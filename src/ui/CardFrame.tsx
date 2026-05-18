@@ -330,9 +330,22 @@ export function CardFrame({
         overflow: 'hidden',
       }}>
         <span style={{ position: 'relative', zIndex: 2 }}>
-          {typeLabel(data)}
-          {isHero && ` · ${getHeroIdentity((data as any).id).role}`}
-          {isHero && (data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
+          {/* Quieter context tags (type + role) */}
+          <span style={{ color: 'rgba(255,255,255,0.78)' }}>
+            {typeLabel(data)}
+            {isHero && ` · ${getHeroIdentity((data as any).id).role}`}
+          </span>
+          {/* Bold gameplay tags (skill/passive flag + ability name) */}
+          {isHero && (data as any).abilityName && (
+            <>
+              <span style={{ color: 'rgba(255,255,255,0.78)' }}> · </span>
+              <span style={{ color: '#fff', textShadow: '0 0 4px rgba(255,255,255,0.45)' }}>
+                {(data as any).skill ? 'SKILL' : 'PASSIVE'}
+                {' '}
+                <span style={{ fontWeight: 900 }}>{(data as any).abilityName}</span>
+              </span>
+            </>
+          )}
         </span>
         <AnimatePresence>
           {hover && (
