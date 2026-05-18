@@ -329,7 +329,11 @@ export function CardFrame({
         borderBottom: `1px solid rgba(0,0,0,0.3)`,
         overflow: 'hidden',
       }}>
-        <span style={{ position: 'relative', zIndex: 2 }}>{typeLabel(data)}</span>
+        <span style={{ position: 'relative', zIndex: 2 }}>
+          {typeLabel(data)}
+          {isHero && ` · ${getHeroIdentity((data as any).id).role}`}
+          {isHero && (data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
+        </span>
         <AnimatePresence>
           {hover && (
             <motion.div
@@ -375,21 +379,7 @@ export function CardFrame({
           {data?.name ?? cardId}
         </div>
 
-        {/* Subtitle: role · ability name (heroes only). The card type now
-            lives in the brass ribbon above. */}
-        {isHero && (
-          <div style={{
-            fontSize: 8.5,
-            fontWeight: 700,
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            color: getHeroIdentity((data as any).id).accent,
-            marginTop: 1,
-          }}>
-            {getHeroIdentity((data as any).id).role}
-            {(data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
-          </div>
-        )}
+        {/* (Role + ability name now live on the banner above with the type.) */}
 
         {/* Body text */}
         {size !== 'slot' && data?.text && (
