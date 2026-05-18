@@ -1,0 +1,46 @@
+import type { EquipmentCard } from '@/engine/types';
+
+/**
+ * Equipment = PASSIVE Deadlock items. Once attached, they stay on the bearer
+ * and apply an ongoing effect (stat boost, resist status, on-trigger proc).
+ *
+ * Every card here is verified against the Deadlock catalogue and is_active_item=false.
+ * For ACTIVE Deadlock items (Healing Rite, Cold Front, Curse, etc.), see `spells.ts`.
+ */
+export const EQUIPMENT: EquipmentCard[] = [
+  // ----- Tier 1 — 1 soul (passive stat sticks) -----
+  { id: 'basic_magazine',       name: 'Basic Magazine',        type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { atk: 1 },           text: '+1 ATK.' },
+  { id: 'headshot_booster',     name: 'Headshot Booster',      type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { atk: 1 },           text: '+1 ATK.' },
+  { id: 'extra_health',         name: 'Extra Health',          type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { hp: 3 },            text: '+3 HP.' },
+  { id: 'improved_spirit',      name: 'Improved Spirit',       type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { spirit: 1 },        text: '+1 Spirit.' },
+  { id: 'improved_cooldown',    name: 'Improved Cooldown',     type: 'equipment', rarity: 2, tier: 1, cost: 1, abilities: ['eff_improved_cooldown'], text: 'Bearer\'s skill ignores the one-skill-per-turn limit.' },
+  { id: 'mystic_burst',         name: 'Mystic Burst',          type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { spirit: 1 },        text: '+1 Spirit. (Skill hits deal bonus spirit dmg.)' },
+  { id: 'sprint_boots',         name: 'Sprint Boots',          type: 'equipment', rarity: 1, tier: 1, cost: 1, abilities: ['eff_sprint_boots_attach'], bonus: { hp: 1 }, text: '+1 HP. On attach: refresh bearer (clears exhaust).' },
+
+  // ----- Tier 2 — 3 souls (passive procs + bigger stats) -----
+  { id: 'berserker',            name: 'Berserker',             type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_berserker'],  text: '+1 Weapon Power on attach. (Bigger when low HP in canon.)' },
+  { id: 'bullet_armor',         name: 'Bullet Armor',          type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_bullet_armor'], text: 'Bearer gains Bullet Resist 2.' },
+  { id: 'enduring_spirit',      name: 'Enduring Spirit',       type: 'equipment', rarity: 2, tier: 2, cost: 3, bonus: { hp: 2, spirit: 1 }, text: '+2 HP, +1 Spirit.' },
+  { id: 'extra_regen',          name: 'Extra Regen',           type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_extra_regen'], text: 'Start of turn heal bearer 1.' },
+  { id: 'melee_lifesteal',      name: 'Melee Lifesteal',       type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_melee_lifesteal'], text: 'Bearer heals 1 after attacking.' },
+  { id: 'monster_rounds',       name: 'Monster Rounds',        type: 'equipment', rarity: 2, tier: 2, cost: 3, bonus: { atk: 2 },           text: '+2 ATK.' },
+  { id: 'spirit_armor',         name: 'Spirit Armor',          type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_spirit_armor'], text: 'Bearer gains Spirit Resist 2.' },
+  { id: 'spirit_strike',        name: 'Spirit Strike',         type: 'equipment', rarity: 2, tier: 2, cost: 3, bonus: { spirit: 2 },        text: '+2 Spirit.' },
+  { id: 'mystic_vulnerability', name: 'Mystic Vulnerability',  type: 'equipment', rarity: 2, tier: 2, cost: 3, bonus: { spirit: 1, hp: 2 }, text: '+1 Spirit, +2 HP. (Skill hits leave targets vulnerable in canon.)' },
+  { id: 'enchanter_barrier',    name: 'Enchanter Barrier',     type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_enchanter_barrier_attach'], text: 'On attach: bearer gains Shield 3.' },
+  { id: 'debuff_remover',       name: 'Debuff Remover',        type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_debuff_remover_attach'], bonus: { hp: 2 }, text: '+2 HP. On attach: cleanse all debuffs.' },
+  { id: 'suppressor',           name: 'Suppressor',            type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_suppressor_attach'], bonus: { hp: 2 }, text: '+2 HP. On attach: Silence enemy Active for 1.' },
+
+  // ----- Tier 3 — 4 souls (build-defining passives) -----
+  { id: 'frenzy',               name: 'Frenzy',                type: 'equipment', rarity: 3, tier: 3, cost: 4, abilities: ['eff_frenzy'],     text: 'Bearer gains +1 Weapon Power (permanent).' },
+  { id: 'diviners_kevlar',      name: "Diviner's Kevlar",      type: 'equipment', rarity: 3, tier: 3, cost: 4, abilities: ['eff_diviners_kevlar'], bonus: { hp: 2 }, text: '+2 HP. Bearer gains Spirit Resist 4.' },
+  { id: 'surge_of_power',       name: 'Surge of Power',        type: 'equipment', rarity: 3, tier: 3, cost: 4, bonus: { spirit: 3 },         text: '+3 Spirit. (Stacks per skill use in canon.)' },
+
+  // ----- Tier 4 mythic — 5 souls -----
+  { id: 'titanic_magazine',     name: 'Titanic Magazine',      type: 'equipment', rarity: 4, tier: 3, cost: 5, bonus: { atk: 3, hp: 3 },    text: 'Mythic. +3 ATK, +3 HP.' },
+  { id: 'mystic_reverb',        name: 'Mystic Reverb',         type: 'equipment', rarity: 4, tier: 3, cost: 5, abilities: ['eff_mystic_reverb'], text: 'Mythic. Bearer gains +3 Spirit Power (permanent).' },
+  { id: 'boundless_spirit',     name: 'Boundless Spirit',      type: 'equipment', rarity: 4, tier: 3, cost: 5, abilities: ['eff_boundless_spirit'], bonus: { hp: 3 }, text: 'Mythic. +3 HP. Bearer gains +5 Spirit Power (permanent).' },
+  { id: 'inhibitor',            name: 'Inhibitor',             type: 'equipment', rarity: 4, tier: 3, cost: 5, abilities: ['eff_inhibitor_attach'], bonus: { hp: 3, spirit: 1 }, text: 'Mythic. +3 HP, +1 Spirit. Bearer gains Spirit Resist 3.' },
+];
+
+export const EQUIPMENT_BY_ID = Object.fromEntries(EQUIPMENT.map((e) => [e.id, e])) as Record<string, EquipmentCard>;
