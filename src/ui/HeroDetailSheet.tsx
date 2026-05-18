@@ -7,6 +7,7 @@ import { effectiveAtk } from '@/engine/util';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { StatusIcon } from './StatusIcon';
 import { palette, radius, spring, shadow, text } from './tokens';
+import { RuleText } from './RuleText';
 
 interface Props {
   card: CardInstance;
@@ -42,6 +43,7 @@ export function HeroDetailSheet({
   if (!data || data.type !== 'hero') return null;
 
   const skillAbility = data.skill ? getAbility(data.skill) : null;
+  const passiveAbility = data.passives?.[0] ? getAbility(data.passives[0]) : null;
   const ult = data.ult ? CARDS_BY_ID[data.ult] : null;
   const ultAbility = (ult && ult.type === 'ultimate' && ult.abilities[0]) ? getAbility(ult.abilities[0]) : null;
   const attached = card.attached ?? [];
@@ -103,7 +105,7 @@ export function HeroDetailSheet({
             ...text.body, color: palette.textDim, marginBottom: 18,
             fontStyle: 'italic',
           }}>
-            {data.text}
+            <RuleText text={data.text} />
           </p>
         )}
 
@@ -132,9 +134,9 @@ export function HeroDetailSheet({
           )}
         </Block>
 
-        {/* Skill — consistent format with Ultimate */}
-        <Block title="Skill">
-          {skillAbility ? (
+        {/* Skill OR Passive — each hero has exactly one. Render whichever exists. */}
+        {skillAbility ? (
+          <Block title="Skill">
             <AbilityPanel
               name={extractAbilityName(skillAbility.prompt) ?? data.name}
               description={extractAbilityDesc(skillAbility.prompt) ?? skillAbility.prompt ?? ''}
@@ -143,8 +145,16 @@ export function HeroDetailSheet({
               ability={skillAbility}
               hero={card}
             />
-          ) : <Empty>No skill.</Empty>}
-        </Block>
+          </Block>
+        ) : passiveAbility ? (
+          <Block title="Passive">
+            <PassivePanel
+              name={extractAbilityName(passiveAbility.prompt) ?? `${data.name}'s Passive`}
+              description={extractAbilityDesc(passiveAbility.prompt) ?? passiveAbility.prompt ?? data.text ?? ''}
+              trigger={passiveAbility.trigger}
+            />
+          </Block>
+        ) : null}
 
         {/* Ultimate — same shape as Skill */}
         <Block title="Ultimate">
@@ -241,6 +251,40 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <div style={{ ...text.body, color: palette.textFaint, fontStyle: 'italic' }}>{children}</div>;
 }
 
+// Display labels for ability triggers — shown as a chip in PassivePanel so the
+// player knows when the passive fires.
+const TRIGGER_LABELS: Record<string, string> = {
+  startOfTurn: 'Start of own turn',
+  endOfTurn:   'End of own turn',
+  onAttack:    'On attack',
+  onDeath:     'On death',
+  onPlay:      'On play',
+  ongoing:     'Always',
+  activate:    'Activate',
+};
+
+/**
+ * Passive ability block: name + trigger chip + description. No target, no
+ * scaling, no USE button — passives just sit on the hero and fire when their
+ * trigger condition is met (or "Always" for ongoing damage hooks like Haze's
+ * Fixation or Wraith's mixed bullets).
+ */
+function PassivePanel({ name, description, trigger }: { name: string; description: string; trigger: string }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+        <span style={{ ...text.label, color: palette.text }}>{name}</span>
+        <span style={{ ...text.label, color: palette.success }}>{TRIGGER_LABELS[trigger] ?? trigger}</span>
+      </div>
+      {description && (
+        <div style={{ ...text.body, color: palette.textDim, marginBottom: 6 }}>
+          <RuleText text={description} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Shared layout for Skill and Ultimate: bold name, description body, target chip,
  * and the scaling preview block. Same shape for both = visual parity.
@@ -265,7 +309,7 @@ function AbilityPanel({
       </div>
       {description && (
         <div style={{ ...text.body, color: palette.textDim, marginBottom: 6 }}>
-          {description}
+          <RuleText text={description} />
         </div>
       )}
       <div style={{

@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { palette, fonts, shadow, radius, rarityStyle, typeTint } from './tokens';
+import { RuleText } from './RuleText';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { HeroPortrait } from '@/cards/art/heroArt';
@@ -396,7 +397,7 @@ export function CardFrame({
             color: palette.card.bodyTextDim,
             overflow: 'hidden',
           }}>
-            {data.text}
+            <RuleText text={data.text} />
           </div>
         )}
 

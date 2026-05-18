@@ -75,16 +75,16 @@ export function PreviewGallery() {
       </Section>
 
       <Section title={`Heroes (${HEROES.length})`}>
-        <Grid min={150}>
+        <Grid min={320}>
           {HEROES.map((h) => (
             <CardFrame
               key={h.id}
               cardId={h.id}
-              size="hand"
+              size="full"
               footer={
                 <>
-                  <StatPill icon={<SwordIcon />} value={h.atk} color={palette.atk} />
-                  <StatPill icon={<HeartIcon />} value={h.hp} color={palette.hp} />
+                  <StatPill big icon={<SwordIcon size={18} />} value={h.atk} color={palette.atk} />
+                  <StatPill big icon={<HeartIcon size={18} />} value={h.hp} color={palette.hp} />
                 </>
               }
             />
@@ -93,50 +93,38 @@ export function PreviewGallery() {
       </Section>
 
       <Section title={`Spells (${SPELLS.length})`}>
-        <Grid min={150}>
+        <Grid min={320}>
           {SPELLS.map((s) => (
-            <CardFrame key={s.id} cardId={s.id} size="hand" />
+            <CardFrame key={s.id} cardId={s.id} size="full" />
           ))}
         </Grid>
       </Section>
 
       <Section title={`Equipment (${EQUIPMENT.length})`}>
-        <Grid min={150}>
-          {EQUIPMENT.map((e) => {
-            const parts: string[] = [];
-            if (e.bonus?.atk) parts.push(`+${e.bonus.atk} ATK`);
-            if (e.bonus?.hp) parts.push(`+${e.bonus.hp} HP`);
-            if (e.bonus?.spirit) parts.push(`+${e.bonus.spirit} SPI`);
-            return (
-              <CardFrame
-                key={e.id}
-                cardId={e.id}
-                size="hand"
-                glow={e.tier === 3 ? 'gold' : null}
-                footer={
-                  <span style={{
-                    color: palette.type.equipment.accent,
-                    fontWeight: 700, fontSize: 11, letterSpacing: '0.04em',
-                  }}>{parts.join(' · ') || `Tier ${e.tier}`}</span>
-                }
-              />
-            );
-          })}
+        <Grid min={320}>
+          {EQUIPMENT.map((e) => (
+            <CardFrame
+              key={e.id}
+              cardId={e.id}
+              size="full"
+              glow={e.tier === 3 ? 'gold' : null}
+            />
+          ))}
         </Grid>
       </Section>
 
       <Section title={`Ultimates (${ULTIMATES.length})`}>
-        <Grid min={150}>
+        <Grid min={320}>
           {ULTIMATES.map((u) => (
             <CardFrame
               key={u.id}
               cardId={u.id}
-              size="hand"
+              size="full"
               glow="gold"
               footer={
                 <span style={{
                   color: palette.type.ultimate.accent,
-                  fontWeight: 700, fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
+                  fontWeight: 700, fontSize: 12, letterSpacing: '0.18em', textTransform: 'uppercase',
                 }}>Ultimate</span>
               }
             />
