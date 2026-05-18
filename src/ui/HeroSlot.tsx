@@ -47,7 +47,8 @@ export function HeroSlot({
   const skillReady = !isCorpse && isActive && isAlly && data.skill && !card.skillUsedThisTurn && !playerSkillSpent;
   const isArmedSource = !!pending && pending.kind === 'useSkill' && pending.iid === card.iid;
   const attached = isCorpse ? [] : (card.attached ?? []);
-  const role = getHeroIdentity(card.cardId).role;
+  // On the small in-game tile we only have room for the primary keyword.
+  const role = getHeroIdentity(card.cardId).keywords[0] ?? 'Hero';
 
   const lungeY = attackPulse ? (isOpponent ? 14 : -14) : 0;
 
@@ -252,7 +253,7 @@ export function HeroSlot({
         textAlign: 'left',
         borderBottom: `1px solid rgba(0,0,0,0.3)`,
       }}>
-        {role.charAt(0).toUpperCase() + role.slice(1)}
+        {role}
       </div>
 
       {/* Cream body — name + stats row */}

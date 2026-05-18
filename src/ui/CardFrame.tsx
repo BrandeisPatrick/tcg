@@ -327,8 +327,8 @@ export function CardFrame({
       }}>
         <span style={{ position: 'relative', zIndex: 2 }}>
           {typeLabel(data)}
-          {isHero && ` · ${capitalize(getHeroIdentity((data as any).id).role)}`}
-          {isHero && (data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
+          {isHero && getHeroIdentity((data as any).id).keywords
+            .map((k) => ` · ${k}`).join('')}
         </span>
         <AnimatePresence>
           {hover && (
@@ -445,9 +445,6 @@ function rarityName(r: 1 | 2 | 3 | 4): string {
   return r === 4 ? 'Mythic' : r === 3 ? 'Rare' : r === 2 ? 'Uncommon' : 'Common';
 }
 
-function capitalize(s: string): string {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-}
 
 function StatPill({ icon, value, bg }: { icon: ReactNode; value: number; bg: string }) {
   return (
