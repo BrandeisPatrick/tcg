@@ -694,9 +694,8 @@ const eff_ult_mirage: AbilityDef = {
   id: 'eff_ult_mirage', trigger: 'onPlay', target: 'noTarget',
   run: (G, ctx) => {
     const ps = G.players[ctx.movingPlayer];
-    const corpses = [ps.active, ...ps.bench].filter(
-      (c) => c && (c.respawnTurnsLeft ?? 0) > 0,
-    ) as { cardId: string; hp: number; hpMax: number; statuses: any[]; exhausted: boolean; respawnTurnsLeft?: number; atkMod: number; spiritMod: number; skillUsedThisTurn: boolean; }[];
+    const corpses = [ps.active, ...ps.bench]
+      .filter((c): c is CardInstance => c !== null && (c.respawnTurnsLeft ?? 0) > 0);
     if (corpses.length === 0) {
       pushLog(G, 'Traveler fizzled (no fallen heroes).');
       return;

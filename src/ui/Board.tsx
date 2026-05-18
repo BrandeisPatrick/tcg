@@ -28,6 +28,10 @@ import { UltMomentFlash } from './UltMomentFlash';
 import { useCombatSpeed, COMBAT_SPEED_MS, type CombatSpeed } from './useCombatSpeed';
 import { palette, fonts, radius, shadow, spring, text } from './tokens';
 
+// Animation / pacing constants.
+const FLOATER_CLEAR_MS = 950;   // how long damage/heal floaters stay on-screen
+const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
+
 interface PendingPlay {
   kind: 'playCard' | 'useSkill';
   iid: string;
@@ -177,7 +181,7 @@ export function Board(props: BoardProps<GameState>) {
       setFloaters((cur) => [...cur, ...additions]);
       setTimeout(() => {
         setFloaters((cur) => cur.filter((f) => !additions.some((a) => a.id === f.id)));
-      }, 950);
+      }, FLOATER_CLEAR_MS);
     }
   }, [G]);
 
@@ -220,16 +224,18 @@ export function Board(props: BoardProps<GameState>) {
       if (opts.length === 0) { triggerEndTurn(); return; }
       const best = opts[0];
       try {
+        // boardgame.io types `moves` as Record<string, (...args: unknown[]) => void>
+        // but won't infer per-move signatures. One Function-typed lookup is
+        // tidier than four separate `as any` casts and keeps the AI loop in
+        // one place if a new move kind is added.
+        const dispatch = moves as unknown as Record<string, (...args: unknown[]) => void>;
         if (best.move === 'endTurn') triggerEndTurn();
-        else if (best.move === 'playCard') (moves.playCard as any)(...best.args);
-        else if (best.move === 'useSkill') (moves.useSkill as any)(...best.args);
-        else if (best.move === 'moveHero') (moves.moveHero as any)(...best.args);
-        else if (best.move === 'promoteToActive') (moves as any).promoteToActive(...best.args);
+        else if (dispatch[best.move]) dispatch[best.move](...best.args);
         else triggerEndTurn(); // unknown move kind — bail rather than freeze the AI loop
       } catch {
         triggerEndTurn();
       }
-    }, 800);
+    }, AI_THINK_MS);
     return () => clearTimeout(t);
   }, [ctx.currentPlayer, ctx.turn, G, moves, ctx, combatPlan, triggerEndTurn]);
 

@@ -72,12 +72,6 @@ export function effectiveSpirit(card: CardInstance): number {
   return (card.spiritMod ?? 0) + fromBuff;
 }
 
-export function isHeroCard(iid: string, G: GameState): boolean {
-  const f = findCardAnywhere(G, iid);
-  if (!f) return false;
-  return CARDS_BY_ID[f.card.cardId]?.type === 'hero';
-}
-
 export function pushLog(G: GameState, text: string) {
   G.log.push({ turn: G.turnNumber, text });
   if (G.log.length > 200) G.log.splice(0, G.log.length - 200);

@@ -43,7 +43,7 @@ function typeLabel(data: CardData | undefined): string {
   switch (data.type) {
     case 'hero': return 'Hero';
     case 'spell': return 'Spell';
-    case 'equipment': return `Item · Tier ${(data as any).tier ?? 1}`;
+    case 'equipment': return `Item · Tier ${data.tier ?? 1}`;
     case 'ultimate': return 'Ultimate';
   }
 }
@@ -239,8 +239,7 @@ export function CardFrame({
   };
 
   const artH = size === 'full' ? '58%' : '55%';
-  const cost = (data && (data.type === 'spell' || data.type === 'equipment' || data.type === 'ultimate'))
-    ? (data as any).cost ?? 0 : 0;
+  const cost = data && data.type !== 'hero' ? data.cost ?? 0 : 0;
   const showCost = !isHero && cost > 0;
   const showStats = isHero;
 

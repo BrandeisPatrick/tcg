@@ -1,9 +1,5 @@
 import type { HeroCard } from '@/engine/types';
 
-// Hero stats from the original TcgEngine spec.
-// Cards marked TODO_STAT have unknown values and should be tuned against the original .asset files.
-export const TODO_STAT = -1;
-
 /**
  * 19 heroes total. Each hero has EXACTLY ONE distinguishing mechanic — either a
  * `skill` (Activate trigger, costs the player's one-skill-per-turn) OR an entry
