@@ -381,25 +381,21 @@ export function CardFrame({
 
         {/* (Role + ability name now live on the banner above with the type.) */}
 
-        {/* SKILL / PASSIVE label sitting directly above the effect text — makes
-            the activation type unmistakable at a glance. */}
+        {/* SKILL / PASSIVE label sitting directly above the effect text. Plain
+            text — SKILL in dark body color, PASSIVE in muted grey. */}
         {size !== 'slot' && isHero && data?.text && (() => {
           const d = data as any;
-          const tag = d.skill ? 'SKILL' : d.passives?.length ? 'PASSIVE' : null;
+          const isSkill = !!d.skill;
+          const tag = isSkill ? 'SKILL' : d.passives?.length ? 'PASSIVE' : null;
           if (!tag) return null;
           return (
             <div style={{
-              alignSelf: 'flex-start',
               marginTop: 4,
-              padding: '1px 6px',
-              background: tint.ribbon,
-              color: '#fff',
-              fontSize: 8,
-              fontWeight: 800,
+              color: isSkill ? palette.card.bodyText : palette.card.bodyTextDim,
+              fontSize: 8.5,
+              fontWeight: 700,
               letterSpacing: '0.22em',
               textTransform: 'uppercase',
-              borderRadius: 2,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
             }}>{tag}</div>
           );
         })()}
