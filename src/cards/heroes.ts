@@ -5,16 +5,16 @@ import type { HeroCard } from '@/engine/types';
 export const TODO_STAT = -1;
 
 /**
- * 17 heroes total. Each hero has EXACTLY ONE distinguishing mechanic — either a
+ * 19 heroes total. Each hero has EXACTLY ONE distinguishing mechanic — either a
  * `skill` (Activate trigger, costs the player's one-skill-per-turn) OR an entry
  * in `passives` (always-on or trigger-based, no cast). Never both.
  *
- * Split (7 passive / 10 skill):
- *   PASSIVE: Abrams, Haze, Mo & Krill, Rem, Shiv, Vindicta, Wraith
- *   SKILL:   Dynamo, Kelvin, Lady Geist, Lash, Paige, Seven, Sinclair, Viscous, Yamato, Warden
+ * Split (8 passive / 11 skill):
+ *   PASSIVE: Abrams, Haze, Mo & Krill, Rem, Shiv, Trapper, Vindicta, Wraith
+ *   SKILL:   Dynamo, Kelvin, Lady Geist, Lash, Mirage, Paige, Seven, Sinclair, Viscous, Warden, Yamato
  *
- * Archetypes (6 roles): tank, marksman, caster, healer, bruiser, disruptor.
- * Ultimates are 1:1 with heroes.
+ * Archetypes (8 roles): tank, marksman, caster, healer, bruiser, disruptor,
+ * trickster, assassin. Ultimates are 1:1 with heroes.
  */
 export const HEROES: HeroCard[] = [
   // ----- PASSIVE-only heroes -----
@@ -211,6 +211,34 @@ export const HEROES: HeroCard[] = [
     skill: 'skill_warden',
     ult: 'ult_warden',
     text: 'Disruptor. Last Stand: Silence + Disarm + Vulnerable on an enemy for 2 turns (no damage).',
+  },
+  // Trickster: Sleep-based soft control. Sleep wakes on damage, so the
+  // opponent has to choose between waking the target (losing the lock early)
+  // or leaving them inert (and burning a turn doing nothing with them).
+  {
+    id: 'hero_mirage',
+    name: 'Mirage',
+    type: 'hero',
+    rarity: 3,
+    atk: 2,
+    hp: 9,
+    skill: 'skill_mirage',
+    ult: 'ult_mirage',
+    text: 'Trickster. Tornado: Sleep 2 on enemy bench. Sleep wakes on damage.',
+  },
+  // Assassin: execute-based finisher. Low baseline damage, but attacks gain
+  // +3 bullet damage vs targets at or below 4 HP. Picks off the wounded —
+  // pairs best with bleed/poke heroes (Shiv, Vindicta) softening the line.
+  {
+    id: 'hero_trapper',
+    name: 'Trapper',
+    type: 'hero',
+    rarity: 3,
+    atk: 3,
+    hp: 9,
+    passives: ['passive_trapper_execute'],
+    ult: 'ult_trapper',
+    text: 'Assassin. Execute: attacks deal +3 dmg vs targets at 4 HP or below.',
   },
 ];
 

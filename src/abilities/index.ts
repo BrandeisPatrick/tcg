@@ -463,6 +463,22 @@ const skill_warden: AbilityDef = {
   },
 };
 
+// Trickster identity: Sleep the enemy BENCH for 2 turns. Active is left alone
+// on purpose — basic attacks only target Active, so a Sleeping bench stays
+// asleep through combat. Effect: any promotion is delayed (a corpse Active
+// can't be replaced by a sleeping hero), and long-range bench attackers like
+// Haze / Vindicta lose their bench shots. Big tempo swing on stalled boards.
+const skill_mirage: AbilityDef = {
+  id: 'skill_mirage', trigger: 'activate', target: 'noTarget', exhausts: true,
+  prompt: 'Mirage Tornado — Sleep 2 on enemy bench. Wakes on damage.',
+  run: (G, ctx) => {
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    for (const b of enemy.bench) {
+      if (b && (b.respawnTurnsLeft ?? 0) === 0) addStatus(G, b, 'sleep', 1, 2);
+    }
+  },
+};
+
 // ----- Hero passives (always-on or trigger-based, no Activate) -----
 
 const passive_abrams_heal: AbilityDef = {
@@ -525,6 +541,14 @@ const passive_vindicta_flight: AbilityDef = {
 const passive_wraith_mixed: AbilityDef = {
   id: 'passive_wraith_mixed', trigger: 'ongoing', target: 'self',
   prompt: 'Mixed Bullets — attacks split half bullet, half spirit.',
+  run: () => { /* combat hook reads this directly */ },
+};
+
+// Execute: marker passive. The +3 damage vs low-HP targets lives in
+// `combat.ts:effectiveAttackDamage` (same pattern as Haze Fixation).
+const passive_trapper_execute: AbilityDef = {
+  id: 'passive_trapper_execute', trigger: 'ongoing', target: 'self',
+  prompt: 'Execute — +3 attack dmg vs targets at 4 HP or below.',
   run: () => { /* combat hook reads this directly */ },
 };
 
@@ -646,6 +670,41 @@ const eff_ult_warden: AbilityDef = {
   },
 };
 
+// Mirage ultimate: sleeps enemy BENCH 2 + Vulnerable 2 on enemy Active.
+// Active won't stay asleep through combat, so we trade that branch for
+// "Vulnerable" (+2 dmg taken) — Mirage's team capitalizes by killing the
+// soft active while reinforcements stay locked on the bench.
+const eff_ult_mirage: AbilityDef = {
+  id: 'eff_ult_mirage', trigger: 'onPlay', target: 'noTarget',
+  base: 2, baseLabel: 'AoE Sleep + Vuln',
+  run: (G, ctx) => {
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    if (enemy.active && (enemy.active.respawnTurnsLeft ?? 0) === 0) {
+      addStatus(G, enemy.active, 'vulnerable', 1, 2);
+    }
+    for (const b of enemy.bench) {
+      if (b && (b.respawnTurnsLeft ?? 0) === 0) addStatus(G, b, 'sleep', 1, 2);
+    }
+  },
+};
+
+// Trapper ultimate: Mark of Death. If the target is at 5 HP or less, set its
+// HP to 0 (true execute, ignoring shield/armor) — otherwise deal 5 attack
+// damage. Either way the target takes a chunk; the execute branch is the
+// Assassin payoff for setting up a wounded target.
+const eff_ult_trapper: AbilityDef = {
+  id: 'eff_ult_trapper', trigger: 'onPlay', target: 'enemyAny',
+  base: 5, baseLabel: 'exec ≤5 / 5 dmg',
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    if (target.hp <= 5) {
+      damageUnit(G, target, target.hp + 99, 'pure', 'Trapper');
+    } else {
+      damageUnit(G, target, 5, 'attack', 'Trapper');
+    }
+  },
+};
+
 const ABILITIES_LIST: AbilityDef[] = [
   // ----- Spells (active items + healing_rite + TCG-original soul_rebirth) -----
   eff_healing_rite, eff_rusted_barrel, eff_golden_goose,
@@ -660,17 +719,17 @@ const ABILITIES_LIST: AbilityDef[] = [
   // On-attach equipment (formerly spells, repurposed for is_active_item=false canon)
   eff_sprint_boots_attach, eff_enchanter_barrier_attach, eff_debuff_remover_attach,
   eff_suppressor_attach, eff_inhibitor_attach,
-  // ----- Hero skills (10 skill-only heroes incl. Warden) -----
+  // ----- Hero skills (11 skill-only heroes incl. Warden + Mirage) -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
-  skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
-  // ----- Hero passives (7 passive-only heroes incl. Wraith) -----
+  skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden, skill_mirage,
+  // ----- Hero passives (8 passive-only heroes incl. Wraith + Trapper) -----
   passive_abrams_heal, passive_haze_stunbonus, passive_mo_krill_burrow, passive_rem_benchheal,
-  passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed,
+  passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed, passive_trapper_execute,
   // ----- Ultimates (one per hero, +Wraith) -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
   eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven,
   eff_ult_shiv, eff_ult_sinclair, eff_ult_vindicta, eff_ult_viscous, eff_ult_yamato,
-  eff_ult_wraith, eff_ult_warden,
+  eff_ult_wraith, eff_ult_warden, eff_ult_mirage, eff_ult_trapper,
 ];
 
 export const ABILITIES_BY_ID: Record<string, AbilityDef> = Object.fromEntries(

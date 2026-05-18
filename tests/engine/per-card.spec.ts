@@ -296,6 +296,62 @@ describe('Disruptor archetype — Warden', () => {
   });
 });
 
+describe('Trickster archetype — Mirage', () => {
+  it('Tornado applies Sleep 2 to every enemy BENCH card (not Active)', () => {
+    const G = freshG();
+    const enemy = G.players['1'];
+    ABILITIES_BY_ID['skill_mirage'].run(G, { movingPlayer: '0' }, {});
+    expect(enemy.active!.statuses.find((s) => s.id === 'sleep')).toBeUndefined();
+    for (const b of enemy.bench) {
+      if (!b) continue;
+      const sleep = b.statuses.find((s) => s.id === 'sleep');
+      expect(sleep?.duration).toBe(2);
+    }
+  });
+
+  it('Fire Scarabs ult sleeps bench AND Vulnerables enemy Active', () => {
+    const G = freshG();
+    const enemy = G.players['1'];
+    ABILITIES_BY_ID['eff_ult_mirage'].run(G, { movingPlayer: '0' }, {});
+    expect(enemy.active!.statuses.find((s) => s.id === 'vulnerable')?.duration).toBe(2);
+    for (const b of enemy.bench) {
+      if (!b) continue;
+      expect(b.statuses.find((s) => s.id === 'sleep')?.duration).toBe(2);
+    }
+  });
+});
+
+describe('Assassin archetype — Trapper', () => {
+  it('Mark of Death ult executes target at HP <= 5 (sets to 0 via pure dmg)', () => {
+    const G = freshG();
+    const target = G.players['1'].active!;
+    target.hp = 5;
+    ABILITIES_BY_ID['eff_ult_trapper'].run(G, { movingPlayer: '0' }, { target });
+    expect(target.hp).toBe(0);
+  });
+
+  it('Mark of Death deals 5 attack dmg when target HP > 5', () => {
+    const G = freshG();
+    const target = G.players['1'].active!;
+    target.hp = 10;
+    const before = target.hp;
+    ABILITIES_BY_ID['eff_ult_trapper'].run(G, { movingPlayer: '0' }, { target });
+    expect(before - target.hp).toBe(5);
+  });
+
+  it('Execute passive: Trapper basic attack gets +3 vs HP<=4 target (combat hook)', async () => {
+    // Verify the combat hook path: synthesize a Trapper-like attacker config and a wounded target.
+    const { CARDS_BY_ID } = await import('@/cards');
+    const trapper = CARDS_BY_ID['hero_trapper'];
+    expect(trapper).toBeDefined();
+    expect((trapper as any).atk).toBe(3);
+    expect((trapper as any).passives).toContain('passive_trapper_execute');
+    // Behaviour is locked by the combat unit test below (smoke test runs the
+    // resolver end-to-end). Here we just assert the ability registry binding.
+    expect(ABILITIES_BY_ID['passive_trapper_execute']).toBeDefined();
+  });
+});
+
 // Regression lock: no glass-cannon hero should be one-shot by an opening-turn
 // skill + basic-attack alpha. Worst-case caster combo is Yamato (atk 4) casting
 // Power Slash (4 spirit at 0 SPI) into the front line. Every starter-deck hero

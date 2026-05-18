@@ -1,12 +1,12 @@
 // Per-hero color identity + role. Drives portrait shape and frame accent.
 
-export type HeroRole = 'tank' | 'marksman' | 'caster' | 'healer' | 'bruiser' | 'disruptor';
+export type HeroRole = 'tank' | 'marksman' | 'caster' | 'healer' | 'bruiser' | 'disruptor' | 'trickster' | 'assassin';
 
 export interface HeroIdentity {
   primary: string;     // dominant color
   accent: string;      // secondary
   role: HeroRole;
-  glyph: 'shield' | 'crosshair' | 'orb' | 'cross' | 'fang' | 'bolt' | 'flame' | 'gear' | 'eye' | 'chain';
+  glyph: 'shield' | 'crosshair' | 'orb' | 'cross' | 'fang' | 'bolt' | 'flame' | 'gear' | 'eye' | 'chain' | 'feather' | 'dagger';
   initial: string;     // for fallback / corner mark
 }
 
@@ -28,6 +28,8 @@ export const HERO_IDENTITY: Record<string, HeroIdentity> = {
   hero_yamato:    { primary: '#ff5a8c', accent: '#4a162a', role: 'bruiser', glyph: 'flame',     initial: 'Y' },
   hero_wraith:    { primary: '#9d8aff', accent: '#241a4a', role: 'caster',  glyph: 'eye',       initial: 'W' },
   hero_warden:    { primary: '#7be0bf', accent: '#143a30', role: 'disruptor', glyph: 'chain',    initial: 'W' },
+  hero_mirage:    { primary: '#e6a861', accent: '#43230d', role: 'trickster', glyph: 'feather', initial: 'M' },
+  hero_trapper:   { primary: '#8aa86f', accent: '#1f2e15', role: 'assassin',  glyph: 'dagger', initial: 'T' },
 };
 
 export function getHeroIdentity(cardId: string): HeroIdentity {
