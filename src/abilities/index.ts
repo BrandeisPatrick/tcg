@@ -447,33 +447,34 @@ const skill_yamato: AbilityDef = {
   run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 4 + spi(source), 'spirit'); },
 };
 
-// Disruptor identity: total lockdown for 2 turns, ZERO damage. Warden does
-// not kill anyone himself — his job is to set up the rest of the team. The
-// canon skill "Binding Word" marks an enemy and yanks them back if they flee
-// — abstracted as a heavy debuff lock with no damage.
+// Warden skill: hardens himself with a Shield. Canon Warden hunkers down
+// behind his shackle barrier before unleashing Last Stand — TCG abstraction
+// is a Shield 5 self-buff that scales with Spirit.
 const skill_warden: AbilityDef = {
-  id: 'skill_warden', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Warden Binding Word — Silence + Disarm + Vulnerable on target for 2 turns.',
-  // no base/scalesSpirit — pure utility, no scaling preview
-  run: (G, _ctx, { target }) => {
-    if (!target) return;
-    addStatus(G, target, 'silenced', 1, 2);
-    addStatus(G, target, 'disarm', 1, 2);
-    addStatus(G, target, 'vulnerable', 1, 2);
+  id: 'skill_warden', trigger: 'activate', target: 'self', exhausts: true,
+  prompt: 'Warden Willpower — Shield 5 on self.',
+  base: 5, baseLabel: 'shield',
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
+    const t = target ?? source;
+    if (t) addStatus(G, t, 'shield', 5 + spi(source), 999);
   },
 };
 
-// Trickster identity: canon Mirage's Tornado transforms him into a
-// whirlwind that can't be hit while moving and disorients enemies on
-// contact. TCG mapping: caster gains Invincibility 1 + enemy Active gains
-// Vulnerable 2. Hit-and-run — Mirage dodges damage this turn while setting
-// up his team's next attack window.
+// Trickster identity: Mirage's Tornado transforms him into a whirlwind —
+// can't be hit while spinning, disorients + stuns the enemy on contact.
+// TCG mapping: self Invincible 1, enemy Active gets Vulnerable 1 + Stun 1.
+// Stun 1 sets up Haze's Fixation passive (+2 vs Stunned) and Headshot
+// Booster equipment for follow-up damage windows.
 const skill_mirage: AbilityDef = {
   id: 'skill_mirage', trigger: 'activate', target: 'enemyActive', exhausts: true,
-  prompt: 'Mirage Tornado — gain Invincible 1 + Vulnerable 2 on enemy Active.',
+  prompt: 'Mirage Tornado — gain Invincible 1 + Vulnerable 1 + Stun 1 on enemy Active.',
   run: (G, _ctx, { source, target }) => {
     if (source) addStatus(G, source, 'invincibility', 1, 1);
-    if (target) addStatus(G, target, 'vulnerable', 1, 2);
+    if (target) {
+      addStatus(G, target, 'vulnerable', 1, 1);
+      addStatus(G, target, 'stun', 1, 1);
+    }
   },
 };
 
@@ -542,14 +543,17 @@ const passive_wraith_mixed: AbilityDef = {
   run: () => { /* combat hook reads this directly */ },
 };
 
-// Bloodscent: marker passive. Canon Drifter's Bloodscent reveals isolated
-// enemies and amplifies damage against them — translated to a flat +3 bullet
-// damage vs targets at or below 4 HP. The combat hook lives in
-// `combat.ts:effectiveAttackDamage` (same pattern as Haze Fixation).
+// Bloodscent: canon Drifter literally feeds off weakened prey. Two effects
+// in one passive:
+//   1) Lifesteal — on every basic attack, Drifter heals 1 (onAttack trigger).
+//   2) +3 bullet dmg vs targets at <=4 HP (combat hook in
+//      `combat.ts:effectiveAttackDamage`).
+// The first effect uses the ability's onAttack trigger; the second is read
+// directly from the attacker cardId in the combat hook.
 const passive_drifter_bloodscent: AbilityDef = {
-  id: 'passive_drifter_bloodscent', trigger: 'ongoing', target: 'self',
-  prompt: 'Bloodscent — +3 attack dmg vs targets at 4 HP or below.',
-  run: () => { /* combat hook reads this directly */ },
+  id: 'passive_drifter_bloodscent', trigger: 'onAttack', target: 'self',
+  prompt: 'Bloodscent — heal 1 on attack + 3 dmg vs targets at 4 HP or below.',
+  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1); },
 };
 
 // ----- Ultimates -----
@@ -656,48 +660,73 @@ const eff_ult_wraith: AbilityDef = {
   },
 };
 
-// Warden ultimate: Alchemical Flask. AoE Disarm + Silence on every enemy.
-// No damage — keeps the Disruptor identity intact even at the ult level.
+// Warden ultimate Last Stand: canon is a big AoE spirit pulse. TCG mapping:
+// 3 spirit damage to every enemy board card + lifesteal (heal Warden for
+// total damage dealt / 2). Lets Warden tank up AND drain back HP on the
+// big swing — pairs with his shield skill for sustain identity.
 const eff_ult_warden: AbilityDef = {
   id: 'eff_ult_warden', trigger: 'onPlay', target: 'noTarget',
-  base: 2, baseLabel: 'AoE Disarm + Silence',
+  base: 3, baseLabel: 'spirit AoE + lifesteal',
   run: (G, ctx) => {
     const enemy = otherPlayer(ctx.movingPlayer);
+    let totalDealt = 0;
     eachBoard(G, enemy, (c) => {
-      addStatus(G, c, 'disarm', 1, 2);
-      addStatus(G, c, 'silenced', 1, 2);
+      totalDealt += damageUnit(G, c, 3, 'spirit', 'Warden');
     });
+    // Lifesteal back to Warden wherever he is on the caster's board.
+    const ps = G.players[ctx.movingPlayer];
+    const warden = [ps.active, ...ps.bench].find(
+      (c) => c && c.cardId === 'hero_warden' && (c.respawnTurnsLeft ?? 0) === 0,
+    );
+    if (warden && totalDealt > 0) {
+      const heal = Math.ceil(totalDealt / 2);
+      healUnit(G, warden, heal);
+      pushLog(G, `Last Stand: Warden drained ${heal} HP from the AoE.`);
+    }
   },
 };
 
-// Mirage ultimate: canon Fire Scarabs is a swarm of damaging projectiles
-// with a slow. TCG mapping: 3 spirit damage + Vulnerable 2 to every enemy
-// board card. AoE setup that punishes both Active and bench.
+// Mirage ultimate Traveler: canon Mirage teleports across the map. TCG
+// abstraction: instant respawn of a fallen ally — Mirage ferries their soul
+// back through the sands. Super-cheap ult cost so it's an emergency tempo
+// recovery, not a finisher. If no corpses, fizzles.
 const eff_ult_mirage: AbilityDef = {
   id: 'eff_ult_mirage', trigger: 'onPlay', target: 'noTarget',
-  base: 3, baseLabel: 'AoE spirit + Vuln',
   run: (G, ctx) => {
-    const enemy = otherPlayer(ctx.movingPlayer);
-    eachBoard(G, enemy, (c) => {
-      damageUnit(G, c, 3, 'spirit', 'Mirage');
-      addStatus(G, c, 'vulnerable', 1, 2);
-    });
+    const ps = G.players[ctx.movingPlayer];
+    const corpses = [ps.active, ...ps.bench].filter(
+      (c) => c && (c.respawnTurnsLeft ?? 0) > 0,
+    ) as { cardId: string; hp: number; hpMax: number; statuses: any[]; exhausted: boolean; respawnTurnsLeft?: number; atkMod: number; spiritMod: number; skillUsedThisTurn: boolean; }[];
+    if (corpses.length === 0) {
+      pushLog(G, 'Traveler fizzled (no fallen heroes).');
+      return;
+    }
+    // Revive whichever corpse is closest to natural respawn (lowest timer).
+    corpses.sort((a, b) => (a.respawnTurnsLeft ?? 99) - (b.respawnTurnsLeft ?? 99));
+    const c = corpses[0];
+    c.respawnTurnsLeft = undefined;
+    c.hp = c.hpMax;
+    c.statuses = [];
+    c.atkMod = 0;
+    c.spiritMod = 0;
+    c.skillUsedThisTurn = false;
+    c.exhausted = false;
+    pushLog(G, `Traveler: ${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} returns to the field.`);
   },
 };
 
-// Drifter ultimate: canon Eternal Night surrounds enemies in darkness and
-// isolates them. TCG mapping: true execute on target at <=5 HP, otherwise
-// 5 attack damage. Pairs with the Bloodscent passive — Drifter is built
-// around finishing wounded prey.
+// Drifter ultimate Eternal Night: canon wraps the field in darkness +
+// isolation. TCG mapping: Silence every enemy bench card for 2 turns —
+// reinforcements can't cast skills, can't promote into a Silenced active
+// (silence carries with them). Sustains the lifesteal-into-execute loop
+// by stopping the opponent from responding with skill counter-plays.
 const eff_ult_drifter: AbilityDef = {
-  id: 'eff_ult_drifter', trigger: 'onPlay', target: 'enemyAny',
-  base: 5, baseLabel: 'exec ≤5 / 5 dmg',
-  run: (G, _ctx, { target }) => {
-    if (!target) return;
-    if (target.hp <= 5) {
-      damageUnit(G, target, target.hp + 99, 'pure', 'Drifter');
-    } else {
-      damageUnit(G, target, 5, 'attack', 'Drifter');
+  id: 'eff_ult_drifter', trigger: 'onPlay', target: 'noTarget',
+  base: 2, baseLabel: 'AoE bench Silence',
+  run: (G, ctx) => {
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    for (const b of enemy.bench) {
+      if (b && (b.respawnTurnsLeft ?? 0) === 0) addStatus(G, b, 'silenced', 1, 2);
     }
   },
 };

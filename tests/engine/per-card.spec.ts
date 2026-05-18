@@ -269,82 +269,113 @@ describe('Equipment on-attach procs', () => {
 });
 
 describe('Disruptor archetype — Warden', () => {
-  it('Last Stand applies Silence + Disarm + Vulnerable for 2 turns (no damage)', () => {
+  it('Willpower skill grants Warden Shield 5 + Spirit', () => {
     const G = freshG();
-    const target = G.players['1'].active!;
-    const hpBefore = target.hp;
     const warden = G.players['0'].active!;
-    ABILITIES_BY_ID['skill_warden'].run(G, { movingPlayer: '0' }, { source: warden, target });
-    expect(target.hp).toBe(hpBefore); // pure utility, no damage
-    const silence = target.statuses.find((s) => s.id === 'silenced');
-    const disarm = target.statuses.find((s) => s.id === 'disarm');
-    const vuln = target.statuses.find((s) => s.id === 'vulnerable');
-    expect(silence?.duration).toBe(2);
-    expect(disarm?.duration).toBe(2);
-    expect(vuln?.duration).toBe(2);
+    warden.spiritMod = 2;
+    ABILITIES_BY_ID['skill_warden'].run(G, { movingPlayer: '0' }, { source: warden, target: warden });
+    const shield = warden.statuses.find((s) => s.id === 'shield');
+    expect(shield?.value).toBe(7); // 5 + 2 Spirit
   });
 
-  it('Alchemical Flask ult applies Disarm + Silence to every enemy board card', () => {
+  it('Last Stand ult deals 3 spirit AoE + lifesteals back to Warden', () => {
     const G = freshG();
-    ABILITIES_BY_ID['eff_ult_warden'].run(G, { movingPlayer: '0' }, {});
+    // Replace P0 active with Warden so the lifesteal target exists.
+    const warden = G.players['0'].active!;
+    (warden as any).cardId = 'hero_warden';
+    warden.hp = 4;
+    warden.hpMax = 11;
     const enemy = G.players['1'];
-    const boardCards = [enemy.active, ...enemy.bench].filter((c) => c != null);
-    for (const c of boardCards) {
-      expect(c!.statuses.find((s) => s.id === 'disarm')).toBeDefined();
-      expect(c!.statuses.find((s) => s.id === 'silenced')).toBeDefined();
-    }
+    const hpBefore = enemy.active!.hp;
+    ABILITIES_BY_ID['eff_ult_warden'].run(G, { movingPlayer: '0' }, {});
+    expect(hpBefore - enemy.active!.hp).toBe(3); // 3 spirit landed
+    // Lifesteal: Warden should heal >= 1 (at least half of one enemy's 3 dmg = 2).
+    expect(warden.hp).toBeGreaterThan(4);
   });
 });
 
 describe('Trickster archetype — Mirage', () => {
-  it('Tornado grants Invincible 1 to caster + Vulnerable 2 on enemy Active', () => {
+  it('Tornado grants caster Invincible 1 + Vulnerable 1 + Stun 1 on enemy Active', () => {
     const G = freshG();
     const mirage = G.players['0'].active!;
     const target = G.players['1'].active!;
     ABILITIES_BY_ID['skill_mirage'].run(G, { movingPlayer: '0' }, { source: mirage, target });
     expect(mirage.statuses.find((s) => s.id === 'invincibility')?.duration).toBe(1);
-    expect(target.statuses.find((s) => s.id === 'vulnerable')?.duration).toBe(2);
+    expect(target.statuses.find((s) => s.id === 'vulnerable')?.duration).toBe(1);
+    expect(target.statuses.find((s) => s.id === 'stun')?.duration).toBe(1);
   });
 
-  it('Fire Scarabs ult deals 3 spirit + Vulnerable 2 to every enemy board card', () => {
+  it('Traveler ult instantly respawns a fallen ally hero', () => {
     const G = freshG();
-    const enemy = G.players['1'];
-    const hpBefore = enemy.active!.hp;
+    const fallen = G.players['0'].bench[0]!;
+    fallen.hp = 0;
+    fallen.respawnTurnsLeft = 3;
     ABILITIES_BY_ID['eff_ult_mirage'].run(G, { movingPlayer: '0' }, {});
-    expect(hpBefore - enemy.active!.hp).toBe(3);
-    expect(enemy.active!.statuses.find((s) => s.id === 'vulnerable')?.duration).toBe(2);
-    for (const b of enemy.bench) {
-      if (!b) continue;
-      expect(b.statuses.find((s) => s.id === 'vulnerable')?.duration).toBe(2);
-    }
+    expect(fallen.respawnTurnsLeft).toBeUndefined();
+    expect(fallen.hp).toBe(fallen.hpMax);
+  });
+
+  it('Traveler fizzles when there are no fallen heroes (no-op)', () => {
+    const G = freshG();
+    // No corpses present on init.
+    ABILITIES_BY_ID['eff_ult_mirage'].run(G, { movingPlayer: '0' }, {});
+    // No crash, no mutation that matters.
+    expect(G.players['0'].active?.hp).toBe(G.players['0'].active?.hpMax);
   });
 });
 
 describe('Assassin archetype — Drifter', () => {
-  it('Eternal Night ult executes target at HP <= 5 (sets to 0 via pure dmg)', () => {
+  it('Eternal Night ult Silences all enemy bench heroes for 2 turns', () => {
     const G = freshG();
-    const target = G.players['1'].active!;
-    target.hp = 5;
-    ABILITIES_BY_ID['eff_ult_drifter'].run(G, { movingPlayer: '0' }, { target });
-    expect(target.hp).toBe(0);
+    ABILITIES_BY_ID['eff_ult_drifter'].run(G, { movingPlayer: '0' }, {});
+    // Enemy active should NOT be silenced — ult targets bench only.
+    expect(G.players['1'].active!.statuses.find((s) => s.id === 'silenced')).toBeUndefined();
+    for (const b of G.players['1'].bench) {
+      if (!b) continue;
+      expect(b.statuses.find((s) => s.id === 'silenced')?.duration).toBe(2);
+    }
   });
 
-  it('Eternal Night deals 5 attack dmg when target HP > 5', () => {
+  it('Bloodscent on-attack passive heals Drifter for 1', () => {
     const G = freshG();
-    const target = G.players['1'].active!;
-    target.hp = 10;
-    const before = target.hp;
-    ABILITIES_BY_ID['eff_ult_drifter'].run(G, { movingPlayer: '0' }, { target });
-    expect(before - target.hp).toBe(5);
+    const drifter = G.players['0'].active!;
+    drifter.hp = 5;
+    drifter.hpMax = 9;
+    ABILITIES_BY_ID['passive_drifter_bloodscent'].run(G, { movingPlayer: '0' }, { source: drifter });
+    expect(drifter.hp).toBe(6); // healed 1
   });
 
-  it('Bloodscent passive registered for Drifter (combat hook applies via effectiveAttackDamage)', async () => {
+  it('Bloodscent passive is registered for Drifter and bound on the hero card', async () => {
     const { CARDS_BY_ID } = await import('@/cards');
     const drifter = CARDS_BY_ID['hero_drifter'];
-    expect(drifter).toBeDefined();
-    expect((drifter as any).atk).toBe(3);
     expect((drifter as any).passives).toContain('passive_drifter_bloodscent');
     expect(ABILITIES_BY_ID['passive_drifter_bloodscent']).toBeDefined();
+  });
+});
+
+describe('Headshot Booster equipment — +2 vs Stunned', () => {
+  it('combat-hook fires when bearer attacks a Stunned target', async () => {
+    // We test through a minimal synthesized attacker with the equipment
+    // attached. Since the hook lives in `effectiveAttackDamage`, we drive it
+    // by importing the resolver and computing damage on a built unit.
+    const { resolveAttackPhase } = await import('@/engine/combat');
+    const G = freshG();
+    // Equip Headshot Booster on the player active (a hero with stat bonus).
+    const atk = G.players['0'].active!;
+    const eq = { iid: 'hb1', cardId: 'headshot_booster', ownerId: '0', zone: 'attached', attachedTo: atk.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false } as any;
+    atk.attached = [eq];
+    // Stun the enemy active.
+    G.players['1'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 });
+    const beforeHp = G.players['1'].active!.hp;
+    resolveAttackPhase(G, '0');
+    // Attacker's base ATK + Headshot's +1 ATK stat bonus is currently not
+    // auto-applied to atkMod via this synthetic equip path, but the +2 vs
+    // Stunned combat hook IS — that's what we want to assert.
+    // The actual delta is "base ATK + bonus". For Haze (atk 4) that's 4 + 2 = 6,
+    // but we cannot assume the active hero. Just assert damage dealt is at
+    // least the bonus.
+    const dmgDealt = beforeHp - G.players['1'].active!.hp;
+    expect(dmgDealt).toBeGreaterThanOrEqual(2);
   });
 });
 

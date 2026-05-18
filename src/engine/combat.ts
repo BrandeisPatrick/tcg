@@ -223,5 +223,15 @@ function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): 
     dmg += 3;
     bonusLabel = 'Drifter: Bloodscent +3';
   }
+  // Headshot Booster equipment: bearer's attacks deal +2 vs Stunned targets.
+  // Generic, hero-agnostic version of Haze's Fixation — opens the same
+  // setup → finish pattern to any equipped hero.
+  if (
+    atk.attached?.some((eq) => eq.cardId === 'headshot_booster') &&
+    target?.statuses.some((s) => s.id === 'stun')
+  ) {
+    dmg += 2;
+    bonusLabel = 'Headshot Booster: +2 vs Stunned';
+  }
   return { dmg, bonusLabel };
 }

@@ -211,7 +211,7 @@ export const HEROES: HeroCard[] = [
     hp: 11,
     skill: 'skill_warden',
     ult: 'ult_warden',
-    text: 'Disruptor. Binding Word: Silence + Disarm + Vulnerable on an enemy for 2 turns (no damage).',
+    text: 'Disruptor. Willpower: Shield 5 on self (+ caster Spirit).',
   },
   // Trickster: canon Mirage is a whirlwind that can't be hit while spinning
   // and disorients enemies on contact — translated to "Mirage gains
@@ -225,7 +225,7 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_mirage',
     ult: 'ult_mirage',
-    text: 'Trickster. Tornado: gain Invincible 1 + Vulnerable 2 on enemy Active.',
+    text: 'Trickster. Tornado: gain Invincible 1 + Vulnerable 1 + Stun 1 on enemy Active.',
   },
   // Assassin: canon Deadlock's Drifter. His passive "Bloodscent" reveals
   // and amplifies damage on isolated/weakened targets — perfect TCG
@@ -239,7 +239,7 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     passives: ['passive_drifter_bloodscent'],
     ult: 'ult_drifter',
-    text: 'Assassin. Bloodscent: attacks deal +3 dmg vs targets at 4 HP or below.',
+    text: 'Assassin. Bloodscent: heal 1 on attack, +3 dmg vs targets at 4 HP or below.',
   },
 ];
 

@@ -23,7 +23,7 @@ import type { EquipmentCard } from '@/engine/types';
 export const EQUIPMENT: EquipmentCard[] = [
   // ----- Tier 1 — 1 soul (passive stat sticks + small passives) -----
   { id: 'basic_magazine',       name: 'Basic Magazine',        type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { atk: 1 },           text: '+1 ATK.' },
-  { id: 'headshot_booster',     name: 'Headshot Booster',      type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { atk: 1 },           text: '+1 ATK.' },
+  { id: 'headshot_booster',     name: 'Headshot Booster',      type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { atk: 1 },           text: '+1 ATK. Attacks deal +2 dmg vs Stunned targets.' },
   { id: 'close_quarters',       name: 'Close Quarters',        type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { atk: 1 },           text: '+1 ATK.' },
   { id: 'extra_health',         name: 'Extra Health',          type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { hp: 3 },            text: '+3 HP.' },
   { id: 'extra_stamina',        name: 'Extra Stamina',         type: 'equipment', rarity: 1, tier: 1, cost: 1, abilities: ['eff_extra_stamina'], text: 'On attach: draw 2 cards.' },
