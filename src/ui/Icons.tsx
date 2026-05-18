@@ -14,11 +14,21 @@ const wrap = (size: number, style?: CSSProperties): CSSProperties => ({
   ...style,
 });
 
+/** Bullet cartridge icon — used for ATK / bullet damage stat. Drawn as a
+ *  horizontal cartridge: brass casing on the left, pointed nose on the right,
+ *  faint rim line at the base. Reads more clearly than the old crossed-sword
+ *  glyph and matches Deadlock's bullet-damage terminology. */
 export function SwordIcon({ size = 14, color = '#ffd166', style }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" style={wrap(size, style)}>
-      <path d="M3 12 L6 9 M2 14 L4 12 L6 14 L4 16 Z" fill={color} stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
-      <path d="M6 10 L13 3 L13.5 1 L11 1.5 L4 8.5 Z" fill={color} stroke={color} strokeWidth="1" strokeLinejoin="round" />
+      {/* Casing */}
+      <rect x="2" y="5" width="8.5" height="6" rx="0.6" fill={color} stroke="rgba(0,0,0,0.3)" strokeWidth="0.5" />
+      {/* Rim mark */}
+      <rect x="2" y="5" width="1.4" height="6" fill="rgba(0,0,0,0.25)" />
+      {/* Bullet tip (pointed) */}
+      <path d="M10.5 5 L14.5 8 L10.5 11 Z" fill={color} stroke="rgba(0,0,0,0.3)" strokeWidth="0.5" strokeLinejoin="round" />
+      {/* Highlight */}
+      <rect x="3" y="5.6" width="6.5" height="0.6" fill="rgba(255,255,255,0.35)" />
     </svg>
   );
 }
