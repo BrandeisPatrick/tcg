@@ -1,0 +1,42 @@
+MIT License
+
+Copyright (c) 2026 BrandeisPatrick
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+
+DISCLAIMER — FAN PROJECT
+
+This project is an unofficial, non-commercial fan-made trading-card game
+inspired by Valve's Deadlock. It is not affiliated with, endorsed by, or
+sponsored by Valve Corporation.
+
+"Deadlock," all hero names, item names, and the bitmap art assets
+distributed in `public/heroes/`, `public/spells/`, and `public/items/` are
+the property of Valve Corporation. The art is sourced via the community-run
+deadlock-api.com asset bucket and remains under Valve's copyright; it is
+included here for illustrative, non-commercial fan use only.
+
+The MIT license above applies ONLY to the source code in this repository —
+the game engine, UI components, scripts, and tests authored by the project
+maintainers. It does NOT grant any rights to the third-party art assets.
+
+If you are a representative of Valve and would like the art removed,
+please open an issue on this repository and I will comply promptly.

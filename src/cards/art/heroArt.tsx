@@ -8,9 +8,11 @@ interface PortraitProps {
   variant?: 'card' | 'mm' | 'sm';   // which asset variant to use
 }
 
-// Real hero card art lives in /public/heroes/<cardId>_<variant>.webp
+// Real hero card art lives in public/heroes/<cardId>_<variant>.webp.
+// Prefix with Vite's BASE_URL so the path resolves under "/" (local dev)
+// and "/deadlock-tcg/" (GitHub Pages production build).
 function imageUrl(cardId: string, variant: 'card' | 'mm' | 'sm') {
-  return `/heroes/${cardId}_${variant}.webp`;
+  return `${import.meta.env.BASE_URL}heroes/${cardId}_${variant}.webp`;
 }
 
 export function HeroPortrait({ cardId, size, full = false, className, variant = 'card' }: PortraitProps) {

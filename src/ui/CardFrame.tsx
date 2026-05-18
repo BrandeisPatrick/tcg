@@ -190,8 +190,8 @@ function ArtWindow({ data, size }: { data: CardData | undefined; size: Size }) {
       </div>
     );
   }
-  if (data.type === 'spell') return <ArtImg src={`/spells/${data.id}.webp`} kind="spell" cardId={data.id} />;
-  if (data.type === 'equipment') return <ArtImg src={`/items/${data.id}.webp`} kind="equipment" cardId={data.id} />;
+  if (data.type === 'spell') return <ArtImg src={`${import.meta.env.BASE_URL}spells/${data.id}.webp`} kind="spell" cardId={data.id} />;
+  if (data.type === 'equipment') return <ArtImg src={`${import.meta.env.BASE_URL}items/${data.id}.webp`} kind="equipment" cardId={data.id} />;
   return null;
 }
 

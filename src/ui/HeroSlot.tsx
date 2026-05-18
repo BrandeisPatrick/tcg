@@ -173,7 +173,7 @@ export function HeroSlot({
                   overflow: 'hidden',
                   cursor: 'help',
                 }} title={CARDS_BY_ID[eq.cardId]?.name}>
-                <img src={`/items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
+                <img src={`${import.meta.env.BASE_URL}items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
                   style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
               </div>
             ))}
