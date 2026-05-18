@@ -379,6 +379,46 @@ describe('Headshot Booster equipment — +2 vs Stunned', () => {
   });
 });
 
+// Regression: damage log uses the player-facing "bullet" label, not the
+// engine-internal "attack" damage type.
+describe('damage log labelling', () => {
+  it('logs bullet damage with "bullet" not "attack"', async () => {
+    const { damageUnit } = await import('@/engine/damage');
+    const G = freshG();
+    const tgt = G.players['1'].active!;
+    damageUnit(G, tgt, 3, 'attack', 'TestHero');
+    const lastLog = G.log[G.log.length - 1];
+    expect(lastLog.text).toMatch(/bullet dmg/);
+    expect(lastLog.text).not.toMatch(/attack dmg/);
+  });
+
+  it('logs spirit damage with "spirit" label', async () => {
+    const { damageUnit } = await import('@/engine/damage');
+    const G = freshG();
+    const tgt = G.players['1'].active!;
+    damageUnit(G, tgt, 3, 'spirit', 'TestHero');
+    const lastLog = G.log[G.log.length - 1];
+    expect(lastLog.text).toMatch(/spirit dmg/);
+  });
+});
+
+// Regression: every hero's card text describes damage with explicit bullet/
+// spirit labels (no bare "dmg") so the player can read intent at a glance.
+describe('card text damage labels', () => {
+  it('every hero / ult / spell card text labels damage as bullet or spirit', async () => {
+    const { HEROES } = await import('@/cards/heroes');
+    const { ULTIMATES } = await import('@/cards/ultimates');
+    const { SPELLS } = await import('@/cards/spells');
+    const allText = [...HEROES, ...ULTIMATES, ...SPELLS]
+      .map((c) => ({ id: c.id, text: c.text ?? '' }))
+      .filter((c) => / dmg\b/i.test(c.text));
+    for (const c of allText) {
+      const hasLabel = /bullet dmg|spirit dmg|pure dmg/i.test(c.text);
+      expect(hasLabel, `${c.id} has unlabeled "dmg": "${c.text}"`).toBe(true);
+    }
+  });
+});
+
 // Regression lock: no glass-cannon hero should be one-shot by an opening-turn
 // skill + basic-attack alpha. Worst-case caster combo is Yamato (atk 4) casting
 // Power Slash (4 spirit at 0 SPI) into the front line. Every starter-deck hero
