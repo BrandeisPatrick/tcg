@@ -40,7 +40,7 @@ export const SPELLS: SpellCard[] = [
 
   // ----- Mythic (T4) · 5 souls — late-game finishers -----
   { id: 'ethereal_shift',      name: 'Ethereal Shift',      type: 'spell', rarity: 4, cost: 5, abilities: ['eff_ethereal_shift'],      text: 'Mythic. Grant ally Active Invincibility for 2 turns.' },
-  { id: 'phantom_strike',      name: 'Phantom Strike',      type: 'spell', rarity: 4, cost: 5, abilities: ['eff_phantom_strike'],      text: 'Mythic. 6 dmg (+ caster Spirit) to any enemy.' },
+  { id: 'phantom_strike',      name: 'Phantom Strike',      type: 'spell', rarity: 4, cost: 5, abilities: ['eff_phantom_strike'],      text: 'Mythic. 6 bullet dmg (+ caster Spirit) to any enemy.' },
   { id: 'echo_shard',          name: 'Echo Shard',          type: 'spell', rarity: 4, cost: 5, abilities: ['eff_echo_shard'],          text: 'Mythic. Cast another skill this turn.' },
   { id: 'silence_glyph',       name: 'Silence Glyph',       type: 'spell', rarity: 4, cost: 5, abilities: ['eff_silence_glyph'],       text: 'Mythic. Silence enemy Active and all Bench heroes for 2 turns.' },
   { id: 'curse',               name: 'Curse',               type: 'spell', rarity: 4, cost: 5, abilities: ['eff_curse'],               text: 'Mythic. Silence, Disarm, and Vulnerable on enemy Active for 2 turns.' },

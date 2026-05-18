@@ -93,7 +93,7 @@ export const HEROES: HeroCard[] = [
     passives: ['passive_vindicta_flight'],
     ult: 'ult_vindicta',
     abilityName: 'Flight',
-    text: 'Long Range. Takes 1 less attack damage from all sources.',
+    text: 'Long Range. Takes 1 less bullet damage from all sources.',
     flags: { longRange: true },
   },
   {
@@ -259,7 +259,7 @@ export const HEROES: HeroCard[] = [
     passives: ['passive_drifter_bloodscent'],
     ult: 'ult_drifter',
     abilityName: 'Bloodscent',
-    text: 'Heal 1 on attack. +3 dmg vs targets at 4 HP or below.',
+    text: 'Heal 1 on attack. +3 bullet dmg vs targets at 4 HP or below.',
   },
 ];
 

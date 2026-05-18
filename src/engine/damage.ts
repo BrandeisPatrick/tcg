@@ -60,7 +60,9 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
 
   const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
   const arrow = sourceName ? `${sourceName} → ${targetName}` : targetName;
-  pushLog(G, `${arrow}: ${dmg} ${type} dmg (${targetName} ${target.hp} HP).`);
+  // Display "bullet" instead of the engine-internal "attack" damage type.
+  const typeLabel = type === 'attack' ? 'bullet' : type;
+  pushLog(G, `${arrow}: ${dmg} ${typeLabel} dmg (${targetName} ${target.hp} HP).`);
 
   // Overflow: any damage in excess of the hero's HP spills into the owner's Patron.
   // This is what keeps games finishing once respawn is in play — pushing past a KO

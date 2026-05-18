@@ -34,6 +34,12 @@ const KEYWORDS: Record<string, string> = {
   'Mythic':         palette.accent,
   // Scaling tag (spirit purple — same as Spirit Power buff family)
   'caster Spirit':  palette.spirit,
+  // Damage type labels — make bullet vs spirit damage unmistakable.
+  // 'bullet damage' / 'bullet dmg' compounds must come before solo 'bullet'.
+  'bullet damage':  palette.atk,
+  'bullet dmg':     palette.atk,
+  'spirit damage':  palette.spirit,
+  'spirit dmg':     palette.spirit,
 };
 
 // Build a single global regex from the keys, longest-first to greedily match

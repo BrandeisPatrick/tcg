@@ -64,7 +64,7 @@ function eachBoard(G: GameState, pid: PlayerID, fn: (c: CardInstance) => void) {
 const eff_phantom_strike: AbilityDef = {
   id: 'eff_phantom_strike', trigger: 'onPlay', target: 'enemyAny',
   prompt: 'Phantom Strike — pick an enemy.',
-  scalesSpirit: true, base: 6, baseLabel: 'dmg',
+  scalesSpirit: true, base: 6, baseLabel: 'bullet dmg',
   run: (G, ctx, { target }) => {
     if (!target) return;
     damageUnit(G, target, 6 + activeSpi(G, ctx.movingPlayer), 'attack');
@@ -385,7 +385,7 @@ const skill_kelvin: AbilityDef = {
 const skill_lady_geist: AbilityDef = {
   id: 'skill_lady_geist', trigger: 'activate', target: 'enemyAny', exhausts: true,
   prompt: 'Lady Geist — 3 spirit dmg.',
-  base: 3, baseLabel: 'dmg',
+  base: 3, baseLabel: 'spirit dmg',
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 3 + spi(source), 'spirit'); },
 };
@@ -531,7 +531,7 @@ const passive_shiv_bleed: AbilityDef = {
 // + spells) and the planner in `combat.ts` (basic attacks).
 const passive_vindicta_flight: AbilityDef = {
   id: 'passive_vindicta_flight', trigger: 'ongoing', target: 'self',
-  prompt: 'Flight — takes 1 less attack (bullet) damage from all sources.',
+  prompt: 'Flight — takes 1 less bullet damage from all sources.',
   run: () => { /* damage hook reads this directly */ },
 };
 
@@ -552,7 +552,7 @@ const passive_wraith_mixed: AbilityDef = {
 // directly from the attacker cardId in the combat hook.
 const passive_drifter_bloodscent: AbilityDef = {
   id: 'passive_drifter_bloodscent', trigger: 'onAttack', target: 'self',
-  prompt: 'Bloodscent — heal 1 on attack + 3 dmg vs targets at 4 HP or below.',
+  prompt: 'Bloodscent — heal 1 on attack + 3 bullet dmg vs targets at 4 HP or below.',
   run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1); },
 };
 
@@ -577,7 +577,7 @@ const eff_ult_dynamo: AbilityDef = {
 };
 const eff_ult_haze: AbilityDef = {
   id: 'eff_ult_haze', trigger: 'onPlay', target: 'noTarget',
-  base: 2, baseLabel: 'dmg per enemy',
+  base: 2, baseLabel: 'bullet dmg per enemy',
   run: (G, ctx) => { eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 2, 'attack')); },
 };
 const eff_ult_kelvin: AbilityDef = {
@@ -594,7 +594,7 @@ const eff_ult_lady_geist: AbilityDef = {
 };
 const eff_ult_lash: AbilityDef = {
   id: 'eff_ult_lash', trigger: 'onPlay', target: 'enemyActive',
-  base: 6, baseLabel: 'dmg',
+  base: 6, baseLabel: 'bullet dmg',
   run: (G, _ctx, { target }) => { if (target) damageUnit(G, target, 6, 'attack'); },
 };
 const eff_ult_mo_krill: AbilityDef = {
@@ -628,12 +628,12 @@ const eff_ult_sinclair: AbilityDef = {
 };
 const eff_ult_vindicta: AbilityDef = {
   id: 'eff_ult_vindicta', trigger: 'onPlay', target: 'enemyAny',
-  base: 5, baseLabel: 'dmg',
+  base: 5, baseLabel: 'bullet dmg',
   run: (G, _ctx, { target }) => { if (target) damageUnit(G, target, 5, 'attack'); },
 };
 const eff_ult_viscous: AbilityDef = {
   id: 'eff_ult_viscous', trigger: 'onPlay', target: 'enemyActive',
-  base: 3, baseLabel: 'dmg + self Invinc 2',
+  base: 3, baseLabel: 'bullet dmg + self Invinc 2',
   run: (G, ctx, { source, target }) => {
     const ally = G.players[ctx.movingPlayer].active;
     if (ally) addStatus(G, ally, 'invincibility', 1, 2);
