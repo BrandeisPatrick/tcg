@@ -31,6 +31,9 @@ export const STATUSES: StatusDef[] = [
   // ----- DOT -----
   { id: 'bleed',         title: 'Bleed',         desc: 'Take <value> Pure dmg at start of turn (stacks, max 3).',  hvalue: -1 },
 
+  // ----- Delayed CC -----
+  { id: 'charged',       title: 'Charged',       desc: 'On expiry: Stun for 1 turn.',                              hvalue: -1 },
+
   // ----- Other debuff -----
   { id: 'vulnerable',    title: 'Vulnerable',    desc: 'Take +2 damage from all sources.',                         hvalue: -2 },
 

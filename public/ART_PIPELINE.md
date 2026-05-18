@@ -192,6 +192,7 @@ HERO_MAP = {
     'hero_vindicta':    'hornet',
     'hero_viscous':     'viscous',
     'hero_yamato':      'yamato',
+    'hero_wraith':      'wraith',
 }
 # Each hero has 3 sizes: _card (portrait), _mm (minimap), _sm (small icon)
 # Source: https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/{slug}_{kind}.webp

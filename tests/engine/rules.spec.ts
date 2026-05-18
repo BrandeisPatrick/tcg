@@ -20,24 +20,25 @@ describe('rule: only one skill per player per turn', () => {
     const G = freshG();
     const me = G.players['0'];
     const enemy = G.players['1'];
-    const hero1 = me.active!;
-    const hero2 = me.bench[0]!;
+    // Aggro deck heroes: [haze (passive), vindicta (passive), lash (skill), paige (skill)].
+    // Pick the two skill heroes — Lash + Paige — for this per-turn-cap test.
+    const hero1 = me.bench[1]!;  // Lash
+    const hero2 = me.bench[2]!;  // Paige
     expect(me.skillUsedThisTurn).toBe(false);
     const r1 = runMove('useSkill', G, '0', hero1.iid, enemy.active!.iid);
     expect(r1).not.toBe('INVALID_MOVE');
     expect(me.skillUsedThisTurn).toBe(true);
-    const r2 = runMove('useSkill', G, '0', hero2.iid, enemy.active!.iid);
+    const r2 = runMove('useSkill', G, '0', hero2.iid, me.active!.iid);
     expect(r2).toBe('INVALID_MOVE');
   });
 
   it('flag resets at the start of the player\'s next turn', () => {
     const c = Client({ game: DeadlockGame, numPlayers: 2 });
     c.start();
-    // Pop the initial state — flag should be false.
     let g = c.getState()!.G as GameState;
     expect(g.players['0'].skillUsedThisTurn).toBe(false);
-    // Use a skill (Haze active hits enemy active).
-    const hero = g.players['0'].active!;
+    // Use a skill — Lash on bench (active Haze is now passive-only).
+    const hero = g.players['0'].bench[1]!;  // Lash
     const target = g.players['1'].active!;
     (c.moves as any).useSkill(hero.iid, target.iid);
     g = c.getState()!.G as GameState;

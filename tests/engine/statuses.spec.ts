@@ -170,18 +170,18 @@ describe('status: weapon_power', () => {
 });
 
 describe('status: spirit_power', () => {
-  it('adds to skill scaling (Haze skill: 2 + SPI total)', async () => {
+  it('adds to skill scaling (Lady Geist skill: 3 + SPI total)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
-    const skill = ABILITIES_BY_ID['skill_haze'];
+    const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
-    const haze = G.players['0'].active!;
-    haze.spiritMod = 1; // 1 from equipment
-    addStatus(G, haze, 'spirit_power', 3, 2); // +3 from buff
+    const caster = G.players['0'].active!;
+    caster.spiritMod = 1; // 1 from equipment
+    addStatus(G, caster, 'spirit_power', 3, 2); // +3 from buff
     const target = G.players['1'].active!;
     const hpBefore = target.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: haze, target });
-    // base 2 + (spiritMod 1 + spirit_power 3) = 6
-    expect(hpBefore - target.hp).toBe(6);
+    skill.run(G, { movingPlayer: '0' }, { source: caster, target });
+    // base 3 + (spiritMod 1 + spirit_power 3) = 7
+    expect(hpBefore - target.hp).toBe(7);
   });
 });
 

@@ -190,46 +190,45 @@ describe('souls economy', () => {
     expect(retreats.length).toBe(0);
   });
 
-  // ----- Spirit scaling on hero skills -----
-  it('hero skill at 0 SPI deals base damage (Haze: 2 + 0 = 2 spirit)', async () => {
+  // ----- Spirit scaling on hero skills (use Lady Geist as representative — 3 spirit dmg) -----
+  it('hero skill at 0 SPI deals base damage (Lady Geist: 3 + 0 = 3 spirit)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
-    const skill = ABILITIES_BY_ID['skill_haze'];
+    const skill = ABILITIES_BY_ID['skill_lady_geist'];
     expect(skill.scalesSpirit).toBe(true);
-    expect(skill.base).toBe(2);
+    expect(skill.base).toBe(3);
     const G = freshG();
-    const haze = G.players['0'].active!;
-    haze.spiritMod = 0;
+    const caster = G.players['0'].active!;
+    caster.spiritMod = 0;
     const target = G.players['1'].active!;
     const hpBefore = target.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: haze, target });
-    expect(hpBefore - target.hp).toBe(2);
-    expect(target.statuses.some((s) => s.id === 'stun')).toBe(true);
+    skill.run(G, { movingPlayer: '0' }, { source: caster, target });
+    expect(hpBefore - target.hp).toBe(3);
   });
 
-  it('hero skill at +3 SPI deals base + spirit (Haze: 2 + 3 = 5 spirit)', async () => {
+  it('hero skill at +3 SPI deals base + spirit (Lady Geist: 3 + 3 = 6 spirit)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
-    const skill = ABILITIES_BY_ID['skill_haze'];
+    const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
-    const haze = G.players['0'].active!;
-    haze.spiritMod = 3;
+    const caster = G.players['0'].active!;
+    caster.spiritMod = 3;
     const target = G.players['1'].active!;
     const hpBefore = target.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: haze, target });
-    expect(hpBefore - target.hp).toBe(5);
+    skill.run(G, { movingPlayer: '0' }, { source: caster, target });
+    expect(hpBefore - target.hp).toBe(6);
   });
 
-  it('heal scales with spirit (Rem heal 3 + 2 SPI = 5)', async () => {
+  it('heal scales with spirit (Dynamo heal 3 + 2 SPI = 5)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
-    const skill = ABILITIES_BY_ID['skill_rem'];
+    const skill = ABILITIES_BY_ID['skill_dynamo'];
     expect(skill.scalesSpirit).toBe(true);
     const G = freshG();
-    const rem = G.players['0'].active!;
-    rem.spiritMod = 2;
+    const healer = G.players['0'].active!;
+    healer.spiritMod = 2;
     // Wound an ally so the heal lands
     const ally = G.players['0'].bench[0]!;
     ally.hp = 1;
     const hpBefore = ally.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    skill.run(G, { movingPlayer: '0' }, { source: healer, target: ally });
     expect(ally.hp - hpBefore).toBe(5);
   });
 

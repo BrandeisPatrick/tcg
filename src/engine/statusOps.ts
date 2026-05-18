@@ -55,6 +55,13 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
     const bleed = c.statuses.find((s) => s.id === 'bleed');
     if (bleed) damageUnit(G, c, bleed.value, 'pure');
+    // Charged: delayed-stun. Detected BEFORE the tick so we know it's about to expire,
+    // then converts into a Stun(1) on the same target. Powers Seven's Static Charge.
+    const charged = c.statuses.find((s) => s.id === 'charged');
+    if (charged && charged.duration === 1) {
+      addStatus(G, c, 'stun', 1, 1);
+      pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} discharges: Stun for 1.`);
+    }
     c.statuses = c.statuses
       .map((s) => ({ ...s, duration: s.duration - 1 }))
       .filter((s) => s.duration > 0);

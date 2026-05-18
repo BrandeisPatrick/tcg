@@ -7,6 +7,11 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   if (amount <= 0) return 0;
   // Corpses can't take more damage — they're already KO'd waiting to respawn.
   if ((target.respawnTurnsLeft ?? 0) > 0) return 0;
+  // Vindicta passive: flight. Reduces incoming attack (bullet) damage by 1 —
+  // she's literally above the gunfire. Doesn't apply to spirit/pure.
+  if (type === 'attack' && target.cardId === 'hero_vindicta') {
+    amount = Math.max(0, amount - 1);
+  }
   // Invincibility is granted by a small set of cards (Ethereal Shift, etc.) and
   // negates all damage. The status is not user-visible — see card text + portrait aura.
   if (target.statuses.some((s) => s.id === 'invincibility')) return 0;

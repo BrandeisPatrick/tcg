@@ -61,8 +61,10 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
   let simHp = target?.hp ?? 0;
   let simShield = target?.statuses.find((s) => s.id === 'shield')?.value ?? 0;
   const bulletResist = target?.statuses.find((s) => s.id === 'bullet_resist')?.value ?? 0;
+  const spiritResist = target?.statuses.find((s) => s.id === 'spirit_resist')?.value ?? 0;
   const hasInvinc = !!target?.statuses.some((s) => s.id === 'invincibility');
   const vulnerable = !!target?.statuses.some((s) => s.id === 'vulnerable');
+  const targetIsVindicta = target?.cardId === 'hero_vindicta';
 
   const steps: AttackStep[] = [];
   let damageToActive = 0;
@@ -77,10 +79,23 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
     if (target) {
       // Mirror damageUnit's mitigation pipeline so the predicted HP matches reality.
       let final = dmg;
+      const wraithSplit = atk.cardId === 'hero_wraith';
       if (vulnerable) final += 2;
       if (hasInvinc) final = 0;
-      // Bullet Resist reduces attack-type damage only.
-      if (final > 0) final = Math.max(0, final - bulletResist);
+      if (final > 0) {
+        if (wraithSplit) {
+          // Split half bullet / half spirit. Vindicta's -1 only applies to the bullet half.
+          const half1 = Math.max(0, Math.ceil(final / 2) - (targetIsVindicta ? 1 : 0));
+          const half2 = Math.floor(final / 2);
+          const bulletHalf = Math.max(0, half1 - bulletResist);
+          const spiritHalf = Math.max(0, half2 - spiritResist);
+          final = bulletHalf + spiritHalf;
+        } else {
+          // Bullet Resist reduces attack-type damage; Vindicta further reduces by 1.
+          if (targetIsVindicta) final = Math.max(0, final - 1);
+          final = Math.max(0, final - bulletResist);
+        }
+      }
       // Shield absorbs next.
       if (final > 0 && simShield > 0) {
         const absorb = Math.min(simShield, final);
@@ -149,7 +164,15 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
     if (dmg <= 0) continue;
 
     if (target) {
-      damageUnit(G, target, dmg, 'attack');
+      // Wraith passive: split half bullet / half spirit. Pierces single-type resists.
+      if (atk.cardId === 'hero_wraith') {
+        const half1 = Math.ceil(dmg / 2);
+        const half2 = Math.floor(dmg / 2);
+        if (half1 > 0) damageUnit(G, target, half1, 'attack');
+        if (half2 > 0) damageUnit(G, target, half2, 'spirit');
+      } else {
+        damageUnit(G, target, dmg, 'attack');
+      }
       // Trigger any onAttack ability on the attacker's hero.
       const data = CARDS_BY_ID[atk.cardId];
       if (data?.type === 'hero') {

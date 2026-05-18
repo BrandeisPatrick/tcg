@@ -282,20 +282,9 @@ const eff_cast_divine_barrier: AbilityDef = {
   run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'shield', 5, 999); },
 };
 
-// ----- Hero skills -----
+// ----- Hero skills (active, "Activate" trigger) -----
 // Each skill declares its scaling (spirit / bullet / both / none).
 // Base damage stays its original type. Scaling adds a second damage event of the matching type.
-const skill_abrams: AbilityDef = {
-  id: 'skill_abrams', trigger: 'activate', target: 'enemyActive', exhausts: true,
-  prompt: 'Abrams skill — 2 spirit + Stun 2.',
-  base: 2, baseLabel: 'dmg',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
-    if (!target) return;
-    damageUnit(G, target, 2 + spi(source), 'spirit');
-    addStatus(G, target, 'stun', 1, 2);
-  },
-};
 
 const skill_dynamo: AbilityDef = {
   id: 'skill_dynamo', trigger: 'activate', target: 'allyHero', exhausts: true,
@@ -303,18 +292,6 @@ const skill_dynamo: AbilityDef = {
   base: 3, baseLabel: 'heal',
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => { if (target) healUnit(G, target, 3 + spi(source)); },
-};
-
-const skill_haze: AbilityDef = {
-  id: 'skill_haze', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Haze skill — 2 dmg + Stun 2.',
-  base: 2, baseLabel: 'dmg',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
-    if (!target) return;
-    damageUnit(G, target, 2 + spi(source), 'spirit');
-    addStatus(G, target, 'stun', 1, 2);
-  },
 };
 
 const skill_kelvin: AbilityDef = {
@@ -344,17 +321,6 @@ const skill_lash: AbilityDef = {
   run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 3 + spi(source), 'spirit'); },
 };
 
-const skill_mo_krill: AbilityDef = {
-  id: 'skill_mo_krill', trigger: 'activate', target: 'enemyActive', exhausts: true,
-  prompt: 'Mo & Krill — 2 dmg + heal self 1.',
-  base: 2, baseLabel: 'dmg',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
-    if (target) damageUnit(G, target, 2 + spi(source), 'spirit');
-    if (source) healUnit(G, source, 1 + spi(source));
-  },
-};
-
 const skill_paige: AbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero', exhausts: true,
   prompt: 'Paige — Shield 3.',
@@ -363,28 +329,13 @@ const skill_paige: AbilityDef = {
   run: (G, _ctx, { source, target }) => { if (target) addStatus(G, target, 'shield', 3 + spi(source), 999); },
 };
 
-const skill_rem: AbilityDef = {
-  id: 'skill_rem', trigger: 'activate', target: 'allyHero', exhausts: true,
-  prompt: 'Rem — heal 3.',
-  base: 3, baseLabel: 'heal',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) healUnit(G, target, 3 + spi(source)); },
-};
-
-const skill_seven: AbilityDef = {
-  id: 'skill_seven', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Seven — 3 spirit dmg.',
-  base: 3, baseLabel: 'dmg',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 3 + spi(source), 'spirit'); },
-};
-
-const skill_shiv: AbilityDef = {
-  id: 'skill_shiv', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Shiv — Bleed 2.',
-  base: 2, baseLabel: 'bleed',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) addStatus(G, target, 'bleed', 2 + spi(source), 3); },
+// Static Charge: delayed stun. Applies the Charged status; on its expiry next turn
+// the tick handler in statusOps converts it to a 1-turn Stun.
+const skill_seven_static: AbilityDef = {
+  id: 'skill_seven_static', trigger: 'activate', target: 'enemyActive', exhausts: true,
+  prompt: 'Seven Static Charge — apply Charged 1 to enemy Active. Stuns on expiry.',
+  base: 1, baseLabel: 'turn fuse',
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'charged', 1, 1); },
 };
 
 const skill_sinclair: AbilityDef = {
@@ -394,21 +345,9 @@ const skill_sinclair: AbilityDef = {
   run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'spirit_power', 2, 2); },
 };
 
-const skill_vindicta: AbilityDef = {
-  id: 'skill_vindicta', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Vindicta — 2 dmg + Sleep 2.',
-  base: 2, baseLabel: 'dmg',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
-    if (!target) return;
-    damageUnit(G, target, 2 + spi(source), 'spirit');
-    addStatus(G, target, 'sleep', 1, 2);
-  },
-};
-
 const skill_viscous: AbilityDef = {
   id: 'skill_viscous', trigger: 'activate', target: 'self', exhausts: true,
-  prompt: 'Viscous — Invincible 1.',
+  prompt: 'Viscous Cube Form — Invincible 1.',
   // pure defensive — no scaling
   run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'invincibility', 1, 1); },
 };
@@ -421,7 +360,8 @@ const skill_yamato: AbilityDef = {
   run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 3 + spi(source), 'spirit'); },
 };
 
-// ----- Hero passives -----
+// ----- Hero passives (always-on or trigger-based, no Activate) -----
+
 const passive_abrams_heal: AbilityDef = {
   id: 'passive_abrams_heal', trigger: 'startOfTurn', target: 'self',
   run: (G, _ctx, { source }) => {
@@ -431,34 +371,27 @@ const passive_abrams_heal: AbilityDef = {
   },
 };
 
-const passive_dynamo_heal: AbilityDef = {
-  id: 'passive_dynamo_heal', trigger: 'endOfTurn', target: 'self',
-  run: (G, ctx, { source }) => {
-    if (!source) return;
-    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 1);
-  },
-};
-
+// Fixation: +2 ATK vs Stunned targets. The damage hook lives in
+// `combat.ts:effectiveAttackDamage` — this is a marker so the registry
+// owns the definition and the UI can show a trigger label.
 const passive_haze_stunbonus: AbilityDef = {
   id: 'passive_haze_stunbonus', trigger: 'ongoing', target: 'self',
+  prompt: 'Fixation — +2 ATK vs Stunned targets.',
   run: () => { /* combat hook reads this directly */ },
 };
 
-const passive_kelvin_chill: AbilityDef = {
-  id: 'passive_kelvin_chill', trigger: 'startOfTurn', target: 'self',
-  run: (G, ctx, { source }) => {
-    const enemy = G.players[otherPlayer(ctx.movingPlayer)].active;
-    if (enemy) addStatus(G, enemy, 'vulnerable', 0, 1);
+// Burrow: cleanses all debuffs from self at the start of own turn (only while Active).
+const passive_mo_krill_burrow: AbilityDef = {
+  id: 'passive_mo_krill_burrow', trigger: 'startOfTurn', target: 'self',
+  prompt: 'Burrow — start of own turn: cleanse all debuffs from self.',
+  run: (G, _ctx, { source }) => {
+    if (source && source.zone === 'active') cleanseDebuffs(source);
   },
-};
-
-const passive_lash_swap: AbilityDef = {
-  id: 'passive_lash_swap', trigger: 'ongoing', target: 'self',
-  run: () => {},
 };
 
 const passive_rem_benchheal: AbilityDef = {
   id: 'passive_rem_benchheal', trigger: 'startOfTurn', target: 'self',
+  prompt: "Lil Helpers — start of own turn: heal ally Active 2 while on the bench.",
   run: (G, ctx, { source }) => {
     if (!source || source.zone !== 'bench') return;
     const ally = G.players[ctx.movingPlayer].active;
@@ -466,16 +399,29 @@ const passive_rem_benchheal: AbilityDef = {
   },
 };
 
-const passive_seven_zap: AbilityDef = {
-  id: 'passive_seven_zap', trigger: 'endOfTurn', target: 'self',
-  run: (G, ctx, { source }) => {
-    if (!source || source.zone !== 'active') return;
-    const benchEnemies = G.players[otherPlayer(ctx.movingPlayer)].bench.filter(Boolean) as CardInstance[];
-    if (benchEnemies.length) {
-      const t = benchEnemies[Math.floor(Math.random() * benchEnemies.length)];
-      damageUnit(G, t, 1, 'spirit');
-    }
+// On every attack Shiv lands, apply Bleed 1 (2 turns) to the target.
+const passive_shiv_bleed: AbilityDef = {
+  id: 'passive_shiv_bleed', trigger: 'onAttack', target: 'self',
+  prompt: "Serrated Knives — attacks apply Bleed 1 for 2 turns.",
+  run: (G, _ctx, { source, target }) => {
+    if (source && target) addStatus(G, target, 'bleed', 1, 2);
   },
+};
+
+// Flight: marker passive. The actual mitigation lives in `damageUnit` (skills
+// + spells) and the planner in `combat.ts` (basic attacks).
+const passive_vindicta_flight: AbilityDef = {
+  id: 'passive_vindicta_flight', trigger: 'ongoing', target: 'self',
+  prompt: 'Flight — takes 1 less attack (bullet) damage from all sources.',
+  run: () => { /* damage hook reads this directly */ },
+};
+
+// Mixed damage: marker passive. Combat resolver splits Wraith's attack into
+// half bullet / half spirit, each subject to its own resist.
+const passive_wraith_mixed: AbilityDef = {
+  id: 'passive_wraith_mixed', trigger: 'ongoing', target: 'self',
+  prompt: 'Mixed Bullets — attacks split half bullet, half spirit.',
+  run: () => { /* combat hook reads this directly */ },
 };
 
 // ----- Ultimates -----
@@ -571,6 +517,17 @@ const eff_ult_yamato: AbilityDef = {
   },
 };
 
+// Wraith ultimate: Telekinesis. Lifts the enemy Active for big spirit damage + Stun 2.
+const eff_ult_wraith: AbilityDef = {
+  id: 'eff_ult_wraith', trigger: 'onPlay', target: 'enemyActive',
+  base: 4, baseLabel: 'spirit + Stun 2',
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    damageUnit(G, target, 4, 'spirit');
+    addStatus(G, target, 'stun', 1, 2);
+  },
+};
+
 const ABILITIES_LIST: AbilityDef[] = [
   // ----- Spells (active items + healing_rite + TCG-original soul_rebirth) -----
   eff_healing_rite, eff_cold_front, eff_decay, eff_ethereal_shift, eff_phantom_strike,
@@ -583,17 +540,17 @@ const ABILITIES_LIST: AbilityDef[] = [
   // On-attach equipment (formerly spells, repurposed for is_active_item=false canon)
   eff_sprint_boots_attach, eff_enchanter_barrier_attach, eff_debuff_remover_attach,
   eff_suppressor_attach, eff_inhibitor_attach,
-  // hero skills
-  skill_abrams, skill_dynamo, skill_haze, skill_kelvin, skill_lady_geist, skill_lash,
-  skill_mo_krill, skill_paige, skill_rem, skill_seven, skill_shiv, skill_sinclair,
-  skill_vindicta, skill_viscous, skill_yamato,
-  // hero passives
-  passive_abrams_heal, passive_dynamo_heal, passive_haze_stunbonus, passive_kelvin_chill,
-  passive_lash_swap, passive_rem_benchheal, passive_seven_zap,
-  // ultimates
+  // ----- Hero skills (9 skill-only heroes) -----
+  skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
+  skill_seven_static, skill_sinclair, skill_viscous, skill_yamato,
+  // ----- Hero passives (7 passive-only heroes incl. Wraith) -----
+  passive_abrams_heal, passive_haze_stunbonus, passive_mo_krill_burrow, passive_rem_benchheal,
+  passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed,
+  // ----- Ultimates (one per hero, +Wraith) -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
   eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven,
   eff_ult_shiv, eff_ult_sinclair, eff_ult_vindicta, eff_ult_viscous, eff_ult_yamato,
+  eff_ult_wraith,
 ];
 
 export const ABILITIES_BY_ID: Record<string, AbilityDef> = Object.fromEntries(
