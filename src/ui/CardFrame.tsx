@@ -397,10 +397,11 @@ export function CardFrame({
             }}>
               {tag && (
                 <span style={{
-                  fontWeight: 700,
-                  // Skill in a warm brown (matches card border), Passive in
-                  // a cooler neutral grey — clearly distinct at a glance.
-                  color: isSkill ? '#5a3f1c' : '#8a857a',
+                  fontWeight: 800,
+                  // Skill in a warm brown (matches card border), Passive in a
+                  // darker cooler grey — both read as bold labels and stay
+                  // clearly distinct at a glance.
+                  color: isSkill ? '#5a3f1c' : '#6b665c',
                   marginRight: 5,
                 }}>{tag}</span>
               )}
