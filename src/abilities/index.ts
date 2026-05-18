@@ -296,8 +296,8 @@ const skill_dynamo: AbilityDef = {
 
 const skill_kelvin: AbilityDef = {
   id: 'skill_kelvin', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Kelvin skill — 2 dmg.',
-  base: 2, baseLabel: 'dmg',
+  prompt: 'Kelvin Arctic Beam — 2 spirit dmg.',
+  base: 2, baseLabel: 'spirit dmg',
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
@@ -315,27 +315,32 @@ const skill_lady_geist: AbilityDef = {
 
 const skill_lash: AbilityDef = {
   id: 'skill_lash', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Lash — 3 dmg.',
-  base: 3, baseLabel: 'dmg',
+  prompt: 'Lash Ground Strike — 3 spirit dmg + Stun 1 turn.',
+  base: 3, baseLabel: 'spirit dmg',
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 3 + spi(source), 'spirit'); },
+  run: (G, _ctx, { source, target }) => {
+    if (!target) return;
+    damageUnit(G, target, 3 + spi(source), 'spirit');
+    addStatus(G, target, 'stun', 1, 1);
+  },
 };
 
 const skill_paige: AbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero', exhausts: true,
-  prompt: 'Paige — Shield 3.',
-  base: 3, baseLabel: 'shield',
+  prompt: 'Paige Plot Armor — Shield 5 on ally.',
+  base: 5, baseLabel: 'shield',
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) addStatus(G, target, 'shield', 3 + spi(source), 999); },
+  run: (G, _ctx, { source, target }) => { if (target) addStatus(G, target, 'shield', 5 + spi(source), 999); },
 };
 
-// Static Charge: delayed stun. Applies the Charged status; on its expiry next turn
-// the tick handler in statusOps converts it to a 1-turn Stun.
+// Static Charge: long-fuse delayed stun. Applies Charged for 2 turns; on
+// expiry the tick handler in statusOps converts it to a 2-turn Stun — the
+// payoff for the long wait. Costs the player a soul slot to plan around.
 const skill_seven_static: AbilityDef = {
   id: 'skill_seven_static', trigger: 'activate', target: 'enemyActive', exhausts: true,
-  prompt: 'Seven Static Charge — apply Charged 1 to enemy Active. Stuns on expiry.',
-  base: 1, baseLabel: 'turn fuse',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'charged', 1, 1); },
+  prompt: 'Seven Static Charge — apply Charged 2 turns to enemy Active. Stuns for 2 turns on expiry.',
+  base: 2, baseLabel: 'turn fuse',
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'charged', 1, 2); },
 };
 
 const skill_sinclair: AbilityDef = {
@@ -354,10 +359,10 @@ const skill_viscous: AbilityDef = {
 
 const skill_yamato: AbilityDef = {
   id: 'skill_yamato', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Yamato — 3 dmg.',
-  base: 3, baseLabel: 'dmg',
+  prompt: 'Yamato Power Slash — 5 spirit dmg.',
+  base: 5, baseLabel: 'spirit dmg',
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 3 + spi(source), 'spirit'); },
+  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 5 + spi(source), 'spirit'); },
 };
 
 // ----- Hero passives (always-on or trigger-based, no Activate) -----

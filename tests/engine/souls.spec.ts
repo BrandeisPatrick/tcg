@@ -232,7 +232,7 @@ describe('souls economy', () => {
     expect(ally.hp - hpBefore).toBe(5);
   });
 
-  it('shield magnitude scales with spirit (Paige shield 3 + 4 SPI = 7)', async () => {
+  it('shield magnitude scales with spirit (Paige shield 5 + 4 SPI = 9)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_paige'];
     const G = freshG();
@@ -241,7 +241,7 @@ describe('souls economy', () => {
     const ally = G.players['0'].bench[0]!;
     skill.run(G, { movingPlayer: '0' }, { source: paige, target: ally });
     const sh = ally.statuses.find((s) => s.id === 'shield');
-    expect(sh?.value).toBe(7);
+    expect(sh?.value).toBe(9);
   });
 
   it('no skill has bullet scaling — all damage scaling goes through Spirit', async () => {

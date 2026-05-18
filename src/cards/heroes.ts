@@ -118,7 +118,7 @@ export const HEROES: HeroCard[] = [
     hp: 12,
     skill: 'skill_kelvin',
     ult: 'ult_kelvin',
-    text: 'Caster. Skill deals 2 dmg to any enemy.',
+    text: 'Caster. Arctic Beam: 2 spirit dmg to any enemy.',
   },
   {
     id: 'hero_lady_geist',
@@ -140,7 +140,7 @@ export const HEROES: HeroCard[] = [
     hp: 8,
     skill: 'skill_lash',
     ult: 'ult_lash',
-    text: 'Bruiser. Skill deals 3 dmg to any enemy.',
+    text: 'Bruiser. Ground Strike: 3 spirit dmg + Stun 1 turn.',
   },
   {
     id: 'hero_paige',
@@ -151,7 +151,7 @@ export const HEROES: HeroCard[] = [
     hp: 10,
     skill: 'skill_paige',
     ult: 'ult_paige',
-    text: 'Healer. Skill grants Shield 3 to an ally.',
+    text: 'Healer. Plot Armor: Shield 5 on an ally.',
   },
   {
     id: 'hero_seven',
@@ -162,7 +162,7 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_seven_static',
     ult: 'ult_seven',
-    text: 'Caster. Static Charge: applies Charged 1 to enemy Active — stuns on expiry.',
+    text: 'Caster. Static Charge: applies Charged 2 turns — Stun 2 turns on expiry.',
   },
   {
     id: 'hero_sinclair',
@@ -195,7 +195,7 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_yamato',
     ult: 'ult_yamato',
-    text: 'Bruiser. Skill deals 3 spirit dmg to any enemy.',
+    text: 'Bruiser. Power Slash: 5 spirit dmg to any enemy.',
   },
 ];
 
