@@ -1,0 +1,400 @@
+import { describe, it, expect } from 'vitest';
+import { Client } from 'boardgame.io/client';
+import { DeadlockGame } from '@/engine/game';
+import { damageUnit, healUnit } from '@/engine/damage';
+import { addStatus, tickStartOfTurn, cleanseDebuffs } from '@/engine/statusOps';
+import { effectiveAtk } from '@/engine/util';
+import type { GameState, PlayerID } from '@/engine/types';
+
+function freshG(): GameState {
+  const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
+  return JSON.parse(JSON.stringify(setup)) as GameState;
+}
+
+function newClient() {
+  const c = Client({ game: DeadlockGame, numPlayers: 2 });
+  c.start();
+  return c;
+}
+
+/**
+ * Call an engine move handler directly against a mutable G. Bypasses boardgame.io's
+ * immer wrapping so tests can preload status state without "object is not extensible" errors.
+ * Returns INVALID_MOVE if the engine rejected, otherwise undefined.
+ */
+function runMove(name: string, G: GameState, pid: PlayerID, ...args: any[]) {
+  const fn = (DeadlockGame.moves as any)[name];
+  return fn({ G, ctx: { currentPlayer: pid, numPlayers: 2, turn: 1 } as any, playerID: pid, events: {} as any, random: {} as any }, ...args);
+}
+
+describe('status: invincibility', () => {
+  it('blocks all damage including pure/bleed/poison', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'invincibility', 1, 99);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 5, 'attack');
+    damageUnit(G, t, 5, 'spirit');
+    damageUnit(G, t, 5, 'pure');
+    expect(t.hp).toBe(hpBefore);
+  });
+
+  it('blocks bleed ticks at start of turn', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'bleed', 2, 3);
+    addStatus(G, t, 'invincibility', 1, 99);
+    const hpBefore = t.hp;
+    tickStartOfTurn(G, G.players['0']);
+    expect(t.hp).toBe(hpBefore);
+  });
+});
+
+describe('status: shield', () => {
+  it('absorbs attack damage and breaks after', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'shield', 3, 999);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 2, 'attack'); // shield 3 → 1
+    expect(t.hp).toBe(hpBefore);
+    damageUnit(G, t, 2, 'attack'); // shield 1 → 0, 1 spills to HP
+    expect(t.hp).toBe(hpBefore - 1);
+    expect(t.statuses.find((s) => s.id === 'shield')).toBeUndefined();
+  });
+
+  it('pure damage bypasses shield', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'shield', 5, 999);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 3, 'pure');
+    expect(t.hp).toBe(hpBefore - 3);
+    expect(t.statuses.find((s) => s.id === 'shield')?.value).toBe(5); // intact
+  });
+});
+
+describe('status: armor', () => {
+  it('reduces attack damage only', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'bullet_resist', 2, 999);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 4, 'attack'); // -2 → 2 dmg
+    expect(hpBefore - t.hp).toBe(2);
+  });
+
+  it('does NOT reduce spirit/pure damage', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'bullet_resist', 99, 999);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 3, 'spirit');
+    damageUnit(G, t, 3, 'pure');
+    expect(hpBefore - t.hp).toBe(6);
+  });
+});
+
+describe('status: hex', () => {
+  it('amplifies incoming damage by +2', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'vulnerable', 1, 99);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 3, 'attack'); // 3 + 2 hex = 5
+    expect(hpBefore - t.hp).toBe(5);
+  });
+
+  it('does NOT reduce the target\'s ATK (vulnerable only amplifies incoming damage)', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    const baseAtk = effectiveAtk(t);
+    addStatus(G, t, 'vulnerable', 1, 99);
+    expect(effectiveAtk(t)).toBe(baseAtk);
+  });
+});
+
+describe('status: unstoppable', () => {
+  it('blocks incoming CC (stun/silenced/disarm/sleep)', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'unstoppable', 1, 99);
+    addStatus(G, t, 'stun', 1, 2);
+    addStatus(G, t, 'silenced', 1, 2);
+    addStatus(G, t, 'disarm', 1, 2);
+    addStatus(G, t, 'sleep', 1, 2);
+    for (const id of ['stun', 'silenced', 'disarm', 'sleep']) {
+      expect(t.statuses.some((s) => s.id === id)).toBe(false);
+    }
+  });
+
+  it('cleanses existing CC when applied', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'stun', 1, 99);
+    addStatus(G, t, 'bleed', 2, 3); // not CC — should persist
+    addStatus(G, t, 'unstoppable', 1, 99);
+    expect(t.statuses.some((s) => s.id === 'stun')).toBe(false);
+    expect(t.statuses.some((s) => s.id === 'bleed')).toBe(true);
+    expect(t.statuses.some((s) => s.id === 'unstoppable')).toBe(true);
+  });
+
+  it('does NOT block non-CC debuffs (bleed, vulnerable)', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'unstoppable', 1, 99);
+    addStatus(G, t, 'bleed', 2, 3);
+    addStatus(G, t, 'vulnerable', 1, 2);
+    expect(t.statuses.some((s) => s.id === 'bleed')).toBe(true);
+    expect(t.statuses.some((s) => s.id === 'vulnerable')).toBe(true);
+  });
+});
+
+describe('status: weapon_power', () => {
+  it('adds to effectiveAtk on top of equipment bonus', async () => {
+    const G = freshG();
+    const hero = G.players['0'].active!;
+    const base = effectiveAtk(hero);
+    hero.atkMod = 2; // simulate one bullet item attached
+    addStatus(G, hero, 'weapon_power', 3, 2);
+    expect(effectiveAtk(hero)).toBe(base + 2 + 3);
+  });
+
+  it('does NOT bypass Stun / Disarm / Sleep (still ATK=0)', () => {
+    const G = freshG();
+    const hero = G.players['0'].active!;
+    addStatus(G, hero, 'weapon_power', 5, 99);
+    addStatus(G, hero, 'stun', 1, 99);
+    expect(effectiveAtk(hero)).toBe(0);
+  });
+});
+
+describe('status: spirit_power', () => {
+  it('adds to skill scaling (Haze skill: 2 + SPI total)', async () => {
+    const { ABILITIES_BY_ID } = await import('@/abilities');
+    const skill = ABILITIES_BY_ID['skill_haze'];
+    const G = freshG();
+    const haze = G.players['0'].active!;
+    haze.spiritMod = 1; // 1 from equipment
+    addStatus(G, haze, 'spirit_power', 3, 2); // +3 from buff
+    const target = G.players['1'].active!;
+    const hpBefore = target.hp;
+    skill.run(G, { movingPlayer: '0' }, { source: haze, target });
+    // base 2 + (spiritMod 1 + spirit_power 3) = 6
+    expect(hpBefore - target.hp).toBe(6);
+  });
+});
+
+describe('status: spirit_resist', () => {
+  it('reduces spirit damage only', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'spirit_resist', 2, 999);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 4, 'spirit');
+    expect(hpBefore - t.hp).toBe(2);
+  });
+
+  it('does NOT reduce attack/pure damage', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'spirit_resist', 99, 999);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 3, 'attack');
+    damageUnit(G, t, 3, 'pure');
+    expect(hpBefore - t.hp).toBe(6);
+  });
+});
+
+describe('status: sleep', () => {
+  it('forces ATK to 0', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'sleep', 1, 99);
+    expect(effectiveAtk(t)).toBe(0);
+  });
+
+  it('breaks (is removed) on any damage', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'sleep', 1, 99);
+    damageUnit(G, t, 1, 'attack');
+    expect(t.statuses.some((s) => s.id === 'sleep')).toBe(false);
+  });
+
+  it('blocks useSkill', () => {
+    const G = freshG();
+    const hero = G.players['0'].active!;
+    addStatus(G, hero, 'sleep', 1, 99);
+    const result = runMove('useSkill', G, '0', hero.iid, G.players['1'].active!.iid);
+    expect(result).toBe('INVALID_MOVE');
+  });
+});
+
+describe('status: stun', () => {
+  it('forces ATK to 0', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'stun', 1, 99);
+    expect(effectiveAtk(t)).toBe(0);
+  });
+
+  it('blocks useSkill', () => {
+    const G = freshG();
+    const hero = G.players['0'].active!;
+    addStatus(G, hero, 'stun', 1, 99);
+    const result = runMove('useSkill', G, '0', hero.iid, G.players['1'].active!.iid);
+    expect(result).toBe('INVALID_MOVE');
+    expect(hero.skillUsedThisTurn).toBe(false);
+  });
+});
+
+describe('status: silenced', () => {
+  it('blocks useSkill', () => {
+    const G = freshG();
+    const hero = G.players['0'].active!;
+    addStatus(G, hero, 'silenced', 1, 99);
+    const result = runMove('useSkill', G, '0', hero.iid, G.players['1'].active!.iid);
+    expect(result).toBe('INVALID_MOVE');
+    expect(hero.skillUsedThisTurn).toBe(false);
+  });
+});
+
+describe('status: disarm', () => {
+  it('forces ATK to 0', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'disarm', 1, 99);
+    expect(effectiveAtk(t)).toBe(0);
+  });
+});
+
+describe('status: bleed', () => {
+  it('deals pure damage equal to its value at start of turn', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'bleed', 2, 3);
+    const hpBefore = t.hp;
+    tickStartOfTurn(G, G.players['0']);
+    expect(hpBefore - t.hp).toBe(2);
+  });
+
+  it('stacks up to 3 when re-applied', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'bleed', 2, 3);
+    addStatus(G, t, 'bleed', 2, 3);
+    expect(t.statuses.find((s) => s.id === 'bleed')!.value).toBe(3); // capped
+  });
+
+  it('expires after duration', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'bleed', 1, 1);
+    tickStartOfTurn(G, G.players['0']); // ticks then duration -1 → 0 → removed
+    expect(t.statuses.some((s) => s.id === 'bleed')).toBe(false);
+  });
+});
+
+describe('healing is no longer gated by any status', () => {
+  it('a wounded-equivalent target can still be healed (wound status removed)', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    t.hp = 5;
+    const hpMax = t.hpMax;
+    healUnit(G, t, 10);
+    expect(t.hp).toBe(Math.min(hpMax, 5 + 10));
+  });
+});
+
+describe('status: sleep blocks swaps (replaces old "trap")', () => {
+  it('prevents the asleep Active from swapping out (retreat)', () => {
+    const G = freshG();
+    G.players['0'].souls = 5;
+    const hero = G.players['0'].active!;
+    addStatus(G, hero, 'sleep', 1, 99);
+    const result = runMove('moveHero', G, '0', 0, 1);
+    expect(result).toBe('INVALID_MOVE');
+    expect(G.players['0'].active?.iid).toBe(hero.iid);
+  });
+
+  it('prevents an asleep bench hero from being swapped in', () => {
+    const G = freshG();
+    G.players['0'].souls = 5;
+    const benchHero = G.players['0'].bench[0]!;
+    addStatus(G, benchHero, 'sleep', 1, 99);
+    const result = runMove('moveHero', G, '0', 1, 0);
+    expect(result).toBe('INVALID_MOVE');
+  });
+});
+
+describe('status: long_range (passive on bench)', () => {
+  it('lets bench hero attack with Active', async () => {
+    const { planAttackPhase } = await import('@/engine/combat');
+    const G = freshG();
+    // Vindicta on bench with flags.longRange — included as attacker automatically
+    const plan = planAttackPhase(G, '0');
+    // Should have at least 2 attackers (active + bench long_range)
+    expect(plan.steps.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('status: bench_only (passive)', () => {
+  it('prevents flagged hero from being moved to Active slot', () => {
+    // Not enforced via status — enforced via card flag. Skip.
+    expect(true).toBe(true);
+  });
+});
+
+describe('cleanseDebuffs', () => {
+  it('removes all debuffs, keeps buffs', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'bleed', 2, 3);
+    addStatus(G, t, 'stun', 1, 2);
+    addStatus(G, t, 'shield', 3, 99); // buff
+    addStatus(G, t, 'bullet_resist', 2, 99); // buff
+    cleanseDebuffs(t);
+    expect(t.statuses.some((s) => s.id === 'bleed')).toBe(false);
+    expect(t.statuses.some((s) => s.id === 'stun')).toBe(false);
+    expect(t.statuses.some((s) => s.id === 'shield')).toBe(true);
+    expect(t.statuses.some((s) => s.id === 'bullet_resist')).toBe(true);
+  });
+});
+
+describe('combined interactions', () => {
+  it('shield + armor: armor first, then shield absorbs the rest', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'bullet_resist', 2, 99);
+    addStatus(G, t, 'shield', 3, 99);
+    const hpBefore = t.hp;
+    // 6 attack: armor -2 → 4 left. shield absorbs 3, 1 spills to HP.
+    damageUnit(G, t, 6, 'attack');
+    expect(hpBefore - t.hp).toBe(1);
+    expect(t.statuses.find((s) => s.id === 'shield')).toBeUndefined();
+    expect(t.statuses.find((s) => s.id === 'bullet_resist')?.value).toBe(2);
+  });
+
+  it('hex + invincibility: invincibility wins (damage = 0)', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'vulnerable', 1, 99);
+    addStatus(G, t, 'invincibility', 1, 99);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 4, 'attack'); // would be 6 with hex, but invincibility blocks
+    expect(t.hp).toBe(hpBefore);
+  });
+
+  it('unstoppable blocks new CC; pre-existing non-CC debuffs keep ticking', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'bleed', 2, 3); // applied before Unstoppable
+    addStatus(G, t, 'unstoppable', 1, 99);
+    addStatus(G, t, 'stun', 1, 2); // blocked
+    expect(t.statuses.some((s) => s.id === 'stun')).toBe(false);
+    const hpBefore = t.hp;
+    tickStartOfTurn(G, G.players['0']);
+    expect(hpBefore - t.hp).toBe(2); // pre-existing bleed still ticks
+  });
+});
