@@ -748,13 +748,46 @@ function HandTray({
   );
 }
 
+/**
+ * Categorize a log line by its leading verb / keyword so the side panel can
+ * tint it semantically. Pure substring matching — fast and stable since all
+ * log strings are constructed in the engine via `pushLog`.
+ *
+ *   damage taken / KO / fell / fatigue       → wine red
+ *   healed / respawned / refreshed           → success green
+ *   gained <status> / cleansed / discharges  → spirit purple
+ *   played / promoted / retreated / unlocked → brass
+ *   Mulligan / Attack phase / Turn marker    → dim grey
+ *   everything else                          → default text
+ */
+function logEntryColor(s: string): string {
+  if (/took \d+ |overflow|fatigue|fell\.|KO bounty|spills|patron/i.test(s)) return palette.danger;
+  if (/healed |respawned|refreshed|reshuffled|woke/i.test(s)) return palette.success;
+  if (/gained |cleansed|discharges/i.test(s)) return palette.spirit;
+  if (/played |promoted |retreated|swapped|unlocked|\+1 Souls/i.test(s)) return palette.accent;
+  if (/Mulligan|Attack phase|---/i.test(s)) return palette.textFaint;
+  return palette.text;
+}
+
 function SidePanel({ G, me, isMyTurn, turn, onLogToggle, projectedFaceDamageMe, projectedFaceDamageOpp, combatSpeed, onCombatSpeedChange }: {
   G: GameState; me: PlayerID; isMyTurn: boolean; turn: number; onLogToggle: () => void;
   projectedFaceDamageMe?: number; projectedFaceDamageOpp?: number;
   combatSpeed?: CombatSpeed; onCombatSpeedChange?: (s: CombatSpeed) => void;
 }) {
   const opp: PlayerID = me === '0' ? '1' : '0';
-  const recentLog = [...G.log].slice(-8).reverse();
+  // Group log entries by turn (newest first). Each group shows one "Turn N"
+  // header followed by its lines — saves the T-prefix per line and makes
+  // turn boundaries scannable.
+  const grouped = (() => {
+    const last40 = [...G.log].slice(-40).reverse();
+    const out: { turn: number; entries: typeof last40 }[] = [];
+    for (const e of last40) {
+      const head = out[out.length - 1];
+      if (head && head.turn === e.turn) head.entries.push(e);
+      else out.push({ turn: e.turn, entries: [e] });
+    }
+    return out;
+  })();
   return (
     <aside style={{
       display: 'flex', flexDirection: 'column', gap: 12,
@@ -798,13 +831,30 @@ function SidePanel({ G, me, isMyTurn, turn, onLogToggle, projectedFaceDamageMe, 
             ...text.label, color: palette.accent,
           }}>Full Log →</button>
         </div>
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
-          {recentLog.length === 0 ? (
+        <div style={{ flex: 1, overflow: 'auto', padding: '4px 12px 12px' }}>
+          {grouped.length === 0 ? (
             <div style={{ ...text.body, color: palette.textFaint, fontStyle: 'italic' }}>No actions yet.</div>
-          ) : recentLog.map((e, i) => (
-            <div key={i} style={{ ...text.body, color: palette.text, padding: '2px 0' }}>
-              <span style={{ color: palette.accentWarm, marginRight: 6, fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>T{e.turn}</span>
-              {e.text}
+          ) : grouped.map((g) => (
+            <div key={g.turn} style={{ marginTop: 8 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
+                paddingBottom: 3, borderBottom: `1px dashed ${palette.border}`,
+              }}>
+                <span style={{ ...text.label, color: palette.accentWarm }}>Turn</span>
+                <span style={{ ...text.numeric, color: palette.text }}>{g.turn}</span>
+              </div>
+              {g.entries.map((e, i) => {
+                const c = logEntryColor(e.text);
+                return (
+                  <div key={i} style={{
+                    ...text.body, color: c, padding: '1px 0',
+                    paddingLeft: 6, borderLeft: `2px solid ${c}44`,
+                    marginLeft: 2,
+                  }}>
+                    {e.text}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
