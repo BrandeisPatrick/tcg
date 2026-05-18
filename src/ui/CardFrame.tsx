@@ -312,22 +312,16 @@ export function CardFrame({
         )}
       </div>
 
-      {/* Colored type ribbon */}
+      {/* Colored separator strip (no text — type label now lives in the
+          subtitle line below alongside the role + ability name). */}
       <div style={{
         position: 'relative',
         flexShrink: 0,
-        padding: '2px 8px',
+        height: 4,
         background: `linear-gradient(90deg, ${tint.ribbon}ee, ${tint.ribbon}aa 60%, ${tint.ribbon}55)`,
-        color: '#fff',
-        fontSize: 8.5,
-        fontWeight: 700,
-        letterSpacing: '0.2em',
-        textTransform: 'uppercase',
-        textAlign: 'left',
         borderBottom: `1px solid rgba(0,0,0,0.3)`,
         overflow: 'hidden',
       }}>
-        <span style={{ position: 'relative', zIndex: 2 }}>{typeLabel(data)}</span>
         <AnimatePresence>
           {hover && (
             <motion.div
@@ -341,7 +335,6 @@ export function CardFrame({
                 width: '45%',
                 background: `linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.5) 50%, transparent 75%)`,
                 pointerEvents: 'none',
-                zIndex: 1,
               }}
             />
           )}
@@ -373,18 +366,20 @@ export function CardFrame({
           {data?.name ?? cardId}
         </div>
 
-        {/* Subtitle: role · ability name. Tags rendered as one uppercased line. */}
-        {isHero && (
+        {/* Subtitle: type · role · ability name (heroes) or just type (others).
+            All tags on a single uppercased line, replacing the old ribbon. */}
+        {data && (
           <div style={{
             fontSize: 8.5,
             fontWeight: 700,
             letterSpacing: '0.18em',
             textTransform: 'uppercase',
-            color: getHeroIdentity((data as any).id).accent,
+            color: isHero ? getHeroIdentity((data as any).id).accent : palette.card.bodyTextDim,
             marginTop: 1,
           }}>
-            {getHeroIdentity((data as any).id).role}
-            {(data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
+            {typeLabel(data)}
+            {isHero && ` · ${getHeroIdentity((data as any).id).role}`}
+            {isHero && (data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
           </div>
         )}
 
