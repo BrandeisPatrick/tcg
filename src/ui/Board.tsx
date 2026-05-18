@@ -753,19 +753,19 @@ function HandTray({
  * tint it semantically. Pure substring matching — fast and stable since all
  * log strings are constructed in the engine via `pushLog`.
  *
- *   damage taken / KO / fell / fatigue       → wine red
- *   healed / respawned / refreshed           → success green
- *   gained <status> / cleansed / discharges  → spirit purple
- *   played / promoted / retreated / unlocked → brass
- *   Mulligan / Attack phase / Turn marker    → dim grey
- *   everything else                          → default text
+ *   attack arrow / KO / fell / overflow       → wine red
+ *   healed / respawned / refresh              → success green
+ *   gained <status> / cleansed / discharges   → spirit purple
+ *   casts skill / played / promoted / unlocked → brass
+ *   Mulligan / Turn marker                    → dim grey
+ *   everything else                           → default text
  */
 function logEntryColor(s: string): string {
-  if (/took \d+ |overflow|fatigue|fell\.|KO bounty|spills|patron/i.test(s)) return palette.danger;
-  if (/healed |respawned|refreshed|reshuffled|woke/i.test(s)) return palette.success;
-  if (/gained |cleansed|discharges/i.test(s)) return palette.spirit;
-  if (/played |promoted |retreated|swapped|unlocked|\+1 Souls/i.test(s)) return palette.accent;
-  if (/Mulligan|Attack phase|---/i.test(s)) return palette.textFaint;
+  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return palette.danger;
+  if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return palette.success;
+  if (/gained |cleansed|discharges|resisted/i.test(s)) return palette.spirit;
+  if (/casts skill|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return palette.accent;
+  if (/Mulligan|---/i.test(s)) return palette.textFaint;
   return palette.text;
 }
 

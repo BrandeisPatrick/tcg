@@ -46,8 +46,8 @@ describe('Deadlock TCG engine smoke', () => {
   it('initializes a match with two full boards and 3-card hands', () => {
     const c = newClient();
     const { G, ctx } = snap(c);
-    expect(G.players['0'].hp).toBe(20);
-    expect(G.players['1'].hp).toBe(20);
+    expect(G.players['0'].hp).toBe(15);
+    expect(G.players['1'].hp).toBe(15);
     expect(G.players['0'].active).not.toBeNull();
     expect(G.players['1'].active).not.toBeNull();
     expect(G.players['0'].bench.filter(Boolean).length).toBe(3);

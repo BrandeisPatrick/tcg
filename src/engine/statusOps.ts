@@ -1,8 +1,15 @@
 import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState } from './types';
-import { DEBUFF_IDS, CC_STATUSES } from '@/statuses';
+import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit } from './damage';
 import { liveBoardCards, pushLog } from './util';
 import { CARDS_BY_ID } from '@/cards';
+
+// Statuses whose value is a magnitude that's worth printing in the log
+// (Bleed 3, Bullet Resist 4, Shield 5, etc.). Stun/Silence/Disarm/Sleep/
+// Vulnerable are binary (value=1) and read better without the trailing "1".
+const MAGNITUDE_STATUSES: Set<StatusId> = new Set([
+  'bleed', 'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power',
+]);
 
 /**
  * Apply a status to a target with Deadlock-style rules:
@@ -43,7 +50,12 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
     const inst: StatusInstance = { id, value, duration };
     target.statuses.push(inst);
   }
-  pushLog(G, `${name} gained ${id}(${value}, (${duration})).`);
+  // Natural-prose log: "Haze gained Stun for 2 turns" / "Abrams gained Bleed 3 for 3 turns" /
+  // "Vindicta gained Shield 5" (permanent, no duration shown).
+  const title = STATUSES_BY_ID[id]?.title ?? id;
+  const mag = MAGNITUDE_STATUSES.has(id) ? ` ${value}` : '';
+  const dur = duration >= 99 ? '' : ` for ${duration} turn${duration === 1 ? '' : 's'}`;
+  pushLog(G, `${name} gained ${title}${mag}${dur}.`);
 }
 
 export function cleanseDebuffs(target: CardInstance) {

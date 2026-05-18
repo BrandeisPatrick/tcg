@@ -217,7 +217,7 @@ describe('souls economy', () => {
     expect(hpBefore - target.hp).toBe(6);
   });
 
-  it('heal scales with spirit (Dynamo heal 3 + 2 SPI = 5)', async () => {
+  it('heal scales with spirit (Dynamo heal 4 + 2 SPI = 6)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_dynamo'];
     expect(skill.scalesSpirit).toBe(true);
@@ -229,7 +229,7 @@ describe('souls economy', () => {
     ally.hp = 1;
     const hpBefore = ally.hp;
     skill.run(G, { movingPlayer: '0' }, { source: healer, target: ally });
-    expect(ally.hp - hpBefore).toBe(5);
+    expect(ally.hp - hpBefore).toBe(6);
   });
 
   it('shield magnitude scales with spirit (Paige shield 5 + 4 SPI = 9)', async () => {

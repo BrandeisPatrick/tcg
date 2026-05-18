@@ -364,20 +364,21 @@ const eff_cast_divine_barrier: AbilityDef = {
 
 const skill_dynamo: AbilityDef = {
   id: 'skill_dynamo', trigger: 'activate', target: 'allyHero', exhausts: true,
-  prompt: 'Dynamo skill — heal an ally for 3.',
-  base: 3, baseLabel: 'heal',
+  prompt: 'Dynamo Rejuvenating Aurora — heal an ally for 4.',
+  base: 4, baseLabel: 'heal',
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) healUnit(G, target, 3 + spi(source)); },
+  run: (G, _ctx, { source, target }) => { if (target) healUnit(G, target, 4 + spi(source)); },
 };
 
 const skill_kelvin: AbilityDef = {
   id: 'skill_kelvin', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Kelvin Arctic Beam — 2 spirit dmg.',
-  base: 2, baseLabel: 'spirit dmg',
+  prompt: 'Kelvin Frost Grenade — 3 spirit dmg + Vulnerable 2 turns.',
+  base: 3, baseLabel: 'spirit dmg',
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
-    damageUnit(G, target, 2 + spi(source), 'spirit');
+    damageUnit(G, target, 3 + spi(source), 'spirit');
+    addStatus(G, target, 'vulnerable', 1, 2);
   },
 };
 
@@ -409,14 +410,19 @@ const skill_paige: AbilityDef = {
   run: (G, _ctx, { source, target }) => { if (target) addStatus(G, target, 'shield', 5 + spi(source), 999); },
 };
 
-// Static Charge: long-fuse delayed stun. Applies Charged for 2 turns; on
-// expiry the tick handler in statusOps converts it to a 2-turn Stun — the
-// payoff for the long wait. Costs the player a soul slot to plan around.
+// Static Charge: 2 spirit dmg upfront + apply Charged for 2 turns; on expiry
+// the tick handler converts it to a 2-turn Stun. Gives Control immediate
+// pressure plus a long-fuse stun setup.
 const skill_seven_static: AbilityDef = {
   id: 'skill_seven_static', trigger: 'activate', target: 'enemyActive', exhausts: true,
-  prompt: 'Seven Static Charge — apply Charged 2 turns to enemy Active. Stuns for 2 turns on expiry.',
-  base: 2, baseLabel: 'turn fuse',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'charged', 1, 2); },
+  prompt: 'Seven Static Charge — 2 spirit dmg + Charged 2 turns. Stuns for 2 turns on expiry.',
+  base: 2, baseLabel: 'spirit dmg',
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
+    if (!target) return;
+    damageUnit(G, target, 2 + spi(source), 'spirit');
+    addStatus(G, target, 'charged', 1, 2);
+  },
 };
 
 const skill_sinclair: AbilityDef = {
@@ -445,10 +451,11 @@ const skill_yamato: AbilityDef = {
 
 const passive_abrams_heal: AbilityDef = {
   id: 'passive_abrams_heal', trigger: 'startOfTurn', target: 'self',
+  prompt: 'Siphon Life — start of own turn while Active: heal 3.',
   run: (G, _ctx, { source }) => {
     if (!source) return;
     const found = findCardOnBoard(G, source.iid);
-    if (found && found.card === source && source.zone === 'active') healUnit(G, source, 2);
+    if (found && found.card === source && source.zone === 'active') healUnit(G, source, 3);
   },
 };
 

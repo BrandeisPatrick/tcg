@@ -69,8 +69,8 @@ function buildPlayer(pid: PlayerID, deck: DeckBlueprint): PlayerState {
 
   return {
     id: pid,
-    hp: 20,
-    hpMax: 20,
+    hp: 15,
+    hpMax: 15,
     souls: SOULS_START,
     deck: deckInstances,
     hand: [],
@@ -329,6 +329,12 @@ export const DeadlockGame: Game<GameState> = {
         const f = findCardOnBoard(G, targetIid);
         if (f) target = f.card;
       }
+
+      // Headline log BEFORE the ability runs — the ability itself will emit
+      // damage/status lines under this header, and the player sees who cast what.
+      const heroName = data.name;
+      const targetName = target ? (CARDS_BY_ID[target.cardId]?.name ?? target.cardId) : null;
+      pushLog(G, `${heroName} casts skill${targetName ? ` on ${targetName}` : ''}.`);
 
       ability.run(G, { movingPlayer: pid }, { source: hero, target });
       hero.skillUsedThisTurn = true;     // per-hero flag (drives UI glint)

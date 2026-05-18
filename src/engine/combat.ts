@@ -164,14 +164,15 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
     if (dmg <= 0) continue;
 
     if (target) {
+      const atkName = CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId;
       // Wraith passive: split half bullet / half spirit. Pierces single-type resists.
       if (atk.cardId === 'hero_wraith') {
         const half1 = Math.ceil(dmg / 2);
         const half2 = Math.floor(dmg / 2);
-        if (half1 > 0) damageUnit(G, target, half1, 'attack');
-        if (half2 > 0) damageUnit(G, target, half2, 'spirit');
+        if (half1 > 0) damageUnit(G, target, half1, 'attack', atkName);
+        if (half2 > 0) damageUnit(G, target, half2, 'spirit', atkName);
       } else {
-        damageUnit(G, target, dmg, 'attack');
+        damageUnit(G, target, dmg, 'attack', atkName);
       }
       // Trigger any onAttack ability on the attacker's hero.
       const data = CARDS_BY_ID[atk.cardId];
@@ -188,8 +189,8 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
 
   reapDead(G, defender);
   reapDead(G, attacker);
-
-  pushLog(G, `Attack phase: P${attackerId} resolved.`);
+  // (No trailing "phase resolved" log — the per-hit entries above + the turn
+  // group header in the UI already convey what happened.)
 }
 
 // ---------- Helpers (shared between planner and resolver) ----------

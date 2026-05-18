@@ -26,7 +26,7 @@ export const HEROES: HeroCard[] = [
     hp: 14,
     passives: ['passive_abrams_heal'],
     ult: 'ult_abrams',
-    text: 'Tank. Heals 2 at start of own turn while Active.',
+    text: 'Tank. Siphon Life: heals 3 at start of own turn while Active.',
   },
   {
     id: 'hero_haze',
@@ -107,7 +107,7 @@ export const HEROES: HeroCard[] = [
     hp: 11,
     skill: 'skill_dynamo',
     ult: 'ult_dynamo',
-    text: 'Healer. Skill heals an ally for 3.',
+    text: 'Healer. Rejuvenating Aurora: heals an ally for 4 (+ caster Spirit).',
   },
   {
     id: 'hero_kelvin',
@@ -118,7 +118,7 @@ export const HEROES: HeroCard[] = [
     hp: 12,
     skill: 'skill_kelvin',
     ult: 'ult_kelvin',
-    text: 'Caster. Arctic Beam: 2 spirit dmg to any enemy.',
+    text: 'Caster. Frost Grenade: 3 spirit dmg + Vulnerable 2 turns.',
   },
   {
     id: 'hero_lady_geist',
@@ -162,7 +162,7 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_seven_static',
     ult: 'ult_seven',
-    text: 'Caster. Static Charge: applies Charged 2 turns — Stun 2 turns on expiry.',
+    text: 'Caster. Static Charge: 2 spirit dmg + Charged 2 — Stun 2 turns on expiry.',
   },
   {
     id: 'hero_sinclair',

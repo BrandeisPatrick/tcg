@@ -3,7 +3,9 @@ import { findCardOnBoard, pushLog } from './util';
 import { CARDS_BY_ID } from '@/cards';
 
 // Damage routing for a unit. Returns the damage actually dealt after mitigation.
-export function damageUnit(G: GameState, target: CardInstance, amount: number, type: DamageType): number {
+// `sourceName` is optional — when provided it's included in the log entry so the
+// player can see who attacked whom (e.g., "Haze → Abrams: 4 attack dmg (8 HP)").
+export function damageUnit(G: GameState, target: CardInstance, amount: number, type: DamageType, sourceName?: string): number {
   if (amount <= 0) return 0;
   // Corpses can't take more damage — they're already KO'd waiting to respawn.
   if ((target.respawnTurnsLeft ?? 0) > 0) return 0;
@@ -56,7 +58,9 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     pushLog(G, `${CARDS_BY_ID[target.cardId]?.name ?? target.cardId} woke from Sleep.`);
   }
 
-  pushLog(G, `${CARDS_BY_ID[target.cardId]?.name ?? target.cardId} took ${dmg} ${type} dmg (now ${target.hp} HP).`);
+  const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
+  const arrow = sourceName ? `${sourceName} → ${targetName}` : targetName;
+  pushLog(G, `${arrow}: ${dmg} ${type} dmg (${targetName} ${target.hp} HP).`);
 
   // Overflow: any damage in excess of the hero's HP spills into the owner's Patron.
   // This is what keeps games finishing once respawn is in play — pushing past a KO
@@ -74,7 +78,8 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
 export function damagePlayer(G: GameState, pid: PlayerID, amount: number): number {
   if (amount <= 0) return 0;
   G.players[pid].hp -= amount;
-  pushLog(G, `Player ${pid} took ${amount} dmg (HP ${G.players[pid].hp}).`);
+  const teamName = pid === '0' ? 'Amber Hand' : 'Sapphire Flame';
+  pushLog(G, `${teamName} patron: ${amount} dmg (${G.players[pid].hp} HP).`);
   return amount;
 }
 
@@ -101,12 +106,16 @@ export const RESPAWN_TURNS = 3;
  */
 function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} fell.`);
-  // KO bounty: opponent of the fallen hero's owner gains +1 soul (hard-capped).
+  // KO bounty: opponent of the fallen hero's owner gains +1 soul (hard-capped)
+  // and the fallen hero's patron takes 1 splash damage (decisiveness — makes
+  // sure heroes dying actually presses the game toward a conclusion instead
+  // of stalling for 60 turns).
   const SOULS_MAX = 7;
   const oppId: PlayerID = ps.id === '0' ? '1' : '0';
   const before = G.players[oppId].souls;
   G.players[oppId].souls = Math.min(SOULS_MAX, before + 1);
   if (G.players[oppId].souls > before) pushLog(G, `P${oppId} +1 Souls (KO bounty).`);
+  damagePlayer(G, ps.id, 1);
   // Attached equipment is dropped to discard pile on death.
   if (hero.attached && hero.attached.length > 0) {
     for (const eq of hero.attached) {
