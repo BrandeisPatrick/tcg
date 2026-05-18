@@ -46,12 +46,27 @@ describe('NEW T1 spells', () => {
 });
 
 describe('NEW T1 equipment', () => {
-  it('extra_stamina clears bearer exhaust at start of turn', () => {
+  it('extra_stamina draws 2 cards on attach', () => {
     const G = freshG();
-    const bearer = G.players['0'].active!;
-    bearer.exhausted = true;
-    ABILITIES_BY_ID['eff_extra_stamina'].run(G, { movingPlayer: '0' }, { source: bearer });
-    expect(bearer.exhausted).toBe(false);
+    const ps = G.players['0'];
+    const handBefore = ps.hand.length;
+    const deckBefore = ps.deck.length;
+    ABILITIES_BY_ID['eff_extra_stamina'].run(G, { movingPlayer: '0' }, {});
+    expect(ps.hand.length - handBefore).toBe(2);
+    expect(deckBefore - ps.deck.length).toBe(2);
+  });
+
+  it('extra_stamina respects hand cap (max 7)', () => {
+    const G = freshG();
+    const ps = G.players['0'];
+    // Fill hand to 6 — drawing 2 should only land 1.
+    while (ps.hand.length < 6 && ps.deck.length > 0) {
+      const c = ps.deck.shift()!;
+      ps.hand.push(c);
+    }
+    expect(ps.hand.length).toBe(6);
+    ABILITIES_BY_ID['eff_extra_stamina'].run(G, { movingPlayer: '0' }, {});
+    expect(ps.hand.length).toBe(7);
   });
 
   it('mystic_expansion grants long_range status on attach', () => {

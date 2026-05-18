@@ -156,14 +156,23 @@ const eff_inhibitor_attach: AbilityDef = {
   run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 3, 999); },
 };
 
-// New T1 equipment: every turn the bearer's exhaust is cleared. Distinct from
-// Sprint Boots (one-shot on attach).
+// Extra Stamina (Deadlock-flavor mapping: stamina ⇄ extra "actions" in hand).
+// On attach: draw 2 cards. Net card-advantage of +1 (paid 1 card to play this).
 const eff_extra_stamina: AbilityDef = {
-  id: 'eff_extra_stamina', trigger: 'startOfTurn', target: 'self',
-  run: (G, _ctx, { source }) => {
-    if (source) {
-      source.exhausted = false;
+  id: 'eff_extra_stamina', trigger: 'onPlay', target: 'self',
+  run: (G, ctx) => {
+    const ps = G.players[ctx.movingPlayer];
+    const MAX_HAND = 7;
+    let drawn = 0;
+    for (let i = 0; i < 2; i++) {
+      if (ps.hand.length >= MAX_HAND) break;
+      const c = ps.deck.shift();
+      if (!c) break;        // skip fatigue + reshuffle on equipment attach; cheap T1 shouldn't punish
+      c.zone = 'hand';
+      ps.hand.push(c);
+      drawn++;
     }
+    if (drawn > 0) pushLog(G, `Extra Stamina: drew ${drawn} card${drawn === 1 ? '' : 's'}.`);
   },
 };
 

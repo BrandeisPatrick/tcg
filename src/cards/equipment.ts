@@ -26,7 +26,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'headshot_booster',     name: 'Headshot Booster',      type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { atk: 1 },           text: '+1 ATK.' },
   { id: 'close_quarters',       name: 'Close Quarters',        type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { atk: 1 },           text: '+1 ATK.' },
   { id: 'extra_health',         name: 'Extra Health',          type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { hp: 3 },            text: '+3 HP.' },
-  { id: 'extra_stamina',        name: 'Extra Stamina',         type: 'equipment', rarity: 1, tier: 1, cost: 1, abilities: ['eff_extra_stamina'], text: 'Start of turn: refresh bearer (clears exhaust).' },
+  { id: 'extra_stamina',        name: 'Extra Stamina',         type: 'equipment', rarity: 1, tier: 1, cost: 1, abilities: ['eff_extra_stamina'], text: 'On attach: draw 2 cards.' },
   { id: 'mystic_burst',         name: 'Mystic Burst',          type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { spirit: 1 },        text: '+1 Spirit.' },
   { id: 'sprint_boots',         name: 'Sprint Boots',          type: 'equipment', rarity: 1, tier: 1, cost: 1, abilities: ['eff_sprint_boots_attach'], bonus: { hp: 1 }, text: '+1 HP. On attach: refresh bearer.' },
   { id: 'enduring_spirit',      name: 'Enduring Spirit',       type: 'equipment', rarity: 1, tier: 1, cost: 1, bonus: { hp: 2, spirit: 1 }, text: '+2 HP, +1 Spirit.' },
