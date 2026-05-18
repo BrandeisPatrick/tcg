@@ -78,10 +78,9 @@ export function HeroSlot({
 
   // Compact bench mode: smaller fonts, shorter body
   const nameSize = compact ? 10 : 13;
-  const ribbonFontSize = compact ? 7 : 8.5;
+  const ribbonFontSize = compact ? 9 : 11;
   const statSize = compact ? 12 : 15;
   const iconSize = compact ? 11 : 13;
-  const ribbonLetterSpacing = compact ? '0.12em' : '0.16em';
   const bodyPadding = compact ? '4px 6px 5px' : '5px 9px 6px';
 
   return (
@@ -242,22 +241,18 @@ export function HeroSlot({
         )}
       </div>
 
-      {/* Brass type ribbon: role */}
+      {/* Type ribbon: role — single style, no uppercase / letter-spacing */}
       <div style={{
         flexShrink: 0,
         padding: '2px 8px',
         background: `linear-gradient(90deg, ${palette.type.hero.ribbon}, ${palette.type.hero.ribbon}cc)`,
         color: '#fff',
-        fontFamily: fonts.display,
         fontSize: ribbonFontSize,
         fontWeight: 700,
-        letterSpacing: ribbonLetterSpacing,
-        textTransform: 'uppercase',
         textAlign: 'left',
         borderBottom: `1px solid rgba(0,0,0,0.3)`,
-        textShadow: '0 1px 1px rgba(0,0,0,0.3)',
       }}>
-        {role}
+        {role.charAt(0).toUpperCase() + role.slice(1)}
       </div>
 
       {/* Cream body — name + stats row */}
@@ -272,10 +267,8 @@ export function HeroSlot({
         minHeight: 0,
       }}>
         <div style={{
-          fontFamily: fonts.display,
           fontSize: nameSize,
           fontWeight: 700,
-          letterSpacing: '0.02em',
           color: palette.card.bodyText,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -287,9 +280,8 @@ export function HeroSlot({
         <div style={{
           marginTop: 3,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          fontFamily: fonts.display, fontSize: statSize, fontWeight: 700,
+          fontSize: statSize, fontWeight: 700,
           fontVariantNumeric: 'tabular-nums',
-          letterSpacing: '0.02em',
         }}>
           <span style={{
             color: palette.atk,
@@ -306,7 +298,6 @@ export function HeroSlot({
               opacity: 0.5,
               fontSize: Math.max(9, statSize - 4),
               fontWeight: 500,
-              fontFamily: fonts.ui,
               marginLeft: 1,
             }}>/{card.hpMax}</span>
           </span>

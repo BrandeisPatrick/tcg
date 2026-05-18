@@ -1030,8 +1030,8 @@ function SoulGem({ size = 14 }: { size?: number }) {
 function Stat({ label, value, accent }: { label: string; value: any; accent: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-      <span style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: palette.textFaint }}>{label}</span>
-      <span style={{ fontFamily: fonts.display, fontSize: 14, fontWeight: 600, color: accent, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: palette.textFaint }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 700, color: accent, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
     </div>
   );
 }
@@ -1043,8 +1043,7 @@ function PlayerSummary({ label, ps, hostile }: { label: string; ps: GameState['p
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
         <span style={{
-          fontFamily: fonts.display, fontSize: 12, fontWeight: 600,
-          letterSpacing: '0.18em', textTransform: 'uppercase', color,
+          fontSize: 12, fontWeight: 700, color,
         }}>{label}</span>
         <span style={{ fontSize: 12, color: palette.textDim }}>
           deck {ps.deck.length} · disc {ps.discard.length}{hostile ? ` · hand ${ps.hand.length}` : ''}

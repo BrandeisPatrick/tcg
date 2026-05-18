@@ -120,11 +120,13 @@ export function typeTint(t: 'hero' | 'spell' | 'equipment' | 'ultimate') {
  */
 export const text = {
   label: {
-    fontFamily: fonts.display,
+    // Single-family, sentence-case header. Same Inter family as body; bold +
+    // muted color carries the "label" role instead of uppercase/letter-spacing.
+    fontFamily: fonts.ui,
     fontSize: 11,
     fontWeight: 700,
-    letterSpacing: '0.22em',
-    textTransform: 'uppercase' as const,
+    letterSpacing: '0',
+    textTransform: 'none' as const,
     lineHeight: 1.2,
   },
   body: {
@@ -136,10 +138,10 @@ export const text = {
     lineHeight: 1.45,
   },
   numeric: {
-    fontFamily: fonts.display,
+    fontFamily: fonts.ui,
     fontSize: 16,
     fontWeight: 800,
-    letterSpacing: '0.02em',
+    letterSpacing: '0',
     fontVariantNumeric: 'tabular-nums' as const,
     lineHeight: 1,
   },
