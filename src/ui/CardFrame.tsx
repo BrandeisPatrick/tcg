@@ -378,36 +378,34 @@ export function CardFrame({
           {data?.name ?? cardId}
         </div>
 
-        {/* SKILL / PASSIVE label — bold, dark for skill, grey for passive. */}
-        {size !== 'slot' && isHero && data?.text && (() => {
+        {/* Body text (effect) — Skill / Passive label is inlined as a bold
+            prefix on the same row as the effect description. */}
+        {size !== 'slot' && data?.text && (() => {
           const d = data as any;
-          const isSkill = !!d.skill;
-          const tag = isSkill ? 'Skill' : d.passives?.length ? 'Passive' : null;
-          if (!tag) return null;
+          const isSkill = isHero && !!d.skill;
+          const isPassive = isHero && !d.skill && !!d.passives?.length;
+          const tag = isSkill ? 'Skill' : isPassive ? 'Passive' : null;
           return (
             <div style={{
+              flex: 1,
               marginTop: 4,
               fontSize: 11,
-              fontWeight: 700,
-              color: isSkill ? palette.card.bodyText : palette.card.bodyTextDim,
-            }}>{tag}</div>
+              fontWeight: 400,
+              lineHeight: 1.35,
+              color: palette.card.bodyTextDim,
+              overflow: 'hidden',
+            }}>
+              {tag && (
+                <span style={{
+                  fontWeight: 700,
+                  color: isSkill ? palette.card.bodyText : palette.card.bodyTextDim,
+                  marginRight: 5,
+                }}>{tag}</span>
+              )}
+              <RuleText text={data.text} />
+            </div>
           );
         })()}
-
-        {/* Body text (effect). Keywords still auto-bolded by RuleText. */}
-        {size !== 'slot' && data?.text && (
-          <div style={{
-            flex: 1,
-            marginTop: 3,
-            fontSize: 11,
-            fontWeight: 400,
-            lineHeight: 1.35,
-            color: palette.card.bodyTextDim,
-            overflow: 'hidden',
-          }}>
-            <RuleText text={data.text} />
-          </div>
-        )}
 
         {/* Footer slot (optional override) */}
         {footer && (
