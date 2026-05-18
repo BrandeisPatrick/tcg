@@ -330,22 +330,9 @@ export function CardFrame({
         overflow: 'hidden',
       }}>
         <span style={{ position: 'relative', zIndex: 2 }}>
-          {/* Quieter context tags (type + role) */}
-          <span style={{ color: 'rgba(255,255,255,0.78)' }}>
-            {typeLabel(data)}
-            {isHero && ` · ${getHeroIdentity((data as any).id).role}`}
-          </span>
-          {/* Bold gameplay tags (skill/passive flag + ability name) */}
-          {isHero && (data as any).abilityName && (
-            <>
-              <span style={{ color: 'rgba(255,255,255,0.78)' }}> · </span>
-              <span style={{ color: '#fff', textShadow: '0 0 4px rgba(255,255,255,0.45)' }}>
-                {(data as any).skill ? 'SKILL' : 'PASSIVE'}
-                {' '}
-                <span style={{ fontWeight: 900 }}>{(data as any).abilityName}</span>
-              </span>
-            </>
-          )}
+          {typeLabel(data)}
+          {isHero && ` · ${getHeroIdentity((data as any).id).role}`}
+          {isHero && (data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
         </span>
         <AnimatePresence>
           {hover && (
@@ -393,6 +380,29 @@ export function CardFrame({
         </div>
 
         {/* (Role + ability name now live on the banner above with the type.) */}
+
+        {/* SKILL / PASSIVE label sitting directly above the effect text — makes
+            the activation type unmistakable at a glance. */}
+        {size !== 'slot' && isHero && data?.text && (() => {
+          const d = data as any;
+          const tag = d.skill ? 'SKILL' : d.passives?.length ? 'PASSIVE' : null;
+          if (!tag) return null;
+          return (
+            <div style={{
+              alignSelf: 'flex-start',
+              marginTop: 4,
+              padding: '1px 6px',
+              background: tint.ribbon,
+              color: '#fff',
+              fontSize: 8,
+              fontWeight: 800,
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              borderRadius: 2,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+            }}>{tag}</div>
+          );
+        })()}
 
         {/* Body text */}
         {size !== 'slot' && data?.text && (
