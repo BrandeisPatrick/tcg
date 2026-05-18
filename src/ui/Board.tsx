@@ -197,6 +197,8 @@ export function Board(props: BoardProps<GameState>) {
         else if (best.move === 'playCard') (moves.playCard as any)(...best.args);
         else if (best.move === 'useSkill') (moves.useSkill as any)(...best.args);
         else if (best.move === 'moveHero') (moves.moveHero as any)(...best.args);
+        else if (best.move === 'promoteToActive') (moves as any).promoteToActive(...best.args);
+        else triggerEndTurn(); // unknown move kind — bail rather than freeze the AI loop
       } catch {
         triggerEndTurn();
       }
