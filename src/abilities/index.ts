@@ -441,10 +441,10 @@ const skill_viscous: AbilityDef = {
 
 const skill_yamato: AbilityDef = {
   id: 'skill_yamato', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Yamato Power Slash — 5 spirit dmg.',
-  base: 5, baseLabel: 'spirit dmg',
+  prompt: 'Yamato Power Slash — 4 spirit dmg.',
+  base: 4, baseLabel: 'spirit dmg',
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 5 + spi(source), 'spirit'); },
+  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 4 + spi(source), 'spirit'); },
 };
 
 // ----- Hero passives (always-on or trigger-based, no Activate) -----

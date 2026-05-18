@@ -161,8 +161,7 @@ describe('Spell spirit scaling sourced from Active hero', () => {
     const ally = G.players['0'].bench[0]!;
     ally.hp = 1;
     ABILITIES_BY_ID['eff_healing_rite'].run(G, { movingPlayer: '0' }, { target: ally });
-    // base 3 + spirit 2 = 5 healing. Capped by hpMax but Vindicta hpMax is 7
-    // so 1 + 5 = 6 fits cleanly.
+    // base 3 + spirit 2 = 5 healing; ally starts at 1 → ends at 6.
     expect(ally.hp).toBe(6);
   });
 
@@ -266,5 +265,32 @@ describe('Equipment on-attach procs', () => {
     bearer.exhausted = true;
     ABILITIES_BY_ID['eff_sprint_boots_attach'].run(G, { movingPlayer: '0' }, { source: bearer, target: bearer });
     expect(bearer.exhausted).toBe(false);
+  });
+});
+
+// Regression lock: no glass-cannon hero should be one-shot by an opening-turn
+// skill + basic-attack alpha. Worst-case caster combo is Yamato (atk 4) casting
+// Power Slash (4 spirit at 0 SPI) into the front line. Every starter-deck hero
+// must survive that 8-dmg burst with at least 1 HP after mitigation.
+describe('alpha-strike regression', () => {
+  it('every starter hero survives a turn-2 (4 spirit + 4 atk) opening alpha', async () => {
+    const { damageUnit } = await import('@/engine/damage');
+    const { CARDS_BY_ID } = await import('@/cards');
+    const G = freshG();
+    const frontline = [
+      G.players['0'].active!,
+      ...G.players['0'].bench.filter(Boolean) as NonNullable<typeof G.players['0'].active>[],
+      G.players['1'].active!,
+      ...G.players['1'].bench.filter(Boolean) as NonNullable<typeof G.players['1'].active>[],
+    ];
+    for (const hero of frontline) {
+      const startHp = hero.hp;
+      damageUnit(G, hero, 4, 'spirit');
+      damageUnit(G, hero, 4, 'attack');
+      const name = CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId;
+      expect(hero.hp, `${name} died to opening alpha (start ${startHp}, end ${hero.hp})`).toBeGreaterThan(0);
+      // reset for next hero
+      hero.hp = startHp;
+    }
   });
 });
