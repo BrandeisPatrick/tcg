@@ -3,6 +3,7 @@ import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { otherPlayer, liveBoardCards, effectiveAtk } from '@/engine/util';
 import { getAbility, type TargetFilter } from '@/abilities';
+import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
 
 interface MoveOption {
   move: 'playCard' | 'useSkill' | 'endTurn' | 'moveHero' | 'promoteToActive';
@@ -145,7 +146,26 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx): MoveOption[] {
 
     if (data.type === 'equipment') {
       for (const t of allyTargets) {
-        out.push({ move: 'playCard', args: [c.iid, t.iid], score: scorePlayCard(G, pid, c, t) });
+        const slotsTaken = (t.attached ?? []).length;
+        if (slotsTaken < MAX_EQUIPMENT_PER_HERO) {
+          out.push({ move: 'playCard', args: [c.iid, t.iid], score: scorePlayCard(G, pid, c, t) });
+        } else {
+          // Hero is full — discard the lowest-priority existing item to
+          // make room. Use the same scorePlayCard heuristic to pick the
+          // worst current piece (lowest score = least valuable to keep).
+          const attached = t.attached!;
+          let worst = attached[0];
+          let worstScore = scorePlayCard(G, pid, worst, t);
+          for (const eq of attached.slice(1)) {
+            const s = scorePlayCard(G, pid, eq, t);
+            if (s < worstScore) { worst = eq; worstScore = s; }
+          }
+          out.push({
+            move: 'playCard',
+            args: [c.iid, t.iid, worst.iid],
+            score: scorePlayCard(G, pid, c, t) - worstScore,
+          });
+        }
       }
     }
   }

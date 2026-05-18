@@ -379,6 +379,58 @@ describe('Headshot Booster equipment — +2 vs Stunned', () => {
   });
 });
 
+// Regression: equipment cap of 3 per hero. Trying to attach a 4th without
+// specifying which to discard is invalid; specifying a valid discard iid
+// swaps cleanly and the dropped item lands in the discard pile.
+describe('equipment cap (3 per hero)', () => {
+  it('rejects a 4th equipment without a discard target', async () => {
+    const { DeadlockGame } = await import('@/engine/game');
+    const G = freshG();
+    const hero = G.players['0'].active!;
+    // Pre-fill the hero with 3 equipment instances.
+    hero.attached = [
+      { iid: 'eq1', cardId: 'basic_magazine', ownerId: '0', zone: 'equipment', attachedTo: hero.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false },
+      { iid: 'eq2', cardId: 'extra_health',  ownerId: '0', zone: 'equipment', attachedTo: hero.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false },
+      { iid: 'eq3', cardId: 'mystic_burst',  ownerId: '0', zone: 'equipment', attachedTo: hero.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false },
+    ] as any;
+    // Put a 4th equipment in hand with affordable cost.
+    G.players['0'].souls = 5;
+    const incoming = { iid: 'eq4', cardId: 'monster_rounds', ownerId: '0', zone: 'hand', hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false } as any;
+    G.players['0'].hand = [incoming];
+
+    const fn = (DeadlockGame.moves as any).playCard;
+    const r = fn({ G, ctx: { currentPlayer: '0', numPlayers: 2 } as any, playerID: '0' }, 'eq4', hero.iid);
+    expect(r).toBe('INVALID_MOVE');
+    // Hero still wears the original 3.
+    expect(hero.attached?.length).toBe(3);
+  });
+
+  it('swaps cleanly when a valid discard target is provided', async () => {
+    const { DeadlockGame } = await import('@/engine/game');
+    const G = freshG();
+    const hero = G.players['0'].active!;
+    hero.attached = [
+      { iid: 'eq1', cardId: 'basic_magazine', ownerId: '0', zone: 'equipment', attachedTo: hero.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false },
+      { iid: 'eq2', cardId: 'extra_health',  ownerId: '0', zone: 'equipment', attachedTo: hero.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false },
+      { iid: 'eq3', cardId: 'mystic_burst',  ownerId: '0', zone: 'equipment', attachedTo: hero.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false },
+    ] as any;
+    G.players['0'].souls = 5;
+    const incoming = { iid: 'eq4', cardId: 'monster_rounds', ownerId: '0', zone: 'hand', hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false } as any;
+    G.players['0'].hand = [incoming];
+
+    const fn = (DeadlockGame.moves as any).playCard;
+    const r = fn({ G, ctx: { currentPlayer: '0', numPlayers: 2 } as any, playerID: '0' }, 'eq4', hero.iid, 'eq2');
+    expect(r).not.toBe('INVALID_MOVE');
+    // Slot count still 3, eq2 is gone, eq4 is attached.
+    const ids = hero.attached!.map((eq) => eq.iid);
+    expect(hero.attached?.length).toBe(3);
+    expect(ids).not.toContain('eq2');
+    expect(ids).toContain('eq4');
+    // Discarded item is in the discard pile.
+    expect(G.players['0'].discard.some((c) => c.iid === 'eq2')).toBe(true);
+  });
+});
+
 // Regression: damage log uses the player-facing "bullet" label, not the
 // engine-internal "attack" damage type.
 describe('damage log labelling', () => {

@@ -17,6 +17,9 @@ import { getAbility } from '@/abilities';
 const MAX_HAND = 7;
 const ULT_UNLOCK_TURN = 5;
 const SOULS_START = 0;
+/** Max equipment a hero can wear at once. Playing a 4th piece requires
+ *  the player to choose one of the existing items to discard. */
+export const MAX_EQUIPMENT_PER_HERO = 3;
 // Refill economy (Hearthstone-style): at the start of each of your turns,
 // your pool is REFILLED to N — anything banked from last turn is lost.
 // The ramp climbs 1 → 7 by your 7th turn, then caps.
@@ -252,7 +255,7 @@ export const DeadlockGame: Game<GameState> = {
   },
 
   moves: {
-    playCard: ({ G, ctx, playerID }, iid: string, targetIid?: string) => {
+    playCard: ({ G, ctx, playerID }, iid: string, targetIid?: string, discardIid?: string) => {
       const pid = (playerID ?? ctx.currentPlayer) as PlayerID;
       const ps = G.players[pid];
       const idx = ps.hand.findIndex((c) => c.iid === iid);
@@ -277,6 +280,21 @@ export const DeadlockGame: Game<GameState> = {
         if (CARDS_BY_ID[target.cardId]?.type !== 'hero') return INVALID_MOVE;
         // Can't attach gear to a corpse.
         if ((target.respawnTurnsLeft ?? 0) > 0) return INVALID_MOVE;
+        // Equipment cap: if the hero is full, the caller must specify
+        // which existing item to discard. Without discardIid the move is
+        // invalid so the UI can intercept and prompt the player to pick.
+        const attached = target.attached ?? [];
+        if (attached.length >= MAX_EQUIPMENT_PER_HERO) {
+          if (!discardIid) return INVALID_MOVE;
+          const dropIdx = attached.findIndex((eq) => eq.iid === discardIid);
+          if (dropIdx < 0) return INVALID_MOVE;
+          const dropped = attached[dropIdx];
+          dropped.zone = 'discard';
+          dropped.attachedTo = undefined;
+          ps.discard.push(dropped);
+          attached.splice(dropIdx, 1);
+          pushLog(G, `${CARDS_BY_ID[target.cardId]?.name} discarded ${CARDS_BY_ID[dropped.cardId]?.name} to make room.`);
+        }
         card.attachedTo = target.iid;
       }
       // Spells / ults targeting a hero can't pick a corpse either.

@@ -17,6 +17,8 @@ import { ArenaBackdrop } from './ArenaBackdrop';
 import { DragArrow } from './DragArrow';
 import { MulliganOverlay } from './MulliganOverlay';
 import { PromotionOverlay } from './PromotionOverlay';
+import { EquipmentReplaceOverlay } from './EquipmentReplaceOverlay';
+import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
 import { BenchRow } from './BenchRow';
 import { ActiveSlot } from './ActiveSlot';
 import { ActiveDuel } from './ActiveDuel';
@@ -52,6 +54,10 @@ export function Board(props: BoardProps<GameState>) {
   const [bannerTone, setBannerTone] = useState<'self' | 'opponent'>('self');
   const [preview, setPreview] = useState<{ card: CardInstance; hover: boolean } | null>(null);
   const [heroDetail, setHeroDetail] = useState<CardInstance | null>(null);
+  // Equipment replacement flow: when the player tries to attach a 4th piece
+  // to a hero, this holds the incoming card + the target hero until the
+  // player picks which existing item to discard (or cancels).
+  const [replaceTarget, setReplaceTarget] = useState<{ incoming: CardInstance; hero: CardInstance } | null>(null);
   const [attackingIids, setAttackingIids] = useState<Set<string>>(new Set());
   // Combat animation gate. While non-null, end-turn is intercepted — the
   // choreographer walks the plan visually, then we call the actual move.
@@ -284,6 +290,24 @@ export function Board(props: BoardProps<GameState>) {
     }
   }
 
+  /**
+   * Equipment attach gate: if the target hero is at the equipment cap (3),
+   * open the replacement modal instead of dispatching playCard. The modal
+   * calls back with the chosen discard iid, which is forwarded to playCard.
+   * Returns true if the play was deferred to the modal (caller should not
+   * call playCard directly).
+   */
+  function maybeOpenEquipmentReplace(handCardIid: string, heroCardIid: string): boolean {
+    const handCard = G.players[me].hand.find((c) => c.iid === handCardIid);
+    if (!handCard) return false;
+    if (CARDS_BY_ID[handCard.cardId]?.type !== 'equipment') return false;
+    const found = findOnBoard(G, heroCardIid);
+    if (!found || found.owner !== me) return false;
+    if ((found.card.attached ?? []).length < MAX_EQUIPMENT_PER_HERO) return false;
+    setReplaceTarget({ incoming: handCard, hero: found.card });
+    return true;
+  }
+
   function onTapHero(card: CardInstance, owner: PlayerID) {
     // Corpses are non-interactive — they're respawning in their slot.
     if ((card.respawnTurnsLeft ?? 0) > 0) return;
@@ -291,8 +315,12 @@ export function Board(props: BoardProps<GameState>) {
       if (!isMyTurn) return;
       const valid = isTargetable(card, owner);
       if (!valid) { setPending(null); return; }
-      if (pending.kind === 'playCard') moves.playCard(pending.iid, card.iid);
-      else moves.useSkill(pending.iid, card.iid);
+      if (pending.kind === 'playCard') {
+        if (maybeOpenEquipmentReplace(pending.iid, card.iid)) { setPending(null); return; }
+        moves.playCard(pending.iid, card.iid);
+      } else {
+        moves.useSkill(pending.iid, card.iid);
+      }
       setPending(null);
       return;
     }
@@ -361,6 +389,7 @@ export function Board(props: BoardProps<GameState>) {
       if (targetIid) {
         const found = findOnBoard(G, targetIid);
         if (found && found.owner === me && CARDS_BY_ID[found.card.cardId]?.type === 'hero') {
+          if (maybeOpenEquipmentReplace(c.iid, targetIid)) { setPending(null); return; }
           moves.playCard(c.iid, targetIid);
           setPending(null);
           return;
@@ -629,6 +658,20 @@ export function Board(props: BoardProps<GameState>) {
               />
             );
           })()}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {replaceTarget && (
+            <EquipmentReplaceOverlay
+              incoming={replaceTarget.incoming}
+              hero={replaceTarget.hero}
+              onPick={(discardIid) => {
+                moves.playCard(replaceTarget.incoming.iid, replaceTarget.hero.iid, discardIid);
+                setReplaceTarget(null);
+              }}
+              onCancel={() => setReplaceTarget(null)}
+            />
+          )}
         </AnimatePresence>
 
         <AnimatePresence>
