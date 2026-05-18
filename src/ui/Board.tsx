@@ -102,6 +102,33 @@ export function Board(props: BoardProps<GameState>) {
     if (!inHand && !inAttached) setPreview(null);
   }, [G, preview]);
 
+  // Stuck-hover guard: if the cursor leaves the document or stops moving for
+  // ~2.5s while a hover preview is open, close it. Catches the case where the
+  // source card unmounts mid-hover and never fires pointerleave, or the user
+  // tabs/alt-tabs away.
+  useEffect(() => {
+    if (!preview?.hover) return;
+    let idleTimer: ReturnType<typeof setTimeout>;
+    const armIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => setPreview(null), 2500);
+    };
+    const onWinBlur = () => setPreview(null);
+    const onDocLeave = (e: PointerEvent) => {
+      if (e.relatedTarget === null) setPreview(null);
+    };
+    armIdle();
+    window.addEventListener('pointermove', armIdle, { passive: true });
+    window.addEventListener('blur', onWinBlur);
+    document.addEventListener('pointerleave', onDocLeave);
+    return () => {
+      clearTimeout(idleTimer);
+      window.removeEventListener('pointermove', armIdle);
+      window.removeEventListener('blur', onWinBlur);
+      document.removeEventListener('pointerleave', onDocLeave);
+    };
+  }, [preview]);
+
   const prevHpRef = useRef<Map<string, number>>(new Map());
   const prevPlayerHpRef = useRef<{ '0': number; '1': number }>({ '0': 20, '1': 20 });
 

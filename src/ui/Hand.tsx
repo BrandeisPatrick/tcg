@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRef } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { CardFrame } from './CardFrame';
@@ -50,10 +51,31 @@ function cardOverlap(total: number): number {
 
 export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, onHover, onDragEndOver }: Props) {
   const total = cards.length;
+  // Per-card timers held in refs so they survive re-renders. Without this,
+  // the closure variables get re-created each render, leaving stale timers
+  // dangling and the preview "stuck" open.
+  const hoverTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pressTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const currentHover = useRef<string | null>(null);
+  const clearHover = (iid: string) => {
+    const t = hoverTimers.current.get(iid);
+    if (t) { clearTimeout(t); hoverTimers.current.delete(iid); }
+  };
+  const clearPress = (iid: string) => {
+    const t = pressTimers.current.get(iid);
+    if (t) { clearTimeout(t); pressTimers.current.delete(iid); }
+  };
+  const closePreview = () => {
+    if (currentHover.current !== null) {
+      currentHover.current = null;
+      if (onHover) onHover(null);
+    }
+  };
 
   return (
     <div
-      onMouseLeave={() => { if (onHover) onHover(null); }}
+      onMouseLeave={closePreview}
+      onPointerLeave={closePreview}
       style={{
         display: 'flex',
         gap: 0,
@@ -78,8 +100,6 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
           const cardDisabled = disabled || unaffordable;
           const rot = selected ? 0 : fanRotation(i, total);
           const y = selected ? -42 : fanY(i, total);
-          let pressTimer: ReturnType<typeof setTimeout> | undefined;
-          let hoverTimer: ReturnType<typeof setTimeout> | undefined;
 
           return (
             <motion.div
@@ -98,26 +118,32 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 if (onDragEndOver) onDragEndOver(c, info.point.x, info.point.y);
               }}
               whileTap={{ scale: selected ? 1.06 : 0.98 }}
-              whileHover={!cardDisabled ? { y: y - 30, scale: 1.05, rotate: 0, zIndex: 200 } : undefined}
-              onMouseEnter={() => {
-                if (onHover) {
-                  hoverTimer = setTimeout(() => onHover(c), 650);
-                }
+              // No whileHover lift — caused mouseenter/leave oscillation as
+              // the card sprang up while the cursor moved off, trapping the
+              // preview open. Hover state is signalled with a subtle scale +
+              // outline on the CardFrame itself if needed; the elevation
+              // animation moved to drag-only.
+              onPointerEnter={() => {
+                if (cardDisabled || !onHover) return;
+                clearHover(c.iid);
+                const timer = setTimeout(() => {
+                  currentHover.current = c.iid;
+                  onHover(c);
+                }, 350);
+                hoverTimers.current.set(c.iid, timer);
               }}
-              onMouseLeave={() => {
-                if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = undefined; }
-                if (onHover) onHover(null);
+              onPointerLeave={() => {
+                clearHover(c.iid);
+                clearPress(c.iid);
+                if (currentHover.current === c.iid) closePreview();
               }}
               onPointerDown={() => {
                 if (onLongPress) {
-                  pressTimer = setTimeout(() => onLongPress(c), 500);
+                  const timer = setTimeout(() => onLongPress(c), 500);
+                  pressTimers.current.set(c.iid, timer);
                 }
               }}
-              onPointerUp={() => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; } }}
-              onPointerLeave={() => {
-                if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; }
-                if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = undefined; }
-              }}
+              onPointerUp={() => clearPress(c.iid)}
               onClick={() => !cardDisabled && onTap(c)}
               title={unaffordable ? `Need ${cost} souls (have ${mySouls})` : undefined}
               style={{
