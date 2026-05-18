@@ -7,6 +7,7 @@ import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { StatusIcon } from './StatusIcon';
 import { SwordIcon, HeartIcon } from './Icons';
 import { palette, fonts, radius, spring, text } from './tokens';
+import { RuleText } from './RuleText';
 
 interface Props {
   card: CardInstance;
@@ -302,6 +303,34 @@ export function HeroSlot({
             }}>/{card.hpMax}</span>
           </span>
         </div>
+
+        {/* Effect text — Skill / Passive label + body. Matches the full
+            card view's rendering format so the on-board tile carries the
+            same information at a glance. */}
+        {data.text && (() => {
+          const isSkill = !!data.skill;
+          const isPassive = !data.skill && !!data.passives?.length;
+          const tag = isSkill ? 'Skill' : isPassive ? 'Passive' : null;
+          return (
+            <div style={{
+              marginTop: 4,
+              fontSize: compact ? 9 : 11,
+              fontWeight: 400,
+              lineHeight: 1.3,
+              color: palette.card.bodyTextDim,
+              overflow: 'hidden',
+            }}>
+              {tag && (
+                <span style={{
+                  fontWeight: 800,
+                  color: isSkill ? '#5a3f1c' : '#6b665c',
+                  marginRight: 5,
+                }}>{tag}</span>
+              )}
+              <RuleText text={data.text} />
+            </div>
+          );
+        })()}
       </div>
     </motion.button>
   );
