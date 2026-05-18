@@ -312,26 +312,23 @@ export function CardFrame({
         )}
       </div>
 
-      {/* Colored type ribbon — horizontal banner sitting between art and
-          body, carrying the card type label (HERO / SPELL / EQUIPMENT /
-          ULTIMATE). Hover triggers a shimmer sweep. */}
+      {/* Horizontal type banner — single style with the rest of the card.
+          Hover triggers a shimmer sweep. */}
       <div style={{
         position: 'relative',
         flexShrink: 0,
-        padding: '2px 8px',
+        padding: '3px 8px',
         background: `linear-gradient(90deg, ${tint.ribbon}ee, ${tint.ribbon}aa 60%, ${tint.ribbon}55)`,
         color: '#fff',
-        fontSize: 8.5,
+        fontSize: 11,
         fontWeight: 700,
-        letterSpacing: '0.2em',
-        textTransform: 'uppercase',
         textAlign: 'left',
         borderBottom: `1px solid rgba(0,0,0,0.3)`,
         overflow: 'hidden',
       }}>
         <span style={{ position: 'relative', zIndex: 2 }}>
           {typeLabel(data)}
-          {isHero && ` · ${getHeroIdentity((data as any).id).role}`}
+          {isHero && ` · ${capitalize(getHeroIdentity((data as any).id).role)}`}
           {isHero && (data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
         </span>
         <AnimatePresence>
@@ -364,49 +361,47 @@ export function CardFrame({
         padding: '5px 8px 6px',
         minHeight: 0,
       }}>
+        {/* All body-section text is a single unified style: fonts.ui, size 11,
+            no letter-spacing, no uppercase. Only color and font-weight differ
+            between elements. */}
+
         {/* Name */}
         <div style={{
-          fontFamily: fonts.display,
-          fontSize: sz.nameSize,
+          fontSize: 11,
           fontWeight: 700,
-          letterSpacing: '0.02em',
           color: palette.card.bodyText,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          lineHeight: 1.15,
+          lineHeight: 1.2,
         }}>
           {data?.name ?? cardId}
         </div>
 
-        {/* (Role + ability name now live on the banner above with the type.) */}
-
-        {/* SKILL / PASSIVE label sitting directly above the effect text. Plain
-            text — SKILL in dark body color, PASSIVE in muted grey. */}
+        {/* SKILL / PASSIVE label — bold, dark for skill, grey for passive. */}
         {size !== 'slot' && isHero && data?.text && (() => {
           const d = data as any;
           const isSkill = !!d.skill;
-          const tag = isSkill ? 'SKILL' : d.passives?.length ? 'PASSIVE' : null;
+          const tag = isSkill ? 'Skill' : d.passives?.length ? 'Passive' : null;
           if (!tag) return null;
           return (
             <div style={{
               marginTop: 4,
-              color: isSkill ? palette.card.bodyText : palette.card.bodyTextDim,
-              fontSize: 8.5,
+              fontSize: 11,
               fontWeight: 700,
-              letterSpacing: '0.22em',
-              textTransform: 'uppercase',
+              color: isSkill ? palette.card.bodyText : palette.card.bodyTextDim,
             }}>{tag}</div>
           );
         })()}
 
-        {/* Body text */}
+        {/* Body text (effect). Keywords still auto-bolded by RuleText. */}
         {size !== 'slot' && data?.text && (
           <div style={{
             flex: 1,
             marginTop: 3,
-            fontSize: sz.bodySize,
-            lineHeight: 1.3,
+            fontSize: 11,
+            fontWeight: 400,
+            lineHeight: 1.35,
             color: palette.card.bodyTextDim,
             overflow: 'hidden',
           }}>
@@ -419,7 +414,7 @@ export function CardFrame({
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             marginTop: 4,
-            fontSize: 10, color: palette.card.flavor,
+            fontSize: 11, fontWeight: 400, color: palette.card.flavor,
             borderTop: `1px solid ${palette.card.bodyBorder}55`,
             paddingTop: 4,
           }}>
@@ -427,20 +422,18 @@ export function CardFrame({
           </div>
         )}
 
-        {/* Set / identifier line — single centered string */}
+        {/* Set / identifier line */}
         {size !== 'slot' && data && (
           <div style={{
             marginTop: footer ? 2 : 'auto',
             paddingTop: 2,
             textAlign: 'center',
-            fontSize: 7.5,
-            letterSpacing: '0.16em',
-            textTransform: 'uppercase',
+            fontSize: 11,
+            fontWeight: 400,
             color: palette.card.flavor,
-            fontVariantNumeric: 'tabular-nums',
-            opacity: 0.6,
+            opacity: 0.55,
           }}>
-            DLK · CURSED APPLE · {String(CARD_INDEX[data.id] ?? 0).padStart(2, '0')}/{CARD_TOTAL}
+            DLK · Cursed Apple · {String(CARD_INDEX[data.id] ?? 0).padStart(2, '0')}/{CARD_TOTAL}
           </div>
         )}
       </div>
@@ -450,6 +443,10 @@ export function CardFrame({
 
 function rarityName(r: 1 | 2 | 3 | 4): string {
   return r === 4 ? 'Mythic' : r === 3 ? 'Rare' : r === 2 ? 'Uncommon' : 'Common';
+}
+
+function capitalize(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 function StatPill({ icon, value, bg }: { icon: ReactNode; value: number; bg: string }) {
