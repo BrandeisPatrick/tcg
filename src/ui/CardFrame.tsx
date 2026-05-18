@@ -312,16 +312,24 @@ export function CardFrame({
         )}
       </div>
 
-      {/* Colored separator strip (no text — type label now lives in the
-          subtitle line below alongside the role + ability name). */}
+      {/* Colored type ribbon — horizontal banner sitting between art and
+          body, carrying the card type label (HERO / SPELL / EQUIPMENT /
+          ULTIMATE). Hover triggers a shimmer sweep. */}
       <div style={{
         position: 'relative',
         flexShrink: 0,
-        height: 4,
+        padding: '2px 8px',
         background: `linear-gradient(90deg, ${tint.ribbon}ee, ${tint.ribbon}aa 60%, ${tint.ribbon}55)`,
+        color: '#fff',
+        fontSize: 8.5,
+        fontWeight: 700,
+        letterSpacing: '0.2em',
+        textTransform: 'uppercase',
+        textAlign: 'left',
         borderBottom: `1px solid rgba(0,0,0,0.3)`,
         overflow: 'hidden',
       }}>
+        <span style={{ position: 'relative', zIndex: 2 }}>{typeLabel(data)}</span>
         <AnimatePresence>
           {hover && (
             <motion.div
@@ -335,6 +343,7 @@ export function CardFrame({
                 width: '45%',
                 background: `linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.5) 50%, transparent 75%)`,
                 pointerEvents: 'none',
+                zIndex: 1,
               }}
             />
           )}
@@ -366,20 +375,19 @@ export function CardFrame({
           {data?.name ?? cardId}
         </div>
 
-        {/* Subtitle: type · role · ability name (heroes) or just type (others).
-            All tags on a single uppercased line, replacing the old ribbon. */}
-        {data && (
+        {/* Subtitle: role · ability name (heroes only). The card type now
+            lives in the brass ribbon above. */}
+        {isHero && (
           <div style={{
             fontSize: 8.5,
             fontWeight: 700,
             letterSpacing: '0.18em',
             textTransform: 'uppercase',
-            color: isHero ? getHeroIdentity((data as any).id).accent : palette.card.bodyTextDim,
+            color: getHeroIdentity((data as any).id).accent,
             marginTop: 1,
           }}>
-            {typeLabel(data)}
-            {isHero && ` · ${getHeroIdentity((data as any).id).role}`}
-            {isHero && (data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
+            {getHeroIdentity((data as any).id).role}
+            {(data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
           </div>
         )}
 
