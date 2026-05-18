@@ -32,6 +32,8 @@ const KEYWORDS: Record<string, string> = {
   'Start of turn':  palette.accent,
   'After attacking':palette.accent,
   'Mythic':         palette.accent,
+  // Scaling tag (spirit purple — same as Spirit Power buff family)
+  'caster Spirit':  palette.spirit,
 };
 
 // Build a single global regex from the keys, longest-first to greedily match

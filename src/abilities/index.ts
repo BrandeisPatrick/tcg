@@ -39,8 +39,19 @@ export interface AbilityDef {
 }
 
 // Helper: total spirit-stat bonus from the source (equipment + Spirit Power buff).
+// Used by HERO skills where the source IS the casting hero.
 export function spi(source?: CardInstance): number {
   return source ? effectiveSpirit(source) : 0;
+}
+
+// Helper: spirit scaling sourced from the player's ACTIVE hero. Used by SPELLS
+// (where `source` is the spell card itself, which has no spiritMod) — the
+// active hero "channels" the spell, so their spirit boosts the magnitude.
+// Corpse active = no scaling.
+export function activeSpi(G: GameState, pid: PlayerID): number {
+  const a = G.players[pid].active;
+  if (!a || (a.respawnTurnsLeft ?? 0) > 0) return 0;
+  return effectiveSpirit(a);
 }
 
 // Helper: deal damage to all of a player's board cards
@@ -53,9 +64,10 @@ function eachBoard(G: GameState, pid: PlayerID, fn: (c: CardInstance) => void) {
 const eff_phantom_strike: AbilityDef = {
   id: 'eff_phantom_strike', trigger: 'onPlay', target: 'enemyAny',
   prompt: 'Phantom Strike — pick an enemy.',
-  run: (G, _ctx, { target }) => {
+  scalesSpirit: true, base: 3, baseLabel: 'dmg',
+  run: (G, ctx, { target }) => {
     if (!target) return;
-    damageUnit(G, target, 3, 'attack');
+    damageUnit(G, target, 3 + activeSpi(G, ctx.movingPlayer), 'attack');
   },
 };
 
@@ -68,7 +80,10 @@ const eff_cold_front: AbilityDef = {
 const eff_decay: AbilityDef = {
   id: 'eff_decay', trigger: 'onPlay', target: 'enemyActive',
   prompt: 'Decay — apply Bleed.',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bleed', 2, 3); },
+  scalesSpirit: true, base: 2, baseLabel: 'Bleed',
+  run: (G, ctx, { target }) => {
+    if (target) addStatus(G, target, 'bleed', 2 + activeSpi(G, ctx.movingPlayer), 3);
+  },
 };
 
 const eff_silence_glyph: AbilityDef = {
@@ -104,7 +119,10 @@ const eff_ethereal_shift: AbilityDef = {
 const eff_return_fire: AbilityDef = {
   id: 'eff_return_fire', trigger: 'onPlay', target: 'allyHero',
   prompt: 'Brace ally: +3 Bullet Resist for 1 turn.',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bullet_resist', 3, 1); },
+  scalesSpirit: true, base: 3, baseLabel: 'Bullet Resist',
+  run: (G, ctx, { target }) => {
+    if (target) addStatus(G, target, 'bullet_resist', 3 + activeSpi(G, ctx.movingPlayer), 1);
+  },
 };
 
 const eff_echo_shard: AbilityDef = {
@@ -201,7 +219,9 @@ const eff_healing_rite: AbilityDef = {
   id: 'eff_healing_rite', trigger: 'onPlay', target: 'allyHero',
   prompt: 'Healing Rite — heal an ally for 3.',
   scalesSpirit: true, base: 3, baseLabel: 'heal',
-  run: (G, _ctx, { source, target }) => { if (target) healUnit(G, target, 3 + spi(source)); },
+  run: (G, ctx, { target }) => {
+    if (target) healUnit(G, target, 3 + activeSpi(G, ctx.movingPlayer));
+  },
 };
 
 const eff_bullet_armor: AbilityDef = {
@@ -213,7 +233,10 @@ const eff_bullet_armor: AbilityDef = {
 const eff_cast_metal_skin: AbilityDef = {
   id: 'eff_cast_metal_skin', trigger: 'onPlay', target: 'allyHero',
   prompt: 'Metal Skin — fortify an ally.',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bullet_resist', 3, 2); },
+  scalesSpirit: true, base: 3, baseLabel: 'Bullet Resist',
+  run: (G, ctx, { target }) => {
+    if (target) addStatus(G, target, 'bullet_resist', 3 + activeSpi(G, ctx.movingPlayer), 2);
+  },
 };
 
 const eff_extra_regen: AbilityDef = {
@@ -279,7 +302,10 @@ const eff_mystic_reverb: AbilityDef = {
 const eff_cast_divine_barrier: AbilityDef = {
   id: 'eff_cast_divine_barrier', trigger: 'onPlay', target: 'allyHero',
   prompt: 'Divine Barrier — Shield 5 on ally.',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'shield', 5, 999); },
+  scalesSpirit: true, base: 5, baseLabel: 'Shield',
+  run: (G, ctx, { target }) => {
+    if (target) addStatus(G, target, 'shield', 5 + activeSpi(G, ctx.movingPlayer), 999);
+  },
 };
 
 // ----- Hero skills (active, "Activate" trigger) -----
