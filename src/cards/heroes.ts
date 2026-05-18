@@ -15,6 +15,10 @@ export const TODO_STAT = -1;
  *
  * Archetypes (8 roles): tank, marksman, caster, healer, bruiser, disruptor,
  * trickster, assassin. Ultimates are 1:1 with heroes.
+ *
+ * Card text format: `abilityName` carries the skill/passive name (rendered as a
+ * tag next to the role on the card subtitle). `text` carries ONLY the
+ * mechanical effect — no "Role. AbilityName:" prefix.
  */
 export const HEROES: HeroCard[] = [
   // ----- PASSIVE-only heroes -----
@@ -27,7 +31,8 @@ export const HEROES: HeroCard[] = [
     hp: 14,
     passives: ['passive_abrams_heal'],
     ult: 'ult_abrams',
-    text: 'Tank. Siphon Life: heals 3 at start of own turn while Active.',
+    abilityName: 'Siphon Life',
+    text: 'Heals 3 at start of own turn while Active.',
   },
   {
     id: 'hero_haze',
@@ -38,7 +43,8 @@ export const HEROES: HeroCard[] = [
     hp: 10,
     passives: ['passive_haze_stunbonus'],
     ult: 'ult_haze',
-    text: 'Marksman. Fixation: +2 ATK vs Stunned targets.',
+    abilityName: 'Fixation',
+    text: '+2 ATK vs Stunned targets.',
   },
   {
     id: 'hero_mo_krill',
@@ -49,7 +55,8 @@ export const HEROES: HeroCard[] = [
     hp: 11,
     passives: ['passive_mo_krill_burrow'],
     ult: 'ult_mo_krill',
-    text: 'Bruiser. Burrow: cleanses all debuffs from self at start of own turn.',
+    abilityName: 'Burrow',
+    text: 'Cleanses all debuffs from self at start of own turn.',
   },
   {
     id: 'hero_rem',
@@ -60,7 +67,8 @@ export const HEROES: HeroCard[] = [
     hp: 7,
     passives: ['passive_rem_benchheal'],
     ult: 'ult_rem',
-    text: 'Healer. Bench-only. Start of own turn: heals ally Active 2.',
+    abilityName: 'Lil Helpers',
+    text: 'Bench-only. Start of own turn: heals ally Active 2.',
     flags: { benchOnly: true },
   },
   {
@@ -72,7 +80,8 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     passives: ['passive_shiv_bleed'],
     ult: 'ult_shiv',
-    text: 'Bruiser. Serrated Knives: attacks apply Bleed 1 for 2 turns.',
+    abilityName: 'Serrated Knives',
+    text: 'Attacks apply Bleed 1 for 2 turns.',
   },
   {
     id: 'hero_vindicta',
@@ -83,7 +92,8 @@ export const HEROES: HeroCard[] = [
     hp: 8,
     passives: ['passive_vindicta_flight'],
     ult: 'ult_vindicta',
-    text: 'Marksman. Long Range. Flight: takes 1 less attack damage from all sources.',
+    abilityName: 'Flight',
+    text: 'Long Range. Takes 1 less attack damage from all sources.',
     flags: { longRange: true },
   },
   {
@@ -95,7 +105,8 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     passives: ['passive_wraith_mixed'],
     ult: 'ult_wraith',
-    text: 'Caster. Attacks split half bullet / half spirit — pierces single-type resists.',
+    abilityName: 'Mixed Bullets',
+    text: 'Attacks split half bullet / half spirit — pierces single-type resists.',
   },
 
   // ----- SKILL-only heroes -----
@@ -108,7 +119,8 @@ export const HEROES: HeroCard[] = [
     hp: 11,
     skill: 'skill_dynamo',
     ult: 'ult_dynamo',
-    text: 'Healer. Rejuvenating Aurora: heals an ally for 4 (+ caster Spirit).',
+    abilityName: 'Rejuvenating Aurora',
+    text: 'Heals an ally for 4 (+ caster Spirit).',
   },
   {
     id: 'hero_kelvin',
@@ -119,7 +131,8 @@ export const HEROES: HeroCard[] = [
     hp: 12,
     skill: 'skill_kelvin',
     ult: 'ult_kelvin',
-    text: 'Caster. Frost Grenade: 3 spirit dmg + Vulnerable 2 turns.',
+    abilityName: 'Frost Grenade',
+    text: '3 spirit dmg + Vulnerable 2 turns.',
   },
   {
     id: 'hero_lady_geist',
@@ -130,7 +143,8 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_lady_geist',
     ult: 'ult_lady_geist',
-    text: 'Caster. Skill deals 3 spirit dmg to any enemy.',
+    abilityName: 'Essence Bomb',
+    text: '3 spirit dmg to any enemy.',
   },
   {
     id: 'hero_lash',
@@ -141,7 +155,8 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_lash',
     ult: 'ult_lash',
-    text: 'Bruiser. Ground Strike: 3 spirit dmg + Stun 1 turn.',
+    abilityName: 'Ground Strike',
+    text: '3 spirit dmg + Stun 1 turn.',
   },
   {
     id: 'hero_paige',
@@ -152,7 +167,8 @@ export const HEROES: HeroCard[] = [
     hp: 10,
     skill: 'skill_paige',
     ult: 'ult_paige',
-    text: 'Healer. Plot Armor: Shield 5 on an ally.',
+    abilityName: 'Plot Armor',
+    text: 'Shield 5 on an ally.',
   },
   {
     id: 'hero_seven',
@@ -163,7 +179,8 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_seven_static',
     ult: 'ult_seven',
-    text: 'Caster. Static Charge: 2 spirit dmg + Charged 2 — Stun 2 turns on expiry.',
+    abilityName: 'Static Charge',
+    text: '2 spirit dmg + Charged 2 — Stun 2 turns on expiry.',
   },
   {
     id: 'hero_sinclair',
@@ -174,7 +191,8 @@ export const HEROES: HeroCard[] = [
     hp: 10,
     skill: 'skill_sinclair',
     ult: 'ult_sinclair',
-    text: 'Caster. Skill grants ally +2 Spirit Power for 2 turns.',
+    abilityName: 'Vexing Bolt',
+    text: 'Ally +2 Spirit Power for 2 turns.',
   },
   {
     id: 'hero_viscous',
@@ -185,7 +203,8 @@ export const HEROES: HeroCard[] = [
     hp: 13,
     skill: 'skill_viscous',
     ult: 'ult_viscous',
-    text: 'Tank. Cube Form: gains Invincibility 1.',
+    abilityName: 'Cube Form',
+    text: 'Gains Invincibility 1.',
   },
   {
     id: 'hero_yamato',
@@ -196,12 +215,11 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_yamato',
     ult: 'ult_yamato',
-    text: 'Bruiser. Power Slash: 4 spirit dmg to any enemy.',
+    abilityName: 'Power Slash',
+    text: '4 spirit dmg to any enemy.',
   },
-  // Disruptor: pure lockdown. No damage on the skill — its job is to neuter a
-  // key enemy so the rest of the team capitalizes. Ability names follow
-  // canon: Binding Word is Warden's mark-and-yank skill; Last Stand is his
-  // AoE ultimate.
+  // Disruptor: shields up before the AoE drain. Canon Warden's Willpower
+  // (a.k.a. Stomp) hunkers him down; Last Stand is his channeled pulse.
   {
     id: 'hero_warden',
     name: 'Warden',
@@ -211,11 +229,12 @@ export const HEROES: HeroCard[] = [
     hp: 11,
     skill: 'skill_warden',
     ult: 'ult_warden',
-    text: 'Disruptor. Willpower: Shield 5 on self (+ caster Spirit).',
+    abilityName: 'Willpower',
+    text: 'Shield 5 on self (+ caster Spirit).',
   },
-  // Trickster: canon Mirage is a whirlwind that can't be hit while spinning
-  // and disorients enemies on contact — translated to "Mirage gains
-  // Invincibility 1 + enemy Active gains Vulnerable 2." Hit-and-run identity.
+  // Trickster: canon Mirage spins into a whirlwind that can't be hit and
+  // disorients enemies on contact. Stun synergizes with Haze's Fixation +
+  // Headshot Booster equipment for follow-up bursts.
   {
     id: 'hero_mirage',
     name: 'Mirage',
@@ -225,11 +244,11 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_mirage',
     ult: 'ult_mirage',
-    text: 'Trickster. Tornado: gain Invincible 1 + Vulnerable 1 + Stun 1 on enemy Active.',
+    abilityName: 'Tornado',
+    text: 'Gain Invincible 1 + Vulnerable 1 + Stun 1 on enemy Active.',
   },
-  // Assassin: canon Deadlock's Drifter. His passive "Bloodscent" reveals
-  // and amplifies damage on isolated/weakened targets — perfect TCG
-  // execute mechanic (+3 bullet damage vs targets at <= 4 HP).
+  // Assassin: canon Drifter feeds off weakened prey. Bloodscent both heals
+  // on hit and amps damage vs low-HP targets.
   {
     id: 'hero_drifter',
     name: 'Drifter',
@@ -239,7 +258,8 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     passives: ['passive_drifter_bloodscent'],
     ult: 'ult_drifter',
-    text: 'Assassin. Bloodscent: heal 1 on attack, +3 dmg vs targets at 4 HP or below.',
+    abilityName: 'Bloodscent',
+    text: 'Heal 1 on attack. +3 dmg vs targets at 4 HP or below.',
   },
 ];
 

@@ -33,6 +33,10 @@ export interface HeroCard extends BaseCard {
   skill?: AbilityId;
   passives?: AbilityId[];
   ult?: CardId;
+  /** Display name of the hero's skill or passive (e.g., "Willpower", "Fixation").
+   *  Rendered as a tag next to the role on the card subtitle so the card text
+   *  body can carry just the mechanical effect without a "Role. Name:" prefix. */
+  abilityName?: string;
   flags?: { longRange?: boolean; benchOnly?: boolean };
 }
 

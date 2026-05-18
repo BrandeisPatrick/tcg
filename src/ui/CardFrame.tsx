@@ -373,7 +373,7 @@ export function CardFrame({
           {data?.name ?? cardId}
         </div>
 
-        {/* Subtitle (hero role) */}
+        {/* Subtitle: role · ability name. Tags rendered as one uppercased line. */}
         {isHero && (
           <div style={{
             fontSize: 8.5,
@@ -384,6 +384,7 @@ export function CardFrame({
             marginTop: 1,
           }}>
             {getHeroIdentity((data as any).id).role}
+            {(data as any).abilityName ? ` · ${(data as any).abilityName}` : ''}
           </div>
         )}
 
