@@ -447,6 +447,22 @@ const skill_yamato: AbilityDef = {
   run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 4 + spi(source), 'spirit'); },
 };
 
+// Disruptor identity: total lockdown for 2 turns, ZERO damage. Warden does not
+// kill anyone himself — his job is to set up the rest of the team. Costs the
+// usual one-skill-per-turn slot. Cannot be silenced because Warden's skill
+// targets enemies, not allies.
+const skill_warden: AbilityDef = {
+  id: 'skill_warden', trigger: 'activate', target: 'enemyAny', exhausts: true,
+  prompt: 'Warden Last Stand — Silence + Disarm + Vulnerable on target for 2 turns.',
+  // no base/scalesSpirit — pure utility, no scaling preview
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    addStatus(G, target, 'silenced', 1, 2);
+    addStatus(G, target, 'disarm', 1, 2);
+    addStatus(G, target, 'vulnerable', 1, 2);
+  },
+};
+
 // ----- Hero passives (always-on or trigger-based, no Activate) -----
 
 const passive_abrams_heal: AbilityDef = {
@@ -616,6 +632,20 @@ const eff_ult_wraith: AbilityDef = {
   },
 };
 
+// Warden ultimate: Alchemical Flask. AoE Disarm + Silence on every enemy.
+// No damage — keeps the Disruptor identity intact even at the ult level.
+const eff_ult_warden: AbilityDef = {
+  id: 'eff_ult_warden', trigger: 'onPlay', target: 'noTarget',
+  base: 2, baseLabel: 'AoE Disarm + Silence',
+  run: (G, ctx) => {
+    const enemy = otherPlayer(ctx.movingPlayer);
+    eachBoard(G, enemy, (c) => {
+      addStatus(G, c, 'disarm', 1, 2);
+      addStatus(G, c, 'silenced', 1, 2);
+    });
+  },
+};
+
 const ABILITIES_LIST: AbilityDef[] = [
   // ----- Spells (active items + healing_rite + TCG-original soul_rebirth) -----
   eff_healing_rite, eff_rusted_barrel, eff_golden_goose,
@@ -630,9 +660,9 @@ const ABILITIES_LIST: AbilityDef[] = [
   // On-attach equipment (formerly spells, repurposed for is_active_item=false canon)
   eff_sprint_boots_attach, eff_enchanter_barrier_attach, eff_debuff_remover_attach,
   eff_suppressor_attach, eff_inhibitor_attach,
-  // ----- Hero skills (9 skill-only heroes) -----
+  // ----- Hero skills (10 skill-only heroes incl. Warden) -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
-  skill_seven_static, skill_sinclair, skill_viscous, skill_yamato,
+  skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
   // ----- Hero passives (7 passive-only heroes incl. Wraith) -----
   passive_abrams_heal, passive_haze_stunbonus, passive_mo_krill_burrow, passive_rem_benchheal,
   passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed,
@@ -640,7 +670,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
   eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven,
   eff_ult_shiv, eff_ult_sinclair, eff_ult_vindicta, eff_ult_viscous, eff_ult_yamato,
-  eff_ult_wraith,
+  eff_ult_wraith, eff_ult_warden,
 ];
 
 export const ABILITIES_BY_ID: Record<string, AbilityDef> = Object.fromEntries(

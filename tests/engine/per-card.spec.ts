@@ -268,6 +268,34 @@ describe('Equipment on-attach procs', () => {
   });
 });
 
+describe('Disruptor archetype — Warden', () => {
+  it('Last Stand applies Silence + Disarm + Vulnerable for 2 turns (no damage)', () => {
+    const G = freshG();
+    const target = G.players['1'].active!;
+    const hpBefore = target.hp;
+    const warden = G.players['0'].active!;
+    ABILITIES_BY_ID['skill_warden'].run(G, { movingPlayer: '0' }, { source: warden, target });
+    expect(target.hp).toBe(hpBefore); // pure utility, no damage
+    const silence = target.statuses.find((s) => s.id === 'silenced');
+    const disarm = target.statuses.find((s) => s.id === 'disarm');
+    const vuln = target.statuses.find((s) => s.id === 'vulnerable');
+    expect(silence?.duration).toBe(2);
+    expect(disarm?.duration).toBe(2);
+    expect(vuln?.duration).toBe(2);
+  });
+
+  it('Alchemical Flask ult applies Disarm + Silence to every enemy board card', () => {
+    const G = freshG();
+    ABILITIES_BY_ID['eff_ult_warden'].run(G, { movingPlayer: '0' }, {});
+    const enemy = G.players['1'];
+    const boardCards = [enemy.active, ...enemy.bench].filter((c) => c != null);
+    for (const c of boardCards) {
+      expect(c!.statuses.find((s) => s.id === 'disarm')).toBeDefined();
+      expect(c!.statuses.find((s) => s.id === 'silenced')).toBeDefined();
+    }
+  });
+});
+
 // Regression lock: no glass-cannon hero should be one-shot by an opening-turn
 // skill + basic-attack alpha. Worst-case caster combo is Yamato (atk 4) casting
 // Power Slash (4 spirit at 0 SPI) into the front line. Every starter-deck hero
@@ -279,9 +307,9 @@ describe('alpha-strike regression', () => {
     const G = freshG();
     const frontline = [
       G.players['0'].active!,
-      ...G.players['0'].bench.filter(Boolean) as NonNullable<typeof G.players['0'].active>[],
+      ...G.players['0'].bench.filter((c) => c != null).map((c) => c!),
       G.players['1'].active!,
-      ...G.players['1'].bench.filter(Boolean) as NonNullable<typeof G.players['1'].active>[],
+      ...G.players['1'].bench.filter((c) => c != null).map((c) => c!),
     ];
     for (const hero of frontline) {
       const startHp = hero.hp;

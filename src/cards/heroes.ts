@@ -5,15 +5,16 @@ import type { HeroCard } from '@/engine/types';
 export const TODO_STAT = -1;
 
 /**
- * 16 heroes total. Each hero has EXACTLY ONE distinguishing mechanic — either a
+ * 17 heroes total. Each hero has EXACTLY ONE distinguishing mechanic — either a
  * `skill` (Activate trigger, costs the player's one-skill-per-turn) OR an entry
  * in `passives` (always-on or trigger-based, no cast). Never both.
  *
- * Split (7 passive / 9 skill):
+ * Split (7 passive / 10 skill):
  *   PASSIVE: Abrams, Haze, Mo & Krill, Rem, Shiv, Vindicta, Wraith
- *   SKILL:   Dynamo, Kelvin, Lady Geist, Lash, Paige, Seven, Sinclair, Viscous, Yamato
+ *   SKILL:   Dynamo, Kelvin, Lady Geist, Lash, Paige, Seven, Sinclair, Viscous, Yamato, Warden
  *
- * Ultimates are 1:1 with heroes and remain unchanged across this restructure.
+ * Archetypes (6 roles): tank, marksman, caster, healer, bruiser, disruptor.
+ * Ultimates are 1:1 with heroes.
  */
 export const HEROES: HeroCard[] = [
   // ----- PASSIVE-only heroes -----
@@ -196,6 +197,20 @@ export const HEROES: HeroCard[] = [
     skill: 'skill_yamato',
     ult: 'ult_yamato',
     text: 'Bruiser. Power Slash: 4 spirit dmg to any enemy.',
+  },
+  // Disruptor: pure lockdown. No damage on the skill — its job is to neuter a
+  // key enemy for two turns so the rest of the team capitalizes. Stats sit
+  // mid-tier so Warden survives behind the line while spinning his shackles.
+  {
+    id: 'hero_warden',
+    name: 'Warden',
+    type: 'hero',
+    rarity: 3,
+    atk: 3,
+    hp: 11,
+    skill: 'skill_warden',
+    ult: 'ult_warden',
+    text: 'Disruptor. Last Stand: Silence + Disarm + Vulnerable on an enemy for 2 turns (no damage).',
   },
 ];
 
