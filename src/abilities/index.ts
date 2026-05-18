@@ -64,10 +64,10 @@ function eachBoard(G: GameState, pid: PlayerID, fn: (c: CardInstance) => void) {
 const eff_phantom_strike: AbilityDef = {
   id: 'eff_phantom_strike', trigger: 'onPlay', target: 'enemyAny',
   prompt: 'Phantom Strike — pick an enemy.',
-  scalesSpirit: true, base: 3, baseLabel: 'dmg',
+  scalesSpirit: true, base: 6, baseLabel: 'dmg',
   run: (G, ctx, { target }) => {
     if (!target) return;
-    damageUnit(G, target, 3 + activeSpi(G, ctx.movingPlayer), 'attack');
+    damageUnit(G, target, 6 + activeSpi(G, ctx.movingPlayer), 'attack');
   },
 };
 
@@ -80,9 +80,9 @@ const eff_cold_front: AbilityDef = {
 const eff_decay: AbilityDef = {
   id: 'eff_decay', trigger: 'onPlay', target: 'enemyActive',
   prompt: 'Decay — apply Bleed.',
-  scalesSpirit: true, base: 2, baseLabel: 'Bleed',
+  scalesSpirit: true, base: 3, baseLabel: 'Bleed',
   run: (G, ctx, { target }) => {
-    if (target) addStatus(G, target, 'bleed', 2 + activeSpi(G, ctx.movingPlayer), 3);
+    if (target) addStatus(G, target, 'bleed', 3 + activeSpi(G, ctx.movingPlayer), 3);
   },
 };
 
@@ -90,17 +90,17 @@ const eff_silence_glyph: AbilityDef = {
   id: 'eff_silence_glyph', trigger: 'onPlay', target: 'noTarget',
   run: (G, ctx) => {
     const enemy = otherPlayer(ctx.movingPlayer);
-    eachBoard(G, enemy, (c) => addStatus(G, c, 'silenced', 1, 1));
+    eachBoard(G, enemy, (c) => addStatus(G, c, 'silenced', 1, 2));
   },
 };
 
 const eff_knockdown: AbilityDef = {
   id: 'eff_knockdown', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Knockdown — Stun + Disarm.',
+  prompt: 'Knockdown — Stun 2 + Disarm 3.',
   run: (G, _ctx, { target }) => {
     if (!target) return;
-    addStatus(G, target, 'stun', 1, 1);
-    addStatus(G, target, 'disarm', 1, 2);
+    addStatus(G, target, 'stun', 1, 2);
+    addStatus(G, target, 'disarm', 1, 3);
   },
 };
 
@@ -112,8 +112,8 @@ const eff_enchanter_barrier_attach: AbilityDef = {
 
 const eff_ethereal_shift: AbilityDef = {
   id: 'eff_ethereal_shift', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Invincibility 1 on ally.',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'invincibility', 1, 1); },
+  prompt: 'Mythic Invincibility 2 on ally.',
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'invincibility', 1, 2); },
 };
 
 const eff_return_fire: AbilityDef = {
@@ -154,6 +154,47 @@ const eff_suppressor_attach: AbilityDef = {
 const eff_inhibitor_attach: AbilityDef = {
   id: 'eff_inhibitor_attach', trigger: 'onPlay', target: 'self',
   run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 3, 999); },
+};
+
+// New T1 equipment: every turn the bearer's exhaust is cleared. Distinct from
+// Sprint Boots (one-shot on attach).
+const eff_extra_stamina: AbilityDef = {
+  id: 'eff_extra_stamina', trigger: 'startOfTurn', target: 'self',
+  run: (G, _ctx, { source }) => {
+    if (source) {
+      source.exhausted = false;
+    }
+  },
+};
+
+// New T1 equipment: on attach the bearer gains the Long Range status permanently
+// (can attack from the bench, same as Haze/Vindicta intrinsic flag).
+const eff_mystic_expansion: AbilityDef = {
+  id: 'eff_mystic_expansion', trigger: 'onPlay', target: 'self',
+  run: (G, _ctx, { source, target }) => {
+    const t = target ?? source;
+    if (t) addStatus(G, t, 'long_range', 1, 999);
+  },
+};
+
+// New T1 spell: 1-turn Spirit Power burst on ally. Mini Sinclair skill.
+const eff_rusted_barrel: AbilityDef = {
+  id: 'eff_rusted_barrel', trigger: 'onPlay', target: 'allyHero',
+  prompt: 'Rusted Barrel — +2 Spirit Power on ally for 1 turn.',
+  run: (G, _ctx, { target }) => {
+    if (target) addStatus(G, target, 'spirit_power', 2, 1);
+  },
+};
+
+// New T1 spell: gain 2 souls immediately (net +1 after the cast cost). Cap at 7.
+const eff_golden_goose: AbilityDef = {
+  id: 'eff_golden_goose', trigger: 'onPlay', target: 'noTarget',
+  run: (G, ctx) => {
+    const ps = G.players[ctx.movingPlayer];
+    const before = ps.souls;
+    ps.souls = Math.min(7, ps.souls + 2);
+    if (ps.souls > before) pushLog(G, `Golden Goose Egg: +${ps.souls - before} souls.`);
+  },
 };
 
 const eff_improved_cooldown: AbilityDef = {
@@ -229,13 +270,13 @@ const eff_bullet_armor: AbilityDef = {
   run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 2, 999); },
 };
 
-// Cast Metal Skin (spell): grant ally Bullet Resist 3 for 2 turns (canon active duration).
+// Cast Metal Skin (spell): grant ally Bullet Resist 5 for 2 turns (canon T3 active).
 const eff_cast_metal_skin: AbilityDef = {
   id: 'eff_cast_metal_skin', trigger: 'onPlay', target: 'allyHero',
   prompt: 'Metal Skin — fortify an ally.',
-  scalesSpirit: true, base: 3, baseLabel: 'Bullet Resist',
+  scalesSpirit: true, base: 5, baseLabel: 'Bullet Resist',
   run: (G, ctx, { target }) => {
-    if (target) addStatus(G, target, 'bullet_resist', 3 + activeSpi(G, ctx.movingPlayer), 2);
+    if (target) addStatus(G, target, 'bullet_resist', 5 + activeSpi(G, ctx.movingPlayer), 2);
   },
 };
 
@@ -265,8 +306,8 @@ const eff_slowing_hex: AbilityDef = {
   prompt: 'Slowing Hex — pick an enemy.',
   run: (G, _ctx, { target }) => {
     if (!target) return;
-    addStatus(G, target, 'vulnerable', 1, 3);
-    addStatus(G, target, 'disarm', 1, 3);
+    addStatus(G, target, 'vulnerable', 1, 2);
+    addStatus(G, target, 'disarm', 1, 2);
   },
 };
 
@@ -284,8 +325,8 @@ const eff_sprint_boots_attach: AbilityDef = {
 // Disarming Hex (spell): disarm a target enemy for 2 turns.
 const eff_disarming_hex: AbilityDef = {
   id: 'eff_disarming_hex', trigger: 'onPlay', target: 'enemyAny',
-  prompt: 'Disarming Hex — pick an enemy to disarm.',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'disarm', 1, 2); },
+  prompt: 'Disarming Hex — Disarm 3 turns.',
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'disarm', 1, 3); },
 };
 
 const eff_frenzy: AbilityDef = {
@@ -561,13 +602,15 @@ const eff_ult_wraith: AbilityDef = {
 
 const ABILITIES_LIST: AbilityDef[] = [
   // ----- Spells (active items + healing_rite + TCG-original soul_rebirth) -----
-  eff_healing_rite, eff_cold_front, eff_decay, eff_ethereal_shift, eff_phantom_strike,
+  eff_healing_rite, eff_rusted_barrel, eff_golden_goose,
+  eff_cold_front, eff_decay, eff_ethereal_shift, eff_phantom_strike,
   eff_return_fire, eff_echo_shard, eff_knockdown, eff_silence_glyph, eff_disarming_hex,
   eff_cast_metal_skin, eff_slowing_hex,
   eff_curse, eff_cast_divine_barrier, eff_soul_rebirth,
   // ----- Equipment (passive items + on-attach procs) -----
   eff_bullet_armor, eff_extra_regen, eff_melee_lifesteal, eff_berserker, eff_spirit_armor,
   eff_frenzy, eff_mystic_reverb, eff_improved_cooldown, eff_diviners_kevlar, eff_boundless_spirit,
+  eff_extra_stamina, eff_mystic_expansion,
   // On-attach equipment (formerly spells, repurposed for is_active_item=false canon)
   eff_sprint_boots_attach, eff_enchanter_barrier_attach, eff_debuff_remover_attach,
   eff_suppressor_attach, eff_inhibitor_attach,

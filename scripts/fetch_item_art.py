@@ -40,6 +40,9 @@ EQ_MAP = {
     'mystic_reverb':        'Mystic Reverb',
     'boundless_spirit':     'Boundless Spirit',
     'inhibitor':            'Inhibitor',            # passive mythic: stacks ability resist
+    'close_quarters':       'Close Quarters',       # T1 weapon: +ATK at close range (NEW)
+    'extra_stamina':        'Extra Stamina',        # T1 vitality: passive stamina (NEW)
+    'mystic_expansion':     'Mystic Expansion',     # T1 spirit: +ability range (NEW)
 }
 
 # --- Active items (rendered as Spells / one-shot casts) ---
@@ -59,6 +62,8 @@ SP_MAP = {
     'curse':                'Cursed Relic',         # renamed in canon
     'divine_barrier':       'Divine Barrier',       # active: cast shield
     'soul_rebirth':         'Rejuvenating Aurora',  # flavor match; TCG-original mechanic
+    'rusted_barrel':        'Rusted Barrel',        # T1 spirit active (NEW)
+    'golden_goose_egg':     'Golden Goose Egg',     # T1 spirit active (NEW)
 }
 
 API = 'https://assets.deadlock-api.com/v2/items'
