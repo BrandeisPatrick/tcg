@@ -327,7 +327,7 @@ function AbilityPanel({
 
 function ScalingPreview({ ability, hero }: { ability: AbilityDef; hero: CardInstance }) {
   const base = ability.base ?? null;
-  const baseLabel = (ability.baseLabel ?? 'effect').toUpperCase();
+  const baseLabel = ability.baseLabel ?? 'effect';
   const scalesSpirit = !!ability.scalesSpirit;
 
   // If neither a base value nor any scaling, this is a pure utility ability — skip the block.
@@ -356,9 +356,9 @@ function ScalingPreview({ ability, hero }: { ability: AbilityDef; hero: CardInst
       borderRadius: 6,
       display: 'flex', flexDirection: 'column', gap: 5,
     }}>
-      <Row label="BASE" value={`${baseVal} ${baseLabel}`} color={palette.textDim} />
+      <Row label="Base" value={`${baseVal} ${baseLabel}`} color={palette.textDim} />
       {scalesSpirit && (
-        <Row label="+ SPIRIT" value={`+${spi}`} color={palette.spirit} hint={`(${spi} SPI)`} />
+        <Row label="+ Spirit" value={`+${spi}`} color={palette.spirit} hint={`(${spi} SPI)`} />
       )}
       {scalesSpirit && (
         <div style={{
@@ -366,7 +366,7 @@ function ScalingPreview({ ability, hero }: { ability: AbilityDef; hero: CardInst
           borderTop: `1px dashed ${palette.border}`,
           display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
         }}>
-          <span style={{ ...text.label, color: palette.textDim }}>= TOTAL</span>
+          <span style={{ ...text.label, color: palette.textDim }}>= Total</span>
           <span style={{ ...text.numeric, color: palette.accentWarm }}>{total}</span>
         </div>
       )}
