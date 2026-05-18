@@ -447,13 +447,13 @@ const skill_yamato: AbilityDef = {
   run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 4 + spi(source), 'spirit'); },
 };
 
-// Disruptor identity: total lockdown for 2 turns, ZERO damage. Warden does not
-// kill anyone himself — his job is to set up the rest of the team. Costs the
-// usual one-skill-per-turn slot. Cannot be silenced because Warden's skill
-// targets enemies, not allies.
+// Disruptor identity: total lockdown for 2 turns, ZERO damage. Warden does
+// not kill anyone himself — his job is to set up the rest of the team. The
+// canon skill "Binding Word" marks an enemy and yanks them back if they flee
+// — abstracted as a heavy debuff lock with no damage.
 const skill_warden: AbilityDef = {
   id: 'skill_warden', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Warden Last Stand — Silence + Disarm + Vulnerable on target for 2 turns.',
+  prompt: 'Warden Binding Word — Silence + Disarm + Vulnerable on target for 2 turns.',
   // no base/scalesSpirit — pure utility, no scaling preview
   run: (G, _ctx, { target }) => {
     if (!target) return;
@@ -463,19 +463,17 @@ const skill_warden: AbilityDef = {
   },
 };
 
-// Trickster identity: Sleep the enemy BENCH for 2 turns. Active is left alone
-// on purpose — basic attacks only target Active, so a Sleeping bench stays
-// asleep through combat. Effect: any promotion is delayed (a corpse Active
-// can't be replaced by a sleeping hero), and long-range bench attackers like
-// Haze / Vindicta lose their bench shots. Big tempo swing on stalled boards.
+// Trickster identity: canon Mirage's Tornado transforms him into a
+// whirlwind that can't be hit while moving and disorients enemies on
+// contact. TCG mapping: caster gains Invincibility 1 + enemy Active gains
+// Vulnerable 2. Hit-and-run — Mirage dodges damage this turn while setting
+// up his team's next attack window.
 const skill_mirage: AbilityDef = {
-  id: 'skill_mirage', trigger: 'activate', target: 'noTarget', exhausts: true,
-  prompt: 'Mirage Tornado — Sleep 2 on enemy bench. Wakes on damage.',
-  run: (G, ctx) => {
-    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
-    for (const b of enemy.bench) {
-      if (b && (b.respawnTurnsLeft ?? 0) === 0) addStatus(G, b, 'sleep', 1, 2);
-    }
+  id: 'skill_mirage', trigger: 'activate', target: 'enemyActive', exhausts: true,
+  prompt: 'Mirage Tornado — gain Invincible 1 + Vulnerable 2 on enemy Active.',
+  run: (G, _ctx, { source, target }) => {
+    if (source) addStatus(G, source, 'invincibility', 1, 1);
+    if (target) addStatus(G, target, 'vulnerable', 1, 2);
   },
 };
 
@@ -544,11 +542,13 @@ const passive_wraith_mixed: AbilityDef = {
   run: () => { /* combat hook reads this directly */ },
 };
 
-// Execute: marker passive. The +3 damage vs low-HP targets lives in
+// Bloodscent: marker passive. Canon Drifter's Bloodscent reveals isolated
+// enemies and amplifies damage against them — translated to a flat +3 bullet
+// damage vs targets at or below 4 HP. The combat hook lives in
 // `combat.ts:effectiveAttackDamage` (same pattern as Haze Fixation).
-const passive_trapper_execute: AbilityDef = {
-  id: 'passive_trapper_execute', trigger: 'ongoing', target: 'self',
-  prompt: 'Execute — +3 attack dmg vs targets at 4 HP or below.',
+const passive_drifter_bloodscent: AbilityDef = {
+  id: 'passive_drifter_bloodscent', trigger: 'ongoing', target: 'self',
+  prompt: 'Bloodscent — +3 attack dmg vs targets at 4 HP or below.',
   run: () => { /* combat hook reads this directly */ },
 };
 
@@ -670,37 +670,34 @@ const eff_ult_warden: AbilityDef = {
   },
 };
 
-// Mirage ultimate: sleeps enemy BENCH 2 + Vulnerable 2 on enemy Active.
-// Active won't stay asleep through combat, so we trade that branch for
-// "Vulnerable" (+2 dmg taken) — Mirage's team capitalizes by killing the
-// soft active while reinforcements stay locked on the bench.
+// Mirage ultimate: canon Fire Scarabs is a swarm of damaging projectiles
+// with a slow. TCG mapping: 3 spirit damage + Vulnerable 2 to every enemy
+// board card. AoE setup that punishes both Active and bench.
 const eff_ult_mirage: AbilityDef = {
   id: 'eff_ult_mirage', trigger: 'onPlay', target: 'noTarget',
-  base: 2, baseLabel: 'AoE Sleep + Vuln',
+  base: 3, baseLabel: 'AoE spirit + Vuln',
   run: (G, ctx) => {
-    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
-    if (enemy.active && (enemy.active.respawnTurnsLeft ?? 0) === 0) {
-      addStatus(G, enemy.active, 'vulnerable', 1, 2);
-    }
-    for (const b of enemy.bench) {
-      if (b && (b.respawnTurnsLeft ?? 0) === 0) addStatus(G, b, 'sleep', 1, 2);
-    }
+    const enemy = otherPlayer(ctx.movingPlayer);
+    eachBoard(G, enemy, (c) => {
+      damageUnit(G, c, 3, 'spirit', 'Mirage');
+      addStatus(G, c, 'vulnerable', 1, 2);
+    });
   },
 };
 
-// Trapper ultimate: Mark of Death. If the target is at 5 HP or less, set its
-// HP to 0 (true execute, ignoring shield/armor) — otherwise deal 5 attack
-// damage. Either way the target takes a chunk; the execute branch is the
-// Assassin payoff for setting up a wounded target.
-const eff_ult_trapper: AbilityDef = {
-  id: 'eff_ult_trapper', trigger: 'onPlay', target: 'enemyAny',
+// Drifter ultimate: canon Eternal Night surrounds enemies in darkness and
+// isolates them. TCG mapping: true execute on target at <=5 HP, otherwise
+// 5 attack damage. Pairs with the Bloodscent passive — Drifter is built
+// around finishing wounded prey.
+const eff_ult_drifter: AbilityDef = {
+  id: 'eff_ult_drifter', trigger: 'onPlay', target: 'enemyAny',
   base: 5, baseLabel: 'exec ≤5 / 5 dmg',
   run: (G, _ctx, { target }) => {
     if (!target) return;
     if (target.hp <= 5) {
-      damageUnit(G, target, target.hp + 99, 'pure', 'Trapper');
+      damageUnit(G, target, target.hp + 99, 'pure', 'Drifter');
     } else {
-      damageUnit(G, target, 5, 'attack', 'Trapper');
+      damageUnit(G, target, 5, 'attack', 'Drifter');
     }
   },
 };
@@ -722,14 +719,14 @@ const ABILITIES_LIST: AbilityDef[] = [
   // ----- Hero skills (11 skill-only heroes incl. Warden + Mirage) -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden, skill_mirage,
-  // ----- Hero passives (8 passive-only heroes incl. Wraith + Trapper) -----
+  // ----- Hero passives (8 passive-only heroes incl. Wraith + Drifter) -----
   passive_abrams_heal, passive_haze_stunbonus, passive_mo_krill_burrow, passive_rem_benchheal,
-  passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed, passive_trapper_execute,
+  passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed, passive_drifter_bloodscent,
   // ----- Ultimates (one per hero, +Wraith) -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
   eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven,
   eff_ult_shiv, eff_ult_sinclair, eff_ult_vindicta, eff_ult_viscous, eff_ult_yamato,
-  eff_ult_wraith, eff_ult_warden, eff_ult_mirage, eff_ult_trapper,
+  eff_ult_wraith, eff_ult_warden, eff_ult_mirage, eff_ult_drifter,
 ];
 
 export const ABILITIES_BY_ID: Record<string, AbilityDef> = Object.fromEntries(

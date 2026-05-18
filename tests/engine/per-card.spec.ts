@@ -297,58 +297,54 @@ describe('Disruptor archetype — Warden', () => {
 });
 
 describe('Trickster archetype — Mirage', () => {
-  it('Tornado applies Sleep 2 to every enemy BENCH card (not Active)', () => {
+  it('Tornado grants Invincible 1 to caster + Vulnerable 2 on enemy Active', () => {
     const G = freshG();
-    const enemy = G.players['1'];
-    ABILITIES_BY_ID['skill_mirage'].run(G, { movingPlayer: '0' }, {});
-    expect(enemy.active!.statuses.find((s) => s.id === 'sleep')).toBeUndefined();
-    for (const b of enemy.bench) {
-      if (!b) continue;
-      const sleep = b.statuses.find((s) => s.id === 'sleep');
-      expect(sleep?.duration).toBe(2);
-    }
+    const mirage = G.players['0'].active!;
+    const target = G.players['1'].active!;
+    ABILITIES_BY_ID['skill_mirage'].run(G, { movingPlayer: '0' }, { source: mirage, target });
+    expect(mirage.statuses.find((s) => s.id === 'invincibility')?.duration).toBe(1);
+    expect(target.statuses.find((s) => s.id === 'vulnerable')?.duration).toBe(2);
   });
 
-  it('Fire Scarabs ult sleeps bench AND Vulnerables enemy Active', () => {
+  it('Fire Scarabs ult deals 3 spirit + Vulnerable 2 to every enemy board card', () => {
     const G = freshG();
     const enemy = G.players['1'];
+    const hpBefore = enemy.active!.hp;
     ABILITIES_BY_ID['eff_ult_mirage'].run(G, { movingPlayer: '0' }, {});
+    expect(hpBefore - enemy.active!.hp).toBe(3);
     expect(enemy.active!.statuses.find((s) => s.id === 'vulnerable')?.duration).toBe(2);
     for (const b of enemy.bench) {
       if (!b) continue;
-      expect(b.statuses.find((s) => s.id === 'sleep')?.duration).toBe(2);
+      expect(b.statuses.find((s) => s.id === 'vulnerable')?.duration).toBe(2);
     }
   });
 });
 
-describe('Assassin archetype — Trapper', () => {
-  it('Mark of Death ult executes target at HP <= 5 (sets to 0 via pure dmg)', () => {
+describe('Assassin archetype — Drifter', () => {
+  it('Eternal Night ult executes target at HP <= 5 (sets to 0 via pure dmg)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hp = 5;
-    ABILITIES_BY_ID['eff_ult_trapper'].run(G, { movingPlayer: '0' }, { target });
+    ABILITIES_BY_ID['eff_ult_drifter'].run(G, { movingPlayer: '0' }, { target });
     expect(target.hp).toBe(0);
   });
 
-  it('Mark of Death deals 5 attack dmg when target HP > 5', () => {
+  it('Eternal Night deals 5 attack dmg when target HP > 5', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hp = 10;
     const before = target.hp;
-    ABILITIES_BY_ID['eff_ult_trapper'].run(G, { movingPlayer: '0' }, { target });
+    ABILITIES_BY_ID['eff_ult_drifter'].run(G, { movingPlayer: '0' }, { target });
     expect(before - target.hp).toBe(5);
   });
 
-  it('Execute passive: Trapper basic attack gets +3 vs HP<=4 target (combat hook)', async () => {
-    // Verify the combat hook path: synthesize a Trapper-like attacker config and a wounded target.
+  it('Bloodscent passive registered for Drifter (combat hook applies via effectiveAttackDamage)', async () => {
     const { CARDS_BY_ID } = await import('@/cards');
-    const trapper = CARDS_BY_ID['hero_trapper'];
-    expect(trapper).toBeDefined();
-    expect((trapper as any).atk).toBe(3);
-    expect((trapper as any).passives).toContain('passive_trapper_execute');
-    // Behaviour is locked by the combat unit test below (smoke test runs the
-    // resolver end-to-end). Here we just assert the ability registry binding.
-    expect(ABILITIES_BY_ID['passive_trapper_execute']).toBeDefined();
+    const drifter = CARDS_BY_ID['hero_drifter'];
+    expect(drifter).toBeDefined();
+    expect((drifter as any).atk).toBe(3);
+    expect((drifter as any).passives).toContain('passive_drifter_bloodscent');
+    expect(ABILITIES_BY_ID['passive_drifter_bloodscent']).toBeDefined();
   });
 });
 

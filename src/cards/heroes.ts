@@ -10,7 +10,7 @@ export const TODO_STAT = -1;
  * in `passives` (always-on or trigger-based, no cast). Never both.
  *
  * Split (8 passive / 11 skill):
- *   PASSIVE: Abrams, Haze, Mo & Krill, Rem, Shiv, Trapper, Vindicta, Wraith
+ *   PASSIVE: Abrams, Drifter, Haze, Mo & Krill, Rem, Shiv, Vindicta, Wraith
  *   SKILL:   Dynamo, Kelvin, Lady Geist, Lash, Mirage, Paige, Seven, Sinclair, Viscous, Warden, Yamato
  *
  * Archetypes (8 roles): tank, marksman, caster, healer, bruiser, disruptor,
@@ -199,8 +199,9 @@ export const HEROES: HeroCard[] = [
     text: 'Bruiser. Power Slash: 4 spirit dmg to any enemy.',
   },
   // Disruptor: pure lockdown. No damage on the skill — its job is to neuter a
-  // key enemy for two turns so the rest of the team capitalizes. Stats sit
-  // mid-tier so Warden survives behind the line while spinning his shackles.
+  // key enemy so the rest of the team capitalizes. Ability names follow
+  // canon: Binding Word is Warden's mark-and-yank skill; Last Stand is his
+  // AoE ultimate.
   {
     id: 'hero_warden',
     name: 'Warden',
@@ -210,11 +211,11 @@ export const HEROES: HeroCard[] = [
     hp: 11,
     skill: 'skill_warden',
     ult: 'ult_warden',
-    text: 'Disruptor. Last Stand: Silence + Disarm + Vulnerable on an enemy for 2 turns (no damage).',
+    text: 'Disruptor. Binding Word: Silence + Disarm + Vulnerable on an enemy for 2 turns (no damage).',
   },
-  // Trickster: Sleep-based soft control. Sleep wakes on damage, so the
-  // opponent has to choose between waking the target (losing the lock early)
-  // or leaving them inert (and burning a turn doing nothing with them).
+  // Trickster: canon Mirage is a whirlwind that can't be hit while spinning
+  // and disorients enemies on contact — translated to "Mirage gains
+  // Invincibility 1 + enemy Active gains Vulnerable 2." Hit-and-run identity.
   {
     id: 'hero_mirage',
     name: 'Mirage',
@@ -224,21 +225,21 @@ export const HEROES: HeroCard[] = [
     hp: 9,
     skill: 'skill_mirage',
     ult: 'ult_mirage',
-    text: 'Trickster. Tornado: Sleep 2 on enemy bench. Sleep wakes on damage.',
+    text: 'Trickster. Tornado: gain Invincible 1 + Vulnerable 2 on enemy Active.',
   },
-  // Assassin: execute-based finisher. Low baseline damage, but attacks gain
-  // +3 bullet damage vs targets at or below 4 HP. Picks off the wounded —
-  // pairs best with bleed/poke heroes (Shiv, Vindicta) softening the line.
+  // Assassin: canon Deadlock's Drifter. His passive "Bloodscent" reveals
+  // and amplifies damage on isolated/weakened targets — perfect TCG
+  // execute mechanic (+3 bullet damage vs targets at <= 4 HP).
   {
-    id: 'hero_trapper',
-    name: 'Trapper',
+    id: 'hero_drifter',
+    name: 'Drifter',
     type: 'hero',
     rarity: 3,
     atk: 3,
     hp: 9,
-    passives: ['passive_trapper_execute'],
-    ult: 'ult_trapper',
-    text: 'Assassin. Execute: attacks deal +3 dmg vs targets at 4 HP or below.',
+    passives: ['passive_drifter_bloodscent'],
+    ult: 'ult_drifter',
+    text: 'Assassin. Bloodscent: attacks deal +3 dmg vs targets at 4 HP or below.',
   },
 ];
 

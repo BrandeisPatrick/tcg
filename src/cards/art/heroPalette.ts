@@ -29,7 +29,7 @@ export const HERO_IDENTITY: Record<string, HeroIdentity> = {
   hero_wraith:    { primary: '#9d8aff', accent: '#241a4a', role: 'caster',  glyph: 'eye',       initial: 'W' },
   hero_warden:    { primary: '#7be0bf', accent: '#143a30', role: 'disruptor', glyph: 'chain',    initial: 'W' },
   hero_mirage:    { primary: '#e6a861', accent: '#43230d', role: 'trickster', glyph: 'feather', initial: 'M' },
-  hero_trapper:   { primary: '#8aa86f', accent: '#1f2e15', role: 'assassin',  glyph: 'dagger', initial: 'T' },
+  hero_drifter:   { primary: '#a5b4c8', accent: '#1b212d', role: 'assassin',  glyph: 'dagger', initial: 'D' },
 };
 
 export function getHeroIdentity(cardId: string): HeroIdentity {

@@ -218,10 +218,10 @@ function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): 
     dmg += 2;
     bonusLabel = 'Haze: +2 vs Stunned';
   }
-  // Trapper passive: +3 vs targets at or below 4 HP (Execute).
-  if (data?.type === 'hero' && data.id === 'hero_trapper' && target && target.hp <= 4) {
+  // Drifter passive: +3 vs targets at or below 4 HP (Bloodscent).
+  if (data?.type === 'hero' && data.id === 'hero_drifter' && target && target.hp <= 4) {
     dmg += 3;
-    bonusLabel = 'Trapper: Execute +3';
+    bonusLabel = 'Drifter: Bloodscent +3';
   }
   return { dmg, bonusLabel };
 }

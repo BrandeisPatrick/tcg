@@ -20,9 +20,9 @@ export const ULTIMATES: UltimateCard[] = [
   { id: 'ult_viscous',    name: 'Goo Ball',        type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_viscous',    abilities: ['eff_ult_viscous'],    text: 'Bearer Invincibility 2 + 3 dmg to enemy Active.' },
   { id: 'ult_yamato',     name: 'Shadow Transformation', type: 'ultimate', rarity: 4, cost: 5, linkedHero: 'hero_yamato', abilities: ['eff_ult_yamato'],  text: 'Bearer gains +3 ATK and Unstoppable for 2 turns.' },
   { id: 'ult_wraith',     name: 'Telekinesis',     type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_wraith',     abilities: ['eff_ult_wraith'],     text: 'Lift enemy Active. 4 spirit dmg + Stun 2 turns.' },
-  { id: 'ult_warden',     name: 'Alchemical Flask', type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_warden',     abilities: ['eff_ult_warden'],     text: 'All enemies: Disarm 2 + Silence 2.' },
-  { id: 'ult_mirage',     name: 'Fire Scarabs',     type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_mirage',     abilities: ['eff_ult_mirage'],     text: 'Enemy bench: Sleep 2. Enemy Active: Vulnerable 2.' },
-  { id: 'ult_trapper',    name: 'Mark of Death',    type: 'ultimate', rarity: 4, cost: 5, linkedHero: 'hero_trapper',    abilities: ['eff_ult_trapper'],    text: 'Execute target enemy if HP ≤ 5; otherwise 5 attack dmg.' },
+  { id: 'ult_warden',     name: 'Last Stand',       type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_warden',     abilities: ['eff_ult_warden'],     text: 'All enemies: Disarm 2 + Silence 2.' },
+  { id: 'ult_mirage',     name: 'Fire Scarabs',     type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_mirage',     abilities: ['eff_ult_mirage'],     text: '3 spirit dmg + Vulnerable 2 to all enemies.' },
+  { id: 'ult_drifter',    name: 'Eternal Night',    type: 'ultimate', rarity: 4, cost: 5, linkedHero: 'hero_drifter',    abilities: ['eff_ult_drifter'],    text: 'Execute target enemy if HP ≤ 5; otherwise 5 attack dmg.' },
 ];
 
 export const ULTIMATES_BY_ID = Object.fromEntries(ULTIMATES.map((u) => [u.id, u])) as Record<string, UltimateCard>;
