@@ -13,6 +13,9 @@ import { reapDead, damagePlayer } from './damage';
 import { resolveAttackPhase } from './combat';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, resetIid, nextIid } from './util';
 import { getAbility } from '@/abilities';
+import { withCast } from './castContext';
+import { fireEquipmentTriggers } from './equipmentDispatch';
+import { grantExp } from './expSystem';
 
 const MAX_HAND = 7;
 const ULT_UNLOCK_TURN = 5;
@@ -37,6 +40,7 @@ function soulRefillForTurn(globalTurn: number): number {
 function makeInstance(cardId: string, ownerId: PlayerID, zone: CardInstance['zone'], slot?: 0|1|2|3): CardInstance {
   const data = getCard(cardId);
   const hp = data.type === 'hero' ? data.hp : 0;
+  const isHero = data.type === 'hero';
   return {
     iid: nextIid(),
     cardId,
@@ -52,6 +56,8 @@ function makeInstance(cardId: string, ownerId: PlayerID, zone: CardInstance['zon
     statuses: [],
     exhausted: false,
     skillUsedThisTurn: false,
+    // Hero leveling: start at Lv1 with 0 exp.
+    ...(isHero ? { exp: 0, level: 1 as const } : {}),
   };
 }
 
@@ -150,14 +156,24 @@ function applyOnPlay(G: GameState, pid: PlayerID, source: CardInstance, target?:
     data?.type === 'ultimate' ? data.abilities :
     [];
 
+  // Only fire abilities marked with the onPlay trigger. Equipment can also
+  // declare reactive triggers (onBearerSkillDamage, onAttack, onBearerCCSuffered,
+  // onBearerSkillUsed, onBearerUltCast) which must NOT fire on attach — those
+  // are driven by the engine dispatcher at the appropriate game event.
   for (const aid of abilityIds) {
     const a = getAbility(aid);
-    if (a) a.run(G, { movingPlayer: pid }, { source, target });
+    if (a && a.trigger === 'onPlay') {
+      a.run(G, { movingPlayer: pid }, { source, target });
+    }
   }
   if (data?.type === 'equipment' && target && data.bonus) {
     if (data.bonus.atk) target.atkMod += data.bonus.atk;
     if (data.bonus.hp) { target.hpMax += data.bonus.hp; target.hp += data.bonus.hp; }
     if (data.bonus.spirit) target.spiritMod += data.bonus.spirit;
+  }
+  // Hero leveling: +1 exp to the bearer hero when an item is attached.
+  if (data?.type === 'equipment' && target && CARDS_BY_ID[target.cardId]?.type === 'hero') {
+    grantExp(G, target, 1);
   }
 }
 
@@ -250,6 +266,11 @@ export const DeadlockGame: Game<GameState> = {
       const pid = ctx.currentPlayer as PlayerID;
       fireBoardTriggers(G, pid, 'endOfTurn');
       resolveAttackPhase(G, pid);
+      // Hero leveling: +1 exp to each alive hero on the player's board.
+      for (const c of liveBoardCards(G.players[pid])) {
+        const data = CARDS_BY_ID[c.cardId];
+        if (data?.type === 'hero') grantExp(G, c, 1);
+      }
       clearTurnFlags(G.players[pid]);
     },
   },
@@ -305,7 +326,18 @@ export const DeadlockGame: Game<GameState> = {
       ps.souls -= cost;
       ps.hand.splice(idx, 1);
 
-      applyOnPlay(G, pid, card, target);
+      // Cast context: spells channel through the active hero (so spell damage
+      // can scale with Spirit and trigger the active hero's equipment).
+      // Ults are sourced from their linked hero on the caster's board.
+      if (data.type === 'spell') {
+        withCast(ps.active, 'spell', () => applyOnPlay(G, pid, card, target));
+      } else if (data.type === 'ultimate') {
+        const linked = [ps.active, ...ps.bench].find((c) => c?.cardId === (data as any).linkedHero) ?? null;
+        withCast(linked, 'ult', () => applyOnPlay(G, pid, card, target));
+        if (linked) fireEquipmentTriggers(G, linked, 'onBearerUltCast', { movingPlayer: pid });
+      } else {
+        applyOnPlay(G, pid, card, target);
+      }
 
       if (data.type === 'spell' || data.type === 'ultimate') {
         card.zone = 'discard';
@@ -330,11 +362,9 @@ export const DeadlockGame: Game<GameState> = {
       // Corpses can't act.
       if ((hero.respawnTurnsLeft ?? 0) > 0) return INVALID_MOVE;
       // Rule: only ONE skill use per player per turn (across all heroes).
-      // Bypass: a bearer of Improved Cooldown ignores the player-wide gate.
-      const hasImprovedCooldown = hero.attached?.some((eq) => eq.cardId === 'improved_cooldown') ?? false;
-      if (ps.skillUsedThisTurn && !hasImprovedCooldown) return INVALID_MOVE;
-      // Stun / Silenced / Sleep all suppress skill use.
-      if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun' || s.id === 'sleep')) return INVALID_MOVE;
+      if (ps.skillUsedThisTurn) return INVALID_MOVE;
+      // Stun and Silenced both suppress skill use.
+      if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun')) return INVALID_MOVE;
 
       const data = CARDS_BY_ID[hero.cardId];
       if (data?.type !== 'hero' || !data.skill) return INVALID_MOVE;
@@ -354,9 +384,15 @@ export const DeadlockGame: Game<GameState> = {
       const targetName = target ? (CARDS_BY_ID[target.cardId]?.name ?? target.cardId) : null;
       pushLog(G, `${heroName} casts skill${targetName ? ` on ${targetName}` : ''}.`);
 
-      ability.run(G, { movingPlayer: pid }, { source: hero, target });
+      // Cast context: equipment triggers (Mystic Burst, Mystic Vulnerability,
+      // Suppressor, Mystic Reverb) read this to know "bearer's skill damaged X".
+      withCast(hero, 'skill', () => {
+        ability.run(G, { movingPlayer: pid }, { source: hero, target });
+      });
       hero.skillUsedThisTurn = true;     // per-hero flag (drives UI glint)
       ps.skillUsedThisTurn = true;       // per-player flag (gates the rule)
+      // Equipment reactive: Surge of Power fires after bearer used their skill.
+      fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: pid });
       reapDead(G, G.players['0']);
       reapDead(G, G.players['1']);
     },
@@ -375,9 +411,6 @@ export const DeadlockGame: Game<GameState> = {
       if (!a) return INVALID_MOVE;
       const aData = CARDS_BY_ID[a.cardId];
       if (toSlot === 0 && aData?.type === 'hero' && aData.flags?.benchOnly) return INVALID_MOVE;
-      // Trap: a hero with the Trap status cannot be swapped (in or out).
-      if (a.statuses.some((s) => s.id === 'sleep')) return INVALID_MOVE;
-      if (b && b.statuses.some((s) => s.id === 'sleep')) return INVALID_MOVE;
       // Retreat cost: swapping the Active out (slot 0 involved, both heroes alive) charges souls.
       const isRetreat = (fromSlot === 0 || toSlot === 0) && a && b;
       if (isRetreat) {
@@ -398,20 +431,26 @@ export const DeadlockGame: Game<GameState> = {
     /**
      * Promote a bench hero to Active after the previous Active was KO'd.
      * Free (no Retreat cost) since it's a forced replacement, not a tactical
-     * swap. The dying corpse takes the chosen bench hero's slot — that's where
-     * it stays greyed-out until its respawn timer hits 0.
+     * swap. The dying corpse takes the chosen bench hero's slot — that's
+     * where it stays greyed-out until its respawn timer hits 0.
      *
-     * Callable on either player's turn (your active can die during the
-     * opponent's combat phase, and you still need to pick a replacement).
+     * Callable on EITHER player's turn — your Active can die during the
+     * opponent's combat phase or off a skill they cast, and the engine is
+     * still on their turn at that moment. The owning player is derived from
+     * the bench iid rather than from `playerID` so the dispatcher's turn
+     * context doesn't gate the swap.
      */
-    promoteToActive: ({ G, playerID }, benchHeroIid: string) => {
-      if (!playerID) return INVALID_MOVE;
-      const pid = playerID as PlayerID;
+    promoteToActive: ({ G }, benchHeroIid: string) => {
+      let pid: PlayerID | null = null;
+      let benchIdx = -1;
+      for (const candidate of ['0', '1'] as PlayerID[]) {
+        const idx = G.players[candidate].bench.findIndex((b) => b?.iid === benchHeroIid);
+        if (idx !== -1) { pid = candidate; benchIdx = idx; break; }
+      }
+      if (!pid) return INVALID_MOVE;
       const ps = G.players[pid];
       // Only valid when our Active is a corpse — otherwise use retreat (which costs souls).
       if (!ps.active || (ps.active.respawnTurnsLeft ?? 0) === 0) return INVALID_MOVE;
-      const benchIdx = ps.bench.findIndex((b) => b?.iid === benchHeroIid);
-      if (benchIdx === -1) return INVALID_MOVE;
       const benchHero = ps.bench[benchIdx]!;
       // Replacement must be alive (no corpses moving to Active).
       if ((benchHero.respawnTurnsLeft ?? 0) > 0) return INVALID_MOVE;

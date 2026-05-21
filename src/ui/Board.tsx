@@ -4,43 +4,38 @@ import type { BoardProps } from 'boardgame.io/react';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
-import { PlayerArea } from './PlayerArea';
-import { Hand } from './Hand';
-import { Log } from './Log';
-import { TargetingOverlay } from './TargetingOverlay';
-import { TurnBanner } from './TurnBanner';
-import { DamageFloaters, type FloaterEntry } from './DamageFloater';
-import { CardPreview } from './CardPreview';
-import { HeroDetailSheet } from './HeroDetailSheet';
-import { OpponentHand } from './OpponentHand';
-import { ArenaBackdrop } from './ArenaBackdrop';
-import { DragArrow } from './DragArrow';
-import { MulliganOverlay } from './MulliganOverlay';
-import { PromotionOverlay } from './PromotionOverlay';
-import { EquipmentReplaceOverlay } from './EquipmentReplaceOverlay';
+import { Hand } from './board/Hand';
+import { Log } from './side-panel/Log';
+import { LogLine } from './side-panel/LogLine';
+import { TargetingOverlay } from './overlays/TargetingOverlay';
+import { TurnBanner } from './effects/TurnBanner';
+import { DamageFloaters, type FloaterEntry } from './effects/DamageFloater';
+import { CardPreview } from './overlays/CardPreview';
+import { HeroDetailSheet } from './overlays/HeroDetailSheet';
+import { OpponentHand } from './board/OpponentHand';
+import { ArenaBackdrop } from './board/ArenaBackdrop';
+import { DragArrow } from './effects/DragArrow';
+import { MulliganOverlay } from './overlays/MulliganOverlay';
+import { PromotionOverlay } from './overlays/PromotionOverlay';
+import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
 import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
-import { BenchRow } from './BenchRow';
-import { ActiveSlot } from './ActiveSlot';
-import { ActiveDuel } from './ActiveDuel';
+import { BenchRow } from './board/BenchRow';
+import { ActiveSlot } from './board/ActiveSlot';
+import { ActiveDuel } from './board/ActiveDuel';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility, type TargetFilter } from '@/abilities';
 import { planAttackPhase, type AttackPlan } from '@/engine/combat';
-import { CombatChoreographer } from './CombatChoreographer';
-import { UltMomentFlash } from './UltMomentFlash';
-import { useCombatSpeed, COMBAT_SPEED_MS, type CombatSpeed } from './useCombatSpeed';
+import { CombatChoreographer, type BeatImpact } from './effects/CombatChoreographer';
+import { UltMomentFlash } from './effects/UltMomentFlash';
+import { useCombatSpeed, COMBAT_SPEED_MS } from './hooks/useCombatSpeed';
 import { palette, fonts, radius, shadow, spring, text } from './tokens';
+import { SidePanel } from './side-panel/SidePanel';
+import { HandTray } from './board/HandTray';
+import { findOnBoard, filterAllows, type PendingPlay } from './helpers';
 
 // Animation / pacing constants.
 const FLOATER_CLEAR_MS = 950;   // how long damage/heal floaters stay on-screen
 const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
-
-interface PendingPlay {
-  kind: 'playCard' | 'useSkill';
-  iid: string;
-  title: string;
-  desc: string;
-  filter: TargetFilter;
-}
 
 export function Board(props: BoardProps<GameState>) {
   const { G, ctx, moves } = props;
@@ -58,18 +53,36 @@ export function Board(props: BoardProps<GameState>) {
   // to a hero, this holds the incoming card + the target hero until the
   // player picks which existing item to discard (or cancels).
   const [replaceTarget, setReplaceTarget] = useState<{ incoming: CardInstance; hero: CardInstance } | null>(null);
-  const [attackingIids, setAttackingIids] = useState<Set<string>>(new Set());
   // Combat animation gate. While non-null, end-turn is intercepted — the
   // choreographer walks the plan visually, then we call the actual move.
   const [combatPlan, setCombatPlan] = useState<AttackPlan | null>(null);
   // Pending end-turn callback to fire once choreographer completes.
   const pendingEndTurnRef = useRef<(() => void) | null>(null);
+  // iids whose HP delta we should NOT emit a DamageFloater for, because the
+  // combat choreographer just drew its own −N for the same hit. Populated
+  // when a combat plan starts; cleared shortly after the engine resolves.
+  const combatTargetIidsRef = useRef<Set<string>>(new Set());
+  const combatTargetsClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [combatSpeed, setCombatSpeed] = useCombatSpeed();
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
-    if (el) slotRefs.current.set(iid, el);
-    else slotRefs.current.delete(iid);
+    if (el) {
+      slotRefs.current.set(iid, el);
+      return;
+    }
+    // Cleanup callback (el === null): during AnimatePresence layout transitions
+    // (e.g., a hero promoted from bench to active), the entering element's
+    // mount-ref can fire BEFORE the exiting element's cleanup-ref, even though
+    // both share the same iid. Blindly deleting here wipes the just-set ref
+    // and the choreographer can't find the slot, so the entire AttackBeat
+    // bails (no tracer, no banner). Instead, only delete if the currently
+    // registered element is detached from the DOM — meaning no replacement
+    // has re-registered for this iid.
+    const cur = slotRefs.current.get(iid);
+    if (cur && !document.body.contains(cur)) {
+      slotRefs.current.delete(iid);
+    }
   }, []);
 
   // Face-damage projection feeds the patron HP bar indicator (the per-hero
@@ -80,6 +93,57 @@ export function Board(props: BoardProps<GameState>) {
     const plan = planAttackPhase(G, ctx.currentPlayer as PlayerID);
     return plan.damageToFace;
   }, [G, ctx.currentPlayer, ctx.gameover]);
+
+  /** Stable callback for CombatChoreographer — inline arrows recreate every
+   *  render and would re-fire the choreographer's walk effect, replaying the
+   *  same attack beat multiple times. */
+  const handleCombatComplete = useCallback(() => {
+    setCombatPlan(null);
+    if (pendingEndTurnRef.current) pendingEndTurnRef.current();
+    // After the engine resolves, the HP-diff effect will fire one render later.
+    // Keep the suppression set alive briefly so that effect skips the floater
+    // pushes for iids the choreographer already painted, then clear it.
+    if (combatTargetsClearTimerRef.current) clearTimeout(combatTargetsClearTimerRef.current);
+    combatTargetsClearTimerRef.current = setTimeout(() => {
+      combatTargetIidsRef.current = new Set();
+      combatTargetsClearTimerRef.current = null;
+    }, 200);
+  }, []);
+
+  /** Per-beat impact handler — pushes damage numbers into the shared
+   *  DamageFloaters layer at the cinematic impact moment, so combat numbers
+   *  use the same renderer and the same anchor position as skill / spell /
+   *  heal numbers triggered elsewhere on the board. */
+  const handleBeatImpact = useCallback((impact: BeatImpact) => {
+    const additions: FloaterEntry[] = [];
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    if (impact.primary && impact.step.finalDamage > 0) {
+      additions.push({
+        id: `combat-primary-${impact.primary.iid}-${stamp}`,
+        iid: impact.primary.iid,
+        value: -impact.step.finalDamage,
+        kind: impact.primary.iid.startsWith('face-') ? 'face' : 'attack',
+        x: impact.primary.x,
+        y: impact.primary.y,
+      });
+    }
+    if (impact.retaliation && impact.step.retaliationDamage > 0) {
+      additions.push({
+        id: `combat-retal-${impact.retaliation.iid}-${stamp}`,
+        iid: impact.retaliation.iid,
+        value: -impact.step.retaliationDamage,
+        kind: 'attack',
+        x: impact.retaliation.x,
+        y: impact.retaliation.y,
+      });
+    }
+    if (additions.length) {
+      setFloaters((cur) => [...cur, ...additions]);
+      setTimeout(() => {
+        setFloaters((cur) => cur.filter((f) => !additions.some((a) => a.id === f.id)));
+      }, FLOATER_CLEAR_MS);
+    }
+  }, []);
 
   /** Intercept end-turn to play the attack-phase animation before the engine resolves. */
   const triggerEndTurn = useCallback(() => {
@@ -95,6 +159,23 @@ export function Board(props: BoardProps<GameState>) {
       try { moves.endTurn(); } catch {}
       pendingEndTurnRef.current = null;
     };
+    // Snapshot which iids the choreographer will paint a −N over, so the
+    // HP-diff effect skips duplicating the same number. Includes the
+    // attacker iid whenever a beat carries retaliation damage — the attacker
+    // also takes a hit on resolve, and the choreographer fires its own
+    // floater for that side.
+    const targets = new Set<string>();
+    const oppPid: PlayerID = ctx.currentPlayer === '0' ? '1' : '0';
+    for (const s of plan.steps) {
+      if (s.targetIid) targets.add(s.targetIid);
+      else targets.add(`face-${oppPid}`);
+      if (s.retaliationDamage > 0) targets.add(s.attackerIid);
+    }
+    combatTargetIidsRef.current = targets;
+    if (combatTargetsClearTimerRef.current) {
+      clearTimeout(combatTargetsClearTimerRef.current);
+      combatTargetsClearTimerRef.current = null;
+    }
     setCombatPlan(plan);
   }, [G, ctx.currentPlayer, combatPlan, moves, combatSpeed]);
 
@@ -150,6 +231,7 @@ export function Board(props: BoardProps<GameState>) {
       newHp.set(c.iid, c.hp);
       const prev = prevHpRef.current.get(c.iid);
       if (prev !== undefined && prev !== c.hp) {
+        if (combatTargetIidsRef.current.has(c.iid)) return;
         const el = slotRefs.current.get(c.iid);
         const rect = el?.getBoundingClientRect();
         if (rect) {
@@ -158,8 +240,11 @@ export function Board(props: BoardProps<GameState>) {
             iid: c.iid,
             value: c.hp - prev,
             kind: c.hp > prev ? 'heal' : 'attack',
+            // Anchor: TOP edge of the card. The floater renders just above and
+            // floats further up. Identical position whether the trigger is
+            // combat damage, a skill, a status tick, or a heal.
             x: rect.left + rect.width / 2,
-            y: rect.top + rect.height / 2,
+            y: rect.top,
           });
         }
       }
@@ -171,14 +256,17 @@ export function Board(props: BoardProps<GameState>) {
     for (const pid of ['0', '1'] as PlayerID[]) {
       const prev = prevPlayerHpRef.current[pid];
       if (prev !== G.players[pid].hp) {
-        additions.push({
-          id: `face-${pid}-${Date.now()}`,
-          iid: `face-${pid}`,
-          value: G.players[pid].hp - prev,
-          kind: 'face',
-          x: pid === me ? window.innerWidth / 2 : window.innerWidth / 2,
-          y: pid === me ? window.innerHeight - 110 : 70,
-        });
+        if (!combatTargetIidsRef.current.has(`face-${pid}`)) {
+          additions.push({
+            id: `face-${pid}-${Date.now()}`,
+            iid: `face-${pid}`,
+            value: G.players[pid].hp - prev,
+            kind: 'face',
+            // y = top of the face zone (matches the synthetic combat band).
+            x: window.innerWidth / 2,
+            y: pid === me ? window.innerHeight - 156 : 16,
+          });
+        }
         prevPlayerHpRef.current[pid] = G.players[pid].hp;
       }
     }
@@ -200,27 +288,11 @@ export function Board(props: BoardProps<GameState>) {
       setBannerText(isMy ? 'Your Move' : "Rival's Move");
       setBannerTone(isMy ? 'self' : 'opponent');
       setBannerVisible(true);
-      const t = setTimeout(() => setBannerVisible(false), 900);
+      const t = setTimeout(() => setBannerVisible(false), 1600);
       lastTurnRef.current = cur;
       return () => clearTimeout(t);
     }
   }, [ctx.turn, ctx.currentPlayer]);
-
-  useEffect(() => {
-    if (ctx.turn === 1) return;
-    const justAttackedPid: PlayerID = ctx.currentPlayer === me ? '1' : '0';
-    const ps = G.players[justAttackedPid];
-    const ids = new Set<string>();
-    if (ps.active) ids.add(ps.active.iid);
-    for (const b of ps.bench) {
-      if (!b) continue;
-      const data = CARDS_BY_ID[b.cardId];
-      if (data?.type === 'hero' && data.flags?.longRange) ids.add(b.iid);
-    }
-    setAttackingIids(ids);
-    const t = setTimeout(() => setAttackingIids(new Set()), 380);
-    return () => clearTimeout(t);
-  }, [ctx.turn, ctx.currentPlayer, G, me]);
 
   // AI loop. Pauses while combat is animating.
   useEffect(() => {
@@ -413,14 +485,14 @@ export function Board(props: BoardProps<GameState>) {
         height: '100vh',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         background: `radial-gradient(circle at 50% 35%, ${tone}30, ${palette.bg0})`,
-        fontFamily: fonts.display, gap: 28,
+        fontFamily: fonts.ui, gap: 28,
       }}>
         <motion.h1
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={spring.bouncy}
           style={{
-            fontSize: 96, color: tone, letterSpacing: '0.2em',
+            fontSize: 22, fontWeight: 700, color: tone,
             textShadow: `0 0 40px ${tone}aa`, margin: 0,
           }}
         >{txt}</motion.h1>
@@ -429,8 +501,7 @@ export function Board(props: BoardProps<GameState>) {
           style={{
             background: `linear-gradient(180deg, ${tone}aa, ${tone}66)`,
             color: palette.text, padding: '16px 40px', border: 'none', borderRadius: 12,
-            fontFamily: fonts.display, fontSize: 16, fontWeight: 600,
-            letterSpacing: '0.18em', textTransform: 'uppercase',
+            fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
             cursor: 'pointer', boxShadow: shadow.lg,
           }}
         >Rematch</button>
@@ -480,7 +551,6 @@ export function Board(props: BoardProps<GameState>) {
               onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
               isTargetable={isTargetable}
               registerSlotRef={registerSlotRef}
-              attackingIids={attackingIids}
             />
           </div>
 
@@ -498,7 +568,6 @@ export function Board(props: BoardProps<GameState>) {
               onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
               isTargetable={isTargetable}
               registerSlotRef={registerSlotRef}
-              attackingIids={attackingIids}
               playerSkillSpent={G.players[me].skillUsedThisTurn}
             />
           </div>
@@ -515,7 +584,6 @@ export function Board(props: BoardProps<GameState>) {
               onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
               isTargetable={isTargetable}
               registerSlotRef={registerSlotRef}
-              attackingIids={attackingIids}
               playerSkillSpent={G.players[me].skillUsedThisTurn}
             />
           </div>
@@ -680,10 +748,8 @@ export function Board(props: BoardProps<GameState>) {
               plan={combatPlan}
               slotRefs={slotRefs.current}
               stepDuration={COMBAT_SPEED_MS[combatSpeed]}
-              onComplete={() => {
-                setCombatPlan(null);
-                if (pendingEndTurnRef.current) pendingEndTurnRef.current();
-              }}
+              onComplete={handleCombatComplete}
+              onBeatImpact={handleBeatImpact}
             />
           )}
         </AnimatePresence>
@@ -694,497 +760,11 @@ export function Board(props: BoardProps<GameState>) {
   );
 }
 
-function Battlefield({ isMyTurn, turn }: { isMyTurn: boolean; turn: number }) {
-  const accent = isMyTurn ? palette.accent : palette.danger;
-  return (
-    <div style={{
-      position: 'relative',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      borderRadius: radius.md,
-      borderTop: `1px solid ${palette.border}`,
-      borderBottom: `1px solid ${palette.border}`,
-      background: `linear-gradient(180deg, rgba(8,12,22,0) 0%, rgba(8,12,22,0.55) 50%, rgba(8,12,22,0) 100%)`,
-      overflow: 'hidden',
-      gap: 14,
-    }}>
-      {/* Center light bar */}
-      <div style={{
-        position: 'absolute', inset: '50% 0 50%',
-        height: 1,
-        background: `linear-gradient(90deg, transparent 0%, ${accent}66 25%, ${accent} 50%, ${accent}66 75%, transparent 100%)`,
-        boxShadow: `0 0 20px ${accent}55`,
-      }} />
-      {/* Animated glow blob behind centerpiece */}
-      <div style={{
-        position: 'absolute', left: '50%', top: '50%',
-        width: 200, height: 60, transform: 'translate(-50%, -50%)',
-        background: `radial-gradient(ellipse at center, ${accent}33, transparent 70%)`,
-        filter: 'blur(8px)',
-        pointerEvents: 'none',
-      }} />
-      <span style={{
-        position: 'absolute', left: 18, top: '50%', transform: 'translateY(-50%)',
-        ...text.label, color: palette.textFaint,
-      }}>
-        Lane
-      </span>
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: 10,
-        padding: '8px 22px',
-        background: `linear-gradient(180deg, rgba(8,12,22,0.85), rgba(8,12,22,0.65))`,
-        border: `1px solid ${accent}55`,
-        borderRadius: 999,
-        boxShadow: `0 0 20px ${accent}33, inset 0 0 10px ${accent}11`,
-        backdropFilter: 'blur(6px)',
-      }}>
-        <span style={{
-          width: 9, height: 9, borderRadius: '50%',
-          background: accent,
-          boxShadow: `0 0 10px ${accent}`,
-        }} />
-        <span style={{ ...text.label, color: palette.text }}>{isMyTurn ? 'Your Move' : 'Rival Moves'}</span>
-      </div>
-      <span style={{
-        position: 'absolute', right: 18, top: '50%', transform: 'translateY(-50%)',
-        display: 'inline-flex', alignItems: 'baseline', gap: 6,
-      }}>
-        <span style={{ ...text.label, color: palette.textDim }}>Turn</span>
-        <span style={{ ...text.numeric, color: palette.text }}>{turn}</span>
-      </span>
-    </div>
-  );
-}
 
-function HandTray({
-  cards, disabled, pending, isMyTurn, hasPending, mySouls, onTap, onLongPress, onHover, onDragEndOver, onEnd, onCancel,
-}: {
-  cards: CardInstance[]; disabled: boolean; pending: PendingPlay | null;
-  isMyTurn: boolean; hasPending: boolean; mySouls: number;
-  onTap: (c: CardInstance) => void; onLongPress: (c: CardInstance) => void;
-  onHover: (c: CardInstance | null) => void;
-  onDragEndOver: (c: CardInstance, x: number, y: number) => void;
-  onEnd: () => void; onCancel: () => void;
-}) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr auto',
-      alignItems: 'flex-end',
-      gap: 16,
-      paddingBottom: 16,
-    }}>
-      <div style={{ minWidth: 0 }}>
-        <Hand
-          cards={cards}
-          disabled={disabled}
-          pending={pending}
-          mySouls={mySouls}
-          onTap={onTap}
-          onLongPress={onLongPress}
-          onHover={onHover}
-          onDragEndOver={onDragEndOver}
-        />
-      </div>
-      <div style={{ display: 'flex', gap: 10, paddingBottom: 12 }}>
-        <motion.button
-          whileTap={{ scale: 0.96 }}
-          whileHover={isMyTurn ? { scale: 1.03, y: -2 } : undefined}
-          disabled={!isMyTurn}
-          onClick={onEnd}
-          style={{
-            background: isMyTurn
-              ? `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}55)`
-              : 'rgba(255,255,255,0.04)',
-            ...text.label, color: palette.text,
-            padding: '20px 30px',
-            border: `1px solid ${isMyTurn ? palette.accent : palette.border}`,
-            borderRadius: radius.md,
-            boxShadow: isMyTurn ? shadow.glowAccent : shadow.sm,
-            cursor: isMyTurn ? 'pointer' : 'default',
-            opacity: isMyTurn ? 1 : 0.45,
-            minWidth: 160,
-          }}
-        >End Cycle</motion.button>
-        {hasPending && (
-          <motion.button
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={onCancel}
-            style={{
-              background: 'rgba(255,107,107,0.12)',
-              ...text.label, color: palette.danger,
-              padding: '20px 24px',
-              border: `1px solid ${palette.danger}55`,
-              borderRadius: radius.md,
-              cursor: 'pointer',
-            }}
-          >Cancel</motion.button>
-        )}
-      </div>
-    </div>
-  );
-}
 
-/**
- * Categorize a log line by its leading verb / keyword so the side panel can
- * tint it semantically. Pure substring matching — fast and stable since all
- * log strings are constructed in the engine via `pushLog`.
- *
- *   attack arrow / KO / fell / overflow       → wine red
- *   healed / respawned / refresh              → success green
- *   gained <status> / cleansed / discharges   → spirit purple
- *   casts skill / played / promoted / unlocked → brass
- *   Mulligan / Turn marker                    → dim grey
- *   everything else                           → default text
- */
-function logEntryColor(s: string): string {
-  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return palette.danger;
-  if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return palette.success;
-  if (/gained |cleansed|discharges|resisted/i.test(s)) return palette.spirit;
-  if (/casts skill|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return palette.accent;
-  if (/Mulligan|---/i.test(s)) return palette.textFaint;
-  return palette.text;
-}
 
-function SidePanel({ G, me, isMyTurn, turn, onLogToggle, projectedFaceDamageMe, projectedFaceDamageOpp, combatSpeed, onCombatSpeedChange }: {
-  G: GameState; me: PlayerID; isMyTurn: boolean; turn: number; onLogToggle: () => void;
-  projectedFaceDamageMe?: number; projectedFaceDamageOpp?: number;
-  combatSpeed?: CombatSpeed; onCombatSpeedChange?: (s: CombatSpeed) => void;
-}) {
-  const opp: PlayerID = me === '0' ? '1' : '0';
-  // Group log entries by turn (newest first). Each group shows one "Turn N"
-  // header followed by its lines — saves the T-prefix per line and makes
-  // turn boundaries scannable.
-  const grouped = (() => {
-    const last40 = [...G.log].slice(-40).reverse();
-    const out: { turn: number; entries: typeof last40 }[] = [];
-    for (const e of last40) {
-      const head = out[out.length - 1];
-      if (head && head.turn === e.turn) head.entries.push(e);
-      else out.push({ turn: e.turn, entries: [e] });
-    }
-    return out;
-  })();
-  return (
-    <aside style={{
-      display: 'flex', flexDirection: 'column', gap: 12,
-      padding: '14px 14px 14px',
-      background: palette.bg1,
-      border: `1px solid #5a3f1c`,
-      borderRadius: radius.lg,
-      boxShadow: '0 4px 12px rgba(40, 20, 0, 0.22)',
-      minHeight: 0,
-      height: 'calc(100vh - 32px)',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        paddingBottom: 8, borderBottom: `1px solid ${palette.border}`,
-      }}>
-        <span style={{ ...text.label, color: palette.textDim }}>Patrol</span>
-        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ ...text.label, color: palette.textFaint }}>Turn</span>
-          <span style={{ ...text.numeric, color: palette.text }}>{turn}</span>
-        </span>
-      </div>
 
-      <PlayerCard label="Sapphire Flame" ps={G.players[opp]} hostile order={opp === '0' ? '1st' : '2nd'} projectedFaceDamage={projectedFaceDamageOpp} />
 
-      <div style={{
-        flex: 1, minHeight: 0,
-        display: 'flex', flexDirection: 'column',
-        background: 'rgba(120, 80, 30, 0.06)',
-        border: `1px solid ${palette.border}`,
-        borderRadius: radius.md,
-        overflow: 'hidden',
-      }}>
-        <div style={{
-          padding: '8px 12px', borderBottom: `1px solid ${palette.border}`,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <span style={{ ...text.label, color: palette.textDim }}>Recent</span>
-          <button onClick={onLogToggle} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            ...text.label, color: palette.accent,
-          }}>Full Log →</button>
-        </div>
-        <div style={{ flex: 1, overflow: 'auto', padding: '4px 12px 12px' }}>
-          {grouped.length === 0 ? (
-            <div style={{ ...text.body, color: palette.textFaint, fontStyle: 'italic' }}>No actions yet.</div>
-          ) : grouped.map((g) => (
-            <div key={g.turn} style={{ marginTop: 8 }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
-                paddingBottom: 3, borderBottom: `1px dashed ${palette.border}`,
-              }}>
-                <span style={{ ...text.label, color: palette.accentWarm }}>Turn</span>
-                <span style={{ ...text.numeric, color: palette.text }}>{g.turn}</span>
-              </div>
-              {g.entries.map((e, i) => {
-                const c = logEntryColor(e.text);
-                return (
-                  <div key={i} style={{
-                    ...text.body, color: c, padding: '1px 0',
-                    paddingLeft: 6, borderLeft: `2px solid ${c}44`,
-                    marginLeft: 2,
-                  }}>
-                    {e.text}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
 
-      <PlayerCard label="Amber Hand" ps={G.players[me]} active={isMyTurn} order={me === '0' ? '1st' : '2nd'} projectedFaceDamage={projectedFaceDamageMe} />
 
-      {/* Combat speed picker */}
-      {combatSpeed && onCombatSpeedChange && (
-        <div style={{
-          paddingTop: 8, borderTop: `1px solid ${palette.border}`,
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          <span style={{ ...text.label, color: palette.textFaint }}>Combat Speed</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
-            {(['instant', 'fast', 'normal', 'slow'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => onCombatSpeedChange(s)}
-                title={s === 'instant' ? 'Skip animations entirely' : `${s} (${s === 'fast' ? '380ms' : s === 'normal' ? '700ms' : '1.1s'} per hit)`}
-                style={{
-                  padding: '5px 0',
-                  background: combatSpeed === s
-                    ? `linear-gradient(180deg, ${palette.accent}, ${palette.accent}aa)`
-                    : palette.bg2,
-                  border: `1px solid ${combatSpeed === s ? palette.accent : palette.border}`,
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  ...text.label,
-                  color: combatSpeed === s ? '#1a1208' : palette.textDim,
-                  textShadow: combatSpeed === s ? '0 1px 0 rgba(255,235,180,0.4)' : 'none',
-                }}
-              >
-                {s === 'instant' ? '⏵⏵' : s.charAt(0)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
-      <div style={{
-        paddingTop: 8, borderTop: `1px solid ${palette.border}`,
-        ...text.body, color: palette.textFaint,
-      }}>
-        Drop a card on a hero · Hover for the lore · Hold for full preview
-      </div>
-    </aside>
-  );
-}
-
-function PlayerCard({ label, ps, hostile, active, order, projectedFaceDamage }: { label: string; ps: GameState['players'][PlayerID]; hostile?: boolean; active?: boolean; order?: '1st' | '2nd'; projectedFaceDamage?: number }) {
-  const color = hostile ? palette.danger : palette.accent;
-  const hpFrac = Math.max(0, Math.min(1, ps.hp / ps.hpMax));
-  const projectedHp = Math.max(0, ps.hp - (projectedFaceDamage ?? 0));
-  const projectedFrac = Math.max(0, Math.min(1, projectedHp / ps.hpMax));
-  const hasIncoming = !!projectedFaceDamage && projectedFaceDamage > 0;
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', gap: 6,
-      padding: 10,
-      borderRadius: radius.md,
-      border: `1px solid ${palette.border}`,
-      background: 'transparent',
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            ...text.label, color: palette.textDim, whiteSpace: 'nowrap',
-          }}>
-            <span style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: active ? palette.accent : palette.textFaint,
-            }} />
-            {label}
-          </span>
-          {order && <OrderBadge order={order} color={palette.textFaint} />}
-        </div>
-        <span style={{ ...text.body, color: palette.textFaint }}>
-          deck {ps.deck.length} · disc {ps.discard.length}{hostile ? ` · hand ${ps.hand.length}` : ''}
-        </span>
-      </div>
-      <div style={{
-        position: 'relative', height: 8, borderRadius: 4,
-        background: 'rgba(255,255,255,0.05)', overflow: 'hidden',
-      }}>
-        <div style={{
-          position: 'absolute', inset: 0, width: `${hpFrac * 100}%`,
-          background: `linear-gradient(90deg, ${color}, ${color}aa)`,
-          transition: 'width 240ms cubic-bezier(0.22, 1, 0.36, 1)',
-        }} />
-        {/* Predicted HP drop overlay (dimmer red wash on the slice that's about to be lost) */}
-        {hasIncoming && (
-          <div style={{
-            position: 'absolute', top: 0, bottom: 0,
-            left: `${projectedFrac * 100}%`,
-            width: `${(hpFrac - projectedFrac) * 100}%`,
-            background: `repeating-linear-gradient(45deg, ${palette.danger}cc 0 4px, ${palette.danger}88 4px 8px)`,
-            transition: 'all 200ms ease',
-          }} />
-        )}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ ...text.label, color: palette.textFaint }}>HP</span>
-        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
-          {hasIncoming && (
-            <span style={{
-              padding: '1px 6px', borderRadius: 4,
-              background: `${palette.danger}cc`, color: '#fff',
-              textShadow: '0 1px 1px rgba(0,0,0,0.5)',
-              ...text.label,
-            }}>▼{projectedFaceDamage}</span>
-          )}
-          <span style={{ ...text.numeric, color: palette.textDim }}>
-            {ps.hp}<span style={{ ...text.body, color: palette.textFaint, marginLeft: 2 }}> / {ps.hpMax}</span>
-          </span>
-        </span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
-        <span style={{ ...text.label, color: palette.textFaint }}>Souls</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <SoulGem />
-          <span style={{ ...text.numeric, color: palette.accentWarm }}>{ps.souls}</span>
-        </span>
-      </div>
-      {/* Skill availability dot + respawn queue */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2, minHeight: 16 }}>
-        <span style={{ ...text.label, color: palette.textFaint }}>Skill</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          {ps.skillUsedThisTurn ? (
-            <span style={{
-              display: 'inline-block',
-              width: 8, height: 8, borderRadius: '50%',
-              background: palette.textFaint,
-            }} />
-          ) : (
-            <motion.span
-              animate={{ opacity: [0.6, 1, 0.6], scale: [0.92, 1.08, 0.92] }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-              style={{
-                display: 'inline-block',
-                width: 8, height: 8, borderRadius: '50%',
-                background: palette.success,
-                boxShadow: `0 0 8px ${palette.success}`,
-              }}
-            />
-          )}
-          <span style={{ ...text.label, color: ps.skillUsedThisTurn ? palette.textFaint : palette.success }}>
-            {ps.skillUsedThisTurn ? 'Used' : 'Ready'}
-          </span>
-        </span>
-      </div>
-      {/* Respawning heroes stay in their bench/active slot greyed-out now;
-          see HeroSlot's RespawnOverlay. No side-panel queue needed. */}
-    </div>
-  );
-}
-
-function SoulGem({ size = 14 }: { size?: number }) {
-  return (
-    <span aria-hidden style={{
-      width: size, height: size, borderRadius: '50%',
-      background: `radial-gradient(circle at 35% 30%, #ffd98a, ${palette.accent} 55%, #6e4612 100%)`,
-      border: '1px solid #3a2810',
-      boxShadow: `0 1px 2px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,235,180,0.5)`,
-      display: 'inline-block',
-    }} />
-  );
-}
-
-function Stat({ label, value, accent }: { label: string; value: any; accent: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: palette.textFaint }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: accent, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-    </div>
-  );
-}
-
-function PlayerSummary({ label, ps, hostile }: { label: string; ps: GameState['players'][PlayerID]; hostile?: boolean }) {
-  const color = hostile ? palette.danger : palette.accent;
-  const hpFrac = Math.max(0, Math.min(1, ps.hp / ps.hpMax));
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-        <span style={{
-          fontSize: 12, fontWeight: 700, color,
-        }}>{label}</span>
-        <span style={{ fontSize: 12, color: palette.textDim }}>
-          deck {ps.deck.length} · disc {ps.discard.length}{hostile ? ` · hand ${ps.hand.length}` : ''}
-        </span>
-      </div>
-      <div style={{
-        position: 'relative', height: 10, borderRadius: 5,
-        background: 'rgba(255,255,255,0.06)', overflow: 'hidden',
-        border: `1px solid ${palette.border}`,
-      }}>
-        <div style={{
-          position: 'absolute', inset: 0, width: `${hpFrac * 100}%`,
-          background: `linear-gradient(90deg, ${color}, ${color}88)`,
-          boxShadow: `0 0 12px ${color}66`,
-          transition: 'width 240ms cubic-bezier(0.22, 1, 0.36, 1)',
-        }} />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2, fontSize: 11, color: palette.hp, fontVariantNumeric: 'tabular-nums' }}>
-        {ps.hp} / {ps.hpMax} HP
-      </div>
-    </div>
-  );
-}
-
-function OrderBadge({ order, color }: { order: '1st' | '2nd'; color: string }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      padding: '1px 5px',
-      marginLeft: 4,
-      borderRadius: 3,
-      border: `1px solid ${color}88`,
-      background: `linear-gradient(180deg, ${color}33, ${color}11)`,
-      color: color,
-      fontFamily: fonts.ui,
-      fontSize: 9,
-      fontWeight: 800,
-      letterSpacing: '0.04em',
-      textTransform: 'none',
-      lineHeight: 1.3,
-    }}>
-      {order}
-    </span>
-  );
-}
-
-function findOnBoard(G: GameState, iid: string): { owner: PlayerID; card: CardInstance } | null {
-  for (const pid of ['0', '1'] as PlayerID[]) {
-    const ps = G.players[pid];
-    if (ps.active?.iid === iid) return { owner: pid, card: ps.active };
-    for (const b of ps.bench) if (b?.iid === iid) return { owner: pid, card: b };
-  }
-  return null;
-}
-
-function filterAllows(filter: TargetFilter, card: CardInstance, owner: PlayerID, me: PlayerID): boolean {
-  const isAlly = owner === me;
-  switch (filter) {
-    case 'noTarget': return false;
-    case 'self': return false;
-    case 'allyAny': return isAlly;
-    case 'allyHero': return isAlly && CARDS_BY_ID[card.cardId]?.type === 'hero';
-    case 'enemyAny': return !isAlly;
-    case 'enemyHero': return !isAlly && CARDS_BY_ID[card.cardId]?.type === 'hero';
-    case 'enemyActive': return !isAlly && card.zone === 'active';
-    case 'anyBoard': return true;
-  }
-}

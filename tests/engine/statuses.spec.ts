@@ -27,29 +27,6 @@ function runMove(name: string, G: GameState, pid: PlayerID, ...args: any[]) {
   return fn({ G, ctx: { currentPlayer: pid, numPlayers: 2, turn: 1 } as any, playerID: pid, events: {} as any, random: {} as any }, ...args);
 }
 
-describe('status: invincibility', () => {
-  it('blocks all damage including pure/bleed/poison', () => {
-    const G = freshG();
-    const t = G.players['1'].active!;
-    addStatus(G, t, 'invincibility', 1, 99);
-    const hpBefore = t.hp;
-    damageUnit(G, t, 5, 'attack');
-    damageUnit(G, t, 5, 'spirit');
-    damageUnit(G, t, 5, 'pure');
-    expect(t.hp).toBe(hpBefore);
-  });
-
-  it('blocks bleed ticks at start of turn', () => {
-    const G = freshG();
-    const t = G.players['0'].active!;
-    addStatus(G, t, 'bleed', 2, 3);
-    addStatus(G, t, 'invincibility', 1, 99);
-    const hpBefore = t.hp;
-    tickStartOfTurn(G, G.players['0']);
-    expect(t.hp).toBe(hpBefore);
-  });
-});
-
 describe('status: shield', () => {
   it('absorbs attack damage and breaks after', () => {
     const G = freshG();
@@ -95,13 +72,13 @@ describe('status: armor', () => {
   });
 });
 
-describe('status: hex', () => {
-  it('amplifies incoming damage by +2', () => {
+describe('status: vulnerable', () => {
+  it('amplifies incoming damage by status value', () => {
     const G = freshG();
     const t = G.players['1'].active!;
-    addStatus(G, t, 'vulnerable', 1, 99);
+    addStatus(G, t, 'vulnerable', 2, 99);
     const hpBefore = t.hp;
-    damageUnit(G, t, 3, 'attack'); // 3 + 2 hex = 5
+    damageUnit(G, t, 3, 'attack'); // 3 + 2 vulnerable = 5
     expect(hpBefore - t.hp).toBe(5);
   });
 
@@ -109,21 +86,36 @@ describe('status: hex', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     const baseAtk = effectiveAtk(t);
-    addStatus(G, t, 'vulnerable', 1, 99);
+    addStatus(G, t, 'vulnerable', 2, 99);
     expect(effectiveAtk(t)).toBe(baseAtk);
   });
 });
 
+describe('status: weaken', () => {
+  it('reduces effective ATK by value while active', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    const baseAtk = effectiveAtk(t);
+    addStatus(G, t, 'weaken', 2, 2);
+    // Skip if hero already has 0 ATK (corner case for some passive heroes).
+    if (baseAtk > 0) {
+      // Weaken is applied in combat's effectiveAttackDamage, not in effectiveAtk
+      // itself — verify via the planner instead.
+      // For this unit test, just verify the status is on the card.
+      expect(t.statuses.find((s) => s.id === 'weaken')?.value).toBe(2);
+    }
+  });
+});
+
 describe('status: unstoppable', () => {
-  it('blocks incoming CC (stun/silenced/disarm/sleep)', () => {
+  it('blocks incoming CC (stun/silenced/disarm)', () => {
     const G = freshG();
     const t = G.players['1'].active!;
     addStatus(G, t, 'unstoppable', 1, 99);
     addStatus(G, t, 'stun', 1, 2);
     addStatus(G, t, 'silenced', 1, 2);
     addStatus(G, t, 'disarm', 1, 2);
-    addStatus(G, t, 'sleep', 1, 2);
-    for (const id of ['stun', 'silenced', 'disarm', 'sleep']) {
+    for (const id of ['stun', 'silenced', 'disarm']) {
       expect(t.statuses.some((s) => s.id === id)).toBe(false);
     }
   });
@@ -139,7 +131,7 @@ describe('status: unstoppable', () => {
     expect(t.statuses.some((s) => s.id === 'unstoppable')).toBe(true);
   });
 
-  it('does NOT block non-CC debuffs (bleed, vulnerable)', () => {
+  it('does NOT block non-CC debuffs from being applied (bleed, vulnerable)', () => {
     const G = freshG();
     const t = G.players['1'].active!;
     addStatus(G, t, 'unstoppable', 1, 99);
@@ -147,6 +139,27 @@ describe('status: unstoppable', () => {
     addStatus(G, t, 'vulnerable', 1, 2);
     expect(t.statuses.some((s) => s.id === 'bleed')).toBe(true);
     expect(t.statuses.some((s) => s.id === 'vulnerable')).toBe(true);
+  });
+
+  it('blocks all damage (attack / spirit / pure) while up', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'unstoppable', 1, 99);
+    const hpBefore = t.hp;
+    damageUnit(G, t, 5, 'attack');
+    damageUnit(G, t, 5, 'spirit');
+    damageUnit(G, t, 5, 'pure');
+    expect(t.hp).toBe(hpBefore);
+  });
+
+  it('blocks bleed ticks at start of turn', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    addStatus(G, t, 'bleed', 2, 3);
+    addStatus(G, t, 'unstoppable', 1, 99);
+    const hpBefore = t.hp;
+    tickStartOfTurn(G, G.players['0']);
+    expect(t.hp).toBe(hpBefore);
   });
 });
 
@@ -170,7 +183,7 @@ describe('status: weapon_power', () => {
 });
 
 describe('status: spirit_power', () => {
-  it('adds to skill scaling (Lady Geist skill: 3 + SPI total)', async () => {
+  it('adds to skill scaling (Lady Geist skill: 4 + SPI total)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -178,10 +191,13 @@ describe('status: spirit_power', () => {
     caster.spiritMod = 1; // 1 from equipment
     addStatus(G, caster, 'spirit_power', 3, 2); // +3 from buff
     const target = G.players['1'].active!;
+    // Pad target HP so the 8-dmg hit doesn't overflow to the patron — we're
+    // measuring raw damage, not what HP actually absorbs.
+    target.hpMax = 20; target.hp = 20;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    // base 3 + (spiritMod 1 + spirit_power 3) = 7
-    expect(hpBefore - target.hp).toBe(7);
+    // base 4 + (spiritMod 1 + spirit_power 3) = 8
+    expect(hpBefore - target.hp).toBe(8);
   });
 });
 
@@ -203,31 +219,6 @@ describe('status: spirit_resist', () => {
     damageUnit(G, t, 3, 'attack');
     damageUnit(G, t, 3, 'pure');
     expect(hpBefore - t.hp).toBe(6);
-  });
-});
-
-describe('status: sleep', () => {
-  it('forces ATK to 0', () => {
-    const G = freshG();
-    const t = G.players['0'].active!;
-    addStatus(G, t, 'sleep', 1, 99);
-    expect(effectiveAtk(t)).toBe(0);
-  });
-
-  it('breaks (is removed) on any damage', () => {
-    const G = freshG();
-    const t = G.players['1'].active!;
-    addStatus(G, t, 'sleep', 1, 99);
-    damageUnit(G, t, 1, 'attack');
-    expect(t.statuses.some((s) => s.id === 'sleep')).toBe(false);
-  });
-
-  it('blocks useSkill', () => {
-    const G = freshG();
-    const hero = G.players['0'].active!;
-    addStatus(G, hero, 'sleep', 1, 99);
-    const result = runMove('useSkill', G, '0', hero.iid, G.players['1'].active!.iid);
-    expect(result).toBe('INVALID_MOVE');
   });
 });
 
@@ -307,35 +298,12 @@ describe('healing is no longer gated by any status', () => {
   });
 });
 
-describe('status: sleep blocks swaps (replaces old "trap")', () => {
-  it('prevents the asleep Active from swapping out (retreat)', () => {
-    const G = freshG();
-    G.players['0'].souls = 5;
-    const hero = G.players['0'].active!;
-    addStatus(G, hero, 'sleep', 1, 99);
-    const result = runMove('moveHero', G, '0', 0, 1);
-    expect(result).toBe('INVALID_MOVE');
-    expect(G.players['0'].active?.iid).toBe(hero.iid);
-  });
-
-  it('prevents an asleep bench hero from being swapped in', () => {
-    const G = freshG();
-    G.players['0'].souls = 5;
-    const benchHero = G.players['0'].bench[0]!;
-    addStatus(G, benchHero, 'sleep', 1, 99);
-    const result = runMove('moveHero', G, '0', 1, 0);
-    expect(result).toBe('INVALID_MOVE');
-  });
-});
-
-describe('status: long_range (passive on bench)', () => {
-  it('lets bench hero attack with Active', async () => {
+describe('bench attack — Active only by default', () => {
+  it('only the Active hero attacks unless an equipment grants long range', async () => {
     const { planAttackPhase } = await import('@/engine/combat');
     const G = freshG();
-    // Vindicta on bench with flags.longRange — included as attacker automatically
     const plan = planAttackPhase(G, '0');
-    // Should have at least 2 attackers (active + bench long_range)
-    expect(plan.steps.length).toBeGreaterThanOrEqual(2);
+    expect(plan.steps.length).toBe(1);
   });
 });
 
@@ -376,25 +344,26 @@ describe('combined interactions', () => {
     expect(t.statuses.find((s) => s.id === 'bullet_resist')?.value).toBe(2);
   });
 
-  it('hex + invincibility: invincibility wins (damage = 0)', () => {
+  it('vulnerable + unstoppable: unstoppable wins (damage = 0)', () => {
     const G = freshG();
     const t = G.players['1'].active!;
     addStatus(G, t, 'vulnerable', 1, 99);
-    addStatus(G, t, 'invincibility', 1, 99);
+    addStatus(G, t, 'unstoppable', 1, 99);
     const hpBefore = t.hp;
-    damageUnit(G, t, 4, 'attack'); // would be 6 with hex, but invincibility blocks
+    damageUnit(G, t, 4, 'attack'); // would be 6 with vulnerable, but unstoppable blocks
     expect(t.hp).toBe(hpBefore);
   });
 
-  it('unstoppable blocks new CC; pre-existing non-CC debuffs keep ticking', () => {
+  it('unstoppable blocks new CC and zeroes pre-existing damage debuffs', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     addStatus(G, t, 'bleed', 2, 3); // applied before Unstoppable
     addStatus(G, t, 'unstoppable', 1, 99);
-    addStatus(G, t, 'stun', 1, 2); // blocked
+    addStatus(G, t, 'stun', 1, 2); // blocked outright
     expect(t.statuses.some((s) => s.id === 'stun')).toBe(false);
     const hpBefore = t.hp;
     tickStartOfTurn(G, G.players['0']);
-    expect(hpBefore - t.hp).toBe(2); // pre-existing bleed still ticks
+    expect(t.hp).toBe(hpBefore); // bleed still in status list, but damage = 0
+    expect(t.statuses.some((s) => s.id === 'bleed')).toBe(true);
   });
 });

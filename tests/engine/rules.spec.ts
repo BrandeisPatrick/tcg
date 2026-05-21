@@ -55,24 +55,25 @@ describe('rule: only one skill per player per turn', () => {
 });
 
 describe('rule: hero respawn after KO', () => {
-  it("a KO'd hero stays in slot as a corpse (not in discard)", () => {
+  it("a KO'd hero stays on the board as a corpse (not in discard)", () => {
     const G = freshG();
-    const hero = G.players['1'].active!;
+    // Use P0 so we don't trigger AI auto-promote (which moves the corpse to
+    // the bench). The "corpse stays on board" rule is what's under test here.
+    const hero = G.players['0'].active!;
     const targetIid = hero.iid;
     damageUnit(G, hero, 9999, 'pure');
-    reapDead(G, G.players['1']);
-    // Corpse stays in active slot — UI greys it out via respawnTurnsLeft.
-    expect(G.players['1'].discard.some((c: any) => c.iid === targetIid)).toBe(false);
-    expect(G.players['1'].active?.iid).toBe(targetIid);
-    expect((G.players['1'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
+    reapDead(G, G.players['0']);
+    expect(G.players['0'].discard.some((c: any) => c.iid === targetIid)).toBe(false);
+    expect(G.players['0'].active?.iid).toBe(targetIid);
+    expect((G.players['0'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
   });
 
   it('respawning hero returns to life after RESPAWN_TURNS', () => {
     const G = freshG();
-    const hero = G.players['1'].active!;
+    const hero = G.players['0'].active!;
     damageUnit(G, hero, 9999, 'pure');
-    reapDead(G, G.players['1']);
-    const corpse = G.players['1'].active!;
+    reapDead(G, G.players['0']);
+    const corpse = G.players['0'].active!;
     const start = corpse.respawnTurnsLeft ?? 0;
     expect(start).toBeGreaterThan(0);
     // Simulate tickRespawn: decrement until 0 and verify restoration.
@@ -96,5 +97,54 @@ describe('rule: hero respawn after KO', () => {
     damageUnit(G, target, 8, 'pure'); // 3 to KO, 5 overflow
     expect(target.hp).toBe(0);
     expect(G.players['1'].hp).toBe(beforePatron - 5);
+  });
+
+  it("AI auto-promotes the strongest bench hero when its Active dies", () => {
+    const G = freshG();
+    const aiActive = G.players['1'].active!;
+    const aiActiveIid = aiActive.iid;
+    // Pick the strongest bench hero by HP for verification.
+    const benchAlive = G.players['1'].bench.filter(Boolean) as any[];
+    benchAlive.sort((a, b) => b.hp - a.hp);
+    const expectedPromoted = benchAlive[0];
+    expect(expectedPromoted).toBeDefined();
+
+    damageUnit(G, aiActive, 9999, 'pure');
+    reapDead(G, G.players['1']);
+
+    // Active slot now holds the promoted hero, not the corpse.
+    expect(G.players['1'].active?.iid).toBe(expectedPromoted.iid);
+    expect((G.players['1'].active?.respawnTurnsLeft ?? 0)).toBe(0);
+    // The corpse moved to a bench slot and kept its respawn countdown.
+    const corpseOnBench = G.players['1'].bench.find((b) => b?.iid === aiActiveIid);
+    expect(corpseOnBench).toBeDefined();
+    expect((corpseOnBench!.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
+  });
+
+  it("AI's Active stays a corpse when no bench hero can be promoted", () => {
+    const G = freshG();
+    // Empty AI bench so no candidates remain.
+    G.players['1'].bench = [null, null, null];
+    const aiActive = G.players['1'].active!;
+    damageUnit(G, aiActive, 9999, 'pure');
+    reapDead(G, G.players['1']);
+    // No swap — corpse stays in slot.
+    expect(G.players['1'].active?.iid).toBe(aiActive.iid);
+    expect((G.players['1'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
+  });
+
+  it("promoteToActive works during the OPPONENT's turn (cross-turn callable)", () => {
+    const G = freshG();
+    // Kill P0's active so they're a corpse and need to promote.
+    const p0Active = G.players['0'].active!;
+    damageUnit(G, p0Active, 9999, 'pure');
+    reapDead(G, G.players['0']);
+    expect((G.players['0'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
+    const benchPick = G.players['0'].bench.find((b) => b)!;
+    // Dispatch the promote move with playerID='1' (opponent's turn). It must
+    // still act on P0's board — the owning player is derived from the iid.
+    const r = runMove('promoteToActive', G, '1', benchPick.iid);
+    expect(r).not.toBe('INVALID_MOVE');
+    expect(G.players['0'].active?.iid).toBe(benchPick.iid);
   });
 });

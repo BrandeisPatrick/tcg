@@ -1,10 +1,13 @@
 import type { CardInstance, DamageType, GameState, PlayerID, PlayerState } from './types';
 import { findCardOnBoard, pushLog } from './util';
 import { CARDS_BY_ID } from '@/cards';
+import { currentCast } from './castContext';
+import { fireEquipmentTriggers } from './equipmentDispatch';
+import { grantExp } from './expSystem';
 
 // Damage routing for a unit. Returns the damage actually dealt after mitigation.
-// `sourceName` is optional — when provided it's included in the log entry so the
-// player can see who attacked whom (e.g., "Haze → Abrams: 4 attack dmg (8 HP)").
+// `sourceName`, if omitted, is resolved from the current cast context so skill /
+// spell / ult damage gets "Caster → Target" attribution in the log automatically.
 export function damageUnit(G: GameState, target: CardInstance, amount: number, type: DamageType, sourceName?: string): number {
   if (amount <= 0) return 0;
   // Corpses can't take more damage — they're already KO'd waiting to respawn.
@@ -14,14 +17,13 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   if (type === 'attack' && target.cardId === 'hero_vindicta') {
     amount = Math.max(0, amount - 1);
   }
-  // Invincibility is granted by a small set of cards (Ethereal Shift, etc.) and
-  // negates all damage. The status is not user-visible — see card text + portrait aura.
-  if (target.statuses.some((s) => s.id === 'invincibility')) return 0;
+  if (target.statuses.some((s) => s.id === 'unstoppable')) return 0;
 
   let dmg = amount;
 
-  // Vulnerable: +2 dmg taken from all sources.
-  if (target.statuses.some((s) => s.id === 'vulnerable')) dmg += 2;
+  // Vulnerable: takes +N damage from all sources (N = status value).
+  const vuln = target.statuses.find((s) => s.id === 'vulnerable');
+  if (vuln) dmg += vuln.value;
 
   // Bullet Resist reduces bullet (attack) damage only.
   if (type === 'attack') {
@@ -50,28 +52,59 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
 
   if (dmg <= 0) return 0;
 
+  const hpBefore = target.hp;
   target.hp -= dmg;
 
-  // Sleep wakes up on any damage.
-  if (target.statuses.some((s) => s.id === 'sleep')) {
-    target.statuses = target.statuses.filter((s) => s.id !== 'sleep');
-    pushLog(G, `${CARDS_BY_ID[target.cardId]?.name ?? target.cardId} woke from Sleep.`);
-  }
-
   const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
-  const arrow = sourceName ? `${sourceName} → ${targetName}` : targetName;
-  // Display "bullet" instead of the engine-internal "attack" damage type.
+  let effectiveSource = sourceName;
+  if (!effectiveSource) {
+    const cast = currentCast();
+    // Procs (kind='proc') already pass their own sourceName; only fill in for
+    // skill/spell/ult/attack frames.
+    if (cast && cast.source && cast.kind !== 'proc') {
+      effectiveSource = CARDS_BY_ID[cast.source.cardId]?.name ?? cast.source.cardId;
+    }
+  }
+  const arrow = effectiveSource ? `${effectiveSource} → ${targetName}` : targetName;
   const typeLabel = type === 'attack' ? 'bullet' : type;
   pushLog(G, `${arrow}: ${dmg} ${typeLabel} dmg (${targetName} ${target.hp} HP).`);
 
-  // Overflow: any damage in excess of the hero's HP spills into the owner's Patron.
-  // This is what keeps games finishing once respawn is in play — pushing past a KO
-  // hits the player directly (Deadlock: pushing into the base).
+  // Overflow past 0 HP spills to the owner's Patron. Without this, the
+  // respawn loop would let games drag past natural finish.
   if (target.hp < 0) {
     const overflow = -target.hp;
     target.hp = 0;
     damagePlayer(G, target.ownerId, overflow);
     pushLog(G, `Overflow: ${overflow} dmg spills to P${target.ownerId}'s patron.`);
+  }
+
+  // Equipment trigger dispatch — routed via a dispatcher to avoid a
+  // damage.ts ⇄ abilities/index.ts circular import.
+  const cast = currentCast();
+  if (cast && cast.source) {
+    if (cast.kind === 'skill' || cast.kind === 'spell' || cast.kind === 'ult') {
+      fireEquipmentTriggers(G, cast.source, 'onBearerSkillDamage', { movingPlayer: cast.source.ownerId }, target);
+    }
+    if (cast.kind === 'attack') {
+      fireEquipmentTriggers(G, cast.source, 'onAttack', { movingPlayer: cast.source.ownerId }, target);
+    }
+  }
+
+  // Damaged-by-type triggers — fired on the *target*, regardless of who or
+  // what dealt the damage. Bullet Shield / Spirit Shield read these to grant
+  // the bearer a reactive Shield after eating a bullet / spirit hit.
+  if (type === 'attack') {
+    fireEquipmentTriggers(G, target, 'onBearerDamagedByBullet', { movingPlayer: target.ownerId });
+  } else if (type === 'spirit') {
+    fireEquipmentTriggers(G, target, 'onBearerDamagedBySpirit', { movingPlayer: target.ownerId });
+  }
+
+  // Kill blow → +1 exp to the killer hero (only the hit that drops hp to 0).
+  if (hpBefore > 0 && target.hp <= 0 && cast && cast.source) {
+    const srcData = CARDS_BY_ID[cast.source.cardId];
+    if (srcData?.type === 'hero') {
+      grantExp(G, cast.source, 1);
+    }
   }
 
   return dmg;
@@ -85,12 +118,28 @@ export function damagePlayer(G: GameState, pid: PlayerID, amount: number): numbe
   return amount;
 }
 
-export function healUnit(G: GameState, target: CardInstance, amount: number): number {
+/** Heal a unit. `sourceName` falls back to the cast-context caster for logging. */
+export function healUnit(G: GameState, target: CardInstance, amount: number, sourceName?: string): number {
   if (amount <= 0) return 0;
+  if ((target.respawnTurnsLeft ?? 0) > 0) return 0;
+  const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
+  if (target.statuses.some((s) => s.id === 'healing_blocked')) {
+    pushLog(G, `${targetName} could not be healed (Healing Blocked).`);
+    return 0;
+  }
   const healed = Math.min(amount, target.hpMax - target.hp);
   target.hp += healed;
   if (healed > 0) {
-    pushLog(G, `${CARDS_BY_ID[target.cardId]?.name ?? target.cardId} healed ${healed}.`);
+    let effectiveSource = sourceName;
+    if (!effectiveSource) {
+      const cast = currentCast();
+      if (cast && cast.source && cast.kind !== 'proc') {
+        const srcName = CARDS_BY_ID[cast.source.cardId]?.name ?? cast.source.cardId;
+        if (srcName !== targetName) effectiveSource = srcName;
+      }
+    }
+    const tag = effectiveSource ? ` (${effectiveSource})` : '';
+    pushLog(G, `${targetName} healed ${healed}${tag}.`);
   }
   return healed;
 }
@@ -101,38 +150,22 @@ export function healUnit(G: GameState, target: CardInstance, amount: number): nu
 export const RESPAWN_TURNS = 3;
 
 /**
- * Process a hero's death IN PLACE: drop attached gear, clear statuses + mods,
- * arm the respawn timer. The hero stays in its slot (active or bench) — the UI
- * renders it greyed out with a countdown until `respawnTurnsLeft` reaches 0,
- * at which point `tickRespawn` brings them back to life.
+ * Process a hero's death in place: wipe active statuses, arm the respawn
+ * timer, charge the death cost. Level / exp / equipment / atkMod / spiritMod /
+ * hpMax all persist — only the live combat state (hp, statuses, turn flags)
+ * resets. `tickRespawn` brings the hero back at full hp when the timer ticks down.
  */
 function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} fell.`);
-  // KO bounty: opponent of the fallen hero's owner gains +1 soul (hard-capped)
-  // and the fallen hero's patron takes 1 splash damage (decisiveness — makes
-  // sure heroes dying actually presses the game toward a conclusion instead
-  // of stalling for 60 turns).
   const SOULS_MAX = 7;
   const oppId: PlayerID = ps.id === '0' ? '1' : '0';
   const before = G.players[oppId].souls;
   G.players[oppId].souls = Math.min(SOULS_MAX, before + 1);
   if (G.players[oppId].souls > before) pushLog(G, `P${oppId} +1 Souls (KO bounty).`);
   damagePlayer(G, ps.id, 1);
-  // Attached equipment is dropped to discard pile on death.
-  if (hero.attached && hero.attached.length > 0) {
-    for (const eq of hero.attached) {
-      eq.zone = 'discard';
-      eq.attachedTo = undefined;
-      ps.discard.push(eq);
-    }
-    hero.attached = [];
-  }
-  // Reset state so the corpse can't be statused, doesn't carry buffs, etc.
   hero.statuses = [];
-  hero.atkMod = 0;
-  hero.spiritMod = 0;
   hero.skillUsedThisTurn = false;
-  hero.exhausted = true; // can't attack while dead
+  hero.exhausted = true;
   hero.hp = 0;
   hero.respawnTurnsLeft = RESPAWN_TURNS;
   pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} respawning in (${RESPAWN_TURNS}).`);
@@ -141,6 +174,10 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
 /**
  * Sweep a player's board for heroes that just hit 0 HP. The hero stays in its
  * slot — `killInPlace` arms the respawn timer instead of moving them out.
+ * Then, for AI (player '1'), immediately auto-promote a bench hero into the
+ * vacated Active slot so the engine never sits idle waiting on AI's turn to
+ * pick a replacement. Player '0' (the human) keeps the manual choice via the
+ * PromotionOverlay.
  */
 export function reapDead(G: GameState, ps: PlayerState) {
   if (ps.active && ps.active.hp <= 0 && ps.active.respawnTurnsLeft == null) {
@@ -151,4 +188,35 @@ export function reapDead(G: GameState, ps: PlayerState) {
       killInPlace(G, ps, b);
     }
   }
+  if (ps.id === '1') autoPromoteAi(G, ps);
+}
+
+/**
+ * If AI's Active is a corpse and there's an alive bench hero, swap the
+ * strongest bench hero into Active. Heuristic: highest current HP. The dying
+ * corpse takes the bench slot the new Active vacated and continues its
+ * respawn countdown there.
+ */
+function autoPromoteAi(G: GameState, ps: PlayerState) {
+  if (!ps.active || (ps.active.respawnTurnsLeft ?? 0) === 0) return;
+  let bestIdx = -1;
+  let bestHp = -1;
+  for (let i = 0; i < ps.bench.length; i++) {
+    const b = ps.bench[i];
+    if (!b || (b.respawnTurnsLeft ?? 0) > 0) continue;
+    const d = CARDS_BY_ID[b.cardId];
+    if (d?.type !== 'hero' || d.flags?.benchOnly) continue;
+    if (b.hp > bestHp) { bestHp = b.hp; bestIdx = i; }
+  }
+  if (bestIdx === -1) return;
+  const benchHero = ps.bench[bestIdx]!;
+  const corpse = ps.active;
+  ps.active = benchHero;
+  benchHero.zone = 'active';
+  benchHero.slot = 0;
+  ps.bench[bestIdx] = corpse;
+  corpse.zone = 'bench';
+  corpse.slot = (bestIdx + 1) as 1 | 2 | 3;
+  const data = CARDS_BY_ID[benchHero.cardId];
+  pushLog(G, `P${ps.id} promoted ${data?.name ?? benchHero.cardId} to Active.`);
 }

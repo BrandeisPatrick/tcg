@@ -62,7 +62,9 @@ export const palette = {
 
 export const fonts = {
   ui:      '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  display: '"Exo 2 Variable", "Inter Variable", -apple-system, sans-serif',
+  /** @deprecated Use `fonts.ui` everywhere. Kept defined so the import keeps
+   *  resolving while remaining usages get cleaned up; do not introduce new ones. */
+  display: '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   mono:    'ui-monospace, "SF Mono", Menlo, monospace',
 } as const;
 
@@ -106,24 +108,48 @@ export function typeTint(t: 'hero' | 'spell' | 'equipment' | 'ultimate') {
 }
 
 /**
- * UI typography — only THREE styles outside of cards.
+ * UI typography — one-family system. Hierarchy by color + weight; size used
+ * sparingly as the contrast register.
  *
- * Use these tokens (spread onto `style`) instead of writing inline font props.
- * Color is intentionally omitted from each token so callers can override per context.
+ * CONSTRAINTS (enforced by code review, not by compiler):
+ *   - Family: ONLY `fonts.ui` (Inter Variable). No `fonts.display`, no hardcoded family.
+ *   - Weights: ONLY `400` (regular) or `700` (bold).
+ *   - Transforms: NEVER `textTransform: 'uppercase'`, NEVER non-zero `letterSpacing`,
+ *     NEVER `fontStyle: 'italic'`.
  *
- * - `text.label`   uppercase display label (panel headers, badges, buttons, section titles)
- * - `text.body`    sentence-case prose (log entries, hints, descriptions, meta info)
- * - `text.numeric` tabular display numbers (HP, souls, turn counter, stat readouts)
+ * Approved size scale (use the nearest tier, do not invent new sizes):
+ *   - 11  — chrome / metadata (DLK identifier line, hand-card body)
+ *   - 12  — default (labels, ribbons, names, body, log entries)
+ *   - 14  — full-card name (preview / hover surface)
+ *   - 16  — panel counters (patron HP, Souls, turn pip, respawn count, hand count)
+ *   - 22  — large display (in-game stats: ATK/HP/SPI on hero detail + promotion modal,
+ *           KO line, level ring centroid, ULT badge)
+ *   - 28  — damage popup (the hit-landed beat; bigger than other display to read as IMPACT)
  *
- * Card surfaces (CardFrame, HeroSlot, StatusIcon) are exempt — their visual
- * grammar is the bitmap-card style and uses its own type scale.
+ * Tokens (spread onto `style`; override `fontSize` inline where the scale demands):
+ *   - `text.label`   12 / 700 — bold label
+ *   - `text.body`    12 / 400 — regular prose
+ *   - `text.numeric` 22 / 700 — tabular large display (override to 16 for panel counters)
  */
+/** Shared hero stat-pair style (ATK / Lv / HP). Spread onto the inline-flex
+ *  container; only size + colour vary per surface. */
+export const statRow = {
+  pair: (sizePx: number) => ({
+    display: 'inline-flex' as const,
+    alignItems: 'center' as const,
+    gap: Math.max(2, Math.round(sizePx * 0.22)),
+    fontFamily: fonts.ui,
+    fontWeight: 700,
+    fontSize: sizePx,
+    fontVariantNumeric: 'tabular-nums' as const,
+    lineHeight: 1,
+  }),
+} as const;
+
 export const text = {
   label: {
-    // Single-family, sentence-case header. Same Inter family as body; bold +
-    // muted color carries the "label" role instead of uppercase/letter-spacing.
     fontFamily: fonts.ui,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 700,
     letterSpacing: '0',
     textTransform: 'none' as const,
@@ -131,7 +157,7 @@ export const text = {
   },
   body: {
     fontFamily: fonts.ui,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: 400,
     letterSpacing: '0',
     textTransform: 'none' as const,
@@ -139,8 +165,8 @@ export const text = {
   },
   numeric: {
     fontFamily: fonts.ui,
-    fontSize: 16,
-    fontWeight: 800,
+    fontSize: 22,
+    fontWeight: 700,
     letterSpacing: '0',
     fontVariantNumeric: 'tabular-nums' as const,
     lineHeight: 1,

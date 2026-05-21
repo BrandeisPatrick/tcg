@@ -61,7 +61,7 @@ SP_MAP = {
     'slowing_hex':          'Slowing Hex',
     'curse':                'Cursed Relic',         # renamed in canon
     'divine_barrier':       'Divine Barrier',       # active: cast shield
-    'soul_rebirth':         'Rejuvenating Aurora',  # flavor match; TCG-original mechanic
+    'soul_rebirth':         'Soul Rebirth',         # canon-faithful: passive respawn-on-death (canon is T4 passive equipment)
     'rusted_barrel':        'Rusted Barrel',        # T1 spirit active (NEW)
     'golden_goose_egg':     'Golden Goose Egg',     # T1 spirit active (NEW)
 }

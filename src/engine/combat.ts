@@ -3,6 +3,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { damageUnit, damagePlayer, reapDead } from './damage';
 import { otherPlayer, effectiveAtk, pushLog } from './util';
 import { getAbility } from '@/abilities';
+import { withCast } from './castContext';
 
 // ---------- Attack plan (pure, for UI prediction + animation) ----------
 
@@ -23,6 +24,14 @@ export interface AttackStep {
   predictedKO: boolean;
   /** Short label for any bonus that contributed (e.g., "Haze passive vs Stun: +2"). */
   bonusLabel?: string;
+  /** Retaliation damage dealt by the defender BACK to the attacker (mutual-damage rule).
+   *  Only populated when `atk` is the rival's active hero — bench attackers (Mystic
+   *  Expansion bearers, etc.) don't trigger retaliation. 0 means no retaliation. */
+  retaliationDamage: number;
+  /** Predicted HP on the attacker after retaliation lands. null if no retaliation. */
+  attackerHpAfter: number | null;
+  /** True if retaliation will KO the attacker. */
+  attackerKO: boolean;
 }
 
 export interface AttackPlan {
@@ -57,14 +66,9 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
   // A corpse active (respawning) isn't a valid bullet sponge — attacks pass to face.
   const target = defender.active && (defender.active.respawnTurnsLeft ?? 0) === 0 ? defender.active : null;
 
-  // Running simulation state (without mutating G).
+  // Running simulation state for the DEFENDER (without mutating G).
   let simHp = target?.hp ?? 0;
   let simShield = target?.statuses.find((s) => s.id === 'shield')?.value ?? 0;
-  const bulletResist = target?.statuses.find((s) => s.id === 'bullet_resist')?.value ?? 0;
-  const spiritResist = target?.statuses.find((s) => s.id === 'spirit_resist')?.value ?? 0;
-  const hasInvinc = !!target?.statuses.some((s) => s.id === 'invincibility');
-  const vulnerable = !!target?.statuses.some((s) => s.id === 'vulnerable');
-  const targetIsVindicta = target?.cardId === 'hero_vindicta';
 
   const steps: AttackStep[] = [];
   let damageToActive = 0;
@@ -77,36 +81,40 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
     if (dmg <= 0) continue;
 
     if (target) {
-      // Mirror damageUnit's mitigation pipeline so the predicted HP matches reality.
-      let final = dmg;
       const wraithSplit = atk.cardId === 'hero_wraith';
-      if (vulnerable) final += 2;
-      if (hasInvinc) final = 0;
-      if (final > 0) {
-        if (wraithSplit) {
-          // Split half bullet / half spirit. Vindicta's -1 only applies to the bullet half.
-          const half1 = Math.max(0, Math.ceil(final / 2) - (targetIsVindicta ? 1 : 0));
-          const half2 = Math.floor(final / 2);
-          const bulletHalf = Math.max(0, half1 - bulletResist);
-          const spiritHalf = Math.max(0, half2 - spiritResist);
-          final = bulletHalf + spiritHalf;
-        } else {
-          // Bullet Resist reduces attack-type damage; Vindicta further reduces by 1.
-          if (targetIsVindicta) final = Math.max(0, final - 1);
-          final = Math.max(0, final - bulletResist);
-        }
-      }
-      // Shield absorbs next.
-      if (final > 0 && simShield > 0) {
-        const absorb = Math.min(simShield, final);
-        simShield -= absorb;
-        final -= absorb;
-      }
+      const m = simulateAttackMitigation(dmg, target, simShield, wraithSplit);
+      simShield = m.shieldRemaining;
+      const final = m.final;
 
       const predictedHp = simHp - final;
       const ko = predictedHp <= 0;
       // Overflow: anything past 0 HP spills to the defender's patron.
       const overflow = ko ? -predictedHp : 0;
+
+      // Retaliation: only the defender's Active retaliates, and only against
+      // the rival's active attacker. Bench attackers (Mystic Expansion) swing
+      // freely with no return damage.
+      const isActiveAttacker = atk === attacker.active;
+      let retaliationDamage = 0;
+      let attackerHpAfter: number | null = null;
+      let attackerKO = false;
+      if (isActiveAttacker) {
+        const { dmg: rawRetal } = effectiveAttackDamage(target, atk);
+        if (rawRetal > 0) {
+          const rm = simulateAttackMitigation(
+            rawRetal,
+            atk,
+            atk.statuses.find((s) => s.id === 'shield')?.value ?? 0,
+            target.cardId === 'hero_wraith',
+          );
+          retaliationDamage = rm.final;
+          const atkHp = atk.hp - retaliationDamage;
+          attackerHpAfter = Math.max(0, atkHp);
+          attackerKO = atkHp <= 0;
+        } else {
+          attackerHpAfter = atk.hp;
+        }
+      }
 
       steps.push({
         attackerIid: atk.iid,
@@ -118,13 +126,16 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
         predictedHpAfter: Math.max(0, predictedHp),
         predictedKO: ko,
         bonusLabel,
+        retaliationDamage,
+        attackerHpAfter,
+        attackerKO,
       });
       simHp = Math.max(0, predictedHp);
       damageToActive += final;
       if (overflow > 0) damageToFace += overflow;
       if (ko) defenderActiveKO = target.iid;
     } else {
-      // No defender Active → face damage.
+      // No defender Active → face damage. Face attacks don't retaliate.
       steps.push({
         attackerIid: atk.iid,
         attackerName: CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId,
@@ -135,12 +146,54 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
         predictedHpAfter: null,
         predictedKO: false,
         bonusLabel,
+        retaliationDamage: 0,
+        attackerHpAfter: null,
+        attackerKO: false,
       });
       damageToFace += dmg;
     }
   }
 
   return { attackerId, defenderId, steps, damageToActive, damageToFace, defenderActiveKO };
+}
+
+/** Pure-function mitigation simulator shared between the planner's attack and
+ *  retaliation paths. Mirrors damageUnit's pipeline (Vulnerable, Unstoppable,
+ *  Vindicta -1 bullet, Bullet Resist, Wraith half-split, Shield). */
+function simulateAttackMitigation(
+  rawDmg: number,
+  target: CardInstance,
+  shieldValue: number,
+  wraithSplit: boolean,
+): { final: number; shieldRemaining: number } {
+  const bulletResist = target.statuses.find((s) => s.id === 'bullet_resist')?.value ?? 0;
+  const spiritResist = target.statuses.find((s) => s.id === 'spirit_resist')?.value ?? 0;
+  const hasInvinc = target.statuses.some((s) => s.id === 'unstoppable');
+  const vulnerable = target.statuses.some((s) => s.id === 'vulnerable');
+  const targetIsVindicta = target.cardId === 'hero_vindicta';
+
+  let final = rawDmg;
+  if (vulnerable) final += 2;
+  if (hasInvinc) final = 0;
+  if (final > 0) {
+    if (wraithSplit) {
+      const half1 = Math.max(0, Math.ceil(final / 2) - (targetIsVindicta ? 1 : 0));
+      const half2 = Math.floor(final / 2);
+      const bulletHalf = Math.max(0, half1 - bulletResist);
+      const spiritHalf = Math.max(0, half2 - spiritResist);
+      final = bulletHalf + spiritHalf;
+    } else {
+      if (targetIsVindicta) final = Math.max(0, final - 1);
+      final = Math.max(0, final - bulletResist);
+    }
+  }
+  let shieldRemaining = shieldValue;
+  if (final > 0 && shieldRemaining > 0) {
+    const absorb = Math.min(shieldRemaining, final);
+    shieldRemaining -= absorb;
+    final -= absorb;
+  }
+  return { final, shieldRemaining };
 }
 
 // ---------- Engine resolver (mutating) ----------
@@ -165,21 +218,58 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
 
     if (target) {
       const atkName = CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId;
-      // Wraith passive: split half bullet / half spirit. Pierces single-type resists.
-      if (atk.cardId === 'hero_wraith') {
-        const half1 = Math.ceil(dmg / 2);
-        const half2 = Math.floor(dmg / 2);
-        if (half1 > 0) damageUnit(G, target, half1, 'attack', atkName);
-        if (half2 > 0) damageUnit(G, target, half2, 'spirit', atkName);
-      } else {
-        damageUnit(G, target, dmg, 'attack', atkName);
-      }
-      // Trigger any onAttack ability on the attacker's hero.
+      // Mutual-damage rule: when the rival's Active is the attacker, the
+      // defender's Active retaliates with their full ATK. Bench attackers
+      // (Mystic Expansion bearers) don't trigger retaliation. Damage in both
+      // directions is computed BEFORE either lands, so a KO on one side
+      // doesn't discount the other side's swing.
+      const isActiveAttacker = atk === attacker.active;
+      const { dmg: retalDmg } = isActiveAttacker
+        ? effectiveAttackDamage(target, atk)
+        : { dmg: 0 };
+
+      // ---- Apply the attacker's swing first (existing pipeline). ----
+      withCast(atk, 'attack', () => {
+        if (atk.cardId === 'hero_wraith') {
+          const half1 = Math.ceil(dmg / 2);
+          const half2 = Math.floor(dmg / 2);
+          if (half1 > 0) damageUnit(G, target, half1, 'attack', atkName);
+          if (half2 > 0) damageUnit(G, target, half2, 'spirit', atkName);
+        } else {
+          damageUnit(G, target, dmg, 'attack', atkName);
+        }
+      });
       const data = CARDS_BY_ID[atk.cardId];
       if (data?.type === 'hero') {
         for (const passId of data.passives ?? []) {
           const a = getAbility(passId);
           if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target });
+        }
+      }
+
+      // ---- Apply the defender's retaliation. ----
+      // Use the pre-attack rawDmg from above; defender's HP loss in the same
+      // exchange does not reduce their retaliation strength. Atk is the new
+      // damage recipient, so all its mitigation (shield, Vindicta -1, etc.)
+      // applies through damageUnit naturally.
+      if (retalDmg > 0 && atk.hp > 0) {
+        const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
+        withCast(target, 'attack', () => {
+          if (target.cardId === 'hero_wraith') {
+            const half1 = Math.ceil(retalDmg / 2);
+            const half2 = Math.floor(retalDmg / 2);
+            if (half1 > 0) damageUnit(G, atk, half1, 'attack', targetName);
+            if (half2 > 0) damageUnit(G, atk, half2, 'spirit', targetName);
+          } else {
+            damageUnit(G, atk, retalDmg, 'attack', targetName);
+          }
+        });
+        const tdata = CARDS_BY_ID[target.cardId];
+        if (tdata?.type === 'hero') {
+          for (const passId of tdata.passives ?? []) {
+            const a = getAbility(passId);
+            if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: defenderId }, { source: target, target: atk });
+          }
         }
       }
     } else {
@@ -189,8 +279,6 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
 
   reapDead(G, defender);
   reapDead(G, attacker);
-  // (No trailing "phase resolved" log — the per-hit entries above + the turn
-  // group header in the UI already convey what happened.)
 }
 
 // ---------- Helpers (shared between planner and resolver) ----------
@@ -200,9 +288,12 @@ function collectAttackers(attacker: { active: CardInstance | null; bench: (CardI
   if (attacker.active && (attacker.active.respawnTurnsLeft ?? 0) === 0) out.push(attacker.active);
   for (const b of attacker.bench) {
     if (!b || (b.respawnTurnsLeft ?? 0) > 0) continue;
-    // Either the bench hero has the long_range status applied, or it's an
-    // intrinsic flag on the hero data (Haze, Vindicta).
-    if (b.statuses.some((s) => s.id === 'long_range')) { out.push(b); continue; }
+    // Mystic Expansion equipment lets the bearer attack from the bench
+    // (canon: imbue with range). Same effect as the intrinsic flag — checked
+    // directly by attached cardId so no engine-level "long_range" status is
+    // needed.
+    if (b.attached?.some((eq) => eq.cardId === 'mystic_expansion')) { out.push(b); continue; }
+    // Intrinsic long range on the hero card (Vindicta's Flight, e.g.).
     const data = CARDS_BY_ID[b.cardId];
     if (data?.type === 'hero' && data.flags?.longRange) out.push(b);
   }
@@ -211,6 +302,10 @@ function collectAttackers(attacker: { active: CardInstance | null; bench: (CardI
 
 function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): { dmg: number; bonusLabel?: string } {
   let dmg = effectiveAtk(atk);
+  // Weaken: subtract the status value from the attacker's outgoing damage,
+  // floored at 0. Carried by Rusted Barrel and any future "ATK-down" effect.
+  const weak = atk.statuses.find((s) => s.id === 'weaken');
+  if (weak) dmg = Math.max(0, dmg - weak.value);
   let bonusLabel: string | undefined;
   // Haze passive: +2 vs Stunned target.
   const data = CARDS_BY_ID[atk.cardId];
@@ -222,16 +317,6 @@ function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): 
   if (data?.type === 'hero' && data.id === 'hero_drifter' && target && target.hp <= 4) {
     dmg += 3;
     bonusLabel = 'Drifter: Bloodscent +3';
-  }
-  // Headshot Booster equipment: bearer's attacks deal +2 vs Stunned targets.
-  // Generic, hero-agnostic version of Haze's Fixation — opens the same
-  // setup → finish pattern to any equipped hero.
-  if (
-    atk.attached?.some((eq) => eq.cardId === 'headshot_booster') &&
-    target?.statuses.some((s) => s.id === 'stun')
-  ) {
-    dmg += 2;
-    bonusLabel = 'Headshot Booster: +2 vs Stunned';
   }
   return { dmg, bonusLabel };
 }

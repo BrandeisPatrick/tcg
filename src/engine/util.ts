@@ -54,8 +54,8 @@ export function isRespawning(card: CardInstance): boolean {
 export function effectiveAtk(card: CardInstance): number {
   const data = CARDS_BY_ID[card.cardId];
   if (data?.type !== 'hero') return 0;
-  // Stun / Disarm / Sleep all silence basic attacks.
-  if (card.statuses.some((s) => s.id === 'stun' || s.id === 'disarm' || s.id === 'sleep')) return 0;
+  // Stun and Disarm both silence basic attacks.
+  if (card.statuses.some((s) => s.id === 'stun' || s.id === 'disarm')) return 0;
   // Sum any temporary Weapon Power buffs on top of base + equipment bonus.
   const weaponPower = card.statuses
     .filter((s) => s.id === 'weapon_power')
