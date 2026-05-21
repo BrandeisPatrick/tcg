@@ -20,7 +20,7 @@ export interface PendingPlay {
  *   attack arrow / KO / fell / overflow       → wine red
  *   healed / respawned / refresh              → success green
  *   gained <status> / cleansed / discharges   → spirit purple
- *   casts skill / played / promoted / unlocked → brass
+ *   used skill / played / promoted / unlocked → brass
  *   Mulligan / Turn marker                    → dim grey
  *   everything else                           → default text
  */
@@ -28,7 +28,7 @@ export function logEntryColor(s: string): string {
   if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return palette.danger;
   if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return palette.success;
   if (/gained |cleansed|discharges|resisted/i.test(s)) return palette.spirit;
-  if (/casts skill|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return palette.accent;
+  if (/used skill:|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return palette.accent;
   if (/Mulligan|---/i.test(s)) return palette.textFaint;
   return palette.text;
 }

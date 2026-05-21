@@ -27,14 +27,15 @@ import { getAbility, type TargetFilter } from '@/abilities';
 import { planAttackPhase, type AttackPlan } from '@/engine/combat';
 import { CombatChoreographer, type BeatImpact } from './effects/CombatChoreographer';
 import { UltMomentFlash } from './effects/UltMomentFlash';
-import { useCombatSpeed, COMBAT_SPEED_MS } from './hooks/useCombatSpeed';
+import { CardPlayFlash } from './effects/CardPlayFlash';
+import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { palette, fonts, radius, shadow, spring, text } from './tokens';
 import { SidePanel } from './side-panel/SidePanel';
 import { HandTray } from './board/HandTray';
 import { findOnBoard, filterAllows, type PendingPlay } from './helpers';
 
 // Animation / pacing constants.
-const FLOATER_CLEAR_MS = 950;   // how long damage/heal floaters stay on-screen
+const FLOATER_CLEAR_MS = 2000; // how long damage/heal floaters stay on-screen (long enough to read the number; calibrated to outlast the attack-beat impact phase)
 const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
 
 export function Board(props: BoardProps<GameState>) {
@@ -63,7 +64,6 @@ export function Board(props: BoardProps<GameState>) {
   // when a combat plan starts; cleared shortly after the engine resolves.
   const combatTargetIidsRef = useRef<Set<string>>(new Set());
   const combatTargetsClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [combatSpeed, setCombatSpeed] = useCombatSpeed();
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
@@ -148,8 +148,7 @@ export function Board(props: BoardProps<GameState>) {
   /** Intercept end-turn to play the attack-phase animation before the engine resolves. */
   const triggerEndTurn = useCallback(() => {
     if (combatPlan) return; // already animating
-    // Instant speed = no animation, just resolve.
-    if (combatSpeed === 'instant') { moves.endTurn(); return; }
+    if (G.action?.state === 'begin') return; // wait for card/skill reveal first
     const plan = planAttackPhase(G, ctx.currentPlayer as PlayerID);
     if (plan.steps.length === 0) {
       moves.endTurn();
@@ -177,7 +176,7 @@ export function Board(props: BoardProps<GameState>) {
       combatTargetsClearTimerRef.current = null;
     }
     setCombatPlan(plan);
-  }, [G, ctx.currentPlayer, combatPlan, moves, combatSpeed]);
+  }, [G, ctx.currentPlayer, combatPlan, moves, G.action]);
 
   // Safety net: if the previewed card (hand or attached equipment) is no longer present, drop the preview.
   useEffect(() => {
@@ -221,25 +220,36 @@ export function Board(props: BoardProps<GameState>) {
   }, [preview]);
 
   const prevHpRef = useRef<Map<string, number>>(new Map());
+  const prevHpMaxRef = useRef<Map<string, number>>(new Map());
   const prevPlayerHpRef = useRef<{ '0': number; '1': number }>({ '0': 20, '1': 20 });
 
   useEffect(() => {
     const additions: FloaterEntry[] = [];
     const newHp = new Map<string, number>();
+    const newHpMax = new Map<string, number>();
     const collect = (c: CardInstance | null) => {
       if (!c) return;
       newHp.set(c.iid, c.hp);
+      newHpMax.set(c.iid, c.hpMax);
       const prev = prevHpRef.current.get(c.iid);
+      const prevMax = prevHpMaxRef.current.get(c.iid);
       if (prev !== undefined && prev !== c.hp) {
         if (combatTargetIidsRef.current.has(c.iid)) return;
+        // Level-up grants +N HP and +N hpMax in lock-step (see expSystem.grantExp).
+        // That's a stat upgrade, not a heal — suppress the floater so it doesn't
+        // double up with the level-ring tick + log line. Only an hp increase
+        // that exceeds the hpMax increase is treated as a true heal.
+        const hpDelta = c.hp - prev;
+        const maxDelta = prevMax !== undefined ? c.hpMax - prevMax : 0;
+        if (hpDelta > 0 && maxDelta > 0 && hpDelta === maxDelta) return;
         const el = slotRefs.current.get(c.iid);
         const rect = el?.getBoundingClientRect();
         if (rect) {
           additions.push({
             id: `${c.iid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             iid: c.iid,
-            value: c.hp - prev,
-            kind: c.hp > prev ? 'heal' : 'attack',
+            value: hpDelta,
+            kind: hpDelta > 0 ? 'heal' : 'attack',
             // Anchor: TOP edge of the card. The floater renders just above and
             // floats further up. Identical position whether the trigger is
             // combat damage, a skill, a status tick, or a heal.
@@ -271,6 +281,7 @@ export function Board(props: BoardProps<GameState>) {
       }
     }
     prevHpRef.current = newHp;
+    prevHpMaxRef.current = newHpMax;
     if (additions.length) {
       setFloaters((cur) => [...cur, ...additions]);
       setTimeout(() => {
@@ -288,15 +299,18 @@ export function Board(props: BoardProps<GameState>) {
       setBannerText(isMy ? 'Your Move' : "Rival's Move");
       setBannerTone(isMy ? 'self' : 'opponent');
       setBannerVisible(true);
-      const t = setTimeout(() => setBannerVisible(false), 1600);
+      const t = setTimeout(() => setBannerVisible(false), 2200);
       lastTurnRef.current = cur;
       return () => clearTimeout(t);
     }
   }, [ctx.turn, ctx.currentPlayer]);
 
-  // AI loop. Pauses while combat is animating.
+  // AI loop. Pauses while combat is animating OR while a card-play / skill /
+  // ult reveal is in flight (so the AI doesn't fire its next move on top of
+  // its previous animation).
   useEffect(() => {
     if (ctx.gameover || ctx.currentPlayer !== '1' || combatPlan) return;
+    if (G.action?.state === 'begin') return;
     const t = setTimeout(() => {
       const opts = enumerateAIMoves(G, ctx);
       if (opts.length === 0) { triggerEndTurn(); return; }
@@ -315,7 +329,20 @@ export function Board(props: BoardProps<GameState>) {
       }
     }, AI_THINK_MS);
     return () => clearTimeout(t);
-  }, [ctx.currentPlayer, ctx.turn, G, moves, ctx, combatPlan, triggerEndTurn]);
+  }, [ctx.currentPlayer, ctx.turn, G, moves, ctx, combatPlan, triggerEndTurn, G.action]);
+
+  // Action reveal driver. When the engine sets G.action with state='begin'
+  // (after playCard / useSkill), schedule completeAction so the animation
+  // hold matches the dispatcher unlock. Player input is blocked elsewhere
+  // via `actionLocked` until this fires.
+  useEffect(() => {
+    if (G.action?.state !== 'begin') return;
+    const HOLD_MS = 2400;
+    const t = setTimeout(() => {
+      try { (moves as any).completeAction(); } catch {}
+    }, HOLD_MS);
+    return () => clearTimeout(t);
+  }, [G.action?.id, G.action?.state, moves]);
 
   const isTargetable = useCallback((card: CardInstance, owner: PlayerID): boolean => {
     if (!pending) return false;
@@ -334,8 +361,13 @@ export function Board(props: BoardProps<GameState>) {
     }
   }, [pending, me]);
 
+  /** True while a card-play / skill / ult reveal is mid-animation. Blocks
+   *  the player from queueing the next move until the action visibly resolves. */
+  const actionLocked = G.action?.state === 'begin';
+
   function onTapCardInHand(c: CardInstance) {
     if (!isMyTurn) return;
+    if (actionLocked) return;
     const data = CARDS_BY_ID[c.cardId];
     if (!data) return;
 
@@ -384,7 +416,7 @@ export function Board(props: BoardProps<GameState>) {
     // Corpses are non-interactive — they're respawning in their slot.
     if ((card.respawnTurnsLeft ?? 0) > 0) return;
     if (pending) {
-      if (!isMyTurn) return;
+      if (!isMyTurn || actionLocked) return;
       const valid = isTargetable(card, owner);
       if (!valid) { setPending(null); return; }
       if (pending.kind === 'playCard') {
@@ -407,6 +439,7 @@ export function Board(props: BoardProps<GameState>) {
    */
   function tryUseSkill(card: CardInstance) {
     if (!isMyTurn) return;
+    if (actionLocked) return;
     const hasIC = card.attached?.some((eq) => eq.cardId === 'improved_cooldown') ?? false;
     if (G.players[me].skillUsedThisTurn && !hasIC) return; // player-wide rule (IC bypass)
     if (card.skillUsedThisTurn) return;
@@ -615,8 +648,6 @@ export function Board(props: BoardProps<GameState>) {
           onLogToggle={() => setLogOpen((v) => !v)}
           projectedFaceDamageMe={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
           projectedFaceDamageOpp={ctx.currentPlayer === me ? projectedFaceDamage : 0}
-          combatSpeed={combatSpeed}
-          onCombatSpeedChange={setCombatSpeed}
         />
 
         <AnimatePresence>
@@ -747,7 +778,7 @@ export function Board(props: BoardProps<GameState>) {
             <CombatChoreographer
               plan={combatPlan}
               slotRefs={slotRefs.current}
-              stepDuration={COMBAT_SPEED_MS[combatSpeed]}
+              stepDuration={COMBAT_STEP_MS}
               onComplete={handleCombatComplete}
               onBeatImpact={handleBeatImpact}
             />
@@ -755,6 +786,7 @@ export function Board(props: BoardProps<GameState>) {
         </AnimatePresence>
 
         <UltMomentFlash G={G} />
+        <CardPlayFlash G={G} />
       </div>
     </LayoutGroup>
   );

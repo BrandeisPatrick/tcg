@@ -40,7 +40,7 @@ export const HEROES: HeroCard[] = [
     passives: ['passive_haze_stunbonus'],
     ult: 'ult_haze',
     abilityName: 'Fixation',
-    text: '+2 ATK vs Stunned targets.',
+    text: '+2 Bullet Power vs Stunned targets.',
   },
   {
     id: 'hero_mo_krill',

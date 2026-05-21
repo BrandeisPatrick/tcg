@@ -149,6 +149,24 @@ export interface QueuedItem {
   priority: number;
 }
 
+/**
+ * One "action" the player or AI just took — drives the matching reveal
+ * animation (card-play flash, skill flash, ult flash) and the UI/AI lock that
+ * prevents the next move until the animation finishes. State transitions
+ * `begin` → `done` via the `completeAction` move once the UI's animation
+ * timeout fires. Engine moves do not gate themselves on this — tests bypass
+ * the UI and the lock lives at the dispatch layer.
+ */
+export type GameActionKind = 'play' | 'skill' | 'ult';
+
+export interface GameAction {
+  id: string;
+  kind: GameActionKind;
+  by: PlayerID;
+  cardId: CardId;
+  state: 'begin' | 'done';
+}
+
 export interface GameState {
   players: { '0': PlayerState; '1': PlayerState };
   turnNumber: number;
@@ -157,4 +175,8 @@ export interface GameState {
   log: LogEntry[];
   rngSeed?: string;
   mulliganPending: boolean;       // true at game start until player resolves opening mulligan
+  /** Current resolving action (card play / skill / ult). UI watches this to
+   *  trigger the reveal animation and pause further input until the player
+   *  has had time to see what just happened. */
+  action: GameAction | null;
 }

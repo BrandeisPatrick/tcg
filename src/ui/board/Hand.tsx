@@ -180,7 +180,6 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 size="hand"
                 selected={selected}
                 glow={selected ? (data?.type === 'ultimate' ? 'gold' : 'accent') : null}
-                footer={renderFooter(c)}
               />
             </motion.div>
           );
@@ -190,23 +189,3 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
   );
 }
 
-function renderFooter(c: CardInstance) {
-  const data = CARDS_BY_ID[c.cardId];
-  if (!data) return null;
-  if (data.type === 'hero') {
-    return null; // stats render as pills in the art window now
-  }
-  if (data.type === 'equipment') {
-    const parts: string[] = [];
-    if (data.bonus?.atk) parts.push(`+${data.bonus.atk} ATK`);
-    if (data.bonus?.hp) parts.push(`+${data.bonus.hp} HP`);
-    if (data.bonus?.spirit) parts.push(`+${data.bonus.spirit} SPI`);
-    if (parts.length === 0) return null;
-    return (
-      <span style={{ color: '#544a3b', fontWeight: 700, fontSize: 12 }}>
-        {parts.join(' · ')}
-      </span>
-    );
-  }
-  return null;
-}

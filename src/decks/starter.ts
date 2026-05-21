@@ -16,23 +16,20 @@ export const STARTER_DECK_PLAYER: DeckBlueprint = {
   cards: [
     // Cost 1 — early-game density
     'healing_rite', 'healing_rite', 'healing_rite',
-    'rusted_barrel',
-    // Cost 2 — stat sticks + skirmish
-    'extended_magazine', 'extended_magazine',
-    'close_quarters', 'close_quarters',
+    'rusted_barrel', 'rusted_barrel',
+    // Cost 2 — stat sticks + sustain
+    'extended_magazine', 'extended_magazine', 'extended_magazine',
     'extra_health', 'extra_health',
-    'bullet_lifesteal',
-    'cold_front',
-    'return_fire',
-    // Cost 3 — control + tempo
-    'slowing_hex',
+    'restorative_shot', 'restorative_shot',
+    // Cost 3 — burst + control
+    'cold_front', 'cold_front',
+    'disarming_hex',
     'decay',
-    'bullet_armor',
+    'bullet_resist',
     // Cost 4 — finishers
     'bullet_shield',
     'knockdown',
     'metal_skin',
-    'extra_stamina',
   ],
 };
 
@@ -41,23 +38,20 @@ export const STARTER_DECK_AI: DeckBlueprint = {
   title: 'Starter — Control',
   heroes: ['hero_abrams', 'hero_dynamo', 'hero_kelvin', 'hero_seven'],
   cards: [
-    // Cost 1 — early healing + brace
-    'healing_rite', 'healing_rite',
+    // Cost 1 — early healing + weaken
+    'healing_rite', 'healing_rite', 'healing_rite',
     'rusted_barrel',
-    // Cost 2 — utility + lifesteal
+    // Cost 2 — utility + sustain
     'extra_health', 'extra_health',
-    'extra_spirit',
-    'extra_stamina',
-    'spirit_lifesteal',
-    'cold_front',
-    'return_fire',
-    // Cost 3 — control
-    'decay',
-    'slowing_hex',
-    'bullet_armor',
-    'spirit_armor',
+    'extra_spirit', 'extra_spirit',
+    'mystic_regeneration', 'mystic_regeneration',
     'extended_magazine',
-    'close_quarters',
+    // Cost 3 — control + burst
+    'cold_front',
+    'decay',
+    'disarming_hex',
+    'bullet_resist',
+    'spirit_resist',
     // Cost 4 — reactive shields + lock
     'spirit_shield',
     'bullet_shield',

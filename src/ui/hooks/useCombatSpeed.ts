@@ -1,29 +1,6 @@
-import { useState, useCallback } from 'react';
-
-export type CombatSpeed = 'instant' | 'fast' | 'normal' | 'slow';
-
-export const COMBAT_SPEED_MS: Record<CombatSpeed, number> = {
-  instant: 0,
-  fast: 900,
-  normal: 1500,
-  slow: 2400,
-};
-
-const STORAGE_KEY = 'deadlock-tcg.combatSpeed';
-
-function read(): CombatSpeed {
-  try {
-    const v = localStorage.getItem(STORAGE_KEY) as CombatSpeed | null;
-    if (v && v in COMBAT_SPEED_MS) return v;
-  } catch {}
-  return 'normal';
-}
-
-export function useCombatSpeed(): [CombatSpeed, (s: CombatSpeed) => void] {
-  const [speed, setSpeedState] = useState<CombatSpeed>(read);
-  const setSpeed = useCallback((s: CombatSpeed) => {
-    setSpeedState(s);
-    try { localStorage.setItem(STORAGE_KEY, s); } catch {}
-  }, []);
-  return [speed, setSpeed];
-}
+// Single combat tempo. Per-attack-beat duration covers wind-up → tracer →
+// impact → readable hold. Calibrated so the damage banner + floating number
+// get ~1.6s of impact-phase visibility — gives the player time to read the
+// number before the next beat takes over. The corner Skip button in
+// CombatChoreographer is the escape hatch for long sequences.
+export const COMBAT_STEP_MS = 2400;

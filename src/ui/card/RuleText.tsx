@@ -23,12 +23,10 @@ const KEYWORDS: Record<string, string> = {
   // Buffs / defenses (success green)
   'Bullet Resist':  palette.status.buff,
   'Spirit Resist':  palette.status.buff,
-  'Bullet Lifesteal': palette.status.buff,
-  'Spirit Lifesteal': palette.status.buff,
   'Bullet Shield':  palette.status.buff,
   'Spirit Shield':  palette.status.buff,
   'Shield':         palette.status.buff,
-  'Weapon Power':   palette.status.buff,
+  'Bullet Power':   palette.status.buff,
   'Spirit Power':   palette.status.buff,
   'Unstoppable':    palette.status.buff,
   // Timing markers (brass)

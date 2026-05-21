@@ -13,21 +13,28 @@ See public/ART_PIPELINE.md for the full pipeline + gotchas.
 import json, os, sys, urllib.request
 
 # --- Passive items (rendered as Equipment) ---
+# Card-id keys map to the CANON item name used to look up shop art.
+# bullet_resist/spirit_resist are V1 card renames that still source art
+# from canon Bullet/Spirit Armor.
 EQ_MAP = {
     'basic_magazine':       'Extended Magazine',
+    'extended_magazine':    'Extended Magazine',
     'headshot_booster':     'Headshot Booster',
     'extra_health':         'Extra Health',
+    'extra_spirit':         'Improved Spirit',
     'improved_spirit':      'Improved Spirit',
     'improved_cooldown':    'Compress Cooldown',   # renamed in canon
     'mystic_burst':         'Mystic Burst',         # passive: bullet bonus on skill hit
     'sprint_boots':         'Sprint Boots',         # passive: +speed/stamina
     'berserker':            'Berserker',
-    'bullet_armor':         'Bullet Armor',
+    'bullet_resist':        'Bullet Armor',         # V1 rename: art still from canon Bullet Armor
+    'spirit_resist':        'Spirit Armor',         # V1 rename: art still from canon Spirit Armor
     'enduring_spirit':      'Enduring Spirit',
     'extra_regen':          'Extra Regen',
     'melee_lifesteal':      'Melee Lifesteal',
     'monster_rounds':       'Monster Rounds',
-    'spirit_armor':         'Spirit Armor',
+    'restorative_shot':     'Restorative Shot',     # V1 rename of bullet_lifesteal
+    'mystic_regeneration':  'Mystic Regeneration',  # V1 rename of spirit_lifesteal
     'spirit_strike':        'Spirit Strike',
     'mystic_vulnerability': 'Mystic Vulnerability', # passive: skill hits apply vuln
     'enchanter_barrier':    'Reactive Barrier',     # passive: shield triggers on damage
@@ -40,8 +47,6 @@ EQ_MAP = {
     'mystic_reverb':        'Mystic Reverb',
     'boundless_spirit':     'Boundless Spirit',
     'inhibitor':            'Inhibitor',            # passive mythic: stacks ability resist
-    'close_quarters':       'Close Quarters',       # T1 weapon: +ATK at close range (NEW)
-    'extra_stamina':        'Extra Stamina',        # T1 vitality: passive stamina (NEW)
     'mystic_expansion':     'Mystic Expansion',     # T1 spirit: +ability range (NEW)
 }
 
@@ -52,13 +57,11 @@ SP_MAP = {
     'decay':                'Decay',
     'ethereal_shift':       'Ethereal Shift',
     'phantom_strike':       'Phantom Strike',
-    'return_fire':          'Return Fire',
     'echo_shard':           'Echo Shard',
     'knockdown':            'Knockdown',
     'silence_glyph':        'Silencer',
-    'disarming_hex':        'Disarming Hex',        # replaces withering_whip
+    'disarming_hex':        'Disarming Hex',
     'metal_skin':           'Metal Skin',           # active: bullet resist burst
-    'slowing_hex':          'Slowing Hex',
     'curse':                'Cursed Relic',         # renamed in canon
     'divine_barrier':       'Divine Barrier',       # active: cast shield
     'soul_rebirth':         'Soul Rebirth',         # canon-faithful: passive respawn-on-death (canon is T4 passive equipment)

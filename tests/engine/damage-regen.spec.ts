@@ -228,21 +228,21 @@ describe('heal sources: all respect Healing Blocked', () => {
     expect(abrams.hp).toBe(8); // no heal
   });
 
-  it('Bullet Lifesteal (onAttack proc)', () => {
+  it('Restorative Shot (onAttack proc)', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     t.hp = t.hpMax - 3;
     addStatus(G, t, 'healing_blocked', 1, 2);
-    ABILITIES_BY_ID['eff_bullet_lifesteal_proc'].run(G, { movingPlayer: '0' }, { source: t });
+    ABILITIES_BY_ID['eff_restorative_shot_proc'].run(G, { movingPlayer: '0' }, { source: t });
     expect(t.hp).toBe(t.hpMax - 3);
   });
 
-  it('Spirit Lifesteal (onBearerSkillDamage proc)', () => {
+  it('Mystic Regeneration (onBearerSkillDamage proc)', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     t.hp = t.hpMax - 3;
     addStatus(G, t, 'healing_blocked', 1, 2);
-    ABILITIES_BY_ID['eff_spirit_lifesteal_proc'].run(G, { movingPlayer: '0' }, { source: t });
+    ABILITIES_BY_ID['eff_mystic_regeneration_proc'].run(G, { movingPlayer: '0' }, { source: t });
     expect(t.hp).toBe(t.hpMax - 3);
   });
 

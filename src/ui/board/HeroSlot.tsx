@@ -37,8 +37,21 @@ export function HeroSlot({
     return <div style={{ aspectRatio: '3 / 4', border: `1px dashed ${palette.border}`, borderRadius: radius.md }} />;
   }
   const isAlly = owner === myId;
-  const atk = effectiveAtk(card);
-  const lowHp = card.hp <= card.hpMax * 0.4;
+  // Outgoing attack value as it will resolve in combat: effectiveAtk minus any
+  // Weaken so the displayed BP matches what the hero actually swings for.
+  // (combat.ts:effectiveAttackDamage applies the same subtraction.)
+  const weakenValue = card.statuses.find((s) => s.id === 'weaken')?.value ?? 0;
+  const atk = Math.max(0, effectiveAtk(card) - weakenValue);
+  // Stat colour deviates from the default text colour only when the value has
+  // drifted from the printed base — buffs read green, debuffs / damage red.
+  // This lets a glance pick out heroes whose stats have changed mid-match.
+  const baseAtk = data.atk;
+  const atkColor = atk > baseAtk ? palette.success : atk < baseAtk ? palette.danger : palette.text;
+  const baseHp = data.hp;
+  const hpColor =
+    card.hp < card.hpMax ? palette.danger
+    : card.hpMax > baseHp ? palette.success
+    : palette.text;
   const isActive = card.zone === 'active';
   // Corpse: dead hero waiting to respawn in this slot.
   const respawnLeft = card.respawnTurnsLeft ?? 0;
@@ -280,16 +293,12 @@ export function HeroSlot({
           marginTop: 3,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span style={{ ...statRow.pair(statSize), color: palette.atk }}>
+          <span style={{ ...statRow.pair(statSize), color: atkColor }}>
             <SwordIcon size={iconSize} color={palette.atk} />{atk}
           </span>
-          <span style={{
-            ...statRow.pair(statSize),
-            color: lowHp ? palette.danger : palette.hp,
-          }}>
-            <HeartIcon size={iconSize} color={lowHp ? palette.danger : palette.hp} />
+          <span style={{ ...statRow.pair(statSize), color: hpColor }}>
+            <HeartIcon size={iconSize} color={palette.hp} />
             {card.hp}
-            <span style={{ opacity: 0.55 }}>/{card.hpMax}</span>
           </span>
         </div>
       </div>

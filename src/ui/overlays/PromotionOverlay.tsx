@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
+import { effectiveAtk } from '@/engine/util';
 import { palette, radius, shadow, spring, text } from '../tokens';
 
 interface Props {
@@ -104,11 +105,28 @@ function CandidateCard({ card, onPick }: { card: CardInstance; onPick: () => voi
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
       }}>
         <span style={{ ...text.label, color: palette.card.bodyText }}>{data.name}</span>
-        <div style={{ display: 'inline-flex', gap: 12, alignItems: 'baseline' }}>
-          <span style={{ ...text.numeric, color: palette.atk }}>{data.atk}</span>
-          <span style={{ ...text.body, color: palette.textFaint }}>·</span>
-          <span style={{ ...text.numeric, color: palette.hp }}>{card.hp}</span>
-        </div>
+        {(() => {
+          const heroData: any = data;
+          const baseAtk: number = heroData.atk ?? 0;
+          const baseHp: number = heroData.hp ?? 0;
+          const weaken = card.statuses.find((s) => s.id === 'weaken')?.value ?? 0;
+          const atk = Math.max(0, effectiveAtk(card) - weaken);
+          // Same colour rules as HeroSlot: default = neutral text, buff = green,
+          // damage / debuff = red. Drop the "/max" suffix so the number reads
+          // as the hero's actual current stat at a glance.
+          const atkColor = atk > baseAtk ? palette.success : atk < baseAtk ? palette.danger : palette.card.bodyText;
+          const hpColor =
+            card.hp < card.hpMax ? palette.danger
+            : card.hpMax > baseHp ? palette.success
+            : palette.card.bodyText;
+          return (
+            <div style={{ display: 'inline-flex', gap: 12, alignItems: 'baseline' }}>
+              <span style={{ ...text.numeric, color: atkColor }}>{atk}</span>
+              <span style={{ ...text.body, color: palette.textFaint }}>·</span>
+              <span style={{ ...text.numeric, color: hpColor }}>{card.hp}</span>
+            </div>
+          );
+        })()}
       </div>
     </motion.button>
   );

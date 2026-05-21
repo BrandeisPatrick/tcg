@@ -20,11 +20,11 @@ function freshG(): GameState {
 }
 
 // ============================================================================
-// Spells (8 cards)
+// Spells (7 cards)
 // ============================================================================
 
 describe('Spells — cost 1', () => {
-  it('Healing Rite heals 2 (+ caster Spirit)', () => {
+  it('Healing Rite heals 2 (flat, no Spirit scaling)', () => {
     const G = freshG();
     const target = G.players['0'].bench[0]!;
     target.hp = target.hpMax - 5;
@@ -43,26 +43,16 @@ describe('Spells — cost 1', () => {
   });
 });
 
-describe('Spells — cost 2', () => {
-  it('Cold Front stuns enemy Active for 1 turn', () => {
+describe('Spells — cost 3', () => {
+  it('Cold Front deals 4 spirit damage (+ caster Spirit) to enemy Active', () => {
     const G = freshG();
     const target = G.players['1'].active!;
+    target.hpMax = 30; target.hp = 30;
+    const before = target.hp;
     ABILITIES_BY_ID['eff_cold_front'].run(G, { movingPlayer: '0' }, { target });
-    const s = target.statuses.find((x) => x.id === 'stun');
-    expect(s?.duration).toBe(1);
+    expect(before - target.hp).toBe(4);
   });
 
-  it('Return Fire grants Bullet Resist 3 (+ Spi) for 1 turn', () => {
-    const G = freshG();
-    const ally = G.players['0'].bench[0]!;
-    ABILITIES_BY_ID['eff_return_fire'].run(G, { movingPlayer: '0' }, { target: ally });
-    const br = ally.statuses.find((s) => s.id === 'bullet_resist');
-    expect(br?.value).toBe(3);
-    expect(br?.duration).toBe(1);
-  });
-});
-
-describe('Spells — cost 3', () => {
   it('Decay applies Bleed 2 for 2 turns (4 pure damage total over two ticks)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
@@ -78,15 +68,12 @@ describe('Spells — cost 3', () => {
     expect(before - target.hp).toBe(4);
   });
 
-  it('Slowing Hex applies Disarm + Vulnerable 2 for 1 turn', () => {
+  it('Disarming Hex applies Disarm for 2 turns', () => {
     const G = freshG();
     const target = G.players['1'].active!;
-    ABILITIES_BY_ID['eff_slowing_hex'].run(G, { movingPlayer: '0' }, { target });
+    ABILITIES_BY_ID['eff_disarming_hex'].run(G, { movingPlayer: '0' }, { target });
     const d = target.statuses.find((s) => s.id === 'disarm');
-    const v = target.statuses.find((s) => s.id === 'vulnerable');
-    expect(d?.duration).toBe(1);
-    expect(v?.value).toBe(2);
-    expect(v?.duration).toBe(1);
+    expect(d?.duration).toBe(2);
   });
 });
 
@@ -99,76 +86,55 @@ describe('Spells — cost 4', () => {
     expect(target.statuses.find((s) => s.id === 'disarm')?.duration).toBe(2);
   });
 
-  it('Metal Skin grants ally Bullet Resist 5 (+ Spi) for 1 turn', () => {
+  it('Metal Skin grants ally Bullet Resist 5 for 2 turns (no scaling)', () => {
     const G = freshG();
     const ally = G.players['0'].bench[0]!;
     ABILITIES_BY_ID['eff_cast_metal_skin'].run(G, { movingPlayer: '0' }, { target: ally });
     const br = ally.statuses.find((s) => s.id === 'bullet_resist');
     expect(br?.value).toBe(5);
-    expect(br?.duration).toBe(1);
+    expect(br?.duration).toBe(2);
   });
 });
 
 // ============================================================================
-// Equipment (11 cards) — passives, on-attach, reactive procs
+// Equipment (9 cards) — passives + reactive procs
 // ============================================================================
 
-describe('Equipment passives + on-attach', () => {
-  it('Bullet Armor grants permanent Bullet Resist 2', () => {
+describe('Equipment passives', () => {
+  it('Bullet Resist (equipment) grants permanent Bullet Resist 2', () => {
     const G = freshG();
     const t = G.players['0'].active!;
-    ABILITIES_BY_ID['eff_bullet_armor'].run(G, { movingPlayer: '0' }, { source: t });
+    ABILITIES_BY_ID['eff_bullet_resist'].run(G, { movingPlayer: '0' }, { source: t });
     const br = t.statuses.find((s) => s.id === 'bullet_resist');
     expect(br?.value).toBe(2);
     expect(br?.duration).toBeGreaterThanOrEqual(99);
   });
 
-  it('Spirit Armor grants permanent Spirit Resist 2', () => {
+  it('Spirit Resist (equipment) grants permanent Spirit Resist 2', () => {
     const G = freshG();
     const t = G.players['0'].active!;
-    ABILITIES_BY_ID['eff_spirit_armor'].run(G, { movingPlayer: '0' }, { source: t });
+    ABILITIES_BY_ID['eff_spirit_resist'].run(G, { movingPlayer: '0' }, { source: t });
     const sr = t.statuses.find((s) => s.id === 'spirit_resist');
     expect(sr?.value).toBe(2);
-  });
-
-  it('Extra Stamina draws 2 cards on attach', () => {
-    const G = freshG();
-    const ps = G.players['0'];
-    const handBefore = ps.hand.length;
-    const deckBefore = ps.deck.length;
-    ABILITIES_BY_ID['eff_extra_stamina'].run(G, { movingPlayer: '0' }, {});
-    const drawn = Math.min(2, deckBefore);
-    expect(ps.hand.length).toBe(handBefore + drawn);
-    expect(ps.deck.length).toBe(deckBefore - drawn);
-  });
-
-  it('Extra Stamina respects hand cap (max 7)', () => {
-    const G = freshG();
-    const ps = G.players['0'];
-    while (ps.hand.length < 7 && ps.deck.length > 0) ps.hand.push(ps.deck.shift()!);
-    expect(ps.hand.length).toBe(7);
-    const before = ps.hand.length;
-    ABILITIES_BY_ID['eff_extra_stamina'].run(G, { movingPlayer: '0' }, {});
-    expect(ps.hand.length).toBe(before);
   });
 });
 
 describe('Equipment reactive procs', () => {
-  it('Bullet Lifesteal heals 1 on attack', () => {
+  it('Restorative Shot heals 1 on attack', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     t.hp = t.hpMax - 3;
     const before = t.hp;
-    ABILITIES_BY_ID['eff_bullet_lifesteal_proc'].run(G, { movingPlayer: '0' }, { source: t });
+    ABILITIES_BY_ID['eff_restorative_shot_proc'].run(G, { movingPlayer: '0' }, { source: t });
     expect(t.hp - before).toBe(1);
   });
 
-  it('Spirit Lifesteal heals 1 after skill damages an enemy', () => {
+  it('Mystic Regeneration heals 1 after skill damages an enemy', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     t.hp = t.hpMax - 3;
     const before = t.hp;
-    ABILITIES_BY_ID['eff_spirit_lifesteal_proc'].run(G, { movingPlayer: '0' }, { source: t });
+    ABILITIES_BY_ID['eff_mystic_regeneration_proc'].run(G, { movingPlayer: '0' }, { source: t });
     expect(t.hp - before).toBe(1);
   });
 
@@ -276,7 +242,7 @@ describe('equipment cap (3 per hero)', () => {
     const G = freshG();
     G.players['0'].souls = 99;
     const hero = G.players['0'].active!;
-    const ids = ['close_quarters', 'extra_health', 'bullet_lifesteal', 'extended_magazine'];
+    const ids = ['extra_spirit', 'extra_health', 'restorative_shot', 'extended_magazine'];
     const playFn = (DeadlockGame as any).moves.playCard;
     let lastResult: any;
     for (const cardId of ids) {

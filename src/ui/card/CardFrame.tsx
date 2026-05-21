@@ -368,7 +368,7 @@ export function CardFrame({
         {/* Name — slightly larger on full-size cards so it reads as the card
             headline above the body text; hand-size keeps the compact 12.
             Allows up to 2 lines so long canon names (e.g. "Extended Magazine",
-            "Spirit Lifesteal") don't truncate with an ellipsis. */}
+            "Mystic Regeneration") don't truncate with an ellipsis. */}
         <div style={{
           fontSize: size === 'full' ? 14 : 12,
           fontWeight: 700,

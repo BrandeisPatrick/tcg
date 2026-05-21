@@ -38,8 +38,8 @@ describe('souls economy', () => {
   it('playing a card deducts its cost', () => {
     const G = freshG();
     G.players['0'].souls = 5;
-    // Close Quarters: T1 equipment, cost 2, basic +1 ATK stat stick.
-    const shot = { ...G.players['0'].deck[0], cardId: 'close_quarters', iid: 'test_shot' } as any;
+    // Extended Magazine: T1 equipment, cost 2, +1 Bullet Power stat stick.
+    const shot = { ...G.players['0'].deck[0], cardId: 'extended_magazine', iid: 'test_shot' } as any;
     G.players['0'].hand = [shot];
     const before = G.players['0'].souls;
     const r = runMove('playCard', G, '0', 'test_shot', G.players['0'].active!.iid);
@@ -234,32 +234,31 @@ describe('souls economy', () => {
     expect(hpBefore - target.hp).toBe(7); // base 4 + 3 spirit
   });
 
-  it('heal scales with spirit (Dynamo heal 2 + 2 SPI = 4)', async () => {
+  it('heal is flat — Spirit does NOT scale heals (Dynamo heal 2)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_dynamo'];
-    expect(skill.scalesSpirit).toBe(true);
+    expect(skill.scalesSpirit).toBeUndefined();
     const G = freshG();
     const healer = G.players['0'].active!;
-    healer.spiritMod = 2;
-    // Wound an ally so the heal lands; pad hpMax so the heal isn't capped.
+    healer.spiritMod = 2; // spirit should be ignored for heals
     const ally = G.players['0'].bench[0]!;
     ally.hpMax = 20;
     ally.hp = 1;
     const hpBefore = ally.hp;
     skill.run(G, { movingPlayer: '0' }, { source: healer, target: ally });
-    expect(ally.hp - hpBefore).toBe(4); // base 2 + 2 spirit
+    expect(ally.hp - hpBefore).toBe(2); // flat 2, no spirit
   });
 
-  it('shield magnitude scales with spirit (Paige shield 4 + 4 SPI = 8)', async () => {
+  it('shield magnitude is flat — Spirit does NOT scale shields (Paige shield 4)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_paige'];
     const G = freshG();
     const paige = G.players['0'].active!;
-    paige.spiritMod = 4;
+    paige.spiritMod = 4; // spirit should be ignored for shields
     const ally = G.players['0'].bench[0]!;
     skill.run(G, { movingPlayer: '0' }, { source: paige, target: ally });
     const sh = ally.statuses.find((s) => s.id === 'shield');
-    expect(sh?.value).toBe(8); // base 4 + 4 spirit
+    expect(sh?.value).toBe(4); // flat 4, no spirit
   });
 
   it('no skill has bullet scaling — all damage scaling goes through Spirit', async () => {

@@ -44,7 +44,7 @@ export function DamageFloaters({ entries }: { entries: FloaterEntry[] }) {
               initial={{ opacity: 0, y: 0, scale: 0.6 }}
               animate={{ opacity: 1, y: -32, scale: 1.2 }}
               exit={{ opacity: 0, y: -56, scale: 0.95 }}
-              transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 1.6, ease: [0.22, 1, 0.36, 1] }}
               style={{
                 position: 'absolute',
                 left: e.x - 30,

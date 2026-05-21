@@ -18,7 +18,7 @@ export const STATUSES: StatusDef[] = [
   { id: 'bullet_resist', title: 'Bullet Resist', desc: 'Reduce bullet (attack) damage by <value>.',                hvalue:  1 },
   { id: 'spirit_resist', title: 'Spirit Resist', desc: 'Reduce spirit (skill) damage by <value>.',                 hvalue:  1 },
   { id: 'shield',        title: 'Shield',        desc: 'Absorb <value> damage, then break.',                       hvalue:  1 },
-  { id: 'weapon_power',  title: 'Weapon Power',  desc: '+<value> ATK on basic attacks.',                           hvalue:  1 },
+  { id: 'weapon_power',  title: 'Bullet Power',  desc: '+<value> Bullet Power on basic attacks.',                  hvalue:  1 },
   { id: 'spirit_power',  title: 'Spirit Power',  desc: '+<value> to skill / ultimate scaling.',                    hvalue:  1 },
   { id: 'unstoppable',   title: 'Unstoppable',   desc: 'Immune to all damage and crowd control. Cleanses CC on apply.', hvalue: 2 },
 
@@ -35,7 +35,7 @@ export const STATUSES: StatusDef[] = [
   { id: 'djinns_mark',   title: "Djinn's Mark",  desc: 'Detonates at 4 stacks or on expiry for 2 spirit dmg per stack.', hvalue: -1 },
 
   // ----- Other debuff -----
-  { id: 'weaken',        title: 'Weaken',        desc: '−<value> ATK on basic attacks while active.',             hvalue: -1 },
+  { id: 'weaken',        title: 'Weaken',        desc: '−<value> Bullet Power on basic attacks while active.',    hvalue: -1 },
   { id: 'vulnerable',    title: 'Vulnerable',    desc: 'Take +<value> damage from all sources.',                  hvalue: -2 },
   { id: 'healing_blocked', title: 'Healing Blocked', desc: 'Cannot be healed.',                                    hvalue: -1 },
 ];

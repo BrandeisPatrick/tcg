@@ -139,38 +139,47 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, onBeatImpact, 
         Skip ▶▶
       </motion.button>
 
-      {/* Combat label — anchored above the duel divider so it sits ON the
-          battleground rather than at the top of the page. Larger pill, brighter
-          chrome, slow fade-in / scale-in. */}
+      {/* Combat label — full-width slide-in banner across the duel divider,
+          same chrome as TurnBanner so the start of combat reads as a major
+          beat (not just a small floating pill). Mounts once at combat start,
+          settles centered, then exits when the choreographer unmounts. */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: -8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
         style={{
           position: 'fixed',
-          top: '32%', left: 0, right: 0,
-          textAlign: 'center',
+          top: '50%',
+          left: 0, right: 0,
+          transform: 'translateY(-50%)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
           pointerEvents: 'none',
           zIndex: 88,
         }}
       >
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 12,
-          padding: '10px 22px',
-          background: `linear-gradient(90deg, ${palette.bg1}f5, ${palette.bg2}f5)`,
-          border: `1.5px solid ${palette.accent}`,
-          borderRadius: 999,
-          fontFamily: fonts.ui,
-          fontSize: 14, fontWeight: 700,
-          color: palette.text,
-          boxShadow: `0 6px 20px rgba(40,20,0,0.45), 0 0 28px ${palette.accent}55`,
-        }}>
-          <span style={{
-            width: 9, height: 9, borderRadius: '50%',
-            background: palette.accent, boxShadow: `0 0 10px ${palette.accent}`,
-          }} />
-          <span>Combat · {beatIndex + 1} / {plan.steps.length}</span>
-        </span>
+        <motion.div
+          initial={{ x: '-100vw' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100vw' }}
+          transition={{ type: 'spring', stiffness: 240, damping: 26 }}
+          style={{
+            width: '100%',
+            padding: '20px 0',
+            background: `linear-gradient(90deg, transparent 0%, ${palette.bg1}f5 12%, ${palette.bg2}f5 50%, ${palette.bg1}f5 88%, transparent 100%)`,
+            borderTop: `2px solid ${palette.danger}`,
+            borderBottom: `2px solid ${palette.danger}`,
+            textAlign: 'center',
+            fontFamily: fonts.ui,
+            fontSize: 26, fontWeight: 700,
+            color: palette.text,
+            boxShadow: `0 0 36px ${palette.danger}66, 0 8px 24px rgba(40,20,0,0.45)`,
+          }}
+        >
+          Combat · {beatIndex + 1} / {plan.steps.length}
+        </motion.div>
       </motion.div>
     </>
   );

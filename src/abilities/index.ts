@@ -78,19 +78,19 @@ function eachBoard(G: GameState, pid: PlayerID, fn: (c: CardInstance) => void) {
   reapDead(G, G.players[pid]);
 }
 
-// ----- Spells (8 cards) -----
+// ----- Spells (7 cards) -----
 
-// Cost 1 — T1 floor.
+// Cost 1 — T1 floor. Heals are flat (Spirit Power scales spirit damage only).
 const eff_healing_rite: AbilityDef = {
   id: 'eff_healing_rite', trigger: 'onPlay', target: 'allyHero',
   prompt: 'Healing Rite — heal an ally for 2.',
-  scalesSpirit: true, base: 2, baseLabel: 'heal',
-  run: (G, ctx, { target }) => {
-    if (target) healUnit(G, target, 2 + activeSpi(G, ctx.movingPlayer));
+  base: 2, baseLabel: 'heal',
+  run: (G, _ctx, { target }) => {
+    if (target) healUnit(G, target, 2);
   },
 };
 
-// Canon Rusted Barrel reduces enemy fire rate → mapped to Weaken (-N ATK).
+// Canon Rusted Barrel reduces enemy fire rate → mapped to Weaken (-N Bullet Power).
 const eff_rusted_barrel: AbilityDef = {
   id: 'eff_rusted_barrel', trigger: 'onPlay', target: 'enemyActive',
   prompt: 'Rusted Barrel — Weaken 2 on enemy Active for 2 turns.',
@@ -99,19 +99,13 @@ const eff_rusted_barrel: AbilityDef = {
   },
 };
 
-// Cost 2 — T1 ceiling.
+// Cost 3 — T2 spirit burst.
 const eff_cold_front: AbilityDef = {
   id: 'eff_cold_front', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Cold Front — Stun enemy Active for 1 turn.',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'stun', 1, 1); },
-};
-
-const eff_return_fire: AbilityDef = {
-  id: 'eff_return_fire', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Brace ally: +3 Bullet Resist for 1 turn.',
-  scalesSpirit: true, base: 3, baseLabel: 'Bullet Resist',
+  prompt: 'Cold Front — 4 spirit damage to enemy Active.',
+  scalesSpirit: true, base: 4, baseLabel: 'spirit dmg',
   run: (G, ctx, { target }) => {
-    if (target) addStatus(G, target, 'bullet_resist', 3 + activeSpi(G, ctx.movingPlayer), 1);
+    if (target) damageUnit(G, target, 4 + activeSpi(G, ctx.movingPlayer), 'spirit', 'Cold Front');
   },
 };
 
@@ -125,13 +119,11 @@ const eff_decay: AbilityDef = {
   },
 };
 
-const eff_slowing_hex: AbilityDef = {
-  id: 'eff_slowing_hex', trigger: 'onPlay', target: 'enemyAny',
-  prompt: 'Slowing Hex — Disarm + Vulnerable 2 on any enemy for 1 turn.',
+const eff_disarming_hex: AbilityDef = {
+  id: 'eff_disarming_hex', trigger: 'onPlay', target: 'enemyAny',
+  prompt: 'Disarming Hex — Disarm any enemy for 2 turns.',
   run: (G, _ctx, { target }) => {
-    if (!target) return;
-    addStatus(G, target, 'vulnerable', 2, 1);
-    addStatus(G, target, 'disarm', 1, 1);
+    if (target) addStatus(G, target, 'disarm', 1, 2);
   },
 };
 
@@ -146,58 +138,40 @@ const eff_knockdown: AbilityDef = {
   },
 };
 
+// Bullet Resist is flat — Spirit Power scales spirit damage only.
 const eff_cast_metal_skin: AbilityDef = {
   id: 'eff_cast_metal_skin', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Metal Skin — Bullet Resist 5 for 1 turn.',
-  scalesSpirit: true, base: 5, baseLabel: 'Bullet Resist',
-  run: (G, ctx, { target }) => {
-    if (target) addStatus(G, target, 'bullet_resist', 5 + activeSpi(G, ctx.movingPlayer), 1);
+  prompt: 'Metal Skin — Bullet Resist 5 for 2 turns.',
+  base: 5, baseLabel: 'Bullet Resist',
+  run: (G, _ctx, { target }) => {
+    if (target) addStatus(G, target, 'bullet_resist', 5, 2);
   },
 };
 
 // ----- Equipment passive effects + on-attach -----
 
-// Bullet / Spirit Armor: permanent resist stick.
-const eff_bullet_armor: AbilityDef = {
-  id: 'eff_bullet_armor', trigger: 'onPlay', target: 'self',
+// Bullet / Spirit Resist: permanent resist stick.
+const eff_bullet_resist: AbilityDef = {
+  id: 'eff_bullet_resist', trigger: 'onPlay', target: 'self',
   run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 2, 999); },
 };
-const eff_spirit_armor: AbilityDef = {
-  id: 'eff_spirit_armor', trigger: 'onPlay', target: 'self',
+const eff_spirit_resist: AbilityDef = {
+  id: 'eff_spirit_resist', trigger: 'onPlay', target: 'self',
   run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 2, 999); },
-};
-
-// Extra Stamina (on-attach): draw 2 cards. Card-advantage equipment at cost 2.
-const eff_extra_stamina: AbilityDef = {
-  id: 'eff_extra_stamina', trigger: 'onPlay', target: 'self',
-  run: (G, ctx) => {
-    const ps = G.players[ctx.movingPlayer];
-    const MAX_HAND = 7;
-    let drawn = 0;
-    for (let i = 0; i < 2; i++) {
-      if (ps.hand.length >= MAX_HAND) break;
-      const c = ps.deck.shift();
-      if (!c) break;
-      c.zone = 'hand';
-      ps.hand.push(c);
-      drawn++;
-    }
-    if (drawn > 0) pushLog(G, `Extra Stamina: drew ${drawn} card${drawn === 1 ? '' : 's'}.`);
-  },
 };
 
 // ----- Equipment reactive triggers -----
 
-// Bullet Lifesteal: after bearer's basic attack, heal 1.
-const eff_bullet_lifesteal_proc: AbilityDef = {
-  id: 'eff_bullet_lifesteal_proc', trigger: 'onAttack', target: 'self',
-  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Bullet Lifesteal'); },
+// Restorative Shot: after bearer's basic attack, heal 1.
+const eff_restorative_shot_proc: AbilityDef = {
+  id: 'eff_restorative_shot_proc', trigger: 'onAttack', target: 'self',
+  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Restorative Shot'); },
 };
 
-// Spirit Lifesteal: after bearer's skill / spell / ult damages an enemy, heal 1.
-const eff_spirit_lifesteal_proc: AbilityDef = {
-  id: 'eff_spirit_lifesteal_proc', trigger: 'onBearerSkillDamage', target: 'self',
-  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Spirit Lifesteal'); },
+// Mystic Regeneration: after bearer's skill / spell / ult damages an enemy, heal 1.
+const eff_mystic_regeneration_proc: AbilityDef = {
+  id: 'eff_mystic_regeneration_proc', trigger: 'onBearerSkillDamage', target: 'self',
+  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Mystic Regeneration'); },
 };
 
 // Bullet Shield: after bearer takes bullet damage, gain Shield 2.
@@ -216,12 +190,12 @@ const eff_spirit_shield_proc: AbilityDef = {
 // Each skill declares its scaling (spirit / bullet / both / none).
 // Base damage stays its original type. Scaling adds a second damage event of the matching type.
 
+// Heals are flat — Spirit Power scales spirit damage only.
 const skill_dynamo: AbilityDef = {
   id: 'skill_dynamo', trigger: 'activate', target: 'allyHero', exhausts: true,
   prompt: 'Dynamo Rejuvenating Aurora — heal an ally for 2.',
   base: 2, baseLabel: 'heal',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) healUnit(G, target, 2 + spi(source)); },
+  run: (G, _ctx, { target }) => { if (target) healUnit(G, target, 2); },
 };
 
 // Canon Frost Grenade damages enemies + heals allies in the cloud.
@@ -257,12 +231,12 @@ const skill_lash: AbilityDef = {
   },
 };
 
+// Shields are flat — Spirit Power scales spirit damage only.
 const skill_paige: AbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero', exhausts: true,
   prompt: 'Paige Plot Armor — Shield 4 on ally.',
   base: 4, baseLabel: 'shield',
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) addStatus(G, target, 'shield', 4 + spi(source), 999); },
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'shield', 4, 999); },
 };
 
 // Static Charge: 1 spirit dmg upfront + apply Charged for 2 turns; on expiry
@@ -312,15 +286,14 @@ const skill_yamato: AbilityDef = {
 
 // Warden skill: hardens himself with a Shield. Canon Warden hunkers down
 // behind his shackle barrier before unleashing Last Stand — TCG abstraction
-// is a self-buff Shield that scales with Spirit.
+// is a flat self-buff Shield.
 const skill_warden: AbilityDef = {
   id: 'skill_warden', trigger: 'activate', target: 'self', exhausts: true,
   prompt: 'Warden Willpower — Shield 2 on self.',
   base: 2, baseLabel: 'shield',
-  scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
-    if (t) addStatus(G, t, 'shield', 2 + spi(source), 999);
+    if (t) addStatus(G, t, 'shield', 2, 999);
   },
 };
 
@@ -358,12 +331,12 @@ const passive_abrams_heal: AbilityDef = {
   },
 };
 
-// Fixation: +2 ATK vs Stunned targets. The damage hook lives in
+// Fixation: +2 Bullet Power vs Stunned targets. The damage hook lives in
 // `combat.ts:effectiveAttackDamage` — this is a marker so the registry
 // owns the definition and the UI can show a trigger label.
 const passive_haze_stunbonus: AbilityDef = {
   id: 'passive_haze_stunbonus', trigger: 'ongoing', target: 'self',
-  prompt: 'Fixation — +2 ATK vs Stunned targets.',
+  prompt: 'Fixation — +2 Bullet Power vs Stunned targets.',
   run: () => { /* combat hook reads this directly */ },
 };
 
@@ -472,7 +445,7 @@ const eff_ult_mo_krill: AbilityDef = {
 };
 const eff_ult_paige: AbilityDef = {
   id: 'eff_ult_paige', trigger: 'onPlay', target: 'noTarget',
-  base: 2, baseLabel: '+ATK to team',
+  base: 2, baseLabel: '+Bullet Power to team',
   run: (G, ctx) => { for (const c of liveBoardCards(G.players[ctx.movingPlayer])) addStatus(G, c, 'weapon_power', 2, 2); },
 };
 const eff_ult_rem: AbilityDef = {
@@ -510,7 +483,7 @@ const eff_ult_viscous: AbilityDef = {
 };
 const eff_ult_yamato: AbilityDef = {
   id: 'eff_ult_yamato', trigger: 'onPlay', target: 'self',
-  base: 3, baseLabel: '+ATK + Unstoppable',
+  base: 3, baseLabel: '+Bullet Power + Unstoppable',
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
     if (t) { addStatus(G, t, 'weapon_power', 3, 999); addStatus(G, t, 'unstoppable', 1, 2); }
@@ -599,15 +572,15 @@ const eff_ult_drifter: AbilityDef = {
 };
 
 const ABILITIES_LIST: AbilityDef[] = [
-  // ----- Spells (8 cards) -----
+  // ----- Spells (7 cards) -----
   eff_healing_rite, eff_rusted_barrel,
-  eff_cold_front, eff_return_fire,
-  eff_decay, eff_slowing_hex,
+  eff_cold_front,
+  eff_decay, eff_disarming_hex,
   eff_knockdown, eff_cast_metal_skin,
-  // ----- Equipment passives + on-attach (3 cards) -----
-  eff_bullet_armor, eff_spirit_armor, eff_extra_stamina,
+  // ----- Equipment passives (2 cards) -----
+  eff_bullet_resist, eff_spirit_resist,
   // ----- Equipment reactive procs (4 cards) -----
-  eff_bullet_lifesteal_proc, eff_spirit_lifesteal_proc,
+  eff_restorative_shot_proc, eff_mystic_regeneration_proc,
   eff_bullet_shield_proc, eff_spirit_shield_proc,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,

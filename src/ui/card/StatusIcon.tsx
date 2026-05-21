@@ -12,7 +12,7 @@ function colorFor(id: StatusId): string {
 
 const STATUS_LABELS: Record<string, string> = {
   // Buffs
-  weapon_power:  '+ATK',
+  weapon_power:  '+BP',
   spirit_power:  '+SPI',
   bullet_resist: 'Bullet Res',
   spirit_resist: 'Spirit Res',

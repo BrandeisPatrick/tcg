@@ -20,6 +20,10 @@ import { grantExp } from './expSystem';
 const MAX_HAND = 7;
 const ULT_UNLOCK_TURN = 5;
 const SOULS_START = 0;
+/** Monotonic counter for `G.action.id` — each play / skill / ult bumps this
+ *  so the UI's animation-driver effect (keyed on action.id) re-fires for
+ *  back-to-back actions of the same kind. */
+let actionCounter = 0;
 /** Max equipment a hero can wear at once. Playing a 4th piece requires
  *  the player to choose one of the existing items to discard. */
 export const MAX_EQUIPMENT_PER_HERO = 3;
@@ -234,6 +238,7 @@ export const DeadlockGame: Game<GameState> = {
       resolveQueue: [],
       log: [{ turn: 1, text: 'Match begins.' }],
       mulliganPending: true,
+      action: null,
     };
     drawN(G, players['0'], 3);
     drawN(G, players['1'], 3);
@@ -276,6 +281,18 @@ export const DeadlockGame: Game<GameState> = {
   },
 
   moves: {
+    /**
+     * UI-side callback: signals the reveal animation for the previous
+     * action has finished playing. Flips `G.action.state` begin → done. The
+     * dispatcher (player input / AI loop) treats anything other than `begin`
+     * as not-locked. Engine resolution doesn't gate itself on this — only the
+     * UI/AI input layer does. The next playCard / useSkill overwrites
+     * `G.action` with a fresh `begin` state.
+     */
+    completeAction: ({ G }) => {
+      if (G.action) G.action.state = 'done';
+    },
+
     playCard: ({ G, ctx, playerID }, iid: string, targetIid?: string, discardIid?: string) => {
       const pid = (playerID ?? ctx.currentPlayer) as PlayerID;
       const ps = G.players[pid];
@@ -351,6 +368,16 @@ export const DeadlockGame: Game<GameState> = {
       pushLog(G, `P${pid} played ${data.name}${target ? ` on ${CARDS_BY_ID[target.cardId]?.name}` : ''}.`);
       reapDead(G, G.players['0']);
       reapDead(G, G.players['1']);
+      // Record the action so the UI can play the matching reveal animation
+      // (CardPlayFlash for spell/equipment, UltMomentFlash for ultimate)
+      // and lock further input until completeAction fires.
+      G.action = {
+        id: `act-${++actionCounter}`,
+        kind: data.type === 'ultimate' ? 'ult' : 'play',
+        by: pid,
+        cardId: card.cardId,
+        state: 'begin',
+      };
     },
 
     useSkill: ({ G, ctx, playerID }, heroIid: string, targetIid?: string) => {
@@ -380,9 +407,11 @@ export const DeadlockGame: Game<GameState> = {
 
       // Headline log BEFORE the ability runs — the ability itself will emit
       // damage/status lines under this header, and the player sees who cast what.
+      // Format mirrors playCard so CardPlayFlash can show the hero card the
+      // same way it shows the spell/equipment card on play.
       const heroName = data.name;
       const targetName = target ? (CARDS_BY_ID[target.cardId]?.name ?? target.cardId) : null;
-      pushLog(G, `${heroName} casts skill${targetName ? ` on ${targetName}` : ''}.`);
+      pushLog(G, `P${pid} used skill: ${heroName}${targetName ? ` on ${targetName}` : ''}.`);
 
       // Cast context: equipment triggers (Mystic Burst, Mystic Vulnerability,
       // Suppressor, Mystic Reverb) read this to know "bearer's skill damaged X".
@@ -395,6 +424,13 @@ export const DeadlockGame: Game<GameState> = {
       fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: pid });
       reapDead(G, G.players['0']);
       reapDead(G, G.players['1']);
+      G.action = {
+        id: `act-${++actionCounter}`,
+        kind: 'skill',
+        by: pid,
+        cardId: hero.cardId,
+        state: 'begin',
+      };
     },
 
     moveHero: ({ G, ctx, playerID }, fromSlot: 0|1|2|3, toSlot: 0|1|2|3) => {

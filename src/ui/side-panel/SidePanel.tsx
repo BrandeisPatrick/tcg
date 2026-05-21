@@ -1,6 +1,5 @@
 import type { GameState, PlayerID } from '@/engine/types';
 import { palette, radius, text } from '../tokens';
-import type { CombatSpeed } from '../hooks/useCombatSpeed';
 import { LogLine } from './LogLine';
 import { PlayerCard } from './PlayerCard';
 import { logEntryColor } from '../helpers';
@@ -11,17 +10,14 @@ import { logEntryColor } from '../helpers';
  *   - Opponent patron card (Sapphire Flame)
  *   - Recent log (grouped by turn, semantic colour from logEntryColor)
  *   - Your patron card (Amber Hand)
- *   - Combat speed picker
  *   - Hint footer
  */
 export function SidePanel({
   G, me, isMyTurn, turn, onLogToggle,
   projectedFaceDamageMe, projectedFaceDamageOpp,
-  combatSpeed, onCombatSpeedChange,
 }: {
   G: GameState; me: PlayerID; isMyTurn: boolean; turn: number; onLogToggle: () => void;
   projectedFaceDamageMe?: number; projectedFaceDamageOpp?: number;
-  combatSpeed?: CombatSpeed; onCombatSpeedChange?: (s: CombatSpeed) => void;
 }) {
   const opp: PlayerID = me === '0' ? '1' : '0';
   // Group log entries by turn (newest first). Each group shows one "Turn N"
@@ -110,39 +106,6 @@ export function SidePanel({
       </div>
 
       <PlayerCard label="Amber Hand" ps={G.players[me]} active={isMyTurn} order={me === '0' ? '1st' : '2nd'} projectedFaceDamage={projectedFaceDamageMe} />
-
-      {/* Combat speed picker */}
-      {combatSpeed && onCombatSpeedChange && (
-        <div style={{
-          paddingTop: 8, borderTop: `1px solid ${palette.border}`,
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          <span style={{ ...text.label, color: palette.textFaint }}>Combat Speed</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4 }}>
-            {(['instant', 'fast', 'normal', 'slow'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => onCombatSpeedChange(s)}
-                title={s === 'instant' ? 'Skip animations entirely' : `${s} (${s === 'fast' ? '380ms' : s === 'normal' ? '700ms' : '1.1s'} per hit)`}
-                style={{
-                  padding: '5px 0',
-                  background: combatSpeed === s
-                    ? `linear-gradient(180deg, ${palette.accent}, ${palette.accent}aa)`
-                    : palette.bg2,
-                  border: `1px solid ${combatSpeed === s ? palette.accent : palette.border}`,
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  ...text.label,
-                  color: combatSpeed === s ? '#1a1208' : palette.textDim,
-                  textShadow: combatSpeed === s ? '0 1px 0 rgba(255,235,180,0.4)' : 'none',
-                }}
-              >
-                {s === 'instant' ? '⏵⏵' : s.charAt(0)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div style={{
         paddingTop: 8, borderTop: `1px solid ${palette.border}`,

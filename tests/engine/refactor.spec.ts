@@ -79,7 +79,7 @@ describe('Healing Blocked status', () => {
 
 describe('Cast context — equipment proc recursion guard', () => {
   it('cast kind "proc" suppresses re-triggering equipment from inside an equipment proc', () => {
-    // Spirit Lifesteal heals the bearer when their skill damages an enemy.
+    // Mystic Regeneration heals the bearer when their skill damages an enemy.
     // The dispatcher wraps each proc.run in withCast(..., 'proc') so a
     // damageUnit call inside the proc (none here, but architecturally) does
     // NOT re-fire onBearerSkillDamage. We verify the proc doesn't cause
@@ -87,7 +87,7 @@ describe('Cast context — equipment proc recursion guard', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
-    attachEquip(hero, 'spirit_lifesteal');
+    attachEquip(hero, 'mystic_regeneration');
     hero.hp = hero.hpMax - 5;
     const hpBefore = hero.hp;
     withCast(hero, 'skill', () => damageUnit(G, enemy, 3, 'spirit'));
@@ -96,22 +96,22 @@ describe('Cast context — equipment proc recursion guard', () => {
 });
 
 describe('Equipment reactive procs (new V1 set)', () => {
-  it('Bullet Lifesteal — bearer attacks → heal 1', () => {
+  it('Restorative Shot — bearer attacks → heal 1', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
-    attachEquip(hero, 'bullet_lifesteal');
+    attachEquip(hero, 'restorative_shot');
     hero.hp = hero.hpMax - 3;
     const hpBefore = hero.hp;
     withCast(hero, 'attack', () => damageUnit(G, enemy, 2, 'attack'));
     expect(hero.hp - hpBefore).toBe(1);
   });
 
-  it('Spirit Lifesteal — bearer skill damages enemy → heal 1', () => {
+  it('Mystic Regeneration — bearer skill damages enemy → heal 1', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
-    attachEquip(hero, 'spirit_lifesteal');
+    attachEquip(hero, 'mystic_regeneration');
     hero.hp = hero.hpMax - 3;
     const hpBefore = hero.hp;
     withCast(hero, 'skill', () => damageUnit(G, enemy, 2, 'spirit'));

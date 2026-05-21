@@ -43,7 +43,7 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
     card.atkMod += atkGain;
     card.hpMax += hpGain;
     card.hp += hpGain;
-    pushLog(G, `${data.name} reached Level ${level} (+${atkGain} ATK, +${hpGain} HP).`);
+    pushLog(G, `${data.name} reached Level ${level} (+${atkGain} Bullet Power, +${hpGain} HP).`);
   }
   return gained;
 }

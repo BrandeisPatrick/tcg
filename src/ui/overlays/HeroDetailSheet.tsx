@@ -92,7 +92,7 @@ export function HeroDetailSheet({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...text.label, color: palette.text }}>{data.name}</div>
             <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-              <Stat label="ATK" value={effectiveAtk(card)} color={palette.atk} />
+              <Stat label="BP" value={effectiveAtk(card)} color={palette.atk} />
               <Stat label="HP" value={`${card.hp}/${card.hpMax}`} color={palette.hp} />
               <Stat label="SPI" value={card.spiritMod} color={palette.spirit} />
             </div>

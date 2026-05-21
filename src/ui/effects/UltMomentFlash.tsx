@@ -1,70 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { palette, fonts } from '../tokens';
 
 /**
- * Watches the engine log for "played <Ultimate Name>" events and surfaces a
- * dramatic screen-fill flash + nameplate when an ultimate is cast.
- *
- * The flash is fire-and-forget: 1.4s total, non-interactive, doesn't block.
+ * Surfaces the dramatic screen-fill + nameplate when an ultimate is cast.
+ * Driven by `G.action` with `kind: 'ult'` and `state: 'begin'`. Board.tsx
+ * owns the dismissal timing via `completeAction`.
  */
 interface Props {
   G: GameState;
 }
 
-interface UltMoment {
-  id: number;
-  name: string;
-  caster: string; // 'P0' or 'P1'
-}
-
-let nextId = 1;
-
 export function UltMomentFlash({ G }: Props) {
-  const [moments, setMoments] = useState<UltMoment[]>([]);
-  const lastSeenLen = useRef(G.log.length);
-
-  useEffect(() => {
-    const newEntries = G.log.slice(lastSeenLen.current);
-    lastSeenLen.current = G.log.length;
-
-    const ultNamesById = new Set(
-      Object.values(CARDS_BY_ID).filter((c) => c?.type === 'ultimate').map((c) => c!.name),
-    );
-
-    const additions: UltMoment[] = [];
-    for (const e of newEntries) {
-      // Engine logs as: "P0 played <Card Name>." or "P0 played <Card Name> on <Target>."
-      const m = e.text.match(/^(P[01]) played ([^.]+?)(?:\s+on\s+|\.$)/);
-      if (!m) continue;
-      const caster = m[1];
-      const cardName = m[2].trim();
-      if (ultNamesById.has(cardName)) {
-        additions.push({ id: nextId++, name: cardName, caster });
-      }
-    }
-    if (additions.length) {
-      setMoments((prev) => [...prev, ...additions]);
-      for (const a of additions) {
-        setTimeout(() => {
-          setMoments((prev) => prev.filter((m) => m.id !== a.id));
-        }, 1500);
-      }
-    }
-  }, [G.log]);
-
+  const action = G.action;
+  if (!action || action.state !== 'begin' || action.kind !== 'ult') {
+    return <AnimatePresence />;
+  }
+  const data = CARDS_BY_ID[action.cardId];
+  if (!data) return <AnimatePresence />;
   return (
     <AnimatePresence>
-      {moments.map((m) => (
-        <UltFlashOverlay key={m.id} name={m.name} caster={m.caster} />
-      ))}
+      <UltFlashOverlay
+        key={action.id}
+        name={data.name}
+        caster={action.by === '0' ? 'P0' : 'P1'}
+      />
     </AnimatePresence>
   );
 }
 
-function UltFlashOverlay({ name, caster }: { name: string; caster: string }) {
+export function UltFlashOverlay({ name, caster }: { name: string; caster: string }) {
   // Tint by caster: gold for you, wine for rival.
   const accent = caster === 'P0' ? palette.accent : palette.danger;
 
@@ -75,7 +41,7 @@ function UltFlashOverlay({ name, caster }: { name: string; caster: string }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.55, 0.4, 0] }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 1.2, times: [0, 0.15, 0.4, 1] }}
+        transition={{ duration: 2.2, times: [0, 0.10, 0.65, 1] }}
         style={{
           position: 'fixed', inset: 0,
           background: `radial-gradient(ellipse at center, ${accent}, transparent 70%)`,
@@ -100,7 +66,7 @@ function UltFlashOverlay({ name, caster }: { name: string; caster: string }) {
       <motion.div
         initial={{ opacity: 0, scale: 0.6, y: 20 }}
         animate={{ opacity: [0, 1, 1, 0], scale: [0.6, 1.06, 1, 0.96], y: [20, 0, 0, -10] }}
-        transition={{ duration: 1.35, times: [0, 0.25, 0.75, 1] }}
+        transition={{ duration: 2.3, times: [0, 0.12, 0.85, 1] }}
         style={{
           position: 'fixed',
           left: 0, right: 0,
