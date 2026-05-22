@@ -111,14 +111,14 @@ function CandidateCard({ card, onPick }: { card: CardInstance; onPick: () => voi
           const baseHp: number = heroData.hp ?? 0;
           const weaken = card.statuses.find((s) => s.id === 'weaken')?.value ?? 0;
           const atk = Math.max(0, effectiveAtk(card) - weaken);
-          // Same colour rules as HeroSlot: default = neutral text, buff = green,
-          // damage / debuff = red. Drop the "/max" suffix so the number reads
-          // as the hero's actual current stat at a glance.
-          const atkColor = atk > baseAtk ? palette.success : atk < baseAtk ? palette.danger : palette.card.bodyText;
+          // Same colour rules as HeroSlot: each stat number stays in its
+          // brand-colour family (brass for BP, vermillion for HP) and only
+          // modulates intensity to reflect drift from the printed base.
+          const atkColor = atk > baseAtk ? palette.atkBright : atk < baseAtk ? palette.atkDim : palette.atk;
           const hpColor =
-            card.hp < card.hpMax ? palette.danger
-            : card.hpMax > baseHp ? palette.success
-            : palette.card.bodyText;
+            card.hp < card.hpMax ? palette.hpDim
+            : card.hpMax > baseHp ? palette.hpBright
+            : palette.hp;
           return (
             <div style={{ display: 'inline-flex', gap: 12, alignItems: 'baseline' }}>
               <span style={{ ...text.numeric, color: atkColor }}>{atk}</span>

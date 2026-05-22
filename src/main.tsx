@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { App } from './App';
+import { Root } from './Root';
 import { PreviewGallery } from './ui/PreviewGallery';
 import '@fontsource-variable/inter/index.css';
 import '@fontsource-variable/exo-2/index.css';
@@ -13,6 +13,6 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {isPreview ? <PreviewGallery /> : <App />}
+    {isPreview ? <PreviewGallery /> : <Root />}
   </React.StrictMode>,
 );

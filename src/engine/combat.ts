@@ -22,6 +22,10 @@ export interface AttackStep {
   predictedHpAfter: number | null;
   /** True if this step will KO the target. */
   predictedKO: boolean;
+  /** Amount the target's Shield absorbed at this step. > 0 means the attack
+   *  landed but Shield mitigated some/all of it — choreographer renders a
+   *  green deflect flash so the impact reads even when HP doesn't move. */
+  shieldAbsorbed: number;
   /** Short label for any bonus that contributed (e.g., "Haze passive vs Stun: +2"). */
   bonusLabel?: string;
   /** Retaliation damage dealt by the defender BACK to the attacker (mutual-damage rule).
@@ -82,8 +86,10 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
 
     if (target) {
       const wraithSplit = atk.cardId === 'hero_wraith';
+      const shieldBefore = simShield;
       const m = simulateAttackMitigation(dmg, target, simShield, wraithSplit);
       simShield = m.shieldRemaining;
+      const shieldAbsorbed = Math.max(0, shieldBefore - m.shieldRemaining);
       const final = m.final;
 
       const predictedHp = simHp - final;
@@ -125,6 +131,7 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
         rawDamage: dmg,
         predictedHpAfter: Math.max(0, predictedHp),
         predictedKO: ko,
+        shieldAbsorbed,
         bonusLabel,
         retaliationDamage,
         attackerHpAfter,
@@ -145,6 +152,7 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
         rawDamage: dmg,
         predictedHpAfter: null,
         predictedKO: false,
+        shieldAbsorbed: 0,
         bonusLabel,
         retaliationDamage: 0,
         attackerHpAfter: null,

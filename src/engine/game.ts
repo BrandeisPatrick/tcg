@@ -6,7 +6,7 @@ import type {
   PlayerID,
   PlayerState,
 } from './types';
-import { CARDS_BY_ID, getCard } from '@/cards';
+import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { STARTER_DECK_PLAYER, STARTER_DECK_AI, type DeckBlueprint } from '@/decks/starter';
 import { tickStartOfTurn, clearTurnFlags } from './statusOps';
 import { reapDead, damagePlayer } from './damage';
@@ -27,6 +27,9 @@ let actionCounter = 0;
 /** Max equipment a hero can wear at once. Playing a 4th piece requires
  *  the player to choose one of the existing items to discard. */
 export const MAX_EQUIPMENT_PER_HERO = 3;
+/** Soul cost to activate any hero skill (one-per-player-per-turn rule still
+ *  applies — this just adds a tempo cost on top). */
+export const SKILL_COST = 1;
 // Refill economy (Hearthstone-style): at the start of each of your turns,
 // your pool is REFILLED to N — anything banked from last turn is lost.
 // The ramp climbs 1 → 7 by your 7th turn, then caps.
@@ -64,6 +67,30 @@ function makeInstance(cardId: string, ownerId: PlayerID, zone: CardInstance['zon
     ...(isHero ? { exp: 0, level: 1 as const } : {}),
   };
 }
+
+/** Empty PlayerState used while the pre-match draft is running — no heroes,
+ *  no deck. Replaced via `buildPlayer()` once the 8th draft pick lands. */
+function makeEmptyPlayer(pid: PlayerID): PlayerState {
+  return {
+    id: pid,
+    hp: 15,
+    hpMax: 15,
+    souls: SOULS_START,
+    deck: [],
+    hand: [],
+    active: null,
+    bench: [null, null, null],
+    discard: [],
+    secret: [],
+    ultsConsumed: [],
+    skillUsedThisTurn: false,
+    respawning: [],
+  };
+}
+
+/** Snake draft order for 4 picks per player (8 total).
+ *  P0 picks at indexes 0, 3, 4, 7; P1 picks at 1, 2, 5, 6. */
+const DRAFT_ORDER: PlayerID[] = ['0', '1', '1', '0', '0', '1', '1', '0'];
 
 function buildPlayer(pid: PlayerID, deck: DeckBlueprint): PlayerState {
   const heroes = deck.heroes;
@@ -227,35 +254,46 @@ export const DeadlockGame: Game<GameState> = {
   name: 'deadlock-tcg',
   setup: (): GameState => {
     resetIid();
-    const players = {
-      '0': buildPlayer('0', STARTER_DECK_PLAYER),
-      '1': buildPlayer('1', STARTER_DECK_AI),
-    };
     const G: GameState = {
-      players,
+      players: {
+        '0': makeEmptyPlayer('0'),
+        '1': makeEmptyPlayer('1'),
+      },
       turnNumber: 1,
       selector: null,
       resolveQueue: [],
-      log: [{ turn: 1, text: 'Match begins.' }],
-      mulliganPending: true,
+      log: [{ turn: 1, text: 'Draft begins.' }],
+      draft: {
+        pool: HEROES.map((h) => h.id),
+        order: [...DRAFT_ORDER],
+        currentIndex: 0,
+        picks: { '0': [], '1': [] },
+      },
+      draftTurnsOffset: 0,  // set in draftPick when draft completes
+      mulliganPending: false,
       action: null,
     };
-    drawN(G, players['0'], 3);
-    drawN(G, players['1'], 3);
     return G;
   },
 
   turn: {
     onBegin: ({ G, ctx }) => {
+      // Draft phase: turn changes are just for snake-order ownership; the
+      // normal start-of-turn pipeline (souls refill, draw, respawn ticks)
+      // must NOT fire while players have empty boards / decks.
+      if (G.draft) return;
       const pid = ctx.currentPlayer as PlayerID;
       const ps = G.players[pid];
-      G.turnNumber = ctx.turn;
+      // Real-match turn — boardgame.io's ctx.turn includes the draft turns,
+      // so subtract the offset captured at draft completion.
+      const realTurn = ctx.turn - G.draftTurnsOffset;
+      G.turnNumber = realTurn;
       ps.skillUsedThisTurn = false;
       tickStartOfTurn(G, ps);
       // Refill (not add) — no hoarding across turns. KO bounty banked this turn IS preserved
       // until the NEXT refill, so a kill mid-turn still gives you something to spend right away.
-      ps.souls = soulRefillForTurn(ctx.turn);
-      const drawCount = ctx.turn === 1 && pid === '0' ? 1 : 2;
+      ps.souls = soulRefillForTurn(realTurn);
+      const drawCount = realTurn === 1 && pid === '0' ? 1 : 2;
       drawN(G, ps, drawCount);
       // Ultimate unlock
       unlockUltimates(G, ps);
@@ -268,6 +306,7 @@ export const DeadlockGame: Game<GameState> = {
       pushLog(G, `--- Turn ${ctx.turn}, player ${pid} ---`);
     },
     onEnd: ({ G, ctx }) => {
+      if (G.draft) return;  // see onBegin — draft turns are not real game turns
       const pid = ctx.currentPlayer as PlayerID;
       fireBoardTriggers(G, pid, 'endOfTurn');
       resolveAttackPhase(G, pid);
@@ -399,11 +438,17 @@ export const DeadlockGame: Game<GameState> = {
       const ability = getAbility(data.skill);
       if (!ability) return INVALID_MOVE;
 
+      // Skills cost 1 soul. Same gating pattern as playCard — reject before
+      // any state mutation if the player can't afford it.
+      if (ps.souls < SKILL_COST) return INVALID_MOVE;
+
       let target: CardInstance | undefined;
       if (targetIid) {
         const f = findCardOnBoard(G, targetIid);
         if (f) target = f.card;
       }
+
+      ps.souls -= SKILL_COST;
 
       // Headline log BEFORE the ability runs — the ability itself will emit
       // damage/status lines under this header, and the player sees who cast what.
@@ -505,6 +550,63 @@ export const DeadlockGame: Game<GameState> = {
 
     endTurn: ({ events }) => {
       events.endTurn();
+    },
+
+    /**
+     * Pre-match hero draft pick. Validates the pick is from the current
+     * player's draft turn, removes the hero from the pool, and either ends
+     * the boardgame.io turn (if the next pick belongs to the other player)
+     * or stays in the same turn (consecutive snake picks). On the final
+     * pick, finalizes both players' PlayerStates with the drafted heroes
+     * and flips `mulliganPending = true` so MulliganOverlay takes over.
+     */
+    draftPick: ({ G, ctx, events }, heroId: string) => {
+      if (!G.draft) return INVALID_MOVE;
+      const expected = G.draft.order[G.draft.currentIndex];
+      if (expected !== ctx.currentPlayer) return INVALID_MOVE;
+      if (!G.draft.pool.includes(heroId)) return INVALID_MOVE;
+
+      G.draft.pool = G.draft.pool.filter((id) => id !== heroId);
+      G.draft.picks[expected].push(heroId);
+      G.draft.currentIndex++;
+
+      const data = CARDS_BY_ID[heroId];
+      pushLog(G, `P${expected} drafted ${data?.name ?? heroId}.`);
+
+      if (G.draft.currentIndex >= G.draft.order.length) {
+        const p0Heroes = G.draft.picks['0'] as [string, string, string, string];
+        const p1Heroes = G.draft.picks['1'] as [string, string, string, string];
+        const p0 = buildPlayer('0', { id: 'drafted_0', title: 'Drafted', heroes: p0Heroes, cards: STARTER_DECK_PLAYER.cards });
+        const p1 = buildPlayer('1', { id: 'drafted_1', title: 'Drafted', heroes: p1Heroes, cards: STARTER_DECK_AI.cards });
+        G.players['0'] = p0;
+        G.players['1'] = p1;
+        drawN(G, p0, 3);
+        drawN(G, p1, 3);
+        G.draft = null;
+        G.mulliganPending = true;
+        // Calibrate the boardgame.io turn counter so the player who finalized
+        // the draft is "real-turn 1". turn.onBegin will compute realTurn from
+        // (ctx.turn - draftTurnsOffset) on every subsequent turn.
+        G.draftTurnsOffset = ctx.turn - 1;
+        G.turnNumber = 1;
+        // turn.onBegin was gated by G.draft when this ctx.turn began, so its
+        // setup pipeline never ran for the current player. Run the T1
+        // equivalent now: souls refill, T1 P0 single draw, ult unlock check.
+        const currentPid = ctx.currentPlayer as PlayerID;
+        const currentPs = G.players[currentPid];
+        currentPs.souls = soulRefillForTurn(1);
+        const drawCount = currentPid === '0' ? 1 : 2;
+        drawN(G, currentPs, drawCount);
+        unlockUltimates(G, currentPs);
+        pushLog(G, 'Match begins.');
+        // Snake order guarantees pick 8 is P0, but defensively re-route the
+        // turn to P0 if we ever change that.
+        if (ctx.currentPlayer !== '0') events.endTurn();
+        return;
+      }
+
+      const next = G.draft.order[G.draft.currentIndex];
+      if (next !== ctx.currentPlayer) events.endTurn();
     },
 
     mulligan: ({ G }, swapIids: string[] = []) => {

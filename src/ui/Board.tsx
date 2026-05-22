@@ -8,14 +8,13 @@ import { Hand } from './board/Hand';
 import { Log } from './side-panel/Log';
 import { LogLine } from './side-panel/LogLine';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
-import { TurnBanner } from './effects/TurnBanner';
-import { DamageFloaters, type FloaterEntry } from './effects/DamageFloater';
 import { CardPreview } from './overlays/CardPreview';
 import { HeroDetailSheet } from './overlays/HeroDetailSheet';
 import { OpponentHand } from './board/OpponentHand';
 import { ArenaBackdrop } from './board/ArenaBackdrop';
 import { DragArrow } from './effects/DragArrow';
 import { MulliganOverlay } from './overlays/MulliganOverlay';
+import { DraftOverlay } from './overlays/DraftOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
 import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
@@ -25,17 +24,19 @@ import { ActiveDuel } from './board/ActiveDuel';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility, type TargetFilter } from '@/abilities';
 import { planAttackPhase, type AttackPlan } from '@/engine/combat';
-import { CombatChoreographer, type BeatImpact } from './effects/CombatChoreographer';
+import { CombatChoreographer } from './effects/CombatChoreographer';
+import { SoulsRail } from './board/SoulsRail';
+import { CombatProgressContext, type CombatProgress } from './effects/CombatProgressContext';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash } from './effects/CardPlayFlash';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { palette, fonts, radius, shadow, spring, text } from './tokens';
 import { SidePanel } from './side-panel/SidePanel';
+import { PanelDrawer } from './side-panel/PanelDrawer';
 import { HandTray } from './board/HandTray';
 import { findOnBoard, filterAllows, type PendingPlay } from './helpers';
 
 // Animation / pacing constants.
-const FLOATER_CLEAR_MS = 2000; // how long damage/heal floaters stay on-screen (long enough to read the number; calibrated to outlast the attack-beat impact phase)
 const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
 
 export function Board(props: BoardProps<GameState>) {
@@ -44,10 +45,7 @@ export function Board(props: BoardProps<GameState>) {
   const isMyTurn = ctx.currentPlayer === me;
   const [pending, setPending] = useState<PendingPlay | null>(null);
   const [logOpen, setLogOpen] = useState(false);
-  const [floaters, setFloaters] = useState<FloaterEntry[]>([]);
-  const [bannerVisible, setBannerVisible] = useState(false);
-  const [bannerText, setBannerText] = useState('');
-  const [bannerTone, setBannerTone] = useState<'self' | 'opponent'>('self');
+  const [panelOpen, setPanelOpen] = useState(false);
   const [preview, setPreview] = useState<{ card: CardInstance; hover: boolean } | null>(null);
   const [heroDetail, setHeroDetail] = useState<CardInstance | null>(null);
   // Equipment replacement flow: when the player tries to attach a 4th piece
@@ -59,11 +57,16 @@ export function Board(props: BoardProps<GameState>) {
   const [combatPlan, setCombatPlan] = useState<AttackPlan | null>(null);
   // Pending end-turn callback to fire once choreographer completes.
   const pendingEndTurnRef = useRef<(() => void) | null>(null);
-  // iids whose HP delta we should NOT emit a DamageFloater for, because the
-  // combat choreographer just drew its own −N for the same hit. Populated
-  // when a combat plan starts; cleared shortly after the engine resolves.
-  const combatTargetIidsRef = useRef<Set<string>>(new Set());
-  const combatTargetsClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirror of the choreographer's beat index so the TurnCompass (via
+  // CombatProgressContext) can paint its combat-mode ring without the
+  // choreographer needing to own any UI other than the action visuals.
+  const [combatBeat, setCombatBeat] = useState(0);
+  // Snap back to 0 whenever a new plan mounts or combat ends so the
+  // compass doesn't carry stale beat state into the next combat.
+  useEffect(() => { setCombatBeat(0); }, [combatPlan]);
+  const combatProgress: CombatProgress = combatPlan
+    ? { total: combatPlan.steps.length, currentBeat: combatBeat, attackerIsMe: combatPlan.attackerId === me }
+    : null;
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
@@ -100,49 +103,6 @@ export function Board(props: BoardProps<GameState>) {
   const handleCombatComplete = useCallback(() => {
     setCombatPlan(null);
     if (pendingEndTurnRef.current) pendingEndTurnRef.current();
-    // After the engine resolves, the HP-diff effect will fire one render later.
-    // Keep the suppression set alive briefly so that effect skips the floater
-    // pushes for iids the choreographer already painted, then clear it.
-    if (combatTargetsClearTimerRef.current) clearTimeout(combatTargetsClearTimerRef.current);
-    combatTargetsClearTimerRef.current = setTimeout(() => {
-      combatTargetIidsRef.current = new Set();
-      combatTargetsClearTimerRef.current = null;
-    }, 200);
-  }, []);
-
-  /** Per-beat impact handler — pushes damage numbers into the shared
-   *  DamageFloaters layer at the cinematic impact moment, so combat numbers
-   *  use the same renderer and the same anchor position as skill / spell /
-   *  heal numbers triggered elsewhere on the board. */
-  const handleBeatImpact = useCallback((impact: BeatImpact) => {
-    const additions: FloaterEntry[] = [];
-    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    if (impact.primary && impact.step.finalDamage > 0) {
-      additions.push({
-        id: `combat-primary-${impact.primary.iid}-${stamp}`,
-        iid: impact.primary.iid,
-        value: -impact.step.finalDamage,
-        kind: impact.primary.iid.startsWith('face-') ? 'face' : 'attack',
-        x: impact.primary.x,
-        y: impact.primary.y,
-      });
-    }
-    if (impact.retaliation && impact.step.retaliationDamage > 0) {
-      additions.push({
-        id: `combat-retal-${impact.retaliation.iid}-${stamp}`,
-        iid: impact.retaliation.iid,
-        value: -impact.step.retaliationDamage,
-        kind: 'attack',
-        x: impact.retaliation.x,
-        y: impact.retaliation.y,
-      });
-    }
-    if (additions.length) {
-      setFloaters((cur) => [...cur, ...additions]);
-      setTimeout(() => {
-        setFloaters((cur) => cur.filter((f) => !additions.some((a) => a.id === f.id)));
-      }, FLOATER_CLEAR_MS);
-    }
   }, []);
 
   /** Intercept end-turn to play the attack-phase animation before the engine resolves. */
@@ -158,23 +118,6 @@ export function Board(props: BoardProps<GameState>) {
       try { moves.endTurn(); } catch {}
       pendingEndTurnRef.current = null;
     };
-    // Snapshot which iids the choreographer will paint a −N over, so the
-    // HP-diff effect skips duplicating the same number. Includes the
-    // attacker iid whenever a beat carries retaliation damage — the attacker
-    // also takes a hit on resolve, and the choreographer fires its own
-    // floater for that side.
-    const targets = new Set<string>();
-    const oppPid: PlayerID = ctx.currentPlayer === '0' ? '1' : '0';
-    for (const s of plan.steps) {
-      if (s.targetIid) targets.add(s.targetIid);
-      else targets.add(`face-${oppPid}`);
-      if (s.retaliationDamage > 0) targets.add(s.attackerIid);
-    }
-    combatTargetIidsRef.current = targets;
-    if (combatTargetsClearTimerRef.current) {
-      clearTimeout(combatTargetsClearTimerRef.current);
-      combatTargetsClearTimerRef.current = null;
-    }
     setCombatPlan(plan);
   }, [G, ctx.currentPlayer, combatPlan, moves, G.action]);
 
@@ -219,91 +162,14 @@ export function Board(props: BoardProps<GameState>) {
     };
   }, [preview]);
 
-  const prevHpRef = useRef<Map<string, number>>(new Map());
-  const prevHpMaxRef = useRef<Map<string, number>>(new Map());
-  const prevPlayerHpRef = useRef<{ '0': number; '1': number }>({ '0': 20, '1': 20 });
+  // HP / BP change animations are now driven by `useStatTick` inside
+  // HeroSlot (per-card) and PlayerCard (patron HP) — no central floater
+  // pushes here. Removing the old HP-diff effect also drops the
+  // combat-vs-card-diff deduplication ref it used to need.
 
-  useEffect(() => {
-    const additions: FloaterEntry[] = [];
-    const newHp = new Map<string, number>();
-    const newHpMax = new Map<string, number>();
-    const collect = (c: CardInstance | null) => {
-      if (!c) return;
-      newHp.set(c.iid, c.hp);
-      newHpMax.set(c.iid, c.hpMax);
-      const prev = prevHpRef.current.get(c.iid);
-      const prevMax = prevHpMaxRef.current.get(c.iid);
-      if (prev !== undefined && prev !== c.hp) {
-        if (combatTargetIidsRef.current.has(c.iid)) return;
-        // Level-up grants +N HP and +N hpMax in lock-step (see expSystem.grantExp).
-        // That's a stat upgrade, not a heal — suppress the floater so it doesn't
-        // double up with the level-ring tick + log line. Only an hp increase
-        // that exceeds the hpMax increase is treated as a true heal.
-        const hpDelta = c.hp - prev;
-        const maxDelta = prevMax !== undefined ? c.hpMax - prevMax : 0;
-        if (hpDelta > 0 && maxDelta > 0 && hpDelta === maxDelta) return;
-        const el = slotRefs.current.get(c.iid);
-        const rect = el?.getBoundingClientRect();
-        if (rect) {
-          additions.push({
-            id: `${c.iid}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            iid: c.iid,
-            value: hpDelta,
-            kind: hpDelta > 0 ? 'heal' : 'attack',
-            // Anchor: TOP edge of the card. The floater renders just above and
-            // floats further up. Identical position whether the trigger is
-            // combat damage, a skill, a status tick, or a heal.
-            x: rect.left + rect.width / 2,
-            y: rect.top,
-          });
-        }
-      }
-    };
-    for (const pid of ['0', '1'] as PlayerID[]) {
-      collect(G.players[pid].active);
-      for (const b of G.players[pid].bench) collect(b);
-    }
-    for (const pid of ['0', '1'] as PlayerID[]) {
-      const prev = prevPlayerHpRef.current[pid];
-      if (prev !== G.players[pid].hp) {
-        if (!combatTargetIidsRef.current.has(`face-${pid}`)) {
-          additions.push({
-            id: `face-${pid}-${Date.now()}`,
-            iid: `face-${pid}`,
-            value: G.players[pid].hp - prev,
-            kind: 'face',
-            // y = top of the face zone (matches the synthetic combat band).
-            x: window.innerWidth / 2,
-            y: pid === me ? window.innerHeight - 156 : 16,
-          });
-        }
-        prevPlayerHpRef.current[pid] = G.players[pid].hp;
-      }
-    }
-    prevHpRef.current = newHp;
-    prevHpMaxRef.current = newHpMax;
-    if (additions.length) {
-      setFloaters((cur) => [...cur, ...additions]);
-      setTimeout(() => {
-        setFloaters((cur) => cur.filter((f) => !additions.some((a) => a.id === f.id)));
-      }, FLOATER_CLEAR_MS);
-    }
-  }, [G]);
-
-  const lastTurnRef = useRef<{ turn: number; player: string }>({ turn: ctx.turn, player: ctx.currentPlayer });
-  useEffect(() => {
-    const cur = { turn: ctx.turn, player: ctx.currentPlayer };
-    const prev = lastTurnRef.current;
-    if (cur.player !== prev.player || cur.turn !== prev.turn) {
-      const isMy = cur.player === me;
-      setBannerText(isMy ? 'Your Move' : "Rival's Move");
-      setBannerTone(isMy ? 'self' : 'opponent');
-      setBannerVisible(true);
-      const t = setTimeout(() => setBannerVisible(false), 2200);
-      lastTurnRef.current = cur;
-      return () => clearTimeout(t);
-    }
-  }, [ctx.turn, ctx.currentPlayer]);
+  // Turn-change acknowledgement now lives on the TurnCompass itself
+  // (ring-burst + chevron flip + hue swap on isMyTurn change). No
+  // banner needed.
 
   // AI loop. Pauses while combat is animating OR while a card-play / skill /
   // ult reveal is in flight (so the AI doesn't fire its next move on top of
@@ -440,10 +306,10 @@ export function Board(props: BoardProps<GameState>) {
   function tryUseSkill(card: CardInstance) {
     if (!isMyTurn) return;
     if (actionLocked) return;
-    const hasIC = card.attached?.some((eq) => eq.cardId === 'improved_cooldown') ?? false;
-    if (G.players[me].skillUsedThisTurn && !hasIC) return; // player-wide rule (IC bypass)
+    if (G.players[me].skillUsedThisTurn) return; // one skill per player per turn
+    if (G.players[me].souls < 1) return; // skills cost 1 soul
     if (card.skillUsedThisTurn) return;
-    if (card.statuses.some((s) => s.id === 'stun' || s.id === 'silenced' || s.id === 'sleep')) return;
+    if (card.statuses.some((s) => s.id === 'stun' || s.id === 'silenced')) return;
     const data = CARDS_BY_ID[card.cardId];
     if (data?.type !== 'hero' || !data.skill) return;
     const ability = getAbility(data.skill);
@@ -544,27 +410,45 @@ export function Board(props: BoardProps<GameState>) {
 
   const opp: PlayerID = '1';
 
+  // Pre-match draft: render only the DraftOverlay; suppress the rest of the
+  // board chrome. Boardgame.io currentPlayer drives whose pick it is, so we
+  // still need props from G + ctx down to the overlay.
+  if (G.draft) {
+    return (
+      <DraftOverlay
+        draft={G.draft}
+        currentPlayer={ctx.currentPlayer as PlayerID}
+        me={me}
+        onPick={(heroId) => (moves as any).draftPick(heroId)}
+      />
+    );
+  }
+
   return (
     <LayoutGroup>
+      <CombatProgressContext.Provider value={combatProgress}>
       <ArenaBackdrop />
       <div style={{
         minHeight: '100vh',
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1100px) 280px',
-        gridTemplateRows: '1fr',
-        maxWidth: 1460,
+        display: 'flex',
+        justifyContent: 'center',
         margin: '0 auto',
-        gap: 16,
         padding: '12px 16px 0',
         fontFamily: fonts.ui, color: palette.text,
         position: 'relative',
-        justifyContent: 'center',
       }}>
-        {/* MAIN COLUMN */}
+        {/* MAIN COLUMN — battle stage centered, side panel lives in a
+            drawer slid in from the right (toggled by the chevron tab). */}
         <div style={{
+          flex: '1 1 auto',
+          maxWidth: 1100,
           display: 'flex',
           flexDirection: 'column',
-          gap: 10,
+          // Center the stack vertically so unused space spreads to top/bottom
+          // rather than ballooning the active row. Generous fibonacci gap
+          // gives the rows visible breathing room rather than packing them.
+          justifyContent: 'center',
+          gap: 40,
           minHeight: 0,
           height: 'calc(100vh - 32px)',
         }}>
@@ -572,52 +456,71 @@ export function Board(props: BoardProps<GameState>) {
             <OpponentHand cards={G.players[opp].hand} />
           </div>
 
-          {/* OPP BENCH (3 cards) */}
-          <div style={{ flex: '0 0 130px' }}>
-            <BenchRow
-              ps={G.players[opp]}
-              owner={opp} myId={me}
-              isOpponent
-              pending={pending}
-              onTapHero={onTapHero}
-              onLongPressHero={(c) => setHeroDetail(c)}
-              onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
-              isTargetable={isTargetable}
-              registerSlotRef={registerSlotRef}
-            />
-          </div>
+          {/* 3×3 BOARD GRID — wraps the three rows (opp bench, lane, my
+              bench) in a positioning context so SoulsRail can pin to the
+              right edge, running parallel to the grid. */}
+          <div style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 40,
+          }}>
+            {/* OPP BENCH (3 cards) */}
+            <div style={{ flex: '0 0 180px', height: 180 }}>
+              <BenchRow
+                ps={G.players[opp]}
+                owner={opp} myId={me}
+                isOpponent
+                pending={pending}
+                onTapHero={onTapHero}
+                onLongPressHero={(c) => setHeroDetail(c)}
+                onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
+                isTargetable={isTargetable}
+                registerSlotRef={registerSlotRef}
+              />
+            </div>
 
-          {/* THE DUEL — opp active and my active side by side */}
-          <div style={{ flex: '1 1 290px', minHeight: 290 }}>
-            <ActiveDuel
-              G={G}
-              me={me}
-              opp={opp}
-              isMyTurn={isMyTurn}
-              turn={ctx.turn}
-              pending={pending}
-              onTapHero={onTapHero}
-              onLongPressHero={(c) => setHeroDetail(c)}
-              onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
-              isTargetable={isTargetable}
-              registerSlotRef={registerSlotRef}
-              playerSkillSpent={G.players[me].skillUsedThisTurn}
-            />
-          </div>
+            {/* THE DUEL — opp active and my active side by side. Active row
+                is bench × golden ratio (180 × 1.618 ≈ 291) so the duel still
+                reads as the focus while bench tiles show full portraits. */}
+            <div style={{ flex: '0 0 290px', height: 290 }}>
+              <ActiveDuel
+                G={G}
+                me={me}
+                opp={opp}
+                isMyTurn={isMyTurn}
+                turn={ctx.turn}
+                pending={pending}
+                onTapHero={onTapHero}
+                onLongPressHero={(c) => setHeroDetail(c)}
+                onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
+                isTargetable={isTargetable}
+                registerSlotRef={registerSlotRef}
+                playerSkillSpent={G.players[me].skillUsedThisTurn}
+              />
+            </div>
 
-          {/* MY BENCH (3 cards) */}
-          <div style={{ flex: '0 0 130px' }}>
-            <BenchRow
-              ps={G.players[me]}
-              owner={me} myId={me}
-              isOpponent={false}
-              pending={pending}
-              onTapHero={onTapHero}
-              onLongPressHero={(c) => setHeroDetail(c)}
-              onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
-              isTargetable={isTargetable}
-              registerSlotRef={registerSlotRef}
-              playerSkillSpent={G.players[me].skillUsedThisTurn}
+            {/* MY BENCH (3 cards) */}
+            <div style={{ flex: '0 0 180px', height: 180 }}>
+              <BenchRow
+                ps={G.players[me]}
+                owner={me} myId={me}
+                isOpponent={false}
+                pending={pending}
+                onTapHero={onTapHero}
+                onLongPressHero={(c) => setHeroDetail(c)}
+                onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
+                isTargetable={isTargetable}
+                registerSlotRef={registerSlotRef}
+                playerSkillSpent={G.players[me].skillUsedThisTurn}
+              />
+            </div>
+
+            {/* Souls rail — vertical gem stack parallel to the 3×3 grid;
+                top = rival, bottom = you, positions encode ownership. */}
+            <SoulsRail
+              rivalSouls={G.players[opp].souls}
+              yourSouls={G.players[me].souls}
             />
           </div>
 
@@ -639,16 +542,19 @@ export function Board(props: BoardProps<GameState>) {
           </div>
         </div>
 
-        {/* RIGHT SIDE PANEL */}
-        <SidePanel
-          G={G}
-          me={me}
-          isMyTurn={isMyTurn}
-          turn={ctx.turn}
-          onLogToggle={() => setLogOpen((v) => !v)}
-          projectedFaceDamageMe={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
-          projectedFaceDamageOpp={ctx.currentPlayer === me ? projectedFaceDamage : 0}
-        />
+        {/* PANEL DRAWER — slides in from the right edge, toggled by a thin
+            chevron tab always visible at the right edge of the viewport. */}
+        <PanelDrawer open={panelOpen} onToggle={() => setPanelOpen((v) => !v)}>
+          <SidePanel
+            G={G}
+            me={me}
+            isMyTurn={isMyTurn}
+            turn={ctx.turn}
+            onLogToggle={() => setLogOpen((v) => !v)}
+            projectedFaceDamageMe={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
+            projectedFaceDamageOpp={ctx.currentPlayer === me ? projectedFaceDamage : 0}
+          />
+        </PanelDrawer>
 
         <AnimatePresence>
           {pending && (
@@ -663,14 +569,10 @@ export function Board(props: BoardProps<GameState>) {
 
         <AnimatePresence>{logOpen && <Log entries={G.log} onClose={() => setLogOpen(false)} />}</AnimatePresence>
 
-        <DamageFloaters entries={floaters} />
-
         <DragArrow
           active={!!pending}
           source={pending ? { x: window.innerWidth / 2, y: window.innerHeight - 130 } : null}
         />
-
-        <TurnBanner visible={bannerVisible} text={bannerText} tone={bannerTone} />
 
         <AnimatePresence>
           {preview && <CardPreview key={preview.card.iid + (preview.hover ? '-h' : '-p')} cardId={preview.card.cardId} hover={preview.hover} onClose={() => setPreview(null)} />}
@@ -689,21 +591,24 @@ export function Board(props: BoardProps<GameState>) {
             // shows when the engine would actually accept the move.
             const data = CARDS_BY_ID[heroDetail.cardId];
             const hasSkill = data?.type === 'hero' && !!data.skill;
-            const heroCcd = heroDetail.statuses.some((s) => s.id === 'stun' || s.id === 'silenced' || s.id === 'sleep');
-            const heroHasIC = heroDetail.attached?.some((eq) => eq.cardId === 'improved_cooldown') ?? false;
-            const playerSkillGate = G.players[me].skillUsedThisTurn && !heroHasIC;
+            const heroCcd = heroDetail.statuses.some((s) => s.id === 'stun' || s.id === 'silenced');
+            const playerSkillGate = G.players[me].skillUsedThisTurn;
+            const SKILL_COST = 1;
+            const canAffordSkill = mySouls >= SKILL_COST;
             const canUseSkill = isMyTurn
               && isMine
               && hasSkill
               && !heroDetail.skillUsedThisTurn
               && !playerSkillGate
-              && !heroCcd;
+              && !heroCcd
+              && canAffordSkill;
             const skillBlockedReason =
               !isMine ? null :
               !isMyTurn ? "Not your turn" :
               playerSkillGate ? "1 skill per turn" :
               heroDetail.skillUsedThisTurn ? "Already used" :
               heroCcd ? "Cannot use skill (status)" :
+              !canAffordSkill ? `Need ${SKILL_COST} soul` :
               null;
 
             return (
@@ -780,7 +685,7 @@ export function Board(props: BoardProps<GameState>) {
               slotRefs={slotRefs.current}
               stepDuration={COMBAT_STEP_MS}
               onComplete={handleCombatComplete}
-              onBeatImpact={handleBeatImpact}
+              onBeatIndexChange={setCombatBeat}
             />
           )}
         </AnimatePresence>
@@ -788,6 +693,7 @@ export function Board(props: BoardProps<GameState>) {
         <UltMomentFlash G={G} />
         <CardPlayFlash G={G} />
       </div>
+      </CombatProgressContext.Provider>
     </LayoutGroup>
   );
 }

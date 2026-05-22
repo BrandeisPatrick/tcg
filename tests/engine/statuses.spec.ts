@@ -232,6 +232,7 @@ describe('status: stun', () => {
 
   it('blocks useSkill', () => {
     const G = freshG();
+    G.players['0'].souls = 5; // afford the skill cost so rejection is the stun, not the soul gate
     const hero = G.players['0'].active!;
     addStatus(G, hero, 'stun', 1, 99);
     const result = runMove('useSkill', G, '0', hero.iid, G.players['1'].active!.iid);
@@ -243,6 +244,7 @@ describe('status: stun', () => {
 describe('status: silenced', () => {
   it('blocks useSkill', () => {
     const G = freshG();
+    G.players['0'].souls = 5;
     const hero = G.players['0'].active!;
     addStatus(G, hero, 'silenced', 1, 99);
     const result = runMove('useSkill', G, '0', hero.iid, G.players['1'].active!.iid);

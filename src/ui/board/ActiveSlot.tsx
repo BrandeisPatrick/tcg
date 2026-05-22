@@ -35,13 +35,9 @@ export function ActiveSlot({
       height: '100%',
       gap: 14,
     }}>
-      <span style={{
-        position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-        ...text.label, color: palette.textDim,
-      }}>
-        {isOpponent ? 'Rival · Front' : 'Your · Front'}
-      </span>
-      <div style={{ width: 190, height: '100%', maxHeight: 280 }}>
+      {/* Row label moved to ActiveDuel — sits at the left edge of the row
+          (matching the Bench label style) instead of overlapping each tile. */}
+      <div style={{ width: '100%', height: '100%', maxHeight: 280 }}>
         <AnimatePresence mode="popLayout">
           {card ? (
             <motion.div

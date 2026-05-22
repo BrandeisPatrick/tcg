@@ -3,6 +3,7 @@ import type { GameState, PlayerID } from '@/engine/types';
 import { palette, radius, text } from '../tokens';
 import { OrderBadge } from './OrderBadge';
 import { SoulGem } from './SoulGem';
+import { useStatTick } from '../board/useStatTick';
 
 /**
  * Side-panel block for one patron: HP bar (with projected-damage stripe),
@@ -24,6 +25,12 @@ export function PlayerCard({
   const projectedHp = Math.max(0, ps.hp - (projectedFaceDamage ?? 0));
   const projectedFrac = Math.max(0, Math.min(1, projectedHp / ps.hpMax));
   const hasIncoming = !!projectedFaceDamage && projectedFaceDamage > 0;
+  // Pulse + flash the patron HP number whenever face HP changes — same
+  // visual language as hero HP ticks on the board: rest in the HP brand
+  // colour, pulse bright when healed, pulse desaturated when damaged.
+  const hpTick = useStatTick(ps.hp);
+  const hpBase = palette.hp;
+  const hpFlash = hpTick === 'down' ? palette.hpDim : hpTick === 'up' ? palette.hpBright : hpBase;
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', gap: 6,
@@ -81,8 +88,15 @@ export function PlayerCard({
               ...text.label,
             }}>▼{projectedFaceDamage}</span>
           )}
-          <span style={{ ...text.numeric, fontSize: 16, color: palette.textDim }}>
-            {ps.hp}<span style={{ ...text.body, color: palette.textFaint, marginLeft: 2 }}> / {ps.hpMax}</span>
+          <span style={{ ...text.numeric, fontSize: 16 }}>
+            <motion.span
+              style={{ color: hpBase, display: 'inline-block' }}
+              animate={hpTick
+                ? { scale: [1, 1.35, 1], color: [hpBase, hpFlash, hpBase] }
+                : { scale: 1, color: hpBase }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            >{ps.hp}</motion.span>
+            <span style={{ ...text.body, color: palette.textFaint, marginLeft: 2 }}> / {ps.hpMax}</span>
           </span>
         </span>
       </div>

@@ -6,7 +6,7 @@ import { getAbility, type TargetFilter } from '@/abilities';
 import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
 
 interface MoveOption {
-  move: 'playCard' | 'useSkill' | 'endTurn' | 'moveHero' | 'promoteToActive';
+  move: 'playCard' | 'useSkill' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
   args: any[];
   score: number;
 }
@@ -91,6 +91,31 @@ function scoreSkill(G: GameState, pid: PlayerID, hero: CardInstance, target?: Ca
 
 export function enumerateAIMoves(G: GameState, ctx: Ctx): MoveOption[] {
   const pid = ctx.currentPlayer as PlayerID;
+
+  // Pre-match draft: only one move kind is legal. Score by stat sum +
+  // rarity, with a small diversity nudge so the AI doesn't pick four glass
+  // cannons. Returns sorted; the top option is the AI's pick.
+  if (G.draft && G.draft.order[G.draft.currentIndex] === pid) {
+    const myPicks = G.draft.picks[pid];
+    const taken = myPicks.map((id) => CARDS_BY_ID[id]).filter((c) => c?.type === 'hero') as any[];
+    const myAtk = taken.reduce((a, h) => a + (h.atk ?? 0), 0);
+    const myHp = taken.reduce((a, h) => a + (h.hp ?? 0), 0);
+    const opts: MoveOption[] = [];
+    for (const id of G.draft.pool) {
+      const h = CARDS_BY_ID[id];
+      if (!h || h.type !== 'hero') continue;
+      // Stat sum + rarity weight (rarer heroes are usually statlines + skill).
+      let s = (h.atk ?? 0) + (h.hp ?? 0) + (h.rarity ?? 1) * 1.5;
+      // Diversity nudge: if I'm already heavy on ATK, prefer HP; vice versa.
+      if (myAtk > myHp + 3 && (h.hp ?? 0) > (h.atk ?? 0)) s += 2;
+      if (myHp > myAtk + 3 && (h.atk ?? 0) > (h.hp ?? 0)) s += 2;
+      // Tiny jitter so identical scores don't always tie the same way (boardgame.io's RNG isn't seeded here).
+      s += Math.random() * 0.4;
+      opts.push({ move: 'draftPick', args: [id], score: s });
+    }
+    return opts.sort((a, b) => b.score - a.score).slice(0, 8);
+  }
+
   const ps = G.players[pid];
   const out: MoveOption[] = [];
   const enemy = G.players[otherPlayer(pid)];
@@ -170,8 +195,10 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx): MoveOption[] {
     }
   }
 
-  // Use skills — only one skill per player per turn, so skip entirely if already used.
-  if (!ps.skillUsedThisTurn) for (const hero of allyTargets) {
+  // Use skills — only one skill per player per turn, and each skill costs
+  // 1 soul (matches game.ts useSkill). Skip the whole branch if either rule
+  // would reject every candidate up front.
+  if (!ps.skillUsedThisTurn && ps.souls >= 1) for (const hero of allyTargets) {
     if (hero.skillUsedThisTurn) continue;
     const data = CARDS_BY_ID[hero.cardId];
     if (data?.type !== 'hero' || !data.skill) continue;

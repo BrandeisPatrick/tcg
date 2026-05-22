@@ -47,6 +47,24 @@ export function HeartIcon({ size = 14, color = '#ff7d7d', style }: IconProps) {
   );
 }
 
+/** Heater shield — used for the Shield-status stat readout on the hero tile.
+ *  Default colour is forest green to match the buff palette. */
+export function ShieldIcon({ size = 14, color = '#4a7030', style }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" style={wrap(size, style)}>
+      <path
+        d="M8 1.2 L14 3 L14 8 C 14 11.5, 11.5 13.6, 8 14.8 C 4.5 13.6, 2 11.5, 2 8 L 2 3 Z"
+        fill={color}
+        stroke="rgba(0,0,0,0.4)"
+        strokeWidth="0.6"
+        strokeLinejoin="round"
+      />
+      {/* subtle inner highlight on the upper-left face */}
+      <path d="M8 2.4 L4 3.6 L4 7.5 C 4 8.4, 4.5 9.2, 5 9.8 L 5 4.4 Z" fill="rgba(255,255,255,0.22)" />
+    </svg>
+  );
+}
+
 export function SpiritIcon({ size = 14, color = '#c08bff', style }: IconProps) {
   return (
     <svg viewBox="0 0 16 16" style={wrap(size, style)}>

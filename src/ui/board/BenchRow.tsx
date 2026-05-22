@@ -41,12 +41,14 @@ export function BenchRow({
         position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
         ...text.label, color: palette.textDim,
       }}>
-        {isOpponent ? 'Rival · Cover' : 'Your · Cover'}
+        {isOpponent ? 'Rival · Bench' : 'Your · Bench'}
       </span>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 140px)',
-        gap: 10,
+        // Matches ActiveDuel grid so all three rows column-align across
+        // the board (Rival Bench → Lane → Your Bench).
+        gridTemplateColumns: 'repeat(3, 180px)',
+        gap: 28,
         height: '100%',
       }}>
         <AnimatePresence mode="popLayout">

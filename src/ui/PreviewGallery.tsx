@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { CardFrame } from './card/CardFrame';
 import { StatusIcon } from './card/StatusIcon';
-import { TurnBanner } from './effects/TurnBanner';
-import { DamageFloaters, type FloaterEntry } from './effects/DamageFloater';
 import { CardPlayOverlay } from './effects/CardPlayFlash';
 import { UltFlashOverlay } from './effects/UltMomentFlash';
 import { HEROES, SPELLS, EQUIPMENT, ULTIMATES } from '@/cards';
 import { STATUSES } from '@/statuses';
 import { HeroSlot } from './board/HeroSlot';
+import { TurnCompass } from './board/TurnCompass';
+import { SoulsRail } from './board/SoulsRail';
 import type { CardInstance, HeroCard } from '@/engine/types';
 import { palette, fonts, radius, shadow, text } from './tokens';
 import { LevelRing } from './card/LevelRing';
@@ -179,36 +179,19 @@ function CardsTab() {
 function AnimationsTab() {
   return (
     <>
-      <Section title="Turn Banner">
-        <Caption>Plays at the start of each turn to mark who's moving. The combat banner uses the same chrome with a wine-red border to signal a contested beat.</Caption>
-        <Row>
-          <TriggerButton label="Your Move" component={(onDone) => (
-            <AutoExit ms={2200} onDone={onDone}>
-              <TurnBanner visible={true} text="Your Move" tone="self" />
-            </AutoExit>
-          )} />
-          <TriggerButton label="Rival's Move" component={(onDone) => (
-            <AutoExit ms={2200} onDone={onDone}>
-              <TurnBanner visible={true} text="Rival's Move" tone="opponent" />
-            </AutoExit>
-          )} />
-          <TriggerButton label="Combat · 1 / 3" component={(onDone) => (
-            <AutoExit ms={2200} onDone={onDone}>
-              <TurnBanner visible={true} text="Combat · 1 / 3" tone="opponent" />
-            </AutoExit>
-          )} />
-        </Row>
+      <Section title="Turn Compass">
+        <Caption>Persistent quiet indicator pinned between the two active heroes. Idle: a conic-gradient ring sweeps slowly (~8s) and the chevron points at whoever's turn. Combat mode: the ring swaps to a segmented progress fill — one arc per attack step, filling in the attacker's hue with the active segment pulsing. No sibling chrome.</Caption>
+        <TurnCompassDemo />
       </Section>
 
-      <Section title="Damage / Heal Floaters">
-        <Caption>Single renderer for every damage and heal number on the board — combat hits, skill damage, status ticks (Bleed, Djinn's Mark), heals, face damage. Color encodes the source.</Caption>
-        <Row>
-          <FloaterTrigger label="Bullet (attack)" entry={{ value: -3, kind: 'attack' }} />
-          <FloaterTrigger label="Spirit damage" entry={{ value: -7, kind: 'spirit' }} />
-          <FloaterTrigger label="Pure (Bleed / Djinn's Mark)" entry={{ value: -2, kind: 'pure' }} />
-          <FloaterTrigger label="Heal" entry={{ value: 4, kind: 'heal' }} />
-          <FloaterTrigger label="Face damage" entry={{ value: -1, kind: 'face' }} />
-        </Row>
+      <Section title="Souls Rail">
+        <Caption>Vertical stack of flat brass rectangles hugging the right edge of the 3×3 grid. Rival's chips anchor at the top edge; yours anchor at the bottom — position carries ownership. Each soul = one chip; spends pop the head chip off, refills pop a new one on. No labels, no mid-divider.</Caption>
+        <SoulsRailDemo />
+      </Section>
+
+      <Section title="HP / BP Tick">
+        <Caption>Damage and heals animate ON the hero card's HP / BP number — a quick scale pulse that stays in the stat's own colour family (brass for BP, vermillion for HP). Buffs pulse brighter, debuffs/damage pulse desaturated grey. Click below to mutate a mock card and watch the number tick.</Caption>
+        <StatTickDemo />
       </Section>
 
       <Section title="Card-Play Flash">
@@ -295,26 +278,134 @@ function AutoExit({ ms, onDone, children }: { ms: number; onDone: () => void; ch
   return <>{children}</>;
 }
 
-function FloaterTrigger({ label, entry }: {
-  label: string;
-  entry: { value: number; kind: FloaterEntry['kind'] };
-}) {
-  const [floaters, setFloaters] = useState<FloaterEntry[]>([]);
-  function fire() {
-    const id = `demo-${Date.now()}`;
-    setFloaters([{
-      id, iid: 'demo',
-      value: entry.value, kind: entry.kind,
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    }]);
-    setTimeout(() => setFloaters([]), 2000);
-  }
+function SoulsRailDemo() {
+  // Stage matches the live board's height proportion (3 rows of 180/290
+  // px + gaps ≈ 690 px). The rail is rendered absolutely inside a
+  // relative container so the same anchor logic the live board uses
+  // (right: -28px) reads correctly here too.
+  const [rival, setRival] = useState(2);
+  const [you, setYou] = useState(3);
   return (
-    <>
-      <Button onClick={fire}>{label}</Button>
-      <DamageFloaters entries={floaters} />
-    </>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{
+        position: 'relative',
+        height: 460,
+        borderRadius: radius.md,
+        border: `1px solid ${palette.border}`,
+        background: `linear-gradient(180deg, ${palette.bg1}, ${palette.bg2})`,
+      }}>
+        {/* Stage stand-ins for the 3 board rows so the rail's midline
+            visibly aligns with the centre row, just like in-game. */}
+        <div style={{
+          position: 'absolute', inset: 12,
+          display: 'flex', flexDirection: 'column', gap: 16,
+        }}>
+          <div style={{ flex: 1, border: `1px dashed ${palette.border}`, borderRadius: radius.sm, opacity: 0.6 }} />
+          <div style={{ flex: 1.6, border: `1px dashed ${palette.border}`, borderRadius: radius.sm, opacity: 0.6 }} />
+          <div style={{ flex: 1, border: `1px dashed ${palette.border}`, borderRadius: radius.sm, opacity: 0.6 }} />
+        </div>
+        <SoulsRail rivalSouls={rival} yourSouls={you} />
+      </div>
+      <Row>
+        <Button onClick={() => setRival((s) => Math.max(0, s - 1))}>−1 Rival ({rival})</Button>
+        <Button onClick={() => setRival((s) => s + 1)}>+1 Rival</Button>
+        <Button onClick={() => setYou((s) => Math.max(0, s - 1))}>−1 You ({you})</Button>
+        <Button onClick={() => setYou((s) => s + 1)}>+1 You</Button>
+        <Button onClick={() => { setRival(2); setYou(3); }}>Reset</Button>
+      </Row>
+    </div>
+  );
+}
+
+function TurnCompassDemo() {
+  // Two mounted compasses — one per idle turn state — plus a combat-mode
+  // sub-stage that flips the same component into its segmented-ring state
+  // via the `combatOverride` prop. The 18-px column gap matches the
+  // chevron's max extent so it never collides with the label.
+  const [turn, setTurn] = useState(1);
+  const [isMyTurn, setIsMyTurn] = useState(true);
+  const [combatMode, setCombatMode] = useState(false);
+  const [attackerIsMe, setAttackerIsMe] = useState(true);
+  const [total, setTotal] = useState(3);
+  const [currentBeat, setCurrentBeat] = useState(0);
+  const combatOverride = combatMode
+    ? { total, currentBeat, attackerIsMe }
+    : null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
+          <TurnCompass isMyTurn={true} turn={turn} combatOverride={null} />
+          <span style={{ ...text.label, color: palette.textDim }}>Your Move (idle)</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
+          <TurnCompass isMyTurn={false} turn={turn} combatOverride={null} />
+          <span style={{ ...text.label, color: palette.textDim }}>Rival's Move (idle)</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+          <span style={{ ...text.label, color: palette.textDim }}>Live toggle</span>
+          <div style={{ padding: '8px 0' }}>
+            <TurnCompass isMyTurn={isMyTurn} turn={turn} combatOverride={combatOverride} />
+          </div>
+          <Row>
+            <Button onClick={() => setTurn((v) => v + 1)}>+1 Turn</Button>
+            <Button onClick={() => setIsMyTurn((v) => !v)}>Flip side</Button>
+            <Button onClick={() => { setTurn(1); setIsMyTurn(true); setCombatMode(false); setAttackerIsMe(true); setTotal(3); setCurrentBeat(0); }}>Reset</Button>
+          </Row>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <span style={{ ...text.label, color: palette.textDim }}>Combat mode (same compass)</span>
+        <Row>
+          <Button onClick={() => setCombatMode((v) => !v)}>{combatMode ? 'Combat: ON' : 'Combat: OFF'}</Button>
+          <Button onClick={() => setCurrentBeat((b) => (b + 1) % (total + 1))} disabled={!combatMode}>Step beat ({currentBeat} / {total})</Button>
+          <Button onClick={() => setAttackerIsMe((v) => !v)} disabled={!combatMode}>{attackerIsMe ? 'You attacking' : 'Rival attacking'}</Button>
+          <Button onClick={() => setTotal((t) => (t % 4) + 1)} disabled={!combatMode}>Total = {total} (cycle)</Button>
+        </Row>
+        <Caption>Toggling combat mode swaps the live-toggle compass's idle conic sweep for a segmented progress ring — one arc per beat, filling in the attacker's hue. The active segment pulses. No sibling chrome.</Caption>
+      </div>
+    </div>
+  );
+}
+
+function StatTickDemo() {
+  // Mock a Paige instance and let the demo mutate hp / atkMod directly so
+  // the on-card animation (driven by useStatTick inside HeroSlot) fires
+  // exactly the same way it does in a real match.
+  const paige = HEROES.find((h) => h.id === 'hero_paige')!;
+  const [hp, setHp] = useState(paige.hp);
+  const [atkMod, setAtkMod] = useState(0);
+  const card: CardInstance = {
+    ...mockHeroInstance(paige),
+    hp, hpMax: paige.hp, atkMod,
+  };
+  return (
+    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div style={{ width: 180, aspectRatio: '3 / 4' }}>
+        <HeroSlot
+          card={card}
+          owner="0" myId="0" isOpponent={false}
+          pending={null} isTargetable={false}
+          isCurrentTurn={false}
+          onTap={() => {}}
+        />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <Caption>HP changes</Caption>
+        <Row>
+          <Button onClick={() => setHp((v) => Math.max(0, v - 1))}>−1 HP</Button>
+          <Button onClick={() => setHp((v) => Math.max(0, v - 3))}>−3 HP</Button>
+          <Button onClick={() => setHp((v) => Math.min(paige.hp, v + 1))}>+1 HP</Button>
+          <Button onClick={() => setHp(paige.hp)}>Full heal</Button>
+        </Row>
+        <Caption>BP changes</Caption>
+        <Row>
+          <Button onClick={() => setAtkMod((v) => v + 1)}>+1 BP</Button>
+          <Button onClick={() => setAtkMod((v) => v - 1)}>−1 BP</Button>
+          <Button onClick={() => setAtkMod(0)}>Reset</Button>
+        </Row>
+      </div>
+    </div>
   );
 }
 

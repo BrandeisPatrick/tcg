@@ -5,9 +5,10 @@ import { effectiveAtk } from '@/engine/util';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { StatusIcon } from '../card/StatusIcon';
-import { SwordIcon, HeartIcon } from '../card/Icons';
+import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
 import { palette, fonts, radius, spring, text, statRow } from '../tokens';
 import { LevelRing } from '../card/LevelRing';
+import { useStatTick } from './useStatTick';
 
 interface Props {
   card: CardInstance;
@@ -42,16 +43,24 @@ export function HeroSlot({
   // (combat.ts:effectiveAttackDamage applies the same subtraction.)
   const weakenValue = card.statuses.find((s) => s.id === 'weaken')?.value ?? 0;
   const atk = Math.max(0, effectiveAtk(card) - weakenValue);
-  // Stat colour deviates from the default text colour only when the value has
-  // drifted from the printed base — buffs read green, debuffs / damage red.
-  // This lets a glance pick out heroes whose stats have changed mid-match.
+  // Stat number stays in its own brand-colour family (brass for BP, vermillion
+  // for HP) and only modulates intensity to show drift from the printed base:
+  //   default → brand colour, buffed → bright shade, debuffed/damaged → grey.
+  // Keeping the hue locked means a quick glance always identifies which stat
+  // is which, while the intensity carries the state.
   const baseAtk = data.atk;
-  const atkColor = atk > baseAtk ? palette.success : atk < baseAtk ? palette.danger : palette.text;
+  const atkColor = atk > baseAtk ? palette.atkBright : atk < baseAtk ? palette.atkDim : palette.atk;
   const baseHp = data.hp;
   const hpColor =
-    card.hp < card.hpMax ? palette.danger
-    : card.hpMax > baseHp ? palette.success
-    : palette.text;
+    card.hp < card.hpMax ? palette.hpDim
+    : card.hpMax > baseHp ? palette.hpBright
+    : palette.hp;
+  // Pulse the stat number on the card whenever its value changes — this
+  // replaces the old floating ±N number above the card.
+  const hpTick = useStatTick(card.hp);
+  const bpTick = useStatTick(atk);
+  const shieldValue = card.statuses.find((s) => s.id === 'shield')?.value ?? 0;
+  const shieldTick = useStatTick(shieldValue);
   const isActive = card.zone === 'active';
   // Corpse: dead hero waiting to respawn in this slot.
   const respawnLeft = card.respawnTurnsLeft ?? 0;
@@ -293,12 +302,42 @@ export function HeroSlot({
           marginTop: 3,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span style={{ ...statRow.pair(statSize), color: atkColor }}>
-            <SwordIcon size={iconSize} color={palette.atk} />{atk}
+          {/* BP + HP numbers pulse + colour-flash on change. The icons stay
+              static (brand-colour anchor) — only the value text animates. */}
+          <span style={{ ...statRow.pair(statSize) }}>
+            <SwordIcon size={iconSize} color={palette.atk} />
+            <motion.span
+              style={{ color: atkColor, display: 'inline-block' }}
+              animate={bpTick
+                ? { scale: [1, 1.35, 1],
+                    color: [atkColor, bpTick === 'up' ? palette.atkBright : palette.atkDim, atkColor] }
+                : { scale: 1, color: atkColor }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            >{atk}</motion.span>
           </span>
-          <span style={{ ...statRow.pair(statSize), color: hpColor }}>
+          {shieldValue > 0 && (
+            <span style={{ ...statRow.pair(statSize) }}>
+              <ShieldIcon size={iconSize} color={palette.success} />
+              <motion.span
+                style={{ color: palette.success, display: 'inline-block' }}
+                animate={shieldTick
+                  ? { scale: [1, 1.4, 1],
+                      color: [palette.success, shieldTick === 'down' ? '#9bd47a' : '#bff09e', palette.success] }
+                  : { scale: 1, color: palette.success }}
+                transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              >{shieldValue}</motion.span>
+            </span>
+          )}
+          <span style={{ ...statRow.pair(statSize) }}>
             <HeartIcon size={iconSize} color={palette.hp} />
-            {card.hp}
+            <motion.span
+              style={{ color: hpColor, display: 'inline-block' }}
+              animate={hpTick
+                ? { scale: [1, 1.35, 1],
+                    color: [hpColor, hpTick === 'up' ? palette.hpBright : palette.hpDim, hpColor] }
+                : { scale: 1, color: hpColor }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            >{card.hp}</motion.span>
           </span>
         </div>
       </div>

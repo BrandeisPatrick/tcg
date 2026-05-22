@@ -95,7 +95,7 @@ export interface CardInstance {
   /**
    * Hero leveling. Heroes start at level 1 and climb to a cap of 4.
    * Earn exp from three triggers: end of owner's turn (+1 per alive hero),
-   * equipping an item (+1 to the bearer), and landing a killing blow (+1 to
+   * equipping an item (+1 to the bearer), and landing a killing blow (+2 to
    * the killer). Reaching the next per-level threshold (3 → 6 → 9 exp)
    * advances `level` and rolls the surplus into the next bar. Resets to
    * level 1 / 0 exp on death (alongside other corpse cleanup).
@@ -167,6 +167,20 @@ export interface GameAction {
   state: 'begin' | 'done';
 }
 
+/**
+ * Pre-match hero draft. Both players take turns picking 4 heroes each from
+ * the full pool in snake order. While `draft != null` the regular match
+ * gates (mulligan, normal moves) are inactive and the DraftOverlay is
+ * displayed. On the 8th pick the move finalizes both PlayerStates with the
+ * drafted heroes, clears `draft`, and flips `mulliganPending` to true.
+ */
+export interface DraftState {
+  pool: CardId[];                                 // remaining hero ids
+  order: PlayerID[];                              // length 8, snake e.g. ['0','1','1','0','0','1','1','0']
+  currentIndex: number;                           // 0..order.length
+  picks: { '0': CardId[]; '1': CardId[] };        // per-player picks in pick order
+}
+
 export interface GameState {
   players: { '0': PlayerState; '1': PlayerState };
   turnNumber: number;
@@ -174,7 +188,18 @@ export interface GameState {
   resolveQueue: QueuedItem[];
   log: LogEntry[];
   rngSeed?: string;
-  mulliganPending: boolean;       // true at game start until player resolves opening mulligan
+  /** Pre-match hero draft. Null once draft completes. */
+  draft: DraftState | null;
+  /**
+   * Offset between boardgame.io's ctx.turn and the "real match turn". The
+   * draft phase uses boardgame.io turns for snake-order ownership, which
+   * inflates ctx.turn by ~5 turns before the match proper starts. This
+   * offset is set at the moment of draft completion so that turn.onBegin
+   * can compute `realTurn = ctx.turn - draftTurnsOffset` for soul refill +
+   * draw rules.
+   */
+  draftTurnsOffset: number;
+  mulliganPending: boolean;       // true after draft completes until player resolves opening mulligan
   /** Current resolving action (card play / skill / ult). UI watches this to
    *  trigger the reveal animation and pause further input until the player
    *  has had time to see what just happened. */

@@ -1,6 +1,7 @@
 import { ActiveSlot } from './ActiveSlot';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { palette, fonts } from '../tokens';
+import { palette, text } from '../tokens';
+import { TurnCompass } from './TurnCompass';
 
 interface Props {
   G: GameState;
@@ -30,11 +31,24 @@ export function ActiveDuel({
     <div style={{
       position: 'relative',
       display: 'grid',
-      gridTemplateColumns: '1fr 56px 1fr',
-      gap: 0,
+      // Same 3-column track as BenchRow so the three rows (Rival Bench →
+      // Lane → Your Bench) column-align across the board. Col 2 hosts the
+      // turn-indicator divider; col 1 and col 3 host the active heroes.
+      gridTemplateColumns: 'repeat(3, 180px)',
+      gap: 28,
+      justifyContent: 'center',
       height: '100%',
       alignItems: 'stretch',
     }}>
+      {/* Lane label — sits at the left edge of the row, matching the Bench
+          labels' position so the three section labels stack down the left
+          side of the board. One shared label since both sides share the lane. */}
+      <span style={{
+        position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+        ...text.label, color: palette.textDim,
+      }}>
+        Lane
+      </span>
       {/* Opp Active (left) */}
       <ActiveSlot
         ps={G.players[opp]}
@@ -72,45 +86,7 @@ export function ActiveDuel({
           filter: 'blur(10px)',
           pointerEvents: 'none',
         }} />
-        {/* Turn pill - vertical */}
-        <div style={{
-          position: 'relative',
-          zIndex: 2,
-          padding: '14px 6px',
-          background: `linear-gradient(180deg, ${palette.bg1}, ${palette.bg2})`,
-          border: `1px solid ${isMyTurn ? accent : '#5a3f1c'}`,
-          borderRadius: 999,
-          boxShadow: isMyTurn
-            ? `0 0 18px ${accent}55, 0 2px 6px rgba(40,20,0,0.25)`
-            : `0 2px 6px rgba(40,20,0,0.22)`,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 8,
-        }}>
-          <span style={{
-            width: 8, height: 8, borderRadius: '50%',
-            background: accent,
-            boxShadow: isMyTurn ? `0 0 8px ${accent}` : 'none',
-          }} />
-          <span style={{
-            fontFamily: fonts.ui, fontSize: 14, fontWeight: 700,
-            color: palette.text,
-            writingMode: 'vertical-rl',
-            transform: 'rotate(180deg)',
-          }}>
-            {isMyTurn ? 'Your Move' : "Rival's Move"}
-          </span>
-          <span style={{
-            fontFamily: fonts.ui, fontSize: 12, fontWeight: 400,
-            color: palette.textDim,
-            fontVariantNumeric: 'tabular-nums',
-            writingMode: 'vertical-rl',
-            transform: 'rotate(180deg)',
-          }}>
-            T{turn}
-          </span>
-        </div>
+        <TurnCompass isMyTurn={isMyTurn} turn={turn} />
       </div>
 
       {/* My Active (right) */}

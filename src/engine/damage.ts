@@ -99,11 +99,13 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     fireEquipmentTriggers(G, target, 'onBearerDamagedBySpirit', { movingPlayer: target.ownerId });
   }
 
-  // Kill blow → +1 exp to the killer hero (only the hit that drops hp to 0).
+  // Kill blow → +2 exp to the killer hero (only the hit that drops hp to 0).
+  // A kill is the highest-value source of exp; rewards aggression over the
+  // passive +1 from end-of-turn and +1 from equip.
   if (hpBefore > 0 && target.hp <= 0 && cast && cast.source) {
     const srcData = CARDS_BY_ID[cast.source.cardId];
     if (srcData?.type === 'hero') {
-      grantExp(G, cast.source, 1);
+      grantExp(G, cast.source, 2);
     }
   }
 
@@ -168,6 +170,8 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   hero.exhausted = true;
   hero.hp = 0;
   hero.respawnTurnsLeft = RESPAWN_TURNS;
+  // Level + exp + stat mods INTENTIONALLY persist through respawn — the
+  // hero comes back at full hp with their rank intact (see leveling.spec).
   pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} respawning in (${RESPAWN_TURNS}).`);
 }
 

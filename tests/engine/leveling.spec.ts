@@ -110,14 +110,14 @@ describe('hero leveling triggers', () => {
     expect((h.exp ?? 0) - before).toBe(1);
   });
 
-  it('killing blow grants +1 exp to the killer hero via cast context', () => {
+  it('killing blow grants +2 exp to the killer hero via cast context', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     enemy.hp = 1;
     withCast(hero, 'attack', () => damageUnit(G, enemy, 5, 'attack'));
-    // killer started at Lv1 with 0 exp; kill grants +1.
-    expect(hero.exp).toBe(1);
+    // killer started at Lv1 with 0 exp; kill grants +2.
+    expect(hero.exp).toBe(2);
     expect(hero.level).toBe(1);
   });
 
@@ -127,7 +127,7 @@ describe('hero leveling triggers', () => {
     const enemy = G.players['1'].active!;
     enemy.hp = 1;
     withCast(hero, 'skill', () => damageUnit(G, enemy, 50, 'spirit'));
-    expect(hero.exp).toBe(1);
+    expect(hero.exp).toBe(2);
   });
 
   it('death PRESERVES level + exp (rank persists through respawn)', () => {

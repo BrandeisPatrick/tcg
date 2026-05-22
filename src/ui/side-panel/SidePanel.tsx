@@ -42,7 +42,7 @@ export function SidePanel({
       borderRadius: radius.lg,
       boxShadow: '0 4px 12px rgba(40, 20, 0, 0.22)',
       minHeight: 0,
-      height: 'calc(100vh - 32px)',
+      height: '100%',
       overflow: 'hidden',
     }}>
       <div style={{

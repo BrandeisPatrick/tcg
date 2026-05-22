@@ -4,25 +4,14 @@ import type { AttackPlan, AttackStep } from '@/engine/combat';
 import { palette, fonts } from '../tokens';
 
 /**
- * Position payload pushed at the impact moment of an attack beat. Carries the
- * card-top anchors for the primary target (and the attacker, when retaliation
- * lands), so the parent can feed them into the shared DamageFloaters layer at
- * the same relative position as every other damage / heal event.
- */
-export interface BeatImpact {
-  step: AttackStep;
-  primary: { x: number; y: number; iid: string } | null;
-  retaliation: { x: number; y: number; iid: string } | null;
-}
-
-/**
  * Animated walk-through of an attack phase plan.
  *
  * Renders overlay visuals anchored to the attacker/target slot positions:
- * projectile, full-card red flash on the target, shake animation, an HP
- * tick-down indicator showing before→after, and a damage number pop.
- * Walks `plan.steps` one at a time, then invokes `onComplete` so the engine
- * can resolve for real.
+ * projectile, full-card red flash on the target, shake animation, and a
+ * sweeping DamageBanner. Walks `plan.steps` one at a time, then invokes
+ * `onComplete` so the engine can resolve for real. Damage numbers themselves
+ * animate ON the hero cards via `useStatTick` in HeroSlot — no floater
+ * push from this component.
  */
 interface Props {
   plan: AttackPlan;
@@ -30,13 +19,11 @@ interface Props {
   slotRefs: Map<string, HTMLElement>;
   /** Called after all steps animate (or skip is clicked). */
   onComplete: () => void;
-  /** Fires once per beat at the impact moment with the anchor positions
-   *  for the primary hit and (if any) the retaliation hit. The parent uses
-   *  this to push a FloaterEntry into the shared damage-number layer so
-   *  combat numbers share the same look as skill / spell / heal numbers. */
-  onBeatImpact?: (impact: BeatImpact) => void;
   /** ms per step (default 1100). Controls combat tempo. */
   stepDuration?: number;
+  /** Notifies parents (Board → CombatProgressContext → TurnCompass) of
+   *  every beat tick so the compass can drive its combat-mode ring. */
+  onBeatIndexChange?: (beat: number) => void;
 }
 
 interface ActiveBeat {
@@ -45,7 +32,7 @@ interface ActiveBeat {
   targetRect: DOMRect | null;
 }
 
-export function CombatChoreographer({ plan, slotRefs, onComplete, onBeatImpact, stepDuration = 1100 }: Props) {
+export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration = 1100, onBeatIndexChange }: Props) {
   const [beatIndex, setBeatIndex] = useState(0);
   const [done, setDone] = useState(false);
   const skippedRef = useRef(false);
@@ -54,6 +41,14 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, onBeatImpact, 
   // on every parent re-render and replay the same beat multiple times.
   const onCompleteRef = useRef(onComplete);
   useEffect(() => { onCompleteRef.current = onComplete; }, [onComplete]);
+  const onBeatIndexChangeRef = useRef(onBeatIndexChange);
+  useEffect(() => { onBeatIndexChangeRef.current = onBeatIndexChange; }, [onBeatIndexChange]);
+
+  // Broadcast every beat to the ambient CombatProgressContext consumers
+  // (notably TurnCompass). Fires on mount (beat 0) and after each tick.
+  useEffect(() => {
+    onBeatIndexChangeRef.current?.(beatIndex);
+  }, [beatIndex]);
 
   useEffect(() => {
     if (done) return;
@@ -99,7 +94,10 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, onBeatImpact, 
 
   return (
     <>
-      {/* Dim backdrop to focus attention; keeps board readable but mutes hand */}
+      {/* Dim backdrop to focus attention; keeps board readable but mutes hand.
+          14% — softer than the previous 22% now that the loud combat banner
+          is gone and the backdrop carries more of the "combat in focus"
+          weight. */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -107,13 +105,13 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, onBeatImpact, 
         transition={{ duration: 0.15 }}
         style={{
           position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,0.22)',
+          background: 'rgba(0,0,0,0.14)',
           pointerEvents: 'none',
           zIndex: 70,
         }}
       />
 
-      <AttackBeat key={beatIndex} beat={beat} stepDuration={stepDuration} onBeatImpact={onBeatImpact} />
+      <AttackBeat key={beatIndex} beat={beat} stepDuration={stepDuration} />
 
       {/* Skip button — corner overlay, visible during combat */}
       <motion.button
@@ -139,68 +137,29 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, onBeatImpact, 
         Skip ▶▶
       </motion.button>
 
-      {/* Combat label — full-width slide-in banner across the duel divider,
-          same chrome as TurnBanner so the start of combat reads as a major
-          beat (not just a small floating pill). Mounts once at combat start,
-          settles centered, then exits when the choreographer unmounts. */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }}
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: 0, right: 0,
-          transform: 'translateY(-50%)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          pointerEvents: 'none',
-          zIndex: 88,
-        }}
-      >
-        <motion.div
-          initial={{ x: '-100vw' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100vw' }}
-          transition={{ type: 'spring', stiffness: 240, damping: 26 }}
-          style={{
-            width: '100%',
-            padding: '20px 0',
-            background: `linear-gradient(90deg, transparent 0%, ${palette.bg1}f5 12%, ${palette.bg2}f5 50%, ${palette.bg1}f5 88%, transparent 100%)`,
-            borderTop: `2px solid ${palette.danger}`,
-            borderBottom: `2px solid ${palette.danger}`,
-            textAlign: 'center',
-            fontFamily: fonts.ui,
-            fontSize: 26, fontWeight: 700,
-            color: palette.text,
-            boxShadow: `0 0 36px ${palette.danger}66, 0 8px 24px rgba(40,20,0,0.45)`,
-          }}
-        >
-          Combat · {beatIndex + 1} / {plan.steps.length}
-        </motion.div>
-      </motion.div>
+      {/* Beat progress is no longer a separate chip — the Turn Compass
+          consumes CombatProgressContext and morphs its idle conic-sweep
+          ring into a segmented progress ring while combat is in flight. */}
     </>
   );
 }
 
-const AttackBeat = memo(function AttackBeat({ beat, stepDuration, onBeatImpact }: { beat: ActiveBeat; stepDuration: number; onBeatImpact?: (impact: BeatImpact) => void }) {
+const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: ActiveBeat; stepDuration: number }) {
   const { step, attackerRect, targetRect } = beat;
 
   // Beat phases scaled to stepDuration:
   //  - 0%   – 15%:  wind-up
   //  - 15%  – 35%:  tracer in flight
-  //  - 35%  – 100%: impact (EVA banner sweep + damage number) — most of the
-  //    beat is the readable hold so the player can actually parse the banner.
+  //  - 35%  – 100%: impact (EVA banner sweep) — most of the beat is the
+  //    readable hold so the player can parse the banner. The HP number on
+  //    the target card animates via useStatTick when the engine applies the
+  //    damage; no per-beat floater push from this component.
   const totalSec = stepDuration / 1000;
   const projectileDuration = totalSec * 0.22;
   const projectileDelay = totalSec * 0.15;
   const impactDelay = totalSec * 0.35;
   const damagePersist = totalSec - impactDelay;
 
-  // Compute geometry. These are derived before the early return so the
-  // impact-callback effect's deps can be stable across renders.
   const sx = attackerRect ? attackerRect.left + attackerRect.width / 2 : 0;
   const sy = attackerRect ? attackerRect.top + attackerRect.height / 2 : 0;
   const tx = targetRect ? targetRect.left + targetRect.width / 2 : window.innerWidth / 2;
@@ -209,36 +168,6 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration, onBeatImpact }
   const dy = ty - sy;
   const dist = Math.hypot(dx, dy);
   const angle = Math.atan2(dy, dx);
-
-  // Fire impact callback at the impact moment so the parent can push damage
-  // floaters into the shared layer at the right cinematic beat (not at
-  // engine-resolve time, which would land after the banner has faded).
-  useEffect(() => {
-    if (!onBeatImpact || !attackerRect) return;
-    const t = setTimeout(() => {
-      // Primary anchor: TOP of the target card, or the synthetic face band's
-      // top edge for direct hits. Matches DamageFloaters' "anchor = card top"
-      // convention so combat numbers sit at the same relative position as
-      // skill / spell / heal numbers.
-      const attackerIsTop = sy < window.innerHeight / 2;
-      const faceBandTop = attackerIsTop ? window.innerHeight - 156 : 16;
-      const primary = step.finalDamage > 0 ? {
-        x: tx,
-        y: targetRect ? targetRect.top : faceBandTop,
-        iid: step.targetIid ?? `face-${attackerIsTop ? '0' : '1'}`,
-      } : null;
-      const retaliation = step.retaliationDamage > 0 ? {
-        x: sx,
-        y: attackerRect.top,
-        iid: step.attackerIid,
-      } : null;
-      onBeatImpact({ step, primary, retaliation });
-    }, impactDelay * 1000);
-    return () => clearTimeout(t);
-    // step / attackerRect / targetRect are captured fresh each beat via the
-    // memoised `beat` prop; the effect only needs to fire once per beat.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   if (!attackerRect) return null;
 
@@ -290,6 +219,21 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration, onBeatImpact }
         />
       )}
 
+      {/* Shield-absorbed deflect — when the target's Shield ate part/all of the
+          hit, flash a green shield over the target card so the impact reads
+          even when HP doesn't move. Triggers at impactDelay so it lands with
+          the banner sweep. */}
+      {step.shieldAbsorbed > 0 && targetRect && (
+        <ShieldDeflect
+          rect={{ left: targetRect.left, top: targetRect.top, width: targetRect.width, height: targetRect.height }}
+          impactDelay={impactDelay}
+          damagePersist={damagePersist}
+          absorbed={step.shieldAbsorbed}
+          fullyAbsorbed={step.finalDamage === 0}
+          keySuffix={`shield-${step.attackerIid}-${step.targetIid ?? 'face'}`}
+        />
+      )}
+
       {/* "Damaged by …" feedback for the PRIMARY target — the hero the attacker
           swung at. For face attacks (no targetRect), a synthetic band at the
           receiving player's avatar zone hosts the same banner. */}
@@ -335,9 +279,8 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration, onBeatImpact }
         />
       )}
 
-      {/* Damage / retaliation numbers are emitted via onBeatImpact into the
-          shared DamageFloaters layer — same renderer, same anchor, same look
-          as every other damage / heal number on the board. */}
+      {/* Damage numbers animate on the target card's HP/BP via useStatTick
+          when the engine applies the hit — no per-beat floater here. */}
 
       {/* Bonus label (e.g. "Haze +2 vs Stunned") if present */}
       {step.bonusLabel && (
@@ -466,6 +409,100 @@ function DamageBanner({
             K.O.
           </span>
         )}
+      </motion.div>
+    </div>
+  );
+}
+
+/**
+ * Green shield-deflect flash anchored over the target card. Renders when the
+ * target's Shield ate part or all of the incoming damage — gives the impact a
+ * visible cue even when HP doesn't change. Composes a soft green wash, a
+ * scaling shield glyph, and an "ABSORBED N" / "BLOCKED N" label.
+ */
+function ShieldDeflect({
+  rect, impactDelay, damagePersist, absorbed, fullyAbsorbed, keySuffix,
+}: {
+  rect: { left: number; top: number; width: number; height: number };
+  impactDelay: number;
+  damagePersist: number;
+  absorbed: number;
+  fullyAbsorbed: boolean;
+  keySuffix: string;
+}) {
+  const flashDuration = damagePersist * 0.85;
+  const glyphSize = Math.max(36, Math.min(72, Math.round(rect.width * 0.42)));
+  const greenBright = '#6dc04b';
+  const greenDeep = '#4a7030';
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        left: rect.left, top: rect.top,
+        width: rect.width, height: rect.height,
+        overflow: 'hidden',
+        borderRadius: 10,
+        pointerEvents: 'none',
+        zIndex: 85,
+        isolation: 'isolate',
+      }}
+    >
+      {/* Green wash that fades in with impact and out before the beat ends */}
+      <motion.div
+        key={`shieldwash-${keySuffix}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0.55, 0.55, 0] }}
+        transition={{ duration: flashDuration, delay: impactDelay, times: [0, 0.12, 0.7, 1] }}
+        style={{
+          position: 'absolute', inset: 0,
+          background: `radial-gradient(ellipse at 50% 50%, ${greenBright}aa, ${greenDeep}55 55%, transparent 85%)`,
+        }}
+      />
+      {/* Shield glyph — punches in at impact, holds, fades out */}
+      <motion.div
+        key={`shieldglyph-${keySuffix}`}
+        initial={{ scale: 0.55, opacity: 0 }}
+        animate={{ scale: [0.55, 1.18, 1.05, 1.05], opacity: [0, 1, 1, 0] }}
+        transition={{ duration: flashDuration, delay: impactDelay, times: [0, 0.18, 0.7, 1], ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          position: 'absolute',
+          left: '50%', top: '50%',
+          width: glyphSize, height: glyphSize,
+          transform: 'translate(-50%, -50%)',
+          filter: `drop-shadow(0 0 12px ${greenBright}cc)`,
+        }}
+      >
+        <svg viewBox="0 0 16 16" width="100%" height="100%">
+          <path
+            d="M8 1.2 L14 3 L14 8 C 14 11.5, 11.5 13.6, 8 14.8 C 4.5 13.6, 2 11.5, 2 8 L 2 3 Z"
+            fill={greenBright}
+            stroke="rgba(0,0,0,0.55)"
+            strokeWidth="0.6"
+            strokeLinejoin="round"
+          />
+          <path d="M8 2.4 L4 3.6 L4 7.5 C 4 8.4, 4.5 9.2, 5 9.8 L 5 4.4 Z" fill="rgba(255,255,255,0.32)" />
+        </svg>
+      </motion.div>
+      {/* Label — "BLOCKED N" when shield ate it all, "ABSORBED N" partial */}
+      <motion.div
+        key={`shieldlabel-${keySuffix}`}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: [0, 1, 1, 0], y: [6, 0, 0, -4] }}
+        transition={{ duration: flashDuration, delay: impactDelay + 0.06, times: [0, 0.2, 0.7, 1] }}
+        style={{
+          position: 'absolute',
+          left: 0, right: 0,
+          bottom: `calc(50% - ${glyphSize * 0.85}px)`,
+          textAlign: 'center',
+          fontFamily: fonts.ui,
+          fontWeight: 700,
+          fontSize: 13,
+          letterSpacing: '0.16em',
+          color: '#fff',
+          textShadow: `0 1px 2px rgba(0,0,0,0.9), 0 0 8px ${greenDeep}`,
+        }}
+      >
+        {fullyAbsorbed ? 'BLOCKED' : 'ABSORBED'} {absorbed}
       </motion.div>
     </div>
   );

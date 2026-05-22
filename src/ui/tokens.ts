@@ -22,9 +22,18 @@ export const palette = {
   danger: '#8a2e2a',       // wine red
   success: '#4a7030',      // forest, darker for cream contrast
   hp: '#c04a30',           // warm vermillion
-  atk: '#996018',          // dark brass
+  atk: '#6b4716',          // dark brass — deliberately darker / less saturated than gold so the BP number sits quieter than HP vermillion at rest
   spirit: '#7a4a8a',       // muted plum
   pure: '#3a7a86',         // deep teal — desaturated
+
+  // BP / HP deviation colours — each stat number stays in its own hue
+  // family (brass for BP, vermillion for HP) and only modulates intensity
+  // to convey state. Default = the brand colour (palette.atk / palette.hp).
+  // Bright = above-base buff. Dim = desaturated grey for damage / debuff.
+  atkBright: '#e6b94a',    // bright brass / gold — BP buffed above base
+  atkDim:    '#7a6d5a',    // desaturated brass — BP reduced below base
+  hpBright:  '#e8633a',    // bright vermillion — HP buffed above base
+  hpDim:     '#8a7068',    // desaturated vermillion — HP damaged below max
 
   // Rarity gems — re-pitched for visibility on cream
   rarity: {
