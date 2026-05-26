@@ -21,6 +21,7 @@ export const STATUSES: StatusDef[] = [
   { id: 'weapon_power',  title: 'Bullet Power',  desc: '+<value> Bullet Power on basic attacks.',                  hvalue:  1 },
   { id: 'spirit_power',  title: 'Spirit Power',  desc: '+<value> to skill / ultimate scaling.',                    hvalue:  1 },
   { id: 'unstoppable',   title: 'Unstoppable',   desc: 'Immune to all damage and crowd control. Cleanses CC on apply.', hvalue: 2 },
+  { id: 'healing_boost', title: 'Healing Boost', desc: '+<value> to all healing received.',                           hvalue:  1 },
 
   // ----- Hard CC -----
   { id: 'stun',          title: 'Stun',          desc: 'Cannot act, attack, or use skills.',                       hvalue: -2 },
@@ -35,9 +36,11 @@ export const STATUSES: StatusDef[] = [
   { id: 'djinns_mark',   title: "Djinn's Mark",  desc: 'Detonates at 4 stacks or on expiry for 2 spirit dmg per stack.', hvalue: -1 },
 
   // ----- Other debuff -----
-  { id: 'weaken',        title: 'Weaken',        desc: '−<value> Bullet Power on basic attacks while active.',    hvalue: -1 },
-  { id: 'vulnerable',    title: 'Vulnerable',    desc: 'Take +<value> damage from all sources.',                  hvalue: -2 },
-  { id: 'healing_blocked', title: 'Healing Blocked', desc: 'Cannot be healed.',                                    hvalue: -1 },
+  { id: 'weapon_power_down',   title: 'Bullet Power',  desc: 'Bullet Power −<value> on basic attacks.',                 hvalue: -1 },
+  { id: 'spirit_power_down',   title: 'Spirit Power',  desc: 'Spirit Power −<value> on skills.',                           hvalue: -1 },
+  { id: 'bullet_resist_down',  title: 'Bullet Resist', desc: 'Bullet Resist −<value>. Take +<value> bullet damage.',       hvalue: -1 },
+  { id: 'spirit_resist_down',  title: 'Spirit Resist', desc: 'Spirit Resist −<value>. Take +<value> spirit damage.',       hvalue: -1 },
+  { id: 'healing_boost_down',  title: 'Healing Boost', desc: 'Cannot be healed.',                                          hvalue: -1 },
 ];
 
 export const STATUSES_BY_ID = Object.fromEntries(STATUSES.map((s) => [s.id, s])) as Record<string, StatusDef>;

@@ -176,23 +176,29 @@ function simulateAttackMitigation(
 ): { final: number; shieldRemaining: number } {
   const bulletResist = target.statuses.find((s) => s.id === 'bullet_resist')?.value ?? 0;
   const spiritResist = target.statuses.find((s) => s.id === 'spirit_resist')?.value ?? 0;
+  const bulletShred = target.statuses.find((s) => s.id === 'bullet_resist_down')?.value ?? 0;
+  const spiritShred = target.statuses.find((s) => s.id === 'spirit_resist_down')?.value ?? 0;
+  const netBullet = bulletResist - bulletShred;
+  const netSpirit = spiritResist - spiritShred;
   const hasInvinc = target.statuses.some((s) => s.id === 'unstoppable');
-  const vulnerable = target.statuses.some((s) => s.id === 'vulnerable');
   const targetIsVindicta = target.cardId === 'hero_vindicta';
 
   let final = rawDmg;
-  if (vulnerable) final += 2;
   if (hasInvinc) final = 0;
   if (final > 0) {
     if (wraithSplit) {
-      const half1 = Math.max(0, Math.ceil(final / 2) - (targetIsVindicta ? 1 : 0));
-      const half2 = Math.floor(final / 2);
-      const bulletHalf = Math.max(0, half1 - bulletResist);
-      const spiritHalf = Math.max(0, half2 - spiritResist);
-      final = bulletHalf + spiritHalf;
+      let half1 = Math.ceil(final / 2);
+      if (targetIsVindicta) half1 = Math.max(0, half1 - 1);
+      if (netBullet > 0) half1 = Math.max(0, half1 - netBullet);
+      else if (netBullet < 0) half1 += Math.abs(netBullet);
+      let half2 = Math.floor(final / 2);
+      if (netSpirit > 0) half2 = Math.max(0, half2 - netSpirit);
+      else if (netSpirit < 0) half2 += Math.abs(netSpirit);
+      final = half1 + half2;
     } else {
       if (targetIsVindicta) final = Math.max(0, final - 1);
-      final = Math.max(0, final - bulletResist);
+      if (netBullet > 0) final = Math.max(0, final - netBullet);
+      else if (netBullet < 0) final += Math.abs(netBullet);
     }
   }
   let shieldRemaining = shieldValue;
@@ -312,7 +318,7 @@ function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): 
   let dmg = effectiveAtk(atk);
   // Weaken: subtract the status value from the attacker's outgoing damage,
   // floored at 0. Carried by Rusted Barrel and any future "ATK-down" effect.
-  const weak = atk.statuses.find((s) => s.id === 'weaken');
+  const weak = atk.statuses.find((s) => s.id === 'weapon_power_down');
   if (weak) dmg = Math.max(0, dmg - weak.value);
   let bonusLabel: string | undefined;
   // Haze passive: +2 vs Stunned target.

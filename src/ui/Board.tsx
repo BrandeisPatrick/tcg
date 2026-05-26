@@ -15,6 +15,7 @@ import { ArenaBackdrop } from './board/ArenaBackdrop';
 import { DragArrow } from './effects/DragArrow';
 import { MulliganOverlay } from './overlays/MulliganOverlay';
 import { DraftOverlay } from './overlays/DraftOverlay';
+import { ShopOverlay } from './overlays/ShopOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
 import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
@@ -45,7 +46,7 @@ export function Board(props: BoardProps<GameState>) {
   const isMyTurn = ctx.currentPlayer === me;
   const [pending, setPending] = useState<PendingPlay | null>(null);
   const [logOpen, setLogOpen] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [preview, setPreview] = useState<{ card: CardInstance; hover: boolean } | null>(null);
   const [heroDetail, setHeroDetail] = useState<CardInstance | null>(null);
   // Equipment replacement flow: when the player tries to attach a 4th piece
@@ -203,7 +204,7 @@ export function Board(props: BoardProps<GameState>) {
   // via `actionLocked` until this fires.
   useEffect(() => {
     if (G.action?.state !== 'begin') return;
-    const HOLD_MS = 2400;
+    const HOLD_MS = 3200;
     const t = setTimeout(() => {
       try { (moves as any).completeAction(); } catch {}
     }, HOLD_MS);
@@ -420,6 +421,16 @@ export function Board(props: BoardProps<GameState>) {
         currentPlayer={ctx.currentPlayer as PlayerID}
         me={me}
         onPick={(heroId) => (moves as any).draftPick(heroId)}
+      />
+    );
+  }
+
+  if (G.shop) {
+    return (
+      <ShopOverlay
+        shop={G.shop}
+        me={me}
+        onPick={(cardId) => (moves as any).shopPick(cardId)}
       />
     );
   }

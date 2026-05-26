@@ -1,8 +1,8 @@
 import type { StatusId } from '@/engine/types';
 import { palette, fonts } from '../tokens';
 
-const BUFFS: Set<StatusId> = new Set(['weapon_power','spirit_power','bullet_resist','spirit_resist','shield','unstoppable']);
-const DEBUFFS: Set<StatusId> = new Set(['stun','silenced','disarm','bleed','vulnerable','charged','healing_blocked']);
+const BUFFS: Set<StatusId> = new Set(['weapon_power','spirit_power','bullet_resist','spirit_resist','shield','unstoppable','healing_boost']);
+const DEBUFFS: Set<StatusId> = new Set(['stun','silenced','disarm','bleed','weapon_power_down','spirit_power_down','bullet_resist_down','spirit_resist_down','charged','healing_boost_down','djinns_mark']);
 
 function colorFor(id: StatusId): string {
   if (BUFFS.has(id)) return palette.status.buff;
@@ -18,19 +18,24 @@ const STATUS_LABELS: Record<string, string> = {
   spirit_resist: 'Spirit Res',
   shield:        'Shield',
   unstoppable:   'Unstop',
+  healing_boost: '+Heal',
   // Debuffs
   stun:          'Stun',
   silenced:      'Silence',
   disarm:        'Disarm',
   bleed:         'Bleed',
-  vulnerable:    'Vuln',
+  weapon_power_down:  '−BP',
+  spirit_power_down:  '−SPI',
+  bullet_resist_down: '−B.Res',
+  spirit_resist_down: '−S.Res',
   charged:       'Charged',
-  healing_blocked: 'Heal Block',
+  healing_boost_down: '−Heal',
 };
 
 // Magnitude statuses render the value pill; binary statuses (value=1) hide it.
 const VALUE_STATUSES: Set<string> = new Set([
-  'shield', 'bullet_resist', 'spirit_resist', 'weapon_power', 'spirit_power', 'bleed',
+  'shield', 'bullet_resist', 'spirit_resist', 'weapon_power', 'spirit_power', 'bleed', 'healing_boost',
+  'weapon_power_down', 'spirit_power_down', 'bullet_resist_down', 'spirit_resist_down',
 ]);
 
 interface Props {

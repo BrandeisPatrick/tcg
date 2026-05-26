@@ -6,7 +6,7 @@ import type {
   PlayerID,
   PlayerState,
 } from './types';
-import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
+import { CARDS_BY_ID, getCard, HEROES, SHOP_T1, SHOP_T2, SHOP_T3, SHOP_T4 } from '@/cards';
 import { STARTER_DECK_PLAYER, STARTER_DECK_AI, type DeckBlueprint } from '@/decks/starter';
 import { tickStartOfTurn, clearTurnFlags } from './statusOps';
 import { reapDead, damagePlayer } from './damage';
@@ -42,6 +42,39 @@ function soulRefillForTurn(globalTurn: number): number {
   // globalTurn 1 → my turn 1 (idx 0), globalTurn 3 → my turn 2 (idx 1), ...
   const idx = Math.floor((globalTurn - 1) / 2);
   return SOULS_REFILL_TABLE[Math.min(idx, SOULS_REFILL_TABLE.length - 1)];
+}
+
+// Shop turns: player's local turn 1, 3, 5, 7 → visits 1–4.
+const SHOP_TURNS: Record<number, 1|2|3|4> = { 1: 1, 3: 2, 5: 3, 7: 4 };
+
+type TierWeights = [number, number, number, number]; // [T1%, T2%, T3%, T4%]
+const SHOP_WEIGHTS: Record<1|2|3|4, TierWeights> = {
+  1: [80, 20,  0,  0],
+  2: [30, 50, 20,  0],
+  3: [ 0, 20, 50, 30],
+  4: [ 0,  0, 20, 80],
+};
+const TIER_POOLS = [SHOP_T1, SHOP_T2, SHOP_T3, SHOP_T4];
+
+function rollShopChoices(visit: 1|2|3|4): string[] {
+  const weights = SHOP_WEIGHTS[visit];
+  const weighted: string[] = [];
+  for (let t = 0; t < 4; t++) {
+    const pool = TIER_POOLS[t];
+    for (let i = 0; i < weights[t]; i++) weighted.push(...pool);
+  }
+  if (weighted.length === 0) return SHOP_T1.slice(0, 3);
+  const picks: string[] = [];
+  while (picks.length < 3) {
+    const id = weighted[Math.floor(Math.random() * weighted.length)];
+    if (!picks.includes(id)) picks.push(id);
+    if (picks.length >= weighted.length) break;
+  }
+  return picks;
+}
+
+function playerLocalTurn(realTurn: number): number {
+  return Math.ceil(realTurn / 2);
 }
 
 function makeInstance(cardId: string, ownerId: PlayerID, zone: CardInstance['zone'], slot?: 0|1|2|3): CardInstance {
@@ -92,8 +125,7 @@ function makeEmptyPlayer(pid: PlayerID): PlayerState {
  *  P0 picks at indexes 0, 3, 4, 7; P1 picks at 1, 2, 5, 6. */
 const DRAFT_ORDER: PlayerID[] = ['0', '1', '1', '0', '0', '1', '1', '0'];
 
-function buildPlayer(pid: PlayerID, deck: DeckBlueprint): PlayerState {
-  const heroes = deck.heroes;
+function buildPlayer(pid: PlayerID, heroes: [string, string, string, string]): PlayerState {
   const active = makeInstance(heroes[0], pid, 'active', 0);
   const bench: (CardInstance | null)[] = [
     makeInstance(heroes[1], pid, 'bench', 1),
@@ -101,18 +133,12 @@ function buildPlayer(pid: PlayerID, deck: DeckBlueprint): PlayerState {
     makeInstance(heroes[3], pid, 'bench', 3),
   ];
 
-  const deckInstances = deck.cards.map((cid) => makeInstance(cid, pid, 'deck'));
-  for (let i = deckInstances.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deckInstances[i], deckInstances[j]] = [deckInstances[j], deckInstances[i]];
-  }
-
   return {
     id: pid,
     hp: 15,
     hpMax: 15,
     souls: SOULS_START,
-    deck: deckInstances,
+    deck: [],
     hand: [],
     active,
     bench,
@@ -122,46 +148,6 @@ function buildPlayer(pid: PlayerID, deck: DeckBlueprint): PlayerState {
     skillUsedThisTurn: false,
     respawning: [],
   };
-}
-
-function reshuffleDiscardIfNeeded(G: GameState, ps: PlayerState) {
-  if (ps.deck.length > 0) return;
-  if (ps.discard.length === 0) return;
-  // Move all discard back to deck (excluding equipment which stays with hero)
-  const recyclable = ps.discard.filter((c) => CARDS_BY_ID[c.cardId]?.type !== 'equipment');
-  ps.discard = ps.discard.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'equipment');
-  for (const c of recyclable) {
-    c.zone = 'deck';
-    c.statuses = [];
-    c.atkMod = 0;
-    c.spiritMod = 0;
-    c.attached = [];
-    if (CARDS_BY_ID[c.cardId]?.type === 'hero') {
-      c.hp = c.hpMax;
-    }
-    ps.deck.push(c);
-  }
-  // Shuffle
-  for (let i = ps.deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [ps.deck[i], ps.deck[j]] = [ps.deck[j], ps.deck[i]];
-  }
-  pushLog(G, `P${ps.id} reshuffled discard.`);
-}
-
-function drawN(G: GameState, ps: PlayerState, n: number) {
-  for (let i = 0; i < n; i++) {
-    if (ps.hand.length >= MAX_HAND) break;
-    if (ps.deck.length === 0) reshuffleDiscardIfNeeded(G, ps);
-    const c = ps.deck.shift();
-    if (!c) {
-      damagePlayer(G, ps.id, 1);
-      pushLog(G, `P${ps.id} fatigue: 1 dmg (no cards).`);
-      continue;
-    }
-    c.zone = 'hand';
-    ps.hand.push(c);
-  }
 }
 
 function unlockUltimates(G: GameState, ps: PlayerState) {
@@ -272,6 +258,7 @@ export const DeadlockGame: Game<GameState> = {
       draftTurnsOffset: 0,  // set in draftPick when draft completes
       mulliganPending: false,
       action: null,
+      shop: null,
     };
     return G;
   },
@@ -293,8 +280,12 @@ export const DeadlockGame: Game<GameState> = {
       // Refill (not add) — no hoarding across turns. KO bounty banked this turn IS preserved
       // until the NEXT refill, so a kill mid-turn still gives you something to spend right away.
       ps.souls = soulRefillForTurn(realTurn);
-      const drawCount = realTurn === 1 && pid === '0' ? 1 : 2;
-      drawN(G, ps, drawCount);
+      // Shop: open on player's local turns 1, 3, 5, 7 (visits 1–4).
+      const myTurn = playerLocalTurn(realTurn);
+      const visit = SHOP_TURNS[myTurn];
+      if (visit) {
+        G.shop = { forPlayer: pid, round: 1, visit, choices: rollShopChoices(visit) };
+      }
       // Ultimate unlock
       unlockUltimates(G, ps);
       // Respawn queue ticks down for BOTH players at the start of every turn.
@@ -330,6 +321,23 @@ export const DeadlockGame: Game<GameState> = {
      */
     completeAction: ({ G }) => {
       if (G.action) G.action.state = 'done';
+    },
+
+    shopPick: ({ G, ctx, playerID }, cardId: string) => {
+      const pid = (playerID ?? ctx.currentPlayer) as PlayerID;
+      if (!G.shop || G.shop.forPlayer !== pid) return INVALID_MOVE;
+      if (!G.shop.choices.includes(cardId)) return INVALID_MOVE;
+      const ps = G.players[pid];
+      if (ps.hand.length < MAX_HAND) {
+        const inst = makeInstance(cardId, pid, 'hand');
+        ps.hand.push(inst);
+      }
+      pushLog(G, `P${pid} picked ${CARDS_BY_ID[cardId]?.name ?? cardId} from shop.`);
+      if (G.shop.round < 3) {
+        G.shop = { ...G.shop, round: (G.shop.round + 1) as 1|2|3, choices: rollShopChoices(G.shop.visit) };
+      } else {
+        G.shop = null;
+      }
     },
 
     playCard: ({ G, ctx, playerID }, iid: string, targetIid?: string, discardIid?: string) => {
@@ -576,31 +584,19 @@ export const DeadlockGame: Game<GameState> = {
       if (G.draft.currentIndex >= G.draft.order.length) {
         const p0Heroes = G.draft.picks['0'] as [string, string, string, string];
         const p1Heroes = G.draft.picks['1'] as [string, string, string, string];
-        const p0 = buildPlayer('0', { id: 'drafted_0', title: 'Drafted', heroes: p0Heroes, cards: STARTER_DECK_PLAYER.cards });
-        const p1 = buildPlayer('1', { id: 'drafted_1', title: 'Drafted', heroes: p1Heroes, cards: STARTER_DECK_AI.cards });
-        G.players['0'] = p0;
-        G.players['1'] = p1;
-        drawN(G, p0, 3);
-        drawN(G, p1, 3);
+        G.players['0'] = buildPlayer('0', p0Heroes);
+        G.players['1'] = buildPlayer('1', p1Heroes);
         G.draft = null;
-        G.mulliganPending = true;
-        // Calibrate the boardgame.io turn counter so the player who finalized
-        // the draft is "real-turn 1". turn.onBegin will compute realTurn from
-        // (ctx.turn - draftTurnsOffset) on every subsequent turn.
+        G.mulliganPending = false;
         G.draftTurnsOffset = ctx.turn - 1;
         G.turnNumber = 1;
-        // turn.onBegin was gated by G.draft when this ctx.turn began, so its
-        // setup pipeline never ran for the current player. Run the T1
-        // equivalent now: souls refill, T1 P0 single draw, ult unlock check.
         const currentPid = ctx.currentPlayer as PlayerID;
         const currentPs = G.players[currentPid];
         currentPs.souls = soulRefillForTurn(1);
-        const drawCount = currentPid === '0' ? 1 : 2;
-        drawN(G, currentPs, drawCount);
+        // Open shop visit 1 for the first player.
+        G.shop = { forPlayer: currentPid, round: 1, visit: 1, choices: rollShopChoices(1) };
         unlockUltimates(G, currentPs);
         pushLog(G, 'Match begins.');
-        // Snake order guarantees pick 8 is P0, but defensively re-route the
-        // turn to P0 if we ever change that.
         if (ctx.currentPlayer !== '0') events.endTurn();
         return;
       }
@@ -609,47 +605,9 @@ export const DeadlockGame: Game<GameState> = {
       if (next !== ctx.currentPlayer) events.endTurn();
     },
 
-    mulligan: ({ G }, swapIids: string[] = []) => {
+    mulligan: ({ G }) => {
       if (!G.mulliganPending) return INVALID_MOVE;
-      const ps = G.players['0'];
-      // Pull selected cards out of the hand
-      const keep: CardInstance[] = [];
-      const swap: CardInstance[] = [];
-      for (const c of ps.hand) {
-        if (swapIids.includes(c.iid)) swap.push(c);
-        else keep.push(c);
-      }
-      ps.hand = keep;
-      // Put them back in the deck
-      for (const c of swap) {
-        c.zone = 'deck';
-        ps.deck.push(c);
-      }
-      // Shuffle
-      for (let i = ps.deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [ps.deck[i], ps.deck[j]] = [ps.deck[j], ps.deck[i]];
-      }
-      // Replenish
-      drawN(G, ps, swap.length);
-      // AI mulligan: cheap rule — swap cards it can never use (heroes, ults), keep the rest.
-      const ai = G.players['1'];
-      const aiSwap: CardInstance[] = [];
-      const aiKeep: CardInstance[] = [];
-      for (const c of ai.hand) {
-        const data = CARDS_BY_ID[c.cardId];
-        if (data?.type === 'hero' || data?.type === 'ultimate') aiSwap.push(c);
-        else aiKeep.push(c);
-      }
-      ai.hand = aiKeep;
-      for (const c of aiSwap) { c.zone = 'deck'; ai.deck.push(c); }
-      for (let i = ai.deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [ai.deck[i], ai.deck[j]] = [ai.deck[j], ai.deck[i]];
-      }
-      drawN(G, ai, aiSwap.length);
       G.mulliganPending = false;
-      pushLog(G, `Mulligan complete (you swapped ${swap.length}).`);
     },
   },
 

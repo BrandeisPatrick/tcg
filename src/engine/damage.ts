@@ -21,19 +21,20 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
 
   let dmg = amount;
 
-  // Vulnerable: takes +N damage from all sources (N = status value).
-  const vuln = target.statuses.find((s) => s.id === 'vulnerable');
-  if (vuln) dmg += vuln.value;
-
-  // Bullet Resist reduces bullet (attack) damage only.
+  // Net resist: buff − shred. Positive = damage reduction, negative = amplification.
   if (type === 'attack') {
-    const br = target.statuses.find((s) => s.id === 'bullet_resist');
-    if (br) dmg = Math.max(0, dmg - br.value);
+    const resist = target.statuses.find((s) => s.id === 'bullet_resist')?.value ?? 0;
+    const shred = target.statuses.find((s) => s.id === 'bullet_resist_down')?.value ?? 0;
+    const net = resist - shred;
+    if (net > 0) dmg = Math.max(0, dmg - net);
+    else if (net < 0) dmg += Math.abs(net);
   }
-  // Spirit Resist reduces spirit (skill) damage only.
   if (type === 'spirit') {
-    const sr = target.statuses.find((s) => s.id === 'spirit_resist');
-    if (sr) dmg = Math.max(0, dmg - sr.value);
+    const resist = target.statuses.find((s) => s.id === 'spirit_resist')?.value ?? 0;
+    const shred = target.statuses.find((s) => s.id === 'spirit_resist_down')?.value ?? 0;
+    const net = resist - shred;
+    if (net > 0) dmg = Math.max(0, dmg - net);
+    else if (net < 0) dmg += Math.abs(net);
   }
 
   // Pure ignores everything else (no Shield interaction either)
@@ -125,16 +126,20 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
   if (amount <= 0) return 0;
   if ((target.respawnTurnsLeft ?? 0) > 0) return 0;
   const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
-  if (target.statuses.some((s) => s.id === 'healing_blocked')) {
+  if (target.statuses.some((s) => s.id === 'healing_boost_down')) {
     pushLog(G, `${targetName} could not be healed (Healing Blocked).`);
     return 0;
   }
-  const healed = Math.min(amount, target.hpMax - target.hp);
+  const targetBoost = target.statuses.find((s) => s.id === 'healing_boost')?.value ?? 0;
+  const cast = currentCast();
+  const casterBoost = (cast?.source && cast.source !== target)
+    ? (cast.source.statuses.find((s) => s.id === 'healing_boost')?.value ?? 0)
+    : 0;
+  const healed = Math.min(amount + targetBoost + casterBoost, target.hpMax - target.hp);
   target.hp += healed;
   if (healed > 0) {
     let effectiveSource = sourceName;
     if (!effectiveSource) {
-      const cast = currentCast();
       if (cast && cast.source && cast.kind !== 'proc') {
         const srcName = CARDS_BY_ID[cast.source.cardId]?.name ?? cast.source.cardId;
         if (srcName !== targetName) effectiveSource = srcName;

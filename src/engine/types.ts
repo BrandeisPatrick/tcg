@@ -48,7 +48,7 @@ export interface SpellCard extends BaseCard {
 
 export interface EquipmentCard extends BaseCard {
   type: 'equipment';
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   abilities?: AbilityId[];
   bonus?: { atk?: number; hp?: number; spirit?: number };
   cost?: number;
@@ -181,6 +181,13 @@ export interface DraftState {
   picks: { '0': CardId[]; '1': CardId[] };        // per-player picks in pick order
 }
 
+export interface ShopState {
+  forPlayer: PlayerID;
+  round: 1 | 2 | 3;
+  visit: 1 | 2 | 3 | 4;
+  choices: CardId[];
+}
+
 export interface GameState {
   players: { '0': PlayerState; '1': PlayerState };
   turnNumber: number;
@@ -204,4 +211,6 @@ export interface GameState {
    *  trigger the reveal animation and pause further input until the player
    *  has had time to see what just happened. */
   action: GameAction | null;
+  /** Street Brawl shop. When non-null the player must pick before acting. */
+  shop: ShopState | null;
 }

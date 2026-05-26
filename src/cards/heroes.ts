@@ -115,7 +115,7 @@ export const HEROES: HeroCard[] = [
     skill: 'skill_dynamo',
     ult: 'ult_dynamo',
     abilityName: 'Rejuvenating Aurora',
-    text: 'Heals an ally for 2 (+ caster Spirit).',
+    text: 'Heals an ally for 2.',
   },
   {
     id: 'hero_kelvin',
@@ -223,7 +223,7 @@ export const HEROES: HeroCard[] = [
     skill: 'skill_warden',
     ult: 'ult_warden',
     abilityName: 'Willpower',
-    text: 'Shield 2 on self (+ caster Spirit).',
+    text: 'Shield 2 on self.',
   },
   {
     id: 'hero_mirage',

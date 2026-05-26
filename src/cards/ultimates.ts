@@ -4,7 +4,7 @@ import type { UltimateCard } from '@/engine/types';
 // For MVP we treat them as cards that get summoned to hand when a hero meets the unlock condition (TBD).
 // Costs sit at 5-7 souls: single-target ults at 5, board-wide at 6, full team buff/save at 7.
 export const ULTIMATES: UltimateCard[] = [
-  { id: 'ult_abrams',     name: 'Seismic Impact',  type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_abrams',     abilities: ['eff_ult_abrams'],     text: '4 spirit + Splash 2 to all enemy board.' },
+  { id: 'ult_abrams',     name: 'Seismic Impact',  type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_abrams',     abilities: ['eff_ult_abrams'],     text: '4 spirit damage to all enemies.' },
   { id: 'ult_dynamo',     name: 'Singularity',     type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_dynamo',     abilities: ['eff_ult_dynamo'],     text: 'Stun all enemy bench for 2.' },
   { id: 'ult_haze',       name: 'Bullet Dance',    type: 'ultimate', rarity: 4, cost: 6, linkedHero: 'hero_haze',       abilities: ['eff_ult_haze'],       text: 'Deal 2 bullet dmg to every enemy.' },
   { id: 'ult_kelvin',     name: 'Frozen Shelter',  type: 'ultimate', rarity: 4, cost: 7, linkedHero: 'hero_kelvin',     abilities: ['eff_ult_kelvin'],     text: 'All allies gain Unstoppable 1.' },

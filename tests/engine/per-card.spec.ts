@@ -53,37 +53,37 @@ describe('Spells — cost 3', () => {
     expect(before - target.hp).toBe(4);
   });
 
-  it('Decay applies Bleed 2 for 2 turns (4 pure damage total over two ticks)', () => {
+  it('Decay applies Bleed 3 for 2 turns (6 pure damage total over two ticks)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hpMax = 30; target.hp = 30;
     ABILITIES_BY_ID['eff_decay'].run(G, { movingPlayer: '0' }, { target });
     const b = target.statuses.find((s) => s.id === 'bleed');
-    expect(b?.value).toBe(2);
+    expect(b?.value).toBe(3);
     expect(b?.duration).toBe(2);
-    // Two start-of-turn ticks for player 1 → bleed deals 2 + 2 = 4 pure damage.
+    // Two start-of-turn ticks for player 1 → bleed deals 3 + 3 = 6 pure damage.
     const before = target.hp;
     tickStartOfTurn(G, G.players['1']);
     tickStartOfTurn(G, G.players['1']);
-    expect(before - target.hp).toBe(4);
+    expect(before - target.hp).toBe(6);
   });
 
-  it('Disarming Hex applies Disarm for 2 turns', () => {
+  it('Disarming Hex applies Disarm for 3 turns', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     ABILITIES_BY_ID['eff_disarming_hex'].run(G, { movingPlayer: '0' }, { target });
     const d = target.statuses.find((s) => s.id === 'disarm');
-    expect(d?.duration).toBe(2);
+    expect(d?.duration).toBe(3);
   });
 });
 
-describe('Spells — cost 4', () => {
-  it('Knockdown applies Stun 1T + Disarm 2T', () => {
+describe('Spells — cost 5', () => {
+  it('Knockdown applies Stun 1T + Disarm 3T', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     ABILITIES_BY_ID['eff_knockdown'].run(G, { movingPlayer: '0' }, { target });
     expect(target.statuses.find((s) => s.id === 'stun')?.duration).toBe(1);
-    expect(target.statuses.find((s) => s.id === 'disarm')?.duration).toBe(2);
+    expect(target.statuses.find((s) => s.id === 'disarm')?.duration).toBe(3);
   });
 
   it('Metal Skin grants ally Bullet Resist 5 for 2 turns (no scaling)', () => {
@@ -101,21 +101,21 @@ describe('Spells — cost 4', () => {
 // ============================================================================
 
 describe('Equipment passives', () => {
-  it('Bullet Resist (equipment) grants permanent Bullet Resist 2', () => {
+  it('Bullet Resilience grants permanent Bullet Resist 3', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     ABILITIES_BY_ID['eff_bullet_resist'].run(G, { movingPlayer: '0' }, { source: t });
     const br = t.statuses.find((s) => s.id === 'bullet_resist');
-    expect(br?.value).toBe(2);
+    expect(br?.value).toBe(3);
     expect(br?.duration).toBeGreaterThanOrEqual(99);
   });
 
-  it('Spirit Resist (equipment) grants permanent Spirit Resist 2', () => {
+  it('Spirit Resilience grants permanent Spirit Resist 3', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     ABILITIES_BY_ID['eff_spirit_resist'].run(G, { movingPlayer: '0' }, { source: t });
     const sr = t.statuses.find((s) => s.id === 'spirit_resist');
-    expect(sr?.value).toBe(2);
+    expect(sr?.value).toBe(3);
   });
 });
 
@@ -172,7 +172,7 @@ describe('Reactive shield triggers fire from real damage', () => {
   it('Bullet Shield procs when the bearer is shot', () => {
     const G = freshG();
     const target = G.players['1'].active!;
-    attach(target, 'bullet_shield');
+    attach(target, 'weapon_shielding');
     target.hpMax = 30; target.hp = 30;
     damageUnit(G, target, 3, 'attack', 'TestAttacker');
     expect(target.statuses.find((s) => s.id === 'shield')?.value).toBe(2);
@@ -181,7 +181,7 @@ describe('Reactive shield triggers fire from real damage', () => {
   it('Bullet Shield does NOT proc on spirit damage', () => {
     const G = freshG();
     const target = G.players['1'].active!;
-    attach(target, 'bullet_shield');
+    attach(target, 'weapon_shielding');
     target.hpMax = 30; target.hp = 30;
     damageUnit(G, target, 3, 'spirit', 'TestCaster');
     expect(target.statuses.find((s) => s.id === 'shield')).toBeUndefined();
@@ -190,7 +190,7 @@ describe('Reactive shield triggers fire from real damage', () => {
   it('Spirit Shield procs on spirit damage', () => {
     const G = freshG();
     const target = G.players['1'].active!;
-    attach(target, 'spirit_shield');
+    attach(target, 'spirit_shielding');
     target.hpMax = 30; target.hp = 30;
     damageUnit(G, target, 3, 'spirit', 'TestCaster');
     expect(target.statuses.find((s) => s.id === 'shield')?.value).toBe(2);

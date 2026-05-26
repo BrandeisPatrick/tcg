@@ -109,7 +109,7 @@ function CandidateCard({ card, onPick }: { card: CardInstance; onPick: () => voi
           const heroData: any = data;
           const baseAtk: number = heroData.atk ?? 0;
           const baseHp: number = heroData.hp ?? 0;
-          const weaken = card.statuses.find((s) => s.id === 'weaken')?.value ?? 0;
+          const weaken = card.statuses.find((s) => s.id === 'weapon_power_down')?.value ?? 0;
           const atk = Math.max(0, effectiveAtk(card) - weaken);
           // Same colour rules as HeroSlot: each stat number stays in its
           // brand-colour family (brass for BP, vermillion for HP) and only

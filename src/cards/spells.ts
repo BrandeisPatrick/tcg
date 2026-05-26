@@ -21,16 +21,19 @@ import type { SpellCard } from '@/engine/types';
 export const SPELLS: SpellCard[] = [
   // ----- T1 (cost 1) — early reactive plays -----
   { id: 'healing_rite',  name: 'Healing Rite',  type: 'spell', rarity: 1, cost: 1, abilities: ['eff_healing_rite'],  text: 'Heal an ally for 2.' },
-  { id: 'rusted_barrel', name: 'Rusted Barrel', type: 'spell', rarity: 1, cost: 1, abilities: ['eff_rusted_barrel'], text: 'Apply Weaken 2 on enemy Active for 2 turns.' },
+  { id: 'rusted_barrel', name: 'Rusted Barrel', type: 'spell', rarity: 1, cost: 1, abilities: ['eff_rusted_barrel'], text: 'Apply Bullet Power −2 on enemy Active for 2 turns.' },
 
   // ----- T2 (cost 3) — control + tempo -----
   { id: 'cold_front',     name: 'Cold Front',     type: 'spell', rarity: 2, cost: 3, abilities: ['eff_cold_front'],     text: 'Deal 4 spirit damage to enemy Active.' },
-  { id: 'decay',          name: 'Decay',          type: 'spell', rarity: 2, cost: 3, abilities: ['eff_decay'],          text: 'Apply Bleed 2 to enemy Active for 2 turns.' },
-  { id: 'disarming_hex',  name: 'Disarming Hex',  type: 'spell', rarity: 2, cost: 3, abilities: ['eff_disarming_hex'],  text: 'Disarm any enemy for 2 turns.' },
+  { id: 'slowing_hex',    name: 'Slowing Hex',    type: 'spell', rarity: 2, cost: 3, abilities: ['eff_slowing_hex'],    text: 'Silence any enemy for 1 turn.' },
+  { id: 'healbane',       name: 'Healbane',       type: 'spell', rarity: 2, cost: 3, abilities: ['eff_healbane'],       text: 'Block healing on any enemy for 2 turns.' },
+  { id: 'spirit_sap',     name: 'Spirit Sap',     type: 'spell', rarity: 2, cost: 3, abilities: ['eff_spirit_sap'],     text: 'Apply Spirit Resist −2 to any enemy for 2 turns.' },
 
-  // ----- T2 (cost 4) — finishers -----
-  { id: 'knockdown',  name: 'Knockdown',  type: 'spell', rarity: 2, cost: 4, abilities: ['eff_knockdown'],         text: 'Stun enemy Active for 1 turn. Disarm for 2 turns.' },
-  { id: 'metal_skin', name: 'Metal Skin', type: 'spell', rarity: 2, cost: 4, abilities: ['eff_cast_metal_skin'],   text: 'Grant ally Bullet Resist 5 for 2 turns.' },
+  // ----- T3 (cost 5) — premium finishers (canon T3 Spirit) -----
+  { id: 'decay',          name: 'Decay',          type: 'spell', rarity: 3, cost: 5, abilities: ['eff_decay'],          text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
+  { id: 'disarming_hex',  name: 'Disarming Hex',  type: 'spell', rarity: 3, cost: 5, abilities: ['eff_disarming_hex'],  text: 'Disarm any enemy for 3 turns.' },
+  { id: 'knockdown',      name: 'Knockdown',      type: 'spell', rarity: 3, cost: 5, abilities: ['eff_knockdown'],      text: 'Stun enemy Active for 1 turn. Disarm for 3 turns.' },
+  { id: 'metal_skin',     name: 'Metal Skin',     type: 'spell', rarity: 3, cost: 5, abilities: ['eff_cast_metal_skin'], text: 'Grant ally Bullet Resist 5 for 2 turns.' },
 ];
 
 export const SPELLS_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s])) as Record<string, SpellCard>;

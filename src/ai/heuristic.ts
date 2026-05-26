@@ -6,7 +6,7 @@ import { getAbility, type TargetFilter } from '@/abilities';
 import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
 
 interface MoveOption {
-  move: 'playCard' | 'useSkill' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
+  move: 'playCard' | 'useSkill' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick' | 'shopPick';
   args: any[];
   score: number;
 }
@@ -114,6 +114,25 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx): MoveOption[] {
       opts.push({ move: 'draftPick', args: [id], score: s });
     }
     return opts.sort((a, b) => b.score - a.score).slice(0, 8);
+  }
+
+  // Shop picker: score each of the 3 choices and pick the best.
+  if (G.shop && G.shop.forPlayer === pid) {
+    const opts: MoveOption[] = [];
+    for (const id of G.shop.choices) {
+      const c = CARDS_BY_ID[id];
+      if (!c) continue;
+      let s = (c.rarity ?? 1) * 3;
+      if (c.type === 'equipment' && 'bonus' in c) {
+        if (c.bonus?.atk) s += c.bonus.atk * 5;
+        if (c.bonus?.hp) s += c.bonus.hp * 2;
+        if (c.bonus?.spirit) s += c.bonus.spirit * 4;
+      }
+      if (c.type === 'spell') s += 2;
+      s += Math.random() * 0.5;
+      opts.push({ move: 'shopPick', args: [id], score: s });
+    }
+    return opts.sort((a, b) => b.score - a.score);
   }
 
   const ps = G.players[pid];

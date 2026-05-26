@@ -26,3 +26,10 @@ export function getCard(id: string): CardData {
 }
 
 export { HEROES, SPELLS, EQUIPMENT, ULTIMATES };
+
+// Shop pool: all buyable cards (spells + equipment) grouped by rarity tier.
+const SHOP_POOL = [...SPELLS, ...EQUIPMENT];
+export const SHOP_T1 = SHOP_POOL.filter((c) => c.rarity === 1).map((c) => c.id);
+export const SHOP_T2 = SHOP_POOL.filter((c) => c.rarity === 2).map((c) => c.id);
+export const SHOP_T3 = SHOP_POOL.filter((c) => c.rarity === 3).map((c) => c.id);
+export const SHOP_T4 = SHOP_POOL.filter((c) => c.rarity === 4).map((c) => c.id);

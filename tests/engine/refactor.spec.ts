@@ -121,7 +121,7 @@ describe('Equipment reactive procs (new V1 set)', () => {
   it('Bullet Shield — bearer takes bullet damage → gain Shield 2', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
-    attachEquip(hero, 'bullet_shield');
+    attachEquip(hero, 'weapon_shielding');
     hero.hpMax = 30; hero.hp = 30;
     damageUnit(G, hero, 3, 'attack', 'TestAttacker');
     expect(hero.statuses.find((s) => s.id === 'shield')?.value).toBe(2);
@@ -130,7 +130,7 @@ describe('Equipment reactive procs (new V1 set)', () => {
   it('Spirit Shield — bearer takes spirit damage → gain Shield 2', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
-    attachEquip(hero, 'spirit_shield');
+    attachEquip(hero, 'spirit_shielding');
     hero.hpMax = 30; hero.hp = 30;
     damageUnit(G, hero, 3, 'spirit', 'TestCaster');
     expect(hero.statuses.find((s) => s.id === 'shield')?.value).toBe(2);
@@ -139,7 +139,7 @@ describe('Equipment reactive procs (new V1 set)', () => {
   it('Bullet Shield does NOT proc on spirit damage', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
-    attachEquip(hero, 'bullet_shield');
+    attachEquip(hero, 'weapon_shielding');
     hero.hpMax = 30; hero.hp = 30;
     damageUnit(G, hero, 3, 'spirit', 'TestCaster');
     expect(hero.statuses.find((s) => s.id === 'shield')).toBeUndefined();

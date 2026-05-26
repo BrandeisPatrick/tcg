@@ -95,7 +95,7 @@ const eff_rusted_barrel: AbilityDef = {
   id: 'eff_rusted_barrel', trigger: 'onPlay', target: 'enemyActive',
   prompt: 'Rusted Barrel — Weaken 2 on enemy Active for 2 turns.',
   run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'weaken', 2, 2);
+    if (target) addStatus(G, target, 'weapon_power_down', 2, 2);
   },
 };
 
@@ -109,32 +109,59 @@ const eff_cold_front: AbilityDef = {
   },
 };
 
-// Cost 3 — T2 floor.
+// Canon Slowing Hex: slows + silences movement. TCG: Silence 1 turn.
+const eff_slowing_hex: AbilityDef = {
+  id: 'eff_slowing_hex', trigger: 'onPlay', target: 'enemyAny',
+  prompt: 'Slowing Hex — Silence any enemy for 1 turn.',
+  run: (G, _ctx, { target }) => {
+    if (target) addStatus(G, target, 'silenced', 1, 1);
+  },
+};
+
+// Canon Healbane: reduces healing on target. TCG: block healing for 2 turns.
+const eff_healbane: AbilityDef = {
+  id: 'eff_healbane', trigger: 'onPlay', target: 'enemyAny',
+  prompt: 'Healbane — block healing on any enemy for 2 turns.',
+  run: (G, _ctx, { target }) => {
+    if (target) addStatus(G, target, 'healing_boost_down', 1, 2);
+  },
+};
+
+// Canon Spirit Sap: reduces target's spirit resist. TCG: Spirit Vulnerable 2 for 2 turns.
+const eff_spirit_sap: AbilityDef = {
+  id: 'eff_spirit_sap', trigger: 'onPlay', target: 'enemyAny',
+  prompt: 'Spirit Sap — Spirit Vulnerable 2 on any enemy for 2 turns.',
+  run: (G, _ctx, { target }) => {
+    if (target) addStatus(G, target, 'spirit_resist_down', 2, 2);
+  },
+};
+
+// Cost 5 — T3 premium DoT.
 const eff_decay: AbilityDef = {
   id: 'eff_decay', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Decay — apply Bleed 2 for 2 turns.',
-  scalesSpirit: false, base: 2, baseLabel: 'Bleed',
+  prompt: 'Decay — apply Bleed 3 for 2 turns.',
+  scalesSpirit: false, base: 3, baseLabel: 'Bleed',
   run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'bleed', 2, 2);
+    if (target) addStatus(G, target, 'bleed', 3, 2);
   },
 };
 
 const eff_disarming_hex: AbilityDef = {
   id: 'eff_disarming_hex', trigger: 'onPlay', target: 'enemyAny',
-  prompt: 'Disarming Hex — Disarm any enemy for 2 turns.',
+  prompt: 'Disarming Hex — Disarm any enemy for 3 turns.',
   run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'disarm', 1, 2);
+    if (target) addStatus(G, target, 'disarm', 1, 3);
   },
 };
 
-// Cost 4 — T2 ceiling.
+// Cost 5 — T3 premium hard CC.
 const eff_knockdown: AbilityDef = {
   id: 'eff_knockdown', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Knockdown — Stun 1 turn + Disarm 2 turns.',
+  prompt: 'Knockdown — Stun 1 turn + Disarm 3 turns.',
   run: (G, _ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'stun', 1, 1);
-    addStatus(G, target, 'disarm', 1, 2);
+    addStatus(G, target, 'disarm', 1, 3);
   },
 };
 
@@ -150,17 +177,34 @@ const eff_cast_metal_skin: AbilityDef = {
 
 // ----- Equipment passive effects + on-attach -----
 
-// Bullet / Spirit Resist: permanent resist stick.
+// Bullet / Spirit Resilience: permanent resist stick (T3, cost 5).
 const eff_bullet_resist: AbilityDef = {
   id: 'eff_bullet_resist', trigger: 'onPlay', target: 'self',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 2, 999); },
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 3, 999); },
 };
 const eff_spirit_resist: AbilityDef = {
   id: 'eff_spirit_resist', trigger: 'onPlay', target: 'self',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 2, 999); },
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 3, 999); },
+};
+
+// Healing chain: Extra Regen (+1 HP) → Healing Booster → Healing Tempo.
+// Booster and Tempo grant the Healing Boost keyword at escalating magnitudes.
+const eff_healing_booster: AbilityDef = {
+  id: 'eff_healing_booster', trigger: 'onPlay', target: 'self',
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'healing_boost', 2, 999); },
+};
+const eff_healing_tempo: AbilityDef = {
+  id: 'eff_healing_tempo', trigger: 'onPlay', target: 'self',
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'healing_boost', 3, 999); },
 };
 
 // ----- Equipment reactive triggers -----
+
+// Bullet Resist Shredder: bearer's attacks apply Bullet Vulnerable 1 for 1 turn.
+const eff_bullet_resist_shredder_proc: AbilityDef = {
+  id: 'eff_bullet_resist_shredder_proc', trigger: 'onAttack', target: 'self',
+  run: (G, _ctx, { source, target }) => { if (target) addStatus(G, target, 'bullet_resist_down', 1, 1); },
+};
 
 // Restorative Shot: after bearer's basic attack, heal 1.
 const eff_restorative_shot_proc: AbilityDef = {
@@ -486,7 +530,7 @@ const eff_ult_yamato: AbilityDef = {
   base: 3, baseLabel: '+Bullet Power + Unstoppable',
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
-    if (t) { addStatus(G, t, 'weapon_power', 3, 999); addStatus(G, t, 'unstoppable', 1, 2); }
+    if (t) { addStatus(G, t, 'weapon_power', 3, 2); addStatus(G, t, 'unstoppable', 1, 2); }
   },
 };
 
@@ -572,14 +616,15 @@ const eff_ult_drifter: AbilityDef = {
 };
 
 const ABILITIES_LIST: AbilityDef[] = [
-  // ----- Spells (7 cards) -----
+  // ----- Spells (10 cards) -----
   eff_healing_rite, eff_rusted_barrel,
-  eff_cold_front,
+  eff_cold_front, eff_slowing_hex, eff_healbane, eff_spirit_sap,
   eff_decay, eff_disarming_hex,
   eff_knockdown, eff_cast_metal_skin,
-  // ----- Equipment passives (2 cards) -----
-  eff_bullet_resist, eff_spirit_resist,
-  // ----- Equipment reactive procs (4 cards) -----
+  // ----- Equipment passives (4 cards) -----
+  eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
+  // ----- Equipment reactive procs (5 cards) -----
+  eff_bullet_resist_shredder_proc,
   eff_restorative_shot_proc, eff_mystic_regeneration_proc,
   eff_bullet_shield_proc, eff_spirit_shield_proc,
   // ----- Hero skills -----

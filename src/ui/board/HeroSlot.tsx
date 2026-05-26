@@ -41,7 +41,7 @@ export function HeroSlot({
   // Outgoing attack value as it will resolve in combat: effectiveAtk minus any
   // Weaken so the displayed BP matches what the hero actually swings for.
   // (combat.ts:effectiveAttackDamage applies the same subtraction.)
-  const weakenValue = card.statuses.find((s) => s.id === 'weaken')?.value ?? 0;
+  const weakenValue = card.statuses.find((s) => s.id === 'weapon_power_down')?.value ?? 0;
   const atk = Math.max(0, effectiveAtk(card) - weakenValue);
   // Stat number stays in its own brand-colour family (brass for BP, vermillion
   // for HP) and only modulates intensity to show drift from the printed base:

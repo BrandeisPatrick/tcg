@@ -12,6 +12,7 @@ import { SoulsRail } from './board/SoulsRail';
 import type { CardInstance, HeroCard } from '@/engine/types';
 import { palette, fonts, radius, shadow, text } from './tokens';
 import { LevelRing } from './card/LevelRing';
+import { RoundCardIcon } from './card/RoundCardIcon';
 
 // Mock a board-state CardInstance for a hero so the gallery can render it
 // through the same HeroSlot used in-game. Stats default to the printed values;
@@ -150,6 +151,22 @@ function CardsTab() {
         </Grid>
       </Section>
 
+      <Section title={`Round Icons — Spells (${SPELLS.length})`}>
+        <Grid min={160}>
+          {SPELLS.map((s) => (
+            <RoundCardIcon key={s.id} cardId={s.id} size={120} />
+          ))}
+        </Grid>
+      </Section>
+
+      <Section title={`Round Icons — Equipment (${EQUIPMENT.length})`}>
+        <Grid min={160}>
+          {EQUIPMENT.map((e) => (
+            <RoundCardIcon key={e.id} cardId={e.id} size={120} />
+          ))}
+        </Grid>
+      </Section>
+
       <Section title={`Ultimates (${ULTIMATES.length})`}>
         <Grid min={150}>
           {ULTIMATES.map((u) => (
@@ -195,13 +212,13 @@ function AnimationsTab() {
       </Section>
 
       <Section title="Card-Play Flash">
-        <Caption>Triggered when a spell or equipment is played from hand, or when a hero activates their skill. Same reveal in all cases — the relevant card sits on-screen for ~2.4s with a caption.</Caption>
+        <Caption>Triggered when a spell or equipment is played from hand, or when a hero activates their skill. Same reveal in all cases — the relevant card sits on-screen for ~3.2s with a caption.</Caption>
         <Row>
           <CardPlayTrigger label="You — Spell" cardId="cold_front" caster="P0" />
           <CardPlayTrigger label="You — Equipment" cardId="restorative_shot" caster="P0" />
           <CardPlayTrigger label="You — Skill" cardId="hero_paige" caster="P0" kind="skill" />
           <CardPlayTrigger label="Rival — Spell" cardId="disarming_hex" caster="P1" />
-          <CardPlayTrigger label="Rival — Equipment" cardId="bullet_shield" caster="P1" />
+          <CardPlayTrigger label="Rival — Equipment" cardId="weapon_shielding" caster="P1" />
           <CardPlayTrigger label="Rival — Skill" cardId="hero_kelvin" caster="P1" kind="skill" />
         </Row>
       </Section>
@@ -418,7 +435,7 @@ function CardPlayTrigger({ label, cardId, caster, kind = 'play' }: {
       <Button onClick={() => setActive(true)} disabled={active}>{label}</Button>
       <AnimatePresence>
         {active && (
-          <AutoExit ms={2400} onDone={() => setActive(false)}>
+          <AutoExit ms={3200} onDone={() => setActive(false)}>
             <CardPlayOverlay cardId={cardId} caster={caster} kind={kind} />
           </AutoExit>
         )}
@@ -434,7 +451,7 @@ function UltTrigger({ label, name, caster }: { label: string; name: string; cast
       <Button onClick={() => setActive(true)} disabled={active}>{label}</Button>
       <AnimatePresence>
         {active && (
-          <AutoExit ms={2400} onDone={() => setActive(false)}>
+          <AutoExit ms={3200} onDone={() => setActive(false)}>
             <UltFlashOverlay name={name} caster={caster} />
           </AutoExit>
         )}
