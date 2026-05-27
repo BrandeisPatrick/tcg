@@ -5,7 +5,7 @@ import { Hand } from './Hand';
 import type { PendingPlay } from '../helpers';
 
 /**
- * Bottom row: hand fan on the left, End Cycle / Cancel buttons on the right.
+ * Bottom row: hand fan on the left, End Turn / Cancel buttons on the right.
  * Pure presentation — receives all callbacks from Board.tsx.
  */
 export function HandTray({
@@ -64,7 +64,7 @@ export function HandTray({
             opacity: isMyTurn ? 1 : 0.45,
             minWidth: 160,
           }}
-        >End Cycle</motion.button>
+        >End Turn</motion.button>
         {hasPending && (
           <motion.button
             initial={{ opacity: 0, x: 20 }}

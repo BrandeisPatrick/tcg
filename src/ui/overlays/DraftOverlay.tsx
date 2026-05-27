@@ -130,7 +130,7 @@ function Header({
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 22 }}>
         <div
           style={{
-            fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+            fontFamily: fonts.display,
             fontSize: 38,
             fontWeight: 700,
             letterSpacing: '0.08em',
@@ -143,7 +143,7 @@ function Header({
         </div>
         <div
           style={{
-            fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+            fontFamily: fonts.display,
             fontSize: 12,
             fontWeight: 700,
             letterSpacing: '0.42em',
@@ -255,7 +255,7 @@ function PickStrip({
         style={{
           minWidth: 96,
           textAlign: align === 'left' ? 'left' : 'right',
-          fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+          fontFamily: fonts.display,
           fontSize: 11,
           fontWeight: 700,
           letterSpacing: '0.32em',
@@ -538,7 +538,7 @@ function HeroPreview({
       >
         <div
           style={{
-            fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+            fontFamily: fonts.display,
             fontSize: 13,
             fontWeight: 700,
             letterSpacing: '0.36em',
@@ -552,7 +552,7 @@ function HeroPreview({
 
         <div
           style={{
-            fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+            fontFamily: fonts.display,
             fontSize: 'clamp(48px, 5vw, 76px)',
             fontWeight: 700,
             letterSpacing: '0.02em',
@@ -574,7 +574,7 @@ function HeroPreview({
                 borderRadius: 4,
                 background: identity.primary,
                 color: identity.accent,
-                fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+                fontFamily: fonts.display,
                 fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: '0.22em',
@@ -629,7 +629,7 @@ function HeroPreview({
               borderRadius: 6,
               background: myTurn ? identity.primary : 'rgba(255,255,255,0.18)',
               color: myTurn ? identity.accent : 'rgba(255,255,255,0.6)',
-              fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+              fontFamily: fonts.display,
               fontSize: 14,
               fontWeight: 700,
               letterSpacing: '0.32em',
@@ -651,7 +651,7 @@ function Stat({ label, value }: { label: string; value: number }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
       <div
         style={{
-          fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+          fontFamily: fonts.display,
           fontSize: 10,
           fontWeight: 700,
           letterSpacing: '0.32em',
@@ -664,7 +664,7 @@ function Stat({ label, value }: { label: string; value: number }) {
       </div>
       <div
         style={{
-          fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+          fontFamily: fonts.display,
           fontSize: 34,
           fontWeight: 700,
           color: '#fff',
@@ -683,7 +683,7 @@ function AbilityChip({ label, name }: { label: string; name: string }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
       <div
         style={{
-          fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+          fontFamily: fonts.display,
           fontSize: 10,
           fontWeight: 700,
           letterSpacing: '0.32em',
@@ -696,7 +696,7 @@ function AbilityChip({ label, name }: { label: string; name: string }) {
       </div>
       <div
         style={{
-          fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+          fontFamily: fonts.display,
           fontSize: 20,
           fontWeight: 700,
           color: '#fff',

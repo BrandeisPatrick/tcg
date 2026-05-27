@@ -3,7 +3,8 @@ import ReactDOM from 'react-dom/client';
 import { Root } from './Root';
 import { PreviewGallery } from './ui/PreviewGallery';
 import '@fontsource-variable/inter/index.css';
-import '@fontsource-variable/exo-2/index.css';
+import '@fontsource-variable/saira/index.css';
+import '@fontsource/saira-stencil-one/400.css';
 import './ui/styles.css';
 
 const params = new URLSearchParams(window.location.search);

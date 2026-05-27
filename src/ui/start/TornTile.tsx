@@ -3,14 +3,13 @@
 // fill and content. Splitting these layers avoids the Safari clip-path +
 // filter + rotate flicker.
 //
-// Typography note: this surface uses Exo 2 + uppercase + letter-spacing on
-// its eyebrow / title. tokens.ts forbids those for in-game card UI; the start
-// screen is a branding surface and deliberately deviates. Body / subtitle
-// text continues to follow the tokens.
+// Typography: eyebrow + title + "Soon" pill use `fonts.display` (Big Shoulders
+// Display) from tokens.ts — the brand-display stack that matches Deadlock's
+// in-game UI. Subtitle uses `text.body` (Saira) for the body register.
 
 import type { ReactNode, CSSProperties } from 'react';
 import { motion } from 'framer-motion';
-import { palette, fonts, spring, text } from '../tokens';
+import { palette, fonts, spring, text, shadow } from '../tokens';
 
 export type TornTileVariant = 'primary' | 'wide';
 
@@ -27,6 +26,10 @@ export interface TornTileProps {
     /** Center the radial fade-to-transparent mask. Defaults to '50% 35%'. */
     maskCenter?: string;
   };
+  /** Brass-stamped action label rendered at the bottom-right. Decorative —
+   *  clicks fall through to the tile's `onClick`; this is purely the
+   *  affordance that tells the user the tile is the action. */
+  cta?: { label: string };
   comingSoon?: boolean;
   disabled?: boolean;
   onClick?: () => void;
@@ -46,6 +49,7 @@ export function TornTile({
   title,
   subtitle,
   art,
+  cta,
   comingSoon = false,
   disabled = false,
   onClick,
@@ -187,27 +191,64 @@ export function TornTile({
             </div>
           )}
 
-          {/* Coming-soon brass pill, top-right */}
+          {/* Coming-soon brass stamp, top-right. Angular double-stroke
+              (not a rounded chip) matches the torn-paper / industrial
+              aesthetic better than a generic web badge. */}
           {comingSoon && (
             <div
               style={{
                 position: 'absolute',
                 top: 18,
                 right: 22,
-                padding: '4px 10px',
-                borderRadius: 999,
-                background: 'rgba(176, 120, 37, 0.18)',
-                border: `1px solid ${palette.accent}`,
+                padding: '3px 12px',
+                borderRadius: 2,
+                background: 'rgba(176, 120, 37, 0.12)',
+                border: `2px double ${palette.accent}`,
                 color: palette.accent,
-                fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+                fontFamily: fonts.display,
                 fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: '0.18em',
+                letterSpacing: '0.22em',
                 textTransform: 'uppercase',
                 zIndex: 4,
               }}
             >
               Soon
+            </div>
+          )}
+
+          {/* Brass-stamped CTA, bottom-right. Decorative — `pointer-events: none`
+              lets clicks pass through to the tile's role="button" handler. The
+              hover is driven by the parent tile so the CTA + tile lift together.
+              Top highlight + bottom shadow + dark inner stroke = embossed brass
+              plate, not a flat web button. */}
+          {cta && (
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                bottom: variant === 'primary' ? 44 : 28,
+                right: variant === 'primary' ? 40 : 28,
+                padding: '12px 26px',
+                borderRadius: 2,
+                background: palette.accent,
+                color: palette.bg2,
+                border: '1px solid rgba(60, 30, 5, 0.45)',
+                fontFamily: fonts.display,
+                fontSize: 16,
+                letterSpacing: '0.32em',
+                textTransform: 'uppercase',
+                boxShadow:
+                  'inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(60, 30, 5, 0.3), 0 4px 12px rgba(40, 20, 0, 0.28)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                zIndex: 4,
+                pointerEvents: 'none',
+                userSelect: 'none',
+              }}
+            >
+              {cta.label}
+              <span aria-hidden style={{ fontSize: 13, lineHeight: 1 }}>▸</span>
             </div>
           )}
 
@@ -224,10 +265,10 @@ export function TornTile({
           >
             <div
               style={{
-                fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+                fontFamily: fonts.display,
                 fontSize: variant === 'primary' ? 14 : 12,
                 fontWeight: 700,
-                letterSpacing: '0.32em',
+                letterSpacing: '0.26em',
                 textTransform: 'uppercase',
                 color: palette.accent,
                 marginBottom: 8,
@@ -237,10 +278,10 @@ export function TornTile({
             </div>
             <div
               style={{
-                fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
+                fontFamily: fonts.display,
                 fontSize: titleSize,
                 fontWeight: 700,
-                letterSpacing: '0.04em',
+                letterSpacing: '0.02em',
                 textTransform: 'uppercase',
                 color: palette.text,
                 lineHeight: 1,

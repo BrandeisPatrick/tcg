@@ -70,10 +70,14 @@ export const palette = {
 } as const;
 
 export const fonts = {
-  ui:      '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  /** @deprecated Use `fonts.ui` everywhere. Kept defined so the import keeps
-   *  resolving while remaining usages get cleaned up; do not introduce new ones. */
-  display: '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  // UI body / labels — Saira pairs with Saira Stencil One (same family root)
+  // and reads with the same humanist-condensed energy as Deadlock's in-game UI text.
+  ui:      '"Saira Variable", "Saira", "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  // Brand display — Saira Stencil One. Heavy stenciled condensed sans;
+  // "stamped on a crate" feel that matches Deadlock's industrial UI flavor.
+  // Single weight (400) — do not set fontWeight: 700 on consumers, the font's
+  // natural heaviness is the weight.
+  display: '"Saira Stencil One", "Saira Variable", Impact, sans-serif',
   mono:    'ui-monospace, "SF Mono", Menlo, monospace',
 } as const;
 
@@ -166,7 +170,7 @@ export const text = {
   },
   body: {
     fontFamily: fonts.ui,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 400,
     letterSpacing: '0',
     textTransform: 'none' as const,

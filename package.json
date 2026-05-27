@@ -11,9 +11,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@fontsource-variable/exo-2": "^5.2.8",
     "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/saira": "^5.2.11",
     "@fontsource/cinzel": "^5.2.8",
+    "@fontsource/saira-stencil-one": "^5.2.8",
     "boardgame.io": "^0.50.2",
     "framer-motion": "^12.38.0",
     "react": "^18.3.1",

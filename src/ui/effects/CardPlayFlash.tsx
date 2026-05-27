@@ -48,7 +48,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play' }: {
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.35, 0.35, 0] }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 2.4, times: [0, 0.10, 0.88, 1] }}
+        transition={{ duration: 3.2, times: [0, 0.10, 0.88, 1] }}
         style={{
           position: 'fixed', inset: 0,
           background: 'rgba(0,0,0,0.35)',
@@ -75,7 +75,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play' }: {
             y: [20, 0, 0, -10],
           }}
           exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 2.4, times: [0, 0.10, 0.88, 1], ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 3.2, times: [0, 0.10, 0.88, 1], ease: [0.22, 1, 0.36, 1] }}
           style={{
             filter: `drop-shadow(0 16px 36px rgba(0,0,0,0.55)) drop-shadow(0 0 22px ${accent}88)`,
           }}
@@ -87,7 +87,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play' }: {
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: [0, 1, 1, 0], y: [-8, 0, 0, -8] }}
-        transition={{ duration: 2.4, times: [0, 0.10, 0.88, 1] }}
+        transition={{ duration: 3.2, times: [0, 0.10, 0.88, 1] }}
         style={{
           position: 'fixed',
           left: 0, right: 0,

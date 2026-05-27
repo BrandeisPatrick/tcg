@@ -4,10 +4,10 @@
 // AI), one secondary tile linking into the existing preview gallery, and
 // one greyed "coming soon" placeholder to preserve the busy-menu composition.
 //
-// Typography note: header + tile labels use Exo 2 uppercase + letter-spacing.
-// tokens.ts explicitly forbids those for in-game card UI; the start screen
-// is a branding surface that deliberately deviates to match the source game.
-// Body / subtitle text continues to follow `text.body` from tokens.
+// Typography: header + tile labels use `fonts.display` (Saira Stencil One)
+// — the brand-display stack from tokens.ts; stencil-cut letterforms give
+// the menu a "stamped on a crate" feel that mirrors Deadlock's industrial
+// UI flavor. Body / subtitle text follows `text.body` (Saira).
 
 import { motion } from 'framer-motion';
 import { palette, fonts, spring, text } from '../tokens';
@@ -46,6 +46,7 @@ export function StartScreen({ onPlay }: StartScreenProps) {
         style={{
           position: 'relative',
           zIndex: 1,
+          flex: 1,
           width: '100%',
           maxWidth: 1440,
           display: 'flex',
@@ -66,7 +67,7 @@ export function StartScreen({ onPlay }: StartScreenProps) {
           style={{
             display: 'grid',
             gridTemplateColumns: '1.35fr 1fr',
-            gridTemplateRows: '1fr 1fr',
+            gridTemplateRows: '1.4fr 1fr',
             gap: 24,
             minHeight: 600,
             maxHeight: 720,
@@ -85,6 +86,7 @@ export function StartScreen({ onPlay }: StartScreenProps) {
               eyebrow="Vs AI"
               title="Quick Match"
               subtitle="Best of one. Solo against the computer."
+              cta={{ label: 'Play' }}
               onClick={onPlay}
               ariaLabel="Start Quick Match vs AI"
             >
@@ -102,7 +104,7 @@ export function StartScreen({ onPlay }: StartScreenProps) {
           >
             <TornTile
               variant="wide"
-              rotation={0.8}
+              rotation={1.2}
               eyebrow="QA Tool"
               title="Preview"
               subtitle="Every card and animation, in one room."
@@ -112,7 +114,7 @@ export function StartScreen({ onPlay }: StartScreenProps) {
               }}
               ariaLabel="Open preview gallery"
             >
-              <CardStackSigil />
+              <HeroPortraitFan />
             </TornTile>
           </motion.div>
 
@@ -125,13 +127,13 @@ export function StartScreen({ onPlay }: StartScreenProps) {
           >
             <TornTile
               variant="wide"
-              rotation={-0.4}
+              rotation={-1.6}
               eyebrow="Mode"
               title="Ranked"
               subtitle="Climb the ladder. Coming soon."
               comingSoon
             >
-              <RankedSigil />
+              <RankedSilhouette />
             </TornTile>
           </motion.div>
         </motion.div>
@@ -152,7 +154,7 @@ function OldGodsBanner() {
       style={{
         position: 'absolute',
         left: 24,
-        top: 40,
+        top: 80,
         width: '58%',
         pointerEvents: 'none',
       }}
@@ -172,6 +174,8 @@ function OldGodsBanner() {
           objectFit: 'cover',
           border: `6px solid ${palette.bg2}`,
           background: palette.bg2,
+          // Subtle sepia pulls the cold teal sky into the warm parchment register.
+          filter: 'sepia(0.10) saturate(0.95)',
           boxShadow:
             '0 14px 28px rgba(40,20,0,0.35), 0 2px 6px rgba(40,20,0,0.20), inset 0 0 0 1px rgba(120,80,30,0.25)',
           userSelect: 'none',
@@ -194,8 +198,8 @@ function KeyartPoster() {
       style={{
         position: 'absolute',
         right: 22,
-        top: 22,
-        bottom: 180,
+        top: 60,
+        bottom: 220,
         width: '32%',
         display: 'flex',
         alignItems: 'flex-start',
@@ -218,6 +222,9 @@ function KeyartPoster() {
           objectFit: 'contain',
           border: `6px solid ${palette.bg2}`,
           background: palette.bg2,
+          // Near-noop on this already-warm keyart; kept for parity with
+          // OldGodsBanner so the pair of posters tints together.
+          filter: 'sepia(0.10) saturate(0.95)',
           boxShadow:
             '0 14px 28px rgba(40,20,0,0.35), 0 2px 6px rgba(40,20,0,0.20), inset 0 0 0 1px rgba(120,80,30,0.25)',
           userSelect: 'none',
@@ -227,103 +234,137 @@ function KeyartPoster() {
   );
 }
 
-function CardStackSigil() {
-  // Three fanned cards rendered as a simple SVG sigil — same visual register
-  // as the trophy sigil on the Ranked tile. Communicates "card library /
-  // preview" without the noise of three full CardFrame components.
+const HERO_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
+
+function HeroPortraitFan() {
+  // Three hero card portraits fanned to the right side of the Preview tile —
+  // a literal preview of what the gallery shows when clicked. Plain <img> on
+  // the hero card webp, mirroring DraftOverlay's HeroThumb pattern.
+  const heroes = [
+    { id: 'hero_haze', rotate: -12, dx: -68 },
+    { id: 'hero_vindicta', rotate: 0, dx: 0, focused: true },
+    { id: 'hero_abrams', rotate: 12, dx: 68 },
+  ];
   return (
     <div
       style={{
         position: 'absolute',
-        right: 24,
+        right: 32,
         top: '50%',
-        transform: 'translateY(-50%) rotate(-4deg)',
-        width: 170,
-        height: 170,
+        transform: 'translateY(-50%)',
+        width: 320,
+        height: 200,
         pointerEvents: 'none',
       }}
     >
-      <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden>
-        <defs>
-          <linearGradient id="ps-card" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f5e8cc" />
-            <stop offset="100%" stopColor="#ddc99b" />
-          </linearGradient>
-        </defs>
-        {/* Back card */}
-        <g transform="rotate(-14 50 90)">
-          <rect
-            x="22" y="22" width="46" height="62" rx="3"
-            fill="url(#ps-card)" stroke="#5a3f1c" strokeWidth="1.1"
-          />
-          <rect x="28" y="28" width="34" height="22" rx="1.5" fill="#7a4f1a" opacity="0.35" />
-          <line x1="28" y1="56" x2="60" y2="56" stroke="#5a3f1c" strokeWidth="0.6" />
-          <line x1="28" y1="62" x2="56" y2="62" stroke="#5a3f1c" strokeWidth="0.5" />
-          <line x1="28" y1="68" x2="50" y2="68" stroke="#5a3f1c" strokeWidth="0.5" />
-        </g>
-        {/* Middle card */}
-        <g transform="rotate(2 50 86)">
-          <rect
-            x="28" y="20" width="46" height="62" rx="3"
-            fill="url(#ps-card)" stroke="#5a3f1c" strokeWidth="1.1"
-          />
-          <rect x="34" y="26" width="34" height="22" rx="1.5" fill="#b07825" opacity="0.55" />
-          <circle cx="51" cy="37" r="6" fill="#7a4f1a" opacity="0.6" />
-          <line x1="34" y1="54" x2="66" y2="54" stroke="#5a3f1c" strokeWidth="0.6" />
-          <line x1="34" y1="60" x2="62" y2="60" stroke="#5a3f1c" strokeWidth="0.5" />
-          <line x1="34" y1="66" x2="56" y2="66" stroke="#5a3f1c" strokeWidth="0.5" />
-        </g>
-        {/* Front card */}
-        <g transform="rotate(16 50 90)">
-          <rect
-            x="34" y="18" width="46" height="62" rx="3"
-            fill="url(#ps-card)" stroke="#5a3f1c" strokeWidth="1.2"
-          />
-          <rect x="40" y="24" width="34" height="22" rx="1.5" fill="#4a7030" opacity="0.55" />
-          <path d="M 47 36 l 4 -8 l 4 8 l 8 1 l -6 6 l 2 9 l -8 -4 l -8 4 l 2 -9 l -6 -6 z"
-                fill="rgba(176,120,37,0.6)" stroke="#5a3f1c" strokeWidth="0.6" />
-          <line x1="40" y1="52" x2="72" y2="52" stroke="#5a3f1c" strokeWidth="0.6" />
-          <line x1="40" y1="58" x2="68" y2="58" stroke="#5a3f1c" strokeWidth="0.5" />
-          <line x1="40" y1="64" x2="62" y2="64" stroke="#5a3f1c" strokeWidth="0.5" />
-        </g>
-      </svg>
+      {heroes.map((h, i) => (
+        <motion.img
+          key={h.id}
+          src={`${HERO_BASE}${h.id}_card.webp`}
+          alt=""
+          aria-hidden
+          draggable={false}
+          initial={{ opacity: 0, y: 14, rotate: h.rotate * 0.3 }}
+          animate={{ opacity: h.focused ? 1 : 0.88, y: 0, rotate: h.rotate }}
+          transition={{ ...spring.soft, delay: 0.9 + i * 0.08 }}
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: 8,
+            width: 122,
+            height: 162,
+            marginLeft: -61 + h.dx,
+            objectFit: 'cover',
+            objectPosition: '50% 14%',
+            borderRadius: 3,
+            border: h.focused
+              ? `2px solid ${palette.accent}`
+              : `1px solid rgba(176, 120, 37, 0.5)`,
+            background: '#1a0f06',
+            // Sepia + desaturate pulls cold hero hues (Vindicta blue-purple,
+            // Abrams steel-blue) into the warm parchment/brass palette so the
+            // fan reads as tinted prints, not full-color renders.
+            filter: 'sepia(0.22) saturate(0.85) contrast(1.04)',
+            boxShadow: h.focused
+              ? '0 10px 24px rgba(40,20,0,0.42), 0 0 0 1px rgba(176,120,37,0.5)'
+              : '0 6px 16px rgba(40,20,0,0.32)',
+            zIndex: h.focused ? 2 : 1,
+            userSelect: 'none',
+          }}
+        />
+      ))}
     </div>
   );
 }
 
-function RankedSigil() {
-  // Trophy / ladder sigil for the coming-soon Ranked tile. Pure SVG so it
-  // doesn't depend on any hero art and stays palette-coherent on parchment.
+function RankedSilhouette() {
+  // Dark hero silhouette (Warden — the bouncer / gatekeeper, thematic fit
+  // for "competitive mode") behind a brass padlock overlay. Reads as
+  // "locked competitive mode" more specifically than a generic trophy.
+  const mask =
+    'radial-gradient(ellipse 78% 92% at 60% 50%, #000 55%, rgba(0,0,0,0.85) 78%, transparent 96%)';
   return (
     <div
       style={{
         position: 'absolute',
-        right: 24,
-        top: '50%',
-        transform: 'translateY(-50%) rotate(2deg)',
-        width: 160,
-        height: 160,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        width: '32%',
         pointerEvents: 'none',
-        opacity: 0.85,
+        overflow: 'hidden',
       }}
     >
-      <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden>
-        <defs>
-          <radialGradient id="rank-fill" cx="0.5" cy="0.5" r="0.6">
-            <stop offset="0%" stopColor="#cc9a44" stopOpacity="0.85" />
-            <stop offset="100%" stopColor="#7a4f1a" stopOpacity="0.55" />
-          </radialGradient>
-        </defs>
-        <g stroke="#5a3f1c" strokeWidth="1.2" fill="none">
-          <circle cx="50" cy="42" r="22" fill="url(#rank-fill)" />
-          <path d="M 28 42 q -10 4 -10 -10 q 0 -8 10 -8" />
-          <path d="M 72 42 q 10 4 10 -10 q 0 -8 -10 -8" />
-          <path d="M 40 64 v 8 q 0 4 -4 6 h 28 q -4 -2 -4 -6 v -8" fill="rgba(176,120,37,0.18)" />
-          <path d="M 30 84 h 40" strokeWidth="1.6" />
-          <path d="M 35 88 h 30" strokeWidth="1" />
-          <path d="M 42 18 l 4 8 l 8 1 l -6 6 l 2 9 l -8 -4 l -8 4 l 2 -9 l -6 -6 l 8 -1 z"
-                fill="rgba(176,120,37,0.5)" strokeWidth="0.8" transform="translate(4 0)" />
-        </g>
+      <img
+        src={`${HERO_BASE}hero_warden_card.webp`}
+        alt=""
+        aria-hidden
+        draggable={false}
+        style={{
+          position: 'absolute',
+          right: -20,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          height: '110%',
+          objectFit: 'cover',
+          objectPosition: '50% 18%',
+          filter: 'grayscale(0.7) brightness(0.55) sepia(0.25) contrast(1.05)',
+          WebkitMaskImage: mask,
+          maskImage: mask,
+          userSelect: 'none',
+        }}
+      />
+      <svg
+        viewBox="0 0 100 100"
+        width="64"
+        height="64"
+        aria-hidden
+        style={{
+          position: 'absolute',
+          right: '38%',
+          top: '50%',
+          transform: 'translate(50%, -50%)',
+          filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.6))',
+        }}
+      >
+        {/* Padlock shackle */}
+        <path
+          d="M 32 50 v -12 a 18 18 0 0 1 36 0 v 12"
+          fill="none"
+          stroke={palette.accent}
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+        {/* Padlock body */}
+        <rect
+          x="22" y="48" width="56" height="42" rx="4"
+          fill={palette.accent}
+          stroke="#5a3f1c"
+          strokeWidth="2"
+        />
+        {/* Keyhole */}
+        <circle cx="50" cy="65" r="5" fill="#3a2410" />
+        <rect x="48" y="65" width="4" height="13" fill="#3a2410" rx="1" />
       </svg>
     </div>
   );
@@ -345,23 +386,6 @@ function Header() {
         gap: 10,
       }}
     >
-      <motion.div
-        variants={{
-          hidden: { opacity: 0, y: 12 },
-          show: { opacity: 1, y: 0, transition: spring.soft },
-        }}
-        style={{
-          fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
-          fontSize: 14,
-          fontWeight: 700,
-          letterSpacing: '0.42em',
-          textTransform: 'uppercase',
-          color: palette.accent,
-        }}
-      >
-        Select Play Mode
-      </motion.div>
-
       <motion.img
         src={`${ART_BASE}deadlock_wordmark.png`}
         alt="Deadlock"
@@ -371,30 +395,12 @@ function Header() {
           show: { opacity: 1, y: 0, transition: spring.soft },
         }}
         style={{
-          height: 56,
+          height: 64,
           width: 'auto',
           filter: 'drop-shadow(0 2px 6px rgba(40,20,0,0.18))',
           userSelect: 'none',
         }}
       />
-
-      <motion.div
-        variants={{
-          hidden: { opacity: 0, y: 12 },
-          show: { opacity: 1, y: 0, transition: spring.soft },
-        }}
-        style={{
-          fontFamily: '"Exo 2 Variable", "Exo 2", ' + fonts.ui,
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: '0.42em',
-          textTransform: 'uppercase',
-          color: palette.textDim,
-          marginTop: -2,
-        }}
-      >
-        TCG
-      </motion.div>
 
       <motion.div
         aria-hidden
@@ -445,13 +451,29 @@ function Footer() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ ...spring.soft, delay: 1.0 }}
       style={{
-        ...text.body,
-        color: palette.textFaint,
         textAlign: 'center',
-        marginTop: 8,
+        marginTop: 'auto',
+        paddingTop: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
       }}
     >
-      A fan-made tabletop adaptation. Not affiliated with Valve.
+      <div style={{ ...text.body, color: palette.textFaint }}>
+        A fan-made tabletop adaptation. Not affiliated with Valve.
+      </div>
+      <div
+        style={{
+          fontFamily: fonts.display,
+          fontSize: 11,
+          letterSpacing: '0.32em',
+          textTransform: 'uppercase',
+          color: palette.textFaint,
+          opacity: 0.75,
+        }}
+      >
+        v0.1 · build
+      </div>
     </motion.div>
   );
 }
