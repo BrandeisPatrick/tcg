@@ -48,6 +48,14 @@ EQ_MAP = {
     'boundless_spirit':     'Boundless Spirit',
     'inhibitor':            'Inhibitor',            # passive mythic: stacks ability resist
     'mystic_expansion':     'Mystic Expansion',     # T1 spirit: +ability range (NEW)
+    'healing_booster':      'Healing Booster',
+    'weapon_shielding':     'Weapon Shielding',
+    'spirit_shielding':     'Spirit Shielding',
+    'glass_cannon':         'Glass Cannon',
+    'healing_tempo':        'Healing Tempo',
+    'bullet_resilience':    'Bullet Resilience',
+    'spirit_resilience':    'Spirit Resilience',
+    'bullet_resist_shredder': 'Bullet Resist Shredder',
 }
 
 # --- Active items (rendered as Spells / one-shot casts) ---
@@ -67,6 +75,9 @@ SP_MAP = {
     'soul_rebirth':         'Soul Rebirth',         # canon-faithful: passive respawn-on-death (canon is T4 passive equipment)
     'rusted_barrel':        'Rusted Barrel',        # T1 spirit active (NEW)
     'golden_goose_egg':     'Golden Goose Egg',     # T1 spirit active (NEW)
+    'spirit_sap':           'Spirit Sap',
+    'slowing_hex':          'Slowing Hex',
+    'healbane':             'Healbane',
 }
 
 API = 'https://assets.deadlock-api.com/v2/items'

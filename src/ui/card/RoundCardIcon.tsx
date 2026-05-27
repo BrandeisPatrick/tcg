@@ -165,7 +165,6 @@ function CircleArt({ data }: { data: CardData | undefined }) {
 export function RoundCardIcon({ cardId, size = 130, selected = false }: Props) {
   const data = CARDS_BY_ID[cardId];
   const tint = typeTint(data?.type ?? 'spell');
-  const cost = data && data.type !== 'hero' ? (data as any).cost ?? 0 : 0;
   const name = data?.name ?? cardId;
   const rarity = data?.rarity ?? 1;
 
@@ -219,21 +218,6 @@ export function RoundCardIcon({ cardId, size = 130, selected = false }: Props) {
           {typeLabel}
         </div>
 
-        {/* Cost pip (top-left) */}
-        {cost > 0 && (
-          <div style={{
-            position: 'absolute', top: 4, left: 4,
-            width: 26, height: 26, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #d4a840, #b07825)',
-            border: '2px solid rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 800, color: '#1a1008',
-            fontFamily: fonts.ui,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
-          }}>
-            {cost}
-          </div>
-        )}
       </div>
 
       {/* Name below */}

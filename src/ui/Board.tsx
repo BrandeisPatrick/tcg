@@ -15,7 +15,6 @@ import { ArenaBackdrop } from './board/ArenaBackdrop';
 import { DragArrow } from './effects/DragArrow';
 import { MulliganOverlay } from './overlays/MulliganOverlay';
 import { DraftOverlay } from './overlays/DraftOverlay';
-import { ShopOverlay } from './overlays/ShopOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
 import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
@@ -425,16 +424,6 @@ export function Board(props: BoardProps<GameState>) {
     );
   }
 
-  if (G.shop) {
-    return (
-      <ShopOverlay
-        shop={G.shop}
-        me={me}
-        onPick={(cardId) => (moves as any).shopPick(cardId)}
-      />
-    );
-  }
-
   return (
     <LayoutGroup>
       <CombatProgressContext.Provider value={combatProgress}>
@@ -500,7 +489,7 @@ export function Board(props: BoardProps<GameState>) {
                 me={me}
                 opp={opp}
                 isMyTurn={isMyTurn}
-                turn={ctx.turn}
+                turn={G.turnNumber}
                 pending={pending}
                 onTapHero={onTapHero}
                 onLongPressHero={(c) => setHeroDetail(c)}
@@ -560,7 +549,7 @@ export function Board(props: BoardProps<GameState>) {
             G={G}
             me={me}
             isMyTurn={isMyTurn}
-            turn={ctx.turn}
+            turn={G.turnNumber}
             onLogToggle={() => setLogOpen((v) => !v)}
             projectedFaceDamageMe={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
             projectedFaceDamageOpp={ctx.currentPlayer === me ? projectedFaceDamage : 0}

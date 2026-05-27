@@ -6,8 +6,9 @@ import type {
   PlayerID,
   PlayerState,
 } from './types';
-import { CARDS_BY_ID, getCard, HEROES, SHOP_T1, SHOP_T2, SHOP_T3, SHOP_T4 } from '@/cards';
-import { STARTER_DECK_PLAYER, STARTER_DECK_AI, type DeckBlueprint } from '@/decks/starter';
+import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
+import { getMatchConfig } from '@/storage/matchConfig';
+import { getAIDeck } from '@/decks/aiDecks';
 import { tickStartOfTurn, clearTurnFlags } from './statusOps';
 import { reapDead, damagePlayer } from './damage';
 import { resolveAttackPhase } from './combat';
@@ -44,38 +45,8 @@ function soulRefillForTurn(globalTurn: number): number {
   return SOULS_REFILL_TABLE[Math.min(idx, SOULS_REFILL_TABLE.length - 1)];
 }
 
-// Shop turns: player's local turn 1, 3, 5, 7 → visits 1–4.
-const SHOP_TURNS: Record<number, 1|2|3|4> = { 1: 1, 3: 2, 5: 3, 7: 4 };
-
-type TierWeights = [number, number, number, number]; // [T1%, T2%, T3%, T4%]
-const SHOP_WEIGHTS: Record<1|2|3|4, TierWeights> = {
-  1: [80, 20,  0,  0],
-  2: [30, 50, 20,  0],
-  3: [ 0, 20, 50, 30],
-  4: [ 0,  0, 20, 80],
-};
-const TIER_POOLS = [SHOP_T1, SHOP_T2, SHOP_T3, SHOP_T4];
-
-function rollShopChoices(visit: 1|2|3|4): string[] {
-  const weights = SHOP_WEIGHTS[visit];
-  const weighted: string[] = [];
-  for (let t = 0; t < 4; t++) {
-    const pool = TIER_POOLS[t];
-    for (let i = 0; i < weights[t]; i++) weighted.push(...pool);
-  }
-  if (weighted.length === 0) return SHOP_T1.slice(0, 3);
-  const picks: string[] = [];
-  while (picks.length < 3) {
-    const id = weighted[Math.floor(Math.random() * weighted.length)];
-    if (!picks.includes(id)) picks.push(id);
-    if (picks.length >= weighted.length) break;
-  }
-  return picks;
-}
-
-function playerLocalTurn(realTurn: number): number {
-  return Math.ceil(realTurn / 2);
-}
+const INITIAL_DRAW = 3;
+const DRAW_PER_TURN = 1;
 
 function makeInstance(cardId: string, ownerId: PlayerID, zone: CardInstance['zone'], slot?: 0|1|2|3): CardInstance {
   const data = getCard(cardId);
@@ -125,7 +96,15 @@ function makeEmptyPlayer(pid: PlayerID): PlayerState {
  *  P0 picks at indexes 0, 3, 4, 7; P1 picks at 1, 2, 5, 6. */
 const DRAFT_ORDER: PlayerID[] = ['0', '1', '1', '0', '0', '1', '1', '0'];
 
-function buildPlayer(pid: PlayerID, heroes: [string, string, string, string]): PlayerState {
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function buildPlayer(pid: PlayerID, heroes: [string, string, string, string], deckCards: string[]): PlayerState {
   const active = makeInstance(heroes[0], pid, 'active', 0);
   const bench: (CardInstance | null)[] = [
     makeInstance(heroes[1], pid, 'bench', 1),
@@ -133,13 +112,21 @@ function buildPlayer(pid: PlayerID, heroes: [string, string, string, string]): P
     makeInstance(heroes[3], pid, 'bench', 3),
   ];
 
+  const deck = shuffle(deckCards.map((id) => makeInstance(id, pid, 'deck')));
+  const hand: CardInstance[] = [];
+  for (let i = 0; i < INITIAL_DRAW && deck.length > 0; i++) {
+    const card = deck.pop()!;
+    card.zone = 'hand';
+    hand.push(card);
+  }
+
   return {
     id: pid,
     hp: 15,
     hpMax: 15,
     souls: SOULS_START,
-    deck: [],
-    hand: [],
+    deck,
+    hand,
     active,
     bench,
     discard: [],
@@ -280,11 +267,14 @@ export const DeadlockGame: Game<GameState> = {
       // Refill (not add) — no hoarding across turns. KO bounty banked this turn IS preserved
       // until the NEXT refill, so a kill mid-turn still gives you something to spend right away.
       ps.souls = soulRefillForTurn(realTurn);
-      // Shop: open on player's local turns 1, 3, 5, 7 (visits 1–4).
-      const myTurn = playerLocalTurn(realTurn);
-      const visit = SHOP_TURNS[myTurn];
-      if (visit) {
-        G.shop = { forPlayer: pid, round: 1, visit, choices: rollShopChoices(visit) };
+      // Draw from deck
+      if (ps.hand.length < MAX_HAND && ps.deck.length > 0) {
+        for (let i = 0; i < DRAW_PER_TURN && ps.deck.length > 0 && ps.hand.length < MAX_HAND; i++) {
+          const card = ps.deck.pop()!;
+          card.zone = 'hand';
+          ps.hand.push(card);
+          pushLog(G, `P${pid} drew ${CARDS_BY_ID[card.cardId]?.name ?? card.cardId}.`);
+        }
       }
       // Ultimate unlock
       unlockUltimates(G, ps);
@@ -294,7 +284,7 @@ export const DeadlockGame: Game<GameState> = {
       fireBoardTriggers(G, pid, 'startOfTurn');
       reapDead(G, G.players['0']);
       reapDead(G, G.players['1']);
-      pushLog(G, `--- Turn ${ctx.turn}, player ${pid} ---`);
+      pushLog(G, `--- Turn ${realTurn}, player ${pid} ---`);
     },
     onEnd: ({ G, ctx }) => {
       if (G.draft) return;  // see onBegin — draft turns are not real game turns
@@ -323,21 +313,8 @@ export const DeadlockGame: Game<GameState> = {
       if (G.action) G.action.state = 'done';
     },
 
-    shopPick: ({ G, ctx, playerID }, cardId: string) => {
-      const pid = (playerID ?? ctx.currentPlayer) as PlayerID;
-      if (!G.shop || G.shop.forPlayer !== pid) return INVALID_MOVE;
-      if (!G.shop.choices.includes(cardId)) return INVALID_MOVE;
-      const ps = G.players[pid];
-      if (ps.hand.length < MAX_HAND) {
-        const inst = makeInstance(cardId, pid, 'hand');
-        ps.hand.push(inst);
-      }
-      pushLog(G, `P${pid} picked ${CARDS_BY_ID[cardId]?.name ?? cardId} from shop.`);
-      if (G.shop.round < 3) {
-        G.shop = { ...G.shop, round: (G.shop.round + 1) as 1|2|3, choices: rollShopChoices(G.shop.visit) };
-      } else {
-        G.shop = null;
-      }
+    shopPick: () => {
+      return INVALID_MOVE;
     },
 
     playCard: ({ G, ctx, playerID }, iid: string, targetIid?: string, discardIid?: string) => {
@@ -584,8 +561,11 @@ export const DeadlockGame: Game<GameState> = {
       if (G.draft.currentIndex >= G.draft.order.length) {
         const p0Heroes = G.draft.picks['0'] as [string, string, string, string];
         const p1Heroes = G.draft.picks['1'] as [string, string, string, string];
-        G.players['0'] = buildPlayer('0', p0Heroes);
-        G.players['1'] = buildPlayer('1', p1Heroes);
+        const config = getMatchConfig();
+        const playerDeck = config.playerDeck.length > 0 ? config.playerDeck : getAIDeck();
+        const aiDeck = getAIDeck();
+        G.players['0'] = buildPlayer('0', p0Heroes, playerDeck);
+        G.players['1'] = buildPlayer('1', p1Heroes, aiDeck);
         G.draft = null;
         G.mulliganPending = false;
         G.draftTurnsOffset = ctx.turn - 1;
@@ -593,8 +573,6 @@ export const DeadlockGame: Game<GameState> = {
         const currentPid = ctx.currentPlayer as PlayerID;
         const currentPs = G.players[currentPid];
         currentPs.souls = soulRefillForTurn(1);
-        // Open shop visit 1 for the first player.
-        G.shop = { forPlayer: currentPid, round: 1, visit: 1, choices: rollShopChoices(1) };
         unlockUltimates(G, currentPs);
         pushLog(G, 'Match begins.');
         if (ctx.currentPlayer !== '0') events.endTurn();

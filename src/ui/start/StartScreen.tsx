@@ -17,9 +17,11 @@ const ART_BASE = `${import.meta.env.BASE_URL ?? '/'}art/`;
 
 interface StartScreenProps {
   onPlay: () => void;
+  onHeroes?: () => void;
+  onDecks?: () => void;
 }
 
-export function StartScreen({ onPlay }: StartScreenProps) {
+export function StartScreen({ onPlay, onHeroes, onDecks }: StartScreenProps) {
   return (
     <div
       style={{
@@ -123,17 +125,29 @@ export function StartScreen({ onPlay }: StartScreenProps) {
               hidden: { opacity: 0, y: 24 },
               show: { opacity: 1, y: 0, transition: spring.default },
             }}
-            style={{ gridRow: '2', gridColumn: '2', minHeight: 0 }}
+            style={{ gridRow: '2', gridColumn: '2', minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}
           >
             <TornTile
               variant="wide"
-              rotation={-1.6}
-              eyebrow="Mode"
-              title="Ranked"
-              subtitle="Climb the ladder. Coming soon."
-              comingSoon
+              rotation={-1.2}
+              eyebrow="Collection"
+              title="Heroes"
+              subtitle="Set preferred draft picks."
+              onClick={onHeroes}
+              ariaLabel="Manage preferred heroes"
             >
-              <RankedSilhouette />
+              <HeroPrefsIcon />
+            </TornTile>
+            <TornTile
+              variant="wide"
+              rotation={1.4}
+              eyebrow="Collection"
+              title="Decks"
+              subtitle="Build spell & item decks."
+              onClick={onDecks}
+              ariaLabel="Manage decks"
+            >
+              <DeckIcon />
             </TornTile>
           </motion.div>
         </motion.div>
@@ -297,74 +311,82 @@ function HeroPortraitFan() {
   );
 }
 
-function RankedSilhouette() {
-  // Dark hero silhouette (Warden — the bouncer / gatekeeper, thematic fit
-  // for "competitive mode") behind a brass padlock overlay. Reads as
-  // "locked competitive mode" more specifically than a generic trophy.
-  const mask =
-    'radial-gradient(ellipse 78% 92% at 60% 50%, #000 55%, rgba(0,0,0,0.85) 78%, transparent 96%)';
+function HeroPrefsIcon() {
   return (
     <div
       style={{
         position: 'absolute',
-        right: 0,
-        top: 0,
-        bottom: 0,
-        width: '32%',
+        right: 12,
+        top: '50%',
+        transform: 'translateY(-55%)',
         pointerEvents: 'none',
-        overflow: 'hidden',
       }}
     >
-      <img
-        src={`${HERO_BASE}hero_warden_card.webp`}
-        alt=""
-        aria-hidden
-        draggable={false}
-        style={{
-          position: 'absolute',
-          right: -20,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          height: '110%',
-          objectFit: 'cover',
-          objectPosition: '50% 18%',
-          filter: 'grayscale(0.7) brightness(0.55) sepia(0.25) contrast(1.05)',
-          WebkitMaskImage: mask,
-          maskImage: mask,
-          userSelect: 'none',
-        }}
-      />
-      <svg
-        viewBox="0 0 100 100"
-        width="64"
-        height="64"
-        aria-hidden
-        style={{
-          position: 'absolute',
-          right: '38%',
-          top: '50%',
-          transform: 'translate(50%, -50%)',
-          filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.6))',
-        }}
-      >
-        {/* Padlock shackle */}
-        <path
-          d="M 32 50 v -12 a 18 18 0 0 1 36 0 v 12"
-          fill="none"
-          stroke={palette.accent}
-          strokeWidth="6"
-          strokeLinecap="round"
+      {['hero_haze', 'hero_abrams'].map((id, i) => (
+        <img
+          key={id}
+          src={`${HERO_BASE}${id}_card.webp`}
+          alt=""
+          aria-hidden
+          draggable={false}
+          style={{
+            width: 52,
+            height: 68,
+            objectFit: 'cover',
+            objectPosition: '50% 14%',
+            borderRadius: 3,
+            border: `1px solid ${palette.accent}`,
+            background: '#1a0f06',
+            filter: 'sepia(0.15) saturate(0.9)',
+            boxShadow: '0 4px 12px rgba(40,20,0,0.35)',
+            position: i === 0 ? 'relative' as const : 'absolute' as const,
+            ...(i === 1 ? { top: -12, left: 36 } : {}),
+            zIndex: 2 - i,
+            userSelect: 'none' as const,
+          }}
         />
-        {/* Padlock body */}
-        <rect
-          x="22" y="48" width="56" height="42" rx="4"
+      ))}
+    </div>
+  );
+}
+
+function DeckIcon() {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 16,
+        top: '50%',
+        transform: 'translateY(-55%)',
+        pointerEvents: 'none',
+      }}
+    >
+      <svg viewBox="0 0 80 80" width="64" height="64" aria-hidden>
+        {[0, 4, 8].map((offset, i) => (
+          <rect
+            key={i}
+            x={10 + offset}
+            y={8 + offset}
+            width="48"
+            height="64"
+            rx="4"
+            fill={i === 2 ? palette.bg2 : palette.bg3}
+            stroke={palette.accent}
+            strokeWidth="1.5"
+            opacity={0.6 + i * 0.2}
+          />
+        ))}
+        <text
+          x="34"
+          y="52"
+          textAnchor="middle"
           fill={palette.accent}
-          stroke="#5a3f1c"
-          strokeWidth="2"
-        />
-        {/* Keyhole */}
-        <circle cx="50" cy="65" r="5" fill="#3a2410" />
-        <rect x="48" y="65" width="4" height="13" fill="#3a2410" rx="1" />
+          fontSize="22"
+          fontWeight="700"
+          fontFamily={fonts.display}
+        >
+          5
+        </text>
       </svg>
     </div>
   );

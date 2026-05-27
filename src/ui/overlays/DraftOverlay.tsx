@@ -7,12 +7,13 @@
 // Snake-order is driven by the engine; this overlay just dispatches draftPick
 // when it's the local player's turn.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { DraftState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { palette, fonts, spring, text } from '../tokens';
+import { getMatchConfig } from '@/storage/matchConfig';
 
 interface Props {
   draft: DraftState;
@@ -43,6 +44,26 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
     }
   }, [pool, focused]);
 
+  // Auto-draft: when it's our turn and we have preferred heroes available,
+  // pick them automatically after a brief delay.
+  const [autoBanner, setAutoBanner] = useState<string | null>(null);
+  const autoPickedRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!myTurn) return;
+    const prefs = getMatchConfig().heroPreferences.filter(Boolean) as string[];
+    const nextPref = prefs.find((id) => pool.includes(id) && !autoPickedRef.current.has(id));
+    if (!nextPref) return;
+    const heroName = CARDS_BY_ID[nextPref]?.name ?? nextPref;
+    setFocused(nextPref);
+    setAutoBanner(heroName);
+    const t = setTimeout(() => {
+      autoPickedRef.current.add(nextPref);
+      setAutoBanner(null);
+      onPick(nextPref);
+    }, 700);
+    return () => clearTimeout(t);
+  }, [myTurn, pool, onPick]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -65,6 +86,32 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
         aiTurn={aiTurn}
         currentPickNumber={draft.currentIndex + 1}
       />
+
+      <AnimatePresence>
+        {autoBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              textAlign: 'center',
+              padding: '6px 20px',
+              background: `${palette.accent}22`,
+              border: `1px solid ${palette.accent}`,
+              borderRadius: 999,
+              fontFamily: fonts.ui,
+              fontSize: 12,
+              fontWeight: 700,
+              color: palette.accent,
+              alignSelf: 'center',
+              marginBottom: 8,
+            }}
+          >
+            Auto-drafting: {autoBanner}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <TeamStrips
         myPicks={myPicks}

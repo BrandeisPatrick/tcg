@@ -1,26 +1,68 @@
-// Top-level shell that gates entry to the boardgame.io match behind a
-// start-screen. `App` is a boardgame.io Client factory — mounting it kicks
-// off a match immediately. We delay that mount until the user clicks Quick
-// Match, and key it on `matchEpoch` so a future "back to menu → play again"
-// flow gets a clean match by bumping the key.
-
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { App } from './App';
 import { StartScreen } from './ui/start/StartScreen';
+import { HeroPreferenceScreen } from './ui/collection/HeroPreferenceScreen';
+import { DeckManagerScreen } from './ui/collection/DeckManagerScreen';
+import { DeckEditorScreen } from './ui/collection/DeckEditorScreen';
 import { TornEdgeDefs } from './ui/start/tornEdges';
+import { setMatchConfig } from './storage/matchConfig';
+import { getPreferredHeroes, getSelectedDeck } from './storage/playerData';
 
-type View = 'start' | 'match';
+type View =
+  | { screen: 'start' }
+  | { screen: 'heroes' }
+  | { screen: 'decks' }
+  | { screen: 'deckEdit'; slotIndex: number }
+  | { screen: 'match' };
 
 export function Root() {
-  const [view, setView] = useState<View>('start');
-  const [matchEpoch] = useState(0);
+  const [view, setView] = useState<View>({ screen: 'start' });
+  const [matchEpoch, setMatchEpoch] = useState(0);
+
+  const goStart = useCallback(() => setView({ screen: 'start' }), []);
+  const goHeroes = useCallback(() => setView({ screen: 'heroes' }), []);
+  const goDecks = useCallback(() => setView({ screen: 'decks' }), []);
+  const goEditDeck = useCallback((idx: number) => setView({ screen: 'deckEdit', slotIndex: idx }), []);
+
+  const goMatch = useCallback(() => {
+    const deck = getSelectedDeck();
+    const prefs = getPreferredHeroes();
+    setMatchConfig({
+      playerDeck: deck?.cards ?? [],
+      heroPreferences: prefs,
+    });
+    setMatchEpoch((e) => e + 1);
+    setView({ screen: 'match' });
+  }, []);
 
   return (
     <>
       <TornEdgeDefs />
-      {view === 'start'
-        ? <StartScreen onPlay={() => setView('match')} />
-        : <App key={matchEpoch} />}
+      {view.screen === 'start' && (
+        <StartScreen
+          onPlay={goMatch}
+          onHeroes={goHeroes}
+          onDecks={goDecks}
+        />
+      )}
+      {view.screen === 'heroes' && (
+        <HeroPreferenceScreen onBack={goStart} />
+      )}
+      {view.screen === 'decks' && (
+        <DeckManagerScreen
+          onBack={goStart}
+          onEditDeck={goEditDeck}
+        />
+      )}
+      {view.screen === 'deckEdit' && (
+        <DeckEditorScreen
+          slotIndex={view.slotIndex}
+          onBack={goDecks}
+        />
+      )}
+      {view.screen === 'match' && (
+        <App key={matchEpoch} />
+      )}
     </>
   );
 }
