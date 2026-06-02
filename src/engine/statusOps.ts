@@ -16,6 +16,13 @@ const MAGNITUDE_STATUSES: Set<StatusId> = new Set([
   'bullet_resist_down', 'spirit_resist_down', 'healing_boost', 'healing_boost_down',
 ]);
 
+// Stat-reduction debuffs store a positive magnitude that represents a reduction.
+// The log prints it with a leading minus so the text matches the on-card badge
+// (e.g. "−BP 2") instead of reading like a buff ("Bullet Power 2").
+const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
+  'weapon_power_down', 'spirit_power_down', 'bullet_resist_down', 'spirit_resist_down',
+]);
+
 /**
  * Apply a status to a target with Deadlock-style rules:
  *
@@ -60,12 +67,17 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
     const inst: StatusInstance = { id, value, duration };
     target.statuses.push(inst);
   }
-  // Natural-prose log: "Haze gained Stun for 2 turns" / "Abrams gained Bleed 3 for 3 turns" /
-  // "Vindicta gained Shield 5" (permanent, no duration shown).
+  // Natural-prose log: buffs read "gained", debuffs read "suffered" so the sign
+  // of the effect is unambiguous. Stat-reduction debuffs print a leading minus
+  // on their magnitude to match the on-card badge:
+  //   "Haze suffered Stun for 2 turns" / "Abrams suffered Bleed 3 for 3 turns" /
+  //   "Vindicta gained Shield 5" / "Shiv suffered Bullet Power −2 for 2 turns".
   const title = STATUSES_BY_ID[id]?.title ?? id;
-  const mag = MAGNITUDE_STATUSES.has(id) ? ` ${value}` : '';
+  const sign = NEGATIVE_MAGNITUDE_STATUSES.has(id) ? '−' : '';
+  const mag = MAGNITUDE_STATUSES.has(id) ? ` ${sign}${value}` : '';
   const dur = duration >= 99 ? '' : ` for ${duration} turn${duration === 1 ? '' : 's'}`;
-  pushLog(G, `${name} gained ${title}${mag}${dur}.`);
+  const verb = DEBUFF_IDS.has(id) ? 'suffered' : 'gained';
+  pushLog(G, `${name} ${verb} ${title}${mag}${dur}.`);
 
   // Equipment reactive: Reactive Barrier shields the bearer when they suffer
   // hard CC. Fire here so any attached equipment with onBearerCCSuffered runs.

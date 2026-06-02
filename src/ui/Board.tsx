@@ -30,6 +30,7 @@ import { CombatProgressContext, type CombatProgress } from './effects/CombatProg
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash } from './effects/CardPlayFlash';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
+import { useFitScale } from './hooks/useFitScale';
 import { palette, fonts, radius, shadow, spring, text } from './tokens';
 import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer } from './side-panel/PanelDrawer';
@@ -67,6 +68,10 @@ export function Board(props: BoardProps<GameState>) {
   const combatProgress: CombatProgress = combatPlan
     ? { total: combatPlan.steps.length, currentBeat: combatBeat, attackerIsMe: combatPlan.attackerId === me }
     : null;
+
+  // Scale the battle stage to fit shorter viewports so the hand row never gets
+  // clipped off the bottom of the screen.
+  const { containerRef: fitContainerRef, contentRef: fitContentRef, scale: fitScale } = useFitScale();
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
@@ -439,19 +444,35 @@ export function Board(props: BoardProps<GameState>) {
       }}>
         {/* MAIN COLUMN — battle stage centered, side panel lives in a
             drawer slid in from the right (toggled by the chevron tab). */}
-        <div style={{
-          flex: '1 1 auto',
-          maxWidth: 1100,
-          display: 'flex',
-          flexDirection: 'column',
-          // Center the stack vertically so unused space spreads to top/bottom
-          // rather than ballooning the active row. Generous fibonacci gap
-          // gives the rows visible breathing room rather than packing them.
-          justifyContent: 'center',
-          gap: 40,
-          minHeight: 0,
-          height: 'calc(100vh - 32px)',
-        }}>
+        <div
+          ref={fitContainerRef}
+          style={{
+            flex: '1 1 auto',
+            maxWidth: 1100,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            // Center the stage vertically so unused space spreads to top/bottom
+            // rather than ballooning the active row. When the stage is taller
+            // than the viewport, useFitScale shrinks it (transform below) so the
+            // hand row stays on-screen instead of overflowing off the bottom.
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: 0,
+            height: 'calc(100vh - 32px)',
+          }}>
+        <div
+          ref={fitContentRef}
+          style={{
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            // Generous fibonacci gap gives the rows visible breathing room
+            // rather than packing them.
+            gap: 40,
+            transform: `scale(${fitScale})`,
+            transformOrigin: 'center center',
+          }}>
           <div style={{ flex: '0 0 auto' }}>
             <OpponentHand cards={G.players[opp].hand} />
           </div>
@@ -540,6 +561,7 @@ export function Board(props: BoardProps<GameState>) {
               onCancel={() => setPending(null)}
             />
           </div>
+        </div>
         </div>
 
         {/* PANEL DRAWER — slides in from the right edge, toggled by a thin
