@@ -11,11 +11,11 @@ import { RuleText } from '../card/RuleText';
 
 interface Props {
   card: CardInstance;
-  /** True if this hero belongs to the local player. Drives the "Use Skill" + "Retreat" buttons. */
+  /** True if this hero belongs to the local player. Drives the Skill action + Retreat. */
   isMine?: boolean;
-  /** All gates for the USE SKILL button satisfied (player flag, per-hero, CC). */
+  /** All gates for using the skill satisfied (player flag, per-hero, CC). */
   canUseSkill?: boolean;
-  /** Short reason why the button is disabled, shown as a subtitle. */
+  /** Short reason why the skill can't be used, shown inside the skill card. */
   skillBlockedReason?: string;
   onUseSkill?: () => void;
   canRetreat?: boolean;
@@ -48,6 +48,15 @@ export function HeroDetailSheet({
   const ultAbility = (ult && ult.type === 'ultimate' && ult.abilities[0]) ? getAbility(ult.abilities[0]) : null;
   const attached = card.attached ?? [];
 
+  const skillName = skillAbility ? (extractAbilityName(skillAbility.prompt) ?? data.name) : '';
+  const skillDesc = skillAbility ? (extractAbilityDesc(skillAbility.prompt) ?? skillAbility.prompt ?? '') : '';
+  const passiveDesc = passiveAbility ? (extractAbilityDesc(passiveAbility.prompt) ?? passiveAbility.prompt ?? data.text ?? '') : '';
+
+  // The hero's flavor line often just restates the skill/passive — only show it
+  // when it adds something new, so the sheet doesn't say the same thing twice.
+  const norm = (s?: string) => (s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const showFlavor = !!data.text && norm(data.text) !== norm(skillDesc) && norm(data.text) !== norm(passiveDesc);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -73,17 +82,17 @@ export function HeroDetailSheet({
           borderTopLeftRadius: 16, borderTopRightRadius: 16,
           border: `2px solid #5a3f1c`,
           borderBottom: 'none',
-          padding: '24px 22px calc(24px + env(safe-area-inset-bottom))',
+          padding: '22px 20px calc(20px + env(safe-area-inset-bottom))',
           color: palette.text,
           boxShadow: shadow.xl,
-          maxHeight: '88vh',
+          maxHeight: '90vh',
           overflow: 'auto',
         }}
       >
         {/* Header — portrait + name + stats row */}
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 18 }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: showFlavor ? 14 : 18 }}>
           <div style={{
-            width: 88, height: 88, borderRadius: radius.md, overflow: 'hidden',
+            width: 84, height: 84, borderRadius: radius.md, overflow: 'hidden',
             border: `1.5px solid ${palette.borderStrong}`,
             flexShrink: 0,
           }}>
@@ -99,20 +108,16 @@ export function HeroDetailSheet({
           </div>
         </div>
 
-        {/* Hero flavor / passive description */}
-        {data.text && (
-          <p style={{
-            ...text.body, color: palette.textDim, marginBottom: 18,
-          }}>
-            <RuleText text={data.text} />
+        {/* Hero flavor — only when it isn't a restatement of the skill/passive */}
+        {showFlavor && (
+          <p style={{ ...text.body, color: palette.textDim, marginBottom: 18 }}>
+            <RuleText text={data.text!} />
           </p>
         )}
 
-        {/* Active effects */}
-        <Block title="Active Effects">
-          {card.statuses.length === 0 ? (
-            <Empty>No active effects.</Empty>
-          ) : (
+        {/* Active effects — hidden entirely when there are none (less clutter) */}
+        {card.statuses.length > 0 && (
+          <Block title="Active Effects">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {card.statuses.map((s, i) => {
                 const def = STATUSES_BY_ID[s.id];
@@ -130,34 +135,38 @@ export function HeroDetailSheet({
                 );
               })}
             </div>
-          )}
-        </Block>
+          </Block>
+        )}
 
-        {/* Skill OR Passive — each hero has exactly one. Render whichever exists. */}
+        {/* Skill — the card itself is the action. Tap it to use the skill. */}
         {skillAbility ? (
           <Block title="Skill">
-            <AbilityPanel
-              name={extractAbilityName(skillAbility.prompt) ?? data.name}
-              description={extractAbilityDesc(skillAbility.prompt) ?? skillAbility.prompt ?? ''}
+            <SkillActionCard
+              name={skillName}
+              description={skillDesc}
               targetLabel={TARGET_LABELS[skillAbility.target] ?? skillAbility.target}
-              statusChip={card.skillUsedThisTurn ? { label: 'USED', color: palette.textFaint } : { label: 'READY', color: palette.success }}
               ability={skillAbility}
               hero={card}
+              mine={!!isMine}
+              used={!!card.skillUsedThisTurn}
+              canUse={!!canUseSkill}
+              blockedReason={skillBlockedReason}
+              onUse={onUseSkill ? () => { onUseSkill(); onClose(); } : undefined}
             />
           </Block>
         ) : passiveAbility ? (
           <Block title="Passive">
             <PassivePanel
               name={extractAbilityName(passiveAbility.prompt) ?? `${data.name}'s Passive`}
-              description={extractAbilityDesc(passiveAbility.prompt) ?? passiveAbility.prompt ?? data.text ?? ''}
+              description={passiveDesc}
               trigger={passiveAbility.trigger}
             />
           </Block>
         ) : null}
 
-        {/* Ultimate — same shape as Skill */}
-        <Block title="Ultimate">
-          {ult && ultAbility ? (
+        {/* Ultimate — informational (ults are cast from hand, not here) */}
+        {ult && ultAbility && (
+          <Block title="Ultimate">
             <AbilityPanel
               name={ult.name}
               description={ult.text ?? ''}
@@ -165,14 +174,12 @@ export function HeroDetailSheet({
               ability={ultAbility}
               hero={card}
             />
-          ) : <Empty>No ultimate.</Empty>}
-        </Block>
+          </Block>
+        )}
 
-        {/* Equipment */}
-        <Block title="Equipment">
-          {attached.length === 0 ? (
-            <Empty>No equipment attached.</Empty>
-          ) : (
+        {/* Equipment — hidden when none attached */}
+        {attached.length > 0 && (
+          <Block title="Equipment">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {attached.map((eq) => (
                 <span key={eq.iid} style={{
@@ -186,20 +193,10 @@ export function HeroDetailSheet({
                 </span>
               ))}
             </div>
-          )}
-        </Block>
-
-        {/* Action buttons */}
-        {isMine && skillAbility && onUseSkill && (
-          <ActionButton
-            primary
-            disabled={!canUseSkill}
-            disabledReason={skillBlockedReason}
-            onClick={() => { onUseSkill(); onClose(); }}
-            icon="◎"
-            label="Use Skill"
-          />
+          </Block>
         )}
+
+        {/* Secondary actions */}
         {canRetreat && onRetreat && (
           <ActionButton
             onClick={() => { onRetreat(); onClose(); }}
@@ -213,12 +210,12 @@ export function HeroDetailSheet({
           onClick={onClose}
           style={{
             marginTop: 10, width: '100%',
-            padding: '13px',
-            background: palette.bg2,
+            padding: '12px',
+            background: 'transparent',
             border: `1px solid ${palette.border}`,
             borderRadius: radius.md,
             cursor: 'pointer',
-            ...text.label, color: palette.textDim,
+            ...text.label, color: palette.textFaint,
           }}
         >Close</button>
       </motion.div>
@@ -230,8 +227,8 @@ export function HeroDetailSheet({
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ ...text.label, color: palette.textFaint, marginBottom: 10 }}>{title}</div>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ ...text.label, color: palette.textFaint, marginBottom: 8 }}>{title}</div>
       {children}
     </div>
   );
@@ -246,12 +243,6 @@ function Stat({ label, value, color }: { label: string; value: any; color: strin
   );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
-  return <div style={{ ...text.body, color: palette.textFaint }}>{children}</div>;
-}
-
-// Display labels for ability triggers — shown as a chip in PassivePanel so the
-// player knows when the passive fires.
 const TRIGGER_LABELS: Record<string, string> = {
   startOfTurn: 'Start of own turn',
   endOfTurn:   'End of own turn',
@@ -263,20 +254,21 @@ const TRIGGER_LABELS: Record<string, string> = {
 };
 
 /**
- * Passive ability block: name + trigger chip + description. No target, no
- * scaling, no USE button — passives just sit on the hero and fire when their
- * trigger condition is met (or "Always" for ongoing damage hooks like Haze's
- * Fixation or Wraith's mixed bullets).
+ * Passive ability block: name + trigger chip + description. No action — passives
+ * just fire when their trigger condition is met.
  */
 function PassivePanel({ name, description, trigger }: { name: string; description: string; trigger: string }) {
   return (
-    <div>
+    <div style={{
+      padding: '12px 14px', borderRadius: radius.md,
+      background: 'rgba(120, 80, 30, 0.05)', border: `1px solid ${palette.border}`,
+    }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
         <span style={{ ...text.label, color: palette.text }}>{name}</span>
         <span style={{ ...text.label, color: palette.success }}>{TRIGGER_LABELS[trigger] ?? trigger}</span>
       </div>
       {description && (
-        <div style={{ ...text.body, color: palette.textDim, marginBottom: 6 }}>
+        <div style={{ ...text.body, color: palette.textDim }}>
           <RuleText text={description} />
         </div>
       )}
@@ -285,66 +277,148 @@ function PassivePanel({ name, description, trigger }: { name: string; descriptio
 }
 
 /**
- * Shared layout for Skill and Ultimate: bold name, description body, target chip,
- * and the scaling preview block. Same shape for both = visual parity.
+ * The Skill card IS the "use skill" button. When the skill is usable (it's the
+ * player's hero and all gates pass) the whole card is a pressable brass panel
+ * with a footer CTA; otherwise it renders as a flat, non-interactive info card
+ * (USED / blocked reason / enemy hero).
  */
-function AbilityPanel({
-  name, description, targetLabel, statusChip, ability, hero,
+function SkillActionCard({
+  name, description, targetLabel, ability, hero,
+  mine, used, canUse, blockedReason, onUse,
 }: {
   name: string;
   description: string;
   targetLabel: string;
-  statusChip?: { label: string; color: string };
+  ability: AbilityDef;
+  hero: CardInstance;
+  mine: boolean;
+  used: boolean;
+  canUse: boolean;
+  blockedReason?: string;
+  onUse?: () => void;
+}) {
+  const interactive = mine && !!onUse && canUse && !used;
+  const accent = palette.accent;
+
+  const chip = used
+    ? { label: 'USED', color: palette.textFaint }
+    : { label: 'READY', color: palette.success };
+
+  return (
+    <motion.div
+      role={interactive ? 'button' : undefined}
+      whileTap={interactive ? { scale: 0.985 } : undefined}
+      onClick={interactive ? (e) => { e.stopPropagation(); onUse!(); } : undefined}
+      style={{
+        padding: '14px 14px 12px',
+        borderRadius: radius.md,
+        background: interactive
+          ? `linear-gradient(180deg, ${accent}22, ${accent}0c)`
+          : 'rgba(120, 80, 30, 0.05)',
+        border: `1.5px solid ${interactive ? accent : palette.border}`,
+        boxShadow: interactive ? `0 2px 10px rgba(40,20,0,0.18), 0 0 14px ${accent}40` : 'none',
+        cursor: interactive ? 'pointer' : 'default',
+        opacity: used ? 0.7 : 1,
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+        <span style={{ ...text.label, color: palette.text }}>{name}</span>
+        <span style={{ flexShrink: 0, ...text.label, color: chip.color }}>{chip.label}</span>
+      </div>
+      {description && (
+        <div style={{ ...text.body, color: palette.textDim, marginBottom: 8 }}>
+          <RuleText text={description} />
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{
+          display: 'inline-block', padding: '2px 8px',
+          background: 'rgba(120, 80, 30, 0.10)', border: `1px solid ${palette.border}`,
+          borderRadius: 999, ...text.label, color: palette.textFaint,
+        }}>Target · {targetLabel}</span>
+        <ScalingChip ability={ability} hero={hero} />
+      </div>
+      <ScalingBreakdown ability={ability} hero={hero} />
+
+      {/* Footer CTA / status — the "Use Skill" affordance lives in the card */}
+      {interactive ? (
+        <div style={{
+          marginTop: 12, paddingTop: 10, borderTop: `1px solid ${accent}55`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          ...text.label, color: palette.accentWarm,
+        }}>
+          <span aria-hidden>◎</span><span>Tap to Use Skill</span>
+        </div>
+      ) : mine && !canUse && (blockedReason || used) ? (
+        <div style={{
+          marginTop: 10, paddingTop: 8, borderTop: `1px solid ${palette.border}`,
+          textAlign: 'center', ...text.body, color: palette.textFaint,
+        }}>{used ? 'Already used this turn' : blockedReason}</div>
+      ) : null}
+    </motion.div>
+  );
+}
+
+/**
+ * Shared read-only layout for the Ultimate: bold name, description, target chip,
+ * and (when relevant) the scaling breakdown.
+ */
+function AbilityPanel({
+  name, description, targetLabel, ability, hero,
+}: {
+  name: string;
+  description: string;
+  targetLabel: string;
   ability: AbilityDef;
   hero: CardInstance;
 }) {
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
-        <span style={{ ...text.label, color: palette.text }}>{name}</span>
-        {statusChip && (
-          <span style={{ flexShrink: 0, ...text.label, color: statusChip.color }}>{statusChip.label}</span>
-        )}
-      </div>
+    <div style={{
+      padding: '12px 14px', borderRadius: radius.md,
+      background: 'rgba(120, 80, 30, 0.05)', border: `1px solid ${palette.border}`,
+    }}>
+      <div style={{ ...text.label, color: palette.text, marginBottom: 4 }}>{name}</div>
       {description && (
-        <div style={{ ...text.body, color: palette.textDim, marginBottom: 6 }}>
+        <div style={{ ...text.body, color: palette.textDim, marginBottom: 8 }}>
           <RuleText text={description} />
         </div>
       )}
-      <div style={{
-        display: 'inline-block',
-        padding: '2px 8px',
-        background: 'rgba(120, 80, 30, 0.10)',
-        border: `1px solid ${palette.border}`,
-        borderRadius: 999,
-        ...text.label, color: palette.textFaint,
-      }}>Target · {targetLabel}</div>
-      <ScalingPreview ability={ability} hero={hero} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{
+          display: 'inline-block', padding: '2px 8px',
+          background: 'rgba(120, 80, 30, 0.10)', border: `1px solid ${palette.border}`,
+          borderRadius: 999, ...text.label, color: palette.textFaint,
+        }}>Target · {targetLabel}</span>
+        <ScalingChip ability={ability} hero={hero} />
+      </div>
+      <ScalingBreakdown ability={ability} hero={hero} />
     </div>
   );
 }
 
-function ScalingPreview({ ability, hero }: { ability: AbilityDef; hero: CardInstance }) {
+/** Compact one-line value chip — shown only when there's a flat base and no
+ *  active Spirit scaling (keeps simple effects from rendering a whole box). */
+function ScalingChip({ ability, hero }: { ability: AbilityDef; hero: CardInstance }) {
   const base = ability.base ?? null;
-  const baseLabel = ability.baseLabel ?? 'effect';
   const scalesSpirit = !!ability.scalesSpirit;
+  if (base === null) return null;            // pure utility → nothing
+  if (scalesSpirit && hero.spiritMod !== 0) return null; // breakdown box handles it
+  return (
+    <span style={{
+      display: 'inline-block', padding: '2px 8px',
+      background: 'rgba(120, 80, 30, 0.10)', border: `1px solid ${palette.border}`,
+      borderRadius: 999, ...text.label, color: palette.accentWarm,
+    }}>{base} {ability.baseLabel ?? 'effect'}</span>
+  );
+}
 
-  // If neither a base value nor any scaling, this is a pure utility ability — skip the block.
-  if (base === null && !scalesSpirit) {
-    return (
-      <div style={{
-        marginTop: 10, padding: '8px 12px',
-        background: 'rgba(120, 80, 30, 0.06)',
-        border: `1px dashed ${palette.border}`,
-        borderRadius: 6,
-        ...text.body, color: palette.textFaint,
-      }}>Pure utility — no damage or scaling.</div>
-    );
-  }
-
-  const baseVal = base ?? 0;
+/** Full Base / +Spirit / Total box — only when Spirit is actively adding to it. */
+function ScalingBreakdown({ ability, hero }: { ability: AbilityDef; hero: CardInstance }) {
+  const base = ability.base ?? 0;
+  const scalesSpirit = !!ability.scalesSpirit;
   const spi = hero.spiritMod;
-  const total = baseVal + (scalesSpirit ? spi : 0);
+  if (!scalesSpirit || spi === 0) return null;
 
   return (
     <div style={{
@@ -354,20 +428,16 @@ function ScalingPreview({ ability, hero }: { ability: AbilityDef; hero: CardInst
       borderRadius: 6,
       display: 'flex', flexDirection: 'column', gap: 5,
     }}>
-      <Row label="Base" value={`${baseVal} ${baseLabel}`} color={palette.textDim} />
-      {scalesSpirit && (
-        <Row label="+ Spirit" value={`+${spi}`} color={palette.spirit} hint={`(${spi} SPI)`} />
-      )}
-      {scalesSpirit && (
-        <div style={{
-          marginTop: 4, paddingTop: 6,
-          borderTop: `1px dashed ${palette.border}`,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-        }}>
-          <span style={{ ...text.label, color: palette.textDim }}>= Total</span>
-          <span style={{ ...text.numeric, color: palette.accentWarm }}>{total}</span>
-        </div>
-      )}
+      <Row label="Base" value={`${base} ${ability.baseLabel ?? 'effect'}`} color={palette.textDim} />
+      <Row label="+ Spirit" value={`+${spi}`} color={palette.spirit} hint={`(${spi} SPI)`} />
+      <div style={{
+        marginTop: 4, paddingTop: 6,
+        borderTop: `1px dashed ${palette.border}`,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+      }}>
+        <span style={{ ...text.label, color: palette.textDim }}>= Total</span>
+        <span style={{ ...text.numeric, color: palette.accentWarm }}>{base + spi}</span>
+      </div>
     </div>
   );
 }
@@ -384,64 +454,43 @@ function Row({ label, value, color, hint }: { label: string; value: string; colo
   );
 }
 
-/**
- * Shared action button used for Use Skill + Retreat. Brass gradient, prominent.
- * `primary` makes it slightly bigger (Use Skill); `disabled` dims and shows reason.
- */
+/** Secondary action button (Retreat). Brass gradient, full width. */
 function ActionButton({
-  primary, disabled, disabledReason, onClick, icon, label, badge,
+  onClick, icon, label, badge,
 }: {
-  primary?: boolean;
-  disabled?: boolean;
-  disabledReason?: string;
   onClick: () => void;
   icon: string;
   label: string;
   badge?: string;
 }) {
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (disabled) return;
-    onClick();
-  };
   return (
     <button
-      onClick={handleClick}
-      disabled={disabled}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
       style={{
         marginTop: 10, width: '100%',
-        padding: primary ? '16px' : '14px',
-        background: disabled
-          ? palette.bg2
-          : `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}77)`,
-        border: `1.5px solid ${disabled ? palette.border : palette.accent}`,
+        padding: '14px',
+        background: `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}77)`,
+        border: `1.5px solid ${palette.accent}`,
         borderRadius: radius.md,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-        boxShadow: disabled ? 'none' : `0 2px 8px rgba(40, 20, 0, 0.25), 0 0 14px ${palette.accent}55`,
-        opacity: disabled ? 0.7 : 1,
-        ...text.label, color: disabled ? palette.textFaint : '#1a1208',
+        cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        boxShadow: `0 2px 8px rgba(40, 20, 0, 0.25), 0 0 14px ${palette.accent}55`,
+        ...text.label, color: '#1a1208',
       }}
     >
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-        <span aria-hidden>{icon}</span>
-        <span>{label}</span>
-        {badge && (
-          <span style={{
-            padding: '2px 8px', borderRadius: 999,
-            background: 'rgba(0,0,0,0.25)',
-            ...text.label,
-          }}>{badge}</span>
-        )}
-      </span>
-      {disabled && disabledReason && (
-        <span style={{ ...text.body, color: palette.textFaint }}>{disabledReason}</span>
+      <span aria-hidden>{icon}</span>
+      <span>{label}</span>
+      {badge && (
+        <span style={{
+          padding: '2px 8px', borderRadius: 999,
+          background: 'rgba(0,0,0,0.25)', ...text.label,
+        }}>{badge}</span>
       )}
     </button>
   );
 }
 
-// Split "Name — description" prompts into title + body for the Skill panel.
+// Split "Name — description" prompts into title + body for the panels.
 function extractAbilityName(prompt?: string): string | null {
   if (!prompt) return null;
   const idx = prompt.indexOf(' — ');

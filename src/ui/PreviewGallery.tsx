@@ -9,6 +9,7 @@ import { STATUSES } from '@/statuses';
 import { HeroSlot } from './board/HeroSlot';
 import { TurnCompass } from './board/TurnCompass';
 import { SoulsRail } from './board/SoulsRail';
+import { HeroDetailSheet } from './overlays/HeroDetailSheet';
 import type { CardInstance, HeroCard } from '@/engine/types';
 import { palette, fonts, radius, shadow, text } from './tokens';
 import { LevelRing } from './card/LevelRing';
@@ -35,7 +36,7 @@ function mockHeroInstance(h: HeroCard): CardInstance {
   };
 }
 
-type Tab = 'cards' | 'animations' | 'statuses';
+type Tab = 'cards' | 'animations' | 'statuses' | 'overlays';
 
 export function PreviewGallery() {
   useEffect(() => { document.body.classList.add('preview'); return () => document.body.classList.remove('preview'); }, []);
@@ -69,6 +70,7 @@ export function PreviewGallery() {
         {tab === 'cards' && <CardsTab />}
         {tab === 'animations' && <AnimationsTab />}
         {tab === 'statuses' && <StatusesTab />}
+        {tab === 'overlays' && <OverlaysTab />}
       </div>
     </div>
   );
@@ -79,6 +81,7 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     { id: 'cards', label: 'Cards' },
     { id: 'animations', label: 'Animations' },
     { id: 'statuses', label: 'Statuses' },
+    { id: 'overlays', label: 'Overlays' },
   ];
   return (
     <div style={{
@@ -490,6 +493,115 @@ function StatusesTab() {
           );
         })}
       </Grid>
+    </Section>
+  );
+}
+
+// =============================================================================
+// OVERLAYS TAB
+// =============================================================================
+
+function mockEquipInstance(cardId: string): CardInstance {
+  return {
+    iid: `preview-eq-${cardId}`,
+    cardId,
+    ownerId: '0',
+    zone: 'equipment',
+    hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
+    statuses: [], exhausted: false, skillUsedThisTurn: false,
+  };
+}
+
+const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
+  { id: 'ready',   label: 'Skill READY (yours)', hint: 'Skill card is the button — tap to use' },
+  { id: 'used',    label: 'Skill USED',           hint: 'Dimmed, "already used this turn"' },
+  { id: 'blocked', label: 'Skill blocked',        hint: 'Flat card + reason ("Not your turn")' },
+  { id: 'enemy',   label: 'Enemy hero',           hint: 'Read-only, no action' },
+  { id: 'loaded',  label: 'Statuses + equipment + retreat', hint: 'Active Effects, Equipment, Retreat all shown' },
+];
+
+function OverlaysTab() {
+  const [heroId, setHeroId] = useState('hero_kelvin');
+  const [scenario, setScenario] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const hero = HEROES.find((h) => h.id === heroId)!;
+
+  function build(s: string): { card: CardInstance; props: Parameters<typeof HeroDetailSheet>[0] } {
+    let card = mockHeroInstance(hero);
+    const props: Parameters<typeof HeroDetailSheet>[0] = {
+      card,
+      isMine: true,
+      canUseSkill: true,
+      onUseSkill: () => setToast('⚔︎ Skill activated'),
+      onClose: () => setScenario(null),
+    };
+    if (s === 'used') { card = { ...card, skillUsedThisTurn: true }; props.canUseSkill = false; }
+    if (s === 'blocked') { props.canUseSkill = false; props.skillBlockedReason = 'Not your turn'; }
+    if (s === 'enemy') { props.isMine = false; props.canUseSkill = false; }
+    if (s === 'loaded') {
+      card = {
+        ...card,
+        statuses: [
+          { id: 'bleed', value: 3, duration: 2 },
+          { id: 'shield', value: 5, duration: 999 },
+          { id: 'spirit_power', value: 2, duration: 2 },
+        ],
+        attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('healing_booster')],
+      };
+      props.canRetreat = true;
+      props.retreatCost = 2;
+      props.onRetreat = () => setToast('↻ Retreated');
+    }
+    props.card = card;
+    return { card, props };
+  }
+
+  const built = scenario ? build(scenario) : null;
+
+  return (
+    <Section title="Hero Detail Sheet">
+      <Caption>
+        The bottom-sheet that opens when you tap a hero. The Skill section <strong>is</strong> the
+        action — tap the skill card to use it (no separate button). Pick a hero and a state, then
+        open. Heroes with a passive (instead of a skill) show a non-actionable Passive block.
+      </Caption>
+
+      <Row>
+        <label style={{ ...text.label, color: palette.textDim, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          Hero
+          <select
+            value={heroId}
+            onChange={(e) => setHeroId(e.target.value)}
+            style={{
+              background: palette.bg2, color: palette.text,
+              border: `1px solid ${palette.border}`, borderRadius: radius.md,
+              padding: '8px 10px', fontFamily: fonts.ui, fontWeight: 700, fontSize: 12,
+            }}
+          >
+            {HEROES.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+        </label>
+      </Row>
+
+      <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {SHEET_SCENARIOS.map((sc) => (
+          <div key={sc.id} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <Button onClick={() => setScenario(sc.id)}>{sc.label}</Button>
+            <span style={{ ...text.body, color: palette.textDim }}>{sc.hint}</span>
+          </div>
+        ))}
+      </div>
+
+      {toast && (
+        <p style={{ marginTop: 14, ...text.label, color: palette.success }}>
+          {toast} — (sheet closed, as it does in-game)
+        </p>
+      )}
+
+      <AnimatePresence>
+        {built && <HeroDetailSheet key={`${heroId}-${scenario}`} {...built.props} />}
+      </AnimatePresence>
     </Section>
   );
 }
