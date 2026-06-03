@@ -110,6 +110,17 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     }
   }
 
+  // Sleep wakes on any connecting damage (target still alive). Strip it first so
+  // the wake-up burst (Rem's Naptime) doesn't re-enter this hook, then deal it.
+  if (target.hp > 0) {
+    const sleeping = target.statuses.find((s) => s.id === 'sleep');
+    if (sleeping) {
+      target.statuses = target.statuses.filter((s) => s.id !== 'sleep');
+      pushLog(G, `${targetName} wakes.`);
+      if (sleeping.value > 0) damageUnit(G, target, sleeping.value, 'spirit', 'Naptime');
+    }
+  }
+
   return dmg;
 }
 

@@ -112,8 +112,33 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Djinn's Mark detonates.`);
       damageUnit(G, c, 2 * mark.value, 'spirit');
     }
+    // Action-denying CC (stun/silenced/disarm) is NOT decremented here — it
+    // ticks at the END of the afflicted unit's turn (see tickEndOfTurnCC), so a
+    // stored duration of N denies exactly N of the unit's turns. Everything else
+    // (buffs, DoT, stat debuffs) decrements at start-of-turn as normal.
+    // Full rationale: docs/stats-model.md.
     c.statuses = c.statuses
-      .map((s) => ({ ...s, duration: s.duration - 1 }))
+      .map((s) => (CC_STATUSES.has(s.id) ? s : { ...s, duration: s.duration - 1 }))
+      .filter((s) => s.duration > 0);
+  }
+}
+
+// Tick action-denying CC (stun/silenced/disarm) at the END of the afflicted
+// unit's owner's turn — after they've spent the turn under it. Pairs with the
+// CC exclusion in tickStartOfTurn so duration N = N denied turns.
+export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
+  for (const c of liveBoardCards(ps)) {
+    // Sleep about to expire naturally → fire its wake-up burst (Rem's Naptime)
+    // before it drops. Strip it first so the burst doesn't re-enter the
+    // damage-side wake hook. Plain sleep (value 0) just decays below.
+    const sleeping = c.statuses.find((s) => s.id === 'sleep');
+    if (sleeping && sleeping.duration === 1 && sleeping.value > 0) {
+      c.statuses = c.statuses.filter((s) => s !== sleeping);
+      pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} wakes — Naptime detonates.`);
+      damageUnit(G, c, sleeping.value, 'spirit', 'Naptime');
+    }
+    c.statuses = c.statuses
+      .map((s) => (CC_STATUSES.has(s.id) ? { ...s, duration: s.duration - 1 } : s))
       .filter((s) => s.duration > 0);
   }
 }

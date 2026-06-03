@@ -1,8 +1,8 @@
 import type { GameState, CardInstance, PlayerID, StatusId } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, ULTIMATES } from '@/cards';
 import { damageUnit, healUnit, reapDead } from '@/engine/damage';
 import { addStatus, cleanseDebuffs } from '@/engine/statusOps';
-import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit } from '@/engine/util';
+import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit, nextIid } from '@/engine/util';
 import { setEquipmentDispatcher } from '@/engine/equipmentDispatch';
 
 // An EffectFn mutates G. It receives the source card (if any), the target (if any),
@@ -148,9 +148,9 @@ const eff_decay: AbilityDef = {
 
 const eff_disarming_hex: AbilityDef = {
   id: 'eff_disarming_hex', trigger: 'onPlay', target: 'enemyAny',
-  prompt: 'Disarming Hex — Disarm any enemy for 3 turns.',
+  prompt: 'Disarming Hex — Disarm any enemy for 2 turns.',
   run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'disarm', 1, 3);
+    if (target) addStatus(G, target, 'disarm', 1, 2);
   },
 };
 
@@ -195,7 +195,7 @@ const eff_healing_booster: AbilityDef = {
 };
 const eff_healing_tempo: AbilityDef = {
   id: 'eff_healing_tempo', trigger: 'onPlay', target: 'self',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'healing_boost', 3, 999); },
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'healing_boost', 4, 999); },
 };
 
 // ----- Equipment reactive triggers -----
@@ -210,6 +210,12 @@ const eff_bullet_resist_shredder_proc: AbilityDef = {
 const eff_restorative_shot_proc: AbilityDef = {
   id: 'eff_restorative_shot_proc', trigger: 'onAttack', target: 'self',
   run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Restorative Shot'); },
+};
+
+// Extra Regen: at the start of the bearer's turn, heal 1 (regen-over-time).
+const eff_extra_regen_proc: AbilityDef = {
+  id: 'eff_extra_regen_proc', trigger: 'startOfTurn', target: 'self',
+  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Extra Regen'); },
 };
 
 // Mystic Regeneration: after bearer's skill / spell / ult damages an enemy, heal 1.
@@ -448,26 +454,28 @@ const passive_drifter_bloodscent: AbilityDef = {
 // (no stat scaling), so the preview shows "+0" / "Flat effect" by default.
 const eff_ult_abrams: AbilityDef = {
   id: 'eff_ult_abrams', trigger: 'onPlay', target: 'noTarget',
-  base: 4, baseLabel: 'spirit AOE',
+  base: 4, baseLabel: 'spirit AOE + Stun',
   run: (G, ctx) => {
     const enemy = otherPlayer(ctx.movingPlayer);
     eachBoard(G, enemy, (c) => damageUnit(G, c, 4, 'spirit'));
+    const act = G.players[enemy].active;
+    if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
   },
 };
 const eff_ult_dynamo: AbilityDef = {
   id: 'eff_ult_dynamo', trigger: 'onPlay', target: 'noTarget',
-  run: (G, ctx) => {
-    for (const b of G.players[otherPlayer(ctx.movingPlayer)].bench) if (b) addStatus(G, b, 'stun', 1, 2);
-  },
+  baseLabel: 'AoE Stun',
+  run: (G, ctx) => { eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => addStatus(G, c, 'stun', 1, 1)); },
 };
 const eff_ult_haze: AbilityDef = {
   id: 'eff_ult_haze', trigger: 'onPlay', target: 'noTarget',
-  base: 2, baseLabel: 'bullet dmg per enemy',
-  run: (G, ctx) => { eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 2, 'attack')); },
+  base: 3, baseLabel: 'bullet dmg per enemy',
+  run: (G, ctx) => { eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 3, 'attack')); },
 };
 const eff_ult_kelvin: AbilityDef = {
   id: 'eff_ult_kelvin', trigger: 'onPlay', target: 'noTarget',
-  run: (G, ctx) => { for (const c of liveBoardCards(G.players[ctx.movingPlayer])) addStatus(G, c, 'unstoppable', 1, 1); },
+  base: 7, baseLabel: 'heal team',
+  run: (G, ctx) => { for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 7, 'Frozen Shelter'); },
 };
 const eff_ult_lady_geist: AbilityDef = {
   id: 'eff_ult_lady_geist', trigger: 'onPlay', target: 'noTarget',
@@ -478,24 +486,41 @@ const eff_ult_lady_geist: AbilityDef = {
   },
 };
 const eff_ult_lash: AbilityDef = {
-  id: 'eff_ult_lash', trigger: 'onPlay', target: 'enemyActive',
-  base: 6, baseLabel: 'bullet dmg',
-  run: (G, _ctx, { target }) => { if (target) damageUnit(G, target, 6, 'attack'); },
+  id: 'eff_ult_lash', trigger: 'onPlay', target: 'noTarget',
+  base: 5, baseLabel: 'spirit AOE + Stun',
+  run: (G, ctx) => {
+    const enemy = otherPlayer(ctx.movingPlayer);
+    eachBoard(G, enemy, (c) => damageUnit(G, c, 5, 'spirit'));
+    const act = G.players[enemy].active;
+    if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
+  },
 };
 const eff_ult_mo_krill: AbilityDef = {
   id: 'eff_ult_mo_krill', trigger: 'onPlay', target: 'enemyActive',
-  base: 2, baseLabel: 'bleed (3t)',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bleed', 2, 3); },
+  base: 6, baseLabel: 'drain + Stun',
+  run: (G, ctx, { target }) => {
+    if (!target) return;
+    addStatus(G, target, 'stun', 1, 1);
+    const dealt = damageUnit(G, target, 6, 'spirit', 'Combo');
+    const ps = G.players[ctx.movingPlayer];
+    const mk = [ps.active, ...ps.bench].find((c) => c && c.cardId === 'hero_mo_krill' && (c.respawnTurnsLeft ?? 0) === 0);
+    if (mk && dealt > 0) healUnit(G, mk, dealt, 'Combo');
+  },
 };
 const eff_ult_paige: AbilityDef = {
   id: 'eff_ult_paige', trigger: 'onPlay', target: 'noTarget',
-  base: 2, baseLabel: '+Bullet Power to team',
-  run: (G, ctx) => { for (const c of liveBoardCards(G.players[ctx.movingPlayer])) addStatus(G, c, 'weapon_power', 2, 2); },
+  base: 4, baseLabel: 'team heal + spirit AOE',
+  run: (G, ctx) => {
+    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 4, 'Rallying Charge');
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 4, 'spirit'));
+  },
 };
 const eff_ult_rem: AbilityDef = {
-  id: 'eff_ult_rem', trigger: 'onPlay', target: 'noTarget',
-  base: 4, baseLabel: 'heal team',
-  run: (G, ctx) => { for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 4); },
+  id: 'eff_ult_rem', trigger: 'onPlay', target: 'enemyActive',
+  base: 6, baseLabel: 'Sleep + wake dmg',
+  // Naptime: sleep the enemy Active; the stored value (6) is the wake-up burst,
+  // dealt when it wakes (any damage) or when the sleep expires (statusOps).
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'sleep', 6, 2); },
 };
 const eff_ult_seven: AbilityDef = {
   id: 'eff_ult_seven', trigger: 'onPlay', target: 'noTarget',
@@ -504,44 +529,80 @@ const eff_ult_seven: AbilityDef = {
 };
 const eff_ult_shiv: AbilityDef = {
   id: 'eff_ult_shiv', trigger: 'onPlay', target: 'enemyActive',
-  base: 3, baseLabel: 'bleed (3t)',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bleed', 3, 3); },
+  base: 5, baseLabel: 'spirit + execute',
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    // Killing Blow: execute a target already below half HP, else a 5 spirit hit.
+    if (target.hp <= target.hpMax / 2) damageUnit(G, target, 999, 'pure', 'Killing Blow');
+    else damageUnit(G, target, 5, 'spirit', 'Killing Blow');
+  },
 };
 const eff_ult_sinclair: AbilityDef = {
   id: 'eff_ult_sinclair', trigger: 'onPlay', target: 'noTarget',
-  run: (G, ctx) => { for (const c of liveBoardCards(G.players[ctx.movingPlayer])) c.skillUsedThisTurn = false; },
+  baseLabel: 'copy enemy ultimate',
+  // Audience Participation: copy the enemy Active hero's ultimate into your hand
+  // as a free (0-cost) card. costOverride is read by playCard.
+  run: (G, ctx) => {
+    const pid = ctx.movingPlayer;
+    const enemyActive = G.players[otherPlayer(pid)].active;
+    if (!enemyActive || (enemyActive.respawnTurnsLeft ?? 0) > 0) {
+      pushLog(G, 'Audience Participation: no enemy ultimate to copy.');
+      return;
+    }
+    const ult = ULTIMATES.find((u) => u.linkedHero === enemyActive.cardId);
+    if (!ult) { pushLog(G, 'Audience Participation: nothing to copy.'); return; }
+    const copy: CardInstance = {
+      iid: nextIid(), cardId: ult.id, ownerId: pid, zone: 'hand',
+      attached: [], hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
+      statuses: [], exhausted: false, skillUsedThisTurn: false, costOverride: 0,
+    };
+    G.players[pid].hand.push(copy);
+    pushLog(G, `Audience Participation: copied ${ult.name} (free to cast).`);
+  },
 };
 const eff_ult_vindicta: AbilityDef = {
   id: 'eff_ult_vindicta', trigger: 'onPlay', target: 'enemyAny',
-  base: 5, baseLabel: 'bullet dmg',
-  run: (G, _ctx, { target }) => { if (target) damageUnit(G, target, 5, 'attack'); },
+  base: 5, baseLabel: 'spirit (execute bonus)',
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    // Assassinate: 9 spirit to a target already below half HP, else 5.
+    const dmg = target.hp <= target.hpMax / 2 ? 9 : 5;
+    damageUnit(G, target, dmg, 'spirit', 'Assassinate');
+  },
 };
 const eff_ult_viscous: AbilityDef = {
-  id: 'eff_ult_viscous', trigger: 'onPlay', target: 'enemyActive',
-  base: 3, baseLabel: 'bullet dmg + Unstoppable 2',
-  run: (G, ctx, { source, target }) => {
-    const ally = G.players[ctx.movingPlayer].active;
-    if (ally) addStatus(G, ally, 'unstoppable', 1, 2);
-    if (target) damageUnit(G, target, 3, 'attack');
+  id: 'eff_ult_viscous', trigger: 'onPlay', target: 'noTarget',
+  base: 3, baseLabel: 'spirit AOE + self Unstoppable',
+  run: (G, ctx) => {
+    const ps = G.players[ctx.movingPlayer];
+    const vis = [ps.active, ...ps.bench].find((c) => c && c.cardId === 'hero_viscous' && (c.respawnTurnsLeft ?? 0) === 0);
+    if (vis) addStatus(G, vis, 'unstoppable', 1, 1);
+    const enemy = otherPlayer(ctx.movingPlayer);
+    eachBoard(G, enemy, (c) => damageUnit(G, c, 3, 'spirit'));
+    const act = G.players[enemy].active;
+    if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
   },
 };
 const eff_ult_yamato: AbilityDef = {
   id: 'eff_ult_yamato', trigger: 'onPlay', target: 'self',
-  base: 3, baseLabel: '+Bullet Power + Unstoppable',
+  base: 3, baseLabel: '+Bullet Power + Unstoppable + heal',
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
-    if (t) { addStatus(G, t, 'weapon_power', 3, 2); addStatus(G, t, 'unstoppable', 1, 2); }
+    if (!t) return;
+    addStatus(G, t, 'weapon_power', 3, 2);
+    addStatus(G, t, 'unstoppable', 1, 1);
+    healUnit(G, t, 5, 'Shadow Transformation');
   },
 };
 
-// Wraith ultimate: Telekinesis. Lifts the enemy Active for big spirit damage + Stun 2.
+// Wraith ultimate: Telekinesis. Lifts the enemy Active for spirit damage + Stun 1.
 const eff_ult_wraith: AbilityDef = {
   id: 'eff_ult_wraith', trigger: 'onPlay', target: 'enemyActive',
-  base: 4, baseLabel: 'spirit + Stun 2',
+  base: 4, baseLabel: 'spirit + Stun',
   run: (G, _ctx, { target }) => {
     if (!target) return;
     damageUnit(G, target, 4, 'spirit');
-    addStatus(G, target, 'stun', 1, 2);
+    addStatus(G, target, 'stun', 1, 1);
   },
 };
 
@@ -571,47 +632,48 @@ const eff_ult_warden: AbilityDef = {
   },
 };
 
-// Mirage ultimate Traveler: canon Mirage teleports across the map. TCG
-// abstraction: instant respawn of a fallen ally — Mirage ferries their soul
-// back through the sands. Super-cheap ult cost so it's an emergency tempo
-// recovery, not a finisher. If no corpses, fizzles.
+// Mirage ultimate Traveler: canon Mirage teleports himself to safety. TCG
+// mapping: a free reposition — if Mirage is Active, swap him to the bench with
+// an available ally (no Retreat cost), then grant Shield 3 ("barrier on
+// arrival"). A cheap escape/tempo tool, not a finisher.
 const eff_ult_mirage: AbilityDef = {
   id: 'eff_ult_mirage', trigger: 'onPlay', target: 'noTarget',
+  baseLabel: 'reposition + Shield',
   run: (G, ctx) => {
     const ps = G.players[ctx.movingPlayer];
-    const corpses = [ps.active, ...ps.bench]
-      .filter((c): c is CardInstance => c !== null && (c.respawnTurnsLeft ?? 0) > 0);
-    if (corpses.length === 0) {
-      pushLog(G, 'Traveler fizzled (no fallen heroes).');
-      return;
+    const mirage = [ps.active, ...ps.bench].find(
+      (c) => c && c.cardId === 'hero_mirage' && (c.respawnTurnsLeft ?? 0) === 0,
+    );
+    if (!mirage) { pushLog(G, 'Traveler fizzled.'); return; }
+    if (ps.active === mirage) {
+      const benchAlly = ps.bench.find((b) => {
+        if (!b || (b.respawnTurnsLeft ?? 0) > 0) return false;
+        const d = CARDS_BY_ID[b.cardId];
+        return d?.type === 'hero' && !d.flags?.benchOnly;
+      });
+      if (benchAlly) {
+        const bSlot = benchAlly.slot ?? 1;
+        ps.active = benchAlly; benchAlly.zone = 'active'; benchAlly.slot = 0;
+        ps.bench[bSlot - 1] = mirage; mirage.zone = 'bench'; mirage.slot = bSlot;
+      }
     }
-    // Revive whichever corpse is closest to natural respawn (lowest timer).
-    corpses.sort((a, b) => (a.respawnTurnsLeft ?? 99) - (b.respawnTurnsLeft ?? 99));
-    const c = corpses[0];
-    c.respawnTurnsLeft = undefined;
-    c.hp = c.hpMax;
-    c.statuses = [];
-    c.atkMod = 0;
-    c.spiritMod = 0;
-    c.skillUsedThisTurn = false;
-    c.exhausted = false;
-    pushLog(G, `Traveler: ${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} returns to the field.`);
+    addStatus(G, mirage, 'shield', 3, 999);
+    pushLog(G, 'Traveler: Mirage slips to safety (Shield 3).');
   },
 };
 
-// Drifter ultimate Eternal Night: canon wraps the field in darkness +
-// isolation. TCG mapping: Silence every enemy bench card for 2 turns —
-// reinforcements can't cast skills, can't promote into a Silenced active
-// (silence carries with them). Sustains the lifesteal-into-execute loop
-// by stopping the opponent from responding with skill counter-plays.
+// Drifter ultimate Eternal Night: canon wraps up to 2 enemies in isolating
+// darkness. TCG mapping: Silence the enemy Active + one bench hero for 2 turns
+// (they can't cast skills/ults). Stops the opponent from answering with skill
+// counter-plays.
 const eff_ult_drifter: AbilityDef = {
   id: 'eff_ult_drifter', trigger: 'onPlay', target: 'noTarget',
-  base: 2, baseLabel: 'AoE bench Silence',
+  baseLabel: 'Silence 2 enemies',
   run: (G, ctx) => {
     const enemy = G.players[otherPlayer(ctx.movingPlayer)];
-    for (const b of enemy.bench) {
-      if (b && (b.respawnTurnsLeft ?? 0) === 0) addStatus(G, b, 'silenced', 1, 2);
-    }
+    if (enemy.active && (enemy.active.respawnTurnsLeft ?? 0) === 0) addStatus(G, enemy.active, 'silenced', 1, 2);
+    const benchHero = enemy.bench.find((b) => b && (b.respawnTurnsLeft ?? 0) === 0);
+    if (benchHero) addStatus(G, benchHero, 'silenced', 1, 2);
   },
 };
 
@@ -625,7 +687,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
   // ----- Equipment reactive procs (5 cards) -----
   eff_bullet_resist_shredder_proc,
-  eff_restorative_shot_proc, eff_mystic_regeneration_proc,
+  eff_restorative_shot_proc, eff_extra_regen_proc, eff_mystic_regeneration_proc,
   eff_bullet_shield_proc, eff_spirit_shield_proc,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,

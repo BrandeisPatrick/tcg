@@ -27,6 +27,7 @@ export const STATUSES: StatusDef[] = [
   { id: 'stun',          title: 'Stun',          desc: 'Cannot act, attack, or use skills.',                       hvalue: -2 },
   { id: 'silenced',      title: 'Silenced',      desc: 'Cannot use skills or ultimates.',                          hvalue: -1 },
   { id: 'disarm',        title: 'Disarm',        desc: 'Cannot make basic attacks.',                               hvalue: -2 },
+  { id: 'sleep',         title: 'Sleep',         desc: 'Cannot act, attack, or use skills. Any damage wakes it (triggering any wake-up effect).', hvalue: -2 },
 
   // ----- DOT -----
   { id: 'bleed',         title: 'Bleed',         desc: 'Take <value> Pure dmg at start of turn (stacks, max 3).',  hvalue: -1 },
@@ -48,4 +49,4 @@ export const STATUSES_BY_ID = Object.fromEntries(STATUSES.map((s) => [s.id, s]))
 export const DEBUFF_IDS = new Set(STATUSES.filter((s) => s.hvalue < 0).map((s) => s.id));
 
 /** Hard crowd control — blocked by Unstoppable. */
-export const CC_STATUSES: Set<StatusId> = new Set(['stun', 'silenced', 'disarm']);
+export const CC_STATUSES: Set<StatusId> = new Set(['stun', 'silenced', 'disarm', 'sleep']);

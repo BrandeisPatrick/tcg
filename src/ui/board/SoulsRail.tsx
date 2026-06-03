@@ -10,7 +10,7 @@ interface Props {
 const RECT_WIDTH = 40;
 const RECT_HEIGHT = 10;
 const GAP = 4;
-const CAP = 8;
+const CAP = 10;   // matches SOULS_MAX — full stack renders without an overflow tail
 
 /** Hook: track the current "slot count" for a player. The slot count
  *  rebases to the current souls when souls go UP (a refill / gain) and

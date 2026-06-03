@@ -85,6 +85,9 @@ export interface CardInstance {
   statuses: StatusInstance[];
   exhausted: boolean;
   skillUsedThisTurn: boolean;
+  /** Per-instance play-cost override. When set, used instead of the card
+   *  definition's cost — e.g. Sinclair's free (0-cost) copied ultimate. */
+  costOverride?: number;
   /**
    * Turns remaining until the hero respawns. `> 0` means the hero is currently
    * KO'd and occupying its slot as a corpse (greyed in UI, can't act / be

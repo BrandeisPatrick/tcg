@@ -69,7 +69,7 @@ function scorePlayCard(G: GameState, pid: PlayerID, card: CardInstance, target?:
   if (target && target.ownerId === pid && target.hp < target.hpMax / 2) s += 8;
   // Cost-efficiency: penalize plays that consume most of the pool with little overflow.
   // Encourages chaining cheap plays before dumping a mythic.
-  if (cost >= 5) {
+  if (cost >= 7) {
     const overflow = ps.souls - cost;
     if (overflow < 0) s -= 1000; // unaffordable; will be filtered, just in case
     else if (overflow < 1) s -= 6; // would empty our pool — still play if value is high

@@ -9,7 +9,7 @@ import type {
 import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { getAIDeck } from '@/decks/aiDecks';
-import { tickStartOfTurn, clearTurnFlags } from './statusOps';
+import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags } from './statusOps';
 import { reapDead, damagePlayer } from './damage';
 import { resolveAttackPhase } from './combat';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, resetIid, nextIid } from './util';
@@ -33,10 +33,10 @@ export const MAX_EQUIPMENT_PER_HERO = 3;
 export const SKILL_COST = 1;
 // Refill economy (Hearthstone-style): at the start of each of your turns,
 // your pool is REFILLED to N — anything banked from last turn is lost.
-// The ramp climbs 1 → 7 by your 7th turn, then caps.
-const SOULS_REFILL_TABLE = [1, 2, 3, 4, 5, 6, 7];
+// The ramp climbs 1 → 10 by your 10th turn, then caps.
+const SOULS_REFILL_TABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const SOULS_PER_KO = 1;
-const SOULS_MAX = 7;         // hard cap — KO bounty + refill can't push you over.
+const SOULS_MAX = 10;        // hard cap — KO bounty + refill can't push you over.
 const RETREAT_COST = 2;      // souls to swap an Active with a bench hero (Pokémon-flavored)
 
 function soulRefillForTurn(globalTurn: number): number {
@@ -190,6 +190,16 @@ function fireBoardTriggers(G: GameState, pid: PlayerID, trigger: 'startOfTurn' |
       const a = getAbility(passId);
       if (a?.trigger === trigger) a.run(G, { movingPlayer: pid }, { source: c });
     }
+    // Equipment worn by this hero may also declare turn-based procs
+    // (e.g. Extra Regen heals 1 each start of turn).
+    for (const eq of c.attached ?? []) {
+      const eqData = CARDS_BY_ID[eq.cardId];
+      if (eqData?.type !== 'equipment') continue;
+      for (const aid of eqData.abilities ?? []) {
+        const a = getAbility(aid);
+        if (a?.trigger === trigger) a.run(G, { movingPlayer: pid }, { source: c });
+      }
+    }
   }
 }
 
@@ -296,6 +306,9 @@ export const DeadlockGame: Game<GameState> = {
         const data = CARDS_BY_ID[c.cardId];
         if (data?.type === 'hero') grantExp(G, c, 1);
       }
+      // Strip action-denying CC now that this player has spent their turn under
+      // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
+      tickEndOfTurnCC(G, G.players[pid]);
       clearTurnFlags(G.players[pid]);
     },
   },
@@ -327,7 +340,7 @@ export const DeadlockGame: Game<GameState> = {
       if (!data) return INVALID_MOVE;
 
       const cost = (data.type === 'spell' || data.type === 'equipment' || data.type === 'ultimate')
-        ? (data.cost ?? 0) : 0;
+        ? (card.costOverride ?? data.cost ?? 0) : 0;
       if (ps.souls < cost) return INVALID_MOVE;
 
       let target: CardInstance | undefined;
@@ -414,8 +427,8 @@ export const DeadlockGame: Game<GameState> = {
       if ((hero.respawnTurnsLeft ?? 0) > 0) return INVALID_MOVE;
       // Rule: only ONE skill use per player per turn (across all heroes).
       if (ps.skillUsedThisTurn) return INVALID_MOVE;
-      // Stun and Silenced both suppress skill use.
-      if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun')) return INVALID_MOVE;
+      // Stun, Silenced, and Sleep all suppress skill use.
+      if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun' || s.id === 'sleep')) return INVALID_MOVE;
 
       const data = CARDS_BY_ID[hero.cardId];
       if (data?.type !== 'hero' || !data.skill) return INVALID_MOVE;
