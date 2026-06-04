@@ -20,6 +20,9 @@ import { grantExp } from './expSystem';
 
 const MAX_HAND = 7;
 const ULT_UNLOCK_TURN = 5;
+// Patron HP — the ONLY way it drops is a hero death (flat 1, in killInPlace).
+// Low because each death is just 1 dmg; tuned via the eval sim for pacing.
+const PATRON_HP = 8;
 const SOULS_START = 0;
 /** Monotonic counter for `G.action.id` — each play / skill / ult bumps this
  *  so the UI's animation-driver effect (keyed on action.id) re-fires for
@@ -77,8 +80,8 @@ function makeInstance(cardId: string, ownerId: PlayerID, zone: CardInstance['zon
 function makeEmptyPlayer(pid: PlayerID): PlayerState {
   return {
     id: pid,
-    hp: 15,
-    hpMax: 15,
+    hp: PATRON_HP,
+    hpMax: PATRON_HP,
     souls: SOULS_START,
     deck: [],
     hand: [],
@@ -122,8 +125,8 @@ function buildPlayer(pid: PlayerID, heroes: [string, string, string, string], de
 
   return {
     id: pid,
-    hp: 15,
-    hpMax: 15,
+    hp: PATRON_HP,
+    hpMax: PATRON_HP,
     souls: SOULS_START,
     deck,
     hand,
@@ -290,9 +293,11 @@ export const DeadlockGame: Game<GameState> = {
       }
       // Ultimate unlock
       unlockUltimates(G, ps);
-      // Respawn queue ticks down for BOTH players at the start of every turn.
-      tickRespawn(G, '0');
-      tickRespawn(G, '1');
+      // Respawn ticks ONLY for the player whose turn is starting, so a corpse
+      // decrements once per round (on its owner's turn) — RESPAWN_TURNS = 3 means
+      // 3 of the owner's turns of downtime. (Ticking both players here was a bug:
+      // it double-ticked corpses, halving respawn time so KOs felt near-instant.)
+      tickRespawn(G, pid);
       fireBoardTriggers(G, pid, 'startOfTurn');
       reapDead(G, G.players['0']);
       reapDead(G, G.players['1']);

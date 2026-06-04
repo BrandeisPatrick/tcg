@@ -253,12 +253,19 @@ const eff_spirit_shield_proc: AbilityDef = {
 // Heals are flat — Spirit Power scales spirit damage only.
 const skill_dynamo: AbilityDef = {
   id: 'skill_dynamo', trigger: 'activate', target: 'allyHero', exhausts: true,
-  prompt: 'Dynamo Rejuvenating Aurora — heal an ally for 2.',
+  prompt: 'Dynamo Rejuvenating Aurora — heal an ally 2 + grant Bullet Power (1 + ½ Spirit) for 2 turns.',
   base: 2, baseLabel: 'heal',
-  run: (G, _ctx, { target }) => { if (target) healUnit(G, target, 2); },
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
+    if (!target) return;
+    healUnit(G, target, 2);
+    addStatus(G, target, 'weapon_power', 1 + Math.floor(spi(source) / 2), 2);
+  },
 };
 
-// Canon Frost Grenade damages enemies + heals allies in the cloud.
+// Canon Frost Grenade damages enemies + heals allies in the cloud. Here it
+// damages the enemy Active and heals OUR Active — so when Kelvin is fronting he
+// hits and heals himself (a hit-and-heal frontline caster).
 const skill_kelvin: AbilityDef = {
   id: 'skill_kelvin', trigger: 'activate', target: 'enemyActive', exhausts: true,
   prompt: 'Kelvin Frost Grenade — 1 spirit dmg to enemy Active + heal ally Active 2.',
@@ -281,22 +288,30 @@ const skill_lady_geist: AbilityDef = {
 
 const skill_lash: AbilityDef = {
   id: 'skill_lash', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Lash Ground Strike — 1 spirit dmg + Stun 1 turn.',
+  prompt: 'Lash Ground Strike — 1 spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
   base: 1, baseLabel: 'spirit dmg',
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
     damageUnit(G, target, 1 + spi(source), 'spirit');
-    addStatus(G, target, 'stun', 1, 1);
+    // Vulnerable: amplify all incoming damage (bullet + spirit). Helps the team
+    // secure a kill (the only win-route) rather than denying a turn like Stun did.
+    addStatus(G, target, 'bullet_resist_down', 1, 1);
+    addStatus(G, target, 'spirit_resist_down', 1, 1);
   },
 };
 
 // Shields are flat — Spirit Power scales spirit damage only.
 const skill_paige: AbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero', exhausts: true,
-  prompt: 'Paige Plot Armor — Shield 3 on ally.',
-  base: 3, baseLabel: 'shield',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'shield', 3, 999); },
+  prompt: 'Paige Plot Armor — Shield 2 + grant Bullet Power (1 + ½ Spirit) for 2 turns.',
+  base: 2, baseLabel: 'shield',
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
+    if (!target) return;
+    addStatus(G, target, 'shield', 2, 999);
+    addStatus(G, target, 'weapon_power', 1 + Math.floor(spi(source) / 2), 2);
+  },
 };
 
 // Static Charge: 1 spirit dmg upfront + apply Charged for 2 turns; on expiry
@@ -349,11 +364,11 @@ const skill_yamato: AbilityDef = {
 // is a flat self-buff Shield.
 const skill_warden: AbilityDef = {
   id: 'skill_warden', trigger: 'activate', target: 'self', exhausts: true,
-  prompt: 'Warden Willpower — Shield 2 on self.',
-  base: 2, baseLabel: 'shield',
+  prompt: 'Warden Willpower — Shield 3 on self.',
+  base: 3, baseLabel: 'shield',
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
-    if (t) addStatus(G, t, 'shield', 2, 999);
+    if (t) addStatus(G, t, 'shield', 3, 999);
   },
 };
 
@@ -366,14 +381,14 @@ const skill_warden: AbilityDef = {
 // the on-attack stack application + the at-cap detonation.
 const passive_mirage_djinns_mark: AbilityDef = {
   id: 'passive_mirage_djinns_mark', trigger: 'onAttack', target: 'self',
-  prompt: "Djinn's Mark — attacks apply 1 stack (max 4) for 3 turns. Detonates at 4 stacks or on expiry for 2 spirit dmg per stack.",
+  prompt: "Djinn's Mark — attacks apply 1 stack (max 4) for 3 turns. Detonates at 4 stacks or on expiry for 3 spirit dmg per stack.",
   run: (G, _ctx, { source, target }) => {
     if (!source || !target) return;
     addStatus(G, target, 'djinns_mark', 1, 3);
     const mark = target.statuses.find((s) => s.id === 'djinns_mark');
     if (mark && mark.value >= 4) {
       pushLog(G, `${CARDS_BY_ID[target.cardId]?.name ?? target.cardId} — Djinn's Mark detonates.`);
-      damageUnit(G, target, 2 * mark.value, 'spirit');
+      damageUnit(G, target, 3 * mark.value, 'spirit');
       target.statuses = target.statuses.filter((s) => s.id !== 'djinns_mark');
     }
   },
@@ -381,12 +396,12 @@ const passive_mirage_djinns_mark: AbilityDef = {
 
 const passive_abrams_heal: AbilityDef = {
   id: 'passive_abrams_heal', trigger: 'startOfTurn', target: 'self',
-  prompt: 'Infernal Resilience — start of own turn while Active: heal 2.',
+  prompt: 'Infernal Resilience — start of own turn while Active: heal 1.',
   run: (G, _ctx, { source }) => {
     if (!source) return;
     const found = findCardOnBoard(G, source.iid);
     if (found && found.card === source && source.zone === 'active') {
-      healUnit(G, source, 2, 'Infernal Resilience');
+      healUnit(G, source, 1, 'Infernal Resilience');
     }
   },
 };
@@ -411,20 +426,20 @@ const passive_mo_krill_burrow: AbilityDef = {
 
 const passive_rem_benchheal: AbilityDef = {
   id: 'passive_rem_benchheal', trigger: 'startOfTurn', target: 'self',
-  prompt: "Lil Helpers — start of own turn: heal ally Active 2 while on the bench.",
+  prompt: "Lil Helpers — start of own turn: heal ally Active 3 while on the bench.",
   run: (G, ctx, { source }) => {
     if (!source || source.zone !== 'bench') return;
     const ally = G.players[ctx.movingPlayer].active;
-    if (ally) healUnit(G, ally, 2);
+    if (ally) healUnit(G, ally, 3);
   },
 };
 
 // On every attack Shiv lands, apply Bleed 1 (2 turns) to the target.
 const passive_shiv_bleed: AbilityDef = {
   id: 'passive_shiv_bleed', trigger: 'onAttack', target: 'self',
-  prompt: "Serrated Knives — attacks apply Bleed 1 for 2 turns.",
+  prompt: "Serrated Knives — attacks apply Bleed 2 for 2 turns.",
   run: (G, _ctx, { source, target }) => {
-    if (source && target) addStatus(G, target, 'bleed', 1, 2);
+    if (source && target) addStatus(G, target, 'bleed', 2, 2);
   },
 };
 
@@ -436,12 +451,18 @@ const passive_vindicta_flight: AbilityDef = {
   run: () => {},
 };
 
-// Mixed damage: marker passive. Combat resolver splits Wraith's attack into
-// half bullet / half spirit, each subject to its own resist.
+// Mixed Bullets: Wraith's basic attack deals Bullet Power as bullet damage
+// (the normal swing) PLUS her full Spirit Power as a second spirit-damage hit —
+// so Weapon AND Spirit items both scale her, and she pierces either single
+// resist. Fires on every attack (and retaliation) like Shiv's bleed.
 const passive_wraith_mixed: AbilityDef = {
-  id: 'passive_wraith_mixed', trigger: 'ongoing', target: 'self',
-  prompt: 'Mixed Bullets — attacks split half bullet, half spirit.',
-  run: () => { /* combat hook reads this directly */ },
+  id: 'passive_wraith_mixed', trigger: 'onAttack', target: 'self',
+  prompt: 'Mixed Bullets — attacks also deal Spirit Power as spirit damage.',
+  run: (G, _ctx, { source, target }) => {
+    if (!source || !target) return;
+    const sp = effectiveSpirit(source);
+    if (sp > 0) damageUnit(G, target, sp, 'spirit', 'Mixed Bullets');
+  },
 };
 
 // Bloodscent: canon Drifter literally feeds off weakened prey. Two effects

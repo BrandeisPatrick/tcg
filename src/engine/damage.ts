@@ -74,14 +74,9 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   const typeLabel = type === 'attack' ? 'bullet' : type;
   pushLog(G, `${arrow}: ${dmg} ${typeLabel} dmg (${targetName} ${target.hp} HP).`);
 
-  // Overflow past 0 HP spills to the owner's Patron. Without this, the
-  // respawn loop would let games drag past natural finish.
-  if (target.hp < 0) {
-    const overflow = -target.hp;
-    target.hp = 0;
-    damagePlayer(G, target.ownerId, overflow);
-    pushLog(G, `Overflow: ${overflow} dmg spills to P${target.ownerId}'s patron.`);
-  }
+  // The patron is ONLY damaged when a hero dies (flat 1, in killInPlace) —
+  // excess past 0 HP is discarded, not spilled. Just clamp.
+  if (target.hp < 0) target.hp = 0;
 
   // Equipment trigger dispatch — routed via a dispatcher to avoid a
   // damage.ts ⇄ abilities/index.ts circular import.

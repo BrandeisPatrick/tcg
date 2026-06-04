@@ -1,9 +1,78 @@
 import type { Ctx } from 'boardgame.io';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { otherPlayer, liveBoardCards, effectiveAtk } from '@/engine/util';
+import { otherPlayer, liveBoardCards, effectiveAtk, effectiveSpirit } from '@/engine/util';
 import { getAbility, type TargetFilter } from '@/abilities';
-import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
+import { MAX_EQUIPMENT_PER_HERO, DeadlockGame } from '@/engine/game';
+import { resolveAttackPhase } from '@/engine/combat';
+
+// ----- 1-ply lookahead -------------------------------------------------------
+// The crude per-move scores below only generate the LEGAL move list; the actual
+// ranking comes from simulating each move on a cloned state and scoring the
+// resulting position with evalState. This is what lifts the AI from ~random to
+// actually-playing: it captures target selection, lethal, and resource value
+// without hand-tuning every case.
+
+/** A hero's offensive potential: bullet attack PLUS its damaging skill's output
+ *  (base + Spirit if it scales). This is what makes the lookahead ITEMIZE — a
+ *  Spirit item raises a caster's threat (its skill), a Weapon item raises an
+ *  attacker's, so the AI routes each build axis onto the hero that wants it. */
+function heroThreat(c: CardInstance): number {
+  const data = CARDS_BY_ID[c.cardId];
+  let t = effectiveAtk(c);
+  if (data?.type === 'hero' && data.skill) {
+    const ab = getAbility(data.skill);
+    if (ab && ab.base != null) t += ab.base + (ab.scalesSpirit ? effectiveSpirit(c) : 0);
+  }
+  return t;
+}
+
+/** Position value from `pid`'s perspective (higher = better for pid). */
+function evalState(g: GameState, pid: PlayerID): number {
+  const en = otherPlayer(pid);
+  const me = g.players[pid];
+  const foe = g.players[en];
+  // Patron HP is the win condition — weight it heavily.
+  let s = (me.hp - foe.hp) * 12;
+  const tally = (ps: typeof me, sign: number) => {
+    for (const c of liveBoardCards(ps)) {
+      // Shield absorbs damage before HP and stops overflow reaching the patron,
+      // so a point of shield is worth a point of HP — weight it like HP (×2),
+      // not ×1 (which made the bot under-value/under-cast shielders like Warden).
+      const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
+      s += sign * (3 + c.hp * 2 + heroThreat(c) * 1.5 + shield * 2);
+    }
+    for (const c of [ps.active, ...ps.bench]) {
+      if (c && (c.respawnTurnsLeft ?? 0) > 0) s -= sign * 5; // corpse = lost presence
+    }
+  };
+  tally(me, 1);
+  tally(foe, -1);
+  return s;
+}
+
+const SIM_CTX = (pid: PlayerID) => ({ currentPlayer: pid, numPlayers: 2, turn: 1 } as any);
+
+/** Deep-clone G for safe simulation. Shallow-copy first with an empty log so we
+ *  don't mutate the (frozen) live state and don't pay to clone the growing log. */
+function cloneForSim(G: GameState): GameState {
+  return structuredClone({ ...G, log: [] }) as GameState;
+}
+
+/** Apply one candidate move to a cloned state. endTurn is simulated as "resolve
+ *  my attack phase" so the AI can see combat / lethal outcomes. */
+function simulateMove(G: GameState, pid: PlayerID, move: string, args: any[]): GameState {
+  const g = cloneForSim(G);
+  try {
+    if (move === 'endTurn') {
+      resolveAttackPhase(g, pid);
+    } else {
+      const fn = (DeadlockGame as any).moves[move];
+      if (fn) fn({ G: g, ctx: SIM_CTX(pid), playerID: pid, events: {} }, ...args);
+    }
+  } catch { /* invalid sim → unchanged clone scores like a no-op */ }
+  return g;
+}
 
 interface MoveOption {
   move: 'playCard' | 'useSkill' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
@@ -58,6 +127,7 @@ function scorePlayCard(G: GameState, pid: PlayerID, card: CardInstance, target?:
   if (data.type === 'equipment') {
     s += 10;
     if (data.bonus?.atk) s += data.bonus.atk * 6;
+    if (data.bonus?.spirit) s += data.bonus.spirit * 6;  // Spirit gear was ignored — casters never built
     if (data.bonus?.hp) s += data.bonus.hp * 3;
   }
   if (data.type === 'ultimate') s += 30;
@@ -89,7 +159,7 @@ function scoreSkill(G: GameState, pid: PlayerID, hero: CardInstance, target?: Ca
   return s;
 }
 
-export function enumerateAIMoves(G: GameState, ctx: Ctx): MoveOption[] {
+export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): MoveOption[] {
   const pid = ctx.currentPlayer as PlayerID;
 
   // Pre-match draft: only one move kind is legal. Score by stat sum +
@@ -251,6 +321,17 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx): MoveOption[] {
 
   // Always offer endTurn as fallback
   out.push({ move: 'endTurn', args: [], score: 1 });
+
+  // Re-rank every legal move by 1-ply lookahead: simulate it and score the
+  // resulting position. A tiny bias toward acting (vs. passing) breaks ties so
+  // the AI takes value-neutral tempo plays instead of idling. Skipped when used
+  // as a plain legal-move enumerator (e.g. inside the MCTS bot's rollouts).
+  if (lookahead) {
+    for (const opt of out) {
+      const g2 = simulateMove(G, pid, opt.move, opt.args);
+      opt.score = evalState(g2, pid) + (opt.move === 'endTurn' ? 0 : 0.1);
+    }
+  }
 
   return out.sort((a, b) => b.score - a.score).slice(0, 12);
 }

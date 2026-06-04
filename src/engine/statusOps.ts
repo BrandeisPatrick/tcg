@@ -105,12 +105,12 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} discharges: Stun for 1 turn.`);
     }
     // Djinn's Mark: detonates on natural expiry (timer reaches 1 = about to
-    // tick to 0) for 2 spirit damage per stack. The mark itself is removed
+    // tick to 0) for 3 spirit damage per stack. The mark itself is removed
     // by the standard duration-decay path immediately after.
     const mark = c.statuses.find((s) => s.id === 'djinns_mark');
     if (mark && mark.duration === 1) {
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Djinn's Mark detonates.`);
-      damageUnit(G, c, 2 * mark.value, 'spirit');
+      damageUnit(G, c, 3 * mark.value, 'spirit');
     }
     // Action-denying CC (stun/silenced/disarm) is NOT decremented here — it
     // ticks at the END of the afflicted unit's turn (see tickEndOfTurnCC), so a

@@ -1,6 +1,6 @@
 import type { GameState, PlayerID, CardInstance } from './types';
 import { CARDS_BY_ID } from '@/cards';
-import { damageUnit, damagePlayer, reapDead } from './damage';
+import { damageUnit, reapDead } from './damage';
 import { otherPlayer, effectiveAtk, pushLog } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
@@ -85,7 +85,7 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
     if (dmg <= 0) continue;
 
     if (target) {
-      const wraithSplit = atk.cardId === 'hero_wraith';
+      const wraithSplit = false; // Wraith deals full bullet + a separate Spirit hit via passive_wraith_mixed
       const shieldBefore = simShield;
       const m = simulateAttackMitigation(dmg, target, simShield, wraithSplit);
       simShield = m.shieldRemaining;
@@ -111,7 +111,7 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
             rawRetal,
             atk,
             atk.statuses.find((s) => s.id === 'shield')?.value ?? 0,
-            target.cardId === 'hero_wraith',
+            false,
           );
           retaliationDamage = rm.final;
           const atkHp = atk.hp - retaliationDamage;
@@ -217,6 +217,12 @@ function simulateAttackMitigation(
  * The behavior matches `planAttackPhase` step for step.
  */
 export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
+  // First player (P0) forgoes first-strike: no attacks on Turn 1, so P1 lands
+  // the first hit. NOTE: this alone does NOT close the seat gap — P0's edge is
+  // cumulative (acting first every round), and the sim still shows ~63% P0.
+  // A persistent counter-lever (e.g. a per-turn soul coin for P1) is still TODO.
+  if ((G.turnNumber ?? 1) <= 1) return;
+
   const defenderId = otherPlayer(attackerId);
   const attacker = G.players[attackerId];
   const defender = G.players[defenderId];
@@ -244,14 +250,7 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
 
       // ---- Apply the attacker's swing first (existing pipeline). ----
       withCast(atk, 'attack', () => {
-        if (atk.cardId === 'hero_wraith') {
-          const half1 = Math.ceil(dmg / 2);
-          const half2 = Math.floor(dmg / 2);
-          if (half1 > 0) damageUnit(G, target, half1, 'attack', atkName);
-          if (half2 > 0) damageUnit(G, target, half2, 'spirit', atkName);
-        } else {
-          damageUnit(G, target, dmg, 'attack', atkName);
-        }
+        damageUnit(G, target, dmg, 'attack', atkName);
       });
       const data = CARDS_BY_ID[atk.cardId];
       if (data?.type === 'hero') {
@@ -269,14 +268,7 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
       if (retalDmg > 0 && atk.hp > 0) {
         const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
         withCast(target, 'attack', () => {
-          if (target.cardId === 'hero_wraith') {
-            const half1 = Math.ceil(retalDmg / 2);
-            const half2 = Math.floor(retalDmg / 2);
-            if (half1 > 0) damageUnit(G, atk, half1, 'attack', targetName);
-            if (half2 > 0) damageUnit(G, atk, half2, 'spirit', targetName);
-          } else {
-            damageUnit(G, atk, retalDmg, 'attack', targetName);
-          }
+          damageUnit(G, atk, retalDmg, 'attack', targetName);
         });
         const tdata = CARDS_BY_ID[target.cardId];
         if (tdata?.type === 'hero') {
@@ -286,9 +278,9 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
           }
         }
       }
-    } else {
-      damagePlayer(G, defenderId, dmg);
     }
+    // No living Active to sponge → the attack fizzles. The patron is only
+    // damaged when a hero dies (flat 1, in killInPlace), never by face damage.
   }
 
   reapDead(G, defender);

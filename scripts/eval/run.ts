@@ -77,6 +77,7 @@ async function main() {
   let p0 = 0, p1 = 0, stale = 0;
   const lengths: number[] = [];
   const hero: Record<string, { games: number; wins: number }> = {};
+  const equip: Record<string, { games: number; wins: number }> = {};
   for (const r of res) {
     if (r.stalemate) { stale++; }
     else { r.winner === '0' ? p0++ : p1++; lengths.push(r.length); }
@@ -85,6 +86,11 @@ async function main() {
       for (const id of r.heroes[side]) {
         (hero[id] ??= { games: 0, wins: 0 }).games++;
         if (won) hero[id].wins++;
+      }
+      // dedupe per side per game → "built at least once this game"
+      for (const id of new Set(r.equips[side])) {
+        (equip[id] ??= { games: 0, wins: 0 }).games++;
+        if (won) equip[id].wins++;
       }
     }
   }
@@ -114,6 +120,15 @@ async function main() {
   }
   md += `\n> Only **★** rows are statistically distinguishable from 50% at this N. ` +
     `If the skill ladder showed MCTS beating the heuristic, treat skill-dependent (caster) heroes' numbers as a lower bound — the bot underplays them.\n`;
+
+  md += `\n## 5. Per-card — equipment build-rate & win-rate (95% CI)\n`;
+  md += `How often each item gets built and the win-rate when it does — shows whether the build system (esp. Spirit gear) is being used and pays off.\n\n`;
+  md += `| Item | built (games) | win-rate [95% CI] |\n|---|---:|---|\n`;
+  const eqRows = Object.entries(equip)
+    .map(([id, h]) => ({ name: heroName(id), ...h }))
+    .sort((a, b) => b.games - a.games);
+  for (const r of eqRows) md += `| ${r.name} | ${r.games} | ${ciStr(r.wins, r.games)} |\n`;
+  if (eqRows.length === 0) md += `| _(no equipment built)_ | 0 | — |\n`;
 
   md += `\n_Total wall-clock: ${((Date.now() - t0) / 1000).toFixed(1)}s._\n`;
 

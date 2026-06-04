@@ -1,46 +1,34 @@
 import type { CardId } from '@/engine/types';
 
+// Each archetype now carries a spread across all three build axes — Weapon
+// (extended/titanic magazine…), Spirit (extra/improved/boundless spirit), and
+// Vitality (extra_health, resists) — so whatever heroes are drafted, the deck
+// can itemize toward their lean. (Previously Spirit gear was almost absent, so
+// casters could never scale.)
+
 const AI_DECK_BALANCED: CardId[] = [
-  'healing_rite', 'healing_rite',
-  'rusted_barrel', 'rusted_barrel',
-  'cold_front',
-  'slowing_hex',
-  'healbane',
-  'extended_magazine', 'extended_magazine',
-  'extra_health', 'extra_health',
-  'restorative_shot',
-  'titanic_magazine',
-  'healing_booster',
-  'bullet_resilience',
+  'healing_rite', 'rusted_barrel',
+  'cold_front', 'slowing_hex',
+  'extended_magazine', 'titanic_magazine',   // Weapon
+  'extra_spirit', 'improved_spirit',         // Spirit
+  'extra_health', 'bullet_resilience',       // Vitality
+  'healing_booster', 'restorative_shot',
+  'mystic_regeneration', 'knockdown',
 ];
 
 const AI_DECK_AGGRO: CardId[] = [
-  'rusted_barrel', 'rusted_barrel',
-  'cold_front', 'cold_front',
-  'decay',
-  'knockdown',
-  'extended_magazine', 'extended_magazine',
-  'extra_regen',
-  'titanic_magazine', 'titanic_magazine',
+  'rusted_barrel', 'cold_front', 'decay',
+  'extended_magazine', 'titanic_magazine', 'titanic_magazine', 'glass_cannon',  // Weapon
+  'extra_spirit', 'improved_spirit',         // Spirit (so even aggro can run a caster)
   'bullet_resist_shredder',
-  'glass_cannon',
-  'healing_rite',
-  'restorative_shot',
+  'extra_regen', 'restorative_shot', 'healing_rite',
 ];
 
 const AI_DECK_CONTROL: CardId[] = [
-  'healing_rite', 'healing_rite',
-  'slowing_hex', 'slowing_hex',
-  'healbane',
-  'metal_skin',
-  'disarming_hex',
-  'extra_health', 'extra_health',
-  'extra_spirit',
-  'healing_booster',
-  'weapon_shielding',
-  'spirit_resilience',
-  'bullet_resilience',
-  'mystic_regeneration',
+  'healing_rite', 'slowing_hex', 'healbane', 'metal_skin', 'disarming_hex',
+  'extra_spirit', 'improved_spirit', 'boundless_spirit',   // Spirit-heavy
+  'extra_health', 'spirit_resilience', 'bullet_resilience', // Vitality
+  'healing_booster', 'weapon_shielding', 'mystic_regeneration',
 ];
 
 const AI_DECKS = [AI_DECK_BALANCED, AI_DECK_AGGRO, AI_DECK_CONTROL];

@@ -46,8 +46,10 @@ export function wilson(wins: number, n: number, z = 1.96): { lo: number; hi: num
 }
 
 // ---- agents ------------------------------------------------------------------
+// Plain legal-move list (no lookahead) — for the MCTS bot's rollouts and the
+// random agent. The heuristic agent calls enumerateAIMoves with lookahead on.
 const enumerate = (G: any, ctx: any) =>
-  enumerateAIMoves(G, ctx).map((o) => ({ move: o.move, args: o.args }));
+  enumerateAIMoves(G, ctx, false).map((o) => ({ move: o.move, args: o.args }));
 
 export type Choice = { move: string; args: any[] };
 // Agents receive the FULL boardgame.io client state (not just {G,ctx}) — the
@@ -85,7 +87,17 @@ export type GameResult = {
   stalemate: boolean;
   length: number;                     // real match turns
   heroes: Record<PlayerID, string[]>;
+  equips: Record<PlayerID, string[]>; // equipment cardIds actually built, per side
 };
+
+/** Equipment ids attached on a side's board heroes at game end (what got built). */
+function boardEquips(ps: PlayerState): string[] {
+  const out: string[] = [];
+  for (const c of [ps.active, ...ps.bench]) {
+    for (const eq of c?.attached ?? []) out.push(eq.cardId);
+  }
+  return out;
+}
 
 function boardHeroes(ps: PlayerState): string[] {
   return [ps.active, ...ps.bench]
@@ -166,6 +178,7 @@ export async function runGame(opts: {
     stalemate: !over,
     length: G.turnNumber ?? 0,
     heroes: { '0': boardHeroes(G.players['0']), '1': boardHeroes(G.players['1']) },
+    equips: { '0': boardEquips(G.players['0']), '1': boardEquips(G.players['1']) },
   };
 }
 
