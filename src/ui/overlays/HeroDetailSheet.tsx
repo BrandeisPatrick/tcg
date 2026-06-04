@@ -346,7 +346,7 @@ function SkillActionCard({
         <div style={{
           marginTop: 12, paddingTop: 10, borderTop: `1px solid ${accent}55`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          ...text.label, color: palette.accentWarm,
+          ...text.label, color: palette.textDim,
         }}>
           <span aria-hidden>◎</span><span>Tap to Use Skill</span>
         </div>
@@ -408,7 +408,7 @@ function ScalingChip({ ability, hero }: { ability: AbilityDef; hero: CardInstanc
     <span style={{
       display: 'inline-block', padding: '2px 8px',
       background: 'rgba(120, 80, 30, 0.10)', border: `1px solid ${palette.border}`,
-      borderRadius: 999, ...text.label, color: palette.accentWarm,
+      borderRadius: 999, ...text.label, color: palette.textDim,
     }}>{base} {ability.baseLabel ?? 'effect'}</span>
   );
 }
@@ -436,7 +436,7 @@ function ScalingBreakdown({ ability, hero }: { ability: AbilityDef; hero: CardIn
         display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
       }}>
         <span style={{ ...text.label, color: palette.textDim }}>= Total</span>
-        <span style={{ ...text.numeric, color: palette.accentWarm }}>{base + spi}</span>
+        <span style={{ ...text.numeric, color: palette.textDim }}>{base + spi}</span>
       </div>
     </div>
   );
