@@ -13,7 +13,10 @@ export const MAX_LEVEL = 4 as const;
 
 export const LEVEL_ATK_BONUS = 1 as const;
 export const LEVEL_HP_BONUS = 1 as const;
-export const LEVEL_SPIRIT_BONUS = 0 as const;
+// Every hero gains Spirit per level (not just casters) so any hero's skill /
+// ultimate scales into the late game — Spirit is a real build axis, no role
+// caps. See docs/balance-model.md.
+export const LEVEL_SPIRIT_BONUS = 1 as const;
 
 /** Returns the number of levels gained (0 if no level-up). */
 export function grantExp(G: GameState, card: CardInstance, amount: number): number {
@@ -40,10 +43,12 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
   if (gained > 0) {
     const atkGain = gained * LEVEL_ATK_BONUS;
     const hpGain = gained * LEVEL_HP_BONUS;
+    const spiritGain = gained * LEVEL_SPIRIT_BONUS;
     card.atkMod += atkGain;
     card.hpMax += hpGain;
     card.hp += hpGain;
-    pushLog(G, `${data.name} reached Level ${level} (+${atkGain} Bullet Power, +${hpGain} HP).`);
+    card.spiritMod += spiritGain;
+    pushLog(G, `${data.name} reached Level ${level} (+${atkGain} Bullet Power, +${hpGain} HP, +${spiritGain} Spirit Power).`);
   }
   return gained;
 }

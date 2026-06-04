@@ -72,6 +72,16 @@ export function activeSpi(G: GameState, pid: PlayerID): number {
   return effectiveSpirit(a);
 }
 
+// Helper: spirit scaling for ULTIMATES. The handler's `source` is the ult card
+// (no spirit), but ults run inside withCast(linkedHero, 'ult', …), so the
+// linked hero is the cast-context source — read its effective Spirit here so a
+// spirit-built hero's ultimate scales (e.g. a Spirit Abrams). 0 if no linked
+// hero on board (e.g. a Sinclair-copied ult).
+export function ultSpi(): number {
+  const src = currentCast()?.source;
+  return src ? effectiveSpirit(src) : 0;
+}
+
 // Helper: deal damage to all of a player's board cards
 function eachBoard(G: GameState, pid: PlayerID, fn: (c: CardInstance) => void) {
   for (const c of liveBoardCards(G.players[pid])) fn(c);
@@ -251,11 +261,11 @@ const skill_dynamo: AbilityDef = {
 // Canon Frost Grenade damages enemies + heals allies in the cloud.
 const skill_kelvin: AbilityDef = {
   id: 'skill_kelvin', trigger: 'activate', target: 'enemyActive', exhausts: true,
-  prompt: 'Kelvin Frost Grenade — 2 spirit dmg to enemy Active + heal ally Active 2.',
-  base: 2, baseLabel: 'spirit dmg',
+  prompt: 'Kelvin Frost Grenade — 1 spirit dmg to enemy Active + heal ally Active 2.',
+  base: 1, baseLabel: 'spirit dmg',
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {
-    if (target) damageUnit(G, target, 2 + spi(source), 'spirit');
+    if (target) damageUnit(G, target, 1 + spi(source), 'spirit');
     const ally = G.players[ctx.movingPlayer].active;
     if (ally) healUnit(G, ally, 2);
   },
@@ -263,20 +273,20 @@ const skill_kelvin: AbilityDef = {
 
 const skill_lady_geist: AbilityDef = {
   id: 'skill_lady_geist', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Lady Geist — 4 spirit dmg.',
-  base: 4, baseLabel: 'spirit dmg',
+  prompt: 'Lady Geist — 2 spirit dmg.',
+  base: 2, baseLabel: 'spirit dmg',
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 4 + spi(source), 'spirit'); },
+  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 2 + spi(source), 'spirit'); },
 };
 
 const skill_lash: AbilityDef = {
   id: 'skill_lash', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Lash Ground Strike — 2 spirit dmg + Stun 1 turn.',
-  base: 2, baseLabel: 'spirit dmg',
+  prompt: 'Lash Ground Strike — 1 spirit dmg + Stun 1 turn.',
+  base: 1, baseLabel: 'spirit dmg',
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
-    damageUnit(G, target, 2 + spi(source), 'spirit');
+    damageUnit(G, target, 1 + spi(source), 'spirit');
     addStatus(G, target, 'stun', 1, 1);
   },
 };
@@ -284,9 +294,9 @@ const skill_lash: AbilityDef = {
 // Shields are flat — Spirit Power scales spirit damage only.
 const skill_paige: AbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero', exhausts: true,
-  prompt: 'Paige Plot Armor — Shield 4 on ally.',
-  base: 4, baseLabel: 'shield',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'shield', 4, 999); },
+  prompt: 'Paige Plot Armor — Shield 3 on ally.',
+  base: 3, baseLabel: 'shield',
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'shield', 3, 999); },
 };
 
 // Static Charge: 1 spirit dmg upfront + apply Charged for 2 turns; on expiry
@@ -306,11 +316,11 @@ const skill_seven_static: AbilityDef = {
 
 const skill_sinclair: AbilityDef = {
   id: 'skill_sinclair', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Sinclair Vexing Bolt — 3 spirit dmg to any enemy.',
-  base: 3, baseLabel: 'spirit dmg',
+  prompt: 'Sinclair Vexing Bolt — 2 spirit dmg to any enemy.',
+  base: 2, baseLabel: 'spirit dmg',
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
-    if (target) damageUnit(G, target, 3 + spi(source), 'spirit');
+    if (target) damageUnit(G, target, 2 + spi(source), 'spirit');
   },
 };
 
@@ -328,10 +338,10 @@ const skill_viscous: AbilityDef = {
 
 const skill_yamato: AbilityDef = {
   id: 'skill_yamato', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Yamato Power Slash — 2 spirit dmg.',
-  base: 2, baseLabel: 'spirit dmg',
+  prompt: 'Yamato Power Slash — 1 spirit dmg.',
+  base: 1, baseLabel: 'spirit dmg',
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 2 + spi(source), 'spirit'); },
+  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 1 + spi(source), 'spirit'); },
 };
 
 // Warden skill: hardens himself with a Shield. Canon Warden hunkers down
@@ -457,7 +467,8 @@ const eff_ult_abrams: AbilityDef = {
   base: 4, baseLabel: 'spirit AOE + Stun',
   run: (G, ctx) => {
     const enemy = otherPlayer(ctx.movingPlayer);
-    eachBoard(G, enemy, (c) => damageUnit(G, c, 4, 'spirit'));
+    const s = ultSpi();
+    eachBoard(G, enemy, (c) => damageUnit(G, c, 4 + s, 'spirit'));
     const act = G.players[enemy].active;
     if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
   },
@@ -470,7 +481,7 @@ const eff_ult_dynamo: AbilityDef = {
 const eff_ult_haze: AbilityDef = {
   id: 'eff_ult_haze', trigger: 'onPlay', target: 'noTarget',
   base: 3, baseLabel: 'bullet dmg per enemy',
-  run: (G, ctx) => { eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 3, 'attack')); },
+  run: (G, ctx) => { const s = ultSpi(); eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 3 + s, 'attack')); },
 };
 const eff_ult_kelvin: AbilityDef = {
   id: 'eff_ult_kelvin', trigger: 'onPlay', target: 'noTarget',
@@ -490,7 +501,8 @@ const eff_ult_lash: AbilityDef = {
   base: 5, baseLabel: 'spirit AOE + Stun',
   run: (G, ctx) => {
     const enemy = otherPlayer(ctx.movingPlayer);
-    eachBoard(G, enemy, (c) => damageUnit(G, c, 5, 'spirit'));
+    const s = ultSpi();
+    eachBoard(G, enemy, (c) => damageUnit(G, c, 5 + s, 'spirit'));
     const act = G.players[enemy].active;
     if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
   },
@@ -501,7 +513,7 @@ const eff_ult_mo_krill: AbilityDef = {
   run: (G, ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'stun', 1, 1);
-    const dealt = damageUnit(G, target, 6, 'spirit', 'Combo');
+    const dealt = damageUnit(G, target, 6 + ultSpi(), 'spirit', 'Combo');
     const ps = G.players[ctx.movingPlayer];
     const mk = [ps.active, ...ps.bench].find((c) => c && c.cardId === 'hero_mo_krill' && (c.respawnTurnsLeft ?? 0) === 0);
     if (mk && dealt > 0) healUnit(G, mk, dealt, 'Combo');
@@ -512,7 +524,8 @@ const eff_ult_paige: AbilityDef = {
   base: 4, baseLabel: 'team heal + spirit AOE',
   run: (G, ctx) => {
     for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 4, 'Rallying Charge');
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 4, 'spirit'));
+    const s = ultSpi();
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 4 + s, 'spirit'));
   },
 };
 const eff_ult_rem: AbilityDef = {
@@ -520,12 +533,12 @@ const eff_ult_rem: AbilityDef = {
   base: 6, baseLabel: 'Sleep + wake dmg',
   // Naptime: sleep the enemy Active; the stored value (6) is the wake-up burst,
   // dealt when it wakes (any damage) or when the sleep expires (statusOps).
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'sleep', 6, 2); },
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'sleep', 6 + ultSpi(), 2); },
 };
 const eff_ult_seven: AbilityDef = {
   id: 'eff_ult_seven', trigger: 'onPlay', target: 'noTarget',
   base: 3, baseLabel: 'spirit AOE',
-  run: (G, ctx) => { eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 3, 'spirit')); },
+  run: (G, ctx) => { const s = ultSpi(); eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 3 + s, 'spirit')); },
 };
 const eff_ult_shiv: AbilityDef = {
   id: 'eff_ult_shiv', trigger: 'onPlay', target: 'enemyActive',
@@ -534,7 +547,7 @@ const eff_ult_shiv: AbilityDef = {
     if (!target) return;
     // Killing Blow: execute a target already below half HP, else a 5 spirit hit.
     if (target.hp <= target.hpMax / 2) damageUnit(G, target, 999, 'pure', 'Killing Blow');
-    else damageUnit(G, target, 5, 'spirit', 'Killing Blow');
+    else damageUnit(G, target, 5 + ultSpi(), 'spirit', 'Killing Blow');
   },
 };
 const eff_ult_sinclair: AbilityDef = {
@@ -566,7 +579,7 @@ const eff_ult_vindicta: AbilityDef = {
   run: (G, _ctx, { target }) => {
     if (!target) return;
     // Assassinate: 9 spirit to a target already below half HP, else 5.
-    const dmg = target.hp <= target.hpMax / 2 ? 9 : 5;
+    const dmg = (target.hp <= target.hpMax / 2 ? 9 : 5) + ultSpi();
     damageUnit(G, target, dmg, 'spirit', 'Assassinate');
   },
 };
@@ -578,7 +591,8 @@ const eff_ult_viscous: AbilityDef = {
     const vis = [ps.active, ...ps.bench].find((c) => c && c.cardId === 'hero_viscous' && (c.respawnTurnsLeft ?? 0) === 0);
     if (vis) addStatus(G, vis, 'unstoppable', 1, 1);
     const enemy = otherPlayer(ctx.movingPlayer);
-    eachBoard(G, enemy, (c) => damageUnit(G, c, 3, 'spirit'));
+    const s = ultSpi();
+    eachBoard(G, enemy, (c) => damageUnit(G, c, 3 + s, 'spirit'));
     const act = G.players[enemy].active;
     if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
   },
@@ -601,7 +615,7 @@ const eff_ult_wraith: AbilityDef = {
   base: 4, baseLabel: 'spirit + Stun',
   run: (G, _ctx, { target }) => {
     if (!target) return;
-    damageUnit(G, target, 4, 'spirit');
+    damageUnit(G, target, 4 + ultSpi(), 'spirit');
     addStatus(G, target, 'stun', 1, 1);
   },
 };
@@ -615,9 +629,10 @@ const eff_ult_warden: AbilityDef = {
   base: 3, baseLabel: 'spirit AoE + lifesteal',
   run: (G, ctx) => {
     const enemy = otherPlayer(ctx.movingPlayer);
+    const s = ultSpi();
     let totalDealt = 0;
     eachBoard(G, enemy, (c) => {
-      totalDealt += damageUnit(G, c, 3, 'spirit', 'Warden');
+      totalDealt += damageUnit(G, c, 3 + s, 'spirit', 'Warden');
     });
     // Lifesteal back to Warden wherever he is on the caster's board.
     const ps = G.players[ctx.movingPlayer];
@@ -713,7 +728,7 @@ export function getAbility(id: string): AbilityDef | undefined {
 
 // Procs run inside withCast(..., 'proc') so nested damageUnit calls don't
 // re-fire equipment triggers (would recurse on Mystic Burst, Mystic Reverb, etc.).
-import { withCast as _withCast } from '@/engine/castContext';
+import { withCast as _withCast, currentCast } from '@/engine/castContext';
 setEquipmentDispatcher((G, bearer, kind, ctx, target) => {
   if (!bearer.attached) return;
   for (const eq of bearer.attached) {
