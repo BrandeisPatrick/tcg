@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { CardFrame } from './card/CardFrame';
 import { StatusIcon } from './card/StatusIcon';
@@ -10,7 +10,8 @@ import { HeroSlot } from './board/HeroSlot';
 import { TurnCompass } from './board/TurnCompass';
 import { SoulsRail } from './board/SoulsRail';
 import { HeroDetailSheet } from './overlays/HeroDetailSheet';
-import type { CardInstance, HeroCard } from '@/engine/types';
+import { DamageFxContext } from './effects/DamageFxContext';
+import type { CardInstance, HeroCard, DamageEvent } from '@/engine/types';
 import { palette, fonts, radius, shadow, text } from './tokens';
 import { LevelRing } from './card/LevelRing';
 import { RoundCardIcon } from './card/RoundCardIcon';
@@ -36,7 +37,7 @@ function mockHeroInstance(h: HeroCard): CardInstance {
   };
 }
 
-type Tab = 'cards' | 'animations' | 'statuses' | 'overlays';
+type Tab = 'cards' | 'combat' | 'board' | 'statuses' | 'overlays';
 
 export function PreviewGallery() {
   useEffect(() => { document.body.classList.add('preview'); return () => document.body.classList.remove('preview'); }, []);
@@ -68,7 +69,8 @@ export function PreviewGallery() {
 
       <div style={{ marginTop: 22 }}>
         {tab === 'cards' && <CardsTab />}
-        {tab === 'animations' && <AnimationsTab />}
+        {tab === 'combat' && <CombatFxTab />}
+        {tab === 'board' && <BoardTab />}
         {tab === 'statuses' && <StatusesTab />}
         {tab === 'overlays' && <OverlaysTab />}
       </div>
@@ -79,7 +81,8 @@ export function PreviewGallery() {
 function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
   const items: { id: Tab; label: string }[] = [
     { id: 'cards', label: 'Cards' },
-    { id: 'animations', label: 'Animations' },
+    { id: 'combat', label: 'Combat FX' },
+    { id: 'board', label: 'Board' },
     { id: 'statuses', label: 'Statuses' },
     { id: 'overlays', label: 'Overlays' },
   ];
@@ -193,20 +196,15 @@ function CardsTab() {
 }
 
 // =============================================================================
-// ANIMATIONS TAB
+// COMBAT FX TAB — transient feedback (what you see when something happens)
 // =============================================================================
 
-function AnimationsTab() {
+function CombatFxTab() {
   return (
     <>
-      <Section title="Turn Compass">
-        <Caption>Persistent quiet indicator pinned between the two active heroes. Idle: a conic-gradient ring sweeps slowly (~8s) and the chevron points at whoever's turn. Combat mode: the ring swaps to a segmented progress fill — one arc per attack step, filling in the attacker's hue with the active segment pulsing. No sibling chrome.</Caption>
-        <TurnCompassDemo />
-      </Section>
-
-      <Section title="Souls Rail">
-        <Caption>Vertical stack of flat brass rectangles hugging the right edge of the 3×3 grid. Rival's chips anchor at the top edge; yours anchor at the bottom — position carries ownership. Each soul = one chip; spends pop the head chip off, refills pop a new one on. No labels, no mid-divider.</Caption>
-        <SoulsRailDemo />
+      <Section title="Damage Flash — card got hit">
+        <Caption>The on-card reaction when a hero takes damage — a type-coloured glow/tint over the card (bullet = vermillion, spirit = plum, pure = teal, KO = wine), no shake. The HP-number pulse below carries the amount. Drives skill/spell/ult/bleed via the impact-beat sequencer, and basic attacks via the choreographer at impact.</Caption>
+        <DamageFlashDemo />
       </Section>
 
       <Section title="HP / BP Tick">
@@ -234,6 +232,26 @@ function AnimationsTab() {
           <UltTrigger label="Rival — Death Slam" name="Death Slam" caster="P1" />
           <UltTrigger label="Rival — Soul Exchange" name="Soul Exchange" caster="P1" />
         </Row>
+      </Section>
+    </>
+  );
+}
+
+// =============================================================================
+// BOARD TAB — persistent HUD chrome + progression
+// =============================================================================
+
+function BoardTab() {
+  return (
+    <>
+      <Section title="Turn Compass">
+        <Caption>Persistent quiet indicator pinned between the two active heroes. Idle: a conic-gradient ring sweeps slowly (~8s) and the chevron points at whoever's turn. Combat mode: the ring swaps to a segmented progress fill — one arc per attack step, filling in the attacker's hue with the active segment pulsing. No sibling chrome.</Caption>
+        <TurnCompassDemo />
+      </Section>
+
+      <Section title="Souls Rail">
+        <Caption>Vertical stack of flat brass rectangles hugging the right edge of the 3×3 grid. Rival's chips anchor at the top edge; yours anchor at the bottom — position carries ownership. Each soul = one chip; spends pop the head chip off, refills pop a new one on. No labels, no mid-divider.</Caption>
+        <SoulsRailDemo />
       </Section>
 
       <Section title="Hero Level Rings — stages 1 → 4">
@@ -426,6 +444,41 @@ function StatTickDemo() {
         </Row>
       </div>
     </div>
+  );
+}
+
+function DamageFlashDemo() {
+  const hero = HEROES.find((h) => h.id === 'hero_abrams')!;
+  const card = mockHeroInstance(hero);
+  const [fx, setFx] = useState<DamageEvent | null>(null);
+  const seqRef = useRef(0);
+  const fire = (type: 'attack' | 'spirit' | 'pure', ko = false) => {
+    setFx({ iid: card.iid, type, ko, amount: ko ? 99 : 3, seq: ++seqRef.current });
+    setTimeout(() => setFx(null), 1500);
+  };
+  const resolver = (iid: string) => (iid === card.iid ? fx : null);
+  return (
+    <DamageFxContext.Provider value={resolver}>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        <div style={{ width: 180, aspectRatio: '3 / 4' }}>
+          <HeroSlot
+            card={card}
+            owner="0" myId="0" isOpponent={false}
+            pending={null} isTargetable={false} isCurrentTurn={false}
+            onTap={() => {}}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Caption>Type drives the colour (bullet = vermillion, spirit = plum, pure = teal, KO = wine). No shake — minimal + informative.</Caption>
+          <Row>
+            <Button onClick={() => fire('attack')}>Bullet hit</Button>
+            <Button onClick={() => fire('spirit')}>Spirit hit</Button>
+            <Button onClick={() => fire('pure')}>Pure hit</Button>
+            <Button onClick={() => fire('attack', true)}>KO</Button>
+          </Row>
+        </div>
+      </div>
+    </DamageFxContext.Provider>
   );
 }
 

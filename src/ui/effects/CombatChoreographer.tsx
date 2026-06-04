@@ -2,6 +2,25 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { AttackPlan, AttackStep } from '@/engine/combat';
 import { palette, fonts } from '../tokens';
+import { DamageFlash } from './DamageFlash';
+
+/** Fixed-positioned wrapper so the card-anchored DamageFlash can be used in the
+ *  choreographer's overlay layer (over the target/attacker card rect). */
+function FlashOverCard({ rect, ko, delaySec, keySuffix }: {
+  rect: { left: number; top: number; width: number; height: number };
+  ko: boolean;
+  delaySec: number;
+  keySuffix: string;
+}) {
+  return (
+    <div style={{
+      position: 'fixed', left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+      borderRadius: 10, overflow: 'hidden', pointerEvents: 'none', zIndex: 82,
+    }}>
+      <DamageFlash key={keySuffix} type="attack" ko={ko} delayMs={delaySec * 1000} />
+    </div>
+  );
+}
 
 /**
  * Animated walk-through of an attack phase plan.
@@ -231,6 +250,26 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
           absorbed={step.shieldAbsorbed}
           fullyAbsorbed={step.finalDamage === 0}
           keySuffix={`shield-${step.attackerIid}-${step.targetIid ?? 'face'}`}
+        />
+      )}
+
+      {/* Bullet "got hit" flash on the target, synced to impact (matches the
+          ability-damage flash from DamageFlash; attacks are always bullet). */}
+      {step.finalDamage > 0 && targetRect && (
+        <FlashOverCard
+          rect={{ left: targetRect.left, top: targetRect.top, width: targetRect.width, height: targetRect.height }}
+          ko={step.predictedKO}
+          delaySec={impactDelay}
+          keySuffix={`hit-${step.attackerIid}-${step.targetIid ?? 'face'}`}
+        />
+      )}
+      {/* Same flash on the attacker when the defender retaliates. */}
+      {step.retaliationDamage > 0 && (
+        <FlashOverCard
+          rect={{ left: attackerRect.left, top: attackerRect.top, width: attackerRect.width, height: attackerRect.height }}
+          ko={false}
+          delaySec={impactDelay}
+          keySuffix={`retal-${step.attackerIid}-${step.targetIid ?? 'face'}`}
         />
       )}
 

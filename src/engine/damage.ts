@@ -5,6 +5,10 @@ import { currentCast } from './castContext';
 import { fireEquipmentTriggers } from './equipmentDispatch';
 import { grantExp } from './expSystem';
 
+// Monotonic id for damage-flash events (see GameState.damageFx). Module-level so
+// it survives across moves; the UI plays new entries by tracking the high seq.
+let fxSeq = 0;
+
 // Damage routing for a unit. Returns the damage actually dealt after mitigation.
 // `sourceName`, if omitted, is resolved from the current cast context so skill /
 // spell / ult damage gets "Caster → Target" attribution in the log automatically.
@@ -108,6 +112,14 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     if (srcData?.type === 'hero') {
       grantExp(G, cast.source, 2);
     }
+  }
+
+  // Surface a damage-flash event for the UI — color-coded by type, with KO flag.
+  // Basic-attack damage is omitted (the combat choreographer animates those).
+  if (cast?.kind !== 'attack') {
+    (G.damageFx ?? (G.damageFx = [])).push({
+      iid: target.iid, amount: dmg, type, ko: target.hp <= 0, seq: ++fxSeq,
+    });
   }
 
   // Sleep wakes on any connecting damage (target still alive). Strip it first so

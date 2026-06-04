@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
-import type { GameState, CardInstance, PlayerID } from '@/engine/types';
+import type { GameState, CardInstance, PlayerID, DamageEvent } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { Hand } from './board/Hand';
@@ -27,11 +27,12 @@ import { planAttackPhase, type AttackPlan } from '@/engine/combat';
 import { CombatChoreographer } from './effects/CombatChoreographer';
 import { SoulsRail } from './board/SoulsRail';
 import { CombatProgressContext, type CombatProgress } from './effects/CombatProgressContext';
+import { DamageFxContext, type DamageFxResolver } from './effects/DamageFxContext';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash } from './effects/CardPlayFlash';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { useFitScale } from './hooks/useFitScale';
-import { palette, fonts, radius, shadow, spring, text } from './tokens';
+import { palette, fonts, radius, shadow, spring, text, DAMAGE_BEAT_MS } from './tokens';
 import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer } from './side-panel/PanelDrawer';
 import { HandTray } from './board/HandTray';
@@ -65,6 +66,35 @@ export function Board(props: BoardProps<GameState>) {
   // Snap back to 0 whenever a new plan mounts or combat ends so the
   // compass doesn't carry stale beat state into the next combat.
   useEffect(() => { setCombatBeat(0); }, [combatPlan]);
+
+  // "Got hit" flash sequencer. Plays NEW non-attack damage events (skill / spell
+  // / ult / bleed, pushed to G.damageFx) for a short impact beat so the on-card
+  // flash is clearly seen. Basic attacks are flashed via the choreographer beat
+  // instead (see damageFxFor). We track a high-water seq so a remount/reconnect
+  // doesn't replay old hits.
+  const [fxBeat, setFxBeat] = useState<DamageEvent[]>([]);
+  const seenFxSeq = useRef<number | null>(null);
+  const maxFxSeq = G.damageFx.reduce((m, e) => Math.max(m, e.seq), 0);
+  useEffect(() => {
+    if (seenFxSeq.current === null) { seenFxSeq.current = maxFxSeq; return; }
+    if (maxFxSeq <= seenFxSeq.current) return;
+    const fresh = G.damageFx.filter((e) => e.seq > (seenFxSeq.current ?? 0));
+    seenFxSeq.current = maxFxSeq;
+    if (fresh.length === 0) return;
+    setFxBeat(fresh);
+    const t = setTimeout(() => setFxBeat([]), DAMAGE_BEAT_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxFxSeq]);
+
+  // Resolver consumed by every HeroSlot via DamageFxContext. Covers non-attack
+  // damage (skill / spell / ult / bleed); basic-attack flashes are rendered by
+  // the CombatChoreographer at the true impact moment instead.
+  const damageFxFor = useCallback<DamageFxResolver>(
+    (iid) => fxBeat.find((e) => e.iid === iid) ?? null,
+    [fxBeat],
+  );
+
   const combatProgress: CombatProgress = combatPlan
     ? { total: combatPlan.steps.length, currentBeat: combatBeat, attackerIsMe: combatPlan.attackerId === me }
     : null;
@@ -432,6 +462,7 @@ export function Board(props: BoardProps<GameState>) {
   return (
     <LayoutGroup>
       <CombatProgressContext.Provider value={combatProgress}>
+      <DamageFxContext.Provider value={damageFxFor}>
       <ArenaBackdrop />
       <div style={{
         minHeight: '100vh',
@@ -715,6 +746,7 @@ export function Board(props: BoardProps<GameState>) {
         <UltMomentFlash G={G} />
         <CardPlayFlash G={G} />
       </div>
+      </DamageFxContext.Provider>
       </CombatProgressContext.Provider>
     </LayoutGroup>
   );

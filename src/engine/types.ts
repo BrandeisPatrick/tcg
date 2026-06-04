@@ -170,6 +170,17 @@ export interface GameAction {
   state: 'begin' | 'done';
 }
 
+/** A single resolved damage hit, surfaced so the UI can play a type-colored
+ *  "card got hit" flash. Basic-attack damage is omitted here (the combat
+ *  choreographer owns that). The UI tracks a high-water `seq` to play new ones. */
+export interface DamageEvent {
+  iid: string;            // the damaged unit
+  amount: number;         // final damage dealt (post-resist/shield)
+  type: DamageType;       // 'attack' | 'spirit' | 'pure' → drives the flash colour
+  ko: boolean;            // dropped the unit to 0
+  seq: number;            // monotonic id
+}
+
 /**
  * Pre-match hero draft. Both players take turns picking 4 heroes each from
  * the full pool in snake order. While `draft != null` the regular match
@@ -214,6 +225,10 @@ export interface GameState {
    *  trigger the reveal animation and pause further input until the player
    *  has had time to see what just happened. */
   action: GameAction | null;
+  /** Transient list of damage hits since the last UI flush, for the on-card
+   *  "got hit" flash. Cleared at the start of each turn; UI plays new entries
+   *  by tracking the highest `seq` it has seen. */
+  damageFx: DamageEvent[];
   /** Street Brawl shop. When non-null the player must pick before acting. */
   shop: ShopState | null;
 }

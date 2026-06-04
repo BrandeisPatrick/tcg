@@ -112,6 +112,19 @@ export const spring = {
   bouncy:  { type: 'spring' as const, stiffness: 380, damping: 14, mass: 0.6 },
 } as const;
 
+// Dedicated window (ms) the UI holds so a non-attack damage flash (skill / spell
+// / ult / bleed) is clearly seen. See DamageFlash + Board's impact-beat sequencer.
+export const DAMAGE_BEAT_MS = 1300;
+
+// "Card got hit" flash colour by damage type — minimal + informative (the colour
+// tells you the type; the HP-number pulse tells you the amount).
+export function damageFxColor(type: 'attack' | 'spirit' | 'pure', ko = false): string {
+  if (ko) return palette.danger;            // wine for a kill, regardless of type
+  return type === 'spirit' ? palette.spirit
+    : type === 'pure' ? palette.pure
+    : palette.hp;                            // 'attack' → bullet vermillion
+}
+
 export function rarityStyle(rarity: 1 | 2 | 3 | 4) {
   return palette.rarity[rarity];
 }

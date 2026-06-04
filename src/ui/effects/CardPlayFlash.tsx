@@ -80,7 +80,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play' }: {
             filter: `drop-shadow(0 16px 36px rgba(0,0,0,0.55)) drop-shadow(0 0 22px ${accent}88)`,
           }}
         >
-          <CardFrame cardId={cardId} size="full" />
+          <CardFrame cardId={cardId} size="full" hideStats={kind === 'skill'} />
         </motion.div>
       </div>
       {/* Caption above the card. */}

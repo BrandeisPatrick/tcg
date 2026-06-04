@@ -23,6 +23,9 @@ interface Props {
   onClick?: () => void;
   rotate?: number;
   zoom?: boolean;
+  /** Hide the top-right hero BP/HP stat pills (used by the skill-used reveal,
+   *  where the stat badge is noise — the reveal is about the skill). */
+  hideStats?: boolean;
 }
 
 const SIZES: Record<Size, { w: number; h: number; nameSize: number; bodySize: number }> = {
@@ -198,7 +201,7 @@ function ArtWindow({ data, size }: { data: CardData | undefined; size: Size }) {
 
 export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, faded = false,
-  overlay, footer, onClick, className, style, rotate = 0, zoom = false,
+  overlay, footer, onClick, className, style, rotate = 0, zoom = false, hideStats = false,
 }: Props) {
   const [hover, setHover] = useState(false);
   const data = CARDS_BY_ID[cardId];
@@ -289,7 +292,7 @@ export function CardFrame({
         )}
 
         {/* Stat pills (top-right) for heroes */}
-        {showStats && (
+        {showStats && !hideStats && (
           <div style={{
             position: 'absolute', top: 4, right: 4,
             display: 'flex', gap: 3,

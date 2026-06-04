@@ -255,6 +255,7 @@ export const DeadlockGame: Game<GameState> = {
       draftTurnsOffset: 0,  // set in draftPick when draft completes
       mulliganPending: false,
       action: null,
+      damageFx: [],
       shop: null,
     };
     return G;
@@ -273,6 +274,7 @@ export const DeadlockGame: Game<GameState> = {
       const realTurn = ctx.turn - G.draftTurnsOffset;
       G.turnNumber = realTurn;
       ps.skillUsedThisTurn = false;
+      G.damageFx = [];   // flush last turn's hit-flash events before this turn's (e.g. bleed) land
       tickStartOfTurn(G, ps);
       // Refill (not add) — no hoarding across turns. KO bounty banked this turn IS preserved
       // until the NEXT refill, so a kill mid-turn still gives you something to spend right away.

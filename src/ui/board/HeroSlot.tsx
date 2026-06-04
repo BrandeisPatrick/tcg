@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
 import type { CardInstance, PlayerID } from '@/engine/types';
+import { DamageFlash } from '../effects/DamageFlash';
+import { useDamageFx } from '../effects/DamageFxContext';
 import { CARDS_BY_ID } from '@/cards';
 import { effectiveAtk } from '@/engine/util';
 import { HeroPortrait } from '@/cards/art/heroArt';
@@ -61,6 +63,7 @@ export function HeroSlot({
   const bpTick = useStatTick(atk);
   const shieldValue = card.statuses.find((s) => s.id === 'shield')?.value ?? 0;
   const shieldTick = useStatTick(shieldValue);
+  const damageFx = useDamageFx(card.iid);
   const isActive = card.zone === 'active';
   // Corpse: dead hero waiting to respawn in this slot.
   const respawnLeft = card.respawnTurnsLeft ?? 0;
@@ -136,6 +139,10 @@ export function HeroSlot({
         flexDirection: 'column',
       }}
     >
+      {/* "Card got hit" flash — type-coloured, clipped to the card. Keyed by the
+          hit's seq so each new hit replays the animation. */}
+      {damageFx && <DamageFlash key={damageFx.seq} type={damageFx.type} ko={damageFx.ko} />}
+
       {/* Art window — dark portrait, fills top portion */}
       <div style={{
         position: 'relative',
