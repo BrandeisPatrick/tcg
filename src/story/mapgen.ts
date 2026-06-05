@@ -15,63 +15,65 @@ const COLUMNS: NodeKind[][] = [
   ['boss'],
 ];
 
-const X_MIN = 0.08, X_MAX = 0.92;
-const Y_MIN = 0.16, Y_MAX = 0.84;
+// Vertical layout: depth climbs bottom (start / the Battery) to top (boss /
+// uptown); nodes within a tier spread horizontally. Matches a portrait journey
+// up the island. The X range is kept central so nodes stay on the landmass.
+const X_MIN = 0.2, X_MAX = 0.8;
+const Y_TOP = 0.12;     // boss tier (uptown)
+const Y_BOTTOM = 0.87;  // start tier (downtown)
 
 /**
  * Generate a layered, branching node map (Slay-the-Spire style) laid out over
- * the NYC map. Positions are normalized 0..1 so the UI can place node buttons
- * by percentage. Edges connect each node to 1-2 nearest nodes in the next
- * column, and every node is guaranteed reachable with an outgoing path.
+ * the NYC map as a vertical climb. Positions are normalized 0..1 so the UI can
+ * place node buttons by percentage. Edges connect each node to 1-2 nearest
+ * nodes in the next tier, and every node is guaranteed reachable.
  */
 export function generateMap(seed: number): StoryNode[] {
   const r = rng(seed);
-  const cols = COLUMNS.length;
-  const nodesByCol: StoryNode[][] = [];
+  const tiers = COLUMNS.length;
+  const nodesByTier: StoryNode[][] = [];
 
-  // Place nodes.
-  for (let c = 0; c < cols; c++) {
+  // Place nodes — depth → vertical position (bottom up), index → horizontal.
+  for (let c = 0; c < tiers; c++) {
     const kinds = shuffled(COLUMNS[c], r);
     const k = kinds.length;
-    const x = X_MIN + (X_MAX - X_MIN) * (cols === 1 ? 0.5 : c / (cols - 1));
-    const col: StoryNode[] = kinds.map((kind, i) => {
-      // Even vertical spread + small deterministic jitter for an organic look.
+    const y = Y_BOTTOM - (Y_BOTTOM - Y_TOP) * (tiers === 1 ? 0 : c / (tiers - 1));
+    const tier: StoryNode[] = kinds.map((kind, i) => {
       const base = k === 1 ? 0.5 : i / (k - 1);
-      const y = Y_MIN + (Y_MAX - Y_MIN) * base + (r() - 0.5) * 0.06;
-      const jx = x + (r() - 0.5) * 0.03;
+      const x = X_MIN + (X_MAX - X_MIN) * base + (r() - 0.5) * 0.05;
+      const jy = y + (r() - 0.5) * 0.035;
       return {
         id: `n${c}_${i}`,
         kind,
         depth: c,
-        x: Math.min(X_MAX, Math.max(X_MIN, jx)),
-        y: Math.min(0.9, Math.max(0.1, y)),
+        x: Math.min(X_MAX + 0.02, Math.max(X_MIN - 0.02, x)),
+        y: Math.min(0.92, Math.max(0.08, jy)),
         next: [],
       };
     });
-    nodesByCol.push(col);
+    nodesByTier.push(tier);
   }
 
-  // Connect columns. Each current node links to its nearest-by-y child, plus a
-  // second with some probability; then any orphaned child gets an incoming edge.
-  for (let c = 0; c < cols - 1; c++) {
-    const cur = nodesByCol[c];
-    const nxt = nodesByCol[c + 1];
+  // Connect tiers. Each node links to its nearest-by-x node in the tier above,
+  // plus a second with some probability; then any orphaned node gets an edge.
+  for (let c = 0; c < tiers - 1; c++) {
+    const cur = nodesByTier[c];
+    const nxt = nodesByTier[c + 1];
     for (const a of cur) {
-      const byDist = [...nxt].sort((p, q) => Math.abs(p.y - a.y) - Math.abs(q.y - a.y));
+      const byDist = [...nxt].sort((p, q) => Math.abs(p.x - a.x) - Math.abs(q.x - a.x));
       a.next.push(byDist[0].id);
       if (byDist[1] && r() < 0.45) a.next.push(byDist[1].id);
     }
-    // Guarantee every next-column node is reachable.
     for (const b of nxt) {
       const hasIncoming = cur.some((a) => a.next.includes(b.id));
       if (!hasIncoming) {
-        const closest = [...cur].sort((p, q) => Math.abs(p.y - b.y) - Math.abs(q.y - b.y))[0];
+        const closest = [...cur].sort((p, q) => Math.abs(p.x - b.x) - Math.abs(q.x - b.x))[0];
         closest.next.push(b.id);
       }
     }
   }
 
-  return nodesByCol.flat();
+  return nodesByTier.flat();
 }
 
 export function maxDepth(nodes: StoryNode[]): number {

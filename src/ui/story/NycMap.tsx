@@ -1,23 +1,22 @@
 // Hand-drawn vintage New York City map, rendered as SVG so it scales cleanly
 // and tints into the app's warm parchment palette (no external image / no
-// copyright). The city fills the whole frame as a top-down engraved street
-// grid, framed by thin river/harbor water at the edges — so the campaign node
-// path (drawn on top by the map screen) always sits ON the streets. Purely
-// decorative (aria-hidden); muted so the glowing nodes pop.
+// copyright). The island fills the frame in PORTRAIT orientation — uptown at
+// the top, the Battery at the bottom point — framed by the Hudson & East
+// rivers and the harbor, so the campaign path (drawn on top by the map screen)
+// climbs bottom-to-top up the city. Purely decorative (aria-hidden).
 
 const SEPIA = '#6b4a22';
 const SEPIA_FAINT = 'rgba(107, 74, 34, 0.30)';
-const LAND = '#e3d2a6';
 const LAND_EDGE = '#8a6a32';
 const WATER = '#c1cabf';
 const WATER_HATCH = 'rgba(120, 138, 128, 0.4)';
 const PARK = '#aebb8c';
 
-// Big irregular landmass filling most of the panel — the city. Wavy coastline
-// for an old-map feel; ~60-90px of water margin all around.
+// Manhattan as a vertical island: arched uptown at the top, tapering to the
+// Battery point at the bottom; wide midtown to hold the branching path.
 const ISLAND =
-  '96,82 262,64 470,80 700,60 922,78 1108,98 1128,262 1112,442 1092,602 ' +
-  '900,636 660,650 430,634 236,648 96,606 74,430 88,250';
+  '600,56 822,82 1012,150 1098,300 1110,362 1096,474 1010,560 ' +
+  '802,632 600,652 398,632 190,560 104,474 90,362 102,300 188,150 378,82';
 
 export function NycMap() {
   return (
@@ -28,7 +27,7 @@ export function NycMap() {
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
     >
       <defs>
-        <radialGradient id="nyc-land" cx="0.46" cy="0.42" r="0.8">
+        <radialGradient id="nyc-land" cx="0.5" cy="0.46" r="0.8">
           <stop offset="0%" stopColor="#efe2c2" />
           <stop offset="62%" stopColor="#e4d3aa" />
           <stop offset="100%" stopColor="#d6bf90" />
@@ -42,66 +41,70 @@ export function NycMap() {
         </clipPath>
       </defs>
 
-      {/* Water base (the rivers + harbor framing the city) */}
+      {/* Water base (Hudson + East rivers + harbor) */}
       <rect width="1200" height="700" fill={WATER} />
       {Array.from({ length: 24 }).map((_, i) => (
         <line key={`hl${i}`} x1={0} y1={20 + i * 30} x2={1200} y2={20 + i * 30} stroke={WATER_HATCH} strokeWidth="0.5" opacity="0.5" />
       ))}
 
-      {/* Manhattan — fills the frame */}
+      {/* Manhattan */}
       <polygon points={ISLAND} fill="url(#nyc-land)" stroke={LAND_EDGE} strokeWidth="2.5" />
 
-      {/* Engraved street grid + Central Park, clipped to the city and tilted to
-          the island's gentle NE axis. Broadway cuts a long diagonal. */}
+      {/* Engraved grid — vertical avenues + denser cross-streets, gently tilted;
+          Central Park (tall) uptown; Broadway cuts a long diagonal. */}
       <g clipPath="url(#nyc-island)">
-        <g transform="translate(600,360) rotate(-11)">
+        <g transform="translate(600,356) rotate(-5)">
           {/* avenues (vertical) */}
-          {Array.from({ length: 33 }).map((_, i) => {
-            const x = -640 + i * 40;
-            return <line key={`av${i}`} x1={x} y1={-420} x2={x} y2={420} stroke={SEPIA_FAINT} strokeWidth="1" />;
+          {Array.from({ length: 23 }).map((_, i) => {
+            const x = -550 + i * 50;
+            return <line key={`av${i}`} x1={x} y1={-330} x2={x} y2={330} stroke={SEPIA_FAINT} strokeWidth="1" />;
           })}
-          {/* cross-streets (horizontal) */}
-          {Array.from({ length: 25 }).map((_, i) => {
-            const y = -420 + i * 34;
-            return <line key={`st${i}`} x1={-660} y1={y} x2={660} y2={y} stroke={SEPIA_FAINT} strokeWidth="0.7" />;
+          {/* cross-streets (horizontal, denser) */}
+          {Array.from({ length: 27 }).map((_, i) => {
+            const y = -330 + i * 25;
+            return <line key={`st${i}`} x1={-560} y1={y} x2={560} y2={y} stroke={SEPIA_FAINT} strokeWidth="0.7" />;
           })}
-          {/* Central Park */}
-          <rect x={-30} y={-250} width={120} height={170} fill={PARK} stroke={LAND_EDGE} strokeWidth="1.2" opacity="0.85" />
-          {/* Broadway diagonal */}
-          <line x1={-560} y1={400} x2={520} y2={-400} stroke={SEPIA} strokeWidth="1.8" opacity="0.45" />
+          {/* Central Park (tall rectangle, uptown) */}
+          <rect x={-52} y={-250} width={104} height={186} fill={PARK} stroke={LAND_EDGE} strokeWidth="1.2" opacity="0.85" />
+          <text x={0} y={-150} textAnchor="middle" transform="rotate(-90 0 -150)" fill={SEPIA} opacity="0.6"
+            style={{ fontFamily: 'Georgia, serif', fontSize: 11, fontStyle: 'italic', letterSpacing: '0.18em' }}>
+            CENTRAL  PARK
+          </text>
+          {/* Broadway */}
+          <line x1={-300} y1={330} x2={260} y2={-330} stroke={SEPIA} strokeWidth="1.8" opacity="0.45" />
         </g>
       </g>
 
-      {/* River ink labels in the thin water margins */}
-      <text x={40} y={250} transform="rotate(90 40 250)" fill={SEPIA} opacity="0.55"
-        style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 18, fontStyle: 'italic', letterSpacing: '0.3em' }}>
+      {/* River + harbor ink labels in the water margins */}
+      <text x={44} y={250} transform="rotate(90 44 250)" fill={SEPIA} opacity="0.55"
+        style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 17, fontStyle: 'italic', letterSpacing: '0.3em' }}>
         HUDSON  RIVER
       </text>
-      <text x={1178} y={300} transform="rotate(90 1178 300)" fill={SEPIA} opacity="0.55"
-        style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 18, fontStyle: 'italic', letterSpacing: '0.3em' }}>
+      <text x={1176} y={300} transform="rotate(90 1176 300)" fill={SEPIA} opacity="0.55"
+        style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 17, fontStyle: 'italic', letterSpacing: '0.3em' }}>
         EAST  RIVER
       </text>
 
-      {/* Compass rose, top-right water corner */}
-      <g transform="translate(1150,92)" opacity="0.7">
-        <circle r="40" fill="none" stroke={SEPIA} strokeWidth="1.4" />
-        <circle r="30" fill="none" stroke={SEPIA_FAINT} strokeWidth="0.8" />
+      {/* Compass rose, top-right harbor corner */}
+      <g transform="translate(1126,92)" opacity="0.7">
+        <circle r="38" fill="none" stroke={SEPIA} strokeWidth="1.4" />
+        <circle r="28" fill="none" stroke={SEPIA_FAINT} strokeWidth="0.8" />
         {Array.from({ length: 8 }).map((_, i) => {
           const a = (i * Math.PI) / 4;
-          const long = i % 2 === 0 ? 38 : 22;
+          const long = i % 2 === 0 ? 36 : 21;
           const x = Math.sin(a) * long;
           const y = -Math.cos(a) * long;
           return <line key={`cr${i}`} x1={0} y1={0} x2={x} y2={y} stroke={SEPIA} strokeWidth={i % 2 === 0 ? 1.4 : 0.8} />;
         })}
-        <polygon points="0,-38 5,-6 0,0 -5,-6" fill={SEPIA} />
-        <text x={0} y={-44} textAnchor="middle" fill={SEPIA}
+        <polygon points="0,-36 5,-6 0,0 -5,-6" fill={SEPIA} />
+        <text x={0} y={-42} textAnchor="middle" fill={SEPIA}
           style={{ fontFamily: 'Georgia, serif', fontSize: 12, fontWeight: 700 }}>N</text>
       </g>
 
-      {/* Title cartouche along the bottom harbor (clear of the run HUD) */}
-      <g transform="translate(600,684)" textAnchor="middle" opacity="0.8">
+      {/* Title cartouche in the bottom harbor */}
+      <g transform="translate(600,686)" textAnchor="middle" opacity="0.82">
         <text x={0} y={0} fill={SEPIA}
-          style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 22, fontWeight: 700, letterSpacing: '0.24em' }}>
+          style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 21, fontWeight: 700, letterSpacing: '0.24em' }}>
           NEW  YORK
         </text>
       </g>
