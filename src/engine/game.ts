@@ -8,7 +8,7 @@ import type {
 } from './types';
 import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { getMatchConfig } from '@/storage/matchConfig';
-import { getAIDeck } from '@/decks/aiDecks';
+import { getAIDeckTagged } from '@/decks/aiDecks';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags } from './statusOps';
 import { reapDead, damagePlayer } from './damage';
 import { resolveAttackPhase } from './combat';
@@ -107,13 +107,32 @@ function shuffle<T>(arr: T[]): T[] {
   return arr;
 }
 
-function buildPlayer(pid: PlayerID, heroes: [string, string, string, string], deckCards: string[]): PlayerState {
-  const active = makeInstance(heroes[0], pid, 'active', 0);
-  const bench: (CardInstance | null)[] = [
-    makeInstance(heroes[1], pid, 'bench', 1),
-    makeInstance(heroes[2], pid, 'bench', 2),
-    makeInstance(heroes[3], pid, 'bench', 3),
-  ];
+interface RosterOpts {
+  /** Flat stat buff applied to every hero (Story mode enemy scaling). */
+  buff?: { atk: number; hp: number };
+  /** Patron-HP override for this match (Story pacing). */
+  patronHp?: number;
+}
+
+/** Build a PlayerState from a 1-4 hero roster + deck. Heroes beyond the first
+ *  fill the bench (length 3, padded with null). Used by both the draft path
+ *  (exactly 4 heroes) and Story mode (1-4 heroes, optional buff/patron HP). */
+function buildPlayer(pid: PlayerID, heroes: string[], deckCards: string[], opts: RosterOpts = {}): PlayerState {
+  const roster = heroes.slice(0, 4);
+  const active = makeInstance(roster[0], pid, 'active', 0);
+  const bench: (CardInstance | null)[] = [null, null, null];
+  for (let i = 1; i < roster.length; i++) {
+    bench[i - 1] = makeInstance(roster[i], pid, 'bench', i as 1 | 2 | 3);
+  }
+
+  const buff = opts.buff;
+  if (buff && (buff.atk || buff.hp)) {
+    for (const c of [active, ...bench]) {
+      if (!c) continue;
+      if (buff.atk) c.atkMod += buff.atk;
+      if (buff.hp) { c.hpMax += buff.hp; c.hp += buff.hp; }
+    }
+  }
 
   const deck = shuffle(deckCards.map((id) => makeInstance(id, pid, 'deck')));
   const hand: CardInstance[] = [];
@@ -123,10 +142,11 @@ function buildPlayer(pid: PlayerID, heroes: [string, string, string, string], de
     hand.push(card);
   }
 
+  const patronHp = opts.patronHp ?? PATRON_HP;
   return {
     id: pid,
-    hp: PATRON_HP,
-    hpMax: PATRON_HP,
+    hp: patronHp,
+    hpMax: patronHp,
     souls: SOULS_START,
     deck,
     hand,
@@ -240,6 +260,32 @@ export const DeadlockGame: Game<GameState> = {
   name: 'deadlock-tcg',
   setup: (): GameState => {
     resetIid();
+    const story = getMatchConfig().story;
+
+    // Story mode: skip the draft entirely and build both players from the
+    // campaign roster/deck. Enemy heroes carry the node's scaling buff.
+    if (story) {
+      const G: GameState = {
+        players: {
+          '0': buildPlayer('0', story.playerHeroes, story.playerDeck, { patronHp: story.patronHp }),
+          '1': buildPlayer('1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.patronHp }),
+        },
+        turnNumber: 1,
+        selector: null,
+        resolveQueue: [],
+        log: [{ turn: 1, text: 'Battle begins.' }],
+        draft: null,
+        draftTurnsOffset: 0,
+        mulliganPending: false,
+        action: null,
+        damageFx: [],
+        shop: null,
+      };
+      G.players['0'].archetype = 'story';
+      G.players['1'].archetype = 'story-enemy';
+      return G;
+    }
+
     const G: GameState = {
       players: {
         '0': makeEmptyPlayer('0'),
@@ -582,10 +628,13 @@ export const DeadlockGame: Game<GameState> = {
         const p0Heroes = G.draft.picks['0'] as [string, string, string, string];
         const p1Heroes = G.draft.picks['1'] as [string, string, string, string];
         const config = getMatchConfig();
-        const playerDeck = config.playerDeck.length > 0 ? config.playerDeck : getAIDeck();
-        const aiDeck = getAIDeck();
+        const p0Tag = getAIDeckTagged();
+        const playerDeck = config.playerDeck.length > 0 ? config.playerDeck : p0Tag.cards;
+        const aiTag = getAIDeckTagged();
         G.players['0'] = buildPlayer('0', p0Heroes, playerDeck);
-        G.players['1'] = buildPlayer('1', p1Heroes, aiDeck);
+        G.players['1'] = buildPlayer('1', p1Heroes, aiTag.cards);
+        G.players['0'].archetype = config.playerDeck.length > 0 ? 'custom' : p0Tag.archetype;
+        G.players['1'].archetype = aiTag.archetype;
         G.draft = null;
         G.mulliganPending = false;
         G.draftTurnsOffset = ctx.turn - 1;

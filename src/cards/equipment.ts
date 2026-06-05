@@ -40,14 +40,17 @@ export const EQUIPMENT: EquipmentCard[] = [
   // ----- T2 (cost 3-4) — resist shred (canon T2 Spirit) -----
   { id: 'bullet_resist_shredder', name: 'Bullet Resist Shredder', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_bullet_resist_shredder_proc'], text: "Bearer's attacks apply Bullet Resist −1 for 1 turn." },
 
+  // Spirit Resist is narrower than Bullet Resist (spirit damage is rare), so it
+  // sits a tier below its bullet counterpart — same magnitude, lower cost.
+  { id: 'spirit_resilience', name: 'Spirit Resilience', type: 'equipment', rarity: 2, tier: 2, cost: 4, abilities: ['eff_spirit_resist'], text: 'Spirit Resist 3.' },
+
   // ----- T3 (cost 5-6) — passive resists (canon T3 Vitality) -----
-  { id: 'bullet_resilience', name: 'Bullet Resilience', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_bullet_resist'], text: 'Bullet Resist 3.' },
-  { id: 'spirit_resilience', name: 'Spirit Resilience', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_spirit_resist'], text: 'Spirit Resist 3.' },
+  { id: 'bullet_resilience', name: 'Bullet Resilience', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_bullet_resist'], text: 'Bullet Resist 3.' },
 
   // ----- T4 (cost 7+) — premium items (canon T4) -----
   { id: 'healing_tempo',  name: 'Healing Tempo',  type: 'equipment', rarity: 4, tier: 4, cost: 7, bonus: { atk: 2 }, abilities: ['eff_healing_tempo'], text: '+2 Bullet Power. Healing Boost 4.' },
   { id: 'boundless_spirit', name: 'Boundless Spirit', type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { spirit: 5, hp: 3 }, text: '+5 Spirit Power. +3 HP.' },
-  { id: 'glass_cannon',   name: 'Glass Cannon',   type: 'equipment', rarity: 4, tier: 4, cost: 10, bonus: { atk: 6, hp: -3 }, text: '+6 Bullet Power. −3 max HP.' },
+  { id: 'glass_cannon',   name: 'Glass Cannon',   type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { atk: 6, hp: -1 }, text: '+6 Bullet Power. −1 max HP.' },
 ];
 
 export const EQUIPMENT_BY_ID = Object.fromEntries(EQUIPMENT.map((e) => [e.id, e])) as Record<string, EquipmentCard>;

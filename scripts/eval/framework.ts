@@ -88,7 +88,14 @@ export type GameResult = {
   length: number;                     // real match turns
   heroes: Record<PlayerID, string[]>;
   equips: Record<PlayerID, string[]>; // equipment cardIds actually built, per side
+  spells: Record<PlayerID, string[]>; // spell cardIds actually cast (from discard), per side
+  archetypes: Record<PlayerID, string>; // deck archetype each side drafted
 };
+
+/** Spell cardIds in a player's discard at game end = spells they actually cast. */
+function discardSpells(ps: PlayerState): string[] {
+  return ps.discard.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'spell').map((c) => c.cardId);
+}
 
 /** Equipment ids attached on a side's board heroes at game end (what got built). */
 function boardEquips(ps: PlayerState): string[] {
@@ -179,6 +186,8 @@ export async function runGame(opts: {
     length: G.turnNumber ?? 0,
     heroes: { '0': boardHeroes(G.players['0']), '1': boardHeroes(G.players['1']) },
     equips: { '0': boardEquips(G.players['0']), '1': boardEquips(G.players['1']) },
+    spells: { '0': discardSpells(G.players['0']), '1': discardSpells(G.players['1']) },
+    archetypes: { '0': G.players['0'].archetype ?? '?', '1': G.players['1'].archetype ?? '?' },
   };
 }
 

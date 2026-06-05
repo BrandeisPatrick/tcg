@@ -78,6 +78,8 @@ async function main() {
   const lengths: number[] = [];
   const hero: Record<string, { games: number; wins: number }> = {};
   const equip: Record<string, { games: number; wins: number }> = {};
+  const spell: Record<string, { games: number; wins: number }> = {};
+  const arch: Record<string, { games: number; wins: number }> = {};
   for (const r of res) {
     if (r.stalemate) { stale++; }
     else { r.winner === '0' ? p0++ : p1++; lengths.push(r.length); }
@@ -91,6 +93,15 @@ async function main() {
       for (const id of new Set(r.equips[side])) {
         (equip[id] ??= { games: 0, wins: 0 }).games++;
         if (won) equip[id].wins++;
+      }
+      for (const id of new Set(r.spells[side])) {
+        (spell[id] ??= { games: 0, wins: 0 }).games++;
+        if (won) spell[id].wins++;
+      }
+      const a = r.archetypes[side];
+      if (a) {
+        (arch[a] ??= { games: 0, wins: 0 }).games++;
+        if (won) arch[a].wins++;
       }
     }
   }
@@ -129,6 +140,27 @@ async function main() {
     .sort((a, b) => b.games - a.games);
   for (const r of eqRows) md += `| ${r.name} | ${r.games} | ${ciStr(r.wins, r.games)} |\n`;
   if (eqRows.length === 0) md += `| _(no equipment built)_ | 0 | — |\n`;
+
+  md += `\n## 6. Per-spell — cast-rate & win-rate (95% CI)\n`;
+  md += `How often each spell gets cast and the win-rate when it does — flags weak/strong spells (esp. Control's disruption kit).\n\n`;
+  md += `| Spell | cast (games) | win-rate [95% CI] |\n|---|---:|---|\n`;
+  const spRows = Object.entries(spell)
+    .map(([id, h]) => ({ name: heroName(id), ...h }))
+    .sort((a, b) => b.games - a.games);
+  for (const r of spRows) md += `| ${r.name} | ${r.games} | ${ciStr(r.wins, r.games)} |\n`;
+  if (spRows.length === 0) md += `| _(no spells cast)_ | 0 | — |\n`;
+
+  md += `\n## 7. Per-archetype — deck win-rate (95% CI, ★ = significant outlier)\n`;
+  md += `Each side drafts a random archetype (balanced/aggro/control). Shows whether any deck strategy dominates.\n\n`;
+  md += `| Archetype | games | win-rate [95% CI] | |\n|---|---:|---|---|\n`;
+  const archRows = Object.entries(arch)
+    .map(([id, h]) => ({ id, ...h, w: wilson(h.wins, h.games) }))
+    .sort((a, b) => b.w.p - a.w.p);
+  for (const r of archRows) {
+    const sig = (r.w.lo > 0.5 || r.w.hi < 0.5) ? (r.w.p > 0.5 ? '★ strong' : '★ weak') : '';
+    md += `| ${r.id} | ${r.games} | ${ciStr(r.wins, r.games)} | ${sig} |\n`;
+  }
+  if (archRows.length === 0) md += `| _(no archetype data)_ | 0 | — | |\n`;
 
   md += `\n_Total wall-clock: ${((Date.now() - t0) / 1000).toFixed(1)}s._\n`;
 

@@ -1,13 +1,13 @@
 /**
  * Hero leveling. Heroes start at Lv1, climb to Lv4 (cap). Step costs are
- * 3 → 6 → 9 exp (cumulative cap 18). Exp earned at end of owner's turn,
- * on equipment attach, and on kill blow. Persists across respawn.
+ * 5 → 7 → 9 exp (cumulative cap 21). Exp earned at end of owner's turn (all
+ * board heroes), on equipment attach, and on kill blow. Persists across respawn.
  */
 import type { CardInstance, GameState } from './types';
 import { CARDS_BY_ID } from '@/cards';
 import { pushLog } from './util';
 
-export const LEVEL_THRESHOLDS = [3, 6, 9] as const;
+export const LEVEL_THRESHOLDS = [5, 7, 9] as const;
 export const START_LEVEL = 1 as const;
 export const MAX_LEVEL = 4 as const;
 

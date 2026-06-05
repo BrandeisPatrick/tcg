@@ -31,13 +31,32 @@ const AI_DECK_CONTROL: CardId[] = [
   'healing_booster', 'weapon_shielding', 'mystic_regeneration',
 ];
 
-const AI_DECKS = [AI_DECK_BALANCED, AI_DECK_AGGRO, AI_DECK_CONTROL];
+export type ArchetypeName = 'balanced' | 'aggro' | 'control';
+export const AI_DECKS_BY_NAME: Record<ArchetypeName, CardId[]> = {
+  balanced: AI_DECK_BALANCED,
+  aggro: AI_DECK_AGGRO,
+  control: AI_DECK_CONTROL,
+};
+const ARCHETYPE_NAMES = Object.keys(AI_DECKS_BY_NAME) as ArchetypeName[];
 
-export function getAIDeck(): CardId[] {
-  const deck = [...AI_DECKS[Math.floor(Math.random() * AI_DECKS.length)]];
+// Eval harness can force a specific archetype for the NEXT getAIDeck() call
+// (consumed once, then cleared) so it can run clean archetype-vs-archetype
+// matchups. null = pick randomly, as in normal play.
+let _forcedNext: ArchetypeName | null = null;
+export function forceNextArchetype(name: ArchetypeName | null): void { _forcedNext = name; }
+
+/** Returns a shuffled deck plus which archetype it is (for win-rate tracking). */
+export function getAIDeckTagged(): { cards: CardId[]; archetype: ArchetypeName } {
+  const archetype = _forcedNext ?? ARCHETYPE_NAMES[Math.floor(Math.random() * ARCHETYPE_NAMES.length)];
+  _forcedNext = null;
+  const deck = [...AI_DECKS_BY_NAME[archetype]];
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
-  return deck;
+  return { cards: deck, archetype };
+}
+
+export function getAIDeck(): CardId[] {
+  return getAIDeckTagged().cards;
 }

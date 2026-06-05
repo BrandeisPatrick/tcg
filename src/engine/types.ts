@@ -123,6 +123,8 @@ export interface PlayerState {
   skillUsedThisTurn: boolean;
   /** Heroes waiting to come back to the bench after being KO'd. */
   respawning: RespawnEntry[];
+  /** Deck archetype this player drafted (for eval/balance tracking). */
+  archetype?: string;
 }
 
 export interface RespawnEntry {

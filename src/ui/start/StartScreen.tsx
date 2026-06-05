@@ -12,16 +12,18 @@
 import { motion } from 'framer-motion';
 import { palette, fonts, spring, text } from '../tokens';
 import { TornTile } from './TornTile';
+import { NycMap } from '../story/NycMap';
 
 const ART_BASE = `${import.meta.env.BASE_URL ?? '/'}art/`;
 
 interface StartScreenProps {
   onPlay: () => void;
+  onStory?: () => void;
   onHeroes?: () => void;
   onDecks?: () => void;
 }
 
-export function StartScreen({ onPlay, onHeroes, onDecks }: StartScreenProps) {
+export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenProps) {
   return (
     <div
       style={{
@@ -80,7 +82,7 @@ export function StartScreen({ onPlay, onHeroes, onDecks }: StartScreenProps) {
               hidden: { opacity: 0, y: 24 },
               show: { opacity: 1, y: 0, transition: spring.default },
             }}
-            style={{ gridRow: '1 / span 2', gridColumn: '1', minHeight: 0 }}
+            style={{ gridRow: '1', gridColumn: '1', minHeight: 0 }}
           >
             <TornTile
               variant="primary"
@@ -94,6 +96,27 @@ export function StartScreen({ onPlay, onHeroes, onDecks }: StartScreenProps) {
             >
               <OldGodsBanner />
               <KeyartPoster />
+            </TornTile>
+          </motion.div>
+
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, y: 24 },
+              show: { opacity: 1, y: 0, transition: spring.default },
+            }}
+            style={{ gridRow: '2', gridColumn: '1', minHeight: 0 }}
+          >
+            <TornTile
+              variant="primary"
+              rotation={0.8}
+              eyebrow="Campaign"
+              title="Story"
+              subtitle="Fight uptown across old New York. Recruit, build, survive."
+              cta={{ label: 'Begin' }}
+              onClick={onStory}
+              ariaLabel="Start Story campaign"
+            >
+              <StoryMapTeaser />
             </TornTile>
           </motion.div>
 
@@ -154,6 +177,32 @@ export function StartScreen({ onPlay, onHeroes, onDecks }: StartScreenProps) {
 
         <Footer />
       </motion.div>
+    </div>
+  );
+}
+
+function StoryMapTeaser() {
+  // A framed vintage-NYC-map vignette pinned to the right of the Story tile,
+  // previewing the campaign's overworld. Reuses the same SVG map as the mode.
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 22,
+        top: '50%',
+        transform: 'translateY(-50%) rotate(-1.5deg)',
+        width: '46%',
+        aspectRatio: '1200 / 700',
+        borderRadius: 6,
+        overflow: 'hidden',
+        border: `5px solid ${palette.bg2}`,
+        boxShadow:
+          '0 14px 28px rgba(40,20,0,0.35), 0 2px 6px rgba(40,20,0,0.20), inset 0 0 0 1px rgba(120,80,30,0.25)',
+        pointerEvents: 'none',
+        filter: 'sepia(0.12) saturate(0.95)',
+      }}
+    >
+      <NycMap />
     </div>
   );
 }

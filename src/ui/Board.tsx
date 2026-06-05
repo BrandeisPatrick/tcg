@@ -37,6 +37,8 @@ import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer } from './side-panel/PanelDrawer';
 import { HandTray } from './board/HandTray';
 import { findOnBoard, filterAllows, type PendingPlay } from './helpers';
+import { getMatchConfig } from '@/storage/matchConfig';
+import { finishStoryBattle } from '@/story/storyRun';
 
 // Animation / pacing constants.
 const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
@@ -411,9 +413,15 @@ export function Board(props: BoardProps<GameState>) {
   }
 
   if (ctx.gameover) {
+    const isStory = !!getMatchConfig().story;
+    const won = ctx.gameover.winner === me;
+    const tone = won ? palette.success : palette.danger;
     const txt = ctx.gameover.draw ? 'Draw' :
-      ctx.gameover.winner === me ? 'Patron Falls' : 'Outflanked';
-    const tone = ctx.gameover.winner === me ? palette.success : palette.danger;
+      isStory ? (won ? 'Victory' : 'Defeated') :
+      won ? 'Patron Falls' : 'Outflanked';
+    // Story battles return to the campaign map (win advances, loss ends the
+    // run); a draw counts as a loss so the run still resolves. Quick Match
+    // just reloads for a rematch.
     return (
       <div style={{
         height: '100vh',
@@ -430,15 +438,20 @@ export function Board(props: BoardProps<GameState>) {
             textShadow: `0 0 40px ${tone}aa`, margin: 0,
           }}
         >{txt}</motion.h1>
+        {isStory && !ctx.gameover.draw && (
+          <div style={{ ...text.body, color: palette.textDim, marginTop: -14 }}>
+            {won ? 'The block is yours — press on uptown.' : 'Your run ends in the old city.'}
+          </div>
+        )}
         <button
-          onClick={() => location.reload()}
+          onClick={() => { if (isStory) finishStoryBattle(won); else location.reload(); }}
           style={{
             background: `linear-gradient(180deg, ${tone}aa, ${tone}66)`,
             color: palette.text, padding: '16px 40px', border: 'none', borderRadius: 12,
             fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
             cursor: 'pointer', boxShadow: shadow.lg,
           }}
-        >Rematch</button>
+        >{isStory ? 'Return to Map' : 'Rematch'}</button>
       </div>
     );
   }
