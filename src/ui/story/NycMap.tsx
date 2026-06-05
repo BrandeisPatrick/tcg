@@ -1,22 +1,53 @@
-// Hand-drawn vintage New York City map, rendered as SVG so it scales cleanly
-// and tints into the app's warm parchment palette (no external image / no
-// copyright). The island fills the frame in PORTRAIT orientation — uptown at
-// the top, the Battery at the bottom point — framed by the Hudson & East
-// rivers and the harbor, so the campaign path (drawn on top by the map screen)
-// climbs bottom-to-top up the city. Purely decorative (aria-hidden).
+// Hand-drawn vintage New York City map, rendered as SVG (no external image / no
+// copyright). The five boroughs around the harbour — New Jersey, The Bronx,
+// Queens, Brooklyn, Staten Island — frame the Hudson, East and Harlem rivers,
+// with Manhattan as the iconic tilted island down the middle: Battery point at
+// the bottom, Central Park, the avenue grid. The campaign path (drawn on top by
+// the map screen) climbs up Manhattan. Purely decorative (aria-hidden).
 
 const SEPIA = '#6b4a22';
 const SEPIA_FAINT = 'rgba(107, 74, 34, 0.30)';
+const LAND_BORO = '#d8c293';   // outer boroughs (muted)
 const LAND_EDGE = '#8a6a32';
-const WATER = '#c1cabf';
+const WATER = '#bcc7bd';
 const WATER_HATCH = 'rgba(120, 138, 128, 0.4)';
 const PARK = '#aebb8c';
 
-// Manhattan as a vertical island: arched uptown at the top, tapering to the
-// Battery point at the bottom; wide midtown to hold the branching path.
-const ISLAND =
-  '600,56 822,82 1012,150 1098,300 1110,362 1096,474 1010,560 ' +
-  '802,632 600,652 398,632 190,560 104,474 90,362 102,300 188,150 378,82';
+// Manhattan spine (must match mapgen.ts): Battery (bottom) -> Inwood (top).
+const SP = { x0: 478, y0: 632, x1: 672, y1: 92 };
+const DX = SP.x1 - SP.x0, DY = SP.y1 - SP.y0;
+const LEN = Math.hypot(DX, DY);
+const PX = -DY / LEN, PY = DX / LEN;       // across the island
+const AX = DX / LEN, AY = DY / LEN;        // along the island
+
+const spine = (t: number) => ({ x: SP.x0 + DX * t, y: SP.y0 + DY * t });
+const off = (t: number, hw: number): [number, number] => {
+  const s = spine(t);
+  return [s.x + PX * hw, s.y + PY * hw];
+};
+
+// Manhattan outline: a tilted leaf, narrow at the tips, wide through midtown.
+function manhattan(): string {
+  const N = 16, left: [number, number][] = [], right: [number, number][] = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const hw = 22 + 96 * Math.sin(Math.PI * t);
+    left.push(off(t, -hw));
+    right.push(off(t, hw));
+  }
+  return [...left, ...right.reverse()].map((p) => `${p[0].toFixed(0)},${p[1].toFixed(0)}`).join(' ');
+}
+const MANHATTAN = manhattan();
+const MID = spine(0.5);
+const TILT = (Math.atan2(DY, DX) * 180) / Math.PI + 90; // island long-axis tilt (deg)
+
+// Central Park — a rectangle along the island, uptown.
+function park(): string {
+  const a = off(0.6, -34), b = off(0.78, -34), c = off(0.78, 34), d = off(0.6, 34);
+  return [a, b, c, d].map((p) => `${p[0].toFixed(0)},${p[1].toFixed(0)}`).join(' ');
+}
+const PARK_PTS = park();
+const PARK_LABEL = off(0.69, 0);
 
 export function NycMap() {
   return (
@@ -27,87 +58,99 @@ export function NycMap() {
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
     >
       <defs>
-        <radialGradient id="nyc-land" cx="0.5" cy="0.46" r="0.8">
-          <stop offset="0%" stopColor="#efe2c2" />
-          <stop offset="62%" stopColor="#e4d3aa" />
-          <stop offset="100%" stopColor="#d6bf90" />
+        <radialGradient id="nyc-manh" cx="0.5" cy="0.5" r="0.7">
+          <stop offset="0%" stopColor="#f1e4c5" />
+          <stop offset="100%" stopColor="#e3d2a6" />
         </radialGradient>
         <radialGradient id="nyc-vignette" cx="0.5" cy="0.5" r="0.62">
-          <stop offset="58%" stopColor="rgba(60,38,12,0)" />
-          <stop offset="100%" stopColor="rgba(60,38,12,0.38)" />
+          <stop offset="56%" stopColor="rgba(60,38,12,0)" />
+          <stop offset="100%" stopColor="rgba(60,38,12,0.4)" />
         </radialGradient>
-        <clipPath id="nyc-island">
-          <polygon points={ISLAND} />
-        </clipPath>
+        <clipPath id="nyc-manh-clip"><polygon points={MANHATTAN} /></clipPath>
       </defs>
 
-      {/* Water base (Hudson + East rivers + harbor) */}
+      {/* Water: the rivers + harbour */}
       <rect width="1200" height="700" fill={WATER} />
       {Array.from({ length: 24 }).map((_, i) => (
-        <line key={`hl${i}`} x1={0} y1={20 + i * 30} x2={1200} y2={20 + i * 30} stroke={WATER_HATCH} strokeWidth="0.5" opacity="0.5" />
+        <line key={`w${i}`} x1={0} y1={18 + i * 30} x2={1200} y2={18 + i * 30} stroke={WATER_HATCH} strokeWidth="0.5" opacity="0.5" />
       ))}
 
-      {/* Manhattan */}
-      <polygon points={ISLAND} fill="url(#nyc-land)" stroke={LAND_EDGE} strokeWidth="2.5" />
-
-      {/* Engraved grid — vertical avenues + denser cross-streets, gently tilted;
-          Central Park (tall) uptown; Broadway cuts a long diagonal. */}
-      <g clipPath="url(#nyc-island)">
-        <g transform="translate(600,356) rotate(-5)">
-          {/* avenues (vertical) */}
-          {Array.from({ length: 23 }).map((_, i) => {
-            const x = -550 + i * 50;
-            return <line key={`av${i}`} x1={x} y1={-330} x2={x} y2={330} stroke={SEPIA_FAINT} strokeWidth="1" />;
-          })}
-          {/* cross-streets (horizontal, denser) */}
-          {Array.from({ length: 27 }).map((_, i) => {
-            const y = -330 + i * 25;
-            return <line key={`st${i}`} x1={-560} y1={y} x2={560} y2={y} stroke={SEPIA_FAINT} strokeWidth="0.7" />;
-          })}
-          {/* Central Park (tall rectangle, uptown) */}
-          <rect x={-52} y={-250} width={104} height={186} fill={PARK} stroke={LAND_EDGE} strokeWidth="1.2" opacity="0.85" />
-          <text x={0} y={-150} textAnchor="middle" transform="rotate(-90 0 -150)" fill={SEPIA} opacity="0.6"
-            style={{ fontFamily: 'Georgia, serif', fontSize: 11, fontStyle: 'italic', letterSpacing: '0.18em' }}>
-            CENTRAL  PARK
-          </text>
-          {/* Broadway */}
-          <line x1={-300} y1={330} x2={260} y2={-330} stroke={SEPIA} strokeWidth="1.8" opacity="0.45" />
-        </g>
+      {/* Outer boroughs (muted, behind Manhattan) */}
+      <g fill={LAND_BORO} stroke={LAND_EDGE} strokeWidth="1.5" opacity="0.92">
+        {/* New Jersey — left bank of the Hudson */}
+        <polygon points="0,0 232,0 250,150 196,300 232,470 188,700 0,700" />
+        {/* The Bronx — north, above the Harlem River */}
+        <polygon points="556,0 1200,0 1200,150 980,150 812,96 690,70 612,40" />
+        {/* Queens + Brooklyn — east bank of the East River */}
+        <polygon points="1200,176 1010,214 902,300 854,430 838,560 902,700 1200,700" />
+        {/* Staten Island — lower bay */}
+        <polygon points="250,700 318,648 430,654 470,700" />
       </g>
 
-      {/* River + harbor ink labels in the water margins */}
-      <text x={44} y={250} transform="rotate(90 44 250)" fill={SEPIA} opacity="0.55"
-        style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 17, fontStyle: 'italic', letterSpacing: '0.3em' }}>
-        HUDSON  RIVER
-      </text>
-      <text x={1176} y={300} transform="rotate(90 1176 300)" fill={SEPIA} opacity="0.55"
-        style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 17, fontStyle: 'italic', letterSpacing: '0.3em' }}>
-        EAST  RIVER
+      {/* Manhattan */}
+      <polygon points={MANHATTAN} fill="url(#nyc-manh)" stroke={LAND_EDGE} strokeWidth="2.5" />
+
+      {/* Avenue/street grid + Central Park, clipped to Manhattan and tilted to
+          the island's long axis. */}
+      <g clipPath="url(#nyc-manh-clip)">
+        <g transform={`translate(${MID.x},${MID.y}) rotate(${TILT.toFixed(1)})`}>
+          {Array.from({ length: 11 }).map((_, i) => {
+            const x = -100 + i * 20;
+            return <line key={`av${i}`} x1={x} y1={-320} x2={x} y2={320} stroke={SEPIA_FAINT} strokeWidth="1" />;
+          })}
+          {Array.from({ length: 31 }).map((_, i) => {
+            const y = -320 + i * 21;
+            return <line key={`st${i}`} x1={-120} y1={y} x2={120} y2={y} stroke={SEPIA_FAINT} strokeWidth="0.7" />;
+          })}
+        </g>
+        <polygon points={PARK_PTS} fill={PARK} stroke={LAND_EDGE} strokeWidth="1.2" opacity="0.9" />
+      </g>
+      <text x={PARK_LABEL[0]} y={PARK_LABEL[1]} textAnchor="middle"
+        transform={`rotate(${TILT.toFixed(1)} ${PARK_LABEL[0].toFixed(0)} ${PARK_LABEL[1].toFixed(0)})`}
+        fill={SEPIA} opacity="0.6"
+        style={{ fontFamily: 'Georgia, serif', fontSize: 11, fontStyle: 'italic', letterSpacing: '0.16em' }}>
+        CENTRAL PARK
       </text>
 
-      {/* Compass rose, top-right harbor corner */}
-      <g transform="translate(1126,92)" opacity="0.7">
-        <circle r="38" fill="none" stroke={SEPIA} strokeWidth="1.4" />
-        <circle r="28" fill="none" stroke={SEPIA_FAINT} strokeWidth="0.8" />
+      {/* Manhattan label, along the island axis */}
+      <text x={spine(0.34).x} y={spine(0.34).y} textAnchor="middle"
+        transform={`rotate(${TILT.toFixed(1)} ${spine(0.34).x.toFixed(0)} ${spine(0.34).y.toFixed(0)})`}
+        fill={SEPIA} opacity="0.45"
+        style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, letterSpacing: '0.3em' }}>
+        MANHATTAN
+      </text>
+
+      {/* Borough + river ink labels */}
+      <g fill={SEPIA} style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}>
+        <text x={70} y={250} transform="rotate(90 70 250)" opacity="0.5" style={{ fontSize: 16, fontStyle: 'italic', letterSpacing: '0.28em' }}>HUDSON  RIVER</text>
+        <text x={1064} y={420} transform="rotate(58 1064 420)" opacity="0.5" style={{ fontSize: 15, fontStyle: 'italic', letterSpacing: '0.26em' }}>EAST  RIVER</text>
+        <text x={760} y={64} opacity="0.45" style={{ fontSize: 12, fontStyle: 'italic', letterSpacing: '0.2em' }}>HARLEM R.</text>
+        <text x={70} y={110} opacity="0.55" style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.16em' }}>NEW JERSEY</text>
+        <text x={900} y={40} opacity="0.55" style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.16em' }}>THE BRONX</text>
+        <text x={1040} y={300} opacity="0.55" style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.16em' }}>QUEENS</text>
+        <text x={1030} y={640} opacity="0.55" style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.16em' }}>BROOKLYN</text>
+        <text x={250} y={690} opacity="0.5" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em' }}>STATEN IS.</text>
+        <text x={600} y={690} textAnchor="middle" opacity="0.5" style={{ fontSize: 11, fontStyle: 'italic', letterSpacing: '0.2em' }}>UPPER  BAY</text>
+      </g>
+
+      {/* Compass rose, top-right */}
+      <g transform="translate(1140,86)" opacity="0.7">
+        <circle r="34" fill="none" stroke={SEPIA} strokeWidth="1.3" />
+        <circle r="25" fill="none" stroke={SEPIA_FAINT} strokeWidth="0.8" />
         {Array.from({ length: 8 }).map((_, i) => {
           const a = (i * Math.PI) / 4;
-          const long = i % 2 === 0 ? 36 : 21;
-          const x = Math.sin(a) * long;
-          const y = -Math.cos(a) * long;
-          return <line key={`cr${i}`} x1={0} y1={0} x2={x} y2={y} stroke={SEPIA} strokeWidth={i % 2 === 0 ? 1.4 : 0.8} />;
+          const long = i % 2 === 0 ? 32 : 19;
+          return <line key={`cr${i}`} x1={0} y1={0} x2={Math.sin(a) * long} y2={-Math.cos(a) * long} stroke={SEPIA} strokeWidth={i % 2 === 0 ? 1.3 : 0.8} />;
         })}
-        <polygon points="0,-36 5,-6 0,0 -5,-6" fill={SEPIA} />
-        <text x={0} y={-42} textAnchor="middle" fill={SEPIA}
-          style={{ fontFamily: 'Georgia, serif', fontSize: 12, fontWeight: 700 }}>N</text>
+        <polygon points="0,-32 5,-6 0,0 -5,-6" fill={SEPIA} />
+        <text x={0} y={-38} textAnchor="middle" fill={SEPIA} style={{ fontFamily: 'Georgia, serif', fontSize: 11, fontWeight: 700 }}>N</text>
       </g>
 
-      {/* Title cartouche in the bottom harbor */}
-      <g transform="translate(600,686)" textAnchor="middle" opacity="0.82">
-        <text x={0} y={0} fill={SEPIA}
-          style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 21, fontWeight: 700, letterSpacing: '0.24em' }}>
-          NEW  YORK
-        </text>
-      </g>
+      {/* Title cartouche, top-left */}
+      <text x={250} y={150} fill={SEPIA} opacity="0.8"
+        style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 22, fontWeight: 700, letterSpacing: '0.12em' }}>
+        New York City
+      </text>
 
       {/* Vignette + decorative double frame */}
       <rect width="1200" height="700" fill="url(#nyc-vignette)" />
