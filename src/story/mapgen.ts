@@ -1,5 +1,6 @@
 import type { StoryNode, NodeKind } from './types';
 import { rng, shuffled } from './content';
+import { NYC_SPINE, NYC_VIEW } from '@/ui/story/nycGeo';
 
 // Column blueprint. Each entry is the set of node kinds offered at that depth
 // (their vertical order is shuffled per seed). Depth 0 is the opening 1v1;
@@ -19,8 +20,8 @@ const COLUMNS: NodeKind[][] = [
 // Inwood uptown at the top), so the run is a climb up the island. These must
 // match the spine the NYC map (NycMap.tsx) draws Manhattan around. Coords are
 // in the 1200x700 viewBox; nodes are normalized to 0..1 at the end.
-const SPINE = { x0: 398, y0: 886, x1: 470, y1: 196 };
-const VW = 840, VH = 1080;
+const SPINE = NYC_SPINE;
+const VW = NYC_VIEW.w, VH = NYC_VIEW.h;
 const D = { x: SPINE.x1 - SPINE.x0, y: SPINE.y1 - SPINE.y0 };
 const LEN = Math.hypot(D.x, D.y);
 const PERP = { x: -D.y / LEN, y: D.x / LEN }; // across the island
