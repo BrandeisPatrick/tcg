@@ -11,10 +11,16 @@ export type NodeKind = 'battle' | 'elite' | 'recruit' | 'supply' | 'boss';
 export interface StoryNode {
   id: string;
   kind: NodeKind;
-  depth: number;        // column index (0 = start, max = boss)
+  depth: number;        // position along its path (0 = start) — drives scaling
   x: number;            // normalized 0..1 position on the map
   y: number;            // normalized 0..1 position on the map
-  next: string[];       // child node ids in the following column
+  next: string[];       // child node ids further along the path
+  /** Named NYC location (e.g. "Wall Street"). */
+  name?: string;
+  /** Which campaign route this node belongs to. */
+  region?: string;
+  /** Themed enemy hero that leads the roster at this battle (combat nodes). */
+  enemy?: CardId;
 }
 
 export interface StoryRun {

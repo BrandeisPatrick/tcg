@@ -41,28 +41,30 @@ export function newRun(startHero: CardId): StoryRun {
 }
 
 // ---- map traversal helpers ---------------------------------------------------
-/** A node is reachable when it's a depth-0 node and nothing is cleared yet, or
- *  it's a direct child of the player's current (last-cleared) node. */
+/** A node is reachable when it's a route start (no parents) or any parent has
+ *  been cleared. Each of the three routes advances independently. */
 export function isReachable(run: StoryRun, node: StoryNode): boolean {
   if (run.status !== 'active') return false;
   if (run.clearedNodeIds.includes(node.id)) return false;
-  if (run.currentNodeId === null) return node.depth === 0;
-  const cur = run.nodes.find((n) => n.id === run.currentNodeId);
-  return !!cur && cur.next.includes(node.id);
+  const parents = run.nodes.filter((n) => n.next.includes(node.id));
+  if (parents.length === 0) return true; // route start
+  return parents.some((p) => run.clearedNodeIds.includes(p.id));
 }
 
 export function nodeById(run: StoryRun, id: string | null): StoryNode | undefined {
   return id == null ? undefined : run.nodes.find((n) => n.id === id);
 }
 
-/** Mark a node cleared and advance the player onto it (immutably). */
+/** Mark a node cleared. The campaign is won once every boss has fallen. */
 export function clearNode(run: StoryRun, nodeId: string): StoryRun {
-  const node = run.nodes.find((n) => n.id === nodeId);
+  const cleared = [...run.clearedNodeIds, nodeId];
+  const bosses = run.nodes.filter((n) => n.kind === 'boss');
+  const allBossesDown = bosses.length > 0 && bosses.every((b) => cleared.includes(b.id));
   return {
     ...run,
     currentNodeId: nodeId,
-    clearedNodeIds: [...run.clearedNodeIds, nodeId],
-    status: node?.kind === 'boss' ? 'won' : run.status,
+    clearedNodeIds: cleared,
+    status: allBossesDown ? 'won' : run.status,
   };
 }
 

@@ -9,8 +9,9 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const VW = 840, VH = 1080;
-// View window (lon/lat) — Manhattan centred, boroughs framing it.
-const BB = { S: 40.690, N: 40.882, W: -74.045, E: -73.860 };
+// View window (lon/lat) — the whole metro: NJ (west), Staten Island (south),
+// the five boroughs. Sized to the portrait board aspect.
+const BB = { S: 40.520, N: 40.910, W: -74.200, E: -73.800 };
 const LAT0 = (BB.S + BB.N) / 2;
 const COSL = Math.cos((LAT0 * Math.PI) / 180);
 
@@ -59,12 +60,16 @@ const ring2path = (pts, close) => {
   return close ? d + 'Z' : d;
 };
 
-// ---- boroughs (land) ----
+// ---- land (NYC boroughs + New Jersey) ----
 const boroughs = [];
 const bgeo = JSON.parse(readFileSync('/tmp/nyc_boroughs.geojson', 'utf8'));
-for (const f of bgeo.features) {
-  const name = f.properties.name || f.properties.boro_name || '?';
-  const polys = f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [f.geometry.coordinates];
+const landFeatures = bgeo.features.map((f) => ({ name: f.properties.name || f.properties.boro_name || '?', geom: f.geometry }));
+const sgeo = JSON.parse(readFileSync('/tmp/us_states.json', 'utf8'));
+const nj = sgeo.features.find((f) => f.properties.name === 'New Jersey');
+if (nj) landFeatures.push({ name: 'New Jersey', geom: nj.geometry });
+for (const f of landFeatures) {
+  const name = f.name;
+  const polys = f.geom.type === 'MultiPolygon' ? f.geom.coordinates : [f.geom.coordinates];
   const subpaths = [];
   let best = null, bestLen = 0;
   for (const poly of polys) {
@@ -89,11 +94,11 @@ for (const f of bgeo.features) {
 }
 
 // ---- roads + park (Overpass) ----
-const road = JSON.parse(readFileSync('/tmp/nyc_roads.json', 'utf8'));
+const road = JSON.parse(readFileSync('/tmp/metro_roads.json', 'utf8'));
 const CLASS = {
   motorway: 'major', trunk: 'major', primary: 'major',
-  motorway_link: 'mid', trunk_link: 'mid', primary_link: 'mid', secondary: 'mid', secondary_link: 'mid',
-  tertiary: 'minor',
+  secondary: 'mid',
+  motorway_link: 'minor', trunk_link: 'minor', primary_link: 'minor', secondary_link: 'minor',
 };
 const seg = { major: [], mid: [], minor: [] };
 let park = '', reservoir = '';

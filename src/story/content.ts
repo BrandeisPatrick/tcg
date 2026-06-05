@@ -95,7 +95,10 @@ export function supplyChoices(run: StoryRun, node: StoryNode): CardId[] {
 export function buildStoryMatch(run: StoryRun, node: StoryNode): StorySetup {
   const r = rng(run.seed ^ hashStr(node.id) ^ 0xb47713);
   const size = enemyRosterSize(node.depth, node.kind);
-  const enemyHeroes = pickN(ALL_HERO_IDS, size, r);
+  // Themed location: the named hero leads the enemy roster; fill the rest.
+  const enemyHeroes = node.enemy
+    ? [node.enemy, ...pickN(ALL_HERO_IDS.filter((id) => id !== node.enemy), size - 1, r)]
+    : pickN(ALL_HERO_IDS, size, r);
   const deckSize = enemyDeckSize(node.depth, node.kind);
   const enemyDeck: CardId[] = [];
   for (let i = 0; i < deckSize; i++) enemyDeck.push(SUPPLY_POOL[Math.floor(r() * SUPPLY_POOL.length)]);

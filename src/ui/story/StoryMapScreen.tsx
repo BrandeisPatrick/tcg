@@ -9,7 +9,6 @@ import {
   enemyRosterSize, enemyBuff,
 } from '@/story/content';
 import { newRun, clearNode, isReachable } from '@/story/storyRun';
-import { maxDepth } from '@/story/mapgen';
 import { palette, fonts, text, spring, shadow, radius } from '../tokens';
 import { NycMap } from './NycMap';
 import { PickOverlay } from './PickOverlay';
@@ -137,15 +136,16 @@ function Edges({ run }: { run: StoryRun }) {
         a.next.map((bid) => {
           const b = byId.get(bid);
           if (!b) return null;
-          const live = run.currentNodeId === a.id && isReachable(run, b);
+          const live = run.clearedNodeIds.includes(a.id) && isReachable(run, b);
           const traversed = run.clearedNodeIds.includes(a.id) && run.clearedNodeIds.includes(bid);
-          const color = live ? '#ffd27a' : traversed ? '#bfe6ff' : 'rgba(245,238,222,0.45)';
+          const color = live ? '#ffcf5a' : traversed ? '#6f96d6' : 'rgba(34,24,10,0.7)';
           return (
             <line key={a.id + bid}
               x1={a.x * 1000} y1={a.y * 1000} x2={b.x * 1000} y2={b.y * 1000}
-              stroke={color} strokeWidth={live ? 4 : 2.4}
-              strokeDasharray={live ? '0' : traversed ? '0' : '8 8'}
-              opacity={live ? 0.95 : traversed ? 0.9 : 0.55}
+              stroke={color} strokeWidth={live ? 4 : 2.8}
+              strokeDasharray={live ? '0' : traversed ? '0' : '7 9'}
+              strokeLinecap="round"
+              opacity={live ? 0.95 : traversed ? 0.9 : 0.7}
               style={live ? { filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.9))' } : undefined}
             />
           );
@@ -165,15 +165,15 @@ const KIND_ACCENT: Record<NodeKind, string> = {
 };
 const CURRENT_GOLD = '#e6b94a';
 
-/** Hover scouting text for a node — kind + (for fights) foe count and buff. */
+/** Hover scouting text for a node — location name + what's there. */
 function nodeTip(node: StoryNode): string {
-  if (node.kind === 'recruit') return 'Recruit — choose 1 of 3 heroes';
-  if (node.kind === 'supply') return 'Supply — choose 1 of 3 cards';
+  const place = node.name ? `${node.name} · ` : '';
+  if (node.kind === 'recruit') return `${place}Recruit a hero`;
+  if (node.kind === 'supply') return `${place}Supply cache`;
   const size = enemyRosterSize(node.depth, node.kind);
-  const b = enemyBuff(node.depth, node.kind);
-  const buff = b.atk || b.hp ? ` · +${b.atk}/+${b.hp}` : '';
-  const name = node.kind === 'boss' ? 'Patron — final battle' : node.kind === 'elite' ? 'Enforcer' : 'Skirmish';
-  return `${name} — ${size} foe${size > 1 ? 's' : ''}${buff}`;
+  const led = node.enemy ? ` · ${CARDS_BY_ID[node.enemy]?.name ?? ''}` : '';
+  const kind = node.kind === 'boss' ? 'Boss' : 'Battle';
+  return `${place}${kind} — ${size} foe${size > 1 ? 's' : ''}${led}`;
 }
 
 // ---- node marker -------------------------------------------------------------
@@ -244,6 +244,17 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
           >{nodeTip(node)}</motion.span>
         )}
       </AnimatePresence>
+
+      {/* Always-on location name so the routes read at a glance. */}
+      {node.name && (
+        <span style={{
+          position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+          marginTop: 3, whiteSpace: 'nowrap', pointerEvents: 'none',
+          fontFamily: fonts.ui, fontSize: 9.5, fontWeight: 700, color: '#fbf4e4',
+          textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95)',
+          opacity: reachable || current || cleared ? 1 : 0.7,
+        }}>{node.name}</span>
+      )}
     </button>
   );
 }
@@ -294,9 +305,8 @@ function NodeIcon({ kind, color, size }: { kind: NodeKind | 'cleared'; color: st
 
 // ---- run HUD -----------------------------------------------------------------
 function RunHud({ run, onExit }: { run: StoryRun; onExit: () => void }) {
-  const md = maxDepth(run.nodes);
-  const cur = run.nodes.find((n) => n.id === run.currentNodeId);
-  const depth = cur ? cur.depth + 1 : 0;
+  const bosses = run.nodes.filter((n) => n.kind === 'boss');
+  const bossesDown = bosses.filter((b) => run.clearedNodeIds.includes(b.id)).length;
   return (
     <>
       <button
@@ -331,7 +341,7 @@ function RunHud({ run, onExit }: { run: StoryRun; onExit: () => void }) {
           ))}
         </div>
         <Stat label="Deck" value={`${run.deck.length}`} />
-        <Stat label="Depth" value={`${depth}/${md + 1}`} />
+        <Stat label="Bosses" value={`${bossesDown}/${bosses.length}`} />
       </div>
     </>
   );
