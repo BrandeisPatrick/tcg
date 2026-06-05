@@ -8,10 +8,10 @@ import { rng, shuffled } from './content';
 const COLUMNS: NodeKind[][] = [
   ['battle'],
   ['battle', 'recruit'],
-  ['recruit', 'supply', 'battle'],
-  ['elite', 'battle', 'recruit'],
-  ['recruit', 'supply', 'battle'],
-  ['supply', 'elite'],
+  ['recruit', 'supply'],
+  ['elite', 'battle'],
+  ['supply', 'recruit'],
+  ['battle', 'elite'],
   ['boss'],
 ];
 
@@ -25,8 +25,8 @@ const D = { x: SPINE.x1 - SPINE.x0, y: SPINE.y1 - SPINE.y0 };
 const LEN = Math.hypot(D.x, D.y);
 const PERP = { x: -D.y / LEN, y: D.x / LEN }; // across the island
 // Perpendicular offsets (viewBox px) for each tier size — kept inside the
-// island's mid-width (~126) so every node lands on Manhattan.
-const OFFSETS: Record<number, number[]> = { 1: [0], 2: [-58, 58], 3: [-88, 0, 88] };
+// (narrow, realistic) island's mid half-width so every node lands on Manhattan.
+const OFFSETS: Record<number, number[]> = { 1: [0], 2: [-42, 42], 3: [-78, 0, 78] };
 
 function dist(a: StoryNode, b: StoryNode): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
