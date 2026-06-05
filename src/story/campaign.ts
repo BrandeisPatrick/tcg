@@ -41,21 +41,21 @@ export const REGIONS: Region[] = [
     locs: [
       { id: 'bkbridge', name: 'Brooklyn Bridge', kind: 'battle', lat: 40.7061, lng: -73.9969, enemy: 'hero_lash' },
       { id: 'gowanus', name: 'Gowanus Canal', kind: 'battle', lat: 40.6736, lng: -73.9890, enemy: 'hero_viscous' },
-      { id: 'greenwood', name: 'Green-Wood Cemetery', kind: 'battle', lat: 40.6579, lng: -73.9940, enemy: 'hero_lady_geist' },
-      { id: 'botanic', name: 'Botanic Garden', kind: 'recruit', lat: 40.6680, lng: -73.9630 },
-      { id: 'flushing', name: 'Flushing Meadows', kind: 'battle', lat: 40.7466, lng: -73.8444, enemy: 'hero_dynamo' },
-      { id: 'citifield', name: 'Citi Field', kind: 'supply', lat: 40.7571, lng: -73.8458 },
-      { id: 'coney', name: 'Coney Island', kind: 'boss', lat: 40.5745, lng: -73.9790, enemy: 'hero_sinclair' },
+      { id: 'greenwood', name: 'Green-Wood Cemetery', kind: 'battle', lat: 40.6520, lng: -73.9920, enemy: 'hero_lady_geist' },
+      { id: 'botanic', name: 'Botanic Garden', kind: 'recruit', lat: 40.6680, lng: -73.9560 },
+      { id: 'flushing', name: 'Flushing Meadows', kind: 'battle', lat: 40.7466, lng: -73.8350, enemy: 'hero_dynamo' },
+      { id: 'citifield', name: 'Citi Field', kind: 'supply', lat: 40.7710, lng: -73.8270 },
+      { id: 'coney', name: 'Coney Island', kind: 'boss', lat: 40.5740, lng: -73.9790, enemy: 'hero_sinclair' },
     ],
   },
   {
     id: 'gates', name: 'The Western Gates',
     locs: [
-      { id: 'liberty_sp', name: 'Liberty State Park', kind: 'battle', lat: 40.7045, lng: -74.0530 },
-      { id: 'portnewark', name: 'Port Newark', kind: 'battle', lat: 40.6850, lng: -74.1400, enemy: 'hero_drifter' },
-      { id: 'jerseyflats', name: 'Jersey Flats', kind: 'supply', lat: 40.7250, lng: -74.0950 },
-      { id: 'siferry', name: 'St. George Ferry', kind: 'recruit', lat: 40.6420, lng: -74.0740 },
-      { id: 'todthill', name: 'Todt Hill', kind: 'battle', lat: 40.6010, lng: -74.1050, enemy: 'hero_shiv' },
+      { id: 'liberty_sp', name: 'Liberty State Park', kind: 'battle', lat: 40.7045, lng: -74.0540 },
+      { id: 'jerseyheights', name: 'Jersey Heights', kind: 'supply', lat: 40.7640, lng: -74.1180 },
+      { id: 'portnewark', name: 'Port Newark', kind: 'battle', lat: 40.6950, lng: -74.1720, enemy: 'hero_drifter' },
+      { id: 'siferry', name: 'St. George Ferry', kind: 'recruit', lat: 40.6420, lng: -74.0760 },
+      { id: 'todthill', name: 'Todt Hill', kind: 'battle', lat: 40.5950, lng: -74.1350, enemy: 'hero_shiv' },
       { id: 'liberty', name: 'Statue of Liberty', kind: 'boss', lat: 40.6892, lng: -74.0445, enemy: 'hero_vindicta' },
     ],
   },
@@ -67,7 +67,7 @@ export const BOSS_COUNT = REGIONS.length;
 // Wall St, City Hall, the bridges, Liberty) so their projected dots overlap.
 // Relax them apart with light pairwise repulsion — keeps each near its real
 // spot while staying legible.
-function declutter(nodes: StoryNode[], minDist = 0.052, iters = 60): void {
+function declutter(nodes: StoryNode[], minDist = 0.058, iters = 70): void {
   for (let it = 0; it < iters; it++) {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {

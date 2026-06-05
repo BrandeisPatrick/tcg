@@ -82,9 +82,9 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
         <NycMap />
         {run && run.status !== 'won' && run.status !== 'lost' && (
           <>
-            <Edges run={run} />
+            <Edges run={run} activeRegion={activeRegion(run)} />
             {run.nodes.map((n) => (
-              <NodeMarker key={n.id} run={run} node={n} onClick={() => handleNode(n)} />
+              <NodeMarker key={n.id} run={run} node={n} activeRegion={activeRegion(run)} onClick={() => handleNode(n)} />
             ))}
             <RunHud run={run} onExit={onExit} />
           </>
@@ -126,8 +126,14 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
   );
 }
 
+/** The route the player is currently on = region of the last-cleared node.
+ *  null before anything is cleared (all routes still open). */
+function activeRegion(run: StoryRun): string | null {
+  return run.nodes.find((n) => n.id === run.currentNodeId)?.region ?? null;
+}
+
 // ---- map edges ---------------------------------------------------------------
-function Edges({ run }: { run: StoryRun }) {
+function Edges({ run, activeRegion: active }: { run: StoryRun; activeRegion: string | null }) {
   const byId = new Map(run.nodes.map((n) => [n.id, n]));
   return (
     <svg viewBox="0 0 1000 1000" preserveAspectRatio="none"
@@ -136,16 +142,25 @@ function Edges({ run }: { run: StoryRun }) {
         a.next.map((bid) => {
           const b = byId.get(bid);
           if (!b) return null;
+          // Routes other than the active one are greyed so the map isn't busy.
+          const dimmed = active !== null && a.region !== active;
+          if (dimmed) {
+            return (
+              <line key={a.id + bid}
+                x1={a.x * 1000} y1={a.y * 1000} x2={b.x * 1000} y2={b.y * 1000}
+                stroke="rgba(60,52,38,0.45)" strokeWidth={2} strokeDasharray="6 10" strokeLinecap="round" opacity={0.5} />
+            );
+          }
           const live = run.clearedNodeIds.includes(a.id) && isReachable(run, b);
           const traversed = run.clearedNodeIds.includes(a.id) && run.clearedNodeIds.includes(bid);
-          const color = live ? '#ffcf5a' : traversed ? '#6f96d6' : 'rgba(34,24,10,0.7)';
+          const color = live ? '#ffcf5a' : traversed ? '#6f96d6' : 'rgba(34,24,10,0.72)';
           return (
             <line key={a.id + bid}
               x1={a.x * 1000} y1={a.y * 1000} x2={b.x * 1000} y2={b.y * 1000}
               stroke={color} strokeWidth={live ? 4 : 2.8}
               strokeDasharray={live ? '0' : traversed ? '0' : '7 9'}
               strokeLinecap="round"
-              opacity={live ? 0.95 : traversed ? 0.9 : 0.7}
+              opacity={live ? 0.95 : traversed ? 0.9 : 0.72}
               style={live ? { filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.9))' } : undefined}
             />
           );
@@ -177,17 +192,22 @@ function nodeTip(node: StoryNode): string {
 }
 
 // ---- node marker -------------------------------------------------------------
-function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; onClick: () => void }) {
+function NodeMarker({ run, node, activeRegion: active, onClick }: { run: StoryRun; node: StoryNode; activeRegion: string | null; onClick: () => void }) {
   const [hover, setHover] = useState(false);
   const cleared = run.clearedNodeIds.includes(node.id);
   const current = run.currentNodeId === node.id;
   const reachable = isReachable(run, node);
+  // Routes other than the one you're on grey out (less visual noise).
+  const dimmed = active !== null && node.region !== active && !current;
   const size = node.kind === 'boss' ? 48 : node.kind === 'elite' ? 40 : 36;
   const accent = KIND_ACCENT[node.kind];
 
-  const ring = current ? CURRENT_GOLD : reachable ? accent : cleared ? '#6b8f4a' : 'rgba(60,40,16,0.5)';
-  const fill = current || reachable ? '#251a0c' : cleared ? '#2a2414' : '#1d160b';
-  const iconColor = reachable || current ? '#f3e6c6' : cleared ? '#9db884' : 'rgba(180,150,100,0.55)';
+  const ring = dimmed ? 'rgba(90,78,56,0.5)'
+    : current ? CURRENT_GOLD : reachable ? accent : cleared ? '#6b8f4a' : 'rgba(60,40,16,0.5)';
+  const fill = dimmed ? '#1b160d' : current || reachable ? '#251a0c' : cleared ? '#2a2414' : '#1d160b';
+  const iconColor = dimmed ? 'rgba(150,135,105,0.5)'
+    : reachable || current ? '#f3e6c6' : cleared ? '#9db884' : 'rgba(180,150,100,0.55)';
+  const pulse = reachable && !dimmed;
 
   return (
     <button
@@ -195,7 +215,7 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       disabled={!reachable}
-      aria-label={`${nodeLabel(node.kind)} (depth ${node.depth})`}
+      aria-label={`${node.name ?? nodeLabel(node.kind)}`}
       style={{
         position: 'absolute',
         left: `${node.x * 100}%`, top: `${node.y * 100}%`,
@@ -203,17 +223,18 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
         borderRadius: '50%',
         border: `2.5px solid ${ring}`,
         background: fill,
-        boxShadow: reachable
+        boxShadow: pulse
           ? `0 0 0 4px ${accent}33, 0 6px 16px rgba(0,0,0,0.5)`
           : current ? `0 0 0 4px ${CURRENT_GOLD}33, 0 6px 16px rgba(0,0,0,0.5)`
           : '0 4px 12px rgba(0,0,0,0.45)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: reachable ? 'pointer' : 'default',
         padding: 0,
+        opacity: dimmed ? 0.5 : 1,
         zIndex: hover ? 5 : 1,
       }}
     >
-      {reachable && (
+      {pulse && (
         <motion.span
           aria-hidden
           animate={{ scale: [1, 1.35], opacity: [0.5, 0] }}
@@ -252,7 +273,7 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
           marginTop: 3, whiteSpace: 'nowrap', pointerEvents: 'none',
           fontFamily: fonts.ui, fontSize: 9.5, fontWeight: 700, color: '#fbf4e4',
           textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95)',
-          opacity: reachable || current || cleared ? 1 : 0.7,
+          opacity: dimmed ? 0.4 : reachable || current || cleared ? 1 : 0.78,
         }}>{node.name}</span>
       )}
     </button>
