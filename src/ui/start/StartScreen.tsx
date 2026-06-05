@@ -188,11 +188,11 @@ function StoryMapTeaser() {
     <div
       style={{
         position: 'absolute',
-        right: 22,
+        right: 30,
         top: '50%',
         transform: 'translateY(-50%) rotate(-1.5deg)',
-        width: '46%',
-        aspectRatio: '1200 / 700',
+        width: '26%',
+        aspectRatio: '840 / 1080',
         borderRadius: 6,
         overflow: 'hidden',
         border: `5px solid ${palette.bg2}`,

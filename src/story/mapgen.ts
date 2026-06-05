@@ -19,14 +19,14 @@ const COLUMNS: NodeKind[][] = [
 // Inwood uptown at the top), so the run is a climb up the island. These must
 // match the spine the NYC map (NycMap.tsx) draws Manhattan around. Coords are
 // in the 1200x700 viewBox; nodes are normalized to 0..1 at the end.
-const SPINE = { x0: 478, y0: 632, x1: 672, y1: 92 };
-const VW = 1200, VH = 700;
+const SPINE = { x0: 398, y0: 886, x1: 470, y1: 196 };
+const VW = 840, VH = 1080;
 const D = { x: SPINE.x1 - SPINE.x0, y: SPINE.y1 - SPINE.y0 };
 const LEN = Math.hypot(D.x, D.y);
 const PERP = { x: -D.y / LEN, y: D.x / LEN }; // across the island
 // Perpendicular offsets (viewBox px) for each tier size — kept inside the
-// island's mid-width so every node lands on Manhattan.
-const OFFSETS: Record<number, number[]> = { 1: [0], 2: [-66, 66], 3: [-96, 0, 96] };
+// island's mid-width (~126) so every node lands on Manhattan.
+const OFFSETS: Record<number, number[]> = { 1: [0], 2: [-58, 58], 3: [-88, 0, 88] };
 
 function dist(a: StoryNode, b: StoryNode): number {
   return Math.hypot(a.x - b.x, a.y - b.y);

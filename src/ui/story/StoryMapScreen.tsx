@@ -70,12 +70,13 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
         transition={spring.soft}
         style={{
           position: 'relative',
-          width: 'min(1180px, 94vw, 150vh)',
-          aspectRatio: '1200 / 700',
-          borderRadius: 14,
+          width: 'min(94vw, 72dvh)',
+          aspectRatio: '840 / 1080',
+          borderRadius: 12,
           overflow: 'hidden',
-          border: '8px solid #120b03',
-          boxShadow: '0 28px 80px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(176,120,37,0.4)',
+          // Pale-wood frame, like the laser-cut original.
+          border: '12px solid #c9ad74',
+          boxShadow: '0 28px 80px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(90,64,22,0.5)',
           background: palette.bg0,
         }}
       >
@@ -130,7 +131,7 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
 function Edges({ run }: { run: StoryRun }) {
   const byId = new Map(run.nodes.map((n) => [n.id, n]));
   return (
-    <svg viewBox="0 0 1200 700" preserveAspectRatio="none"
+    <svg viewBox="0 0 1000 1000" preserveAspectRatio="none"
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
       {run.nodes.flatMap((a) =>
         a.next.map((bid) => {
@@ -138,14 +139,14 @@ function Edges({ run }: { run: StoryRun }) {
           if (!b) return null;
           const live = run.currentNodeId === a.id && isReachable(run, b);
           const traversed = run.clearedNodeIds.includes(a.id) && run.clearedNodeIds.includes(bid);
-          const color = live ? palette.accent : traversed ? '#9fd8ff' : 'rgba(60,40,16,0.42)';
+          const color = live ? '#ffd27a' : traversed ? '#bfe6ff' : 'rgba(245,238,222,0.45)';
           return (
             <line key={a.id + bid}
-              x1={a.x * 1200} y1={a.y * 700} x2={b.x * 1200} y2={b.y * 700}
-              stroke={color} strokeWidth={live ? 3.5 : 2.2}
-              strokeDasharray={live ? '0' : traversed ? '0' : '7 7'}
-              opacity={live ? 0.95 : traversed ? 0.85 : 0.5}
-              style={live ? { filter: 'drop-shadow(0 0 6px rgba(176,120,37,0.9))' } : undefined}
+              x1={a.x * 1000} y1={a.y * 1000} x2={b.x * 1000} y2={b.y * 1000}
+              stroke={color} strokeWidth={live ? 4 : 2.4}
+              strokeDasharray={live ? '0' : traversed ? '0' : '8 8'}
+              opacity={live ? 0.95 : traversed ? 0.9 : 0.55}
+              style={live ? { filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.9))' } : undefined}
             />
           );
         }),
@@ -181,7 +182,7 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
   const cleared = run.clearedNodeIds.includes(node.id);
   const current = run.currentNodeId === node.id;
   const reachable = isReachable(run, node);
-  const size = node.kind === 'boss' ? 64 : node.kind === 'elite' ? 52 : 46;
+  const size = node.kind === 'boss' ? 48 : node.kind === 'elite' ? 40 : 36;
   const accent = KIND_ACCENT[node.kind];
 
   const ring = current ? CURRENT_GOLD : reachable ? accent : cleared ? '#6b8f4a' : 'rgba(60,40,16,0.5)';
