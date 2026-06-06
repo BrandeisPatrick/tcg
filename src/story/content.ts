@@ -1,7 +1,7 @@
 import type { CardId } from '@/engine/types';
 import type { StoryNode, NodeKind, StoryRun } from './types';
 import type { StorySetup } from '@/storage/matchConfig';
-import { HEROES, SPELLS, EQUIPMENT } from '@/cards';
+import { HEROES, SPELLS, EQUIPMENT, CARDS_BY_ID } from '@/cards';
 
 // ---- seeded PRNG (mulberry32) ------------------------------------------------
 export function rng(seed: number): () => number {
@@ -57,13 +57,22 @@ export function enemyRosterSize(depth: number, kind: NodeKind): number {
   if (depth <= 4) return 3;
   return 4;
 }
-/** Flat stat buff applied to EVERY enemy hero at a node. */
+/** Flat stat buff applied to EVERY enemy hero at a node. Softened so an
+ *  under-recruited early run stays recoverable; bosses still hit hard. */
 export function enemyBuff(depth: number, kind: NodeKind): { atk: number; hp: number } {
-  let atk = Math.floor(depth / 2);
-  let hp = depth;
+  let atk = Math.floor(depth / 3);
+  let hp = Math.floor(depth * 0.6);
   if (kind === 'elite') { atk += 1; hp += 2; }
   if (kind === 'boss') { atk += 2; hp += 4; }
   return { atk, hp };
+}
+
+/** Max card rarity the enemy is allowed to field at a node — early opponents
+ *  run only weak (tier-1) gear, deeper ones unlock better items. */
+export function enemyMaxRarity(depth: number): number {
+  if (depth <= 2) return 1;
+  if (depth <= 4) return 2;
+  return 4;
 }
 /** Enemy deck size — more cards (more itemization / spells) the deeper you go. */
 export function enemyDeckSize(depth: number, kind: NodeKind): number {
@@ -103,8 +112,11 @@ export function buildStoryMatch(run: StoryRun, node: StoryNode): StorySetup {
     ? [node.enemy, ...pickN(ALL_HERO_IDS.filter((id) => id !== node.enemy), size - 1, r)]
     : pickN(ALL_HERO_IDS, size, r);
   const deckSize = enemyDeckSize(node.depth, node.kind);
+  const maxRarity = enemyMaxRarity(node.depth);
+  const cardPool = SUPPLY_POOL.filter((id) => (CARDS_BY_ID[id]?.rarity ?? 1) <= maxRarity);
+  const pool = cardPool.length ? cardPool : SUPPLY_POOL;
   const enemyDeck: CardId[] = [];
-  for (let i = 0; i < deckSize; i++) enemyDeck.push(SUPPLY_POOL[Math.floor(r() * SUPPLY_POOL.length)]);
+  for (let i = 0; i < deckSize; i++) enemyDeck.push(pool[Math.floor(r() * pool.length)]);
   return {
     playerHeroes: run.heroes,
     playerDeck: run.deck.length ? run.deck : [...STARTING_DECK],

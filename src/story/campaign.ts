@@ -22,27 +22,31 @@ const project = (lat: number, lng: number) => ({
 interface Loc { id: string; name: string; kind: NodeKind; lat: number; lng: number; enemy?: CardId }
 interface Region { id: string; name: string; locs: Loc[] }
 
+// Each route opens with a RECRUIT and carries three recruit nodes total, so a
+// player committing to any single route can always build to a full 4-hero
+// roster (1 start + 3 recruits) before its boss. Recruits come early; the
+// themed battles ramp up after you've had a chance to grow.
 export const REGIONS: Region[] = [
   {
     id: 'spine', name: 'The Spine',
     locs: [
-      { id: 'wallst', name: 'Wall Street', kind: 'battle', lat: 40.7190, lng: -74.0050, enemy: 'hero_wraith' },
+      { id: 'wallst', name: 'Wall Street', kind: 'recruit', lat: 40.7190, lng: -74.0050 },
       { id: 'cityhall', name: 'City Hall Subway', kind: 'battle', lat: 40.7127, lng: -74.0059, enemy: 'hero_mo_krill' },
-      { id: 'timessq', name: 'Times Square', kind: 'supply', lat: 40.7580, lng: -73.9855 },
-      { id: 'themet', name: 'The Met', kind: 'battle', lat: 40.7794, lng: -73.9632, enemy: 'hero_mirage' },
+      { id: 'timessq', name: 'Times Square', kind: 'recruit', lat: 40.7580, lng: -73.9855 },
+      { id: 'themet', name: 'The Met', kind: 'recruit', lat: 40.7794, lng: -73.9632 },
       { id: 'reservoir', name: 'Central Park Reservoir', kind: 'battle', lat: 40.7857, lng: -73.9625, enemy: 'hero_kelvin' },
-      { id: 'cloisters', name: 'The Cloisters', kind: 'recruit', lat: 40.8649, lng: -73.9319 },
+      { id: 'cloisters', name: 'The Cloisters', kind: 'supply', lat: 40.8649, lng: -73.9319 },
       { id: 'yankee', name: 'Yankee Stadium', kind: 'boss', lat: 40.8296, lng: -73.9262, enemy: 'hero_abrams' },
     ],
   },
   {
     id: 'boroughs', name: 'The Outer Boroughs',
     locs: [
-      { id: 'bkbridge', name: 'Brooklyn Bridge', kind: 'battle', lat: 40.6950, lng: -73.9870, enemy: 'hero_lash' },
+      { id: 'bkbridge', name: 'Brooklyn Bridge', kind: 'recruit', lat: 40.6950, lng: -73.9870 },
       { id: 'gowanus', name: 'Gowanus Canal', kind: 'battle', lat: 40.6736, lng: -73.9890, enemy: 'hero_viscous' },
       { id: 'greenwood', name: 'Green-Wood Cemetery', kind: 'battle', lat: 40.6520, lng: -73.9920, enemy: 'hero_lady_geist' },
       { id: 'botanic', name: 'Botanic Garden', kind: 'recruit', lat: 40.6680, lng: -73.9560 },
-      { id: 'flushing', name: 'Flushing Meadows', kind: 'battle', lat: 40.7466, lng: -73.8350, enemy: 'hero_dynamo' },
+      { id: 'flushing', name: 'Flushing Meadows', kind: 'recruit', lat: 40.7466, lng: -73.8350 },
       { id: 'citifield', name: 'Citi Field', kind: 'supply', lat: 40.7710, lng: -73.8270 },
       { id: 'coney', name: 'Coney Island', kind: 'boss', lat: 40.5740, lng: -73.9790, enemy: 'hero_sinclair' },
     ],
@@ -50,8 +54,8 @@ export const REGIONS: Region[] = [
   {
     id: 'gates', name: 'The Western Gates',
     locs: [
-      { id: 'liberty_sp', name: 'Liberty State Park', kind: 'battle', lat: 40.7060, lng: -74.0700 },
-      { id: 'jerseyheights', name: 'Jersey Heights', kind: 'supply', lat: 40.7640, lng: -74.1180 },
+      { id: 'liberty_sp', name: 'Liberty State Park', kind: 'recruit', lat: 40.7060, lng: -74.0700 },
+      { id: 'jerseyheights', name: 'Jersey Heights', kind: 'recruit', lat: 40.7640, lng: -74.1180 },
       { id: 'portnewark', name: 'Port Newark', kind: 'battle', lat: 40.6950, lng: -74.1720, enemy: 'hero_drifter' },
       { id: 'siferry', name: 'St. George Ferry', kind: 'recruit', lat: 40.6420, lng: -74.0760 },
       { id: 'todthill', name: 'Todt Hill', kind: 'battle', lat: 40.5950, lng: -74.1350, enemy: 'hero_shiv' },
