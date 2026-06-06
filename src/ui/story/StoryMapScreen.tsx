@@ -82,9 +82,9 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
         <NycMap />
         {run && run.status !== 'won' && run.status !== 'lost' && (
           <>
-            <Edges run={run} activeRegion={activeRegion(run)} />
+            <Edges run={run} />
             {run.nodes.map((n) => (
-              <NodeMarker key={n.id} run={run} node={n} activeRegion={activeRegion(run)} onClick={() => handleNode(n)} />
+              <NodeMarker key={n.id} run={run} node={n} onClick={() => handleNode(n)} />
             ))}
             <RunHud run={run} onExit={onExit} />
           </>
@@ -126,14 +126,8 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
   );
 }
 
-/** The route the player is currently on = region of the last-cleared node.
- *  null before anything is cleared (all routes still open). */
-function activeRegion(run: StoryRun): string | null {
-  return run.nodes.find((n) => n.id === run.currentNodeId)?.region ?? null;
-}
-
 // ---- map edges ---------------------------------------------------------------
-function Edges({ run, activeRegion: active }: { run: StoryRun; activeRegion: string | null }) {
+function Edges({ run }: { run: StoryRun }) {
   const byId = new Map(run.nodes.map((n) => [n.id, n]));
   return (
     <svg viewBox="0 0 1000 1000" preserveAspectRatio="none"
@@ -142,25 +136,18 @@ function Edges({ run, activeRegion: active }: { run: StoryRun; activeRegion: str
         a.next.map((bid) => {
           const b = byId.get(bid);
           if (!b) return null;
-          // Routes other than the active one are greyed so the map isn't busy.
-          const dimmed = active !== null && a.region !== active;
-          if (dimmed) {
-            return (
-              <line key={a.id + bid}
-                x1={a.x * 1000} y1={a.y * 1000} x2={b.x * 1000} y2={b.y * 1000}
-                stroke="rgba(60,52,38,0.45)" strokeWidth={2} strokeDasharray="6 10" strokeLinecap="round" opacity={0.5} />
-            );
-          }
           const live = run.clearedNodeIds.includes(a.id) && isReachable(run, b);
           const traversed = run.clearedNodeIds.includes(a.id) && run.clearedNodeIds.includes(bid);
-          const color = live ? '#ffcf5a' : traversed ? '#6f96d6' : 'rgba(34,24,10,0.72)';
+          // Edges into not-yet-available ground are grey (the route is visible
+          // but clearly locked).
+          const color = live ? '#ffcf5a' : traversed ? '#6f96d6' : 'rgba(70,62,48,0.5)';
           return (
             <line key={a.id + bid}
               x1={a.x * 1000} y1={a.y * 1000} x2={b.x * 1000} y2={b.y * 1000}
-              stroke={color} strokeWidth={live ? 4 : 2.8}
-              strokeDasharray={live ? '0' : traversed ? '0' : '7 9'}
+              stroke={color} strokeWidth={live ? 4 : 2.4}
+              strokeDasharray={live ? '0' : traversed ? '0' : '7 10'}
               strokeLinecap="round"
-              opacity={live ? 0.95 : traversed ? 0.9 : 0.72}
+              opacity={live ? 0.95 : traversed ? 0.9 : 0.55}
               style={live ? { filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.9))' } : undefined}
             />
           );
@@ -192,25 +179,24 @@ function nodeTip(node: StoryNode): string {
 }
 
 // ---- node marker -------------------------------------------------------------
-function NodeMarker({ run, node, activeRegion: active, onClick }: { run: StoryRun; node: StoryNode; activeRegion: string | null; onClick: () => void }) {
+function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; onClick: () => void }) {
   const [hover, setHover] = useState(false);
   const cleared = run.clearedNodeIds.includes(node.id);
   const current = run.currentNodeId === node.id;
   const reachable = isReachable(run, node);
-  // Routes other than the one you're on grey out (less visual noise).
-  const dimmed = active !== null && node.region !== active && !current;
+  // Unavailable spots (locked — not reachable, not done) are greyed out so only
+  // what you can act on stands out.
+  const muted = !reachable && !current && !cleared;
   const size = node.kind === 'boss' ? 48 : node.kind === 'elite' ? 40 : 36;
   const accent = KIND_ACCENT[node.kind];
 
-  const ring = dimmed ? 'rgba(90,78,56,0.5)'
-    : current ? CURRENT_GOLD : reachable ? accent : cleared ? '#6b8f4a' : 'rgba(60,40,16,0.5)';
-  const fill = dimmed ? '#1b160d' : current || reachable ? '#251a0c' : cleared ? '#2a2414' : '#1d160b';
-  const iconColor = dimmed ? 'rgba(150,135,105,0.5)'
-    : reachable || current ? '#f3e6c6' : cleared ? '#9db884' : 'rgba(180,150,100,0.55)';
-  const pulse = reachable && !dimmed;
-  // Keep labels uncluttered: name shows for nodes you can act on (or your whole
-  // active route); everything else is name-on-hover only.
-  const showLabel = !!node.name && !dimmed && (active === null ? (reachable || cleared || current) : true);
+  const ring = current ? CURRENT_GOLD : reachable ? accent : cleared ? '#6b8f4a' : 'rgba(124,114,94,0.55)';
+  const fill = muted ? '#23201a' : current || reachable ? '#251a0c' : '#2a2414';
+  const iconColor = muted ? 'rgba(150,142,120,0.5)'
+    : reachable || current ? '#f3e6c6' : '#9db884';
+  const pulse = reachable;
+  // Only actionable nodes get a name label; everything else is name-on-hover.
+  const showLabel = !!node.name && (reachable || cleared || current);
 
   return (
     <button
@@ -233,7 +219,7 @@ function NodeMarker({ run, node, activeRegion: active, onClick }: { run: StoryRu
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: reachable ? 'pointer' : 'default',
         padding: 0,
-        opacity: dimmed ? 0.5 : 1,
+        opacity: muted ? 0.5 : 1,
         zIndex: hover ? 5 : 1,
       }}
     >

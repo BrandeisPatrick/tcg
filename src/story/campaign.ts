@@ -26,7 +26,6 @@ export const REGIONS: Region[] = [
   {
     id: 'spine', name: 'The Spine',
     locs: [
-      { id: 'battery', name: 'Battery Park', kind: 'battle', lat: 40.7033, lng: -74.0170 },
       { id: 'wallst', name: 'Wall Street', kind: 'battle', lat: 40.7074, lng: -74.0104, enemy: 'hero_wraith' },
       { id: 'cityhall', name: 'City Hall Subway', kind: 'battle', lat: 40.7127, lng: -74.0059, enemy: 'hero_mo_krill' },
       { id: 'timessq', name: 'Times Square', kind: 'supply', lat: 40.7580, lng: -73.9855 },
@@ -63,6 +62,10 @@ export const REGIONS: Region[] = [
 
 export const BOSS_COUNT = REGIONS.length;
 
+// All three routes branch from one shared origin at the Battery (lower
+// Manhattan), where the three boroughs meet across the harbour.
+const START = { id: 'battery', name: 'Battery Park', kind: 'battle' as NodeKind, lat: 40.7033, lng: -74.0170 };
+
 // Several iconic locations sit within a few blocks of each other (the Battery,
 // Wall St, City Hall, the bridges, Liberty) so their projected dots overlap.
 // Relax them apart with light pairwise repulsion — keeps each near its real
@@ -89,16 +92,23 @@ function declutter(nodes: StoryNode[], minDist = 0.072, iters = 90): void {
   }
 }
 
-/** Flatten the regions into the StoryNode graph (linear chain per region). */
+/** Flatten the campaign into the StoryNode graph: one shared start node that
+ *  branches into three linear regional routes (each ending in a boss). */
 export function buildCampaign(): StoryNode[] {
   const out: StoryNode[] = [];
+  const sp = project(START.lat, START.lng);
+  out.push({
+    id: START.id, kind: START.kind, depth: 0, x: sp.x, y: sp.y,
+    next: REGIONS.map((r) => r.locs[0].id), // branch into each route
+    name: START.name, region: 'start',
+  });
   for (const region of REGIONS) {
     region.locs.forEach((loc, i) => {
       const p = project(loc.lat, loc.lng);
       out.push({
         id: loc.id,
         kind: loc.kind,
-        depth: i,
+        depth: i + 1,
         x: p.x,
         y: p.y,
         next: i < region.locs.length - 1 ? [region.locs[i + 1].id] : [],

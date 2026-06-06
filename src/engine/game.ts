@@ -247,12 +247,24 @@ function tickRespawn(G: GameState, pid: PlayerID) {
   }
 }
 
+/** True when a player still has heroes but every one of them is KO'd (on the
+ *  respawn timer) at the same moment — a full board wipe. */
+function boardWiped(ps: PlayerState): boolean {
+  const heroes = [ps.active, ...ps.bench].filter(
+    (c): c is CardInstance => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero',
+  );
+  if (heroes.length === 0) return false; // pre-match / nothing to wipe yet
+  return heroes.every((c) => (c.respawnTurnsLeft ?? 0) > 0 || c.hp <= 0);
+}
+
 function checkWinner(G: GameState): { winner?: PlayerID; draw?: boolean } | undefined {
-  const p0 = G.players['0'].hp;
-  const p1 = G.players['1'].hp;
-  if (p0 <= 0 && p1 <= 0) return { draw: true };
-  if (p0 <= 0) return { winner: '1' };
-  if (p1 <= 0) return { winner: '0' };
+  // Two ways to lose: your patron HP hits 0 (death tax), OR your whole roster is
+  // on the respawn timer at once (board wipe).
+  const p0Down = G.players['0'].hp <= 0 || boardWiped(G.players['0']);
+  const p1Down = G.players['1'].hp <= 0 || boardWiped(G.players['1']);
+  if (p0Down && p1Down) return { draw: true };
+  if (p0Down) return { winner: '1' };
+  if (p1Down) return { winner: '0' };
   return undefined;
 }
 
