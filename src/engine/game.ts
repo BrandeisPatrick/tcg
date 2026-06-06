@@ -262,7 +262,8 @@ function checkWinner(G: GameState): { winner?: PlayerID; draw?: boolean } | unde
   // on the respawn timer at once (board wipe).
   const p0Down = G.players['0'].hp <= 0 || boardWiped(G.players['0']);
   const p1Down = G.players['1'].hp <= 0 || boardWiped(G.players['1']);
-  if (p0Down && p1Down) return { draw: true };
+  // Ties go to the player (P0) — a mutual wipe shouldn't end your run on a draw.
+  if (p0Down && p1Down) return { winner: '0' };
   if (p0Down) return { winner: '1' };
   if (p1Down) return { winner: '0' };
   return undefined;
