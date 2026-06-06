@@ -86,7 +86,7 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
             {run.nodes.map((n) => (
               <NodeMarker key={n.id} run={run} node={n} onClick={() => handleNode(n)} />
             ))}
-            <RunHud run={run} onExit={onExit} />
+            <RunHud run={run} onExit={onExit} onAbandon={() => onUpdateRun(null)} />
           </>
         )}
 
@@ -316,7 +316,7 @@ function NodeIcon({ kind, color, size }: { kind: NodeKind | 'cleared'; color: st
 }
 
 // ---- run HUD -----------------------------------------------------------------
-function RunHud({ run, onExit }: { run: StoryRun; onExit: () => void }) {
+function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void; onAbandon: () => void }) {
   const bosses = run.nodes.filter((n) => n.kind === 'boss');
   const bossesDown = bosses.filter((b) => run.clearedNodeIds.includes(b.id)).length;
   return (
@@ -331,6 +331,17 @@ function RunHud({ run, onExit }: { run: StoryRun; onExit: () => void }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >‹</button>
+
+      <button
+        onClick={onAbandon}
+        aria-label="Abandon run and start over"
+        style={{
+          position: 'absolute', top: 14, right: 14,
+          background: 'rgba(18,11,3,0.78)', border: `1.5px solid ${palette.danger}`,
+          color: palette.bg1, cursor: 'pointer', borderRadius: radius.pill,
+          padding: '8px 16px', fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
+        }}
+      >Abandon Run</button>
 
       <div style={{
         position: 'absolute', left: 14, bottom: 14,
