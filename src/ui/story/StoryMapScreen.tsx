@@ -195,8 +195,9 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
   const iconColor = muted ? 'rgba(150,142,120,0.5)'
     : reachable || current ? '#f3e6c6' : '#9db884';
   const pulse = reachable;
-  // Only actionable nodes get a name label; everything else is name-on-hover.
-  const showLabel = !!node.name && (reachable || cleared || current);
+  // Only the actionable (reachable) nodes get a name label — cleared/locked
+  // nodes are name-on-hover, which keeps the busy harbour readable.
+  const showLabel = !!node.name && reachable;
 
   return (
     <button
