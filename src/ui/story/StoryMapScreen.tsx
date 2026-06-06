@@ -208,6 +208,9 @@ function NodeMarker({ run, node, activeRegion: active, onClick }: { run: StoryRu
   const iconColor = dimmed ? 'rgba(150,135,105,0.5)'
     : reachable || current ? '#f3e6c6' : cleared ? '#9db884' : 'rgba(180,150,100,0.55)';
   const pulse = reachable && !dimmed;
+  // Keep labels uncluttered: name shows for nodes you can act on (or your whole
+  // active route); everything else is name-on-hover only.
+  const showLabel = !!node.name && !dimmed && (active === null ? (reachable || cleared || current) : true);
 
   return (
     <button
@@ -266,14 +269,14 @@ function NodeMarker({ run, node, activeRegion: active, onClick }: { run: StoryRu
         )}
       </AnimatePresence>
 
-      {/* Always-on location name so the routes read at a glance. */}
-      {node.name && (
+      {/* Location name — only for actionable nodes, so the map stays readable. */}
+      {showLabel && (
         <span style={{
           position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
           marginTop: 3, whiteSpace: 'nowrap', pointerEvents: 'none',
-          fontFamily: fonts.ui, fontSize: 9.5, fontWeight: 700, color: '#fbf4e4',
+          fontFamily: fonts.ui, fontSize: 10, fontWeight: 700, color: '#fbf4e4',
           textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95)',
-          opacity: dimmed ? 0.4 : reachable || current || cleared ? 1 : 0.78,
+          opacity: reachable || current ? 1 : 0.82,
         }}>{node.name}</span>
       )}
     </button>
