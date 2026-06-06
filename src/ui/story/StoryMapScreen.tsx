@@ -269,14 +269,16 @@ function NodeMarker({ run, node, activeRegion: active, onClick }: { run: StoryRu
         )}
       </AnimatePresence>
 
-      {/* Location name — only for actionable nodes, so the map stays readable. */}
+      {/* Location name — only for actionable nodes, so the map stays readable.
+          A dark chip keeps it legible over streets/water even when two sit close. */}
       {showLabel && (
         <span style={{
           position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-          marginTop: 3, whiteSpace: 'nowrap', pointerEvents: 'none',
+          marginTop: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
           fontFamily: fonts.ui, fontSize: 10, fontWeight: 700, color: '#fbf4e4',
-          textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 2px rgba(0,0,0,0.95)',
-          opacity: reachable || current ? 1 : 0.82,
+          background: 'rgba(12,14,20,0.66)', padding: '1px 6px', borderRadius: 4,
+          textShadow: '0 1px 2px rgba(0,0,0,0.9)',
+          opacity: reachable || current ? 1 : 0.85,
         }}>{node.name}</span>
       )}
     </button>

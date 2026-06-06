@@ -67,7 +67,7 @@ export const BOSS_COUNT = REGIONS.length;
 // Wall St, City Hall, the bridges, Liberty) so their projected dots overlap.
 // Relax them apart with light pairwise repulsion — keeps each near its real
 // spot while staying legible.
-function declutter(nodes: StoryNode[], minDist = 0.063, iters = 80): void {
+function declutter(nodes: StoryNode[], minDist = 0.072, iters = 90): void {
   for (let it = 0; it < iters; it++) {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
