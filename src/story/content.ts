@@ -36,8 +36,11 @@ export const ALL_HERO_IDS: CardId[] = HEROES.map((h) => h.id);
 /** Buyable / collectible cards that can join a deck (spells + equipment). */
 export const SUPPLY_POOL: CardId[] = [...SPELLS, ...EQUIPMENT].map((c) => c.id);
 
-/** Three distinct archetypes to open a run with — gun carry, bruiser, caster. */
-export const STARTING_HERO_CHOICES: CardId[] = ['hero_haze', 'hero_abrams', 'hero_lady_geist'];
+/** Three random heroes offered at the start of a run (re-rolled each run). */
+export function randomStartingHeroes(): CardId[] {
+  const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
+  return pickN(ALL_HERO_IDS, 3, rng(seed));
+}
 
 /** Small opening deck; grows as the player clears supply nodes. */
 export const STARTING_DECK: CardId[] = [

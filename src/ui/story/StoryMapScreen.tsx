@@ -5,7 +5,7 @@ import type { StoryRun, StoryNode, NodeKind } from '@/story/types';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroBadge } from '@/cards/art/heroArt';
 import {
-  STARTING_HERO_CHOICES, recruitChoices, supplyChoices, nodeLabel,
+  randomStartingHeroes, recruitChoices, supplyChoices, nodeLabel,
   enemyRosterSize, enemyBuff,
 } from '@/story/content';
 import { newRun, clearNode, isReachable } from '@/story/storyRun';
@@ -21,7 +21,7 @@ interface StoryMapScreenProps {
 }
 
 type PickState =
-  | { mode: 'start' }
+  | { mode: 'start'; options: CardId[] }
   | { mode: 'node'; node: StoryNode; kind: 'hero' | 'card'; options: CardId[] }
   | null;
 
@@ -94,7 +94,7 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
         {(!run || run.status === 'lost' || run.status === 'won') && (
           <CenterPanel
             run={run}
-            onBegin={() => setPick({ mode: 'start' })}
+            onBegin={() => setPick({ mode: 'start', options: randomStartingHeroes() })}
             onExit={onExit}
           />
         )}
@@ -106,7 +106,7 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
             kind="hero"
             title="Choose your first hero"
             subtitle="Recruit more allies and build your deck as you fight uptown."
-            options={STARTING_HERO_CHOICES}
+            options={pick.options}
             onPick={startRun}
             onCancel={() => setPick(null)}
           />

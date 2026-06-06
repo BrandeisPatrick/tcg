@@ -90,13 +90,11 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               eyebrow="Vs AI"
               title="Quick Match"
               subtitle="Best of one. Solo against the computer."
+              art={{ src: `${ART_BASE}old_gods_new_blood.jpg`, objectPosition: '50% 26%', widthPct: 66, maskCenter: '60% 40%' }}
               cta={{ label: 'Play' }}
               onClick={onPlay}
               ariaLabel="Start Quick Match vs AI"
-            >
-              <OldGodsBanner />
-              <KeyartPoster />
-            </TornTile>
+            />
           </motion.div>
 
           <motion.div
@@ -203,96 +201,6 @@ function StoryMapTeaser() {
       }}
     >
       <NycMap />
-    </div>
-  );
-}
-
-function OldGodsBanner() {
-  // "Old Gods, New Blood" Deadlock keyart (the six-heroes revamp update).
-  // Wide landscape JPG; placed upper-left inside the primary tile as the
-  // dominant visual. Counter-tilted from KeyartPoster for a hand-pinned
-  // collage feel.
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: 24,
-        top: 80,
-        width: '58%',
-        pointerEvents: 'none',
-      }}
-    >
-      <motion.img
-        src={`${ART_BASE}old_gods_new_blood.jpg`}
-        alt=""
-        aria-hidden
-        draggable={false}
-        initial={{ opacity: 0, x: -40, y: 8, rotate: 8 }}
-        animate={{ opacity: 1, x: 0, y: 0, rotate: 2.5 }}
-        transition={{ ...spring.soft, delay: 0.95 }}
-        style={{
-          width: '100%',
-          height: 'auto',
-          display: 'block',
-          objectFit: 'cover',
-          border: `6px solid ${palette.bg2}`,
-          background: palette.bg2,
-          // Subtle sepia pulls the cold teal sky into the warm parchment register.
-          filter: 'sepia(0.10) saturate(0.95)',
-          boxShadow:
-            '0 14px 28px rgba(40,20,0,0.35), 0 2px 6px rgba(40,20,0,0.20), inset 0 0 0 1px rgba(120,80,30,0.25)',
-          userSelect: 'none',
-        }}
-      />
-    </div>
-  );
-}
-
-function KeyartPoster() {
-  // Deadlock community keyart (steamgriddb by user "Lovely") placed on the
-  // primary tile like a polaroid pinned to torn paper. The PNG is the brand
-  // image — industrial building + DEADLOCK wordmark + compass emblem in warm
-  // amber/brass tones. Sits inside the clipped tile so hover lifts it with
-  // the parent.
-  // Anchored top-right with bottom padding so it occupies the upper ~70% of
-  // the right side, leaving the bottom-left label stack clear of any overlap.
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        right: 22,
-        top: 60,
-        bottom: 220,
-        width: '32%',
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'flex-end',
-        pointerEvents: 'none',
-      }}
-    >
-      <motion.img
-        src={`${ART_BASE}deadlock_keyart.png`}
-        alt=""
-        aria-hidden
-        draggable={false}
-        initial={{ opacity: 0, x: 40, y: 12, rotate: -8 }}
-        animate={{ opacity: 1, x: 0, y: 0, rotate: -2 }}
-        transition={{ ...spring.soft, delay: 0.85 }}
-        style={{
-          width: 'auto',
-          height: '100%',
-          maxWidth: '100%',
-          objectFit: 'contain',
-          border: `6px solid ${palette.bg2}`,
-          background: palette.bg2,
-          // Near-noop on this already-warm keyart; kept for parity with
-          // OldGodsBanner so the pair of posters tints together.
-          filter: 'sepia(0.10) saturate(0.95)',
-          boxShadow:
-            '0 14px 28px rgba(40,20,0,0.35), 0 2px 6px rgba(40,20,0,0.20), inset 0 0 0 1px rgba(120,80,30,0.25)',
-          userSelect: 'none',
-        }}
-      />
     </div>
   );
 }
