@@ -26,7 +26,7 @@ export const REGIONS: Region[] = [
   {
     id: 'spine', name: 'The Spine',
     locs: [
-      { id: 'wallst', name: 'Wall Street', kind: 'battle', lat: 40.7074, lng: -74.0104, enemy: 'hero_wraith' },
+      { id: 'wallst', name: 'Wall Street', kind: 'battle', lat: 40.7190, lng: -74.0050, enemy: 'hero_wraith' },
       { id: 'cityhall', name: 'City Hall Subway', kind: 'battle', lat: 40.7127, lng: -74.0059, enemy: 'hero_mo_krill' },
       { id: 'timessq', name: 'Times Square', kind: 'supply', lat: 40.7580, lng: -73.9855 },
       { id: 'themet', name: 'The Met', kind: 'battle', lat: 40.7794, lng: -73.9632, enemy: 'hero_mirage' },
@@ -38,7 +38,7 @@ export const REGIONS: Region[] = [
   {
     id: 'boroughs', name: 'The Outer Boroughs',
     locs: [
-      { id: 'bkbridge', name: 'Brooklyn Bridge', kind: 'battle', lat: 40.7061, lng: -73.9969, enemy: 'hero_lash' },
+      { id: 'bkbridge', name: 'Brooklyn Bridge', kind: 'battle', lat: 40.6950, lng: -73.9870, enemy: 'hero_lash' },
       { id: 'gowanus', name: 'Gowanus Canal', kind: 'battle', lat: 40.6736, lng: -73.9890, enemy: 'hero_viscous' },
       { id: 'greenwood', name: 'Green-Wood Cemetery', kind: 'battle', lat: 40.6520, lng: -73.9920, enemy: 'hero_lady_geist' },
       { id: 'botanic', name: 'Botanic Garden', kind: 'recruit', lat: 40.6680, lng: -73.9560 },
@@ -50,7 +50,7 @@ export const REGIONS: Region[] = [
   {
     id: 'gates', name: 'The Western Gates',
     locs: [
-      { id: 'liberty_sp', name: 'Liberty State Park', kind: 'battle', lat: 40.7045, lng: -74.0540 },
+      { id: 'liberty_sp', name: 'Liberty State Park', kind: 'battle', lat: 40.7060, lng: -74.0700 },
       { id: 'jerseyheights', name: 'Jersey Heights', kind: 'supply', lat: 40.7640, lng: -74.1180 },
       { id: 'portnewark', name: 'Port Newark', kind: 'battle', lat: 40.6950, lng: -74.1720, enemy: 'hero_drifter' },
       { id: 'siferry', name: 'St. George Ferry', kind: 'recruit', lat: 40.6420, lng: -74.0760 },

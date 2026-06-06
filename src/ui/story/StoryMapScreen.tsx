@@ -256,18 +256,29 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
         )}
       </AnimatePresence>
 
-      {/* Location name — only for actionable nodes, so the map stays readable.
-          A dark chip keeps it legible over streets/water even when two sit close. */}
-      {showLabel && (
-        <span style={{
-          position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-          marginTop: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
-          fontFamily: fonts.ui, fontSize: 10, fontWeight: 700, color: '#fbf4e4',
-          background: 'rgba(12,14,20,0.66)', padding: '1px 6px', borderRadius: 4,
-          textShadow: '0 1px 2px rgba(0,0,0,0.9)',
-          opacity: reachable || current ? 1 : 0.85,
-        }}>{node.name}</span>
-      )}
+      {/* Location name + a scouting sub-line (foe count & enemy for fights) —
+          only for actionable nodes. The sub-line is touch-friendly: no hover
+          needed on iPad. A dark chip keeps it legible over streets/water. */}
+      {showLabel && (() => {
+        const combat = node.kind === 'battle' || node.kind === 'elite' || node.kind === 'boss';
+        const foes = combat ? enemyRosterSize(node.depth, node.kind) : 0;
+        const enemyName = node.enemy ? CARDS_BY_ID[node.enemy]?.name : undefined;
+        const sub = combat
+          ? `${foes} foe${foes > 1 ? 's' : ''}${enemyName ? ` · ${enemyName}` : ''}`
+          : node.kind === 'recruit' ? 'recruit a hero' : 'supply cache';
+        return (
+          <span style={{
+            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+            marginTop: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+            background: 'rgba(12,14,20,0.7)', padding: '2px 7px', borderRadius: 4,
+            textShadow: '0 1px 2px rgba(0,0,0,0.9)',
+          }}>
+            <span style={{ fontFamily: fonts.ui, fontSize: 10, fontWeight: 700, color: '#fbf4e4' }}>{node.name}</span>
+            <span style={{ fontFamily: fonts.ui, fontSize: 8.5, fontWeight: 700, color: combat ? '#e89a86' : '#bfe6ff' }}>{sub}</span>
+          </span>
+        );
+      })()}
     </button>
   );
 }
