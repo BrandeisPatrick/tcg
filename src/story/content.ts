@@ -74,9 +74,10 @@ export function enemyMaxRarity(depth: number): number {
   if (depth <= 4) return 2;
   return 4;
 }
-/** Enemy deck size — more cards (more itemization / spells) the deeper you go. */
+/** Enemy deck size — small early (so early opponents can't out-sustain you with
+ *  heals/items), more cards the deeper you go. */
 export function enemyDeckSize(depth: number, kind: NodeKind): number {
-  let n = 4 + depth;
+  let n = 2 + depth;
   if (kind === 'elite') n += 2;
   if (kind === 'boss') n += 4;
   return Math.min(n, 16);
