@@ -34,8 +34,15 @@ export const SPELLS: SpellCard[] = [
   // ----- T3 (cost 5-6) — premium finishers (canon T3 Spirit) -----
   { id: 'decay',          name: 'Decay',          type: 'spell', rarity: 3, cost: 5, abilities: ['eff_decay'],          text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
   { id: 'disarming_hex',  name: 'Disarming Hex',  type: 'spell', rarity: 3, cost: 5, abilities: ['eff_disarming_hex'],  text: 'Disarm any enemy for 2 turns.' },
-  { id: 'knockdown',      name: 'Knockdown',      type: 'spell', rarity: 3, cost: 6, abilities: ['eff_knockdown'],      text: 'Stun enemy Active for 1 turn. Disarm for 3 turns.' },
+  { id: 'knockdown',      name: 'Knockdown',      type: 'spell', rarity: 3, cost: 6, abilities: ['eff_knockdown'],      text: 'Stun enemy Active for 1 turn.' },
   { id: 'metal_skin',     name: 'Metal Skin',     type: 'spell', rarity: 3, cost: 6, abilities: ['eff_cast_metal_skin'], text: 'Grant ally Bullet Resist 5 for 2 turns.' },
+
+  // ----- Control pack (canon active items → spells) -----
+  { id: 'debuff_remover', name: 'Debuff Remover', type: 'spell', rarity: 1, cost: 2, abilities: ['eff_debuff_remover'],   text: "Cleanse an ally's debuffs. Grant Shield 2." },
+  { id: 'silence_glyph',  name: 'Silence Glyph',  type: 'spell', rarity: 2, cost: 3, abilities: ['eff_silence_glyph'],    text: 'Deal 2 spirit damage to enemy Active and Silence it for 2 turns.' },
+  { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 2, cost: 4, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
+  { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, cost: 5, abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable for 1 turn.' },
+  { id: 'curse',          name: 'Curse',          type: 'spell', rarity: 3, cost: 5, abilities: ['eff_curse'],            text: 'Silence and Disarm the enemy Active for 3 turns.' },
 ];
 
 export const SPELLS_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s])) as Record<string, SpellCard>;

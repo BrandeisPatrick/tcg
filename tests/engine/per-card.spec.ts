@@ -78,12 +78,12 @@ describe('Spells — cost 3', () => {
 });
 
 describe('Spells — cost 5', () => {
-  it('Knockdown applies Stun 1T + Disarm 3T', () => {
+  it('Knockdown applies Stun 1T (no Disarm)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     ABILITIES_BY_ID['eff_knockdown'].run(G, { movingPlayer: '0' }, { target });
     expect(target.statuses.find((s) => s.id === 'stun')?.duration).toBe(1);
-    expect(target.statuses.find((s) => s.id === 'disarm')?.duration).toBe(3);
+    expect(target.statuses.find((s) => s.id === 'disarm')).toBeUndefined();
   });
 
   it('Metal Skin grants ally Bullet Resist 5 for 2 turns (no scaling)', () => {

@@ -4,7 +4,7 @@ import { damageUnit, healUnit, reapDead } from '@/engine/damage';
 import { addStatus, cleanseDebuffs } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit, nextIid } from '@/engine/util';
-import { setEquipmentDispatcher } from '@/engine/equipmentDispatch';
+import { setEquipmentDispatcher, fireEquipmentTriggers } from '@/engine/equipmentDispatch';
 
 // An EffectFn mutates G. It receives the source card (if any), the target (if any),
 // and a params bag from the ability/card definition.
@@ -165,14 +165,94 @@ const eff_disarming_hex: AbilityDef = {
   },
 };
 
-// Cost 5 — T3 premium hard CC.
+// Cost 6 — short, sharp hard CC: a clean 1-turn stun (Curse is the long sister).
 const eff_knockdown: AbilityDef = {
   id: 'eff_knockdown', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Knockdown — Stun 1 turn + Disarm 3 turns.',
+  prompt: 'Knockdown — Stun the enemy Active for 1 turn.',
   run: (G, _ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'stun', 1, 1);
+  },
+};
+
+// ----- Control spell pack (canon active items → spells) -----
+
+// Silence Glyph (canon T3 spirit): damage + Silence the enemy Active 2 turns.
+const eff_silence_glyph: AbilityDef = {
+  id: 'eff_silence_glyph', trigger: 'onPlay', target: 'enemyActive',
+  base: 2, baseLabel: 'spirit dmg + Silence',
+  scalesSpirit: true,
+  run: (G, ctx, { target }) => {
+    if (!target) return;
+    damageUnit(G, target, 2 + activeSpi(G, ctx.movingPlayer), 'spirit');
+    addStatus(G, target, 'silenced', 1, 2);
+  },
+};
+
+// Curse (canon T4 spirit): long lockdown — Silence + Disarm for 3 turns. The
+// dead-weight active pressures a retreat (no forced swap).
+const eff_curse: AbilityDef = {
+  id: 'eff_curse', trigger: 'onPlay', target: 'enemyActive',
+  prompt: 'Curse — Silence + Disarm the enemy Active for 3 turns.',
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    addStatus(G, target, 'silenced', 1, 3);
     addStatus(G, target, 'disarm', 1, 3);
+  },
+};
+
+// Debuff Remover (canon vitality): cleanse a hero's debuffs + grant Shield 2.
+const eff_debuff_remover: AbilityDef = {
+  id: 'eff_debuff_remover', trigger: 'onPlay', target: 'allyHero',
+  base: 2, baseLabel: 'cleanse + Shield',
+  run: (G, _ctx, { source, target }) => {
+    const t = target ?? source;
+    if (!t) return;
+    cleanseDebuffs(t);
+    addStatus(G, t, 'shield', 2, 999);
+  },
+};
+
+// Unstoppable (canon T4 vitality, as a spell): the active hero gains
+// Unstoppable for 1 turn (cleanses CC on apply; immune to damage + CC). Strong,
+// but it's a one-shot card so the cost is the balance lever.
+const eff_unstoppable_cast: AbilityDef = {
+  id: 'eff_unstoppable_cast', trigger: 'onPlay', target: 'allyHero',
+  base: 1, baseLabel: 'Unstoppable',
+  run: (G, _ctx, { source, target }) => {
+    const t = target ?? source;
+    if (t) addStatus(G, t, 'unstoppable', 1, 1);
+  },
+};
+
+// Echo Shard (canon: recast last ability): the active hero uses their skill
+// AGAIN this turn — bypasses the one-skill-per-turn cap and pays no skill cost,
+// and re-fires onBearerSkillUsed so cast-payoff gear (Cooldown draw, Mystic
+// Burst, Surge, Quicksilver) triggers a second time. Auto-targets to match the
+// skill's filter (enemy Active for offense, the hero itself for buffs). Fizzles
+// politely on a skill-less / passive hero.
+const eff_echo_shard: AbilityDef = {
+  id: 'eff_echo_shard', trigger: 'onPlay', target: 'noTarget',
+  run: (G, ctx, _args) => {
+    const ps = G.players[ctx.movingPlayer];
+    const hero = ps.active;
+    if (!hero || (hero.respawnTurnsLeft ?? 0) > 0) { pushLog(G, 'Echo Shard fizzled — no active hero.'); return; }
+    const data = CARDS_BY_ID[hero.cardId];
+    if (data?.type !== 'hero' || !data.skill) { pushLog(G, 'Echo Shard fizzled — hero has no skill.'); return; }
+    const skill = getAbility(data.skill);
+    if (!skill) { pushLog(G, 'Echo Shard fizzled.'); return; }
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    let target: CardInstance | undefined;
+    switch (skill.target) {
+      case 'enemyActive': case 'enemyAny': case 'enemyHero': case 'anyBoard':
+        target = enemy.active ?? undefined; break;
+      case 'allyHero': case 'allyAny': case 'self':
+        target = hero; break;
+      default: target = undefined;
+    }
+    pushLog(G, `Echo Shard: ${data.name} casts ${data.abilityName ?? 'their skill'} again.`);
+    _withCast(hero, 'skill', () => skill.run(G, { movingPlayer: ctx.movingPlayer }, { source: hero, target }));
+    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: ctx.movingPlayer });
   },
 };
 
@@ -843,11 +923,13 @@ const eff_ult_drifter: AbilityDef = {
 };
 
 const ABILITIES_LIST: AbilityDef[] = [
-  // ----- Spells (10 cards) -----
+  // ----- Spells (15 cards) -----
   eff_healing_rite, eff_rusted_barrel,
   eff_cold_front, eff_slowing_hex, eff_healbane, eff_spirit_sap,
   eff_decay, eff_disarming_hex,
   eff_knockdown, eff_cast_metal_skin,
+  // ----- Control spell pack (active items → spells) -----
+  eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
   // ----- Equipment passives (4 cards) -----
   eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
   // ----- Equipment reactive procs (5 cards) -----
