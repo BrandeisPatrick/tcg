@@ -9,13 +9,14 @@ import type { PendingPlay } from '../helpers';
  * Pure presentation — receives all callbacks from Board.tsx.
  */
 export function HandTray({
-  cards, disabled, pending, isMyTurn, hasPending, mySouls,
+  cards, disabled, pending, isMyTurn, busy, hasPending, mySouls,
   onTap, onLongPress, onHover, onDragEndOver, onEnd, onCancel,
 }: {
   cards: CardInstance[];
   disabled: boolean;
   pending: PendingPlay | null;
   isMyTurn: boolean;
+  busy?: boolean;
   hasPending: boolean;
   mySouls: number;
   onTap: (c: CardInstance) => void;
@@ -49,8 +50,12 @@ export function HandTray({
         <motion.button
           whileTap={{ scale: 0.96 }}
           whileHover={isMyTurn ? { scale: 1.03, y: -2 } : undefined}
+          // Stay clickable while busy: the tap is queued (Board fires it once
+          // the animation settles) rather than dropped, so it never feels dead.
           disabled={!isMyTurn}
           onClick={onEnd}
+          animate={busy ? { opacity: [0.7, 1, 0.7] } : { opacity: isMyTurn ? 1 : 0.45 }}
+          transition={busy ? { duration: 1, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
           style={{
             background: isMyTurn
               ? `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}55)`
@@ -60,11 +65,10 @@ export function HandTray({
             border: `1px solid ${isMyTurn ? palette.accent : palette.border}`,
             borderRadius: radius.md,
             boxShadow: isMyTurn ? shadow.glowAccent : shadow.sm,
-            cursor: isMyTurn ? 'pointer' : 'default',
-            opacity: isMyTurn ? 1 : 0.45,
+            cursor: isMyTurn ? (busy ? 'progress' : 'pointer') : 'default',
             minWidth: 160,
           }}
-        >End Turn</motion.button>
+        >{busy ? 'Ending…' : 'End Turn'}</motion.button>
         {hasPending && (
           <motion.button
             initial={{ opacity: 0, x: 20 }}

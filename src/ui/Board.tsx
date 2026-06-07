@@ -61,6 +61,10 @@ export function Board(props: BoardProps<GameState>) {
   const [combatPlan, setCombatPlan] = useState<AttackPlan | null>(null);
   // Pending end-turn callback to fire once choreographer completes.
   const pendingEndTurnRef = useRef<(() => void) | null>(null);
+  // Queued end-turn intent. If the player taps End Turn while an animation is
+  // in flight (combat choreography or a card/skill reveal), we remember it
+  // here instead of silently dropping the click, then fire once things settle.
+  const queuedEndRef = useRef(false);
   // Mirror of the choreographer's beat index so the TurnCompass (via
   // CombatProgressContext) can paint its combat-mode ring without the
   // choreographer needing to own any UI other than the action visuals.
@@ -144,8 +148,16 @@ export function Board(props: BoardProps<GameState>) {
 
   /** Intercept end-turn to play the attack-phase animation before the engine resolves. */
   const triggerEndTurn = useCallback(() => {
-    if (combatPlan) return; // already animating
-    if (G.action?.state === 'begin') return; // wait for card/skill reveal first
+    // An animation is in flight — combat choreography or a card/skill reveal.
+    // Don't drop the click: remember the player's intent and let the drain
+    // effect below fire it once things settle. (The AI re-fires via its own
+    // effect, so only queue for the human's turn to avoid a stray end-turn
+    // leaking onto the player's turn after the AI moves.)
+    if (combatPlan || G.action?.state === 'begin') {
+      if (ctx.currentPlayer === me) queuedEndRef.current = true;
+      return;
+    }
+    queuedEndRef.current = false;
     const plan = planAttackPhase(G, ctx.currentPlayer as PlayerID);
     if (plan.steps.length === 0) {
       moves.endTurn();
@@ -156,7 +168,18 @@ export function Board(props: BoardProps<GameState>) {
       pendingEndTurnRef.current = null;
     };
     setCombatPlan(plan);
-  }, [G, ctx.currentPlayer, combatPlan, moves, G.action]);
+  }, [G, ctx.currentPlayer, combatPlan, moves, G.action, me]);
+
+  // Drain a queued end-turn once the blocking animation finishes. If the turn
+  // has already flipped (or the game ended) we just clear the flag so a stale
+  // intent never ends the player's next turn for them.
+  useEffect(() => {
+    if (!queuedEndRef.current) return;
+    if (combatPlan || G.action?.state === 'begin') return; // still animating
+    if (ctx.gameover || ctx.currentPlayer !== me) { queuedEndRef.current = false; return; }
+    queuedEndRef.current = false;
+    triggerEndTurn();
+  }, [combatPlan, G.action?.state, ctx.currentPlayer, ctx.gameover, me, triggerEndTurn]);
 
   // Safety net: if the previewed card (hand or attached equipment) is no longer present, drop the preview.
   useEffect(() => {
@@ -595,6 +618,7 @@ export function Board(props: BoardProps<GameState>) {
               disabled={!isMyTurn}
               pending={pending}
               isMyTurn={isMyTurn}
+              busy={isMyTurn && (!!combatPlan || G.action?.state === 'begin' || queuedEndRef.current)}
               hasPending={!!pending}
               mySouls={G.players[me].souls}
               onTap={onTapCardInHand}
