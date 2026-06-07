@@ -2,6 +2,7 @@ import type { GameState, CardInstance, PlayerID, StatusId } from '@/engine/types
 import { CARDS_BY_ID, ULTIMATES } from '@/cards';
 import { damageUnit, healUnit, reapDead } from '@/engine/damage';
 import { addStatus, cleanseDebuffs } from '@/engine/statusOps';
+import { drawCards, consumeEquipment } from '@/engine/deckOps';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit, nextIid } from '@/engine/util';
 import { setEquipmentDispatcher } from '@/engine/equipmentDispatch';
 
@@ -244,6 +245,25 @@ const eff_bullet_shield_proc: AbilityDef = {
 const eff_spirit_shield_proc: AbilityDef = {
   id: 'eff_spirit_shield_proc', trigger: 'onBearerDamagedBySpirit', target: 'self',
   run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 2, 999); },
+};
+
+// Cooldown family (Improved / Superior Cooldown, Refresher): each time the
+// bearer uses a skill, draw a card and spend one of the item's charges. When
+// the charges run out the item breaks (goes to discard, freeing the slot).
+// Shared by all three — the charge count lives on the equipment instance.
+// If the draw fizzles (hand full / deck empty) no charge is spent, so the
+// value is held rather than wasted.
+const eff_cooldown_draw: AbilityDef = {
+  id: 'eff_cooldown_draw', trigger: 'onBearerSkillUsed', target: 'self',
+  run: (G, _ctx, { source, params }) => {
+    const eq = params?.equip as CardInstance | undefined;
+    if (!source || !eq || (eq.charges ?? 0) <= 0) return;
+    const drew = drawCards(G, source.ownerId, 1);
+    if (drew > 0) {
+      eq.charges = (eq.charges ?? 0) - 1;
+      if (eq.charges <= 0) consumeEquipment(G, source, eq);
+    }
+  },
 };
 
 // ----- Hero skills (active, "Activate" trigger) -----
@@ -724,7 +744,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   // ----- Equipment reactive procs (5 cards) -----
   eff_bullet_resist_shredder_proc,
   eff_restorative_shot_proc, eff_extra_regen_proc, eff_mystic_regeneration_proc,
-  eff_bullet_shield_proc, eff_spirit_shield_proc,
+  eff_bullet_shield_proc, eff_spirit_shield_proc, eff_cooldown_draw,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
@@ -752,13 +772,15 @@ export function getAbility(id: string): AbilityDef | undefined {
 import { withCast as _withCast, currentCast } from '@/engine/castContext';
 setEquipmentDispatcher((G, bearer, kind, ctx, target) => {
   if (!bearer.attached) return;
-  for (const eq of bearer.attached) {
+  // Iterate a snapshot: a proc (e.g. a spent cooldown→draw item) may detach
+  // itself from bearer.attached mid-loop, which would skip a sibling otherwise.
+  for (const eq of [...bearer.attached]) {
     const data = CARDS_BY_ID[eq.cardId];
     if (!data || data.type !== 'equipment' || !data.abilities) continue;
     for (const aid of data.abilities) {
       const ability = ABILITIES_BY_ID[aid];
       if (ability && ability.trigger === kind) {
-        _withCast(bearer, 'proc', () => ability.run(G, ctx, { source: bearer, target }));
+        _withCast(bearer, 'proc', () => ability.run(G, ctx, { source: bearer, target, params: { equip: eq } }));
       }
     }
   }

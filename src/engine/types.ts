@@ -52,6 +52,9 @@ export interface EquipmentCard extends BaseCard {
   abilities?: AbilityId[];
   bonus?: { atk?: number; hp?: number; spirit?: number };
   cost?: number;
+  /** Charge-based gear: number of times its reactive trigger fires before the
+   *  item is consumed (cooldown→draw family). Omitted for normal equipment. */
+  charges?: number;
 }
 
 export interface UltimateCard extends BaseCard {
@@ -88,6 +91,12 @@ export interface CardInstance {
   /** Per-instance play-cost override. When set, used instead of the card
    *  definition's cost — e.g. Sinclair's free (0-cost) copied ultimate. */
   costOverride?: number;
+  /**
+   * Charge-based equipment counter (cooldown→draw family). Initialized from the
+   * card's `charges` when attached; each qualifying trigger spends one, and the
+   * item is consumed (sent to discard) when it hits 0. Undefined for normal gear.
+   */
+  charges?: number;
   /**
    * Turns remaining until the hero respawns. `> 0` means the hero is currently
    * KO'd and occupying its slot as a corpse (greyed in UI, can't act / be

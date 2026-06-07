@@ -44,10 +44,20 @@ export const EQUIPMENT: EquipmentCard[] = [
   // sits a tier below its bullet counterpart — same magnitude, lower cost.
   { id: 'spirit_resilience', name: 'Spirit Resilience', type: 'equipment', rarity: 2, tier: 2, cost: 4, abilities: ['eff_spirit_resist'], text: 'Spirit Resist 3.' },
 
+  // ----- Cooldown family → card draw (Improved / Superior / Transcendent Cooldown) -----
+  // Cooldown reduction = take more actions = more options. Translated as pure
+  // card advantage: each time the bearer uses a skill, draw a card, until the
+  // item's charges run out and it breaks. No stats — the draw IS the payoff,
+  // and the equipment slot it occupies is the cost. Tiers escalate the charge
+  // count (2 → 3 → 4). The T4 piece lives in the premium block below.
+  { id: 'improved_cooldown', name: 'Improved Cooldown', type: 'equipment', rarity: 2, tier: 2, cost: 3, charges: 2, abilities: ['eff_cooldown_draw'], text: "When the bearer uses a skill, draw a card. 2 charges, then it breaks." },
+  { id: 'superior_cooldown', name: 'Superior Cooldown', type: 'equipment', rarity: 3, tier: 3, cost: 5, charges: 3, abilities: ['eff_cooldown_draw'], text: "When the bearer uses a skill, draw a card. 3 charges, then it breaks." },
+
   // ----- T3 (cost 5-6) — passive resists (canon T3 Vitality) -----
   { id: 'bullet_resilience', name: 'Bullet Resilience', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_bullet_resist'], text: 'Bullet Resist 3.' },
 
   // ----- T4 (cost 7+) — premium items (canon T4) -----
+  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'equipment', rarity: 4, tier: 4, cost: 7, charges: 4, abilities: ['eff_cooldown_draw'], text: "When the bearer uses a skill, draw a card. 4 charges, then it breaks." },
   { id: 'healing_tempo',  name: 'Healing Tempo',  type: 'equipment', rarity: 4, tier: 4, cost: 7, bonus: { atk: 2 }, abilities: ['eff_healing_tempo'], text: '+2 Bullet Power. Healing Boost 4.' },
   { id: 'boundless_spirit', name: 'Boundless Spirit', type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { spirit: 5, hp: 3 }, text: '+5 Spirit Power. +3 HP.' },
   { id: 'glass_cannon',   name: 'Glass Cannon',   type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { atk: 6, hp: -1 }, text: '+6 Bullet Power. −1 max HP.' },

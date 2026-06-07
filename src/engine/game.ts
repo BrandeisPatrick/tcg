@@ -17,8 +17,8 @@ import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
 import { fireEquipmentTriggers } from './equipmentDispatch';
 import { grantExp } from './expSystem';
+import { MAX_HAND, drawCards } from './deckOps';
 
-const MAX_HAND = 7;
 const ULT_UNLOCK_TURN = 5;
 // Patron HP — the ONLY way it drops is a hero death (flat 1, in killInPlace).
 // Low because each death is just 1 dmg; tuned via the eval sim for pacing.
@@ -198,6 +198,10 @@ function applyOnPlay(G: GameState, pid: PlayerID, source: CardInstance, target?:
     if (data.bonus.hp) { target.hpMax += data.bonus.hp; target.hp += data.bonus.hp; }
     if (data.bonus.spirit) target.spiritMod += data.bonus.spirit;
   }
+  // Charge-based gear (cooldown→draw family): seed the instance's charge meter.
+  if (data?.type === 'equipment' && data.charges) {
+    source.charges = data.charges;
+  }
   // Hero leveling: +1 exp to the bearer hero when an item is attached.
   if (data?.type === 'equipment' && target && CARDS_BY_ID[target.cardId]?.type === 'hero') {
     grantExp(G, target, 1);
@@ -342,14 +346,7 @@ export const DeadlockGame: Game<GameState> = {
       // until the NEXT refill, so a kill mid-turn still gives you something to spend right away.
       ps.souls = soulRefillForTurn(realTurn);
       // Draw from deck
-      if (ps.hand.length < MAX_HAND && ps.deck.length > 0) {
-        for (let i = 0; i < DRAW_PER_TURN && ps.deck.length > 0 && ps.hand.length < MAX_HAND; i++) {
-          const card = ps.deck.pop()!;
-          card.zone = 'hand';
-          ps.hand.push(card);
-          pushLog(G, `P${pid} drew ${CARDS_BY_ID[card.cardId]?.name ?? card.cardId}.`);
-        }
-      }
+      drawCards(G, pid, DRAW_PER_TURN);
       // Ultimate unlock
       unlockUltimates(G, ps);
       // Respawn ticks ONLY for the player whose turn is starting, so a corpse
