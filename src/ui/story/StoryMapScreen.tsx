@@ -167,15 +167,15 @@ const KIND_ACCENT: Record<NodeKind, string> = {
 };
 const CURRENT_GOLD = '#e6b94a';
 
-/** Hover scouting text for a node — location name + what's there. */
-function nodeTip(node: StoryNode): string {
+/** Hover scouting text for a node — location name + what's there. `kind` is the
+ *  effective kind (a recruit becomes a supply once the roster is full). */
+function nodeTip(node: StoryNode, kind: NodeKind): string {
   const place = node.name ? `${node.name} · ` : '';
-  if (node.kind === 'recruit') return `${place}Recruit a hero`;
-  if (node.kind === 'supply') return `${place}Supply cache`;
+  if (kind === 'recruit') return `${place}Recruit a hero`;
+  if (kind === 'supply') return `${place}Supply cache`;
   const size = enemyRosterSize(node.depth, node.kind);
   const led = node.enemy ? ` · ${CARDS_BY_ID[node.enemy]?.name ?? ''}` : '';
-  const kind = node.kind === 'boss' ? 'Boss' : 'Battle';
-  return `${place}${kind} — ${size} foe${size > 1 ? 's' : ''}${led}`;
+  return `${place}${kind === 'boss' ? 'Boss' : 'Battle'} — ${size} foe${size > 1 ? 's' : ''}${led}`;
 }
 
 // ---- node marker -------------------------------------------------------------
@@ -187,8 +187,11 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
   // Unavailable spots (locked — not reachable, not done) are greyed out so only
   // what you can act on stands out.
   const muted = !reachable && !current && !cleared;
-  const size = node.kind === 'boss' ? 48 : node.kind === 'elite' ? 40 : 36;
-  const accent = KIND_ACCENT[node.kind];
+  // A recruit becomes a supply pick once the roster is full — reflect that in
+  // the icon/label/tooltip so the map matches what the click will do.
+  const effKind: NodeKind = node.kind === 'recruit' && run.heroes.length >= 4 ? 'supply' : node.kind;
+  const size = effKind === 'boss' ? 48 : effKind === 'elite' ? 40 : 36;
+  const accent = KIND_ACCENT[effKind];
 
   const ring = current ? CURRENT_GOLD : reachable ? accent : cleared ? '#6b8f4a' : 'rgba(124,114,94,0.55)';
   const fill = muted ? '#23201a' : current || reachable ? '#251a0c' : '#2a2414';
@@ -235,7 +238,7 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
           }}
         />
       )}
-      <NodeIcon kind={cleared && !current ? 'cleared' : node.kind} color={iconColor} size={size * 0.5} />
+      <NodeIcon kind={cleared && !current ? 'cleared' : effKind} color={iconColor} size={size * 0.5} />
 
       <AnimatePresence>
         {hover && (
@@ -252,7 +255,7 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
               fontFamily: fonts.ui, fontSize: 11, fontWeight: 700,
               boxShadow: shadow.md,
             }}
-          >{nodeTip(node)}</motion.span>
+          >{nodeTip(node, effKind)}</motion.span>
         )}
       </AnimatePresence>
 
@@ -260,12 +263,12 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
           only for actionable nodes. The sub-line is touch-friendly: no hover
           needed on iPad. A dark chip keeps it legible over streets/water. */}
       {showLabel && (() => {
-        const combat = node.kind === 'battle' || node.kind === 'elite' || node.kind === 'boss';
+        const combat = effKind === 'battle' || effKind === 'elite' || effKind === 'boss';
         const foes = combat ? enemyRosterSize(node.depth, node.kind) : 0;
         const enemyName = node.enemy ? CARDS_BY_ID[node.enemy]?.name : undefined;
         const sub = combat
           ? `${foes} foe${foes > 1 ? 's' : ''}${enemyName ? ` · ${enemyName}` : ''}`
-          : node.kind === 'recruit' ? 'recruit a hero' : 'supply cache';
+          : effKind === 'recruit' ? 'recruit a hero' : 'supply cache';
         return (
           <span style={{
             position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
