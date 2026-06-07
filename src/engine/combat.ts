@@ -141,6 +141,38 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
       damageToActive += final;
       if (overflow > 0) damageToFace += overflow;
       if (ko) defenderActiveKO = target.iid;
+
+      // Quicksilver Reload: predicted bonus half-power swing (no retaliation).
+      if (atk.extraHalfAttack && simHp > 0) {
+        const half = Math.floor(dmg / 2);
+        if (half > 0) {
+          const sb = simShield;
+          const hm = simulateAttackMitigation(half, target, simShield, false);
+          simShield = hm.shieldRemaining;
+          const hPredicted = simHp - hm.final;
+          const hKo = hPredicted <= 0;
+          const hOverflow = hKo ? -hPredicted : 0;
+          steps.push({
+            attackerIid: atk.iid,
+            attackerName: CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId,
+            targetIid: target.iid,
+            targetName: CARDS_BY_ID[target.cardId]?.name ?? target.cardId,
+            finalDamage: hm.final,
+            rawDamage: half,
+            predictedHpAfter: Math.max(0, hPredicted),
+            predictedKO: hKo,
+            shieldAbsorbed: Math.max(0, sb - hm.shieldRemaining),
+            bonusLabel: 'Quicksilver',
+            retaliationDamage: 0,
+            attackerHpAfter: null,
+            attackerKO: false,
+          });
+          simHp = Math.max(0, hPredicted);
+          damageToActive += hm.final;
+          if (hOverflow > 0) damageToFace += hOverflow;
+          if (hKo) defenderActiveKO = target.iid;
+        }
+      }
     } else {
       // No defender Active → face damage. Face attacks don't retaliate.
       steps.push({
@@ -278,7 +310,26 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
           }
         }
       }
+
+      // ---- Quicksilver Reload: bonus half-power swing after a skill cast. ----
+      // No retaliation; re-fires the attacker's onAttack procs (lifesteal, shred)
+      // and equipment via the 'attack' cast-context. Flag cleared after use.
+      if (atk.extraHalfAttack && atk.hp > 0 && target.hp > 0) {
+        const half = Math.floor(dmg / 2);
+        if (half > 0) {
+          withCast(atk, 'attack', () => {
+            damageUnit(G, target, half, 'attack', `${atkName} (Quicksilver)`);
+          });
+          if (data?.type === 'hero') {
+            for (const passId of data.passives ?? []) {
+              const a = getAbility(passId);
+              if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target });
+            }
+          }
+        }
+      }
     }
+    atk.extraHalfAttack = false;
     // No living Active to sponge → the attack fizzles. The patron is only
     // damaged when a hero dies (flat 1, in killInPlace), never by face damage.
   }

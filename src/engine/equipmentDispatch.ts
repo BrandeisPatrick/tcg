@@ -27,6 +27,7 @@ type Handler = (
   kind: EquipmentTriggerKind,
   ctx: { movingPlayer: PlayerID },
   target?: CardInstance,
+  amount?: number,
 ) => void;
 
 let handler: Handler | null = null;
@@ -39,6 +40,8 @@ export function fireEquipmentTriggers(
   kind: EquipmentTriggerKind,
   ctx: { movingPlayer: PlayerID },
   target?: CardInstance,
+  /** Damage dealt, for triggers that scale off it (e.g. Mystic Reverb's echo). */
+  amount?: number,
 ) {
-  if (handler && bearer) handler(G, bearer, kind, ctx, target);
+  if (handler && bearer) handler(G, bearer, kind, ctx, target, amount);
 }

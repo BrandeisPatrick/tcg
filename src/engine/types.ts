@@ -98,6 +98,12 @@ export interface CardInstance {
    */
   charges?: number;
   /**
+   * Quicksilver Reload: set when the bearer uses a skill, consumed in the
+   * end-of-turn attack phase to grant one extra basic attack at half power.
+   * Cleared each turn by clearTurnFlags. Undefined for everyone else.
+   */
+  extraHalfAttack?: boolean;
+  /**
    * Turns remaining until the hero respawns. `> 0` means the hero is currently
    * KO'd and occupying its slot as a corpse (greyed in UI, can't act / be
    * targeted). On reaching 0 the hero returns to life at full HP in the same

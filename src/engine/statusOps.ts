@@ -112,6 +112,13 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Djinn's Mark detonates.`);
       damageUnit(G, c, 3 * mark.value, 'spirit');
     }
+    // Reverb (Mystic Reverb): delayed echo. Detonates on natural expiry for its
+    // stored value as spirit damage, then the decay path removes it below.
+    const reverb = c.statuses.find((s) => s.id === 'reverb');
+    if (reverb && reverb.duration === 1) {
+      pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Mystic Reverb echoes.`);
+      damageUnit(G, c, reverb.value, 'spirit', 'Mystic Reverb');
+    }
     // Action-denying CC (stun/silenced/disarm) is NOT decremented here — it
     // ticks at the END of the afflicted unit's turn (see tickEndOfTurnCC), so a
     // stored duration of N denies exactly N of the unit's turns. Everything else
@@ -147,5 +154,6 @@ export function clearTurnFlags(ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
     c.exhausted = false;
     c.skillUsedThisTurn = false;
+    c.extraHalfAttack = false;
   }
 }

@@ -83,7 +83,7 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   const cast = currentCast();
   if (cast && cast.source) {
     if (cast.kind === 'skill' || cast.kind === 'spell' || cast.kind === 'ult') {
-      fireEquipmentTriggers(G, cast.source, 'onBearerSkillDamage', { movingPlayer: cast.source.ownerId }, target);
+      fireEquipmentTriggers(G, cast.source, 'onBearerSkillDamage', { movingPlayer: cast.source.ownerId }, target, dmg);
     }
     if (cast.kind === 'attack') {
       fireEquipmentTriggers(G, cast.source, 'onAttack', { movingPlayer: cast.source.ownerId }, target);

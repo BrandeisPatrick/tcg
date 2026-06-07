@@ -53,11 +53,38 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'improved_cooldown', name: 'Improved Cooldown', type: 'equipment', rarity: 2, tier: 2, cost: 3, charges: 2, abilities: ['eff_cooldown_draw'], text: "When the bearer uses a skill, draw a card. 2 charges, then it breaks." },
   { id: 'superior_cooldown', name: 'Superior Cooldown', type: 'equipment', rarity: 3, tier: 3, cost: 5, charges: 3, abilities: ['eff_cooldown_draw'], text: "When the bearer uses a skill, draw a card. 3 charges, then it breaks." },
 
+  // ----- Mystic Burst family → spirit burst on skill use (canon Mystic Burst) -----
+  // The cast-payoff partner to the cooldown line: every skill the bearer uses
+  // pings the enemy active with burst spirit damage. Flat magnitude (no Spirit
+  // scaling) by tier: 2 / 3. No stats — the burst is the payoff, the slot the cost.
+  { id: 'mystic_burst',   name: 'Mystic Burst',   type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_mystic_burst_proc'],   text: 'When the bearer uses a skill, deal 2 spirit damage to the enemy active.' },
+  { id: 'improved_burst', name: 'Improved Burst', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_improved_burst_proc'], text: 'When the bearer uses a skill, deal 3 spirit damage to the enemy active.' },
+
+  // ----- Lifesteal family (canon Bullet/Spirit Lifesteal → Leech) -----
+  // T2 escalations of the T1 heal-on-damage procs (Restorative Shot heals on
+  // attack; Mystic Regeneration heals on skill damage) — both up to heal 2.
+  { id: 'bullet_lifesteal', name: 'Bullet Lifesteal', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_bullet_lifesteal'], text: 'After bearer attacks: heal 2.' },
+  { id: 'spirit_lifesteal', name: 'Spirit Lifesteal', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_spirit_lifesteal'], text: "After bearer's skill / spell / ult damages an enemy: heal 2." },
+
+  // ----- Cast-payoff items (functionality tied to skill / ult activation) -----
+  // Quicksilver Reload (canon "casting reloads your weapon"): after a skill,
+  // the bearer gets a bonus half-power basic attack this turn.
+  { id: 'quicksilver_reload', name: 'Quicksilver Reload', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_quicksilver_reload'], text: 'After the bearer uses a skill, they make a bonus attack at half Bullet Power this turn.' },
+  // Surge of Power: after a skill, +2 Bullet Power for the turn.
+  { id: 'surge_of_power', name: 'Surge of Power', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_surge_of_power'], text: 'After the bearer uses a skill: +2 Bullet Power this turn.' },
+
   // ----- T3 (cost 5-6) — passive resists (canon T3 Vitality) -----
   { id: 'bullet_resilience', name: 'Bullet Resilience', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_bullet_resist'], text: 'Bullet Resist 3.' },
 
   // ----- T4 (cost 7+) — premium items (canon T4) -----
   { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'equipment', rarity: 4, tier: 4, cost: 7, charges: 4, abilities: ['eff_cooldown_draw'], text: "When the bearer uses a skill, draw a card. 4 charges, then it breaks." },
+  // Leech = canon fusion of Bullet Lifesteal + Spirit Lifesteal; lifesteals off
+  // BOTH bullet attacks and skill damage by running both T2 abilities.
+  { id: 'leech', name: 'Leech', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_bullet_lifesteal', 'eff_spirit_lifesteal'], text: "After bearer attacks: heal 2. After bearer's skill / spell / ult damages an enemy: heal 2." },
+  // Diviner's Kevlar (T4): shield payoff on ultimate cast.
+  { id: 'diviners_kevlar', name: "Diviner's Kevlar", type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_diviners_kevlar'], text: 'After the bearer casts their ultimate: gain Shield 4.' },
+  // Mystic Reverb (T4): delayed echo — half the skill's damage hits the target again next turn.
+  { id: 'mystic_reverb', name: 'Mystic Reverb', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_mystic_reverb'], text: "When the bearer's skill damages an enemy: at that enemy's next turn, it takes spirit damage equal to half the damage dealt." },
   { id: 'healing_tempo',  name: 'Healing Tempo',  type: 'equipment', rarity: 4, tier: 4, cost: 7, bonus: { atk: 2 }, abilities: ['eff_healing_tempo'], text: '+2 Bullet Power. Healing Boost 4.' },
   { id: 'boundless_spirit', name: 'Boundless Spirit', type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { spirit: 5, hp: 3 }, text: '+5 Spirit Power. +3 HP.' },
   { id: 'glass_cannon',   name: 'Glass Cannon',   type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { atk: 6, hp: -1 }, text: '+6 Bullet Power. −1 max HP.' },

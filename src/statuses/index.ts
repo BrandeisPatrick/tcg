@@ -35,6 +35,7 @@ export const STATUSES: StatusDef[] = [
   // ----- Delayed CC -----
   { id: 'charged',       title: 'Charged',       desc: 'On expiry: Stun for 2 turns.',                             hvalue: -1 },
   { id: 'djinns_mark',   title: "Djinn's Mark",  desc: 'Detonates at 4 stacks or on expiry for 2 spirit dmg per stack.', hvalue: -1 },
+  { id: 'reverb',        title: 'Reverb',        desc: 'Detonates at the start of your turn for <value> spirit damage.', hvalue: -1 },
 
   // ----- Other debuff -----
   { id: 'weapon_power_down',   title: 'Bullet Power',  desc: 'Bullet Power −<value> on basic attacks.',                 hvalue: -1 },

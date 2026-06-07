@@ -235,6 +235,20 @@ const eff_mystic_regeneration_proc: AbilityDef = {
   run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Mystic Regeneration'); },
 };
 
+// Lifesteal family (canon Bullet/Spirit Lifesteal → Leech): the heal-2 tier-up
+// of Restorative Shot (on attack) / Mystic Regeneration (on skill damage). The
+// T4 Leech runs BOTH — its real canon build path is Bullet + Spirit Lifesteal.
+const eff_bullet_lifesteal: AbilityDef = {
+  id: 'eff_bullet_lifesteal', trigger: 'onAttack', target: 'self',
+  base: 2, baseLabel: 'heal',
+  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 2, 'Bullet Lifesteal'); },
+};
+const eff_spirit_lifesteal: AbilityDef = {
+  id: 'eff_spirit_lifesteal', trigger: 'onBearerSkillDamage', target: 'self',
+  base: 2, baseLabel: 'heal',
+  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 2, 'Spirit Lifesteal'); },
+};
+
 // Bullet Shield: after bearer takes bullet damage, gain Shield 2.
 const eff_bullet_shield_proc: AbilityDef = {
   id: 'eff_bullet_shield_proc', trigger: 'onBearerDamagedByBullet', target: 'self',
@@ -263,6 +277,66 @@ const eff_cooldown_draw: AbilityDef = {
       eq.charges = (eq.charges ?? 0) - 1;
       if (eq.charges <= 0) consumeEquipment(G, source, eq);
     }
+  },
+};
+
+// Mystic Burst family: each time the bearer uses a skill, hit the enemy active
+// with a flat burst of spirit damage (canon Mystic Burst). Runs in the proc
+// cast-context so it doesn't re-fire the bearer's own skill-damage triggers,
+// but still respects the enemy's resist / reactive spirit shield. Tiers 2 / 3.
+function mysticBurst(amount: number, label: string): AbilityDef['run'] {
+  return (G, ctx) => {
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)].active;
+    if (enemy && (enemy.respawnTurnsLeft ?? 0) === 0) damageUnit(G, enemy, amount, 'spirit', label);
+  };
+}
+const eff_mystic_burst_proc: AbilityDef = {
+  id: 'eff_mystic_burst_proc', trigger: 'onBearerSkillUsed', target: 'enemyActive',
+  base: 2, baseLabel: 'spirit dmg', run: mysticBurst(2, 'Mystic Burst'),
+};
+const eff_improved_burst_proc: AbilityDef = {
+  id: 'eff_improved_burst_proc', trigger: 'onBearerSkillUsed', target: 'enemyActive',
+  base: 3, baseLabel: 'spirit dmg', run: mysticBurst(3, 'Improved Burst'),
+};
+
+// ----- Cast-payoff items (functionality tied to skill / ult activation) -----
+
+// Surge of Power: after the bearer uses a skill, gain +2 Bullet Power this turn
+// (weapon_power, duration 1 — present for the end-of-turn attack phase, gone by
+// the bearer's next turn). Canon Surge of Power empowers you right after a cast.
+const eff_surge_of_power: AbilityDef = {
+  id: 'eff_surge_of_power', trigger: 'onBearerSkillUsed', target: 'self',
+  base: 2, baseLabel: 'Bullet Power',
+  run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'weapon_power', 2, 1); },
+};
+
+// Diviner's Kevlar: after the bearer casts their ultimate, gain Shield 4.
+// Tied to ult activation (onBearerUltCast), not skill use.
+const eff_diviners_kevlar: AbilityDef = {
+  id: 'eff_diviners_kevlar', trigger: 'onBearerUltCast', target: 'self',
+  base: 4, baseLabel: 'shield',
+  run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 4, 999); },
+};
+
+// Quicksilver Reload: canon "casting reloads your weapon" — after the bearer
+// uses a skill they get an extra basic attack this turn at half power. The
+// flag is consumed in resolveAttackPhase (end of turn).
+const eff_quicksilver_reload: AbilityDef = {
+  id: 'eff_quicksilver_reload', trigger: 'onBearerSkillUsed', target: 'self',
+  run: (_G, _ctx, { source }) => { if (source) source.extraHalfAttack = true; },
+};
+
+// Mystic Reverb: canon delayed AoE echo on the struck enemy. TCG mapping: when
+// the bearer's skill damages a target, apply a Reverb that detonates at the
+// target's NEXT turn start for 50% of the damage dealt (delayed one turn).
+// Needs the dealt amount, plumbed through the onBearerSkillDamage trigger.
+const eff_mystic_reverb: AbilityDef = {
+  id: 'eff_mystic_reverb', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  run: (G, _ctx, { target, params }) => {
+    const amount = params?.amount as number | undefined;
+    if (!target || !amount || amount <= 0) return;
+    const echo = Math.floor(amount / 2);
+    if (echo > 0) addStatus(G, target, 'reverb', echo, 1);
   },
 };
 
@@ -745,6 +819,9 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_bullet_resist_shredder_proc,
   eff_restorative_shot_proc, eff_extra_regen_proc, eff_mystic_regeneration_proc,
   eff_bullet_shield_proc, eff_spirit_shield_proc, eff_cooldown_draw,
+  eff_mystic_burst_proc, eff_improved_burst_proc,
+  eff_bullet_lifesteal, eff_spirit_lifesteal,
+  eff_surge_of_power, eff_diviners_kevlar, eff_quicksilver_reload, eff_mystic_reverb,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
@@ -770,7 +847,7 @@ export function getAbility(id: string): AbilityDef | undefined {
 // Procs run inside withCast(..., 'proc') so nested damageUnit calls don't
 // re-fire equipment triggers (would recurse on Mystic Burst, Mystic Reverb, etc.).
 import { withCast as _withCast, currentCast } from '@/engine/castContext';
-setEquipmentDispatcher((G, bearer, kind, ctx, target) => {
+setEquipmentDispatcher((G, bearer, kind, ctx, target, amount) => {
   if (!bearer.attached) return;
   // Iterate a snapshot: a proc (e.g. a spent cooldown→draw item) may detach
   // itself from bearer.attached mid-loop, which would skip a sibling otherwise.
@@ -780,7 +857,7 @@ setEquipmentDispatcher((G, bearer, kind, ctx, target) => {
     for (const aid of data.abilities) {
       const ability = ABILITIES_BY_ID[aid];
       if (ability && ability.trigger === kind) {
-        _withCast(bearer, 'proc', () => ability.run(G, ctx, { source: bearer, target, params: { equip: eq } }));
+        _withCast(bearer, 'proc', () => ability.run(G, ctx, { source: bearer, target, params: { equip: eq, amount } }));
       }
     }
   }
