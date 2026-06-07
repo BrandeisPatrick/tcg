@@ -186,6 +186,7 @@ export function HeroSlot({
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
                 style={{
+                  position: 'relative',
                   width: compact ? 18 : 24,
                   height: compact ? 18 : 24,
                   borderRadius: 4,
@@ -197,6 +198,22 @@ export function HeroSlot({
                 }} title={CARDS_BY_ID[eq.cardId]?.name}>
                 <img src={`${import.meta.env.BASE_URL}items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
                   style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+                {/* Charge counter — consumable gear (cooldown→draw family) only. */}
+                {eq.charges != null && (
+                  <span aria-label={`${eq.charges} charges left`} style={{
+                    position: 'absolute', right: 0, bottom: 0,
+                    minWidth: compact ? 9 : 11,
+                    padding: '0 1px',
+                    fontSize: compact ? 8 : 9,
+                    fontWeight: 800,
+                    lineHeight: compact ? '9px' : '11px',
+                    textAlign: 'center',
+                    color: '#fff',
+                    background: eq.charges <= 1 ? '#c2410c' : 'rgba(0,0,0,0.82)',
+                    borderTopLeftRadius: 3,
+                    pointerEvents: 'none',
+                  }}>{eq.charges}</span>
+                )}
               </div>
             ))}
           </div>

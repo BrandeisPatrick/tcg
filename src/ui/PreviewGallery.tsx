@@ -554,7 +554,7 @@ function StatusesTab() {
 // OVERLAYS TAB
 // =============================================================================
 
-function mockEquipInstance(cardId: string): CardInstance {
+function mockEquipInstance(cardId: string, charges?: number): CardInstance {
   return {
     iid: `preview-eq-${cardId}`,
     cardId,
@@ -562,6 +562,7 @@ function mockEquipInstance(cardId: string): CardInstance {
     zone: 'equipment',
     hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
     statuses: [], exhausted: false, skillUsedThisTurn: false,
+    ...(charges != null ? { charges } : {}),
   };
 }
 
@@ -600,7 +601,7 @@ function OverlaysTab() {
           { id: 'shield', value: 5, duration: 999 },
           { id: 'spirit_power', value: 2, duration: 2 },
         ],
-        attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('healing_booster')],
+        attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('improved_cooldown', 2)],
       };
       props.canRetreat = true;
       props.retreatCost = 2;
