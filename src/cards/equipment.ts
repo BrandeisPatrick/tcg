@@ -73,6 +73,14 @@ export const EQUIPMENT: EquipmentCard[] = [
   // Surge of Power: after a skill, +2 Bullet Power for the turn.
   { id: 'surge_of_power', name: 'Surge of Power', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_surge_of_power'], text: 'After the bearer uses a skill: +2 Bullet Power this turn.' },
 
+  // ----- T2 tech (canon Suppressor T2 Spirit, Reactive Barrier T2 Vitality) -----
+  { id: 'suppressor',       name: 'Suppressor',       type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_suppressor'],       text: "When the bearer's skill / spell / ult damages an enemy: Bullet Power −1 for 2 turns." },
+  { id: 'reactive_barrier', name: 'Reactive Barrier', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_reactive_barrier'], text: 'When the bearer is Stunned / Silenced / Disarmed / Slept: gain Shield 3.' },
+
+  // ----- T3 weapon offense (canon Toxic / Tesla Bullets, both T3 Weapon) -----
+  { id: 'toxic_bullets', name: 'Toxic Bullets', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_toxic_bullets'], text: "Bearer's attacks apply Bleed 1 (stacks, max 3) for 2 turns." },
+  { id: 'tesla_bullets', name: 'Tesla Bullets', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_tesla_bullets'], text: "After bearer attacks: chain 1 bullet damage to an enemy bench hero." },
+
   // ----- T3 (cost 5-6) — passive resists (canon T3 Vitality) -----
   { id: 'bullet_resilience', name: 'Bullet Resilience', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_bullet_resist'], text: 'Bullet Resist 3.' },
 

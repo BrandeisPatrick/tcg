@@ -340,6 +340,41 @@ const eff_mystic_reverb: AbilityDef = {
   },
 };
 
+// ----- Bullet-weapon offense + defensive tech (canon weapon/spirit items) -----
+
+// Toxic Bullets (canon T3 weapon): attacks apply stacking Bleed.
+const eff_toxic_bullets: AbilityDef = {
+  id: 'eff_toxic_bullets', trigger: 'onAttack', target: 'self',
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bleed', 1, 2); },
+};
+
+// Tesla Bullets (canon T3 weapon): the shot "jumps" — chain 1 bullet damage to
+// an enemy bench hero. Runs in proc cast-context so it doesn't re-fire onAttack.
+const eff_tesla_bullets: AbilityDef = {
+  id: 'eff_tesla_bullets', trigger: 'onAttack', target: 'self',
+  base: 1, baseLabel: 'chain dmg',
+  run: (G, _ctx, { source }) => {
+    if (!source) return;
+    const enemy = otherPlayer(source.ownerId);
+    const jump = G.players[enemy].bench.find((b) => b && (b.respawnTurnsLeft ?? 0) === 0);
+    if (jump) damageUnit(G, jump, 1, 'attack', 'Tesla Bullets');
+  },
+};
+
+// Suppressor (canon T2 spirit): dealing skill damage reduces the target's fire
+// rate → Weapon Power −1 for 2 turns (so it survives to their next attack).
+const eff_suppressor: AbilityDef = {
+  id: 'eff_suppressor', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'weapon_power_down', 1, 2); },
+};
+
+// Reactive Barrier (canon T2 vitality): gain a Shield when the bearer is CC'd.
+const eff_reactive_barrier: AbilityDef = {
+  id: 'eff_reactive_barrier', trigger: 'onBearerCCSuffered', target: 'self',
+  base: 3, baseLabel: 'shield',
+  run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 3, 999); },
+};
+
 // ----- Hero skills (active, "Activate" trigger) -----
 // Each skill declares its scaling (spirit / bullet / both / none).
 // Base damage stays its original type. Scaling adds a second damage event of the matching type.
@@ -822,6 +857,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_mystic_burst_proc, eff_improved_burst_proc,
   eff_bullet_lifesteal, eff_spirit_lifesteal,
   eff_surge_of_power, eff_diviners_kevlar, eff_quicksilver_reload, eff_mystic_reverb,
+  eff_toxic_bullets, eff_tesla_bullets, eff_suppressor, eff_reactive_barrier,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
