@@ -27,7 +27,7 @@ describe('leveling — universal stat growth', () => {
   it('grants +1 HP / +1 BP / +1 Spirit per level (≈ +3 each at Lv4)', () => {
     const G = freshG();
     const c = makeHero('hero_lady_geist', '0', 'active', 0);
-    grantExp(G, c, 18); // cumulative cap → Lv4
+    grantExp(G, c, 21); // cumulative cap → Lv4 (5 + 7 + 9)
     expect(c.level).toBe(4);
     expect(c.atkMod).toBe(3);
     expect(c.spiritMod).toBe(3); // the V1 change — was 0 before
@@ -47,7 +47,7 @@ describe('skills scale with Spirit into the late game', () => {
     skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
     const lv1Dmg = before1 - dummy.hp; // base 2
 
-    grantExp(G, caster, 18); // → Lv4, +3 Spirit
+    grantExp(G, caster, 21); // → Lv4, +3 Spirit (5 + 7 + 9)
     const before4 = dummy.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
     const lv4Dmg = before4 - dummy.hp; // 2 + 3

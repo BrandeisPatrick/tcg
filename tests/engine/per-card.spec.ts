@@ -37,7 +37,7 @@ describe('Spells — cost 1', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     ABILITIES_BY_ID['eff_rusted_barrel'].run(G, { movingPlayer: '0' }, { target });
-    const w = target.statuses.find((s) => s.id === 'weaken');
+    const w = target.statuses.find((s) => s.id === 'weapon_power_down');
     expect(w?.value).toBe(2);
     expect(w?.duration).toBe(2);
   });
@@ -68,12 +68,12 @@ describe('Spells — cost 3', () => {
     expect(before - target.hp).toBe(6);
   });
 
-  it('Disarming Hex applies Disarm for 3 turns', () => {
+  it('Disarming Hex applies Disarm for 2 turns', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     ABILITIES_BY_ID['eff_disarming_hex'].run(G, { movingPlayer: '0' }, { target });
     const d = target.statuses.find((s) => s.id === 'disarm');
-    expect(d?.duration).toBe(3);
+    expect(d?.duration).toBe(2);
   });
 });
 
@@ -206,7 +206,7 @@ describe('Weaken status reduces attack damage', () => {
     const G = freshG();
     const atk = G.players['0'].active!;
     const target = G.players['1'].active!;
-    addStatus(G, atk, 'weaken', 2, 2);
+    addStatus(G, atk, 'weapon_power_down', 2, 2);
     target.hpMax = 30; target.hp = 30;
     const before = target.hp;
     withCast(atk, 'attack', () => damageUnit(G, target, Math.max(0, 3 - 2), 'attack'));

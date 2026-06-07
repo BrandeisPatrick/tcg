@@ -35,7 +35,7 @@ describe('Rusted Barrel applies Weaken (reduces enemy ATK)', () => {
     const G = freshG();
     const enemy = G.players['1'].active!;
     ABILITIES_BY_ID['eff_rusted_barrel'].run(G, { movingPlayer: '0' }, { target: enemy });
-    const w = enemy.statuses.find((s) => s.id === 'weaken');
+    const w = enemy.statuses.find((s) => s.id === 'weapon_power_down');
     expect(w?.value).toBe(2);
     expect(w?.duration).toBe(2);
   });
@@ -49,7 +49,7 @@ describe('Kelvin Frost Grenade — damage + heal', () => {
     kelvin.hp = kelvin.hpMax - 3;
     const enemyHpBefore = enemy.hp;
     ABILITIES_BY_ID['skill_kelvin'].run(G, { movingPlayer: '0' }, { source: kelvin, target: enemy });
-    expect(enemyHpBefore - enemy.hp).toBe(2);
+    expect(enemyHpBefore - enemy.hp).toBe(1); // 1 spirit base (+0 spirit)
     expect(kelvin.hp).toBe(kelvin.hpMax - 1); // healed for 2
   });
 });
@@ -59,7 +59,7 @@ describe('Healing Blocked status', () => {
     const G = freshG();
     const target = G.players['0'].active!;
     target.hp = target.hpMax - 5;
-    addStatus(G, target, 'healing_blocked', 1, 2);
+    addStatus(G, target, 'healing_boost_down', 1, 2);
     const healed = healUnit(G, target, 3);
     expect(healed).toBe(0);
     expect(target.hp).toBe(target.hpMax - 5);
@@ -68,12 +68,12 @@ describe('Healing Blocked status', () => {
   it('expires after duration', () => {
     const G = freshG();
     const target = G.players['0'].active!;
-    addStatus(G, target, 'healing_blocked', 1, 1);
-    expect(target.statuses.some((s) => s.id === 'healing_blocked')).toBe(true);
+    addStatus(G, target, 'healing_boost_down', 1, 1);
+    expect(target.statuses.some((s) => s.id === 'healing_boost_down')).toBe(true);
     target.statuses = target.statuses
       .map((s) => ({ ...s, duration: s.duration - 1 }))
       .filter((s) => s.duration > 0);
-    expect(target.statuses.some((s) => s.id === 'healing_blocked')).toBe(false);
+    expect(target.statuses.some((s) => s.id === 'healing_boost_down')).toBe(false);
   });
 });
 

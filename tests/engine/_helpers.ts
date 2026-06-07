@@ -4,6 +4,7 @@ import { STARTER_DECK_PLAYER, STARTER_DECK_AI } from '@/decks/starter';
 import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
 import { resetIid, nextIid } from '@/engine/util';
 import { CARDS_BY_ID } from '@/cards';
+import { setMatchConfig } from '@/storage/matchConfig';
 
 /**
  * Battle-ready GameState with both rosters already on the board (no draft).
@@ -22,7 +23,8 @@ export function freshReadyGame(): GameState {
       '0': buildPlayer('0', STARTER_DECK_PLAYER.heroes, AI_DECKS_BY_NAME.aggro),
       '1': buildPlayer('1', STARTER_DECK_AI.heroes, AI_DECKS_BY_NAME.control),
     },
-    turnNumber: 1,
+    // Turn 2 so P0's attack phase resolves (P0 forgoes first strike on turn 1).
+    turnNumber: 2,
     selector: null,
     resolveQueue: [],
     log: [{ turn: 1, text: 'Battle begins.' }],
@@ -33,6 +35,26 @@ export function freshReadyGame(): GameState {
     damageFx: [],
     shop: null,
   } as unknown as GameState;
+}
+
+/**
+ * Make the engine's `setup()` build a battle-ready match (no draft) so a
+ * boardgame.io Client boots straight into turn 1 with both boards populated.
+ * Uses the story branch (which bypasses the draft) with a zero stat buff so it
+ * behaves like a normal match. Call in beforeAll for Client-based specs.
+ */
+export function configureReadyMatch(): void {
+  setMatchConfig({
+    playerDeck: [],
+    heroPreferences: [null, null, null, null],
+    story: {
+      playerHeroes: STARTER_DECK_PLAYER.heroes,
+      playerDeck: AI_DECKS_BY_NAME.aggro,
+      enemyHeroes: STARTER_DECK_AI.heroes,
+      enemyDeck: AI_DECKS_BY_NAME.control,
+      enemyBuff: { atk: 0, hp: 0 },
+    },
+  });
 }
 
 /** Build a single hero instance directly (for tests that want a specific hero). */

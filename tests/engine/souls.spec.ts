@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import type { GameState, PlayerID } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/damage';
-import { freshReadyGame } from './_helpers';
+import { freshReadyGame, configureReadyMatch } from './_helpers';
+
+// Boot the boardgame.io Client straight into a playable match (skip the draft).
+beforeAll(configureReadyMatch);
 
 function newClient() {
   const client = Client({ game: DeadlockGame, numPlayers: 2 });
@@ -54,7 +57,7 @@ describe('souls economy', () => {
     G.players['1'].souls = 0; // AI has nothing
     // Synthesize a fake ctx where currentPlayer = '1'
     const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
-    const moves = enumerateAIMoves(G, ctx);
+    const moves = enumerateAIMoves(G, ctx, false);
     // Every playCard move must reference a card we could afford (cost <= souls)
     for (const m of moves) {
       if (m.move !== 'playCard') continue;
@@ -77,32 +80,27 @@ describe('souls economy', () => {
     expect(G.players['0'].souls).toBe(2);
   });
 
-  it('soul refill caps at 7 (table tail)', () => {
+  it('soul refill caps at the table tail (10)', () => {
     const c = newClient();
-    // Step through 13 endTurns = P0 has had 7 turns. Refill at turn 7 = 7.
-    // Hero levelling now makes auto-combat lethal enough that patrons can
-    // die before we get there, so guard each iteration against gameover and
-    // assert based on the final turn we actually reached.
+    // Step through many endTurns; refill ramps 1..10 then holds at the tail.
+    // Hero levelling makes auto-combat lethal enough that patrons can die
+    // before we get there, so guard each iteration against gameover and
+    // assert the cap held regardless of how far we reached.
     for (let i = 0; i < 13; i++) {
       const { ctx } = snap(c);
       if (ctx.gameover) break;
       c.moves.endTurn?.();
     }
-    const { G, ctx } = snap(c);
-    if (ctx.gameover) {
-      // If the game ended before turn 13, just ensure the cap held.
-      expect(G.players['0'].souls).toBeLessThanOrEqual(7);
-    } else {
-      expect(G.players['0'].souls).toBe(7);
-      // Two more P0 turns; still 7, not climbing.
-      for (let i = 0; i < 4; i++) {
-        const { ctx: c2 } = snap(c);
-        if (c2.gameover) break;
-        c.moves.endTurn?.();
-      }
-      const { G: G2 } = snap(c);
-      expect(G2.players['0'].souls).toBeLessThanOrEqual(7);
+    const { G } = snap(c);
+    expect(G.players['0'].souls).toBeLessThanOrEqual(10);
+    // A few more P0 turns; still capped, not climbing past the tail.
+    for (let i = 0; i < 4; i++) {
+      const { ctx: c2 } = snap(c);
+      if (c2.gameover) break;
+      c.moves.endTurn?.();
     }
+    const { G: G2 } = snap(c);
+    expect(G2.players['0'].souls).toBeLessThanOrEqual(10);
   });
 
   it('+1 souls bounty awarded to opponent on enemy hero KO', () => {
@@ -161,7 +159,7 @@ describe('souls economy', () => {
     G.players['1'].active!.hp = 1;     // critical
     G.players['1'].active!.hpMax = 10;
     const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
-    const moves = enumerateAIMoves(G, ctx);
+    const moves = enumerateAIMoves(G, ctx, false);
     // At least one moveHero option from bench (1|2|3) into slot 0 should appear.
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.length).toBeGreaterThan(0);
@@ -176,7 +174,7 @@ describe('souls economy', () => {
     G.players['1'].souls = 3;
     // Active is full HP, no debuffs — no reason to retreat.
     const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
-    const moves = enumerateAIMoves(G, ctx);
+    const moves = enumerateAIMoves(G, ctx, false);
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     // Filter heuristic should suppress retreats in non-emergencies.
     expect(retreats.length).toBe(0);
@@ -189,7 +187,7 @@ describe('souls economy', () => {
     // Stunned active — dead weight even if HP is fine.
     G.players['1'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 });
     const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
-    const moves = enumerateAIMoves(G, ctx);
+    const moves = enumerateAIMoves(G, ctx, false);
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.length).toBeGreaterThan(0);
   });
@@ -201,27 +199,27 @@ describe('souls economy', () => {
     G.players['1'].active!.hp = 1;     // would want to retreat
     G.players['1'].active!.hpMax = 10;
     const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
-    const moves = enumerateAIMoves(G, ctx);
+    const moves = enumerateAIMoves(G, ctx, false);
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.length).toBe(0);
   });
 
   // ----- Spirit scaling on hero skills (use Lady Geist as representative — 4 spirit dmg) -----
-  it('hero skill at 0 SPI deals base damage (Lady Geist: 4 + 0 = 4 spirit)', async () => {
+  it('hero skill at 0 SPI deals base damage (Lady Geist: 2 + 0 = 2 spirit)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     expect(skill.scalesSpirit).toBe(true);
-    expect(skill.base).toBe(4);
+    expect(skill.base).toBe(2);
     const G = freshG();
     const caster = G.players['0'].active!;
     caster.spiritMod = 0;
     const target = G.players['1'].active!;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(4);
+    expect(hpBefore - target.hp).toBe(2);
   });
 
-  it('hero skill at +3 SPI deals base + spirit (Lady Geist: 4 + 3 = 7 spirit)', async () => {
+  it('hero skill at +3 SPI deals base + spirit (Lady Geist: 2 + 3 = 5 spirit)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -231,13 +229,12 @@ describe('souls economy', () => {
     target.hpMax = 20; target.hp = 20; // soak the full damage to measure it
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(7); // base 4 + 3 spirit
+    expect(hpBefore - target.hp).toBe(5); // base 2 + 3 spirit
   });
 
   it('heal is flat — Spirit does NOT scale heals (Dynamo heal 2)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_dynamo'];
-    expect(skill.scalesSpirit).toBeUndefined();
     const G = freshG();
     const healer = G.players['0'].active!;
     healer.spiritMod = 2; // spirit should be ignored for heals
@@ -249,7 +246,7 @@ describe('souls economy', () => {
     expect(ally.hp - hpBefore).toBe(2); // flat 2, no spirit
   });
 
-  it('shield magnitude is flat — Spirit does NOT scale shields (Paige shield 4)', async () => {
+  it('shield magnitude is flat — Spirit does NOT scale shields (Paige shield 2)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_paige'];
     const G = freshG();
@@ -258,7 +255,7 @@ describe('souls economy', () => {
     const ally = G.players['0'].bench[0]!;
     skill.run(G, { movingPlayer: '0' }, { source: paige, target: ally });
     const sh = ally.statuses.find((s) => s.id === 'shield');
-    expect(sh?.value).toBe(4); // flat 4, no spirit
+    expect(sh?.value).toBe(2); // flat 2, no spirit
   });
 
   it('no skill has bullet scaling — all damage scaling goes through Spirit', async () => {

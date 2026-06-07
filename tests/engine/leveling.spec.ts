@@ -20,22 +20,22 @@ describe('hero leveling: grantExp', () => {
     expect(h.exp).toBe(0);
   });
 
-  it('advances Lv1 → Lv2 at 3 exp (overflow rolls forward)', () => {
+  it('advances Lv1 → Lv2 at 5 exp (overflow rolls forward)', () => {
     const G = freshG();
     const h = G.players['0'].active!;
-    expect(grantExp(G, h, 4)).toBe(1);
+    expect(grantExp(G, h, 6)).toBe(1);
     expect(h.level).toBe(2);
-    expect(h.exp).toBe(1); // 4 - 3 = 1 spilling into Lv2
+    expect(h.exp).toBe(1); // 6 - 5 = 1 spilling into Lv2
   });
 
-  it('Lv2 → Lv3 at +6 exp, Lv3 → Lv4 at +9 exp (per-level thresholds)', () => {
+  it('Lv2 → Lv3 at +7 exp, Lv3 → Lv4 at +9 exp (per-level thresholds)', () => {
     const G = freshG();
     const h = G.players['0'].active!;
-    grantExp(G, h, 3); // → Lv2, 0 exp
+    grantExp(G, h, 5); // → Lv2, 0 exp
     expect(h.level).toBe(2);
-    grantExp(G, h, 5);
+    grantExp(G, h, 6);
     expect(h.level).toBe(2);
-    expect(h.exp).toBe(5);
+    expect(h.exp).toBe(6);
     grantExp(G, h, 1);
     expect(h.level).toBe(3);
     expect(h.exp).toBe(0);
@@ -59,7 +59,7 @@ describe('hero leveling: grantExp', () => {
   it('cannot multi-step in a single grant past max', () => {
     const G = freshG();
     const h = G.players['0'].active!;
-    grantExp(G, h, 18); // exactly enough for Lv4
+    grantExp(G, h, 21); // exactly enough for Lv4 (5 + 7 + 9)
     expect(h.level).toBe(4);
     expect(h.exp).toBe(0);
   });
@@ -133,22 +133,22 @@ describe('hero leveling triggers', () => {
   it('death PRESERVES level + exp (rank persists through respawn)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
-    grantExp(G, target, 7); // Lv2, 4 exp
+    grantExp(G, target, 7); // Lv2 (cost 5), 2 exp
     expect(target.level).toBe(2);
-    expect(target.exp).toBe(4);
+    expect(target.exp).toBe(2);
     target.hp = 1;
     const hero = G.players['0'].active!;
     withCast(hero, 'attack', () => damageUnit(G, target, 5, 'attack'));
     reapDead(G, G.players['1']);
     expect(target.respawnTurnsLeft).toBeGreaterThan(0);
     expect(target.level).toBe(2); // level persists
-    expect(target.exp).toBe(4);   // exp persists
+    expect(target.exp).toBe(2);   // exp persists
   });
 });
 
 describe('LEVEL_THRESHOLDS exposed correctly', () => {
-  it('matches the spec: 3 → 6 → 9 exp per level', () => {
-    expect(LEVEL_THRESHOLDS).toEqual([3, 6, 9]);
+  it('matches the spec: 5 → 7 → 9 exp per level', () => {
+    expect(LEVEL_THRESHOLDS).toEqual([5, 7, 9]);
   });
 });
 
@@ -184,51 +184,51 @@ describe('equipment persists through death', () => {
 });
 
 describe('level-up stat bonuses', () => {
-  it('Lv1 → Lv2 grants +1 ATK, +1 HP/hpMax, +0 Spirit', () => {
+  it('Lv1 → Lv2 grants +1 ATK, +1 HP/hpMax, +1 Spirit', () => {
     const G = freshG();
     const h = G.players['0'].active!;
     const atk0 = h.atkMod;
     const spi0 = h.spiritMod;
     const hpMax0 = h.hpMax;
     const hp0 = h.hp;
-    grantExp(G, h, 3); // Lv1 → Lv2
+    grantExp(G, h, 5); // Lv1 → Lv2
     expect(h.level).toBe(2);
     expect(h.atkMod - atk0).toBe(1);
-    expect(h.spiritMod - spi0).toBe(0);
+    expect(h.spiritMod - spi0).toBe(1);
     expect(h.hpMax - hpMax0).toBe(1);
     expect(h.hp - hp0).toBe(1);  // healed too
   });
 
-  it('Lv4 cap = +3 ATK / +3 HP / +0 Spirit cumulative', () => {
+  it('Lv4 cap = +3 ATK / +3 HP / +3 Spirit cumulative', () => {
     const G = freshG();
     const h = G.players['0'].active!;
     const atk0 = h.atkMod;
     const spi0 = h.spiritMod;
     const hpMax0 = h.hpMax;
-    grantExp(G, h, 18); // all the way to Lv4
+    grantExp(G, h, 21); // all the way to Lv4 (5 + 7 + 9)
     expect(h.level).toBe(4);
     expect(h.atkMod - atk0).toBe(3);
-    expect(h.spiritMod - spi0).toBe(0);
+    expect(h.spiritMod - spi0).toBe(3);
     expect(h.hpMax - hpMax0).toBe(3);
   });
 
-  it('level-up never changes spiritMod (skill scaling is gear-only)', () => {
+  it('level-up grants +1 Spirit per level (Spirit is a real build axis)', () => {
     const G = freshG();
     const h = G.players['0'].active!;
     const spi0 = h.spiritMod;
-    grantExp(G, h, 3);
-    expect(h.spiritMod - spi0).toBe(0); // L2
-    grantExp(G, h, 6);
-    expect(h.spiritMod - spi0).toBe(0); // L3
+    grantExp(G, h, 5);
+    expect(h.spiritMod - spi0).toBe(1); // L2
+    grantExp(G, h, 7);
+    expect(h.spiritMod - spi0).toBe(2); // L3
     grantExp(G, h, 9);
-    expect(h.spiritMod - spi0).toBe(0); // L4
+    expect(h.spiritMod - spi0).toBe(3); // L4
   });
 
   it('multi-step single grant applies bonuses for every step jumped', () => {
     const G = freshG();
     const h = G.players['0'].active!;
     const atk0 = h.atkMod;
-    grantExp(G, h, 10); // Lv1 → Lv3 (3 + 6 = 9 exp consumed, 1 remainder)
+    grantExp(G, h, 12); // Lv1 → Lv3 (5 + 7 = 12 exp consumed)
     expect(h.level).toBe(3);
     expect(h.atkMod - atk0).toBe(2);
   });
@@ -237,10 +237,10 @@ describe('level-up stat bonuses', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     const baseHpMax = target.hpMax;
-    grantExp(G, target, 18); // → Lv4, +3 atk / +3 hpMax / +0 spirit
+    grantExp(G, target, 21); // → Lv4, +3 atk / +3 hpMax / +3 spirit
     expect(target.hpMax).toBe(baseHpMax + 3);
     expect(target.atkMod).toBe(3);
-    expect(target.spiritMod).toBe(0);
+    expect(target.spiritMod).toBe(3);
     target.hp = 1;
     const hero = G.players['0'].active!;
     withCast(hero, 'attack', () => damageUnit(G, target, 5, 'attack'));
@@ -248,6 +248,6 @@ describe('level-up stat bonuses', () => {
     expect(target.level).toBe(4);             // level persists
     expect(target.hpMax).toBe(baseHpMax + 3); // hpMax persists
     expect(target.atkMod).toBe(3);            // atkMod persists
-    expect(target.spiritMod).toBe(0);         // spiritMod stays 0 (never gained any)
+    expect(target.spiritMod).toBe(3);         // spiritMod persists
   });
 });

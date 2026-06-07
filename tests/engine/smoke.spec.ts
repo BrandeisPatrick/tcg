@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState, PlayerID } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
+import { configureReadyMatch } from './_helpers';
+
+// Boot the boardgame.io Client straight into a playable match (skip the draft).
+beforeAll(configureReadyMatch);
 
 function newClient() {
   const client = Client({ game: DeadlockGame, numPlayers: 2 });
@@ -46,15 +50,16 @@ describe('Deadlock TCG engine smoke', () => {
   it('initializes a match with two full boards and 3-card hands', () => {
     const c = newClient();
     const { G, ctx } = snap(c);
-    expect(G.players['0'].hp).toBe(15);
-    expect(G.players['1'].hp).toBe(15);
+    expect(G.players['0'].hp).toBe(8); // patron HP
+    expect(G.players['1'].hp).toBe(8);
     expect(G.players['0'].active).not.toBeNull();
     expect(G.players['1'].active).not.toBeNull();
     expect(G.players['0'].bench.filter(Boolean).length).toBe(3);
     expect(G.players['1'].bench.filter(Boolean).length).toBe(3);
     // After T1 begin, P0 drew 1 (3 + 1 = 4)
     expect(G.players['0'].hand.length).toBe(4);
-    expect(G.players['0'].deck.length).toBe(20 - 4);
+    // Aggro starter deck = 13 cards, minus the 4 now in hand.
+    expect(G.players['0'].deck.length).toBe(13 - 4);
     expect(ctx.currentPlayer).toBe('0');
   });
 

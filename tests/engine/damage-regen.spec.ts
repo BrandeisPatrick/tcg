@@ -3,7 +3,7 @@ import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, CardInstance } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
-import { damageUnit, healUnit } from '@/engine/damage';
+import { damageUnit, healUnit, reapDead } from '@/engine/damage';
 import { withCast } from '@/engine/castContext';
 import { nextIid } from '@/engine/util';
 import { freshReadyGame } from './_helpers';
@@ -39,10 +39,10 @@ function attach(hero: CardInstance, cardId: string) {
 // ============================================================================
 
 describe('damage: mitigation pipeline order', () => {
-  it('Vulnerable adds +value BEFORE resist subtracts', () => {
+  it('Vulnerable (Bullet Resist −) adds +value BEFORE resist subtracts', () => {
     const G = freshG();
     const t = G.players['1'].active!;
-    addStatus(G, t, 'vulnerable', 2, 99);
+    addStatus(G, t, 'bullet_resist_down', 2, 99);
     addStatus(G, t, 'bullet_resist', 5, 99);
     const before = t.hp;
     // 3 attack + 2 vulnerable - 5 bullet resist = 0.
@@ -50,21 +50,21 @@ describe('damage: mitigation pipeline order', () => {
     expect(before - t.hp).toBe(0);
   });
 
-  it('Vulnerable amplifies even pure (bleed) damage', () => {
+  it('pure damage bypasses Vulnerable (resist-down only affects its damage type)', () => {
     const G = freshG();
     const t = G.players['1'].active!;
-    addStatus(G, t, 'vulnerable', 2, 99);
+    addStatus(G, t, 'bullet_resist_down', 2, 99);
     const before = t.hp;
     damageUnit(G, t, 2, 'pure');
-    expect(before - t.hp).toBe(4); // 2 + 2 vulnerable
+    expect(before - t.hp).toBe(2); // pure ignores resist-down
   });
 
-  it('Vulnerable value scales the damage bonus (Vulnerable 3 → +3)', () => {
+  it('Vulnerable value scales the damage bonus (Bullet Resist −3 → +3)', () => {
     const G = freshG();
     const t = G.players['1'].active!;
-    addStatus(G, t, 'vulnerable', 3, 99);
+    addStatus(G, t, 'bullet_resist_down', 3, 99);
     const before = t.hp;
-    damageUnit(G, t, 2, 'pure');
+    damageUnit(G, t, 2, 'attack');
     expect(before - t.hp).toBe(5); // 2 + 3 vulnerable
   });
 
@@ -137,14 +137,15 @@ describe('damage: mitigation pipeline order', () => {
     expect(t.statuses.find((s) => s.id === 'shield')?.value).toBe(10);
   });
 
-  it('Overflow damage spills to patron', () => {
+  it('hero death costs the patron a flat 1 (overflow is discarded)', () => {
     const G = freshG();
     const t = G.players['1'].active!;
     t.hp = 2;
     const patronBefore = G.players['1'].hp;
-    damageUnit(G, t, 10, 'spirit');
+    damageUnit(G, t, 10, 'spirit'); // 8 overflow is discarded, not spilled
     expect(t.hp).toBe(0);
-    expect(patronBefore - G.players['1'].hp).toBe(8); // 10 - 2 spilled
+    reapDead(G, G.players['1']);
+    expect(patronBefore - G.players['1'].hp).toBe(1); // flat 1 on death
   });
 
   it('Zero / negative damage is a no-op and does NOT fire equipment triggers', () => {
@@ -187,7 +188,7 @@ describe('heal: cap + block rules', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     t.hp = t.hpMax - 5;
-    addStatus(G, t, 'healing_blocked', 1, 2);
+    addStatus(G, t, 'healing_boost_down', 1, 2);
     expect(healUnit(G, t, 3)).toBe(0);
     expect(t.hp).toBe(t.hpMax - 5);
   });
@@ -206,9 +207,9 @@ describe('heal: cap + block rules', () => {
   it('Healing Blocked expires (1-turn duration → gone after one tick)', () => {
     const G = freshG();
     const t = G.players['0'].active!;
-    addStatus(G, t, 'healing_blocked', 1, 1);
+    addStatus(G, t, 'healing_boost_down', 1, 1);
     tickStartOfTurn(G, G.players['0']);
-    expect(t.statuses.some((s) => s.id === 'healing_blocked')).toBe(false);
+    expect(t.statuses.some((s) => s.id === 'healing_boost_down')).toBe(false);
     t.hp = t.hpMax - 3;
     expect(healUnit(G, t, 3)).toBe(3);
   });
@@ -223,7 +224,7 @@ describe('heal sources: all respect Healing Blocked', () => {
     const G = freshG();
     const abrams = G.players['0'].active!;
     abrams.cardId = 'hero_abrams'; abrams.hpMax = 14; abrams.hp = 8; abrams.zone = 'active';
-    addStatus(G, abrams, 'healing_blocked', 1, 2);
+    addStatus(G, abrams, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['passive_abrams_heal'].run(G, { movingPlayer: '0' }, { source: abrams });
     expect(abrams.hp).toBe(8); // no heal
   });
@@ -232,7 +233,7 @@ describe('heal sources: all respect Healing Blocked', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     t.hp = t.hpMax - 3;
-    addStatus(G, t, 'healing_blocked', 1, 2);
+    addStatus(G, t, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['eff_restorative_shot_proc'].run(G, { movingPlayer: '0' }, { source: t });
     expect(t.hp).toBe(t.hpMax - 3);
   });
@@ -241,7 +242,7 @@ describe('heal sources: all respect Healing Blocked', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     t.hp = t.hpMax - 3;
-    addStatus(G, t, 'healing_blocked', 1, 2);
+    addStatus(G, t, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['eff_mystic_regeneration_proc'].run(G, { movingPlayer: '0' }, { source: t });
     expect(t.hp).toBe(t.hpMax - 3);
   });
@@ -250,7 +251,7 @@ describe('heal sources: all respect Healing Blocked', () => {
     const G = freshG();
     const drifter = G.players['0'].active!;
     drifter.hp = drifter.hpMax - 3;
-    addStatus(G, drifter, 'healing_blocked', 1, 2);
+    addStatus(G, drifter, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['passive_drifter_bloodscent'].run(G, { movingPlayer: '0' }, { source: drifter });
     expect(drifter.hp).toBe(drifter.hpMax - 3);
   });
@@ -260,18 +261,18 @@ describe('heal sources: all respect Healing Blocked', () => {
     const kelvin = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     kelvin.hp = kelvin.hpMax - 3;
-    addStatus(G, kelvin, 'healing_blocked', 1, 2);
+    addStatus(G, kelvin, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['skill_kelvin'].run(G, { movingPlayer: '0' }, { source: kelvin, target: enemy });
     expect(kelvin.hp).toBe(kelvin.hpMax - 3); // heal blocked
-    // damage still went through though (V1: 2 spirit dmg base)
-    expect(enemy.hp).toBe(enemy.hpMax - 2);
+    // damage still went through though (V1: 1 spirit dmg base)
+    expect(enemy.hp).toBe(enemy.hpMax - 1);
   });
 
   it('Dynamo Rejuvenating Aurora (ally skill heal)', () => {
     const G = freshG();
     const dynamo = G.players['0'].active!;
     dynamo.hp = dynamo.hpMax - 4;
-    addStatus(G, dynamo, 'healing_blocked', 1, 2);
+    addStatus(G, dynamo, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['skill_dynamo'].run(G, { movingPlayer: '0' }, { source: dynamo, target: dynamo });
     expect(dynamo.hp).toBe(dynamo.hpMax - 4);
   });
@@ -280,7 +281,7 @@ describe('heal sources: all respect Healing Blocked', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     t.hp = t.hpMax - 3;
-    addStatus(G, t, 'healing_blocked', 1, 2);
+    addStatus(G, t, 'healing_boost_down', 1, 2);
     ABILITIES_BY_ID['eff_healing_rite'].run(G, { movingPlayer: '0' }, { target: t });
     expect(t.hp).toBe(t.hpMax - 3);
   });
@@ -289,7 +290,7 @@ describe('heal sources: all respect Healing Blocked', () => {
     const G = freshG();
     const ps = G.players['0'];
     for (const c of [ps.active, ...ps.bench]) {
-      if (c) { c.hp = c.hpMax - 3; addStatus(G, c, 'healing_blocked', 1, 2); }
+      if (c) { c.hp = c.hpMax - 3; addStatus(G, c, 'healing_boost_down', 1, 2); }
     }
     ABILITIES_BY_ID['eff_ult_rem'].run(G, { movingPlayer: '0' }, {});
     for (const c of [ps.active, ...ps.bench]) {

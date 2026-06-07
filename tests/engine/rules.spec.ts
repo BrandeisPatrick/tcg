@@ -1,10 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit, reapDead } from '@/engine/damage';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame } from './_helpers';
+import { freshReadyGame, configureReadyMatch } from './_helpers';
+
+// Client-based tests boot straight into a playable match (skip the draft).
+beforeAll(configureReadyMatch);
 
 function freshG(): GameState {
   return freshReadyGame();
@@ -115,14 +118,15 @@ describe('rule: hero respawn after KO', () => {
     expect(corpse.respawnTurnsLeft).toBeUndefined();
   });
 
-  it('overflow damage on KO spills to the patron HP', () => {
+  it('hero KO costs the patron a flat 1 (overflow discarded)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hp = 3;
     const beforePatron = G.players['1'].hp;
-    damageUnit(G, target, 8, 'pure'); // 3 to KO, 5 overflow
+    damageUnit(G, target, 8, 'pure'); // 3 to KO, 5 overflow discarded
     expect(target.hp).toBe(0);
-    expect(G.players['1'].hp).toBe(beforePatron - 5);
+    reapDead(G, G.players['1']);
+    expect(G.players['1'].hp).toBe(beforePatron - 1); // death-only patron model
   });
 
   it("AI auto-promotes the strongest bench hero when its Active dies", () => {

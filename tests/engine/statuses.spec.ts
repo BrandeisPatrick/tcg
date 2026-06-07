@@ -64,6 +64,7 @@ describe('status: armor', () => {
   it('does NOT reduce spirit/pure damage', () => {
     const G = freshG();
     const t = G.players['1'].active!;
+    t.hpMax = 30; t.hp = 30; // pad so the 6 dmg doesn't overflow to patron
     addStatus(G, t, 'bullet_resist', 99, 999);
     const hpBefore = t.hp;
     damageUnit(G, t, 3, 'spirit');
@@ -76,7 +77,7 @@ describe('status: vulnerable', () => {
   it('amplifies incoming damage by status value', () => {
     const G = freshG();
     const t = G.players['1'].active!;
-    addStatus(G, t, 'vulnerable', 2, 99);
+    addStatus(G, t, 'bullet_resist_down', 2, 99);
     const hpBefore = t.hp;
     damageUnit(G, t, 3, 'attack'); // 3 + 2 vulnerable = 5
     expect(hpBefore - t.hp).toBe(5);
@@ -86,7 +87,7 @@ describe('status: vulnerable', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     const baseAtk = effectiveAtk(t);
-    addStatus(G, t, 'vulnerable', 2, 99);
+    addStatus(G, t, 'bullet_resist_down', 2, 99);
     expect(effectiveAtk(t)).toBe(baseAtk);
   });
 });
@@ -96,13 +97,13 @@ describe('status: weaken', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     const baseAtk = effectiveAtk(t);
-    addStatus(G, t, 'weaken', 2, 2);
+    addStatus(G, t, 'weapon_power_down', 2, 2);
     // Skip if hero already has 0 ATK (corner case for some passive heroes).
     if (baseAtk > 0) {
       // Weaken is applied in combat's effectiveAttackDamage, not in effectiveAtk
       // itself — verify via the planner instead.
       // For this unit test, just verify the status is on the card.
-      expect(t.statuses.find((s) => s.id === 'weaken')?.value).toBe(2);
+      expect(t.statuses.find((s) => s.id === 'weapon_power_down')?.value).toBe(2);
     }
   });
 });
@@ -136,9 +137,9 @@ describe('status: unstoppable', () => {
     const t = G.players['1'].active!;
     addStatus(G, t, 'unstoppable', 1, 99);
     addStatus(G, t, 'bleed', 2, 3);
-    addStatus(G, t, 'vulnerable', 1, 2);
+    addStatus(G, t, 'bullet_resist_down', 1, 2);
     expect(t.statuses.some((s) => s.id === 'bleed')).toBe(true);
-    expect(t.statuses.some((s) => s.id === 'vulnerable')).toBe(true);
+    expect(t.statuses.some((s) => s.id === 'bullet_resist_down')).toBe(true);
   });
 
   it('blocks all damage (attack / spirit / pure) while up', () => {
@@ -183,7 +184,7 @@ describe('status: weapon_power', () => {
 });
 
 describe('status: spirit_power', () => {
-  it('adds to skill scaling (Lady Geist skill: 4 + SPI total)', async () => {
+  it('adds to skill scaling (Lady Geist skill: 2 + SPI total)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -191,13 +192,13 @@ describe('status: spirit_power', () => {
     caster.spiritMod = 1; // 1 from equipment
     addStatus(G, caster, 'spirit_power', 3, 2); // +3 from buff
     const target = G.players['1'].active!;
-    // Pad target HP so the 8-dmg hit doesn't overflow to the patron — we're
+    // Pad target HP so the hit doesn't overflow to the patron — we're
     // measuring raw damage, not what HP actually absorbs.
     target.hpMax = 20; target.hp = 20;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    // base 4 + (spiritMod 1 + spirit_power 3) = 8
-    expect(hpBefore - target.hp).toBe(8);
+    // base 2 + (spiritMod 1 + spirit_power 3) = 6
+    expect(hpBefore - target.hp).toBe(6);
   });
 });
 
@@ -214,6 +215,7 @@ describe('status: spirit_resist', () => {
   it('does NOT reduce attack/pure damage', () => {
     const G = freshG();
     const t = G.players['1'].active!;
+    t.hpMax = 30; t.hp = 30; // pad so the 6 dmg doesn't overflow to patron
     addStatus(G, t, 'spirit_resist', 99, 999);
     const hpBefore = t.hp;
     damageUnit(G, t, 3, 'attack');
@@ -349,7 +351,7 @@ describe('combined interactions', () => {
   it('vulnerable + unstoppable: unstoppable wins (damage = 0)', () => {
     const G = freshG();
     const t = G.players['1'].active!;
-    addStatus(G, t, 'vulnerable', 1, 99);
+    addStatus(G, t, 'bullet_resist_down', 1, 99);
     addStatus(G, t, 'unstoppable', 1, 99);
     const hpBefore = t.hp;
     damageUnit(G, t, 4, 'attack'); // would be 6 with vulnerable, but unstoppable blocks
