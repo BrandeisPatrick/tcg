@@ -6,10 +6,10 @@ import { addStatus } from '@/engine/statusOps';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { nextIid } from '@/engine/util';
 import { withCast } from '@/engine/castContext';
+import { freshReadyGame } from './_helpers';
 
 function freshG(): GameState {
-  const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
-  return JSON.parse(JSON.stringify(setup));
+  return freshReadyGame();
 }
 
 /** Build a minimal equipment instance and attach it to a hero. */

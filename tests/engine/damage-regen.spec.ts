@@ -6,6 +6,7 @@ import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { withCast } from '@/engine/castContext';
 import { nextIid } from '@/engine/util';
+import { freshReadyGame } from './_helpers';
 
 /**
  * Damage + regeneration detail tests. Validates the mitigation pipeline
@@ -14,8 +15,7 @@ import { nextIid } from '@/engine/util';
  */
 
 function freshG(): GameState {
-  const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
-  return JSON.parse(JSON.stringify(setup));
+  return freshReadyGame();
 }
 
 function attach(hero: CardInstance, cardId: string) {

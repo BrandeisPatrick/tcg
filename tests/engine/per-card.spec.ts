@@ -5,6 +5,7 @@ import { DeadlockGame } from '@/engine/game';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { withCast } from '@/engine/castContext';
+import { freshReadyGame } from './_helpers';
 
 /**
  * Per-card test scenarios for the V1 minimal spell + equipment set.
@@ -15,8 +16,7 @@ import { withCast } from '@/engine/castContext';
  */
 
 function freshG(): GameState {
-  const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
-  return JSON.parse(JSON.stringify(setup));
+  return freshReadyGame();
 }
 
 // ============================================================================

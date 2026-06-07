@@ -5,10 +5,10 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn, cleanseDebuffs } from '@/engine/statusOps';
 import { effectiveAtk } from '@/engine/util';
 import type { GameState, PlayerID } from '@/engine/types';
+import { freshReadyGame } from './_helpers';
 
 function freshG(): GameState {
-  const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
-  return JSON.parse(JSON.stringify(setup)) as GameState;
+  return freshReadyGame();
 }
 
 function newClient() {

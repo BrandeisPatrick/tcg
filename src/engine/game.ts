@@ -117,7 +117,7 @@ interface RosterOpts {
 /** Build a PlayerState from a 1-4 hero roster + deck. Heroes beyond the first
  *  fill the bench (length 3, padded with null). Used by both the draft path
  *  (exactly 4 heroes) and Story mode (1-4 heroes, optional buff/patron HP). */
-function buildPlayer(pid: PlayerID, heroes: string[], deckCards: string[], opts: RosterOpts = {}): PlayerState {
+export function buildPlayer(pid: PlayerID, heroes: string[], deckCards: string[], opts: RosterOpts = {}): PlayerState {
   const roster = heroes.slice(0, 4);
   const active = makeInstance(roster[0], pid, 'active', 0);
   const bench: (CardInstance | null)[] = [null, null, null];

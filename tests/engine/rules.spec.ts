@@ -4,10 +4,10 @@ import { DeadlockGame } from '@/engine/game';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit, reapDead } from '@/engine/damage';
 import type { GameState, PlayerID } from '@/engine/types';
+import { freshReadyGame } from './_helpers';
 
 function freshG(): GameState {
-  const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
-  return JSON.parse(JSON.stringify(setup)) as GameState;
+  return freshReadyGame();
 }
 
 function runMove(name: string, G: GameState, pid: PlayerID, ...args: any[]) {

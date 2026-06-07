@@ -6,10 +6,10 @@ import { grantExp, LEVEL_THRESHOLDS } from '@/engine/expSystem';
 import { damageUnit, reapDead } from '@/engine/damage';
 import { withCast } from '@/engine/castContext';
 import { nextIid } from '@/engine/util';
+import { freshReadyGame } from './_helpers';
 
 function freshG(): GameState {
-  const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
-  return JSON.parse(JSON.stringify(setup));
+  return freshReadyGame();
 }
 
 describe('hero leveling: grantExp', () => {
