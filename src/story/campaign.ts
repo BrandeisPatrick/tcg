@@ -26,40 +26,46 @@ interface Region { id: string; name: string; locs: Loc[] }
 // player committing to any single route can always build to a full 4-hero
 // roster (1 start + 3 recruits) before its boss. Recruits come early; the
 // themed battles ramp up after you've had a chance to grow.
+// Routes are laid out as clean radial fans from the shared Battery start — each
+// node sits further from the centre than the last, so a path spans OUTWARD to a
+// far-edge boss and never doubles back. Spine runs north up Manhattan into the
+// Bronx; Boroughs runs south through Brooklyn to Coney Island; Gates runs
+// south-west across NJ to Staten Island. Each route opens with a recruit and
+// holds three, so any single path can build a full roster.
 export const REGIONS: Region[] = [
   {
     id: 'spine', name: 'The Spine',
     locs: [
-      { id: 'wallst', name: 'Wall Street', kind: 'recruit', lat: 40.7190, lng: -74.0050 },
-      { id: 'cityhall', name: 'City Hall Subway', kind: 'battle', lat: 40.7127, lng: -74.0059, enemy: 'hero_mo_krill' },
-      { id: 'timessq', name: 'Times Square', kind: 'recruit', lat: 40.7580, lng: -73.9855 },
-      { id: 'themet', name: 'The Met', kind: 'recruit', lat: 40.7794, lng: -73.9632 },
-      { id: 'reservoir', name: 'Central Park Reservoir', kind: 'battle', lat: 40.7857, lng: -73.9625, enemy: 'hero_kelvin' },
-      { id: 'cloisters', name: 'The Cloisters', kind: 'supply', lat: 40.8649, lng: -73.9319 },
-      { id: 'yankee', name: 'Yankee Stadium', kind: 'boss', lat: 40.8296, lng: -73.9262, enemy: 'hero_abrams' },
+      { id: 'wallst', name: 'Wall Street', kind: 'recruit', lat: 40.7120, lng: -74.0095 },
+      { id: 'cityhall', name: 'City Hall Subway', kind: 'battle', lat: 40.7260, lng: -73.9990, enemy: 'hero_mo_krill' },
+      { id: 'timessq', name: 'Times Square', kind: 'recruit', lat: 40.7560, lng: -73.9860 },
+      { id: 'themet', name: 'The Met', kind: 'recruit', lat: 40.7790, lng: -73.9630 },
+      { id: 'reservoir', name: 'Central Park Reservoir', kind: 'battle', lat: 40.8010, lng: -73.9560, enemy: 'hero_kelvin' },
+      { id: 'cloisters', name: 'The Cloisters', kind: 'supply', lat: 40.8400, lng: -73.9340 },
+      { id: 'yankee', name: 'Yankee Stadium', kind: 'boss', lat: 40.8620, lng: -73.9080, enemy: 'hero_abrams' },
     ],
   },
   {
     id: 'boroughs', name: 'The Outer Boroughs',
     locs: [
-      { id: 'bkbridge', name: 'Brooklyn Bridge', kind: 'recruit', lat: 40.6950, lng: -73.9870 },
-      { id: 'gowanus', name: 'Gowanus Canal', kind: 'battle', lat: 40.6736, lng: -73.9890, enemy: 'hero_viscous' },
-      { id: 'greenwood', name: 'Green-Wood Cemetery', kind: 'battle', lat: 40.6520, lng: -73.9920, enemy: 'hero_lady_geist' },
-      { id: 'botanic', name: 'Botanic Garden', kind: 'recruit', lat: 40.6680, lng: -73.9560 },
-      { id: 'flushing', name: 'Flushing Meadows', kind: 'recruit', lat: 40.7466, lng: -73.8350 },
-      { id: 'citifield', name: 'Citi Field', kind: 'supply', lat: 40.7710, lng: -73.8270 },
-      { id: 'coney', name: 'Coney Island', kind: 'boss', lat: 40.5740, lng: -73.9790, enemy: 'hero_sinclair' },
+      { id: 'bkbridge', name: 'Brooklyn Bridge', kind: 'recruit', lat: 40.7000, lng: -73.9930 },
+      { id: 'gowanus', name: 'Gowanus Canal', kind: 'battle', lat: 40.6760, lng: -73.9895, enemy: 'hero_viscous' },
+      { id: 'botanic', name: 'Botanic Garden', kind: 'recruit', lat: 40.6620, lng: -73.9660 },
+      { id: 'greenwood', name: 'Green-Wood Cemetery', kind: 'battle', lat: 40.6470, lng: -73.9870, enemy: 'hero_lady_geist' },
+      { id: 'flushing', name: 'Prospect Park', kind: 'recruit', lat: 40.6300, lng: -73.9690 },
+      { id: 'citifield', name: 'Barclays Center', kind: 'supply', lat: 40.6080, lng: -73.9790 },
+      { id: 'coney', name: 'Coney Island', kind: 'boss', lat: 40.5740, lng: -73.9830, enemy: 'hero_sinclair' },
     ],
   },
   {
     id: 'gates', name: 'The Western Gates',
     locs: [
-      { id: 'liberty_sp', name: 'Liberty State Park', kind: 'recruit', lat: 40.7060, lng: -74.0700 },
-      { id: 'jerseyheights', name: 'Jersey Heights', kind: 'recruit', lat: 40.7640, lng: -74.1180 },
-      { id: 'portnewark', name: 'Port Newark', kind: 'battle', lat: 40.6950, lng: -74.1720, enemy: 'hero_drifter' },
-      { id: 'siferry', name: 'St. George Ferry', kind: 'recruit', lat: 40.6420, lng: -74.0760 },
-      { id: 'todthill', name: 'Todt Hill', kind: 'battle', lat: 40.5950, lng: -74.1350, enemy: 'hero_shiv' },
-      { id: 'liberty', name: 'Statue of Liberty', kind: 'boss', lat: 40.6892, lng: -74.0445, enemy: 'hero_vindicta' },
+      { id: 'liberty_sp', name: 'Liberty State Park', kind: 'recruit', lat: 40.7080, lng: -74.0500 },
+      { id: 'liberty', name: 'Statue of Liberty', kind: 'recruit', lat: 40.6905, lng: -74.0620 },
+      { id: 'portnewark', name: 'Port Newark', kind: 'battle', lat: 40.6670, lng: -74.0950, enemy: 'hero_drifter' },
+      { id: 'siferry', name: 'St. George Ferry', kind: 'recruit', lat: 40.6440, lng: -74.0740 },
+      { id: 'jerseyheights', name: 'Stapleton', kind: 'battle', lat: 40.6180, lng: -74.0920, enemy: 'hero_shiv' },
+      { id: 'todthill', name: 'Todt Hill', kind: 'boss', lat: 40.5880, lng: -74.1180, enemy: 'hero_vindicta' },
     ],
   },
 ];
@@ -74,7 +80,7 @@ const START = { id: 'battery', name: 'Battery Park', kind: 'battle' as NodeKind,
 // Wall St, City Hall, the bridges, Liberty) so their projected dots overlap.
 // Relax them apart with light pairwise repulsion — keeps each near its real
 // spot while staying legible.
-function declutter(nodes: StoryNode[], minDist = 0.082, iters = 110): void {
+function declutter(nodes: StoryNode[], minDist = 0.05, iters = 90): void {
   for (let it = 0; it < iters; it++) {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {

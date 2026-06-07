@@ -77,7 +77,7 @@ export function setMatchExitHandler(fn: ((win: boolean) => void) | null): void {
   exitHandler = fn;
 }
 export function finishStoryBattle(win: boolean): void {
-  const h = exitHandler;
-  exitHandler = null;
-  h?.(win);
+  // Keep the handler registered — it must work for every battle in the run, not
+  // just the first. (Root registers it once on mount and clears it on unmount.)
+  exitHandler?.(win);
 }
