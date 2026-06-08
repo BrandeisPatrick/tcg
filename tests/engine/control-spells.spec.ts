@@ -94,7 +94,7 @@ describe('Echo Shard', () => {
     const enemy = G.players['1'].active!;
     enemy.hpMax = 20; enemy.hp = 20;
     run('eff_echo_shard', G, {});
-    expect(enemy.hp).toBe(16); // 2 (skill) + 2 (Mystic Burst on skill use)
+    expect(enemy.hp).toBe(17); // 2 (skill) + 1 (Mystic Burst on skill use)
   });
 
   it('fizzles on a skill-less (passive) hero', () => {

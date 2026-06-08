@@ -5,6 +5,7 @@ import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState, PlayerID } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { configureReadyMatch } from './_helpers';
+import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -58,8 +59,8 @@ describe('Deadlock TCG engine smoke', () => {
     expect(G.players['1'].bench.filter(Boolean).length).toBe(3);
     // After T1 begin, P0 drew 1 (3 + 1 = 4)
     expect(G.players['0'].hand.length).toBe(4);
-    // Aggro starter deck = 13 cards, minus the 4 now in hand.
-    expect(G.players['0'].deck.length).toBe(13 - 4);
+    // Deck = the configured aggro list minus the 4 cards now in hand.
+    expect(G.players['0'].hand.length + G.players['0'].deck.length).toBe(AI_DECKS_BY_NAME.aggro.length);
     expect(ctx.currentPlayer).toBe('0');
   });
 

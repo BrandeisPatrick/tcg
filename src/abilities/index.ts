@@ -372,11 +372,11 @@ function mysticBurst(amount: number, label: string): AbilityDef['run'] {
 }
 const eff_mystic_burst_proc: AbilityDef = {
   id: 'eff_mystic_burst_proc', trigger: 'onBearerSkillUsed', target: 'enemyActive',
-  base: 2, baseLabel: 'spirit dmg', run: mysticBurst(2, 'Mystic Burst'),
+  base: 1, baseLabel: 'spirit dmg', run: mysticBurst(1, 'Mystic Burst'),
 };
 const eff_improved_burst_proc: AbilityDef = {
   id: 'eff_improved_burst_proc', trigger: 'onBearerSkillUsed', target: 'enemyActive',
-  base: 3, baseLabel: 'spirit dmg', run: mysticBurst(3, 'Improved Burst'),
+  base: 2, baseLabel: 'spirit dmg', run: mysticBurst(2, 'Improved Burst'),
 };
 
 // ----- Cast-payoff items (functionality tied to skill / ult activation) -----
@@ -512,13 +512,13 @@ const eff_colossus: AbilityDef = {
 // Improved Bullet / Spirit Armor (T3 vitality): tier-up resists (4).
 const eff_improved_bullet_armor: AbilityDef = {
   id: 'eff_improved_bullet_armor', trigger: 'onPlay', target: 'self',
-  base: 4, baseLabel: 'Bullet Resist',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 4, 999); },
+  base: 5, baseLabel: 'Bullet Resist',
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 5, 999); },
 };
 const eff_improved_spirit_armor: AbilityDef = {
   id: 'eff_improved_spirit_armor', trigger: 'onPlay', target: 'self',
-  base: 4, baseLabel: 'Spirit Resist',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 4, 999); },
+  base: 5, baseLabel: 'Spirit Resist',
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 5, 999); },
 };
 
 // Frenzy (T4 weapon): while the bearer is below half HP, heal 2 on attack.

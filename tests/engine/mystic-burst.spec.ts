@@ -32,7 +32,7 @@ function attach(G: GameState, bearer: CardInstance, cardId: string): CardInstanc
 }
 
 describe('Mystic Burst family', () => {
-  it('Mystic Burst deals 2 spirit to the enemy active on skill use', () => {
+  it('Mystic Burst deals 1 spirit to the enemy active on skill use', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
@@ -40,10 +40,10 @@ describe('Mystic Burst family', () => {
     attach(G, hero, 'mystic_burst');
 
     fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
-    expect(enemy.hp).toBe(hp0 - 2);
+    expect(enemy.hp).toBe(hp0 - 1);
   });
 
-  it('Improved Burst deals 3 spirit (tier-up)', () => {
+  it('Improved Burst deals 2 spirit (tier-up)', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
@@ -51,7 +51,7 @@ describe('Mystic Burst family', () => {
     attach(G, hero, 'improved_burst');
 
     fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
-    expect(enemy.hp).toBe(hp0 - 3);
+    expect(enemy.hp).toBe(hp0 - 2);
   });
 
   it('respects a spirit shield on the enemy active', () => {
@@ -82,7 +82,7 @@ describe('Mystic Burst family', () => {
   it('cards expose the proposed flat magnitudes', () => {
     expect(EQUIPMENT_BY_ID['mystic_burst'].cost).toBe(3);
     expect(EQUIPMENT_BY_ID['improved_burst'].cost).toBe(5);
-    expect(ABILITIES_BY_ID['eff_mystic_burst_proc'].base).toBe(2);
-    expect(ABILITIES_BY_ID['eff_improved_burst_proc'].base).toBe(3);
+    expect(ABILITIES_BY_ID['eff_mystic_burst_proc'].base).toBe(1);
+    expect(ABILITIES_BY_ID['eff_improved_burst_proc'].base).toBe(2);
   });
 });

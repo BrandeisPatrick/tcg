@@ -39,7 +39,7 @@ export const SPELLS: SpellCard[] = [
 
   // ----- Control pack (canon active items → spells) -----
   { id: 'debuff_remover', name: 'Debuff Remover', type: 'spell', rarity: 1, cost: 2, abilities: ['eff_debuff_remover'],   text: "Cleanse an ally's debuffs. Grant Shield 2." },
-  { id: 'silence_glyph',  name: 'Silence Glyph',  type: 'spell', rarity: 2, cost: 3, abilities: ['eff_silence_glyph'],    text: 'Deal 2 spirit damage to enemy Active and Silence it for 2 turns.' },
+  { id: 'silence_glyph',  name: 'Silence Glyph',  type: 'spell', rarity: 3, cost: 5, abilities: ['eff_silence_glyph'],    text: 'Deal 2 spirit damage to enemy Active and Silence it for 2 turns.' },
   { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 2, cost: 4, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
   { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, cost: 5, abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable for 1 turn.' },
   { id: 'curse',          name: 'Curse',          type: 'spell', rarity: 3, cost: 5, abilities: ['eff_curse'],            text: 'Silence and Disarm the enemy Active for 3 turns.' },

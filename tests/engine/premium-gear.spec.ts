@@ -78,13 +78,13 @@ describe('Colossus', () => {
 });
 
 describe('Improved Armor', () => {
-  it('grants Bullet/Spirit Resist 4', () => {
+  it('grants Bullet/Spirit Resist 5', () => {
     const G = freshReadyGame();
     const hero = G.players['0'].active!;
     ABILITIES_BY_ID['eff_improved_bullet_armor'].run(G, { movingPlayer: '0' }, { source: hero });
     ABILITIES_BY_ID['eff_improved_spirit_armor'].run(G, { movingPlayer: '0' }, { source: hero });
-    expect(val(hero, 'bullet_resist')).toBe(4);
-    expect(val(hero, 'spirit_resist')).toBe(4);
+    expect(val(hero, 'bullet_resist')).toBe(5);
+    expect(val(hero, 'spirit_resist')).toBe(5);
   });
 });
 

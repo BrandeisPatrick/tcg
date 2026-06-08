@@ -14,6 +14,9 @@ const AI_DECK_BALANCED: CardId[] = [
   'extra_health', 'bullet_resilience',       // Vitality
   'healing_booster', 'restorative_shot',
   'mystic_regeneration', 'knockdown',
+  // New cards (mixed) — so the eval exercises them.
+  'colossus', 'reactive_barrier', 'leech', 'transcendent_cooldown',
+  'improved_bullet_armor', 'siphon_bullets', 'improved_burst',
 ];
 
 const AI_DECK_AGGRO: CardId[] = [
@@ -22,6 +25,10 @@ const AI_DECK_AGGRO: CardId[] = [
   'extra_spirit', 'improved_spirit',         // Spirit (so even aggro can run a caster)
   'bullet_resist_shredder',
   'extra_regen', 'restorative_shot', 'healing_rite',
+  // New weapon/offense cards.
+  'mystic_burst', 'toxic_bullets', 'tesla_bullets', 'quicksilver_reload',
+  'surge_of_power', 'berserker', 'crippling_headshot', 'frenzy',
+  'bullet_lifesteal', 'inhibitor',
 ];
 
 const AI_DECK_CONTROL: CardId[] = [
@@ -29,6 +36,11 @@ const AI_DECK_CONTROL: CardId[] = [
   'extra_spirit', 'improved_spirit', 'boundless_spirit',   // Spirit-heavy
   'extra_health', 'spirit_resilience', 'bullet_resilience', // Vitality
   'healing_booster', 'weapon_shielding', 'mystic_regeneration',
+  // New control / caster cards.
+  'curse', 'silence_glyph', 'debuff_remover', 'unstoppable', 'echo_shard',
+  'suppressor', 'escalating_exposure', 'mystic_reverb', 'improved_cooldown',
+  'superior_cooldown', 'diviners_kevlar', 'spirit_lifesteal',
+  'improved_spirit_armor', 'superior_duration',
 ];
 
 export type ArchetypeName = 'balanced' | 'aggro' | 'control';

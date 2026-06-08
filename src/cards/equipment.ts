@@ -57,8 +57,8 @@ export const EQUIPMENT: EquipmentCard[] = [
   // The cast-payoff partner to the cooldown line: every skill the bearer uses
   // pings the enemy active with burst spirit damage. Flat magnitude (no Spirit
   // scaling) by tier: 2 / 3. No stats — the burst is the payoff, the slot the cost.
-  { id: 'mystic_burst',   name: 'Mystic Burst',   type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_mystic_burst_proc'],   text: 'When the bearer uses a skill, deal 2 spirit damage to the enemy active.' },
-  { id: 'improved_burst', name: 'Improved Burst', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_improved_burst_proc'], text: 'When the bearer uses a skill, deal 3 spirit damage to the enemy active.' },
+  { id: 'mystic_burst',   name: 'Mystic Burst',   type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_mystic_burst_proc'],   text: 'When the bearer uses a skill, deal 1 spirit damage to the enemy active.' },
+  { id: 'improved_burst', name: 'Improved Burst', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_improved_burst_proc'], text: 'When the bearer uses a skill, deal 2 spirit damage to the enemy active.' },
 
   // ----- Lifesteal family (canon Bullet/Spirit Lifesteal → Leech) -----
   // T2 escalations of the T1 heal-on-damage procs (Restorative Shot heals on
@@ -89,8 +89,10 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'berserker',          name: 'Berserker',          type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_berserker'],          text: 'When the bearer takes bullet damage: gain +1 Bullet Power (max +4). Lost on death.' },
   { id: 'colossus',           name: 'Colossus',           type: 'equipment', rarity: 3, tier: 3, cost: 6, bonus: { hp: 5 }, abilities: ['eff_colossus'], text: '+5 HP. Bullet Resist 2.' },
   { id: 'superior_duration',  name: 'Superior Duration',  type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: [],                          text: "The bearer's own buffs last 1 turn longer." },
-  { id: 'improved_bullet_armor', name: 'Improved Bullet Armor', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_improved_bullet_armor'], text: 'Bullet Resist 4.' },
-  { id: 'improved_spirit_armor', name: 'Improved Spirit Armor', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_improved_spirit_armor'], text: 'Spirit Resist 4.' },
+  // Improved Armor moved to T4 (BR/SR 5) so it doesn't strictly obsolete the
+  // T3 Bullet Resilience (BR3 @6); now a clean premium resist tier-up.
+  { id: 'improved_bullet_armor', name: 'Improved Bullet Armor', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_improved_bullet_armor'], text: 'Bullet Resist 5.' },
+  { id: 'improved_spirit_armor', name: 'Improved Spirit Armor', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_improved_spirit_armor'], text: 'Spirit Resist 5.' },
 
   // ----- T4 (cost 7+) — premium items (canon T4) -----
   { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'equipment', rarity: 4, tier: 4, cost: 7, charges: 4, abilities: ['eff_cooldown_draw'], text: "When the bearer uses a skill, draw a card. 4 charges, then it breaks." },

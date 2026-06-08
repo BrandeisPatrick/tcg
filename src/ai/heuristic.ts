@@ -28,6 +28,26 @@ function heroThreat(c: CardInstance): number {
 }
 
 /** Position value from `pid`'s perspective (higher = better for pid). */
+// Value of a hero's attached equipment's ABILITY procs (lifesteal, burst,
+// resist, draw, etc.). Stat-stick bonuses (+atk/+spirit/+hp) are already
+// reflected via heroThreat/hp, so this only scores the proc gear the bot was
+// previously blind to — without it the 1-ply lookahead sees no benefit to
+// equipping a proc item (attaching changes nothing on the board *this* turn).
+function equipValue(c: CardInstance): number {
+  if (!c.attached) return 0;
+  let v = 0;
+  for (const eq of c.attached) {
+    const data = CARDS_BY_ID[eq.cardId];
+    if (data?.type !== 'equipment' || !data.abilities) continue;
+    for (const aid of data.abilities) {
+      const ab = getAbility(aid);
+      v += ab?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
+    }
+    if (eq.charges != null) v += eq.charges; // card-draw fuses
+  }
+  return v;
+}
+
 function evalState(g: GameState, pid: PlayerID): number {
   const en = otherPlayer(pid);
   const me = g.players[pid];
@@ -40,7 +60,7 @@ function evalState(g: GameState, pid: PlayerID): number {
       // so a point of shield is worth a point of HP — weight it like HP (×2),
       // not ×1 (which made the bot under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
-      s += sign * (3 + c.hp * 2 + heroThreat(c) * 1.5 + shield * 2);
+      s += sign * (3 + c.hp * 2 + heroThreat(c) * 1.5 + shield * 2 + equipValue(c) * 2);
     }
     for (const c of [ps.active, ...ps.bench]) {
       if (c && (c.respawnTurnsLeft ?? 0) > 0) s -= sign * 5; // corpse = lost presence

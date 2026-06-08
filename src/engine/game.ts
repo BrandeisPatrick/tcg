@@ -422,6 +422,8 @@ export const DeadlockGame: Game<GameState> = {
         // which existing item to discard. Without discardIid the move is
         // invalid so the UI can intercept and prompt the player to pick.
         const attached = target.attached ?? [];
+        // Rule: a hero can't equip two of the same equipment.
+        if (attached.some((eq) => eq.cardId === card.cardId)) return INVALID_MOVE;
         if (attached.length >= MAX_EQUIPMENT_PER_HERO) {
           if (!discardIid) return INVALID_MOVE;
           const dropIdx = attached.findIndex((eq) => eq.iid === discardIid);
