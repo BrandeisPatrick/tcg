@@ -17,7 +17,7 @@ import { MulliganOverlay } from './overlays/MulliganOverlay';
 import { DraftOverlay } from './overlays/DraftOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
-import { MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
+import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST } from '@/engine/game';
 import { BenchRow } from './board/BenchRow';
 import { ActiveSlot } from './board/ActiveSlot';
 import { ActiveDuel } from './board/ActiveDuel';
@@ -673,7 +673,6 @@ export function Board(props: BoardProps<GameState>) {
             const found = findOnBoard(G, heroDetail.iid);
             const isMine = !!found && found.owner === me;
             const mySouls = G.players[me].souls;
-            const RETREAT_COST = 2;
             const isMyBench = isMine && heroDetail.zone === 'bench';
             const canRetreat = isMyTurn && isMyBench && mySouls >= RETREAT_COST && !!G.players[me].active;
 

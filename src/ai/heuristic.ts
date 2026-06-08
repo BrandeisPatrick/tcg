@@ -3,7 +3,7 @@ import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { otherPlayer, liveBoardCards, effectiveAtk, effectiveSpirit } from '@/engine/util';
 import { getAbility, type TargetFilter } from '@/abilities';
-import { MAX_EQUIPMENT_PER_HERO, DeadlockGame } from '@/engine/game';
+import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, DeadlockGame } from '@/engine/game';
 import { resolveAttackPhase } from '@/engine/combat';
 
 // ----- 1-ply lookahead -------------------------------------------------------
@@ -314,9 +314,8 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
     }
   }
 
-  // Retreat: swap Active with a fresh bench hero (costs 2 souls).
+  // Retreat: swap Active with a fresh bench hero (costs RETREAT_COST souls).
   // Score positively when Active is in serious trouble and bench has a healthier option.
-  const RETREAT_COST = 2;
   if (ps.active && ps.souls >= RETREAT_COST) {
     const activeHpFrac = ps.active.hp / Math.max(1, ps.active.hpMax);
     const activeStunned = ps.active.statuses.some(

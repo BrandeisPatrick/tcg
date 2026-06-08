@@ -38,9 +38,9 @@ export const SKILL_COST = 1;
 // your pool is REFILLED to N — anything banked from last turn is lost.
 // The ramp climbs 1 → 10 by your 10th turn, then caps.
 const SOULS_REFILL_TABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const SOULS_PER_KO = 1;
-const SOULS_MAX = 10;        // hard cap — KO bounty + refill can't push you over.
-const RETREAT_COST = 2;      // souls to swap an Active with a bench hero (Pokémon-flavored)
+/** Souls to swap an Active with a bench hero (Pokémon-flavored). Shared with the
+ *  AI heuristic and the board UI so the cost lives in one place. */
+export const RETREAT_COST = 2;
 
 function soulRefillForTurn(globalTurn: number): number {
   // globalTurn 1 → my turn 1 (idx 0), globalTurn 3 → my turn 2 (idx 1), ...
