@@ -37,6 +37,11 @@ export const STATUSES: StatusDef[] = [
   { id: 'djinns_mark',   title: "Djinn's Mark",  desc: 'Detonates at 4 stacks or on expiry for 2 spirit dmg per stack.', hvalue: -1 },
   { id: 'reverb',        title: 'Reverb',        desc: 'Detonates at the start of your turn for <value> spirit damage.', hvalue: -1 },
 
+  // ----- Temporary max-HP transfer (Siphon Bullets); hvalue 0 so cleanse can't
+  // strip them without reverting the maxHP (revert lives in tickStartOfTurn). -----
+  { id: 'siphon_drain',  title: 'Siphoned',      desc: 'Max HP reduced by <value>; restored when it expires.',          hvalue: 0 },
+  { id: 'siphon_gain',   title: 'Siphon',        desc: 'Max HP increased by <value>; reverts when it expires.',          hvalue: 0 },
+
   // ----- Other debuff -----
   { id: 'weapon_power_down',   title: 'Bullet Power',  desc: 'Bullet Power −<value> on basic attacks.',                 hvalue: -1 },
   { id: 'spirit_power_down',   title: 'Spirit Power',  desc: 'Spirit Power −<value> on skills.',                           hvalue: -1 },

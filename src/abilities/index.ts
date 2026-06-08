@@ -455,6 +455,106 @@ const eff_reactive_barrier: AbilityDef = {
   run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 3, 999); },
 };
 
+// ----- Premium T3/T4 gear -----
+
+// Escalating Exposure (canon T4 spirit): bearer's skill damage stacks a Spirit
+// Amp (Spirit Resist −) on the target, cap 3. The min(cap, cur+1) + addStatus
+// (which takes the max) increments without a new stacking rule in addStatus.
+const eff_escalating_exposure: AbilityDef = {
+  id: 'eff_escalating_exposure', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    const cur = target.statuses.find((s) => s.id === 'spirit_resist_down')?.value ?? 0;
+    addStatus(G, target, 'spirit_resist_down', Math.min(3, cur + 1), 2);
+  },
+};
+
+// Inhibitor (T4 weapon): attacks suppress BOTH offense types — Bullet Power −1
+// and Spirit Power −1 (refresh, 2 turns so it bites the enemy's next turn).
+const eff_inhibitor: AbilityDef = {
+  id: 'eff_inhibitor', trigger: 'onAttack', target: 'self',
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    addStatus(G, target, 'weapon_power_down', 1, 2);
+    addStatus(G, target, 'spirit_power_down', 1, 2);
+  },
+};
+
+// Crippling Headshot (T3 weapon): attacks apply Vulnerable — Bullet + Spirit
+// Resist −1 (refresh, 2 turns).
+const eff_crippling_headshot: AbilityDef = {
+  id: 'eff_crippling_headshot', trigger: 'onAttack', target: 'self',
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    addStatus(G, target, 'bullet_resist_down', 1, 2);
+    addStatus(G, target, 'spirit_resist_down', 1, 2);
+  },
+};
+
+// Berserker (T3 weapon): take bullet damage → gain +1 Bullet Power, cap +4.
+// Stored as a weapon_power status (duration 999) so it clears on death.
+const eff_berserker: AbilityDef = {
+  id: 'eff_berserker', trigger: 'onBearerDamagedByBullet', target: 'self',
+  run: (G, _ctx, { source }) => {
+    if (!source) return;
+    const cur = source.statuses.find((s) => s.id === 'weapon_power')?.value ?? 0;
+    addStatus(G, source, 'weapon_power', Math.min(4, cur + 1), 999);
+  },
+};
+
+// Colossus (T3 vitality): big HP (bonus on the card) + permanent Bullet Resist 2.
+const eff_colossus: AbilityDef = {
+  id: 'eff_colossus', trigger: 'onPlay', target: 'self',
+  base: 2, baseLabel: 'Bullet Resist',
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 2, 999); },
+};
+
+// Improved Bullet / Spirit Armor (T3 vitality): tier-up resists (4).
+const eff_improved_bullet_armor: AbilityDef = {
+  id: 'eff_improved_bullet_armor', trigger: 'onPlay', target: 'self',
+  base: 4, baseLabel: 'Bullet Resist',
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 4, 999); },
+};
+const eff_improved_spirit_armor: AbilityDef = {
+  id: 'eff_improved_spirit_armor', trigger: 'onPlay', target: 'self',
+  base: 4, baseLabel: 'Spirit Resist',
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 4, 999); },
+};
+
+// Frenzy (T4 weapon): while the bearer is below half HP, heal 2 on attack.
+// (The +3 Bullet Power half of Frenzy is applied in combat's effectiveAttackDamage.)
+const eff_frenzy: AbilityDef = {
+  id: 'eff_frenzy', trigger: 'onAttack', target: 'self',
+  base: 2, baseLabel: 'heal while <½ HP',
+  run: (G, _ctx, { source }) => {
+    if (source && source.hp < source.hpMax / 2) healUnit(G, source, 2, 'Frenzy');
+  },
+};
+
+// Siphon Bullets (T4 weapon): attacks steal 1 max HP from the target to the
+// bearer, TEMPORARILY — the siphon_drain / siphon_gain statuses revert the
+// maxHP on expiry (tickStartOfTurn) and on death (killInPlace), so it's a
+// 2-turn swing, not a permanent transfer. hvalue 0 → not cleansable.
+const eff_siphon_bullets: AbilityDef = {
+  id: 'eff_siphon_bullets', trigger: 'onAttack', target: 'self',
+  run: (G, _ctx, { source, target }) => {
+    if (!source || !target) return;
+    const bump = (c: CardInstance, id: StatusId) => {
+      let s = c.statuses.find((x) => x.id === id);
+      if (!s) { s = { id, value: 0, duration: 2 }; c.statuses.push(s); }
+      s.value += 1; s.duration = 2;
+    };
+    if (target.hpMax > 1) {
+      target.hpMax -= 1;
+      if (target.hp > target.hpMax) target.hp = target.hpMax;
+      bump(target, 'siphon_drain');
+      source.hpMax += 1;
+      source.hp += 1; // fill the stolen HP
+      bump(source, 'siphon_gain');
+    }
+  },
+};
+
 // ----- Hero skills (active, "Activate" trigger) -----
 // Each skill declares its scaling (spirit / bullet / both / none).
 // Base damage stays its original type. Scaling adds a second damage event of the matching type.
@@ -940,6 +1040,9 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_bullet_lifesteal, eff_spirit_lifesteal,
   eff_surge_of_power, eff_diviners_kevlar, eff_quicksilver_reload, eff_mystic_reverb,
   eff_toxic_bullets, eff_tesla_bullets, eff_suppressor, eff_reactive_barrier,
+  eff_escalating_exposure, eff_inhibitor, eff_crippling_headshot, eff_berserker,
+  eff_colossus, eff_improved_bullet_armor, eff_improved_spirit_armor,
+  eff_frenzy, eff_siphon_bullets,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,

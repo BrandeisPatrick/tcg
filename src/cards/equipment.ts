@@ -84,6 +84,14 @@ export const EQUIPMENT: EquipmentCard[] = [
   // ----- T3 (cost 5-6) — passive resists (canon T3 Vitality) -----
   { id: 'bullet_resilience', name: 'Bullet Resilience', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_bullet_resist'], text: 'Bullet Resist 3.' },
 
+  // ----- T3 premium (offense / scaling / tier-up resists) -----
+  { id: 'crippling_headshot', name: 'Crippling Headshot', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_crippling_headshot'], text: "Bearer's attacks apply Bullet Resist −1 and Spirit Resist −1 for 2 turns." },
+  { id: 'berserker',          name: 'Berserker',          type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_berserker'],          text: 'When the bearer takes bullet damage: gain +1 Bullet Power (max +4). Lost on death.' },
+  { id: 'colossus',           name: 'Colossus',           type: 'equipment', rarity: 3, tier: 3, cost: 6, bonus: { hp: 5 }, abilities: ['eff_colossus'], text: '+5 HP. Bullet Resist 2.' },
+  { id: 'superior_duration',  name: 'Superior Duration',  type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: [],                          text: "The bearer's own buffs last 1 turn longer." },
+  { id: 'improved_bullet_armor', name: 'Improved Bullet Armor', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_improved_bullet_armor'], text: 'Bullet Resist 4.' },
+  { id: 'improved_spirit_armor', name: 'Improved Spirit Armor', type: 'equipment', rarity: 3, tier: 3, cost: 6, abilities: ['eff_improved_spirit_armor'], text: 'Spirit Resist 4.' },
+
   // ----- T4 (cost 7+) — premium items (canon T4) -----
   { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'equipment', rarity: 4, tier: 4, cost: 7, charges: 4, abilities: ['eff_cooldown_draw'], text: "When the bearer uses a skill, draw a card. 4 charges, then it breaks." },
   // Leech = canon fusion of Bullet Lifesteal + Spirit Lifesteal; lifesteals off
@@ -93,6 +101,14 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'diviners_kevlar', name: "Diviner's Kevlar", type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_diviners_kevlar'], text: 'After the bearer casts their ultimate: gain Shield 4.' },
   // Mystic Reverb (T4): delayed echo — half the skill's damage hits the target again next turn.
   { id: 'mystic_reverb', name: 'Mystic Reverb', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_mystic_reverb'], text: "When the bearer's skill damages an enemy: at that enemy's next turn, it takes spirit damage equal to half the damage dealt." },
+  // Escalating Exposure (T4): skill damage stacks Spirit Resist − on the target.
+  { id: 'escalating_exposure', name: 'Escalating Exposure', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_escalating_exposure'], text: "When the bearer's skill / spell / ult damages an enemy: apply Spirit Resist −1 (stacks, max 3) for 2 turns." },
+  // Frenzy (T4): below half HP, +3 Bullet Power (combat) + heal 2 on attack.
+  { id: 'frenzy', name: 'Frenzy', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_frenzy'], text: 'While the bearer is below half HP: +3 Bullet Power, and heal 2 after attacking.' },
+  // Inhibitor (T4): attacks suppress both offense types.
+  { id: 'inhibitor', name: 'Inhibitor', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_inhibitor'], text: "Bearer's attacks apply Bullet Power −1 and Spirit Power −1 for 2 turns." },
+  // Siphon Bullets (T4): attacks temporarily steal 1 max HP (reverts after 2 turns).
+  { id: 'siphon_bullets', name: 'Siphon Bullets', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_siphon_bullets'], text: "After bearer attacks: steal 1 max HP from the target for 2 turns." },
   { id: 'healing_tempo',  name: 'Healing Tempo',  type: 'equipment', rarity: 4, tier: 4, cost: 7, bonus: { atk: 2 }, abilities: ['eff_healing_tempo'], text: '+2 Bullet Power. Healing Boost 4.' },
   { id: 'boundless_spirit', name: 'Boundless Spirit', type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { spirit: 5, hp: 3 }, text: '+5 Spirit Power. +3 HP.' },
   { id: 'glass_cannon',   name: 'Glass Cannon',   type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { atk: 6, hp: -1 }, text: '+6 Bullet Power. −1 max HP.' },

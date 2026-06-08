@@ -188,6 +188,12 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   G.players[oppId].souls = Math.min(SOULS_MAX, before + 1);
   if (G.players[oppId].souls > before) pushLog(G, `P${oppId} +1 Souls (KO bounty).`);
   damagePlayer(G, ps.id, 1);
+  // Revert any temporary Siphon Bullets max-HP swing before statuses are wiped,
+  // so the hero respawns with its true max HP.
+  const sDrain = hero.statuses.find((s) => s.id === 'siphon_drain');
+  if (sDrain) hero.hpMax += sDrain.value;
+  const sGain = hero.statuses.find((s) => s.id === 'siphon_gain');
+  if (sGain) hero.hpMax -= sGain.value;
   hero.statuses = [];
   hero.skillUsedThisTurn = false;
   hero.exhausted = true;

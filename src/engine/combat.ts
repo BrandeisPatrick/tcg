@@ -375,5 +375,10 @@ function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): 
     dmg += 3;
     bonusLabel = 'Drifter: Bloodscent +3';
   }
+  // Frenzy (equipment): +3 Bullet Power while the bearer is below half HP.
+  if (atk.attached?.some((eq) => eq.cardId === 'frenzy') && atk.hp < atk.hpMax / 2) {
+    dmg += 3;
+    bonusLabel = 'Frenzy: +3 <½ HP';
+  }
   return { dmg, bonusLabel };
 }

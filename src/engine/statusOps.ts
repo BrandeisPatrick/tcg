@@ -34,6 +34,12 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
 export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number) {
   const name = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
 
+  // Superior Duration: the bearer's own buffs last 1 turn longer.
+  const sdDef = STATUSES_BY_ID[id];
+  if (sdDef && sdDef.hvalue > 0 && duration < 99 && target.attached?.some((eq) => eq.cardId === 'superior_duration')) {
+    duration += 1;
+  }
+
   // Unstoppable: cleanse existing CC when applied.
   if (id === 'unstoppable') {
     const before = target.statuses.length;
@@ -119,6 +125,11 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Mystic Reverb echoes.`);
       damageUnit(G, c, reverb.value, 'spirit', 'Mystic Reverb');
     }
+    // Siphon Bullets: temporary max-HP transfer reverts when the marker expires.
+    const drain = c.statuses.find((s) => s.id === 'siphon_drain');
+    if (drain && drain.duration === 1) { c.hpMax += drain.value; }
+    const gain = c.statuses.find((s) => s.id === 'siphon_gain');
+    if (gain && gain.duration === 1) { c.hpMax -= gain.value; if (c.hp > c.hpMax) c.hp = c.hpMax; }
     // Action-denying CC (stun/silenced/disarm) is NOT decremented here — it
     // ticks at the END of the afflicted unit's turn (see tickEndOfTurnCC), so a
     // stored duration of N denies exactly N of the unit's turns. Everything else
