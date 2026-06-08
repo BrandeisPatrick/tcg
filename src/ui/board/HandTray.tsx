@@ -54,17 +54,20 @@ export function HandTray({
           // the animation settles) rather than dropped, so it never feels dead.
           disabled={!isMyTurn}
           onClick={onEnd}
-          animate={busy ? { opacity: [0.7, 1, 0.7] } : { opacity: isMyTurn ? 1 : 0.45 }}
+          // `active` = it's my turn AND no animation in flight. While busy the
+          // button greys out (not actionable yet) — but the tap is still queued
+          // underneath, so a press during the animation isn't dropped.
+          animate={busy ? { opacity: [0.4, 0.55, 0.4] } : { opacity: isMyTurn ? 1 : 0.45 }}
           transition={busy ? { duration: 1, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
           style={{
-            background: isMyTurn
+            background: (isMyTurn && !busy)
               ? `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}55)`
               : 'rgba(255,255,255,0.04)',
             ...text.label, color: palette.text,
             padding: '20px 30px',
-            border: `1px solid ${isMyTurn ? palette.accent : palette.border}`,
+            border: `1px solid ${(isMyTurn && !busy) ? palette.accent : palette.border}`,
             borderRadius: radius.md,
-            boxShadow: isMyTurn ? shadow.glowAccent : shadow.sm,
+            boxShadow: (isMyTurn && !busy) ? shadow.glowAccent : shadow.sm,
             cursor: isMyTurn ? (busy ? 'progress' : 'pointer') : 'default',
             minWidth: 160,
           }}
