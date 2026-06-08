@@ -182,7 +182,10 @@ export const RESPAWN_TURNS = 3;
  */
 function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} fell.`);
-  const SOULS_MAX = 7;
+  // Cap the KO bounty at the soul ceiling (the refill table tails at 10). Using
+  // a lower cap would *reduce* a player's souls when they scored a kill while
+  // holding 8–10 — the bounty must never subtract.
+  const SOULS_MAX = 10;
   const oppId: PlayerID = ps.id === '0' ? '1' : '0';
   const before = G.players[oppId].souls;
   G.players[oppId].souls = Math.min(SOULS_MAX, before + 1);
