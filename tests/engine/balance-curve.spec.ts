@@ -45,16 +45,16 @@ describe('skills scale with Spirit into the late game', () => {
 
     const before1 = dummy.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
-    const lv1Dmg = before1 - dummy.hp; // base 2
+    const lv1Dmg = before1 - dummy.hp; // base 3
 
     grantExp(G, caster, 21); // → Lv4, +3 Spirit (5 + 7 + 9)
     const before4 = dummy.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
-    const lv4Dmg = before4 - dummy.hp; // 2 + 3
+    const lv4Dmg = before4 - dummy.hp; // 3 + 3
 
-    expect(lv1Dmg).toBe(2);
+    expect(lv1Dmg).toBe(3);
     expect(lv4Dmg).toBeGreaterThan(lv1Dmg);
-    expect(lv4Dmg).toBe(5);
+    expect(lv4Dmg).toBe(6);
   });
 });
 
@@ -94,7 +94,7 @@ describe('early survivability — no Lv1 one-shots', () => {
 
   it("a Lv1 caster's skill alone cannot kill a fresh squishy (4 HP)", () => {
     const G = freshG();
-    const caster = makeHero('hero_lady_geist', '0', 'active', 0); // strongest base skill (2)
+    const caster = makeHero('hero_lady_geist', '0', 'active', 0); // strongest base skill (3, Life Drain)
     const dummy = makeHero('hero_kelvin', '1', 'active', 0); // 4 HP
     const before = dummy.hp;
     getAbility('skill_lady_geist')!.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });

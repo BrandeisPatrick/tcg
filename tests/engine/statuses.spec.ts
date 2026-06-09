@@ -184,7 +184,7 @@ describe('status: weapon_power', () => {
 });
 
 describe('status: spirit_power', () => {
-  it('adds to skill scaling (Lady Geist skill: 2 + SPI total)', async () => {
+  it('adds to skill scaling (Lady Geist skill: 3 + SPI total)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -197,8 +197,8 @@ describe('status: spirit_power', () => {
     target.hpMax = 20; target.hp = 20;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    // base 2 + (spiritMod 1 + spirit_power 3) = 6
-    expect(hpBefore - target.hp).toBe(6);
+    // base 3 + (spiritMod 1 + spirit_power 3) = 7
+    expect(hpBefore - target.hp).toBe(7);
   });
 });
 

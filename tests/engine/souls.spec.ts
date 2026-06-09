@@ -204,22 +204,23 @@ describe('souls economy', () => {
     expect(retreats.length).toBe(0);
   });
 
-  // ----- Spirit scaling on hero skills (use Lady Geist as representative — 4 spirit dmg) -----
-  it('hero skill at 0 SPI deals base damage (Lady Geist: 2 + 0 = 2 spirit)', async () => {
+  // ----- Spirit scaling on hero skills (use Lady Geist as representative — Life Drain, 3 spirit) -----
+  it('hero skill at 0 SPI deals base damage (Lady Geist: 3 + 0 = 3 spirit)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     expect(skill.scalesSpirit).toBe(true);
-    expect(skill.base).toBe(2);
+    expect(skill.base).toBe(3);
     const G = freshG();
     const caster = G.players['0'].active!;
     caster.spiritMod = 0;
     const target = G.players['1'].active!;
+    target.hpMax = 20; target.hp = 20;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(2);
+    expect(hpBefore - target.hp).toBe(3);
   });
 
-  it('hero skill at +3 SPI deals base + spirit (Lady Geist: 2 + 3 = 5 spirit)', async () => {
+  it('hero skill at +3 SPI deals base + spirit (Lady Geist: 3 + 3 = 6 spirit)', async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -229,7 +230,7 @@ describe('souls economy', () => {
     target.hpMax = 20; target.hp = 20; // soak the full damage to measure it
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(5); // base 2 + 3 spirit
+    expect(hpBefore - target.hp).toBe(6); // base 3 + 3 spirit
   });
 
   it('heal is flat — Spirit does NOT scale heals (Dynamo heal 2)', async () => {

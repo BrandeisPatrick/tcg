@@ -141,8 +141,8 @@ export const HEROES: HeroCard[] = [
     hp: 4,
     skill: 'skill_lady_geist',
     ult: 'ult_lady_geist',
-    abilityName: 'Essence Bomb',
-    text: '2 spirit dmg to any enemy.',
+    abilityName: 'Life Drain',
+    text: 'Deal 3 spirit to any enemy and heal for half the damage dealt.',
   },
   {
     id: 'hero_lash',
@@ -250,7 +250,7 @@ export const HEROES: HeroCard[] = [
     passives: ['passive_drifter_bloodscent'],
     ult: 'ult_drifter',
     abilityName: 'Bloodscent',
-    text: 'Heal 1 on attack. +3 bullet dmg vs targets at 4 HP or below.',
+    text: 'Heals for half the damage his attacks deal (bullet lifesteal).',
   },
 ];
 

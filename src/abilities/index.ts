@@ -616,12 +616,20 @@ const skill_kelvin: AbilityDef = {
   },
 };
 
+// Lady Geist — Life Drain (her in-game #2): deal spirit damage and heal herself
+// for HALF the damage dealt (spirit lifesteal). Scales: more Spirit = bigger
+// drain, and Healing Boost items add flat N to the heal.
 const skill_lady_geist: AbilityDef = {
   id: 'skill_lady_geist', trigger: 'activate', target: 'enemyAny', exhausts: true,
-  prompt: 'Lady Geist — 2 spirit dmg.',
-  base: 2, baseLabel: 'spirit dmg',
+  prompt: 'Lady Geist Life Drain — deal 3 spirit and heal for half the damage dealt.',
+  base: 3, baseLabel: 'spirit drain',
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 2 + spi(source), 'spirit'); },
+  run: (G, _ctx, { source, target }) => {
+    if (!target || !source) return;
+    const dealt = damageUnit(G, target, 3 + spi(source), 'spirit', 'Life Drain');
+    const heal = Math.floor(dealt / 2);
+    if (heal > 0) healUnit(G, source, heal, 'Life Drain');
+  },
 };
 
 const skill_lash: AbilityDef = {
@@ -817,10 +825,17 @@ const passive_wraith_mixed: AbilityDef = {
 //      `combat.ts:effectiveAttackDamage`).
 // The first effect uses the ability's onAttack trigger; the second is read
 // directly from the attacker cardId in the combat hook.
+// Bloodscent: bullet lifesteal — Drifter heals for HALF the damage his attacks
+// deal (the dealt amount is plumbed in via params.dealt from resolveAttackPhase).
+// Scales with weapon power, Extra Attack swings, and Healing Boost items.
 const passive_drifter_bloodscent: AbilityDef = {
   id: 'passive_drifter_bloodscent', trigger: 'onAttack', target: 'self',
-  prompt: 'Bloodscent — heal 1 on attack + 3 bullet dmg vs targets at 4 HP or below.',
-  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Bloodscent'); },
+  prompt: 'Bloodscent — Drifter heals for half the damage his attacks deal.',
+  run: (G, _ctx, { source, params }) => {
+    const dealt = (params?.dealt as number | undefined) ?? 0;
+    const heal = Math.floor(dealt / 2);
+    if (source && heal > 0) healUnit(G, source, heal, 'Bloodscent');
+  },
 };
 
 // ----- Ultimates -----

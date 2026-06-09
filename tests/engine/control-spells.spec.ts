@@ -65,11 +65,11 @@ describe('Unstoppable (spell)', () => {
 describe('Echo Shard', () => {
   it("recasts the active hero's skill (damage lands again)", () => {
     const G = freshReadyGame();
-    G.players['0'].active = makeHero('hero_lady_geist', '0', 'active', 0); // skill = 2 spirit
+    G.players['0'].active = makeHero('hero_lady_geist', '0', 'active', 0); // skill = 3 spirit
     const enemy = G.players['1'].active!;
     enemy.hpMax = 20; enemy.hp = 20;
     run('eff_echo_shard', G, {});
-    expect(enemy.hp).toBe(18); // Lady Geist skill base 2
+    expect(enemy.hp).toBe(17); // Lady Geist skill base 3
   });
 
   it('bypasses the one-skill-per-turn cap', () => {
@@ -79,7 +79,7 @@ describe('Echo Shard', () => {
     const enemy = G.players['1'].active!;
     enemy.hpMax = 20; enemy.hp = 20;
     run('eff_echo_shard', G, {});
-    expect(enemy.hp).toBe(18); // still recast despite the flag
+    expect(enemy.hp).toBe(17); // still recast despite the flag
   });
 
   it('re-fires onBearerSkillUsed → cast-payoff gear procs again (Mystic Burst)', () => {
@@ -94,7 +94,7 @@ describe('Echo Shard', () => {
     const enemy = G.players['1'].active!;
     enemy.hpMax = 20; enemy.hp = 20;
     run('eff_echo_shard', G, {});
-    expect(enemy.hp).toBe(17); // 2 (skill) + 1 (Mystic Burst on skill use)
+    expect(enemy.hp).toBe(16); // 3 (skill) + 1 (Mystic Burst on skill use)
   });
 
   it('fizzles on a skill-less (passive) hero', () => {

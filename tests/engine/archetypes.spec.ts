@@ -130,6 +130,43 @@ describe('Active Reload — Extra Attack spell', () => {
   });
 });
 
+describe('Lifesteal — heal half the damage dealt', () => {
+  it('Drifter Bloodscent heals floor(damage/2) per attack', () => {
+    const G = freshReadyGame();
+    const drifter = makeHero('hero_drifter', '0', 'active', 0);
+    drifter.hp = 1; drifter.hpMax = 20;
+    // Bloodscent reads the dealt amount plumbed in via params.dealt.
+    getAbility('passive_drifter_bloodscent')!.run(G, { movingPlayer: '0' }, { source: drifter, params: { dealt: 4 } });
+    expect(drifter.hp).toBe(1 + 2); // floor(4/2) = 2
+  });
+
+  it('Drifter heals through a real attack phase (half his dealt damage)', () => {
+    const G = freshReadyGame();
+    const drifter = makeHero('hero_drifter', '0', 'active', 0); // atk 3
+    drifter.hp = 1; drifter.hpMax = 20;
+    G.players['0'].active = drifter;
+    soloAttacker(G, '0');
+    const def = G.players['1'].active!;
+    def.hp = def.hpMax = 99; // survives; no retaliation KO concerns
+    const retal = effectiveAtk(def); // defender's swing back at Drifter
+    resolveAttackPhase(G, '0');
+    // Drifter dealt 3 → heals floor(3/2)=1, then ate `retal` from retaliation.
+    expect(drifter.hp).toBe(1 + 1 - retal);
+  });
+
+  it('Lady Geist Life Drain heals for half the spirit damage dealt', () => {
+    const G = freshReadyGame();
+    const geist = makeHero('hero_lady_geist', '0', 'active', 0);
+    geist.hp = 1; geist.hpMax = 10;
+    G.players['0'].active = geist;
+    const enemy = G.players['1'].active!;
+    enemy.hp = enemy.hpMax = 20;
+    getAbility('skill_lady_geist')!.run(G, { movingPlayer: '0' }, { source: geist, target: enemy });
+    expect(enemy.hp).toBe(20 - 3);          // dealt 3 spirit
+    expect(geist.hp).toBe(1 + Math.floor(3 / 2)); // healed half = 1
+  });
+});
+
 describe('Ricochet — canon AoE on attack', () => {
   it('each attack bounces 2 to every enemy bench hero, scaling with Extra Attack', () => {
     const G = freshReadyGame();

@@ -277,8 +277,11 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
       const { dmg: retalDmg } = effectiveAttackDamage(target, atk);
 
       // ---- Apply the attacker's swing first (existing pipeline). ----
+      // Capture the actual damage dealt (post-mitigation) so onAttack lifesteal
+      // (Drifter) can heal for half of it.
+      let dealt = 0;
       withCast(atk, 'attack', () => {
-        damageUnit(G, target, dmg, 'attack', atkName);
+        dealt = damageUnit(G, target, dmg, 'attack', atkName);
       });
       const data = CARDS_BY_ID[atk.cardId];
       if (data?.type === 'hero') {
@@ -287,7 +290,7 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
           // `primary: true` marks this as the hero's main swing of the turn —
           // Haze's Fixation grants its extra attack only here, so the extra
           // swings it spawns (and retaliation) don't re-trigger it.
-          if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target, params: { primary: true } });
+          if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target, params: { primary: true, dealt } });
         }
       }
 
@@ -298,14 +301,15 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
       // applies through damageUnit naturally.
       if (retalDmg > 0 && atk.hp > 0) {
         const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
+        let retalDealt = 0;
         withCast(target, 'attack', () => {
-          damageUnit(G, atk, retalDmg, 'attack', targetName);
+          retalDealt = damageUnit(G, atk, retalDmg, 'attack', targetName);
         });
         const tdata = CARDS_BY_ID[target.cardId];
         if (tdata?.type === 'hero') {
           for (const passId of tdata.passives ?? []) {
             const a = getAbility(passId);
-            if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: defenderId }, { source: target, target: atk });
+            if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: defenderId }, { source: target, target: atk, params: { dealt: retalDealt } });
           }
         }
       }
@@ -322,13 +326,14 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
         if (atk.hp <= 0 || target.hp <= 0) break;
         const bonus = effectiveAttackDamage(atk, target).dmg;
         if (bonus <= 0) continue;
+        let exDealt = 0;
         withCast(atk, 'attack', () => {
-          damageUnit(G, target, bonus, 'attack', `${atkName} (Extra Attack)`);
+          exDealt = damageUnit(G, target, bonus, 'attack', `${atkName} (Extra Attack)`);
         });
         if (data?.type === 'hero') {
           for (const passId of data.passives ?? []) {
             const a = getAbility(passId);
-            if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target });
+            if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target, params: { dealt: exDealt } });
           }
         }
       }
@@ -358,12 +363,6 @@ function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): 
   const weak = atk.statuses.find((s) => s.id === 'weapon_power_down');
   if (weak) dmg = Math.max(0, dmg - weak.value);
   let bonusLabel: string | undefined;
-  const data = CARDS_BY_ID[atk.cardId];
-  // Drifter passive: +3 vs targets at or below 4 HP (Bloodscent).
-  if (data?.type === 'hero' && data.id === 'hero_drifter' && target && target.hp <= 4) {
-    dmg += 3;
-    bonusLabel = 'Drifter: Bloodscent +3';
-  }
   // Frenzy (equipment): +3 Bullet Power while the bearer is below half HP.
   if (atk.attached?.some((eq) => eq.cardId === 'frenzy') && atk.hp < atk.hpMax / 2) {
     dmg += 3;
