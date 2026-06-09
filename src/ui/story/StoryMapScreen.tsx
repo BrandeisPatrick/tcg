@@ -27,15 +27,16 @@ type PickState =
 
 // The map's intrinsic coordinate space (node x/y are normalised against this).
 const MAP_W = 840, MAP_H = 1080;
-// Extra zoom ON TOP of "cover the screen", so nodes spread out and there's room
-// to drag around. 1 = exactly fills the screen; higher = more zoomed.
-const MAP_ZOOM = 1.7;
+// Zoom = "cover the screen" × this multiplier (1 = exactly fills). Adjustable
+// in-game via the +/− buttons, clamped to [ZOOM_MIN, ZOOM_MAX].
+const ZOOM_INITIAL = 1.7, ZOOM_MIN = 1, ZOOM_MAX = 3.2, ZOOM_STEP = 1.3;
 
 export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapScreenProps) {
   const [pick, setPick] = useState<PickState>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // The map is interactive (draggable, nodes shown) only during an active run.
   const active = !!run && run.status !== 'won' && run.status !== 'lost';
+  const [zoom, setZoom] = useState(ZOOM_INITIAL);
 
   // Measure the frame so we can give the pannable world EXPLICIT drag bounds.
   // (Framer's ref-based dragConstraints mis-measures a child larger than the
@@ -53,10 +54,11 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
     return () => ro.disconnect();
   }, []);
   // Size the map world to COVER the full-screen frame (like background cover),
-  // then multiply by MAP_ZOOM. Keeping the world at the map's native aspect is
-  // what keeps the nodes aligned to the city. Pan range = half the overflow.
+  // then multiply by the current zoom. Keeping the world at the map's native
+  // aspect is what keeps the nodes aligned to the city. Pan range = half the
+  // overflow.
   const cover = frame.w && frame.h ? Math.max(frame.w / MAP_W, frame.h / MAP_H) : 0;
-  const scale = cover * MAP_ZOOM;
+  const scale = cover * zoom;
   const worldW = MAP_W * scale, worldH = MAP_H * scale;
   const panX = Math.max(0, (worldW - frame.w) / 2);
   const panY = Math.max(0, (worldH - frame.h) / 2);
@@ -84,6 +86,19 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
   const onPointerUp = (e: React.PointerEvent) => {
     if (drag.current?.moved) { try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ } }
     drag.current = null;
+  };
+
+  // Zoom buttons: scale the multiplier and scale the pan offset by the same
+  // ratio so the screen-centre map point stays put, then re-clamp to new bounds.
+  const applyZoom = (factor: number) => {
+    const nz = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor));
+    if (nz === zoom) return;
+    const ns = cover * nz;
+    const nPanX = Math.max(0, (MAP_W * ns - frame.w) / 2);
+    const nPanY = Math.max(0, (MAP_H * ns - frame.h) / 2);
+    const ratio = nz / zoom;
+    setZoom(nz);
+    setPan((p) => ({ x: clampPan(p.x * ratio, nPanX), y: clampPan(p.y * ratio, nPanY) }));
   };
 
   const startRun = (hero: CardId) => { onUpdateRun(newRun(hero)); setPick(null); };
@@ -134,8 +149,7 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
       >
         {/* Pannable, zoomed-in world: the city map, route edges and node markers
             live here, rendered MAP_ZOOM× larger than the frame so the nodes are
-            well-separated. Drag to move around; the frame clips (overflow hidden).
-            The HUD / intro panel below sit OUTSIDE this and stay fixed. */}
+            well-separated. Drag to move around; the frame clips (overflow hidden). */}
         <div
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -160,21 +174,40 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
             </>
           )}
         </div>
-
-        {/* Fixed overlays (do NOT pan with the map). */}
-        {active && (
-          <RunHud run={run!} onExit={onExit} onAbandon={() => onUpdateRun(null)} />
-        )}
-
-        {/* Intro / start-of-run panel */}
-        {(!run || run.status === 'lost' || run.status === 'won') && (
-          <CenterPanel
-            run={run}
-            onBegin={() => setPick({ mode: 'start', options: randomStartingHeroes() })}
-            onExit={onExit}
-          />
-        )}
       </motion.div>
+
+      {/* Fixed overlays — siblings of the map panel, NOT children of it. Framer
+          applies a compositing transform to the motion.div panel, and a
+          transformed ancestor mis-positions absolutely-placed descendants on
+          fractional-DPR displays (the map's world div escapes only because it has
+          its own translate3d). Anchoring the HUD/zoom/intro to the plain
+          position:fixed root instead keeps them pinned to the real corners. */}
+      {active && (
+        <RunHud run={run!} onExit={onExit} onAbandon={() => onUpdateRun(null)} />
+      )}
+
+      {/* Zoom controls — bottom-right corner, fixed (not pannable). */}
+      {active && (
+        <div style={{
+          position: 'absolute', right: 14, bottom: 14, zIndex: 6,
+          display: 'flex', flexDirection: 'column', gap: 8,
+          // Own compositing layer → correct corner paint even on fractional-DPR
+          // displays (matches the map world div, which never mis-positions).
+          transform: 'translateZ(0)',
+        }}>
+          <ZoomBtn label="+" title="Zoom in" onClick={() => applyZoom(ZOOM_STEP)} disabled={zoom >= ZOOM_MAX - 1e-3} />
+          <ZoomBtn label="−" title="Zoom out" onClick={() => applyZoom(1 / ZOOM_STEP)} disabled={zoom <= ZOOM_MIN + 1e-3} />
+        </div>
+      )}
+
+      {/* Intro / start-of-run panel */}
+      {(!run || run.status === 'lost' || run.status === 'won') && (
+        <CenterPanel
+          run={run}
+          onBegin={() => setPick({ mode: 'start', options: randomStartingHeroes() })}
+          onExit={onExit}
+        />
+      )}
 
       <AnimatePresence>
         {pick?.mode === 'start' && (
@@ -420,6 +453,7 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
           background: 'rgba(18,11,3,0.78)', border: `1.5px solid ${palette.accent}`,
           color: palette.bg1, cursor: 'pointer', fontSize: 18, lineHeight: 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transform: 'translateZ(0)',
         }}
       >‹</button>
 
@@ -431,6 +465,7 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
           background: 'rgba(18,11,3,0.78)', border: `1.5px solid ${palette.danger}`,
           color: palette.bg1, cursor: 'pointer', borderRadius: radius.pill,
           padding: '8px 16px', fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
+          transform: 'translateZ(0)',
         }}
       >Abandon Run</button>
 
@@ -439,7 +474,7 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
         display: 'flex', alignItems: 'center', gap: 14,
         background: 'rgba(18,11,3,0.82)', border: `1px solid ${palette.borderStrong}`,
         borderRadius: radius.pill, padding: '7px 16px 7px 10px',
-        boxShadow: shadow.md,
+        boxShadow: shadow.md, transform: 'translateZ(0)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           {run.heroes.map((id, i) => (
@@ -467,6 +502,25 @@ function Stat({ label, value }: { label: string; value: string }) {
       <span style={{ fontFamily: fonts.ui, fontSize: 16, fontWeight: 700, color: palette.bg1, lineHeight: 1 }}>{value}</span>
       <span style={{ fontFamily: fonts.ui, fontSize: 9, color: palette.textFaint, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{label}</span>
     </div>
+  );
+}
+
+function ZoomBtn({ label, title, onClick, disabled }: { label: string; title: string; onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={title}
+      title={title}
+      style={{
+        width: 44, height: 44, borderRadius: '50%',
+        background: 'rgba(18,11,3,0.82)', border: `1.5px solid ${palette.accent}`,
+        color: palette.bg1, cursor: disabled ? 'default' : 'pointer',
+        fontSize: 24, fontWeight: 700, lineHeight: 1, paddingBottom: 2,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: disabled ? 0.4 : 1, boxShadow: shadow.md, userSelect: 'none',
+      }}
+    >{label}</button>
   );
 }
 
