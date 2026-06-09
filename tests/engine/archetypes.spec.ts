@@ -5,6 +5,7 @@ import { tickCastingPulses, addStatus, tickRemMerges } from '@/engine/statusOps'
 import { damageUnit, reapDead } from '@/engine/damage';
 import { effectiveAtk, grantExtraAttacks, MAX_EXTRA_ATTACKS } from '@/engine/util';
 import { getAbility } from '@/abilities';
+import { buildPlayer } from '@/engine/game';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 
 const extraOf = (c: CardInstance) => c.statuses.find((s) => s.id === 'extra_attack')?.value ?? 0;
@@ -309,5 +310,12 @@ describe('Support — Rem Lil Helpers (merge)', () => {
     expect(G.players['0'].bench[0]).toBe(rem); // rescued, not lost with the body
     expect(rem.zone).toBe('bench');
     expect(rem.remMergeTurnsLeft).toBeUndefined();
+  });
+
+  it('drafted first, bench-only Rem still starts on the bench (not Active)', () => {
+    const ps = buildPlayer('0', ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist'], []);
+    expect(ps.active?.cardId).toBe('hero_warden');       // first non-bench-only
+    expect(ps.active?.cardId).not.toBe('hero_rem');
+    expect(ps.bench.some((b) => b?.cardId === 'hero_rem')).toBe(true);
   });
 });

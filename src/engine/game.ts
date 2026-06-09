@@ -119,10 +119,18 @@ interface RosterOpts {
  *  (exactly 4 heroes) and Story mode (1-4 heroes, optional buff/patron HP). */
 export function buildPlayer(pid: PlayerID, heroes: string[], deckCards: string[], opts: RosterOpts = {}): PlayerState {
   const roster = heroes.slice(0, 4);
-  const active = makeInstance(roster[0], pid, 'active', 0);
+  // A bench-only hero (Rem) must never start as the Active — pick the first
+  // non-bench-only hero for the Active slot; the rest fill the bench in draft
+  // order. (Without this, drafting Rem first put her in the Active slot, which
+  // breaks her merge skill that assumes she's on the bench.)
+  const isBenchOnly = (id: string) => !!(CARDS_BY_ID[id] as { flags?: { benchOnly?: boolean } } | undefined)?.flags?.benchOnly;
+  const activeIdx = roster.findIndex((id) => !isBenchOnly(id));
+  const activeId = roster[activeIdx >= 0 ? activeIdx : 0];
+  const benchIds = roster.filter((_, i) => i !== (activeIdx >= 0 ? activeIdx : 0));
+  const active = makeInstance(activeId, pid, 'active', 0);
   const bench: (CardInstance | null)[] = [null, null, null];
-  for (let i = 1; i < roster.length; i++) {
-    bench[i - 1] = makeInstance(roster[i], pid, 'bench', i as 1 | 2 | 3);
+  for (let i = 0; i < benchIds.length && i < 3; i++) {
+    bench[i] = makeInstance(benchIds[i], pid, 'bench', (i + 1) as 1 | 2 | 3);
   }
 
   const buff = opts.buff;
