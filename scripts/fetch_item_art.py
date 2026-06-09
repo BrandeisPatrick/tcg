@@ -56,6 +56,25 @@ EQ_MAP = {
     'bullet_resilience':    'Bullet Resilience',
     'spirit_resilience':    'Spirit Resilience',
     'bullet_resist_shredder': 'Bullet Resist Shredder',
+    # --- Newer cards (canon names) ---
+    'burst_fire':           'Burst Fire',
+    'ricochet':             'Ricochet',
+    'toxic_bullets':        'Toxic Bullets',
+    'tesla_bullets':        'Tesla Bullets',
+    'crippling_headshot':   'Crippling Headshot',
+    'colossus':             'Colossus',
+    'leech':                'Leech',
+    'siphon_bullets':       'Siphon Bullets',
+    'escalating_exposure':  'Escalating Exposure',
+    'superior_duration':    'Superior Duration',
+    'reactive_barrier':     'Reactive Barrier',
+    'bullet_lifesteal':     'Bullet Lifesteal',
+    'spirit_lifesteal':     'Spirit Lifesteal',
+    'improved_burst':       'Mystic Burst',
+    'superior_cooldown':    'Compress Cooldown',      # cooldown family art
+    'transcendent_cooldown':'Compress Cooldown',
+    'improved_bullet_armor':'Bullet Armor',
+    'improved_spirit_armor':'Spirit Armor',
 }
 
 # --- Active items (rendered as Spells / one-shot casts) ---
@@ -78,6 +97,10 @@ SP_MAP = {
     'spirit_sap':           'Spirit Sap',
     'slowing_hex':          'Slowing Hex',
     'healbane':             'Healbane',
+    # --- Newer active items (canon names) ---
+    'active_reload':        'Active Reload',
+    'unstoppable':          'Unstoppable',
+    'debuff_remover':       'Debuff Reducer',  # closest canon (no active "Debuff Remover")
 }
 
 API = 'https://assets.deadlock-api.com/v2/items'

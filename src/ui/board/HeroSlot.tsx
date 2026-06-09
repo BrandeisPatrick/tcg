@@ -212,6 +212,7 @@ export function HeroSlot({
                     <HeroBadge cardId={eq.cardId} size={dim} />
                   ) : (
                     <img src={`${import.meta.env.BASE_URL}items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
                   )}
                   {/* Merge countdown (Rem) — buff-tinted, mirrors the charge pill. */}
