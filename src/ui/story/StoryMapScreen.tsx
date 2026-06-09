@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CardId } from '@/engine/types';
 import type { StoryRun, StoryNode, NodeKind } from '@/story/types';
@@ -25,8 +25,81 @@ type PickState =
   | { mode: 'node'; node: StoryNode; kind: 'hero' | 'card'; options: CardId[] }
   | null;
 
+// The map's intrinsic coordinate space (node x/y are normalised against this).
+const MAP_W = 840, MAP_H = 1080;
+// Zoom = "cover the screen" × this multiplier (1 = exactly fills). Adjustable
+// in-game via the +/− buttons, clamped to [ZOOM_MIN, ZOOM_MAX].
+const ZOOM_INITIAL = 1.7, ZOOM_MIN = 1, ZOOM_MAX = 3.2, ZOOM_STEP = 1.3;
+
 export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapScreenProps) {
   const [pick, setPick] = useState<PickState>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // The map is interactive (draggable, nodes shown) only during an active run.
+  const active = !!run && run.status !== 'won' && run.status !== 'lost';
+  const [zoom, setZoom] = useState(ZOOM_INITIAL);
+
+  // Measure the frame so we can give the pannable world EXPLICIT drag bounds.
+  // (Framer's ref-based dragConstraints mis-measures a child larger than the
+  // ref and snaps it back to centre — numeric bounds pan reliably.) The world
+  // is centred and MAP_ZOOM× the frame, so it overflows half the excess on each
+  // side: that half-excess is exactly the allowed pan distance per axis.
+  const [frame, setFrame] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const measure = () => setFrame({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Size the map world to COVER the full-screen frame (like background cover),
+  // then multiply by the current zoom. Keeping the world at the map's native
+  // aspect is what keeps the nodes aligned to the city. Pan range = half the
+  // overflow.
+  const cover = frame.w && frame.h ? Math.max(frame.w / MAP_W, frame.h / MAP_H) : 0;
+  const scale = cover * zoom;
+  const worldW = MAP_W * scale, worldH = MAP_H * scale;
+  const panX = Math.max(0, (worldW - frame.w) / 2);
+  const panY = Math.max(0, (worldH - frame.h) / 2);
+
+  // Manual drag-to-pan (own pointer handlers rather than Framer's drag, which is
+  // finicky and hard to verify). A small threshold distinguishes a pan from a
+  // node tap, so clicking a node still works.
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ px: number; py: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const clampPan = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!active) return;
+    drag.current = { px: e.clientX, py: e.clientY, ox: pan.x, oy: pan.y, moved: false };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.px, dy = e.clientY - d.py;
+    if (!d.moved && Math.hypot(dx, dy) > 4) {
+      d.moved = true;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* non-active pointer */ }
+    }
+    if (d.moved) setPan({ x: clampPan(d.ox + dx, panX), y: clampPan(d.oy + dy, panY) });
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (drag.current?.moved) { try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ } }
+    drag.current = null;
+  };
+
+  // Zoom buttons: scale the multiplier and scale the pan offset by the same
+  // ratio so the screen-centre map point stays put, then re-clamp to new bounds.
+  const applyZoom = (factor: number) => {
+    const nz = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor));
+    if (nz === zoom) return;
+    const ns = cover * nz;
+    const nPanX = Math.max(0, (MAP_W * ns - frame.w) / 2);
+    const nPanY = Math.max(0, (MAP_H * ns - frame.h) / 2);
+    const ratio = nz / zoom;
+    setZoom(nz);
+    setPan((p) => ({ x: clampPan(p.x * ratio, nPanX), y: clampPan(p.y * ratio, nPanY) }));
+  };
 
   const startRun = (hero: CardId) => { onUpdateRun(newRun(hero)); setPick(null); };
 
@@ -55,50 +128,86 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
 
   return (
     <div style={{
-      position: 'relative', minHeight: '100dvh', width: '100%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#1a1206', padding: 18, fontFamily: fonts.ui, overflow: 'hidden',
+      position: 'fixed', inset: 0,
+      background: '#1a1206', fontFamily: fonts.ui, overflow: 'hidden',
     }}>
       <BackdropGlow />
 
-      {/* Map panel — fixed 1200:700 aspect so the SVG map, edges and node
-          buttons all share one coordinate space. */}
+      {/* Full-screen map viewport — the world inside is sized to cover this and
+          is dragged around; the viewport clips (overflow hidden). */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
+        ref={panelRef}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         transition={spring.soft}
         style={{
-          position: 'relative',
-          width: 'min(94vw, 72dvh)',
-          aspectRatio: '840 / 1080',
-          borderRadius: 12,
+          position: 'absolute', inset: 0,
           overflow: 'hidden',
-          // Pale-wood frame, like the laser-cut original.
-          border: '12px solid #c9ad74',
-          boxShadow: '0 28px 80px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(90,64,22,0.5)',
           background: palette.bg0,
+          touchAction: 'none', // let the drag handler own touch panning
         }}
       >
-        <NycMap />
-        {run && run.status !== 'won' && run.status !== 'lost' && (
-          <>
-            <Edges run={run} />
-            {run.nodes.map((n) => (
-              <NodeMarker key={n.id} run={run} node={n} onClick={() => handleNode(n)} />
-            ))}
-            <RunHud run={run} onExit={onExit} onAbandon={() => onUpdateRun(null)} />
-          </>
-        )}
-
-        {/* Intro / start-of-run panel */}
-        {(!run || run.status === 'lost' || run.status === 'won') && (
-          <CenterPanel
-            run={run}
-            onBegin={() => setPick({ mode: 'start', options: randomStartingHeroes() })}
-            onExit={onExit}
-          />
-        )}
+        {/* Pannable, zoomed-in world: the city map, route edges and node markers
+            live here, rendered MAP_ZOOM× larger than the frame so the nodes are
+            well-separated. Drag to move around; the frame clips (overflow hidden). */}
+        <div
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          style={{
+            position: 'absolute',
+            width: worldW, height: worldH,
+            left: (frame.w - worldW) / 2, top: (frame.h - worldH) / 2,
+            transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`,
+            cursor: active ? 'grab' : 'default',
+            touchAction: 'none',
+          }}
+        >
+          <NycMap />
+          {active && (
+            <>
+              <Edges run={run!} />
+              {run!.nodes.map((n) => (
+                <NodeMarker key={n.id} run={run!} node={n} onClick={() => handleNode(n)} />
+              ))}
+            </>
+          )}
+        </div>
       </motion.div>
+
+      {/* Fixed overlays — siblings of the map panel, NOT children of it. Framer
+          applies a compositing transform to the motion.div panel, and a
+          transformed ancestor mis-positions absolutely-placed descendants on
+          fractional-DPR displays (the map's world div escapes only because it has
+          its own translate3d). Anchoring the HUD/zoom/intro to the plain
+          position:fixed root instead keeps them pinned to the real corners. */}
+      {active && (
+        <RunHud run={run!} onExit={onExit} onAbandon={() => onUpdateRun(null)} />
+      )}
+
+      {/* Zoom controls — bottom-right corner, fixed (not pannable). */}
+      {active && (
+        <div style={{
+          position: 'absolute', right: 14, bottom: 14, zIndex: 6,
+          display: 'flex', flexDirection: 'column', gap: 8,
+          // Own compositing layer → correct corner paint even on fractional-DPR
+          // displays (matches the map world div, which never mis-positions).
+          transform: 'translateZ(0)',
+        }}>
+          <ZoomBtn label="+" title="Zoom in" onClick={() => applyZoom(ZOOM_STEP)} disabled={zoom >= ZOOM_MAX - 1e-3} />
+          <ZoomBtn label="−" title="Zoom out" onClick={() => applyZoom(1 / ZOOM_STEP)} disabled={zoom <= ZOOM_MIN + 1e-3} />
+        </div>
+      )}
+
+      {/* Intro / start-of-run panel */}
+      {(!run || run.status === 'lost' || run.status === 'won') && (
+        <CenterPanel
+          run={run}
+          onBegin={() => setPick({ mode: 'start', options: randomStartingHeroes() })}
+          onExit={onExit}
+        />
+      )}
 
       <AnimatePresence>
         {pick?.mode === 'start' && (
@@ -344,6 +453,7 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
           background: 'rgba(18,11,3,0.78)', border: `1.5px solid ${palette.accent}`,
           color: palette.bg1, cursor: 'pointer', fontSize: 18, lineHeight: 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transform: 'translateZ(0)',
         }}
       >‹</button>
 
@@ -355,6 +465,7 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
           background: 'rgba(18,11,3,0.78)', border: `1.5px solid ${palette.danger}`,
           color: palette.bg1, cursor: 'pointer', borderRadius: radius.pill,
           padding: '8px 16px', fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
+          transform: 'translateZ(0)',
         }}
       >Abandon Run</button>
 
@@ -363,7 +474,7 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
         display: 'flex', alignItems: 'center', gap: 14,
         background: 'rgba(18,11,3,0.82)', border: `1px solid ${palette.borderStrong}`,
         borderRadius: radius.pill, padding: '7px 16px 7px 10px',
-        boxShadow: shadow.md,
+        boxShadow: shadow.md, transform: 'translateZ(0)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           {run.heroes.map((id, i) => (
@@ -391,6 +502,25 @@ function Stat({ label, value }: { label: string; value: string }) {
       <span style={{ fontFamily: fonts.ui, fontSize: 16, fontWeight: 700, color: palette.bg1, lineHeight: 1 }}>{value}</span>
       <span style={{ fontFamily: fonts.ui, fontSize: 9, color: palette.textFaint, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{label}</span>
     </div>
+  );
+}
+
+function ZoomBtn({ label, title, onClick, disabled }: { label: string; title: string; onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={title}
+      title={title}
+      style={{
+        width: 44, height: 44, borderRadius: '50%',
+        background: 'rgba(18,11,3,0.82)', border: `1.5px solid ${palette.accent}`,
+        color: palette.bg1, cursor: disabled ? 'default' : 'pointer',
+        fontSize: 24, fontWeight: 700, lineHeight: 1, paddingBottom: 2,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: disabled ? 0.4 : 1, boxShadow: shadow.md, userSelect: 'none',
+      }}
+    >{label}</button>
   );
 }
 
