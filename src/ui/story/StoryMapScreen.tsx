@@ -25,9 +25,11 @@ type PickState =
   | { mode: 'node'; node: StoryNode; kind: 'hero' | 'card'; options: CardId[] }
   | null;
 
-// How much larger than the visible frame the map world is rendered, so nodes
-// spread out and the player drags around to navigate. Bump to zoom in further.
-const MAP_ZOOM = 2.3;
+// The map's intrinsic coordinate space (node x/y are normalised against this).
+const MAP_W = 840, MAP_H = 1080;
+// Extra zoom ON TOP of "cover the screen", so nodes spread out and there's room
+// to drag around. 1 = exactly fills the screen; higher = more zoomed.
+const MAP_ZOOM = 1.7;
 
 export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapScreenProps) {
   const [pick, setPick] = useState<PickState>(null);
@@ -50,8 +52,14 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const panX = (frame.w * (MAP_ZOOM - 1)) / 2;
-  const panY = (frame.h * (MAP_ZOOM - 1)) / 2;
+  // Size the map world to COVER the full-screen frame (like background cover),
+  // then multiply by MAP_ZOOM. Keeping the world at the map's native aspect is
+  // what keeps the nodes aligned to the city. Pan range = half the overflow.
+  const cover = frame.w && frame.h ? Math.max(frame.w / MAP_W, frame.h / MAP_H) : 0;
+  const scale = cover * MAP_ZOOM;
+  const worldW = MAP_W * scale, worldH = MAP_H * scale;
+  const panX = Math.max(0, (worldW - frame.w) / 2);
+  const panY = Math.max(0, (worldH - frame.h) / 2);
 
   // Manual drag-to-pan (own pointer handlers rather than Framer's drag, which is
   // finicky and hard to verify). A small threshold distinguishes a pan from a
@@ -105,28 +113,21 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
 
   return (
     <div style={{
-      position: 'relative', minHeight: '100dvh', width: '100%',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#1a1206', padding: 18, fontFamily: fonts.ui, overflow: 'hidden',
+      position: 'fixed', inset: 0,
+      background: '#1a1206', fontFamily: fonts.ui, overflow: 'hidden',
     }}>
       <BackdropGlow />
 
-      {/* Map panel — fixed 1200:700 aspect so the SVG map, edges and node
-          buttons all share one coordinate space. */}
+      {/* Full-screen map viewport — the world inside is sized to cover this and
+          is dragged around; the viewport clips (overflow hidden). */}
       <motion.div
         ref={panelRef}
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         transition={spring.soft}
         style={{
-          position: 'relative',
-          width: 'min(94vw, 72dvh)',
-          aspectRatio: '840 / 1080',
-          borderRadius: 12,
+          position: 'absolute', inset: 0,
           overflow: 'hidden',
-          // Pale-wood frame, like the laser-cut original.
-          border: '12px solid #c9ad74',
-          boxShadow: '0 28px 80px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(90,64,22,0.5)',
           background: palette.bg0,
           touchAction: 'none', // let the drag handler own touch panning
         }}
@@ -142,8 +143,8 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
           onPointerCancel={onPointerUp}
           style={{
             position: 'absolute',
-            width: `${MAP_ZOOM * 100}%`, height: `${MAP_ZOOM * 100}%`,
-            left: `${-(MAP_ZOOM - 1) * 50}%`, top: `${-(MAP_ZOOM - 1) * 50}%`,
+            width: worldW, height: worldH,
+            left: (frame.w - worldW) / 2, top: (frame.h - worldH) / 2,
             transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`,
             cursor: active ? 'grab' : 'default',
             touchAction: 'none',
