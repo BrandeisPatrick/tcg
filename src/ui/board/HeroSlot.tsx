@@ -4,7 +4,7 @@ import { DamageFlash } from '../effects/DamageFlash';
 import { useDamageFx } from '../effects/DamageFxContext';
 import { CARDS_BY_ID } from '@/cards';
 import { effectiveAtk } from '@/engine/util';
-import { HeroPortrait } from '@/cards/art/heroArt';
+import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { StatusIcon } from '../card/StatusIcon';
 import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
@@ -69,7 +69,9 @@ export function HeroSlot({
   const respawnLeft = card.respawnTurnsLeft ?? 0;
   const isCorpse = respawnLeft > 0;
   // Skill-ready glint only shows when both per-hero and player-wide flags allow it.
-  const skillReady = !isCorpse && isActive && isAlly && data.skill && !card.skillUsedThisTurn && !playerSkillSpent;
+  // Bench-only heroes (Rem) cast from the bench, so they glint there too.
+  const skillReady = !isCorpse && isAlly && !!data.skill && !card.skillUsedThisTurn && !playerSkillSpent
+    && (isActive || !!data.flags?.benchOnly);
   const isArmedSource = !!pending && pending.kind === 'useSkill' && pending.iid === card.iid;
   const attached = isCorpse ? [] : (card.attached ?? []);
   // On the small in-game tile we only have room for the primary keyword.
@@ -173,49 +175,80 @@ export function HeroSlot({
           </div>
         )}
 
-        {/* Attached equipment chips — bottom-left of portrait, real item art */}
+        {/* Attached chips — bottom-left of portrait. Equipment shows item art;
+            a merged hero (Rem · Lil Helpers) shows her portrait + turn countdown. */}
         {attached.length > 0 && (
           <div style={{
             position: 'absolute', left: 4, bottom: 4,
             display: 'flex', flexDirection: 'row', gap: 3,
           }}>
-            {attached.slice(0, compact ? 3 : 4).map((eq) => (
-              <div key={eq.iid}
-                onMouseEnter={(e) => { e.stopPropagation(); onEquipmentHover?.(eq); }}
-                onMouseLeave={(e) => { e.stopPropagation(); onEquipmentHover?.(null); }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  position: 'relative',
-                  width: compact ? 18 : 24,
-                  height: compact ? 18 : 24,
-                  borderRadius: 4,
-                  background: '#1a1208',
-                  border: `1.5px solid ${palette.type.equipment.ribbon}`,
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.55)',
-                  overflow: 'hidden',
-                  cursor: 'help',
-                }} title={CARDS_BY_ID[eq.cardId]?.name}>
-                <img src={`${import.meta.env.BASE_URL}items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
-                  style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
-                {/* Charge counter — consumable gear (cooldown→draw family) only. */}
-                {eq.charges != null && (
-                  <span aria-label={`${eq.charges} charges left`} style={{
-                    position: 'absolute', right: 0, bottom: 0,
-                    minWidth: compact ? 9 : 11,
-                    padding: '0 1px',
-                    fontSize: compact ? 8 : 9,
-                    fontWeight: 800,
-                    lineHeight: compact ? '9px' : '11px',
-                    textAlign: 'center',
-                    color: '#fff',
-                    background: eq.charges <= 1 ? '#c2410c' : 'rgba(0,0,0,0.82)',
-                    borderTopLeftRadius: 3,
-                    pointerEvents: 'none',
-                  }}>{eq.charges}</span>
-                )}
-              </div>
-            ))}
+            {attached.slice(0, compact ? 3 : 4).map((eq) => {
+              const eqData = CARDS_BY_ID[eq.cardId];
+              const isMerged = eqData?.type === 'hero'; // Rem merged in
+              const dim = compact ? 18 : 24;
+              return (
+                <div key={eq.iid}
+                  onMouseEnter={(e) => { e.stopPropagation(); onEquipmentHover?.(eq); }}
+                  onMouseLeave={(e) => { e.stopPropagation(); onEquipmentHover?.(null); }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    position: 'relative',
+                    width: dim,
+                    height: dim,
+                    borderRadius: 4,
+                    background: '#1a1208',
+                    border: `1.5px solid ${isMerged ? palette.status.buff : palette.type.equipment.ribbon}`,
+                    boxShadow: isMerged
+                      ? `0 1px 3px rgba(0,0,0,0.55), 0 0 6px ${palette.status.buff}88`
+                      : '0 1px 3px rgba(0,0,0,0.55)',
+                    overflow: 'hidden',
+                    cursor: 'help',
+                  }}
+                  title={isMerged
+                    ? `${eqData?.name} merged — ${eq.remMergeTurnsLeft ?? 0} turn(s) left`
+                    : eqData?.name}>
+                  {isMerged ? (
+                    <HeroBadge cardId={eq.cardId} size={dim} />
+                  ) : (
+                    <img src={`${import.meta.env.BASE_URL}items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
+                      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+                  )}
+                  {/* Merge countdown (Rem) — buff-tinted, mirrors the charge pill. */}
+                  {isMerged && eq.remMergeTurnsLeft != null && (
+                    <span aria-label={`${eq.remMergeTurnsLeft} turns left`} style={{
+                      position: 'absolute', right: 0, bottom: 0,
+                      minWidth: compact ? 9 : 11,
+                      padding: '0 1px',
+                      fontSize: compact ? 8 : 9,
+                      fontWeight: 800,
+                      lineHeight: compact ? '9px' : '11px',
+                      textAlign: 'center',
+                      color: '#fff',
+                      background: palette.status.buff,
+                      borderTopLeftRadius: 3,
+                      pointerEvents: 'none',
+                    }}>{eq.remMergeTurnsLeft}</span>
+                  )}
+                  {/* Charge counter — consumable gear (cooldown→draw family) only. */}
+                  {!isMerged && eq.charges != null && (
+                    <span aria-label={`${eq.charges} charges left`} style={{
+                      position: 'absolute', right: 0, bottom: 0,
+                      minWidth: compact ? 9 : 11,
+                      padding: '0 1px',
+                      fontSize: compact ? 8 : 9,
+                      fontWeight: 800,
+                      lineHeight: compact ? '9px' : '11px',
+                      textAlign: 'center',
+                      color: '#fff',
+                      background: eq.charges <= 1 ? '#c2410c' : 'rgba(0,0,0,0.82)',
+                      borderTopLeftRadius: 3,
+                      pointerEvents: 'none',
+                    }}>{eq.charges}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 

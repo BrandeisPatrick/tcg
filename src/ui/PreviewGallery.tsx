@@ -207,6 +207,11 @@ function CombatFxTab() {
         <DamageFlashDemo />
       </Section>
 
+      <Section title="Rem Merge — Lil Helpers">
+        <Caption>Rem's skill merges her into an ally as a temporary buff. The bearer shows her portrait badge with a turn countdown and a green buff border (left). On the bench she shows the skill-ready glint — she casts from the bench (right).</Caption>
+        <RemMergeDemo />
+      </Section>
+
       <Section title="HP / BP Tick">
         <Caption>Damage and heals animate ON the hero card's HP / BP number — a quick scale pulse that stays in the stat's own colour family (brass for BP, vermillion for HP). Buffs pulse brighter, debuffs/damage pulse desaturated grey. Click below to mutate a mock card and watch the number tick.</Caption>
         <StatTickDemo />
@@ -443,6 +448,40 @@ function StatTickDemo() {
           <Button onClick={() => setAtkMod(0)}>Reset</Button>
         </Row>
       </div>
+    </div>
+  );
+}
+
+function RemMergeDemo() {
+  const bearer = HEROES.find((h) => h.id === 'hero_dynamo')!;
+  const rem = HEROES.find((h) => h.id === 'hero_rem')!;
+  const baseBearer = mockHeroInstance(bearer);
+  const remMerged: CardInstance = {
+    ...mockHeroInstance(rem),
+    zone: 'equipment',
+    attachedTo: 'preview-bearer',
+    remMergeTurnsLeft: 3,
+    remMergeHpBuff: 2,
+  };
+  const bearerCard: CardInstance = {
+    ...baseBearer,
+    iid: 'preview-bearer',
+    hpMax: baseBearer.hpMax + 2,
+    hp: baseBearer.hpMax + 2,
+    attached: [remMerged],
+  };
+  const remBench: CardInstance = { ...mockHeroInstance(rem), iid: 'preview-rem-bench', zone: 'bench', slot: 1 };
+  return (
+    <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div style={{ width: 180, aspectRatio: '3 / 4' }}>
+        <HeroSlot card={bearerCard} owner="0" myId="0" isOpponent={false}
+          pending={null} isTargetable={false} isCurrentTurn onTap={() => {}} />
+      </div>
+      <div style={{ width: 132, aspectRatio: '3 / 4' }}>
+        <HeroSlot card={remBench} owner="0" myId="0" isOpponent={false} compact
+          pending={null} isTargetable={false} isCurrentTurn onTap={() => {}} />
+      </div>
+      <Caption>Left: carry with Rem merged (badge + countdown 3, green border) and +2 max HP. Right: Rem on the bench, skill-ready glint.</Caption>
     </div>
   );
 }

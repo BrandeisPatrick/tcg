@@ -177,21 +177,27 @@ export function HeroDetailSheet({
           </Block>
         )}
 
-        {/* Equipment — hidden when none attached */}
+        {/* Equipment — hidden when none attached. A merged hero (Rem) shows
+            tinted as a buff with its remaining turns. */}
         {attached.length > 0 && (
           <Block title="Equipment">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {attached.map((eq) => (
-                <span key={eq.iid} style={{
-                  padding: '7px 12px',
-                  background: `${palette.type.equipment.accent}1a`,
-                  border: `1px solid ${palette.type.equipment.accent}66`,
-                  borderRadius: 999,
-                  ...text.label, color: palette.type.equipment.accent,
-                }}>
-                  {CARDS_BY_ID[eq.cardId]?.name ?? eq.cardId}
-                </span>
-              ))}
+              {attached.map((eq) => {
+                const merged = CARDS_BY_ID[eq.cardId]?.type === 'hero';
+                const accent = merged ? palette.status.buff : palette.type.equipment.accent;
+                return (
+                  <span key={eq.iid} style={{
+                    padding: '7px 12px',
+                    background: `${accent}1a`,
+                    border: `1px solid ${accent}66`,
+                    borderRadius: 999,
+                    ...text.label, color: accent,
+                  }}>
+                    {CARDS_BY_ID[eq.cardId]?.name ?? eq.cardId}
+                    {merged && eq.remMergeTurnsLeft != null && ` · ${eq.remMergeTurnsLeft}t`}
+                  </span>
+                );
+              })}
             </div>
           </Block>
         )}
