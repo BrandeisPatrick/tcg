@@ -23,6 +23,21 @@ export const STATUSES: StatusDef[] = [
   { id: 'unstoppable',   title: 'Unstoppable',   desc: 'Immune to all damage and crowd control. Cleanses CC on apply.', hvalue: 2 },
   { id: 'healing_boost', title: 'Healing Boost', desc: '+<value> to all healing received.',                           hvalue:  1 },
 
+  // ----- Multi-attack -----
+  // Counts the bearer's extra full-power basic attacks this turn (stacks across
+  // sources). Each extra swing takes no retaliation and re-fires onAttack procs.
+  // Granted at turn start (Burst Fire / Fixation) or on skill use (Active
+  // Reload); consumed in the attack phase.
+  { id: 'extra_attack',  title: 'Extra Attack',  desc: 'Makes <value> extra basic attack(s) this turn.',             hvalue:  1 },
+
+  // ----- Channeled ultimate (board-wipe wincon) -----
+  // Heavy channel: the caster is locked out of attacking and skills, but deals
+  // <value> spirit AoE to all enemies at the end of each of their turns until
+  // it expires. Mobile variant (casting_light) keeps the AoE drain but lets the
+  // caster keep acting. Stun / Sleep interrupts a pulse.
+  { id: 'casting',       title: 'Channeling',    desc: 'Locked in an ultimate: cannot attack or use skills. Deals <value> spirit to all enemies at end of turn.', hvalue: 1 },
+  { id: 'casting_light', title: 'Channeling',    desc: 'Deals <value> spirit to all enemies at end of turn and drains HP. Can still act.',                         hvalue: 1 },
+
   // ----- Hard CC -----
   { id: 'stun',          title: 'Stun',          desc: 'Cannot act, attack, or use skills.',                       hvalue: -2 },
   { id: 'silenced',      title: 'Silenced',      desc: 'Cannot use skills or ultimates.',                          hvalue: -1 },

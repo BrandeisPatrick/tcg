@@ -104,6 +104,8 @@ describe('Frenzy', () => {
 
   it('+3 Bullet Power while below half HP (in the attack phase)', () => {
     const G = freshReadyGame();
+    // Plain attacker (no Fixation follow-up swing) so this isolates Frenzy.
+    G.players['0'].active = makeHero('hero_dynamo', '0', 'active', 0);
     const attacker = G.players['0'].active!;
     const defender = G.players['1'].active!;
     attach(attacker, 'frenzy');

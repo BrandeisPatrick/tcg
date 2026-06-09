@@ -9,7 +9,7 @@ import type {
 import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { getAIDeckTagged } from '@/decks/aiDecks';
-import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags } from './statusOps';
+import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses } from './statusOps';
 import { reapDead, damagePlayer } from './damage';
 import { resolveAttackPhase } from './combat';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, resetIid, nextIid } from './util';
@@ -363,6 +363,9 @@ export const DeadlockGame: Game<GameState> = {
       if (G.draft) return;  // see onBegin — draft turns are not real game turns
       const pid = ctx.currentPlayer as PlayerID;
       fireBoardTriggers(G, pid, 'endOfTurn');
+      // Channeled ultimates (Dynamo / Seven / Warden) pulse their AoE here,
+      // before combat, so Warden's chip softens enemies ahead of his swing.
+      tickCastingPulses(G, G.players[pid]);
       resolveAttackPhase(G, pid);
       // Hero leveling: +1 exp to each alive hero on the player's board.
       for (const c of liveBoardCards(G.players[pid])) {
@@ -492,8 +495,10 @@ export const DeadlockGame: Game<GameState> = {
       if ((hero.respawnTurnsLeft ?? 0) > 0) return INVALID_MOVE;
       // Rule: only ONE skill use per player per turn (across all heroes).
       if (ps.skillUsedThisTurn) return INVALID_MOVE;
-      // Stun, Silenced, and Sleep all suppress skill use.
-      if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun' || s.id === 'sleep')) return INVALID_MOVE;
+      // Stun, Silenced, and Sleep all suppress skill use. `casting` is the heavy
+      // channel lockout (Dynamo / Seven) — locked in their ultimate, no skills.
+      // (Warden's `casting_light` is not listed, so he keeps using Willpower.)
+      if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun' || s.id === 'sleep' || s.id === 'casting')) return INVALID_MOVE;
 
       const data = CARDS_BY_ID[hero.cardId];
       if (data?.type !== 'hero' || !data.skill) return INVALID_MOVE;

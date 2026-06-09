@@ -54,8 +54,11 @@ export function isRespawning(card: CardInstance): boolean {
 export function effectiveAtk(card: CardInstance): number {
   const data = CARDS_BY_ID[card.cardId];
   if (data?.type !== 'hero') return 0;
-  // Stun, Disarm, and Sleep all silence basic attacks.
-  if (card.statuses.some((s) => s.id === 'stun' || s.id === 'disarm' || s.id === 'sleep')) return 0;
+  // Stun, Disarm, and Sleep all silence basic attacks. `casting` is the heavy
+  // channel lockout (Dynamo / Seven) — the hero is locked in their ultimate and
+  // can't make basic attacks. (Warden's `casting_light` is NOT listed, so he
+  // keeps attacking while channeling Last Stand.)
+  if (card.statuses.some((s) => s.id === 'stun' || s.id === 'disarm' || s.id === 'sleep' || s.id === 'casting')) return 0;
   // Sum any temporary Weapon Power buffs on top of base + equipment bonus.
   const weaponPower = card.statuses
     .filter((s) => s.id === 'weapon_power')
@@ -70,6 +73,25 @@ export function effectiveSpirit(card: CardInstance): number {
     .filter((s) => s.id === 'spirit_power')
     .reduce((a, s) => a + s.value, 0);
   return (card.spiritMod ?? 0) + fromBuff;
+}
+
+/** Hard ceiling on stacked Extra Attacks (a loop backstop, not a balance gate). */
+export const MAX_EXTRA_ATTACKS = 6;
+
+/**
+ * Grant the hero `count` Extra Attacks this turn via the `extra_attack` status
+ * (value = number of extra full-power basic swings). Stacks ADDITIVELY across
+ * sources (Burst Fire + Active Reload + Fixation all add up), capped at
+ * MAX_EXTRA_ATTACKS. Manipulated directly (not via addStatus) to avoid a log
+ * line every turn from the always-on sources. Consumed in resolveAttackPhase.
+ */
+export function grantExtraAttacks(card: CardInstance, count: number) {
+  const ex = card.statuses.find((s) => s.id === 'extra_attack');
+  if (ex) ex.value = Math.min(MAX_EXTRA_ATTACKS, ex.value + count);
+  // Duration 99 = a non-expiring marker (the count is the payload, not a timer);
+  // it's consumed in the attack phase and swept by clearTurnFlags, so the UI
+  // shows "Extra Atk N" without a misleading turn countdown.
+  else card.statuses.push({ id: 'extra_attack', value: Math.min(MAX_EXTRA_ATTACKS, count), duration: 99 });
 }
 
 export function pushLog(G: GameState, text: string) {

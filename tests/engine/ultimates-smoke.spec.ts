@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { DeadlockGame } from '@/engine/game';
 import { ULTIMATES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
-import { addStatus } from '@/engine/statusOps';
+import { addStatus, tickCastingPulses } from '@/engine/statusOps';
+import { effectiveAtk } from '@/engine/util';
 import { damageUnit } from '@/engine/damage';
 import type { GameState, CardInstance } from '@/engine/types';
 
@@ -105,10 +106,23 @@ describe('ultimate-specific behaviour', () => {
     expect(G.players['0'].active?.cardId).not.toBe('hero_mirage');
   });
 
-  it('Dynamo stuns the entire enemy board', () => {
+  it('Dynamo begins channeling Singularity (heavy casting lockout)', () => {
+    const G = freshG('hero_dynamo');
+    getAbility('eff_ult_dynamo')!.run(G, { movingPlayer: '0' }, {});
+    const dynamo = [G.players['0'].active, ...G.players['0'].bench].find((c) => c?.cardId === 'hero_dynamo')!;
+    const casting = dynamo.statuses.find((s) => s.id === 'casting');
+    expect(casting?.value).toBe(3);
+    expect(casting?.duration).toBe(3);
+    // Locked out: cannot make basic attacks while channeling.
+    expect(effectiveAtk(dynamo)).toBe(0);
+  });
+
+  it('a casting pulse hits the whole enemy board at end of turn', () => {
     const G = freshG('hero_dynamo');
     getAbility('eff_ult_dynamo')!.run(G, { movingPlayer: '0' }, {});
     const enemies = [G.players['1'].active, ...G.players['1'].bench].filter(Boolean) as CardInstance[];
-    expect(enemies.every((e) => e.statuses.some((s) => s.id === 'stun'))).toBe(true);
+    const before = enemies.map((e) => e.hp);
+    tickCastingPulses(G, G.players['0']);
+    enemies.forEach((e, i) => expect(e.hp).toBeLessThan(before[i]));
   });
 });

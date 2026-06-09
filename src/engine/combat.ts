@@ -57,7 +57,7 @@ export interface AttackPlan {
  * The UI can read this to (a) draw incoming-damage badges before end-of-turn
  * and (b) drive an animated choreographer that walks the steps in order.
  *
- * Predicted HP factors in current shield/armor + Haze's "+2 vs Stunned" passive.
+ * Predicted HP factors in current shield/armor and any queued bonus attacks.
  * Reaping order matches the engine: targets are not re-evaluated mid-phase
  * (defender.active doesn't shift until after all attackers have swung).
  */
@@ -97,29 +97,26 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
       // Overflow: anything past 0 HP spills to the defender's patron.
       const overflow = ko ? -predictedHp : 0;
 
-      // Retaliation: only the defender's Active retaliates, and only against
-      // the rival's active attacker. Bench attackers (Mystic Expansion) swing
-      // freely with no return damage.
-      const isActiveAttacker = atk === attacker.active;
+      // Retaliation: the defender's Active retaliates against the attacker
+      // (mutual-damage rule — only the Active hero attacks, so this always
+      // applies).
       let retaliationDamage = 0;
       let attackerHpAfter: number | null = null;
       let attackerKO = false;
-      if (isActiveAttacker) {
-        const { dmg: rawRetal } = effectiveAttackDamage(target, atk);
-        if (rawRetal > 0) {
-          const rm = simulateAttackMitigation(
-            rawRetal,
-            atk,
-            atk.statuses.find((s) => s.id === 'shield')?.value ?? 0,
-            false,
-          );
-          retaliationDamage = rm.final;
-          const atkHp = atk.hp - retaliationDamage;
-          attackerHpAfter = Math.max(0, atkHp);
-          attackerKO = atkHp <= 0;
-        } else {
-          attackerHpAfter = atk.hp;
-        }
+      const { dmg: rawRetal } = effectiveAttackDamage(target, atk);
+      if (rawRetal > 0) {
+        const rm = simulateAttackMitigation(
+          rawRetal,
+          atk,
+          atk.statuses.find((s) => s.id === 'shield')?.value ?? 0,
+          false,
+        );
+        retaliationDamage = rm.final;
+        const atkHp = atk.hp - retaliationDamage;
+        attackerHpAfter = Math.max(0, atkHp);
+        attackerKO = atkHp <= 0;
+      } else {
+        attackerHpAfter = atk.hp;
       }
 
       steps.push({
@@ -142,36 +139,40 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
       if (overflow > 0) damageToFace += overflow;
       if (ko) defenderActiveKO = target.iid;
 
-      // Quicksilver Reload: predicted bonus half-power swing (no retaliation).
-      if (atk.extraHalfAttack && simHp > 0) {
-        const half = Math.floor(dmg / 2);
-        if (half > 0) {
-          const sb = simShield;
-          const hm = simulateAttackMitigation(half, target, simShield, false);
-          simShield = hm.shieldRemaining;
-          const hPredicted = simHp - hm.final;
-          const hKo = hPredicted <= 0;
-          const hOverflow = hKo ? -hPredicted : 0;
-          steps.push({
-            attackerIid: atk.iid,
-            attackerName: CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId,
-            targetIid: target.iid,
-            targetName: CARDS_BY_ID[target.cardId]?.name ?? target.cardId,
-            finalDamage: hm.final,
-            rawDamage: half,
-            predictedHpAfter: Math.max(0, hPredicted),
-            predictedKO: hKo,
-            shieldAbsorbed: Math.max(0, sb - hm.shieldRemaining),
-            bonusLabel: 'Quicksilver',
-            retaliationDamage: 0,
-            attackerHpAfter: null,
-            attackerKO: false,
-          });
-          simHp = Math.max(0, hPredicted);
-          damageToActive += hm.final;
-          if (hOverflow > 0) damageToFace += hOverflow;
-          if (hKo) defenderActiveKO = target.iid;
-        }
+      // Extra Attacks: predicted extra full-power swings (no retaliation).
+      // Haze's Fixation grants +1 on her primary swing (resolver runs it as an
+      // onAttack passive, which the pure planner can't execute) — mirror it here
+      // so the prediction matches the resolved damage.
+      let extra = atk.statuses.find((s) => s.id === 'extra_attack')?.value ?? 0;
+      if (atk.cardId === 'hero_haze') extra += 1;
+      for (let i = 0; i < extra && simHp > 0; i++) {
+        const bonus = dmg;
+        if (bonus <= 0) continue;
+        const sb = simShield;
+        const hm = simulateAttackMitigation(bonus, target, simShield, false);
+        simShield = hm.shieldRemaining;
+        const hPredicted = simHp - hm.final;
+        const hKo = hPredicted <= 0;
+        const hOverflow = hKo ? -hPredicted : 0;
+        steps.push({
+          attackerIid: atk.iid,
+          attackerName: CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId,
+          targetIid: target.iid,
+          targetName: CARDS_BY_ID[target.cardId]?.name ?? target.cardId,
+          finalDamage: hm.final,
+          rawDamage: bonus,
+          predictedHpAfter: Math.max(0, hPredicted),
+          predictedKO: hKo,
+          shieldAbsorbed: Math.max(0, sb - hm.shieldRemaining),
+          bonusLabel: 'Extra Attack',
+          retaliationDamage: 0,
+          attackerHpAfter: null,
+          attackerKO: false,
+        });
+        simHp = Math.max(0, hPredicted);
+        damageToActive += hm.final;
+        if (hOverflow > 0) damageToFace += hOverflow;
+        if (hKo) defenderActiveKO = target.iid;
       }
     } else {
       // No defender Active → face damage. Face attacks don't retaliate.
@@ -270,15 +271,10 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
 
     if (target) {
       const atkName = CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId;
-      // Mutual-damage rule: when the rival's Active is the attacker, the
-      // defender's Active retaliates with their full ATK. Bench attackers
-      // (Mystic Expansion bearers) don't trigger retaliation. Damage in both
-      // directions is computed BEFORE either lands, so a KO on one side
-      // doesn't discount the other side's swing.
-      const isActiveAttacker = atk === attacker.active;
-      const { dmg: retalDmg } = isActiveAttacker
-        ? effectiveAttackDamage(target, atk)
-        : { dmg: 0 };
+      // Mutual-damage rule: the defender's Active retaliates with their full
+      // ATK. Damage in both directions is computed BEFORE either lands, so a KO
+      // on one side doesn't discount the other side's swing.
+      const { dmg: retalDmg } = effectiveAttackDamage(target, atk);
 
       // ---- Apply the attacker's swing first (existing pipeline). ----
       withCast(atk, 'attack', () => {
@@ -288,7 +284,10 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
       if (data?.type === 'hero') {
         for (const passId of data.passives ?? []) {
           const a = getAbility(passId);
-          if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target });
+          // `primary: true` marks this as the hero's main swing of the turn —
+          // Haze's Fixation grants its extra attack only here, so the extra
+          // swings it spawns (and retaliation) don't re-trigger it.
+          if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target, params: { primary: true } });
         }
       }
 
@@ -311,25 +310,30 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
         }
       }
 
-      // ---- Quicksilver Reload: bonus half-power swing after a skill cast. ----
-      // No retaliation; re-fires the attacker's onAttack procs (lifesteal, shred)
-      // and equipment via the 'attack' cast-context. Flag cleared after use.
-      if (atk.extraHalfAttack && atk.hp > 0 && target.hp > 0) {
-        const half = Math.floor(dmg / 2);
-        if (half > 0) {
-          withCast(atk, 'attack', () => {
-            damageUnit(G, target, half, 'attack', `${atkName} (Quicksilver)`);
-          });
-          if (data?.type === 'hero') {
-            for (const passId of data.passives ?? []) {
-              const a = getAbility(passId);
-              if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target });
-            }
+      // ---- Extra Attacks: additional full-power swings queued this turn
+      // (Active Reload, Burst Fire, Fixation — value of the `extra_attack`
+      // status). Each takes no retaliation and re-fires the attacker's onAttack
+      // procs (lifesteal, bleed, Djinn's Mark, Ricochet AoE, Tesla chain — the
+      // equipment ones fire automatically via the 'attack' cast-context in
+      // damageUnit). Damage is re-evaluated each swing so mid-combat threshold
+      // gear (Frenzy) stays honest. ----
+      const extra = atk.statuses.find((s) => s.id === 'extra_attack')?.value ?? 0;
+      for (let i = 0; i < extra; i++) {
+        if (atk.hp <= 0 || target.hp <= 0) break;
+        const bonus = effectiveAttackDamage(atk, target).dmg;
+        if (bonus <= 0) continue;
+        withCast(atk, 'attack', () => {
+          damageUnit(G, target, bonus, 'attack', `${atkName} (Extra Attack)`);
+        });
+        if (data?.type === 'hero') {
+          for (const passId of data.passives ?? []) {
+            const a = getAbility(passId);
+            if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target });
           }
         }
       }
     }
-    atk.extraHalfAttack = false;
+    atk.statuses = atk.statuses.filter((s) => s.id !== 'extra_attack');
     // No living Active to sponge → the attack fizzles. The patron is only
     // damaged when a hero dies (flat 1, in killInPlace), never by face damage.
   }
@@ -340,21 +344,11 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
 
 // ---------- Helpers (shared between planner and resolver) ----------
 
-function collectAttackers(attacker: { active: CardInstance | null; bench: (CardInstance | null)[] }): CardInstance[] {
-  const out: CardInstance[] = [];
-  if (attacker.active && (attacker.active.respawnTurnsLeft ?? 0) === 0) out.push(attacker.active);
-  for (const b of attacker.bench) {
-    if (!b || (b.respawnTurnsLeft ?? 0) > 0) continue;
-    // Mystic Expansion equipment lets the bearer attack from the bench
-    // (canon: imbue with range). Same effect as the intrinsic flag — checked
-    // directly by attached cardId so no engine-level "long_range" status is
-    // needed.
-    if (b.attached?.some((eq) => eq.cardId === 'mystic_expansion')) { out.push(b); continue; }
-    // Intrinsic long range on the hero card (Vindicta's Flight, e.g.).
-    const data = CARDS_BY_ID[b.cardId];
-    if (data?.type === 'hero' && data.flags?.longRange) out.push(b);
-  }
-  return out;
+// Only the Active hero attacks — bench heroes never swing. Returned as a
+// one-element list so the resolver and planner can share a single loop.
+function collectAttackers(attacker: { active: CardInstance | null }): CardInstance[] {
+  if (attacker.active && (attacker.active.respawnTurnsLeft ?? 0) === 0) return [attacker.active];
+  return [];
 }
 
 function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): { dmg: number; bonusLabel?: string } {
@@ -364,12 +358,7 @@ function effectiveAttackDamage(atk: CardInstance, target: CardInstance | null): 
   const weak = atk.statuses.find((s) => s.id === 'weapon_power_down');
   if (weak) dmg = Math.max(0, dmg - weak.value);
   let bonusLabel: string | undefined;
-  // Haze passive: +2 vs Stunned target.
   const data = CARDS_BY_ID[atk.cardId];
-  if (data?.type === 'hero' && data.id === 'hero_haze' && target?.statuses.some((s) => s.id === 'stun')) {
-    dmg += 2;
-    bonusLabel = 'Haze: +2 vs Stunned';
-  }
   // Drifter passive: +3 vs targets at or below 4 HP (Bloodscent).
   if (data?.type === 'hero' && data.id === 'hero_drifter' && target && target.hp <= 4) {
     dmg += 3;

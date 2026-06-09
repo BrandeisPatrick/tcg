@@ -3,7 +3,7 @@ import { CARDS_BY_ID, ULTIMATES } from '@/cards';
 import { damageUnit, healUnit, reapDead } from '@/engine/damage';
 import { addStatus, cleanseDebuffs } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
-import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit, nextIid } from '@/engine/util';
+import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit, nextIid, grantExtraAttacks } from '@/engine/util';
 import { setEquipmentDispatcher, fireEquipmentTriggers } from '@/engine/equipmentDispatch';
 
 // An EffectFn mutates G. It receives the source card (if any), the target (if any),
@@ -228,7 +228,7 @@ const eff_unstoppable_cast: AbilityDef = {
 // Echo Shard (canon: recast last ability): the active hero uses their skill
 // AGAIN this turn — bypasses the one-skill-per-turn cap and pays no skill cost,
 // and re-fires onBearerSkillUsed so cast-payoff gear (Cooldown draw, Mystic
-// Burst, Surge, Quicksilver) triggers a second time. Auto-targets to match the
+// Burst, Surge) triggers a second time. Auto-targets to match the
 // skill's filter (enemy Active for offense, the hero itself for buffs). Fizzles
 // politely on a skill-less / passive hero.
 const eff_echo_shard: AbilityDef = {
@@ -253,6 +253,18 @@ const eff_echo_shard: AbilityDef = {
     pushLog(G, `Echo Shard: ${data.name} casts ${data.abilityName ?? 'their skill'} again.`);
     _withCast(hero, 'skill', () => skill.run(G, { movingPlayer: ctx.movingPlayer }, { source: hero, target }));
     fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: ctx.movingPlayer });
+  },
+};
+
+// Active Reload (canon T2 Weapon ACTIVE — timed reload → a fire-rate burst).
+// Per our active-item→spell rule it's a one-shot SPELL: your Active hero gains
+// Extra Attack 1 this turn (stacks with Burst Fire / Fixation).
+const eff_active_reload: AbilityDef = {
+  id: 'eff_active_reload', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Active Reload — your Active hero gains Extra Attack 1 this turn.',
+  run: (G, ctx) => {
+    const a = G.players[ctx.movingPlayer].active;
+    if (a && (a.respawnTurnsLeft ?? 0) === 0) grantExtraAttacks(a, 1);
   },
 };
 
@@ -398,12 +410,29 @@ const eff_diviners_kevlar: AbilityDef = {
   run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 4, 999); },
 };
 
-// Quicksilver Reload: canon "casting reloads your weapon" — after the bearer
-// uses a skill they get an extra basic attack this turn at half power. The
-// flag is consumed in resolveAttackPhase (end of turn).
-const eff_quicksilver_reload: AbilityDef = {
-  id: 'eff_quicksilver_reload', trigger: 'onBearerSkillUsed', target: 'self',
-  run: (_G, _ctx, { source }) => { if (source) source.extraHalfAttack = true; },
+
+// Ricochet (canon T4 Weapon): bullets ricochet to nearby enemies — after the
+// bearer attacks, the shot bounces for 2 damage to every OTHER enemy (the enemy
+// bench). Re-fires on every swing, so it scales hard with Extra Attack — a
+// board-wipe engine. Fired via the onAttack path inside damageUnit.
+const eff_ricochet: AbilityDef = {
+  id: 'eff_ricochet', trigger: 'onAttack', target: 'self',
+  base: 2, baseLabel: 'ricochet',
+  run: (G, _ctx, { source }) => {
+    if (!source) return;
+    const enemy = G.players[otherPlayer(source.ownerId)];
+    for (const b of enemy.bench) {
+      if (b && (b.respawnTurnsLeft ?? 0) === 0) damageUnit(G, b, 2, 'attack', 'Ricochet');
+    }
+    reapDead(G, enemy);
+  },
+};
+
+// Burst Fire (canon T3 Weapon): a burst of extra shots — grants Extra Attack 1
+// each turn. Stacks additively with Active Reload / Fixation.
+const eff_burst_fire: AbilityDef = {
+  id: 'eff_burst_fire', trigger: 'startOfTurn', target: 'self',
+  run: (_G, _ctx, { source }) => { if (source) grantExtraAttacks(source, 1); },
 };
 
 // Mystic Reverb: canon delayed AoE echo on the struck enemy. TCG mapping: when
@@ -715,13 +744,20 @@ const passive_abrams_heal: AbilityDef = {
   },
 };
 
-// Fixation: +2 Bullet Power vs Stunned targets. The damage hook lives in
-// `combat.ts:effectiveAttackDamage` — this is a marker so the registry
-// owns the definition and the UI can show a trigger label.
-const passive_haze_stunbonus: AbilityDef = {
-  id: 'passive_haze_stunbonus', trigger: 'ongoing', target: 'self',
-  prompt: 'Fixation — +2 Bullet Power vs Stunned targets.',
-  run: () => { /* combat hook reads this directly */ },
+// Fixation: canon Haze ramps with sustained fire — the more she shoots, the
+// more she hits. TCG: while Active, Haze makes one bonus attack each turn at
+// half Bullet Power. The extra swing's real value is doubling her onAttack
+// procs (bleed, shred, lifesteal). Granted at start of turn, consumed in the
+// end-of-turn attack phase.
+// Fixation: canon Haze ramps with sustained fire. TCG: after Haze makes her
+// attack, she gains Extra Attack 1 (a follow-up swing the same turn). Fires only
+// on her primary swing (`params.primary`) so the follow-up — and any retaliation
+// she takes — don't re-trigger it into an endless chain. Stacks with Burst Fire
+// / Active Reload.
+const passive_haze_fixation: AbilityDef = {
+  id: 'passive_haze_fixation', trigger: 'onAttack', target: 'self',
+  prompt: 'Fixation — after Haze attacks, she gains Extra Attack 1 this turn.',
+  run: (_G, _ctx, { source, params }) => { if (source && params?.primary) grantExtraAttacks(source, 1); },
 };
 
 // Burrow: cleanses all debuffs from self at the start of own turn (only while Active).
@@ -803,10 +839,20 @@ const eff_ult_abrams: AbilityDef = {
     if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
   },
 };
+// Singularity — canon vortex channel. Dynamo locks into the channel (no attack,
+// no skill) and tears the enemy board apart with a 3-spirit AoE pulse at the end
+// of each of his next 3 turns (9 per enemy total; scales with Spirit). Pulses
+// resolve in tickCastingPulses; the lockout is the `casting` status.
 const eff_ult_dynamo: AbilityDef = {
   id: 'eff_ult_dynamo', trigger: 'onPlay', target: 'noTarget',
-  baseLabel: 'AoE Stun',
-  run: (G, ctx) => { eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => addStatus(G, c, 'stun', 1, 1)); },
+  base: 3, baseLabel: 'channel AoE',
+  run: (G, ctx) => {
+    const ps = G.players[ctx.movingPlayer];
+    const dynamo = [ps.active, ...ps.bench].find((c) => c?.cardId === 'hero_dynamo' && (c.respawnTurnsLeft ?? 0) === 0);
+    if (!dynamo) { pushLog(G, 'Singularity fizzled — no Dynamo on the board.'); return; }
+    addStatus(G, dynamo, 'casting', 3, 3);
+    pushLog(G, 'Dynamo channels Singularity.');
+  },
 };
 const eff_ult_haze: AbilityDef = {
   id: 'eff_ult_haze', trigger: 'onPlay', target: 'noTarget',
@@ -865,10 +911,20 @@ const eff_ult_rem: AbilityDef = {
   // dealt when it wakes (any damage) or when the sleep expires (statusOps).
   run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'sleep', 6 + ultSpi(), 2); },
 };
+// Storm Cloud — canon escalating lightning channel. Seven lifts into the storm
+// (locked out, `casting`) and rains an AoE that RAMPS each turn: 2 → 3 → 4
+// spirit (+Spirit) over 3 turns (9 per enemy, back-loaded). The ramp lives in
+// tickCastingPulses (value climbs by 1 per pulse).
 const eff_ult_seven: AbilityDef = {
   id: 'eff_ult_seven', trigger: 'onPlay', target: 'noTarget',
-  base: 3, baseLabel: 'spirit AOE',
-  run: (G, ctx) => { const s = ultSpi(); eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 3 + s, 'spirit')); },
+  base: 2, baseLabel: 'escalating AoE',
+  run: (G, ctx) => {
+    const ps = G.players[ctx.movingPlayer];
+    const seven = [ps.active, ...ps.bench].find((c) => c?.cardId === 'hero_seven' && (c.respawnTurnsLeft ?? 0) === 0);
+    if (!seven) { pushLog(G, 'Storm Cloud fizzled — no Seven on the board.'); return; }
+    addStatus(G, seven, 'casting', 2, 3);
+    pushLog(G, 'Seven channels Storm Cloud.');
+  },
 };
 const eff_ult_shiv: AbilityDef = {
   id: 'eff_ult_shiv', trigger: 'onPlay', target: 'enemyActive',
@@ -950,30 +1006,20 @@ const eff_ult_wraith: AbilityDef = {
   },
 };
 
-// Warden ultimate Last Stand: canon is a big AoE spirit pulse. TCG mapping:
-// 3 spirit damage to every enemy board card + lifesteal (heal Warden for
-// total damage dealt / 2). Lets Warden tank up AND drain back HP on the
-// big swing — pairs with his shield skill for sustain identity.
+// Last Stand — canon drain channel. The LIGHT channel variant: Warden keeps
+// attacking and using Willpower while a 2-spirit (+Spirit) AoE pulse drains the
+// whole enemy board at the end of each of his next 3 turns, healing him for the
+// total. A grindy drain-tank wincon rather than a burst wipe. Pulse + lifesteal
+// resolve in tickCastingPulses; `casting_light` does NOT lock him out.
 const eff_ult_warden: AbilityDef = {
   id: 'eff_ult_warden', trigger: 'onPlay', target: 'noTarget',
-  base: 3, baseLabel: 'spirit AoE + lifesteal',
+  base: 2, baseLabel: 'channel AoE + drain',
   run: (G, ctx) => {
-    const enemy = otherPlayer(ctx.movingPlayer);
-    const s = ultSpi();
-    let totalDealt = 0;
-    eachBoard(G, enemy, (c) => {
-      totalDealt += damageUnit(G, c, 3 + s, 'spirit', 'Warden');
-    });
-    // Lifesteal back to Warden wherever he is on the caster's board.
     const ps = G.players[ctx.movingPlayer];
-    const warden = [ps.active, ...ps.bench].find(
-      (c) => c && c.cardId === 'hero_warden' && (c.respawnTurnsLeft ?? 0) === 0,
-    );
-    if (warden && totalDealt > 0) {
-      const heal = Math.ceil(totalDealt / 2);
-      healUnit(G, warden, heal);
-      pushLog(G, `Last Stand: Warden drained ${heal} HP from the AoE.`);
-    }
+    const warden = [ps.active, ...ps.bench].find((c) => c?.cardId === 'hero_warden' && (c.respawnTurnsLeft ?? 0) === 0);
+    if (!warden) { pushLog(G, 'Last Stand fizzled — no Warden on the board.'); return; }
+    addStatus(G, warden, 'casting_light', 2, 3);
+    pushLog(G, 'Warden braces — Last Stand begins draining.');
   },
 };
 
@@ -1030,6 +1076,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_knockdown, eff_cast_metal_skin,
   // ----- Control spell pack (active items → spells) -----
   eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
+  eff_active_reload,
   // ----- Equipment passives (4 cards) -----
   eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
   // ----- Equipment reactive procs (5 cards) -----
@@ -1038,7 +1085,8 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_bullet_shield_proc, eff_spirit_shield_proc, eff_cooldown_draw,
   eff_mystic_burst_proc, eff_improved_burst_proc,
   eff_bullet_lifesteal, eff_spirit_lifesteal,
-  eff_surge_of_power, eff_diviners_kevlar, eff_quicksilver_reload, eff_mystic_reverb,
+  eff_surge_of_power, eff_diviners_kevlar, eff_mystic_reverb,
+  eff_ricochet, eff_burst_fire,
   eff_toxic_bullets, eff_tesla_bullets, eff_suppressor, eff_reactive_barrier,
   eff_escalating_exposure, eff_inhibitor, eff_crippling_headshot, eff_berserker,
   eff_colossus, eff_improved_bullet_armor, eff_improved_spirit_armor,
@@ -1047,7 +1095,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
   // ----- Hero passives -----
-  passive_abrams_heal, passive_haze_stunbonus, passive_mo_krill_burrow, passive_rem_benchheal,
+  passive_abrams_heal, passive_haze_fixation, passive_mo_krill_burrow, passive_rem_benchheal,
   passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed, passive_drifter_bloodscent,
   passive_mirage_djinns_mark,
   // ----- Ultimates -----

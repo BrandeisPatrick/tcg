@@ -65,27 +65,20 @@ describe("Diviner's Kevlar", () => {
   });
 });
 
-describe('Quicksilver Reload', () => {
-  it('skill use sets the extra-attack flag', () => {
-    const G = freshGame();
-    const hero = G.players['0'].active!;
-    attach(G, hero, 'quicksilver_reload');
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
-    expect(hero.extraHalfAttack).toBe(true);
-  });
-
-  it('adds a half-power second swing in the attack phase, then clears the flag', () => {
+describe('Extra Attack in the attack phase', () => {
+  it('adds a full-power second swing in the attack phase, then clears Extra Attack', () => {
     const G = freshGame();
     const attacker = G.players['0'].active!;
     const defender = G.players['1'].active!;
+    defender.hp = defender.hpMax = 40; // survive both swings
     const dmg = effectiveAtk(attacker);
-    const expected = dmg + Math.floor(dmg / 2);
-    attacker.extraHalfAttack = true;
+    const expected = dmg * 2; // primary + one full-power Extra Attack
+    attacker.statuses.push({ id: 'extra_attack', value: 1, duration: 1 });
 
     const hp0 = defender.hp;
     resolveAttackPhase(G, '0');
     expect(defender.hp).toBe(hp0 - expected);
-    expect(attacker.extraHalfAttack).toBe(false);
+    expect(attacker.statuses.some((s) => s.id === 'extra_attack')).toBe(false);
   });
 
   it('a normal swing (no flag) deals only base damage', () => {

@@ -26,9 +26,9 @@ const AI_DECK_AGGRO: CardId[] = [
   'bullet_resist_shredder',
   'extra_regen', 'restorative_shot', 'healing_rite',
   // New weapon/offense cards.
-  'mystic_burst', 'toxic_bullets', 'tesla_bullets', 'quicksilver_reload',
+  'mystic_burst', 'toxic_bullets', 'tesla_bullets', 'active_reload',
   'surge_of_power', 'berserker', 'crippling_headshot', 'frenzy',
-  'bullet_lifesteal', 'inhibitor',
+  'bullet_lifesteal', 'inhibitor', 'burst_fire', 'ricochet',
 ];
 
 const AI_DECK_CONTROL: CardId[] = [

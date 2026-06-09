@@ -37,7 +37,7 @@ ult is spirit *except* **Haze · Bullet Dance** (she fires her gun).
 | 6 | Mo & Krill | Combo — channel lock + drain | Stun enemy Active 1t; Mo & Krill drains 6 HP (heals itself) |
 | 7 | Rem | Naptime — sleep + wake burst | Sleep enemy Active 2t; 6 spirit when it wakes |
 | 7 | Wraith | Telekinesis — airborne lock | Deal 4 spirit to enemy Active + Stun 1t |
-| 7 | Seven | Storm Cloud — AoE DPS | Deal 3 spirit to all enemies |
+| 8 | Seven | Storm Cloud — escalating AoE channel | **Channels 3t** (locked out): escalating 2→3→4 spirit to all enemies each end of turn |
 | 7 | Haze | Bullet Dance — gun flurry | Deal 3 **bullet** to every enemy |
 | 8 | Drifter | Eternal Night — isolate 2 | Silence enemy Active + 1 bench hero for 2t |
 | 8 | Viscous | Goo Ball — ball + impact | Viscous gains Unstoppable 1t; 3 spirit to all + Stun Active 1t |
@@ -45,11 +45,23 @@ ult is spirit *except* **Haze · Bullet Dance** (she fires her gun).
 | 8 | Kelvin | Frozen Shelter — dome heal | Heal all allies 7 |
 | 9 | Sinclair | Audience Participation — copy ult | Copy enemy Active hero's ultimate into hand (costs 0) |
 | 9 | Lash | Death Slam — multi grab-slam | Deal 5 spirit to all enemies + Stun Active 1t |
-| 9 | Dynamo | Singularity — vortex | Stun all enemies for 1t |
-| 9 | Warden | Last Stand — drain pulse | 3 spirit to every enemy; Warden heals half dealt |
+| 9 | Dynamo | Singularity — vortex channel | **Channels 3t** (locked out, no attack/skill): 3 spirit to all enemies each end of turn. Stun/Sleep interrupts a pulse |
+| 9 | Warden | Last Stand — drain channel | **Channels 3t** (mobile — still attacks/skills): 2 spirit to all enemies each end of turn, heals half the total |
 | 10 | Paige | Rallying Charge — wave | Heal all allies 4 + 4 spirit to all enemies |
 
-**Spread:** 2 ×1 · 5 ×2 · 6 ×3 · 7 ×4 · 8 ×4 · 9 ×4 · 10 ×1.
+**Spread:** 2 ×1 · 5 ×2 · 6 ×3 · 7 ×3 · 8 ×5 · 9 ×4 · 10 ×1.
+
+## Channeled board-wipe ultimates (Dynamo · Seven · Warden)
+A `casting` (heavy lockout) / `casting_light` (mobile) self-status turns these
+three into channeled win conditions: instead of a one-shot effect, the caster
+deals AoE spirit to all enemies at the end of each of their turns over a 3-turn
+channel (`tickCastingPulses` in `statusOps.ts`, fired from `turn.onEnd` before
+the attack phase). `casting` is added to the attack gate (`util.ts`) and skill
+gate (`game.ts`) so heavy channelers (Dynamo, Seven) are locked out; Warden's
+`casting_light` opts out of both. Stun/Sleep on the caster skips that turn's
+pulse (channels are interruptible). Seven's value escalates +1 per pulse.
+Damage scales with the caster's live Spirit each tick. See
+[the multi-attack + casting memory] and `tests/engine/archetypes.spec.ts`.
 
 ## Engine work this required
 - **Sleep status** (`statuses/`, `game.ts` skill gate, `util.ts` attack gate,

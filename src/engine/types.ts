@@ -37,7 +37,7 @@ export interface HeroCard extends BaseCard {
    *  Rendered as a tag next to the role on the card subtitle so the card text
    *  body can carry just the mechanical effect without a "Role. Name:" prefix. */
   abilityName?: string;
-  flags?: { longRange?: boolean; benchOnly?: boolean };
+  flags?: { benchOnly?: boolean };
 }
 
 export interface SpellCard extends BaseCard {
@@ -97,12 +97,12 @@ export interface CardInstance {
    * item is consumed (sent to discard) when it hits 0. Undefined for normal gear.
    */
   charges?: number;
-  /**
-   * Quicksilver Reload: set when the bearer uses a skill, consumed in the
-   * end-of-turn attack phase to grant one extra basic attack at half power.
-   * Cleared each turn by clearTurnFlags. Undefined for everyone else.
-   */
-  extraHalfAttack?: boolean;
+  // Multi-attack is modeled via the `extra_attack` STATUS (value = N extra
+  // full-power swings queued for this turn). It stacks additively across
+  // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed in the
+  // attack phase — see grantExtraAttacks / resolveAttackPhase. Bonus swings take
+  // no retaliation and re-fire onAttack procs (so Ricochet / Toxic Bullets /
+  // Djinn's Mark all proc per swing).
   /**
    * Turns remaining until the hero respawns. `> 0` means the hero is currently
    * KO'd and occupying its slot as a corpse (greyed in UI, can't act / be

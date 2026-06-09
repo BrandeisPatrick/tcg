@@ -1,7 +1,7 @@
 import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState } from './types';
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
-import { damageUnit } from './damage';
-import { liveBoardCards, pushLog } from './util';
+import { damageUnit, healUnit, reapDead } from './damage';
+import { liveBoardCards, pushLog, otherPlayer, effectiveSpirit } from './util';
 import { CARDS_BY_ID } from '@/cards';
 import { fireEquipmentTriggers } from './equipmentDispatch';
 
@@ -14,6 +14,7 @@ const MAGNITUDE_STATUSES: Set<StatusId> = new Set([
   'bleed', 'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power',
   'djinns_mark', 'weapon_power_down', 'spirit_power_down',
   'bullet_resist_down', 'spirit_resist_down', 'healing_boost', 'healing_boost_down',
+  'extra_attack',
 ]);
 
 // Stat-reduction debuffs store a positive magnitude that represents a reduction.
@@ -165,6 +166,57 @@ export function clearTurnFlags(ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
     c.exhausted = false;
     c.skillUsedThisTurn = false;
-    c.extraHalfAttack = false;
+    // Any unused Extra Attack stack expires at end of turn (it's a this-turn
+    // resource); resolveAttackPhase normally consumes it first.
+    c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack');
+  }
+}
+
+/**
+ * Channeled-ultimate pulse. Heroes carrying a `casting` (heavy: Dynamo, Seven)
+ * or `casting_light` (mobile: Warden) status deal AoE spirit damage to all
+ * enemies at the END of each of their turns, over the channel's duration —
+ * a board-wipe win condition. The status `value` is the per-tick base damage;
+ * effective Spirit is added live each pulse. Called from turn.onEnd BEFORE the
+ * attack phase, so Warden's chip softens enemies before he swings.
+ *
+ *  - Interrupt: if the channeler is Stunned / Slept this turn, the pulse is
+ *    skipped (canon: channels are interruptible) — the channel still counts
+ *    down at the next start of turn.
+ *  - Warden's light variant heals him for the total damage dealt (Last Stand
+ *    drain) and does NOT lock him out of attacking / skills.
+ *  - Seven's channel escalates: its per-tick value climbs by 1 each pulse
+ *    (Storm Cloud ramps), so a duration-3 cast deals 2 → 3 → 4 (+Spirit).
+ */
+export function tickCastingPulses(G: GameState, ps: PlayerState) {
+  for (const c of liveBoardCards(ps)) {
+    const heavy = c.statuses.find((s) => s.id === 'casting');
+    const channel = heavy ?? c.statuses.find((s) => s.id === 'casting_light');
+    if (!channel) continue;
+    const name = CARDS_BY_ID[c.cardId]?.name ?? c.cardId;
+
+    // Interruptible: hard CC that pins the caster suppresses this turn's pulse.
+    if (c.statuses.some((s) => s.id === 'stun' || s.id === 'sleep')) {
+      pushLog(G, `${name}'s channel is interrupted this turn.`);
+      continue;
+    }
+
+    const perTick = channel.value + effectiveSpirit(c);
+    const enemyId = otherPlayer(c.ownerId);
+    let totalDealt = 0;
+    for (const e of liveBoardCards(G.players[enemyId])) {
+      totalDealt += damageUnit(G, e, perTick, 'spirit', name);
+    }
+    reapDead(G, G.players[enemyId]);
+    pushLog(G, `${name} channels — ${perTick} spirit to all enemies.`);
+
+    // Warden (light): drain the total back as healing.
+    if (!heavy && totalDealt > 0) {
+      const heal = Math.ceil(totalDealt / 2);
+      healUnit(G, c, heal);
+      pushLog(G, `Last Stand: ${name} drained ${heal} HP.`);
+    }
+    // Seven: escalate the next pulse.
+    if (heavy && c.cardId === 'hero_seven') channel.value += 1;
   }
 }

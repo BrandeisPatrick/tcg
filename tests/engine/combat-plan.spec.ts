@@ -1,18 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { DeadlockGame } from '@/engine/game';
 import { planAttackPhase, resolveAttackPhase } from '@/engine/combat';
+import { effectiveAtk } from '@/engine/util';
 import { addStatus } from '@/engine/statusOps';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame } from './_helpers';
+import { freshReadyGame, makeHero } from './_helpers';
 
 function freshG(): GameState {
   return freshReadyGame();
 }
 
-/**
- * Strip bench attackers so tests can isolate behavior of the Active hero alone.
- * Some starter heroes (Vindicta) have `longRange` and would attack from the bench too.
- */
+/** Swap P0's Active to a hero with no onAttack passive (Dynamo, ATK 3) so
+ *  mitigation/invariant tests see exactly one swing — the default fixture
+ *  Active is Haze, whose Fixation adds a follow-up swing. */
+function plainActive(G: GameState) {
+  G.players['0'].active = makeHero('hero_dynamo', '0', 'active', 0);
+}
+
+/** Clear the bench so a test reads cleanly as just the Active hero (bench
+ *  heroes don't attack, so this only affects bench-targeting passives). */
 function soloAttacker(G: GameState, pid: PlayerID) {
   G.players[pid].bench = [null, null, null];
 }
@@ -20,6 +26,7 @@ function soloAttacker(G: GameState, pid: PlayerID) {
 describe('combat plan invariant', () => {
   it('plan damageToActive matches the HP delta resolveAttackPhase causes', () => {
     const G = freshG();
+    plainActive(G);
     const plan = planAttackPhase(G, '0');
     const target = G.players['1'].active!;
     const hpBefore = target.hp;
@@ -30,8 +37,9 @@ describe('combat plan invariant', () => {
 
   it('plan correctly predicts shield absorption', () => {
     const G = freshG();
+    plainActive(G);
     soloAttacker(G, '0'); // only Active attacks
-    // Slap a shield 5 on the defender Active. P0 Active (Haze ATK 4) attacks.
+    // Shield 5 on the defender Active vs P0 Active (Dynamo ATK 3).
     addStatus(G, G.players['1'].active!, 'shield', 5, 999);
     const plan = planAttackPhase(G, '0');
     // First step: 4 attack absorbed entirely by shield → final 0 → no HP change predicted.
@@ -46,10 +54,11 @@ describe('combat plan invariant', () => {
 
   it('plan correctly predicts armor reduction', () => {
     const G = freshG();
+    plainActive(G);
     soloAttacker(G, '0');
     addStatus(G, G.players['1'].active!, 'bullet_resist', 2, 999);
     const plan = planAttackPhase(G, '0');
-    // V1: Haze ATK 3 - 2 armor = 1 damage predicted.
+    // Dynamo ATK 3 - 2 armor = 1 damage predicted.
     const step = plan.steps[0];
     expect(step.finalDamage).toBe(1);
     const before = G.players['1'].active!.hp;
@@ -68,21 +77,24 @@ describe('combat plan invariant', () => {
     expect(G.players['1'].active!.hp).toBe(before);
   });
 
-  it('plan predicts Haze "+2 vs Stun" passive', () => {
+  it('plan predicts a queued Extra Attack (full power, no retaliation)', () => {
     const G = freshG();
-    // Force P0 active to be Haze
-    const haze = G.players['0'].active!;
-    // Stun the defender Active so Haze's passive applies.
-    addStatus(G, G.players['1'].active!, 'stun', 1, 99);
-    if (haze.cardId !== 'hero_haze') {
-      // Smoke decks put Haze active for P0; skip if test fixture changes.
-      return;
-    }
+    plainActive(G);
+    soloAttacker(G, '0');
+    // Keep the defender alive through both swings so the bonus step is emitted.
+    addStatus(G, G.players['1'].active!, 'shield', 50, 999);
+    const attacker = G.players['0'].active!;
+    const dmg = effectiveAtk(attacker);
+    // Queue one Extra Attack (Active Reload / Burst Fire / Fixation).
+    attacker.statuses.push({ id: 'extra_attack', value: 1, duration: 1 });
     const plan = planAttackPhase(G, '0');
-    const step = plan.steps.find((s) => s.attackerIid === haze.iid);
-    expect(step?.bonusLabel).toContain('Haze');
-    // V1: Haze ATK 3 + 2 (Fixation vs Stunned) = 5
-    expect(step?.finalDamage).toBeGreaterThanOrEqual(3 + 2);
+    const mine = plan.steps.filter((s) => s.attackerIid === attacker.iid);
+    // Primary swing + one Extra Attack swing.
+    expect(mine.length).toBe(2);
+    const bonus = mine[1];
+    expect(bonus.bonusLabel).toBe('Extra Attack');
+    expect(bonus.rawDamage).toBe(dmg); // full power
+    expect(bonus.retaliationDamage).toBe(0);
   });
 
   it('plan flags KO when damage exceeds HP', () => {
@@ -148,17 +160,13 @@ describe('mutual-damage retaliation', () => {
     expect(atk.hp).toBeLessThan(atkHpBefore); // retaliation hit
   });
 
-  it('bench attacker (Mystic Expansion) does NOT trigger retaliation', () => {
+  it('bench heroes never attack (only the Active swings)', () => {
     const G = freshG();
-    const bench = G.players['0'].bench[0]!;
-    // Equip Mystic Expansion onto a bench hero so they can swing from the bench.
-    bench.attached = [{ iid: 'me1', cardId: 'mystic_expansion', ownerId: '0', zone: 'attached', statuses: [], atkMod: 0, spiritMod: 0, hpMax: 0, hp: 0 } as any];
-    G.players['0'].active = null; // remove the active so only bench attacks
     const plan = planAttackPhase(G, '0');
-    const benchStep = plan.steps.find((s) => s.attackerIid === bench.iid);
-    expect(benchStep).toBeDefined();
-    expect(benchStep!.retaliationDamage).toBe(0); // no retaliation for bench attackers
-    expect(benchStep!.attackerHpAfter).toBeNull();
+    // Exactly one attacker — the Active hero. Bench heroes are not attackers.
+    const attackerIids = new Set(plan.steps.map((s) => s.attackerIid));
+    expect(attackerIids.size).toBe(1);
+    expect([...attackerIids][0]).toBe(G.players['0'].active!.iid);
   });
 
   it('face attack does NOT trigger retaliation (no defender to retaliate)', () => {

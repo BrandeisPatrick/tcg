@@ -1,7 +1,7 @@
 import type { StatusId } from '@/engine/types';
 import { palette, fonts } from '../tokens';
 
-const BUFFS: Set<StatusId> = new Set(['weapon_power','spirit_power','bullet_resist','spirit_resist','shield','unstoppable','healing_boost']);
+const BUFFS: Set<StatusId> = new Set(['weapon_power','spirit_power','bullet_resist','spirit_resist','shield','unstoppable','healing_boost','extra_attack','casting','casting_light']);
 const DEBUFFS: Set<StatusId> = new Set(['stun','silenced','disarm','bleed','weapon_power_down','spirit_power_down','bullet_resist_down','spirit_resist_down','charged','healing_boost_down','djinns_mark']);
 
 function colorFor(id: StatusId): string {
@@ -19,6 +19,9 @@ const STATUS_LABELS: Record<string, string> = {
   shield:        'Shield',
   unstoppable:   'Unstop',
   healing_boost: '+Heal',
+  extra_attack:  'Extra Atk',
+  casting:       'Channel',
+  casting_light: 'Channel',
   // Debuffs
   stun:          'Stun',
   silenced:      'Silence',
@@ -36,6 +39,7 @@ const STATUS_LABELS: Record<string, string> = {
 const VALUE_STATUSES: Set<string> = new Set([
   'shield', 'bullet_resist', 'spirit_resist', 'weapon_power', 'spirit_power', 'bleed', 'healing_boost',
   'weapon_power_down', 'spirit_power_down', 'bullet_resist_down', 'spirit_resist_down',
+  'extra_attack', 'casting', 'casting_light',
 ]);
 
 interface Props {

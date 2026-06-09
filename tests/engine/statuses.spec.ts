@@ -302,12 +302,16 @@ describe('healing is no longer gated by any status', () => {
   });
 });
 
-describe('bench attack — Active only by default', () => {
-  it('only the Active hero attacks unless an equipment grants long range', async () => {
+describe('attacks — Active hero only', () => {
+  it('only the Active hero attacks; bench heroes never swing', async () => {
     const { planAttackPhase } = await import('@/engine/combat');
     const G = freshG();
     const plan = planAttackPhase(G, '0');
-    expect(plan.steps.length).toBe(1);
+    // The Active may swing more than once (Haze's Fixation), but there must be
+    // exactly ONE attacker — no bench hero swings.
+    const attackers = new Set(plan.steps.map((s) => s.attackerIid));
+    expect(attackers.size).toBe(1);
+    expect([...attackers][0]).toBe(G.players['0'].active!.iid);
   });
 });
 

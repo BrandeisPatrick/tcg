@@ -67,11 +67,11 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'spirit_lifesteal', name: 'Spirit Lifesteal', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_spirit_lifesteal'], text: "After bearer's skill / spell / ult damages an enemy: heal 2." },
 
   // ----- Cast-payoff items (functionality tied to skill / ult activation) -----
-  // Quicksilver Reload (canon "casting reloads your weapon"): after a skill,
-  // the bearer gets a bonus half-power basic attack this turn.
-  { id: 'quicksilver_reload', name: 'Quicksilver Reload', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_quicksilver_reload'], text: 'After the bearer uses a skill, they make a bonus attack at half Bullet Power this turn.' },
   // Surge of Power: after a skill, +2 Bullet Power for the turn.
   { id: 'surge_of_power', name: 'Surge of Power', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_surge_of_power'], text: 'After the bearer uses a skill: +2 Bullet Power this turn.' },
+  // Burst Fire (canon T3 Weapon): fires a burst of extra shots — grants Extra
+  // Attack 1 each turn (stacks with other Extra Attack sources).
+  { id: 'burst_fire', name: 'Burst Fire', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_burst_fire'], text: 'The bearer gains Extra Attack 1 each turn. (Stacks.)' },
 
   // ----- T2 tech (canon Suppressor T2 Spirit, Reactive Barrier T2 Vitality) -----
   { id: 'suppressor',       name: 'Suppressor',       type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_suppressor'],       text: "When the bearer's skill / spell / ult damages an enemy: Bullet Power −1 for 2 turns." },
@@ -111,6 +111,10 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'inhibitor', name: 'Inhibitor', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_inhibitor'], text: "Bearer's attacks apply Bullet Power −1 and Spirit Power −1 for 2 turns." },
   // Siphon Bullets (T4): attacks temporarily steal 1 max HP (reverts after 2 turns).
   { id: 'siphon_bullets', name: 'Siphon Bullets', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_siphon_bullets'], text: "After bearer attacks: steal 1 max HP from the target for 2 turns." },
+  // Ricochet (canon T4 Weapon): bullets ricochet to nearby enemies — every time
+  // the bearer attacks, the shot bounces for 2 to all OTHER enemies (the bench).
+  // Fires per swing, so it scales with Extra Attack into a board-wipe engine.
+  { id: 'ricochet', name: 'Ricochet', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_ricochet'], text: 'After the bearer attacks, deal 2 to all other enemies (the enemy bench).' },
   { id: 'healing_tempo',  name: 'Healing Tempo',  type: 'equipment', rarity: 4, tier: 4, cost: 7, bonus: { atk: 2 }, abilities: ['eff_healing_tempo'], text: '+2 Bullet Power. Healing Boost 4.' },
   { id: 'boundless_spirit', name: 'Boundless Spirit', type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { spirit: 5, hp: 3 }, text: '+5 Spirit Power. +3 HP.' },
   { id: 'glass_cannon',   name: 'Glass Cannon',   type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { atk: 6, hp: -1 }, text: '+6 Bullet Power. −1 max HP.' },
