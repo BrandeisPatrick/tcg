@@ -1,6 +1,6 @@
 import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState } from './types';
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
-import { damageUnit, healUnit, reapDead } from './damage';
+import { damageUnit, healUnit, reapDead, returnRemToBench } from './damage';
 import { liveBoardCards, pushLog, otherPlayer, effectiveSpirit } from './util';
 import { CARDS_BY_ID } from '@/cards';
 import { fireEquipmentTriggers } from './equipmentDispatch';
@@ -159,6 +159,20 @@ export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
     c.statuses = c.statuses
       .map((s) => (CC_STATUSES.has(s.id) ? { ...s, duration: s.duration - 1 } : s))
       .filter((s) => s.duration > 0);
+  }
+}
+
+/**
+ * Tick Rem's "Lil Helpers" merges at her owner's turn start: count down each
+ * attached Rem and, when the timer expires, detach her back to the bench (which
+ * also reverts the max-HP she granted the bearer).
+ */
+export function tickRemMerges(G: GameState, ps: PlayerState) {
+  for (const bearer of liveBoardCards(ps)) {
+    const rem = bearer.attached?.find((a) => a.cardId === 'hero_rem' && a.remMergeTurnsLeft != null);
+    if (!rem) continue;
+    rem.remMergeTurnsLeft = (rem.remMergeTurnsLeft ?? 0) - 1;
+    if (rem.remMergeTurnsLeft <= 0) returnRemToBench(G, ps, bearer, rem);
   }
 }
 

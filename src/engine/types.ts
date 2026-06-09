@@ -104,6 +104,16 @@ export interface CardInstance {
   // no retaliation and re-fire onAttack procs (so Ricochet / Toxic Bullets /
   // Djinn's Mark all proc per swing).
   /**
+   * Rem's "Lil Helpers" merge: when Rem casts her skill she leaves her bench
+   * slot and attaches to an ally as a temporary buff. These live on the Rem
+   * card while it sits in the bearer's `attached` list: `remMergeTurnsLeft`
+   * counts down at her owner's turn start, and `remMergeHpBuff` is the max-HP
+   * she granted (reverted when she detaches). On expiry / bearer death she
+   * returns to her bench slot. Undefined for everyone else.
+   */
+  remMergeTurnsLeft?: number;
+  remMergeHpBuff?: number;
+  /**
    * Turns remaining until the hero respawns. `> 0` means the hero is currently
    * KO'd and occupying its slot as a corpse (greyed in UI, can't act / be
    * targeted). On reaching 0 the hero returns to life at full HP in the same

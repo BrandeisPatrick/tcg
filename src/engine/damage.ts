@@ -191,6 +191,10 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   G.players[oppId].souls = Math.min(SOULS_MAX, before + 1);
   if (G.players[oppId].souls > before) pushLog(G, `P${oppId} +1 Souls (KO bounty).`);
   damagePlayer(G, ps.id, 1);
+  // Rem rescue: a merged Rem detaches to safety (back to the bench) instead of
+  // dying with the body — and her granted max-HP is reverted here too.
+  const rem = hero.attached?.find((a) => a.cardId === 'hero_rem' && a.remMergeTurnsLeft != null);
+  if (rem) returnRemToBench(G, ps, hero, rem);
   // Revert any temporary Siphon Bullets max-HP swing before statuses are wiped,
   // so the hero respawns with its true max HP.
   const sDrain = hero.statuses.find((s) => s.id === 'siphon_drain');
@@ -205,6 +209,31 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   // Level + exp + stat mods INTENTIONALLY persist through respawn — the
   // hero comes back at full hp with their rank intact (see leveling.spec).
   pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} respawning in (${RESPAWN_TURNS}).`);
+}
+
+/**
+ * Detach a merged Rem from `bearer` and return her to her bench slot: reverts
+ * the temporary max-HP she granted, pulls her out of `bearer.attached`, and
+ * drops her back into her original bench slot (or the first free one). Shared
+ * by the merge-countdown expiry (tickRemMerges) and the bearer-death rescue.
+ */
+export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInstance, rem: CardInstance) {
+  const buff = rem.remMergeHpBuff ?? 0;
+  bearer.hpMax = Math.max(1, bearer.hpMax - buff);
+  if (bearer.hp > bearer.hpMax) bearer.hp = bearer.hpMax;
+  if (bearer.attached) bearer.attached = bearer.attached.filter((a) => a !== rem);
+  rem.remMergeTurnsLeft = undefined;
+  rem.remMergeHpBuff = undefined;
+  rem.zone = 'bench';
+  rem.attachedTo = undefined;
+  const slotIdx = (rem.slot ?? 1) - 1;
+  if (slotIdx >= 0 && slotIdx < ps.bench.length && ps.bench[slotIdx] == null) {
+    ps.bench[slotIdx] = rem;
+  } else {
+    const free = ps.bench.findIndex((b) => b == null);
+    if (free >= 0) ps.bench[free] = rem;
+  }
+  pushLog(G, `Rem returns to the bench.`);
 }
 
 /**

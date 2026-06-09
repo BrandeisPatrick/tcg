@@ -5,9 +5,9 @@ import type { HeroCard } from '@/engine/types';
  * `skill` (Activate trigger, costs the player's one-skill-per-turn) OR an entry
  * in `passives` (always-on or trigger-based, no cast). Never both.
  *
- * Split (9 passive / 10 skill):
- *   PASSIVE: Abrams, Drifter, Haze, Mirage, Mo & Krill, Rem, Shiv, Vindicta, Wraith
- *   SKILL:   Dynamo, Kelvin, Lady Geist, Lash, Paige, Seven, Sinclair, Viscous, Warden, Yamato
+ * Split (8 passive / 11 skill):
+ *   PASSIVE: Abrams, Drifter, Haze, Mirage, Mo & Krill, Shiv, Vindicta, Wraith
+ *   SKILL:   Dynamo, Kelvin, Lady Geist, Lash, Paige, Rem, Seven, Sinclair, Viscous, Warden, Yamato
  *
  * Stats are a NATURAL LEAN, not a role cap. attack = bullet, skill = spirit;
  * every hero gains +1 of each stat per level and can be itemized into a Weapon,
@@ -64,10 +64,10 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 1,
     hp: 4,
-    passives: ['passive_rem_benchheal'],
+    skill: 'skill_rem',
     ult: 'ult_rem',
     abilityName: 'Lil Helpers',
-    text: 'Bench-only. Start of own turn: heals ally Active 3.',
+    text: 'Merge into an ally as a buff: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns, then return to the bench.',
     flags: { benchOnly: true },
   },
   {

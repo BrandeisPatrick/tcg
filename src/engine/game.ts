@@ -9,7 +9,7 @@ import type {
 import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { getAIDeckTagged } from '@/decks/aiDecks';
-import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses } from './statusOps';
+import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from './statusOps';
 import { reapDead, damagePlayer } from './damage';
 import { resolveAttackPhase } from './combat';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, resetIid, nextIid } from './util';
@@ -342,6 +342,8 @@ export const DeadlockGame: Game<GameState> = {
       ps.skillUsedThisTurn = false;
       G.damageFx = [];   // flush last turn's hit-flash events before this turn's (e.g. bleed) land
       tickStartOfTurn(G, ps);
+      // Count down Rem's "Lil Helpers" merges; expired ones return her to bench.
+      tickRemMerges(G, ps);
       // Refill (not add) — no hoarding across turns. KO bounty banked this turn IS preserved
       // until the NEXT refill, so a kill mid-turn still gives you something to spend right away.
       ps.souls = soulRefillForTurn(realTurn);

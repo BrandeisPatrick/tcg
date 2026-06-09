@@ -650,13 +650,15 @@ const skill_lash: AbilityDef = {
 // Shields are flat — Spirit Power scales spirit damage only.
 const skill_paige: AbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero', exhausts: true,
-  prompt: 'Paige Plot Armor — Shield 2 + grant Bullet Power (1 + ½ Spirit) for 2 turns.',
+  prompt: 'Paige Plot Armor — Shield 2 + grant Bullet Resist (1 + ½ Spirit) for 2 turns.',
   base: 2, baseLabel: 'shield',
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
     addStatus(G, target, 'shield', 2, 999);
-    addStatus(G, target, 'weapon_power', 1 + Math.floor(spi(source) / 2), 2);
+    // Defensive buff (distinct from Dynamo's offensive +Bullet Power) so the two
+    // support lanes don't overlap.
+    addStatus(G, target, 'bullet_resist', 1 + Math.floor(spi(source) / 2), 2);
   },
 };
 
@@ -777,13 +779,34 @@ const passive_mo_krill_burrow: AbilityDef = {
   },
 };
 
-const passive_rem_benchheal: AbilityDef = {
-  id: 'passive_rem_benchheal', trigger: 'startOfTurn', target: 'self',
-  prompt: "Lil Helpers — start of own turn: heal ally Active 3 while on the bench.",
-  run: (G, ctx, { source }) => {
-    if (!source || source.zone !== 'bench') return;
-    const ally = G.players[ctx.movingPlayer].active;
-    if (ally) healUnit(G, ally, 3);
+// Rem — Lil Helpers: she merges into a chosen ally as a temporary equipment.
+// On cast: heal the bearer (3 + Rem's Spirit), grant +(1 + Rem's Spirit) max HP,
+// and move Rem from her bench slot into the bearer's attached list for 3 turns.
+// The countdown + return-to-bench live in tickRemMerges; bearer-death rescue in
+// killInPlace. Scaling snapshots Rem's Spirit at cast time.
+const skill_rem: AbilityDef = {
+  id: 'skill_rem', trigger: 'activate', target: 'allyHero', exhausts: true,
+  prompt: "Rem Lil Helpers — merge into an ally: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns.",
+  base: 3, baseLabel: 'heal',
+  scalesSpirit: true,
+  run: (G, ctx, { source, target }) => {
+    if (!source || !target || target === source) return;
+    if ((target.respawnTurnsLeft ?? 0) > 0) return; // can't merge into a corpse
+    const s = effectiveSpirit(source);
+    const hpBuff = 1 + s;
+    target.hpMax += hpBuff;
+    target.hp += hpBuff;
+    healUnit(G, target, 3 + s, 'Lil Helpers');
+    // Move Rem out of her bench slot and attach her to the bearer.
+    const ps = G.players[ctx.movingPlayer];
+    const idx = ps.bench.findIndex((b) => b === source);
+    if (idx >= 0) ps.bench[idx] = null;
+    source.zone = 'equipment';
+    source.attachedTo = target.iid;
+    source.remMergeTurnsLeft = 3;
+    source.remMergeHpBuff = hpBuff;
+    (target.attached ??= []).push(source);
+    pushLog(G, `Rem merges into ${CARDS_BY_ID[target.cardId]?.name ?? target.cardId}.`);
   },
 };
 
@@ -1107,10 +1130,10 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_colossus, eff_improved_bullet_armor, eff_improved_spirit_armor,
   eff_frenzy, eff_siphon_bullets,
   // ----- Hero skills -----
-  skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige,
+  skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige, skill_rem,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
   // ----- Hero passives -----
-  passive_abrams_heal, passive_haze_fixation, passive_mo_krill_burrow, passive_rem_benchheal,
+  passive_abrams_heal, passive_haze_fixation, passive_mo_krill_burrow,
   passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed, passive_drifter_bloodscent,
   passive_mirage_djinns_mark,
   // ----- Ultimates -----

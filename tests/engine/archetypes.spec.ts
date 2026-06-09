@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { freshReadyGame, makeHero } from './_helpers';
 import { resolveAttackPhase } from '@/engine/combat';
-import { tickCastingPulses, addStatus } from '@/engine/statusOps';
+import { tickCastingPulses, addStatus, tickRemMerges } from '@/engine/statusOps';
+import { damageUnit, reapDead } from '@/engine/damage';
 import { effectiveAtk, grantExtraAttacks, MAX_EXTRA_ATTACKS } from '@/engine/util';
 import { getAbility } from '@/abilities';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
@@ -249,5 +250,64 @@ describe('Channeled board-wipe archetype', () => {
     const before = enemies.map((e) => e.hp);
     tickCastingPulses(G, G.players['0']);
     enemies.forEach((e, i) => expect(e.hp).toBe(before[i])); // pulse skipped
+  });
+});
+
+describe('Support — Rem Lil Helpers (merge)', () => {
+  function setup() {
+    const G = freshReadyGame();
+    const ally = makeHero('hero_dynamo', '0', 'active', 0); // bearer, hp 6
+    const rem = makeHero('hero_rem', '0', 'bench', 1);      // slot 1 → bench[0]
+    G.players['0'].active = ally;
+    G.players['0'].bench = [rem, null, null];
+    return { G, ally, rem };
+  }
+
+  it('merges into an ally: heals, grants max HP, attaches, leaves the bench', () => {
+    const { G, ally, rem } = setup();
+    ally.hp = 3;
+    getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    // Rem Spirit 0 → hpBuff 1, heal 3.
+    expect(ally.hpMax).toBe(6 + 1);
+    expect(ally.hp).toBe(3 + 1 + 3); // +1 fills new max, then heal 3 (capped at 7)
+    expect(ally.attached?.some((a) => a.cardId === 'hero_rem')).toBe(true);
+    expect(G.players['0'].bench[0]).toBeNull();
+    expect(rem.remMergeTurnsLeft).toBe(3);
+  });
+
+  it("scales with Rem's Spirit", () => {
+    const { G, ally, rem } = setup();
+    rem.spiritMod = 2;
+    ally.hp = 1; ally.hpMax = 20;
+    getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    // s=2 → hpBuff 3, heal 5.
+    expect(ally.hpMax).toBe(23);
+    expect(ally.hp).toBe(1 + 3 + 5);
+    expect(rem.remMergeHpBuff).toBe(3);
+  });
+
+  it('after 3 ticks Rem returns to bench and the max-HP reverts', () => {
+    const { G, ally, rem } = setup();
+    const baseMax = ally.hpMax;
+    getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    expect(ally.hpMax).toBe(baseMax + 1);
+    tickRemMerges(G, G.players['0']); // 3→2
+    tickRemMerges(G, G.players['0']); // 2→1
+    expect(G.players['0'].bench[0]).toBeNull(); // still merged
+    tickRemMerges(G, G.players['0']); // 1→0 → return
+    expect(ally.hpMax).toBe(baseMax);
+    expect(G.players['0'].bench[0]).toBe(rem);
+    expect(rem.zone).toBe('bench');
+    expect(ally.attached?.some((a) => a.cardId === 'hero_rem')).toBe(false);
+  });
+
+  it('returns Rem to bench if the bearer dies while merged', () => {
+    const { G, ally, rem } = setup();
+    getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    damageUnit(G, ally, 999, 'pure'); // lethal
+    reapDead(G, G.players['0']);
+    expect(G.players['0'].bench[0]).toBe(rem); // rescued, not lost with the body
+    expect(rem.zone).toBe('bench');
+    expect(rem.remMergeTurnsLeft).toBeUndefined();
   });
 });
