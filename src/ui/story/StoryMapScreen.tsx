@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CardId } from '@/engine/types';
 import type { StoryRun, StoryNode, NodeKind } from '@/story/types';
@@ -25,8 +25,58 @@ type PickState =
   | { mode: 'node'; node: StoryNode; kind: 'hero' | 'card'; options: CardId[] }
   | null;
 
+// How much larger than the visible frame the map world is rendered, so nodes
+// spread out and the player drags around to navigate. Bump to zoom in further.
+const MAP_ZOOM = 2.3;
+
 export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapScreenProps) {
   const [pick, setPick] = useState<PickState>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // The map is interactive (draggable, nodes shown) only during an active run.
+  const active = !!run && run.status !== 'won' && run.status !== 'lost';
+
+  // Measure the frame so we can give the pannable world EXPLICIT drag bounds.
+  // (Framer's ref-based dragConstraints mis-measures a child larger than the
+  // ref and snaps it back to centre — numeric bounds pan reliably.) The world
+  // is centred and MAP_ZOOM× the frame, so it overflows half the excess on each
+  // side: that half-excess is exactly the allowed pan distance per axis.
+  const [frame, setFrame] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const measure = () => setFrame({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const panX = (frame.w * (MAP_ZOOM - 1)) / 2;
+  const panY = (frame.h * (MAP_ZOOM - 1)) / 2;
+
+  // Manual drag-to-pan (own pointer handlers rather than Framer's drag, which is
+  // finicky and hard to verify). A small threshold distinguishes a pan from a
+  // node tap, so clicking a node still works.
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ px: number; py: number; ox: number; oy: number; moved: boolean } | null>(null);
+  const clampPan = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (!active) return;
+    drag.current = { px: e.clientX, py: e.clientY, ox: pan.x, oy: pan.y, moved: false };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.px, dy = e.clientY - d.py;
+    if (!d.moved && Math.hypot(dx, dy) > 4) {
+      d.moved = true;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* non-active pointer */ }
+    }
+    if (d.moved) setPan({ x: clampPan(d.ox + dx, panX), y: clampPan(d.oy + dy, panY) });
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (drag.current?.moved) { try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ } }
+    drag.current = null;
+  };
 
   const startRun = (hero: CardId) => { onUpdateRun(newRun(hero)); setPick(null); };
 
@@ -64,6 +114,7 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
       {/* Map panel — fixed 1200:700 aspect so the SVG map, edges and node
           buttons all share one coordinate space. */}
       <motion.div
+        ref={panelRef}
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={spring.soft}
@@ -77,17 +128,41 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
           border: '12px solid #c9ad74',
           boxShadow: '0 28px 80px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(90,64,22,0.5)',
           background: palette.bg0,
+          touchAction: 'none', // let the drag handler own touch panning
         }}
       >
-        <NycMap />
-        {run && run.status !== 'won' && run.status !== 'lost' && (
-          <>
-            <Edges run={run} />
-            {run.nodes.map((n) => (
-              <NodeMarker key={n.id} run={run} node={n} onClick={() => handleNode(n)} />
-            ))}
-            <RunHud run={run} onExit={onExit} onAbandon={() => onUpdateRun(null)} />
-          </>
+        {/* Pannable, zoomed-in world: the city map, route edges and node markers
+            live here, rendered MAP_ZOOM× larger than the frame so the nodes are
+            well-separated. Drag to move around; the frame clips (overflow hidden).
+            The HUD / intro panel below sit OUTSIDE this and stay fixed. */}
+        <div
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          style={{
+            position: 'absolute',
+            width: `${MAP_ZOOM * 100}%`, height: `${MAP_ZOOM * 100}%`,
+            left: `${-(MAP_ZOOM - 1) * 50}%`, top: `${-(MAP_ZOOM - 1) * 50}%`,
+            transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`,
+            cursor: active ? 'grab' : 'default',
+            touchAction: 'none',
+          }}
+        >
+          <NycMap />
+          {active && (
+            <>
+              <Edges run={run!} />
+              {run!.nodes.map((n) => (
+                <NodeMarker key={n.id} run={run!} node={n} onClick={() => handleNode(n)} />
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Fixed overlays (do NOT pan with the map). */}
+        {active && (
+          <RunHud run={run!} onExit={onExit} onAbandon={() => onUpdateRun(null)} />
         )}
 
         {/* Intro / start-of-run panel */}
