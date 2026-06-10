@@ -71,8 +71,12 @@ export function TurnCompass({ isMyTurn, turn, combatOverride }: Props) {
     <motion.div
       aria-label={`Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"}`}
       title={`Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"}`}
-      animate={{ scale: [1, 1.04, 1] }}
-      transition={{ duration: 3.6, repeat: Infinity, ease: 'easeInOut' }}
+      // Breathe only on the player's turn — doubles as a "you're up" signal
+      // and stops the infinite loop from burning frames during rival turns.
+      animate={isMyTurn ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+      transition={isMyTurn
+        ? { duration: 3.6, repeat: Infinity, ease: 'easeInOut' }
+        : { duration: 0.3 }}
       style={{
         position: 'relative',
         zIndex: 2,

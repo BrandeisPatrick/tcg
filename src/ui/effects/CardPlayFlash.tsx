@@ -16,9 +16,12 @@ import { palette, fonts } from '../tokens';
  */
 interface Props {
   G: GameState;
+  /** Resolve the action reveal early (tap-to-skip). Wired by Board to
+   *  `completeAction` so the player never has to sit through the full hold. */
+  onSkip?: () => void;
 }
 
-export function CardPlayFlash({ G }: Props) {
+export function CardPlayFlash({ G, onSkip }: Props) {
   const action = G.action;
   const matching = action && action.state === 'begin' && (action.kind === 'play' || action.kind === 'skill');
   return (
@@ -29,30 +32,35 @@ export function CardPlayFlash({ G }: Props) {
           cardId={action.cardId}
           caster={action.by === '0' ? 'P0' : 'P1'}
           kind={action.kind === 'skill' ? 'skill' : 'play'}
+          onSkip={onSkip}
         />
       )}
     </AnimatePresence>
   );
 }
 
-export function CardPlayOverlay({ cardId, caster, kind = 'play' }: {
-  cardId: string; caster: 'P0' | 'P1'; kind?: 'play' | 'skill';
+export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
+  cardId: string; caster: 'P0' | 'P1'; kind?: 'play' | 'skill'; onSkip?: () => void;
 }) {
   const isOwn = caster === 'P0';
   const accent = isOwn ? palette.accent : palette.danger;
   const verb = kind === 'skill' ? 'used' : 'played';
   return (
     <>
-      {/* Soft backdrop tint so the card pops out from the board behind it. */}
+      {/* Soft backdrop tint so the card pops out from the board behind it.
+          When skippable it also captures the tap — a click anywhere resolves
+          the action immediately instead of waiting out the full hold. */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.35, 0.35, 0] }}
         exit={{ opacity: 0 }}
         transition={{ duration: 3.2, times: [0, 0.10, 0.88, 1] }}
+        onClick={onSkip}
         style={{
           position: 'fixed', inset: 0,
           background: 'rgba(0,0,0,0.35)',
-          pointerEvents: 'none',
+          pointerEvents: onSkip ? 'auto' : 'none',
+          cursor: onSkip ? 'pointer' : undefined,
           zIndex: 70,
         }}
       />
@@ -112,6 +120,30 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play' }: {
           {isOwn ? `You ${verb}` : `Rival ${verb}`}
         </span>
       </motion.div>
+      {/* Skip hint — fades in after the card lands so it never competes with
+          the reveal pop itself. */}
+      {onSkip && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.7 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.7, duration: 0.4 }}
+          style={{
+            position: 'fixed',
+            left: 0, right: 0,
+            top: 'calc(50% + 240px)',
+            textAlign: 'center',
+            pointerEvents: 'none',
+            zIndex: 73,
+            fontFamily: fonts.ui,
+            fontSize: 12, fontWeight: 700,
+            color: '#fff',
+            textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+          }}
+        >
+          Tap anywhere to continue
+        </motion.div>
+      )}
     </>
   );
 }

@@ -17,4 +17,18 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the stable framework code from app code so gameplay updates
+        // don't re-download React/Framer/boardgame.io, and the browser can
+        // fetch chunks in parallel on first load.
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          motion: ['framer-motion'],
+          bgio: ['boardgame.io'],
+        },
+      },
+    },
+  },
 });

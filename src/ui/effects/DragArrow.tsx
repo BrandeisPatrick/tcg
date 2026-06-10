@@ -14,9 +14,25 @@ export function DragArrow({ source, active, color = palette.success }: Props) {
 
   useEffect(() => {
     if (!active) { setPt(null); return; }
-    const onMove = (e: PointerEvent) => setPt({ x: e.clientX, y: e.clientY });
-    window.addEventListener('pointermove', onMove);
-    return () => window.removeEventListener('pointermove', onMove);
+    // Coalesce pointermove to one state update per frame — high-rate mice
+    // (120Hz+) otherwise re-render the whole SVG per event and steal frames
+    // from card animations while targeting.
+    let raf = 0;
+    let next: { x: number; y: number } | null = null;
+    const onMove = (e: PointerEvent) => {
+      next = { x: e.clientX, y: e.clientY };
+      if (!raf) {
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          if (next) setPt(next);
+        });
+      }
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [active]);
 
   if (!active || !source || !pt) return null;

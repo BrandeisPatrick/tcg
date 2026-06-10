@@ -14,6 +14,9 @@ interface Props {
   onLongPress?: (c: CardInstance) => void;
   onHover?: (c: CardInstance | null) => void;
   onDragEndOver?: (c: CardInstance, x: number, y: number) => void;
+  /** Fired when the player taps a card they can't afford — lets the Board
+   *  surface "Need N souls" instead of a silent no-op. */
+  onUnaffordable?: (c: CardInstance, cost: number) => void;
 }
 
 function cardCost(c: CardInstance): number {
@@ -49,7 +52,7 @@ function cardOverlap(total: number): number {
   return -108;
 }
 
-export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, onHover, onDragEndOver }: Props) {
+export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, onHover, onDragEndOver, onUnaffordable }: Props) {
   const total = cards.length;
   // Per-card timers held in refs so they survive re-renders. Without this,
   // the closure variables get re-created each render, leaving stale timers
@@ -105,6 +108,11 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
           const rot = selected ? 0 : fanRotation(i, total);
           const y = selected ? -42 : fanY(i, total);
 
+          // Dim must live in the `animate` target, not `style` — framer's
+          // animate={{ opacity: 1 }} overrides a style-prop opacity, which
+          // silently disabled the unaffordable/disabled fade entirely.
+          const targetOpacity = cardDisabled && !selected ? (unaffordable ? 0.55 : 0.6) : 1;
+
           const isHovered = hoveredIid === c.iid;
           const isNeighborOfHovered = hoveredIdx !== -1 && Math.abs(i - hoveredIdx) === 1;
           const baseOverlap = i === 0 ? 0 : cardOverlap(total);
@@ -125,7 +133,7 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
               layoutId={`card-${c.iid}`}
               layout
               initial={{ opacity: 0, y: 120, scale: 0.5 }}
-              animate={{ opacity: 1, y, scale: selected ? 1.06 : 1, rotate: rot }}
+              animate={{ opacity: targetOpacity, y, scale: selected ? 1.06 : 1, rotate: rot }}
               exit={{ opacity: 0, y: -60, scale: 0.5, transition: { duration: 0.25 } }}
               transition={spring.default}
               drag={!cardDisabled}
@@ -162,17 +170,24 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 }
               }}
               onPointerUp={() => clearPress(c.iid)}
-              onClick={() => !cardDisabled && onTap(c)}
+              onClick={() => {
+                if (!cardDisabled) { onTap(c); return; }
+                // Tapping an unaffordable card on your own turn gets explicit
+                // feedback instead of a silent no-op.
+                if (unaffordable && !disabled) onUnaffordable?.(c, cost);
+              }}
               title={unaffordable ? `Need ${cost} souls (have ${mySouls})` : undefined}
               style={{
+                // No CSS transition on marginLeft — the framer `layout` prop is
+                // the single position driver. A CSS transition here used to
+                // double-animate against the layout spring and made hand
+                // reflow (hover relief, card played/drawn) visibly chop.
                 marginLeft,
                 cursor: cardDisabled ? 'default' : 'pointer',
                 transformOrigin: 'bottom center',
                 zIndex,
                 touchAction: 'none',
-                opacity: cardDisabled && !selected ? (unaffordable ? 0.42 : 0.6) : 1,
                 filter: unaffordable ? 'saturate(0.55)' : undefined,
-                transition: 'margin-left 180ms cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
               <CardFrame
@@ -180,6 +195,7 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 size="hand"
                 selected={selected}
                 glow={selected ? (data?.type === 'ultimate' ? 'gold' : 'accent') : null}
+                unaffordable={unaffordable}
               />
             </motion.div>
           );

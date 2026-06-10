@@ -40,12 +40,14 @@ export function ActiveSlot({
       <div style={{ width: '100%', height: '100%', maxHeight: 280 }}>
         <AnimatePresence mode="popLayout">
           {card ? (
+            // Opacity-only presence — the HeroSlot's shared layoutId animates
+            // the actual bench↔active travel (see BenchRow for the rationale).
             <motion.div
               key={card.iid}
-              initial={{ scale: 0.7, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.4, opacity: 0, rotate: isOpponent ? 8 : -8, filter: 'blur(4px)' }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              transition={{ duration: 0.25 }}
               style={{ height: '100%' }}
             >
               <HeroSlot

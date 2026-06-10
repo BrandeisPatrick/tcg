@@ -63,18 +63,26 @@ export function MulliganOverlay({ cards, onConfirm }: Props) {
         </div>
       </motion.div>
 
-      {/* Cards */}
+      {/* Cards — dealt one after another (stagger) so the opening hand reads
+          as a deal, not a wall. The outer div owns the entrance; the inner
+          button keeps its own animate for the swap-toggle state. */}
       <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ ...spring.snappy, delay: 0.05 }}
+        initial="hidden"
+        animate="show"
+        variants={{ show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } } }}
         style={{ display: 'flex', gap: 24, marginBottom: 32 }}
       >
         {cards.map((c) => {
           const isSwapping = selected.has(c.iid);
           return (
-            <motion.button
+            <motion.div
               key={c.iid}
+              variants={{
+                hidden: { y: 36, opacity: 0, scale: 0.92 },
+                show: { y: 0, opacity: 1, scale: 1, transition: spring.default },
+              }}
+            >
+            <motion.button
               onClick={() => toggle(c.iid)}
               whileTap={{ scale: 0.96 }}
               whileHover={{ y: -8 }}
@@ -116,6 +124,7 @@ export function MulliganOverlay({ cards, onConfirm }: Props) {
                 </div>
               )}
             </motion.button>
+            </motion.div>
           );
         })}
       </motion.div>

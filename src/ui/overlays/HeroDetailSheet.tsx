@@ -99,7 +99,16 @@ export function HeroDetailSheet({
             <HeroPortrait cardId={data.id} full />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ ...text.label, color: palette.text }}>{data.name}</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <span style={{ ...text.label, color: palette.text }}>{data.name}</span>
+              <span style={{
+                padding: '1px 8px', borderRadius: 999,
+                background: 'rgba(120, 80, 30, 0.10)',
+                border: `1px solid ${palette.border}`,
+                ...text.label, color: palette.textDim,
+                fontVariantNumeric: 'tabular-nums',
+              }}>Lv {card.level ?? 1}</span>
+            </div>
             <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
               <Stat label="BP" value={effectiveAtk(card)} color={palette.atk} />
               <Stat label="HP" value={`${card.hp}/${card.hpMax}`} color={palette.hp} />
@@ -347,7 +356,8 @@ function SkillActionCard({
       </div>
       <ScalingBreakdown ability={ability} hero={hero} />
 
-      {/* Footer CTA / status — the "Use Skill" affordance lives in the card */}
+      {/* Footer CTA / status — the "Use Skill" affordance lives in the card.
+          Shows the soul cost like Retreat does (−2) so costs read consistently. */}
       {interactive ? (
         <div style={{
           marginTop: 12, paddingTop: 10, borderTop: `1px solid ${accent}55`,
@@ -355,6 +365,12 @@ function SkillActionCard({
           ...text.label, color: palette.textDim,
         }}>
           <span aria-hidden>◎</span><span>Tap to Use Skill</span>
+          <span style={{
+            padding: '2px 8px', borderRadius: 999,
+            background: 'rgba(120, 80, 30, 0.12)',
+            border: `1px solid ${palette.border}`,
+            ...text.label, color: palette.textDim,
+          }}>−1 soul</span>
         </div>
       ) : mine && !canUse && (blockedReason || used) ? (
         <div style={{

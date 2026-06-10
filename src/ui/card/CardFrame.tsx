@@ -26,6 +26,9 @@ interface Props {
   /** Hide the top-right hero BP/HP stat pills (used by the skill-used reveal,
    *  where the stat badge is noise — the reveal is about the skill). */
   hideStats?: boolean;
+  /** Player can't pay this card's soul cost right now — the cost coin flips
+   *  to warning red so the greyed-out card explains itself at a glance. */
+  unaffordable?: boolean;
 }
 
 const SIZES: Record<Size, { w: number; h: number; nameSize: number; bodySize: number }> = {
@@ -202,6 +205,7 @@ function ArtWindow({ data, size }: { data: CardData | undefined; size: Size }) {
 export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, faded = false,
   overlay, footer, onClick, className, style, rotate = 0, zoom = false, hideStats = false,
+  unaffordable = false,
 }: Props) {
   const [hover, setHover] = useState(false);
   const data = CARDS_BY_ID[cardId];
@@ -273,20 +277,25 @@ export function CardFrame({
         <ArtWindow data={data} size={size} />
         {overlay && <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>{overlay}</div>}
 
-        {/* Cost gem (top-left) — brass soul coin */}
+        {/* Cost gem (top-left) — brass soul coin; flips to warning red when
+            the player can't afford it so the dimmed card explains itself. */}
         {showCost && (
           <div style={{
             position: 'absolute', top: 4, left: 4,
             width: 24, height: 24,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: `radial-gradient(circle at 35% 30%, #ffd98a, ${palette.accent} 55%, #6e4612 100%)`,
+            background: unaffordable
+              ? `radial-gradient(circle at 35% 30%, #e8927a, ${palette.danger} 55%, #4a1512 100%)`
+              : `radial-gradient(circle at 35% 30%, #ffd98a, ${palette.accent} 55%, #6e4612 100%)`,
             border: '1.5px solid #3a2810',
             borderRadius: '50%',
-            boxShadow: `0 1px 3px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,230,170,0.55)`,
-            color: '#2a1a06',
+            boxShadow: unaffordable
+              ? `0 1px 3px rgba(0,0,0,0.6), 0 0 10px ${palette.danger}aa, inset 0 1px 2px rgba(255,200,180,0.45)`
+              : `0 1px 3px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,230,170,0.55)`,
+            color: unaffordable ? '#fff' : '#2a1a06',
             fontFamily: fonts.ui, fontWeight: 700, fontSize: 12,
             fontVariantNumeric: 'tabular-nums',
-            textShadow: '0 1px 0 rgba(255,235,180,0.4)',
+            textShadow: unaffordable ? '0 1px 2px rgba(0,0,0,0.7)' : '0 1px 0 rgba(255,235,180,0.4)',
             zIndex: 5,
           }}>{cost}</div>
         )}

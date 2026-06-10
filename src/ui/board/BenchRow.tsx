@@ -53,12 +53,17 @@ export function BenchRow({
       }}>
         <AnimatePresence mode="popLayout">
           {slots.map((c, i) => c ? (
+            // Wrapper presence is opacity-only and FAST: the HeroSlot inside
+            // carries a shared layoutId, so when a hero changes zones
+            // (promotion / retreat) the layout animation travels it between
+            // rows. A scale/blur exit here used to play a "vanish" at the old
+            // slot that fought the travel and read as a teleport.
             <motion.div
               key={c.iid}
-              initial={{ scale: 0.7, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.4, opacity: 0, rotate: isOpponent ? 8 : -8, filter: 'blur(4px)' }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              transition={{ duration: 0.25 }}
               style={emptyDivStyle}
             >
               <HeroSlot

@@ -67,20 +67,34 @@ export function EquipmentReplaceOverlay({ incoming, hero, onPick, onCancel }: Pr
           </div>
 
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            {attached.map((eq) => (
-              <ReplaceableCard key={eq.iid} card={eq} onPick={() => onPick(eq.iid)} />
+            {/* Staggered entrance — existing items present themselves one by
+                one, then the incoming card arrives last as the payoff. */}
+            {attached.map((eq, i) => (
+              <motion.div
+                key={eq.iid}
+                initial={{ y: 18, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ ...spring.default, delay: 0.08 + i * 0.06 }}
+              >
+                <ReplaceableCard card={eq} onPick={() => onPick(eq.iid)} />
+              </motion.div>
             ))}
             <div style={{
               width: 1, alignSelf: 'stretch',
               background: `${palette.border}aa`,
               margin: '0 4px',
             }} />
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <motion.div
+              initial={{ y: 18, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ ...spring.default, delay: 0.08 + attached.length * 0.06 + 0.06 }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}
+            >
               <span style={{ ...text.label, color: palette.success }}>Incoming</span>
               <div style={{ width: 156, height: 216 }}>
                 <CardFrame cardId={incoming.cardId} size="hand" footer={null} />
               </div>
-            </div>
+            </motion.div>
           </div>
 
           <motion.button

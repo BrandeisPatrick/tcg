@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { App } from './App';
 import { StartScreen } from './ui/start/StartScreen';
 import { HeroPreferenceScreen } from './ui/collection/HeroPreferenceScreen';
@@ -83,43 +84,61 @@ export function Root() {
     return () => setMatchExitHandler(null);
   }, []);
 
+  // Keyed per screen so AnimatePresence cross-fades on navigation instead of
+  // hard-swapping. `mode="wait"` keeps only one (potentially heavy) screen
+  // mounted at a time; match keys on epoch so a rematch also gets a fresh fade.
+  const screenKey =
+    view.screen === 'match' ? `match-${matchEpoch}` :
+    view.screen === 'deckEdit' ? `deckEdit-${view.slotIndex}` :
+    view.screen;
+
   return (
     <>
       <TornEdgeDefs />
-      {view.screen === 'start' && (
-        <StartScreen
-          onPlay={goMatch}
-          onStory={goStory}
-          onHeroes={goHeroes}
-          onDecks={goDecks}
-        />
-      )}
-      {view.screen === 'heroes' && (
-        <HeroPreferenceScreen onBack={goStart} />
-      )}
-      {view.screen === 'decks' && (
-        <DeckManagerScreen
-          onBack={goStart}
-          onEditDeck={goEditDeck}
-        />
-      )}
-      {view.screen === 'deckEdit' && (
-        <DeckEditorScreen
-          slotIndex={view.slotIndex}
-          onBack={goDecks}
-        />
-      )}
-      {view.screen === 'story' && (
-        <StoryMapScreen
-          run={run}
-          onUpdateRun={persistRun}
-          onBattle={startStoryBattle}
-          onExit={goStart}
-        />
-      )}
-      {view.screen === 'match' && (
-        <App key={matchEpoch} />
-      )}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={screenKey}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+        >
+          {view.screen === 'start' && (
+            <StartScreen
+              onPlay={goMatch}
+              onStory={goStory}
+              onHeroes={goHeroes}
+              onDecks={goDecks}
+            />
+          )}
+          {view.screen === 'heroes' && (
+            <HeroPreferenceScreen onBack={goStart} />
+          )}
+          {view.screen === 'decks' && (
+            <DeckManagerScreen
+              onBack={goStart}
+              onEditDeck={goEditDeck}
+            />
+          )}
+          {view.screen === 'deckEdit' && (
+            <DeckEditorScreen
+              slotIndex={view.slotIndex}
+              onBack={goDecks}
+            />
+          )}
+          {view.screen === 'story' && (
+            <StoryMapScreen
+              run={run}
+              onUpdateRun={persistRun}
+              onBattle={startStoryBattle}
+              onExit={goStart}
+            />
+          )}
+          {view.screen === 'match' && (
+            <App key={matchEpoch} />
+          )}
+        </motion.div>
+      </AnimatePresence>
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
-import { palette, radius, shadow, text } from '../tokens';
+import { palette, radius, shadow, spring, text } from '../tokens';
 import { Hand } from './Hand';
 import type { PendingPlay } from '../helpers';
 
@@ -10,7 +10,7 @@ import type { PendingPlay } from '../helpers';
  */
 export function HandTray({
   cards, disabled, pending, isMyTurn, busy, hasPending, mySouls,
-  onTap, onLongPress, onHover, onDragEndOver, onEnd, onCancel,
+  onTap, onLongPress, onHover, onDragEndOver, onUnaffordable, onEnd, onCancel,
 }: {
   cards: CardInstance[];
   disabled: boolean;
@@ -23,6 +23,7 @@ export function HandTray({
   onLongPress: (c: CardInstance) => void;
   onHover: (c: CardInstance | null) => void;
   onDragEndOver: (c: CardInstance, x: number, y: number) => void;
+  onUnaffordable?: (c: CardInstance, cost: number) => void;
   onEnd: () => void;
   onCancel: () => void;
 }) {
@@ -44,6 +45,7 @@ export function HandTray({
           onLongPress={onLongPress}
           onHover={onHover}
           onDragEndOver={onDragEndOver}
+          onUnaffordable={onUnaffordable}
         />
       </div>
       <div style={{ display: 'flex', gap: 10, paddingBottom: 12 }}>
@@ -57,8 +59,18 @@ export function HandTray({
           // `active` = it's my turn AND no animation in flight. While busy the
           // button greys out (not actionable yet) — but the tap is still queued
           // underneath, so a press during the animation isn't dropped.
-          animate={busy ? { opacity: [0.4, 0.55, 0.4] } : { opacity: isMyTurn ? 1 : 0.45 }}
-          transition={busy ? { duration: 1, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
+          // Three states: busy pulse (animation in flight), rival's-turn slow
+          // breathe (signals the AI is acting, not a frozen UI), idle steady.
+          animate={busy
+            ? { opacity: [0.4, 0.55, 0.4] }
+            : isMyTurn
+              ? { opacity: 1 }
+              : { opacity: [0.45, 0.62, 0.45] }}
+          transition={busy
+            ? { duration: 1, repeat: Infinity, ease: 'easeInOut' }
+            : isMyTurn
+              ? { duration: 0.2 }
+              : { duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
           style={{
             background: (isMyTurn && !busy)
               ? `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}55)`
@@ -71,11 +83,12 @@ export function HandTray({
             cursor: isMyTurn ? (busy ? 'progress' : 'pointer') : 'default',
             minWidth: 160,
           }}
-        >{busy ? 'Ending…' : 'End Turn'}</motion.button>
+        >{!isMyTurn ? "Rival's Move" : busy ? 'Resolving…' : 'End Turn'}</motion.button>
         {hasPending && (
           <motion.button
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
+            transition={spring.default}
             whileTap={{ scale: 0.96 }}
             onClick={onCancel}
             style={{

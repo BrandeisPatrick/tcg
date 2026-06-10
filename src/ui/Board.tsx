@@ -101,9 +101,22 @@ export function Board(props: BoardProps<GameState>) {
     [fxBeat],
   );
 
-  const combatProgress: CombatProgress = combatPlan
+  // Memoized — a fresh object identity every Board render used to re-render
+  // every CombatProgressContext consumer (TurnCompass) even between beats.
+  const combatProgress: CombatProgress = useMemo(() => combatPlan
     ? { total: combatPlan.steps.length, currentBeat: combatBeat, attackerIsMe: combatPlan.attackerId === me }
-    : null;
+    : null, [combatPlan, combatBeat, me]);
+
+  // Ephemeral feedback toast — explains otherwise-silent no-ops (unaffordable
+  // card, invalid target) and confirms fire-and-forget actions (mulligan).
+  const [notice, setNotice] = useState<{ id: number; msg: string } | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showNotice = useCallback((msg: string) => {
+    setNotice({ id: Date.now(), msg });
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 2000);
+  }, []);
+  useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
 
   // Scale the battle stage to fit shorter viewports so the hand row never gets
   // clipped off the bottom of the screen.
@@ -180,6 +193,11 @@ export function Board(props: BoardProps<GameState>) {
     queuedEndRef.current = false;
     triggerEndTurn();
   }, [combatPlan, G.action?.state, ctx.currentPlayer, ctx.gameover, me, triggerEndTurn]);
+
+  // Targeting needs the board visible — close any hover/long-press preview the
+  // moment a pending action arms, so the big card preview never sits on top of
+  // the very targets the player is being asked to pick.
+  useEffect(() => { if (pending) setPreview(null); }, [pending]);
 
   // Safety net: if the previewed card (hand or attached equipment) is no longer present, drop the preview.
   useEffect(() => {
@@ -344,7 +362,11 @@ export function Board(props: BoardProps<GameState>) {
     if (pending) {
       if (!isMyTurn || actionLocked) return;
       const valid = isTargetable(card, owner);
-      if (!valid) { setPending(null); return; }
+      if (!valid) {
+        setPending(null);
+        showNotice(`Not a valid target for ${pending.title}`);
+        return;
+      }
       if (pending.kind === 'playCard') {
         if (maybeOpenEquipmentReplace(pending.iid, card.iid)) { setPending(null); return; }
         moves.playCard(pending.iid, card.iid);
@@ -625,6 +647,7 @@ export function Board(props: BoardProps<GameState>) {
               onLongPress={(c) => setPreview({ card: c, hover: false })}
               onHover={(c) => setPreview(c ? { card: c, hover: true } : null)}
               onDragEndOver={onHandDragEnd}
+              onUnaffordable={(_, cost) => showNotice(`Need ${cost} souls — you have ${G.players[me].souls}`)}
               onEnd={() => { setPending(null); triggerEndTurn(); }}
               onCancel={() => setPending(null)}
             />
@@ -724,7 +747,12 @@ export function Board(props: BoardProps<GameState>) {
           {G.mulliganPending && (
             <MulliganOverlay
               cards={G.players[me].hand}
-              onConfirm={(iids) => (moves as any).mulligan(iids)}
+              onConfirm={(iids) => {
+                (moves as any).mulligan(iids);
+                showNotice(iids.length === 0
+                  ? 'Kept opening hand'
+                  : `Swapped ${iids.length} card${iids.length === 1 ? '' : 's'}`);
+              }}
             />
           )}
         </AnimatePresence>
@@ -780,7 +808,46 @@ export function Board(props: BoardProps<GameState>) {
         </AnimatePresence>
 
         <UltMomentFlash G={G} />
-        <CardPlayFlash G={G} />
+        <CardPlayFlash
+          G={G}
+          onSkip={() => { try { (moves as any).completeAction(); } catch {} }}
+        />
+
+        {/* Feedback toast — single pill above the hand. Explains silent
+            no-ops and confirms fire-and-forget actions. */}
+        <AnimatePresence>
+          {notice && (
+            <motion.div
+              key={notice.id}
+              initial={{ opacity: 0, y: 14, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, transition: { duration: 0.18 } }}
+              transition={spring.default}
+              style={{
+                position: 'fixed',
+                left: 0, right: 0,
+                bottom: 196,
+                display: 'flex',
+                justifyContent: 'center',
+                pointerEvents: 'none',
+                zIndex: 95,
+              }}
+            >
+              <span style={{
+                padding: '8px 18px',
+                background: 'linear-gradient(180deg, rgba(40,20,0,0.88), rgba(20,10,0,0.93))',
+                border: `1.5px solid ${palette.accent}`,
+                borderRadius: 999,
+                ...text.label,
+                color: '#fff',
+                textShadow: '0 1px 2px rgba(0,0,0,0.9)',
+                boxShadow: `0 4px 14px rgba(0,0,0,0.45), 0 0 16px ${palette.accent}55`,
+              }}>
+                {notice.msg}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       </DamageFxContext.Provider>
       </CombatProgressContext.Provider>

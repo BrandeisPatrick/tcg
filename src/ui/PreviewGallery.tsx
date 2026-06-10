@@ -191,6 +191,20 @@ function CardsTab() {
           <CardFrame cardId="metal_skin" size="full" />
         </div>
       </Section>
+
+      <Section title="Unaffordable — cost coin warning">
+        <p style={{ ...text.body, color: palette.textDim, marginBottom: 12 }}>
+          When the player can't pay a card's soul cost the hand card dims and its
+          brass cost coin flips to warning red — affordable next to unaffordable below.
+        </p>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <CardFrame cardId="metal_skin" size="hand" />
+          <div style={{ opacity: 0.42, filter: 'saturate(0.55)' }}>
+            <CardFrame cardId="metal_skin" size="hand" unaffordable />
+          </div>
+          <CardFrame cardId="metal_skin" size="hand" unaffordable />
+        </div>
+      </Section>
     </>
   );
 }

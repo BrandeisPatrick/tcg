@@ -57,8 +57,17 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
             gridTemplateColumns: `repeat(${Math.min(candidates.length, 3)}, 156px)`,
             gap: 16,
           }}>
-            {candidates.map((c) => (
-              <CandidateCard key={c.iid} card={c} onPick={() => onPick(c.iid)} />
+            {/* Staggered entrance — candidates rise in one after another so the
+                modal reads as a choice being presented, not a static wall. */}
+            {candidates.map((c, i) => (
+              <motion.div
+                key={c.iid}
+                initial={{ y: 22, opacity: 0, scale: 0.94 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                transition={{ ...spring.default, delay: 0.1 + i * 0.07 }}
+              >
+                <CandidateCard card={c} onPick={() => onPick(c.iid)} />
+              </motion.div>
             ))}
           </div>
 
