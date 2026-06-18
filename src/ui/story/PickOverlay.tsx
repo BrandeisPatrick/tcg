@@ -3,6 +3,7 @@ import type { CardId } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { palette, fonts, text, spring, shadow, radius, typeTint } from '../tokens';
+import { useViewport } from '../hooks/useViewport';
 
 interface PickOverlayProps {
   kind: 'hero' | 'card';
@@ -14,6 +15,7 @@ interface PickOverlayProps {
 }
 
 export function PickOverlay({ kind, title, subtitle, options, onPick, onCancel }: PickOverlayProps) {
+  const { isMobile } = useViewport();
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -23,23 +25,24 @@ export function PickOverlay({ kind, title, subtitle, options, onPick, onCancel }
         position: 'fixed', inset: 0, zIndex: 60,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         background: 'radial-gradient(ellipse at 50% 40%, rgba(20,12,2,0.78), rgba(20,12,2,0.92))',
-        fontFamily: fonts.ui, padding: 24,
+        fontFamily: fonts.ui, padding: isMobile ? 16 : 24,
+        overflowY: isMobile ? 'auto' : undefined,
       }}
       onClick={() => onCancel?.()}
     >
       <motion.h2
         initial={{ y: -12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={spring.soft}
         style={{
-          fontFamily: fonts.display, fontSize: 28, color: palette.bg1, margin: 0,
+          fontFamily: fonts.display, fontSize: isMobile ? 22 : 28, color: palette.bg1, margin: 0,
           letterSpacing: '0.04em', textShadow: '0 2px 12px rgba(0,0,0,0.5)',
         }}
       >{title}</motion.h2>
       {subtitle && (
-        <div style={{ ...text.body, color: palette.textFaint, marginTop: 6, marginBottom: 26 }}>{subtitle}</div>
+        <div style={{ ...text.body, color: palette.textFaint, marginTop: 6, marginBottom: isMobile ? 18 : 26 }}>{subtitle}</div>
       )}
 
       <div
-        style={{ display: 'flex', gap: 22, marginTop: subtitle ? 0 : 26, flexWrap: 'wrap', justifyContent: 'center' }}
+        style={{ display: 'flex', gap: isMobile ? 12 : 22, marginTop: subtitle ? 0 : 26, flexWrap: 'wrap', justifyContent: 'center' }}
         onClick={(e) => e.stopPropagation()}
       >
         {options.map((id, i) => (
@@ -56,7 +59,7 @@ export function PickOverlay({ kind, title, subtitle, options, onPick, onCancel }
             }}
             aria-label={`Choose ${CARDS_BY_ID[id]?.name ?? id}`}
           >
-            {kind === 'hero' ? <HeroChoice id={id} /> : <CardChoice id={id} />}
+            {kind === 'hero' ? <HeroChoice id={id} isMobile={isMobile} /> : <CardChoice id={id} isMobile={isMobile} />}
           </motion.button>
         ))}
       </div>
@@ -65,7 +68,7 @@ export function PickOverlay({ kind, title, subtitle, options, onPick, onCancel }
         <button
           onClick={() => onCancel()}
           style={{
-            marginTop: 28, background: 'transparent', border: `1px solid ${palette.textFaint}`,
+            marginTop: isMobile ? 20 : 28, background: 'transparent', border: `1px solid ${palette.textFaint}`,
             color: palette.bg1, padding: '8px 22px', borderRadius: radius.pill,
             fontFamily: fonts.ui, fontSize: 12, cursor: 'pointer',
           }}
@@ -75,21 +78,23 @@ export function PickOverlay({ kind, title, subtitle, options, onPick, onCancel }
   );
 }
 
-function HeroChoice({ id }: { id: CardId }) {
+function HeroChoice({ id, isMobile }: { id: CardId; isMobile: boolean }) {
   const data = CARDS_BY_ID[id];
+  const w = isMobile ? 148 : 196;
+  const ph = isMobile ? 170 : 224;
   return (
     <div style={{
-      width: 196, borderRadius: radius.lg, overflow: 'hidden',
+      width: w, borderRadius: radius.lg, overflow: 'hidden',
       background: palette.bg2, border: `2px solid ${palette.accent}`,
       boxShadow: shadow.lg,
     }}>
-      <div style={{ height: 224, overflow: 'hidden' }}>
-        <HeroPortrait cardId={id} size={196} variant="card" />
+      <div style={{ height: ph, overflow: 'hidden' }}>
+        <HeroPortrait cardId={id} size={w} variant="card" />
       </div>
-      <div style={{ padding: '10px 12px 12px' }}>
-        <div style={{ ...text.label, fontSize: 14, color: palette.text }}>{data?.name ?? id}</div>
+      <div style={{ padding: '8px 10px 10px' }}>
+        <div style={{ ...text.label, fontSize: isMobile ? 12 : 14, color: palette.text }}>{data?.name ?? id}</div>
         {data?.type === 'hero' && (
-          <div style={{ ...text.body, fontSize: 11, color: palette.textDim, marginTop: 3 }}>
+          <div style={{ ...text.body, fontSize: 10, color: palette.textDim, marginTop: 3 }}>
             BP {data.atk} · HP {data.hp}{data.abilityName ? ` · ${data.abilityName}` : ''}
           </div>
         )}
@@ -98,14 +103,15 @@ function HeroChoice({ id }: { id: CardId }) {
   );
 }
 
-function CardChoice({ id }: { id: CardId }) {
+function CardChoice({ id, isMobile }: { id: CardId; isMobile: boolean }) {
   const data = CARDS_BY_ID[id];
   const t = data?.type === 'spell' || data?.type === 'equipment' ? data.type : 'spell';
   const tint = typeTint(t);
   const cost = data && 'cost' in data ? data.cost : undefined;
+  const w = isMobile ? 148 : 196;
   return (
     <div style={{
-      width: 196, minHeight: 260, borderRadius: radius.lg,
+      width: w, minHeight: isMobile ? 200 : 260, borderRadius: radius.lg,
       background: palette.card.body, border: `2px solid ${tint.ribbon}`,
       boxShadow: shadow.lg, display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
