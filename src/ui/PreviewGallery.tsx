@@ -15,6 +15,7 @@ import type { CardInstance, HeroCard, DamageEvent } from '@/engine/types';
 import { palette, fonts, radius, shadow, text } from './tokens';
 import { LevelRing } from './card/LevelRing';
 import { RoundCardIcon } from './card/RoundCardIcon';
+import { useViewport } from './hooks/useViewport';
 
 // Mock a board-state CardInstance for a hero so the gallery can render it
 // through the same HeroSlot used in-game. Stats default to the printed values;
@@ -79,6 +80,7 @@ export function PreviewGallery() {
 }
 
 function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  const { isMobile } = useViewport();
   const items: { id: Tab; label: string }[] = [
     { id: 'cards', label: 'Cards' },
     { id: 'combat', label: 'Combat FX' },
@@ -91,6 +93,10 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
       maxWidth: 1100, margin: '0 auto',
       display: 'flex', gap: 4,
       borderBottom: `1px solid ${palette.border}`,
+      // The five tabs don't fit a phone row — scroll them horizontally rather
+      // than wrap to two lines.
+      overflowX: isMobile ? 'auto' : undefined,
+      WebkitOverflowScrolling: 'touch',
     }}>
       {items.map((it) => {
         const active = tab === it.id;
@@ -99,7 +105,8 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
             key={it.id}
             onClick={() => setTab(it.id)}
             style={{
-              padding: '10px 18px',
+              padding: isMobile ? '10px 14px' : '10px 18px',
+              flexShrink: 0,
               background: 'transparent',
               color: active ? palette.text : palette.textDim,
               border: 'none',
@@ -390,7 +397,7 @@ function TurnCompassDemo() {
     : null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
           <TurnCompass isMyTurn={true} turn={turn} combatOverride={null} />
           <span style={{ ...text.label, color: palette.textDim }}>Your Move (idle)</span>
@@ -512,7 +519,7 @@ function DamageFlashDemo() {
   const resolver = (iid: string) => (iid === card.iid ? fx : null);
   return (
     <DamageFxContext.Provider value={resolver}>
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ width: 180, aspectRatio: '3 / 4' }}>
           <HeroSlot
             card={card}
