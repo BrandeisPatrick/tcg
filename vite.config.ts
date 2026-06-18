@@ -2,12 +2,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
-// GitHub Pages serves the site at /deadlock-tcg/, so production builds need
-// that base path. Local dev keeps "/" so links and asset URLs stay clean.
+// GitHub Pages serves the site at /tcg/ (repo renamed from deadlock-tcg), so
+// production builds need that base path. Local dev keeps "/" so links and asset
+// URLs stay clean.
 const isProd = process.env.NODE_ENV === 'production';
 
 export default defineConfig({
-  base: isProd ? '/deadlock-tcg/' : '/',
+  base: isProd ? '/tcg/' : '/',
   plugins: [react()],
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
