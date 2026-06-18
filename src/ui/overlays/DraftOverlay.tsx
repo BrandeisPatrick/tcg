@@ -26,7 +26,11 @@ interface Props {
 const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
 
 export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
-  const { isMobile } = useViewport();
+  // The two-column picker/preview needs real width; below this it clips, so
+  // stack to one column. Wider than the phone breakpoint on purpose — the draft
+  // is the widest screen in the app.
+  const { width } = useViewport();
+  const isMobile = width < 860;
   const myTurn = currentPlayer === me && draft.order[draft.currentIndex] === me;
   const aiTurn = !myTurn && draft.currentIndex < draft.order.length;
   const myPicks = draft.picks[me];
@@ -258,7 +262,8 @@ function TeamStrips({
   me: PlayerID;
   oppId: PlayerID;
 }) {
-  const { isMobile } = useViewport();
+  const { width } = useViewport();
+  const isMobile = width < 860;
   return (
     <div
       style={{
