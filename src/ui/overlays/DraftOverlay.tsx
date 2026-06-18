@@ -563,7 +563,17 @@ function HeroPreview({
       }}
     >
       <img
-        src={`${HERO_IMG_BASE}${heroId}_card.webp`}
+        // Cinematic full-art splash (banner-less top-crop of the hero-select
+        // screen). Falls back to the tight `_card` portrait for any hero that
+        // has no splash asset (e.g. Rem).
+        src={`${HERO_IMG_BASE}${heroId}_splash.webp`}
+        onError={(e) => {
+          const img = e.currentTarget;
+          if (!img.dataset.fallback) {
+            img.dataset.fallback = '1';
+            img.src = `${HERO_IMG_BASE}${heroId}_card.webp`;
+          }
+        }}
         alt=""
         draggable={false}
         style={{
@@ -572,7 +582,7 @@ function HeroPreview({
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          objectPosition: '50% 12%',
+          objectPosition: '50% 22%',
           userSelect: 'none',
         }}
       />
