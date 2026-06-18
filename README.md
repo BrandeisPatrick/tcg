@@ -4,7 +4,7 @@ A fan-made trading-card game that mashes up **Valve's Deadlock** (MOBA setting,
 heroes, items) with **Pokémon TCG-style** turn-based card battling. Built as a
 single-page React app.
 
-**Live demo:** https://brandeispatrick.github.io/deadlock-tcg/
+**Live demo:** https://brandeispatrick.github.io/tcg/
 
 > **Fan project.** Not affiliated with Valve. See [LICENSE](./LICENSE) for the
 > art-attribution disclaimer.
