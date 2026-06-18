@@ -12,6 +12,7 @@ import { newRun, clearNode, isReachable } from '@/story/storyRun';
 import { palette, fonts, text, spring, shadow, radius } from '../tokens';
 import { NycMap } from './NycMap';
 import { PickOverlay } from './PickOverlay';
+import { useViewport } from '../hooks/useViewport';
 
 interface StoryMapScreenProps {
   run: StoryRun | null;
@@ -32,6 +33,7 @@ const MAP_W = 840, MAP_H = 1080;
 const ZOOM_INITIAL = 1.7, ZOOM_MIN = 1, ZOOM_MAX = 3.2, ZOOM_STEP = 1.3;
 
 export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapScreenProps) {
+  const { isMobile } = useViewport();
   const [pick, setPick] = useState<PickState>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // The map is interactive (draggable, nodes shown) only during an active run.
@@ -183,7 +185,7 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
           its own translate3d). Anchoring the HUD/zoom/intro to the plain
           position:fixed root instead keeps them pinned to the real corners. */}
       {active && (
-        <RunHud run={run!} onExit={onExit} onAbandon={() => onUpdateRun(null)} />
+        <RunHud run={run!} onExit={onExit} onAbandon={() => onUpdateRun(null)} isMobile={isMobile} />
       )}
 
       {/* Zoom controls — bottom-right corner, fixed (not pannable). */}
@@ -468,16 +470,19 @@ function NodeIcon({ kind, color, size }: { kind: NodeKind | 'cleared'; color: st
 }
 
 // ---- run HUD -----------------------------------------------------------------
-function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void; onAbandon: () => void }) {
+function RunHud({ run, onExit, onAbandon, isMobile }: { run: StoryRun; onExit: () => void; onAbandon: () => void; isMobile: boolean }) {
   const bosses = run.nodes.filter((n) => n.kind === 'boss');
   const bossesDown = bosses.filter((b) => run.clearedNodeIds.includes(b.id)).length;
+  // Phones get larger touch targets and smaller hero badges so the bottom-left
+  // status chip never overflows the screen edge.
+  const badge = isMobile ? 26 : 30;
   return (
     <>
       <button
         onClick={onExit}
         aria-label="Back to menu"
         style={{
-          position: 'absolute', top: 14, left: 14, width: 38, height: 38, borderRadius: '50%',
+          position: 'absolute', top: 14, left: 14, width: isMobile ? 44 : 38, height: isMobile ? 44 : 38, borderRadius: '50%',
           background: 'rgba(18,11,3,0.9)', border: `1.5px solid ${palette.accent}`,
           color: palette.bg1, cursor: 'pointer', fontSize: 18, lineHeight: 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -492,14 +497,16 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
           position: 'absolute', top: 14, right: 14,
           background: 'rgba(18,11,3,0.9)', border: `1.5px solid ${palette.danger}`,
           color: palette.bg1, cursor: 'pointer', borderRadius: radius.pill,
-          padding: '8px 16px', fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
+          padding: isMobile ? '11px 16px' : '8px 16px', fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
           transform: 'translateZ(0)',
         }}
-      >Abandon Run</button>
+      >{isMobile ? 'Abandon' : 'Abandon Run'}</button>
 
       <div style={{
         position: 'absolute', left: 14, bottom: 14,
-        display: 'flex', alignItems: 'center', gap: 14,
+        // Keep clear of the bottom-right zoom controls on narrow screens.
+        maxWidth: isMobile ? 'calc(100vw - 92px)' : undefined,
+        display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14,
         // Near-solid so the tan map underneath can't bleed through and wash out
         // the text contrast.
         background: 'rgba(16,10,3,0.94)', border: `1px solid ${palette.borderStrong}`,
@@ -509,12 +516,12 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
         <div style={{ display: 'flex', alignItems: 'center' }}>
           {run.heroes.map((id, i) => (
             <div key={id} style={{ marginLeft: i === 0 ? 0 : -8, borderRadius: '50%', border: `2px solid #120b03` }}>
-              <HeroBadge cardId={id} size={30} />
+              <HeroBadge cardId={id} size={badge} />
             </div>
           ))}
           {Array.from({ length: Math.max(0, 4 - run.heroes.length) }).map((_, i) => (
             <div key={`e${i}`} style={{
-              marginLeft: -8, width: 30, height: 30, borderRadius: '50%',
+              marginLeft: -8, width: badge, height: badge, borderRadius: '50%',
               border: `2px dashed rgba(176,120,37,0.5)`, background: 'rgba(0,0,0,0.25)',
             }} />
           ))}
