@@ -4,6 +4,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { effectiveAtk } from '@/engine/util';
 import { palette, radius, shadow, spring, text } from '../tokens';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   candidates: CardInstance[];
@@ -17,6 +18,7 @@ interface Props {
  * a choice is made. Each candidate is a tappable portrait card.
  */
 export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
+  const { isMobile } = useViewport();
   return (
     <AnimatePresence>
       <motion.div
@@ -29,7 +31,8 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
           background: 'rgba(20, 12, 4, 0.78)',
           backdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 100, padding: 32,
+          zIndex: 100, padding: isMobile ? 16 : 32,
+          overflowY: isMobile ? 'auto' : undefined,
         }}
       >
         <motion.div
@@ -38,8 +41,8 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
           transition={spring.snappy}
           style={{
             display: 'flex', flexDirection: 'column',
-            alignItems: 'center', gap: 24,
-            padding: '28px 32px',
+            alignItems: 'center', gap: isMobile ? 18 : 24,
+            padding: isMobile ? '22px 18px' : '28px 32px',
             background: palette.bg1,
             border: `2px solid ${palette.accent}`,
             borderRadius: radius.lg,
@@ -54,8 +57,11 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${Math.min(candidates.length, 3)}, 156px)`,
-            gap: 16,
+            // 3-up on desktop; phones wrap to at most 2-up so the row never
+            // exceeds the screen width.
+            gridTemplateColumns: `repeat(${Math.min(candidates.length, isMobile ? 2 : 3)}, ${isMobile ? 140 : 156}px)`,
+            gap: isMobile ? 12 : 16,
+            justifyContent: 'center',
           }}>
             {/* Staggered entrance — candidates rise in one after another so the
                 modal reads as a choice being presented, not a static wall. */}
@@ -66,7 +72,7 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
                 animate={{ y: 0, opacity: 1, scale: 1 }}
                 transition={{ ...spring.default, delay: 0.1 + i * 0.07 }}
               >
-                <CandidateCard card={c} onPick={() => onPick(c.iid)} />
+                <CandidateCard card={c} onPick={() => onPick(c.iid)} isMobile={isMobile} />
               </motion.div>
             ))}
           </div>
@@ -80,7 +86,7 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
   );
 }
 
-function CandidateCard({ card, onPick }: { card: CardInstance; onPick: () => void }) {
+function CandidateCard({ card, onPick, isMobile }: { card: CardInstance; onPick: () => void; isMobile: boolean }) {
   const data = CARDS_BY_ID[card.cardId];
   if (data?.type !== 'hero') return null;
   return (
@@ -90,7 +96,7 @@ function CandidateCard({ card, onPick }: { card: CardInstance; onPick: () => voi
       onClick={onPick}
       style={{
         position: 'relative',
-        width: 156, height: 216,
+        width: isMobile ? 140 : 156, height: isMobile ? 194 : 216,
         padding: 0,
         background: '#3a2810',
         border: `2px solid ${palette.accent}aa`,

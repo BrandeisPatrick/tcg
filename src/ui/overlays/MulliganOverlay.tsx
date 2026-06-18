@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { CardFrame } from '../card/CardFrame';
 import { palette, radius, shadow, spring, text } from '../tokens';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   cards: CardInstance[];
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function MulliganOverlay({ cards, onConfirm }: Props) {
+  const { isMobile } = useViewport();
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   function toggle(iid: string) {
@@ -36,7 +38,8 @@ export function MulliganOverlay({ cards, onConfirm }: Props) {
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         zIndex: 95,
-        padding: 32,
+        padding: isMobile ? 16 : 32,
+        overflowY: isMobile ? 'auto' : undefined,
       }}
     >
       {/* Header */}
@@ -70,7 +73,13 @@ export function MulliganOverlay({ cards, onConfirm }: Props) {
         initial="hidden"
         animate="show"
         variants={{ show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } } }}
-        style={{ display: 'flex', gap: 24, marginBottom: 32 }}
+        style={{
+          display: 'flex',
+          flexWrap: isMobile ? 'wrap' : 'nowrap',
+          justifyContent: 'center',
+          gap: isMobile ? 12 : 24,
+          marginBottom: isMobile ? 20 : 32,
+        }}
       >
         {cards.map((c) => {
           const isSwapping = selected.has(c.iid);
@@ -101,7 +110,7 @@ export function MulliganOverlay({ cards, onConfirm }: Props) {
             >
               <CardFrame
                 cardId={c.cardId}
-                size="full"
+                size={isMobile ? 'hand' : 'full'}
                 glow={isSwapping ? 'danger' : 'accent'}
               />
               {isSwapping && (

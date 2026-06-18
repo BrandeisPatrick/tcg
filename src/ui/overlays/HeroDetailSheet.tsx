@@ -12,6 +12,7 @@ import { LevelRing } from '../card/LevelRing';
 import { CardShine } from '../card/RarityFX';
 import { palette, radius, spring, shadow, text, fonts } from '../tokens';
 import { RuleText } from '../card/RuleText';
+import { useViewport } from '../hooks/useViewport';
 
 const REDUCED = typeof window !== 'undefined'
   && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -37,6 +38,7 @@ export function HeroDetailSheet({
 }: Props) {
   // Pointer-driven tilt for the physical-card feel (framer owns the transform
   // here, so drive rotateX/rotateY through motion values + write the shine vars).
+  const { isMobile } = useViewport();
   const elRef = useRef<HTMLDivElement | null>(null);
   const rotX = useMotionValue(0);
   const rotY = useMotionValue(0);
@@ -83,6 +85,11 @@ export function HeroDetailSheet({
   const skillDesc = skillAbility ? (extractAbilityDesc(skillAbility.prompt) ?? skillAbility.prompt ?? '') : '';
   const passiveDesc = passiveAbility ? (extractAbilityDesc(passiveAbility.prompt) ?? passiveAbility.prompt ?? data.text ?? '') : '';
 
+  // Phones can't fit the 340 card + 280 rail side by side (634px), so the
+  // card+rail row stacks vertically and the card itself shrinks a touch.
+  const cardW = isMobile ? 300 : 340;
+  const cardH = isMobile ? 420 : 476;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -93,8 +100,12 @@ export function HeroDetailSheet({
       style={{
         position: 'fixed', inset: 0, background: palette.overlay,
         backdropFilter: 'blur(10px)', zIndex: 95,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'flex',
+        // Phones stack the card above the rail and may exceed the viewport, so
+        // pin to the top and scroll instead of clipping.
+        alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center',
         padding: '24px 16px',
+        overflowY: isMobile ? 'auto' : undefined,
         perspective: 1400,
       }}
     >
@@ -103,7 +114,12 @@ export function HeroDetailSheet({
           that isn't the hero's printed face lives OUTSIDE the card frame. */}
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ display: 'flex', alignItems: 'flex-start', gap: 14, maxWidth: '100%' }}
+        style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'center' : 'flex-start',
+          gap: 14, maxWidth: '100%',
+        }}
       >
       {/* Card column: the card itself + its action buttons below the frame. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -122,8 +138,8 @@ export function HeroDetailSheet({
         style={{
           position: 'relative',
           // Fixed TCG trading-card ratio (5:7 ≈ 0.714).
-          width: 340, height: 476,
-          maxHeight: 'min(476px, 92vh)',
+          width: cardW, height: cardH,
+          maxHeight: `min(${cardH}px, 92vh)`,
           display: 'flex', flexDirection: 'column',
           background: '#3a2810',            // mahogany frame, peeks at the edge
           borderRadius: 16,
@@ -233,7 +249,7 @@ export function HeroDetailSheet({
 
       {/* Action controls — below the card, outside the frame. The Skill itself
           is tapped inside the card; Retreat + Close live here. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 340 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: cardW }}>
         {canRetreat && onRetreat && (
           <ActionButton
             onClick={() => { onRetreat(); onClose(); }}
@@ -268,7 +284,11 @@ export function HeroDetailSheet({
           transition={{ ...spring.snappy, delay: 0.05 }}
           style={{
             display: 'flex', flexDirection: 'column', gap: 12,
-            width: 280, maxHeight: 'min(476px, 92vh)', overflowY: 'auto',
+            // On phones the rail sits below the card and flows with the page
+            // scroll (no inner cap); on desktop it's a fixed-width side rail.
+            width: isMobile ? cardW : 280,
+            maxHeight: isMobile ? undefined : 'min(476px, 92vh)',
+            overflowY: isMobile ? undefined : 'auto',
           }}
         >
           {/* Stats — Level + BP / HP / SPI, pulled off the card face */}

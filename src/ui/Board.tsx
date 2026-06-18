@@ -514,6 +514,8 @@ export function Board(props: BoardProps<GameState>) {
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         background: `radial-gradient(circle at 50% 35%, ${tone}30, ${palette.bg0})`,
         fontFamily: fonts.ui, gap: 28,
+        padding: isMobile ? '0 22px' : undefined,
+        textAlign: isMobile ? 'center' : undefined,
       }}>
         <motion.h1
           initial={{ scale: 0.6, opacity: 0 }}
