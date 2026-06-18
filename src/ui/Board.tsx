@@ -32,6 +32,7 @@ import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash } from './effects/CardPlayFlash';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { useFitScale } from './hooks/useFitScale';
+import { useViewport } from './hooks/useViewport';
 import { palette, fonts, radius, shadow, spring, text, DAMAGE_BEAT_MS } from './tokens';
 import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer } from './side-panel/PanelDrawer';
@@ -125,6 +126,9 @@ export function Board(props: BoardProps<GameState>) {
   // Scale the battle stage to fit shorter viewports so the hand row never gets
   // clipped off the bottom of the screen.
   const { containerRef: fitContainerRef, contentRef: fitContentRef, scale: fitScale } = useFitScale();
+  // Phone widths reflow the board to a narrower, shorter-row layout (cards
+  // shrink to ~⅓ of the viewport width) instead of overflowing off the side.
+  const { isMobile } = useViewport();
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
@@ -565,7 +569,7 @@ export function Board(props: BoardProps<GameState>) {
         display: 'flex',
         justifyContent: 'center',
         margin: '0 auto',
-        padding: '12px 16px 0',
+        padding: isMobile ? '6px 6px 0' : '12px 16px 0',
         fontFamily: fonts.ui, color: palette.text,
         position: 'relative',
       }}>
@@ -596,7 +600,7 @@ export function Board(props: BoardProps<GameState>) {
             flexDirection: 'column',
             // Generous fibonacci gap gives the rows visible breathing room
             // rather than packing them.
-            gap: 40,
+            gap: isMobile ? 14 : 40,
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
           }}>
@@ -611,10 +615,10 @@ export function Board(props: BoardProps<GameState>) {
             position: 'relative',
             display: 'flex',
             flexDirection: 'column',
-            gap: 40,
+            gap: isMobile ? 14 : 40,
           }}>
             {/* OPP BENCH (3 cards) */}
-            <div style={{ flex: '0 0 180px', height: 180 }}>
+            <div style={{ flex: isMobile ? '0 0 150px' : '0 0 180px', height: isMobile ? 150 : 180 }}>
               <BenchRow
                 ps={G.players[opp]}
                 owner={opp} myId={me}
@@ -631,7 +635,7 @@ export function Board(props: BoardProps<GameState>) {
             {/* THE DUEL — opp active and my active side by side. Active row
                 is bench × golden ratio (180 × 1.618 ≈ 291) so the duel still
                 reads as the focus while bench tiles show full portraits. */}
-            <div style={{ flex: '0 0 290px', height: 290 }}>
+            <div style={{ flex: isMobile ? '0 0 206px' : '0 0 290px', height: isMobile ? 206 : 290 }}>
               <ActiveDuel
                 G={G}
                 me={me}
@@ -649,7 +653,7 @@ export function Board(props: BoardProps<GameState>) {
             </div>
 
             {/* MY BENCH (3 cards) */}
-            <div style={{ flex: '0 0 180px', height: 180 }}>
+            <div style={{ flex: isMobile ? '0 0 150px' : '0 0 180px', height: isMobile ? 150 : 180 }}>
               <BenchRow
                 ps={G.players[me]}
                 owner={me} myId={me}

@@ -2,6 +2,7 @@ import { ActiveSlot } from './ActiveSlot';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { palette, text } from '../tokens';
 import { TurnCompass } from './TurnCompass';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   G: GameState;
@@ -27,6 +28,7 @@ export function ActiveDuel({
   // One accent (Soul cyan) used only when the focus is the player.
   // When it's the rival's turn, the pill fades to dim gray — no red noise.
   const accent = isMyTurn ? palette.accent : palette.textFaint;
+  const { isMobile } = useViewport();
   return (
     <div style={{
       position: 'relative',
@@ -34,8 +36,12 @@ export function ActiveDuel({
       // Same 3-column track as BenchRow so the three rows (Rival Bench →
       // Lane → Your Bench) column-align across the board. Col 2 hosts the
       // turn-indicator divider; col 1 and col 3 host the active heroes.
-      gridTemplateColumns: 'repeat(3, 180px)',
-      gap: 28,
+      // Phones swap the fixed 180px track for a width-capped 1fr track.
+      gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 180px)',
+      gap: isMobile ? 8 : 28,
+      width: isMobile ? '100%' : undefined,
+      maxWidth: isMobile ? 420 : undefined,
+      margin: isMobile ? '0 auto' : undefined,
       justifyContent: 'center',
       height: '100%',
       alignItems: 'stretch',
@@ -43,12 +49,14 @@ export function ActiveDuel({
       {/* Lane label — sits at the left edge of the row, matching the Bench
           labels' position so the three section labels stack down the left
           side of the board. One shared label since both sides share the lane. */}
-      <span style={{
-        position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-        ...text.label, color: palette.textDim,
-      }}>
-        Lane
-      </span>
+      {!isMobile && (
+        <span style={{
+          position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+          ...text.label, color: palette.textDim,
+        }}>
+          Lane
+        </span>
+      )}
       {/* Opp Active (left) */}
       <ActiveSlot
         ps={G.players[opp]}

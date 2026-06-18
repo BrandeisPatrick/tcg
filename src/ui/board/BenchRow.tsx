@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { CardInstance, PlayerID, PlayerState } from '@/engine/types';
 import { HeroSlot } from './HeroSlot';
 import { palette, text } from '../tokens';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   ps: PlayerState;
@@ -26,6 +27,7 @@ export function BenchRow({
 }: Props) {
   const slots = ps.bench;
   const accent = isOpponent ? palette.danger : palette.accent;
+  const { isMobile } = useViewport();
 
   return (
     <div style={{
@@ -33,22 +35,28 @@ export function BenchRow({
       display: 'flex',
       justifyContent: 'center',
       gap: 12,
-      padding: '0 12px',
+      padding: isMobile ? '0 4px' : '0 12px',
       height: '100%',
       minHeight: 0,
     }}>
-      <span style={{
-        position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
-        ...text.label, color: palette.textDim,
-      }}>
-        {isOpponent ? 'Rival · Bench' : 'Your · Bench'}
-      </span>
+      {/* Side label crowds the cards on a phone — desktop only. */}
+      {!isMobile && (
+        <span style={{
+          position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
+          ...text.label, color: palette.textDim,
+        }}>
+          {isOpponent ? 'Rival · Bench' : 'Your · Bench'}
+        </span>
+      )}
       <div style={{
         display: 'grid',
         // Matches ActiveDuel grid so all three rows column-align across
-        // the board (Rival Bench → Lane → Your Bench).
-        gridTemplateColumns: 'repeat(3, 180px)',
-        gap: 28,
+        // the board (Rival Bench → Lane → Your Bench). On phones the fixed
+        // 180px track is replaced by a width-capped 1fr track so 3 cards fit.
+        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 180px)',
+        gap: isMobile ? 8 : 28,
+        width: isMobile ? '100%' : undefined,
+        maxWidth: isMobile ? 420 : undefined,
         height: '100%',
       }}>
         <AnimatePresence mode="popLayout">

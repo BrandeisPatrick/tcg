@@ -13,6 +13,7 @@ import { motion } from 'framer-motion';
 import { palette, fonts, spring, text } from '../tokens';
 import { TornTile } from './TornTile';
 import { NycMap } from '../story/NycMap';
+import { useViewport } from '../hooks/useViewport';
 
 const ART_BASE = `${import.meta.env.BASE_URL ?? '/'}art/`;
 
@@ -24,6 +25,7 @@ interface StartScreenProps {
 }
 
 export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenProps) {
+  const { isMobile } = useViewport();
   return (
     <div
       style={{
@@ -34,11 +36,13 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        padding: '56px 64px 80px',
+        padding: isMobile ? '16px 12px 28px' : '56px 64px 80px',
         background: palette.bg0,
         color: palette.text,
         fontFamily: fonts.ui,
-        overflow: 'hidden',
+        // Phones stack the tiles taller than the viewport — let them scroll
+        // rather than clip; desktop fits in one screen.
+        overflow: isMobile ? 'auto' : 'hidden',
       }}
     >
       <Backdrop />
@@ -56,10 +60,10 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'stretch',
-          gap: 36,
+          gap: isMobile ? 18 : 36,
         }}
       >
-        <Header />
+        <Header compact={isMobile} />
 
         <motion.div
           initial="hidden"
@@ -68,7 +72,13 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
             hidden: {},
             show: { transition: { staggerChildren: 0.12, delayChildren: 0.5 } },
           }}
-          style={{
+          style={isMobile ? {
+            // Single-column stack: each tile gets an explicit height below
+            // (TornTile content is absolutely positioned, so it can't self-size).
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          } : {
             display: 'grid',
             gridTemplateColumns: '1.35fr 1fr',
             gridTemplateRows: '1.4fr 1fr',
@@ -82,7 +92,7 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               hidden: { opacity: 0, y: 24 },
               show: { opacity: 1, y: 0, transition: spring.default },
             }}
-            style={{ gridRow: '1', gridColumn: '1', minHeight: 0 }}
+            style={isMobile ? { height: 150 } : { gridRow: '1', gridColumn: '1', minHeight: 0 }}
           >
             <TornTile
               variant="primary"
@@ -102,7 +112,7 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               hidden: { opacity: 0, y: 24 },
               show: { opacity: 1, y: 0, transition: spring.default },
             }}
-            style={{ gridRow: '2', gridColumn: '1', minHeight: 0 }}
+            style={isMobile ? { height: 150 } : { gridRow: '2', gridColumn: '1', minHeight: 0 }}
           >
             <TornTile
               variant="primary"
@@ -123,7 +133,7 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               hidden: { opacity: 0, y: 24 },
               show: { opacity: 1, y: 0, transition: spring.default },
             }}
-            style={{ gridRow: '1', gridColumn: '2', minHeight: 0 }}
+            style={isMobile ? { height: 122 } : { gridRow: '1', gridColumn: '2', minHeight: 0 }}
           >
             <TornTile
               variant="wide"
@@ -137,7 +147,8 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               }}
               ariaLabel="Open preview gallery"
             >
-              <HeroPortraitFan />
+              {/* Fixed-width 320px fan overflows a phone-width tile — desktop only. */}
+              {!isMobile && <HeroPortraitFan />}
             </TornTile>
           </motion.div>
 
@@ -146,7 +157,9 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               hidden: { opacity: 0, y: 24 },
               show: { opacity: 1, y: 0, transition: spring.default },
             }}
-            style={{ gridRow: '2', gridColumn: '2', minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}
+            style={isMobile
+              ? { height: 118, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }
+              : { gridRow: '2', gridColumn: '2', minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}
           >
             <TornTile
               variant="wide"
@@ -349,7 +362,7 @@ function DeckIcon() {
   );
 }
 
-function Header() {
+function Header({ compact = false }: { compact?: boolean }) {
   return (
     <motion.div
       initial="hidden"
@@ -374,7 +387,8 @@ function Header() {
           show: { opacity: 1, y: 0, transition: spring.soft },
         }}
         style={{
-          height: 64,
+          height: compact ? 42 : 64,
+          maxWidth: '88%',
           width: 'auto',
           filter: 'drop-shadow(0 2px 6px rgba(40,20,0,0.18))',
           userSelect: 'none',
