@@ -10,6 +10,7 @@
 import type { ReactNode, CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { palette, fonts, spring, text, shadow } from '../tokens';
+import { useViewport } from '../hooks/useViewport';
 
 export type TornTileVariant = 'primary' | 'wide';
 
@@ -56,10 +57,20 @@ export function TornTile({
   ariaLabel,
   children,
 }: TornTileProps) {
+  const { isMobile } = useViewport();
   const interactive = !disabled && !comingSoon;
-  const titleSize = variant === 'primary'
-    ? 'clamp(40px, 4vw, 64px)'
-    : 'clamp(24px, 2vw, 32px)';
+  // Phones get a fixed, smaller title so "QUICK MATCH" stays on one line in a
+  // ~340px tile; desktop keeps the fluid clamp that scales up on wide screens.
+  const titleSize = isMobile
+    ? (variant === 'primary' ? 30 : 19)
+    : variant === 'primary'
+      ? 'clamp(40px, 4vw, 64px)'
+      : 'clamp(24px, 2vw, 32px)';
+  // Tighter content insets on the short mobile tiles so the label stack has
+  // room and never rides under the (now-hidden) art / CTA.
+  const pad = variant === 'primary'
+    ? (isMobile ? 20 : 36)
+    : (isMobile ? 16 : 26);
 
   // Outer wrapper carries the entrance + base rotation through framer-motion
   // (raw `transform` would be overridden by motion). Inner wrapper carries the
@@ -221,7 +232,7 @@ export function TornTile({
               hover is driven by the parent tile so the CTA + tile lift together.
               Top highlight + bottom shadow + dark inner stroke = embossed brass
               plate, not a flat web button. */}
-          {cta && (
+          {cta && !isMobile && (
             <div
               aria-hidden
               style={{
@@ -256,9 +267,9 @@ export function TornTile({
           <div
             style={{
               position: 'absolute',
-              left: variant === 'primary' ? 36 : 26,
-              right: variant === 'primary' ? 36 : 26,
-              bottom: variant === 'primary' ? 36 : 22,
+              left: pad,
+              right: pad,
+              bottom: variant === 'primary' ? (isMobile ? 18 : 36) : (isMobile ? 14 : 22),
               zIndex: 4,
               pointerEvents: 'none',
             }}

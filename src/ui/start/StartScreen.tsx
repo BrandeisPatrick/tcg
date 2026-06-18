@@ -100,7 +100,9 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               eyebrow="Vs AI"
               title="Quick Match"
               subtitle="Best of one. Solo against the computer."
-              art={{ src: `${ART_BASE}old_gods_new_blood.jpg`, objectPosition: '50% 26%', widthPct: 66, maskCenter: '60% 40%' }}
+              // The art carries a baked-in "Old Gods New Blood" wordmark that
+              // crosses the title/subtitle on a phone-width tile — desktop-only.
+              art={isMobile ? undefined : { src: `${ART_BASE}old_gods_new_blood.jpg`, objectPosition: '50% 26%', widthPct: 66, maskCenter: '60% 40%' }}
               cta={{ label: 'Play' }}
               onClick={onPlay}
               ariaLabel="Start Quick Match vs AI"
@@ -124,7 +126,9 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               onClick={onStory}
               ariaLabel="Start Story campaign"
             >
-              <StoryMapTeaser />
+              {/* Map vignette sits on the right — on a phone-width tile it rides
+                  over the subtitle, so it's desktop-only. */}
+              {!isMobile && <StoryMapTeaser />}
             </TornTile>
           </motion.div>
 
@@ -170,7 +174,8 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               onClick={onHeroes}
               ariaLabel="Manage preferred heroes"
             >
-              <HeroPrefsIcon />
+              {/* Card-stack icons crowd the title on a half-width phone tile. */}
+              {!isMobile && <HeroPrefsIcon />}
             </TornTile>
             <TornTile
               variant="wide"
@@ -181,7 +186,7 @@ export function StartScreen({ onPlay, onStory, onHeroes, onDecks }: StartScreenP
               onClick={onDecks}
               ariaLabel="Manage decks"
             >
-              <DeckIcon />
+              {!isMobile && <DeckIcon />}
             </TornTile>
           </motion.div>
         </motion.div>
