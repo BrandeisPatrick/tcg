@@ -1,6 +1,6 @@
 import type { GameState, CardInstance, PlayerID, StatusId } from '@/engine/types';
 import { CARDS_BY_ID, ULTIMATES } from '@/cards';
-import { damageUnit, healUnit, reapDead } from '@/engine/damage';
+import { damageUnit, healUnit, resolve } from '@/engine/damage';
 import { addStatus, cleanseDebuffs } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit, nextIid, grantExtraAttacks } from '@/engine/util';
@@ -86,7 +86,7 @@ export function ultSpi(): number {
 // Helper: deal damage to all of a player's board cards
 function eachBoard(G: GameState, pid: PlayerID, fn: (c: CardInstance) => void) {
   for (const c of liveBoardCards(G.players[pid])) fn(c);
-  reapDead(G, G.players[pid]);
+  resolve(G);
 }
 
 // ----- Spells (7 cards) -----
@@ -424,7 +424,7 @@ const eff_ricochet: AbilityDef = {
     for (const b of enemy.bench) {
       if (b && (b.respawnTurnsLeft ?? 0) === 0) damageUnit(G, b, 2, 'attack', 'Ricochet');
     }
-    reapDead(G, enemy);
+    resolve(G);
   },
 };
 

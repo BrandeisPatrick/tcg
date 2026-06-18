@@ -1,6 +1,6 @@
 import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState } from './types';
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
-import { damageUnit, healUnit, reapDead, returnRemToBench } from './damage';
+import { damageUnit, healUnit, resolve, returnRemToBench } from './damage';
 import { liveBoardCards, pushLog, otherPlayer, effectiveSpirit } from './util';
 import { CARDS_BY_ID } from '@/cards';
 import { fireEquipmentTriggers } from './equipmentDispatch';
@@ -221,7 +221,7 @@ export function tickCastingPulses(G: GameState, ps: PlayerState) {
     for (const e of liveBoardCards(G.players[enemyId])) {
       totalDealt += damageUnit(G, e, perTick, 'spirit', name);
     }
-    reapDead(G, G.players[enemyId]);
+    resolve(G);
     pushLog(G, `${name} channels — ${perTick} spirit to all enemies.`);
 
     // Warden (light): drain the total back as healing.

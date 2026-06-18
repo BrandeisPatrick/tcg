@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion';
+import { useRef } from 'react';
+import { motion, useMotionValue } from 'framer-motion';
 import type { CardInstance, PlayerID } from '@/engine/types';
 import { DamageFlash } from '../effects/DamageFlash';
 import { useDamageFx } from '../effects/DamageFxContext';
@@ -10,7 +11,11 @@ import { StatusIcon } from '../card/StatusIcon';
 import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
 import { palette, fonts, radius, spring, text, statRow } from '../tokens';
 import { LevelRing } from '../card/LevelRing';
+import { CardShine } from '../card/RarityFX';
 import { useStatTick } from './useStatTick';
+
+const REDUCED = typeof window !== 'undefined'
+  && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 interface Props {
   card: CardInstance;
@@ -35,6 +40,12 @@ export function HeroSlot({
 }: Props) {
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let pressFired = false;
+  // Pointer-driven tilt. HeroSlot is a motion.button, so framer owns the
+  // transform — drive rotateX/rotateY through motion values (they compose with
+  // the hover lift) and write the --mx/--my/--glare vars the shine reads.
+  const elRef = useRef<HTMLButtonElement | null>(null);
+  const rotX = useMotionValue(0);
+  const rotY = useMotionValue(0);
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') {
     return <div style={{ aspectRatio: '3 / 4', border: `1px dashed ${palette.border}`, borderRadius: radius.md }} />;
@@ -108,10 +119,36 @@ export function HeroSlot({
   const iconSize = compact ? 11 : 13;
   const bodyPadding = compact ? '4px 6px 5px' : '5px 9px 6px';
 
+  // Tilt is suppressed on corpses (the tile is "dead" — should feel inert).
+  const tiltActive = !isCorpse;
+  const TILT_MAX = REDUCED ? 0 : 6;
+  const onTiltMove = (e: React.PointerEvent) => {
+    const el = elRef.current;
+    if (!el || !tiltActive) return;
+    const r = el.getBoundingClientRect();
+    const px = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const py = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    rotY.set((px - 0.5) * 2 * TILT_MAX);
+    rotX.set(-(py - 0.5) * 2 * TILT_MAX);
+    el.style.setProperty('--mx', `${px * 100}%`);
+    el.style.setProperty('--my', `${py * 100}%`);
+    el.style.setProperty('--glare', '1');
+  };
+  const onTiltLeave = () => {
+    rotX.set(0);
+    rotY.set(0);
+    const el = elRef.current;
+    if (el) {
+      el.style.setProperty('--glare', '0');
+      el.style.setProperty('--mx', '50%');
+      el.style.setProperty('--my', '50%');
+    }
+  };
+
   return (
     <motion.button
       layoutId={`hero-${card.iid}`}
-      ref={(el) => registerSlotRef?.(card.iid, el)}
+      ref={(el) => { elRef.current = el; registerSlotRef?.(card.iid, el); }}
       onClick={() => { if (!pressFired) onTap(card, owner); pressFired = false; }}
       onPointerDown={() => {
         pressFired = false;
@@ -119,8 +156,12 @@ export function HeroSlot({
           pressTimer = setTimeout(() => { pressFired = true; onLongPress(card); }, 420);
         }
       }}
+      onPointerMove={tiltActive ? onTiltMove : undefined}
       onPointerUp={() => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; } }}
-      onPointerLeave={() => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; } }}
+      onPointerLeave={() => {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; }
+        onTiltLeave();
+      }}
       whileHover={isAlly && !isCorpse ? { y: -4, scale: 1.015 } : undefined}
       transition={spring.snappy}
       whileTap={isCorpse ? undefined : { scale: 0.97 }}
@@ -139,6 +180,11 @@ export function HeroSlot({
         fontFamily: fonts.ui,
         display: 'flex',
         flexDirection: 'column',
+        // 3D tilt — composes with the whileHover lift; perspective lives on the
+        // element so the rotation reads as real depth.
+        transformPerspective: 700,
+        rotateX: tiltActive ? rotX : 0,
+        rotateY: tiltActive ? rotY : 0,
       }}
     >
       {/* "Card got hit" flash — type-coloured, clipped to the card. Keyed by the
@@ -399,6 +445,10 @@ export function HeroSlot({
           </span>
         </div>
       </div>
+
+      {/* Card shine — restrained board variant: ring + dim holo + soft glare;
+          corpses stay matte */}
+      {!isCorpse && <CardShine rarity={data.rarity} board />}
     </motion.button>
   );
 }

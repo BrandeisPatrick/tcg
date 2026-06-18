@@ -232,7 +232,7 @@ function CombatFxTab() {
       </Section>
 
       <Section title="Card-Play Flash">
-        <Caption>Triggered when a spell or equipment is played from hand, or when a hero activates their skill. Same reveal in all cases — the relevant card sits on-screen for ~3.2s with a caption.</Caption>
+        <Caption>Triggered when a spell or equipment is played from hand, or when a hero activates their skill. Same reveal in all cases — the relevant card sits on-screen for ~1.7s with a caption.</Caption>
         <Row>
           <CardPlayTrigger label="You — Spell" cardId="cold_front" caster="P0" />
           <CardPlayTrigger label="You — Equipment" cardId="restorative_shot" caster="P0" />
@@ -544,7 +544,7 @@ function CardPlayTrigger({ label, cardId, caster, kind = 'play' }: {
       <Button onClick={() => setActive(true)} disabled={active}>{label}</Button>
       <AnimatePresence>
         {active && (
-          <AutoExit ms={3200} onDone={() => setActive(false)}>
+          <AutoExit ms={1700} onDone={() => setActive(false)}>
             <CardPlayOverlay cardId={cardId} caster={caster} kind={kind} />
           </AutoExit>
         )}
@@ -560,7 +560,7 @@ function UltTrigger({ label, name, caster }: { label: string; name: string; cast
       <Button onClick={() => setActive(true)} disabled={active}>{label}</Button>
       <AnimatePresence>
         {active && (
-          <AutoExit ms={3200} onDone={() => setActive(false)}>
+          <AutoExit ms={2400} onDone={() => setActive(false)}>
             <UltFlashOverlay name={name} caster={caster} />
           </AutoExit>
         )}

@@ -303,3 +303,38 @@ describe('heal sources: all respect Healing Blocked', () => {
 // Damage + regen interactions
 // ============================================================================
 
+describe('heal cannot revive a dead-but-unreaped unit', () => {
+  it('healUnit on a hero at hp 0 with no respawn timer yet returns 0 (death stands)', () => {
+    const G = freshG();
+    const t = G.players['0'].active!;
+    t.hp = 0;                              // dead this instant, not yet swept by reapDead
+    expect(t.respawnTurnsLeft ?? null).toBeNull();
+    const healed = healUnit(G, t, 5);
+    expect(healed).toBe(0);
+    expect(t.hp).toBe(0);
+  });
+
+  it('lethal bleed at turn start is NOT undone by a start-of-turn heal — the hero is reaped', () => {
+    // Repro of the reported bug: a hero dies to bleed in tickStartOfTurn, then a
+    // start-of-turn heal (Abrams "Infernal Resilience") fires on the still-unreaped
+    // 0-HP hero before the SBA sweep. The heal must refuse so the KO holds.
+    const G = freshG();
+    const abrams = G.players['0'].active!;
+    abrams.cardId = 'hero_abrams'; abrams.hpMax = 14; abrams.hp = 2; abrams.zone = 'active';
+    addStatus(G, abrams, 'bleed', 5, 3);   // 5 pure > 2 hp → lethal at start of turn
+
+    tickStartOfTurn(G, G.players['0']);     // bleed ticks → hp clamps to 0, not yet reaped
+    expect(abrams.hp).toBe(0);
+    expect(abrams.respawnTurnsLeft ?? null).toBeNull();
+
+    // The heal fires on the 0-HP hero — pre-fix this revived it to 1 HP.
+    ABILITIES_BY_ID['passive_abrams_heal'].run(G, { movingPlayer: '0' }, { source: abrams });
+    expect(abrams.hp).toBe(0);              // refused: death is not undone
+
+    // The death now stands and the sweep puts the hero on the respawn timer.
+    reapDead(G, G.players['0']);
+    expect(abrams.hp).toBe(0);
+    expect(abrams.respawnTurnsLeft ?? 0).toBeGreaterThan(0);
+  });
+});
+

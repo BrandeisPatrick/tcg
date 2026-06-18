@@ -54,7 +54,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.35, 0.35, 0] }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 3.2, times: [0, 0.10, 0.88, 1] }}
+        transition={{ duration: 1.7, times: [0, 0.12, 0.82, 1] }}
         onClick={onSkip}
         style={{
           position: 'fixed', inset: 0,
@@ -76,26 +76,37 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
         zIndex: 72,
       }}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.5, y: 20 }}
+          initial={{ opacity: 0, scale: 0.5, y: 20, rotateY: 38 }}
           animate={{
             opacity: [0, 1, 1, 0],
             scale: [0.5, 1.08, 1.0, 0.95],
             y: [20, 0, 0, -10],
+            // Flips face-up toward the viewer as it lands — "dealt onto the
+            // table" rather than just fading in.
+            rotateY: [38, -4, 0, 0],
+            // Scripted sheen: a light bar sweeps across (--cast) while the holo
+            // ignites and fades (--glare), like turning a holo card in the
+            // light. Held centred (--mx/--my) so the glare reads as a flash.
+            ['--cast' as string]: [0, 0, 1, 1],
+            ['--glare' as string]: [0, 0.9, 0.25, 0],
+            ['--mx' as string]: ['50%', '50%', '50%', '50%'],
+            ['--my' as string]: ['42%', '42%', '42%', '42%'],
           }}
           exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 3.2, times: [0, 0.10, 0.88, 1], ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 1.7, times: [0, 0.12, 0.82, 1], ease: [0.22, 1, 0.36, 1] }}
           style={{
+            transformPerspective: 1100,
             filter: `drop-shadow(0 16px 36px rgba(0,0,0,0.55)) drop-shadow(0 0 22px ${accent}88)`,
           }}
         >
-          <CardFrame cardId={cardId} size="full" hideStats={kind === 'skill'} />
+          <CardFrame cardId={cardId} size="full" physical={false} castSheen hideStats={kind === 'skill'} />
         </motion.div>
       </div>
       {/* Caption above the card. */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: [0, 1, 1, 0], y: [-8, 0, 0, -8] }}
-        transition={{ duration: 3.2, times: [0, 0.10, 0.88, 1] }}
+        transition={{ duration: 1.7, times: [0, 0.12, 0.82, 1] }}
         style={{
           position: 'fixed',
           left: 0, right: 0,

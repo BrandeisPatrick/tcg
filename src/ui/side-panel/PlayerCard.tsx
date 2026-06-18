@@ -51,9 +51,9 @@ export function PlayerCard({
             }} />
             {label}
           </span>
-          {order && <OrderBadge order={order} color={palette.textFaint} />}
+          {order && <OrderBadge order={order} color={palette.textDim} />}
         </div>
-        <span style={{ ...text.body, color: palette.textFaint }}>
+        <span style={{ ...text.body, color: palette.textDim }}>
           deck {ps.deck.length} · disc {ps.discard.length}{hostile ? ` · hand ${ps.hand.length}` : ''}
         </span>
       </div>
@@ -78,7 +78,7 @@ export function PlayerCard({
         )}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ ...text.label, color: palette.textFaint }}>HP</span>
+        <span style={{ ...text.label, color: palette.textDim }}>HP</span>
         <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
           {hasIncoming && (
             <span style={{
@@ -96,12 +96,12 @@ export function PlayerCard({
                 : { scale: 1, color: hpBase }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             >{ps.hp}</motion.span>
-            <span style={{ ...text.body, color: palette.textFaint, marginLeft: 2 }}> / {ps.hpMax}</span>
+            <span style={{ ...text.body, color: palette.textDim, marginLeft: 2 }}> / {ps.hpMax}</span>
           </span>
         </span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
-        <span style={{ ...text.label, color: palette.textFaint }}>Souls</span>
+        <span style={{ ...text.label, color: palette.textDim }}>Souls</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           <SoulGem />
           <span style={{ ...text.numeric, fontSize: 16, color: palette.accentWarm }}>{ps.souls}</span>
@@ -109,7 +109,7 @@ export function PlayerCard({
       </div>
       {/* Skill availability dot + respawn queue */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2, minHeight: 16 }}>
-        <span style={{ ...text.label, color: palette.textFaint }}>Skill</span>
+        <span style={{ ...text.label, color: palette.textDim }}>Skill</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           {ps.skillUsedThisTurn ? (
             <span style={{
@@ -129,7 +129,7 @@ export function PlayerCard({
               }}
             />
           )}
-          <span style={{ ...text.label, color: ps.skillUsedThisTurn ? palette.textFaint : palette.success }}>
+          <span style={{ ...text.label, color: ps.skillUsedThisTurn ? palette.textDim : palette.success }}>
             {ps.skillUsedThisTurn ? 'Used' : 'Ready'}
           </span>
         </span>

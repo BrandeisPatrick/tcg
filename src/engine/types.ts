@@ -248,6 +248,12 @@ export interface GameState {
    */
   draftTurnsOffset: number;
   mulliganPending: boolean;       // true after draft completes until player resolves opening mulligan
+  /** Set by the `resolve` pass when a player's Active is a corpse and an
+   *  eligible bench hero can step up — i.e. a forced promotion is owed. The AI
+   *  side is auto-promoted inside `resolve`, so in practice this only flags the
+   *  local player ('0'): the UI shows the PromotionOverlay (human) or the
+   *  auto-play loop resolves it. Cleared once a promotion lands. */
+  pendingPromotion?: PlayerID;
   /** Current resolving action (card play / skill / ult). UI watches this to
    *  trigger the reveal animation and pause further input until the player
    *  has had time to see what just happened. */

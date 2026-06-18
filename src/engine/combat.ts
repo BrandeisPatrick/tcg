@@ -1,6 +1,6 @@
 import type { GameState, PlayerID, CardInstance } from './types';
 import { CARDS_BY_ID } from '@/cards';
-import { damageUnit, reapDead } from './damage';
+import { damageUnit, resolve } from './damage';
 import { otherPlayer, effectiveAtk, pushLog } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
@@ -343,8 +343,7 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
     // damaged when a hero dies (flat 1, in killInPlace), never by face damage.
   }
 
-  reapDead(G, defender);
-  reapDead(G, attacker);
+  resolve(G);
 }
 
 // ---------- Helpers (shared between planner and resolver) ----------

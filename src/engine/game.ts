@@ -10,7 +10,7 @@ import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { getAIDeckTagged } from '@/decks/aiDecks';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from './statusOps';
-import { reapDead, damagePlayer } from './damage';
+import { resolve, damagePlayer } from './damage';
 import { resolveAttackPhase } from './combat';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, resetIid, nextIid } from './util';
 import { getAbility } from '@/abilities';
@@ -365,8 +365,7 @@ export const DeadlockGame: Game<GameState> = {
       // it double-ticked corpses, halving respawn time so KOs felt near-instant.)
       tickRespawn(G, pid);
       fireBoardTriggers(G, pid, 'startOfTurn');
-      reapDead(G, G.players['0']);
-      reapDead(G, G.players['1']);
+      resolve(G);
       pushLog(G, `--- Turn ${realTurn}, player ${pid} ---`);
     },
     onEnd: ({ G, ctx }) => {
@@ -481,8 +480,7 @@ export const DeadlockGame: Game<GameState> = {
       }
 
       pushLog(G, `P${pid} played ${data.name}${target ? ` on ${CARDS_BY_ID[target.cardId]?.name}` : ''}.`);
-      reapDead(G, G.players['0']);
-      reapDead(G, G.players['1']);
+      resolve(G);
       // Record the action so the UI can play the matching reveal animation
       // (CardPlayFlash for spell/equipment, UltMomentFlash for ultimate)
       // and lock further input until completeAction fires.
@@ -545,8 +543,7 @@ export const DeadlockGame: Game<GameState> = {
       ps.skillUsedThisTurn = true;       // per-player flag (gates the rule)
       // Equipment reactive: Surge of Power fires after bearer used their skill.
       fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: pid });
-      reapDead(G, G.players['0']);
-      reapDead(G, G.players['1']);
+      resolve(G);
       G.action = {
         id: `act-${++actionCounter}`,
         kind: 'skill',
@@ -624,6 +621,9 @@ export const DeadlockGame: Game<GameState> = {
       corpse.zone = 'bench';
       corpse.slot = (benchIdx + 1) as 1 | 2 | 3;
       pushLog(G, `P${pid} promoted ${data.name} to Active.`);
+      // Re-run the state-based pass so the pendingPromotion flag clears (and any
+      // further deaths/promotions settle) before the UI re-reads it.
+      resolve(G);
     },
 
     endTurn: ({ events }) => {

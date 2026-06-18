@@ -83,8 +83,8 @@ export function OpponentHand({ cards }: Props) {
           position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
           display: 'inline-flex', alignItems: 'baseline', gap: 6,
         }}>
-          <span style={{ ...text.label, color: palette.textFaint }}>Hand</span>
-          <span style={{ ...text.numeric, fontSize: 16, color: palette.textDim }}>{total}</span>
+          <span style={{ ...text.label, color: palette.textDim }}>Hand</span>
+          <span style={{ ...text.numeric, fontSize: 16, color: palette.text }}>{total}</span>
         </span>
       )}
     </div>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { CardData } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { palette, fonts } from '../tokens';
+import { RarityFX } from './RarityFX';
 
 const typeTint = (t: string) =>
   t === 'hero' ? palette.type.hero
@@ -218,6 +219,8 @@ export function RoundCardIcon({ cardId, size = 130, selected = false }: Props) {
           {typeLabel}
         </div>
 
+        {/* Rarity foil — circular clip inherited from the container */}
+        <RarityFX rarity={rarity} seed={cardId} />
       </div>
 
       {/* Name below */}

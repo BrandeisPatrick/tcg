@@ -56,8 +56,8 @@ export function NycMap() {
       {/* Road network, clipped to land. Drawn fine→thick so majors sit on top.
           Bridges (roads that cross water) extend past the clip via their own layer. */}
       <g clipPath="url(#nyc-land)">
-        <path d={NYC_ROADS.minor} fill="none" stroke={`${STREET}0.45)`} strokeWidth="0.7" strokeLinecap="round" />
-        <path d={NYC_ROADS.mid} fill="none" stroke={`${STREET}0.6)`} strokeWidth="1.1" strokeLinecap="round" />
+        <path d={NYC_ROADS.minor} fill="none" stroke={`${STREET}0.32)`} strokeWidth="0.7" strokeLinecap="round" />
+        <path d={NYC_ROADS.mid} fill="none" stroke={`${STREET}0.52)`} strokeWidth="1.1" strokeLinecap="round" />
         <path d={NYC_ROADS.major} fill="none" stroke={`${STREET}0.85)`} strokeWidth="1.9" strokeLinecap="round" />
       </g>
       {/* Major roads again un-clipped (thin) so bridges read across the rivers. */}

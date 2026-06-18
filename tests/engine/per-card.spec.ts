@@ -27,7 +27,7 @@ describe('Spells — cost 1', () => {
   it('Healing Rite heals 2 (flat, no Spirit scaling)', () => {
     const G = freshG();
     const target = G.players['0'].bench[0]!;
-    target.hp = target.hpMax - 5;
+    target.hp = Math.max(1, target.hpMax - 5); // wounded but alive (heroes are 5 HP now)
     const before = target.hp;
     ABILITIES_BY_ID['eff_healing_rite'].run(G, { movingPlayer: '0' }, { target });
     expect(target.hp - before).toBe(2);
@@ -223,7 +223,7 @@ describe('Spell scaling treats corpse Active as 0 Spirit', () => {
   it('healing_rite returns base heal when caster Active is a corpse', () => {
     const G = freshG();
     const ally = G.players['0'].bench[0]!;
-    ally.hp = ally.hpMax - 5;
+    ally.hp = Math.max(1, ally.hpMax - 5); // wounded but alive (heroes are 5 HP now)
     // KO the caster's active.
     G.players['0'].active!.respawnTurnsLeft = 3;
     G.players['0'].active!.hp = 0;

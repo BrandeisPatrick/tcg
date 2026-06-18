@@ -28,8 +28,10 @@ export function logEntryColor(s: string): string {
   if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return palette.danger;
   if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return palette.success;
   if (/gained |cleansed|discharges|resisted/i.test(s)) return palette.spirit;
-  if (/used skill:|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return palette.accent;
-  if (/Mulligan|---/i.test(s)) return palette.textFaint;
+  // Dark brass (not the brighter brand `accent`): the brighter brass fails AA
+  // (~2.7:1) on the cream log; `atk` is the same hue family but reads at ~5.9:1.
+  if (/used skill:|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return palette.atk;
+  if (/Mulligan|---/i.test(s)) return palette.textDim;
   return palette.text;
 }
 

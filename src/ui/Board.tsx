@@ -48,6 +48,10 @@ export function Board(props: BoardProps<GameState>) {
   const me: PlayerID = '0';
   const isMyTurn = ctx.currentPlayer === me;
   const [pending, setPending] = useState<PendingPlay | null>(null);
+  // Auto-play: when on, the same AI that runs the opponent also drives the
+  // local player's turns, so the match plays itself hands-free. Toggle in the
+  // top-right; flip off any time to take control back.
+  const [autoPlay, setAutoPlay] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(true);
   const [preview, setPreview] = useState<{ card: CardInstance; hover: boolean } | null>(null);
@@ -253,7 +257,11 @@ export function Board(props: BoardProps<GameState>) {
   // ult reveal is in flight (so the AI doesn't fire its next move on top of
   // its previous animation).
   useEffect(() => {
-    if (ctx.gameover || ctx.currentPlayer !== '1' || combatPlan) return;
+    // The opponent ('1') is always AI-driven; the local player is too while
+    // auto-play is on. Either way the loop is the same: enumerate, play best,
+    // end the turn.
+    const aiControlled = ctx.currentPlayer === '1' || (autoPlay && ctx.currentPlayer === me);
+    if (ctx.gameover || !aiControlled || combatPlan) return;
     if (G.action?.state === 'begin') return;
     const t = setTimeout(() => {
       const opts = enumerateAIMoves(G, ctx);
@@ -273,7 +281,33 @@ export function Board(props: BoardProps<GameState>) {
       }
     }, AI_THINK_MS);
     return () => clearTimeout(t);
-  }, [ctx.currentPlayer, ctx.turn, G, moves, ctx, combatPlan, triggerEndTurn, G.action]);
+  }, [ctx.currentPlayer, ctx.turn, G, moves, ctx, combatPlan, triggerEndTurn, G.action, autoPlay, me]);
+
+  // Auto-play promotion resolver. The engine only auto-promotes the AI ('1');
+  // the local player ('0') normally picks a new Active via the PromotionOverlay.
+  // Under auto-play nobody clicks it — and our Active can die on the OPPONENT's
+  // combat phase, when the AI loop above is enumerating the rival's moves and
+  // never touches our board. So resolve our forced promotion here, on EITHER
+  // turn, picking the highest-HP eligible bench hero (mirrors engine autoPromoteAi).
+  useEffect(() => {
+    if (!autoPlay || ctx.gameover || combatPlan) return;
+    if (G.action?.state === 'begin') return;
+    if (G.pendingPromotion !== me) return;  // single source of truth — set by engine `resolve`
+    const ps = G.players[me];
+    let best: CardInstance | null = null;
+    for (const b of ps.bench) {
+      if (!b || (b.respawnTurnsLeft ?? 0) > 0) continue;
+      const d = CARDS_BY_ID[b.cardId];
+      if (d?.type !== 'hero' || d.flags?.benchOnly) continue;
+      if (!best || b.hp > best.hp) best = b;
+    }
+    if (!best) return;
+    const iid = best.iid;
+    const t = setTimeout(() => {
+      try { (moves as any).promoteToActive(iid); } catch {}
+    }, AI_THINK_MS);
+    return () => clearTimeout(t);
+  }, [autoPlay, ctx.gameover, combatPlan, G.action?.state, G.pendingPromotion, G, moves, me]);
 
   // Action reveal driver. When the engine sets G.action with state='begin'
   // (after playCard / useSkill), schedule completeAction so the animation
@@ -281,12 +315,15 @@ export function Board(props: BoardProps<GameState>) {
   // via `actionLocked` until this fires.
   useEffect(() => {
     if (G.action?.state !== 'begin') return;
-    const HOLD_MS = 3200;
+    // Play / skill reveals are a quick "you played X" beat; the ultimate is a
+    // dramatic screen-fill that needs longer to land. Keep each in sync with
+    // its overlay's animation length (CardPlayFlash 1.7s / UltMomentFlash 2.3s).
+    const HOLD_MS = G.action.kind === 'ult' ? 2400 : 1700;
     const t = setTimeout(() => {
       try { (moves as any).completeAction(); } catch {}
     }, HOLD_MS);
     return () => clearTimeout(t);
-  }, [G.action?.id, G.action?.state, moves]);
+  }, [G.action?.id, G.action?.state, G.action?.kind, moves]);
 
   const isTargetable = useCallback((card: CardInstance, owner: PlayerID): boolean => {
     if (!pending) return false;
@@ -522,6 +559,7 @@ export function Board(props: BoardProps<GameState>) {
       <CombatProgressContext.Provider value={combatProgress}>
       <DamageFxContext.Provider value={damageFxFor}>
       <ArenaBackdrop />
+
       <div style={{
         minHeight: '100vh',
         display: 'flex',
@@ -650,6 +688,8 @@ export function Board(props: BoardProps<GameState>) {
               onUnaffordable={(_, cost) => showNotice(`Need ${cost} souls — you have ${G.players[me].souls}`)}
               onEnd={() => { setPending(null); triggerEndTurn(); }}
               onCancel={() => setPending(null)}
+              autoPlay={autoPlay}
+              onToggleAuto={() => setAutoPlay((v) => !v)}
             />
           </div>
         </div>
@@ -763,8 +803,9 @@ export function Board(props: BoardProps<GameState>) {
         <AnimatePresence>
           {(() => {
             const ps = G.players[me];
-            const activeCorpse = ps.active && (ps.active.respawnTurnsLeft ?? 0) > 0;
-            if (!activeCorpse || G.mulliganPending) return null;
+            // Single source of truth: the engine's `resolve` pass flags when a
+            // promotion is owed. (No recompute of the corpse/candidate condition.)
+            if (G.pendingPromotion !== me || G.mulliganPending) return null;
             const candidates = (ps.bench.filter((b) => {
               if (!b || (b.respawnTurnsLeft ?? 0) > 0) return false;
               const d = CARDS_BY_ID[b.cardId];

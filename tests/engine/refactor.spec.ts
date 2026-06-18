@@ -88,7 +88,7 @@ describe('Cast context — equipment proc recursion guard', () => {
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     attachEquip(hero, 'mystic_regeneration');
-    hero.hp = hero.hpMax - 5;
+    hero.hp = Math.max(1, hero.hpMax - 5); // wounded but alive (heroes are 5 HP now)
     const hpBefore = hero.hp;
     withCast(hero, 'skill', () => damageUnit(G, enemy, 3, 'spirit'));
     expect(hero.hp - hpBefore).toBe(1); // healed exactly once (no recursion)

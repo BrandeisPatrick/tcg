@@ -1,13 +1,20 @@
-import { motion } from 'framer-motion';
+import { useRef } from 'react';
+import { motion, useMotionValue } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { getAbility, type AbilityDef } from '@/abilities';
+import { getAbility } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import { effectiveAtk } from '@/engine/util';
-import { HeroPortrait } from '@/cards/art/heroArt';
+import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
+import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { StatusIcon } from '../card/StatusIcon';
-import { palette, radius, spring, shadow, text } from '../tokens';
+import { LevelRing } from '../card/LevelRing';
+import { CardShine } from '../card/RarityFX';
+import { palette, radius, spring, shadow, text, fonts } from '../tokens';
 import { RuleText } from '../card/RuleText';
+
+const REDUCED = typeof window !== 'undefined'
+  && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 interface Props {
   card: CardInstance;
@@ -24,38 +31,57 @@ interface Props {
   onClose: () => void;
 }
 
-const TARGET_LABELS: Record<string, string> = {
-  noTarget:    'No target',
-  self:        'Self',
-  allyAny:     'Any ally',
-  allyHero:    'Ally hero',
-  enemyAny:    'Any enemy',
-  enemyHero:   'Enemy hero',
-  enemyActive: 'Enemy Active',
-  anyBoard:    'Any hero',
-};
-
 export function HeroDetailSheet({
   card, isMine, canUseSkill, skillBlockedReason, onUseSkill,
   canRetreat, retreatCost = 2, onRetreat, onClose,
 }: Props) {
+  // Pointer-driven tilt for the physical-card feel (framer owns the transform
+  // here, so drive rotateX/rotateY through motion values + write the shine vars).
+  const elRef = useRef<HTMLDivElement | null>(null);
+  const rotX = useMotionValue(0);
+  const rotY = useMotionValue(0);
+  const TILT_MAX = REDUCED ? 0 : 5;
+  const onTiltMove = (e: React.PointerEvent) => {
+    const el = elRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const px = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const py = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    rotY.set((px - 0.5) * 2 * TILT_MAX);
+    rotX.set(-(py - 0.5) * 2 * TILT_MAX);
+    el.style.setProperty('--mx', `${px * 100}%`);
+    el.style.setProperty('--my', `${py * 100}%`);
+    el.style.setProperty('--glare', '1');
+  };
+  const onTiltLeave = () => {
+    rotX.set(0);
+    rotY.set(0);
+    const el = elRef.current;
+    if (el) {
+      el.style.setProperty('--glare', '0');
+      el.style.setProperty('--mx', '50%');
+      el.style.setProperty('--my', '50%');
+    }
+  };
+
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') return null;
 
+  const accent = getHeroIdentity(data.id).primary;
+  const goldInset = palette.rarity[4].fill;
+
   const skillAbility = data.skill ? getAbility(data.skill) : null;
   const passiveAbility = data.passives?.[0] ? getAbility(data.passives[0]) : null;
-  const ult = data.ult ? CARDS_BY_ID[data.ult] : null;
-  const ultAbility = (ult && ult.type === 'ultimate' && ult.abilities[0]) ? getAbility(ult.abilities[0]) : null;
   const attached = card.attached ?? [];
 
-  const skillName = skillAbility ? (extractAbilityName(skillAbility.prompt) ?? data.name) : '';
+  // Ability names carry the hero prefix ("Paige Plot Armor"); strip it so the
+  // skill/passive reads as just the ability ("Plot Armor") — the card already
+  // names the hero.
+  const stripHero = (n: string) => (n.startsWith(`${data.name} `) ? n.slice(data.name.length + 1) : n);
+  const skillName = skillAbility ? stripHero(extractAbilityName(skillAbility.prompt) ?? data.name) : '';
+  const passiveName = passiveAbility ? stripHero(extractAbilityName(passiveAbility.prompt) ?? `${data.name}'s Passive`) : '';
   const skillDesc = skillAbility ? (extractAbilityDesc(skillAbility.prompt) ?? skillAbility.prompt ?? '') : '';
   const passiveDesc = passiveAbility ? (extractAbilityDesc(passiveAbility.prompt) ?? passiveAbility.prompt ?? data.text ?? '') : '';
-
-  // The hero's flavor line often just restates the skill/passive — only show it
-  // when it adds something new, so the sheet doesn't say the same thing twice.
-  const norm = (s?: string) => (s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-  const showFlavor = !!data.text && norm(data.text) !== norm(skillDesc) && norm(data.text) !== norm(passiveDesc);
 
   return (
     <motion.div
@@ -67,151 +93,147 @@ export function HeroDetailSheet({
       style={{
         position: 'fixed', inset: 0, background: palette.overlay,
         backdropFilter: 'blur(10px)', zIndex: 95,
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '24px 16px',
+        perspective: 1400,
       }}
     >
+      {/* Three columns: the card (pure hero face — art + ability text), its
+          action controls beneath it, and the satellite stat rail. Everything
+          that isn't the hero's printed face lives OUTSIDE the card frame. */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ display: 'flex', alignItems: 'flex-start', gap: 14, maxWidth: '100%' }}
+      >
+      {/* Card column: the card itself + its action buttons below the frame. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* The hero rendered as a physical card: framed art board + framed text
+          board (Skill/Passive + flavor). Tilts toward the cursor + holo on
+          hover. The Skill is tap-to-use; Retreat/Close live below the card. */}
       <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
+        ref={elRef}
+        initial={{ opacity: 0, y: 30, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 20, scale: 0.95 }}
         transition={spring.snappy}
         onClick={(e) => e.stopPropagation()}
+        onPointerMove={onTiltMove}
+        onPointerLeave={onTiltLeave}
         style={{
-          width: '100%', maxWidth: 540,
-          background: palette.bg1,
-          borderTopLeftRadius: 16, borderTopRightRadius: 16,
-          border: `2px solid #5a3f1c`,
-          borderBottom: 'none',
-          padding: '22px 20px calc(20px + env(safe-area-inset-bottom))',
+          position: 'relative',
+          // Fixed TCG trading-card ratio (5:7 ≈ 0.714).
+          width: 340, height: 476,
+          maxHeight: 'min(476px, 92vh)',
+          display: 'flex', flexDirection: 'column',
+          background: '#3a2810',            // mahogany frame, peeks at the edge
+          borderRadius: 16,
+          border: `2px solid ${accent}`,
+          boxShadow: `${shadow.xl}, 0 0 32px ${accent}55`,
           color: palette.text,
-          boxShadow: shadow.xl,
-          maxHeight: '90vh',
-          overflow: 'auto',
+          overflow: 'hidden',
+          isolation: 'isolate',
+          transformPerspective: 1400,
+          rotateX: rotX,
+          rotateY: rotY,
+          transformStyle: 'preserve-3d',
         }}
       >
-        {/* Header — portrait + name + stats row */}
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: showFlavor ? 14 : 18 }}>
+        {/* Inner gold inset — same hero/ult cue as the in-hand card frame */}
+        <div style={{
+          position: 'absolute', inset: 3, borderRadius: 12,
+          border: `1px solid ${goldInset}66`,
+          boxShadow: `inset 0 0 8px ${goldInset}22`,
+          pointerEvents: 'none', zIndex: 4,
+        }} />
+
+        {/* ART BOARD — a framed illustration window (not a flush bleed). The
+            8px margin reveals the mahogany shell as a bezel; a gold hairline +
+            inset vignette push the portrait behind glass. Sized so the rules
+            (Skill/Passive + flavor, no ultimate) fit the text board below
+            without scrolling. */}
+        <div style={{
+          position: 'relative', height: 188, flexShrink: 0, overflow: 'hidden',
+          margin: '8px 8px 0', borderRadius: 10,
+          border: `1px solid ${goldInset}55`,
+          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.45), inset 0 0 16px rgba(8,6,3,0.5)',
+        }}>
+          <HeroPortrait cardId={data.id} full />
+          {/* Vignette — feathers the four edges of the illustration window */}
           <div style={{
-            width: 84, height: 84, borderRadius: radius.md, overflow: 'hidden',
-            border: `1.5px solid ${palette.borderStrong}`,
-            flexShrink: 0,
+            position: 'absolute', inset: 0, pointerEvents: 'none',
+            boxShadow: 'inset 0 0 40px 8px rgba(8,6,3,0.5)', zIndex: 2,
+          }} />
+          {/* Nameplate scrim — hero name along the base of the window.
+              Level / BP / HP / SPI live in the right-side stat rail, off-card. */}
+          <div style={{
+            position: 'absolute', left: 0, right: 0, bottom: 0,
+            padding: '24px 13px 9px',
+            background: 'linear-gradient(to top, rgba(8,6,3,0.92), rgba(8,6,3,0.5) 55%, transparent)',
+            zIndex: 3,
           }}>
-            <HeroPortrait cardId={data.id} full />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ ...text.label, color: palette.text }}>{data.name}</span>
-              <span style={{
-                padding: '1px 8px', borderRadius: 999,
-                background: 'rgba(120, 80, 30, 0.10)',
-                border: `1px solid ${palette.border}`,
-                ...text.label, color: palette.textDim,
-                fontVariantNumeric: 'tabular-nums',
-              }}>Lv {card.level ?? 1}</span>
-            </div>
-            <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
-              <Stat label="BP" value={effectiveAtk(card)} color={palette.atk} />
-              <Stat label="HP" value={`${card.hp}/${card.hpMax}`} color={palette.hp} />
-              <Stat label="SPI" value={card.spiritMod} color={palette.spirit} />
-            </div>
+            <span style={{
+              fontFamily: fonts.ui, fontWeight: 700, fontSize: 20, color: '#fff',
+              textShadow: '0 2px 6px rgba(0,0,0,0.8)', lineHeight: 1.05,
+              display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{data.name}</span>
           </div>
         </div>
 
-        {/* Hero flavor — only when it isn't a restatement of the skill/passive */}
-        {showFlavor && (
-          <p style={{ ...text.body, color: palette.textDim, marginBottom: 18 }}>
-            <RuleText text={data.text!} />
-          </p>
-        )}
 
-        {/* Active effects — hidden entirely when there are none (less clutter) */}
-        {card.statuses.length > 0 && (
-          <Block title="Active Effects">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {card.statuses.map((s, i) => {
-                const def = STATUSES_BY_ID[s.id];
-                return (
-                  <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                    <StatusIcon id={s.id} value={s.value} duration={s.duration} size="large" />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ ...text.label, color: palette.text }}>{def?.title ?? s.id}</div>
-                      <div style={{ ...text.body, color: palette.textDim }}>
-                        {def?.desc.replace('<value>', String(s.value))}{' '}
-                        <span style={{ color: palette.textFaint }}>({s.duration}) left</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Block>
-        )}
+        {/* TEXT BOARD — a framed cream rules slab, distinct from the art board.
+            Holds the hero's own ability (Skill/Passive) + flavor and a pinned
+            footer. The Ultimate is NOT shown here (it's cast from hand), so the
+            content fits without scrolling. */}
+        <div style={{
+          flex: '1 1 auto', minHeight: 0,
+          display: 'flex', flexDirection: 'column',
+          margin: '8px', borderRadius: 10,
+          border: `1px solid ${palette.card.bodyBorder}88`,
+          overflow: 'hidden',
+          background: palette.card.body,
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 4px rgba(40,20,0,0.22)',
+          position: 'relative',
+        }}>
+          {/* Rules content — Skill (tap-to-use) or Passive, plus flavor. The
+              overflowY is a safety for an unusually long skill; with no
+              ultimate here it does not normally scroll. */}
+          <div style={{
+            flex: '1 1 auto', minHeight: 0, overflowY: 'auto',
+            color: palette.card.bodyText,
+            padding: '13px 13px 8px',
+          }}>
+            {/* Skill — tap to use; or a non-actionable Passive block. */}
+            {skillAbility ? (
+              <Block title="Skill">
+                <SkillActionCard
+                  name={skillName}
+                  description={skillDesc}
+                  mine={!!isMine}
+                  used={!!card.skillUsedThisTurn}
+                  canUse={!!canUseSkill}
+                  blockedReason={skillBlockedReason}
+                  onUse={onUseSkill ? () => { onUseSkill(); onClose(); } : undefined}
+                />
+              </Block>
+            ) : passiveAbility ? (
+              <Block title="Passive">
+                <PassivePanel
+                  name={passiveName}
+                  description={passiveDesc}
+                  trigger={passiveAbility.trigger}
+                />
+              </Block>
+            ) : null}
+          </div>
+        </div>
 
-        {/* Skill — the card itself is the action. Tap it to use the skill. */}
-        {skillAbility ? (
-          <Block title="Skill">
-            <SkillActionCard
-              name={skillName}
-              description={skillDesc}
-              targetLabel={TARGET_LABELS[skillAbility.target] ?? skillAbility.target}
-              ability={skillAbility}
-              hero={card}
-              mine={!!isMine}
-              used={!!card.skillUsedThisTurn}
-              canUse={!!canUseSkill}
-              blockedReason={skillBlockedReason}
-              onUse={onUseSkill ? () => { onUseSkill(); onClose(); } : undefined}
-            />
-          </Block>
-        ) : passiveAbility ? (
-          <Block title="Passive">
-            <PassivePanel
-              name={extractAbilityName(passiveAbility.prompt) ?? `${data.name}'s Passive`}
-              description={passiveDesc}
-              trigger={passiveAbility.trigger}
-            />
-          </Block>
-        ) : null}
+        {/* Card shine — rarity ring + pointer-driven glare/holo over the frame */}
+        <CardShine rarity={data.rarity} />
+      </motion.div>
 
-        {/* Ultimate — informational (ults are cast from hand, not here) */}
-        {ult && ultAbility && (
-          <Block title="Ultimate">
-            <AbilityPanel
-              name={ult.name}
-              description={ult.text ?? ''}
-              targetLabel={TARGET_LABELS[ultAbility.target] ?? ultAbility.target}
-              ability={ultAbility}
-              hero={card}
-            />
-          </Block>
-        )}
-
-        {/* Equipment — hidden when none attached. A merged hero (Rem) shows
-            tinted as a buff with its remaining turns. */}
-        {attached.length > 0 && (
-          <Block title="Equipment">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {attached.map((eq) => {
-                const merged = CARDS_BY_ID[eq.cardId]?.type === 'hero';
-                const accent = merged ? palette.status.buff : palette.type.equipment.accent;
-                return (
-                  <span key={eq.iid} style={{
-                    padding: '7px 12px',
-                    background: `${accent}1a`,
-                    border: `1px solid ${accent}66`,
-                    borderRadius: 999,
-                    ...text.label, color: accent,
-                  }}>
-                    {CARDS_BY_ID[eq.cardId]?.name ?? eq.cardId}
-                    {merged && eq.remMergeTurnsLeft != null && ` · ${eq.remMergeTurnsLeft}t`}
-                  </span>
-                );
-              })}
-            </div>
-          </Block>
-        )}
-
-        {/* Secondary actions */}
+      {/* Action controls — below the card, outside the frame. The Skill itself
+          is tapped inside the card; Retreat + Close live here. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 340 }}>
         {canRetreat && onRetreat && (
           <ActionButton
             onClick={() => { onRetreat(); onClose(); }}
@@ -220,20 +242,130 @@ export function HeroDetailSheet({
             badge={`−${retreatCost}`}
           />
         )}
-
         <button
           onClick={onClose}
           style={{
-            marginTop: 10, width: '100%',
-            padding: '12px',
-            background: 'transparent',
-            border: `1px solid ${palette.border}`,
+            width: '100%', padding: '12px',
+            background: palette.bg2,
+            border: `1px solid ${palette.borderStrong}`,
             borderRadius: radius.md,
             cursor: 'pointer',
-            ...text.label, color: palette.textFaint,
+            ...text.label, color: palette.textDim,
+            boxShadow: shadow.sm,
           }}
         >Close</button>
-      </motion.div>
+      </div>
+      </div>{/* end card column */}
+
+      {/* Satellite rail — the hero's live game-state (level, stats, buffs, gear)
+          as tokens beside the card, off the card face. Always present (every
+          hero has stats); effects/equipment panels mount only when relevant. */}
+      {(
+        <motion.div
+          initial={{ opacity: 0, x: -12 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -12 }}
+          transition={{ ...spring.snappy, delay: 0.05 }}
+          style={{
+            display: 'flex', flexDirection: 'column', gap: 12,
+            width: 280, maxHeight: 'min(476px, 92vh)', overflowY: 'auto',
+          }}
+        >
+          {/* Stats — Level + BP / HP / SPI, pulled off the card face */}
+          <SidePanel title="Stats">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <LevelRing level={card.level ?? 1} exp={card.exp ?? 0} size={42} />
+              <div style={{ ...text.label, fontSize: 14, color: palette.card.bodyText }}>
+                Level {card.level ?? 1}
+              </div>
+            </div>
+            <div style={{
+              display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+              marginTop: 4, paddingTop: 11,
+              borderTop: `1px solid ${palette.card.bodyBorder}33`,
+            }}>
+              <RailStat label="BP" value={effectiveAtk(card)} color={palette.atk} />
+              <RailStat label="HP" value={`${card.hp}/${card.hpMax}`} color={palette.hp} />
+              <RailStat label="SPI" value={card.spiritMod} color={palette.spirit} />
+            </div>
+          </SidePanel>
+
+          {card.statuses.length > 0 && (
+            <SidePanel title="Active Effects">
+              {card.statuses.map((s, i) => {
+                const def = STATUSES_BY_ID[s.id];
+                return (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {/* Pill + title on one row; description spans the FULL panel
+                        width below so it reads without cramped wrapping. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                      <StatusIcon id={s.id} value={s.value} duration={s.duration} size="large" />
+                      <div style={{ ...text.label, color: palette.card.bodyText, minWidth: 0 }}>
+                        {def?.title ?? s.id}
+                      </div>
+                    </div>
+                    <div style={{ ...text.body, fontSize: 12, color: palette.card.bodyTextDim }}>
+                      {def?.desc.replace('<value>', String(s.value))}{' '}
+                      <span style={{ color: palette.card.flavor }}>({s.duration}) left</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </SidePanel>
+          )}
+
+          {attached.length > 0 && (
+            <SidePanel title="Equipment">
+              {attached.map((eq) => {
+                const eqData = CARDS_BY_ID[eq.cardId];
+                const merged = eqData?.type === 'hero';
+                const acc = merged ? palette.status.buff : palette.type.equipment.accent;
+                return (
+                  <div key={eq.iid} style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+                    <div style={{
+                      width: 32, height: 32, flexShrink: 0,
+                      borderRadius: 6, overflow: 'hidden',
+                      background: '#1a1208', border: `1.5px solid ${acc}`,
+                      boxShadow: merged ? `0 0 6px ${acc}88` : '0 1px 3px rgba(0,0,0,0.5)',
+                    }}>
+                      {merged ? (
+                        <HeroBadge cardId={eq.cardId} size={32} />
+                      ) : (
+                        <img src={`${import.meta.env.BASE_URL}items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <div style={{ ...text.label, color: palette.card.bodyText }}>
+                        {eqData?.name ?? eq.cardId}
+                      </div>
+                      {/* What the item does — the panel should explain the effect,
+                          not just name it. */}
+                      {!merged && eqData?.text && (
+                        <div style={{ ...text.body, fontSize: 12, color: palette.card.bodyTextDim }}>
+                          <RuleText text={eqData.text} />
+                        </div>
+                      )}
+                      {merged && eq.remMergeTurnsLeft != null && (
+                        <div style={{ ...text.body, fontSize: 12, color: palette.status.buff }}>
+                          merged · {eq.remMergeTurnsLeft}t left
+                        </div>
+                      )}
+                      {!merged && eq.charges != null && (
+                        <div style={{ ...text.body, fontSize: 12, color: palette.card.flavor }}>
+                          {eq.charges} charge{eq.charges === 1 ? '' : 's'} left
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </SidePanel>
+          )}
+        </motion.div>
+      )}
+      </div>{/* end card + rail row */}
     </motion.div>
   );
 }
@@ -242,18 +374,45 @@ export function HeroDetailSheet({
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ ...text.label, color: palette.textFaint, marginBottom: 8 }}>{title}</div>
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ ...text.label, color: '#9a7b48', marginBottom: 7 }}>{title}</div>
       {children}
     </div>
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: any; color: string }) {
+/** Stat readout for the off-card stat rail: big tabular number over a brass
+ *  label, dark-on-cream for the panel. */
+function RailStat({ label, value, color }: { label: string; value: any; color: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 56 }}>
-      <span style={{ ...text.numeric, color }}>{value}</span>
-      <span style={{ ...text.label, color: palette.textFaint, marginTop: 3 }}>{label}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
+      <span style={{ ...text.numeric, fontSize: 20, color }}>{value}</span>
+      <span style={{ ...text.label, fontSize: 10, color: palette.card.flavor }}>{label}</span>
+    </div>
+  );
+}
+
+/** A satellite token-panel that floats beside the card (buffs / gear). Styled
+ *  like a small slab of the same card-stock — cream face, mahogany edge, brass
+ *  header — so it reads as related to the card without being inside its frame. */
+function SidePanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: palette.card.body,
+      border: '2px solid #5a3f1c',
+      borderRadius: 12,
+      boxShadow: shadow.lg,
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        padding: '7px 12px',
+        background: 'linear-gradient(180deg, #2a1d0e, #1d130a)',
+        borderBottom: '1px solid rgba(0,0,0,0.4)',
+        ...text.label, color: 'rgba(232,216,180,0.78)',
+      }}>{title}</div>
+      <div style={{ padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 11 }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -298,14 +457,10 @@ function PassivePanel({ name, description, trigger }: { name: string; descriptio
  * (USED / blocked reason / enemy hero).
  */
 function SkillActionCard({
-  name, description, targetLabel, ability, hero,
-  mine, used, canUse, blockedReason, onUse,
+  name, description, mine, used, canUse, blockedReason, onUse,
 }: {
   name: string;
   description: string;
-  targetLabel: string;
-  ability: AbilityDef;
-  hero: CardInstance;
   mine: boolean;
   used: boolean;
   canUse: boolean;
@@ -342,137 +497,22 @@ function SkillActionCard({
         <span style={{ flexShrink: 0, ...text.label, color: chip.color }}>{chip.label}</span>
       </div>
       {description && (
-        <div style={{ ...text.body, color: palette.textDim, marginBottom: 8 }}>
+        <div style={{ ...text.body, color: palette.textDim }}>
           <RuleText text={description} />
         </div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{
-          display: 'inline-block', padding: '2px 8px',
-          background: 'rgba(120, 80, 30, 0.10)', border: `1px solid ${palette.border}`,
-          borderRadius: 999, ...text.label, color: palette.textFaint,
-        }}>Target · {targetLabel}</span>
-        <ScalingChip ability={ability} hero={hero} />
-      </div>
-      <ScalingBreakdown ability={ability} hero={hero} />
 
-      {/* Footer CTA / status — the "Use Skill" affordance lives in the card.
-          Shows the soul cost like Retreat does (−2) so costs read consistently. */}
-      {interactive ? (
-        <div style={{
-          marginTop: 12, paddingTop: 10, borderTop: `1px solid ${accent}55`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          ...text.label, color: palette.textDim,
-        }}>
-          <span aria-hidden>◎</span><span>Tap to Use Skill</span>
-          <span style={{
-            padding: '2px 8px', borderRadius: 999,
-            background: 'rgba(120, 80, 30, 0.12)',
-            border: `1px solid ${palette.border}`,
-            ...text.label, color: palette.textDim,
-          }}>−1 soul</span>
-        </div>
-      ) : mine && !canUse && (blockedReason || used) ? (
+      {/* When the skill can't be used for a stated reason (e.g. "Not your
+          turn"), show it. Usable skills need no prompt — the brass press
+          styling + READY chip already invite the tap; the used state is the
+          USED chip. */}
+      {!interactive && mine && !canUse && !used && blockedReason && (
         <div style={{
           marginTop: 10, paddingTop: 8, borderTop: `1px solid ${palette.border}`,
           textAlign: 'center', ...text.body, color: palette.textFaint,
-        }}>{used ? 'Already used this turn' : blockedReason}</div>
-      ) : null}
-    </motion.div>
-  );
-}
-
-/**
- * Shared read-only layout for the Ultimate: bold name, description, target chip,
- * and (when relevant) the scaling breakdown.
- */
-function AbilityPanel({
-  name, description, targetLabel, ability, hero,
-}: {
-  name: string;
-  description: string;
-  targetLabel: string;
-  ability: AbilityDef;
-  hero: CardInstance;
-}) {
-  return (
-    <div style={{
-      padding: '12px 14px', borderRadius: radius.md,
-      background: 'rgba(120, 80, 30, 0.05)', border: `1px solid ${palette.border}`,
-    }}>
-      <div style={{ ...text.label, color: palette.text, marginBottom: 4 }}>{name}</div>
-      {description && (
-        <div style={{ ...text.body, color: palette.textDim, marginBottom: 8 }}>
-          <RuleText text={description} />
-        </div>
+        }}>{blockedReason}</div>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{
-          display: 'inline-block', padding: '2px 8px',
-          background: 'rgba(120, 80, 30, 0.10)', border: `1px solid ${palette.border}`,
-          borderRadius: 999, ...text.label, color: palette.textFaint,
-        }}>Target · {targetLabel}</span>
-        <ScalingChip ability={ability} hero={hero} />
-      </div>
-      <ScalingBreakdown ability={ability} hero={hero} />
-    </div>
-  );
-}
-
-/** Compact one-line value chip — shown only when there's a flat base and no
- *  active Spirit scaling (keeps simple effects from rendering a whole box). */
-function ScalingChip({ ability, hero }: { ability: AbilityDef; hero: CardInstance }) {
-  const base = ability.base ?? null;
-  const scalesSpirit = !!ability.scalesSpirit;
-  if (base === null) return null;            // pure utility → nothing
-  if (scalesSpirit && hero.spiritMod !== 0) return null; // breakdown box handles it
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px',
-      background: 'rgba(120, 80, 30, 0.10)', border: `1px solid ${palette.border}`,
-      borderRadius: 999, ...text.label, color: palette.textDim,
-    }}>{base} {ability.baseLabel ?? 'effect'}</span>
-  );
-}
-
-/** Full Base / +Spirit / Total box — only when Spirit is actively adding to it. */
-function ScalingBreakdown({ ability, hero }: { ability: AbilityDef; hero: CardInstance }) {
-  const base = ability.base ?? 0;
-  const scalesSpirit = !!ability.scalesSpirit;
-  const spi = hero.spiritMod;
-  if (!scalesSpirit || spi === 0) return null;
-
-  return (
-    <div style={{
-      marginTop: 10, padding: '10px 12px',
-      background: 'rgba(120, 80, 30, 0.06)',
-      border: `1px solid ${palette.border}`,
-      borderRadius: 6,
-      display: 'flex', flexDirection: 'column', gap: 5,
-    }}>
-      <Row label="Base" value={`${base} ${ability.baseLabel ?? 'effect'}`} color={palette.textDim} />
-      <Row label="+ Spirit" value={`+${spi}`} color={palette.spirit} hint={`(${spi} SPI)`} />
-      <div style={{
-        marginTop: 4, paddingTop: 6,
-        borderTop: `1px dashed ${palette.border}`,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-      }}>
-        <span style={{ ...text.label, color: palette.textDim }}>= Total</span>
-        <span style={{ ...text.numeric, color: palette.textDim }}>{base + spi}</span>
-      </div>
-    </div>
-  );
-}
-
-function Row({ label, value, color, hint }: { label: string; value: string; color: string; hint?: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-      <span style={{ ...text.label, color: palette.textFaint }}>{label}</span>
-      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 7 }}>
-        {hint && <span style={{ ...text.body, color: palette.textFaint }}>{hint}</span>}
-        <span style={{ ...text.numeric, color }}>{value}</span>
-      </span>
-    </div>
+    </motion.div>
   );
 }
 

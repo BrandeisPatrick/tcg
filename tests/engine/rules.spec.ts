@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
-import { damageUnit, reapDead } from '@/engine/damage';
+import { damageUnit, reapDead, resolve } from '@/engine/damage';
 import type { GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame, configureReadyMatch } from './_helpers';
 
@@ -140,7 +140,9 @@ describe('rule: hero respawn after KO', () => {
     expect(expectedPromoted).toBeDefined();
 
     damageUnit(G, aiActive, 9999, 'pure');
-    reapDead(G, G.players['1']);
+    // Auto-promotion is part of the `resolve` state-based pass (not `reapDead`,
+    // which now only reaps); resolve reaps both players then auto-promotes the AI.
+    resolve(G);
 
     // Active slot now holds the promoted hero, not the corpse.
     expect(G.players['1'].active?.iid).toBe(expectedPromoted.iid);

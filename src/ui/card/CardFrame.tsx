@@ -2,6 +2,8 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { palette, fonts, shadow, radius, rarityStyle, typeTint } from '../tokens';
 import { RuleText } from './RuleText';
+import { CardShine } from './RarityFX';
+import { usePointerTilt } from './usePointerTilt';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { HeroPortrait } from '@/cards/art/heroArt';
@@ -29,6 +31,13 @@ interface Props {
   /** Player can't pay this card's soul cost right now — the cost coin flips
    *  to warning red so the greyed-out card explains itself at a glance. */
   unaffordable?: boolean;
+  /** Pointer-driven 3D tilt + glare ("physical card" feel). On by default for
+   *  the interactive sizes; pass false for static contexts (slot fills, the
+   *  scripted cast overlay which animates its own sheen). */
+  physical?: boolean;
+  /** Render the scripted cast sheen bar so a parent can sweep it via `--cast`
+   *  (used by the play-cast reveal). */
+  castSheen?: boolean;
 }
 
 const SIZES: Record<Size, { w: number; h: number; nameSize: number; bodySize: number }> = {
@@ -205,9 +214,12 @@ function ArtWindow({ data, size }: { data: CardData | undefined; size: Size }) {
 export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, faded = false,
   overlay, footer, onClick, className, style, rotate = 0, zoom = false, hideStats = false,
-  unaffordable = false,
+  unaffordable = false, physical, castSheen = false,
 }: Props) {
   const [hover, setHover] = useState(false);
+  // Tilt is on by default for the interactive sizes; off for slot fills.
+  const tilt = physical ?? (size !== 'slot');
+  const { ref: tiltRef, handlers: tiltHandlers } = usePointerTilt();
   const data = CARDS_BY_ID[cardId];
   const t = data?.type ?? 'spell';
   const tint = typeTint(t);
@@ -236,8 +248,14 @@ export function CardFrame({
     color: palette.card.bodyText,
     fontFamily: fonts.ui,
     cursor: onClick ? 'pointer' : 'default',
-    transform: `rotate(${rotate}deg) ${selected ? 'translateY(-8px)' : ''} ${zoom ? 'scale(1.02)' : ''}`,
-    transition: 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease',
+    // Tilt (perspective + rotateX/Y reading the live --rx/--ry vars) composes
+    // in front of the consumer's rotate/lift/zoom. A shorter transform
+    // transition keeps the tilt glued to the cursor instead of lagging it.
+    transform: `${tilt ? 'perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) ' : ''}rotate(${rotate}deg) ${selected ? 'translateY(-8px)' : ''} ${zoom ? 'scale(1.02)' : ''}`,
+    transformStyle: tilt ? 'preserve-3d' : undefined,
+    transition: tilt
+      ? 'transform 130ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease'
+      : 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease',
     opacity: faded ? 0.45 : 1,
     isolation: 'isolate',
     display: 'flex',
@@ -253,10 +271,12 @@ export function CardFrame({
   return (
     <div
       className={className}
+      ref={tilt ? tiltRef : undefined}
       style={containerStyle}
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      {...(tilt ? tiltHandlers : {})}
     >
       {hasGoldInset && (
         <div style={{
@@ -460,6 +480,9 @@ export function CardFrame({
           </div>
         )}
       </div>
+
+      {/* Card shine — rarity ring + pointer-driven glare & holographic sheen */}
+      {!faded && <CardShine rarity={rarity} cast={castSheen} />}
     </div>
   );
 }

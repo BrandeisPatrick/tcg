@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
-import { palette, radius, shadow, spring, text } from '../tokens';
+import { palette, spring, text } from '../tokens';
 import { Hand } from './Hand';
 import type { PendingPlay } from '../helpers';
 
@@ -11,6 +11,7 @@ import type { PendingPlay } from '../helpers';
 export function HandTray({
   cards, disabled, pending, isMyTurn, busy, hasPending, mySouls,
   onTap, onLongPress, onHover, onDragEndOver, onUnaffordable, onEnd, onCancel,
+  autoPlay, onToggleAuto,
 }: {
   cards: CardInstance[];
   disabled: boolean;
@@ -26,6 +27,8 @@ export function HandTray({
   onUnaffordable?: (c: CardInstance, cost: number) => void;
   onEnd: () => void;
   onCancel: () => void;
+  autoPlay: boolean;
+  onToggleAuto: () => void;
 }) {
   return (
     <div style={{
@@ -48,10 +51,28 @@ export function HandTray({
           onUnaffordable={onUnaffordable}
         />
       </div>
-      <div style={{ display: 'flex', gap: 10, paddingBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 12 }}>
+        {/* Auto-play toggle — plain grey text, no outline or dot. On-state is
+            shown by the label going brighter; off it's dimmed back. */}
+        <motion.button
+          whileTap={{ scale: 0.94 }}
+          whileHover={{ y: -1, color: 'rgba(58, 56, 50, 1)' }}
+          onClick={onToggleAuto}
+          title={autoPlay
+            ? 'Auto-play on — click to take control'
+            : 'Auto-play off — click to let the AI play'}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            ...text.label,
+            color: autoPlay ? 'rgba(92, 90, 84, 0.95)' : 'rgba(92, 90, 84, 0.42)',
+            padding: '10px 12px',
+            cursor: 'pointer',
+          }}
+        >Auto</motion.button>
         <motion.button
           whileTap={{ scale: 0.96 }}
-          whileHover={isMyTurn ? { scale: 1.03, y: -2 } : undefined}
+          whileHover={isMyTurn ? { scale: 1.03, y: -2, color: 'rgba(58, 56, 50, 1)' } : undefined}
           // Stay clickable while busy: the tap is queued (Board fires it once
           // the animation settles) rather than dropped, so it never feels dead.
           disabled={!isMyTurn}
@@ -72,16 +93,14 @@ export function HandTray({
               ? { duration: 0.2 }
               : { duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
           style={{
-            background: (isMyTurn && !busy)
-              ? `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}55)`
-              : 'rgba(255,255,255,0.04)',
-            ...text.label, color: palette.text,
-            padding: '20px 30px',
-            border: `1px solid ${(isMyTurn && !busy) ? palette.accent : palette.border}`,
-            borderRadius: radius.md,
-            boxShadow: (isMyTurn && !busy) ? shadow.glowAccent : shadow.sm,
+            // Plain grey text, no outline — recedes into the parchment. Active
+            // is a touch brighter so it still reads as pressable.
+            background: 'transparent',
+            border: 'none',
+            ...text.label,
+            color: (isMyTurn && !busy) ? 'rgba(92, 90, 84, 0.9)' : 'rgba(92, 90, 84, 0.5)',
+            padding: '10px 14px',
             cursor: isMyTurn ? (busy ? 'progress' : 'pointer') : 'default',
-            minWidth: 160,
           }}
         >{!isMyTurn ? "Rival's Move" : busy ? 'Resolving…' : 'End Turn'}</motion.button>
         {hasPending && (
@@ -90,13 +109,15 @@ export function HandTray({
             animate={{ opacity: 1, x: 0 }}
             transition={spring.default}
             whileTap={{ scale: 0.96 }}
+            whileHover={{ y: -1, color: palette.danger }}
             onClick={onCancel}
             style={{
-              background: 'rgba(255,107,107,0.12)',
-              ...text.label, color: palette.danger,
-              padding: '20px 24px',
-              border: `1px solid ${palette.danger}55`,
-              borderRadius: radius.md,
+              // Plain text like the others, but wine-tinted so it still reads
+              // as the cancel action.
+              background: 'transparent',
+              border: 'none',
+              ...text.label, color: `${palette.danger}cc`,
+              padding: '10px 12px',
               cursor: 'pointer',
             }}
           >Cancel</motion.button>

@@ -51,7 +51,7 @@ export function SidePanel({
       }}>
         <span style={{ ...text.label, color: palette.textDim }}>Patrol</span>
         <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ ...text.label, color: palette.textFaint }}>Turn</span>
+          <span style={{ ...text.label, color: palette.textDim }}>Turn</span>
           <span style={{ ...text.numeric, fontSize: 16, color: palette.text }}>{turn}</span>
         </span>
       </div>
@@ -78,14 +78,14 @@ export function SidePanel({
         </div>
         <div style={{ flex: 1, overflow: 'auto', padding: '4px 12px 12px' }}>
           {grouped.length === 0 ? (
-            <div style={{ ...text.body, color: palette.textFaint }}>No actions yet.</div>
+            <div style={{ ...text.body, color: palette.textDim }}>No actions yet.</div>
           ) : grouped.map((g) => (
             <div key={g.turn} style={{ marginTop: 8 }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
                 paddingBottom: 3, borderBottom: `1px dashed ${palette.border}`,
               }}>
-                <span style={{ ...text.label, color: palette.accentWarm }}>Turn</span>
+                <span style={{ ...text.label, color: palette.textDim }}>Turn</span>
                 <span style={{ ...text.numeric, fontSize: 16, color: palette.text }}>{g.turn}</span>
               </div>
               {g.entries.map((e, i) => {
@@ -109,7 +109,7 @@ export function SidePanel({
 
       <div style={{
         paddingTop: 8, borderTop: `1px solid ${palette.border}`,
-        ...text.body, color: palette.textFaint,
+        ...text.body, color: palette.textDim,
       }}>
         Drop a card on a hero · Hover for the lore · Hold for full preview
       </div>

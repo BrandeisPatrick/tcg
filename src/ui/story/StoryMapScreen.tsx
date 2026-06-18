@@ -253,11 +253,11 @@ function Edges({ run }: { run: StoryRun }) {
           return (
             <line key={a.id + bid}
               x1={a.x * 1000} y1={a.y * 1000} x2={b.x * 1000} y2={b.y * 1000}
-              stroke={color} strokeWidth={live ? 4 : 2.4}
-              strokeDasharray={live ? '0' : traversed ? '0' : '7 10'}
+              stroke={color} strokeWidth={live ? 2.2 : 1.4}
+              strokeDasharray={live ? '0' : traversed ? '0' : '6 9'}
               strokeLinecap="round"
-              opacity={live ? 0.95 : traversed ? 0.9 : 0.55}
-              style={live ? { filter: 'drop-shadow(0 0 6px rgba(255,200,90,0.9))' } : undefined}
+              opacity={live ? 0.95 : traversed ? 0.85 : 0.5}
+              style={live ? { filter: 'drop-shadow(0 0 4px rgba(255,200,90,0.85))' } : undefined}
             />
           );
         }),
@@ -288,28 +288,41 @@ function nodeTip(node: StoryNode, kind: NodeKind): string {
 }
 
 // ---- node marker -------------------------------------------------------------
+/** Beveled-metal palette for the medallion body, keyed by state/kind. hi = top
+ *  highlight, mid = body, lo = lower shade, rim = edge stroke. */
+type Metal = { hi: string; mid: string; lo: string; rim: string };
+const KIND_METAL: Record<NodeKind, Metal> = {
+  battle:  { hi: '#c2ccd6', mid: '#737e8a', lo: '#3a424c', rim: '#23282f' }, // gunmetal
+  elite:   { hi: '#d9b8e0', mid: '#8a5a9a', lo: '#46294e', rim: '#2c1834' }, // plum steel
+  recruit: { hi: '#c4e0a2', mid: '#5e8442', lo: '#2e4422', rim: '#1c2c16' }, // forest bronze
+  supply:  { hi: '#ffe7a6', mid: '#d2a23e', lo: '#7a5410', rim: '#503709' }, // brass
+  boss:    { hi: '#ffe9ad', mid: '#e0b24c', lo: '#8a5e16', rim: '#5a3d0c' }, // rich gold
+};
+const GOLD_METAL: Metal    = { hi: '#ffeeb5', mid: '#e6b94a', lo: '#8a5e16', rim: '#5a3d0c' }; // current
+const CLEARED_METAL: Metal = { hi: '#a9d2b4', mid: '#5e8e6e', lo: '#2e4a38', rim: '#1c3024' }; // verdigris
+const LOCKED_METAL: Metal  = { hi: '#cfc9bc', mid: '#a39c8c', lo: '#736c5c', rim: '#5a5446' }; // pale dormant stone — recedes into the map
+
 function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; onClick: () => void }) {
   const [hover, setHover] = useState(false);
   const cleared = run.clearedNodeIds.includes(node.id);
   const current = run.currentNodeId === node.id;
   const reachable = isReachable(run, node);
-  // Unavailable spots (locked — not reachable, not done) are greyed out so only
-  // what you can act on stands out.
   const muted = !reachable && !current && !cleared;
-  // A recruit becomes a supply pick once the roster is full — reflect that in
-  // the icon/label/tooltip so the map matches what the click will do.
   const effKind: NodeKind = node.kind === 'recruit' && run.heroes.length >= 4 ? 'supply' : node.kind;
-  const size = effKind === 'boss' ? 48 : effKind === 'elite' ? 40 : 36;
+  const size = effKind === 'boss' ? 50 : effKind === 'elite' ? 42 : 38;
   const accent = KIND_ACCENT[effKind];
-
-  const ring = current ? CURRENT_GOLD : reachable ? accent : cleared ? '#6b8f4a' : 'rgba(124,114,94,0.55)';
-  const fill = muted ? '#23201a' : current || reachable ? '#251a0c' : '#2a2414';
-  const iconColor = muted ? 'rgba(150,142,120,0.5)'
-    : reachable || current ? '#f3e6c6' : '#9db884';
   const pulse = reachable;
-  // Only the actionable (reachable) nodes get a name label — cleared/locked
-  // nodes are name-on-hover, which keeps the busy harbour readable.
-  const showLabel = !!node.name && reachable;
+
+  // The medallion's metal finish reads its state at a glance: brass for "you
+  // are here", vivid kind-metal when reachable, verdigris-tarnished when done,
+  // faded grey when locked.
+  const metal: Metal = current ? GOLD_METAL : cleared ? CLEARED_METAL : muted ? LOCKED_METAL : KIND_METAL[effKind];
+  const emblem = cleared && !current ? 'cleared' : effKind;
+  const emblemColor = muted ? '#8f897c' : cleared && !current ? '#d6efdd' : '#f3e6c6';
+
+  const combat = effKind === 'battle' || effKind === 'elite' || effKind === 'boss';
+  const foes = combat ? enemyRosterSize(node.depth, node.kind) : 0;
+  const showBadge = combat && (reachable || current) && foes > 0;
 
   return (
     <button
@@ -322,33 +335,72 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
         position: 'absolute',
         left: `${node.x * 100}%`, top: `${node.y * 100}%`,
         width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2,
-        borderRadius: '50%',
-        border: `2.5px solid ${ring}`,
-        background: fill,
-        boxShadow: pulse
-          ? `0 0 0 4px ${accent}33, 0 6px 16px rgba(0,0,0,0.5)`
-          : current ? `0 0 0 4px ${CURRENT_GOLD}33, 0 6px 16px rgba(0,0,0,0.5)`
-          : '0 4px 12px rgba(0,0,0,0.45)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        border: 'none', background: 'none', padding: 0,
         cursor: reachable ? 'pointer' : 'default',
-        padding: 0,
         opacity: muted ? 0.5 : 1,
-        zIndex: hover ? 5 : 1,
+        zIndex: hover ? 6 : current ? 3 : 1,
+        // hover lift handled by transform so the medallion feels picked up
+        transform: hover && reachable ? 'translateY(-2px)' : 'none',
+        transition: 'transform 140ms cubic-bezier(0.22,1,0.36,1)',
       }}
     >
+      {/* Ground shadow — anchors the medallion onto the map. */}
+      <span aria-hidden style={{
+        position: 'absolute', left: '50%', bottom: -size * 0.16, transform: 'translateX(-50%)',
+        width: size * 0.78, height: size * 0.22, borderRadius: '50%',
+        background: 'radial-gradient(ellipse, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%)',
+        pointerEvents: 'none',
+      }} />
+
+      {/* Pulse — only on actionable nodes. */}
       {pulse && (
         <motion.span
           aria-hidden
-          animate={{ scale: [1, 1.35], opacity: [0.5, 0] }}
-          transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
-          style={{
-            position: 'absolute', inset: -3, borderRadius: '50%',
-            border: `2px solid ${accent}`,
-          }}
+          animate={{ scale: [1, 1.4], opacity: [0.45, 0] }}
+          transition={{ duration: 1.7, repeat: Infinity, ease: 'easeOut' }}
+          style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `2px solid ${accent}` }}
         />
       )}
-      <NodeIcon kind={cleared && !current ? 'cleared' : effKind} color={iconColor} size={size * 0.5} />
 
+      {/* Medallion body — beveled metal ring. */}
+      <span style={{
+        position: 'relative', width: '100%', height: '100%', borderRadius: '50%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: `linear-gradient(155deg, ${metal.hi}, ${metal.mid} 48%, ${metal.lo})`,
+        border: `1.5px solid ${metal.rim}`,
+        boxShadow: `inset 0 2px 2px rgba(255,255,255,0.45), inset 0 -3px 5px rgba(0,0,0,0.5), 0 5px 12px rgba(0,0,0,0.5)`
+          // Actionable nodes get a soft colored halo + thin ring so "you are
+          // here" and "you can go here" pop against the busy map at a glance.
+          + ((pulse || current) ? `, 0 0 13px 1px ${(current ? CURRENT_GOLD : accent)}88, 0 0 0 2px ${(current ? CURRENT_GOLD : accent)}55` : ''),
+      }}>
+        {/* Recessed inner disc the emblem is struck into. */}
+        <span style={{
+          width: '72%', height: '72%', borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'radial-gradient(circle at 50% 36%, #2b2218, #15100a)',
+          border: `1px solid ${metal.rim}`,
+          boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.75), inset 0 -1px 1px rgba(255,255,255,0.06)',
+        }}>
+          <span aria-hidden style={{ display: 'flex', filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.6))' }}>
+            <NodeIcon kind={emblem} color={emblemColor} size={size * 0.56} />
+          </span>
+        </span>
+      </span>
+
+      {/* Foe-count badge — a small struck coin (no "N foes" text). */}
+      {showBadge && (
+        <span aria-hidden style={{
+          position: 'absolute', right: -3, bottom: -3,
+          minWidth: 17, height: 17, padding: '0 3px', borderRadius: 999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'radial-gradient(circle at 50% 35%, #241a0f, #120c06)',
+          border: `1.5px solid ${metal.mid}`,
+          color: '#f3e6c6', fontFamily: fonts.ui, fontWeight: 800, fontSize: 10, lineHeight: 1,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.6)',
+        }}>{foes}</span>
+      )}
+
+      {/* Name + scouting details — on hover only (keeps the harbour uncluttered). */}
       <AnimatePresence>
         {hover && (
           <motion.span
@@ -358,8 +410,8 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
             transition={{ duration: 0.12 }}
             style={{
               position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-              marginBottom: 8, whiteSpace: 'nowrap', pointerEvents: 'none',
-              background: 'rgba(18,11,3,0.95)', border: `1px solid ${accent}`,
+              marginBottom: 9, whiteSpace: 'nowrap', pointerEvents: 'none',
+              background: 'rgba(18,11,3,0.95)', border: `1px solid ${current ? CURRENT_GOLD : accent}`,
               color: palette.bg1, padding: '5px 10px', borderRadius: radius.md,
               fontFamily: fonts.ui, fontSize: 11, fontWeight: 700,
               boxShadow: shadow.md,
@@ -367,30 +419,6 @@ function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; on
           >{nodeTip(node, effKind)}</motion.span>
         )}
       </AnimatePresence>
-
-      {/* Location name + a scouting sub-line (foe count & enemy for fights) —
-          only for actionable nodes. The sub-line is touch-friendly: no hover
-          needed on iPad. A dark chip keeps it legible over streets/water. */}
-      {showLabel && (() => {
-        const combat = effKind === 'battle' || effKind === 'elite' || effKind === 'boss';
-        const foes = combat ? enemyRosterSize(node.depth, node.kind) : 0;
-        const enemyName = node.enemy ? CARDS_BY_ID[node.enemy]?.name : undefined;
-        const sub = combat
-          ? `${foes} foe${foes > 1 ? 's' : ''}${enemyName ? ` · ${enemyName}` : ''}`
-          : effKind === 'recruit' ? 'recruit a hero' : 'supply cache';
-        return (
-          <span style={{
-            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-            marginTop: 4, whiteSpace: 'nowrap', pointerEvents: 'none',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
-            background: 'rgba(12,14,20,0.7)', padding: '2px 7px', borderRadius: 4,
-            textShadow: '0 1px 2px rgba(0,0,0,0.9)',
-          }}>
-            <span style={{ fontFamily: fonts.ui, fontSize: 10, fontWeight: 700, color: '#fbf4e4' }}>{node.name}</span>
-            <span style={{ fontFamily: fonts.ui, fontSize: 8.5, fontWeight: 700, color: combat ? '#e89a86' : '#bfe6ff' }}>{sub}</span>
-          </span>
-        );
-      })()}
     </button>
   );
 }
@@ -450,7 +478,7 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
         aria-label="Back to menu"
         style={{
           position: 'absolute', top: 14, left: 14, width: 38, height: 38, borderRadius: '50%',
-          background: 'rgba(18,11,3,0.78)', border: `1.5px solid ${palette.accent}`,
+          background: 'rgba(18,11,3,0.9)', border: `1.5px solid ${palette.accent}`,
           color: palette.bg1, cursor: 'pointer', fontSize: 18, lineHeight: 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transform: 'translateZ(0)',
@@ -462,7 +490,7 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
         aria-label="Abandon run and start over"
         style={{
           position: 'absolute', top: 14, right: 14,
-          background: 'rgba(18,11,3,0.78)', border: `1.5px solid ${palette.danger}`,
+          background: 'rgba(18,11,3,0.9)', border: `1.5px solid ${palette.danger}`,
           color: palette.bg1, cursor: 'pointer', borderRadius: radius.pill,
           padding: '8px 16px', fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
           transform: 'translateZ(0)',
@@ -472,7 +500,9 @@ function RunHud({ run, onExit, onAbandon }: { run: StoryRun; onExit: () => void;
       <div style={{
         position: 'absolute', left: 14, bottom: 14,
         display: 'flex', alignItems: 'center', gap: 14,
-        background: 'rgba(18,11,3,0.82)', border: `1px solid ${palette.borderStrong}`,
+        // Near-solid so the tan map underneath can't bleed through and wash out
+        // the text contrast.
+        background: 'rgba(16,10,3,0.94)', border: `1px solid ${palette.borderStrong}`,
         borderRadius: radius.pill, padding: '7px 16px 7px 10px',
         boxShadow: shadow.md, transform: 'translateZ(0)',
       }}>
@@ -500,7 +530,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 40 }}>
       <span style={{ fontFamily: fonts.ui, fontSize: 16, fontWeight: 700, color: palette.bg1, lineHeight: 1 }}>{value}</span>
-      <span style={{ fontFamily: fonts.ui, fontSize: 9, color: palette.textFaint, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ fontFamily: fonts.ui, fontSize: 10, fontWeight: 600, color: 'rgba(240,226,194,0.82)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 2 }}>{label}</span>
     </div>
   );
 }
@@ -514,7 +544,7 @@ function ZoomBtn({ label, title, onClick, disabled }: { label: string; title: st
       title={title}
       style={{
         width: 44, height: 44, borderRadius: '50%',
-        background: 'rgba(18,11,3,0.82)', border: `1.5px solid ${palette.accent}`,
+        background: 'rgba(18,11,3,0.9)', border: `1.5px solid ${palette.accent}`,
         color: palette.bg1, cursor: disabled ? 'default' : 'pointer',
         fontSize: 24, fontWeight: 700, lineHeight: 1, paddingBottom: 2,
         display: 'flex', alignItems: 'center', justifyContent: 'center',

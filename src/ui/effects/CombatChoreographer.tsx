@@ -273,9 +273,9 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
         />
       )}
 
-      {/* "Damaged by …" feedback for the PRIMARY target — the hero the attacker
+      {/* "Damaged" feedback for the PRIMARY target — the hero the attacker
           swung at. For face attacks (no targetRect), a synthetic band at the
-          receiving player's avatar zone hosts the same banner. */}
+          receiving player's avatar zone hosts the same marker. */}
       {(() => {
         let rect: { left: number; top: number; width: number; height: number; isCard: boolean };
         if (targetRect) {
@@ -300,9 +300,9 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
         );
       })()}
 
-      {/* "Damaged by …" feedback for the ATTACKER when retaliation lands.
+      {/* "Damaged" feedback for the ATTACKER when retaliation lands.
           Mutual-damage rule: the attacker also took a hit, so they get the
-          same banner pointing at the defender as the source. */}
+          same marker. */}
       {step.retaliationDamage > 0 && (
         <DamageBanner
           rect={{
@@ -348,18 +348,19 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
 });
 
 /**
- * EVA-style damage feedback that sweeps a black banner across a hero card while
- * collapsing the card to grayscale. Used for both the primary target (attacker
- * → defender) and the retaliating attacker (defender → attacker on mutual hit),
- * so any hero that actually takes damage gets the same "Damaged by …" beat.
+ * Damage feedback clipped to a hero card: a brief desaturation wash plus the
+ * single word "Damaged" (or "K.O." on a lethal blow) that fills with the damage
+ * colour left→right, like a progress bar charging across the word. Used for both
+ * the primary target and a retaliating attacker, so any hero that takes damage
+ * gets the same beat.
  *
- * `rect` is the card's bounding box (or a synthetic face band for direct
- * hits); the banner is clipped to it so it never bleeds onto the rest of the
- * board. `keySuffix` keeps each instance's motion divs uniquely keyed across
- * the primary / retaliation pair.
+ * `rect` is the card's bounding box (or a synthetic face band for direct hits).
+ * The whole effect is clipped to it and the type size is derived from the card
+ * width, so it scales with the board / browser window. `keySuffix` keeps each
+ * instance's motion divs uniquely keyed across the primary / retaliation pair.
  */
 function DamageBanner({
-  rect, sourceName, isKO, damagePersist, impactDelay, keySuffix,
+  rect, isKO, damagePersist, impactDelay, keySuffix,
 }: {
   rect: { left: number; top: number; width: number; height: number; isCard: boolean };
   sourceName: string;
@@ -368,11 +369,12 @@ function DamageBanner({
   impactDelay: number;
   keySuffix: string;
 }) {
-  const bannerHeight = Math.max(24, Math.min(36, Math.round(rect.height * 0.24)));
-  const koBorderTop = isKO ? 3 : 2;
-  // Slightly shorter than damagePersist so the slide-out completes before the
-  // beat unmounts the wrapper.
-  const bannerDuration = damagePersist * 0.92;
+  const word = isKO ? 'K.O.' : 'Damaged';
+  const fill = isKO ? '#ffd24a' : '#e23a30';            // red progress fill (gold on a KO)
+  // Type scales with the card so it tracks the board / window size and never
+  // overflows a narrow card the way a fixed 14px line did.
+  const fontSize = Math.max(13, Math.min(Math.round(rect.width * (isKO ? 0.2 : 0.15)), isKO ? 44 : 34));
+  const dur = damagePersist * 0.92;
   return (
     <div
       style={{
@@ -386,68 +388,57 @@ function DamageBanner({
         isolation: 'isolate',
       }}
     >
+      {/* Drain the card's colour for the beat — reads as "took a hit". */}
       <motion.div
         key={`wash-${keySuffix}`}
         initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 0.95, 0.95, 0] }}
-        transition={{ duration: bannerDuration, delay: impactDelay, times: [0, 0.10, 0.85, 1] }}
+        animate={{ opacity: [0, 0.9, 0.9, 0] }}
+        transition={{ duration: dur, delay: impactDelay, times: [0, 0.1, 0.85, 1] }}
         style={{
           position: 'absolute', inset: 0,
           background: 'rgba(20, 20, 24, 0.6)',
           mixBlendMode: 'saturation',
         }}
       />
+      {/* The word — white, centred and clipped to the card, with a soft focus
+          scrim so it stays legible over bright art. */}
       <motion.div
-        key={`banner-${keySuffix}`}
-        initial={{ x: '-110%' }}
-        animate={{ x: ['-110%', '0%', '0%', '110%'] }}
-        transition={{ duration: bannerDuration, delay: impactDelay, times: [0, 0.18, 0.85, 1], ease: [0.22, 1, 0.36, 1] }}
+        key={`word-${keySuffix}`}
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: [0, 1, 1, 0], scale: [0.92, 1, 1, 1] }}
+        transition={{ duration: dur, delay: impactDelay, times: [0, 0.12, 0.85, 1], ease: 'easeOut' }}
         style={{
-          position: 'absolute',
-          top: `calc(50% - ${(isKO ? bannerHeight * 1.7 : bannerHeight) / 2}px)`,
-          left: 0,
-          width: '100%',
-          minHeight: bannerHeight,
-          background: '#0a0a0a',
-          borderTop: `${koBorderTop}px solid ${palette.danger}`,
-          borderBottom: `1px solid ${palette.danger}88`,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          padding: `${isKO ? 4 : 2}px 10px`,
-          boxShadow: `0 2px 12px rgba(0,0,0,0.65), 0 0 18px ${palette.danger}55`,
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'radial-gradient(ellipse 62% 34% at 50% 50%, rgba(0,0,0,0.5), transparent 72%)',
         }}
       >
-        <span style={{
-          display: 'inline-flex', alignItems: 'center',
-          fontFamily: fonts.ui,
-          fontWeight: 700,
-          fontSize: 14,
-          color: '#fff',
-          whiteSpace: 'nowrap',
-          textShadow: '0 1px 2px rgba(0,0,0,0.9)',
+        <div style={{
+          position: 'relative', display: 'inline-block',
+          fontFamily: fonts.ui, fontWeight: 800, fontSize,
+          letterSpacing: '0.05em', whiteSpace: 'nowrap',
+          textShadow: '0 1px 2px rgba(0,0,0,0.95), 0 2px 10px rgba(0,0,0,0.7)',
         }}>
-          <span style={{
-            color: isKO ? '#ffd98a' : palette.danger,
-            marginRight: 8,
-            fontSize: 18,
-            lineHeight: 1,
-          }}>▌</span>
-          Damaged by {sourceName}
-        </span>
-        {isKO && (
-          <span style={{
-            fontFamily: fonts.ui,
-            fontWeight: 700,
-            fontSize: 28,
-            color: palette.danger,
-            whiteSpace: 'nowrap',
-            marginTop: 3,
-            textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 12px rgba(138,46,42,0.6)',
-          }}>
-            K.O.
-          </span>
-        )}
+          {/* White word. */}
+          <span style={{ color: '#fff' }}>{word}</span>
+          {/* Red progress fill charging INSIDE the white word, left→right, with
+              a bright leading edge — the "bar fills the text" the design calls for. */}
+          <motion.span
+            key={`fill-${keySuffix}`}
+            initial={{ width: '0%' }}
+            animate={{ width: '100%' }}
+            transition={{ duration: dur * 0.5, delay: impactDelay, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              position: 'absolute', left: 0, top: 0, height: '100%',
+              overflow: 'hidden', display: 'block',
+              color: fill,
+              borderRight: `2px solid ${fill}`,
+              filter: `drop-shadow(0 0 6px ${fill}aa)`,
+            }}
+          >
+            <span style={{ whiteSpace: 'nowrap' }}>{word}</span>
+          </motion.span>
+        </div>
       </motion.div>
     </div>
   );

@@ -142,7 +142,8 @@ export function damagePlayer(G: GameState, pid: PlayerID, amount: number): numbe
 /** Heal a unit. `sourceName` falls back to the cast-context caster for logging. */
 export function healUnit(G: GameState, target: CardInstance, amount: number, sourceName?: string): number {
   if (amount <= 0) return 0;
-  if ((target.respawnTurnsLeft ?? 0) > 0) return 0;
+  if ((target.respawnTurnsLeft ?? 0) > 0) return 0;   // corpse on the respawn timer
+  if (target.hp <= 0) return 0;                        // dead, not yet reaped — a heal must not undo the KO
   const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
   if (target.statuses.some((s) => s.id === 'healing_boost_down')) {
     pushLog(G, `${targetName} could not be healed (Healing Blocked).`);
@@ -253,7 +254,38 @@ export function reapDead(G: GameState, ps: PlayerState) {
       killInPlace(G, ps, b);
     }
   }
-  if (ps.id === '1') autoPromoteAi(G, ps);
+}
+
+/** Does this player owe a forced promotion — Active is a corpse AND an eligible
+ *  (alive, non-bench-only) bench hero can step up? */
+export function needsPromotion(ps: PlayerState): boolean {
+  if (!ps.active || (ps.active.respawnTurnsLeft ?? 0) === 0) return false;
+  return ps.bench.some((b) => {
+    if (!b || (b.respawnTurnsLeft ?? 0) > 0) return false;
+    const d = CARDS_BY_ID[b.cardId];
+    return d?.type === 'hero' && !d.flags?.benchOnly;
+  });
+}
+
+/**
+ * The single state-based-actions pass. Run this after ANY board mutation
+ * (combat, ability, status tick, turn start, promotion) — it resolves the
+ * board to a stable state in ONE fixed, linear order so no caller can forget a
+ * step or leave a half-resolved board:
+ *
+ *   1. Reap dead heroes (both players) — arm respawn timers + the patron tax.
+ *   2. Forced promotions — the AI side ('1') auto-promotes its strongest bench
+ *      hero immediately; the local side ('0') is surfaced via `pendingPromotion`
+ *      for the UI (human modal) or the auto-play loop to resolve.
+ *
+ * The win check is intentionally NOT here — boardgame.io's `endIf` is the
+ * canonical gate and runs after every move on the already-resolved state.
+ */
+export function resolve(G: GameState) {
+  reapDead(G, G.players['0']);
+  reapDead(G, G.players['1']);
+  autoPromoteAi(G, G.players['1']);
+  G.pendingPromotion = needsPromotion(G.players['0']) ? '0' : undefined;
 }
 
 /**
