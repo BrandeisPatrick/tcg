@@ -14,6 +14,10 @@ interface Props {
   cardId: string;
   size?: number;
   selected?: boolean;
+  /** Render the card name below the circle. Default true (standalone gallery /
+   *  shop icons). Inline list rows that print their own name pass false so the
+   *  label doesn't duplicate and overflow the tiny icon wrapper. */
+  showName?: boolean;
 }
 
 function CardGlyph({ cardId, accent }: { cardId: string; accent: string }) {
@@ -163,7 +167,7 @@ function CircleArt({ data }: { data: CardData | undefined }) {
   );
 }
 
-export function RoundCardIcon({ cardId, size = 130, selected = false }: Props) {
+export function RoundCardIcon({ cardId, size = 130, selected = false, showName = true }: Props) {
   const data = CARDS_BY_ID[cardId];
   const tint = typeTint(data?.type ?? 'spell');
   const name = data?.name ?? cardId;
@@ -223,19 +227,21 @@ export function RoundCardIcon({ cardId, size = 130, selected = false }: Props) {
         <RarityFX rarity={rarity} seed={cardId} />
       </div>
 
-      {/* Name below */}
-      <div style={{
-        marginTop: 10,
-        fontFamily: fonts.display,
-        fontSize: 14,
-        fontWeight: 700,
-        color: selected ? '#e8d8b4' : '#8a7a60',
-        letterSpacing: 0.5,
-        lineHeight: 1.2,
-        transition: 'color 0.3s',
-      }}>
-        {name}
-      </div>
+      {/* Name below — standalone icons only; inline rows print their own. */}
+      {showName && (
+        <div style={{
+          marginTop: 10,
+          fontFamily: fonts.display,
+          fontSize: 14,
+          fontWeight: 700,
+          color: selected ? '#e8d8b4' : '#8a7a60',
+          letterSpacing: 0.5,
+          lineHeight: 1.2,
+          transition: 'color 0.3s',
+        }}>
+          {name}
+        </div>
+      )}
     </div>
   );
 }

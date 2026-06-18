@@ -252,7 +252,7 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
                         cursor: 'pointer',
                       }}
                     >
-                      <RoundCardIcon cardId={cardId} size={28} />
+                      <RoundCardIcon cardId={cardId} size={28} showName={false} />
                       <div style={{ flex: 1 }}>
                         <div style={{ ...text.label, fontSize: 12 }}>{data?.name ?? cardId}</div>
                         <div style={{ ...text.body, fontSize: 10, color: palette.textDim }}>
@@ -310,7 +310,7 @@ function PoolCard({ card, count, canAdd, onAdd }: {
         textAlign: 'left',
       }}
     >
-      <RoundCardIcon cardId={card.id} size={40} />
+      <RoundCardIcon cardId={card.id} size={40} showName={false} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ ...text.label, fontSize: 12 }}>{card.name}</div>
         <div style={{ ...text.body, fontSize: 10, color: palette.textDim }}>
