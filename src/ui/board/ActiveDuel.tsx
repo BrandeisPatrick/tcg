@@ -89,7 +89,7 @@ export function ActiveDuel({
         {/* Glow blob */}
         <div style={{
           position: 'absolute', top: '50%', left: '50%',
-          width: 80, height: 200, transform: 'translate(-50%, -50%)',
+          width: 80, height: 140, transform: 'translate(-50%, -50%)',
           background: `radial-gradient(ellipse at center, ${accent}28, transparent 70%)`,
           filter: 'blur(10px)',
           pointerEvents: 'none',

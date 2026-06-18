@@ -35,7 +35,7 @@ export function BenchRow({
       display: 'flex',
       justifyContent: 'center',
       gap: 12,
-      padding: isMobile ? '0 4px' : '0 12px',
+      padding: isMobile ? 0 : '0 12px',
       height: '100%',
       minHeight: 0,
     }}>

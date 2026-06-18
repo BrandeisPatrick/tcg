@@ -602,7 +602,7 @@ export function Board(props: BoardProps<GameState>) {
             flexDirection: 'column',
             // Generous fibonacci gap gives the rows visible breathing room
             // rather than packing them.
-            gap: isMobile ? 14 : 40,
+            gap: isMobile ? 20 : 40,
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
           }}>
@@ -617,7 +617,7 @@ export function Board(props: BoardProps<GameState>) {
             position: 'relative',
             display: 'flex',
             flexDirection: 'column',
-            gap: isMobile ? 14 : 40,
+            gap: isMobile ? 20 : 40,
           }}>
             {/* OPP BENCH (3 cards) */}
             <div style={{ flex: isMobile ? '0 0 150px' : '0 0 180px', height: isMobile ? 150 : 180 }}>
