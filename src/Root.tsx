@@ -22,7 +22,25 @@ type View =
   | { screen: 'match' };
 
 export function Root() {
-  const [view, setView] = useState<View>({ screen: 'start' });
+  // Deep-link an initial screen via the URL, e.g. ?screen=match (jumps straight
+  // into a Quick Match draft), ?screen=heroes|decks|story, or
+  // ?screen=deckEdit&slot=N. Only activates when the param is present, so the
+  // normal entry (no query) still lands on the start screen.
+  const [view, setView] = useState<View>(() => {
+    const q = new URLSearchParams(window.location.search);
+    const s = q.get('screen');
+    if (s === 'heroes' || s === 'decks' || s === 'story') return { screen: s };
+    if (s === 'deckEdit') return { screen: 'deckEdit', slotIndex: Number(q.get('slot') ?? 0) || 0 };
+    if (s === 'match') {
+      setMatchConfig({
+        playerDeck: getSelectedDeck()?.cards ?? [],
+        heroPreferences: getPreferredHeroes(),
+        story: undefined,
+      });
+      return { screen: 'match' };
+    }
+    return { screen: 'start' };
+  });
   const [matchEpoch, setMatchEpoch] = useState(0);
   const [run, setRun] = useState<StoryRun | null>(() => loadRun());
   // The node whose battle is currently in progress (resolved on match end).
