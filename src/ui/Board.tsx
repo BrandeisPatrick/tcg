@@ -54,7 +54,7 @@ export function Board(props: BoardProps<GameState>) {
   // top-right; flip off any time to take control back.
   const [autoPlay, setAutoPlay] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 767);
   const [preview, setPreview] = useState<{ card: CardInstance; hover: boolean } | null>(null);
   const [heroDetail, setHeroDetail] = useState<CardInstance | null>(null);
   // Equipment replacement flow: when the player tries to attach a 4th piece
