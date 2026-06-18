@@ -4,6 +4,7 @@ import { palette, fonts, spring, text, shadow } from '../tokens';
 import { loadPlayerData, savePlayerData, deleteDeck, setSelectedDeckIndex, MAX_DECKS, DECK_SIZE } from '@/storage/playerData';
 import type { DeckSlot } from '@/storage/playerData';
 import { CARDS_BY_ID } from '@/cards';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   onBack: () => void;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function DeckManagerScreen({ onBack, onEditDeck }: Props) {
+  const { isMobile } = useViewport();
   const [data, setData] = useState(() => loadPlayerData());
 
   function handleSelect(i: number) {
@@ -29,7 +31,7 @@ export function DeckManagerScreen({ onBack, onEditDeck }: Props) {
       background: palette.bg0,
       color: palette.text,
       fontFamily: fonts.ui,
-      padding: '40px 64px 60px',
+      padding: isMobile ? '24px 14px 40px' : '40px 64px 60px',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -56,7 +58,7 @@ export function DeckManagerScreen({ onBack, onEditDeck }: Props) {
 
         <div style={{
           fontFamily: fonts.display,
-          fontSize: 36,
+          fontSize: isMobile ? 28 : 36,
           color: palette.text,
           marginBottom: 8,
         }}>
@@ -68,8 +70,8 @@ export function DeckManagerScreen({ onBack, onEditDeck }: Props) {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 24,
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+          gap: isMobile ? 16 : 24,
         }}>
           {Array.from({ length: MAX_DECKS }).map((_, i) => {
             const deck = data.decks[i];

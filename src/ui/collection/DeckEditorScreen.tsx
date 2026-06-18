@@ -6,6 +6,7 @@ import type { DeckSlot } from '@/storage/playerData';
 import { SPELLS, EQUIPMENT, CARDS_BY_ID } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { RoundCardIcon } from '../card/RoundCardIcon';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   slotIndex: number;
@@ -15,6 +16,7 @@ interface Props {
 type Filter = 'all' | 'spell' | 'equipment';
 
 export function DeckEditorScreen({ slotIndex, onBack }: Props) {
+  const { isMobile } = useViewport();
   const existing = getDeck(slotIndex);
   const [name, setName] = useState(existing?.name ?? `Deck ${slotIndex + 1}`);
   const [cards, setCards] = useState<string[]>(existing?.cards ?? []);
@@ -61,12 +63,13 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
     }}>
       {/* Header bar */}
       <div style={{
-        padding: '16px 40px',
+        padding: isMobile ? '12px 14px' : '16px 40px',
         borderBottom: `1px solid ${palette.border}`,
         background: palette.bg1,
         display: 'flex',
         alignItems: 'center',
-        gap: 20,
+        gap: isMobile ? 10 : 20,
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
         flexShrink: 0,
       }}>
         <motion.button
@@ -92,7 +95,8 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
           placeholder="Deck name..."
           style={{
             flex: 1,
-            maxWidth: 300,
+            minWidth: isMobile ? 140 : undefined,
+            maxWidth: isMobile ? undefined : 300,
             padding: '8px 14px',
             border: `1px solid ${palette.border}`,
             borderRadius: 6,
@@ -135,17 +139,18 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
         </motion.button>
       </div>
 
-      {/* Main content: pool (left) + deck (right) */}
+      {/* Main content: pool (left) + deck (right). Phones stack them and let
+          the page scroll as one column instead of two independent scroll panes. */}
       <div style={{
         flex: 1,
         display: 'grid',
-        gridTemplateColumns: '1fr 360px',
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 360px',
         minHeight: 0,
       }}>
         {/* Card pool */}
         <div style={{
-          padding: '20px 32px',
-          overflow: 'auto',
+          padding: isMobile ? '16px 14px' : '20px 32px',
+          overflow: isMobile ? 'visible' : 'auto',
         }}>
           <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
             {(['all', 'spell', 'equipment'] as Filter[]).map((f) => (
@@ -171,7 +176,9 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gridTemplateColumns: isMobile
+              ? '1fr'
+              : 'repeat(auto-fill, minmax(280px, 1fr))',
             gap: 10,
           }}>
             {pool.map((card) => {
@@ -192,10 +199,11 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
 
         {/* Deck contents */}
         <div style={{
-          borderLeft: `1px solid ${palette.border}`,
+          borderLeft: isMobile ? 'none' : `1px solid ${palette.border}`,
+          borderTop: isMobile ? `1px solid ${palette.border}` : 'none',
           background: palette.bg1,
-          padding: '20px 20px',
-          overflow: 'auto',
+          padding: isMobile ? '16px 14px' : '20px 20px',
+          overflow: isMobile ? 'visible' : 'auto',
           display: 'flex',
           flexDirection: 'column',
         }}>

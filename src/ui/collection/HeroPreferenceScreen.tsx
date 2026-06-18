@@ -6,6 +6,7 @@ import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { palette, fonts, spring, text, shadow } from '../tokens';
 import { getPreferredHeroes, savePreferredHeroes, MAX_PREFERRED_HEROES } from '@/storage/playerData';
 import type { CardId } from '@/engine/types';
+import { useViewport } from '../hooks/useViewport';
 
 const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
 
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function HeroPreferenceScreen({ onBack }: Props) {
+  const { isMobile } = useViewport();
   const [slots, setSlots] = useState<(CardId | null)[]>(() => {
     const saved = getPreferredHeroes();
     while (saved.length < MAX_PREFERRED_HEROES) saved.push(null);
@@ -44,7 +46,7 @@ export function HeroPreferenceScreen({ onBack }: Props) {
       background: palette.bg0,
       color: palette.text,
       fontFamily: fonts.ui,
-      padding: '40px 64px 60px',
+      padding: isMobile ? '24px 14px 40px' : '40px 64px 60px',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -71,7 +73,7 @@ export function HeroPreferenceScreen({ onBack }: Props) {
 
         <div style={{
           fontFamily: fonts.display,
-          fontSize: 36,
+          fontSize: isMobile ? 28 : 36,
           color: palette.text,
           marginBottom: 8,
         }}>
@@ -84,8 +86,8 @@ export function HeroPreferenceScreen({ onBack }: Props) {
         {/* Priority slots */}
         <div style={{
           display: 'flex',
-          gap: 16,
-          marginBottom: 40,
+          gap: isMobile ? 10 : 16,
+          marginBottom: isMobile ? 28 : 40,
           justifyContent: 'center',
         }}>
           {slots.map((heroId, i) => (
@@ -94,6 +96,7 @@ export function HeroPreferenceScreen({ onBack }: Props) {
               index={i}
               heroId={heroId}
               onRemove={() => removeSlot(i)}
+              isMobile={isMobile}
             />
           ))}
         </div>
@@ -109,8 +112,10 @@ export function HeroPreferenceScreen({ onBack }: Props) {
         </div>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
-          gap: 12,
+          gridTemplateColumns: isMobile
+            ? 'repeat(auto-fill, minmax(84px, 1fr))'
+            : 'repeat(auto-fill, minmax(110px, 1fr))',
+          gap: isMobile ? 8 : 12,
         }}>
           {HEROES.map((hero) => {
             const isSelected = selected.has(hero.id);
@@ -190,10 +195,11 @@ export function HeroPreferenceScreen({ onBack }: Props) {
   );
 }
 
-function PrioritySlot({ index, heroId, onRemove }: {
+function PrioritySlot({ index, heroId, onRemove, isMobile }: {
   index: number;
   heroId: string | null;
   onRemove: () => void;
+  isMobile: boolean;
 }) {
   const data = heroId ? CARDS_BY_ID[heroId] : null;
   const identity = heroId ? getHeroIdentity(heroId) : null;
@@ -216,8 +222,8 @@ function PrioritySlot({ index, heroId, onRemove }: {
       <motion.div
         layout
         style={{
-          width: 100,
-          height: 132,
+          width: isMobile ? 74 : 100,
+          height: isMobile ? 98 : 132,
           borderRadius: 8,
           overflow: 'hidden',
           border: heroId
