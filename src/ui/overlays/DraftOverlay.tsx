@@ -14,6 +14,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { palette, fonts, spring, text } from '../tokens';
 import { getMatchConfig } from '@/storage/matchConfig';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   draft: DraftState;
@@ -25,6 +26,7 @@ interface Props {
 const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
 
 export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
+  const { isMobile } = useViewport();
   const myTurn = currentPlayer === me && draft.order[draft.currentIndex] === me;
   const aiTurn = !myTurn && draft.currentIndex < draft.order.length;
   const myPicks = draft.picks[me];
@@ -77,8 +79,10 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
         display: 'flex',
         flexDirection: 'column',
         zIndex: 95,
-        padding: '24px 40px 28px',
-        overflow: 'hidden',
+        padding: isMobile ? '12px 12px 16px' : '24px 40px 28px',
+        // Phones stack the picker + preview vertically and may exceed the
+        // viewport, so allow scroll instead of clipping the preview pane.
+        overflow: isMobile ? 'auto' : 'hidden',
       }}
     >
       <Header
@@ -127,9 +131,11 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           flex: 1,
           minHeight: 0,
           display: 'grid',
-          gridTemplateColumns: '0.85fr 1.15fr',
-          gap: 32,
-          marginTop: 18,
+          // Phones can't fit the picker + preview side by side (the preview
+          // clips off the right edge), so stack them in one column.
+          gridTemplateColumns: isMobile ? '1fr' : '0.85fr 1.15fr',
+          gap: isMobile ? 14 : 32,
+          marginTop: isMobile ? 10 : 18,
         }}
       >
         <HeroGrid
@@ -252,12 +258,14 @@ function TeamStrips({
   me: PlayerID;
   oppId: PlayerID;
 }) {
+  const { isMobile } = useViewport();
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 24,
+        // Two 4-slot strips side by side overflow a phone — stack them.
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+        gap: isMobile ? 8 : 24,
       }}
     >
       <PickStrip
