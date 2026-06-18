@@ -3,6 +3,7 @@ import type { CardInstance } from '@/engine/types';
 import { palette, spring, text } from '../tokens';
 import { Hand } from './Hand';
 import type { PendingPlay } from '../helpers';
+import { useViewport } from '../hooks/useViewport';
 
 /**
  * Bottom row: hand fan on the left, End Turn / Cancel buttons on the right.
@@ -30,13 +31,13 @@ export function HandTray({
   autoPlay: boolean;
   onToggleAuto: () => void;
 }) {
+  const { isMobile } = useViewport();
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr auto',
-      alignItems: 'flex-end',
-      gap: 16,
-      paddingBottom: 16,
+    <div style={isMobile ? {
+      display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 8,
+    } : {
+      display: 'grid', gridTemplateColumns: '1fr auto',
+      alignItems: 'flex-end', gap: 16, paddingBottom: 16,
     }}>
       <div style={{ minWidth: 0 }}>
         <Hand
@@ -51,7 +52,12 @@ export function HandTray({
           onUnaffordable={onUnaffordable}
         />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 12 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        justifyContent: 'flex-end',
+        paddingBottom: isMobile ? 0 : 12,
+        paddingRight: isMobile ? 8 : 0,
+      }}>
         {/* Auto-play toggle — plain grey text, no outline or dot. On-state is
             shown by the label going brighter; off it's dimmed back. */}
         <motion.button
