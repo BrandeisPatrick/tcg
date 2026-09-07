@@ -78,6 +78,9 @@ export const fonts = {
   // Single weight (400) — do not set fontWeight: 700 on consumers, the font's
   // natural heaviness is the weight.
   display: '"Saira Stencil One", "Saira Variable", Impact, sans-serif',
+  // Brush script — the hand-lettered lead-in on the title poster ("Get dealt
+  // into…"). Caveat Brush; falls back to the platform's marker hand.
+  script:  '"Caveat Brush", "Marker Felt", "Bradley Hand", "Segoe Script", cursive',
   mono:    'ui-monospace, "SF Mono", Menlo, monospace',
 } as const;
 

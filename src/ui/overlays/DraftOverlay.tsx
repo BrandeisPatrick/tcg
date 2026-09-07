@@ -1,19 +1,28 @@
-// Pre-match draft overlay — "Select Hero" composition mirroring Deadlock's
-// hero-select screen. Two-column layout:
-//   Left  — compact hero portrait grid (click to pick, hover to preview)
-//   Right — big preview pane (focused hero's portrait, name, keywords, ability)
+// Pre-match draft overlay — Deadlock's own draft-lobby composition:
 //
-// Both teams' pick strips run along the top edge (yours left, opponent right).
-// Snake-order is driven by the engine; this overlay just dispatches draftPick
-// when it's the local player's turn.
+//   ▸ a dark dial-and-halftone ground, the focused hero's splash bleeding
+//     through it out of focus
+//   ▸ the rival's picks along a red bar across the top (card backs for the
+//     picks still to come; the next one pulses while the AI thinks)
+//   ▸ the full hero roster as a fixed grid of portrait tiles — taken heroes
+//     stay in place, dimmed and framed in their owner's colour, so the grid
+//     never reshuffles under the cursor
+//   ▸ a one-line dossier for whichever hero is focused
+//   ▸ YOUR team as four numbered tarot-style cards; the slot being drafted
+//     previews the focused hero in green, locked picks turn gold
+//   ▸ a chamfered LOCK button (Enter works too) — the one true "draft" trigger
+//
+// Snake order is driven by the engine; this overlay only dispatches
+// draftPick when it's the local player's turn.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { DraftState, PlayerID } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, HEROES } from '@/cards';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { heroArtFocus } from '@/cards/art/heroArt';
-import { palette, fonts, spring, text } from '../tokens';
+import { fonts, spring, text } from '../tokens';
+import { poster, chamfer } from '../poster';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { useViewport } from '../hooks/useViewport';
 
@@ -26,50 +35,94 @@ interface Props {
 
 const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
 
+// Lobby palette — ink ground, cream type, and the three state colours the
+// mockup uses on card frames: gold for locked, green for the live pick,
+// red for the rival.
+const lobby = {
+  ground: poster.ground,
+  panel: poster.panel,
+  edge: poster.edge,
+  cream: poster.cream,
+  dim: poster.creamDim,
+  faint: poster.creamFaint,
+  gold: poster.gold,
+  green: poster.green,
+  red: poster.red,
+} as const;
+
+const NUMERALS = ['I', 'II', 'III', 'IV'];
+
 export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
-  // The two-column picker/preview needs real width; below this it clips, so
-  // stack to one column. Wider than the phone breakpoint on purpose — the draft
-  // is the widest screen in the app.
+  // The roster grid + four cards need real width; below this everything
+  // stacks tighter and the page may scroll.
   const { width } = useViewport();
   const isMobile = width < 860;
   const myTurn = currentPlayer === me && draft.order[draft.currentIndex] === me;
   const aiTurn = !myTurn && draft.currentIndex < draft.order.length;
+  const complete = draft.currentIndex >= draft.order.length;
   const myPicks = draft.picks[me];
   const oppId: PlayerID = me === '0' ? '1' : '0';
   const oppPicks = draft.picks[oppId];
+  const pool = draft.pool;
 
-  // Stable hero pool order so cards don't shuffle every render.
-  const pool = useMemo(() => [...draft.pool].sort(), [draft.pool]);
+  // Fixed roster order (data order) so tiles never move; ownership of taken
+  // heroes comes from the pick lists.
+  const roster = useMemo(() => HEROES.map((h) => h.id), []);
+  const owner = useMemo(() => {
+    const m = new Map<string, 'me' | 'rival'>();
+    myPicks.forEach((id) => m.set(id, 'me'));
+    oppPicks.forEach((id) => m.set(id, 'rival'));
+    return m;
+  }, [myPicks, oppPicks]);
 
-  // Focused hero for the preview pane. Defaults to first in pool; updates on
-  // hover. If the currently focused hero gets picked (by either side), fall
-  // back to the next available one automatically.
+  // Focused hero — previewed in the live card + dossier. Defaults to the
+  // first available hero; if the focused one gets taken, fall back.
   const [focused, setFocused] = useState<string | null>(null);
   useEffect(() => {
     if (!focused || !pool.includes(focused)) {
-      setFocused(pool[0] ?? null);
+      setFocused(roster.find((id) => pool.includes(id)) ?? null);
     }
-  }, [pool, focused]);
+  }, [pool, focused, roster]);
 
-  // Auto-draft: when it's our turn and we have preferred heroes available,
-  // pick them automatically after a brief delay.
-  const [autoBanner, setAutoBanner] = useState<string | null>(null);
+  const lock = () => {
+    if (myTurn && focused && pool.includes(focused)) onPick(focused);
+  };
+
+  // Auto-draft: when it's our turn and a preferred hero is available, pick
+  // it automatically after a brief beat (the live card announces it).
+  const [autoName, setAutoName] = useState<string | null>(null);
   const autoPickedRef = useRef(new Set<string>());
   useEffect(() => {
     if (!myTurn) return;
     const prefs = getMatchConfig().heroPreferences.filter(Boolean) as string[];
     const nextPref = prefs.find((id) => pool.includes(id) && !autoPickedRef.current.has(id));
     if (!nextPref) return;
-    const heroName = CARDS_BY_ID[nextPref]?.name ?? nextPref;
     setFocused(nextPref);
-    setAutoBanner(heroName);
+    setAutoName(CARDS_BY_ID[nextPref]?.name ?? nextPref);
     const t = setTimeout(() => {
       autoPickedRef.current.add(nextPref);
-      setAutoBanner(null);
+      setAutoName(null);
       onPick(nextPref);
     }, 700);
     return () => clearTimeout(t);
   }, [myTurn, pool, onPick]);
+
+  // Enter locks the focused hero — the lobby's "LOCK" key.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      lock();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const preferred = useMemo(
+    () => (getMatchConfig().heroPreferences.filter(Boolean) as string[]).slice(0, 4),
+    [],
+  );
 
   return (
     <motion.div
@@ -80,586 +133,699 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: palette.bg0,
+        background: lobby.ground,
+        color: lobby.cream,
+        fontFamily: fonts.ui,
         display: 'flex',
         flexDirection: 'column',
         zIndex: 95,
-        padding: isMobile ? '12px 12px 16px' : '24px 40px 28px',
-        // Phones stack the picker + preview vertically and may exceed the
-        // viewport, so allow scroll instead of clipping the preview pane.
-        overflow: isMobile ? 'auto' : 'hidden',
+        padding: isMobile ? '12px 12px 14px' : 'clamp(14px, 2.4vh, 24px) clamp(18px, 3vw, 44px) clamp(12px, 2vh, 20px)',
+        gap: isMobile ? 12 : 'clamp(10px, 1.8vh, 18px)',
+        overflowY: 'auto',
+        overflowX: 'hidden',
       }}
     >
-      <Header
-        myTurn={myTurn}
-        aiTurn={aiTurn}
-        currentPickNumber={draft.currentIndex + 1}
-        isMobile={isMobile}
-      />
+      <LobbyBackdrop focused={focused} />
 
-      {/* Desktop status pill lives at the root: the overlay only animates
-          opacity here, so position:fixed anchors to the real viewport. */}
-      {!isMobile && (
-        <StatusPill
-          aiTurn={aiTurn}
-          label={myTurn ? 'Your pick' : aiTurn ? 'Opponent picking…' : 'Draft complete'}
-        />
-      )}
-
-      <AnimatePresence>
-        {autoBanner && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            style={{
-              textAlign: 'center',
-              padding: '6px 20px',
-              background: `${palette.accent}22`,
-              border: `1px solid ${palette.accent}`,
-              borderRadius: 999,
-              fontFamily: fonts.ui,
-              fontSize: 12,
-              fontWeight: 700,
-              color: palette.accent,
-              alignSelf: 'center',
-              marginBottom: 8,
-            }}
-          >
-            Auto-drafting: {autoBanner}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <TeamStrips
-        myPicks={myPicks}
-        oppPicks={oppPicks}
-        order={draft.order}
-        currentIndex={draft.currentIndex}
-        me={me}
-        oppId={oppId}
-      />
-
+      {/* Header row — pick counter left, status capsule docked beside the
+          system gear on the right. */}
       <div
         style={{
-          flex: 1,
-          minHeight: 0,
-          display: 'grid',
-          // Phones can't fit the picker + preview side by side (the preview
-          // clips off the right edge), so stack them in one column.
-          gridTemplateColumns: isMobile ? '1fr' : '0.85fr 1.15fr',
-          gap: isMobile ? 14 : 32,
-          marginTop: isMobile ? 10 : 18,
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          paddingRight: isMobile ? 52 : 60,
         }}
       >
-        <HeroGrid
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: isMobile ? 10 : 18 }}>
+          <span
+            style={{
+              fontFamily: fonts.display,
+              fontSize: isMobile ? 20 : 26,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: lobby.cream,
+              lineHeight: 1,
+            }}
+          >
+            Draft
+          </span>
+          <span style={{ ...text.label, fontSize: isMobile ? 10 : 11, letterSpacing: isMobile ? '0.18em' : '0.3em', color: lobby.dim, whiteSpace: 'nowrap' }}>
+            {complete ? 'Complete' : `${draft.currentIndex + 1}/${draft.order.length}`}
+          </span>
+        </div>
+        <StatusCapsule
+          tone={myTurn ? 'green' : aiTurn ? 'red' : 'dim'}
+          pulse={aiTurn}
+          label={myTurn ? 'Your pick' : aiTurn ? (isMobile ? 'Rival…' : 'Rival picking…') : 'Complete'}
+          compact={isMobile}
+        />
+      </div>
+
+      <PickStrips mine={myPicks} rival={oppPicks} myTurn={myTurn} aiTurn={aiTurn} compact={isMobile} />
+
+      {/* Roster + preferred cluster */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          gap: isMobile ? 10 : 22,
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+        }}
+      >
+        <RosterGrid
+          roster={roster}
           pool={pool}
+          owner={owner}
           focused={focused}
           myTurn={myTurn}
-          onHover={(id) => id && setFocused(id)}
-          onPick={onPick}
+          compact={isMobile}
+          onFocus={setFocused}
+          onLock={(id) => { setFocused(id); if (myTurn && pool.includes(id)) onPick(id); }}
         />
+        {!isMobile && preferred.length > 0 && (
+          <PreferredCluster ids={preferred} pool={pool} />
+        )}
+      </div>
 
-        <HeroPreview heroId={focused} myTurn={myTurn} onPick={onPick} />
+      <Dossier heroId={focused} compact={isMobile} />
+
+      {/* Team line + cards */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: isMobile ? 8 : 12,
+        }}
+      >
+        <TeamCards
+          picks={myPicks}
+          focused={focused}
+          myTurn={myTurn}
+          aiTurn={aiTurn}
+          autoName={autoName}
+          compact={isMobile}
+        />
+      </div>
+
+      {/* Foot — the LOCK plate, centred and alone. */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          marginTop: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingTop: 4,
+        }}
+      >
+        <LockButton
+          enabled={myTurn && !!focused && !autoName}
+          state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
+          onClick={lock}
+          compact={isMobile}
+        />
       </div>
     </motion.div>
   );
 }
 
 // =============================================================================
-// HEADER
+// BACKDROP
 // =============================================================================
 
-function Header({
-  myTurn,
-  aiTurn,
-  currentPickNumber,
-  isMobile,
-}: {
-  myTurn: boolean;
-  aiTurn: boolean;
-  currentPickNumber: number;
-  isMobile: boolean;
-}) {
-  const pillLabel = myTurn ? 'Your pick' : aiTurn ? 'Opponent picking…' : 'Draft complete';
+/** Ink ground with the lobby's dial off to the left, the focused hero's
+ *  splash bleeding through out of focus, and a vignette. */
+function LobbyBackdrop({ focused }: { focused: string | null }) {
   return (
-    <motion.div
-      initial={{ y: -16, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={spring.snappy}
-      style={{
-        display: 'flex',
-        alignItems: 'baseline',
-        justifyContent: 'space-between',
-        marginBottom: 14,
-        // Mobile keeps the pill in-flow: clear the persistent gear (12px
-        // margin + 40px button + 12px gap = 64 from the edge; minus the
-        // overlay's own 12px padding → 52, plus slack). Desktop renders the
-        // pill as an absolute corner fixture instead (below), so the row
-        // only needs to stop short of it.
-        paddingRight: isMobile ? 56 : 230,
-        paddingBottom: 12,
-        borderBottom: `1px solid ${palette.border}`,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 22 }}>
-        <div
-          style={{
-            fontFamily: fonts.display,
-            fontSize: 38,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: palette.text,
-            lineHeight: 1,
-          }}
-        >
-          Select Hero
-        </div>
-        <div
-          style={{
-            fontFamily: fonts.display,
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: '0.42em',
-            textTransform: 'uppercase',
-            color: palette.accent,
-          }}
-        >
-          Pick {currentPickNumber} of 8
-        </div>
-      </div>
-      {/* Mobile keeps the status pill in the header row; desktop docks it
-          on the gear's axis via StatusPill rendered at the OVERLAY root —
-          the header's entrance transform makes it a containing block, so a
-          fixed pill nested here would anchor to the header, not the
-          viewport, and drift during the entrance. */}
-      {isMobile && <StatusPill aiTurn={aiTurn} label={pillLabel} inFlow />}
-    </motion.div>
+    <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      <AnimatePresence>
+        {focused && (
+          <motion.img
+            key={focused}
+            src={`${HERO_IMG_BASE}${focused}_splash.webp`}
+            onError={(e) => {
+              const img = e.currentTarget;
+              if (!img.dataset.fallback) {
+                img.dataset.fallback = '1';
+                img.src = `${HERO_IMG_BASE}${focused}_card.webp`;
+              }
+            }}
+            alt=""
+            draggable={false}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.22 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            style={{
+              position: 'absolute',
+              inset: '-8%',
+              width: '116%',
+              height: '116%',
+              objectFit: 'cover',
+              objectPosition: '60% 30%',
+              filter: 'blur(28px) saturate(1.1)',
+            }}
+          />
+        )}
+      </AnimatePresence>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(12, 15, 17, 0.45)' }} />
+
+      {/* The dial — rings, spokes, node dots — centred left like the mockup. */}
+      <svg
+        viewBox="0 0 1600 1000"
+        preserveAspectRatio="xMidYMid slice"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.16 }}
+      >
+        <defs>
+          <radialGradient id="dl-fade" cx="0.22" cy="0.5" r="0.55">
+            <stop offset="0%" stopColor="#fff" stopOpacity="1" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+          <mask id="dl-mask"><rect width="1600" height="1000" fill="url(#dl-fade)" /></mask>
+        </defs>
+        <g transform="translate(350 500)" mask="url(#dl-mask)" stroke={lobby.cream} fill="none">
+          {[120, 220, 340, 480, 640, 820].map((r, i) => (
+            <circle key={r} r={r} strokeWidth={i % 2 === 0 ? 1 : 0.6} strokeDasharray={i % 2 === 1 ? '3 9' : undefined} />
+          ))}
+          {Array.from({ length: 24 }).map((_, i) => {
+            const a = (i * Math.PI) / 12;
+            return <line key={i} x1={Math.cos(a) * 120} y1={Math.sin(a) * 120} x2={Math.cos(a) * 1000} y2={Math.sin(a) * 1000} strokeWidth={i % 4 === 0 ? 1 : 0.5} />;
+          })}
+          {Array.from({ length: 24 }).flatMap((_, i) => {
+            const a = (i * Math.PI) / 12;
+            return [340, 640].map((r) => (
+              <circle key={`${i}-${r}`} cx={Math.cos(a) * r} cy={Math.sin(a) * r} r={2.4} fill={lobby.cream} stroke="none" />
+            ));
+          })}
+        </g>
+      </svg>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(ellipse 90% 90% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.45) 100%)',
+        }}
+      />
+    </div>
   );
 }
 
-/** Draft status capsule. In-flow on mobile (inside the header row);
- *  viewport-fixed on desktop — same top and 40px height as the system
- *  gear with a 12px gap, so the two corner capsules read as one cluster. */
-function StatusPill({ aiTurn, label, inFlow }: {
-  aiTurn: boolean;
-  label: string;
-  inFlow?: boolean;
-}) {
+// =============================================================================
+// HEADER PIECES
+// =============================================================================
+
+function StatusCapsule({ tone, pulse, label, compact }: { tone: 'green' | 'red' | 'dim'; pulse: boolean; label: string; compact: boolean }) {
+  const color = tone === 'green' ? lobby.green : tone === 'red' ? lobby.red : lobby.dim;
   return (
     <div
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '6px 18px',
-        background: palette.bg1,
-        border: `1px solid #5a3f1c`,
-        borderRadius: 999,
-        boxShadow: '0 4px 12px rgba(40, 20, 0, 0.14)',
-        ...(inFlow ? { alignSelf: 'center' as const } : {
-          position: 'fixed' as const,
-          top: 12,
-          right: 64,
-          height: 40,
-          boxSizing: 'border-box' as const,
-          zIndex: 96,
-        }),
+        gap: compact ? 7 : 9,
+        padding: compact ? '6px 10px' : '7px 14px',
+        background: lobby.panel,
+        flexShrink: 0,
+        border: `1px solid ${lobby.edge}`,
+        clipPath: chamfer(6),
+        WebkitClipPath: chamfer(6),
       }}
     >
-      {aiTurn && (
-        <motion.span
-          aria-hidden
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: palette.accent,
-            display: 'inline-block',
-          }}
-        />
-      )}
-      <span style={{ ...text.label, color: palette.text }}>{label}</span>
+      <motion.span
+        aria-hidden
+        animate={pulse ? { opacity: [0.35, 1, 0.35] } : { opacity: 1 }}
+        transition={pulse ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } : undefined}
+        style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}` }}
+      />
+      <span style={{ ...text.label, fontSize: compact ? 10 : 11, letterSpacing: compact ? '0.14em' : '0.2em', color: lobby.cream, whiteSpace: 'nowrap' }}>{label}</span>
     </div>
   );
 }
 
 // =============================================================================
-// PICK STRIPS (both teams, side by side at top)
+// RIVAL STRIP
 // =============================================================================
 
-function TeamStrips({
-  myPicks,
-  oppPicks,
-  order,
-  currentIndex,
-  me,
-  oppId,
-}: {
-  myPicks: string[];
-  oppPicks: string[];
-  order: PlayerID[];
-  currentIndex: number;
-  me: PlayerID;
-  oppId: PlayerID;
+/**
+ * Both crews' picks along the top: yours in the left corner, the rival's in
+ * the right, each running toward the centre. Corner and colour together say
+ * whose row it is before you read a word.
+ */
+function PickStrips({ mine, rival, myTurn, aiTurn, compact }: {
+  mine: string[];
+  rival: string[];
+  myTurn: boolean;
+  aiTurn: boolean;
+  compact: boolean;
 }) {
-  const { width } = useViewport();
-  // Compact slots buy room for the two strips to stay side by side well
-  // below the picker's own column-stacking threshold; only true phone
-  // widths stack the strips.
-  const stack = width < 680;
-  const compact = width < 1024;
   return (
     <div
       style={{
-        display: 'grid',
-        gridTemplateColumns: stack ? '1fr' : '1fr 1fr',
-        gap: stack ? 8 : 24,
-      }}
-    >
-      <PickStrip
-        label="Your team"
-        picks={myPicks}
-        isActive={order[currentIndex] === me}
-        align="left"
-        compact={compact}
-      />
-      <PickStrip
-        label="Opponent"
-        picks={oppPicks}
-        isActive={order[currentIndex] === oppId}
-        align={stack ? 'left' : 'right'}
-        compact={compact}
-      />
-    </div>
-  );
-}
-
-function PickStrip({
-  label,
-  picks,
-  isActive,
-  align,
-  compact = false,
-}: {
-  label: string;
-  picks: string[];
-  isActive: boolean;
-  align: 'left' | 'right';
-  compact?: boolean;
-}) {
-  const slots = [0, 1, 2, 3];
-  const nextSlot = picks.length;
-  const slotW = compact ? 44 : 56;
-  const slotH = compact ? 60 : 76;
-  return (
-    <div
-      style={{
+        position: 'relative',
+        zIndex: 1,
         display: 'flex',
-        flexDirection: align === 'left' ? 'row' : 'row-reverse',
         alignItems: 'center',
-        gap: compact ? 8 : 12,
+        gap: compact ? 8 : 18,
       }}
     >
+      <PickSide picks={mine} side="left" tone="gold" live={myTurn} compact={compact} />
+      <PickSide picks={rival} side="right" tone="red" live={aiTurn} compact={compact} />
+    </div>
+  );
+}
+
+function PickSide({ picks, side, tone, live, compact }: {
+  picks: string[];
+  side: 'left' | 'right';
+  tone: 'gold' | 'red';
+  live: boolean;
+  compact: boolean;
+}) {
+  const w = compact ? 30 : 52;
+  const h = compact ? 40 : 70;
+  const next = picks.length;
+  const colour = tone === 'gold' ? lobby.gold : lobby.red;
+  const deep = tone === 'gold' ? '#8a6d1f' : '#7f1e1c';
+  // Each banner runs from its own corner toward the middle, cut off at the
+  // inner end so the two point at each other across the roster.
+  const clip = side === 'left'
+    ? 'polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%)'
+    : 'polygon(10px 0, 100% 0, 100% 100%, 0 100%)';
+
+  const slots = (
+    <div style={{ display: 'flex', gap: compact ? 4 : 10, flexDirection: side === 'left' ? 'row' : 'row-reverse' }}>
+      {[0, 1, 2, 3].map((s) => {
+        const id = picks[s];
+        return id ? (
+          <motion.div
+            key={`${tone}-${id}`}
+            initial={{ opacity: 0, y: -10, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={spring.default}
+            title={CARDS_BY_ID[id]?.name ?? id}
+            style={{
+              width: w,
+              height: h,
+              overflow: 'hidden',
+              border: `2px solid ${colour}`,
+              background: lobby.panel,
+              clipPath: chamfer(4),
+              WebkitClipPath: chamfer(4),
+            }}
+          >
+            <img
+              src={`${HERO_IMG_BASE}${id}_card.webp`}
+              alt=""
+              draggable={false}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 14%', userSelect: 'none' }}
+            />
+          </motion.div>
+        ) : (
+          <CardBack key={`${tone}-empty-${s}`} w={w} h={h} live={live && s === next} tone={tone} />
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: compact ? 4 : 10,
+        flexDirection: side === 'left' ? 'row' : 'row-reverse',
+      }}
+    >
+      {slots}
       <div
         style={{
-          minWidth: compact ? 64 : 96,
-          textAlign: align === 'left' ? 'left' : 'right',
-          fontFamily: fonts.display,
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: compact ? '0.18em' : '0.32em',
-          textTransform: 'uppercase',
-          color: palette.accent,
+          flex: 1,
+          minWidth: 0,
+          height: compact ? 8 : 14,
+          background: side === 'left'
+            ? `linear-gradient(90deg, ${colour}, ${deep})`
+            : `linear-gradient(270deg, ${colour}, ${deep})`,
+          clipPath: clip,
+          WebkitClipPath: clip,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: side === 'left' ? 'flex-start' : 'flex-end',
         }}
-      >
-        {label}
-      </div>
-      <div style={{ display: 'flex', gap: compact ? 6 : 8, flexDirection: align === 'left' ? 'row' : 'row-reverse' }}>
-        {slots.map((s) => {
-          const heroId = picks[s];
-          const isActiveSlot = s === 0;
-          const isNext = isActive && s === nextSlot;
-          if (heroId) {
-            return (
-              <motion.div
-                key={`filled-${s}`}
-                layout
-                initial={{ opacity: 0, scale: 0.7, y: -8 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={spring.default}
-                style={{
-                  width: slotW,
-                  height: slotH,
-                  borderRadius: 6,
-                  overflow: 'hidden',
-                  border: isActiveSlot
-                    ? `2px solid ${palette.accent}`
-                    : `1px solid ${palette.borderStrong}`,
-                  boxShadow: '0 3px 8px rgba(40,20,0,0.22)',
-                  background: '#1a0f06',
-                  position: 'relative',
-                }}
-                title={CARDS_BY_ID[heroId]?.name ?? heroId}
-              >
-                <img
-                  src={`${HERO_IMG_BASE}${heroId}_card.webp`}
-                  alt=""
-                  draggable={false}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    objectPosition: '50% 14%',
-                    userSelect: 'none',
-                  }}
-                />
-              </motion.div>
-            );
-          }
-          return (
-            <motion.div
-              key={`empty-${s}`}
-              layout
-              animate={
-                isNext
-                  ? { borderColor: palette.accent, boxShadow: `0 0 0 1px ${palette.accent}, 0 0 10px rgba(176,120,37,0.32)` }
-                  : { borderColor: palette.border, boxShadow: 'none' }
-              }
-              transition={{ duration: 0.3 }}
-              style={{
-                width: slotW,
-                height: slotH,
-                borderRadius: 6,
-                border: `2px dashed ${palette.border}`,
-                background: 'rgba(245, 232, 204, 0.4)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontFamily: fonts.ui,
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: palette.textFaint,
-              }}
-            >
-              {s === 0 ? 'Active' : `B${s}`}
-            </motion.div>
-          );
-        })}
-      </div>
+      />
     </div>
   );
 }
 
+/** A face-down card: ink plate, thin edge, the dial mark in the middle. */
+function CardBack({ w, h, live, tone, numeral, label }: {
+  w: number | string;
+  h: number | string;
+  live?: boolean;
+  tone: 'red' | 'green' | 'gold' | 'dim';
+  numeral?: string;
+  label?: string;
+}) {
+  const color = tone === 'red' ? lobby.red
+    : tone === 'green' ? lobby.green
+    : tone === 'gold' ? lobby.gold
+    : lobby.edge;
+  return (
+    <motion.div
+      animate={live ? { borderColor: [color, lobby.cream, color] } : { borderColor: live ? color : lobby.edge }}
+      transition={live ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
+      style={{
+        position: 'relative',
+        width: w,
+        height: h,
+        border: `2px solid ${lobby.edge}`,
+        background: `linear-gradient(180deg, ${lobby.panel}, #0f1214)`,
+        clipPath: chamfer(4),
+        WebkitClipPath: chamfer(4),
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        flexShrink: 0,
+      }}
+    >
+      {numeral && (
+        <span style={{ position: 'absolute', top: 8, left: 0, right: 0, textAlign: 'center', fontFamily: fonts.display, fontSize: 14, color: lobby.dim, letterSpacing: '0.1em' }}>
+          {numeral}
+        </span>
+      )}
+      <svg viewBox="0 0 40 40" width="38%" height="38%" fill="none" stroke={lobby.faint} strokeWidth="1.4" aria-hidden>
+        <circle cx="20" cy="20" r="15" />
+        <circle cx="20" cy="20" r="6" />
+        {Array.from({ length: 8 }).map((_, i) => {
+          const a = (i * Math.PI) / 4;
+          return <line key={i} x1={20 + Math.cos(a) * 6} y1={20 + Math.sin(a) * 6} x2={20 + Math.cos(a) * 15} y2={20 + Math.sin(a) * 15} />;
+        })}
+        <circle cx="20" cy="20" r="2" fill={lobby.faint} stroke="none" />
+      </svg>
+      {label && (
+        <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.22em', color: live ? lobby.cream : lobby.dim, textAlign: 'center', padding: '0 6px' }}>
+          {label}
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
 // =============================================================================
-// HERO GRID (left column)
+// ROSTER GRID
 // =============================================================================
 
-function HeroGrid({
-  pool,
-  focused,
-  myTurn,
-  onHover,
-  onPick,
+function RosterGrid({
+  roster, pool, owner, focused, myTurn, compact, onFocus, onLock,
 }: {
+  roster: string[];
   pool: string[];
+  owner: Map<string, 'me' | 'rival'>;
   focused: string | null;
   myTurn: boolean;
-  onHover: (heroId: string | null) => void;
-  onPick: (heroId: string) => void;
+  compact: boolean;
+  onFocus: (id: string) => void;
+  onLock: (id: string) => void;
 }) {
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-        gap: 10,
-        alignContent: 'start',
-        padding: '4px 4px 16px',
-        overflow: 'auto',
+        gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? 48 : 64}px, 1fr))`,
+        gap: compact ? 5 : 7,
+        width: '100%',
+        maxWidth: compact ? undefined : 880,
       }}
     >
-      <AnimatePresence mode="popLayout">
-        {pool.map((id) => {
-          const data = CARDS_BY_ID[id];
-          if (!data || data.type !== 'hero') return null;
-          const isFocused = focused === id;
-          return (
-            <motion.button
-              key={id}
-              layout
-              onMouseEnter={() => onHover(id)}
-              onFocus={() => onHover(id)}
-              // Single click focuses the hero in the preview pane; the pane's
-              // big CTA is the one true "draft" trigger. (Instant-draft on a
-              // grid click made mis-clicks spend a pick.) Double-click keeps
-              // a fast path for players who know what they want.
-              onClick={() => onHover(id)}
-              onDoubleClick={() => myTurn && onPick(id)}
-              aria-label={`Select ${data.name}`}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8, y: -12 }}
-              whileHover={{ y: -4 }}
-              whileTap={{ scale: 0.96 }}
-              transition={spring.snappy}
+      {roster.map((id) => {
+        const data = CARDS_BY_ID[id];
+        if (!data || data.type !== 'hero') return null;
+        const available = pool.includes(id);
+        const who = owner.get(id);
+        const isFocused = focused === id;
+        const frame = isFocused
+          ? lobby.green
+          : who === 'me' ? lobby.gold : who === 'rival' ? lobby.red : lobby.edge;
+        return (
+          <motion.button
+            key={id}
+            type="button"
+            disabled={!available}
+            onMouseEnter={() => available && onFocus(id)}
+            onFocus={() => available && onFocus(id)}
+            onClick={() => available && onFocus(id)}
+            onDoubleClick={() => available && myTurn && onLock(id)}
+            aria-label={available ? `Select ${data.name}` : `${data.name} (taken)`}
+            whileHover={available ? { y: -3 } : undefined}
+            whileTap={available ? { scale: 0.96 } : undefined}
+            transition={spring.snappy}
+            title={data.name}
+            style={{
+              position: 'relative',
+              aspectRatio: '3 / 4',
+              padding: 0,
+              border: `2px solid ${frame}`,
+              background: lobby.panel,
+              cursor: available ? 'pointer' : 'default',
+              outline: 'none',
+              overflow: 'hidden',
+              boxShadow: isFocused ? `0 0 0 1px ${lobby.green}, 0 0 16px rgba(98, 196, 98, 0.45)` : 'none',
+              transition: 'border-color 160ms ease, box-shadow 160ms ease',
+            }}
+          >
+            <img
+              src={`${HERO_IMG_BASE}${id}_card.webp`}
+              alt=""
+              draggable={false}
               style={{
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                outline: 'none',
-                position: 'relative',
-                aspectRatio: '3 / 4',
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                objectPosition: '50% 14%',
+                display: 'block',
+                filter: available ? 'none' : 'grayscale(0.85) brightness(0.45)',
+                userSelect: 'none',
               }}
-            >
-              <HeroThumb heroId={id} focused={isFocused} interactive />
-            </motion.button>
-          );
-        })}
-      </AnimatePresence>
+            />
+            {/* Taken — the owner's colour wash. The frame colour already
+                says whose it is, so it carries no label. */}
+            {!available && (
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: who === 'me' ? 'rgba(217, 182, 74, 0.22)' : 'rgba(201, 48, 47, 0.28)',
+                }}
+              />
+            )}
+          </motion.button>
+        );
+      })}
     </div>
   );
 }
 
-function HeroThumb({ heroId, focused, interactive }: { heroId: string; focused: boolean; interactive: boolean }) {
-  const identity = getHeroIdentity(heroId);
+/** Your preferred draft picks (from the Heroes screen) — the ones the lobby
+ *  will auto-lock when they're available. */
+function PreferredCluster({ ids, pool }: { ids: string[]; pool: string[] }) {
   return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        borderRadius: 8,
-        overflow: 'hidden',
-        background: '#1a0f06',
-        border: focused
-          ? `2px solid ${palette.accent}`
-          : `1px solid ${palette.borderStrong}`,
-        boxShadow: focused
-          ? `0 0 0 1px ${palette.accent}, 0 6px 18px rgba(40,20,0,0.32)`
-          : '0 3px 8px rgba(40,20,0,0.22)',
-        opacity: interactive ? 1 : 0.6,
-        transition: 'border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease',
-      }}
-    >
-      <img
-        src={`${HERO_IMG_BASE}${heroId}_card.webp`}
-        alt=""
-        draggable={false}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: '50% 14%',
-          userSelect: 'none',
-        }}
-      />
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          padding: '4px 6px',
-          background: `linear-gradient(to top, ${identity.accent}, transparent)`,
-          color: '#fff',
-          fontFamily: fonts.ui,
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.04em',
-          textShadow: '0 1px 2px rgba(0,0,0,0.7)',
-          textAlign: 'center',
-        }}
-      >
-        {CARDS_BY_ID[heroId]?.name ?? heroId}
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.22em', color: lobby.gold }}>Preferred</span>
+      {ids.map((id) => (
+        <img
+          key={id}
+          src={`${HERO_IMG_BASE}${id}_sm.webp`}
+          alt={CARDS_BY_ID[id]?.name ?? id}
+          title={CARDS_BY_ID[id]?.name ?? id}
+          draggable={false}
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: '50%',
+            objectFit: 'cover',
+            border: `2px solid ${lobby.gold}`,
+            opacity: pool.includes(id) ? 1 : 0.35,
+            filter: pool.includes(id) ? 'none' : 'grayscale(1)',
+            userSelect: 'none',
+          }}
+        />
+      ))}
     </div>
   );
 }
 
 // =============================================================================
-// HERO PREVIEW (right column)
+// DOSSIER
 // =============================================================================
 
-function HeroPreview({
-  heroId,
-  myTurn,
-  onPick,
-}: {
-  heroId: string | null;
-  myTurn: boolean;
-  onPick: (heroId: string) => void;
-}) {
-  if (!heroId) return <div />;
-  const data = CARDS_BY_ID[heroId];
-  if (!data || data.type !== 'hero') return <div />;
+function Dossier({ heroId, compact }: { heroId: string | null; compact: boolean }) {
+  const data = heroId ? CARDS_BY_ID[heroId] : null;
+  if (!heroId || !data || data.type !== 'hero') return <div style={{ minHeight: compact ? 40 : 48 }} />;
   const identity = getHeroIdentity(heroId);
-
   return (
     <motion.div
       key={heroId}
-      initial={{ opacity: 0, x: 16 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.22 }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
       style={{
         position: 'relative',
+        zIndex: 1,
+        alignSelf: 'center',
+        width: '100%',
+        maxWidth: 980,
         display: 'flex',
-        flexDirection: 'column',
-        borderRadius: 10,
-        overflow: 'hidden',
-        background: `linear-gradient(135deg, ${identity.accent}, #1a0f06)`,
-        border: `1px solid ${palette.borderStrong}`,
-        boxShadow: '0 12px 32px rgba(40,20,0,0.32), inset 0 0 0 1px rgba(176,120,37,0.18)',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: compact ? '6px 12px' : '8px 22px',
+        padding: compact ? '8px 12px' : '10px 18px',
+        background: 'rgba(21, 25, 28, 0.8)',
+        border: `1px solid ${lobby.edge}`,
+        borderLeft: `3px solid ${identity.primary}`,
+        clipPath: chamfer(6),
+        WebkitClipPath: chamfer(6),
       }}
     >
-      {/* Ambient fill — the splash blurred and dimmed behind everything.
-          The blur here is intentional atmosphere; the sharp copy renders in
-          the band below at its natural aspect. */}
-      <img
-        src={`${HERO_IMG_BASE}${heroId}_splash.webp`}
-        onError={(e) => {
-          const img = e.currentTarget;
-          if (!img.dataset.fallback) {
-            img.dataset.fallback = '1';
-            img.src = `${HERO_IMG_BASE}${heroId}_card.webp`;
-          }
-        }}
-        alt=""
-        aria-hidden
-        draggable={false}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          filter: 'blur(26px) saturate(1.1)',
-          transform: 'scale(1.25)',
-          opacity: 0.5,
-          userSelect: 'none',
-        }}
-      />
-      <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'rgba(10, 5, 2, 0.45)' }} />
+      <span style={{ fontFamily: fonts.display, fontSize: compact ? 18 : 22, letterSpacing: '0.04em', textTransform: 'uppercase', color: lobby.cream, lineHeight: 1 }}>
+        {data.name}
+      </span>
+      <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {identity.keywords.map((kw) => (
+          <span key={kw} style={{ padding: '3px 8px', background: identity.primary, color: identity.accent, ...text.label, fontSize: 9.5, letterSpacing: '0.18em' }}>
+            {kw}
+          </span>
+        ))}
+      </span>
+      <span style={{ display: 'flex', gap: 14 }}>
+        <Stat label="ATK" value={data.atk} />
+        <Stat label="HP" value={data.hp} />
+      </span>
+      {data.abilityName && (
+        <span style={{ ...text.body, fontSize: compact ? 12 : 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
+          <span style={{ color: lobby.cream, fontWeight: 700 }}>{data.abilityName}</span>
+          {data.text ? ` — ${data.text}` : ''}
+        </span>
+      )}
+    </motion.div>
+  );
+}
 
-      {/* Sharp art band — the splash at (near) its native aspect, so the
-          whole composition is visible and the source pixels aren't blown up
-          into a tall portrait crop (the old full-bleed cover upscaled the
-          692×352 assets ~3× and showed only a sliver). */}
-      <div style={{
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
+      <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.22em', color: lobby.dim }}>{label}</span>
+      <span style={{ fontFamily: fonts.display, fontSize: 20, lineHeight: 1, color: lobby.cream }}>{value}</span>
+    </span>
+  );
+}
+
+// =============================================================================
+// TEAM CARDS
+// =============================================================================
+
+function TeamCards({
+  picks, focused, myTurn, aiTurn, autoName, compact,
+}: {
+  picks: string[];
+  focused: string | null;
+  myTurn: boolean;
+  aiTurn: boolean;
+  autoName: string | null;
+  compact: boolean;
+}) {
+  const live = picks.length;
+  const w = compact ? 'calc((100% - 24px) / 4)' : 'clamp(136px, min(15vw, 30vh), 224px)';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: compact ? 8 : 16,
+        width: compact ? '100%' : undefined,
+        justifyContent: 'center',
+      }}
+    >
+      {[0, 1, 2, 3].map((s) => {
+        const id = picks[s];
+        if (id) {
+          return <TeamCard key={`t-${id}`} w={w} numeral={NUMERALS[s]} heroId={id} tone="gold" role={s === 0 ? 'Active' : ''} />;
+        }
+        if (s === live && myTurn && focused) {
+          return (
+            <TeamCard
+              key="live"
+              w={w}
+              numeral={NUMERALS[s]}
+              heroId={focused}
+              tone="green"
+              role={autoName ? 'Auto' : ''}
+              preview
+            />
+          );
+        }
+        if (s === live && aiTurn) {
+          return (
+            <div key="wait" style={{ width: w, aspectRatio: '5 / 7', display: 'flex' }}>
+              <CardBack w="100%" h="100%" live tone="red" numeral={NUMERALS[s]} />
+            </div>
+          );
+        }
+        return (
+          <div key={`e-${s}`} style={{ width: w, aspectRatio: '5 / 7', display: 'flex' }}>
+            <CardBack w="100%" h="100%" tone="dim" numeral={NUMERALS[s]} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A tarot-style team card: numbered, framed in its state colour, the
+ *  hero's splash edge to edge and a cream name plate at the foot. */
+function TeamCard({ w, numeral, heroId, tone, role, preview }: {
+  w: string;
+  numeral: string;
+  heroId: string;
+  tone: 'gold' | 'green';
+  role: string;
+  preview?: boolean;
+}) {
+  const color = tone === 'gold' ? lobby.gold : lobby.green;
+  const name = CARDS_BY_ID[heroId]?.name ?? heroId;
+  return (
+    <motion.div
+      layout
+      initial={preview ? { opacity: 0, scale: 0.96 } : { opacity: 0, rotateY: 90 }}
+      animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+      transition={preview ? { duration: 0.18 } : spring.soft}
+      style={{
         position: 'relative',
-        width: '100%',
-        aspectRatio: '1230 / 626',
-        flexShrink: 0,
+        width: w,
+        aspectRatio: '5 / 7',
+        border: `2.5px solid ${color}`,
+        background: lobby.panel,
+        clipPath: chamfer(6),
+        WebkitClipPath: chamfer(6),
         overflow: 'hidden',
-      }}>
-        <img
+        boxShadow: preview ? `0 0 0 1px ${color}, 0 0 24px rgba(98, 196, 98, 0.35)` : 'none',
+        flexShrink: 0,
+      }}
+    >
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.img
+          key={heroId}
           src={`${HERO_IMG_BASE}${heroId}_splash.webp`}
           onError={(e) => {
             const img = e.currentTarget;
@@ -670,205 +836,140 @@ function HeroPreview({
           }}
           alt=""
           draggable={false}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
           style={{
+            position: 'absolute',
+            inset: 0,
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            objectPosition: heroArtFocus(heroId, 'splash', '50% 22%'),
+            objectPosition: heroArtFocus(heroId, 'splash', '50% 20%'),
             userSelect: 'none',
           }}
         />
-        {/* Blend the band's lower edge into the info area. */}
-        <div aria-hidden style={{
-          position: 'absolute',
-          left: 0, right: 0, bottom: 0,
-          height: 70,
-          background: 'linear-gradient(to top, rgba(10,5,2,0.75), transparent)',
-        }} />
-      </div>
-
+      </AnimatePresence>
+      {/* Numeral plate + role tag */}
       <div
         style={{
-          position: 'relative',
-          flex: 1,
-          padding: '18px 40px 32px',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
           display: 'flex',
-          flexDirection: 'column',
-          gap: 14,
-          color: '#fff',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '6px 8px',
+          background: 'linear-gradient(to bottom, rgba(12, 15, 17, 0.85), transparent)',
         }}
       >
-        <div
+        <span style={{ fontFamily: fonts.display, fontSize: 14, color, letterSpacing: '0.1em', flexShrink: 0 }}>{numeral}</span>
+        <motion.span
+          animate={preview ? { opacity: [0.6, 1, 0.6] } : { opacity: 1 }}
+          transition={preview ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : undefined}
           style={{
-            fontFamily: fonts.display,
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: '0.36em',
-            textTransform: 'uppercase',
-            color: identity.primary,
-            textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+            ...text.label,
+            fontSize: 9,
+            letterSpacing: '0.2em',
+            color,
+            // On a phone-width card the tag used to wrap onto the numeral.
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            minWidth: 0,
+            marginLeft: 6,
           }}
         >
-          Hero
-        </div>
-
-        <div
-          style={{
-            fontFamily: fonts.display,
-            fontSize: 'clamp(48px, 5vw, 76px)',
-            fontWeight: 700,
-            letterSpacing: '0.02em',
-            textTransform: 'uppercase',
-            lineHeight: 0.95,
-            color: '#fff',
-            textShadow: '0 2px 8px rgba(0,0,0,0.55)',
-          }}
-        >
-          {data.name}
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 2 }}>
-          {identity.keywords.map((kw, i) => (
-            <span
-              key={i}
-              style={{
-                padding: '5px 12px',
-                borderRadius: 4,
-                background: identity.primary,
-                color: identity.accent,
-                fontFamily: fonts.display,
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: '0.22em',
-                textTransform: 'uppercase',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.35)',
-              }}
-            >
-              {kw}
-            </span>
-          ))}
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            gap: 26,
-            alignItems: 'center',
-            marginTop: 8,
-          }}
-        >
-          <Stat label="ATK" value={data.atk} />
-          <Stat label="HP" value={data.hp} />
-          {data.abilityName && <AbilityChip label={data.skill ? 'Skill' : 'Passive'} name={data.abilityName} />}
-        </div>
-
-        {data.text && (
-          <div
-            style={{
-              ...text.body,
-              marginTop: 4,
-              maxWidth: 560,
-              color: 'rgba(255,255,255,0.88)',
-              textShadow: '0 1px 4px rgba(0,0,0,0.6)',
-              fontSize: 14,
-              lineHeight: 1.45,
-            }}
-          >
-            {data.text}
-          </div>
-        )}
-
-        <div style={{ marginTop: 'auto', paddingTop: 18 }}>
-          <motion.button
-            disabled={!myTurn}
-            onClick={() => myTurn && onPick(heroId)}
-            whileHover={myTurn ? { scale: 1.03, y: -2 } : undefined}
-            whileTap={myTurn ? { scale: 0.97 } : undefined}
-            transition={spring.snappy}
-            style={{
-              padding: '14px 38px',
-              border: 'none',
-              borderRadius: 6,
-              background: myTurn ? identity.primary : 'rgba(255,255,255,0.18)',
-              color: myTurn ? identity.accent : 'rgba(255,255,255,0.6)',
-              fontFamily: fonts.display,
-              fontSize: 14,
-              fontWeight: 700,
-              letterSpacing: '0.32em',
-              textTransform: 'uppercase',
-              cursor: myTurn ? 'pointer' : 'default',
-              boxShadow: myTurn ? '0 8px 18px rgba(0,0,0,0.32)' : 'none',
-            }}
-          >
-            {myTurn ? `Draft ${data.name}` : 'Waiting…'}
-          </motion.button>
-        </div>
+          {role}
+        </motion.span>
+      </div>
+      {/* Name plate */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: '7px 8px 8px',
+          background: lobby.cream,
+          color: '#171410',
+          textAlign: 'center',
+          fontFamily: fonts.display,
+          fontSize: 'clamp(11px, 1.05vw, 15px)',
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {name}
       </div>
     </motion.div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+// =============================================================================
+// LOCK
+// =============================================================================
+
+function LockButton({ enabled, state, onClick, compact }: {
+  enabled: boolean;
+  state: 'ready' | 'waiting' | 'done';
+  onClick: () => void;
+  compact: boolean;
+}) {
+  const label = state === 'done' ? 'Locked in' : state === 'waiting' ? 'Waiting…' : 'Lock';
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-      <div
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+      <Bracket side="left" dim={!enabled} />
+      <motion.button
+        type="button"
+        disabled={!enabled}
+        onClick={onClick}
+        whileHover={enabled ? { scale: 1.04, y: -1 } : undefined}
+        whileTap={enabled ? { scale: 0.97 } : undefined}
+        transition={spring.snappy}
         style={{
+          minWidth: compact ? 200 : 180,
+          padding: compact ? '13px 28px' : '13px 34px',
+          border: `2px solid ${enabled ? lobby.cream : lobby.edge}`,
+          background: enabled ? lobby.cream : 'transparent',
+          color: enabled ? '#171410' : lobby.dim,
+          clipPath: chamfer(9),
+          WebkitClipPath: chamfer(9),
           fontFamily: fonts.display,
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.32em',
+          fontSize: 20,
+          letterSpacing: '0.24em',
           textTransform: 'uppercase',
-          color: 'rgba(255,255,255,0.65)',
-          marginBottom: 2,
+          lineHeight: 1,
+          cursor: enabled ? 'pointer' : 'default',
         }}
       >
         {label}
-      </div>
-      <div
-        style={{
-          fontFamily: fonts.display,
-          fontSize: 34,
-          fontWeight: 700,
-          color: '#fff',
-          lineHeight: 1,
-          textShadow: '0 2px 4px rgba(0,0,0,0.55)',
-        }}
-      >
-        {value}
-      </div>
+      </motion.button>
+      <Bracket side="right" dim={!enabled} />
     </div>
   );
 }
 
-function AbilityChip({ label, name }: { label: string; name: string }) {
+function Bracket({ side, dim }: { side: 'left' | 'right'; dim: boolean }) {
+  const c = dim ? lobby.edge : lobby.cream;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-      <div
-        style={{
-          fontFamily: fonts.display,
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.32em',
-          textTransform: 'uppercase',
-          color: 'rgba(255,255,255,0.65)',
-          marginBottom: 2,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontFamily: fonts.display,
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#fff',
-          letterSpacing: '0.02em',
-          lineHeight: 1,
-          textShadow: '0 2px 4px rgba(0,0,0,0.55)',
-        }}
-      >
-        {name}
-      </div>
-    </div>
+    <span
+      aria-hidden
+      style={{
+        width: 12,
+        height: 30,
+        borderTop: `2px solid ${c}`,
+        borderBottom: `2px solid ${c}`,
+        [side === 'left' ? 'borderLeft' : 'borderRight']: `2px solid ${c}`,
+        transform: side === 'left' ? 'skewX(-14deg)' : 'skewX(14deg)',
+        flexShrink: 0,
+      }}
+    />
   );
 }

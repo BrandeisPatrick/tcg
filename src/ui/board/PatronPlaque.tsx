@@ -1,22 +1,21 @@
 import { motion } from 'framer-motion';
 import type { GameState, PlayerID } from '@/engine/types';
-import { palette, fonts, text } from '../tokens';
+import { fonts, text } from '../tokens';
+import { poster, soulCoin } from '../poster';
 import { useStatTick } from './useStatTick';
 
 /**
- * Patron vitals carved into the tabletop — a brass-framed plate screwed to
- * the table's rim corner, so the win condition (patron HP) plus deck/hand
- * counts and skill readiness are ALWAYS on the battlefield, panel open or
- * closed. Rival's plate rides the far rim (top-left), yours the near rim
- * (bottom-left) — mirroring the soul racks' top/bottom split on the right
- * edge: identity/life on the left rail, economy on the right.
+ * A patron's vitals as one narrow rule across the sheet — the rival's above
+ * the top bench, yours below the bottom one. It carries everything the side
+ * panel used to duplicate (patron HP, deck, discard, hand, souls, skill
+ * readiness) in glyphs and numerals rather than labelled rows, so the board
+ * is self-sufficient and the panel is free to be just the log.
  *
- * Material matches RowPlaque (dark mahogany plate, engraved brass text) so
- * it reads as furniture, not floating chrome. Lives INSIDE the tilted,
- * fit-scaled plane; sized so its numerals survive the 0.42 min scale.
+ * Sits inside the board's row stack as a real flex row, so nothing overlaps
+ * the sheet's edge the way the old corner plate did.
  */
 export function PatronPlaque({
-  label, ps, hostile, skillUsed, projectedFaceDamage, side, isMobile, myTurn,
+  label, ps, hostile, skillUsed, projectedFaceDamage, isMobile, myTurn,
 }: {
   label: string;
   ps: GameState['players'][PlayerID];
@@ -24,176 +23,183 @@ export function PatronPlaque({
   /** Player-wide "a skill was used this turn" flag for this patron's side. */
   skillUsed: boolean;
   projectedFaceDamage?: number;
+  /** Which end of the board this row sits at. */
   side: 'top' | 'bottom';
   isMobile: boolean;
-  /** Highlight ring while it's this patron's turn. */
+  /** Highlight while it's this patron's turn. */
   myTurn?: boolean;
 }) {
-  const accent = hostile ? palette.danger : palette.accent;
+  const accent = hostile ? poster.rival : poster.you;
   const hpFrac = Math.max(0, Math.min(1, ps.hp / ps.hpMax));
   const projectedHp = Math.max(0, ps.hp - (projectedFaceDamage ?? 0));
   const projectedFrac = Math.max(0, Math.min(1, projectedHp / ps.hpMax));
   const hasIncoming = !!projectedFaceDamage && projectedFaceDamage > 0;
-  // Same tick language as hero cards / panel: pulse bright on heal,
-  // desaturated on damage.
-  const hpTick = useStatTick(ps.hp);
-  const hpFlash = hpTick === 'down' ? palette.hpDim : hpTick === 'up' ? palette.hpBright : palette.hp;
 
-  const numeralSize = isMobile ? 15 : 21;
+  // Same tick language as the hero cards: bright on heal, grey on damage.
+  const hpTick = useStatTick(ps.hp);
+  const hpFlash = hpTick === 'down' ? poster.stat.hpDim
+    : hpTick === 'up' ? poster.stat.hpBright
+    : poster.stat.hp;
+
+  const num = isMobile ? 13 : 15;
+  const glyph = isMobile ? 11 : 12;
 
   return (
     <div
       aria-label={`${label}: ${ps.hp} of ${ps.hpMax} HP`}
       style={{
         display: 'flex',
-        alignItems: 'stretch',
-        gap: isMobile ? 6 : 9,
-        padding: isMobile ? '4px 8px 5px' : '6px 11px 7px',
-        borderRadius: 7,
-        // RowPlaque's plate ramp, widened — a mahogany plate with brass edge.
-        background: 'linear-gradient(180deg, #52381a, #38250e)',
-        border: '1px solid rgba(235, 205, 145, 0.35)',
-        boxShadow: [
-          'inset 0 1px 0 rgba(255, 226, 170, 0.28)',
-          '0 3px 8px rgba(40, 20, 0, 0.4)',
-          myTurn ? `0 0 0 1.5px ${accent}66, 0 0 14px ${accent}44` : '0 0 0 0 transparent',
-        ].join(', '),
+        alignItems: 'center',
+        gap: isMobile ? 8 : 14,
+        height: '100%',
+        padding: isMobile ? '0 6px' : '0 12px',
+        // A hairline rule, inked in the owner's colour while it's their turn.
+        borderTop: `1.5px solid ${myTurn ? accent : poster.inkRule}`,
         pointerEvents: 'none',
       }}
     >
-      {/* Identity column: faction dot + engraved name. */}
-      <div style={{
-        display: 'flex', flexDirection: 'column',
-        justifyContent: 'center', gap: 3,
-        minWidth: 0,
-      }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          ...text.label,
-          fontSize: isMobile ? 9 : 11,
-          color: '#e3c07f',
-          textShadow: '0 1px 1px rgba(0, 0, 0, 0.55)',
-          whiteSpace: 'nowrap',
-        }}>
-          <span style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: accent,
-            boxShadow: `0 0 5px ${accent}aa`,
-            flexShrink: 0,
-          }} />
-          {label}
-        </span>
-        {/* Counts row — deck / discard (+ rival hand). Engraved small print. */}
-        <span style={{
-          fontFamily: fonts.ui,
-          fontSize: isMobile ? 8.5 : 10,
-          fontWeight: 700,
-          letterSpacing: '0.04em',
-          color: 'rgba(227, 192, 127, 0.72)',
-          textShadow: '0 1px 1px rgba(0, 0, 0, 0.5)',
-          whiteSpace: 'nowrap',
-          fontVariantNumeric: 'tabular-nums',
-        }}>
-          deck {ps.deck.length} · disc {ps.discard.length}{hostile ? ` · hand ${ps.hand.length}` : ''}
-        </span>
-      </div>
-
-      {/* Divider pin — a brass rivet separating identity from vitals. */}
-      <span aria-hidden style={{
-        alignSelf: 'center',
-        width: 5, height: 5, borderRadius: '50%',
-        background: `radial-gradient(circle at 35% 30%, #f0d290, ${palette.accent} 55%, #6b4716)`,
-        boxShadow: '0 1px 1px rgba(0, 0, 0, 0.5)',
+      {/* Patron — a dot and the name, in the owner's ink. */}
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        ...text.label,
+        fontSize: isMobile ? 9 : 10.5,
+        letterSpacing: '0.18em',
+        color: accent,
+        whiteSpace: 'nowrap',
         flexShrink: 0,
-      }} />
-
-      {/* Vitals column: HP numeral + bar, skill dot riding the corner. */}
-      <div style={{
-        display: 'flex', flexDirection: 'column',
-        justifyContent: 'center', gap: 3,
       }}>
-        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, lineHeight: 1 }}>
-          {hasIncoming && (
-            <span style={{
-              padding: '1px 4px', borderRadius: 3,
-              background: `${palette.danger}dd`, color: '#fff',
-              fontFamily: fonts.ui, fontSize: isMobile ? 8.5 : 10, fontWeight: 800,
-              textShadow: '0 1px 1px rgba(0,0,0,0.5)',
-            }}>▼{projectedFaceDamage}</span>
-          )}
-          <motion.span
-            style={{
-              fontFamily: fonts.ui,
-              fontWeight: 800,
-              fontSize: numeralSize,
-              fontVariantNumeric: 'tabular-nums',
-              color: '#f2dfae',
-              textShadow: '0 1px 1px rgba(0, 0, 0, 0.6)',
-              display: 'inline-block',
-            }}
-            animate={hpTick
-              ? { scale: [1, 1.3, 1], color: ['#f2dfae', hpFlash, '#f2dfae'] }
-              : { scale: 1, color: '#f2dfae' }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          >{ps.hp}</motion.span>
-          <span style={{
-            fontFamily: fonts.ui, fontWeight: 700,
-            fontSize: isMobile ? 9 : 11,
-            color: 'rgba(227, 192, 127, 0.65)',
-            textShadow: '0 1px 1px rgba(0, 0, 0, 0.5)',
-          }}>/ {ps.hpMax}</span>
-          {/* Skill readiness — the same green pulse as the panel, docked
-              beside the HP so one glance covers life + skill. */}
-          {skillUsed ? (
-            <span title="Skill used" style={{
-              width: 7, height: 7, borderRadius: '50%', marginLeft: 3,
-              background: 'rgba(227, 192, 127, 0.35)',
-              boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.4)',
-              alignSelf: 'center',
-            }} />
-          ) : (
-            <motion.span
-              title="Skill ready"
-              animate={{ opacity: [0.55, 1, 0.55] }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-              style={{
-                width: 7, height: 7, borderRadius: '50%', marginLeft: 3,
-                background: palette.success,
-                boxShadow: `0 0 6px ${palette.success}`,
-                alignSelf: 'center',
-              }}
-            />
-          )}
-        </span>
-        {/* HP bar — recessed channel with the faction-coloured fill and the
-            hatched projected-damage stripe from the panel's bar. */}
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0 }} />
+        {label}
+      </span>
+
+      {/* HP — numeral, then the bar taking the slack so the two rows line up. */}
+      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, flexShrink: 0 }}>
+        <motion.span
+          style={{
+            fontFamily: fonts.ui,
+            fontWeight: 800,
+            fontSize: num,
+            fontVariantNumeric: 'tabular-nums',
+            color: poster.stat.hp,
+            lineHeight: 1,
+            display: 'inline-block',
+          }}
+          animate={hpTick
+            ? { scale: [1, 1.3, 1], color: [poster.stat.hp, hpFlash, poster.stat.hp] }
+            : { scale: 1, color: poster.stat.hp }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >{ps.hp}</motion.span>
         <span style={{
-          position: 'relative',
-          display: 'block',
-          width: isMobile ? 64 : 92,
-          height: isMobile ? 4 : 5,
-          borderRadius: 3,
-          background: 'rgba(0, 0, 0, 0.4)',
-          boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 226, 170, 0.15)',
-          overflow: 'hidden',
-        }}>
+          fontFamily: fonts.ui, fontWeight: 700, fontSize: glyph - 1, color: poster.inkFaint,
+        }}>/{ps.hpMax}</span>
+      </span>
+
+      <span style={{
+        position: 'relative',
+        flex: 1,
+        minWidth: 24,
+        height: 5,
+        background: poster.inkRule,
+        overflow: 'hidden',
+      }}>
+        <span style={{
+          position: 'absolute', inset: 0,
+          width: `${hpFrac * 100}%`,
+          background: poster.stat.hp,
+          transition: 'width 240ms ease',
+        }} />
+        {/* Incoming face damage — the slice about to be lost, hatched off. */}
+        {hasIncoming && (
           <span style={{
-            position: 'absolute', inset: 0,
-            width: `${hpFrac * 100}%`,
-            background: `linear-gradient(90deg, ${accent}, ${accent}aa)`,
-            transition: 'width 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+            position: 'absolute',
+            top: 0, bottom: 0,
+            left: `${projectedFrac * 100}%`,
+            width: `${(hpFrac - projectedFrac) * 100}%`,
+            background: `repeating-linear-gradient(115deg, ${poster.paperBand} 0 3px, ${poster.stat.hp} 3px 6px)`,
           }} />
-          {hasIncoming && (
-            <span style={{
-              position: 'absolute', top: 0, bottom: 0,
-              left: `${projectedFrac * 100}%`,
-              width: `${(hpFrac - projectedFrac) * 100}%`,
-              background: `repeating-linear-gradient(45deg, ${palette.danger}cc 0 3px, ${palette.danger}77 3px 6px)`,
-              transition: 'all 200ms ease',
-            }} />
-          )}
-        </span>
-      </div>
+        )}
+      </span>
+
+      {/* Counts — glyph plus numeral, no labels. */}
+      <Stat glyph={<DeckGlyph size={glyph} />} value={ps.deck.length} title="Deck" size={glyph} />
+      <Stat glyph={<DiscardGlyph size={glyph} />} value={ps.discard.length} title="Discard" size={glyph} />
+      <Stat glyph={<HandGlyph size={glyph} />} value={ps.hand.length} title="Hand" size={glyph} />
+      <Stat
+        glyph={<span style={soulCoin(glyph - 2)} />}
+        value={ps.souls}
+        title="Souls"
+        size={glyph}
+      />
+
+      {/* Skill readiness — the one state that isn't a number. */}
+      <span
+        title={skillUsed ? 'Skill used' : 'Skill ready'}
+        style={{
+          width: 7, height: 7, borderRadius: '50%',
+          background: skillUsed ? poster.inkFaint : poster.target,
+          flexShrink: 0,
+        }}
+      />
     </div>
+  );
+}
+
+/** One glyph-and-numeral pair. The title carries the word for a hover. */
+function Stat({ glyph, value, title, size }: {
+  glyph: React.ReactNode;
+  value: number;
+  title: string;
+  size: number;
+}) {
+  return (
+    <span
+      title={title}
+      aria-label={`${title}: ${value}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+        fontFamily: fonts.ui,
+        fontWeight: 700,
+        fontSize: size,
+        fontVariantNumeric: 'tabular-nums',
+        color: poster.ink,
+        lineHeight: 1,
+      }}
+    >
+      {glyph}
+      {value}
+    </span>
+  );
+}
+
+/** Stacked cards, face down — the draw pile. */
+function DeckGlyph({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden style={{ display: 'block' }}>
+      <rect x="2.5" y="1.5" width="8" height="11" rx="1.5" fill="none" stroke={poster.inkDim} strokeWidth="1.3" />
+      <rect x="5.5" y="3.5" width="8" height="11" rx="1.5" fill={poster.paperBand} stroke={poster.ink} strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+/** A card set aside — the discard pile. */
+function DiscardGlyph({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden style={{ display: 'block' }}>
+      <rect x="3" y="2.5" width="10" height="11" rx="1.5" fill="none" stroke={poster.inkDim} strokeWidth="1.3" strokeDasharray="2.4 2" />
+      <path d="M5.5 8.5 L10.5 8.5" stroke={poster.inkDim} strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Three cards fanned — the hand. */
+function HandGlyph({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden style={{ display: 'block' }}>
+      <g fill={poster.paperBand} stroke={poster.ink} strokeWidth="1.2" strokeLinejoin="round">
+        <rect x="1.6" y="5" width="5.2" height="8" rx="1" transform="rotate(-16 4.2 9)" />
+        <rect x="5.4" y="4" width="5.2" height="8" rx="1" />
+        <rect x="9.2" y="5" width="5.2" height="8" rx="1" transform="rotate(16 11.8 9)" />
+      </g>
+    </svg>
   );
 }

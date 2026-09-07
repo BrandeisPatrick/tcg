@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { CardFrame } from '../card/CardFrame';
-import { palette, spring } from '../tokens';
+import { spring } from '../tokens';
+import { poster } from '../poster';
 
 interface Props {
   cardId: string;
@@ -23,7 +24,8 @@ export function CardPreview({ cardId, onClose, hover = false }: Props) {
           transform: 'translateY(-50%)',
           zIndex: 92,
           pointerEvents: 'none',
-          filter: 'drop-shadow(0 12px 24px rgba(40, 20, 0, 0.45))',
+          // One neutral drop — the print floats over the sheet with no colour cast.
+          filter: 'drop-shadow(0 16px 28px rgba(0, 0, 0, 0.55))',
         }}
       >
         <CardFrame cardId={cardId} size="full" footer={null} />
@@ -39,8 +41,9 @@ export function CardPreview({ cardId, onClose, hover = false }: Props) {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0,
-        background: palette.overlay,
-        backdropFilter: 'blur(8px)',
+        // Dark scrim over the blurred scene; the card is the only lit thing.
+        background: poster.scrim,
+        backdropFilter: 'blur(6px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         zIndex: 90,
       }}

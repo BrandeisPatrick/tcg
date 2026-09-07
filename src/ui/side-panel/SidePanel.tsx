@@ -1,25 +1,32 @@
-import type { GameState, PlayerID } from '@/engine/types';
-import { palette, radius, text } from '../tokens';
+import type { GameState } from '@/engine/types';
+import { fonts, text } from '../tokens';
+import { poster, chamfer } from '../poster';
 import { LogLine } from './LogLine';
-import { PlayerCard } from './PlayerCard';
 import { logEntryColor } from '../helpers';
 
 /**
- * Right-rail orchestrator. Renders (top → bottom):
- *   - "Patrol" header + current turn pip
- *   - Opponent patron card (Sapphire Flame)
- *   - Recent log (grouped by turn, semantic colour from logEntryColor)
- *   - Your patron card (Amber Hand)
- *   - Hint footer
+ * Right-rail orchestrator, drawn on the drawer's dark chrome (PanelDrawer
+ * owns the surface; this column is transparent). Both patrons' vitals now
+ * live on the board itself, so the panel is only the match log: a heading
+ * with the turn numeral over a recessed well, grouped by turn with each
+ * line inked by logEntryColor.
  */
+
+// Stencil headings in cream, and the dimmer eyebrow that labels a numeral.
+const heading = {
+  fontFamily: fonts.display,
+  letterSpacing: '0.22em',
+  textTransform: 'uppercase',
+  lineHeight: 1,
+  color: poster.cream,
+} as const;
+const eyebrow = { ...heading, fontSize: 10, color: poster.creamDim } as const;
+
 export function SidePanel({
-  G, me, isMyTurn, turn, onLogToggle,
-  projectedFaceDamageMe, projectedFaceDamageOpp,
+  G, turn, onLogToggle,
 }: {
-  G: GameState; me: PlayerID; isMyTurn: boolean; turn: number; onLogToggle: () => void;
-  projectedFaceDamageMe?: number; projectedFaceDamageOpp?: number;
+  G: GameState; turn: number; onLogToggle: () => void;
 }) {
-  const opp: PlayerID = me === '0' ? '1' : '0';
   // Group log entries by turn (newest first). Each group shows one "Turn N"
   // header followed by its lines — saves the T-prefix per line and makes
   // turn boundaries scannable.
@@ -38,79 +45,64 @@ export function SidePanel({
       position: 'relative',
       display: 'flex', flexDirection: 'column', gap: 12,
       padding: '14px 14px 14px',
-      background: `linear-gradient(180deg, ${palette.bg2}, ${palette.bg1} 30%, #e6d4ab)`,
-      // Same material family as the tabletop rim: mahogany frame, warm top
-      // highlight, brass inner keyline (the absolute layer below).
-      border: '1px solid #5a3f1c',
-      borderRadius: radius.lg,
-      boxShadow: [
-        '0 14px 34px rgba(40, 20, 0, 0.30)',
-        '0 3px 10px rgba(40, 20, 0, 0.20)',
-        'inset 0 1px 0 rgba(255, 244, 214, 0.7)',
-      ].join(', '),
+      background: 'transparent',
       minHeight: 0,
       height: '100%',
       overflow: 'hidden',
     }}>
-      {/* Brass keyline — engraved inner frame matching the table inlay. */}
-      <div aria-hidden style={{
-        position: 'absolute',
-        inset: 4,
-        borderRadius: radius.lg - 2,
-        border: '1px solid rgba(176, 120, 37, 0.35)',
-        pointerEvents: 'none',
-      }} />
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        paddingBottom: 8, borderBottom: `1px solid ${palette.borderStrong}`,
-        boxShadow: '0 1px 0 rgba(255, 244, 214, 0.55)',
+        paddingBottom: 8, borderBottom: `1px solid ${poster.edge}`,
       }}>
-        <span style={{ ...text.label, color: palette.textDim }}>Patrol</span>
+        <span style={{ ...heading, fontSize: 18 }}>Log</span>
         <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ ...text.label, color: palette.textDim }}>Turn</span>
-          <span style={{ ...text.numeric, fontSize: 16, color: palette.text }}>{turn}</span>
+          <span style={eyebrow}>Turn</span>
+          <span style={{ ...heading, fontSize: 18 }}>{turn}</span>
         </span>
       </div>
 
-      <PlayerCard label="Sapphire Flame" ps={G.players[opp]} hostile order={opp === '0' ? '1st' : '2nd'} projectedFaceDamage={projectedFaceDamageOpp} />
-
+      {/* Recent log — a recessed well cut into the panel. */}
       <div style={{
         flex: 1, minHeight: 0,
         display: 'flex', flexDirection: 'column',
-        background: 'rgba(120, 80, 30, 0.06)',
-        border: `1px solid ${palette.border}`,
-        borderRadius: radius.md,
+        background: poster.ground,
+        border: `1px solid ${poster.edge}`,
+        clipPath: chamfer(6),
+        WebkitClipPath: chamfer(6),
         overflow: 'hidden',
       }}>
         <div style={{
-          padding: '8px 12px', borderBottom: `1px solid ${palette.border}`,
+          padding: '8px 12px', borderBottom: `1px solid ${poster.edge}`,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <span style={{ ...text.label, color: palette.textDim }}>Recent</span>
+          <span style={{ ...heading, fontSize: 11 }}>Recent</span>
           <button onClick={onLogToggle} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            ...text.label, color: palette.accent,
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            ...heading, fontSize: 11,
           }}>Full Log →</button>
         </div>
         <div style={{ flex: 1, overflow: 'auto', padding: '4px 12px 12px' }}>
           {grouped.length === 0 ? (
-            <div style={{ ...text.body, color: palette.textDim }}>No actions yet.</div>
+            <div style={{ ...text.body, color: poster.creamDim }}>No actions yet.</div>
           ) : grouped.map((g) => (
             <div key={g.turn} style={{ marginTop: 8 }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
-                paddingBottom: 3, borderBottom: `1px dashed ${palette.border}`,
+                paddingBottom: 3, borderBottom: `1px dashed ${poster.edge}`,
               }}>
-                <span style={{ ...text.label, color: palette.textDim }}>Turn</span>
-                <span style={{ ...text.numeric, fontSize: 16, color: palette.text }}>{g.turn}</span>
+                <span style={eyebrow}>Turn</span>
+                <span style={{ ...heading, fontSize: 14 }}>{g.turn}</span>
               </div>
               {g.entries.map((e, i) => {
                 const c = logEntryColor(e.text);
                 return (
                   <div key={i} style={{
                     ...text.body, color: c, padding: '1px 0',
-                    paddingLeft: 6, borderLeft: `2px solid ${c}44`,
-                    marginLeft: 2,
+                    paddingLeft: 6, marginLeft: 2,
+                    // Faint rule in the line's own ink; falls back to the full
+                    // colour (currentColor) where color-mix is unsupported.
+                    borderLeft: '2px solid',
+                    borderLeftColor: `color-mix(in srgb, ${c} 40%, transparent)`,
                   }}>
                     <LogLine text={e.text} />
                   </div>
@@ -121,14 +113,6 @@ export function SidePanel({
         </div>
       </div>
 
-      <PlayerCard label="Amber Hand" ps={G.players[me]} active={isMyTurn} order={me === '0' ? '1st' : '2nd'} projectedFaceDamage={projectedFaceDamageMe} />
-
-      <div style={{
-        paddingTop: 8, borderTop: `1px solid ${palette.border}`,
-        ...text.body, color: palette.textDim,
-      }}>
-        Drop a card on a hero · Hover for the lore · Hold for full preview
-      </div>
     </aside>
   );
 }

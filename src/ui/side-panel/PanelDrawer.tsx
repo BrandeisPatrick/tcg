@@ -1,10 +1,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { palette, fonts } from '../tokens';
+import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 /**
  * Right-side game panel (Patrol + log + Amber Hand) with an always-visible
- * chevron tab to toggle it.
+ * chevron tab to toggle it. Dark chrome: the drawer is a poster.panel column
+ * with a single edge rule down its left side, floating over the blurred
+ * scene; the tab is a small ink plate that rides the panel's edge.
  *
  * Desktop: the panel participates in the Board's flex row — opening it
  * narrows the main column, and the stage's fit-scale reflows to the space
@@ -15,16 +17,13 @@ import { useViewport } from '../hooks/useViewport';
  * panel is closed by default there anyway.
  */
 export const PANEL_WIDTH = 320;
+
+/** The chevron tab's silhouette: chamfered on the left only — its right
+ *  edge is always flush against the panel or the viewport edge. */
+const TAB_CLIP = 'polygon(4px 0, 100% 0, 100% 100%, 4px 100%, 0 calc(100% - 4px), 0 4px)';
 const WIDTH = PANEL_WIDTH;
 
-// Ledger-page material for the panel column: a dark bound spine fading in
-// from the left edge plus the same faint horizontal paper-fibre streaks the
-// ArenaBackdrop uses — ties the sheet to the scene instead of leaving it a
-// flat colour block.
-const PANEL_SURFACE = [
-  'linear-gradient(90deg, rgba(58, 40, 16, 0.26), rgba(58, 40, 16, 0.08) 12px, transparent 30px)',
-  'repeating-linear-gradient(180deg, rgba(120, 80, 30, 0.028) 0 1px, transparent 1px 7px)',
-].join(', ');
+const PANEL_SHADOW = '-16px 0 40px rgba(0, 0, 0, 0.5)';
 
 export function PanelDrawer({ open, onToggle, children }: {
   open: boolean;
@@ -43,26 +42,31 @@ export function PanelDrawer({ open, onToggle, children }: {
         right: open ? WIDTH : 0,
         transform: 'translateY(-50%)',
         width: 22, height: 64,
-        background: `linear-gradient(180deg, ${palette.bg1}, ${palette.bg2})`,
-        border: `1.5px solid ${palette.accent}`,
-        borderRadius: '6px 0 0 6px',
-        color: palette.text,
+        background: poster.panel,
+        border: `1px solid ${poster.edge}`,
+        // Left-only chamfer: the tab's right edge is always flush (against the
+        // panel when open, the viewport edge when closed), so notching it there
+        // would just expose the scene.
+        clipPath: TAB_CLIP,
+        WebkitClipPath: TAB_CLIP,
+        color: poster.cream,
         cursor: 'pointer',
-        fontFamily: fonts.ui,
-        fontSize: 16, fontWeight: 700,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: `-3px 0 12px rgba(40, 20, 0, 0.32)`,
         zIndex: 65,
         padding: 0,
         transition: 'right 280ms cubic-bezier(0.22, 1, 0.36, 1)',
         lineHeight: 1,
       }}
     >
-      <span style={{
-        display: 'inline-block',
+      <span aria-hidden style={{
+        display: 'inline-flex',
         transform: open ? 'none' : 'rotate(180deg)',
         transition: 'transform 220ms ease',
-      }}>‹</span>
+      }}>
+        <svg viewBox="0 0 10 14" width="10" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="8,1 2,7 8,13" />
+        </svg>
+      </span>
     </button>
   );
 
@@ -85,10 +89,9 @@ export function PanelDrawer({ open, onToggle, children }: {
                 // Top padding clears the persistent system gear pinned to the
                 // viewport corner so the panel header never sits under it.
                 padding: '56px 12px 12px 8px',
-                background: palette.bg0,
-                backgroundImage: PANEL_SURFACE,
-                borderLeft: '1px solid rgba(120, 80, 30, 0.32)',
-                boxShadow: `-12px 0 32px rgba(40, 20, 0, 0.36)`,
+                background: poster.panel,
+                borderLeft: `1px solid ${poster.edge}`,
+                boxShadow: PANEL_SHADOW,
                 zIndex: 64,
                 overflow: 'hidden',
               }}
@@ -103,6 +106,8 @@ export function PanelDrawer({ open, onToggle, children }: {
 
   // Desktop: in-flow flex child. Stays mounted so the width can animate;
   // the inner box keeps a constant width so text doesn't reflow mid-slide.
+  // The shadow lives on this outer element — its overflow: hidden would clip
+  // one placed on the inner box.
   return (
     <>
       {tab}
@@ -115,8 +120,8 @@ export function PanelDrawer({ open, onToggle, children }: {
           flex: '0 0 auto',
           alignSelf: 'stretch',
           overflow: 'hidden',
-          background: palette.bg0,
-          boxShadow: open ? `-12px 0 32px rgba(40, 20, 0, 0.36)` : 'none',
+          background: poster.panel,
+          boxShadow: open ? PANEL_SHADOW : 'none',
           zIndex: 64,
           position: 'relative',
         }}
@@ -130,8 +135,8 @@ export function PanelDrawer({ open, onToggle, children }: {
           boxSizing: 'border-box',
           position: 'absolute',
           right: 0, top: 0,
-          backgroundImage: PANEL_SURFACE,
-          borderLeft: '1px solid rgba(120, 80, 30, 0.32)',
+          background: poster.panel,
+          borderLeft: `1px solid ${poster.edge}`,
         }}>
           {children}
         </div>

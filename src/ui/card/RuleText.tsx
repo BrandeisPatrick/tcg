@@ -1,46 +1,47 @@
-import { palette } from '../tokens';
+import { poster } from '../poster';
 
 /**
  * Rule-text keywords that get auto-bolded inside `RuleText`. The keyword's
- * color signals its semantic class — debuffs in wine red, buffs in success
- * green, timing markers in brass — which makes scanning a card text fast.
+ * colour signals its semantic class — debuffs in the poster red, buffs in
+ * the print green, timing markers in plain ink (bold is enough on paper) —
+ * which makes scanning a card text fast.
  *
  * Multi-word terms (e.g., "Bullet Resist") MUST be longer than their
  * single-word prefixes ("Bullet") so the regex's longest-match-first sort
  * picks the compound first.
  */
 const KEYWORDS: Record<string, string> = {
-  // Debuffs (wine red)
-  'Stun':           palette.status.debuff,
-  'Silence':        palette.status.debuff,
-  'Silenced':       palette.status.debuff,
-  'Disarm':         palette.status.debuff,
-  'Disarmed':       palette.status.debuff,
-  'Sleep':          palette.status.debuff,
-  'Bleed':          palette.status.debuff,
-  'Vulnerable':     palette.status.debuff,
-  'Weaken':         palette.status.debuff,
-  // Buffs / defenses (success green)
-  'Bullet Resist':  palette.status.buff,
-  'Spirit Resist':  palette.status.buff,
-  'Bullet Shield':  palette.status.buff,
-  'Spirit Shield':  palette.status.buff,
-  'Shield':         palette.status.buff,
-  'Bullet Power':   palette.status.buff,
-  'Spirit Power':   palette.status.buff,
-  'Unstoppable':    palette.status.buff,
-  // Timing markers (brass)
-  'On attach':      palette.accent,
-  'Start of turn':  palette.accent,
-  'After attacking':palette.accent,
-  // Scaling tag (spirit purple — same as Spirit Power buff family)
-  'caster Spirit':  palette.spirit,
+  // Debuffs (poster red)
+  'Stun':           poster.status.debuff,
+  'Silence':        poster.status.debuff,
+  'Silenced':       poster.status.debuff,
+  'Disarm':         poster.status.debuff,
+  'Disarmed':       poster.status.debuff,
+  'Sleep':          poster.status.debuff,
+  'Bleed':          poster.status.debuff,
+  'Vulnerable':     poster.status.debuff,
+  'Weaken':         poster.status.debuff,
+  // Buffs / defenses (print green)
+  'Bullet Resist':  poster.status.buff,
+  'Spirit Resist':  poster.status.buff,
+  'Bullet Shield':  poster.status.buff,
+  'Spirit Shield':  poster.status.buff,
+  'Shield':         poster.status.buff,
+  'Bullet Power':   poster.status.buff,
+  'Spirit Power':   poster.status.buff,
+  'Unstoppable':    poster.status.buff,
+  // Timing markers (ink)
+  'On attach':      poster.ink,
+  'Start of turn':  poster.ink,
+  'After attacking':poster.ink,
+  // Scaling tag (spirit plum — same as the Spirit Power buff family)
+  'caster Spirit':  poster.stat.spirit,
   // Damage type labels — make bullet vs spirit damage unmistakable.
   // 'bullet damage' / 'bullet dmg' compounds must come before solo 'bullet'.
-  'bullet damage':  palette.atk,
-  'bullet dmg':     palette.atk,
-  'spirit damage':  palette.spirit,
-  'spirit dmg':     palette.spirit,
+  'bullet damage':  poster.stat.atk,
+  'bullet dmg':     poster.stat.atk,
+  'spirit damage':  poster.stat.spirit,
+  'spirit dmg':     poster.stat.spirit,
 };
 
 // Build a single global regex from the keys, longest-first to greedily match

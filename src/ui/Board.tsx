@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
 import type { GameState, CardInstance, PlayerID, DamageEvent } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { HeroPortrait } from '@/cards/art/heroArt';
-import { Hand } from './board/Hand';
 import { Log } from './side-panel/Log';
-import { LogLine } from './side-panel/LogLine';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
 import { CardPreview } from './overlays/CardPreview';
 import { HeroDetailSheet } from './overlays/HeroDetailSheet';
 import { OpponentHand } from './board/OpponentHand';
-import { ArenaBackdrop } from './board/ArenaBackdrop';
+import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
 import { MulliganOverlay } from './overlays/MulliganOverlay';
 import { DraftOverlay } from './overlays/DraftOverlay';
@@ -19,9 +16,8 @@ import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST } from '@/engine/game';
 import { BenchRow } from './board/BenchRow';
-import { ActiveSlot } from './board/ActiveSlot';
 import { ActiveDuel } from './board/ActiveDuel';
-import { BoardTable, boardRows, tablePad } from './board/BoardTable';
+import { BoardTable, boardRows, boardGutter, vitalsPull } from './board/BoardTable';
 import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
 import { enumerateAIMoves } from '@/ai/heuristic';
@@ -37,15 +33,17 @@ import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { useSettings, getSettings } from '@/storage/settings';
 import { useFitScale } from './hooks/useFitScale';
 import { useViewport } from './hooks/useViewport';
-import { palette, fonts, radius, shadow, spring, text, DAMAGE_BEAT_MS } from './tokens';
-import { GameButton } from './chrome';
+import { fonts, spring, DAMAGE_BEAT_MS } from './tokens';
+import { poster } from './poster';
 import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer, PANEL_WIDTH } from './side-panel/PanelDrawer';
 import { HandTray } from './board/HandTray';
 import { findOnBoard, filterAllows, type PendingPlay } from './helpers';
 import { getMatchConfig } from '@/storage/matchConfig';
+import { markTutorialDone } from '@/storage/playerData';
 import { finishStoryBattle } from '@/story/storyRun';
 import { MatchEndScreen } from './board/MatchEndScreen';
+import { CoachPlate } from './tutorial/CoachPlate';
 import { useMatchNav } from './hooks/matchNav';
 
 // Animation / pacing constants.
@@ -56,8 +54,22 @@ export function Board(props: BoardProps<GameState>) {
   const me: PlayerID = '0';
   const matchNav = useMatchNav();
   const isMyTurn = ctx.currentPlayer === me;
+  // A tutorial match is built from a scripted setup like a Story node, but it
+  // exits to the title and carries the coach plate. Read once — the config is
+  // fixed for the life of the mount.
+  const isTutorial = useMemo(() => !!getMatchConfig().tutorial, []);
+  // Winning the lesson counts as having had it, even if the player dismissed
+  // the coach on the first step. (The coach marks it too, when its script
+  // runs out — whichever happens first.)
+  useEffect(() => {
+    if (isTutorial && ctx.gameover?.winner === me) markTutorialDone();
+  }, [isTutorial, ctx.gameover, me]);
   // Combat tempo honours the system-menu speed setting live.
-  const { combatSpeed } = useSettings();
+  const { combatSpeed, reducedMotion } = useSettings();
+  // The backdrop's slow push-in runs only when neither the settings sheet
+  // nor the OS asks for reduced motion (same gate as the title screen).
+  const osReducedMotion = useReducedMotion();
+  const ambient = !reducedMotion && !osReducedMotion;
   const [pending, setPending] = useState<PendingPlay | null>(null);
   // Auto-play: when on, the same AI that runs the opponent also drives the
   // local player's turns, so the match plays itself hands-free. Toggle in the
@@ -130,12 +142,13 @@ export function Board(props: BoardProps<GameState>) {
     ? { total: combatPlan.steps.length, currentBeat: combatBeat, attackerIsMe: combatPlan.attackerId === me }
     : null, [combatPlan, combatBeat, me]);
 
-  // Ephemeral feedback toast — explains otherwise-silent no-ops (unaffordable
-  // card, invalid target) and confirms fire-and-forget actions (mulligan).
-  const [notice, setNotice] = useState<{ id: number; msg: string } | null>(null);
+  // Ephemeral feedback sticker — explains otherwise-silent no-ops (unaffordable
+  // card, invalid target — printed red as warnings) and confirms
+  // fire-and-forget actions (mulligan — printed ink).
+  const [notice, setNotice] = useState<{ id: number; msg: string; warn: boolean } | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showNotice = useCallback((msg: string) => {
-    setNotice({ id: Date.now(), msg });
+  const showNotice = useCallback((msg: string, warn = false) => {
+    setNotice({ id: Date.now(), msg, warn });
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     noticeTimer.current = setTimeout(() => setNotice(null), 2000);
   }, []);
@@ -295,7 +308,7 @@ export function Board(props: BoardProps<GameState>) {
   }, [preview]);
 
   // HP / BP change animations are now driven by `useStatTick` inside
-  // HeroSlot (per-card) and PlayerCard (patron HP) — no central floater
+  // HeroSlot (per-card) and the vitals rules (patron HP) — no central floater
   // pushes here. Removing the old HP-diff effect also drops the
   // combat-vs-card-diff deduplication ref it used to need.
 
@@ -471,7 +484,7 @@ export function Board(props: BoardProps<GameState>) {
       const valid = isTargetable(card, owner);
       if (!valid) {
         setPending(null);
-        showNotice(`Not a valid target for ${pending.title}`);
+        showNotice(`Not a valid target for ${pending.title}`, true);
         return;
       }
       if (pending.kind === 'playCard') {
@@ -577,6 +590,7 @@ export function Board(props: BoardProps<GameState>) {
         won={won}
         draw={!!ctx.gameover.draw}
         isStory={isStory}
+        isTutorial={isTutorial}
         onRematch={() => { if (matchNav) matchNav.rematch(); else location.reload(); }}
         onMenu={matchNav ? matchNav.exitToMenu : null}
         onStoryReturn={() => finishStoryBattle(won)}
@@ -604,7 +618,7 @@ export function Board(props: BoardProps<GameState>) {
     <LayoutGroup>
       <CombatProgressContext.Provider value={combatProgress}>
       <DamageFxContext.Provider value={damageFxFor}>
-      <ArenaBackdrop />
+      <PosterBackdrop ambient={ambient} />
 
       <div style={{
         minHeight: '100vh',
@@ -612,7 +626,7 @@ export function Board(props: BoardProps<GameState>) {
         justifyContent: 'center',
         margin: '0 auto',
         padding: isMobile ? '6px 6px 0' : '12px 16px 0',
-        fontFamily: fonts.ui, color: palette.text,
+        fontFamily: fonts.ui, color: poster.ink,
         position: 'relative',
       }}>
         {/* MAIN COLUMN — battle stage centered, side panel lives in a
@@ -644,8 +658,8 @@ export function Board(props: BoardProps<GameState>) {
           ref={fitContentRef}
           style={{
             // Desktop: size to the stage's intrinsic width (the rows grid /
-            // painted table) so useFitScale can fit BOTH axes — a 100%-wide
-            // box always "fits" horizontally and the table clipped instead
+            // cream sheet) so useFitScale can fit BOTH axes — a 100%-wide
+            // box always "fits" horizontally and the sheet clipped instead
             // of scaling on narrow windows.
             width: isMobile ? '100%' : 'fit-content',
             alignSelf: 'center',
@@ -657,23 +671,19 @@ export function Board(props: BoardProps<GameState>) {
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
           }}>
-          {/* Rival's fan tucks behind the table's far rim — negative margin
-              slides the card bottoms under the tilted plane (which stacks
-              above via zIndex), so the face-down hand rests AT the table
+          {/* Rival's fan tucks behind the sheet's top edge — a small negative
+              margin lets the card backs peek over the paper (the sheet stacks
+              above via zIndex), so the face-down hand rests AT the board
               instead of floating in the room. Mobile keeps the flat gap. */}
-          <div style={{ flex: '0 0 auto', position: 'relative', zIndex: 0, marginBottom: isMobile ? 0 : -46 }}>
+          <div style={{ flex: '0 0 auto', position: 'relative', zIndex: 0, marginBottom: isMobile ? 0 : -10 }}>
             <OpponentHand cards={G.players[opp].hand} />
           </div>
 
           {/* 3×3 BOARD GRID — the three rows (opp bench, lane, my bench)
-              sit on a painted tabletop (BoardTable) and the whole plane is
-              tilted a few degrees on desktop so the battlefield reads as a
-              physical table receding away from the player. Mobile stays
-              flat (vertical space is too tight for the tilt). */}
+              sit on one flat cream sheet (BoardTable), a print floating on
+              the blurred scene. Same flat plane on desktop and mobile. */}
           <div style={{
-            perspective: isMobile ? undefined : 1500,
-            perspectiveOrigin: '50% 30%',
-            // Stacks the tilted table above the rival's fan so the far rim
+            // Stacks the sheet above the rival's fan so the paper's top edge
             // overlaps the tucked card bottoms (see OpponentHand wrapper).
             position: 'relative',
             zIndex: 1,
@@ -683,33 +693,24 @@ export function Board(props: BoardProps<GameState>) {
             display: 'flex',
             flexDirection: 'column',
             gap: boardRows.gap(isMobile),
-            // Gutter rails: row nameplates live in the left rail; the turn
-            // control dock is carved into the right rail. Without them the
+            // Gutter margins: row tags live in the left margin; the turn
+            // control dock sits in the right margin. Without them the
             // fit-content stage hugs the card grid and both sat on cards.
-            paddingLeft: isMobile ? 0 : 76,
-            paddingRight: isMobile ? 0 : 150,
-            // translateZ(0) on mobile keeps a stacking context so the
-            // table layer can never paint over the rows on either branch.
-            transform: isMobile ? 'translateZ(0)' : 'rotateX(9deg)',
+            paddingLeft: boardGutter(isMobile).left,
+            paddingRight: boardGutter(isMobile).right,
+            // translateZ(0) keeps a stacking context so the sheet layer can
+            // never paint over the rows on either branch.
+            transform: 'translateZ(0)',
           }}>
-            {/* Painted tabletop — decorative layer behind the rows. */}
+            {/* The cream sheet — decorative layer behind the rows. */}
             <BoardTable isMobile={isMobile} />
 
-            {/* Patron plaques — vitals carved into the rim corners so HP,
-                counts and skill state live ON the battlefield (the panel is
-                optional depth). Rival rides the far rim, you the near rim,
-                pairing with the soul racks' top/bottom split at the right
-                edge. Inside the tilted plane on purpose: they are table
-                furniture, not floating chrome. */}
-            <div style={{
-              position: 'absolute',
-              // Mobile's flat board has no deep rim to mount on — hoist the
-              // plate fully above the frame so it never clips the first
-              // bench card; desktop keeps the carved-into-the-rim overlap.
-              top: -tablePad(isMobile).top - (isMobile ? 18 : 9),
-              left: -tablePad(isMobile).x + (isMobile ? 4 : 12),
-              zIndex: 2,
-            }}>
+            {/* RIVAL VITALS — a narrow rule capping the top of the stack.
+                Patron HP, deck, discard, hand, souls and skill readiness live
+                here on the board rather than only in the panel, and being a
+                real row it can't overlap the sheet's edge the way the old
+                corner plate did. */}
+            <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.vitals(isMobile)}px`, height: boardRows.vitals(isMobile), marginBottom: -vitalsPull(isMobile) }}>
               <PatronPlaque
                 label="Sapphire Flame"
                 ps={G.players[opp]}
@@ -719,22 +720,6 @@ export function Board(props: BoardProps<GameState>) {
                 side="top"
                 isMobile={isMobile}
                 myTurn={!isMyTurn}
-              />
-            </div>
-            <div style={{
-              position: 'absolute',
-              bottom: -tablePad(isMobile).bottom - (isMobile ? 18 : 9),
-              left: -tablePad(isMobile).x + (isMobile ? 4 : 12),
-              zIndex: 2,
-            }}>
-              <PatronPlaque
-                label="Amber Hand"
-                ps={G.players[me]}
-                skillUsed={G.players[me].skillUsedThisTurn}
-                projectedFaceDamage={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
-                side="bottom"
-                isMobile={isMobile}
-                myTurn={isMyTurn}
               />
             </div>
 
@@ -789,17 +774,30 @@ export function Board(props: BoardProps<GameState>) {
               />
             </div>
 
-            {/* Souls rail — vertical gem stack parallel to the 3×3 grid;
+            {/* YOUR VITALS — the same rule closing the bottom of the stack. */}
+            <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.vitals(isMobile)}px`, height: boardRows.vitals(isMobile), marginTop: -vitalsPull(isMobile) }}>
+              <PatronPlaque
+                label="Amber Hand"
+                ps={G.players[me]}
+                skillUsed={G.players[me].skillUsedThisTurn}
+                projectedFaceDamage={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
+                side="bottom"
+                isMobile={isMobile}
+                myTurn={isMyTurn}
+              />
+            </div>
+
+            {/* Souls rail — vertical coin stack parallel to the 3×3 grid;
                 top = rival, bottom = you, positions encode ownership. */}
             <SoulsRail
               rivalSouls={G.players[opp].souls}
               yourSouls={G.players[me].souls}
             />
 
-            {/* Turn control dock — carved into the table's right rail,
-                centred on the lane like a console screwed to the rim. Lives
-                inside the tilted plane so it reads as part of the board.
-                Phones keep the controls in the hand tray instead. */}
+            {/* Turn control dock — printed in the sheet's right margin,
+                centred on the lane. Lives inside the plane so it reads as
+                part of the board. Phones keep the controls in the hand tray
+                instead. */}
             {!isMobile && (
               <div style={{
                 position: 'absolute',
@@ -828,9 +826,9 @@ export function Board(props: BoardProps<GameState>) {
           </div>
           </div>
 
-          {/* zIndex 2 keeps the hand row above the tilted plane (zIndex 1),
-              so cards rising on select/hover/drag pass OVER the table's
-              front edge instead of sliding beneath it. */}
+          {/* zIndex 2 keeps the hand row above the board plane (zIndex 1),
+              so cards rising on select/hover/drag pass OVER the sheet's
+              bottom edge instead of sliding beneath it. */}
           <div style={{ flex: '0 0 auto', position: 'relative', zIndex: 2 }}>
             <HandTray
               cards={G.players[me].hand}
@@ -844,7 +842,7 @@ export function Board(props: BoardProps<GameState>) {
               onLongPress={(c) => setPreview({ card: c, hover: false })}
               onHover={(c) => setPreview(c ? { card: c, hover: true } : null)}
               onDragEndOver={onHandDragEnd}
-              onUnaffordable={(_, cost) => showNotice(`Need ${cost} souls — you have ${G.players[me].souls}`)}
+              onUnaffordable={(_, cost) => showNotice(`Need ${cost} souls — you have ${G.players[me].souls}`, true)}
               onEnd={() => { setPending(null); triggerEndTurn(); }}
               onCancel={() => setPending(null)}
               autoPlay={autoPlay}
@@ -860,12 +858,8 @@ export function Board(props: BoardProps<GameState>) {
         <PanelDrawer open={panelOpen} onToggle={() => setPanelOpen((v) => !v)}>
           <SidePanel
             G={G}
-            me={me}
-            isMyTurn={isMyTurn}
             turn={G.turnNumber}
             onLogToggle={() => setLogOpen((v) => !v)}
-            projectedFaceDamageMe={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
-            projectedFaceDamageOpp={ctx.currentPlayer === me ? projectedFaceDamage : 0}
           />
         </PanelDrawer>
 
@@ -1018,8 +1012,9 @@ export function Board(props: BoardProps<GameState>) {
           onSkip={() => { try { (moves as any).completeAction(); } catch {} }}
         />
 
-        {/* Feedback toast — single pill above the hand. Explains silent
-            no-ops and confirms fire-and-forget actions. */}
+        {/* Feedback sticker — one ink label above the hand (red when it is
+            a warning). Explains silent no-ops and confirms fire-and-forget
+            actions. */}
         <AnimatePresence>
           {notice && (
             <motion.div
@@ -1039,14 +1034,16 @@ export function Board(props: BoardProps<GameState>) {
               }}
             >
               <span style={{
-                padding: '8px 18px',
-                background: 'linear-gradient(180deg, rgba(40,20,0,0.88), rgba(20,10,0,0.93))',
-                border: `1.5px solid ${palette.accent}`,
-                borderRadius: 999,
-                ...text.label,
-                color: '#fff',
-                textShadow: '0 1px 2px rgba(0,0,0,0.9)',
-                boxShadow: `0 4px 14px rgba(0,0,0,0.45), 0 0 16px ${palette.accent}55`,
+                padding: '8px 16px',
+                background: notice.warn ? poster.red : poster.ink,
+                color: poster.paper,
+                borderRadius: 3,
+                fontFamily: fonts.display,
+                fontSize: 11,
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                lineHeight: 1.2,
+                boxShadow: '0 6px 16px rgba(0, 0, 0, 0.45)',
               }}>
                 {notice.msg}
               </span>
@@ -1054,6 +1051,7 @@ export function Board(props: BoardProps<GameState>) {
           )}
         </AnimatePresence>
       </div>
+      {isTutorial && <CoachPlate G={G} me={me} isMyTurn={isMyTurn} />}
       </DamageFxContext.Provider>
       </CombatProgressContext.Provider>
     </LayoutGroup>

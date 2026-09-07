@@ -1,52 +1,37 @@
-import type { CSSProperties } from 'react';
+import { poster } from '../poster';
 
 /**
- * Card shine — the layered "physical/holo card" treatment, pairs with the
- * `.card-shine` classes in styles.css. Mount as the last child of a
- * `position: relative; overflow: hidden` container with a border-radius (the
- * layers inherit it). Reads the CSS variables written by `usePointerTilt`:
- *   --mx/--my  pointer position (glare + holo follow it)
- *   --glare    highlight strength (0 at rest)
- * so the glare and holo only ignite while the pointer is tracking the card.
+ * Card shine — cards are flat screen prints, so the one light effect left is
+ * the scripted cast bar (`.card-shine__cast` in styles.css): CardPlayFlash
+ * animates the inherited `--cast` variable 0→1 on a wrapper and the bar
+ * sweeps across the card as it is dealt onto the sheet.
  *
- * Holo (the iridescent sheen) is rarity-scaled: commons get a glossy glare
- * only, mythics get full rainbow holo. `board` is the restrained battlefield
- * variant — ring + dim holo, no broad glare, so tiles stay calm.
+ * Mount as the last child of a `position: relative; overflow: hidden;
+ * isolation: isolate` container with a border-radius (the layer inherits it
+ * and blends against the card alone). Renders nothing unless `cast` is set,
+ * so hosts that still mount it for a rarity treatment get a matte card;
+ * `rarity` and `board` are accepted for those call sites.
  */
-export function CardShine({ rarity, board = false, cast = false }: {
+export function CardShine({ cast = false }: {
   rarity: 1 | 2 | 3 | 4;
   board?: boolean;
   /** Render the scripted one-shot sheen bar (the play-cast reveal animates the
    *  `--cast` var to sweep it across, since no pointer is over the card). */
   cast?: boolean;
 }) {
-  // Pointer-reactive layers ride on top regardless of rarity (even commons
-  // feel like glossy stock); the holo gradient strength scales with rarity.
-  const holo = rarity >= 4 ? 0.42 : rarity >= 3 ? 0.26 : rarity >= 2 ? 0.14 : 0;
+  if (!cast) return null;
   return (
-    <div
-      aria-hidden
-      className={`card-shine${board ? ' card-shine--board' : ''} rarity-fx--ring-${rarity}`}
-      style={{ '--holo': String(holo) } as CSSProperties}
-    >
-      {rarity >= 2 && <div className="card-shine__ring" />}
-      {holo > 0 && <div className="card-shine__holo" />}
-      <div className="card-shine__glare" />
-      {cast && <div className="card-shine__cast" />}
+    <div aria-hidden className="card-shine">
+      <div className="card-shine__cast" />
     </div>
   );
 }
 
-/**
- * Back-compat thin wrapper — older call sites pass `rarity`/`board`/`seed`.
- * `seed` is no longer needed (the shine is pointer-driven, not on a timer) so
- * it's accepted and ignored.
- */
-export function RarityFX({ rarity, board = false }: {
-  rarity: 1 | 2 | 3 | 4;
-  board?: boolean;
-  seed?: string;
-}) {
-  if (rarity < 1) return null;
-  return <CardShine rarity={rarity} board={board} />;
+/** Flat rarity inks for the printed rarity dot: common grey, uncommon green,
+ *  rare print blue, mythic gold. */
+export function rarityInk(rarity: 1 | 2 | 3 | 4): string {
+  return rarity >= 4 ? poster.gold
+    : rarity >= 3 ? '#3b5d8a'
+    : rarity >= 2 ? poster.green
+    : '#8f8a80';
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { palette, fonts, spring } from '../tokens';
+import { fonts, spring } from '../tokens';
+import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
 
 interface Props {
@@ -31,35 +32,36 @@ if (typeof CSS !== 'undefined' && typeof (CSS as any).registerProperty === 'func
 /**
  * Persistent turn indicator pinned at the centre of the duel divider.
  *
- * Idle (no combat in flight): a glassmorphic orb with a slow
- * conic-gradient sweep, centre turn numeral, and an external chevron
- * pointing at whichever player owns the turn.
+ * Idle (no combat in flight): a flat paper disc with ink rings, a slow
+ * faint-ink sweep around the edge, centre turn numeral, and an external
+ * chevron pointing at whichever player owns the turn.
  *
- * Combat mode (CombatProgressContext non-null): the same orb, but the
- * conic-gradient ring swaps from "slow ambient highlight" to "segmented
- * progress fill" — one arc per attack step, filling left → right in the
- * attacker's hue family. The active segment pulses for the duration of
- * its beat. The centre numeral and chevron are unchanged so the player
- * never loses the whose-turn signal.
+ * Combat mode (CombatProgressContext non-null): the same disc, but the
+ * edge ring swaps from "slow ambient sweep" to "segmented progress fill" —
+ * one arc per attack step, filling left → right in the attacker's colour.
+ * The active segment pulses for the duration of its beat. The centre
+ * numeral and chevron are unchanged so the player never loses the
+ * whose-turn signal.
  *
  * This component is the single mid-board focal token; combat does NOT
  * introduce any sibling chrome.
  */
-// Orb diameter. The duel divider column is ~180px of open felt — at the old
-// 36px the compass read as a stray dot rather than the board's focal token.
+// Disc diameter. The duel divider column is ~180px of open paper — at the
+// old 36px the compass read as a stray dot rather than the board's focal
+// token.
 const SIZE = 54;
-// Ring mask hole tracks the orb radius (ring layers sit at inset -3).
+// Ring mask hole tracks the disc radius (ring layers sit at inset -3).
 const RING_MASK = `radial-gradient(circle, transparent ${SIZE / 2 - 3}px, #000 ${SIZE / 2 - 2}px)`;
 
 export function TurnCompass({ isMyTurn, turn, combatOverride }: Props) {
   const contextCombat = useCombatProgress();
   const combat = combatOverride !== undefined ? combatOverride : contextCombat;
-  // Hue family follows the turn owner — brass tones when it's the player's
-  // move, wine tones when it's the rival's. Matches the board-wide
-  // "you = brass, opponent = wine" convention. During combat the ring's
-  // fill colour follows the *attacker* instead (which is always the
-  // current-turn player, so this stays consistent with `hue`).
-  const hue = isMyTurn ? palette.accent : palette.danger;
+  // Hue follows the turn owner — gold when it's the player's move, red
+  // when it's the rival's. Matches the board-wide "you = gold, rival =
+  // red" convention. During combat the ring's fill colour follows the
+  // *attacker* instead (which is always the current-turn player, so this
+  // stays consistent with `hue`).
+  const hue = isMyTurn ? poster.you : poster.rival;
 
   // Turn-change ripple — replaces the old full-width TurnBanner. When
   // `isMyTurn` flips we bump a key so AnimatePresence mounts one fresh
@@ -93,27 +95,32 @@ export function TurnCompass({ isMyTurn, turn, combatOverride }: Props) {
         justifyContent: 'center',
       }}
     >
-      {/* Glass surface — translucent parchment over a backdrop blur so the
-          token reads as floating glass on the duel divider, not a chip. */}
+      {/* Paper disc — flat cream with an ink keyline and one inner hairline
+          ring, printed on the divider like a dial. No shadow, no blur. */}
       <div
         aria-hidden
         style={{
           position: 'absolute',
           inset: 0,
           borderRadius: '50%',
-          background: 'rgba(245, 232, 204, 0.55)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          border: `1px solid ${hue}88`,
-          boxShadow: isMyTurn
-            ? `0 0 14px ${hue}55, inset 0 0 0 1px rgba(255, 255, 255, 0.25)`
-            : `0 2px 6px rgba(40, 20, 0, 0.18), inset 0 0 0 1px rgba(255, 255, 255, 0.18)`,
+          background: poster.paper,
+          border: `1.5px solid ${poster.ink}`,
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 5,
+          borderRadius: '50%',
+          border: `1px solid ${poster.inkRule}`,
+          pointerEvents: 'none',
         }}
       />
 
       {combat
         ? <CombatRing combat={combat} />
-        : <IdleSweepRing hue={hue} />}
+        : <IdleSweepRing />}
 
       {/* Turn-change ripple — single short-lived ring-burst that fires on
           every isMyTurn flip. Replaces the old "Your Move / Rival's Move"
@@ -152,31 +159,29 @@ export function TurnCompass({ isMyTurn, turn, combatOverride }: Props) {
         <span style={{
           fontFamily: fonts.display,
           fontSize: 7,
-          fontWeight: 700,
           letterSpacing: '0.34em',
           paddingLeft: '0.34em', // optically recenters tracked-out caps
           textTransform: 'uppercase',
-          color: palette.textDim,
+          color: poster.inkDim,
           lineHeight: 1,
         }}>
           Turn
         </span>
         <span style={{
-          fontFamily: fonts.ui,
+          fontFamily: fonts.display,
           fontSize: 19,
-          fontWeight: 700,
           lineHeight: 1,
-          color: palette.text,
+          color: poster.ink,
           fontVariantNumeric: 'tabular-nums',
         }}>
           {turn}
         </span>
       </span>
 
-      {/* External chevron — sits OUTSIDE the orb's edge and points at the
+      {/* External chevron — sits OUTSIDE the disc's edge and points at the
           active player. Anchored only by `top` so framer-motion can spring
           between the two numeric positions (interpolating `top` ↔ `auto`
-          parks the element mid-orb). Slides from above the orb (opponent)
+          parks the element mid-disc). Slides from above the disc (opponent)
           to below (you) on turn change. */}
       <motion.div
         aria-hidden
@@ -213,9 +218,9 @@ export function TurnCompass({ isMyTurn, turn, combatOverride }: Props) {
   );
 }
 
-/** Idle state — a thin coloured arc orbiting slowly (~8s) around the orb.
- *  Reads as a compass-dial sweep, not a busy halo. */
-function IdleSweepRing({ hue }: { hue: string }) {
+/** Idle state — a thin faint-ink arc orbiting slowly (~8s) around the disc.
+ *  Hard stops so it reads as a printed dial mark, not a glowing halo. */
+function IdleSweepRing() {
   return (
     <div
       aria-hidden
@@ -225,13 +230,8 @@ function IdleSweepRing({ hue }: { hue: string }) {
         inset: -3,
         borderRadius: '50%',
         background: `conic-gradient(from var(--compass-sweep, 0deg),
-          transparent 0deg,
-          transparent 290deg,
-          ${hue}cc 330deg,
-          ${hue}ff 350deg,
-          ${hue}cc 10deg,
-          transparent 50deg,
-          transparent 360deg)`,
+          transparent 0deg 300deg,
+          ${poster.inkFaint} 300deg 360deg)`,
         WebkitMask: RING_MASK,
         mask: RING_MASK,
         pointerEvents: 'none',
@@ -241,20 +241,21 @@ function IdleSweepRing({ hue }: { hue: string }) {
 }
 
 /** Combat state — N equal arcs around the ring, one per attack step.
- *  Resolved segments are solid in the attacker's hue, the active segment
- *  pulses, upcoming segments are low-alpha hairlines. */
+ *  Resolved segments are solid in the attacker's colour (gold = you, red
+ *  = rival), the active segment pulses, upcoming segments are faint-ink
+ *  hairlines. */
 function CombatRing({ combat }: { combat: NonNullable<CombatProgress> }) {
-  const hue = combat.attackerIsMe ? palette.accent : palette.danger;
+  const hue = combat.attackerIsMe ? poster.you : poster.rival;
   const gapDeg = 6;
   const seg = 360 / combat.total;
-  // Static ring: filled colours for resolved + active segments, low-alpha
+  // Static ring: filled colours for resolved + active segments, faint-ink
   // hairline for upcoming. Active segment uses the same fill as resolved
   // (the pulse layer below adds emphasis on top).
   const stops: string[] = [];
   for (let i = 0; i < combat.total; i++) {
     const a0 = i * seg;
     const a1 = a0 + seg - gapDeg;
-    const fill = i <= combat.currentBeat ? hue : `${hue}33`;
+    const fill = i <= combat.currentBeat ? hue : poster.inkFaint;
     stops.push(`${fill} ${a0}deg ${a1}deg`, `transparent ${a1}deg ${a0 + seg}deg`);
   }
   const ringBg = `conic-gradient(from -${gapDeg / 2}deg, ${stops.join(', ')})`;
@@ -300,7 +301,6 @@ function CombatRing({ combat }: { combat: NonNullable<CombatProgress> }) {
             WebkitMask: ringMask,
             mask: ringMask,
             pointerEvents: 'none',
-            filter: `drop-shadow(0 0 4px ${hue}cc)`,
           }}
         />
       )}

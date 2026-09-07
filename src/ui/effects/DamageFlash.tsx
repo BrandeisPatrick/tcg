@@ -1,20 +1,22 @@
 import { motion } from 'framer-motion';
 import type { DamageType } from '@/engine/types';
 import { damageFxColor } from '../tokens';
+import { poster } from '../poster';
 
 /**
  * "Card got hit" reaction — layered, type-coloured, and held bright so it's
- * clearly noticeable without ever shaking the card. Three stacked overlays:
+ * clearly noticeable without ever shaking the card. Three flat overlays:
  *   1. colour wash — snaps in, HOLDS bright for most of the duration, then fades
- *   2. edge ring   — a crisp colour-matched border + inset glow
- *   3. core pop     — a quick near-white centre flash at impact, for punch
- * KO adds a dark vignette + wine colour and runs a touch longer.
+ *   2. edge ring   — a crisp colour-matched border with one flat inset keyline
+ *   3. core pop     — a quick paper-white centre flash at impact, for punch
+ * KO adds a dark vignette, its own ink, and runs a touch longer.
  *
- * The colour tells you the damage type (bullet = vermillion, spirit = plum,
- * pure = teal, KO = wine); the HP-number pulse (useStatTick) tells you the
- * amount. Mount it keyed by the hit's `seq` so each new hit replays. Fills its
- * positioned parent (the hero card) — render inside a slot with
- * `position: relative` and a matching `borderRadius` (inherited).
+ * The colour tells you the damage type (bullet, spirit, pure and KO each
+ * print in their own ink — see damageFxColor); the HP-number pulse
+ * (useStatTick) tells you the amount. Mount it keyed by the hit's `seq` so
+ * each new hit replays. Fills its positioned parent (the hero card) — render
+ * inside a slot with `position: relative` and a matching `borderRadius`
+ * (inherited).
  */
 export function DamageFlash({ type, ko = false, durationMs = 1200, delayMs = 0 }: {
   type: DamageType;
@@ -35,7 +37,7 @@ export function DamageFlash({ type, ko = false, durationMs = 1200, delayMs = 0 }
 
   return (
     <>
-      {/* 1 — colour wash (held bright) */}
+      {/* 1 — colour wash (held bright): a flat overprint; KO darkens the edges. */}
       <motion.div
         aria-hidden
         initial={{ opacity: 0 }}
@@ -45,12 +47,12 @@ export function DamageFlash({ type, ko = false, durationMs = 1200, delayMs = 0 }
           position: 'absolute', inset: 0, borderRadius: 'inherit',
           pointerEvents: 'none', zIndex: 6,
           background: ko
-            ? `radial-gradient(ellipse at center, ${color}77, ${color}40 45%, rgba(0,0,0,0.55) 100%)`
-            : `radial-gradient(ellipse at center, ${color}73, ${color}30 58%, transparent 85%)`,
+            ? `radial-gradient(ellipse at center, ${color}73, ${color}73 55%, rgba(0,0,0,0.6) 100%)`
+            : `${color}66`,
         }}
       />
 
-      {/* 2 — edge ring: crisp border + inset glow */}
+      {/* 2 — edge ring: crisp border + one flat inset keyline */}
       <motion.div
         aria-hidden
         initial={{ opacity: 0 }}
@@ -60,11 +62,11 @@ export function DamageFlash({ type, ko = false, durationMs = 1200, delayMs = 0 }
           position: 'absolute', inset: 0, borderRadius: 'inherit',
           pointerEvents: 'none', zIndex: 7,
           border: `2px solid ${color}`,
-          boxShadow: `inset 0 0 24px ${color}, inset 0 0 8px ${color}`,
+          boxShadow: `inset 0 0 0 3px ${color}55`,
         }}
       />
 
-      {/* 3 — impact core pop: quick near-white centre flash for punch */}
+      {/* 3 — impact core pop: quick paper-white centre flash for punch */}
       <motion.div
         aria-hidden
         initial={{ opacity: 0, scale: 1.18 }}
@@ -73,7 +75,7 @@ export function DamageFlash({ type, ko = false, durationMs = 1200, delayMs = 0 }
         style={{
           position: 'absolute', inset: 0, borderRadius: 'inherit',
           pointerEvents: 'none', zIndex: 8,
-          background: `radial-gradient(ellipse at center, #fff8ee, ${color}55 40%, transparent 70%)`,
+          background: `radial-gradient(ellipse at center, ${poster.paper}, ${color}55 40%, transparent 70%)`,
         }}
       />
     </>

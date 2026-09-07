@@ -3,14 +3,13 @@ import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { useSettings } from '@/storage/settings';
 import { App } from './App';
 import { StartScreen } from './ui/start/StartScreen';
-import { HeroPreferenceScreen } from './ui/collection/HeroPreferenceScreen';
-import { DeckManagerScreen } from './ui/collection/DeckManagerScreen';
+import { LoadoutScreen } from './ui/collection/LoadoutScreen';
 import { DeckEditorScreen } from './ui/collection/DeckEditorScreen';
 import { StoryMapScreen } from './ui/story/StoryMapScreen';
-import { TornEdgeDefs } from './ui/start/tornEdges';
 import { SystemLayer } from './ui/system/SystemMenu';
 import { setMatchConfig, getMatchConfig } from './storage/matchConfig';
 import { getPreferredHeroes, getSelectedDeck } from './storage/playerData';
+import { tutorialSetup } from './tutorial/lesson';
 import type { StoryRun, StoryNode } from './story/types';
 import { loadRun, saveRun, clearNode, setMatchExitHandler } from './story/storyRun';
 import { buildStoryMatch } from './story/content';
@@ -18,22 +17,31 @@ import { MatchNavContext, type MatchNav } from './ui/hooks/matchNav';
 
 type View =
   | { screen: 'start' }
-  | { screen: 'heroes' }
-  | { screen: 'decks' }
+  | { screen: 'loadout' }
   | { screen: 'deckEdit'; slotIndex: number }
   | { screen: 'story' }
   | { screen: 'match' };
 
 export function Root() {
   // Deep-link an initial screen via the URL, e.g. ?screen=match (jumps straight
-  // into a Quick Match draft), ?screen=heroes|decks|story, or
+  // into a Quick Match draft), ?screen=loadout|story|tutorial, or
   // ?screen=deckEdit&slot=N. Only activates when the param is present, so the
   // normal entry (no query) still lands on the start screen.
   const [view, setView] = useState<View>(() => {
     const q = new URLSearchParams(window.location.search);
     const s = q.get('screen');
-    if (s === 'heroes' || s === 'decks' || s === 'story') return { screen: s };
+    if (s === 'loadout' || s === 'story') return { screen: s };
+    // Pre-merge links, kept working: both halves now live on one sheet.
+    if (s === 'heroes' || s === 'decks') return { screen: 'loadout' };
     if (s === 'deckEdit') return { screen: 'deckEdit', slotIndex: Number(q.get('slot') ?? 0) || 0 };
+    if (s === 'tutorial') {
+      setMatchConfig({
+        playerDeck: [],
+        heroPreferences: [null, null, null, null],
+        tutorial: tutorialSetup(),
+      });
+      return { screen: 'match' };
+    }
     if (s === 'match') {
       setMatchConfig({
         playerDeck: getSelectedDeck()?.cards ?? [],
@@ -50,10 +58,22 @@ export function Root() {
   const pendingBattleNode = useRef<string | null>(null);
 
   const goStart = useCallback(() => setView({ screen: 'start' }), []);
-  const goHeroes = useCallback(() => setView({ screen: 'heroes' }), []);
-  const goDecks = useCallback(() => setView({ screen: 'decks' }), []);
+  const goLoadout = useCallback(() => setView({ screen: 'loadout' }), []);
   const goStory = useCallback(() => setView({ screen: 'story' }), []);
   const goEditDeck = useCallback((idx: number) => setView({ screen: 'deckEdit', slotIndex: idx }), []);
+
+  // The tutorial is a real match on a fixed, lopsided setup — same scripted
+  // path Story uses, plus the coach plate. It ignores the player's loadout on
+  // purpose: the lesson refers to specific heroes and cards.
+  const goTutorial = useCallback(() => {
+    setMatchConfig({
+      playerDeck: [],
+      heroPreferences: [null, null, null, null],
+      tutorial: tutorialSetup(),
+    });
+    setMatchEpoch((e) => e + 1);
+    setView({ screen: 'match' });
+  }, []);
 
   const goMatch = useCallback(() => {
     const deck = getSelectedDeck();
@@ -61,7 +81,9 @@ export function Root() {
     setMatchConfig({
       playerDeck: deck?.cards ?? [],
       heroPreferences: prefs,
-      story: undefined, // ensure a Quick Match runs the normal draft path
+      // Clear both scripted setups so a Quick Match runs the normal draft path.
+      story: undefined,
+      tutorial: undefined,
     });
     setMatchEpoch((e) => e + 1);
     setView({ screen: 'match' });
@@ -127,8 +149,11 @@ export function Root() {
 
   const systemExitLabel =
     view.screen === 'start' ? '' :
-    view.screen === 'match' ? (getMatchConfig().story ? 'Concede · Back to Map' : 'Concede Match') :
-    'Back to Title';
+    view.screen === 'match'
+      ? getMatchConfig().story ? 'Concede · Back to Map'
+      : getMatchConfig().tutorial ? 'Leave the Lesson'
+      : 'Concede Match'
+      : 'Back to Title';
 
   // In-match navigation (end screen's Rematch / Main Menu). Provided via
   // context because Board sits under boardgame.io's Client and can't take
@@ -145,7 +170,6 @@ export function Root() {
     // app-wide (opacity still fades); 'user' defers to the OS preference.
     <MotionConfig reducedMotion={reducedMotion ? 'always' : 'user'}>
     <MatchNavContext.Provider value={matchNav}>
-      <TornEdgeDefs />
       <AnimatePresence mode="wait">
         <motion.div
           key={screenKey}
@@ -158,15 +182,12 @@ export function Root() {
             <StartScreen
               onPlay={goMatch}
               onStory={goStory}
-              onHeroes={goHeroes}
-              onDecks={goDecks}
+              onTutorial={goTutorial}
+              onLoadout={goLoadout}
             />
           )}
-          {view.screen === 'heroes' && (
-            <HeroPreferenceScreen onBack={goStart} />
-          )}
-          {view.screen === 'decks' && (
-            <DeckManagerScreen
+          {view.screen === 'loadout' && (
+            <LoadoutScreen
               onBack={goStart}
               onEditDeck={goEditDeck}
             />
@@ -174,7 +195,7 @@ export function Root() {
           {view.screen === 'deckEdit' && (
             <DeckEditorScreen
               slotIndex={view.slotIndex}
-              onBack={goDecks}
+              onBack={goLoadout}
             />
           )}
           {view.screen === 'story' && (

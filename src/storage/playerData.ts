@@ -16,6 +16,9 @@ export interface PlayerData {
   preferredHeroes: (CardId | null)[];
   decks: (DeckSlot | null)[];
   selectedDeckIndex: number | null;
+  /** Set once the coached tutorial's script runs out (or its match is won),
+   *  so the title stops flagging it as the place to start. */
+  tutorialDone: boolean;
 }
 
 const STORAGE_KEY = 'deadlock-tcg-player';
@@ -108,6 +111,7 @@ function defaultPlayerData(): PlayerData {
     preferredHeroes: [null, null, null, null],
     decks: DEFAULT_DECKS.map((d) => ({ ...d })),
     selectedDeckIndex: 0,
+    tutorialDone: false,
   };
 }
 
@@ -124,6 +128,7 @@ export function loadPlayerData(): PlayerData {
         ? parsed.decks.slice(0, MAX_DECKS)
         : [null, null, null, null, null],
       selectedDeckIndex: parsed.selectedDeckIndex ?? null,
+      tutorialDone: parsed.tutorialDone === true,
     };
   } catch {
     return defaultPlayerData();
@@ -171,6 +176,17 @@ export function deleteDeck(index: number): void {
 export function setSelectedDeckIndex(index: number | null): void {
   const data = loadPlayerData();
   data.selectedDeckIndex = index;
+  savePlayerData(data);
+}
+
+export function isTutorialDone(): boolean {
+  return loadPlayerData().tutorialDone;
+}
+
+export function markTutorialDone(): void {
+  const data = loadPlayerData();
+  if (data.tutorialDone) return;
+  data.tutorialDone = true;
   savePlayerData(data);
 }
 

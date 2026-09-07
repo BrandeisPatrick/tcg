@@ -1,21 +1,28 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { palette, fonts, text, spring } from '../tokens';
-import { GameButton } from '../chrome';
+import { heroArtFocus } from '@/cards/art/heroArt';
+import { fonts, spring } from '../tokens';
+import { poster, chamfer, sheetStyle } from '../poster';
+import { PosterButton } from '../chrome';
+import { PosterBackdrop } from '../PosterBackdrop';
 import { useViewport } from '../hooks/useViewport';
+import { useSettings } from '@/storage/settings';
 
 const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
 
 /**
- * Full-screen match epilogue. Leads with an unambiguous VICTORY / DEFEAT /
- * DRAW verdict, backs it with the patron flavor line, shows both teams'
- * final rosters (fallen heroes grayed with a K.O. wash), a compact stat
- * strip, and the exits: Rematch + Main Menu (or Return to Map for story
- * battles).
+ * Full-screen match epilogue, printed as one cream sheet floating on the
+ * blurred scene. A brush-script lead-in carries the patron flavor line into
+ * an unambiguous VICTORY / DEFEAT / DRAW headline, both teams' final rosters
+ * sit beneath as small charcoal-framed portraits (fallen heroes greyed under
+ * a red K.O. sticker), a strip of ink tags holds the numbers, and the exits
+ * are poster buttons: Rematch + Main Menu (or Return to Map for story
+ * battles). Board early-returns into this screen, so it mounts its own
+ * PosterBackdrop.
  */
 export function MatchEndScreen({
-  G, me, won, draw, isStory,
+  G, me, won, draw, isStory, isTutorial = false,
   onRematch, onMenu, onStoryReturn,
 }: {
   G: GameState;
@@ -23,16 +30,26 @@ export function MatchEndScreen({
   won: boolean;
   draw: boolean;
   isStory: boolean;
+  /** A coached lesson rather than a real match — the exits funnel forward
+   *  into a Quick Match instead of offering to run the lesson again. */
+  isTutorial?: boolean;
   onRematch: () => void;
   onMenu: (() => void) | null;
   onStoryReturn: () => void;
 }) {
   const { isMobile } = useViewport();
+  const { reducedMotion } = useSettings();
+  const osReducedMotion = useReducedMotion();
+  const ambient = !reducedMotion && !osReducedMotion;
   const opp: PlayerID = me === '0' ? '1' : '0';
-  const tone = draw ? palette.accent : won ? palette.success : palette.danger;
+  // Verdict ink: victory prints in ink, defeat in the poster's one red, a
+  // draw in dimmed ink. The winning side's roster label takes the same tone.
+  const tone = draw ? poster.inkDim : won ? poster.ink : poster.red;
   const headline = draw ? 'Draw' : won ? 'Victory' : 'Defeat';
   const flavor = draw
     ? 'Both patrons stand — the city holds its breath.'
+    : isTutorial
+      ? (won ? 'Lesson over. The real tables are downstairs.' : 'No matter — you know the moves now.')
     : isStory
       ? (won ? 'The block is yours — press on uptown.' : 'Your run ends in the old city.')
       : (won ? 'The rival patron falls.' : 'Your patron is outflanked.');
@@ -52,111 +69,148 @@ export function MatchEndScreen({
 
   return (
     <div style={{
-      height: '100vh',
+      position: 'relative',
+      minHeight: '100dvh',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      background: `radial-gradient(circle at 50% 32%, ${tone}2e, ${palette.bg0} 68%)`,
+      background: '#0d1715',
+      color: poster.ink,
       fontFamily: fonts.ui,
-      gap: isMobile ? 18 : 24,
       padding: isMobile ? '0 20px' : '0 32px',
       textAlign: 'center',
-      overflow: 'hidden',
+      overflowX: 'hidden',
     }}>
-      {/* Verdict */}
-      <motion.div
-        initial={{ scale: 0.6, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={spring.bouncy}
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
-      >
-        <div style={{
-          fontFamily: fonts.display,
-          fontSize: 13,
-          letterSpacing: '0.5em',
-          textTransform: 'uppercase',
-          color: palette.textDim,
-          paddingLeft: '0.5em', // optically recenters tracked-out caps
-        }}>
-          {isStory ? 'Story battle' : 'Quick match'} · Turn {G.turnNumber}
-        </div>
-        <h1 style={{
-          fontFamily: fonts.display,
-          fontSize: isMobile ? 56 : 84,
-          fontWeight: 400,
-          lineHeight: 1,
-          textTransform: 'uppercase',
-          color: tone,
-          textShadow: `0 0 54px ${tone}77, 0 2px 0 rgba(255, 244, 214, 0.5)`,
-          margin: 0,
-        }}>{headline}</h1>
-        <div style={{ ...text.body, fontSize: 15, color: palette.textDim }}>{flavor}</div>
-      </motion.div>
+      <PosterBackdrop ambient={ambient} />
 
-      {/* Final rosters — yours left, rival right (stacked on phones). */}
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...spring.default, delay: 0.18 }}
+      {/* The sheet. */}
+      <section
+        aria-label="Match result"
         style={{
-          display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          gap: isMobile ? 10 : 44,
-          alignItems: 'center',
+          ...sheetStyle,
+          position: 'relative',
+          zIndex: 1,
+          width: '100%',
+          maxWidth: 900,
+          borderRadius: isMobile ? 16 : 22,
+          padding: isMobile ? '34px 18px 30px' : 'clamp(40px, 6vh, 60px) clamp(28px, 5vw, 64px) clamp(36px, 5vh, 52px)',
+          margin: isMobile ? '20px 0' : '30px 0',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          gap: isMobile ? 18 : 24,
         }}
       >
-        <RosterStrip label="Your team" team={myTeam} fallen={fallen} accent={won && !draw ? tone : palette.textDim} />
-        <div aria-hidden style={{
-          fontFamily: fonts.display, fontSize: 15, color: palette.textFaint, letterSpacing: '0.2em',
-        }}>VS</div>
-        <RosterStrip label="Rival team" team={opTeam} fallen={fallen} accent={!won && !draw ? tone : palette.textDim} />
-      </motion.div>
-
-      {/* Stat strip */}
-      <motion.div
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...spring.default, delay: 0.3 }}
-        style={{
-          display: 'flex', gap: isMobile ? 16 : 34, flexWrap: 'wrap', justifyContent: 'center',
-          padding: '12px 22px',
-          background: 'rgba(245, 232, 204, 0.55)',
-          border: `1px solid ${palette.border}`,
-          borderRadius: 12,
-          boxShadow: 'inset 0 1px 0 rgba(255, 250, 230, 0.6), 0 4px 14px rgba(40, 20, 0, 0.12)',
-        }}
-      >
-        {stats.map((s) => (
-          <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 64 }}>
-            <span style={{
-              fontFamily: fonts.display, fontSize: 10, fontWeight: 700,
-              letterSpacing: '0.28em', textTransform: 'uppercase', color: palette.textFaint,
-            }}>{s.label}</span>
-            <span style={{ ...text.numeric, fontSize: 18, color: palette.text }}>{s.value}</span>
+        {/* Verdict */}
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={spring.bouncy}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
+        >
+          <div style={{
+            fontFamily: fonts.display,
+            fontSize: 11,
+            letterSpacing: '0.28em',
+            textTransform: 'uppercase',
+            color: poster.inkDim,
+            paddingLeft: '0.28em', // optically recenters tracked-out caps
+          }}>
+            {isTutorial ? 'Tutorial' : isStory ? 'Story battle' : 'Quick match'} · Turn {G.turnNumber}
           </div>
-        ))}
-      </motion.div>
+          {/* Brush-script lead-in, tipped up like a hand-lettered overprint. */}
+          <div style={{
+            fontFamily: fonts.script,
+            fontSize: isMobile ? 24 : 30,
+            lineHeight: 1.1,
+            color: poster.ink,
+            transform: 'rotate(-2.5deg)',
+            transformOrigin: 'center bottom',
+            marginTop: 4,
+          }}>
+            {flavor}
+          </div>
+          <h1 style={{
+            fontFamily: fonts.display,
+            fontSize: isMobile ? 56 : 84,
+            lineHeight: 1,
+            textTransform: 'uppercase',
+            color: tone,
+            margin: 0,
+          }}>{headline}</h1>
+          {/* Red register rule — the poster's one accent, under the headline. */}
+          <div aria-hidden style={{ width: 56, height: 3, background: poster.red, marginTop: 6 }} />
+        </motion.div>
 
-      {/* Exits */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...spring.default, delay: 0.42 }}
-        style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', marginTop: 4 }}
-      >
-        {isStory ? (
-          <GameButton variant="brass" onClick={onStoryReturn} style={{ minWidth: 190, textAlign: 'center' }}>
-            Return to Map
-          </GameButton>
-        ) : (
-          <GameButton variant="brass" onClick={onRematch} style={{ minWidth: 170, textAlign: 'center' }}>
-            Rematch
-          </GameButton>
-        )}
-        {onMenu && (
-          <GameButton onClick={onMenu} style={{ minWidth: 150, textAlign: 'center' }}>
-            Main Menu
-          </GameButton>
-        )}
-      </motion.div>
+        {/* Final rosters — yours left, rival right (stacked on phones). */}
+        <motion.div
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...spring.default, delay: 0.18 }}
+          style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: isMobile ? 10 : 44,
+            alignItems: 'center',
+          }}
+        >
+          <RosterStrip label="Your team" team={myTeam} fallen={fallen} accent={won && !draw ? tone : poster.inkDim} />
+          <div aria-hidden style={{
+            fontFamily: fonts.display, fontSize: 15, color: poster.inkFaint, letterSpacing: '0.2em',
+          }}>VS</div>
+          <RosterStrip label="Rival team" team={opTeam} fallen={fallen} accent={!won && !draw ? tone : poster.inkDim} />
+        </motion.div>
+
+        {/* Stat strip — one ink tag per number. */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...spring.default, delay: 0.3 }}
+          style={{
+            display: 'flex', gap: isMobile ? 8 : 12, flexWrap: 'wrap', justifyContent: 'center',
+          }}
+        >
+          {stats.map((s) => (
+            <div key={s.label} style={{
+              display: 'flex', flexDirection: 'column', gap: 4, minWidth: 64,
+              padding: '8px 14px 9px',
+              background: poster.ink,
+              color: poster.paper,
+              clipPath: chamfer(4),
+              WebkitClipPath: chamfer(4),
+            }}>
+              <span style={{
+                fontFamily: fonts.display, fontSize: 10,
+                letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.creamDim,
+                lineHeight: 1,
+              }}>{s.label}</span>
+              <span style={{
+                fontFamily: fonts.display, fontSize: 18, lineHeight: 1,
+                fontVariantNumeric: 'tabular-nums', color: poster.paper,
+              }}>{s.value}</span>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Exits */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...spring.default, delay: 0.42 }}
+          style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', marginTop: 4 }}
+        >
+          {isStory ? (
+            <PosterButton variant="paper" onClick={onStoryReturn} style={{ minWidth: 190, textAlign: 'center' }}>
+              Return to Map
+            </PosterButton>
+          ) : (
+            <PosterButton variant="paper" onClick={onRematch} style={{ minWidth: 170, textAlign: 'center' }}>
+              {isTutorial ? 'Play a Match' : 'Rematch'}
+            </PosterButton>
+          )}
+          {onMenu && (
+            <PosterButton variant="ink" onClick={onMenu} style={{ minWidth: 150, textAlign: 'center' }}>
+              Main Menu
+            </PosterButton>
+          )}
+        </motion.div>
+      </section>
     </div>
   );
 }
@@ -170,7 +224,7 @@ function RosterStrip({ label, team, fallen, accent }: {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
       <div style={{
-        fontFamily: fonts.display, fontSize: 10, fontWeight: 700,
+        fontFamily: fonts.display, fontSize: 10,
         letterSpacing: '0.32em', textTransform: 'uppercase', color: accent,
       }}>{label}</div>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -178,6 +232,8 @@ function RosterStrip({ label, team, fallen, accent }: {
           const dead = fallen(c);
           const name = CARDS_BY_ID[c.cardId]?.name ?? c.cardId;
           return (
+            // Charcoal frame around the portrait; a fallen hero's frame goes
+            // flat (no lift, edge-grey border) under the K.O. sticker.
             <motion.div
               key={c.iid}
               initial={{ opacity: 0, y: 10 }}
@@ -187,34 +243,56 @@ function RosterStrip({ label, team, fallen, accent }: {
               style={{
                 position: 'relative',
                 width: 58, height: 78,
+                boxSizing: 'border-box',
+                padding: 2,
                 borderRadius: 7,
-                overflow: 'hidden',
-                border: `1px solid ${dead ? palette.border : palette.borderStrong}`,
-                background: '#1a0f06',
-                boxShadow: dead ? 'none' : '0 4px 10px rgba(40,20,0,0.28)',
+                border: `2px solid ${dead ? poster.edge : poster.frameLit}`,
+                background: poster.frame,
+                boxShadow: dead ? 'none' : '0 14px 26px rgba(0,0,0,0.35), 0 3px 8px rgba(0,0,0,0.25)',
               }}
             >
-              <img
-                src={`${HERO_IMG_BASE}${c.cardId}_card.webp`}
-                alt={name}
-                draggable={false}
-                style={{
-                  width: '100%', height: '100%',
-                  objectFit: 'cover', objectPosition: '50% 14%',
-                  filter: dead ? 'grayscale(1) brightness(0.55)' : undefined,
-                  userSelect: 'none',
-                }}
-              />
-              {dead && (
-                <div style={{
+              <div style={{
+                position: 'relative',
+                width: '100%', height: '100%',
+                borderRadius: 4,
+                overflow: 'hidden',
+                background: '#0f1214',
+              }}>
+                <img
+                  src={`${HERO_IMG_BASE}${c.cardId}_card.webp`}
+                  alt={name}
+                  draggable={false}
+                  style={{
+                    display: 'block',
+                    width: '100%', height: '100%',
+                    objectFit: 'cover', objectPosition: heroArtFocus(c.cardId, 'card', '50% 14%'),
+                    filter: dead ? 'grayscale(1) brightness(0.55)' : undefined,
+                    userSelect: 'none',
+                  }}
+                />
+                {/* Inner edge — the print sits slightly recessed in its frame. */}
+                <div aria-hidden style={{
                   position: 'absolute', inset: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: fonts.display, fontSize: 11, fontWeight: 700,
-                  letterSpacing: '0.14em', color: 'rgba(255, 235, 210, 0.92)',
-                  textShadow: '0 1px 3px rgba(0,0,0,0.9)',
-                  background: 'linear-gradient(to top, rgba(20,8,2,0.55), transparent)',
-                }}>K.O.</div>
-              )}
+                  boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.35), inset 0 -18px 24px -12px rgba(0,0,0,0.5)',
+                }} />
+                {dead && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{
+                      padding: '3px 6px 4px',
+                      borderRadius: 3,
+                      background: poster.red,
+                      color: poster.paper,
+                      fontFamily: fonts.display, fontSize: 10,
+                      letterSpacing: '0.24em', textTransform: 'uppercase', lineHeight: 1,
+                      transform: 'rotate(-8deg)',
+                      boxShadow: '0 3px 8px rgba(0,0,0,0.35)',
+                    }}>K.O.</span>
+                  </div>
+                )}
+              </div>
             </motion.div>
           );
         })}

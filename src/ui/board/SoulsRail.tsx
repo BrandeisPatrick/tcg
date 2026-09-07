@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { fonts } from '../tokens';
+import { poster, chamfer, soulCoin } from '../poster';
 import { boardRows } from './BoardTable';
 import { useViewport } from '../hooks/useViewport';
 
@@ -32,11 +33,11 @@ function useSlotCount(souls: number): number {
 }
 
 /**
- * Soul racks — one per player, pinned to the right edge of the board like
- * a chip rack screwed into a card table. Each rack is a recessed channel
- * in the felt holding round brass soul-coins: gaining a soul pops a coin
- * into the next socket, spending one leaves the socket visibly empty.
- * The engraved numeral at the rack's anchor end is the at-a-glance count.
+ * Soul racks — one per player, pinned to the right edge of the sheet like
+ * a tally column printed in the margin. Each rack is a slim paper tab
+ * holding a stack of flat gold soul-coins: gaining a soul pops a coin into
+ * the next socket, spending one leaves the socket as an empty ink outline.
+ * The stencilled numeral at the rack's anchor end is the at-a-glance count.
  * Rival's rack anchors at the TOP row, yours at the BOTTOM.
  */
 export function SoulsRail({ rivalSouls, yourSouls }: Props) {
@@ -52,8 +53,8 @@ export function SoulsRail({ rivalSouls, yourSouls }: Props) {
       aria-hidden
       style={{
         position: 'absolute',
-        // Hug the right edge of the board grid so the racks read as
-        // fixtures on the battlefield, not an off-board chrome strip.
+        // Hug the right edge of the board grid so the racks read as part
+        // of the print, not an off-board chrome strip.
         right: isMobile ? -4 : -18,
         top: 0,
         bottom: 0,
@@ -94,13 +95,13 @@ function Rack({ filled, slots, side, mobile }: {
   side: 'rival' | 'you';
   mobile: boolean;
 }) {
-  // Souls gate every play — at 12px the rack was nearly invisible fixture
-  // noise. 15px coins + a bigger engraved count keep it glanceable.
-  const coin = mobile ? 10 : 15;
-  // Always show at least 3 sockets so the fixture reads as a coin rack
-  // even before the economy spins up; clamp to CAP and show a "+N"
-  // overflow tail for any souls past it. Cap is a soft guard — V1
-  // economy shouldn't push past ~6 in normal play.
+  // Souls gate every play — at 12px the rack was nearly invisible margin
+  // noise. 14px coins + a bigger stencilled count keep it glanceable.
+  const coin = mobile ? 10 : 14;
+  // Always show at least 3 sockets so the tab reads as a coin rack even
+  // before the economy spins up; clamp to CAP and show a "+N" overflow
+  // tail for any souls past it. Cap is a soft guard — V1 economy
+  // shouldn't push past ~6 in normal play.
   const rendered = Math.min(Math.max(slots, 3), CAP);
   const overflow = Math.max(0, slots - CAP);
   // Rival's rack reads top-down (numeral at the top edge, coins growing
@@ -115,24 +116,21 @@ function Rack({ filled, slots, side, mobile }: {
       alignItems: 'center',
       gap: mobile ? 3 : 4,
       padding: mobile ? '6px 4px' : '7px 5px',
-      borderRadius: 999,
-      // Recessed channel — same carve treatment as the row wells.
-      background: 'linear-gradient(180deg, rgba(84, 58, 22, 0.15), rgba(84, 58, 22, 0.08))',
-      border: '1px solid rgba(84, 58, 22, 0.32)',
-      boxShadow: [
-        'inset 0 2px 6px rgba(70, 45, 12, 0.28)',
-        'inset 0 -1px 0 rgba(255, 244, 214, 0.4)',
-      ].join(', '),
+      borderRadius: 0,
+      // Paper tab — a chamfered band with a hairline rule, flat like the
+      // rest of the print.
+      background: poster.paperBand,
+      border: `1px solid ${poster.inkRule}`,
+      clipPath: chamfer(4),
+      WebkitClipPath: chamfer(4),
     }}>
-      {/* Engraved count — the at-a-glance readout at the anchor end. */}
+      {/* Stencilled count — the at-a-glance readout at the anchor end. */}
       <span style={{
-        fontFamily: fonts.ui,
+        fontFamily: fonts.display,
         fontSize: mobile ? 11 : 15,
-        fontWeight: 800,
         lineHeight: 1,
         fontVariantNumeric: 'tabular-nums',
-        color: '#5a3a10',
-        textShadow: '0 1px 0 rgba(255, 244, 214, 0.55)',
+        color: poster.ink,
         padding: '1px 0 2px',
       }}>
         {filled}
@@ -143,29 +141,20 @@ function Rack({ filled, slots, side, mobile }: {
           key={`${side}-${i}`}
           style={{
             position: 'relative',
-            width: coin,
-            height: coin,
-            borderRadius: '50%',
-            // Empty socket — a drilled recess in the felt.
-            background: 'rgba(84, 58, 22, 0.16)',
-            boxShadow: 'inset 0 1.5px 3px rgba(70, 45, 12, 0.4)',
+            // Empty socket — a printed ink outline.
+            ...soulCoin(coin, true),
           }}
         >
-          {/* Brass soul-coin — pops in on gain, shrinks away on spend. */}
+          {/* Gold soul-coin — pops in on gain, shrinks away on spend. Sits
+              on inset 0 so its fill covers the socket's outline. */}
           <motion.span
             initial={false}
             animate={{ opacity: isFilled(i) ? 1 : 0, scale: isFilled(i) ? 1 : 0.35 }}
             transition={{ type: 'spring', stiffness: 420, damping: 24, mass: 0.7 }}
             style={{
+              ...soulCoin(coin),
               position: 'absolute',
               inset: 0,
-              borderRadius: '50%',
-              background: 'radial-gradient(circle at 35% 30%, #f6d78c, #dfa93e 45%, #a06a1c 82%, #7a4d12)',
-              boxShadow: [
-                'inset 0 1px 1px rgba(255, 240, 200, 0.8)',
-                '0 1px 2px rgba(40, 20, 0, 0.35)',
-                '0 0 7px rgba(226, 171, 66, 0.55)',
-              ].join(', '),
             }}
           />
         </span>
@@ -173,9 +162,9 @@ function Rack({ filled, slots, side, mobile }: {
 
       {overflow > 0 && (
         <span style={{
-          fontFamily: fonts.ui,
-          fontSize: 10, fontWeight: 700,
-          color: '#6b4716',
+          fontFamily: fonts.display,
+          fontSize: 10,
+          color: poster.inkDim,
           fontVariantNumeric: 'tabular-nums',
           lineHeight: 1,
         }}>+{overflow}</span>

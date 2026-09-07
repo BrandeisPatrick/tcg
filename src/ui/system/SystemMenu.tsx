@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { palette, fonts, spring, systemFont } from '../tokens';
-import { GameButton } from '../chrome';
+import { fonts, spring, systemFont } from '../tokens';
+import { poster, chamfer, PAPER_MOTTLE, sheetStyle } from '../poster';
+import { PosterButton } from '../chrome';
 import { useSettings, updateSettings, APP_STORAGE_KEYS, type AppSettings } from '@/storage/settings';
 
 /**
  * Persistent system layer — the one piece of chrome that exists on every
- * screen. A brass gear pinned to the top-right corner opens a pause-style
- * system menu: combat tempo, context-aware exit, save-data reset.
+ * screen. An ink gear pinned to the top-right corner opens a pause-style
+ * settings sheet in the poster idiom: paper on the dark scene, ink type,
+ * chamfered plates. Combat tempo, context-aware exit, save-data reset.
  * Mounted once in Root, OUTSIDE the screen transition wrapper, so it never
  * fades or moves during navigation.
  */
@@ -27,9 +29,8 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
   useEffect(() => { if (!open) setArmReset(false); }, [open]);
 
   // Escape toggles the menu — the universal pause gesture. Nothing else in
-  // the app binds Escape (verified), so claiming it globally is additive;
-  // if an overlay ever needs the key first it should stopPropagation.
-  // Ignore the key while typing in an input (deck name field).
+  // the app binds Escape globally; overlays that need the key first
+  // stopPropagation. Ignore the key while typing in an input (deck name).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -89,9 +90,9 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(180deg, #52381a, #38250e)',
-          border: '1px solid rgba(235, 205, 145, 0.4)',
-          boxShadow: 'inset 0 1px 0 rgba(255, 226, 170, 0.3), 0 3px 8px rgba(40, 20, 0, 0.4)',
+          background: poster.ink,
+          border: `1.5px solid ${poster.edge}`,
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.45)',
           cursor: 'pointer',
           padding: 0,
         }}
@@ -111,9 +112,9 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
               position: 'fixed',
               inset: 0,
               zIndex: 125,
-              background: 'rgba(58, 38, 12, 0.4)',
-              backdropFilter: 'blur(7px)',
-              WebkitBackdropFilter: 'blur(7px)',
+              background: poster.scrim,
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -131,47 +132,32 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
                 width: 'min(560px, 94vw)',
                 maxHeight: 'min(86vh, 720px)',
                 overflowY: 'auto',
-                borderRadius: 14,
-                background: `linear-gradient(180deg, ${palette.bg2}, ${palette.bg1} 30%, #e6d4ab)`,
-                border: '1px solid #5a3f1c',
-                boxShadow: [
-                  '0 24px 60px rgba(40, 20, 0, 0.45)',
-                  'inset 0 1px 0 rgba(255, 244, 214, 0.7)',
-                ].join(', '),
-                padding: '20px 22px 22px',
+                borderRadius: 18,
+                ...sheetStyle,
+                backgroundImage: PAPER_MOTTLE,
+                color: poster.ink,
+                padding: '22px 26px 24px',
               }}
             >
-              {/* Brass keyline — same ledger framing as panels and table. */}
-              <div aria-hidden style={{
-                position: 'absolute',
-                inset: 4,
-                borderRadius: 10,
-                border: '1px solid rgba(176, 120, 37, 0.35)',
-                pointerEvents: 'none',
-              }} />
-
-              {/* Header */}
+              {/* Header — title + the key that closes it. */}
               <div style={{
                 display: 'flex',
                 alignItems: 'baseline',
                 justifyContent: 'space-between',
                 paddingBottom: 12,
-                borderBottom: `1px solid ${palette.borderStrong}`,
-                boxShadow: '0 1px 0 rgba(255, 244, 214, 0.55)',
+                borderBottom: `1.5px solid ${poster.ink}`,
               }}>
                 <span style={{
                   fontFamily: fonts.display,
-                  // 22px stencil lost its bridges and read as a stray serif
-                  // next to the start screen's big stencil titles — at 26px
-                  // with the same tracking as the home tiles it reads as the
-                  // same voice.
                   fontSize: 26,
-                  letterSpacing: '0.04em',
-                  color: palette.text,
-                  textShadow: '0 1px 0 rgba(255, 244, 214, 0.6)',
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: poster.ink,
+                  lineHeight: 1,
                 }}>
                   System
                 </span>
+                <InkTag>Esc · Close</InkTag>
               </div>
 
               {/* Game */}
@@ -212,41 +198,42 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 10,
-                padding: '16px 0 0',
+                padding: '18px 0 0',
               }}>
                 {exitLabel && (
-                  <GameButton
-                    variant={screen === 'match' ? 'wine' : 'parchment'}
+                  <PosterButton
+                    variant={screen === 'match' ? 'red' : 'ink'}
+                    size="sm"
                     onClick={() => { setOpen(false); onExitToMenu(); }}
-                    style={{ width: '100%', textAlign: 'center', ...systemFont }}
+                    style={{ width: '100%' }}
                   >
                     {exitLabel}
-                  </GameButton>
+                  </PosterButton>
                 )}
-                <GameButton
-                  variant="wine"
+                <PosterButton
+                  variant={armReset ? 'red' : 'paper'}
+                  size="sm"
                   onClick={resetAll}
-                  style={{ width: '100%', textAlign: 'center', ...systemFont }}
+                  style={{ width: '100%' }}
                 >
                   {armReset ? 'Tap again to erase everything' : 'Reset save data'}
-                </GameButton>
+                </PosterButton>
               </div>
 
-              {/* About — the disclaimer + version line (moved here from the
-                  start screen's footer so the title page stays clean). */}
+              {/* About — the disclaimer + version line. */}
               <div style={{
                 marginTop: 18,
                 paddingTop: 14,
-                borderTop: `1px solid ${palette.border}`,
+                borderTop: `1px solid ${poster.inkRule}`,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 5,
                 textAlign: 'center',
               }}>
-                <div style={{ ...systemFont }}>
+                <div style={{ ...systemFont, color: poster.inkDim }}>
                   A fan-made tabletop adaptation. Not affiliated with Valve.
                 </div>
-                <div style={{ ...systemFont }}>
+                <div style={{ ...systemFont, color: poster.inkDim }}>
                   v0.1 · early prototype
                 </div>
               </div>
@@ -258,11 +245,40 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
   );
 }
 
+/** Small ink tag — the sheet's eyebrow / key hint. */
+function InkTag({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{
+      padding: '4px 9px',
+      background: poster.ink,
+      color: poster.paper,
+      fontFamily: fonts.display,
+      fontSize: 10,
+      letterSpacing: '0.2em',
+      textTransform: 'uppercase',
+      lineHeight: 1,
+      clipPath: chamfer(4),
+      WebkitClipPath: chamfer(4),
+    }}>
+      {children}
+    </span>
+  );
+}
+
 /** Titled settings block — keeps every group's rhythm identical. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ padding: '16px 0 2px' }}>
-      <div style={{ ...systemFont, marginBottom: 8 }}>{title}</div>
+      <div style={{
+        fontFamily: fonts.display,
+        fontSize: 11,
+        letterSpacing: '0.28em',
+        textTransform: 'uppercase',
+        color: poster.inkDim,
+        marginBottom: 8,
+      }}>
+        {title}
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</div>
     </div>
   );
@@ -275,15 +291,15 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14,
       }}>
-        <span style={{ ...systemFont, whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{ ...systemFont, color: poster.ink, whiteSpace: 'nowrap' }}>{label}</span>
         <div style={{ flex: '0 1 260px', minWidth: 180 }}>{children}</div>
       </div>
-      {hint && <div style={{ ...systemFont }}>{hint}</div>}
+      {hint && <div style={{ ...systemFont, color: poster.inkDim }}>{hint}</div>}
     </div>
   );
 }
 
-/** Recessed segmented control — the combat-speed pill row, generalized. */
+/** Segmented control — a paper plate; the active segment is inked. */
 function Segmented<T extends string | number>({ options, value, onSelect }: {
   options: readonly { value: T; label: string }[];
   value: T;
@@ -292,12 +308,12 @@ function Segmented<T extends string | number>({ options, value, onSelect }: {
   return (
     <div style={{
       display: 'flex',
-      gap: 6,
+      gap: 4,
       padding: 4,
-      borderRadius: 10,
-      background: 'linear-gradient(180deg, rgba(84, 58, 22, 0.14), rgba(84, 58, 22, 0.08))',
-      border: '1px solid rgba(84, 58, 22, 0.32)',
-      boxShadow: 'inset 0 2px 6px rgba(70, 45, 12, 0.25)',
+      background: poster.paperBand,
+      border: `1.5px solid ${poster.ink}`,
+      clipPath: chamfer(6),
+      WebkitClipPath: chamfer(6),
     }}>
       {options.map((o) => {
         const active = o.value === value;
@@ -308,15 +324,10 @@ function Segmented<T extends string | number>({ options, value, onSelect }: {
             style={{
               flex: 1,
               padding: '8px 0',
-              borderRadius: 7,
-              border: active ? '1px solid #5a3f1c' : '1px solid transparent',
-              background: active
-                ? 'linear-gradient(180deg, #e2ab42, #b07825 55%, #955f19)'
-                : 'transparent',
-              boxShadow: active
-                ? 'inset 0 1px 0 rgba(255, 240, 200, 0.7), 0 2px 5px rgba(40, 20, 0, 0.25)'
-                : undefined,
+              border: 'none',
+              background: active ? poster.ink : 'transparent',
               ...systemFont,
+              color: active ? poster.paper : poster.ink,
               fontVariantNumeric: 'tabular-nums',
               cursor: 'pointer',
             }}
@@ -329,7 +340,7 @@ function Segmented<T extends string | number>({ options, value, onSelect }: {
   );
 }
 
-/** Full-width recessed row with an On/Off pill on the right. */
+/** Full-width paper row with an On/Off pill on the right. */
 function ToggleRow({ label, hint, on, onClick }: {
   label: string;
   hint?: string;
@@ -347,10 +358,10 @@ function ToggleRow({ label, hint, on, onClick }: {
         justifyContent: 'space-between',
         gap: 14,
         padding: '10px 12px',
-        borderRadius: 10,
-        background: 'linear-gradient(180deg, rgba(84, 58, 22, 0.14), rgba(84, 58, 22, 0.08))',
-        border: '1px solid rgba(84, 58, 22, 0.32)',
-        boxShadow: 'inset 0 2px 6px rgba(70, 45, 12, 0.25)',
+        background: poster.paperBand,
+        border: `1.5px solid ${poster.ink}`,
+        clipPath: chamfer(6),
+        WebkitClipPath: chamfer(6),
         cursor: 'pointer',
       }}
     >
@@ -358,20 +369,15 @@ function ToggleRow({ label, hint, on, onClick }: {
         display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
         textAlign: 'left',
       }}>
-        <span style={{ ...systemFont }}>{label}</span>
-        {hint && <span style={{ ...systemFont }}>{hint}</span>}
+        <span style={{ ...systemFont, color: poster.ink }}>{label}</span>
+        {hint && <span style={{ ...systemFont, color: poster.inkDim }}>{hint}</span>}
       </span>
       <span style={{
         padding: '4px 12px',
-        borderRadius: 7,
-        border: '1px solid #5a3f1c',
-        background: on
-          ? 'linear-gradient(180deg, #e2ab42, #b07825 55%, #955f19)'
-          : 'rgba(84, 58, 22, 0.12)',
-        boxShadow: on
-          ? 'inset 0 1px 0 rgba(255, 240, 200, 0.7), 0 2px 5px rgba(40, 20, 0, 0.25)'
-          : 'inset 0 1px 2px rgba(70, 45, 12, 0.25)',
+        border: `1.5px solid ${poster.ink}`,
+        background: on ? poster.ink : 'transparent',
         ...systemFont,
+        color: on ? poster.paper : poster.ink,
         flexShrink: 0,
       }}>
         {on ? 'On' : 'Off'}
@@ -384,7 +390,7 @@ function GearIcon() {
   return (
     <svg viewBox="0 0 24 24" width={20} height={20} aria-hidden>
       <path
-        fill="#e3c07f"
+        fill={poster.cream}
         d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm9 4.94v-2.68l-2.37-.6a6.9 6.9 0 0 0-.68-1.64l1.25-2.1-1.9-1.9-2.1 1.26a6.9 6.9 0 0 0-1.64-.68L13.34 3h-2.68l-.6 2.37a6.9 6.9 0 0 0-1.64.68l-2.1-1.25-1.9 1.9 1.26 2.1a6.9 6.9 0 0 0-.68 1.63L3 10.66v2.68l2.37.6c.15.58.38 1.13.68 1.64l-1.25 2.1 1.9 1.9 2.1-1.26c.51.3 1.06.53 1.63.68l.61 2.37h2.68l.6-2.37a6.9 6.9 0 0 0 1.64-.68l2.1 1.25 1.9-1.9-1.26-2.1c.3-.51.53-1.06.68-1.63l2.37-.61Z"
       />
     </svg>

@@ -1,21 +1,26 @@
-import { useRef } from 'react';
-import { motion, useMotionValue } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import { effectiveAtk } from '@/engine/util';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
-import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
-import { CardShine } from '../card/RarityFX';
-import { palette, radius, spring, shadow, text, fonts } from '../tokens';
+import { spring, text, fonts } from '../tokens';
+import { poster, chamfer, sheetStyle } from '../poster';
+import { PosterButton } from '../chrome';
 import { RuleText } from '../card/RuleText';
 import { useViewport } from '../hooks/useViewport';
 
-const REDUCED = typeof window !== 'undefined'
-  && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/** Stencil eyebrow — block titles, rail headers, stat labels and chips. */
+const eyebrow = {
+  fontFamily: fonts.display,
+  fontSize: 10.5,
+  letterSpacing: '0.22em',
+  textTransform: 'uppercase' as const,
+  lineHeight: 1,
+} as const;
 
 interface Props {
   card: CardInstance;
@@ -36,41 +41,10 @@ export function HeroDetailSheet({
   card, isMine, canUseSkill, skillBlockedReason, onUseSkill,
   canRetreat, retreatCost = 2, onRetreat, onClose,
 }: Props) {
-  // Pointer-driven tilt for the physical-card feel (framer owns the transform
-  // here, so drive rotateX/rotateY through motion values + write the shine vars).
   const { isMobile } = useViewport();
-  const elRef = useRef<HTMLDivElement | null>(null);
-  const rotX = useMotionValue(0);
-  const rotY = useMotionValue(0);
-  const TILT_MAX = REDUCED ? 0 : 5;
-  const onTiltMove = (e: React.PointerEvent) => {
-    const el = elRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const px = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const py = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
-    rotY.set((px - 0.5) * 2 * TILT_MAX);
-    rotX.set(-(py - 0.5) * 2 * TILT_MAX);
-    el.style.setProperty('--mx', `${px * 100}%`);
-    el.style.setProperty('--my', `${py * 100}%`);
-    el.style.setProperty('--glare', '1');
-  };
-  const onTiltLeave = () => {
-    rotX.set(0);
-    rotY.set(0);
-    const el = elRef.current;
-    if (el) {
-      el.style.setProperty('--glare', '0');
-      el.style.setProperty('--mx', '50%');
-      el.style.setProperty('--my', '50%');
-    }
-  };
 
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') return null;
-
-  const accent = getHeroIdentity(data.id).primary;
-  const goldInset = palette.rarity[4].fill;
 
   const skillAbility = data.skill ? getAbility(data.skill) : null;
   const passiveAbility = data.passives?.[0] ? getAbility(data.passives[0]) : null;
@@ -101,15 +75,14 @@ export function HeroDetailSheet({
       transition={{ duration: 0.18 }}
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, background: palette.overlay,
-        backdropFilter: 'blur(10px)', zIndex: 95,
+        position: 'fixed', inset: 0, background: poster.scrim,
+        backdropFilter: 'blur(6px)', zIndex: 95,
         display: 'flex',
         // Phones stack the card above the rail and may exceed the viewport, so
         // pin to the top and scroll instead of clipping.
         alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center',
         padding: '24px 16px',
         overflowY: isMobile ? 'auto' : undefined,
-        perspective: 1400,
       }}
     >
       {/* Three columns: the card (pure hero face — art + ability text), its
@@ -126,99 +99,79 @@ export function HeroDetailSheet({
       >
       {/* Card column: the card itself + its action buttons below the frame. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* The hero rendered as a physical card: framed art board + framed text
-          board (Skill/Passive + flavor). Tilts toward the cursor + holo on
-          hover. The Skill is tap-to-use; Retreat/Close live below the card. */}
+      {/* The hero as a flat charcoal-framed print: art board + cream text
+          board (Skill/Passive). The Skill is tap-to-use; Retreat/Close live
+          below the card. */}
       <motion.div
-        ref={elRef}
         initial={{ opacity: 0, y: 30, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.95 }}
         transition={spring.snappy}
         onClick={(e) => e.stopPropagation()}
-        onPointerMove={onTiltMove}
-        onPointerLeave={onTiltLeave}
         style={{
           position: 'relative',
           // Fixed TCG trading-card ratio (5:7 ≈ 0.714).
           width: cardW, height: cardH,
           maxHeight: `min(${cardH}px, 92vh)`,
           display: 'flex', flexDirection: 'column',
-          background: '#3a2810',            // mahogany frame, peeks at the edge
-          borderRadius: 16,
-          border: `2px solid ${accent}`,
-          boxShadow: `${shadow.xl}, 0 0 32px ${accent}55`,
-          color: palette.text,
+          background: poster.frame,          // charcoal frame, same as CardFrame
+          borderRadius: 10,
+          border: `2px solid ${poster.edge}`,
+          boxShadow: '0 14px 26px rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0, 0, 0.25)',
+          color: poster.ink,
           overflow: 'hidden',
-          isolation: 'isolate',
-          transformPerspective: 1400,
-          rotateX: rotX,
-          rotateY: rotY,
-          transformStyle: 'preserve-3d',
         }}
       >
-        {/* Inner gold inset — same hero/ult cue as the in-hand card frame */}
-        <div style={{
-          position: 'absolute', inset: 3, borderRadius: 12,
-          border: `1px solid ${goldInset}66`,
-          boxShadow: `inset 0 0 8px ${goldInset}22`,
-          pointerEvents: 'none', zIndex: 4,
-        }} />
-
-        {/* ART BOARD — a framed illustration window (not a flush bleed). The
-            8px margin reveals the mahogany shell as a bezel; a gold hairline +
-            inset vignette push the portrait behind glass. Sized so the rules
-            (Skill/Passive + flavor, no ultimate) fit the text board below
-            without scrolling. */}
+        {/* ART BOARD — the portrait printed edge to edge inside the frame's
+            6px margin, with the recessed inner edge every poster card shares.
+            Sized so the rules (Skill/Passive, no ultimate) fit the text board
+            below without scrolling. */}
         <div style={{
           position: 'relative', height: 188, flexShrink: 0, overflow: 'hidden',
-          margin: '8px 8px 0', borderRadius: 10,
-          border: `1px solid ${goldInset}55`,
-          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.45), inset 0 0 16px rgba(8,6,3,0.5)',
+          margin: '6px 6px 0', borderRadius: 6,
+          background: '#0f1214',
         }}>
           <HeroPortrait cardId={data.id} full />
-          {/* Vignette — feathers the four edges of the illustration window */}
-          <div style={{
+          {/* Inner edge — the print sits slightly recessed in its frame. */}
+          <div aria-hidden style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
-            boxShadow: 'inset 0 0 40px 8px rgba(8,6,3,0.5)', zIndex: 2,
+            boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 -18px 24px -12px rgba(0, 0, 0, 0.5)',
+            zIndex: 2,
           }} />
-          {/* Nameplate scrim — hero name along the base of the window.
+          {/* Name band — cream label along the base of the print.
               Level / BP / HP / SPI live in the right-side stat rail, off-card. */}
           <div style={{
             position: 'absolute', left: 0, right: 0, bottom: 0,
-            padding: '24px 13px 9px',
-            background: 'linear-gradient(to top, rgba(8,6,3,0.92), rgba(8,6,3,0.5) 55%, transparent)',
+            padding: '8px 12px 9px',
+            background: poster.paperBand,
             zIndex: 3,
           }}>
             <span style={{
-              fontFamily: fonts.ui, fontWeight: 700, fontSize: 20, color: '#fff',
-              textShadow: '0 2px 6px rgba(0,0,0,0.8)', lineHeight: 1.05,
+              fontFamily: fonts.display, fontSize: 18, color: poster.ink,
+              letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1,
               display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>{data.name}</span>
           </div>
         </div>
 
-
-        {/* TEXT BOARD — a framed cream rules slab, distinct from the art board.
-            Holds the hero's own ability (Skill/Passive) + flavor and a pinned
-            footer. The Ultimate is NOT shown here (it's cast from hand), so the
-            content fits without scrolling. */}
+        {/* TEXT BOARD — the cream rules band under the art. Holds the hero's
+            own ability (Skill/Passive). The Ultimate is NOT shown here (it's
+            cast from hand), so the content fits without scrolling. */}
         <div style={{
           flex: '1 1 auto', minHeight: 0,
           display: 'flex', flexDirection: 'column',
-          margin: '8px', borderRadius: 10,
-          border: `1px solid ${palette.card.bodyBorder}88`,
+          margin: 6, borderRadius: 6,
+          border: `1px solid ${poster.inkRule}`,
           overflow: 'hidden',
-          background: palette.card.body,
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 4px rgba(40,20,0,0.22)',
+          background: poster.paperBand,
           position: 'relative',
         }}>
-          {/* Rules content — Skill (tap-to-use) or Passive, plus flavor. The
-              overflowY is a safety for an unusually long skill; with no
-              ultimate here it does not normally scroll. */}
+          {/* Rules content — Skill (tap-to-use) or Passive. The overflowY is a
+              safety for an unusually long skill; with no ultimate here it does
+              not normally scroll. */}
           <div style={{
             flex: '1 1 auto', minHeight: 0, overflowY: 'auto',
-            color: palette.card.bodyText,
+            color: poster.ink,
             padding: '13px 13px 8px',
           }}>
             {/* Skill — tap to use; or a non-actionable Passive block. */}
@@ -245,9 +198,6 @@ export function HeroDetailSheet({
             ) : null}
           </div>
         </div>
-
-        {/* Card shine — rarity ring + pointer-driven glare/holo over the frame */}
-        <CardShine rarity={data.rarity} />
       </motion.div>
 
       {/* Action controls — below the card, outside the frame. The Skill itself
@@ -261,18 +211,9 @@ export function HeroDetailSheet({
             badge={`−${retreatCost}`}
           />
         )}
-        <button
-          onClick={onClose}
-          style={{
-            width: '100%', padding: '12px',
-            background: palette.bg2,
-            border: `1px solid ${palette.borderStrong}`,
-            borderRadius: radius.md,
-            cursor: 'pointer',
-            ...text.label, color: palette.textDim,
-            boxShadow: shadow.sm,
-          }}
-        >Close</button>
+        <PosterButton variant="ghost" size="sm" onClick={onClose} style={{ width: '100%' }}>
+          Close
+        </PosterButton>
       </div>
       </div>{/* end card column */}
 
@@ -298,18 +239,18 @@ export function HeroDetailSheet({
           <SidePanel title="Stats">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <LevelRing level={card.level ?? 1} exp={card.exp ?? 0} size={42} />
-              <div style={{ ...text.label, fontSize: 14, color: palette.card.bodyText }}>
+              <div style={{ ...eyebrow, fontSize: 14, letterSpacing: '0.12em', color: poster.ink }}>
                 Level {card.level ?? 1}
               </div>
             </div>
             <div style={{
               display: 'flex', justifyContent: 'space-around', alignItems: 'center',
               marginTop: 4, paddingTop: 11,
-              borderTop: `1px solid ${palette.card.bodyBorder}33`,
+              borderTop: `1px solid ${poster.inkRule}`,
             }}>
-              <RailStat label="BP" value={effectiveAtk(card)} color={palette.atk} />
-              <RailStat label="HP" value={`${card.hp}/${card.hpMax}`} color={palette.hp} />
-              <RailStat label="SPI" value={card.spiritMod} color={palette.spirit} />
+              <RailStat label="BP" value={effectiveAtk(card)} color={poster.stat.atk} />
+              <RailStat label="HP" value={`${card.hp}/${card.hpMax}`} color={poster.stat.hp} />
+              <RailStat label="SPI" value={card.spiritMod} color={poster.stat.spirit} />
             </div>
           </SidePanel>
 
@@ -323,13 +264,13 @@ export function HeroDetailSheet({
                         width below so it reads without cramped wrapping. */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                       <StatusIcon id={s.id} value={s.value} duration={s.duration} size="large" />
-                      <div style={{ ...text.label, color: palette.card.bodyText, minWidth: 0 }}>
+                      <div style={{ ...text.label, color: poster.ink, minWidth: 0 }}>
                         {def?.title ?? s.id}
                       </div>
                     </div>
-                    <div style={{ ...text.body, fontSize: 12, color: palette.card.bodyTextDim }}>
+                    <div style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>
                       {def?.desc.replace('<value>', String(s.value))}{' '}
-                      <span style={{ color: palette.card.flavor }}>({s.duration}) left</span>
+                      <span style={{ color: poster.inkFaint }}>({s.duration}) left</span>
                     </div>
                   </div>
                 );
@@ -342,14 +283,14 @@ export function HeroDetailSheet({
               {attached.map((eq) => {
                 const eqData = CARDS_BY_ID[eq.cardId];
                 const merged = eqData?.type === 'hero';
-                const acc = merged ? palette.status.buff : palette.type.equipment.accent;
+                const acc = merged ? poster.status.buff : poster.edge;
                 return (
                   <div key={eq.iid} style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
                     <div style={{
                       width: 32, height: 32, flexShrink: 0,
                       borderRadius: 6, overflow: 'hidden',
-                      background: '#1a1208', border: `1.5px solid ${acc}`,
-                      boxShadow: merged ? `0 0 6px ${acc}88` : '0 1px 3px rgba(0,0,0,0.5)',
+                      background: poster.frame, border: `1.5px solid ${acc}`,
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
                     }}>
                       {merged ? (
                         <HeroBadge cardId={eq.cardId} size={32} />
@@ -360,23 +301,23 @@ export function HeroDetailSheet({
                       )}
                     </div>
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ ...text.label, color: palette.card.bodyText }}>
+                      <div style={{ ...text.label, color: poster.ink }}>
                         {eqData?.name ?? eq.cardId}
                       </div>
                       {/* What the item does — the panel should explain the effect,
                           not just name it. */}
                       {!merged && eqData?.text && (
-                        <div style={{ ...text.body, fontSize: 12, color: palette.card.bodyTextDim }}>
+                        <div style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>
                           <RuleText text={eqData.text} />
                         </div>
                       )}
                       {merged && eq.remMergeTurnsLeft != null && (
-                        <div style={{ ...text.body, fontSize: 12, color: palette.status.buff }}>
+                        <div style={{ ...text.body, fontSize: 12, color: poster.status.buff }}>
                           merged · {eq.remMergeTurnsLeft}t left
                         </div>
                       )}
                       {!merged && eq.charges != null && (
-                        <div style={{ ...text.body, fontSize: 12, color: palette.card.flavor }}>
+                        <div style={{ ...text.body, fontSize: 12, color: poster.inkFaint }}>
                           {eq.charges} charge{eq.charges === 1 ? '' : 's'} left
                         </div>
                       )}
@@ -398,40 +339,38 @@ export function HeroDetailSheet({
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ ...text.label, color: '#9a7b48', marginBottom: 7 }}>{title}</div>
+      <div style={{ ...eyebrow, color: poster.inkDim, marginBottom: 7 }}>{title}</div>
       {children}
     </div>
   );
 }
 
-/** Stat readout for the off-card stat rail: big tabular number over a brass
- *  label, dark-on-cream for the panel. */
+/** Stat readout for the off-card stat rail: big tabular number in its stat
+ *  ink over a small stencil label. */
 function RailStat({ label, value, color }: { label: string; value: any; color: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
       <span style={{ ...text.numeric, fontSize: 20, color }}>{value}</span>
-      <span style={{ ...text.label, fontSize: 10, color: palette.card.flavor }}>{label}</span>
+      <span style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>{label}</span>
     </div>
   );
 }
 
-/** A satellite token-panel that floats beside the card (buffs / gear). Styled
- *  like a small slab of the same card-stock — cream face, mahogany edge, brass
- *  header — so it reads as related to the card without being inside its frame. */
+/** A satellite panel beside the card (stats / buffs / gear): a small cream
+ *  sheet with an ink-tag header, so it reads as the card's paperwork without
+ *  being inside its frame. */
 function SidePanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{
-      background: palette.card.body,
-      border: '2px solid #5a3f1c',
-      borderRadius: 12,
-      boxShadow: shadow.lg,
+      ...sheetStyle,
+      borderRadius: 10,
       overflow: 'hidden',
+      color: poster.ink,
     }}>
       <div style={{
-        padding: '7px 12px',
-        background: 'linear-gradient(180deg, #2a1d0e, #1d130a)',
-        borderBottom: '1px solid rgba(0,0,0,0.4)',
-        ...text.label, color: 'rgba(232,216,180,0.78)',
+        padding: '8px 12px',
+        background: poster.ink,
+        ...eyebrow, color: poster.paper,
       }}>{title}</div>
       <div style={{ padding: '11px 12px', display: 'flex', flexDirection: 'column', gap: 11 }}>
         {children}
@@ -457,15 +396,15 @@ const TRIGGER_LABELS: Record<string, string> = {
 function PassivePanel({ name, description, trigger }: { name: string; description: string; trigger: string }) {
   return (
     <div style={{
-      padding: '12px 14px', borderRadius: radius.md,
-      background: 'rgba(120, 80, 30, 0.05)', border: `1px solid ${palette.border}`,
+      padding: '12px 14px', borderRadius: 6,
+      background: 'transparent', border: `1px solid ${poster.inkRule}`,
     }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
-        <span style={{ ...text.label, color: palette.text }}>{name}</span>
-        <span style={{ ...text.label, color: palette.success }}>{TRIGGER_LABELS[trigger] ?? trigger}</span>
+        <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: poster.ink }}>{name}</span>
+        <span style={{ flexShrink: 0, ...eyebrow, fontSize: 10, color: poster.status.buff }}>{TRIGGER_LABELS[trigger] ?? trigger}</span>
       </div>
       {description && (
-        <div style={{ ...text.body, color: palette.textDim }}>
+        <div style={{ ...text.body, color: poster.inkDim }}>
           <RuleText text={description} />
         </div>
       )}
@@ -475,9 +414,9 @@ function PassivePanel({ name, description, trigger }: { name: string; descriptio
 
 /**
  * The Skill card IS the "use skill" button. When the skill is usable (it's the
- * player's hero and all gates pass) the whole card is a pressable brass panel
- * with a footer CTA; otherwise it renders as a flat, non-interactive info card
- * (USED / blocked reason / enemy hero).
+ * player's hero and all gates pass) the whole card is a pressable red action
+ * plate; otherwise it renders as a flat, outlined info card (USED / blocked
+ * reason / enemy hero).
  */
 function SkillActionCard({
   name, description, mine, used, canUse, blockedReason, onUse,
@@ -491,11 +430,13 @@ function SkillActionCard({
   onUse?: () => void;
 }) {
   const interactive = mine && !!onUse && canUse && !used;
-  const accent = palette.accent;
 
+  // Ink on the outlined plate; cream on the red action plate.
+  const fg = interactive ? poster.paper : poster.ink;
+  const fgDim = interactive ? poster.paper : poster.inkDim;
   const chip = used
-    ? { label: 'USED', color: palette.textFaint }
-    : { label: 'READY', color: palette.success };
+    ? { label: 'USED', color: poster.inkFaint }
+    : { label: 'READY', color: interactive ? poster.paper : poster.status.buff };
 
   return (
     <motion.div
@@ -504,42 +445,50 @@ function SkillActionCard({
       onClick={interactive ? (e) => { e.stopPropagation(); onUse!(); } : undefined}
       style={{
         padding: '14px 14px 12px',
-        borderRadius: radius.md,
-        background: interactive
-          ? `linear-gradient(180deg, ${accent}22, ${accent}0c)`
-          : 'rgba(120, 80, 30, 0.05)',
-        border: `1.5px solid ${interactive ? accent : palette.border}`,
-        boxShadow: interactive ? `0 2px 10px rgba(40,20,0,0.18), 0 0 14px ${accent}40` : 'none',
+        ...(interactive
+          ? {
+              background: poster.red,
+              border: `2px solid ${poster.red}`,
+              clipPath: chamfer(8),
+              WebkitClipPath: chamfer(8),
+            }
+          : {
+              background: 'transparent',
+              border: `1px solid ${poster.inkRule}`,
+              borderRadius: 6,
+            }),
+        color: fg,
         cursor: interactive ? 'pointer' : 'default',
         opacity: used ? 0.7 : 1,
         WebkitTapHighlightColor: 'transparent',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
-        <span style={{ ...text.label, color: palette.text }}>{name}</span>
-        <span style={{ flexShrink: 0, ...text.label, color: chip.color }}>{chip.label}</span>
+        <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: fg }}>{name}</span>
+        <span style={{ flexShrink: 0, ...eyebrow, fontSize: 10, color: chip.color }}>{chip.label}</span>
       </div>
       {description && (
-        <div style={{ ...text.body, color: palette.textDim }}>
+        <div style={{ ...text.body, color: fgDim }}>
           <RuleText text={description} />
         </div>
       )}
 
       {/* When the skill can't be used for a stated reason (e.g. "Not your
-          turn"), show it. Usable skills need no prompt — the brass press
-          styling + READY chip already invite the tap; the used state is the
-          USED chip. */}
+          turn"), show it. Usable skills need no prompt — the red action plate
+          + READY chip already invite the tap; the used state is the USED chip. */}
       {!interactive && mine && !canUse && !used && blockedReason && (
         <div style={{
-          marginTop: 10, paddingTop: 8, borderTop: `1px solid ${palette.border}`,
-          textAlign: 'center', ...text.body, color: palette.textFaint,
+          marginTop: 10, paddingTop: 8, borderTop: `1px solid ${poster.inkRule}`,
+          textAlign: 'center', ...text.body, color: poster.inkDim,
         }}>{blockedReason}</div>
       )}
     </motion.div>
   );
 }
 
-/** Secondary action button (Retreat). Brass gradient, full width. */
+/** Secondary action (Retreat): the poster's paper button, full width, with
+ *  the soul cost on a red sticker. The click stops here so the backdrop's
+ *  dismiss never sees it. */
 function ActionButton({
   onClick, icon, label, badge,
 }: {
@@ -549,29 +498,23 @@ function ActionButton({
   badge?: string;
 }) {
   return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      style={{
-        marginTop: 10, width: '100%',
-        padding: '14px',
-        background: `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}77)`,
-        border: `1.5px solid ${palette.accent}`,
-        borderRadius: radius.md,
-        cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-        boxShadow: `0 2px 8px rgba(40, 20, 0, 0.25), 0 0 14px ${palette.accent}55`,
-        ...text.label, color: '#1a1208',
-      }}
-    >
-      <span aria-hidden>{icon}</span>
-      <span>{label}</span>
-      {badge && (
-        <span style={{
-          padding: '2px 8px', borderRadius: 999,
-          background: 'rgba(0,0,0,0.25)', ...text.label,
-        }}>{badge}</span>
-      )}
-    </button>
+    <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10, width: '100%' }}>
+      <PosterButton
+        variant="paper"
+        onClick={onClick}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+      >
+        <span aria-hidden>{icon}</span>
+        <span>{label}</span>
+        {badge && (
+          <span style={{
+            padding: '3px 8px 4px', borderRadius: 3,
+            background: poster.red, color: poster.paper,
+            fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.12em', lineHeight: 1,
+          }}>{badge}</span>
+        )}
+      </PosterButton>
+    </div>
   );
 }
 

@@ -5,7 +5,7 @@ export type CombatProgress = {
   total: number;
   /** Zero-based index of the beat currently in flight. */
   currentBeat: number;
-  /** True when the local player is the attacker — drives brass vs. wine hue. */
+  /** True when the local player is the attacker — drives the poster.you (gold) vs. poster.rival (red) hue. */
   attackerIsMe: boolean;
 } | null;
 

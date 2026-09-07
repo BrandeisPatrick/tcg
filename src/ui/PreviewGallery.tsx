@@ -12,7 +12,8 @@ import { SoulsRail } from './board/SoulsRail';
 import { HeroDetailSheet } from './overlays/HeroDetailSheet';
 import { DamageFxContext } from './effects/DamageFxContext';
 import type { CardInstance, HeroCard, DamageEvent } from '@/engine/types';
-import { palette, fonts, radius, shadow, text } from './tokens';
+import { fonts, radius, shadow, text } from './tokens';
+import { poster } from './poster';
 import { LevelRing } from './card/LevelRing';
 import { RoundCardIcon } from './card/RoundCardIcon';
 import { useViewport } from './hooks/useViewport';
@@ -48,21 +49,21 @@ export function PreviewGallery() {
     <div style={{
       minHeight: '100dvh',
       padding: '24px 16px 80px',
-      background: palette.bg0,
-      color: palette.text,
+      background: poster.ground,
+      color: poster.cream,
       fontFamily: fonts.ui,
     }}>
       <header style={{ maxWidth: 1100, margin: '0 auto 18px' }}>
         <h1 style={{
           fontFamily: fonts.ui, fontSize: 22, fontWeight: 700,
-          color: palette.accent, margin: 0,
-          textShadow: `0 0 24px ${palette.accent}55`,
+          color: poster.cream, margin: 0,
+          letterSpacing: '0.08em', textTransform: 'uppercase',
         }}>
           Deadlock TCG · Preview Gallery
         </h1>
-        <p style={{ color: palette.textDim, marginTop: 6 }}>
+        <p style={{ color: poster.creamDim, marginTop: 6 }}>
           Visual catalog of every in-game render.&nbsp;
-          <a href={import.meta.env.BASE_URL ?? '/'} style={{ color: palette.accent }}>back to match</a>
+          <a href={import.meta.env.BASE_URL ?? '/'} style={{ color: poster.gold }}>back to match</a>
         </p>
       </header>
 
@@ -92,7 +93,7 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
     <div style={{
       maxWidth: 1100, margin: '0 auto',
       display: 'flex', gap: 4,
-      borderBottom: `1px solid ${palette.border}`,
+      borderBottom: `1px solid ${poster.edge}`,
       // The five tabs don't fit a phone row — scroll them horizontally rather
       // than wrap to two lines.
       overflowX: isMobile ? 'auto' : undefined,
@@ -108,9 +109,9 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
               padding: isMobile ? '10px 14px' : '10px 18px',
               flexShrink: 0,
               background: 'transparent',
-              color: active ? palette.text : palette.textDim,
+              color: active ? poster.cream : poster.creamDim,
               border: 'none',
-              borderBottom: `2px solid ${active ? palette.accent : 'transparent'}`,
+              borderBottom: `2px solid ${active ? poster.gold : 'transparent'}`,
               cursor: 'pointer',
               fontFamily: fonts.ui,
               fontSize: 13, fontWeight: 700,
@@ -189,7 +190,7 @@ function CardsTab() {
       </Section>
 
       <Section title="Long-press preview">
-        <p style={{ ...text.body, color: palette.textDim, marginBottom: 12 }}>
+        <p style={{ ...text.body, color: poster.creamDim, marginBottom: 12 }}>
           Hold any card in-game to surface this large-format view. Uses CardFrame size="full".
         </p>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
@@ -200,9 +201,9 @@ function CardsTab() {
       </Section>
 
       <Section title="Unaffordable — cost coin warning">
-        <p style={{ ...text.body, color: palette.textDim, marginBottom: 12 }}>
+        <p style={{ ...text.body, color: poster.creamDim, marginBottom: 12 }}>
           When the player can't pay a card's soul cost the hand card dims and its
-          brass cost coin flips to warning red — affordable next to unaffordable below.
+          ink cost coin flips to warning red — affordable next to unaffordable below.
         </p>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <CardFrame cardId="metal_skin" size="hand" />
@@ -234,7 +235,7 @@ function CombatFxTab() {
       </Section>
 
       <Section title="HP / BP Tick">
-        <Caption>Damage and heals animate ON the hero card's HP / BP number — a quick scale pulse that stays in the stat's own colour family (brass for BP, vermillion for HP). Buffs pulse brighter, debuffs/damage pulse desaturated grey. Click below to mutate a mock card and watch the number tick.</Caption>
+        <Caption>Damage and heals animate ON the hero card's HP / BP number — a quick scale pulse that stays in the stat's own colour family (ink for BP, red for HP). Buffs pulse brighter, debuffs/damage pulse desaturated grey. Click below to mutate a mock card and watch the number tick.</Caption>
         <StatTickDemo />
       </Section>
 
@@ -276,7 +277,7 @@ function BoardTab() {
       </Section>
 
       <Section title="Souls Rail">
-        <Caption>Vertical stack of flat brass rectangles hugging the right edge of the 3×3 grid. Rival's chips anchor at the top edge; yours anchor at the bottom — position carries ownership. Each soul = one chip; spends pop the head chip off, refills pop a new one on. No labels, no mid-divider.</Caption>
+        <Caption>Vertical stack of flat gold coins hugging the right edge of the 3×3 grid. Rival's chips anchor at the top edge; yours anchor at the bottom — position carries ownership. Each soul = one chip; spends pop the head chip off, refills pop a new one on. No labels, no mid-divider.</Caption>
         <SoulsRailDemo />
       </Section>
 
@@ -294,8 +295,8 @@ function BoardTab() {
           ].map((stage, idx) => (
             <div key={idx} style={{
               padding: 14,
-              background: palette.bg2,
-              border: `1px solid ${palette.border}`,
+              background: poster.paper,
+              border: `1px solid ${poster.inkRule}`,
               borderRadius: radius.md,
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
             }}>
@@ -308,8 +309,8 @@ function BoardTab() {
                   <LevelRing level={stage.level} exp={stage.exp} size={36} />
                 </div>
               </div>
-              <div style={{ ...text.label, color: palette.accent }}>{stage.label}</div>
-              <div style={{ ...text.body, color: palette.textDim, textAlign: 'center' }}>{stage.hint}</div>
+              <div style={{ ...text.label, color: poster.ink }}>{stage.label}</div>
+              <div style={{ ...text.body, color: poster.inkDim, textAlign: 'center' }}>{stage.hint}</div>
             </div>
           ))}
         </Grid>
@@ -355,8 +356,8 @@ function SoulsRailDemo() {
         position: 'relative',
         height: 460,
         borderRadius: radius.md,
-        border: `1px solid ${palette.border}`,
-        background: `linear-gradient(180deg, ${palette.bg1}, ${palette.bg2})`,
+        border: `1px solid ${poster.inkRule}`,
+        background: poster.paper,
       }}>
         {/* Stage stand-ins for the 3 board rows so the rail's midline
             visibly aligns with the centre row, just like in-game. */}
@@ -364,9 +365,9 @@ function SoulsRailDemo() {
           position: 'absolute', inset: 12,
           display: 'flex', flexDirection: 'column', gap: 16,
         }}>
-          <div style={{ flex: 1, border: `1px dashed ${palette.border}`, borderRadius: radius.sm, opacity: 0.6 }} />
-          <div style={{ flex: 1.6, border: `1px dashed ${palette.border}`, borderRadius: radius.sm, opacity: 0.6 }} />
-          <div style={{ flex: 1, border: `1px dashed ${palette.border}`, borderRadius: radius.sm, opacity: 0.6 }} />
+          <div style={{ flex: 1, border: `1px dashed ${poster.inkFaint}`, borderRadius: radius.sm, opacity: 0.6 }} />
+          <div style={{ flex: 1.6, border: `1px dashed ${poster.inkFaint}`, borderRadius: radius.sm, opacity: 0.6 }} />
+          <div style={{ flex: 1, border: `1px dashed ${poster.inkFaint}`, borderRadius: radius.sm, opacity: 0.6 }} />
         </div>
         <SoulsRail rivalSouls={rival} yourSouls={you} />
       </div>
@@ -400,14 +401,14 @@ function TurnCompassDemo() {
       <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
           <TurnCompass isMyTurn={true} turn={turn} combatOverride={null} />
-          <span style={{ ...text.label, color: palette.textDim }}>Your Move (idle)</span>
+          <span style={{ ...text.label, color: poster.creamDim }}>Your Move (idle)</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
           <TurnCompass isMyTurn={false} turn={turn} combatOverride={null} />
-          <span style={{ ...text.label, color: palette.textDim }}>Rival's Move (idle)</span>
+          <span style={{ ...text.label, color: poster.creamDim }}>Rival's Move (idle)</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
-          <span style={{ ...text.label, color: palette.textDim }}>Live toggle</span>
+          <span style={{ ...text.label, color: poster.creamDim }}>Live toggle</span>
           <div style={{ padding: '8px 0' }}>
             <TurnCompass isMyTurn={isMyTurn} turn={turn} combatOverride={combatOverride} />
           </div>
@@ -419,7 +420,7 @@ function TurnCompassDemo() {
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={{ ...text.label, color: palette.textDim }}>Combat mode (same compass)</span>
+        <span style={{ ...text.label, color: poster.creamDim }}>Combat mode (same compass)</span>
         <Row>
           <Button onClick={() => setCombatMode((v) => !v)}>{combatMode ? 'Combat: ON' : 'Combat: OFF'}</Button>
           <Button onClick={() => setCurrentBeat((b) => (b + 1) % (total + 1))} disabled={!combatMode}>Step beat ({currentBeat} / {total})</Button>
@@ -587,7 +588,7 @@ function UltTrigger({ label, name, caster }: { label: string; name: string; cast
 function StatusesTab() {
   return (
     <Section title={`Status Icons (${STATUSES.length})`}>
-      <Caption>Buffs in success green, debuffs in wine red, utility statuses in brass. Magnitude statuses show a value pill; binary statuses (Stun, Silence, Disarm) hide it.</Caption>
+      <Caption>Buffs in green, debuffs in red, utility statuses in ink. Magnitude statuses show a value pill; binary statuses (Stun, Silence, Disarm) hide it.</Caption>
       <Grid min={150}>
         {STATUSES.map((s) => {
           const MAGNITUDE: Record<string, number> = {
@@ -599,12 +600,12 @@ function StatusesTab() {
             <div key={s.id} style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: 10, borderRadius: radius.md,
-              background: palette.bg2, border: `1px solid ${palette.border}`,
+              background: poster.panel, border: `1px solid ${poster.edge}`,
             }}>
               <StatusIcon id={s.id} value={value} duration={2} />
               <div>
                 <div style={{ fontWeight: 700, fontSize: 12 }}>{s.title}</div>
-                <div style={{ color: palette.textDim, fontSize: 12 }}>{s.id}</div>
+                <div style={{ color: poster.creamDim, fontSize: 12 }}>{s.id}</div>
               </div>
             </div>
           );
@@ -686,14 +687,14 @@ function OverlaysTab() {
       </Caption>
 
       <Row>
-        <label style={{ ...text.label, color: palette.textDim, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <label style={{ ...text.label, color: poster.creamDim, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           Hero
           <select
             value={heroId}
             onChange={(e) => setHeroId(e.target.value)}
             style={{
-              background: palette.bg2, color: palette.text,
-              border: `1px solid ${palette.border}`, borderRadius: radius.md,
+              background: poster.panel, color: poster.cream,
+              border: `1px solid ${poster.edge}`, borderRadius: radius.md,
               padding: '8px 10px', fontFamily: fonts.ui, fontWeight: 700, fontSize: 12,
             }}
           >
@@ -706,13 +707,13 @@ function OverlaysTab() {
         {SHEET_SCENARIOS.map((sc) => (
           <div key={sc.id} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <Button onClick={() => setScenario(sc.id)}>{sc.label}</Button>
-            <span style={{ ...text.body, color: palette.textDim }}>{sc.hint}</span>
+            <span style={{ ...text.body, color: poster.creamDim }}>{sc.hint}</span>
           </div>
         ))}
       </div>
 
       {toast && (
-        <p style={{ marginTop: 14, ...text.label, color: palette.success }}>
+        <p style={{ marginTop: 14, ...text.label, color: poster.green }}>
           {toast} — (sheet closed, as it does in-game)
         </p>
       )}
@@ -733,7 +734,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <section style={{ maxWidth: 1100, margin: '0 auto 36px' }}>
       <h2 style={{
         fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
-        color: palette.textDim, margin: '0 0 14px',
+        color: poster.creamDim, margin: '0 0 14px',
       }}>{title}</h2>
       {children}
     </section>
@@ -757,7 +758,7 @@ function Row({ children }: { children: React.ReactNode }) {
 }
 
 function Caption({ children }: { children: React.ReactNode }) {
-  return <p style={{ ...text.body, color: palette.textDim, marginBottom: 12 }}>{children}</p>;
+  return <p style={{ ...text.body, color: poster.creamDim, marginBottom: 12 }}>{children}</p>;
 }
 
 function Button({ children, onClick, disabled }: {
@@ -769,10 +770,10 @@ function Button({ children, onClick, disabled }: {
       disabled={disabled}
       style={{
         background: disabled
-          ? `linear-gradient(180deg, ${palette.bg2}, ${palette.bg1})`
-          : `linear-gradient(180deg, ${palette.accent}cc, ${palette.accent}55)`,
-        color: disabled ? palette.textFaint : palette.text,
-        border: `1px solid ${disabled ? palette.border : palette.accent}`,
+          ? poster.panel
+          : poster.gold,
+        color: disabled ? poster.creamFaint : poster.ink,
+        border: `1px solid ${disabled ? poster.edge : poster.gold}`,
         padding: '8px 14px',
         borderRadius: radius.md,
         fontFamily: fonts.ui, fontWeight: 700, fontSize: 12,

@@ -3,7 +3,9 @@ import { useRef, useState } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { CardFrame } from '../card/CardFrame';
-import { palette, fonts, spring } from '../tokens';
+import { fonts, spring } from '../tokens';
+import { poster } from '../poster';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   cards: CardInstance[];
@@ -42,6 +44,9 @@ function fanY(i: number, total: number): number {
   const offset = Math.abs(i - center);
   return Math.min(offset * offset * 2.5, 32);
 }
+/** Hand card width (CardFrame SIZES.hand) — the fan's own geometry. */
+const CARD_W = 134;
+
 function cardOverlap(total: number): number {
   if (total <= 2) return 20;
   if (total <= 3) return 12;
@@ -54,8 +59,23 @@ function cardOverlap(total: number): number {
   return -94;
 }
 
+/**
+ * The overlap table above is tuned for a desktop-width strip, so on a phone
+ * even a small hand is wider than the screen and the outermost cards get
+ * clipped by the viewport edge. Rather than crushing the spacing (which
+ * collides the name plates), shrink the whole fan to fit: the cards keep
+ * their proportions and stay legible, just smaller.
+ */
+function fanScale(total: number, viewportW: number): number {
+  if (total < 1) return 1;
+  const natural = CARD_W * total + cardOverlap(total) * (total - 1);
+  const avail = viewportW - 24;                       // strip side margins
+  return Math.min(1, avail / natural);
+}
+
 export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, onHover, onDragEndOver, onUnaffordable }: Props) {
   const total = cards.length;
+  const { width: viewportW } = useViewport();
   // Per-card timers held in refs so they survive re-renders. Without this,
   // the closure variables get re-created each render, leaving stale timers
   // dangling and the preview "stuck" open.
@@ -93,14 +113,19 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
         justifyContent: 'center',
         alignItems: 'flex-end',
         minHeight: 180,
-        perspective: 1400,
+        // Shrink-to-fit on narrow screens so no card is clipped by the
+        // viewport edge (see fanScale). 1 on any normal desktop width.
+        transform: `scale(${fanScale(total, viewportW)})`,
+        transformOrigin: 'bottom center',
         // The fan strip spans the full row width; without this it eats clicks
         // meant for anything it overlaps (the End Turn shelf sat unreachable
         // under it). Cards re-enable pointer events individually below.
         pointerEvents: 'none',
       }}>
+      {/* The hand row floats under the cream sheet on the dark scene, so the
+          empty label is a cream stencil eyebrow, not ink. */}
       {total === 0 && (
-        <div style={{ color: palette.textFaint, fontFamily: fonts.ui, fontSize: 13, padding: 32 }}>
+        <div style={{ fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.creamDim, padding: 32 }}>
           Hand empty.
         </div>
       )}
@@ -200,6 +225,8 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 transformOrigin: 'bottom center',
                 zIndex,
                 touchAction: 'none',
+                // Unaffordable cards print greyer; CardFrame's red cost coin
+                // still carries the "can't pay" signal through the wash.
                 filter: unaffordable ? 'saturate(0.55)' : undefined,
                 pointerEvents: 'auto', // opt back in under the strip's pointerEvents:none
               }}

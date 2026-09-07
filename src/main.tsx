@@ -7,6 +7,7 @@ import { Root } from './Root';
 import '@fontsource-variable/inter/index.css';
 import '@fontsource-variable/saira/index.css';
 import '@fontsource/saira-stencil-one/400.css';
+import '@fontsource/caveat-brush/400.css';
 import './ui/styles.css';
 
 // QA-only surface — lazy so players never download the gallery's demo code.

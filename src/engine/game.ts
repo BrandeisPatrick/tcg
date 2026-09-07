@@ -7,7 +7,7 @@ import type {
   PlayerState,
 } from './types';
 import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
-import { getMatchConfig } from '@/storage/matchConfig';
+import { getMatchConfig, scriptedSetup } from '@/storage/matchConfig';
 import { getAIDeckTagged } from '@/decks/aiDecks';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from './statusOps';
 import { resolve, damagePlayer } from './damage';
@@ -285,10 +285,11 @@ export const DeadlockGame: Game<GameState> = {
   name: 'deadlock-tcg',
   setup: (): GameState => {
     resetIid();
-    const story = getMatchConfig().story;
+    // Scripted match (Story node or tutorial lesson): skip the draft entirely
+    // and build both players from the given roster/deck. Enemy heroes carry
+    // the setup's scaling buff.
+    const story = scriptedSetup();
 
-    // Story mode: skip the draft entirely and build both players from the
-    // campaign roster/deck. Enemy heroes carry the node's scaling buff.
     if (story) {
       const G: GameState = {
         players: {

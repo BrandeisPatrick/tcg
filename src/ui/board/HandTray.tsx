@@ -5,10 +5,11 @@ import type { PendingPlay } from '../helpers';
 import { useViewport } from '../hooks/useViewport';
 
 /**
- * Bottom row: the hand fan. On desktop the turn controls live on the
- * table itself (Board mounts BoardControls on the front-right rim), so
- * the fan takes the full row; phones keep the controls here as a row
- * under the hand, End Turn at the thumb edge.
+ * Bottom row: the hand fan, floating under the cream sheet on the dark
+ * scene. On desktop the turn controls live on the sheet's right rail
+ * (Board mounts the BoardControls dock there), so the fan takes the full
+ * row; phones keep the controls here as a row under the hand, End Turn at
+ * the thumb edge.
  */
 export function HandTray({
   cards, disabled, pending, isMyTurn, busy, hasPending, mySouls,
@@ -42,9 +43,9 @@ export function HandTray({
     } : {
       paddingBottom: 16, pointerEvents: 'none', position: 'relative',
     }}>
-      {/* Contact shadow — the fan's pool of shade against the table's near
-          lip, so the held cards read as hovering just off the front edge
-          rather than floating free. Cards' transforms stack above it. */}
+      {/* Contact shade — a flat pool of neutral black under the fan so the
+          held cards read as lifted off the scene rather than floating free.
+          Painted before the cards; their transforms stack above it. */}
       {!isMobile && cards.length > 0 && (
         <div aria-hidden style={{
           position: 'absolute',
@@ -52,7 +53,7 @@ export function HandTray({
           right: '14%',
           bottom: 8,
           height: 48,
-          background: 'radial-gradient(ellipse 50% 100% at 50% 100%, rgba(50, 30, 8, 0.26), rgba(50, 30, 8, 0.10) 55%, transparent 78%)',
+          background: 'radial-gradient(ellipse 50% 100% at 50% 100%, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.10) 55%, transparent 78%)',
           filter: 'blur(2px)',
         }} />
       )}

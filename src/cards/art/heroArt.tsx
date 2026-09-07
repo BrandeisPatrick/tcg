@@ -1,4 +1,5 @@
 import { getHeroIdentity } from './heroPalette';
+import { poster } from '@/ui/poster';
 
 interface PortraitProps {
   cardId: string;
@@ -44,7 +45,7 @@ export function HeroPortrait({ cardId, size, full = false, className, variant = 
         height: size ?? '100%',
         position: 'relative',
         overflow: 'hidden',
-        background: `radial-gradient(ellipse at 50% 30%, ${id.primary}55, ${id.accent} 60%, #05080f 100%)`,
+        background: poster.ground,
       }}
     >
       <img
@@ -62,10 +63,11 @@ export function HeroPortrait({ cardId, size, full = false, className, variant = 
           WebkitMaskImage: 'radial-gradient(ellipse 90% 80% at 50% 45%, black 70%, transparent 100%)',
         }}
       />
-      {/* Color tint overlay to unify look */}
+      {/* Subtle bottom tint so the label band under the art reads as printed
+          over it, not butted against it. */}
       <div style={{
         position: 'absolute', inset: 0,
-        background: `linear-gradient(180deg, transparent 55%, rgba(0,0,0,0.45) 100%), linear-gradient(180deg, transparent 70%, ${id.accent}55 100%)`,
+        background: 'linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.45))',
         pointerEvents: 'none',
       }} />
     </div>
@@ -82,8 +84,8 @@ export function HeroBadge({ cardId, size = 28 }: { cardId: string; size?: number
         height: size,
         borderRadius: 6,
         overflow: 'hidden',
-        background: `linear-gradient(135deg, ${id.primary}, ${id.accent})`,
-        boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.15)`,
+        background: poster.panel,
+        boxShadow: `inset 0 0 0 1px ${poster.edge}`,
       }}
     >
       <img src={url} alt={id.initial} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

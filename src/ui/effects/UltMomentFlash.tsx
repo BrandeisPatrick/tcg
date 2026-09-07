@@ -1,7 +1,8 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { palette, fonts } from '../tokens';
+import { fonts } from '../tokens';
+import { poster, chamfer, PAPER_MOTTLE } from '../poster';
 
 /**
  * Surfaces the dramatic screen-fill + nameplate when an ultimate is cast.
@@ -31,12 +32,13 @@ export function UltMomentFlash({ G }: Props) {
 }
 
 export function UltFlashOverlay({ name, caster }: { name: string; caster: string }) {
-  // Tint by caster: gold for you, wine for rival.
-  const accent = caster === 'P0' ? palette.accent : palette.danger;
+  // Owner accent: gold for you, red for the rival.
+  const isOwn = caster === 'P0';
+  const accent = isOwn ? poster.you : poster.rival;
 
   return (
     <>
-      {/* Screen-fill flash */}
+      {/* Screen-fill strike — one flat overprint of the caster's ink. */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.55, 0.4, 0] }}
@@ -44,25 +46,24 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
         transition={{ duration: 2.2, times: [0, 0.10, 0.65, 1] }}
         style={{
           position: 'fixed', inset: 0,
-          background: `radial-gradient(ellipse at center, ${accent}, transparent 70%)`,
-          mixBlendMode: 'screen',
+          background: `${accent}5c`,
           pointerEvents: 'none',
           zIndex: 98,
         }}
       />
-      {/* Diagonal slash bars (Kingdom Hearts / FGO vibe) */}
+      {/* Diagonal slash — a hard-edged printed band sweeping left to right. */}
       <motion.div
         initial={{ x: '-110%', opacity: 0 }}
         animate={{ x: '120%', opacity: [0, 0.85, 0.5, 0] }}
         transition={{ duration: 0.9, ease: [0.2, 0.7, 0.5, 1] }}
         style={{
           position: 'fixed', top: 0, bottom: 0, left: 0, right: 0,
-          background: `linear-gradient(115deg, transparent 38%, ${accent}99 47%, ${accent} 50%, ${accent}99 53%, transparent 62%)`,
+          background: `linear-gradient(115deg, transparent 44%, ${accent} 44%, ${accent} 56%, transparent 56%)`,
           pointerEvents: 'none',
           zIndex: 99,
         }}
       />
-      {/* Name plate */}
+      {/* Name plate — a cream paper plate with an owner sticker. */}
       <motion.div
         initial={{ opacity: 0, scale: 0.6, y: 20 }}
         animate={{ opacity: [0, 1, 1, 0], scale: [0.6, 1.06, 1, 0.96], y: [20, 0, 0, -10] }}
@@ -74,29 +75,36 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
           textAlign: 'center',
           pointerEvents: 'none',
           zIndex: 100,
+          // drop-shadow follows the chamfered silhouette (box-shadow would be clipped).
+          filter: 'drop-shadow(0 14px 26px rgba(0,0,0,0.45))',
         }}
       >
         <div style={{
           display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
-          padding: '14px 36px',
-          background: `linear-gradient(180deg, rgba(40,20,0,0.85), rgba(20,10,0,0.92))`,
-          border: `2px solid ${accent}`,
-          borderRadius: 8,
-          boxShadow: `0 12px 36px rgba(0,0,0,0.6), 0 0 30px ${accent}aa`,
-          backdropFilter: 'blur(6px)',
+          padding: '14px 36px 16px',
+          background: poster.paper,
+          backgroundImage: PAPER_MOTTLE,
+          backgroundSize: '320px 320px',
+          color: poster.ink,
+          border: `2px solid ${poster.ink}`,
+          clipPath: chamfer(8),
+          WebkitClipPath: chamfer(8),
         }}>
           <span style={{
-            fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
-            color: accent,
-            textShadow: `0 0 12px ${accent}`,
-            marginBottom: 4,
+            padding: '4px 9px 5px',
+            borderRadius: 3,
+            background: accent,
+            color: isOwn ? poster.ink : poster.paper,
+            fontFamily: fonts.display, fontSize: 10,
+            letterSpacing: '0.24em', textTransform: 'uppercase', lineHeight: 1,
+            marginBottom: 8,
           }}>
-            Ultimate · {caster === 'P0' ? 'You' : 'Rival'}
+            Ultimate · {isOwn ? 'You' : 'Rival'}
           </span>
           <span style={{
-            fontFamily: fonts.ui, fontSize: 22, fontWeight: 700,
-            color: '#fff',
-            textShadow: `0 2px 8px rgba(0,0,0,0.9), 0 0 18px ${accent}`,
+            fontFamily: fonts.display, fontSize: 26,
+            letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.05,
+            color: poster.ink,
           }}>
             {name}
           </span>

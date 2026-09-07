@@ -35,9 +35,9 @@ export function useFitScale(min = 0.42) {
     if (!c || !k) return;
     const availH = c.clientHeight;
     const naturalH = k.offsetHeight; // layout size, transform-independent
-    // Width fit too: the stage is fixed-width (rows grid + painted table).
-    // The table paint and souls rail overhang the measured box by up to
-    // ~34px a side, so reserve slack before comparing.
+    // Width fit too: the stage is fixed-width (rows grid + cream sheet).
+    // The sheet's paper margin and the souls rail overhang the measured box
+    // by up to ~34px a side, so reserve slack before comparing.
     const OVERHANG_SLACK = 60;
     const availW = Math.max(0, c.clientWidth - OVERHANG_SLACK);
     const naturalW = k.offsetWidth;

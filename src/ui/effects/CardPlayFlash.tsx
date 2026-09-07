@@ -1,7 +1,8 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState } from '@/engine/types';
 import { CardFrame } from '../card/CardFrame';
-import { palette, fonts } from '../tokens';
+import { fonts } from '../tokens';
+import { poster, chamfer } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 /** Reveal hold in ms — Board's completeAction timer must match. */
@@ -43,11 +44,26 @@ export function CardPlayFlash({ G, onSkip }: Props) {
   );
 }
 
+/** Ink tag — the caption and hint plates above and below the print. */
+const tagStyle = {
+  display: 'inline-block',
+  background: poster.ink,
+  color: poster.cream,
+  clipPath: chamfer(4),
+  WebkitClipPath: chamfer(4),
+  fontFamily: fonts.display,
+  letterSpacing: '0.2em',
+  textTransform: 'uppercase',
+  lineHeight: 1,
+  whiteSpace: 'nowrap',
+} as const;
+
 export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
   cardId: string; caster: 'P0' | 'P1'; kind?: 'play' | 'skill'; onSkip?: () => void;
 }) {
   const isOwn = caster === 'P0';
-  const accent = isOwn ? palette.accent : palette.danger;
+  // Owner accent on the caption: gold for you, red for the rival.
+  const accent = isOwn ? poster.you : poster.rival;
   const verb = kind === 'skill' ? 'used' : 'played';
   const { isMobile } = useViewport();
   const dur = CARD_REVEAL_MS / 1000;
@@ -57,7 +73,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
   const anchorLeft = isMobile ? '50%' : 'clamp(170px, 20vw, 330px)';
   return (
     <>
-      {/* Soft backdrop tint so the card pops out from the board behind it.
+      {/* Scrim over the scene so the print pops off the sheet behind it.
           When skippable it also captures the tap — a click anywhere resolves
           the action immediately instead of waiting out the full hold. */}
       <motion.div
@@ -68,7 +84,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
         onClick={onSkip}
         style={{
           position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,0.35)',
+          background: poster.scrim,
           pointerEvents: onSkip ? 'auto' : 'none',
           cursor: onSkip ? 'pointer' : undefined,
           zIndex: 70,
@@ -92,27 +108,24 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
             scale: [0.45, 0.92, 0.86, 0.82],
             y: [20, 0, 0, -10],
             // Flips face-up toward the viewer as it lands — "dealt onto the
-            // table" rather than just fading in.
+            // sheet" rather than just fading in.
             rotateY: [38, -4, 0, 0],
-            // Scripted sheen: a light bar sweeps across (--cast) while the holo
-            // ignites and fades (--glare), like turning a holo card in the
-            // light. Held centred (--mx/--my) so the glare reads as a flash.
+            // Scripted cast sheen: `--cast` sweeps CardShine's light bar
+            // across the print once it has landed (the only card CSS
+            // variable still read now that the glare layers are gone).
             ['--cast' as string]: [0, 0, 1, 1],
-            ['--glare' as string]: [0, 0.9, 0.25, 0],
-            ['--mx' as string]: ['50%', '50%', '50%', '50%'],
-            ['--my' as string]: ['42%', '42%', '42%', '42%'],
           }}
           exit={{ opacity: 0, scale: 0.8 }}
           transition={{ duration: dur, times: [0, 0.12, 0.82, 1], ease: [0.22, 1, 0.36, 1] }}
           style={{
             transformPerspective: 1100,
-            filter: `drop-shadow(0 16px 36px rgba(0,0,0,0.55)) drop-shadow(0 0 22px ${accent}88)`,
+            filter: 'drop-shadow(0 16px 36px rgba(0,0,0,0.55))',
           }}
         >
           <CardFrame cardId={cardId} size="full" physical={false} castSheen hideStats={kind === 'skill'} />
         </motion.div>
       </div>
-      {/* Caption above the card. */}
+      {/* Caption above the card — an ink tag keyed in the caster's colour. */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: [0, 1, 1, 0], y: [-8, 0, 0, -8] }}
@@ -128,18 +141,15 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
         }}
       >
         <span style={{
-          display: 'inline-block',
-          padding: '6px 16px',
-          background: `linear-gradient(180deg, rgba(40,20,0,0.85), rgba(20,10,0,0.92))`,
+          ...tagStyle,
+          padding: '7px 14px 8px',
           border: `1.5px solid ${accent}`,
-          borderRadius: 999,
-          fontFamily: fonts.ui,
-          fontSize: 12, fontWeight: 700,
-          color: '#fff',
-          textShadow: `0 1px 2px rgba(0,0,0,0.9)`,
-          boxShadow: `0 4px 14px rgba(0,0,0,0.5), 0 0 18px ${accent}66`,
-          whiteSpace: 'nowrap',
+          fontSize: 10.5,
         }}>
+          <span aria-hidden style={{
+            display: 'inline-block', width: 7, height: 7, marginRight: 9,
+            background: accent, verticalAlign: '0.05em',
+          }} />
           {isOwn ? `You ${verb}` : `Rival ${verb}`}
         </span>
       </motion.div>
@@ -159,14 +169,11 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
             textAlign: 'center',
             pointerEvents: 'none',
             zIndex: 73,
-            fontFamily: fonts.ui,
-            fontSize: 12, fontWeight: 700,
-            color: '#fff',
-            textShadow: '0 1px 3px rgba(0,0,0,0.9)',
-            whiteSpace: 'nowrap',
           }}
         >
-          Tap anywhere to continue
+          <span style={{ ...tagStyle, padding: '6px 12px 7px', fontSize: 10, color: poster.creamDim }}>
+            Tap anywhere to continue
+          </span>
         </motion.div>
       )}
     </>

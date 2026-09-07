@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { CardInstance, PlayerID, PlayerState } from '@/engine/types';
 import { HeroSlot } from './HeroSlot';
 import { RowPlaque, SlotWell } from './BoardTable';
-import { palette } from '../tokens';
+import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 interface Props {
@@ -21,13 +21,14 @@ interface Props {
 }
 
 // 3 small bench slots in a centered row. Used above the opponent active
-// (top of screen) and below the player active (bottom).
+// (top of screen) and below the player active (bottom). The owner colour
+// (rival red / your gold) paints the empty wells' dashed outline and label.
 export function BenchRow({
   ps, owner, myId, isOpponent, pending, onTapHero, onLongPressHero, onEquipmentHover,
   isTargetable, registerSlotRef, playerSkillSpent,
 }: Props) {
   const slots = ps.bench;
-  const accent = isOpponent ? palette.danger : palette.accent;
+  const accent = isOpponent ? poster.rival : poster.you;
   const { isMobile } = useViewport();
 
   return (
@@ -43,7 +44,7 @@ export function BenchRow({
       {/* Side label crowds the cards on a phone — desktop only. Stacked
           two-line form fits the left gutter rail. */}
       {!isMobile && (
-        <RowPlaque>{isOpponent ? 'Rival\nBench' : 'Your\nBench'}</RowPlaque>
+        <RowPlaque>Bench</RowPlaque>
       )}
       <div style={{
         display: 'grid',

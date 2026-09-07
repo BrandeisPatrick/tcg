@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
-import { palette } from '../tokens';
+import { poster } from '../poster';
 
 interface Props {
   source: { x: number; y: number } | null;
   active: boolean;
+  /** Head + origin dot colour; the shaft is always cream on an ink keyline. */
   color?: string;
 }
 
-// Curved SVG arrow from `source` to the live pointer position.
+// Curved SVG arrow from `source` to the live pointer position — a cream
+// ribbon with ink edges and a red head, printed flat over the sheet.
 // Mount when targeting is active; the cursor is tracked via a window pointermove listener.
-export function DragArrow({ source, active, color = palette.success }: Props) {
+export function DragArrow({ source, active, color = poster.red }: Props) {
   const [pt, setPt] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export function DragArrow({ source, active, color = palette.success }: Props) {
 
   const w = window.innerWidth;
   const h = window.innerHeight;
+  const curve = `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`;
 
   return (
     <svg
@@ -84,41 +87,40 @@ export function DragArrow({ source, active, color = palette.success }: Props) {
       }}
     >
       <defs>
+        {/* Flat offset shadow — the print's register drop, no blur. */}
         <filter id="arrow-glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
+          <feDropShadow dx="0" dy="2" stdDeviation="0" floodColor="rgba(0,0,0,0.45)" />
         </filter>
       </defs>
 
-      {/* Outer glow line */}
+      {/* Ink keyline under the shaft */}
       <path
-        d={`M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`}
-        stroke={`${color}88`}
-        strokeWidth="8"
+        d={curve}
+        stroke={poster.ink}
+        strokeWidth="6"
         fill="none"
         strokeLinecap="round"
         filter="url(#arrow-glow)"
       />
-      {/* Inner crisp line */}
+      {/* Cream shaft */}
       <path
-        d={`M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`}
-        stroke={color}
+        d={curve}
+        stroke={poster.cream}
         strokeWidth="3"
         fill="none"
         strokeLinecap="round"
       />
-      {/* Arrow head */}
+      {/* Arrow head — red with an ink edge */}
       <polygon
         points={`${ex},${ey} ${leftX},${leftY} ${rightX},${rightY}`}
         fill={color}
+        stroke={poster.ink}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
         filter="url(#arrow-glow)"
       />
       {/* Origin dot */}
-      <circle cx={sx} cy={sy} r="6" fill={color} opacity="0.9" />
-      <circle cx={sx} cy={sy} r="12" fill={`${color}33`} />
+      <circle cx={sx} cy={sy} r="6" fill={color} stroke={poster.ink} strokeWidth="1.5" opacity="0.9" />
     </svg>
   );
 }

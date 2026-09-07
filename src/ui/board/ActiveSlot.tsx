@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { CardInstance, PlayerID, PlayerState } from '@/engine/types';
 import { HeroSlot } from './HeroSlot';
 import { SlotWell } from './BoardTable';
-import { palette } from '../tokens';
+import { poster } from '../poster';
 
 interface Props {
   ps: PlayerState;
@@ -20,12 +20,14 @@ interface Props {
 }
 
 // One prominent Active slot centered horizontally. Larger than bench slots.
+// The owner colour (rival red / your gold) only paints the empty well; the
+// tile itself carries its own frame states.
 export function ActiveSlot({
   ps, owner, myId, isOpponent, pending, onTapHero, onLongPressHero, onEquipmentHover,
   isTargetable, registerSlotRef, isCurrentTurn, playerSkillSpent,
 }: Props) {
   const card = ps.active;
-  const accent = isOpponent ? palette.danger : palette.accent;
+  const accent = isOpponent ? poster.rival : poster.you;
 
   return (
     <div style={{
@@ -34,10 +36,8 @@ export function ActiveSlot({
       justifyContent: 'center',
       alignItems: 'center',
       height: '100%',
-      gap: 14,
     }}>
-      {/* Row label moved to ActiveDuel — sits at the left edge of the row
-          (matching the Bench label style) instead of overlapping each tile. */}
+      {/* The 'Lane' plaque lives in ActiveDuel, in the sheet's left gutter. */}
       <div style={{ width: '100%', height: '100%', maxHeight: 280 }}>
         <AnimatePresence mode="popLayout">
           {card ? (

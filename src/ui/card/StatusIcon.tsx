@@ -1,14 +1,16 @@
 import type { StatusId } from '@/engine/types';
 import { STATUSES_BY_ID } from '@/statuses';
-import { palette, fonts } from '../tokens';
+import { fonts } from '../tokens';
+import { poster } from '../poster';
 
 const BUFFS: Set<StatusId> = new Set(['weapon_power','spirit_power','bullet_resist','spirit_resist','shield','unstoppable','healing_boost','extra_attack','casting','casting_light']);
 const DEBUFFS: Set<StatusId> = new Set(['stun','silenced','disarm','bleed','weapon_power_down','spirit_power_down','bullet_resist_down','spirit_resist_down','charged','healing_boost_down','djinns_mark']);
 
+// Class colours carry meaning: green buff / red debuff / ink utility.
 function colorFor(id: StatusId): string {
-  if (BUFFS.has(id)) return palette.status.buff;
-  if (DEBUFFS.has(id)) return palette.status.debuff;
-  return palette.status.utility;
+  if (BUFFS.has(id)) return poster.status.buff;
+  if (DEBUFFS.has(id)) return poster.status.debuff;
+  return poster.status.utility;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -51,6 +53,11 @@ interface Props {
   size?: 'compact' | 'normal' | 'large';
 }
 
+/**
+ * Status chip — a flat print: solid class colour, cream label, a 1px ink
+ * edge. Mixed case at 12px so 'Bullet Res' / 'Spirit Res' stay
+ * inside compact bench tiles (HeroSlot caps its rows at 36 / 54px).
+ */
 export function StatusIcon({ id, value, duration, size = 'normal' }: Props) {
   const color = colorFor(id);
   // Short chip label if we have one, else the registry's display title —
@@ -68,15 +75,13 @@ export function StatusIcon({ id, value, duration, size = 'normal' }: Props) {
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: `${padV}px ${padH}px`,
-        background: `linear-gradient(180deg, ${color}, ${color}d0)`,
-        color: '#fff',
-        border: `1px solid rgba(0,0,0,0.45)`,
-        borderRadius: 4,
+        background: color,
+        color: poster.cream,
+        border: `1px solid ${poster.ink}`,
+        borderRadius: 2,
         fontFamily: fonts.ui,
         fontSize: 12,
         fontWeight: 700,
-        textShadow: '0 1px 1px rgba(0,0,0,0.55)',
-        boxShadow: `0 1px 3px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18)`,
         whiteSpace: 'nowrap',
         lineHeight: 1.1,
         fontVariantNumeric: 'tabular-nums',
@@ -86,8 +91,8 @@ export function StatusIcon({ id, value, duration, size = 'normal' }: Props) {
       {showValue && (
         <span style={{
           padding: '0 4px',
-          background: 'rgba(0,0,0,0.32)',
-          borderRadius: 6,
+          background: 'rgba(23, 20, 16, 0.35)',
+          borderRadius: 2,
         }}>{value}</span>
       )}
       {showDuration && (

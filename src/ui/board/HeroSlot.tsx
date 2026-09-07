@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { motion, useMotionValue } from 'framer-motion';
+import type { CSSProperties } from 'react';
+import { motion } from 'framer-motion';
 import type { CardInstance, PlayerID } from '@/engine/types';
 import { DamageFlash } from '../effects/DamageFlash';
 import { useDamageFx } from '../effects/DamageFxContext';
@@ -9,13 +9,22 @@ import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { StatusIcon } from '../card/StatusIcon';
 import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
-import { palette, fonts, radius, spring, text, statRow } from '../tokens';
+import { fonts, spring, text, statRow } from '../tokens';
+import { poster } from '../poster';
 import { LevelRing } from '../card/LevelRing';
-import { CardShine } from '../card/RarityFX';
 import { useStatTick } from './useStatTick';
 
-const REDUCED = typeof window !== 'undefined'
-  && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+/**
+ * The in-match hero tile, printed flat in the poster idiom: a charcoal frame
+ * around an edge-to-edge portrait, an ink role band and a cream label band
+ * carrying the name and the BP / Shield / HP row. One component renders both
+ * the large Active tile and the `compact` Bench tile.
+ */
+
+// One dark drop under every tile — the print floats a hair off the sheet.
+const TILE_SHADOW = '0 14px 26px rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0, 0, 0.25)';
+// The frame's inner edge — the portrait sits slightly recessed in the charcoal.
+const PRINT_EDGE = 'inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 -18px 24px -12px rgba(0, 0, 0, 0.5)';
 
 interface Props {
   card: CardInstance;
@@ -35,20 +44,14 @@ interface Props {
 }
 
 export function HeroSlot({
-  card, owner, myId, isOpponent, pending, isTargetable, isCurrentTurn, compact,
+  card, owner, myId, pending, isTargetable, isCurrentTurn, compact,
   onTap, onLongPress, onEquipmentHover, registerSlotRef, playerSkillSpent,
 }: Props) {
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let pressFired = false;
-  // Pointer-driven tilt. HeroSlot is a motion.button, so framer owns the
-  // transform — drive rotateX/rotateY through motion values (they compose with
-  // the hover lift) and write the --mx/--my/--glare vars the shine reads.
-  const elRef = useRef<HTMLButtonElement | null>(null);
-  const rotX = useMotionValue(0);
-  const rotY = useMotionValue(0);
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') {
-    return <div style={{ aspectRatio: '3 / 4', border: `1px dashed ${palette.border}`, borderRadius: radius.md }} />;
+    return <div style={{ aspectRatio: '3 / 4', border: `1.5px dashed ${poster.inkFaint}`, borderRadius: 10 }} />;
   }
   const isAlly = owner === myId;
   // Outgoing attack value as it will resolve in combat: effectiveAtk minus any
@@ -56,18 +59,17 @@ export function HeroSlot({
   // (combat.ts:effectiveAttackDamage applies the same subtraction.)
   const weakenValue = card.statuses.find((s) => s.id === 'weapon_power_down')?.value ?? 0;
   const atk = Math.max(0, effectiveAtk(card) - weakenValue);
-  // Stat number stays in its own brand-colour family (brass for BP, vermillion
-  // for HP) and only modulates intensity to show drift from the printed base:
-  //   default → brand colour, buffed → bright shade, debuffed/damaged → grey.
-  // Keeping the hue locked means a quick glance always identifies which stat
-  // is which, while the intensity carries the state.
+  // Stat inks stay in their own family (BP ink, HP red) and only shift shade
+  // to show drift from the printed base: default → the stat ink, buffed →
+  // bright, debuffed/damaged → dim grey. A locked hue means a glance always
+  // identifies which stat is which; the shade carries the state.
   const baseAtk = data.atk;
-  const atkColor = atk > baseAtk ? palette.atkBright : atk < baseAtk ? palette.atkDim : palette.atk;
+  const atkColor = atk > baseAtk ? poster.stat.atkBright : atk < baseAtk ? poster.stat.atkDim : poster.stat.atk;
   const baseHp = data.hp;
   const hpColor =
-    card.hp < card.hpMax ? palette.hpDim
-    : card.hpMax > baseHp ? palette.hpBright
-    : palette.hp;
+    card.hp < card.hpMax ? poster.stat.hpDim
+    : card.hpMax > baseHp ? poster.stat.hpBright
+    : poster.stat.hp;
   // Pulse the stat number on the card whenever its value changes — this
   // replaces the old floating ±N number above the card.
   const hpTick = useStatTick(card.hp);
@@ -85,70 +87,50 @@ export function HeroSlot({
     && (isActive || !!data.flags?.benchOnly);
   const isArmedSource = !!pending && pending.kind === 'useSkill' && pending.iid === card.iid;
   const attached = isCorpse ? [] : (card.attached ?? []);
-  // On the small in-game tile we only have room for the primary keyword.
-  const role = getHeroIdentity(card.cardId).keywords[0] ?? 'Hero';
+  // On the small in-game tile we only have room for the primary keyword; the
+  // identity colour keys the role band's left edge, as the draft dossier does.
+  const identity = getHeroIdentity(card.cardId);
+  const role = identity.keywords[0] ?? 'Hero';
 
-  // Visual focus: only the active hero whose player's turn it currently is gets
-  // the brass halo. Everything else stays calm — mahogany frame on parchment.
+  // Frame states, in priority order. The poster is flat print: a state is a
+  // border colour plus an inset ring, never an outer glow. The owner colour
+  // keys the lane — gold for you, red for the rival; bench tiles rest on
+  // charcoal.
   const isFocus = isActive && !!isCurrentTurn;
-  const mahoganyFrame = '#5a3f1c';
-  const warmShadow = '0 4px 12px rgba(40, 20, 0, 0.32), 0 1px 2px rgba(40, 20, 0, 0.18)';
-
-  let border: string;
+  const ownerColor = isAlly ? poster.you : poster.rival;
+  let borderColor: string;
   let boxShadow: string;
   if (isTargetable) {
-    border = `2px solid ${palette.success}`;
-    boxShadow = `0 0 0 2px ${palette.success}, 0 0 28px ${palette.success}aa`;
+    borderColor = poster.target;
+    boxShadow = `inset 0 0 0 2px ${poster.target}, ${TILE_SHADOW}`;
   } else if (isArmedSource) {
-    border = `2px solid ${palette.accent}`;
-    boxShadow = `0 0 0 3px ${palette.accent}aa, 0 0 36px ${palette.accent}cc, ${warmShadow}`;
+    borderColor = poster.red;
+    boxShadow = `inset 0 0 0 2px ${poster.red}, ${TILE_SHADOW}`;
   } else if (isFocus) {
-    border = `2px solid ${palette.accent}`;
-    boxShadow = `0 0 0 1px ${palette.accent}88, 0 0 22px ${palette.accent}66, ${warmShadow}`;
+    borderColor = ownerColor;
+    boxShadow = `inset 0 0 0 2px ${ownerColor}, ${TILE_SHADOW}`;
   } else if (isActive) {
-    border = `2px solid ${isAlly ? '#7a5c2a' : '#6a3530'}`;
-    boxShadow = warmShadow;
+    borderColor = ownerColor;
+    boxShadow = TILE_SHADOW;
   } else {
-    border = `2px solid ${mahoganyFrame}`;
-    boxShadow = warmShadow;
+    borderColor = poster.edge;
+    boxShadow = TILE_SHADOW;
   }
+  // A resting frame lightens on hover; a state-coloured frame keeps its signal.
+  const restingFrame = borderColor === poster.edge;
+  // Soft pulse behind the portrait: green while this tile is a legal target,
+  // red while its own skill is armed and waiting for one.
+  const pulse = isTargetable ? poster.target : isArmedSource ? poster.red : null;
 
-  // Compact bench mode: smaller stats + body; ribbon + name use the shared
-  // text.label preset so they match every other panel label on the board.
+  // Compact bench mode: smaller stats, bands and body.
   const statSize = compact ? 12 : 15;
   const iconSize = compact ? 11 : 13;
   const bodyPadding = compact ? '4px 6px 5px' : '5px 9px 6px';
 
-  // Tilt is suppressed on corpses (the tile is "dead" — should feel inert).
-  const tiltActive = !isCorpse;
-  const TILT_MAX = REDUCED ? 0 : 6;
-  const onTiltMove = (e: React.PointerEvent) => {
-    const el = elRef.current;
-    if (!el || !tiltActive) return;
-    const r = el.getBoundingClientRect();
-    const px = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const py = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
-    rotY.set((px - 0.5) * 2 * TILT_MAX);
-    rotX.set(-(py - 0.5) * 2 * TILT_MAX);
-    el.style.setProperty('--mx', `${px * 100}%`);
-    el.style.setProperty('--my', `${py * 100}%`);
-    el.style.setProperty('--glare', '1');
-  };
-  const onTiltLeave = () => {
-    rotX.set(0);
-    rotY.set(0);
-    const el = elRef.current;
-    if (el) {
-      el.style.setProperty('--glare', '0');
-      el.style.setProperty('--mx', '50%');
-      el.style.setProperty('--my', '50%');
-    }
-  };
-
   return (
     <motion.button
       layoutId={`hero-${card.iid}`}
-      ref={(el) => { elRef.current = el; registerSlotRef?.(card.iid, el); }}
+      ref={(el) => registerSlotRef?.(card.iid, el)}
       aria-label={isCorpse
         ? `${data.name} — down, respawns in ${respawnLeft} turn${respawnLeft === 1 ? '' : 's'}`
         : `${data.name} — ${atk} attack, ${card.hp} health`}
@@ -159,48 +141,46 @@ export function HeroSlot({
           pressTimer = setTimeout(() => { pressFired = true; onLongPress(card); }, 420);
         }
       }}
-      onPointerMove={tiltActive ? onTiltMove : undefined}
       onPointerUp={() => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; } }}
-      onPointerLeave={() => {
-        if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; }
-        onTiltLeave();
-      }}
-      whileHover={isAlly && !isCorpse ? { y: -4, scale: 1.015 } : undefined}
+      onPointerLeave={() => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; } }}
+      whileHover={isAlly && !isCorpse
+        ? { y: -4, scale: 1.015, ...(restingFrame ? { borderColor: poster.frameLit } : {}) }
+        : undefined}
       transition={spring.snappy}
       whileTap={isCorpse ? undefined : { scale: 0.97 }}
       style={{
         position: 'relative',
         width: '100%',
         height: '100%',
-        borderRadius: radius.lg,
-        border,
-        background: '#3a2810',   // dark mahogany frame, peeks at edges
+        // Rounded, not chamfered: DamageFlash inherits this radius and the
+        // combat choreographer clips its overlays to it.
+        borderRadius: 10,
+        borderWidth: 2,
+        borderStyle: 'solid',
+        borderColor,
+        background: poster.frame,   // charcoal frame, peeks at the edges
         boxShadow,
         padding: 0,
         overflow: 'hidden',
         cursor: 'pointer',
-        color: palette.text,
+        color: poster.cream,
         fontFamily: fonts.ui,
         display: 'flex',
         flexDirection: 'column',
-        // 3D tilt — composes with the whileHover lift; perspective lives on the
-        // element so the rotation reads as real depth.
-        transformPerspective: 700,
-        rotateX: tiltActive ? rotX : 0,
-        rotateY: tiltActive ? rotY : 0,
       }}
     >
       {/* "Card got hit" flash — type-coloured, clipped to the card. Keyed by the
           hit's seq so each new hit replays the animation. */}
       {damageFx && <DamageFlash key={damageFx.seq} type={damageFx.type} ko={damageFx.ko} />}
 
-      {/* Art window — dark portrait, fills top portion */}
+      {/* Art window — the portrait printed edge to edge on a dark ground;
+          a corpse is greyed and dimmed. */}
       <div style={{
         position: 'relative',
         flex: '1 1 auto',
         minHeight: 0,
         overflow: 'hidden',
-        background: 'linear-gradient(180deg, rgba(20,28,48,0.95), rgba(8,12,22,0.98))',
+        background: '#0f1214',
       }}>
         <div style={{
           width: '100%', height: '100%',
@@ -209,6 +189,8 @@ export function HeroSlot({
         }}>
           <HeroPortrait cardId={card.cardId} full />
         </div>
+        {/* Inner edge — the print sits slightly recessed in its frame. */}
+        <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: PRINT_EDGE, pointerEvents: 'none' }} />
 
         {!isCorpse && card.statuses.length > 0 && (
           <div style={{
@@ -246,11 +228,8 @@ export function HeroSlot({
                     width: dim,
                     height: dim,
                     borderRadius: 4,
-                    background: '#1a1208',
-                    border: `1.5px solid ${isMerged ? palette.status.buff : palette.type.equipment.ribbon}`,
-                    boxShadow: isMerged
-                      ? `0 1px 3px rgba(0,0,0,0.55), 0 0 6px ${palette.status.buff}88`
-                      : '0 1px 3px rgba(0,0,0,0.55)',
+                    background: poster.frame,
+                    border: `1.5px solid ${isMerged ? poster.green : poster.cream}`,
                     overflow: 'hidden',
                     cursor: 'help',
                   }}
@@ -264,36 +243,19 @@ export function HeroSlot({
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
                   )}
-                  {/* Merge countdown (Rem) — buff-tinted, mirrors the charge pill. */}
+                  {/* Merge countdown (Rem) — green sticker, mirrors the charge pill. */}
                   {isMerged && eq.remMergeTurnsLeft != null && (
                     <span aria-label={`${eq.remMergeTurnsLeft} turns left`} style={{
-                      position: 'absolute', right: 0, bottom: 0,
-                      minWidth: compact ? 9 : 11,
-                      padding: '0 1px',
-                      fontSize: compact ? 8 : 9,
-                      fontWeight: 800,
-                      lineHeight: compact ? '9px' : '11px',
-                      textAlign: 'center',
-                      color: '#fff',
-                      background: palette.status.buff,
-                      borderTopLeftRadius: 3,
-                      pointerEvents: 'none',
+                      ...chipPill(compact),
+                      background: poster.green,
                     }}>{eq.remMergeTurnsLeft}</span>
                   )}
-                  {/* Charge counter — consumable gear (cooldown→draw family) only. */}
+                  {/* Charge counter — consumable gear (cooldown→draw family) only.
+                      Ink sticker that turns red on the last charge. */}
                   {!isMerged && eq.charges != null && (
                     <span aria-label={`${eq.charges} charges left`} style={{
-                      position: 'absolute', right: 0, bottom: 0,
-                      minWidth: compact ? 9 : 11,
-                      padding: '0 1px',
-                      fontSize: compact ? 8 : 9,
-                      fontWeight: 800,
-                      lineHeight: compact ? '9px' : '11px',
-                      textAlign: 'center',
-                      color: '#fff',
-                      background: eq.charges <= 1 ? '#c2410c' : 'rgba(0,0,0,0.82)',
-                      borderTopLeftRadius: 3,
-                      pointerEvents: 'none',
+                      ...chipPill(compact),
+                      background: eq.charges <= 1 ? poster.red : poster.ink,
                     }}>{eq.charges}</span>
                   )}
                 </div>
@@ -302,7 +264,7 @@ export function HeroSlot({
           </div>
         )}
 
-        {/* Respawn overlay — corpse: skull + countdown, hero stays in slot but greyed */}
+        {/* Respawn overlay — corpse: clock ring + countdown, hero stays in slot but greyed */}
         {isCorpse && (
           <RespawnOverlay turnsLeft={respawnLeft} compact={!!compact} />
         )}
@@ -316,14 +278,15 @@ export function HeroSlot({
             transition={{ repeat: Infinity, repeatDelay: 1.8, duration: 1.4, ease: 'easeInOut' }}
             style={{
               position: 'absolute', top: 0, bottom: 0, width: '40%',
-              background: `linear-gradient(115deg, transparent 30%, ${palette.accent}66 50%, transparent 70%)`,
+              background: `linear-gradient(115deg, transparent 30%, ${poster.you}66 50%, transparent 70%)`,
               pointerEvents: 'none',
             }}
           />
         )}
 
-        {/* Casting pulse — while this hero's skill is pending a target */}
-        {isArmedSource && (
+        {/* State pulse — green while this tile is a legal target, red while
+            its own skill is armed and waiting for one. */}
+        {pulse && (
           <motion.div
             aria-hidden
             initial={{ opacity: 0.25 }}
@@ -331,12 +294,13 @@ export function HeroSlot({
             transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
             style={{
               position: 'absolute', inset: 0,
-              background: `radial-gradient(ellipse at center, ${palette.accent}55, transparent 70%)`,
+              background: `radial-gradient(ellipse at center, ${pulse}55, transparent 70%)`,
               pointerEvents: 'none',
             }}
           />
         )}
 
+        {/* Unstoppable aura — a breathing gold vignette around the portrait */}
         {card.statuses.some((s) => s.id === 'unstoppable') && (
           <motion.div
             aria-hidden
@@ -345,18 +309,15 @@ export function HeroSlot({
             transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
             style={{
               position: 'absolute', inset: 0,
-              background: `radial-gradient(circle at center, rgba(255,240,180,0.0) 35%, rgba(176,120,37,0.25) 60%, rgba(176,120,37,0.45) 78%, rgba(176,120,37,0.7) 100%)`,
-              boxShadow: 'inset 0 0 24px rgba(255,235,180,0.5)',
+              background: `radial-gradient(circle at center, transparent 35%, ${poster.you}40 60%, ${poster.you}73 78%, ${poster.you}b3 100%)`,
+              boxShadow: `inset 0 0 24px ${poster.you}80`,
               pointerEvents: 'none',
             }}
           />
         )}
 
         {!isCorpse && (
-          <div style={{
-            position: 'absolute', top: 5, right: 5,
-            filter: isFocus ? `drop-shadow(0 0 6px ${palette.accent}aa)` : undefined,
-          }}>
+          <div style={{ position: 'absolute', top: 5, right: 5 }}>
             <LevelRing
               level={card.level ?? 1}
               exp={card.exp ?? 0}
@@ -366,28 +327,33 @@ export function HeroSlot({
         )}
       </div>
 
-      {/* Type ribbon: role — uses the shared text.label preset (Inter 11px / 700)
-          for typographic continuity with every other panel/zone label. */}
+      {/* Role band — an ink tag printed across the tile, keyed at its left
+          edge by the hero's identity colour (as the draft dossier does). */}
       <div style={{
         flexShrink: 0,
         padding: compact ? '3px 8px' : '4px 9px',
-        background: `linear-gradient(180deg, ${palette.type.hero.ribbon}, ${palette.type.hero.ribbon}d8)`,
-        color: '#fff',
-        ...text.label,
+        background: poster.ink,
+        color: poster.cream,
+        borderLeft: `3px solid ${identity.primary}`,
+        fontFamily: fonts.display,
+        fontSize: compact ? 9.5 : 10.5,
+        letterSpacing: '0.2em',
+        textTransform: 'uppercase',
+        lineHeight: 1.2,
         textAlign: 'left',
-        borderTop: '1px solid rgba(255,255,255,0.12)',
-        borderBottom: '1px solid rgba(0,0,0,0.34)',
-        textShadow: '0 1px 1px rgba(0,0,0,0.45)',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
       }}>
         {role}
       </div>
 
-      {/* Cream body — name + stats row. Name is text.label scale boosted one
-          step so it reads as the headline above the smaller role ribbon. */}
+      {/* Cream label band — name + stats row. The stencil name is the headline
+          above the smaller role band. */}
       <div style={{
         flexShrink: 0,
-        background: palette.card.body,
-        color: palette.card.bodyText,
+        background: poster.paperBand,
+        color: poster.ink,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
@@ -395,9 +361,11 @@ export function HeroSlot({
         minHeight: 0,
       }}>
         <div style={{
-          ...text.label,
+          fontFamily: fonts.display,
           fontSize: compact ? 11 : 13,
-          color: palette.card.bodyText,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: poster.ink,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -412,8 +380,7 @@ export function HeroSlot({
             marginTop: 3,
             ...text.label,
             fontSize: compact ? 10 : 11,
-            color: palette.textFaint,
-            fontStyle: 'italic',
+            color: poster.inkDim,
           }}>
             Fell in battle
           </div>
@@ -423,38 +390,38 @@ export function HeroSlot({
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           {/* BP + HP numbers pulse + colour-flash on change. The icons stay
-              static (brand-colour anchor) — only the value text animates. */}
+              static (the stat's ink anchor) — only the value text animates. */}
           <span style={{ ...statRow.pair(statSize) }}>
-            <SwordIcon size={iconSize} color={palette.atk} />
+            <SwordIcon size={iconSize} color={poster.stat.atk} />
             <motion.span
               style={{ color: atkColor, display: 'inline-block' }}
               animate={bpTick
                 ? { scale: [1, 1.35, 1],
-                    color: [atkColor, bpTick === 'up' ? palette.atkBright : palette.atkDim, atkColor] }
+                    color: [atkColor, bpTick === 'up' ? poster.stat.atkBright : poster.stat.atkDim, atkColor] }
                 : { scale: 1, color: atkColor }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             >{atk}</motion.span>
           </span>
           {shieldValue > 0 && (
             <span style={{ ...statRow.pair(statSize) }}>
-              <ShieldIcon size={iconSize} color={palette.success} />
+              <ShieldIcon size={iconSize} color={poster.stat.shield} />
               <motion.span
-                style={{ color: palette.success, display: 'inline-block' }}
+                style={{ color: poster.stat.shield, display: 'inline-block' }}
                 animate={shieldTick
                   ? { scale: [1, 1.4, 1],
-                      color: [palette.success, shieldTick === 'down' ? '#9bd47a' : '#bff09e', palette.success] }
-                  : { scale: 1, color: palette.success }}
+                      color: [poster.stat.shield, shieldTick === 'down' ? poster.stat.atkDim : poster.green, poster.stat.shield] }
+                  : { scale: 1, color: poster.stat.shield }}
                 transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
               >{shieldValue}</motion.span>
             </span>
           )}
           <span style={{ ...statRow.pair(statSize) }}>
-            <HeartIcon size={iconSize} color={palette.hp} />
+            <HeartIcon size={iconSize} color={poster.stat.hp} />
             <motion.span
               style={{ color: hpColor, display: 'inline-block' }}
               animate={hpTick
                 ? { scale: [1, 1.35, 1],
-                    color: [hpColor, hpTick === 'up' ? palette.hpBright : palette.hpDim, hpColor] }
+                    color: [hpColor, hpTick === 'up' ? poster.stat.hpBright : poster.stat.hpDim, hpColor] }
                 : { scale: 1, color: hpColor }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             >{card.hp}</motion.span>
@@ -462,22 +429,36 @@ export function HeroSlot({
         </div>
         )}
       </div>
-
-      {/* Card shine — restrained board variant: ring + dim holo + soft glare;
-          corpses stay matte */}
-      {!isCorpse && <CardShine rarity={data.rarity} board />}
     </motion.button>
   );
 }
 
+/** Corner numeral on an equipment chip — a tiny flat sticker. */
+function chipPill(compact: boolean | undefined): CSSProperties {
+  return {
+    position: 'absolute', right: 0, bottom: 0,
+    minWidth: compact ? 9 : 11,
+    padding: '0 1px',
+    ...text.label,
+    fontSize: compact ? 8 : 9,
+    letterSpacing: 0,
+    lineHeight: compact ? '9px' : '11px',
+    textAlign: 'center',
+    color: poster.paper,
+    borderTopLeftRadius: 3,
+    pointerEvents: 'none',
+  };
+}
+
 /**
- * Renders the in-slot respawn state: dim red wash, slow rotating sigil ring,
- * skull glyph, and the countdown badge. On the last turn (1T), it pulses faster
- * and brightens to signal "about to revive."
+ * Renders the in-slot respawn state over the greyed portrait: a dim wash, a
+ * slow rotating cream clock ring, an hourglass glyph and a red countdown
+ * sticker. On the last turn (1T) the wash turns green and pulses faster to
+ * signal "about to revive."
  */
 function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: boolean }) {
   const isLast = turnsLeft === 1;
-  const wash = isLast ? palette.success : palette.danger;
+  const wash = isLast ? poster.green : poster.red;
   const ringSize = compact ? 56 : 78;
   return (
     <div aria-hidden style={{
@@ -487,7 +468,7 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
       pointerEvents: 'none',
       gap: compact ? 6 : 10,
     }}>
-      {/* Dim wash — sapphire/wine when waiting, soft success when about to revive */}
+      {/* Dim wash — red while waiting, green on the last turn */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: isLast ? [0.30, 0.55, 0.30] : [0.18, 0.32, 0.18] }}
@@ -497,22 +478,22 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
           background: `radial-gradient(ellipse at center, ${wash}cc, ${wash}55 55%, transparent 85%)`,
         }}
       />
-      {/* Slow rotating brass ring with tick marks (Deadlock "respawn clock" feel) */}
+      {/* Slow rotating cream ring with tick marks (Deadlock "respawn clock" feel) */}
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ duration: isLast ? 6 : 14, repeat: Infinity, ease: 'linear' }}
         style={{ position: 'relative', width: ringSize, height: ringSize }}
       >
         <svg viewBox="0 0 100 100" width="100%" height="100%">
-          <circle cx="50" cy="50" r="44" fill="none" stroke={palette.accent} strokeWidth="2" opacity="0.85" />
-          <circle cx="50" cy="50" r="48" fill="none" stroke={palette.accent} strokeWidth="0.7" opacity="0.5" />
+          <circle cx="50" cy="50" r="44" fill="none" stroke={poster.cream} strokeWidth="2" opacity="0.85" />
+          <circle cx="50" cy="50" r="48" fill="none" stroke={poster.cream} strokeWidth="0.7" opacity="0.5" />
           {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg, i) => {
             const rad = (deg * Math.PI) / 180;
             const x1 = 50 + Math.cos(rad) * 44;
             const y1 = 50 + Math.sin(rad) * 44;
             const x2 = 50 + Math.cos(rad) * 48;
             const y2 = 50 + Math.sin(rad) * 48;
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={palette.accent} strokeWidth={deg % 90 === 0 ? 1.8 : 1} opacity="0.8" />;
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={poster.cream} strokeWidth={deg % 90 === 0 ? 1.8 : 1} opacity="0.8" />;
           })}
         </svg>
       </motion.div>
@@ -525,37 +506,41 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
         <svg viewBox="0 0 100 100" width="100%" height="100%">
           {/* Top frame bar */}
           <rect x="18" y="14" width="64" height="6" rx="1.5"
-            fill="#f0e2c2" stroke="#1a1208" strokeWidth="2.5" strokeLinejoin="round" />
-          {/* Glass body — two triangles meeting at a narrow neck */}
+            fill={poster.cream} stroke={poster.ink} strokeWidth="2.5" strokeLinejoin="round" />
+          {/* Bulbs — two triangles meeting at a narrow neck */}
           <path
             d="M24 20 L76 20 L54 50 L76 80 L24 80 L46 50 Z"
-            fill="#f0e2c2" stroke="#1a1208" strokeWidth="2.5" strokeLinejoin="round" />
+            fill={poster.cream} stroke={poster.ink} strokeWidth="2.5" strokeLinejoin="round" />
           {/* Sand pile at the bottom (the part that's already drained) */}
           <path
             d="M34 78 L66 78 L58 70 L42 70 Z"
-            fill="#1a1208" opacity="0.55" />
+            fill={poster.ink} opacity="0.55" />
           {/* Sand stream falling through the neck */}
           <line x1="50" y1="46" x2="50" y2="60"
-            stroke="#1a1208" strokeWidth="2" strokeLinecap="round" />
+            stroke={poster.ink} strokeWidth="2" strokeLinecap="round" />
           {/* Bottom frame bar */}
           <rect x="18" y="80" width="64" height="6" rx="1.5"
-            fill="#f0e2c2" stroke="#1a1208" strokeWidth="2.5" strokeLinejoin="round" />
+            fill={poster.cream} stroke={poster.ink} strokeWidth="2.5" strokeLinejoin="round" />
         </svg>
       </div>
-      {/* Countdown badge — RESPAWNING · 3T */}
+      {/* Countdown sticker — RESPAWN (3), the poster's red action sticker */}
       <div style={{
         position: 'absolute',
         bottom: compact ? 10 : 18,
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: compact ? '3px 8px' : '4px 10px',
-        background: 'rgba(8,12,22,0.85)',
-        border: `1px solid ${palette.accent}aa`,
-        borderRadius: 999,
-        boxShadow: `0 0 12px ${wash}aa`,
-        ...text.label, color: palette.accent,
+        background: poster.red,
+        color: poster.paper,
+        borderRadius: 3,
+        fontFamily: fonts.display,
+        fontSize: compact ? 9 : 10,
+        letterSpacing: '0.24em',
+        textTransform: 'uppercase',
+        lineHeight: 1,
+        whiteSpace: 'nowrap',
       }}>
         <span>Respawn</span>
-        <span style={{ ...text.label, color: '#ffd98a', fontVariantNumeric: 'tabular-nums' }}>({turnsLeft})</span>
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>({turnsLeft})</span>
       </div>
     </div>
   );

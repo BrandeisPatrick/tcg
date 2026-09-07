@@ -1,7 +1,7 @@
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import type { TargetFilter } from '@/abilities';
-import { palette } from './tokens';
+import { poster } from './poster';
 
 /** A card the player has armed to play but not yet targeted/committed. */
 export interface PendingPlay {
@@ -13,26 +13,34 @@ export interface PendingPlay {
 }
 
 /**
- * Categorize a log line by its leading verb / keyword so the side panel can
- * tint it semantically. Pure substring matching — fast and stable since all
- * log strings are constructed in the engine via `pushLog`.
+ * Spirit-damage plum for the dark log — lighter than poster.stat.spirit
+ * (which is pitched for paper) so it reads on poster.panel / poster.ground.
+ * Shared by logEntryColor and LogLine's spirit glyph so line and glyph agree.
+ */
+export const LOG_SPIRIT_PLUM = '#b48cc4';
+
+/**
+ * Categorize a log line by its leading verb / keyword so the side panel and
+ * the full log can tint it semantically. Pure substring matching — fast and
+ * stable since all log strings are constructed in the engine via `pushLog`.
  *
- *   attack arrow / KO / fell / overflow       → wine red
- *   healed / respawned / refresh              → success green
- *   gained <status> / cleansed / discharges   → spirit purple
- *   used skill / played / promoted / unlocked → brass
- *   Mulligan / Turn marker                    → dim grey
- *   everything else                           → default text
+ * Every colour is a dark-chrome ink: the log only ever sits on poster.panel
+ * or poster.ground, never on paper.
+ *
+ *   attack arrow / KO / fell / overflow       → rival red
+ *   healed / respawned / refresh              → green
+ *   gained <status> / cleansed / discharges   → spirit plum
+ *   used skill / played / promoted / unlocked → your gold
+ *   Mulligan / Turn marker                    → dim cream
+ *   everything else                           → cream
  */
 export function logEntryColor(s: string): string {
-  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return palette.danger;
-  if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return palette.success;
-  if (/gained |cleansed|discharges|resisted/i.test(s)) return palette.spirit;
-  // Dark brass (not the brighter brand `accent`): the brighter brass fails AA
-  // (~2.7:1) on the cream log; `atk` is the same hue family but reads at ~5.9:1.
-  if (/used skill:|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return palette.atk;
-  if (/Mulligan|---/i.test(s)) return palette.textDim;
-  return palette.text;
+  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.rival;
+  if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return poster.green;
+  if (/gained |cleansed|discharges|resisted/i.test(s)) return LOG_SPIRIT_PLUM;
+  if (/used skill:|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return poster.you;
+  if (/Mulligan|---/i.test(s)) return poster.creamDim;
+  return poster.cream;
 }
 
 /** Locate a hero by instance-id anywhere on either player's board. */

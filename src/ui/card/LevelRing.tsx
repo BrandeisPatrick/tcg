@@ -1,12 +1,14 @@
 import type { CSSProperties } from 'react';
 import { LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL } from '@/engine/expSystem';
 import { fonts } from '../tokens';
+import { poster } from '../poster';
 
 /**
  * Hero level-progress ring (top-right of hero card). Segment count tracks
- * the per-level threshold (3 / 6 / 9 pieces); each piece = 1 exp earned
+ * the per-level threshold (5 / 7 / 9 pieces); each piece = 1 exp earned
  * toward the next level. Ring lights clockwise from 12 o'clock and fills
- * fully at Lv4 max.
+ * fully at Lv4 max. Printed flat: gold segments on a faint cream track over
+ * a charcoal disc, with the level numeral stencilled in cream.
  */
 export function LevelRing({
   level,
@@ -23,12 +25,12 @@ export function LevelRing({
   const atMax = clampedLevel >= MAX_LEVEL;
   const totalSegments = atMax
     ? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]            // 9 pieces — fully lit at Lv4
-    : LEVEL_THRESHOLDS[(clampedLevel - 1) as 0 | 1 | 2];       // 3 / 6 / 9
+    : LEVEL_THRESHOLDS[(clampedLevel - 1) as 0 | 1 | 2];       // 5 / 7 / 9
   const filled = atMax ? totalSegments : Math.max(0, Math.min(totalSegments, exp));
 
-  const LIT_COLOR = '#ffd87a';
-  const LIT_GLOW = '#ffe9a8';
-  const TRACK_COLOR = 'rgba(255, 220, 160, 0.28)';
+  // Gold ink, not the ownership token — the ring sits on both players' heroes.
+  const LIT_COLOR = poster.gold;
+  const TRACK_COLOR = poster.creamFaint;
   const strokeWidth = Math.max(2, size * 0.105);
   const r = (size - strokeWidth) / 2;
   const cx = size / 2;
@@ -66,7 +68,8 @@ export function LevelRing({
       }}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }}>
-        <circle cx={cx} cy={cy} r={r + strokeWidth * 0.6} fill="rgba(8, 6, 2, 0.45)" />
+        {/* Charcoal backing disc so the numeral contrasts on any portrait */}
+        <circle cx={cx} cy={cy} r={r + strokeWidth * 0.6} fill={poster.panel} />
         {segments.map((seg, i) => (
           <path
             key={i}
@@ -75,7 +78,6 @@ export function LevelRing({
             stroke={seg.lit ? LIT_COLOR : TRACK_COLOR}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
-            style={atMax && seg.lit ? { filter: `drop-shadow(0 0 2px ${LIT_GLOW})` } : undefined}
           />
         ))}
       </svg>
@@ -85,13 +87,11 @@ export function LevelRing({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: LIT_COLOR,
-        fontFamily: fonts.ui,
+        color: poster.cream,
+        fontFamily: fonts.display,
         fontSize: Math.min(22, Math.round(size * 0.46)),
-        fontWeight: 700,
         lineHeight: 1,
         fontVariantNumeric: 'tabular-nums',
-        textShadow: '0 1px 2px rgba(0,0,0,0.7)',
         pointerEvents: 'none',
       }}>{clampedLevel}</span>
     </div>

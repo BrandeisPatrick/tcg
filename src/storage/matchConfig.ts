@@ -20,6 +20,13 @@ export interface MatchConfig {
   heroPreferences: (CardId | null)[];
   /** When present, the game skips the draft and builds the story battle. */
   story?: StorySetup;
+  /**
+   * When present, the game skips the draft and builds the coached tutorial
+   * battle. Same shape as `story` (fixed rosters, fixed decks) but kept on its
+   * own field so nothing downstream mistakes a lesson for a campaign node —
+   * conceding returns to the title, not to the map.
+   */
+  tutorial?: StorySetup;
 }
 
 let current: MatchConfig = {
@@ -33,4 +40,10 @@ export function setMatchConfig(config: MatchConfig): void {
 
 export function getMatchConfig(): MatchConfig {
   return current;
+}
+
+/** The scripted setup for this match, whichever mode supplied it — Story
+ *  campaign node or tutorial lesson. Both bypass the draft. */
+export function scriptedSetup(config: MatchConfig = current): StorySetup | undefined {
+  return config.story ?? config.tutorial;
 }

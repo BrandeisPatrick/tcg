@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
-import { palette, fonts, spring, text } from '../tokens';
+import { fonts, spring } from '../tokens';
+import { poster, chamfer } from '../poster';
+import { PosterButton } from '../chrome';
 
 interface Props {
   isMyTurn: boolean;
@@ -9,12 +11,17 @@ interface Props {
   onEnd: () => void;
   onCancel: () => void;
   onToggleAuto: () => void;
-  /** 'dock' mounts the cluster in the table's right rail (desktop) as a
-   *  carved console: engraved status plate, brass END TURN medallion set
-   *  into a socket, and a small auto switch. 'tray' is the flat row used
-   *  inside the mobile hand tray. */
+  /** 'dock' mounts the cluster in the sheet's right rail (desktop) as a
+   *  vertical stack printed on the paper: ghost status capsule, the paper
+   *  END TURN button, and the AUTO ink tag. 'tray' is the flat row used
+   *  inside the mobile hand tray, which floats on the dark scene below the
+   *  sheet — so its ghost surfaces switch to the cream/edge skin. */
   variant: 'dock' | 'tray';
 }
+
+/** Lamp-dot tone for the status capsule: dim while waiting on the rival,
+ *  gold (your colour) while it's your move or resolving, green under auto. */
+type StatusTone = 'dim' | 'gold' | 'green';
 
 /**
  * The turn-control cluster: status lamp, End Turn, Auto toggle, Cancel.
@@ -26,15 +33,16 @@ export function BoardControls({
   isMyTurn, busy, hasPending, autoPlay, onEnd, onCancel, onToggleAuto, variant,
 }: Props) {
   const status = !isMyTurn
-    ? { key: 'rival', label: "Rival's move", tone: palette.textDim, pulse: true }
+    ? { key: 'rival', label: "Rival's move", tone: 'dim' as StatusTone, pulse: true }
     : busy
-      ? { key: 'busy', label: 'Resolving…', tone: palette.accent, pulse: true }
+      ? { key: 'busy', label: 'Resolving…', tone: 'gold' as StatusTone, pulse: true }
       : autoPlay
-        ? { key: 'auto', label: 'Auto-play on', tone: palette.success, pulse: false }
+        ? { key: 'auto', label: 'Auto-play on', tone: 'green' as StatusTone, pulse: false }
         // Idle on the player's turn: say so — the empty slot read as a
         // half-finished panel and the state was only implied by button color.
-        : { key: 'yours', label: 'Your move', tone: palette.accent, pulse: false };
+        : { key: 'yours', label: 'Your move', tone: 'gold' as StatusTone, pulse: false };
   const endTurnHot = isMyTurn && !busy;
+  const endTurnCursor = isMyTurn ? (busy ? 'progress' : 'pointer') : 'default';
 
   if (variant === 'tray') {
     // Mobile hand-tray row: Auto · status/cancel · End Turn, thumb-side last.
@@ -46,173 +54,133 @@ export function BoardControls({
         paddingRight: 8,
         pointerEvents: 'auto',
       }}>
-        <AutoSwitch autoPlay={autoPlay} onToggleAuto={onToggleAuto} />
+        <AutoSwitch autoPlay={autoPlay} onToggleAuto={onToggleAuto} onDark />
         <div style={{ height: 32, display: 'flex', alignItems: 'center' }}>
-          <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} />
+          <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} onDark />
         </div>
-        <motion.button
-          whileTap={isMyTurn ? { scale: 0.97, y: 2 } : undefined}
-          disabled={!isMyTurn}
-          onClick={onEnd}
+        {/* Hot = full paper; cold (busy) dims. The button stays ENABLED while
+            busy so Board can queue the click. */}
+        <motion.div
           animate={{ opacity: endTurnHot ? 1 : 0.75 }}
           transition={{ duration: 0.25 }}
-          style={{
-            width: 132,
-            padding: '12px 0',
-            borderRadius: 10,
-            border: '1px solid #5a3f1c',
-            background: endTurnHot
-              ? 'linear-gradient(180deg, #e2ab42, #b07825 55%, #955f19)'
-              : 'linear-gradient(180deg, #e8d8b2, #d9c497)',
-            boxShadow: endTurnHot
-              ? '0 3px 0 #6b4716, 0 7px 16px rgba(40, 20, 0, 0.35), inset 0 1px 0 rgba(255, 240, 200, 0.7)'
-              : 'inset 0 1px 0 rgba(255, 250, 230, 0.5), 0 1px 3px rgba(40, 20, 0, 0.2)',
-            ...text.label,
-            textAlign: 'center',
-            color: endTurnHot ? '#241503' : palette.textDim,
-            textShadow: endTurnHot ? '0 1px 0 rgba(255, 235, 180, 0.45)' : undefined,
-            cursor: isMyTurn ? (busy ? 'progress' : 'pointer') : 'default',
-          }}
-        >End Turn</motion.button>
+          style={{ display: 'flex' }}
+        >
+          <PosterButton
+            variant="paper"
+            size="sm"
+            disabled={!isMyTurn}
+            onClick={onEnd}
+            style={{
+              width: 132,
+              padding: '12px 0',
+              textAlign: 'center',
+              cursor: endTurnCursor,
+              // On the dark scene the built-in disabled outline is ink on
+              // ink — swap it for the cream ghost so the slot stays visible.
+              ...(!isMyTurn ? { color: poster.creamDim, border: `2px solid ${poster.edge}` } : {}),
+            }}
+          >End Turn</PosterButton>
+        </motion.div>
       </div>
     );
   }
 
-  // Desktop dock — a console carved into the table's right rail.
+  // Desktop dock — a vertical stack printed on the sheet's right rail.
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 11,
       pointerEvents: 'auto',
     }}>
-      {/* Status plate / Cancel — fixed-height slot so swaps never reflow. */}
+      {/* Status capsule / Cancel — fixed-height slot so swaps never reflow. */}
       <div style={{
         height: 30,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} plate />
+        <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} />
       </div>
 
-      {/* END TURN — a brass medallion set into a recessed socket, the same
-          fixture language as the souls rack and respawn dials. */}
-      <div style={{
-        width: 104, height: 104,
-        borderRadius: '50%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        // The socket: a recess drilled into the felt.
-        background: 'linear-gradient(180deg, rgba(84, 58, 22, 0.30), rgba(84, 58, 22, 0.14))',
-        boxShadow: [
-          'inset 0 3px 8px rgba(70, 45, 12, 0.5)',
-          'inset 0 -1px 0 rgba(255, 244, 214, 0.5)',
-        ].join(', '),
-      }}>
-        <motion.button
-          whileHover={endTurnHot ? { scale: 1.04 } : undefined}
-          whileTap={isMyTurn ? { scale: 0.95 } : undefined}
+      {/* END TURN — the paper PosterButton, two-line label so the cluster
+          stays inside the 150px rail. Hot = full paper; cold (busy) dims. */}
+      <motion.div
+        animate={{ opacity: endTurnHot ? 1 : 0.75 }}
+        transition={{ duration: 0.25 }}
+        style={{ position: 'relative', display: 'flex' }}
+      >
+        {/* Ready cue — a flat keyline in your colour whose OPACITY pulses,
+            on its own layer outside the button's chamfer clip. */}
+        {endTurnHot && (
+          <motion.span
+            aria-hidden
+            initial={{ opacity: 0.35 }}
+            animate={{ opacity: [0.35, 0.85, 0.35] }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+            style={{
+              position: 'absolute', inset: -4,
+              border: `1px solid ${poster.you}`,
+              clipPath: chamfer(11),
+              WebkitClipPath: chamfer(11),
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        <PosterButton
+          variant="paper"
+          size="md"
           disabled={!isMyTurn}
           onClick={onEnd}
-          aria-label="End Turn"
+          ariaLabel="End Turn"
           style={{
-            position: 'relative',
-            width: 88, height: 88,
-            borderRadius: '50%',
-            border: '1px solid rgba(50, 28, 6, 0.85)',
-            background: endTurnHot
-              ? 'radial-gradient(circle at 36% 28%, #f2c665, #cf9832 45%, #a06a1c 78%, #7a4d12)'
-              : 'radial-gradient(circle at 36% 28%, #cdb287, #b0966a 50%, #8d7449 82%, #6f5a38)',
-            // Structural shadows stay STATIC — animating a multi-shadow list
-            // (with insets) through framer degenerates into a giant stray
-            // ring. The ready-glow pulses on its own layer below instead.
-            boxShadow: endTurnHot
-              ? '0 3px 6px rgba(30, 15, 0, 0.5), inset 0 2px 2px rgba(255, 240, 200, 0.75), inset 0 -3px 4px rgba(90, 50, 8, 0.55)'
-              : '0 2px 5px rgba(30, 15, 0, 0.45), inset 0 1px 1px rgba(255, 240, 200, 0.4), inset 0 -2px 3px rgba(60, 35, 8, 0.4)',
-            cursor: isMyTurn ? (busy ? 'progress' : 'pointer') : 'default',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            gap: 2,
-            padding: 0,
+            // Left pad carries the tracking so the stacked caps sit centred.
+            padding: '13px 22px 13px calc(22px + 0.22em)',
+            lineHeight: 1.15,
+            textAlign: 'center',
+            cursor: endTurnCursor,
           }}
         >
-          {/* Ready glow — a single-shadow halo whose OPACITY pulses. */}
-          {endTurnHot && (
-            <motion.span
-              aria-hidden
-              initial={{ opacity: 0.35 }}
-              animate={{ opacity: [0.35, 0.85, 0.35] }}
-              transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-              style={{
-                position: 'absolute', inset: -2,
-                borderRadius: '50%',
-                boxShadow: `0 0 22px 4px ${palette.accent}66`,
-                pointerEvents: 'none',
-              }}
-            />
-          )}
-          {/* Engraved ring inside the medallion face. */}
-          <span aria-hidden style={{
-            position: 'absolute', inset: 7,
-            borderRadius: '50%',
-            border: endTurnHot
-              ? '1px solid rgba(60, 32, 4, 0.5)'
-              : '1px solid rgba(60, 40, 14, 0.4)',
-            boxShadow: 'inset 0 1px 0 rgba(255, 240, 200, 0.3)',
-            pointerEvents: 'none',
-          }} />
-          <span style={{
-            fontFamily: fonts.display,
-            fontSize: 15,
-            fontWeight: 700,
-            lineHeight: 1.15,
-            letterSpacing: '0.16em',
-            paddingLeft: '0.16em', // optically recenters tracked-out caps
-            textTransform: 'uppercase',
-            textAlign: 'center',
-            color: endTurnHot ? '#2a1503' : 'rgba(46, 32, 12, 0.72)',
-            textShadow: endTurnHot
-              ? '0 1px 0 rgba(255, 235, 180, 0.5)'
-              : '0 1px 0 rgba(255, 240, 210, 0.35)',
-          }}>
-            End<br />Turn
-          </span>
-        </motion.button>
-      </div>
+          End<br />Turn
+        </PosterButton>
+      </motion.div>
 
       <AutoSwitch autoPlay={autoPlay} onToggleAuto={onToggleAuto} />
     </div>
   );
 }
 
-/** Status readout, or the Cancel pill while a card/skill is armed. `plate`
- *  renders the engraved-nameplate look used on the table dock. Keyed
- *  pop-in only — an AnimatePresence exit/enter swap here wedged mid-flight
- *  and left the slot permanently empty. */
-function StatusOrCancel({ status, hasPending, onCancel, plate = false }: {
-  status: { key: string; label: string; tone: string; pulse: boolean };
+/** Status readout, or the red Cancel button while a card/skill is armed.
+ *  The readout is a ghost capsule (outline only, like a disabled
+ *  PosterButton) with a lamp dot; `onDark` swaps its ink outline for the
+ *  cream/edge skin used on the dark scene. Keyed pop-in only — an
+ *  AnimatePresence exit/enter swap here wedged mid-flight and left the
+ *  slot permanently empty. */
+function StatusOrCancel({ status, hasPending, onCancel, onDark = false }: {
+  status: { key: string; label: string; tone: StatusTone; pulse: boolean };
   hasPending: boolean;
   onCancel: () => void;
-  plate?: boolean;
+  onDark?: boolean;
 }) {
   if (hasPending) {
     return (
-      <motion.button
+      <motion.div
         key="cancel"
         initial={{ opacity: 0, y: 5 }}
         animate={{ opacity: 1, y: 0 }}
         transition={spring.default}
-        whileTap={{ scale: 0.96 }}
-        whileHover={{ y: -1 }}
-        onClick={onCancel}
-        style={{
-          background: 'rgba(138, 46, 42, 0.1)',
-          border: `1px solid ${palette.danger}77`,
-          borderRadius: 999,
-          ...text.label, color: palette.danger,
-          padding: '6px 15px',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >Cancel</motion.button>
+        style={{ display: 'flex' }}
+      >
+        <PosterButton
+          variant="red"
+          size="sm"
+          onClick={onCancel}
+          style={{ padding: '6px 14px', whiteSpace: 'nowrap' }}
+        >Cancel</PosterButton>
+      </motion.div>
     );
   }
+  const lamp = status.tone === 'green'
+    ? poster.green
+    : status.tone === 'gold'
+      ? poster.you
+      : onDark ? poster.creamDim : poster.inkFaint;
   return (
     <motion.span
       key={status.key}
@@ -221,18 +189,18 @@ function StatusOrCancel({ status, hasPending, onCancel, plate = false }: {
       transition={spring.default}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 7,
-        ...(plate ? {
-          padding: '4px 11px',
-          borderRadius: 5,
-          background: 'linear-gradient(180deg, #52381a, #38250e)',
-          border: '1px solid rgba(235, 205, 145, 0.35)',
-          boxShadow: 'inset 0 1px 0 rgba(255, 226, 170, 0.28), 0 2px 5px rgba(40, 20, 0, 0.35)',
-        } : {}),
-        ...text.label,
-        fontSize: 11,
+        padding: '4px 11px',
+        background: 'transparent',
+        border: `1.5px solid ${onDark ? poster.edge : poster.inkFaint}`,
+        clipPath: chamfer(5),
+        WebkitClipPath: chamfer(5),
+        fontFamily: fonts.display,
+        fontSize: 10,
+        letterSpacing: '0.18em',
+        textTransform: 'uppercase',
+        lineHeight: 1,
         whiteSpace: 'nowrap',
-        color: plate ? '#e3c07f' : status.tone,
-        textShadow: plate ? '0 1px 1px rgba(0, 0, 0, 0.55)' : undefined,
+        color: onDark ? poster.creamDim : poster.inkDim,
       }}
     >
       <motion.span
@@ -243,8 +211,7 @@ function StatusOrCancel({ status, hasPending, onCancel, plate = false }: {
           : { duration: 0.2 }}
         style={{
           width: 7, height: 7, borderRadius: '50%',
-          background: status.tone,
-          boxShadow: `0 0 8px ${status.tone}`,
+          background: lamp,
         }}
       />
       {status.label}
@@ -252,11 +219,19 @@ function StatusOrCancel({ status, hasPending, onCancel, plate = false }: {
   );
 }
 
-/** Auto-play toggle — quiet ghost pill with a state lamp; the dot goes
- *  forest-green while the AI is driving your turns. */
-function AutoSwitch({ autoPlay, onToggleAuto }: { autoPlay: boolean; onToggleAuto: () => void }) {
+/** Auto-play toggle — an INK TAG chip with a state lamp; text, border and
+ *  dot go gold while the AI is driving your turns. `onDark` gives the off
+ *  state an edge-coloured border so the ink chip keeps a silhouette on
+ *  the dark scene. */
+function AutoSwitch({ autoPlay, onToggleAuto, onDark = false }: {
+  autoPlay: boolean;
+  onToggleAuto: () => void;
+  onDark?: boolean;
+}) {
+  const offBorder = onDark ? poster.edge : poster.ink;
   return (
     <motion.button
+      type="button"
       whileTap={{ scale: 0.94 }}
       whileHover={{ y: -1 }}
       onClick={onToggleAuto}
@@ -265,20 +240,23 @@ function AutoSwitch({ autoPlay, onToggleAuto }: { autoPlay: boolean; onToggleAut
         : 'Auto-play off — click to let the AI play'}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 7,
-        background: autoPlay ? 'rgba(74, 112, 48, 0.14)' : 'rgba(58, 40, 16, 0.08)',
-        border: `1px solid ${autoPlay ? `${palette.success}88` : 'rgba(90, 63, 28, 0.3)'}`,
-        borderRadius: 999,
-        ...text.label,
-        fontSize: 11,
-        color: autoPlay ? palette.success : palette.textFaint,
+        background: poster.ink,
+        border: `1.5px solid ${autoPlay ? poster.gold : offBorder}`,
+        clipPath: chamfer(4),
+        WebkitClipPath: chamfer(4),
+        fontFamily: fonts.display,
+        fontSize: 10.5,
+        letterSpacing: '0.2em',
+        textTransform: 'uppercase',
+        lineHeight: 1,
+        color: autoPlay ? poster.gold : poster.paper,
         padding: '5px 12px',
         cursor: 'pointer',
       }}
     >
       <span aria-hidden style={{
         width: 7, height: 7, borderRadius: '50%',
-        background: autoPlay ? palette.success : 'rgba(90, 63, 28, 0.3)',
-        boxShadow: autoPlay ? `0 0 8px ${palette.success}aa` : undefined,
+        background: autoPlay ? poster.gold : poster.creamFaint,
       }} />
       Auto
     </motion.button>

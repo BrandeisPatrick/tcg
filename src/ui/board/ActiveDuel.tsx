@@ -1,6 +1,6 @@
 import { ActiveSlot } from './ActiveSlot';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { palette } from '../tokens';
+import { poster } from '../poster';
 import { RowPlaque } from './BoardTable';
 import { TurnCompass } from './TurnCompass';
 import { useViewport } from '../hooks/useViewport';
@@ -20,15 +20,12 @@ interface Props {
   playerSkillSpent?: boolean;
 }
 
-// The middle row of the 3-2-3 layout. Opp Active on the left, your Active on the right,
-// with a vertical battlefield divider in the center carrying the turn indicator.
+// The middle row of the 3-2-3 layout. Opp Active on the left, your Active on
+// the right, with a printed hairline down the centre carrying the turn compass.
 export function ActiveDuel({
   G, me, opp, isMyTurn, turn,
   pending, onTapHero, onLongPressHero, onEquipmentHover, isTargetable, registerSlotRef, playerSkillSpent,
 }: Props) {
-  // One accent (Soul cyan) used only when the focus is the player.
-  // When it's the rival's turn, the pill fades to dim gray — no red noise.
-  const accent = isMyTurn ? palette.accent : palette.textFaint;
   const { isMobile } = useViewport();
   return (
     <div style={{
@@ -73,19 +70,11 @@ export function ActiveDuel({
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-        {/* Vertical glow line */}
-        <div style={{
+        {/* Ink hairline — a flat printed rule; the compass carries whose turn it is. */}
+        <div aria-hidden style={{
           position: 'absolute', top: 0, bottom: 0, left: '50%',
           width: 1, transform: 'translateX(-50%)',
-          background: `linear-gradient(180deg, transparent 0%, ${accent}66 30%, ${accent} 50%, ${accent}66 70%, transparent 100%)`,
-          boxShadow: `0 0 20px ${accent}55`,
-        }} />
-        {/* Glow blob */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          width: 80, height: 140, transform: 'translate(-50%, -50%)',
-          background: `radial-gradient(ellipse at center, ${accent}28, transparent 70%)`,
-          filter: 'blur(10px)',
+          background: `linear-gradient(180deg, transparent 0%, ${poster.inkFaint} 18%, ${poster.inkFaint} 82%, transparent 100%)`,
           pointerEvents: 'none',
         }} />
         <TurnCompass isMyTurn={isMyTurn} turn={turn} />

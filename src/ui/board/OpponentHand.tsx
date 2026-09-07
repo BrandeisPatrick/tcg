@@ -1,13 +1,14 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
-import { palette, spring, text } from '../tokens';
+import { spring, text } from '../tokens';
+import { poster } from '../poster';
 
 interface Props {
   cards: CardInstance[];
 }
 
 // Mirror of the player's Hand fanning math, but inverted: cards open downward
-// from a top anchor, so they look like an opponent's hand seen across the table.
+// from a top anchor, so they look like an opponent's hand seen across the sheet.
 function fanRotation(i: number, total: number): number {
   if (total <= 2) return 0;
   const center = (total - 1) / 2;
@@ -45,15 +46,14 @@ export function OpponentHand({ cards }: Props) {
       alignItems: 'flex-start',
       padding: '4px 0 8px',
       minHeight: CARD_H + 4,
-      perspective: 1200,
       // Purely decorative strip — never intercept clicks meant for the
       // board rows it can overlap.
       pointerEvents: 'none',
     }}>
-      {/* Ambient occlusion behind the fan — a soft pool of shade where the
-          rival's cards meet the table's far rim, so the dark backs read as
-          resting there instead of pasted on the parchment. Painted before
-          the cards; their transforms stack them above it. */}
+      {/* Ambient shade behind the fan — a flat pool of neutral black where
+          the rival's card backs peek over the sheet's top edge, so the ink
+          plates read as resting there instead of pasted on the paper.
+          Painted before the cards; their transforms stack them above it. */}
       {total > 0 && (
         <div aria-hidden style={{
           position: 'absolute',
@@ -62,12 +62,14 @@ export function OpponentHand({ cards }: Props) {
           width: Math.min(560, total * (CARD_W + 8) + 120),
           height: 54,
           transform: 'translateX(-50%)',
-          background: 'radial-gradient(ellipse 50% 100% at 50% 100%, rgba(50, 30, 8, 0.22), rgba(50, 30, 8, 0.09) 55%, transparent 78%)',
+          background: 'radial-gradient(ellipse 50% 100% at 50% 100%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.14) 55%, transparent 78%)',
           filter: 'blur(2px)',
         }} />
       )}
+      {/* The strip hangs above the sheet on the dark scene, so the empty
+          label is cream, not ink. */}
       {total === 0 && (
-        <div style={{ ...text.label, color: palette.textFaint, padding: '20px 0' }}>
+        <div style={{ ...text.label, fontSize: 11, letterSpacing: '0.18em', color: poster.creamDim, padding: '20px 0' }}>
           Rival — no cards in hand
         </div>
       )}
@@ -97,52 +99,44 @@ export function OpponentHand({ cards }: Props) {
           );
         })}
       </AnimatePresence>
-      {/* No count chip — the rival PatronPlaque on the table rim is the
-          canonical hand counter now; the fan itself just shows the cards. */}
+      {/* No count chip — the rival PatronPlaque on the sheet's corner is the
+          canonical hand counter; the fan itself just shows the cards. */}
     </div>
   );
 }
 
+/** Face-down card — the lobby's ink plate: charcoal panel, thin edge and
+ *  the printer's dial mark centred in faint cream. Static by design: the
+ *  border pulse is the draft's "live pick" signal, not the rival's hand. */
 function CardBack() {
-  // Face-down hand stays dark — sealed envelopes on a parchment table.
-  const back0 = '#3a2810';
-  const back1 = '#1f1408';
-  const brass = palette.accent;
   return (
     <div style={{
       width: '100%', height: '100%',
-      borderRadius: 6,
-      background: `
-        linear-gradient(160deg, ${back0}, ${back1} 60%, #0e0905),
-        radial-gradient(ellipse at 50% 30%, ${brass}22, transparent 60%)
-      `,
-      border: `1px solid #5a3f1c`,
-      boxShadow: '0 4px 12px rgba(40, 20, 0, 0.45), inset 0 0 0 1px rgba(255, 220, 160, 0.08)',
-      position: 'relative',
-      overflow: 'hidden',
+      boxSizing: 'border-box',
+      borderRadius: 10,
+      background: poster.panel,
+      border: `2px solid ${poster.edge}`,
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.45)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
     }}>
-      {/* Inner border */}
-      <div style={{
-        position: 'absolute', inset: 4,
-        borderRadius: 4,
-        border: `1px solid rgba(255, 220, 160, 0.08)`,
-        pointerEvents: 'none',
-      }} />
-      {/* Centerpiece — hex glyph */}
-      <svg viewBox="0 0 60 90" preserveAspectRatio="xMidYMid meet"
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-        <defs>
-          <radialGradient id="cb-glow" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0%" stopColor={brass} stopOpacity="0.5" />
-            <stop offset="100%" stopColor={brass} stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <ellipse cx="30" cy="45" rx="22" ry="14" fill="url(#cb-glow)" />
-        <g stroke={brass} strokeWidth="0.8" fill="none" opacity="0.7">
-          <path d="M30 30 L46 39 L46 55 L30 64 L14 55 L14 39 Z" />
-          <path d="M30 36 L40 42 L40 54 L30 60 L20 54 L20 42 Z" opacity="0.6" />
-          <circle cx="30" cy="48" r="2.5" fill={brass} fillOpacity="0.6" />
-        </g>
+      <svg viewBox="0 0 40 40" width="38%" height="38%" fill="none" stroke={poster.creamFaint} strokeWidth="1.4" aria-hidden>
+        <circle cx="20" cy="20" r="15.5" />
+        <circle cx="20" cy="20" r="6.5" />
+        {Array.from({ length: 8 }).map((_, i) => {
+          const a = (i * Math.PI) / 4;
+          return (
+            <line
+              key={i}
+              x1={20 + Math.cos(a) * 6.5}
+              y1={20 + Math.sin(a) * 6.5}
+              x2={20 + Math.cos(a) * 15.5}
+              y2={20 + Math.sin(a) * 15.5}
+            />
+          );
+        })}
+        <circle cx="20" cy="20" r="2" fill={poster.creamFaint} stroke="none" />
       </svg>
     </div>
   );
