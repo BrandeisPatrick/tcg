@@ -4,12 +4,14 @@ import { fonts, spring, systemFont } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, sheetStyle, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 import { useSettings, updateSettings, APP_STORAGE_KEYS, type AppSettings } from '@/storage/settings';
+import { ArtCredits } from './ArtCredits';
 
 /**
  * Persistent system layer — the one piece of chrome that exists on every
  * screen. An ink gear pinned to the top-right corner opens a pause-style
  * settings sheet in the poster idiom: paper on the dark scene, ink type,
- * chamfered plates. Combat tempo, context-aware exit, save-data reset.
+ * chamfered plates. Combat tempo, context-aware exit, save-data reset, and
+ * a second page — the art credits — behind the About line.
  * Mounted once in Root, OUTSIDE the screen transition wrapper, so it never
  * fades or moves during navigation.
  */
@@ -24,9 +26,12 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
   const [open, setOpen] = useState(false);
   const settings = useSettings();
   const [armReset, setArmReset] = useState(false);
+  // The sheet's second page: the art credits. Always reopens on settings.
+  const [page, setPage] = useState<'settings' | 'credits'>('settings');
 
-  // Re-disarm the destructive reset whenever the menu closes.
-  useEffect(() => { if (!open) setArmReset(false); }, [open]);
+  // Re-disarm the destructive reset (and come back to settings) whenever
+  // the menu closes.
+  useEffect(() => { if (!open) { setArmReset(false); setPage('settings'); } }, [open]);
 
   // Escape toggles the menu — the universal pause gesture. Nothing else in
   // the app binds Escape globally; overlays that need the key first
@@ -131,7 +136,8 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
               onClick={(e) => e.stopPropagation()}
               style={{
                 position: 'relative',
-                width: 'min(560px, 94vw)',
+                // The credits page carries prints and links; give it more sheet.
+                width: page === 'credits' ? 'min(720px, 94vw)' : 'min(560px, 94vw)',
                 maxHeight: 'min(86vh, 720px)',
                 overflowY: 'auto',
                 borderRadius: 18,
@@ -157,11 +163,22 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
                   color: poster.ink,
                   lineHeight: 1,
                 }}>
-                  System
+                  {page === 'credits' ? 'Credits' : 'System'}
                 </span>
                 <InkTag>Esc · Close</InkTag>
               </div>
 
+              {page === 'credits' ? (
+                <div style={{ padding: '16px 0 4px' }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <PosterButton variant="paper" size="sm" onClick={() => setPage('settings')} ariaLabel="Back to settings">
+                      ← Settings
+                    </PosterButton>
+                  </div>
+                  <ArtCredits compact />
+                </div>
+              ) : (
+              <>
               {/* Game */}
               <Section title="Game">
                 <Field label="Combat speed">
@@ -235,10 +252,22 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
                 <div style={{ ...systemFont, color: poster.inkDim }}>
                   A fan-made tabletop adaptation. Not affiliated with Valve.
                 </div>
+                {/* Where every outside picture and typeface came from. */}
+                <PosterButton
+                  variant="paper"
+                  size="sm"
+                  onClick={() => setPage('credits')}
+                  ariaLabel="Art credits"
+                  style={{ alignSelf: 'center', marginTop: 4 }}
+                >
+                  Art credits
+                </PosterButton>
                 <div style={{ ...systemFont, color: poster.inkDim }}>
                   v0.1 · early prototype
                 </div>
               </div>
+              </>
+              )}
             </motion.div>
           </motion.div>
         )}

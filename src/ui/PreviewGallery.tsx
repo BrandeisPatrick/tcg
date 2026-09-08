@@ -1,5 +1,15 @@
+/**
+ * The Gallery — every card and every piece of chrome the game draws, laid
+ * out on one cream sheet so it can be looked at (and, for the effects,
+ * fired) outside a match. Printed in the poster idiom like the title sheet,
+ * the loadout and the lessons, so it reads as the same object; the last tab
+ * is the art credits.
+ *
+ * Reached from the title's Gallery card (?preview=1); ?preview=1&tab=credits
+ * opens straight on the credits.
+ */
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CardFrame } from './card/CardFrame';
 import { StatusIcon } from './card/StatusIcon';
 import { CardPlayOverlay } from './effects/CardPlayFlash';
@@ -9,14 +19,20 @@ import { STATUSES } from '@/statuses';
 import { HeroSlot } from './board/HeroSlot';
 import { TurnCompass } from './board/TurnCompass';
 import { SoulsRail } from './board/SoulsRail';
+import { boardRows } from './board/BoardTable';
 import { HeroDetailSheet } from './overlays/HeroDetailSheet';
 import { DamageFxContext } from './effects/DamageFxContext';
 import type { CardInstance, HeroCard, DamageEvent } from '@/engine/types';
-import { fonts, radius, shadow, text } from './tokens';
-import { poster } from './poster';
+import { fonts, radius, spring, text } from './tokens';
+import { poster, chamfer, clipBoth, sheetStyle } from './poster';
+import { PosterBackdrop } from './PosterBackdrop';
+import { PosterButton } from './chrome';
 import { LevelRing } from './card/LevelRing';
 import { RoundCardIcon } from './card/RoundCardIcon';
 import { useViewport } from './hooks/useViewport';
+import { ArtCredits } from './system/ArtCredits';
+
+const BASE = import.meta.env.BASE_URL ?? '/';
 
 // Mock a board-state CardInstance for a hero so the gallery can render it
 // through the same HeroSlot used in-game. Stats default to the printed values;
@@ -39,90 +55,174 @@ function mockHeroInstance(h: HeroCard): CardInstance {
   };
 }
 
-type Tab = 'cards' | 'combat' | 'board' | 'statuses' | 'overlays';
+type Tab = 'cards' | 'combat' | 'board' | 'statuses' | 'overlays' | 'credits';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'cards', label: 'Cards' },
+  { id: 'combat', label: 'Combat FX' },
+  { id: 'board', label: 'Board' },
+  { id: 'statuses', label: 'Statuses' },
+  { id: 'overlays', label: 'Overlays' },
+  { id: 'credits', label: 'Credits' },
+];
+
+function initialTab(): Tab {
+  const t = new URLSearchParams(window.location.search).get('tab');
+  return TABS.some((x) => x.id === t) ? (t as Tab) : 'cards';
+}
 
 export function PreviewGallery() {
-  useEffect(() => { document.body.classList.add('preview'); return () => document.body.classList.remove('preview'); }, []);
-  const [tab, setTab] = useState<Tab>('cards');
+  const { isMobile } = useViewport();
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   return (
-    <div style={{
-      minHeight: '100dvh',
-      padding: '24px 16px 80px',
-      background: poster.ground,
-      color: poster.cream,
-      fontFamily: fonts.ui,
-    }}>
-      <header style={{ maxWidth: 1100, margin: '0 auto 18px' }}>
-        <h1 style={{
-          fontFamily: fonts.ui, fontSize: 22, fontWeight: 700,
-          color: poster.cream, margin: 0,
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-        }}>
-          Deadlock TCG · Preview Gallery
-        </h1>
-        <p style={{ color: poster.creamDim, marginTop: 6 }}>
-          Visual catalog of every in-game render.&nbsp;
-          <a href={import.meta.env.BASE_URL ?? '/'} style={{ color: poster.gold }}>back to match</a>
-        </p>
-      </header>
+    <div
+      style={{
+        position: 'relative',
+        minHeight: '100dvh',
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        padding: isMobile ? 10 : 'clamp(14px, 3vh, 30px) clamp(14px, 3vw, 40px)',
+        background: poster.ground,
+        color: poster.ink,
+        fontFamily: fonts.ui,
+        overflowX: 'hidden',
+      }}
+    >
+      <PosterBackdrop />
 
-      <TabBar tab={tab} setTab={setTab} />
+      {/* The sheet. Only opacity animates: a transform on this ancestor
+          would trap the fixed-position overlays the demos fire. */}
+      <motion.section
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        aria-label="Gallery"
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          width: '100%',
+          maxWidth: 1380,
+          borderRadius: isMobile ? 18 : 28,
+          overflow: 'hidden',
+          padding: isMobile ? '14px 14px 20px' : 'clamp(18px, 2.4vh, 28px) clamp(22px, 3vw, 38px) clamp(24px, 3vh, 34px)',
+          ...sheetStyle,
+        }}
+      >
+        <header
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            paddingBottom: isMobile ? 12 : 16,
+            marginBottom: isMobile ? 12 : 16,
+            borderBottom: `1.5px solid ${poster.ink}`,
+          }}
+        >
+          <PosterButton
+            variant="paper"
+            size="sm"
+            onClick={() => { window.location.href = BASE; }}
+            ariaLabel="Back to the title screen"
+          >
+            ← Back
+          </PosterButton>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: fonts.display,
+              fontSize: isMobile ? 26 : 'clamp(28px, 3vw, 40px)',
+              fontWeight: 400,
+              letterSpacing: '0.02em',
+              textTransform: 'uppercase',
+              lineHeight: 1,
+            }}
+          >
+            Gallery
+          </h1>
+          {!isMobile && (
+            <span
+              style={{
+                ...text.label,
+                marginLeft: 'auto',
+                fontSize: 10.5,
+                letterSpacing: '0.2em',
+                color: poster.inkDim,
+                whiteSpace: 'nowrap',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {HEROES.length} heroes · {SPELLS.length} spells · {EQUIPMENT.length} items
+            </span>
+          )}
+        </header>
 
-      <div style={{ marginTop: 22 }}>
-        {tab === 'cards' && <CardsTab />}
-        {tab === 'combat' && <CombatFxTab />}
-        {tab === 'board' && <BoardTab />}
-        {tab === 'statuses' && <StatusesTab />}
-        {tab === 'overlays' && <OverlaysTab />}
-      </div>
+        <TabBar tab={tab} setTab={setTab} compact={isMobile} />
+
+        <div style={{ marginTop: isMobile ? 16 : 22 }}>
+          {tab === 'cards' && <CardsTab />}
+          {tab === 'combat' && <CombatFxTab />}
+          {tab === 'board' && <BoardTab />}
+          {tab === 'statuses' && <StatusesTab />}
+          {tab === 'overlays' && <OverlaysTab />}
+          {tab === 'credits' && <ArtCredits compact={isMobile} />}
+        </div>
+      </motion.section>
     </div>
   );
 }
 
-function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
-  const { isMobile } = useViewport();
-  const items: { id: Tab; label: string }[] = [
-    { id: 'cards', label: 'Cards' },
-    { id: 'combat', label: 'Combat FX' },
-    { id: 'board', label: 'Board' },
-    { id: 'statuses', label: 'Statuses' },
-    { id: 'overlays', label: 'Overlays' },
-  ];
+/** The sheet's tabs — stencil plates in a row; the open one is inked.
+ *  On a phone the row scrolls sideways rather than wrapping. */
+function TabBar({ tab, setTab, compact }: { tab: Tab; setTab: (t: Tab) => void; compact: boolean }) {
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = nav.current?.querySelector<HTMLElement>('button[aria-pressed="true"]');
+    el?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [tab]);
   return (
-    <div style={{
-      maxWidth: 1100, margin: '0 auto',
-      display: 'flex', gap: 4,
-      borderBottom: `1px solid ${poster.edge}`,
-      // The five tabs don't fit a phone row — scroll them horizontally rather
-      // than wrap to two lines.
-      overflowX: isMobile ? 'auto' : undefined,
-      WebkitOverflowScrolling: 'touch',
-    }}>
-      {items.map((it) => {
+    <nav
+      ref={nav}
+      aria-label="Gallery sections"
+      style={{
+        display: 'flex',
+        gap: 6,
+        overflowX: compact ? 'auto' : undefined,
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
+        paddingBottom: compact ? 2 : 0,
+      }}
+    >
+      {TABS.map((it) => {
         const active = tab === it.id;
         return (
           <button
             key={it.id}
+            type="button"
             onClick={() => setTab(it.id)}
+            aria-pressed={active}
             style={{
-              padding: isMobile ? '10px 14px' : '10px 18px',
               flexShrink: 0,
-              background: 'transparent',
-              color: active ? poster.cream : poster.creamDim,
-              border: 'none',
-              borderBottom: `2px solid ${active ? poster.gold : 'transparent'}`,
+              padding: compact ? '9px 14px' : '10px 18px',
+              background: active ? poster.ink : 'transparent',
+              color: active ? poster.paper : poster.ink,
+              border: `1.5px solid ${active ? poster.ink : poster.inkRule}`,
+              ...clipBoth(chamfer(6)),
+              fontFamily: fonts.display,
+              fontSize: compact ? 11 : 12,
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              lineHeight: 1,
               cursor: 'pointer',
-              fontFamily: fonts.ui,
-              fontSize: 13, fontWeight: 700,
-              marginBottom: -1,
             }}
           >
             {it.label}
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }
 
@@ -131,10 +231,11 @@ function TabBar({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
 // =============================================================================
 
 function CardsTab() {
+  const { isMobile } = useViewport();
   return (
     <>
       <Section title={`Heroes (${HEROES.length})`}>
-        <Grid min={170}>
+        <Grid min={isMobile ? 150 : 170}>
           {HEROES.map((h) => (
             <div key={h.id} style={{ aspectRatio: '3 / 4' }}>
               <HeroSlot
@@ -190,7 +291,7 @@ function CardsTab() {
       </Section>
 
       <Section title="Long-press preview">
-        <p style={{ ...text.body, color: poster.creamDim, marginBottom: 12 }}>
+        <p style={{ ...text.body, color: poster.inkDim, marginBottom: 12 }}>
           Hold any card in-game to surface this large-format view. Uses CardFrame size="full".
         </p>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
@@ -201,7 +302,7 @@ function CardsTab() {
       </Section>
 
       <Section title="Unaffordable — cost coin warning">
-        <p style={{ ...text.body, color: poster.creamDim, marginBottom: 12 }}>
+        <p style={{ ...text.body, color: poster.inkDim, marginBottom: 12 }}>
           When the player can't pay a card's soul cost the hand card dims and its
           ink cost coin flips to warning red — affordable next to unaffordable below.
         </p>
@@ -295,15 +396,15 @@ function BoardTab() {
           ].map((stage, idx) => (
             <div key={idx} style={{
               padding: 14,
-              background: poster.paper,
-              border: `1px solid ${poster.inkRule}`,
-              borderRadius: radius.md,
+              background: poster.paperBand,
+              border: `1.5px solid ${poster.inkRule}`,
+              ...clipBoth(chamfer(8)),
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
             }}>
               <div style={{
                 position: 'relative', width: 96, height: 96,
-                background: 'linear-gradient(180deg, rgba(20,28,48,0.95), rgba(8,12,22,0.98))',
-                borderRadius: radius.md,
+                background: poster.frame,
+                borderRadius: 8,
               }}>
                 <div style={{ position: 'absolute', top: 8, right: 8 }}>
                   <LevelRing level={stage.level} exp={stage.exp} size={36} />
@@ -344,30 +445,36 @@ function AutoExit({ ms, onDone, children }: { ms: number; onDone: () => void; ch
 }
 
 function SoulsRailDemo() {
-  // Stage matches the live board's height proportion (3 rows of 180/290
-  // px + gaps ≈ 690 px). The rail is rendered absolutely inside a
-  // relative container so the same anchor logic the live board uses
-  // (right: -28px) reads correctly here too.
+  // The stage is exactly the live board's row stack (bench, lane, bench
+  // from the shared boardRows metrics), because the rail lays its two
+  // racks out against those same rows; any other height puts your rack
+  // below the stage. The rail is absolutely positioned inside it, so the
+  // live board's right-edge anchor reads correctly here too.
+  const { isMobile } = useViewport();
+  const bench = boardRows.bench(isMobile);
+  const lane = boardRows.lane(isMobile);
+  const gap = boardRows.gap(isMobile);
   const [rival, setRival] = useState(2);
   const [you, setYou] = useState(3);
+  const standIn = { border: `1px dashed ${poster.inkFaint}`, borderRadius: radius.sm, opacity: 0.6 };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{
         position: 'relative',
-        height: 460,
+        height: bench * 2 + lane + gap * 2,
         borderRadius: radius.md,
-        border: `1px solid ${poster.inkRule}`,
-        background: poster.paper,
+        border: `1.5px solid ${poster.inkRule}`,
+        background: poster.paperBand,
       }}>
-        {/* Stage stand-ins for the 3 board rows so the rail's midline
-            visibly aligns with the centre row, just like in-game. */}
+        {/* Stand-ins for the three board rows, on the board's own metrics,
+            so each rack visibly sits centred in its bench row. */}
         <div style={{
-          position: 'absolute', inset: 12,
-          display: 'flex', flexDirection: 'column', gap: 16,
+          position: 'absolute', inset: '0 12px',
+          display: 'flex', flexDirection: 'column', gap,
         }}>
-          <div style={{ flex: 1, border: `1px dashed ${poster.inkFaint}`, borderRadius: radius.sm, opacity: 0.6 }} />
-          <div style={{ flex: 1.6, border: `1px dashed ${poster.inkFaint}`, borderRadius: radius.sm, opacity: 0.6 }} />
-          <div style={{ flex: 1, border: `1px dashed ${poster.inkFaint}`, borderRadius: radius.sm, opacity: 0.6 }} />
+          <div style={{ flex: `0 0 ${bench}px`, ...standIn }} />
+          <div style={{ flex: `0 0 ${lane}px`, ...standIn }} />
+          <div style={{ flex: `0 0 ${bench}px`, ...standIn }} />
         </div>
         <SoulsRail rivalSouls={rival} yourSouls={you} />
       </div>
@@ -401,14 +508,14 @@ function TurnCompassDemo() {
       <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
           <TurnCompass isMyTurn={true} turn={turn} combatOverride={null} />
-          <span style={{ ...text.label, color: poster.creamDim }}>Your Move (idle)</span>
+          <span style={{ ...text.label, color: poster.inkDim }}>Your Move (idle)</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18, alignItems: 'center' }}>
           <TurnCompass isMyTurn={false} turn={turn} combatOverride={null} />
-          <span style={{ ...text.label, color: poster.creamDim }}>Rival's Move (idle)</span>
+          <span style={{ ...text.label, color: poster.inkDim }}>Rival's Move (idle)</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
-          <span style={{ ...text.label, color: poster.creamDim }}>Live toggle</span>
+          <span style={{ ...text.label, color: poster.inkDim }}>Live toggle</span>
           <div style={{ padding: '8px 0' }}>
             <TurnCompass isMyTurn={isMyTurn} turn={turn} combatOverride={combatOverride} />
           </div>
@@ -420,7 +527,7 @@ function TurnCompassDemo() {
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <span style={{ ...text.label, color: poster.creamDim }}>Combat mode (same compass)</span>
+        <span style={{ ...text.label, color: poster.inkDim }}>Combat mode (same compass)</span>
         <Row>
           <Button onClick={() => setCombatMode((v) => !v)}>{combatMode ? 'Combat: ON' : 'Combat: OFF'}</Button>
           <Button onClick={() => setCurrentBeat((b) => (b + 1) % (total + 1))} disabled={!combatMode}>Step beat ({currentBeat} / {total})</Button>
@@ -589,7 +696,7 @@ function StatusesTab() {
   return (
     <Section title={`Status Icons (${STATUSES.length})`}>
       <Caption>Buffs in green, debuffs in red, utility statuses in ink. Magnitude statuses show a value pill; binary statuses (Stun, Silence, Disarm) hide it.</Caption>
-      <Grid min={150}>
+      <Grid min={230}>
         {STATUSES.map((s) => {
           const MAGNITUDE: Record<string, number> = {
             bullet_resist: 3, spirit_resist: 3, shield: 5,
@@ -599,13 +706,14 @@ function StatusesTab() {
           return (
             <div key={s.id} style={{
               display: 'flex', alignItems: 'center', gap: 10,
-              padding: 10, borderRadius: radius.md,
-              background: poster.panel, border: `1px solid ${poster.edge}`,
+              padding: 10,
+              background: poster.paperBand, border: `1.5px solid ${poster.inkRule}`,
+              ...clipBoth(chamfer(6)),
             }}>
               <StatusIcon id={s.id} value={value} duration={2} />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 12 }}>{s.title}</div>
-                <div style={{ color: poster.creamDim, fontSize: 12 }}>{s.id}</div>
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                <div style={{ ...text.label, color: poster.ink }}>{s.title}</div>
+                <div style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>{s.id}</div>
               </div>
             </div>
           );
@@ -687,14 +795,14 @@ function OverlaysTab() {
       </Caption>
 
       <Row>
-        <label style={{ ...text.label, color: poster.creamDim, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <label style={{ ...text.label, color: poster.inkDim, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           Hero
           <select
             value={heroId}
             onChange={(e) => setHeroId(e.target.value)}
             style={{
-              background: poster.panel, color: poster.cream,
-              border: `1px solid ${poster.edge}`, borderRadius: radius.md,
+              background: poster.paper, color: poster.ink,
+              border: `1.5px solid ${poster.ink}`, borderRadius: 0,
               padding: '8px 10px', fontFamily: fonts.ui, fontWeight: 700, fontSize: 12,
             }}
           >
@@ -707,13 +815,13 @@ function OverlaysTab() {
         {SHEET_SCENARIOS.map((sc) => (
           <div key={sc.id} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <Button onClick={() => setScenario(sc.id)}>{sc.label}</Button>
-            <span style={{ ...text.body, color: poster.creamDim }}>{sc.hint}</span>
+            <span style={{ ...text.body, color: poster.inkDim }}>{sc.hint}</span>
           </div>
         ))}
       </div>
 
       {toast && (
-        <p style={{ marginTop: 14, ...text.label, color: poster.green }}>
+        <p style={{ marginTop: 14, ...text.label, color: poster.stat.atkBright }}>
           {toast} — (sheet closed, as it does in-game)
         </p>
       )}
@@ -726,16 +834,28 @@ function OverlaysTab() {
 }
 
 // =============================================================================
-// LAYOUT PRIMITIVES
+// LAYOUT PRIMITIVES — the sheet's own voice: stencil eyebrows over a hairline,
+// prose in the body register, the poster button for anything pressed.
 // =============================================================================
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section style={{ maxWidth: 1100, margin: '0 auto 36px' }}>
-      <h2 style={{
-        fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
-        color: poster.creamDim, margin: '0 0 14px',
-      }}>{title}</h2>
+    <section style={{ margin: '0 0 34px' }}>
+      <h2
+        style={{
+          margin: '0 0 14px',
+          paddingBottom: 6,
+          borderBottom: `1px solid ${poster.inkRule}`,
+          fontFamily: fonts.display,
+          fontSize: 11,
+          fontWeight: 400,
+          letterSpacing: '0.28em',
+          textTransform: 'uppercase',
+          color: poster.inkDim,
+        }}
+      >
+        {title}
+      </h2>
       {children}
     </section>
   );
@@ -754,36 +874,19 @@ function Grid({ children, min = 150 }: { children: React.ReactNode; min?: number
 }
 
 function Row({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{children}</div>;
+  return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>{children}</div>;
 }
 
 function Caption({ children }: { children: React.ReactNode }) {
-  return <p style={{ ...text.body, color: poster.creamDim, marginBottom: 12 }}>{children}</p>;
+  return <p style={{ ...text.body, color: poster.inkDim, margin: '0 0 12px', maxWidth: 760 }}>{children}</p>;
 }
 
 function Button({ children, onClick, disabled }: {
   children: React.ReactNode; onClick: () => void; disabled?: boolean;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        background: disabled
-          ? poster.panel
-          : poster.gold,
-        color: disabled ? poster.creamFaint : poster.ink,
-        border: `1px solid ${disabled ? poster.edge : poster.gold}`,
-        padding: '8px 14px',
-        borderRadius: radius.md,
-        fontFamily: fonts.ui, fontWeight: 700, fontSize: 12,
-        cursor: disabled ? 'wait' : 'pointer',
-        boxShadow: disabled ? 'none' : shadow.glowAccent,
-        opacity: disabled ? 0.7 : 1,
-        transition: 'opacity 120ms ease',
-      }}
-    >
+    <PosterButton variant="paper" size="sm" onClick={onClick} disabled={disabled}>
       {children}
-    </button>
+    </PosterButton>
   );
 }

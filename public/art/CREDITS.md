@@ -1,9 +1,15 @@
 # Art credits
 
+The player-facing version of this list is in the game itself: System menu →
+**Art credits**, or the Gallery's **Credits** tab (`?preview=1&tab=credits`).
+Both are rendered from `src/art/credits.ts`; keep that file and this one in
+step whenever a picture is added or replaced.
+
 ## Deadlock brand assets (Valve)
 
 - `deadlock_wordmark.png` — https://www.steamgriddb.com/logo/130957 (SteamGridDB,
-  by user "Lovely"). Kept as the source for the derived file below.
+  by user "Lovely"). Kept as the source for the derived file below; not shown
+  itself.
 - `deadlock_wordmark_ink.png` — the wordmark above, flattened to solid ink from
   its own alpha for the title sheet's flat screen-print look.
 - `menu_scene.jpg`, `menu_street.jpg` — official Deadlock screenshots from the
@@ -16,25 +22,22 @@ from their "Deadlock Graphical Library" collection.
 
 ## Hero, spell and item art
 
-`public/heroes/`, `public/spells/` and `public/items/` come from the community
-asset bucket at https://deadlock-api.com/. See `public/ART_PIPELINE.md`.
+- Hero portraits (`public/heroes/hero_<id>_card.webp`) and the wide splashes
+  (`hero_<id>_splash.webp`) are crops of Valve's official hero-select screens,
+  taken from a community compilation posted to r/DeadlockTheGame ("A quick
+  compilation of all the updated hero select screens"). The source frames are
+  kept in `public/_audit/hero_sources/`; `scripts/crop_heroes.py` cuts the
+  portraits from them. Rem has no updated select screen, so her portrait comes
+  from the asset mirror below.
+- The small hero icons (`_mm.webp`, `_sm.webp`) and everything in
+  `public/spells/` and `public/items/` are the game's own icons and shop art,
+  pulled from the community asset bucket at https://deadlock-api.com/
+  (https://assets.deadlock-api.com/). See `public/ART_PIPELINE.md`.
 
 ## Menu card bills
 
-The painted posters on three of the title-screen cards were supplied by the
-project owner:
-
-- `bill_heroes.webp` — "Deadlock Vindicta Fan Art Poster Design" by **Dsgnmon**,
-  published at https://dribbble.com/shots/25066548-Deadlock-Vindicta-Fan-Art-Poster-Design
-  and marked "Fan art by © Dsgnmon 2024. All rights reserved." Used here with
-  credit; ask Dsgnmon before shipping this anywhere public, and replace it on
-  request.
-- `bill_decks.webp` ("Embrace the power from beyond!") and `bill_gallery.webp`
-  ("Obscura Labrium") — Deadlock-universe advertising bills. Provenance is
-  unconfirmed: neither their cover text nor their imagery returns any search
-  result, so the original artist could not be identified. Treated as Valve
-  Deadlock art under the same fair-use terms as the rest of this project, and
-  replaceable on request.
+The painted posters on the title-screen cards were supplied by the project
+owner:
 
 - `bill_tutorial.webp` — the Tutorial card and the cover print on the Lessons
   sheet: "Deadlock in 'In Your Dreams!'", a fan poster in the style of a 1930s
@@ -43,13 +46,37 @@ project owner:
   community post (the file was named `in-your-dreams-v0-flzp0vykynld1`),
   re-encoded to 1200 px for the web. Used here with credit; ask the artist
   before shipping this anywhere public, and replace it on request.
+- `bill_decks.webp` ("Embrace the power from beyond!") and `bill_gallery.webp`
+  ("Obscura Labrium") — Deadlock-universe advertising bills on the Loadout and
+  Gallery cards. Provenance is unconfirmed: neither their cover text nor their
+  imagery returns any search result, so the original artist could not be
+  identified. Treated as Valve Deadlock art under the same fair-use terms as
+  the rest of this project, and replaceable on request.
+- `bill_heroes.webp` — "Deadlock Vindicta Fan Art Poster Design" by **Dsgnmon**,
+  published at https://dribbble.com/shots/25066548-Deadlock-Vindicta-Fan-Art-Poster-Design
+  and marked "Fan art by © Dsgnmon 2024. All rights reserved." It fronted the
+  Tutorial card until the poster above replaced it and is not on any screen
+  now; it stays in the folder under the same terms (ask Dsgnmon before
+  shipping it anywhere public, replace on request) in case a card needs it
+  again.
+
+## Type
+
+Bundled through Fontsource under the SIL Open Font License 1.1:
+
+- **Saira** and **Saira Stencil One** — Omnibus-Type
+  (https://github.com/Omnibus-Type/Saira). Body and display faces.
+- **Caveat Brush** — Impallari Type (https://fonts.google.com/specimen/Caveat+Brush).
+  The title sheet's brush-script lead-in.
+- **Inter** — Rasmus Andersson (https://rsms.me/inter/). Loaded as the fallback
+  face behind Saira.
 
 ## Original art in this project
 
 The Story card's dusk skyline (`src/ui/start/cardScenes.tsx`) is hand-authored
 SVG drawn for this project in the poster palette, with the campaign route
-climbing the city. The title screen, draft lobby and match board are likewise
-original layouts.
+climbing the city. The level rings, status and card icons, the fallback card
+glyphs, the title screen, draft lobby and match board are likewise original.
 
 ## Disclaimer
 
