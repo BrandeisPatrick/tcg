@@ -1,11 +1,11 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { motion, AnimatePresence, MotionConfig } from 'framer-motion';
 import { useSettings } from '@/storage/settings';
 import { App } from './App';
 import { StartScreen } from './ui/start/StartScreen';
 import { LoadoutScreen } from './ui/collection/LoadoutScreen';
 import { DeckEditorScreen } from './ui/collection/DeckEditorScreen';
-import { StoryMapScreen } from './ui/story/StoryMapScreen';
+import { PosterBackdrop } from './ui/PosterBackdrop';
 import { SystemLayer } from './ui/system/SystemMenu';
 import { setMatchConfig, getMatchConfig } from './storage/matchConfig';
 import { getPreferredHeroes, getSelectedDeck } from './storage/playerData';
@@ -14,6 +14,29 @@ import type { StoryRun, StoryNode } from './story/types';
 import { loadRun, saveRun, clearNode, setMatchExitHandler } from './story/storyRun';
 import { buildStoryMatch } from './story/content';
 import { MatchNavContext, type MatchNav } from './ui/hooks/matchNav';
+
+/**
+ * The story map draws real NYC geometry — borough outlines and the whole OSM
+ * road network, baked into nycGeo.ts. That data is 840 kB raw and ~320 kB
+ * gzipped, which is more than every other module in the app put together, and
+ * until now every visitor downloaded it to look at the title screen.
+ *
+ * Splitting it out is purely a matter of WHEN it is fetched: not a coordinate
+ * of the map changes, and it renders exactly as before. The one cost — a beat
+ * of nothing on the first Story open — is paid off by `prefetchStoryMap`
+ * below, which pulls the chunk down while the title screen sits idle. By the
+ * time anyone presses Story it is already in cache.
+ */
+const StoryMapScreen = lazy(() =>
+  import('./ui/story/StoryMapScreen').then((m) => ({ default: m.StoryMapScreen })),
+);
+
+let storyMapPrefetched = false;
+function prefetchStoryMap() {
+  if (storyMapPrefetched) return;
+  storyMapPrefetched = true;
+  void import('./ui/story/StoryMapScreen');
+}
 
 type View =
   | { screen: 'start' }
@@ -56,6 +79,17 @@ export function Root() {
   const [run, setRun] = useState<StoryRun | null>(() => loadRun());
   // The node whose battle is currently in progress (resolved on match end).
   const pendingBattleNode = useRef<string | null>(null);
+
+  // Warm the story chunk while nothing else is happening, so pressing Story
+  // never waits on the network. requestIdleCallback where it exists (not
+  // Safari), a slack timeout otherwise; either way it never competes with the
+  // title screen's own load.
+  useEffect(() => {
+    const idle = (window as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    if (idle) { idle(prefetchStoryMap); return; }
+    const t = setTimeout(prefetchStoryMap, 2000);
+    return () => clearTimeout(t);
+  }, []);
 
   const goStart = useCallback(() => setView({ screen: 'start' }), []);
   const goLoadout = useCallback(() => setView({ screen: 'loadout' }), []);
@@ -199,12 +233,14 @@ export function Root() {
             />
           )}
           {view.screen === 'story' && (
+            <Suspense fallback={<div style={{ minHeight: '100dvh', background: '#0d1715' }}><PosterBackdrop /></div>}>
             <StoryMapScreen
               run={run}
               onUpdateRun={persistRun}
               onBattle={startStoryBattle}
               onExit={goStart}
             />
+            </Suspense>
           )}
           {view.screen === 'match' && (
             <App key={matchEpoch} />
