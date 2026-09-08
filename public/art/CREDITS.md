@@ -36,6 +36,14 @@ project owner:
   Deadlock art under the same fair-use terms as the rest of this project, and
   replaceable on request.
 
+- `bill_tutorial.webp` — the Tutorial card and the cover print on the Lessons
+  sheet: "Deadlock in 'In Your Dreams!'", a fan poster in the style of a 1930s
+  cartoon title card, signed **Toasty Ghostey** (the "Presented with sound by
+  Toasty Ghostey" badge in its corner). Supplied by the project owner from a
+  community post (the file was named `in-your-dreams-v0-flzp0vykynld1`),
+  re-encoded to 1200 px for the web. Used here with credit; ask the artist
+  before shipping this anywhere public, and replace it on request.
+
 ## Original art in this project
 
 The Story card's dusk skyline (`src/ui/start/cardScenes.tsx`) is hand-authored

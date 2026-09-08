@@ -16,6 +16,8 @@ import { HeroPortrait } from '@/cards/art/heroArt';
 import { loadPlayerData } from '@/storage/playerData';
 import { LESSONS, type LessonId } from '@/tutorial/lessons';
 
+const COVER = `${import.meta.env.BASE_URL ?? '/'}art/bill_tutorial.webp`;
+
 interface Props {
   onBack: () => void;
   onStart: (id: LessonId) => void;
@@ -102,11 +104,24 @@ export function LessonsScreen({ onBack, onStart }: Props) {
           </span>
         </header>
 
-        <p style={{ ...text.body, margin: `0 0 ${isMobile ? 12 : 18}px`, color: poster.inkDim, maxWidth: 640 }}>
-          {LESSONS.length} short lessons, one thing each. Every lesson is its own small
-          fight, set up so the move it teaches is the move that wins it. Take them in
-          order, or jump to the one you need.
-        </p>
+        {/* Cover: the tutorial's own bill — a framed print beside the intro on
+            desktop, a banner across the top of the sheet on phones. */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'stretch' : 'center',
+            gap: isMobile ? 12 : 24,
+            marginBottom: isMobile ? 14 : 20,
+          }}
+        >
+          <CoverPrint compact={isMobile} />
+          <p style={{ ...text.body, margin: 0, color: poster.inkDim, maxWidth: 560 }}>
+            {LESSONS.length} short lessons, one thing each. Every lesson is its own small
+            fight, set up so the move it teaches is the move that wins it. Take them in
+            order, or jump to the one you need.
+          </p>
+        </div>
 
         <ol
           style={{
@@ -134,6 +149,39 @@ export function LessonsScreen({ onBack, onStart }: Props) {
           ))}
         </ol>
       </motion.section>
+    </div>
+  );
+}
+
+/** The cover bill in the charcoal frame the title cards wear. Decorative. */
+function CoverPrint({ compact }: { compact: boolean }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        flexShrink: 0,
+        width: compact ? '100%' : 300,
+        height: compact ? 200 : 210,
+        padding: compact ? 5 : 6,
+        borderRadius: 12,
+        background: poster.frame,
+        boxShadow: '0 12px 24px rgba(23, 20, 16, 0.3), 0 3px 8px rgba(23, 20, 16, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+      }}
+    >
+      <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 8, overflow: 'hidden', background: '#0f1214' }}>
+        <img
+          src={COVER}
+          alt=""
+          draggable={false}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: compact ? '50% 42%' : '50% 40%',
+            filter: 'contrast(1.04)',
+            userSelect: 'none',
+          }}
+        />
+        <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 -18px 24px -12px rgba(0, 0, 0, 0.5)' }} />
+      </div>
     </div>
   );
 }

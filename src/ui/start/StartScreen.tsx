@@ -234,7 +234,7 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
             status={status.tutorial}
             cta={status.tutorialDone ? undefined : status.tutorialStarted ? 'Continue' : 'Learn'}
             tag={status.tutorialStarted || status.tutorialDone ? undefined : 'Start here'}
-            art={{ src: `${ART_BASE}bill_heroes.webp`, objectPosition: '50% 46%' }}
+            art={{ src: `${ART_BASE}bill_tutorial.webp`, objectPosition: '38% 42%' }}
             onClick={onTutorial}
             ariaLabel="Open the tutorial lessons"
             compact={isMobile}
