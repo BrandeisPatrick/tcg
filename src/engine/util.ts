@@ -26,18 +26,6 @@ export function findCardOnBoard(G: GameState, iid: string): { owner: PlayerID; c
   return null;
 }
 
-export function findCardAnywhere(G: GameState, iid: string): { owner: PlayerID; card: CardInstance; zone: string } | null {
-  for (const pid of ['0', '1'] as PlayerID[]) {
-    const ps = G.players[pid];
-    if (ps.active?.iid === iid) return { owner: pid, card: ps.active, zone: 'active' };
-    for (const b of ps.bench) if (b?.iid === iid) return { owner: pid, card: b, zone: 'bench' };
-    for (const c of ps.hand) if (c.iid === iid) return { owner: pid, card: c, zone: 'hand' };
-    for (const c of ps.deck) if (c.iid === iid) return { owner: pid, card: c, zone: 'deck' };
-    for (const c of ps.discard) if (c.iid === iid) return { owner: pid, card: c, zone: 'discard' };
-  }
-  return null;
-}
-
 export function liveBoardCards(ps: PlayerState): CardInstance[] {
   const out: CardInstance[] = [];
   if (ps.active && !isRespawning(ps.active)) out.push(ps.active);

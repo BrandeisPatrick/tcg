@@ -1,5 +1,4 @@
 import type { CardId } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
 
 export const MAX_DECKS = 5;
 export const DECK_SIZE = 15;
@@ -179,31 +178,9 @@ export function setSelectedDeckIndex(index: number | null): void {
   savePlayerData(data);
 }
 
-export function isTutorialDone(): boolean {
-  return loadPlayerData().tutorialDone;
-}
-
 export function markTutorialDone(): void {
   const data = loadPlayerData();
   if (data.tutorialDone) return;
   data.tutorialDone = true;
   savePlayerData(data);
-}
-
-export function isValidDeck(deck: DeckSlot): boolean {
-  if (deck.cards.length !== DECK_SIZE) return false;
-  const counts: Record<string, number> = {};
-  for (const id of deck.cards) {
-    const card = CARDS_BY_ID[id];
-    if (!card || (card.type !== 'spell' && card.type !== 'equipment')) return false;
-    counts[id] = (counts[id] ?? 0) + 1;
-    if (counts[id] > MAX_COPIES) return false;
-  }
-  return true;
-}
-
-export function deckableCards(): CardId[] {
-  return Object.values(CARDS_BY_ID)
-    .filter((c) => c.type === 'spell' || c.type === 'equipment')
-    .map((c) => c.id);
 }

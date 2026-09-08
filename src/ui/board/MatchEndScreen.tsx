@@ -1,13 +1,12 @@
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { fonts, spring } from '../tokens';
-import { poster, chamfer, sheetStyle } from '../poster';
+import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { useViewport } from '../hooks/useViewport';
-import { useSettings } from '@/storage/settings';
 
 const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
 
@@ -38,9 +37,6 @@ export function MatchEndScreen({
   onStoryReturn: () => void;
 }) {
   const { isMobile } = useViewport();
-  const { reducedMotion } = useSettings();
-  const osReducedMotion = useReducedMotion();
-  const ambient = !reducedMotion && !osReducedMotion;
   const opp: PlayerID = me === '0' ? '1' : '0';
   // Verdict ink: victory prints in ink, defeat in the poster's one red, a
   // draw in dimmed ink. The winning side's roster label takes the same tone.
@@ -79,7 +75,7 @@ export function MatchEndScreen({
       textAlign: 'center',
       overflowX: 'hidden',
     }}>
-      <PosterBackdrop ambient={ambient} />
+      <PosterBackdrop />
 
       {/* The sheet. */}
       <section
@@ -172,8 +168,7 @@ export function MatchEndScreen({
               padding: '8px 14px 9px',
               background: poster.ink,
               color: poster.paper,
-              clipPath: chamfer(4),
-              WebkitClipPath: chamfer(4),
+              ...clipBoth(chamfer(4)),
             }}>
               <span style={{
                 fontFamily: fonts.display, fontSize: 10,

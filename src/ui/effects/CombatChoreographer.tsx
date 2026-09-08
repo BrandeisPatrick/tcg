@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { AttackPlan, AttackStep } from '@/engine/combat';
 import { fonts } from '../tokens';
-import { poster, chamfer } from '../poster';
+import { poster, chamfer, clipBoth } from '../poster';
 import { DamageFlash } from './DamageFlash';
 
 /** Fixed-positioned wrapper so the card-anchored DamageFlash can be used in the
@@ -147,8 +147,7 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration =
           background: poster.paper,
           color: poster.ink,
           border: `2px solid ${poster.ink}`,
-          clipPath: chamfer(6),
-          WebkitClipPath: chamfer(6),
+          ...clipBoth(chamfer(6)),
           cursor: 'pointer',
           fontFamily: fonts.display,
           fontSize: 12,
@@ -343,8 +342,7 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
             padding: '3px 7px 4px',
             background: poster.ink,
             color: poster.paper,
-            clipPath: chamfer(3),
-            WebkitClipPath: chamfer(3),
+            ...clipBoth(chamfer(3)),
             fontFamily: fonts.display,
             fontSize: 10.5,
             letterSpacing: '0.12em',
@@ -550,8 +548,7 @@ function ShieldDeflect({
           padding: '4px 9px 5px',
           background: poster.ink,
           color: green,
-          clipPath: chamfer(4),
-          WebkitClipPath: chamfer(4),
+          ...clipBoth(chamfer(4)),
           fontFamily: fonts.display,
           fontSize: 11,
           letterSpacing: '0.2em',

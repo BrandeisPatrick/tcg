@@ -5,9 +5,9 @@
  * to the right, both on one cream sheet.
  */
 import { useState } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { fonts, spring, text } from '../tokens';
-import { poster, chamfer, sheetStyle } from '../poster';
+import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { PosterButton } from '../chrome';
 import { getDeck, saveDeck, DECK_SIZE, MAX_COPIES } from '@/storage/playerData';
@@ -16,7 +16,6 @@ import { SPELLS, EQUIPMENT, CARDS_BY_ID } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { RoundCardIcon } from '../card/RoundCardIcon';
 import { useViewport } from '../hooks/useViewport';
-import { useSettings } from '@/storage/settings';
 
 interface Props {
   slotIndex: number;
@@ -27,9 +26,6 @@ type Filter = 'all' | 'spell' | 'equipment';
 
 export function DeckEditorScreen({ slotIndex, onBack }: Props) {
   const { isMobile } = useViewport();
-  const { reducedMotion } = useSettings();
-  const osReducedMotion = useReducedMotion();
-  const ambient = !reducedMotion && !osReducedMotion;
 
   const existing = getDeck(slotIndex);
   const [name, setName] = useState(existing?.name ?? `Deck ${slotIndex + 1}`);
@@ -78,7 +74,7 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
         overflowX: 'hidden',
       }}
     >
-      <PosterBackdrop ambient={ambient} />
+      <PosterBackdrop />
 
       <motion.section
         initial={{ opacity: 0, y: 18 }}
@@ -173,8 +169,7 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
                     border: `1.5px solid ${filter === f ? poster.ink : poster.inkRule}`,
                     background: filter === f ? poster.ink : 'transparent',
                     color: filter === f ? poster.paper : poster.inkDim,
-                    clipPath: chamfer(6),
-                    WebkitClipPath: chamfer(6),
+                    ...clipBoth(chamfer(6)),
                     fontFamily: fonts.display,
                     fontSize: 11,
                     letterSpacing: '0.18em',
@@ -261,8 +256,7 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
                           border: `1px solid ${poster.edge}`,
                           background: poster.panel,
                           color: poster.cream,
-                          clipPath: chamfer(5),
-                          WebkitClipPath: chamfer(5),
+                          ...clipBoth(chamfer(5)),
                           cursor: 'pointer',
                           textAlign: 'left',
                         }}
@@ -314,8 +308,7 @@ function PoolCard({ card, count, canAdd, onAdd }: {
         border: `1.5px solid ${count > 0 ? poster.ink : poster.inkRule}`,
         background: 'transparent',
         color: poster.ink,
-        clipPath: chamfer(7),
-        WebkitClipPath: chamfer(7),
+        ...clipBoth(chamfer(7)),
         cursor: canAdd ? 'pointer' : 'default',
         opacity: canAdd ? 1 : 0.45,
         textAlign: 'left',

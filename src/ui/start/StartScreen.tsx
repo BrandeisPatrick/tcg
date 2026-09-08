@@ -6,20 +6,20 @@
 // idiom: hero art edge to edge inside a charcoal frame, a cream label band
 // beneath. Every card shows real save state (selected deck, campaign
 // progress, squad picks) so the poster reads as a game that remembers you,
-// not a set of links. Until the tutorial has been played its card wears the
-// red "Start here" tag — the one bit of steering the sheet does.
+// not a set of links. The tutorial sits second, straight after Quick Match,
+// and until it has been played its card wears the red "Start here" tag —
+// the one bit of steering the sheet does.
 //
 // Typography: script lead-in in `fonts.script` (Caveat Brush), labels and
 // titles in `fonts.display` (Saira Stencil One), body in `text.body`.
 
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { fonts, spring, text } from '../tokens';
-import { poster, PAPER_MOTTLE } from '../poster';
+import { poster, PAPER_MOTTLE, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { StorySkyline } from './cardScenes';
 import { useViewport } from '../hooks/useViewport';
-import { useSettings } from '@/storage/settings';
 import { loadPlayerData, MAX_PREFERRED_HEROES } from '@/storage/playerData';
 import { loadRun } from '@/story/storyRun';
 import { CARDS_BY_ID, HEROES, SPELLS, EQUIPMENT } from '@/cards';
@@ -91,9 +91,6 @@ function useTitleStatus() {
 
 export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScreenProps) {
   const { isMobile, width } = useViewport();
-  const { reducedMotion } = useSettings();
-  const osReducedMotion = useReducedMotion();
-  const ambient = !reducedMotion && !osReducedMotion;
   const status = useTitleStatus();
   const featured = useMemo(featuredHero, []);
   const featuredName = CARDS_BY_ID[featured]?.name ?? '';
@@ -120,7 +117,7 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
         overflowX: 'hidden',
       }}
     >
-      <PosterBackdrop ambient={ambient} />
+      <PosterBackdrop />
 
       {/* The sheet. */}
       <motion.section
@@ -227,15 +224,6 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
             span={isMobile ? 2 : 1}
           />
           <ModeCard
-            title="Story"
-            status={status.story}
-            cta={status.storyActive ? 'Continue' : 'Begin'}
-            art={{ node: <StorySkyline /> }}
-            onClick={onStory}
-            ariaLabel={status.storyActive ? 'Continue Story campaign' : 'Start Story campaign'}
-            compact={isMobile}
-          />
-          <ModeCard
             title="Tutorial"
             status={status.tutorial}
             cta={status.tutorialDone ? undefined : 'Learn'}
@@ -243,6 +231,15 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
             art={{ src: `${ART_BASE}bill_heroes.webp`, objectPosition: '50% 46%' }}
             onClick={onTutorial}
             ariaLabel="Play the coached tutorial match"
+            compact={isMobile}
+          />
+          <ModeCard
+            title="Story"
+            status={status.story}
+            cta={status.storyActive ? 'Continue' : 'Begin'}
+            art={{ node: <StorySkyline /> }}
+            onClick={onStory}
+            ariaLabel={status.storyActive ? 'Continue Story campaign' : 'Start Story campaign'}
             compact={isMobile}
           />
           <ModeCard
@@ -441,8 +438,7 @@ function StreetWindow() {
         style={{
           position: 'absolute',
           inset: 0,
-          clipPath: clip,
-          WebkitClipPath: clip,
+          ...clipBoth(clip),
           overflow: 'hidden',
           background: '#0c1210',
         }}

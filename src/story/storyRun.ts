@@ -1,6 +1,6 @@
 import type { CardId } from '@/engine/types';
 import type { StoryRun, StoryNode } from './types';
-import { generateMap } from './mapgen';
+import { buildCampaign } from './campaign';
 import { STARTING_DECK } from './content';
 
 const STORAGE_KEY = 'deadlock-tcg-story';
@@ -31,7 +31,7 @@ export function newRun(startHero: CardId): StoryRun {
   const seed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
   return {
     seed,
-    nodes: generateMap(seed),
+    nodes: buildCampaign(),
     currentNodeId: null,
     clearedNodeIds: [],
     heroes: [startHero],
@@ -49,10 +49,6 @@ export function isReachable(run: StoryRun, node: StoryNode): boolean {
   const parents = run.nodes.filter((n) => n.next.includes(node.id));
   if (parents.length === 0) return true; // route start
   return parents.some((p) => run.clearedNodeIds.includes(p.id));
-}
-
-export function nodeById(run: StoryRun, id: string | null): StoryNode | undefined {
-  return id == null ? undefined : run.nodes.find((n) => n.id === id);
 }
 
 /** Mark a node cleared. The campaign is won once every boss has fallen. */

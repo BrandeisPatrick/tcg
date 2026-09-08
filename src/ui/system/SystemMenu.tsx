@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fonts, spring, systemFont } from '../tokens';
-import { poster, chamfer, PAPER_MOTTLE, sheetStyle } from '../poster';
+import { poster, chamfer, PAPER_MOTTLE, sheetStyle, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 import { useSettings, updateSettings, APP_STORAGE_KEYS, type AppSettings } from '@/storage/settings';
 
@@ -257,8 +257,7 @@ function InkTag({ children }: { children: React.ReactNode }) {
       letterSpacing: '0.2em',
       textTransform: 'uppercase',
       lineHeight: 1,
-      clipPath: chamfer(4),
-      WebkitClipPath: chamfer(4),
+      ...clipBoth(chamfer(4)),
     }}>
       {children}
     </span>
@@ -312,8 +311,7 @@ function Segmented<T extends string | number>({ options, value, onSelect }: {
       padding: 4,
       background: poster.paperBand,
       border: `1.5px solid ${poster.ink}`,
-      clipPath: chamfer(6),
-      WebkitClipPath: chamfer(6),
+      ...clipBoth(chamfer(6)),
     }}>
       {options.map((o) => {
         const active = o.value === value;
@@ -360,8 +358,7 @@ function ToggleRow({ label, hint, on, onClick }: {
         padding: '10px 12px',
         background: poster.paperBand,
         border: `1.5px solid ${poster.ink}`,
-        clipPath: chamfer(6),
-        WebkitClipPath: chamfer(6),
+        ...clipBoth(chamfer(6)),
         cursor: 'pointer',
       }}
     >

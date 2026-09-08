@@ -53,7 +53,3 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
   return gained;
 }
 
-export function resetExpOnDeath(card: CardInstance) {
-  card.exp = 0;
-  card.level = START_LEVEL;
-}

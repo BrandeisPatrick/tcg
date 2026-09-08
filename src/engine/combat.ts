@@ -1,7 +1,7 @@
 import type { GameState, PlayerID, CardInstance } from './types';
 import { CARDS_BY_ID } from '@/cards';
 import { damageUnit, resolve } from './damage';
-import { otherPlayer, effectiveAtk, pushLog } from './util';
+import { otherPlayer, effectiveAtk } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
 

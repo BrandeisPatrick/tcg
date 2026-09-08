@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { CardFrame } from '../card/CardFrame';
 import { spring } from '../tokens';
-import { poster } from '../poster';
+import { scrimStyle } from '../poster';
 
 interface Props {
   cardId: string;
@@ -28,7 +28,7 @@ export function CardPreview({ cardId, onClose, hover = false }: Props) {
           filter: 'drop-shadow(0 16px 28px rgba(0, 0, 0, 0.55))',
         }}
       >
-        <CardFrame cardId={cardId} size="full" footer={null} />
+        <CardFrame cardId={cardId} size="full" />
       </motion.div>
     );
   }
@@ -40,11 +40,8 @@ export function CardPreview({ cardId, onClose, hover = false }: Props) {
       transition={{ duration: 0.18 }}
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0,
         // Dark scrim over the blurred scene; the card is the only lit thing.
-        background: poster.scrim,
-        backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        ...scrimStyle,
         zIndex: 90,
       }}
     >
@@ -54,7 +51,7 @@ export function CardPreview({ cardId, onClose, hover = false }: Props) {
         exit={{ scale: 0.85, opacity: 0 }}
         transition={spring.snappy}
       >
-        <CardFrame cardId={cardId} size="full" footer={null} />
+        <CardFrame cardId={cardId} size="full" />
       </motion.div>
     </motion.div>
   );

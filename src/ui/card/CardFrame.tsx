@@ -9,21 +9,14 @@ import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { SwordIcon, HeartIcon } from './Icons';
 
-type Size = 'hand' | 'slot' | 'full';
+type Size = 'hand' | 'full';
 
 interface Props {
   cardId: string;
   size?: Size;
   selected?: boolean;
   glow?: 'gold' | 'accent' | 'danger' | null;
-  faded?: boolean;
-  className?: string;
   style?: CSSProperties;
-  overlay?: ReactNode;
-  footer?: ReactNode;
-  onClick?: () => void;
-  rotate?: number;
-  zoom?: boolean;
   /** Hide the top-right hero BP/HP stat pills (used by the skill-used reveal,
    *  where the stat badge is noise — the reveal is about the skill). */
   hideStats?: boolean;
@@ -31,9 +24,8 @@ interface Props {
    *  to warning red so the greyed-out card explains itself at a glance. */
   unaffordable?: boolean;
   /** Pointer feedback — the frame lights and the card lifts under the
-   *  cursor. On by default for the interactive sizes; pass false for static
-   *  contexts (slot fills, the scripted cast overlay which animates its own
-   *  motion). */
+   *  cursor. On by default; the scripted cast overlay passes false because it
+   *  animates its own motion. */
   physical?: boolean;
   /** Render the scripted cast sheen bar so a parent can sweep it via `--cast`
    *  (used by the play-cast reveal). */
@@ -42,7 +34,6 @@ interface Props {
 
 const SIZES: Record<Size, { w: number; h: number }> = {
   hand: { w: 134, h: 188 },
-  slot: { w: 0,   h: 0 },
   full: { w: 300, h: 420 },
 };
 
@@ -208,14 +199,12 @@ function ArtWindow({ data }: { data: CardData | undefined }) {
 }
 
 export function CardFrame({
-  cardId, size = 'hand', selected = false, glow = null, faded = false,
-  overlay, footer, onClick, className, style, rotate = 0, zoom = false, hideStats = false,
+  cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
   unaffordable = false, physical, castSheen = false,
 }: Props) {
   const [hover, setHover] = useState(false);
-  // Pointer feedback is on by default for the interactive sizes; off for
-  // slot fills (and for the cast overlay, which passes physical={false}).
-  const reactive = physical ?? (size !== 'slot');
+  // Pointer feedback is on by default; the cast overlay passes physical={false}.
+  const reactive = physical ?? true;
   const lit = reactive && hover;
   const data = CARDS_BY_ID[cardId];
   const sz = SIZES[size];
@@ -233,8 +222,8 @@ export function CardFrame({
   // Charcoal frame: art window on top (~55% of the height), an ink type band,
   // then the cream label band with the rules.
   const containerStyle: CSSProperties = {
-    width: size === 'slot' ? '100%' : sz.w,
-    height: size === 'slot' ? '100%' : sz.h,
+    width: sz.w,
+    height: sz.h,
     borderRadius: 10,
     background: poster.frame,
     border: `2px solid ${stateColor ?? (lit ? poster.frameLit : poster.edge)}`,
@@ -243,12 +232,12 @@ export function CardFrame({
     overflow: 'hidden',
     color: poster.ink,
     fontFamily: fonts.ui,
-    cursor: onClick ? 'pointer' : 'default',
-    // Consumer rotate, then the selection lift (or the smaller hover lift),
-    // then zoom.
-    transform: `rotate(${rotate}deg) ${selected ? 'translateY(-8px)' : lit ? 'translateY(-3px)' : ''} ${zoom ? 'scale(1.02)' : ''}`,
+    cursor: 'default',
+    // The rotate(0deg) base is load-bearing: it keeps the card on its own
+    // compositor layer, so text antialiasing does not shift when the lift
+    // transform kicks in.
+    transform: `rotate(0deg) ${selected ? 'translateY(-8px)' : lit ? 'translateY(-3px)' : ''}`,
     transition: 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, border-color 180ms ease',
-    opacity: faded ? 0.45 : 1,
     // The cast sheen blends (screen) against the card only, not the sheet.
     isolation: 'isolate',
     display: 'flex',
@@ -263,9 +252,7 @@ export function CardFrame({
 
   return (
     <div
-      className={className}
       style={containerStyle}
-      onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -279,7 +266,6 @@ export function CardFrame({
       }}>
         <ArtWindow data={data} />
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
-        {overlay && <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>{overlay}</div>}
 
         {/* Cost coin (top-left) — an ink disc with a cream numeral; flips to
             the poster red when the player can't afford it so the dimmed card
@@ -380,7 +366,7 @@ export function CardFrame({
 
         {/* Body text (effect) — Skill / Passive label is inlined as a bold
             prefix on the same row as the effect description. */}
-        {size !== 'slot' && data?.text && (() => {
+        {data?.text && (() => {
           const d = data as any;
           const isSkill = isHero && !!d.skill;
           const isPassive = isHero && !d.skill && !!d.passives?.length;
@@ -412,25 +398,12 @@ export function CardFrame({
           );
         })()}
 
-        {/* Footer slot (optional override) */}
-        {footer && (
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            marginTop: 4,
-            fontSize: 12, fontWeight: 400, color: poster.inkDim,
-            borderTop: `1px solid ${poster.inkRule}`,
-            paddingTop: 4,
-          }}>
-            {footer}
-          </div>
-        )}
-
         {/* Set / identifier line — only on full-size cards. Hand-size is
             too cramped to give this reference info real estate; the effect
             text takes priority. */}
         {size === 'full' && data && (
           <div style={{
-            marginTop: footer ? 3 : 'auto',
+            marginTop: 'auto',
             paddingTop: 3,
             borderTop: `1px solid ${poster.inkRule}`,
             textAlign: 'center',
@@ -445,7 +418,7 @@ export function CardFrame({
       </div>
 
       {/* Cast sheen — only the scripted play-cast bar; the print is otherwise matte */}
-      {!faded && <CardShine rarity={rarity} cast={castSheen} />}
+      <CardShine rarity={rarity} cast={castSheen} />
     </div>
   );
 }

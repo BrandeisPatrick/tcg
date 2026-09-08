@@ -13,10 +13,10 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState, PlayerID } from '@/engine/types';
 import { fonts, spring, text } from '../tokens';
-import { poster, chamfer, PAPER_MOTTLE } from '../poster';
+import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { markTutorialDone } from '@/storage/playerData';
-import { LESSON, emptySeen, type CoachSeen } from '@/tutorial/lesson';
+import { LESSON, emptySeen, hasEquipment, type CoachSeen } from '@/tutorial/lesson';
 
 /** Beat between a task ticking off and the next step sliding in, so the
  *  completion is legible rather than a jump-cut. */
@@ -56,6 +56,13 @@ export function CoachPlate({ G, me, isMyTurn }: {
   useEffect(() => {
     if (!isMyTurn) setSeen((s) => (s.endedTurn ? s : { ...s, endedTurn: true }));
   }, [isMyTurn]);
+
+  // Gear is read off the board rather than off the action feed: an item can
+  // also arrive by replacing a worn piece, which resolves as a plain play.
+  const equipped = hasEquipment(G, me);
+  useEffect(() => {
+    if (equipped) setSeen((s) => (s.equipped ? s : { ...s, equipped: true }));
+  }, [equipped]);
 
   // Active swaps come from retreat (souls) or a promotion off a corpse; both
   // read as "you moved a hero into the fight". A hero dying leaves the corpse
@@ -103,8 +110,8 @@ export function CoachPlate({ G, me, isMyTurn }: {
   // system gear in that corner (its hit area would otherwise swallow the
   // plate's own Next / dismiss). Desktop: bottom-left, clear of everything.
   const shell: CSSProperties = isMobile
-    ? { left: 8, right: 56, top: 6 }
-    : { left: 18, bottom: 18, width: 292 };
+    ? { left: 8, right: 56, top: 4 }
+    : { left: 18, bottom: 18, width: 306 };
 
   return (
     <AnimatePresence>
@@ -125,30 +132,32 @@ export function CoachPlate({ G, me, isMyTurn }: {
             backgroundImage: PAPER_MOTTLE,
             backgroundSize: '320px 320px',
             color: poster.ink,
-            clipPath: chamfer(12),
-            WebkitClipPath: chamfer(12),
+            ...clipBoth(chamfer(12)),
             boxShadow: '0 18px 40px rgba(0, 0, 0, 0.5)',
-            padding: isMobile ? '8px 12px 10px' : '13px 16px 14px',
+            padding: isMobile ? '7px 12px 8px' : '13px 16px 14px',
             fontFamily: fonts.ui,
           }}
         >
-          {/* Rail: step count, the red task dot, and the dismiss. On phones the
-              action rides up here too — the plate sits in the strip above the
-              board, and a third row would push it down over the rival's rule. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 5 : 7 }}>
-            {!done && current.task && <TaskDot ticked={ticked} />}
+          {/* Rail: the chapter and step count, the red task dot, a progress
+              rule, and the dismiss. On phones the action rides up here too —
+              the plate sits in the strip above the board, and a third row
+              would push it down over the rival's rule. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 3 : 7 }}>
+            {/* Phones have no footer row, so the task marker rides the rail there. */}
+            {isMobile && !done && current.task && <TaskDot ticked={ticked} />}
             <span
               style={{
                 ...text.label,
                 fontSize: 9.5,
-                letterSpacing: '0.24em',
+                letterSpacing: '0.2em',
                 color: poster.inkDim,
                 fontVariantNumeric: 'tabular-nums',
+                whiteSpace: 'nowrap',
               }}
             >
-              {done ? 'Lesson' : `${step + 1} / ${LESSON.length}`}
+              {done ? 'Lesson' : `${current.phase} · ${step + 1}/${LESSON.length}`}
             </span>
-            <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
+            <ProgressRule done={done ? 1 : step / LESSON.length} />
             {isMobile && !done && (
               <PlateAction label={current.task ? 'Skip' : 'Next'} onClick={next} muted={!!current.task} />
             )}
@@ -187,16 +196,16 @@ export function CoachPlate({ G, me, isMyTurn }: {
               <div
                 style={{
                   fontFamily: fonts.display,
-                  fontSize: isMobile ? 15 : 19,
+                  fontSize: isMobile ? 14 : 19,
                   letterSpacing: '0.02em',
                   textTransform: 'uppercase',
                   lineHeight: 1.1,
-                  marginBottom: 4,
+                  marginBottom: isMobile ? 2 : 4,
                 }}
               >
                 {done ? 'Ready' : current.title}
               </div>
-              <div style={{ ...text.body, fontSize: isMobile ? 11.5 : 12.5, color: poster.inkDim }}>
+              <div style={{ ...text.body, fontSize: isMobile ? 11 : 12.5, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
                 {done ? 'The rest is yours.' : current.body}
               </div>
             </motion.div>
@@ -224,6 +233,21 @@ export function CoachPlate({ G, me, isMyTurn }: {
         </motion.aside>
       )}
     </AnimatePresence>
+  );
+}
+
+/** The rail's hairline doubles as the progress bar: ink for what's behind
+ *  you, rule grey for what's left. Fifteen steps is enough that "how much
+ *  more of this" is a fair question. */
+function ProgressRule({ done }: { done: number }) {
+  return (
+    <span aria-hidden style={{ flex: 1, height: 2, background: poster.inkRule, position: 'relative', minWidth: 24 }}>
+      <motion.span
+        animate={{ width: `${Math.round(done * 100)}%` }}
+        transition={spring.snappy}
+        style={{ position: 'absolute', left: 0, top: 0, bottom: 0, background: poster.ink }}
+      />
+    </span>
   );
 }
 
@@ -263,8 +287,7 @@ function PlateAction({ label, onClick, muted }: {
         border: `1.5px solid ${muted ? poster.inkDim : poster.ink}`,
         background: muted ? 'transparent' : poster.ink,
         color: muted ? poster.inkDim : poster.paper,
-        clipPath: chamfer(6),
-        WebkitClipPath: chamfer(6),
+        ...clipBoth(chamfer(6)),
         fontFamily: fonts.display,
         fontSize: 11,
         letterSpacing: '0.2em',

@@ -70,7 +70,6 @@ export const REGIONS: Region[] = [
   },
 ];
 
-export const BOSS_COUNT = REGIONS.length;
 
 // All three routes branch from one shared origin at the Battery (lower
 // Manhattan), where the three boroughs meet across the harbour.

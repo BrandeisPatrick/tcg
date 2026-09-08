@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import type { TargetFilter } from '@/abilities';
 import { fonts, spring, text } from '../tokens';
-import { poster, chamfer } from '../poster';
+import { poster, chamfer, clipBoth } from '../poster';
 
 interface Props {
   title: string;
@@ -66,8 +66,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
         pointerEvents: 'auto',
         background: poster.panel,
         border: `1px solid ${poster.edge}`,
-        clipPath: chamfer(6),
-        WebkitClipPath: chamfer(6),
+        ...clipBoth(chamfer(6)),
         padding: '7px 8px 7px 8px',
       }}
     >
@@ -78,8 +77,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
         padding: '5px 10px',
         background: poster.target,
         color: poster.ink,
-        clipPath: chamfer(4),
-        WebkitClipPath: chamfer(4),
+        ...clipBoth(chamfer(4)),
         fontFamily: fonts.display,
         fontSize: 10.5,
         letterSpacing: '0.2em',

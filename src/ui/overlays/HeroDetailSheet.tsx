@@ -8,7 +8,7 @@ import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { spring, text, fonts } from '../tokens';
-import { poster, chamfer, sheetStyle } from '../poster';
+import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 import { RuleText } from '../card/RuleText';
 import { useViewport } from '../hooks/useViewport';
@@ -449,8 +449,7 @@ function SkillActionCard({
           ? {
               background: poster.red,
               border: `2px solid ${poster.red}`,
-              clipPath: chamfer(8),
-              WebkitClipPath: chamfer(8),
+              ...clipBoth(chamfer(8)),
             }
           : {
               background: 'transparent',

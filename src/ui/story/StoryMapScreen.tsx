@@ -6,7 +6,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { HeroBadge } from '@/cards/art/heroArt';
 import {
   randomStartingHeroes, recruitChoices, supplyChoices, nodeLabel,
-  enemyRosterSize, enemyBuff,
+  enemyRosterSize,
 } from '@/story/content';
 import { newRun, clearNode, isReachable } from '@/story/storyRun';
 import { palette, fonts, text, spring, shadow, radius } from '../tokens';

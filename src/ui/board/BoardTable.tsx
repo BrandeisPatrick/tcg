@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { fonts } from '../tokens';
-import { poster, chamfer, sheetStyle } from '../poster';
+import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 
 /**
  * Shared row metrics — single source of truth for the three board rows.
@@ -210,8 +210,7 @@ export function RowPlaque({ children }: { children: ReactNode }) {
       padding: '5px 4px',
       background: poster.ink,
       color: poster.paper,
-      clipPath: chamfer(4),
-      WebkitClipPath: chamfer(4),
+      ...clipBoth(chamfer(4)),
       fontFamily: fonts.display,
       fontSize: 10.5,
       letterSpacing: '0.2em',

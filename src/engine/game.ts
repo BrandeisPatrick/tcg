@@ -10,9 +10,9 @@ import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { getMatchConfig, scriptedSetup } from '@/storage/matchConfig';
 import { getAIDeckTagged } from '@/decks/aiDecks';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from './statusOps';
-import { resolve, damagePlayer } from './damage';
+import { resolve } from './damage';
 import { resolveAttackPhase } from './combat';
-import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, resetIid, nextIid } from './util';
+import { findCardOnBoard, liveBoardCards, pushLog, resetIid, nextIid } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
 import { fireEquipmentTriggers } from './equipmentDispatch';
@@ -88,10 +88,8 @@ function makeEmptyPlayer(pid: PlayerID): PlayerState {
     active: null,
     bench: [null, null, null],
     discard: [],
-    secret: [],
     ultsConsumed: [],
     skillUsedThisTurn: false,
-    respawning: [],
   };
 }
 
@@ -161,10 +159,8 @@ export function buildPlayer(pid: PlayerID, heroes: string[], deckCards: string[]
     active,
     bench,
     discard: [],
-    secret: [],
     ultsConsumed: [],
     skillUsedThisTurn: false,
-    respawning: [],
   };
 }
 
@@ -297,15 +293,12 @@ export const DeadlockGame: Game<GameState> = {
           '1': buildPlayer('1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.patronHp }),
         },
         turnNumber: 1,
-        selector: null,
-        resolveQueue: [],
         log: [{ turn: 1, text: 'Battle begins.' }],
         draft: null,
         draftTurnsOffset: 0,
         mulliganPending: false,
         action: null,
         damageFx: [],
-        shop: null,
       };
       G.players['0'].archetype = 'story';
       G.players['1'].archetype = 'story-enemy';
@@ -318,8 +311,6 @@ export const DeadlockGame: Game<GameState> = {
         '1': makeEmptyPlayer('1'),
       },
       turnNumber: 1,
-      selector: null,
-      resolveQueue: [],
       log: [{ turn: 1, text: 'Draft begins.' }],
       draft: {
         pool: HEROES.map((h) => h.id),
@@ -331,7 +322,6 @@ export const DeadlockGame: Game<GameState> = {
       mulliganPending: false,
       action: null,
       damageFx: [],
-      shop: null,
     };
     return G;
   },
@@ -400,10 +390,6 @@ export const DeadlockGame: Game<GameState> = {
      */
     completeAction: ({ G }) => {
       if (G.action) G.action.state = 'done';
-    },
-
-    shopPick: () => {
-      return INVALID_MOVE;
     },
 
     playCard: ({ G, ctx, playerID }, iid: string, targetIid?: string, discardIid?: string) => {

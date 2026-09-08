@@ -6,10 +6,7 @@ export const palette = {
   bg0: '#e8d8b4',          // page bg
   bg1: '#f0e2c2',          // panel bg
   bg2: '#f5e8cc',          // raised surface
-  bg3: '#ddc99b',          // hover / pressed
-  border: 'rgba(120, 80, 30, 0.28)',
   borderStrong: 'rgba(120, 80, 30, 0.5)',
-  overlay: 'rgba(240, 226, 194, 0.88)',
 
   // Text — mahogany ramp
   text: '#2a1f12',
@@ -18,30 +15,11 @@ export const palette = {
 
   // Accents — brass + wine (no cyan)
   accent: '#b07825',       // action focus
-  accentWarm: '#cc6630',   // secondary warm
   danger: '#8a2e2a',       // wine red
   success: '#4a7030',      // forest, darker for cream contrast
-  hp: '#c04a30',           // warm vermillion
-  atk: '#6b4716',          // dark brass — deliberately darker / less saturated than gold so the BP number sits quieter than HP vermillion at rest
+  hp: '#c04a30',           // warm vermillion — damageFxColor's 'attack' ink
   spirit: '#7a4a8a',       // muted plum
   pure: '#3a7a86',         // deep teal — desaturated
-
-  // BP / HP deviation colours — each stat number stays in its own hue
-  // family (brass for BP, vermillion for HP) and only modulates intensity
-  // to convey state. Default = the brand colour (palette.atk / palette.hp).
-  // Bright = above-base buff. Dim = desaturated grey for damage / debuff.
-  atkBright: '#e6b94a',    // bright brass / gold — BP buffed above base
-  atkDim:    '#7a6d5a',    // desaturated brass — BP reduced below base
-  hpBright:  '#e8633a',    // bright vermillion — HP buffed above base
-  hpDim:     '#8a7068',    // desaturated vermillion — HP damaged below max
-
-  // Rarity gems — re-pitched for visibility on cream
-  rarity: {
-    1: { fill: '#8e7e65', glow: 'rgba(142, 126, 101, 0.4)' },     // common - warm gray
-    2: { fill: '#3a7030', glow: 'rgba(58, 112, 48, 0.45)' },      // uncommon - forest
-    3: { fill: '#2a4870', glow: 'rgba(42, 72, 112, 0.5)' },       // rare - deep blue
-    4: { fill: '#b07825', glow: 'rgba(176, 120, 37, 0.55)' },     // mythic - brass
-  },
 
   // Card-type ribbons — cream-frame friendly
   type: {
@@ -51,21 +29,10 @@ export const palette = {
     ultimate:  { from: '#0a3a35', to: '#031a18', accent: '#98ffde', ribbon: '#b07825' },  // brass (accent)
   },
 
-  // Cream/parchment for card description bodies — same as before, page now matches
+  // Cream/parchment for card description bodies
   card: {
     body: '#f7e7d1',
-    bodyDim: '#dec9a8',
     bodyText: '#1a1410',
-    bodyTextDim: '#544a3b',
-    bodyBorder: '#8a6d3a',   // stronger dark sepia frame
-    flavor: '#7a6e58',
-  },
-
-  // Status categories
-  status: {
-    buff:    '#4a7030',
-    debuff:  '#8a2e2a',
-    utility: '#b07825',      // brass instead of cyan
   },
 } as const;
 
@@ -81,18 +48,13 @@ export const fonts = {
   // Brush script — the hand-lettered lead-in on the title poster ("Get dealt
   // into…"). Caveat Brush; falls back to the platform's marker hand.
   script:  '"Caveat Brush", "Marker Felt", "Bradley Hand", "Segoe Script", cursive',
-  mono:    'ui-monospace, "SF Mono", Menlo, monospace',
 } as const;
 
 // Shadows are now warm brown drops onto parchment, not black on dark.
 export const shadow = {
-  sm: '0 1px 2px rgba(40, 20, 0, 0.18)',
   md: '0 4px 12px rgba(40, 20, 0, 0.22)',
   lg: '0 12px 32px rgba(40, 20, 0, 0.28)',
-  xl: '0 20px 60px rgba(40, 20, 0, 0.34)',
   glowAccent: '0 0 0 1px rgba(176, 120, 37, 0.55), 0 0 24px rgba(176, 120, 37, 0.4)',
-  glowGold:   '0 0 0 1px rgba(176, 120, 37, 0.6), 0 0 28px rgba(176, 120, 37, 0.45)',
-  glowDanger: '0 0 0 1px rgba(138, 46, 42, 0.5), 0 0 18px rgba(138, 46, 42, 0.4)',
 } as const;
 
 export const radius = {
@@ -100,12 +62,6 @@ export const radius = {
   md: 6,
   lg: 8,
   pill: 999,
-} as const;
-
-export const ease = {
-  spring: 'cubic-bezier(0.22, 1, 0.36, 1)',
-  back:   'cubic-bezier(0.34, 1.56, 0.64, 1)',
-  smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
 } as const;
 
 export const spring = {
@@ -128,37 +84,25 @@ export function damageFxColor(type: 'attack' | 'spirit' | 'pure', ko = false): s
     : palette.hp;                            // 'attack' → bullet vermillion
 }
 
-export function rarityStyle(rarity: 1 | 2 | 3 | 4) {
-  return palette.rarity[rarity];
-}
-
 export function typeTint(t: 'hero' | 'spell' | 'equipment' | 'ultimate') {
   return palette.type[t];
 }
 
 /**
- * UI typography — one-family system. Hierarchy by color + weight; size used
- * sparingly as the contrast register.
+ * UI typography. Two families carry the whole app: `fonts.ui` (Saira) for
+ * anything you read as a sentence, `fonts.display` (Saira Stencil One) for
+ * anything stamped — titles, plate labels, stickers. `fonts.script` is the
+ * title poster's hand-lettered lead-in and appears nowhere else.
  *
- * CONSTRAINTS (enforced by code review, not by compiler):
- *   - Family: ONLY `fonts.ui` (Inter Variable). No `fonts.display`, no hardcoded family.
- *   - Weights: ONLY `400` (regular) or `700` (bold).
- *   - Transforms: NEVER `textTransform: 'uppercase'`, NEVER non-zero `letterSpacing`,
- *     NEVER `fontStyle: 'italic'`.
+ * Size scale — use the nearest tier rather than inventing one:
+ *   - 10-11  chrome / metadata (status lines, card identifiers)
+ *   - 12-13  default (labels, names, body, log entries)
+ *   - 14-16  panel counters and full-card names
+ *   - 19-28  display (hero stats, verdict headlines, damage popups)
  *
- * Approved size scale (use the nearest tier, do not invent new sizes):
- *   - 11  — chrome / metadata (DLK identifier line, hand-card body)
- *   - 12  — default (labels, ribbons, names, body, log entries)
- *   - 14  — full-card name (preview / hover surface)
- *   - 16  — panel counters (patron HP, Souls, turn pip, respawn count, hand count)
- *   - 22  — large display (in-game stats: ATK/HP/SPI on hero detail + promotion modal,
- *           KO line, level ring centroid, ULT badge)
- *   - 28  — damage popup (the hit-landed beat; bigger than other display to read as IMPACT)
- *
- * Tokens (spread onto `style`; override `fontSize` inline where the scale demands):
- *   - `text.label`   12 / 700 — bold label
- *   - `text.body`    12 / 400 — regular prose
- *   - `text.numeric` 22 / 700 — tabular large display (override to 16 for panel counters)
+ * Tokens below are spread onto `style`; override `fontSize` where the scale
+ * demands. `text.label` is uppercase with tracking on purpose — it is the
+ * poster's stencil voice; `text.body` is the untransformed prose register.
  */
 /** Shared hero stat-pair style (ATK / Lv / HP). Spread onto the inline-flex
  *  container; only size + colour vary per surface. */

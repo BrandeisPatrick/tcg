@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { fonts, spring } from '../tokens';
-import { poster, chamfer } from '../poster';
+import { poster, chamfer, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 
 interface Props {
@@ -117,8 +117,7 @@ export function BoardControls({
             style={{
               position: 'absolute', inset: -4,
               border: `1px solid ${poster.you}`,
-              clipPath: chamfer(11),
-              WebkitClipPath: chamfer(11),
+              ...clipBoth(chamfer(11)),
               pointerEvents: 'none',
             }}
           />
@@ -192,8 +191,7 @@ function StatusOrCancel({ status, hasPending, onCancel, onDark = false }: {
         padding: '4px 11px',
         background: 'transparent',
         border: `1.5px solid ${onDark ? poster.edge : poster.inkFaint}`,
-        clipPath: chamfer(5),
-        WebkitClipPath: chamfer(5),
+        ...clipBoth(chamfer(5)),
         fontFamily: fonts.display,
         fontSize: 10,
         letterSpacing: '0.18em',
@@ -242,8 +240,7 @@ function AutoSwitch({ autoPlay, onToggleAuto, onDark = false }: {
         display: 'inline-flex', alignItems: 'center', gap: 7,
         background: poster.ink,
         border: `1.5px solid ${autoPlay ? poster.gold : offBorder}`,
-        clipPath: chamfer(4),
-        WebkitClipPath: chamfer(4),
+        ...clipBoth(chamfer(4)),
         fontFamily: fonts.display,
         fontSize: 10.5,
         letterSpacing: '0.2em',

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
 import type { GameState, CardInstance, PlayerID, DamageEvent } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
@@ -65,11 +65,8 @@ export function Board(props: BoardProps<GameState>) {
     if (isTutorial && ctx.gameover?.winner === me) markTutorialDone();
   }, [isTutorial, ctx.gameover, me]);
   // Combat tempo honours the system-menu speed setting live.
-  const { combatSpeed, reducedMotion } = useSettings();
+  const { combatSpeed } = useSettings();
   // The backdrop's slow push-in runs only when neither the settings sheet
-  // nor the OS asks for reduced motion (same gate as the title screen).
-  const osReducedMotion = useReducedMotion();
-  const ambient = !reducedMotion && !osReducedMotion;
   const [pending, setPending] = useState<PendingPlay | null>(null);
   // Auto-play: when on, the same AI that runs the opponent also drives the
   // local player's turns, so the match plays itself hands-free. Toggle in the
@@ -412,17 +409,9 @@ export function Board(props: BoardProps<GameState>) {
     if (!pending) return false;
     // Corpses (respawning heroes) are never valid targets.
     if ((card.respawnTurnsLeft ?? 0) > 0) return false;
-    const isAlly = owner === me;
-    switch (pending.filter) {
-      case 'noTarget': return false;
-      case 'self': return isAlly && pending.iid === card.iid;
-      case 'allyAny': return isAlly;
-      case 'allyHero': return isAlly && CARDS_BY_ID[card.cardId]?.type === 'hero';
-      case 'enemyAny': return !isAlly;
-      case 'enemyHero': return !isAlly && CARDS_BY_ID[card.cardId]?.type === 'hero';
-      case 'enemyActive': return !isAlly && card.zone === 'active';
-      case 'anyBoard': return true;
-    }
+    // 'self' means the armed card itself; filterAllows has no source to compare.
+    if (pending.filter === 'self') return owner === me && pending.iid === card.iid;
+    return filterAllows(pending.filter, card, owner, me);
   }, [pending, me]);
 
   /** True while a card-play / skill / ult reveal is mid-animation. Blocks
@@ -618,7 +607,7 @@ export function Board(props: BoardProps<GameState>) {
     <LayoutGroup>
       <CombatProgressContext.Provider value={combatProgress}>
       <DamageFxContext.Provider value={damageFxFor}>
-      <PosterBackdrop ambient={ambient} />
+      <PosterBackdrop />
 
       <div style={{
         minHeight: '100vh',

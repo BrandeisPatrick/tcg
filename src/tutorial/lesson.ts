@@ -4,9 +4,9 @@
  *
  * The match reuses the scripted-setup path Story already uses (`StorySetup`),
  * so no engine branch is needed: fixed rosters, fixed decks, no draft, no
- * mulligan. It is deliberately lopsided — the player fields two 2/6 heroes
- * against two 1/4s, and the patron only has 3 lives, so the lesson resolves in
- * a handful of turns and is very hard to lose.
+ * mulligan. It is deliberately lopsided — two 2/6 heroes against three 1-attack
+ * ones — so the lesson is very hard to lose and long enough for the whole
+ * script to land.
  *
  * The script never blocks input. Each step either states something (advance on
  * Next) or names a task and watches the game state until the player does it.
@@ -15,18 +15,19 @@
  */
 import type { CardId, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
-import { RETREAT_COST, SKILL_COST } from '@/engine/game';
+import { CARDS_BY_ID } from '@/cards';
+import { RETREAT_COST, SKILL_COST, MAX_EQUIPMENT_PER_HERO } from '@/engine/game';
 
 /** Your side: two sturdy heroes with cheap, unambiguous skills. */
 const PLAYER_HEROES: CardId[] = ['hero_kelvin', 'hero_yamato'];
 /** Theirs: three of the lowest-attack heroes in the set (1 atk each), so the
- *  lesson is safe to lose track of — and long enough that the script gets to
- *  finish. With two, an optimal opponent's board wipes on turn 5, which can
- *  end the match while the coach is still on step 5. */
+ *  lesson is safe to lose track of. */
 const ENEMY_HEROES: CardId[] = ['hero_lash', 'hero_sinclair', 'hero_lady_geist'];
 
-/** A 12-card deck of 1- and 2-cost cards only, so something is always
- *  playable and it never runs dry inside the lesson. */
+/** Sixteen cards, weighted to 1- and 2-cost so something is always playable
+ *  on the opening souls, with two pricier items for the later turns. Both
+ *  spells and equipment are in it: the script asks for one of each, and at
+ *  the observed match length (8-13 turns) it never runs dry. */
 const PLAYER_DECK: CardId[] = [
   'extra_health', 'extra_health',
   'healing_rite', 'healing_rite',
@@ -34,6 +35,8 @@ const PLAYER_DECK: CardId[] = [
   'extended_magazine', 'extended_magazine',
   'rusted_barrel', 'rusted_barrel',
   'extra_regen', 'extra_regen',
+  'mystic_regeneration', 'mystic_regeneration',
+  'healing_booster', 'healing_booster',
 ];
 
 const ENEMY_DECK: CardId[] = [
@@ -44,9 +47,12 @@ const ENEMY_DECK: CardId[] = [
   'healing_booster', 'mystic_regeneration',
 ];
 
-/** Patron lives for the lesson. Low so the match still ends while the script
- *  is fresh; the player's side is safe behind 6 HP heroes either way. */
+/** Patron lives for the lesson. Low so it still ends while the script is
+ *  fresh; the player's side is safe behind 6 HP heroes either way. */
 const TUTORIAL_PATRON_HP = 4;
+/** Flat HP on every rival hero. Buying time rather than lives: it stretches
+ *  the match past the last step without making the rivals hit any harder. */
+const ENEMY_BUFF = { atk: 0, hp: 2 };
 
 export function tutorialSetup(): StorySetup {
   return {
@@ -54,7 +60,7 @@ export function tutorialSetup(): StorySetup {
     playerDeck: [...PLAYER_DECK],
     enemyHeroes: [...ENEMY_HEROES],
     enemyDeck: [...ENEMY_DECK],
-    enemyBuff: { atk: 0, hp: 0 },
+    enemyBuff: { ...ENEMY_BUFF },
     patronHp: TUTORIAL_PATRON_HP,
   };
 }
@@ -67,6 +73,7 @@ export function tutorialSetup(): StorySetup {
  *  stay true, so a step can't un-complete when the turn rolls over. */
 export interface CoachSeen {
   playedCard: boolean;
+  equipped: boolean;
   usedSkill: boolean;
   endedTurn: boolean;
   swapped: boolean;
@@ -74,6 +81,7 @@ export interface CoachSeen {
 
 export const emptySeen: CoachSeen = {
   playedCard: false,
+  equipped: false,
   usedSkill: false,
   endedTurn: false,
   swapped: false,
@@ -86,59 +94,131 @@ export interface CoachView {
   seen: CoachSeen;
 }
 
+/** Which part of the game a step belongs to — printed in the plate's rail so
+ *  fifteen steps read as four short chapters rather than one long list. */
+export type CoachPhase = 'Table' | 'Your Turn' | 'The Fight' | 'Close';
+
 export interface CoachStep {
   id: string;
+  phase: CoachPhase;
   /** Stencil heading — two or three words. */
   title: string;
-  /** One line. The board shows the rest. */
+  /** One or two short lines. The board shows the rest. */
   body: string;
   /** Present = the step is a task, and completes when this reads true.
    *  Absent = the step just states something and advances on Next. */
   task?: (v: CoachView) => boolean;
 }
 
+/** True once any hero of yours is wearing a piece of equipment. */
+export function hasEquipment(G: GameState, me: PlayerID): boolean {
+  const ps = G.players[me];
+  return [ps.active, ...ps.bench].some((c) => {
+    if (!c) return false;
+    return (c.attached ?? []).some((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment');
+  });
+}
+
 export const LESSON: CoachStep[] = [
+  // ---- Table: what you are looking at ----
   {
     id: 'deal',
+    phase: 'Table',
     title: 'The Deal',
-    body: 'Zero their patron, or floor their whole bench.',
+    body: 'Two patrons back this fight. Win by dropping theirs to zero, or by leaving their whole bench down at once.',
   },
   {
+    id: 'rows',
+    phase: 'Table',
+    title: 'The Rows',
+    body: 'Only the Active in the middle row fights. Your bench waits below it, out of reach.',
+  },
+  {
+    id: 'lives',
+    phase: 'Table',
+    title: 'Patron Lives',
+    body: 'Every hero that falls costs its patron one life. Both counts sit on the rules above and below the sheet.',
+  },
+
+  // ---- Your Turn: the moves ----
+  {
     id: 'souls',
+    phase: 'Your Turn',
     title: 'Souls',
-    body: 'The rail refills each turn. Cards and skills spend it.',
+    body: 'The rail refills at the start of your turn — one, then two, then more. Unspent souls do not carry over.',
+  },
+  {
+    id: 'draw',
+    phase: 'Your Turn',
+    title: 'The Draw',
+    body: 'One card a turn, off the top of your deck. What is left of it is counted on your rule.',
   },
   {
     id: 'play',
+    phase: 'Your Turn',
     title: 'Play a Card',
-    body: 'Tap a card, then tap who it lands on.',
+    body: 'Tap a card, then tap who it lands on. A spell resolves once; a card you cannot afford stays greyed.',
     task: (v) => v.seen.playedCard,
   },
   {
+    id: 'equip',
+    phase: 'Your Turn',
+    title: 'Gear a Hero',
+    body: `Equipment rides on a hero — up to ${MAX_EQUIPMENT_PER_HERO} pieces — and folds straight into their numbers.`,
+    task: (v) => v.seen.equipped,
+  },
+  {
     id: 'skill',
+    phase: 'Your Turn',
     title: 'Use a Skill',
-    body: `Tap your Active, then its Skill. ${SKILL_COST} soul, once a turn.`,
+    body: `Tap your Active, then its Skill. One skill a turn across your whole side, ${SKILL_COST} soul.`,
     task: (v) => v.seen.usedSkill,
   },
   {
     id: 'end',
+    phase: 'Your Turn',
     title: 'End the Turn',
-    body: 'Both Actives trade blows on the way out.',
+    body: 'Both Actives trade blows on the way out. The number beside the blade is what each one hits for.',
     task: (v) => v.seen.endedTurn,
   },
+
+  // ---- The Fight: keeping a side alive ----
   {
     id: 'retreat',
+    phase: 'The Fight',
     title: 'Retreat',
-    body: `Open a bench hero and Retreat — ${RETREAT_COST} souls.`,
+    body: `Open a bench hero and Retreat — ${RETREAT_COST} souls. Pull a worn Active out before it falls.`,
     task: (v) => v.seen.swapped,
   },
   {
+    id: 'down',
+    phase: 'The Fight',
+    title: 'Down, Not Out',
+    body: 'A fallen hero stays greyed in its slot on a respawn timer, then stands back up at full health.',
+  },
+  {
+    id: 'levels',
+    phase: 'The Fight',
+    title: 'Levelling',
+    body: 'Heroes earn experience for damage and kills. The ring on each card fills, and levelling raises their numbers.',
+  },
+  {
     id: 'ults',
+    phase: 'The Fight',
     title: 'Ultimates',
-    body: 'Every hero deals you theirs on turn five.',
+    body: 'On turn five every hero deals you theirs. They cost the most and they end fights.',
+  },
+
+  // ---- Close ----
+  {
+    id: 'log',
+    phase: 'Close',
+    title: 'The Log',
+    body: 'Lost the thread? The panel lists every hit, heal and effect in order.',
   },
   {
     id: 'close',
+    phase: 'Close',
     title: "That's the Game",
     body: 'Take the street.',
   },

@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { fonts, spring } from './tokens';
-import { poster, chamfer, posterButtonSkins, type PosterButtonVariant } from './poster';
+import { poster, chamfer, posterButtonSkins, type PosterButtonVariant, clipBoth } from './poster';
 
 /**
  * Shared chrome. Every screen outside the card art itself is now printed in
@@ -53,8 +53,7 @@ export function PosterButton({
         padding: size === 'sm' ? '9px 18px' : '13px 30px',
         ...skin,
         ...(disabled ? disabledSkin : {}),
-        clipPath: chamfer(n),
-        WebkitClipPath: chamfer(n),
+        ...clipBoth(chamfer(n)),
         fontFamily: fonts.display,
         fontSize: size === 'sm' ? 13 : 17,
         letterSpacing: '0.22em',

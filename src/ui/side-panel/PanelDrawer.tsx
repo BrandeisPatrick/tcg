@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { poster } from '../poster';
+import { poster, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 /**
@@ -47,8 +47,7 @@ export function PanelDrawer({ open, onToggle, children }: {
         // Left-only chamfer: the tab's right edge is always flush (against the
         // panel when open, the viewport edge when closed), so notching it there
         // would just expose the scene.
-        clipPath: TAB_CLIP,
-        WebkitClipPath: TAB_CLIP,
+        ...clipBoth(TAB_CLIP),
         color: poster.cream,
         cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',

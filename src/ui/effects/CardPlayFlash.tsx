@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState } from '@/engine/types';
 import { CardFrame } from '../card/CardFrame';
 import { fonts } from '../tokens';
-import { poster, chamfer } from '../poster';
+import { poster, chamfer, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 /** Reveal hold in ms — Board's completeAction timer must match. */
@@ -49,8 +49,7 @@ const tagStyle = {
   display: 'inline-block',
   background: poster.ink,
   color: poster.cream,
-  clipPath: chamfer(4),
-  WebkitClipPath: chamfer(4),
+  ...clipBoth(chamfer(4)),
   fontFamily: fonts.display,
   letterSpacing: '0.2em',
   textTransform: 'uppercase',

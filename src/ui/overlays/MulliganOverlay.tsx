@@ -4,7 +4,7 @@ import type { CardInstance } from '@/engine/types';
 import { CardFrame } from '../card/CardFrame';
 import { fonts, spring, text } from '../tokens';
 import { PosterButton } from '../chrome';
-import { poster, chamfer, sheetStyle } from '../poster';
+import { poster, chamfer, sheetStyle, clipBoth, scrimStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 interface Props {
@@ -23,8 +23,7 @@ const inkTag = {
   letterSpacing: '0.2em',
   textTransform: 'uppercase' as const,
   lineHeight: 1,
-  clipPath: chamfer(4),
-  WebkitClipPath: chamfer(4),
+  ...clipBoth(chamfer(4)),
 };
 
 export function MulliganOverlay({ cards, onConfirm }: Props) {
@@ -56,11 +55,8 @@ export function MulliganOverlay({ cards, onConfirm }: Props) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
       style={{
-        position: 'fixed', inset: 0,
-        background: poster.scrim,
-        backdropFilter: 'blur(6px)',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
+        ...scrimStyle,
+        flexDirection: 'column',
         zIndex: 95,
         padding: isMobile ? 16 : 32,
         overflowY: compact ? 'auto' : undefined,

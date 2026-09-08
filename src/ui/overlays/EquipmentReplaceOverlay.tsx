@@ -4,7 +4,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { CardFrame } from '../card/CardFrame';
 import { fonts, spring, text } from '../tokens';
 import { PosterButton } from '../chrome';
-import { poster, sheetStyle } from '../poster';
+import { poster, sheetStyle, scrimStyle } from '../poster';
 
 interface Props {
   /** The piece of equipment trying to be played from hand. */
@@ -48,10 +48,7 @@ export function EquipmentReplaceOverlay({ incoming, hero, onPick, onCancel }: Pr
       transition={{ duration: 0.18 }}
       onClick={onCancel}
       style={{
-        position: 'fixed', inset: 0,
-        background: poster.scrim,
-        backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        ...scrimStyle,
         zIndex: 100, padding: 32,
       }}
     >
@@ -124,7 +121,7 @@ export function EquipmentReplaceOverlay({ incoming, hero, onPick, onCancel }: Pr
               boxShadow: '0 3px 8px rgba(0, 0, 0, 0.35)',
             }}>Incoming</span>
             <div style={cardBox}>
-              <CardFrame cardId={incoming.cardId} size="hand" footer={null} />
+              <CardFrame cardId={incoming.cardId} size="hand" />
             </div>
           </motion.div>
         </div>
@@ -151,7 +148,7 @@ function ReplaceableCard({ card, onPick }: { card: CardInstance; onPick: () => v
         cursor: 'pointer',
       }}
     >
-      <CardFrame cardId={card.cardId} size="hand" footer={null} />
+      <CardFrame cardId={card.cardId} size="hand" />
     </motion.button>
   );
 }

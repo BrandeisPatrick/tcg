@@ -43,7 +43,3 @@ export function withCast<T>(source: CardInstance | null, kind: CastKind, fn: () 
   }
 }
 
-/** Reset the entire stack (used by test helpers + game reset). */
-export function resetCastContext() {
-  stack.length = 0;
-}

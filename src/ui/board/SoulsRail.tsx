@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { fonts } from '../tokens';
-import { poster, chamfer, soulCoin } from '../poster';
+import { poster, chamfer, soulCoin, clipBoth } from '../poster';
 import { boardRows } from './BoardTable';
 import { useViewport } from '../hooks/useViewport';
 
@@ -121,8 +121,7 @@ function Rack({ filled, slots, side, mobile }: {
       // rest of the print.
       background: poster.paperBand,
       border: `1px solid ${poster.inkRule}`,
-      clipPath: chamfer(4),
-      WebkitClipPath: chamfer(4),
+      ...clipBoth(chamfer(4)),
     }}>
       {/* Stencilled count — the at-a-glance readout at the anchor end. */}
       <span style={{

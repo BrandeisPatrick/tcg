@@ -10,14 +10,13 @@
  * job (fifteen cards), not a different answer.
  */
 import { useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { HEROES, CARDS_BY_ID } from '@/cards';
 import { fonts, spring, text } from '../tokens';
-import { poster, chamfer, sheetStyle } from '../poster';
+import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
-import { useSettings } from '@/storage/settings';
 import {
   loadPlayerData, savePreferredHeroes, setSelectedDeckIndex, deleteDeck,
   MAX_PREFERRED_HEROES, MAX_DECKS, DECK_SIZE,
@@ -34,9 +33,6 @@ interface Props {
 
 export function LoadoutScreen({ onBack, onEditDeck }: Props) {
   const { isMobile, width } = useViewport();
-  const { reducedMotion } = useSettings();
-  const osReducedMotion = useReducedMotion();
-  const ambient = !reducedMotion && !osReducedMotion;
   // Two columns only where both halves keep a workable width; below that the
   // hero grid squeezes to three-across and the deck rows lose their numbers.
   const split = width >= 1080;
@@ -79,7 +75,7 @@ export function LoadoutScreen({ onBack, onEditDeck }: Props) {
         overflowX: 'hidden',
       }}
     >
-      <PosterBackdrop ambient={ambient} />
+      <PosterBackdrop />
 
       <motion.section
         initial={{ opacity: 0, y: 18 }}
@@ -258,8 +254,7 @@ function Squad({ slots, onAdd, onClear, compact, split }: {
                 padding: 3,
                 border: 'none',
                 background: picked ? poster.ink : poster.frame,
-                clipPath: chamfer(7),
-                WebkitClipPath: chamfer(7),
+                ...clipBoth(chamfer(7)),
                 aspectRatio: '3 / 4',
                 cursor: closed ? 'default' : 'pointer',
                 // Picked heroes are greyed by the image filter below; the rest
@@ -359,8 +354,7 @@ function PickSlot({ index, heroId, onClear }: {
         padding: heroId ? 4 : 0,
         border: heroId ? 'none' : `1.5px dashed ${poster.inkDim}`,
         background: heroId ? poster.ink : 'transparent',
-        clipPath: heroId ? chamfer(9) : undefined,
-        WebkitClipPath: heroId ? chamfer(9) : undefined,
+        ...clipBoth(heroId ? chamfer(9) : undefined),
         cursor: heroId ? 'pointer' : 'default',
         overflow: 'hidden',
       }}
@@ -522,8 +516,7 @@ function DeckRow({
         background: active ? poster.ink : 'transparent',
         color: active ? poster.paper : poster.ink,
         border: `1.5px solid ${active ? poster.ink : poster.inkRule}`,
-        clipPath: chamfer(9),
-        WebkitClipPath: chamfer(9),
+        ...clipBoth(chamfer(9)),
       }}
     >
       {/* Slot numeral / active mark */}
@@ -627,8 +620,7 @@ function RowAction({ label, tone, onClick, ariaLabel }: {
         background: 'transparent',
         color,
         opacity: tone === 'cream' ? 0.8 : 1,
-        clipPath: chamfer(5),
-        WebkitClipPath: chamfer(5),
+        ...clipBoth(chamfer(5)),
         fontFamily: fonts.display,
         fontSize: 10.5,
         letterSpacing: '0.16em',

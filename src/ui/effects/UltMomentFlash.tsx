@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { fonts } from '../tokens';
-import { poster, chamfer, PAPER_MOTTLE } from '../poster';
+import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 
 /**
  * Surfaces the dramatic screen-fill + nameplate when an ultimate is cast.
@@ -87,8 +87,7 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
           backgroundSize: '320px 320px',
           color: poster.ink,
           border: `2px solid ${poster.ink}`,
-          clipPath: chamfer(8),
-          WebkitClipPath: chamfer(8),
+          ...clipBoth(chamfer(8)),
         }}>
           <span style={{
             padding: '4px 9px 5px',

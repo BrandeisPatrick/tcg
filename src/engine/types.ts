@@ -11,8 +11,7 @@ export type Zone =
   | 'active'
   | 'bench'
   | 'equipment'
-  | 'discard'
-  | 'secret';
+  | 'discard';
 
 export type DamageType = 'attack' | 'spirit' | 'pure';
 
@@ -142,41 +141,16 @@ export interface PlayerState {
   active: CardInstance | null;
   bench: (CardInstance | null)[]; // length 3
   discard: CardInstance[];
-  secret: CardInstance[];
   ultsConsumed: string[]; // ult cardIds that have already entered hand this match
   /** Whether this player has already used a hero skill this turn (max 1 skill per player per turn). */
   skillUsedThisTurn: boolean;
-  /** Heroes waiting to come back to the bench after being KO'd. */
-  respawning: RespawnEntry[];
   /** Deck archetype this player drafted (for eval/balance tracking). */
   archetype?: string;
-}
-
-export interface RespawnEntry {
-  card: CardInstance;     // fresh-state hero (full HP, no statuses)
-  turnsLeft: number;      // ticks down at the start of each turn
-}
-
-export interface PendingSelector {
-  movingPlayer: PlayerID;
-  abilityId: AbilityId;
-  sourceIid?: string;
-  filter: 'enemyBoard' | 'allyBoard' | 'enemyAny' | 'allyAny' | 'anyBoard' | 'enemyHero' | 'allyHero';
-  prompt: string;
 }
 
 export interface LogEntry {
   turn: number;
   text: string;
-}
-
-export interface QueuedItem {
-  kind: 'ability' | 'attack' | 'secret' | 'callback';
-  effectId: string;
-  params?: Record<string, unknown>;
-  sourceIid?: string;
-  targetIid?: string;
-  priority: number;
 }
 
 /**
@@ -222,20 +196,10 @@ export interface DraftState {
   picks: { '0': CardId[]; '1': CardId[] };        // per-player picks in pick order
 }
 
-export interface ShopState {
-  forPlayer: PlayerID;
-  round: 1 | 2 | 3;
-  visit: 1 | 2 | 3 | 4;
-  choices: CardId[];
-}
-
 export interface GameState {
   players: { '0': PlayerState; '1': PlayerState };
   turnNumber: number;
-  selector: PendingSelector | null;
-  resolveQueue: QueuedItem[];
   log: LogEntry[];
-  rngSeed?: string;
   /** Pre-match hero draft. Null once draft completes. */
   draft: DraftState | null;
   /**
@@ -262,6 +226,4 @@ export interface GameState {
    *  "got hit" flash. Cleared at the start of each turn; UI plays new entries
    *  by tracking the highest `seq` it has seen. */
   damageFx: DamageEvent[];
-  /** Street Brawl shop. When non-null the player must pick before acting. */
-  shop: ShopState | null;
 }

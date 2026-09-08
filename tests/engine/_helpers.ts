@@ -25,15 +25,12 @@ export function freshReadyGame(): GameState {
     },
     // Turn 2 so P0's attack phase resolves (P0 forgoes first strike on turn 1).
     turnNumber: 2,
-    selector: null,
-    resolveQueue: [],
     log: [{ turn: 1, text: 'Battle begins.' }],
     draft: null,
     draftTurnsOffset: 0,
     mulliganPending: false,
     action: null,
     damageFx: [],
-    shop: null,
   } as unknown as GameState;
 }
 

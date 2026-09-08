@@ -48,7 +48,3 @@ export function useViewport(): Viewport {
   return vp;
 }
 
-/** Convenience: true on phone-width viewports (≤767px). */
-export function useIsMobile(): boolean {
-  return useViewport().isMobile;
-}

@@ -49,7 +49,6 @@ export const poster = {
     hpDim: '#9a6f68',
     shield: '#3f8f3a',
     spirit: '#7a4a8a',
-    pure: '#3a7a86',
   },
   status: {
     buff: '#3f8f3a',
@@ -78,6 +77,13 @@ export const posterButtonSkins = {
 } as const;
 export type PosterButtonVariant = keyof typeof posterButtonSkins;
 
+/** Spread a clip-path onto a style with its WebKit twin. Every chamfered
+ *  surface needs both, and 38 hand-copied pairs is 38 chances to set one. */
+export const clipBoth = (path: string | undefined) => ({
+  clipPath: path,
+  WebkitClipPath: path,
+});
+
 /** Chamfered corners — the poster's button, plate and card silhouette. */
 export const chamfer = (n: number) =>
   `polygon(${n}px 0, calc(100% - ${n}px) 0, 100% ${n}px, 100% calc(100% - ${n}px), calc(100% - ${n}px) 100%, ${n}px 100%, 0 calc(100% - ${n}px), 0 ${n}px)`;
@@ -85,6 +91,25 @@ export const chamfer = (n: number) =>
 /** Soft low-frequency mottling — the uneven sizing of a handmade sheet.
  *  Tile it under any paper surface. */
 export const PAPER_MOTTLE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='3' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.30  0 0 0 0 0.12  0 0 0 0.075 0'/%3E%3C/filter%3E%3Crect width='320' height='320' filter='url(%23p)'/%3E%3C/svg%3E")`;
+
+/** The drop shadow under a framed tile — menu cards, hero slots, the framed
+ *  portraits on the match-end sheet. */
+export const tileShadow = '0 14px 26px rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0, 0, 0.25)';
+
+/** The inner edge that makes a print sit slightly recessed in its frame. */
+export const printEdge = 'inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 -18px 24px -12px rgba(0, 0, 0, 0.5)';
+
+/** The modal backdrop: the scene dimmed to the poster's scrim, filling the
+ *  viewport above everything. Spread FIRST, then add each site's z-index. */
+export const scrimStyle = {
+  position: 'fixed' as const,
+  inset: 0,
+  background: poster.scrim,
+  backdropFilter: 'blur(6px)',
+  display: 'flex' as const,
+  alignItems: 'center' as const,
+  justifyContent: 'center' as const,
+};
 
 /** The cream sheet: paper + mottle + the drop shadow that floats it over
  *  the blurred scene. Spread onto a container's style. */

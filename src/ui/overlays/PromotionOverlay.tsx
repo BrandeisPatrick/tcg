@@ -4,7 +4,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { effectiveAtk } from '@/engine/util';
 import { fonts, spring, text } from '../tokens';
-import { poster, sheetStyle } from '../poster';
+import { poster, sheetStyle, scrimStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 interface Props {
@@ -29,10 +29,7 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
       style={{
-        position: 'fixed', inset: 0,
-        background: poster.scrim,
-        backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        ...scrimStyle,
         zIndex: 100, padding: isMobile ? 16 : 32,
         overflowY: isMobile ? 'auto' : undefined,
       }}

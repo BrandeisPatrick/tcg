@@ -22,7 +22,7 @@ import { CARDS_BY_ID, HEROES } from '@/cards';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { fonts, spring, text } from '../tokens';
-import { poster, chamfer } from '../poster';
+import { poster, chamfer, clipBoth } from '../poster';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { useViewport } from '../hooks/useViewport';
 
@@ -356,8 +356,7 @@ function StatusCapsule({ tone, pulse, label, compact }: { tone: 'green' | 'red' 
         background: lobby.panel,
         flexShrink: 0,
         border: `1px solid ${lobby.edge}`,
-        clipPath: chamfer(6),
-        WebkitClipPath: chamfer(6),
+        ...clipBoth(chamfer(6)),
       }}
     >
       <motion.span
@@ -438,8 +437,7 @@ function PickSide({ picks, side, tone, live, compact }: {
               overflow: 'hidden',
               border: `2px solid ${colour}`,
               background: lobby.panel,
-              clipPath: chamfer(4),
-              WebkitClipPath: chamfer(4),
+              ...clipBoth(chamfer(4)),
             }}
           >
             <img
@@ -476,8 +474,7 @@ function PickSide({ picks, side, tone, live, compact }: {
           background: side === 'left'
             ? `linear-gradient(90deg, ${colour}, ${deep})`
             : `linear-gradient(270deg, ${colour}, ${deep})`,
-          clipPath: clip,
-          WebkitClipPath: clip,
+          ...clipBoth(clip),
           display: 'flex',
           alignItems: 'center',
           justifyContent: side === 'left' ? 'flex-start' : 'flex-end',
@@ -510,8 +507,7 @@ function CardBack({ w, h, live, tone, numeral, label }: {
         height: h,
         border: `2px solid ${lobby.edge}`,
         background: `linear-gradient(180deg, ${lobby.panel}, #0f1214)`,
-        clipPath: chamfer(4),
-        WebkitClipPath: chamfer(4),
+        ...clipBoth(chamfer(4)),
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -695,8 +691,7 @@ function Dossier({ heroId, compact }: { heroId: string | null; compact: boolean 
         background: 'rgba(21, 25, 28, 0.8)',
         border: `1px solid ${lobby.edge}`,
         borderLeft: `3px solid ${identity.primary}`,
-        clipPath: chamfer(6),
-        WebkitClipPath: chamfer(6),
+        ...clipBoth(chamfer(6)),
       }}
     >
       <span style={{ fontFamily: fonts.display, fontSize: compact ? 18 : 22, letterSpacing: '0.04em', textTransform: 'uppercase', color: lobby.cream, lineHeight: 1 }}>
@@ -816,8 +811,7 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
         aspectRatio: '5 / 7',
         border: `2.5px solid ${color}`,
         background: lobby.panel,
-        clipPath: chamfer(6),
-        WebkitClipPath: chamfer(6),
+        ...clipBoth(chamfer(6)),
         overflow: 'hidden',
         boxShadow: preview ? `0 0 0 1px ${color}, 0 0 24px rgba(98, 196, 98, 0.35)` : 'none',
         flexShrink: 0,
@@ -939,8 +933,7 @@ function LockButton({ enabled, state, onClick, compact }: {
           border: `2px solid ${enabled ? lobby.cream : lobby.edge}`,
           background: enabled ? lobby.cream : 'transparent',
           color: enabled ? '#171410' : lobby.dim,
-          clipPath: chamfer(9),
-          WebkitClipPath: chamfer(9),
+          ...clipBoth(chamfer(9)),
           fontFamily: fonts.display,
           fontSize: 20,
           letterSpacing: '0.24em',

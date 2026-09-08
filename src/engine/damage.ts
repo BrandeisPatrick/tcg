@@ -1,5 +1,5 @@
 import type { CardInstance, DamageType, GameState, PlayerID, PlayerState } from './types';
-import { findCardOnBoard, pushLog } from './util';
+import { pushLog } from './util';
 import { CARDS_BY_ID } from '@/cards';
 import { currentCast } from './castContext';
 import { fireEquipmentTriggers } from './equipmentDispatch';

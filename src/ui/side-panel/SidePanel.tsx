@@ -1,6 +1,6 @@
 import type { GameState } from '@/engine/types';
 import { fonts, text } from '../tokens';
-import { poster, chamfer } from '../poster';
+import { poster, chamfer, clipBoth } from '../poster';
 import { LogLine } from './LogLine';
 import { logEntryColor } from '../helpers';
 
@@ -67,8 +67,7 @@ export function SidePanel({
         display: 'flex', flexDirection: 'column',
         background: poster.ground,
         border: `1px solid ${poster.edge}`,
-        clipPath: chamfer(6),
-        WebkitClipPath: chamfer(6),
+        ...clipBoth(chamfer(6)),
         overflow: 'hidden',
       }}>
         <div style={{
