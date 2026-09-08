@@ -2,10 +2,19 @@
  * The tutorial coach — a small cream plate printed in the poster's voice that
  * walks a first-time player through one match.
  *
- * It never blocks input and never drives a move. Task steps watch the game
- * state and tick themselves off when the player does the thing; stated steps
- * advance on Next. A player who dismisses the plate is left with an ordinary
- * (very winnable) match.
+ * It never drives a move. Task steps watch the game state and tick themselves
+ * off when the player does the thing; stated steps advance on Next. Between
+ * the two sits the gate: while a step is up, only what it allows can be
+ * touched. A player who dismisses the plate gets an ordinary (very winnable)
+ * match with the whole board back.
+ *
+ * Each render the plate is in exactly one mode:
+ *   wait     — the rival is moving (or a stated step is holding for a
+ *              moment). Light scrim, nothing tappable, no Next.
+ *   blocked  — the task cannot be paid for right now. The plate says so and
+ *              opens End Turn instead, so the player is never boxed in.
+ *   ticked   — the task just landed. A short beat, sealed, before moving on.
+ *   live     — the step's own spot and allow.
  *
  * Mounted by Board only when the match config carries a tutorial setup.
  */
@@ -16,12 +25,16 @@ import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { markTutorialDone } from '@/storage/playerData';
-import { LESSON, emptySeen, hasEquipment, type CoachSeen } from '@/tutorial/lesson';
+import {
+  LESSON, RIVAL_TURN, emptySeen, hasEquipment,
+  type CoachSeen, type CoachView, type GateSpec,
+} from '@/tutorial/lesson';
 import { TutorialGate } from './TutorialGate';
 
 /** Beat between a task ticking off and the next step sliding in, so the
  *  completion is legible rather than a jump-cut. */
 const TICK_MS = 900;
+const NONE: GateSpec[] = [];
 
 export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
   G: GameState;
@@ -61,9 +74,11 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
     }));
   }, [actionId, actionKind]);
 
-  // The only way the turn stops being mine is that I ended it.
+  // Count the turns you have ended: each my-turn → rival-turn edge is one.
+  const wasMyTurn = useRef(isMyTurn);
   useEffect(() => {
-    if (!isMyTurn) setSeen((s) => (s.endedTurn ? s : { ...s, endedTurn: true }));
+    if (wasMyTurn.current && !isMyTurn) setSeen((s) => ({ ...s, turnsEnded: s.turnsEnded + 1 }));
+    wasMyTurn.current = isMyTurn;
   }, [isMyTurn]);
 
   // Gear is read off the board rather than off the action feed: an item can
@@ -86,17 +101,38 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
     }
   }, [activeIid]);
 
-  // ---- advance ----
+  // ---- the step, and which mode it is in ----
   const current = LESSON[step];
   const done = step >= LESSON.length;
-  const view = { G, me, isMyTurn, seen, targeting, sheetOpen };
+  const view: CoachView = { G, me, isMyTurn, seen, targeting, sheetOpen };
   const complete = !!current?.task && current.task(view);
 
-  // What the gate lets through right now. Memoised on its contents so the
+  const waitText: string | null = !current || done || complete ? null
+    : current.wait ? current.wait(view)
+    : current.task && !isMyTurn ? RIVAL_TURN
+    : null;
+  const blocked = !!current?.task && !waitText && !complete && !!current.ready && !current.ready(view);
+
+  const bodyText = done ? 'The rest is yours.'
+    : waitText ? waitText
+    : blocked ? pick(current.blocked ?? current.body, view)
+    : pick(current.body, view);
+
+  // What the gate lights and lets through. Memoised on contents so the
   // gate's measuring effect is not restarted every frame by a fresh array.
-  const specs = !done && open && current.gate ? current.gate(view) : null;
-  const specsKey = specs ? specs.join('|') : '';
-  const gateSpecs = useMemo(() => (specsKey ? specsKey.split('|') : []), [specsKey]);
+  const gated = !done && open && !!current.spot;
+  const hold = ticked || !!waitText;
+  const spotList = !gated ? NONE
+    : hold ? NONE
+    : blocked ? ['End Turn']
+    : current.spot!(view);
+  const allowList = !gated || hold || !current.task ? NONE
+    : blocked ? ['End Turn']
+    : (current.allow ?? current.spot!)(view);
+  const spotKey = spotList.join('|');
+  const allowKey = allowList.join('|');
+  const spot = useMemo(() => (spotKey ? spotKey.split('|') : NONE), [spotKey]);
+  const allow = useMemo(() => (allowKey ? allowKey.split('|') : NONE), [allowKey]);
 
   // Deps are (complete, step) on purpose. `ticked` must stay out of them:
   // setting it re-renders, and if the effect re-ran it would clear its own
@@ -128,6 +164,16 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
   /** Next / Skip — both just move on; clamped so the closing card stays. */
   const next = () => setStep((i) => Math.min(i + 1, LESSON.length));
 
+  const status = ticked ? 'Done'
+    : waitText ? 'Rival moves'
+    : blocked ? 'Refill first'
+    : 'Your move';
+  // The action button: Skip on a task, Next on a statement, nothing while
+  // the plate is holding for the rival (there is nothing to skip to yet).
+  const action = done || waitText ? null
+    : current.task ? { label: 'Skip', muted: true }
+    : { label: 'Next', muted: false };
+
   // Phones: a bar in the strip above the board, stopping short of the fixed
   // system gear in that corner (its hit area would otherwise swallow the
   // plate's own Next / dismiss). Desktop: bottom-left, clear of everything.
@@ -139,7 +185,14 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
     <>
       {/* Dismissing the coach also lifts the gate — a player who opts out of
           the lesson gets their whole board back. */}
-      {specs !== null && <TutorialGate specs={gateSpecs} onBlocked={() => setNudge(true)} />}
+      {gated && (
+        <TutorialGate
+          spot={spot}
+          allow={allow}
+          dim={hold ? 0.3 : 0.62}
+          onBlocked={() => setNudge(true)}
+        />
+      )}
     <AnimatePresence>
       {open && (
         <motion.aside
@@ -174,7 +227,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
               would push it down over the rival's rule. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 3 : 7 }}>
             {/* Phones have no footer row, so the task marker rides the rail there. */}
-            {isMobile && !done && current.task && <TaskDot ticked={ticked} />}
+            {isMobile && !done && (current.task || waitText) && <TaskDot ticked={ticked} waiting={!!waitText} />}
             <span
               style={{
                 ...text.label,
@@ -188,8 +241,8 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
               {done ? 'Lesson' : `${current.phase} · ${step + 1}/${LESSON.length}`}
             </span>
             <ProgressRule done={done ? 1 : step / LESSON.length} />
-            {isMobile && !done && (
-              <PlateAction label={current.task ? 'Skip' : 'Next'} onClick={next} muted={!!current.task} />
+            {isMobile && action && (
+              <PlateAction label={action.label} onClick={next} muted={action.muted} />
             )}
             <button
               type="button"
@@ -218,7 +271,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
               always lands the new text; the fade-in is decoration. */}
           <div>
             <motion.div
-              key={done ? 'done' : current.id}
+              key={done ? 'done' : `${current.id}:${waitText ? 'w' : blocked ? 'b' : 'l'}`}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
@@ -236,28 +289,23 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
                 {done ? 'Ready' : current.title}
               </div>
               <div style={{ ...text.body, fontSize: isMobile ? 11 : 12.5, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
-                {done ? 'The rest is yours.' : current.body}
+                {bodyText}
               </div>
             </motion.div>
           </div>
 
           {!done && !isMobile && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 11 }}>
-              {current.task ? (
+              {(current.task || waitText) ? (
                 <>
-                  <TaskDot ticked={ticked} />
+                  <TaskDot ticked={ticked} waiting={!!waitText} />
                   <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.2em', color: ticked ? poster.ink : poster.inkDim }}>
-                    {ticked ? 'Done' : isMyTurn ? 'Your move' : 'Rival moves'}
+                    {status}
                   </span>
-                  <span style={{ flex: 1 }} />
-                  <PlateAction label="Skip" onClick={next} muted />
                 </>
-              ) : (
-                <>
-                  <span style={{ flex: 1 }} />
-                  <PlateAction label="Next" onClick={next} />
-                </>
-              )}
+              ) : null}
+              <span style={{ flex: 1 }} />
+              {action && <PlateAction label={action.label} onClick={next} muted={action.muted} />}
             </div>
           )}
         </motion.aside>
@@ -267,8 +315,12 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
   );
 }
 
+function pick(t: string | ((v: CoachView) => string), v: CoachView): string {
+  return typeof t === 'function' ? t(v) : t;
+}
+
 /** The rail's hairline doubles as the progress bar: ink for what's behind
- *  you, rule grey for what's left. Fifteen steps is enough that "how much
+ *  you, rule grey for what's left. Sixteen steps is enough that "how much
  *  more of this" is a fair question. */
 function ProgressRule({ done }: { done: number }) {
   return (
@@ -282,20 +334,21 @@ function ProgressRule({ done }: { done: number }) {
   );
 }
 
-/** The waiting marker — a red dot that breathes while the task is open and
- *  snaps to a filled ink tick the moment it lands. */
-function TaskDot({ ticked }: { ticked: boolean }) {
+/** The waiting marker — a red dot that breathes while the task is open,
+ *  goes grey while the rival has the table, and snaps to a filled ink tick
+ *  the moment the task lands. */
+function TaskDot({ ticked, waiting }: { ticked: boolean; waiting: boolean }) {
   return (
     <motion.span
       aria-hidden
       animate={ticked ? { scale: 1 } : { scale: [1, 0.62, 1] }}
-      transition={ticked ? { duration: 0.2 } : { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+      transition={ticked ? { duration: 0.2 } : { duration: waiting ? 2.4 : 1.5, repeat: Infinity, ease: 'easeInOut' }}
       style={{
         width: 9,
         height: 9,
         flexShrink: 0,
         borderRadius: '50%',
-        background: ticked ? poster.ink : poster.red,
+        background: ticked ? poster.ink : waiting ? poster.inkFaint : poster.red,
       }}
     />
   );

@@ -37,6 +37,7 @@ import { fonts, spring, DAMAGE_BEAT_MS } from './tokens';
 import { poster } from './poster';
 import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer, PANEL_WIDTH } from './side-panel/PanelDrawer';
+import { PATRON_NAMES } from './board/patrons';
 import { HandTray } from './board/HandTray';
 import { findOnBoard, filterAllows, type PendingPlay } from './helpers';
 import { getMatchConfig } from '@/storage/matchConfig';
@@ -701,7 +702,7 @@ export function Board(props: BoardProps<GameState>) {
                 corner plate did. */}
             <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.vitals(isMobile)}px`, height: boardRows.vitals(isMobile), marginBottom: -vitalsPull(isMobile) }}>
               <PatronPlaque
-                label="Sapphire Flame"
+                label={PATRON_NAMES.rival}
                 ps={G.players[opp]}
                 hostile
                 skillUsed={G.players[opp].skillUsedThisTurn}
@@ -766,7 +767,7 @@ export function Board(props: BoardProps<GameState>) {
             {/* YOUR VITALS — the same rule closing the bottom of the stack. */}
             <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.vitals(isMobile)}px`, height: boardRows.vitals(isMobile), marginTop: -vitalsPull(isMobile) }}>
               <PatronPlaque
-                label="Amber Hand"
+                label={PATRON_NAMES.you}
                 ps={G.players[me]}
                 skillUsed={G.players[me].skillUsedThisTurn}
                 projectedFaceDamage={ctx.currentPlayer !== me ? projectedFaceDamage : 0}

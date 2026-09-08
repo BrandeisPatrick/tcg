@@ -70,6 +70,7 @@ export function BoardControls({
             size="sm"
             disabled={!isMyTurn}
             onClick={onEnd}
+            ariaLabel="End Turn"
             style={{
               width: 132,
               padding: '12px 0',

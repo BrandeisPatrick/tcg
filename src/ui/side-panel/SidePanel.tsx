@@ -41,7 +41,7 @@ export function SidePanel({
     return out;
   })();
   return (
-    <aside style={{
+    <aside aria-label="Match log" style={{
       position: 'relative',
       display: 'flex', flexDirection: 'column', gap: 12,
       padding: '14px 14px 14px',

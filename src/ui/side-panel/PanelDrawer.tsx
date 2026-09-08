@@ -36,6 +36,7 @@ export function PanelDrawer({ open, onToggle, children }: {
     <button
       onClick={onToggle}
       title={open ? 'Hide panel' : 'Show panel'}
+      aria-label={open ? 'Hide panel' : 'Show panel'}
       style={{
         position: 'fixed',
         top: '50%',

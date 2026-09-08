@@ -89,6 +89,8 @@ export function HeroDetailSheet({
           action controls beneath it, and the satellite stat rail. Everything
           that isn't the hero's printed face lives OUTSIDE the card frame. */}
       <div
+        role="dialog"
+        aria-label="Hero sheet"
         onClick={(e) => e.stopPropagation()}
         style={{
           display: 'flex',
