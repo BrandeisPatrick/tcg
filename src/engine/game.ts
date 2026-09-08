@@ -110,6 +110,9 @@ interface RosterOpts {
   buff?: { atk: number; hp: number };
   /** Patron-HP override for this match (Story pacing). */
   patronHp?: number;
+  /** Deal the deck top-down instead of shuffling (the coached tutorial, which
+   *  names the cards it asks you to play). */
+  ordered?: boolean;
 }
 
 /** Build a PlayerState from a 1-4 hero roster + deck. Heroes beyond the first
@@ -140,7 +143,10 @@ export function buildPlayer(pid: PlayerID, heroes: string[], deckCards: string[]
     }
   }
 
-  const deck = shuffle(deckCards.map((id) => makeInstance(id, pid, 'deck')));
+  // `deck.pop()` draws from the END, so an ordered deck is reversed on the
+  // way in — deckCards[0] is then the first card dealt.
+  const instances = deckCards.map((id) => makeInstance(id, pid, 'deck'));
+  const deck = opts.ordered ? instances.reverse() : shuffle(instances);
   const hand: CardInstance[] = [];
   for (let i = 0; i < INITIAL_DRAW && deck.length > 0; i++) {
     const card = deck.pop()!;
@@ -289,7 +295,7 @@ export const DeadlockGame: Game<GameState> = {
     if (story) {
       const G: GameState = {
         players: {
-          '0': buildPlayer('0', story.playerHeroes, story.playerDeck, { patronHp: story.patronHp }),
+          '0': buildPlayer('0', story.playerHeroes, story.playerDeck, { patronHp: story.patronHp, ordered: story.orderedPlayerDeck }),
           '1': buildPlayer('1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.patronHp }),
         },
         turnNumber: 1,

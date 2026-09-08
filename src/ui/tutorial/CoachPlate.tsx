@@ -9,7 +9,7 @@
  *
  * Mounted by Board only when the match config carries a tutorial setup.
  */
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { GameState, PlayerID } from '@/engine/types';
 import { fonts, spring, text } from '../tokens';
@@ -17,21 +17,30 @@ import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { markTutorialDone } from '@/storage/playerData';
 import { LESSON, emptySeen, hasEquipment, type CoachSeen } from '@/tutorial/lesson';
+import { TutorialGate } from './TutorialGate';
 
 /** Beat between a task ticking off and the next step sliding in, so the
  *  completion is legible rather than a jump-cut. */
 const TICK_MS = 900;
 
-export function CoachPlate({ G, me, isMyTurn }: {
+export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
   G: GameState;
   me: PlayerID;
   isMyTurn: boolean;
+  /** A card or skill is armed and waiting for its target. */
+  targeting: boolean;
+  /** The hero detail sheet is open — where Skill and Retreat live. */
+  sheetOpen: boolean;
 }) {
   const { isMobile } = useViewport();
   const [step, setStep] = useState(0);
   const [ticked, setTicked] = useState(false);
   const [open, setOpen] = useState(true);
   const [seen, setSeen] = useState<CoachSeen>(emptySeen);
+  // Set when a tap lands on the sealed area, so the plate can answer it with
+  // a flick rather than letting the press feel broken. Self-clearing, so the
+  // shake plays once per blocked tap.
+  const [nudge, setNudge] = useState(false);
 
   const myPs = G.players[me];
   const actionId = G.action?.by === me ? G.action.id : null;
@@ -80,7 +89,14 @@ export function CoachPlate({ G, me, isMyTurn }: {
   // ---- advance ----
   const current = LESSON[step];
   const done = step >= LESSON.length;
-  const complete = !!current?.task && current.task({ G, me, isMyTurn, seen });
+  const view = { G, me, isMyTurn, seen, targeting, sheetOpen };
+  const complete = !!current?.task && current.task(view);
+
+  // What the gate lets through right now. Memoised on its contents so the
+  // gate's measuring effect is not restarted every frame by a fresh array.
+  const specs = !done && open && current.gate ? current.gate(view) : null;
+  const specsKey = specs ? specs.join('|') : '';
+  const gateSpecs = useMemo(() => (specsKey ? specsKey.split('|') : []), [specsKey]);
 
   // Deps are (complete, step) on purpose. `ticked` must stay out of them:
   // setting it re-renders, and if the effect re-ran it would clear its own
@@ -103,6 +119,12 @@ export function CoachPlate({ G, me, isMyTurn }: {
     return () => clearTimeout(t);
   }, [done]);
 
+  useEffect(() => {
+    if (!nudge) return;
+    const t = setTimeout(() => setNudge(false), 420);
+    return () => clearTimeout(t);
+  }, [nudge]);
+
   /** Next / Skip — both just move on; clamped so the closing card stays. */
   const next = () => setStep((i) => Math.min(i + 1, LESSON.length));
 
@@ -114,6 +136,10 @@ export function CoachPlate({ G, me, isMyTurn }: {
     : { left: 18, bottom: 18, width: 306 };
 
   return (
+    <>
+      {/* Dismissing the coach also lifts the gate — a player who opts out of
+          the lesson gets their whole board back. */}
+      {specs !== null && <TutorialGate specs={gateSpecs} onBlocked={() => setNudge(true)} />}
     <AnimatePresence>
       {open && (
         <motion.aside
@@ -121,12 +147,16 @@ export function CoachPlate({ G, me, isMyTurn }: {
           aria-live="polite"
           aria-label="Tutorial"
           initial={{ opacity: 0, y: isMobile ? -14 : 14 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={nudge
+            ? { opacity: 1, y: 0, x: [0, -5, 5, -3, 0] }
+            : { opacity: 1, y: 0, x: 0 }}
           exit={{ opacity: 0, y: isMobile ? -14 : 14 }}
           transition={spring.soft}
           style={{
             position: 'fixed',
-            zIndex: 60,
+            // Above TutorialGate's scrim (200): the plate is the one control a
+            // sealed step must still accept, or the lesson cannot be advanced.
+            zIndex: 210,
             ...shell,
             background: poster.paper,
             backgroundImage: PAPER_MOTTLE,
@@ -233,6 +263,7 @@ export function CoachPlate({ G, me, isMyTurn }: {
         </motion.aside>
       )}
     </AnimatePresence>
+    </>
   );
 }
 

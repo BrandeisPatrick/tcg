@@ -13,6 +13,9 @@ export interface StorySetup {
   enemyDeck: CardId[];
   enemyBuff: { atk: number; hp: number };
   patronHp?: number;
+  /** Deal the player's deck in the order given instead of shuffling it, so a
+   *  scripted lesson can name the cards in the opening hand. */
+  orderedPlayerDeck?: boolean;
 }
 
 export interface MatchConfig {

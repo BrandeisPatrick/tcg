@@ -1040,7 +1040,15 @@ export function Board(props: BoardProps<GameState>) {
           )}
         </AnimatePresence>
       </div>
-      {isTutorial && <CoachPlate G={G} me={me} isMyTurn={isMyTurn} />}
+      {isTutorial && (
+        <CoachPlate
+          G={G}
+          me={me}
+          isMyTurn={isMyTurn}
+          targeting={!!pending}
+          sheetOpen={!!heroDetail}
+        />
+      )}
       </DamageFxContext.Provider>
       </CombatProgressContext.Provider>
     </LayoutGroup>

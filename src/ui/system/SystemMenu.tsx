@@ -83,7 +83,9 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
           position: 'fixed',
           top: 12,
           right: 12,
-          zIndex: 130,
+          // Above the tutorial gate (200) and its coach (210): a sealed lesson
+          // step must never take away the way out of the match.
+          zIndex: 230,
           width: 40,
           height: 40,
           borderRadius: '50%',
@@ -111,7 +113,7 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
             style={{
               position: 'fixed',
               inset: 0,
-              zIndex: 125,
+              zIndex: 225,
               background: poster.scrim,
               backdropFilter: 'blur(6px)',
               WebkitBackdropFilter: 'blur(6px)',
