@@ -40,18 +40,27 @@ The painted posters on the title-screen cards were supplied by the project
 owner:
 
 - `bill_tutorial.webp` — the Tutorial card and the cover print on the Lessons
-  sheet: "Deadlock in 'In Your Dreams!'", a fan poster in the style of a 1930s
-  cartoon title card, signed **Toasty Ghostey** (the "Presented with sound by
-  Toasty Ghostey" badge in its corner). Supplied by the project owner from a
-  community post (the file was named `in-your-dreams-v0-flzp0vykynld1`),
-  re-encoded to 1200 px for the web. Used here with credit; ask the artist
-  before shipping this anywhere public, and replace it on request.
-- `bill_decks.webp` ("Embrace the power from beyond!") and `bill_gallery.webp`
-  ("Obscura Labrium") — Deadlock-universe advertising bills on the Loadout and
-  Gallery cards. Provenance is unconfirmed: neither their cover text nor their
-  imagery returns any search result, so the original artist could not be
-  identified. Treated as Valve Deadlock art under the same fair-use terms as
-  the rest of this project, and replaceable on request.
+  sheet: "Deadlock in 'In Your Dreams!'", one of the fan-made "Deadlock title
+  cards" by **Toasty Ghostey** (the "Presented with sound by Toasty Ghostey"
+  badge in its corner), drawn in the style of a 1930s cartoon title card. The
+  series is posted on Newgrounds
+  (https://www.newgrounds.com/art/view/toastyghostey/deadlock-title-cards,
+  27 Aug 2024: "Ol' Bully Bebop!", "Ya Urn'd It!", "Lucky Seven", with the
+  note "just continuing on with em") and Tumblr
+  (https://toastyghostey.tumblr.com/post/759938597611798528/); a later card,
+  "Meanie Mina, Dynamo!", is on the artist's Bluesky (8 Nov 2025). This card's
+  own post was not found on those feeds; it was supplied by the project owner
+  from a Reddit post titled "In Your Dreams" (the file was named
+  `in-your-dreams-v0-flzp0vykynld1`), re-encoded to 1200 px for the web.
+  Artist links: https://linktr.ee/ToastyGhostey. Used here with credit; ask
+  the artist before shipping this anywhere public, and replace it on request.
+- `bill_decks.webp` ("Embrace the power from beyond!", a Fairfax Industries
+  bill) and `bill_gallery.webp` ("Obscura Labrium") — two of the in-world
+  advertising posters **Evgeniy Evstratiy** painted for Valve's Deadlock in
+  2024, shown in his ArtStation set "deadlock (alpha) - posters"
+  (https://www.artstation.com/artwork/kN9Bax, images 9 and 5; profile
+  https://www.artstation.com/evstratiyart). Valve's art, under the same
+  fair-use terms as the rest of this project; replaceable on request.
 - `bill_heroes.webp` — "Deadlock Vindicta Fan Art Poster Design" by **Dsgnmon**,
   published at https://dribbble.com/shots/25066548-Deadlock-Vindicta-Fan-Art-Poster-Design
   and marked "Fan art by © Dsgnmon 2024. All rights reserved." It fronted the

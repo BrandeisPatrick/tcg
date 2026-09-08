@@ -54,6 +54,9 @@ const STEAM: CreditLink = { label: 'Deadlock on Steam', href: 'https://store.ste
 const DL_API: CreditLink = { label: 'deadlock-api.com', href: 'https://deadlock-api.com/' };
 const DL_BUCKET: CreditLink = { label: 'Assets API', href: 'https://assets.deadlock-api.com/' };
 const FONTSOURCE: CreditLink = { label: 'Fontsource', href: 'https://fontsource.org/' };
+const EVSTRATIY_POST: CreditLink = { label: 'ArtStation post', href: 'https://www.artstation.com/artwork/kN9Bax' };
+const EVSTRATIY: CreditLink = { label: 'Evgeniy Evstratiy', href: 'https://www.artstation.com/evstratiyart' };
+const EVSTRATIY_BY = 'Painted by Evgeniy Evstratiy for Valve — one of the in-world advertising posters on Deadlock\'s streets (2024), shown in his ArtStation set "deadlock (alpha) - posters".';
 
 export const ART_CREDITS: CreditGroup[] = [
   {
@@ -118,39 +121,43 @@ export const ART_CREDITS: CreditGroup[] = [
         terms: VALVE,
         thumb: { kind: 'image', src: `${BASE}spells/cold_front.webp`, position: '50% 40%' },
       },
-    ],
-  },
-  {
-    id: 'posters',
-    title: 'Fan posters',
-    blurb: 'The painted bills on the menu cards are other artists\' fan work, shown with credit. Each comes down the moment its artist asks.',
-    items: [
-      {
-        id: 'bill-tutorial',
-        title: 'Deadlock in "In Your Dreams!"',
-        by: 'Toasty Ghostey — a fan poster in the manner of a 1930s cartoon title card, signed in its corner.',
-        where: 'The Tutorial card, and the cover print on the Lessons sheet.',
-        links: [],
-        terms: `${FAN} Re-encoded to 1200 px for the web.`,
-        thumb: { kind: 'image', src: `${BASE}art/bill_tutorial.webp`, position: '38% 42%' },
-      },
       {
         id: 'bill-decks',
         title: '"Embrace the power from beyond!"',
-        by: 'Artist unknown — a Deadlock-universe advertising bill. If you know who painted it, say so and they will be named here.',
+        by: `${EVSTRATIY_BY} A Fairfax Industries bill.`,
         where: 'The Loadout card.',
-        links: [],
-        terms: `${VALVE} Replaced on request.`,
+        links: [EVSTRATIY_POST, EVSTRATIY],
+        terms: VALVE,
         thumb: { kind: 'image', src: `${BASE}art/bill_decks.webp`, position: '50% 34%' },
       },
       {
         id: 'bill-gallery',
         title: '"Obscura Labrium"',
-        by: 'Artist unknown — a Deadlock-universe advertising bill. If you know who painted it, say so and they will be named here.',
+        by: EVSTRATIY_BY,
         where: 'The Gallery card.',
-        links: [],
-        terms: `${VALVE} Replaced on request.`,
+        links: [EVSTRATIY_POST, EVSTRATIY],
+        terms: VALVE,
         thumb: { kind: 'image', src: `${BASE}art/bill_gallery.webp`, position: '50% 40%' },
+      },
+    ],
+  },
+  {
+    id: 'fan',
+    title: 'Fan art',
+    blurb: 'Made by a fan, like this game. Shown with credit, and taken down the moment the artist asks.',
+    items: [
+      {
+        id: 'bill-tutorial',
+        title: 'Deadlock in "In Your Dreams!"',
+        by: 'Toasty Ghostey — one of the fan-made "Deadlock title cards" drawn in the manner of a 1930s cartoon title card, signed in the corner. The series began in August 2024 ("found myself having a lot of fun with these so just continuing on with em"); this card reached us through a community post titled "In Your Dreams".',
+        where: 'The Tutorial card, and the cover print on the Lessons sheet.',
+        links: [
+          { label: 'The series on Newgrounds', href: 'https://www.newgrounds.com/art/view/toastyghostey/deadlock-title-cards' },
+          { label: 'On Tumblr', href: 'https://toastyghostey.tumblr.com/post/759938597611798528/some-fake-deadlock-title-cards-i-whipped-up' },
+          { label: 'Toasty Ghostey', href: 'https://linktr.ee/ToastyGhostey' },
+        ],
+        terms: `${FAN} Re-encoded to 1200 px for the web.`,
+        thumb: { kind: 'image', src: `${BASE}art/bill_tutorial.webp`, position: '38% 42%' },
       },
     ],
   },
