@@ -4,6 +4,7 @@ import { fonts, spring, systemFont } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, sheetStyle, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 import { useSettings, updateSettings, APP_STORAGE_KEYS, type AppSettings } from '@/storage/settings';
+import { useViewport } from '../hooks/useViewport';
 import { ArtCredits } from './ArtCredits';
 
 /**
@@ -314,15 +315,23 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/** Labelled control row (label left, control right) with an optional hint. */
+/** Labelled control row (label left, control right) with an optional hint.
+ *  On a phone the sheet is ~350px wide, which is not enough for a label
+ *  and a three-way control side by side, so the control drops under its
+ *  label and takes the full width instead of running off the sheet. */
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  const { isMobile } = useViewport();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14,
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        alignItems: isMobile ? 'stretch' : 'center',
+        justifyContent: 'space-between',
+        gap: isMobile ? 6 : 14,
       }}>
-        <span style={{ ...systemFont, color: poster.ink, whiteSpace: 'nowrap' }}>{label}</span>
-        <div style={{ flex: '0 1 260px', minWidth: 180 }}>{children}</div>
+        <span style={{ ...systemFont, color: poster.ink, whiteSpace: isMobile ? 'normal' : 'nowrap' }}>{label}</span>
+        <div style={isMobile ? { width: '100%' } : { flex: '0 1 260px', minWidth: 180 }}>{children}</div>
       </div>
       {hint && <div style={{ ...systemFont, color: poster.inkDim }}>{hint}</div>}
     </div>
