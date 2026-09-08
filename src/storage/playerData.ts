@@ -15,8 +15,10 @@ export interface PlayerData {
   preferredHeroes: (CardId | null)[];
   decks: (DeckSlot | null)[];
   selectedDeckIndex: number | null;
-  /** Set once the coached tutorial's script runs out (or its match is won),
-   *  so the title stops flagging it as the place to start. */
+  /** Ids of the tutorial lessons finished (script run out, or match won). */
+  lessonsDone: string[];
+  /** Every lesson finished — the title stops flagging the tutorial as the
+   *  place to start. */
   tutorialDone: boolean;
 }
 
@@ -110,6 +112,7 @@ function defaultPlayerData(): PlayerData {
     preferredHeroes: [null, null, null, null],
     decks: DEFAULT_DECKS.map((d) => ({ ...d })),
     selectedDeckIndex: 0,
+    lessonsDone: [],
     tutorialDone: false,
   };
 }
@@ -127,6 +130,7 @@ export function loadPlayerData(): PlayerData {
         ? parsed.decks.slice(0, MAX_DECKS)
         : [null, null, null, null, null],
       selectedDeckIndex: parsed.selectedDeckIndex ?? null,
+      lessonsDone: Array.isArray(parsed.lessonsDone) ? parsed.lessonsDone.filter((x: unknown) => typeof x === 'string') : [],
       tutorialDone: parsed.tutorialDone === true,
     };
   } catch {
@@ -178,9 +182,14 @@ export function setSelectedDeckIndex(index: number | null): void {
   savePlayerData(data);
 }
 
-export function markTutorialDone(): void {
+/** Record a finished lesson. `total` is how many lessons there are, so this
+ *  layer can flip the tutorial itself to done without knowing them. */
+export function markLessonDone(id: string, total: number): void {
   const data = loadPlayerData();
-  if (data.tutorialDone) return;
-  data.tutorialDone = true;
+  const already = data.lessonsDone.includes(id);
+  const allDone = (already ? data.lessonsDone.length : data.lessonsDone.length + 1) >= total;
+  if (already && data.tutorialDone === allDone) return;
+  if (!already) data.lessonsDone.push(id);
+  data.tutorialDone = allDone;
   savePlayerData(data);
 }

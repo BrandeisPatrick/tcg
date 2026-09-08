@@ -21,7 +21,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { poster } from '../poster';
-import type { GateSpec } from '@/tutorial/lesson';
+import type { GateSpec } from '@/tutorial/lessons';
 
 const Z = 200;
 const PAD = 6;

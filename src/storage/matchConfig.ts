@@ -16,6 +16,12 @@ export interface StorySetup {
   /** Deal the player's deck in the order given instead of shuffling it, so a
    *  scripted lesson can name the cards in the opening hand. */
   orderedPlayerDeck?: boolean;
+  /** Open the match on a later turn (souls already ramped, ultimates already
+   *  dealt) — the later tutorial lessons start mid-fight rather than making
+   *  the player replay the opening every time. */
+  startTurn?: number;
+  /** Rival patron lives, when they should differ from yours. */
+  enemyPatronHp?: number;
 }
 
 export interface MatchConfig {
@@ -30,6 +36,8 @@ export interface MatchConfig {
    * conceding returns to the title, not to the map.
    */
   tutorial?: StorySetup;
+  /** Which lesson `tutorial` is — picks the coach's script. */
+  lesson?: string;
 }
 
 let current: MatchConfig = {

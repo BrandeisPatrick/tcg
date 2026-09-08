@@ -41,7 +41,8 @@ import { PATRON_NAMES } from './board/patrons';
 import { HandTray } from './board/HandTray';
 import { findOnBoard, filterAllows, type PendingPlay } from './helpers';
 import { getMatchConfig } from '@/storage/matchConfig';
-import { markTutorialDone } from '@/storage/playerData';
+import { markLessonDone } from '@/storage/playerData';
+import { LESSONS, lessonById, nextLesson } from '@/tutorial/lessons';
 import { finishStoryBattle } from '@/story/storyRun';
 import { MatchEndScreen } from './board/MatchEndScreen';
 import { CoachPlate } from './tutorial/CoachPlate';
@@ -55,16 +56,18 @@ export function Board(props: BoardProps<GameState>) {
   const me: PlayerID = '0';
   const matchNav = useMatchNav();
   const isMyTurn = ctx.currentPlayer === me;
-  // A tutorial match is built from a scripted setup like a Story node, but it
-  // exits to the title and carries the coach plate. Read once — the config is
-  // fixed for the life of the mount.
-  const isTutorial = useMemo(() => !!getMatchConfig().tutorial, []);
+  // A tutorial lesson is built from a scripted setup like a Story node, but it
+  // exits to the lesson list and carries the coach plate. Read once — the
+  // config is fixed for the life of the mount.
+  const lesson = useMemo(() => lessonById(getMatchConfig().lesson), []);
+  const isTutorial = !!lesson;
   // Winning the lesson counts as having had it, even if the player dismissed
   // the coach on the first step. (The coach marks it too, when its script
   // runs out — whichever happens first.)
   useEffect(() => {
-    if (isTutorial && ctx.gameover?.winner === me) markTutorialDone();
-  }, [isTutorial, ctx.gameover, me]);
+    if (lesson && ctx.gameover?.winner === me) markLessonDone(lesson.id, LESSONS.length);
+  }, [lesson, ctx.gameover, me]);
+  const following = lesson ? nextLesson(lesson.id) : undefined;
   // Combat tempo honours the system-menu speed setting live.
   const { combatSpeed } = useSettings();
   // The backdrop's slow push-in runs only when neither the settings sheet
@@ -428,7 +431,9 @@ export function Board(props: BoardProps<GameState>) {
     if (data.type === 'spell' || data.type === 'ultimate') {
       const ability = getAbility(data.abilities[0]);
       if (!ability) return;
-      if (ability.target === 'noTarget') {
+      // Nothing to aim: a self-cast ultimate (Yamato's Shadow Transformation)
+      // lands on its own hero, which the engine resolves.
+      if (ability.target === 'noTarget' || (data.type === 'ultimate' && ability.target === 'self')) {
         moves.playCard(c.iid);
         return;
       }
@@ -533,7 +538,9 @@ export function Board(props: BoardProps<GameState>) {
     if (data.type === 'spell' || data.type === 'ultimate') {
       const ability = getAbility(data.abilities[0]);
       if (!ability) return;
-      if (ability.target === 'noTarget') { moves.playCard(c.iid); setPending(null); return; }
+      if (ability.target === 'noTarget' || (data.type === 'ultimate' && ability.target === 'self')) {
+        moves.playCard(c.iid); setPending(null); return;
+      }
       if (targetIid) {
         const found = findOnBoard(G, targetIid);
         if (found && filterAllows(ability.target, found.card, found.owner, me)) {
@@ -581,6 +588,9 @@ export function Board(props: BoardProps<GameState>) {
         draw={!!ctx.gameover.draw}
         isStory={isStory}
         isTutorial={isTutorial}
+        lessonNumber={lesson?.number}
+        onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
+        onLessons={lesson && matchNav ? matchNav.toLessons : undefined}
         onRematch={() => { if (matchNav) matchNav.rematch(); else location.reload(); }}
         onMenu={matchNav ? matchNav.exitToMenu : null}
         onStoryReturn={() => finishStoryBattle(won)}
@@ -1041,13 +1051,16 @@ export function Board(props: BoardProps<GameState>) {
           )}
         </AnimatePresence>
       </div>
-      {isTutorial && (
+      {lesson && (
         <CoachPlate
           G={G}
           me={me}
           isMyTurn={isMyTurn}
           targeting={!!pending}
           sheetOpen={!!heroDetail}
+          lesson={lesson}
+          onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
+          onLessons={matchNav ? matchNav.toLessons : undefined}
         />
       )}
       </DamageFxContext.Provider>

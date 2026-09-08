@@ -1,6 +1,6 @@
 /**
  * The tutorial coach — a small cream plate printed in the poster's voice that
- * walks a first-time player through one match.
+ * walks a first-time player through one lesson.
  *
  * It never drives a move. Task steps watch the game state and tick themselves
  * off when the player does the thing; stated steps advance on Next. Between
@@ -16,7 +16,10 @@
  *   ticked   — the task just landed. A short beat, sealed, before moving on.
  *   live     — the step's own spot and allow.
  *
- * Mounted by Board only when the match config carries a tutorial setup.
+ * When the script runs out the plate turns into the lesson's closing card:
+ * next lesson, the list, or × to keep playing this match.
+ *
+ * Mounted by Board only when the match config names a lesson.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,11 +27,11 @@ import type { GameState, PlayerID } from '@/engine/types';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
-import { markTutorialDone } from '@/storage/playerData';
+import { markLessonDone } from '@/storage/playerData';
 import {
-  LESSON, RIVAL_TURN, emptySeen, hasEquipment,
-  type CoachSeen, type CoachView, type GateSpec,
-} from '@/tutorial/lesson';
+  LESSONS, RIVAL_TURN, emptySeen, hasEquipment,
+  type CoachSeen, type CoachView, type GateSpec, type Lesson,
+} from '@/tutorial/lessons';
 import { TutorialGate } from './TutorialGate';
 
 /** Beat between a task ticking off and the next step sliding in, so the
@@ -36,7 +39,7 @@ import { TutorialGate } from './TutorialGate';
 const TICK_MS = 900;
 const NONE: GateSpec[] = [];
 
-export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
+export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNextLesson, onLessons }: {
   G: GameState;
   me: PlayerID;
   isMyTurn: boolean;
@@ -44,8 +47,14 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
   targeting: boolean;
   /** The hero detail sheet is open — where Skill and Retreat live. */
   sheetOpen: boolean;
+  lesson: Lesson;
+  /** Start the following lesson fresh; absent on the last one. */
+  onNextLesson?: () => void;
+  /** Back to the list. */
+  onLessons?: () => void;
 }) {
   const { isMobile } = useViewport();
+  const steps = lesson.steps;
   const [step, setStep] = useState(0);
   const [ticked, setTicked] = useState(false);
   const [open, setOpen] = useState(true);
@@ -67,9 +76,10 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
     lastActionRef.current = actionId;
     setSeen((s) => ({
       ...s,
-      // An ultimate is still a card leaving your hand at a target, so it
-      // satisfies the "play a card" step as readily as a spell does.
+      // An ultimate is still a card leaving your hand, so it satisfies the
+      // "play a card" step as readily as a spell does.
       playedCard: s.playedCard || actionKind === 'play' || actionKind === 'ult',
+      castUlt: s.castUlt || actionKind === 'ult',
       usedSkill: s.usedSkill || actionKind === 'skill',
     }));
   }, [actionId, actionKind]);
@@ -102,8 +112,8 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
   }, [activeIid]);
 
   // ---- the step, and which mode it is in ----
-  const current = LESSON[step];
-  const done = step >= LESSON.length;
+  const current = steps[step];
+  const done = step >= steps.length;
   const view: CoachView = { G, me, isMyTurn, seen, targeting, sheetOpen };
   const complete = !!current?.task && current.task(view);
 
@@ -113,7 +123,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
     : null;
   const blocked = !!current?.task && !waitText && !complete && !!current.ready && !current.ready(view);
 
-  const bodyText = done ? 'The rest is yours.'
+  const bodyText = done ? lesson.outro
     : waitText ? waitText
     : blocked ? pick(current.blocked ?? current.body, view)
     : pick(current.body, view);
@@ -145,15 +155,10 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
     return () => clearTimeout(t);
   }, [complete, step]);
 
-  // The script running out is what "finished the tutorial" means — the match
+  // The script running out is what "finished the lesson" means — the match
   // result is beside the point, and a player who reads every card and then
   // loses has still had the lesson.
-  useEffect(() => { if (done) markTutorialDone(); }, [done]);
-  useEffect(() => {
-    if (!done) return;
-    const t = setTimeout(() => setOpen(false), 2600);
-    return () => clearTimeout(t);
-  }, [done]);
+  useEffect(() => { if (done) markLessonDone(lesson.id, LESSONS.length); }, [done, lesson.id]);
 
   useEffect(() => {
     if (!nudge) return;
@@ -162,7 +167,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
   }, [nudge]);
 
   /** Next / Skip — both just move on; clamped so the closing card stays. */
-  const next = () => setStep((i) => Math.min(i + 1, LESSON.length));
+  const next = () => setStep((i) => Math.min(i + 1, steps.length));
 
   const status = ticked ? 'Done'
     : waitText ? 'Rival moves'
@@ -170,6 +175,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
     : 'Your move';
   // The action button: Skip on a task, Next on a statement, nothing while
   // the plate is holding for the rival (there is nothing to skip to yet).
+  // On the closing card the actions are the lesson's exits.
   const action = done || waitText ? null
     : current.task ? { label: 'Skip', muted: true }
     : { label: 'Next', muted: false };
@@ -180,6 +186,13 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
   const shell: CSSProperties = isMobile
     ? { left: 8, right: 56, top: 4 }
     : { left: 18, bottom: 18, width: 306 };
+
+  const exits = done ? (
+    <>
+      {onNextLesson && <PlateAction label="Next lesson" onClick={onNextLesson} />}
+      {onLessons && <PlateAction label={onNextLesson ? 'Lessons' : 'All lessons'} onClick={onLessons} muted={!!onNextLesson} />}
+    </>
+  ) : null;
 
   return (
     <>
@@ -221,7 +234,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
             fontFamily: fonts.ui,
           }}
         >
-          {/* Rail: the chapter and step count, the red task dot, a progress
+          {/* Rail: the lesson and step count, the red task dot, a progress
               rule, and the dismiss. On phones the action rides up here too —
               the plate sits in the strip above the board, and a third row
               would push it down over the rival's rule. */}
@@ -238,16 +251,19 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
                 whiteSpace: 'nowrap',
               }}
             >
-              {done ? 'Lesson' : `${current.phase} · ${step + 1}/${LESSON.length}`}
+              {done ? `Lesson ${lesson.number} · done` : `Lesson ${lesson.number} · ${step + 1}/${steps.length}`}
             </span>
-            <ProgressRule done={done ? 1 : step / LESSON.length} />
+            <ProgressRule done={done ? 1 : step / steps.length} />
             {isMobile && action && (
               <PlateAction label={action.label} onClick={next} muted={action.muted} />
             )}
+            {isMobile && done && (onNextLesson
+              ? <PlateAction label="Next lesson" onClick={onNextLesson} />
+              : onLessons ? <PlateAction label="Lessons" onClick={onLessons} /> : null)}
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Dismiss the tutorial coach"
+              aria-label={done ? 'Close the coach and keep playing' : 'Dismiss the tutorial coach'}
               style={{
                 border: 'none',
                 background: 'none',
@@ -286,17 +302,20 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
                   marginBottom: isMobile ? 2 : 4,
                 }}
               >
-                {done ? 'Ready' : current.title}
+                {done ? `${lesson.title} · done` : current.title}
               </div>
               <div style={{ ...text.body, fontSize: isMobile ? 11 : 12.5, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
                 {bodyText}
+                {done && (
+                  <span style={{ display: 'block', marginTop: isMobile ? 2 : 4, color: poster.inkFaint }}>× keeps this match going.</span>
+                )}
               </div>
             </motion.div>
           </div>
 
-          {!done && !isMobile && (
+          {!isMobile && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 11 }}>
-              {(current.task || waitText) ? (
+              {!done && (current.task || waitText) ? (
                 <>
                   <TaskDot ticked={ticked} waiting={!!waitText} />
                   <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.2em', color: ticked ? poster.ink : poster.inkDim }}>
@@ -306,6 +325,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen }: {
               ) : null}
               <span style={{ flex: 1 }} />
               {action && <PlateAction label={action.label} onClick={next} muted={action.muted} />}
+              {exits}
             </div>
           )}
         </motion.aside>
@@ -320,8 +340,7 @@ function pick(t: string | ((v: CoachView) => string), v: CoachView): string {
 }
 
 /** The rail's hairline doubles as the progress bar: ink for what's behind
- *  you, rule grey for what's left. Sixteen steps is enough that "how much
- *  more of this" is a fair question. */
+ *  you, rule grey for what's left. */
 function ProgressRule({ done }: { done: number }) {
   return (
     <span aria-hidden style={{ flex: 1, height: 2, background: poster.inkRule, position: 'relative', minWidth: 24 }}>
@@ -378,6 +397,7 @@ function PlateAction({ label, onClick, muted }: {
         textTransform: 'uppercase',
         lineHeight: 1,
         cursor: 'pointer',
+        whiteSpace: 'nowrap',
       }}
     >
       {label}

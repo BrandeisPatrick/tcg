@@ -11,6 +11,10 @@ import { createContext, useContext } from 'react';
 export interface MatchNav {
   rematch: () => void;
   exitToMenu: () => void;
+  /** Back to the tutorial's lesson list. */
+  toLessons: () => void;
+  /** Start a lesson fresh (the coach's "Next lesson"). */
+  startLesson: (id: string) => void;
 }
 
 export const MatchNavContext = createContext<MatchNav | null>(null);

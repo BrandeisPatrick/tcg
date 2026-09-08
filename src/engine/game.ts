@@ -293,15 +293,19 @@ export const DeadlockGame: Game<GameState> = {
     const story = scriptedSetup();
 
     if (story) {
+      // A lesson may open mid-match: the turn counter starts at `startTurn`,
+      // so the first refill and the ultimate unlock see the right turn.
+      const startTurn = Math.max(1, Math.floor(story.startTurn ?? 1));
       const G: GameState = {
         players: {
           '0': buildPlayer('0', story.playerHeroes, story.playerDeck, { patronHp: story.patronHp, ordered: story.orderedPlayerDeck }),
-          '1': buildPlayer('1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.patronHp }),
+          '1': buildPlayer('1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.enemyPatronHp ?? story.patronHp }),
         },
-        turnNumber: 1,
-        log: [{ turn: 1, text: 'Battle begins.' }],
+        turnNumber: startTurn,
+        log: [{ turn: startTurn, text: 'Battle begins.' }],
         draft: null,
-        draftTurnsOffset: 0,
+        // realTurn = ctx.turn - offset, and ctx.turn starts at 1.
+        draftTurnsOffset: 1 - startTurn,
         mulliganPending: false,
         action: null,
         damageFx: [],
@@ -415,6 +419,16 @@ export const DeadlockGame: Game<GameState> = {
       if (targetIid) {
         const f = findCardOnBoard(G, targetIid);
         if (f) target = f.card;
+      }
+      // A self-cast ultimate (Yamato's Shadow Transformation) lands on its own
+      // hero — there is nothing for the caster to aim, so resolve it here.
+      if (data.type === 'ultimate' && !target && getAbility(data.abilities[0])?.target === 'self') {
+        const linkedId = (data as { linkedHero?: string }).linkedHero;
+        const own = [ps.active, ...ps.bench].find(
+          (c): c is CardInstance => !!c && c.cardId === linkedId && (c.respawnTurnsLeft ?? 0) === 0,
+        );
+        if (!own) return INVALID_MOVE;
+        target = own;
       }
 
       if (data.type === 'equipment') {

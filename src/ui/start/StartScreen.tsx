@@ -24,6 +24,7 @@ import { loadPlayerData, MAX_PREFERRED_HEROES } from '@/storage/playerData';
 import { loadRun } from '@/story/storyRun';
 import { CARDS_BY_ID, HEROES, SPELLS, EQUIPMENT } from '@/cards';
 import { heroArtFocus } from '@/cards/art/heroArt';
+import { LESSONS } from '@/tutorial/lessons';
 
 const BASE = import.meta.env.BASE_URL ?? '/';
 const ART_BASE = `${BASE}art/`;
@@ -82,8 +83,13 @@ function useTitleStatus() {
       // One line for both halves of the merged sheet: who you asked the draft
       // for, and what you're carrying.
       loadout: `${picks}/${MAX_PREFERRED_HEROES} squad · ${deck ? deck.name : 'no deck'}`,
-      tutorial: data.tutorialDone ? 'Played · run it again' : 'Learn the moves in one match',
+      tutorial: data.tutorialDone
+        ? `${LESSONS.length}/${LESSONS.length} lessons · play any again`
+        : data.lessonsDone.length
+          ? `${data.lessonsDone.length}/${LESSONS.length} lessons done`
+          : `${LESSONS.length} short lessons · one move each`,
       tutorialDone: data.tutorialDone,
+      tutorialStarted: data.lessonsDone.length > 0,
       gallery: `${HEROES.length} heroes · ${SPELLS.length} spells · ${EQUIPMENT.length} items`,
     };
   }, []);
@@ -226,11 +232,11 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
           <ModeCard
             title="Tutorial"
             status={status.tutorial}
-            cta={status.tutorialDone ? undefined : 'Learn'}
-            tag={status.tutorialDone ? undefined : 'Start here'}
+            cta={status.tutorialDone ? undefined : status.tutorialStarted ? 'Continue' : 'Learn'}
+            tag={status.tutorialStarted || status.tutorialDone ? undefined : 'Start here'}
             art={{ src: `${ART_BASE}bill_heroes.webp`, objectPosition: '50% 46%' }}
             onClick={onTutorial}
-            ariaLabel="Play the coached tutorial match"
+            ariaLabel="Open the tutorial lessons"
             compact={isMobile}
           />
           <ModeCard

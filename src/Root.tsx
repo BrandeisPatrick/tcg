@@ -9,7 +9,8 @@ import { PosterBackdrop } from './ui/PosterBackdrop';
 import { SystemLayer } from './ui/system/SystemMenu';
 import { setMatchConfig, getMatchConfig } from './storage/matchConfig';
 import { getPreferredHeroes, getSelectedDeck } from './storage/playerData';
-import { tutorialSetup } from './tutorial/lesson';
+import { LESSONS, lessonById } from './tutorial/lessons';
+import { LessonsScreen } from './ui/tutorial/LessonsScreen';
 import type { StoryRun, StoryNode } from './story/types';
 import { loadRun, saveRun, clearNode, setMatchExitHandler } from './story/storyRun';
 import { buildStoryMatch } from './story/content';
@@ -43,28 +44,41 @@ type View =
   | { screen: 'loadout' }
   | { screen: 'deckEdit'; slotIndex: number }
   | { screen: 'story' }
+  | { screen: 'lessons' }
   | { screen: 'match' };
+
+/** Point the match config at one tutorial lesson: its fixed match, and its
+ *  id so the coach knows which script to run. Ignores the player's loadout
+ *  on purpose — the lessons refer to specific heroes and cards. */
+function configureLesson(id: string): boolean {
+  const lesson = lessonById(id) ?? LESSONS.find((l) => String(l.number) === id);
+  if (!lesson) return false;
+  setMatchConfig({
+    playerDeck: [],
+    heroPreferences: [null, null, null, null],
+    tutorial: lesson.setup(),
+    lesson: lesson.id,
+  });
+  return true;
+}
 
 export function Root() {
   // Deep-link an initial screen via the URL, e.g. ?screen=match (jumps straight
-  // into a Quick Match draft), ?screen=loadout|story|tutorial, or
-  // ?screen=deckEdit&slot=N. Only activates when the param is present, so the
-  // normal entry (no query) still lands on the start screen.
+  // into a Quick Match draft), ?screen=loadout|story|lessons, ?lesson=<id|n>
+  // (straight into one tutorial lesson), or ?screen=deckEdit&slot=N. Only
+  // activates when the param is present, so the normal entry (no query) still
+  // lands on the start screen.
   const [view, setView] = useState<View>(() => {
     const q = new URLSearchParams(window.location.search);
     const s = q.get('screen');
-    if (s === 'loadout' || s === 'story') return { screen: s };
+    if (s === 'loadout' || s === 'story' || s === 'lessons') return { screen: s };
     // Pre-merge links, kept working: both halves now live on one sheet.
     if (s === 'heroes' || s === 'decks') return { screen: 'loadout' };
     if (s === 'deckEdit') return { screen: 'deckEdit', slotIndex: Number(q.get('slot') ?? 0) || 0 };
-    if (s === 'tutorial') {
-      setMatchConfig({
-        playerDeck: [],
-        heroPreferences: [null, null, null, null],
-        tutorial: tutorialSetup(),
-      });
-      return { screen: 'match' };
-    }
+    // The old single-lesson link now opens the list.
+    if (s === 'tutorial') return { screen: 'lessons' };
+    const lesson = q.get('lesson');
+    if (lesson && configureLesson(lesson)) return { screen: 'match' };
     if (s === 'match') {
       setMatchConfig({
         playerDeck: getSelectedDeck()?.cards ?? [],
@@ -96,15 +110,11 @@ export function Root() {
   const goStory = useCallback(() => setView({ screen: 'story' }), []);
   const goEditDeck = useCallback((idx: number) => setView({ screen: 'deckEdit', slotIndex: idx }), []);
 
-  // The tutorial is a real match on a fixed, lopsided setup — same scripted
-  // path Story uses, plus the coach plate. It ignores the player's loadout on
-  // purpose: the lesson refers to specific heroes and cards.
-  const goTutorial = useCallback(() => {
-    setMatchConfig({
-      playerDeck: [],
-      heroPreferences: [null, null, null, null],
-      tutorial: tutorialSetup(),
-    });
+  // The tutorial is a list of lessons, each a real match on a fixed, lopsided
+  // setup — the same scripted path Story uses, plus the coach plate.
+  const goLessons = useCallback(() => setView({ screen: 'lessons' }), []);
+  const goLesson = useCallback((id: string) => {
+    if (!configureLesson(id)) return;
     setMatchEpoch((e) => e + 1);
     setView({ screen: 'match' });
   }, []);
@@ -170,12 +180,14 @@ export function Root() {
     view.screen;
 
   // System-menu exit: conceding a story battle retreats to the campaign map
-  // (the node stays uncleared, so it can be retried); everything else
-  // returns to the title screen.
+  // (the node stays uncleared, so it can be retried); leaving a lesson goes
+  // back to the lesson list; everything else returns to the title screen.
   const systemExit = useCallback(() => {
     if (view.screen === 'match' && getMatchConfig().story) {
       pendingBattleNode.current = null;
       setView({ screen: 'story' });
+    } else if (view.screen === 'match' && getMatchConfig().tutorial) {
+      setView({ screen: 'lessons' });
     } else {
       setView({ screen: 'start' });
     }
@@ -193,8 +205,8 @@ export function Root() {
   // context because Board sits under boardgame.io's Client and can't take
   // props from here.
   const matchNav: MatchNav = useMemo(
-    () => ({ rematch: goMatch, exitToMenu: goStart }),
-    [goMatch, goStart],
+    () => ({ rematch: goMatch, exitToMenu: goStart, toLessons: goLessons, startLesson: goLesson }),
+    [goMatch, goStart, goLessons, goLesson],
   );
 
   const { reducedMotion } = useSettings();
@@ -216,7 +228,7 @@ export function Root() {
             <StartScreen
               onPlay={goMatch}
               onStory={goStory}
-              onTutorial={goTutorial}
+              onTutorial={goLessons}
               onLoadout={goLoadout}
             />
           )}
@@ -231,6 +243,9 @@ export function Root() {
               slotIndex={view.slotIndex}
               onBack={goLoadout}
             />
+          )}
+          {view.screen === 'lessons' && (
+            <LessonsScreen onBack={goStart} onStart={goLesson} />
           )}
           {view.screen === 'story' && (
             <Suspense fallback={<div style={{ minHeight: '100dvh', background: '#0d1715' }}><PosterBackdrop /></div>}>

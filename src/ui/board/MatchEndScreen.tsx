@@ -22,7 +22,7 @@ const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
  */
 export function MatchEndScreen({
   G, me, won, draw, isStory, isTutorial = false,
-  onRematch, onMenu, onStoryReturn,
+  onRematch, onMenu, onStoryReturn, lessonNumber, onNextLesson, onLessons,
 }: {
   G: GameState;
   me: PlayerID;
@@ -32,6 +32,11 @@ export function MatchEndScreen({
   /** A coached lesson rather than a real match — the exits funnel forward
    *  into a Quick Match instead of offering to run the lesson again. */
   isTutorial?: boolean;
+  /** Which lesson this was, for the eyebrow. */
+  lessonNumber?: number;
+  /** Lesson exits — the following lesson (absent on the last) and the list. */
+  onNextLesson?: () => void;
+  onLessons?: () => void;
   onRematch: () => void;
   onMenu: (() => void) | null;
   onStoryReturn: () => void;
@@ -108,7 +113,7 @@ export function MatchEndScreen({
             color: poster.inkDim,
             paddingLeft: '0.28em', // optically recenters tracked-out caps
           }}>
-            {isTutorial ? 'Tutorial' : isStory ? 'Story battle' : 'Quick match'} · Turn {G.turnNumber}
+            {isTutorial ? `Lesson ${lessonNumber ?? ''}`.trim() : isStory ? 'Story battle' : 'Quick match'} · Turn {G.turnNumber}
           </div>
           {/* Brush-script lead-in, tipped up like a hand-lettered overprint. */}
           <div style={{
@@ -194,9 +199,22 @@ export function MatchEndScreen({
             <PosterButton variant="paper" onClick={onStoryReturn} style={{ minWidth: 190, textAlign: 'center' }}>
               Return to Map
             </PosterButton>
+          ) : isTutorial ? (
+            <>
+              {onNextLesson && (
+                <PosterButton variant="paper" onClick={onNextLesson} style={{ minWidth: 170, textAlign: 'center' }}>
+                  Next Lesson
+                </PosterButton>
+              )}
+              {onLessons && (
+                <PosterButton variant={onNextLesson ? 'ink' : 'paper'} onClick={onLessons} style={{ minWidth: 150, textAlign: 'center' }}>
+                  All Lessons
+                </PosterButton>
+              )}
+            </>
           ) : (
             <PosterButton variant="paper" onClick={onRematch} style={{ minWidth: 170, textAlign: 'center' }}>
-              {isTutorial ? 'Play a Match' : 'Rematch'}
+              Rematch
             </PosterButton>
           )}
           {onMenu && (
