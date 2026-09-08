@@ -3,21 +3,26 @@
  * own small match on the scripted path Story uses (`StorySetup`): fixed
  * rosters, fixed decks, no draft, no mulligan.
  *
- * A lesson can open mid-fight (`startTurn`), so "Skills and Gear" begins with
- * two souls already in hand and "Ultimates" with the ultimates already dealt —
- * nobody replays the opening five times. Each lesson is written against the
- * real soul economy of the turn it opens on:
+ * Nothing here is read and dismissed: every step is a tap on the real thing.
+ * A concept is taught by doing it — open a hero to see his numbers, tap a
+ * card you cannot pay for and feel the soul limit, gear up and watch the
+ * health climb, end the turn and watch a hero fall.
  *
- *   1  The Table         turn 1  · 1 soul   · play a card, end the turn
- *   2  Skills and Gear   turn 3  · 2 souls  · one skill, one piece of gear
- *   3  The Bench         turn 5  · 3 souls  · retreat, fight with the fresh one
- *   4  Ultimates         turn 11 · 6 souls  · cast Shadow Transformation
- *   5  Take the Street   turn 5  · 3 souls  · their patron's last life
+ * A lesson can open mid-fight (`startTurn`, `activeWear`), so a heal has a
+ * worn hero to land on and "Ultimates" opens with the ultimates already
+ * dealt. Each lesson is written against the real soul economy of the turn it
+ * opens on:
  *
- * Every task step names exactly the control that performs it (the gate lets
+ *   1  The Table          turn 1  · 1 soul   · look, feel the limit, gear, end, the fall
+ *   2  Spells and Skills  turn 3  · 2 souls  · a spell that resolves, a skill that returns
+ *   3  The Bench          turn 5  · 3 souls  · retreat, fight with the fresh one
+ *   4  Ultimates          turn 11 · 6 souls  · cast Shadow Transformation
+ *   5  Take the Street    turn 5  · 3 souls  · their patron's last life
+ *
+ * Every step names exactly the control that performs it (the gate lets
  * nothing else through), waits out the rival's turn, and — should the player
  * arrive short of souls — points at End Turn instead of asking for a move
- * that cannot be made. Stated steps light up the thing they describe.
+ * that cannot be made.
  */
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
@@ -33,10 +38,11 @@ import { PATRON_NAMES } from '@/ui/board/patrons';
 
 /** Your side: two sturdy heroes with cheap, unambiguous skills. */
 const PLAYER_HEROES: CardId[] = ['hero_kelvin', 'hero_yamato'];
-/** Theirs: two of the lowest-attack heroes in the set (1 atk each) fronting,
- *  and Viscous — whose skill only ever touches himself — on the bench, so no
- *  rival turn lands more than a couple of points on the player's Active. */
-const ENEMY_HEROES: CardId[] = ['hero_lash', 'hero_sinclair', 'hero_viscous'];
+/** Theirs: Lash (1 attack) fronting, with Viscous and Warden — whose skills
+ *  only ever touch themselves — on the bench. Lash's Ground Strike is then
+ *  the one rival skill that deals damage, and it deals one: a hero of yours
+ *  can sit on the bench at two health and still be standing next turn. */
+const ENEMY_HEROES: CardId[] = ['hero_lash', 'hero_viscous', 'hero_warden'];
 
 /** Cheap, quiet cards: nothing here decides a fight, and nothing surprises a
  *  script that is naming other cards. */
@@ -110,6 +116,12 @@ export interface CoachView {
   targeting: boolean;
   /** The hero detail sheet is open (where Skill and Retreat live). */
   sheetOpen: boolean;
+  /** …and whose it is. */
+  sheetHero: CardId | null;
+  /** Taps on cards the player could not pay for, so far. */
+  refusals: number;
+  /** The id of the last tap-to-continue step the player answered. */
+  acked: string | null;
 }
 
 /**
@@ -141,15 +153,12 @@ function benchOf(G: GameState, pid: PlayerID): CardInstance | null {
 function inHand(G: GameState, me: PlayerID, id: CardId): boolean {
   return G.players[me].hand.some((c) => c.cardId === id);
 }
-function handNames(G: GameState, me: PlayerID): string[] {
-  return [...new Set(G.players[me].hand.map(nameOf))];
-}
 function ultsInHand(G: GameState, me: PlayerID): string[] {
   return G.players[me].hand.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate').map(nameOf);
 }
-function corpses(G: GameState): CardInstance[] {
-  return (['0', '1'] as PlayerID[]).flatMap((pid) => {
-    const ps = G.players[pid];
+function corpses(G: GameState, pid?: PlayerID): CardInstance[] {
+  return (pid ? [pid] : (['0', '1'] as PlayerID[])).flatMap((p) => {
+    const ps = G.players[p];
     return [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c && (c.respawnTurnsLeft ?? 0) > 0);
   });
 }
@@ -191,33 +200,31 @@ export interface CoachStep {
   id: string;
   /** Stencil heading — two or three words. */
   title: string;
-  /** One or two short lines. The board shows the rest. */
+  /** One or two short lines, ending in the tap it asks for. */
   body: Text;
-  /** Present = the step is a task, and completes when this reads true.
-   *  Absent = the step just states something and advances on Next. */
-  task?: (v: CoachView) => boolean;
-  /** Task steps: can the move be made right now? When not, the plate shows
-   *  `blocked` and opens End Turn instead — a short soul pocket must never
-   *  trap the player in a step they cannot finish. */
+  /** Completes when this reads true. Every step has one. */
+  task: (v: CoachView) => boolean;
+  /** Can the move be made right now? When not, the plate shows `blocked`
+   *  and opens End Turn instead — a short soul pocket must never trap the
+   *  player in a step they cannot finish. */
   ready?: (v: CoachView) => boolean;
   blocked?: Text;
   /** Returns a line to hold on while something plays out (the rival's turn),
-   *  or null to proceed. Task steps wait for your turn by default. */
+   *  or null to proceed. Steps wait for your turn by default. */
   wait?: (v: CoachView) => string | null;
-  /** What is lit through the scrim. Empty = the whole board is sealed.
-   *  Absent = no gate at all; the board is the player's. */
-  spot?: (v: CoachView) => GateSpec[];
-  /** What may be tapped. Task steps only; defaults to `spot`. */
+  /** What is lit through the scrim. Empty = the whole board is sealed. */
+  spot: (v: CoachView) => GateSpec[];
+  /** What may be tapped. Defaults to `spot`. */
   allow?: (v: CoachView) => GateSpec[];
+  /** The lit things are not controls (a rule, a fallen hero): a tap on any
+   *  of them is the answer, and `task` reads `acked`. */
+  tap?: boolean;
 }
 
 export const RIVAL_TURN = "Rival's turn. Watch — on their way out, both Actives trade blows.";
 
 const YOU = `${PATRON_NAMES.you}:`;
 const THEM = `${PATRON_NAMES.rival}:`;
-const afterRival = (v: CoachView) => (v.isMyTurn ? null : RIVAL_TURN);
-const bothActives = (v: CoachView) =>
-  [tile(activeOf(v.G, RIVAL)), tile(activeOf(v.G, v.me))].filter(Boolean);
 
 /** End the turn — the n-th time this lesson. */
 function endTurn(n: number, body: string): CoachStep {
@@ -228,6 +235,33 @@ function endTurn(n: number, body: string): CoachStep {
     task: (v) => v.seen.turnsEnded >= n,
     wait: () => null,
     spot: () => ['End Turn'],
+  };
+}
+
+/** Open a hero's sheet — the one place his numbers, skill, level and gear
+ *  are all printed. Completes the moment it is open. */
+function look(id: string, title: string, who: (v: CoachView) => CardInstance | null, body: Text): CoachStep {
+  return {
+    id,
+    title,
+    body,
+    task: (v) => v.sheetHero !== null && v.sheetHero === who(v)?.cardId,
+    ready: (v) => !!who(v),
+    blocked: 'Nothing to look at there any more. End the turn.',
+    spot: (v) => [tile(who(v))].filter(Boolean),
+  };
+}
+
+/** …and close it again, having read what it says. */
+function close(id: string, title: string, body: Text): CoachStep {
+  return {
+    id,
+    title,
+    body,
+    task: (v) => !v.sheetOpen,
+    wait: () => null,
+    spot: () => ['Hero sheet'],
+    allow: () => ['~Close'],
   };
 }
 
@@ -261,6 +295,19 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
   };
 }
 
+/** Play a one-soul card from hand onto your Active: tap it, then tap him. */
+function playOnActive(id: string, title: string, cardId: CardId, cardName: string, lead: (v: CoachView) => string, done: (v: CoachView) => boolean): CoachStep {
+  return {
+    id,
+    title,
+    body: (v) => `${lead(v)} Tap ${cardName}, then tap ${nameOf(activeOf(v.G, v.me)) || 'your Active'}.`,
+    task: done,
+    ready: (v) => v.G.players[v.me].souls >= cardCost(cardId, 1) && inHand(v.G, v.me, cardId) && !!activeOf(v.G, v.me),
+    blocked: `${cardName} costs a soul and you have none left. End the turn — souls refill.`,
+    spot: (v) => (v.targeting ? [tile(activeOf(v.G, v.me))] : [`*${cardName}`]),
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* The lessons                                                         */
 /* ------------------------------------------------------------------ */
@@ -282,69 +329,63 @@ export interface Lesson {
   steps: CoachStep[];
 }
 
+const mine = (v: CoachView) => activeOf(v.G, v.me);
+const theirs = (v: CoachView) => activeOf(v.G, RIVAL);
+const myBench = (v: CoachView) => benchOf(v.G, v.me);
+const hpOf = (c: CardInstance | null) => (c ? `${c.hp} of ${c.hpMax}` : '');
+
 export const LESSONS: Lesson[] = [
   {
     id: 'table',
     number: 1,
     title: 'The Table',
-    blurb: 'Patrons, rows, souls — and your first card.',
+    blurb: 'Look, spend, gear up, end the turn — and watch a hero fall.',
     face: 'hero_kelvin',
-    outro: 'You can play a card and end a turn. Everything else is a variation on that.',
+    outro: 'You can read a hero, pay for a card and end a turn. Everything else is a variation on that.',
+    // Rivals at two health and no cards to heal with: the first trade the
+    // player ever ends drops Lash, and the patron's life is paid in front
+    // of them.
     setup: () => match({
+      enemyBuff: { atk: 0, hp: -2 },
+      enemyDeck: [],
       playerDeck: [
-        'healing_rite',      // turn 1, 1 soul — "Play a Card"
-        'extra_health', 'extended_magazine',
-        'restorative_shot',  // drawn turn 1
+        'extended_magazine',  // costs 2 — the card you cannot pay for
+        'extra_health',       // costs 1 — the card you can
+        'healing_rite',
+        'restorative_shot',   // drawn turn 1
         ...FILLER,
       ],
     }),
     steps: [
+      look('look', 'Your Active', mine, (v) => `Two heroes are yours: ${nameOf(mine(v))} in the middle row fights; ${nameOf(myBench(v))} waits on the bench below, out of reach. Tap ${nameOf(mine(v))} to look him over.`),
+      close('numbers', 'His Numbers', (v) => `The sheet is every hero's card: attack, health, level, and his skill. Tap any hero, yours or theirs, to read it. Tap Close.`),
       {
-        id: 'deal',
-        title: 'The Deal',
-        body: 'Two patrons back this fight — theirs on the top rule, yours on the bottom. Every hero that falls costs its patron a life. Drop theirs to zero and the street is yours.',
-        spot: () => [THEM, YOU],
-      },
-      {
-        id: 'rows',
-        title: 'The Rows',
-        body: 'Only the two Actives in the middle row fight. Benches wait out of reach — theirs above, yours below.',
-        spot: bothActives,
-      },
-      {
-        id: 'souls',
+        id: 'broke',
         title: 'Souls',
-        body: 'Souls pay for everything, and they sit on your rule. They refill at the start of each of your turns — one, then two, then three. Unspent souls do not carry over.',
-        spot: () => [`${YOU} >> Souls:`],
+        body: (v) => `Cards cost souls, and the rail on your rule says you have ${v.G.players[v.me].souls}. Tap Extended Magazine — it costs two.`,
+        task: (v) => v.refusals >= 1 || v.G.players[v.me].souls >= 2 || !inHand(v.G, v.me, 'extended_magazine'),
+        spot: () => [`${YOU} >> Souls:`, '*Extended Magazine'],
+        allow: () => ['*Extended Magazine'],
       },
+      playOnActive('gear', 'Play a Card', 'extra_health', 'Extra Health',
+        (v) => `Told you. One soul buys a one-soul card, and gear stays on: ${nameOf(mine(v))}'s health climbs to ${(mine(v)?.hpMax ?? 6) + 2}.`,
+        (v) => v.seen.equipped),
+      endTurn(1, 'Nothing left to spend — souls refill at the start of your next turn, one more each time. Tap End Turn. The rival moves, and on their way out the two Actives trade blows.'),
       {
-        id: 'draw',
-        title: 'The Draw',
-        body: 'You draw one card a turn off the top of your deck. Your hand is what you can play; the deck count is what is left.',
-        spot: (v) => [`${YOU} >> Deck:`, ...handNames(v.G, v.me).map((n) => `*${n}`)],
-      },
-      {
-        id: 'play',
-        title: 'Play a Card',
-        body: (v) => `Tap Healing Rite, then tap ${nameOf(activeOf(v.G, v.me)) || 'your Active'}. The spell heals for two, spends your one soul and goes to the discard.`,
-        task: (v) => v.seen.playedCard,
-        ready: (v) => v.G.players[v.me].souls >= 1 && inHand(v.G, v.me, 'healing_rite') && !!activeOf(v.G, v.me),
-        blocked: 'Healing Rite costs a soul and you have none left. End the turn — souls refill.',
-        spot: (v) => (v.targeting ? [tile(activeOf(v.G, v.me))] : ['*Healing Rite']),
-      },
-      endTurn(1, 'Nothing left to spend, so end the turn. The rival moves, and on their way out both Actives trade blows.'),
-      {
-        id: 'trade',
+        id: 'fall',
         title: 'The Trade',
         body: (v) => {
-          const mine = activeOf(v.G, v.me), theirs = activeOf(v.G, RIVAL);
-          if (!mine || !theirs || v.seen.turnsEnded < 1) {
-            return 'Every turn closes with the two Actives trading blows. The number beside the blade is what each one hits for.';
+          const c = corpses(v.G, RIVAL)[0];
+          const rival = v.G.players[RIVAL];
+          const me = mine(v);
+          if (c && me) {
+            return `${nameOf(c)} swung, ${nameOf(me)} hit back for ${effectiveAtk(me)}, and ${nameOf(c)} fell. Every hero that falls costs its patron a life: theirs is down to ${rival.hp} of ${rival.hpMax}. Drop it to zero and the street is yours. Tap their rule.`;
           }
-          return `${nameOf(theirs)} swung for ${effectiveAtk(theirs)} and ${nameOf(mine)} hit back for ${effectiveAtk(mine)}. Every turn closes with that trade — the number beside the blade is what each one hits for.`;
+          return 'Every turn closes with the two Actives trading blows; the number beside the blade is what each one hits for. A patron pays a life for every hero of theirs that falls. Tap their rule.';
         },
-        wait: afterRival,
-        spot: bothActives,
+        task: (v) => v.acked === 'fall',
+        tap: true,
+        spot: (v) => [THEM, ...corpses(v.G, RIVAL).map(tile)],
       },
     ],
   },
@@ -352,44 +393,28 @@ export const LESSONS: Lesson[] = [
   {
     id: 'skills',
     number: 2,
-    title: 'Skills and Gear',
-    blurb: 'Two souls: one for a skill, one for a piece of gear.',
+    title: 'Spells and Skills',
+    blurb: 'Two souls: a spell that resolves once, a skill that comes back.',
     face: 'hero_kelvin',
-    outro: 'Skills cost a soul and gear stays on. Spend every soul, every turn.',
+    outro: 'Spells resolve once and go to the discard. Skills cost a soul and come back every turn. Spend every soul, every turn.',
     setup: () => match({
       startTurn: 3,
+      activeWear: 4,
       playerDeck: [
-        'extra_health',      // turn 3, 1 soul — "Gear a Hero"
+        'healing_rite',       // turn 3, 1 soul — the spell
         'extended_magazine', 'restorative_shot',
-        'rusted_barrel',     // drawn turn 3
+        'rusted_barrel',      // drawn turn 3
         ...FILLER,
       ],
     }),
     steps: [
-      {
-        id: 'two',
-        title: 'Two Souls',
-        body: 'Turn three, and the rail refilled to two. One buys a skill, one buys a piece of gear — and both are gone at the end of the turn either way.',
-        spot: () => [`${YOU} >> Souls:`],
-      },
-      useSkill('Use a Skill', () => `One skill a turn across your whole side, for ${SKILL_COST} soul.`),
-      {
-        id: 'equip',
-        title: 'Gear a Hero',
-        body: (v) => `Tap Extra Health, then ${nameOf(activeOf(v.G, v.me)) || 'your Active'}. Gear stays on a hero — up to ${MAX_EQUIPMENT_PER_HERO} pieces — and folds into their numbers.`,
-        task: (v) => v.seen.equipped,
-        ready: (v) => v.G.players[v.me].souls >= 1 && inHand(v.G, v.me, 'extra_health') && !!activeOf(v.G, v.me),
-        blocked: 'Extra Health costs a soul and you have none left. End the turn — souls refill.',
-        spot: (v) => (v.targeting ? [tile(activeOf(v.G, v.me))] : ['*Extra Health']),
-      },
-      endTurn(1, 'Spent out. End the turn and watch the trade — the gear counts in it.'),
-      {
-        id: 'levels',
-        title: 'Levelling',
-        body: (v) => `${nameOf(activeOf(v.G, v.me)) || 'Your Active'} earned experience for standing the turn and for landing the hit. The ring in the card's corner fills; a level raises the numbers.`,
-        wait: afterRival,
-        spot: (v) => [tile(activeOf(v.G, v.me))].filter(Boolean),
-      },
+      playOnActive('heal', 'Play a Spell', 'healing_rite', 'Healing Rite',
+        (v) => `Turn three, two souls, and ${nameOf(mine(v))} is at ${hpOf(mine(v))}. A spell resolves once and goes to the discard.`,
+        (v) => v.seen.playedCard),
+      useSkill('Use a Skill', () => `One soul left. A skill costs exactly that, once a turn across your whole side — and it is back next turn.`),
+      endTurn(1, 'Spent out. Tap End Turn and watch the trade.'),
+      look('levels', 'Levelling', mine, (v) => `${nameOf(mine(v))} earned experience for standing the turn and for the hit. Tap ${nameOf(mine(v))}.`),
+      close('ring', 'The Ring', 'The ring around his level fills with experience; a level raises his numbers. Tap Close.'),
     ],
   },
 
@@ -400,32 +425,22 @@ export const LESSONS: Lesson[] = [
     blurb: 'Pull a worn Active out and send the fresh one in.',
     face: 'hero_yamato',
     outro: 'Rotate. A worn Active on the bench is a hero saved.',
-    setup: () => match({ startTurn: 5 }),
+    setup: () => match({ startTurn: 5, activeWear: 3 }),
     steps: [
       {
         id: 'retreat',
         title: 'Retreat',
-        body: (v) => `Three souls this turn. Tap ${nameOf(benchOf(v.G, v.me)) || 'your bench hero'} on your bench, then Retreat: ${RETREAT_COST} souls swap the two, and the worn one steps out before it falls.`,
+        body: (v) => `${nameOf(mine(v))} is worn to ${hpOf(mine(v))}. Pull him out before it gets worse: three souls this turn — tap ${nameOf(myBench(v)) || 'your bench hero'} on your bench, then Retreat. ${RETREAT_COST} souls swap the two.`,
         task: (v) => v.seen.swapped,
-        ready: (v) => v.G.players[v.me].souls >= RETREAT_COST && !!benchOf(v.G, v.me) && !!activeOf(v.G, v.me),
+        ready: (v) => v.G.players[v.me].souls >= RETREAT_COST && !!myBench(v) && !!mine(v),
         blocked: `Retreat costs ${RETREAT_COST} souls. End the turn to refill, then come back to it.`,
-        spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(benchOf(v.G, v.me))]),
-        allow: (v) => (v.sheetOpen ? ['~Retreat'] : [tile(benchOf(v.G, v.me))]),
+        spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(myBench(v))]),
+        allow: (v) => (v.sheetOpen ? ['~Retreat'] : [tile(myBench(v))]),
       },
-      useSkill('Fresh Legs', (v) => `${nameOf(activeOf(v.G, v.me)) || 'The fresh hero'} is in the fight now, and one soul is left for a skill.`),
-      endTurn(1, 'End the turn. The fresh Active takes the trade; the worn one sits it out.'),
-      {
-        id: 'holds',
-        title: 'The Bench Holds',
-        body: (v) => {
-          const rested = benchOf(v.G, v.me), front = activeOf(v.G, v.me);
-          return rested && front
-            ? `${nameOf(rested)} sat that round out at ${rested.hp} health while ${nameOf(front)} took the hits. Rotate the worn one out and the fresh one in — that is how a lopsided fight stays even.`
-            : 'Rotate the worn one out and the fresh one in — that is how a lopsided fight stays even.';
-        },
-        wait: afterRival,
-        spot: (v) => [tile(activeOf(v.G, v.me)), tile(benchOf(v.G, v.me))].filter(Boolean),
-      },
+      useSkill('Fresh Legs', (v) => `${nameOf(mine(v))} is in the fight now, and one soul is left for his skill.`),
+      endTurn(1, 'Tap End Turn. The fresh Active takes the trade; the worn one sits it out.'),
+      look('holds', 'The Bench Holds', myBench, (v) => `Tap ${nameOf(myBench(v))} on the bench.`),
+      close('safe', 'Out of the Trade', (v) => `Still standing at ${hpOf(myBench(v))}. Attacks only ever land on the Active; a skill can still chip the bench, but a chip is not a trade. Rotate the worn one out and the fresh one in. Tap Close.`),
     ],
   },
 
@@ -436,25 +451,18 @@ export const LESSONS: Lesson[] = [
     blurb: 'The big card every hero deals you on turn five.',
     face: 'hero_yamato',
     outro: 'One ultimate per hero, per match. Time it.',
-    // Yamato fronts this one: Shadow Transformation is cast on himself and the
-    // payoff is his own swing. Six souls — the turn-eleven refill — pay for it.
-    setup: () => match({ startTurn: 11, playerHeroes: ['hero_yamato', 'hero_kelvin'] }),
+    // Yamato fronts this one, worn down to a point of health: Shadow
+    // Transformation heals him to full and puts three attack on his blade,
+    // and the payoff is his own swing. Six souls — the turn-eleven refill.
+    setup: () => match({ startTurn: 11, activeWear: 5, playerHeroes: ['hero_yamato', 'hero_kelvin'] }),
     steps: [
-      {
-        id: 'intro',
-        title: 'Ultimates',
-        body: (v) => {
-          const ults = ultsInHand(v.G, v.me);
-          return ults.length
-            ? `Turn eleven, six souls. Every hero on your board dealt you its ultimate on turn five — ${ults.join(' and ')} are in your hand. They cost the most, and they end fights.`
-            : 'From turn five, every hero on your board deals you its ultimate. They cost the most, and they end fights.';
-        },
-        spot: (v) => ultsInHand(v.G, v.me).map((n) => `*${n}`),
-      },
       {
         id: 'cast',
         title: 'Cast It',
-        body: (v) => `Tap Shadow Transformation. It costs all six souls: ${nameOf(activeOf(v.G, v.me)) || 'Yamato'} gains three attack for two turns, cannot be stopped, and heals five.`,
+        body: (v) => {
+          const ults = ultsInHand(v.G, v.me);
+          return `${nameOf(mine(v))} is at ${hpOf(mine(v))}, and it is turn eleven: six souls. Every hero deals you its ultimate on turn five${ults.length ? ` — ${ults.join(' and ')} are in your hand` : ''}. Tap Shadow Transformation.`;
+        },
         task: (v) => v.seen.castUlt,
         ready: (v) => v.G.players[v.me].souls >= cardCost('ult_yamato', 6)
           && inHand(v.G, v.me, 'ult_yamato')
@@ -462,21 +470,13 @@ export const LESSONS: Lesson[] = [
         blocked: 'Shadow Transformation costs six souls. End the turn — souls refill.',
         spot: () => ['*Shadow Transformation'],
       },
-      endTurn(1, 'End the turn. Watch the number beside the blade, and what it does to the trade.'),
-      {
-        id: 'payoff',
-        title: 'The Payoff',
-        body: (v) => {
-          const mine = activeOf(v.G, v.me), theirs = activeOf(v.G, RIVAL);
-          const c = corpses(v.G)[0];
-          const swing = mine ? `${nameOf(mine)} swings for ${effectiveAtk(mine)} while it lasts` : 'The buff lasts two turns';
-          return c
-            ? `${swing} — and ${nameOf(c)} is down for it. A fallen hero greys out on a respawn timer, and its patron has already paid the life. One ultimate per hero, per match.`
-            : `${swing}${theirs ? `, and ${nameOf(theirs)} is at ${theirs.hp}` : ''}. The card is gone to the discard: one ultimate per hero, per match.`;
-        },
-        wait: afterRival,
-        spot: (v) => [tile(activeOf(v.G, v.me)), tile(activeOf(v.G, RIVAL)), ...corpses(v.G).map(tile)].filter(Boolean),
-      },
+      endTurn(1, 'All six souls, one card: healed to full, and three more attack for two turns. Tap End Turn and watch the swing.'),
+      look('payoff', 'The Payoff', mine, (v) => {
+        const c = corpses(v.G, RIVAL)[0];
+        const me = mine(v);
+        return `${nameOf(me)} swings for ${me ? effectiveAtk(me) : 5} while it lasts${c ? ` — and ${nameOf(c)} is down for it, its patron a life poorer` : ''}. Tap ${nameOf(me)}.`;
+      }),
+      close('effects', 'Active Effects', 'Bullet Power +3 sits under Active Effects with its turns left; the card itself is gone to the discard. One ultimate per hero, per match. Tap Close.'),
     ],
   },
 
@@ -498,17 +498,13 @@ export const LESSONS: Lesson[] = [
       playerDeck: ['healing_rite', 'healing_rite', ...FILLER],
     }),
     steps: [
-      {
-        id: 'last',
-        title: 'Last Life',
-        body: (v) => `Their patron is down to its last life. Drop ${nameOf(activeOf(v.G, RIVAL)) || 'their Active'} and the street is yours.`,
-        spot: () => [THEM],
-      },
-      useSkill('Wear Them Down', (v) => {
-        const theirs = activeOf(v.G, RIVAL);
-        return theirs ? `${nameOf(theirs)} is at ${theirs.hp}; the skill takes one.` : 'Soften their Active first.';
+      look('size', 'Last Life', theirs, (v) => `Their patron is down to its last life: one more fallen hero and the street is yours. Tap ${nameOf(theirs(v))} to size him up.`),
+      close('plan', 'The Plan', (v) => {
+        const me = mine(v);
+        return `${hpOf(theirs(v)) || 'Three'} health. ${skillNameOf(me)} takes one; ${nameOf(me)}'s swing takes ${me ? effectiveAtk(me) : 2}. Tap Close.`;
       }),
-      endTurn(1, 'End the turn. The swing is what finishes it — watch their rule.'),
+      useSkill('Wear Him Down', (v) => `${nameOf(theirs(v))} is at ${hpOf(theirs(v))}.`),
+      endTurn(1, 'Tap End Turn. The swing finishes it — watch their rule.'),
     ],
   },
 ];

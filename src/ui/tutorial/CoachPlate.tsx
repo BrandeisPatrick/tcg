@@ -23,7 +23,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { GameState, PlayerID } from '@/engine/types';
+import type { CardId, GameState, PlayerID } from '@/engine/types';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
@@ -39,14 +39,16 @@ import { TutorialGate } from './TutorialGate';
 const TICK_MS = 900;
 const NONE: GateSpec[] = [];
 
-export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNextLesson, onLessons }: {
+export function CoachPlate({ G, me, isMyTurn, targeting, sheetHero, refusals, lesson, onNextLesson, onLessons }: {
   G: GameState;
   me: PlayerID;
   isMyTurn: boolean;
   /** A card or skill is armed and waiting for its target. */
   targeting: boolean;
-  /** The hero detail sheet is open — where Skill and Retreat live. */
-  sheetOpen: boolean;
+  /** The hero whose detail sheet is open (where Skill and Retreat live), or null. */
+  sheetHero: CardId | null;
+  /** Taps on cards the player could not pay for, so far this match. */
+  refusals: number;
   lesson: Lesson;
   /** Start the following lesson fresh; absent on the last one. */
   onNextLesson?: () => void;
@@ -59,6 +61,8 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNe
   const [ticked, setTicked] = useState(false);
   const [open, setOpen] = useState(true);
   const [seen, setSeen] = useState<CoachSeen>(emptySeen);
+  // A step that only asks for a tap on the thing it lit records the tap here.
+  const [acked, setAcked] = useState<string | null>(null);
   // Set when a tap lands on the sealed area, so the plate can answer it with
   // a flick rather than letting the press feel broken. Self-clearing, so the
   // shake plays once per blocked tap.
@@ -114,14 +118,18 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNe
   // ---- the step, and which mode it is in ----
   const current = steps[step];
   const done = step >= steps.length;
-  const view: CoachView = { G, me, isMyTurn, seen, targeting, sheetOpen };
+  const view: CoachView = { G, me, isMyTurn, seen, targeting, sheetOpen: sheetHero !== null, sheetHero, refusals, acked };
   const complete = !!current?.task && current.task(view);
+  /** A card or skill reveal is still on screen. */
+  const revealUp = G.action?.state === 'begin';
 
+  // Every step is something to do, so by default a step waits out the
+  // rival's turn; a step may say otherwise (End Turn completes during it).
   const waitText: string | null = !current || done || complete ? null
     : current.wait ? current.wait(view)
-    : current.task && !isMyTurn ? RIVAL_TURN
+    : !isMyTurn ? RIVAL_TURN
     : null;
-  const blocked = !!current?.task && !waitText && !complete && !!current.ready && !current.ready(view);
+  const blocked = !!current && !waitText && !complete && !!current.ready && !current.ready(view);
 
   const bodyText = done ? lesson.outro
     : waitText ? waitText
@@ -131,14 +139,18 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNe
   // What the gate lights and lets through. Memoised on contents so the
   // gate's measuring effect is not restarted every frame by a fresh array.
   const gated = !done && open && !!current.spot;
-  const hold = ticked || !!waitText;
+  // Hold through a task's landing beat, the rival's turn, and any reveal
+  // still in flight — the next thing to tap lights up only once the board
+  // can actually take the tap.
+  const hold = ticked || !!waitText || revealUp;
   const spotList = !gated ? NONE
     : hold ? NONE
     : blocked ? ['End Turn']
     : current.spot!(view);
-  const allowList = !gated || hold || !current.task ? NONE
+  const allowList = !gated || hold || current.tap ? NONE
     : blocked ? ['End Turn']
     : (current.allow ?? current.spot!)(view);
+  const tapToContinue = gated && !hold && !blocked && !!current.tap;
   const spotKey = spotList.join('|');
   const allowKey = allowList.join('|');
   const spot = useMemo(() => (spotKey ? spotKey.split('|') : NONE), [spotKey]);
@@ -148,10 +160,21 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNe
   // setting it re-renders, and if the effect re-ran it would clear its own
   // pending timeout and never advance. Keying on `step` as well means a task
   // the player happened to satisfy early still ticks when its step comes up.
+  // The tick shows at once; the step turns over only once the beat has
+  // passed AND no reveal is still on screen, so the next thing to tap never
+  // lights up under a card the player would otherwise tap through.
+  const revealRef = useRef(revealUp);
+  revealRef.current = revealUp;
   useEffect(() => {
     if (!complete) return;
     setTicked(true);
-    const t = setTimeout(() => { setTicked(false); setStep((i) => i + 1); }, TICK_MS);
+    let t: ReturnType<typeof setTimeout>;
+    const advance = () => {
+      if (revealRef.current) { t = setTimeout(advance, 150); return; }
+      setTicked(false);
+      setStep((i) => i + 1);
+    };
+    t = setTimeout(advance, TICK_MS);
     return () => clearTimeout(t);
   }, [complete, step]);
 
@@ -173,12 +196,10 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNe
     : waitText ? 'Rival moves'
     : blocked ? 'Refill first'
     : 'Your move';
-  // The action button: Skip on a task, Next on a statement, nothing while
-  // the plate is holding for the rival (there is nothing to skip to yet).
-  // On the closing card the actions are the lesson's exits.
-  const action = done || waitText ? null
-    : current.task ? { label: 'Skip', muted: true }
-    : { label: 'Next', muted: false };
+  // The action button: Skip, except while the plate is holding for the
+  // rival (there is nothing to skip to yet). On the closing card the
+  // actions are the lesson's exits.
+  const action = done || waitText ? null : { label: 'Skip', muted: true };
 
   // Phones: a bar in the strip above the board, stopping short of the fixed
   // system gear in that corner (its hit area would otherwise swallow the
@@ -204,6 +225,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNe
           allow={allow}
           dim={hold ? 0.3 : 0.62}
           onBlocked={() => setNudge(true)}
+          onTap={tapToContinue ? () => setAcked(current.id) : undefined}
         />
       )}
     <AnimatePresence>
@@ -240,7 +262,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNe
               would push it down over the rival's rule. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 3 : 7 }}>
             {/* Phones have no footer row, so the task marker rides the rail there. */}
-            {isMobile && !done && (current.task || waitText) && <TaskDot ticked={ticked} waiting={!!waitText} />}
+            {isMobile && !done && <TaskDot ticked={ticked} waiting={!!waitText} />}
             <span
               style={{
                 ...text.label,
@@ -315,7 +337,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetOpen, lesson, onNe
 
           {!isMobile && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 11 }}>
-              {!done && (current.task || waitText) ? (
+              {!done ? (
                 <>
                   <TaskDot ticked={ticked} waiting={!!waitText} />
                   <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.2em', color: ticked ? poster.ink : poster.inkDim }}>

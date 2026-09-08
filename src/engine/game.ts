@@ -310,6 +310,11 @@ export const DeadlockGame: Game<GameState> = {
         action: null,
         damageFx: [],
       };
+      // A lesson may open with the Active already worn, so a heal or a
+      // retreat has something to show for itself.
+      const wear = Math.max(0, Math.floor(story.activeWear ?? 0));
+      const mine = G.players['0'].active;
+      if (wear && mine) mine.hp = Math.max(1, mine.hp - wear);
       G.players['0'].archetype = 'story';
       G.players['1'].archetype = 'story-enemy';
       return G;

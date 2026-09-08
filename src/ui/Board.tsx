@@ -72,6 +72,9 @@ export function Board(props: BoardProps<GameState>) {
   const { combatSpeed } = useSettings();
   // The backdrop's slow push-in runs only when neither the settings sheet
   const [pending, setPending] = useState<PendingPlay | null>(null);
+  // Taps on cards the player cannot pay for. The coach counts them: one
+  // lesson has the player feel the soul limit before it explains it.
+  const [refusals, setRefusals] = useState(0);
   // Auto-play: when on, the same AI that runs the opponent also drives the
   // local player's turns, so the match plays itself hands-free. Toggle in the
   // top-right; flip off any time to take control back.
@@ -842,7 +845,10 @@ export function Board(props: BoardProps<GameState>) {
               onLongPress={(c) => setPreview({ card: c, hover: false })}
               onHover={(c) => setPreview(c ? { card: c, hover: true } : null)}
               onDragEndOver={onHandDragEnd}
-              onUnaffordable={(_, cost) => showNotice(`Need ${cost} souls — you have ${G.players[me].souls}`, true)}
+              onUnaffordable={(_, cost) => {
+                setRefusals((n) => n + 1);
+                showNotice(`Need ${cost} souls — you have ${G.players[me].souls}`, true);
+              }}
               onEnd={() => { setPending(null); triggerEndTurn(); }}
               onCancel={() => setPending(null)}
               autoPlay={autoPlay}
@@ -1057,7 +1063,8 @@ export function Board(props: BoardProps<GameState>) {
           me={me}
           isMyTurn={isMyTurn}
           targeting={!!pending}
-          sheetOpen={!!heroDetail}
+          sheetHero={heroDetail?.cardId ?? null}
+          refusals={refusals}
           lesson={lesson}
           onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
           onLessons={matchNav ? matchNav.toLessons : undefined}

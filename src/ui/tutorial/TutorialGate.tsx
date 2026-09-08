@@ -114,7 +114,7 @@ function sheetPath(W: number, H: number, holes: Box[]): string {
 
 interface Layout { W: number; H: number; spot: Box[]; allow: Box[]; missing: boolean }
 
-export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
+export function TutorialGate({ spot, allow, dim = 0.62, onBlocked, onTap }: {
   /** Lit through the scrim. Empty = the whole screen is sealed. */
   spot: GateSpec[];
   /** Tappable. Empty = nothing is; the step is only telling you something. */
@@ -122,6 +122,10 @@ export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
   /** Scrim opacity — lighter while something is playing out underneath. */
   dim?: number;
   onBlocked?: () => void;
+  /** When set, the lit things are not passed through to the board: a tap on
+   *  any of them is the step's answer (for things that are not controls —
+   *  a patron's rule, a fallen hero). */
+  onTap?: () => void;
 }) {
   const [layout, setLayout] = useState<Layout | null>(null);
   const [open, setOpen] = useState(false);
@@ -200,20 +204,36 @@ export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
           {...eat}
         />
       </svg>
+      {/* Tap-to-continue: a clear catcher over each lit thing, above the
+          scrim, so the tap is answered by the coach rather than the board. */}
+      {onTap && spotHoles.map((b, i) => (
+        <div
+          key={`t-${i}`}
+          role="button"
+          aria-label="Continue"
+          onClick={(e) => { e.stopPropagation(); onTap(); }}
+          style={{
+            position: 'fixed',
+            left: b.x, top: b.y, width: b.w, height: b.h,
+            cursor: 'pointer',
+            zIndex: Z + 2,
+          }}
+        />
+      ))}
       {/* Rings: a pulsing gold frame on every tappable target, a quieter one
           on anything merely pointed at. Decoration — never eats the tap. */}
-      {(allowHoles.length ? allowHoles : spotHoles).map((b, i) => (
+      {(allowHoles.length || onTap ? (allowHoles.length ? allowHoles : spotHoles) : spotHoles).map((b, i) => (
         <motion.div
           key={`${allowHoles.length ? 'a' : 's'}-${i}`}
           aria-hidden
-          animate={{ opacity: allowHoles.length ? [0.55, 1, 0.55] : [0.7, 1, 0.7] }}
+          animate={{ opacity: allowHoles.length || onTap ? [0.55, 1, 0.55] : [0.7, 1, 0.7] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
           style={{
             position: 'fixed',
             left: b.x, top: b.y, width: b.w, height: b.h,
-            border: `${allowHoles.length ? 2.5 : 2}px solid ${poster.gold}`,
+            border: `${allowHoles.length || onTap ? 2.5 : 2}px solid ${poster.gold}`,
             borderRadius: RADIUS,
-            boxShadow: allowHoles.length
+            boxShadow: allowHoles.length || onTap
               ? '0 0 0 3px rgba(217, 182, 74, 0.25), 0 0 22px rgba(217, 182, 74, 0.45)'
               : '0 0 0 2px rgba(217, 182, 74, 0.18), 0 0 14px rgba(217, 182, 74, 0.3)',
             pointerEvents: 'none',

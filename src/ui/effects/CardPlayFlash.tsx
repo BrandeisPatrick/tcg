@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useIsPresent } from 'framer-motion';
 import type { GameState } from '@/engine/types';
 import { CardFrame } from '../card/CardFrame';
 import { fonts } from '../tokens';
@@ -66,6 +66,9 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
   const verb = kind === 'skill' ? 'used' : 'played';
   const { isMobile } = useViewport();
   const dur = CARD_REVEAL_MS / 1000;
+  // Once the action has resolved the overlay is only fading out; it must not
+  // keep swallowing taps meant for the board underneath.
+  const present = useIsPresent();
   // Desktop: anchor the reveal to the left margin so the board — where the
   // spell is about to land — stays readable behind it. Phones center it
   // (no side margin to borrow).
@@ -78,14 +81,14 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.22, 0.22, 0] }}
-        exit={{ opacity: 0 }}
+        exit={{ opacity: 0, transition: { duration: 0.2 } }}
         transition={{ duration: dur, times: [0, 0.12, 0.82, 1] }}
         onClick={onSkip}
         style={{
           position: 'fixed', inset: 0,
           background: poster.scrim,
-          pointerEvents: onSkip ? 'auto' : 'none',
-          cursor: onSkip ? 'pointer' : undefined,
+          pointerEvents: present && onSkip ? 'auto' : 'none',
+          cursor: present && onSkip ? 'pointer' : undefined,
           zIndex: 70,
         }}
       />

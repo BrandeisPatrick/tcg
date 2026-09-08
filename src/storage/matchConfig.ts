@@ -22,6 +22,9 @@ export interface StorySetup {
   startTurn?: number;
   /** Rival patron lives, when they should differ from yours. */
   enemyPatronHp?: number;
+  /** Health already taken off the player's Active when the match opens — a
+   *  lesson that teaches a heal or a retreat needs a hero worth healing. */
+  activeWear?: number;
 }
 
 export interface MatchConfig {
