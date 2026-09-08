@@ -297,7 +297,7 @@ function TopStrip({ compact }: { compact: boolean }) {
       }}
     >
       <span style={{ ...stripText, justifySelf: 'start' }}>
-        Fan project
+        {compact ? 'Fan project' : 'Unofficial fan project'}
       </span>
       <Emblem />
       <span style={{ ...stripText, justifySelf: 'end', paddingRight: compact ? 42 : 40 }}>
@@ -419,6 +419,24 @@ function TitleBlock({ compact }: { compact: boolean }) {
         Tabletop card battles · Old New York
       </motion.div>
 
+      {/* The line that has to survive any screenshot of this sheet: the
+          wordmark above is Valve's, the game is not. Same voice as the
+          tagline, one step quieter; allowed to wrap on a phone. */}
+      <motion.div
+        variants={rise}
+        style={{
+          fontFamily: fonts.display,
+          fontSize: compact ? 9.5 : 11,
+          letterSpacing: compact ? '0.16em' : '0.3em',
+          textTransform: 'uppercase',
+          color: ink.dim,
+          marginTop: compact ? 5 : 8,
+          paddingLeft: 3,
+          lineHeight: 1.4,
+        }}
+      >
+        Not affiliated with Valve Corporation
+      </motion.div>
     </motion.div>
   );
 }
