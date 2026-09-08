@@ -1,5 +1,5 @@
 /**
- * The tutorial's lesson list — five numbered rows on a cream sheet, each its
+ * The tutorial's lesson list — numbered rows on a cream sheet, each its
  * own short match. Finished lessons wear an ink tick; the first unfinished
  * one wears the red "Start" sticker. Any row can be played again.
  *
@@ -103,8 +103,9 @@ export function LessonsScreen({ onBack, onStart }: Props) {
         </header>
 
         <p style={{ ...text.body, margin: `0 0 ${isMobile ? 12 : 18}px`, color: poster.inkDim, maxWidth: 640 }}>
-          Five short lessons, one thing each. Every lesson is its own small match —
-          take them in order, or jump to the one you need. They all stand alone.
+          {LESSONS.length} short lessons, one thing each. Every lesson is its own small
+          fight, set up so the move it teaches is the move that wins it. Take them in
+          order, or jump to the one you need.
         </p>
 
         <ol

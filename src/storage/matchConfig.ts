@@ -1,5 +1,15 @@
 import type { CardId } from '@/engine/types';
 
+/** Custom numbers for one hero of a scripted match, by roster position
+ *  (Active first, then the bench). `hpMax` sets a hero's full health and
+ *  fills it; `hp` alone sets where he stands right now. */
+export interface HeroStatOverride {
+  atk?: number;
+  hpMax?: number;
+  hp?: number;
+  exp?: number;
+}
+
 /**
  * Direct match setup for Story mode — bypasses the pre-match hero draft and
  * builds both players from explicit rosters/decks, with a flat stat buff on
@@ -22,9 +32,11 @@ export interface StorySetup {
   startTurn?: number;
   /** Rival patron lives, when they should differ from yours. */
   enemyPatronHp?: number;
-  /** Health already taken off the player's Active when the match opens — a
-   *  lesson that teaches a heal or a retreat needs a hero worth healing. */
-  activeWear?: number;
+  /** Custom attack / health / experience per hero, so a lesson can build the
+   *  exact situation it teaches: a hero one point short of a level, a rival
+   *  who falls to precisely the taught move. */
+  playerHeroStats?: (HeroStatOverride | undefined)[];
+  enemyHeroStats?: (HeroStatOverride | undefined)[];
 }
 
 export interface MatchConfig {

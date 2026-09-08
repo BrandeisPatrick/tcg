@@ -22,7 +22,7 @@ const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
  */
 export function MatchEndScreen({
   G, me, won, draw, isStory, isTutorial = false,
-  onRematch, onMenu, onStoryReturn, lessonNumber, onNextLesson, onLessons,
+  onRematch, onMenu, onStoryReturn, lessonNumber, lessonOutro, onNextLesson, onLessons,
 }: {
   G: GameState;
   me: PlayerID;
@@ -34,6 +34,8 @@ export function MatchEndScreen({
   isTutorial?: boolean;
   /** Which lesson this was, for the eyebrow. */
   lessonNumber?: number;
+  /** The lesson's own closing line, printed over the verdict on a win. */
+  lessonOutro?: string;
   /** Lesson exits — the following lesson (absent on the last) and the list. */
   onNextLesson?: () => void;
   onLessons?: () => void;
@@ -50,7 +52,7 @@ export function MatchEndScreen({
   const flavor = draw
     ? 'Both patrons stand — the city holds its breath.'
     : isTutorial
-      ? (won ? 'Lesson over. The real tables are downstairs.' : 'No matter — you know the moves now.')
+      ? (won ? (lessonOutro ?? 'Lesson over. The real tables are downstairs.') : 'No matter — you know the moves now.')
     : isStory
       ? (won ? 'The block is yours — press on uptown.' : 'Your run ends in the old city.')
       : (won ? 'The rival patron falls.' : 'Your patron is outflanked.');

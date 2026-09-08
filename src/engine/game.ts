@@ -7,7 +7,7 @@ import type {
   PlayerState,
 } from './types';
 import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
-import { getMatchConfig, scriptedSetup } from '@/storage/matchConfig';
+import { getMatchConfig, scriptedSetup, type HeroStatOverride } from '@/storage/matchConfig';
 import { getAIDeckTagged } from '@/decks/aiDecks';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from './statusOps';
 import { resolve } from './damage';
@@ -170,6 +170,24 @@ export function buildPlayer(pid: PlayerID, heroes: string[], deckCards: string[]
   };
 }
 
+/** Overwrite a roster's printed numbers (Active first, then the bench).
+ *  Attack is stored as a modifier over the card's base, so everything that
+ *  reads `effectiveAtk` sees the custom value. */
+function applyHeroStats(ps: PlayerState, stats?: (HeroStatOverride | undefined)[]) {
+  if (!stats) return;
+  const roster = [ps.active, ...ps.bench];
+  stats.forEach((o, i) => {
+    const c = roster[i];
+    if (!c || !o) return;
+    const data = CARDS_BY_ID[c.cardId];
+    const baseAtk = data?.type === 'hero' ? data.atk : 0;
+    if (o.atk !== undefined) c.atkMod = o.atk - baseAtk;
+    if (o.hpMax !== undefined) { c.hpMax = o.hpMax; c.hp = o.hpMax; }
+    if (o.hp !== undefined) { c.hp = o.hp; if (c.hpMax < o.hp) c.hpMax = o.hp; }
+    if (o.exp !== undefined) c.exp = o.exp;
+  });
+}
+
 function unlockUltimates(G: GameState, ps: PlayerState) {
   if (G.turnNumber < ULT_UNLOCK_TURN) return;
   const heroesOnBoard: CardInstance[] = liveBoardCards(ps);
@@ -310,11 +328,10 @@ export const DeadlockGame: Game<GameState> = {
         action: null,
         damageFx: [],
       };
-      // A lesson may open with the Active already worn, so a heal or a
-      // retreat has something to show for itself.
-      const wear = Math.max(0, Math.floor(story.activeWear ?? 0));
-      const mine = G.players['0'].active;
-      if (wear && mine) mine.hp = Math.max(1, mine.hp - wear);
+      // A lesson builds the exact situation it teaches: custom attack,
+      // health and experience per hero, by roster position.
+      applyHeroStats(G.players['0'], story.playerHeroStats);
+      applyHeroStats(G.players['1'], story.enemyHeroStats);
       G.players['0'].archetype = 'story';
       G.players['1'].archetype = 'story-enemy';
       return G;
