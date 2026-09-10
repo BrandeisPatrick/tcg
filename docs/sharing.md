@@ -13,14 +13,62 @@ on the site or in the post.
       Bluesky `@toastyghostey.newgrounds.com`, or the Reddit account that
       posted "In Your Dreams"). Wait for an answer; if none comes, swap the
       Tutorial cover for original art before posting.
+- [ ] Upload the trailer to YouTube (see below). Set it Public, copy the
+      link, and paste it into the Reddit post.
 - [ ] Read r/DeadlockTheGame's rules and flairs on the day, and post as fan
       content. The official forums (forums.playdeadlock.com) have a fan
       content section and the Deadlock Discord has fan-project channels;
       both are friendlier to project links.
-- [ ] Take two or three screenshots, or a short clip of a lesson, from the
-      live site: https://brandeispatrick.github.io/tcg/
 - [ ] Post from an account that does other things on the subreddit; Reddit's
       self-promotion norms apply.
+
+## The trailer
+
+`~/Downloads/deadlock-tcg-trailer.mp4` — 69 s, 1920x1080 at 60 fps, 19 MB,
+no audio. Recorded off the live site, so everything in it is the real
+build. Thumbnails: `deadlock-tcg-thumbnail.jpg` (the title sheet) and
+`deadlock-tcg-thumbnail-board.jpg` (a match in progress), both 1280x720.
+
+It has no soundtrack. Silent is fine, but if you want music, add it in
+YouTube's editor from their free Audio Library — anything else risks a
+copyright claim on a video whose whole job is to look above board.
+
+### YouTube fields
+
+**Title** (pick one, both under 100 characters):
+
+- Deadlock as a card game — free fan project, plays in your browser
+- I turned Deadlock into a browser card game (free fan project)
+
+**Description:**
+
+> An unofficial, non-commercial fan project. Not affiliated with Valve.
+>
+> Play it free in your browser: https://brandeispatrick.github.io/tcg/
+> Source (MIT): https://github.com/BrandeisPatrick/tcg
+>
+> A small tabletop-style card game built on Valve's Deadlock. Draft a squad
+> of heroes, refill souls each turn to pay for spells and gear, level heroes
+> up, retreat them to the bench, and bring the rival's patron down. There's
+> a four-lesson tutorial that teaches one thing at a time, a story campaign
+> across a map of New York, and a gallery of every card. Matches are against
+> an AI. No ads, no accounts, works on a phone.
+>
+> Everything Deadlock in it is Valve's: the hero art, the item art, and the
+> in-world posters painted by Evgeniy Evstratiy. The tutorial cover is Toasty
+> Ghostey's "In Your Dreams!" title card. Full credits with links are in the
+> game under System -> Art credits. Anything comes down on request.
+>
+> 0:00 The title sheet and the draft
+> 0:18 A match, played out
+> 0:38 The tutorial
+> 0:53 Every card, and the credits
+
+**Tags:** deadlock, deadlock valve, valve, fan game, card game, tcg,
+browser game, indie, fan project, deadlock fan art
+
+**Settings:** Category Gaming; "No, it's not made for kids"; Public. Leave
+comments on — the feedback is the point.
 
 ## Message to Toasty Ghostey
 
@@ -45,6 +93,9 @@ Short enough for a DM. Fill in the two links.
 Text post, flair for fan content (the subreddit's "Fan Art" or equivalent),
 images or clip attached, link in the body.
 
+Post it as a link to the YouTube video if the subreddit prefers video
+posts, otherwise a text post with the trailer link at the top.
+
 Title, pick one:
 
 - I made a free, unofficial Deadlock card game you can play in your browser
@@ -56,6 +107,7 @@ Body:
 > **Unofficial fan project, not affiliated with Valve.** Free, no ads, no
 > accounts, works on a phone.
 >
+> Trailer: <YOUTUBE LINK>
 > Play it here: https://brandeispatrick.github.io/tcg/
 >
 > It's a small tabletop-style card game built on Deadlock. You draft a squad
