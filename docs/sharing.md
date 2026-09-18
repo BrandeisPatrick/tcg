@@ -22,12 +22,27 @@ on the site or in the post.
 - [ ] Post from an account that does other things on the subreddit; Reddit's
       self-promotion norms apply.
 
-## The trailer
+## The video
 
-`~/Downloads/deadlock-tcg-trailer.mp4` — 69 s, 1920x1080 at 60 fps, 19 MB,
-no audio. Recorded off the live site, so everything in it is the real
-build. Thumbnails: `deadlock-tcg-thumbnail.jpg` (the title sheet) and
-`deadlock-tcg-thumbnail-board.jpg` (a match in progress), both 1280x720.
+`~/Downloads/deadlock-tcg-tutorial.mp4` — 1 min 51 s, 1920x1080 at 60 fps,
+19 MB, no audio. It walks the four tutorial lessons in order, each behind a
+numbered title card, so a viewer sees exactly what each mechanic does:
+
+1. **The Skill** — open a hero's sheet, spend the soul, cast Frost Grenade.
+2. **Souls and Gear** — a card you cannot afford, the refill next turn, then
+   Extended Magazine going on and the attack going up. (The rival's turn in
+   the middle runs at 2.6x so it does not drag.)
+3. **Level Up** — the experience ring one point short, gear supplying the
+   point, and the log spelling out "Kelvin reached Level 2 (+1 Bullet Power,
+   +1 HP, +1 Spirit Power)" as his attack goes 2 to 3.
+4. **The Bench** — Kelvin down to one health, Yamato retreating in for two
+   souls, and the swing that ends it.
+
+Recorded off the live site, so everything in it is the real build. Thumbnail:
+`deadlock-tcg-tutorial-thumbnail.jpg` (the lessons sheet), 1280x720.
+
+`deadlock-tcg-trailer.mp4` is the earlier 69 s cut — title, draft, a match
+played out, the gallery. Keep it for a second post or the itch/GitHub page.
 
 It has no soundtrack. Silent is fine, but if you want music, add it in
 YouTube's editor from their free Audio Library — anything else risks a
@@ -37,8 +52,8 @@ copyright claim on a video whose whole job is to look above board.
 
 **Title** (pick one, both under 100 characters):
 
-- Deadlock as a card game — free fan project, plays in your browser
-- I turned Deadlock into a browser card game (free fan project)
+- How my Deadlock card game plays — the whole tutorial in two minutes
+- Deadlock as a card game: skills, souls, levelling and the bench
 
 **Description:**
 
@@ -47,25 +62,29 @@ copyright claim on a video whose whole job is to look above board.
 > Play it free in your browser: https://brandeispatrick.github.io/tcg/
 > Source (MIT): https://github.com/BrandeisPatrick/tcg
 >
-> A small tabletop-style card game built on Valve's Deadlock. Draft a squad
-> of heroes, refill souls each turn to pay for spells and gear, level heroes
-> up, retreat them to the bench, and bring the rival's patron down. There's
-> a four-lesson tutorial that teaches one thing at a time, a story campaign
-> across a map of New York, and a gallery of every card. Matches are against
-> an AI. No ads, no accounts, works on a phone.
+> The four tutorial lessons, start to finish. Each one is its own small
+> fight, set up so the move it teaches is the move that wins it: a hero's
+> skill, the soul economy and gear, levelling a hero mid-match, and
+> retreating a worn hero to the bench.
+>
+> It's a small tabletop-style card game built on Valve's Deadlock. Draft a
+> squad, refill souls each turn to pay for spells and gear, level heroes up,
+> and bring the rival's patron down. There's also a story campaign across a
+> map of New York and a gallery of every card. Matches are against an AI.
+> No ads, no accounts, works on a phone.
 >
 > Everything Deadlock in it is Valve's: the hero art, the item art, and the
 > in-world posters painted by Evgeniy Evstratiy. The tutorial cover is Toasty
 > Ghostey's "In Your Dreams!" title card. Full credits with links are in the
 > game under System -> Art credits. Anything comes down on request.
 >
-> 0:00 The title sheet and the draft
-> 0:18 A match, played out
-> 0:38 The tutorial
-> 0:53 Every card, and the credits
+> 0:00 The lessons, and 1 — The Skill
+> 0:23 2 — Souls and Gear
+> 0:55 3 — Level Up
+> 1:21 4 — The Bench
 
 **Tags:** deadlock, deadlock valve, valve, fan game, card game, tcg,
-browser game, indie, fan project, deadlock fan art
+browser game, tutorial, indie, fan project, deadlock fan art
 
 **Settings:** Category Gaming; "No, it's not made for kids"; Public. Leave
 comments on — the feedback is the point.
