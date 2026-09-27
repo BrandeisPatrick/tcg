@@ -27,3 +27,6 @@ yarn-error.log*
 
 # Generated simulation / evaluation output
 sim-reports/
+
+# Frames written by the scripts/qa animation harness
+*-shots/

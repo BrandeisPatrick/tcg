@@ -3,32 +3,19 @@ import { motion } from 'framer-motion';
 import type { AttackPlan, AttackStep } from '@/engine/combat';
 import { fonts } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
-import { DamageFlash } from './DamageFlash';
-
-/** Fixed-positioned wrapper so the card-anchored DamageFlash can be used in the
- *  choreographer's overlay layer (over the target/attacker card rect). */
-function FlashOverCard({ rect, ko, delaySec, keySuffix }: {
-  rect: { left: number; top: number; width: number; height: number };
-  ko: boolean;
-  delaySec: number;
-  keySuffix: string;
-}) {
-  return (
-    <div style={{
-      position: 'fixed', left: rect.left, top: rect.top, width: rect.width, height: rect.height,
-      borderRadius: 10, overflow: 'hidden', pointerEvents: 'none', zIndex: 82,
-    }}>
-      <DamageFlash key={keySuffix} type="attack" ko={ko} delayMs={delaySec * 1000} />
-    </div>
-  );
-}
+import { GunBurst, KoShatter } from './fx/hits';
+import { ShieldDeflect } from './fx/support';
+import { MuzzleFlash, TracerVolley } from './fx/primitives';
+import { center, edgePoint, toRect } from './fx/geometry';
 
 /**
  * Animated walk-through of an attack phase plan.
  *
  * Renders overlay visuals anchored to the attacker/target slot positions:
- * a flat tracer in the attacker's colour, the type-coloured hit flash on the
- * target, and a DamageBanner sticker. Walks `plan.steps` one at a time, then invokes
+ * gunfire — a muzzle flash and a volley of tracers in the attacker's colour,
+ * bullet holes punched into the target (GunBurst, the same family the FX
+ * layer uses for skill-sourced bullets), the KO shatter — and a DamageBanner
+ * sticker. Walks `plan.steps` one at a time, then invokes
  * `onComplete` so the engine can resolve for real. Damage numbers themselves
  * animate ON the hero cards via `useStatTick` in HeroSlot — no floater
  * push from this component.
@@ -48,6 +35,7 @@ interface Props {
 
 interface ActiveBeat {
   step: AttackStep;
+  index: number;
   attackerRect: DOMRect | null;
   targetRect: DOMRect | null;
 }
@@ -105,6 +93,7 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration =
     const targetEl = step.targetIid ? slotRefs.get(step.targetIid) : null;
     return {
       step,
+      index: beatIndex,
       attackerRect: attackerEl?.getBoundingClientRect() ?? null,
       targetRect: targetEl?.getBoundingClientRect() ?? null,
     };
@@ -163,7 +152,10 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration =
 }
 
 const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: ActiveBeat; stepDuration: number }) {
-  const { step, attackerRect, targetRect } = beat;
+  const { step, index, attackerRect, targetRect } = beat;
+  // Seeds the hole scatter / crack pattern so re-renders within the beat draw
+  // the same picture, and each beat draws a different one.
+  const seed = index * 7919 + 13;
 
   // Beat phases scaled to stepDuration:
   //  - 0%   – 15%:  wind-up
@@ -184,7 +176,6 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
   const ty = targetRect ? targetRect.top + targetRect.height / 2 : window.innerHeight - 100;
   const dx = tx - sx;
   const dy = ty - sy;
-  const dist = Math.hypot(dx, dy);
   const angle = Math.atan2(dy, dx);
   // The rival's row sits on the top half of the sheet, yours on the bottom —
   // so the attacker's side (and its ink) follows from where it swings from.
@@ -194,86 +185,62 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
 
   if (!attackerRect) return null;
 
+  const attackerBox = toRect({ getBoundingClientRect: () => attackerRect } as unknown as Element);
+  const targetBox = targetRect ? toRect({ getBoundingClientRect: () => targetRect } as unknown as Element) : null;
+  const attackerC = center(attackerBox);
+  const targetC = { x: tx, y: ty };
+  const muzzle = edgePoint(attackerBox, targetC);
+  const targetEdge = targetBox ? edgePoint(targetBox, attackerC) : targetC;
+  // Each round flies for most of the projectile window; the three are spaced
+  // so the last one lands on the impact beat.
+  const roundGap = projectileDuration * 1000 * 0.12;
+  const roundMs = Math.max(120, projectileDuration * 1000 - 2 * roundGap);
+
   return (
     <>
-      {/* Tracer — a flat streak in the attacker's ink, fading in from its
-          origin so the leading edge lands solid. The rotation must go
-          through framer-motion's transform stack (not raw CSS transform),
-          because the scaleX animation otherwise overwrites a static
-          `transform: rotate(...)` and the tracer renders unrotated. */}
-      <motion.div
-        initial={{ scaleX: 0, opacity: 0 }}
-        animate={{ scaleX: 1, opacity: [0, 1, 1, 0] }}
-        transition={{ duration: projectileDuration, delay: projectileDelay, ease: [0.2, 0.6, 0.4, 1], times: [0, 0.1, 0.85, 1] }}
-        style={{
-          position: 'fixed',
-          left: sx, top: sy - 2,
-          width: dist, height: 4,
-          background: `linear-gradient(90deg, ${attackerInk}00, ${attackerInk} 35%, ${attackerInk})`,
-          transformOrigin: '0 50%',
-          rotate: `${angle}rad`,
-          pointerEvents: 'none',
-          zIndex: 81,
-          borderRadius: 2,
-        }}
-      />
+      {/* Gunfire — a muzzle flash on the attacker's edge facing the target and
+          three tracer rounds in the attacker's ink, the last landing at the
+          impact beat. */}
+      <MuzzleFlash at={muzzle} angle={angle} ink={attackerInk} atMs={projectileDelay * 1000} />
+      <TracerVolley from={muzzle} to={targetEdge} ink={attackerInk} at={projectileDelay * 1000} dur={roundMs} rounds={3} gap={roundGap} />
 
-      {/* Retaliation tracer — defender swings back at the attacker in its own
-          ink. Only shown when the mutual-damage rule applied (active vs
-          active). Same length and timing as the primary tracer but rotated
-          180° so it visually counters the incoming swing. */}
+      {/* Retaliation — the defender shoots back from its own edge in its own
+          ink, a beat behind the incoming volley. Only when the mutual-damage
+          rule applied (active vs active). */}
       {step.retaliationDamage > 0 && targetRect && (
-        <motion.div
-          initial={{ scaleX: 0, opacity: 0 }}
-          animate={{ scaleX: 1, opacity: [0, 1, 1, 0] }}
-          transition={{ duration: projectileDuration, delay: projectileDelay, ease: [0.2, 0.6, 0.4, 1], times: [0, 0.1, 0.85, 1] }}
-          style={{
-            position: 'fixed',
-            left: tx, top: ty - 2,
-            width: dist, height: 4,
-            background: `linear-gradient(90deg, ${defenderInk}00, ${defenderInk} 35%, ${defenderInk})`,
-            transformOrigin: '0 50%',
-            rotate: `${angle + Math.PI}rad`,
-            pointerEvents: 'none',
-            zIndex: 81,
-            borderRadius: 2,
-          }}
-        />
+        <>
+          <MuzzleFlash at={targetEdge} angle={angle + Math.PI} ink={defenderInk} atMs={(projectileDelay + 0.1) * 1000} />
+          <TracerVolley from={targetEdge} to={muzzle} ink={defenderInk} at={(projectileDelay + 0.1) * 1000} dur={roundMs} rounds={3} gap={roundGap} />
+        </>
       )}
 
       {/* Shield-absorbed deflect — when the target's Shield ate part/all of the
-          hit, flash a green shield over the target card so the impact reads
-          even when HP doesn't move. Triggers at impactDelay so it lands with
-          the banner sweep. */}
+          hit, flash the shield over the target card so the impact reads even
+          when HP doesn't move. Lands with the banner sweep. */}
       {step.shieldAbsorbed > 0 && targetRect && (
         <ShieldDeflect
-          rect={{ left: targetRect.left, top: targetRect.top, width: targetRect.width, height: targetRect.height }}
-          impactDelay={impactDelay}
-          damagePersist={damagePersist}
+          rect={targetBox!}
           absorbed={step.shieldAbsorbed}
           fullyAbsorbed={step.finalDamage === 0}
-          keySuffix={`shield-${step.attackerIid}-${step.targetIid ?? 'face'}`}
+          at={impactDelay * 1000}
+          hold={damagePersist * 1000}
         />
       )}
 
-      {/* Bullet "got hit" flash on the target, synced to impact (matches the
-          ability-damage flash from DamageFlash; attacks are always bullet). */}
+      {/* Bullets land: holes punched into the target, sparks off the far side,
+          and the shatter on a lethal blow. */}
       {step.finalDamage > 0 && targetRect && (
-        <FlashOverCard
-          rect={{ left: targetRect.left, top: targetRect.top, width: targetRect.width, height: targetRect.height }}
-          ko={step.predictedKO}
-          delaySec={impactDelay}
-          keySuffix={`hit-${step.attackerIid}-${step.targetIid ?? 'face'}`}
-        />
+        <>
+          <GunBurst rect={targetBox!} amount={step.finalDamage} at={impactDelay * 1000} hold={damagePersist * 1000 * 0.9} seed={seed} from={attackerC} ownerInk={attackerInk} volley={false} />
+          {step.predictedKO && <KoShatter rect={targetBox!} at={impactDelay * 1000 + 140} seed={seed + 1} hold={damagePersist * 1000 * 0.9} />}
+        </>
       )}
-      {/* Same flash on the attacker when the defender retaliates. */}
+      {/* The same on the attacker when the defender retaliates. */}
       {step.retaliationDamage > 0 && (
-        <FlashOverCard
-          rect={{ left: attackerRect.left, top: attackerRect.top, width: attackerRect.width, height: attackerRect.height }}
-          ko={false}
-          delaySec={impactDelay}
-          keySuffix={`retal-${step.attackerIid}-${step.targetIid ?? 'face'}`}
-        />
+        <>
+          <GunBurst rect={attackerBox} amount={step.retaliationDamage} at={(impactDelay + 0.1) * 1000} hold={damagePersist * 1000 * 0.85} seed={seed + 2} from={targetC} ownerInk={defenderInk} volley={false} />
+          {step.attackerKO && <KoShatter rect={attackerBox} at={(impactDelay + 0.1) * 1000 + 140} seed={seed + 3} hold={damagePersist * 1000 * 0.85} />}
+        </>
       )}
 
       {/* "Damaged" feedback for the PRIMARY target — the hero the attacker
@@ -459,107 +426,3 @@ function DamageBanner({
     </div>
   );
 }
-
-/**
- * Green shield-deflect flash anchored over the target card. Renders when the
- * target's Shield ate part or all of the incoming damage — gives the impact a
- * visible cue even when HP doesn't change. Composes a flat green wash, a
- * scaling shield glyph, and an "ABSORBED N" / "BLOCKED N" ink tag.
- */
-function ShieldDeflect({
-  rect, impactDelay, damagePersist, absorbed, fullyAbsorbed, keySuffix,
-}: {
-  rect: { left: number; top: number; width: number; height: number };
-  impactDelay: number;
-  damagePersist: number;
-  absorbed: number;
-  fullyAbsorbed: boolean;
-  keySuffix: string;
-}) {
-  const flashDuration = damagePersist * 0.85;
-  const glyphSize = Math.max(36, Math.min(72, Math.round(rect.width * 0.42)));
-  const green = poster.green;
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        left: rect.left, top: rect.top,
-        width: rect.width, height: rect.height,
-        overflow: 'hidden',
-        borderRadius: 10,
-        pointerEvents: 'none',
-        zIndex: 85,
-        isolation: 'isolate',
-      }}
-    >
-      {/* Flat green wash that fades in with impact and out before the beat ends */}
-      <motion.div
-        key={`shieldwash-${keySuffix}`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 0.55, 0.55, 0] }}
-        transition={{ duration: flashDuration, delay: impactDelay, times: [0, 0.12, 0.7, 1] }}
-        style={{
-          position: 'absolute', inset: 0,
-          background: `${green}99`,
-        }}
-      />
-      {/* Shield glyph — punches in at impact, holds, fades out. A hard offset
-          shadow grounds it like a printed sticker. */}
-      <motion.div
-        key={`shieldglyph-${keySuffix}`}
-        initial={{ scale: 0.55, opacity: 0 }}
-        animate={{ scale: [0.55, 1.18, 1.05, 1.05], opacity: [0, 1, 1, 0] }}
-        transition={{ duration: flashDuration, delay: impactDelay, times: [0, 0.18, 0.7, 1], ease: [0.22, 1, 0.36, 1] }}
-        style={{
-          position: 'absolute',
-          left: '50%', top: '50%',
-          width: glyphSize, height: glyphSize,
-          transform: 'translate(-50%, -50%)',
-          filter: 'drop-shadow(0 2px 0 rgba(0,0,0,0.45))',
-        }}
-      >
-        <svg viewBox="0 0 16 16" width="100%" height="100%">
-          <path
-            d="M8 1.2 L14 3 L14 8 C 14 11.5, 11.5 13.6, 8 14.8 C 4.5 13.6, 2 11.5, 2 8 L 2 3 Z"
-            fill={green}
-            stroke={poster.ink}
-            strokeWidth="0.7"
-            strokeLinejoin="round"
-          />
-          <path d="M8 2.4 L4 3.6 L4 7.5 C 4 8.4, 4.5 9.2, 5 9.8 L 5 4.4 Z" fill="rgba(242,230,203,0.4)" />
-        </svg>
-      </motion.div>
-      {/* Label — "BLOCKED N" when shield ate it all, "ABSORBED N" partial —
-          as an ink tag with green type. */}
-      <motion.div
-        key={`shieldlabel-${keySuffix}`}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: [0, 1, 1, 0], y: [6, 0, 0, -4] }}
-        transition={{ duration: flashDuration, delay: impactDelay + 0.06, times: [0, 0.2, 0.7, 1] }}
-        style={{
-          position: 'absolute',
-          left: 0, right: 0,
-          bottom: `calc(50% - ${glyphSize * 0.85}px)`,
-          textAlign: 'center',
-        }}
-      >
-        <span style={{
-          display: 'inline-block',
-          padding: '4px 9px 5px',
-          background: poster.ink,
-          color: green,
-          ...clipBoth(chamfer(4)),
-          fontFamily: fonts.display,
-          fontSize: 11,
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          lineHeight: 1,
-          whiteSpace: 'nowrap',
-        }}>
-          {fullyAbsorbed ? 'BLOCKED' : 'ABSORBED'} {absorbed}
-        </span>
-      </motion.div>
-    </div>
-  );
-}
-

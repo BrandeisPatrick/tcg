@@ -1,8 +1,8 @@
 import type { CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import type { CardInstance, PlayerID } from '@/engine/types';
-import { DamageFlash } from '../effects/DamageFlash';
-import { useDamageFx } from '../effects/DamageFxContext';
+import { useFxHold } from '../effects/fx/FxTimingContext';
+import { useDelayedValue } from '../hooks/useDelayedValue';
 import { CARDS_BY_ID } from '@/cards';
 import { effectiveAtk } from '@/engine/util';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
@@ -54,11 +54,19 @@ export function HeroSlot({
     return <div style={{ aspectRatio: '3 / 4', border: `1.5px dashed ${poster.inkFaint}`, borderRadius: 10 }} />;
   }
   const isAlly = owner === myId;
+  // Board-FX hold: while a skill's bolt is still on its way to this card the
+  // numbers, the status chips and the corpse look keep showing the pre-hit
+  // state, and switch the moment the impact lands (Board derives the delay
+  // from the fresh FX batch; zero when nothing is in flight). Interaction
+  // guards read the live card, only the print lags.
+  const hold = useFxHold(card.iid);
+  const shownHp = useDelayedValue(card.hp, hold.impact);
+  const shownStatuses = useDelayedValue(card.statuses, hold.impact);
   // Outgoing attack value as it will resolve in combat: effectiveAtk minus any
   // Weaken so the displayed BP matches what the hero actually swings for.
   // (combat.ts:effectiveAttackDamage applies the same subtraction.)
   const weakenValue = card.statuses.find((s) => s.id === 'weapon_power_down')?.value ?? 0;
-  const atk = Math.max(0, effectiveAtk(card) - weakenValue);
+  const atk = useDelayedValue(Math.max(0, effectiveAtk(card) - weakenValue), hold.impact);
   // Stat inks stay in their own family (BP ink, HP red) and only shift shade
   // to show drift from the printed base: default → the stat ink, buffed →
   // bright, debuffed/damaged → dim grey. A locked hue means a glance always
@@ -67,19 +75,19 @@ export function HeroSlot({
   const atkColor = atk > baseAtk ? poster.stat.atkBright : atk < baseAtk ? poster.stat.atkDim : poster.stat.atk;
   const baseHp = data.hp;
   const hpColor =
-    card.hp < card.hpMax ? poster.stat.hpDim
+    shownHp < card.hpMax ? poster.stat.hpDim
     : card.hpMax > baseHp ? poster.stat.hpBright
     : poster.stat.hp;
   // Pulse the stat number on the card whenever its value changes — this
   // replaces the old floating ±N number above the card.
-  const hpTick = useStatTick(card.hp);
+  const hpTick = useStatTick(shownHp);
   const bpTick = useStatTick(atk);
-  const shieldValue = card.statuses.find((s) => s.id === 'shield')?.value ?? 0;
+  const shieldValue = shownStatuses.find((s) => s.id === 'shield')?.value ?? 0;
   const shieldTick = useStatTick(shieldValue);
-  const damageFx = useDamageFx(card.iid);
   const isActive = card.zone === 'active';
-  // Corpse: dead hero waiting to respawn in this slot.
-  const respawnLeft = card.respawnTurnsLeft ?? 0;
+  // Corpse: dead hero waiting to respawn in this slot. A KO'd hero keeps its
+  // living print until the impact's shatter has played, then turns.
+  const respawnLeft = useDelayedValue(card.respawnTurnsLeft ?? 0, hold.settle);
   const isCorpse = respawnLeft > 0;
   // Skill-ready glint only shows when both per-hero and player-wide flags allow it.
   // Bench-only heroes (Rem) cast from the bench, so they glint there too.
@@ -133,7 +141,7 @@ export function HeroSlot({
       ref={(el) => registerSlotRef?.(card.iid, el)}
       aria-label={isCorpse
         ? `${data.name} — down, respawns in ${respawnLeft} turn${respawnLeft === 1 ? '' : 's'}`
-        : `${data.name} — ${atk} attack, ${card.hp} health`}
+        : `${data.name} — ${atk} attack, ${shownHp} health`}
       onClick={() => { if (!pressFired) onTap(card, owner); pressFired = false; }}
       onPointerDown={() => {
         pressFired = false;
@@ -152,7 +160,7 @@ export function HeroSlot({
         position: 'relative',
         width: '100%',
         height: '100%',
-        // Rounded, not chamfered: DamageFlash inherits this radius and the
+        // Rounded, not chamfered: the FX layer's clipped washes use this radius and the
         // combat choreographer clips its overlays to it.
         borderRadius: 10,
         borderWidth: 2,
@@ -169,9 +177,8 @@ export function HeroSlot({
         flexDirection: 'column',
       }}
     >
-      {/* "Card got hit" flash — type-coloured, clipped to the card. Keyed by the
-          hit's seq so each new hit replays the animation. */}
-      {damageFx && <DamageFlash key={damageFx.seq} type={damageFx.type} ko={damageFx.ko} />}
+      {/* "Card got hit" and every other reaction is drawn over the card by
+          the board's FxLayer (effects/fx), anchored to this slot's rect. */}
 
       {/* Art window — the portrait printed edge to edge on a dark ground;
           a corpse is greyed and dimmed. */}
@@ -192,7 +199,7 @@ export function HeroSlot({
         {/* Inner edge — the print sits slightly recessed in its frame. */}
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: PRINT_EDGE, pointerEvents: 'none' }} />
 
-        {!isCorpse && card.statuses.length > 0 && (
+        {!isCorpse && shownStatuses.length > 0 && (
           <div style={{
             position: 'absolute', top: 6, left: 6, right: 6,
             display: 'flex', flexWrap: 'wrap', gap: 4,
@@ -200,7 +207,7 @@ export function HeroSlot({
             maxHeight: compact ? 36 : 54, overflow: 'hidden',
             pointerEvents: 'none',
           }}>
-            {card.statuses.slice(0, compact ? 3 : 5).map((s, i) => (
+            {shownStatuses.slice(0, compact ? 3 : 5).map((s, i) => (
               <StatusIcon key={i} id={s.id} value={s.value} duration={s.duration} size={compact ? 'compact' : 'normal'} />
             ))}
           </div>
@@ -301,7 +308,7 @@ export function HeroSlot({
         )}
 
         {/* Unstoppable aura — a breathing gold vignette around the portrait */}
-        {card.statuses.some((s) => s.id === 'unstoppable') && (
+        {shownStatuses.some((s) => s.id === 'unstoppable') && (
           <motion.div
             aria-hidden
             initial={{ opacity: 0.3 }}
@@ -424,7 +431,7 @@ export function HeroSlot({
                     color: [hpColor, hpTick === 'up' ? poster.stat.hpBright : poster.stat.hpDim, hpColor] }
                 : { scale: 1, color: hpColor }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            >{card.hp}</motion.span>
+            >{shownHp}</motion.span>
           </span>
         </div>
         )}

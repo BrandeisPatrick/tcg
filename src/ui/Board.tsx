@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
-import type { GameState, CardInstance, PlayerID, DamageEvent } from '@/engine/types';
+import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
@@ -26,14 +26,17 @@ import { planAttackPhase, type AttackPlan } from '@/engine/combat';
 import { CombatChoreographer } from './effects/CombatChoreographer';
 import { SoulsRail } from './board/SoulsRail';
 import { CombatProgressContext, type CombatProgress } from './effects/CombatProgressContext';
-import { DamageFxContext, type DamageFxResolver } from './effects/DamageFxContext';
+import { FxLayer } from './effects/fx/FxLayer';
+import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingContext';
+import { buildFxTimeline } from './effects/fx/fxTimeline';
+import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { useSettings, getSettings } from '@/storage/settings';
 import { useFitScale } from './hooks/useFitScale';
-import { useViewport } from './hooks/useViewport';
-import { fonts, spring, DAMAGE_BEAT_MS } from './tokens';
+import { useViewport, MOBILE_MAX } from './hooks/useViewport';
+import { fonts, spring } from './tokens';
 import { poster } from './poster';
 import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer, PANEL_WIDTH } from './side-panel/PanelDrawer';
@@ -112,33 +115,40 @@ export function Board(props: BoardProps<GameState>) {
   // compass doesn't carry stale beat state into the next combat.
   useEffect(() => { setCombatBeat(0); }, [combatPlan]);
 
-  // "Got hit" flash sequencer. Plays NEW non-attack damage events (skill / spell
-  // / ult / bleed, pushed to G.damageFx) for a short impact beat so the on-card
-  // flash is clearly seen. Basic attacks are flashed via the choreographer beat
-  // instead (see damageFxFor). We track a high-water seq so a remount/reconnect
-  // doesn't replay old hits.
-  const [fxBeat, setFxBeat] = useState<DamageEvent[]>([]);
-  const seenFxSeq = useRef<number | null>(null);
-  const maxFxSeq = G.damageFx.reduce((m, e) => Math.max(m, e.seq), 0);
+  // Board FX stream. Every move / turn tick the engine resolves pushes its
+  // visible consequences onto G.fx (hits, heals, statuses, the cast itself…).
+  // The events not yet played are the "fresh" batch: derived HERE, during
+  // render, so the impact-delay context is in place on the very render the
+  // HP changes and HeroSlot can hold its numbers until the bolt lands. The
+  // high-water mark moves in an effect after commit; a remount seeds it from
+  // the current stream so old hits are never replayed. Basic attacks are not
+  // in the stream — the CombatChoreographer animates them before resolving.
+  const lastSeenFxRef = useRef<number | null>(null);
+  const maxFxSeq = G.fx.reduce((m, e) => Math.max(m, e.seq), 0);
+  if (lastSeenFxRef.current === null) lastSeenFxRef.current = maxFxSeq;
+  const freshFx = G.fx.filter((e) => e.seq > (lastSeenFxRef.current ?? 0));
+  const freshFxKey = freshFx.length > 0 ? maxFxSeq : 0;
   useEffect(() => {
-    if (seenFxSeq.current === null) { seenFxSeq.current = maxFxSeq; return; }
-    if (maxFxSeq <= seenFxSeq.current) return;
-    const fresh = G.damageFx.filter((e) => e.seq > (seenFxSeq.current ?? 0));
-    seenFxSeq.current = maxFxSeq;
-    if (fresh.length === 0) return;
-    setFxBeat(fresh);
-    const t = setTimeout(() => setFxBeat([]), DAMAGE_BEAT_MS);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (maxFxSeq > (lastSeenFxRef.current ?? 0)) lastSeenFxRef.current = maxFxSeq;
   }, [maxFxSeq]);
-
-  // Resolver consumed by every HeroSlot via DamageFxContext. Covers non-attack
-  // damage (skill / spell / ult / bleed); basic-attack flashes are rendered by
-  // the CombatChoreographer at the true impact moment instead.
-  const damageFxFor = useCallback<DamageFxResolver>(
-    (iid) => fxBeat.find((e) => e.iid === iid) ?? null,
-    [fxBeat],
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fxTimeline = useMemo(() => buildFxTimeline(freshFx), [freshFxKey]);
+  const fxHoldFor = useCallback<FxHoldResolver>(
+    (iid) => ({ impact: fxTimeline.impactDelay[iid] ?? 0, settle: fxTimeline.koSettle[iid] ?? 0 }),
+    [fxTimeline],
   );
+  // The spell reveal (CardPlayFlash) sits left of centre on desktop and
+  // centred on phones; a spell's bolt leaves from there. Read at fire time so
+  // it tracks the live viewport without a dependency on the breakpoint hook.
+  const spellOrigin = useCallback(() => ({
+    x: window.innerWidth <= MOBILE_MAX ? window.innerWidth / 2 : Math.min(330, Math.max(170, window.innerWidth * 0.2)),
+    y: window.innerHeight / 2,
+  }), []);
+  // When our Active is KO'd by a skill / spell, the promotion prompt waits for
+  // the shatter to play instead of covering it.
+  const myActiveIid = G.players[me].active?.iid;
+  const koSettleDelay = myActiveIid ? (fxTimeline.koSettle[myActiveIid] ?? 0) : 0;
+  const pendingPromotionShown = useDelayedValue(G.pendingPromotion, koSettleDelay);
 
   // Memoized — a fresh object identity every Board render used to re-render
   // every CombatProgressContext consumer (TurnCompass) even between beats.
@@ -621,7 +631,7 @@ export function Board(props: BoardProps<GameState>) {
   return (
     <LayoutGroup>
       <CombatProgressContext.Provider value={combatProgress}>
-      <DamageFxContext.Provider value={damageFxFor}>
+      <FxTimingContext.Provider value={fxHoldFor}>
       <PosterBackdrop />
 
       <div style={{
@@ -970,7 +980,8 @@ export function Board(props: BoardProps<GameState>) {
             const ps = G.players[me];
             // Single source of truth: the engine's `resolve` pass flags when a
             // promotion is owed. (No recompute of the corpse/candidate condition.)
-            if (G.pendingPromotion !== me || G.mulliganPending) return null;
+            // Shown late when a KO animation is still playing on our Active.
+            if (pendingPromotionShown !== me || G.pendingPromotion !== me || G.mulliganPending) return null;
             const candidates = (ps.bench.filter((b) => {
               if (!b || (b.respawnTurnsLeft ?? 0) > 0) return false;
               const d = CARDS_BY_ID[b.cardId];
@@ -1018,6 +1029,10 @@ export function Board(props: BoardProps<GameState>) {
           G={G}
           onSkip={() => { try { (moves as any).completeAction(); } catch {} }}
         />
+
+        {/* Board FX — skill flares and bolts, type-coloured impacts, status
+            stamps, heals, shields, revives — anchored to the hero slots. */}
+        <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
 
         {/* Feedback sticker — one ink label above the hand (red when it is
             a warning). Explains silent no-ops and confirms fire-and-forget
@@ -1071,7 +1086,7 @@ export function Board(props: BoardProps<GameState>) {
           onLessons={matchNav ? matchNav.toLessons : undefined}
         />
       )}
-      </DamageFxContext.Provider>
+      </FxTimingContext.Provider>
       </CombatProgressContext.Provider>
     </LayoutGroup>
   );

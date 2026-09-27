@@ -21,12 +21,13 @@ import { TurnCompass } from './board/TurnCompass';
 import { SoulsRail } from './board/SoulsRail';
 import { boardRows } from './board/BoardTable';
 import { HeroDetailSheet } from './overlays/HeroDetailSheet';
-import { DamageFxContext } from './effects/DamageFxContext';
-import type { CardInstance, HeroCard, DamageEvent } from '@/engine/types';
-import { fonts, radius, spring, text } from './tokens';
+import type { CardInstance, HeroCard } from '@/engine/types';
+import { fonts, radius, text } from './tokens';
 import { poster, chamfer, clipBoth, sheetStyle } from './poster';
 import { PosterBackdrop } from './PosterBackdrop';
 import { PosterButton } from './chrome';
+import { Section, Grid, Row, Caption, Button } from './gallery/primitives';
+import { FxShowroom } from './gallery/FxShowroom';
 import { LevelRing } from './card/LevelRing';
 import { RoundCardIcon } from './card/RoundCardIcon';
 import { useViewport } from './hooks/useViewport';
@@ -325,9 +326,9 @@ function CardsTab() {
 function CombatFxTab() {
   return (
     <>
-      <Section title="Damage Flash — card got hit">
-        <Caption>The on-card reaction when a hero takes damage — a type-coloured glow/tint over the card (bullet = vermillion, spirit = plum, pure = teal, KO = wine), no shake. The HP-number pulse below carries the amount. Drives skill/spell/ult/bleed via the impact-beat sequencer, and basic attacks via the choreographer at impact.</Caption>
-        <DamageFlashDemo />
+      <Section title="Board FX — every reaction the match draws">
+        <Caption>Everything the engine resolves is played over the hero slots by the FxLayer: a skill's flare on its caster and a bolt to the target, gunfire (muzzle flash, tracer volley, holes punched into the print), spirit bursts, pure tears, bleed running down the card, the KO shatter, a unique lead-in per tagged effect (Djinn's Mark converging and detonating, Mystic Reverb ringing in, Naptime's letters, a Killing Blow's slashes, Ricochet bounces, Tesla arcs, channel shockwaves), and stamps for statuses, shields, immunity, revives and level-ups. HP, BP, Shield and the corpse look on a struck card hold until the bolt lands. Fire any of them on the stage below.</Caption>
+        <FxShowroom />
       </Section>
 
       <Section title="Rem Merge — Lil Helpers">
@@ -615,45 +616,6 @@ function RemMergeDemo() {
   );
 }
 
-function DamageFlashDemo() {
-  const hero = HEROES.find((h) => h.id === 'hero_abrams')!;
-  const card = mockHeroInstance(hero);
-  const [fx, setFx] = useState<DamageEvent | null>(null);
-  const seqRef = useRef(0);
-  // Clear-timer held in a ref: re-firing within the 1.5s window must cancel
-  // the previous unmount fuse, or the stale timer cuts the NEW flash short.
-  const clearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fire = (type: 'attack' | 'spirit' | 'pure', ko = false) => {
-    if (clearRef.current) clearTimeout(clearRef.current);
-    setFx({ iid: card.iid, type, ko, amount: ko ? 99 : 3, seq: ++seqRef.current });
-    clearRef.current = setTimeout(() => setFx(null), 1500);
-  };
-  const resolver = (iid: string) => (iid === card.iid ? fx : null);
-  return (
-    <DamageFxContext.Provider value={resolver}>
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ width: 180, aspectRatio: '3 / 4' }}>
-          <HeroSlot
-            card={card}
-            owner="0" myId="0" isOpponent={false}
-            pending={null} isTargetable={false} isCurrentTurn={false}
-            onTap={() => {}}
-          />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Caption>Type drives the colour (bullet = vermillion, spirit = plum, pure = teal, KO = wine). No shake — minimal + informative.</Caption>
-          <Row>
-            <Button onClick={() => fire('attack')}>Bullet hit</Button>
-            <Button onClick={() => fire('spirit')}>Spirit hit</Button>
-            <Button onClick={() => fire('pure')}>Pure hit</Button>
-            <Button onClick={() => fire('attack', true)}>KO</Button>
-          </Row>
-        </div>
-      </div>
-    </DamageFxContext.Provider>
-  );
-}
-
 function CardPlayTrigger({ label, cardId, caster, kind = 'play' }: {
   label: string; cardId: string; caster: 'P0' | 'P1'; kind?: 'play' | 'skill';
 }) {
@@ -830,63 +792,5 @@ function OverlaysTab() {
         {built && <HeroDetailSheet key={`${heroId}-${scenario}`} {...built.props} />}
       </AnimatePresence>
     </Section>
-  );
-}
-
-// =============================================================================
-// LAYOUT PRIMITIVES — the sheet's own voice: stencil eyebrows over a hairline,
-// prose in the body register, the poster button for anything pressed.
-// =============================================================================
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={{ margin: '0 0 34px' }}>
-      <h2
-        style={{
-          margin: '0 0 14px',
-          paddingBottom: 6,
-          borderBottom: `1px solid ${poster.inkRule}`,
-          fontFamily: fonts.display,
-          fontSize: 11,
-          fontWeight: 400,
-          letterSpacing: '0.28em',
-          textTransform: 'uppercase',
-          color: poster.inkDim,
-        }}
-      >
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-function Grid({ children, min = 150 }: { children: React.ReactNode; min?: number }) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: `repeat(auto-fill, minmax(${min}px, 1fr))`,
-      gap: 14,
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function Row({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>{children}</div>;
-}
-
-function Caption({ children }: { children: React.ReactNode }) {
-  return <p style={{ ...text.body, color: poster.inkDim, margin: '0 0 12px', maxWidth: 760 }}>{children}</p>;
-}
-
-function Button({ children, onClick, disabled }: {
-  children: React.ReactNode; onClick: () => void; disabled?: boolean;
-}) {
-  return (
-    <PosterButton variant="paper" size="sm" onClick={onClick} disabled={disabled}>
-      {children}
-    </PosterButton>
   );
 }

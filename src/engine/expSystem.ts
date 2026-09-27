@@ -6,6 +6,7 @@
 import type { CardInstance, GameState } from './types';
 import { CARDS_BY_ID } from '@/cards';
 import { pushLog } from './util';
+import { pushFx } from './fx';
 
 export const LEVEL_THRESHOLDS = [5, 7, 9] as const;
 export const START_LEVEL = 1 as const;
@@ -49,6 +50,7 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
     card.hp += hpGain;
     card.spiritMod += spiritGain;
     pushLog(G, `${data.name} reached Level ${level} (+${atkGain} Bullet Power, +${hpGain} HP, +${spiritGain} Spirit Power).`);
+    pushFx(G, { kind: 'levelup', iid: card.iid, level });
   }
   return gained;
 }

@@ -23,6 +23,13 @@ single-page React app.
 - **Active hero KO flow:** corpse stays in slot greyed-out with a rotating
   brass clock ring + countdown; on death the player is prompted to choose a
   bench hero to step up.
+- **Board FX:** every resolved effect is animated on the cards — a skill's
+  flare and bolt from its caster, gunfire (muzzle flash, tracer volley, bullet
+  holes) for bullet damage, spirit bursts, pure tears, bleed drips, a KO
+  shatter, and a unique lead-in per signature effect (Djinn's Mark detonating,
+  Mystic Reverb echoing, Naptime waking, Killing Blow slashing, Ricochet,
+  Tesla, channelled ultimates), plus stamps for statuses, shields, immunity,
+  revives and level-ups. See [`docs/fx-model.md`](./docs/fx-model.md).
 - **One-skill-per-turn** rule (Improved Cooldown equipment bypasses).
 - **41 bitmap card-art assets** pulled from the community asset bucket; SVG
   fallback glyphs for cards that don't have canon art yet.
@@ -52,6 +59,14 @@ Edit the `EQ_MAP` / `SP_MAP` dicts in `scripts/fetch_item_art.py` to add new
 cards. See [`public/ART_PIPELINE.md`](./public/ART_PIPELINE.md) for the full
 workflow + gotchas (canon item renames, active/passive validation, etc.).
 
+## Filming the animations
+
+`scripts/qa/` drives headless Chrome over CDP against the dev server with the
+app's virtual clock (`?vtclock=1`) so any frame of an animation can be
+captured: `fx-gallery.mjs` fires every effect on the Gallery's showroom
+(`?preview=1&tab=combat`), `fx-match.mjs` plays a real match (draft, a skill,
+the rival's turn, combat), and both write contact sheets to look at.
+
 ## Architecture
 
 ```
@@ -63,6 +78,7 @@ src/
 ├── ai/          Heuristic move enumerator + scorer
 ├── ui/          React components (Board, HeroSlot, CardFrame, side panel,
 │                hero detail sheet, mulligan, promotion overlay, …)
+│   └── effects/fx/  the board-FX player (timeline scheduler + animation families)
 └── statuses/    Status taxonomy + display metadata
 public/
 ├── heroes/      Hero portrait .webp (3 sizes each)

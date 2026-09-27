@@ -18,6 +18,7 @@ import { withCast } from './castContext';
 import { fireEquipmentTriggers } from './equipmentDispatch';
 import { grantExp } from './expSystem';
 import { MAX_HAND, drawCards } from './deckOps';
+import { pushFx } from './fx';
 
 const ULT_UNLOCK_TURN = 5;
 // Patron HP — the ONLY way it drops is a hero death (flat 1, in killInPlace).
@@ -275,6 +276,7 @@ function tickRespawn(G: GameState, pid: PlayerID) {
       hero.hp = hero.hpMax;
       hero.exhausted = false;
       pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} respawned.`);
+      pushFx(G, { kind: 'revive', iid: hero.iid });
     }
   }
 }
@@ -326,7 +328,7 @@ export const DeadlockGame: Game<GameState> = {
         draftTurnsOffset: 1 - startTurn,
         mulliganPending: false,
         action: null,
-        damageFx: [],
+        fx: [],
       };
       // A lesson builds the exact situation it teaches: custom attack,
       // health and experience per hero, by roster position.
@@ -353,7 +355,7 @@ export const DeadlockGame: Game<GameState> = {
       draftTurnsOffset: 0,  // set in draftPick when draft completes
       mulliganPending: false,
       action: null,
-      damageFx: [],
+      fx: [],
     };
     return G;
   },
@@ -371,7 +373,7 @@ export const DeadlockGame: Game<GameState> = {
       const realTurn = ctx.turn - G.draftTurnsOffset;
       G.turnNumber = realTurn;
       ps.skillUsedThisTurn = false;
-      G.damageFx = [];   // flush last turn's hit-flash events before this turn's (e.g. bleed) land
+      G.fx = [];   // flush last turn's board-FX events before this turn's (e.g. bleed ticks) land
       tickStartOfTurn(G, ps);
       // Count down Rem's "Lil Helpers" merges; expired ones return her to bench.
       tickRemMerges(G, ps);
@@ -489,13 +491,18 @@ export const DeadlockGame: Game<GameState> = {
       // Cast context: spells channel through the active hero (so spell damage
       // can scale with Spirit and trigger the active hero's equipment).
       // Ults are sourced from their linked hero on the caster's board.
+      // The FX layer's cast event goes out FIRST so the effects that follow
+      // read as this card's (the bolt leaves the caster, the hits land).
       if (data.type === 'spell') {
+        pushFx(G, { kind: 'cast', castKind: 'spell', by: pid, cardId: card.cardId, iid: ps.active?.iid, targetIid: target?.iid });
         withCast(ps.active, 'spell', () => applyOnPlay(G, pid, card, target));
       } else if (data.type === 'ultimate') {
         const linked = [ps.active, ...ps.bench].find((c) => c?.cardId === (data as any).linkedHero) ?? null;
+        pushFx(G, { kind: 'cast', castKind: 'ult', by: pid, cardId: card.cardId, iid: linked?.iid, targetIid: target?.iid });
         withCast(linked, 'ult', () => applyOnPlay(G, pid, card, target));
         if (linked) fireEquipmentTriggers(G, linked, 'onBearerUltCast', { movingPlayer: pid });
       } else {
+        pushFx(G, { kind: 'cast', castKind: 'equip', by: pid, cardId: card.cardId, iid: target?.iid, targetIid: target?.iid });
         applyOnPlay(G, pid, card, target);
       }
 
@@ -565,6 +572,9 @@ export const DeadlockGame: Game<GameState> = {
 
       // Cast context: equipment triggers (Mystic Burst, Mystic Vulnerability,
       // Suppressor, Mystic Reverb) read this to know "bearer's skill damaged X".
+      // The FX layer's cast event goes out first so the skill's effects read
+      // as its own: flare on the hero, bolt to the target, then the impact.
+      pushFx(G, { kind: 'cast', castKind: 'skill', by: pid, cardId: hero.cardId, iid: hero.iid, targetIid: target?.iid });
       withCast(hero, 'skill', () => {
         ability.run(G, { movingPlayer: pid }, { source: hero, target });
       });

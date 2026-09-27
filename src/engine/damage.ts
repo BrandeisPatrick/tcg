@@ -1,18 +1,29 @@
-import type { CardInstance, DamageType, GameState, PlayerID, PlayerState } from './types';
+import type { CardInstance, DamageType, FxCastKind, FxTag, GameState, PlayerID, PlayerState } from './types';
 import { pushLog } from './util';
 import { CARDS_BY_ID } from '@/cards';
 import { currentCast } from './castContext';
 import { fireEquipmentTriggers } from './equipmentDispatch';
 import { grantExp } from './expSystem';
+import { pushFx, fxSource } from './fx';
 
-// Monotonic id for damage-flash events (see GameState.damageFx). Module-level so
-// it survives across moves; the UI plays new entries by tracking the high seq.
-let fxSeq = 0;
+/** Presentation hints for the FX layer, passed by call sites whose damage is
+ *  one of a kind (a Djinn's Mark detonation, a Killing Blow execute, a Tesla
+ *  chain…). Everything else is inferred from the cast context. */
+export interface DamageFxOpts {
+  tag?: FxTag;
+  /** Who did it, when the cast context doesn't know (a passive firing outside
+   *  its owner's cast frame, a status ticking on its own). */
+  source?: CardInstance | null;
+  /** Tag-specific count (Djinn's Mark stacks). */
+  stacks?: number;
+  /** Override the inferred cast kind. */
+  cast?: FxCastKind;
+}
 
 // Damage routing for a unit. Returns the damage actually dealt after mitigation.
 // `sourceName`, if omitted, is resolved from the current cast context so skill /
 // spell / ult damage gets "Caster → Target" attribution in the log automatically.
-export function damageUnit(G: GameState, target: CardInstance, amount: number, type: DamageType, sourceName?: string): number {
+export function damageUnit(G: GameState, target: CardInstance, amount: number, type: DamageType, sourceName?: string, fx?: DamageFxOpts): number {
   if (amount <= 0) return 0;
   // Corpses can't take more damage — they're already KO'd waiting to respawn.
   if ((target.respawnTurnsLeft ?? 0) > 0) return 0;
@@ -21,7 +32,15 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   if (type === 'attack' && target.cardId === 'hero_vindicta') {
     amount = Math.max(0, amount - 1);
   }
-  if (target.statuses.some((s) => s.id === 'unstoppable')) return 0;
+  const cast = currentCast();
+  // The FX layer's notion of who did this and how: an explicit hint wins, then
+  // the cast frame, then "a status ticking on its own".
+  const castKind: FxCastKind = fx?.cast ?? cast?.kind ?? 'tick';
+  const fxFrom = fxSource(fx?.source ?? cast?.source);
+  if (target.statuses.some((s) => s.id === 'unstoppable')) {
+    pushFx(G, { kind: 'immune', iid: target.iid, what: 'damage' });
+    return 0;
+  }
 
   let dmg = amount;
 
@@ -49,9 +68,13 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
       const absorbed = Math.min(shield.value, dmg);
       shield.value -= absorbed;
       dmg -= absorbed;
-      if (shield.value <= 0) {
+      const broken = shield.value <= 0;
+      if (broken) {
         target.statuses = target.statuses.filter((s) => s !== shield);
       }
+      // The impact still has to read even when HP doesn't move — the FX layer
+      // flashes the shield glyph with "ABSORBED N" / "BLOCKED".
+      if (absorbed > 0) pushFx(G, { kind: 'shield', iid: target.iid, absorbed, broken, type, source: fxFrom });
     }
   }
 
@@ -80,7 +103,6 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
 
   // Equipment trigger dispatch — routed via a dispatcher to avoid a
   // damage.ts ⇄ abilities/index.ts circular import.
-  const cast = currentCast();
   if (cast && cast.source) {
     if (cast.kind === 'skill' || cast.kind === 'spell' || cast.kind === 'ult') {
       fireEquipmentTriggers(G, cast.source, 'onBearerSkillDamage', { movingPlayer: cast.source.ownerId }, target, dmg);
@@ -109,11 +131,15 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     }
   }
 
-  // Surface a damage-flash event for the UI — color-coded by type, with KO flag.
-  // Basic-attack damage is omitted (the combat choreographer animates those).
-  if (cast?.kind !== 'attack') {
-    (G.damageFx ?? (G.damageFx = [])).push({
-      iid: target.iid, amount: dmg, type, ko: target.hp <= 0, seq: ++fxSeq,
+  // Surface the hit for the FX layer. The basic swing is left out — the combat
+  // choreographer animates it BEFORE the engine resolves — but anything riding
+  // on a swing (Tesla, Ricochet, a Djinn's Mark detonation) carries a tag and
+  // is kept, filed as a proc.
+  if (castKind !== 'attack' || fx?.tag) {
+    pushFx(G, {
+      kind: 'hit', iid: target.iid, amount: dmg, type, ko: target.hp <= 0,
+      cast: castKind === 'attack' ? 'proc' : castKind,
+      source: fxFrom, tag: fx?.tag, stacks: fx?.stacks,
     });
   }
 
@@ -124,7 +150,7 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     if (sleeping) {
       target.statuses = target.statuses.filter((s) => s.id !== 'sleep');
       pushLog(G, `${targetName} wakes.`);
-      if (sleeping.value > 0) damageUnit(G, target, sleeping.value, 'spirit', 'Naptime');
+      if (sleeping.value > 0) damageUnit(G, target, sleeping.value, 'spirit', 'Naptime', { tag: 'naptime' });
     }
   }
 
@@ -139,8 +165,15 @@ export function damagePlayer(G: GameState, pid: PlayerID, amount: number): numbe
   return amount;
 }
 
+/** Presentation hints for a heal: 'lifesteal' streams motes from the unit the
+ *  HP was drawn out of; 'regen' is the quiet start-of-turn tick. */
+export interface HealFxOpts {
+  tag?: FxTag;
+  from?: CardInstance | null;
+}
+
 /** Heal a unit. `sourceName` falls back to the cast-context caster for logging. */
-export function healUnit(G: GameState, target: CardInstance, amount: number, sourceName?: string): number {
+export function healUnit(G: GameState, target: CardInstance, amount: number, sourceName?: string, fx?: HealFxOpts): number {
   if (amount <= 0) return 0;
   if ((target.respawnTurnsLeft ?? 0) > 0) return 0;   // corpse on the respawn timer
   if (target.hp <= 0) return 0;                        // dead, not yet reaped — a heal must not undo the KO
@@ -166,6 +199,11 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
     }
     const tag = effectiveSource ? ` (${effectiveSource})` : '';
     pushLog(G, `${targetName} healed ${healed}${tag}.`);
+    pushFx(G, {
+      kind: 'heal', iid: target.iid, amount: healed, tag: fx?.tag,
+      from: fxSource(fx?.from),
+      source: cast?.source && cast.source !== target ? fxSource(cast.source) : undefined,
+    });
   }
   return healed;
 }

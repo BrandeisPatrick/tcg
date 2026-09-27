@@ -30,7 +30,7 @@ export function freshReadyGame(): GameState {
     draftTurnsOffset: 0,
     mulliganPending: false,
     action: null,
-    damageFx: [],
+    fx: [],
   } as unknown as GameState;
 }
 

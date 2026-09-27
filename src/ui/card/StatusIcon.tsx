@@ -45,6 +45,15 @@ const VALUE_STATUSES: Set<string> = new Set([
   'extra_attack', 'casting', 'casting_light',
 ]);
 
+/** The chip's text for a status at a given magnitude — "Shield 3", "Stun",
+ *  "−BP 2" — shared with the FX layer's status stamps so a stamp and the chip
+ *  it lands as always read the same. */
+export function statusChipText(id: StatusId, value?: number): string {
+  const label = STATUS_LABELS[id] ?? STATUSES_BY_ID[id]?.title ?? id;
+  const showValue = typeof value === 'number' && (VALUE_STATUSES.has(id) || value > 1);
+  return showValue ? `${label} ${value}` : label;
+}
+
 interface Props {
   id: StatusId;
   value?: number;

@@ -5,6 +5,7 @@ import { addStatus, cleanseDebuffs } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
 import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit, nextIid, grantExtraAttacks } from '@/engine/util';
 import { setEquipmentDispatcher, fireEquipmentTriggers } from '@/engine/equipmentDispatch';
+import { pushFx } from '@/engine/fx';
 
 // An EffectFn mutates G. It receives the source card (if any), the target (if any),
 // and a params bag from the ability/card definition.
@@ -311,19 +312,19 @@ const eff_bullet_resist_shredder_proc: AbilityDef = {
 // Restorative Shot: after bearer's basic attack, heal 1.
 const eff_restorative_shot_proc: AbilityDef = {
   id: 'eff_restorative_shot_proc', trigger: 'onAttack', target: 'self',
-  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Restorative Shot'); },
+  run: (G, _ctx, { source, target }) => { if (source) healUnit(G, source, 1, 'Restorative Shot', { tag: 'lifesteal', from: target }); },
 };
 
 // Extra Regen: at the start of the bearer's turn, heal 1 (regen-over-time).
 const eff_extra_regen_proc: AbilityDef = {
   id: 'eff_extra_regen_proc', trigger: 'startOfTurn', target: 'self',
-  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Extra Regen'); },
+  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Extra Regen', { tag: 'regen' }); },
 };
 
 // Mystic Regeneration: after bearer's skill / spell / ult damages an enemy, heal 1.
 const eff_mystic_regeneration_proc: AbilityDef = {
   id: 'eff_mystic_regeneration_proc', trigger: 'onBearerSkillDamage', target: 'self',
-  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 1, 'Mystic Regeneration'); },
+  run: (G, _ctx, { source, target }) => { if (source) healUnit(G, source, 1, 'Mystic Regeneration', { tag: 'lifesteal', from: target }); },
 };
 
 // Lifesteal family (canon Bullet/Spirit Lifesteal → Leech): the heal-2 tier-up
@@ -332,12 +333,12 @@ const eff_mystic_regeneration_proc: AbilityDef = {
 const eff_bullet_lifesteal: AbilityDef = {
   id: 'eff_bullet_lifesteal', trigger: 'onAttack', target: 'self',
   base: 2,
-  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 2, 'Bullet Lifesteal'); },
+  run: (G, _ctx, { source, target }) => { if (source) healUnit(G, source, 2, 'Bullet Lifesteal', { tag: 'lifesteal', from: target }); },
 };
 const eff_spirit_lifesteal: AbilityDef = {
   id: 'eff_spirit_lifesteal', trigger: 'onBearerSkillDamage', target: 'self',
   base: 2,
-  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 2, 'Spirit Lifesteal'); },
+  run: (G, _ctx, { source, target }) => { if (source) healUnit(G, source, 2, 'Spirit Lifesteal', { tag: 'lifesteal', from: target }); },
 };
 
 // Bullet Shield: after bearer takes bullet damage, gain Shield 2.
@@ -378,7 +379,7 @@ const eff_cooldown_draw: AbilityDef = {
 function mysticBurst(amount: number, label: string): AbilityDef['run'] {
   return (G, ctx) => {
     const enemy = G.players[otherPlayer(ctx.movingPlayer)].active;
-    if (enemy && (enemy.respawnTurnsLeft ?? 0) === 0) damageUnit(G, enemy, amount, 'spirit', label);
+    if (enemy && (enemy.respawnTurnsLeft ?? 0) === 0) damageUnit(G, enemy, amount, 'spirit', label, { tag: 'burst' });
   };
 }
 const eff_mystic_burst_proc: AbilityDef = {
@@ -421,7 +422,7 @@ const eff_ricochet: AbilityDef = {
     if (!source) return;
     const enemy = G.players[otherPlayer(source.ownerId)];
     for (const b of enemy.bench) {
-      if (b && (b.respawnTurnsLeft ?? 0) === 0) damageUnit(G, b, 2, 'attack', 'Ricochet');
+      if (b && (b.respawnTurnsLeft ?? 0) === 0) damageUnit(G, b, 2, 'attack', 'Ricochet', { tag: 'ricochet' });
     }
     resolve(G);
   },
@@ -465,7 +466,7 @@ const eff_tesla_bullets: AbilityDef = {
     if (!source) return;
     const enemy = otherPlayer(source.ownerId);
     const jump = G.players[enemy].bench.find((b) => b && (b.respawnTurnsLeft ?? 0) === 0);
-    if (jump) damageUnit(G, jump, 1, 'attack', 'Tesla Bullets');
+    if (jump) damageUnit(G, jump, 1, 'attack', 'Tesla Bullets', { tag: 'tesla' });
   },
 };
 
@@ -554,8 +555,8 @@ const eff_improved_spirit_armor: AbilityDef = {
 const eff_frenzy: AbilityDef = {
   id: 'eff_frenzy', trigger: 'onAttack', target: 'self',
   base: 2,
-  run: (G, _ctx, { source }) => {
-    if (source && source.hp < source.hpMax / 2) healUnit(G, source, 2, 'Frenzy');
+  run: (G, _ctx, { source, target }) => {
+    if (source && source.hp < source.hpMax / 2) healUnit(G, source, 2, 'Frenzy', { tag: 'lifesteal', from: target });
   },
 };
 
@@ -579,6 +580,11 @@ const eff_siphon_bullets: AbilityDef = {
       source.hpMax += 1;
       source.hp += 1; // fill the stolen HP
       bump(source, 'siphon_gain');
+      const drain = target.statuses.find((x) => x.id === 'siphon_drain')!;
+      const gain = source.statuses.find((x) => x.id === 'siphon_gain')!;
+      const src = { iid: source.iid, cardId: source.cardId, owner: source.ownerId };
+      pushFx(G, { kind: 'status', iid: target.iid, statusId: 'siphon_drain', value: drain.value, duration: 2, debuff: true, tag: 'siphon', source: src });
+      pushFx(G, { kind: 'status', iid: source.iid, statusId: 'siphon_gain', value: gain.value, duration: 2, debuff: false, tag: 'siphon', source: src });
     }
   },
 };
@@ -625,9 +631,9 @@ const skill_lady_geist: AbilityDef = {
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target || !source) return;
-    const dealt = damageUnit(G, target, 3 + spi(source), 'spirit', 'Life Drain');
+    const dealt = damageUnit(G, target, 3 + spi(source), 'spirit', 'Life Drain', { tag: 'life_drain' });
     const heal = Math.floor(dealt / 2);
-    if (heal > 0) healUnit(G, source, heal, 'Life Drain');
+    if (heal > 0) healUnit(G, source, heal, 'Life Drain', { tag: 'lifesteal', from: target });
   },
 };
 
@@ -735,7 +741,7 @@ const passive_mirage_djinns_mark: AbilityDef = {
     const mark = target.statuses.find((s) => s.id === 'djinns_mark');
     if (mark && mark.value >= 4) {
       pushLog(G, `${CARDS_BY_ID[target.cardId]?.name ?? target.cardId} — Djinn's Mark detonates.`);
-      damageUnit(G, target, 3 * mark.value, 'spirit');
+      damageUnit(G, target, 3 * mark.value, 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value, source, cast: 'proc' });
       target.statuses = target.statuses.filter((s) => s.id !== 'djinns_mark');
     }
   },
@@ -748,7 +754,7 @@ const passive_abrams_heal: AbilityDef = {
     if (!source) return;
     const found = findCardOnBoard(G, source.iid);
     if (found && found.card === source && source.zone === 'active') {
-      healUnit(G, source, 1, 'Infernal Resilience');
+      healUnit(G, source, 1, 'Infernal Resilience', { tag: 'regen' });
     }
   },
 };
@@ -836,7 +842,7 @@ const passive_wraith_mixed: AbilityDef = {
   run: (G, _ctx, { source, target }) => {
     if (!source || !target) return;
     const sp = effectiveSpirit(source);
-    if (sp > 0) damageUnit(G, target, sp, 'spirit', 'Mixed Bullets');
+    if (sp > 0) damageUnit(G, target, sp, 'spirit', 'Mixed Bullets', { tag: 'mixed_bullets', source, cast: 'proc' });
   },
 };
 
@@ -853,10 +859,10 @@ const passive_wraith_mixed: AbilityDef = {
 const passive_drifter_bloodscent: AbilityDef = {
   id: 'passive_drifter_bloodscent', trigger: 'onAttack', target: 'self',
   prompt: 'Bloodscent — Drifter heals for half the damage his attacks deal.',
-  run: (G, _ctx, { source, params }) => {
+  run: (G, _ctx, { source, target, params }) => {
     const dealt = (params?.dealt as number | undefined) ?? 0;
     const heal = Math.floor(dealt / 2);
-    if (source && heal > 0) healUnit(G, source, heal, 'Bloodscent');
+    if (source && heal > 0) healUnit(G, source, heal, 'Bloodscent', { tag: 'lifesteal', from: target });
   },
 };
 
@@ -924,10 +930,10 @@ const eff_ult_mo_krill: AbilityDef = {
   run: (G, ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'stun', 1, 1);
-    const dealt = damageUnit(G, target, 6 + ultSpi(), 'spirit', 'Combo');
+    const dealt = damageUnit(G, target, 6 + ultSpi(), 'spirit', 'Combo', { tag: 'combo' });
     const ps = G.players[ctx.movingPlayer];
     const mk = [ps.active, ...ps.bench].find((c) => c && c.cardId === 'hero_mo_krill' && (c.respawnTurnsLeft ?? 0) === 0);
-    if (mk && dealt > 0) healUnit(G, mk, dealt, 'Combo');
+    if (mk && dealt > 0) healUnit(G, mk, dealt, 'Combo', { tag: 'lifesteal', from: target });
   },
 };
 const eff_ult_paige: AbilityDef = {
@@ -967,7 +973,7 @@ const eff_ult_shiv: AbilityDef = {
   run: (G, _ctx, { target }) => {
     if (!target) return;
     // Killing Blow: execute a target already below half HP, else a 5 spirit hit.
-    if (target.hp <= target.hpMax / 2) damageUnit(G, target, 999, 'pure', 'Killing Blow');
+    if (target.hp <= target.hpMax / 2) damageUnit(G, target, 999, 'pure', 'Killing Blow', { tag: 'execute' });
     else damageUnit(G, target, 5 + ultSpi(), 'spirit', 'Killing Blow');
   },
 };

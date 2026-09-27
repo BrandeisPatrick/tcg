@@ -171,16 +171,136 @@ export interface GameAction {
   state: 'begin' | 'done';
 }
 
-/** A single resolved damage hit, surfaced so the UI can play a type-colored
- *  "card got hit" flash. Basic-attack damage is omitted here (the combat
- *  choreographer owns that). The UI tracks a high-water `seq` to play new ones. */
-export interface DamageEvent {
-  iid: string;            // the damaged unit
-  amount: number;         // final damage dealt (post-resist/shield)
-  type: DamageType;       // 'attack' | 'spirit' | 'pure' → drives the flash colour
-  ko: boolean;            // dropped the unit to 0
-  seq: number;            // monotonic id
+// ---------------------------------------------------------------------------
+// Board FX stream — everything the match screen animates after the engine has
+// resolved it. The engine pushes one event per thing that visibly happened;
+// the UI plays each new batch as a small choreographed timeline (a skill's
+// flare on the caster, its bolt to the target, the type-coloured impact, the
+// status stamps) and holds the stat numbers until the impact lands.
+// ---------------------------------------------------------------------------
+
+/** How an effect came about. The FX layer picks its animation family from
+ *  this: a skill / spell / ult is a cast (a bolt leaves the caster), a proc is
+ *  a passive going off, a tick is a start- or end-of-turn resolution. The
+ *  basic swing is 'attack' — the combat choreographer animates it BEFORE the
+ *  engine resolves, so the engine never emits an untagged hit for it. */
+export type FxCastKind = 'skill' | 'spell' | 'ult' | 'proc' | 'tick' | 'attack';
+
+/** A one-of-a-kind effect signature. Each tag has its own animation in the
+ *  FX layer (Djinn's Mark converging and detonating, Bleed dripping, Mystic
+ *  Reverb ringing in, a Killing Blow slashing…). Untagged events fall back to
+ *  the damage-type family (gunfire / spirit / pure). */
+export type FxTag =
+  | 'djinns_mark'    // Mirage's mark detonating (at 4 stacks or on expiry)
+  | 'bleed'          // start-of-turn Bleed tick
+  | 'reverb'         // Mystic Reverb's delayed echo
+  | 'naptime'        // Rem's Naptime wake-up burst
+  | 'discharge'      // Charged running out → Stun
+  | 'execute'        // Shiv's Killing Blow execute
+  | 'life_drain'     // Lady Geist's Life Drain hit
+  | 'lifesteal'      // healing drawn out of a struck enemy (Bloodscent, Leech…)
+  | 'mixed_bullets'  // Wraith's spirit rider on her bullet
+  | 'ricochet'       // Ricochet bouncing to the bench
+  | 'tesla'          // Tesla Bullets chaining to the bench
+  | 'burst'          // Mystic Burst proc after a skill
+  | 'channel'        // a channeled ultimate's end-of-turn pulse
+  | 'regen'          // start-of-turn regeneration (Abrams, Extra Regen)
+  | 'combo'          // Mo & Krill's Combo drain
+  | 'siphon';        // Siphon Bullets' max-HP transfer
+
+/** Who caused an effect, as far as the board can point at them. */
+export interface FxSource {
+  iid: string;
+  cardId: CardId;
+  owner: PlayerID;
 }
+
+interface FxBase {
+  /** Monotonic id — the UI tracks a high-water mark to play only new events. */
+  seq: number;
+}
+
+/** A resolved damage hit (post-resist, post-shield). */
+export interface HitFx extends FxBase {
+  kind: 'hit';
+  iid: string;            // the damaged unit
+  amount: number;         // final damage dealt
+  type: DamageType;       // 'attack' (bullet) | 'spirit' | 'pure'
+  ko: boolean;            // dropped the unit to 0
+  cast: FxCastKind;
+  source?: FxSource;
+  tag?: FxTag;
+  /** Tag-specific count — Djinn's Mark stacks that detonated. */
+  stacks?: number;
+}
+
+export interface HealFx extends FxBase {
+  kind: 'heal';
+  iid: string;
+  amount: number;
+  tag?: FxTag;
+  /** Where the healing was drawn from (lifesteal) — the motes stream from here. */
+  from?: FxSource;
+  source?: FxSource;
+}
+
+export interface StatusFx extends FxBase {
+  kind: 'status';
+  iid: string;
+  statusId: StatusId;
+  /** Resulting magnitude on the unit (after stacking / refresh). */
+  value: number;
+  duration: number;
+  debuff: boolean;
+  tag?: FxTag;
+  source?: FxSource;
+}
+
+/** A Shield ate some or all of a hit. */
+export interface ShieldFx extends FxBase {
+  kind: 'shield';
+  iid: string;
+  absorbed: number;
+  broken: boolean;        // the shield is gone after this
+  type: DamageType;
+  source?: FxSource;
+}
+
+/** Unstoppable shrugged something off. */
+export interface ImmuneFx extends FxBase {
+  kind: 'immune';
+  iid: string;
+  what: 'damage' | StatusId;
+}
+
+/** A cast just happened — pushed BEFORE its effects so the batch reads as
+ *  "this caster did the following". `iid` is the casting unit on the board
+ *  (the hero for a skill, the linked hero for an ult, the channelling Active
+ *  for a spell, the bearer for equipment); absent when nobody's there. */
+export interface CastFx extends FxBase {
+  kind: 'cast';
+  castKind: 'skill' | 'spell' | 'ult' | 'equip';
+  by: PlayerID;
+  cardId: CardId;
+  iid?: string;
+  targetIid?: string;
+}
+
+/** A corpse came back at full HP. */
+export interface ReviveFx extends FxBase {
+  kind: 'revive';
+  iid: string;
+}
+
+/** A hero reached a new level. */
+export interface LevelUpFx extends FxBase {
+  kind: 'levelup';
+  iid: string;
+  level: number;
+}
+
+export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | CastFx | ReviveFx | LevelUpFx;
+export type FxKind = FxEvent['kind'];
 
 /**
  * Pre-match hero draft. Both players take turns picking 4 heroes each from
@@ -222,8 +342,8 @@ export interface GameState {
    *  trigger the reveal animation and pause further input until the player
    *  has had time to see what just happened. */
   action: GameAction | null;
-  /** Transient list of damage hits since the last UI flush, for the on-card
-   *  "got hit" flash. Cleared at the start of each turn; UI plays new entries
-   *  by tracking the highest `seq` it has seen. */
-  damageFx: DamageEvent[];
+  /** Transient board-FX stream — hits, heals, statuses, casts, revives…
+   *  since the turn began. Cleared at the start of each turn; the UI plays new
+   *  entries by tracking the highest `seq` it has seen. */
+  fx: FxEvent[];
 }

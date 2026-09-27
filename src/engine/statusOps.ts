@@ -1,9 +1,11 @@
-import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState } from './types';
+import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState, FxTag } from './types';
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit, resolve, returnRemToBench } from './damage';
 import { liveBoardCards, pushLog, otherPlayer, effectiveSpirit } from './util';
 import { CARDS_BY_ID } from '@/cards';
 import { fireEquipmentTriggers } from './equipmentDispatch';
+import { currentCast } from './castContext';
+import { pushFx, fxSource } from './fx';
 
 // Statuses whose value is a magnitude that's worth printing in the log
 // (Bleed 3, Bullet Resist 4, Shield 5, etc.). Stun/Silence/Disarm/Sleep are
@@ -32,7 +34,7 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  *  - Re-applying a status with the same id refreshes value/duration to the
  *    larger of the two — except Bleed, which stacks up to 3.
  */
-export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number) {
+export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number, fx?: { tag?: FxTag }) {
   const name = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
 
   // Superior Duration: the bearer's own buffs last 1 turn longer.
@@ -53,6 +55,7 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
   // Unstoppable: block incoming CC.
   if (CC_STATUSES.has(id) && target.statuses.some((s) => s.id === 'unstoppable')) {
     pushLog(G, `${name} resisted ${id} (Unstoppable).`);
+    pushFx(G, { kind: 'immune', iid: target.iid, what: id });
     return;
   }
 
@@ -85,6 +88,13 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
   const dur = duration >= 99 ? '' : ` for ${duration} turn${duration === 1 ? '' : 's'}`;
   const verb = DEBUFF_IDS.has(id) ? 'suffered' : 'gained';
   pushLog(G, `${name} ${verb} ${title}${mag}${dur}.`);
+  // Stamp it on the card: the FX layer slaps the status chip on at impact.
+  const landed = target.statuses.find((s) => s.id === id);
+  pushFx(G, {
+    kind: 'status', iid: target.iid, statusId: id,
+    value: landed?.value ?? value, duration: landed?.duration ?? duration,
+    debuff: DEBUFF_IDS.has(id), tag: fx?.tag, source: fxSource(currentCast()?.source),
+  });
 
   // Equipment reactive: Reactive Barrier shields the bearer when they suffer
   // hard CC. Fire here so any attached equipment with onBearerCCSuffered runs.
@@ -101,14 +111,14 @@ export function cleanseDebuffs(target: CardInstance) {
 export function tickStartOfTurn(G: GameState, ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
     const bleed = c.statuses.find((s) => s.id === 'bleed');
-    if (bleed) damageUnit(G, c, bleed.value, 'pure');
+    if (bleed) damageUnit(G, c, bleed.value, 'pure', 'Bleed', { tag: 'bleed' });
     // Charged: delayed-stun. Detected BEFORE the tick so we know it's about
     // to expire, then converts into a 1-turn Stun on the same target. Powers
     // Seven's Static Charge — long fuse + small payoff (down from 2t stun
     // after the balance pass).
     const charged = c.statuses.find((s) => s.id === 'charged');
     if (charged && charged.duration === 1) {
-      addStatus(G, c, 'stun', 1, 1);
+      addStatus(G, c, 'stun', 1, 1, { tag: 'discharge' });
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} discharges: Stun for 1 turn.`);
     }
     // Djinn's Mark: detonates on natural expiry (timer reaches 1 = about to
@@ -117,14 +127,14 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
     const mark = c.statuses.find((s) => s.id === 'djinns_mark');
     if (mark && mark.duration === 1) {
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Djinn's Mark detonates.`);
-      damageUnit(G, c, 3 * mark.value, 'spirit');
+      damageUnit(G, c, 3 * mark.value, 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value });
     }
     // Reverb (Mystic Reverb): delayed echo. Detonates on natural expiry for its
     // stored value as spirit damage, then the decay path removes it below.
     const reverb = c.statuses.find((s) => s.id === 'reverb');
     if (reverb && reverb.duration === 1) {
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Mystic Reverb echoes.`);
-      damageUnit(G, c, reverb.value, 'spirit', 'Mystic Reverb');
+      damageUnit(G, c, reverb.value, 'spirit', 'Mystic Reverb', { tag: 'reverb' });
     }
     // Siphon Bullets: temporary max-HP transfer reverts when the marker expires.
     const drain = c.statuses.find((s) => s.id === 'siphon_drain');
@@ -154,7 +164,7 @@ export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
     if (sleeping && sleeping.duration === 1 && sleeping.value > 0) {
       c.statuses = c.statuses.filter((s) => s !== sleeping);
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} wakes — Naptime detonates.`);
-      damageUnit(G, c, sleeping.value, 'spirit', 'Naptime');
+      damageUnit(G, c, sleeping.value, 'spirit', 'Naptime', { tag: 'naptime' });
     }
     c.statuses = c.statuses
       .map((s) => (CC_STATUSES.has(s.id) ? { ...s, duration: s.duration - 1 } : s))
@@ -219,7 +229,7 @@ export function tickCastingPulses(G: GameState, ps: PlayerState) {
     const enemyId = otherPlayer(c.ownerId);
     let totalDealt = 0;
     for (const e of liveBoardCards(G.players[enemyId])) {
-      totalDealt += damageUnit(G, e, perTick, 'spirit', name);
+      totalDealt += damageUnit(G, e, perTick, 'spirit', name, { tag: 'channel', source: c });
     }
     resolve(G);
     pushLog(G, `${name} channels — ${perTick} spirit to all enemies.`);
@@ -227,7 +237,7 @@ export function tickCastingPulses(G: GameState, ps: PlayerState) {
     // Warden (light): drain the total back as healing.
     if (!heavy && totalDealt > 0) {
       const heal = Math.ceil(totalDealt / 2);
-      healUnit(G, c, heal);
+      healUnit(G, c, heal, 'Last Stand', { tag: 'lifesteal' });
       pushLog(G, `Last Stand: ${name} drained ${heal} HP.`);
     }
     // Seven: escalate the next pulse.
