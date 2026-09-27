@@ -10,13 +10,14 @@
  * another slot mid-effect keeps the effect where the hit landed (the same
  * trade the combat choreographer makes).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import type { CastFx, FxEvent, HitFx } from '@/engine/types';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { FX_INK, FX_TIMING, TAG_INFO, typeInk } from './fxCatalog';
 import { buildFxTimeline, type FxItem, type FxTimeline } from './fxTimeline';
-import { type Pt, type Rect, center, dist, toRect } from './geometry';
+import { FxImpulseContext, type FxImpulse, hitStrength } from './FxImpulse';
+import { type Pt, type Rect, angleOf, center, dist, toRect } from './geometry';
 import { AoeWave, Bolt, DrainStream, LightningArc } from './primitives';
 import { HitImpact } from './hits';
 import {
@@ -95,6 +96,34 @@ function FxBatch({ live }: { live: LiveBatch }) {
   const { batch, timeline, rects, origin } = live;
   const cast = timeline.cast;
   const statusIndex = new Map<string, number>();
+  const hitIndex = new Map<string, number>();
+
+  // The tiles take their blows at the impact beats: HeroSlot listens on the
+  // impulse bus and recoils along the shot (see FxImpulse).
+  const bus = useContext(FxImpulseContext);
+  useEffect(() => {
+    if (!bus) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const it of timeline.items) {
+      const ev = it.ev;
+      let impulse: FxImpulse | null = null;
+      if (ev.kind === 'hit' && ev.amount > 0) {
+        const src = ev.source ? rects.get(ev.source.iid) : undefined;
+        const tgt = rects.get(ev.iid);
+        const angle = src && tgt && ev.source!.iid !== ev.iid ? angleOf(center(src), center(tgt)) : undefined;
+        impulse = { kind: ev.ko ? 'ko' : 'hit', angle, strength: hitStrength(ev.amount) };
+      } else if (ev.kind === 'heal' && ev.amount > 0) {
+        impulse = { kind: 'heal', strength: 0.6 };
+      } else if (ev.kind === 'shield') {
+        impulse = { kind: 'shield', strength: 0.6 };
+      }
+      if (!impulse || !('iid' in ev) || !ev.iid) continue;
+      const iid = ev.iid;
+      const imp = impulse;
+      timers.push(setTimeout(() => bus.emit(iid, imp), it.at));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [bus, timeline, rects]);
 
   // Channelled pulses: one shockwave from the channeler per pulse group,
   // then the per-target impacts. Seven's storm rains lightning instead.
@@ -132,12 +161,12 @@ function FxBatch({ live }: { live: LiveBatch }) {
         return <AoeWave key={src.iid} from={from} radius={radius} color={ink} at={g.at - lead} dur={lead - 40} spokes={g.targets} />;
       })}
 
-      {timeline.items.map((it) => renderItem(it, rects, batch, statusIndex))}
+      {timeline.items.map((it) => renderItem(it, rects, batch, statusIndex, hitIndex))}
     </>
   );
 }
 
-function renderItem(it: FxItem, rects: Map<string, Rect>, batch: FxEvent[], statusIndex: Map<string, number>) {
+function renderItem(it: FxItem, rects: Map<string, Rect>, batch: FxEvent[], statusIndex: Map<string, number>, hitIndex: Map<string, number>) {
   const ev = it.ev;
   const key = `fx-${ev.seq}`;
   switch (ev.kind) {
@@ -147,7 +176,9 @@ function renderItem(it: FxItem, rects: Map<string, Rect>, batch: FxEvent[], stat
       const rect = rects.get(ev.iid);
       if (!rect) return null;
       const sourceRect = ev.source ? rects.get(ev.source.iid) : undefined;
-      return <HitImpact key={key} ev={ev} rect={rect} sourceRect={sourceRect} at={it.at} hold={it.hold} ownerInk={ownerInk(ev.source?.owner)} />;
+      const n = hitIndex.get(ev.iid) ?? 0;
+      hitIndex.set(ev.iid, n + 1);
+      return <HitImpact key={key} ev={ev} rect={rect} sourceRect={sourceRect} at={it.at} hold={it.hold} ownerInk={ownerInk(ev.source?.owner)} index={n} />;
     }
     case 'heal': {
       const rect = rects.get(ev.iid);

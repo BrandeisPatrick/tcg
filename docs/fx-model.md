@@ -45,6 +45,18 @@ hands both to:
   the bolt lands, so the number drops with the impact, not before it.
 - `FxLayer` — measures the cards involved, plays the batch as fixed-position
   overlays, and unmounts it when the timeline ends. Batches overlap freely.
+- `FxImpulseContext` (`FxImpulse.ts`) — the recoil channel. At each impact
+  beat the layer (and the combat choreographer, for basic swings) emits one
+  impulse per card — kind, the blow's direction, its strength — and the
+  `HeroSlot` listening on that iid kicks the whole tile: shoved ~10 px along
+  the shot and springing back past rest for a hit, ~15 px with a twist for a
+  kill, a lift for a heal, a shiver when a Shield holds. `kickFor` is pure;
+  `tests/ui/fx-impulse.spec.ts` pins the shapes.
+- `FxCalmContext` (`FxMotionContext.ts`) — calm motion, on when the system
+  menu's reduced-motion setting or the OS preference is set. Everything that
+  flies renders nothing (motes, rings, bolts, arcs, tracers, streams,
+  shockwaves) and the tiles do not recoil; washes, stickers, plates and the
+  numerals still tell the whole story on the same beats.
 
 The beat (`fxCatalog.ts` holds every number):
 
@@ -57,11 +69,17 @@ ultimates wait 600 ms for their name plate first; AoE impacts ripple by 90 ms pe
 
 Animation families (`hits.tsx`, `support.tsx`, `primitives.tsx`):
 
-- **bullet** — gunfire: muzzle flash, tracer volley in the owner's ink, holes
-  punched into the print one by one, sparks off the far side.
+- **the amount** — every hit prints `−N` in stencil digits (a shade brighter
+  than its type's wash, paper keyline, hard ink drop) at the impact; heals
+  print `+N`. Several hits on one card in a batch fan out and land a beat
+  apart so `−2` then `−3` never reads as `−23`. The basic swing prints its
+  amount above the choreographer's `Damaged` banner the same way.
+- **bullet** — gunfire: muzzle flash at the shooter's edge facing the target,
+  tracer volley in the owner's ink, holes punched into the print one by one,
+  sparks off the far side.
 - **spirit** — plum overprint, concentric rings, the spirit rune, star motes.
 - **pure** — teal overprint with a tear drawn across the card; **Bleed**
-  instead runs red down the print with a `BLEED N` sticker.
+  instead runs red down the print under a `BLEED` sticker.
 - **KO** — cracks from the impact point, a wine vignette, shards falling
   away, the `K.O.` sticker charging gold. The corpse look lands after.
 - **tags** — Djinn's Mark stacks ring the card, spin inward and detonate
@@ -75,4 +93,5 @@ Animation families (`hits.tsx`, `support.tsx`, `primitives.tsx`):
   Unstoppable in gold; revive rays; level-up burst; equip glint.
 
 The Gallery (`?preview=1&tab=combat`) has a showroom that fires every one of
-these through the real `FxLayer`, `HeroSlot` and timing context.
+these through the real `FxLayer`, `HeroSlot`, timing context and impulse bus,
+with a `Calm motion` toggle to preview what reduced-motion players see.

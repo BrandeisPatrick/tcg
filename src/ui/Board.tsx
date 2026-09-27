@@ -27,6 +27,8 @@ import { CombatChoreographer } from './effects/CombatChoreographer';
 import { SoulsRail } from './board/SoulsRail';
 import { CombatProgressContext, type CombatProgress } from './effects/CombatProgressContext';
 import { FxLayer } from './effects/fx/FxLayer';
+import { FxImpulseBus, FxImpulseContext } from './effects/fx/FxImpulse';
+import { FxCalmContext, useCalmMotion } from './effects/fx/FxMotionContext';
 import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingContext';
 import { buildFxTimeline } from './effects/fx/fxTimeline';
 import { useDelayedValue } from './hooks/useDelayedValue';
@@ -133,6 +135,10 @@ export function Board(props: BoardProps<GameState>) {
   }, [maxFxSeq]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fxTimeline = useMemo(() => buildFxTimeline(freshFx), [freshFxKey]);
+  // The tiles' recoil channel (FxLayer / CombatChoreographer emit, HeroSlot
+  // listens) and the calm-motion switch every FX primitive reads.
+  const fxBus = useMemo(() => new FxImpulseBus(), []);
+  const calmMotion = useCalmMotion();
   const fxHoldFor = useCallback<FxHoldResolver>(
     (iid) => ({ impact: fxTimeline.impactDelay[iid] ?? 0, settle: fxTimeline.koSettle[iid] ?? 0 }),
     [fxTimeline],
@@ -632,6 +638,8 @@ export function Board(props: BoardProps<GameState>) {
     <LayoutGroup>
       <CombatProgressContext.Provider value={combatProgress}>
       <FxTimingContext.Provider value={fxHoldFor}>
+      <FxImpulseContext.Provider value={fxBus}>
+      <FxCalmContext.Provider value={calmMotion}>
       <PosterBackdrop />
 
       <div style={{
@@ -1086,6 +1094,8 @@ export function Board(props: BoardProps<GameState>) {
           onLessons={matchNav ? matchNav.toLessons : undefined}
         />
       )}
+      </FxCalmContext.Provider>
+      </FxImpulseContext.Provider>
       </FxTimingContext.Provider>
       </CombatProgressContext.Provider>
     </LayoutGroup>

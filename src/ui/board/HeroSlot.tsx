@@ -1,7 +1,9 @@
-import type { CSSProperties } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useRef, type CSSProperties } from 'react';
+import { animate, motion, type AnimationPlaybackControls } from 'framer-motion';
 import type { CardInstance, PlayerID } from '@/engine/types';
 import { useFxHold } from '../effects/fx/FxTimingContext';
+import { kickFor, useFxImpulse } from '../effects/fx/FxImpulse';
+import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
 import { CARDS_BY_ID } from '@/cards';
 import { effectiveAtk } from '@/engine/util';
@@ -60,6 +62,21 @@ export function HeroSlot({
   // from the fresh FX batch; zero when nothing is in flight). Interaction
   // guards read the live card, only the print lags.
   const hold = useFxHold(card.iid);
+  // Recoil: when a blow lands (the FX layer's or the choreographer's impact
+  // beat) the whole tile is shoved along the shot and springs back — harder
+  // with a twist on a kill, a lift on a heal, a shiver when a Shield holds.
+  // Driven imperatively so nothing remounts; skipped under calm motion.
+  const tileRef = useRef<HTMLElement | null>(null);
+  const kickCtl = useRef<AnimationPlaybackControls | null>(null);
+  const calm = useFxCalm();
+  useFxImpulse(card.iid, (impulse) => {
+    const el = tileRef.current;
+    if (calm || !el) return;
+    kickCtl.current?.stop();
+    const { keyframes, duration } = kickFor(impulse);
+    kickCtl.current = animate(el, keyframes, { duration, ease: 'easeOut' });
+  });
+  useEffect(() => () => kickCtl.current?.stop(), []);
   const shownHp = useDelayedValue(card.hp, hold.impact);
   const shownStatuses = useDelayedValue(card.statuses, hold.impact);
   // Outgoing attack value as it will resolve in combat: effectiveAtk minus any
@@ -138,7 +155,7 @@ export function HeroSlot({
   return (
     <motion.button
       layoutId={`hero-${card.iid}`}
-      ref={(el) => registerSlotRef?.(card.iid, el)}
+      ref={(el) => { tileRef.current = el; registerSlotRef?.(card.iid, el); }}
       aria-label={isCorpse
         ? `${data.name} — down, respawns in ${respawnLeft} turn${respawnLeft === 1 ? '' : 's'}`
         : `${data.name} — ${atk} attack, ${shownHp} health`}
@@ -178,7 +195,8 @@ export function HeroSlot({
       }}
     >
       {/* "Card got hit" and every other reaction is drawn over the card by
-          the board's FxLayer (effects/fx), anchored to this slot's rect. */}
+          the board's FxLayer (effects/fx), anchored to this slot's rect; the
+          tile itself only recoils (FxImpulse). */}
 
       {/* Art window — the portrait printed edge to edge on a dark ground;
           a corpse is greyed and dimmed. */}

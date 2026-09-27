@@ -1,11 +1,13 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { AttackPlan, AttackStep } from '@/engine/combat';
 import { fonts } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { GunBurst, KoShatter } from './fx/hits';
 import { ShieldDeflect } from './fx/support';
-import { MuzzleFlash, TracerVolley } from './fx/primitives';
+import { Fixed, MuzzleFlash, Numeral, TracerVolley, numeralSize } from './fx/primitives';
+import { NUMERAL_INK } from './fx/fxCatalog';
+import { FxImpulseContext, type FxImpulse, hitStrength } from './fx/FxImpulse';
 import { center, edgePoint, toRect } from './fx/geometry';
 
 /**
@@ -14,11 +16,11 @@ import { center, edgePoint, toRect } from './fx/geometry';
  * Renders overlay visuals anchored to the attacker/target slot positions:
  * gunfire — a muzzle flash and a volley of tracers in the attacker's colour,
  * bullet holes punched into the target (GunBurst, the same family the FX
- * layer uses for skill-sourced bullets), the KO shatter — and a DamageBanner
- * sticker. Walks `plan.steps` one at a time, then invokes
- * `onComplete` so the engine can resolve for real. Damage numbers themselves
- * animate ON the hero cards via `useStatTick` in HeroSlot — no floater
- * push from this component.
+ * layer uses for skill-sourced bullets), the KO shatter, the amount in
+ * stencil digits — and a DamageBanner sticker. The tiles recoil through the
+ * FxImpulse bus at each impact beat. Walks `plan.steps` one at a time, then
+ * invokes `onComplete` so the engine can resolve for real; the HP numbers
+ * on the cards move then (`useStatTick` in HeroSlot).
  */
 interface Props {
   plan: AttackPlan;
@@ -161,9 +163,9 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
   //  - 0%   – 15%:  wind-up
   //  - 15%  – 35%:  tracer in flight
   //  - 35%  – 100%: impact (EVA banner sweep) — most of the beat is the
-  //    readable hold so the player can parse the banner. The HP number on
-  //    the target card animates via useStatTick when the engine applies the
-  //    damage; no per-beat floater push from this component.
+  //    readable hold so the player can parse the banner and the amount. The
+  //    HP number on the target card moves when the engine applies the
+  //    damage, after the walk-through (useStatTick in HeroSlot).
   const totalSec = stepDuration / 1000;
   const projectileDuration = totalSec * 0.22;
   const projectileDelay = totalSec * 0.15;
@@ -182,6 +184,27 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
   const attackerIsTop = sy < window.innerHeight / 2;
   const attackerInk = attackerIsTop ? poster.rival : poster.you;
   const defenderInk = attackerIsTop ? poster.you : poster.rival;
+
+  // The tiles take the blows: the target at the impact beat, the attacker a
+  // beat later when retaliation lands (FxImpulse → HeroSlot's recoil).
+  const bus = useContext(FxImpulseContext);
+  useEffect(() => {
+    if (!bus) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    if (step.targetIid) {
+      const kind: FxImpulse['kind'] | null = step.finalDamage > 0 ? (step.predictedKO ? 'ko' : 'hit') : step.shieldAbsorbed > 0 ? 'shield' : null;
+      if (kind) {
+        const impulse: FxImpulse = { kind, angle, strength: hitStrength(step.finalDamage) };
+        const iid = step.targetIid;
+        timers.push(setTimeout(() => bus.emit(iid, impulse), impactDelay * 1000));
+      }
+    }
+    if (step.retaliationDamage > 0) {
+      const impulse: FxImpulse = { kind: step.attackerKO ? 'ko' : 'hit', angle: angle + Math.PI, strength: hitStrength(step.retaliationDamage) };
+      timers.push(setTimeout(() => bus.emit(step.attackerIid, impulse), (impactDelay + 0.1) * 1000));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [bus, step, angle, impactDelay]);
 
   if (!attackerRect) return null;
 
@@ -233,6 +256,11 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
         <>
           <GunBurst rect={targetBox!} amount={step.finalDamage} at={impactDelay * 1000} hold={damagePersist * 1000 * 0.9} seed={seed} from={attackerC} ownerInk={attackerInk} volley={false} />
           {step.predictedKO && <KoShatter rect={targetBox!} at={impactDelay * 1000 + 140} seed={seed + 1} hold={damagePersist * 1000 * 0.9} />}
+          {/* The amount, in stencil digits above the banner. */}
+          <Fixed rect={targetBox!} z={89}>
+            <Numeral text={`−${step.finalDamage}`} ink={step.predictedKO ? NUMERAL_INK.ko : NUMERAL_INK.attack}
+              at={impactDelay * 1000 + 30} dur={Math.min(damagePersist * 1000 * 0.85, 1000)} size={numeralSize(targetBox!)} top="26%" />
+          </Fixed>
         </>
       )}
       {/* The same on the attacker when the defender retaliates. */}
@@ -240,6 +268,10 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
         <>
           <GunBurst rect={attackerBox} amount={step.retaliationDamage} at={(impactDelay + 0.1) * 1000} hold={damagePersist * 1000 * 0.85} seed={seed + 2} from={targetC} ownerInk={defenderInk} volley={false} />
           {step.attackerKO && <KoShatter rect={attackerBox} at={(impactDelay + 0.1) * 1000 + 140} seed={seed + 3} hold={damagePersist * 1000 * 0.85} />}
+          <Fixed rect={attackerBox} z={89}>
+            <Numeral text={`−${step.retaliationDamage}`} ink={step.attackerKO ? NUMERAL_INK.ko : NUMERAL_INK.attack}
+              at={(impactDelay + 0.1) * 1000 + 30} dur={Math.min(damagePersist * 1000 * 0.8, 1000)} size={numeralSize(attackerBox)} top="26%" />
+          </Fixed>
         </>
       )}
 
@@ -258,13 +290,21 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
           rect = { left: bandLeft, top: bandTop, width: bandWidth, height: bandHeight, isCard: false };
         }
         return (
-          <DamageBanner
-            rect={rect}
-            isKO={step.predictedKO}
-            damagePersist={damagePersist}
-            impactDelay={impactDelay}
-            keySuffix={`primary-${step.attackerIid}-${step.targetIid ?? 'face'}`}
-          />
+          <>
+            <DamageBanner
+              rect={rect}
+              isKO={step.predictedKO}
+              damagePersist={damagePersist}
+              impactDelay={impactDelay}
+              keySuffix={`primary-${step.attackerIid}-${step.targetIid ?? 'face'}`}
+            />
+            {/* A face hit has no card to print on — the amount rides the band. */}
+            {!rect.isCard && step.finalDamage > 0 && (
+              <Fixed rect={rect} z={89}>
+                <Numeral text={`−${step.finalDamage}`} ink={NUMERAL_INK.attack} at={impactDelay * 1000 + 30} dur={Math.min(damagePersist * 1000 * 0.85, 1000)} size={34} top="22%" />
+              </Fixed>
+            )}
+          </>
         );
       })()}
 
@@ -285,8 +325,8 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
         />
       )}
 
-      {/* Damage numbers animate on the target card's HP/BP via useStatTick
-          when the engine applies the hit — no per-beat floater here. */}
+      {/* The HP number itself moves when the engine applies the hit, after
+          the walk-through (useStatTick in HeroSlot). */}
 
       {/* Bonus label (e.g. "Haze +2 vs Stunned") if present — a small ink
           sticker rising off the attacker. */}

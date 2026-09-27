@@ -10,9 +10,9 @@ import { CARDS_BY_ID } from '@/cards';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { statusChipText } from '../../card/StatusIcon';
-import { FX_INK, TAG_INFO } from './fxCatalog';
+import { FX_INK, NUMERAL_INK, TAG_INFO } from './fxCatalog';
 import { type Rect } from './geometry';
-import { EASE_OUT, Fixed, LightningArc, Motes, Plate, Ring, Stamp, Wash, sec } from './primitives';
+import { EASE_OUT, Fixed, LightningArc, Motes, Numeral, Plate, Ring, Stamp, Wash, numeralSize, sec } from './primitives';
 import { DjinnGlyph, SleepLetters, onInk } from './hits';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -123,6 +123,11 @@ export function HealGlow({ rect, amount, at, hold, tag, seed }: {
         <Motes origin={{ x: rect.width / 2, y: rect.height * 0.7 }} count={clamp(2 + amount, 3, 8)} seed={seed} color={FX_INK.heal} alt={FX_INK.cream}
           shape="cross" at={at} dur={quiet ? 1000 : 800} spread={[10, 50]} rise={quiet ? 20 : 40} size={10} angle={{ center: -Math.PI / 2, span: 1.6 }} />
       </Fixed>
+      {amount > 0 && (
+        <Fixed rect={rect} z={89}>
+          <Numeral text={`+${amount}`} ink={NUMERAL_INK.heal} at={at + 30} dur={Math.min(hold, 950)} size={numeralSize(rect)} top="34%" />
+        </Fixed>
+      )}
     </>
   );
 }

@@ -4,12 +4,17 @@
  * bolts and tracers drawn between cards. Everything is framer-motion driven
  * (no CSS animations) so the QA virtual clock can step it, and every delay
  * is given in milliseconds from the batch start.
+ *
+ * Under calm motion (FxMotionContext) everything that flies — motes, rings,
+ * bolts, arcs, tracers, streams, shockwaves — renders nothing; the washes,
+ * stickers, plates and numerals carry the story on their own.
  */
 import type { CSSProperties, ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { fonts } from '../../tokens';
 import { poster, chamfer, clipBoth } from '../../poster';
 import { FX_INK } from './fxCatalog';
+import { useFxCalm } from './FxMotionContext';
 import { type Pt, type Rect, angleOf, curvePath, dist, jaggedPath, seeded } from './geometry';
 
 export const EASE_OUT = [0.22, 1, 0.36, 1] as const;
@@ -63,6 +68,7 @@ export function Ring({ cx = '50%', cy = '50%', size, color, at = 0, dur = 520, f
   cx?: number | string; cy?: number | string; size: number; color: string;
   at?: number; dur?: number; from?: number; to?: number; width?: number; peak?: number; dashed?: boolean;
 }) {
+  if (useFxCalm()) return null;
   return (
     <motion.div
       initial={{ scale: from, opacity: 0 }}
@@ -97,7 +103,9 @@ export function Motes({ origin, count, seed, color, alt = FX_INK.cream, shape = 
   at?: number; dur?: number; spread?: [number, number]; rise?: number; gravity?: number; size?: number;
   angle?: { center: number; span: number };
 }) {
+  const calm = useFxCalm();
   const rng = seeded(seed);
+  if (calm) return null;
   return (
     <>
       {Array.from({ length: count }, (_, i) => {
@@ -186,6 +194,45 @@ export function Stamp({ text, at = 0, dur = 900, sticker = poster.ink, ink = pos
   );
 }
 
+const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/** Type size for the amount on a card of this width. */
+export const numeralSize = (rect: Rect) => clampN(Math.round(rect.width * 0.19), 18, 38);
+
+/** The amount, printed big at the impact — stencil digits in the effect's
+ *  ink with a paper keyline and a hard ink drop, popping in, drifting up and
+ *  fading. `index` fans several numerals on one card apart. Reads on any art
+ *  and stays put under reduced motion (only the pop is a transform). */
+export function Numeral({ text, ink, at = 0, dur = 900, size = 28, top = '30%', index = 0, drift = 24 }: {
+  text: string; ink: string; at?: number; dur?: number; size?: number; top?: string; index?: number; drift?: number;
+}) {
+  // Later numerals on the same card fan out to either side and land a beat
+  // apart, so "−2" then "−3" never reads as "−23".
+  const dx = (index % 2 ? 1 : -1) * Math.ceil(index / 2) * size * 1.5;
+  const k = Math.max(1.2, size * 0.045);
+  const keyline = poster.paper;
+  const shadow = [
+    `${-k}px ${-k}px 0 ${keyline}`, `${k}px ${-k}px 0 ${keyline}`, `${-k}px ${k}px 0 ${keyline}`, `${k}px ${k}px 0 ${keyline}`,
+    `0 ${-k}px 0 ${keyline}`, `0 ${k}px 0 ${keyline}`, `${-k}px 0 0 ${keyline}`, `${k}px 0 0 ${keyline}`,
+    `0 ${Math.max(2, Math.round(size * 0.11))}px 0 ${poster.ink}`,
+  ].join(', ');
+  return (
+    <div style={{ position: 'absolute', left: `calc(50% + ${dx}px)`, top, transform: 'translate(-50%, -50%)' }}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.5, y: 8 }}
+        animate={{ opacity: [0, 1, 1, 0], scale: [0.5, 1.22, 1, 1], y: [8, -2, -drift * 0.55, -drift] }}
+        transition={{ duration: sec(dur), delay: sec(at + index * 160), times: [0, 0.14, 0.72, 1], ease: EASE_OUT }}
+        style={{
+          fontFamily: fonts.display, fontSize: size, lineHeight: 1, whiteSpace: 'nowrap',
+          letterSpacing: '0.02em', color: ink, textShadow: shadow,
+        }}
+      >
+        {text}
+      </motion.div>
+    </div>
+  );
+}
+
 /** A small ink plate floating above a card — the caster's ability name. */
 export function Plate({ text, keyline, at = 0, dur = 800, fontSize = 11 }: {
   text: string; keyline: string; at?: number; dur?: number; fontSize?: number;
@@ -219,7 +266,9 @@ export function Bolt({ from, to, color, at = 0, dur = 340, width = 3, bulge = 0.
   from: Pt; to: Pt; color: string; at?: number; dur?: number; width?: number; bulge?: number;
   head?: boolean; alt?: string; z?: number; fade?: number;
 }) {
+  const calm = useFxCalm();
   const { d, box } = curvePath(from, to, bulge);
+  if (calm) return null;
   const total = dur + fade;
   const drawn = dur / total;
   const stroke = {
@@ -255,8 +304,10 @@ export function Bolt({ from, to, color, at = 0, dur = 340, width = 3, bulge = 0.
 export function LightningArc({ from, to, at = 0, dur = 300, seed, color = FX_INK.lightning, z = 82 }: {
   from: Pt; to: Pt; at?: number; dur?: number; seed: number; color?: string; z?: number;
 }) {
+  const calm = useFxCalm();
   const rng = seeded(seed);
   const main = jaggedPath(from, to, rng, 8, 0.12);
+  if (calm) return null;
   // The branch forks from a point a third of the way along and dies out
   // sideways.
   const forkFrom = { x: from.x + (to.x - from.x) * 0.35, y: from.y + (to.y - from.y) * 0.35 };
@@ -287,7 +338,9 @@ export function LightningArc({ from, to, at = 0, dur = 300, seed, color = FX_INK
 export function TracerVolley({ from, to, ink, at = 0, dur = 220, rounds = 3, gap = 55, z = 81 }: {
   from: Pt; to: Pt; ink: string; at?: number; dur?: number; rounds?: number; gap?: number; z?: number;
 }) {
+  const calm = useFxCalm();
   const a = angleOf(from, to);
+  if (calm) return null;
   const d = dist(from, to);
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -320,6 +373,7 @@ export function TracerVolley({ from, to, ink, at = 0, dur = 220, rounds = 3, gap
 export function MuzzleFlash({ at: pt, angle, ink, atMs = 0, size = 36, z = 83 }: {
   at: Pt; angle: number; ink: string; atMs?: number; size?: number; z?: number;
 }) {
+  if (useFxCalm()) return null;
   return (
     <div aria-hidden style={{ position: 'fixed', left: pt.x - size / 2, top: pt.y - size / 2, width: size, height: size, pointerEvents: 'none', zIndex: z }}>
       <motion.div
@@ -353,8 +407,10 @@ export function MuzzleFlash({ at: pt, angle, ink, atMs = 0, size = 36, z = 83 }:
 export function DrainStream({ from, to, color, at = 0, dur = 320, count = 7, seed, z = 82 }: {
   from: Pt; to: Pt; color: string; at?: number; dur?: number; count?: number; seed: number; z?: number;
 }) {
+  const calm = useFxCalm();
   const rng = seeded(seed);
   const { d, box } = curvePath(from, to, 0.22);
+  if (calm) return null;
   return (
     <div aria-hidden style={fixedBox(box, z)}>
       {Array.from({ length: count }, (_, i) => {
@@ -383,7 +439,9 @@ export function DrainStream({ from, to, color, at = 0, dur = 320, count = 7, see
 export function AoeWave({ from, radius, color, at = 0, dur = 420, z = 79, spokes }: {
   from: Pt; radius: number; color: string; at?: number; dur?: number; z?: number; spokes?: Pt[];
 }) {
+  const calm = useFxCalm();
   const size = radius * 2;
+  if (calm) return null;
   return (
     <>
       <div aria-hidden style={{ position: 'fixed', left: from.x - radius, top: from.y - radius, width: size, height: size, pointerEvents: 'none', zIndex: z }}>

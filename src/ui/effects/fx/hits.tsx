@@ -1,6 +1,7 @@
 /**
  * "Card got hit" — one animation family per damage type, and a unique intro
- * for every tagged effect:
+ * for every tagged effect. Every hit also prints its amount as a stencil
+ * numeral in the type ink (the tile itself recoils via FxImpulse).
  *
  *   bullet  gunfire — muzzle flash, a tracer volley, holes punched into the
  *           print one after another, sparks flying off the far side
@@ -20,9 +21,9 @@ import { motion } from 'framer-motion';
 import type { HitFx } from '@/engine/types';
 import { poster } from '../../poster';
 import { fonts } from '../../tokens';
-import { FX_INK, TAG_INFO, tagLead } from './fxCatalog';
+import { FX_INK, TAG_INFO, numeralInk, tagLead } from './fxCatalog';
 import { type Pt, type Rect, angleOf, center, edgePoint, scatterInRect, seeded } from './geometry';
-import { Bolt, EASE_OUT, Fixed, LightningArc, Motes, MuzzleFlash, Ring, Stamp, TracerVolley, Wash, sec } from './primitives';
+import { Bolt, EASE_OUT, Fixed, LightningArc, Motes, MuzzleFlash, Numeral, Ring, Stamp, TracerVolley, Wash, numeralSize, sec } from './primitives';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const stampSize = (rect: Rect) => clamp(Math.round(rect.width * 0.1), 11, 22);
@@ -40,7 +41,7 @@ export function onInk(hex: string): string {
 // The dispatcher — one hit event → its intro, its type family, its stickers.
 // ---------------------------------------------------------------------------
 
-export function HitImpact({ ev, rect, sourceRect, at, hold, ownerInk = FX_INK.gold }: {
+export function HitImpact({ ev, rect, sourceRect, at, hold, ownerInk = FX_INK.gold, index = 0 }: {
   ev: HitFx;
   rect: Rect;
   sourceRect?: Rect | null;
@@ -49,12 +50,16 @@ export function HitImpact({ ev, rect, sourceRect, at, hold, ownerInk = FX_INK.go
   hold: number;
   /** The source's owner ink (your gold / the rival's red) for tracers. */
   ownerInk?: string;
+  /** Which hit on this card within the batch — fans the numerals apart. */
+  index?: number;
 }) {
   const seed = ev.seq;
   const tag = ev.tag;
   const info = tag ? TAG_INFO[tag] : null;
   const lead = tagLead(tag);
   const from = sourceRect ? center(sourceRect) : undefined;
+  // Gunfire leaves from the source's edge facing the target, not its middle.
+  const muzzle = sourceRect ? edgePoint(sourceRect, center(rect)) : undefined;
   // Ricochet / Tesla draw their own travel; the plain volley would double it.
   const travelsItself = tag === 'ricochet' || tag === 'tesla';
   const fs = stampSize(rect);
@@ -75,7 +80,7 @@ export function HitImpact({ ev, rect, sourceRect, at, hold, ownerInk = FX_INK.go
 
       {/* Impact by type */}
       {ev.type === 'attack' && (
-        <GunBurst rect={rect} amount={ev.amount} at={at} hold={hold} seed={seed} from={from} ownerInk={ownerInk} volley={!!from && !travelsItself} />
+        <GunBurst rect={rect} amount={ev.amount} at={at} hold={hold} seed={seed} from={muzzle} ownerInk={ownerInk} volley={!!muzzle && !travelsItself} />
       )}
       {ev.type === 'spirit' && (
         <SpiritBurst rect={rect} at={at} hold={hold} seed={seed} accent={tag === 'djinns_mark' ? TAG_INFO.djinns_mark.ink : tag === 'life_drain' ? TAG_INFO.life_drain.ink : undefined} big={tag === 'djinns_mark' || tag === 'naptime'} />
@@ -87,7 +92,7 @@ export function HitImpact({ ev, rect, sourceRect, at, hold, ownerInk = FX_INK.go
       {info && STAMPED_TAGS.has(tag!) && (
         <Fixed rect={rect} z={87}>
           <Stamp
-            text={tag === 'djinns_mark' ? `${info.label} ×${ev.stacks ?? ''}`.trim() : tag === 'bleed' ? `${info.label} ${ev.amount}` : info.label}
+            text={tag === 'djinns_mark' ? `${info.label} ×${ev.stacks ?? ''}`.trim() : info.label}
             sticker={info.ink}
             ink={onInk(info.ink)}
             fontSize={fs}
@@ -96,6 +101,13 @@ export function HitImpact({ ev, rect, sourceRect, at, hold, ownerInk = FX_INK.go
             top={tag === 'execute' ? '42%' : '58%'}
             fill={tag === 'execute' ? FX_INK.gold : undefined}
           />
+        </Fixed>
+      )}
+
+      {/* The amount — stencil digits in the type ink, above the stickers. */}
+      {ev.amount > 0 && (
+        <Fixed rect={rect} z={89}>
+          <Numeral text={`−${ev.amount}`} ink={numeralInk(ev.type, ev.ko)} at={at + 30} dur={Math.min(hold, 1000)} size={numeralSize(rect)} top={ev.ko ? '24%' : '30%'} index={index} />
         </Fixed>
       )}
 

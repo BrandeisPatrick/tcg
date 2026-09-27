@@ -70,6 +70,21 @@ export function tagLead(tag?: FxTag): number {
   return tag ? TAG_INFO[tag].lead : 0;
 }
 
+/** Inks the amount prints in at an impact — a shade brighter than the wash
+ *  of the same type, so the digits read on a dark portrait. */
+export const NUMERAL_INK = {
+  attack: '#ef5a3e',
+  spirit: '#c98cf0',
+  pure: '#7fd6d0',
+  ko: poster.red,
+  heal: poster.green,
+} as const;
+
+export function numeralInk(type: DamageType, ko = false): string {
+  if (ko) return NUMERAL_INK.ko;
+  return type === 'spirit' ? NUMERAL_INK.spirit : type === 'pure' ? NUMERAL_INK.pure : NUMERAL_INK.attack;
+}
+
 /** The damage-type ink: bullet vermillion, spirit plum, pure teal, KO wine. */
 export function typeInk(type: DamageType, ko = false): string {
   return damageFxColor(type, ko);

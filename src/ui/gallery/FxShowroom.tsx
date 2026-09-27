@@ -1,7 +1,7 @@
 /**
  * The FX showroom — a six-card stage (a rival trio above, yours below) wired
- * to the real FxLayer, HeroSlot and impact-delay context, with a button for
- * every animation the match can draw. Each button synthesises the exact
+ * to the real FxLayer, HeroSlot, impact-delay context and recoil bus, with a
+ * button for every animation the match can draw. Each button synthesises the exact
  * event batch the engine would push and fires it through the same timeline
  * scheduler the board uses, so what plays here is what plays in a match.
  * The mock HP follows the hits so the stat hold can be seen too.
@@ -11,6 +11,8 @@ import type { CardInstance, DamageType, FxCastKind, FxEvent, FxSource, FxTag, Pl
 import { CARDS_BY_ID } from '@/cards';
 import { HeroSlot } from '../board/HeroSlot';
 import { FxLayer } from '../effects/fx/FxLayer';
+import { FxImpulseBus, FxImpulseContext } from '../effects/fx/FxImpulse';
+import { FxCalmContext } from '../effects/fx/FxMotionContext';
 import { FxTimingContext } from '../effects/fx/FxTimingContext';
 import { buildFxTimeline } from '../effects/fx/fxTimeline';
 import { poster, chamfer, clipBoth } from '../poster';
@@ -82,6 +84,7 @@ const GROUPS: Group[] = [
       { label: 'Gunfire ×2 (from Kelvin)', events: [hit('r0', 2, 'attack', { source: 'y0', cast: 'proc' })] },
       { label: 'Gunfire ×5', events: [hit('r0', 5, 'attack', { source: 'y0', cast: 'proc' })] },
       { label: 'Spirit hit ×2', events: [hit('r0', 2, 'spirit', { source: 'y0' })] },
+      { label: 'Two spirit hits on Abrams (2 + 3)', events: [hit('r0', 2, 'spirit', { source: 'y0' }), hit('r0', 3, 'spirit', { source: 'y0' })] },
       { label: 'Pure hit ×2', events: [hit('r0', 2, 'pure')] },
       { label: 'KO · spirit', events: [hit('r0', 99, 'spirit', { source: 'y0' })] },
       { label: 'KO · gunfire', events: [hit('r0', 99, 'attack', { source: 'y0', cast: 'proc' })] },
@@ -158,6 +161,8 @@ export function FxShowroom() {
   const [dead, setDead] = useState<Set<Id>>(() => new Set());
   const [batch, setBatch] = useState<FxEvent[]>([]);
   const [batchKey, setBatchKey] = useState(0);
+  const [calm, setCalm] = useState(false);
+  const bus = useMemo(() => new FxImpulseBus(), []);
   const seq = useRef(1000);
   const slotRefs = useRef(new Map<string, HTMLElement>());
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
@@ -250,6 +255,8 @@ export function FxShowroom() {
 
   return (
     <FxTimingContext.Provider value={fxHoldFor}>
+    <FxImpulseContext.Provider value={bus}>
+    <FxCalmContext.Provider value={calm}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         {/* The stage — two rows of the live HeroSlot, on a band of deeper paper. */}
         <div style={{
@@ -267,8 +274,9 @@ export function FxShowroom() {
         <Row>
           <Button onClick={reset}>Reset stage</Button>
           <Button onClick={koHaze}>KO Haze (gunfire)</Button>
+          <Button onClick={() => setCalm((c) => !c)}>{calm ? 'Calm motion: on' : 'Calm motion: off'}</Button>
           <span style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>
-            Mock HP follows the hits — watch the number hold until the bolt lands, and a kill turn into the corpse after the shatter.
+            Mock HP follows the hits — watch the number hold until the bolt lands, the tile recoil along the shot, and a kill turn into the corpse after the shatter. Calm motion is what reduced-motion players see.
           </span>
         </Row>
         <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
@@ -288,6 +296,8 @@ export function FxShowroom() {
           </div>
         ))}
       </div>
+    </FxCalmContext.Provider>
+    </FxImpulseContext.Provider>
     </FxTimingContext.Provider>
   );
 }

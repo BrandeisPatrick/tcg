@@ -29,7 +29,10 @@ single-page React app.
   shatter, and a unique lead-in per signature effect (Djinn's Mark detonating,
   Mystic Reverb echoing, Naptime waking, Killing Blow slashing, Ricochet,
   Tesla, channelled ultimates), plus stamps for statuses, shields, immunity,
-  revives and level-ups. See [`docs/fx-model.md`](./docs/fx-model.md).
+  revives and level-ups. Every hit prints its amount in stencil digits and
+  the tile recoils along the shot; a calm mode (reduced motion) keeps the
+  beats and the numbers but nothing flies. See
+  [`docs/fx-model.md`](./docs/fx-model.md).
 - **One-skill-per-turn** rule (Improved Cooldown equipment bypasses).
 - **41 bitmap card-art assets** pulled from the community asset bucket; SVG
   fallback glyphs for cards that don't have canon art yet.
@@ -65,7 +68,9 @@ workflow + gotchas (canon item renames, active/passive validation, etc.).
 app's virtual clock (`?vtclock=1`) so any frame of an animation can be
 captured: `fx-gallery.mjs` fires every effect on the Gallery's showroom
 (`?preview=1&tab=combat`), `fx-match.mjs` plays a real match (draft, a skill,
-the rival's turn, combat), and both write contact sheets to look at.
+the rival's turn, combat), and both write contact sheets to look at. Any
+showroom button can be named as a "demo", so listing `Calm motion: off`
+first films the demos after it under reduced motion.
 
 ## Architecture
 

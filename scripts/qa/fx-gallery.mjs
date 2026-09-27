@@ -6,6 +6,9 @@
  *   npm run dev            # in another terminal
  *   node scripts/qa/fx-gallery.mjs OUT_DIR [PORT] ["Demo label|Other label"]
  *   SHEETS_ONLY=1 node scripts/qa/fx-gallery.mjs OUT_DIR   # rebuild sheets from frames
+ *
+ * Any showroom button counts as a "demo": list "Calm motion: off" first to
+ * film the demos after it under reduced motion.
  */
 import { launch, byText } from './cdp.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -20,7 +23,7 @@ mkdirSync(OUT, { recursive: true });
 
 const DEFAULT_DEMOS = [
   'Kelvin · Frost Grenade → Abrams', 'Lady Geist · Life Drain → Abrams', 'Spell · Cold Front → Abrams', 'Ult · Seismic Impact — spirit AoE + Stun',
-  'Ult · Bullet Dance — gunfire AoE', 'Gunfire ×5', 'Spirit hit ×2', 'Pure hit ×2',
+  'Ult · Bullet Dance — gunfire AoE', 'Gunfire ×5', 'Two spirit hits on Abrams (2 + 3)', 'Pure hit ×2',
   'KO · gunfire', "Djinn's Mark ×4 detonates (Mirage → Abrams)", 'Bleed tick ×3 (Abrams) + ×2 (Haze)', 'Mystic Reverb echo (Abrams)',
   'Naptime — wakes (Abrams)', 'Charged → Discharge · Stun (Kelvin)', 'Killing Blow — execute (Abrams)', 'Ricochet → bench (Haze, Seven)',
   'Tesla chain → Haze', 'Storm Cloud pulse (Seven → all)', 'Heal 3 (Kelvin)', 'Shield absorbs 2, 1 spills',
