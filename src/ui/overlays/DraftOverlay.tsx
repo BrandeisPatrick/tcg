@@ -147,8 +147,10 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
     >
       <LobbyBackdrop focused={focused} />
 
-      {/* Header row — pick counter left, status capsule docked beside the
-          system gear on the right. */}
+      {/* Header row — pick counter left, the LOCK plate docked beside the
+          system gear on the right. It lives up here, next to the roster it
+          confirms: at the foot of a tall screen it was a long reach from
+          the tiles. Its lamp says whose pick it is. */}
       <div
         style={{
           position: 'relative',
@@ -177,10 +179,10 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
             {complete ? 'Complete' : `${draft.currentIndex + 1}/${draft.order.length}`}
           </span>
         </div>
-        <StatusCapsule
-          tone={myTurn ? 'green' : aiTurn ? 'red' : 'dim'}
-          pulse={aiTurn}
-          label={myTurn ? 'Your pick' : aiTurn ? (isMobile ? 'Rival…' : 'Rival picking…') : 'Complete'}
+        <LockButton
+          enabled={myTurn && !!focused && !autoName}
+          state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
+          onClick={lock}
           compact={isMobile}
         />
       </div>
@@ -232,26 +234,6 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           myTurn={myTurn}
           aiTurn={aiTurn}
           autoName={autoName}
-          compact={isMobile}
-        />
-      </div>
-
-      {/* Foot — the LOCK plate, centred and alone. */}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          marginTop: 'auto',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingTop: 4,
-        }}
-      >
-        <LockButton
-          enabled={myTurn && !!focused && !autoName}
-          state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
-          onClick={lock}
           compact={isMobile}
         />
       </div>
@@ -343,32 +325,6 @@ function LobbyBackdrop({ focused }: { focused: string | null }) {
 // =============================================================================
 // HEADER PIECES
 // =============================================================================
-
-function StatusCapsule({ tone, pulse, label, compact }: { tone: 'green' | 'red' | 'dim'; pulse: boolean; label: string; compact: boolean }) {
-  const color = tone === 'green' ? lobby.green : tone === 'red' ? lobby.red : lobby.dim;
-  return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: compact ? 7 : 9,
-        padding: compact ? '6px 10px' : '7px 14px',
-        background: lobby.panel,
-        flexShrink: 0,
-        border: `1px solid ${lobby.edge}`,
-        ...clipBoth(chamfer(6)),
-      }}
-    >
-      <motion.span
-        aria-hidden
-        animate={pulse ? { opacity: [0.35, 1, 0.35] } : { opacity: 1 }}
-        transition={pulse ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } : undefined}
-        style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}` }}
-      />
-      <span style={{ ...text.label, fontSize: compact ? 10 : 11, letterSpacing: compact ? '0.14em' : '0.2em', color: lobby.cream, whiteSpace: 'nowrap' }}>{label}</span>
-    </div>
-  );
-}
 
 // =============================================================================
 // RIVAL STRIP
@@ -910,6 +866,9 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
 // LOCK
 // =============================================================================
 
+/** The LOCK plate, with the lobby's status lamp in it: green when the pick
+ *  is yours, pulsing red while the rival chooses, dim once the draft is done.
+ *  Compact (phone) drops the brackets and tightens the type. */
 function LockButton({ enabled, state, onClick, compact }: {
   enabled: boolean;
   state: 'ready' | 'waiting' | 'done';
@@ -917,34 +876,46 @@ function LockButton({ enabled, state, onClick, compact }: {
   compact: boolean;
 }) {
   const label = state === 'done' ? 'Locked in' : state === 'waiting' ? 'Waiting…' : 'Lock';
+  const lamp = state === 'ready' ? lobby.green : state === 'waiting' ? lobby.red : lobby.dim;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      <Bracket side="left" dim={!enabled} />
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0 }}>
+      {!compact && <Bracket side="left" dim={!enabled} />}
       <motion.button
         type="button"
         disabled={!enabled}
         onClick={onClick}
+        aria-label={label}
         whileHover={enabled ? { scale: 1.04, y: -1 } : undefined}
         whileTap={enabled ? { scale: 0.97 } : undefined}
         transition={spring.snappy}
         style={{
-          minWidth: compact ? 200 : 180,
-          padding: compact ? '13px 28px' : '13px 34px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: compact ? 8 : 12,
+          minWidth: compact ? 0 : 180,
+          padding: compact ? '10px 16px' : '13px 30px',
           border: `2px solid ${enabled ? lobby.cream : lobby.edge}`,
           background: enabled ? lobby.cream : 'transparent',
           color: enabled ? '#171410' : lobby.dim,
           ...clipBoth(chamfer(9)),
           fontFamily: fonts.display,
-          fontSize: 20,
+          fontSize: compact ? 15 : 20,
           letterSpacing: '0.24em',
           textTransform: 'uppercase',
           lineHeight: 1,
+          whiteSpace: 'nowrap',
           cursor: enabled ? 'pointer' : 'default',
         }}
       >
+        <motion.span
+          aria-hidden
+          animate={state === 'waiting' ? { opacity: [0.35, 1, 0.35] } : { opacity: 1 }}
+          transition={state === 'waiting' ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } : undefined}
+          style={{ width: 9, height: 9, borderRadius: '50%', background: lamp, boxShadow: `0 0 8px ${lamp}`, flexShrink: 0 }}
+        />
         {label}
       </motion.button>
-      <Bracket side="right" dim={!enabled} />
+      {!compact && <Bracket side="right" dim={!enabled} />}
     </div>
   );
 }

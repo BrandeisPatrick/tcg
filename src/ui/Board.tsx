@@ -55,6 +55,8 @@ import { useMatchNav } from './hooks/matchNav';
 
 // Animation / pacing constants.
 const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
+/** What a click must land on to NOT cancel an armed card or skill. */
+const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="tab"]';
 
 export function Board(props: BoardProps<GameState>) {
   const { G, ctx, moves } = props;
@@ -285,6 +287,22 @@ export function Board(props: BoardProps<GameState>) {
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, [pending, heroDetail]);
+
+  // Tap-away: while a card or skill is armed, a click on anything that is
+  // not a control — the sheet, the room, the log — backs out of targeting,
+  // the way Escape does. Controls (hero tiles, hand cards, buttons) handle
+  // their own clicks and may re-arm; this listener sits on window, after
+  // React's handlers have run, and only acts on non-interactive targets.
+  useEffect(() => {
+    if (!pending) return;
+    const onClick = (e: MouseEvent) => {
+      const el = e.target instanceof Element ? e.target : null;
+      if (el?.closest(TAP_AWAY_CONTROLS)) return;
+      setPending(null);
+    };
+    window.addEventListener('click', onClick);
+    return () => window.removeEventListener('click', onClick);
+  }, [pending]);
 
   // Safety net: if the previewed card (hand or attached equipment) is no longer present, drop the preview.
   useEffect(() => {
