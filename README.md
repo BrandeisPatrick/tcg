@@ -70,7 +70,8 @@ captured: `fx-gallery.mjs` fires every effect on the Gallery's showroom
 (`?preview=1&tab=combat`), `fx-match.mjs` plays a real match (draft, a skill,
 the rival's turn, combat), and both write contact sheets to look at. Any
 showroom button can be named as a "demo", so listing `Calm motion: off`
-first films the demos after it under reduced motion.
+first films the demos after it under reduced motion. Set `DEV_URL` when the
+dev server is not on `http://localhost:5173`.
 
 ## Architecture
 

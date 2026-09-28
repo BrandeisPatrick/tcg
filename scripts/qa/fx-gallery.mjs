@@ -14,6 +14,8 @@ import { launch, byText } from './cdp.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+// The dev server's origin — the desktop app may assign a port other than 5173.
+const DEV_URL = (process.env.DEV_URL ?? 'http://localhost:5173').replace(/\/$/, '');
 const OUT = resolve(process.argv[2] ?? './fx-shots');
 const SHEETS_ONLY = process.env.SHEETS_ONLY === '1';
 const PORT = Number(process.argv[3] ?? 9333);
@@ -35,7 +37,7 @@ const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g
 const b = await launch({ port: PORT, width: 1440, height: 900 });
 try {
   if (!SHEETS_ONLY) {
-  await b.navigate(`http://localhost:5173/?preview=1&tab=combat&vtclock=1`);
+  await b.navigate(`${DEV_URL}/?preview=1&tab=combat&vtclock=1`);
   await b.waitFor(byText('Kelvin · Frost Grenade → Abrams'));
   }
   // Stage clip: union of the six hero slots plus a margin for spill-over.

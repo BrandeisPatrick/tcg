@@ -10,6 +10,8 @@ import { launch, byText, byAria, byAriaStart } from './cdp.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+// The dev server's origin — the desktop app may assign a port other than 5173.
+const DEV_URL = (process.env.DEV_URL ?? 'http://localhost:5173').replace(/\/$/, '');
 const OUT = resolve(process.argv[2] ?? './match-shots');
 const PORT = Number(process.argv[3] ?? 9335);
 const MODE = process.argv[4] ?? 'desktop';
@@ -23,7 +25,7 @@ const shots = [];
 const shoot = async (name) => { const f = join(OUT, `${String(shots.length).padStart(3, '0')}-${name}.png`); await b.shot(f); shots.push({ name, f }); return f; };
 
 try {
-  await b.navigate(`http://localhost:5173/?screen=match&vtclock=1`);
+  await b.navigate(`${DEV_URL}/?screen=match&vtclock=1`);
   await b.waitFor(`document.querySelector('[aria-label^="Select "]')`, { timeout: 20000 });
   // ---- Draft: pick preferred heroes whenever the Lock button is live; tick for the AI in between.
   for (let i = 0; i < 60; i++) {
