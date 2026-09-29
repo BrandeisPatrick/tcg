@@ -939,6 +939,9 @@ export function Board(props: BoardProps<GameState>) {
             const mySouls = G.players[me].souls;
             const isMyBench = isMine && heroDetail.zone === 'bench';
             const canRetreat = isMyTurn && isMyBench && mySouls >= RETREAT_COST && !!G.players[me].active;
+            // Retreat sends the Active to the bench; the sheet names it.
+            const myActive = G.players[me].active;
+            const retreatingName = myActive ? CARDS_BY_ID[myActive.cardId]?.name : undefined;
 
             // Skill availability — mirrors `tryUseSkill` so the button only
             // shows when the engine would actually accept the move.
@@ -973,6 +976,7 @@ export function Board(props: BoardProps<GameState>) {
                 onUseSkill={() => tryUseSkill(heroDetail)}
                 canRetreat={canRetreat}
                 retreatCost={RETREAT_COST}
+                retreatingName={retreatingName}
                 onRetreat={() => {
                   if (heroDetail.slot && heroDetail.slot >= 1 && heroDetail.slot <= 3) {
                     (moves as any).moveHero(heroDetail.slot, 0);

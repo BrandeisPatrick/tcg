@@ -31,15 +31,19 @@ interface Props {
   /** Short reason why the skill can't be used, shown inside the skill card. */
   skillBlockedReason?: string;
   onUseSkill?: () => void;
+  /** The sheet's hero is on the bench and may swap with the Active: the
+   *  Active retreats to the bench and this hero takes its place. */
   canRetreat?: boolean;
   retreatCost?: number;
+  /** Name of the Active who would go to the bench — printed on the button. */
+  retreatingName?: string;
   onRetreat?: () => void;
   onClose: () => void;
 }
 
 export function HeroDetailSheet({
   card, isMine, canUseSkill, skillBlockedReason, onUseSkill,
-  canRetreat, retreatCost = 2, onRetreat, onClose,
+  canRetreat, retreatCost = 2, retreatingName, onRetreat, onClose,
 }: Props) {
   const { isMobile } = useViewport();
 
@@ -205,11 +209,16 @@ export function HeroDetailSheet({
       {/* Action controls — below the card, outside the frame. The Skill itself
           is tapped inside the card; Retreat + Close live here. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: cardW }}>
+        {/* Retreat sends the ACTIVE to the bench; this sheet's hero (on the
+            bench) takes its place. The headline names the move, the line
+            under it says who goes where. */}
         {canRetreat && onRetreat && (
           <ActionButton
             onClick={() => { onRetreat(); onClose(); }}
             icon="↻"
-            label="Retreat to Active"
+            label="Retreat to bench"
+            caption={`${retreatingName ?? 'Your Active'} to bench · ${data.name} to Active`}
+            ariaLabel={`Retreat ${retreatingName ?? 'your Active'} to the bench and send ${data.name} in — costs ${retreatCost} souls`}
             badge={`−${retreatCost}`}
           />
         )}
@@ -488,25 +497,40 @@ function SkillActionCard({
 }
 
 /** Secondary action (Retreat): the poster's paper button, full width, with
- *  the soul cost on a red sticker. The click stops here so the backdrop's
- *  dismiss never sees it. */
+ *  the soul cost on a red sticker and an optional plain-type line under the
+ *  headline saying what the move does. The click stops here so the
+ *  backdrop's dismiss never sees it. */
 function ActionButton({
-  onClick, icon, label, badge,
+  onClick, icon, label, caption, badge, ariaLabel,
 }: {
   onClick: () => void;
   icon: string;
   label: string;
+  caption?: string;
   badge?: string;
+  ariaLabel?: string;
 }) {
   return (
     <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10, width: '100%' }}>
       <PosterButton
         variant="paper"
         onClick={onClick}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+        ariaLabel={ariaLabel}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+          ...(caption ? { padding: '11px 16px 12px' } : {}),
+        }}
       >
         <span aria-hidden>{icon}</span>
-        <span>{label}</span>
+        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 5, minWidth: 0, textAlign: 'left' }}>
+          <span style={caption ? { fontSize: 15, letterSpacing: '0.14em' } : undefined}>{label}</span>
+          {caption && (
+            <span style={{
+              fontFamily: fonts.ui, fontSize: 12, fontWeight: 500, letterSpacing: 'normal',
+              textTransform: 'none', lineHeight: 1.25, color: poster.inkDim,
+            }}>{caption}</span>
+          )}
+        </span>
         {badge && (
           <span style={{
             padding: '3px 8px 4px', borderRadius: 3,
