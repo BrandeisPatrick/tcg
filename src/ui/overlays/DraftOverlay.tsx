@@ -15,7 +15,7 @@
 // Snake order is driven by the engine; this overlay only dispatches
 // draftPick when it's the local player's turn.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { DraftState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, HEROES } from '@/cards';
@@ -57,10 +57,6 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   // stacks tighter and the page may scroll.
   const { width } = useViewport();
   const isMobile = width < 860;
-  // Room for the LOCK plate beside the roster tiles (an equal margin is
-  // reserved on both sides so the roster stays centred); narrower windows
-  // dock it in the header instead.
-  const lockBeside = width >= 1100;
   const myTurn = currentPlayer === me && draft.order[draft.currentIndex] === me;
   const aiTurn = !myTurn && draft.currentIndex < draft.order.length;
   const complete = draft.currentIndex >= draft.order.length;
@@ -151,11 +147,10 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
     >
       <LobbyBackdrop focused={focused} />
 
-      {/* Header row — the pick counter, and on a narrow window the LOCK
-          plate centred beside it (a full-width roster leaves no room next
-          to the tiles). Equal outer columns keep the plate on the centre
-          line; the empty right column leaves the system gear's corner
-          alone. */}
+      {/* Header row — the pick counter, and on a phone the LOCK plate
+          centred beside it (the pick strips are too tight there to hold
+          it). Equal outer columns keep the plate on the centre line; the
+          empty right column leaves the system gear's corner alone. */}
       <div
         style={{
           position: 'relative',
@@ -184,41 +179,48 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
             {complete ? 'Complete' : `${draft.currentIndex + 1}/${draft.order.length}`}
           </span>
         </div>
-        {!lockBeside ? (
+        {isMobile ? (
           <LockButton
             enabled={myTurn && !!focused && !autoName}
             state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
             onClick={lock}
-            compact={isMobile}
+            compact
           />
         ) : <span aria-hidden />}
         <span aria-hidden />
       </div>
 
-      <PickStrips mine={myPicks} rival={oppPicks} myTurn={myTurn} aiTurn={aiTurn} compact={isMobile} />
+      {/* The pick strips, with the LOCK plate in the middle of the line
+          where the two banners meet — level with the crews' cards, on the
+          centre line, a short reach from the roster below. Its lamp says
+          whose pick it is. (The foot of a tall screen was a long reach.) */}
+      <PickStrips
+        mine={myPicks}
+        rival={oppPicks}
+        myTurn={myTurn}
+        aiTurn={aiTurn}
+        compact={isMobile}
+        centre={!isMobile ? (
+          <LockButton
+            enabled={myTurn && !!focused && !autoName}
+            state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
+            onClick={lock}
+            compact={false}
+          />
+        ) : undefined}
+      />
 
-      {/* Roster line — the tiles centred, and on a wide window the LOCK
-          plate off their right edge, level with the rows: pick a tile, move
-          right, lock (the foot of a tall screen was a long reach). Both
-          side columns reserve the plate's width so the roster stays on the
-          centre line whichever side holds something; your preferred
-          cluster sits in the left one. */}
+      {/* Roster + preferred cluster */}
       <div
         style={{
           position: 'relative',
           zIndex: 1,
-          display: lockBeside ? 'grid' : 'flex',
-          gridTemplateColumns: lockBeside ? `minmax(${LOCK_LINE_W}px, 1fr) minmax(0, 880px) minmax(${LOCK_LINE_W}px, 1fr)` : undefined,
-          alignItems: lockBeside ? 'center' : 'flex-start',
-          justifyContent: 'center',
+          display: 'flex',
           gap: isMobile ? 10 : 22,
+          alignItems: 'flex-start',
+          justifyContent: 'center',
         }}
       >
-        {lockBeside && (
-          <div style={{ justifySelf: 'end' }}>
-            {preferred.length > 0 && <PreferredCluster ids={preferred} pool={pool} />}
-          </div>
-        )}
         <RosterGrid
           roster={roster}
           pool={pool}
@@ -229,16 +231,9 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           onFocus={setFocused}
           onLock={(id) => { setFocused(id); if (myTurn && pool.includes(id)) onPick(id); }}
         />
-        {lockBeside ? (
-          <div style={{ justifySelf: 'start' }}>
-            <LockButton
-              enabled={myTurn && !!focused && !autoName}
-              state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
-              onClick={lock}
-              compact={false}
-            />
-          </div>
-        ) : (!isMobile && preferred.length > 0 && <PreferredCluster ids={preferred} pool={pool} />)}
+        {!isMobile && preferred.length > 0 && (
+          <PreferredCluster ids={preferred} pool={pool} />
+        )}
       </div>
 
       <Dossier heroId={focused} compact={isMobile} />
@@ -359,14 +354,17 @@ function LobbyBackdrop({ focused }: { focused: string | null }) {
 /**
  * Both crews' picks along the top: yours in the left corner, the rival's in
  * the right, each running toward the centre. Corner and colour together say
- * whose row it is before you read a word.
+ * whose row it is before you read a word. `centre` sits where the two
+ * banners meet — the LOCK plate on desktop; both sides flex equally, so it
+ * lands on the centre line.
  */
-function PickStrips({ mine, rival, myTurn, aiTurn, compact }: {
+function PickStrips({ mine, rival, myTurn, aiTurn, compact, centre }: {
   mine: string[];
   rival: string[];
   myTurn: boolean;
   aiTurn: boolean;
   compact: boolean;
+  centre?: ReactNode;
 }) {
   return (
     <div
@@ -379,6 +377,7 @@ function PickStrips({ mine, rival, myTurn, aiTurn, compact }: {
       }}
     >
       <PickSide picks={mine} side="left" tone="gold" live={myTurn} compact={compact} />
+      {centre}
       <PickSide picks={rival} side="right" tone="red" live={aiTurn} compact={compact} />
     </div>
   );
@@ -892,10 +891,9 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
 // LOCK
 // =============================================================================
 
-/** Width of the LOCK plate with its brackets — the roster line reserves
- *  this on both sides of the tiles. */
+/** The LOCK plate's width — fixed, so the pick strips stay balanced as its
+ *  label changes between turns. */
 const LOCK_PLATE_W = 168;
-const LOCK_LINE_W = LOCK_PLATE_W + 2 * (12 + 8);
 
 /** The LOCK plate, with the lobby's status lamp in it: green when the pick
  *  is yours, pulsing red while the rival chooses, dim once the draft is done.
