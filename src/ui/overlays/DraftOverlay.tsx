@@ -57,6 +57,10 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   // stacks tighter and the page may scroll.
   const { width } = useViewport();
   const isMobile = width < 860;
+  // Room for the LOCK plate beside the roster tiles (an equal margin is
+  // reserved on both sides so the roster stays centred); narrower windows
+  // dock it in the header instead.
+  const lockBeside = width >= 1100;
   const myTurn = currentPlayer === me && draft.order[draft.currentIndex] === me;
   const aiTurn = !myTurn && draft.currentIndex < draft.order.length;
   const complete = draft.currentIndex >= draft.order.length;
@@ -147,12 +151,11 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
     >
       <LobbyBackdrop focused={focused} />
 
-      {/* Header row — pick counter left, the LOCK plate centred over the
-          roster it confirms (at the foot of a tall screen it was a long
-          reach from the tiles). Equal outer columns keep the plate on the
-          sheet's centre line, level with the counter; the empty right
-          column leaves the system gear's corner alone. Its lamp says whose
-          pick it is. */}
+      {/* Header row — the pick counter, and on a narrow window the LOCK
+          plate centred beside it (a full-width roster leaves no room next
+          to the tiles). Equal outer columns keep the plate on the centre
+          line; the empty right column leaves the system gear's corner
+          alone. */}
       <div
         style={{
           position: 'relative',
@@ -161,6 +164,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           gridTemplateColumns: '1fr auto 1fr',
           alignItems: 'center',
           gap: 12,
+          minHeight: isMobile ? undefined : 34,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: isMobile ? 10 : 18 }}>
@@ -180,28 +184,41 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
             {complete ? 'Complete' : `${draft.currentIndex + 1}/${draft.order.length}`}
           </span>
         </div>
-        <LockButton
-          enabled={myTurn && !!focused && !autoName}
-          state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
-          onClick={lock}
-          compact={isMobile}
-        />
+        {!lockBeside ? (
+          <LockButton
+            enabled={myTurn && !!focused && !autoName}
+            state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
+            onClick={lock}
+            compact={isMobile}
+          />
+        ) : <span aria-hidden />}
         <span aria-hidden />
       </div>
 
       <PickStrips mine={myPicks} rival={oppPicks} myTurn={myTurn} aiTurn={aiTurn} compact={isMobile} />
 
-      {/* Roster + preferred cluster */}
+      {/* Roster line — the tiles centred, and on a wide window the LOCK
+          plate off their right edge, level with the rows: pick a tile, move
+          right, lock (the foot of a tall screen was a long reach). Both
+          side columns reserve the plate's width so the roster stays on the
+          centre line whichever side holds something; your preferred
+          cluster sits in the left one. */}
       <div
         style={{
           position: 'relative',
           zIndex: 1,
-          display: 'flex',
-          gap: isMobile ? 10 : 22,
-          alignItems: 'flex-start',
+          display: lockBeside ? 'grid' : 'flex',
+          gridTemplateColumns: lockBeside ? `minmax(${LOCK_LINE_W}px, 1fr) minmax(0, 880px) minmax(${LOCK_LINE_W}px, 1fr)` : undefined,
+          alignItems: lockBeside ? 'center' : 'flex-start',
           justifyContent: 'center',
+          gap: isMobile ? 10 : 22,
         }}
       >
+        {lockBeside && (
+          <div style={{ justifySelf: 'end' }}>
+            {preferred.length > 0 && <PreferredCluster ids={preferred} pool={pool} />}
+          </div>
+        )}
         <RosterGrid
           roster={roster}
           pool={pool}
@@ -212,9 +229,16 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           onFocus={setFocused}
           onLock={(id) => { setFocused(id); if (myTurn && pool.includes(id)) onPick(id); }}
         />
-        {!isMobile && preferred.length > 0 && (
-          <PreferredCluster ids={preferred} pool={pool} />
-        )}
+        {lockBeside ? (
+          <div style={{ justifySelf: 'start' }}>
+            <LockButton
+              enabled={myTurn && !!focused && !autoName}
+              state={complete ? 'done' : myTurn ? 'ready' : 'waiting'}
+              onClick={lock}
+              compact={false}
+            />
+          </div>
+        ) : (!isMobile && preferred.length > 0 && <PreferredCluster ids={preferred} pool={pool} />)}
       </div>
 
       <Dossier heroId={focused} compact={isMobile} />
@@ -868,8 +892,14 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
 // LOCK
 // =============================================================================
 
+/** Width of the LOCK plate with its brackets — the roster line reserves
+ *  this on both sides of the tiles. */
+const LOCK_PLATE_W = 168;
+const LOCK_LINE_W = LOCK_PLATE_W + 2 * (12 + 8);
+
 /** The LOCK plate, with the lobby's status lamp in it: green when the pick
  *  is yours, pulsing red while the rival chooses, dim once the draft is done.
+ *  A fixed width, so the line it sits on never shifts as the label changes.
  *  Compact (phone) drops the brackets and tightens the type. */
 function LockButton({ enabled, state, onClick, compact }: {
   enabled: boolean;
@@ -877,25 +907,26 @@ function LockButton({ enabled, state, onClick, compact }: {
   onClick: () => void;
   compact: boolean;
 }) {
-  const label = state === 'done' ? 'Locked in' : state === 'waiting' ? 'Waiting…' : 'Lock';
+  const label = state === 'done' ? 'Locked' : state === 'waiting' ? 'Rival…' : 'Lock';
   const lamp = state === 'ready' ? lobby.green : state === 'waiting' ? lobby.red : lobby.dim;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: compact ? 12 : 8, flexShrink: 0 }}>
       {!compact && <Bracket side="left" dim={!enabled} />}
       <motion.button
         type="button"
         disabled={!enabled}
         onClick={onClick}
-        aria-label={label}
+        aria-label={state === 'waiting' ? 'Rival picking' : label}
         whileHover={enabled ? { scale: 1.04, y: -1 } : undefined}
         whileTap={enabled ? { scale: 0.97 } : undefined}
         transition={spring.snappy}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
+          justifyContent: 'center',
           gap: compact ? 8 : 12,
-          minWidth: compact ? 0 : 180,
-          padding: compact ? '10px 16px' : '13px 30px',
+          width: compact ? undefined : LOCK_PLATE_W,
+          padding: compact ? '10px 16px' : '13px 12px',
           border: `2px solid ${enabled ? lobby.cream : lobby.edge}`,
           background: enabled ? lobby.cream : 'transparent',
           color: enabled ? '#171410' : lobby.dim,
