@@ -147,19 +147,20 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
     >
       <LobbyBackdrop focused={focused} />
 
-      {/* Header row — pick counter left, the LOCK plate docked beside the
-          system gear on the right. It lives up here, next to the roster it
-          confirms: at the foot of a tall screen it was a long reach from
-          the tiles. Its lamp says whose pick it is. */}
+      {/* Header row — pick counter left, the LOCK plate centred over the
+          roster it confirms (at the foot of a tall screen it was a long
+          reach from the tiles). Equal outer columns keep the plate on the
+          sheet's centre line, level with the counter; the empty right
+          column leaves the system gear's corner alone. Its lamp says whose
+          pick it is. */}
       <div
         style={{
           position: 'relative',
           zIndex: 1,
-          display: 'flex',
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
           alignItems: 'center',
-          justifyContent: 'space-between',
           gap: 12,
-          paddingRight: isMobile ? 52 : 60,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: isMobile ? 10 : 18 }}>
@@ -185,6 +186,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           onClick={lock}
           compact={isMobile}
         />
+        <span aria-hidden />
       </div>
 
       <PickStrips mine={myPicks} rival={oppPicks} myTurn={myTurn} aiTurn={aiTurn} compact={isMobile} />
