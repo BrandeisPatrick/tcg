@@ -6,11 +6,19 @@ import { poster } from '../poster';
 const BUFFS: Set<StatusId> = new Set(['weapon_power','spirit_power','bullet_resist','spirit_resist','shield','unstoppable','healing_boost','extra_attack','casting','casting_light']);
 const DEBUFFS: Set<StatusId> = new Set(['stun','silenced','disarm','bleed','weapon_power_down','spirit_power_down','bullet_resist_down','spirit_resist_down','charged','healing_boost_down','djinns_mark']);
 
+export type StatusClass = 'buff' | 'debuff' | 'utility';
+
+/** Which of the three chip colours a status wears. Exported so a list of
+ *  statuses can be grouped by the colour it is actually drawn in. */
+export function statusClass(id: StatusId): StatusClass {
+  if (BUFFS.has(id)) return 'buff';
+  if (DEBUFFS.has(id)) return 'debuff';
+  return 'utility';
+}
+
 // Class colours carry meaning: green buff / red debuff / ink utility.
 function colorFor(id: StatusId): string {
-  if (BUFFS.has(id)) return poster.status.buff;
-  if (DEBUFFS.has(id)) return poster.status.debuff;
-  return poster.status.utility;
+  return poster.status[statusClass(id)];
 }
 
 const STATUS_LABELS: Record<string, string> = {

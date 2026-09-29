@@ -1,0 +1,531 @@
+/* =============================================================================
+   The Gallery sheet — layout and interactive states.
+
+   Imported by PreviewGallery.tsx, so it ships inside the Gallery's lazy chunk:
+   a player who never opens the Gallery never downloads it.
+
+   The rest of the app styles inline and branches on useViewport(). The Gallery
+   is the exception because it needs what inline styles cannot do: :hover and
+   :focus-visible on sixty demo triggers, position: sticky chrome, and summary
+   markers. Colours and faces still come from poster.ts / tokens.ts —
+   PreviewGallery sets them as custom properties on the .gal root, so the
+   palette keeps one source of truth.
+
+   Two rules the whole file obeys:
+   1. No transform, filter or contain on anything that wraps a demo. The demos
+      fire position: fixed overlays, and any of those would trap them.
+   2. Focus is drawn INSIDE the control (inset shadow), because a chamfered
+      clip-path would cut an outline off.
+   ========================================================================== */
+
+.gal {
+  --g-cut: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+  --g-paper-fill: var(--g-paper) var(--g-mottle) 0 0 / 320px 320px;
+  /* body { overflow-x: hidden } would do, but hidden makes this box a scroll
+     container and sticky chrome would stick to it instead of the viewport. */
+  overflow-x: clip;
+}
+
+/* clip, not hidden, for the same reason: the masthead below is sticky. */
+.gal-sheet { overflow: clip; }
+
+/* ---- Masthead ----------------------------------------------------------- */
+
+.gal-head {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--g-stick);
+  margin: 0 calc(-1 * var(--g-pad));
+  padding: 0 var(--g-pad);
+  background: var(--g-paper-fill);
+  border-bottom: 1.5px solid var(--g-ink);
+}
+
+/* Phone: the title row scrolls away and only the tab strip sticks. */
+.gal-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0 8px;
+}
+
+.gal-title {
+  margin: 0;
+  font: 400 24px/1 var(--g-display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--g-ink);
+}
+
+.gal-count {
+  margin-left: auto;
+  font: 700 10.5px/1 var(--g-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--g-ink-dim);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1279px) { .gal-count { display: none; } }
+
+.gal-tabs {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.gal-tabs::-webkit-scrollbar { display: none; }
+
+.gal-tab {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  border: 0;
+  background: transparent;
+  color: var(--g-ink);
+  font: 400 11.5px/1 var(--g-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  clip-path: var(--g-cut);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.gal-tab:hover { background: var(--g-deep); }
+.gal-tab[aria-pressed="true"] { background: var(--g-ink); color: var(--g-paper); }
+.gal-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--g-red); }
+
+.gal-body { padding-top: 14px; }
+
+/* ---- Second-level bar: parks under the masthead ------------------------- */
+
+.gal-bar {
+  position: sticky;
+  top: var(--g-stick);
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: -14px calc(-1 * var(--g-pad)) 14px;
+  padding: 8px var(--g-pad);
+  background: var(--g-paper-fill);
+  border-bottom: 1px solid var(--g-rule);
+}
+.gal-bar--static { position: static; }
+
+.gal-bar__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--g-ink);
+  font: 700 12px/1.3 var(--g-ui);
+  text-align: left;
+}
+.gal-bar__toggle > span:first-child { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gal-bar__toggle > span:last-child {
+  flex: 0 0 auto;
+  font: 400 10.5px/1 var(--g-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--g-ink-dim);
+}
+.gal-bar__toggle:focus-visible { outline: none; box-shadow: inset 0 -2px 0 var(--g-red); }
+
+/* ---- Sections ----------------------------------------------------------- */
+
+.gal-sec {
+  margin: 0 0 22px;
+  scroll-margin-top: calc(var(--g-stick) + 60px);
+}
+.gal-sec:last-child { margin-bottom: 0; }
+
+.gal-sec__head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 0 0 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--g-rule);
+}
+.gal-sec__title {
+  margin: 0;
+  font: 400 13px/1.15 var(--g-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--g-ink);
+}
+.gal-sec__count {
+  font: 700 11px/1 var(--g-ui);
+  letter-spacing: 0.04em;
+  color: var(--g-ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.gal-sec__aside {
+  margin-left: auto;
+  min-width: 0;
+  font: 400 12px/1.3 var(--g-ui);
+  color: var(--g-ink-dim);
+  text-align: right;
+}
+
+/* A slim label inside a section — the equipment tiers. */
+.gal-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  /* Clear of the drop shadow under the row of cards above. */
+  margin: 20px 0 8px;
+  font: 700 11px/1.2 var(--g-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--g-ink);
+}
+.gal-sec__head + .gal-sub, .gal-cap + .gal-sub { margin-top: 0; }
+.gal-sub > span { font-weight: 400; letter-spacing: 0.02em; text-transform: none; color: var(--g-ink-dim); }
+
+/* Prose. 66 characters is the measure: the old captions ran to 120. */
+.gal-cap {
+  margin: 0 0 10px;
+  max-width: 66ch;
+  font: 400 13px/1.5 var(--g-ui);
+  color: var(--g-ink-soft);
+}
+.gal-cap:last-child { margin-bottom: 0; }
+.gal-cap strong { font-weight: 700; color: var(--g-ink); }
+
+/* The long explanations fold away; the demo is the point. */
+.gal-notes { margin: 0 0 12px; }
+.gal-notes > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  list-style: none;
+  cursor: pointer;
+  font: 700 11px/1 var(--g-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--g-ink-dim);
+}
+.gal-notes > summary::-webkit-details-marker { display: none; }
+.gal-notes > summary::before {
+  content: '+';
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  font: 700 11px/10px var(--g-ui);
+  text-align: center;
+}
+.gal-notes[open] > summary::before { content: '\2013'; }
+.gal-notes > summary:hover { color: var(--g-ink); }
+.gal-notes > summary:focus-visible { outline: none; box-shadow: inset 0 -2px 0 var(--g-red); }
+.gal-notes__body {
+  margin-top: 6px;
+  padding: 10px 14px;
+  max-width: 72ch;
+  border-left: 2px solid var(--g-ink);
+  background: var(--g-band);
+}
+.gal-notes__body p { margin: 0 0 8px; font: 400 13px/1.55 var(--g-ui); color: var(--g-ink-soft); }
+.gal-notes__body p:last-child { margin-bottom: 0; }
+
+.gal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+.gal-cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; align-items: start; }
+@media (max-width: 1099px) { .gal-cols2 { grid-template-columns: minmax(0, 1fr); } }
+
+.gal-panel {
+  padding: 12px 14px 14px;
+  background: var(--g-band);
+  border: 1.5px solid var(--g-rule);
+}
+
+/* A row that scrolls sideways. A scroll container clips at its padding box,
+   and a card's drop shadow reaches well past the card, so the box is padded
+   out to hold the shadow and pulled back by the same amount: the layout
+   does not move, and the shadow is not sliced off in a hard line. */
+.gal-scroller {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  margin: -10px -10px -30px;
+  padding: 10px 10px 40px;
+  scroll-padding: 0 10px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.gal-scroller::-webkit-scrollbar { display: none; }
+.gal-scroller > * { flex: 0 0 auto; scroll-snap-align: start; }
+/* Run to the sheet's edges, so a card cut off by the scroll is cut by the
+   paper and not by an invisible box inside it. */
+.gal-scroller--bleed {
+  margin: -10px calc(-1 * var(--g-pad)) -30px;
+  padding: 10px var(--g-pad) 40px;
+  scroll-padding: 0 var(--g-pad);
+}
+
+/* ---- Controls ----------------------------------------------------------- */
+
+/* A demo trigger. Sentence case in the reading face: there are sixty of
+   these, and "DJINN'S MARK ×4 DETONATES (MIRAGE → ABRAMS)" set in tracked
+   stencil caps was the least readable thing on the sheet. */
+.gal-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.gal-chip {
+  padding: 6px 10px;
+  border: 1.5px solid var(--g-faint);
+  background: transparent;
+  color: var(--g-ink);
+  font: 600 12.5px/1.15 var(--g-ui);
+  letter-spacing: 0.01em;
+  text-align: left;
+  clip-path: var(--g-cut);
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.gal-chip:hover:not(:disabled) { background: var(--g-deep); border-color: var(--g-ink); }
+.gal-chip[data-on="true"] { background: var(--g-ink); border-color: var(--g-ink); color: var(--g-paper); }
+.gal-chip:disabled { border-color: var(--g-rule); color: var(--g-ink-dim); cursor: default; }
+.gal-chip:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--g-red); }
+
+/* One-of-many. The options share their borders, so eight of them cost the
+   width of eight labels and nothing more. */
+.gal-seg { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.gal-seg__label {
+  flex: 0 0 auto;
+  font: 700 10px/1 var(--g-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--g-ink-dim);
+}
+.gal-seg__set { display: flex; flex-wrap: wrap; min-width: 0; padding: 0 1.5px 1.5px 0; }
+.gal-seg__opt {
+  position: relative;
+  margin: 0 -1.5px -1.5px 0;
+  padding: 6px 9px;
+  border: 1.5px solid var(--g-faint);
+  background: transparent;
+  color: var(--g-ink);
+  font: 400 10.5px/1 var(--g-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.gal-seg__opt:hover { background: var(--g-deep); }
+.gal-seg__opt[aria-pressed="true"] { z-index: 1; background: var(--g-ink); border-color: var(--g-ink); color: var(--g-paper); }
+.gal-seg__opt:disabled { color: var(--g-ink-dim); cursor: default; background: transparent; }
+.gal-seg__opt:focus-visible { z-index: 2; outline: none; box-shadow: inset 0 0 0 2px var(--g-red); }
+.gal-seg__n {
+  margin-left: 5px;
+  font: 700 10px/1 var(--g-ui);
+  letter-spacing: 0;
+  opacity: 0.62;
+  font-variant-numeric: tabular-nums;
+}
+/* Folded out on a phone the bar is a column of controls: give the labels
+   one width so the plates line up down their left edge. */
+@media (max-width: 767px) {
+  .gal-bar .gal-seg { display: flex; width: 100%; }
+  .gal-bar .gal-seg__label { flex: 0 0 58px; }
+}
+/* One line that scrolls sideways, for a phone. */
+.gal-seg--scroll { display: flex; width: 100%; }
+.gal-seg--scroll .gal-seg__set { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.gal-seg--scroll .gal-seg__set::-webkit-scrollbar { display: none; }
+.gal-seg--scroll .gal-seg__opt { flex: 0 0 auto; }
+
+.gal-search {
+  flex: 0 1 230px;
+  min-width: 130px;
+  margin-left: auto;
+  padding: 6px 10px;
+  border: 1.5px solid var(--g-faint);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--g-ink);
+  font: 600 12.5px/1.2 var(--g-ui);
+  -webkit-appearance: none;
+  appearance: none;
+  /* The page turns selection off for the board; a field needs it back. */
+  -webkit-user-select: text;
+  user-select: text;
+}
+.gal-search::placeholder { color: var(--g-ink-dim); font-weight: 400; }
+.gal-search:focus { outline: none; border-color: var(--g-ink); background: rgba(255, 255, 255, 0.62); }
+.gal-search--wide { flex: 1 1 auto; width: 100%; margin: 0 0 12px; }
+
+.gal-select {
+  padding: 6px 10px;
+  border: 1.5px solid var(--g-ink);
+  border-radius: 0;
+  background: var(--g-paper);
+  color: var(--g-ink);
+  font: 700 12.5px/1.2 var(--g-ui);
+}
+
+/* ---- Cards -------------------------------------------------------------- */
+
+/* A card that opens at full size. CardFrame is a div; the button gives it
+   a name, a focus ring and the keyboard. */
+.gal-card {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  cursor: zoom-in;
+}
+.gal-card:focus-visible { outline: 2px solid var(--g-red); outline-offset: 2px; }
+
+.gal-figcap {
+  margin-top: 6px;
+  font: 700 10px/1.2 var(--g-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--g-ink-dim);
+  text-align: center;
+}
+
+.gal-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--g-ink);
+  cursor: zoom-in;
+}
+.gal-icon > span {
+  font: 700 11px/1.2 var(--g-ui);
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+.gal-icon:focus-visible { outline: 2px solid var(--g-red); outline-offset: 3px; }
+
+.gal-empty {
+  padding: 28px 0;
+  font: 400 13px/1.5 var(--g-ui);
+  color: var(--g-ink-soft);
+}
+
+/* ---- Combat FX ---------------------------------------------------------- */
+
+.gal-fx { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 22px; }
+.gal-fx--two { grid-template-columns: auto minmax(0, 1fr); gap: 26px; }
+
+/* The stage stays on screen while its triggers scroll: a button that fires
+   an effect nobody can see is not a demo. */
+.gal-fx__stage { z-index: 10; }
+.gal-fx__stage--stick { position: sticky; top: calc(var(--g-stick) + 12px); }
+.gal-fx--stack .gal-fx__stage {
+  margin: -14px calc(-1 * var(--g-pad)) 0;
+  padding: 10px var(--g-pad) 8px;
+  background: var(--g-paper-fill);
+  border-bottom: 1px solid var(--g-rule);
+}
+.gal-fx--stack .gal-fx__stage--stick { top: var(--g-stick); }
+
+.gal-fx__band {
+  display: flex;
+  flex-direction: column;
+  background: var(--g-band);
+  border: 1.5px solid var(--g-rule);
+}
+.gal-fx__side {
+  flex: 0 0 auto;
+  align-self: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font: 700 9.5px/1 var(--g-ui);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--g-ink-dim);
+}
+
+.gal-fx__group { padding: 10px 0 12px; border-top: 1px solid var(--g-rule); }
+.gal-fx__group:first-of-type { border-top: 0; padding-top: 2px; }
+.gal-fx__lede { margin: 0 0 7px; max-width: 74ch; font: 400 12px/1.4 var(--g-ui); color: var(--g-ink-dim); }
+.gal-fx__lede h3 {
+  display: inline;
+  margin: 0 8px 0 0;
+  font: 400 12px/1.4 var(--g-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--g-ink);
+}
+
+/* ---- Statuses ----------------------------------------------------------- */
+
+.gal-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 22px; }
+@media (max-width: 1099px) { .gal-status { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767px) { .gal-status { grid-template-columns: minmax(0, 1fr); } }
+.gal-status__row {
+  display: grid;
+  grid-template-columns: 122px minmax(0, 1fr);
+  column-gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--g-rule);
+}
+.gal-status__chip { grid-row: 1 / span 2; align-self: center; }
+.gal-status__head { grid-column: 2; align-self: end; }
+.gal-status__name { font: 700 12.5px/1.2 var(--g-ui); color: var(--g-ink); }
+.gal-status__id {
+  margin-left: 6px;
+  font: 400 10.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--g-ink-dim);
+}
+.gal-status__desc { grid-column: 2; margin-top: 2px; font: 400 12px/1.35 var(--g-ui); color: var(--g-ink-soft); }
+/* A phone gives the rule the full width of the sheet, so it rarely wraps:
+   chip and name share a line, the rule runs under both. */
+@media (max-width: 767px) {
+  .gal-status__row { grid-template-columns: auto minmax(0, 1fr); padding: 6px 0; }
+  .gal-status__chip { grid-row: auto; }
+  .gal-status__head { align-self: center; }
+  .gal-status__desc { grid-column: 1 / -1; margin-top: 4px; }
+}
+
+/* ---- Overlays ----------------------------------------------------------- */
+
+.gal-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; }
+.gal-pick__item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border: 1.5px solid var(--g-faint);
+  background: transparent;
+  color: var(--g-ink);
+  text-align: left;
+  clip-path: var(--g-cut);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.gal-pick__item:hover { background: var(--g-deep); border-color: var(--g-ink); }
+.gal-pick__item:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--g-red); }
+.gal-pick__item > b { font: 400 11.5px/1.2 var(--g-display); letter-spacing: 0.12em; text-transform: uppercase; }
+.gal-pick__item > span { font: 400 12px/1.35 var(--g-ui); color: var(--g-ink-soft); }
+
+/* ---- Lightbox ----------------------------------------------------------- */
+
+.gal-lb__nav {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--g-cream-faint);
+  background: color-mix(in srgb, var(--g-ground) 50%, transparent);
+  color: var(--g-cream);
+  font: 400 18px/1 var(--g-display);
+  clip-path: var(--g-cut);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.gal-lb__nav:hover:not(:disabled) { background: color-mix(in srgb, var(--g-ground) 85%, transparent); border-color: var(--g-cream); }
+.gal-lb__nav:disabled { opacity: 0.3; cursor: default; }
+.gal-lb__nav:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--g-red); }

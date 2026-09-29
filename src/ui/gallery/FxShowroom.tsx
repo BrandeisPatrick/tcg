@@ -1,12 +1,17 @@
 /**
  * The FX showroom — a six-card stage (a rival trio above, yours below) wired
  * to the real FxLayer, HeroSlot, impact-delay context and recoil bus, with a
- * button for every animation the match can draw. Each button synthesises the exact
- * event batch the engine would push and fires it through the same timeline
- * scheduler the board uses, so what plays here is what plays in a match.
- * The mock HP follows the hits so the stat hold can be seen too.
+ * trigger for every animation the match can draw. Each trigger synthesises the
+ * exact event batch the engine would push and fires it through the same
+ * timeline scheduler the board uses, so what plays here is what plays in a
+ * match. The mock HP follows the hits so the stat hold can be seen too.
+ *
+ * Laid out so the stage never leaves the screen: beside the triggers on a
+ * wide window, pinned above them on a narrow one. There are sixty-odd
+ * triggers, and a trigger that fires an effect nobody can see is not a demo.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { motion } from 'framer-motion';
 import type { CardInstance, DamageType, FxCastKind, FxEvent, FxSource, FxTag, PlayerID, StatusId } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroSlot } from '../board/HeroSlot';
@@ -15,9 +20,8 @@ import { FxImpulseBus, FxImpulseContext } from '../effects/fx/FxImpulse';
 import { FxCalmContext } from '../effects/fx/FxMotionContext';
 import { FxTimingContext } from '../effects/fx/FxTimingContext';
 import { buildFxTimeline } from '../effects/fx/fxTimeline';
-import { poster, chamfer, clipBoth } from '../poster';
-import { fonts, text } from '../tokens';
-import { Button, Caption, Row } from './primitives';
+import { useViewport } from '../hooks/useViewport';
+import { Button, Chip, Row, Segmented, STICK, type Option } from './primitives';
 
 type Id = 'r0' | 'r1' | 'r2' | 'y0' | 'y1' | 'y2';
 type Ev = FxEvent extends infer E ? (E extends FxEvent ? Omit<E, 'seq'> : never) : never;
@@ -47,10 +51,15 @@ const shield = (iid: Id, absorbed: number, broken: boolean, type: DamageType): E
 const immune = (iid: Id, what: 'damage' | StatusId): Ev => ({ kind: 'immune', iid, what });
 
 interface Demo { label: string; events: Ev[] }
-interface Group { title: string; blurb: string; demos: Demo[] }
+interface Group { id: string; short: string; title: string; blurb: string; demos: Demo[] }
+
+/** A group the stage does not drive: full-screen overlays with their own
+ *  triggers, listed with the rest so every "fire this" lives in one place. */
+export interface ExtraGroup { id: string; short: string; title: string; blurb: string; body: ReactNode }
 
 const GROUPS: Group[] = [
   {
+    id: 'skills', short: 'Skills',
     title: 'Skill triggers',
     blurb: 'The caster flares in its identity colour with its ability on a plate, a bolt flies to the target, and the impact lands with the stat change.',
     demos: [
@@ -62,6 +71,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: 'spells', short: 'Spells & ults',
     title: 'Spells & ultimates',
     blurb: "A spell's bolt leaves the card reveal (left of centre on desktop); an ultimate waits for its name plate, then the linked hero flares heavier and the strike lands as a bolt or a shockwave with spokes.",
     demos: [
@@ -78,6 +88,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: 'damage', short: 'Damage',
     title: 'Damage by type',
     blurb: 'Bullet damage is gunfire — muzzle flash, tracer volley, holes, sparks. Spirit is a plum burst with the rune. Pure tears the print. A kill cracks it and stamps K.O.',
     demos: [
@@ -91,6 +102,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: 'unique', short: 'Unique',
     title: 'Unique effects',
     blurb: 'Every tagged effect has its own lead-in before the impact.',
     demos: [
@@ -112,6 +124,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: 'heals', short: 'Heals & shields',
     title: 'Heals, shields, immunity',
     blurb: 'Green rises for healing; a shield glyph pops with its tally (and cracks when it breaks); Unstoppable shrugs in gold.',
     demos: [
@@ -124,6 +137,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: 'stamps', short: 'Statuses',
     title: 'Status stamps',
     blurb: 'A status lands as a slapped-on sticker in its class colour, with a glyph or a flourish where the status has one (stars for Stun, letters for Sleep, mark pips, a channel ring…).',
     demos: [
@@ -146,6 +160,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: 'respawn', short: 'Respawn & level',
     title: 'Respawn & level',
     blurb: 'A corpse comes back under gold rays; a level-up rings the card gold.',
     demos: [
@@ -156,12 +171,15 @@ const GROUPS: Group[] = [
   },
 ];
 
-export function FxShowroom() {
+export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
+  const { width, height, isMobile } = useViewport();
   const [hp, setHp] = useState<Record<Id, number>>(() => Object.fromEntries(IDS.map((id) => [id, maxHp(id)])) as Record<Id, number>);
   const [dead, setDead] = useState<Set<Id>>(() => new Set());
   const [batch, setBatch] = useState<FxEvent[]>([]);
   const [batchKey, setBatchKey] = useState(0);
   const [calm, setCalm] = useState(false);
+  const [only, setOnly] = useState('all');
+  const [playing, setPlaying] = useState<string | null>(null);
   const bus = useMemo(() => new FxImpulseBus(), []);
   const seq = useRef(1000);
   const slotRefs = useRef(new Map<string, HTMLElement>());
@@ -175,11 +193,11 @@ export function FxShowroom() {
   // Retire the batch once it has played so later mock changes are not held.
   useEffect(() => {
     if (batch.length === 0) return;
-    const t = setTimeout(() => setBatch([]), timeline.total + 50);
+    const t = setTimeout(() => { setBatch([]); setPlaying(null); }, timeline.total + 50);
     return () => clearTimeout(t);
   }, [batch, timeline]);
 
-  const fire = (events: Ev[]) => {
+  const fire = (events: Ev[], label?: string) => {
     // Apply the batch to the mock board so the stat hold has something to hold.
     const nextHp = { ...hp };
     const nextDead = new Set(dead);
@@ -206,6 +224,7 @@ export function FxShowroom() {
     setDead(nextDead);
     setBatch(stamped);
     setBatchKey(seq.current);
+    setPlaying(label ?? null);
   };
 
   const reset = () => {
@@ -238,80 +257,112 @@ export function FxShowroom() {
     y: window.innerHeight / 2,
   }), []);
 
+  // ---- layout ---------------------------------------------------------------
+  // Beside the triggers when there is room for both, pinned above them when
+  // there is not. Either way the tiles are sized so the whole stage, its
+  // controls and the masthead fit the window: a pinned stage taller than the
+  // window would hide its own bottom row.
+  const two = width >= 1100;
+  const stick = isMobile ? STICK.phone : STICK.desk;
+  const gap = isMobile ? 8 : 14;
+  const pad = isMobile ? 8 : 14;
+  const SIDE = 10;                       // the vertical "Rival" / "You" label
+  // Everything that shares the window's height with the two rows of tiles.
+  const chrome = stick + (two ? 12 : 10) + pad * 2 + gap + 40 /* controls */ + (two ? 12 : 8);
+  const rowMax = isMobile ? 146 : two ? 240 : 196;
+  const rowFit = Math.floor((height - chrome) / 2);
+  // A window too short to hold the stage gets it unpinned, at a usable size.
+  const pinned = rowFit >= 96;
+  const rowH = pinned ? Math.min(rowMax, rowFit) : Math.min(rowMax, 150);
+  // The live board draws a bench tile at about three quarters of the active
+  // one. A phone's stage is too narrow for that: a bench tile so small cannot
+  // hold a hero's name, so there the three share the row more evenly.
+  const ratio = isMobile ? 0.9 : 0.735;
+  // A phone is also bounded by its width: sheet margins, the band's padding,
+  // the side label and the two gutters come out of it first.
+  const across = isMobile ? width - 36 - pad * 2 - SIDE - gap * 3 : Infinity;
+  const active = Math.floor(Math.min(rowH * 0.75, across / (1 + 2 * ratio)));
+  const bench = Math.round(active * ratio);
+
   const slot = (id: Id, compact: boolean) => (
-    <div key={id} style={{ width: compact ? 132 : 180, aspectRatio: '3 / 4', flexShrink: 0 }}>
+    <div key={id} style={{ width: compact ? bench : active, aspectRatio: '3 / 4', flexShrink: 0 }}>
       <HeroSlot
         card={card(id)}
         owner={STAGE[id].owner} myId="0"
         isOpponent={STAGE[id].owner === '1'}
         pending={null} isTargetable={false}
         isCurrentTurn={STAGE[id].zone === 'active'}
-        compact={compact}
+        compact={compact || active < 150}
         onTap={() => {}}
         registerSlotRef={registerSlotRef}
       />
     </div>
   );
 
+  const row = (label: string, ids: [Id, Id, Id]) => (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap }}>
+      <span className="gal-fx__side">{label}</span>
+      {slot(ids[0], false)}{slot(ids[1], true)}{slot(ids[2], true)}
+    </div>
+  );
+
+  const filters: Option<string>[] = [
+    { id: 'all', label: 'All', n: GROUPS.reduce((n, g) => n + g.demos.length, 0) },
+    ...GROUPS.map((g) => ({ id: g.id, label: g.short, n: g.demos.length })),
+    ...extra.map((g) => ({ id: g.id, label: g.short })),
+  ];
+  const shown = (id: string) => only === 'all' || only === id;
+
   return (
     <FxTimingContext.Provider value={fxHoldFor}>
     <FxImpulseContext.Provider value={bus}>
     <FxCalmContext.Provider value={calm}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {/* The stage — two rows of the live HeroSlot, on a band of deeper paper. */}
-        <div style={{
-          position: 'relative',
-          padding: '18px 22px 20px',
-          background: poster.paperBand,
-          border: `1.5px solid ${poster.inkRule}`,
-          ...clipBoth(chamfer(10)),
-          display: 'flex', flexDirection: 'column', gap: 26,
-          overflowX: 'auto',
-        }}>
-          <StageRow label="Rival">{slot('r0', false)}{slot('r1', true)}{slot('r2', true)}</StageRow>
-          <StageRow label="You">{slot('y0', false)}{slot('y1', true)}{slot('y2', true)}</StageRow>
-        </div>
-        <Row>
-          <Button onClick={reset}>Reset stage</Button>
-          <Button onClick={koHaze}>KO Haze (gunfire)</Button>
-          <Button onClick={() => setCalm((c) => !c)}>{calm ? 'Calm motion: on' : 'Calm motion: off'}</Button>
-          <span style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>
-            Mock HP follows the hits — watch the number hold until the bolt lands, the tile recoil along the shot, and a kill turn into the corpse after the shatter. Calm motion is what reduced-motion players see.
-          </span>
-        </Row>
-        <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
-
-        {GROUPS.map((g) => (
-          <div key={g.title}>
-            <h3 style={{
-              margin: '0 0 6px', fontFamily: fonts.display, fontSize: 12, fontWeight: 400,
-              letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.ink,
-            }}>
-              {g.title}
-            </h3>
-            <Caption>{g.blurb}</Caption>
+      <div className={two ? 'gal-fx gal-fx--two' : 'gal-fx gal-fx--stack'}>
+        {/* layoutRoot: the tiles carry a layoutId, and framer measures layout
+            in page coordinates. A pinned stage moves in page coordinates every
+            time the page scrolls, so without this the tiles would glide in
+            from where they last were on the next render. */}
+        <motion.div layoutRoot className={pinned ? 'gal-fx__stage gal-fx__stage--stick' : 'gal-fx__stage'}>
+          <div className="gal-fx__band" style={{ padding: pad, gap, alignItems: two ? 'flex-start' : 'center' }}>
+            {row('Rival', ['r0', 'r1', 'r2'])}
+            {row('You', ['y0', 'y1', 'y2'])}
+          </div>
+          <div style={{ marginTop: 8 }}>
             <Row>
-              {g.demos.map((d) => <Button key={d.label} onClick={() => fire(d.events)}>{d.label}</Button>)}
+              <Button onClick={reset}>{isMobile ? 'Reset' : 'Reset stage'}</Button>
+              <Button onClick={koHaze}>{isMobile ? 'KO Haze' : 'KO Haze (gunfire)'}</Button>
+              <Button onClick={() => setCalm((c) => !c)} title="What reduced-motion players see">
+                {isMobile ? `Calm: ${calm ? 'on' : 'off'}` : `Calm motion: ${calm ? 'on' : 'off'}`}
+              </Button>
             </Row>
           </div>
-        ))}
+        </motion.div>
+
+        <div style={{ minWidth: 0 }}>
+          <div style={{ marginBottom: 10 }}>
+            <Segmented label="Show" value={only} onChange={setOnly} options={filters} scroll={isMobile} />
+          </div>
+          {GROUPS.filter((g) => shown(g.id)).map((g) => (
+            <div key={g.id} className="gal-fx__group">
+              <div className="gal-fx__lede"><h3>{g.title}</h3>{g.blurb}</div>
+              <div className="gal-chips">
+                {g.demos.map((d) => (
+                  <Chip key={d.label} on={playing === d.label} onClick={() => fire(d.events, d.label)}>{d.label}</Chip>
+                ))}
+              </div>
+            </div>
+          ))}
+          {extra.filter((g) => shown(g.id)).map((g) => (
+            <div key={g.id} className="gal-fx__group">
+              <div className="gal-fx__lede"><h3>{g.title}</h3>{g.blurb}</div>
+              <div className="gal-chips">{g.body}</div>
+            </div>
+          ))}
+        </div>
       </div>
+      <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
     </FxCalmContext.Provider>
     </FxImpulseContext.Provider>
     </FxTimingContext.Provider>
-  );
-}
-
-function StageRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18 }}>
-      <span style={{
-        ...text.label, fontSize: 10, letterSpacing: '0.24em', color: poster.inkDim,
-        writingMode: 'vertical-rl', transform: 'rotate(180deg)', alignSelf: 'center', flexShrink: 0,
-      }}>
-        {label}
-      </span>
-      {children}
-    </div>
   );
 }

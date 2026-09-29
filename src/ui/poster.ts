@@ -13,6 +13,7 @@ export const poster = {
 
   // Ink — flat black type and rules on paper.
   ink: '#171410',
+  inkSoft: 'rgba(23, 20, 16, 0.78)',   // running prose on paper (8:1); a step under full ink
   inkDim: 'rgba(23, 20, 16, 0.64)',
   inkFaint: 'rgba(23, 20, 16, 0.3)',
   inkRule: 'rgba(23, 20, 16, 0.18)',

@@ -9,7 +9,12 @@ import { fonts, text } from '../tokens';
 import { poster, printEdge } from '../poster';
 import { ART_CREDITS, ART_DISCLAIMER, ORIGINAL_ART_NOTE, type ArtCredit, type CreditThumb } from '@/art/credits';
 
-export function ArtCredits({ compact = false }: { compact?: boolean }) {
+export function ArtCredits({ compact = false, columns = 1 }: {
+  compact?: boolean;
+  /** Rows per line. The System sheet is narrow and keeps one; the Gallery's
+   *  sheet is wide enough to set the list in two. */
+  columns?: 1 | 2;
+}) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 20 : 28 }}>
       <p style={{ ...text.body, margin: 0, color: poster.inkDim, maxWidth: 640 }}>
@@ -35,7 +40,16 @@ export function ArtCredits({ compact = false }: { compact?: boolean }) {
           <p style={{ ...text.body, margin: '6px 0 10px', color: poster.ink, maxWidth: 640 }}>
             {group.blurb}
           </p>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+          <ul
+            style={{
+              listStyle: 'none',
+              margin: 0,
+              padding: 0,
+              ...(columns > 1
+                ? { display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, columnGap: 32 }
+                : null),
+            }}
+          >
             {group.items.map((item) => (
               <CreditRow key={item.id} item={item} compact={compact} />
             ))}
