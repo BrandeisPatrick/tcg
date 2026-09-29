@@ -3,6 +3,11 @@ import { fonts, text } from '../tokens';
 import { poster } from '../poster';
 import { RuleText } from './RuleText';
 import { CardShine, rarityInk } from './RarityFX';
+import {
+  type Foil, type Holo, type HoloScope, type HoloStrength, type HoloPalette,
+  hasStamp, hasGloss, useFoilPointer,
+  FoilEdge, GlossPanel, HoloLayer, foilTextClass, TILT_TRANSFORM,
+} from './SpotVarnish';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { HeroPortrait } from '@/cards/art/heroArt';
@@ -30,6 +35,22 @@ interface Props {
   /** Render the scripted cast sheen bar so a parent can sweep it via `--cast`
    *  (used by the play-cast reveal). */
   castSheen?: boolean;
+  /** Premium print finish for a rarity-4 sheet — metallic ink on the keyline
+   *  and type, and/or a clear varnish on the bands. Off by default: an
+   *  ordinary card is a matte screen print and stays one. */
+  foil?: Foil | null;
+  /** Iridescence, and the plate it was applied to. `holoScope` defaults to
+   *  the art window, which keeps it off the rules text. */
+  holo?: Holo | null;
+  holoScope?: HoloScope;
+  holoStrength?: HoloStrength;
+  /** Scales a pattern holo's tile; ignored by the wash variants. */
+  holoMarkScale?: number;
+  /** What the bands are made of; defaults to the game's amber–teal. */
+  holoPalette?: HoloPalette;
+  /** Turn the card to follow the pointer. Shares --px/--py with the foil, so
+   *  the metal catches light because the card moved, which is the point. */
+  tilt?: boolean;
 }
 
 const SIZES: Record<Size, { w: number; h: number }> = {
@@ -200,9 +221,17 @@ function ArtWindow({ data }: { data: CardData | undefined }) {
 
 export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
-  unaffordable = false, physical, castSheen = false,
+  unaffordable = false, physical, castSheen = false, foil = null,
+  holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
+  holoPalette = 'amber', tilt = false,
 }: Props) {
   const [hover, setHover] = useState(false);
+  // Premium-plate flags, read once so the markup below stays declarative.
+  const stamped = hasStamp(foil);
+  const glossed = hasGloss(foil);
+  // One pointer source feeds the foil ramps, the holo sweep and the tilt.
+  const pointerLive = !!foil || !!holo || tilt;
+  const { ref: foilRef, onPointerMove, onPointerLeave } = useFoilPointer(pointerLive);
   // Pointer feedback is on by default; the cast overlay passes physical={false}.
   const reactive = physical ?? true;
   const lit = reactive && hover;
@@ -236,7 +265,9 @@ export function CardFrame({
     // The rotate(0deg) base is load-bearing: it keeps the card on its own
     // compositor layer, so text antialiasing does not shift when the lift
     // transform kicks in.
-    transform: `rotate(0deg) ${selected ? 'translateY(-8px)' : lit ? 'translateY(-3px)' : ''}`,
+    // The rotate(0deg) base stays first among the flat transforms; the tilt's
+    // perspective() must lead the whole list to apply to the rotations after it.
+    transform: `${tilt ? TILT_TRANSFORM + ' ' : ''}rotate(0deg) ${selected ? 'translateY(-8px)' : lit ? 'translateY(-3px)' : ''}`,
     transition: 'transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease, border-color 180ms ease',
     // The cast sheen blends (screen) against the card only, not the sheet.
     isolation: 'isolate',
@@ -252,9 +283,12 @@ export function CardFrame({
 
   return (
     <div
+      ref={foilRef}
+      className={[foil && 'foil', tilt && 'tilt'].filter(Boolean).join(' ') || undefined}
       style={containerStyle}
       onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseLeave={() => { setHover(false); onPointerLeave(); }}
+      onPointerMove={onPointerMove}
     >
       {/* Art window — printed edge to edge across the top portion */}
       <div style={{
@@ -266,6 +300,7 @@ export function CardFrame({
       }}>
         <ArtWindow data={data} />
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
+        {holo && holoScope === 'art' && <HoloLayer variant={holo} strength={holoStrength} markScale={holoMarkScale} palette={holoPalette} />}
 
         {/* Cost coin (top-left) — an ink disc with a cream numeral; flips to
             the poster red when the player can't afford it so the dimmed card
@@ -327,13 +362,19 @@ export function CardFrame({
         overflow: 'hidden',
         textOverflow: 'ellipsis',
       }}>
-        {typeLabel(data)}
-        {isHero && getHeroIdentity((data as any).id).keywords
-          .map((k) => ` · ${k}`).join('')}
+        {/* Foil type on the ink band takes the full ramp — its bright end is
+            far lighter than the ink, so the metal reads at full range here. */}
+        <span className={stamped ? foilTextClass() : undefined}>
+          {typeLabel(data)}
+          {isHero && getHeroIdentity((data as any).id).keywords
+            .map((k) => ` · ${k}`).join('')}
+        </span>
+        {glossed && <GlossPanel />}
       </div>
 
       {/* Cream label band — name and rules printed on paper */}
       <div style={{
+        position: 'relative',
         flex: '1 1 auto',
         background: poster.paperBand,
         color: poster.ink,
@@ -349,18 +390,28 @@ export function CardFrame({
             headline above the body text; hand-size keeps the compact 12.
             Allows up to 2 lines so long canon names (e.g. "Extended Magazine",
             "Mystic Regeneration") don't truncate with an ellipsis. */}
-        <div style={{
-          fontFamily: fonts.display,
-          fontSize: size === 'full' ? 14 : 12,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          color: poster.ink,
-          lineHeight: 1.15,
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-        }}>
+        <div
+          className={stamped ? foilTextClass(true) : undefined}
+          style={{
+            fontFamily: fonts.display,
+            fontSize: size === 'full' ? 14 : 12,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            // Omitted when stamped: an inline colour outranks the stylesheet's
+            // `color: transparent`, and opaque ink would paint straight over
+            // the ramp that background-clip had just knocked out of the glyphs.
+            ...(stamped ? null : { color: poster.ink }),
+            lineHeight: 1.15,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            // The stamped name needs its own stacking context so the band's
+            // varnish layer cannot wash over the foil glyphs.
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
           {data?.name ?? cardId}
         </div>
 
@@ -415,10 +466,19 @@ export function CardFrame({
             DLK · Cursed Apple · {String(CARD_INDEX[data.id] ?? 0).padStart(2, '0')}/{CARD_TOTAL}
           </div>
         )}
+
+        {glossed && <GlossPanel paper />}
       </div>
 
       {/* Cast sheen — only the scripted play-cast bar; the print is otherwise matte */}
       <CardShine rarity={rarity} cast={castSheen} />
+
+      {/* Iridescence over the whole sheet. Above the bands, so it washes the
+          rules text too — the reason `art` is the default scope. */}
+      {holo && holoScope === 'card' && <HoloLayer variant={holo} strength={holoStrength} markScale={holoMarkScale} palette={holoPalette} />}
+
+      {/* Premium plates, outermost so the keyline rides the card's own edge */}
+      {stamped && <FoilEdge />}
     </div>
   );
 }
