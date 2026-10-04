@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { PosterButton } from '../chrome';
+import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 /** Height of the sticky masthead. Second-level bars park under it. */
@@ -74,7 +75,15 @@ export function Button({ children, onClick, disabled, title }: {
       onClick={onClick}
       disabled={disabled}
       title={title}
-      style={{ padding: '7px 12px', fontSize: 11, letterSpacing: '0.14em', borderWidth: 1.5 }}
+      style={{
+        padding: '7px 12px',
+        fontSize: 11,
+        letterSpacing: '0.14em',
+        // The whole border, not its width alone: PosterButton sets the
+        // shorthand, and a width beside it is lost the first time the button
+        // is switched off or on.
+        border: `1.5px solid ${disabled ? poster.inkFaint : poster.ink}`,
+      }}
     >
       {children}
     </PosterButton>
