@@ -13,7 +13,7 @@
 // Typography: script lead-in in `fonts.script` (Caveat Brush), labels and
 // titles in `fonts.display` (Saira Stencil One), body in `text.body`.
 
-import { useMemo, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { fonts, spring, text } from '../tokens';
 import { poster, PAPER_MOTTLE, clipBoth } from '../poster';
@@ -23,6 +23,7 @@ import { useViewport } from '../hooks/useViewport';
 import { loadPlayerData, MAX_PREFERRED_HEROES } from '@/storage/playerData';
 import { loadRun } from '@/story/storyRun';
 import { CARDS_BY_ID, HEROES, SPELLS, EQUIPMENT } from '@/cards';
+import type { CardId } from '@/engine/types';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { LESSONS } from '@/tutorial/lessons';
 
@@ -43,18 +44,28 @@ const ink = {
   band: poster.paperBand,
 } as const;
 
-// Poster hero for the Quick Match card. Drawn from the 1230×626 splash set
-// (sharp enough for a portrait crop) minus the heroes that hold a fixed card
-// below, so no face appears twice; rotates daily so the title never
-// fossilises on one hero.
-const FEATURED_HEROES = ['hero_abrams', 'hero_wraith', 'hero_yamato', 'hero_mirage'] as const;
-function featuredHero(): string {
-  const day = Math.floor(Date.now() / 86_400_000);
-  return FEATURED_HEROES[day % FEATURED_HEROES.length];
+// Poster hero for the Quick Match card, and the hero the draft opens on.
+// Drawn from the splash set minus the heroes that hold a fixed card below
+// (Mo & Krill star in the Tutorial's cartoon), so no face appears twice, and
+// minus Seven, whose splash is all machine and no face. Dealt fresh each
+// time the title is shown, never the same hero twice running.
+const FEATURED_HEROES: readonly CardId[] = [
+  'hero_abrams', 'hero_drifter', 'hero_dynamo', 'hero_haze',
+  'hero_kelvin', 'hero_lady_geist', 'hero_lash', 'hero_mirage',
+  'hero_paige', 'hero_shiv', 'hero_sinclair', 'hero_vindicta',
+  'hero_viscous', 'hero_warden', 'hero_wraith', 'hero_yamato',
+];
+/** The hero the title last put on screen. Module-level, so it outlives the
+ *  screen's remounts. */
+let lastFeatured: CardId | null = null;
+function dealFeatured(): CardId {
+  const choices = FEATURED_HEROES.filter((id) => id !== lastFeatured);
+  return choices[Math.floor(Math.random() * choices.length)];
 }
 
 interface StartScreenProps {
-  onPlay: () => void;
+  /** Quick Match, carrying the featured hero for the draft to open on. */
+  onPlay: (featuredHero: CardId) => void;
   onStory?: () => void;
   onTutorial?: () => void;
   onLoadout?: () => void;
@@ -98,7 +109,10 @@ function useTitleStatus() {
 export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScreenProps) {
   const { isMobile, width } = useViewport();
   const status = useTitleStatus();
-  const featured = useMemo(featuredHero, []);
+  const [featured] = useState(dealFeatured);
+  // Remembered once it is on screen rather than while dealing: StrictMode
+  // deals twice and keeps only one.
+  useEffect(() => { lastFeatured = featured; }, [featured]);
   const featuredName = CARDS_BY_ID[featured]?.name ?? '';
   // The street window sits beside the title only when there's room for it.
   const wide = width >= 1024;
@@ -224,7 +238,7 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
             cta="Play"
             tag={`Featured · ${featuredName}`}
             art={{ src: `${HERO_BASE}${featured}_splash.webp`, objectPosition: heroArtFocus(featured, 'splash', '50% 18%') }}
-            onClick={onPlay}
+            onClick={() => onPlay(featured)}
             ariaLabel="Start Quick Match vs AI"
             compact={isMobile}
             span={isMobile ? 2 : 1}
@@ -740,6 +754,12 @@ function ModeCard({
                   letterSpacing: '0.2em',
                   textTransform: 'uppercase',
                   whiteSpace: 'nowrap',
+                  // Kept on the print: on a narrow sheet a long name
+                  // ("Featured · Lady Geist") ends in an ellipsis rather
+                  // than running under the frame.
+                  maxWidth: 'calc(100% - 10px)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
                 {tag}

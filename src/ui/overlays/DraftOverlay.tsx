@@ -52,6 +52,15 @@ const lobby = {
 
 const NUMERALS = ['I', 'II', 'III', 'IV'];
 
+/** The hero the lobby focuses when nothing still available holds it: the
+ *  title's featured hero while it is in the pool, otherwise any free hero at
+ *  random rather than always the first tile of the grid. */
+function defaultFocus(pool: string[]): string | null {
+  const featured = getMatchConfig().featuredHero;
+  if (featured && pool.includes(featured)) return featured;
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+}
+
 export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   // The roster grid + four cards need real width; below this everything
   // stacks tighter and the page may scroll.
@@ -75,14 +84,14 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
     return m;
   }, [myPicks, oppPicks]);
 
-  // Focused hero — previewed in the live card + dossier. Defaults to the
-  // first available hero; if the focused one gets taken, fall back.
-  const [focused, setFocused] = useState<string | null>(null);
+  // Focused hero — previewed in the live card + dossier. Opens on the default
+  // (below); only once the focused one leaves the pool (locked, or taken by
+  // the rival) does it move to a fresh default, so it never shifts under the
+  // player while they are looking at it.
+  const [focused, setFocused] = useState<string | null>(() => defaultFocus(pool));
   useEffect(() => {
-    if (!focused || !pool.includes(focused)) {
-      setFocused(roster.find((id) => pool.includes(id)) ?? null);
-    }
-  }, [pool, focused, roster]);
+    if (!focused || !pool.includes(focused)) setFocused(defaultFocus(pool));
+  }, [pool, focused]);
 
   const lock = () => {
     if (myTurn && focused && pool.includes(focused)) onPick(focused);

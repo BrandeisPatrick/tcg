@@ -20,13 +20,16 @@ function imageUrl(cardId: string, variant: 'card' | 'mm' | 'sm') {
  * Per-hero objectPosition overrides for cover-cropped art, keyed by asset
  * kind. The uniform defaults ('50% 22%' splash, '50% 14%' tiles, 'center
  * 30%' portraits) assume a lone hero's face near the top-centre — duo
- * compositions break that rule. Mo & Krill's splash is a wide landscape
- * where Krill rides centre-frame and Mo's head fills the RIGHT half; in a
- * portrait box, cover fits it by height, so the X coordinate alone decides
- * the visible slice — centred X showed only Krill.
+ * compositions and off-centre heads break that rule. Mo & Krill's splash is
+ * a wide landscape where Krill rides centre-frame and Mo's head fills the
+ * RIGHT half; in a portrait box, cover fits it by height, so the X
+ * coordinate alone decides the visible slice — centred X showed only Krill.
+ * Dynamo's centre is his coat and mechanical arm; his helmeted head floats
+ * at the upper right, half cut off by a centred crop.
  */
 export const HERO_ART_FOCUS: Record<string, { splash?: string; card?: string }> = {
   hero_mo_krill: { splash: '62% 22%' },
+  hero_dynamo: { splash: '84% 22%' },
 };
 
 /** objectPosition for a hero's cover-cropped art, with per-surface default. */

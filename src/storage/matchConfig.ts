@@ -42,6 +42,11 @@ export interface StorySetup {
 export interface MatchConfig {
   playerDeck: CardId[];
   heroPreferences: (CardId | null)[];
+  /** The hero the title's Quick Match card featured. The draft opens focused
+   *  on it, and comes back to it while it is still in the pool. Unset for a
+   *  deep-linked match or a rematch, where the draft opens on a random free
+   *  hero instead. */
+  featuredHero?: CardId;
   /** When present, the game skips the draft and builds the story battle. */
   story?: StorySetup;
   /**
