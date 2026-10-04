@@ -140,6 +140,11 @@ Animation families (`hits.tsx`, `support.tsx`, `shatter.tsx`, `primitives.tsx`):
   the table from above; where it lands every card bobs, a shockwave rolls
   out and speed lines burst from behind it.
 
+When the move that decides the match comes with a cast or a kill, `Board`
+keeps the table up until that batch has played (capped at 2.8 s, input
+sealed) before handing over to the result sheet — the final blow is seen
+landing.
+
 The Gallery (`?preview=1&tab=combat`) has a showroom that fires every one of
 these through the real `FxLayer`, FX stage, `HeroSlot`, timing context and
 impulse bus — and walks basic attacks through the real choreographer — with

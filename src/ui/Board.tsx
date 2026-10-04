@@ -56,6 +56,9 @@ import { useMatchNav } from './hooks/matchNav';
 
 // Animation / pacing constants.
 const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
+/** The longest the board stays up after the match is decided, so the blow
+ *  that decided it can be seen landing before the result sheet takes over. */
+const FINAL_BLOW_MAX_MS = 2800;
 /** What a click must land on to NOT cancel an armed card or skill. */
 const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="tab"]';
 
@@ -160,6 +163,13 @@ export function Board(props: BoardProps<GameState>) {
   const myActiveIid = G.players[me].active?.iid;
   const koSettleDelay = myActiveIid ? (fxTimeline.koSettle[myActiveIid] ?? 0) : 0;
   const pendingPromotionShown = useDelayedValue(G.pendingPromotion, koSettleDelay);
+  // The final blow gets to land. When the move that ended the match came
+  // with a cast or a kill, the board stays up until that batch has played —
+  // the bolt, the card breaking, the K.O. sticker — and only then hands over
+  // to the result sheet. (A basic attack's kill has already been walked by
+  // the choreographer; nothing to wait for.) Input is sealed meanwhile.
+  const finalBlow = !!ctx.gameover && freshFx.some((e) => e.kind === 'cast' || (e.kind === 'hit' && e.ko));
+  const gameover = useDelayedValue(ctx.gameover, finalBlow ? Math.min(fxTimeline.total, FINAL_BLOW_MAX_MS) : 0);
 
   // Memoized — a fresh object identity every Board render used to re-render
   // every CombatProgressContext consumer (TurnCompass) even between beats.
@@ -438,7 +448,8 @@ export function Board(props: BoardProps<GameState>) {
   // hold matches the dispatcher unlock. Player input is blocked elsewhere
   // via `actionLocked` until this fires.
   useEffect(() => {
-    if (G.action?.state !== 'begin') return;
+    // A move that ends the match leaves its reveal open: nothing to complete.
+    if (ctx.gameover || G.action?.state !== 'begin') return;
     // Play / skill reveals are a quick "you played X" beat; the ultimate is a
     // dramatic screen-fill that needs longer to land. Keep each in sync with
     // its overlay's animation length (CardPlayFlash / UltMomentFlash 2.3s).
@@ -447,7 +458,7 @@ export function Board(props: BoardProps<GameState>) {
       try { (moves as any).completeAction(); } catch {}
     }, HOLD_MS);
     return () => clearTimeout(t);
-  }, [G.action?.id, G.action?.state, G.action?.kind, moves]);
+  }, [G.action?.id, G.action?.state, G.action?.kind, moves, ctx.gameover]);
 
   const isTargetable = useCallback((card: CardInstance, owner: PlayerID): boolean => {
     if (!pending) return false;
@@ -614,9 +625,9 @@ export function Board(props: BoardProps<GameState>) {
     }
   }
 
-  if (ctx.gameover) {
+  if (gameover) {
     const isStory = !!getMatchConfig().story;
-    const won = ctx.gameover.winner === me;
+    const won = gameover.winner === me;
     // Story battles return to the campaign map (win advances, loss ends the
     // run); a draw counts as a loss so the run still resolves. Quick Match
     // offers Rematch (fresh mount via Root's matchEpoch) and Main Menu.
@@ -625,7 +636,7 @@ export function Board(props: BoardProps<GameState>) {
         G={G}
         me={me}
         won={won}
-        draw={!!ctx.gameover.draw}
+        draw={!!gameover.draw}
         isStory={isStory}
         isTutorial={isTutorial}
         lessonNumber={lesson?.number}
@@ -1061,8 +1072,13 @@ export function Board(props: BoardProps<GameState>) {
         <UltMomentFlash G={G} />
         <CardPlayFlash
           G={G}
-          onSkip={() => { try { (moves as any).completeAction(); } catch {} }}
+          // Once the match is decided there is nothing left to skip to.
+          onSkip={ctx.gameover ? undefined : () => { try { (moves as any).completeAction(); } catch {} }}
         />
+
+        {/* The match is decided and its last blow is still playing: nothing
+            on the board can be touched until the result sheet takes over. */}
+        {ctx.gameover && <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: 94 }} />}
 
         {/* Board FX — skill flares and bolts, type-coloured impacts, status
             stamps, heals, shields, revives — anchored to the hero slots. */}
