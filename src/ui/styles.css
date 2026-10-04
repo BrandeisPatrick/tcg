@@ -177,11 +177,13 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
   content: '';
   position: absolute;
   inset: -50%;
+  /* A sheen, not a strip light: at twice this the bar read as a white stripe
+     painted across the type band. */
   background: linear-gradient(103deg,
     transparent 38%,
-    rgba(255, 252, 238, 0.28) 47%,
-    rgba(255, 255, 255, 0.5) 50%,
-    rgba(255, 252, 238, 0.28) 53%,
+    rgba(255, 252, 238, 0.15) 47%,
+    rgba(255, 255, 255, 0.28) 50%,
+    rgba(255, 252, 238, 0.15) 53%,
     transparent 62%);
   transform: translateX(calc((var(--px, 0.5) - 0.5) * 150%));
   mix-blend-mode: screen;
@@ -191,7 +193,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
    a faint sheen that follows the paper's own tone. */
 .foil-gloss--paper::before {
   mix-blend-mode: overlay;
-  opacity: 0.55;
+  opacity: 0.45;
 }
 
 /* ===== 3D tilt =====
@@ -227,7 +229,17 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
    went dead on dark art).
 
    Layer markup is HoloLayer in SpotVarnish.tsx: four <i> children, shine-a,
-   shine-b, glitter, glare. Variants differ by the mask on the two shines. */
+   shine-b, glitter, glare. Variants differ by the mask on the two shines.
+
+   THE WRAPPER MUST NOT BE A STACKING CONTEXT. A blend mode only reaches as
+   far as the nearest one, so a z-index, a mask, an opacity or a filter on
+   .holo cuts every layer off from the art: the dodge, the screen and the
+   overlay then blend with nothing, and the whole stack is laid over the
+   picture as flat translucent paint — a bright fog that lifts the blacks,
+   which is exactly what a foil must not do. That is how this shipped at
+   first. So the wrapper only positions and clips, and everything that makes
+   a stacking context (the z-index, the point-light mask) sits on the layers
+   themselves, which is harmless: each is the thing being blended. */
 .holo {
   --holo-strength: 1;
   --holo-angle: 115deg;
@@ -236,16 +248,6 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
   border-radius: inherit;
   overflow: hidden;
   pointer-events: none;
-  z-index: 6;
-  /* Lit from a point: the whole treatment is ~4x stronger under the pointer
-     than at the far corner. This is most of the difference between a foil
-     and a filter — a filter is uniform. */
-  -webkit-mask-image: radial-gradient(farthest-corner circle
-    at calc(var(--px, 0.5) * 100%) calc(var(--py, 0.5) * 100%),
-    #000 0%, rgba(0, 0, 0, 0.9) 22%, rgba(0, 0, 0, 0.42) 62%, rgba(0, 0, 0, 0.24) 100%);
-  mask-image: radial-gradient(farthest-corner circle
-    at calc(var(--px, 0.5) * 100%) calc(var(--py, 0.5) * 100%),
-    #000 0%, rgba(0, 0, 0, 0.9) 22%, rgba(0, 0, 0, 0.42) 62%, rgba(0, 0, 0, 0.24) 100%);
 }
 /* ===== Palettes ==========================================================
    Seven band stops, cycled symmetrically so a duotone still fills the run.
@@ -278,6 +280,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
 .holo > i {
   position: absolute;
   inset: 0;
+  z-index: 6;
   display: block;
   transition: background-position 90ms linear, opacity 120ms linear;
 }
@@ -301,12 +304,22 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
      every band and leaves the clear gaps clear. */
   filter: brightness(0.7) contrast(1.9) saturate(var(--holo-sat, 1));
   opacity: calc(var(--holo-strength, 1) * 0.5);
-  -webkit-mask-image: var(--holo-mark, none);
-  -webkit-mask-size: var(--holo-mark-size, auto);
-  -webkit-mask-repeat: repeat;
-  mask-image: var(--holo-mark, none);
-  mask-size: var(--holo-mark-size, auto);
-  mask-repeat: repeat;
+  /* Two masks, intersected: the variant's mark (solid when it has none), and
+     the point light — the bands are ~4x stronger under the pointer than at
+     the far corner, which is most of the difference between a foil and a
+     filter; a filter is uniform. The layer overhangs the card by a quarter
+     each way, so the pointer and the falloff are restated in its own box. */
+  --holo-light: radial-gradient(farthest-corner circle
+    at calc(16.667% + var(--px, 0.5) * 66.667%) calc(16.667% + var(--py, 0.5) * 66.667%),
+    #000 0%, rgba(0, 0, 0, 0.9) 14.7%, rgba(0, 0, 0, 0.42) 41.3%, rgba(0, 0, 0, 0.24) 66.7%);
+  -webkit-mask-image: var(--holo-mark, linear-gradient(#000, #000)), var(--holo-light);
+  -webkit-mask-size: var(--holo-mark-size, auto), auto;
+  -webkit-mask-repeat: repeat, no-repeat;
+  -webkit-mask-composite: source-in;
+  mask-image: var(--holo-mark, linear-gradient(#000, #000)), var(--holo-light);
+  mask-size: var(--holo-mark-size, auto), auto;
+  mask-repeat: repeat, no-repeat;
+  mask-composite: intersect;
 }
 /* The counter-travelling copy: same bands, screen blend so it survives black,
    a few degrees off so the two interfere as they cross. */
@@ -320,14 +333,26 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
   opacity: calc(var(--holo-strength, 1) * 0.22);
 }
 
-/* -- the glare ----------------------------------------------------------- */
+/* -- the glare -----------------------------------------------------------
+   The light itself, and it has to stay under the art. With no pointer it
+   sits in the middle of the picture for good, so it is tuned as a light on
+   the portrait rather than a spotlight: the core is a little under half of
+   the first tuning (a near-opaque cream at 0.85), which read as too bright. */
 .holo__glare {
   background-image: radial-gradient(farthest-corner circle
     at calc(var(--px, 0.5) * 100%) calc(var(--py, 0.5) * 100%),
-    rgba(250, 240, 214, 0.96) 0%, rgba(250, 240, 214, 0.6) 10%,
-    rgba(250, 240, 214, 0.14) 30%, rgba(0, 0, 0, 0.34) 80%);
+    rgba(250, 240, 214, 0.55) 0%, rgba(250, 240, 214, 0.3) 10%,
+    rgba(250, 240, 214, 0.07) 30%, rgba(0, 0, 0, 0.26) 80%);
   mix-blend-mode: overlay;
-  opacity: calc(var(--holo-strength, 1) * 0.85);
+  opacity: calc(var(--holo-strength, 1) * 0.7);
+  /* The same point light the bands wear, so the far-side darkening fades
+     out toward the corners instead of vignetting the art. */
+  -webkit-mask-image: radial-gradient(farthest-corner circle
+    at calc(var(--px, 0.5) * 100%) calc(var(--py, 0.5) * 100%),
+    #000 0%, rgba(0, 0, 0, 0.9) 22%, rgba(0, 0, 0, 0.42) 62%, rgba(0, 0, 0, 0.24) 100%);
+  mask-image: radial-gradient(farthest-corner circle
+    at calc(var(--px, 0.5) * 100%) calc(var(--py, 0.5) * 100%),
+    #000 0%, rgba(0, 0, 0, 0.9) 22%, rgba(0, 0, 0, 0.42) 62%, rgba(0, 0, 0, 0.24) 100%);
   transition: none; /* the gradient centre is the pointer; lag reads as a smear */
 }
 
@@ -339,8 +364,10 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
   /* Drifts against the pointer so specks pass under the glare and twinkle. */
   background-position: calc(var(--px, 0.5) * -90px) calc(var(--py, 0.5) * -70px);
   mix-blend-mode: screen;
-  filter: contrast(1.6) brightness(1.25);
-  opacity: calc(var(--holo-strength, 1) * 1);
+  /* Specks, not a frost: on screen blend, at full opacity and pushed past
+     white, the field under the light added up to a second glare. */
+  filter: contrast(1.6) brightness(1.05);
+  opacity: calc(var(--holo-strength, 1) * 0.6);
   /* Only near the light. */
   -webkit-mask-image: radial-gradient(farthest-side circle
     at calc(var(--px, 0.5) * 100%) calc(var(--py, 0.5) * 100%),
@@ -380,7 +407,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
   --holo-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.026' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.9 0 0 0 -0.5'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23c)'/%3E%3C/svg%3E");
   --holo-mark-size: calc(190px * var(--holo-mark-scale, 1));
 }
-.holo--cosmos .holo__glitter { opacity: calc(var(--holo-strength, 1) * 1); }
+/* Its glitter is the starfield, so it keeps more of it than the rest. */
+.holo--cosmos .holo__glitter { opacity: calc(var(--holo-strength, 1) * 0.8); }
 
 /* Sigil — the game's own stat marks in an offset lattice. */
 .holo--sigil .holo__shine {
