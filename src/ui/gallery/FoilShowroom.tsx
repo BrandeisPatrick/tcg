@@ -10,9 +10,12 @@
  * clear spot varnish, written here from scratch. See SpotVarnish.tsx for the
  * two rules that keep it foil rather than holo.
  *
- * The settings ride in a bar that stays under the masthead, because every
- * card below takes them and a control that has scrolled away cannot be
- * compared against anything.
+ * One card at a time. Pick the card, pick the finish, and the stage shows
+ * that card — beside its own matte print when Compare is on, so never more
+ * than two. A finish is a stack of blended layers (and, for Cosmos, a
+ * turbulence filter), and the earlier sheet that drew every rarity-4 card in
+ * it at once could stall the tab. The settings ride in a bar that stays
+ * under the masthead, so they are never a scroll away from the card.
  *
  * Nothing here is wired into gameplay: CardFrame's `foil` prop defaults to
  * null, and only this tab passes it.
@@ -23,9 +26,9 @@ import {
   type Foil, type Holo, type HoloScope, type HoloStrength, type HoloPalette,
   isPattern, useFoilSweepAllowed,
 } from '../card/SpotVarnish';
-import { ULTIMATES, EQUIPMENT } from '@/cards';
+import { ULTIMATES, EQUIPMENT, CARDS_BY_ID } from '@/cards';
 import {
-  Section, Caption, Notes, Button, CardGrid, Fit, Segmented, Toggle,
+  Caption, Notes, Button, Segmented, Toggle, useWidth, HAND, FULL,
 } from './primitives';
 import { useViewport } from '../hooks/useViewport';
 
@@ -77,12 +80,27 @@ const SCOPES: { id: HoloScope; label: string }[] = [
   { id: 'card', label: 'Whole card' },
 ];
 
-// Four premium items that between them exercise a long name, a two-line rule
-// and a short one, so the stamped type is judged at its worst as well as best.
-const T4_SAMPLE = ['diviners_kevlar', 'transcendent_cooldown', 'leech', 'escalating_exposure'];
+type SizeId = 'full' | 'hand';
+const SIZES: { id: SizeId; label: string }[] = [
+  { id: 'full', label: 'Full' },
+  { id: 'hand', label: 'Hand' },
+];
+
+// The finish is for rarity 4 only: every ultimate, and the tier-4 equipment.
+const T4_GEAR = EQUIPMENT.filter((e) => e.rarity === 4);
+const CARD_IDS = [...ULTIMATES, ...T4_GEAR].map((c) => c.id);
+const ultLabel = (u: (typeof ULTIMATES)[number]) => {
+  const hero = CARDS_BY_ID[u.linkedHero]?.name;
+  return hero ? `${u.name} · ${hero}` : u.name;
+};
+
+const STAGE_GAP = 28;
 
 export function FoilShowroom() {
   const { isMobile } = useViewport();
+  const [cardId, setCardId] = useState('ult_kelvin');
+  const [size, setSize] = useState<SizeId>('full');
+  const [compare, setCompare] = useState(true);
   const [choice, setChoice] = useState<Choice>('both');
   const [holoChoice, setHolo] = useState<HoloChoice>('split');
   const [scope, setScope] = useState<HoloScope>('art');
@@ -94,14 +112,13 @@ export function FoilShowroom() {
   // there the bar folds to one line that names the current finish.
   const [open, setOpen] = useState(!isMobile);
   const sweepAllowed = useFoilSweepAllowed();
-  const stage = useRef<HTMLDivElement>(null);
+  const [stage, stageW] = useWidth<HTMLDivElement>();
   const raf = useRef<number | null>(null);
 
-  /** Turn every card on the sheet through the light at once. Cards write their
-   *  own --px only while hovered, so driving it here reaches all of them —
-   *  which is also how a phone, with no pointer at all, would ever see the
-   *  metal move. */
-  const sweepAll = (ms = 1100) => {
+  /** Turn the card through the light. A card writes its own --px only while
+   *  hovered, so driving it from the stage is how a phone, with no pointer
+   *  at all, ever sees the metal move. */
+  const sweep = (ms = 1100) => {
     const el = stage.current;
     if (!el || !sweepAllowed) return;
     if (raf.current) cancelAnimationFrame(raf.current);
@@ -117,8 +134,6 @@ export function FoilShowroom() {
 
   const foil = asFoil(choice);
   const holo = asHolo(holoChoice);
-  // Everything below takes the same settings; bundled so a call site cannot
-  // accidentally show one card under different rules than its neighbour.
   const markScale = MARK_SCALES.find((m) => m.id === markId)!.v;
   const fx = {
     foil, holo, holoScope: scope, holoStrength: strength, holoMarkScale: markScale,
@@ -128,43 +143,98 @@ export function FoilShowroom() {
   const finish = CHOICES.find((c) => c.id === choice)!;
   const holoOf = HOLOS.find((c) => c.id === holoChoice)!;
   const colour = PALETTES.find((c) => c.id === palette)!;
+  const cardName = CARDS_BY_ID[cardId]?.name ?? cardId;
 
-  // The four judged at close range lead the set, so the worst cases for the
-  // stamped type (a long name, a two-line rule) are the first thing seen.
-  const t4Gear = EQUIPMENT.filter((e) => e.rarity === 4);
-  const t4 = [
-    ...T4_SAMPLE.map((id) => t4Gear.find((e) => e.id === id)).filter((e) => !!e),
-    ...t4Gear.filter((e) => !T4_SAMPLE.includes(e.id)),
-  ] as typeof t4Gear;
+  /** Step to the neighbouring card, wrapping at either end. */
+  const step = (by: number) => {
+    const i = CARD_IDS.indexOf(cardId);
+    setCardId(CARD_IDS[(i + by + CARD_IDS.length) % CARD_IDS.length]);
+  };
+
+  // The stage holds one card or two, at the size picked — scaled down as a
+  // pair only where two will not fit side by side (a phone).
+  const dims = size === 'full' ? FULL : HAND;
+  const shown = compare ? 2 : 1;
+  const scale = stageW > 0 ? Math.min(1, (stageW - STAGE_GAP * (shown - 1)) / (dims.w * shown)) : 1;
+  const slot = (label: string, card: React.ReactNode) => (
+    <figure style={{ margin: 0, width: dims.w * scale }}>
+      <div style={{ width: dims.w * scale, height: dims.h * scale }}>
+        <div style={{ width: dims.w, height: dims.h, transform: `scale(${scale})`, transformOrigin: '0 0' }}>
+          {card}
+        </div>
+      </div>
+      <figcaption className="gal-figcap">{label}</figcaption>
+    </figure>
+  );
+
+  const picker = (
+    <div className="gal-seg" role="group" aria-label="Card">
+      <span className="gal-seg__label" aria-hidden>Card</span>
+      <Button onClick={() => step(-1)} title="Previous card">←</Button>
+      <select
+        className="gal-select"
+        value={cardId}
+        onChange={(e) => setCardId(e.target.value)}
+        aria-label="Card"
+        style={{ minWidth: 0, flex: '1 1 auto' }}
+      >
+        <optgroup label="Ultimates">
+          {ULTIMATES.map((u) => <option key={u.id} value={u.id}>{ultLabel(u)}</option>)}
+        </optgroup>
+        <optgroup label="Tier-4 equipment">
+          {T4_GEAR.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+        </optgroup>
+      </select>
+      <Button onClick={() => step(1)} title="Next card">→</Button>
+    </div>
+  );
 
   const controls = (
     <>
+      {picker}
       <Segmented label="Finish" value={choice} onChange={setChoice} options={CHOICES} />
       <Segmented label="Holo" value={holoChoice} onChange={setHolo} options={HOLOS} />
       <Segmented label="Colour" value={palette} onChange={setPalette} options={PALETTES} />
       <Segmented label="Area" value={scope} onChange={setScope} options={SCOPES} />
       <Segmented label="Strength" value={strength} onChange={setStrength} options={STRENGTHS} />
       {patterned && <Segmented label="Tile" value={markId} onChange={setMarkId} options={MARK_SCALES} />}
+      <Segmented label="Size" value={size} onChange={setSize} options={SIZES} />
+      <Toggle label="Compare" on={compare} onChange={setCompare}>Beside matte {compare ? 'on' : 'off'}</Toggle>
       <Toggle label="Motion" on={tilt} onChange={setTilt}>3D tilt {tilt ? 'on' : 'off'}</Toggle>
-      <Button onClick={() => sweepAll()} disabled={!sweepAllowed || (choice === 'matte' && !holo)}>
+      <Button onClick={() => sweep()} disabled={!sweepAllowed || (choice === 'matte' && !holo)}>
         Turn in the light
       </Button>
     </>
   );
 
   return (
-    <div ref={stage}>
+    <div>
       <div className="gal-bar" style={isMobile ? { gap: '8px 14px' } : undefined}>
         {isMobile && (
           <button type="button" className="gal-bar__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-            <span>{finish.label} · {holoOf.label} · {colour.label} · {SCOPES.find((x) => x.id === scope)!.label}</span>
+            <span>{cardName} · {finish.label} · {holoOf.label} · {colour.label}</span>
             <span>{open ? 'Close' : 'Settings'}</span>
           </button>
         )}
         {(open || !isMobile) && controls}
       </div>
 
-      <div className="gal-cols2" style={{ marginBottom: 14 }}>
+      {/* The stage: the picked card in the picked finish and, with Compare
+          on, the same card as it ships today. Two cards at most. */}
+      <div
+        ref={stage}
+        style={{
+          display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+          gap: STAGE_GAP, margin: '6px 0 22px',
+          // Until it is measured there is nothing to scale against.
+          visibility: stageW > 0 ? 'visible' : 'hidden',
+        }}
+      >
+        {slot(`${finish.label}${holo ? ` · ${holoOf.label}` : ''}`, <CardFrame cardId={cardId} size={size} {...fx} />)}
+        {compare && slot('Matte, as it ships', <CardFrame cardId={cardId} size={size} />)}
+      </div>
+
+      <div className="gal-cols2">
         <div>
           <Caption><strong>Finish · {finish.label}.</strong> {finish.blurb}</Caption>
           <Caption><strong>Holo · {holoOf.label}.</strong> {holoOf.blurb}</Caption>
@@ -184,9 +254,9 @@ export function FoilShowroom() {
             </p>
             <p>
               Tilt and iridescence sit on the same two pointer variables as the foil, so the metal catches light{' '}
-              <em>because</em> the card turned, rather than alongside it. Move the pointer across a card, or
-              press Turn in the light to sweep the whole sheet. That sweep is also the only way any of this
-              moves on a phone.
+              <em>because</em> the card turned, rather than alongside it. Move the pointer across the card, or
+              press Turn in the light to sweep it. That sweep is also the only way any of this moves on a
+              phone.
             </p>
             <p>
               The first three holos are washes: the iridescence covers the plate evenly. The last four are
@@ -204,72 +274,6 @@ export function FoilShowroom() {
         </div>
       </div>
 
-      <div className="gal-cols2">
-        <Section title="Colour" count={PALETTES.length} aside="the same holo, four palettes">
-          <CardGrid pack="start" gap={12}>
-            {PALETTES.map((pl) => (
-              <Fit key={pl.id} label={pl.label}>
-                <CardFrame cardId="ult_kelvin" size="hand" {...fx} holo={holo ?? 'rainbow'} holoPalette={pl.id} />
-              </Fit>
-            ))}
-          </CardGrid>
-        </Section>
-
-        <Section title="Finish" count={CHOICES.length} aside="one card, four finishes">
-          <CardGrid pack="start" gap={12}>
-            {CHOICES.map((c) => (
-              <Fit key={c.id} label={c.label}>
-                <CardFrame cardId="ult_lash" size="hand" {...fx} foil={asFoil(c.id)} />
-              </Fit>
-            ))}
-          </CardGrid>
-        </Section>
-      </div>
-
-      <Section title="Holo" count={HOLOS.length - 1} aside="none, then three washes and four patterns">
-        <CardGrid pack="start" gap={12}>
-          {HOLOS.map((h) => (
-            <Fit key={h.id} label={h.label}>
-              <CardFrame cardId="ult_haze" size="hand" {...fx} holo={asHolo(h.id)} />
-            </Fit>
-          ))}
-        </CardGrid>
-      </Section>
-
-      <div className="gal-cols2">
-        <Section title="Against the lower rarities" aside="the finish is on the last card only">
-          <CardGrid pack="start" gap={12}>
-            <Fit label="Tier 1"><CardFrame cardId="extra_health" size="hand" /></Fit>
-            <Fit label="Tier 2"><CardFrame cardId="titanic_magazine" size="hand" /></Fit>
-            <Fit label="Tier 3"><CardFrame cardId="superior_cooldown" size="hand" /></Fit>
-            <Fit label="Tier 4"><CardFrame cardId="transcendent_cooldown" size="hand" {...fx} /></Fit>
-          </CardGrid>
-        </Section>
-
-        <Section title="Large format" aside="the long-press view">
-          <div className="gal-scroller gal-scroller--bleed">
-            <CardFrame cardId="ult_rem" size="full" {...fx} />
-            <CardFrame cardId="leech" size="full" {...fx} />
-          </div>
-        </Section>
-      </div>
-
-      <Section title="Ultimates" count={ULTIMATES.length} aside="every one is rarity 4">
-        <Caption>The real test is the grid: a finish that charms on one card can turn a whole sheet noisy.</Caption>
-        <CardGrid>
-          {ULTIMATES.map((u) => (
-            <Fit key={u.id}><CardFrame cardId={u.id} size="hand" {...fx} /></Fit>
-          ))}
-        </CardGrid>
-      </Section>
-
-      <Section title="Tier-4 equipment" count={t4.length} aside="the same rarity, so the same plate">
-        <CardGrid>
-          {t4.map((e) => (
-            <Fit key={e.id}><CardFrame cardId={e.id} size="hand" {...fx} /></Fit>
-          ))}
-        </CardGrid>
-      </Section>
     </div>
   );
 }
