@@ -1,7 +1,7 @@
 import type { Ctx } from 'boardgame.io';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { otherPlayer, liveBoardCards, effectiveAtk, effectiveSpirit } from '@/engine/util';
+import { otherPlayer, liveBoardCards, effectiveAtk, effectiveSpirit, isRespawning, stepInCandidates } from '@/engine/util';
 import { getAbility, type TargetFilter } from '@/abilities';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, DeadlockGame } from '@/engine/game';
 import { resolveAttackPhase } from '@/engine/combat';
@@ -218,12 +218,8 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
   // and dispatching promoteToActive outside that window is an invalid move.
   const activeIsCorpse = !!ps.active && (ps.active.respawnTurnsLeft ?? 0) > 0 && G.pendingPromotion === pid;
   if (activeIsCorpse) {
-    for (let i = 0; i < ps.bench.length; i++) {
-      const b = ps.bench[i];
-      if (!b || (b.respawnTurnsLeft ?? 0) > 0) continue;
-      const d = CARDS_BY_ID[b.cardId];
-      if (d?.type !== 'hero' || d.flags?.benchOnly) continue;
-      // Prefer the highest-HP candidate.
+    // Prefer the highest-HP candidate.
+    for (const b of stepInCandidates(ps)) {
       out.push({ move: 'promoteToActive', args: [b.iid], score: 50_000 + b.hp });
     }
     if (out.length > 0) return out;
@@ -319,17 +315,12 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
 
   // Retreat: swap Active with a fresh bench hero (costs RETREAT_COST souls).
   // Score positively when Active is in serious trouble and bench has a healthier option.
-  if (ps.active && ps.souls >= RETREAT_COST) {
+  if (ps.active && !isRespawning(ps.active) && ps.souls >= RETREAT_COST) {
     const activeHpFrac = ps.active.hp / Math.max(1, ps.active.hpMax);
     const activeStunned = ps.active.statuses.some(
       (s) => s.id === 'stun' || s.id === 'silenced' || s.id === 'disarm',
     );
-    for (let i = 0; i < ps.bench.length; i++) {
-      const benchHero = ps.bench[i];
-      if (!benchHero) continue;
-      const benchData = CARDS_BY_ID[benchHero.cardId];
-      if (benchData?.type !== 'hero') continue;
-      if (benchData.flags?.benchOnly) continue;
+    for (const benchHero of stepInCandidates(ps)) {
       const benchHpFrac = benchHero.hp / Math.max(1, benchHero.hpMax);
       // Only retreat if the bench replacement is meaningfully fresher.
       if (benchHpFrac - activeHpFrac < 0.25 && !activeStunned) continue;
@@ -337,7 +328,7 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
       if (activeHpFrac < 0.35) s += 30; // about to die
       if (activeStunned) s += 18;       // CC'd active is dead weight
       s += Math.round((benchHpFrac - activeHpFrac) * 20);
-      out.push({ move: 'moveHero', args: [(i + 1) as 1 | 2 | 3, 0], score: s });
+      out.push({ move: 'moveHero', args: [ps.bench.indexOf(benchHero) + 1, 0], score: s });
     }
   }
 

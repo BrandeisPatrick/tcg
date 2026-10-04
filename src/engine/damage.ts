@@ -1,5 +1,5 @@
 import type { CardInstance, DamageType, FxCastKind, FxTag, GameState, PlayerID, PlayerState } from './types';
-import { pushLog } from './util';
+import { pushLog, stepInCandidates } from './util';
 import { CARDS_BY_ID } from '@/cards';
 import { currentCast } from './castContext';
 import { fireEquipmentTriggers } from './equipmentDispatch';
@@ -298,11 +298,7 @@ export function reapDead(G: GameState, ps: PlayerState) {
  *  (alive, non-bench-only) bench hero can step up? */
 export function needsPromotion(ps: PlayerState): boolean {
   if (!ps.active || (ps.active.respawnTurnsLeft ?? 0) === 0) return false;
-  return ps.bench.some((b) => {
-    if (!b || (b.respawnTurnsLeft ?? 0) > 0) return false;
-    const d = CARDS_BY_ID[b.cardId];
-    return d?.type === 'hero' && !d.flags?.benchOnly;
-  });
+  return stepInCandidates(ps).length > 0;
 }
 
 /**
@@ -334,17 +330,11 @@ export function resolve(G: GameState) {
  */
 function autoPromoteAi(G: GameState, ps: PlayerState) {
   if (!ps.active || (ps.active.respawnTurnsLeft ?? 0) === 0) return;
-  let bestIdx = -1;
-  let bestHp = -1;
-  for (let i = 0; i < ps.bench.length; i++) {
-    const b = ps.bench[i];
-    if (!b || (b.respawnTurnsLeft ?? 0) > 0) continue;
-    const d = CARDS_BY_ID[b.cardId];
-    if (d?.type !== 'hero' || d.flags?.benchOnly) continue;
-    if (b.hp > bestHp) { bestHp = b.hp; bestIdx = i; }
-  }
-  if (bestIdx === -1) return;
-  const benchHero = ps.bench[bestIdx]!;
+  const candidates = stepInCandidates(ps);
+  if (candidates.length === 0) return;
+  // Highest HP steps up; on a tie, the earliest bench slot.
+  const benchHero = candidates.reduce((best, b) => (b.hp > best.hp ? b : best));
+  const bestIdx = ps.bench.indexOf(benchHero);
   const corpse = ps.active;
   ps.active = benchHero;
   benchHero.zone = 'active';

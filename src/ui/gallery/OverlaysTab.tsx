@@ -1,11 +1,14 @@
 /**
- * Overlays — the hero detail sheet, opened in each state it can be in.
+ * Overlays — the hero detail sheet, opened in each state it can be in, and
+ * the sheet that asks for a new Active.
  */
 import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { HEROES } from '@/cards';
+import { RETREAT_COST } from '@/engine/game';
 import { HeroDetailSheet } from '../overlays/HeroDetailSheet';
+import { PromotionOverlay } from '../overlays/PromotionOverlay';
 import { poster } from '../poster';
 import { mockHeroInstance, mockEquipInstance } from './mock';
 import { Section, Caption } from './primitives';
@@ -15,7 +18,8 @@ const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
   { id: 'used',    label: 'Skill used',          hint: 'Dimmed, with “already used this turn”.' },
   { id: 'blocked', label: 'Skill blocked',       hint: 'A flat card and the reason (“Not your turn”).' },
   { id: 'enemy',   label: 'Enemy hero',          hint: 'Read-only. No action.' },
-  { id: 'loaded',  label: 'Statuses, equipment, retreat', hint: 'Active Effects, Equipment and Retreat all shown.' },
+  { id: 'loaded',  label: 'Statuses, equipment, retreat', hint: 'Active Effects, Equipment and Retreat all shown. Retreat is on the Active’s sheet only.' },
+  { id: 'broke',   label: 'Retreat, short of souls', hint: 'The button stays on the sheet, inert, and says what is missing.' },
 ];
 
 export function OverlaysTab() {
@@ -47,9 +51,12 @@ export function OverlaysTab() {
         ],
         attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('improved_cooldown', 2)],
       };
-      props.canRetreat = true;
-      props.retreatCost = 2;
+      props.retreat = { cost: RETREAT_COST, incomingName: 'Yamato' };
       props.onRetreat = () => setToast('Retreated');
+    }
+    if (s === 'broke') {
+      props.retreat = { cost: RETREAT_COST, blockedReason: `Need ${RETREAT_COST} souls` };
+      props.onRetreat = () => {};
     }
     props.card = card;
     return props;
@@ -58,6 +65,7 @@ export function OverlaysTab() {
   const built = scenario ? build(scenario) : null;
 
   return (
+    <>
     <Section
       title="Hero detail sheet"
       aside={(
@@ -92,6 +100,50 @@ export function OverlaysTab() {
 
       <AnimatePresence>
         {built && <HeroDetailSheet key={`${heroId}-${scenario}`} {...built} />}
+      </AnimatePresence>
+    </Section>
+
+    <NewActiveDemo />
+    </>
+  );
+}
+
+const CHOOSER_BENCH = ['hero_yamato', 'hero_abrams', 'hero_haze'];
+
+/** The "choose your new Active" sheet, in the two ways it is reached. */
+function NewActiveDemo() {
+  const [mode, setMode] = useState<'fell' | 'retreat' | null>(null);
+  const candidates = CHOOSER_BENCH
+    .map((id) => HEROES.find((h) => h.id === id))
+    .filter((h): h is NonNullable<typeof h> => !!h)
+    .map((h) => mockHeroInstance(h));
+  return (
+    <Section title="New Active">
+      <Caption>
+        One sheet asks who takes the lane. After a knockout it is owed, so it cannot be dismissed. On a
+        retreat with more than one hero able to go in it is a choice: it prints the cost and backs out on
+        Cancel, Escape or a tap outside.
+      </Caption>
+      <div className="gal-pick">
+        <button type="button" className="gal-pick__item" onClick={() => setMode('fell')}>
+          <b>After a knockout</b>
+          <span>Your Active fell. Pick who steps up; there is no way out but a pick.</span>
+        </button>
+        <button type="button" className="gal-pick__item" onClick={() => setMode('retreat')}>
+          <b>Retreat, three on the bench</b>
+          <span>Opened from the Active’s sheet when more than one hero can go in.</span>
+        </button>
+      </div>
+      <AnimatePresence>
+        {mode && (
+          <PromotionOverlay
+            key={mode}
+            candidates={candidates}
+            leavingName="Kelvin"
+            retreat={mode === 'retreat' ? { cost: RETREAT_COST, onCancel: () => setMode(null) } : undefined}
+            onPick={() => setMode(null)}
+          />
+        )}
       </AnimatePresence>
     </Section>
   );

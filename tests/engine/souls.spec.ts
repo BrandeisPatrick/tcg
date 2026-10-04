@@ -143,6 +143,24 @@ describe('souls economy', () => {
     expect(G.players['0'].souls).toBe(1); // unchanged
   });
 
+  it('retreat needs two living heroes — a fallen bench hero cannot be sent in', () => {
+    const G = freshG();
+    G.players['0'].souls = 5;
+    G.players['0'].bench[0]!.respawnTurnsLeft = 2; // a corpse on the bench
+    expect(runMove('moveHero', G, '0', 1, 0)).toBe('INVALID_MOVE');
+    expect(G.players['0'].souls).toBe(5); // nothing charged
+    // The living bench hero beside it can still go in.
+    expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE');
+  });
+
+  it('a fallen Active cannot retreat — promotion replaces it instead', () => {
+    const G = freshG();
+    G.players['0'].souls = 5;
+    G.players['0'].active!.respawnTurnsLeft = 2;
+    expect(runMove('moveHero', G, '0', 1, 0)).toBe('INVALID_MOVE');
+    expect(G.players['0'].souls).toBe(5);
+  });
+
   it('bench-to-bench reorganization is free', () => {
     const c = newClient();
     const before = snap(c).G.players['0'].souls;
@@ -190,6 +208,19 @@ describe('souls economy', () => {
     const moves = enumerateAIMoves(G, ctx, false);
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.length).toBeGreaterThan(0);
+  });
+
+  it('AI never retreats into a fallen or bench-only hero', async () => {
+    const { enumerateAIMoves } = await import('@/ai/heuristic');
+    const { makeHero } = await import('./_helpers');
+    const G = freshG();
+    G.players['1'].souls = 3;
+    G.players['1'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 }); // wants out
+    G.players['1'].bench[0]!.respawnTurnsLeft = 2;                // slot 1: a corpse
+    G.players['1'].bench[1] = makeHero('hero_rem', '1', 'bench', 2); // slot 2: bench-only
+    const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
+    const retreats = enumerateAIMoves(G, ctx, false).filter((m) => m.move === 'moveHero' && m.args[1] === 0);
+    expect(retreats.map((m) => m.args[0])).toEqual([3]);
   });
 
   it('AI cannot retreat when it lacks souls (cost-filtered out)', async () => {

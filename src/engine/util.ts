@@ -39,6 +39,17 @@ export function isRespawning(card: CardInstance): boolean {
   return (card.respawnTurnsLeft ?? 0) > 0;
 }
 
+/** The bench heroes who can take the Active slot right now: alive, and not
+ *  bench-only (Rem). One list for the forced promotion off a fallen Active,
+ *  the paid retreat, the AI and the board, so they cannot disagree. */
+export function stepInCandidates(ps: PlayerState): CardInstance[] {
+  return ps.bench.filter((b): b is CardInstance => {
+    if (!b || isRespawning(b)) return false;
+    const d = CARDS_BY_ID[b.cardId];
+    return d?.type === 'hero' && !d.flags?.benchOnly;
+  });
+}
+
 export function effectiveAtk(card: CardInstance): number {
   const data = CARDS_BY_ID[card.cardId];
   if (data?.type !== 'hero') return 0;

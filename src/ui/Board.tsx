@@ -3,6 +3,7 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
+import { stepInCandidates } from '@/engine/util';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
 import { CardPreview } from './overlays/CardPreview';
@@ -14,7 +15,7 @@ import { MulliganOverlay } from './overlays/MulliganOverlay';
 import { DraftOverlay } from './overlays/DraftOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST } from '@/engine/game';
+import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/game';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardTable, boardRows, boardGutter, vitalsPull } from './board/BoardTable';
@@ -102,6 +103,9 @@ export function Board(props: BoardProps<GameState>) {
   });
   const [preview, setPreview] = useState<{ card: CardInstance; hover: boolean } | null>(null);
   const [heroDetail, setHeroDetail] = useState<CardInstance | null>(null);
+  // Retreat with more than one bench hero able to go in: the chooser is up
+  // until the player picks who (or backs out).
+  const [retreatPick, setRetreatPick] = useState(false);
   // Equipment replacement flow: when the player tries to attach a 4th piece
   // to a hero, this holds the incoming card + the target hero until the
   // player picks which existing item to discard (or cancels).
@@ -285,21 +289,23 @@ export function Board(props: BoardProps<GameState>) {
   // never sits on top of the very targets the player is being asked to pick.
   useEffect(() => { if (pending && preview) setPreview(null); }, [pending, preview]);
 
-  // Layered Escape: back out of the innermost mode first — an armed
-  // targeting state or an open hero sheet — before the key reaches the
-  // SystemLayer's pause-menu toggle. Capture phase + stopImmediatePropagation
-  // so the system listener (bubble phase on window) never sees the press.
+  // Layered Escape: back out of the innermost mode first — the retreat
+  // chooser, an open hero sheet, an armed targeting state — before the key
+  // reaches the SystemLayer's pause-menu toggle. Capture phase +
+  // stopImmediatePropagation so the system listener (bubble phase on window)
+  // never sees the press.
   useEffect(() => {
-    if (!pending && !heroDetail) return;
+    if (!pending && !heroDetail && !retreatPick) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopImmediatePropagation();
-      if (heroDetail) setHeroDetail(null);
+      if (retreatPick) setRetreatPick(false);
+      else if (heroDetail) setHeroDetail(null);
       else setPending(null);
     };
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
-  }, [pending, heroDetail]);
+  }, [pending, heroDetail, retreatPick]);
 
   // Tap-away: while a card or skill is armed, a click on anything that is
   // not a control — the sheet, the room, the log — backs out of targeting,
@@ -427,16 +433,9 @@ export function Board(props: BoardProps<GameState>) {
     // dispatching from both effects raced and spammed `invalid move` for the
     // loser. This effect only covers promotions owed on the RIVAL's turn.
     if (ctx.currentPlayer === me) return;
-    const ps = G.players[me];
-    let best: CardInstance | null = null;
-    for (const b of ps.bench) {
-      if (!b || (b.respawnTurnsLeft ?? 0) > 0) continue;
-      const d = CARDS_BY_ID[b.cardId];
-      if (d?.type !== 'hero' || d.flags?.benchOnly) continue;
-      if (!best || b.hp > best.hp) best = b;
-    }
-    if (!best) return;
-    const iid = best.iid;
+    const candidates = stepInCandidates(G.players[me]);
+    if (candidates.length === 0) return;
+    const iid = candidates.reduce((best, b) => (b.hp > best.hp ? b : best)).iid;
     const t = setTimeout(() => {
       try { (moves as any).promoteToActive(iid); } catch {}
     }, AI_THINK_MS);
@@ -555,7 +554,7 @@ export function Board(props: BoardProps<GameState>) {
     if (!isMyTurn) return;
     if (actionLocked) return;
     if (G.players[me].skillUsedThisTurn) return; // one skill per player per turn
-    if (G.players[me].souls < 1) return; // skills cost 1 soul
+    if (G.players[me].souls < SKILL_COST) return;
     if (card.skillUsedThisTurn) return;
     if (card.statuses.some((s) => s.id === 'stun' || s.id === 'silenced')) return;
     const data = CARDS_BY_ID[card.cardId];
@@ -570,6 +569,21 @@ export function Board(props: BoardProps<GameState>) {
       desc: ability.prompt ?? 'Choose a target.',
       filter: ability.target,
     });
+  }
+
+  /** Swap the Active with this bench hero (the engine charges the souls). */
+  function retreatTo(heroIid: string) {
+    const slot = G.players[me].bench.findIndex((b) => b?.iid === heroIid) + 1;
+    if (slot >= 1) moves.moveHero(slot, 0);
+  }
+
+  /** Retreat, from the Active's sheet. With one hero able to step in the swap
+   *  happens at once; with more, the player picks who goes in. */
+  function startRetreat() {
+    if (!isMyTurn || actionLocked) return;
+    const stepIns = stepInCandidates(G.players[me]);
+    if (stepIns.length === 1) retreatTo(stepIns[0].iid);
+    else if (stepIns.length > 1) setRetreatPick(true);
   }
 
   function onHandDragEnd(c: CardInstance, x: number, y: number) {
@@ -952,11 +966,18 @@ export function Board(props: BoardProps<GameState>) {
             const found = findOnBoard(G, heroDetail.iid);
             const isMine = !!found && found.owner === me;
             const mySouls = G.players[me].souls;
-            const isMyBench = isMine && heroDetail.zone === 'bench';
-            const canRetreat = isMyTurn && isMyBench && mySouls >= RETREAT_COST && !!G.players[me].active;
-            // Retreat sends the Active to the bench; the sheet names it.
-            const myActive = G.players[me].active;
-            const retreatingName = myActive ? CARDS_BY_ID[myActive.cardId]?.name : undefined;
+            // Retreat is the Active's own move, so it is offered on the
+            // Active's sheet and nowhere else — whenever a bench hero could
+            // take the fight, with the reason printed when it cannot be done
+            // right now.
+            const stepIns = isMine && found.card.zone === 'active' ? stepInCandidates(G.players[me]) : [];
+            const retreat = stepIns.length === 0 ? undefined : {
+              cost: RETREAT_COST,
+              incomingName: stepIns.length === 1 ? CARDS_BY_ID[stepIns[0].cardId]?.name : undefined,
+              blockedReason: !isMyTurn ? 'Not your turn'
+                : mySouls < RETREAT_COST ? `Need ${RETREAT_COST} souls`
+                : undefined,
+            };
 
             // Skill availability — mirrors `tryUseSkill` so the button only
             // shows when the engine would actually accept the move.
@@ -964,7 +985,6 @@ export function Board(props: BoardProps<GameState>) {
             const hasSkill = data?.type === 'hero' && !!data.skill;
             const heroCcd = heroDetail.statuses.some((s) => s.id === 'stun' || s.id === 'silenced');
             const playerSkillGate = G.players[me].skillUsedThisTurn;
-            const SKILL_COST = 1;
             const canAffordSkill = mySouls >= SKILL_COST;
             const canUseSkill = isMyTurn
               && isMine
@@ -989,14 +1009,8 @@ export function Board(props: BoardProps<GameState>) {
                 canUseSkill={canUseSkill}
                 skillBlockedReason={skillBlockedReason ?? undefined}
                 onUseSkill={() => tryUseSkill(heroDetail)}
-                canRetreat={canRetreat}
-                retreatCost={RETREAT_COST}
-                retreatingName={retreatingName}
-                onRetreat={() => {
-                  if (heroDetail.slot && heroDetail.slot >= 1 && heroDetail.slot <= 3) {
-                    (moves as any).moveHero(heroDetail.slot, 0);
-                  }
-                }}
+                retreat={retreat}
+                onRetreat={startRetreat}
                 onClose={() => setHeroDetail(null)}
               />
             );
@@ -1027,20 +1041,31 @@ export function Board(props: BoardProps<GameState>) {
             // promotion is owed. (No recompute of the corpse/candidate condition.)
             // Shown late when a KO animation is still playing on our Active.
             if (pendingPromotionShown !== me || G.pendingPromotion !== me || G.mulliganPending) return null;
-            const candidates = (ps.bench.filter((b) => {
-              if (!b || (b.respawnTurnsLeft ?? 0) > 0) return false;
-              const d = CARDS_BY_ID[b.cardId];
-              return d?.type === 'hero' && !d.flags?.benchOnly;
-            }) as CardInstance[]);
+            const candidates = stepInCandidates(ps);
             if (candidates.length === 0) return null;
             return (
               <PromotionOverlay
+                key="promotion"
                 candidates={candidates}
-                fallenName={CARDS_BY_ID[ps.active!.cardId]?.name ?? 'Your Active'}
+                leavingName={CARDS_BY_ID[ps.active!.cardId]?.name ?? 'Your Active'}
                 onPick={(iid) => (moves as any).promoteToActive(iid)}
               />
             );
           })()}
+        </AnimatePresence>
+
+        {/* Retreat chooser: the same sheet, asked for rather than owed — it
+            names the cost and can be backed out of. */}
+        <AnimatePresence>
+          {retreatPick && G.players[me].active && (
+            <PromotionOverlay
+              key="retreat"
+              candidates={stepInCandidates(G.players[me])}
+              leavingName={CARDS_BY_ID[G.players[me].active.cardId]?.name ?? 'Your Active'}
+              retreat={{ cost: RETREAT_COST, onCancel: () => setRetreatPick(false) }}
+              onPick={(iid) => { setRetreatPick(false); retreatTo(iid); }}
+            />
+          )}
         </AnimatePresence>
 
         <AnimatePresence>

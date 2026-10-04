@@ -12,7 +12,7 @@ import { getAIDeckTagged } from '@/decks/aiDecks';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from './statusOps';
 import { resolve } from './damage';
 import { resolveAttackPhase } from './combat';
-import { findCardOnBoard, liveBoardCards, pushLog, resetIid, nextIid } from './util';
+import { findCardOnBoard, isRespawning, liveBoardCards, pushLog, resetIid, nextIid } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
 import { fireEquipmentTriggers } from './equipmentDispatch';
@@ -606,9 +606,12 @@ export const DeadlockGame: Game<GameState> = {
       if (!a) return INVALID_MOVE;
       const aData = CARDS_BY_ID[a.cardId];
       if (toSlot === 0 && aData?.type === 'hero' && aData.flags?.benchOnly) return INVALID_MOVE;
-      // Retreat cost: swapping the Active out (slot 0 involved, both heroes alive) charges souls.
+      // Retreat: swapping the Active with a bench hero charges souls, and both
+      // must be alive — a fallen Active is replaced by promoteToActive (free),
+      // and a corpse on the bench cannot be sent in to fight.
       const isRetreat = (fromSlot === 0 || toSlot === 0) && a && b;
       if (isRetreat) {
+        if (isRespawning(a) || isRespawning(b)) return INVALID_MOVE;
         if (ps.souls < RETREAT_COST) return INVALID_MOVE;
         ps.souls -= RETREAT_COST;
       }

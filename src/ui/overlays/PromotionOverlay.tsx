@@ -5,22 +5,29 @@ import { HeroPortrait } from '@/cards/art/heroArt';
 import { effectiveAtk } from '@/engine/util';
 import { fonts, spring, text } from '../tokens';
 import { poster, sheetStyle, scrimStyle } from '../poster';
+import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   candidates: CardInstance[];
-  fallenName: string;
+  /** The Active leaving the lane — fallen, or retreating. */
+  leavingName: string;
+  /** Set when this is a paid retreat rather than a promotion off a fallen
+   *  Active: the sheet says so, prints the cost, and can be backed out of. */
+  retreat?: { cost: number; onCancel: () => void };
   onPick: (heroIid: string) => void;
 }
 
 /**
- * Modal that appears when the local player's Active hero has been KO'd and
- * they need to choose a bench hero to step up. Blocks other interactions until
- * a choice is made (no backdrop dismiss). A cream sheet on the dark scrim;
- * each candidate is a tappable charcoal-framed portrait card. Board wraps
- * this in its own AnimatePresence, which drives the exit fade.
+ * The "choose your new Active" modal. It opens when the local player's
+ * Active has been KO'd and a bench hero must step up — then it blocks other
+ * interactions until a choice is made (no backdrop dismiss) — and when the
+ * player retreats with more than one hero able to go in, where the backdrop
+ * and a Cancel button back out. A cream sheet on the dark scrim; each
+ * candidate is a tappable charcoal-framed portrait card. Board wraps this in
+ * its own AnimatePresence, which drives the exit fade.
  */
-export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
+export function PromotionOverlay({ candidates, leavingName, retreat, onPick }: Props) {
   const { isMobile } = useViewport();
   return (
     <motion.div
@@ -28,6 +35,7 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
+      onClick={retreat?.onCancel}
       style={{
         ...scrimStyle,
         zIndex: 100, padding: isMobile ? 16 : 32,
@@ -38,6 +46,9 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
         initial={{ y: 20, scale: 0.95 }}
         animate={{ y: 0, scale: 1 }}
         transition={spring.snappy}
+        role="dialog"
+        aria-label="Choose your new Active"
+        onClick={(e) => e.stopPropagation()}
         style={{
           ...sheetStyle,
           display: 'flex', flexDirection: 'column',
@@ -55,8 +66,8 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             lineHeight: 1,
-            color: poster.red,
-          }}>{fallenName} Fell</span>
+            color: retreat ? poster.ink : poster.red,
+          }}>{leavingName} {retreat ? 'Retreats' : 'Fell'}</span>
           <span style={{
             fontFamily: fonts.display,
             fontSize: 13,
@@ -89,9 +100,14 @@ export function PromotionOverlay({ candidates, fallenName, onPick }: Props) {
           ))}
         </div>
 
-        <span style={{ ...text.body, color: poster.inkDim }}>
-          The fallen hero takes their bench slot to respawn.
+        <span style={{ ...text.body, color: poster.inkDim, textAlign: 'center' }}>
+          {retreat
+            ? `${leavingName} takes their bench slot. Retreat costs ${retreat.cost} souls.`
+            : 'The fallen hero takes their bench slot to respawn.'}
         </span>
+        {retreat && (
+          <PosterButton variant="ink" size="sm" onClick={retreat.onCancel}>Cancel</PosterButton>
+        )}
       </motion.div>
     </motion.div>
   );

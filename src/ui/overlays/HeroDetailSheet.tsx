@@ -24,26 +24,31 @@ const eyebrow = {
 
 interface Props {
   card: CardInstance;
-  /** True if this hero belongs to the local player. Drives the Skill action + Retreat. */
+  /** True if this hero belongs to the local player. Drives the Skill action. */
   isMine?: boolean;
   /** All gates for using the skill satisfied (player flag, per-hero, CC). */
   canUseSkill?: boolean;
   /** Short reason why the skill can't be used, shown inside the skill card. */
   skillBlockedReason?: string;
   onUseSkill?: () => void;
-  /** The sheet's hero is on the bench and may swap with the Active: the
-   *  Active retreats to the bench and this hero takes its place. */
-  canRetreat?: boolean;
-  retreatCost?: number;
-  /** Name of the Active who would go to the bench — printed on the button. */
-  retreatingName?: string;
+  /** Retreat lives on your Active's sheet: he goes to the bench and a bench
+   *  hero takes the fight. Absent when nobody on the bench can step in. */
+  retreat?: {
+    cost: number;
+    /** Who comes in, when exactly one hero can — printed on the button. With
+     *  more than one, the player picks after tapping. */
+    incomingName?: string;
+    /** Why it cannot be done right now ("Need 2 souls"). The button prints
+     *  the reason and stays inert. */
+    blockedReason?: string;
+  };
   onRetreat?: () => void;
   onClose: () => void;
 }
 
 export function HeroDetailSheet({
   card, isMine, canUseSkill, skillBlockedReason, onUseSkill,
-  canRetreat, retreatCost = 2, retreatingName, onRetreat, onClose,
+  retreat, onRetreat, onClose,
 }: Props) {
   const { isMobile } = useViewport();
 
@@ -209,17 +214,21 @@ export function HeroDetailSheet({
       {/* Action controls — below the card, outside the frame. The Skill itself
           is tapped inside the card; Retreat + Close live here. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: cardW }}>
-        {/* Retreat sends the ACTIVE to the bench; this sheet's hero (on the
-            bench) takes its place. The headline names the move, the line
-            under it says who goes where. */}
-        {canRetreat && onRetreat && (
+        {/* Retreat sends this sheet's hero — the Active — to the bench. The
+            headline names the move; the line under it says who goes where,
+            or why it cannot be done yet. */}
+        {retreat && onRetreat && (
           <ActionButton
             onClick={() => { onRetreat(); onClose(); }}
+            disabled={!!retreat.blockedReason}
             icon="↻"
             label="Retreat to bench"
-            caption={`${retreatingName ?? 'Your Active'} to bench · ${data.name} to Active`}
-            ariaLabel={`Retreat ${retreatingName ?? 'your Active'} to the bench and send ${data.name} in — costs ${retreatCost} souls`}
-            badge={`−${retreatCost}`}
+            caption={retreat.blockedReason
+              ?? (retreat.incomingName
+                ? `${data.name} to bench · ${retreat.incomingName} to Active`
+                : `${data.name} to bench · you pick who goes in`)}
+            ariaLabel={`Retreat ${data.name} to the bench — costs ${retreat.cost} souls`}
+            badge={`−${retreat.cost}`}
           />
         )}
         <PosterButton variant="ghost" size="sm" onClick={onClose} style={{ width: '100%' }}>
@@ -498,10 +507,11 @@ function SkillActionCard({
 
 /** Secondary action (Retreat): the poster's paper button, full width, with
  *  the soul cost on a red sticker and an optional plain-type line under the
- *  headline saying what the move does. The click stops here so the
- *  backdrop's dismiss never sees it. */
+ *  headline saying what the move does. Disabled, it drops to the cream
+ *  outline the dark scrim needs and the line says why. The click stops here
+ *  so the backdrop's dismiss never sees it. */
 function ActionButton({
-  onClick, icon, label, caption, badge, ariaLabel,
+  onClick, icon, label, caption, badge, ariaLabel, disabled = false,
 }: {
   onClick: () => void;
   icon: string;
@@ -509,16 +519,19 @@ function ActionButton({
   caption?: string;
   badge?: string;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10, width: '100%' }}>
       <PosterButton
         variant="paper"
         onClick={onClick}
+        disabled={disabled}
         ariaLabel={ariaLabel}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
           ...(caption ? { padding: '11px 16px 12px' } : {}),
+          ...(disabled ? { color: poster.creamDim, border: `2px solid ${poster.edge}` } : {}),
         }}
       >
         <span aria-hidden>{icon}</span>
@@ -527,14 +540,16 @@ function ActionButton({
           {caption && (
             <span style={{
               fontFamily: fonts.ui, fontSize: 12, fontWeight: 500, letterSpacing: 'normal',
-              textTransform: 'none', lineHeight: 1.25, color: poster.inkDim,
+              textTransform: 'none', lineHeight: 1.25, color: disabled ? poster.creamDim : poster.inkDim,
             }}>{caption}</span>
           )}
         </span>
         {badge && (
           <span style={{
             padding: '3px 8px 4px', borderRadius: 3,
-            background: poster.red, color: poster.paper,
+            background: disabled ? 'transparent' : poster.red,
+            border: `1px solid ${disabled ? poster.creamFaint : poster.red}`,
+            color: disabled ? poster.creamDim : poster.paper,
             fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.12em', lineHeight: 1,
           }}>{badge}</span>
         )}

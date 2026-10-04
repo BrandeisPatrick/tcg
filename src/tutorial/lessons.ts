@@ -399,18 +399,22 @@ export const LESSONS: Lesson[] = [
     }),
     steps: [
       look('look', 'Spent', mine, (v) => `${nameOf(mine(v))} is at ${hpOf(mine(v))}: the next trade finishes him. ${nameOf(myBench(v))} waits fresh on your bench. Tap ${nameOf(mine(v))}.`),
-      close('close', 'One Left', (v) => `${hpOf(mine(v))}. He cannot take another hit, but a hero on the bench takes none. Tap Close.`),
+      // Retreat is the Active's own move and lives on his sheet, which the
+      // step before has just opened. Should it be closed, the step opens it
+      // again first.
       {
         id: 'retreat',
         title: 'Retreat',
-        body: (v) => (v.sheetOpen
-          ? `Retreat costs ${RETREAT_COST} souls and swaps the two. Tap Retreat.`
-          : `Tap ${nameOf(myBench(v)) || 'your bench hero'} on your bench, then Retreat: ${RETREAT_COST} souls swap the two.`),
+        body: (v) => (v.seen.swapped
+          ? `${nameOf(mine(v))} is in. ${nameOf(myBench(v))} is on the bench, out of the fight.`
+          : v.sheetOpen
+            ? `A hero on the bench takes no hits. Retreat costs ${RETREAT_COST} souls and swaps the two. Tap Retreat.`
+            : `Tap ${nameOf(mine(v)) || 'your Active'}, then Retreat: ${RETREAT_COST} souls swap him with ${nameOf(myBench(v)) || 'your bench hero'}.`),
         task: (v) => v.seen.swapped,
         ready: (v) => souls(v) >= RETREAT_COST && !!myBench(v) && !!mine(v),
         blocked: `Retreat costs ${RETREAT_COST} souls. End the turn to refill, then come back to it.`,
-        spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(myBench(v))]),
-        allow: (v) => (v.sheetOpen ? ['~Retreat'] : [tile(myBench(v))]),
+        spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
+        allow: (v) => (v.sheetOpen ? ['~Retreat'] : [tile(mine(v))]),
       },
       endTurn(1, (v) => `${nameOf(mine(v))} takes the trade now, and ${nameOf(myBench(v))} sits it out. ${nameOf(mine(v))} swings for ${atkOf(mine(v))}; ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. Tap End Turn.`),
     ],
