@@ -15,7 +15,7 @@
  * animation) never finishes under the virtual clock, so `tick` pins it.
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,31 @@ const WebSocket = require('ws');
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Every launch makes a fresh Chrome profile in the temp dir (~40 MB each).
+// They must go when the browser does — 460 left behind once filled the disk
+// and failed every run after. close() removes its own; anything a script
+// leaves open when it exits, is interrupted or crashes is swept up here.
+const live = new Set();
+function sweep(session) {
+  try { session.proc.kill('SIGKILL'); } catch {}
+  // Chrome may still be letting go of files for a moment: retry, quietly.
+  try { rmSync(session.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch {}
+  live.delete(session);
+}
+let guarded = false;
+function guardExit() {
+  if (guarded) return;
+  guarded = true;
+  process.on('exit', () => { for (const s of [...live]) sweep(s); });
+  for (const [sig, code] of [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]]) {
+    process.on(sig, () => process.exit(code));
+  }
+  // Taking these over means printing them and failing the run ourselves.
+  const die = (err) => { console.error(err); process.exit(1); };
+  process.on('uncaughtException', die);
+  process.on('unhandledRejection', die);
+}
+
 export async function launch({ port = 9333, width = 1440, height = 900, scale = 1 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'tcg-cdp-'));
   const proc = spawn(CHROME, [
@@ -33,6 +58,9 @@ export async function launch({ port = 9333, width = 1440, height = 900, scale = 
     `--window-size=${width},${height}`, '--no-first-run', '--no-default-browser-check',
     '--disable-gpu', '--hide-scrollbars', '--mute-audio', 'about:blank',
   ], { stdio: 'ignore' });
+  const session = { proc, dir };
+  live.add(session);
+  guardExit();
   let targets = null;
   for (let i = 0; i < 60; i++) {
     try {
@@ -126,7 +154,21 @@ export async function launch({ port = 9333, width = 1440, height = 900, scale = 
   };
   // Let React commit (MessageChannel hops) after a click before ticking.
   const settle = async (hops = 3) => evaluate(`new Promise((r) => { let n = ${hops}; const ch = new MessageChannel(); ch.port1.onmessage = () => { if (--n <= 0) r(true); else ch.port2.postMessage(0); }; ch.port2.postMessage(0); })`);
-  const close = async () => { try { ws.close(); } catch {} proc.kill('SIGKILL'); };
+  const close = async () => {
+    try { ws.close(); } catch {}
+    const exited = proc.exitCode !== null || proc.signalCode !== null
+      ? Promise.resolve()
+      : new Promise((r) => proc.once('exit', r));
+    try { proc.kill('SIGKILL'); } catch {}
+    await Promise.race([exited, sleep(3000)]);
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      await sleep(500);
+      try { rmSync(dir, { recursive: true, force: true }); } catch (err) { console.warn(`cdp: could not remove ${dir}: ${err.message}`); }
+    }
+    live.delete(session);
+  };
   return { send, on, evaluate, navigate, waitFor, shot, clickAt, clickEl, tick, settle, close, errors };
 }
 
