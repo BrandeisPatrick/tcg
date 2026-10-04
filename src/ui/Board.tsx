@@ -24,7 +24,7 @@ import { BoardControls } from './board/BoardControls';
 import type { TurnPhase } from './board/TurnCompass';
 import { turnStepFor } from './board/turnStep';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { getAbility, type TargetFilter } from '@/abilities';
+import { getAbility } from '@/abilities';
 import { battleOwed, planAttackPhase, type AttackPlan } from '@/engine/combat';
 import { CombatChoreographer } from './effects/CombatChoreographer';
 import { SoulsRail } from './board/SoulsRail';

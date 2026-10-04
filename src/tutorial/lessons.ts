@@ -127,15 +127,6 @@ function benchOf(G: GameState, pid: PlayerID): CardInstance | null {
 function inHand(G: GameState, me: PlayerID, id: CardId): boolean {
   return G.players[me].hand.some((c) => c.cardId === id);
 }
-function ultsInHand(G: GameState, me: PlayerID): string[] {
-  return G.players[me].hand.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate').map(nameOf);
-}
-function corpses(G: GameState, pid?: PlayerID): CardInstance[] {
-  return (pid ? [pid] : (['0', '1'] as PlayerID[])).flatMap((p) => {
-    const ps = G.players[p];
-    return [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c && (c.respawnTurnsLeft ?? 0) > 0);
-  });
-}
 /** "Frost Grenade" — the skill's own name, hero prefix stripped, exactly as
  *  the sheet prints it. */
 function skillNameOf(c: CardInstance | null): string {
@@ -203,8 +194,6 @@ export const turnButton = (v: CoachView): GateSpec =>
   TURN_STEP_LABEL[turnStepFor(v.G, v.isMyTurn)];
 
 const YOU = `${PATRON_NAMES.you}:`;
-const THEM = `${PATRON_NAMES.rival}:`;
-void YOU; void THEM;
 
 const mine = (v: CoachView) => activeOf(v.G, v.me);
 const theirs = (v: CoachView) => activeOf(v.G, RIVAL);
