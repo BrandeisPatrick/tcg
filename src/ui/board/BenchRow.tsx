@@ -88,7 +88,7 @@ export function BenchRow({
               />
             </motion.div>
           ) : (
-            <EmptyBenchSlot key={`empty-bench-${i}`} accent={accent} />
+            <SlotWell key={`empty-bench-${i}`} accent={accent} />
           ))}
         </AnimatePresence>
       </div>
@@ -97,7 +97,3 @@ export function BenchRow({
 }
 
 const emptyDivStyle: CSSProperties = { display: 'block', height: '100%', minHeight: 0 };
-
-function EmptyBenchSlot({ accent }: { accent: string }) {
-  return <SlotWell accent={accent} />;
-}

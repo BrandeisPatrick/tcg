@@ -67,14 +67,10 @@ export function ActiveSlot({
               />
             </motion.div>
           ) : (
-            <EmptyActive accent={accent} />
+            <SlotWell accent={accent} label="Active K.O." />
           )}
         </AnimatePresence>
       </div>
     </div>
   );
-}
-
-function EmptyActive({ accent }: { accent: string }) {
-  return <SlotWell accent={accent} label="Active K.O." />;
 }

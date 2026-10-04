@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import { fonts } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 
@@ -231,10 +231,15 @@ export function RowPlaque({ children }: { children: ReactNode }) {
  * mark in the owner's colour. `accent` follows the owner (poster.rival for
  * the rival, poster.you for you); `label` prints under the mark (Active
  * row).
+ *
+ * The ref lands on the outline itself. BenchRow and ActiveSlot render a well
+ * as a direct child of `AnimatePresence mode="popLayout"`, which hands every
+ * direct child a ref so it can measure an exiting one and lift it out of the
+ * flow — keep it a direct child there, a plain wrapper would drop the ref.
  */
-export function SlotWell({ accent, label }: { accent: string; label?: string }) {
+export const SlotWell = forwardRef<HTMLDivElement, { accent: string; label?: string }>(function SlotWell({ accent, label }, ref) {
   return (
-    <div style={{
+    <div ref={ref} style={{
       position: 'relative',
       width: '100%',
       height: '100%',
@@ -280,4 +285,4 @@ export function SlotWell({ accent, label }: { accent: string; label?: string }) 
       )}
     </div>
   );
-}
+});
