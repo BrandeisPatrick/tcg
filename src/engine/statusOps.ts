@@ -191,7 +191,8 @@ export function clearTurnFlags(ps: PlayerState) {
     c.exhausted = false;
     c.skillUsedThisTurn = false;
     // Any unused Extra Attack stack expires at end of turn (it's a this-turn
-    // resource); resolveAttackPhase normally consumes it first.
+    // resource); the battle normally consumes it first, and one granted after
+    // the battle has nothing left to swing at.
     c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack');
   }
 }
@@ -201,8 +202,8 @@ export function clearTurnFlags(ps: PlayerState) {
  * or `casting_light` (mobile: Warden) status deal AoE spirit damage to all
  * enemies at the END of each of their turns, over the channel's duration —
  * a board-wipe win condition. The status `value` is the per-tick base damage;
- * effective Spirit is added live each pulse. Called from turn.onEnd BEFORE the
- * attack phase, so Warden's chip softens enemies before he swings.
+ * effective Spirit is added live each pulse. Called from turn.onEnd, so the
+ * pulse comes after the battle and the second prepare phase.
  *
  *  - Interrupt: if the channeler is Stunned / Slept this turn, the pulse is
  *    skipped (canon: channels are interruptible) — the channel still counts

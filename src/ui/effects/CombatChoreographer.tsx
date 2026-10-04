@@ -28,7 +28,8 @@ import { gunImpact, ring } from './fx/stage/emitters';
  * one at a time, then invokes `onComplete` so the engine can resolve for
  * real; the HP numbers on the cards move then (`useStatTick` in HeroSlot).
  * A card that went down stays under a grey veil until that happens, so it
- * never stands back up between beats.
+ * never stands back up between beats. A plan with no steps (nobody can
+ * swing) draws nothing and completes after a short hold.
  */
 interface Props {
   plan: AttackPlan;
@@ -54,6 +55,9 @@ interface ActiveBeat {
   /** Every card on the table, for the jolt when one breaks. */
   rects: Map<string, Rect>;
 }
+
+/** The least an empty battle (no attack steps) holds before it resolves. */
+const EMPTY_BATTLE_MIN_MS = 450;
 
 /** The beat's clock, as fractions of one step: wind-up, the volley in
  *  flight, then the impact and its readable hold. The HP number on the
@@ -93,9 +97,14 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration =
   useEffect(() => {
     if (done) return;
     if (plan.steps.length === 0) {
-      setDone(true);
-      onCompleteRef.current();
-      return;
+      // Nobody can swing. The battle still takes a short beat before it
+      // resolves, so the phase is seen to pass — and so a double tap on
+      // Enter Battle is not carried straight into End Turn.
+      const t = setTimeout(() => {
+        setDone(true);
+        onCompleteRef.current();
+      }, Math.max(EMPTY_BATTLE_MIN_MS, stepDuration * 0.3));
+      return () => clearTimeout(t);
     }
     if (beatIndex >= plan.steps.length) {
       setDone(true);

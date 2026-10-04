@@ -5,6 +5,7 @@ import { freshReadyGame, makeHero, configureReadyMatch } from './_helpers';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { withCast } from '@/engine/castContext';
+import { resolveAttackPhase } from '@/engine/combat';
 import { getAbility } from '@/abilities';
 import type { GameState, HitFx, StatusFx, HealFx, CastFx } from '@/engine/types';
 
@@ -108,6 +109,16 @@ describe('board FX stream — mitigation, heals, statuses', () => {
     expect(G.fx.map((e) => e.kind)).toEqual(['shield', 'hit']);
     expect(G.fx[0]).toMatchObject({ absorbed: 1, broken: true });
     expect(G.fx[1]).toMatchObject({ amount: 2 });
+  });
+
+  it('a basic swing into a Shield stays out of the stream — the choreographer shows that deflect', () => {
+    const G = freshReadyGame();
+    const abrams = G.players['1'].active!;
+    addStatus(G, abrams, 'shield', 9, 999);
+    G.fx = [];
+    resolveAttackPhase(G, '0');
+    expect(G.fx.filter((e) => e.kind === 'shield' && e.iid === abrams.iid)).toEqual([]);
+    expect(abrams.statuses.find((s) => s.id === 'shield')!.value).toBeLessThan(9); // it did absorb
   });
 
   it('Unstoppable shrugging off damage or CC is surfaced as immune', () => {

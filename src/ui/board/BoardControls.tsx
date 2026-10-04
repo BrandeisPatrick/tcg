@@ -2,18 +2,21 @@ import { motion } from 'framer-motion';
 import { fonts, spring } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
+import { TURN_STEP_LABEL, type TurnStep } from './turnStep';
 
 interface Props {
   isMyTurn: boolean;
+  turnStep: TurnStep;
   busy: boolean;
   hasPending: boolean;
   autoPlay: boolean;
-  onEnd: () => void;
+  /** The turn button was pressed: enter the battle, or end the turn. */
+  onAdvance: () => void;
   onCancel: () => void;
   onToggleAuto: () => void;
   /** 'dock' mounts the cluster in the sheet's right rail (desktop) as a
    *  vertical stack printed on the paper: ghost status capsule, the paper
-   *  END TURN button, and the AUTO ink tag. 'tray' is the flat row used
+   *  turn button, and the AUTO ink tag. 'tray' is the flat row used
    *  inside the mobile hand tray, which floats on the dark scene below the
    *  sheet — so its ghost surfaces switch to the cream/edge skin. */
   variant: 'dock' | 'tray';
@@ -24,13 +27,14 @@ interface Props {
 type StatusTone = 'dim' | 'gold' | 'green';
 
 /**
- * The turn-control cluster: status lamp, End Turn, Auto toggle, Cancel.
- * Buttons keep constant labels (an action never doubles as a state
- * readout); the status line carries the changing state in a fixed-height
- * slot so nothing reflows.
+ * The turn-control cluster: status lamp, the turn button, Auto toggle,
+ * Cancel. A button's label is always the action a press performs — the turn
+ * button reads Enter Battle while the battle is ahead and End Turn once it
+ * is fought, never a state readout; the status line carries the changing
+ * state in a fixed-height slot so nothing reflows.
  */
 export function BoardControls({
-  isMyTurn, busy, hasPending, autoPlay, onEnd, onCancel, onToggleAuto, variant,
+  isMyTurn, turnStep, busy, hasPending, autoPlay, onAdvance, onCancel, onToggleAuto, variant,
 }: Props) {
   const status = !isMyTurn
     ? { key: 'rival', label: "Rival's move", tone: 'dim' as StatusTone, pulse: true }
@@ -41,11 +45,13 @@ export function BoardControls({
         // Idle on the player's turn: say so — the empty slot read as a
         // half-finished panel and the state was only implied by button color.
         : { key: 'yours', label: 'Your move', tone: 'gold' as StatusTone, pulse: false };
-  const endTurnHot = isMyTurn && !busy;
-  const endTurnCursor = isMyTurn ? (busy ? 'progress' : 'pointer') : 'default';
+  const turnHot = isMyTurn && !busy;
+  const turnCursor = isMyTurn ? (busy ? 'progress' : 'pointer') : 'default';
+  const turnLabel = TURN_STEP_LABEL[turnStep];
+  const [labelTop, labelBottom] = turnLabel.split(' ');
 
   if (variant === 'tray') {
-    // Mobile hand-tray row: Auto · status/cancel · End Turn, thumb-side last.
+    // Mobile hand-tray row: Auto · status/cancel · turn button, thumb-side last.
     // pointerEvents:auto — the tray shell above is pointer-transparent.
     return (
       <div style={{
@@ -61,7 +67,7 @@ export function BoardControls({
         {/* Hot = full paper; cold (busy) dims. The button stays ENABLED while
             busy so Board can queue the click. */}
         <motion.div
-          animate={{ opacity: endTurnHot ? 1 : 0.75 }}
+          animate={{ opacity: turnHot ? 1 : 0.75 }}
           transition={{ duration: 0.25 }}
           style={{ display: 'flex' }}
         >
@@ -69,18 +75,21 @@ export function BoardControls({
             variant="paper"
             size="sm"
             disabled={!isMyTurn}
-            onClick={onEnd}
-            ariaLabel="End Turn"
+            onClick={onAdvance}
+            ariaLabel={turnLabel}
             style={{
-              width: 132,
+              // One width for both labels, so the row never shifts when the
+              // step changes; the tracking is eased to fit the longer one.
+              width: 146,
               padding: '12px 0',
+              letterSpacing: '0.16em',
               textAlign: 'center',
-              cursor: endTurnCursor,
+              cursor: turnCursor,
               // On the dark scene the built-in disabled outline is ink on
               // ink — swap it for the cream ghost so the slot stays visible.
               ...(!isMyTurn ? { color: poster.creamDim, border: `2px solid ${poster.edge}` } : {}),
             }}
-          >End Turn</PosterButton>
+          >{turnLabel}</PosterButton>
         </motion.div>
       </div>
     );
@@ -100,16 +109,17 @@ export function BoardControls({
         <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} />
       </div>
 
-      {/* END TURN — the paper PosterButton, two-line label so the cluster
-          stays inside the 150px rail. Hot = full paper; cold (busy) dims. */}
+      {/* The turn button — the paper PosterButton, two-line label so the
+          cluster stays inside the 150px rail. Hot = full paper; cold (busy)
+          dims. */}
       <motion.div
-        animate={{ opacity: endTurnHot ? 1 : 0.75 }}
+        animate={{ opacity: turnHot ? 1 : 0.75 }}
         transition={{ duration: 0.25 }}
         style={{ position: 'relative', display: 'flex' }}
       >
         {/* Ready cue — a flat keyline in your colour whose OPACITY pulses,
             on its own layer outside the button's chamfer clip. */}
-        {endTurnHot && (
+        {turnHot && (
           <motion.span
             aria-hidden
             initial={{ opacity: 0.35 }}
@@ -127,17 +137,20 @@ export function BoardControls({
           variant="paper"
           size="md"
           disabled={!isMyTurn}
-          onClick={onEnd}
-          ariaLabel="End Turn"
+          onClick={onAdvance}
+          ariaLabel={turnLabel}
           style={{
-            // Left pad carries the tracking so the stacked caps sit centred.
-            padding: '13px 22px 13px calc(22px + 0.22em)',
+            // One width for both labels, so the cluster never shifts when the
+            // step changes. Left pad carries the tracking so the stacked caps
+            // sit centred.
+            width: 134,
+            padding: '13px 0 13px 0.22em',
             lineHeight: 1.15,
             textAlign: 'center',
-            cursor: endTurnCursor,
+            cursor: turnCursor,
           }}
         >
-          End<br />Turn
+          {labelTop}<br />{labelBottom}
         </PosterButton>
       </motion.div>
 

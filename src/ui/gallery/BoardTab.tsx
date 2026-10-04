@@ -4,15 +4,17 @@
  * stage as tall as the live board, so it takes a narrow column of its own
  * and the other two stack beside it.
  */
-import { useState } from 'react';
-import { TurnCompass } from '../board/TurnCompass';
+import { useEffect, useState } from 'react';
+import {
+  TurnCompass, PHASE_STYLES, DEFAULT_PHASE_STYLE, type PhaseStyle, type TurnPhase,
+} from '../board/TurnCompass';
 import { SoulsRail } from '../board/SoulsRail';
 import { boardRows } from '../board/BoardTable';
 import { LevelRing } from '../card/LevelRing';
 import { poster } from '../poster';
 import { radius } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
-import { Section, Caption, Notes, Row, Button, Sub, Grid } from './primitives';
+import { Section, Caption, Notes, Row, Button, Sub, Grid, Segmented, type Option } from './primitives';
 
 const RINGS: { level: 1 | 2 | 3 | 4; exp: number; label: string; hint: string }[] = [
   { level: 1, exp: 0, label: 'Lv1 · 0/3', hint: '3 segments, empty' },
@@ -33,7 +35,7 @@ export function BoardTab() {
       : undefined}
     >
       <div style={{ minWidth: 0 }}>
-        <Section title="Turn compass">
+        <Section title="Turn compass" count={PHASE_STYLES.length} aside="five ways to print the phase">
           <TurnCompassDemo />
         </Section>
 
@@ -131,60 +133,96 @@ function SoulsRailDemo() {
   );
 }
 
+const PHASE_OPTIONS: Option<TurnPhase>[] = [
+  { id: 'prepare', label: 'Prepare' },
+  { id: 'battle', label: 'Battle' },
+  { id: 'regroup', label: 'Prepare' },
+];
+
+const PHASE_STYLE_NOTES: Record<PhaseStyle, { name: string; note: string }> = {
+  track: { name: 'Track', note: 'The word on a slip under the dial, over three pips: where the turn is and what comes next. The battle is the diamond, and its word inverts to a plate.' },
+  bars: { name: 'Bars', note: 'Level bars, like a music player’s: flat before the battle, bouncing through it, held where they stopped after it.' },
+  tag: { name: 'Tag', note: 'A numbered ink tag. For the battle it takes the colour of whoever is fighting.' },
+  thirds: { name: 'Thirds', note: 'Nothing added. The ring is the turn in three arcs and the caption is the word; the battle’s arc splits into its attack steps.' },
+  ink: { name: 'Ink', note: 'Nothing added. The caption is the word, and the dial floods with ink for the battle.' },
+};
+
+/** Attack steps in the demo's battle. */
+const DEMO_BEATS = 2;
+
 function TurnCompassDemo() {
-  // Two mounted compasses — one per idle turn state — plus a live one that
-  // the controls drive, which flips into its segmented-ring state through
-  // the `combatOverride` prop.
-  const [turn, setTurn] = useState(1);
+  // One set of controls drives every dial, so the ways of printing the
+  // phase are compared on the same turn at the same moment.
+  const [turn, setTurn] = useState(3);
   const [isMyTurn, setIsMyTurn] = useState(true);
-  const [combatMode, setCombatMode] = useState(false);
-  const [attackerIsMe, setAttackerIsMe] = useState(true);
-  const [total, setTotal] = useState(3);
-  const [currentBeat, setCurrentBeat] = useState(0);
-  const combatOverride = combatMode ? { total, currentBeat, attackerIsMe } : null;
-  const reset = () => {
-    setTurn(1); setIsMyTurn(true); setCombatMode(false);
-    setAttackerIsMe(true); setTotal(3); setCurrentBeat(0);
-  };
-  const dial = (label: string, node: React.ReactNode) => (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, minWidth: 92 }}>
-      {/* The chevron hangs outside the dial, so the dial gets room for it. */}
-      <div style={{ padding: '10px 0' }}>{node}</div>
-      <span style={{ fontWeight: 700, fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: poster.inkDim, textAlign: 'center' }}>{label}</span>
-    </div>
-  );
+  const [phase, setPhase] = useState<TurnPhase>('prepare');
+  const [beat, setBeat] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const combatOverride = phase === 'battle' ? { total: DEMO_BEATS, currentBeat: beat, attackerIsMe: isMyTurn } : null;
+
+  // Play a turn: prepare, the battle beat by beat, prepare again, and the
+  // turn changes hands.
+  useEffect(() => {
+    if (!playing) return;
+    const script: [number, () => void][] = [
+      [0, () => { setPhase('prepare'); setBeat(0); }],
+      [1500, () => setPhase('battle')],
+      [2500, () => setBeat(1)],
+      [3500, () => { setPhase('regroup'); setBeat(0); }],
+      [5000, () => { setIsMyTurn((v) => !v); setTurn((t) => t + 1); setPhase('prepare'); setPlaying(false); }],
+    ];
+    const timers = script.map(([at, run]) => setTimeout(run, at));
+    return () => timers.forEach(clearTimeout);
+  }, [playing]);
+
+  const pickPhase = (p: TurnPhase) => { setPlaying(false); setBeat(0); setPhase(p); };
+
   return (
     <>
       <Caption>
-        A quiet indicator pinned between the two active heroes. Idle, a ring sweeps slowly and the chevron
-        points at whoever&rsquo;s turn it is. In combat the ring becomes one arc per attack step, filling in
-        the attacker&rsquo;s colour.
+        The dial pinned between the two active heroes: whose turn, which turn, and where in the turn. A turn
+        runs <strong>Prepare</strong>, <strong>Battle</strong>, <strong>Prepare</strong>, then it changes
+        hands, and the turn button walks it with the dial: Enter Battle, then End Turn. Below are five ways
+        of printing the phase, all on the same turn.
       </Caption>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '14px 28px', marginBottom: 12 }}>
-        {dial('Your move', <TurnCompass isMyTurn turn={turn} combatOverride={null} />)}
-        {dial('Rival’s move', <TurnCompass isMyTurn={false} turn={turn} combatOverride={null} />)}
-        {dial('Live', <TurnCompass isMyTurn={isMyTurn} turn={turn} combatOverride={combatOverride} />)}
-        <div style={{ flex: '1 1 300px', minWidth: 0 }}>
-          <Sub title="Live dial" />
-          <Row>
-            <Button onClick={() => setTurn((v) => v + 1)}>+1 turn</Button>
-            <Button onClick={() => setIsMyTurn((v) => !v)}>Flip side</Button>
-            <Button onClick={reset}>Reset</Button>
-          </Row>
-          <Sub title="Combat mode" note="the same dial" />
-          <Row>
-            <Button onClick={() => setCombatMode((v) => !v)}>{combatMode ? 'Combat: on' : 'Combat: off'}</Button>
-            <Button onClick={() => setCurrentBeat((b) => (b + 1) % (total + 1))} disabled={!combatMode}>Step beat ({currentBeat} / {total})</Button>
-            <Button onClick={() => setAttackerIsMe((v) => !v)} disabled={!combatMode}>{attackerIsMe ? 'You attacking' : 'Rival attacking'}</Button>
-            <Button onClick={() => setTotal((t) => (t % 4) + 1)} disabled={!combatMode}>Total = {total}</Button>
-          </Row>
-        </div>
+      <div className="gal-bar gal-bar--static" style={{ margin: '0 0 12px', padding: '8px 0', background: 'none', borderTop: `1px solid ${poster.inkRule}` }}>
+        <Segmented label="Phase" value={phase} onChange={pickPhase} options={PHASE_OPTIONS} />
+        <Button onClick={() => setPlaying(true)} disabled={playing}>{playing ? 'Playing…' : 'Play a turn'}</Button>
+        <Button onClick={() => setBeat((b) => (b + 1) % (DEMO_BEATS + 1))} disabled={phase !== 'battle' || playing}>
+          Step beat ({Math.min(beat + 1, DEMO_BEATS)} / {DEMO_BEATS})
+        </Button>
+        <Button onClick={() => setIsMyTurn((v) => !v)} disabled={playing}>{isMyTurn ? 'Your turn' : 'Rival’s turn'}</Button>
+        <Button onClick={() => setTurn((v) => v + 1)} disabled={playing}>+1 turn</Button>
       </div>
+      <Grid min={176} gap={10}>
+        {PHASE_STYLES.map((style) => (
+          <figure key={style} style={{ margin: 0, padding: '0 10px 10px', border: `1.5px solid ${poster.inkRule}` }}>
+            {/* The dial on its divider, with the room it has on the board:
+                the chevron above or below, and a readout hanging under it. */}
+            <div style={{ position: 'relative', height: 146, display: 'flex', justifyContent: 'center', paddingTop: 28 }}>
+              <div aria-hidden style={{ position: 'absolute', top: 6, bottom: 6, left: '50%', width: 1, background: poster.inkFaint }} />
+              <TurnCompass isMyTurn={isMyTurn} turn={turn} phase={phase} phaseStyle={style} combatOverride={combatOverride} />
+            </div>
+            <figcaption>
+              <div style={{ fontWeight: 700, fontSize: 11.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: poster.ink }}>
+                {PHASE_STYLE_NOTES[style].name}
+                {style === DEFAULT_PHASE_STYLE && <span style={{ fontWeight: 400, letterSpacing: '0.02em', textTransform: 'none', color: poster.inkDim }}> · on the board</span>}
+              </div>
+              <div style={{ marginTop: 3, fontSize: 12, lineHeight: 1.35, color: poster.inkSoft }}>{PHASE_STYLE_NOTES[style].note}</div>
+            </figcaption>
+          </figure>
+        ))}
+      </Grid>
       <Notes label="How it reads">
         <p>
-          The idle ring is a conic gradient on a sweep of about 8 s. Combat mode swaps it for a segmented
-          progress fill: one arc per beat, the active segment pulsing. There is no sibling chrome; the dial
-          carries the whole turn state.
+          Outside the battle the ring is a conic gradient on a sweep of about 8 s. While the battle is fought
+          it becomes a segmented progress fill: one arc per attack step, the step in flight pulsing. The
+          chevron and the hue say whose turn it is, and a turn changing hands fires one ring-burst.
+        </p>
+        <p>
+          The phase is meant to be found, not to call for attention: nothing moves in either prepare phase,
+          and only the battle animates. To change what the board prints, set DEFAULT_PHASE_STYLE in
+          TurnCompass.tsx.
         </p>
       </Notes>
     </>

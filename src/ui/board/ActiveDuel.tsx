@@ -2,7 +2,7 @@ import { ActiveSlot } from './ActiveSlot';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { poster } from '../poster';
 import { RowPlaque } from './BoardTable';
-import { TurnCompass } from './TurnCompass';
+import { TurnCompass, type TurnPhase } from './TurnCompass';
 import { useViewport } from '../hooks/useViewport';
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
   opp: PlayerID;
   isMyTurn: boolean;
   turn: number;
+  /** Where the turn stands — printed by the compass. */
+  phase: TurnPhase;
   pending: { iid: string; kind: 'playCard' | 'useSkill'; filter: string } | null;
   onTapHero: (c: CardInstance, owner: PlayerID) => void;
   onLongPressHero?: (c: CardInstance) => void;
@@ -23,7 +25,7 @@ interface Props {
 // The middle row of the 3-2-3 layout. Opp Active on the left, your Active on
 // the right, with a printed hairline down the centre carrying the turn compass.
 export function ActiveDuel({
-  G, me, opp, isMyTurn, turn,
+  G, me, opp, isMyTurn, turn, phase,
   pending, onTapHero, onLongPressHero, onEquipmentHover, isTargetable, registerSlotRef, playerSkillSpent,
 }: Props) {
   const { isMobile } = useViewport();
@@ -77,7 +79,7 @@ export function ActiveDuel({
           background: `linear-gradient(180deg, transparent 0%, ${poster.inkFaint} 18%, ${poster.inkFaint} 82%, transparent 100%)`,
           pointerEvents: 'none',
         }} />
-        <TurnCompass isMyTurn={isMyTurn} turn={turn} />
+        <TurnCompass isMyTurn={isMyTurn} turn={turn} phase={phase} />
       </div>
 
       {/* My Active (right) */}

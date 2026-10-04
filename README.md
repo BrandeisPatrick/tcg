@@ -20,6 +20,10 @@ single-page React app.
   [deadlock-api.com](https://deadlock-api.com/) catalogue.
 - **Refill soul economy** (Hearthstone-style): your pool refills 1→7 over the
   first seven turns. No hoarding across turns. KO bounty (+1 capped at 7).
+- **Turn phases:** a turn runs Prepare → Battle → Prepare → End Turn. One
+  button walks it — Enter Battle (the two Actives trade blows), then End Turn —
+  so cards, a skill or a retreat can go before the battle or after it. The
+  dial between the Actives prints the phase. Turn 1 has no battle.
 - **Active hero KO flow:** corpse stays in slot greyed-out with a rotating
   brass clock ring + countdown; on death the player is prompted to choose a
   bench hero to step up.

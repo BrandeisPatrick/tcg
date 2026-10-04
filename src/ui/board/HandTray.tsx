@@ -1,6 +1,7 @@
 import type { CardInstance } from '@/engine/types';
 import { Hand } from './Hand';
 import { BoardControls } from './BoardControls';
+import type { TurnStep } from './turnStep';
 import type { PendingPlay } from '../helpers';
 import { useViewport } from '../hooks/useViewport';
 
@@ -8,18 +9,19 @@ import { useViewport } from '../hooks/useViewport';
  * Bottom row: the hand fan, floating under the cream sheet on the dark
  * scene. On desktop the turn controls live on the sheet's right rail
  * (Board mounts the BoardControls dock there), so the fan takes the full
- * row; phones keep the controls here as a row under the hand, End Turn at
- * the thumb edge.
+ * row; phones keep the controls here as a row under the hand, the turn
+ * button at the thumb edge.
  */
 export function HandTray({
-  cards, disabled, pending, isMyTurn, busy, hasPending, mySouls,
-  onTap, onLongPress, onHover, onDragEndOver, onUnaffordable, onEnd, onCancel,
+  cards, disabled, pending, isMyTurn, turnStep, busy, hasPending, mySouls,
+  onTap, onLongPress, onHover, onDragEndOver, onUnaffordable, onAdvance, onCancel,
   autoPlay, onToggleAuto,
 }: {
   cards: CardInstance[];
   disabled: boolean;
   pending: PendingPlay | null;
   isMyTurn: boolean;
+  turnStep: TurnStep;
   busy?: boolean;
   hasPending: boolean;
   mySouls: number;
@@ -28,7 +30,7 @@ export function HandTray({
   onHover: (c: CardInstance | null) => void;
   onDragEndOver: (c: CardInstance, x: number, y: number) => void;
   onUnaffordable?: (c: CardInstance, cost: number) => void;
-  onEnd: () => void;
+  onAdvance: () => void;
   onCancel: () => void;
   autoPlay: boolean;
   onToggleAuto: () => void;
@@ -74,10 +76,11 @@ export function HandTray({
         <BoardControls
           variant="tray"
           isMyTurn={isMyTurn}
+          turnStep={turnStep}
           busy={!!busy}
           hasPending={hasPending}
           autoPlay={autoPlay}
-          onEnd={onEnd}
+          onAdvance={onAdvance}
           onCancel={onCancel}
           onToggleAuto={onToggleAuto}
         />

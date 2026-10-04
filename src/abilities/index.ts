@@ -394,8 +394,8 @@ const eff_improved_burst_proc: AbilityDef = {
 // ----- Cast-payoff items (functionality tied to skill / ult activation) -----
 
 // Surge of Power: after the bearer uses a skill, gain +2 Bullet Power this turn
-// (weapon_power, duration 1 — present for the end-of-turn attack phase, gone by
-// the bearer's next turn). Canon Surge of Power empowers you right after a cast.
+// (weapon_power, duration 1 — present for this turn's battle, gone by the
+// bearer's next turn). Canon Surge of Power empowers you right after a cast.
 const eff_surge_of_power: AbilityDef = {
   id: 'eff_surge_of_power', trigger: 'onBearerSkillUsed', target: 'self',
   base: 2,
@@ -759,11 +759,6 @@ const passive_abrams_heal: AbilityDef = {
   },
 };
 
-// Fixation: canon Haze ramps with sustained fire — the more she shoots, the
-// more she hits. TCG: while Active, Haze makes one bonus attack each turn at
-// half Bullet Power. The extra swing's real value is doubling her onAttack
-// procs (bleed, shred, lifesteal). Granted at start of turn, consumed in the
-// end-of-turn attack phase.
 // Fixation: canon Haze ramps with sustained fire. TCG: after Haze makes her
 // attack, she gains Extra Attack 1 (a follow-up swing the same turn). Fires only
 // on her primary swing (`params.primary`) so the follow-up — and any retaliation

@@ -332,6 +332,11 @@ export interface GameState {
    */
   draftTurnsOffset: number;
   mulliganPending: boolean;       // true after draft completes until player resolves opening mulligan
+  /** This turn's battle has been fought. A turn runs Prepare → Battle →
+   *  Prepare → End Turn: while this is false the battle is still ahead (the
+   *  turn button reads Enter Battle); once true the player is in the second
+   *  prepare phase and the button ends the turn. Reset at each turn start. */
+  battleFought: boolean;
   /** Set by the `resolve` pass when a player's Active is a corpse and an
    *  eligible bench hero can step up — i.e. a forced promotion is owed. The AI
    *  side is auto-promoted inside `resolve`, so in practice this only flags the

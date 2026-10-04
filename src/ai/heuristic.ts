@@ -1,10 +1,11 @@
 import type { Ctx } from 'boardgame.io';
+import { INVALID_MOVE } from 'boardgame.io/core';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { otherPlayer, liveBoardCards, effectiveAtk, effectiveSpirit, isRespawning, stepInCandidates } from '@/engine/util';
 import { getAbility, type TargetFilter } from '@/abilities';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, DeadlockGame } from '@/engine/game';
-import { resolveAttackPhase } from '@/engine/combat';
+import { battleOwed, resolveAttackPhase } from '@/engine/combat';
 
 // ----- 1-ply lookahead -------------------------------------------------------
 // The crude per-move scores below only generate the LEGAL move list; the actual
@@ -12,6 +13,9 @@ import { resolveAttackPhase } from '@/engine/combat';
 // resulting position with evalState. This is what lifts the AI from ~random to
 // actually-playing: it captures target selection, lethal, and resource value
 // without hand-tuning every case.
+//
+// A turn runs Prepare → Battle → Prepare → End Turn, so the AI passes twice:
+// `enterBattle` while the battle is ahead, `endTurn` once it is fought.
 
 /** A hero's offensive potential: bullet attack PLUS its damaging skill's output
  *  (base + Spirit if it scales). This is what makes the lookahead ITEMIZE — a
@@ -79,23 +83,30 @@ function cloneForSim(G: GameState): GameState {
   return structuredClone({ ...G, log: [] }) as GameState;
 }
 
-/** Apply one candidate move to a cloned state. endTurn is simulated as "resolve
- *  my attack phase" so the AI can see combat / lethal outcomes. */
-function simulateMove(G: GameState, pid: PlayerID, move: string, args: any[]): GameState {
+/** Apply one candidate move to a cloned state. While the battle is still
+ *  ahead, every line is played through it — "this move, then the battle"
+ *  against "the battle now" — so the AI sees what a buff, a heal or a retreat
+ *  is worth in the trade it is about to take, and sees lethal. Once the battle
+ *  is fought a move is scored as it lands, against simply ending the turn.
+ *  Returns null for a move the engine rejects (or that throws): it changes
+ *  nothing, so left in the ranking it would tie with passing and, with the
+ *  bias toward acting, be picked over it — a turn spent on an invalid move. */
+function simulateMove(G: GameState, pid: PlayerID, move: string, args: any[]): GameState | null {
   const g = cloneForSim(G);
   try {
-    if (move === 'endTurn') {
-      resolveAttackPhase(g, pid);
-    } else {
+    if (move !== 'enterBattle' && move !== 'endTurn') {
       const fn = (DeadlockGame as any).moves[move];
-      if (fn) fn({ G: g, ctx: SIM_CTX(pid), playerID: pid, events: {} }, ...args);
+      if (!fn || fn({ G: g, ctx: SIM_CTX(pid), playerID: pid, events: {} }, ...args) === INVALID_MOVE) return null;
     }
-  } catch { /* invalid sim → unchanged clone scores like a no-op */ }
+    if (battleOwed(g)) resolveAttackPhase(g, pid);
+  } catch {
+    return null;
+  }
   return g;
 }
 
 interface MoveOption {
-  move: 'playCard' | 'useSkill' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
+  move: 'playCard' | 'useSkill' | 'enterBattle' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
   args: any[];
   score: number;
 }
@@ -210,32 +221,38 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
   const out: MoveOption[] = [];
   const enemy = G.players[otherPlayer(pid)];
 
-  // If our Active is a corpse and we have an alive bench hero, the ONLY legal
-  // move is to promote — return immediately so the AI doesn't try to play cards
-  // through a dead Active.
-  // Gate on the engine's pendingPromotion flag (set by `resolve`) — a corpse
-  // Active alone isn't enough (e.g. promotion already owed to the other seat),
-  // and dispatching promoteToActive outside that window is an invalid move.
-  const activeIsCorpse = !!ps.active && (ps.active.respawnTurnsLeft ?? 0) > 0 && G.pendingPromotion === pid;
-  if (activeIsCorpse) {
-    // Prefer the highest-HP candidate.
-    for (const b of stepInCandidates(ps)) {
-      out.push({ move: 'promoteToActive', args: [b.iid], score: 50_000 + b.hp });
-    }
-    if (out.length > 0) return out;
+  // A promotion owed comes before anything else at the table — return it
+  // alone. Owed by this seat, it is the only legal move (no playing cards
+  // through a dead Active). Owed by the other seat, whose Active this seat's
+  // battle or skill has just dropped, nobody moves on until that lane is
+  // refilled: `promoteToActive` finds its owner from the bench hero, so it can
+  // be made from whichever seat is asked. (On the board the local player
+  // answers the prompt themselves and the AI loop waits rather than ask —
+  // unless auto-play is driving their seat.)
+  // Gated on the engine's pendingPromotion flag (set by `resolve`) — outside
+  // that window the move is invalid. Highest HP first.
+  if (G.pendingPromotion) {
+    const owed = stepInCandidates(G.players[G.pendingPromotion])
+      .map((b): MoveOption => ({ move: 'promoteToActive', args: [b.iid], score: 50_000 + b.hp }))
+      .sort((a, b) => b.score - a.score);
+    if (owed.length > 0) return owed;
   }
 
   const enemyTargets = liveBoardCards(enemy);
   const allyTargets = liveBoardCards(ps);
 
+  // The pass move for where the turn stands: open the battle while it is
+  // still ahead, end the turn once it is fought (or on Turn 1, which has none).
+  const battleAhead = battleOwed(G);
+  const pass = battleAhead ? 'enterBattle' : 'endTurn';
+
   // --- Lethal short-circuit ---
-  // If our Active alone can kill the enemy player (their Active dies and their HP hits 0), prioritize endTurn.
-  // (Combat resolves at end of turn.)
+  // If our Active alone can kill the enemy player (their Active dies and their HP hits 0), go to battle.
   // Sum of our attackers vs their Active first, then face dmg.
   const ourAttackers = [...allyTargets].filter((c) => effectiveAtk(c) > 0);
   let totalDmg = ourAttackers.reduce((acc, c) => acc + effectiveAtk(c), 0);
-  if (enemy.active && totalDmg >= enemy.active.hp + enemy.hp) {
-    out.push({ move: 'endTurn', args: [], score: 1_000_000 });
+  if (battleAhead && enemy.active && totalDmg >= enemy.active.hp + enemy.hp) {
+    out.push({ move: pass, args: [], score: 1_000_000 });
   }
 
   // Play cards (cost-gated)
@@ -260,6 +277,8 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
 
     if (data.type === 'equipment') {
       for (const t of allyTargets) {
+        // A hero cannot wear two of the same item.
+        if ((t.attached ?? []).some((eq) => eq.cardId === c.cardId)) continue;
         const slotsTaken = (t.attached ?? []).length;
         if (slotsTaken < MAX_EQUIPMENT_PER_HERO) {
           out.push({ move: 'playCard', args: [c.iid, t.iid], score: scorePlayCard(G, pid, c, t) });
@@ -291,9 +310,10 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
     if (hero.skillUsedThisTurn) continue;
     const data = CARDS_BY_ID[hero.cardId];
     if (data?.type !== 'hero' || !data.skill) continue;
-    // Stun / Silence / Sleep all suppress skill use — engine enforces this, the
-    // AI must respect it too or it'll burn a heuristic round on an invalid move.
-    if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun' || s.id === 'sleep')) continue;
+    // Stun / Silence / Sleep and a heavy channel all suppress skill use — engine
+    // enforces this, the AI must respect it too or it'll burn a heuristic round
+    // on an invalid move.
+    if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun' || s.id === 'sleep' || s.id === 'casting')) continue;
     const ability = getAbility(data.skill);
     if (!ability) continue;
     const filter = ability.target;
@@ -332,18 +352,22 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
     }
   }
 
-  // Always offer endTurn as fallback
-  out.push({ move: 'endTurn', args: [], score: 1 });
+  // Always offer the pass move as fallback
+  out.push({ move: pass, args: [], score: 1 });
 
   // Re-rank every legal move by 1-ply lookahead: simulate it and score the
   // resulting position. A tiny bias toward acting (vs. passing) breaks ties so
   // the AI takes value-neutral tempo plays instead of idling. Skipped when used
   // as a plain legal-move enumerator (e.g. inside the MCTS bot's rollouts).
   if (lookahead) {
+    const ranked: MoveOption[] = [];
     for (const opt of out) {
       const g2 = simulateMove(G, pid, opt.move, opt.args);
-      opt.score = evalState(g2, pid) + (opt.move === 'endTurn' ? 0 : 0.1);
+      if (!g2) continue;
+      opt.score = evalState(g2, pid) + (opt.move === pass ? 0 : 0.1);
+      ranked.push(opt);
     }
+    return ranked.sort((a, b) => b.score - a.score).slice(0, 12);
   }
 
   return out.sort((a, b) => b.score - a.score).slice(0, 12);

@@ -12,7 +12,8 @@
  *   wait     — the rival is moving (or a stated step is holding for a
  *              moment). Light scrim, nothing tappable, no Next.
  *   blocked  — the task cannot be paid for right now. The plate says so and
- *              opens End Turn instead, so the player is never boxed in.
+ *              opens the turn button instead (Enter Battle, then End Turn),
+ *              so the player is never boxed in.
  *   ticked   — the task just landed. A short beat, sealed, before moving on.
  *   live     — the step's own spot and allow.
  *
@@ -29,7 +30,7 @@ import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { markLessonDone } from '@/storage/playerData';
 import {
-  LESSONS, RIVAL_TURN, emptySeen, hasEquipment,
+  LESSONS, RIVAL_TURN, emptySeen, hasEquipment, turnButton,
   type CoachSeen, type CoachView, type GateSpec, type Lesson,
 } from '@/tutorial/lessons';
 import { TutorialGate } from './TutorialGate';
@@ -95,6 +96,15 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetHero, refusals, le
     wasMyTurn.current = isMyTurn;
   }, [isMyTurn]);
 
+  // Count the battles you have entered: each time your turn's battle goes
+  // from ahead to fought is one.
+  const myBattleFought = isMyTurn && G.battleFought;
+  const wasFought = useRef(myBattleFought);
+  useEffect(() => {
+    if (myBattleFought && !wasFought.current) setSeen((s) => ({ ...s, battles: s.battles + 1 }));
+    wasFought.current = myBattleFought;
+  }, [myBattleFought]);
+
   // Gear is read off the board rather than off the action feed: an item can
   // also arrive by replacing a worn piece, which resolves as a plain play.
   const equipped = hasEquipment(G, me);
@@ -124,7 +134,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetHero, refusals, le
   const revealUp = G.action?.state === 'begin';
 
   // Every step is something to do, so by default a step waits out the
-  // rival's turn; a step may say otherwise (End Turn completes during it).
+  // rival's turn; a step may say otherwise (ending the turn completes during it).
   const waitText: string | null = !current || done || complete ? null
     : current.wait ? current.wait(view)
     : !isMyTurn ? RIVAL_TURN
@@ -138,17 +148,19 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetHero, refusals, le
 
   // What the gate lights and lets through. Memoised on contents so the
   // gate's measuring effect is not restarted every frame by a fresh array.
-  const gated = !done && open && !!current.spot;
+  // A promotion you owe is the game's own modal, and the rival waits on it:
+  // the gate steps aside so the choice can always be made.
+  const gated = !done && open && !!current.spot && G.pendingPromotion !== me;
   // Hold through a task's landing beat, the rival's turn, and any reveal
   // still in flight — the next thing to tap lights up only once the board
   // can actually take the tap.
   const hold = ticked || !!waitText || revealUp;
   const spotList = !gated ? NONE
     : hold ? NONE
-    : blocked ? ['End Turn']
+    : blocked ? [turnButton(view)]
     : current.spot!(view);
   const allowList = !gated || hold || current.tap ? NONE
-    : blocked ? ['End Turn']
+    : blocked ? [turnButton(view)]
     : (current.allow ?? current.spot!)(view);
   const tapToContinue = gated && !hold && !blocked && !!current.tap;
   const spotKey = spotList.join('|');

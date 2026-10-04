@@ -10,8 +10,8 @@ import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { getMatchConfig, scriptedSetup, type HeroStatOverride } from '@/storage/matchConfig';
 import { getAIDeckTagged } from '@/decks/aiDecks';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from './statusOps';
-import { resolve } from './damage';
-import { resolveAttackPhase } from './combat';
+import { needsPromotion, resolve } from './damage';
+import { battleOwed, resolveAttackPhase } from './combat';
 import { findCardOnBoard, isRespawning, liveBoardCards, pushLog, resetIid, nextIid } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
@@ -327,6 +327,7 @@ export const DeadlockGame: Game<GameState> = {
         // realTurn = ctx.turn - offset, and ctx.turn starts at 1.
         draftTurnsOffset: 1 - startTurn,
         mulliganPending: false,
+        battleFought: false,
         action: null,
         fx: [],
       };
@@ -354,6 +355,7 @@ export const DeadlockGame: Game<GameState> = {
       },
       draftTurnsOffset: 0,  // set in draftPick when draft completes
       mulliganPending: false,
+      battleFought: false,
       action: null,
       fx: [],
     };
@@ -372,6 +374,7 @@ export const DeadlockGame: Game<GameState> = {
       // so subtract the offset captured at draft completion.
       const realTurn = ctx.turn - G.draftTurnsOffset;
       G.turnNumber = realTurn;
+      G.battleFought = false;
       ps.skillUsedThisTurn = false;
       G.fx = [];   // flush last turn's board-FX events before this turn's (e.g. bleed ticks) land
       tickStartOfTurn(G, ps);
@@ -396,11 +399,13 @@ export const DeadlockGame: Game<GameState> = {
     onEnd: ({ G, ctx }) => {
       if (G.draft) return;  // see onBegin — draft turns are not real game turns
       const pid = ctx.currentPlayer as PlayerID;
+      // The battle is not optional: a turn that ends without `enterBattle`
+      // fights it on the way out.
+      if (!G.battleFought) resolveAttackPhase(G, pid);
       fireBoardTriggers(G, pid, 'endOfTurn');
-      // Channeled ultimates (Dynamo / Seven / Warden) pulse their AoE here,
-      // before combat, so Warden's chip softens enemies ahead of his swing.
+      // Channeled ultimates (Dynamo / Seven / Warden) pulse their AoE at the
+      // end of the turn, after the battle and the second prepare phase.
       tickCastingPulses(G, G.players[pid]);
-      resolveAttackPhase(G, pid);
       // Hero leveling: +1 exp to each alive hero on the player's board.
       for (const c of liveBoardCards(G.players[pid])) {
         const data = CARDS_BY_ID[c.cardId];
@@ -666,6 +671,20 @@ export const DeadlockGame: Game<GameState> = {
       // Re-run the state-based pass so the pendingPromotion flag clears (and any
       // further deaths/promotions settle) before the UI re-reads it.
       resolve(G);
+    },
+
+    /**
+     * Open the battle: the two Actives trade blows. The turn stays with the
+     * player — a second prepare phase follows, and `endTurn` closes it. One
+     * battle a turn, and none on Turn 1. A fallen Active is replaced first:
+     * the battle belongs to the hero who steps up, and entering it with a
+     * corpse in the lane would spend it on nothing.
+     */
+    enterBattle: ({ G, ctx }) => {
+      const pid = ctx.currentPlayer as PlayerID;
+      if (G.draft || !battleOwed(G) || needsPromotion(G.players[pid])) return INVALID_MOVE;
+      G.battleFought = true;
+      resolveAttackPhase(G, pid);
     },
 
     endTurn: ({ events }) => {

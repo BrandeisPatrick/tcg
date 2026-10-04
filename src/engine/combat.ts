@@ -5,6 +5,20 @@ import { otherPlayer, effectiveAtk } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
 
+// ---------- The battle step of a turn ----------
+
+/** The first player forgoes first strike: Turn 1 has no battle. One rule,
+ *  read by the planner, the resolver, the turn flow and the board, so the
+ *  four cannot drift apart. */
+export function battleThisTurn(G: GameState): boolean {
+  return (G.turnNumber ?? 1) > 1;
+}
+
+/** True while the current turn's battle is still ahead of the player. */
+export function battleOwed(G: GameState): boolean {
+  return !G.battleFought && battleThisTurn(G);
+}
+
 // ---------- Attack plan (pure, for UI prediction + animation) ----------
 
 /** One projected attack event. */
@@ -54,8 +68,8 @@ export interface AttackPlan {
  * Build a pure, predictive plan for the upcoming attack phase.
  *
  * The plan mirrors what `resolveAttackPhase` will do but mutates nothing.
- * The UI can read this to (a) draw incoming-damage badges before end-of-turn
- * and (b) drive an animated choreographer that walks the steps in order.
+ * The UI can read this to (a) project the battle's damage before it is
+ * fought and (b) drive an animated choreographer that walks the steps in order.
  *
  * Predicted HP factors in current shield/armor and any queued bonus attacks.
  * Reaping order matches the engine: targets are not re-evaluated mid-phase
@@ -67,9 +81,8 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
   // Mirror resolveAttackPhase's first-turn rule (P0 forgoes first-strike on
   // Turn 1): the plan must predict "no attacks" too, or the UI choreographs
   // a phantom strike — tracers, hit flashes, Damaged banners — that the
-  // engine then never applies. Same condition as the resolver, so the two
-  // can't drift apart on this rule.
-  if ((G.turnNumber ?? 1) <= 1) {
+  // engine then never applies.
+  if (!battleThisTurn(G)) {
     return { attackerId, defenderId, steps: [], damageToActive: 0, damageToFace: 0, defenderActiveKO: null };
   }
 
@@ -256,7 +269,7 @@ function simulateAttackMitigation(
 // ---------- Engine resolver (mutating) ----------
 
 /**
- * Run the attack phase for the player whose turn just ended.
+ * Run the attack phase — the battle — for the player whose turn it is.
  * The behavior matches `planAttackPhase` step for step.
  */
 export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
@@ -264,7 +277,7 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
   // the first hit. NOTE: this alone does NOT close the seat gap — P0's edge is
   // cumulative (acting first every round), and the sim still shows ~63% P0.
   // A persistent counter-lever (e.g. a per-turn soul coin for P1) is still TODO.
-  if ((G.turnNumber ?? 1) <= 1) return;
+  if (!battleThisTurn(G)) return;
 
   const defenderId = otherPlayer(attackerId);
   const attacker = G.players[attackerId];
