@@ -6,6 +6,7 @@
  *   npm run dev            # in another terminal
  *   node scripts/qa/fx-gallery.mjs OUT_DIR [PORT] ["Demo label|Other label"]
  *   SHEETS_ONLY=1 node scripts/qa/fx-gallery.mjs OUT_DIR   # rebuild sheets from frames
+ *   OFFSETS=80,160,240,320,480,640 node scripts/qa/fx-gallery.mjs OUT_DIR   # finer sampling
  *
  * Any showroom button counts as a "demo": list "Calm motion: off" first to
  * film the demos after it under reduced motion.
@@ -20,10 +21,12 @@ const OUT = resolve(process.argv[2] ?? './fx-shots');
 const SHEETS_ONLY = process.env.SHEETS_ONLY === '1';
 const PORT = Number(process.argv[3] ?? 9333);
 const DEMOS = (process.argv[4] ?? '').split('|').filter(Boolean);
-const OFFSETS = [150, 450, 800, 1250];
+const OFFSETS = (process.env.OFFSETS ?? '150,450,800,1250,1800').split(',').map(Number);
+const FRAME_W = Math.min(300, Math.floor(1230 / OFFSETS.length));
 mkdirSync(OUT, { recursive: true });
 
 const DEFAULT_DEMOS = [
+  'Attack · exchange (both take damage)', 'Attack · lethal — Abrams breaks', 'Attack · Shield blocks it', 'Attack · face (no Active to hit)',
   'Kelvin · Frost Grenade → Abrams', 'Lady Geist · Life Drain → Abrams', 'Spell · Cold Front → Abrams', 'Ult · Seismic Impact — spirit AoE + Stun',
   'Ult · Bullet Dance — gunfire AoE', 'Gunfire ×5', 'Two spirit hits on Abrams (2 + 3)', 'Pure hit ×2',
   'KO · gunfire', "Djinn's Mark ×4 detonates (Mirage → Abrams)", 'Bleed tick ×3 (Abrams) + ×2 (Haze)', 'Mystic Reverb echo (Abrams)',
@@ -89,7 +92,7 @@ try {
       body{margin:0;background:#111;color:#eee;font:12px/1.3 -apple-system,sans-serif}
       .row{display:flex;align-items:flex-start;gap:6px;padding:6px 8px;border-bottom:1px solid #333}
       .label{width:150px;flex:0 0 150px;padding-top:4px;font-weight:600}
-      img{width:300px;height:auto;display:block;border:1px solid #333}
+      img{width:${FRAME_W}px;height:auto;display:block;border:1px solid #333}
       .t{color:#999;font-size:10px;text-align:center}
     </style>${group.map((g) => `<div class="row"><div class="label">${g.label}</div>${g.row.map((f, k) => `<div><img src="file://${f}"><div class="t">${OFFSETS[k]} ms</div></div>`).join('')}</div>`).join('')}`;
     const file = join(OUT, `sheet-${i}.html`);

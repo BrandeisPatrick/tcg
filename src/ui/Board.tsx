@@ -31,6 +31,7 @@ import { FxImpulseBus, FxImpulseContext } from './effects/fx/FxImpulse';
 import { FxCalmContext, useCalmMotion } from './effects/fx/FxMotionContext';
 import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingContext';
 import { buildFxTimeline } from './effects/fx/fxTimeline';
+import { FxStageProvider } from './effects/fx/stage/FxStage';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
@@ -138,11 +139,13 @@ export function Board(props: BoardProps<GameState>) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fxTimeline = useMemo(() => buildFxTimeline(freshFx), [freshFxKey]);
   // The tiles' recoil channel (FxLayer / CombatChoreographer emit, HeroSlot
-  // listens) and the calm-motion switch every FX primitive reads.
+  // listens) and the calm-motion switch every FX primitive reads. The FX
+  // stage — the canvas where sparks, bolts and debris have height — is
+  // mounted below, around everything that books effects on it.
   const fxBus = useMemo(() => new FxImpulseBus(), []);
   const calmMotion = useCalmMotion();
   const fxHoldFor = useCallback<FxHoldResolver>(
-    (iid) => ({ impact: fxTimeline.impactDelay[iid] ?? 0, settle: fxTimeline.koSettle[iid] ?? 0 }),
+    (iid) => ({ impact: fxTimeline.impactDelay[iid] ?? 0, settle: fxTimeline.koCorpse[iid] ?? 0 }),
     [fxTimeline],
   );
   // The spell reveal (CardPlayFlash) sits left of centre on desktop and
@@ -658,6 +661,7 @@ export function Board(props: BoardProps<GameState>) {
       <FxTimingContext.Provider value={fxHoldFor}>
       <FxImpulseContext.Provider value={fxBus}>
       <FxCalmContext.Provider value={calmMotion}>
+      <FxStageProvider density={isMobile ? 0.6 : 1}>
       <PosterBackdrop />
 
       <div style={{
@@ -1116,6 +1120,7 @@ export function Board(props: BoardProps<GameState>) {
           onLessons={matchNav ? matchNav.toLessons : undefined}
         />
       )}
+      </FxStageProvider>
       </FxCalmContext.Provider>
       </FxImpulseContext.Provider>
       </FxTimingContext.Provider>

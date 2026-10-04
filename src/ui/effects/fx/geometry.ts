@@ -16,6 +16,13 @@ export function toRect(el: Element): Rect {
   return { left: b.left, top: b.top, width: b.width, height: b.height };
 }
 
+/** A hero tile's rect at rest. A kick shoves and tips the tile itself, so
+ *  its own bounding box wanders mid-effect; the wrapper HeroSlot marks with
+ *  `data-fx-rest` never moves, and effects anchor to that. */
+export function restRect(el: Element): Rect {
+  return toRect(el.closest('[data-fx-rest]') ?? el);
+}
+
 /** Where a ray from the rect's centre toward `toward` leaves the rect —
  *  the muzzle sits on the attacker's edge facing its target. */
 export function edgePoint(r: Rect, toward: Pt): Pt {

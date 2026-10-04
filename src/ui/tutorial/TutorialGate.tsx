@@ -30,15 +30,19 @@ const RADIUS = 12;
  *  flight) before the gate concludes it is lost and opens. */
 const MISSING_GRACE_MS = 700;
 
+/** Decorative copies are never a task's target — the FX layer clones a hero
+ *  tile into shards when its card breaks, and those clones are buttons too. */
+const live = (e: HTMLElement) => !e.closest('[aria-hidden="true"]');
+
 function byLabel(scope: ParentNode, prefix: string, all: boolean): HTMLElement[] {
   const els = [...scope.querySelectorAll<HTMLElement>('[aria-label]')]
-    .filter((e) => (e.getAttribute('aria-label') ?? '').startsWith(prefix));
+    .filter((e) => (e.getAttribute('aria-label') ?? '').startsWith(prefix) && live(e));
   return all ? els : els.slice(0, 1);
 }
 function byText(scope: ParentNode, needle: string, all: boolean): HTMLElement[] {
   const n = needle.toLowerCase();
   const els = [...scope.querySelectorAll<HTMLElement>('button, [role="button"]')]
-    .filter((e) => (e.textContent ?? '').toLowerCase().includes(n));
+    .filter((e) => (e.textContent ?? '').toLowerCase().includes(n) && live(e));
   return all ? els : els.slice(0, 1);
 }
 

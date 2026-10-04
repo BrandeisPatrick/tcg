@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import { animate, motion, type AnimationPlaybackControls } from 'framer-motion';
 import type { CardInstance, PlayerID } from '@/engine/types';
 import { useFxHold } from '../effects/fx/FxTimingContext';
-import { kickFor, useFxImpulse } from '../effects/fx/FxImpulse';
+import { LIFT_VAR, TILT_PERSPECTIVE, fromHere, kickFor, useFxImpulse } from '../effects/fx/FxImpulse';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
 import { CARDS_BY_ID } from '@/cards';
@@ -24,7 +24,9 @@ import { useStatTick } from './useStatTick';
  */
 
 // One dark drop under every tile — the print floats a hair off the sheet.
-const TILE_SHADOW = '0 14px 26px rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0, 0, 0.25)';
+// The drop reads the lift variable a kick animates (FxImpulse): as a card
+// comes up off the table its shadow falls further away and softens.
+const TILE_SHADOW = `0 calc(14px + var(${LIFT_VAR}, 0) * 22px) calc(26px + var(${LIFT_VAR}, 0) * 30px) rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0, 0, 0.25)`;
 // The frame's inner edge — the portrait sits slightly recessed in the charcoal.
 const PRINT_EDGE = 'inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 -18px 24px -12px rgba(0, 0, 0, 0.5)';
 
@@ -63,8 +65,9 @@ export function HeroSlot({
   // guards read the live card, only the print lags.
   const hold = useFxHold(card.iid);
   // Recoil: when a blow lands (the FX layer's or the choreographer's impact
-  // beat) the whole tile is shoved along the shot and springs back — harder
-  // with a twist on a kill, a lift on a heal, a shiver when a Shield holds.
+  // beat) the whole tile takes it like a card on a table — shoved along the
+  // shot with its far edge rocking up, twisted on a kill, lifted on a heal,
+  // kicked back as it fires (see FxImpulse's kickFor for every shape).
   // Driven imperatively so nothing remounts; skipped under calm motion.
   const tileRef = useRef<HTMLElement | null>(null);
   const kickCtl = useRef<AnimationPlaybackControls | null>(null);
@@ -73,8 +76,8 @@ export function HeroSlot({
     const el = tileRef.current;
     if (calm || !el) return;
     kickCtl.current?.stop();
-    const { keyframes, duration } = kickFor(impulse);
-    kickCtl.current = animate(el, keyframes, { duration, ease: 'easeOut' });
+    const { keyframes, duration, times } = kickFor(impulse);
+    kickCtl.current = animate(el, fromHere(keyframes), { duration, times, ease: 'easeOut' });
   });
   useEffect(() => () => kickCtl.current?.stop(), []);
   const shownHp = useDelayedValue(card.hp, hold.impact);
@@ -153,6 +156,10 @@ export function HeroSlot({
   const bodyPadding = compact ? '4px 6px 5px' : '5px 9px 6px';
 
   return (
+    // The perspective a kick tips the tile in sits on this wrapper, so the
+    // tile's own transform stays `none` at rest — and the wrapper, which
+    // never moves, is the box the FX layer measures (geometry's restRect).
+    <div data-fx-rest style={{ width: '100%', height: '100%', perspective: TILT_PERSPECTIVE }}>
     <motion.button
       layoutId={`hero-${card.iid}`}
       ref={(el) => { tileRef.current = el; registerSlotRef?.(card.iid, el); }}
@@ -455,6 +462,7 @@ export function HeroSlot({
         )}
       </div>
     </motion.button>
+    </div>
   );
 }
 

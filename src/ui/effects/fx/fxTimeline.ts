@@ -29,7 +29,10 @@ export interface FxTimeline {
   total: number;
   /** ms until the first impact on each unit — HeroSlot holds its numbers this long. */
   impactDelay: Record<string, number>;
-  /** ms until a KO'd unit may take on its corpse look (after the shatter). */
+  /** ms until a KO'd unit takes on its corpse look — under the backing its
+   *  shards leave behind, so the swap is never seen. */
+  koCorpse: Record<string, number>;
+  /** ms until a kill has fully played (the sticker has faded). */
   koSettle: Record<string, number>;
 }
 
@@ -49,6 +52,7 @@ export function buildFxTimeline(batch: FxEvent[]): FxTimeline {
   const hitAt = new Map<string, number>();
   const statusCount = new Map<string, number>();
   const impactDelay: Record<string, number> = {};
+  const koCorpse: Record<string, number> = {};
   const koSettle: Record<string, number> = {};
   const items: FxItem[] = [];
   const noteImpact = (iid: string, at: number) => {
@@ -61,11 +65,18 @@ export function buildFxTimeline(batch: FxEvent[]): FxTimeline {
         items.push({ ev, at: lead, hold: T.castHold });
         break;
       case 'hit': {
-        const at = baseFor(ev.iid) + tagLead(ev.tag) + T.stagger * idx(ev.iid);
+        // Gunfire from another card needs its volley's flight before it can
+        // land; a cast's lead already covers that, a bare proc's does not.
+        const volley = ev.type === 'attack' && !!ev.source && ev.source.iid !== ev.iid && ev.tag !== 'ricochet' && ev.tag !== 'tesla';
+        const base = volley ? Math.max(baseFor(ev.iid), T.volleyLead) : baseFor(ev.iid);
+        const at = base + tagLead(ev.tag) + T.stagger * idx(ev.iid);
         items.push({ ev, at, hold: ev.ko ? T.koHold : T.hitHold });
         if (!hitAt.has(ev.iid) || at < hitAt.get(ev.iid)!) hitAt.set(ev.iid, at);
         noteImpact(ev.iid, at);
-        if (ev.ko) koSettle[ev.iid] = Math.max(koSettle[ev.iid] ?? 0, at + T.koSettle);
+        if (ev.ko) {
+          koCorpse[ev.iid] = Math.max(koCorpse[ev.iid] ?? 0, at + T.koCorpse);
+          koSettle[ev.iid] = Math.max(koSettle[ev.iid] ?? 0, at + T.koSettle);
+        }
         break;
       }
       case 'shield':
@@ -105,5 +116,5 @@ export function buildFxTimeline(batch: FxEvent[]): FxTimeline {
   }
 
   const total = items.reduce((m, it) => Math.max(m, it.at + it.hold), 0) + 80;
-  return { items, cast, total, impactDelay, koSettle };
+  return { items, cast, total, impactDelay, koCorpse, koSettle };
 }

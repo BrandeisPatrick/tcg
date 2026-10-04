@@ -11,11 +11,17 @@ import { poster } from '../../poster';
 
 export const FX_TIMING = {
   /** Cast flare → bolt lands on the target. */
-  castLead: 420,
-  /** Effects the caster puts on itself land during the flare. */
-  selfLead: 220,
+  castLead: 560,
+  /** The caster gathers power this long (its card lifted, motes winding
+   *  in) before the bolt leaves. */
+  castCharge: 240,
+  /** Effects the caster puts on itself land as the charge lets go. */
+  selfLead: 240,
   /** Ultimates wait for the screen-fill name plate before the strike lands. */
   ultLead: 600,
+  /** A gunfire hit's volley leaves this long before its rounds land — the
+   *  muzzle flash, then three tracers in flight (travel + two round gaps). */
+  volleyLead: 300,
   /** Between impacts on different targets in one batch (an AoE ripples). */
   stagger: 90,
   /** A status stamp lands this long after the hit on the same card… */
@@ -33,8 +39,15 @@ export const FX_TIMING = {
   castHold: 850,
   reviveHold: 1300,
   levelHold: 1300,
-  /** The KO shatter and the K.O. sticker play this long before the corpse
-   *  look may land — the sticker has faded by then. */
+  /** A kill: the impact, then the print breaks into shards this much later… */
+  koBreak: 300,
+  /** …the K.O. sticker is slammed down on what is left… */
+  koStamp: 470,
+  /** …and under the dark backing the shards left behind, the tile takes on
+   *  its corpse look, before the backing fades to show it. */
+  koCorpse: 650,
+  /** The whole kill has played by now — anything that would cover it (the
+   *  promotion prompt) waits this long. */
   koSettle: 1450,
 } as const;
 

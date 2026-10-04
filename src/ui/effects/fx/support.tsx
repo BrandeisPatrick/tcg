@@ -1,8 +1,11 @@
 /**
  * Everything that happens on a card that is not a hit: a caster's skill
- * trigger (flare + ability plate), healing, a status landing as a stamp
- * (with a glyph or a flourish per status), a Shield deflect, an Unstoppable
- * shrug, a revive, a level-up, an equipment attach.
+ * trigger (motes drawn down into the card, the flare, the ability plate
+ * swinging up, the shockwave as it lets go), healing lifting off the card, a
+ * status slapped on as a sticker (with a glyph or a flourish per status), a
+ * Shield deflect, an Unstoppable shrug, a revive, a level-up, an equipment
+ * attach. As with hits, the card carries the print and the FX stage throws
+ * whatever leaves it.
  */
 import { motion } from 'framer-motion';
 import type { FxTag, StatusFx, StatusId } from '@/engine/types';
@@ -10,10 +13,12 @@ import { CARDS_BY_ID } from '@/cards';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { statusChipText } from '../../card/StatusIcon';
-import { FX_INK, NUMERAL_INK, TAG_INFO } from './fxCatalog';
-import { type Rect } from './geometry';
-import { EASE_OUT, Fixed, LightningArc, Motes, Numeral, Plate, Ring, Stamp, Wash, numeralSize, sec } from './primitives';
+import { FX_INK, FX_TIMING, NUMERAL_INK, TAG_INFO } from './fxCatalog';
+import { type Rect, center } from './geometry';
+import { EASE_OUT, Fixed, LightningArc, Numeral, Plate, Ring, Stamp, Wash, numeralSize, sec } from './primitives';
 import { DjinnGlyph, SleepLetters, onInk } from './hits';
+import { useStage } from './stage/FxStage';
+import { castCharge, castRelease, goldBurst, healRise, helix, shieldSkid } from './stage/emitters';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -36,14 +41,23 @@ export function castInk(cardId: string): string {
 // Cast — the skill trigger on the caster's card.
 // ---------------------------------------------------------------------------
 
-export function CastFlare({ rect, ink, label, at, hold, heavy = false }: {
-  rect: Rect; ink: string; label: string; at: number; hold: number; heavy?: boolean;
+export function CastFlare({ rect, ink, label, at, hold, seed, heavy = false }: {
+  rect: Rect; ink: string; label: string; at: number; hold: number; seed: number; heavy?: boolean;
 }) {
   const fontSize = clamp(rect.width * 0.075, 10, 13);
+  const charge = FX_TIMING.castCharge;
+  // Power gathers out of the air into the card, then goes off along the table.
+  useStage((s) => {
+    const at0 = center(rect);
+    const r = Math.hypot(rect.width, rect.height) / 2;
+    s.at(at, (stage) => stage.add(castCharge({ at: at0, r, ink, seed, dur: charge, heavy, density: stage.density })));
+    s.at(at + charge, (stage) => stage.add(castRelease({ at: at0, r, ink, seed: seed + 7, heavy, density: stage.density })));
+  });
   return (
     <>
       <Fixed rect={rect} clip z={80}>
         <Wash color={ink} peak={heavy ? 0.6 : 0.45} at={at} dur={hold * 0.7} radial />
+        <Wash color={FX_INK.cream} peak={0.5} at={at + charge - 30} dur={220} radial />
         <motion.div
           initial={{ x: '-130%' }}
           animate={{ x: ['-130%', '130%'] }}
@@ -107,6 +121,9 @@ export function HealGlow({ rect, amount, at, hold, tag, seed }: {
 }) {
   const drawn = tag === 'lifesteal';
   const quiet = tag === 'regen';
+  useStage((s) => s.at(at, (stage) => stage.add(healRise({
+    at: center(rect), width: rect.width, height: rect.height, seed, count: clamp(3 + amount, 4, 10), quiet, density: stage.density,
+  }))));
   return (
     <>
       <Fixed rect={rect} clip z={80}>
@@ -116,12 +133,17 @@ export function HealGlow({ rect, amount, at, hold, tag, seed }: {
           transition={{ duration: sec(hold * 0.9), delay: sec(at), times: [0, 0.15, 0.6, 1] }}
           style={{ position: 'absolute', inset: 0, background: `linear-gradient(0deg, ${FX_INK.heal}, ${FX_INK.heal}44 55%, transparent 90%)` }}
         />
+        {/* Light climbing the card as the healing takes. */}
+        {!quiet && (
+          <motion.div
+            initial={{ y: '110%', opacity: 0 }}
+            animate={{ y: ['110%', '-60%'], opacity: [0, 0.7, 0.7, 0] }}
+            transition={{ duration: 0.7, delay: sec(at), ease: 'easeOut', times: [0, 0.15, 0.7, 1] }}
+            style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '45%', background: `linear-gradient(0deg, transparent, ${FX_INK.cream}, transparent)` }}
+          />
+        )}
         {drawn && <Wash color={poster.red} peak={0.35} at={at} dur={320} />}
         {!quiet && <Ring size={rect.width * 0.6} color={FX_INK.heal} at={at} dur={600} from={0.5} to={1.5} width={2.5} />}
-      </Fixed>
-      <Fixed rect={rect} z={83}>
-        <Motes origin={{ x: rect.width / 2, y: rect.height * 0.7 }} count={clamp(2 + amount, 3, 8)} seed={seed} color={FX_INK.heal} alt={FX_INK.cream}
-          shape="cross" at={at} dur={quiet ? 1000 : 800} spread={[10, 50]} rise={quiet ? 20 : 40} size={10} angle={{ center: -Math.PI / 2, span: 1.6 }} />
       </Fixed>
       {amount > 0 && (
         <Fixed rect={rect} z={89}>
@@ -172,7 +194,8 @@ function StatusGlyph({ id, color, size }: { id: StatusId; color: string; size: n
   }
 }
 
-/** Three stars circling above a stunned hero. */
+/** Three stars circling above a stunned hero — an orbit seen edge-on, so
+ *  each star swells as it swings round the near side and passes behind. */
 function StunStars({ rect, at, hold }: { rect: Rect; at: number; hold: number }) {
   const r = rect.width * 0.22;
   const cx = rect.width / 2;
@@ -183,14 +206,17 @@ function StunStars({ rect, at, hold }: { rect: Rect; at: number; hold: number })
       {[0, 1, 2].map((i) => {
         const a0 = (i / 3) * Math.PI * 2;
         const steps = 5;
-        const xs = Array.from({ length: steps }, (_, k) => cx + Math.cos(a0 + (k / (steps - 1)) * Math.PI * 1.5) * r - size / 2);
-        const ys = Array.from({ length: steps }, (_, k) => cy + Math.sin(a0 + (k / (steps - 1)) * Math.PI * 1.5) * r * 0.45 - size / 2);
+        const ang = (k: number) => a0 + (k / (steps - 1)) * Math.PI * 1.5;
+        const xs = Array.from({ length: steps }, (_, k) => cx + Math.cos(ang(k)) * r - size / 2);
+        const ys = Array.from({ length: steps }, (_, k) => cy + Math.sin(ang(k)) * r * 0.45 - size / 2);
+        // sin > 0 is the near side of the orbit.
+        const depth = Array.from({ length: steps }, (_, k) => 1 + Math.sin(ang(k)) * 0.38);
         return (
           <motion.div key={i}
             initial={{ x: xs[0], y: ys[0], opacity: 0, scale: 0.6 }}
-            animate={{ x: xs, y: ys, opacity: [0, 1, 1, 1, 0], scale: [0.6, 1, 0.9, 1, 0.6] }}
+            animate={{ x: xs, y: ys, opacity: [0, 1, 1, 1, 0], scale: depth }}
             transition={{ duration: sec(hold * 0.9), delay: sec(at), ease: 'linear' }}
-            style={{ position: 'absolute', left: 0, top: 0, width: size, height: size, filter: 'drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5))' }}
+            style={{ position: 'absolute', left: 0, top: 0, width: size, height: size, filter: 'drop-shadow(0 7px 3px rgba(0, 0, 0, 0.4))' }}
           >
             <svg viewBox="0 0 20 20" width="100%" height="100%"><path d="M10 1 L12.4 7.2 L19 7.6 L13.8 11.8 L15.6 18.5 L10 14.8 L4.4 18.5 L6.2 11.8 L1 7.6 L7.6 7.2 Z" fill={FX_INK.gold} stroke={poster.ink} strokeWidth="1" strokeLinejoin="round" /></svg>
           </motion.div>
@@ -280,29 +306,35 @@ export function StatusStamp({ rect, ev, at, hold, index = 0 }: { rect: Rect; ev:
 // Shield deflect, Unstoppable shrug.
 // ---------------------------------------------------------------------------
 
-/** A Shield ate part or all of a hit — the green glyph pops with the tally.
- *  `broken` cracks the glyph as it fades. Used by both the FX layer and the
- *  combat choreographer. */
-export function ShieldDeflect({ rect, absorbed, fullyAbsorbed, broken = false, at, hold, z = 85 }: {
-  rect: Rect; absorbed: number; fullyAbsorbed: boolean; broken?: boolean; at: number; hold: number; z?: number;
+/** A Shield ate part or all of a hit — the green glyph swings up in front
+ *  of the card with the tally, sparks skid off across the table, and when it
+ *  is `broken` the glyph cracks as it fades and the shield comes apart. Used
+ *  by both the FX layer and the combat choreographer. */
+export function ShieldDeflect({ rect, absorbed, fullyAbsorbed, broken = false, at, hold, seed = 1, z = 85 }: {
+  rect: Rect; absorbed: number; fullyAbsorbed: boolean; broken?: boolean; at: number; hold: number; seed?: number; z?: number;
 }) {
   const green = poster.green;
   const glyphSize = clamp(Math.round(rect.width * 0.42), 36, 72);
   const dur = hold * 0.85;
+  useStage((s) => s.at(at, (stage) => stage.add(shieldSkid({ at: center(rect), r: rect.width / 2, seed, broken, density: stage.density }))));
   return (
     <Fixed rect={rect} z={z}>
       <Fixed rect={{ left: 0, top: 0, width: rect.width, height: rect.height }} clip z={0} style={{ position: 'absolute' }}>
-        <Wash color={green} peak={0.55} at={at} dur={dur} holdFrac={0.7} />
+        <Wash color={green} peak={0.55} at={at} dur={dur} holdFrac={0.7} radial />
       </Fixed>
       <motion.div
-        initial={{ scale: 0.55, opacity: 0 }}
-        animate={{ scale: [0.55, 1.18, 1.05, 1.05], opacity: [0, 1, 1, 0], x: broken ? [0, 0, -3, 3, 0] : 0 }}
+        initial={{ scale: 0.4, opacity: 0, rotateY: 80 }}
+        animate={{ scale: [0.4, 1.3, 1.1, 1.1], opacity: [0, 1, 1, 0], rotateY: [80, -12, 0, 0], x: broken ? [0, 0, -3, 3] : 0 }}
         transition={{ duration: sec(dur), delay: sec(at), times: [0, 0.18, 0.7, 1], ease: EASE_OUT }}
-        style={{ position: 'absolute', left: '50%', top: '50%', width: glyphSize, height: glyphSize, marginLeft: -glyphSize / 2, marginTop: -glyphSize / 2, filter: 'drop-shadow(0 2px 0 rgba(0, 0, 0, 0.45))' }}
+        style={{
+          position: 'absolute', left: '50%', top: '50%', width: glyphSize, height: glyphSize, marginLeft: -glyphSize / 2, marginTop: -glyphSize / 2,
+          transformPerspective: 460, filter: 'drop-shadow(0 10px 5px rgba(0, 0, 0, 0.45))',
+        }}
       >
         <svg viewBox="0 0 16 16" width="100%" height="100%">
           <path d="M8 1.2 L14 3 L14 8 C 14 11.5, 11.5 13.6, 8 14.8 C 4.5 13.6, 2 11.5, 2 8 L 2 3 Z" fill={green} stroke={poster.ink} strokeWidth="0.7" strokeLinejoin="round" />
           <path d="M8 2.4 L4 3.6 L4 7.5 C 4 8.4, 4.5 9.2, 5 9.8 L 5 4.4 Z" fill="rgba(242, 230, 203, 0.4)" />
+          <path d="M8 2.4 L12 3.6 L12 8 C 12 10.6, 10.4 12.2, 8 13.2 Z" fill="rgba(0, 0, 0, 0.16)" />
           {broken && (
             <motion.path d="M7 2 L8.5 6 L6.5 8.5 L9 12.5 L8 14.5" fill="none" stroke={poster.ink} strokeWidth="1.1" strokeLinejoin="round"
               initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, delay: sec(at + 200) }} />
@@ -318,8 +350,9 @@ export function ShieldDeflect({ rect, absorbed, fullyAbsorbed, broken = false, a
   );
 }
 
-export function ImmuneStamp({ rect, what, at, hold }: { rect: Rect; what: 'damage' | StatusId; at: number; hold: number }) {
+export function ImmuneStamp({ rect, what, at, hold, seed = 1 }: { rect: Rect; what: 'damage' | StatusId; at: number; hold: number; seed?: number }) {
   const text = what === 'damage' ? 'Unstoppable' : `Resisted · ${statusChipText(what)}`;
+  useStage((s) => s.at(at, (stage) => stage.add(goldBurst({ at: center(rect), r: rect.width / 2, seed, density: stage.density }))));
   return (
     <>
       <Fixed rect={rect} clip z={80}>
@@ -340,6 +373,12 @@ export function ImmuneStamp({ rect, what, at, hold }: { rect: Rect; what: 'damag
 
 export function ReviveRays({ rect, at, hold, seed }: { rect: Rect; at: number; hold: number; seed: number }) {
   const size = Math.max(rect.width, rect.height) * 1.6;
+  useStage((s) => s.at(at + 60, (stage) => {
+    const c = center(rect);
+    stage.add(helix({ at: c, r: rect.width * 0.5, seed, count: 14, color: FX_INK.gold, density: stage.density }));
+    stage.add(helix({ at: c, r: rect.width * 0.34, seed: seed + 3, count: 8, color: poster.green, density: stage.density }));
+    stage.add(goldBurst({ at: c, r: rect.width / 2, seed: seed + 5, density: stage.density }));
+  }));
   return (
     <>
       <Fixed rect={rect} clip z={80}>
@@ -359,8 +398,6 @@ export function ReviveRays({ rect, at, hold, seed }: { rect: Rect; at: number; h
         <Ring size={rect.width * 0.6} color={poster.green} at={at + 80} dur={800} from={0.3} to={2.2} width={3} />
       </Fixed>
       <Fixed rect={rect} z={86}>
-        <Motes origin={{ x: rect.width / 2, y: rect.height * 0.75 }} count={8} seed={seed} color={FX_INK.gold} alt={poster.green}
-          shape="star" at={at + 60} dur={900} spread={[20, 70]} rise={50} size={10} angle={{ center: -Math.PI / 2, span: 2 }} />
         <Stamp text="Respawned" sticker={poster.green} ink={poster.ink} fontSize={clamp(rect.width * 0.085, 11, 15)} at={at + 160} dur={hold - 160} rotate={-4} />
       </Fixed>
     </>
@@ -368,6 +405,11 @@ export function ReviveRays({ rect, at, hold, seed }: { rect: Rect; at: number; h
 }
 
 export function LevelUpBurst({ rect, level, at, hold, seed }: { rect: Rect; level: number; at: number; hold: number; seed: number }) {
+  useStage((s) => s.at(at, (stage) => {
+    const c = center(rect);
+    stage.add(goldBurst({ at: c, r: rect.width / 2, seed, density: stage.density }));
+    stage.add(helix({ at: c, r: rect.width * 0.46, seed: seed + 3, count: 12, color: FX_INK.gold, density: stage.density }));
+  }));
   return (
     <>
       <Fixed rect={rect} clip z={80}>
@@ -376,8 +418,6 @@ export function LevelUpBurst({ rect, level, at, hold, seed }: { rect: Rect; leve
         <Ring size={rect.width * 0.6} color={FX_INK.cream} at={at + 140} dur={700} from={0.3} to={2} width={2} />
       </Fixed>
       <Fixed rect={rect} z={86}>
-        <Motes origin={{ x: rect.width / 2, y: rect.height / 2 }} count={10} seed={seed} color={FX_INK.gold} alt={FX_INK.cream}
-          shape="star" at={at} dur={850} spread={[30, 90]} rise={30} size={10} />
         <Stamp text={`Level ${level}`} sticker={FX_INK.gold} ink={poster.ink} fontSize={clamp(rect.width * 0.1, 12, 18)} at={at + 120} dur={hold - 120} rotate={-4} />
       </Fixed>
     </>

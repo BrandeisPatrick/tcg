@@ -8,8 +8,8 @@ import { createContext, useContext } from 'react';
  *
  *   impact  until the first impact lands on the card (HP / BP / Shield /
  *           status chips switch then)
- *   settle  until a KO'd card may take on its corpse look (after the shatter
- *           and the K.O. sticker have played)
+ *   settle  until a KO'd card takes on its corpse look — once its print has
+ *           broken and the shatter's backing hides the swap
  *
  * Both are zero when nothing is in flight for that card.
  */

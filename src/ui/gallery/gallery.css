@@ -293,6 +293,8 @@
 .gal-chip:hover:not(:disabled) { background: var(--g-deep); border-color: var(--g-ink); }
 .gal-chip[data-on="true"] { background: var(--g-ink); border-color: var(--g-ink); color: var(--g-paper); }
 .gal-chip:disabled { border-color: var(--g-rule); color: var(--g-ink-dim); cursor: default; }
+/* A trigger locked while its own effect plays keeps its inked look. */
+.gal-chip[data-on="true"]:disabled { border-color: var(--g-ink); color: var(--g-paper); }
 .gal-chip:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--g-red); }
 
 /* One-of-many. The options share their borders, so eight of them cost the

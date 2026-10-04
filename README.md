@@ -23,15 +23,18 @@ single-page React app.
 - **Active hero KO flow:** corpse stays in slot greyed-out with a rotating
   brass clock ring + countdown; on death the player is prompted to choose a
   bench hero to step up.
-- **Board FX:** every resolved effect is animated on the cards — a skill's
-  flare and bolt from its caster, gunfire (muzzle flash, tracer volley, bullet
-  holes) for bullet damage, spirit bursts, pure tears, bleed drips, a KO
-  shatter, and a unique lead-in per signature effect (Djinn's Mark detonating,
-  Mystic Reverb echoing, Naptime waking, Killing Blow slashing, Ricochet,
-  Tesla, channelled ultimates), plus stamps for statuses, shields, immunity,
-  revives and level-ups. Every hit prints its amount in stencil digits and
-  the tile recoils along the shot; a calm mode (reduced motion) keeps the
-  beats and the numbers but nothing flies. See
+- **Board FX:** every resolved effect is animated on the cards, with depth —
+  the table is seen from above and effects have height. A caster's card lifts
+  and gathers power, its bolt arcs over the board with a shadow under it;
+  gunfire throws muzzle flashes, tracers and brass casings that bounce on the
+  table; struck cards rock in 3D, sparks and chads of the print fly up and
+  fall back; a pure hit tears the card in two; a kill breaks the card itself
+  into shards. Plus a unique lead-in per signature effect (Djinn's Mark
+  detonating, Mystic Reverb echoing, Naptime waking, Killing Blow slashing,
+  Ricochet, Tesla, channelled ultimates) and stickers slammed on for
+  statuses, shields, immunity, revives and level-ups. Every hit prints its
+  amount in stencil digits; a calm mode (reduced motion) keeps the beats and
+  the numbers but nothing flies. See
   [`docs/fx-model.md`](./docs/fx-model.md).
 - **One-skill-per-turn** rule (Improved Cooldown equipment bypasses).
 - **41 bitmap card-art assets** pulled from the community asset bucket; SVG
@@ -67,11 +70,13 @@ workflow + gotchas (canon item renames, active/passive validation, etc.).
 `scripts/qa/` drives headless Chrome over CDP against the dev server with the
 app's virtual clock (`?vtclock=1`) so any frame of an animation can be
 captured: `fx-gallery.mjs` fires every effect on the Gallery's showroom
-(`?preview=1&tab=combat`), `fx-match.mjs` plays a real match (draft, a skill,
-the rival's turn, combat), and both write contact sheets to look at. Any
-showroom button can be named as a "demo", so listing `Calm motion: off`
-first films the demos after it under reduced motion. Set `DEV_URL` when the
-dev server is not on `http://localhost:5173`.
+(`?preview=1&tab=combat`) — basic attacks included, walked by the real combat
+choreographer — and `fx-match.mjs` plays a real match (draft, a skill, the
+rival's turn, combat); both write contact sheets to look at. Any showroom
+button can be named as a "demo", so listing `Calm motion: off` first films
+the demos after it under reduced motion, and `OFFSETS=80,160,240,…` samples
+an effect more finely. Set `DEV_URL` when the dev server is not on
+`http://localhost:5173`.
 
 ## Architecture
 
@@ -84,7 +89,8 @@ src/
 ├── ai/          Heuristic move enumerator + scorer
 ├── ui/          React components (Board, HeroSlot, CardFrame, side panel,
 │                hero detail sheet, mulligan, promotion overlay, …)
-│   └── effects/fx/  the board-FX player (timeline scheduler + animation families)
+│   └── effects/fx/  the board-FX player (timeline scheduler, animation families,
+│                    and stage/ — the canvas particle world with height)
 └── statuses/    Status taxonomy + display metadata
 public/
 ├── heroes/      Hero portrait .webp (3 sizes each)

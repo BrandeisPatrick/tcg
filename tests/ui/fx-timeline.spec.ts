@@ -48,6 +48,41 @@ describe('fx timeline', () => {
     expect(tl.items.slice(1).map((i) => i.at)).toEqual([base, base + T.stagger, base + 2 * T.stagger]);
     expect(tl.koSettle.e3).toBe(base + 2 * T.stagger + T.koSettle);
     expect(tl.items[3].hold).toBe(T.koHold);
+    // The tile turns corpse under the shatter's backing — after the print
+    // breaks, well before the kill has finished playing.
+    expect(tl.koCorpse.e3).toBe(base + 2 * T.stagger + T.koCorpse);
+    expect(T.koBreak).toBeLessThan(T.koStamp);
+    expect(T.koStamp).toBeLessThan(T.koCorpse);
+    expect(T.koCorpse).toBeLessThan(T.koSettle);
+    expect(tl.koCorpse.e1).toBeUndefined();
+  });
+
+  it('the bolt needs time to fly: a charge fits inside the cast lead', () => {
+    expect(T.castCharge).toBeLessThan(T.castLead - 150);
+    expect(T.selfLead).toBeLessThanOrEqual(T.castLead);
+  });
+
+  it('gunfire from another card waits for its volley; a cast already covers it', () => {
+    const src = { iid: 's', cardId: 'hero_haze', owner: '0' as const };
+    const proc = buildFxTimeline([
+      ev({ kind: 'hit', iid: 't', amount: 2, type: 'attack', ko: false, cast: 'proc', source: src }),
+    ] as FxEvent[]);
+    expect(proc.items[0].at).toBe(T.volleyLead);
+    expect(proc.impactDelay.t).toBe(T.volleyLead);
+    // Sourceless, self-inflicted, or travelling by its own lead-in: no volley.
+    const bare = buildFxTimeline([
+      ev({ kind: 'hit', iid: 't', amount: 2, type: 'attack', ko: false, cast: 'tick' }),
+      ev({ kind: 'hit', iid: 's', amount: 1, type: 'attack', ko: false, cast: 'proc', source: src }),
+      ev({ kind: 'hit', iid: 'u', amount: 1, type: 'attack', ko: false, cast: 'proc', source: src, tag: 'ricochet' }),
+    ] as FxEvent[]);
+    expect(bare.items.map((i) => i.at)).toEqual([0, T.stagger, 2 * T.stagger + TAG_INFO.ricochet.lead]);
+    // Behind a cast the hit keeps the cast's own lead.
+    const ult = buildFxTimeline([
+      ev({ kind: 'cast', castKind: 'ult', by: '0', cardId: 'ult_haze', iid: 's' }),
+      ev({ kind: 'hit', iid: 't', amount: 3, type: 'attack', ko: false, cast: 'ult', source: src }),
+    ] as FxEvent[]);
+    expect(ult.items[1].at).toBe(T.ultLead + T.castLead);
+    expect(T.ultLead + T.castLead).toBeGreaterThan(T.volleyLead);
   });
 
   it('a unique tag adds its intro lead before the impact', () => {

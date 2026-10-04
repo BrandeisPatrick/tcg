@@ -1,25 +1,31 @@
 /**
  * The FX showroom — a six-card stage (a rival trio above, yours below) wired
- * to the real FxLayer, HeroSlot, impact-delay context and recoil bus, with a
- * trigger for every animation the match can draw. Each trigger synthesises the
- * exact event batch the engine would push and fires it through the same
- * timeline scheduler the board uses, so what plays here is what plays in a
- * match. The mock HP follows the hits so the stat hold can be seen too.
+ * to the real FxLayer, FX stage, HeroSlot, impact-delay context and recoil
+ * bus, with a trigger for every animation the match can draw. Each trigger
+ * synthesises the exact event batch the engine would push and fires it
+ * through the same timeline scheduler the board uses — or, for the basic
+ * attack, hands the real CombatChoreographer a plan — so what plays here is
+ * what plays in a match. The mock HP follows the hits so the stat hold can
+ * be seen too.
  *
  * Laid out so the stage never leaves the screen: beside the triggers on a
  * wide window, pinned above them on a narrow one. There are sixty-odd
  * triggers, and a trigger that fires an effect nobody can see is not a demo.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { CardInstance, DamageType, FxCastKind, FxEvent, FxSource, FxTag, PlayerID, StatusId } from '@/engine/types';
+import type { AttackPlan, AttackStep } from '@/engine/combat';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroSlot } from '../board/HeroSlot';
+import { CombatChoreographer } from '../effects/CombatChoreographer';
+import { COMBAT_STEP_MS } from '../hooks/useCombatSpeed';
 import { FxLayer } from '../effects/fx/FxLayer';
 import { FxImpulseBus, FxImpulseContext } from '../effects/fx/FxImpulse';
 import { FxCalmContext } from '../effects/fx/FxMotionContext';
 import { FxTimingContext } from '../effects/fx/FxTimingContext';
 import { buildFxTimeline } from '../effects/fx/fxTimeline';
+import { FxStageProvider } from '../effects/fx/stage/FxStage';
 import { useViewport } from '../hooks/useViewport';
 import { Button, Chip, Row, Segmented, STICK, type Option } from './primitives';
 
@@ -50,7 +56,15 @@ const cast = (castKind: 'skill' | 'spell' | 'ult' | 'equip', by: PlayerID, cardI
 const shield = (iid: Id, absorbed: number, broken: boolean, type: DamageType): Ev => ({ kind: 'shield', iid, absorbed, broken, type });
 const immune = (iid: Id, what: 'damage' | StatusId): Ev => ({ kind: 'immune', iid, what });
 
-interface Demo { label: string; events: Ev[] }
+/** One beat of a basic attack, as the engine's attack plan would describe it. */
+const swing = (from: Id, to: Id | null, dmg: number, o: Partial<AttackStep> = {}): AttackStep => ({
+  attackerIid: from, attackerName: CARDS_BY_ID[STAGE[from].cardId]?.name ?? from,
+  targetIid: to, targetName: to ? CARDS_BY_ID[STAGE[to].cardId]?.name ?? to : null,
+  finalDamage: dmg, rawDamage: dmg + (o.shieldAbsorbed ?? 0), predictedHpAfter: null, predictedKO: false,
+  shieldAbsorbed: 0, retaliationDamage: 0, attackerHpAfter: null, attackerKO: false, ...o,
+});
+
+interface Demo { label: string; events: Ev[]; /** A basic attack: walked by the combat choreographer instead. */ plan?: AttackStep[] }
 interface Group { id: string; short: string; title: string; blurb: string; demos: Demo[] }
 
 /** A group the stage does not drive: full-screen overlays with their own
@@ -58,6 +72,20 @@ interface Group { id: string; short: string; title: string; blurb: string; demos
 export interface ExtraGroup { id: string; short: string; title: string; blurb: string; body: ReactNode }
 
 const GROUPS: Group[] = [
+  {
+    id: 'attacks', short: 'Attacks',
+    title: 'Basic attacks',
+    blurb: "The end-of-turn firefight, walked by the combat choreographer: the shooter's card comes up off the table and kicks back with each round, casings fly, tracers cross with their shadows under them, and the rounds punch into the target as it rocks. A lethal blow breaks the card into shards and jolts the whole table.",
+    demos: [
+      { label: 'Attack · Kelvin → Abrams', events: [], plan: [swing('y0', 'r0', 3)] },
+      { label: 'Attack · exchange (both take damage)', events: [], plan: [swing('r0', 'y0', 4, { retaliationDamage: 2 })] },
+      { label: 'Attack · lethal — Abrams breaks', events: [], plan: [swing('y0', 'r0', 99, { predictedKO: true, retaliationDamage: 1 })] },
+      { label: 'Attack · both go down', events: [], plan: [swing('r0', 'y0', 99, { predictedKO: true, retaliationDamage: 99, attackerKO: true })] },
+      { label: 'Attack · Shield blocks it', events: [], plan: [swing('y0', 'r0', 0, { shieldAbsorbed: 3 })] },
+      { label: 'Attack · two beats (Active, then a bench gun)', events: [], plan: [swing('y0', 'r0', 2, { retaliationDamage: 1 }), swing('y1', 'r0', 2, { bonusLabel: 'Mirage +1 vs Marked' })] },
+      { label: 'Attack · face (no Active to hit)', events: [], plan: [swing('y0', null, 3)] },
+    ],
+  },
   {
     id: 'skills', short: 'Skills',
     title: 'Skill triggers',
@@ -180,6 +208,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
   const [calm, setCalm] = useState(false);
   const [only, setOnly] = useState('all');
   const [playing, setPlaying] = useState<string | null>(null);
+  const [attack, setAttack] = useState<AttackPlan | null>(null);
   const bus = useMemo(() => new FxImpulseBus(), []);
   const seq = useRef(1000);
   const slotRefs = useRef(new Map<string, HTMLElement>());
@@ -189,7 +218,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
   }, []);
 
   const timeline = useMemo(() => buildFxTimeline(batch), [batch]);
-  const fxHoldFor = useCallback((iid: string) => ({ impact: timeline.impactDelay[iid] ?? 0, settle: timeline.koSettle[iid] ?? 0 }), [timeline]);
+  const fxHoldFor = useCallback((iid: string) => ({ impact: timeline.impactDelay[iid] ?? 0, settle: timeline.koCorpse[iid] ?? 0 }), [timeline]);
   // Retire the batch once it has played so later mock changes are not held.
   useEffect(() => {
     if (batch.length === 0) return;
@@ -231,6 +260,40 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
     setHp(Object.fromEntries(IDS.map((id) => [id, maxHp(id)])) as Record<Id, number>);
     setDead(new Set());
   };
+
+  // A basic attack: the choreographer walks the plan first, and only then
+  // does the "engine" resolve — as in a match, the mock HP moves afterwards.
+  const attackRef = useRef<AttackPlan | null>(null);
+  const swingPlan = (steps: AttackStep[], label: string) => {
+    const by = STAGE[steps[0].attackerIid as Id].owner;
+    attackRef.current = { attackerId: by, defenderId: by === '0' ? '1' : '0', steps, damageToActive: 0, damageToFace: 0, defenderActiveKO: null };
+    setAttack(attackRef.current);
+    setPlaying(label);
+  };
+  const resolveAttack = useCallback(() => {
+    const plan = attackRef.current;
+    attackRef.current = null;
+    if (plan) {
+      setHp((h) => {
+        const next = { ...h };
+        for (const st of plan.steps) {
+          if (st.targetIid) next[st.targetIid as Id] = Math.max(0, next[st.targetIid as Id] - st.finalDamage);
+          next[st.attackerIid as Id] = Math.max(0, next[st.attackerIid as Id] - st.retaliationDamage);
+        }
+        return next;
+      });
+      setDead((d) => {
+        const next = new Set(d);
+        for (const st of plan.steps) {
+          if (st.predictedKO && st.targetIid) next.add(st.targetIid as Id);
+          if (st.attackerKO) next.add(st.attackerIid as Id);
+        }
+        return next;
+      });
+    }
+    setAttack(null);
+    setPlaying(null);
+  }, []);
 
   const koHaze = () => fire([hit('r1', 99, 'attack', { source: 'y0', cast: 'proc' })]);
 
@@ -317,6 +380,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
     <FxTimingContext.Provider value={fxHoldFor}>
     <FxImpulseContext.Provider value={bus}>
     <FxCalmContext.Provider value={calm}>
+    <FxStageProvider density={isMobile ? 0.6 : 1}>
       <div className={two ? 'gal-fx gal-fx--two' : 'gal-fx gal-fx--stack'}>
         {/* layoutRoot: the tiles carry a layoutId, and framer measures layout
             in page coordinates. A pinned stage moves in page coordinates every
@@ -347,7 +411,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
               <div className="gal-fx__lede"><h3>{g.title}</h3>{g.blurb}</div>
               <div className="gal-chips">
                 {g.demos.map((d) => (
-                  <Chip key={d.label} on={playing === d.label} onClick={() => fire(d.events, d.label)}>{d.label}</Chip>
+                  <Chip key={d.label} on={playing === d.label} disabled={!!attack} onClick={() => (d.plan ? swingPlan(d.plan, d.label) : fire(d.events, d.label))}>{d.label}</Chip>
                 ))}
               </div>
             </div>
@@ -361,6 +425,10 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
         </div>
       </div>
       <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
+      <AnimatePresence>
+        {attack && <CombatChoreographer plan={attack} slotRefs={slotRefs.current} stepDuration={COMBAT_STEP_MS} onComplete={resolveAttack} />}
+      </AnimatePresence>
+    </FxStageProvider>
     </FxCalmContext.Provider>
     </FxImpulseContext.Provider>
     </FxTimingContext.Provider>

@@ -1,10 +1,14 @@
 /**
  * The board-FX layer. Board hands it each fresh batch of engine events (the
  * hits / heals / statuses / casts one move produced); the layer measures the
- * cards involved, schedules the batch with `buildFxTimeline`, and plays it as
- * fixed-position overlays anchored to those cards. Batches overlap freely —
- * a bleed tick can still be dripping while the next skill's bolt flies — and
- * each one unmounts itself when its timeline runs out.
+ * cards on the table, schedules the batch with `buildFxTimeline`, and plays
+ * it three ways at once: prints on the cards (fixed-position overlays
+ * anchored to their rects), things in the air (booked on the FX stage by
+ * those overlays), and the cards themselves moving (impulses on the bus —
+ * a hit rocks its target, a caster lifts, a shockwave bobs every card it
+ * passes under). Batches overlap freely — a bleed tick can still be dripping
+ * while the next skill's bolt flies — and each one unmounts itself when its
+ * timeline runs out.
  *
  * Positions are captured once, when the batch arrives, so a card sliding to
  * another slot mid-effect keeps the effect where the hit landed (the same
@@ -16,10 +20,11 @@ import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { FX_INK, FX_TIMING, TAG_INFO, typeInk } from './fxCatalog';
 import { buildFxTimeline, type FxItem, type FxTimeline } from './fxTimeline';
-import { FxImpulseContext, type FxImpulse, hitStrength } from './FxImpulse';
-import { type Pt, type Rect, angleOf, center, dist, toRect } from './geometry';
-import { AoeWave, Bolt, DrainStream, LightningArc } from './primitives';
+import { FxImpulseBus, FxImpulseContext, type FxImpulse, hitStrength } from './FxImpulse';
+import { type Pt, type Rect, angleOf, center, dist, restRect } from './geometry';
+import { AoeWave, Bolt, DrainStream, FxCardContext, LightningArc } from './primitives';
 import { HitImpact } from './hits';
+import { useStageEngine } from './stage/FxStage';
 import {
   CastFlare, EquipGlint, HealGlow, ImmuneStamp, LevelUpBurst, ReviveRays, ShieldDeflect, StatusStamp,
   castInk, castLabel,
@@ -29,7 +34,11 @@ interface LiveBatch {
   key: number;
   batch: FxEvent[];
   timeline: FxTimeline;
+  /** Every card on the table when the batch arrived, not only the ones it
+   *  names — a shockwave bobs the bystanders too. */
   rects: Map<string, Rect>;
+  /** The live tiles, for the effects that take the card itself apart. */
+  tiles: Map<string, HTMLElement>;
   /** Where a spell's bolt leaves from (the reveal card), when Board knows. */
   origin: Pt | null;
 }
@@ -48,32 +57,29 @@ export function FxLayer({ batch, batchKey, slotRefs, spellOrigin }: FxLayerProps
   const [live, setLive] = useState<LiveBatch[]>([]);
   const lastKey = useRef(0);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const stage = useStageEngine();
 
   useEffect(() => {
     if (batch.length === 0 || batchKey <= lastKey.current) return;
     lastKey.current = batchKey;
     const timeline = buildFxTimeline(batch);
-    // Measure every card the batch touches — targets, sources, lifesteal victims.
-    const want = new Set<string>();
-    for (const e of batch) {
-      if ('iid' in e && e.iid) want.add(e.iid);
-      if ('source' in e && e.source) want.add(e.source.iid);
-      if ('from' in e && e.from) want.add(e.from.iid);
-      if (e.kind === 'cast' && e.targetIid) want.add(e.targetIid);
-    }
     const rects = new Map<string, Rect>();
-    for (const iid of want) {
-      const el = slotRefs.get(iid);
-      if (el && document.body.contains(el)) rects.set(iid, toRect(el));
+    const tiles = new Map<string, HTMLElement>();
+    for (const [iid, el] of slotRefs) {
+      if (!document.body.contains(el)) continue;
+      rects.set(iid, restRect(el));
+      tiles.set(iid, el);
     }
+    const table = tableCenter(rects);
+    if (table) stage?.lookAt(table);
     const origin = timeline.cast?.castKind === 'spell' ? (spellOrigin?.() ?? null) : null;
-    setLive((l) => [...l, { key: batchKey, batch, timeline, rects, origin }]);
+    setLive((l) => [...l, { key: batchKey, batch, timeline, rects, tiles, origin }]);
     const t = setTimeout(() => {
       timers.current.delete(t);
       setLive((l) => l.filter((b) => b.key !== batchKey));
     }, timeline.total);
     timers.current.add(t);
-  }, [batch, batchKey, slotRefs, spellOrigin]);
+  }, [batch, batchKey, slotRefs, spellOrigin, stage]);
 
   useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
 
@@ -92,35 +98,101 @@ function effectInk(batch: FxEvent[], casterIid: string | undefined): string {
   return FX_INK.spirit;
 }
 
+/** The middle of the cards on the table — where the stage's camera hangs. */
+export function tableCenter(rects: Map<string, Rect>): Pt | null {
+  if (rects.size === 0) return null;
+  let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+  for (const q of rects.values()) {
+    l = Math.min(l, q.left); t = Math.min(t, q.top);
+    r = Math.max(r, q.left + q.width); b = Math.max(b, q.top + q.height);
+  }
+  return { x: (l + r) / 2, y: (t + b) / 2 };
+}
+
+/** How fast a shockwave's bob travels from card to card, px/s. */
+const QUAKE_SPEED = 1500;
+
+/** Bob every card but `skip` as a shock from `from` passes under it — the
+ *  nearer the card, the sooner and the harder. Returns the timers booked. */
+export function quake(bus: FxImpulseBus, rects: Map<string, Rect>, from: Pt, at: number, strength: number, skip?: string): ReturnType<typeof setTimeout>[] {
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  for (const [iid, rect] of rects) {
+    if (iid === skip) continue;
+    const c = center(rect);
+    const d = dist(from, c);
+    const impulse: FxImpulse = { kind: 'wave', angle: angleOf(from, c), strength: Math.max(0.25, strength / (1 + d / 320)) };
+    timers.push(setTimeout(() => bus.emit(iid, impulse), at + (d / QUAKE_SPEED) * 1000));
+  }
+  return timers;
+}
+
+/** The cast's targets: every card its effects land on, other than the caster. */
+function castTargets(cast: CastFx, timeline: FxTimeline, rects: Map<string, Rect>): Pt[] {
+  const seen = new Set<string>();
+  const targets: Pt[] = [];
+  for (const it of timeline.items) {
+    const e = it.ev;
+    if (e.kind === 'cast' || !('iid' in e) || e.iid === cast.iid || seen.has(e.iid)) continue;
+    if (e.kind === 'heal' && e.tag === 'lifesteal') continue;   // drawn back, not cast out
+    seen.add(e.iid);
+    const r = rects.get(e.iid);
+    if (r) targets.push(center(r));
+  }
+  return targets;
+}
+
 function FxBatch({ live }: { live: LiveBatch }) {
-  const { batch, timeline, rects, origin } = live;
+  const { batch, timeline, rects, tiles, origin } = live;
   const cast = timeline.cast;
   const statusIndex = new Map<string, number>();
   const hitIndex = new Map<string, number>();
 
-  // The tiles take their blows at the impact beats: HeroSlot listens on the
-  // impulse bus and recoils along the shot (see FxImpulse).
+  // The tiles take their part at the beats: HeroSlot listens on the impulse
+  // bus and moves the card (see FxImpulse).
   const bus = useContext(FxImpulseContext);
   useEffect(() => {
     if (!bus) return;
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const emit = (iid: string, impulse: FxImpulse, at: number) => {
+      timers.push(setTimeout(() => bus.emit(iid, impulse), Math.max(0, at)));
+    };
     for (const it of timeline.items) {
       const ev = it.ev;
-      let impulse: FxImpulse | null = null;
-      if (ev.kind === 'hit' && ev.amount > 0) {
+      if (ev.kind === 'cast') {
+        // The caster lifts while it gathers power and slaps down as it lets
+        // go; an area cast then rolls a shockwave under every other card.
+        if (ev.castKind === 'equip' || ev.castKind === 'spell' || !ev.iid) continue;
+        const heavy = ev.castKind === 'ult';
+        emit(ev.iid, { kind: 'cast', strength: heavy ? 1 : 0.4, duration: (FX_TIMING.castCharge + 180) / 1000 }, it.at);
+        const src = rects.get(ev.iid);
+        if (src && castTargets(ev, timeline, rects).length > 1) {
+          timers.push(...quake(bus, rects, center(src), it.at + FX_TIMING.castCharge, heavy ? 1 : 0.7, ev.iid));
+        }
+      } else if (ev.kind === 'hit' && ev.amount > 0) {
         const src = ev.source ? rects.get(ev.source.iid) : undefined;
         const tgt = rects.get(ev.iid);
         const angle = src && tgt && ev.source!.iid !== ev.iid ? angleOf(center(src), center(tgt)) : undefined;
-        impulse = { kind: ev.ko ? 'ko' : 'hit', angle, strength: hitStrength(ev.amount) };
+        emit(ev.iid, { kind: ev.ko ? 'ko' : 'hit', angle, strength: hitStrength(ev.amount) }, it.at);
+        // A skill's gunfire kicks its shooter back (GunBurst's volley leaves
+        // this long before the rounds land).
+        if (ev.type === 'attack' && angle != null && ev.tag !== 'ricochet' && ev.tag !== 'tesla') {
+          emit(ev.source!.iid, { kind: 'fire', angle, strength: 0.5 }, it.at - FX_TIMING.volleyLead);
+        }
+        if (ev.ko && tgt) {
+          // The card breaks: every other card on the table jumps, and the
+          // sticker slammed onto the wreck lands with a thud.
+          timers.push(...quake(bus, rects, center(tgt), it.at + FX_TIMING.koBreak, 0.9, ev.iid));
+          emit(ev.iid, { kind: 'slam', strength: 1 }, it.at + FX_TIMING.koStamp + 90);
+        }
       } else if (ev.kind === 'heal' && ev.amount > 0) {
-        impulse = { kind: 'heal', strength: 0.6 };
+        emit(ev.iid, { kind: 'heal', strength: 0.6 }, it.at);
       } else if (ev.kind === 'shield') {
-        impulse = { kind: 'shield', strength: 0.6 };
+        emit(ev.iid, { kind: 'shield', strength: 0.6 }, it.at);
+      } else if (ev.kind === 'status') {
+        emit(ev.iid, { kind: 'slam', strength: 0.6 }, it.at + 100);
+      } else if (ev.kind === 'revive' || ev.kind === 'levelup') {
+        emit(ev.iid, { kind: 'cast', strength: 0.5, duration: 0.6 }, it.at);
       }
-      if (!impulse || !('iid' in ev) || !ev.iid) continue;
-      const iid = ev.iid;
-      const imp = impulse;
-      timers.push(setTimeout(() => bus.emit(iid, imp), it.at));
     }
     return () => timers.forEach(clearTimeout);
   }, [bus, timeline, rects]);
@@ -138,6 +210,16 @@ function FxBatch({ live }: { live: LiveBatch }) {
     g.at = Math.min(g.at, it.at);
     channelGroups.set(ev.source.iid, g);
   }
+  useEffect(() => {
+    if (!bus) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const g of channelGroups.values()) {
+      const src = rects.get(g.source!.iid);
+      if (src && g.source!.cardId !== 'hero_seven') timers.push(...quake(bus, rects, center(src), g.at - TAG_INFO.channel.lead, 0.7, g.source!.iid));
+    }
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bus, timeline, rects]);
 
   return (
     <>
@@ -158,15 +240,20 @@ function FxBatch({ live }: { live: LiveBatch }) {
         if (!srcRect) return null;
         const from = center(srcRect);
         const radius = Math.max(...g.targets.map((p) => dist(from, p))) + 60;
-        return <AoeWave key={src.iid} from={from} radius={radius} color={ink} at={g.at - lead} dur={lead - 40} spokes={g.targets} />;
+        return <AoeWave key={src.iid} from={from} radius={radius} color={ink} at={g.at - lead} dur={lead - 40} seed={live.key} spokes={g.targets} />;
       })}
 
-      {timeline.items.map((it) => renderItem(it, rects, batch, statusIndex, hitIndex))}
+      {/* Each effect is printed on its own card, and rides that card's kicks. */}
+      {timeline.items.map((it) => (
+        <FxCardContext.Provider key={`fx-${it.ev.seq}`} value={'iid' in it.ev ? it.ev.iid ?? null : null}>
+          {renderItem(it, rects, tiles, batch, statusIndex, hitIndex)}
+        </FxCardContext.Provider>
+      ))}
     </>
   );
 }
 
-function renderItem(it: FxItem, rects: Map<string, Rect>, batch: FxEvent[], statusIndex: Map<string, number>, hitIndex: Map<string, number>) {
+function renderItem(it: FxItem, rects: Map<string, Rect>, tiles: Map<string, HTMLElement>, batch: FxEvent[], statusIndex: Map<string, number>, hitIndex: Map<string, number>) {
   const ev = it.ev;
   const key = `fx-${ev.seq}`;
   switch (ev.kind) {
@@ -178,7 +265,7 @@ function renderItem(it: FxItem, rects: Map<string, Rect>, batch: FxEvent[], stat
       const sourceRect = ev.source ? rects.get(ev.source.iid) : undefined;
       const n = hitIndex.get(ev.iid) ?? 0;
       hitIndex.set(ev.iid, n + 1);
-      return <HitImpact key={key} ev={ev} rect={rect} sourceRect={sourceRect} at={it.at} hold={it.hold} ownerInk={ownerInk(ev.source?.owner)} index={n} />;
+      return <HitImpact key={key} ev={ev} rect={rect} sourceRect={sourceRect} tile={tiles.get(ev.iid)} at={it.at} hold={it.hold} ownerInk={ownerInk(ev.source?.owner)} index={n} />;
     }
     case 'heal': {
       const rect = rects.get(ev.iid);
@@ -207,12 +294,12 @@ function renderItem(it: FxItem, rects: Map<string, Rect>, batch: FxEvent[], stat
       // The engine pushes the spill-over hit right after the absorb, so a
       // following hit on the same card means the shield did not eat it all.
       const spilled = batch.some((e) => e.kind === 'hit' && e.iid === ev.iid && e.seq === ev.seq + 1);
-      return <ShieldDeflect key={key} rect={rect} absorbed={ev.absorbed} fullyAbsorbed={!spilled} broken={ev.broken} at={it.at} hold={it.hold} />;
+      return <ShieldDeflect key={key} rect={rect} absorbed={ev.absorbed} fullyAbsorbed={!spilled} broken={ev.broken} at={it.at} hold={it.hold} seed={ev.seq} />;
     }
     case 'immune': {
       const rect = rects.get(ev.iid);
       if (!rect) return null;
-      return <ImmuneStamp key={key} rect={rect} what={ev.what} at={it.at} hold={it.hold} />;
+      return <ImmuneStamp key={key} rect={rect} what={ev.what} at={it.at} hold={it.hold} seed={ev.seq} />;
     }
     case 'revive': {
       const rect = rects.get(ev.iid);
@@ -227,43 +314,44 @@ function renderItem(it: FxItem, rects: Map<string, Rect>, batch: FxEvent[], stat
   }
 }
 
-/** The cast's own visuals: the flare on the caster, then a bolt to a single
- *  target or a shockwave with spokes to several. Equipment just glints. */
+/** The cast's own visuals: the caster gathers power and flares, then a bolt
+ *  arcs over the table to a single target, or a shockwave rolls out with a
+ *  low bolt to each of several. Equipment just glints. */
 function CastVisuals({ cast, item, batch, timeline, rects, origin }: {
   cast: CastFx; item: FxItem; batch: FxEvent[]; timeline: FxTimeline; rects: Map<string, Rect>; origin: Pt | null;
 }) {
   const casterRect = cast.iid ? rects.get(cast.iid) : undefined;
   if (cast.castKind === 'equip') {
-    return casterRect ? <EquipGlint rect={casterRect} at={item.at} hold={item.hold} /> : null;
+    return casterRect ? (
+      <FxCardContext.Provider value={cast.iid ?? null}>
+        <EquipGlint rect={casterRect} at={item.at} hold={item.hold} />
+      </FxCardContext.Provider>
+    ) : null;
   }
-  const ink = cast.castKind === 'skill' ? castInk(cast.cardId) : cast.castKind === 'ult' ? castInk(cast.cardId) : effectInk(batch, cast.iid);
+  const heavy = cast.castKind === 'ult';
+  const ink = cast.castKind === 'spell' ? effectInk(batch, cast.iid) : castInk(cast.cardId);
   const label = castLabel(cast.cardId);
-  // Every card the cast's effects land on, other than the caster itself.
-  const seen = new Set<string>();
-  const targets: Pt[] = [];
-  for (const it of timeline.items) {
-    const e = it.ev;
-    if (e.kind === 'cast' || !('iid' in e) || e.iid === cast.iid || seen.has(e.iid)) continue;
-    if (e.kind === 'heal' && e.tag === 'lifesteal') continue;   // drawn back, not cast out
-    seen.add(e.iid);
-    const r = rects.get(e.iid);
-    if (r) targets.push(center(r));
-  }
+  const targets = castTargets(cast, timeline, rects);
   const from = cast.castKind === 'spell'
     ? (origin ?? (casterRect ? center(casterRect) : null))
     : (casterRect ? center(casterRect) : null);
-  const boltAt = item.at + 60;
-  const boltDur = FX_TIMING.castLead - 80;
+  // A hero's bolt leaves once the charge lets go; a spell's is thrown
+  // straight off the revealed card.
+  const flares = !!casterRect && cast.castKind !== 'spell';
+  const boltAt = item.at + (flares ? FX_TIMING.castCharge : 60);
+  const boltDur = item.at + FX_TIMING.castLead - 20 - boltAt;
   return (
     <>
-      {casterRect && cast.castKind !== 'spell' && (
-        <CastFlare rect={casterRect} ink={ink} label={label} at={item.at} hold={item.hold} heavy={cast.castKind === 'ult'} />
+      {flares && (
+        <FxCardContext.Provider value={cast.iid ?? null}>
+          <CastFlare rect={casterRect} ink={ink} label={label} at={item.at} hold={item.hold} seed={cast.seq} heavy={heavy} />
+        </FxCardContext.Provider>
       )}
       {from && targets.length === 1 && (
-        <Bolt from={from} to={targets[0]} color={ink} at={boltAt} dur={boltDur} width={cast.castKind === 'ult' ? 4 : 3} />
+        <Bolt from={from} to={targets[0]} color={ink} at={boltAt} dur={boltDur} size={heavy ? 12 : 9} embers={heavy ? 130 : 90} />
       )}
       {from && targets.length > 1 && (
-        <AoeWave from={from} radius={Math.max(...targets.map((p) => dist(from, p))) + 60} color={ink} at={boltAt - 20} dur={boltDur} spokes={targets} />
+        <AoeWave from={from} radius={Math.max(...targets.map((p) => dist(from, p))) + 60} color={ink} at={boltAt - 20} dur={boltDur} seed={cast.seq} spokes={targets} />
       )}
     </>
   );

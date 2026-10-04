@@ -51,20 +51,26 @@ export function CombatTab() {
     <>
       <Notes label="What the stage draws">
         <p>
-          Everything the engine resolves is played over the hero slots by the FxLayer: a skill&rsquo;s flare on
-          its caster and a bolt to the target, gunfire (muzzle flash, tracer volley, holes punched into the
-          print), spirit bursts, pure tears, bleed running down the card, the KO shatter, and stamps for
-          statuses, shields, immunity, revives and level-ups.
+          The table is seen from straight above, and effects have height. Everything the engine resolves is
+          played three ways at once: prints on the cards (washes of light off the impact, bullet holes, the
+          rune, stickers slammed on, the amount in stencil digits), things in the air on the FX stage (a
+          bolt arcing over the board with its shadow under it, tracers, brass casings bouncing on the
+          paper, sparks and chads of the print flung up and falling back, embers winding toward you), and
+          the cards themselves &mdash; a hit rocks the tile off the table, a shooter kicks back with each
+          round, a caster lifts while it gathers power, a shockwave bobs every card it passes under.
         </p>
         <p>
-          Every tagged effect has a lead-in of its own: Djinn&rsquo;s Mark converging and detonating, Mystic
-          Reverb ringing in, Naptime&rsquo;s letters, a Killing Blow&rsquo;s slashes, Ricochet bounces, Tesla
-          arcs, channel shockwaves.
+          Two effects take the card itself apart: a pure hit tears it in two for a moment, and a kill
+          breaks it into shards &mdash; clones of the live tile, cut along the cracks &mdash; before the
+          K.O. sticker is slammed onto what is left. Every tagged effect still has a lead-in of its own:
+          Djinn&rsquo;s Mark converging and detonating, Mystic Reverb ringing in, Naptime&rsquo;s letters, a
+          Killing Blow&rsquo;s slashes, Ricochet bounces, Tesla arcs, channel shockwaves.
         </p>
         <p>
           The stage keeps a mock HP that follows the hits, so the hold can be seen: the number, the chips and
-          the corpse look on a struck card wait until the bolt lands, the tile recoils along the shot, and a
-          kill turns into the corpse after the shatter. Calm motion is what a reduced-motion player sees.
+          the corpse look on a struck card wait until the bolt lands, and a kill turns into the corpse under
+          the shatter. Calm motion is what a reduced-motion player sees: the prints and the numbers on the
+          same beats, and nothing flies.
         </p>
       </Notes>
 
