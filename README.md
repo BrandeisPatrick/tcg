@@ -23,7 +23,10 @@ single-page React app.
 - **Turn phases:** a turn runs Prepare → Battle → Prepare → End Turn. One
   button walks it — Enter Battle (the two Actives trade blows), then End Turn —
   so cards, a skill or a retreat can go before the battle or after it. The
-  dial between the Actives prints the phase. Turn 1 has no battle.
+  dial between the Actives shows the phase without a word: quiet while you
+  prepare, with only its spinner moving; ringed with bouncing level bars that
+  thump on every attack step while the battle is fought; and left with a short
+  fringe once it is over. Turn 1 has no battle.
 - **Active hero KO flow:** corpse stays in slot greyed-out with a rotating
   brass clock ring + countdown; on death the player is prompted to choose a
   bench hero to step up.

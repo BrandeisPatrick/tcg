@@ -1,38 +1,20 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { fonts, spring } from '../tokens';
-import { poster, chamfer, clipBoth } from '../poster';
+import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
 
 /** Where a turn stands. It runs Prepare → Battle → Prepare → End Turn;
- *  'regroup' is the second prepare phase, printed "Prepare" like the first. */
+ *  'regroup' is the second prepare phase. */
 export type TurnPhase = 'prepare' | 'battle' | 'regroup';
 
-/** The ways the compass can print the phase. The Gallery's Board tab shows
- *  them side by side; the board uses DEFAULT_PHASE_STYLE.
- *
- *    track   the word on a slip under the dial, over three pips — where the
- *            turn is and what comes next
- *    bars    the word under five level bars: flat before the battle, bouncing
- *            through it, held where they stopped after it
- *    tag     a numbered ink tag under the dial, in the owner's colour for
- *            the battle
- *    thirds  nothing added: the dial's ring is the turn in three arcs, and
- *            its caption is the word
- *    ink     nothing added: the dial itself floods with ink for the battle
- */
-export const PHASE_STYLES = ['track', 'bars', 'tag', 'thirds', 'ink'] as const;
-export type PhaseStyle = (typeof PHASE_STYLES)[number];
-export const DEFAULT_PHASE_STYLE: PhaseStyle = 'track';
-
-const PHASES: TurnPhase[] = ['prepare', 'battle', 'regroup'];
+/** The phase in words — for the dial's accessible name only. */
 const PHASE_WORD: Record<TurnPhase, string> = { prepare: 'Prepare', battle: 'Battle', regroup: 'Prepare' };
 
 interface Props {
   isMyTurn: boolean;
   turn: number;
   phase: TurnPhase;
-  phaseStyle?: PhaseStyle;
   /** Override for the ambient `CombatProgressContext` value — only the
    *  preview gallery passes this so it can demo the combat-mode ring
    *  without a real battle. Live game always reads context. */
@@ -64,17 +46,20 @@ if (typeof CSS !== 'undefined' && typeof (CSS as any).registerProperty === 'func
  * turn. A turn changing hands fires one ring-burst, flips the chevron and
  * swaps the hue.
  *
- * The ring: outside the battle, a slow faint-ink sweep around the edge.
- * While the battle is fought (CombatProgressContext non-null) it becomes a
- * segmented progress fill — one arc per attack step, filling in the
- * attacker's colour, the active segment pulsing.
- *
- * The phase: printed quietly, in one of the PHASE_STYLES. It changes with
- * the turn button's label — Enter Battle while the battle is ahead, End
- * Turn once it is fought — so the two always tell the same story.
+ * The phase: each has its own look, and none is a word. Preparing, the dial
+ * is quiet — only the spinner moves, a faint arc sweeping slowly round the
+ * edge. The battle is loud: the ring becomes one arc per attack step,
+ * filling in the attacker's colour, and level bars like a music player's
+ * stand out all round the dial and bounce. Every attack step lands as a
+ * thump — the bars jump, the dial pops, a ring bursts off it. Once the
+ * battle is fought the bars settle into a short fringe that stays until the
+ * turn changes hands, so the second prepare phase reads as the first with
+ * the battle behind it. It all changes with the turn button's label — Enter
+ * Battle while the battle is ahead, End Turn once it is fought — so the two
+ * always tell the same story.
  *
  * This component is the single mid-board focal token; combat does NOT
- * introduce any sibling chrome.
+ * introduce any sibling chrome, and nothing is hung off one side of it.
  */
 // Disc diameter. The duel divider column is ~180px of open paper — at the
 // old 36px the compass read as a stray dot rather than the board's focal
@@ -83,7 +68,7 @@ const SIZE = 54;
 // Ring mask hole tracks the disc radius (ring layers sit at inset -3).
 const RING_MASK = `radial-gradient(circle, transparent ${SIZE / 2 - 3}px, #000 ${SIZE / 2 - 2}px)`;
 
-export function TurnCompass({ isMyTurn, turn, phase, phaseStyle = DEFAULT_PHASE_STYLE, combatOverride }: Props) {
+export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
   const contextCombat = useCombatProgress();
   const combat = combatOverride !== undefined ? combatOverride : contextCombat;
   // Hue follows the turn owner — gold when it's the player's move, red
@@ -105,13 +90,13 @@ export function TurnCompass({ isMyTurn, turn, phase, phaseStyle = DEFAULT_PHASE_
     setRippleKey((k) => k + 1);
   }, [isMyTurn]);
 
-  const word = PHASE_WORD[phase];
-  // 'thirds' and 'ink' print the phase inside the dial; the others hang a
-  // readout under it.
-  const readout = phaseStyle === 'thirds' || phaseStyle === 'ink' ? null : phaseStyle;
-  const inDial = readout === null;
-  const flooded = phaseStyle === 'ink' && phase === 'battle';
-  const name = `Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"} · ${word} phase`;
+  const battle = phase === 'battle';
+  // The attack step in flight. Each new one lands as a thump: the two
+  // keyframes are the same, and swapping from one name to the other is what
+  // starts the animation over.
+  const beat = battle && combat && combat.currentBeat < combat.total ? combat.currentBeat : null;
+  const thump = beat === null ? undefined : `turn-compass-thump-${beat % 2 ? 'b' : 'a'} 0.4s ease-out`;
+  const name = `Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"} · ${PHASE_WORD[phase]} phase`;
 
   return (
     <motion.div
@@ -128,103 +113,90 @@ export function TurnCompass({ isMyTurn, turn, phase, phaseStyle = DEFAULT_PHASE_
         zIndex: 2,
         width: SIZE,
         height: SIZE,
+      }}
+    >
+      <LevelBars phase={phase} hue={hue} thump={thump} />
+
+      {/* The dial itself — everything that pops together on a thump. */}
+      <div className="turn-compass-thump" style={{
+        position: 'absolute',
+        inset: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-      }}
-    >
-      {/* Paper disc — flat cream with an ink keyline and one inner hairline
-          ring, printed on the divider like a dial. No shadow, no blur. */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: '50%',
-          background: flooded ? poster.ink : poster.paper,
-          border: `1.5px solid ${poster.ink}`,
-          transition: 'background-color 0.25s ease',
-        }}
-      />
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          inset: 5,
-          borderRadius: '50%',
-          border: `1px solid ${flooded ? poster.creamFaint : poster.inkRule}`,
-          pointerEvents: 'none',
-        }}
-      />
-
-      {phaseStyle === 'thirds'
-        ? <ThirdsRing phase={phase} combat={combat} hue={hue} />
-        : combat
-          ? <CombatRing combat={combat} />
-          : <IdleSweepRing />}
-
-      {/* Turn-change ripple — single short-lived ring-burst that fires on
-          every isMyTurn flip. Replaces the old "Your Move / Rival's Move"
-          banner. Skipped on first mount so it doesn't fire on game load. */}
-      <AnimatePresence>
-        {rippleKey > 0 && (
-          <motion.div
-            key={rippleKey}
-            aria-hidden
-            initial={{ scale: 1, opacity: 0.75 }}
-            animate={{ scale: 1.65, opacity: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              borderRadius: '50%',
-              border: `1.5px solid ${hue}`,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Centred readout — a micro caption over the turn numeral. The
-          caption is "TURN", or the phase where the style prints it in the
-          dial. The numeral stays static so it's always readable in a single
-          beat (also during combat — beat progress lives in the ring). */}
-      <span style={{
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 1,
-        zIndex: 1,
+        animation: thump,
+        ...thumpFrom(1.09),
       }}>
-        <span
-          // Keyed so a phase change lands as new type; no exit animation to
-          // wait on (one that stalls in a throttled tab would hold the old
-          // word on screen).
-          key={inDial ? phase : 'turn'}
+        {/* Paper disc — flat cream with an ink keyline and one inner
+            hairline ring, printed on the divider like a dial. No shadow, no
+            blur. Through the battle the hairline takes the attacker's
+            colour. */}
+        <div
+          aria-hidden
           style={{
-            fontFamily: fonts.display,
-            fontSize: inDial ? 6.5 : 7,
-            letterSpacing: inDial ? '0.12em' : '0.34em',
-            paddingLeft: inDial ? '0.12em' : '0.34em', // optically recenters tracked-out caps
-            textTransform: 'uppercase',
-            color: flooded ? poster.cream : poster.inkDim,
-            lineHeight: 1,
+            position: 'absolute',
+            inset: 0,
+            borderRadius: '50%',
+            background: poster.paper,
+            border: `1.5px solid ${poster.ink}`,
           }}
-        >
-          {inDial ? word : 'Turn'}
-        </span>
+        />
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 5,
+            borderRadius: '50%',
+            border: battle ? `1.5px solid ${hue}` : `1px solid ${poster.inkRule}`,
+            transition: 'border-color 0.25s ease',
+            pointerEvents: 'none',
+          }}
+        />
+
+        {combat ? <CombatRing combat={combat} /> : <IdleSweepRing />}
+
+        {/* Centred readout — a micro "TURN" caption over the turn numeral.
+            Static, so it is always readable in a single beat (also during
+            combat — beat progress lives in the ring). */}
         <span style={{
-          fontFamily: fonts.display,
-          fontSize: 19,
-          lineHeight: 1,
-          color: flooded ? poster.paper : poster.ink,
-          fontVariantNumeric: 'tabular-nums',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 1,
+          zIndex: 1,
         }}>
-          {turn}
+          <span style={{
+            fontFamily: fonts.display,
+            fontSize: 7,
+            letterSpacing: '0.34em',
+            paddingLeft: '0.34em', // optically recenters tracked-out caps
+            textTransform: 'uppercase',
+            color: poster.inkDim,
+            lineHeight: 1,
+          }}>
+            Turn
+          </span>
+          <span style={{
+            fontFamily: fonts.display,
+            fontSize: 19,
+            lineHeight: 1,
+            color: poster.ink,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {turn}
+          </span>
         </span>
-      </span>
+      </div>
+
+      {/* Ring-bursts — one on every isMyTurn flip (it replaces the old "Your
+          Move / Rival's Move" banner, and is skipped on first mount so it
+          doesn't fire on game load), and a heavier one for every attack
+          step of the battle. */}
+      <AnimatePresence>
+        {rippleKey > 0 && <RingBurst key={`turn-${rippleKey}`} hue={hue} weight={1.5} reach={1.65} />}
+        {beat !== null && <RingBurst key={`beat-${beat}`} hue={hue} weight={2.5} reach={1.9} />}
+      </AnimatePresence>
 
       {/* External chevron — sits OUTSIDE the disc's edge and points at the
           active player. Anchored only by `top` so framer-motion can spring
@@ -251,8 +223,6 @@ export function TurnCompass({ isMyTurn, turn, phase, phaseStyle = DEFAULT_PHASE_
         </svg>
       </motion.div>
 
-      {readout && <PhaseReadout kind={readout} phase={phase} hue={hue} mine={isMyTurn} />}
-
       {/* Keyframes — declared inline so the component is self-contained and
           can be dropped into PreviewGallery without external CSS. */}
       <style>{`
@@ -260,187 +230,56 @@ export function TurnCompass({ isMyTurn, turn, phase, phaseStyle = DEFAULT_PHASE_
           from { --compass-sweep: 0deg; }
           to   { --compass-sweep: 360deg; }
         }
+        @keyframes turn-compass-ring-in {
+          from { opacity: 0; }
+        }
+        .turn-compass-ring {
+          animation: turn-compass-ring-in 0.3s ease-out;
+        }
         .turn-compass-sweep {
-          animation: turn-compass-sweep-spin 8s linear infinite;
+          animation: turn-compass-sweep-spin 8s linear infinite, turn-compass-ring-in 0.3s ease-out;
         }
         @keyframes turn-compass-bar-bounce {
-          0%, 100% { transform: scaleY(0.25); }
+          0%, 100% { transform: scaleY(0.3); }
           50%      { transform: scaleY(1); }
         }
         .turn-compass-bar {
           animation: turn-compass-bar-bounce 600ms ease-in-out infinite;
         }
+        @keyframes turn-compass-thump-a {
+          from { transform: scale(var(--thump-from)); }
+        }
+        @keyframes turn-compass-thump-b {
+          from { transform: scale(var(--thump-from)); }
+        }
         @media (prefers-reduced-motion: reduce) {
           .turn-compass-bar { animation: none; transform: scaleY(0.75); }
+          .turn-compass-thump { animation: none !important; }
         }
       `}</style>
     </motion.div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// The phase, printed under the dial
-// ---------------------------------------------------------------------------
+/** How far out a thump starts, for the keyframes to read. */
+const thumpFrom = (scale: number) => ({ '--thump-from': scale }) as CSSProperties;
 
-/** Stencil micro-type shared by the readouts. */
-const phaseType = {
-  fontFamily: fonts.display,
-  fontSize: 11,
-  letterSpacing: '0.2em',
-  textTransform: 'uppercase' as const,
-  lineHeight: 1,
-  whiteSpace: 'nowrap' as const,
-};
-
-/** Level-bar heights in px: flat before the battle, and frozen mid-song
- *  after it. During the battle every bar is full height and bounces. */
-const BARS_REST = [3, 3, 3, 3, 3];
-const BARS_HELD = [5, 9, 6, 11, 7];
-const BARS_MAX = 12;
-/** Each bar bounces to its own beat so the five never move as one. */
-const BAR_BEAT_MS = [520, 680, 440, 760, 600];
-
-/**
- * The phase on a slip of paper under the dial — the dial's own paper with a
- * faint keyline, so it reads as a label pinned to the divider (and masks the
- * hairline behind it). The tag style is its own plate and needs no slip.
- * Sits below the chevron's low position, so the two never touch, and stays
- * put when the turn changes hands — one place to look. Decorative: the
- * dial's accessible name already says the phase.
- */
-function PhaseReadout({ kind, phase, hue, mine }: {
-  kind: 'track' | 'bars' | 'tag';
-  phase: TurnPhase;
-  hue: string;
-  mine: boolean;
-}) {
-  const at = PHASES.indexOf(phase);
-  const battle = phase === 'battle';
-  const word = PHASE_WORD[phase];
-  // A plate in the owner's colour: ink reads on your gold, paper on the
-  // rival's red.
-  const onHue = mine ? poster.ink : poster.paper;
-
+/** A ring that leaves the dial's edge, grows to `reach` times its size and
+ *  fades. Mounted under AnimatePresence with a fresh key for every burst. */
+function RingBurst({ hue, weight, reach }: { hue: string; weight: number; reach: number }) {
   return (
-    <div
+    <motion.div
       aria-hidden
+      initial={{ scale: 1, opacity: 0.75 }}
+      animate={{ scale: reach, opacity: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       style={{
         position: 'absolute',
-        top: SIZE + 12,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 5,
-        ...(kind === 'tag' ? {} : {
-          padding: '3px 5px 5px',
-          background: poster.paper,
-          border: `1px solid ${poster.inkFaint}`,
-          borderRadius: 3,
-        }),
+        inset: 0,
+        borderRadius: '50%',
+        border: `${weight}px solid ${hue}`,
         pointerEvents: 'none',
-      }}
-    >
-      {kind === 'bars' && (
-        <span style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: BARS_MAX }}>
-          {BARS_REST.map((rest, i) => (
-            <span
-              key={i}
-              className={battle ? 'turn-compass-bar' : undefined}
-              style={{
-                width: 3,
-                height: battle ? BARS_MAX : phase === 'regroup' ? BARS_HELD[i] : rest,
-                background: battle ? poster.ink : phase === 'regroup' ? poster.inkDim : poster.inkFaint,
-                transformOrigin: '50% 100%',
-                animationDuration: `${BAR_BEAT_MS[i]}ms`,
-                // Negative delays start the five out of step.
-                animationDelay: `${-i * 137}ms`,
-                transition: 'height 0.25s ease, background-color 0.25s ease',
-              }}
-            />
-          ))}
-        </span>
-      )}
-
-      {kind === 'tag' ? (
-        <motion.span
-          key={phase}
-          initial={{ opacity: 0, y: 3 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          style={{
-            ...phaseType,
-            display: 'inline-flex',
-            alignItems: 'baseline',
-            gap: 6,
-            padding: '5px 9px 5px 10px',
-            background: battle ? hue : poster.ink,
-            color: battle ? onHue : poster.paper,
-            ...clipBoth(chamfer(4)),
-          }}
-        >
-          <span style={{ opacity: 0.62, letterSpacing: 0 }}>{at + 1}</span>
-          {word}
-        </motion.span>
-      ) : (
-        // The word in ink; for the battle it inverts to a plate, so the
-        // change of phase is a change of weight rather than of colour.
-        <motion.span
-          key={phase}
-          initial={{ opacity: 0, y: 3 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          style={{
-            ...phaseType,
-            padding: '3px 5px 3px calc(5px + 0.2em)',
-            background: battle ? poster.ink : 'transparent',
-            color: battle ? poster.paper : poster.ink,
-            ...clipBoth(chamfer(3)),
-          }}
-        >
-          {word}
-        </motion.span>
-      )}
-
-      {kind === 'track' && (
-        <span style={{ display: 'flex', alignItems: 'center' }}>
-          {PHASES.map((p, i) => (
-            <Fragment key={p}>
-              {i > 0 && (
-                <span style={{ width: 12, height: 1, background: i <= at ? poster.ink : poster.inkFaint }} />
-              )}
-              <TrackPip diamond={p === 'battle'} state={i < at ? 'done' : i === at ? 'now' : 'ahead'} hue={hue} />
-            </Fragment>
-          ))}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/** One stop on the track: a dot for a prepare phase, a diamond for the
- *  battle. Behind you it is ink, where you stand it is the owner's colour
- *  with an ink rim (pulsing through the battle), ahead it is an outline. */
-function TrackPip({ diamond, state, hue }: { diamond: boolean; state: 'done' | 'now' | 'ahead'; hue: string }) {
-  const size = diamond ? 7 : 8;
-  return (
-    <motion.span
-      animate={diamond && state === 'now' ? { opacity: [1, 0.4, 1] } : { opacity: 1 }}
-      transition={diamond && state === 'now'
-        ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' }
-        : { duration: 0.2 }}
-      style={{
-        width: size,
-        height: size,
-        // The diamond's corners reach past its box; the margin keeps the
-        // connectors off them.
-        margin: diamond ? '0 2px' : 0,
-        boxSizing: 'border-box',
-        borderRadius: diamond ? 0 : '50%',
-        rotate: diamond ? 45 : 0,
-        background: state === 'done' ? poster.ink : state === 'now' ? hue : 'transparent',
-        border: `1px solid ${state === 'ahead' ? poster.inkFaint : poster.ink}`,
       }}
     />
   );
@@ -450,89 +289,43 @@ function TrackPip({ diamond, state, hue }: { diamond: boolean; state: 'done' | '
 // The ring
 // ---------------------------------------------------------------------------
 
-/** A ring layer: a conic gradient shown only through the ring mask. */
-function Ring({ background }: { background: string }) {
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: 'absolute',
-        inset: -3,
-        borderRadius: '50%',
-        background,
-        WebkitMask: RING_MASK,
-        mask: RING_MASK,
-        pointerEvents: 'none',
-      }}
-    />
-  );
+/** A stretch of the ring in one ink, in degrees clockwise from the top. */
+type Arc = { a0: number; a1: number; ink: string };
+
+/** A ring layer: its arcs as a conic gradient with nothing between them,
+ *  shown only through the ring mask. */
+function ringLayer(arcs: Arc[], from = '0deg') {
+  const stops: string[] = [];
+  let at = 0;
+  for (const arc of arcs) {
+    if (arc.a0 > at) stops.push(`transparent ${at}deg ${arc.a0}deg`);
+    stops.push(`${arc.ink} ${arc.a0}deg ${arc.a1}deg`);
+    at = arc.a1;
+  }
+  if (at < 360) stops.push(`transparent ${at}deg 360deg`);
+  return {
+    position: 'absolute' as const,
+    inset: -3,
+    borderRadius: '50%',
+    background: `conic-gradient(from ${from}, ${stops.join(', ')})`,
+    WebkitMask: RING_MASK,
+    mask: RING_MASK,
+    pointerEvents: 'none' as const,
+  };
 }
 
-/** The ring layer for the beat in flight: only its arc is opaque, and the
- *  layer's opacity pulses, so the current beat is unmistakable while the
- *  resolved arcs stay calm. */
-function PulsingArc({ from, a0, a1, hue }: { from: number; a0: number; a1: number; hue: string }) {
-  return (
-    <motion.div
-      aria-hidden
-      animate={{ opacity: [0.55, 1, 0.55] }}
-      transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
-      style={{
-        position: 'absolute',
-        inset: -3,
-        borderRadius: '50%',
-        background: `conic-gradient(from ${from}deg,
-          transparent 0deg ${a0}deg,
-          ${hue} ${a0}deg ${a1}deg,
-          transparent ${a1}deg 360deg)`,
-        WebkitMask: RING_MASK,
-        mask: RING_MASK,
-        pointerEvents: 'none',
-      }}
-    />
-  );
-}
-
-/** Idle state — a thin faint-ink arc orbiting slowly (~8s) around the disc.
- *  Hard stops so it reads as a printed dial mark, not a glowing halo. */
+/** The spinner — a thin faint-ink arc orbiting slowly (~8s) around the disc.
+ *  Hard stops so it reads as a printed dial mark, not a glowing halo. Like
+ *  the battle's ring it arrives on a short fade, so a change of ring is
+ *  never a jump. */
 function IdleSweepRing() {
   return (
     <div
       aria-hidden
       className="turn-compass-sweep"
-      style={{
-        position: 'absolute',
-        inset: -3,
-        borderRadius: '50%',
-        background: `conic-gradient(from var(--compass-sweep, 0deg),
-          transparent 0deg 300deg,
-          ${poster.inkFaint} 300deg 360deg)`,
-        WebkitMask: RING_MASK,
-        mask: RING_MASK,
-        pointerEvents: 'none',
-      }}
+      style={ringLayer([{ a0: 300, a1: 360, ink: poster.inkFaint }], 'var(--compass-sweep, 0deg)')}
     />
   );
-}
-
-/**
- * Arcs for `total` beats laid over `span` degrees starting at `start`, as
- * conic-gradient stops: beats up to `current` in the attacker's colour, the
- * rest faint-ink hairlines, `gap` degrees of nothing after each. Returns
- * the stops and the arc of the beat in flight.
- */
-function beatArcs(total: number, current: number, hue: string, start: number, span: number, gap: number) {
-  const seg = span / total;
-  const stops: string[] = [];
-  for (let i = 0; i < total; i++) {
-    const a0 = start + i * seg;
-    const a1 = a0 + seg - gap;
-    stops.push(`${i <= current ? hue : poster.inkFaint} ${a0}deg ${a1}deg`, `transparent ${a1}deg ${a0 + seg}deg`);
-  }
-  const active = current < total
-    ? { a0: start + current * seg, a1: start + (current + 1) * seg - gap }
-    : null;
-  return { stops, active };
 }
 
 /** Combat state — N equal arcs around the ring, one per attack step.
@@ -542,48 +335,91 @@ function beatArcs(total: number, current: number, hue: string, start: number, sp
 function CombatRing({ combat }: { combat: NonNullable<CombatProgress> }) {
   const hue = combat.attackerIsMe ? poster.you : poster.rival;
   const gap = 6;
-  const { stops, active } = beatArcs(combat.total, combat.currentBeat, hue, 0, 360, gap);
+  const width = 360 / combat.total - gap;
+  const arcs: Arc[] = [];
+  for (let i = 0; i < combat.total; i++) {
+    const a0 = gap / 2 + i * (width + gap);
+    arcs.push({ a0, a1: a0 + width, ink: i <= combat.currentBeat ? hue : poster.inkFaint });
+  }
+  const active = combat.currentBeat < combat.total ? arcs[combat.currentBeat] : null;
   return (
     <>
-      <Ring background={`conic-gradient(from -${gap / 2}deg, ${stops.join(', ')})`} />
-      {active && <PulsingArc from={-gap / 2} a0={active.a0} a1={active.a1} hue={hue} />}
+      <div aria-hidden className="turn-compass-ring" style={ringLayer(arcs)} />
+      {/* The beat in flight, on a layer whose opacity pulses, so it is
+          unmistakable while the resolved arcs stay calm. */}
+      {active && (
+        <motion.div
+          aria-hidden
+          animate={{ opacity: [0.55, 1, 0.55] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+          style={ringLayer([active])}
+        />
+      )}
     </>
   );
 }
 
+// ---------------------------------------------------------------------------
+// The level bars
+// ---------------------------------------------------------------------------
+
+/** Bars stand every BAR_STEP degrees round the dial, except at the two
+ *  poles, where the chevron and the divider are. Long and short alternate. */
+const BAR_STEP = 12;
+const BARS_A_SIDE = 180 / BAR_STEP - 1;
+/** A long and a short bar at full stretch, and the fringe the long ones are
+ *  left at once the battle is fought. */
+const BAR_LONG = 10;
+const BAR_SHORT = 6;
+const BAR_FRINGE = 3;
+/** Each bar bounces to its own beat so they never move as one. */
+const BAR_BEAT_MS = [520, 680, 440, 760, 600, 480, 720, 560, 640, 500, 700, 460, 740, 580];
+
 /**
- * The ring as the turn itself: three arcs clockwise from the top — prepare,
- * battle, prepare. Arcs behind the current phase are ink, the current one
- * is the owner's colour, those ahead are faint. While the battle is fought
- * its arc splits into one notch per attack step, the notch in flight
- * pulsing.
+ * Level bars, like a music player's, bent round the dial: nothing while the
+ * battle is ahead, bouncing through it, a short even fringe after it. The
+ * long bars are ink and the short ones between them the attacker's colour;
+ * only the long ones stay on as the fringe. They open like a fan, from the
+ * top pole down, and all jump outward together on every thump. A bar and its
+ * twin across the dial share a length and a beat, so the two sides always
+ * match.
  */
-function ThirdsRing({ phase, combat, hue }: { phase: TurnPhase; combat: CombatProgress; hue: string }) {
-  const at = PHASES.indexOf(phase);
-  const gap = 8;
-  const third = 360 / PHASES.length;
-  const stops: string[] = [];
-  let active: { a0: number; a1: number } | null = null;
-  for (let i = 0; i < PHASES.length; i++) {
-    const a0 = i * third;
-    const end = `transparent ${a0 + third - gap}deg ${a0 + third}deg`;
-    if (PHASES[i] === 'battle' && phase === 'battle' && combat) {
-      // The beats share the battle's arc: notch gaps between them, and the
-      // arc's own gap after the last.
-      const notch = 4;
-      const beats = beatArcs(combat.total, combat.currentBeat, hue, a0, third - gap + notch, notch);
-      stops.push(...beats.stops.slice(0, -1), end);
-      active = beats.active;
-      continue;
-    }
-    const fill = i < at ? poster.ink : i === at ? hue : poster.inkFaint;
-    stops.push(`${fill} ${a0}deg ${a0 + third - gap}deg`, end);
-  }
-  const from = gap / 2;
+function LevelBars({ phase, hue, thump }: { phase: TurnPhase; hue: string; thump: string | undefined }) {
+  const battle = phase === 'battle';
+  const fought = phase === 'regroup';
   return (
-    <>
-      <Ring background={`conic-gradient(from ${from}deg, ${stops.join(', ')})`} />
-      {active && <PulsingArc from={from} a0={active.a0} a1={active.a1} hue={hue} />}
-    </>
+    <div
+      aria-hidden
+      className="turn-compass-thump"
+      style={{ position: 'absolute', left: '50%', top: '50%', pointerEvents: 'none', animation: thump, ...thumpFrom(1.2) }}
+    >
+      {Array.from({ length: BARS_A_SIDE * 2 }, (_, n) => {
+        const i = n % BARS_A_SIDE;
+        const long = i % 2 === 0;
+        const angle = (i + 1) * BAR_STEP * (n < BARS_A_SIDE ? 1 : -1);
+        return (
+          // Turned about the dial's centre; the bar grows outward from just
+          // past the ring.
+          <span key={n} style={{ position: 'absolute', left: 0, top: 0, transform: `rotate(${angle}deg)` }}>
+            <span
+              className={battle ? 'turn-compass-bar' : undefined}
+              style={{
+                position: 'absolute',
+                left: -1,
+                bottom: SIZE / 2 + 5,
+                width: 2,
+                height: battle ? (long ? BAR_LONG : BAR_SHORT) : fought && long ? BAR_FRINGE : 0,
+                background: battle ? (long ? poster.ink : hue) : poster.inkDim,
+                transformOrigin: '50% 100%',
+                animationDuration: `${BAR_BEAT_MS[i]}ms`,
+                // Negative delays start them out of step.
+                animationDelay: `${-i * 137}ms`,
+                transition: `height 0.25s ease ${i * 12}ms, background-color 0.25s ease`,
+              }}
+            />
+          </span>
+        );
+      })}
+    </div>
   );
 }
