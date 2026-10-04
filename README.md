@@ -75,8 +75,9 @@ choreographer — and `fx-match.mjs` plays a real match (draft, a skill, the
 rival's turn, combat); both write contact sheets to look at. Any showroom
 button can be named as a "demo", so listing `Calm motion: off` first films
 the demos after it under reduced motion, and `OFFSETS=80,160,240,…` samples
-an effect more finely. Set `DEV_URL` when the dev server is not on
-`http://localhost:5173`.
+an effect more finely. `tutorial.mjs` walks the tutorial lessons end to end
+with real clicks on whatever the coach has lit, and fails unless each one is
+won. Set `DEV_URL` when the dev server is not on `http://localhost:5173`.
 
 ## Architecture
 
