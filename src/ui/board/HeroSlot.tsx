@@ -14,7 +14,7 @@ import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
 import { fonts, spring, text, statRow } from '../tokens';
 import { poster } from '../poster';
 import { LevelRing } from '../card/LevelRing';
-import { LevelTrim, trimInset, type TrimPalette } from '../card/LevelTrim';
+import { LevelTrim, trimInset } from '../card/LevelTrim';
 import { useStatTick } from './useStatTick';
 
 /**
@@ -47,14 +47,11 @@ interface Props {
   /** This hero can still do something this turn — use its skill, or (the
    *  Active) make the turn's attack. A glint sweeps across the portrait. */
   ready?: boolean;
-  /** The level bezel's inks. The board uses the default; the Gallery sets
-   *  both side by side. */
-  trimPalette?: TrimPalette;
 }
 
 export function HeroSlot({
   card, owner, myId, pending, isTargetable, isCurrentTurn, compact,
-  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready, trimPalette,
+  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready,
 }: Props) {
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let pressFired = false;
@@ -471,7 +468,7 @@ export function HeroSlot({
 
       {/* The level bezel — inside the state border, never in place of it.
           The frame's inner corner is its 10px radius less the 2px border. */}
-      {!isCorpse && <LevelTrim level={level} radius={8} compact={compact} palette={trimPalette} />}
+      {!isCorpse && <LevelTrim level={level} radius={8} compact={compact} />}
     </motion.button>
     </div>
   );

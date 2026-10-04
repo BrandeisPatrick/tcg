@@ -3,7 +3,7 @@
  * soul racks, the level rings and the level edge. The souls rail has to be
  * drawn against a stage as tall as the live board, so it takes a narrow
  * column of its own and the compass and rings stack beside it; the level
- * edge compares two palettes on real tiles and runs the sheet's full width.
+ * edge is shown on real tiles and runs the sheet's full width.
  */
 import { Fragment, useEffect, useState } from 'react';
 import type { CardInstance, PlayerID } from '@/engine/types';
@@ -13,7 +13,6 @@ import { SoulsRail } from '../board/SoulsRail';
 import { boardRows } from '../board/BoardTable';
 import { HeroSlot } from '../board/HeroSlot';
 import { LevelRing } from '../card/LevelRing';
-import type { TrimPalette } from '../card/LevelTrim';
 import { poster } from '../poster';
 import { radius } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
@@ -71,7 +70,7 @@ export function BoardTab() {
       </Section>
     </div>
 
-    <Section title="Level edge" aside="pick a palette" id="level-edge">
+    <Section title="Level edge" id="level-edge">
       <LevelEdgeDemo />
     </Section>
     </>
@@ -80,7 +79,7 @@ export function BoardTab() {
 
 const TRIM_LEVELS = [1, 2, 3, 4] as const;
 
-/** The tiles a palette is judged on: both Actives in their owners' frames,
+/** The tiles the bezel is shown on: both Actives in their owners' frames,
  *  a resting bench tile, and a bench tile lit as a legal target. */
 const TRIM_ROWS: { id: string; label: string; hero: string; owner: PlayerID; compact: boolean; target: boolean }[] = [
   { id: 'you', label: 'Your Active', hero: 'hero_kelvin', owner: '0', compact: false, target: false },
@@ -113,17 +112,10 @@ function LevelEdgeDemo() {
       <Row>
         <Button onClick={() => setRewound(true)} disabled={rewound}>Level up</Button>
       </Row>
-      <LevelEdgeSheet
-        palette="tiers" rewound={rewound}
-        title="Tiers" note="steel, blue, violet foil · recommended: none of them is a state colour"
-      />
-      <LevelEdgeSheet
-        palette="classic" rewound={rewound}
-        title="Classic" note="gold, green, purple · the gold and the green sit beside the ownership gold and the target green"
-      />
+      <LevelEdgeSheet rewound={rewound} />
       <Notes label="How it reads">
         <p>
-          The board draws the Tiers inks; the hero sheet&rsquo;s big card carries the same band in its
+          Steel, blue, violet foil: none of them is a state colour. The hero sheet&rsquo;s big card carries the same band in its
           charcoal margin. Under calm motion the Lv4 sheen holds still and a level-up only flashes.
         </p>
       </Notes>
@@ -131,49 +123,43 @@ function LevelEdgeDemo() {
   );
 }
 
-function LevelEdgeSheet({ palette, title, note, rewound }: {
-  palette: TrimPalette; title: string; note: string; rewound: boolean;
-}) {
+function LevelEdgeSheet({ rewound }: { rewound: boolean }) {
   const card = (row: (typeof TRIM_ROWS)[number], lv: 1 | 2 | 3 | 4): CardInstance => ({
     ...mockHeroInstance(HEROES.find((h) => h.id === row.hero)!),
     // One iid per tile: HeroSlot's layoutId is built from it.
-    iid: `trim-${palette}-${row.id}-${lv}`,
+    iid: `trim-${row.id}-${lv}`,
     ownerId: row.owner,
     zone: row.compact ? 'bench' : 'active',
     level: rewound ? TRIM_LEVELS[Math.max(0, lv - 2)] : lv,
   });
   return (
-    <>
-      <Sub title={title} note={note} />
-      <div style={{ overflowX: 'auto' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: '92px repeat(4, 180px)', gap: '14px 16px',
-          alignItems: 'center', width: 'max-content',
-        }}>
-          <span />
-          {TRIM_LEVELS.map((lv) => (
-            <div key={lv} className="gal-figcap" style={{ marginTop: 0 }}>Lv{lv}</div>
-          ))}
-          {TRIM_ROWS.map((row) => (
-            <Fragment key={row.id}>
-              <div className="gal-figcap" style={{ marginTop: 0, textAlign: 'left' }}>{row.label}</div>
-              {TRIM_LEVELS.map((lv) => (
-                <div key={lv} style={{ width: 180, height: row.compact ? 180 : 280 }}>
-                  <HeroSlot
-                    card={card(row, lv)}
-                    owner={row.owner} myId="0" isOpponent={row.owner !== '0'}
-                    pending={null} isTargetable={row.target}
-                    compact={row.compact}
-                    onTap={() => {}}
-                    trimPalette={palette}
-                  />
-                </div>
-              ))}
-            </Fragment>
-          ))}
-        </div>
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: '92px repeat(4, 180px)', gap: '14px 16px',
+        alignItems: 'center', width: 'max-content',
+      }}>
+        <span />
+        {TRIM_LEVELS.map((lv) => (
+          <div key={lv} className="gal-figcap" style={{ marginTop: 0 }}>Lv{lv}</div>
+        ))}
+        {TRIM_ROWS.map((row) => (
+          <Fragment key={row.id}>
+            <div className="gal-figcap" style={{ marginTop: 0, textAlign: 'left' }}>{row.label}</div>
+            {TRIM_LEVELS.map((lv) => (
+              <div key={lv} style={{ width: 180, height: row.compact ? 180 : 280 }}>
+                <HeroSlot
+                  card={card(row, lv)}
+                  owner={row.owner} myId="0" isOpponent={row.owner !== '0'}
+                  pending={null} isTargetable={row.target}
+                  compact={row.compact}
+                  onTap={() => {}}
+                />
+              </div>
+            ))}
+          </Fragment>
+        ))}
       </div>
-    </>
+    </div>
   );
 }
 

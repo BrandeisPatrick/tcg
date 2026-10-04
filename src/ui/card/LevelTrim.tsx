@@ -25,27 +25,15 @@ import { useFxCalm } from '../effects/fx/FxMotionContext';
  * hidden`); `radius` is the frame's inner corner radius.
  */
 
-export type TrimPalette = 'tiers' | 'classic';
-
 interface Foil { base: string; light: string; deep: string }
 
-const PALETTES: Record<TrimPalette, { 2: string; 3: string; 4: Foil }> = {
-  // The recommendation. Steel, blue, violet is the tier ramp games already
-  // teach (common, rare, epic), and none of it is a state colour. Each ink
-  // is mid-light so it holds on the charcoal frame; the keyline carries it
-  // over the cream band.
-  tiers: {
-    2: '#9eadbc',
-    3: '#3d86e3',
-    4: { base: '#8a5cf0', light: '#cdb6ff', deep: '#5b33c2' },
-  },
-  // The player's own list. Its gold and green sit beside the ownership gold
-  // and the target green, so they lean amber and emerald to stay apart.
-  classic: {
-    2: '#e0a22b',
-    3: '#2fa86a',
-    4: { base: '#a052dc', light: '#dfb3f8', deep: '#6b2aa6' },
-  },
+// Steel, blue, violet: the tier ramp games already teach (common, rare,
+// epic), and none of it is a state colour. Each ink is mid-light so it holds
+// on the charcoal frame; the keyline carries it over the cream band.
+const INKS: { 2: string; 3: string; 4: Foil } = {
+  2: '#9eadbc',
+  3: '#3d86e3',
+  4: { base: '#8a5cf0', light: '#cdb6ff', deep: '#5b33c2' },
 };
 
 // Sizes in px: [Active tile and sheet card, compact bench tile]. A photo
@@ -79,11 +67,10 @@ export function trimInset(level: number, compact: boolean): number {
   return BAND[Math.min(4, level) as 2 | 3 | 4][compact ? 1 : 0] + 1;
 }
 
-export function LevelTrim({ level, radius, compact = false, palette = 'tiers' }: {
+export function LevelTrim({ level, radius, compact = false }: {
   level: number;
   radius: number;
   compact?: boolean;
-  palette?: TrimPalette;
 }) {
   // The level this trim last drew. A rise strikes the new band in; the
   // first draw (a tile dealt, a hero respawning) does not.
@@ -93,19 +80,18 @@ export function LevelTrim({ level, radius, compact = false, palette = 'tiers' }:
   if (level < 2) return null;
   const lv = Math.min(4, level) as 2 | 3 | 4;
   // Keyed by level, so a rise mounts a fresh bezel that reads `strike` once.
-  return <Bezel key={lv} lv={lv} radius={radius} compact={compact} palette={palette} strike={rose} />;
+  return <Bezel key={lv} lv={lv} radius={radius} compact={compact} strike={rose} />;
 }
 
-function Bezel({ lv, radius, compact, palette, strike }: {
-  lv: 2 | 3 | 4; radius: number; compact: boolean; palette: TrimPalette; strike: boolean;
+function Bezel({ lv, radius, compact, strike }: {
+  lv: 2 | 3 | 4; radius: number; compact: boolean; strike: boolean;
 }) {
   const calm = useFxCalm();
   const [flash, setFlash] = useState(strike);
   const size = compact ? 1 : 0;
   const band = BAND[lv][size];
-  const inks = PALETTES[palette];
-  const foil = lv === 4 ? inks[4] : null;
-  const ink = foil ? foil.base : inks[lv as 2 | 3];
+  const foil = lv === 4 ? INKS[4] : null;
+  const ink = foil ? foil.base : INKS[lv as 2 | 3];
   const leg = lv === 2 ? 0 : CORNER[lv][size];
   return (
     <div aria-hidden style={{ position: 'absolute', inset: 0, borderRadius: radius, pointerEvents: 'none' }}>
