@@ -1,6 +1,7 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import type { CardInstance, PlayerID, PlayerState } from '@/engine/types';
 import { HeroSlot } from './HeroSlot';
+import { DealSticker, DealtTile } from './BoardIntro';
 import { SlotWell } from './BoardTable';
 import { poster } from '../poster';
 
@@ -16,7 +17,8 @@ interface Props {
   isTargetable: (card: CardInstance, owner: PlayerID) => boolean;
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
   isCurrentTurn?: boolean;
-  playerSkillSpent?: boolean;
+  /** Heroes here that can still do something this turn (the ready glint). */
+  readyIids?: ReadonlySet<string>;
 }
 
 // One prominent Active slot centered horizontally. Larger than bench slots.
@@ -24,7 +26,7 @@ interface Props {
 // tile itself carries its own frame states.
 export function ActiveSlot({
   ps, owner, myId, isOpponent, pending, onTapHero, onLongPressHero, onEquipmentHover,
-  isTargetable, registerSlotRef, isCurrentTurn, playerSkillSpent,
+  isTargetable, registerSlotRef, isCurrentTurn, readyIids,
 }: Props) {
   const card = ps.active;
   const accent = isOpponent ? poster.rival : poster.you;
@@ -42,15 +44,8 @@ export function ActiveSlot({
         <AnimatePresence mode="popLayout">
           {card ? (
             // Opacity-only presence — the HeroSlot's shared layoutId animates
-            // the actual bench↔active travel (see BenchRow for the rationale).
-            <motion.div
-              key={card.iid}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, transition: { duration: 0.12 } }}
-              transition={{ duration: 0.25 }}
-              style={{ height: '100%' }}
-            >
+            // the actual bench↔active travel (see DealtTile for the rationale).
+            <DealtTile key={card.iid} owner={owner} slot="active" style={{ height: '100%' }}>
               <HeroSlot
                 card={card}
                 owner={owner}
@@ -63,14 +58,16 @@ export function ActiveSlot({
                 onLongPress={onLongPressHero}
                 onEquipmentHover={onEquipmentHover}
                 registerSlotRef={registerSlotRef}
-                playerSkillSpent={playerSkillSpent}
+                ready={readyIids?.has(card.iid)}
               />
-            </motion.div>
+            </DealtTile>
           ) : (
             <SlotWell accent={accent} label="Active K.O." />
           )}
         </AnimatePresence>
       </div>
+      {/* At the match's start, "Rival" / "You" names whose Active this is. */}
+      <DealSticker rival={isOpponent} />
     </div>
   );
 }

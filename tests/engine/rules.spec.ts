@@ -18,43 +18,49 @@ function runMove(name: string, G: GameState, pid: PlayerID, ...args: any[]) {
   return fn({ G, ctx: { currentPlayer: pid, numPlayers: 2, turn: 1 } as any, playerID: pid, events: {} as any, random: {} as any }, ...args);
 }
 
-describe('rule: only one skill per player per turn', () => {
-  it('rejects a second skill use in the same turn', () => {
+describe('rule: each hero uses its skill once per turn', () => {
+  it('rejects a second use by the same hero, but not a different hero', () => {
     const G = freshG();
     const me = G.players['0'];
-    me.souls = 9; // enough to pay the 1-soul skill cost
+    me.souls = 9; // enough to pay the 1-soul skill cost twice over
     const enemy = G.players['1'];
     // Aggro deck heroes: [haze (passive), vindicta (passive), lash (skill), paige (skill)].
     // Pick the two skill heroes — Lash + Paige — for this per-turn-cap test.
     const hero1 = me.bench[1]!;  // Lash
     const hero2 = me.bench[2]!;  // Paige
-    expect(me.skillUsedThisTurn).toBe(false);
+    expect(hero1.skillUsedThisTurn).toBe(false);
     const r1 = runMove('useSkill', G, '0', hero1.iid, enemy.active!.iid);
     expect(r1).not.toBe('INVALID_MOVE');
-    expect(me.skillUsedThisTurn).toBe(true);
+    expect(hero1.skillUsedThisTurn).toBe(true);
+    expect(runMove('useSkill', G, '0', hero1.iid, enemy.active!.iid)).toBe('INVALID_MOVE');
     const r2 = runMove('useSkill', G, '0', hero2.iid, me.active!.iid);
-    expect(r2).toBe('INVALID_MOVE');
+    expect(r2).not.toBe('INVALID_MOVE');
+    expect(hero2.skillUsedThisTurn).toBe(true);
   });
 
-  it('flag resets at the start of the player\'s next turn', () => {
+  it('the hero\'s flag clears when its turn ends, so it casts again next turn', () => {
     const c = Client({ game: DeadlockGame, numPlayers: 2 });
     c.start();
     let g = c.getState()!.G as GameState;
-    expect(g.players['0'].skillUsedThisTurn).toBe(false);
-    // Use a skill — Lash on bench (active Haze is now passive-only).
+    // Use a skill — Lash on bench (active Haze is passive-only).
     const hero = g.players['0'].bench[1]!;  // Lash
+    expect(hero.skillUsedThisTurn).toBe(false);
     const target = g.players['1'].active!;
     (c.moves as any).useSkill(hero.iid, target.iid);
     g = c.getState()!.G as GameState;
-    expect(g.players['0'].skillUsedThisTurn).toBe(true);
-    // End turn, opponent's turn begins; flag still set for P0.
+    expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(true);
+    // End turn: the flag is cleared on the way out, for the opponent's turn.
     c.moves.endTurn?.();
     g = c.getState()!.G as GameState;
-    expect(g.players['0'].skillUsedThisTurn).toBe(true);
-    // End opp turn; P0's turn begins again, flag resets.
+    expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(false);
+    // P0's next turn: Lash casts again.
     c.moves.endTurn?.();
     g = c.getState()!.G as GameState;
-    expect(g.players['0'].skillUsedThisTurn).toBe(false);
+    const soulsBefore = g.players['0'].souls;
+    (c.moves as any).useSkill(hero.iid, g.players['1'].active!.iid);
+    g = c.getState()!.G as GameState;
+    expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(true);
+    expect(g.players['0'].souls).toBe(soulsBefore - 1);
   });
 });
 
@@ -78,7 +84,7 @@ describe('rule: skills cost 1 soul', () => {
     const target = G.players['1'].active!;
     const r = runMove('useSkill', G, '0', hero.iid, target.iid);
     expect(r).toBe('INVALID_MOVE');
-    expect(me.skillUsedThisTurn).toBe(false);
+    expect(hero.skillUsedThisTurn).toBe(false);
     expect(me.souls).toBe(0);
   });
 });
@@ -289,10 +295,10 @@ describe('rule: equipment cap forces a discard pick', () => {
 });
 
 // ============================================================================
-// Mutual damage in the active duel
+// The attack is one-way
 // ============================================================================
-describe('rule: mutual damage in the active duel', () => {
-  it('Active-vs-Active end-of-turn attack damages BOTH heroes', async () => {
+describe('rule: the attack is one-way', () => {
+  it('the Active-vs-Active attack damages only the defender', async () => {
     const { planAttackPhase, resolveAttackPhase } = await import('@/engine/combat');
     const G = freshG();
     const attacker = G.players['0'].active!;
@@ -302,11 +308,11 @@ describe('rule: mutual damage in the active duel', () => {
     const attackerHp0 = attacker.hp;
     const defenderHp0 = defender.hp;
     const plan = planAttackPhase(G, '0');
-    // Plan should include at least the active swing with retaliation.
+    // Plan should include at least the active swing.
     expect(plan.steps.length).toBeGreaterThan(0);
     resolveAttackPhase(G, '0');
-    // Both Actives took damage (defender from attacker's swing, attacker from retaliation).
-    expect(defender.hp).toBeLessThan(defenderHp0);
-    expect(attacker.hp).toBeLessThan(attackerHp0);
+    // The defender took the swing; the attacker took nothing back.
+    expect(defender.hp).toBe(defenderHp0 - plan.damageToActive);
+    expect(attacker.hp).toBe(attackerHp0);
   });
 });

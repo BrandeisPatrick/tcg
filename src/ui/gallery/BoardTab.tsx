@@ -1,17 +1,23 @@
 /**
  * Board — the persistent chrome around the cards: the turn compass, the
- * soul racks and the level rings. The souls rail has to be drawn against a
- * stage as tall as the live board, so it takes a narrow column of its own
- * and the other two stack beside it.
+ * soul racks, the level rings and the level edge. The souls rail has to be
+ * drawn against a stage as tall as the live board, so it takes a narrow
+ * column of its own and the compass and rings stack beside it; the level
+ * edge compares two palettes on real tiles and runs the sheet's full width.
  */
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
+import type { CardInstance, PlayerID } from '@/engine/types';
+import { HEROES } from '@/cards';
 import { TurnCompass, type TurnPhase } from '../board/TurnCompass';
 import { SoulsRail } from '../board/SoulsRail';
 import { boardRows } from '../board/BoardTable';
+import { HeroSlot } from '../board/HeroSlot';
 import { LevelRing } from '../card/LevelRing';
+import type { TrimPalette } from '../card/LevelTrim';
 import { poster } from '../poster';
 import { radius } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
+import { mockHeroInstance } from './mock';
 import { Section, Caption, Notes, Row, Button, Sub, Grid, Segmented, Toggle, type Option } from './primitives';
 
 const RINGS: { level: 1 | 2 | 3 | 4; exp: number; label: string; hint: string }[] = [
@@ -28,6 +34,7 @@ export function BoardTab() {
   const { width } = useViewport();
   const wide = width >= 1100;
   return (
+    <>
     <div style={wide
       ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '0 32px', alignItems: 'start' }
       : undefined}
@@ -63,6 +70,110 @@ export function BoardTab() {
         <SoulsRailDemo />
       </Section>
     </div>
+
+    <Section title="Level edge" aside="pick a palette" id="level-edge">
+      <LevelEdgeDemo />
+    </Section>
+    </>
+  );
+}
+
+const TRIM_LEVELS = [1, 2, 3, 4] as const;
+
+/** The tiles a palette is judged on: both Actives in their owners' frames,
+ *  a resting bench tile, and a bench tile lit as a legal target. */
+const TRIM_ROWS: { id: string; label: string; hero: string; owner: PlayerID; compact: boolean; target: boolean }[] = [
+  { id: 'you', label: 'Your Active', hero: 'hero_kelvin', owner: '0', compact: false, target: false },
+  { id: 'rival', label: 'Rival Active', hero: 'hero_lady_geist', owner: '1', compact: false, target: false },
+  { id: 'bench', label: 'Bench', hero: 'hero_paige', owner: '0', compact: true, target: false },
+  { id: 'target', label: 'Target', hero: 'hero_abrams', owner: '1', compact: true, target: true },
+];
+
+function LevelEdgeDemo() {
+  // Level up: every tile drops a level for a moment and comes back, so each
+  // band strikes in as it does when a hero levels on the board.
+  const [rewound, setRewound] = useState(false);
+  useEffect(() => {
+    if (!rewound) return;
+    const t = setTimeout(() => setRewound(false), 500);
+    return () => clearTimeout(t);
+  }, [rewound]);
+  return (
+    <>
+      <Caption>
+        A hero&rsquo;s level, printed into its frame. The border is already the state channel (gold yours,
+        red the rival&rsquo;s, green a legal target), so the level is a band inside it, with a dark line
+        along its inner edge so it reads over the portrait and the cream band alike.
+      </Caption>
+      <Caption>
+        It reads by form as well as ink: <strong>Lv2</strong> a plain band, <strong>Lv3</strong> the band
+        with photo corners, <strong>Lv4</strong> a heavier band and larger corners in foil, with a slow
+        sheen running round it. Tiles at the board&rsquo;s own size.
+      </Caption>
+      <Row>
+        <Button onClick={() => setRewound(true)} disabled={rewound}>Level up</Button>
+      </Row>
+      <LevelEdgeSheet
+        palette="tiers" rewound={rewound}
+        title="Tiers" note="steel, blue, violet foil · recommended: none of them is a state colour"
+      />
+      <LevelEdgeSheet
+        palette="classic" rewound={rewound}
+        title="Classic" note="gold, green, purple · the gold and the green sit beside the ownership gold and the target green"
+      />
+      <Notes label="How it reads">
+        <p>
+          The board draws the Tiers inks; the hero sheet&rsquo;s big card carries the same band in its
+          charcoal margin. Under calm motion the Lv4 sheen holds still and a level-up only flashes.
+        </p>
+      </Notes>
+    </>
+  );
+}
+
+function LevelEdgeSheet({ palette, title, note, rewound }: {
+  palette: TrimPalette; title: string; note: string; rewound: boolean;
+}) {
+  const card = (row: (typeof TRIM_ROWS)[number], lv: 1 | 2 | 3 | 4): CardInstance => ({
+    ...mockHeroInstance(HEROES.find((h) => h.id === row.hero)!),
+    // One iid per tile: HeroSlot's layoutId is built from it.
+    iid: `trim-${palette}-${row.id}-${lv}`,
+    ownerId: row.owner,
+    zone: row.compact ? 'bench' : 'active',
+    level: rewound ? TRIM_LEVELS[Math.max(0, lv - 2)] : lv,
+  });
+  return (
+    <>
+      <Sub title={title} note={note} />
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: '92px repeat(4, 180px)', gap: '14px 16px',
+          alignItems: 'center', width: 'max-content',
+        }}>
+          <span />
+          {TRIM_LEVELS.map((lv) => (
+            <div key={lv} className="gal-figcap" style={{ marginTop: 0 }}>Lv{lv}</div>
+          ))}
+          {TRIM_ROWS.map((row) => (
+            <Fragment key={row.id}>
+              <div className="gal-figcap" style={{ marginTop: 0, textAlign: 'left' }}>{row.label}</div>
+              {TRIM_LEVELS.map((lv) => (
+                <div key={lv} style={{ width: 180, height: row.compact ? 180 : 280 }}>
+                  <HeroSlot
+                    card={card(row, lv)}
+                    owner={row.owner} myId="0" isOpponent={row.owner !== '0'}
+                    pending={null} isTargetable={row.target}
+                    compact={row.compact}
+                    onTap={() => {}}
+                    trimPalette={palette}
+                  />
+                </div>
+              ))}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -132,12 +243,12 @@ function SoulsRailDemo() {
 }
 
 const PHASE_OPTIONS: Option<TurnPhase>[] = [
-  { id: 'prepare', label: 'Prepare' },
-  { id: 'battle', label: 'Battle' },
-  { id: 'regroup', label: 'Prepare' },
+  { id: 'prepare', label: 'Before' },
+  { id: 'battle', label: 'Attack' },
+  { id: 'regroup', label: 'After' },
 ];
 
-/** Attack steps in the demo's battle. */
+/** Attack steps in the demo's attack (the swing and two Extra Attacks). */
 const DEMO_BEATS = 3;
 /** What the board's fit-scale leaves of the dial on a 1440 × 900 screen. */
 const BOARD_SCALE = 0.75;
@@ -149,10 +260,10 @@ function TurnCompassDemo() {
   const [beat, setBeat] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [boardSize, setBoardSize] = useState(false);
-  const battleOf = (currentBeat: number) => ({ total: DEMO_BEATS, currentBeat, attackerIsMe: isMyTurn });
+  const attackOf = (currentBeat: number) => ({ total: DEMO_BEATS, currentBeat, attackerIsMe: isMyTurn });
 
-  // Play a turn: prepare, the battle step by step, prepare again, and the
-  // turn changes hands.
+  // Play a turn: the attack ahead, the attack step by step, the attack
+  // made, and the turn changes hands.
   useEffect(() => {
     if (!playing) return;
     const script: [number, () => void][] = [
@@ -186,15 +297,15 @@ function TurnCompassDemo() {
     <>
       <Caption>
         The dial pinned between the two active heroes: whose turn, which turn, and where in the turn. A turn
-        runs <strong>Prepare</strong>, <strong>Battle</strong>, <strong>Prepare</strong>, then it changes
-        hands, and the turn button walks it with the dial: Enter Battle, then End Turn. Each phase has its
-        own look, and none of them is a word.
+        is the player&rsquo;s to spend on cards, skills and a retreat, with one <strong>attack</strong> among
+        them, made from the Active&rsquo;s sheet; the turn button only ends it. The dial marks the attack:
+        before it, while it lands, and once it is made. Each has its own look, and none of them is a word.
       </Caption>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
-        {dial('Prepare', <TurnCompass isMyTurn={isMyTurn} turn={turn} phase="prepare" combatOverride={null} />)}
-        {dial('Battle', <TurnCompass isMyTurn={isMyTurn} turn={turn} phase="battle" combatOverride={battleOf(1)} />)}
-        {dial('Prepare, battle fought', <TurnCompass isMyTurn={isMyTurn} turn={turn} phase="regroup" combatOverride={null} />)}
-        {dial('Live', <TurnCompass isMyTurn={isMyTurn} turn={turn} phase={phase} combatOverride={phase === 'battle' ? battleOf(beat) : null} />)}
+        {dial('Before the attack', <TurnCompass isMyTurn={isMyTurn} turn={turn} phase="prepare" combatOverride={null} />)}
+        {dial('The attack', <TurnCompass isMyTurn={isMyTurn} turn={turn} phase="battle" combatOverride={attackOf(1)} />)}
+        {dial('Attack made', <TurnCompass isMyTurn={isMyTurn} turn={turn} phase="regroup" combatOverride={null} />)}
+        {dial('Live', <TurnCompass isMyTurn={isMyTurn} turn={turn} phase={phase} combatOverride={phase === 'battle' ? attackOf(beat) : null} />)}
       </div>
       <div className="gal-bar gal-bar--static" style={{ margin: '0 0 12px', padding: '8px 0', background: 'none', borderTop: `1px solid ${poster.inkRule}` }}>
         <Segmented label="Live" value={phase} onChange={pickPhase} options={PHASE_OPTIONS} />
@@ -208,16 +319,18 @@ function TurnCompassDemo() {
       </div>
       <Notes label="How it reads">
         <p>
-          Preparing, the dial is quiet: only the spinner moves, a faint arc on a sweep of about 8 s. The
-          battle is loud. The ring becomes one arc per attack step, filling in the attacker’s colour, and
-          level bars like a music player’s stand out all round the dial and bounce. Every attack step
-          lands as a thump: the bars jump, the dial pops and a ring bursts off it.
+          Before the attack the dial is quiet: only the spinner moves, a faint arc on a sweep of about 8 s.
+          The attack is loud. The ring becomes one arc per attack step (the swing, then any Extra Attacks),
+          filling in the attacker’s colour, and level bars like a music player’s stand out all round the
+          dial and bounce. Every attack step lands as a thump: the bars jump, the dial pops and a ring
+          bursts off it.
         </p>
         <p>
-          Once the battle is fought the bars settle into a short fringe that stays until the turn changes
-          hands, so the second prepare phase reads as the first with the battle behind it. The chevron
-          and the hue say whose turn it is, and a turn changing hands fires one ring-burst. Board size
-          shrinks the dials to what a 1440 × 900 screen leaves of them.
+          Once the attack is made the bars settle into a short fringe that stays until the turn changes
+          hands, so the rest of the turn reads as its start with the attack behind it; a turn ended without
+          an attack stays quiet throughout. The chevron and the hue say whose turn it is, and a turn
+          changing hands fires one ring-burst. Board size shrinks the dials to what a 1440 × 900 screen
+          leaves of them.
         </p>
       </Notes>
     </>

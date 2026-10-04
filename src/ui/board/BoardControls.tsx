@@ -2,16 +2,18 @@ import { motion } from 'framer-motion';
 import { fonts, spring } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
-import { TURN_STEP_LABEL, type TurnStep } from './turnStep';
+
+/** The turn button's name — its label and its accessible name, by which the
+ *  tutorial's gate finds it. */
+export const END_TURN = 'End Turn';
 
 interface Props {
   isMyTurn: boolean;
-  turnStep: TurnStep;
   busy: boolean;
   hasPending: boolean;
   autoPlay: boolean;
-  /** The turn button was pressed: enter the battle, or end the turn. */
-  onAdvance: () => void;
+  /** The turn button was pressed. */
+  onEndTurn: () => void;
   onCancel: () => void;
   onToggleAuto: () => void;
   /** 'dock' mounts the cluster in the sheet's right rail (desktop) as a
@@ -29,12 +31,12 @@ type StatusTone = 'dim' | 'gold' | 'green';
 /**
  * The turn-control cluster: status lamp, the turn button, Auto toggle,
  * Cancel. A button's label is always the action a press performs — the turn
- * button reads Enter Battle while the battle is ahead and End Turn once it
- * is fought, never a state readout; the status line carries the changing
- * state in a fixed-height slot so nothing reflows.
+ * button only ever ends the turn (the attack is made from the Active's
+ * sheet), never a state readout; the status line carries the changing state
+ * in a fixed-height slot so nothing reflows.
  */
 export function BoardControls({
-  isMyTurn, turnStep, busy, hasPending, autoPlay, onAdvance, onCancel, onToggleAuto, variant,
+  isMyTurn, busy, hasPending, autoPlay, onEndTurn, onCancel, onToggleAuto, variant,
 }: Props) {
   const status = !isMyTurn
     ? { key: 'rival', label: "Rival's move", tone: 'dim' as StatusTone, pulse: true }
@@ -47,8 +49,7 @@ export function BoardControls({
         : { key: 'yours', label: 'Your move', tone: 'gold' as StatusTone, pulse: false };
   const turnHot = isMyTurn && !busy;
   const turnCursor = isMyTurn ? (busy ? 'progress' : 'pointer') : 'default';
-  const turnLabel = TURN_STEP_LABEL[turnStep];
-  const [labelTop, labelBottom] = turnLabel.split(' ');
+  const [labelTop, labelBottom] = END_TURN.split(' ');
 
   if (variant === 'tray') {
     // Mobile hand-tray row: Auto · status/cancel · turn button, thumb-side last.
@@ -75,11 +76,11 @@ export function BoardControls({
             variant="paper"
             size="sm"
             disabled={!isMyTurn}
-            onClick={onAdvance}
-            ariaLabel={turnLabel}
+            onClick={onEndTurn}
+            ariaLabel={END_TURN}
             style={{
-              // One width for both labels, so the row never shifts when the
-              // step changes; the tracking is eased to fit the longer one.
+              // A fixed width, so the row never shifts while the status
+              // beside it changes.
               width: 146,
               padding: '12px 0',
               letterSpacing: '0.16em',
@@ -89,7 +90,7 @@ export function BoardControls({
               // ink — swap it for the cream ghost so the slot stays visible.
               ...(!isMyTurn ? { color: poster.creamDim, border: `2px solid ${poster.edge}` } : {}),
             }}
-          >{turnLabel}</PosterButton>
+          >{END_TURN}</PosterButton>
         </motion.div>
       </div>
     );
@@ -137,12 +138,12 @@ export function BoardControls({
           variant="paper"
           size="md"
           disabled={!isMyTurn}
-          onClick={onAdvance}
-          ariaLabel={turnLabel}
+          onClick={onEndTurn}
+          ariaLabel={END_TURN}
           style={{
-            // One width for both labels, so the cluster never shifts when the
-            // step changes. Left pad carries the tracking so the stacked caps
-            // sit centred.
+            // A fixed width, so the cluster never shifts while the status
+            // above it changes. Left pad carries the tracking so the stacked
+            // caps sit centred.
             width: 134,
             padding: '13px 0 13px 0.22em',
             lineHeight: 1.15,

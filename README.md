@@ -20,13 +20,14 @@ single-page React app.
   [deadlock-api.com](https://deadlock-api.com/) catalogue.
 - **Refill soul economy** (Hearthstone-style): your pool refills 1→7 over the
   first seven turns. No hoarding across turns. KO bounty (+1 capped at 7).
-- **Turn phases:** a turn runs Prepare → Battle → Prepare → End Turn. One
-  button walks it — Enter Battle (the two Actives trade blows), then End Turn —
-  so cards, a skill or a retreat can go before the battle or after it. The
-  dial between the Actives shows the phase without a word: quiet while you
-  prepare, with only its spinner moving; ringed with bouncing level bars that
-  thump on every attack step while the battle is fought; and left with a short
-  fringe once it is over. Turn 1 has no battle.
+- **The turn:** cards, skills and a retreat in any order, with one attack
+  among them. The attack is tapped on your Active's sheet: it swings at the
+  rival Active for its bullet damage, costs nothing, and is one-way — the
+  rival does not hit back. None on Turn 1. The turn button only ends the turn,
+  and ending it never attacks. The dial between the Actives shows the attack
+  without a word: quiet before it, with only its spinner moving; ringed with
+  bouncing level bars that thump on every swing while it lands; and left with
+  a short fringe once it is made.
 - **Active hero KO flow:** corpse stays in slot greyed-out with a rotating
   brass clock ring + countdown; on death the player is prompted to choose a
   bench hero to step up.
@@ -43,7 +44,9 @@ single-page React app.
   amount in stencil digits; a calm mode (reduced motion) keeps the beats and
   the numbers but nothing flies. See
   [`docs/fx-model.md`](./docs/fx-model.md).
-- **One-skill-per-turn** rule (Improved Cooldown equipment bypasses).
+- **A skill per hero per turn:** every hero, bench included, can use its
+  skill once a turn for a soul. The Active does one or the other — its skill
+  or the attack.
 - **41 bitmap card-art assets** pulled from the community asset bucket; SVG
   fallback glyphs for cards that don't have canon art yet.
 - **AI opponent** with a heuristic move enumerator (lethal short-circuit,
@@ -79,7 +82,8 @@ app's virtual clock (`?vtclock=1`) so any frame of an animation can be
 captured: `fx-gallery.mjs` fires every effect on the Gallery's showroom
 (`?preview=1&tab=combat`) — basic attacks included, walked by the real combat
 choreographer — and `fx-match.mjs` plays a real match (draft, a skill, the
-rival's turn, combat); both write contact sheets to look at. Any showroom
+rival's turn and its attack, then your own attack from your Active's sheet);
+both write contact sheets to look at. Any showroom
 button can be named as a "demo", so listing `Calm motion: off` first films
 the demos after it under reduced motion, and `OFFSETS=80,160,240,…` samples
 an effect more finely. `tutorial.mjs` walks the tutorial lessons end to end

@@ -4,8 +4,8 @@ import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
 
-/** Where a turn stands. It runs Prepare → Battle → Prepare → End Turn;
- *  'regroup' is the second prepare phase. */
+/** Where a turn stands against its one attack: 'prepare' before it,
+ *  'battle' while it is walked, 'regroup' once it is made. */
 export type TurnPhase = 'prepare' | 'battle' | 'regroup';
 
 /** The phase in words — for the dial's accessible name only. */
@@ -17,7 +17,7 @@ interface Props {
   phase: TurnPhase;
   /** Override for the ambient `CombatProgressContext` value — only the
    *  preview gallery passes this so it can demo the combat-mode ring
-   *  without a real battle. Live game always reads context. */
+   *  without a real attack. Live game always reads context. */
   combatOverride?: CombatProgress;
 }
 
@@ -39,24 +39,23 @@ if (typeof CSS !== 'undefined' && typeof (CSS as any).registerProperty === 'func
 
 /**
  * Persistent turn indicator pinned at the centre of the duel divider: whose
- * turn it is, which turn, and where in the turn — Prepare, Battle, Prepare.
+ * turn it is, which turn, and where in the turn — before its attack, the
+ * attack, after it.
  *
  * The dial: a flat paper disc with ink rings, the turn numeral at its
  * centre, and an external chevron pointing at whichever player owns the
  * turn. A turn changing hands fires one ring-burst, flips the chevron and
  * swaps the hue.
  *
- * The phase: each has its own look, and none is a word. Preparing, the dial
- * is quiet — only the spinner moves, a faint arc sweeping slowly round the
- * edge. The battle is loud: the ring becomes one arc per attack step,
- * filling in the attacker's colour, and level bars like a music player's
- * stand out all round the dial and bounce. Every attack step lands as a
- * thump — the bars jump, the dial pops, a ring bursts off it. Once the
- * battle is fought the bars settle into a short fringe that stays until the
- * turn changes hands, so the second prepare phase reads as the first with
- * the battle behind it. It all changes with the turn button's label — Enter
- * Battle while the battle is ahead, End Turn once it is fought — so the two
- * always tell the same story.
+ * The phase: each has its own look, and none is a word. Before the attack
+ * the dial is quiet — only the spinner moves, a faint arc sweeping slowly
+ * round the edge. The attack is loud: the ring becomes one arc per attack
+ * step, filling in the attacker's colour, and level bars like a music
+ * player's stand out all round the dial and bounce. Every attack step lands
+ * as a thump — the bars jump, the dial pops, a ring bursts off it. Once the
+ * attack is made the bars settle into a short fringe that stays until the
+ * turn changes hands, so the rest of the turn reads as its start with the
+ * attack behind it. A turn ended without an attack stays quiet throughout.
  *
  * This component is the single mid-board focal token; combat does NOT
  * introduce any sibling chrome, and nothing is hung off one side of it.
@@ -129,7 +128,7 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
       }}>
         {/* Paper disc — flat cream with an ink keyline and one inner
             hairline ring, printed on the divider like a dial. No shadow, no
-            blur. Through the battle the hairline takes the attacker's
+            blur. Through the attack the hairline takes the attacker's
             colour. */}
         <div
           aria-hidden
@@ -192,7 +191,7 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
       {/* Ring-bursts — one on every isMyTurn flip (it replaces the old "Your
           Move / Rival's Move" banner, and is skipped on first mount so it
           doesn't fire on game load), and a heavier one for every attack
-          step of the battle. */}
+          step. */}
       <AnimatePresence>
         {rippleKey > 0 && <RingBurst key={`turn-${rippleKey}`} hue={hue} weight={1.5} reach={1.65} />}
         {beat !== null && <RingBurst key={`beat-${beat}`} hue={hue} weight={2.5} reach={1.9} />}
@@ -316,7 +315,7 @@ function ringLayer(arcs: Arc[], from = '0deg') {
 
 /** The spinner — a thin faint-ink arc orbiting slowly (~8s) around the disc.
  *  Hard stops so it reads as a printed dial mark, not a glowing halo. Like
- *  the battle's ring it arrives on a short fade, so a change of ring is
+ *  the attack's ring it arrives on a short fade, so a change of ring is
  *  never a jump. */
 function IdleSweepRing() {
   return (
@@ -368,7 +367,7 @@ function CombatRing({ combat }: { combat: NonNullable<CombatProgress> }) {
 const BAR_STEP = 12;
 const BARS_A_SIDE = 180 / BAR_STEP - 1;
 /** A long and a short bar at full stretch, and the fringe the long ones are
- *  left at once the battle is fought. */
+ *  left at once the attack is made. */
 const BAR_LONG = 10;
 const BAR_SHORT = 6;
 const BAR_FRINGE = 3;
@@ -377,7 +376,7 @@ const BAR_BEAT_MS = [520, 680, 440, 760, 600, 480, 720, 560, 640, 500, 700, 460,
 
 /**
  * Level bars, like a music player's, bent round the dial: nothing while the
- * battle is ahead, bouncing through it, a short even fringe after it. The
+ * attack is ahead, bouncing through it, a short even fringe after it. The
  * long bars are ink and the short ones between them the attacker's colour;
  * only the long ones stay on as the fringe. They open like a fan, from the
  * top pole down, and all jump outward together on every thump. A bar and its

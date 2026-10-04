@@ -204,7 +204,7 @@ function RemMergeDemo() {
       </div>
       <div style={{ width: 110, aspectRatio: '3 / 4', flexShrink: 0 }}>
         <HeroSlot card={remBench} owner="0" myId="0" isOpponent={false} compact
-          pending={null} isTargetable={false} isCurrentTurn onTap={() => {}} />
+          pending={null} isTargetable={false} isCurrentTurn ready onTap={() => {}} />
       </div>
       <div style={{ flex: '1 1 220px', minWidth: 0, alignSelf: 'flex-start' }}>
         <Caption>
@@ -212,8 +212,8 @@ function RemMergeDemo() {
         </Caption>
         <Caption>
           <strong>Left</strong>, the carry: her portrait badge with a countdown of 3, a green buff border, and
-          +2 max HP. <strong>Right</strong>, Rem on the bench with the skill-ready glint, because she casts
-          from the bench.
+          +2 max HP. <strong>Right</strong>, Rem on the bench with the ready glint: her skill can still be
+          used this turn, and she casts it from the bench.
         </Caption>
       </div>
     </div>

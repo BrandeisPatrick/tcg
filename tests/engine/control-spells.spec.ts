@@ -72,10 +72,10 @@ describe('Echo Shard', () => {
     expect(enemy.hp).toBe(17); // Lady Geist skill base 3
   });
 
-  it('bypasses the one-skill-per-turn cap', () => {
+  it('bypasses the once-a-turn skill limit', () => {
     const G = freshReadyGame();
     G.players['0'].active = makeHero('hero_lady_geist', '0', 'active', 0);
-    G.players['0'].skillUsedThisTurn = true; // already skilled this turn
+    G.players['0'].active.skillUsedThisTurn = true; // already skilled this turn
     const enemy = G.players['1'].active!;
     enemy.hpMax = 20; enemy.hp = 20;
     run('eff_echo_shard', G, {});

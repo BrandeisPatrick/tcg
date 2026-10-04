@@ -86,7 +86,12 @@ export interface CardInstance {
   spiritMod: number;
   statuses: StatusInstance[];
   exhausted: boolean;
+  /** This hero used its skill this turn. Each hero may use its skill once a
+   *  turn, and a hero that has done so cannot make the turn's attack. */
   skillUsedThisTurn: boolean;
+  /** This hero made the turn's attack, so it cannot use its skill this turn
+   *  (it keeps the flag if it retreats to the bench afterwards). */
+  attackedThisTurn?: boolean;
   /** Per-instance play-cost override. When set, used instead of the card
    *  definition's cost — e.g. Sinclair's free (0-cost) copied ultimate. */
   costOverride?: number;
@@ -98,10 +103,10 @@ export interface CardInstance {
   charges?: number;
   // Multi-attack is modeled via the `extra_attack` STATUS (value = N extra
   // full-power swings queued for this turn). It stacks additively across
-  // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed in the
-  // attack phase — see grantExtraAttacks / resolveAttackPhase. Bonus swings take
-  // no retaliation and re-fire onAttack procs (so Ricochet / Toxic Bullets /
-  // Djinn's Mark all proc per swing).
+  // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed by the
+  // turn's attack — see grantExtraAttacks / resolveAttackPhase. Each bonus swing
+  // re-fires onAttack procs (so Ricochet / Toxic Bullets / Djinn's Mark all proc
+  // per swing).
   /**
    * Rem's "Lil Helpers" merge: when Rem casts her skill she leaves her bench
    * slot and attaches to an ally as a temporary buff. These live on the Rem
@@ -142,8 +147,6 @@ export interface PlayerState {
   bench: (CardInstance | null)[]; // length 3
   discard: CardInstance[];
   ultsConsumed: string[]; // ult cardIds that have already entered hand this match
-  /** Whether this player has already used a hero skill this turn (max 1 skill per player per turn). */
-  skillUsedThisTurn: boolean;
   /** Deck archetype this player drafted (for eval/balance tracking). */
   archetype?: string;
 }
@@ -332,11 +335,12 @@ export interface GameState {
    */
   draftTurnsOffset: number;
   mulliganPending: boolean;       // true after draft completes until player resolves opening mulligan
-  /** This turn's battle has been fought. A turn runs Prepare → Battle →
-   *  Prepare → End Turn: while this is false the battle is still ahead (the
-   *  turn button reads Enter Battle); once true the player is in the second
-   *  prepare phase and the button ends the turn. Reset at each turn start. */
-  battleFought: boolean;
+  /** This turn's attack has been made. A turn is the player's to spend on
+   *  cards, skills and a retreat in any order, with at most one attack among
+   *  them: the `attack` move, the Active swinging one-way at the rival Active.
+   *  Ending the turn never attacks. One attack a turn whoever is Active, so a
+   *  hero who steps in after it cannot swing again. Reset at each turn start. */
+  attackUsed: boolean;
   /** Set by the `resolve` pass when a player's Active is a corpse and an
    *  eligible bench hero can step up — i.e. a forced promotion is owed. The AI
    *  side is auto-promoted inside `resolve`, so in practice this only flags the

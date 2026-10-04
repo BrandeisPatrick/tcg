@@ -226,7 +226,7 @@ const eff_unstoppable_cast: AbilityDef = {
 };
 
 // Echo Shard (canon: recast last ability): the active hero uses their skill
-// AGAIN this turn — bypasses the one-skill-per-turn cap and pays no skill cost,
+// AGAIN this turn — bypasses the once-a-turn skill limit and pays no skill cost,
 // and re-fires onBearerSkillUsed so cast-payoff gear (Cooldown draw, Mystic
 // Burst, Surge) triggers a second time. Auto-targets to match the
 // skill's filter (enemy Active for offense, the hero itself for buffs). Fizzles
@@ -393,13 +393,15 @@ const eff_improved_burst_proc: AbilityDef = {
 
 // ----- Cast-payoff items (functionality tied to skill / ult activation) -----
 
-// Surge of Power: after the bearer uses a skill, gain +2 Bullet Power this turn
-// (weapon_power, duration 1 — present for this turn's battle, gone by the
-// bearer's next turn). Canon Surge of Power empowers you right after a cast.
+// Surge of Power: after the bearer uses a skill, gain +2 Bullet Power through
+// its next turn (weapon_power, duration 2). The hero who uses its skill gives
+// up this turn's attack, so the surge has to outlast the turn to be swung
+// with: skill now, the empowered attack next turn. Canon Surge of Power
+// empowers you right after a cast.
 const eff_surge_of_power: AbilityDef = {
   id: 'eff_surge_of_power', trigger: 'onBearerSkillUsed', target: 'self',
   base: 2,
-  run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'weapon_power', 2, 1); },
+  run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'weapon_power', 2, 2); },
 };
 
 // Diviner's Kevlar: after the bearer casts their ultimate, gain Shield 4.
@@ -761,9 +763,8 @@ const passive_abrams_heal: AbilityDef = {
 
 // Fixation: canon Haze ramps with sustained fire. TCG: after Haze makes her
 // attack, she gains Extra Attack 1 (a follow-up swing the same turn). Fires only
-// on her primary swing (`params.primary`) so the follow-up — and any retaliation
-// she takes — don't re-trigger it into an endless chain. Stacks with Burst Fire
-// / Active Reload.
+// on her primary swing (`params.primary`) so the follow-up doesn't re-trigger it
+// into an endless chain. Stacks with Burst Fire / Active Reload.
 const passive_haze_fixation: AbilityDef = {
   id: 'passive_haze_fixation', trigger: 'onAttack', target: 'self',
   prompt: 'Fixation — after Haze attacks, she gains Extra Attack 1 this turn.',
@@ -830,7 +831,7 @@ const passive_vindicta_flight: AbilityDef = {
 // Mixed Bullets: Wraith's basic attack deals Bullet Power as bullet damage
 // (the normal swing) PLUS her full Spirit Power as a second spirit-damage hit —
 // so Weapon AND Spirit items both scale her, and she pierces either single
-// resist. Fires on every attack (and retaliation) like Shiv's bleed.
+// resist. Fires on every swing (Extra Attacks too) like Shiv's bleed.
 const passive_wraith_mixed: AbilityDef = {
   id: 'passive_wraith_mixed', trigger: 'onAttack', target: 'self',
   prompt: 'Mixed Bullets — attacks also deal Spirit Power as spirit damage.',

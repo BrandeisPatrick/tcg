@@ -23,13 +23,13 @@ export function freshReadyGame(): GameState {
       '0': buildPlayer('0', STARTER_DECK_PLAYER.heroes, AI_DECKS_BY_NAME.aggro),
       '1': buildPlayer('1', STARTER_DECK_AI.heroes, AI_DECKS_BY_NAME.control),
     },
-    // Turn 2 so P0's attack phase resolves (P0 forgoes first strike on turn 1).
+    // Turn 2 so P0 may attack (P0 forgoes first strike on turn 1).
     turnNumber: 2,
     log: [{ turn: 1, text: 'Battle begins.' }],
     draft: null,
     draftTurnsOffset: 0,
     mulliganPending: false,
-    battleFought: false,
+    attackUsed: false,
     action: null,
     fx: [],
   } as unknown as GameState;

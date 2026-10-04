@@ -14,13 +14,21 @@ import { mockHeroInstance, mockEquipInstance } from './mock';
 import { Section, Caption } from './primitives';
 
 const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
-  { id: 'ready',   label: 'Skill ready (yours)', hint: 'The skill card is the button: tap it to use the skill.' },
-  { id: 'used',    label: 'Skill used',          hint: 'Dimmed, with “already used this turn”.' },
-  { id: 'blocked', label: 'Skill blocked',       hint: 'A flat card and the reason (“Not your turn”).' },
-  { id: 'enemy',   label: 'Enemy hero',          hint: 'Read-only. No action.' },
-  { id: 'loaded',  label: 'Statuses, equipment, retreat', hint: 'Active Effects, Equipment and Retreat all shown. Retreat is on the Active’s sheet only.' },
-  { id: 'broke',   label: 'Retreat, short of souls', hint: 'The button stays on the sheet, inert, and says what is missing.' },
+  { id: 'ready',    label: 'Your Active, both ready', hint: 'Skill or Attack: each plate is its button, and the “or” between them says the Active does one a turn.' },
+  { id: 'skilled',  label: 'Skill used',              hint: 'The skill reads USED; the Attack goes flat with “Used its skill this turn”.' },
+  { id: 'attacked', label: 'Attacked',                hint: 'The Attack reads USED; the skill goes flat with “Attacked this turn”.' },
+  { id: 'turn1',    label: 'Turn 1',                  hint: 'The skill is there; the Attack is flat with “No attacks on Turn 1”.' },
+  { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the Passive panel, and the Attack under it.' },
+  { id: 'bench',    label: 'A bench hero',            hint: 'Its skill can be used from the bench. No Attack — only the Active swings.' },
+  { id: 'blocked',  label: 'Not your turn',           hint: 'Both plates flat, with the reason.' },
+  { id: 'enemy',    label: 'Rival hero',              hint: 'Read-only. No action.' },
+  { id: 'loaded',   label: 'Statuses, equipment, retreat', hint: 'Active Effects, Equipment and Retreat all shown. Retreat is on the Active’s sheet only.' },
+  { id: 'broke',    label: 'Retreat, short of souls', hint: 'The button stays on the sheet, inert, and says what is missing.' },
 ];
+
+/** The passive-only hero the "Passive-only Active" state falls back to when
+ *  the picked hero has a skill. */
+const PASSIVE_STAND_IN = 'hero_abrams';
 
 export function OverlaysTab() {
   const [heroId, setHeroId] = useState('hero_kelvin');
@@ -30,17 +38,39 @@ export function OverlaysTab() {
   const hero = HEROES.find((h) => h.id === heroId)!;
 
   function build(s: string): Parameters<typeof HeroDetailSheet>[0] {
-    let card: CardInstance = mockHeroInstance(hero);
+    const shown = s === 'passive' && hero.skill ? HEROES.find((h) => h.id === PASSIVE_STAND_IN)! : hero;
+    let card: CardInstance = mockHeroInstance(shown);
     const props: Parameters<typeof HeroDetailSheet>[0] = {
       card,
       isMine: true,
       canUseSkill: true,
       onUseSkill: () => setToast('Skill activated'),
+      // The plan's line as the board prints it, against a stand-in rival.
+      attack: { line: `Hits Lash for ${shown.atk} bullet damage`, onAttack: () => setToast('Attacked') },
       onClose: () => setScenario(null),
     };
-    if (s === 'used') { card = { ...card, skillUsedThisTurn: true }; props.canUseSkill = false; }
-    if (s === 'blocked') { props.canUseSkill = false; props.skillBlockedReason = 'Not your turn'; }
-    if (s === 'enemy') { props.isMine = false; props.canUseSkill = false; }
+    const attackBlocked = (blockedReason: string, made = false) => {
+      props.attack = { ...props.attack!, line: undefined, blockedReason, made };
+    };
+    if (s === 'skilled') {
+      card = { ...card, skillUsedThisTurn: true };
+      props.canUseSkill = false;
+      attackBlocked('Used its skill this turn');
+    }
+    if (s === 'attacked') {
+      card = { ...card, attackedThisTurn: true };
+      props.canUseSkill = false;
+      props.skillBlockedReason = 'Attacked this turn';
+      attackBlocked('Attacked this turn', true);
+    }
+    if (s === 'turn1') attackBlocked('No attacks on Turn 1');
+    if (s === 'bench') { card = { ...card, zone: 'bench', slot: 1 }; props.attack = undefined; }
+    if (s === 'blocked') {
+      props.canUseSkill = false;
+      props.skillBlockedReason = 'Not your turn';
+      attackBlocked('Not your turn');
+    }
+    if (s === 'enemy') { props.isMine = false; props.canUseSkill = false; props.attack = undefined; }
     if (s === 'loaded') {
       card = {
         ...card,
@@ -78,9 +108,10 @@ export function OverlaysTab() {
       )}
     >
       <Caption>
-        The sheet that rises when a hero is tapped. The Skill section <strong>is</strong> the action: tap the
-        skill card to use it. A hero with a passive shows a Passive block that cannot be pressed. Pick a
-        hero, then a state.
+        The sheet that rises when a hero is tapped. Its plates <strong>are</strong> the actions: tap the
+        skill card to use the skill (any of your heroes, once a turn, a soul each), and on your Active tap
+        Attack to swing at their Active — free, one-way, and instead of the skill, not as well. A hero with a
+        passive shows a Passive block that cannot be pressed. Pick a hero, then a state.
       </Caption>
 
       <div className="gal-pick">

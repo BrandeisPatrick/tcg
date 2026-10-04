@@ -190,10 +190,15 @@ export function clearTurnFlags(ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
     c.exhausted = false;
     c.skillUsedThisTurn = false;
+    c.attackedThisTurn = false;
     // Any unused Extra Attack stack expires at end of turn (it's a this-turn
-    // resource); the battle normally consumes it first, and one granted after
-    // the battle has nothing left to swing at.
+    // resource); the attack consumes it, and a turn that ends without one
+    // lets it go.
     c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack');
+    // A merged Rem rides on her bearer, out of the board sweep above: clear
+    // her skill flag here too, or she would come back from the merge with
+    // her skill already spent for that turn.
+    for (const a of c.attached ?? []) if (a.remMergeTurnsLeft != null) a.skillUsedThisTurn = false;
   }
 }
 
@@ -203,7 +208,7 @@ export function clearTurnFlags(ps: PlayerState) {
  * enemies at the END of each of their turns, over the channel's duration —
  * a board-wipe win condition. The status `value` is the per-tick base damage;
  * effective Spirit is added live each pulse. Called from turn.onEnd, so the
- * pulse comes after the battle and the second prepare phase.
+ * pulse comes after everything the player did in the turn, the attack included.
  *
  *  - Interrupt: if the channeler is Stunned / Slept this turn, the pulse is
  *    skipped (canon: channels are interruptible) — the channel still counts

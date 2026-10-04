@@ -1,7 +1,8 @@
 import type { CSSProperties } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import type { CardInstance, PlayerID, PlayerState } from '@/engine/types';
 import { HeroSlot } from './HeroSlot';
+import { DealtTile } from './BoardIntro';
 import { RowPlaque, SlotWell } from './BoardTable';
 import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
@@ -17,7 +18,8 @@ interface Props {
   onEquipmentHover?: (eq: CardInstance | null) => void;
   isTargetable: (card: CardInstance, owner: PlayerID) => boolean;
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
-  playerSkillSpent?: boolean;
+  /** Heroes here that can still do something this turn (the ready glint). */
+  readyIids?: ReadonlySet<string>;
 }
 
 // 3 small bench slots in a centered row. Used above the opponent active
@@ -25,7 +27,7 @@ interface Props {
 // (rival red / your gold) paints the empty wells' dashed outline and label.
 export function BenchRow({
   ps, owner, myId, isOpponent, pending, onTapHero, onLongPressHero, onEquipmentHover,
-  isTargetable, registerSlotRef, playerSkillSpent,
+  isTargetable, registerSlotRef, readyIids,
 }: Props) {
   const slots = ps.bench;
   const accent = isOpponent ? poster.rival : poster.you;
@@ -59,19 +61,10 @@ export function BenchRow({
       }}>
         <AnimatePresence mode="popLayout">
           {slots.map((c, i) => c ? (
-            // Wrapper presence is opacity-only and FAST: the HeroSlot inside
-            // carries a shared layoutId, so when a hero changes zones
-            // (promotion / retreat) the layout animation travels it between
-            // rows. A scale/blur exit here used to play a "vanish" at the old
-            // slot that fought the travel and read as a teleport.
-            <motion.div
-              key={c.iid}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, transition: { duration: 0.12 } }}
-              transition={{ duration: 0.25 }}
-              style={emptyDivStyle}
-            >
+            // Opacity-only presence, so the HeroSlot's shared layoutId can
+            // travel a hero between rows; dealt in at the match's start
+            // (DealtTile has the rationale).
+            <DealtTile key={c.iid} owner={owner} slot={i as 0 | 1 | 2} style={emptyDivStyle}>
               <HeroSlot
                 card={c}
                 owner={owner}
@@ -84,9 +77,9 @@ export function BenchRow({
                 onLongPress={onLongPressHero}
                 onEquipmentHover={onEquipmentHover}
                 registerSlotRef={registerSlotRef}
-                playerSkillSpent={playerSkillSpent}
+                ready={readyIids?.has(c.iid)}
               />
-            </motion.div>
+            </DealtTile>
           ) : (
             <SlotWell key={`empty-bench-${i}`} accent={accent} />
           ))}

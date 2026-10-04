@@ -77,7 +77,7 @@ describe('combat plan invariant', () => {
     expect(G.players['1'].active!.hp).toBe(before);
   });
 
-  it('plan predicts a queued Extra Attack (full power, no retaliation)', () => {
+  it('plan predicts a queued Extra Attack (full power)', () => {
     const G = freshG();
     plainActive(G);
     soloAttacker(G, '0');
@@ -94,7 +94,6 @@ describe('combat plan invariant', () => {
     const bonus = mine[1];
     expect(bonus.bonusLabel).toBe('Extra Attack');
     expect(bonus.rawDamage).toBe(dmg); // full power
-    expect(bonus.retaliationDamage).toBe(0);
   });
 
   it('plan flags KO when damage exceeds HP', () => {
@@ -136,19 +135,18 @@ describe('combat plan invariant', () => {
   });
 });
 
-describe('mutual-damage retaliation', () => {
-  it('plan predicts retaliation against the rival\'s active attacker', () => {
+describe('the attack is one-way', () => {
+  it('plan steps are all swings at the rival Active, none back at the attacker', () => {
     const G = freshG();
     soloAttacker(G, '0'); // only Active swings
+    const atk = G.players['0'].active!;
+    const def = G.players['1'].active!;
     const plan = planAttackPhase(G, '0');
-    const activeStep = plan.steps.find((s) => s.attackerIid === G.players['0'].active!.iid);
-    expect(activeStep).toBeDefined();
-    // Defender's Active retaliates with their full effective ATK.
-    expect(activeStep!.retaliationDamage).toBeGreaterThan(0);
-    expect(activeStep!.attackerHpAfter).toBe(G.players['0'].active!.hp - activeStep!.retaliationDamage);
+    expect(plan.steps.length).toBeGreaterThan(0);
+    expect(plan.steps.every((s) => s.attackerIid === atk.iid && s.targetIid === def.iid)).toBe(true);
   });
 
-  it('active attack actually damages BOTH heroes on resolve', () => {
+  it('resolve damages the defender and leaves the attacker untouched', () => {
     const G = freshG();
     soloAttacker(G, '0');
     const atk = G.players['0'].active!;
@@ -157,7 +155,7 @@ describe('mutual-damage retaliation', () => {
     const defHpBefore = def.hp;
     resolveAttackPhase(G, '0');
     expect(def.hp).toBeLessThan(defHpBefore); // attacker hit
-    expect(atk.hp).toBeLessThan(atkHpBefore); // retaliation hit
+    expect(atk.hp).toBe(atkHpBefore);         // nothing came back
   });
 
   it('bench heroes never attack (only the Active swings)', () => {
@@ -169,55 +167,47 @@ describe('mutual-damage retaliation', () => {
     expect([...attackerIids][0]).toBe(G.players['0'].active!.iid);
   });
 
-  it('face attack does NOT trigger retaliation (no defender to retaliate)', () => {
-    const G = freshG();
-    soloAttacker(G, '0');
-    G.players['1'].active = null;
-    const plan = planAttackPhase(G, '0');
-    expect(plan.steps.length).toBeGreaterThan(0);
-    expect(plan.steps.every((s) => s.retaliationDamage === 0)).toBe(true);
-  });
-
-  it('retaliation respects attacker shield (mitigation pipeline runs both ways)', () => {
+  it("the attacker's Shield is not spent: nothing comes back to absorb", () => {
     const G = freshG();
     soloAttacker(G, '0');
     const atk = G.players['0'].active!;
-    // Shield the attacker so retaliation is absorbed.
-    addStatus(G, atk, 'shield', 99, 999);
-    const atkHpBefore = atk.hp;
+    addStatus(G, atk, 'shield', 5, 999);
     resolveAttackPhase(G, '0');
-    expect(atk.hp).toBe(atkHpBefore); // shield fully absorbed retaliation
+    expect(atk.statuses.find((s) => s.id === 'shield')?.value).toBe(5);
   });
 
-  it('attacker retaliation does not change because attack KO\'d the defender (simultaneous resolution)', () => {
+  it('a KO swing is predicted and lands, and the attacker takes nothing back', () => {
     const G = freshG();
     soloAttacker(G, '0');
     const atk = G.players['0'].active!;
     const def = G.players['1'].active!;
-    // Make defender 1 HP so attack KOs in one swing; defender still retaliates.
-    def.hp = 1;
-    const defAtk = def.atkMod + (def as any).hpMax * 0; // just a sanity hold
-    void defAtk; // (kept inert for symmetry)
+    def.hp = 1; // one swing KOs
     const atkHpBefore = atk.hp;
     const plan = planAttackPhase(G, '0');
     const step = plan.steps.find((s) => s.attackerIid === atk.iid)!;
     expect(step.predictedKO).toBe(true);
-    // Even though defender is KO'd, retaliation lands.
-    expect(step.retaliationDamage).toBeGreaterThan(0);
     resolveAttackPhase(G, '0');
-    expect(atkHpBefore - atk.hp).toBe(step.retaliationDamage);
+    expect(def.hp).toBe(0);
+    expect(atk.hp).toBe(atkHpBefore);
   });
 
-  it('defender passive (Shiv Bleed) fires on retaliation', async () => {
+  it("the defender's onAttack passive (Shiv's Bleed) does not fire", () => {
     const G = freshG();
     soloAttacker(G, '0');
-    // Force defender's Active to be Shiv so their onAttack passive applies Bleed on retaliation.
+    // A Shiv defender: under a two-way trade her passive would Bleed the attacker.
     (G.players['1'].active as any).cardId = 'hero_shiv';
     const atk = G.players['0'].active!;
     resolveAttackPhase(G, '0');
-    // Atk should now carry Bleed from Shiv's retaliation.
-    const bleed = atk.statuses.find((s) => s.id === 'bleed');
-    expect(bleed).toBeDefined();
-    expect(bleed!.value).toBeGreaterThan(0);
+    expect(atk.statuses.find((s) => s.id === 'bleed')).toBeUndefined();
+  });
+
+  it("the attacker's own onAttack passive still fires (Shiv's Bleed on the defender)", () => {
+    const G = freshG();
+    soloAttacker(G, '0');
+    G.players['0'].active = makeHero('hero_shiv', '0', 'active', 0);
+    const def = G.players['1'].active!;
+    def.hp = def.hpMax = 30;
+    resolveAttackPhase(G, '0');
+    expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBeGreaterThan(0);
   });
 });

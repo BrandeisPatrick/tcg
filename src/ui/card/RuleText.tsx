@@ -57,6 +57,11 @@ interface Props {
   text: string;
   /** Override the inherit color for non-keyword spans (default: inherit) */
   baseColor?: string;
+  /** The keyword inks are picked for cream paper; on a solid action plate
+   *  (the red skill plate) they sink into the fill. There, every keyword is
+   *  printed in this colour — the plate's own type — and heavier, so it
+   *  still stands out from the running text. */
+  keywordColor?: string;
 }
 
 /**
@@ -64,7 +69,7 @@ interface Props {
  * colored. Splits on the keyword regex (capturing group) so matches and gaps
  * alternate in the output array.
  */
-export function RuleText({ text, baseColor }: Props) {
+export function RuleText({ text, baseColor, keywordColor }: Props) {
   if (!text) return null;
   const parts = text.split(KEYWORD_REGEX);
   return (
@@ -73,7 +78,7 @@ export function RuleText({ text, baseColor }: Props) {
         const color = KEYWORDS[part];
         if (color) {
           return (
-            <strong key={i} style={{ color, fontWeight: 700 }}>{part}</strong>
+            <strong key={i} style={keywordColor ? { color: keywordColor, fontWeight: 800 } : { color, fontWeight: 700 }}>{part}</strong>
           );
         }
         return baseColor ? <span key={i} style={{ color: baseColor }}>{part}</span> : <span key={i}>{part}</span>;

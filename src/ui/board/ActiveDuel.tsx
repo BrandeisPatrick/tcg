@@ -19,14 +19,15 @@ interface Props {
   onEquipmentHover?: (eq: CardInstance | null) => void;
   isTargetable: (card: CardInstance, owner: PlayerID) => boolean;
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
-  playerSkillSpent?: boolean;
+  /** Your heroes that can still do something this turn (the ready glint). */
+  readyIids?: ReadonlySet<string>;
 }
 
 // The middle row of the 3-2-3 layout. Opp Active on the left, your Active on
 // the right, with a printed hairline down the centre carrying the turn compass.
 export function ActiveDuel({
   G, me, opp, isMyTurn, turn, phase,
-  pending, onTapHero, onLongPressHero, onEquipmentHover, isTargetable, registerSlotRef, playerSkillSpent,
+  pending, onTapHero, onLongPressHero, onEquipmentHover, isTargetable, registerSlotRef, readyIids,
 }: Props) {
   const { isMobile } = useViewport();
   return (
@@ -94,7 +95,7 @@ export function ActiveDuel({
         isTargetable={isTargetable}
         registerSlotRef={registerSlotRef}
         isCurrentTurn={isMyTurn}
-        playerSkillSpent={playerSkillSpent}
+        readyIids={readyIids}
       />
     </div>
   );

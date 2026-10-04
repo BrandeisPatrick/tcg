@@ -1,9 +1,10 @@
 /**
  * Full-match playtest — draft a real match, switch Auto on so the AI plays
  * both seats, and tick the virtual clock until the result sheet. Reads the
- * turn dial and the turn button on the way, so it reports every state the
- * turn flow went through (whose move, which phase, what the button offered)
- * and stops with a failure if the match sits still for a minute of game time.
+ * turn dial, the mover's attack lamp and the turn button on the way, so it
+ * reports every state the turn flow went through (whose move, which phase,
+ * whether the turn's attack was still to make, what the button offered) and
+ * stops with a failure if the match sits still for a minute of game time.
  * The lessons walk four short scripted fights; this is the long way round:
  * draws, promotions, respawns, ultimates and a real ending.
  *
@@ -27,16 +28,23 @@ const STALL_TICKS = 60_000 / TICK_MS;
 const MAX_TICKS = 3000;
 
 const lockIn = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Lock In'))`;
-// The turn button, under either name it wears.
-const turnButton = `(document.querySelector('[aria-label="Enter Battle"]') || document.querySelector('[aria-label="End Turn"]'))`;
+// The turn button — it only ever ends the turn; attacks are made from the
+// Active's sheet (here, by the AI through the same path).
+const turnButton = `document.querySelector('[aria-label="End Turn"]')`;
+// The mover's patron lamp says whether the turn's attack is still to make:
+// "Ready to attack" or "No attack left this turn" (the other seat's lamp
+// reads "Waiting for its turn").
+const LAMPS = ['Ready to attack', 'No attack left this turn'];
 const LOOK = `(() => {
   const dial = document.querySelector('[aria-label^="Turn "]');
   const over = [...document.querySelectorAll('*')].find((e) => e.children.length === 0 && /^(Victory|Defeat|Draw)$/.test(e.textContent.trim()));
   const btn = ${turnButton};
+  const lamp = [...document.querySelectorAll('[role="img"][aria-label]')].map((e) => e.getAttribute('aria-label')).find((l) => ${JSON.stringify(LAMPS)}.includes(l));
   return {
     dial: dial ? dial.getAttribute('aria-label') : null,
     over: over ? over.textContent.trim() : null,
     button: btn ? btn.getAttribute('aria-label') + (btn.disabled ? ' (off)' : '') : null,
+    lamp: lamp ?? null,
   };
 })()`;
 
@@ -68,16 +76,16 @@ try {
   await b.clickEl(byText('Auto'), { js: true, scroll: false });
   await b.settle(3);
 
-  // ---- Let it play. Every distinct (mover, phase, button) is a state the turn flow reached.
+  // ---- Let it play. Every distinct (mover, phase, attack, button) is a state the turn flow reached.
   const states = new Set();
-  let result = null, lastDial = '', still = 0, battles = 0;
+  let result = null, lastDial = '', still = 0, attacks = 0;
   for (let i = 0; i < MAX_TICKS && !result; i++) {
     await b.tick(TICK_MS); await b.settle(2);
     const s = await b.evaluate(LOOK);
     if (s.over) { result = s.over; break; }
     if (!s.dial) continue;
     const m = s.dial.match(/^Turn \d+ · (.+?) · (\w+) phase/);
-    if (m) states.add(`${m[1]} · ${m[2]} · button: ${s.button}`);
+    if (m) states.add(`${m[1]} · ${m[2]} · ${s.lamp ?? 'attack: —'} · button: ${s.button}`);
     if (s.dial === lastDial) {
       if (++still > STALL_TICKS) {
         console.log(`STUCK for a minute of game time at "${s.dial}", button: ${s.button}`);
@@ -87,8 +95,8 @@ try {
       continue;
     }
     lastDial = s.dial; still = 0;
-    // Film the first few battles.
-    if (/Battle phase/.test(s.dial) && battles < 6) await b.shot(join(OUT, `${MODE}-battle-${++battles}.png`));
+    // Film the first few attacks as they are walked.
+    if (/Battle phase/.test(s.dial) && attacks < 6) await b.shot(join(OUT, `${MODE}-attack-${++attacks}.png`));
   }
   await b.tick(1500); await b.settle(2);
   await b.shot(join(OUT, `${MODE}-end.png`));

@@ -149,11 +149,10 @@ describe('Lifesteal — heal half the damage dealt', () => {
     G.players['0'].active = drifter;
     soloAttacker(G, '0');
     const def = G.players['1'].active!;
-    def.hp = def.hpMax = 99; // survives; no retaliation KO concerns
-    const retal = effectiveAtk(def); // defender's swing back at Drifter
+    def.hp = def.hpMax = 99; // survives the swing
     resolveAttackPhase(G, '0');
-    // Drifter dealt 3 → heals floor(3/2)=1, then ate `retal` from retaliation.
-    expect(drifter.hp).toBe(1 + 1 - retal);
+    // Drifter dealt 3 → heals floor(3/2)=1; the defender does not strike back.
+    expect(drifter.hp).toBe(1 + 1);
   });
 
   it('Lady Geist Life Drain heals for half the spirit damage dealt', () => {

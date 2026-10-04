@@ -64,17 +64,17 @@ describe('Deadlock TCG engine smoke', () => {
     expect(ctx.currentPlayer).toBe('0');
   });
 
-  it('end turn alternates players and runs combat', () => {
+  it('end turn alternates players and never attacks', () => {
     const c = newClient();
     const beforeOppHP = (snap(c).G.players['1'].active?.hp) ?? 0;
     c.moves.endTurn?.();
     const { G, ctx } = snap(c);
     expect(ctx.currentPlayer).toBe('1');
-    // Opponent active should have taken player active's attack damage (Haze atk 4)
+    // The attack is a move of its own; ending the turn does not make it.
     const oppActiveAfter = G.players['1'].active;
     expect(oppActiveAfter).not.toBeNull();
     if (oppActiveAfter) {
-      expect(oppActiveAfter.hp).toBeLessThanOrEqual(beforeOppHP);
+      expect(oppActiveAfter.hp).toBe(beforeOppHP);
     }
   });
 

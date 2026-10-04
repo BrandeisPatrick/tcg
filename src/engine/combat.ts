@@ -1,27 +1,50 @@
 import type { GameState, PlayerID, CardInstance } from './types';
 import { CARDS_BY_ID } from '@/cards';
 import { damageUnit, resolve } from './damage';
-import { otherPlayer, effectiveAtk } from './util';
+import { otherPlayer, effectiveAtk, isRespawning } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
 
-// ---------- The battle step of a turn ----------
+// ---------- The turn's attack ----------
 
-/** The first player forgoes first strike: Turn 1 has no battle. One rule,
- *  read by the planner, the resolver, the turn flow and the board, so the
+/** The first player forgoes first strike: Turn 1 has no attack. One rule,
+ *  read by the planner, the resolver, the attack gate and the board, so the
  *  four cannot drift apart. */
-export function battleThisTurn(G: GameState): boolean {
+export function attackTurn(G: GameState): boolean {
   return (G.turnNumber ?? 1) > 1;
 }
 
-/** True while the current turn's battle is still ahead of the player. */
-export function battleOwed(G: GameState): boolean {
-  return !G.battleFought && battleThisTurn(G);
+/** Why a player's Active cannot make the turn's attack. */
+export type AttackBlock = 'turn1' | 'used' | 'skill' | 'noActive' | 'cannot' | 'noTarget';
+
+/** Why `pid`'s Active cannot make the turn's attack right now, or null when it
+ *  can. One gate, read by the `attack` move, the planner's callers, the AI and
+ *  the board, so the four cannot drift apart. Checked in this order:
+ *   - 'turn1'    Turn 1 has no attack (the first player forgoes first strike).
+ *   - 'used'     this turn's attack has been made. One a turn, whoever is
+ *                Active: the hero who steps in after it cannot swing again.
+ *   - 'noActive' there is no living Active. A fallen one is replaced first —
+ *                the attack belongs to the hero who steps up.
+ *   - 'skill'    the Active used its skill this turn; a hero does one or the
+ *                other.
+ *   - 'noTarget' the rival has no living Active to swing at.
+ *   - 'cannot'   the swing would deal nothing: Stun, Disarm, Sleep, a heavy
+ *                channel, or Weaken down to 0. */
+export function attackBlocked(G: GameState, pid: PlayerID): AttackBlock | null {
+  if (!attackTurn(G)) return 'turn1';
+  if (G.attackUsed) return 'used';
+  const active = G.players[pid].active;
+  if (!active || isRespawning(active)) return 'noActive';
+  if (active.skillUsedThisTurn) return 'skill';
+  const target = G.players[otherPlayer(pid)].active;
+  if (!target || isRespawning(target)) return 'noTarget';
+  if (effectiveAttackDamage(active, target).dmg <= 0) return 'cannot';
+  return null;
 }
 
 // ---------- Attack plan (pure, for UI prediction + animation) ----------
 
-/** One projected attack event. */
+/** One projected swing of the attack. */
 export interface AttackStep {
   attackerIid: string;
   attackerName: string;
@@ -42,14 +65,6 @@ export interface AttackStep {
   shieldAbsorbed: number;
   /** Short label for any bonus that contributed (e.g., "Haze passive vs Stun: +2"). */
   bonusLabel?: string;
-  /** Retaliation damage dealt by the defender BACK to the attacker (mutual-damage rule).
-   *  Only populated when `atk` is the rival's active hero — bench attackers (Mystic
-   *  Expansion bearers, etc.) don't trigger retaliation. 0 means no retaliation. */
-  retaliationDamage: number;
-  /** Predicted HP on the attacker after retaliation lands. null if no retaliation. */
-  attackerHpAfter: number | null;
-  /** True if retaliation will KO the attacker. */
-  attackerKO: boolean;
 }
 
 export interface AttackPlan {
@@ -60,20 +75,21 @@ export interface AttackPlan {
   damageToActive: number;
   /** Sum of damage hitting the defender's face (only if Active is null). */
   damageToFace: number;
-  /** iid of the defender's Active if it will be KO'd during this phase. */
+  /** iid of the defender's Active if it will be KO'd during the attack. */
   defenderActiveKO: string | null;
 }
 
 /**
- * Build a pure, predictive plan for the upcoming attack phase.
+ * Build a pure, predictive plan of the attack `attackerId`'s Active would make.
  *
  * The plan mirrors what `resolveAttackPhase` will do but mutates nothing.
- * The UI can read this to (a) project the battle's damage before it is
- * fought and (b) drive an animated choreographer that walks the steps in order.
+ * The UI can read this to (a) project the attack's damage before it is made
+ * and (b) drive an animated choreographer that walks the steps in order. It
+ * does not ask whether the attack may be made — callers check `attackBlocked`.
  *
  * Predicted HP factors in current shield/armor and any queued bonus attacks.
- * Reaping order matches the engine: targets are not re-evaluated mid-phase
- * (defender.active doesn't shift until after all attackers have swung).
+ * Reaping order matches the engine: the target is not re-evaluated mid-attack
+ * (defender.active doesn't shift until every swing has landed).
  */
 export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan {
   const defenderId = otherPlayer(attackerId);
@@ -82,7 +98,7 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
   // Turn 1): the plan must predict "no attacks" too, or the UI choreographs
   // a phantom strike — tracers, hit flashes, Damaged banners — that the
   // engine then never applies.
-  if (!battleThisTurn(G)) {
+  if (!attackTurn(G)) {
     return { attackerId, defenderId, steps: [], damageToActive: 0, damageToFace: 0, defenderActiveKO: null };
   }
 
@@ -120,28 +136,6 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
       // Overflow: anything past 0 HP spills to the defender's patron.
       const overflow = ko ? -predictedHp : 0;
 
-      // Retaliation: the defender's Active retaliates against the attacker
-      // (mutual-damage rule — only the Active hero attacks, so this always
-      // applies).
-      let retaliationDamage = 0;
-      let attackerHpAfter: number | null = null;
-      let attackerKO = false;
-      const { dmg: rawRetal } = effectiveAttackDamage(target, atk);
-      if (rawRetal > 0) {
-        const rm = simulateAttackMitigation(
-          rawRetal,
-          atk,
-          atk.statuses.find((s) => s.id === 'shield')?.value ?? 0,
-          false,
-        );
-        retaliationDamage = rm.final;
-        const atkHp = atk.hp - retaliationDamage;
-        attackerHpAfter = Math.max(0, atkHp);
-        attackerKO = atkHp <= 0;
-      } else {
-        attackerHpAfter = atk.hp;
-      }
-
       steps.push({
         attackerIid: atk.iid,
         attackerName: CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId,
@@ -153,16 +147,13 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
         predictedKO: ko,
         shieldAbsorbed,
         bonusLabel,
-        retaliationDamage,
-        attackerHpAfter,
-        attackerKO,
       });
       simHp = Math.max(0, predictedHp);
       damageToActive += final;
       if (overflow > 0) damageToFace += overflow;
       if (ko) defenderActiveKO = target.iid;
 
-      // Extra Attacks: predicted extra full-power swings (no retaliation).
+      // Extra Attacks: predicted extra full-power swings.
       // Haze's Fixation grants +1 on her primary swing (resolver runs it as an
       // onAttack passive, which the pure planner can't execute) — mirror it here
       // so the prediction matches the resolved damage.
@@ -188,9 +179,6 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
           predictedKO: hKo,
           shieldAbsorbed: Math.max(0, sb - hm.shieldRemaining),
           bonusLabel: 'Extra Attack',
-          retaliationDamage: 0,
-          attackerHpAfter: null,
-          attackerKO: false,
         });
         simHp = Math.max(0, hPredicted);
         damageToActive += hm.final;
@@ -198,7 +186,7 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
         if (hKo) defenderActiveKO = target.iid;
       }
     } else {
-      // No defender Active → face damage. Face attacks don't retaliate.
+      // No defender Active → face damage.
       steps.push({
         attackerIid: atk.iid,
         attackerName: CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId,
@@ -210,9 +198,6 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
         predictedKO: false,
         shieldAbsorbed: 0,
         bonusLabel,
-        retaliationDamage: 0,
-        attackerHpAfter: null,
-        attackerKO: false,
       });
       damageToFace += dmg;
     }
@@ -221,9 +206,9 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
   return { attackerId, defenderId, steps, damageToActive, damageToFace, defenderActiveKO };
 }
 
-/** Pure-function mitigation simulator shared between the planner's attack and
- *  retaliation paths. Mirrors damageUnit's pipeline (Vulnerable, Unstoppable,
- *  Vindicta -1 bullet, Bullet Resist, Wraith half-split, Shield). */
+/** Pure-function mitigation simulator for the planner's swings. Mirrors
+ *  damageUnit's pipeline (Vulnerable, Unstoppable, Vindicta -1 bullet, Bullet
+ *  Resist, Wraith half-split, Shield). */
 function simulateAttackMitigation(
   rawDmg: number,
   target: CardInstance,
@@ -269,15 +254,18 @@ function simulateAttackMitigation(
 // ---------- Engine resolver (mutating) ----------
 
 /**
- * Run the attack phase — the battle — for the player whose turn it is.
- * The behavior matches `planAttackPhase` step for step.
+ * Resolve the attack of `attackerId`'s Active: its swing at the rival Active,
+ * then any Extra Attacks it has queued. One-way — the defender does not strike
+ * back, and none of its onAttack passives fire. The behavior matches
+ * `planAttackPhase` step for step. This only swings: the `attack` move checks
+ * `attackBlocked` and marks the attack as made before calling it.
  */
 export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
   // First player (P0) forgoes first-strike: no attacks on Turn 1, so P1 lands
   // the first hit. NOTE: this alone does NOT close the seat gap — P0's edge is
-  // cumulative (acting first every round), and the sim still shows ~63% P0.
+  // cumulative (acting first every round); scripts/balance-sim.ts reports it.
   // A persistent counter-lever (e.g. a per-turn soul coin for P1) is still TODO.
-  if (!battleThisTurn(G)) return;
+  if (!attackTurn(G)) return;
 
   const defenderId = otherPlayer(attackerId);
   const attacker = G.players[attackerId];
@@ -294,12 +282,8 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
 
     if (target) {
       const atkName = CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId;
-      // Mutual-damage rule: the defender's Active retaliates with their full
-      // ATK. Damage in both directions is computed BEFORE either lands, so a KO
-      // on one side doesn't discount the other side's swing.
-      const { dmg: retalDmg } = effectiveAttackDamage(target, atk);
 
-      // ---- Apply the attacker's swing first (existing pipeline). ----
+      // ---- The swing. ----
       // Capture the actual damage dealt (post-mitigation) so onAttack lifesteal
       // (Drifter) can heal for half of it.
       let dealt = 0;
@@ -312,38 +296,18 @@ export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
           const a = getAbility(passId);
           // `primary: true` marks this as the hero's main swing of the turn —
           // Haze's Fixation grants its extra attack only here, so the extra
-          // swings it spawns (and retaliation) don't re-trigger it.
+          // swings it spawns don't re-trigger it.
           if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target, params: { primary: true, dealt } });
-        }
-      }
-
-      // ---- Apply the defender's retaliation. ----
-      // Use the pre-attack rawDmg from above; defender's HP loss in the same
-      // exchange does not reduce their retaliation strength. Atk is the new
-      // damage recipient, so all its mitigation (shield, Vindicta -1, etc.)
-      // applies through damageUnit naturally.
-      if (retalDmg > 0 && atk.hp > 0) {
-        const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
-        let retalDealt = 0;
-        withCast(target, 'attack', () => {
-          retalDealt = damageUnit(G, atk, retalDmg, 'attack', targetName);
-        });
-        const tdata = CARDS_BY_ID[target.cardId];
-        if (tdata?.type === 'hero') {
-          for (const passId of tdata.passives ?? []) {
-            const a = getAbility(passId);
-            if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: defenderId }, { source: target, target: atk, params: { dealt: retalDealt } });
-          }
         }
       }
 
       // ---- Extra Attacks: additional full-power swings queued this turn
       // (Active Reload, Burst Fire, Fixation — value of the `extra_attack`
-      // status). Each takes no retaliation and re-fires the attacker's onAttack
-      // procs (lifesteal, bleed, Djinn's Mark, Ricochet AoE, Tesla chain — the
-      // equipment ones fire automatically via the 'attack' cast-context in
-      // damageUnit). Damage is re-evaluated each swing so mid-combat threshold
-      // gear (Frenzy) stays honest. ----
+      // status). Each re-fires the attacker's onAttack procs (lifesteal,
+      // bleed, Djinn's Mark, Ricochet AoE, Tesla chain — the equipment ones
+      // fire automatically via the 'attack' cast-context in damageUnit).
+      // Damage is re-evaluated each swing so mid-attack threshold gear
+      // (Frenzy) stays honest. ----
       const extra = atk.statuses.find((s) => s.id === 'extra_attack')?.value ?? 0;
       for (let i = 0; i < extra; i++) {
         if (atk.hp <= 0 || target.hp <= 0) break;

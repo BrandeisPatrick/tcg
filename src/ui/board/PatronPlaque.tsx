@@ -7,21 +7,21 @@ import { useStatTick } from './useStatTick';
 /**
  * A patron's vitals as one narrow rule across the sheet — the rival's above
  * the top bench, yours below the bottom one. It carries everything the side
- * panel used to duplicate (patron HP, deck, discard, hand, souls, skill
- * readiness) in glyphs and numerals rather than labelled rows, so the board
- * is self-sufficient and the panel is free to be just the log.
+ * panel used to duplicate (patron HP, deck, discard, hand, souls) and the
+ * turn's attack in glyphs and numerals rather than labelled rows, so the
+ * board is self-sufficient and the panel is free to be just the log.
  *
  * Sits inside the board's row stack as a real flex row, so nothing overlaps
  * the sheet's edge the way the old corner plate did.
  */
 export function PatronPlaque({
-  label, ps, hostile, skillUsed, projectedFaceDamage, isMobile, myTurn,
+  label, ps, hostile, attackOpen, projectedFaceDamage, isMobile, myTurn,
 }: {
   label: string;
   ps: GameState['players'][PlayerID];
   hostile?: boolean;
-  /** Player-wide "a skill was used this turn" flag for this patron's side. */
-  skillUsed: boolean;
+  /** It is this patron's turn and its attack can still be made. */
+  attackOpen: boolean;
   projectedFaceDamage?: number;
   /** Which end of the board this row sits at. */
   side: 'top' | 'bottom';
@@ -40,6 +40,8 @@ export function PatronPlaque({
   const hpFlash = hpTick === 'down' ? poster.stat.hpDim
     : hpTick === 'up' ? poster.stat.hpBright
     : poster.stat.hp;
+
+  const attackLamp = attackOpen ? 'Ready to attack' : myTurn ? 'No attack left this turn' : 'Waiting for its turn';
 
   const num = isMobile ? 13 : 15;
   const glyph = isMobile ? 11 : 12;
@@ -131,12 +133,15 @@ export function PatronPlaque({
         size={glyph}
       />
 
-      {/* Skill readiness — the one state that isn't a number. */}
+      {/* The turn's attack — the one state that isn't a number. Lit while
+          the patron whose turn it is can still make it. */}
       <span
-        title={skillUsed ? 'Skill used' : 'Skill ready'}
+        role="img"
+        aria-label={attackLamp}
+        title={attackLamp}
         style={{
           width: 7, height: 7, borderRadius: '50%',
-          background: skillUsed ? poster.inkFaint : poster.target,
+          background: attackOpen ? poster.target : poster.inkFaint,
           flexShrink: 0,
         }}
       />

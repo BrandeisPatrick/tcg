@@ -56,7 +56,7 @@ A `casting` (heavy lockout) / `casting_light` (mobile) self-status turns these
 three into channeled win conditions: instead of a one-shot effect, the caster
 deals AoE spirit to all enemies at the end of each of their turns over a 3-turn
 channel (`tickCastingPulses` in `statusOps.ts`, fired from `turn.onEnd`, after
-the battle and the second prepare phase). `casting` is added to the attack gate (`util.ts`) and skill
+everything the player did in the turn, the attack included). `casting` is added to the attack gate (`util.ts`) and skill
 gate (`game.ts`) so heavy channelers (Dynamo, Seven) are locked out; Warden's
 `casting_light` opts out of both. Stun/Sleep on the caster skips that turn's
 pulse (channels are interruptible). Seven's value escalates +1 per pulse.

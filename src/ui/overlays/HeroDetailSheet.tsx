@@ -4,9 +4,11 @@ import { CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import { effectiveAtk } from '@/engine/util';
+import { SKILL_COST } from '@/engine/game';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
+import { LevelTrim } from '../card/LevelTrim';
 import { spring, text, fonts } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
@@ -22,15 +24,33 @@ const eyebrow = {
   lineHeight: 1,
 } as const;
 
+/** The turn's attack, offered on your Active's sheet: a swing at the rival
+ *  Active for its bullet damage. Free, one-way, one a turn — and the Active
+ *  makes it or uses its skill, not both. */
+export interface AttackOffer {
+  /** What the swing would do ("Hits Dynamo for 2 bullet damage"), while it
+   *  can be made. */
+  line?: string;
+  /** Why it cannot be made right now ("No attacks on Turn 1"), printed in
+   *  the line's place. */
+  blockedReason?: string;
+  /** This hero made the turn's attack. */
+  made?: boolean;
+  onAttack: () => void;
+}
+
 interface Props {
   card: CardInstance;
   /** True if this hero belongs to the local player. Drives the Skill action. */
   isMine?: boolean;
-  /** All gates for using the skill satisfied (player flag, per-hero, CC). */
+  /** Every gate for using the skill is open (its turn, the hero's own once a
+   *  turn, statuses, souls). */
   canUseSkill?: boolean;
   /** Short reason why the skill can't be used, shown inside the skill card. */
   skillBlockedReason?: string;
   onUseSkill?: () => void;
+  /** The Attack plate — on the local player's Active only. */
+  attack?: AttackOffer;
   /** Retreat lives on your Active's sheet: he goes to the bench and a bench
    *  hero takes the fight. Absent when nobody on the bench can step in. */
   retreat?: {
@@ -47,10 +67,10 @@ interface Props {
 }
 
 export function HeroDetailSheet({
-  card, isMine, canUseSkill, skillBlockedReason, onUseSkill,
+  card, isMine, canUseSkill, skillBlockedReason, onUseSkill, attack,
   retreat, onRetreat, onClose,
 }: Props) {
-  const { isMobile } = useViewport();
+  const { isMobile, width: vw, height: vh } = useViewport();
 
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') return null;
@@ -71,10 +91,17 @@ export function HeroDetailSheet({
   const skillDesc = sentence(skillAbility ? (extractAbilityDesc(skillAbility.prompt) ?? skillAbility.prompt ?? '') : '');
   const passiveDesc = sentence(passiveAbility ? (extractAbilityDesc(passiveAbility.prompt) ?? passiveAbility.prompt ?? data.text ?? '') : '');
 
-  // Phones can't fit the 340 card + 280 rail side by side (634px), so the
-  // card+rail row stacks vertically and the card itself shrinks a touch.
-  const cardW = isMobile ? 300 : 340;
-  const cardH = isMobile ? 420 : 476;
+  // The card at the trading-card ratio (5:7). On desktop it stands as tall
+  // as the window allows, up to 600, leaving room under it for Retreat and
+  // Close; the rail sits beside it. Phones stack the card above the rail, so
+  // there it takes as much of the width as fits.
+  const cardH = isMobile
+    ? Math.round(Math.min(428, vw - 32) * 7 / 5)
+    : Math.max(420, Math.min(600, vh - 190));
+  const cardW = Math.round(cardH * 5 / 7);
+  // The art board keeps its share of the card as the card grows. Phones give
+  // the rules a little more of it: their narrower plates wrap to more lines.
+  const artH = Math.round(cardH * (isMobile ? 0.38 : 0.42));
 
   return (
     <motion.div
@@ -88,9 +115,10 @@ export function HeroDetailSheet({
         backdropFilter: 'blur(6px)', zIndex: 95,
         display: 'flex',
         // Phones stack the card above the rail and may exceed the viewport, so
-        // pin to the top and scroll instead of clipping.
+        // pin to the top and scroll instead of clipping — starting below the
+        // system gear, which a full-width card would otherwise run under.
         alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center',
-        padding: '24px 16px',
+        padding: isMobile ? '64px 16px 24px' : '24px 16px',
         overflowY: isMobile ? 'auto' : undefined,
       }}
     >
@@ -121,9 +149,7 @@ export function HeroDetailSheet({
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'relative',
-          // Fixed TCG trading-card ratio (5:7 ≈ 0.714).
           width: cardW, height: cardH,
-          maxHeight: `min(${cardH}px, 92vh)`,
           display: 'flex', flexDirection: 'column',
           background: poster.frame,          // charcoal frame, same as CardFrame
           borderRadius: 10,
@@ -135,10 +161,10 @@ export function HeroDetailSheet({
       >
         {/* ART BOARD — the portrait printed edge to edge inside the frame's
             6px margin, with the recessed inner edge every poster card shares.
-            Sized so the rules (Skill/Passive, no ultimate) fit the text board
-            below without scrolling. */}
+            Sized so the rules (Skill/Passive, and the Attack on your Active)
+            fit the text board below without scrolling. */}
         <div style={{
-          position: 'relative', height: 188, flexShrink: 0, overflow: 'hidden',
+          position: 'relative', height: artH, flexShrink: 0, overflow: 'hidden',
           margin: '6px 6px 0', borderRadius: 6,
           background: '#0f1214',
         }}>
@@ -166,8 +192,9 @@ export function HeroDetailSheet({
         </div>
 
         {/* TEXT BOARD — the cream rules band under the art. Holds the hero's
-            own ability (Skill/Passive). The Ultimate is NOT shown here (it's
-            cast from hand), so the content fits without scrolling. */}
+            own ability (Skill/Passive) and, on your Active, the turn's
+            Attack. The Ultimate is NOT shown here (it's cast from hand), so
+            the content fits without scrolling. */}
         <div style={{
           flex: '1 1 auto', minHeight: 0,
           display: 'flex', flexDirection: 'column',
@@ -177,9 +204,9 @@ export function HeroDetailSheet({
           background: poster.paperBand,
           position: 'relative',
         }}>
-          {/* Rules content — Skill (tap-to-use) or Passive. The overflowY is a
-              safety for an unusually long skill; with no ultimate here it does
-              not normally scroll. */}
+          {/* Rules content — Skill (tap-to-use) or Passive, then the Attack
+              on your Active. The overflowY is a safety for an unusually long
+              skill; with no ultimate here it does not normally scroll. */}
           <div style={{
             flex: '1 1 auto', minHeight: 0, overflowY: 'auto',
             color: poster.ink,
@@ -207,8 +234,20 @@ export function HeroDetailSheet({
                 />
               </Block>
             ) : null}
+            {/* The Attack — your Active's other move. Beside a skill the two
+                are split by an "or": the Active does one a turn, and using
+                either spends the other. */}
+            {attack && (
+              <>
+                {skillAbility && <OrRule />}
+                <AttackPlate offer={attack} onAttack={() => { attack.onAttack(); onClose(); }} />
+              </>
+            )}
           </div>
         </div>
+
+        {/* The level bezel, in the frame's charcoal margin as on the tile. */}
+        <LevelTrim level={card.level ?? 1} radius={8} />
       </motion.div>
 
       {/* Action controls — below the card, outside the frame. The Skill itself
@@ -251,7 +290,7 @@ export function HeroDetailSheet({
             // On phones the rail sits below the card and flows with the page
             // scroll (no inner cap); on desktop it's a fixed-width side rail.
             width: isMobile ? cardW : 280,
-            maxHeight: isMobile ? undefined : 'min(476px, 92vh)',
+            maxHeight: isMobile ? undefined : cardH,
             overflowY: isMobile ? undefined : 'auto',
           }}
         >
@@ -436,7 +475,7 @@ function PassivePanel({ name, description, trigger }: { name: string; descriptio
  * The Skill card IS the "use skill" button. When the skill is usable (it's the
  * player's hero and all gates pass) the whole card is a pressable red action
  * plate; otherwise it renders as a flat, outlined info card (USED / blocked
- * reason / enemy hero).
+ * reason / enemy hero). The chip prints what it costs.
  */
 function SkillActionCard({
   name, description, mine, used, canUse, blockedReason, onUse,
@@ -456,7 +495,7 @@ function SkillActionCard({
   const fgDim = interactive ? poster.paper : poster.inkDim;
   const chip = used
     ? { label: 'USED', color: poster.inkFaint }
-    : { label: 'READY', color: interactive ? poster.paper : poster.status.buff };
+    : { label: `${SKILL_COST} soul${SKILL_COST === 1 ? '' : 's'}`, color: interactive ? poster.paper : poster.inkDim };
 
   return (
     <motion.div
@@ -488,7 +527,7 @@ function SkillActionCard({
       </div>
       {description && (
         <div style={{ ...text.body, color: fgDim }}>
-          <RuleText text={description} />
+          <RuleText text={description} keywordColor={interactive ? fg : undefined} />
         </div>
       )}
 
@@ -501,6 +540,70 @@ function SkillActionCard({
           textAlign: 'center', ...text.body, color: poster.inkDim,
         }}>{blockedReason}</div>
       )}
+    </motion.div>
+  );
+}
+
+/** The either/or between your Active's skill and its attack: one a turn. */
+function OrRule() {
+  return (
+    <div role="separator" aria-label="or — one a turn" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '-4px 0 10px' }}>
+      <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
+      <span aria-hidden style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>or · one a turn</span>
+      <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
+    </div>
+  );
+}
+
+/**
+ * The Attack plate: your Active swings at the rival Active for its bullet
+ * damage. Free, so it carries no cost — the chip says so. Ready, the whole
+ * plate is the button, printed in ink so it never reads as the skill's red
+ * plate beside it, and its line says what the swing would do. Otherwise it
+ * is the same flat outlined card a skill turns into, and the line is the
+ * reason. Its accessible name starts with "Attack", which is how the
+ * tutorial's gate finds it.
+ */
+function AttackPlate({ offer, onAttack }: { offer: AttackOffer; onAttack: () => void }) {
+  const interactive = !offer.blockedReason && !offer.made;
+  const line = interactive ? offer.line : offer.blockedReason;
+  const fg = interactive ? poster.paper : poster.ink;
+  const chip = offer.made
+    ? { label: 'USED', color: poster.inkFaint }
+    : { label: 'Free', color: interactive ? poster.gold : poster.inkDim };
+  const go = (e: React.SyntheticEvent) => { e.stopPropagation(); onAttack(); };
+  return (
+    <motion.div
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? `Attack: ${line}. Free.` : undefined}
+      whileTap={interactive ? { scale: 0.985 } : undefined}
+      onClick={interactive ? go : undefined}
+      onKeyDown={interactive ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } } : undefined}
+      style={{
+        padding: '12px 14px 11px',
+        ...(interactive
+          ? {
+              background: poster.ink,
+              border: `2px solid ${poster.ink}`,
+              ...clipBoth(chamfer(8)),
+            }
+          : {
+              background: 'transparent',
+              border: `1px solid ${poster.inkRule}`,
+              borderRadius: 6,
+            }),
+        color: fg,
+        cursor: interactive ? 'pointer' : 'default',
+        opacity: offer.made ? 0.7 : 1,
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+        <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: fg }}>Attack</span>
+        <span style={{ flexShrink: 0, ...eyebrow, fontSize: 10, color: chip.color }}>{chip.label}</span>
+      </div>
+      {line && <div style={{ ...text.body, color: interactive ? poster.cream : poster.inkDim }}>{line}</div>}
     </motion.div>
   );
 }

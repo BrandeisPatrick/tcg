@@ -1,7 +1,6 @@
 import type { CardInstance } from '@/engine/types';
 import { Hand } from './Hand';
 import { BoardControls } from './BoardControls';
-import type { TurnStep } from './turnStep';
 import type { PendingPlay } from '../helpers';
 import { useViewport } from '../hooks/useViewport';
 
@@ -13,15 +12,14 @@ import { useViewport } from '../hooks/useViewport';
  * button at the thumb edge.
  */
 export function HandTray({
-  cards, disabled, pending, isMyTurn, turnStep, busy, hasPending, mySouls,
-  onTap, onLongPress, onHover, onDragEndOver, onUnaffordable, onAdvance, onCancel,
+  cards, disabled, pending, isMyTurn, busy, hasPending, mySouls,
+  onTap, onLongPress, onHover, onDragEndOver, onUnaffordable, onEndTurn, onCancel,
   autoPlay, onToggleAuto,
 }: {
   cards: CardInstance[];
   disabled: boolean;
   pending: PendingPlay | null;
   isMyTurn: boolean;
-  turnStep: TurnStep;
   busy?: boolean;
   hasPending: boolean;
   mySouls: number;
@@ -30,7 +28,7 @@ export function HandTray({
   onHover: (c: CardInstance | null) => void;
   onDragEndOver: (c: CardInstance, x: number, y: number) => void;
   onUnaffordable?: (c: CardInstance, cost: number) => void;
-  onAdvance: () => void;
+  onEndTurn: () => void;
   onCancel: () => void;
   autoPlay: boolean;
   onToggleAuto: () => void;
@@ -76,11 +74,10 @@ export function HandTray({
         <BoardControls
           variant="tray"
           isMyTurn={isMyTurn}
-          turnStep={turnStep}
           busy={!!busy}
           hasPending={hasPending}
           autoPlay={autoPlay}
-          onAdvance={onAdvance}
+          onEndTurn={onEndTurn}
           onCancel={onCancel}
           onToggleAuto={onToggleAuto}
         />

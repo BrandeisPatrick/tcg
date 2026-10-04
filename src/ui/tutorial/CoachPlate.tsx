@@ -11,9 +11,9 @@
  * Each render the plate is in exactly one mode:
  *   wait     — the rival is moving (or a stated step is holding for a
  *              moment). Light scrim, nothing tappable, no Next.
- *   blocked  — the task cannot be paid for right now. The plate says so and
- *              opens the turn button instead (Enter Battle, then End Turn),
- *              so the player is never boxed in.
+ *   blocked  — the task cannot be done right now. The plate says so and
+ *              opens the turn button (End Turn) instead, so the player is
+ *              never boxed in.
  *   ticked   — the task just landed. A short beat, sealed, before moving on.
  *   live     — the step's own spot and allow.
  *
@@ -30,7 +30,7 @@ import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { markLessonDone } from '@/storage/playerData';
 import {
-  LESSONS, RIVAL_TURN, emptySeen, hasEquipment, turnButton,
+  LESSONS, RIVAL_TURN, TURN_BUTTON, emptySeen, hasEquipment,
   type CoachSeen, type CoachView, type GateSpec, type Lesson,
 } from '@/tutorial/lessons';
 import { TutorialGate } from './TutorialGate';
@@ -40,12 +40,14 @@ import { TutorialGate } from './TutorialGate';
 const TICK_MS = 900;
 const NONE: GateSpec[] = [];
 
-export function CoachPlate({ G, me, isMyTurn, targeting, sheetHero, refusals, lesson, onNextLesson, onLessons }: {
+export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, refusals, lesson, onNextLesson, onLessons }: {
   G: GameState;
   me: PlayerID;
   isMyTurn: boolean;
   /** A card or skill is armed and waiting for its target. */
   targeting: boolean;
+  /** Your attack is being walked (the engine makes it once the walk ends). */
+  attacking: boolean;
   /** The hero whose detail sheet is open (where Skill and Retreat live), or null. */
   sheetHero: CardId | null;
   /** Taps on cards the player could not pay for, so far this match. */
@@ -96,14 +98,14 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetHero, refusals, le
     wasMyTurn.current = isMyTurn;
   }, [isMyTurn]);
 
-  // Count the battles you have entered: each time your turn's battle goes
-  // from ahead to fought is one.
-  const myBattleFought = isMyTurn && G.battleFought;
-  const wasFought = useRef(myBattleFought);
+  // Count the attacks you have made: each time your turn's attack goes from
+  // open to made is one.
+  const myAttackMade = isMyTurn && G.attackUsed;
+  const wasMade = useRef(myAttackMade);
   useEffect(() => {
-    if (myBattleFought && !wasFought.current) setSeen((s) => ({ ...s, battles: s.battles + 1 }));
-    wasFought.current = myBattleFought;
-  }, [myBattleFought]);
+    if (myAttackMade && !wasMade.current) setSeen((s) => ({ ...s, attacks: s.attacks + 1 }));
+    wasMade.current = myAttackMade;
+  }, [myAttackMade]);
 
   // Gear is read off the board rather than off the action feed: an item can
   // also arrive by replacing a worn piece, which resolves as a plain play.
@@ -128,7 +130,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetHero, refusals, le
   // ---- the step, and which mode it is in ----
   const current = steps[step];
   const done = step >= steps.length;
-  const view: CoachView = { G, me, isMyTurn, seen, targeting, sheetOpen: sheetHero !== null, sheetHero, refusals, acked };
+  const view: CoachView = { G, me, isMyTurn, seen, targeting, attacking, sheetOpen: sheetHero !== null, sheetHero, refusals, acked };
   const complete = !!current?.task && current.task(view);
   /** A card or skill reveal is still on screen. */
   const revealUp = G.action?.state === 'begin';
@@ -151,16 +153,16 @@ export function CoachPlate({ G, me, isMyTurn, targeting, sheetHero, refusals, le
   // A promotion you owe is the game's own modal, and the rival waits on it:
   // the gate steps aside so the choice can always be made.
   const gated = !done && open && !!current.spot && G.pendingPromotion !== me;
-  // Hold through a task's landing beat, the rival's turn, and any reveal
-  // still in flight — the next thing to tap lights up only once the board
-  // can actually take the tap.
-  const hold = ticked || !!waitText || revealUp;
+  // Hold through a task's landing beat, the rival's turn, and any reveal or
+  // attack still in flight — the next thing to tap lights up only once the
+  // board can actually take the tap.
+  const hold = ticked || !!waitText || revealUp || attacking;
   const spotList = !gated ? NONE
     : hold ? NONE
-    : blocked ? [turnButton(view)]
+    : blocked ? [TURN_BUTTON]
     : current.spot!(view);
   const allowList = !gated || hold || current.tap ? NONE
-    : blocked ? [turnButton(view)]
+    : blocked ? [TURN_BUTTON]
     : (current.allow ?? current.spot!)(view);
   const tapToContinue = gated && !hold && !blocked && !!current.tap;
   const spotKey = spotList.join('|');

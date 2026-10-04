@@ -36,14 +36,20 @@ function attach(G: GameState, bearer: CardInstance, cardId: string): CardInstanc
 }
 
 describe('Surge of Power', () => {
-  it('grants +2 Bullet Power for the turn on skill use', () => {
+  it('grants +2 Bullet Power on skill use, lasting through the next turn', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     attach(G, hero, 'surge_of_power');
     fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
     const wp = hero.statuses.find((s) => s.id === 'weapon_power');
     expect(wp?.value).toBe(2);
-    expect(wp?.duration).toBe(1);
+    // The caster cannot attack this turn; the surge is still there to swing
+    // with after the next start-of-turn tick.
+    expect(wp?.duration).toBe(2);
+    tickStartOfTurn(G, G.players['0']);
+    expect(hero.statuses.find((s) => s.id === 'weapon_power')?.value).toBe(2);
+    tickStartOfTurn(G, G.players['0']);
+    expect(hero.statuses.find((s) => s.id === 'weapon_power')).toBeUndefined();
   });
 });
 

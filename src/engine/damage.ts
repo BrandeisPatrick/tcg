@@ -75,7 +75,7 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
       // The impact still has to read even when HP doesn't move — the FX layer
       // flashes the shield glyph with "ABSORBED N" / "BLOCKED". The basic
       // swing is left out, like its hit below: the combat choreographer has
-      // already shown that deflect by the time the battle resolves.
+      // already shown that deflect by the time the attack resolves.
       if (absorbed > 0 && (castKind !== 'attack' || fx?.tag)) {
         pushFx(G, { kind: 'shield', iid: target.iid, absorbed, broken, type, source: fxFrom });
       }
@@ -246,6 +246,7 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   if (sGain) hero.hpMax -= sGain.value;
   hero.statuses = [];
   hero.skillUsedThisTurn = false;
+  hero.attackedThisTurn = false;
   hero.exhausted = true;
   hero.hp = 0;
   hero.respawnTurnsLeft = RESPAWN_TURNS;

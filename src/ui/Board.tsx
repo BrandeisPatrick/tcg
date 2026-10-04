@@ -3,7 +3,7 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { isRespawning, stepInCandidates } from '@/engine/util';
+import { stepInCandidates } from '@/engine/util';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
 import { CardPreview } from './overlays/CardPreview';
@@ -15,17 +15,18 @@ import { MulliganOverlay } from './overlays/MulliganOverlay';
 import { DraftOverlay } from './overlays/DraftOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/game';
+import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST } from '@/engine/game';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
+import { BoardIntro } from './board/BoardIntro';
 import { BoardTable, boardRows, boardGutter, vitalsPull } from './board/BoardTable';
 import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
 import type { TurnPhase } from './board/TurnCompass';
-import { turnStepFor } from './board/turnStep';
+import { attackBlockReason, attackLine, readyHeroes, skillBlockReason, skillBlocked } from './board/heroActions';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
-import { battleOwed, planAttackPhase, type AttackPlan } from '@/engine/combat';
+import { attackBlocked, planAttackPhase, type AttackPlan } from '@/engine/combat';
 import { CombatChoreographer } from './effects/CombatChoreographer';
 import { SoulsRail } from './board/SoulsRail';
 import { CombatProgressContext, type CombatProgress } from './effects/CombatProgressContext';
@@ -112,18 +113,26 @@ export function Board(props: BoardProps<GameState>) {
   // to a hero, this holds the incoming card + the target hero until the
   // player picks which existing item to discard (or cancels).
   const [replaceTarget, setReplaceTarget] = useState<{ incoming: CardInstance; hero: CardInstance } | null>(null);
-  // The battle being fought. While non-null the choreographer is walking the
-  // plan; when it finishes, the engine resolves the battle for real.
+  // The turn's attack, being made. While non-null the choreographer is
+  // walking its plan; when it finishes, the engine makes the attack for real.
   const [combatPlan, setCombatPlan] = useState<AttackPlan | null>(null);
-  // Queued turn-button intent. If the player taps the button while a card or
-  // skill reveal is in flight, we remember it here instead of silently
-  // dropping the click, then fire once the reveal settles.
-  const queuedAdvanceRef = useRef(false);
-  // A turn runs Prepare → Battle → Prepare → End Turn. The battle is on
-  // while the choreographer walks it; before it the turn is in its first
-  // prepare phase, after it in the second ('regroup').
-  const turnPhase: TurnPhase = combatPlan ? 'battle' : G.battleFought ? 'regroup' : 'prepare';
-  const turnStep = turnStepFor(G, isMyTurn);
+  // Queued End Turn. If the player taps the button while a card or skill
+  // reveal is in flight, we remember it here instead of silently dropping
+  // the click, then fire once the reveal settles.
+  const queuedEndRef = useRef(false);
+  const mover = ctx.currentPlayer as PlayerID;
+  // A turn is the player's to spend on cards, skills and a retreat, with one
+  // attack among them. The dial marks the attack: 'battle' while the
+  // choreographer walks it, 'regroup' once it is made, 'prepare' before.
+  const turnPhase: TurnPhase = combatPlan ? 'battle' : G.attackUsed ? 'regroup' : 'prepare';
+  /** The mover's attack can still be made — and is not being made already. */
+  const attackOpen = !ctx.gameover && !combatPlan && attackBlocked(G, mover) === null;
+  // The ready glint: your heroes that can still do something this turn —
+  // none while an attack is being walked, when nothing can be done.
+  const readyIids = useMemo(
+    () => (isMyTurn && !combatPlan ? readyHeroes(G, me, attackOpen) : new Set<string>()),
+    [G, me, isMyTurn, combatPlan, attackOpen],
+  );
   // Mirror of the choreographer's beat index so the TurnCompass (via
   // CombatProgressContext) can paint its combat-mode ring without the
   // choreographer needing to own any UI other than the action visuals.
@@ -182,9 +191,7 @@ export function Board(props: BoardProps<GameState>) {
 
   // Memoized — a fresh object identity every Board render used to re-render
   // every CombatProgressContext consumer (TurnCompass) even between beats.
-  // A battle nobody can swing in has no beats to count: the compass keeps
-  // its plain ring.
-  const combatProgress: CombatProgress = useMemo(() => combatPlan && combatPlan.steps.length > 0
+  const combatProgress: CombatProgress = useMemo(() => combatPlan
     ? { total: combatPlan.steps.length, currentBeat: combatBeat, attackerIsMe: combatPlan.attackerId === me }
     : null, [combatPlan, combatBeat, me]);
 
@@ -240,69 +247,65 @@ export function Board(props: BoardProps<GameState>) {
 
   // Face-damage projection feeds the patron HP bar indicator (the per-hero
   // ▼N badges were removed as visual noise — combat choreographer shows
-  // damage events when they land). Nothing is projected once the turn's
-  // battle is behind it.
-  const projectedFaceDamage = useMemo(() => {
-    if (ctx.gameover || !battleOwed(G)) return 0;
-    const plan = planAttackPhase(G, ctx.currentPlayer as PlayerID);
-    return plan.damageToFace;
-  }, [G, ctx.currentPlayer, ctx.gameover]);
+  // damage events when they land). Projected only while the mover's attack
+  // is still there to be made.
+  const projectedFaceDamage = useMemo(
+    () => (attackOpen ? planAttackPhase(G, mover).damageToFace : 0),
+    [G, mover, attackOpen],
+  );
 
-  /** The choreographer has walked the battle: resolve it in the engine. The
-   *  turn stays with the player, now in the second prepare phase. (Stable
-   *  apart from `moves`; the choreographer keeps its callback in a ref.) */
+  /** The choreographer has walked the attack: make it in the engine. The
+   *  turn stays with the player. (Stable apart from `moves`; the
+   *  choreographer keeps its callback in a ref.) */
   const handleCombatComplete = useCallback(() => {
     setCombatPlan(null);
-    try { moves.enterBattle(); } catch {}
+    try { moves.attack(); } catch {}
   }, [moves]);
 
-  /** The turn button, and the AI's pass: open the battle while it is still
-   *  ahead — the choreographer walks it, then the engine resolves it — and
-   *  end the turn once it is fought. */
-  const advanceTurn = useCallback(() => {
-    // Mid-battle a press does nothing. It is not queued either: a double tap
-    // on Enter Battle must not end the turn the moment the battle is over
-    // and skip the prepare phase after it.
+  /** Make the turn's attack. The player's Attack plate and the AI's
+   *  `attack` both come here, so either one is walked by the choreographer
+   *  before the engine makes it. The engine's own gate decides whether
+   *  there is an attack to make. */
+  const startAttack = useCallback(() => {
+    if (combatPlan || G.action?.state === 'begin') return;
+    if (attackBlocked(G, mover)) return;
+    setCombatPlan(planAttackPhase(G, mover));
+  }, [G, mover, combatPlan]);
+
+  /** The turn button, and the AI's pass: end the turn. Ending it never
+   *  attacks — an attack not made is simply let go. */
+  const endTurn = useCallback(() => {
+    // While the attack is being walked a press does nothing, and is not
+    // queued either: the engine has not made the attack yet, and a turn
+    // ended under it would leave the walk to land on the next player's turn.
     if (combatPlan) return;
     // Our Active has fallen and the choice of who steps up is still owed (its
-    // prompt may be waiting out the knockout). That comes first: the battle
-    // belongs to the hero who steps up, and the turn does not end without one.
-    if (ctx.currentPlayer === me && G.pendingPromotion === me) return;
+    // prompt may be waiting out the knockout). That comes first: the turn
+    // does not end with a corpse in the lane.
+    if (mover === me && G.pendingPromotion === me) return;
     // A card or skill reveal is in flight. Don't drop the click: remember
     // the player's intent and let the drain effect below fire it once the
     // reveal settles. (The AI re-fires via its own effect, so only queue for
     // the human's turn to avoid a stray press leaking onto the player's turn
     // after the AI moves.)
     if (G.action?.state === 'begin') {
-      if (ctx.currentPlayer === me) queuedAdvanceRef.current = true;
+      if (mover === me) queuedEndRef.current = true;
       return;
     }
-    queuedAdvanceRef.current = false;
-    if (!battleOwed(G)) {
-      moves.endTurn();
-      return;
-    }
-    const plan = planAttackPhase(G, ctx.currentPlayer as PlayerID);
-    setCombatPlan(plan);
-    // Nobody can swing (a locked-down Active): the choreographer has nothing
-    // to walk and the battle passes in a beat, so say why.
-    if (plan.steps.length === 0) {
-      const active = G.players[ctx.currentPlayer as PlayerID].active;
-      const name = active && !isRespawning(active) ? CARDS_BY_ID[active.cardId]?.name : undefined;
-      showNotice(name ? `${name} cannot attack` : 'No attack this battle');
-    }
-  }, [G, ctx.currentPlayer, combatPlan, moves, me, showNotice]);
+    queuedEndRef.current = false;
+    moves.endTurn();
+  }, [G.action?.state, G.pendingPromotion, mover, combatPlan, moves, me]);
 
   // Drain a queued press once the reveal finishes. If the turn has already
   // flipped (or the game ended) we just clear the flag so a stale intent
   // never acts on the player's next turn for them.
   useEffect(() => {
-    if (!queuedAdvanceRef.current) return;
+    if (!queuedEndRef.current) return;
     if (combatPlan || G.action?.state === 'begin') return; // still animating
-    if (ctx.gameover || ctx.currentPlayer !== me) { queuedAdvanceRef.current = false; return; }
-    queuedAdvanceRef.current = false;
-    advanceTurn();
-  }, [combatPlan, G.action?.state, ctx.currentPlayer, ctx.gameover, me, advanceTurn]);
+    if (ctx.gameover || ctx.currentPlayer !== me) { queuedEndRef.current = false; return; }
+    queuedEndRef.current = false;
+    endTurn();
+  }, [combatPlan, G.action?.state, ctx.currentPlayer, ctx.gameover, me, endTurn]);
 
   // Targeting needs the board visible — close any hover/long-press preview the
   // moment a pending action arms, AND any that opens mid-targeting (a hover
@@ -395,57 +398,58 @@ export function Board(props: BoardProps<GameState>) {
   // banner needed.
 
   // The opponent ('1') is always AI-driven; the local player is too while
-  // auto-play is on. The AI holds while combat is animating or a card-play /
-  // skill / ult reveal is in flight (so it doesn't fire its next move on top
-  // of its previous animation), and while our Active has fallen and the
-  // choice of who steps up is ours to make: the rival's second prepare phase
-  // must not play out against a lane we have not refilled. Under auto-play
-  // nobody answers that prompt, so the loop makes the promotion itself — the
-  // enumerator returns an owed promotion first, from either seat.
+  // auto-play is on. The AI holds while an attack is being walked or a
+  // card-play / skill / ult reveal is in flight (so it doesn't fire its next
+  // move on top of its previous animation), and while our Active has fallen
+  // and the choice of who steps up is ours to make: the rest of the rival's
+  // turn must not play out against a lane we have not refilled. Under
+  // auto-play nobody answers that prompt, so the loop makes the promotion
+  // itself — the enumerator returns an owed promotion first, from either seat.
   const aiControlled = ctx.currentPlayer === '1' || (autoPlay && ctx.currentPlayer === me);
   const aiHolds = !!ctx.gameover || !aiControlled || !!combatPlan || G.action?.state === 'begin'
     || (G.pendingPromotion === me && !autoPlay);
 
-  // AI loop: enumerate, play the best move, pass (enter battle, then end the
-  // turn) when passing is best.
+  // AI loop: enumerate, play the best move, end the turn when that is best.
   useEffect(() => {
     if (aiHolds) return;
     const t = setTimeout(() => {
       try {
         // enumerate inside the try — if the heuristic ever throws, falling
-        // through to the pass keeps the match moving instead of freezing the
-        // AI's turn forever (nothing else would re-arm this effect).
+        // through to ending the turn keeps the match moving instead of
+        // freezing the AI's turn forever (nothing else would re-arm this
+        // effect).
         const opts = enumerateAIMoves(G, ctx);
-        if (opts.length === 0) { advanceTurn(); return; }
+        if (opts.length === 0) { endTurn(); return; }
         const best = opts[0];
         // boardgame.io types `moves` as Record<string, (...args: unknown[]) => void>
         // but won't infer per-move signatures. One Function-typed lookup is
         // tidier than four separate `as any` casts and keeps the AI loop in
         // one place if a new move kind is added.
         const dispatch = moves as unknown as Record<string, (...args: unknown[]) => void>;
-        // Both passes go through the turn button's path, so the AI's battle
-        // is walked by the choreographer like the player's.
-        if (best.move === 'enterBattle' || best.move === 'endTurn') advanceTurn();
+        // The attack goes the way the player's Attack plate does, so the AI's
+        // attack is walked by the choreographer like the player's.
+        if (best.move === 'attack') startAttack();
+        else if (best.move === 'endTurn') endTurn();
         else if (dispatch[best.move]) dispatch[best.move](...best.args);
-        else advanceTurn(); // unknown move kind — bail rather than freeze the AI loop
+        else endTurn(); // unknown move kind — bail rather than freeze the AI loop
       } catch {
-        advanceTurn();
+        endTurn();
       }
     }, AI_THINK_MS);
     return () => clearTimeout(t);
-  }, [aiHolds, ctx, G, moves, advanceTurn]);
+  }, [aiHolds, ctx, G, moves, startAttack, endTurn]);
 
   // AI watchdog. The loop above re-arms on state changes — but a dispatched
   // move the engine rejects (INVALID_MOVE) leaves G untouched, so nothing
   // re-fires and the rival's turn would wedge forever. If an AI-controlled
-  // turn sits with no state change well past the think delay, force the next
-  // pass so the match always keeps moving. (ctx and G are in the deps to
-  // restart the clock on every state change.)
+  // turn sits with no state change well past the think delay, end it so the
+  // match always keeps moving. (ctx and G are in the deps to restart the
+  // clock on every state change.)
   useEffect(() => {
     if (aiHolds) return;
-    const t = setTimeout(() => { advanceTurn(); }, AI_THINK_MS * 6);
+    const t = setTimeout(() => { endTurn(); }, AI_THINK_MS * 6);
     return () => clearTimeout(t);
-  }, [aiHolds, ctx, G, advanceTurn]);
+  }, [aiHolds, ctx, G, endTurn]);
 
   // Action reveal driver. When the engine sets G.action with state='begin'
   // (after playCard / useSkill), schedule completeAction so the animation
@@ -474,13 +478,13 @@ export function Board(props: BoardProps<GameState>) {
   }, [pending, me]);
 
   /** True while the player's next move must wait: a card-play / skill / ult
-   *  reveal is mid-animation, the battle is being walked, or their Active has
+   *  reveal is mid-animation, the attack is being walked, or their Active has
    *  fallen and the choice of who steps up is still owed (its prompt may be
    *  waiting out the knockout). */
   const actionLocked = G.action?.state === 'begin' || !!combatPlan || G.pendingPromotion === me;
   /** The turn button shows as working: locked, or holding a queued press. */
-  const turnBusy = isMyTurn && (actionLocked || queuedAdvanceRef.current);
-  const pressTurnButton = () => { setPending(null); advanceTurn(); };
+  const turnBusy = isMyTurn && (actionLocked || queuedEndRef.current);
+  const pressTurnButton = () => { setPending(null); endTurn(); };
 
   function onTapCardInHand(c: CardInstance) {
     if (!isMyTurn) return;
@@ -551,22 +555,20 @@ export function Board(props: BoardProps<GameState>) {
       setPending(null);
       return;
     }
-    // No pending action: open the preview for any hero (own or enemy).
-    // Skill activation happens from inside the preview via the "Use Skill" button.
+    // No pending action: open the sheet for any hero (own or enemy). The
+    // skill and the attack are used from its plates.
     setHeroDetail(card);
   }
 
   /**
-   * Try to activate this hero's skill. Mirrors the engine guards
-   * (`game.ts` useSkill) so the UI never opens a stale targeting overlay.
+   * Try to activate this hero's skill. Checks the engine's own guards
+   * (`skillBlocked` mirrors `useSkill`) so the UI never opens a stale
+   * targeting overlay.
    */
   function tryUseSkill(card: CardInstance) {
     if (!isMyTurn) return;
     if (actionLocked) return;
-    if (G.players[me].skillUsedThisTurn) return; // one skill per player per turn
-    if (G.players[me].souls < SKILL_COST) return;
-    if (card.skillUsedThisTurn) return;
-    if (card.statuses.some((s) => s.id === 'stun' || s.id === 'silenced')) return;
+    if (skillBlocked(G, me, card)) return;
     const data = CARDS_BY_ID[card.cardId];
     if (data?.type !== 'hero' || !data.skill) return;
     const ability = getAbility(data.skill);
@@ -579,6 +581,12 @@ export function Board(props: BoardProps<GameState>) {
       desc: ability.prompt ?? 'Choose a target.',
       filter: ability.target,
     });
+  }
+
+  /** The Attack plate on your Active's sheet. */
+  function attackFromSheet() {
+    if (!isMyTurn || actionLocked) return;
+    startAttack();
   }
 
   /** Swap the Active with this bench hero (the engine charges the souls). */
@@ -696,6 +704,8 @@ export function Board(props: BoardProps<GameState>) {
       <FxTimingContext.Provider value={fxHoldFor}>
       <FxImpulseContext.Provider value={fxBus}>
       <FxCalmContext.Provider value={calmMotion}>
+      {/* The deal-in: the heroes are dealt onto the board as it first shows. */}
+      <BoardIntro me={me}>
       <FxStageProvider density={isMobile ? 0.6 : 1}>
       <PosterBackdrop />
 
@@ -794,7 +804,7 @@ export function Board(props: BoardProps<GameState>) {
                 label={PATRON_NAMES.rival}
                 ps={G.players[opp]}
                 hostile
-                skillUsed={G.players[opp].skillUsedThisTurn}
+                attackOpen={!isMyTurn && attackOpen}
                 projectedFaceDamage={ctx.currentPlayer === me ? projectedFaceDamage : 0}
                 side="top"
                 isMobile={isMobile}
@@ -834,7 +844,7 @@ export function Board(props: BoardProps<GameState>) {
                 onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
                 isTargetable={isTargetable}
                 registerSlotRef={registerSlotRef}
-                playerSkillSpent={G.players[me].skillUsedThisTurn}
+                readyIids={readyIids}
               />
             </div>
 
@@ -850,7 +860,7 @@ export function Board(props: BoardProps<GameState>) {
                 onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
                 isTargetable={isTargetable}
                 registerSlotRef={registerSlotRef}
-                playerSkillSpent={G.players[me].skillUsedThisTurn}
+                readyIids={readyIids}
               />
             </div>
 
@@ -859,7 +869,7 @@ export function Board(props: BoardProps<GameState>) {
               <PatronPlaque
                 label={PATRON_NAMES.you}
                 ps={G.players[me]}
-                skillUsed={G.players[me].skillUsedThisTurn}
+                attackOpen={isMyTurn && attackOpen}
                 projectedFaceDamage={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
                 side="bottom"
                 isMobile={isMobile}
@@ -894,11 +904,10 @@ export function Board(props: BoardProps<GameState>) {
                 <BoardControls
                   variant="dock"
                   isMyTurn={isMyTurn}
-                  turnStep={turnStep}
                   busy={turnBusy}
                   hasPending={!!pending}
                   autoPlay={autoPlay}
-                  onAdvance={pressTurnButton}
+                  onEndTurn={pressTurnButton}
                   onCancel={() => setPending(null)}
                   onToggleAuto={() => setAutoPlay((v) => !v)}
                 />
@@ -916,7 +925,6 @@ export function Board(props: BoardProps<GameState>) {
               disabled={!isMyTurn}
               pending={pending}
               isMyTurn={isMyTurn}
-              turnStep={turnStep}
               busy={turnBusy}
               hasPending={!!pending}
               mySouls={G.players[me].souls}
@@ -928,7 +936,7 @@ export function Board(props: BoardProps<GameState>) {
                 setRefusals((n) => n + 1);
                 showNotice(`Need ${cost} souls — you have ${G.players[me].souls}`, true);
               }}
-              onAdvance={pressTurnButton}
+              onEndTurn={pressTurnButton}
               onCancel={() => setPending(null)}
               autoPlay={autoPlay}
               onToggleAuto={() => setAutoPlay((v) => !v)}
@@ -976,14 +984,19 @@ export function Board(props: BoardProps<GameState>) {
 
         <AnimatePresence>
           {heroDetail && (() => {
+            // The sheet reads the hero as it stands now, not as it was when
+            // tapped, so its plates stay true if the board moves while it is
+            // open. (A hero who has left the board keeps its last picture.)
             const found = findOnBoard(G, heroDetail.iid);
-            const isMine = !!found && found.owner === me;
+            const hero = found?.card ?? heroDetail;
+            const isMine = found?.owner === me;
+            const isMyActive = isMine && G.players[me].active?.iid === hero.iid;
             const mySouls = G.players[me].souls;
             // Retreat is the Active's own move, so it is offered on the
             // Active's sheet and nowhere else — whenever a bench hero could
             // take the fight, with the reason printed when it cannot be done
             // right now.
-            const stepIns = isMine && found.card.zone === 'active' ? stepInCandidates(G.players[me]) : [];
+            const stepIns = isMyActive ? stepInCandidates(G.players[me]) : [];
             const retreat = stepIns.length === 0 ? undefined : {
               cost: RETREAT_COST,
               incomingName: stepIns.length === 1 ? CARDS_BY_ID[stepIns[0].cardId]?.name : undefined,
@@ -992,36 +1005,31 @@ export function Board(props: BoardProps<GameState>) {
                 : undefined,
             };
 
-            // Skill availability — mirrors `tryUseSkill` so the button only
-            // shows when the engine would actually accept the move.
-            const data = CARDS_BY_ID[heroDetail.cardId];
-            const hasSkill = data?.type === 'hero' && !!data.skill;
-            const heroCcd = heroDetail.statuses.some((s) => s.id === 'stun' || s.id === 'silenced');
-            const playerSkillGate = G.players[me].skillUsedThisTurn;
-            const canAffordSkill = mySouls >= SKILL_COST;
-            const canUseSkill = isMyTurn
-              && isMine
-              && hasSkill
-              && !heroDetail.skillUsedThisTurn
-              && !playerSkillGate
-              && !heroCcd
-              && canAffordSkill;
-            const skillBlockedReason =
-              !isMine ? null :
-              !isMyTurn ? "Not your turn" :
-              playerSkillGate ? "1 skill per turn" :
-              heroDetail.skillUsedThisTurn ? "Already used" :
-              heroCcd ? "Cannot use skill (status)" :
-              !canAffordSkill ? `Need ${SKILL_COST} soul` :
-              null;
+            // Any of your heroes may use its skill, once a turn, on the
+            // engine's own terms (`skillBlocked`).
+            const skillBlock = isMine ? skillBlocked(G, me, hero) : null;
+            const skillBlockedReason = !isMine ? undefined
+              : !isMyTurn ? 'Not your turn'
+              : skillBlock ? skillBlockReason(skillBlock)
+              : undefined;
+            // The turn's attack is your Active's, offered on its sheet with
+            // what it would do, or why it cannot be made.
+            const attackBlock = isMyActive && isMyTurn ? attackBlocked(G, me) : null;
+            const attack = !isMyActive ? undefined : {
+              line: isMyTurn && attackBlock === null ? attackLine(planAttackPhase(G, me)) : undefined,
+              blockedReason: !isMyTurn ? 'Not your turn' : attackBlock ? attackBlockReason(attackBlock, hero) : undefined,
+              made: !!hero.attackedThisTurn,
+              onAttack: attackFromSheet,
+            };
 
             return (
               <HeroDetailSheet
-                card={heroDetail}
+                card={hero}
                 isMine={isMine}
-                canUseSkill={canUseSkill}
-                skillBlockedReason={skillBlockedReason ?? undefined}
-                onUseSkill={() => tryUseSkill(heroDetail)}
+                canUseSkill={isMine && isMyTurn && skillBlock === null}
+                skillBlockedReason={skillBlockedReason}
+                onUseSkill={() => tryUseSkill(hero)}
+                attack={attack}
                 retreat={retreat}
                 onRetreat={startRetreat}
                 onClose={() => setHeroDetail(null)}
@@ -1099,6 +1107,7 @@ export function Board(props: BoardProps<GameState>) {
           {combatPlan && (
             <CombatChoreographer
               plan={combatPlan}
+              me={me}
               slotRefs={slotRefs.current}
               stepDuration={COMBAT_STEP_MS / combatSpeed}
               onComplete={handleCombatComplete}
@@ -1167,6 +1176,7 @@ export function Board(props: BoardProps<GameState>) {
           me={me}
           isMyTurn={isMyTurn}
           targeting={!!pending}
+          attacking={isMyTurn && !!combatPlan}
           sheetHero={heroDetail?.cardId ?? null}
           refusals={refusals}
           lesson={lesson}
@@ -1175,6 +1185,7 @@ export function Board(props: BoardProps<GameState>) {
         />
       )}
       </FxStageProvider>
+      </BoardIntro>
       </FxCalmContext.Provider>
       </FxImpulseContext.Provider>
       </FxTimingContext.Provider>

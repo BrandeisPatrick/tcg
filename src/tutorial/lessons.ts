@@ -6,15 +6,16 @@
  *
  *   1  The Skill        Kelvin vs a hurt Lash, no cards. Frost Grenade ends it.
  *   2  Souls and Gear   one card you cannot afford yet; next turn you can,
- *                       and the extra attack is the kill.
+ *                       and the point of attack it adds is the kill.
  *   3  Level Up         Kelvin a point short of Level 2; gear tips him over,
  *                       and the levelled swing is the kill.
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
  *
- * A turn runs Prepare → Battle → Prepare → End Turn, and one button walks
- * it: Enter Battle, then End Turn. In lessons 2 to 4 the kill is the battle,
- * so the last tap is Enter Battle.
+ * A turn is yours to spend on cards, skills and a retreat, with one attack
+ * among them: your Active makes it from its sheet, and the turn button only
+ * ends the turn. In lessons 2 to 4 the kill is the attack, so the last tap is
+ * the Attack plate on your Active's sheet.
  *
  * Nothing is read and dismissed: every step is a tap on the real thing, and
  * every lesson ends on the victory screen. Each step names exactly the
@@ -27,10 +28,11 @@ import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { effectiveAtk } from '@/engine/util';
-import { battleOwed } from '@/engine/combat';
+import { attackBlocked } from '@/engine/combat';
 import { RETREAT_COST, SKILL_COST } from '@/engine/game';
 import { PATRON_NAMES } from '@/ui/board/patrons';
-import { TURN_STEP_LABEL, turnStepFor } from '@/ui/board/turnStep';
+import { END_TURN } from '@/ui/board/BoardControls';
+import { skillBlocked } from '@/ui/board/heroActions';
 
 /* ------------------------------------------------------------------ */
 /* The matches                                                         */
@@ -65,8 +67,8 @@ export interface CoachSeen {
   usedSkill: boolean;
   castUlt: boolean;
   swapped: boolean;
-  /** How many battles you have entered. */
-  battles: number;
+  /** How many attacks you have made. */
+  attacks: number;
   /** How many of your turns you have ended. */
   turnsEnded: number;
 }
@@ -77,7 +79,7 @@ export const emptySeen: CoachSeen = {
   usedSkill: false,
   castUlt: false,
   swapped: false,
-  battles: 0,
+  attacks: 0,
   turnsEnded: 0,
 };
 
@@ -88,7 +90,9 @@ export interface CoachView {
   seen: CoachSeen;
   /** A card or skill is armed and waiting for its target. */
   targeting: boolean;
-  /** The hero detail sheet is open (where Skill and Retreat live). */
+  /** Your attack is being walked, before the engine makes it. */
+  attacking: boolean;
+  /** The hero detail sheet is open (where Skill, Attack and Retreat live). */
   sheetOpen: boolean;
   /** …and whose it is. */
   sheetHero: CardId | null;
@@ -114,8 +118,10 @@ const nameOf = (c: CardInstance | null | undefined) =>
   c ? CARDS_BY_ID[c.cardId]?.name ?? c.cardId : '';
 /** The hero tile announces itself as "Kelvin — 2 attack, 6 health". */
 const tile = (c: CardInstance | null | undefined) => (c ? `${nameOf(c)} —` : '');
-const ccd = (c: CardInstance | null) =>
-  !!c && c.statuses.some((s) => s.id === 'stun' || s.id === 'silenced');
+/** The Attack plate on the open hero sheet; its accessible name starts
+ *  "Attack". Looked up inside the sheet, so nothing else on the board can
+ *  answer to it. */
+const ATTACK_PLATE: GateSpec = 'Hero sheet >> Attack';
 
 function activeOf(G: GameState, pid: PlayerID): CardInstance | null {
   const a = G.players[pid].active;
@@ -186,12 +192,10 @@ export interface CoachStep {
   tap?: boolean;
 }
 
-export const RIVAL_TURN = "Rival's turn. Watch — when they enter battle, both Actives trade blows.";
+export const RIVAL_TURN = "Rival's turn. Watch — their Active gets one move too: its skill, or an attack on yours.";
 
-/** The turn button, by the name it wears right now: Enter Battle while the
- *  turn's battle is still ahead, End Turn once it is fought. */
-export const turnButton = (v: CoachView): GateSpec =>
-  TURN_STEP_LABEL[turnStepFor(v.G, v.isMyTurn)];
+/** The turn button, by its name. */
+export const TURN_BUTTON: GateSpec = END_TURN;
 
 const YOU = `${PATRON_NAMES.you}:`;
 
@@ -210,21 +214,27 @@ function endTurn(n: number, body: Text): CoachStep {
     body,
     task: (v) => v.seen.turnsEnded >= n,
     wait: () => null,
-    spot: (v) => [turnButton(v)],
+    spot: () => [TURN_BUTTON],
   };
 }
 
-/** Enter the battle: the two Actives trade blows. In every lesson that asks
- *  for it the battle is the kill, so the match ends under this step. */
-function battle(body: Text): CoachStep {
+/** Make the turn's attack: your Active swings at theirs, from the Attack
+ *  plate on his sheet. In every lesson that asks for it the attack is the
+ *  kill, so the match ends under this step. Like the skill, the line follows
+ *  where the player is and names the next tap only — none while the swing
+ *  is in the air. */
+function attack(lead: (v: CoachView) => string): CoachStep {
   return {
-    id: 'battle',
-    title: 'Enter Battle',
-    body,
-    task: (v) => v.seen.battles >= 1,
-    ready: (v) => battleOwed(v.G),
-    blocked: 'No battle left this turn. End the turn; the next one has its own.',
-    spot: () => [TURN_STEP_LABEL.battle],
+    id: 'attack',
+    title: 'Attack',
+    body: (v) => (v.attacking ? lead(v)
+      : v.sheetOpen ? `${lead(v)} Tap Attack.`
+      : `${lead(v)} Tap ${nameOf(mine(v)) || 'your Active'} to open his sheet.`),
+    task: (v) => v.seen.attacks >= 1,
+    ready: (v) => attackBlocked(v.G, v.me) === null,
+    blocked: 'No attack left this turn. End the turn; the next one has its own.',
+    spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
+    allow: (v) => (v.sheetOpen ? [ATTACK_PLATE] : [tile(mine(v))]),
   };
 }
 
@@ -272,11 +282,14 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
     task: (v) => v.seen.usedSkill,
     ready: (v) => {
       const me = mine(v);
-      return souls(v) >= SKILL_COST && !v.G.players[v.me].skillUsedThisTurn && !!me && !ccd(me) && !!theirs(v);
+      return !!me && !!theirs(v) && skillBlocked(v.G, v.me, me) === null;
     },
-    blocked: (v) => ccd(mine(v))
-      ? `${nameOf(mine(v))} is locked down and cannot act. End the turn.`
-      : `A skill costs ${SKILL_COST} soul and needs a fresh turn. End the turn — souls refill.`,
+    blocked: (v) => {
+      const me = mine(v);
+      return me && skillBlocked(v.G, v.me, me) === 'status'
+        ? `${nameOf(me)} is locked down and cannot act. End the turn.`
+        : `A skill costs ${SKILL_COST} soul and needs a fresh turn. End the turn — souls refill.`;
+    },
     spot: (v) =>
       v.targeting ? [tile(theirs(v))]
       : v.sheetOpen ? ['Hero sheet']
@@ -349,11 +362,12 @@ export const LESSONS: Lesson[] = [
     blurb: "One card you can't afford yet. Then you can.",
     face: 'hero_kelvin',
     outro: 'Souls refill at the start of your turn, one more each time. Gear stays on.',
-    // Lash at five: the trade in the rival's battle leaves him at three, and
-    // Kelvin's plain swing of two would not finish him. The extra attack does.
+    // Lash at three: Kelvin's plain swing of two would not finish him, and
+    // with the magazine's point on top it does. The rival's attack is
+    // one-way, so nothing wears Lash down in between — the gear is the kill.
     setup: () => fight({
       playerDeck: ['extended_magazine'],
-      enemyHeroStats: [{ hpMax: 5 }],
+      enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
       {
@@ -364,11 +378,11 @@ export const LESSONS: Lesson[] = [
         spot: () => [`${YOU} >> Souls:`, '*Extended Magazine'],
         allow: () => ['*Extended Magazine'],
       },
-      endTurn(1, 'Refused. Souls refill at the start of each of your turns, one more each time — two next turn. Nobody fights on the first turn, so tap End Turn. On theirs, the rival enters battle and the two Actives trade blows.'),
+      endTurn(1, 'Refused. Souls refill at the start of each of your turns, one more each time — two next turn. Nobody attacks on the first turn, so tap End Turn.'),
       playOnActive('gear', 'Gear', 'extended_magazine', 'Extended Magazine',
         (v) => `Two souls this turn. Extended Magazine is +1 attack, and gear stays on the hero.`,
         (v) => v.seen.equipped),
-      battle((v) => `${nameOf(mine(v))} now swings for ${atkOf(mine(v))}, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. A turn runs prepare, battle, prepare — and you are prepared. Tap Enter Battle.`),
+      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. Your Active does one thing a turn — its skill or an attack — and the attack is free.`),
     ],
   },
 
@@ -380,8 +394,8 @@ export const LESSONS: Lesson[] = [
     face: 'hero_kelvin',
     outro: 'Gear, kills and standing the turn all earn experience. A level raises the numbers.',
     // Kelvin one point short of Level 2 and Lash at three: the point that
-    // comes with the gear is the level, and the level is the extra attack
-    // that finishes the fight. Turn two, so the swing lands.
+    // comes with the gear is the level, and the level is the point of attack
+    // that finishes the fight. Turn two, so there is an attack to make.
     setup: () => fight({
       startTurn: 2,
       playerDeck: ['extra_health'],
@@ -394,7 +408,7 @@ export const LESSONS: Lesson[] = [
       playOnActive('gear', 'Tip It Over', 'extra_health', 'Extra Health',
         () => `One soul, one item. Extra Health's point is the one he needs — Level 2, and his attack goes up with it.`,
         (v) => v.seen.equipped),
-      battle((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. Tap Enter Battle.`),
+      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}.`),
     ],
   },
 
@@ -406,16 +420,18 @@ export const LESSONS: Lesson[] = [
     face: 'hero_yamato',
     outro: 'Rotate. A worn Active on the bench is a hero saved.',
     // Kelvin at one point of health with Yamato fresh behind him, Lash at
-    // two: the trade would kill Kelvin, and Yamato's swing kills Lash. Turn
-    // three, so there are exactly the two souls a retreat costs.
+    // three: Kelvin's swing of two cannot finish Lash, and Lash's next attack
+    // would finish Kelvin. Yamato swings for three, and his swing kills Lash.
+    // Turn three, so there are exactly the two souls a retreat costs — none
+    // left over for a skill.
     setup: () => fight({
       startTurn: 3,
       playerHeroes: ['hero_kelvin', 'hero_yamato'],
-      playerHeroStats: [{ hp: 1 }],
-      enemyHeroStats: [{ hp: 2 }],
+      playerHeroStats: [{ hp: 1 }, { atk: 3 }],
+      enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      look('look', 'Spent', mine, (v) => `${nameOf(mine(v))} is at ${hpOf(mine(v))}: the next trade finishes him. ${nameOf(myBench(v))} waits fresh on your bench. Tap ${nameOf(mine(v))}.`),
+      look('look', 'Spent', mine, (v) => `${nameOf(mine(v))} is at ${hpOf(mine(v))}: ${nameOf(theirs(v))}'s next attack finishes him, and his own swing of ${atkOf(mine(v))} cannot finish ${nameOf(theirs(v))}. ${nameOf(myBench(v))} waits fresh on your bench. Tap ${nameOf(mine(v))}.`),
       // Retreat is the Active's own move and lives on his sheet, which the
       // step before has just opened. Should it be closed, the step opens it
       // again first.
@@ -425,7 +441,7 @@ export const LESSONS: Lesson[] = [
         body: (v) => (v.seen.swapped
           ? `${nameOf(mine(v))} is in. ${nameOf(myBench(v))} is on the bench, out of the fight.`
           : v.sheetOpen
-            ? `A hero on the bench takes no hits. Retreat costs ${RETREAT_COST} souls and swaps the two. Tap Retreat.`
+            ? `Attacks only ever hit the Active. Retreat costs ${RETREAT_COST} souls and swaps the two. Tap Retreat.`
             : `Tap ${nameOf(mine(v)) || 'your Active'}, then Retreat: ${RETREAT_COST} souls swap him with ${nameOf(myBench(v)) || 'your bench hero'}.`),
         task: (v) => v.seen.swapped,
         ready: (v) => souls(v) >= RETREAT_COST && !!myBench(v) && !!mine(v),
@@ -433,7 +449,7 @@ export const LESSONS: Lesson[] = [
         spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
         allow: (v) => (v.sheetOpen ? ['~Retreat'] : [tile(mine(v))]),
       },
-      battle((v) => `${nameOf(mine(v))} takes the trade now, and ${nameOf(myBench(v))} sits it out. ${nameOf(mine(v))} swings for ${atkOf(mine(v))}; ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. Tap Enter Battle.`),
+      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))}, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. ${nameOf(myBench(v))} sits it out on the bench.`),
     ],
   },
 ];

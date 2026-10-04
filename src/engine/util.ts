@@ -88,7 +88,7 @@ export function grantExtraAttacks(card: CardInstance, count: number) {
   const ex = card.statuses.find((s) => s.id === 'extra_attack');
   if (ex) ex.value = Math.min(MAX_EXTRA_ATTACKS, ex.value + count);
   // Duration 99 = a non-expiring marker (the count is the payload, not a timer);
-  // it's consumed in the attack phase and swept by clearTurnFlags, so the UI
+  // it's consumed by the turn's attack and swept by clearTurnFlags, so the UI
   // shows "Extra Atk N" without a misleading turn countdown.
   else card.statuses.push({ id: 'extra_attack', value: Math.min(MAX_EXTRA_ATTACKS, count), duration: 99 });
 }

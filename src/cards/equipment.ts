@@ -67,8 +67,8 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'spirit_lifesteal', name: 'Spirit Lifesteal', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_spirit_lifesteal'], text: "After bearer's skill / spell / ult damages an enemy: heal 2." },
 
   // ----- Cast-payoff items (functionality tied to skill / ult activation) -----
-  // Surge of Power: after a skill, +2 Bullet Power for the turn.
-  { id: 'surge_of_power', name: 'Surge of Power', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_surge_of_power'], text: 'After the bearer uses a skill: +2 Bullet Power this turn.' },
+  // Surge of Power: after a skill, +2 Bullet Power through the bearer's next turn.
+  { id: 'surge_of_power', name: 'Surge of Power', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_surge_of_power'], text: 'After the bearer uses a skill: +2 Bullet Power until the end of your next turn.' },
   // Burst Fire (canon T3 Weapon): fires a burst of extra shots — grants Extra
   // Attack 1 each turn (stacks with other Extra Attack sources).
   { id: 'burst_fire', name: 'Burst Fire', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_burst_fire'], text: 'The bearer gains Extra Attack 1 each turn. (Stacks.)' },

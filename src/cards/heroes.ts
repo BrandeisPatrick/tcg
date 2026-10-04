@@ -2,8 +2,9 @@ import type { HeroCard } from '@/engine/types';
 
 /**
  * 19 heroes total. Each hero has EXACTLY ONE distinguishing mechanic — either a
- * `skill` (Activate trigger, costs the player's one-skill-per-turn) OR an entry
- * in `passives` (always-on or trigger-based, no cast). Never both.
+ * `skill` (Activate trigger, once a turn per hero; the hero gives up the turn's
+ * attack to use it) OR an entry in `passives` (always-on or trigger-based, no
+ * cast). Never both.
  *
  * Split (8 passive / 11 skill):
  *   PASSIVE: Abrams, Drifter, Haze, Mirage, Mo & Krill, Shiv, Vindicta, Wraith

@@ -10,8 +10,8 @@ import { CARDS_BY_ID, getCard, HEROES } from '@/cards';
 import { getMatchConfig, scriptedSetup, type HeroStatOverride } from '@/storage/matchConfig';
 import { getAIDeckTagged } from '@/decks/aiDecks';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from './statusOps';
-import { needsPromotion, resolve } from './damage';
-import { battleOwed, resolveAttackPhase } from './combat';
+import { resolve } from './damage';
+import { attackBlocked, resolveAttackPhase } from './combat';
 import { findCardOnBoard, isRespawning, liveBoardCards, pushLog, resetIid, nextIid } from './util';
 import { getAbility } from '@/abilities';
 import { withCast } from './castContext';
@@ -32,8 +32,10 @@ let actionCounter = 0;
 /** Max equipment a hero can wear at once. Playing a 4th piece requires
  *  the player to choose one of the existing items to discard. */
 export const MAX_EQUIPMENT_PER_HERO = 3;
-/** Soul cost to activate any hero skill (one-per-player-per-turn rule still
- *  applies — this just adds a tempo cost on top). */
+/** Soul cost to activate a hero skill. Each hero may use its skill once a
+ *  turn, so a full bench can cast several in one turn souls permitting; a hero
+ *  that uses its skill gives up the turn's attack, and one that has attacked
+ *  cannot use its skill. */
 export const SKILL_COST = 1;
 // Refill economy (Hearthstone-style): at the start of each of your turns,
 // your pool is REFILLED to N — anything banked from last turn is lost.
@@ -71,6 +73,7 @@ function makeInstance(cardId: string, ownerId: PlayerID, zone: CardInstance['zon
     statuses: [],
     exhausted: false,
     skillUsedThisTurn: false,
+    attackedThisTurn: false,
     // Hero leveling: start at Lv1 with 0 exp.
     ...(isHero ? { exp: 0, level: 1 as const } : {}),
   };
@@ -90,7 +93,6 @@ function makeEmptyPlayer(pid: PlayerID): PlayerState {
     bench: [null, null, null],
     discard: [],
     ultsConsumed: [],
-    skillUsedThisTurn: false,
   };
 }
 
@@ -167,7 +169,6 @@ export function buildPlayer(pid: PlayerID, heroes: string[], deckCards: string[]
     bench,
     discard: [],
     ultsConsumed: [],
-    skillUsedThisTurn: false,
   };
 }
 
@@ -327,7 +328,7 @@ export const DeadlockGame: Game<GameState> = {
         // realTurn = ctx.turn - offset, and ctx.turn starts at 1.
         draftTurnsOffset: 1 - startTurn,
         mulliganPending: false,
-        battleFought: false,
+        attackUsed: false,
         action: null,
         fx: [],
       };
@@ -355,7 +356,7 @@ export const DeadlockGame: Game<GameState> = {
       },
       draftTurnsOffset: 0,  // set in draftPick when draft completes
       mulliganPending: false,
-      battleFought: false,
+      attackUsed: false,
       action: null,
       fx: [],
     };
@@ -374,8 +375,7 @@ export const DeadlockGame: Game<GameState> = {
       // so subtract the offset captured at draft completion.
       const realTurn = ctx.turn - G.draftTurnsOffset;
       G.turnNumber = realTurn;
-      G.battleFought = false;
-      ps.skillUsedThisTurn = false;
+      G.attackUsed = false;
       G.fx = [];   // flush last turn's board-FX events before this turn's (e.g. bleed ticks) land
       tickStartOfTurn(G, ps);
       // Count down Rem's "Lil Helpers" merges; expired ones return her to bench.
@@ -399,12 +399,11 @@ export const DeadlockGame: Game<GameState> = {
     onEnd: ({ G, ctx }) => {
       if (G.draft) return;  // see onBegin — draft turns are not real game turns
       const pid = ctx.currentPlayer as PlayerID;
-      // The battle is not optional: a turn that ends without `enterBattle`
-      // fights it on the way out.
-      if (!G.battleFought) resolveAttackPhase(G, pid);
+      // Ending the turn never attacks: a turn that ends without the `attack`
+      // move simply forgoes it.
       fireBoardTriggers(G, pid, 'endOfTurn');
       // Channeled ultimates (Dynamo / Seven / Warden) pulse their AoE at the
-      // end of the turn, after the battle and the second prepare phase.
+      // end of the turn, after everything the player did in it.
       tickCastingPulses(G, G.players[pid]);
       // Hero leveling: +1 exp to each alive hero on the player's board.
       for (const c of liveBoardCards(G.players[pid])) {
@@ -542,8 +541,10 @@ export const DeadlockGame: Game<GameState> = {
       const hero = found.card;
       // Corpses can't act.
       if ((hero.respawnTurnsLeft ?? 0) > 0) return INVALID_MOVE;
-      // Rule: only ONE skill use per player per turn (across all heroes).
-      if (ps.skillUsedThisTurn) return INVALID_MOVE;
+      // Rule: each hero uses its skill at most once a turn, and a hero does
+      // one or the other — the hero who made the turn's attack has spent its
+      // action.
+      if (hero.skillUsedThisTurn || hero.attackedThisTurn) return INVALID_MOVE;
       // Stun, Silenced, and Sleep all suppress skill use. `casting` is the heavy
       // channel lockout (Dynamo / Seven) — locked in their ultimate, no skills.
       // (Warden's `casting_light` is not listed, so he keeps using Willpower.)
@@ -583,8 +584,8 @@ export const DeadlockGame: Game<GameState> = {
       withCast(hero, 'skill', () => {
         ability.run(G, { movingPlayer: pid }, { source: hero, target });
       });
-      hero.skillUsedThisTurn = true;     // per-hero flag (drives UI glint)
-      ps.skillUsedThisTurn = true;       // per-player flag (gates the rule)
+      // Spent for the turn: no second cast, and no attack from this hero.
+      hero.skillUsedThisTurn = true;
       // Equipment reactive: Surge of Power fires after bearer used their skill.
       fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: pid });
       resolve(G);
@@ -637,8 +638,8 @@ export const DeadlockGame: Game<GameState> = {
      * swap. The dying corpse takes the chosen bench hero's slot — that's
      * where it stays greyed-out until its respawn timer hits 0.
      *
-     * Callable on EITHER player's turn — your Active can die during the
-     * opponent's combat phase or off a skill they cast, and the engine is
+     * Callable on EITHER player's turn — your Active can die to the
+     * opponent's attack or off a skill they cast, and the engine is
      * still on their turn at that moment. The owning player is derived from
      * the bench iid rather than from `playerID` so the dispatcher's turn
      * context doesn't gate the swap.
@@ -674,16 +675,19 @@ export const DeadlockGame: Game<GameState> = {
     },
 
     /**
-     * Open the battle: the two Actives trade blows. The turn stays with the
-     * player — a second prepare phase follows, and `endTurn` closes it. One
-     * battle a turn, and none on Turn 1. A fallen Active is replaced first:
-     * the battle belongs to the hero who steps up, and entering it with a
-     * corpse in the lane would spend it on nothing.
+     * The turn's attack: the Active swings at the rival Active for its bullet
+     * damage, plus any Extra Attacks it has queued. It costs nothing, it is
+     * one-way — the defender does not strike back — and the turn stays with
+     * the player, who can go on playing cards, skills and a retreat before
+     * `endTurn`. `attackBlocked` holds every condition: none on Turn 1, one a
+     * turn, a living Active that has not used its skill this turn, a living
+     * rival Active, and a swing that deals something.
      */
-    enterBattle: ({ G, ctx }) => {
+    attack: ({ G, ctx }) => {
       const pid = ctx.currentPlayer as PlayerID;
-      if (G.draft || !battleOwed(G) || needsPromotion(G.players[pid])) return INVALID_MOVE;
-      G.battleFought = true;
+      if (G.draft || attackBlocked(G, pid)) return INVALID_MOVE;
+      G.attackUsed = true;
+      G.players[pid].active!.attackedThisTurn = true;
       resolveAttackPhase(G, pid);
     },
 

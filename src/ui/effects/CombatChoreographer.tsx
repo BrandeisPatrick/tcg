@@ -1,6 +1,7 @@
 import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { AttackPlan, AttackStep } from '@/engine/combat';
+import type { PlayerID } from '@/engine/types';
 import { fonts } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { GunBurst, KoShatter, KoSticker } from './fx/hits';
@@ -15,24 +16,27 @@ import { useStage, useStageEngine } from './fx/stage/FxStage';
 import { gunImpact, ring } from './fx/stage/emitters';
 
 /**
- * Animated walk-through of an attack phase plan.
+ * Animated walk-through of the turn's attack, from its plan.
  *
- * Each beat is a firefight between two cards: the attacker's tile comes up
- * off the table and kicks back with every round (FxImpulse), the FX stage
- * throws the muzzle flash, the casings and a volley of tracers in the
- * attacker's colour, and the rounds land on the target — holes punched into
- * its print (GunBurst, the same family the FX layer uses for skill-sourced
- * bullets), the tile rocking under them, the amount in stencil digits and a
- * DamageBanner sticker. A lethal blow breaks the card into shards
- * (KoShatter) and every other card on the table jumps. Walks `plan.steps`
- * one at a time, then invokes `onComplete` so the engine can resolve for
- * real; the HP numbers on the cards move then (`useStatTick` in HeroSlot).
- * A card that went down stays under a grey veil until that happens, so it
- * never stands back up between beats. A plan with no steps (nobody can
- * swing) draws nothing and completes after a short hold.
+ * Each beat is one swing, and it is one-way — the defender does not shoot
+ * back: the attacker's tile comes up off the table and kicks back with every
+ * round (FxImpulse), the FX stage throws the muzzle flash, the casings and a
+ * volley of tracers in the attacker's colour, and the rounds land on the
+ * target — holes punched into its print (GunBurst, the same family the FX
+ * layer uses for skill-sourced bullets), the tile rocking under them, the
+ * amount in stencil digits and a DamageBanner sticker. A lethal blow breaks
+ * the card into shards (KoShatter) and every other card on the table jumps.
+ * Walks `plan.steps` one at a time (the swing, then any Extra Attacks), then
+ * invokes `onComplete` so the engine can make the attack for real; the HP
+ * numbers on the cards move then (`useStatTick` in HeroSlot). A card that
+ * went down stays under a grey veil until that happens, so it never stands
+ * back up between beats.
  */
 interface Props {
   plan: AttackPlan;
+  /** The local player. The attack is printed in its attacker's colour —
+   *  your gold when the plan's attacker is you, the rival's red otherwise. */
+  me: PlayerID;
   /** Map of slot iid → DOM element for measuring positions. */
   slotRefs: Map<string, HTMLElement>;
   /** Called after all steps animate (or skip is clicked). */
@@ -50,14 +54,10 @@ interface ActiveBeat {
   attackerRect: Rect | null;
   targetRect: Rect | null;
   /** The target's live tile — a lethal blow cuts it into shards. */
-  attackerTile: HTMLElement | null;
   targetTile: HTMLElement | null;
   /** Every card on the table, for the jolt when one breaks. */
   rects: Map<string, Rect>;
 }
-
-/** The least an empty battle (no attack steps) holds before it resolves. */
-const EMPTY_BATTLE_MIN_MS = 450;
 
 /** The beat's clock, as fractions of one step: wind-up, the volley in
  *  flight, then the impact and its readable hold. The HP number on the
@@ -73,7 +73,7 @@ const beatTiming = (stepDuration: number) => {
   return { projectileDelay, impactDelay, roundGap, roundMs, damagePersist: stepDuration - impactDelay };
 };
 
-export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration = 1100, onBeatIndexChange }: Props) {
+export function CombatChoreographer({ plan, me, slotRefs, onComplete, stepDuration = 1100, onBeatIndexChange }: Props) {
   const [beatIndex, setBeatIndex] = useState(0);
   const [done, setDone] = useState(false);
   const skippedRef = useRef(false);
@@ -96,16 +96,6 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration =
 
   useEffect(() => {
     if (done) return;
-    if (plan.steps.length === 0) {
-      // Nobody can swing. The battle still takes a short beat before it
-      // resolves, so the phase is seen to pass — and so a double tap on
-      // Enter Battle is not carried straight into End Turn.
-      const t = setTimeout(() => {
-        setDone(true);
-        onCompleteRef.current();
-      }, Math.max(EMPTY_BATTLE_MIN_MS, stepDuration * 0.3));
-      return () => clearTimeout(t);
-    }
     if (beatIndex >= plan.steps.length) {
       setDone(true);
       onCompleteRef.current();
@@ -137,13 +127,11 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration =
     const attackerRect = rects.get(step.attackerIid) ?? null;
     const targetRect = step.targetIid ? rects.get(step.targetIid) ?? null : null;
     if (step.predictedKO && step.targetIid && targetRect) fallen.current.set(step.targetIid, { rect: targetRect, beat: beatIndex });
-    if (step.attackerKO && attackerRect) fallen.current.set(step.attackerIid, { rect: attackerRect, beat: beatIndex });
     return {
       step,
       index: beatIndex,
       attackerRect,
       targetRect,
-      attackerTile: slotRefs.get(step.attackerIid) ?? null,
       targetTile: step.targetIid ? slotRefs.get(step.targetIid) ?? null : null,
       rects,
     };
@@ -170,7 +158,7 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration =
             }}
           />
 
-          <AttackBeat key={beatIndex} beat={beat} stepDuration={stepDuration} />
+          <AttackBeat key={beatIndex} beat={beat} mine={plan.attackerId === me} stepDuration={stepDuration} />
 
           {/* Skip button — a chamfered paper plate in the corner, visible during
               combat. */}
@@ -225,7 +213,12 @@ export function CombatChoreographer({ plan, slotRefs, onComplete, stepDuration =
   );
 }
 
-const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: ActiveBeat; stepDuration: number }) {
+const AttackBeat = memo(function AttackBeat({ beat, mine, stepDuration }: {
+  beat: ActiveBeat;
+  /** The local player is the one swinging. */
+  mine: boolean;
+  stepDuration: number;
+}) {
   const { step, index, attackerRect, targetRect, rects } = beat;
   // Seeds the hole scatter / crack pattern so re-renders within the beat draw
   // the same picture, and each beat draws a different one.
@@ -234,26 +227,25 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
   const calm = useFxCalm();
 
   const attackerC = attackerRect ? center(attackerRect) : { x: 0, y: 0 };
-  // The rival's row sits on the top half of the sheet, yours on the bottom —
-  // so the attacker's side (and its ink) follows from where it swings from.
-  const attackerIsTop = attackerC.y < window.innerHeight / 2;
-  const attackerInk = attackerIsTop ? poster.rival : poster.you;
-  const defenderInk = attackerIsTop ? poster.you : poster.rival;
-  // A face hit has no card to land on: the rounds fly to the far edge of the
-  // sheet, where the receiving patron sits, and a band there takes the blow.
+  // The attack is printed in its attacker's colour, read off who is
+  // attacking — not off where the card sits: both Actives share the lane, so
+  // a card's height on screen says nothing about whose it is.
+  const attackerInk = mine ? poster.you : poster.rival;
+  // A face hit has no card to land on: the rounds fly to the edge of the
+  // sheet where the receiving patron sits — the rival's at the top, yours at
+  // the bottom — and a band there takes the blow.
   const band = useMemo<Rect>(() => {
     const height = 140;
     const width = Math.min(560, window.innerWidth - 32);
-    return { left: (window.innerWidth - width) / 2, top: attackerIsTop ? window.innerHeight - height - 16 : 16, width, height };
-  }, [attackerIsTop]);
+    return { left: (window.innerWidth - width) / 2, top: mine ? 16 : window.innerHeight - height - 16, width, height };
+  }, [mine]);
   const hitRect = targetRect ?? band;
   const targetC = center(hitRect);
   const angle = Math.atan2(targetC.y - attackerC.y, targetC.x - attackerC.x);
-  const retaliates = step.retaliationDamage > 0 && !!targetRect;
 
   // The tiles take their part: the attacker comes up and kicks back with
-  // its volley, the target rocks at the impact beat, the attacker a beat
-  // later when retaliation lands, and a card breaking jolts the table.
+  // its volley, the target rocks at the impact beat, and a card breaking
+  // jolts the table.
   const bus = useContext(FxImpulseContext);
   useEffect(() => {
     if (!bus) return;
@@ -263,16 +255,9 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
     if (step.targetIid) {
       const kind: FxImpulse['kind'] | null = step.finalDamage > 0 ? (step.predictedKO ? 'ko' : 'hit') : step.shieldAbsorbed > 0 ? 'shield' : null;
       if (kind) emit(step.targetIid, { kind, angle, strength: hitStrength(step.finalDamage) }, impactDelay);
-      if (retaliates) emit(step.targetIid, { kind: 'fire', angle: angle + Math.PI, strength: hitStrength(step.retaliationDamage), lead: 0.03, gap: roundGap / 1000 }, projectileDelay + 100);
       if (step.predictedKO && targetRect) {
         timers.push(...quake(bus, rects, center(targetRect), impactDelay + FX_TIMING.koBreak, 0.9, step.targetIid));
         emit(step.targetIid, { kind: 'slam', strength: 1 }, impactDelay + FX_TIMING.koStamp + 90);
-      }
-    }
-    if (step.retaliationDamage > 0) {
-      emit(step.attackerIid, { kind: step.attackerKO ? 'ko' : 'hit', angle: angle + Math.PI, strength: hitStrength(step.retaliationDamage) }, impactDelay + 100);
-      if (step.attackerKO && attackerRect) {
-        timers.push(...quake(bus, rects, center(attackerRect), impactDelay + 100 + FX_TIMING.koBreak, 0.9, step.attackerIid));
       }
     }
     return () => timers.forEach(clearTimeout);
@@ -311,21 +296,6 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
             origin={`${(muzzle.x - attackerRect.left).toFixed(0)}px ${(muzzle.y - attackerRect.top).toFixed(0)}px`} />
         </Fixed>
       </FxCardContext.Provider>
-
-      {/* Retaliation — the defender shoots back from its own edge in its own
-          ink, a beat behind the incoming volley. Only when the mutual-damage
-          rule applied (active vs active). */}
-      {retaliates && targetRect && (
-        <>
-          <Gunfire from={targetEdge} to={muzzle} ink={defenderInk} seed={seed + 9} at={projectileDelay + 100} dur={roundMs} rounds={3} gap={roundGap} />
-          <FxCardContext.Provider value={step.targetIid}>
-            <Fixed rect={targetRect} clip z={80}>
-              <Wash color={defenderInk} peak={0.55} at={projectileDelay + 100} dur={2 * roundGap + 260} radial holdFrac={0.5}
-                origin={`${(targetEdge.x - targetRect.left).toFixed(0)}px ${(targetEdge.y - targetRect.top).toFixed(0)}px`} />
-            </Fixed>
-          </FxCardContext.Provider>
-        </>
-      )}
 
       {/* Everything printed on the target rides the target's tile as it rocks. */}
       <FxCardContext.Provider value={step.targetIid ?? null}>
@@ -373,7 +343,6 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
             calm={calm}
             damagePersist={damagePersist / 1000}
             impactDelay={impactDelay / 1000}
-            keySuffix={`primary-${step.attackerIid}-${step.targetIid ?? 'face'}`}
           />
         )}
         {!targetRect && step.finalDamage > 0 && (
@@ -382,33 +351,6 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
           </Fixed>
         )}
       </FxCardContext.Provider>
-
-      {/* The same on the attacker when the defender retaliates (the
-          mutual-damage rule): the attacker also took a hit. */}
-      {step.retaliationDamage > 0 && (
-        <FxCardContext.Provider value={step.attackerIid}>
-          <GunBurst rect={attackerRect} amount={step.retaliationDamage} at={impactDelay + 100} hold={damagePersist * 0.85} seed={seed + 2} from={targetC} ownerInk={defenderInk} volley={false} />
-          {step.attackerKO ? (
-            <>
-              <KoShatter rect={attackerRect} tile={beat.attackerTile} at={shatterAt + 100} seed={seed + 3} hold={stepDuration - shatterAt - 100} dir={angle + Math.PI} />
-              <KoSticker rect={attackerRect} at={stampAt + 100} hold={stepDuration - stampAt - 100} seed={seed + 3} />
-            </>
-          ) : (
-            <DamageBanner
-              rect={attackerRect}
-              isCard
-              calm={calm}
-              damagePersist={damagePersist / 1000}
-              impactDelay={(impactDelay + 100) / 1000}
-              keySuffix={`retal-${step.attackerIid}-${step.targetIid ?? 'face'}`}
-            />
-          )}
-          <Fixed rect={attackerRect} z={89}>
-            <Numeral text={`−${step.retaliationDamage}`} ink={step.attackerKO ? NUMERAL_INK.ko : NUMERAL_INK.attack}
-              at={impactDelay + 130} dur={Math.min(damagePersist * 0.8, 1000)} size={numeralSize(attackerRect)} top="26%" />
-          </Fixed>
-        </FxCardContext.Provider>
-      )}
 
       {/* The HP number itself moves when the engine applies the hit, after
           the walk-through (useStatTick in HeroSlot). */}
@@ -450,27 +392,24 @@ const AttackBeat = memo(function AttackBeat({ beat, stepDuration }: { beat: Acti
 });
 
 /**
- * Damage feedback clipped to a hero card: a brief desaturation wash plus a
- * sticker slammed down over the art carrying the single word "Damaged" (ink
- * sticker, red fill). The fill charges across the word left→right, like a
- * progress bar. Used for both the primary target and a retaliating attacker,
- * so any hero that takes damage gets the same beat. (A lethal blow breaks
- * the card and gets the K.O. sticker instead.)
+ * Damage feedback clipped to the card the swing hit: a brief desaturation
+ * wash plus a sticker slammed down over the art carrying the single word
+ * "Damaged" (ink sticker, red fill). The fill charges across the word
+ * left→right, like a progress bar. (A lethal blow breaks the card and gets
+ * the K.O. sticker instead.)
  *
  * `rect` is the card's bounding box (or a synthetic face band for direct hits).
  * The whole effect is clipped to it and the type size is derived from the card
- * width, so it scales with the board / browser window. `keySuffix` keeps each
- * instance's motion divs uniquely keyed across the primary / retaliation pair.
+ * width, so it scales with the board / browser window.
  */
 function DamageBanner({
-  rect, isCard, calm, damagePersist, impactDelay, keySuffix,
+  rect, isCard, calm, damagePersist, impactDelay,
 }: {
   rect: Rect;
   isCard: boolean;
   calm: boolean;
   damagePersist: number;
   impactDelay: number;
-  keySuffix: string;
 }) {
   const word = 'Damaged';
   const fill = poster.red;          // progress fill
@@ -483,7 +422,6 @@ function DamageBanner({
     <Fixed rect={rect} clip radius={isCard ? 10 : 6} z={84}>
       {/* Drain the card's colour for the beat — reads as "took a hit". */}
       <motion.div
-        key={`wash-${keySuffix}`}
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.9, 0.9, 0] }}
         transition={{ duration: dur, delay: impactDelay, times: [0, 0.1, 0.85, 1] }}
@@ -497,7 +435,6 @@ function DamageBanner({
           card. The sticker carries legibility over bright art, so no scrim.
           It comes down from the viewer's side and lands with a squash. */}
       <motion.div
-        key={`word-${keySuffix}`}
         initial={calm ? { opacity: 0, scale: 0.92 } : { opacity: 0, scale: 2.1, rotateX: 38 }}
         animate={calm
           ? { opacity: [0, 1, 1, 0], scale: [0.92, 1, 1, 1] }
@@ -526,7 +463,6 @@ function DamageBanner({
             {/* Progress fill charging INSIDE the paper word, left→right, with a
                 solid leading edge — the "bar fills the text" the design calls for. */}
             <motion.span
-              key={`fill-${keySuffix}`}
               initial={{ width: '0%' }}
               animate={{ width: '100%' }}
               transition={{ duration: dur * 0.5, delay: impactDelay + 0.09, ease: [0.22, 1, 0.36, 1] }}

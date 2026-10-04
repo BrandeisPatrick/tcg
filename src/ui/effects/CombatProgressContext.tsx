@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 
 export type CombatProgress = {
-  /** Number of beats in the active combat phase (i.e. plan.steps.length). */
+  /** Number of beats in the attack being walked (i.e. plan.steps.length). */
   total: number;
   /** Zero-based index of the beat currently in flight. */
   currentBeat: number;

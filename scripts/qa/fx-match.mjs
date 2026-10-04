@@ -1,7 +1,9 @@
 /**
  * Live-match FX QA — draft a roster, use Kelvin's Frost Grenade for real,
- * film the skill's FX, end the turn and film the rival's turn and the combat
- * choreographer. Frames land in OUT_DIR with a contact sheet.
+ * film the skill's FX, end the turn and film the rival's turn (its skills,
+ * and its attack walked by the combat choreographer), then make your own
+ * attack from your Active's sheet and film that. Frames land in OUT_DIR with
+ * a contact sheet.
  *
  *   npm run dev            # in another terminal
  *   node scripts/qa/fx-match.mjs OUT_DIR [PORT] [desktop|mobile]
@@ -76,8 +78,9 @@ try {
   // The sheet's exit fade starts late under the virtual clock — wait it out.
   for (let i = 0; i < 20; i++) { await b.tick(150); await b.settle(2); if (!(await b.evaluate(`!!document.querySelector('[aria-label="Hero sheet"]')`))) break; }
   await shoot('targeting');
-  // Rival active = the hero slot button in the lane row with the smaller x (left).
-  const target = `(() => { const btns = [...document.querySelectorAll('button[aria-label*=" — "]')]; const rs = btns.map((el) => ({ el, r: el.getBoundingClientRect() })); const ys = [...new Set(rs.map((x) => Math.round(x.r.top / 10)))].sort((a, b) => a - b); const laneY = ys[1]; const lane = rs.filter((x) => Math.round(x.r.top / 10) === laneY).sort((a, b) => a.r.left - b.r.left); return lane[0]?.el; })()`;
+  // The lane row's hero tiles, left to right: the rival's Active, then yours.
+  const lane = `(() => { const btns = [...document.querySelectorAll('button[aria-label*=" — "]')].filter((el) => !el.closest('[aria-hidden="true"]')); const rs = btns.map((el) => ({ el, r: el.getBoundingClientRect() })); const ys = [...new Set(rs.map((x) => Math.round(x.r.top / 10)))].sort((a, b) => a - b); const laneY = ys[1]; return rs.filter((x) => Math.round(x.r.top / 10) === laneY).sort((a, b) => a.r.left - b.r.left).map((x) => x.el); })()`;
+  const target = `${lane}[0]`;
   const r3 = await b.clickEl(target);
   log('target click', r3.hit);
   await b.settle(4);
@@ -85,9 +88,9 @@ try {
   log('skill fired:', used);
   // Film the skill: frames every 150ms for 2.4s.
   for (let t = 0; t <= 2400; t += 150) { if (t) await b.tick(150); await b.settle(1); await shoot(`skill-${t}`); }
-  // ---- End turn, then film the rival's turn and the combat that follows.
+  // ---- End turn, then film the rival's turn: its moves, and its attack.
   await b.tick(1500); await b.settle(2);
-  const r4 = await b.clickEl(byAria('End Turn'), { js: true, scroll: false });
+  await b.clickEl(byAria('End Turn'), { js: true, scroll: false });
   log('end turn');
   let vt = 0, taken = 0, lastMarker = '';
   while (vt < 24000 && taken < 40) {
@@ -98,6 +101,38 @@ try {
     if (st.fx !== lastMarker) { log('t=' + vt, 'fx batches:', st.fx || '-', 'combat:', st.skip); lastMarker = st.fx; }
   }
   await shoot('after');
+
+  // ---- Your turn: open your Active's sheet and make the attack from it.
+  const myMove = `(() => { const d = document.querySelector('[aria-label^="Turn "]'); const e = ${byAria('End Turn')}; return !!d && /Your Move/.test(d.getAttribute('aria-label')) && !!e && !e.disabled && !document.querySelector('[aria-label="Choose your new Active"]'); })()`;
+  // (Should the rival's attack have dropped your Active, send in whoever is first.)
+  const promotion = `document.querySelector('[aria-label="Choose your new Active"] button')`;
+  for (let t = 0; t < 30000 && !(await b.evaluate(myMove)); t += 250) {
+    if (await b.evaluate(`!!${promotion}`)) { await b.evaluate(`${promotion}.click()`); await b.settle(3); }
+    await b.tick(250); await b.settle(1);
+  }
+  await b.tick(1500); await b.settle(2);
+  const r5 = await b.clickEl(`${lane}.at(-1)`, { scroll: false });
+  log('my active click', r5.hit);
+  await b.settle(3);
+  for (let i = 0; i < 20 && !(await b.evaluate(`!!document.querySelector('[aria-label="Hero sheet"]')`)); i++) { await b.tick(100); await b.settle(2); }
+  await b.tick(600); await b.settle(2);
+  await shoot('my-sheet');
+  const plate = `document.querySelector('[aria-label="Hero sheet"] [aria-label^="Attack"]')`;
+  if (await b.evaluate(`!!${plate}`)) {
+    log('attack plate:', await b.evaluate(`${plate}.getAttribute('aria-label')`));
+    const r6 = await b.clickEl(plate, { scroll: false });
+    log('attack plate click', r6.hit);
+    await b.settle(3);
+    // Film the attack: frames every 100ms while the walk is on screen.
+    for (let t = 0; t <= 2600; t += 100) {
+      if (t) await b.tick(100);
+      await b.settle(1);
+      const dial = await b.evaluate(`document.querySelector('[aria-label^="Turn "]')?.getAttribute('aria-label') ?? ''`);
+      await shoot(`mine-${t}${/Battle/.test(dial) ? '-battle' : ''}`);
+    }
+  } else {
+    log('no attack to make:', await b.evaluate(`document.querySelector('[aria-label="Hero sheet"]')?.innerText.replace(/\s+/g, ' ').slice(0, 200)`));
+  }
   // ---- Contact sheets, 5 per row.
   const rows = [];
   for (let i = 0; i < shots.length; i += 5) rows.push(shots.slice(i, i + 5));

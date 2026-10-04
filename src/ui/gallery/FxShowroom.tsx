@@ -61,7 +61,7 @@ const swing = (from: Id, to: Id | null, dmg: number, o: Partial<AttackStep> = {}
   attackerIid: from, attackerName: CARDS_BY_ID[STAGE[from].cardId]?.name ?? from,
   targetIid: to, targetName: to ? CARDS_BY_ID[STAGE[to].cardId]?.name ?? to : null,
   finalDamage: dmg, rawDamage: dmg + (o.shieldAbsorbed ?? 0), predictedHpAfter: null, predictedKO: false,
-  shieldAbsorbed: 0, retaliationDamage: 0, attackerHpAfter: null, attackerKO: false, ...o,
+  shieldAbsorbed: 0, ...o,
 });
 
 interface Demo { label: string; events: Ev[]; /** A basic attack: walked by the combat choreographer instead. */ plan?: AttackStep[] }
@@ -75,14 +75,13 @@ const GROUPS: Group[] = [
   {
     id: 'attacks', short: 'Attacks',
     title: 'Basic attacks',
-    blurb: "The end-of-turn firefight, walked by the combat choreographer: the shooter's card comes up off the table and kicks back with each round, casings fly, tracers cross with their shadows under them, and the rounds punch into the target as it rocks. A lethal blow breaks the card into shards and jolts the whole table.",
+    blurb: "An Active's attack, walked by the combat choreographer: the shooter's card comes up off the table and kicks back with each round, casings fly, tracers fly with their shadows under them, and the rounds punch into the target as it rocks. It is one-way — the target does not shoot back. A lethal blow breaks the card into shards and jolts the whole table.",
     demos: [
       { label: 'Attack · Kelvin → Abrams', events: [], plan: [swing('y0', 'r0', 3)] },
-      { label: 'Attack · exchange (both take damage)', events: [], plan: [swing('r0', 'y0', 4, { retaliationDamage: 2 })] },
-      { label: 'Attack · lethal — Abrams breaks', events: [], plan: [swing('y0', 'r0', 99, { predictedKO: true, retaliationDamage: 1 })] },
-      { label: 'Attack · both go down', events: [], plan: [swing('r0', 'y0', 99, { predictedKO: true, retaliationDamage: 99, attackerKO: true })] },
+      { label: 'Attack · Abrams → Kelvin', events: [], plan: [swing('r0', 'y0', 4)] },
+      { label: 'Attack · lethal — Abrams breaks', events: [], plan: [swing('y0', 'r0', 99, { predictedKO: true })] },
       { label: 'Attack · Shield blocks it', events: [], plan: [swing('y0', 'r0', 0, { shieldAbsorbed: 3 })] },
-      { label: 'Attack · two beats (Active, then a bench gun)', events: [], plan: [swing('y0', 'r0', 2, { retaliationDamage: 1 }), swing('y1', 'r0', 2, { bonusLabel: 'Mirage +1 vs Marked' })] },
+      { label: 'Attack · two beats (an Extra Attack)', events: [], plan: [swing('y0', 'r0', 2), swing('y0', 'r0', 2, { bonusLabel: 'Extra Attack' })] },
       { label: 'Attack · face (no Active to hit)', events: [], plan: [swing('y0', null, 3)] },
     ],
   },
@@ -278,7 +277,6 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
         const next = { ...h };
         for (const st of plan.steps) {
           if (st.targetIid) next[st.targetIid as Id] = Math.max(0, next[st.targetIid as Id] - st.finalDamage);
-          next[st.attackerIid as Id] = Math.max(0, next[st.attackerIid as Id] - st.retaliationDamage);
         }
         return next;
       });
@@ -286,7 +284,6 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
         const next = new Set(d);
         for (const st of plan.steps) {
           if (st.predictedKO && st.targetIid) next.add(st.targetIid as Id);
-          if (st.attackerKO) next.add(st.attackerIid as Id);
         }
         return next;
       });
@@ -426,7 +423,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
       </div>
       <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
       <AnimatePresence>
-        {attack && <CombatChoreographer plan={attack} slotRefs={slotRefs.current} stepDuration={COMBAT_STEP_MS} onComplete={resolveAttack} />}
+        {attack && <CombatChoreographer plan={attack} me="0" slotRefs={slotRefs.current} stepDuration={COMBAT_STEP_MS} onComplete={resolveAttack} />}
       </AnimatePresence>
     </FxStageProvider>
     </FxCalmContext.Provider>

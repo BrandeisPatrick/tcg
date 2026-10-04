@@ -14,6 +14,7 @@ import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
 import { fonts, spring, text, statRow } from '../tokens';
 import { poster } from '../poster';
 import { LevelRing } from '../card/LevelRing';
+import { LevelTrim, trimInset, type TrimPalette } from '../card/LevelTrim';
 import { useStatTick } from './useStatTick';
 
 /**
@@ -43,13 +44,17 @@ interface Props {
   onLongPress?: (c: CardInstance) => void;
   onEquipmentHover?: (eq: CardInstance | null) => void;
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
-  /** True if the local player has already used a skill this turn — suppresses the skill-ready glint on every own hero. */
-  playerSkillSpent?: boolean;
+  /** This hero can still do something this turn — use its skill, or (the
+   *  Active) make the turn's attack. A glint sweeps across the portrait. */
+  ready?: boolean;
+  /** The level bezel's inks. The board uses the default; the Gallery sets
+   *  both side by side. */
+  trimPalette?: TrimPalette;
 }
 
 export function HeroSlot({
   card, owner, myId, pending, isTargetable, isCurrentTurn, compact,
-  onTap, onLongPress, onEquipmentHover, registerSlotRef, playerSkillSpent,
+  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready, trimPalette,
 }: Props) {
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let pressFired = false;
@@ -109,16 +114,16 @@ export function HeroSlot({
   // living print until the impact's shatter has played, then turns.
   const respawnLeft = useDelayedValue(card.respawnTurnsLeft ?? 0, hold.settle);
   const isCorpse = respawnLeft > 0;
-  // Skill-ready glint only shows when both per-hero and player-wide flags allow it.
-  // Bench-only heroes (Rem) cast from the bench, so they glint there too.
-  const skillReady = !isCorpse && isAlly && !!data.skill && !card.skillUsedThisTurn && !playerSkillSpent
-    && (isActive || !!data.flags?.benchOnly);
   const isArmedSource = !!pending && pending.kind === 'useSkill' && pending.iid === card.iid;
   const attached = isCorpse ? [] : (card.attached ?? []);
   // On the small in-game tile we only have room for the primary keyword; the
   // identity colour keys the role band's left edge, as the draft dossier does.
   const identity = getHeroIdentity(card.cardId);
   const role = identity.keywords[0] ?? 'Hero';
+  // The level bezel inside the frame (LevelTrim); none on a corpse. The role
+  // band steps in by its width so the identity key stays in sight.
+  const level = card.level ?? 1;
+  const trimIn = isCorpse ? 0 : trimInset(level, !!compact);
 
   // Frame states, in priority order. The poster is flat print: a state is a
   // border colour plus an inset ring, never an outer glow. The owner colour
@@ -301,8 +306,9 @@ export function HeroSlot({
           <RespawnOverlay turnsLeft={respawnLeft} compact={!!compact} />
         )}
 
-        {/* Skill ready glint — sweeps across portrait only (suppressed while armed) */}
-        {!isCorpse && skillReady && !isArmedSource && (
+        {/* Ready glint — this hero still has a move this turn; sweeps across
+            the portrait only (suppressed while its skill is armed). */}
+        {!isCorpse && ready && !isArmedSource && (
           <motion.div
             aria-hidden
             initial={{ x: '-120%' }}
@@ -351,7 +357,7 @@ export function HeroSlot({
         {!isCorpse && (
           <div style={{ position: 'absolute', top: 5, right: 5 }}>
             <LevelRing
-              level={card.level ?? 1}
+              level={level}
               exp={card.exp ?? 0}
               size={compact ? 22 : 28}
             />
@@ -363,6 +369,7 @@ export function HeroSlot({
           edge by the hero's identity colour (as the draft dossier does). */}
       <div style={{
         flexShrink: 0,
+        marginLeft: trimIn,
         padding: compact ? '3px 8px' : '4px 9px',
         background: poster.ink,
         color: poster.cream,
@@ -461,6 +468,10 @@ export function HeroSlot({
         </div>
         )}
       </div>
+
+      {/* The level bezel — inside the state border, never in place of it.
+          The frame's inner corner is its 10px radius less the 2px border. */}
+      {!isCorpse && <LevelTrim level={level} radius={8} compact={compact} palette={trimPalette} />}
     </motion.button>
     </div>
   );
