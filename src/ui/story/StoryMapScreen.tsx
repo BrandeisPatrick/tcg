@@ -1,18 +1,28 @@
-import { useState, useRef, useLayoutEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import type { CardId } from '@/engine/types';
-import type { StoryRun, StoryNode, NodeKind } from '@/story/types';
-import { CARDS_BY_ID } from '@/cards';
-import { HeroBadge } from '@/cards/art/heroArt';
-import {
-  randomStartingHeroes, recruitChoices, supplyChoices, nodeLabel,
-  enemyRosterSize,
-} from '@/story/content';
+import type { StoryRun, StoryNode } from '@/story/types';
+import { randomStartingHeroes, recruitChoices, supplyChoices } from '@/story/content';
 import { newRun, clearNode, isReachable } from '@/story/storyRun';
-import { palette, fonts, text, spring, shadow, radius } from '../tokens';
-import { NycMap } from './NycMap';
-import { PickOverlay } from './PickOverlay';
+import { effectiveKind, stopState } from '@/story/describe';
+import { useSettings } from '@/storage/settings';
+import { PosterButton } from '../chrome';
+import { PAPER_MOTTLE } from '../poster';
+import { fonts } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
+import { NycMap, MAP_WATER } from './NycMap';
+import { PickOverlay } from './PickOverlay';
+import { StopCard } from './StopCard';
+import { RunPanel } from './RunPanel';
+import { StorySheet } from './StorySheet';
+import { RouteLines, routeLegs } from './RouteLines';
+import { StopLayer, type Box } from './StopMarker';
+import { MapControls, OsmCredit } from './MapControls';
+import {
+  MAP_W, MAP_H, coverScale, scaleLimits, frameStops, revealPoint, lodBand,
+  type Camera, type Frame, type Pad,
+} from './mapCamera';
+import { useMapCamera, useCamera, useRaster, type MapCamera } from './useMapCamera';
 
 interface StoryMapScreenProps {
   run: StoryRun | null;
@@ -26,89 +36,198 @@ type PickState =
   | { mode: 'node'; node: StoryNode; kind: 'hero' | 'card'; options: CardId[] }
   | null;
 
-// The map's intrinsic coordinate space (node x/y are normalised against this).
-const MAP_W = 840, MAP_H = 1080;
-// Zoom = "cover the screen" × this multiplier (1 = exactly fills). Adjustable
-// in-game via the +/− buttons, clamped to [ZOOM_MIN, ZOOM_MAX].
-const ZOOM_INITIAL = 1.7, ZOOM_MIN = 1, ZOOM_MAX = 3.2, ZOOM_STEP = 1.3;
+/** The opening view comes no closer than this (× cover). */
+const FRONTIER_ZOOM = 2.2;
+/** A stop picked from the run panel is shown at least this close (× cover). */
+const FOCUS_ZOOM = 2;
+/** Keep a nudged stop this far inside the free area, so its tag shows too. */
+const STOP_MARGIN = 40;
+/** Desktop docks (the layout rule shared with the panels). */
+const DOCK = { top: 64, runW: 288, cardW: 340, edge: 16 };
+const CREDIT_H = 18;
+/** The zoom (px per map unit) at which NycMap's line weights are as drawn. */
+const LINE_REF = 1.7;
+
+/** How many stops each run (by seed) had cleared the last time the map was
+ *  on screen. Growth since then means we just came back from a won battle,
+ *  and the stop that fell gets stamped. Module scope: it outlives the screen
+ *  being unmounted for the match. */
+const seenCleared = new Map<number, number>();
+
+/** Where the player can act: every open stop, plus where they stand. */
+function frontier(run: StoryRun): StoryNode[] {
+  return run.nodes.filter((n) => n.id === run.currentNodeId || stopState(run, n) === 'open');
+}
+
+const inset = (p: Pad, m: number): Pad => ({ top: p.top + m, right: p.right + m, bottom: p.bottom + m, left: p.left + m });
 
 export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapScreenProps) {
   const { isMobile } = useViewport();
+  const { reducedMotion } = useSettings();
+  const osReduced = useReducedMotion();
+  const calm = reducedMotion || !!osReduced;
+  // The map takes gestures and shows stops only during an active run; behind
+  // the intro and ending sheets it is scenery.
+  const active = !!run && run.status === 'active';
   const [pick, setPick] = useState<PickState>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  // The map is interactive (draggable, nodes shown) only during an active run.
-  const active = !!run && run.status !== 'won' && run.status !== 'lost';
-  const [zoom, setZoom] = useState(ZOOM_INITIAL);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = active ? run.nodes.find((n) => n.id === selectedId) ?? null : null;
 
-  // Measure the frame so we can give the pannable world EXPLICIT drag bounds.
-  // (Framer's ref-based dragConstraints mis-measures a child larger than the
-  // ref and snaps it back to centre — numeric bounds pan reliably.) The world
-  // is centred and MAP_ZOOM× the frame, so it overflows half the excess on each
-  // side: that half-excess is exactly the allowed pan distance per axis.
-  const [frame, setFrame] = useState({ w: 0, h: 0 });
+  // Phone: the bottom slot's height decides what the map keeps clear.
+  const slotRef = useRef<HTMLDivElement>(null);
+  const [slotH, setSlotH] = useState(0);
   useLayoutEffect(() => {
-    const el = panelRef.current;
-    if (!el) return;
-    const measure = () => setFrame({ w: el.clientWidth, h: el.clientHeight });
+    const el = slotRef.current;
+    if (!el) { setSlotH(0); return; }
+    const measure = () => setSlotH(el.getBoundingClientRect().height);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
+  }, [isMobile, active]);
+
+  // Screen boxes of everything floating over the map, so optional name tags
+  // can keep out from under them.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [hud, setHud] = useState<Box[]>([]);
+  const [hudEpoch, setHudEpoch] = useState(0);
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root || !active) return;
+    const els = [...root.querySelectorAll<HTMLElement>('[data-dock], [data-hud]')];
+    const read = () => {
+      const boxes = els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom };
+      });
+      // The System gear (SystemLayer, top right, 40×40 at 12px).
+      boxes.push({ x0: window.innerWidth - 56, y0: 8, x1: window.innerWidth - 8, y1: 56 });
+      setHud((prev) => (JSON.stringify(prev) === JSON.stringify(boxes) ? prev : boxes));
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    els.forEach((el) => ro.observe(el));
+    window.addEventListener('resize', read);
+    return () => { ro.disconnect(); window.removeEventListener('resize', read); };
+  }, [active, isMobile, selectedId, slotH, hudEpoch]);
+
+  /** The viewport minus everything docked over it. */
+  const padsRef = useRef<(cardOpen: boolean) => Pad>(() => ({ top: 0, right: 0, bottom: 0, left: 0 }));
+  padsRef.current = (cardOpen: boolean): Pad => isMobile
+    ? { top: 64, left: 20, right: 64, bottom: (slotH || 84) + 12 + CREDIT_H + 8 }
+    : {
+        top: DOCK.top,
+        left: DOCK.edge + DOCK.runW + 16,
+        right: cardOpen ? DOCK.edge + DOCK.cardW + 16 : 76,
+        bottom: 32,
+      };
+
+  const frontierCamera = (r: StoryRun, frame: Frame, cardOpen = false): Camera =>
+    frameStops(frontier(r), frame, inset(padsRef.current(cardOpen), STOP_MARGIN), coverScale(frame) * FRONTIER_ZOOM);
+
+  // Back from a won battle? Then the opening shot is the stop that fell.
+  const [arrival] = useState<StoryNode | null>(() => {
+    if (!run || run.status !== 'active' || calm) return null;
+    const before = seenCleared.get(run.seed);
+    if (before === undefined || run.clearedNodeIds.length <= before) return null;
+    return run.nodes.find((n) => n.id === run.currentNodeId) ?? null;
+  });
+  const [stampId, setStampId] = useState<string | null>(arrival?.id ?? null);
+  useEffect(() => {
+    if (run) seenCleared.set(run.seed, run.clearedNodeIds.length);
+  }, [run]);
+
+  const camera = useMapCamera({
+    enabled: active && !pick,
+    reduced: calm,
+    initial: (frame) => {
+      if (run && arrival) {
+        return frameStops([arrival], frame, padsRef.current(false), coverScale(frame) * FRONTIER_ZOOM);
+      }
+      if (run && active) return frontierCamera(run, frame);
+      // Scenery behind a sheet: the harbour, the Battery at its heart.
+      const here = run?.nodes.find((n) => n.id === run.currentNodeId);
+      return frameStops([here ?? { x: 376 / MAP_W, y: 585 / MAP_H }], frame,
+        { top: 0, right: 0, bottom: 0, left: 0 }, coverScale(frame) * 1.5);
+    },
+    onTapEmpty: () => setSelectedId(null),
+  });
+
+  // The opening shot of an arrival holds on the stamped stop, then flies on
+  // to the new frontier.
+  useEffect(() => {
+    if (!arrival || !run) return;
+    const t = window.setTimeout(() => camera.flyTo(frontierCamera(run, camera.frame), 800), 520);
+    return () => window.clearTimeout(t);
+    // Once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Size the map world to COVER the full-screen frame (like background cover),
-  // then multiply by the current zoom. Keeping the world at the map's native
-  // aspect is what keeps the nodes aligned to the city. Pan range = half the
-  // overflow.
-  const cover = frame.w && frame.h ? Math.max(frame.w / MAP_W, frame.h / MAP_H) : 0;
-  const scale = cover * zoom;
-  const worldW = MAP_W * scale, worldH = MAP_H * scale;
-  const panX = Math.max(0, (worldW - frame.w) / 2);
-  const panY = Math.max(0, (worldH - frame.h) / 2);
 
-  // Manual drag-to-pan (own pointer handlers rather than Framer's drag, which is
-  // finicky and hard to verify). A small threshold distinguishes a pan from a
-  // node tap, so clicking a node still works.
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const drag = useRef<{ px: number; py: number; ox: number; oy: number; moved: boolean } | null>(null);
-  const clampPan = (v: number, m: number) => Math.max(-m, Math.min(m, v));
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (!active) return;
-    drag.current = { px: e.clientX, py: e.clientY, ox: pan.x, oy: pan.y, moved: false };
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    const d = drag.current;
-    if (!d) return;
-    const dx = e.clientX - d.px, dy = e.clientY - d.py;
-    if (!d.moved && Math.hypot(dx, dy) > 4) {
-      d.moved = true;
-      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* non-active pointer */ }
-    }
-    if (d.moved) setPan({ x: clampPan(d.ox + dx, panX), y: clampPan(d.oy + dy, panY) });
-  };
-  const onPointerUp = (e: React.PointerEvent) => {
-    if (drag.current?.moved) { try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* */ } }
-    drag.current = null;
-  };
+  // A run that has just begun (from the intro or an ending) flies in on its
+  // first stop.
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current && run) camera.flyTo(frontierCamera(run, camera.frame), 700);
+    wasActive.current = active;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
-  // Zoom buttons: scale the multiplier and scale the pan offset by the same
-  // ratio so the screen-centre map point stays put, then re-clamp to new bounds.
-  const applyZoom = (factor: number) => {
-    const nz = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor));
-    if (nz === zoom) return;
-    const ns = cover * nz;
-    const nPanX = Math.max(0, (MAP_W * ns - frame.w) / 2);
-    const nPanY = Math.max(0, (MAP_H * ns - frame.h) / 2);
-    const ratio = nz / zoom;
-    setZoom(nz);
-    setPan((p) => ({ x: clampPan(p.x * ratio, nPanX), y: clampPan(p.y * ratio, nPanY) }));
-  };
+  // A stop that opens its card from under a dock is nudged into the clear.
+  useEffect(() => {
+    if (!selected) return;
+    const next = revealPoint(camera.dest(), camera.frame, selected.x, selected.y,
+      inset(padsRef.current(true), STOP_MARGIN));
+    if (next) camera.flyTo(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, slotH]);
+
+  // Escape lets go of the selected stop (the pick sheets handle their own).
+  // Captured and stopped, like every overlay that needs the key first, so the
+  // same press does not also open the System menu.
+  useEffect(() => {
+    if (!selectedId || pick) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setSelectedId(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [selectedId, pick]);
+
+  const select = useCallback((node: StoryNode) => setSelectedId(node.id), []);
+
+  // Tabbing onto a stop off screen brings it into view.
+  const cardOpen = useRef(false);
+  cardOpen.current = !!selected;
+  const reveal = useCallback((node: StoryNode) => {
+    const next = revealPoint(camera.dest(), camera.frame, node.x, node.y,
+      inset(padsRef.current(cardOpen.current), STOP_MARGIN));
+    if (next) camera.flyTo(next);
+  }, [camera]);
+
+  const focusStop = useCallback((node: StoryNode) => {
+    const f = camera.frame;
+    const s = Math.max(camera.dest().s, coverScale(f) * FOCUS_ZOOM);
+    // On a phone the card replaces the run bar; until it is measured, assume
+    // it takes about half the screen.
+    const pad = padsRef.current(true);
+    if (isMobile) pad.bottom = Math.max(pad.bottom, f.h * 0.5);
+    camera.flyTo(frameStops([node], f, pad, s));
+    setSelectedId(node.id);
+  }, [camera, isMobile]);
+
+  const locate = useCallback(() => {
+    if (run) camera.flyTo(frontierCamera(run, camera.frame, !!selected));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run, camera, selected]);
 
   const startRun = (hero: CardId) => { onUpdateRun(newRun(hero)); setPick(null); };
 
-  const handleNode = (node: StoryNode) => {
+  // The stop card's one action — today's node handling, unchanged.
+  const go = (node: StoryNode) => {
     if (!run || !isReachable(run, node)) return;
-    // Roster full → a recruit node hands out supplies instead of a 5th hero.
-    const kind: NodeKind = node.kind === 'recruit' && run.heroes.length >= 4 ? 'supply' : node.kind;
+    const kind = effectiveKind(run, node); // a full roster turns a recruit into supplies
     if (kind === 'recruit') {
       setPick({ mode: 'node', node, kind: 'hero', options: recruitChoices(run, node) });
     } else if (kind === 'supply') {
@@ -126,108 +245,138 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
       : { ...next, deck: [...next.deck, id] };
     onUpdateRun(next);
     setPick(null);
+    setSelectedId(null);
+    if (!calm) setStampId(pick.node.id);
   };
 
-  return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      background: '#1a1206', fontFamily: fonts.ui, overflow: 'hidden',
-    }}>
-      <BackdropGlow />
+  const abandon = useCallback(() => {
+    setSelectedId(null);
+    onUpdateRun(null);
+  }, [onUpdateRun]);
 
-      {/* Full-screen map viewport — the world inside is sized to cover this and
-          is dragged around; the viewport clips (overflow hidden). */}
-      <motion.div
-        ref={panelRef}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={spring.soft}
-        style={{
-          position: 'absolute', inset: 0,
-          overflow: 'hidden',
-          background: palette.bg0,
-          touchAction: 'none', // let the drag handler own touch panning
-        }}
-      >
-        {/* Pannable, zoomed-in world: the city map, route edges and node markers
-            live here, rendered MAP_ZOOM× larger than the frame so the nodes are
-            well-separated. Drag to move around; the frame clips (overflow hidden). */}
-        <div
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          style={{
-            position: 'absolute',
-            width: worldW, height: worldH,
-            left: (frame.w - worldW) / 2, top: (frame.h - worldH) / 2,
-            transform: `translate3d(${pan.x}px, ${pan.y}px, 0)`,
-            cursor: active ? 'grab' : 'default',
-            touchAction: 'none',
-          }}
-        >
-          <NycMap />
-          {active && (
+  const legs = useMemo(() => (run ? routeLegs(run.nodes) : []), [run?.nodes]);
+  // The legs a just-cleared stop opened draw themselves in.
+  const drawIn = useMemo(() => new Set(
+    stampId ? legs.filter((l) => l.from.id === stampId).map((l) => l.key) : [],
+  ), [legs, stampId]);
+
+  const creditBottom = isMobile ? (active ? slotH + 12 + 6 : 8) : 12;
+
+  return (
+    <div ref={rootRef} style={{
+      position: 'fixed', inset: 0, overflow: 'clip',
+      background: MAP_WATER, fontFamily: fonts.ui,
+    }}>
+      {/* Fixed HUD — siblings of the map, NOT children of it. A transformed
+          ancestor mis-positions absolutely-placed descendants on fractional-
+          DPR displays (and would trap the panels' own fixed sheets), so the
+          docks and controls hang off this plain position:fixed root, and the
+          dock slots themselves never carry a transform. They come first in
+          the DOM so Tab reaches Back and the run panel before the 21 stops;
+          the map's own stacking context keeps it underneath. */}
+      {active && (
+        <>
+          <div data-hud="back" style={{ position: 'fixed', top: 12, left: 12, zIndex: 30 }}>
+            <PosterButton variant="ink" size="sm" onClick={onExit} ariaLabel="Back to the title screen">
+              ← Back
+            </PosterButton>
+          </div>
+
+          {isMobile ? (
+            <div ref={slotRef} data-dock="bottom" style={{
+              position: 'fixed', left: 12, right: 12, bottom: 12, zIndex: 20,
+              maxHeight: '62dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column',
+            }}>
+              {selected
+                ? <StopCard run={run!} node={selected} compact onGo={() => go(selected)} onClose={() => setSelectedId(null)} />
+                : <MemoRunPanel run={run!} compact onFocusStop={focusStop} onAbandon={abandon} />}
+            </div>
+          ) : (
             <>
-              <Edges run={run!} />
-              {run!.nodes.map((n) => (
-                <NodeMarker key={n.id} run={run!} node={n} onClick={() => handleNode(n)} />
-              ))}
+              <div data-dock="run" style={{
+                position: 'fixed', left: DOCK.edge, top: DOCK.top, width: DOCK.runW, zIndex: 20,
+                maxHeight: 'calc(100dvh - 96px)', overflowY: 'auto', display: 'flex', flexDirection: 'column',
+              }}>
+                <MemoRunPanel run={run!} compact={false} onFocusStop={focusStop} onAbandon={abandon} />
+              </div>
+              <AnimatePresence onExitComplete={() => setHudEpoch((n) => n + 1)}>
+                {selected && (
+                  <motion.div key="card" data-dock="card"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.16 }}
+                    style={{
+                      position: 'fixed', right: DOCK.edge, top: DOCK.top, width: DOCK.cardW, zIndex: 21,
+                      maxHeight: 'calc(100dvh - 260px)', overflowY: 'auto', display: 'flex', flexDirection: 'column',
+                    }}>
+                    <StopCard run={run!} node={selected} compact={false} onGo={() => go(selected)} onClose={() => setSelectedId(null)} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </>
           )}
-        </div>
-      </motion.div>
 
-      {/* Fixed overlays — siblings of the map panel, NOT children of it. Framer
-          applies a compositing transform to the motion.div panel, and a
-          transformed ancestor mis-positions absolutely-placed descendants on
-          fractional-DPR displays (the map's world div escapes only because it has
-          its own translate3d). Anchoring the HUD/zoom/intro to the plain
-          position:fixed root instead keeps them pinned to the real corners. */}
-      {active && (
-        <RunHud run={run!} onExit={onExit} onAbandon={() => onUpdateRun(null)} isMobile={isMobile} />
+          <Controls camera={camera} onLocate={locate} style={{
+            position: 'fixed', zIndex: 20,
+            right: isMobile ? 12 : 16,
+            bottom: creditBottom + CREDIT_H + 8,
+          }} />
+        </>
       )}
 
-      {/* Zoom controls — bottom-right corner, fixed (not pannable). */}
-      {active && (
-        <div style={{
-          position: 'absolute', right: 14, bottom: 14, zIndex: 6,
-          display: 'flex', flexDirection: 'column', gap: 8,
-          // Own compositing layer → correct corner paint even on fractional-DPR
-          // displays (matches the map world div, which never mis-positions).
-          transform: 'translateZ(0)',
-        }}>
-          <ZoomBtn label="+" title="Zoom in" onClick={() => applyZoom(ZOOM_STEP)} disabled={zoom >= ZOOM_MAX - 1e-3} />
-          <ZoomBtn label="−" title="Zoom out" onClick={() => applyZoom(1 / ZOOM_STEP)} disabled={zoom <= ZOOM_MIN + 1e-3} />
-        </div>
-      )}
+      {/* The map viewport — takes the gestures. The sheet inside is moved by
+          one transform; the routes and stops are drawn over it in screen
+          space from the same camera. */}
+      <div
+        ref={camera.viewportRef}
+        style={{
+          // Its own stacking context: the stops' z-order stays inside the map
+          // and never climbs over the docks. Clipped, not hidden: a hidden
+          // overflow is still a scroll container, and focusing a stop off
+          // screen would scroll the whole map out from under the camera.
+          position: 'absolute', inset: 0, zIndex: 0, overflow: 'clip',
+          touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
+          cursor: active ? 'grab' : 'default',
+          pointerEvents: active ? 'auto' : 'none',
+        }}
+      >
+        <MapLayer camera={camera} />
+        {active && (
+          <MapStage camera={camera} run={run!} legs={legs} drawIn={drawIn} hud={hud} selectedId={selectedId}
+            stampId={stampId} calm={calm} onSelect={select} onKeyboardFocus={reveal} />
+        )}
+      </div>
 
-      {/* Intro / start-of-run panel */}
-      {(!run || run.status === 'lost' || run.status === 'won') && (
-        <CenterPanel
-          run={run}
-          onBegin={() => setPick({ mode: 'start', options: randomStartingHeroes() })}
-          onExit={onExit}
-        />
-      )}
+      <OsmCredit style={{ position: 'fixed', right: isMobile ? 12 : 16, bottom: creditBottom, zIndex: 70 }} />
+
+      <AnimatePresence>
+        {!active && pick?.mode !== 'start' && (
+          <StorySheet key="sheet" run={run}
+            onBegin={() => setPick({ mode: 'start', options: randomStartingHeroes() })}
+            onExit={onExit} />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {pick?.mode === 'start' && (
           <PickOverlay
+            key="start"
             kind="hero"
             title="Choose your first hero"
             subtitle="Recruit more allies and build your deck as you fight uptown."
             options={pick.options}
+            confirmVerb="Start with"
             onPick={startRun}
             onCancel={() => setPick(null)}
           />
         )}
         {pick?.mode === 'node' && (
           <PickOverlay
+            key="node"
             kind={pick.kind}
             title={pick.kind === 'hero' ? 'Recruit a hero' : 'Take a supply'}
             subtitle={pick.kind === 'hero' ? 'Add one to your roster (up to four).' : 'Add one card to your deck.'}
             options={pick.options}
+            confirmVerb={pick.kind === 'hero' ? 'Recruit' : 'Take'}
             onPick={resolveChoice}
             onCancel={() => setPick(null)}
           />
@@ -237,387 +386,92 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
   );
 }
 
-// ---- map edges ---------------------------------------------------------------
-function Edges({ run }: { run: StoryRun }) {
-  const byId = new Map(run.nodes.map((n) => [n.id, n]));
+// The run panel is the heaviest thing docked on the map; it only needs to
+// redraw when the run changes, not when the selection does.
+const MemoRunPanel = memo(RunPanel);
+
+/** Lay the 840×1080 sheet out at `raster` px per unit and move it with one
+ *  transform. While the camera moves only the transform changes (cheap); once
+ *  it rests, raster catches up with the zoom and the scale returns to exactly
+ *  1, so the print is re-rasterised crisp. NycMap is memo'd and never
+ *  re-renders here.
+ *
+ *  The detail band (`data-zoom`) follows the same committed raster scale, not
+ *  the live zoom: a band change repaints the whole sheet (~100ms on a
+ *  desktop), and it belongs with the re-layout at rest — detail that settles
+ *  in a moment after the zoom stops is fine, a stall mid-gesture is not. */
+function MapLayer({ camera }: { camera: MapCamera }) {
+  const cam = useCamera(camera);
+  const raster = useRaster(camera);
+  const { frame } = camera;
+  const k = cam.s / raster;
+  const tx = Math.round(frame.w / 2 - cam.cx * cam.s);
+  const ty = Math.round(frame.h / 2 - cam.cy * cam.s);
   return (
-    <svg viewBox="0 0 1000 1000" preserveAspectRatio="none"
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-      {run.nodes.flatMap((a) =>
-        a.next.map((bid) => {
-          const b = byId.get(bid);
-          if (!b) return null;
-          const live = run.clearedNodeIds.includes(a.id) && isReachable(run, b);
-          const traversed = run.clearedNodeIds.includes(a.id) && run.clearedNodeIds.includes(bid);
-          // Edges into not-yet-available ground are grey (the route is visible
-          // but clearly locked).
-          const color = live ? '#ffcf5a' : traversed ? '#6f96d6' : 'rgba(70,62,48,0.5)';
-          return (
-            <line key={a.id + bid}
-              x1={a.x * 1000} y1={a.y * 1000} x2={b.x * 1000} y2={b.y * 1000}
-              stroke={color} strokeWidth={live ? 2.2 : 1.4}
-              strokeDasharray={live ? '0' : traversed ? '0' : '6 9'}
-              strokeLinecap="round"
-              opacity={live ? 0.95 : traversed ? 0.85 : 0.5}
-              style={live ? { filter: 'drop-shadow(0 0 4px rgba(255,200,90,0.85))' } : undefined}
-            />
-          );
-        }),
-      )}
-    </svg>
-  );
-}
-
-// Per-kind accent so the map reads at a glance (reachable rings + hover chips).
-const KIND_ACCENT: Record<NodeKind, string> = {
-  battle: palette.danger,     // wine
-  elite: palette.spirit,      // plum
-  recruit: palette.success,   // forest
-  supply: palette.accent,     // brass
-  boss: '#e6b94a',            // gold
-};
-const CURRENT_GOLD = '#e6b94a';
-
-/** Hover scouting text for a node — location name + what's there. `kind` is the
- *  effective kind (a recruit becomes a supply once the roster is full). */
-function nodeTip(node: StoryNode, kind: NodeKind): string {
-  const place = node.name ? `${node.name} · ` : '';
-  if (kind === 'recruit') return `${place}Recruit a hero`;
-  if (kind === 'supply') return `${place}Supply cache`;
-  const size = enemyRosterSize(node.depth, node.kind);
-  const led = node.enemy ? ` · ${CARDS_BY_ID[node.enemy]?.name ?? ''}` : '';
-  return `${place}${kind === 'boss' ? 'Boss' : 'Battle'} — ${size} foe${size > 1 ? 's' : ''}${led}`;
-}
-
-// ---- node marker -------------------------------------------------------------
-/** Beveled-metal palette for the medallion body, keyed by state/kind. hi = top
- *  highlight, mid = body, lo = lower shade, rim = edge stroke. */
-type Metal = { hi: string; mid: string; lo: string; rim: string };
-const KIND_METAL: Record<NodeKind, Metal> = {
-  battle:  { hi: '#c2ccd6', mid: '#737e8a', lo: '#3a424c', rim: '#23282f' }, // gunmetal
-  elite:   { hi: '#d9b8e0', mid: '#8a5a9a', lo: '#46294e', rim: '#2c1834' }, // plum steel
-  recruit: { hi: '#c4e0a2', mid: '#5e8442', lo: '#2e4422', rim: '#1c2c16' }, // forest bronze
-  supply:  { hi: '#ffe7a6', mid: '#d2a23e', lo: '#7a5410', rim: '#503709' }, // brass
-  boss:    { hi: '#ffe9ad', mid: '#e0b24c', lo: '#8a5e16', rim: '#5a3d0c' }, // rich gold
-};
-const GOLD_METAL: Metal    = { hi: '#ffeeb5', mid: '#e6b94a', lo: '#8a5e16', rim: '#5a3d0c' }; // current
-const CLEARED_METAL: Metal = { hi: '#a9d2b4', mid: '#5e8e6e', lo: '#2e4a38', rim: '#1c3024' }; // verdigris
-const LOCKED_METAL: Metal  = { hi: '#cfc9bc', mid: '#a39c8c', lo: '#736c5c', rim: '#5a5446' }; // pale dormant stone — recedes into the map
-
-function NodeMarker({ run, node, onClick }: { run: StoryRun; node: StoryNode; onClick: () => void }) {
-  const [hover, setHover] = useState(false);
-  const cleared = run.clearedNodeIds.includes(node.id);
-  const current = run.currentNodeId === node.id;
-  const reachable = isReachable(run, node);
-  const muted = !reachable && !current && !cleared;
-  const effKind: NodeKind = node.kind === 'recruit' && run.heroes.length >= 4 ? 'supply' : node.kind;
-  const size = effKind === 'boss' ? 50 : effKind === 'elite' ? 42 : 38;
-  const accent = KIND_ACCENT[effKind];
-  const pulse = reachable;
-
-  // The medallion's metal finish reads its state at a glance: brass for "you
-  // are here", vivid kind-metal when reachable, verdigris-tarnished when done,
-  // faded grey when locked.
-  const metal: Metal = current ? GOLD_METAL : cleared ? CLEARED_METAL : muted ? LOCKED_METAL : KIND_METAL[effKind];
-  const emblem = cleared && !current ? 'cleared' : effKind;
-  const emblemColor = muted ? '#8f897c' : cleared && !current ? '#d6efdd' : '#f3e6c6';
-
-  const combat = effKind === 'battle' || effKind === 'elite' || effKind === 'boss';
-  const foes = combat ? enemyRosterSize(node.depth, node.kind) : 0;
-  const showBadge = combat && (reachable || current) && foes > 0;
-
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      disabled={!reachable}
-      aria-label={`${node.name ?? nodeLabel(node.kind)}`}
+    <div
+      data-map-layer
+      data-zoom={lodBand(raster)}
       style={{
-        position: 'absolute',
-        left: `${node.x * 100}%`, top: `${node.y * 100}%`,
-        width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2,
-        border: 'none', background: 'none', padding: 0,
-        cursor: reachable ? 'pointer' : 'default',
-        opacity: muted ? 0.5 : 1,
-        zIndex: hover ? 6 : current ? 3 : 1,
-        // hover lift handled by transform so the medallion feels picked up
-        transform: hover && reachable ? 'translateY(-2px)' : 'none',
-        transition: 'transform 140ms cubic-bezier(0.22,1,0.36,1)',
+        position: 'absolute', left: 0, top: 0,
+        width: MAP_W * raster, height: MAP_H * raster,
+        transform: `translate3d(${tx}px, ${ty}px, 0) scale(${k})`,
+        transformOrigin: '0 0',
+        willChange: 'transform',
+        // NycMap's line weights follow the square root of the zoom.
+        ['--line' as string]: Math.sqrt(LINE_REF / raster),
       }}
     >
-      {/* Ground shadow — anchors the medallion onto the map. */}
-      <span aria-hidden style={{
-        position: 'absolute', left: '50%', bottom: -size * 0.16, transform: 'translateX(-50%)',
-        width: size * 0.78, height: size * 0.22, borderRadius: '50%',
-        background: 'radial-gradient(ellipse, rgba(0,0,0,0.5), rgba(0,0,0,0) 70%)',
-        pointerEvents: 'none',
+      <NycMap />
+      {/* The paper's tooth, printed with the sheet (so it pans and zooms
+          with it). */}
+      <div aria-hidden style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage: PAPER_MOTTLE,
+        backgroundSize: `${200 * raster}px ${200 * raster}px`,
+        mixBlendMode: 'multiply',
       }} />
-
-      {/* Pulse — only on actionable nodes. */}
-      {pulse && (
-        <motion.span
-          aria-hidden
-          animate={{ scale: [1, 1.4], opacity: [0.45, 0] }}
-          transition={{ duration: 1.7, repeat: Infinity, ease: 'easeOut' }}
-          style={{ position: 'absolute', inset: -2, borderRadius: '50%', border: `2px solid ${accent}` }}
-        />
-      )}
-
-      {/* Medallion body — beveled metal ring. */}
-      <span style={{
-        position: 'relative', width: '100%', height: '100%', borderRadius: '50%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: `linear-gradient(155deg, ${metal.hi}, ${metal.mid} 48%, ${metal.lo})`,
-        border: `1.5px solid ${metal.rim}`,
-        boxShadow: `inset 0 2px 2px rgba(255,255,255,0.45), inset 0 -3px 5px rgba(0,0,0,0.5), 0 5px 12px rgba(0,0,0,0.5)`
-          // Actionable nodes get a soft colored halo + thin ring so "you are
-          // here" and "you can go here" pop against the busy map at a glance.
-          + ((pulse || current) ? `, 0 0 18px 3px ${(current ? CURRENT_GOLD : accent)}99, 0 0 0 2px ${(current ? CURRENT_GOLD : accent)}88` : ''),
-      }}>
-        {/* Recessed inner disc the emblem is struck into. */}
-        <span style={{
-          width: '72%', height: '72%', borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'radial-gradient(circle at 50% 36%, #2b2218, #15100a)',
-          border: `1px solid ${metal.rim}`,
-          boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.75), inset 0 -1px 1px rgba(255,255,255,0.06)',
-        }}>
-          <span aria-hidden style={{ display: 'flex', filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.6))' }}>
-            <NodeIcon kind={emblem} color={emblemColor} size={size * 0.56} />
-          </span>
-        </span>
-      </span>
-
-      {/* Foe-count badge — a small struck coin (no "N foes" text). */}
-      {showBadge && (
-        <span aria-hidden style={{
-          position: 'absolute', right: -3, bottom: -3,
-          minWidth: 17, height: 17, padding: '0 3px', borderRadius: 999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'radial-gradient(circle at 50% 35%, #241a0f, #120c06)',
-          border: `1.5px solid ${metal.mid}`,
-          color: '#f3e6c6', fontFamily: fonts.ui, fontWeight: 800, fontSize: 10, lineHeight: 1,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.6)',
-        }}>{foes}</span>
-      )}
-
-      {/* Name + scouting details — on hover only (keeps the harbour uncluttered). */}
-      <AnimatePresence>
-        {hover && (
-          <motion.span
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.12 }}
-            style={{
-              position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-              marginBottom: 9, whiteSpace: 'nowrap', pointerEvents: 'none',
-              background: 'rgba(18,11,3,0.95)', border: `1px solid ${current ? CURRENT_GOLD : accent}`,
-              color: palette.bg1, padding: '5px 10px', borderRadius: radius.md,
-              fontFamily: fonts.ui, fontSize: 11, fontWeight: 700,
-              boxShadow: shadow.md,
-            }}
-          >{nodeTip(node, effKind)}</motion.span>
-        )}
-      </AnimatePresence>
-    </button>
-  );
-}
-
-// ---- node icons --------------------------------------------------------------
-function NodeIcon({ kind, color, size }: { kind: NodeKind | 'cleared'; color: string; size: number }) {
-  const sw = 2;
-  const c = { stroke: color, strokeWidth: sw, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
-  switch (kind) {
-    case 'cleared':
-      return <svg width={size} height={size} viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" {...c} strokeWidth={3} /></svg>;
-    case 'battle':
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24">
-          <path d="M4 4l11 11M15 13l3 3-2 2-3-3M20 4L9 15M9 11l-3 3 2 2 3-3" {...c} />
-        </svg>
-      );
-    case 'elite':
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24">
-          <path d="M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4L12 16.3 7.2 18.7l.9-5.4L4.2 8.7l5.4-.8z" {...c} fill={color} />
-        </svg>
-      );
-    case 'recruit':
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24">
-          <circle cx="10" cy="8" r="3.4" {...c} />
-          <path d="M4.5 19c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5" {...c} />
-          <path d="M18.5 6.5v5M16 9h5" {...c} />
-        </svg>
-      );
-    case 'supply':
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24">
-          <rect x="4" y="9" width="16" height="10" rx="1.5" {...c} />
-          <path d="M4 9l2.5-4h11L20 9M12 9v10" {...c} />
-          <rect x="10.5" y="11.5" width="3" height="3" rx="0.6" {...c} fill={color} />
-        </svg>
-      );
-    case 'boss':
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24">
-          <path d="M4 18h16M4 18l-1-9 5 4 4-7 4 7 5-4-1 9z" {...c} fill={color} />
-        </svg>
-      );
-  }
-}
-
-// ---- run HUD -----------------------------------------------------------------
-function RunHud({ run, onExit, onAbandon, isMobile }: { run: StoryRun; onExit: () => void; onAbandon: () => void; isMobile: boolean }) {
-  const bosses = run.nodes.filter((n) => n.kind === 'boss');
-  const bossesDown = bosses.filter((b) => run.clearedNodeIds.includes(b.id)).length;
-  // Phones get larger touch targets and smaller hero badges so the bottom-left
-  // status chip never overflows the screen edge.
-  const badge = isMobile ? 26 : 30;
-  return (
-    <>
-      <button
-        onClick={onExit}
-        aria-label="Back to menu"
-        style={{
-          position: 'absolute', top: 14, left: 14, width: isMobile ? 44 : 38, height: isMobile ? 44 : 38, borderRadius: '50%',
-          background: 'rgba(18,11,3,0.9)', border: `1.5px solid ${palette.accent}`,
-          color: palette.bg1, cursor: 'pointer', fontSize: 18, lineHeight: 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transform: 'translateZ(0)',
-        }}
-      >‹</button>
-
-      <button
-        onClick={onAbandon}
-        aria-label="Abandon run and start over"
-        style={{
-          // right offset clears the persistent system gear in the corner.
-          position: 'absolute', top: 14, right: 62,
-          background: 'rgba(18,11,3,0.9)', border: `1.5px solid ${palette.danger}`,
-          color: palette.bg1, cursor: 'pointer', borderRadius: radius.pill,
-          padding: isMobile ? '11px 16px' : '8px 16px', fontFamily: fonts.ui, fontSize: 12, fontWeight: 700,
-          transform: 'translateZ(0)',
-        }}
-      >{isMobile ? 'Abandon' : 'Abandon Run'}</button>
-
-      <div style={{
-        position: 'absolute', left: 14, bottom: 14,
-        // Keep clear of the bottom-right zoom controls on narrow screens.
-        maxWidth: isMobile ? 'calc(100vw - 92px)' : undefined,
-        display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 14,
-        // Near-solid so the tan map underneath can't bleed through and wash out
-        // the text contrast.
-        background: 'rgba(16,10,3,0.94)', border: `1px solid ${palette.borderStrong}`,
-        borderRadius: radius.pill, padding: '7px 16px 7px 10px',
-        boxShadow: shadow.md, transform: 'translateZ(0)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          {run.heroes.map((id, i) => (
-            <div key={id} style={{ marginLeft: i === 0 ? 0 : -8, borderRadius: '50%', border: `2px solid #120b03` }}>
-              <HeroBadge cardId={id} size={badge} />
-            </div>
-          ))}
-          {Array.from({ length: Math.max(0, 4 - run.heroes.length) }).map((_, i) => (
-            <div key={`e${i}`} style={{
-              marginLeft: -8, width: badge, height: badge, borderRadius: '50%',
-              border: `2px dashed rgba(176,120,37,0.5)`, background: 'rgba(0,0,0,0.25)',
-            }} />
-          ))}
-        </div>
-        <Stat label="Deck" value={`${run.deck.length}`} />
-        <Stat label="Bosses" value={`${bossesDown}/${bosses.length}`} />
-      </div>
-    </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 40 }}>
-      <span style={{ fontFamily: fonts.ui, fontSize: 16, fontWeight: 700, color: palette.bg1, lineHeight: 1 }}>{value}</span>
-      <span style={{ fontFamily: fonts.ui, fontSize: 10, fontWeight: 600, color: 'rgba(240,226,194,0.82)', letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 2 }}>{label}</span>
     </div>
   );
 }
 
-function ZoomBtn({ label, title, onClick, disabled }: { label: string; title: string; onClick: () => void; disabled: boolean }) {
+/** Everything drawn from the live camera in screen space. */
+function MapStage({ camera, run, legs, drawIn, hud, selectedId, stampId, calm, onSelect, onKeyboardFocus }: {
+  camera: MapCamera;
+  run: StoryRun;
+  legs: ReturnType<typeof routeLegs>;
+  drawIn: ReadonlySet<string>;
+  hud: readonly Box[];
+  selectedId: string | null;
+  stampId: string | null;
+  calm: boolean;
+  onSelect: (node: StoryNode) => void;
+  onKeyboardFocus: (node: StoryNode) => void;
+}) {
+  const cam = useCamera(camera);
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={title}
-      title={title}
-      style={{
-        width: 44, height: 44, borderRadius: '50%',
-        background: 'rgba(18,11,3,0.9)', border: `1.5px solid ${palette.accent}`,
-        color: palette.bg1, cursor: disabled ? 'default' : 'pointer',
-        fontSize: 24, fontWeight: 700, lineHeight: 1, paddingBottom: 2,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        opacity: disabled ? 0.4 : 1, boxShadow: shadow.md, userSelect: 'none',
-      }}
-    >{label}</button>
+    <>
+      <RouteLines run={run} legs={legs} cam={cam} frame={camera.frame} drawIn={drawIn} calm={calm} />
+      <StopLayer run={run} cam={cam} frame={camera.frame} hud={hud} selectedId={selectedId} stampId={stampId}
+        calm={calm} onSelect={onSelect} onKeyboardFocus={onKeyboardFocus} />
+    </>
   );
 }
 
-// ---- center panel (intro / win / loss) --------------------------------------
-function CenterPanel({ run, onBegin, onExit }: { run: StoryRun | null; onBegin: () => void; onExit: () => void }) {
-  const won = run?.status === 'won';
-  const lost = run?.status === 'lost';
-  const title = won ? 'The City Is Yours' : lost ? 'Outflanked' : 'Streets of New York';
-  const body = won
-    ? 'You toppled the rival Patron and claimed the city. A new run awaits.'
-    : lost
-      ? 'Your run ends in the gutters of the old city. Regroup and try again.'
-      : 'A roguelike campaign. Begin with a single hero, recruit allies, build your deck, and fight uptown to the rival Patron — who grows stronger with every block.';
-  const cta = won ? 'New Run' : lost ? 'Try Again' : 'Enter the City';
-  const tone = won ? palette.success : lost ? palette.danger : palette.accent;
-
+function Controls({ camera, onLocate, style }: {
+  camera: MapCamera;
+  onLocate: () => void;
+  style: CSSProperties;
+}) {
+  const cam = useCamera(camera);
+  const { min, max } = scaleLimits(camera.frame);
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      style={{
-        position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 16, textAlign: 'center',
-        background: 'radial-gradient(ellipse at 50% 45%, rgba(20,12,2,0.55), rgba(20,12,2,0.82))',
-        padding: 32,
-      }}
-    >
-      <motion.h1
-        initial={{ y: -14, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={spring.soft}
-        style={{ fontFamily: fonts.display, fontSize: 'clamp(28px, 5vw, 48px)', color: tone, margin: 0, letterSpacing: '0.03em', textShadow: '0 3px 18px rgba(0,0,0,0.6)' }}
-      >{title}</motion.h1>
-      <p style={{ ...text.body, color: palette.bg1, maxWidth: 460, margin: 0 }}>{body}</p>
-      <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-        <button
-          onClick={onBegin}
-          style={{
-            background: `linear-gradient(180deg, ${tone}, ${tone}aa)`, color: '#fff7e8',
-            padding: '13px 34px', border: 'none', borderRadius: radius.pill,
-            fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em',
-            cursor: 'pointer', boxShadow: shadow.lg,
-          }}
-        >{cta}</button>
-        <button
-          onClick={onExit}
-          style={{
-            background: 'transparent', color: palette.bg1, padding: '13px 26px',
-            border: `1px solid ${palette.textFaint}`, borderRadius: radius.pill,
-            fontFamily: fonts.ui, fontSize: 13, cursor: 'pointer',
-          }}
-        >Menu</button>
-      </div>
-    </motion.div>
-  );
-}
-
-function BackdropGlow() {
-  return (
-    <div aria-hidden style={{
-      position: 'absolute', inset: 0, pointerEvents: 'none',
-      background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(176,120,37,0.10), transparent 70%)',
-    }} />
+    <MapControls
+      canZoomIn={cam.s < max - 1e-3}
+      canZoomOut={cam.s > min + 1e-3}
+      onZoomIn={() => camera.zoomBy(1.4)}
+      onZoomOut={() => camera.zoomBy(1 / 1.4)}
+      onLocate={onLocate}
+      style={style}
+    />
   );
 }

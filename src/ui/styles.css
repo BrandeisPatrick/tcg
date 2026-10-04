@@ -79,6 +79,17 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
   to   { transform: scale(1.09) translate3d(-1.5%, 1%, 0); }
 }
 
+/* ===== Story map =====
+   The map's only running motion is the pulse on an open stop — it points at
+   where you can go; the red route's dots hold still, like the title card's.
+   story-draw is one-off: it reveals a newly opened leg on arrival, through a
+   pathLength=1 mask (RouteLines.tsx). */
+@keyframes story-pulse {
+  from { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  to   { transform: translate(-50%, -50%) scale(1.55); opacity: 0; }
+}
+@keyframes story-draw { to { stroke-dashoffset: 0; } }
+
 /* ===== Spot varnish / metallic ink — the rarity-4 premium plate =====
    What a print shop actually does to make one sheet feel expensive: lay a
    metallic ink plate over selected type, and optionally a clear spot varnish

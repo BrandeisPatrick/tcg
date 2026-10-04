@@ -28,11 +28,12 @@ import { FoilShowroom } from './gallery/FoilShowroom';
 import { BoardTab } from './gallery/BoardTab';
 import { StatusesTab } from './gallery/StatusesTab';
 import { OverlaysTab } from './gallery/OverlaysTab';
+import { StoryTab } from './gallery/StoryTab';
 import './gallery/gallery.css';
 
 const BASE = import.meta.env.BASE_URL ?? '/';
 
-type Tab = 'cards' | 'combat' | 'foil' | 'board' | 'statuses' | 'overlays' | 'credits';
+type Tab = 'cards' | 'combat' | 'foil' | 'board' | 'statuses' | 'overlays' | 'story' | 'credits';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'cards', label: 'Cards' },
@@ -41,6 +42,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'board', label: 'Board' },
   { id: 'statuses', label: 'Statuses' },
   { id: 'overlays', label: 'Overlays' },
+  { id: 'story', label: 'Story' },
   { id: 'credits', label: 'Credits' },
 ];
 
@@ -163,6 +165,7 @@ export function PreviewGallery() {
           {tab === 'board' && <BoardTab />}
           {tab === 'statuses' && <StatusesTab />}
           {tab === 'overlays' && <OverlaysTab />}
+          {tab === 'story' && <StoryTab />}
           {tab === 'credits' && <ArtCredits compact={isMobile} columns={isMobile ? 1 : 2} />}
         </div>
       </motion.section>
