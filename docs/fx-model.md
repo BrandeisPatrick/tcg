@@ -51,11 +51,13 @@ Rules the FX layer relies on (pinned by `tests/engine/fx-events.spec.ts`):
   reactions to the hit (procs, statuses), then the hit itself — so a Shield
   and the hit it let past are not adjacent; the FX layer pairs them by card
   and damage type (`shieldSpilled`), not by `seq`.
-- `G.fx` is flushed at every turn start (`beginTurn`, in the same reducer call
-  that ends the previous turn): effects pushed at the END of a turn — a channel
-  pulse, Naptime's wake, an end-of-turn level-up — are flushed before the UI
-  sees them (a known gap). `seq` keeps climbing (it comes from `G.counters`), so the UI's
-  high-water mark never replays old hits after a remount.
+- `G.fx` is flushed at the START of a turn's end effects (`endTurnEffects`), not
+  at the next turn's start: `turn.onEnd` and the next `turn.onBegin` run in one
+  reducer call, so the batch the board sees after `endTurn` is the end of the
+  turn that finished — a channel pulse, Naptime's wake, an end-of-turn level-up —
+  followed by the next turn's start ticks (bleed, regen, a revive), in `seq`
+  order, with nothing older. `seq` keeps climbing (it comes from `G.counters`),
+  so the UI's high-water mark never replays old hits after a remount.
 - Unique effects carry an `FxTag`: `djinns_mark`, `bleed`, `reverb`,
   `naptime`, `discharge`, `execute`, `life_drain`, `lifesteal`,
   `mixed_bullets`, `ricochet`, `tesla`, `burst`, `channel`, `regen`, `combo`,

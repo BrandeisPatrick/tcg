@@ -251,7 +251,7 @@ describe('board FX stream — the turn\'s attack', () => {
 describe('board FX stream — casts and the turn flush', () => {
   beforeAll(configureReadyMatch);
 
-  it('useSkill pushes the cast first, then its effects; turn start flushes the stream', () => {
+  it('useSkill pushes the cast first, then its effects; the end of the turn flushes the stream', () => {
     const client = Client({ game: DeadlockGame, numPlayers: 2 });
     client.start();
     // Give P0 a caster: swap Lash (bench, enemyAny skill) into the Active slot
@@ -286,7 +286,41 @@ describe('board FX stream — casts and the turn flush', () => {
     client.moves.completeAction!();
     client.moves.endTurn!();
     s = client.getState()!; G = s.G as GameState;
-    // The rival's turn began: the stream was flushed before its own ticks.
+    // The rival's turn began: the stream was flushed before it, so the skill's cast is gone.
     expect(G.fx.every((e) => e.kind !== 'cast')).toBe(true);
+  });
+
+  it('what the end of the turn does reaches the board with the next turn\'s start, in one batch', () => {
+    // P0 channels (a pulse at the end of its turn) and has a hero one exp short of a level;
+    // P1's Abrams will regenerate when its turn starts. A stale event is left in the stream.
+    const G0 = freshReadyGame();
+    G0.turnNumber = 3;
+    G0.draftTurnsOffset = 1 - 3;
+    const p0 = G0.players['0'];
+    addStatus(G0, p0.active!, 'casting_light', 2, 3);
+    const lash = p0.bench[1]!;
+    lash.level = 1; lash.exp = 4;
+    G0.fx = [{ kind: 'revive', iid: 'stale', seq: 1 }];
+    G0.counters.fx = 1;
+
+    const client = Client({ game: { ...DeadlockGame, setup: () => G0 } as never, numPlayers: 2 });
+    client.start();
+    const snapshots: GameState[] = [];
+    client.subscribe((s) => { if (s) snapshots.push(s.G as GameState); });
+    client.moves.endTurn!();
+    const G = client.getState()!.G as GameState;
+
+    expect(G.fx.some((e) => 'iid' in e && e.iid === 'stale')).toBe(false); // flushed
+    const labels = G.fx.map((e) => (e.kind === 'hit' || e.kind === 'heal' ? `${e.kind}:${e.tag}` : e.kind));
+    const pulses = labels.filter((l) => l === 'hit:channel');
+    expect(pulses.length).toBe(4);                      // the whole rival board
+    expect(labels).toContain('levelup');                // the end-of-turn exp
+    expect(labels).toContain('heal:regen');             // the rival's start-of-turn tick
+    // end of P0's turn first, then the start of P1's
+    expect(labels.lastIndexOf('hit:channel')).toBeLessThan(labels.indexOf('heal:regen'));
+    expect(labels.indexOf('levelup')).toBeLessThan(labels.indexOf('heal:regen'));
+    for (let i = 1; i < G.fx.length; i++) expect(G.fx[i].seq).toBeGreaterThan(G.fx[i - 1].seq);
+    // and the board saw it as the ONE state after endTurn, not an intermediate one
+    expect(snapshots.at(-1)!.fx.length).toBe(G.fx.length);
   });
 });

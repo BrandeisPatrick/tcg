@@ -5,7 +5,7 @@
  *
  * The events are presentation hints only — nothing in the rules reads them.
  * `seq` comes from `G.counters` (see ids.ts), so it keeps climbing across
- * moves and across the per-turn flush of `G.fx` (turn.onBegin); the UI tracks
+ * moves and across the per-turn flush of `G.fx` (endTurnEffects); the UI tracks
  * the high-water mark it has played and never replays an old event after a
  * remount.
  */

@@ -396,7 +396,8 @@ export interface GameState {
    *  has had time to see what just happened. */
   action: GameAction | null;
   /** Transient board-FX stream — hits, heals, statuses, casts, revives…
-   *  since the turn began. Cleared at the start of each turn; the UI plays new
-   *  entries by tracking the highest `seq` it has seen. */
+   *  since the last turn ended. Cleared when a turn's end effects begin (so
+   *  after `endTurn` it holds that turn's end and the next turn's start); the UI
+   *  plays new entries by tracking the highest `seq` it has seen. */
   fx: FxEvent[];
 }

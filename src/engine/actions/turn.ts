@@ -82,7 +82,6 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   const realTurn = ctxTurn - G.draftTurnsOffset;
   G.turnNumber = realTurn;
   G.attackUsed = false;
-  G.fx = [];   // flush last turn's board-FX events before this turn's (e.g. bleed ticks) land
   tickStartOfTurn(G, ps);
   // Count down Rem's "Lil Helpers" merges; expired ones return her to bench.
   tickRemMerges(G, ps);
@@ -106,6 +105,11 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
 /** The end of `pid`'s turn. */
 export function endTurnEffects(G: GameState, pid: PlayerID) {
   if (G.draft) return;
+  // The board-FX stream is flushed here, ahead of everything the turn's end does
+  // (and so ahead of the next turn's start, which follows in the same reducer
+  // call). What the board sees after `endTurn` is then one batch: the end-of-turn
+  // pulses, wake-ups and level-ups, and the next turn's start ticks.
+  G.fx = [];
   // Ending the turn never attacks: a turn that ends without the `attack`
   // move simply forgoes it.
   fireBoardTriggers(G, pid, 'endOfTurn');
