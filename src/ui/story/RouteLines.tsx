@@ -1,12 +1,15 @@
-import { memo } from 'react';
+import { memo, type CSSProperties } from 'react';
 import type { StoryRun, StoryNode } from '@/story/types';
 import { stopState } from '@/story/describe';
 import { poster } from '../poster';
-import { MAP_W, MAP_H, type Camera, type Frame } from './mapCamera';
+import { MAP_W, MAP_H } from './mapCamera';
 
 /**
- * The campaign routes, drawn in SCREEN space over the transformed sheet so
- * their weight never scales with the zoom. Each route is one smooth curve
+ * The campaign routes, drawn over the sheet in map units inside the map
+ * stage, under one group scaled by the stage's live zoom (`--s`). Their
+ * strokes are non-scaling, so a route keeps its weight and the red dots their
+ * rhythm at every zoom, mid-pinch included, and the paths themselves are
+ * built once per run, not per frame. Each route is one smooth curve
  * through its stops (Catmull-Rom, cut into one cubic Bézier per leg so each
  * leg can carry its own state):
  *   - travelled — both ends cleared: a gold line on an ink casing, your path;
@@ -72,63 +75,65 @@ export function legState(run: StoryRun, leg: Leg): LegState {
 const DOT_GAP = 10;
 const LOCKED_CASING = 'rgba(242, 230, 203, 0.32)';
 const LOCKED_INK = 'rgba(23, 20, 16, 0.42)';
+/** The draw-in mask's width, in map units: wider than the open route's
+ *  casing at the widest zoom (≈ 10 units there), whatever the zoom. */
+const REVEAL_W = 14;
+
+const n = (v: number) => v.toFixed(1);
+const pathOf = (leg: Leg) => {
+  const [a, b, c, e] = leg.p;
+  return `M${n(a.x)} ${n(a.y)}C${n(b.x)} ${n(b.y)} ${n(c.x)} ${n(c.y)} ${n(e.x)} ${n(e.y)}`;
+};
+/** Widths and dashes in screen px, whatever the group's scale. */
+const fixed: CSSProperties = { vectorEffect: 'non-scaling-stroke' };
 
 export const RouteLines = memo(function RouteLines({
-  run, legs, cam, frame, drawIn, calm,
+  run, legs, drawIn, calm,
 }: {
   run: StoryRun;
   legs: Leg[];
-  cam: Camera;
-  frame: Frame;
   /** Legs that draw themselves in (the ones a cleared stop just opened). */
   drawIn: ReadonlySet<string>;
   calm: boolean;
 }) {
-  const sx = (v: V) => ((v.x - cam.cx) * cam.s + frame.w / 2).toFixed(1);
-  const sy = (v: V) => ((v.y - cam.cy) * cam.s + frame.h / 2).toFixed(1);
-  const d = (leg: Leg) => {
-    const [a, b, c, e] = leg.p;
-    return `M${sx(a)} ${sy(a)}C${sx(b)} ${sy(b)} ${sx(c)} ${sy(c)} ${sx(e)} ${sy(e)}`;
-  };
   const by: Record<LegState, Leg[]> = { travelled: [], open: [], locked: [] };
   for (const leg of legs) by[legState(run, leg)].push(leg);
   const masked = by.open.filter((l) => drawIn.has(l.key) && !calm);
 
   return (
-    <svg aria-hidden width={frame.w} height={frame.h}
+    <svg aria-hidden width={1} height={1}
       style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', pointerEvents: 'none' }}>
-      {masked.length > 0 && (
-        <defs>
-          {masked.map((leg) => (
-            // A stroke that reveals the leg end to end; pathLength 1 makes the
-            // dash offset a 0→1 progress whatever the leg's length on screen.
-            <mask key={leg.key} id={maskId(leg)} maskUnits="userSpaceOnUse"
-              x={-frame.w} y={-frame.h} width={frame.w * 3} height={frame.h * 3}>
-              <path d={d(leg)} fill="none" stroke="#fff" strokeWidth="14" strokeLinecap="round"
-                pathLength={1} strokeDasharray="1 1"
-                style={{ strokeDashoffset: 1, animation: 'story-draw 700ms 550ms cubic-bezier(0.3, 0, 0.2, 1) forwards' }} />
-            </mask>
-          ))}
-        </defs>
-      )}
-
-      <g fill="none" strokeLinecap="round">
+      <g fill="none" strokeLinecap="round" style={{ transform: 'scale(var(--s, 1))' }}>
+        {masked.length > 0 && (
+          <defs>
+            {masked.map((leg) => (
+              // A stroke that reveals the leg end to end; pathLength 1 makes
+              // the dash offset a 0→1 progress whatever the leg's length.
+              <mask key={leg.key} id={maskId(leg)} maskUnits="userSpaceOnUse"
+                x={-MAP_W} y={-MAP_H} width={MAP_W * 3} height={MAP_H * 3}>
+                <path d={pathOf(leg)} fill="none" stroke="#fff" strokeWidth={REVEAL_W} strokeLinecap="round"
+                  pathLength={1} strokeDasharray="1 1"
+                  style={{ strokeDashoffset: 1, animation: 'story-draw 700ms 550ms cubic-bezier(0.3, 0, 0.2, 1) forwards' }} />
+              </mask>
+            ))}
+          </defs>
+        )}
         {by.locked.map((leg) => (
           <g key={leg.key}>
-            <path d={d(leg)} stroke={LOCKED_CASING} strokeWidth="3.5" />
-            <path d={d(leg)} stroke={LOCKED_INK} strokeWidth="1.4" strokeDasharray="5 6" />
+            <path d={pathOf(leg)} style={fixed} stroke={LOCKED_CASING} strokeWidth="3.5" />
+            <path d={pathOf(leg)} style={fixed} stroke={LOCKED_INK} strokeWidth="1.4" strokeDasharray="5 6" />
           </g>
         ))}
         {by.travelled.map((leg) => (
           <g key={leg.key}>
-            <path d={d(leg)} stroke={poster.ink} strokeWidth="6" />
-            <path d={d(leg)} stroke={poster.gold} strokeWidth="3" />
+            <path d={pathOf(leg)} style={fixed} stroke={poster.ink} strokeWidth="6" />
+            <path d={pathOf(leg)} style={fixed} stroke={poster.gold} strokeWidth="3" />
           </g>
         ))}
         {by.open.map((leg) => (
           <g key={leg.key} mask={masked.includes(leg) ? `url(#${maskId(leg)})` : undefined}>
-            <path d={d(leg)} stroke={poster.paper} strokeWidth="7.5" strokeDasharray={`0.1 ${DOT_GAP - 0.1}`} />
-            <path d={d(leg)} stroke={poster.red} strokeWidth="4.5" strokeDasharray={`0.1 ${DOT_GAP - 0.1}`} />
+            <path d={pathOf(leg)} style={fixed} stroke={poster.paper} strokeWidth="7.5" strokeDasharray={`0.1 ${DOT_GAP - 0.1}`} />
+            <path d={pathOf(leg)} style={fixed} stroke={poster.red} strokeWidth="4.5" strokeDasharray={`0.1 ${DOT_GAP - 0.1}`} />
           </g>
         ))}
       </g>

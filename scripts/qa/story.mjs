@@ -5,6 +5,9 @@
  * docks, every stop sits exactly on its map point at any zoom, the wheel
  * zooms about the cursor, the sheet never shows its edge, the picks clear
  * their stops, the run panel flies to a stop, and a run can be abandoned.
+ * And how the map moves: nothing but the camera writes to the page while a
+ * gesture runs, a throw glides on and a touch stops it, a double tap zooms
+ * in about the point.
  * Prints PASS / FAIL per check, saves NNN-size-name.png frames, and exits
  * non-zero on any failure.
  *
@@ -82,14 +85,101 @@ const band = (s) => (s >= 3.6 ? 'near' : s >= 2.4 ? 'mid' : 'far');
 const inDock = (p, docks) => docks.some((d) => p.x >= d.x0 && p.x <= d.x1 && p.y >= d.y0 && p.y <= d.y1);
 const onScreen = (p) => p.x >= 0 && p.y >= 0 && p.x <= W && p.y <= H;
 
+/** A placing drag: it holds still a beat before letting go, as a hand that
+ *  puts the map somewhere does, so it never throws the map (a release on the
+ *  move glides on — see `stroke` for those). */
 async function drag(x0, y0, x1, y1, steps = 14) {
   await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0, y: y0 });
   await b.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x0, y: y0, button: 'left', buttons: 1, clickCount: 1 });
   for (let i = 1; i <= steps; i++) {
     await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0 + ((x1 - x0) * i) / steps, y: y0 + ((y1 - y0) * i) / steps, button: 'left', buttons: 1 });
   }
+  await sleep(140);
   await b.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x1, y: y1, button: 'left', buttons: 0, clickCount: 1 });
 }
+/** One finger (touch on the phone, the mouse on the desktop): down, up, and
+ *  moves in between. `at` (ms since the epoch) stamps the event the way a
+ *  digitiser does, so a busy machine's CDP latency cannot turn a throw into
+ *  a finger that held still. */
+const stamp = (at) => (at ? { timestamp: at / 1000 } : {});
+const finger = {
+  down: (x, y, at) => PHONE
+    ? b.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 0 }], ...stamp(at) })
+    : b.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1, ...stamp(at) }),
+  move: (x, y, at) => PHONE
+    ? b.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y, id: 0 }], ...stamp(at) })
+    : b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1, ...stamp(at) }),
+  up: (x, y, at) => PHONE
+    ? b.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], ...stamp(at) })
+    : b.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1, ...stamp(at) }),
+};
+/** A stroke paced in real time — `ms` from the press to the last move — and
+ *  let go on the move: fast, it throws the map; slow, it places it. Calls
+ *  `beforeUp` just before letting go. */
+async function stroke(x0, y0, dx, dy, ms, { steps = 10, beforeUp } = {}) {
+  if (!PHONE) await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0, y: y0 });
+  const t0 = Date.now();
+  await finger.down(x0, y0, t0);
+  for (let i = 1; i <= steps; i++) {
+    const at = t0 + (ms * i) / steps;
+    if (at > Date.now()) await sleep(at - Date.now());
+    await finger.move(x0 + (dx * i) / steps, y0 + (dy * i) / steps, at);
+  }
+  await beforeUp?.();
+  await finger.up(x0 + dx, y0 + dy, beforeUp ? undefined : t0 + ms + 4);
+}
+/** A tap with the finger (a touch tap on the phone, a click on the desktop). */
+async function tap(x, y) {
+  if (!PHONE) { await b.clickAt(x, y); return; }
+  await finger.down(x, y);
+  await sleep(30);
+  await finger.up(x, y);
+}
+/** Record the sheet's on-screen corner every frame, in the page, for `ms`;
+ *  `window.__up` marks the moment the finger lifted. Read with SAMPLED. */
+const SAMPLE = (ms) => `(() => {
+  const L = document.querySelector('[data-map-layer]');
+  window.__samp = []; window.__up = null;
+  addEventListener('pointerup', () => { window.__up = performance.now(); }, { capture: true, once: true });
+  const t0 = performance.now();
+  const loop = () => {
+    const m = /translate3d\\(([-\\d.]+)px, ([-\\d.]+)px/.exec(L.style.transform);
+    window.__samp.push([performance.now(), +m[1], +m[2]]);
+    if (performance.now() - t0 < ${ms}) requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+})()`;
+/** The samples relative to the lift: when the sheet last moved (ms after
+ *  it), and how far it went from 50ms after it (the frame that takes in the
+ *  finger's last move lands just after the lift). */
+const SAMPLED = `(() => {
+  const s = window.__samp, up = window.__up;
+  let last = null;
+  for (let i = 1; i < s.length; i++) {
+    if ((s[i][1] !== s[i - 1][1] || s[i][2] !== s[i - 1][2]) && s[i][0] > up) last = s[i][0] - up;
+  }
+  const at = s.find((p) => p[0] >= up + 50) ?? s[s.length - 1], end = s[s.length - 1];
+  return { up: up !== null, last, travel: Math.hypot(end[1] - at[1], end[2] - at[2]), frames: s.length };
+})()`;
+/** Mutations inside the map viewport, by what they touched: the map layer,
+ *  the stage, the viewport itself (the drag cursor), or anything else. */
+const MO_START = `(() => {
+  const root = document.querySelector('[data-map-layer]').parentElement;
+  window.__mo = {};
+  const who = (n) => n === root ? 'viewport' : n.nodeType !== 1 ? n.nodeName
+    : n.matches('[data-map-layer]') ? 'map-layer' : n.matches('[data-map-stage]') ? 'stage'
+    : n.closest('[data-stop]') ? 'stop ' + n.closest('[data-stop]').dataset.stop : n.tagName.toLowerCase();
+  const note = (ms) => { for (const m of ms) { const k = m.type + ' ' + who(m.target) + (m.attributeName ? '@' + m.attributeName : ''); window.__mo[k] = (window.__mo[k] ?? 0) + 1; } };
+  window.__moObs = new MutationObserver(note);
+  window.__moObs.observe(root, { attributes: true, childList: true, subtree: true, characterData: true });
+  window.__moNote = note;
+})()`;
+const MO_STOP = `(() => { window.__moNote(window.__moObs.takeRecords()); window.__moObs.disconnect(); return window.__mo; })()`;
+/** Only the camera's own writes: the sheet's and the stage's style, the
+ *  stage's zoom-out mark (and the viewport's drag cursor) — no stop, tag,
+ *  route or child touched. */
+const cameraOnly = (mo) => Object.keys(mo).every((k) => /^attributes ((map-layer|stage|viewport)@style|stage@data-zooming)$/.test(k))
+  && (mo['attributes stage@style'] ?? 0) > 5;
 /** The map layer's transform — the camera, as the page applied it. */
 const layerTransform = () => b.evaluate(`document.querySelector('[data-map-layer]').style.transform`);
 /** A point in the given part of the screen where a press lands on the map
@@ -533,6 +623,126 @@ try {
     await sleep(400);
   }
 
+  // ---- 14. while the map moves, React does not ------------------------------------
+  // Over a pan in progress (and a pinch on the phone, a wheel turn on the
+  // desktop) the only writes inside the map are the camera's own: the
+  // sheet's transform and the stage's transform / zoom. No stop, tag or
+  // route is touched — nothing re-renders until the camera rests.
+  if (PHONE) await b.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await writeRun(mid);
+  await toMap();
+  {
+    const p = await bareMap();
+    let panMo = null, zoomMo = null;
+    await b.evaluate(MO_START);
+    await stroke(p.x, p.y, -W * 0.3, -H * 0.2, 900, { steps: 30, beforeUp: async () => { panMo = await b.evaluate(MO_STOP); } });
+    await sleep(2000);
+    await waitRest();
+    const c = await bareMap();
+    await b.evaluate(MO_START);
+    if (PHONE) {
+      const pts = (spread) => [{ x: c.x - spread, y: c.y, id: 0 }, { x: c.x + spread, y: c.y, id: 1 }];
+      await b.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(40) });
+      for (let i = 1; i <= 12; i++) { await b.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(40 + i * 5) }); await sleep(20); }
+      zoomMo = await b.evaluate(MO_STOP);
+      await b.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } else {
+      for (let i = 0; i < 6; i++) {
+        await b.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: c.x, y: c.y, deltaX: 0, deltaY: -60 });
+        await sleep(50);
+      }
+      zoomMo = await b.evaluate(MO_STOP);
+    }
+    check(`14 while the map moves nothing re-renders: a pan and a ${PHONE ? 'pinch' : 'wheel turn'} restyle only the sheet and the stage`,
+      cameraOnly(panMo) && cameraOnly(zoomMo), `pan ${JSON.stringify(panMo)}; ${PHONE ? 'pinch' : 'wheel'} ${JSON.stringify(zoomMo)}`);
+  }
+
+  // ---- 15. momentum: a throw glides on and eases out; a touch stops it --------------
+  await writeRun(mid);
+  await toMap();
+  await zoomButton('Zoom in', 2);
+  await waitRest();
+  {
+    const SHEET_GAP = `(() => { const r = document.querySelector('[data-map-layer] svg').getBoundingClientRect(); return Math.max(r.left, r.top, ${W} - r.right, ${H} - r.bottom); })()`;
+    // Throw toward the side with the most sheet left to show.
+    const r = await b.evaluate(`(() => { const r = document.querySelector('[data-map-layer] svg').getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; })()`);
+    const sx = -r.l > r.r - W ? 1 : -1, sy = -r.t > r.b - H ? 1 : -1;
+    const from = { x: W / 2 - sx * W * 0.2, y: H / 2 - sy * H * 0.1 };
+    // A brisk flick: ~2 px/ms.
+    const fling = { dx: sx * 200, dy: sy * 110 };
+    const fast = Math.hypot(fling.dx, fling.dy) / 120;
+
+    await b.evaluate(SAMPLE(2400));
+    await stroke(from.x, from.y, fling.dx, fling.dy, 120, { steps: 8 });
+    await sleep(2500);
+    const thrown = await b.evaluate(SAMPLED);
+    const gap = await b.evaluate(SHEET_GAP);
+    await shot('thrown');
+    check('15a a throw glides on after the lift, eases out and stops inside the sheet within ~1.5s',
+      thrown.up && thrown.last > 200 && thrown.last <= 1600 && thrown.travel > 40 && gap <= 0.5,
+      `${fast.toFixed(1)} px/ms throw: ${thrown.travel.toFixed(0)}px after the lift, last move at +${thrown.last?.toFixed(0)}ms; sheet gap ${gap.toFixed(2)}px`);
+
+    await waitRest();
+    await b.evaluate(SAMPLE(1200));
+    await stroke(W / 2, H / 2, -sx * 60, -sy * 30, 1000, { steps: 20 });
+    await sleep(1300);
+    const slow = await b.evaluate(SAMPLED);
+    check('15b a slow release does not glide', slow.up && slow.travel < 1, `${slow.travel.toFixed(1)}px after the lift, last move at ${slow.last === null ? 'none' : `+${slow.last.toFixed(0)}ms`}`);
+
+    await waitRest();
+    await stroke(from.x, from.y, fling.dx, fling.dy, 120, { steps: 8 });
+    await sleep(160);
+    const g0 = await layerTransform();
+    await sleep(40);
+    const g1 = await layerTransform();
+    await finger.down(W / 2, H / 2);
+    await sleep(40);
+    const c0 = await layerTransform();
+    await sleep(400);
+    const c1 = await layerTransform();
+    await finger.up(W / 2, H / 2);
+    check('15c a touch during the glide stops it at once', g0 !== g1 && c0 === c1, `gliding ${g0 !== g1}; held ${c0 === c1 ? 'still' : `moved ${c0} → ${c1}`}`);
+  }
+
+  // ---- 16. double tap zooms in about the point; taps on a stop only select ---------
+  await writeRun(mid);
+  await toMap();
+  {
+    const p = await bareMap();
+    const under = await b.evaluate(`(() => { const p = new DOMPoint(${p.x}, ${p.y}).matrixTransform(document.querySelector('[data-map-layer] svg').getScreenCTM().inverse()); return { x: p.x, y: p.y }; })()`);
+    const s0 = (await b.evaluate(LAYER)).s;
+    await tap(p.x, p.y);
+    await sleep(90);
+    await tap(p.x, p.y);
+    await sleep(1000);
+    const s1 = (await b.evaluate(LAYER)).s;
+    const back = await b.evaluate(`(() => { const q = new DOMPoint(${under.x}, ${under.y}).matrixTransform(document.querySelector('[data-map-layer] svg').getScreenCTM()); return { x: q.x, y: q.y }; })()`);
+    const drift = Math.hypot(back.x - p.x, back.y - p.y);
+    await shot('double-tap');
+    check('16a a double tap on bare map zooms in one step, the tapped point held under the finger',
+      s1 / s0 > 1.3 && s1 / s0 < 1.5 && drift <= 2, `s ${s0.toFixed(2)} → ${s1.toFixed(2)}, drift ${drift.toFixed(2)}px`);
+
+    // The stop nearest the middle of the free map, so selecting it need not
+    // nudge it out from under its card.
+    const target = (await b.evaluate(STOPS)).filter(onScreen).sort((a, c) => Math.hypot(a.x - W / 2, a.y - H * 0.35) - Math.hypot(c.x - W / 2, c.y - H * 0.35))[0];
+    await tap(target.x, target.y);
+    await sleep(90);
+    await tap(target.x, target.y);
+    await sleep(1000);
+    const s2 = (await b.evaluate(LAYER)).s;
+    const picked = (await b.evaluate(STOPS)).find((s) => s.id === target.id);
+    check('16b two taps on a stop select it and leave the zoom alone', picked.pressed && Math.abs(s2 - s1) < 1e-3,
+      `${target.id} pressed=${picked.pressed}, s ${s1.toFixed(3)} → ${s2.toFixed(3)}`);
+
+    const q = await bareMap();
+    await tap(q.x, q.y);
+    await sleep(50);
+    const now = (await b.evaluate(STOPS)).some((s) => s.pressed);
+    check('16c a single tap on bare map deselects at once (within 50ms)', !now);
+    await sleep(500);
+  }
+  if (PHONE) await b.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+
   // ---- 10. abandon → intro, save gone ----------------------------------------------
   if (PHONE) {
     await b.clickEl(button('Story run: '));
@@ -575,6 +785,15 @@ try {
   await shot('reduced-motion');
   check('13 reduced motion: no ambient animation, zoom jumps', moving === 0 && Math.abs(z1 - z2) < 1e-3 && z2 > z0 * 1.2,
     `${moving} animated, s ${z0.toFixed(2)} → ${z1.toFixed(2)} (40ms) → ${z2.toFixed(2)}`);
+  // …and a throw stops where the finger lets go.
+  if (PHONE) await b.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  await waitRest();
+  await b.evaluate(SAMPLE(1000));
+  await stroke(W / 2 + 60, H / 2, -120, -60, 80, { steps: 6 });
+  await sleep(1100);
+  const calmThrow = await b.evaluate(SAMPLED);
+  if (PHONE) await b.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  check('13b reduced motion: a throw does not glide', calmThrow.up && calmThrow.travel < 1, `${calmThrow.travel.toFixed(1)}px after the lift`);
   await b.send('Emulation.setEmulatedMedia', { features: [] });
   await b.evaluate(`localStorage.removeItem('${KEY}')`);
 } catch (err) {

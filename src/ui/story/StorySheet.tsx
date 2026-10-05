@@ -5,7 +5,7 @@
  *
  * `embedded` prints the sheet alone, in flow, for the Gallery.
  */
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { CARDS_BY_ID } from '@/cards';
 import type { StoryRun } from '@/story/types';
@@ -15,6 +15,7 @@ import { poster, chamfer, clipBoth, scrimStyle, sheetStyle } from '../poster';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 import { FramedPortrait, StopGlyph, eyebrow } from './StopGlyph';
+import { CREDIT_CLEAR } from './MapControls';
 
 /** INK TAG eyebrow — black plate, cream stencil caps (the mulligan sheet's). */
 const inkTag = {
@@ -90,22 +91,28 @@ export function StorySheet({ run, onBegin, onExit, embedded = false }: {
   );
 
   if (embedded) return sheet;
+  const scroll: CSSProperties = { overflowY: 'auto', alignItems: 'flex-start' };
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.25 }}
-      style={{
-        ...scrimStyle,
-        zIndex: 58,
-        overflowY: 'auto',
-        // Phones: the top band stays clear of the System gear.
-        padding: isMobile ? '64px 12px 16px' : '48px 32px',
-        alignItems: 'flex-start',
-      }}
+      style={{ ...scrimStyle, zIndex: 58, ...(isMobile ? null : { ...scroll, padding: '48px 32px' }) }}
     >
-      {sheet}
+      {isMobile ? (
+        // Phones: the sheet scrolls in a box that stops short of the foot,
+        // which is the map credit's, so no button ever scrolls under it; the
+        // top band stays clear of the System gear.
+        <div style={{
+          ...scroll,
+          position: 'absolute', inset: `0 0 ${CREDIT_CLEAR}px`,
+          display: 'flex', justifyContent: 'center',
+          padding: '64px 12px 12px',
+        }}>
+          {sheet}
+        </div>
+      ) : sheet}
     </motion.div>
   );
 }

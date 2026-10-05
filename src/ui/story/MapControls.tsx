@@ -63,6 +63,14 @@ function MapButton({ label, disabled, onClick, children }: {
   );
 }
 
+/** The credit's height. */
+export const CREDIT_H = 18;
+/** On a phone, while a sheet or a pick is up over the map, the credit drops
+ *  to this far off the bottom, and the overlay keeps the strip below its
+ *  controls clear (CREDIT_CLEAR): the credit still shows, never on a button. */
+export const CREDIT_LOW = 8;
+export const CREDIT_CLEAR = CREDIT_LOW + CREDIT_H + 8;
+
 /** The OpenStreetMap credit the map data's licence (ODbL) asks for — pinned
  *  to the screen, since the sheet itself pans out of view. */
 export function OsmCredit({ style }: { style?: CSSProperties }) {

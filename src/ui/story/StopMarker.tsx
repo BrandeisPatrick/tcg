@@ -6,12 +6,16 @@ import { enemyRosterSize } from '@/story/content';
 import { fonts, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { KIND_INK, KIND_LABEL, StopGlyph } from './StopGlyph';
-import { coverScale, toScreen, zoomProgress, type Camera, type Frame } from './mapCamera';
+import { MAP_W, MAP_H, coverScale, toScreen, zoomProgress, type Camera, type Frame } from './mapCamera';
 
 /**
- * The stops, as stamps printed over the sheet — drawn in screen space at a
- * near-constant size (≈30px at the widest view, ≈46px close in), so they
- * stay crisp and always outweigh the streets under them.
+ * The stops, as stamps printed over the sheet — drawn at a near-constant
+ * screen size (≈30px at the widest view, ≈46px close in), so they stay crisp
+ * and always outweigh the streets under them. Each sits on its map point
+ * through the map stage's live zoom (`--s`, see StoryMapScreen's MapStage)
+ * and follows its live size (`--d`), so the camera moves and sizes them
+ * without React; they are drawn afresh, and their name tags placed, only
+ * when it comes to rest.
  *
  *   battle / elite — a round print of the leader's face in a ring of the
  *                    kind's ink (the shared start, with no leader: swords);
@@ -38,9 +42,12 @@ export interface StopView {
   state: StopState;
   current: boolean;
   selected: boolean;
-  /** Screen position of the stop's centre. */
+  /** Screen position of the stop's centre, for the camera at rest. */
   x: number;
   y: number;
+  /** Its map point, in map units. */
+  mx: number;
+  my: number;
   /** Base diameter at this zoom; `r` is the drawn outer radius. */
   d: number;
   r: number;
@@ -171,10 +178,16 @@ function placeTags(views: StopView[], frame: Frame, showAll: boolean, hud: reado
 
 const coarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 
+/** A stop's base diameter at a zoom (px): ≈30 at the widest view, ≈46 close
+ *  in. The map stage carries the live value as `--d`, so a marker drawn at
+ *  rest follows the zoom between rests by scaling itself (see StopMarker). */
+export const stopSize = (cam: Camera, frame: Frame) => 30 + 16 * zoomProgress(cam, frame);
+
 export const StopLayer = memo(function StopLayer({
   run, cam, frame, hud, selectedId, stampId, calm, onSelect, onKeyboardFocus,
 }: {
   run: StoryRun;
+  /** The camera at rest: it sizes the stops and places their tags. */
   cam: Camera;
   frame: Frame;
   /** Screen boxes of the HUD over the map; optional tags keep out of them. */
@@ -187,7 +200,7 @@ export const StopLayer = memo(function StopLayer({
   /** A stop reached with the keyboard (Tab), which may be off screen. */
   onKeyboardFocus: (node: StoryNode) => void;
 }) {
-  const d = 30 + 16 * zoomProgress(cam, frame);
+  const d = stopSize(cam, frame);
   const showAll = cam.s >= coverScale(frame) * 1.9;
   const views: StopView[] = run.nodes.map((node) => {
     const kind = effectiveKind(run, node);
@@ -197,7 +210,7 @@ export const StopLayer = memo(function StopLayer({
     const r = state === 'cleared' ? coinSize(own) / 2 : kind === 'boss' ? sealSize(own) / 2 : own / 2;
     const combat = kind === 'battle' || kind === 'elite' || kind === 'boss';
     return {
-      node, kind, state, x: p.x, y: p.y, d: own, r,
+      node, kind, state, x: p.x, y: p.y, mx: node.x * MAP_W, my: node.y * MAP_H, d: own, r,
       current: run.currentNodeId === node.id,
       selected: selectedId === node.id,
       tag: null,
@@ -239,6 +252,10 @@ function StopMarker({ view: v, minHit, stamp, calm, onPress, onKeyboardFocus }: 
   const hit = Math.max(minHit, v.r * 2 + 4);
   const place = v.node.name ?? KIND_LABEL[v.kind];
   const centred: CSSProperties = { position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
+  // Drawn at the rest zoom's size; between rests the marker follows the live
+  // size (`--d`) by this factor — exactly 1 at rest. A painted scale, not a
+  // composited one, so it stays crisp.
+  const grow = `(var(--d) + ${v.kind === 'boss' ? BOSS_EXTRA : 0}) / ${v.d}`;
   return (
     <button
       type="button"
@@ -251,48 +268,55 @@ function StopMarker({ view: v, minHit, stamp, calm, onPress, onKeyboardFocus }: 
       data-stop={v.node.id}
       style={{
         position: 'absolute', left: 0, top: 0, width: hit, height: hit,
-        transform: `translate3d(${v.x - hit / 2}px, ${v.y - hit / 2}px, 0)`,
+        // On its map point at the stage's live zoom: the camera moves it.
+        transform: `translate3d(calc(var(--s) * ${v.mx.toFixed(2)}px - ${hit / 2}px), calc(var(--s) * ${v.my.toFixed(2)}px - ${hit / 2}px), 0)`,
         zIndex: layerOf(v),
         border: 'none', background: 'none', padding: 0, cursor: 'pointer',
         WebkitTapHighlightColor: 'transparent',
       }}
     >
-      {v.state === 'open' && !calm && (
-        <span aria-hidden style={{
-          ...centred, width: v.r * 2 + 4, height: v.r * 2 + 4, borderRadius: '50%',
-          border: `2px solid ${poster.red}`, boxSizing: 'border-box',
-          animation: 'story-pulse 1.9s cubic-bezier(0.2, 0.6, 0.4, 1) infinite',
-        }} />
-      )}
-      {v.selected && (
-        <span aria-hidden style={{
-          ...centred, width: v.r * 2 + 12, height: v.r * 2 + 12, borderRadius: '50%',
-          border: `3px solid ${poster.target}`, boxSizing: 'border-box',
-          boxShadow: '0 0 0 1.5px rgba(23, 20, 16, 0.55)',
-        }} />
-      )}
+      <span aria-hidden style={{ position: 'absolute', inset: 0, transform: `scale(calc(${grow}))` }}>
+        {v.state === 'open' && !calm && (
+          <span style={{
+            ...centred, width: v.r * 2 + 4, height: v.r * 2 + 4, borderRadius: '50%',
+            border: `2px solid ${poster.red}`, boxSizing: 'border-box',
+            animation: 'story-pulse 1.9s cubic-bezier(0.2, 0.6, 0.4, 1) infinite',
+          }} />
+        )}
+        {v.selected && (
+          <span style={{
+            ...centred, width: v.r * 2 + 12, height: v.r * 2 + 12, borderRadius: '50%',
+            border: `3px solid ${poster.target}`, boxSizing: 'border-box',
+            boxShadow: '0 0 0 1.5px rgba(23, 20, 16, 0.55)',
+          }} />
+        )}
 
-      <span aria-hidden style={centred}>
-        {v.state === 'cleared'
-          ? <ClearedCoin size={coinSize(v.d)} stamp={stamp} />
-          : v.kind === 'boss'
-            ? <BossSeal view={v} />
-            : <Disc view={v} />}
+        <span style={centred}>
+          {v.state === 'cleared'
+            ? <ClearedCoin size={coinSize(v.d)} stamp={stamp} />
+            : v.kind === 'boss'
+              ? <BossSeal view={v} />
+              : <Disc view={v} />}
+        </span>
+
+        {v.foes > 0 && (
+          <span style={{
+            position: 'absolute', left: `calc(50% + ${v.r * 0.62}px)`, top: `calc(50% + ${v.r * 0.62}px)`,
+            transform: 'translate(-50%, -50%)',
+            minWidth: 16, height: 16, padding: '0 3px', boxSizing: 'border-box', borderRadius: 8,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: poster.ink, color: poster.paper, border: `1.5px solid ${poster.paper}`,
+            fontFamily: fonts.ui, fontWeight: 800, fontSize: 10, lineHeight: 1,
+          }}>{v.foes}</span>
+        )}
       </span>
 
-      {v.foes > 0 && (
-        <span aria-hidden style={{
-          position: 'absolute', left: `calc(50% + ${v.r * 0.62}px)`, top: `calc(50% + ${v.r * 0.62}px)`,
-          transform: 'translate(-50%, -50%)',
-          minWidth: 16, height: 16, padding: '0 3px', boxSizing: 'border-box', borderRadius: 8,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: poster.ink, color: poster.paper, border: `1.5px solid ${poster.paper}`,
-          fontFamily: fonts.ui, fontWeight: 800, fontSize: 10, lineHeight: 1,
-        }}>{v.foes}</span>
-      )}
-
-      {v.current && <Pennant r={v.r} />}
-      {v.tag && <NameTag side={v.tag} shift={v.tagShift} must={v.tagMust} r={v.r} dim={v.state === 'locked'} label={place} />}
+      {/* The pennant and the tag keep their own size; they ride the
+          marker's edge as it grows. A tag that moves side is a new tag
+          (it fades in where it lands). */}
+      {v.current && <Pennant edge={`${v.r}px * ${grow}`} />}
+      {v.tag && <NameTag key={v.tag} side={v.tag} shift={v.tagShift} must={v.tagMust} edge={`${v.r}px * ${grow}`}
+        dim={v.state === 'locked'} label={place} />}
     </button>
   );
 }
@@ -432,12 +456,15 @@ function BossSeal({ view: v }: { view: StopView }) {
   );
 }
 
-/** "You are here": a small gold pennant planted on the last stop cleared. */
-function Pennant({ r }: { r: number }) {
+/** "You are here": a small gold pennant planted on the last stop cleared.
+ *  `edge` is the marker's live radius, as a calc() term. */
+function Pennant({ edge }: { edge: string }) {
   return (
     <svg aria-hidden width={PENNANT_W} height={PENNANT_H} viewBox={`0 0 ${PENNANT_W} ${PENNANT_H}`}
       style={{
-        position: 'absolute', left: '50%', bottom: `calc(50% + ${r - 3}px)`, marginLeft: -1.5,
+        // Its foot on the marker's edge, by transform (the edge follows the zoom).
+        position: 'absolute', left: '50%', top: '50%', marginLeft: -1.5,
+        transform: `translateY(calc(-100% - ${edge} + 3px))`,
         overflow: 'visible', pointerEvents: 'none',
       }}>
       <line x1={1.5} y1={1} x2={1.5} y2={PENNANT_H} stroke={poster.ink} strokeWidth={2} />
@@ -449,23 +476,28 @@ function Pennant({ r }: { r: number }) {
   );
 }
 
-function NameTag({ side, shift, must, r, dim, label }: {
+/** A stop's name, `edge` (the marker's live radius, a calc() term) plus a
+ *  gap off its centre on one side. */
+function NameTag({ side, shift, must, edge, dim, label }: {
   side: TagSide;
   shift: number;
   must: boolean;
-  r: number;
+  edge: string;
   dim: boolean;
   label: string;
 }) {
-  const g = r + TAG_GAP;
-  const at: CSSProperties =
-    side === 'below' ? { left: '50%', top: `calc(50% + ${g}px)`, transform: `translateX(calc(-50% + ${shift}px))` }
-    : side === 'above' ? { left: '50%', bottom: `calc(50% + ${g}px)`, transform: `translateX(calc(-50% + ${shift}px))` }
-    : side === 'right' ? { left: `calc(50% + ${g}px)`, top: '50%', transform: `translateY(calc(-50% + ${shift}px))` }
-    : { right: `calc(50% + ${g}px)`, top: '50%', transform: `translateY(calc(-50% + ${shift}px))` };
+  // Offsets by transform, not top / left: the edge moves with the zoom, and
+  // a transform moves the tag without laying anything out.
+  const g = `(${edge} + ${TAG_GAP}px)`;
+  const along = `calc(-50% + ${shift}px)`;
+  const transform =
+    side === 'below' ? `translate(${along}, calc${g})`
+    : side === 'above' ? `translate(${along}, calc(-100% - ${g}))`
+    : side === 'right' ? `translate(calc${g}, ${along})`
+    : `translate(calc(-100% - ${g}), ${along})`;
   return (
     <span aria-hidden data-tag={must ? 'must' : 'more'} style={{
-      position: 'absolute', ...at, height: TAG_H, boxSizing: 'border-box',
+      position: 'absolute', left: '50%', top: '50%', transform, height: TAG_H, boxSizing: 'border-box',
       display: 'flex', alignItems: 'center', padding: '0 5px', whiteSpace: 'nowrap',
       ...text.label, fontSize: TAG_FONT, lineHeight: 1,
       background: dim ? poster.paperDeep : poster.paper,

@@ -7,7 +7,6 @@ import { newRun, clearNode, isReachable } from '@/story/storyRun';
 import { effectiveKind, stopState } from '@/story/describe';
 import { useSettings } from '@/storage/settings';
 import { PosterButton } from '../chrome';
-import { PAPER_MOTTLE } from '../poster';
 import { fonts } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
 import { NycMap, MAP_WATER } from './NycMap';
@@ -16,13 +15,13 @@ import { StopCard } from './StopCard';
 import { RunPanel } from './RunPanel';
 import { StorySheet } from './StorySheet';
 import { RouteLines, routeLegs } from './RouteLines';
-import { StopLayer, type Box } from './StopMarker';
-import { MapControls, OsmCredit } from './MapControls';
+import { StopLayer, stopSize, type Box } from './StopMarker';
+import { MapControls, OsmCredit, CREDIT_H, CREDIT_LOW } from './MapControls';
 import {
   MAP_W, MAP_H, coverScale, scaleLimits, frameStops, revealPoint, lodBand,
   type Camera, type Frame, type Pad,
 } from './mapCamera';
-import { useMapCamera, useCamera, useRaster, type MapCamera } from './useMapCamera';
+import { useMapCamera, useRest, useRaster, ZOOM_STEP, type MapCamera } from './useMapCamera';
 
 interface StoryMapScreenProps {
   run: StoryRun | null;
@@ -44,7 +43,6 @@ const FOCUS_ZOOM = 2;
 const STOP_MARGIN = 40;
 /** Desktop docks (the layout rule shared with the panels). */
 const DOCK = { top: 64, runW: 288, cardW: 340, edge: 16 };
-const CREDIT_H = 18;
 /** The zoom (px per map unit) at which NycMap's line weights are as drawn. */
 const LINE_REF = 1.7;
 
@@ -260,7 +258,10 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
     stampId ? legs.filter((l) => l.from.id === stampId).map((l) => l.key) : [],
   ), [legs, stampId]);
 
-  const creditBottom = isMobile ? (active ? slotH + 12 + 6 : 8) : 12;
+  // On the map, over a phone's dock; while a pick is up, at the phone's foot,
+  // a strip the pick keeps clear (as the sheets do, shown when no run is).
+  const creditOnMap = isMobile ? (active ? slotH + 12 + 6 : CREDIT_LOW) : 12;
+  const creditBottom = isMobile && pick ? CREDIT_LOW : creditOnMap;
 
   return (
     <div ref={rootRef} style={{
@@ -318,14 +319,14 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
           <Controls camera={camera} onLocate={locate} style={{
             position: 'fixed', zIndex: 20,
             right: isMobile ? 12 : 16,
-            bottom: creditBottom + CREDIT_H + 8,
+            bottom: creditOnMap + CREDIT_H + 8,
           }} />
         </>
       )}
 
       {/* The map viewport — takes the gestures. The sheet inside is moved by
-          one transform; the routes and stops are drawn over it in screen
-          space from the same camera. */}
+          one transform, the routes and stops over it by another, both
+          written by the camera. */}
       <div
         ref={camera.viewportRef}
         style={{
@@ -386,35 +387,48 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
   );
 }
 
+/** The paper's tooth, baked from PAPER_MOTTLE (scripts/art/bake_mottle.mjs):
+ *  a plain see-through tile, so a sheet tile rasterises it as an image
+ *  instead of running the turbulence again, and no blend needs a layer. */
+const TOOTH = `url("${import.meta.env.BASE_URL ?? '/'}art/paper_mottle.png")`;
+
 // The run panel is the heaviest thing docked on the map; it only needs to
 // redraw when the run changes, not when the selection does.
 const MemoRunPanel = memo(RunPanel);
 
+/** Where the sheet's top-left corner sits on screen — whole px, so the print
+ *  holds still between frames; the stage uses the same, so the stops agree. */
+const origin = (cam: Camera, frame: Frame) => ({
+  x: Math.round(frame.w / 2 - cam.cx * cam.s),
+  y: Math.round(frame.h / 2 - cam.cy * cam.s),
+});
+
 /** Lay the 840×1080 sheet out at `raster` px per unit and move it with one
- *  transform. While the camera moves only the transform changes (cheap); once
- *  it rests, raster catches up with the zoom and the scale returns to exactly
- *  1, so the print is re-rasterised crisp. NycMap is memo'd and never
- *  re-renders here.
+ *  transform. While the camera moves only the transform changes, written by
+ *  the camera each frame (cheap); once it rests, raster catches up with the
+ *  zoom and the scale returns to exactly 1, so the print is re-rasterised
+ *  crisp. Only that re-renders this; NycMap is memo'd and never does.
  *
  *  The detail band (`data-zoom`) follows the same committed raster scale, not
  *  the live zoom: a band change repaints the whole sheet (~100ms on a
  *  desktop), and it belongs with the re-layout at rest — detail that settles
  *  in a moment after the zoom stops is fine, a stall mid-gesture is not. */
 function MapLayer({ camera }: { camera: MapCamera }) {
-  const cam = useCamera(camera);
   const raster = useRaster(camera);
-  const { frame } = camera;
-  const k = cam.s / raster;
-  const tx = Math.round(frame.w / 2 - cam.cx * cam.s);
-  const ty = Math.round(frame.h / 2 - cam.cy * cam.s);
+  const ref = useRef<HTMLDivElement>(null);
+  // React never writes the transform (it would fight the camera's writes).
+  useLayoutEffect(() => camera.paint((cam, r, frame) => {
+    const o = origin(cam, frame);
+    ref.current!.style.transform = `translate3d(${o.x}px, ${o.y}px, 0) scale(${cam.s / r})`;
+  }), [camera]);
   return (
     <div
+      ref={ref}
       data-map-layer
       data-zoom={lodBand(raster)}
       style={{
         position: 'absolute', left: 0, top: 0,
         width: MAP_W * raster, height: MAP_H * raster,
-        transform: `translate3d(${tx}px, ${ty}px, 0) scale(${k})`,
         transformOrigin: '0 0',
         willChange: 'transform',
         // NycMap's line weights follow the square root of the zoom.
@@ -426,15 +440,23 @@ function MapLayer({ camera }: { camera: MapCamera }) {
           with it). */}
       <div aria-hidden style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage: PAPER_MOTTLE,
+        backgroundImage: TOOTH,
         backgroundSize: `${200 * raster}px ${200 * raster}px`,
-        mixBlendMode: 'multiply',
       }} />
     </div>
   );
 }
 
-/** Everything drawn from the live camera in screen space. */
+/** The routes and stops, over the sheet. One element carries the camera: its
+ *  transform is the sheet's corner on screen, `--s` the live zoom (px per
+ *  map unit) and `--d` the stops' live size, all written by the camera each
+ *  frame. Inside it everything is placed in map units scaled by `--s` (the
+ *  stops' transforms, the routes' group), so the stops ride exactly on their
+ *  map points at every frame, and nothing in here re-renders while the
+ *  camera moves. A pan changes only the stage's transform — no style, no
+ *  paint; a zoom also the two variables. React draws the layer again when
+ *  the camera rests (the stops at their new size, the name tags placed for
+ *  the new view) or when the run or the selection changes. */
 function MapStage({ camera, run, legs, drawIn, hud, selectedId, stampId, calm, onSelect, onKeyboardFocus }: {
   camera: MapCamera;
   run: StoryRun;
@@ -447,13 +469,40 @@ function MapStage({ camera, run, legs, drawIn, hud, selectedId, stampId, calm, o
   onSelect: (node: StoryNode) => void;
   onKeyboardFocus: (node: StoryNode) => void;
 }) {
-  const cam = useCamera(camera);
+  const rest = useRest(camera);
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    let s = NaN;
+    return camera.paint((cam, raster, frame) => {
+      const el = ref.current!;
+      const o = origin(cam, frame);
+      el.style.transform = `translate3d(${o.x}px, ${o.y}px, 0)`;
+      // Only a zoom restyles what is inside: the stops' places and size.
+      if (cam.s !== s) {
+        s = cam.s;
+        el.style.setProperty('--s', String(s));
+        el.style.setProperty('--d', String(stopSize(cam, frame)));
+      }
+      // Zoomed well out from where the tags were placed, the stops crowd
+      // together: the optional tags step aside until the camera rests.
+      const k = s / raster;
+      const was = el.dataset.zooming === 'out';
+      const out = was ? k < 0.9 : k < 0.8;
+      if (out !== was) {
+        if (out) el.dataset.zooming = 'out';
+        else delete el.dataset.zooming;
+      }
+    });
+  }, [camera]);
   return (
-    <>
-      <RouteLines run={run} legs={legs} cam={cam} frame={camera.frame} drawIn={drawIn} calm={calm} />
-      <StopLayer run={run} cam={cam} frame={camera.frame} hud={hud} selectedId={selectedId} stampId={stampId}
+    <div ref={ref} data-map-stage data-calm={calm || undefined} style={{
+      position: 'absolute', left: 0, top: 0, width: 0, height: 0,
+      willChange: 'transform',
+    }}>
+      <RouteLines run={run} legs={legs} drawIn={drawIn} calm={calm} />
+      <StopLayer run={run} cam={rest.cam} frame={camera.frame} hud={hud} selectedId={selectedId} stampId={stampId}
         calm={calm} onSelect={onSelect} onKeyboardFocus={onKeyboardFocus} />
-    </>
+    </div>
   );
 }
 
@@ -462,14 +511,14 @@ function Controls({ camera, onLocate, style }: {
   onLocate: () => void;
   style: CSSProperties;
 }) {
-  const cam = useCamera(camera);
+  const { cam } = useRest(camera);
   const { min, max } = scaleLimits(camera.frame);
   return (
     <MapControls
       canZoomIn={cam.s < max - 1e-3}
       canZoomOut={cam.s > min + 1e-3}
-      onZoomIn={() => camera.zoomBy(1.4)}
-      onZoomOut={() => camera.zoomBy(1 / 1.4)}
+      onZoomIn={() => camera.zoomBy(ZOOM_STEP)}
+      onZoomOut={() => camera.zoomBy(1 / ZOOM_STEP)}
       onLocate={onLocate}
       style={style}
     />

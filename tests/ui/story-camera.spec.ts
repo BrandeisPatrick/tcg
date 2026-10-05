@@ -1,15 +1,19 @@
 /**
  * The story map's camera math. The screen moves an 840 kB sheet with one
- * transform and draws the stops in screen space from toScreen(), so these
- * functions are the whole contract between the two: if they agree, a stop
- * sits on its street at every zoom.
+ * transform and the stops and routes with another, both from the same
+ * camera, and places the name tags from toScreen(), so these functions are
+ * the whole contract between them: if they agree, a stop sits on its street
+ * at every zoom. The gestures' own math is here too — the speed of a throw
+ * and the glide that follows it.
  */
 import { describe, it, expect } from 'vitest';
 import {
   MAP_W, MAP_H, MAX_ZOOM, ABS_MAX_SCALE, LOD_MID, LOD_NEAR,
   coverScale, scaleLimits, clampCamera, toScreen, toMap, zoomAt, pinchTo,
-  panBy, frameStops, revealPoint, lerpCamera, lodBand, zoomProgress,
-  type Camera, type Frame,
+  panBy, frameStops, revealPoint, lerpCamera, lerpCameraAbout, lodBand, zoomProgress,
+  releaseVelocity, glideOffset, glideSpeed, glideDuration,
+  FLING_WINDOW, FLING_STILL, FLING_MAX, GLIDE_TAU, GLIDE_STOP,
+  type Camera, type Frame, type Sample,
 } from '@/ui/story/mapCamera';
 
 const DESK: Frame = { w: 1440, h: 900 };
@@ -200,5 +204,93 @@ describe('lerpCamera / zoomProgress', () => {
     const { min, max } = scaleLimits(DESK);
     expect(zoomProgress({ cx: 420, cy: 540, s: min }, DESK)).toBeCloseTo(0);
     expect(zoomProgress({ cx: 420, cy: 540, s: max }, DESK)).toBeCloseTo(1);
+  });
+});
+
+describe('lerpCameraAbout', () => {
+  it('holds the anchor under the same screen point all the way through a zoom about it', () => {
+    const cam = { cx: 420, cy: 540, s: 2 };
+    const anchor = { x: 260, y: 610 };
+    const p = toMap(cam, PHONE, anchor.x, anchor.y);
+    const to = zoomAt(cam, PHONE, 1.4, anchor.x, anchor.y);
+    for (const t of [0, 0.2, 0.5, 0.8, 1]) {
+      const c = lerpCameraAbout(cam, to, t, p);
+      const q = toScreen(c, PHONE, p.x / MAP_W, p.y / MAP_H);
+      expect(q.x).toBeCloseTo(anchor.x);
+      expect(q.y).toBeCloseTo(anchor.y);
+    }
+    // A plain lerp of the centre lets it wander mid-flight.
+    const mid = toScreen(lerpCamera(cam, to, 0.5), PHONE, p.x / MAP_W, p.y / MAP_H);
+    expect(Math.abs(mid.x - anchor.x) + Math.abs(mid.y - anchor.y)).toBeGreaterThan(0.5);
+  });
+  it('lands exactly on both ends, and blends zoom in log space', () => {
+    const a = { cx: 300, cy: 400, s: 1.5 }, b = { cx: 520, cy: 610, s: 4 };
+    const p = { x: 410, y: 500 };
+    expect(lerpCameraAbout(a, b, 0, p).cx).toBeCloseTo(a.cx);
+    expect(lerpCameraAbout(a, b, 0, p).cy).toBeCloseTo(a.cy);
+    const end = lerpCameraAbout(a, b, 1, p);
+    expect(end.cx).toBeCloseTo(b.cx);
+    expect(end.cy).toBeCloseTo(b.cy);
+    expect(end.s).toBeCloseTo(b.s);
+    expect(lerpCameraAbout(a, b, 0.5, p).s).toBeCloseTo(Math.sqrt(1.5 * 4));
+  });
+});
+
+describe('releaseVelocity', () => {
+  /** A finger moving at (vx, vy) px/ms, sampled every `dt` ms until `t1`. */
+  const path = (vx: number, vy: number, t1: number, dt = 8): Sample[] =>
+    Array.from({ length: Math.floor(t1 / dt) + 1 }, (_, i) => ({ t: i * dt, x: 100 + vx * i * dt, y: 200 + vy * i * dt }));
+
+  it('reads a steady drag at its speed', () => {
+    const v = releaseVelocity(path(1.2, -0.5, 400), 404);
+    expect(v.vx).toBeCloseTo(1.2);
+    expect(v.vy).toBeCloseTo(-0.5);
+  });
+  it('looks only at the last FLING_WINDOW ms: a drag that slowed is read slow', () => {
+    const fast = path(3, 0, 300);
+    const end = fast[fast.length - 1];
+    const slowTail = Array.from({ length: 20 }, (_, i) => ({ t: end.t + (i + 1) * 8, x: end.x + 0.1 * (i + 1) * 8, y: end.y }));
+    const v = releaseVelocity([...fast, ...slowTail], slowTail[slowTail.length - 1].t + 4);
+    expect(FLING_WINDOW).toBeLessThan(20 * 8);
+    expect(v.vx).toBeCloseTo(0.1);
+  });
+  it('is zero when the finger held still before lifting', () => {
+    const p = path(2, 0, 300), last = p[p.length - 1].t;
+    expect(releaseVelocity(p, last + FLING_STILL + 1)).toEqual({ vx: 0, vy: 0 });
+    expect(releaseVelocity(p, last + FLING_STILL - 5).vx).toBeCloseTo(2);
+  });
+  it('is zero without a path, and capped at FLING_MAX for a wild last sample', () => {
+    expect(releaseVelocity([], 0)).toEqual({ vx: 0, vy: 0 });
+    expect(releaseVelocity([{ t: 0, x: 0, y: 0 }], 2)).toEqual({ vx: 0, vy: 0 });
+    const v = releaseVelocity([{ t: 0, x: 0, y: 0 }, { t: 10, x: 300, y: 400 }], 12);
+    expect(Math.hypot(v.vx, v.vy)).toBeCloseTo(FLING_MAX);
+    expect(v.vx / v.vy).toBeCloseTo(300 / 400);
+  });
+});
+
+describe('glide', () => {
+  it('leaves at the throw speed and decays by e every GLIDE_TAU', () => {
+    expect(glideSpeed(2, 0)).toBeCloseTo(2);
+    expect(glideSpeed(2, GLIDE_TAU)).toBeCloseTo(2 / Math.E);
+    // The offset's slope at the lift is the throw's speed: no jump.
+    expect(glideOffset(2, 1) / 1).toBeCloseTo(2, 2);
+  });
+  it('travels speed × GLIDE_TAU in all, and never further', () => {
+    expect(glideOffset(1.5, 0)).toBe(0);
+    expect(glideOffset(1.5, 1e6)).toBeCloseTo(1.5 * GLIDE_TAU);
+    expect(glideOffset(-1.5, 1e6)).toBeCloseTo(-1.5 * GLIDE_TAU);
+    let prev = 0;
+    for (let t = 50; t <= 3000; t += 50) {
+      const o = glideOffset(1.5, t);
+      expect(o).toBeGreaterThan(prev);
+      prev = o;
+    }
+  });
+  it('a brisk throw is over in about 1.5 s, the hardest within ~1.6 s, a slow one at once', () => {
+    expect(glideDuration(2)).toBeGreaterThan(1000);
+    expect(glideDuration(2)).toBeLessThan(1500);
+    expect(glideDuration(FLING_MAX)).toBeLessThan(1650);
+    expect(glideDuration(GLIDE_STOP)).toBe(0);
+    expect(glideSpeed(2, glideDuration(2))).toBeCloseTo(GLIDE_STOP);
   });
 });

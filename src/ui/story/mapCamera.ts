@@ -164,3 +164,71 @@ export function lerpCamera(a: Camera, b: Camera, t: number): Camera {
     s: Math.exp(Math.log(a.s) + (Math.log(b.s) - Math.log(a.s)) * t),
   };
 }
+
+/** Blend two cameras about a map point `p` (map units): the zoom in log
+ *  space, p's screen position in a straight line. A zoom about a point (a
+ *  double tap) then holds that point under the finger the whole way, where a
+ *  plain lerp of the centre lets it wander mid-flight. */
+export function lerpCameraAbout(a: Camera, b: Camera, t: number, p: { x: number; y: number }): Camera {
+  const s = Math.exp(Math.log(a.s) + (Math.log(b.s) - Math.log(a.s)) * t);
+  // p's offset from the viewport centre, in screen px, at each end.
+  const ox = (p.x - a.cx) * a.s + ((p.x - b.cx) * b.s - (p.x - a.cx) * a.s) * t;
+  const oy = (p.y - a.cy) * a.s + ((p.y - b.cy) * b.s - (p.y - a.cy) * a.s) * t;
+  return { cx: p.x - ox / s, cy: p.y - oy / s, s };
+}
+
+// ---- momentum ---------------------------------------------------------------
+
+/** One point of a drag: a time stamp (ms) and a screen position (px). */
+export interface Sample { t: number; x: number; y: number }
+
+/** How far back a release looks to judge the finger's speed (ms). */
+export const FLING_WINDOW = 100;
+/** A finger that held still this long before lifting was placing the map,
+ *  not throwing it (ms). */
+export const FLING_STILL = 60;
+/** Slower than this (px/ms) at release is a placed map: no glide. */
+export const FLING_MIN = 0.15;
+/** A cap on the throw (px/ms), against a noisy last sample. */
+export const FLING_MAX = 4;
+/** The glide's time constant (ms): its speed falls by e every this long, as
+ *  a native map's does. It travels speed × GLIDE_TAU px in all. */
+export const GLIDE_TAU = 325;
+/** The glide stops once it is this slow (px/ms, ≈ ½ px a frame): a 2 px/ms
+ *  throw is over in ~1.35 s, the hardest one in ~1.6 s. */
+export const GLIDE_STOP = 0.03;
+
+/** The finger's velocity (px/ms) as it lifted: its average over the last
+ *  FLING_WINDOW ms of travel, or zero if it had held still before lifting. */
+export function releaseVelocity(samples: readonly Sample[], tUp: number): { vx: number; vy: number } {
+  const zero = { vx: 0, vy: 0 };
+  const n = samples.length;
+  if (n < 2) return zero;
+  const last = samples[n - 1];
+  if (tUp - last.t > FLING_STILL) return zero;
+  let i = n - 2;
+  while (i > 0 && last.t - samples[i - 1].t <= FLING_WINDOW) i--;
+  const first = samples[i];
+  const dt = last.t - first.t;
+  if (dt <= 0 || dt > FLING_WINDOW * 2) return zero;
+  let vx = (last.x - first.x) / dt, vy = (last.y - first.y) / dt;
+  const v = Math.hypot(vx, vy);
+  if (v > FLING_MAX) { vx *= FLING_MAX / v; vy *= FLING_MAX / v; }
+  return { vx, vy };
+}
+
+/** How far a glide thrown at v (px/ms) has carried the map after t ms:
+ *  exponential decay, so it leaves the finger at the finger's own speed. */
+export function glideOffset(v: number, t: number): number {
+  return v * GLIDE_TAU * (1 - Math.exp(-t / GLIDE_TAU));
+}
+
+/** The glide's speed (px/ms) t ms after a throw at v. */
+export function glideSpeed(v: number, t: number): number {
+  return v * Math.exp(-t / GLIDE_TAU);
+}
+
+/** How long a glide thrown at `speed` (px/ms) runs before it stops. */
+export function glideDuration(speed: number): number {
+  return speed <= GLIDE_STOP ? 0 : GLIDE_TAU * Math.log(speed / GLIDE_STOP);
+}

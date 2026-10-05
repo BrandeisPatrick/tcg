@@ -18,6 +18,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { CardFrame } from '../card/CardFrame';
 import { fonts, spring, text } from '../tokens';
 import { poster, scrimStyle } from '../poster';
+import { CREDIT_CLEAR } from './MapControls';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 
@@ -103,7 +104,8 @@ export function PickOverlay({ kind, title, subtitle, options, confirmVerb, onPic
         flexDirection: 'column',
         justifyContent: narrow ? 'flex-start' : 'center',
         gap: 0,
-        padding: narrow ? '14px 16px 16px' : '28px 32px',
+        // Phones: the foot is the map credit's (it shows through the scrim).
+        padding: narrow ? `14px 16px ${CREDIT_CLEAR}px` : '28px 32px',
         fontFamily: fonts.ui,
         color: poster.cream,
         overflow: 'hidden',
