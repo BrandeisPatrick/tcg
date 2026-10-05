@@ -62,9 +62,9 @@ function evalState(g: GameState, pid: PlayerID): number {
   let s = (me.hp - foe.hp) * 12;
   const tally = (ps: typeof me, sign: number) => {
     for (const c of liveBoardCards(ps)) {
-      // Shield absorbs damage before HP and stops overflow reaching the patron,
-      // so a point of shield is worth a point of HP — weight it like HP (×2),
-      // not ×1 (which made the bot under-value/under-cast shielders like Warden).
+      // Shield absorbs damage before HP, so a point of shield is worth a
+      // point of HP — weight it like HP (×2), not ×1 (which made the bot
+      // under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
       s += sign * (3 + c.hp * 2 + heroThreat(c) * 1.5 + shield * 2 + equipValue(c) * 2);
     }
@@ -204,6 +204,17 @@ function scoreAttack(G: GameState, pid: PlayerID): number {
   return 15 + plan.damageToActive * 3 + (plan.defenderActiveKO ? 25 : 0);
 }
 
+/** True when the turn's attack, made now, wins the match. The attack is made
+ *  on a copy through the engine's own move and the engine's own win check
+ *  reads the result, so "lethal" means what the rules mean: the knockout's
+ *  patron life, a board wipe, a Ricochet that drops the last bench hero, a
+ *  merged Rem who walks off the fallen bearer — and a mutual wipe that goes
+ *  to P0. */
+function attackWins(G: GameState, pid: PlayerID): boolean {
+  const g = simulateMove(G, pid, 'attack', []);
+  return !!g && DeadlockGame.endIf?.({ G: g } as any)?.winner === pid;
+}
+
 export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): MoveOption[] {
   const pid = ctx.currentPlayer as PlayerID;
 
@@ -260,13 +271,11 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
   const attackOpen = attackBlocked(G, pid) === null;
 
   // --- Lethal short-circuit ---
-  // If our Active alone can kill the enemy player (their Active dies and their HP hits 0), attack.
-  // Sum of our attackers vs their Active first, then face dmg.
-  const ourAttackers = [...allyTargets].filter((c) => effectiveAtk(c) > 0);
-  let totalDmg = ourAttackers.reduce((acc, c) => acc + effectiveAtk(c), 0);
+  // An attack that wins the match goes first. Only our Active swings, and its
+  // swings never reach the rival patron: the attack wins when its knockout
+  // costs the last patron life, or leaves the rival with no hero standing.
   if (attackOpen) {
-    const lethal = !!enemy.active && totalDmg >= enemy.active.hp + enemy.hp;
-    out.push({ move: 'attack', args: [], score: lethal ? 1_000_000 : scoreAttack(G, pid) });
+    out.push({ move: 'attack', args: [], score: attackWins(G, pid) ? 1_000_000 : scoreAttack(G, pid) });
   }
 
   // Play cards (cost-gated)

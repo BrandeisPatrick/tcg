@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
-import { attackBlocked, attackTurn, type AttackBlock } from '@/engine/combat';
+import { attackBlocked, attackTurn, planAttackPhase, type AttackBlock } from '@/engine/combat';
+import { effectiveAtk, liveBoardCards } from '@/engine/util';
 import { addStatus, clearTurnFlags, tickRemMerges } from '@/engine/statusOps';
 import { resolve } from '@/engine/damage';
 import { enumerateAIMoves } from '@/ai/heuristic';
@@ -322,6 +323,74 @@ describe('AI: the attack is a choice', () => {
     const G = freshReadyGame(); // the AI holds no souls: no skills or retreat
     G.players['1'].hand = [];
     expect(enumerateAIMoves(G, ctx('1'))[0].move).toBe('attack');
+  });
+
+  // The attack that wins the match is ranked above everything in the plain
+  // move list. Only the Active swings and the swings never reach the patron:
+  // a win is a knockout that costs the last patron life or leaves the rival
+  // with no hero standing.
+  const LETHAL = 1_000_000;
+  const attackScore = (G: GameState) => enumerateAIMoves(G, ctx('1'), false).find((m) => m.move === 'attack')!.score;
+  /** P0's bench, all down on the respawn timer. */
+  const benchDown = (G: GameState) => {
+    for (const b of G.players['0'].bench) if (b) { b.hp = 0; b.respawnTurnsLeft = 2; }
+  };
+
+  it("ranks the attack as lethal when its knockout takes the rival patron's last life", () => {
+    const G = freshReadyGame();
+    const p0 = G.players['0'];
+    p0.active!.hp = 1;
+    p0.hp = 1;
+    expect(attackScore(G)).toBe(LETHAL);
+  });
+
+  it('ranks the attack as lethal when its knockout leaves the rival no hero standing', () => {
+    const G = freshReadyGame();
+    const p0 = G.players['0'];
+    p0.active!.hp = 1;
+    benchDown(G);
+    expect(p0.hp).toBeGreaterThan(1); // the patron itself would survive
+    expect(attackScore(G)).toBe(LETHAL);
+  });
+
+  it('a knockout with a patron life to spare and a hero to step in is not lethal', () => {
+    const G = freshReadyGame();
+    const p0 = G.players['0'];
+    p0.active!.hp = 1;
+    p0.hp = 2;
+    expect(planAttackPhase(G, '1').defenderActiveKO).toBe(p0.active!.iid);
+    expect(attackScore(G)).toBeLessThan(LETHAL);
+  });
+
+  it("neither the bench's attack nor damage past a knockout counts toward lethal", () => {
+    const G = freshReadyGame();
+    const p0 = G.players['0'];
+    p0.active!.hp = p0.active!.hpMax = 30;
+    const swing = planAttackPhase(G, '1').damageToActive;
+    p0.active!.hp = p0.active!.hpMax = swing + 1; // the Active survives the swing
+    p0.hp = 1;
+    // What the old check summed — every live hero's attack against Active HP
+    // plus patron HP — calls this lethal; it is not.
+    const summed = liveBoardCards(G.players['1']).reduce((n, c) => n + effectiveAtk(c), 0);
+    expect(summed).toBeGreaterThanOrEqual(p0.active!.hp + p0.hp);
+    expect(attackScore(G)).toBeLessThan(LETHAL);
+  });
+
+  it('a merged Rem who walks off the fallen bearer keeps the rival in the match', () => {
+    const G = freshReadyGame();
+    const p0 = G.players['0'];
+    const bearer = p0.active!;
+    bearer.hp = 1;
+    benchDown(G);
+    p0.bench[2] = null; // the slot she returns to
+    const rem = makeHero('hero_rem', '0', 'equipment', 3);
+    rem.attachedTo = bearer.iid;
+    rem.remMergeTurnsLeft = 2;
+    rem.remMergeHpBuff = 0;
+    bearer.attached = [rem];
+    expect(attackScore(G)).toBeLessThan(LETHAL);
+    bearer.attached = []; // without her, the same knockout wipes the board
+    expect(attackScore(G)).toBe(LETHAL);
   });
 
   it('never ranks a move the engine would reject', () => {
