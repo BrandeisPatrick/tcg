@@ -18,10 +18,10 @@ import { buildStoryMatch } from './story/content';
 import { MatchNavContext, type MatchNav } from './ui/hooks/matchNav';
 
 /**
- * The story map draws real NYC geometry — borough outlines and the whole OSM
- * road network, baked into nycGeo.ts. That data is 840 kB raw and ~320 kB
- * gzipped, which is more than every other module in the app put together, and
- * until now every visitor downloaded it to look at the title screen.
+ * The story map draws real NYC geometry — borough outlines and the OSM road
+ * network, pre-printed in nycSheet.ts. Its chunk is ~570 kB raw and ~190 kB
+ * gzipped, more than any other module in the app, and no visitor should have
+ * to download it to look at the title screen.
  *
  * Splitting it out is purely a matter of WHEN it is fetched: not a coordinate
  * of the map changes, and it renders exactly as before. The one cost — a beat

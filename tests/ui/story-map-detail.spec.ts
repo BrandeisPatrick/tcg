@@ -5,14 +5,13 @@
  * stop's name or the sheet's own borough and river names.
  */
 import { describe, it, expect } from 'vitest';
-import { statSync } from 'node:fs';
 import { buildCampaign } from '@/story/campaign';
 import { NYC_BOROUGHS } from '@/ui/story/nycGeo';
 import {
   LABELS, LANDMARKS, VIGNETTE_BOX, SOUNDINGS, SCALE_BAR,
   project, placeLabel, labelPoints, stopZone, inBox, type Box,
 } from '@/ui/story/mapDetail';
-import { DETAIL_WATER } from '@/ui/story/MapDetails';
+import { DETAIL_WATER, WATERLINE_BLENDS } from '@/ui/story/MapDetails';
 import { MAP_WATER } from '@/ui/story/NycMap';
 
 const W = 840, H = 1080;
@@ -126,11 +125,20 @@ describe('map detail vignettes and chart marks', () => {
 });
 
 describe('map detail data', () => {
-  it('stays under the 200 kB budget', () => {
-    expect(statSync('src/ui/story/nycDetail.ts').size).toBeLessThanOrEqual(200 * 1024);
-  });
+  // The bundled geometry's budget is in story-map-sheet.spec.ts; nycDetail.ts
+  // is only a bake input now.
 
   it('cuts its waterlines back to the sheet’s own water', () => {
     expect(DETAIL_WATER).toBe(MAP_WATER);
+  });
+
+  it('prints the inner waterlines in the colour their cream made over that water', () => {
+    const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+    const water = hex(MAP_WATER), cream = [242, 230, 203];
+    for (const { alpha, ink } of WATERLINE_BLENDS) {
+      const rgb = ink.match(/\d+/g)!.map(Number);
+      // Within a level of the exact blend: the raster rounds its alpha to 8 bits.
+      rgb.forEach((c, k) => expect(Math.abs(c - (water[k] + (cream[k] - water[k]) * alpha)), ink).toBeLessThan(1));
+    }
   });
 });

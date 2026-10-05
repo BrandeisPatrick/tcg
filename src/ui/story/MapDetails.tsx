@@ -10,12 +10,13 @@
 // paper, cream at a low alpha on the water — with no new colour and nothing
 // that moves. Smaller names wait for the zoom: the screen sets `data-zoom`
 // (far | mid | near) on the sheet's wrapper and the tier classes below key
-// off it. Data: nycDetail.ts (OpenStreetMap, baked) and mapDetail.ts (placed
-// by hand).
+// off it. Data: nycSheet.ts (OpenStreetMap, baked in grid cells — see
+// NycMap) and mapDetail.ts (placed by hand).
 
 import { memo, Fragment, type ReactNode } from 'react';
-import { NYC_BOROUGHS } from './nycGeo';
-import { NYC_GREEN, NYC_RAIL, NYC_RUNWAYS, NYC_FERRIES, NYC_COAST } from './nycDetail';
+import {
+  SHEET_GRID, SHEET_WATERLINE, SHEET_WATERLINE_CLIPPED, SHEET_GREEN, SHEET_RAIL, SHEET_RUNWAYS, SHEET_FERRIES,
+} from './nycSheet';
 import {
   LABELS, LANDMARKS, SOUNDINGS, SCALE_BAR, KIND_STYLE, METRES_PER_UNIT,
   placeLabel, project, type MapLabel, type Tier, type VignetteId,
@@ -26,6 +27,11 @@ import { fonts } from '../tokens';
 /** The water the waterlines are cut back to: NycMap's MAP_WATER (importing
  *  it would loop the two modules; a test keeps them equal). */
 export const DETAIL_WATER = '#1f3f3d';
+
+/** Every cell of the sheet's grid, and the clip (defined by NycMap) that
+ *  keeps a see-through layer's cell to its own square. */
+export const CELLS = Array.from({ length: SHEET_GRID.cols * SHEET_GRID.rows }, (_, i) => i);
+export const cellClip = (i: number) => `url(#nyc-cell-${i})`;
 
 const INK = (a: number) => `rgba(23, 20, 16, ${a})`;
 const CREAM = (a: number) => `rgba(242, 230, 203, ${a})`;
@@ -49,34 +55,44 @@ const TIERS = `
 
 // ---- under the land -----------------------------------------------------------
 
-/** Chart waterlines: offset from the coast (map units) and strength, outer
- *  first. Each is a wide cream band cut back by a narrower water band, so
- *  only a thin line is left; the land covers the inner half. */
+/** Chart waterlines: offset from the coast (map units) and ink, outer first.
+ *  Each is a wide cream band cut back by a narrower water band, so only a
+ *  thin line is left; the land covers the inner half. The outer line lies on
+ *  the sea's swell lines, so it stays see-through and each cell is clipped
+ *  to itself; the inner two lie on the outer band's flat water, so they are
+ *  printed in the opaque colour that cream at 0.085 and 0.11 makes over
+ *  DETAIL_WATER (as the raster rounds it) and draw like the water bands. */
 const WATERLINES = [
-  { off: 10.5, a: 0.06 },
-  { off: 7.6, a: 0.085 },
-  { off: 5.2, a: 0.11 },
+  { off: 10.5, ink: CREAM(0.06), clip: true },
+  { off: 7.6, ink: 'rgb(49, 77, 73)', clip: false },
+  { off: 5.2, ink: 'rgb(54, 81, 76)', clip: false },
 ];
+/** The two pre-blended inks and the alphas they stand for (a test checks them). */
+export const WATERLINE_BLENDS = [{ alpha: 0.085, ink: WATERLINES[1].ink }, { alpha: 0.11, ink: WATERLINES[2].ink }];
 const WATERLINE_W = 0.5;
 
 const MILE = 1609.34 / METRES_PER_UNIT;
 
 export const MapUnderlay = memo(function MapUnderlay() {
   const bar = project(SCALE_BAR.lat, SCALE_BAR.lng);
+  // A cell's clipped set carries all that reaches it; the opaque bands draw
+  // each segment once (see nycSheet.ts).
+  const coast = (key: string, clip: boolean) => (clip ? SHEET_WATERLINE_CLIPPED : SHEET_WATERLINE).map((d, i) => d && (
+    <path key={`${key}${i}`} d={d} clipPath={clip ? cellClip(i) : undefined} />
+  ));
   return (
     <g>
       <style>{TIERS}</style>
-      <defs>
-        <path id="md-coast" d={NYC_COAST} />
-      </defs>
 
-      <g fill="none" strokeLinejoin="round">
-        {WATERLINES.map(({ off, a }) => (
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {WATERLINES.map(({ off, ink, clip }) => (
           <Fragment key={off}>
-            <use href="#md-coast" stroke={CREAM(a)}
-              style={{ strokeWidth: `calc(${2 * off} + ${WATERLINE_W} * var(--line, 1))` }} />
-            <use href="#md-coast" stroke={DETAIL_WATER}
-              style={{ strokeWidth: `calc(${2 * off} - ${WATERLINE_W} * var(--line, 1))` }} />
+            <g stroke={ink} style={{ strokeWidth: `calc(${2 * off} + ${WATERLINE_W} * var(--line, 1))` }}>
+              {coast('c', clip)}
+            </g>
+            <g stroke={DETAIL_WATER} style={{ strokeWidth: `calc(${2 * off} - ${WATERLINE_W} * var(--line, 1))` }}>
+              {coast('w', false)}
+            </g>
           </Fragment>
         ))}
       </g>
@@ -85,7 +101,7 @@ export const MapUnderlay = memo(function MapUnderlay() {
         {/* Ferry lines: fine cream dots — finer and fainter than any route. */}
         <g fill="none" stroke={CREAM(0.3)} strokeLinecap="round" strokeDasharray="0 1.7"
           style={{ strokeWidth: line(0.5) }}>
-          {NYC_FERRIES.map((f) => <path key={f.name} d={f.d} />)}
+          {SHEET_FERRIES.map((f) => <path key={f.name} d={f.d} />)}
         </g>
 
         {/* Soundings, in a chart's italic figures. */}
@@ -116,6 +132,9 @@ export const MapUnderlay = memo(function MapUnderlay() {
 
 // ---- over the land --------------------------------------------------------------
 
+const RAIL_LINE = { strokeWidth: line(0.4) };
+const RAIL_TIES = { strokeWidth: line(1.3) };
+
 export const MapOverlay = memo(function MapOverlay() {
   const tiers: Record<Tier, MapLabel[]> = { always: [], mid: [], near: [] };
   for (const l of LABELS) tiers[l.tier ?? KIND_STYLE[l.kind].tier].push(l);
@@ -123,17 +142,23 @@ export const MapOverlay = memo(function MapOverlay() {
     <g>
       <style>{TIERS}</style>
       <defs>
-        <clipPath id="md-land">
-          {NYC_BOROUGHS.map((b) => <path key={b.name} d={b.d} />)}
-        </clipPath>
+        {/* The land around each group of parks that reaches the water. */}
+        {SHEET_GREEN.map((g, k) => g.clip && (
+          <clipPath key={k} id={`md-green-${k}`}><path d={g.clip} /></clipPath>
+        ))}
       </defs>
 
-      {/* Parks, cemeteries, golf: flat green, kept to the land. */}
-      <path d={NYC_GREEN} fill={GREEN} fillOpacity={GREEN_TINT} clipPath="url(#md-land)" />
+      {/* Parks, cemeteries, golf: flat green, kept to the land. A group of
+          parks that overlap shares one path, so the tint never doubles. */}
+      <g fill={GREEN} fillOpacity={GREEN_TINT}>
+        {SHEET_GREEN.map((g, k) => (
+          <path key={k} d={g.d} clipPath={g.clip ? `url(#md-green-${k})` : undefined} />
+        ))}
+      </g>
 
       {/* Runways: paper strips with a faint ink edge. */}
       <g fill="none" strokeLinecap="butt">
-        {NYC_RUNWAYS.map((r, i) => (
+        {SHEET_RUNWAYS.map((r, i) => (
           <Fragment key={i}>
             <path d={r.d} stroke={INK(0.16)} style={{ strokeWidth: `calc(${r.w} + 0.5 * var(--line, 1))` }} />
             <path d={r.d} stroke={poster.paper} strokeWidth={r.w} />
@@ -141,10 +166,15 @@ export const MapOverlay = memo(function MapOverlay() {
         ))}
       </g>
 
-      {/* Rail: a fine ink line with cross-ties. */}
+      {/* Rail: a fine ink line with cross-ties, each cell clipped to itself
+          (where two lines overlap at a junction the ink must not double). */}
       <g fill="none" stroke={INK(0.22)}>
-        <path d={NYC_RAIL} style={{ strokeWidth: line(0.4) }} />
-        <path d={NYC_RAIL} strokeDasharray="0.3 2.4" style={{ strokeWidth: line(1.3) }} />
+        {SHEET_RAIL.map((d, i) => d && (
+          <g key={i} clipPath={cellClip(i)}>
+            <path d={d} style={RAIL_LINE} />
+            <path d={d} strokeDasharray="0.3 2.4" style={RAIL_TIES} />
+          </g>
+        ))}
       </g>
 
       {LANDMARKS.map((m) => {

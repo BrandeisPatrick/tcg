@@ -1,11 +1,12 @@
 // New York City story-map sheet, rendered from REAL open geo-data:
 //   - borough land polygons (coastline-clipped) — NYC borough boundaries
 //   - the OSM road network (major / mid / minor) + Central Park + the reservoir
-// Projected into the 840x1080 board space and baked into nycGeo.ts by
-// scripts/geo/buildNyc.mjs. Printed like a screen-printed city sheet from the
-// same press as the title poster: cream paper land, one deep teal for the
-// water, the streets as ink hairlines that stay well under the stops and the
-// route drawn over them. Purely decorative (aria-hidden).
+// Projected into the 840x1080 board space (scripts/geo/buildNyc.mjs) and baked
+// render-ready into nycSheet.ts (scripts/geo/bakeNycSheet.mjs). Printed like a
+// screen-printed city sheet from the same press as the title poster: cream
+// paper land, one deep teal for the water, the streets as ink hairlines that
+// stay well under the stops and the route drawn over them. Purely decorative
+// (aria-hidden).
 //
 // The OpenStreetMap credit is NOT drawn here: the sheet pans off-screen, and
 // the ODbL wants the credit always in view, so the screen pins it instead.
@@ -14,14 +15,23 @@
 // layer: sqrt(1.7 / px-per-unit), so they grow with the square root of the
 // zoom instead of linearly. Close in, a coast stays a keyline and a street a
 // hairline rather than swelling into bands; far out, they don't vanish.
+//
+// Every stroked layer comes in grid cells (SHEET_GRID), one element per
+// layer and cell: the raster draws the sheet in tiles and walks a whole path
+// for each tile it touches, so a tile should only meet the geometry near it.
+// Opaque inks may overlap from cell to cell; a see-through ink is clipped to
+// its cell (or cut where it prints nothing), so it never doubles up.
 
-import { memo } from 'react';
-import { NYC_VIEW, NYC_BOROUGHS, NYC_ROADS, NYC_PARK, NYC_RESERVOIR } from './nycGeo';
-import { MapUnderlay, MapOverlay } from './MapDetails';
+import { memo, type ReactNode } from 'react';
+import {
+  SHEET_VIEW, SHEET_GRID, SHEET_LAND, SHEET_PARK, SHEET_RESERVOIR, SHEET_KEYLINE,
+  SHEET_HALO, SHEET_RULE, SHEET_BRIDGES, SHEET_ROADS, SHEET_LAND_CLIP,
+} from './nycSheet';
+import { MapUnderlay, MapOverlay, cellClip, CELLS } from './MapDetails';
 import { poster } from '../poster';
 import { fonts } from '../tokens';
 
-const VW = NYC_VIEW.w, VH = NYC_VIEW.h;
+const VW = SHEET_VIEW.w, VH = SHEET_VIEW.h;
 
 // The press's inks. Water and paper are flat; everything else is ink or
 // cream at an alpha, so the stops (full-strength ink, red, gold) always win.
@@ -59,15 +69,43 @@ const RIVERS: { text: string; x: number; y: number; size: number; rotate: number
   { text: 'East River', x: 501, y: 452, size: 12, rotate: -63 },
 ];
 
+/** Each cell's paths, drawn by `draw` where the cell has any. */
+const inCells = (layer: string[], draw: (d: string, i: number) => ReactNode) =>
+  layer.map((d, i) => (d ? draw(d, i) : null));
+/** Per borough, per cell → per cell, per borough. */
+const HALO_CELLS = CELLS.map((i) => SHEET_HALO.map((b) => b[i]).filter(Boolean));
+const ROAD_INK = {
+  minor: { stroke: `${STREET}0.07)`, ...line(0.6) },
+  mid: { stroke: `${STREET}0.12)`, ...line(0.9) },
+  major: { stroke: `${STREET}0.2)`, ...line(1.3) },
+};
+
+/** How far the outer cells' clips reach past the sheet (map units). */
+const PAST = 20;
+
 export const NycMap = memo(function NycMap() {
+  const { cols, rows, w: cw, h: ch } = SHEET_GRID;
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} aria-hidden
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}>
       <defs>
-        {/* Land mask — used to clip the road network to dry land. */}
-        <clipPath id="nyc-land">
-          {NYC_BOROUGHS.map((b) => <path key={b.name} d={b.d} />)}
-        </clipPath>
+        {/* The grid's cells, for the see-through layers drawn in cells. The
+            outer cells reach past the sheet: a clip edge on the sheet's own
+            edge would soften it twice. */}
+        {CELLS.map((i) => {
+          const c = i % cols, r = Math.floor(i / cols);
+          const x0 = c === 0 ? -PAST : c * cw, x1 = c === cols - 1 ? VW + PAST : (c + 1) * cw;
+          const y0 = r === 0 ? -PAST : r * ch, y1 = r === rows - 1 ? VH + PAST : (r + 1) * ch;
+          return (
+            <clipPath key={i} id={`nyc-cell-${i}`}>
+              <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} />
+            </clipPath>
+          );
+        })}
+        {/* Each cell's dry land — the road network is clipped to it. */}
+        {inCells(SHEET_LAND_CLIP, (d, i) => (
+          <clipPath key={`land${i}`} id={`nyc-land-${i}`}><path d={d} /></clipPath>
+        ))}
       </defs>
 
       {/* Water — one flat ink, with barely-there swell lines. */}
@@ -79,43 +117,61 @@ export const NycMap = memo(function NycMap() {
 
       <MapUnderlay />
 
-      {/* Bridges: the major roads un-clipped, in cream, UNDER the land — so
-          they only show where they cross the water. */}
-      <path d={NYC_ROADS.major} fill="none" stroke={BRIDGE} style={line(1.2)} strokeLinecap="round" />
+      {/* Bridges: the major roads near the water, in cream, UNDER the land —
+          so they only show where they cross it. Bridges that could touch
+          share a cell's path, so the cream never doubles where they meet. */}
+      <g fill="none" stroke={BRIDGE} strokeLinecap="round" strokeLinejoin="round" style={line(1.2)}>
+        {inCells(SHEET_BRIDGES, (d, i) => <path key={i} d={d} />)}
+      </g>
 
-      {/* Shore halo — a soft cream band along every coast. */}
-      {NYC_BOROUGHS.map((b) => (
-        <path key={`halo-${b.name}`} d={b.d} fill="none" stroke={HALO} style={line(8)} strokeLinejoin="round" />
-      ))}
+      {/* Shore halo — a soft cream band along every coast. Each borough's
+          is its own path (where two meet, as over a narrow river, they
+          deepen), clipped to its cell. */}
+      <g fill="none" stroke={HALO} strokeLinecap="round" strokeLinejoin="round" style={line(8)}>
+        {HALO_CELLS.map((parts, i) => parts.length > 0 && (
+          <g key={i} clipPath={cellClip(i)}>
+            {parts.map((d, k) => <path key={k} d={d} />)}
+          </g>
+        ))}
+      </g>
 
       {/* Keyline: the ink outline is laid down first and the paper printed
           over it, so only its outer half shows at the coast — and where two
-          boroughs meet on land, their fills cover it entirely. */}
-      {NYC_BOROUGHS.map((b) => (
-        <path key={`key-${b.name}`} d={b.d} fill="none" stroke={KEYLINE} style={line(1.7)} strokeLinejoin="round" />
-      ))}
-      {NYC_BOROUGHS.map((b) => (
+          boroughs meet on land, their fills cover it all but the hairline
+          seam between their edges (so it is kept there too). */}
+      <g fill="none" stroke={KEYLINE} strokeLinecap="round" strokeLinejoin="round" style={line(1.7)}>
+        {inCells(SHEET_KEYLINE, (d, i) => <path key={i} d={d} />)}
+      </g>
+      {SHEET_LAND.map((b) => (
         <path key={`land-${b.name}`} d={b.d} fillRule="evenodd"
           fill={b.name === 'Manhattan' ? LAND_STAGE : LAND} />
       ))}
       {/* Borough lines on land: a faint dashed rule, the print's only nod to
-          the boundaries that the keyline no longer draws. */}
-      {NYC_BOROUGHS.map((b) => (
-        <path key={`line-${b.name}`} d={b.d} fill="none" stroke="rgba(23, 20, 16, 0.22)"
-          style={line(0.7)} strokeDasharray="3 2.5" />
-      ))}
+          the boundaries that the keyline no longer draws (along a coast it
+          also darkens the keyline's inner edge). Cut in the dashes' gaps, so
+          its cells need no clip; each borough's is its own path. */}
+      <g fill="none" stroke="rgba(23, 20, 16, 0.22)" strokeDasharray="3 2.5" style={line(0.7)}>
+        {SHEET_RULE.map((cells, b) => inCells(cells, (d, i) => <path key={`${b}-${i}`} d={d} />))}
+      </g>
 
       {/* Road network, clipped to land, in ink hairlines. Drawn fine→thick
-          so majors sit on top. */}
-      <g clipPath="url(#nyc-land)" fill="none" strokeLinecap="round">
-        <path d={NYC_ROADS.minor} stroke={`${STREET}0.07)`} style={line(0.6)} />
-        <path d={NYC_ROADS.mid} stroke={`${STREET}0.12)`} style={line(0.9)} />
-        <path d={NYC_ROADS.major} stroke={`${STREET}0.2)`} style={line(1.3)} />
+          so majors sit on top. Each cell is clipped to its own square and to
+          the land around it. */}
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        {inCells(SHEET_LAND_CLIP, (_, i) => (
+          <g key={i} clipPath={`url(#nyc-land-${i})`}>
+            <g clipPath={cellClip(i)}>
+              {(['minor', 'mid', 'major'] as const).map((k) => SHEET_ROADS[k][i] && (
+                <path key={k} d={SHEET_ROADS[k][i]} style={ROAD_INK[k]} />
+              ))}
+            </g>
+          </g>
+        ))}
       </g>
 
       {/* Central Park + reservoir */}
-      {NYC_PARK && <path d={NYC_PARK} fill={PARK} stroke={KEYLINE} style={line(0.8)} />}
-      {NYC_RESERVOIR && <path d={NYC_RESERVOIR} fill={MAP_WATER} stroke={KEYLINE} style={line(0.6)} />}
+      {SHEET_PARK && <path d={SHEET_PARK} fill={PARK} stroke={KEYLINE} style={line(0.8)} />}
+      {SHEET_RESERVOIR && <path d={SHEET_RESERVOIR} fill={MAP_WATER} stroke={KEYLINE} style={line(0.6)} />}
 
       <MapOverlay />
 
