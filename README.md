@@ -52,8 +52,13 @@ single-page React app.
 - **AI opponent** that plays only the engine's own legal moves and ranks them
   by a 1-ply lookahead (sees lethal, on-attach equipment, forced promotion when
   the Active dies).
-- **79 engine tests** covering souls, statuses, abilities, respawn rules,
-  combat planner/resolver parity.
+- **One rulebook:** every rule lives in one engine function that the board,
+  the AI and the attack preview all ask; the preview is the real attack run on
+  a copy. See [`docs/engine-model.md`](./docs/engine-model.md).
+- **~700 tests**, including a seeded fuzz suite that plays thousands of
+  games (the real AI, random legal play and malformed moves) and checks the
+  state after every move, and a replay trace (`scripts/replay-trace.ts`) that
+  proves an engine change altered only what it meant to.
 
 ## Run it locally
 
