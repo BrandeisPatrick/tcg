@@ -45,9 +45,9 @@ export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot:
  * context doesn't gate the swap.
  */
 export function promoteToActive(G: GameState, benchHeroIid: string) {
-  const pid = (['0', '1'] as PlayerID[]).find((p) => G.players[p].bench.some((b) => b?.iid === benchHeroIid))!;
+  const pid = (['0', '1'] as PlayerID[]).find((p) => G.players[p].bench.some((b) => b != null && b.iid === benchHeroIid))!;
   const ps = G.players[pid];
-  const benchIdx = ps.bench.findIndex((b) => b?.iid === benchHeroIid);
+  const benchIdx = ps.bench.findIndex((b) => b != null && b.iid === benchHeroIid);
   const benchHero = ps.bench[benchIdx]!;
   // Swap: bench hero becomes Active, corpse takes the vacated bench slot.
   const corpse = ps.active!;

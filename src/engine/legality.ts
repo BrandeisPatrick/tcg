@@ -217,7 +217,7 @@ export type PromoteBlock = 'notOnBench' | 'notOwed' | 'down' | 'benchOnly';
 export function promoteBlocked(G: GameState, benchIid: string): PromoteBlock | null {
   for (const pid of ['0', '1'] as PlayerID[]) {
     const ps = G.players[pid];
-    const benchHero = ps.bench.find((b) => b?.iid === benchIid);
+    const benchHero = ps.bench.find((b) => b != null && b.iid === benchIid);
     if (!benchHero) continue;
     // Only valid when the Active is a corpse — otherwise use retreat (which costs souls).
     if (!ps.active || !isRespawning(ps.active)) return 'notOwed';
@@ -255,6 +255,7 @@ export function mulliganBlocked(G: GameState): 'noMulligan' | null {
  *  also answer the looser "is there some target" when it is left off). Ending
  *  the turn is always legal. */
 export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
+  if (!G.players[pid]) return 'noPlayer';
   switch (a.type) {
     case 'attack':
       return G.draft ? 'draft' : attackBlocked(G, pid);

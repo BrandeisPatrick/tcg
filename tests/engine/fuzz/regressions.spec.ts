@@ -391,11 +391,11 @@ describe('E6 targets are validated against the ability\'s TargetFilter', () => {
 // ===========================================================================
 // E7  Missing ids throw instead of being rejected
 //     findCardOnBoard: `b?.iid === undefined` matches an EMPTY bench slot (the hole a
-//     merged Rem leaves), so `useSkill()` gets `found.card === null`. (E7b, promoteToActive:
-//     fixed; E7a, useSkill: open)
+//     merged Rem leaves), so `useSkill()` got `found.card === null`. (E7a, E7b: fixed — an empty
+//     slot is nobody, and every id that names no card is INVALID)
 // ===========================================================================
 describe('E7 a missing iid is a rejected move, not a TypeError', () => {
-  it.fails('E7a useSkill with no hero iid while the bench has a hole', () => {
+  it('E7a useSkill with no hero iid while the bench has a hole', () => {
     const G = game();
     G.players['0'].bench[0] = null;
     expect(runMove('useSkill', G, '0', undefined)).toBe(INVALID_MOVE);
@@ -407,6 +407,36 @@ describe('E7 a missing iid is a rejected move, not a TypeError', () => {
     G.players['0'].active!.hp = 0;
     G.players['0'].active!.respawnTurnsLeft = 3;
     expect(runMove('promoteToActive', G, '0', undefined)).toBe(INVALID_MOVE);
+  });
+});
+
+describe('E7 junk arguments of every kind are INVALID, never a throw', () => {
+  const junk: unknown[] = [undefined, null, 7, '', 'no-such-iid', {}, [], NaN];
+  const withHole = () => {
+    const G = game();
+    G.players['0'].bench[0] = null; // the hole a merged Rem leaves
+    return G;
+  };
+
+  it.each(['useSkill', 'playCard', 'promoteToActive'])('%s with junk ids', (move) => {
+    for (const a of junk) for (const b of junk) {
+      const G = withHole();
+      const before = JSON.stringify(G);
+      expect(runMove(move, G, '0', a, b, a), `${move}(${String(a)}, ${String(b)})`).toBe(INVALID_MOVE);
+      expect(JSON.stringify(G)).toBe(before);
+    }
+  });
+
+  it('moveHero with a junk slot on either side', () => {
+    const slots: unknown[] = [...junk, 4, -1, 1.5, '2'];
+    for (const bad of slots) for (const ok of [0, 1, 2, 3, ...slots]) {
+      for (const [a, b] of [[bad, ok], [ok, bad]]) {
+        const G = withHole();
+        const before = JSON.stringify(G);
+        expect(runMove('moveHero', G, '0', a, b), `moveHero(${String(a)}, ${String(b)})`).toBe(INVALID_MOVE);
+        expect(JSON.stringify(G)).toBe(before);
+      }
+    }
   });
 });
 

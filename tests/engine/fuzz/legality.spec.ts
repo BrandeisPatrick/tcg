@@ -28,8 +28,6 @@ const KNOWN: Known[] = [
   // ---- E5: moveHero ----
   { id: 'moveHero-accepts-illegal:active-slot-with-hole@moveHero', why: 'E5c: Active <-> empty bench slot is accepted: the Active vanishes and the swap costs no souls.' },
   { id: 'moveHero-accepts-illegal:bench-only-to-active@moveHero', why: 'E5d: the benchOnly guard looks at the hero being moved, not at the one that lands in slot 0, so moveHero(0, remSlot) makes Rem the Active.' },
-  // ---- E7: garbage arguments throw ----
-  { id: 'move-threw@useSkill', why: 'E7a: useSkill(undefined) with an empty bench slot dereferences null (findCardOnBoard matches the hole).' },
   // ---- E3 mirror: Rem is counted as equipment ----
   {
     id: 'rejects-legal-target:equipment@playCard',

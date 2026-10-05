@@ -24,11 +24,14 @@ export function otherPlayer(id: PlayerID): PlayerID {
   return id === '0' ? '1' : '0';
 }
 
+/** The board card with this iid, or null. An empty slot is nobody: a missing or
+ *  junk iid (`undefined`, a number…) finds nothing, so callers can treat "not
+ *  found" as the one answer for every id that names no card. */
 export function findCardOnBoard(G: GameState, iid: string): { owner: PlayerID; card: CardInstance } | null {
   for (const pid of ['0', '1'] as PlayerID[]) {
     const ps = G.players[pid];
-    if (ps.active?.iid === iid) return { owner: pid, card: ps.active };
-    for (const b of ps.bench) if (b?.iid === iid) return { owner: pid, card: b };
+    if (ps.active && ps.active.iid === iid) return { owner: pid, card: ps.active };
+    for (const b of ps.bench) if (b && b.iid === iid) return { owner: pid, card: b };
   }
   return null;
 }

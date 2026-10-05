@@ -83,10 +83,6 @@ const KNOWN: Known[] = [
     when: remInvolved,
   },
   {
-    id: 'engine-threw@useSkill#chaos',
-    why: 'E7a: findCardOnBoard(undefined) matches an empty bench slot (util.ts:23-24) and useSkill dereferences found.card === null (game.ts:543).',
-  },
-  {
     id: 'corpse-state@playCard#chaos',
     why: 'E2b: Soul Exchange against / from a corpse Active gives the corpse hp.',
   },
