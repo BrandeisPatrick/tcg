@@ -18,6 +18,7 @@ import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { resolve } from '@/engine/death';
 import { addStatus, grantExtraAttacks, tickRemMerges } from '@/engine/statusOps';
+import { consumeEquipment } from '@/engine/deckOps';
 import { blocked, legalActions, skillBlocked } from '@/engine/legality';
 import { wornEquipment } from '@/engine/query';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
@@ -545,13 +546,13 @@ describe('E7 junk arguments of every kind are INVALID, never a throw', () => {
 });
 
 // ===========================================================================
-// E8  Replaced equipment keeps its bonuses  (INTENT UNCONFIRMED)
-//     game.ts:226-230 applyOnPlay adds `bonus` to atkMod / hpMax / spiritMod and
-//     statuses (Bullet Resist…) with duration 999; nothing removes them when the item
-//     is discarded to make room. If "discard" is meant to keep the stats, delete this.
+// E8  Replaced equipment kept its bonuses  (fixed: discarding an item takes its stat bonus back)
+//     applyOnPlay adds `bonus` to atkMod / hpMax / spiritMod; nothing removed it when the item was
+//     discarded to make room or broke. (Statuses an item grants when played — Bullet Resist and the
+//     like — are not tracked back to it and stay; that is a separate, larger question.)
 // ===========================================================================
-describe('E8 discarding equipment takes its bonus away (intent unconfirmed)', () => {
-  it.fails('E8a the +2 HP of Extra Health leaves with it', () => {
+describe('E8 discarding equipment takes its bonus away', () => {
+  it('E8a the +2 HP of Extra Health leaves with it', () => {
     const G = game();
     const hero = G.players['0'].active!;
     const base = hero.hpMax;
@@ -561,11 +562,63 @@ describe('E8 discarding equipment takes its bonus away (intent unconfirmed)', ()
     wearByPlay(G, hero, 'extra_spirit');
     runMove('playCard', G, '0', toHand(G, '0', 'titanic_magazine').iid, hero.iid, hp.iid);
     expect(hero.attached!.some((a) => a.iid === hp.iid)).toBe(false);
-    expect(hero.hpMax).toBe(base); // currently still base + 2
+    expect(hero.hpMax).toBe(base);
+  });
+
+  it('E8b every stat of the printed bonus goes with the item, and HP with no room left goes too', () => {
+    const G = game();
+    const hero = G.players['0'].active!;
+    const { atkMod, spiritMod, hpMax } = hero;
+    const boundless = wearByPlay(G, hero, 'boundless_spirit'); // +5 spirit, +3 HP
+    const magazine = wearByPlay(G, hero, 'titanic_magazine');  // +2 attack
+    wearByPlay(G, hero, 'extra_health');
+    expect([hero.atkMod, hero.spiritMod, hero.hpMax]).toEqual([atkMod + 2, spiritMod + 5, hpMax + 3 + 2]);
+    hero.hp = hero.hpMax;
+    runMove('playCard', G, '0', toHand(G, '0', 'improved_spirit').iid, hero.iid, boundless.iid);
+    expect([hero.atkMod, hero.spiritMod, hero.hpMax]).toEqual([atkMod + 2, spiritMod + 2, hpMax + 2]);
+    expect(hero.hp).toBe(hero.hpMax);
+    expect(G.players['0'].discard.map((c) => c.iid)).toContain(boundless.iid);
+    expect(hero.attached!.some((a) => a.iid === magazine.iid)).toBe(true); // what stays, stays
+  });
+
+  it('E8c HP already lost stays lost; a negative bonus (Glass Cannon) gives its max HP back', () => {
+    const G = game();
+    const hero = G.players['0'].active!;
+    const base = hero.hpMax;
+    const hp = wearByPlay(G, hero, 'extra_health');
+    const cannon = wearByPlay(G, hero, 'glass_cannon'); // +6 attack, -1 max HP
+    wearByPlay(G, hero, 'extended_magazine');
+    expect(hero.hpMax).toBe(base + 2 - 1);
+    hero.hp = 3;
+    runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, hero.iid, hp.iid);
+    expect([hero.hpMax, hero.hp]).toEqual([base - 1, 3]); // the lost HP is not refunded or double-counted
+    const G2 = game();
+    const h2 = G2.players['0'].active!;
+    const base2 = h2.hpMax;
+    const cannon2 = wearByPlay(G2, h2, 'glass_cannon');
+    wearByPlay(G2, h2, 'extra_health'); wearByPlay(G2, h2, 'extended_magazine');
+    h2.hp = h2.hpMax; // full
+    runMove('playCard', G2, '0', toHand(G2, '0', 'extra_spirit').iid, h2.iid, cannon2.iid);
+    expect(h2.hpMax).toBe(base2 + 2); // the -1 is back
+    expect(h2.hp).toBe(base2 + 2 - 1); // …but the HP it cost is not healed
+    expect(cannon.iid).not.toBe(cannon2.iid);
+  });
+
+  it('E8d a spent charge item takes its bonus with it too (consumeEquipment)', () => {
+    const G = game();
+    const hero = G.players['0'].active!;
+    const base = hero.hpMax;
+    const worn = wearByPlay(G, hero, 'extra_health');
+    expect(hero.hpMax).toBe(base + 2);
+    consumeEquipment(G, hero, worn);
+    expect(hero.hpMax).toBe(base);
+    expect(hero.attached!.some((a) => a.iid === worn.iid)).toBe(false);
+    expect(G.players['0'].discard.some((c) => c.iid === worn.iid)).toBe(true);
   });
 });
 function wearByPlay(G: GameState, hero: CardInstance, cardId: string): CardInstance {
   const c = toHand(G, '0', cardId);
+  G.players['0'].souls = 10; // the price is not what is under test
   expect(runMove('playCard', G, '0', c.iid, hero.iid)).not.toBe(INVALID_MOVE);
   return c;
 }

@@ -373,7 +373,8 @@ export function collectTransitionViolations(
     const spot = everyCard(after.G).find((x) => x.card.iid === arg0)?.place;
     const okSpot = t === 'equipment' ? spot?.startsWith('attached:') : spot === 'discard';
     if (!okSpot) add('play-card-destination', arg0, `${played.cardId} (${t}) ended in ${spot ?? 'nowhere'} after playCard`);
-    // Equipment adds exactly its bonus (plus whatever level the +1 exp earns the bearer).
+    // Equipment adds exactly its bonus (plus whatever level the +1 exp earns the bearer), and a
+    // piece discarded to make room takes its own bonus away.
     const d = CARDS_BY_ID[played.cardId];
     const bearerIid = typeof move.args[1] === 'string' ? (move.args[1] as string) : undefined;
     if (d?.type === 'equipment' && bearerIid) {
@@ -381,10 +382,15 @@ export function collectTransitionViolations(
       const b1 = boardOf(after.G.players[mover]).find((c) => c.iid === bearerIid);
       if (b0 && b1 && !isRespawning(b0)) {
         const lv = (b1.level ?? 1) - (b0.level ?? 1);
+        const droppedCard = typeof move.args[2] === 'string' ? (b0.attached ?? []).find((a) => a.iid === move.args[2]) : undefined;
+        const droppedData = droppedCard && b0.attached && (b0.attached.filter((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment').length >= MAX_EQUIPMENT_PER_HERO)
+          ? CARDS_BY_ID[droppedCard.cardId]
+          : undefined;
+        const gone = droppedData?.type === 'equipment' ? droppedData.bonus : undefined;
         const want = {
-          atkMod: (d.bonus?.atk ?? 0) + lv * LEVEL_ATK_BONUS,
-          hpMax: (d.bonus?.hp ?? 0) + lv * LEVEL_HP_BONUS,
-          spiritMod: (d.bonus?.spirit ?? 0) + lv * LEVEL_SPIRIT_BONUS,
+          atkMod: (d.bonus?.atk ?? 0) - (gone?.atk ?? 0) + lv * LEVEL_ATK_BONUS,
+          hpMax: (d.bonus?.hp ?? 0) - (gone?.hp ?? 0) + lv * LEVEL_HP_BONUS,
+          spiritMod: (d.bonus?.spirit ?? 0) - (gone?.spirit ?? 0) + lv * LEVEL_SPIRIT_BONUS,
         };
         for (const k of ['atkMod', 'hpMax', 'spiritMod'] as const) {
           if (b1[k] - b0[k] !== want[k]) add('equip-bonus', `${bearerIid}-${k}`, `${b1.cardId}#${bearerIid} ${k} ${b0[k]} -> ${b1[k]} after wearing ${d.id}; its bonus and ${lv} level-up(s) give ${want[k]}`);

@@ -15,6 +15,7 @@ import { nextActionId } from '../ids';
 import { withCast } from '../castContext';
 import { fireTriggers } from '../triggers';
 import { grantExp } from '../expSystem';
+import { discardEquipment } from '../deckOps';
 import { resolve } from '../death';
 
 function applyOnPlay(G: GameState, pid: PlayerID, source: CardInstance, target?: CardInstance) {
@@ -77,10 +78,7 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, targetIid
     // Equipment cap: a hero at the cap gives up the item the caller named.
     if (wornEquipment(target).length >= MAX_EQUIPMENT_PER_HERO) {
       const dropped = wornEquipment(target).find((eq) => eq.iid === discardIid)!;
-      dropped.zone = 'discard';
-      dropped.attachedTo = undefined;
-      ps.discard.push(dropped);
-      target.attached!.splice(target.attached!.indexOf(dropped), 1);
+      discardEquipment(G, target, dropped);
       pushLog(G, `${CARDS_BY_ID[target.cardId]?.name} discarded ${CARDS_BY_ID[dropped.cardId]?.name} to make room.`);
     }
     card.attachedTo = target.iid;

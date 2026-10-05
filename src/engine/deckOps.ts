@@ -55,11 +55,14 @@ export function drawCards(G: GameState, pid: PlayerID, n: number): number {
 }
 
 /**
- * Detach a spent equipment from its bearer and send it to the owner's discard.
- * Used by charge-based items (the cooldown→draw family) when the last charge is
- * consumed, so the hero's equipment slot frees up instead of holding a dead item.
+ * Take a worn piece of equipment off its bearer and into its owner's discard,
+ * and take back what it gave: its printed stat bonus (attack, spirit, max HP)
+ * leaves with it, and HP the bearer no longer has room for goes too. (Statuses
+ * an item granted when played — a Bullet Resist, a Healing Boost — are not
+ * tracked back to the item and stay.) Shared by the cap's replacement of an
+ * item and by a spent charge item.
  */
-export function consumeEquipment(G: GameState, bearer: CardInstance, eq: CardInstance): void {
+export function discardEquipment(G: GameState, bearer: CardInstance, eq: CardInstance): void {
   const arr = bearer.attached;
   if (arr) {
     const idx = arr.findIndex((e) => e.iid === eq.iid);
@@ -68,5 +71,24 @@ export function consumeEquipment(G: GameState, bearer: CardInstance, eq: CardIns
   eq.zone = 'discard';
   eq.attachedTo = undefined;
   G.players[eq.ownerId].discard.push(eq);
+  const data = CARDS_BY_ID[eq.cardId];
+  const bonus = data?.type === 'equipment' ? data.bonus : undefined;
+  if (bonus) {
+    bearer.atkMod -= bonus.atk ?? 0;
+    bearer.spiritMod -= bonus.spirit ?? 0;
+    if (bonus.hp) {
+      bearer.hpMax = Math.max(1, bearer.hpMax - bonus.hp);
+      if (bearer.hp > bearer.hpMax) bearer.hp = bearer.hpMax;
+    }
+  }
+}
+
+/**
+ * A charge-based item (the cooldown→draw family) spent its last charge: it
+ * breaks and goes to the discard, so the hero's equipment slot frees up instead
+ * of holding a dead item.
+ */
+export function consumeEquipment(G: GameState, bearer: CardInstance, eq: CardInstance): void {
+  discardEquipment(G, bearer, eq);
   pushLog(G, `${CARDS_BY_ID[eq.cardId]?.name ?? 'Equipment'} spent its last charge and broke.`);
 }
