@@ -63,14 +63,16 @@ export function attackBlocked(G: GameState, pid: PlayerID): AttackBlock | null {
 
 export type SkillBlock = 'noSkill' | 'down' | 'used' | 'attacked' | 'status' | 'souls' | 'target';
 
-/** What a hero's skill may be aimed at: the live board cards its filter allows,
- *  or 'none' for a skill that takes no target. No skill at all gives []. */
+/** What a hero's skill may be aimed at: the live board cards its filter allows
+ *  (minus the caster, for a skill that says `excludeSelf`), or 'none' for a skill
+ *  that takes no target. No skill at all gives []. */
 export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance): CardInstance[] | 'none' {
   const data = CARDS_BY_ID[hero.cardId];
   const ability = data?.type === 'hero' && data.skill ? getAbility(data.skill) : undefined;
   if (!ability) return [];
   if (ability.target === 'noTarget') return 'none';
-  return targetsFor(G, pid, ability.target, hero);
+  const targets = targetsFor(G, pid, ability.target, hero);
+  return ability.excludeSelf ? targets.filter((t) => t.iid !== hero.iid) : targets;
 }
 
 /**

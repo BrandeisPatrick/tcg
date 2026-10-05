@@ -51,6 +51,10 @@ export interface AbilityDef {
    *  proxy for how much an ability is worth (ai/heuristic.ts), and pinned
    *  by souls.spec / mystic-burst.spec. Not rendered anywhere. */
   base?: number;
+  /** The caster is not a target of its own skill, whatever the filter says.
+   *  (Rem's Lil Helpers merges her INTO an ally: aimed at herself it would do
+   *  nothing and still cost the soul and the skill.) */
+  excludeSelf?: boolean;
   run: EffectFn;
 
   // ----- Pure hooks -----
@@ -814,7 +818,7 @@ const passive_mo_krill_burrow: AbilityDef = {
 // The countdown + return-to-bench live in tickRemMerges; bearer-death rescue in
 // killInPlace. Scaling snapshots Rem's Spirit at cast time.
 const skill_rem: AbilityDef = {
-  id: 'skill_rem', trigger: 'activate', target: 'allyHero',
+  id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   prompt: "Rem Lil Helpers — merge into an ally: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns.",
   base: 3,
   scalesSpirit: true,

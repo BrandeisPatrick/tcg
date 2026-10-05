@@ -404,7 +404,7 @@ describe('E5 moveHero', () => {
 // ===========================================================================
 // E6  useSkill / playCard never checked the ability's TargetFilter
 //     (fixed: legality.ts skillBlocked / playBlocked validate against targetsFor;
-//     E6i, Rem aimed at herself, is open)
+//     E6i, Rem aimed at herself: fixed by the skill's `excludeSelf`)
 // ===========================================================================
 describe('E6 targets are validated against the ability\'s TargetFilter', () => {
   it('precondition: the AI aims Cold Front at the enemy Active and the engine takes it', () => {
@@ -481,7 +481,7 @@ describe('E6 targets are validated against the ability\'s TargetFilter', () => {
     expect(foe.attached ?? []).not.toContain(rem);
   });
 
-  it.fails('E6i Rem aimed at herself is refused instead of burning a soul and the skill for nothing', () => {
+  it('E6i Rem aimed at herself is refused instead of burning a soul and the skill for nothing', () => {
     const G = game();
     const rem = makeHero('hero_rem', '0', 'bench', 1);
     G.players['0'].bench[0] = rem;
@@ -490,6 +490,20 @@ describe('E6 targets are validated against the ability\'s TargetFilter', () => {
     expect(r).toBe(INVALID_MOVE);
     expect(G.players['0'].souls).toBe(souls);
     expect(rem.skillUsedThisTurn).toBe(false);
+  });
+
+  it('E6j Rem still merges into any other ally hero, and has no target when she is alone', () => {
+    const G = game();
+    const rem = makeHero('hero_rem', '0', 'bench', 1);
+    G.players['0'].bench[0] = rem;
+    const me = G.players['0'];
+    const others = [me.active!, me.bench[1]!, me.bench[2]!].map((c) => c.iid);
+    const targets = legalActions(G, '0').filter((a) => a.type === 'useSkill' && a.heroIid === rem.iid).map((a) => (a as { targetIid?: string }).targetIid);
+    expect(targets).toEqual(others); // board order, her own iid not among them
+    expect(skillBlocked(G, '0', rem)).toBeNull();
+    // alone on the board she has nobody to merge into
+    me.active = rem; me.bench = [null, null, null]; // (a state a story roster can reach)
+    expect(skillBlocked(G, '0', rem)).toBe('target');
   });
 });
 

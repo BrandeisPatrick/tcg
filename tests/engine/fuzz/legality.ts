@@ -14,7 +14,7 @@ import type { Snapshot, StepInfo } from './driver';
 import { chaosMove } from './driver';
 import { moveTags, signatureOf, type Hit } from './hits';
 import {
-  boardOf, boardUnits, callMove, diffPaths, filterForHandCard, filterForSkill, targetLegal,
+  boardOf, boardUnits, callMove, diffPaths, filterForHandCard, filterForSkill, skillExcludesSelf, targetLegal,
 } from './oracle';
 import type { TargetFilter } from '@/abilities';
 
@@ -95,7 +95,7 @@ export function probeLegality(
     let candidates: unknown[][] = [];
     if (filter === 'noTarget') candidates = [[hero.iid]];
     else if (filter === 'self') candidates = [[hero.iid, hero.iid]];
-    else if (filter) candidates = liveTargets.filter((t) => targetLegal(filter, t, hero, pid)).map((t) => [hero.iid, t.iid]);
+    else if (filter) candidates = liveTargets.filter((t) => targetLegal(filter, t, hero, pid) && !(skillExcludesSelf(hero) && t.iid === hero.iid)).map((t) => [hero.iid, t.iid]);
     let eng = false;
     for (const args of candidates) {
       if (callMove(G, ctx, pid, 'useSkill', args).outcome === 'accepted') { eng = true; break; }
@@ -151,7 +151,8 @@ export function probeLegality(
       const own = boardOf(me).find((c) => c.cardId === linkedId && !isRespawning(c));
       legal = !!own && (tgt === undefined || (tCard !== undefined && tCard.iid === own.iid));
     } else {
-      legal = targetLegal(filter, tCard, src.kind === 'skill' ? src.card : undefined, pid);
+      legal = targetLegal(filter, tCard, src.kind === 'skill' ? src.card : undefined, pid)
+        && !(src.kind === 'skill' && skillExcludesSelf(src.card) && tCard?.iid === src.card.iid);
     }
     const args = [src.card.iid, tgt === 'ghost' ? 'ghost-iid' : tCard?.iid];
     const name = src.kind === 'skill' ? 'useSkill' : 'playCard';

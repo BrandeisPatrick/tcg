@@ -111,8 +111,9 @@ export type TargetFilter =
  * Every live board card `filter` allows for `pid`, in board order: the enemy's
  * Active, enemy bench 1..3, then your Active and bench 1..3. Corpses are never
  * targets. `self` is `source` alone, and `noTarget` allows none (the caller
- * reads that as "nothing to aim"). `allyHero` includes the caster — Rem may
- * aim at herself, a known quirk this keeps.
+ * reads that as "nothing to aim"). `allyHero` includes the caster; a skill that
+ * should not aim at its own caster says so itself (`excludeSelf`, applied by
+ * legality's skillTargets) rather than needing a filter of its own.
  */
 export function targetsFor(G: GameState, pid: PlayerID, filter: TargetFilter, source?: CardInstance): CardInstance[] {
   if (filter === 'noTarget') return [];

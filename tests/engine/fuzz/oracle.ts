@@ -84,6 +84,12 @@ export function filterForSkill(hero: CardInstance): TargetFilter | null {
   return getAbility(d.skill)?.target ?? null;
 }
 
+/** A skill that is never aimed at its own caster (Rem's merge), whatever its filter says. */
+export function skillExcludesSelf(hero: CardInstance): boolean {
+  const d = CARDS_BY_ID[hero.cardId];
+  return d?.type === 'hero' && !!d.skill && !!getAbility(d.skill)?.excludeSelf;
+}
+
 /** Is `target` a legal choice for `filter`, cast by `pid` from `source`?
  *  A target must be on the board and alive (a corpse "can't be targeted"). */
 export function targetLegal(
