@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { freshReadyGame, makeHero } from './_helpers';
-import { resolveAttackPhase } from '@/engine/actions/attack';
+import { freshReadyGame, makeAttack, makeHero } from './_helpers';
+import { INVALID, perform } from '@/engine/engine';
 import { tickCastingPulses, addStatus, tickRemMerges } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
@@ -32,7 +32,7 @@ describe('Multi-attack: Extra Attack (N)', () => {
     grantExtraAttacks(atk, 1);
 
     const shieldBefore = def.statuses.find((s) => s.id === 'shield')!.value;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     const shieldAfter = def.statuses.find((s) => s.id === 'shield')!.value;
     expect(shieldBefore - shieldAfter).toBe(dmg * 2); // primary + 1 full Extra Attack
   });
@@ -61,7 +61,7 @@ describe('Multi-attack: Extra Attack (N)', () => {
     const dmg = effectiveAtk(atk);
     grantExtraAttacks(atk, 2); // 1 primary + 2 extra = 3 swings
     const hp0 = def.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(hp0 - def.hp).toBe(dmg * 3);
     expect(extraOf(atk)).toBe(0); // consumed
   });
@@ -74,7 +74,7 @@ describe('Multi-attack: Extra Attack (N)', () => {
     def.hp = def.hpMax = 30;
     atk.attached = [{ ...makeHero('toxic_bullets', '0'), cardId: 'toxic_bullets' }];
     grantExtraAttacks(atk, 2); // 3 swings → Bleed maxes at 3
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBe(3);
   });
 
@@ -107,7 +107,7 @@ describe('Haze Fixation — reactive follow-up swing', () => {
     const def = G.players['1'].active!;
     def.hp = def.hpMax = 99;
     const dmg = effectiveAtk(haze);
-    resolveAttackPhase(G, '0'); // no start-of-turn grant; Fixation fires on her swing
+    makeAttack(G, '0'); // no start-of-turn grant; Fixation fires on her swing
     expect(def.hp).toBe(99 - dmg * 2); // primary + one Fixation Extra Attack
     expect(extraOf(haze)).toBe(0); // consumed + cleared
   });
@@ -120,7 +120,7 @@ describe('Haze Fixation — reactive follow-up swing', () => {
     addStatus(G, haze, 'disarm', 1, 2); // can't attack → effectiveAtk 0
     const def = G.players['1'].active!;
     const hp0 = def.hp;
-    resolveAttackPhase(G, '0');
+    expect(perform(G, '0', { type: 'attack' })).toBe(INVALID); // the gate refuses it
     expect(def.hp).toBe(hp0); // no damage
     expect(extraOf(haze)).toBe(0); // Fixation never fired
   });
@@ -154,7 +154,7 @@ describe('Lifesteal — heal half the damage dealt', () => {
     soloAttacker(G, '0');
     const def = G.players['1'].active!;
     def.hp = def.hpMax = 99; // survives the swing
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     // Drifter dealt 3 → heals floor(3/2)=1; the defender does not strike back.
     expect(drifter.hp).toBe(1 + 1);
   });
@@ -185,7 +185,7 @@ describe('Ricochet — canon AoE on attack', () => {
     bench0.hp = bench0.hpMax = 99;
     const before = bench0.hp;
     grantExtraAttacks(atk, 1); // 2 swings → 2 ricochet pulses → 4 to the bench hero
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(before - bench0.hp).toBe(4);
   });
 });

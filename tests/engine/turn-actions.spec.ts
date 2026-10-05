@@ -3,7 +3,7 @@ import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
 import { attackBlocked, attackTurn, type AttackBlock } from '@/engine/legality';
-import { planAttackPhase } from '@/engine/forecast';
+import { forecastAttack } from '@/engine/forecast';
 import { effectiveAtk, liveBoardCards } from '@/engine/query';
 import { addStatus, clearTurnFlags, tickRemMerges } from '@/engine/statusOps';
 import { resolve } from '@/engine/death';
@@ -359,7 +359,7 @@ describe('AI: the attack is a choice', () => {
     const p0 = G.players['0'];
     p0.active!.hp = 1;
     p0.hp = 2;
-    expect(planAttackPhase(G, '1').defenderActiveKO).toBe(p0.active!.iid);
+    expect(forecastAttack(G, '1').defenderActiveKO).toBe(p0.active!.iid);
     expect(attackScore(G)).toBeLessThan(LETHAL);
   });
 
@@ -367,7 +367,7 @@ describe('AI: the attack is a choice', () => {
     const G = freshReadyGame();
     const p0 = G.players['0'];
     p0.active!.hp = p0.active!.hpMax = 30;
-    const swing = planAttackPhase(G, '1').damageToActive;
+    const swing = forecastAttack(G, '1').damageToActive;
     p0.active!.hp = p0.active!.hpMax = swing + 1; // the Active survives the swing
     p0.hp = 1;
     // What the old check summed — every live hero's attack against Active HP

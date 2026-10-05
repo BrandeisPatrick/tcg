@@ -870,7 +870,7 @@ const passive_wraith_mixed: AbilityDef = {
 };
 
 // Bloodscent: bullet lifesteal — Drifter heals for HALF the damage his attacks
-// deal (the dealt amount is plumbed in via params.dealt from resolveAttackPhase).
+// deal (the dealt amount is plumbed in via params.dealt from the attack action).
 // Scales with weapon power, Extra Attack swings, and Healing Boost items.
 const passive_drifter_bloodscent: AbilityDef = {
   id: 'passive_drifter_bloodscent', trigger: 'onAttack', target: 'self',

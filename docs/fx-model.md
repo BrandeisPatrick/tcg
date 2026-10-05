@@ -12,21 +12,49 @@ event (`FxEvent` in `src/engine/types.ts`), with a monotonic `seq`:
 | kind      | when                                             | carries                                   |
 |-----------|--------------------------------------------------|-------------------------------------------|
 | `cast`    | a skill / spell / ult / equipment goes off        | caster iid, card, target — pushed FIRST   |
+| `swing`   | one swing of the turn's attack begins            | attacker, target, `index`, `raw` power, `label`, target HP |
 | `hit`     | damage landed (post-resist, post-shield)          | type, amount, KO, cast kind, source, tag  |
 | `heal`    | HP restored                                      | amount, tag, `from` (lifesteal victim)     |
 | `status`  | a status landed                                  | resulting value, class, tag               |
-| `shield`  | a Shield ate some / all of a hit                 | absorbed, broken                          |
-| `immune`  | Unstoppable shrugged off damage or CC            | what                                      |
+| `shield`  | a Shield ate some / all of a hit                 | absorbed, broken, cast kind               |
+| `immune`  | Unstoppable shrugged off damage or CC            | what, cast kind (for damage)              |
 | `revive`  | a corpse came back                               |                                           |
 | `levelup` | a hero reached a new level                       | level                                     |
 
 Rules the FX layer relies on (pinned by `tests/engine/fx-events.spec.ts`):
 
-- The **basic swing is never in the stream.** The combat choreographer
-  animates it before the engine resolves. Anything riding on a swing (Tesla,
-  Ricochet, a Djinn's Mark detonation) carries a tag and is kept as a `proc`.
+- **The engine reports everything it does, the basic swing included.** Each
+  swing of the turn's attack pushes a `swing` BEFORE its damage (`index` 0 is
+  the primary, 1.. the Extra Attacks; `raw` is the attack power it was made
+  with, `label` is `Extra Attack` or a bonus's own — Frenzy's — and
+  `targetHp` the target's HP as it begins). The hit, Shield absorb or
+  Unstoppable shrug of that swing follow, filed `cast: 'attack'`. What the
+  swing sets off keeps its own cast and tag — a Tesla / Ricochet hit or a
+  Djinn's Mark detonation is a `proc` — and, being a reaction pushed from
+  inside the damage, lands in the stream ahead of the swing's own hit.
+- **The board does not play the swing twice.** The combat choreographer walks
+  the basic attack from the forecast BEFORE the engine makes it, so the
+  match screen drops `swing` events and the `hit` / `shield` carrying cast
+  `attack` (`walkedByChoreographer` in `fxTimeline.ts`, the one place that
+  decides; Board's fresh batch, the timeline, the FX layer and the final-blow
+  check all go through it). An Unstoppable shrug is not dropped — the walk has
+  no beat for it.
+- **The forecast is the same stream.** `forecastAttack` (`engine/forecast.ts`)
+  runs the real attack on a copy of the game (`simulate`) and reads these
+  events back: a step per `swing`, its `finalDamage` and `shieldAbsorbed` from
+  the `attack`-cast hit and absorb, its HP after from the next swing's
+  `targetHp` (the last from the state the run leaves). So what the choreographer
+  walks cannot differ from what the engine then reports
+  (`tests/engine/forecast.spec.ts`).
 - A `cast` precedes its effects, so a batch reads "this caster did these".
-- `G.fx` is flushed at every turn start; `seq` keeps climbing, so the UI's
+- Within one damage call the engine pushes a Shield's absorb, then the
+  reactions to the hit (procs, statuses), then the hit itself — so a Shield
+  and the hit it let past are not adjacent; the FX layer pairs them by card
+  and damage type (`shieldSpilled`), not by `seq`.
+- `G.fx` is flushed at every turn start (`beginTurn`, in the same reducer call
+  that ends the previous turn): effects pushed at the END of a turn — a channel
+  pulse, Naptime's wake, an end-of-turn level-up — are flushed before the UI
+  sees them (a known gap). `seq` keeps climbing (it comes from `G.counters`), so the UI's
   high-water mark never replays old hits after a remount.
 - Unique effects carry an `FxTag`: `djinns_mark`, `bleed`, `reverb`,
   `naptime`, `discharge`, `execute`, `life_drain`, `lifesteal`,
@@ -36,8 +64,8 @@ Rules the FX layer relies on (pinned by `tests/engine/fx-events.spec.ts`):
 
 ## The player
 
-`Board.tsx` derives the **fresh batch** (events past its high-water mark)
-during render, runs it through `buildFxTimeline` (pure, `fxTimeline.ts`) and
+`Board.tsx` derives the **fresh batch** (events past its high-water mark,
+minus what the choreographer walked) during render, runs it through `buildFxTimeline` (pure, `fxTimeline.ts`) and
 hands both to:
 
 - `FxTimingContext` — `HeroSlot` reads the per-card impact delay and holds
@@ -134,7 +162,7 @@ Animation families (`hits.tsx`, `support.tsx`, `shatter.tsx`, `primitives.tsx`):
   in gold; a revive or level-up winding a column of glints up off the card;
   equip glint.
 - **the basic attack** (`CombatChoreographer.tsx`) — the same gunfire family
-  walked beat by beat before the engine resolves; a card that breaks stays
+  walked beat by beat from the forecast before the engine resolves; a card that breaks stays
   under a grey veil until the engine turns it for real.
 - **the ultimate** (`UltMomentFlash.tsx`) — the name plate is dropped onto
   the table from above; where it lands every card bobs, a shockwave rolls

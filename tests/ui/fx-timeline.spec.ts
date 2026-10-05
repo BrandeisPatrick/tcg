@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildFxTimeline } from '@/ui/effects/fx/fxTimeline';
+import { buildFxTimeline, shieldSpilled, walkedByChoreographer } from '@/ui/effects/fx/fxTimeline';
 import { FX_TIMING as T, TAG_INFO } from '@/ui/effects/fx/fxCatalog';
-import type { FxEvent } from '@/engine/types';
+import type { FxEvent, ShieldFx } from '@/engine/types';
 
 /** The FX scheduler is pure — pin the beat structure HeroSlot and FxLayer
  *  build on: a cast pushes impacts out to the bolt's arrival, stamps queue
@@ -113,5 +113,53 @@ describe('fx timeline', () => {
     ] as FxEvent[];
     const tl = buildFxTimeline(batch);
     expect(tl.items.map((i) => i.at)).toEqual([0, T.stagger, 2 * T.stagger]);
+  });
+});
+
+describe('what the choreographer has already walked', () => {
+  it("a basic swing's own swing, hit and Shield are walked; its procs, riders, shrugs and everything else are not", () => {
+    const walked = [
+      ev({ kind: 'swing', iid: 'a', targetIid: 't', index: 0, raw: 3, targetHp: 10 }),
+      ev({ kind: 'hit', iid: 't', amount: 3, type: 'attack', ko: false, cast: 'attack' }),
+      ev({ kind: 'shield', iid: 't', absorbed: 2, broken: false, type: 'attack', cast: 'attack' }),
+    ] as FxEvent[];
+    const played = [
+      ev({ kind: 'hit', iid: 'b', amount: 1, type: 'attack', ko: false, cast: 'proc', tag: 'tesla' }),
+      ev({ kind: 'hit', iid: 't', amount: 3, type: 'spirit', ko: false, cast: 'skill' }),
+      ev({ kind: 'shield', iid: 't', absorbed: 2, broken: false, type: 'spirit', cast: 'skill' }),
+      ev({ kind: 'shield', iid: 't', absorbed: 2, broken: false, type: 'attack' }),
+      // The walk has no beat for an Unstoppable shrug, so its stamp still plays.
+      ev({ kind: 'immune', iid: 't', what: 'damage', cast: 'attack' }),
+      ev({ kind: 'heal', iid: 'a', amount: 2, tag: 'lifesteal' }),
+      ev({ kind: 'status', iid: 't', statusId: 'bleed', value: 1, duration: 2, debuff: true }),
+    ] as FxEvent[];
+    expect(walked.map(walkedByChoreographer)).toEqual([true, true, true]);
+    expect(played.map(walkedByChoreographer)).toEqual(played.map(() => false));
+  });
+});
+
+describe('a Shield spilling', () => {
+  const shield = (iid: string, type: 'attack' | 'spirit' = 'spirit') =>
+    ev({ kind: 'shield', iid, absorbed: 2, broken: false, type }) as ShieldFx;
+  const hit = (iid: string, type: 'attack' | 'spirit' = 'spirit') =>
+    ev({ kind: 'hit', iid, amount: 1, type, ko: false, cast: 'skill' }) as FxEvent;
+
+  it('is read off the next hit on the card, however many reactions sit between them', () => {
+    const s = shield('t');
+    const batch: FxEvent[] = [s, ev({ kind: 'status', iid: 't', statusId: 'shield', value: 2, duration: 999, debuff: false }) as FxEvent, hit('b'), hit('t')];
+    expect(shieldSpilled(batch, s)).toBe(true);
+  });
+
+  it('is not spilled when the next thing on the card is another absorb, or there is nothing more', () => {
+    const s = shield('t');
+    expect(shieldSpilled([s, hit('b')], s)).toBe(false);
+    expect(shieldSpilled([s, shield('t')], s)).toBe(false);
+    expect(shieldSpilled([s], s)).toBe(false);
+  });
+
+  it('pairs by card and damage type, not by position', () => {
+    const s = shield('t', 'attack');
+    expect(shieldSpilled([s, hit('t', 'spirit')], s)).toBe(false);
+    expect(shieldSpilled([s, hit('t', 'attack')], s)).toBe(true);
   });
 });

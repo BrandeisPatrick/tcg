@@ -27,7 +27,7 @@ import { attackBlockReason, attackLine, readyHeroes, skillBlockReason } from './
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
 import { attackBlocked, skillBlocked } from '@/engine/legality';
-import { planAttackPhase, type AttackPlan } from '@/engine/forecast';
+import { forecastAttack, type AttackPlan } from '@/engine/forecast';
 import { CombatChoreographer } from './effects/CombatChoreographer';
 import { SoulsRail } from './board/SoulsRail';
 import { CombatProgressContext, type CombatProgress } from './effects/CombatProgressContext';
@@ -35,7 +35,7 @@ import { FxLayer } from './effects/fx/FxLayer';
 import { FxImpulseBus, FxImpulseContext } from './effects/fx/FxImpulse';
 import { FxCalmContext, useCalmMotion } from './effects/fx/FxMotionContext';
 import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingContext';
-import { buildFxTimeline } from './effects/fx/fxTimeline';
+import { buildFxTimeline, walkedByChoreographer } from './effects/fx/fxTimeline';
 import { FxStageProvider } from './effects/fx/stage/FxStage';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
@@ -148,12 +148,13 @@ export function Board(props: BoardProps<GameState>) {
   // render, so the impact-delay context is in place on the very render the
   // HP changes and HeroSlot can hold its numbers until the bolt lands. The
   // high-water mark moves in an effect after commit; a remount seeds it from
-  // the current stream so old hits are never replayed. Basic attacks are not
-  // in the stream — the CombatChoreographer animates them before resolving.
+  // the current stream so old hits are never replayed. The basic attack is in
+  // the stream, but the CombatChoreographer has already walked it before the
+  // engine resolved, so the fresh batch leaves out what it walked.
   const lastSeenFxRef = useRef<number | null>(null);
   const maxFxSeq = G.fx.reduce((m, e) => Math.max(m, e.seq), 0);
   if (lastSeenFxRef.current === null) lastSeenFxRef.current = maxFxSeq;
-  const freshFx = G.fx.filter((e) => e.seq > (lastSeenFxRef.current ?? 0));
+  const freshFx = G.fx.filter((e) => e.seq > (lastSeenFxRef.current ?? 0) && !walkedByChoreographer(e));
   const freshFxKey = freshFx.length > 0 ? maxFxSeq : 0;
   useEffect(() => {
     if (maxFxSeq > (lastSeenFxRef.current ?? 0)) lastSeenFxRef.current = maxFxSeq;
@@ -253,7 +254,7 @@ export function Board(props: BoardProps<GameState>) {
   // they land.) Projected only while the mover's attack is still there to be
   // made.
   const projectedPatronDamage = useMemo(
-    () => (attackOpen ? planAttackPhase(G, mover).patronDamage : 0),
+    () => (attackOpen ? forecastAttack(G, mover).patronDamage : 0),
     [G, mover, attackOpen],
   );
 
@@ -272,7 +273,7 @@ export function Board(props: BoardProps<GameState>) {
   const startAttack = useCallback(() => {
     if (combatPlan || G.action?.state === 'begin') return;
     if (attackBlocked(G, mover)) return;
-    setCombatPlan(planAttackPhase(G, mover));
+    setCombatPlan(forecastAttack(G, mover));
   }, [G, mover, combatPlan]);
 
   /** The turn button, and the AI's pass: end the turn. Ending it never
@@ -1019,7 +1020,7 @@ export function Board(props: BoardProps<GameState>) {
             // what it would do, or why it cannot be made.
             const attackBlock = isMyActive && isMyTurn ? attackBlocked(G, me) : null;
             const attack = !isMyActive ? undefined : {
-              line: isMyTurn && attackBlock === null ? attackLine(planAttackPhase(G, me)) : undefined,
+              line: isMyTurn && attackBlock === null ? attackLine(forecastAttack(G, me)) : undefined,
               blockedReason: !isMyTurn ? 'Not your turn' : attackBlock ? attackBlockReason(attackBlock, hero) : undefined,
               made: !!hero.attackedThisTurn,
               onAttack: attackFromSheet,

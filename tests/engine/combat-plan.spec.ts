@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { DeadlockGame } from '@/engine/game';
-import { planAttackPhase } from '@/engine/forecast';
-import { resolveAttackPhase } from '@/engine/actions/attack';
+import { forecastAttack } from '@/engine/forecast';
 import { effectiveAtk } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, makeHero } from './_helpers';
+import { freshReadyGame, makeAttack, makeHero } from './_helpers';
+import { INVALID, perform } from '@/engine/engine';
 
 function freshG(): GameState {
   return freshReadyGame();
@@ -35,13 +35,13 @@ function wear(bearer: CardInstance, cardId: string) {
 }
 
 describe('combat plan invariant', () => {
-  it('plan damageToActive matches the HP delta resolveAttackPhase causes', () => {
+  it('plan damageToActive matches the HP delta the real attack causes', () => {
     const G = freshG();
     plainActive(G);
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     const target = G.players['1'].active!;
     const hpBefore = target.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     const hpAfter = G.players['1'].active!.hp;
     expect(hpBefore - hpAfter).toBe(plan.damageToActive);
   });
@@ -52,14 +52,14 @@ describe('combat plan invariant', () => {
     soloAttacker(G, '0'); // only Active attacks
     // Shield 5 on the defender Active vs P0 Active (Dynamo ATK 3).
     addStatus(G, G.players['1'].active!, 'shield', 5, 999);
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     // First step: 4 attack absorbed entirely by shield → final 0 → no HP change predicted.
     const step = plan.steps[0];
     expect(step.finalDamage).toBe(0);
     expect(plan.damageToActive).toBe(0);
     // Apply and verify.
     const before = G.players['1'].active!.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(G.players['1'].active!.hp).toBe(before); // shield ate it
   });
 
@@ -68,23 +68,23 @@ describe('combat plan invariant', () => {
     plainActive(G);
     soloAttacker(G, '0');
     addStatus(G, G.players['1'].active!, 'bullet_resist', 2, 999);
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     // Dynamo ATK 3 - 2 armor = 1 damage predicted.
     const step = plan.steps[0];
     expect(step.finalDamage).toBe(1);
     const before = G.players['1'].active!.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(before - G.players['1'].active!.hp).toBe(1);
   });
 
   it('plan correctly predicts unstoppable (zero damage)', () => {
     const G = freshG();
     addStatus(G, G.players['1'].active!, 'unstoppable', 1, 99);
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     expect(plan.damageToActive).toBe(0);
     expect(plan.steps.every((s) => s.finalDamage === 0)).toBe(true);
     const before = G.players['1'].active!.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(G.players['1'].active!.hp).toBe(before);
   });
 
@@ -98,7 +98,7 @@ describe('combat plan invariant', () => {
     const dmg = effectiveAtk(attacker);
     // Queue one Extra Attack (Active Reload / Burst Fire / Fixation).
     attacker.statuses.push({ id: 'extra_attack', value: 1, duration: 1 });
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     const mine = plan.steps.filter((s) => s.attackerIid === attacker.iid);
     // Primary swing + one Extra Attack swing.
     expect(mine.length).toBe(2);
@@ -111,12 +111,12 @@ describe('combat plan invariant', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hp = 1; // one shot
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     expect(plan.defenderActiveKO).toBe(target.iid);
     expect(plan.steps.some((s) => s.predictedKO)).toBe(true);
   });
 
-  it('with no living rival Active the plan is empty, and the attack fizzles: the patron is not hit', () => {
+  it('with no living rival Active the plan is empty, and the attack is refused: the patron is not hit', () => {
     const vacate: [string, (G: GameState) => void][] = [
       ['no Active', (G) => { G.players['1'].active = null; }],
       ['a corpse in the lane', (G) => { G.players['1'].active!.hp = 0; G.players['1'].active!.respawnTurnsLeft = 2; }],
@@ -124,13 +124,13 @@ describe('combat plan invariant', () => {
     for (const [label, doctor] of vacate) {
       const G = freshG();
       doctor(G);
-      const plan = planAttackPhase(G, '0');
+      const plan = forecastAttack(G, '0');
       expect(plan.steps, label).toEqual([]);
       expect(plan.damageToActive, label).toBe(0);
       expect(plan.patronDamage, label).toBe(0);
       expect(plan.defenderActiveKO, label).toBeNull();
       const patronBefore = G.players['1'].hp;
-      resolveAttackPhase(G, '0');
+      expect(perform(G, '0', { type: 'attack' }), label).toBe(INVALID);
       expect(G.players['1'].hp, label).toBe(patronBefore);
     }
   });
@@ -141,12 +141,12 @@ describe('combat plan invariant', () => {
     soloAttacker(G, '0');
     const target = G.players['1'].active!;
     target.hp = 1; // Dynamo's 3 overshoots by 2
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     expect(plan.defenderActiveKO).toBe(target.iid);
     expect(plan.steps[0].finalDamage).toBe(3);
     expect(plan.patronDamage).toBe(1);
     const patronBefore = G.players['1'].hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(patronBefore - G.players['1'].hp).toBe(plan.patronDamage);
   });
 
@@ -154,19 +154,19 @@ describe('combat plan invariant', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hp = target.hpMax = 30;
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     expect(plan.damageToActive).toBeGreaterThan(0);
     expect(plan.defenderActiveKO).toBeNull();
     expect(plan.patronDamage).toBe(0);
     const patronBefore = G.players['1'].hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(G.players['1'].hp).toBe(patronBefore);
   });
 
   it('plan does NOT mutate game state', () => {
     const G = freshG();
     const snapshotBefore = JSON.stringify(G);
-    planAttackPhase(G, '0');
+    forecastAttack(G, '0');
     const snapshotAfter = JSON.stringify(G);
     expect(snapshotAfter).toBe(snapshotBefore);
   });
@@ -176,9 +176,9 @@ describe('combat plan invariant', () => {
     // Sprinkle some shield/armor for a more interesting test.
     addStatus(G, G.players['1'].active!, 'shield', 2, 999);
     addStatus(G, G.players['1'].active!, 'bullet_resist', 1, 999);
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     const before = G.players['1'].active!.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     const after = G.players['1'].active!.hp;
     expect(before - after).toBe(plan.damageToActive);
   });
@@ -190,7 +190,7 @@ describe('the attack is one-way', () => {
     soloAttacker(G, '0'); // only Active swings
     const atk = G.players['0'].active!;
     const def = G.players['1'].active!;
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     expect(plan.steps.length).toBeGreaterThan(0);
     expect(plan.steps.every((s) => s.attackerIid === atk.iid && s.targetIid === def.iid)).toBe(true);
   });
@@ -202,14 +202,14 @@ describe('the attack is one-way', () => {
     const def = G.players['1'].active!;
     const atkHpBefore = atk.hp;
     const defHpBefore = def.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(def.hp).toBeLessThan(defHpBefore); // attacker hit
     expect(atk.hp).toBe(atkHpBefore);         // nothing came back
   });
 
   it('bench heroes never attack (only the Active swings)', () => {
     const G = freshG();
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     // Exactly one attacker — the Active hero. Bench heroes are not attackers.
     const attackerIids = new Set(plan.steps.map((s) => s.attackerIid));
     expect(attackerIids.size).toBe(1);
@@ -221,7 +221,7 @@ describe('the attack is one-way', () => {
     soloAttacker(G, '0');
     const atk = G.players['0'].active!;
     addStatus(G, atk, 'shield', 5, 999);
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(atk.statuses.find((s) => s.id === 'shield')?.value).toBe(5);
   });
 
@@ -232,10 +232,10 @@ describe('the attack is one-way', () => {
     const def = G.players['1'].active!;
     def.hp = 1; // one swing KOs
     const atkHpBefore = atk.hp;
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     const step = plan.steps.find((s) => s.attackerIid === atk.iid)!;
     expect(step.predictedKO).toBe(true);
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(def.hp).toBe(0);
     expect(atk.hp).toBe(atkHpBefore);
   });
@@ -246,7 +246,7 @@ describe('the attack is one-way', () => {
     // A Shiv defender: under a two-way trade her passive would Bleed the attacker.
     (G.players['1'].active as any).cardId = 'hero_shiv';
     const atk = G.players['0'].active!;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(atk.statuses.find((s) => s.id === 'bleed')).toBeUndefined();
   });
 
@@ -256,7 +256,7 @@ describe('the attack is one-way', () => {
     G.players['0'].active = makeHero('hero_shiv', '0', 'active', 0);
     const def = G.players['1'].active!;
     def.hp = def.hpMax = 30;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBeGreaterThan(0);
   });
 });
@@ -314,9 +314,9 @@ describe("Frenzy's bonus is planned swing by swing, as the resolver deals it", (
     defender.hpMax = defender.hp = 40;
     c.doctor?.(G, attacker, defender);
 
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     expect(plan.steps.map((s) => s.finalDamage)).toEqual(c.swings);
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     const dealt = 40 - defender.hp;
     expect(dealt).toBe(c.swings.reduce((a, b) => a + b, 0));
     expect(plan.damageToActive).toBe(dealt);

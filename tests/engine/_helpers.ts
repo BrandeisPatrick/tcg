@@ -1,6 +1,8 @@
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { buildPlayer } from '@/engine/actions/setup';
 import { allocatorFor, newCounters } from '@/engine/ids';
+import { INVALID, perform } from '@/engine/engine';
+import { blocked } from '@/engine/legality';
 import { STARTER_DECK_PLAYER, STARTER_DECK_AI } from '@/decks/starter';
 import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
 import { CARDS_BY_ID } from '@/cards';
@@ -65,6 +67,15 @@ export function configureReadyMatch(): void {
       enemyBuff: { atk: 0, hp: 0 },
     },
   });
+}
+
+/**
+ * Make the turn's attack for `pid` through the engine's front door. A test that
+ * means to have an attack made hears about it if the engine refuses.
+ */
+export function makeAttack(G: GameState, pid: PlayerID): void {
+  const why = blocked(G, pid, { type: 'attack' });
+  if (perform(G, pid, { type: 'attack' }) === INVALID) throw new Error(`the attack was refused: ${why}`);
 }
 
 /** Build a single hero instance directly (for tests that want a specific hero). */

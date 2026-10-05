@@ -4,12 +4,12 @@ import { ABILITIES_BY_ID } from '@/abilities';
 import { fireTriggers } from '@/engine/triggers';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { attackBlocked } from '@/engine/legality';
-import { planAttackPhase } from '@/engine/forecast';
-import { resolveAttackPhase } from '@/engine/actions/attack';
+import { forecastAttack } from '@/engine/forecast';
 import { reapDead } from '@/engine/death';
 import { effectiveAtk } from '@/engine/query';
 import { EQUIPMENT_BY_ID } from '@/cards/equipment';
-import { freshReadyGame, makeHero } from './_helpers';
+import { freshReadyGame, makeAttack, makeHero } from './_helpers';
+import { INVALID, perform } from '@/engine/engine';
 
 function attach(bearer: CardInstance, cardId: string): CardInstance {
   const eq: CardInstance = {
@@ -116,7 +116,7 @@ describe('Frenzy', () => {
     defender.hpMax = 40; defender.hp = 40;
     // The card face reads the same attack power the swing deals.
     expect(effectiveAtk(attacker)).toBe(base + 3);
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(40 - defender.hp).toBe(base + 3);
   });
 
@@ -132,10 +132,10 @@ describe('Frenzy', () => {
     defender.hpMax = 40; defender.hp = 40;
     addStatus(G, attacker, lockout, 1, 2);
     expect(attackBlocked(G, '0')).toBe('cannot');
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     expect(plan.steps).toEqual([]);
     expect(plan.damageToActive).toBe(0);
-    resolveAttackPhase(G, '0');
+    expect(perform(G, '0', { type: 'attack' })).toBe(INVALID);
     expect(defender.hp).toBe(40);
     expect(attacker.hp).toBe(2); // no swing, so no Frenzy heal either
   });

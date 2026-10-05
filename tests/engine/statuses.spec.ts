@@ -303,9 +303,9 @@ describe('healing is no longer gated by any status', () => {
 
 describe('attacks — Active hero only', () => {
   it('only the Active hero attacks; bench heroes never swing', async () => {
-    const { planAttackPhase } = await import('@/engine/forecast');
+    const { forecastAttack } = await import('@/engine/forecast');
     const G = freshG();
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     // The Active may swing more than once (Haze's Fixation), but there must be
     // exactly ONE attacker — no bench hero swings.
     const attackers = new Set(plan.steps.map((s) => s.attackerIid));

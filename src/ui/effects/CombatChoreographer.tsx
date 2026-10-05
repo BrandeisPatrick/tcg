@@ -15,7 +15,7 @@ import { type Rect, center, edgePoint, restRect } from './fx/geometry';
 import { useStageEngine } from './fx/stage/FxStage';
 
 /**
- * Animated walk-through of the turn's attack, from its plan.
+ * Animated walk-through of the turn's attack, from its forecast (`forecastAttack`).
  *
  * Each beat is one swing, and it is one-way — the defender does not shoot
  * back: the attacker's tile comes up off the table and kicks back with every

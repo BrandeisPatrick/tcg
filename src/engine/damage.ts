@@ -35,9 +35,12 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   // The FX layer's notion of who did this and how: an explicit hint wins, then
   // the cast frame, then "a status ticking on its own".
   const castKind: FxCastKind = fx?.cast ?? cast?.kind ?? 'tick';
+  // What the events of this hit are filed under: the basic swing's own are
+  // 'attack'; a tagged effect riding on a swing is a proc.
+  const fxCast: FxCastKind = castKind === 'attack' && fx?.tag ? 'proc' : castKind;
   const fxFrom = fxSource(fx?.source ?? cast?.source);
   if (target.statuses.some((s) => s.id === 'unstoppable')) {
-    pushFx(G, { kind: 'immune', iid: target.iid, what: 'damage' });
+    pushFx(G, { kind: 'immune', iid: target.iid, what: 'damage', cast: fxCast });
     return 0;
   }
 
@@ -72,11 +75,9 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
         target.statuses = target.statuses.filter((s) => s !== shield);
       }
       // The impact still has to read even when HP doesn't move — the FX layer
-      // flashes the shield glyph with "ABSORBED N" / "BLOCKED". The basic
-      // swing is left out, like its hit below: the combat choreographer has
-      // already shown that deflect by the time the attack resolves.
-      if (absorbed > 0 && (castKind !== 'attack' || fx?.tag)) {
-        pushFx(G, { kind: 'shield', iid: target.iid, absorbed, broken, type, source: fxFrom });
+      // flashes the shield glyph with "ABSORBED N" / "BLOCKED".
+      if (absorbed > 0) {
+        pushFx(G, { kind: 'shield', iid: target.iid, absorbed, broken, type, cast: fxCast, source: fxFrom });
       }
     }
   }
@@ -133,17 +134,14 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     }
   }
 
-  // Surface the hit for the FX layer. The basic swing is left out — the combat
-  // choreographer animates it BEFORE the engine resolves — but anything riding
-  // on a swing (Tesla, Ricochet, a Djinn's Mark detonation) carries a tag and
-  // is kept, filed as a proc.
-  if (castKind !== 'attack' || fx?.tag) {
-    pushFx(G, {
-      kind: 'hit', iid: target.iid, amount: dmg, type, ko: target.hp <= 0,
-      cast: castKind === 'attack' ? 'proc' : castKind,
-      source: fxFrom, tag: fx?.tag, stacks: fx?.stacks,
-    });
-  }
+  // Surface the hit for the FX layer. The basic swing is in the stream like
+  // everything else, filed 'attack' (the board skips it: the combat
+  // choreographer has already walked it); anything riding on a swing (Tesla,
+  // Ricochet, a Djinn's Mark detonation) carries a tag and is filed as a proc.
+  pushFx(G, {
+    kind: 'hit', iid: target.iid, amount: dmg, type, ko: target.hp <= 0,
+    cast: fxCast, source: fxFrom, tag: fx?.tag, stacks: fx?.stacks,
+  });
 
   // Sleep wakes on any connecting damage (target still alive). Strip it first so
   // the wake-up burst (Rem's Naptime) doesn't re-enter this hook, then deal it.

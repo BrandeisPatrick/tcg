@@ -3,7 +3,7 @@ import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
 import { attackBlocked } from '@/engine/legality';
-import { planAttackPhase } from '@/engine/forecast';
+import { forecastAttack } from '@/engine/forecast';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { setMatchConfig } from '@/storage/matchConfig';
 import type { GameState } from '@/engine/types';
@@ -69,8 +69,8 @@ describe('the tutorial is staged so the taught move wins', () => {
     const { G } = state(c);
     const [kelvin, lash] = [G.players['0'].active!, G.players['1'].active!];
     expect(kelvin.hp).toBe(1);
-    expect(planAttackPhase(G, '0').defenderActiveKO).toBeNull();      // Kelvin's swing
-    expect(planAttackPhase(G, '1').defenderActiveKO).toBe(kelvin.iid); // Lash's, next turn
+    expect(forecastAttack(G, '0').defenderActiveKO).toBeNull();      // Kelvin's swing
+    expect(forecastAttack(G, '1').defenderActiveKO).toBe(kelvin.iid); // Lash's, next turn
     expect(lash.hp).toBe(3);
     moves(c).moveHero(1, 0);        // retreat: Yamato in, for the two souls turn 3 brings
     expect(state(c).G.players['0'].active!.cardId).toBe('hero_yamato');

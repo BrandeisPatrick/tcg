@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { fireTriggers } from '@/engine/triggers';
-import { resolveAttackPhase } from '@/engine/actions/attack';
 import { damageUnit } from '@/engine/damage';
 import { tickStartOfTurn } from '@/engine/statusOps';
 import { withCast } from '@/engine/castContext';
 import { effectiveAtk } from '@/engine/query';
 import { HEROES } from '@/cards';
+import { makeAttack } from './_helpers';
 import '@/abilities'; // registers the card behaviour with the engine
 
 function freshGame(): GameState {
@@ -21,6 +21,7 @@ function freshGame(): GameState {
       statuses: [], exhausted: false, skillUsedThisTurn: false,
     };
   }
+  G.draft = null;   // setup() opens a draft; this is a battle already under way
   G.turnNumber = 2; // past the turn-1 no-attack guard
   return G;
 }
@@ -82,7 +83,7 @@ describe('Extra Attack in the attack phase', () => {
     attacker.statuses.push({ id: 'extra_attack', value: 1, duration: 1 });
 
     const hp0 = defender.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(defender.hp).toBe(hp0 - expected);
     expect(attacker.statuses.some((s) => s.id === 'extra_attack')).toBe(false);
   });
@@ -93,7 +94,7 @@ describe('Extra Attack in the attack phase', () => {
     const defender = G.players['1'].active!;
     const dmg = effectiveAtk(attacker);
     const hp0 = defender.hp;
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     expect(defender.hp).toBe(hp0 - dmg);
   });
 });

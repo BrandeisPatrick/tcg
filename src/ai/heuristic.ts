@@ -7,7 +7,7 @@ import { getAbility, type TargetFilter } from '@/abilities';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
 import { DeadlockGame } from '@/engine/game';
 import { attackBlocked } from '@/engine/legality';
-import { planAttackPhase } from '@/engine/forecast';
+import { forecastAttack } from '@/engine/forecast';
 
 // ----- 1-ply lookahead -------------------------------------------------------
 // The crude per-move scores below only generate the LEGAL move list; the actual
@@ -204,7 +204,7 @@ function scoreSkill(G: GameState, pid: PlayerID, hero: CardInstance, target?: Ca
  *  Active, plus a premium for a KO. Without lookahead this is what keeps the
  *  attack near the top of the list next to the cards and skills. */
 function scoreAttack(G: GameState, pid: PlayerID): number {
-  const plan = planAttackPhase(G, pid);
+  const plan = forecastAttack(G, pid);
   return 15 + plan.damageToActive * 3 + (plan.defenderActiveKO ? 25 : 0);
 }
 

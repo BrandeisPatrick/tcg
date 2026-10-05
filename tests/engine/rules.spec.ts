@@ -5,7 +5,7 @@ import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { reapDead, resolve } from '@/engine/death';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch } from './_helpers';
+import { freshReadyGame, configureReadyMatch, makeAttack } from './_helpers';
 
 // Client-based tests boot straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -300,19 +300,18 @@ describe('rule: equipment cap forces a discard pick', () => {
 // ============================================================================
 describe('rule: the attack is one-way', () => {
   it('the Active-vs-Active attack damages only the defender', async () => {
-    const { planAttackPhase } = await import('@/engine/forecast');
-    const { resolveAttackPhase } = await import('@/engine/actions/attack');
-    const G = freshG();
+    const { forecastAttack } = await import('@/engine/forecast');
+        const G = freshG();
     const attacker = G.players['0'].active!;
     const defender = G.players['1'].active!;
     attacker.hpMax = 30; attacker.hp = 30;
     defender.hpMax = 30; defender.hp = 30;
     const attackerHp0 = attacker.hp;
     const defenderHp0 = defender.hp;
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     // Plan should include at least the active swing.
     expect(plan.steps.length).toBeGreaterThan(0);
-    resolveAttackPhase(G, '0');
+    makeAttack(G, '0');
     // The defender took the swing; the attacker took nothing back.
     expect(defender.hp).toBe(defenderHp0 - plan.damageToActive);
     expect(attacker.hp).toBe(attackerHp0);

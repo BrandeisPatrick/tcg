@@ -11,8 +11,40 @@
  * Impacts on different targets in one batch ripple out by `stagger`, and an
  * ultimate's strike waits for its screen-fill name plate first.
  */
-import type { FxEvent, CastFx } from '@/engine/types';
+import type { FxEvent, CastFx, ShieldFx } from '@/engine/types';
 import { FX_TIMING as T, tagLead } from './fxCatalog';
+
+/**
+ * True for what the combat choreographer has already shown by the time the
+ * engine reports it. The basic attack is walked from the forecast BEFORE the
+ * engine makes it, so the engine's own account of that walk — each `swing`, and
+ * the hit and Shield that swing met (cast 'attack') — must not be played a
+ * second time. The one place that decides this: Board filters its fresh batch
+ * through it for the timeline, the FX layer and the final-blow check alike.
+ * (Everything else the swing set off — procs, riders, heals, statuses — is not
+ * in the walk and plays as usual, and so does an Unstoppable shrug: the walk
+ * has no beat for it.)
+ */
+export function walkedByChoreographer(ev: FxEvent): boolean {
+  return ev.kind === 'swing' || ((ev.kind === 'hit' || ev.kind === 'shield') && ev.cast === 'attack');
+}
+
+/**
+ * Whether a Shield's absorb let some of the hit through. The engine pushes the
+ * absorb and then — only if something got past — the hit it let by, with just
+ * that damage's own reactions between them, so the next hit or Shield on the
+ * same card says which it was.
+ */
+export function shieldSpilled(batch: FxEvent[], shield: ShieldFx): boolean {
+  let after = false;
+  for (const e of batch) {
+    if (e === shield) { after = true; continue; }
+    if (after && (e.kind === 'hit' || e.kind === 'shield') && e.iid === shield.iid && e.type === shield.type) {
+      return e.kind === 'hit';
+    }
+  }
+  return false;
+}
 
 export interface FxItem {
   ev: FxEvent;
@@ -106,6 +138,10 @@ export function buildFxTimeline(batch: FxEvent[]): FxTimeline {
         noteImpact(ev.iid, at);
         break;
       }
+      case 'swing':
+        // The choreographer walks the basic attack from the forecast (see
+        // walkedByChoreographer); Board never hands a swing to the timeline.
+        break;
       case 'revive':
         items.push({ ev, at: T.stagger * idx(ev.iid), hold: T.reviveHold });
         break;

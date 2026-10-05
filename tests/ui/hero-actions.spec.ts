@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DeadlockGame } from '@/engine/game';
 import { attackBlocked, skillBlocked } from '@/engine/legality';
-import { planAttackPhase } from '@/engine/forecast';
+import { forecastAttack } from '@/engine/forecast';
 import { addStatus } from '@/engine/statusOps';
 import type { GameState, PlayerID } from '@/engine/types';
 import { attackBlockReason, attackLine, readyHeroes } from '@/ui/board/heroActions';
@@ -59,7 +59,7 @@ describe('the attack, as the sheet words it', () => {
     const G = freshReadyGame(); // Haze swings, and Fixation adds a second swing
     const abrams = G.players['1'].active!;
     abrams.hp = abrams.hpMax = 30; // stands through both
-    const plan = planAttackPhase(G, '0');
+    const plan = forecastAttack(G, '0');
     expect(plan.steps.length).toBe(2);
     const dealt = plan.steps.reduce((n, s) => n + s.finalDamage, 0);
     expect(attackLine(plan)).toBe(`Hits Abrams for ${dealt} bullet damage in 2 swings`);
@@ -68,7 +68,7 @@ describe('the attack, as the sheet words it', () => {
   it('calls a knockout', () => {
     const G = freshReadyGame();
     G.players['1'].active!.hp = 1;
-    expect(attackLine(planAttackPhase(G, '0'))).toBe(`Hits Abrams for ${planAttackPhase(G, '0').steps[0].finalDamage} bullet damage — a knockout`);
+    expect(attackLine(forecastAttack(G, '0'))).toBe(`Hits Abrams for ${forecastAttack(G, '0').steps[0].finalDamage} bullet damage — a knockout`);
   });
 
   it('tells the attacker from the hero who came in after it', () => {

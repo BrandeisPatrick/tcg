@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
-import { freshReadyGame, makeHero, configureReadyMatch } from './_helpers';
+import { freshReadyGame, makeAttack, makeHero, configureReadyMatch } from './_helpers';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { withCast } from '@/engine/castContext';
-import { resolveAttackPhase } from '@/engine/actions/attack';
 import { getAbility } from '@/abilities';
-import type { GameState, HitFx, StatusFx, HealFx, CastFx } from '@/engine/types';
+import type { CardInstance, GameState, HitFx, ShieldFx, StatusFx, HealFx, CastFx, SwingFx } from '@/engine/types';
 
 /**
  * The board-FX stream (`G.fx`) is what the match screen animates. These pin
@@ -33,12 +32,13 @@ describe('board FX stream — hits', () => {
     expect(h[0].seq).toBeGreaterThan(0);
   });
 
-  it('the basic swing is left to the choreographer (no untagged attack hit)', () => {
+  it('the basic swing is reported like any other hit, filed cast "attack"', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const abrams = G.players['1'].active!;
     withCast(haze, 'attack', () => damageUnit(G, abrams, 2, 'attack', 'Haze'));
-    expect(hits(G)).toHaveLength(0);
+    expect(hits(G)).toHaveLength(1);
+    expect(hits(G)[0]).toMatchObject({ iid: abrams.iid, amount: 2, type: 'attack', cast: 'attack', source: { iid: haze.iid } });
     expect(abrams.hp).toBe(3);
   });
 
@@ -111,13 +111,15 @@ describe('board FX stream — mitigation, heals, statuses', () => {
     expect(G.fx[1]).toMatchObject({ amount: 2 });
   });
 
-  it('a basic swing into a Shield stays out of the stream — the choreographer shows that deflect', () => {
+  it('a basic swing into a Shield is reported: the absorb is filed cast "attack"', () => {
     const G = freshReadyGame();
     const abrams = G.players['1'].active!;
     addStatus(G, abrams, 'shield', 9, 999);
     G.fx = [];
-    resolveAttackPhase(G, '0');
-    expect(G.fx.filter((e) => e.kind === 'shield' && e.iid === abrams.iid)).toEqual([]);
+    makeAttack(G, '0');
+    const shield = G.fx.filter((e): e is ShieldFx => e.kind === 'shield' && e.iid === abrams.iid);
+    expect(shield.length).toBeGreaterThan(0);
+    expect(shield.every((e) => e.cast === 'attack' && e.type === 'attack')).toBe(true);
     expect(abrams.statuses.find((s) => s.id === 'shield')!.value).toBeLessThan(9); // it did absorb
   });
 
@@ -172,6 +174,77 @@ describe('board FX stream — mitigation, heals, statuses', () => {
     tickStartOfTurn(G, G.players['1']);
     const stun = G.fx.find((e): e is StatusFx => e.kind === 'status' && e.statusId === 'stun');
     expect(stun).toMatchObject({ tag: 'discharge' });
+  });
+});
+
+describe('board FX stream — the turn\'s attack', () => {
+  /** P0's Active is a plain Dynamo (no onAttack passive, so one swing) against Abrams. */
+  function plainAttack(extra?: (G: GameState, attacker: CardInstance, defender: CardInstance) => void) {
+    const G = freshReadyGame();
+    const attacker = G.players['0'].active = makeHero('hero_dynamo', '0', 'active', 0);
+    const defender = G.players['1'].active!;
+    defender.hpMax = defender.hp = 40;
+    extra?.(G, attacker, defender);
+    G.fx = [];
+    makeAttack(G, '0');
+    return { G, attacker, defender };
+  }
+  const kinds = (G: GameState) => G.fx.map((e) => e.kind);
+
+  it('each swing is reported BEFORE its damage: the swing, then the hit it made', () => {
+    const { G, attacker, defender } = plainAttack();
+    expect(kinds(G)).toEqual(['swing', 'hit']);
+    expect(G.fx[0]).toMatchObject({ kind: 'swing', iid: attacker.iid, targetIid: defender.iid, index: 0, raw: 3, targetHp: 40 });
+    expect((G.fx[0] as SwingFx).label).toBeUndefined();
+    expect(G.fx[1]).toMatchObject({ kind: 'hit', iid: defender.iid, amount: 3, cast: 'attack', source: { iid: attacker.iid } });
+    expect(G.fx[1].seq).toBeGreaterThan(G.fx[0].seq);
+  });
+
+  it('an Extra Attack is its own swing, labelled, indexed and starting from the HP the last one left', () => {
+    const { G } = plainAttack((_G, attacker) => attacker.statuses.push({ id: 'extra_attack', value: 2, duration: 99 }));
+    const swings = G.fx.filter((e): e is SwingFx => e.kind === 'swing');
+    expect(swings.map((s) => [s.index, s.raw, s.label, s.targetHp])).toEqual([
+      [0, 3, undefined, 40], [1, 3, 'Extra Attack', 37], [2, 3, 'Extra Attack', 34],
+    ]);
+    expect(kinds(G)).toEqual(['swing', 'hit', 'swing', 'hit', 'swing', 'hit']);
+  });
+
+  it("a swing that carries Frenzy's bonus says so, and its raw power includes it", () => {
+    const { G } = plainAttack((_G, attacker) => {
+      (attacker.attached ??= []).push({
+        iid: 'eq-frenzy', cardId: 'frenzy', ownerId: '0', zone: 'equipment', attachedTo: attacker.iid,
+        hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
+      });
+      attacker.hpMax = 10; attacker.hp = 2; // below half
+    });
+    expect(G.fx[0]).toMatchObject({ kind: 'swing', raw: 6, label: 'Frenzy: +3 <½ HP' });
+  });
+
+  it('a swing into a Shield is the swing, the absorb and the spill — all filed "attack"', () => {
+    const { G } = plainAttack((G0, _a, defender) => addStatus(G0, defender, 'shield', 2, 999));
+    expect(kinds(G)).toEqual(['swing', 'shield', 'hit']);
+    expect(G.fx[1]).toMatchObject({ absorbed: 2, broken: true, cast: 'attack' });
+    expect(G.fx[2]).toMatchObject({ amount: 1, cast: 'attack' });
+  });
+
+  it('a swing at an Unstoppable target is the swing and the shrug, filed "attack"', () => {
+    const { G, defender } = plainAttack((G0, _a, def) => addStatus(G0, def, 'unstoppable', 1, 1));
+    expect(kinds(G)).toEqual(['swing', 'immune']);
+    expect(G.fx[1]).toMatchObject({ iid: defender.iid, what: 'damage', cast: 'attack' });
+  });
+
+  it('what a swing sets off keeps its own cast and tag, after the swing it rode on (Tesla)', () => {
+    const { G } = plainAttack((G0, attacker) => {
+      (attacker.attached ??= []).push({
+        iid: 'eq-tesla', cardId: 'tesla_bullets', ownerId: '0', zone: 'equipment', attachedTo: attacker.iid,
+        hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
+      });
+    });
+    // The swing opens its stretch of the stream; the reaction (a hit on the
+    // bench) is pushed from inside the swing's damage, ahead of the swing's own hit.
+    expect(kinds(G)).toEqual(['swing', 'hit', 'hit']);
+    expect(G.fx[1]).toMatchObject({ cast: 'proc', tag: 'tesla' });
+    expect(G.fx[2]).toMatchObject({ cast: 'attack', tag: undefined });
   });
 });
 

@@ -108,7 +108,7 @@ export interface CardInstance {
   // Multi-attack is modeled via the `extra_attack` STATUS (value = N extra
   // full-power swings queued for this turn). It stacks additively across
   // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed by the
-  // turn's attack — see grantExtraAttacks / resolveAttackPhase. Each bonus swing
+  // turn's attack — see grantExtraAttacks / actions/attack.ts. Each bonus swing
   // re-fires onAttack procs (so Ricochet / Toxic Bullets / Djinn's Mark all proc
   // per swing).
   /**
@@ -189,8 +189,11 @@ export interface GameAction {
 /** How an effect came about. The FX layer picks its animation family from
  *  this: a skill / spell / ult is a cast (a bolt leaves the caster), a proc is
  *  a passive going off, a tick is a start- or end-of-turn resolution. The
- *  basic swing is 'attack' — the combat choreographer animates it BEFORE the
- *  engine resolves, so the engine never emits an untagged hit for it. */
+ *  basic swing is 'attack' — the engine reports it like everything else, but
+ *  the combat choreographer has already walked it from the forecast BEFORE the
+ *  engine resolved, so the board skips these events (`walkedByChoreographer`
+ *  in ui/effects/fx/fxTimeline.ts). Anything riding on a swing (a tagged proc)
+ *  is filed as 'proc'. */
 export type FxCastKind = 'skill' | 'spell' | 'ult' | 'proc' | 'tick' | 'attack';
 
 /** A one-of-a-kind effect signature. Each tag has its own animation in the
@@ -270,6 +273,8 @@ export interface ShieldFx extends FxBase {
   absorbed: number;
   broken: boolean;        // the shield is gone after this
   type: DamageType;
+  /** How the hit that met the Shield came about (a basic swing is 'attack'). */
+  cast?: FxCastKind;
   source?: FxSource;
 }
 
@@ -278,6 +283,28 @@ export interface ImmuneFx extends FxBase {
   kind: 'immune';
   iid: string;
   what: 'damage' | StatusId;
+  /** For `what: 'damage'`: how the hit that was shrugged off came about. */
+  cast?: FxCastKind;
+}
+
+/** One swing of the turn's attack, pushed BEFORE that swing's damage so the
+ *  stream reads "this swing, then what it did": the hit, the Shield that ate
+ *  part of it, the riders and detonations it set off. The forecast reads the
+ *  swings back off the real run. */
+export interface SwingFx extends FxBase {
+  kind: 'swing';
+  iid: string;            // the attacker
+  targetIid: string;
+  /** 0 for the primary swing, 1.. for Extra Attacks. */
+  index: number;
+  /** The attack power the swing was made with, before the target's mitigation. */
+  raw: number;
+  /** What the swing carried: 'Extra Attack' on an extra swing, a bonus's own
+   *  label (Frenzy's) on a swing whose attack power included one. */
+  label?: string;
+  /** The target's HP as the swing begins — so HP after a swing is read off the
+   *  next one's, riders and detonations included. */
+  targetHp: number;
 }
 
 /** A cast just happened — pushed BEFORE its effects so the batch reads as
@@ -306,7 +333,7 @@ export interface LevelUpFx extends FxBase {
   level: number;
 }
 
-export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | CastFx | ReviveFx | LevelUpFx;
+export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx;
 export type FxKind = FxEvent['kind'];
 
 /**

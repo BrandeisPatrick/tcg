@@ -19,7 +19,7 @@ import type { CastFx, FxEvent, HitFx } from '@/engine/types';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { FX_INK, FX_TIMING, TAG_INFO, typeInk } from './fxCatalog';
-import { buildFxTimeline, type FxItem, type FxTimeline } from './fxTimeline';
+import { buildFxTimeline, shieldSpilled, type FxItem, type FxTimeline } from './fxTimeline';
 import { FxImpulseBus, FxImpulseContext, type FxImpulse, hitStrength } from './FxImpulse';
 import { type Pt, type Rect, angleOf, center, dist, restRect } from './geometry';
 import { AoeWave, Bolt, DrainStream, FxCardContext, LightningArc } from './primitives';
@@ -291,10 +291,7 @@ function renderItem(it: FxItem, rects: Map<string, Rect>, tiles: Map<string, HTM
     case 'shield': {
       const rect = rects.get(ev.iid);
       if (!rect) return null;
-      // The engine pushes the spill-over hit right after the absorb, so a
-      // following hit on the same card means the shield did not eat it all.
-      const spilled = batch.some((e) => e.kind === 'hit' && e.iid === ev.iid && e.seq === ev.seq + 1);
-      return <ShieldDeflect key={key} rect={rect} absorbed={ev.absorbed} fullyAbsorbed={!spilled} broken={ev.broken} at={it.at} hold={it.hold} seed={ev.seq} />;
+      return <ShieldDeflect key={key} rect={rect} absorbed={ev.absorbed} fullyAbsorbed={!shieldSpilled(batch, ev)} broken={ev.broken} at={it.at} hold={it.hold} seed={ev.seq} />;
     }
     case 'immune': {
       const rect = rects.get(ev.iid);
