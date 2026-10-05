@@ -203,9 +203,10 @@ describe('E3 a merged Rem is not an equipment slot', () => {
 });
 
 // ===========================================================================
-// E4  returnRemToBench
-//     damage.ts:269-286: the free-slot fallback never updates `rem.slot`, and when no
-//     slot is free she is detached and put nowhere.
+// E4  returnRemToBench  (fixed: she lands in a real slot with `slot` right, and is never dropped)
+//     The free-slot fallback never updated `rem.slot`, and when no slot was free she was
+//     detached and put nowhere. The hole she leaves can no longer be filled (E5c), so her own
+//     slot is always free; these tests build the impossible states by hand.
 // ===========================================================================
 describe('E4 Rem returns to a real bench slot', () => {
   it('precondition: with her own slot free she returns there', () => {
@@ -217,33 +218,46 @@ describe('E4 Rem returns to a real bench slot', () => {
     expect(rem.slot).toBe(2);
   });
 
-  it.fails('E4a her slot field matches where she lands when another hero took her old slot', () => {
+  it('E4a her slot field matches where she lands when another hero took her old slot', () => {
     const G = game();
     const me = G.players['0'];
     const rem = mergeRem(G, 2, me.active!);
-    expect(runMove('moveHero', G, '0', 3, 2)).not.toBe(INVALID_MOVE); // Paige steps into the hole
+    // Paige into the hole by hand (no move can do it any more).
+    const paige = me.bench[2]!;
+    me.bench[1] = paige; paige.slot = 2;
+    me.bench[2] = null;
     rem.remMergeTurnsLeft = 1;
     tickRemMerges(G, me);
     const idx = me.bench.indexOf(rem);
-    expect(idx).toBeGreaterThanOrEqual(0);
-    expect(rem.slot).toBe(idx + 1); // currently 2, she sits in bench[2]
+    expect(idx).toBe(2); // the first free slot
+    expect(rem.slot).toBe(idx + 1);
+    expect(rem.zone).toBe('bench');
+    expect(me.bench[1]).toBe(paige);
   });
 
-  it.fails('E4b she is never dropped when the bench has no free slot', () => {
+  it('E4b she is never dropped when the bench has no free slot: she stays merged and the log says so', () => {
     const G = game();
     const me = G.players['0'];
-    const rem = mergeRem(G, 3, me.active!);
-    // The only way to fill the hole today is the Active stepping into it (see E5).
-    runMove('moveHero', G, '0', 0, 3);
+    const bearer = me.active!;
+    const rem = mergeRem(G, 3, bearer);
+    me.bench[2] = makeHero('hero_shiv', '0', 'bench', 3); // the hole filled by hand
     rem.remMergeTurnsLeft = 1;
     tickRemMerges(G, me);
-    expect(anywhere(G, rem.iid)).toBeDefined(); // currently gone from every zone
+    expect(anywhere(G, rem.iid)).toBeDefined();
+    expect(bearer.attached).toContain(rem);
+    expect(rem.remMergeTurnsLeft).toBe(1); // she tries again next turn
+    expect(G.log.some((l) => l.text.includes('Rem has no free bench slot'))).toBe(true);
+    me.bench[2] = null; // once there is room she returns
+    rem.remMergeTurnsLeft = 1;
+    tickRemMerges(G, me);
+    expect(me.bench[2]).toBe(rem);
+    expect(rem.slot).toBe(3);
   });
 });
 
 // ===========================================================================
-// E5  moveHero validates neither its arguments nor an empty / bench-only side
-//     (E5a, E5b, E5e: fixed — moveBlocked refuses junk slots; E5c, E5d: open)
+// E5  moveHero validated neither its arguments nor an empty / bench-only side
+//     (fixed: moveBlocked refuses junk slots, a hole on either side, and Rem in slot 0)
 // ===========================================================================
 describe('E5 moveHero', () => {
   it('precondition: a plain retreat swaps Active and bench hero and charges 2 souls', () => {
@@ -269,7 +283,7 @@ describe('E5 moveHero', () => {
     expect(runMove('moveHero', G, '0', 1, undefined)).toBe(INVALID_MOVE);
   });
 
-  it.fails('E5c the Active cannot be swapped into an empty bench slot (it would leave no Active, and a free retreat)', () => {
+  it('E5c the Active cannot be swapped into an empty bench slot (it would leave no Active, and a free retreat)', () => {
     const G = game();
     const me = G.players['0'];
     me.bench[1] = null; // the hole a merged Rem leaves
@@ -280,13 +294,38 @@ describe('E5 moveHero', () => {
     expect(me.souls).toBe(souls);
   });
 
-  it.fails('E5d Rem cannot be swapped into the Active slot from the Active\'s side (guard only checks the mover)', () => {
+  it('E5c2 a bench hero cannot trade into an empty bench slot either', () => {
     const G = game();
     const me = G.players['0'];
-    me.bench[1] = makeHero('hero_rem', '0', 'bench', 2);
-    const r = runMove('moveHero', G, '0', 0, 2);
-    expect(r).toBe(INVALID_MOVE);
-    expect(me.active!.cardId).not.toBe('hero_rem');
+    me.bench[1] = null;
+    expect(runMove('moveHero', G, '0', 3, 2)).toBe(INVALID_MOVE);
+    expect(runMove('moveHero', G, '0', 2, 3)).toBe(INVALID_MOVE);
+    expect(me.bench[2]).not.toBeNull();
+  });
+
+  it('E5d Rem cannot take the Active slot from either side of the swap', () => {
+    for (const [from, to] of [[0, 2], [2, 0]] as const) {
+      const G = game();
+      const me = G.players['0'];
+      const active = me.active!;
+      me.bench[1] = makeHero('hero_rem', '0', 'bench', 2);
+      const r = runMove('moveHero', G, '0', from, to);
+      expect(r, `moveHero(${from}, ${to})`).toBe(INVALID_MOVE);
+      expect(me.active).toBe(active);
+      expect(me.souls).toBe(10);
+    }
+  });
+
+  it('E5f two occupied bench slots trade places for free, Rem included', () => {
+    const G = game();
+    const me = G.players['0'];
+    const rem = me.bench[1] = makeHero('hero_rem', '0', 'bench', 2);
+    const paige = me.bench[2]!;
+    expect(runMove('moveHero', G, '0', 2, 3)).not.toBe(INVALID_MOVE);
+    expect(me.bench[2]).toBe(rem);
+    expect(me.bench[1]).toBe(paige);
+    expect([rem.slot, paige.slot]).toEqual([3, 2]);
+    expect(me.souls).toBe(10);
   });
 
   it('E5e through a real client a missing slot is a rejected move, not an exception', () => {

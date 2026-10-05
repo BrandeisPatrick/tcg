@@ -177,11 +177,11 @@ export function probeLegality(
         else {
           const a = get(from), b = get(to);
           if (!a) reason = 'no-hero-at-from';
+          else if (!b) reason = 'hole'; // a swap trades two occupied slots
           else if (from === 0 || to === 0) {
             const incoming = from === 0 ? b : a;
-            if (!b) reason = 'active-slot-with-hole';
-            else if (isRespawning(a) || isRespawning(b)) reason = 'corpse-swap';
-            else if (incoming && isBenchOnly(incoming)) reason = 'bench-only-to-active';
+            if (isRespawning(a) || isRespawning(b)) reason = 'corpse-swap';
+            else if (isBenchOnly(incoming)) reason = 'bench-only-to-active';
             else legal = true;
           } else legal = true;
         }

@@ -18,9 +18,6 @@ import { formatList, fuzzGames } from './oracle';
 
 const GAMES = fuzzGames(80);
 
-const remInvolved = (h: Hit) =>
-  h.message.includes('hero_rem') || h.tags.includes('hero:hero_rem') || h.tags.includes('rem:merged') || h.tags.includes('discard:merged-rem');
-
 const KNOWN: Known[] = [
   // ---- reachable in normal play (AI or UI moves) ----
   {
@@ -48,40 +45,7 @@ const KNOWN: Known[] = [
     why: 'E3c: discarding the merged Rem frees one "slot" but the hero still wears 3 pieces of gear, so the new item makes 4.',
     when: (h) => h.tags.includes('discard:merged-rem'),
   },
-  {
-    id: 'zone-slot-match@*',
-    why: 'E4a: returnRemToBench (damage.ts:278-285) falls back to the first free bench slot without updating rem.slot when another hero took her old one (bench swaps via moveHero).',
-    when: (h) => h.message.includes('hero_rem') && h.message.includes("zone 'bench'"),
-  },
-  {
-    id: 'card-vanished@endTurn',
-    why: 'E4b: returnRemToBench drops Rem from every zone when her slot is taken and the bench has no free slot (reached through the E5c hole swap).',
-    when: (h) => h.message.includes('hero_rem'),
-  },
-  // ---- reachable only through moveHero / useSkill misuse (chaos) ----
-  {
-    id: 'active-present@moveHero#chaos',
-    why: 'E5c: moveHero(0, emptySlot) moves the Active into the hole a merged Rem left and leaves ps.active null (and the retreat is free).',
-  },
-  {
-    id: 'active-not-bench-only@moveHero#chaos',
-    why: 'E5d: the bench-only guard checks only the mover; moveHero(0, remSlot) puts Rem in the Active slot.',
-  },
-  {
-    id: 'iid-unique@useSkill',
-    why: 'E5d follow-on: Rem as the Active casts Lil Helpers; skill_rem only removes her from the BENCH, so the same instance is Active and attached.',
-    when: remInvolved,
-  },
-  {
-    id: 'roster-duplicate@useSkill',
-    why: 'E5d follow-on: the duplicated Rem (Active AND attached) counts twice in the roster.',
-    when: remInvolved,
-  },
-  {
-    id: 'zone-slot-match@useSkill',
-    why: 'E5d follow-on: the same duplicated Rem has zone "equipment" while she is the Active.',
-    when: remInvolved,
-  },
+  // ---- reachable only through a made-up move (chaos) ----
   {
     id: 'corpse-state@playCard#chaos',
     why: 'E2b: Soul Exchange against / from a corpse Active gives the corpse hp.',
@@ -89,10 +53,6 @@ const KNOWN: Known[] = [
   {
     id: 'hero-hp-range@playCard#chaos',
     why: 'E2a: Soul Exchange again (the chaos seat plays it with a bad target argument).',
-  },
-  {
-    id: 'card-vanished@endTurn#chaos',
-    why: 'E6h / E4b: that Rem expires (tickRemMerges) and returnRemToBench puts her in the wrong player\'s bench or nowhere.',
   },
 ];
 

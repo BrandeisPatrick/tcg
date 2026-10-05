@@ -188,9 +188,12 @@ export function playBlocked(
 export type MoveBlock = 'same' | 'empty' | 'benchOnly' | 'down' | 'souls' | 'illegal';
 
 /** Why `pid` cannot swap the heroes in two slots (0 = Active, 1..3 = bench),
- *  or null when they can. Swapping the Active with a bench hero is a Retreat:
- *  both must be alive and it costs RETREAT_COST souls. Bench-to-bench swaps
- *  are free. */
+ *  or null when they can. A swap trades two OCCUPIED slots: a hole is nobody to
+ *  trade with (the Active walking into a hole would leave the lane empty), and
+ *  slots outside 0..3 are no slots. A bench-only hero (Rem) never takes the
+ *  Active slot, whichever side of the swap she is on. Swapping the Active with a
+ *  bench hero is a Retreat: both must be alive and it costs RETREAT_COST souls.
+ *  Bench-to-bench swaps are free. */
 export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlot: number): MoveBlock | null {
   const isSlot = (s: number) => s === 0 || s === 1 || s === 2 || s === 3;
   if (!isSlot(fromSlot) || !isSlot(toSlot)) return 'illegal';
@@ -199,11 +202,11 @@ export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlo
   const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
   const a = get(fromSlot);
   const b = get(toSlot);
-  if (!a) return 'empty';
-  const aData = CARDS_BY_ID[a.cardId];
-  if (toSlot === 0 && aData?.type === 'hero' && aData.flags?.benchOnly) return 'benchOnly';
-  const isRetreat = (fromSlot === 0 || toSlot === 0) && a && b;
-  if (isRetreat) {
+  if (!a || !b) return 'empty';
+  if (fromSlot === 0 || toSlot === 0) {
+    const incoming = fromSlot === 0 ? b : a; // who takes the Active slot
+    const data = CARDS_BY_ID[incoming.cardId];
+    if (data?.type === 'hero' && data.flags?.benchOnly) return 'benchOnly';
     if (isRespawning(a) || isRespawning(b)) return 'down';
     if (ps.souls < RETREAT_COST) return 'souls';
   }

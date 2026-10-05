@@ -50,12 +50,26 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
 }
 
 /**
- * Detach a merged Rem from `bearer` and return her to her bench slot: reverts
- * the temporary max-HP she granted, pulls her out of `bearer.attached`, and
- * drops her back into her original bench slot (or the first free one). Shared
- * by the merge-countdown expiry (tickRemMerges) and the bearer-death rescue.
+ * Detach a merged Rem from `bearer` and return her to a real bench slot:
+ * reverts the temporary max-HP she granted, pulls her out of `bearer.attached`,
+ * and drops her back into the slot she left (or the first free one), with her
+ * `slot` saying where she landed. Shared by the merge-countdown expiry
+ * (tickRemMerges) and the bearer-death rescue.
+ *
+ * The slot she left is always free: she merged out of it, and nothing writes
+ * into an empty bench slot (moveBlocked refuses a swap with a hole; the other
+ * bench moves trade two occupied slots). If that ever stopped being true she
+ * would have nowhere to go, and she is not dropped: she stays merged, with a
+ * log line saying so, and tries again at her owner's next turn start.
  */
 export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInstance, rem: CardInstance) {
+  const own = (rem.slot ?? 1) - 1;
+  const slotIdx = own >= 0 && own < ps.bench.length && ps.bench[own] == null ? own : ps.bench.findIndex((b) => b == null);
+  if (slotIdx < 0) {
+    pushLog(G, `Rem has no free bench slot and stays merged.`);
+    rem.remMergeTurnsLeft = 1;
+    return;
+  }
   const buff = rem.remMergeHpBuff ?? 0;
   bearer.hpMax = Math.max(1, bearer.hpMax - buff);
   if (bearer.hp > bearer.hpMax) bearer.hp = bearer.hpMax;
@@ -64,13 +78,8 @@ export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInst
   rem.remMergeHpBuff = undefined;
   rem.zone = 'bench';
   rem.attachedTo = undefined;
-  const slotIdx = (rem.slot ?? 1) - 1;
-  if (slotIdx >= 0 && slotIdx < ps.bench.length && ps.bench[slotIdx] == null) {
-    ps.bench[slotIdx] = rem;
-  } else {
-    const free = ps.bench.findIndex((b) => b == null);
-    if (free >= 0) ps.bench[free] = rem;
-  }
+  rem.slot = (slotIdx + 1) as 1 | 2 | 3;
+  ps.bench[slotIdx] = rem;
   pushLog(G, `Rem returns to the bench.`);
 }
 
