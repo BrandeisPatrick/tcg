@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, CardInstance } from '@/engine/types';
-import { DeadlockGame } from '@/engine/game';
 import { addStatus } from '@/engine/statusOps';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { withCast } from '@/engine/castContext';

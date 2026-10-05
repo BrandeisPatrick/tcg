@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import type { GameState, PlayerID } from '@/engine/types';
+import type { GameState } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { configureReadyMatch } from './_helpers';
 import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';

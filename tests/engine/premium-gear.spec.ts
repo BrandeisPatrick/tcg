@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { GameState, CardInstance, PlayerID } from '@/engine/types';
+import type { CardInstance } from '@/engine/types';
 import { ABILITIES_BY_ID } from '@/abilities';
 import { fireTriggers } from '@/engine/triggers';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';

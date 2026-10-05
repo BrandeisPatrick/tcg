@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
-import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { reapDead, resolve } from '@/engine/death';
 import type { GameState, PlayerID } from '@/engine/types';

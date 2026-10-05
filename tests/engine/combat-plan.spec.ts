@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { DeadlockGame } from '@/engine/game';
 import { forecastAttack } from '@/engine/forecast';
 import { effectiveAtk } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';

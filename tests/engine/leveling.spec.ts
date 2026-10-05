@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, CardInstance } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { grantExp } from '@/engine/expSystem';

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
-import { CARDS_BY_ID, HEROES, SPELLS, EQUIPMENT, ULTIMATES } from '@/cards';
+import { HEROES, SPELLS, EQUIPMENT, ULTIMATES } from '@/cards';
 import { DeadlockGame } from '@/engine/game';
 
 function freshGame(): GameState {
