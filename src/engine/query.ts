@@ -7,6 +7,7 @@
 import type {
   CardInstance,
   DamageType,
+  EquipmentCard,
   GameState,
   HeroCard,
   PlayerID,
@@ -149,15 +150,21 @@ export function abilitySources(card: CardInstance): AbilitySource[] {
     const ability = getAbility(id);
     if (ability) out.push({ ability });
   }
-  for (const equip of card.attached ?? []) {
-    const data = CARDS_BY_ID[equip.cardId];
-    if (data?.type !== 'equipment') continue;
+  for (const equip of wornEquipment(card)) {
+    const data = CARDS_BY_ID[equip.cardId] as EquipmentCard;
     for (const id of data.abilities ?? []) {
       const ability = getAbility(id);
       if (ability) out.push({ ability, equip });
     }
   }
   return out;
+}
+
+/** The equipment `card` wears, in worn order. A merged Rem rides in the same
+ *  `attached` list but is a hero, not equipment: she takes no slot of the cap and
+ *  can never be the piece discarded to make room. */
+export function wornEquipment(card: CardInstance): CardInstance[] {
+  return (card.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment');
 }
 
 /** Damage `card` is about to take, after the pure `incoming` hooks of what it

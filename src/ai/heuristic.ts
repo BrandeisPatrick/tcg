@@ -2,7 +2,7 @@ import type { Ctx } from 'boardgame.io';
 import { INVALID_MOVE } from 'boardgame.io/core';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { otherPlayer, liveBoardCards, baseAttack, effectiveSpirit, isBlocked, isRespawning, stepInCandidates } from '@/engine/query';
+import { otherPlayer, liveBoardCards, baseAttack, effectiveSpirit, isBlocked, isRespawning, stepInCandidates, wornEquipment } from '@/engine/query';
 import { getAbility, type TargetFilter } from '@/abilities';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
 import { DeadlockGame } from '@/engine/game';
@@ -304,19 +304,19 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
 
     if (data.type === 'equipment') {
       for (const t of allyTargets) {
-        // A hero cannot wear two of the same item.
-        if ((t.attached ?? []).some((eq) => eq.cardId === c.cardId)) continue;
-        const slotsTaken = (t.attached ?? []).length;
-        if (slotsTaken < MAX_EQUIPMENT_PER_HERO) {
+        // A hero cannot wear two of the same item. (A merged Rem is not equipment:
+        // she takes no slot and is never the piece to discard.)
+        const worn = wornEquipment(t);
+        if (worn.some((eq) => eq.cardId === c.cardId)) continue;
+        if (worn.length < MAX_EQUIPMENT_PER_HERO) {
           out.push({ move: 'playCard', args: [c.iid, t.iid], score: scorePlayCard(G, pid, c, t) });
         } else {
           // Hero is full — discard the lowest-priority existing item to
           // make room. Use the same scorePlayCard heuristic to pick the
           // worst current piece (lowest score = least valuable to keep).
-          const attached = t.attached!;
-          let worst = attached[0];
+          let worst = worn[0];
           let worstScore = scorePlayCard(G, pid, worst, t);
-          for (const eq of attached.slice(1)) {
+          for (const eq of worn.slice(1)) {
             const s = scorePlayCard(G, pid, eq, t);
             if (s < worstScore) { worst = eq; worstScore = s; }
           }

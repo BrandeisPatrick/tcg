@@ -20,7 +20,7 @@ import { getAbility } from './registry';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from './constants';
 import {
   attackPower, findCardOnBoard, isBlocked, isRespawning, liveBoardCards, otherPlayer, stepInCandidates,
-  targetsFor,
+  targetsFor, wornEquipment,
 } from './query';
 
 // ---------- The turn's attack ----------
@@ -139,7 +139,8 @@ export function playTargets(G: GameState, pid: PlayerID, card: CardInstance): Ca
  *  - equipment goes on one of your living heroes ('target'), not one that
  *    already wears it ('duplicate'), and a hero at the cap needs a worn item
  *    named to discard — 'full' when none is named, 'discard' when it is not
- *    worn. (A merged Rem rides in the same list and counts toward the cap.)
+ *    worn equipment. (A merged Rem is not equipment: she takes no slot and
+ *    cannot be named.)
  * Without `targetIid` the question is whether the card is playable on SOME
  * target; a discard is then assumed to be available.
  */
@@ -164,7 +165,7 @@ export function playBlocked(
 
   if (data.type === 'equipment') {
     const heroes = playTargets(G, pid, card) as CardInstance[];
-    const wears = (hero: CardInstance) => (hero.attached ?? []).some((eq) => eq.cardId === card.cardId);
+    const wears = (hero: CardInstance) => wornEquipment(hero).some((eq) => eq.cardId === card.cardId);
     if (targetIid === undefined) {
       if (heroes.length === 0) return 'target';
       return heroes.some((h) => !wears(h)) ? null : 'duplicate';
@@ -172,7 +173,7 @@ export function playBlocked(
     const hero = heroes.find((h) => h.iid === targetIid);
     if (!hero) return 'target';
     if (wears(hero)) return 'duplicate';
-    const worn = hero.attached ?? [];
+    const worn = wornEquipment(hero);
     if (worn.length >= MAX_EQUIPMENT_PER_HERO) {
       if (!discardIid) return 'full';
       if (!worn.some((eq) => eq.iid === discardIid)) return 'discard';
@@ -316,7 +317,7 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
     if (targets === 'none') { offer({ type: 'playCard', cardIid: card.iid }); continue; }
     const equipment = CARDS_BY_ID[card.cardId]?.type === 'equipment';
     for (const t of targets) {
-      const worn = t.attached ?? [];
+      const worn = wornEquipment(t);
       if (equipment && worn.length >= MAX_EQUIPMENT_PER_HERO) {
         for (const eq of worn) offer({ type: 'playCard', cardIid: card.iid, targetIid: t.iid, discardIid: eq.iid });
       } else {

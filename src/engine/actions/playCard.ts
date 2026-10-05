@@ -6,7 +6,7 @@
 import type { CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID } from '@/cards';
 import { getAbility } from '../registry';
-import { findCardOnBoard } from '../query';
+import { findCardOnBoard, wornEquipment } from '../query';
 import { cardCost } from '../legality';
 import { MAX_EQUIPMENT_PER_HERO } from '../constants';
 import { pushLog } from '../log';
@@ -75,14 +75,12 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, targetIid
 
   if (data.type === 'equipment' && target) {
     // Equipment cap: a hero at the cap gives up the item the caller named.
-    const attached = target.attached ?? [];
-    if (attached.length >= MAX_EQUIPMENT_PER_HERO) {
-      const dropIdx = attached.findIndex((eq) => eq.iid === discardIid);
-      const dropped = attached[dropIdx];
+    if (wornEquipment(target).length >= MAX_EQUIPMENT_PER_HERO) {
+      const dropped = wornEquipment(target).find((eq) => eq.iid === discardIid)!;
       dropped.zone = 'discard';
       dropped.attachedTo = undefined;
       ps.discard.push(dropped);
-      attached.splice(dropIdx, 1);
+      target.attached!.splice(target.attached!.indexOf(dropped), 1);
       pushLog(G, `${CARDS_BY_ID[target.cardId]?.name} discarded ${CARDS_BY_ID[dropped.cardId]?.name} to make room.`);
     }
     card.attachedTo = target.iid;

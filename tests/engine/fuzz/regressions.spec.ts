@@ -19,6 +19,7 @@ import { enumerateAIMoves } from '@/ai/heuristic';
 import { resolve } from '@/engine/death';
 import { addStatus, grantExtraAttacks, tickRemMerges } from '@/engine/statusOps';
 import { blocked, legalActions, skillBlocked } from '@/engine/legality';
+import { wornEquipment } from '@/engine/query';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { configureReadyMatch, freshReadyGame, makeHero, nextTestIid } from '../_helpers';
 import { forecastMismatches } from './forecast';
@@ -204,10 +205,10 @@ describe('E2 Soul Exchange keeps HP inside 0..hpMax and leaves corpses alone', (
 });
 
 // ===========================================================================
-// E3  A merged Rem is counted — and can be discarded — as equipment
-//     game.ts:471-484 playCard counts `target.attached.length` (Rem included) against
-//     MAX_EQUIPMENT_PER_HERO and lets `discardIid` name her. heuristic.ts:305 and
-//     Board.tsx:535 count the same way, and the replace overlay lists her.
+// E3  A merged Rem was counted — and could be discarded — as equipment  (fixed: wornEquipment)
+//     playCard counted `target.attached.length` (Rem included) against MAX_EQUIPMENT_PER_HERO and
+//     let `discardIid` name her; the AI counted and scored the same way (it picked her as the
+//     "worst" piece), and the board's replace overlay lists her (a UI fix, still to come).
 // ===========================================================================
 describe('E3 a merged Rem is not an equipment slot', () => {
   const remGame = (equipCount: number) => {
@@ -225,32 +226,44 @@ describe('E3 a merged Rem is not an equipment slot', () => {
     expect(runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, bearer.iid)).toBe(INVALID_MOVE);
   });
 
-  it.fails('E3a two items + Rem: a third item needs no discard (the cap counts equipment only)', () => {
+  it('E3a two items + Rem: a third item needs no discard (the cap counts equipment only)', () => {
     const { G, bearer } = remGame(2);
     const r = runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, bearer.iid);
-    expect(r).not.toBe(INVALID_MOVE); // currently INVALID_MOVE: attached.length is 3
+    expect(r).not.toBe(INVALID_MOVE);
   });
 
-  it.fails('E3b Rem cannot be named as the item to discard', () => {
+  it('E3b Rem cannot be named as the item to discard', () => {
     const { G, bearer, rem } = remGame(3);
     const r = runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, bearer.iid, rem.iid);
-    expect(r).toBe(INVALID_MOVE); // currently accepted: Rem goes to the discard pile
+    expect(r).toBe(INVALID_MOVE);
     expect(G.players['0'].discard.some((c) => c.cardId === 'hero_rem')).toBe(false);
   });
 
-  it.fails('E3c a discard never ends with more than 3 pieces of gear', () => {
+  it('E3c a discard never ends with more than 3 pieces of gear', () => {
     const { G, bearer, rem } = remGame(3);
     runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, bearer.iid, rem.iid);
     const gear = (bearer.attached ?? []).filter((a) => a.cardId !== 'hero_rem');
-    expect(gear.length).toBeLessThanOrEqual(3); // currently 4
+    expect(gear.length).toBeLessThanOrEqual(3);
   });
 
-  it.fails('M3d the AI never offers to discard the merged Rem', () => {
+  it('M3d the AI never offers to discard the merged Rem', () => {
     const { G, bearer, rem } = remGame(2);
     toHand(G, '0', 'extra_spirit');
     const offers = enumerateAIMoves(G, ctxFor('0'), false)
       .filter((m) => m.move === 'playCard' && m.args[1] === bearer.iid && m.args[2] === rem.iid);
-    expect(offers).toEqual([]); // currently offered: heuristic.ts:305-324 scores her lowest
+    expect(offers).toEqual([]);
+  });
+
+  it('E3d Rem + 3 pieces of gear is at the cap: the 4th needs a discard, and only a worn piece can be named', () => {
+    const { G, bearer, rem } = remGame(3);
+    const eq = toHand(G, '0', 'extra_spirit');
+    expect(blocked(G, '0', { type: 'playCard', cardIid: eq.iid, targetIid: bearer.iid })).toBe('full');
+    const gear = wornEquipment(bearer);
+    expect(gear.map((g) => g.cardId)).toEqual(['extra_health', 'extended_magazine', 'restorative_shot']); // worn order, no Rem
+    expect(blocked(G, '0', { type: 'playCard', cardIid: eq.iid, targetIid: bearer.iid, discardIid: rem.iid })).toBe('discard');
+    const named = legalActions(G, '0').filter((a) => a.type === 'playCard' && a.cardIid === eq.iid && a.targetIid === bearer.iid);
+    expect(named.map((a) => (a as { discardIid?: string }).discardIid)).toEqual(gear.map((g) => g.iid));
+    expect(blocked(G, '0', { type: 'playCard', cardIid: eq.iid, targetIid: bearer.iid, discardIid: gear[1].iid })).toBeNull();
   });
 });
 

@@ -25,14 +25,8 @@ import { formatList, fuzzGames } from './oracle';
 const GAMES = fuzzGames(12);
 const PROBE: ProbeOpts = DEFAULT_PROBE;
 
-const KNOWN: Known[] = [
-  // ---- E3 mirror: Rem is counted as equipment ----
-  {
-    id: 'rejects-legal-target:equipment@playCard',
-    why: 'E3a: playCard counts the merged Rem against the 3-item equipment cap, so a hero with 2 items + Rem cannot take a third without a discard.',
-    when: (h) => h.tags.includes('reason:rem-counted-as-slot'),
-  },
-];
+/** Violations the engine has today, each with its reason (none: every finding is fixed). */
+const KNOWN: Known[] = [];
 
 describe('the engine agrees with the AI list, the UI gate and the rules oracle', () => {
   MIXES.forEach((mix, mixIndex) => {

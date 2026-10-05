@@ -18,19 +18,8 @@ import { formatList, fuzzGames } from './oracle';
 
 const GAMES = fuzzGames(80);
 
-const KNOWN: Known[] = [
-  // ---- reachable in normal play (AI or UI moves) ----
-  {
-    id: 'card-vanished@playCard',
-    why: 'E3: a merged Rem counts as an equipment slot and can be named as the discard (game.ts:471-484; the AI does it, heuristic.ts:305-324). She goes to the discard pile and her own gear is lost with her.',
-    when: (h) => h.tags.includes('discard:merged-rem'),
-  },
-  {
-    id: 'equipment-cap@playCard',
-    why: 'E3c: discarding the merged Rem frees one "slot" but the hero still wears 3 pieces of gear, so the new item makes 4.',
-    when: (h) => h.tags.includes('discard:merged-rem'),
-  },
-];
+/** Violations the engine has today, each with its reason (none: every finding is fixed). */
+const KNOWN: Known[] = [];
 
 describe('invariants hold in every state of seeded games', () => {
   MIXES.forEach((mix, mixIndex) => {
