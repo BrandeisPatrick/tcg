@@ -5,6 +5,7 @@ import { useFxHold } from '../effects/fx/FxTimingContext';
 import { LIFT_VAR, TILT_PERSPECTIVE, fromHere, kickFor, useFxImpulse } from '../effects/fx/FxImpulse';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
+import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 import { CARDS_BY_ID } from '@/cards';
 import { effectiveAtk } from '@/engine/util';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
@@ -305,19 +306,7 @@ export function HeroSlot({
 
         {/* Ready glint — this hero still has a move this turn; sweeps across
             the portrait only (suppressed while its skill is armed). */}
-        {!isCorpse && ready && !isArmedSource && (
-          <motion.div
-            aria-hidden
-            initial={{ x: '-120%' }}
-            animate={{ x: '120%' }}
-            transition={{ repeat: Infinity, repeatDelay: 1.8, duration: 1.4, ease: 'easeInOut' }}
-            style={{
-              position: 'absolute', top: 0, bottom: 0, width: '40%',
-              background: `linear-gradient(115deg, transparent 30%, ${poster.you}66 50%, transparent 70%)`,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
+        {!isCorpse && ready && !isArmedSource && <ReadyGlint />}
 
         {/* State pulse — green while this tile is a legal target, red while
             its own skill is armed and waiting for one. */}
@@ -474,6 +463,35 @@ export function HeroSlot({
   );
 }
 
+/** The ready glint's sweep: 1.4s across, then 1.8s parked where it ends. */
+const GLINT: Loop = {
+  keyframes: [
+    { transform: 'translateX(-120%)', offset: 0 },
+    { transform: 'translateX(120%)', offset: 1.4 / 3.2 },
+    { transform: 'translateX(120%)', offset: 1 },
+  ],
+  duration: 3200,
+  easing: 'ease-in-out',
+};
+
+/** A band of your colour sweeping across the portrait. At rest (reduced
+ *  motion) it sits where a sweep ends. */
+function ReadyGlint() {
+  const ref = useAmbientLoop<HTMLDivElement>(GLINT);
+  return (
+    <div
+      ref={ref}
+      aria-hidden
+      style={{
+        position: 'absolute', top: 0, bottom: 0, width: '40%',
+        background: `linear-gradient(115deg, transparent 30%, ${poster.you}66 50%, transparent 70%)`,
+        transform: 'translateX(120%)',
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}
+
 /** Corner numeral on an equipment chip — a tiny flat sticker. */
 function chipPill(compact: boolean | undefined): CSSProperties {
   return {
@@ -501,6 +519,13 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
   const isLast = turnsLeft === 1;
   const wash = isLast ? poster.green : poster.red;
   const ringSize = compact ? 56 : 78;
+  // The clock keeps the pace it started at, as it always has: a hero who
+  // falls with one turn left spins fast from the start.
+  const clock = useAmbientLoop<HTMLDivElement>({
+    keyframes: [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+    duration: isLast ? 6000 : 14000,
+    easing: 'linear',
+  });
   return (
     <div aria-hidden style={{
       position: 'absolute', inset: 0,
@@ -520,11 +545,7 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
         }}
       />
       {/* Slow rotating cream ring with tick marks (Deadlock "respawn clock" feel) */}
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: isLast ? 6 : 14, repeat: Infinity, ease: 'linear' }}
-        style={{ position: 'relative', width: ringSize, height: ringSize }}
-      >
+      <div ref={clock} style={{ position: 'relative', width: ringSize, height: ringSize }}>
         <svg viewBox="0 0 100 100" width="100%" height="100%">
           <circle cx="50" cy="50" r="44" fill="none" stroke={poster.cream} strokeWidth="2" opacity="0.85" />
           <circle cx="50" cy="50" r="48" fill="none" stroke={poster.cream} strokeWidth="0.7" opacity="0.5" />
@@ -537,7 +558,7 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
             return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={poster.cream} strokeWidth={deg % 90 === 0 ? 1.8 : 1} opacity="0.8" />;
           })}
         </svg>
-      </motion.div>
+      </div>
       {/* Hourglass glyph in the center of the ring — "respawning" timer */}
       <div style={{
         position: 'absolute',

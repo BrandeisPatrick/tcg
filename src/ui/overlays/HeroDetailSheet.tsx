@@ -10,7 +10,7 @@ import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { LevelTrim } from '../card/LevelTrim';
 import { spring, text, fonts } from '../tokens';
-import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
+import { poster, chamfer, sheetStyle, clipBoth, scrimStyle } from '../poster';
 import { PosterButton } from '../chrome';
 import { RuleText } from '../card/RuleText';
 import { useViewport } from '../hooks/useViewport';
@@ -111,13 +111,12 @@ export function HeroDetailSheet({
       transition={{ duration: 0.18 }}
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, background: poster.scrim,
-        backdropFilter: 'blur(6px)', zIndex: 95,
-        display: 'flex',
+        ...scrimStyle,
+        zIndex: 95,
         // Phones stack the card above the rail and may exceed the viewport, so
         // pin to the top and scroll instead of clipping — starting below the
         // system gear, which a full-width card would otherwise run under.
-        alignItems: isMobile ? 'flex-start' : 'center', justifyContent: 'center',
+        alignItems: isMobile ? 'flex-start' : 'center',
         padding: isMobile ? '64px 16px 24px' : '24px 16px',
         overflowY: isMobile ? 'auto' : undefined,
       }}

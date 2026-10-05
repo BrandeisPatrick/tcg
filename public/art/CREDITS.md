@@ -16,6 +16,8 @@ step whenever a picture is added or replaced.
   Steam store page (https://store.steampowered.com/app/1422450/), downscaled.
   `menu_scene` is the blurred ground every screen floats on; `menu_street` is
   the street window on the title sheet.
+- `menu_scene_ground.png` — `menu_scene.jpg` above, blurred, graded and shrunk
+  by `scripts/art/bake_backdrop.sh`; it is what the screens actually draw.
 
 SteamGridDB submissions by user **Lovely** (`/profile/76561197970889908`)
 from their "Deadlock Graphical Library" collection.

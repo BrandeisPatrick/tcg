@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
+import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 
 /** Where a turn stands against its one attack: 'prepare' before it,
  *  'battle' while it is walked, 'regroup' once it is made. */
@@ -19,22 +20,6 @@ interface Props {
    *  preview gallery passes this so it can demo the combat-mode ring
    *  without a real attack. Live game always reads context. */
   combatOverride?: CombatProgress;
-}
-
-// Register a CSS custom property the conic-gradient sweep can animate.
-// Without @property, browsers interpolate angle as a string and the sweep
-// snaps instead of rotating smoothly. Guarded so HMR re-imports don't throw.
-if (typeof CSS !== 'undefined' && typeof (CSS as any).registerProperty === 'function') {
-  try {
-    (CSS as any).registerProperty({
-      name: '--compass-sweep',
-      syntax: '<angle>',
-      inherits: false,
-      initialValue: '0deg',
-    });
-  } catch {
-    // Already registered (HMR) — ignore.
-  }
 }
 
 /**
@@ -66,6 +51,12 @@ if (typeof CSS !== 'undefined' && typeof (CSS as any).registerProperty === 'func
 const SIZE = 54;
 // Ring mask hole tracks the disc radius (ring layers sit at inset -3).
 const RING_MASK = `radial-gradient(circle, transparent ${SIZE / 2 - 3}px, #000 ${SIZE / 2 - 2}px)`;
+/** The breathe on the player's turn. */
+const BREATHE: Loop = {
+  keyframes: [{ transform: 'scale(1)' }, { transform: 'scale(1.04)' }, { transform: 'scale(1)' }],
+  duration: 3600,
+  easing: 'ease-in-out',
+};
 
 export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
   const contextCombat = useCombatProgress();
@@ -96,17 +87,15 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
   const beat = battle && combat && combat.currentBeat < combat.total ? combat.currentBeat : null;
   const thump = beat === null ? undefined : `turn-compass-thump-${beat % 2 ? 'b' : 'a'} 0.4s ease-out`;
   const name = `Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"} · ${PHASE_WORD[phase]} phase`;
+  // Breathe only on the player's turn — doubles as a "you're up" signal and
+  // stops the loop during rival turns, settling back over 0.3s.
+  const breathe = useAmbientLoop<HTMLDivElement>(isMyTurn ? BREATHE : null, 300);
 
   return (
-    <motion.div
+    <div
+      ref={breathe}
       aria-label={name}
       title={name}
-      // Breathe only on the player's turn — doubles as a "you're up" signal
-      // and stops the infinite loop from burning frames during rival turns.
-      animate={isMyTurn ? { scale: [1, 1.04, 1] } : { scale: 1 }}
-      transition={isMyTurn
-        ? { duration: 3.6, repeat: Infinity, ease: 'easeInOut' }
-        : { duration: 0.3 }}
       style={{
         position: 'relative',
         zIndex: 2,
@@ -226,8 +215,8 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
           can be dropped into PreviewGallery without external CSS. */}
       <style>{`
         @keyframes turn-compass-sweep-spin {
-          from { --compass-sweep: 0deg; }
-          to   { --compass-sweep: 360deg; }
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
         }
         @keyframes turn-compass-ring-in {
           from { opacity: 0; }
@@ -254,9 +243,10 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
         @media (prefers-reduced-motion: reduce) {
           .turn-compass-bar { animation: none; transform: scaleY(0.75); }
           .turn-compass-thump { animation: none !important; }
+          .turn-compass-sweep { animation: none; }
         }
       `}</style>
-    </motion.div>
+    </div>
   );
 }
 
@@ -293,7 +283,7 @@ type Arc = { a0: number; a1: number; ink: string };
 
 /** A ring layer: its arcs as a conic gradient with nothing between them,
  *  shown only through the ring mask. */
-function ringLayer(arcs: Arc[], from = '0deg') {
+function ringLayer(arcs: Arc[]) {
   const stops: string[] = [];
   let at = 0;
   for (const arc of arcs) {
@@ -306,7 +296,7 @@ function ringLayer(arcs: Arc[], from = '0deg') {
     position: 'absolute' as const,
     inset: -3,
     borderRadius: '50%',
-    background: `conic-gradient(from ${from}, ${stops.join(', ')})`,
+    background: `conic-gradient(${stops.join(', ')})`,
     WebkitMask: RING_MASK,
     mask: RING_MASK,
     pointerEvents: 'none' as const,
@@ -316,13 +306,16 @@ function ringLayer(arcs: Arc[], from = '0deg') {
 /** The spinner — a thin faint-ink arc orbiting slowly (~8s) around the disc.
  *  Hard stops so it reads as a printed dial mark, not a glowing halo. Like
  *  the attack's ring it arrives on a short fade, so a change of ring is
- *  never a jump. */
+ *  never a jump. The layer turns, not the gradient's angle: a transform the
+ *  compositor spins alone, where an animated angle repaints the dial every
+ *  frame. (The OS reduced-motion rule stops it at rest, 0deg, where its
+ *  0.01ms cycle used to hold it anyway.) */
 function IdleSweepRing() {
   return (
     <div
       aria-hidden
       className="turn-compass-sweep"
-      style={ringLayer([{ a0: 300, a1: 360, ink: poster.inkFaint }], 'var(--compass-sweep, 0deg)')}
+      style={ringLayer([{ a0: 300, a1: 360, ink: poster.inkFaint }])}
     />
   );
 }

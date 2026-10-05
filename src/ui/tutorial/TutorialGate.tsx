@@ -29,6 +29,12 @@ const RADIUS = 12;
 /** How long a task target may be missing (a sheet sliding in, a card in
  *  flight) before the gate concludes it is lost and opens. */
 const MISSING_GRACE_MS = 700;
+/** Frames in a row with nothing moved before the gate stops measuring. */
+const QUIET_FRAMES = 20;
+/** How often a sleeping gate looks anyway, for a move nothing announced. */
+const POLL_MS = 1000;
+/** What wakes a sleeping gate, besides a write to the DOM. */
+const WAKE_ON = ['transitionrun', 'transitionend', 'animationstart', 'animationend', 'scroll', 'resize', 'load'] as const;
 
 /** Decorative copies are never a task's target — the FX layer clones a hero
  *  tile into shards when its card breaks, and those clones are buttons too. */
@@ -137,33 +143,68 @@ export function TutorialGate({ spot, allow, dim = 0.62, onBlocked, onTap }: {
   const lastKey = useRef('');
   const missingSince = useRef<number | null>(null);
 
-  // Re-measure every frame: cards animate into the hand, heroes lift on
-  // hover, the sheet slides in. A static measurement drifts off its target
-  // within a few hundred milliseconds — but only commit when something moved.
+  // Re-measure every frame while anything moves: cards animate into the
+  // hand, heroes lift on hover, the sheet slides in. A static measurement
+  // drifts off its target within a few hundred milliseconds — but only commit
+  // when something moved. Once nothing has moved for a moment the loop
+  // sleeps, so a step the player sits and reads costs the phone nothing. Any
+  // change wakes it — a write to the DOM (framer's motion is one), a CSS
+  // transition or animation, a scroll, a resize, a load — and a slow look
+  // catches whatever none of those announce.
   useEffect(() => {
     lastKey.current = '';
     missingSince.current = null;
     setOpen(false);
-    const tick = () => {
+    /** True while there is reason to look again next frame: the holes
+     *  moved, or a lost target's grace is still running. */
+    const measure = () => {
       const a = merge(boxes(resolve(allow)));
       // Everything tappable is also lit, whether or not the step said so.
       const s = merge([...boxes(resolve(spot)), ...a]);
       const missing = allow.length > 0 && a.length === 0;
       const now = performance.now();
+      let grace = false;
       if (missing) {
         missingSince.current ??= now;
         if (now - missingSince.current > MISSING_GRACE_MS) setOpen(true);
+        else grace = true;
       } else {
         missingSince.current = null;
         setOpen(false);
       }
       const next: Layout = { W: window.innerWidth, H: window.innerHeight, spot: s, allow: a, missing };
       const key = JSON.stringify(next);
-      if (key !== lastKey.current) { lastKey.current = key; setLayout(next); }
-      raf.current = requestAnimationFrame(tick);
+      if (key === lastKey.current) return grace;
+      lastKey.current = key;
+      setLayout(next);
+      return true;
     };
-    raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current);
+    let awake = false;
+    let quiet = 0;
+    const frame = () => {
+      quiet = measure() ? 0 : quiet + 1;
+      if (quiet < QUIET_FRAMES) raf.current = requestAnimationFrame(frame);
+      else awake = false;
+    };
+    const wake = () => {
+      quiet = 0;
+      if (awake) return;
+      awake = true;
+      raf.current = requestAnimationFrame(frame);
+    };
+    wake();
+    const writes = new MutationObserver(wake);
+    writes.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style', 'class'] });
+    for (const e of WAKE_ON) window.addEventListener(e, wake, true);
+    document.fonts?.addEventListener('loadingdone', wake);
+    const poll = setInterval(() => { if (!awake && measure()) wake(); }, POLL_MS);
+    return () => {
+      cancelAnimationFrame(raf.current);
+      writes.disconnect();
+      for (const e of WAKE_ON) window.removeEventListener(e, wake, true);
+      document.fonts?.removeEventListener('loadingdone', wake);
+      clearInterval(poll);
+    };
   }, [spot, allow]);
 
   // A task whose target has gone opens the gate rather than sealing the

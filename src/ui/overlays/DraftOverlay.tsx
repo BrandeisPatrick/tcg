@@ -16,7 +16,7 @@
 // draftPick when it's the local player's turn.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, easeInOut } from 'framer-motion';
 import type { DraftState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, HEROES } from '@/cards';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
@@ -474,6 +474,24 @@ function PickSide({ picks, side, tone, live, compact }: {
   );
 }
 
+/** The live card back's pulse, as the cream overlay's opacity over one 1.4s
+ *  cycle: out to cream and back, eased in and out each way. framer used to
+ *  pulse the border's colour itself, mixing each channel in a squared space;
+ *  an opacity crossfade mixes them straight, so each sample is the opacity
+ *  that lands nearest framer's mix (least squares over the channels). */
+function pulseCurve(from: string, to: string): number[] {
+  const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const f = rgb(from), t = rgb(to);
+  const d = f.map((v, c) => t[c] - v);
+  const span = d.reduce((a, v) => a + v * v, 0) || 1;
+  return PULSE_TIMES.map((at) => {
+    const v = easeInOut(at < 0.5 ? at * 2 : 2 - at * 2);
+    const mix = f.map((x, c) => Math.sqrt(x * x + v * (t[c] * t[c] - x * x)) - x);
+    return Math.min(1, Math.max(0, mix.reduce((a, m, c) => a + m * d[c], 0) / span));
+  });
+}
+const PULSE_TIMES = Array.from({ length: 17 }, (_, i) => i / 16);
+
 /** A face-down card: ink plate, thin edge, the dial mark in the middle. */
 function CardBack({ w, h, live, tone, numeral, label }: {
   w: number | string;
@@ -487,15 +505,16 @@ function CardBack({ w, h, live, tone, numeral, label }: {
     : tone === 'green' ? lobby.green
     : tone === 'gold' ? lobby.gold
     : lobby.edge;
+  const pulse = useMemo(() => pulseCurve(color, lobby.cream), [color]);
   return (
-    <motion.div
-      animate={live ? { borderColor: [color, lobby.cream, color] } : { borderColor: live ? color : lobby.edge }}
-      transition={live ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
+    <div
       style={{
         position: 'relative',
         width: w,
         height: h,
-        border: `2px solid ${lobby.edge}`,
+        border: `2px solid ${live ? color : lobby.edge}`,
+        // Off again, the edge fades back; on, it takes the colour at once.
+        transition: live ? undefined : 'border-color 0.3s ease-out',
         background: `linear-gradient(180deg, ${lobby.panel}, #0f1214)`,
         ...clipBoth(chamfer(4)),
         display: 'flex',
@@ -506,6 +525,15 @@ function CardBack({ w, h, live, tone, numeral, label }: {
         flexShrink: 0,
       }}
     >
+      {/* The live pulse: a cream edge laid over the coloured one, breathing
+          in and out. Its opacity is the compositor's to animate; a border
+          colour has to be repainted every frame. */}
+      <motion.div
+        aria-hidden
+        animate={live ? { opacity: pulse } : { opacity: 0 }}
+        transition={live ? { duration: 1.4, repeat: Infinity, times: PULSE_TIMES, ease: 'linear' } : { duration: 0.3 }}
+        style={{ position: 'absolute', inset: -2, border: `2px solid ${lobby.cream}`, opacity: 0, pointerEvents: 'none' }}
+      />
       {numeral && (
         <span style={{ position: 'absolute', top: 8, left: 0, right: 0, textAlign: 'center', fontFamily: fonts.display, fontSize: 14, color: lobby.dim, letterSpacing: '0.1em' }}>
           {numeral}
@@ -525,7 +553,7 @@ function CardBack({ w, h, live, tone, numeral, label }: {
           {label}
         </span>
       )}
-    </motion.div>
+    </div>
   );
 }
 

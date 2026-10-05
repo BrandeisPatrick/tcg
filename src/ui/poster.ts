@@ -101,12 +101,14 @@ export const tileShadow = '0 14px 26px rgba(0, 0, 0, 0.35), 0 3px 8px rgba(0, 0,
 export const printEdge = 'inset 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 -18px 24px -12px rgba(0, 0, 0, 0.5)';
 
 /** The modal backdrop: the scene dimmed to the poster's scrim, filling the
- *  viewport above everything. Spread FIRST, then add each site's z-index. */
+ *  viewport above everything. Spread FIRST, then add each site's z-index.
+ *  Blurred behind on wider screens; a phone dims a little harder instead
+ *  (styles.css, "Modal scrim"). */
 export const scrimStyle = {
   position: 'fixed' as const,
   inset: 0,
-  background: poster.scrim,
-  backdropFilter: 'blur(6px)',
+  background: `var(--scrim, ${poster.scrim})`,
+  backdropFilter: 'var(--scrim-blur, blur(6px))',
   display: 'flex' as const,
   alignItems: 'center' as const,
   justifyContent: 'center' as const,

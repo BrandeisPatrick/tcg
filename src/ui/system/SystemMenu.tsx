@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fonts, spring, systemFont } from '../tokens';
-import { poster, chamfer, PAPER_MOTTLE, sheetStyle, clipBoth } from '../poster';
+import { poster, chamfer, PAPER_MOTTLE, sheetStyle, clipBoth, scrimStyle } from '../poster';
 import { PosterButton } from '../chrome';
 import { useSettings, updateSettings, APP_STORAGE_KEYS, type AppSettings } from '@/storage/settings';
 import { useViewport } from '../hooks/useViewport';
@@ -117,15 +117,9 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
             transition={{ duration: 0.18 }}
             onClick={() => setOpen(false)}
             style={{
-              position: 'fixed',
-              inset: 0,
+              ...scrimStyle,
+              WebkitBackdropFilter: scrimStyle.backdropFilter,
               zIndex: 225,
-              background: poster.scrim,
-              backdropFilter: 'blur(6px)',
-              WebkitBackdropFilter: 'blur(6px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               padding: 20,
             }}
           >

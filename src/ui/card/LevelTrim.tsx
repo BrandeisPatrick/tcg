@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { motion } from 'framer-motion';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
+import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 
 /**
  * The level bezel — a hero's level printed into its frame. The tile's 2px
@@ -131,13 +132,20 @@ function Bezel({ lv, radius, compact, strike }: {
   );
 }
 
+/** One turn of the sheen. */
+const TURN: Loop = {
+  keyframes: [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+  duration: 5000,
+  easing: 'linear',
+};
+
 /** The foil's light: a soft arc of cream turning slowly round the band. The
  *  ring's mask keeps it on the band — nothing spills onto the print. */
 function Sheen({ calm }: { calm: boolean }) {
+  const turn = useAmbientLoop<HTMLDivElement>(calm ? null : TURN);
   return (
-    <motion.div
-      animate={calm ? undefined : { rotate: 360 }}
-      transition={calm ? undefined : { duration: 5, repeat: Infinity, ease: 'linear' }}
+    <div
+      ref={turn}
       style={{
         position: 'absolute', inset: '-100%',
         background: 'conic-gradient(transparent 0deg 270deg, rgba(255, 248, 232, 0.9) 318deg, transparent 352deg)',

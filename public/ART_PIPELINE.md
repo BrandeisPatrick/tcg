@@ -201,6 +201,40 @@ HERO_MAP = {
 Hero portraits are already pulled and live in `public/heroes/`. No re-run needed
 unless a new hero is added.
 
+## The backdrop
+
+Every sheet floats on `public/art/menu_scene_ground.png`: the night scene
+(`public/art/menu_scene.jpg`) with its blur, grade and teal wash baked in, so
+`PosterBackdrop` draws a plain image instead of running a CSS filter on every
+frame. Its vignette and grain stay live CSS on top. After changing the scene or
+the look, re-bake it (ffmpeg, from the project root):
+
+```bash
+sh scripts/art/bake_backdrop.sh            # → public/art/menu_scene_ground.png, 320x180
+```
+
+The script spells out how the old CSS (`blur(18px) saturate(0.85)
+brightness(0.6)` under an `rgba(6, 24, 20, 0.36)` wash) became its numbers.
+Keep it a PNG: JPEG's 8x8 blocks show as faint squares once scaled up.
+
+## The map's paper tooth
+
+The story map's sheet is printed with `public/art/paper_mottle.png`, a 160px
+see-through tile baked from `PAPER_MOTTLE` (the feTurbulence SVG in
+`src/ui/poster.ts`). The map used to lay the SVG itself over the sheet with
+`mix-blend-mode: multiply`, which ran the turbulence again for every tile the
+sheet rasterised; the tile is drawn plainly, with no blend mode, and its colour
+and alpha are fitted so it lands where the multiply did on the papers and the
+water. After changing the mottle or those inks, re-bake it (headless Chrome and
+ffmpeg, from the project root):
+
+```bash
+node scripts/art/bake_mottle.mjs            # → public/art/paper_mottle.png
+```
+
+`PAPER_MOTTLE` itself stays: the other sheets use it as a plain background and
+are not rasterised tile by tile.
+
 ## Gotchas
 
 - **Wrong category will MISS silently.** Spells and items are pulled into

@@ -34,6 +34,7 @@ import {
   type CoachSeen, type CoachView, type GateSpec, type Lesson,
 } from '@/tutorial/lessons';
 import { TutorialGate } from './TutorialGate';
+import { useAmbientLoop } from '../hooks/useAmbientLoop';
 
 /** Beat between a task ticking off and the next step sliding in, so the
  *  completion is legible rather than a jump-cut. */
@@ -391,13 +392,18 @@ function ProgressRule({ done }: { done: number }) {
 
 /** The waiting marker — a red dot that breathes while the task is open,
  *  goes grey while the rival has the table, and snaps to a filled ink tick
- *  the moment the task lands. */
+ *  the moment the task lands (its breath settling over 0.2s). The breath
+ *  keeps the pace it started at. */
 function TaskDot({ ticked, waiting }: { ticked: boolean; waiting: boolean }) {
+  const breath = useAmbientLoop<HTMLSpanElement>(ticked ? null : {
+    keyframes: [{ transform: 'scale(1)' }, { transform: 'scale(0.62)' }, { transform: 'scale(1)' }],
+    duration: waiting ? 2400 : 1500,
+    easing: 'ease-in-out',
+  }, 200);
   return (
-    <motion.span
+    <span
+      ref={breath}
       aria-hidden
-      animate={ticked ? { scale: 1 } : { scale: [1, 0.62, 1] }}
-      transition={ticked ? { duration: 0.2 } : { duration: waiting ? 2.4 : 1.5, repeat: Infinity, ease: 'easeInOut' }}
       style={{
         width: 9,
         height: 9,

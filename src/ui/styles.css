@@ -69,14 +69,14 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-/* ===== Title screen (poster sheet) =====
-   A slow push-in on the blurred night scene behind the sheet. The
-   reduced-motion rule above zeroes it; StartScreen also drops it when the
-   in-app "Reduce motion" setting is on. */
-.ss-drift { animation: ss-drift 60s ease-in-out infinite alternate; }
-@keyframes ss-drift {
-  from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to   { transform: scale(1.09) translate3d(-1.5%, 1%, 0); }
+/* ===== Modal scrim =====
+   A modal's backdrop blur is a full-screen filter run again whenever anything
+   under it moves — with a hero sheet open over a phone's idle board it cost
+   over ten times the rest of the frame. Phones (the useViewport breakpoint)
+   dim the scene a little harder instead, so the sheet still lifts off it;
+   wider screens keep poster.ts's scrim and blur. */
+@media (max-width: 767px) {
+  :root { --scrim: rgba(6, 24, 20, 0.9); --scrim-blur: none; }
 }
 
 /* ===== Story map =====
@@ -89,6 +89,14 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
   to   { transform: translate(-50%, -50%) scale(1.55); opacity: 0; }
 }
 @keyframes story-draw { to { stroke-dashoffset: 0; } }
+/* The stops' name tags are placed when the camera rests, so a tag placed
+   there fades in rather than popping; and while a zoom out crowds the stops
+   together, the optional tags (cleared and locked stops') step aside until
+   it rests — MapStage marks the stage. Neither in calm mode. */
+[data-map-stage] [data-tag] { transition: opacity 0.18s ease-out; }
+@starting-style { [data-map-stage] [data-tag] { opacity: 0; } }
+[data-map-stage][data-zooming='out'] [data-tag='more'] { opacity: 0; }
+[data-map-stage][data-calm] [data-tag] { transition: none; }
 
 /* ===== Spot varnish / metallic ink — the rarity-4 premium plate =====
    What a print shop actually does to make one sheet feel expensive: lay a
