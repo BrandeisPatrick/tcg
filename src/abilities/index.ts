@@ -5,7 +5,7 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { resolve } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
-import { findCardOnBoard, liveBoardCards, otherPlayer, effectiveSpirit, type TargetFilter } from '@/engine/query';
+import { findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, type TargetFilter } from '@/engine/query';
 import { pushLog } from '@/engine/log';
 import { newIid } from '@/engine/ids';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -595,7 +595,9 @@ const eff_superior_duration: AbilityDef = {
 const eff_siphon_bullets: AbilityDef = {
   id: 'eff_siphon_bullets', trigger: 'onAttack', target: 'self',
   run: (G, _ctx, { source, target }) => {
-    if (!source || !target) return;
+    // A corpse is neither robbed nor fed: by the time this fires, Ricochet's own
+    // resolve may already have reaped the target.
+    if (!source || !target || isRespawning(source) || isRespawning(target)) return;
     const bump = (c: CardInstance, id: StatusId) => {
       let s = c.statuses.find((x) => x.id === id);
       if (!s) { s = { id, value: 0, duration: 2 }; c.statuses.push(s); }

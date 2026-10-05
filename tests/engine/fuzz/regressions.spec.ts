@@ -17,7 +17,7 @@ import { INVALID_MOVE } from 'boardgame.io/core';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { resolve } from '@/engine/death';
-import { tickRemMerges } from '@/engine/statusOps';
+import { addStatus, grantExtraAttacks, tickRemMerges } from '@/engine/statusOps';
 import { blocked, legalActions, skillBlocked } from '@/engine/legality';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { configureReadyMatch, freshReadyGame, makeHero, nextTestIid } from '../_helpers';
@@ -70,12 +70,10 @@ function mergeRem(G: GameState, slot: 1 | 2 | 3, bearer: CardInstance): CardInst
 }
 
 // ===========================================================================
-// E1  addStatus puts statuses on a corpse
-//     statusOps.ts:37 addStatus has no `isRespawning` guard (damageUnit / healUnit /
-//     grantExp all have one). Reached through combat.ts:322 — a swing's onAttack
-//     passives run after the target was already reaped by Ricochet's own resolve()
-//     (abilities/index.ts:429) — and through game.ts:507 (an ultimate's
-//     onBearerUltCast gear on a linked hero who is a corpse).
+// E1  addStatus put statuses on a corpse  (fixed: a corpse takes no status, at the source)
+//     Reached through a swing's onAttack passives running after the target was already reaped
+//     by Ricochet's own resolve(), and through an ultimate's onBearerUltCast gear on a linked
+//     hero who is a corpse.
 // ===========================================================================
 describe('E1 a corpse carries no statuses', () => {
   it('precondition: Ricochet reaps the target mid-attack and the hero is a corpse afterwards', () => {
@@ -89,7 +87,7 @@ describe('E1 a corpse carries no statuses', () => {
     expect(foe.respawnTurnsLeft).toBeGreaterThan(0);
   });
 
-  it.fails('E1a Shiv\'s Bleed does not land on the Active he just knocked out (fuzz: heuristic-vs-heuristic seed 145 step 64 is the Weapon Shielding variant)', () => {
+  it('E1a Shiv\'s Bleed does not land on the Active he just knocked out (fuzz: heuristic-vs-heuristic seed 145 step 64 is the Weapon Shielding variant)', () => {
     const G = game();
     const shiv = makeHero('hero_shiv', '0', 'active', 0);
     wear(shiv, 'ricochet');
@@ -97,10 +95,10 @@ describe('E1 a corpse carries no statuses', () => {
     const foe = G.players['1'].active!;
     foe.hp = 1;
     runMove('attack', G, '0');
-    expect(foe.statuses).toEqual([]); // currently [bleed 2/2]: it respawns still bleeding
+    expect(foe.statuses).toEqual([]);
   });
 
-  it.fails('E1b Diviner\'s Kevlar does not shield the corpse of the hero whose ultimate is cast', () => {
+  it('E1b Diviner\'s Kevlar does not shield the corpse of the hero whose ultimate is cast', () => {
     const G = game();
     const lash = G.players['0'].bench[1]!;
     expect(lash.cardId).toBe('hero_lash');
@@ -109,7 +107,38 @@ describe('E1 a corpse carries no statuses', () => {
     wear(lash, 'diviners_kevlar');
     const ult = toHand(G, '0', 'ult_lash');
     runMove('playCard', G, '0', ult.iid);
-    expect(lash.statuses).toEqual([]); // currently [shield 4]
+    expect(lash.statuses).toEqual([]);
+  });
+
+  it('E1c Siphon Bullets neither robs nor feeds a corpse (Ricochet reaped the target first)', () => {
+    const G = game();
+    const shiv = makeHero('hero_shiv', '0', 'active', 0);
+    wear(shiv, 'ricochet');
+    wear(shiv, 'siphon_bullets');
+    G.players['0'].active = shiv;
+    const foe = G.players['1'].active!;
+    foe.hp = 1;
+    const hpMax = foe.hpMax;
+    runMove('attack', G, '0');
+    expect(foe.respawnTurnsLeft).toBeGreaterThan(0);
+    expect(foe.statuses).toEqual([]);
+    expect(foe.hpMax).toBe(hpMax); // it respawns at its true max HP
+  });
+
+  it('E1d addStatus and grantExtraAttacks on a corpse do nothing — no status, no log line, no event', () => {
+    const G = game();
+    const corpse = G.players['1'].bench[0]!;
+    corpse.hp = 0;
+    corpse.respawnTurnsLeft = 2;
+    const log = G.log.length;
+    const fx = G.fx.length;
+    for (const id of ['stun', 'bleed', 'shield', 'unstoppable', 'weapon_power']) addStatus(G, corpse, id, 1, 2);
+    grantExtraAttacks(corpse, 2);
+    expect(corpse.statuses).toEqual([]);
+    expect([G.log.length, G.fx.length]).toEqual([log, fx]);
+    // and a living hero still takes them
+    addStatus(G, G.players['1'].bench[1]!, 'shield', 2, 9);
+    expect(G.players['1'].bench[1]!.statuses.map((s) => s.id)).toEqual(['shield']);
   });
 });
 

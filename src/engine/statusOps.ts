@@ -2,7 +2,7 @@ import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState, Fx
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from './damage';
 import { resolve, returnRemToBench } from './death';
-import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, statusDuration } from './query';
+import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isRespawning, statusDuration } from './query';
 import { pushLog } from './log';
 import { CARDS_BY_ID } from '@/cards';
 import { fireTriggers } from './triggers';
@@ -40,10 +40,16 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  *  - What the bearer carries may stretch the duration (`buffDuration` hooks:
  *    Superior Duration).
  *
+ * A corpse on its respawn timer takes no status at all (nothing is logged or
+ * shown): a swing's passives can run after the target was reaped (Ricochet's
+ * own resolve), and a hero would otherwise respawn still carrying what landed
+ * on its body.
+ *
  * `opts.ramp` marks a channel that escalates: its value climbs by `ramp`
  * after each pulse (see tickCastingPulses).
  */
 export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number, opts?: { tag?: FxTag; ramp?: number }) {
+  if (isRespawning(target)) return;
   const name = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
 
   duration = statusDuration(target, id, duration);
@@ -181,8 +187,10 @@ export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
  * sources (Burst Fire + Active Reload + Fixation all add up), capped at
  * MAX_EXTRA_ATTACKS. Manipulated directly (not via addStatus) to avoid a log
  * line every turn from the always-on sources. Consumed by the turn's attack.
+ * A corpse is granted nothing (it takes no status, like addStatus).
  */
 export function grantExtraAttacks(card: CardInstance, count: number) {
+  if (isRespawning(card)) return;
   const ex = card.statuses.find((s) => s.id === 'extra_attack');
   if (ex) ex.value = Math.min(MAX_EXTRA_ATTACKS, ex.value + count);
   // Duration 99 = a non-expiring marker (the count is the payload, not a timer);

@@ -21,13 +21,8 @@ const GAMES = fuzzGames(80);
 const KNOWN: Known[] = [
   // ---- reachable in normal play (AI or UI moves) ----
   {
-    id: 'corpse-state@attack',
-    why: 'E1: statusOps.addStatus has no corpse guard. A swing\'s onAttack passives (Shiv Bleed, Djinn\'s Mark, Bullet Shield, Crippling Headshot…) land on a target Ricochet\'s resolve() already reaped (combat.ts:322 after abilities/index.ts:429), so the corpse respawns still carrying the status.',
-    when: (h) => h.message.includes('carries statuses'),
-  },
-  {
     id: 'corpse-state@playCard',
-    why: 'E1b: an ultimate whose linked hero is a corpse still fires onBearerUltCast gear (game.ts:507) — Diviner\'s Kevlar shields the corpse. E2b: Lady Geist\'s Soul Exchange writes hp onto a corpse Active (abilities/index.ts:904).',
+    why: 'E2b: Lady Geist\'s Soul Exchange writes hp onto a corpse Active.',
     when: (h) => h.tags.includes('type:ultimate'),
   },
   {
