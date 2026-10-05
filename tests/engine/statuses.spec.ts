@@ -4,6 +4,7 @@ import { DeadlockGame } from '@/engine/game';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn, cleanseDebuffs } from '@/engine/statusOps';
 import { effectiveAtk } from '@/engine/query';
+import { STATUSES_BY_ID } from '@/statuses';
 import type { GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame } from './_helpers';
 
@@ -372,5 +373,29 @@ describe('combined interactions', () => {
     tickStartOfTurn(G, G.players['0']);
     expect(t.hp).toBe(hpBefore); // bleed still in status list, but damage = 0
     expect(t.statuses.some((s) => s.id === 'bleed')).toBe(true);
+  });
+});
+
+// The texts a player reads (the hero sheet, the Gallery) say what the engine does.
+describe('status texts match the rules', () => {
+  const desc = (id: string) => STATUSES_BY_ID[id].desc;
+
+  it("Charged's Stun lasts 1 turn when it expires", () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    addStatus(G, t, 'charged', 1, 1);
+    tickStartOfTurn(G, G.players['1']);
+    expect(t.statuses.find((s) => s.id === 'stun')).toMatchObject({ value: 1, duration: 1 });
+    expect(desc('charged')).toContain('Stun for 1 turn.');
+  });
+
+  it("Djinn's Mark detonates for 3 spirit damage per stack", () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    t.hp = t.hpMax = 30;
+    addStatus(G, t, 'djinns_mark', 2, 1);
+    tickStartOfTurn(G, G.players['1']);
+    expect(30 - t.hp).toBe(6); // 2 stacks x 3
+    expect(desc('djinns_mark')).toContain('3 spirit dmg per stack');
   });
 });
