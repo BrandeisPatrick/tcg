@@ -70,7 +70,7 @@ export function attackLine(plan: AttackPlan): string {
   const swings = plan.steps.length > 1 ? ` in ${plan.steps.length} swings` : '';
   const shield = soaked > 0 ? `, ${soaked} into its Shield` : '';
   const ko = plan.defenderActiveKO ? ' — a knockout' : '';
-  return `Hits ${first.targetName ?? 'their Active'} for ${dealt} bullet damage${swings}${shield}${ko}`;
+  return `Hits ${first.targetName} for ${dealt} bullet damage${swings}${shield}${ko}`;
 }
 
 /** Every hero of `pid`'s that can still do something this turn: use its

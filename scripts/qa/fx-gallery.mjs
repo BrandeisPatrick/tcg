@@ -26,7 +26,7 @@ const FRAME_W = Math.min(300, Math.floor(1230 / OFFSETS.length));
 mkdirSync(OUT, { recursive: true });
 
 const DEFAULT_DEMOS = [
-  'Attack · exchange (both take damage)', 'Attack · lethal — Abrams breaks', 'Attack · Shield blocks it', 'Attack · face (no Active to hit)',
+  'Attack · Kelvin → Abrams', 'Attack · lethal — Abrams breaks', 'Attack · Shield blocks it',
   'Kelvin · Frost Grenade → Abrams', 'Lady Geist · Life Drain → Abrams', 'Spell · Cold Front → Abrams', 'Ult · Seismic Impact — spirit AoE + Stun',
   'Ult · Bullet Dance — gunfire AoE', 'Gunfire ×5', 'Two spirit hits on Abrams (2 + 3)', 'Pure hit ×2',
   'KO · gunfire', "Djinn's Mark ×4 detonates (Mirage → Abrams)", 'Bleed tick ×3 (Abrams) + ×2 (Haze)', 'Mystic Reverb echo (Abrams)',

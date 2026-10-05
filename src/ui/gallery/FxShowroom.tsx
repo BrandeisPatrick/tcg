@@ -57,10 +57,10 @@ const shield = (iid: Id, absorbed: number, broken: boolean, type: DamageType): E
 const immune = (iid: Id, what: 'damage' | StatusId): Ev => ({ kind: 'immune', iid, what });
 
 /** One beat of a basic attack, as the engine's attack plan would describe it. */
-const swing = (from: Id, to: Id | null, dmg: number, o: Partial<AttackStep> = {}): AttackStep => ({
+const swing = (from: Id, to: Id, dmg: number, o: Partial<AttackStep> = {}): AttackStep => ({
   attackerIid: from, attackerName: CARDS_BY_ID[STAGE[from].cardId]?.name ?? from,
-  targetIid: to, targetName: to ? CARDS_BY_ID[STAGE[to].cardId]?.name ?? to : null,
-  finalDamage: dmg, rawDamage: dmg + (o.shieldAbsorbed ?? 0), predictedHpAfter: null, predictedKO: false,
+  targetIid: to, targetName: CARDS_BY_ID[STAGE[to].cardId]?.name ?? to,
+  finalDamage: dmg, rawDamage: dmg + (o.shieldAbsorbed ?? 0), predictedHpAfter: Math.max(0, maxHp(to) - dmg), predictedKO: false,
   shieldAbsorbed: 0, ...o,
 });
 
@@ -82,7 +82,6 @@ const GROUPS: Group[] = [
       { label: 'Attack · lethal — Abrams breaks', events: [], plan: [swing('y0', 'r0', 99, { predictedKO: true })] },
       { label: 'Attack · Shield blocks it', events: [], plan: [swing('y0', 'r0', 0, { shieldAbsorbed: 3 })] },
       { label: 'Attack · two beats (an Extra Attack)', events: [], plan: [swing('y0', 'r0', 2), swing('y0', 'r0', 2, { bonusLabel: 'Extra Attack' })] },
-      { label: 'Attack · face (no Active to hit)', events: [], plan: [swing('y0', null, 3)] },
     ],
   },
   {
@@ -265,7 +264,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
   const attackRef = useRef<AttackPlan | null>(null);
   const swingPlan = (steps: AttackStep[], label: string) => {
     const by = STAGE[steps[0].attackerIid as Id].owner;
-    attackRef.current = { attackerId: by, defenderId: by === '0' ? '1' : '0', steps, damageToActive: 0, damageToFace: 0, defenderActiveKO: null };
+    attackRef.current = { attackerId: by, defenderId: by === '0' ? '1' : '0', steps, damageToActive: 0, patronDamage: 0, defenderActiveKO: null };
     setAttack(attackRef.current);
     setPlaying(label);
   };
@@ -276,14 +275,14 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
       setHp((h) => {
         const next = { ...h };
         for (const st of plan.steps) {
-          if (st.targetIid) next[st.targetIid as Id] = Math.max(0, next[st.targetIid as Id] - st.finalDamage);
+          next[st.targetIid as Id] = Math.max(0, next[st.targetIid as Id] - st.finalDamage);
         }
         return next;
       });
       setDead((d) => {
         const next = new Set(d);
         for (const st of plan.steps) {
-          if (st.predictedKO && st.targetIid) next.add(st.targetIid as Id);
+          if (st.predictedKO) next.add(st.targetIid as Id);
         }
         return next;
       });

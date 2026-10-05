@@ -217,6 +217,11 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
  *  greyed-out, while this counts down. */
 export const RESPAWN_TURNS = 3;
 
+/** Patron HP a side loses each time one of its heroes falls — the only way a
+ *  patron is ever damaged. One number, charged by `killInPlace` and projected
+ *  by the attack planner, so the two cannot drift apart. */
+export const KO_PATRON_DAMAGE = 1;
+
 /**
  * Process a hero's death in place: wipe active statuses, arm the respawn
  * timer, charge the death cost. Level / exp / equipment / atkMod / spiritMod /
@@ -233,7 +238,7 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   const before = G.players[oppId].souls;
   G.players[oppId].souls = Math.min(SOULS_MAX, before + 1);
   if (G.players[oppId].souls > before) pushLog(G, `P${oppId} +1 Souls (KO bounty).`);
-  damagePlayer(G, ps.id, 1);
+  damagePlayer(G, ps.id, KO_PATRON_DAMAGE);
   // Rem rescue: a merged Rem detaches to safety (back to the bench) instead of
   // dying with the body — and her granted max-HP is reverted here too.
   const rem = hero.attached?.find((a) => a.cardId === 'hero_rem' && a.remMergeTurnsLeft != null);

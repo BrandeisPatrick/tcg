@@ -245,12 +245,14 @@ export function Board(props: BoardProps<GameState>) {
     }
   }, []);
 
-  // Face-damage projection feeds the patron HP bar indicator (the per-hero
-  // ▼N badges were removed as visual noise — combat choreographer shows
-  // damage events when they land). Projected only while the mover's attack
-  // is still there to be made.
-  const projectedFaceDamage = useMemo(
-    () => (attackOpen ? planAttackPhase(G, mover).damageToFace : 0),
+  // What the mover's attack would cost the other patron, for the hatched
+  // slice on its HP bar: the life a knocked-out Active takes with it — the
+  // swings themselves never reach a patron. (The per-hero ▼N badges were
+  // removed as visual noise — combat choreographer shows damage events when
+  // they land.) Projected only while the mover's attack is still there to be
+  // made.
+  const projectedPatronDamage = useMemo(
+    () => (attackOpen ? planAttackPhase(G, mover).patronDamage : 0),
     [G, mover, attackOpen],
   );
 
@@ -805,7 +807,7 @@ export function Board(props: BoardProps<GameState>) {
                 ps={G.players[opp]}
                 hostile
                 attackOpen={!isMyTurn && attackOpen}
-                projectedFaceDamage={ctx.currentPlayer === me ? projectedFaceDamage : 0}
+                projectedDamage={ctx.currentPlayer === me ? projectedPatronDamage : 0}
                 side="top"
                 isMobile={isMobile}
                 myTurn={!isMyTurn}
@@ -870,7 +872,7 @@ export function Board(props: BoardProps<GameState>) {
                 label={PATRON_NAMES.you}
                 ps={G.players[me]}
                 attackOpen={isMyTurn && attackOpen}
-                projectedFaceDamage={ctx.currentPlayer !== me ? projectedFaceDamage : 0}
+                projectedDamage={ctx.currentPlayer !== me ? projectedPatronDamage : 0}
                 side="bottom"
                 isMobile={isMobile}
                 myTurn={isMyTurn}

@@ -50,14 +50,20 @@ export function stepInCandidates(ps: PlayerState): CardInstance[] {
   });
 }
 
+/** True while a hero cannot make basic attacks. Stun, Disarm, and Sleep all
+ *  silence them. `casting` is the heavy channel lockout (Dynamo / Seven) — the
+ *  hero is locked in their ultimate. (Warden's `casting_light` is NOT listed,
+ *  so he keeps attacking while channeling Last Stand.) One list, read by
+ *  `effectiveAtk` and by combat's attack damage, so nothing added on top of a
+ *  hero's attack (Frenzy) swings through a lockout. */
+export function attackLocked(card: CardInstance): boolean {
+  return card.statuses.some((s) => s.id === 'stun' || s.id === 'disarm' || s.id === 'sleep' || s.id === 'casting');
+}
+
 export function effectiveAtk(card: CardInstance): number {
   const data = CARDS_BY_ID[card.cardId];
   if (data?.type !== 'hero') return 0;
-  // Stun, Disarm, and Sleep all silence basic attacks. `casting` is the heavy
-  // channel lockout (Dynamo / Seven) — the hero is locked in their ultimate and
-  // can't make basic attacks. (Warden's `casting_light` is NOT listed, so he
-  // keeps attacking while channeling Last Stand.)
-  if (card.statuses.some((s) => s.id === 'stun' || s.id === 'disarm' || s.id === 'sleep' || s.id === 'casting')) return 0;
+  if (attackLocked(card)) return 0;
   // Sum any temporary Weapon Power buffs on top of base + equipment bonus.
   const weaponPower = card.statuses
     .filter((s) => s.id === 'weapon_power')

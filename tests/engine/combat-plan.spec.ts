@@ -3,7 +3,7 @@ import { DeadlockGame } from '@/engine/game';
 import { planAttackPhase, resolveAttackPhase } from '@/engine/combat';
 import { effectiveAtk } from '@/engine/util';
 import { addStatus } from '@/engine/statusOps';
-import type { GameState, PlayerID } from '@/engine/types';
+import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame, makeHero } from './_helpers';
 
 function freshG(): GameState {
@@ -21,6 +21,16 @@ function plainActive(G: GameState) {
  *  heroes don't attack, so this only affects bench-targeting passives). */
 function soloAttacker(G: GameState, pid: PlayerID) {
   G.players[pid].bench = [null, null, null];
+}
+
+/** Put a piece of gear on a hero as it would sit once played (no cost, no
+ *  onPlay effect — the on-attack procs are what these tests are after). */
+function wear(bearer: CardInstance, cardId: string) {
+  (bearer.attached ??= []).push({
+    iid: `eq-${cardId}`, cardId, ownerId: bearer.ownerId, zone: 'equipment',
+    attachedTo: bearer.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
+    statuses: [], exhausted: false, skillUsedThisTurn: false,
+  });
 }
 
 describe('combat plan invariant', () => {
@@ -105,13 +115,51 @@ describe('combat plan invariant', () => {
     expect(plan.steps.some((s) => s.predictedKO)).toBe(true);
   });
 
-  it('plan returns face damage when defender Active is null', () => {
+  it('with no living rival Active the plan is empty, and the attack fizzles: the patron is not hit', () => {
+    const vacate: [string, (G: GameState) => void][] = [
+      ['no Active', (G) => { G.players['1'].active = null; }],
+      ['a corpse in the lane', (G) => { G.players['1'].active!.hp = 0; G.players['1'].active!.respawnTurnsLeft = 2; }],
+    ];
+    for (const [label, doctor] of vacate) {
+      const G = freshG();
+      doctor(G);
+      const plan = planAttackPhase(G, '0');
+      expect(plan.steps, label).toEqual([]);
+      expect(plan.damageToActive, label).toBe(0);
+      expect(plan.patronDamage, label).toBe(0);
+      expect(plan.defenderActiveKO, label).toBeNull();
+      const patronBefore = G.players['1'].hp;
+      resolveAttackPhase(G, '0');
+      expect(G.players['1'].hp, label).toBe(patronBefore);
+    }
+  });
+
+  it("a KO costs the defender's patron the one life the engine takes — the overflow is not spilled", () => {
     const G = freshG();
-    G.players['1'].active = null; // no active
+    plainActive(G);
+    soloAttacker(G, '0');
+    const target = G.players['1'].active!;
+    target.hp = 1; // Dynamo's 3 overshoots by 2
     const plan = planAttackPhase(G, '0');
-    expect(plan.damageToActive).toBe(0);
-    expect(plan.damageToFace).toBeGreaterThan(0);
-    expect(plan.steps.every((s) => s.targetIid === null)).toBe(true);
+    expect(plan.defenderActiveKO).toBe(target.iid);
+    expect(plan.steps[0].finalDamage).toBe(3);
+    expect(plan.patronDamage).toBe(1);
+    const patronBefore = G.players['1'].hp;
+    resolveAttackPhase(G, '0');
+    expect(patronBefore - G.players['1'].hp).toBe(plan.patronDamage);
+  });
+
+  it('an attack the rival Active survives costs its patron nothing', () => {
+    const G = freshG();
+    const target = G.players['1'].active!;
+    target.hp = target.hpMax = 30;
+    const plan = planAttackPhase(G, '0');
+    expect(plan.damageToActive).toBeGreaterThan(0);
+    expect(plan.defenderActiveKO).toBeNull();
+    expect(plan.patronDamage).toBe(0);
+    const patronBefore = G.players['1'].hp;
+    resolveAttackPhase(G, '0');
+    expect(G.players['1'].hp).toBe(patronBefore);
   });
 
   it('plan does NOT mutate game state', () => {
@@ -209,5 +257,67 @@ describe('the attack is one-way', () => {
     def.hp = def.hpMax = 30;
     resolveAttackPhase(G, '0');
     expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBeGreaterThan(0);
+  });
+});
+
+// The attacker's own swings move its HP — Frenzy and lifesteal gear heal it,
+// Bloodscent heals it, Siphon Bullets raises its max — and Frenzy's +3 is
+// judged against that HP swing by swing. The plan has to carry the attacker's
+// HP along, or an Extra Attack is predicted with a bonus the engine no longer
+// gives. Every bearer here swings for 3, and for 6 while below half HP.
+describe("Frenzy's bonus is planned swing by swing, as the resolver deals it", () => {
+  interface Bearer {
+    hero?: string;
+    hp: number;
+    hpMax?: number;
+    gear: string[];
+    /** Extra Attacks queued (default 1). */
+    extra?: number;
+    doctor?: (G: GameState, attacker: CardInstance, defender: CardInstance) => void;
+    /** What each swing deals to the rival Active. */
+    swings: number[];
+  }
+  const cases: [string, Bearer][] = [
+    ['its own heal lifts the bearer over half HP, and the Extra Attack loses the +3',
+      { hp: 4, gear: ['frenzy'], swings: [6, 3] }],
+    ['a bearer still below half HP after the heal keeps the +3',
+      { hp: 1, gear: ['frenzy'], swings: [6, 6] }],
+    ['the bonus drops off on the swing after the heal that crosses half HP',
+      { hp: 1, gear: ['frenzy'], extra: 2, swings: [6, 6, 3] }],
+    ["Restorative Shot's 1 counts toward the threshold",
+      { hp: 2, gear: ['frenzy', 'restorative_shot'], swings: [6, 3] }],
+    ["Bullet Lifesteal's 2 counts toward the threshold",
+      { hp: 1, gear: ['frenzy', 'bullet_lifesteal'], swings: [6, 3] }],
+    ["Leech's on-attack 2 counts toward the threshold",
+      { hp: 1, gear: ['leech', 'frenzy'], swings: [6, 3] }],
+    ['Siphon Bullets moves the bearer along with its max HP',
+      { hp: 3, hpMax: 11, gear: ['frenzy', 'siphon_bullets'], swings: [6, 3] }],
+    ["Drifter's Bloodscent heals half of what the swing dealt",
+      { hero: 'hero_drifter', hp: 6, hpMax: 20, gear: ['frenzy'], swings: [6, 3] }],
+    ['Healing Boost adds to each heal',
+      { hp: 2, gear: ['frenzy'], doctor: (G, a) => addStatus(G, a, 'healing_boost', 2, 999), swings: [6, 3] }],
+    ['Healing Blocked stops the heal, so the +3 stays',
+      { hp: 4, gear: ['frenzy'], doctor: (G, a) => addStatus(G, a, 'healing_boost_down', 1, 2), swings: [6, 6] }],
+    ['a swing the Shield soaks up whole heals nothing, so the +3 stays',
+      { hp: 4, gear: ['frenzy'], doctor: (G, _a, d) => addStatus(G, d, 'shield', 6, 999), swings: [0, 6] }],
+  ];
+
+  it.each(cases)('%s', (_name, c) => {
+    const G = freshG();
+    const attacker = G.players['0'].active = makeHero(c.hero ?? 'hero_dynamo', '0', 'active', 0);
+    attacker.hpMax = c.hpMax ?? 10;
+    attacker.hp = c.hp;
+    for (const cardId of c.gear) wear(attacker, cardId);
+    attacker.statuses.push({ id: 'extra_attack', value: c.extra ?? 1, duration: 99 });
+    const defender = G.players['1'].active!;
+    defender.hpMax = defender.hp = 40;
+    c.doctor?.(G, attacker, defender);
+
+    const plan = planAttackPhase(G, '0');
+    expect(plan.steps.map((s) => s.finalDamage)).toEqual(c.swings);
+    resolveAttackPhase(G, '0');
+    const dealt = 40 - defender.hp;
+    expect(dealt).toBe(c.swings.reduce((a, b) => a + b, 0));
+    expect(plan.damageToActive).toBe(dealt);
   });
 });

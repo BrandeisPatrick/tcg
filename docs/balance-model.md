@@ -54,7 +54,8 @@ squishies die faster — that's positioning, not a stat problem.
 
 ## 4. Lanes — front tank / back caster (emergent, not enforced)
 
-Only the **Active** hero attacks and soaks damage for the team (overflow → patron).
+Only the **Active** hero attacks and soaks damage for the team (a fallen hero costs
+the patron 1; damage past 0 HP is not spilled).
 So a natural strategy is: park a **Vitality build** (high HP + regen, e.g. Abrams,
 Mo & Krill) Active to absorb, while **Spirit builds** sit on the bench and cast.
 This is strategy enabled by the rules, **not** a hard class — any hero can be put

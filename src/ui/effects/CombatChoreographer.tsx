@@ -11,9 +11,8 @@ import { FX_TIMING, NUMERAL_INK } from './fx/fxCatalog';
 import { FxImpulseContext, type FxImpulse, hitStrength } from './fx/FxImpulse';
 import { useFxCalm } from './fx/FxMotionContext';
 import { quake, tableCenter } from './fx/FxLayer';
-import { type Rect, center, edgePoint, restRect, seeded } from './fx/geometry';
-import { useStage, useStageEngine } from './fx/stage/FxStage';
-import { gunImpact, ring } from './fx/stage/emitters';
+import { type Rect, center, edgePoint, restRect } from './fx/geometry';
+import { useStageEngine } from './fx/stage/FxStage';
 
 /**
  * Animated walk-through of the turn's attack, from its plan.
@@ -125,14 +124,14 @@ export function CombatChoreographer({ plan, me, slotRefs, onComplete, stepDurati
     const table = tableCenter(rects);
     if (table) stage?.lookAt(table);
     const attackerRect = rects.get(step.attackerIid) ?? null;
-    const targetRect = step.targetIid ? rects.get(step.targetIid) ?? null : null;
-    if (step.predictedKO && step.targetIid && targetRect) fallen.current.set(step.targetIid, { rect: targetRect, beat: beatIndex });
+    const targetRect = rects.get(step.targetIid) ?? null;
+    if (step.predictedKO && targetRect) fallen.current.set(step.targetIid, { rect: targetRect, beat: beatIndex });
     return {
       step,
       index: beatIndex,
       attackerRect,
       targetRect,
-      targetTile: step.targetIid ? slotRefs.get(step.targetIid) ?? null : null,
+      targetTile: slotRefs.get(step.targetIid) ?? null,
       rects,
     };
   }, [beatIndex, plan.steps, slotRefs, done, stage]);
@@ -231,16 +230,9 @@ const AttackBeat = memo(function AttackBeat({ beat, mine, stepDuration }: {
   // attacking — not off where the card sits: both Actives share the lane, so
   // a card's height on screen says nothing about whose it is.
   const attackerInk = mine ? poster.you : poster.rival;
-  // A face hit has no card to land on: the rounds fly to the edge of the
-  // sheet where the receiving patron sits — the rival's at the top, yours at
-  // the bottom — and a band there takes the blow.
-  const band = useMemo<Rect>(() => {
-    const height = 140;
-    const width = Math.min(560, window.innerWidth - 32);
-    return { left: (window.innerWidth - width) / 2, top: mine ? 16 : window.innerHeight - height - 16, width, height };
-  }, [mine]);
-  const hitRect = targetRect ?? band;
-  const targetC = center(hitRect);
+  // Every swing lands on a card — the rival's living Active. The patron is
+  // never shot at: it pays for a knockout, not for the rounds.
+  const targetC = targetRect ? center(targetRect) : attackerC;
   const angle = Math.atan2(targetC.y - attackerC.y, targetC.x - attackerC.x);
 
   // The tiles take their part: the attacker comes up and kicks back with
@@ -252,33 +244,22 @@ const AttackBeat = memo(function AttackBeat({ beat, mine, stepDuration }: {
     const timers: ReturnType<typeof setTimeout>[] = [];
     const emit = (iid: string, impulse: FxImpulse, at: number) => { timers.push(setTimeout(() => bus.emit(iid, impulse), at)); };
     emit(step.attackerIid, { kind: 'fire', angle, strength: hitStrength(step.finalDamage), lead: projectileDelay / 1000, gap: roundGap / 1000 }, 0);
-    if (step.targetIid) {
-      const kind: FxImpulse['kind'] | null = step.finalDamage > 0 ? (step.predictedKO ? 'ko' : 'hit') : step.shieldAbsorbed > 0 ? 'shield' : null;
-      if (kind) emit(step.targetIid, { kind, angle, strength: hitStrength(step.finalDamage) }, impactDelay);
-      if (step.predictedKO && targetRect) {
-        timers.push(...quake(bus, rects, center(targetRect), impactDelay + FX_TIMING.koBreak, 0.9, step.targetIid));
-        emit(step.targetIid, { kind: 'slam', strength: 1 }, impactDelay + FX_TIMING.koStamp + 90);
-      }
+    const kind: FxImpulse['kind'] | null = step.finalDamage > 0 ? (step.predictedKO ? 'ko' : 'hit') : step.shieldAbsorbed > 0 ? 'shield' : null;
+    if (kind) emit(step.targetIid, { kind, angle, strength: hitStrength(step.finalDamage) }, impactDelay);
+    if (step.predictedKO && targetRect) {
+      timers.push(...quake(bus, rects, center(targetRect), impactDelay + FX_TIMING.koBreak, 0.9, step.targetIid));
+      emit(step.targetIid, { kind: 'slam', strength: 1 }, impactDelay + FX_TIMING.koStamp + 90);
     }
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bus, step]);
 
-  // A face hit: the rounds chew along the band at the patron's edge.
-  useStage((s) => {
-    if (targetRect || step.finalDamage <= 0) return;
-    const rng = seeded(seed + 5);
-    for (let i = 0; i < 4; i++) {
-      const at = { x: band.left + band.width * (0.2 + rng() * 0.6), y: band.top + band.height * (0.3 + rng() * 0.4) };
-      s.at(impactDelay + i * 60, (stage) => stage.add(gunImpact({ at, dir: angle, seed: seed + i * 19, power: 0.8, density: stage.density })));
-    }
-    s.at(impactDelay, (stage) => stage.add(ring({ at: center(band), r0: 30, r1: band.width * 0.5, color: attackerInk, width: 5, life: 520 })));
-  });
-
-  if (!attackerRect) return null;
+  // Nothing is drawn without both tiles measured: the rounds need a muzzle
+  // to leave and a card to land on.
+  if (!attackerRect || !targetRect) return null;
 
   const muzzle = edgePoint(attackerRect, targetC);
-  const targetEdge = targetRect ? edgePoint(targetRect, attackerC) : targetC;
+  const targetEdge = edgePoint(targetRect, attackerC);
   const shatterAt = impactDelay + FX_TIMING.koBreak;
   const stampAt = impactDelay + FX_TIMING.koStamp;
   const persist = damagePersist * 0.9;
@@ -298,11 +279,11 @@ const AttackBeat = memo(function AttackBeat({ beat, mine, stepDuration }: {
       </FxCardContext.Provider>
 
       {/* Everything printed on the target rides the target's tile as it rocks. */}
-      <FxCardContext.Provider value={step.targetIid ?? null}>
+      <FxCardContext.Provider value={step.targetIid}>
         {/* Shield-absorbed deflect — when the target's Shield ate part/all of the
             hit, the shield swings up over the target card so the impact reads
             even when HP doesn't move. */}
-        {step.shieldAbsorbed > 0 && targetRect && (
+        {step.shieldAbsorbed > 0 && (
           <ShieldDeflect
             rect={targetRect}
             absorbed={step.shieldAbsorbed}
@@ -315,7 +296,7 @@ const AttackBeat = memo(function AttackBeat({ beat, mine, stepDuration }: {
 
         {/* Bullets land: holes punched into the target, sparks and chads off
             the far side, and on a lethal blow the card itself breaks. */}
-        {step.finalDamage > 0 && targetRect && (
+        {step.finalDamage > 0 && (
           <>
             <GunBurst rect={targetRect} amount={step.finalDamage} at={impactDelay} hold={persist} seed={seed} from={attackerC} ownerInk={attackerInk} volley={false} />
             {step.predictedKO && (
@@ -333,22 +314,14 @@ const AttackBeat = memo(function AttackBeat({ beat, mine, stepDuration }: {
         )}
 
         {/* "Damaged" feedback for the PRIMARY target — the hero the attacker
-            swung at; a card that broke carries the K.O. sticker instead. For
-            face attacks the band at the receiving patron's edge hosts the
-            same marker and the amount. */}
-        {step.finalDamage > 0 && !(step.predictedKO && targetRect) && (
+            swung at; a card that broke carries the K.O. sticker instead. */}
+        {step.finalDamage > 0 && !step.predictedKO && (
           <DamageBanner
-            rect={hitRect}
-            isCard={!!targetRect}
+            rect={targetRect}
             calm={calm}
             damagePersist={damagePersist / 1000}
             impactDelay={impactDelay / 1000}
           />
-        )}
-        {!targetRect && step.finalDamage > 0 && (
-          <Fixed rect={band} z={89}>
-            <Numeral text={`−${step.finalDamage}`} ink={NUMERAL_INK.attack} at={impactDelay + 30} dur={Math.min(damagePersist * 0.85, 1000)} size={34} top="22%" />
-          </Fixed>
         )}
       </FxCardContext.Provider>
 
@@ -398,15 +371,14 @@ const AttackBeat = memo(function AttackBeat({ beat, mine, stepDuration }: {
  * left→right, like a progress bar. (A lethal blow breaks the card and gets
  * the K.O. sticker instead.)
  *
- * `rect` is the card's bounding box (or a synthetic face band for direct hits).
+ * `rect` is the card's bounding box.
  * The whole effect is clipped to it and the type size is derived from the card
  * width, so it scales with the board / browser window.
  */
 function DamageBanner({
-  rect, isCard, calm, damagePersist, impactDelay,
+  rect, calm, damagePersist, impactDelay,
 }: {
   rect: Rect;
-  isCard: boolean;
   calm: boolean;
   damagePersist: number;
   impactDelay: number;
@@ -419,7 +391,7 @@ function DamageBanner({
   const fontSize = Math.max(13, Math.min(Math.round(rect.width * 0.15), 34));
   const dur = damagePersist * 0.92;
   return (
-    <Fixed rect={rect} clip radius={isCard ? 10 : 6} z={84}>
+    <Fixed rect={rect} clip radius={10} z={84}>
       {/* Drain the card's colour for the beat — reads as "took a hit". */}
       <motion.div
         initial={{ opacity: 0 }}

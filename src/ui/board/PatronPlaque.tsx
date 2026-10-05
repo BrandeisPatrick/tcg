@@ -15,14 +15,16 @@ import { useStatTick } from './useStatTick';
  * the sheet's edge the way the old corner plate did.
  */
 export function PatronPlaque({
-  label, ps, hostile, attackOpen, projectedFaceDamage, isMobile, myTurn,
+  label, ps, hostile, attackOpen, projectedDamage, isMobile, myTurn,
 }: {
   label: string;
   ps: GameState['players'][PlayerID];
   hostile?: boolean;
   /** It is this patron's turn and its attack can still be made. */
   attackOpen: boolean;
-  projectedFaceDamage?: number;
+  /** Patron HP the other side's open attack would cost this one: the life a
+   *  knocked-out Active takes with it. */
+  projectedDamage?: number;
   /** Which end of the board this row sits at. */
   side: 'top' | 'bottom';
   isMobile: boolean;
@@ -31,9 +33,9 @@ export function PatronPlaque({
 }) {
   const accent = hostile ? poster.rival : poster.you;
   const hpFrac = Math.max(0, Math.min(1, ps.hp / ps.hpMax));
-  const projectedHp = Math.max(0, ps.hp - (projectedFaceDamage ?? 0));
+  const projectedHp = Math.max(0, ps.hp - (projectedDamage ?? 0));
   const projectedFrac = Math.max(0, Math.min(1, projectedHp / ps.hpMax));
-  const hasIncoming = !!projectedFaceDamage && projectedFaceDamage > 0;
+  const hasIncoming = !!projectedDamage && projectedDamage > 0;
 
   // Same tick language as the hero cards: bright on heal, grey on damage.
   const hpTick = useStatTick(ps.hp);
@@ -110,7 +112,8 @@ export function PatronPlaque({
           background: poster.stat.hp,
           transition: 'width 240ms ease',
         }} />
-        {/* Incoming face damage — the slice about to be lost, hatched off. */}
+        {/* What an incoming knockout would cost — the slice about to be lost,
+            hatched off. */}
         {hasIncoming && (
           <span style={{
             position: 'absolute',

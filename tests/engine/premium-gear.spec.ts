@@ -3,7 +3,7 @@ import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { ABILITIES_BY_ID } from '@/abilities';
 import { fireEquipmentTriggers } from '@/engine/equipmentDispatch';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
-import { resolveAttackPhase } from '@/engine/combat';
+import { attackBlocked, planAttackPhase, resolveAttackPhase } from '@/engine/combat';
 import { reapDead } from '@/engine/damage';
 import { effectiveAtk } from '@/engine/util';
 import { EQUIPMENT_BY_ID } from '@/cards/equipment';
@@ -114,6 +114,26 @@ describe('Frenzy', () => {
     const base = effectiveAtk(attacker);
     resolveAttackPhase(G, '0');
     expect(40 - defender.hp).toBe(base + 3);
+  });
+
+  // The +3 rides on a swing; it does not make one. A bearer that cannot make
+  // basic attacks deals nothing, and the gate, the plan and the resolver agree.
+  it.each(['stun', 'disarm', 'sleep', 'casting'] as const)('gives nothing to a bearer that cannot attack (%s): blocked, no plan, no damage', (lockout) => {
+    const G = freshReadyGame();
+    G.players['0'].active = makeHero('hero_dynamo', '0', 'active', 0);
+    const attacker = G.players['0'].active!;
+    const defender = G.players['1'].active!;
+    attach(attacker, 'frenzy');
+    attacker.hpMax = 10; attacker.hp = 2; // below half
+    defender.hpMax = 40; defender.hp = 40;
+    addStatus(G, attacker, lockout, 1, 2);
+    expect(attackBlocked(G, '0')).toBe('cannot');
+    const plan = planAttackPhase(G, '0');
+    expect(plan.steps).toEqual([]);
+    expect(plan.damageToActive).toBe(0);
+    resolveAttackPhase(G, '0');
+    expect(defender.hp).toBe(40);
+    expect(attacker.hp).toBe(2); // no swing, so no Frenzy heal either
   });
 });
 
