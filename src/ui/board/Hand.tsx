@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRef, useState } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
+import { cardCost } from '@/engine/legality';
 import { CardFrame } from '../card/CardFrame';
 import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
@@ -18,16 +19,7 @@ interface Props {
   onDragEndOver?: (c: CardInstance, x: number, y: number) => void;
   /** Fired when the player taps a card they can't afford — lets the Board
    *  surface "Need N souls" instead of a silent no-op. */
-  onUnaffordable?: (c: CardInstance, cost: number) => void;
-}
-
-function cardCost(c: CardInstance): number {
-  const data = CARDS_BY_ID[c.cardId];
-  if (!data) return 0;
-  if (data.type === 'spell' || data.type === 'equipment' || data.type === 'ultimate') {
-    return (data as any).cost ?? 0;
-  }
-  return 0;
+  onUnaffordable?: (c: CardInstance) => void;
 }
 
 // Desktop fanning — wider arc, more rotation since cards are bigger.
@@ -210,7 +202,7 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 if (!cardDisabled) { onTap(c); return; }
                 // Tapping an unaffordable card on your own turn gets explicit
                 // feedback instead of a silent no-op.
-                if (unaffordable && !disabled) onUnaffordable?.(c, cost);
+                if (unaffordable && !disabled) onUnaffordable?.(c);
               }}
               role="button"
               aria-label={`${data?.name ?? c.cardId}${cost > 0 ? `, cost ${cost} souls` : ''}${unaffordable ? ' — cannot afford' : ''}`}
@@ -234,6 +226,8 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
               <CardFrame
                 cardId={c.cardId}
                 size="hand"
+                // The price this copy costs — a free copied ultimate prints 0.
+                cost={cost}
                 selected={selected}
                 glow={selected ? (data?.type === 'ultimate' ? 'gold' : 'accent') : null}
                 unaffordable={unaffordable}

@@ -56,6 +56,9 @@ export function HeroPortrait({ cardId, size, full = false, className, variant = 
         alt={id.initial}
         loading="lazy"
         decoding="async"
+        // Not draggable: it sits inside hand cards, whose own drag must not be
+        // taken over by a native image drag.
+        draggable={false}
         style={{
           width: '100%',
           height: '100%',

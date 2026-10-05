@@ -16,7 +16,7 @@ interface Props {
   onTapHero: (c: CardInstance, owner: PlayerID) => void;
   onLongPressHero?: (c: CardInstance) => void;
   onEquipmentHover?: (eq: CardInstance | null) => void;
-  isTargetable: (card: CardInstance, owner: PlayerID) => boolean;
+  isTargetable: (card: CardInstance) => boolean;
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
   /** Heroes here that can still do something this turn (the ready glint). */
   readyIids?: ReadonlySet<string>;
@@ -71,7 +71,7 @@ export function BenchRow({
                 myId={myId}
                 isOpponent={isOpponent}
                 pending={pending}
-                isTargetable={isTargetable(c, owner)}
+                isTargetable={isTargetable(c)}
                 compact
                 onTap={onTapHero}
                 onLongPress={onLongPressHero}

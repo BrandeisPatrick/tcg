@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
+import { wornEquipment } from '@/engine/query';
 import { CardFrame } from '../card/CardFrame';
 import { fonts, spring, text } from '../tokens';
 import { PosterButton } from '../chrome';
@@ -38,7 +39,9 @@ const cardBox = {
 export function EquipmentReplaceOverlay({ incoming, hero, onPick, onCancel }: Props) {
   const heroName = CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId;
   const incomingName = CARDS_BY_ID[incoming.cardId]?.name ?? incoming.cardId;
-  const attached = hero.attached ?? [];
+  // The items the hero wears — a merged Rem rides in `attached` too, but she
+  // is not equipment and cannot be the one replaced.
+  const attached = wornEquipment(hero);
 
   return (
     <motion.div

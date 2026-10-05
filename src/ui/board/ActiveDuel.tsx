@@ -17,7 +17,7 @@ interface Props {
   onTapHero: (c: CardInstance, owner: PlayerID) => void;
   onLongPressHero?: (c: CardInstance) => void;
   onEquipmentHover?: (eq: CardInstance | null) => void;
-  isTargetable: (card: CardInstance, owner: PlayerID) => boolean;
+  isTargetable: (card: CardInstance) => boolean;
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
   /** Your heroes that can still do something this turn (the ready glint). */
   readyIids?: ReadonlySet<string>;

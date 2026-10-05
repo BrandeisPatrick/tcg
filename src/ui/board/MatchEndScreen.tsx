@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
+import { isRespawning } from '@/engine/query';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { fonts, spring } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
@@ -59,7 +60,7 @@ export function MatchEndScreen({
 
   const myPs = G.players[me];
   const opPs = G.players[opp];
-  const fallen = (c: CardInstance | null) => !c || c.hp <= 0 || (c.respawnTurnsLeft ?? 0) > 0;
+  const fallen = (c: CardInstance | null) => !c || c.hp <= 0 || isRespawning(c);
   const myTeam = [myPs.active, ...myPs.bench].filter(Boolean) as CardInstance[];
   const opTeam = [opPs.active, ...opPs.bench].filter(Boolean) as CardInstance[];
 

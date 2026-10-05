@@ -14,7 +14,7 @@ interface Props {
   onTapHero: (c: CardInstance, owner: PlayerID) => void;
   onLongPressHero?: (c: CardInstance) => void;
   onEquipmentHover?: (eq: CardInstance | null) => void;
-  isTargetable: (card: CardInstance, owner: PlayerID) => boolean;
+  isTargetable: (card: CardInstance) => boolean;
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
   isCurrentTurn?: boolean;
   /** Heroes here that can still do something this turn (the ready glint). */
@@ -52,7 +52,7 @@ export function ActiveSlot({
                 myId={myId}
                 isOpponent={isOpponent}
                 pending={pending}
-                isTargetable={isTargetable(card, owner)}
+                isTargetable={isTargetable(card)}
                 isCurrentTurn={isCurrentTurn}
                 onTap={onTapHero}
                 onLongPress={onLongPressHero}

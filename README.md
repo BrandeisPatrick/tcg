@@ -90,8 +90,14 @@ an effect more finely. `tutorial.mjs` walks the tutorial lessons end to end
 with real clicks on whatever the coach has lit, and fails unless each one is
 won. `match.mjs` drafts a match, switches Auto on and lets the AI play both
 seats to the result sheet, reporting every state the turn flow reached and
-failing if the match ever sits still. Set `DEV_URL` when the dev server is
-not on `http://localhost:5173`.
+failing if the match ever sits still. Both fail on any console error, page
+exception or React `Warning:` (an explicit, commented allowlist at the top of
+each script is the only way out). `legality.mjs` stages boards a game rarely
+reaches — a free copied ultimate, a spell dropped on a corpse, an item a hero
+already wears, a hero at the equipment cap — by syncing a doctored state into
+the live client, and checks the hand, the glow and the refusal stickers with
+real mouse events. Set `DEV_URL` when the dev server is not on
+`http://localhost:5173`.
 
 ## Architecture
 

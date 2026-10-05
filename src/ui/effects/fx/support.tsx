@@ -12,7 +12,7 @@ import type { FxTag, StatusFx, StatusId } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
-import { statusChipText } from '../../card/StatusIcon';
+import { statusChipText, statusClass } from '../../card/StatusIcon';
 import { FX_INK, FX_TIMING, NUMERAL_INK, TAG_INFO } from './fxCatalog';
 import { type Rect, center } from './geometry';
 import { EASE_OUT, Fixed, LightningArc, Numeral, Plate, Ring, Stamp, Wash, numeralSize, sec } from './primitives';
@@ -158,11 +158,13 @@ export function HealGlow({ rect, amount, at, hold, tag, seed }: {
 // Status stamps.
 // ---------------------------------------------------------------------------
 
-const UTILITY: Set<string> = new Set(['siphon_drain', 'siphon_gain', 'reverb', 'casting', 'casting_light']);
-
+/** The stamp's ink is the colour of the chip it lands as (`statusClass`, read
+ *  off the status definition); a channel is spirit-purple whichever side it
+ *  sits on. */
 function statusInk(ev: StatusFx): string {
-  if (UTILITY.has(ev.statusId)) return ev.statusId === 'casting' || ev.statusId === 'casting_light' ? FX_INK.spirit : poster.inkDim;
-  return ev.debuff ? poster.status.debuff : poster.status.buff;
+  if (ev.statusId === 'casting' || ev.statusId === 'casting_light') return FX_INK.spirit;
+  const side = statusClass(ev.statusId);
+  return side === 'utility' ? poster.inkDim : side === 'debuff' ? poster.status.debuff : poster.status.buff;
 }
 
 /** A small printed glyph over the stamp for the statuses that have one. */

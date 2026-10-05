@@ -3,17 +3,15 @@ import { STATUSES_BY_ID } from '@/statuses';
 import { fonts } from '../tokens';
 import { poster } from '../poster';
 
-const BUFFS: Set<StatusId> = new Set(['weapon_power','spirit_power','bullet_resist','spirit_resist','shield','unstoppable','healing_boost','extra_attack','casting','casting_light']);
-const DEBUFFS: Set<StatusId> = new Set(['stun','silenced','disarm','bleed','weapon_power_down','spirit_power_down','bullet_resist_down','spirit_resist_down','charged','healing_boost_down','djinns_mark']);
-
 export type StatusClass = 'buff' | 'debuff' | 'utility';
 
-/** Which of the three chip colours a status wears. Exported so a list of
- *  statuses can be grouped by the colour it is actually drawn in. */
+/** Which of the three chip colours a status wears, read off the status's own
+ *  definition (`hvalue`, src/statuses): above 0 is a buff, below 0 a debuff, 0
+ *  is neither. Exported so a list of statuses can be grouped by the colour it
+ *  is actually drawn in. */
 export function statusClass(id: StatusId): StatusClass {
-  if (BUFFS.has(id)) return 'buff';
-  if (DEBUFFS.has(id)) return 'debuff';
-  return 'utility';
+  const side = STATUSES_BY_ID[id]?.hvalue ?? 0;
+  return side > 0 ? 'buff' : side < 0 ? 'debuff' : 'utility';
 }
 
 // Class colours carry meaning: green buff / red debuff / ink utility.

@@ -27,10 +27,11 @@ import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
-import { effectiveAtk } from '@/engine/query';
-import { attackBlocked, skillBlocked } from '@/engine/legality';
+import { effectiveAtk, isRespawning, stepInCandidates } from '@/engine/query';
+import { attackBlocked, cardCost, playBlocked, skillBlocked } from '@/engine/legality';
 import { RETREAT_COST, SKILL_COST } from '@/engine/constants';
 import { PATRON_NAMES } from '@/ui/board/patrons';
+import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
 
 /* ------------------------------------------------------------------ */
@@ -111,8 +112,7 @@ export interface CoachView {
 export type GateSpec = string;
 
 const RIVAL: PlayerID = '1';
-const alive = (c: CardInstance | null | undefined): c is CardInstance =>
-  !!c && (c.respawnTurnsLeft ?? 0) === 0;
+const alive = (c: CardInstance | null | undefined): c is CardInstance => !!c && !isRespawning(c);
 const nameOf = (c: CardInstance | null | undefined) =>
   c ? CARDS_BY_ID[c.cardId]?.name ?? c.cardId : '';
 /** The hero tile announces itself as "Kelvin — 2 attack, 6 health". */
@@ -144,12 +144,25 @@ function skillNameOf(c: CardInstance | null): string {
   return name || 'the skill';
 }
 
-/** A card's printed soul cost, with a fallback for the odd card without one. */
-function cardCost(id: CardId, fallback: number): number {
-  const d = CARDS_BY_ID[id];
-  const cost = d && 'cost' in d ? (d as { cost?: number }).cost : undefined;
-  return cost ?? fallback;
+/** The copy of a card in your hand, if you hold one. */
+function held(G: GameState, me: PlayerID, id: CardId): CardInstance | undefined {
+  return G.players[me].hand.find((c) => c.cardId === id);
 }
+/** What that copy costs to play — the engine's `cardCost`, as the hand prints
+ *  it. Once it has left your hand (a step's words stay up a beat after the
+ *  card is played) the printed cost stands in, so the line does not change. */
+function costOf(G: GameState, me: PlayerID, id: CardId): number {
+  const card = held(G, me, id);
+  if (card) return cardCost(card);
+  const data = CARDS_BY_ID[id];
+  return data && data.type !== 'hero' ? data.cost ?? 0 : 0;
+}
+/** A count of souls, in the coach's voice: "two souls". */
+function soulsText(n: number): string {
+  const word = ['no', 'one', 'two', 'three', 'four', 'five', 'six'][n] ?? String(n);
+  return `${word} soul${n === 1 ? '' : 's'}`;
+}
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** True once any hero of yours is wearing a piece of equipment. */
 export function hasEquipment(G: GameState, me: PlayerID): boolean {
@@ -280,8 +293,8 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
     },
     task: (v) => v.seen.usedSkill,
     ready: (v) => {
-      const me = mine(v);
-      return !!me && !!theirs(v) && skillBlocked(v.G, v.me, me) === null;
+      const me = mine(v), them = theirs(v);
+      return !!me && !!them && skillBlocked(v.G, v.me, me, them.iid) === null;
     },
     blocked: (v) => {
       const me = mine(v);
@@ -309,7 +322,11 @@ function playOnActive(id: string, title: string, cardId: CardId, cardName: strin
       ? `${lead(v)} Now tap ${nameOf(mine(v)) || 'your Active'}.`
       : `${lead(v)} Tap ${cardName}, then tap ${nameOf(mine(v)) || 'your Active'}.`),
     task: done,
-    ready: (v) => souls(v) >= cardCost(cardId, 1) && inHand(v.G, v.me, cardId) && !!mine(v),
+    // The engine's own question: in hand, paid for, and aimed at your Active.
+    ready: (v) => {
+      const card = held(v.G, v.me, cardId), target = mine(v);
+      return !!card && !!target && playBlocked(v.G, v.me, card.iid, target.iid) === null;
+    },
     blocked: `${cardName} costs more than you have left. End the turn — souls refill.`,
     spot: (v) => (v.targeting ? [tile(mine(v))] : [`*${cardName}`]),
   };
@@ -372,14 +389,14 @@ export const LESSONS: Lesson[] = [
       {
         id: 'broke',
         title: 'Souls',
-        body: (v) => `Cards cost souls. The rail on your rule says you have ${souls(v)}, and Extended Magazine costs two. Tap Extended Magazine.`,
-        task: (v) => v.refusals >= 1 || souls(v) >= 2 || !inHand(v.G, v.me, 'extended_magazine'),
+        body: (v) => `Cards cost souls. The rail on your rule says you have ${souls(v)}, and Extended Magazine costs ${soulsText(costOf(v.G, v.me, 'extended_magazine'))}. Tap Extended Magazine.`,
+        task: (v) => v.refusals >= 1 || souls(v) >= costOf(v.G, v.me, 'extended_magazine') || !inHand(v.G, v.me, 'extended_magazine'),
         spot: () => [`${YOU} >> Souls:`, '*Extended Magazine'],
         allow: () => ['*Extended Magazine'],
       },
       endTurn(1, 'Refused. Souls refill at the start of each of your turns, one more each time — two next turn. Nobody attacks on the first turn, so tap End Turn.'),
       playOnActive('gear', 'Gear', 'extended_magazine', 'Extended Magazine',
-        (v) => `Two souls this turn. Extended Magazine is +1 attack, and gear stays on the hero.`,
+        (v) => `${sentence(soulsText(costOf(v.G, v.me, 'extended_magazine')))} this turn. Extended Magazine is +1 attack, and gear stays on the hero.`,
         (v) => v.seen.equipped),
       attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. Your Active does one thing a turn — its skill or an attack — and the attack is free.`),
     ],
@@ -405,7 +422,7 @@ export const LESSONS: Lesson[] = [
       look('look', 'Nearly There', mine, (v) => `The ring in the corner of ${nameOf(mine(v))}'s card is experience. He is one point short of Level 2. Tap ${nameOf(mine(v))} to see the ring.`),
       close('close', 'Level 1', 'Level 1, the ring nearly full. Gear counts as experience: attaching an item gives the bearer a point. Tap Close.'),
       playOnActive('gear', 'Tip It Over', 'extra_health', 'Extra Health',
-        () => `One soul, one item. Extra Health's point is the one he needs — Level 2, and his attack goes up with it.`,
+        (v) => `${sentence(soulsText(costOf(v.G, v.me, 'extra_health')))}, one item. Extra Health's point is the one he needs — Level 2, and his attack goes up with it.`,
         (v) => v.seen.equipped),
       attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}.`),
     ],
@@ -443,7 +460,11 @@ export const LESSONS: Lesson[] = [
             ? `Attacks only ever hit the Active. Retreat costs ${RETREAT_COST} souls and swaps the two. Tap Retreat.`
             : `Tap ${nameOf(mine(v)) || 'your Active'}, then Retreat: ${RETREAT_COST} souls swap him with ${nameOf(myBench(v)) || 'your bench hero'}.`),
         task: (v) => v.seen.swapped,
-        ready: (v) => souls(v) >= RETREAT_COST && !!myBench(v) && !!mine(v),
+        // The engine's own question: is a swap with the bench open to you now?
+        ready: (v) => {
+          const stepIns = stepInCandidates(v.G.players[v.me]);
+          return stepIns.length > 0 && retreatBlock(v.G, v.me, stepIns) === null;
+        },
         blocked: `Retreat costs ${RETREAT_COST} souls. End the turn to refill, then come back to it.`,
         spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
         allow: (v) => (v.sheetOpen ? ['~Retreat'] : [tile(mine(v))]),

@@ -27,7 +27,7 @@ export function HandTray({
   onLongPress: (c: CardInstance) => void;
   onHover: (c: CardInstance | null) => void;
   onDragEndOver: (c: CardInstance, x: number, y: number) => void;
-  onUnaffordable?: (c: CardInstance, cost: number) => void;
+  onUnaffordable?: (c: CardInstance) => void;
   onEndTurn: () => void;
   onCancel: () => void;
   autoPlay: boolean;

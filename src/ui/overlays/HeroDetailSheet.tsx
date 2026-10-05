@@ -3,7 +3,7 @@ import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
-import { effectiveAtk } from '@/engine/query';
+import { effectiveAtk, effectiveSpirit } from '@/engine/query';
 import { SKILL_COST } from '@/engine/constants';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { StatusIcon } from '../card/StatusIcon';
@@ -308,7 +308,7 @@ export function HeroDetailSheet({
             }}>
               <RailStat label="BP" value={effectiveAtk(card)} color={poster.stat.atk} />
               <RailStat label="HP" value={`${card.hp}/${card.hpMax}`} color={poster.stat.hp} />
-              <RailStat label="SPI" value={card.spiritMod} color={poster.stat.spirit} />
+              <RailStat label="SPI" value={effectiveSpirit(card)} color={poster.stat.spirit} />
             </div>
           </SidePanel>
 

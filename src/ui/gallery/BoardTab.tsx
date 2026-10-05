@@ -7,6 +7,7 @@
  */
 import { Fragment, useEffect, useState } from 'react';
 import type { CardInstance, PlayerID } from '@/engine/types';
+import { LEVEL_THRESHOLDS } from '@/engine/constants';
 import { HEROES } from '@/cards';
 import { TurnCompass, type TurnPhase } from '../board/TurnCompass';
 import { SoulsRail } from '../board/SoulsRail';
@@ -19,13 +20,17 @@ import { useViewport } from '../hooks/useViewport';
 import { mockHeroInstance } from './mock';
 import { Section, Caption, Notes, Row, Button, Sub, Grid, Segmented, Toggle, type Option } from './primitives';
 
+// One empty and one two-thirds-lit ring per level step; the step sizes are the
+// engine's own (`LEVEL_THRESHOLDS`), so the labels follow a balance change.
 const RINGS: { level: 1 | 2 | 3 | 4; exp: number; label: string; hint: string }[] = [
-  { level: 1, exp: 0, label: 'Lv1 · 0/3', hint: '3 segments, empty' },
-  { level: 1, exp: 2, label: 'Lv1 · 2/3', hint: '2 of 3 lit' },
-  { level: 2, exp: 0, label: 'Lv2 · 0/6', hint: '6 segments, empty' },
-  { level: 2, exp: 4, label: 'Lv2 · 4/6', hint: '4 of 6 lit' },
-  { level: 3, exp: 0, label: 'Lv3 · 0/9', hint: '9 segments, empty' },
-  { level: 3, exp: 6, label: 'Lv3 · 6/9', hint: '6 of 9 lit' },
+  ...LEVEL_THRESHOLDS.flatMap((step, i) => {
+    const level = (i + 1) as 1 | 2 | 3;
+    const lit = Math.round((step * 2) / 3);
+    return [
+      { level, exp: 0, label: `Lv${level} · 0/${step}`, hint: `${step} segments, empty` },
+      { level, exp: lit, label: `Lv${level} · ${lit}/${step}`, hint: `${lit} of ${step} lit` },
+    ];
+  }),
   { level: 4, exp: 0, label: 'Lv4 · max', hint: 'fully lit, with glow' },
 ];
 

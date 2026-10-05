@@ -5,11 +5,13 @@ import { scrimStyle } from '../poster';
 
 interface Props {
   cardId: string;
+  /** What this copy costs, when it is an instance (see CardFrame `cost`). */
+  cost?: number;
   onClose: () => void;
   hover?: boolean; // when true: floats non-blocking near the side, no backdrop
 }
 
-export function CardPreview({ cardId, onClose, hover = false }: Props) {
+export function CardPreview({ cardId, cost, onClose, hover = false }: Props) {
   if (hover) {
     return (
       <motion.div
@@ -28,7 +30,7 @@ export function CardPreview({ cardId, onClose, hover = false }: Props) {
           filter: 'drop-shadow(0 16px 28px rgba(0, 0, 0, 0.55))',
         }}
       >
-        <CardFrame cardId={cardId} size="full" />
+        <CardFrame cardId={cardId} cost={cost} size="full" />
       </motion.div>
     );
   }
@@ -51,7 +53,7 @@ export function CardPreview({ cardId, onClose, hover = false }: Props) {
         exit={{ scale: 0.85, opacity: 0 }}
         transition={spring.snappy}
       >
-        <CardFrame cardId={cardId} size="full" />
+        <CardFrame cardId={cardId} cost={cost} size="full" />
       </motion.div>
     </motion.div>
   );

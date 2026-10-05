@@ -15,6 +15,16 @@ import { launch, byText } from './cdp.mjs';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+// A React `Warning:` fails the run — a ref or key warning is a real bug that
+// only shows in the dev console (the empty bench slots' ref warning lived for
+// a while because these scripts used to drop every one). A warning that
+// genuinely cannot be fixed in this repo may be listed here as a RegExp tested
+// against the whole console line; every entry needs a comment saying which
+// warning it is and why it cannot be fixed. Start empty, keep empty.
+const ALLOWED_WARNINGS = [
+  // /Warning: Some third-party thing/,  // why it cannot be fixed here
+];
+
 const DEV_URL = (process.env.DEV_URL ?? 'http://localhost:5173').replace(/\/$/, '');
 const OUT = resolve(process.argv[2] ?? './match-shots');
 const PORT = Number(process.argv[3] ?? 9339);
@@ -104,9 +114,10 @@ try {
   console.log(`result: ${result ?? 'NO RESULT'}  (last dial: ${lastDial})`);
   console.log('turn states reached:\n  ' + [...states].sort().join('\n  '));
   if (!result) failed = true;
-  // React's dev-only warnings are noise here; anything else is a failure.
-  const errors = b.errors.filter((e) => !/^\[console\.(error|warning)\] Warning: /.test(e));
-  console.log('page errors:', errors.length ? errors.slice(0, 10).map((e) => e.slice(0, 300)) : 'none');
+  // Every console error, console warning and page exception fails the run —
+  // React's dev-only `Warning:` lines included, bar the explicit allowlist above.
+  const errors = b.errors.filter((e) => !ALLOWED_WARNINGS.some((re) => re.test(e)));
+  console.log('page errors (React warnings included):', errors.length ? errors.slice(0, 10).map((e) => e.slice(0, 300)) : 'none');
   if (errors.length) failed = true;
 } finally {
   await b.close();

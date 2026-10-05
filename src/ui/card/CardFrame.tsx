@@ -25,6 +25,11 @@ interface Props {
   /** Hide the top-right hero BP/HP stat pills (used by the skill-used reveal,
    *  where the stat badge is noise — the reveal is about the skill). */
   hideStats?: boolean;
+  /** The soul cost to print on the coin, for a card that is an instance in
+   *  hand: the engine's `cardCost`, which honours an override (Sinclair's copied
+   *  ultimate is free). Omitted, the card's printed cost — right for the deck
+   *  editor, the collection and the gallery, where no instance exists. */
+  cost?: number;
   /** Player can't pay this card's soul cost right now — the cost coin flips
    *  to warning red so the greyed-out card explains itself at a glance. */
   unaffordable?: boolean;
@@ -174,7 +179,9 @@ function ArtImg({ src, cardId }: { src: string; cardId: string }) {
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: poster.ground }}>
       {failed ? <FallbackArt cardId={cardId} /> : (
-        <img src={src} alt="" loading="lazy" decoding="async"
+        // Not draggable: a hand card's drag is the card's, and a native image drag
+        // would take the pointer over mid-flick (pointercancel) and drop nothing.
+        <img src={src} alt="" loading="lazy" decoding="async" draggable={false}
           onError={() => setFailed(true)}
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -221,7 +228,7 @@ function ArtWindow({ data }: { data: CardData | undefined }) {
 
 export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
-  unaffordable = false, physical, castSheen = false, foil = null,
+  cost: costInPlay, unaffordable = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
   holoPalette = 'amber', tilt = false,
 }: Props) {
@@ -277,8 +284,11 @@ export function CardFrame({
   };
 
   const artH = size === 'full' ? '58%' : '55%';
-  const cost = data && data.type !== 'hero' ? data.cost ?? 0 : 0;
-  const showCost = !isHero && cost > 0;
+  const printedCost = data && data.type !== 'hero' ? data.cost ?? 0 : 0;
+  const cost = costInPlay ?? printedCost;
+  // A card with no price prints no coin — but a copy made free (Sinclair's
+  // copied ultimate) prints a 0, so it does not look like a card with no cost.
+  const showCost = !isHero && (cost > 0 || cost !== printedCost);
   const showStats = isHero;
 
   return (
