@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { DeadlockGame } from '@/engine/game';
-import { attackBlocked, planAttackPhase } from '@/engine/combat';
+import { attackBlocked, skillBlocked } from '@/engine/legality';
+import { planAttackPhase } from '@/engine/forecast';
 import { addStatus } from '@/engine/statusOps';
 import type { GameState, PlayerID } from '@/engine/types';
-import { attackBlockReason, attackLine, readyHeroes, skillBlocked } from '@/ui/board/heroActions';
+import { attackBlockReason, attackLine, readyHeroes } from '@/ui/board/heroActions';
 import { freshReadyGame } from '../engine/_helpers';
 
 // The board, the hero sheet and the tutorial read what a hero can still do

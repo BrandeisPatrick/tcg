@@ -1,48 +1,19 @@
-import type { GameState, PlayerID, CardInstance } from './types';
+/**
+ * What the turn's attack would do, worked out ahead of making it — for the
+ * board's damage preview and the choreographer's walk, and for the AI's crude
+ * attack score.
+ *
+ * STAGE 1: this is still the hand-written mirror of the resolver
+ * (`planAttackPhase`); it only reads attack damage through `attackPower` now,
+ * so the Frenzy and lockout rules are not repeated here. It is replaced by a
+ * forecast derived from the real action run on a copy (`forecastAttack`).
+ */
+import type { CardInstance, GameState, PlayerID } from './types';
 import { CARDS_BY_ID } from '@/cards';
-import { damageUnit, resolve, KO_PATRON_DAMAGE } from './damage';
-import { otherPlayer, effectiveAtk, attackLocked, isRespawning } from './util';
-import { getAbility } from '@/abilities';
-import { withCast } from './castContext';
-
-// ---------- The turn's attack ----------
-
-/** The first player forgoes first strike: Turn 1 has no attack. One rule,
- *  read by the planner, the resolver, the attack gate and the board, so the
- *  four cannot drift apart. */
-export function attackTurn(G: GameState): boolean {
-  return (G.turnNumber ?? 1) > 1;
-}
-
-/** Why a player's Active cannot make the turn's attack. */
-export type AttackBlock = 'turn1' | 'used' | 'skill' | 'noActive' | 'cannot' | 'noTarget';
-
-/** Why `pid`'s Active cannot make the turn's attack right now, or null when it
- *  can. One gate, read by the `attack` move, the planner's callers, the AI and
- *  the board, so the four cannot drift apart. Checked in this order:
- *   - 'turn1'    Turn 1 has no attack (the first player forgoes first strike).
- *   - 'used'     this turn's attack has been made. One a turn, whoever is
- *                Active: the hero who steps in after it cannot swing again.
- *   - 'noActive' there is no living Active. A fallen one is replaced first —
- *                the attack belongs to the hero who steps up.
- *   - 'skill'    the Active used its skill this turn; a hero does one or the
- *                other.
- *   - 'noTarget' the rival has no living Active to swing at.
- *   - 'cannot'   the swing would deal nothing: Stun, Disarm, Sleep, a heavy
- *                channel, or Weaken down to 0. */
-export function attackBlocked(G: GameState, pid: PlayerID): AttackBlock | null {
-  if (!attackTurn(G)) return 'turn1';
-  if (G.attackUsed) return 'used';
-  const active = G.players[pid].active;
-  if (!active || isRespawning(active)) return 'noActive';
-  if (active.skillUsedThisTurn) return 'skill';
-  const target = G.players[otherPlayer(pid)].active;
-  if (!target || isRespawning(target)) return 'noTarget';
-  if (effectiveAttackDamage(active, target).dmg <= 0) return 'cannot';
-  return null;
-}
-
-// ---------- Attack plan (pure, for UI prediction + animation) ----------
+import { KO_PATRON_DAMAGE } from './constants';
+import { attackPower, otherPlayer } from './query';
+import { attackTurn } from './legality';
+import { collectAttackers } from './actions/attack';
 
 /** One projected swing of the attack. */
 export interface AttackStep {
@@ -131,7 +102,7 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
     // swing, as the resolver re-reads it — so Frenzy's +3 drops off the swing
     // after a heal lifts the bearer to half HP.
     const self = { hp: atk.hp, hpMax: atk.hpMax };
-    const { dmg, bonusLabel } = effectiveAttackDamage(atk, target, self);
+    const { dmg, bonusLabel } = swingPower(atk, self);
     if (dmg <= 0) continue;
 
     /** One swing: mitigated, recorded, and its effects on the attacker
@@ -170,7 +141,7 @@ export function planAttackPhase(G: GameState, attackerId: PlayerID): AttackPlan 
     let extra = atk.statuses.find((s) => s.id === 'extra_attack')?.value ?? 0;
     if (atk.cardId === 'hero_haze') extra += 1;
     for (let i = 0; i < extra && simHp > 0; i++) {
-      const bonus = effectiveAttackDamage(atk, target, self).dmg;
+      const bonus = swingPower(atk, self).dmg;
       if (bonus <= 0) continue;
       land(bonus, 'Extra Attack');
     }
@@ -272,120 +243,10 @@ function simulateAttackMitigation(
   return { final, shieldRemaining };
 }
 
-// ---------- Engine resolver (mutating) ----------
-
-/**
- * Resolve the attack of `attackerId`'s Active: its swing at the rival Active,
- * then any Extra Attacks it has queued. One-way — the defender does not strike
- * back, and none of its onAttack passives fire. The behavior matches
- * `planAttackPhase` step for step. This only swings: the `attack` move checks
- * `attackBlocked` and marks the attack as made before calling it.
- */
-export function resolveAttackPhase(G: GameState, attackerId: PlayerID) {
-  // First player (P0) forgoes first-strike: no attacks on Turn 1, so P1 lands
-  // the first hit. NOTE: this alone does NOT close the seat gap — P0's edge is
-  // cumulative (acting first every round); scripts/balance-sim.ts reports it.
-  // A persistent counter-lever (e.g. a per-turn soul coin for P1) is still TODO.
-  if (!attackTurn(G)) return;
-
-  const defenderId = otherPlayer(attackerId);
-  const attacker = G.players[attackerId];
-  const defender = G.players[defenderId];
-
-  const attackers = collectAttackers(attacker);
-  // A corpse active (respawning) isn't a valid bullet sponge — with no living
-  // Active there is nothing to swing at.
-  const target = defender.active && (defender.active.respawnTurnsLeft ?? 0) === 0 ? defender.active : null;
-
-  for (const atk of attackers) {
-    if (atk.hp <= 0) continue;
-    const { dmg } = effectiveAttackDamage(atk, target);
-    if (dmg <= 0) continue;
-
-    if (target) {
-      const atkName = CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId;
-
-      // ---- The swing. ----
-      // Capture the actual damage dealt (post-mitigation) so onAttack lifesteal
-      // (Drifter) can heal for half of it.
-      let dealt = 0;
-      withCast(atk, 'attack', () => {
-        dealt = damageUnit(G, target, dmg, 'attack', atkName);
-      });
-      const data = CARDS_BY_ID[atk.cardId];
-      if (data?.type === 'hero') {
-        for (const passId of data.passives ?? []) {
-          const a = getAbility(passId);
-          // `primary: true` marks this as the hero's main swing of the turn —
-          // Haze's Fixation grants its extra attack only here, so the extra
-          // swings it spawns don't re-trigger it.
-          if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target, params: { primary: true, dealt } });
-        }
-      }
-
-      // ---- Extra Attacks: additional full-power swings queued this turn
-      // (Active Reload, Burst Fire, Fixation — value of the `extra_attack`
-      // status). Each re-fires the attacker's onAttack procs (lifesteal,
-      // bleed, Djinn's Mark, Ricochet AoE, Tesla chain — the equipment ones
-      // fire automatically via the 'attack' cast-context in damageUnit).
-      // Damage is re-evaluated each swing so mid-attack threshold gear
-      // (Frenzy) stays honest. ----
-      const extra = atk.statuses.find((s) => s.id === 'extra_attack')?.value ?? 0;
-      for (let i = 0; i < extra; i++) {
-        if (atk.hp <= 0 || target.hp <= 0) break;
-        const bonus = effectiveAttackDamage(atk, target).dmg;
-        if (bonus <= 0) continue;
-        let exDealt = 0;
-        withCast(atk, 'attack', () => {
-          exDealt = damageUnit(G, target, bonus, 'attack', `${atkName} (Extra Attack)`);
-        });
-        if (data?.type === 'hero') {
-          for (const passId of data.passives ?? []) {
-            const a = getAbility(passId);
-            if (a?.trigger === 'onAttack') a.run(G, { movingPlayer: attackerId }, { source: atk, target, params: { dealt: exDealt } });
-          }
-        }
-      }
-    }
-    atk.statuses = atk.statuses.filter((s) => s.id !== 'extra_attack');
-    // No living Active to sponge → the attack fizzles. The patron is only
-    // damaged when a hero dies (flat KO_PATRON_DAMAGE, in killInPlace), never
-    // by the swings themselves.
-  }
-
-  resolve(G);
-}
-
-// ---------- Helpers (shared between planner and resolver) ----------
-
-// Only the Active hero attacks — bench heroes never swing. Returned as a
-// one-element list so the resolver and planner can share a single loop.
-function collectAttackers(attacker: { active: CardInstance | null }): CardInstance[] {
-  if (attacker.active && (attacker.active.respawnTurnsLeft ?? 0) === 0) return [attacker.active];
-  return [];
-}
-
-function effectiveAttackDamage(
-  atk: CardInstance,
-  target: CardInstance | null,
-  // The HP Frenzy's threshold is read against: the attacker's own, or the
-  // planner's running copy of it between swings.
-  self: { hp: number; hpMax: number } = atk,
-): { dmg: number; bonusLabel?: string } {
-  // A hero that cannot make basic attacks swings for nothing, whatever it
-  // wears. Checked here, ahead of every bonus, so the planner, the resolver
-  // and the attack gate all read the same 0.
-  if (attackLocked(atk)) return { dmg: 0 };
-  let dmg = effectiveAtk(atk);
-  // Weaken: subtract the status value from the attacker's outgoing damage,
-  // floored at 0. Carried by Rusted Barrel and any future "ATK-down" effect.
-  const weak = atk.statuses.find((s) => s.id === 'weapon_power_down');
-  if (weak) dmg = Math.max(0, dmg - weak.value);
-  let bonusLabel: string | undefined;
-  // Frenzy (equipment): +3 Bullet Power while the bearer is below half HP.
-  if (atk.attached?.some((eq) => eq.cardId === 'frenzy') && self.hp < self.hpMax / 2) {
-    dmg += 3;
-    bonusLabel = 'Frenzy: +3 <½ HP';
-  }
-  return { dmg, bonusLabel };
+/** What one swing of `atk` deals, with `self` standing in for its HP — the
+ *  planner's running copy between swings, which is what Frenzy's threshold
+ *  reads. Everything is `attackPower`'s: lockouts, Weaken, bonus hooks. */
+function swingPower(atk: CardInstance, self: { hp: number; hpMax: number }): { dmg: number; bonusLabel?: string } {
+  const power = attackPower({ ...atk, hp: self.hp, hpMax: self.hpMax });
+  return { dmg: power.total, bonusLabel: power.parts.find((p) => p.bonus)?.label };
 }

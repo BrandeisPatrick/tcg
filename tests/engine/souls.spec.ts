@@ -4,7 +4,7 @@ import { DeadlockGame } from '@/engine/game';
 import type { GameState, PlayerID } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { damageUnit } from '@/engine/damage';
-import { reapDead } from '@/engine/damage';
+import { reapDead } from '@/engine/death';
 import { freshReadyGame, configureReadyMatch } from './_helpers';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).

@@ -3,7 +3,7 @@ import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn, cleanseDebuffs } from '@/engine/statusOps';
-import { effectiveAtk } from '@/engine/util';
+import { effectiveAtk } from '@/engine/query';
 import type { GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame } from './_helpers';
 
@@ -100,10 +100,9 @@ describe('status: weaken', () => {
     addStatus(G, t, 'weapon_power_down', 2, 2);
     // Skip if hero already has 0 ATK (corner case for some passive heroes).
     if (baseAtk > 0) {
-      // Weaken is applied in combat's effectiveAttackDamage, not in effectiveAtk
-      // itself — verify via the planner instead.
-      // For this unit test, just verify the status is on the card.
+      // Weaken is part of attackPower, which effectiveAtk reads.
       expect(t.statuses.find((s) => s.id === 'weapon_power_down')?.value).toBe(2);
+      expect(effectiveAtk(t)).toBe(Math.max(0, baseAtk - 2));
     }
   });
 });
@@ -304,7 +303,7 @@ describe('healing is no longer gated by any status', () => {
 
 describe('attacks — Active hero only', () => {
   it('only the Active hero attacks; bench heroes never swing', async () => {
-    const { planAttackPhase } = await import('@/engine/combat');
+    const { planAttackPhase } = await import('@/engine/forecast');
     const G = freshG();
     const plan = planAttackPhase(G, '0');
     // The Active may swing more than once (Haze's Fixation), but there must be

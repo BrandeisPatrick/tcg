@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL } from '@/engine/expSystem';
+import { LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL } from '@/engine/constants';
 import { fonts } from '../tokens';
 import { poster } from '../poster';
 

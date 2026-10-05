@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { HEROES } from '@/cards';
-import { RETREAT_COST } from '@/engine/game';
+import { RETREAT_COST } from '@/engine/constants';
 import { HeroDetailSheet } from '../overlays/HeroDetailSheet';
 import { PromotionOverlay } from '../overlays/PromotionOverlay';
 import { poster } from '../poster';

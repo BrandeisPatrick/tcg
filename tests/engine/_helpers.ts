@@ -1,10 +1,20 @@
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
-import { buildPlayer } from '@/engine/game';
+import { buildPlayer } from '@/engine/actions/setup';
+import { allocatorFor, newCounters } from '@/engine/ids';
 import { STARTER_DECK_PLAYER, STARTER_DECK_AI } from '@/decks/starter';
 import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
-import { resetIid, nextIid } from '@/engine/util';
 import { CARDS_BY_ID } from '@/cards';
 import { setMatchConfig } from '@/storage/matchConfig';
+
+let testIids = 1;
+/**
+ * An instance id for a card a test builds by hand. The counter is the test's
+ * own (a game's ids come from `G.counters`, as 'i…'), and the 't' prefix keeps
+ * the two from ever colliding in one game. Pass a prefix for readable ids.
+ */
+export function nextTestIid(prefix = 't'): string {
+  return `${prefix}${testIids++}`;
+}
 
 /**
  * Battle-ready GameState with both rosters already on the board (no draft).
@@ -17,11 +27,13 @@ import { setMatchConfig } from '@/storage/matchConfig';
  * `players['0'].active` must build a ready state via this helper instead.
  */
 export function freshReadyGame(): GameState {
-  resetIid();
+  const counters = newCounters();
+  const ids = allocatorFor(counters);
   return {
+    counters,
     players: {
-      '0': buildPlayer('0', STARTER_DECK_PLAYER.heroes, AI_DECKS_BY_NAME.aggro),
-      '1': buildPlayer('1', STARTER_DECK_AI.heroes, AI_DECKS_BY_NAME.control),
+      '0': buildPlayer(ids, '0', STARTER_DECK_PLAYER.heroes, AI_DECKS_BY_NAME.aggro),
+      '1': buildPlayer(ids, '1', STARTER_DECK_AI.heroes, AI_DECKS_BY_NAME.control),
     },
     // Turn 2 so P0 may attack (P0 forgoes first strike on turn 1).
     turnNumber: 2,
@@ -64,7 +76,7 @@ export function makeHero(
 ): CardInstance {
   const data = CARDS_BY_ID[cardId] as any;
   return {
-    iid: nextIid(),
+    iid: nextTestIid(),
     cardId,
     ownerId,
     zone,

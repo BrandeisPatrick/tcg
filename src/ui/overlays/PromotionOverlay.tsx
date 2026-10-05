@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
-import { effectiveAtk } from '@/engine/util';
+import { effectiveAtk } from '@/engine/query';
 import { fonts, spring, text } from '../tokens';
 import { poster, sheetStyle, scrimStyle } from '../poster';
 import { PosterButton } from '../chrome';
@@ -171,8 +171,7 @@ function CandidateCard({ card, onPick, isMobile }: { card: CardInstance; onPick:
           const heroData: any = data;
           const baseAtk: number = heroData.atk ?? 0;
           const baseHp: number = heroData.hp ?? 0;
-          const weaken = card.statuses.find((s) => s.id === 'weapon_power_down')?.value ?? 0;
-          const atk = Math.max(0, effectiveAtk(card) - weaken);
+          const atk = effectiveAtk(card);
           // Same ink rule as HeroSlot: each stat keeps its hue (ink for BP,
           // red for HP) and only shifts bright/dim to show drift from the
           // printed base.

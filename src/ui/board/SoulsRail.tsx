@@ -4,13 +4,14 @@ import { fonts } from '../tokens';
 import { poster, chamfer, soulCoin, clipBoth } from '../poster';
 import { boardRows } from './BoardTable';
 import { useViewport } from '../hooks/useViewport';
+import { SOULS_MAX } from '@/engine/constants';
 
 interface Props {
   rivalSouls: number;
   yourSouls: number;
 }
 
-const CAP = 10;   // matches SOULS_MAX — full rack renders without an overflow tail
+const CAP = SOULS_MAX;   // a full rack renders without an overflow tail
 
 /** Hook: track the current "slot count" for a player. The slot count
  *  rebases to the current souls when souls go UP (a refill / gain) and

@@ -1,23 +1,15 @@
 /**
- * Hero leveling. Heroes start at Lv1, climb to Lv4 (cap). Step costs are
- * 5 → 7 → 9 exp (cumulative cap 21). Exp earned at end of owner's turn (all
- * board heroes), on equipment attach, and on kill blow. Persists across respawn.
+ * Hero leveling. Heroes start at Lv1 and climb to the cap (the numbers are in
+ * constants.ts). Exp is earned at end of owner's turn (all board heroes), on
+ * equipment attach, and on kill blow. Persists across respawn.
  */
 import type { CardInstance, GameState } from './types';
 import { CARDS_BY_ID } from '@/cards';
-import { pushLog } from './util';
+import { pushLog } from './log';
 import { pushFx } from './fx';
-
-export const LEVEL_THRESHOLDS = [5, 7, 9] as const;
-export const START_LEVEL = 1 as const;
-export const MAX_LEVEL = 4 as const;
-
-export const LEVEL_ATK_BONUS = 1 as const;
-export const LEVEL_HP_BONUS = 1 as const;
-// Every hero gains Spirit per level (not just casters) so any hero's skill /
-// ultimate scales into the late game — Spirit is a real build axis, no role
-// caps. See docs/balance-model.md.
-export const LEVEL_SPIRIT_BONUS = 1 as const;
+import {
+  LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL,
+} from './constants';
 
 /** Returns the number of levels gained (0 if no level-up). */
 export function grantExp(G: GameState, card: CardInstance, amount: number): number {
@@ -54,4 +46,3 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
   }
   return gained;
 }
-

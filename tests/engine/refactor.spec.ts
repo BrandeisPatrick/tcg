@@ -4,9 +4,8 @@ import type { GameState, CardInstance } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { addStatus } from '@/engine/statusOps';
 import { damageUnit, healUnit } from '@/engine/damage';
-import { nextIid } from '@/engine/util';
 import { withCast } from '@/engine/castContext';
-import { freshReadyGame } from './_helpers';
+import { freshReadyGame, nextTestIid } from './_helpers';
 
 function freshG(): GameState {
   return freshReadyGame();
@@ -15,7 +14,7 @@ function freshG(): GameState {
 /** Build a minimal equipment instance and attach it to a hero. */
 function attachEquip(hero: CardInstance, cardId: string): CardInstance {
   const eq: CardInstance = {
-    iid: nextIid('eq'),
+    iid: nextTestIid('eq'),
     cardId,
     ownerId: hero.ownerId,
     zone: 'equipment',

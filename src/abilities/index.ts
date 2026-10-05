@@ -1,11 +1,20 @@
-import type { GameState, CardInstance, PlayerID, StatusId } from '@/engine/types';
+import type { GameState, CardInstance, DamageType, PlayerID, StatusId } from '@/engine/types';
 import { CARDS_BY_ID, ULTIMATES } from '@/cards';
-import { damageUnit, healUnit, resolve } from '@/engine/damage';
-import { addStatus, cleanseDebuffs } from '@/engine/statusOps';
+import { STATUSES_BY_ID } from '@/statuses';
+import { damageUnit, healUnit } from '@/engine/damage';
+import { resolve } from '@/engine/death';
+import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
-import { findCardOnBoard, liveBoardCards, otherPlayer, pushLog, effectiveSpirit, nextIid, grantExtraAttacks } from '@/engine/util';
-import { setEquipmentDispatcher, fireEquipmentTriggers } from '@/engine/equipmentDispatch';
+import { findCardOnBoard, liveBoardCards, otherPlayer, effectiveSpirit, type TargetFilter } from '@/engine/query';
+import { pushLog } from '@/engine/log';
+import { newIid } from '@/engine/ids';
+import { getAbility, registerAbilities } from '@/engine/registry';
+import { fireTriggers } from '@/engine/triggers';
+import { withCast, currentCast } from '@/engine/castContext';
 import { pushFx } from '@/engine/fx';
+
+export type { TargetFilter };
+export { getAbility };
 
 // An EffectFn mutates G. It receives the source card (if any), the target (if any),
 // and a params bag from the ability/card definition.
@@ -14,17 +23,6 @@ export type EffectFn = (
   ctx: { movingPlayer: PlayerID },
   args: { source?: CardInstance; target?: CardInstance; params?: Record<string, any> },
 ) => void;
-
-// Filter describing what counts as a valid target for an ability.
-export type TargetFilter =
-  | 'noTarget'
-  | 'self'
-  | 'allyAny'           // any ally board card
-  | 'allyHero'
-  | 'enemyAny'
-  | 'enemyHero'
-  | 'enemyActive'
-  | 'anyBoard';
 
 export interface AbilityDef {
   id: string;
@@ -54,6 +52,21 @@ export interface AbilityDef {
    *  by souls.spec / mystic-burst.spec. Not rendered anywhere. */
   base?: number;
   run: EffectFn;
+
+  // ----- Pure hooks -----
+  // Optional readings the engine takes of a card that carries this ability
+  // (see `abilitySources` in engine/query.ts). They only compute a number: no
+  // mutation, no events, so a forecast can call them freely.
+
+  /** A conditional bonus to the bearer's basic swing, read by `attackPower`
+   *  with the bearer as it stands (Frenzy: +3 below half HP). */
+  attackBonus?: (self: CardInstance) => { amount: number; label: string } | null;
+  /** What damage the bearer takes after this ability's say, applied before
+   *  any status (Vindicta's flight takes 1 off a bullet). */
+  incoming?: (self: CardInstance, amount: number, type: DamageType) => number;
+  /** How long a status lands for on the bearer (Superior Duration stretches
+   *  its buffs). */
+  buffDuration?: (self: CardInstance, statusId: StatusId, duration: number) => number;
 }
 
 
@@ -251,8 +264,8 @@ const eff_echo_shard: AbilityDef = {
       default: target = undefined;
     }
     pushLog(G, `Echo Shard: ${data.name} casts ${data.abilityName ?? 'their skill'} again.`);
-    _withCast(hero, 'skill', () => skill.run(G, { movingPlayer: ctx.movingPlayer }, { source: hero, target }));
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: ctx.movingPlayer });
+    withCast(hero, 'skill', () => skill.run(G, { movingPlayer: ctx.movingPlayer }, { source: hero, target }));
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: ctx.movingPlayer });
   },
 };
 
@@ -552,14 +565,27 @@ const eff_improved_spirit_armor: AbilityDef = {
   run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 5, 999); },
 };
 
-// Frenzy (T4 weapon): while the bearer is below half HP, heal 2 on attack.
-// (The +3 Bullet Power half of Frenzy is applied in combat's effectiveAttackDamage.)
+// Frenzy (T4 weapon): while the bearer is below half HP, +3 Bullet Power (the
+// attackBonus hook, read by attackPower) and heal 2 on attack.
 const eff_frenzy: AbilityDef = {
   id: 'eff_frenzy', trigger: 'onAttack', target: 'self',
   base: 2,
+  attackBonus: (self) => (self.hp < self.hpMax / 2 ? { amount: 3, label: 'Frenzy: +3 <½ HP' } : null),
   run: (G, _ctx, { source, target }) => {
     if (source && source.hp < source.hpMax / 2) healUnit(G, source, 2, 'Frenzy', { tag: 'lifesteal', from: target });
   },
+};
+
+// Superior Duration (T3 vitality): the bearer's own buffs last 1 turn longer.
+// A pure hook, nothing to fire — `base: 0` keeps it worth nothing to the AI's
+// equipment valuation, as it was when the card listed no abilities. Permanent
+// buffs (duration 99+) are left alone.
+const eff_superior_duration: AbilityDef = {
+  id: 'eff_superior_duration', trigger: 'ongoing', target: 'self',
+  base: 0,
+  buffDuration: (_self, statusId, duration) =>
+    (STATUSES_BY_ID[statusId]?.hvalue ?? 0) > 0 && duration < 99 ? duration + 1 : duration,
+  run: () => {},
 };
 
 // Siphon Bullets (T4 weapon): attacks steal 1 max HP from the target to the
@@ -820,11 +846,12 @@ const passive_shiv_bleed: AbilityDef = {
   },
 };
 
-// Flight: marker passive. The actual mitigation lives in `damageUnit` (skills
-// + spells) and the planner in `combat.ts` (basic attacks).
+// Flight: takes 1 less bullet damage from every source. A pure hook —
+// damageUnit asks it (`incomingDamage`) before anything else touches the hit.
 const passive_vindicta_flight: AbilityDef = {
   id: 'passive_vindicta_flight', trigger: 'ongoing', target: 'self',
   prompt: 'Flight — takes 1 less bullet damage from all sources.',
+  incoming: (_self, amount, type) => (type === 'attack' ? Math.max(0, amount - 1) : amount),
   run: () => {},
 };
 
@@ -842,13 +869,6 @@ const passive_wraith_mixed: AbilityDef = {
   },
 };
 
-// Bloodscent: canon Drifter literally feeds off weakened prey. Two effects
-// in one passive:
-//   1) Lifesteal — on every basic attack, Drifter heals 1 (onAttack trigger).
-//   2) +3 bullet dmg vs targets at <=4 HP (combat hook in
-//      `combat.ts:effectiveAttackDamage`).
-// The first effect uses the ability's onAttack trigger; the second is read
-// directly from the attacker cardId in the combat hook.
 // Bloodscent: bullet lifesteal — Drifter heals for HALF the damage his attacks
 // deal (the dealt amount is plumbed in via params.dealt from resolveAttackPhase).
 // Scales with weapon power, Extra Attack swings, and Healing Boost items.
@@ -950,8 +970,8 @@ const eff_ult_rem: AbilityDef = {
 };
 // Storm Cloud — canon escalating lightning channel. Seven lifts into the storm
 // (locked out, `casting`) and rains an AoE that RAMPS each turn: 2 → 3 → 4
-// spirit (+Spirit) over 3 turns (9 per enemy, back-loaded). The ramp lives in
-// tickCastingPulses (value climbs by 1 per pulse).
+// spirit (+Spirit) over 3 turns (9 per enemy, back-loaded). The channel carries
+// `ramp: 1`, and tickCastingPulses adds it to the value after each pulse.
 const eff_ult_seven: AbilityDef = {
   id: 'eff_ult_seven', trigger: 'onPlay', target: 'noTarget',
   base: 2,
@@ -959,7 +979,7 @@ const eff_ult_seven: AbilityDef = {
     const ps = G.players[ctx.movingPlayer];
     const seven = [ps.active, ...ps.bench].find((c) => c?.cardId === 'hero_seven' && (c.respawnTurnsLeft ?? 0) === 0);
     if (!seven) { pushLog(G, 'Storm Cloud fizzled — no Seven on the board.'); return; }
-    addStatus(G, seven, 'casting', 2, 3);
+    addStatus(G, seven, 'casting', 2, 3, { ramp: 1 });
     pushLog(G, 'Seven channels Storm Cloud.');
   },
 };
@@ -987,7 +1007,7 @@ const eff_ult_sinclair: AbilityDef = {
     const ult = ULTIMATES.find((u) => u.linkedHero === enemyActive.cardId);
     if (!ult) { pushLog(G, 'Audience Participation: nothing to copy.'); return; }
     const copy: CardInstance = {
-      iid: nextIid(), cardId: ult.id, ownerId: pid, zone: 'hand',
+      iid: newIid(G), cardId: ult.id, ownerId: pid, zone: 'hand',
       attached: [], hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
       statuses: [], exhausted: false, skillUsedThisTurn: false, costOverride: 0,
     };
@@ -1124,7 +1144,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_toxic_bullets, eff_tesla_bullets, eff_suppressor, eff_reactive_barrier,
   eff_escalating_exposure, eff_inhibitor, eff_crippling_headshot, eff_berserker,
   eff_colossus, eff_improved_bullet_armor, eff_improved_spirit_armor,
-  eff_frenzy, eff_siphon_bullets,
+  eff_frenzy, eff_siphon_bullets, eff_superior_duration,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige, skill_rem,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
@@ -1143,25 +1163,6 @@ export const ABILITIES_BY_ID: Record<string, AbilityDef> = Object.fromEntries(
   ABILITIES_LIST.map((a) => [a.id, a]),
 );
 
-export function getAbility(id: string): AbilityDef | undefined {
-  return ABILITIES_BY_ID[id];
-}
-
-// Procs run inside withCast(..., 'proc') so nested damageUnit calls don't
-// re-fire equipment triggers (would recurse on Mystic Burst, Mystic Reverb, etc.).
-import { withCast as _withCast, currentCast } from '@/engine/castContext';
-setEquipmentDispatcher((G, bearer, kind, ctx, target, amount) => {
-  if (!bearer.attached) return;
-  // Iterate a snapshot: a proc (e.g. a spent cooldown→draw item) may detach
-  // itself from bearer.attached mid-loop, which would skip a sibling otherwise.
-  for (const eq of [...bearer.attached]) {
-    const data = CARDS_BY_ID[eq.cardId];
-    if (!data || data.type !== 'equipment' || !data.abilities) continue;
-    for (const aid of data.abilities) {
-      const ability = ABILITIES_BY_ID[aid];
-      if (ability && ability.trigger === kind) {
-        _withCast(bearer, 'proc', () => ability.run(G, ctx, { source: bearer, target, params: { equip: eq, amount } }));
-      }
-    }
-  }
-});
+// The engine looks card behaviour up in its registry (engine/registry.ts);
+// loading this module is what fills it.
+registerAbilities(ABILITIES_LIST);

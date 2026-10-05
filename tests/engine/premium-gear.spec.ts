@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { ABILITIES_BY_ID } from '@/abilities';
-import { fireEquipmentTriggers } from '@/engine/equipmentDispatch';
+import { fireTriggers } from '@/engine/triggers';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
-import { attackBlocked, planAttackPhase, resolveAttackPhase } from '@/engine/combat';
-import { reapDead } from '@/engine/damage';
-import { effectiveAtk } from '@/engine/util';
+import { attackBlocked } from '@/engine/legality';
+import { planAttackPhase } from '@/engine/forecast';
+import { resolveAttackPhase } from '@/engine/actions/attack';
+import { reapDead } from '@/engine/death';
+import { effectiveAtk } from '@/engine/query';
 import { EQUIPMENT_BY_ID } from '@/cards/equipment';
 import { freshReadyGame, makeHero } from './_helpers';
 
@@ -27,7 +29,7 @@ describe('Escalating Exposure', () => {
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     attach(hero, 'escalating_exposure');
-    for (let i = 0; i < 4; i++) fireEquipmentTriggers(G, hero, 'onBearerSkillDamage', { movingPlayer: '0' }, enemy);
+    for (let i = 0; i < 4; i++) fireTriggers(G, hero, 'onBearerSkillDamage', { reaction: true, movingPlayer: '0', target: enemy });
     expect(val(enemy, 'spirit_resist_down')).toBe(3); // capped
   });
 });
@@ -38,7 +40,7 @@ describe('Inhibitor', () => {
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     attach(hero, 'inhibitor');
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(val(enemy, 'weapon_power_down')).toBe(1);
     expect(val(enemy, 'spirit_power_down')).toBe(1);
     expect(dur(enemy, 'weapon_power_down')).toBe(2);
@@ -51,7 +53,7 @@ describe('Crippling Headshot', () => {
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     attach(hero, 'crippling_headshot');
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(val(enemy, 'bullet_resist_down')).toBe(1);
     expect(val(enemy, 'spirit_resist_down')).toBe(1);
   });
@@ -62,7 +64,7 @@ describe('Berserker', () => {
     const G = freshReadyGame();
     const hero = G.players['0'].active!;
     attach(hero, 'berserker');
-    for (let i = 0; i < 6; i++) fireEquipmentTriggers(G, hero, 'onBearerDamagedByBullet', { movingPlayer: '0' });
+    for (let i = 0; i < 6; i++) fireTriggers(G, hero, 'onBearerDamagedByBullet', { reaction: true, movingPlayer: '0' });
     expect(val(hero, 'weapon_power')).toBe(4); // capped
   });
 });
@@ -95,10 +97,10 @@ describe('Frenzy', () => {
     const enemy = G.players['1'].active!;
     attach(hero, 'frenzy');
     hero.hpMax = 10; hero.hp = 10; // full → no heal
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(hero.hp).toBe(10);
     hero.hp = 3; // below half
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(hero.hp).toBe(5); // +2
   });
 
@@ -108,10 +110,12 @@ describe('Frenzy', () => {
     G.players['0'].active = makeHero('hero_dynamo', '0', 'active', 0);
     const attacker = G.players['0'].active!;
     const defender = G.players['1'].active!;
+    const base = effectiveAtk(attacker);
     attach(attacker, 'frenzy');
     attacker.hpMax = 10; attacker.hp = 2; // below half
     defender.hpMax = 40; defender.hp = 40;
-    const base = effectiveAtk(attacker);
+    // The card face reads the same attack power the swing deals.
+    expect(effectiveAtk(attacker)).toBe(base + 3);
     resolveAttackPhase(G, '0');
     expect(40 - defender.hp).toBe(base + 3);
   });
@@ -146,7 +150,7 @@ describe('Siphon Bullets', () => {
     enemy.hpMax = 20; enemy.hp = 20;
     attach(hero, 'siphon_bullets');
 
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(enemy.hpMax).toBe(19);
     expect(hero.hpMax).toBe(11);
     expect(hero.hp).toBe(11); // filled the stolen HP
@@ -163,7 +167,7 @@ describe('Siphon Bullets', () => {
     const enemy = G.players['1'].active!;
     hero.hpMax = 10; hero.hp = 10;
     attach(hero, 'siphon_bullets');
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(hero.hpMax).toBe(11);
     hero.hp = 0;
     reapDead(G, G.players['0']);

@@ -5,7 +5,7 @@ import { freshReadyGame, makeHero, configureReadyMatch } from './_helpers';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { withCast } from '@/engine/castContext';
-import { resolveAttackPhase } from '@/engine/combat';
+import { resolveAttackPhase } from '@/engine/actions/attack';
 import { getAbility } from '@/abilities';
 import type { GameState, HitFx, StatusFx, HealFx, CastFx } from '@/engine/types';
 

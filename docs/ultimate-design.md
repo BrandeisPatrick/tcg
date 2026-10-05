@@ -56,19 +56,21 @@ A `casting` (heavy lockout) / `casting_light` (mobile) self-status turns these
 three into channeled win conditions: instead of a one-shot effect, the caster
 deals AoE spirit to all enemies at the end of each of their turns over a 3-turn
 channel (`tickCastingPulses` in `statusOps.ts`, fired from `turn.onEnd`, after
-everything the player did in the turn, the attack included). `casting` is added to the attack gate (`util.ts`) and skill
-gate (`game.ts`) so heavy channelers (Dynamo, Seven) are locked out; Warden's
-`casting_light` opts out of both. Stun/Sleep on the caster skips that turn's
-pulse (channels are interruptible). Seven's value escalates +1 per pulse.
+everything the player did in the turn, the attack included). `casting` declares
+that it blocks attacks and skills (`StatusDef.blocks`, read by `isBlocked` in
+`query.ts`) so heavy channelers (Dynamo, Seven) are locked out; Warden's
+`casting_light` blocks neither. Stun/Sleep on the caster (they block the
+`pulse`) skips that turn's pulse (channels are interruptible). Seven's channel
+carries `ramp: 1`, so its value escalates +1 per pulse.
 Damage scales with the caster's live Spirit each tick. See
 [the multi-attack + casting memory] and `tests/engine/archetypes.spec.ts`.
 
 ## Engine work this required
-- **Sleep status** (`statuses/`, `game.ts` skill gate, `util.ts` attack gate,
+- **Sleep status** (`statuses/` — what it blocks and that it is CC —,
   `damage.ts` wake hook, `statusOps.ts` expiry burst).
-- **Per-instance `costOverride`** (`types.ts`, `game.ts` playCard) for Sinclair's
-  free copy.
-- Sinclair mints a 0-cost copy of the enemy ult into hand via `nextIid`.
+- **Per-instance `costOverride`** (`types.ts`, `cardCost` in `legality.ts`) for
+  Sinclair's free copy.
+- Sinclair mints a 0-cost copy of the enemy ult into hand via `newIid` (`ids.ts`).
 - Mirage performs a free Active↔bench swap inline.
 
 ## Lowest-confidence / deviations

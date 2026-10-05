@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
-import { fireEquipmentTriggers } from '@/engine/equipmentDispatch';
+import { fireTriggers } from '@/engine/triggers';
 import { EQUIPMENT_BY_ID } from '@/cards/equipment';
 import { ABILITIES_BY_ID } from '@/abilities';
 import { HEROES } from '@/cards';
@@ -39,7 +39,7 @@ describe('Mystic Burst family', () => {
     const hp0 = enemy.hp;
     attach(G, hero, 'mystic_burst');
 
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: '0' });
     expect(enemy.hp).toBe(hp0 - 1);
   });
 
@@ -50,7 +50,7 @@ describe('Mystic Burst family', () => {
     const hp0 = enemy.hp;
     attach(G, hero, 'improved_burst');
 
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: '0' });
     expect(enemy.hp).toBe(hp0 - 2);
   });
 
@@ -62,7 +62,7 @@ describe('Mystic Burst family', () => {
     enemy.statuses.push({ id: 'shield', value: 2, duration: 999 });
     attach(G, hero, 'mystic_burst');
 
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: '0' });
     // 2 dmg fully absorbed by Shield 2 → no HP loss.
     expect(enemy.hp).toBe(hp0);
   });
@@ -75,7 +75,7 @@ describe('Mystic Burst family', () => {
     const hp0 = enemy.hp;
     attach(G, hero, 'mystic_burst');
 
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: '0' });
     expect(enemy.hp).toBe(hp0);
   });
 

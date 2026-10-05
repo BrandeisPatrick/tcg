@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
-import { fireEquipmentTriggers } from '@/engine/equipmentDispatch';
+import { fireTriggers } from '@/engine/triggers';
 import { addStatus } from '@/engine/statusOps';
 import { HEROES } from '@/cards';
-import '@/abilities'; // registers the equipment dispatcher
+import '@/abilities'; // registers the card behaviour with the engine
 
 function freshGame(): GameState {
   const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
@@ -48,11 +48,11 @@ describe('Toxic Bullets', () => {
     const enemy = G.players['1'].active!;
     attach(G, hero, 'toxic_bullets');
 
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(enemy.statuses.find((s) => s.id === 'bleed')?.value).toBe(1);
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(enemy.statuses.find((s) => s.id === 'bleed')?.value).toBe(3); // capped
   });
 });
@@ -65,7 +65,7 @@ describe('Tesla Bullets', () => {
     const bench = benchHero(G, '1', 1);
     attach(G, hero, 'tesla_bullets');
 
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(bench.hp).toBe(9); // 10 - 1 chain
   });
 
@@ -74,7 +74,7 @@ describe('Tesla Bullets', () => {
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     attach(G, hero, 'tesla_bullets');
-    expect(() => fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy)).not.toThrow();
+    expect(() => fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy })).not.toThrow();
   });
 });
 
@@ -85,7 +85,7 @@ describe('Suppressor', () => {
     const enemy = G.players['1'].active!;
     attach(G, hero, 'suppressor');
 
-    fireEquipmentTriggers(G, hero, 'onBearerSkillDamage', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onBearerSkillDamage', { reaction: true, movingPlayer: '0', target: enemy });
     const wpd = enemy.statuses.find((s) => s.id === 'weapon_power_down');
     expect(wpd?.value).toBe(1);
     expect(wpd?.duration).toBe(2);

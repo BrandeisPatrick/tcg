@@ -1,11 +1,14 @@
 import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState, FxTag } from './types';
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
-import { damageUnit, healUnit, resolve, returnRemToBench } from './damage';
-import { liveBoardCards, pushLog, otherPlayer, effectiveSpirit } from './util';
+import { damageUnit, healUnit } from './damage';
+import { resolve, returnRemToBench } from './death';
+import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, statusDuration } from './query';
+import { pushLog } from './log';
 import { CARDS_BY_ID } from '@/cards';
-import { fireEquipmentTriggers } from './equipmentDispatch';
+import { fireTriggers } from './triggers';
 import { currentCast } from './castContext';
 import { pushFx, fxSource } from './fx';
+import { MAX_EXTRA_ATTACKS } from './constants';
 
 // Statuses whose value is a magnitude that's worth printing in the log
 // (Bleed 3, Bullet Resist 4, Shield 5, etc.). Stun/Silence/Disarm/Sleep are
@@ -32,16 +35,18 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  *  - Unstoppable BLOCKS any incoming CC (stun / silence / disarm / sleep).
  *  - Applying Unstoppable itself CLEANSES any CC currently on the bearer.
  *  - Re-applying a status with the same id refreshes value/duration to the
- *    larger of the two — except Bleed, which stacks up to 3.
+ *    larger of the two — unless the status declares how it stacks
+ *    (`StatusDef.stack`: Bleed and Djinn's Mark add their values up to a cap).
+ *  - What the bearer carries may stretch the duration (`buffDuration` hooks:
+ *    Superior Duration).
+ *
+ * `opts.ramp` marks a channel that escalates: its value climbs by `ramp`
+ * after each pulse (see tickCastingPulses).
  */
-export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number, fx?: { tag?: FxTag }) {
+export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number, opts?: { tag?: FxTag; ramp?: number }) {
   const name = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
 
-  // Superior Duration: the bearer's own buffs last 1 turn longer.
-  const sdDef = STATUSES_BY_ID[id];
-  if (sdDef && sdDef.hvalue > 0 && duration < 99 && target.attached?.some((eq) => eq.cardId === 'superior_duration')) {
-    duration += 1;
-  }
+  duration = statusDuration(target, id, duration);
 
   // Unstoppable: cleanse existing CC when applied.
   if (id === 'unstoppable') {
@@ -61,20 +66,18 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
 
   const existing = target.statuses.find((s) => s.id === id);
   if (existing) {
-    if (id === 'bleed') {
-      existing.value = Math.min(3, existing.value + value);
-      existing.duration = Math.max(existing.duration, duration);
-    } else if (id === 'djinns_mark') {
-      // Mirage's mark stacks additively (cap 4) and refreshes its full
-      // 3-turn timer on every new stack — the active rebuilds the timer.
-      existing.value = Math.min(4, existing.value + value);
-      existing.duration = duration;
+    const stack = STATUSES_BY_ID[id]?.stack;
+    if (stack) {
+      existing.value = Math.min(stack.cap, existing.value + value);
+      existing.duration = stack.duration === 'max' ? Math.max(existing.duration, duration) : duration;
     } else {
       existing.value = Math.max(existing.value, value);
       existing.duration = Math.max(existing.duration, duration);
     }
+    if (opts?.ramp) existing.ramp = opts.ramp;
   } else {
     const inst: StatusInstance = { id, value, duration };
+    if (opts?.ramp) inst.ramp = opts.ramp;
     target.statuses.push(inst);
   }
   // Natural-prose log: buffs read "gained", debuffs read "suffered" so the sign
@@ -93,13 +96,13 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
   pushFx(G, {
     kind: 'status', iid: target.iid, statusId: id,
     value: landed?.value ?? value, duration: landed?.duration ?? duration,
-    debuff: DEBUFF_IDS.has(id), tag: fx?.tag, source: fxSource(currentCast()?.source),
+    debuff: DEBUFF_IDS.has(id), tag: opts?.tag, source: fxSource(currentCast()?.source),
   });
 
   // Equipment reactive: Reactive Barrier shields the bearer when they suffer
   // hard CC. Fire here so any attached equipment with onBearerCCSuffered runs.
   if (CC_STATUSES.has(id)) {
-    fireEquipmentTriggers(G, target, 'onBearerCCSuffered', { movingPlayer: target.ownerId });
+    fireTriggers(G, target, 'onBearerCCSuffered', { reaction: true });
   }
 }
 
@@ -173,13 +176,29 @@ export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
 }
 
 /**
+ * Grant the hero `count` Extra Attacks this turn via the `extra_attack` status
+ * (value = number of extra full-power basic swings). Stacks ADDITIVELY across
+ * sources (Burst Fire + Active Reload + Fixation all add up), capped at
+ * MAX_EXTRA_ATTACKS. Manipulated directly (not via addStatus) to avoid a log
+ * line every turn from the always-on sources. Consumed by the turn's attack.
+ */
+export function grantExtraAttacks(card: CardInstance, count: number) {
+  const ex = card.statuses.find((s) => s.id === 'extra_attack');
+  if (ex) ex.value = Math.min(MAX_EXTRA_ATTACKS, ex.value + count);
+  // Duration 99 = a non-expiring marker (the count is the payload, not a timer);
+  // it's consumed by the turn's attack and swept by clearTurnFlags, so the UI
+  // shows "Extra Atk N" without a misleading turn countdown.
+  else card.statuses.push({ id: 'extra_attack', value: Math.min(MAX_EXTRA_ATTACKS, count), duration: 99 });
+}
+
+/**
  * Tick Rem's "Lil Helpers" merges at her owner's turn start: count down each
  * attached Rem and, when the timer expires, detach her back to the bench (which
  * also reverts the max-HP she granted the bearer).
  */
 export function tickRemMerges(G: GameState, ps: PlayerState) {
   for (const bearer of liveBoardCards(ps)) {
-    const rem = bearer.attached?.find((a) => a.cardId === 'hero_rem' && a.remMergeTurnsLeft != null);
+    const rem = bearer.attached?.find((a) => a.remMergeTurnsLeft != null);
     if (!rem) continue;
     rem.remMergeTurnsLeft = (rem.remMergeTurnsLeft ?? 0) - 1;
     if (rem.remMergeTurnsLeft <= 0) returnRemToBench(G, ps, bearer, rem);
@@ -215,8 +234,9 @@ export function clearTurnFlags(ps: PlayerState) {
  *    down at the next start of turn.
  *  - Warden's light variant heals him for the total damage dealt (Last Stand
  *    drain) and does NOT lock him out of attacking / skills.
- *  - Seven's channel escalates: its per-tick value climbs by 1 each pulse
- *    (Storm Cloud ramps), so a duration-3 cast deals 2 → 3 → 4 (+Spirit).
+ *  - Seven's channel escalates: its status carries `ramp: 1`, so its per-tick
+ *    value climbs by 1 each pulse (Storm Cloud ramps) and a duration-3 cast
+ *    deals 2 → 3 → 4 (+Spirit).
  */
 export function tickCastingPulses(G: GameState, ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
@@ -226,7 +246,7 @@ export function tickCastingPulses(G: GameState, ps: PlayerState) {
     const name = CARDS_BY_ID[c.cardId]?.name ?? c.cardId;
 
     // Interruptible: hard CC that pins the caster suppresses this turn's pulse.
-    if (c.statuses.some((s) => s.id === 'stun' || s.id === 'sleep')) {
+    if (isBlocked(c, 'pulse')) {
       pushLog(G, `${name}'s channel is interrupted this turn.`);
       continue;
     }
@@ -246,7 +266,7 @@ export function tickCastingPulses(G: GameState, ps: PlayerState) {
       healUnit(G, c, heal, 'Last Stand', { tag: 'lifesteal' });
       pushLog(G, `Last Stand: ${name} drained ${heal} HP.`);
     }
-    // Seven: escalate the next pulse.
-    if (heavy && c.cardId === 'hero_seven') channel.value += 1;
+    // An escalating channel (Seven's): the next pulse hits harder.
+    if (channel.ramp) channel.value += channel.ramp;
   }
 }

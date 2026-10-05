@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CardInstance, DamageType, FxCastKind, FxEvent, FxSource, FxTag, PlayerID, StatusId } from '@/engine/types';
-import type { AttackPlan, AttackStep } from '@/engine/combat';
+import type { AttackPlan, AttackStep } from '@/engine/forecast';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroSlot } from '../board/HeroSlot';
 import { CombatChoreographer } from '../effects/CombatChoreographer';

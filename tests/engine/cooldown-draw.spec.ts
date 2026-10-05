@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
-import { fireEquipmentTriggers } from '@/engine/equipmentDispatch';
+import { fireTriggers } from '@/engine/triggers';
 import { EQUIPMENT_BY_ID } from '@/cards/equipment';
 import { HEROES } from '@/cards';
 
@@ -49,13 +49,13 @@ describe('cooldown→draw family', () => {
     const deck0 = G.players[pid].deck.length;
 
     // 1st skill use → draw 1, charge 2→1, still attached.
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: pid });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });
     expect(G.players[pid].hand.length).toBe(1);
     expect(eq.charges).toBe(1);
     expect(hero.attached).toContain(eq);
 
     // 2nd skill use → draw 1 more, charge 1→0, item consumed to discard.
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: pid });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });
     expect(G.players[pid].hand.length).toBe(2);
     expect(eq.charges).toBe(0);
     expect(hero.attached).not.toContain(eq);
@@ -63,7 +63,7 @@ describe('cooldown→draw family', () => {
     expect(G.players[pid].deck.length).toBe(deck0 - 2);
 
     // 3rd skill use → nothing happens (no charges, already gone).
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: pid });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });
     expect(G.players[pid].hand.length).toBe(2);
   });
 
@@ -75,7 +75,7 @@ describe('cooldown→draw family', () => {
     // Fill hand to MAX_HAND (7).
     while (G.players[pid].hand.length < 7) G.players[pid].hand.push({ ...hero, iid: `filler-${G.players[pid].hand.length}` });
 
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: pid });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });
     expect(eq.charges).toBe(3); // fizzled, no charge spent
     expect(hero.attached).toContain(eq);
   });

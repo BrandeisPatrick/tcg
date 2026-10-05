@@ -3,7 +3,7 @@ import { DeadlockGame } from '@/engine/game';
 import { HEROES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { grantExp } from '@/engine/expSystem';
-import { effectiveAtk } from '@/engine/util';
+import { effectiveAtk } from '@/engine/query';
 import { withCast } from '@/engine/castContext';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 

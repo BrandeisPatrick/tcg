@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
-import { damageUnit, reapDead, resolve } from '@/engine/damage';
+import { damageUnit } from '@/engine/damage';
+import { reapDead, resolve } from '@/engine/death';
 import type { GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame, configureReadyMatch } from './_helpers';
 
@@ -299,7 +300,8 @@ describe('rule: equipment cap forces a discard pick', () => {
 // ============================================================================
 describe('rule: the attack is one-way', () => {
   it('the Active-vs-Active attack damages only the defender', async () => {
-    const { planAttackPhase, resolveAttackPhase } = await import('@/engine/combat');
+    const { planAttackPhase } = await import('@/engine/forecast');
+    const { resolveAttackPhase } = await import('@/engine/actions/attack');
     const G = freshG();
     const attacker = G.players['0'].active!;
     const defender = G.players['1'].active!;

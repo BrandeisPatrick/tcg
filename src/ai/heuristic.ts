@@ -2,10 +2,12 @@ import type { Ctx } from 'boardgame.io';
 import { INVALID_MOVE } from 'boardgame.io/core';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { otherPlayer, liveBoardCards, effectiveAtk, effectiveSpirit, isRespawning, stepInCandidates } from '@/engine/util';
+import { otherPlayer, liveBoardCards, baseAttack, effectiveSpirit, isBlocked, isRespawning, stepInCandidates } from '@/engine/query';
 import { getAbility, type TargetFilter } from '@/abilities';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST, DeadlockGame } from '@/engine/game';
-import { attackBlocked, planAttackPhase } from '@/engine/combat';
+import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
+import { DeadlockGame } from '@/engine/game';
+import { attackBlocked } from '@/engine/legality';
+import { planAttackPhase } from '@/engine/forecast';
 
 // ----- 1-ply lookahead -------------------------------------------------------
 // The crude per-move scores below only generate the LEGAL move list; the actual
@@ -25,7 +27,9 @@ import { attackBlocked, planAttackPhase } from '@/engine/combat';
  *  attacker's, so the AI routes each build axis onto the hero that wants it. */
 function heroThreat(c: CardInstance): number {
   const data = CARDS_BY_ID[c.cardId];
-  let t = effectiveAtk(c);
+  // The hero's stat attack, before Weaken and conditional bonuses: the number
+  // this heuristic was tuned on (a swing's real damage is `attackPower`).
+  let t = baseAttack(c);
   if (data?.type === 'hero' && data.skill) {
     const ab = getAbility(data.skill);
     if (ab && ab.base != null) t += ab.base + (ab.scalesSpirit ? effectiveSpirit(c) : 0);
@@ -336,7 +340,7 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
     // Stun / Silence / Sleep and a heavy channel all suppress skill use — engine
     // enforces this, the AI must respect it too or it'll burn a heuristic round
     // on an invalid move.
-    if (hero.statuses.some((s) => s.id === 'silenced' || s.id === 'stun' || s.id === 'sleep' || s.id === 'casting')) continue;
+    if (isBlocked(hero, 'skill')) continue;
     const ability = getAbility(data.skill);
     if (!ability) continue;
     const filter = ability.target;

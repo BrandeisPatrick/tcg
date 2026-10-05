@@ -2,11 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, CardInstance } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
-import { grantExp, LEVEL_THRESHOLDS } from '@/engine/expSystem';
-import { damageUnit, reapDead } from '@/engine/damage';
+import { grantExp } from '@/engine/expSystem';
+import { LEVEL_THRESHOLDS } from '@/engine/constants';
+import { damageUnit } from '@/engine/damage';
+import { reapDead } from '@/engine/death';
 import { withCast } from '@/engine/castContext';
-import { nextIid } from '@/engine/util';
-import { freshReadyGame } from './_helpers';
+import { freshReadyGame, nextTestIid } from './_helpers';
 
 function freshG(): GameState {
   return freshReadyGame();
@@ -158,7 +159,7 @@ describe('equipment persists through death', () => {
     const target = G.players['1'].active!;
     // Hand-build an equipment instance and attach it directly.
     const eq: CardInstance = {
-      iid: nextIid('eq'),
+      iid: nextTestIid('eq'),
       cardId: 'extended_magazine',
       ownerId: '1',
       zone: 'equipment',

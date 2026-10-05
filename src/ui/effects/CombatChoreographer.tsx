@@ -1,6 +1,6 @@
 import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import type { AttackPlan, AttackStep } from '@/engine/combat';
+import type { AttackPlan, AttackStep } from '@/engine/forecast';
 import type { PlayerID } from '@/engine/types';
 import { fonts } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';

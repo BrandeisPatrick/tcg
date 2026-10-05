@@ -3,37 +3,14 @@
  * turn is the player's to spend on cards, skills and a retreat, with one
  * attack among them: every hero may use its skill once a turn (a soul each),
  * and the Active does one or the other — its skill or the attack. The board's
- * glint, the hero sheet's plates and the tutorial all ask here, so none of
- * them offers a move the engine would refuse.
+ * glint, the hero sheet's plates and the tutorial all ask the engine's own
+ * `skillBlocked` / `attackBlocked` (legality.ts), so none of them offers a move
+ * the engine would refuse; this file only words the answers.
  */
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
-import { getAbility } from '@/abilities';
-import { SKILL_COST } from '@/engine/game';
-import type { AttackBlock, AttackPlan } from '@/engine/combat';
-
-/** Why a hero cannot use its skill right now. */
-export type SkillBlock = 'noSkill' | 'down' | 'used' | 'attacked' | 'status' | 'souls';
-
-/** Statuses that keep a hero from its skill: Stun, Silence, Sleep, and the
- *  heavy channel lockout (`casting`; Warden's `casting_light` is not one). */
-const SKILL_LOCKS = new Set(['silenced', 'stun', 'sleep', 'casting']);
-
-/** Why `pid`'s hero cannot use its skill right now, or null when it can.
- *  The engine's `useSkill` guards, one for one: a hero with a skill, alive,
- *  that has neither used it nor made the turn's attack, free of the statuses
- *  that lock it, and a soul to pay with. Whose turn it is, is the caller's
- *  question. */
-export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance): SkillBlock | null {
-  const data = CARDS_BY_ID[hero.cardId];
-  if (data?.type !== 'hero' || !data.skill || !getAbility(data.skill)) return 'noSkill';
-  if ((hero.respawnTurnsLeft ?? 0) > 0) return 'down';
-  if (hero.skillUsedThisTurn) return 'used';
-  if (hero.attackedThisTurn) return 'attacked';
-  if (hero.statuses.some((s) => SKILL_LOCKS.has(s.id))) return 'status';
-  if (G.players[pid].souls < SKILL_COST) return 'souls';
-  return null;
-}
+import { SKILL_COST } from '@/engine/constants';
+import { skillBlocked, type AttackBlock, type SkillBlock } from '@/engine/legality';
+import type { AttackPlan } from '@/engine/forecast';
 
 /** The line the hero sheet prints on a skill that cannot be used. */
 export function skillBlockReason(block: SkillBlock): string {
@@ -42,6 +19,7 @@ export function skillBlockReason(block: SkillBlock): string {
     case 'attacked': return 'Attacked this turn';
     case 'status': return 'Cannot use skill (status)';
     case 'souls': return `Need ${SKILL_COST} soul`;
+    case 'target': return 'No valid target';
     case 'down': return 'Down until it respawns';
     case 'noSkill': return '';
   }

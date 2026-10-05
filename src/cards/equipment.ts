@@ -88,7 +88,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'crippling_headshot', name: 'Crippling Headshot', type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_crippling_headshot'], text: "Bearer's attacks apply Bullet Resist −1 and Spirit Resist −1 for 2 turns." },
   { id: 'berserker',          name: 'Berserker',          type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_berserker'],          text: 'When the bearer takes bullet damage: gain +1 Bullet Power (max +4). Lost on death.' },
   { id: 'colossus',           name: 'Colossus',           type: 'equipment', rarity: 3, tier: 3, cost: 6, bonus: { hp: 5 }, abilities: ['eff_colossus'], text: '+5 HP. Bullet Resist 2.' },
-  { id: 'superior_duration',  name: 'Superior Duration',  type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: [],                          text: "The bearer's own buffs last 1 turn longer." },
+  { id: 'superior_duration',  name: 'Superior Duration',  type: 'equipment', rarity: 3, tier: 3, cost: 5, abilities: ['eff_superior_duration'],   text: "The bearer's own buffs last 1 turn longer." },
   // Improved Armor moved to T4 (BR/SR 5) so it doesn't strictly obsolete the
   // T3 Bullet Resilience (BR3 @6); now a clean premium resist tier-up.
   { id: 'improved_bullet_armor', name: 'Improved Bullet Armor', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_improved_bullet_armor'], text: 'Bullet Resist 5.' },

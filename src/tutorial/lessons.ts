@@ -27,12 +27,11 @@ import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
-import { effectiveAtk } from '@/engine/util';
-import { attackBlocked } from '@/engine/combat';
-import { RETREAT_COST, SKILL_COST } from '@/engine/game';
+import { effectiveAtk } from '@/engine/query';
+import { attackBlocked, skillBlocked } from '@/engine/legality';
+import { RETREAT_COST, SKILL_COST } from '@/engine/constants';
 import { PATRON_NAMES } from '@/ui/board/patrons';
 import { END_TURN } from '@/ui/board/BoardControls';
-import { skillBlocked } from '@/ui/board/heroActions';
 
 /* ------------------------------------------------------------------ */
 /* The matches                                                         */

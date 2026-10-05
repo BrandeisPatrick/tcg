@@ -3,7 +3,7 @@ import { DeadlockGame } from '@/engine/game';
 import { ULTIMATES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { addStatus, tickCastingPulses } from '@/engine/statusOps';
-import { effectiveAtk } from '@/engine/util';
+import { effectiveAtk } from '@/engine/query';
 import { damageUnit } from '@/engine/damage';
 import type { GameState, CardInstance } from '@/engine/types';
 

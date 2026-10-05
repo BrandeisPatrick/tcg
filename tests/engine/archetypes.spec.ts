@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { freshReadyGame, makeHero } from './_helpers';
-import { resolveAttackPhase } from '@/engine/combat';
+import { resolveAttackPhase } from '@/engine/actions/attack';
 import { tickCastingPulses, addStatus, tickRemMerges } from '@/engine/statusOps';
-import { damageUnit, reapDead } from '@/engine/damage';
-import { effectiveAtk, grantExtraAttacks, MAX_EXTRA_ATTACKS } from '@/engine/util';
+import { damageUnit } from '@/engine/damage';
+import { reapDead } from '@/engine/death';
+import { effectiveAtk } from '@/engine/query';
+import { grantExtraAttacks } from '@/engine/statusOps';
+import { MAX_EXTRA_ATTACKS } from '@/engine/constants';
 import { getAbility } from '@/abilities';
-import { buildPlayer } from '@/engine/game';
+import { buildPlayer } from '@/engine/actions/setup';
+import { allocatorFor, newCounters } from '@/engine/ids';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 
 const extraOf = (c: CardInstance) => c.statuses.find((s) => s.id === 'extra_attack')?.value ?? 0;
@@ -312,7 +316,7 @@ describe('Support — Rem Lil Helpers (merge)', () => {
   });
 
   it('drafted first, bench-only Rem still starts on the bench (not Active)', () => {
-    const ps = buildPlayer('0', ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist'], []);
+    const ps = buildPlayer(allocatorFor(newCounters()), '0', ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist'], []);
     expect(ps.active?.cardId).toBe('hero_warden');       // first non-bench-only
     expect(ps.active?.cardId).not.toBe('hero_rem');
     expect(ps.bench.some((b) => b?.cardId === 'hero_rem')).toBe(true);

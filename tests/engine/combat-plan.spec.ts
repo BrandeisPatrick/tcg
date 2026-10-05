@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { DeadlockGame } from '@/engine/game';
-import { planAttackPhase, resolveAttackPhase } from '@/engine/combat';
-import { effectiveAtk } from '@/engine/util';
+import { planAttackPhase } from '@/engine/forecast';
+import { resolveAttackPhase } from '@/engine/actions/attack';
+import { effectiveAtk } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame, makeHero } from './_helpers';

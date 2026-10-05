@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
-import { fireEquipmentTriggers } from '@/engine/equipmentDispatch';
+import { fireTriggers } from '@/engine/triggers';
 import { EQUIPMENT_BY_ID } from '@/cards/equipment';
 import { HEROES } from '@/cards';
 
@@ -37,7 +37,7 @@ describe('Lifesteal family', () => {
     attach(G, hero, 'bullet_lifesteal');
     const enemy = G.players['1'].active!;
 
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(hero.hp).toBe(5);
   });
 
@@ -48,7 +48,7 @@ describe('Lifesteal family', () => {
     attach(G, hero, 'spirit_lifesteal');
     const enemy = G.players['1'].active!;
 
-    fireEquipmentTriggers(G, hero, 'onBearerSkillDamage', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onBearerSkillDamage', { reaction: true, movingPlayer: '0', target: enemy });
     expect(hero.hp).toBe(5);
   });
 
@@ -59,9 +59,9 @@ describe('Lifesteal family', () => {
     attach(G, hero, 'leech');
     const enemy = G.players['1'].active!;
 
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(hero.hp).toBe(3); // +2 from bullet lifesteal
-    fireEquipmentTriggers(G, hero, 'onBearerSkillDamage', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onBearerSkillDamage', { reaction: true, movingPlayer: '0', target: enemy });
     expect(hero.hp).toBe(5); // +2 from spirit lifesteal
   });
 
@@ -72,7 +72,7 @@ describe('Lifesteal family', () => {
     attach(G, hero, 'bullet_lifesteal');
     const enemy = G.players['1'].active!;
 
-    fireEquipmentTriggers(G, hero, 'onAttack', { movingPlayer: '0' }, enemy);
+    fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     expect(hero.hp).toBe(hero.hpMax);
   });
 

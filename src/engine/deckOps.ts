@@ -1,14 +1,39 @@
 /**
- * Deck / hand operations shared between the turn pipeline (game.ts) and
- * card effects (abilities/index.ts). Kept in its own module so abilities can
- * draw cards without importing game.ts (which would be a circular import).
+ * Deck / hand operations shared between the turn pipeline (actions/turn.ts)
+ * and card effects (abilities/index.ts). Kept in its own module so abilities
+ * can draw cards without importing the turn pipeline (a circular import).
  */
 import type { CardInstance, GameState, PlayerID } from './types';
-import { CARDS_BY_ID } from '@/cards';
-import { pushLog } from './util';
+import { CARDS_BY_ID, getCard } from '@/cards';
+import type { IidAllocator } from './ids';
+import { pushLog } from './log';
+import { MAX_HAND } from './constants';
 
-/** Max cards a player may hold. Draws past this are lost (they fizzle). */
-export const MAX_HAND = 7;
+/** A fresh card of `cardId`, named by `ids` (see ids.ts). */
+export function makeInstance(ids: IidAllocator, cardId: string, ownerId: PlayerID, zone: CardInstance['zone'], slot?: 0|1|2|3): CardInstance {
+  const data = getCard(cardId);
+  const hp = data.type === 'hero' ? data.hp : 0;
+  const isHero = data.type === 'hero';
+  return {
+    iid: ids(),
+    cardId,
+    ownerId,
+    zone,
+    slot,
+    attachedTo: undefined,
+    attached: [],
+    hp,
+    hpMax: hp,
+    atkMod: 0,
+    spiritMod: 0,
+    statuses: [],
+    exhausted: false,
+    skillUsedThisTurn: false,
+    attackedThisTurn: false,
+    // Hero leveling: start at Lv1 with 0 exp.
+    ...(isHero ? { exp: 0, level: 1 as const } : {}),
+  };
+}
 
 /**
  * Draw up to `n` cards from the player's deck into hand, respecting MAX_HAND

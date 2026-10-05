@@ -70,6 +70,10 @@ export interface StatusInstance {
   value: number;
   duration: number;
   sourceIid?: string;
+  /** A channel that escalates: `value` climbs by `ramp` after each pulse
+   *  (Seven's Storm Cloud marks its `casting` status with 1). Absent on
+   *  everything else. */
+  ramp?: number;
 }
 
 export interface CardInstance {
@@ -319,7 +323,20 @@ export interface DraftState {
   picks: { '0': CardId[]; '1': CardId[] };        // per-player picks in pick order
 }
 
+/** The counters that name things (see ids.ts). They live in G so a game is
+ *  its whole state: a simulation on a clone counts on its own copy. */
+export interface Counters {
+  /** Next instance id number. */
+  iid: number;
+  /** Last FX event sequence number handed out. */
+  fx: number;
+  /** Last `G.action` id handed out. */
+  action: number;
+}
+
 export interface GameState {
+  /** Id / FX-seq / action-id counters — see ids.ts. */
+  counters: Counters;
   players: { '0': PlayerState; '1': PlayerState };
   turnNumber: number;
   log: LogEntry[];

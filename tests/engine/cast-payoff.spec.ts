@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
-import { fireEquipmentTriggers } from '@/engine/equipmentDispatch';
-import { resolveAttackPhase } from '@/engine/combat';
+import { fireTriggers } from '@/engine/triggers';
+import { resolveAttackPhase } from '@/engine/actions/attack';
 import { damageUnit } from '@/engine/damage';
 import { tickStartOfTurn } from '@/engine/statusOps';
 import { withCast } from '@/engine/castContext';
-import { effectiveAtk } from '@/engine/util';
+import { effectiveAtk } from '@/engine/query';
 import { HEROES } from '@/cards';
-import '@/abilities'; // registers the equipment dispatcher
+import '@/abilities'; // registers the card behaviour with the engine
 
 function freshGame(): GameState {
   const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
@@ -40,7 +40,7 @@ describe('Surge of Power', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     attach(G, hero, 'surge_of_power');
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: '0' });
     const wp = hero.statuses.find((s) => s.id === 'weapon_power');
     expect(wp?.value).toBe(2);
     // The caster cannot attack this turn; the surge is still there to swing
@@ -58,7 +58,7 @@ describe("Diviner's Kevlar", () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     attach(G, hero, 'diviners_kevlar');
-    fireEquipmentTriggers(G, hero, 'onBearerUltCast', { movingPlayer: '0' });
+    fireTriggers(G, hero, 'onBearerUltCast', { reaction: true, movingPlayer: '0' });
     expect(hero.statuses.find((s) => s.id === 'shield')?.value).toBe(4);
   });
 
@@ -66,7 +66,7 @@ describe("Diviner's Kevlar", () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     attach(G, hero, 'diviners_kevlar');
-    fireEquipmentTriggers(G, hero, 'onBearerSkillUsed', { movingPlayer: '0' });
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: '0' });
     expect(hero.statuses.find((s) => s.id === 'shield')).toBeUndefined();
   });
 });

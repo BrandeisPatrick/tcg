@@ -7,7 +7,7 @@ import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 import { CARDS_BY_ID } from '@/cards';
-import { effectiveAtk } from '@/engine/util';
+import { effectiveAtk } from '@/engine/query';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { StatusIcon } from '../card/StatusIcon';
@@ -85,11 +85,10 @@ export function HeroSlot({
   useEffect(() => () => kickCtl.current?.stop(), []);
   const shownHp = useDelayedValue(card.hp, hold.impact);
   const shownStatuses = useDelayedValue(card.statuses, hold.impact);
-  // Outgoing attack value as it will resolve in combat: effectiveAtk minus any
-  // Weaken so the displayed BP matches what the hero actually swings for.
-  // (combat.ts:effectiveAttackDamage applies the same subtraction.)
-  const weakenValue = card.statuses.find((s) => s.id === 'weapon_power_down')?.value ?? 0;
-  const atk = useDelayedValue(Math.max(0, effectiveAtk(card) - weakenValue), hold.impact);
+  // Outgoing attack value as it will resolve in combat: effectiveAtk is the
+  // engine's attack power (Weaken and Frenzy included), so the displayed BP is
+  // what the hero actually swings for.
+  const atk = useDelayedValue(effectiveAtk(card), hold.impact);
   // Stat inks stay in their own family (BP ink, HP red) and only shift shade
   // to show drift from the printed base: default → the stat ink, buffed →
   // bright, debuffed/damaged → dim grey. A locked hue means a glance always

@@ -43,3 +43,12 @@ export function withCast<T>(source: CardInstance | null, kind: CastKind, fn: () 
   }
 }
 
+
+/** A cast frame is pushed and popped inside one synchronous call (try/finally),
+ *  so none can be open when a new action begins. `perform` asserts that in dev:
+ *  a leftover frame would silently mis-attribute everything the action does. */
+export function assertNoCast(): void {
+  if (import.meta.env?.DEV && stack.length > 0) {
+    throw new Error(`cast frame left open (${stack[stack.length - 1].kind}) when a new action began`);
+  }
+}

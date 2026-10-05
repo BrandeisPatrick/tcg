@@ -3,10 +3,10 @@ import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, CardInstance } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
-import { damageUnit, healUnit, reapDead } from '@/engine/damage';
+import { damageUnit, healUnit } from '@/engine/damage';
+import { reapDead } from '@/engine/death';
 import { withCast } from '@/engine/castContext';
-import { nextIid } from '@/engine/util';
-import { freshReadyGame } from './_helpers';
+import { freshReadyGame, nextTestIid } from './_helpers';
 
 /**
  * Damage + regeneration detail tests. Validates the mitigation pipeline
@@ -20,7 +20,7 @@ function freshG(): GameState {
 
 function attach(hero: CardInstance, cardId: string) {
   const eq: CardInstance = {
-    iid: nextIid('eq'),
+    iid: nextTestIid('eq'),
     cardId,
     ownerId: hero.ownerId,
     zone: 'equipment',
