@@ -18,7 +18,7 @@ import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { resolve } from '@/engine/death';
 import { tickRemMerges } from '@/engine/statusOps';
-import { skillBlocked } from '@/engine/legality';
+import { blocked, legalActions, skillBlocked } from '@/engine/legality';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { configureReadyMatch, freshReadyGame, makeHero, nextTestIid } from '../_helpers';
 import { forecastMismatches } from './forecast';
@@ -635,9 +635,10 @@ describe('M3 the AI sees every legal play', () => {
 });
 
 // ===========================================================================
-// M4  An owed promotion is only enforced by the AI / UI
-//     heuristic.ts:249-264 returns the promotion alone ("the only legal move"); the
-//     engine takes any move, endTurn included, while G.pendingPromotion is set.
+// M4  An owed promotion was only enforced by the AI / UI  (fixed: blocked() enforces it)
+//     The AI returned the promotion alone ("the only legal move") and the board refused to
+//     end the turn, but the engine took any move, endTurn included, while G.pendingPromotion
+//     was set.
 // ===========================================================================
 describe('M4 a promotion owed is the only legal move', () => {
   const owed = () => {
@@ -653,13 +654,33 @@ describe('M4 a promotion owed is the only legal move', () => {
     expect(new Set(enumerateAIMoves(G, ctxFor('0'), false).map((m) => m.move))).toEqual(new Set(['promoteToActive']));
   });
 
-  it.fails('M4a endTurn is refused while the seat owes a promotion', () => {
+  it('M4a endTurn is refused while the seat owes a promotion', () => {
     expect(runMove('endTurn', owed(), '0')).toBe(INVALID_MOVE);
   });
 
-  it.fails('M4b a spell is refused while the seat owes a promotion', () => {
+  it('M4b a spell is refused while the seat owes a promotion', () => {
     const G = owed();
     const heal = toHand(G, '0', 'healing_rite');
     expect(runMove('playCard', G, '0', heal.iid, G.players['0'].bench[1]!.iid)).toBe(INVALID_MOVE);
+  });
+
+  it('M4c the only legal action is a promotion for the owed seat\'s bench — made from either seat', () => {
+    const G = owed();
+    const me = G.players['0'];
+    const stepIns = [me.bench[0]!, me.bench[1]!, me.bench[2]!].map((b) => b.iid);
+    for (const pid of ['0', '1'] as const) {
+      expect(legalActions(G, pid), `seat ${pid}`).toEqual(stepIns.map((benchIid) => ({ type: 'promoteToActive', benchIid })));
+    }
+    // the rival's own heroes are not the ones owed
+    expect(blocked(G, '1', { type: 'promoteToActive', benchIid: G.players['1'].bench[0]!.iid })).toBe('promotionOwed');
+    // none of the other moves, however harmless
+    for (const a of [{ type: 'attack' }, { type: 'moveHero', fromSlot: 1, toSlot: 2 }, { type: 'endTurn' }] as const) {
+      expect(blocked(G, '0', a), a.type).toBe('promotionOwed');
+    }
+    // the rival may make it from its own turn, and then play goes on
+    expect(runMove('promoteToActive', G, '1', stepIns[1])).not.toBe(INVALID_MOVE);
+    expect(G.pendingPromotion).toBeUndefined();
+    expect(me.active!.iid).toBe(stepIns[1]);
+    expect(runMove('endTurn', G, '0')).not.toBe(INVALID_MOVE);
   });
 });

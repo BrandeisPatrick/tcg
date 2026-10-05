@@ -1,14 +1,15 @@
 /**
  * The engine's idea of "legal" against the other places that have one:
  *   A  every move enumerateAIMoves offers is accepted by the move function;
- *   B  heroActions.skillBlocked === null  <=>  useSkill succeeds for some target the AI would try;
+ *   B  legality.skillBlocked === null  <=>  useSkill succeeds for some target the AI would try;
  *   C  a rejected move leaves the state untouched (validate before mutate), and the engine
  *      never throws on garbage arguments;
  *   D  targets: the engine accepts exactly the targets the ability's TargetFilter allows
  *      (rules oracle in oracle.ts, written from the TargetFilter doc, not from the engine);
  *   E  moveHero: legal swaps accepted, junk slots / an emptied Active / a bench-only hero in
  *      the Active slot refused;
- *   F  an owed promotion (G.pendingPromotion) blocks the other moves, as the AI treats it.
+ *   F  an owed promotion (G.pendingPromotion) leaves the promotion as the only legal action,
+ *      endTurn and attack included (B, D and E are asked of ordinary positions).
  *
  * Everything is checked on structuredClones at the decision points of seeded live games.
  * KNOWN lists what the engine does today; see regressions.spec.ts for a minimal
@@ -30,11 +31,6 @@ const KNOWN: Known[] = [
     id: 'rejects-legal-target:equipment@playCard',
     why: 'E3a: playCard counts the merged Rem against the 3-item equipment cap, so a hero with 2 items + Rem cannot take a third without a discard.',
     when: (h) => h.tags.includes('reason:rem-counted-as-slot'),
-  },
-  // ---- M4 ----
-  {
-    id: 'owed-promotion-skippable@*',
-    why: 'M4: only the AI and the board treat G.pendingPromotion as "the only legal move"; the engine takes endTurn / playCard while it is owed.',
   },
 ];
 

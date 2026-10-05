@@ -216,7 +216,8 @@ export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlo
 export type PromoteBlock = 'notOnBench' | 'notOwed' | 'down' | 'benchOnly';
 
 /** Why the bench hero `benchIid` cannot step up to a fallen Active, or null
- *  when it can. Whose bench it is comes from the iid, so either seat may ask. */
+ *  when it can. Whose bench it is comes from the iid, so either seat may ask
+ *  (the AI promotes the owed seat from its own turn). */
 export function promoteBlocked(G: GameState, benchIid: string): PromoteBlock | null {
   for (const pid of ['0', '1'] as PlayerID[]) {
     const ps = G.players[pid];
@@ -255,10 +256,19 @@ export function mulliganBlocked(G: GameState): 'noMulligan' | null {
 /** Why `a` cannot be made by `pid` right now, or null when it can — the
  *  dispatch `perform` runs before it mutates anything. An action must name a
  *  target whenever the skill or card takes one (the per-move functions above
- *  also answer the looser "is there some target" when it is left off). Ending
- *  the turn is always legal. */
+ *  also answer the looser "is there some target" when it is left off).
+ *
+ *  While a promotion is owed (`G.pendingPromotion`: a seat's Active has fallen
+ *  and a bench hero can step up) the only legal action is that promotion — for
+ *  that seat's bench, made from either seat — so nothing, the end of the turn
+ *  included, happens around a corpse in the lane. */
 export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   if (!G.players[pid]) return 'noPlayer';
+  if (G.pendingPromotion) {
+    if (a.type !== 'promoteToActive') return 'promotionOwed';
+    const owed = G.players[G.pendingPromotion].bench.some((b) => b != null && b.iid === a.benchIid);
+    if (!owed) return 'promotionOwed';
+  }
   switch (a.type) {
     case 'attack':
       return G.draft ? 'draft' : attackBlocked(G, pid);
@@ -290,8 +300,9 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
  * order (equipment on a hero at the cap is offered once per item it could
  * discard — the choice of which is the player's); each living hero's skill, in
  * board order, on each of its targets; retreats from the bench in
- * `stepInCandidates` order; promotions; and ending the turn last. Everything
- * listed passes `blocked`.
+ * `stepInCandidates` order; promotions (either seat's: `pid` may promote the
+ * seat that owes one); and ending the turn last. Everything listed passes
+ * `blocked`, so while a promotion is owed that is all there is.
  */
 export function legalActions(G: GameState, pid: PlayerID): Action[] {
   const ps = G.players[pid];
@@ -320,10 +331,13 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
     for (const t of targets) offer({ type: 'useSkill', heroIid: hero.iid, targetIid: t.iid });
   }
 
-  const stepIns = stepInCandidates(ps);
-  for (const b of stepIns) offer({ type: 'moveHero', fromSlot: (ps.bench.indexOf(b) + 1) as 1 | 2 | 3, toSlot: 0 });
-  for (const b of stepIns) offer({ type: 'promoteToActive', benchIid: b.iid });
+  for (const b of stepInCandidates(ps)) offer({ type: 'moveHero', fromSlot: (ps.bench.indexOf(b) + 1) as 1 | 2 | 3, toSlot: 0 });
+  // A promotion may be made for either seat: the one owed is on the other side of the table
+  // when its Active fell to this seat's attack.
+  for (const seat of ['0', '1'] as PlayerID[]) {
+    for (const b of stepInCandidates(G.players[seat])) offer({ type: 'promoteToActive', benchIid: b.iid });
+  }
 
-  out.push({ type: 'endTurn' });
+  offer({ type: 'endTurn' });
   return out;
 }

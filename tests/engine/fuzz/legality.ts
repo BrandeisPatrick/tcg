@@ -82,10 +82,14 @@ export function probeLegality(
     }
   }
 
+  // While a promotion is owed the engine refuses everything else (section F); the rest of
+  // the probes ask about moves in an ordinary position.
+  const owed = G.pendingPromotion !== undefined;
+
   // ---------------------------------------------------------------- B: skillBlocked <=> useSkill
   const enemy = G.players[otherPlayer(pid)];
   const liveTargets = [...liveBoardCards(enemy), ...liveBoardCards(me)];
-  for (const hero of boardOf(me)) {
+  for (const hero of owed ? [] : boardOf(me)) {
     const ui = skillBlocked(G, pid, hero) === null;
     const filter = filterForSkill(hero);
     let candidates: unknown[][] = [];
@@ -127,7 +131,7 @@ export function probeLegality(
   }
   for (const c of me.hand) if (filterForHandCard(c)) sources.push({ kind: 'card', card: c });
   const targets: (CardInstance | Ghost | undefined)[] = [undefined, 'ghost', ...boardUnits(G)];
-  for (let n = 0; n < opts.targetCombos && sources.length; n++) {
+  for (let n = 0; n < opts.targetCombos && sources.length && !owed; n++) {
     const src = pickOne(sources, rnd);
     const tgt = pickOne(targets, rnd);
     const filter = src.kind === 'skill' ? filterForSkill(src.card)! : filterForHandCard(src.card)!;
@@ -163,7 +167,7 @@ export function probeLegality(
   }
 
   // ---------------------------------------------------------------- E: moveHero
-  if (rnd() < opts.moveHeroSweep) {
+  if (!owed && rnd() < opts.moveHeroSweep) {
     const slots: unknown[] = [0, 1, 2, 3, -1, 4, 1.5, '2', undefined, null];
     const get = (s: number) => (s === 0 ? me.active : me.bench[s - 1]);
     const ok = (x: unknown): x is 0 | 1 | 2 | 3 => Number.isInteger(x) && (x as number) >= 0 && (x as number) <= 3;
@@ -194,8 +198,8 @@ export function probeLegality(
   }
 
   // ---------------------------------------------------------------- F: an owed promotion
-  if (G.pendingPromotion === pid) {
-    const probes: { name: string; args: unknown[] }[] = [{ name: 'endTurn', args: [] }];
+  if (G.pendingPromotion !== undefined) {
+    const probes: { name: string; args: unknown[] }[] = [{ name: 'endTurn', args: [] }, { name: 'attack', args: [] }];
     const free = me.hand.find((c) => CARDS_BY_ID[c.cardId]?.type === 'spell' && filterForHandCard(c) === 'noTarget');
     if (free) probes.push({ name: 'playCard', args: [free.iid] });
     for (const p of probes) {

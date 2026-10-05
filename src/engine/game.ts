@@ -62,7 +62,9 @@ export const DeadlockGame: Game<GameState> = {
     /** The turn's attack. Always the player whose turn it is. */
     attack: ({ G, ctx }) => move(G, ctx.currentPlayer as PlayerID, { type: 'attack' }),
 
-    endTurn: ({ events }) => {
+    /** End the turn — unless a promotion is owed, which comes first. */
+    endTurn: ({ G, ctx, playerID, events }) => {
+      if (move(G, mover(ctx, playerID), { type: 'endTurn' }) === INVALID_MOVE) return INVALID_MOVE;
       events.endTurn();
     },
 
