@@ -923,12 +923,23 @@ const eff_ult_kelvin: AbilityDef = {
   base: 7,
   run: (G, ctx) => { for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 7, 'Frozen Shelter'); },
 };
+// Soul Exchange: the two Actives trade current HP. Only two living Actives can
+// trade (a corpse has no HP to give or take), and each hero takes no more than
+// its own max HP can hold, so the swap can never push a hero over its max or
+// knock one out.
 const eff_ult_lady_geist: AbilityDef = {
   id: 'eff_ult_lady_geist', trigger: 'onPlay', target: 'noTarget',
   run: (G, ctx) => {
     const ally = G.players[ctx.movingPlayer].active;
     const enemy = G.players[otherPlayer(ctx.movingPlayer)].active;
-    if (ally && enemy) { const t = ally.hp; ally.hp = enemy.hp; enemy.hp = t; pushLog(G, 'Souls swapped.'); }
+    if (!ally || !enemy || isRespawning(ally) || isRespawning(enemy)) {
+      pushLog(G, 'Soul Exchange fizzled — both Actives must be standing.');
+      return;
+    }
+    const allyHp = ally.hp;
+    ally.hp = Math.min(enemy.hp, ally.hpMax);
+    enemy.hp = Math.min(allyHp, enemy.hpMax);
+    pushLog(G, 'Souls swapped.');
   },
 };
 const eff_ult_lash: AbilityDef = {

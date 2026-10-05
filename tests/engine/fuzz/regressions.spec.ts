@@ -143,9 +143,8 @@ describe('E1 a corpse carries no statuses', () => {
 });
 
 // ===========================================================================
-// E2  Lady Geist's Soul Exchange swaps raw HP
-//     abilities/index.ts:904-911 eff_ult_lady_geist: `ally.hp = enemy.hp`, no clamp to
-//     hpMax and no corpse check.
+// E2  Lady Geist's Soul Exchange swapped raw HP  (fixed: two living Actives, each clamped to its own max)
+//     eff_ult_lady_geist did `ally.hp = enemy.hp`: no clamp to hpMax and no corpse check.
 // ===========================================================================
 describe('E2 Soul Exchange keeps HP inside 0..hpMax and leaves corpses alone', () => {
   const geistGame = () => {
@@ -161,22 +160,46 @@ describe('E2 Soul Exchange keeps HP inside 0..hpMax and leaves corpses alone', (
     expect(geist.hpMax).toBeLessThan(12);
   });
 
-  it.fails('E2a the swap never leaves a hero above its max HP', () => {
+  it('E2a the swap never leaves a hero above its max HP', () => {
     const { G, geist, foe } = geistGame();
     geist.hp = 1;
     foe.hpMax = foe.hp = 12;
     runMove('playCard', G, '0', toHand(G, '0', 'ult_lady_geist').iid);
-    expect(geist.hp).toBeLessThanOrEqual(geist.hpMax); // currently 12 / 4
+    expect(geist.hp).toBeLessThanOrEqual(geist.hpMax);
   });
 
-  it.fails('E2b a corpse Active cannot be swapped with (no hp on a corpse, no free KO of the caster)', () => {
+  it('E2b a corpse Active cannot be swapped with (no hp on a corpse, no free KO of the caster)', () => {
     const { G, geist, foe } = geistGame();
     geist.hp = 5;
     foe.hp = 0;
     foe.respawnTurnsLeft = 3;
     runMove('playCard', G, '0', toHand(G, '0', 'ult_lady_geist').iid);
-    expect(foe.hp).toBe(0);     // currently 5: a corpse with HP
-    expect(geist.hp).toBe(5);   // currently 0: the caster is knocked out by its own ultimate
+    expect(foe.hp).toBe(0);
+    expect(geist.hp).toBe(5);
+  });
+
+  it('E2c each hero keeps what its own max HP holds, and the HP that fits changes hands', () => {
+    const { G, geist, foe } = geistGame();
+    geist.hp = 1;                    // 1 / 4
+    foe.hpMax = 12; foe.hp = 9;      // 9 / 12
+    runMove('playCard', G, '0', toHand(G, '0', 'ult_lady_geist').iid);
+    expect([geist.hp, foe.hp]).toEqual([4, 1]); // 9 clamps to Geist's max 4; Geist's 1 goes across
+    expect(G.log.some((l) => l.text === 'Souls swapped.')).toBe(true);
+  });
+
+  it('E2d a corpse on either side: it fizzles with a log line and nobody changes', () => {
+    for (const side of ['ally', 'foe'] as const) {
+      const { G, geist, foe } = geistGame();
+      geist.hp = 2;
+      foe.hp = 7;
+      const corpse = side === 'ally' ? geist : foe;
+      corpse.hp = 0;
+      corpse.respawnTurnsLeft = 3;
+      const before = [geist.hp, foe.hp];
+      runMove('playCard', G, '0', toHand(G, '0', 'ult_lady_geist').iid);
+      expect([geist.hp, foe.hp], side).toEqual(before);
+      expect(G.log.some((l) => l.text.startsWith('Soul Exchange fizzled')), side).toBe(true);
+    }
   });
 });
 

@@ -21,16 +21,6 @@ const GAMES = fuzzGames(80);
 const KNOWN: Known[] = [
   // ---- reachable in normal play (AI or UI moves) ----
   {
-    id: 'corpse-state@playCard',
-    why: 'E2b: Lady Geist\'s Soul Exchange writes hp onto a corpse Active.',
-    when: (h) => h.tags.includes('type:ultimate'),
-  },
-  {
-    id: 'hero-hp-range@playCard',
-    why: 'E2a: Soul Exchange (eff_ult_lady_geist) swaps raw hp values with no clamp to the receiver\'s hpMax.',
-    when: (h) => h.tags.includes('card:ult_lady_geist'),
-  },
-  {
     id: 'card-vanished@playCard',
     why: 'E3: a merged Rem counts as an equipment slot and can be named as the discard (game.ts:471-484; the AI does it, heuristic.ts:305-324). She goes to the discard pile and her own gear is lost with her.',
     when: (h) => h.tags.includes('discard:merged-rem'),
@@ -39,15 +29,6 @@ const KNOWN: Known[] = [
     id: 'equipment-cap@playCard',
     why: 'E3c: discarding the merged Rem frees one "slot" but the hero still wears 3 pieces of gear, so the new item makes 4.',
     when: (h) => h.tags.includes('discard:merged-rem'),
-  },
-  // ---- reachable only through a made-up move (chaos) ----
-  {
-    id: 'corpse-state@playCard#chaos',
-    why: 'E2b: Soul Exchange against / from a corpse Active gives the corpse hp.',
-  },
-  {
-    id: 'hero-hp-range@playCard#chaos',
-    why: 'E2a: Soul Exchange again (the chaos seat plays it with a bad target argument).',
   },
 ];
 
