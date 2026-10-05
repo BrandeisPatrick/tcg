@@ -721,7 +721,9 @@ describe('M2 the attack forecast matches what the attack does', () => {
 });
 
 // ===========================================================================
-// M3  The AI's own copy of the rules
+// M3  The AI's own copy of the rules  (fixed: the AI plays the engine's legalActions)
+//     It had its own cost (blind to costOverride), its own target test (a self-cast ultimate
+//     never matched) and its own skill gate (Rem on Rem).
 // ===========================================================================
 describe('M3 the AI sees every legal play', () => {
   it('precondition: the engine plays a free copied ultimate at 0 souls', () => {
@@ -732,7 +734,7 @@ describe('M3 the AI sees every legal play', () => {
     expect(runMove('playCard', G, '0', copy.iid)).not.toBe(INVALID_MOVE);
   });
 
-  it.fails('M3a Sinclair\'s free copy (costOverride 0) is offered at 0 souls (heuristic.ts cardCost ignores costOverride)', () => {
+  it('M3a Sinclair\'s free copy (costOverride 0) is offered at 0 souls', () => {
     const G = game();
     G.players['0'].souls = 0;
     const copy = toHand(G, '0', 'ult_haze');
@@ -748,7 +750,7 @@ describe('M3 the AI sees every legal play', () => {
     expect(runMove('playCard', G, '0', ult.iid)).not.toBe(INVALID_MOVE);
   });
 
-  it.fails('M3b Yamato\'s self-cast ultimate is offered (heuristic.ts isValidTarget(self) with no source is never true)', () => {
+  it('M3b Yamato\'s self-cast ultimate is offered', () => {
     const G = game();
     G.players['0'].active = makeHero('hero_yamato', '0', 'active', 0);
     const ult = toHand(G, '0', 'ult_yamato');
@@ -756,7 +758,7 @@ describe('M3 the AI sees every legal play', () => {
     expect(offered).toBe(true);
   });
 
-  it.fails('M3c Rem\'s skill is not offered on Rem herself (a no-op that costs a soul)', () => {
+  it('M3c Rem\'s skill is not offered on Rem herself (the engine refuses it)', () => {
     const G = game();
     const rem = makeHero('hero_rem', '0', 'bench', 1);
     G.players['0'].bench = [rem, null, null]; // a short list: the AI keeps only its top 12 moves

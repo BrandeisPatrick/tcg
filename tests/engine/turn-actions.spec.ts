@@ -394,6 +394,79 @@ describe('AI: the attack is a choice', () => {
     expect(attackScore(G)).toBe(LETHAL);
   });
 
+  // With lookahead the position after each line is scored, so a won game has to
+  // look different from a good position: the winning line ranks first, whatever
+  // else it leaves on the board.
+  const winsFirst = (G: GameState) => {
+    const top = enumerateAIMoves(G, ctx('1'))[0];
+    expect(top.move).toBe('attack');
+    expect(top.score).toBeGreaterThanOrEqual(LETHAL);
+  };
+
+  it('with lookahead the attack that takes the rival patron\'s last life ranks first, decisively', () => {
+    const G = freshReadyGame();
+    G.players['0'].active!.hp = 1;
+    G.players['0'].hp = 1;
+    winsFirst(G);
+  });
+
+  it('with lookahead the attack that leaves the rival no hero standing ranks first, decisively', () => {
+    const G = freshReadyGame();
+    G.players['0'].active!.hp = 1;
+    benchDown(G);
+    winsFirst(G);
+  });
+
+  it('with lookahead a won game is worth more than any position, a lost one less', () => {
+    const won = freshReadyGame();
+    won.players['0'].hp = 0; // the rival patron has already fallen
+    expect(enumerateAIMoves(won, ctx('1')).every((m) => m.score >= LETHAL)).toBe(true);
+    const lost = freshReadyGame();
+    lost.players['1'].hp = 0;
+    expect(enumerateAIMoves(lost, ctx('1')).every((m) => m.score < -LETHAL + 1)).toBe(true); // + the 0.1 bias toward acting
+  });
+
+  // With no souls to spend the list is the attack and passing, and passing is
+  // scored as the position stands: `evalState` read straight off the list.
+  const standing = (G: GameState) => {
+    G.players['1'].souls = 0;
+    G.players['1'].hand = [];
+    const pass = enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'endTurn');
+    return pass!.score;
+  };
+
+  it('values a hero by the attack it really makes: Weaken counts against its owner and for its rival', () => {
+    const base = standing(freshReadyGame());
+    const mine = freshReadyGame();
+    addStatus(mine, mine.players['1'].active!, 'weapon_power_down', 1, 2);
+    expect(effectiveAtk(mine.players['1'].active!)).toBe(effectiveAtk(freshReadyGame().players['1'].active!) - 1);
+    expect(base - standing(mine)).toBeCloseTo(1.5);
+    const theirs = freshReadyGame();
+    addStatus(theirs, theirs.players['0'].active!, 'weapon_power_down', 1, 2);
+    expect(standing(theirs) - base).toBeCloseTo(1.5);
+  });
+
+  it('offers a hero at the gear cap every item it could discard, and lets the lookahead pick', () => {
+    const G = freshReadyGame();
+    const ai = G.players['1'];
+    ai.souls = 5;
+    ai.bench = [null, null, null]; // a short list: the AI keeps only its top 12 moves
+    const hero = ai.active!;
+    const gear = (cardId: string, iid: string) =>
+      ({ ...ai.deck[0], cardId, iid, zone: 'equipment' as const, attachedTo: hero.iid, attached: [] });
+    hero.attached = [gear('extended_magazine', 'atk'), gear('extra_health', 'hp'), gear('extra_spirit', 'spi')];
+    ai.hand = [{ ...ai.deck[1], cardId: 'restorative_shot', iid: 'new', zone: 'hand' as const }];
+    for (const lookahead of [false, true]) {
+      const plays = enumerateAIMoves(G, ctx('1'), lookahead).filter((m) => m.move === 'playCard' && m.args[1] === hero.iid);
+      expect(plays.map((m) => m.args[2]).sort(), `lookahead ${lookahead}`).toEqual(['atk', 'hp', 'spi']);
+    }
+    // Which piece goes is read off the position each leaves: the +2 HP and the
+    // +1 Bullet Power are worth keeping, the Spirit Power on a hero whose
+    // skill takes none is not.
+    const best = enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'playCard' && m.args[1] === hero.iid)!;
+    expect(best.args[2]).toBe('spi');
+  });
+
   it('never ranks a move the engine would reject', () => {
     const G = freshReadyGame();
     const ai = G.players['1'];

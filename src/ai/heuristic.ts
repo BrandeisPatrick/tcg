@@ -1,25 +1,30 @@
+/**
+ * The AI. It knows no rules: the moves it considers are the engine's own
+ * `legalActions` (legality.ts), so everything it offers is something the engine
+ * has already said yes to, and it never has to be taught a new rule. What is
+ * left here is judgement — how good a move, or the position it leaves, is.
+ *
+ * With lookahead (the default) every candidate is made on a copy through the
+ * engine (`simulate`), and the resulting position is scored by `evalState`.
+ * That captures target choice, lethal and the value of gear and skills without
+ * hand-tuning each case. A turn is the player's to spend on cards, skills and a
+ * retreat in any order, with at most one attack among them — and ending the turn
+ * never attacks, so the AI has to choose `attack` itself. The Active either
+ * attacks or uses its skill, so every line is valued with the attack it leaves
+ * on the table.
+ *
+ * Without lookahead (the eval framework's random agent, the MCTS bot's rollouts)
+ * the moves are only listed, ranked by cheap per-move scores.
+ */
 import type { Ctx } from 'boardgame.io';
-import { INVALID_MOVE } from 'boardgame.io/core';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { otherPlayer, liveBoardCards, baseAttack, effectiveSpirit, isBlocked, isRespawning, stepInCandidates, wornEquipment } from '@/engine/query';
-import { getAbility, type TargetFilter } from '@/abilities';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
-import { DeadlockGame } from '@/engine/game';
-import { attackBlocked } from '@/engine/legality';
-import { forecastAttack } from '@/engine/forecast';
-
-// ----- 1-ply lookahead -------------------------------------------------------
-// The crude per-move scores below only generate the LEGAL move list; the actual
-// ranking comes from simulating each move on a cloned state and scoring the
-// resulting position with evalState. This is what lifts the AI from ~random to
-// actually-playing: it captures target selection, lethal, and resource value
-// without hand-tuning every case.
-//
-// A turn is the player's to spend on cards, skills and a retreat in any order,
-// with at most one attack among them — and ending the turn never attacks, so
-// the AI has to choose `attack` itself. The Active either attacks or uses its
-// skill, so every line is valued with the attack it leaves on the table.
+import { CC_STATUSES } from '@/statuses';
+import { checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, liveBoardCards, otherPlayer } from '@/engine/query';
+import { getAbility } from '@/abilities';
+import { perform, type Action } from '@/engine/engine';
+import { attackBlocked, cardCost, legalActions } from '@/engine/legality';
+import { forecastAttack, simulate } from '@/engine/forecast';
 
 /** A hero's offensive potential: bullet attack PLUS its damaging skill's output
  *  (base + Spirit if it scales). This is what makes the lookahead ITEMIZE — a
@@ -27,9 +32,7 @@ import { forecastAttack } from '@/engine/forecast';
  *  attacker's, so the AI routes each build axis onto the hero that wants it. */
 function heroThreat(c: CardInstance): number {
   const data = CARDS_BY_ID[c.cardId];
-  // The hero's stat attack, before Weaken and conditional bonuses: the number
-  // this heuristic was tuned on (a swing's real damage is `attackPower`).
-  let t = baseAttack(c);
+  let t = effectiveAtk(c);
   if (data?.type === 'hero' && data.skill) {
     const ab = getAbility(data.skill);
     if (ab && ab.base != null) t += ab.base + (ab.scalesSpirit ? effectiveSpirit(c) : 0);
@@ -37,7 +40,6 @@ function heroThreat(c: CardInstance): number {
   return t;
 }
 
-/** Position value from `pid`'s perspective (higher = better for pid). */
 // Value of a hero's attached equipment's ABILITY procs (lifesteal, burst,
 // resist, draw, etc.). Stat-stick bonuses (+atk/+spirit/+hp) are already
 // reflected via heroThreat/hp, so this only scores the proc gear the bot was
@@ -58,7 +60,15 @@ function equipValue(c: CardInstance): number {
   return v;
 }
 
+/** What a won game is worth, in the units of `evalState`: more than any position. */
+const DECISIVE = 1_000_000;
+
+/** Position value from `pid`'s perspective (higher = better for pid). */
 function evalState(g: GameState, pid: PlayerID): number {
+  // A match that is over is not "a good position": it is the one that must
+  // rank first (or, lost, last). The engine's own win check says which.
+  const won = checkWinner(g)?.winner;
+  if (won) return won === pid ? DECISIVE : -DECISIVE;
   const en = otherPlayer(pid);
   const me = g.players[pid];
   const foe = g.players[en];
@@ -81,82 +91,30 @@ function evalState(g: GameState, pid: PlayerID): number {
   return s;
 }
 
-const SIM_CTX = (pid: PlayerID) => ({ currentPlayer: pid, numPlayers: 2, turn: 1 } as any);
-
-/** Deep-clone G for safe simulation. Shallow-copy first with an empty log so we
- *  don't mutate the (frozen) live state and don't pay to clone the growing log. */
-function cloneForSim(G: GameState): GameState {
-  return structuredClone({ ...G, log: [] }) as GameState;
-}
-
-/** Apply one candidate move to a cloned state through the engine's own move.
- *  While the turn's attack is still available after it, the line is played
- *  through the attack too — "this move, then the attack" — so a buff, a bench
- *  skill or a retreat is valued by the attack it improves, and sees lethal;
- *  the Active's own skill, which forfeits the attack, is weighed honestly
- *  against attacking. `endTurn` is scored as the position stands: ending the
- *  turn forfeits the attack.
- *  Returns null for a move the engine rejects (or that throws): it changes
- *  nothing, so left in the ranking it would tie with passing and, with the
- *  bias toward acting, be picked over it — a turn spent on an invalid move. */
-function simulateMove(G: GameState, pid: PlayerID, move: string, args: any[]): GameState | null {
-  const g = cloneForSim(G);
-  try {
-    if (move !== 'endTurn') {
-      const moves = (DeadlockGame as any).moves;
-      const call = (name: string, ...a: any[]) =>
-        moves[name]({ G: g, ctx: SIM_CTX(pid), playerID: pid, events: {} }, ...a);
-      if (!moves[move] || call(move, ...args) === INVALID_MOVE) return null;
-      if (attackBlocked(g, pid) === null) call('attack');
-    }
-  } catch {
-    return null;
-  }
-  return g;
-}
-
 interface MoveOption {
   move: 'playCard' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
   args: any[];
   score: number;
 }
 
-function isValidTarget(filter: TargetFilter, target: CardInstance | undefined, source: CardInstance | undefined, pid: PlayerID): boolean {
-  if (filter === 'noTarget') return target === undefined;
-  if (target === undefined) return false;
-  const isAlly = target.ownerId === pid;
-  switch (filter) {
-    case 'self': return source !== undefined && target.iid === source.iid;
-    case 'allyAny': return isAlly;
-    case 'allyHero': return isAlly && CARDS_BY_ID[target.cardId]?.type === 'hero';
-    case 'enemyAny': return !isAlly;
-    case 'enemyHero': return !isAlly && CARDS_BY_ID[target.cardId]?.type === 'hero';
-    case 'enemyActive': return !isAlly && target.zone === 'active';
-    case 'anyBoard': return true;
+/** An engine action in the form the callers dispatch: the boardgame.io move and
+ *  its arguments (playCard [card, target?, discard?], useSkill [hero, target?],
+ *  moveHero [from, to], promoteToActive [iid], attack [], endTurn []). */
+function toMove(a: Action): Pick<MoveOption, 'move' | 'args'> {
+  const present = (...xs: (string | undefined)[]) => xs.filter((x): x is string => x !== undefined);
+  switch (a.type) {
+    case 'playCard': return { move: 'playCard', args: present(a.cardIid, a.targetIid, a.discardIid) };
+    case 'useSkill': return { move: 'useSkill', args: present(a.heroIid, a.targetIid) };
+    case 'moveHero': return { move: 'moveHero', args: [a.fromSlot, a.toSlot] };
+    case 'promoteToActive': return { move: 'promoteToActive', args: [a.benchIid] };
+    case 'attack': return { move: 'attack', args: [] };
+    case 'endTurn': return { move: 'endTurn', args: [] };
   }
 }
 
-function abilityFiltersForCard(card: CardInstance): TargetFilter | null {
-  const data = CARDS_BY_ID[card.cardId];
-  if (!data) return null;
-  if (data.type === 'spell' || data.type === 'ultimate') {
-    const aid = data.abilities[0];
-    return getAbility(aid)?.target ?? null;
-  }
-  if (data.type === 'equipment') {
-    return 'allyHero';
-  }
-  return null;
-}
-
-function cardCost(card: CardInstance): number {
-  const data = CARDS_BY_ID[card.cardId];
-  if (!data) return 0;
-  if (data.type === 'spell' || data.type === 'equipment' || data.type === 'ultimate') {
-    return (data as any).cost ?? 0;
-  }
-  return 0;
-}
+// ----- the crude per-move scores ---------------------------------------------
+// What ranks the plain list (no lookahead), fed by the action: cards and skills
+// above passing, the attack by the damage it would land.
 
 function scorePlayCard(G: GameState, pid: PlayerID, card: CardInstance, target?: CardInstance): number {
   const data = CARDS_BY_ID[card.cardId];
@@ -178,19 +136,13 @@ function scorePlayCard(G: GameState, pid: PlayerID, card: CardInstance, target?:
     if (data.type === 'spell' && target.hp <= 3) s += 25;
   }
   if (target && target.ownerId === pid && target.hp < target.hpMax / 2) s += 8;
-  // Cost-efficiency: penalize plays that consume most of the pool with little overflow.
+  // Cost-efficiency: penalize plays that would empty the pool of a big spend.
   // Encourages chaining cheap plays before dumping a mythic.
-  if (cost >= 7) {
-    const overflow = ps.souls - cost;
-    if (overflow < 0) s -= 1000; // unaffordable; will be filtered, just in case
-    else if (overflow < 1) s -= 6; // would empty our pool — still play if value is high
-  }
+  if (cost >= 7 && ps.souls - cost < 1) s -= 6;
   return s;
 }
 
-function scoreSkill(G: GameState, pid: PlayerID, hero: CardInstance, target?: CardInstance): number {
-  const data = CARDS_BY_ID[hero.cardId];
-  if (data?.type !== 'hero') return 0;
+function scoreSkill(pid: PlayerID, target?: CardInstance): number {
   let s = 12;
   if (target && target.ownerId !== pid) {
     s += 8;
@@ -200,28 +152,95 @@ function scoreSkill(G: GameState, pid: PlayerID, hero: CardInstance, target?: Ca
   return s;
 }
 
-/** Crude score for the turn's attack: the damage it would land on the rival
- *  Active, plus a premium for a KO. Without lookahead this is what keeps the
- *  attack near the top of the list next to the cards and skills. */
+/** What the attack is worth to the crude list: a win outranks everything; else
+ *  the damage it would land on the rival Active, plus a premium for a KO. With
+ *  lookahead a win is `evalState`'s verdict instead. Both are read off the
+ *  engine's own run of the attack — "wins" means what the rules mean: the
+ *  knockout's patron life, a board wipe, a Ricochet that drops the last bench
+ *  hero, a merged Rem who walks off the fallen bearer, and a mutual wipe that
+ *  goes to P0. */
 function scoreAttack(G: GameState, pid: PlayerID): number {
+  if (checkWinner(simulate(G, pid, { type: 'attack' }).G)?.winner === pid) return DECISIVE;
   const plan = forecastAttack(G, pid);
   return 15 + plan.damageToActive * 3 + (plan.defenderActiveKO ? 25 : 0);
 }
 
-/** True when the turn's attack, made now, wins the match. The attack is made
- *  on a copy through the engine's own move and the engine's own win check
- *  reads the result, so "lethal" means what the rules mean: the knockout's
- *  patron life, a board wipe, a Ricochet that drops the last bench hero, a
- *  merged Rem who walks off the fallen bearer — and a mutual wipe that goes
- *  to P0. */
-function attackWins(G: GameState, pid: PlayerID): boolean {
-  const g = simulateMove(G, pid, 'attack', []);
-  return !!g && DeadlockGame.endIf?.({ G: g } as any)?.winner === pid;
+/** A retreat's score, or null when the swap is not worth its souls. It is worth
+ *  them when the hero stepping in is much fresher, or when the Active is
+ *  crowd-controlled (dead weight whatever its HP). The AI still offers a retreat
+ *  that is not worth it — the engine allows it — but ranks it behind everything. */
+function retreatPoints(active: CardInstance, incoming: CardInstance): number | null {
+  const activeFrac = active.hp / Math.max(1, active.hpMax);
+  const gain = incoming.hp / Math.max(1, incoming.hpMax) - activeFrac;
+  const deadWeight = active.statuses.some((s) => CC_STATUSES.has(s.id));
+  if (gain < 0.25 && !deadWeight) return null;
+  let s = 10;
+  if (activeFrac < 0.35) s += 30; // about to die
+  if (deadWeight) s += 18;
+  return s + Math.round(gain * 20);
+}
+
+/** Where a retreat that is not worth it ranks: behind passing, behind every
+ *  real play, but still in the list. */
+const NOT_WORTH_IT = -1000;
+
+/** The retreat `a` makes: who leaves the Active slot and who takes it. */
+function retreatPair(G: GameState, pid: PlayerID, a: Extract<Action, { type: 'moveHero' }>) {
+  const ps = G.players[pid];
+  return { active: ps.active!, incoming: ps.bench[a.fromSlot - 1]! };
+}
+
+function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
+  switch (a.type) {
+    case 'attack': return scoreAttack(G, pid);
+    case 'playCard': {
+      const card = G.players[pid].hand.find((c) => c.iid === a.cardIid)!;
+      const target = a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined;
+      // Gear named to go is weighed as the play it would be: the better the piece, the less this is worth.
+      const gone = a.discardIid ? target?.attached?.find((e) => e.iid === a.discardIid) : undefined;
+      return scorePlayCard(G, pid, card, target) - (gone ? scorePlayCard(G, pid, gone, target) : 0);
+    }
+    case 'useSkill': return scoreSkill(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined);
+    case 'moveHero': {
+      const { active, incoming } = retreatPair(G, pid, a);
+      return retreatPoints(active, incoming) ?? NOT_WORTH_IT;
+    }
+    // A promotion owed comes before everything: the healthiest hero steps up.
+    case 'promoteToActive': return 50_000 + findCardOnBoard(G, a.benchIid)!.card.hp;
+    case 'endTurn': return 1;
+  }
+}
+
+// ----- the lookahead ----------------------------------------------------------
+
+/** The position after `a`, on a copy. While the turn's attack is still available
+ *  after it, the line is played through the attack too — "this move, then the
+ *  attack" — so a buff, a bench skill or a retreat is valued by the attack it
+ *  improves, and sees lethal; the Active's own skill, which forfeits the attack,
+ *  is weighed honestly against attacking. `endTurn` is scored as the position
+ *  stands: ending the turn forfeits the attack. */
+function lineAfter(G: GameState, pid: PlayerID, a: Action): GameState {
+  if (a.type === 'endTurn') return G;
+  const { G: g } = simulate(G, pid, a);
+  if (attackBlocked(g, pid) === null) perform(g, pid, { type: 'attack' });
+  return g;
+}
+
+/** The lookahead's score for `a`: the value of the position it leads to. A tiny
+ *  bias toward acting (vs. passing) breaks ties so the AI takes value-neutral
+ *  tempo plays instead of idling. A retreat that is not worth its souls is
+ *  marked down so it ranks behind real plays — unless it wins the match. */
+function lookaheadScore(G: GameState, pid: PlayerID, a: Action): number {
+  let s = evalState(lineAfter(G, pid, a), pid) + (a.type === 'endTurn' ? 0 : 0.1);
+  if (a.type === 'moveHero') {
+    const { active, incoming } = retreatPair(G, pid, a);
+    if (retreatPoints(active, incoming) === null) s += NOT_WORTH_IT;
+  }
+  return s;
 }
 
 export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): MoveOption[] {
   const pid = ctx.currentPlayer as PlayerID;
-
   // Pre-match draft: only one move kind is legal. Score by stat sum +
   // rarity, with a small diversity nudge so the AI doesn't pick four glass
   // cannons. Returns sorted; the top option is the AI's pick.
@@ -246,157 +265,23 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
     return opts.sort((a, b) => b.score - a.score).slice(0, 8);
   }
 
-  const ps = G.players[pid];
-  const out: MoveOption[] = [];
-  const enemy = G.players[otherPlayer(pid)];
+  // Everything the engine allows, in its order: the attack, cards, skills,
+  // retreats, promotions, and ending the turn last. While a promotion is owed
+  // that is the promotion alone — for whichever seat owes it, made from either
+  // (on the board the local player answers the prompt themselves and the AI
+  // loop waits rather than ask, unless auto-play is driving their seat).
+  const actions = legalActions(G, pid);
 
-  // A promotion owed comes before anything else at the table — return it
-  // alone. Owed by this seat, it is the only legal move (no playing cards
-  // through a dead Active). Owed by the other seat, whose Active this seat's
-  // attack or skill has just dropped, nobody moves on until that lane is
-  // refilled: `promoteToActive` finds its owner from the bench hero, so it can
-  // be made from whichever seat is asked. (On the board the local player
-  // answers the prompt themselves and the AI loop waits rather than ask —
-  // unless auto-play is driving their seat.)
-  // Gated on the engine's pendingPromotion flag (set by `resolve`) — outside
-  // that window the move is invalid. Highest HP first.
+  // A promotion needs no weighing: the healthiest hero steps up.
   if (G.pendingPromotion) {
-    const owed = stepInCandidates(G.players[G.pendingPromotion])
-      .map((b): MoveOption => ({ move: 'promoteToActive', args: [b.iid], score: 50_000 + b.hp }))
+    return actions
+      .map((a): MoveOption => ({ ...toMove(a), score: crudeScore(G, pid, a) }))
       .sort((a, b) => b.score - a.score);
-    if (owed.length > 0) return owed;
   }
 
-  const enemyTargets = liveBoardCards(enemy);
-  const allyTargets = liveBoardCards(ps);
-
-  // The attack is offered exactly while the engine's gate is open — the same
-  // `attackBlocked` the `attack` move checks.
-  const attackOpen = attackBlocked(G, pid) === null;
-
-  // --- Lethal short-circuit ---
-  // An attack that wins the match goes first. Only our Active swings, and its
-  // swings never reach the rival patron: the attack wins when its knockout
-  // costs the last patron life, or leaves the rival with no hero standing.
-  if (attackOpen) {
-    out.push({ move: 'attack', args: [], score: attackWins(G, pid) ? 1_000_000 : scoreAttack(G, pid) });
-  }
-
-  // Play cards (cost-gated)
-  for (const c of ps.hand) {
-    const data = CARDS_BY_ID[c.cardId];
-    if (!data) continue;
-    if (cardCost(c) > ps.souls) continue; // unaffordable
-
-    const filter = abilityFiltersForCard(c);
-
-    if (data.type === 'spell' || data.type === 'ultimate') {
-      if (filter === 'noTarget' || filter === null) {
-        out.push({ move: 'playCard', args: [c.iid], score: scorePlayCard(G, pid, c) });
-      } else {
-        for (const t of [...enemyTargets, ...allyTargets]) {
-          if (filter && isValidTarget(filter, t, undefined, pid)) {
-            out.push({ move: 'playCard', args: [c.iid, t.iid], score: scorePlayCard(G, pid, c, t) });
-          }
-        }
-      }
-    }
-
-    if (data.type === 'equipment') {
-      for (const t of allyTargets) {
-        // A hero cannot wear two of the same item. (A merged Rem is not equipment:
-        // she takes no slot and is never the piece to discard.)
-        const worn = wornEquipment(t);
-        if (worn.some((eq) => eq.cardId === c.cardId)) continue;
-        if (worn.length < MAX_EQUIPMENT_PER_HERO) {
-          out.push({ move: 'playCard', args: [c.iid, t.iid], score: scorePlayCard(G, pid, c, t) });
-        } else {
-          // Hero is full — discard the lowest-priority existing item to
-          // make room. Use the same scorePlayCard heuristic to pick the
-          // worst current piece (lowest score = least valuable to keep).
-          let worst = worn[0];
-          let worstScore = scorePlayCard(G, pid, worst, t);
-          for (const eq of worn.slice(1)) {
-            const s = scorePlayCard(G, pid, eq, t);
-            if (s < worstScore) { worst = eq; worstScore = s; }
-          }
-          out.push({
-            move: 'playCard',
-            args: [c.iid, t.iid, worst.iid],
-            score: scorePlayCard(G, pid, c, t) - worstScore,
-          });
-        }
-      }
-    }
-  }
-
-  // Use skills — each hero once a turn, SKILL_COST souls each (matches
-  // game.ts useSkill). A hero that made the turn's attack has spent its
-  // action; the Active's skill forfeits the attack, which the lookahead weighs.
-  if (ps.souls >= SKILL_COST) for (const hero of allyTargets) {
-    if (hero.skillUsedThisTurn || hero.attackedThisTurn) continue;
-    const data = CARDS_BY_ID[hero.cardId];
-    if (data?.type !== 'hero' || !data.skill) continue;
-    // Stun / Silence / Sleep and a heavy channel all suppress skill use — engine
-    // enforces this, the AI must respect it too or it'll burn a heuristic round
-    // on an invalid move.
-    if (isBlocked(hero, 'skill')) continue;
-    const ability = getAbility(data.skill);
-    if (!ability) continue;
-    const filter = ability.target;
-
-    if (filter === 'noTarget') {
-      out.push({ move: 'useSkill', args: [hero.iid], score: scoreSkill(G, pid, hero) });
-      continue;
-    }
-    if (filter === 'self') {
-      out.push({ move: 'useSkill', args: [hero.iid, hero.iid], score: scoreSkill(G, pid, hero, hero) });
-      continue;
-    }
-    for (const t of [...enemyTargets, ...allyTargets]) {
-      if (isValidTarget(filter, t, hero, pid)) {
-        out.push({ move: 'useSkill', args: [hero.iid, t.iid], score: scoreSkill(G, pid, hero, t) });
-      }
-    }
-  }
-
-  // Retreat: swap Active with a fresh bench hero (costs RETREAT_COST souls).
-  // Score positively when Active is in serious trouble and bench has a healthier option.
-  if (ps.active && !isRespawning(ps.active) && ps.souls >= RETREAT_COST) {
-    const activeHpFrac = ps.active.hp / Math.max(1, ps.active.hpMax);
-    const activeStunned = ps.active.statuses.some(
-      (s) => s.id === 'stun' || s.id === 'silenced' || s.id === 'disarm',
-    );
-    for (const benchHero of stepInCandidates(ps)) {
-      const benchHpFrac = benchHero.hp / Math.max(1, benchHero.hpMax);
-      // Only retreat if the bench replacement is meaningfully fresher.
-      if (benchHpFrac - activeHpFrac < 0.25 && !activeStunned) continue;
-      let s = 10;
-      if (activeHpFrac < 0.35) s += 30; // about to die
-      if (activeStunned) s += 18;       // CC'd active is dead weight
-      s += Math.round((benchHpFrac - activeHpFrac) * 20);
-      out.push({ move: 'moveHero', args: [ps.bench.indexOf(benchHero) + 1, 0], score: s });
-    }
-  }
-
-  // Always offer the pass move as fallback: ending the turn, which gives up
-  // an attack not yet made.
-  out.push({ move: 'endTurn', args: [], score: 1 });
-
-  // Re-rank every legal move by 1-ply lookahead: simulate it and score the
-  // resulting position. A tiny bias toward acting (vs. passing) breaks ties so
-  // the AI takes value-neutral tempo plays instead of idling. Skipped when used
-  // as a plain legal-move enumerator (e.g. inside the MCTS bot's rollouts).
-  if (lookahead) {
-    const ranked: MoveOption[] = [];
-    for (const opt of out) {
-      const g2 = simulateMove(G, pid, opt.move, opt.args);
-      if (!g2) continue;
-      opt.score = evalState(g2, pid) + (opt.move === 'endTurn' ? 0 : 0.1);
-      ranked.push(opt);
-    }
-    return ranked.sort((a, b) => b.score - a.score).slice(0, 12);
-  }
-
-  return out.sort((a, b) => b.score - a.score).slice(0, 12);
+  const options = actions.map((a): MoveOption => ({
+    ...toMove(a),
+    score: lookahead ? lookaheadScore(G, pid, a) : crudeScore(G, pid, a),
+  }));
+  return options.sort((a, b) => b.score - a.score).slice(0, 12);
 }

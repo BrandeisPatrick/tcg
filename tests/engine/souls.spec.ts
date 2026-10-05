@@ -186,16 +186,23 @@ describe('souls economy', () => {
     expect(bestRetreat.score).toBeGreaterThanOrEqual(30);
   });
 
-  it('AI does NOT retreat when its Active is healthy and bench is similar', async () => {
+  it('AI offers a retreat when its Active is healthy and bench is similar, but ranks it behind every other move', async () => {
     const { enumerateAIMoves } = await import('@/ai/heuristic');
     const G = freshG();
     G.players['1'].souls = 3;
-    // Active is full HP, no debuffs — no reason to retreat.
+    G.players['1'].hand = []; // a short list: nothing is cut from it
+    // Active is full HP, no debuffs — no reason to retreat. The engine allows it, so it is listed.
     const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
-    const moves = enumerateAIMoves(G, ctx, false);
-    const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
-    // Filter heuristic should suppress retreats in non-emergencies.
-    expect(retreats.length).toBe(0);
+    for (const lookahead of [false, true]) {
+      const moves = enumerateAIMoves(G, ctx, lookahead);
+      const isRetreat = (m: { move: string; args: any[] }) => m.move === 'moveHero' && m.args[1] === 0;
+      const retreats = moves.filter(isRetreat);
+      const rest = moves.filter((m) => !isRetreat(m));
+      expect(retreats.length, `lookahead ${lookahead}`).toBeGreaterThan(0);
+      // Behind passing and everything else: never the AI's pick, never ahead of a real play.
+      expect(Math.max(...retreats.map((m) => m.score))).toBeLessThan(Math.min(...rest.map((m) => m.score)));
+      expect(moves.indexOf(retreats[0])).toBeGreaterThan(moves.findIndex((m) => m.move === 'endTurn'));
+    }
   });
 
   it('AI retreats when its Active is hard-CC\'d (stunned/disarmed/silenced)', async () => {
@@ -208,6 +215,17 @@ describe('souls economy', () => {
     const moves = enumerateAIMoves(G, ctx, false);
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.length).toBeGreaterThan(0);
+  });
+
+  it('AI retreats when its Active is asleep (any hard crowd control is dead weight, not only a listed few)', async () => {
+    const { enumerateAIMoves } = await import('@/ai/heuristic');
+    const G = freshG();
+    G.players['1'].souls = 3;
+    G.players['1'].active!.statuses.push({ id: 'sleep', value: 1, duration: 2 });
+    const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
+    const retreats = enumerateAIMoves(G, ctx, false).filter((m) => m.move === 'moveHero' && m.args[1] === 0);
+    expect(retreats.length).toBeGreaterThan(0);
+    expect(Math.max(...retreats.map((m) => m.score))).toBeGreaterThanOrEqual(28);
   });
 
   it('AI never retreats into a fallen or bench-only hero', async () => {

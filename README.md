@@ -49,8 +49,9 @@ single-page React app.
   or the attack.
 - **41 bitmap card-art assets** pulled from the community asset bucket; SVG
   fallback glyphs for cards that don't have canon art yet.
-- **AI opponent** with a heuristic move enumerator (lethal short-circuit,
-  on-attach equipment, forced promotion when active dies).
+- **AI opponent** that plays only the engine's own legal moves and ranks them
+  by a 1-ply lookahead (sees lethal, on-attach equipment, forced promotion when
+  the Active dies).
 - **79 engine tests** covering souls, statuses, abilities, respawn rules,
   combat planner/resolver parity.
 

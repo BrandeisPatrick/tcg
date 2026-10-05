@@ -19,13 +19,7 @@ import { formatList, fuzzGames } from './oracle';
 const GAMES = fuzzGames(80);
 
 /** Violations the engine has today, each with its reason (none: every finding is fixed). */
-const KNOWN: Known[] = [
-  {
-    id: 'legal-move-rejected@useSkill',
-    why: 'M3c: the AI\'s move list still offers Rem\'s skill on Rem herself, which the engine refuses (excludeSelf); a policy that plays straight from that list (random-legal, the chaos seat\'s fallback) is refused and falls back to ending the turn. Goes with the AI rework.',
-    when: (h) => h.tags.includes('hero:hero_rem'),
-  },
-];
+const KNOWN: Known[] = [];
 
 describe('invariants hold in every state of seeded games', () => {
   MIXES.forEach((mix, mixIndex) => {

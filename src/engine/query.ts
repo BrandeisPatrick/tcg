@@ -200,18 +200,6 @@ export function isBlocked(card: CardInstance, act: Blockable): boolean {
 
 // ---------- Attack and spirit ----------
 
-/** A hero's bullet power before Weaken and any conditional bonus: printed
- *  attack + modifiers + Weapon Power buffs, floored at 0. Zero when the hero
- *  cannot make a basic attack. */
-export function baseAttack(card: CardInstance): number {
-  const data = heroData(card);
-  if (!data || isBlocked(card, 'attack')) return 0;
-  const weaponPower = card.statuses
-    .filter((s) => s.id === 'weapon_power')
-    .reduce((a, s) => a + s.value, 0);
-  return Math.max(0, data.atk + card.atkMod + weaponPower);
-}
-
 export interface AttackPower {
   /** What one basic swing deals before the target's mitigation. */
   total: number;
@@ -241,7 +229,7 @@ export function attackPower(card: CardInstance): AttackPower {
     .filter((s) => s.id === 'weapon_power')
     .reduce((a, s) => a + s.value, 0);
   if (weaponPower) parts.push({ label: 'Weapon Power', amount: weaponPower });
-  let total = baseAttack(card);
+  let total = Math.max(0, data.atk + card.atkMod + weaponPower);
   const weak = card.statuses.find((s) => s.id === 'weapon_power_down');
   if (weak) {
     const weakened = Math.max(0, total - weak.value);
