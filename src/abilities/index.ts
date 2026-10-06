@@ -206,11 +206,13 @@ const eff_silence_glyph: AbilityDef = {
   },
 };
 
-// Curse (canon T4 spirit): long lockdown — Silence + Disarm for 3 turns. The
-// dead-weight active pressures a retreat (no forced swap).
+// Curse (canon T4 spirit): long lockdown on one enemy hero, Active or bench —
+// Silence (no skill) + Disarm (no attack) for 3 turns. On the Active it is
+// dead weight that pressures a retreat (no forced swap); on the bench it shuts
+// off a caster.
 const eff_curse: AbilityDef = {
-  id: 'eff_curse', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Curse — Silence + Disarm the enemy Active for 3 turns.',
+  id: 'eff_curse', trigger: 'onPlay', target: 'enemyHero',
+  prompt: 'Curse — one enemy hero cannot use its skill or attack for 3 turns.',
   run: (G, _ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'silenced', 1, 3);

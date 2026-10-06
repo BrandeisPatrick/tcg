@@ -58,7 +58,7 @@ export const STATUSES: StatusDef[] = [
 
   // ----- Hard CC -----
   { id: 'stun',          title: 'Stun',          desc: 'Cannot act, attack, or use skills.',                       hvalue: -2, blocks: ['attack', 'skill', 'pulse'], cc: true },
-  { id: 'silenced',      title: 'Silenced',      desc: 'Cannot use skills or ultimates.',                          hvalue: -1, blocks: ['skill'], cc: true },
+  { id: 'silenced',      title: 'Silenced',      desc: 'Cannot use skills.',                                         hvalue: -1, blocks: ['skill'], cc: true },
   { id: 'disarm',        title: 'Disarm',        desc: 'Cannot make basic attacks.',                               hvalue: -2, blocks: ['attack'], cc: true },
   { id: 'sleep',         title: 'Sleep',         desc: 'Cannot act, attack, or use skills. Any damage wakes it (triggering any wake-up effect).', hvalue: -2, blocks: ['attack', 'skill', 'pulse'], cc: true },
 

@@ -43,7 +43,7 @@ export const SPELLS: SpellCard[] = [
   { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 2, cost: 4, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
   { id: 'active_reload',  name: 'Active Reload',  type: 'spell', rarity: 2, cost: 3, abilities: ['eff_active_reload'],     text: 'Your Active hero gains Extra Attack 1 this turn.' },
   { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, cost: 5, abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable for 1 turn.' },
-  { id: 'curse',          name: 'Curse',          type: 'spell', rarity: 3, cost: 5, abilities: ['eff_curse'],            text: 'Silence and Disarm the enemy Active for 3 turns.' },
+  { id: 'curse',          name: 'Curse',          type: 'spell', rarity: 3, cost: 5, abilities: ['eff_curse'],            text: 'Silence and Disarm one enemy hero for 3 turns: no skill, no attack.' },
 ];
 
 export const SPELLS_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s])) as Record<string, SpellCard>;
