@@ -29,13 +29,14 @@ const shoot = async (name) => { const f = join(OUT, `${String(shots.length).padS
 try {
   await b.navigate(`${DEV_URL}/?screen=match&vtclock=1`);
   await b.waitFor(`document.querySelector('[aria-label^="Select "]')`, { timeout: 20000 });
-  // ---- Draft: pick preferred heroes whenever the Lock button is live; tick for the AI in between.
+  // ---- Draft: on our pick (the plate reads Lock — disabled until a hero is chosen) pick a
+  // preferred hero and lock it; tick for the AI in between.
   for (let i = 0; i < 60; i++) {
     const state = await b.evaluate(`(() => {
       const lock = ${byText('Lock')};
       const draftOpen = !!document.querySelector('[aria-label^="Select "]') || !!lock;
       const mulligan = ${byTextStartExpr('Lock In')};
-      return { draftOpen, lockLive: !!lock && !lock.disabled, mulligan: !!mulligan };
+      return { draftOpen, lockLive: !!lock, mulligan: !!mulligan };
     })()`);
     if (state.mulligan) break;
     if (!state.draftOpen) { await b.tick(300); await b.settle(2); const board = await b.evaluate(`!!${byAria('End Turn')}`); if (board) break; continue; }

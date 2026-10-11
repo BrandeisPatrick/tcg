@@ -65,7 +65,7 @@ function dealFeatured(): CardId {
 
 interface StartScreenProps {
   /** Quick Match, carrying the featured hero for the draft to open on. */
-  onPlay: (featuredHero: CardId) => void;
+  onPlay: () => void;
   onStory?: () => void;
   onTutorial?: () => void;
   onLoadout?: () => void;
@@ -238,7 +238,7 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
             cta="Play"
             tag={`Featured · ${featuredName}`}
             art={{ src: `${HERO_BASE}${featured}_splash.webp`, objectPosition: heroArtFocus(featured, 'splash', '50% 18%') }}
-            onClick={() => onPlay(featured)}
+            onClick={() => onPlay()}
             ariaLabel="Start Quick Match vs AI"
             compact={isMobile}
             span={isMobile ? 2 : 1}

@@ -96,7 +96,7 @@ const endTurn = `document.querySelector('[aria-label="End Turn"]')`;
 for (let i = 0; i < 80; i++) {
   const st = await b.evaluate(`(() => {
     const lock = ${byText('Lock')};
-    return { draft: !!document.querySelector('[aria-label^="Select "]') || !!lock, live: !!lock && !lock.disabled, mulligan: !!${lockIn}, board: !!${endTurn} };
+    return { draft: !!document.querySelector('[aria-label^="Select "]') || !!lock, live: !!lock, mulligan: !!${lockIn}, board: !!${endTurn} };
   })()`);
   if (st.mulligan || (!st.draft && st.board)) break;
   if (st.live) {

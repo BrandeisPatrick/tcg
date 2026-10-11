@@ -55,12 +55,6 @@ const NUMERALS = ['I', 'II', 'III', 'IV'];
 /** The hero the lobby focuses when nothing still available holds it: the
  *  title's featured hero while it is in the pool, otherwise any free hero at
  *  random rather than always the first tile of the grid. */
-function defaultFocus(pool: string[]): string | null {
-  const featured = getMatchConfig().featuredHero;
-  if (featured && pool.includes(featured)) return featured;
-  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
-}
-
 export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   // The roster grid + four cards need real width; below this everything
   // stacks tighter and the page may scroll.
@@ -77,13 +71,14 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   // Fixed roster order (data order) so tiles never move.
   const roster = useMemo(() => HEROES.map((h) => h.id), []);
 
-  // Focused hero — previewed in the live card + dossier. Opens on the default
-  // (below); only once the focused one leaves the pool (locked, or taken by
-  // the rival) does it move to a fresh default, so it never shifts under the
-  // player while they are looking at it.
-  const [focused, setFocused] = useState<string | null>(() => defaultFocus(pool));
+  // Focused hero — previewed in the live card + dossier, and what LOCK takes.
+  // Nothing is chosen for the player: the draft opens with no hero focused,
+  // and once the focused one leaves the pool (locked, or taken by the rival)
+  // the focus clears again, so a green frame only ever means "you tapped
+  // this". LOCK waits until there is one.
+  const [focused, setFocused] = useState<string | null>(null);
   useEffect(() => {
-    if (!focused || !pool.includes(focused)) setFocused(defaultFocus(pool));
+    if (focused && !pool.includes(focused)) setFocused(null);
   }, [pool, focused]);
 
   const lock = () => {
@@ -237,7 +232,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
         )}
       </div>
 
-      <Dossier heroId={focused} compact={isMobile} />
+      <Dossier heroId={focused} compact={isMobile} hint={myTurn && !focused && !autoName ? 'Tap a hero to see them, then Lock' : undefined} />
 
       {/* Team line + cards */}
       <div
@@ -663,9 +658,16 @@ function PreferredCluster({ ids, pool }: { ids: string[]; pool: string[] }) {
 // DOSSIER
 // =============================================================================
 
-function Dossier({ heroId, compact }: { heroId: string | null; compact: boolean }) {
+function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: boolean; hint?: string }) {
   const data = heroId ? CARDS_BY_ID[heroId] : null;
-  if (!heroId || !data || data.type !== 'hero') return <div style={{ minHeight: compact ? 40 : 48 }} />;
+  if (!heroId || !data || data.type !== 'hero') {
+    // Nothing chosen yet: on the player's pick, say what to do in the dossier's place.
+    return (
+      <div style={{ minHeight: compact ? 40 : 48, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+        {hint && <span style={{ ...text.label, fontSize: compact ? 10.5 : 12, letterSpacing: '0.2em', color: lobby.dim }}>{hint}</span>}
+      </div>
+    );
+  }
   const identity = getHeroIdentity(heroId);
   return (
     <motion.div

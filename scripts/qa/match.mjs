@@ -63,11 +63,12 @@ let failed = false;
 try {
   await b.navigate(`${DEV_URL}/?screen=match&vtclock=1`);
   await b.waitFor(`document.querySelector('[aria-label^="Select "]')`, { timeout: 20000 });
-  // ---- Draft: take the first hero on offer whenever Lock is live; tick for the AI in between.
+  // ---- Draft: on our pick (the plate reads Lock — it stays disabled until a hero is
+  // chosen) take the first hero on offer and lock it; tick for the AI in between.
   for (let i = 0; i < 80; i++) {
     const st = await b.evaluate(`(() => {
       const lock = ${byText('Lock')};
-      return { draft: !!document.querySelector('[aria-label^="Select "]') || !!lock, live: !!lock && !lock.disabled, mulligan: !!${lockIn}, board: !!${turnButton} };
+      return { draft: !!document.querySelector('[aria-label^="Select "]') || !!lock, live: !!lock, mulligan: !!${lockIn}, board: !!${turnButton} };
     })()`);
     if (st.mulligan || (!st.draft && st.board)) break;
     if (st.live) {
