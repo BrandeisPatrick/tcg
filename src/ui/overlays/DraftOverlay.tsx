@@ -5,8 +5,8 @@
 //   ▸ the rival's picks along a red bar across the top (card backs for the
 //     picks still to come; the next one pulses while the AI thinks)
 //   ▸ the full hero roster as a fixed grid of portrait tiles — taken heroes
-//     stay in place, dimmed and framed in their owner's colour, so the grid
-//     never reshuffles under the cursor
+//     stay in place, greyed out (whose pick it was is the strips' job), so
+//     the grid never reshuffles under the cursor
 //   ▸ a one-line dossier for whichever hero is focused
 //   ▸ YOUR team as four numbered tarot-style cards; the slot being drafted
 //     previews the focused hero in green, locked picks turn gold
@@ -74,15 +74,8 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   const oppPicks = draft.picks[oppId];
   const pool = draft.pool;
 
-  // Fixed roster order (data order) so tiles never move; ownership of taken
-  // heroes comes from the pick lists.
+  // Fixed roster order (data order) so tiles never move.
   const roster = useMemo(() => HEROES.map((h) => h.id), []);
-  const owner = useMemo(() => {
-    const m = new Map<string, 'me' | 'rival'>();
-    myPicks.forEach((id) => m.set(id, 'me'));
-    oppPicks.forEach((id) => m.set(id, 'rival'));
-    return m;
-  }, [myPicks, oppPicks]);
 
   // Focused hero — previewed in the live card + dossier. Opens on the default
   // (below); only once the focused one leaves the pool (locked, or taken by
@@ -233,7 +226,6 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
         <RosterGrid
           roster={roster}
           pool={pool}
-          owner={owner}
           focused={focused}
           myTurn={myTurn}
           compact={isMobile}
@@ -562,11 +554,10 @@ function CardBack({ w, h, live, tone, numeral, label }: {
 // =============================================================================
 
 function RosterGrid({
-  roster, pool, owner, focused, myTurn, compact, onFocus, onLock,
+  roster, pool, focused, myTurn, compact, onFocus, onLock,
 }: {
   roster: string[];
   pool: string[];
-  owner: Map<string, 'me' | 'rival'>;
   focused: string | null;
   myTurn: boolean;
   compact: boolean;
@@ -587,11 +578,10 @@ function RosterGrid({
         const data = CARDS_BY_ID[id];
         if (!data || data.type !== 'hero') return null;
         const available = pool.includes(id);
-        const who = owner.get(id);
         const isFocused = focused === id;
-        const frame = isFocused
-          ? lobby.green
-          : who === 'me' ? lobby.gold : who === 'rival' ? lobby.red : lobby.edge;
+        // A taken hero is simply grey: one colour for "gone", whoever took it.
+        // The pick strips along the top already say whose crew it joined.
+        const frame = isFocused ? lobby.green : lobby.edge;
         return (
           <motion.button
             key={id}
@@ -629,22 +619,10 @@ function RosterGrid({
                 objectFit: 'cover',
                 objectPosition: '50% 14%',
                 display: 'block',
-                filter: available ? 'none' : 'grayscale(0.85) brightness(0.45)',
+                filter: available ? 'none' : 'grayscale(1) brightness(0.4)',
                 userSelect: 'none',
               }}
             />
-            {/* Taken — the owner's colour wash. The frame colour already
-                says whose it is, so it carries no label. */}
-            {!available && (
-              <div
-                aria-hidden
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  background: who === 'me' ? 'rgba(217, 182, 74, 0.22)' : 'rgba(201, 48, 47, 0.28)',
-                }}
-              />
-            )}
           </motion.button>
         );
       })}
