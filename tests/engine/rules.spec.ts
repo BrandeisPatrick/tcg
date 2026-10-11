@@ -124,15 +124,16 @@ describe('rule: hero respawn after KO', () => {
     expect(corpse.respawnTurnsLeft).toBeUndefined();
   });
 
-  it('hero KO costs the patron a flat 1 (overflow discarded)', () => {
+  it("hero KO costs the patron the fallen hero's level (overflow discarded)", () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hp = 3;
+    target.level = 3;
     const beforePatron = G.players['1'].hp;
     damageUnit(G, target, 8, 'pure'); // 3 to KO, 5 overflow discarded
     expect(target.hp).toBe(0);
     reapDead(G, G.players['1']);
-    expect(G.players['1'].hp).toBe(beforePatron - 1); // death-only patron model
+    expect(G.players['1'].hp).toBe(beforePatron - 3); // death-only patron model: a Level 3 hero costs 3
   });
 
   it("AI auto-promotes the strongest bench hero when its Active dies", () => {
@@ -190,7 +191,7 @@ describe('rule: hero respawn after KO', () => {
 // ============================================================================
 // Ultimate unlock at turn 5
 // ============================================================================
-describe('rule: ultimates unlock at start of turn 5', () => {
+describe('rule: a hero earns its ultimate at Level 2', () => {
   // Drive the engine's turn.onBegin directly: it's the same handler the
   // client invokes, but bypassing the client lets us prime an empty hand so
   // the unlock isn't gated by MAX_HAND from passive draws.
@@ -199,20 +200,21 @@ describe('rule: ultimates unlock at start of turn 5', () => {
     onBegin({ G, ctx: { turn, currentPlayer: pid, numPlayers: 2 } as any, events: {} as any, random: {} as any });
   }
 
-  it('no ult enters hand before turn 5', () => {
+  it('no ult enters hand while every hero is Level 1, however late the turn', () => {
     const G = freshG();
     G.players['0'].hand = [];
-    for (let t = 1; t < 5; t++) {
+    for (let t = 1; t < 12; t += 2) {
       runOnBegin(G, t, '0');
       expect(G.players['0'].hand.filter((c) => c.cardId.startsWith('ult_')).length).toBe(0);
       G.players['0'].hand = [];
     }
   });
 
-  it('all linked ults are dealt to hand at the start of turn 5', () => {
+  it('every ult a hero has earned (Level 2) is dealt at the start of a turn', () => {
     const G = freshG();
     G.players['0'].hand = [];
-    runOnBegin(G, 5, '0');
+    for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
+    runOnBegin(G, 3, '0');
     const ultsInHand = new Set(G.players['0'].hand.filter((c) => c.cardId.startsWith('ult_')).map((c) => c.cardId));
     // Aggro deck heroes: Haze, Vindicta, Lash, Paige → their ults.
     for (const ult of ['ult_haze', 'ult_vindicta', 'ult_lash', 'ult_paige']) {
@@ -220,7 +222,7 @@ describe('rule: ultimates unlock at start of turn 5', () => {
     }
   });
 
-  it('an ult unlock that is blocked by a full hand retries next turn (not consumed)', () => {
+  it('an ult held back by a full hand is dealt at a later turn start (not consumed)', () => {
     const G = freshG();
     // Fill the hand so no ult fits.
     while (G.players['0'].hand.length < 7) {
@@ -230,11 +232,12 @@ describe('rule: ultimates unlock at start of turn 5', () => {
         statuses: [], exhausted: false, skillUsedThisTurn: false,
       } as any);
     }
-    runOnBegin(G, 5, '0');
+    G.players['0'].active!.level = 2;
+    runOnBegin(G, 3, '0');
     expect(G.players['0'].ultsConsumed.length).toBe(0);
-    // Empty hand and retry next turn — ults should still be deliverable.
+    // Empty hand and retry next turn — the ult should still be deliverable.
     G.players['0'].hand = [];
-    runOnBegin(G, 6, '0');
+    runOnBegin(G, 5, '0');
     expect(G.players['0'].ultsConsumed.length).toBeGreaterThan(0);
   });
 });

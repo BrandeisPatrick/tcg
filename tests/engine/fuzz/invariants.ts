@@ -16,7 +16,7 @@ import {
   LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_EQUIPMENT_PER_HERO, MAX_HAND, MAX_LEVEL,
   RETREAT_COST, SKILL_COST, SOULS_MAX,
 } from '@/engine/constants';
-import { isRespawning, stepInCandidates } from '@/engine/query';
+import { isRespawning, koPatronDamage, stepInCandidates } from '@/engine/query';
 import { PIDS, boardOf, describeUnit, everyCard, isHeroCard, other } from './oracle';
 
 export interface Violation {
@@ -269,8 +269,9 @@ export function collectTransitionViolations(
   }
   if (before.G.draft || after.G.draft) return out;
 
-  // The patron only loses HP when one of its heroes falls: exactly 1 per hero
-  // that went from alive to a corpse during this move, and never gains any.
+  // The patron only loses HP when one of its heroes falls: the level of each
+  // hero that went from alive to a corpse during this move (the level it fell
+  // at — a level persists through death), and it never gains any.
   // (Skipped once an iid is duplicated: hero identity is the iid, and a clone of
   // a card — already reported as `iid-unique` — would make the count meaningless.)
   const duplicated = hasDuplicateIids(before.G) || hasDuplicateIids(after.G);
@@ -278,15 +279,15 @@ export function collectTransitionViolations(
     const b = before.G.players[pid];
     const a = after.G.players[pid];
     const was = heroesByIid(b);
-    let fell = 0;
+    let owed = 0;
     const names: string[] = [];
     for (const [iid, h] of heroesByIid(a)) {
       const prev = was.get(iid);
-      if (prev && !isRespawning(prev) && isRespawning(h)) { fell++; names.push(h.cardId); }
+      if (prev && !isRespawning(prev) && isRespawning(h)) { owed += koPatronDamage(h); names.push(`${h.cardId} Lv${h.level ?? 1}`); }
     }
     const drop = b.hp - a.hp;
-    if (drop !== fell) {
-      add('patron-delta', pid, `P${pid} patron hp ${b.hp} -> ${a.hp} (drop ${drop}) but ${fell} of its heroes fell [${names.join(',')}]`);
+    if (drop !== owed) {
+      add('patron-delta', pid, `P${pid} patron hp ${b.hp} -> ${a.hp} (drop ${drop}) but its fallen heroes owe ${owed} [${names.join(',')}]`);
     }
   }
 

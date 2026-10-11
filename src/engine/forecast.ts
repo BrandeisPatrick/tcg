@@ -72,9 +72,10 @@ export interface AttackPlan {
   /** HP the defender's Active loses over the whole attack (clamped ≥ 0) —
    *  swings, riders and detonations together. */
   damageToActive: number;
-  /** Patron HP the attack costs the defender: the flat KO_PATRON_DAMAGE when
-   *  its Active is knocked out, 0 otherwise. The swings themselves never reach
-   *  the patron — damage past 0 HP is discarded, not spilled. */
+  /** Patron HP the attack costs the defender: the fallen hero's level when
+   *  its Active is knocked out (`koPatronDamage`), 0 otherwise. The swings
+   *  themselves never reach the patron — damage past 0 HP is discarded, not
+   *  spilled. */
   patronDamage: number;
   /** iid of the defender's Active if it fell during the attack. */
   defenderActiveKO: string | null;

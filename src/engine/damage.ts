@@ -6,6 +6,7 @@ import { currentCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { pushFx, fxSource } from './fx';
+import { EXP_ON_KILL } from './constants';
 
 /** Presentation hints for the FX layer, passed by call sites whose damage is
  *  one of a kind (a Djinn's Mark detonation, a Killing Blow execute, a Tesla
@@ -101,7 +102,7 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   const typeLabel = type === 'attack' ? 'bullet' : type;
   pushLog(G, `${arrow}: ${dmg} ${typeLabel} dmg (${targetName} ${target.hp} HP).`);
 
-  // The patron is ONLY damaged when a hero dies (flat 1, in killInPlace) —
+  // The patron is ONLY damaged when a hero dies (its level, in killInPlace) —
   // excess past 0 HP is discarded, not spilled. Just clamp.
   if (target.hp < 0) target.hp = 0;
 
@@ -124,13 +125,13 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     fireTriggers(G, target, 'onBearerDamagedBySpirit', { reaction: true });
   }
 
-  // Kill blow → +2 exp to the killer hero (only the hit that drops hp to 0).
-  // A kill is the highest-value source of exp; rewards aggression over the
-  // passive +1 from end-of-turn and +1 from equip.
+  // Kill blow → EXP_ON_KILL to the killer hero (only the hit that drops hp
+  // to 0): the highest-value source of exp, so aggression outpaces standing
+  // the turn.
   if (hpBefore > 0 && target.hp <= 0 && cast && cast.source) {
     const srcData = CARDS_BY_ID[cast.source.cardId];
     if (srcData?.type === 'hero') {
-      grantExp(G, cast.source, 2);
+      grantExp(G, cast.source, EXP_ON_KILL);
     }
   }
 

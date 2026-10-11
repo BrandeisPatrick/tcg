@@ -5,41 +5,23 @@
  * next — the match's start- and end-of-turn pipeline must not fire on empty
  * boards and decks — so both do nothing until the draft is over.
  */
-import type { CardInstance, GameState, PlayerID, PlayerState } from '../types';
+import type { CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID } from '@/cards';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from '../statusOps';
 import { resolve } from '../death';
 import { heroData, liveBoardCards } from '../query';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
-import { allocatorOf } from '../ids';
 import { fireTriggers, type Trigger } from '../triggers';
-import { grantExp } from '../expSystem';
-import { drawCards, makeInstance } from '../deckOps';
-import { DRAW_PER_TURN, MAX_HAND, SOULS_REFILL_TABLE, ULT_UNLOCK_TURN } from '../constants';
+import { dealEarnedUltimates, grantExp } from '../expSystem';
+import { drawCards } from '../deckOps';
+import { DRAW_PER_TURN, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, SOULS_REFILL_TABLE } from '../constants';
 
 /** Souls a player's pool is refilled to at the start of their turn. */
 export function soulRefillForTurn(globalTurn: number): number {
   // globalTurn 1 → my turn 1 (idx 0), globalTurn 3 → my turn 2 (idx 1), ...
   const idx = Math.floor((globalTurn - 1) / 2);
   return SOULS_REFILL_TABLE[Math.min(idx, SOULS_REFILL_TABLE.length - 1)];
-}
-
-/** From ULT_UNLOCK_TURN on, each living hero's ultimate enters its owner's
- *  hand once per match (hand space permitting). */
-export function unlockUltimates(G: GameState, ps: PlayerState) {
-  if (G.turnNumber < ULT_UNLOCK_TURN) return;
-  const ids = allocatorOf(G);
-  for (const hero of liveBoardCards(ps)) {
-    const data = CARDS_BY_ID[hero.cardId];
-    if (data?.type !== 'hero' || !data.ult) continue;
-    if (ps.ultsConsumed.includes(data.ult)) continue;
-    if (ps.hand.length >= MAX_HAND) break;
-    const ult = makeInstance(ids, data.ult, ps.id, 'hand');
-    ps.hand.push(ult);
-    ps.ultsConsumed.push(data.ult);
-    pushLog(G, `P${ps.id} unlocked ${CARDS_BY_ID[data.ult]?.name ?? data.ult}.`);
-  }
 }
 
 /** Fire a turn-edge trigger for every living hero of `pid`: the hero's own
@@ -90,8 +72,8 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   ps.souls = soulRefillForTurn(realTurn);
   // Draw from deck
   drawCards(G, pid, DRAW_PER_TURN);
-  // Ultimate unlock
-  unlockUltimates(G, ps);
+  // An ultimate a hero earned while this hand was full is dealt now.
+  dealEarnedUltimates(G, ps);
   // Respawn ticks ONLY for the player whose turn is starting, so a corpse
   // decrements once per round (on its owner's turn) — RESPAWN_TURNS = 3 means
   // 3 of the owner's turns of downtime. (Ticking both players here was a bug:
@@ -116,9 +98,11 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   // Channeled ultimates (Dynamo / Seven / Warden) pulse their AoE at the
   // end of the turn, after everything the player did in it.
   tickCastingPulses(G, G.players[pid]);
-  // Hero leveling: +1 exp to each alive hero on the player's board.
-  for (const c of liveBoardCards(G.players[pid])) {
-    if (heroData(c)) grantExp(G, c, 1);
+  // Hero leveling: the lane is where a hero grows. The Active earns more for
+  // standing the turn than a bench hero does.
+  const ps = G.players[pid];
+  for (const c of liveBoardCards(ps)) {
+    if (heroData(c)) grantExp(G, c, c === ps.active ? EXP_PER_TURN_ACTIVE : EXP_PER_TURN_BENCH);
   }
   // Strip action-denying CC now that this player has spent their turn under
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).

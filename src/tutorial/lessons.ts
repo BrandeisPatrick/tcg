@@ -408,7 +408,7 @@ export const LESSONS: Lesson[] = [
     title: 'Level Up',
     blurb: 'A point of experience short. Gear tips him over.',
     face: 'hero_kelvin',
-    outro: 'Gear, kills and standing the turn all earn experience. A level raises the numbers.',
+    outro: 'Gear, kills and standing the turn all earn experience — the Active earns the most. A level raises the numbers, and Level 2 brings the hero\'s ultimate.',
     // Kelvin one point short of Level 2 and Lash at three: the point that
     // comes with the gear is the level, and the level is the point of attack
     // that finishes the fight. Turn two, so there is an attack to make.

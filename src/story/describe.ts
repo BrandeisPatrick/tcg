@@ -39,7 +39,7 @@ export interface StopFacts {
   combat: boolean;
   foes: number;         // 0 when not combat
   buff: { atk: number; hp: number };
-  patronHp: number;     // K.O.s needed to win the stop; 0 when not combat
+  patronHp: number;     // both patrons' HP at the stop (a fall costs the fallen hero's level); 0 when not combat
   leader?: CardId;
   lockedBy?: StoryNode;
 }

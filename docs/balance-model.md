@@ -62,8 +62,13 @@ This is strategy enabled by the rules, **not** a hard class — any hero can be 
 in any seat.
 
 ## 5. Current stat anchors (V1)
-- Patron HP **15**; lose at 0. Respawn 3 turns; a death chips 1 to your own patron
-  and gives the opponent +1 soul.
+- Patron HP **10** (tuned by the sim); lose at 0, or when every hero is down at
+  once. Respawn 3 turns; a death costs your own patron the fallen hero's
+  **level** and gives the opponent +1 soul.
+- **Earn it in the lane:** the Active earns 2 exp at the end of its turn, a
+  bench hero 1; +1 on equip, +2 on a kill blow (5 / 7 / 9 to level). A hero's
+  ultimate is dealt to hand when it reaches Level 2 — the front-liner earns
+  it first, a bench caster late — so ults arrive one at a time.
 - Base HP: squishy **4**, bruiser **6**, anchor tank **7**. Base BP: caster/support
   **1**, attacker/bruiser **2**, tank **1**.
 - Base skill damage **1–2**; heals/shields flat (Spirit scales **damage** only).

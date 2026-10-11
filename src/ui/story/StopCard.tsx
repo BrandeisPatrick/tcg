@@ -180,7 +180,7 @@ function CombatBody({ f, compact }: { f: StopFacts; compact: boolean }) {
         }}
       >
         <Fact label="Foes" value={f.foes} compact={compact} />
-        <Fact label="K.O.s to win" value={f.patronHp} compact={compact} rule />
+        <Fact label="Patron HP" value={f.patronHp} compact={compact} rule />
         <Fact label="Their edge" value={edge || 'None'} compact={compact} rule small />
       </dl>
     </>

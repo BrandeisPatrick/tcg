@@ -13,13 +13,18 @@ single-page React app.
 
 ## What's in the box
 
-- **15 heroes** drawn from Deadlock's roster (Abrams, Haze, Vindicta, Lash,
+- **19 heroes** drawn from Deadlock's roster (Abrams, Haze, Vindicta, Lash,
   Paige, Dynamo, Kelvin, Seven, Sinclair, …) each with ATK / HP / skill / passive / ultimate.
-- **15 spells** (active items) and **26 equipment** (passive items) mapped 1:1
+- **16 spells** (active items) and **44 equipment** (passive items) mapped 1:1
   to canon Deadlock items, verified against the `is_active_item` field of the
   [deadlock-api.com](https://deadlock-api.com/) catalogue.
-- **Refill soul economy** (Hearthstone-style): your pool refills 1→7 over the
-  first seven turns. No hoarding across turns. KO bounty (+1 capped at 7).
+- **Refill soul economy** (Hearthstone-style): your pool refills 1→10 over
+  your first ten turns. No hoarding across turns. KO bounty (+1, capped at 10).
+- **Earn it in the lane:** the Active earns two exp for standing the turn, a
+  bench hero one; gear and kills earn more. Level 2 brings a hero's ultimate
+  to hand — one at a time, as each hero earns it. A fallen hero costs its
+  patron its level: a leveled carry is the costliest to lose, and the one
+  worth hunting. A patron at 0 — or every hero down at once — loses.
 - **The turn:** cards, skills and a retreat in any order, with one attack
   among them. The attack is tapped on your Active's sheet: it swings at the
   rival Active for its bullet damage, costs nothing, and is one-way — the

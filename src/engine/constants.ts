@@ -28,14 +28,10 @@ export const MAX_EXTRA_ATTACKS = 6;
 
 // ---------- Patron, souls, drawing ----------
 
-/** Patron HP — the ONLY way it drops is a hero death (flat KO_PATRON_DAMAGE,
- *  in killInPlace). Low because each death is just 1 dmg; tuned via the eval
- *  sim for pacing. */
-export const PATRON_HP = 8;
-
-/** Patron HP a side loses each time one of its heroes falls — the only way a
- *  patron is ever damaged. */
-export const KO_PATRON_DAMAGE = 1;
+/** Patron HP — the ONLY way it drops is a hero death, which costs the fallen
+ *  hero's level (`koPatronDamage` in query.ts, charged in killInPlace). Tuned
+ *  via the eval sim for pacing. */
+export const PATRON_HP = 10;
 
 export const SOULS_START = 0;
 
@@ -53,8 +49,9 @@ export const DRAW_PER_TURN = 1;
 
 // ---------- Turn structure and death ----------
 
-/** The match turn from which a hero's ultimate may enter its owner's hand. */
-export const ULT_UNLOCK_TURN = 5;
+/** The level at which a hero has earned its ultimate: reaching it deals the
+ *  ult card to its owner's hand (`dealEarnedUltimates` in expSystem.ts). */
+export const ULT_UNLOCK_LEVEL = 2;
 
 /** Turns a hero takes to respawn after being KO'd. Long enough that death
  *  matters, short enough that you can rebuild. Hero stays in their slot,
@@ -63,8 +60,21 @@ export const RESPAWN_TURNS = 3;
 
 // ---------- Leveling ----------
 // Heroes start at Lv1, climb to Lv4 (cap). Step costs are 5 → 7 → 9 exp
-// (cumulative cap 21). Exp is earned at the end of the owner's turn (all board
-// heroes), on equipment attach, and on a kill blow; it persists across respawn.
+// (cumulative cap 21). Exp is earned in the lane: at the end of the owner's
+// turn the Active earns EXP_PER_TURN_ACTIVE and each bench hero
+// EXP_PER_TURN_BENCH; attaching equipment and landing a kill blow earn more.
+// It persists across respawn.
+
+/** Exp the Active earns at the end of its owner's turn — the lane is where a
+ *  hero grows, and where it is at risk. */
+export const EXP_PER_TURN_ACTIVE = 2;
+/** Exp a bench hero earns at the end of its owner's turn. */
+export const EXP_PER_TURN_BENCH = 1;
+/** Exp the bearer earns when equipment is attached to it. */
+export const EXP_ON_EQUIP = 1;
+/** Exp a hero earns for the hit that knocks an enemy out — the highest-value
+ *  source, so aggression outpaces standing the turn. */
+export const EXP_ON_KILL = 2;
 
 export const LEVEL_THRESHOLDS = [5, 7, 9] as const;
 export const START_LEVEL = 1 as const;

@@ -85,9 +85,10 @@ export function enemyDeckSize(depth: number, kind: NodeKind): number {
 /** Battle patron HP scales with depth: quick early skirmishes (a 1v1 opener
  *  shouldn't grind), epic late fights. Both sides share the value so the duel
  *  stays symmetric. STORY-ONLY — standard games use the PATRON_HP constant, so
- *  this never touches Quick Match balance. Each enemy death drops the patron by
- *  one (death-only model), so this is the cumulative-kill bar to win a node:
- *  depth-0 opener = 1 kill, City Hall (d2) = 3, far bosses (d6-7) still = 7-8. */
+ *  this never touches Quick Match balance. A fall costs the patron the fallen
+ *  hero's level (death-only model), so this is the bar to win a node: the
+ *  depth-0 opener falls to the first K.O., City Hall (d2) to three fresh
+ *  heroes or a leveled one and a fresh one, far bosses (d6-7) still 7-8. */
 export function patronHpForDepth(depth: number): number {
   return Math.min(8, 1 + depth);
 }

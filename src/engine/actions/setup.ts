@@ -11,7 +11,7 @@ import { allocatorFor, allocatorOf, newCounters, type IidAllocator } from '../id
 import { makeInstance } from '../deckOps';
 import { pushLog } from '../log';
 import { INITIAL_DRAW, PATRON_HP, SOULS_START } from '../constants';
-import { soulRefillForTurn, unlockUltimates } from './turn';
+import { soulRefillForTurn } from './turn';
 
 /** Empty PlayerState used while the pre-match draft is running — no heroes,
  *  no deck. Replaced via `buildPlayer()` once the 8th draft pick lands. */
@@ -224,7 +224,6 @@ export function draftPick(G: GameState, ctx: { currentPlayer: string; turn: numb
     G.turnNumber = 1;
     const currentPs = G.players[ctx.currentPlayer as PlayerID];
     currentPs.souls = soulRefillForTurn(1);
-    unlockUltimates(G, currentPs);
     pushLog(G, 'Match begins.');
     return { endTurn: ctx.currentPlayer !== '0' };
   }

@@ -1,15 +1,16 @@
 /**
  * Death and the state-based pass that follows every change to the board: a
- * hero at 0 HP falls in place (respawn timer, patron tax, KO bounty), and a
- * fallen Active is replaced. `resolve` is the one entry point; call it after
- * ANY mutation (combat, ability, status tick, turn start, promotion).
+ * hero at 0 HP falls in place (respawn timer, a patron tax of its level, KO
+ * bounty), and a fallen Active is replaced. `resolve` is the one entry point;
+ * call it after ANY mutation (combat, ability, status tick, turn start,
+ * promotion).
  */
 import type { CardInstance, GameState, PlayerID, PlayerState } from './types';
 import { CARDS_BY_ID } from '@/cards';
 import { pushLog } from './log';
 import { damagePlayer } from './damage';
-import { isRespawning, stepInCandidates } from './query';
-import { KO_PATRON_DAMAGE, RESPAWN_TURNS, SOULS_MAX } from './constants';
+import { isRespawning, koPatronDamage, stepInCandidates } from './query';
+import { RESPAWN_TURNS, SOULS_MAX } from './constants';
 
 /**
  * Process a hero's death in place: wipe active statuses, arm the respawn
@@ -26,7 +27,9 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   const before = G.players[oppId].souls;
   G.players[oppId].souls = Math.min(SOULS_MAX, before + 1);
   if (G.players[oppId].souls > before) pushLog(G, `P${oppId} +1 Souls (KO bounty).`);
-  damagePlayer(G, ps.id, KO_PATRON_DAMAGE);
+  // The patron pays the fallen hero's level: a leveled carry is the costliest
+  // loss on the board.
+  damagePlayer(G, ps.id, koPatronDamage(hero));
   // Rem rescue: a merged Rem detaches to safety (back to the bench) instead of
   // dying with the body — and her granted max-HP is reverted here too. (A
   // merged Rem is the only attached card that carries a merge timer.)

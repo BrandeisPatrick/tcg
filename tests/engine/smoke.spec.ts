@@ -6,6 +6,7 @@ import type { GameState } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { configureReadyMatch } from './_helpers';
 import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
+import { PATRON_HP } from '@/engine/constants';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -51,8 +52,8 @@ describe('Deadlock TCG engine smoke', () => {
   it('initializes a match with two full boards and 3-card hands', () => {
     const c = newClient();
     const { G, ctx } = snap(c);
-    expect(G.players['0'].hp).toBe(8); // patron HP
-    expect(G.players['1'].hp).toBe(8);
+    expect(G.players['0'].hp).toBe(PATRON_HP);
+    expect(G.players['1'].hp).toBe(PATRON_HP);
     expect(G.players['0'].active).not.toBeNull();
     expect(G.players['1'].active).not.toBeNull();
     expect(G.players['0'].bench.filter(Boolean).length).toBe(3);

@@ -8,7 +8,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { getAbility } from '../registry';
 import { findCardOnBoard, wornEquipment } from '../query';
 import { cardCost } from '../legality';
-import { MAX_EQUIPMENT_PER_HERO } from '../constants';
+import { EXP_ON_EQUIP, MAX_EQUIPMENT_PER_HERO } from '../constants';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { nextActionId } from '../ids';
@@ -45,9 +45,9 @@ function applyOnPlay(G: GameState, pid: PlayerID, source: CardInstance, target?:
   if (data?.type === 'equipment' && data.charges) {
     source.charges = data.charges;
   }
-  // Hero leveling: +1 exp to the bearer hero when an item is attached.
+  // Hero leveling: the bearer earns EXP_ON_EQUIP when an item is attached.
   if (data?.type === 'equipment' && target && CARDS_BY_ID[target.cardId]?.type === 'hero') {
-    grantExp(G, target, 1);
+    grantExp(G, target, EXP_ON_EQUIP);
   }
 }
 

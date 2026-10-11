@@ -18,6 +18,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID, type Blockable } from '@/statuses';
 import type { AbilityDef } from '@/abilities';
 import { getAbility } from './registry';
+import { START_LEVEL } from './constants';
 
 // ---------- The board ----------
 
@@ -91,6 +92,12 @@ function boardWiped(ps: PlayerState): boolean {
   );
   if (heroes.length === 0) return false; // pre-match / nothing to wipe yet
   return heroes.every((c) => (c.respawnTurnsLeft ?? 0) > 0 || c.hp <= 0);
+}
+
+/** Patron HP a hero's fall costs its owner: the fallen hero's level, so a
+ *  leveled carry is the costliest to lose — and the one worth hunting. */
+export function koPatronDamage(hero: CardInstance): number {
+  return hero.level ?? START_LEVEL;
 }
 
 // ---------- Targets ----------

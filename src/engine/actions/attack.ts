@@ -45,8 +45,8 @@ export function attack(G: GameState, pid: PlayerID) {
     swing(G, atk, target, index++, power);
   }
   atk.statuses = atk.statuses.filter((s) => s.id !== 'extra_attack');
-  // The patron is only damaged when a hero dies (flat KO_PATRON_DAMAGE, in
-  // killInPlace), never by the swings themselves.
+  // The patron is only damaged when a hero dies (its level, `koPatronDamage`,
+  // charged in killInPlace), never by the swings themselves.
   resolve(G);
 }
 

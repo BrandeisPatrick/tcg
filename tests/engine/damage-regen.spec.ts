@@ -136,15 +136,16 @@ describe('damage: mitigation pipeline order', () => {
     expect(t.statuses.find((s) => s.id === 'shield')?.value).toBe(10);
   });
 
-  it('hero death costs the patron a flat 1 (overflow is discarded)', () => {
+  it("hero death costs the patron the fallen hero's level (overflow is discarded)", () => {
     const G = freshG();
     const t = G.players['1'].active!;
     t.hp = 2;
+    t.level = 2;
     const patronBefore = G.players['1'].hp;
     damageUnit(G, t, 10, 'spirit'); // 8 overflow is discarded, not spilled
     expect(t.hp).toBe(0);
     reapDead(G, G.players['1']);
-    expect(patronBefore - G.players['1'].hp).toBe(1); // flat 1 on death
+    expect(patronBefore - G.players['1'].hp).toBe(2); // a Level 2 hero costs 2
   });
 
   it('Zero / negative damage is a no-op and does NOT fire equipment triggers', () => {
