@@ -42,6 +42,10 @@ export interface StorySetup {
 export interface MatchConfig {
   playerDeck: CardId[];
   heroPreferences: (CardId | null)[];
+  /** The hero the title's Quick Match card featured — the recommended first
+   *  pick: the draft opens focused on it for the first choice only. Unset for
+   *  a deep-linked match or a rematch, where nothing is pre-selected. */
+  featuredHero?: CardId;
   /** When present, the game skips the draft and builds the story battle. */
   story?: StorySetup;
   /**

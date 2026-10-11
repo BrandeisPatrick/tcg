@@ -7,6 +7,7 @@ import { LoadoutScreen } from './ui/collection/LoadoutScreen';
 import { DeckEditorScreen } from './ui/collection/DeckEditorScreen';
 import { PosterBackdrop } from './ui/PosterBackdrop';
 import { SystemLayer } from './ui/system/SystemMenu';
+import type { CardId } from './engine/types';
 import { setMatchConfig, getMatchConfig } from './storage/matchConfig';
 import { getPreferredHeroes, getSelectedDeck } from './storage/playerData';
 import { LESSONS, lessonById } from './tutorial/lessons';
@@ -119,12 +120,15 @@ export function Root() {
     setView({ screen: 'match' });
   }, []);
 
-  const goMatch = useCallback(() => {
+  // From the title, `featuredHero` is the hero on the Quick Match card — the
+  // draft's recommended first pick. A rematch passes none.
+  const goMatch = useCallback((featuredHero?: CardId) => {
     const deck = getSelectedDeck();
     const prefs = getPreferredHeroes();
     setMatchConfig({
       playerDeck: deck?.cards ?? [],
       heroPreferences: prefs,
+      featuredHero,
       // Clear both scripted setups so a Quick Match runs the normal draft path.
       story: undefined,
       tutorial: undefined,

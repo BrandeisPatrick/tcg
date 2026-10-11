@@ -72,11 +72,15 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   const roster = useMemo(() => HEROES.map((h) => h.id), []);
 
   // Focused hero — previewed in the live card + dossier, and what LOCK takes.
-  // Nothing is chosen for the player: the draft opens with no hero focused,
-  // and once the focused one leaves the pool (locked, or taken by the rival)
-  // the focus clears again, so a green frame only ever means "you tapped
-  // this". LOCK waits until there is one.
-  const [focused, setFocused] = useState<string | null>(null);
+  // The first choice opens on the recommended hero (the one the title's Quick
+  // Match card featured), ready to lock. That is the only time a hero is
+  // chosen for the player: once the focused one leaves the pool (locked, or
+  // taken by the rival) the focus clears, and from then on a green frame only
+  // ever means "you tapped this". LOCK waits until there is one.
+  const [focused, setFocused] = useState<string | null>(() => {
+    const featured = getMatchConfig().featuredHero;
+    return draft.currentIndex === 0 && featured && pool.includes(featured) ? featured : null;
+  });
   useEffect(() => {
     if (focused && !pool.includes(focused)) setFocused(null);
   }, [pool, focused]);
