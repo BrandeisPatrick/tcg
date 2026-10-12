@@ -1,10 +1,11 @@
 /**
- * The turn's attack: the Active swings at the rival Active for its bullet
- * damage, then once more for each Extra Attack it has queued. It costs
+ * The turn's attack: the Active swings at its target — the rival Active, or
+ * with reach any living enemy hero the player names — for its bullet damage,
+ * then once more at the same hero for each Extra Attack it has queued. It costs
  * nothing, it is one-way — the defender does not strike back — and the turn
  * stays with the player, who can go on playing cards, skills and a retreat
  * before `endTurn`. `attackBlocked` (legality.ts) holds every condition, so
- * this assumes a living Active, a living rival Active and a swing that deals
+ * this assumes a living Active, a legal target and a swing that deals
  * something.
  *
  * Every swing is reported as a `swing` event BEFORE its damage, so the stream
@@ -15,20 +16,24 @@ import type { CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID } from '@/cards';
 import { damageUnit } from '../damage';
 import { resolve } from '../death';
-import { attackPower, otherPlayer, type AttackPower } from '../query';
+import { attackTargets } from '../legality';
+import { attackPower, findCardOnBoard, isRespawning, isUntargetable, targetsFor, type AttackPower } from '../query';
 import { fireTriggers } from '../triggers';
 import { withCast } from '../castContext';
 import { pushFx } from '../fx';
 
-/** Make the turn's attack: mark it spent, swing, then each Extra Attack. */
-export function attack(G: GameState, pid: PlayerID) {
-  G.attackUsed = true;
+/** Make the turn's attack: mark it spent, swing, then each Extra Attack. The
+ *  target is `targetIid`, left out the first of `attackTargets`. */
+export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
   const atk = G.players[pid].active!;
+  // Who is swung at is settled before the attack is marked spent: once it is,
+  // `attackTargets` is empty.
+  const target = (targetIid === undefined ? attackTargets(G, pid)[0] : findCardOnBoard(G, targetIid)?.card)!;
+  G.attackUsed = true;
   atk.attackedThisTurn = true;
-  const target = G.players[otherPlayer(pid)].active!;
 
   // ---- The primary swing. ----
-  swing(G, atk, target, 0, attackPower(atk));
+  swing(G, atk, target, 0, attackPower(atk, target));
 
   // ---- Extra Attacks: additional full-power swings queued this turn (Active
   // Reload, Burst Fire, Fixation — the value of the `extra_attack` status,
@@ -40,13 +45,37 @@ export function attack(G: GameState, pid: PlayerID) {
   let index = 1;
   for (let i = 0; i < extras; i++) {
     if (atk.hp <= 0 || target.hp <= 0) break;
-    const power = attackPower(atk);
+    const power = attackPower(atk, target);
     if (power.total <= 0) continue;
     swing(G, atk, target, index++, power);
   }
   atk.statuses = atk.statuses.filter((s) => s.id !== 'extra_attack');
   // The patron is only damaged when a hero dies (its level, `koPatronDamage`,
   // charged in killInPlace), never by the swings themselves.
+  resolve(G);
+}
+
+/**
+ * A full-power swing at every living enemy hero, in `targetsFor` order: each is
+ * its own `swing` (index 0, 1, 2, ...) with its power read for that hero, its
+ * own on-attack procs, and the state-based pass at the end. For an ultimate that
+ * attacks the whole board. It is not "the turn's attack": `G.attackUsed` and the
+ * attacker's flags are left as they are, and Extra Attacks are neither read nor
+ * spent. A hero a Dome keeps from being the target of an attack is skipped, and
+ * so is a swing that would deal nothing (the attacker is Disarmed, say).
+ */
+export function attackAll(G: GameState, attacker: CardInstance) {
+  if (isRespawning(attacker)) return;
+  let index = 0;
+  for (const foe of targetsFor(G, attacker.ownerId, 'enemyHero')) {
+    if (attacker.hp <= 0) break;
+    // A hero an earlier swing's follow-through (a chain, a bounce) already took
+    // down is not hit again.
+    if (foe.hp <= 0 || isUntargetable(foe, 'attack')) continue;
+    const power = attackPower(attacker, foe);
+    if (power.total <= 0) continue;
+    swing(G, attacker, foe, index++, power);
+  }
   resolve(G);
 }
 

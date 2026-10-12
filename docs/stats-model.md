@@ -13,14 +13,15 @@ live in `src/cards/*.ts` headers.
 ## 1. Turn structure & when statuses tick
 
 Two players alternate. Each status is defined once, in `src/statuses/index.ts`:
-what it **blocks** (a basic attack, a skill, a channel's pulse), whether it is
-hard **crowd control** (`cc`: Stun, Silenced, Disarm, Sleep) and how a second
-application **stacks**. Two clocks run on a unit's **own** turns only:
+what it **blocks** (a basic attack, a skill, a channel's pulse, a move), whether
+it is hard **crowd control** (`cc`: Stun, Silenced, Disarm, Sleep, Rooted,
+Rabbit) and how a second application **stacks**. Two clocks run on a unit's
+**own** turns only:
 
 - **Start of its owner's turn** (`tickStartOfTurn`, `src/engine/statusOps.ts`):
-  Bleed deals its damage; Charged, Djinn's Mark and Reverb go off if they are
-  about to expire; then every status that is **not** crowd control drops by 1,
-  and any at 0 is removed.
+  Bleed deals its damage; Charged, Djinn's Mark, Reverb and Last Stand go off
+  if they are about to expire; then every status that is **not** crowd control
+  drops by 1, and any at 0 is removed.
 - **End of its owner's turn** (`tickEndOfTurnCC`): crowd control drops by 1
   (Sleep's wake-up burst goes off as it expires). So CC is stripped only after
   the unit has spent a turn under it.
@@ -32,7 +33,7 @@ after the use (CD 2 = every other turn).
 
 A lockout is checked when the unit tries to act: `isBlocked(card, act)`
 (`src/engine/query.ts`) reads each status's `blocks`, and the attack gate, the
-skill gate, the channel pulse, the AI and the board all ask it.
+skill gate, the retreat gate, the channel pulse, the AI and the board all ask it.
 
 ---
 
@@ -40,10 +41,12 @@ skill gate, the channel pulse, the AI and the board all ask it.
 
 | You apply… | Realized on | Stored duration **N** → real effect |
 |---|---|---|
-| Hard CC on an enemy (stun, silenced, disarm, sleep) | the enemy's turns | **N** turns denied |
+| Hard CC on an enemy (stun, silenced, disarm, sleep, rabbit) | the enemy's turns | **N** turns denied |
+| Rooted on an enemy hero | the enemy's turns | **N** turns it cannot retreat or be swapped into the lane (hard CC, so it ticks as that turn ends; it can still fight) |
 | A DoT on an enemy (bleed) | the enemy's turn starts | **N** ticks of damage |
 | A stat debuff on an enemy (*_power_down, *_resist_down) | the enemy's turns | **N − 1** enemy turns covered |
 | A defensive buff on your unit (unstoppable) | the opponent's turns | **N** turns covered |
+| A dome on your unit | the opponent's turns | **N** turns covered: no basic attack can be aimed at it. Not CC, so it ticks at the start of your turn — put up for 1 on your turn it is gone when your next one begins |
 | A stat buff on your unit (weapon_power, spirit_power) | your attacks and casts | until your **N**th turn start from now |
 
 Why stat debuffs are the odd one out: they are not crowd control, so they tick

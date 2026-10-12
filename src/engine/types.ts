@@ -74,6 +74,9 @@ export interface StatusInstance {
    *  (Seven's Storm Cloud marks its `casting` status with 1). Absent on
    *  everything else. */
   ramp?: number;
+  /** HP the bearer heals when the status goes off (Last Stand's). Absent on
+   *  everything else, and read as 0 where a status that heals does not say. */
+  heal?: number;
 }
 
 export interface CardInstance {

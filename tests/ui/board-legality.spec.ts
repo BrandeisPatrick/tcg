@@ -278,10 +278,10 @@ describe('a refused move is said, with the engine\'s own code', () => {
 // below is keyed by the engine's own union, so a code added there is a compile
 // error here until it is worded.
 describe('every block code has words', () => {
-  const skill: Record<SkillBlock, true> = { noSkill: true, down: true, used: true, attacked: true, status: true, cooldown: true, souls: true, target: true };
-  const attack: Record<AttackBlock, true> = { turn1: true, used: true, skill: true, noActive: true, cannot: true, noTarget: true };
+  const skill: Record<SkillBlock, true> = { noSkill: true, down: true, used: true, attacked: true, status: true, cooldown: true, hp: true, souls: true, target: true };
+  const attack: Record<AttackBlock, true> = { turn1: true, used: true, skill: true, noActive: true, cannot: true, noTarget: true, target: true };
   const play: Record<PlayBlock, true> = { notInHand: true, souls: true, target: true, duplicate: true, full: true, discard: true };
-  const move: Record<MoveBlock, true> = { same: true, empty: true, benchOnly: true, down: true, souls: true, illegal: true };
+  const move: Record<MoveBlock, true> = { same: true, empty: true, benchOnly: true, down: true, rooted: true, souls: true, illegal: true };
   const promote: Record<PromoteBlock, true> = { notOnBench: true, notOwed: true, down: true, benchOnly: true };
 
   it('skills: all but noSkill (nothing to say: there is no skill to offer)', () => {

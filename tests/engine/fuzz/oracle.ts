@@ -134,6 +134,45 @@ export function targetLegal(
 }
 
 // ---------------------------------------------------------------------------
+// Rules oracle: the basic attack. Written from the rules, not copied from
+// `attackTargets` / `attackBlocked`: the attack is open when it is not Turn 1,
+// not yet made this turn, and the Active is standing and has not used its skill;
+// it may be aimed at the rival's living Active — or, if a passive of the hero's or
+// a piece of gear it wears has `reach`, at any living enemy hero — and never at a
+// hero under a Dome.
+// ---------------------------------------------------------------------------
+
+/** Does a passive of the hero's, or gear it wears, give its attack reach? */
+export function carriesReach(hero: CardInstance): boolean {
+  const data = CARDS_BY_ID[hero.cardId];
+  const worn = (hero.attached ?? []).flatMap((a) => {
+    const d = CARDS_BY_ID[a.cardId];
+    return d?.type === 'equipment' ? d.abilities ?? [] : [];
+  });
+  const ids = [...(data?.type === 'hero' ? data.passives ?? [] : []), ...worn];
+  return ids.some((id) => !!getAbility(id)?.reach);
+}
+
+/** Is the turn's attack open to `pid`'s Active at all (whoever it might aim at,
+ *  and whatever the swing would deal)? */
+export function attackOpenFor(G: GameState, pid: PlayerID): boolean {
+  const active = G.players[pid].active;
+  return G.turnNumber > 1 && !G.attackUsed && !!active && !isRespawning(active) && !active.skillUsedThisTurn;
+}
+
+/** The heroes `pid`'s Active may aim its attack at, in board order (the rival's
+ *  Active, then its bench). Silent on whether the attack is open and whether the
+ *  swing would deal anything: those are asked on their own. */
+export function attackTargetsOracle(G: GameState, pid: PlayerID): CardInstance[] {
+  const active = G.players[pid].active;
+  const foe = G.players[other(pid)];
+  if (!active) return [];
+  const alive = boardOf(foe).filter((c) => isHeroCard(c) && !isRespawning(c));
+  const reachable = carriesReach(active) ? alive : alive.filter((c) => c.iid === foe.active?.iid);
+  return reachable.filter((c) => !c.statuses.some((s) => s.id === 'dome'));
+}
+
+// ---------------------------------------------------------------------------
 // Direct move calls on a clone (what heuristic.ts simulateMove does).
 // ---------------------------------------------------------------------------
 

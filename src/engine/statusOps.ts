@@ -19,7 +19,7 @@ const MAGNITUDE_STATUSES: Set<StatusId> = new Set([
   'bleed', 'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power',
   'djinns_mark', 'weapon_power_down', 'spirit_power_down',
   'bullet_resist_down', 'spirit_resist_down', 'healing_boost', 'healing_boost_down',
-  'extra_attack',
+  'extra_attack', 'fixation', 'last_stand',
 ]);
 
 // Stat-reduction debuffs store a positive magnitude that represents a reduction.
@@ -46,9 +46,10 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  * on its body.
  *
  * `opts.ramp` marks a channel that escalates: its value climbs by `ramp`
- * after each pulse (see tickCastingPulses).
+ * after each pulse (see tickCastingPulses). `opts.heal` is the HP the bearer
+ * recovers when the status goes off (Last Stand, in tickStartOfTurn).
  */
-export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number, opts?: { tag?: FxTag; ramp?: number }) {
+export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number, opts?: { tag?: FxTag; ramp?: number; heal?: number }) {
   if (isRespawning(target)) return;
   const name = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
 
@@ -81,9 +82,11 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
       existing.duration = Math.max(existing.duration, duration);
     }
     if (opts?.ramp) existing.ramp = opts.ramp;
+    if (opts?.heal) existing.heal = opts.heal;
   } else {
     const inst: StatusInstance = { id, value, duration };
     if (opts?.ramp) inst.ramp = opts.ramp;
+    if (opts?.heal) inst.heal = opts.heal;
     target.statuses.push(inst);
   }
   // Natural-prose log: buffs read "gained", debuffs read "suffered" so the sign
@@ -116,6 +119,11 @@ export function cleanseDebuffs(target: CardInstance) {
   target.statuses = target.statuses.filter((s) => !DEBUFF_IDS.has(s.id));
 }
 
+// What ends when a hero leaves the Active slot lives in lane.ts (a leaf, so
+// death.ts and board.ts can call it without a cycle); it is re-exported here
+// beside the other status rules.
+export { leaveActive } from './lane';
+
 // Tick start-of-turn effects on a player's board.
 export function tickStartOfTurn(G: GameState, ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
@@ -144,6 +152,20 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
     if (reverb && reverb.duration === 1) {
       pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Mystic Reverb echoes.`);
       damageUnit(G, c, reverb.value, 'spirit', 'Mystic Reverb', { tag: 'reverb' });
+    }
+    // Last Stand: a delayed strike from the bearer's side. When its timer reaches 1 (about
+    // to tick to 0) it goes off — its value plus the bearer's Spirit as spirit damage to
+    // every living enemy hero, then the bearer heals what the status carries (nothing, if
+    // it carries nothing). The decay path removes it below.
+    const lastStand = c.statuses.find((s) => s.id === 'last_stand');
+    if (lastStand && lastStand.duration === 1) {
+      const name = CARDS_BY_ID[c.cardId]?.name ?? c.cardId;
+      pushLog(G, `${name} — Last Stand goes off.`);
+      const perHit = lastStand.value + effectiveSpirit(c);
+      for (const e of liveBoardCards(G.players[otherPlayer(ps.id)])) {
+        damageUnit(G, e, perHit, 'spirit', 'Last Stand', { tag: 'channel', source: c });
+      }
+      if (lastStand.heal) healUnit(G, c, lastStand.heal, 'Last Stand');
     }
     // Siphon Bullets: temporary max-HP transfer reverts when the marker expires.
     const drain = c.statuses.find((s) => s.id === 'siphon_drain');

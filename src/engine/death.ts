@@ -10,7 +10,23 @@ import { CARDS_BY_ID } from '@/cards';
 import { pushLog } from './log';
 import { damagePlayer } from './damage';
 import { isRespawning, koPatronDamage, stepInCandidates } from './query';
+import { leaveActive } from './lane';
 import { RESPAWN_TURNS, SOULS_MAX } from './constants';
+
+/**
+ * Give `pid` `n` souls, up to the ceiling (SOULS_MAX). A bounty must never
+ * subtract: a pool already at the ceiling is left as it is. The log says what
+ * was gained (nothing is logged when nothing was) and why. Returns the souls
+ * actually gained.
+ */
+export function awardSouls(G: GameState, pid: PlayerID, n: number, reason?: string): number {
+  const player = G.players[pid];
+  const before = player.souls;
+  player.souls = Math.max(before, Math.min(SOULS_MAX, before + n));
+  const gained = player.souls - before;
+  if (gained > 0) pushLog(G, `P${pid} +${gained} Souls${reason ? ` (${reason})` : ''}.`);
+  return gained;
+}
 
 /**
  * Process a hero's death in place: wipe active statuses, arm the respawn
@@ -22,13 +38,9 @@ import { RESPAWN_TURNS, SOULS_MAX } from './constants';
  */
 export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} fell.`);
-  // Cap the KO bounty at the soul ceiling. Using a lower cap would *reduce* a
-  // player's souls when they scored a kill while holding 8–10 — the bounty
-  // must never subtract.
+  // The KO bounty is capped at the soul ceiling (and never subtracts: see awardSouls).
   const oppId: PlayerID = ps.id === '0' ? '1' : '0';
-  const before = G.players[oppId].souls;
-  G.players[oppId].souls = Math.min(SOULS_MAX, before + 1);
-  if (G.players[oppId].souls > before) pushLog(G, `P${oppId} +1 Souls (KO bounty).`);
+  awardSouls(G, oppId, 1, 'KO bounty');
   // The patron pays the fallen hero's level: a leveled carry is the costliest
   // loss on the board.
   damagePlayer(G, ps.id, koPatronDamage(hero));
@@ -150,6 +162,7 @@ export function autoPromoteAi(G: GameState, ps: PlayerState) {
   const benchHero = candidates.reduce((best, b) => (b.hp > best.hp ? b : best));
   const bestIdx = ps.bench.indexOf(benchHero);
   const corpse = ps.active;
+  leaveActive(G, corpse);
   ps.active = benchHero;
   benchHero.zone = 'active';
   benchHero.slot = 0;

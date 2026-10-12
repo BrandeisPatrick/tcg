@@ -16,7 +16,7 @@ import type {
   StatusId,
 } from './types';
 import { CARDS_BY_ID } from '@/cards';
-import { STATUSES_BY_ID, type Blockable } from '@/statuses';
+import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import { START_LEVEL } from './constants';
@@ -241,14 +241,28 @@ export function statusDuration(card: CardInstance, statusId: StatusId, duration:
   return n;
 }
 
+/** True when `card`'s basic attack may be aimed at any living enemy hero, not
+ *  only the rival Active: something the hero carries — a passive, or worn gear —
+ *  has `reach`. The one reading of it; `attackTargets` (legality.ts) asks here. */
+export function hasReach(card: CardInstance): boolean {
+  return abilitySources(card).some(({ ability }) => !!ability.reach);
+}
+
 // ---------- Statuses ----------
 
 /** True while a status on `card` stops it doing `act`. The only lockout check
  *  there is: each status declares what it blocks (`StatusDef.blocks`), and the
- *  attack gate, `useSkill`, the channel pulse, the AI and the board all ask
- *  this rather than listing statuses. */
+ *  attack gate, `useSkill`, the channel pulse, the retreat gate, the AI and the
+ *  board all ask this rather than listing statuses. */
 export function isBlocked(card: CardInstance, act: Blockable): boolean {
   return card.statuses.some((s) => STATUSES_BY_ID[s.id]?.blocks?.includes(act));
+}
+
+/** True while a status on `card` keeps it from being the target of `act`: a
+ *  Dome makes its bearer untargetable by a basic attack. The one check, as
+ *  `isBlocked` is for what a hero cannot do: `attackTargets` (legality.ts) asks it. */
+export function isUntargetable(card: CardInstance, act: Untargetable): boolean {
+  return card.statuses.some((s) => STATUSES_BY_ID[s.id]?.untargetable?.includes(act));
 }
 
 // ---------- Attack and spirit ----------
@@ -272,9 +286,12 @@ export interface AttackPower {
  *  - minus Weaken (Rusted Barrel and any future "ATK-down"), floored at 0;
  *  - plus each `attackBonus` hook of what the hero carries.
  * It reads `card.hp` for hooks like Frenzy's, so a caller simulating a swing
- * later in the turn passes a view of the card at that moment.
+ * later in the turn passes a view of the card at that moment. A swing at a
+ * known target passes it (`target`), for a hook that reads the target (Fixation
+ * adds a stack's worth against the hero it is fixed on); the card face has no
+ * target and passes none.
  */
-export function attackPower(card: CardInstance): AttackPower {
+export function attackPower(card: CardInstance, target?: CardInstance): AttackPower {
   const data = heroData(card);
   if (!data || isBlocked(card, 'attack')) return { total: 0, parts: [] };
   const parts: AttackPower['parts'] = [{ label: 'Bullet Power', amount: data.atk + card.atkMod }];
@@ -290,7 +307,7 @@ export function attackPower(card: CardInstance): AttackPower {
     total = weakened;
   }
   for (const { ability } of abilitySources(card)) {
-    const bonus = ability.attackBonus?.(card);
+    const bonus = ability.attackBonus?.(card, target);
     if (!bonus) continue;
     total += bonus.amount;
     parts.push({ label: bonus.label, amount: bonus.amount, bonus: true });

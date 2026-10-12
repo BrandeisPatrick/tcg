@@ -1,7 +1,8 @@
 /**
  * A hero uses one of its skills. Costs SKILL_COST souls, one skill a turn per
  * hero (whichever of its skills), and gives up that hero's attack. A skill with
- * a cooldown goes on cooldown. `skillBlocked` (legality.ts) has already said it
+ * a cooldown goes on cooldown, and one with an HP cost (`hpCost`) takes it off
+ * the hero before it runs. `skillBlocked` (legality.ts) has already said it
  * may be done and at whom; this only does it.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
@@ -37,6 +38,14 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   const heroName = data.name;
   const targetName = target ? (CARDS_BY_ID[target.cardId]?.name ?? target.cardId) : null;
   pushLog(G, `P${pid} used skill: ${heroName}${targetName ? ` on ${targetName}` : ''}.`);
+
+  // HP the skill costs comes straight off the caster: through no Shield or
+  // resist, setting off no trigger, and `skillBlocked` has seen to it that the
+  // hero has more than this, so it cannot be the death of it.
+  if (ability.hpCost) {
+    hero.hp -= ability.hpCost;
+    pushLog(G, `${heroName} pays ${ability.hpCost} HP.`);
+  }
 
   // Cast context: equipment triggers (Mystic Burst, Mystic Vulnerability,
   // Suppressor, Mystic Reverb) read this to know "bearer's skill damaged X".

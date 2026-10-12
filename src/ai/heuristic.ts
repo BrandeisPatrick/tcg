@@ -106,7 +106,8 @@ interface MoveOption {
 
 /** An engine action in the form the callers dispatch: the boardgame.io move and
  *  its arguments (playCard [card, target?, discard?], useSkill [hero, target?,
- *  skill?], moveHero [from, to], promoteToActive [iid], attack [], endTurn []). */
+ *  skill?], moveHero [from, to], promoteToActive [iid], attack [target?],
+ *  endTurn []). */
 function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
   const present = (...xs: (string | undefined)[]) => xs.filter((x): x is string => x !== undefined);
   switch (a.type) {
@@ -122,7 +123,8 @@ function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
     }
     case 'moveHero': return { move: 'moveHero', args: [a.fromSlot, a.toSlot] };
     case 'promoteToActive': return { move: 'promoteToActive', args: [a.benchIid] };
-    case 'attack': return { move: 'attack', args: [] };
+    // The default target (the first the engine lists) is the move's default: no argument.
+    case 'attack': return { move: 'attack', args: present(a.targetIid) };
     case 'endTurn': return { move: 'endTurn', args: [] };
   }
 }
@@ -167,16 +169,16 @@ function scoreSkill(pid: PlayerID, target?: CardInstance): number {
   return s;
 }
 
-/** What the attack is worth to the crude list: a win outranks everything; else
- *  the damage it would land on the rival Active, plus a premium for a KO. With
- *  lookahead a win is `evalState`'s verdict instead. Both are read off the
- *  engine's own run of the attack — "wins" means what the rules mean: the
- *  knockout's patron life, a board wipe, a Ricochet that drops the last bench
- *  hero, a merged Rem who walks off the fallen bearer, and a mutual wipe that
- *  goes to P0. */
-function scoreAttack(G: GameState, pid: PlayerID): number {
-  if (checkWinner(simulate(G, pid, { type: 'attack' }).G)?.winner === pid) return DECISIVE;
-  const plan = forecastAttack(G, pid);
+/** What the attack on `targetIid` (left out, the default target) is worth to
+ *  the crude list: a win outranks everything; else the damage it would land on
+ *  its target, plus a premium for a KO. With lookahead a win is `evalState`'s
+ *  verdict instead. Both are read off the engine's own run of the attack —
+ *  "wins" means what the rules mean: the knockout's patron life, a board wipe,
+ *  a Ricochet that drops the last bench hero, a merged Rem who walks off the
+ *  fallen bearer, and a mutual wipe that goes to P0. */
+function scoreAttack(G: GameState, pid: PlayerID, targetIid?: string): number {
+  if (checkWinner(simulate(G, pid, { type: 'attack', targetIid }).G)?.winner === pid) return DECISIVE;
+  const plan = forecastAttack(G, pid, targetIid);
   return 15 + plan.damageToActive * 3 + (plan.defenderActiveKO ? 25 : 0);
 }
 
@@ -207,7 +209,7 @@ function retreatPair(G: GameState, pid: PlayerID, a: Extract<Action, { type: 'mo
 
 function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
   switch (a.type) {
-    case 'attack': return scoreAttack(G, pid);
+    case 'attack': return scoreAttack(G, pid, a.targetIid);
     case 'playCard': {
       const card = G.players[pid].hand.find((c) => c.iid === a.cardIid)!;
       const target = a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined;

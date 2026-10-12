@@ -23,7 +23,7 @@ import { moveHero, promoteToActive } from './actions/board';
 export const INVALID: unique symbol = Symbol('INVALID');
 
 export type Action =
-  | { type: 'attack' }
+  | { type: 'attack'; targetIid?: string }               // no targetIid = the first of `attackTargets`
   | { type: 'useSkill'; heroIid: string; skillId?: AbilityId; targetIid?: string }   // no skillId = the hero's first skill
   | { type: 'playCard'; cardIid: string; targetIid?: string; discardIid?: string }
   | { type: 'moveHero'; fromSlot: 0 | 1 | 2 | 3; toSlot: 0 | 1 | 2 | 3 }
@@ -36,7 +36,7 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
   assertNoCast();
   if (blocked(G, pid, a) !== null) return INVALID;
   switch (a.type) {
-    case 'attack': return attack(G, pid);
+    case 'attack': return attack(G, pid, a.targetIid);
     case 'useSkill': return useSkill(G, pid, a.heroIid, a.targetIid, a.skillId);
     case 'playCard': return playCard(G, pid, a.cardIid, a.targetIid, a.discardIid);
     case 'moveHero': return moveHero(G, pid, a.fromSlot, a.toSlot);

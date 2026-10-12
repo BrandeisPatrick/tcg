@@ -5,7 +5,8 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { resolve } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
-import { findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, type TargetFilter } from '@/engine/query';
+import { findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, stepInCandidates, type TargetFilter } from '@/engine/query';
+import { swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { newIid } from '@/engine/ids';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -56,6 +57,11 @@ export interface AbilityDef {
    *  or 0 = usable every turn. Counted in `CardInstance.cooldowns`, ticked at
    *  the start of the owner's turn (docs/stats-model.md §1). */
   cooldown?: number;
+  /** A hero skill only: HP the caster pays to use it. The skill is blocked
+   *  unless the caster has MORE than this (`skillBlocked`'s 'hp'), and the
+   *  payment comes straight off its HP before the skill runs — through no Shield
+   *  or resist, setting off no trigger, and never enough to kill. */
+  hpCost?: number;
   /** If true, hero's spiritMod adds to the skill's damage/heal/effect magnitude as spirit-type damage. */
   scalesSpirit?: boolean;
   /** Base magnitude (dmg/heal/shield). Read by the AI heuristic as its
@@ -74,8 +80,14 @@ export interface AbilityDef {
   // mutation, no events, so a forecast can call them freely.
 
   /** A conditional bonus to the bearer's basic swing, read by `attackPower`
-   *  with the bearer as it stands (Frenzy: +3 below half HP). */
-  attackBonus?: (self: CardInstance) => { amount: number; label: string } | null;
+   *  with the bearer as it stands (Frenzy: +3 below half HP) and, for a swing
+   *  at a known hero, the `target` it is aimed at (Fixation reads the stacks
+   *  on it). The card face asks with no target. */
+  attackBonus?: (self: CardInstance, target?: CardInstance) => { amount: number; label: string } | null;
+  /** The bearer's basic attack may be aimed at any living enemy hero, not only
+   *  the rival Active. Read by `hasReach`; `attackTargets` (legality.ts) builds
+   *  the list of who it may swing at. */
+  reach?: true;
   /** What damage the bearer takes after this ability's say, applied before
    *  any status (Vindicta's flight takes 1 off a bullet). */
   incoming?: (self: CardInstance, amount: number, type: DamageType) => number;
@@ -1165,16 +1177,9 @@ const eff_ult_mirage: AbilityDef = {
     );
     if (!mirage) { pushLog(G, 'Traveler fizzled.'); return; }
     if (ps.active === mirage) {
-      const benchAlly = ps.bench.find((b) => {
-        if (!b || (b.respawnTurnsLeft ?? 0) > 0) return false;
-        const d = CARDS_BY_ID[b.cardId];
-        return d?.type === 'hero' && !d.flags?.benchOnly;
-      });
-      if (benchAlly) {
-        const bSlot = benchAlly.slot ?? 1;
-        ps.active = benchAlly; benchAlly.zone = 'active'; benchAlly.slot = 0;
-        ps.bench[bSlot - 1] = mirage; mirage.zone = 'bench'; mirage.slot = bSlot;
-      }
+      // The first ally who can take the front steps in; the line below tells the story.
+      const benchAlly = stepInCandidates(ps)[0];
+      if (benchAlly) swapIntoActive(G, ps, benchAlly, { quiet: true });
     }
     addStatus(G, mirage, 'shield', 3, 999);
     pushLog(G, 'Traveler: Mirage slips to safety (Shield 3).');

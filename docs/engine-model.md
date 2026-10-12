@@ -34,13 +34,14 @@ lock a skill. The engine fixes that by construction:
 | Module | Holds |
 |---|---|
 | `constants.ts` | every rule number (costs, caps, patron HP, soul ramp, respawn, levels) |
-| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` / `resolveSkill` (a hero's kit: its skills, then passives; which skill a bare action names), `isBlocked`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, `checkWinner` |
-| `legality.ts` | the only place a move's legality is written: `attackBlocked`, `skillBlocked` / `skillTargets`, `playBlocked` / `playTargets`, `cardCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else), `legalActions` |
+| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` / `resolveSkill` (a hero's kit: its skills, then passives; which skill a bare action names), `isBlocked` / `isUntargetable`, `hasReach`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, `checkWinner` |
+| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets`, `playBlocked` / `playTargets`, `cardCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
-| `actions/` | what each action does once it is legal: `attack`, `playCard`, `useSkill`, `board` (swap / promote), `turn` (start / end), `setup` (draft, rosters) |
-| `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts`, `deckOps.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion, statuses and their ticks, exp, the deck |
+| `actions/` | what each action does once it is legal: `attack` (and `attackAll`, a swing at every enemy hero), `playCard`, `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters) |
+| `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts`, `deckOps.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp, the deck and the hand (`returnToHand`) |
+| `lane.ts` | `leaveActive`: what ends when a hero leaves the Active slot (a leaf, so death, statuses and the board moves all call it) |
 | `triggers.ts`, `registry.ts` | the one dispatcher for hero passives and worn equipment; abilities register themselves at load |
-| `forecast.ts` | `simulate(G, pid, action)` and `forecastAttack(G, pid)` |
+| `forecast.ts` | `simulate(G, pid, action)` and `forecastAttack(G, pid, targetIid?)` |
 | `ids.ts`, `fx.ts`, `log.ts`, `castContext.ts` | counters in `G`, the event stream, the match log, the cast frame |
 | `game.ts` | the boardgame.io adapter only: setup, turn hooks, moves → `perform`, `endIf` |
 
@@ -54,12 +55,37 @@ status semantics are `src/statuses/index.ts`.
   legality it needs — the engine, the board and the AI all read it.
 - **A number the rules read** — a bonus to the basic swing, damage the bearer
   takes, how long its buffs last — is a pure hook on the ability:
-  `attackBonus` (Frenzy), `incoming` (Vindicta's flight), `buffDuration`
-  (Superior Duration). `attackPower`, `damageUnit` and `addStatus` ask every
-  ability the hero carries; nothing else needs to know.
-- **A status** declares `blocks` (attack / skill / channel pulse), `cc` (hard
-  crowd control: Unstoppable blocks it, it ticks at the end of the turn) and
-  `stack`. `isBlocked(card, act)` is the only lockout check there is.
+  `attackBonus(self, target)` (Frenzy; the swing passes its target, for a bonus
+  that reads it — Fixation's stacks — and the card face passes none),
+  `incoming` (Vindicta's flight), `buffDuration` (Superior Duration).
+  `attackPower`, `damageUnit` and `addStatus` ask every ability the hero
+  carries; nothing else needs to know.
+- **Who the attack may name** — `reach` on a passive (or worn gear) lets its
+  hero's basic attack name any living enemy hero, not only the rival Active;
+  `attackTargets` is the one list, and the move, the forecast, the AI and
+  `legalActions` all read it.
+- **A skill that costs HP** — `hpCost` on the skill: it is blocked unless the
+  caster has more HP than that, and `useSkill` takes the HP straight off before
+  the skill runs (through no Shield, setting off no trigger, never a kill).
+- **A status** declares what it does to its bearer, and the engine reads it
+  from that one place:
+  - `blocks` — attack / skill / channel pulse / move (a Retreat, or being
+    swapped into the Active slot: Rooted); `isBlocked(card, act)` is the only
+    lockout check there is.
+  - `untargetable` — the bearer cannot be the target of a basic attack (Dome);
+    `isUntargetable(card, act)` is the only check on who may be aimed at.
+  - `clearOnLeaveActive` — the status ends when its bearer leaves the Active
+    slot (Fixation); `leaveActive` does it, and every move off the slot calls it.
+  - `cc` (hard crowd control: Unstoppable blocks it, it ticks at the end of the
+    turn) and `stack`.
+
+  A delayed effect goes off in `tickStartOfTurn`, beside Charged and Reverb
+  (Last Stand; the status instance carries its own `heal`).
+- **Moving heroes, souls, cards** — a card that puts a bench hero in the Active
+  slot calls `swapIntoActive`, one that drags an enemy there `pullToActive`,
+  one that pays out souls `awardSouls`, one that returns a card to its owner's
+  hand `returnToHand`; an ultimate that swings at the whole board calls
+  `attackAll`. None of them is written twice.
 - **Never** add a `cardId === '…'` to `src/engine`, a status list to the UI or
   the AI, or a cost / target / cap check outside `legality.ts`.
 

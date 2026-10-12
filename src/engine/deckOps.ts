@@ -3,9 +3,9 @@
  * and card effects (abilities/index.ts). Kept in its own module so abilities
  * can draw cards without importing the turn pipeline (a circular import).
  */
-import type { CardInstance, GameState, PlayerID } from './types';
+import type { CardInstance, GameState, PlayerID, PlayerState } from './types';
 import { CARDS_BY_ID, getCard } from '@/cards';
-import type { IidAllocator } from './ids';
+import { allocatorOf, type IidAllocator } from './ids';
 import { pushLog } from './log';
 import { MAX_HAND } from './constants';
 
@@ -52,6 +52,23 @@ export function drawCards(G: GameState, pid: PlayerID, n: number): number {
     drawn++;
   }
   return drawn;
+}
+
+/**
+ * Put a fresh copy of `cardId` into `ps`'s hand (a card that comes back — a
+ * spent ultimate, say). A full hand (MAX_HAND) has no room for it: it is lost,
+ * and the log says so. Returns the new card, or null when it was lost.
+ */
+export function returnToHand(G: GameState, ps: PlayerState, cardId: string): CardInstance | null {
+  const name = CARDS_BY_ID[cardId]?.name ?? cardId;
+  if (ps.hand.length >= MAX_HAND) {
+    pushLog(G, `P${ps.id}'s hand is full — ${name} is lost.`);
+    return null;
+  }
+  const card = makeInstance(allocatorOf(G), cardId, ps.id, 'hand');
+  ps.hand.push(card);
+  pushLog(G, `${name} returns to P${ps.id}'s hand.`);
+  return card;
 }
 
 /**

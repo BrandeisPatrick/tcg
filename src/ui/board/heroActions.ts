@@ -15,7 +15,7 @@ import {
   blocked, cardCost, moveBlocked, skillBlocked,
   type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
-import { findCardOnBoard, heroData, resolveSkill } from '@/engine/query';
+import { findCardOnBoard, heroData, isRespawning, isUntargetable, otherPlayer, resolveSkill } from '@/engine/query';
 import type { Action } from '@/engine/engine';
 import type { AttackPlan } from '@/engine/forecast';
 
@@ -37,6 +37,7 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       const left = (skill && hero?.cooldowns?.[skill.id]) || 0;
       return left > 0 ? `Ready in ${left} turn${left === 1 ? '' : 's'}` : 'On cooldown';
     }
+    case 'hp': return skill?.ability.hpCost ? `Needs more than ${skill.ability.hpCost} HP` : 'Not enough HP';
     case 'souls': return `Need ${souls(SKILL_COST)}`;
     case 'target': return 'No valid target';
     case 'down': return 'Down until it respawns';
@@ -44,14 +45,20 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
   }
 }
 
-/** The line the hero sheet prints on an attack that cannot be made. */
-export function attackBlockReason(block: AttackBlock, active: CardInstance | null | undefined): string {
+/** The line the hero sheet prints on an attack that cannot be made. Name the
+ *  rival's Active to get the line for one who cannot be attacked (a Dome)
+ *  rather than for one who is not there. */
+export function attackBlockReason(block: AttackBlock, active: CardInstance | null | undefined, rival?: CardInstance | null): string {
   switch (block) {
     case 'turn1': return 'No attacks on Turn 1';
     case 'used': return active?.attackedThisTurn ? 'Attacked this turn' : "This turn's attack is spent";
     case 'skill': return 'Used its skill this turn';
     case 'cannot': return 'Cannot attack (status)';
-    case 'noTarget': return 'No rival Active to hit';
+    case 'noTarget': {
+      const domed = !!rival && !isRespawning(rival) && isUntargetable(rival, 'attack');
+      return domed ? 'Their Active cannot be attacked this turn' : 'No rival Active to hit';
+    }
+    case 'target': return 'That hero cannot be attacked';
     case 'noActive': return 'Down until it respawns';
   }
 }
@@ -89,6 +96,7 @@ export function moveBlockReason(block: MoveBlock): string {
     case 'empty': return 'There is no hero in that slot';
     case 'benchOnly': return 'That hero can only fight from the bench';
     case 'down': return 'Down until it respawns';
+    case 'rooted': return 'Rooted: cannot retreat or be swapped';
     case 'souls': return `Need ${souls(RETREAT_COST)}`;
     case 'illegal': return 'Not a place on the board';
   }
@@ -139,7 +147,7 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
   switch (a.type) {
     case 'attack':
       if (code === 'draft') return 'Pick your heroes first';
-      return attackBlockReason(code as AttackBlock, G.players[pid].active);
+      return attackBlockReason(code as AttackBlock, G.players[pid].active, G.players[otherPlayer(pid)].active);
     case 'useSkill': {
       const card = findCardOnBoard(G, a.heroIid)?.card;
       const hero = nameOf(card);

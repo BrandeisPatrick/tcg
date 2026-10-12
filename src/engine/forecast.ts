@@ -40,7 +40,8 @@ export function simulate(G: GameState, pid: PlayerID, a: Action, opts: { keepLog
 export interface AttackStep {
   attackerIid: string;
   attackerName: string;
-  /** iid of the defending hero — always the rival's living Active. */
+  /** iid of the defending hero: the rival's living Active, or the hero a
+   *  reaching attacker named. */
   targetIid: string;
   targetName: string;
   /** HP the swing's own hit took off the target after mitigation (shield/armor). */
@@ -69,27 +70,30 @@ export interface AttackPlan {
   attackerId: PlayerID;
   defenderId: PlayerID;
   steps: AttackStep[];
-  /** HP the defender's Active loses over the whole attack (clamped ≥ 0) —
-   *  swings, riders and detonations together. */
+  /** HP the target (the defender's Active, unless the attack names another
+   *  hero) loses over the whole attack (clamped ≥ 0) — swings, riders and
+   *  detonations together. */
   damageToActive: number;
   /** Patron HP the attack costs the defender: the fallen hero's level when
    *  its Active is knocked out (`koPatronDamage`), 0 otherwise. The swings
    *  themselves never reach the patron — damage past 0 HP is discarded, not
    *  spilled. */
   patronDamage: number;
-  /** iid of the defender's Active if it fell during the attack. */
+  /** iid of the target if it fell during the attack. */
   defenderActiveKO: string | null;
 }
 
 /**
  * What the attack `pid`'s Active would make does, read off `simulate`'s run of
  * it: one step per `swing` event, with the hit, the Shield and the target's HP
- * that swing produced. An attack that may not be made has an empty plan.
+ * that swing produced. `targetIid` names who is swung at, as the `attack`
+ * action does (left out, the default target). An attack that may not be made has
+ * an empty plan.
  */
-export function forecastAttack(G: GameState, pid: PlayerID): AttackPlan {
+export function forecastAttack(G: GameState, pid: PlayerID, targetIid?: string): AttackPlan {
   const defenderId = otherPlayer(pid);
   const plan: AttackPlan = { attackerId: pid, defenderId, steps: [], damageToActive: 0, patronDamage: 0, defenderActiveKO: null };
-  const { G: after, events, invalid } = simulate(G, pid, { type: 'attack' });
+  const { G: after, events, invalid } = simulate(G, pid, { type: 'attack', targetIid });
   if (invalid) return plan;
 
   // The events from one swing to the next are that swing's: its own hit and
@@ -100,9 +104,9 @@ export function forecastAttack(G: GameState, pid: PlayerID): AttackPlan {
     else swings.at(-1)?.events.push(e);
   }
   if (swings.length === 0) return plan;
-  const targetIid = swings[0].swing.targetIid;
+  const aimedAt = swings[0].swing.targetIid;
   const hpBefore = swings[0].swing.targetHp;
-  const hpAfter = findCardOnBoard(after, targetIid)!.card.hp;
+  const hpAfter = findCardOnBoard(after, aimedAt)!.card.hp;
   const nameOf = (iid: string) => {
     const cardId = findCardOnBoard(G, iid)!.card.cardId;
     return CARDS_BY_ID[cardId]?.name ?? cardId;
@@ -131,6 +135,6 @@ export function forecastAttack(G: GameState, pid: PlayerID): AttackPlan {
 
   plan.damageToActive = Math.max(0, hpBefore - hpAfter);
   plan.patronDamage = Math.max(0, G.players[defenderId].hp - after.players[defenderId].hp);
-  plan.defenderActiveKO = hpAfter <= 0 ? targetIid : null;
+  plan.defenderActiveKO = hpAfter <= 0 ? aimedAt : null;
   return plan;
 }

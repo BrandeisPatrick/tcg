@@ -2,20 +2,20 @@
  * Legality probes: at a decision point of a live game, ask the engine (through
  * direct move calls on clones) whether it agrees with the other sources of
  * "what may I do" — the AI's legal-move list, the UI's `skillBlocked`, and an
- * independent rules oracle for targets and hero moves.
+ * independent rules oracle for targets, hero moves and who the attack may name.
  */
 import type { CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { skillBlocked } from '@/engine/legality';
+import { legalActions, skillBlocked } from '@/engine/legality';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST } from '@/engine/constants';
-import { isRespawning, liveBoardCards, otherPlayer } from '@/engine/query';
+import { attackPower, isRespawning, liveBoardCards, otherPlayer } from '@/engine/query';
 import type { Snapshot, StepInfo } from './driver';
 import { chaosMove } from './driver';
 import { moveTags, signatureOf, type Hit } from './hits';
 import {
-  boardOf, boardUnits, callMove, diffPaths, filterForHandCard, filterForSkill, skillCooling, skillExcludesSelf,
-  skillIdsOf, targetLegal,
+  attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, diffPaths, filterForHandCard, filterForSkill,
+  skillCooling, skillExcludesSelf, skillIdsOf, targetLegal,
 } from './oracle';
 import type { TargetFilter } from '@/abilities';
 
@@ -33,6 +33,7 @@ export const DEFAULT_PROBE: ProbeOpts = { chaosPerStep: 3, targetCombos: 8, move
 const pickOne = <T,>(arr: T[], r: () => number): T => arr[Math.floor(r() * arr.length)];
 const isBenchOnly = (c: CardInstance) => !!(CARDS_BY_ID[c.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly;
 const isMergedRem = (c: CardInstance) => c.cardId === 'hero_rem' && c.remMergeTurnsLeft != null;
+const isRooted = (c: CardInstance) => c.statuses.some((s) => s.id === 'rooted');
 
 type Ghost = 'ghost';
 
@@ -204,6 +205,7 @@ export function probeLegality(
             const incoming = from === 0 ? b : a;
             if (isRespawning(a) || isRespawning(b)) reason = 'corpse-swap';
             else if (isBenchOnly(incoming)) reason = 'bench-only-to-active';
+            else if (isRooted(a) || isRooted(b)) reason = 'rooted'; // Rooted: no retreat, whichever side of the swap it is on
             else legal = true;
           } else legal = true;
         }
@@ -223,6 +225,42 @@ export function probeLegality(
     for (const p of probes) {
       const r = callMove(G, ctx, pid, p.name, p.args, (g) => { g.players[pid].souls = 10; });
       if (r.outcome === 'accepted') add('owed-promotion-skippable', p.name, p.args, `P${pid} owes a promotion (pendingPromotion) yet ${p.name} is accepted`);
+    }
+  }
+
+  // ---------------------------------------------------------------- G: who the attack may name
+  // With the attack open, `attack(targetIid)` is accepted exactly for the heroes the rules oracle
+  // lists (a bare `attack` when it lists any), a refusal leaves the state as it was, and
+  // `legalActions` offers one attack per listed hero, the first of them as the bare action.
+  const attacker = me.active;
+  if (!owed && attacker && attackOpenFor(G, pid)) {
+    const units = boardUnits(G);
+    const want = attackTargetsOracle(G, pid).filter((t) => attackPower(attacker, t).total > 0);
+    const wantIids = want.map((t) => t.iid);
+    const tries: (string | undefined)[] = [undefined, 'ghost-iid', ...units.map((c) => c.iid)];
+    for (const iid of tries) {
+      const args = iid === undefined ? [] : [iid];
+      const legal = iid === undefined ? want.length > 0 : wantIids.includes(iid);
+      const unit = units.find((c) => c.iid === iid);
+      const who = iid === undefined ? 'no target' : unit ? `${unit.cardId}#${unit.iid}${isRespawning(unit) ? ' (corpse)' : ''}` : 'an unknown iid';
+      const kind = iid === undefined ? 'bare' : !unit ? 'ghost' : isRespawning(unit) ? 'corpse' : unit.ownerId === pid ? 'ally' : unit.zone === 'active' ? 'active' : 'bench';
+      const r = callMove(G, ctx, pid, 'attack', args);
+      if (r.outcome === 'threw') {
+        add('move-threw', 'attack', args, `attack(${JSON.stringify(args)}) threw: ${String(r.error).slice(0, 140)}`);
+      } else if (r.outcome === 'accepted' && !legal) {
+        add(`attack-accepts-illegal-target:${kind}`, 'attack', args, `attack at ${who} was accepted; the rules list [${wantIids.join(', ')}]`);
+      } else if (r.outcome === 'rejected' && legal) {
+        add(`attack-rejects-legal-target:${kind}`, 'attack', args, `attack at ${who} is legal by the rules but the engine rejected it`);
+      } else if (r.outcome === 'rejected') {
+        const d = diffPaths(G, r.G, 4);
+        if (d.length) add('attack-refusal-mutates', 'attack', args, `attack at ${who} was rejected but changed the state: ${d.join(' ; ')}`);
+      }
+    }
+    const offered = legalActions(G, pid).flatMap((a) => (a.type === 'attack' ? [a] : []));
+    const named = offered.map((a, i) => (i === 0 ? a.targetIid ?? wantIids[0] : a.targetIid));
+    const shaped = offered.slice(1).every((a) => a.targetIid !== undefined);
+    if (!shaped || JSON.stringify(named) !== JSON.stringify(wantIids)) {
+      add('attack-offers', 'attack', [], `legalActions offers attacks at [${named.join(', ')}] (bare first: ${shaped}); the rules list [${wantIids.join(', ')}]`);
     }
   }
 }

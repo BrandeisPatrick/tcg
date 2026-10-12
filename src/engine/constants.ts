@@ -93,3 +93,5 @@ export const LEVEL_SPIRIT_BONUS = 1 as const;
 export const BLEED_CAP = 3;
 /** Djinn's Mark stacks additively up to this value (and detonates at it). */
 export const DJINN_CAP = 4;
+/** Fixation stacks additively up to this value (+1 to the fixed attacker's swing per stack). */
+export const FIXATION_CAP = 3;

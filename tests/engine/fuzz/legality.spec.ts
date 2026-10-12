@@ -10,7 +10,10 @@
  *   E  moveHero: legal swaps accepted, junk slots / an emptied Active / a bench-only hero in
  *      the Active slot refused;
  *   F  an owed promotion (G.pendingPromotion) leaves the promotion as the only legal action,
- *      endTurn and attack included (B, D and E are asked of ordinary positions).
+ *      endTurn and attack included (B, D and E are asked of ordinary positions);
+ *   G  the attack: `attack(targetIid)` is accepted exactly for the heroes the rules oracle lists
+ *      (the rival Active, or any living enemy hero for a hero with reach, never one under a
+ *      Dome), a refusal changes nothing, and legalActions offers one attack per listed hero.
  *
  * Everything is checked on structuredClones at the decision points of seeded live games.
  * KNOWN lists what the engine does today; see regressions.spec.ts for a minimal

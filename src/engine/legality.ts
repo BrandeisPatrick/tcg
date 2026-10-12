@@ -19,8 +19,8 @@ import type { Action } from './engine';
 import { getAbility } from './registry';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from './constants';
 import {
-  attackPower, findCardOnBoard, heroData, isBlocked, isRespawning, liveBoardCards, otherPlayer, resolveSkill,
-  stepInCandidates, targetsFor, wornEquipment,
+  attackPower, findCardOnBoard, hasReach, heroData, isBlocked, isRespawning, isUntargetable, liveBoardCards, otherPlayer,
+  resolveSkill, stepInCandidates, targetsFor, wornEquipment,
 } from './query';
 
 // ---------- The turn's attack ----------
@@ -32,11 +32,53 @@ export function attackTurn(G: GameState): boolean {
 }
 
 /** Why a player's Active cannot make the turn's attack. */
-export type AttackBlock = 'turn1' | 'used' | 'skill' | 'noActive' | 'cannot' | 'noTarget';
+export type AttackBlock = 'turn1' | 'used' | 'skill' | 'noActive' | 'cannot' | 'noTarget' | 'target';
+
+/** The reasons that stop the Active attacking whatever it aims at — the ones
+ *  about the attacker and the turn, in the order `attackBlocked` checks them. */
+function attackerBlock(G: GameState, pid: PlayerID): 'turn1' | 'used' | 'noActive' | 'skill' | null {
+  if (!attackTurn(G)) return 'turn1';
+  if (G.attackUsed) return 'used';
+  const active = G.players[pid].active;
+  if (!active || isRespawning(active)) return 'noActive';
+  if (active.skillUsedThisTurn) return 'skill';
+  return null;
+}
+
+/** Everyone `active` could aim a basic attack at, were it free to make one: the
+ *  rival's living Active — or, with reach, every living enemy hero in
+ *  `targetsFor` order — minus any hero a status makes untargetable for an
+ *  attack (Dome). Whether the swing would deal anything is a separate question. */
+function aimable(G: GameState, pid: PlayerID, active: CardInstance): CardInstance[] {
+  let foes: CardInstance[];
+  if (hasReach(active)) {
+    foes = targetsFor(G, pid, 'enemyHero');
+  } else {
+    const rival = G.players[otherPlayer(pid)].active;
+    foes = rival && !isRespawning(rival) ? [rival] : [];
+  }
+  return foes.filter((t) => !isUntargetable(t, 'attack'));
+}
+
+/**
+ * The one list of what `pid`'s Active may swing at this turn: the rival's living
+ * Active, or — with reach — every living enemy hero, in `targetsFor` order; never
+ * a hero a Dome makes untargetable, and only those the swing would hurt. Empty
+ * when the Active cannot attack for any of `attackBlocked`'s reasons. The first
+ * of the list is who a bare `attack` swings at; the board, the AI and
+ * `legalActions` offer one attack per hero in it.
+ */
+export function attackTargets(G: GameState, pid: PlayerID): CardInstance[] {
+  if (attackerBlock(G, pid) !== null) return [];
+  const active = G.players[pid].active!;
+  return aimable(G, pid, active).filter((t) => attackPower(active, t).total > 0);
+}
 
 /** Why `pid`'s Active cannot make the turn's attack right now, or null when it
  *  can. One gate, read by the `attack` move, the forecast, the AI and the
- *  board, so they cannot drift apart. Checked in this order:
+ *  board, so they cannot drift apart. `targetIid` names who is to be swung at;
+ *  left out, it is the first of `attackTargets` (the rival Active, unless
+ *  the hero has reach). Checked in this order:
  *   - 'turn1'    Turn 1 has no attack (the first player forgoes first strike).
  *   - 'used'     this turn's attack has been made. One a turn, whoever is
  *                Active: the hero who steps in after it cannot swing again.
@@ -44,24 +86,29 @@ export type AttackBlock = 'turn1' | 'used' | 'skill' | 'noActive' | 'cannot' | '
  *                the attack belongs to the hero who steps up.
  *   - 'skill'    the Active used its skill this turn; a hero does one or the
  *                other.
- *   - 'noTarget' the rival has no living Active to swing at.
+ *   - 'noTarget' there is no legal target: the rival has no living Active to
+ *                swing at (or, with reach, no living hero), or all of them are
+ *                untargetable (a Dome).
+ *   - 'target'   `targetIid` names a hero the attack may not be aimed at: not on
+ *                the board, not an enemy, fallen, domed, or on the bench of a
+ *                hero without reach.
  *   - 'cannot'   the swing would deal nothing: Stun, Disarm, Sleep, a heavy
  *                channel, or Weaken down to 0. */
-export function attackBlocked(G: GameState, pid: PlayerID): AttackBlock | null {
-  if (!attackTurn(G)) return 'turn1';
-  if (G.attackUsed) return 'used';
-  const active = G.players[pid].active;
-  if (!active || isRespawning(active)) return 'noActive';
-  if (active.skillUsedThisTurn) return 'skill';
-  const target = G.players[otherPlayer(pid)].active;
-  if (!target || isRespawning(target)) return 'noTarget';
-  if (attackPower(active).total <= 0) return 'cannot';
+export function attackBlocked(G: GameState, pid: PlayerID, targetIid?: string): AttackBlock | null {
+  const early = attackerBlock(G, pid);
+  if (early) return early;
+  const active = G.players[pid].active!;
+  const aim = aimable(G, pid, active);
+  if (aim.length === 0) return 'noTarget';
+  if (targetIid !== undefined && !aim.some((t) => t.iid === targetIid)) return 'target';
+  const swings = targetIid === undefined ? aim : aim.filter((t) => t.iid === targetIid);
+  if (!swings.some((t) => attackPower(active, t).total > 0)) return 'cannot';
   return null;
 }
 
 // ---------- Hero skills ----------
 
-export type SkillBlock = 'noSkill' | 'down' | 'used' | 'attacked' | 'status' | 'cooldown' | 'souls' | 'target';
+export type SkillBlock = 'noSkill' | 'down' | 'used' | 'attacked' | 'status' | 'cooldown' | 'hp' | 'souls' | 'target';
 
 /** What one of a hero's skills may be aimed at (`skillId` names it; left out,
  *  the hero's first): the live board cards its filter allows (minus the
@@ -89,6 +136,8 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
  *  - 'attacked' it made the turn's attack.
  *  - 'status'   a status locks its skills (`isBlocked(hero, 'skill')`).
  *  - 'cooldown' this skill is still cooling down (`hero.cooldowns`).
+ *  - 'hp'       the skill costs HP (`hpCost`) and the hero does not have more
+ *               than that: it can pay what it has left, never its last.
  *  - 'souls'    the player has fewer than SKILL_COST souls.
  *  - 'target'   there is nothing legal to aim it at — or `targetIid` is not.
  *
@@ -104,6 +153,7 @@ export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, ta
   if (hero.attackedThisTurn) return 'attacked';
   if (isBlocked(hero, 'skill')) return 'status';
   if ((hero.cooldowns?.[skill.id] ?? 0) > 0) return 'cooldown';
+  if (skill.ability.hpCost && hero.hp <= skill.ability.hpCost) return 'hp';
   if (G.players[pid].souls < SKILL_COST) return 'souls';
   const targets = skillTargets(G, pid, hero, skill.id);
   if (targets === 'none') return null;
@@ -200,15 +250,18 @@ export function playBlocked(
 
 // ---------- Moving heroes ----------
 
-export type MoveBlock = 'same' | 'empty' | 'benchOnly' | 'down' | 'souls' | 'illegal';
+export type MoveBlock = 'same' | 'empty' | 'benchOnly' | 'down' | 'rooted' | 'souls' | 'illegal';
 
 /** Why `pid` cannot swap the heroes in two slots (0 = Active, 1..3 = bench),
  *  or null when they can. A swap trades two OCCUPIED slots: a hole is nobody to
  *  trade with (the Active walking into a hole would leave the lane empty), and
  *  slots outside 0..3 are no slots. A bench-only hero (Rem) never takes the
  *  Active slot, whichever side of the swap she is on. Swapping the Active with a
- *  bench hero is a Retreat: both must be alive and it costs RETREAT_COST souls.
- *  Bench-to-bench swaps are free. */
+ *  bench hero is a Retreat: both must be alive, neither may be Rooted (a status
+ *  that blocks 'move', on either side of the swap), and it costs RETREAT_COST
+ *  souls. Bench-to-bench swaps are free, and a Rooted hero may still be moved
+ *  between bench slots. (The forced promotion of a fallen Active is not a swap:
+ *  `promoteBlocked`.) */
 export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlot: number): MoveBlock | null {
   const isSlot = (s: number) => s === 0 || s === 1 || s === 2 || s === 3;
   if (!isSlot(fromSlot) || !isSlot(toSlot)) return 'illegal';
@@ -223,6 +276,7 @@ export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlo
     const data = CARDS_BY_ID[incoming.cardId];
     if (data?.type === 'hero' && data.flags?.benchOnly) return 'benchOnly';
     if (isRespawning(a) || isRespawning(b)) return 'down';
+    if (isBlocked(a, 'move') || isBlocked(b, 'move')) return 'rooted';
     if (ps.souls < RETREAT_COST) return 'souls';
   }
   return null;
@@ -286,7 +340,7 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   }
   switch (a.type) {
     case 'attack':
-      return G.draft ? 'draft' : attackBlocked(G, pid);
+      return G.draft ? 'draft' : attackBlocked(G, pid, a.targetIid);
     case 'useSkill': {
       const found = findCardOnBoard(G, a.heroIid);
       if (!found || found.owner !== pid) return 'noHero';
@@ -310,7 +364,9 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
 }
 
 /**
- * Every action `pid` could make right now. In order: the attack, if open; each
+ * Every action `pid` could make right now. In order: the attack, if open — once
+ * per hero it may swing at (`attackTargets`), the first as the bare action (a
+ * bare `attack` swings at it) and any others naming theirs; each
  * card in hand, in hand order, on each of its legal targets in `targetsFor`
  * order (equipment on a hero at the cap is offered once per item it could
  * discard — the choice of which is the player's); each living hero's skills, in
@@ -325,7 +381,7 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
   const out: Action[] = [];
   const offer = (a: Action) => { if (blocked(G, pid, a) === null) out.push(a); };
 
-  offer({ type: 'attack' });
+  attackTargets(G, pid).forEach((t, i) => offer(i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }));
 
   for (const card of ps.hand) {
     const targets = playTargets(G, pid, card);

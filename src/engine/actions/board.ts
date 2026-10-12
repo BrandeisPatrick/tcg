@@ -1,13 +1,21 @@
 /**
  * Moving heroes about the board: the swap (a paid Retreat, or a free bench
- * shuffle) and the forced promotion of a bench hero to a fallen Active's slot.
- * `moveBlocked` / `promoteBlocked` (legality.ts) hold the guards.
+ * shuffle), the forced promotion of a bench hero to a fallen Active's slot, and
+ * the two free swaps a card's effect makes — a bench hero stepping in for the
+ * Active (`swapIntoActive`) or an enemy bench hero dragged to the front
+ * (`pullToActive`). `moveBlocked` / `promoteBlocked` (legality.ts) hold the
+ * guards of the first two; the effects' helpers check for themselves.
+ *
+ * Every hero that leaves the Active slot goes through `leaveActive`
+ * (lane.ts), which ends what only means something in the lane (Fixation).
  */
-import type { CardInstance, GameState, PlayerID } from '../types';
+import type { CardInstance, GameState, PlayerID, PlayerState } from '../types';
 import { CARDS_BY_ID } from '@/cards';
 import { RETREAT_COST } from '../constants';
 import { pushLog } from '../log';
 import { resolve } from '../death';
+import { stepInCandidates } from '../query';
+import { leaveActive } from '../lane';
 
 export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot: 0|1|2|3) {
   const ps = G.players[pid];
@@ -21,7 +29,10 @@ export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot:
   const b = get(toSlot);
   // Retreat: swapping the Active with a bench hero charges souls (both are alive).
   const isRetreat = fromSlot === 0 || toSlot === 0;
-  if (isRetreat) ps.souls -= RETREAT_COST;
+  if (isRetreat) {
+    ps.souls -= RETREAT_COST;
+    leaveActive(G, ps.active!); // the hero standing in the lane steps out of it
+  }
   set(fromSlot, b);
   set(toSlot, a);
   a.exhausted = true;
@@ -52,6 +63,7 @@ export function promoteToActive(G: GameState, benchHeroIid: string) {
   const benchHero = ps.bench[benchIdx]!;
   // Swap: bench hero becomes Active, corpse takes the vacated bench slot.
   const corpse = ps.active!;
+  leaveActive(G, corpse);
   ps.active = benchHero;
   benchHero.zone = 'active';
   benchHero.slot = 0;
@@ -62,4 +74,56 @@ export function promoteToActive(G: GameState, benchHeroIid: string) {
   // Re-run the state-based pass so the pendingPromotion flag clears (and any
   // further deaths/promotions settle) before the UI re-reads it.
   resolve(G);
+}
+
+/** The name a log line calls a card by. */
+const nameOf = (card: CardInstance) => CARDS_BY_ID[card.cardId]?.name ?? card.cardId;
+
+/**
+ * Trade the Active of `ps` with `hero`, a bench hero of the same player: the
+ * Active goes to the slot `hero` leaves. No souls, and neither hero is
+ * exhausted (a free swap, not a Retreat). Only a hero who could take the front
+ * at all comes — alive and not bench-only, the `stepInCandidates` list — and a
+ * player with no Active has nobody to trade with: otherwise it says nothing,
+ * touches nothing and tells the caller (false). `say` words the log line from
+ * the two names; null logs nothing.
+ */
+function swapWithActive(
+  G: GameState, ps: PlayerState, hero: CardInstance, say: ((hero: string, active: string) => string) | null,
+): boolean {
+  const active = ps.active;
+  const slotIdx = ps.bench.findIndex((b) => b != null && b.iid === hero.iid);
+  if (!active || slotIdx < 0 || !stepInCandidates(ps).some((b) => b.iid === hero.iid)) return false;
+  const stepsIn = ps.bench[slotIdx]!; // the card on the board, whatever copy of it the caller holds
+  leaveActive(G, active);
+  ps.active = stepsIn;
+  stepsIn.zone = 'active';
+  stepsIn.slot = 0;
+  ps.bench[slotIdx] = active;
+  active.zone = 'bench';
+  active.slot = (slotIdx + 1) as 1 | 2 | 3;
+  if (say) pushLog(G, say(nameOf(stepsIn), nameOf(active)));
+  return true;
+}
+
+/**
+ * A bench hero of `ps` steps into the Active slot, free: the Active takes the
+ * slot it leaves (Mirage's Traveler). `leaveActive` runs for the hero who steps
+ * out, and the log says "X steps in for Y." — pass `quiet` when the card's own
+ * line already tells it. Returns whether the swap was made: it is not for a
+ * hero who is not on `ps`'s bench, a fallen one, a bench-only one (Rem), or a
+ * board with no Active.
+ */
+export function swapIntoActive(G: GameState, ps: PlayerState, hero: CardInstance, opts: { quiet?: boolean } = {}): boolean {
+  return swapWithActive(G, ps, hero, opts.quiet ? null : (h, a) => `${h} steps in for ${a}.`);
+}
+
+/**
+ * The same swap on the rival's board: `benchHero`, on `victimPs`'s bench, is
+ * dragged to the front and that player's Active takes its slot. `leaveActive`
+ * runs for the Active it replaces; the log says "X is dragged to the front."
+ * Returns whether it was made, on the same terms as `swapIntoActive`.
+ */
+export function pullToActive(G: GameState, victimPs: PlayerState, benchHero: CardInstance): boolean {
+  return swapWithActive(G, victimPs, benchHero, (h) => `${h} is dragged to the front.`);
 }

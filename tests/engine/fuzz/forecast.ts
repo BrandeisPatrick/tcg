@@ -9,7 +9,7 @@
 import type { Ctx } from 'boardgame.io';
 import type { GameState, PlayerID } from '@/engine/types';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { attackBlocked } from '@/engine/legality';
+import { attackBlocked, attackTargets } from '@/engine/legality';
 import { forecastAttack, simulate, type AttackPlan } from '@/engine/forecast';
 import { isRespawning, otherPlayer } from '@/engine/query';
 import { DeadlockGame } from '@/engine/game';
@@ -31,7 +31,7 @@ function evaluate(G: GameState, ctx: Ctx, pid: PlayerID):
   Evaluation | { kind: 'blocked' } | { kind: 'rejected'; how: string } | { kind: 'missing' } {
   if (attackBlocked(G, pid) !== null) return { kind: 'blocked' };
   const foe = otherPlayer(pid);
-  const tgt = G.players[foe].active!;
+  const tgt = attackTargets(G, pid)[0]; // who a bare attack swings at: the rival Active, unless it cannot be attacked
   const plan = forecastAttack(G, pid);
   const r = callMove(G, ctx, pid, 'attack', []);
   if (r.outcome !== 'accepted') return { kind: 'rejected', how: r.outcome };
@@ -86,7 +86,6 @@ export function probeForecast(snap: Snapshot, info: StepInfo, hits: Hit[], mix: 
   const { G, ctx } = snap;
   if (G.draft || ctx.gameover) return 0;
   const pid = ctx.currentPlayer as PlayerID;
-  const foe = otherPlayer(pid);
   const base = { mix, seed: info.seed, step: info.step, move: 'attack', args: [] as unknown[], chaos: false };
   const e = evaluate(G, ctx, pid);
   if ('kind' in e) {
@@ -99,7 +98,7 @@ export function probeForecast(snap: Snapshot, info: StepInfo, hits: Hit[], mix: 
     return 1;
   }
   const atk = G.players[pid].active!;
-  const tgt = G.players[foe].active!;
+  const tgt = attackTargets(G, pid)[0];
   const tags = contextTags(atk.cardId, tgt.cardId);
   for (const m of e.mismatches) {
     hits.push({
