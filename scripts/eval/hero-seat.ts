@@ -14,7 +14,11 @@ const GAMES = Number(process.argv[2] ?? 600);
 const TURN_CAP = 40;
 
 function roster(ps: PlayerState): string[] {
-  return [ps.active, ...ps.bench]
+  // A merged Rem rides in an ally's `attached` list, not on a slot: she is
+  // still this side's hero, so her games count for her.
+  const slots = [ps.active, ...ps.bench];
+  const merged = slots.flatMap((c) => (c?.attached ?? []).filter((a) => a.remMergeTurnsLeft != null));
+  return [...slots, ...merged]
     .filter((c): c is NonNullable<typeof c> => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero')
     .map((c) => c.cardId);
 }

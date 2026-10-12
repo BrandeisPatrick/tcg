@@ -74,13 +74,11 @@ keeping also shows on other `SEED`s.
   weak teammates still loses. Use forced matchups for specific-card tests.
 - **Overfitting to the bot** — never tune until *our* bot hits 50/50; require an
   outlier to be flagged across agents and keep humans in the loop.
-- **A Rem merged at the end** — `balance-sim.ts` and `eval/framework.ts` read
-  each side's heroes off the board when the game ends, and a Rem merged into an
-  ally then sits in its `attached` list, not on a slot, so her games are
-  dropped (about one in five, once the AI merges her). Her row reads low:
-  33% → 48% when her roster is read at the start of the match, 33% → 33% as the
-  scripts count it. Read rosters when the draft ends, or count `attached` heroes
-  that carry `remMergeTurnsLeft`.
+- **A Rem merged at the end** — `balance-sim.ts`, `eval/framework.ts` and
+  `eval/hero-seat.ts` read each side's heroes off the board when the game ends;
+  a Rem merged into an ally then sits in its `attached` list, not on a slot.
+  They count her there (`remMergeTurnsLeft`), or about one in five of her games
+  would be dropped once the AI merges her and her row would read 15 points low.
 
 ## The loop
 **Self-play at scale → CI-flagged outliers (paired metrics) → human picks the
