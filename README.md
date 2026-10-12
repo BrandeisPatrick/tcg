@@ -56,7 +56,7 @@ single-page React app.
   fallback glyphs for cards that don't have canon art yet.
 - **AI opponent** that plays only the engine's own legal moves and ranks them
   by a 1-ply lookahead (sees lethal, on-attach equipment, forced promotion when
-  the Active dies).
+  the Active dies, and prices statuses, channelled ultimates and a merged Rem).
 - **One rulebook:** every rule lives in one engine function that the board,
   the AI and the attack preview all ask; the preview is the real attack run on
   a copy. See [`docs/engine-model.md`](./docs/engine-model.md).

@@ -437,13 +437,19 @@ describe('AI: the attack is a choice', () => {
 
   it('values a hero by the attack it really makes: Weaken counts against its owner and for its rival', () => {
     const base = standing(freshReadyGame());
+    // The attack it makes: one point softer is 1.5 of threat, however the point was lost.
+    const worn = freshReadyGame();
+    worn.players['1'].active!.atkMod -= 1;
+    expect(base - standing(worn)).toBeCloseTo(1.5);
+    // Weaken takes that point off, and is itself a debuff the position prices:
+    // a point of HP (2) for each of its 2 turns.
     const mine = freshReadyGame();
     addStatus(mine, mine.players['1'].active!, 'weapon_power_down', 1, 2);
     expect(effectiveAtk(mine.players['1'].active!)).toBe(effectiveAtk(freshReadyGame().players['1'].active!) - 1);
-    expect(base - standing(mine)).toBeCloseTo(1.5);
+    expect(base - standing(mine)).toBeCloseTo(1.5 + 4);
     const theirs = freshReadyGame();
     addStatus(theirs, theirs.players['0'].active!, 'weapon_power_down', 1, 2);
-    expect(standing(theirs) - base).toBeCloseTo(1.5);
+    expect(standing(theirs) - base).toBeCloseTo(1.5 + 4);
   });
 
   it('offers a hero at the gear cap every item it could discard, and lets the lookahead pick', () => {
@@ -512,6 +518,16 @@ describe('AI: the attack is a choice', () => {
     const ai = G.players['1'];
     ai.souls = 2;
     ai.hand = [{ ...ai.deck[0], cardId: 'extended_magazine', iid: 'mag', zone: 'hand' }];
+    // With the bench's skills on offer too, the magazine still comes before the attack…
+    const all = enumerateAIMoves(G, ctx('1'));
+    const magOnActive = all.findIndex((m) => m.move === 'playCard' && m.args[0] === 'mag' && m.args[1] === ai.active!.iid);
+    expect(magOnActive).toBeGreaterThanOrEqual(0);
+    expect(magOnActive).toBeLessThan(all.findIndex((m) => m.move === 'attack'));
+    // …and with only the gear and the attack to weigh (the bench has used its
+    // skills) it is the first choice. A 1-soul skill like Dynamo's Bullet Power
+    // buff is worth more than the 2-soul magazine now that the position prices
+    // the buff's status; that is not what this test is about.
+    for (const b of ai.bench) if (b) b.skillUsedThisTurn = true;
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect(best.move).toBe('playCard');
     expect(best.args[0]).toBe('mag');

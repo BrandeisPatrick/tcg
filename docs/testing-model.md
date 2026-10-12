@@ -11,6 +11,8 @@ can simulate thousands of games cheaply and reproducibly.
 ## The harness — `scripts/eval/`
 - `framework.ts` — seeded runner, agent ladder, Wilson CIs, matchup control.
 - `run.ts` — batteries + report → writes `sim-reports/evaluation.md`.
+- `ai-vs-ai.ts` — the current AI against the previous commit's, for a change to
+  how the AI values a position (below).
 
 Run:
 ```
@@ -18,6 +20,23 @@ npx vite-node scripts/eval/run.ts smoke        # fast sanity (incl. MCTS)
 npx vite-node scripts/eval/run.ts full 1000    # full battery
 ```
 A simpler one-shot per-hero sim also exists: `scripts/balance-sim.ts`.
+
+### Does a change to the AI play better? — `ai-vs-ai.ts`
+A change to `evalState` (or its weights) is proven by play, not by reading
+numbers. The script plays N seeded games (default 1000, random drafts) with one
+seat on the current `enumerateAIMoves` and the other on a frozen copy of the
+heuristic from before the change, and reports the new AI's win-rate over the
+decisive games with a 95% Wilson interval. Seats alternate every game, in pairs
+that share a seed, so the draft and the first-player edge cancel; the same two
+heuristics and `SEED` replay the same games.
+
+The frozen copy is scratch and never committed. Before changing the AI, make it
+from the commit you start at (`git show HEAD:src/ai/heuristic.ts`, written to
+`scripts/eval/_old-heuristic.ts`), run
+`npx vite-node scripts/eval/ai-vs-ai.ts`, and delete the copy before you
+commit. The bar is a win-rate of at least 52% with the interval above 50%. One
+run of 1000 games has a standard error of about 1.6 points, so a change worth
+keeping also shows on other `SEED`s.
 
 ## What makes it FAIR (vs. a naive AI-vs-AI sim)
 
@@ -55,6 +74,13 @@ A simpler one-shot per-hero sim also exists: `scripts/balance-sim.ts`.
   weak teammates still loses. Use forced matchups for specific-card tests.
 - **Overfitting to the bot** — never tune until *our* bot hits 50/50; require an
   outlier to be flagged across agents and keep humans in the loop.
+- **A Rem merged at the end** — `balance-sim.ts` and `eval/framework.ts` read
+  each side's heroes off the board when the game ends, and a Rem merged into an
+  ally then sits in its `attached` list, not on a slot, so her games are
+  dropped (about one in five, once the AI merges her). Her row reads low:
+  33% → 48% when her roster is read at the start of the match, 33% → 33% as the
+  scripts count it. Read rosters when the draft ends, or count `attached` heroes
+  that carry `remMergeTurnsLeft`.
 
 ## The loop
 **Self-play at scale → CI-flagged outliers (paired metrics) → human picks the

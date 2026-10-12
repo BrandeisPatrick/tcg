@@ -7,24 +7,85 @@
  * With lookahead (the default) every candidate is made on a copy through the
  * engine (`simulate`), and the resulting position is scored by `evalState`.
  * That captures target choice, lethal and the value of gear and skills without
- * hand-tuning each case. A turn is the player's to spend on cards, skills and a
- * retreat in any order, with at most one attack among them — and ending the turn
- * never attacks, so the AI has to choose `attack` itself. The Active either
- * attacks or uses its skill, so every line is valued with the attack it leaves
- * on the table.
+ * hand-tuning each case, and what a line leaves on the board: the statuses it
+ * lands, the channel it starts, the Rem it merges. A turn is the player's to
+ * spend on cards, skills and a retreat in any order, with at most one attack
+ * among them — and ending the turn never attacks, so the AI has to choose
+ * `attack` itself. The Active either attacks or uses its skill, so every line is
+ * valued with the attack it leaves on the table.
  *
  * Without lookahead (the eval framework's random agent, the MCTS bot's rollouts)
  * the moves are only listed, ranked by cheap per-move scores.
  */
 import type { Ctx } from 'boardgame.io';
-import type { GameState, PlayerID, CardInstance } from '@/engine/types';
+import type { GameState, PlayerID, PlayerState, CardInstance, StatusInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { CC_STATUSES } from '@/statuses';
+import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import { checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, liveBoardCards, otherPlayer, resolveSkill } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import { perform, type Action } from '@/engine/engine';
 import { attackBlocked, cardCost, legalActions } from '@/engine/legality';
 import { forecastAttack, simulate } from '@/engine/forecast';
+
+// ----- what a status is worth ---------------------------------------------------
+// The numbers `evalState` pays for statuses and channels, in its own units (a
+// point of HP is worth 2). They are judgement, kept in one place so a balance
+// pass can move them without touching the arithmetic below. They were set by
+// play, not by eye: `scripts/eval/ai-vs-ai.ts` against the AI before them.
+// Pricing a point of pure damage or of a stat at 1 won 54.4% of 40,000 seeded
+// games against it; at a point of HP (2) it won 55.3%. Most of the other lines
+// move the result by less than the noise (a game is decided by the draft and
+// the first player's edge far more than by what a stun is worth), so move one
+// only with thousands of games behind it.
+
+/** A status adds `hvalue × scale × (byValue ? value : 1) × min(duration, turns)` to
+ *  its bearer. `hvalue` is the sign and size the status declares for itself
+ *  (statuses/index.ts: a buff is positive, a debuff negative), so the same line
+ *  lowers an own unit that suffers a status and raises the foe's that does. */
+interface Weight {
+  /** Multiplies the status's own `hvalue`. */
+  scale: number;
+  /** The status's `value` is a magnitude that multiplies the price. */
+  byValue?: true;
+  /** The most turns of the status that count (a permanent one counts as this many). */
+  turns: number;
+}
+
+const STATUS_WEIGHT: Record<string, Weight> = {
+  // Hard crowd control: any status the engine flags `cc` (stun, silenced, disarm, sleep).
+  cc:            { scale: 3,   turns: 2 },                // a denied turn is worth about a unit's threat; two turns at most
+  sleep_burst:   { scale: 0.5, turns: 1, byValue: true }, // a Sleep's stored wake-up burst (Naptime), halved: it can be cleansed first
+  // Damage and crowd control still to come.
+  bleed:         { scale: 2,   turns: 3, byValue: true }, // pure damage: `value` a turn for up to 3 turns, each point worth a point of HP
+  charged:       { scale: 3,   turns: 1 },                // a Stun on its way: the price of one denied turn
+  djinns_mark:   { scale: 1.5, turns: 1, byValue: true }, // the detonation (3 spirit a stack), halved: it can be cleansed first
+  reverb:        { scale: 1,   turns: 1, byValue: true }, // the echo: its stored spirit damage
+  // Magnitude buffs and debuffs: each point is a point of HP saved or dealt on a hit, for the
+  // next 2 turns (a permanent one counts as 2).
+  bullet_resist:      { scale: 2, turns: 2, byValue: true }, // damage taken off every bullet hit
+  spirit_resist:      { scale: 2, turns: 2, byValue: true }, // damage taken off every spirit hit
+  weapon_power:       { scale: 2, turns: 2, byValue: true }, // extra damage on every swing
+  spirit_power:       { scale: 2, turns: 2, byValue: true }, // extra damage on every skill
+  weapon_power_down:  { scale: 2, turns: 2, byValue: true }, // swings that hit softer
+  spirit_power_down:  { scale: 2, turns: 2, byValue: true }, // skills that hit softer
+  bullet_resist_down: { scale: 2, turns: 2, byValue: true }, // extra damage taken from every bullet hit
+  spirit_resist_down: { scale: 2, turns: 2, byValue: true }, // extra damage taken from every spirit hit
+  healing_boost:      { scale: 2, turns: 2, byValue: true }, // extra healing on every heal
+  healing_boost_down: { scale: 2, turns: 2 },                // no healing at all for up to 2 turns, worth about 2 a turn
+  // Immunity.
+  unstoppable:   { scale: 3,   turns: 2 },                // a turn of immunity to damage and crowd control is worth a lot: about 6 a turn
+  // Not here, on purpose: Shield (counted with the unit), Extra Attack and the Siphon
+  // markers (bookkeeping), and the two channels, which `channelValue` prices.
+};
+
+/** What a channelled ultimate is worth (`channelValue`): the damage it still has
+ *  to deal, less the actions its caster gives up while it channels. */
+const CHANNEL_WEIGHT = {
+  /** The damage still to come counts in full, as threat. */
+  damage: 1,
+  /** A heavy channel's caster can neither attack nor cast: this share of its threat is lost for each turn left. */
+  lockout: 0.5,
+};
 
 /** A hero's offensive potential: bullet attack PLUS its best skill's output
  *  (base + Spirit if it scales). This is what makes the lookahead ITEMIZE — a
@@ -70,7 +131,60 @@ function equipValue(c: CardInstance): number {
 /** What a won game is worth, in the units of `evalState`: more than any position. */
 const DECISIVE = 1_000_000;
 
-/** Position value from `pid`'s perspective (higher = better for pid). */
+/** What a hero standing on the board is worth: its presence, its HP and its offense. */
+function presence(c: CardInstance): number {
+  return 3 + c.hp * 2 + heroThreat(c) * 1.5;
+}
+
+/** One status line's price (see `Weight`). */
+function price(hvalue: number, w: Weight, s: StatusInstance): number {
+  return hvalue * w.scale * (w.byValue ? s.value : 1) * Math.min(s.duration, w.turns);
+}
+
+/** What the statuses on `c` are worth to its owner (a debuff is negative). The
+ *  hard crowd control is found by the engine's own `cc` flag, not by a list. */
+function statusValue(c: CardInstance): number {
+  let v = 0;
+  for (const s of c.statuses) {
+    const def = STATUSES_BY_ID[s.id];
+    if (!def) continue;
+    const w = STATUS_WEIGHT[s.id] ?? (def.cc ? STATUS_WEIGHT.cc : undefined);
+    if (w) v += price(def.hvalue, w, s);
+    // A Sleep that stores a wake-up burst (Naptime) is also that damage to come.
+    if (s.id === 'sleep' && s.value > 0) v += price(def.hvalue, STATUS_WEIGHT.sleep_burst, s);
+  }
+  return v;
+}
+
+/** What a channelled ultimate on `c` is worth to its owner: the damage it still
+ *  has to deal to each of the `enemies` standing, counted as threat. Each pulse
+ *  hits for the channel's value plus the caster's Spirit, once for every turn
+ *  left, and an escalating channel (Seven's ramp) hits harder on each pulse. A
+ *  heavy channel (`casting`) also locks its caster out of attacking and casting
+ *  for as long as it runs. */
+function channelValue(c: CardInstance, enemies: number): number {
+  let v = 0;
+  for (const s of c.statuses) {
+    if (s.id !== 'casting' && s.id !== 'casting_light') continue;
+    let dealt = (s.value + effectiveSpirit(c)) * s.duration;
+    if (s.ramp) dealt += (s.ramp * (s.duration - 1) * s.duration) / 2;
+    v += dealt * enemies * CHANNEL_WEIGHT.damage;
+    if (s.id === 'casting') v -= heroThreat(c) * s.duration * CHANNEL_WEIGHT.lockout;
+  }
+  return v;
+}
+
+/** The Rem riding on `c`, if she has merged into it ("Lil Helpers"). A merged
+ *  Rem is a hero still on the board, not gear: she is out of her bench slot but
+ *  comes back to it, and the HP she granted is already on the bearer. */
+function mergedRem(c: CardInstance): CardInstance[] {
+  return (c.attached ?? []).filter((a) => a.remMergeTurnsLeft != null);
+}
+
+/** Position value from `pid`'s perspective (higher = better for pid). It counts
+ *  each living hero's HP, offense (attack plus its best skill), shield and worn
+ *  gear, plus the statuses it carries, the channel it is running and the merged
+ *  Rem it wears, and each fallen hero as a lost presence. */
 function evalState(g: GameState, pid: PlayerID): number {
   // A match that is over is not "a good position": it is the one that must
   // rank first (or, lost, last). The engine's own win check says which.
@@ -81,20 +195,23 @@ function evalState(g: GameState, pid: PlayerID): number {
   const foe = g.players[en];
   // Patron HP is the win condition — weight it heavily.
   let s = (me.hp - foe.hp) * 12;
-  const tally = (ps: typeof me, sign: number) => {
+  const tally = (ps: PlayerState, rivals: PlayerState, sign: number) => {
+    const enemies = liveBoardCards(rivals).length;
     for (const c of liveBoardCards(ps)) {
       // Shield absorbs damage before HP, so a point of shield is worth a
       // point of HP — weight it like HP (×2), not ×1 (which made the bot
       // under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
-      s += sign * (3 + c.hp * 2 + heroThreat(c) * 1.5 + shield * 2 + equipValue(c) * 2);
+      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + statusValue(c) + channelValue(c, enemies));
+      // Merging Rem into an ally is not the loss of a hero.
+      for (const rem of mergedRem(c)) s += sign * presence(rem);
     }
     for (const c of [ps.active, ...ps.bench]) {
       if (c && (c.respawnTurnsLeft ?? 0) > 0) s -= sign * 5; // corpse = lost presence
     }
   };
-  tally(me, 1);
-  tally(foe, -1);
+  tally(me, foe, 1);
+  tally(foe, me, -1);
   return s;
 }
 

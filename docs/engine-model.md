@@ -46,7 +46,11 @@ lock a skill. The engine fixes that by construction:
 | `game.ts` | the boardgame.io adapter only: setup, turn hooks, moves → `perform`, `endIf` |
 
 Card behaviour is `src/abilities/index.ts` (one `AbilityDef` per effect);
-status semantics are `src/statuses/index.ts`.
+status semantics are `src/statuses/index.ts`. The AI is `src/ai/heuristic.ts`:
+it lists `legalActions` and ranks each by the position it leads to
+(`evalState`). What it thinks a status, a channelled ultimate or a merged Rem
+is worth is judgement, kept in one table (`STATUS_WEIGHT`) at the top of that
+file.
 
 ## Adding or changing a card
 
@@ -87,7 +91,9 @@ status semantics are `src/statuses/index.ts`.
   hand `returnToHand`; an ultimate that swings at the whole board calls
   `attackAll`. None of them is written twice.
 - **Never** add a `cardId === '…'` to `src/engine`, a status list to the UI or
-  the AI, or a cost / target / cap check outside `legality.ts`.
+  the AI (the AI's `STATUS_WEIGHT` prices statuses; what a status does is only
+  ever read from `StatusDef`), or a cost / target / cap check outside
+  `legality.ts`.
 
 ## Proving a change
 
@@ -102,6 +108,12 @@ status semantics are `src/statuses/index.ts`.
   that legality and the engine agree in both directions, that a refused move
   changes nothing, that the forecast equals the real attack, and that a seed
   replays identically.
+- **AI vs AI** (`scripts/eval/ai-vs-ai.ts`): a change to how the AI values a
+  position plays the new AI against the previous commit's over 1000 seeded
+  games, seats alternating; it must win at least 52% with the 95% Wilson
+  interval above 50% (see [testing-model.md](./testing-model.md)). The balance
+  sim and the match telemetry then say what the new play does to the card and
+  hero tables.
 - **In the browser**: `scripts/qa/tutorial.mjs` and `match.mjs` at both sizes
   (they fail on any console error or React warning), `legality.mjs` for the
   board's refusals on staged boards.
