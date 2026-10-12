@@ -50,8 +50,9 @@ export const DeadlockGame: Game<GameState> = {
     playCard: ({ G, ctx, playerID }, cardIid: string, targetIid?: string, discardIid?: string) =>
       move(G, mover(ctx, playerID), { type: 'playCard', cardIid, targetIid, discardIid }),
 
-    useSkill: ({ G, ctx, playerID }, heroIid: string, targetIid?: string) =>
-      move(G, mover(ctx, playerID), { type: 'useSkill', heroIid, targetIid }),
+    /** `skillId` is left off for the hero's first skill. */
+    useSkill: ({ G, ctx, playerID }, heroIid: string, targetIid?: string, skillId?: string) =>
+      move(G, mover(ctx, playerID), { type: 'useSkill', heroIid, targetIid, skillId }),
 
     moveHero: ({ G, ctx, playerID }, fromSlot: 0 | 1 | 2 | 3, toSlot: 0 | 1 | 2 | 3) =>
       move(G, mover(ctx, playerID), { type: 'moveHero', fromSlot, toSlot }),

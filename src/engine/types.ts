@@ -25,17 +25,17 @@ export interface BaseCard {
   text?: string;
 }
 
-export interface HeroCard extends BaseCard {
+/** A hero prints no text of its own: its card text is its abilities' (`name`
+ *  and `text` on each AbilityDef), read through `heroAbilities` (engine/query.ts). */
+export interface HeroCard extends Omit<BaseCard, 'text'> {
   type: 'hero';
   atk: number;
   hp: number;
-  skill?: AbilityId;
+  /** The skills the hero may use, in order: one or two, none for a passive-only
+   *  hero. A bare `useSkill` names `skills[0]`. A hero uses one skill a turn. */
+  skills: AbilityId[];
   passives?: AbilityId[];
   ult?: CardId;
-  /** Display name of the hero's skill or passive (e.g., "Willpower", "Fixation").
-   *  Rendered as a tag next to the role on the card subtitle so the card text
-   *  body can carry just the mechanical effect without a "Role. Name:" prefix. */
-  abilityName?: string;
   flags?: { benchOnly?: boolean };
 }
 
@@ -90,9 +90,19 @@ export interface CardInstance {
   spiritMod: number;
   statuses: StatusInstance[];
   exhausted: boolean;
-  /** This hero used its skill this turn. Each hero may use its skill once a
-   *  turn, and a hero that has done so cannot make the turn's attack. */
+  /** This hero used a skill this turn. Each hero may use one skill a turn, and
+   *  a hero that has done so cannot make the turn's attack. */
   skillUsedThisTurn: boolean;
+  /** The skill this hero used this turn (set by `useSkill`, cleared with the
+   *  other turn flags): what Echo Shard repeats, and which of two skills the
+   *  hero sheet marks USED. Bookkeeping, so the replay trace ignores it. */
+  lastSkillUsed?: AbilityId;
+  /** Turns of its owner left before each skill may be used again (the
+   *  ability's `cooldown`). Present only once a skill has set one: the map is
+   *  dropped when it empties, so a hero that never used a cooldown skill has no
+   *  field. Ticks at the start of the owner's turn (docs/stats-model.md §1); a
+   *  fall and a respawn leave it as it is. */
+  cooldowns?: Partial<Record<AbilityId, number>>;
   /** This hero made the turn's attack, so it cannot use its skill this turn
    *  (it keeps the flag if it retreats to the bench afterwards). */
   attackedThisTurn?: boolean;
@@ -176,6 +186,9 @@ export interface GameAction {
   by: PlayerID;
   cardId: CardId;
   state: 'begin' | 'done';
+  /** For a 'skill' action: which of the hero's skills was used (the skill
+   *  flash reads its name). */
+  abilityId?: AbilityId;
 }
 
 // ---------------------------------------------------------------------------

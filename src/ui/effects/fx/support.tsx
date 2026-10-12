@@ -8,8 +8,9 @@
  * whatever leaves it.
  */
 import { motion } from 'framer-motion';
-import type { FxTag, StatusFx, StatusId } from '@/engine/types';
+import type { AbilityId, FxTag, StatusFx, StatusId } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
+import { heroAbilities } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { statusChipText, statusClass } from '../../card/StatusIcon';
@@ -22,11 +23,15 @@ import { castCharge, castRelease, goldBurst, healRise, helix, shieldSkid } from 
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** The name to print on a caster's plate — a hero's ability, a card's name. */
-export function castLabel(cardId: string): string {
+/** The name to print on a caster's plate — a hero's ability, a card's name.
+ *  `abilityId` names the ability a hero used (`G.action.abilityId`); left out,
+ *  it is the hero's first. */
+export function castLabel(cardId: string, abilityId?: AbilityId): string {
   const data = CARDS_BY_ID[cardId];
   if (!data) return '';
-  return data.type === 'hero' ? (data.abilityName ?? 'Skill') : data.name;
+  if (data.type !== 'hero') return data.name;
+  const kit = heroAbilities(data);
+  return (kit.find((x) => x.ability.id === abilityId) ?? kit[0])?.ability.name ?? 'Skill';
 }
 
 /** The colour a cast draws in — a hero's identity for a skill or ult. */

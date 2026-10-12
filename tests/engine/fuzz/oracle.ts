@@ -78,16 +78,34 @@ export function filterForHandCard(card: CardInstance): TargetFilter | 'equipment
   return null;
 }
 
-export function filterForSkill(hero: CardInstance): TargetFilter | null {
+/** The skills a hero card lists, in order: one or two, none for a passive-only
+ *  hero (or a card that is no hero). The first is what a bare `useSkill` names. */
+export function skillIdsOf(hero: CardInstance): string[] {
   const d = CARDS_BY_ID[hero.cardId];
-  if (d?.type !== 'hero' || !d.skill) return null;
-  return getAbility(d.skill)?.target ?? null;
+  return d?.type === 'hero' ? d.skills : [];
+}
+
+/** The TargetFilter that governs one of a hero's skills (`skillId`; left out,
+ *  its first), or null when the hero has no such skill. */
+export function filterForSkill(hero: CardInstance, skillId?: string): TargetFilter | null {
+  const ids = skillIdsOf(hero);
+  const id = skillId ?? ids[0];
+  if (id === undefined || !ids.includes(id)) return null;
+  return getAbility(id)?.target ?? null;
 }
 
 /** A skill that is never aimed at its own caster (Rem's merge), whatever its filter says. */
-export function skillExcludesSelf(hero: CardInstance): boolean {
-  const d = CARDS_BY_ID[hero.cardId];
-  return d?.type === 'hero' && !!d.skill && !!getAbility(d.skill)?.excludeSelf;
+export function skillExcludesSelf(hero: CardInstance, skillId?: string): boolean {
+  const ids = skillIdsOf(hero);
+  const id = skillId ?? ids[0];
+  return id !== undefined && ids.includes(id) && !!getAbility(id)?.excludeSelf;
+}
+
+/** A skill that is still cooling down: its entry in the owner's-turn timer
+ *  (`cooldowns`, docs/stats-model.md §1) is above 0. Written from that rule, not
+ *  from `skillBlocked`, so the probes can tell the gate it is wrong. */
+export function skillCooling(hero: CardInstance, skillId: string): boolean {
+  return (hero.cooldowns?.[skillId] ?? 0) > 0;
 }
 
 /** Is `target` a legal choice for `filter`, cast by `pid` from `source`?

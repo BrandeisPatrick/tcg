@@ -1,7 +1,8 @@
 /**
  * The engine's idea of "legal" against the other places that have one:
  *   A  every move enumerateAIMoves offers is accepted by the move function;
- *   B  legality.skillBlocked === null  <=>  useSkill succeeds for some target the AI would try;
+ *   B  legality.skillBlocked === null  <=>  useSkill succeeds for some target the AI would try
+ *      (each skill of each hero on its own; a skill still cooling down never succeeds);
  *   C  a rejected move leaves the state untouched (validate before mutate), and the engine
  *      never throws on garbage arguments;
  *   D  targets: the engine accepts exactly the targets the ability's TargetFilter allows

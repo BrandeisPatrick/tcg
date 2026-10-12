@@ -5,6 +5,7 @@
  * A rule that needs a number asks here instead of working it out again.
  */
 import type {
+  AbilityId,
   CardInstance,
   DamageType,
   EquipmentCard,
@@ -16,7 +17,7 @@ import type {
 } from './types';
 import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID, type Blockable } from '@/statuses';
-import type { AbilityDef } from '@/abilities';
+import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import { START_LEVEL } from './constants';
 
@@ -173,6 +174,51 @@ export function abilitySources(card: CardInstance): AbilitySource[] {
  *  can never be the piece discarded to make room. */
 export function wornEquipment(card: CardInstance): CardInstance[] {
   return (card.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment');
+}
+
+// ---------- A hero's kit ----------
+
+/** One skill a hero can use: its id, and the ability that does it. */
+export interface HeroSkill {
+  id: AbilityId;
+  ability: AbilityDef;
+}
+
+/**
+ * The skill `skillId` names on `card` — left out, the hero's first — or
+ * undefined when the card is no hero, has no skills, does not have that one, or
+ * the ability is not registered. The one reading of "which skill": the rules
+ * (legality, `useSkill`), the AI and the board all ask here, so a bare action
+ * means the same thing to every one of them.
+ */
+export function resolveSkill(card: CardInstance, skillId?: AbilityId): HeroSkill | undefined {
+  const skills = heroData(card)?.skills;
+  if (!skills || skills.length === 0) return undefined;
+  const id = skillId === undefined ? skills[0] : skillId;
+  if (!skills.includes(id)) return undefined;
+  const ability = getAbility(id);
+  return ability ? { id, ability } : undefined;
+}
+
+/**
+ * Everything a hero card prints, in the order it prints it: its skills, in
+ * order, then its passives — each ability with the `name` and `text` it carries.
+ * The one way the card face, the hero sheet, the draft, the AI and the tutorial
+ * read a hero's kit. An id that names no registered ability, or one without a
+ * name and text, is left out (the data tests fail on it).
+ */
+export function heroAbilities(data: HeroCard): { kind: 'skill' | 'passive'; ability: HeroAbilityDef }[] {
+  const named = (a: AbilityDef | undefined): a is HeroAbilityDef => !!a && typeof a.name === 'string' && typeof a.text === 'string';
+  const out: { kind: 'skill' | 'passive'; ability: HeroAbilityDef }[] = [];
+  const add = (kind: 'skill' | 'passive', ids: readonly AbilityId[]) => {
+    for (const id of ids) {
+      const ability = getAbility(id);
+      if (named(ability)) out.push({ kind, ability });
+    }
+  };
+  add('skill', data.skills);
+  add('passive', data.passives ?? []);
+  return out;
 }
 
 /** Damage `card` is about to take, after the pure `incoming` hooks of what it

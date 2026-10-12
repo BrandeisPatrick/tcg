@@ -20,7 +20,7 @@ export function isValidTarget(G: GameState, me: PlayerID, pending: PendingPlay |
   if (!pending) return false;
   if (pending.kind === 'useSkill') {
     const hero = findCardOnBoard(G, pending.iid);
-    return !!hero && hero.owner === me && skillBlocked(G, me, hero.card, card.iid) === null;
+    return !!hero && hero.owner === me && skillBlocked(G, me, hero.card, card.iid, pending.skillId) === null;
   }
   const why = playBlocked(G, me, pending.iid, card.iid);
   return why === null || why === 'full';

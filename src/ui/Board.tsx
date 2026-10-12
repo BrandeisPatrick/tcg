@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
-import type { GameState, CardInstance, PlayerID } from '@/engine/types';
+import type { AbilityId, GameState, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { findCardOnBoard, isRespawning, stepInCandidates } from '@/engine/query';
+import { findCardOnBoard, heroData, isRespawning, resolveSkill, stepInCandidates } from '@/engine/query';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
 import { CardPreview } from './overlays/CardPreview';
-import { HeroDetailSheet } from './overlays/HeroDetailSheet';
+import { HeroDetailSheet, type SkillOffer } from './overlays/HeroDetailSheet';
 import { OpponentHand } from './board/OpponentHand';
 import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
@@ -516,12 +516,14 @@ export function Board(props: BoardProps<GameState>) {
     else moves.playCard(cardIid);
   }
 
-  /** Use a hero's skill once the engine says it may be used. */
-  function castSkill(heroIid: string, targetIid?: string) {
-    const no = actionRefusal(G, me, { type: 'useSkill', heroIid, targetIid });
+  /** Use one of a hero's skills once the engine says it may be used. */
+  function castSkill(heroIid: string, targetIid?: string, skillId?: AbilityId) {
+    const no = actionRefusal(G, me, { type: 'useSkill', heroIid, targetIid, skillId });
     if (no) { showNotice(no.text, true); return; }
-    if (targetIid) moves.useSkill(heroIid, targetIid);
-    else moves.useSkill(heroIid);
+    // The move's arguments end at the last one given: [hero], [hero, target], [hero, target, skill].
+    const args = [heroIid, targetIid, skillId];
+    while (args.length > 1 && args[args.length - 1] === undefined) args.pop();
+    moves.useSkill(...args);
   }
 
   /** Arm a card that needs a target: the board lights what it may be aimed
@@ -560,7 +562,7 @@ export function Board(props: BoardProps<GameState>) {
       // A tap on a hero the armed card cannot go to (a corpse, a rival for
       // gear, one already wearing the item) is refused with the reason.
       if (pending.kind === 'playCard') playCardOn(pending.iid, card.iid);
-      else castSkill(pending.iid, card.iid);
+      else castSkill(pending.iid, card.iid, pending.skillId);
       setPending(null);
       return;
     }
@@ -572,23 +574,22 @@ export function Board(props: BoardProps<GameState>) {
   }
 
   /**
-   * Try to activate this hero's skill. Asks the engine first (`skillBlocked`),
-   * so the UI never opens a stale targeting overlay.
+   * Try to activate one of this hero's skills. Asks the engine first
+   * (`skillBlocked`), so the UI never opens a stale targeting overlay.
    */
-  function tryUseSkill(card: CardInstance) {
+  function tryUseSkill(card: CardInstance, skillId: AbilityId) {
     if (!isMyTurn) return;
     if (actionLocked) return;
-    const why = skillBlocked(G, me, card);
-    if (why) { if (why !== 'noSkill') showNotice(skillBlockReason(why), true); return; }
+    const why = skillBlocked(G, me, card, undefined, skillId);
+    if (why) { if (why !== 'noSkill') showNotice(skillBlockReason(why, card, skillId), true); return; }
     const data = CARDS_BY_ID[card.cardId];
-    if (data?.type !== 'hero' || !data.skill) return;
-    const ability = getAbility(data.skill);
-    if (!ability) return;
-    if (skillTargets(G, me, card) === 'none') { castSkill(card.iid); return; }
+    const ability = resolveSkill(card, skillId)?.ability;
+    if (data?.type !== 'hero' || !ability) return;
+    if (skillTargets(G, me, card, skillId) === 'none') { castSkill(card.iid, undefined, skillId); return; }
     // A skill aimed at its own hero asks for nothing.
-    if (ability.target === 'self') { castSkill(card.iid, card.iid); return; }
+    if (ability.target === 'self') { castSkill(card.iid, card.iid, skillId); return; }
     setPending({
-      kind: 'useSkill', iid: card.iid,
+      kind: 'useSkill', iid: card.iid, skillId,
       title: `${data.name} · Skill`,
       desc: ability.prompt ?? 'Choose a target.',
       filter: ability.target,
@@ -998,13 +999,19 @@ export function Board(props: BoardProps<GameState>) {
                 : undefined,
             };
 
-            // Any of your heroes may use its skill, once a turn, on the
-            // engine's own terms (`skillBlocked`).
-            const skillBlock = isMine ? skillBlocked(G, me, hero) : null;
-            const skillBlockedReason = !isMine ? undefined
-              : !isMyTurn ? 'Not your turn'
-              : skillBlock ? skillBlockReason(skillBlock)
-              : undefined;
+            // Any of your heroes may use one skill a turn, on the engine's own
+            // terms (`skillBlocked`) — each of its skills asked on its own.
+            const skillOffers: Record<AbilityId, SkillOffer> = {};
+            for (const skillId of heroData(hero)?.skills ?? []) {
+              const block = isMine ? skillBlocked(G, me, hero, undefined, skillId) : null;
+              skillOffers[skillId] = {
+                canUse: isMine && isMyTurn && block === null,
+                blockedReason: !isMine ? undefined
+                  : !isMyTurn ? 'Not your turn'
+                  : block ? skillBlockReason(block, hero, skillId)
+                  : undefined,
+              };
+            }
             // The turn's attack is your Active's, offered on its sheet with
             // what it would do, or why it cannot be made.
             const attackBlock = isMyActive && isMyTurn ? attackBlocked(G, me) : null;
@@ -1019,9 +1026,8 @@ export function Board(props: BoardProps<GameState>) {
               <HeroDetailSheet
                 card={hero}
                 isMine={isMine}
-                canUseSkill={isMine && isMyTurn && skillBlock === null}
-                skillBlockedReason={skillBlockedReason}
-                onUseSkill={() => tryUseSkill(hero)}
+                skills={skillOffers}
+                onUseSkill={(skillId) => tryUseSkill(hero, skillId)}
                 attack={attack}
                 retreat={retreat}
                 onRetreat={startRetreat}
@@ -1122,7 +1128,7 @@ export function Board(props: BoardProps<GameState>) {
 
         {/* Board FX — skill flares and bolts, type-coloured impacts, status
             stamps, heals, shields, revives — anchored to the hero slots. */}
-        <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
+        <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} action={G.action} />
 
         {/* Feedback sticker — one ink label above the hand (red when it is
             a warning). Explains silent no-ops and confirms fire-and-forget

@@ -62,13 +62,14 @@ describe('Abilities — every card has a registered, executable ability', () => 
 
   it('every hero skill maps to a real ability and runs', () => {
     for (const hero of HEROES) {
-      if (!hero.skill) continue;
-      const G = freshGame();
-      const ability = ABILITIES_BY_ID[hero.skill];
-      expect(ability, `Hero ${hero.id} -> skill ${hero.skill} missing`).toBeTruthy();
-      const source = G.players['0'].active!;
-      const target = pickTargetFor(G, ability.target, '0', source);
-      expect(() => ability.run(G, { movingPlayer: '0' }, { source, target })).not.toThrow();
+      for (const skillId of hero.skills) {
+        const G = freshGame();
+        const ability = ABILITIES_BY_ID[skillId];
+        expect(ability, `Hero ${hero.id} -> skill ${skillId} missing`).toBeTruthy();
+        const source = G.players['0'].active!;
+        const target = pickTargetFor(G, ability.target, '0', source);
+        expect(() => ability.run(G, { movingPlayer: '0' }, { source, target })).not.toThrow();
+      }
     }
   });
 

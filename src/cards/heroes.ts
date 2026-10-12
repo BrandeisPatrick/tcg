@@ -1,10 +1,11 @@
 import type { HeroCard } from '@/engine/types';
 
 /**
- * 19 heroes total. Each hero has EXACTLY ONE distinguishing mechanic — either a
- * `skill` (Activate trigger, once a turn per hero; the hero gives up the turn's
- * attack to use it) OR an entry in `passives` (always-on or trigger-based, no
- * cast). Never both.
+ * 19 heroes total. A hero carries one or two abilities: `skills` (Activate
+ * trigger; a hero uses ONE skill a turn and gives up the turn's attack to use
+ * it; `[]` for a passive-only hero) and `passives` (always-on or trigger-based,
+ * no cast). Today every hero has exactly one ability — a skill or a passive,
+ * never both.
  *
  * Split (8 passive / 11 skill):
  *   PASSIVE: Abrams, Drifter, Haze, Mirage, Mo & Krill, Shiv, Vindicta, Wraith
@@ -16,9 +17,11 @@ import type { HeroCard } from '@/engine/types';
  * offense is intentionally low at Lv1 so early fights take 2–3 turns and the
  * late game snowballs via levels + items. See docs/balance-model.md.
  *
- * Card text format: `abilityName` carries the skill/passive name (rendered as a
- * tag next to the role on the card subtitle). `text` carries ONLY the
- * mechanical effect — no "Role. AbilityName:" prefix.
+ * Card text: a hero prints none of its own. Each skill and passive is an
+ * AbilityDef (src/abilities) carrying its display `name` ("Frost Grenade") and
+ * `text`, the mechanical effect only — no "Role. AbilityName:" prefix.
+ * `heroAbilities` (src/engine/query.ts) lists a hero's, skills first; the card
+ * face, the hero sheet, the draft and the tutorial all read the kit there.
  */
 export const HEROES: HeroCard[] = [
   // ----- PASSIVE-only heroes -----
@@ -29,10 +32,9 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 1,
     hp: 5,
+    skills: [],
     passives: ['passive_abrams_heal'],
     ult: 'ult_abrams',
-    abilityName: 'Infernal Resilience',
-    text: 'Heals 1 at start of own turn while Active.',
   },
   {
     id: 'hero_haze',
@@ -41,10 +43,9 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 3,
     hp: 5,
+    skills: [],
     passives: ['passive_haze_fixation'],
     ult: 'ult_haze',
-    abilityName: 'Fixation',
-    text: 'After Haze attacks, she gains Extra Attack 1 this turn.',
   },
   {
     id: 'hero_mo_krill',
@@ -53,10 +54,9 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 1,
     hp: 7,
+    skills: [],
     passives: ['passive_mo_krill_burrow'],
     ult: 'ult_mo_krill',
-    abilityName: 'Burrow',
-    text: 'Cleanses all debuffs from self at start of own turn.',
   },
   {
     id: 'hero_rem',
@@ -65,10 +65,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 1,
     hp: 4,
-    skill: 'skill_rem',
+    skills: ['skill_rem'],
     ult: 'ult_rem',
-    abilityName: 'Lil Helpers',
-    text: 'Merge into an ally as a buff: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns, then return to the bench.',
     flags: { benchOnly: true },
   },
   {
@@ -78,10 +76,9 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 5,
+    skills: [],
     passives: ['passive_shiv_bleed'],
     ult: 'ult_shiv',
-    abilityName: 'Serrated Knives',
-    text: 'Attacks apply Bleed 2 for 2 turns.',
   },
   {
     id: 'hero_vindicta',
@@ -90,10 +87,9 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 5,
+    skills: [],
     passives: ['passive_vindicta_flight'],
     ult: 'ult_vindicta',
-    abilityName: 'Flight',
-    text: 'Takes 1 less bullet damage from all sources.',
   },
   {
     id: 'hero_wraith',
@@ -102,10 +98,9 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 6,
+    skills: [],
     passives: ['passive_wraith_mixed'],
     ult: 'ult_wraith',
-    abilityName: 'Mixed Bullets',
-    text: 'Attacks deal Bullet Power (bullet) + Spirit Power (spirit).',
   },
 
   // ----- SKILL-only heroes -----
@@ -116,10 +111,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 3,
     hp: 6,
-    skill: 'skill_dynamo',
+    skills: ['skill_dynamo'],
     ult: 'ult_dynamo',
-    abilityName: 'Rejuvenating Aurora',
-    text: 'Heal an ally 2 and grant +Bullet Power (1 + ½ Spirit) for 2 turns.',
   },
   {
     id: 'hero_kelvin',
@@ -128,10 +121,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 6,
-    skill: 'skill_kelvin',
+    skills: ['skill_kelvin'],
     ult: 'ult_kelvin',
-    abilityName: 'Frost Grenade',
-    text: '1 spirit dmg to enemy Active + heal your Active 2.',
   },
   {
     id: 'hero_lady_geist',
@@ -140,10 +131,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 1,
     hp: 4,
-    skill: 'skill_lady_geist',
+    skills: ['skill_lady_geist'],
     ult: 'ult_lady_geist',
-    abilityName: 'Life Drain',
-    text: 'Deal 3 spirit to any enemy and heal for half the damage dealt.',
   },
   {
     id: 'hero_lash',
@@ -152,10 +141,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 1,
     hp: 4,
-    skill: 'skill_lash',
+    skills: ['skill_lash'],
     ult: 'ult_lash',
-    abilityName: 'Ground Strike',
-    text: '1 spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
   },
   {
     id: 'hero_paige',
@@ -164,10 +151,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 4,
-    skill: 'skill_paige',
+    skills: ['skill_paige'],
     ult: 'ult_paige',
-    abilityName: 'Plot Armor',
-    text: 'Shield 2 on an ally and grant +Bullet Power (1 + ½ Spirit) for 2 turns.',
   },
   {
     id: 'hero_seven',
@@ -176,10 +161,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 4,
-    skill: 'skill_seven_static',
+    skills: ['skill_seven_static'],
     ult: 'ult_seven',
-    abilityName: 'Static Charge',
-    text: '1 spirit dmg + Charged 2 — Stun 1 turn on expiry.',
   },
   {
     id: 'hero_sinclair',
@@ -188,10 +171,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 1,
     hp: 4,
-    skill: 'skill_sinclair',
+    skills: ['skill_sinclair'],
     ult: 'ult_sinclair',
-    abilityName: 'Vexing Bolt',
-    text: '2 spirit dmg to any enemy.',
   },
   {
     id: 'hero_viscous',
@@ -200,10 +181,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 4,
-    skill: 'skill_viscous',
+    skills: ['skill_viscous'],
     ult: 'ult_viscous',
-    abilityName: 'The Cube',
-    text: 'Gain Unstoppable 1 + heal 1.',
   },
   {
     id: 'hero_yamato',
@@ -212,10 +191,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 6,
-    skill: 'skill_yamato',
+    skills: ['skill_yamato'],
     ult: 'ult_yamato',
-    abilityName: 'Power Slash',
-    text: '1 spirit dmg to any enemy.',
   },
   {
     id: 'hero_warden',
@@ -224,10 +201,8 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 2,
     hp: 5,
-    skill: 'skill_warden',
+    skills: ['skill_warden'],
     ult: 'ult_warden',
-    abilityName: 'Willpower',
-    text: 'Shield 3 on self.',
   },
   {
     id: 'hero_mirage',
@@ -236,10 +211,9 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 3,
     hp: 6,
+    skills: [],
     passives: ['passive_mirage_djinns_mark'],
     ult: 'ult_mirage',
-    abilityName: "Djinn's Mark",
-    text: "Attacks apply 1 stack of Djinn's Mark (max 4) for 3 turns. Mark detonates at max stacks or on expiry for 3 spirit dmg per stack.",
   },
   {
     id: 'hero_drifter',
@@ -248,10 +222,9 @@ export const HEROES: HeroCard[] = [
     rarity: 3,
     atk: 3,
     hp: 5,
+    skills: [],
     passives: ['passive_drifter_bloodscent'],
     ult: 'ult_drifter',
-    abilityName: 'Bloodscent',
-    text: 'Heals for half the damage his attacks deal (bullet lifesteal).',
   },
 ];
 

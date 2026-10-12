@@ -25,6 +25,11 @@ application **stacks**. Two clocks run on a unit's **own** turns only:
   (Sleep's wake-up burst goes off as it expires). So CC is stripped only after
   the unit has spent a turn under it.
 
+A hero skill's **cooldown** (`AbilityDef.cooldown`, counted in
+`CardInstance.cooldowns`) runs on the first clock, at the start of its owner's
+turn (`tickCooldowns`): CD N: usable again at the start of the owner's Nth turn
+after the use (CD 2 = every other turn).
+
 A lockout is checked when the unit tries to act: `isBlocked(card, act)`
 (`src/engine/query.ts`) reads each status's `blocks`, and the attack gate, the
 skill gate, the channel pulse, the AI and the board all ask it.

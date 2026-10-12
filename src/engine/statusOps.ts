@@ -213,10 +213,37 @@ export function tickRemMerges(G: GameState, ps: PlayerState) {
   }
 }
 
+/**
+ * Tick every skill cooldown of `ps`'s heroes down by one, at the start of their
+ * owner's turn (docs/stats-model.md §1): an entry that reaches 0 is removed, and
+ * an empty map is removed with it, so a hero that is off cooldown is back to
+ * having no field at all. It counts the owner's turns, so a hero on the
+ * respawn timer and a merged Rem (out of the board sweep, riding on her
+ * bearer) tick like the rest — a fall and a respawn leave a cooldown as it is.
+ */
+export function tickCooldowns(ps: PlayerState) {
+  const tick = (c: CardInstance) => {
+    const cooldowns = c.cooldowns;
+    if (!cooldowns) return;
+    for (const id of Object.keys(cooldowns)) {
+      const left = (cooldowns[id] ?? 0) - 1;
+      if (left > 0) cooldowns[id] = left;
+      else delete cooldowns[id];
+    }
+    if (Object.keys(cooldowns).length === 0) delete c.cooldowns;
+  };
+  for (const c of [ps.active, ...ps.bench]) {
+    if (!c) continue;
+    tick(c);
+    for (const a of c.attached ?? []) tick(a);
+  }
+}
+
 export function clearTurnFlags(ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
     c.exhausted = false;
     c.skillUsedThisTurn = false;
+    if (c.lastSkillUsed !== undefined) c.lastSkillUsed = undefined;
     c.attackedThisTurn = false;
     // Any unused Extra Attack stack expires at end of turn (it's a this-turn
     // resource); the attack consumes it, and a turn that ends without one
@@ -225,7 +252,11 @@ export function clearTurnFlags(ps: PlayerState) {
     // A merged Rem rides on her bearer, out of the board sweep above: clear
     // her skill flag here too, or she would come back from the merge with
     // her skill already spent for that turn.
-    for (const a of c.attached ?? []) if (a.remMergeTurnsLeft != null) a.skillUsedThisTurn = false;
+    for (const a of c.attached ?? []) {
+      if (a.remMergeTurnsLeft == null) continue;
+      a.skillUsedThisTurn = false;
+      if (a.lastSkillUsed !== undefined) a.lastSkillUsed = undefined;
+    }
   }
 }
 

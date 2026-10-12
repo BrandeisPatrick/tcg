@@ -5,7 +5,7 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { resolve } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
-import { findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, type TargetFilter } from '@/engine/query';
+import { findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, type TargetFilter } from '@/engine/query';
 import { pushLog } from '@/engine/log';
 import { newIid } from '@/engine/ids';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -45,6 +45,17 @@ export interface AbilityDef {
     | 'onBearerDamagedBySpirit'; // bearer just took spirit damage
   target: TargetFilter;
   prompt?: string;
+  /** A hero skill's or passive's display name ("Frost Grenade"), printed on
+   *  the card, the hero sheet and the skill flash. Spells, gear and ultimates
+   *  are named by their card. */
+  name?: string;
+  /** A hero skill's or passive's card text: the mechanical sentence the hero
+   *  card prints for it. Spells, gear and ultimates print their own card text. */
+  text?: string;
+  /** A hero skill only: turns of its owner before it may be used again. Absent
+   *  or 0 = usable every turn. Counted in `CardInstance.cooldowns`, ticked at
+   *  the start of the owner's turn (docs/stats-model.md §1). */
+  cooldown?: number;
   /** If true, hero's spiritMod adds to the skill's damage/heal/effect magnitude as spirit-type damage. */
   scalesSpirit?: boolean;
   /** Base magnitude (dmg/heal/shield). Read by the AI heuristic as its
@@ -72,6 +83,10 @@ export interface AbilityDef {
    *  its buffs). */
   buffDuration?: (self: CardInstance, statusId: StatusId, duration: number) => number;
 }
+
+/** A hero's skill or passive: an AbilityDef that carries the `name` and `text`
+ *  its hero card prints (`heroAbilities`, engine/query.ts, lists them). */
+export type HeroAbilityDef = AbilityDef & { name: string; text: string };
 
 
 // Helper: total spirit-stat bonus from the source (equipment + Spirit Power buff).
@@ -257,8 +272,9 @@ const eff_echo_shard: AbilityDef = {
     const hero = ps.active;
     if (!hero || (hero.respawnTurnsLeft ?? 0) > 0) { pushLog(G, 'Echo Shard fizzled — no active hero.'); return; }
     const data = CARDS_BY_ID[hero.cardId];
-    if (data?.type !== 'hero' || !data.skill) { pushLog(G, 'Echo Shard fizzled — hero has no skill.'); return; }
-    const skill = getAbility(data.skill);
+    if (data?.type !== 'hero' || data.skills.length === 0) { pushLog(G, 'Echo Shard fizzled — hero has no skill.'); return; }
+    // The skill it used this turn, again — else its first.
+    const skill = (resolveSkill(hero, hero.lastSkillUsed) ?? resolveSkill(hero))?.ability;
     if (!skill) { pushLog(G, 'Echo Shard fizzled.'); return; }
     const enemy = G.players[otherPlayer(ctx.movingPlayer)];
     let target: CardInstance | undefined;
@@ -269,7 +285,7 @@ const eff_echo_shard: AbilityDef = {
         target = hero; break;
       default: target = undefined;
     }
-    pushLog(G, `Echo Shard: ${data.name} casts ${data.abilityName ?? 'their skill'} again.`);
+    pushLog(G, `Echo Shard: ${data.name} casts ${skill.name ?? 'their skill'} again.`);
     withCast(hero, 'skill', () => skill.run(G, { movingPlayer: ctx.movingPlayer }, { source: hero, target }));
     fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: ctx.movingPlayer });
   },
@@ -630,8 +646,10 @@ const eff_siphon_bullets: AbilityDef = {
 // Base damage stays its original type. Scaling adds a second damage event of the matching type.
 
 // Heals are flat — Spirit Power scales spirit damage only.
-const skill_dynamo: AbilityDef = {
+const skill_dynamo: HeroAbilityDef = {
   id: 'skill_dynamo', trigger: 'activate', target: 'allyHero',
+  name: 'Rejuvenating Aurora',
+  text: 'Heal an ally 2 and grant +Bullet Power (1 + ½ Spirit) for 2 turns.',
   prompt: 'Dynamo Rejuvenating Aurora — heal an ally 2 + grant Bullet Power (1 + ½ Spirit) for 2 turns.',
   base: 2,
   scalesSpirit: true,
@@ -645,8 +663,10 @@ const skill_dynamo: AbilityDef = {
 // Canon Frost Grenade damages enemies + heals allies in the cloud. Here it
 // damages the enemy Active and heals OUR Active — so when Kelvin is fronting he
 // hits and heals himself (a hit-and-heal frontline caster).
-const skill_kelvin: AbilityDef = {
+const skill_kelvin: HeroAbilityDef = {
   id: 'skill_kelvin', trigger: 'activate', target: 'enemyActive',
+  name: 'Frost Grenade',
+  text: '1 spirit dmg to enemy Active + heal your Active 2.',
   prompt: 'Kelvin Frost Grenade — 1 spirit dmg to enemy Active + heal ally Active 2.',
   base: 1,
   scalesSpirit: true,
@@ -660,8 +680,10 @@ const skill_kelvin: AbilityDef = {
 // Lady Geist — Life Drain (her in-game #2): deal spirit damage and heal herself
 // for HALF the damage dealt (spirit lifesteal). Scales: more Spirit = bigger
 // drain, and Healing Boost items add flat N to the heal.
-const skill_lady_geist: AbilityDef = {
+const skill_lady_geist: HeroAbilityDef = {
   id: 'skill_lady_geist', trigger: 'activate', target: 'enemyAny',
+  name: 'Life Drain',
+  text: 'Deal 3 spirit to any enemy and heal for half the damage dealt.',
   prompt: 'Lady Geist Life Drain — deal 3 spirit and heal for half the damage dealt.',
   base: 3,
   scalesSpirit: true,
@@ -673,8 +695,10 @@ const skill_lady_geist: AbilityDef = {
   },
 };
 
-const skill_lash: AbilityDef = {
+const skill_lash: HeroAbilityDef = {
   id: 'skill_lash', trigger: 'activate', target: 'enemyAny',
+  name: 'Ground Strike',
+  text: '1 spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
   prompt: 'Lash Ground Strike — 1 spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
   base: 1,
   scalesSpirit: true,
@@ -689,8 +713,10 @@ const skill_lash: AbilityDef = {
 };
 
 // Shields are flat — Spirit Power scales spirit damage only.
-const skill_paige: AbilityDef = {
+const skill_paige: HeroAbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero',
+  name: 'Plot Armor',
+  text: 'Shield 2 on an ally and grant +Bullet Power (1 + ½ Spirit) for 2 turns.',
   prompt: 'Paige Plot Armor — Shield 2 + grant Bullet Resist (1 + ½ Spirit) for 2 turns.',
   base: 2,
   scalesSpirit: true,
@@ -706,8 +732,10 @@ const skill_paige: AbilityDef = {
 // Static Charge: 1 spirit dmg upfront + apply Charged for 2 turns; on expiry
 // the tick handler converts it to a 1-turn Stun. Gives Control immediate
 // pressure plus a long-fuse stun setup.
-const skill_seven_static: AbilityDef = {
+const skill_seven_static: HeroAbilityDef = {
   id: 'skill_seven_static', trigger: 'activate', target: 'enemyActive',
+  name: 'Static Charge',
+  text: '1 spirit dmg + Charged 2 — Stun 1 turn on expiry.',
   prompt: 'Seven Static Charge — 1 spirit dmg + Charged 2 turns. Stuns for 1 turn on expiry.',
   base: 1,
   scalesSpirit: true,
@@ -718,8 +746,10 @@ const skill_seven_static: AbilityDef = {
   },
 };
 
-const skill_sinclair: AbilityDef = {
+const skill_sinclair: HeroAbilityDef = {
   id: 'skill_sinclair', trigger: 'activate', target: 'enemyAny',
+  name: 'Vexing Bolt',
+  text: '2 spirit dmg to any enemy.',
   prompt: 'Sinclair Vexing Bolt — 2 spirit dmg to any enemy.',
   base: 2,
   scalesSpirit: true,
@@ -728,8 +758,10 @@ const skill_sinclair: AbilityDef = {
   },
 };
 
-const skill_viscous: AbilityDef = {
+const skill_viscous: HeroAbilityDef = {
   id: 'skill_viscous', trigger: 'activate', target: 'self',
+  name: 'The Cube',
+  text: 'Gain Unstoppable 1 + heal 1.',
   prompt: 'Viscous The Cube — Unstoppable 1 + heal 1.',
   base: 1,
   run: (G, _ctx, { source, target }) => {
@@ -740,8 +772,10 @@ const skill_viscous: AbilityDef = {
   },
 };
 
-const skill_yamato: AbilityDef = {
+const skill_yamato: HeroAbilityDef = {
   id: 'skill_yamato', trigger: 'activate', target: 'enemyAny',
+  name: 'Power Slash',
+  text: '1 spirit dmg to any enemy.',
   prompt: 'Yamato Power Slash — 1 spirit dmg.',
   base: 1,
   scalesSpirit: true,
@@ -751,8 +785,10 @@ const skill_yamato: AbilityDef = {
 // Warden skill: hardens himself with a Shield. Canon Warden hunkers down
 // behind his shackle barrier before unleashing Last Stand — TCG abstraction
 // is a flat self-buff Shield.
-const skill_warden: AbilityDef = {
+const skill_warden: HeroAbilityDef = {
   id: 'skill_warden', trigger: 'activate', target: 'self',
+  name: 'Willpower',
+  text: 'Shield 3 on self.',
   prompt: 'Warden Willpower — Shield 3 on self.',
   base: 3,
   run: (G, _ctx, { source, target }) => {
@@ -768,8 +804,10 @@ const skill_warden: AbilityDef = {
 // comes first. Detonation deals 2 spirit damage per stack and resets the mark.
 // The on-expire half lives in statusOps.tickStartOfTurn; this passive owns
 // the on-attack stack application + the at-cap detonation.
-const passive_mirage_djinns_mark: AbilityDef = {
+const passive_mirage_djinns_mark: HeroAbilityDef = {
   id: 'passive_mirage_djinns_mark', trigger: 'onAttack', target: 'self',
+  name: "Djinn's Mark",
+  text: "Attacks apply 1 stack of Djinn's Mark (max 4) for 3 turns. Mark detonates at max stacks or on expiry for 3 spirit dmg per stack.",
   prompt: "Djinn's Mark — attacks apply 1 stack (max 4) for 3 turns. Detonates at 4 stacks or on expiry for 3 spirit dmg per stack.",
   run: (G, _ctx, { source, target }) => {
     if (!source || !target) return;
@@ -783,8 +821,10 @@ const passive_mirage_djinns_mark: AbilityDef = {
   },
 };
 
-const passive_abrams_heal: AbilityDef = {
+const passive_abrams_heal: HeroAbilityDef = {
   id: 'passive_abrams_heal', trigger: 'startOfTurn', target: 'self',
+  name: 'Infernal Resilience',
+  text: 'Heals 1 at start of own turn while Active.',
   prompt: 'Infernal Resilience — start of own turn while Active: heal 1.',
   run: (G, _ctx, { source }) => {
     if (!source) return;
@@ -799,15 +839,19 @@ const passive_abrams_heal: AbilityDef = {
 // attack, she gains Extra Attack 1 (a follow-up swing the same turn). Fires only
 // on her primary swing (`params.primary`) so the follow-up doesn't re-trigger it
 // into an endless chain. Stacks with Burst Fire / Active Reload.
-const passive_haze_fixation: AbilityDef = {
+const passive_haze_fixation: HeroAbilityDef = {
   id: 'passive_haze_fixation', trigger: 'onAttack', target: 'self',
+  name: 'Fixation',
+  text: 'After Haze attacks, she gains Extra Attack 1 this turn.',
   prompt: 'Fixation — after Haze attacks, she gains Extra Attack 1 this turn.',
   run: (_G, _ctx, { source, params }) => { if (source && params?.primary) grantExtraAttacks(source, 1); },
 };
 
 // Burrow: cleanses all debuffs from self at the start of own turn (only while Active).
-const passive_mo_krill_burrow: AbilityDef = {
+const passive_mo_krill_burrow: HeroAbilityDef = {
   id: 'passive_mo_krill_burrow', trigger: 'startOfTurn', target: 'self',
+  name: 'Burrow',
+  text: 'Cleanses all debuffs from self at start of own turn.',
   prompt: 'Burrow — start of own turn: cleanse all debuffs from self.',
   run: (G, _ctx, { source }) => {
     if (source && source.zone === 'active') cleanseDebuffs(source);
@@ -819,8 +863,10 @@ const passive_mo_krill_burrow: AbilityDef = {
 // and move Rem from her bench slot into the bearer's attached list for 3 turns.
 // The countdown + return-to-bench live in tickRemMerges; bearer-death rescue in
 // killInPlace. Scaling snapshots Rem's Spirit at cast time.
-const skill_rem: AbilityDef = {
+const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
+  name: 'Lil Helpers',
+  text: 'Merge into an ally as a buff: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns, then return to the bench.',
   prompt: "Rem Lil Helpers — merge into an ally: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns.",
   base: 3,
   scalesSpirit: true,
@@ -846,8 +892,10 @@ const skill_rem: AbilityDef = {
 };
 
 // On every attack Shiv lands, apply Bleed 1 (2 turns) to the target.
-const passive_shiv_bleed: AbilityDef = {
+const passive_shiv_bleed: HeroAbilityDef = {
   id: 'passive_shiv_bleed', trigger: 'onAttack', target: 'self',
+  name: 'Serrated Knives',
+  text: 'Attacks apply Bleed 2 for 2 turns.',
   prompt: "Serrated Knives — attacks apply Bleed 2 for 2 turns.",
   run: (G, _ctx, { source, target }) => {
     if (source && target) addStatus(G, target, 'bleed', 2, 2);
@@ -856,8 +904,10 @@ const passive_shiv_bleed: AbilityDef = {
 
 // Flight: takes 1 less bullet damage from every source. A pure hook —
 // damageUnit asks it (`incomingDamage`) before anything else touches the hit.
-const passive_vindicta_flight: AbilityDef = {
+const passive_vindicta_flight: HeroAbilityDef = {
   id: 'passive_vindicta_flight', trigger: 'ongoing', target: 'self',
+  name: 'Flight',
+  text: 'Takes 1 less bullet damage from all sources.',
   prompt: 'Flight — takes 1 less bullet damage from all sources.',
   incoming: (_self, amount, type) => (type === 'attack' ? Math.max(0, amount - 1) : amount),
   run: () => {},
@@ -867,8 +917,10 @@ const passive_vindicta_flight: AbilityDef = {
 // (the normal swing) PLUS her full Spirit Power as a second spirit-damage hit —
 // so Weapon AND Spirit items both scale her, and she pierces either single
 // resist. Fires on every swing (Extra Attacks too) like Shiv's bleed.
-const passive_wraith_mixed: AbilityDef = {
+const passive_wraith_mixed: HeroAbilityDef = {
   id: 'passive_wraith_mixed', trigger: 'onAttack', target: 'self',
+  name: 'Mixed Bullets',
+  text: 'Attacks deal Bullet Power (bullet) + Spirit Power (spirit).',
   prompt: 'Mixed Bullets — attacks also deal Spirit Power as spirit damage.',
   run: (G, _ctx, { source, target }) => {
     if (!source || !target) return;
@@ -880,8 +932,10 @@ const passive_wraith_mixed: AbilityDef = {
 // Bloodscent: bullet lifesteal — Drifter heals for HALF the damage his attacks
 // deal (the dealt amount is plumbed in via params.dealt from the attack action).
 // Scales with weapon power, Extra Attack swings, and Healing Boost items.
-const passive_drifter_bloodscent: AbilityDef = {
+const passive_drifter_bloodscent: HeroAbilityDef = {
   id: 'passive_drifter_bloodscent', trigger: 'onAttack', target: 'self',
+  name: 'Bloodscent',
+  text: 'Heals for half the damage his attacks deal (bullet lifesteal).',
   prompt: 'Bloodscent — Drifter heals for half the damage his attacks deal.',
   run: (G, _ctx, { source, target, params }) => {
     const dealt = (params?.dealt as number | undefined) ?? 0;

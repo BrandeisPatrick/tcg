@@ -20,22 +20,29 @@ import type { Ctx } from 'boardgame.io';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { CC_STATUSES } from '@/statuses';
-import { checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, liveBoardCards, otherPlayer } from '@/engine/query';
+import { checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, liveBoardCards, otherPlayer, resolveSkill } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import { perform, type Action } from '@/engine/engine';
 import { attackBlocked, cardCost, legalActions } from '@/engine/legality';
 import { forecastAttack, simulate } from '@/engine/forecast';
 
-/** A hero's offensive potential: bullet attack PLUS its damaging skill's output
+/** A hero's offensive potential: bullet attack PLUS its best skill's output
  *  (base + Spirit if it scales). This is what makes the lookahead ITEMIZE — a
  *  Spirit item raises a caster's threat (its skill), a Weapon item raises an
- *  attacker's, so the AI routes each build axis onto the hero that wants it. */
+ *  attacker's, so the AI routes each build axis onto the hero that wants it.
+ *  A hero uses one skill a turn, so the best of its skills is what it threatens. */
 function heroThreat(c: CardInstance): number {
   const data = CARDS_BY_ID[c.cardId];
   let t = effectiveAtk(c);
-  if (data?.type === 'hero' && data.skill) {
-    const ab = getAbility(data.skill);
-    if (ab && ab.base != null) t += ab.base + (ab.scalesSpirit ? effectiveSpirit(c) : 0);
+  if (data?.type === 'hero') {
+    let best: number | undefined;
+    for (const id of data.skills) {
+      const ab = getAbility(id);
+      if (!ab || ab.base == null) continue;
+      const v = ab.base + (ab.scalesSpirit ? effectiveSpirit(c) : 0);
+      if (best === undefined || v > best) best = v;
+    }
+    if (best !== undefined) t += best;
   }
   return t;
 }
@@ -98,13 +105,21 @@ interface MoveOption {
 }
 
 /** An engine action in the form the callers dispatch: the boardgame.io move and
- *  its arguments (playCard [card, target?, discard?], useSkill [hero, target?],
- *  moveHero [from, to], promoteToActive [iid], attack [], endTurn []). */
-function toMove(a: Action): Pick<MoveOption, 'move' | 'args'> {
+ *  its arguments (playCard [card, target?, discard?], useSkill [hero, target?,
+ *  skill?], moveHero [from, to], promoteToActive [iid], attack [], endTurn []). */
+function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
   const present = (...xs: (string | undefined)[]) => xs.filter((x): x is string => x !== undefined);
   switch (a.type) {
     case 'playCard': return { move: 'playCard', args: present(a.cardIid, a.targetIid, a.discardIid) };
-    case 'useSkill': return { move: 'useSkill', args: present(a.heroIid, a.targetIid) };
+    case 'useSkill': {
+      // The skill is named only when it is not the hero's first (the move's default),
+      // so a one-skill hero's move is the one it always was; a skill with no target
+      // keeps the target's place in the list empty rather than shift the skill into it.
+      const hero = findCardOnBoard(G, a.heroIid)?.card;
+      const first = hero && resolveSkill(hero)?.id;
+      if (a.skillId === undefined || a.skillId === first) return { move: 'useSkill', args: present(a.heroIid, a.targetIid) };
+      return { move: 'useSkill', args: [a.heroIid, a.targetIid, a.skillId] };
+    }
     case 'moveHero': return { move: 'moveHero', args: [a.fromSlot, a.toSlot] };
     case 'promoteToActive': return { move: 'promoteToActive', args: [a.benchIid] };
     case 'attack': return { move: 'attack', args: [] };
@@ -275,12 +290,12 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
   // A promotion needs no weighing: the healthiest hero steps up.
   if (G.pendingPromotion) {
     return actions
-      .map((a): MoveOption => ({ ...toMove(a), score: crudeScore(G, pid, a) }))
+      .map((a): MoveOption => ({ ...toMove(G, a), score: crudeScore(G, pid, a) }))
       .sort((a, b) => b.score - a.score);
   }
 
   const options = actions.map((a): MoveOption => ({
-    ...toMove(a),
+    ...toMove(G, a),
     score: lookahead ? lookaheadScore(G, pid, a) : crudeScore(G, pid, a),
   }));
   return options.sort((a, b) => b.score - a.score).slice(0, 12);

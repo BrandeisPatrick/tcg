@@ -26,8 +26,7 @@
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID } from '@/cards';
-import { getAbility } from '@/abilities';
-import { effectiveAtk, isRespawning, stepInCandidates } from '@/engine/query';
+import { effectiveAtk, heroAbilities, isRespawning, stepInCandidates } from '@/engine/query';
 import { attackBlocked, cardCost, playBlocked, skillBlocked } from '@/engine/legality';
 import { RETREAT_COST, SKILL_COST } from '@/engine/constants';
 import { PATRON_NAMES } from '@/ui/board/patrons';
@@ -132,16 +131,13 @@ function benchOf(G: GameState, pid: PlayerID): CardInstance | null {
 function inHand(G: GameState, me: PlayerID, id: CardId): boolean {
   return G.players[me].hand.some((c) => c.cardId === id);
 }
-/** "Frost Grenade" — the skill's own name, hero prefix stripped, exactly as
- *  the sheet prints it. */
+/** "Frost Grenade" — the hero's first skill by its own name, exactly as the
+ *  sheet prints it. */
 function skillNameOf(c: CardInstance | null): string {
   if (!c) return 'the skill';
   const data = CARDS_BY_ID[c.cardId];
-  if (data?.type !== 'hero' || !data.skill) return 'the skill';
-  const prompt = getAbility(data.skill)?.prompt ?? '';
-  const head = prompt.split(' — ')[0]?.trim() ?? '';
-  const name = head.startsWith(`${data.name} `) ? head.slice(data.name.length + 1) : head;
-  return name || 'the skill';
+  if (data?.type !== 'hero') return 'the skill';
+  return heroAbilities(data).find((x) => x.kind === 'skill')?.ability.name || 'the skill';
 }
 
 /** The copy of a card in your hand, if you hold one. */

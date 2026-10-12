@@ -8,14 +8,14 @@
  * `moveBlocked` (legality.ts), so none of them offers a move the engine would
  * refuse; this file only words the answers.
  */
-import type { CardInstance, GameState, PlayerID } from '@/engine/types';
+import type { AbilityId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
 import {
   blocked, cardCost, moveBlocked, skillBlocked,
   type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
-import { findCardOnBoard } from '@/engine/query';
+import { findCardOnBoard, heroData, resolveSkill } from '@/engine/query';
 import type { Action } from '@/engine/engine';
 import type { AttackPlan } from '@/engine/forecast';
 
@@ -23,12 +23,20 @@ import type { AttackPlan } from '@/engine/forecast';
 const souls = (n: number) => `${n} soul${n === 1 ? '' : 's'}`;
 const nameOf = (card: CardInstance | null | undefined) => (card ? CARDS_BY_ID[card.cardId]?.name ?? '' : '');
 
-/** The line the hero sheet prints on a skill that cannot be used. */
-export function skillBlockReason(block: SkillBlock): string {
+/** The line the hero sheet prints on a skill that cannot be used. Name the
+ *  hero and the skill (left out: its first) to get the lines that need them:
+ *  how long a cooldown has to run, and that it was the hero's other skill that
+ *  was used. */
+export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId?: AbilityId): string {
+  const skill = hero && resolveSkill(hero, skillId);
   switch (block) {
-    case 'used': return 'Already used';
+    case 'used': return hero?.lastSkillUsed && skill && hero.lastSkillUsed !== skill.id ? 'Used its other skill this turn' : 'Already used';
     case 'attacked': return 'Attacked this turn';
     case 'status': return 'Cannot use skill (status)';
+    case 'cooldown': {
+      const left = (skill && hero?.cooldowns?.[skill.id]) || 0;
+      return left > 0 ? `Ready in ${left} turn${left === 1 ? '' : 's'}` : 'On cooldown';
+    }
     case 'souls': return `Need ${souls(SKILL_COST)}`;
     case 'target': return 'No valid target';
     case 'down': return 'Down until it respawns';
@@ -133,11 +141,12 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
       if (code === 'draft') return 'Pick your heroes first';
       return attackBlockReason(code as AttackBlock, G.players[pid].active);
     case 'useSkill': {
-      const hero = nameOf(findCardOnBoard(G, a.heroIid)?.card);
+      const card = findCardOnBoard(G, a.heroIid)?.card;
+      const hero = nameOf(card);
       if (code === 'noHero') return 'That is not one of your heroes';
       if (code === 'noSkill') return `${hero} has no skill`;
       if (code === 'target' && a.targetIid !== undefined) return `Not a valid target for ${hero}'s skill`;
-      return skillBlockReason(code as SkillBlock);
+      return skillBlockReason(code as SkillBlock, card, a.skillId);
     }
     case 'playCard': {
       const card = G.players[pid].hand.find((c) => c.iid === a.cardIid);
@@ -168,14 +177,15 @@ export function attackLine(plan: AttackPlan): string {
   return `Hits ${first.targetName} for ${dealt} bullet damage${swings}${shield}${ko}`;
 }
 
-/** Every hero of `pid`'s that can still do something this turn: use its
- *  skill now, or — the Active — make the turn's attack while it is open. */
+/** Every hero of `pid`'s that can still do something this turn: use one of
+ *  its skills now, or — the Active — make the turn's attack while it is open. */
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {
   const ps = G.players[pid];
   const ready = new Set<string>();
   for (const hero of [ps.active, ...ps.bench]) {
     if (!hero) continue;
-    if (skillBlocked(G, pid, hero) === null || (hero === ps.active && attackOpen)) ready.add(hero.iid);
+    const skillOpen = (heroData(hero)?.skills ?? []).some((id) => skillBlocked(G, pid, hero, undefined, id) === null);
+    if (skillOpen || (hero === ps.active && attackOpen)) ready.add(hero.iid);
   }
   return ready;
 }

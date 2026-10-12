@@ -10,7 +10,7 @@
  * action has the cards.
  */
 import '@/abilities';
-import type { GameState, PlayerID } from './types';
+import type { AbilityId, GameState, PlayerID } from './types';
 import { blocked } from './legality';
 import { assertNoCast } from './castContext';
 import { attack } from './actions/attack';
@@ -24,7 +24,7 @@ export const INVALID: unique symbol = Symbol('INVALID');
 
 export type Action =
   | { type: 'attack' }
-  | { type: 'useSkill'; heroIid: string; targetIid?: string }
+  | { type: 'useSkill'; heroIid: string; skillId?: AbilityId; targetIid?: string }   // no skillId = the hero's first skill
   | { type: 'playCard'; cardIid: string; targetIid?: string; discardIid?: string }
   | { type: 'moveHero'; fromSlot: 0 | 1 | 2 | 3; toSlot: 0 | 1 | 2 | 3 }
   | { type: 'promoteToActive'; benchIid: string }
@@ -37,7 +37,7 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
   if (blocked(G, pid, a) !== null) return INVALID;
   switch (a.type) {
     case 'attack': return attack(G, pid);
-    case 'useSkill': return useSkill(G, pid, a.heroIid, a.targetIid);
+    case 'useSkill': return useSkill(G, pid, a.heroIid, a.targetIid, a.skillId);
     case 'playCard': return playCard(G, pid, a.cardIid, a.targetIid, a.discardIid);
     case 'moveHero': return moveHero(G, pid, a.fromSlot, a.toSlot);
     case 'promoteToActive': return promoteToActive(G, a.benchIid);

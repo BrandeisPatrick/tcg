@@ -10,6 +10,7 @@ import {
 } from './SpotVarnish';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
+import { heroAbilities } from '@/engine/query';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { SwordIcon, HeartIcon } from './Icons';
@@ -426,15 +427,31 @@ export function CardFrame({
         </div>
 
         {/* Body text (effect) — Skill / Passive label is inlined as a bold
-            prefix on the same row as the effect description. */}
-        {data?.text && (() => {
-          const d = data as any;
-          const isSkill = isHero && !!d.skill;
-          const isPassive = isHero && !d.skill && !!d.passives?.length;
-          const tag = isSkill ? 'Skill' : isPassive ? 'Passive' : null;
+            prefix on the same row as the effect description. A hero prints
+            its abilities, skills first, one line each; any other card prints
+            its own text. */}
+        {(() => {
+          const lines: { key: string; tag: 'Skill' | 'Passive' | null; body: string }[] = data?.type === 'hero'
+            ? heroAbilities(data).map(({ kind, ability }) => ({ key: ability.id, tag: kind === 'skill' ? 'Skill' : 'Passive', body: ability.text }))
+            : data?.text ? [{ key: 'text', tag: null, body: data.text }] : [];
+          if (lines.length === 0) return null;
           // Hand-size cards are 134×188 — give the effect every pixel:
           // tighter line-height, smaller font, full ink for sharper reads.
           const isHand = size === 'hand';
+          const line = (l: (typeof lines)[number]) => (
+            <>
+              {l.tag && (
+                <span style={{
+                  fontWeight: 700,
+                  // Skill in the poster red, Passive in dim ink — both read as
+                  // bold labels and stay clearly distinct at a glance.
+                  color: l.tag === 'Skill' ? poster.red : poster.inkDim,
+                  marginRight: 5,
+                }}>{l.tag}</span>
+              )}
+              <RuleText text={l.body} />
+            </>
+          );
           return (
             <div style={{
               ...text.body,
@@ -445,16 +462,11 @@ export function CardFrame({
               color: isHand ? poster.ink : poster.inkDim,
               overflow: 'hidden',
             }}>
-              {tag && (
-                <span style={{
-                  fontWeight: 700,
-                  // Skill in the poster red, Passive in dim ink — both read as
-                  // bold labels and stay clearly distinct at a glance.
-                  color: isSkill ? poster.red : poster.inkDim,
-                  marginRight: 5,
-                }}>{tag}</span>
-              )}
-              <RuleText text={data.text} />
+              {lines.length === 1
+                ? line(lines[0])
+                : lines.map((l, i) => (
+                  <div key={l.key} style={i > 0 ? { marginTop: isHand ? 2 : 3 } : undefined}>{line(l)}</div>
+                ))}
             </div>
           );
         })()}

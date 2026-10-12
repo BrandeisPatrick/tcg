@@ -13,7 +13,7 @@ import { PosterButton } from '../chrome';
 import { getDeck, saveDeck, DECK_SIZE, MAX_COPIES } from '@/storage/playerData';
 import type { DeckSlot } from '@/storage/playerData';
 import { SPELLS, EQUIPMENT, CARDS_BY_ID } from '@/cards';
-import type { CardData } from '@/engine/types';
+import type { EquipmentCard, SpellCard } from '@/engine/types';
 import { RoundCardIcon } from '../card/RoundCardIcon';
 import { useViewport } from '../hooks/useViewport';
 
@@ -32,7 +32,7 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
   const [cards, setCards] = useState<string[]>(existing?.cards ?? []);
   const [filter, setFilter] = useState<Filter>('all');
 
-  const pool: CardData[] = filter === 'spell' ? SPELLS
+  const pool: (SpellCard | EquipmentCard)[] = filter === 'spell' ? SPELLS
     : filter === 'equipment' ? EQUIPMENT
     : [...SPELLS, ...EQUIPMENT];
 
@@ -283,7 +283,7 @@ export function DeckEditorScreen({ slotIndex, onBack }: Props) {
 }
 
 function PoolCard({ card, count, canAdd, onAdd }: {
-  card: CardData;
+  card: SpellCard | EquipmentCard;
   count: number;
   canAdd: boolean;
   onAdd: () => void;

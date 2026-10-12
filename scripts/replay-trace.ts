@@ -15,10 +15,14 @@
  *   npx vite-node scripts/replay-trace.ts compare before.jsonl after.jsonl [shown=8]
  *
  * Env: SEED (default 1). IGNORE — comma list of keys dropped from the hashed
- * state wherever they occur (default `seq`); name a new bookkeeping field there
- * when you add one, and say so. Instance ids are relabelled by order of first
- * appearance, so two engines that number their cards differently hash alike
- * when they hold the same cards in the same places; G.action's id is dropped.
+ * state wherever they occur (default `seq,lastSkillUsed`); name a new
+ * bookkeeping field there when you add one, and say so. `lastSkillUsed` is the
+ * skill a hero used this turn (kept for Echo Shard and the hero sheet): it
+ * says nothing the moves have not, so a trace from before it existed still
+ * matches. Instance ids are relabelled by order of first appearance, so two
+ * engines that number their cards differently hash alike when they hold the
+ * same cards in the same places; G.action's id and abilityId (which skill the
+ * board's skill flash names) are dropped.
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -40,7 +44,7 @@ type Line = { g: number; step?: number; move?: string; args?: unknown[]; forced?
 
 async function record(games: number, out: string) {
   const SEED = Number(process.env.SEED ?? 1);
-  const IGNORE = new Set((process.env.IGNORE ?? 'seq').split(',').filter(Boolean));
+  const IGNORE = new Set((process.env.IGNORE ?? 'seq,lastSkillUsed').split(',').filter(Boolean));
   const TURN_CAP = 40;
   const MOVES_PER_TURN_CAP = 40;
 
@@ -55,7 +59,7 @@ async function record(games: number, out: string) {
   let iidMap = new Map<string, string>();
   const canon = (v: string) => { let c = iidMap.get(v); if (!c) { c = `#${iidMap.size}`; iidMap.set(v, c); } return c; };
   const hashState = (G: any) => {
-    const json = JSON.stringify({ ...G, action: G.action ? { ...G.action, id: undefined } : null }, (k, v) => {
+    const json = JSON.stringify({ ...G, action: G.action ? { ...G.action, id: undefined, abilityId: undefined } : null }, (k, v) => {
       if (IGNORE.has(k)) return undefined;
       if (IID_KEYS.has(k) && typeof v === 'string') return canon(v);
       return v;

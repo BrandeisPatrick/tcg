@@ -6,6 +6,7 @@ import {
   type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
+import { heroData } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
 import { STATUSES } from '@/statuses';
 import { CARDS_BY_ID } from '@/cards';
@@ -277,7 +278,7 @@ describe('a refused move is said, with the engine\'s own code', () => {
 // below is keyed by the engine's own union, so a code added there is a compile
 // error here until it is worded.
 describe('every block code has words', () => {
-  const skill: Record<SkillBlock, true> = { noSkill: true, down: true, used: true, attacked: true, status: true, souls: true, target: true };
+  const skill: Record<SkillBlock, true> = { noSkill: true, down: true, used: true, attacked: true, status: true, cooldown: true, souls: true, target: true };
   const attack: Record<AttackBlock, true> = { turn1: true, used: true, skill: true, noActive: true, cannot: true, noTarget: true };
   const play: Record<PlayBlock, true> = { notInHand: true, souls: true, target: true, duplicate: true, full: true, discard: true };
   const move: Record<MoveBlock, true> = { same: true, empty: true, benchOnly: true, down: true, souls: true, illegal: true };
@@ -308,6 +309,17 @@ describe('every block code has words', () => {
   it('swaps and promotions', () => {
     for (const code of Object.keys(move) as MoveBlock[]) expect(moveBlockReason(code).length, code).toBeGreaterThan(0);
     for (const code of Object.keys(promote) as PromoteBlock[]) expect(promoteBlockReason(code).length, code).toBeGreaterThan(0);
+  });
+
+  it('a skill on cooldown says how many turns are left, and a skill held back by the other one says so', () => {
+    const lash = board().players[ME].bench[1]!; // one skill: Ground Strike
+    const skillId = heroData(lash)!.skills[0];
+    expect(skillBlockReason('cooldown')).toBe('On cooldown'); // no hero to ask: no number
+    expect(skillBlockReason('cooldown', { ...lash, cooldowns: { [skillId]: 2 } })).toBe('Ready in 2 turns');
+    expect(skillBlockReason('cooldown', { ...lash, cooldowns: { [skillId]: 1 } }, skillId)).toBe('Ready in 1 turn');
+    expect(skillBlockReason('used', lash)).toBe('Already used');
+    expect(skillBlockReason('used', { ...lash, lastSkillUsed: skillId }, skillId)).toBe('Already used');
+    expect(skillBlockReason('used', { ...lash, lastSkillUsed: 'some_other_skill' }, skillId)).toBe('Used its other skill this turn');
   });
 });
 

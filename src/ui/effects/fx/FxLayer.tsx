@@ -15,7 +15,7 @@
  * trade the combat choreographer makes).
  */
 import { useContext, useEffect, useRef, useState } from 'react';
-import type { CastFx, FxEvent, HitFx } from '@/engine/types';
+import type { CastFx, FxEvent, GameAction, HitFx } from '@/engine/types';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { FX_INK, FX_TIMING, TAG_INFO, typeInk } from './fxCatalog';
@@ -41,6 +41,9 @@ interface LiveBatch {
   tiles: Map<string, HTMLElement>;
   /** Where a spell's bolt leaves from (the reveal card), when Board knows. */
   origin: Pt | null;
+  /** The move that made the batch (`G.action`, as it stood when the batch
+   *  arrived): a skill's plate names the skill that was used. */
+  action: GameAction | null;
 }
 
 export interface FxLayerProps {
@@ -51,9 +54,12 @@ export interface FxLayerProps {
   slotRefs: Map<string, HTMLElement>;
   /** The point a spell's bolt should leave from — the card reveal's anchor. */
   spellOrigin?: () => Pt;
+  /** The game's current action (`G.action`), when the batch comes from a
+   *  match: it says which of a hero's skills the batch's skill cast used. */
+  action?: GameAction | null;
 }
 
-export function FxLayer({ batch, batchKey, slotRefs, spellOrigin }: FxLayerProps) {
+export function FxLayer({ batch, batchKey, slotRefs, spellOrigin, action = null }: FxLayerProps) {
   const [live, setLive] = useState<LiveBatch[]>([]);
   const lastKey = useRef(0);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
@@ -73,13 +79,13 @@ export function FxLayer({ batch, batchKey, slotRefs, spellOrigin }: FxLayerProps
     const table = tableCenter(rects);
     if (table) stage?.lookAt(table);
     const origin = timeline.cast?.castKind === 'spell' ? (spellOrigin?.() ?? null) : null;
-    setLive((l) => [...l, { key: batchKey, batch, timeline, rects, tiles, origin }]);
+    setLive((l) => [...l, { key: batchKey, batch, timeline, rects, tiles, origin, action }]);
     const t = setTimeout(() => {
       timers.current.delete(t);
       setLive((l) => l.filter((b) => b.key !== batchKey));
     }, timeline.total);
     timers.current.add(t);
-  }, [batch, batchKey, slotRefs, spellOrigin, stage]);
+  }, [batch, batchKey, slotRefs, spellOrigin, stage, action]);
 
   useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
 
@@ -142,7 +148,7 @@ function castTargets(cast: CastFx, timeline: FxTimeline, rects: Map<string, Rect
 }
 
 function FxBatch({ live }: { live: LiveBatch }) {
-  const { batch, timeline, rects, tiles, origin } = live;
+  const { batch, timeline, rects, tiles, origin, action } = live;
   const cast = timeline.cast;
   const statusIndex = new Map<string, number>();
   const hitIndex = new Map<string, number>();
@@ -225,7 +231,7 @@ function FxBatch({ live }: { live: LiveBatch }) {
     <>
       {/* Zero-size marker so QA harnesses can see a batch start (data-fx-batch). */}
       <span data-fx-batch={live.key} data-fx-total={timeline.total} aria-hidden style={{ position: 'fixed', left: 0, top: 0, width: 0, height: 0 }} />
-      {cast && <CastVisuals cast={cast} item={timeline.items.find((i) => i.ev === cast)!} batch={batch} timeline={timeline} rects={rects} origin={origin} />}
+      {cast && <CastVisuals cast={cast} item={timeline.items.find((i) => i.ev === cast)!} batch={batch} timeline={timeline} rects={rects} origin={origin} action={action} />}
 
       {[...channelGroups.values()].map((g) => {
         const src = g.source!;
@@ -314,8 +320,9 @@ function renderItem(it: FxItem, rects: Map<string, Rect>, tiles: Map<string, HTM
 /** The cast's own visuals: the caster gathers power and flares, then a bolt
  *  arcs over the table to a single target, or a shockwave rolls out with a
  *  low bolt to each of several. Equipment just glints. */
-function CastVisuals({ cast, item, batch, timeline, rects, origin }: {
+function CastVisuals({ cast, item, batch, timeline, rects, origin, action }: {
   cast: CastFx; item: FxItem; batch: FxEvent[]; timeline: FxTimeline; rects: Map<string, Rect>; origin: Pt | null;
+  action: GameAction | null;
 }) {
   const casterRect = cast.iid ? rects.get(cast.iid) : undefined;
   if (cast.castKind === 'equip') {
@@ -327,7 +334,9 @@ function CastVisuals({ cast, item, batch, timeline, rects, origin }: {
   }
   const heavy = cast.castKind === 'ult';
   const ink = cast.castKind === 'spell' ? effectInk(batch, cast.iid) : castInk(cast.cardId);
-  const label = castLabel(cast.cardId);
+  // A hero's plate names the skill the move used, when the move says.
+  const used = cast.castKind === 'skill' && action?.kind === 'skill' && action.cardId === cast.cardId ? action.abilityId : undefined;
+  const label = castLabel(cast.cardId, used);
   const targets = castTargets(cast, timeline, rects);
   const from = cast.castKind === 'spell'
     ? (origin ?? (casterRect ? center(casterRect) : null))

@@ -1,10 +1,13 @@
 import type { TargetFilter } from '@/abilities';
+import type { AbilityId } from '@/engine/types';
 import { poster } from './poster';
 
 /** A card the player has armed to play but not yet targeted/committed. */
 export interface PendingPlay {
   kind: 'playCard' | 'useSkill';
   iid: string;
+  /** For a skill: which of the hero's skills is armed (the next tap aims it). */
+  skillId?: AbilityId;
   title: string;
   desc: string;
   /** What the banner says it may be aimed at (its label, and where it docks).

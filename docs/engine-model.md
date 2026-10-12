@@ -34,7 +34,7 @@ lock a skill. The engine fixes that by construction:
 | Module | Holds |
 |---|---|
 | `constants.ts` | every rule number (costs, caps, patron HP, soul ramp, respawn, levels) |
-| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `isBlocked`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, `checkWinner` |
+| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` / `resolveSkill` (a hero's kit: its skills, then passives; which skill a bare action names), `isBlocked`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, `checkWinner` |
 | `legality.ts` | the only place a move's legality is written: `attackBlocked`, `skillBlocked` / `skillTargets`, `playBlocked` / `playTargets`, `cardCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `attack`, `playCard`, `useSkill`, `board` (swap / promote), `turn` (start / end), `setup` (draft, rosters) |

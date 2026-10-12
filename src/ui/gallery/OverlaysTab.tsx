@@ -7,7 +7,7 @@ import { AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { HEROES } from '@/cards';
 import { RETREAT_COST } from '@/engine/constants';
-import { HeroDetailSheet } from '../overlays/HeroDetailSheet';
+import { HeroDetailSheet, type SkillOffer } from '../overlays/HeroDetailSheet';
 import { PromotionOverlay } from '../overlays/PromotionOverlay';
 import { poster } from '../poster';
 import { mockHeroInstance, mockEquipInstance } from './mock';
@@ -38,12 +38,11 @@ export function OverlaysTab() {
   const hero = HEROES.find((h) => h.id === heroId)!;
 
   function build(s: string): Parameters<typeof HeroDetailSheet>[0] {
-    const shown = s === 'passive' && hero.skill ? HEROES.find((h) => h.id === PASSIVE_STAND_IN)! : hero;
+    const shown = s === 'passive' && hero.skills.length > 0 ? HEROES.find((h) => h.id === PASSIVE_STAND_IN)! : hero;
     let card: CardInstance = mockHeroInstance(shown);
     const props: Parameters<typeof HeroDetailSheet>[0] = {
       card,
       isMine: true,
-      canUseSkill: true,
       onUseSkill: () => setToast('Skill activated'),
       // The plan's line as the board prints it, against a stand-in rival.
       attack: { line: `Hits Lash for ${shown.atk} bullet damage`, onAttack: () => setToast('Attacked') },
@@ -52,25 +51,28 @@ export function OverlaysTab() {
     const attackBlocked = (blockedReason: string, made = false) => {
       props.attack = { ...props.attack!, line: undefined, blockedReason, made };
     };
+    // Every skill of the hero shown, in one state.
+    const eachSkill = (offer: SkillOffer) => {
+      props.skills = Object.fromEntries(shown.skills.map((id) => [id, offer]));
+    };
+    eachSkill({ canUse: true });
     if (s === 'skilled') {
       card = { ...card, skillUsedThisTurn: true };
-      props.canUseSkill = false;
+      eachSkill({ canUse: false });
       attackBlocked('Used its skill this turn');
     }
     if (s === 'attacked') {
       card = { ...card, attackedThisTurn: true };
-      props.canUseSkill = false;
-      props.skillBlockedReason = 'Attacked this turn';
+      eachSkill({ canUse: false, blockedReason: 'Attacked this turn' });
       attackBlocked('Attacked this turn', true);
     }
     if (s === 'turn1') attackBlocked('No attacks on Turn 1');
     if (s === 'bench') { card = { ...card, zone: 'bench', slot: 1 }; props.attack = undefined; }
     if (s === 'blocked') {
-      props.canUseSkill = false;
-      props.skillBlockedReason = 'Not your turn';
+      eachSkill({ canUse: false, blockedReason: 'Not your turn' });
       attackBlocked('Not your turn');
     }
-    if (s === 'enemy') { props.isMine = false; props.canUseSkill = false; props.attack = undefined; }
+    if (s === 'enemy') { props.isMine = false; eachSkill({ canUse: false }); props.attack = undefined; }
     if (s === 'loaded') {
       card = {
         ...card,

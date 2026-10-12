@@ -14,7 +14,8 @@ import type { Snapshot, StepInfo } from './driver';
 import { chaosMove } from './driver';
 import { moveTags, signatureOf, type Hit } from './hits';
 import {
-  boardOf, boardUnits, callMove, diffPaths, filterForHandCard, filterForSkill, skillExcludesSelf, targetLegal,
+  boardOf, boardUnits, callMove, diffPaths, filterForHandCard, filterForSkill, skillCooling, skillExcludesSelf,
+  skillIdsOf, targetLegal,
 } from './oracle';
 import type { TargetFilter } from '@/abilities';
 
@@ -87,26 +88,38 @@ export function probeLegality(
   const owed = G.pendingPromotion !== undefined;
 
   // ---------------------------------------------------------------- B: skillBlocked <=> useSkill
+  // Each skill of each hero on its own. The move is useSkill(hero, target?, skill?): the
+  // hero's first skill is the default and goes unnamed, any other is named.
   const enemy = G.players[otherPlayer(pid)];
   const liveTargets = [...liveBoardCards(enemy), ...liveBoardCards(me)];
   for (const hero of owed ? [] : boardOf(me)) {
-    const ui = skillBlocked(G, pid, hero) === null;
-    const filter = filterForSkill(hero);
-    let candidates: unknown[][] = [];
-    if (filter === 'noTarget') candidates = [[hero.iid]];
-    else if (filter === 'self') candidates = [[hero.iid, hero.iid]];
-    else if (filter) candidates = liveTargets.filter((t) => targetLegal(filter, t, hero, pid) && !(skillExcludesSelf(hero) && t.iid === hero.iid)).map((t) => [hero.iid, t.iid]);
-    let eng = false;
-    for (const args of candidates) {
-      if (callMove(G, ctx, pid, 'useSkill', args).outcome === 'accepted') { eng = true; break; }
-    }
-    if (ui && !eng) {
-      add('skill-gate', 'useSkill', [hero.iid],
-        `skillBlocked says ${hero.cardId}#${hero.iid} can cast but useSkill fails for ${candidates.length} candidate target(s)`,
-        [candidates.length === 0 ? 'reason:no-legal-target' : 'reason:engine-rejects']);
-    } else if (!ui && eng) {
-      add('skill-gate', 'useSkill', [hero.iid], `skillBlocked says ${hero.cardId}#${hero.iid} is blocked (${skillBlocked(G, pid, hero)}) but useSkill succeeds`,
-        [`reason:ui-blocks-${skillBlocked(G, pid, hero)}`]);
+    const skillIds = skillIdsOf(hero);
+    for (const skillId of skillIds) {
+      const named = (args: unknown[]) => (skillId === skillIds[0] ? args : [args[0], args[1], skillId]);
+      const ui = skillBlocked(G, pid, hero, undefined, skillId) === null;
+      const filter = filterForSkill(hero, skillId);
+      let candidates: unknown[][] = [];
+      if (filter === 'noTarget') candidates = [[hero.iid]];
+      else if (filter === 'self') candidates = [[hero.iid, hero.iid]];
+      else if (filter) candidates = liveTargets.filter((t) => targetLegal(filter, t, hero, pid) && !(skillExcludesSelf(hero, skillId) && t.iid === hero.iid)).map((t) => [hero.iid, t.iid]);
+      let eng = false;
+      for (const args of candidates) {
+        if (callMove(G, ctx, pid, 'useSkill', named(args)).outcome === 'accepted') { eng = true; break; }
+      }
+      if (ui && !eng) {
+        add('skill-gate', 'useSkill', named([hero.iid]),
+          `skillBlocked says ${hero.cardId}#${hero.iid} can cast ${skillId} but useSkill fails for ${candidates.length} candidate target(s)`,
+          [candidates.length === 0 ? 'reason:no-legal-target' : 'reason:engine-rejects']);
+      } else if (!ui && eng) {
+        const why = skillBlocked(G, pid, hero, undefined, skillId);
+        add('skill-gate', 'useSkill', named([hero.iid]), `skillBlocked says ${hero.cardId}#${hero.iid} is blocked from ${skillId} (${why}) but useSkill succeeds`,
+          [`reason:ui-blocks-${why}`]);
+      }
+      // A skill that is cooling down is never usable, whatever else is open — the rules
+      // say so on their own, so this holds even if the gate and the engine both forgot it.
+      if (eng && skillCooling(hero, skillId)) {
+        add('skill-cooldown', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid} has ${skillId} cooling down (${hero.cooldowns?.[skillId]}) but useSkill succeeds`);
+      }
     }
   }
 
@@ -123,18 +136,20 @@ export function probeLegality(
   }
 
   // ---------------------------------------------------------------- D: target legality
-  type Src = { kind: 'skill' | 'card'; card: CardInstance };
+  type Src = { kind: 'skill' | 'card'; card: CardInstance; skillId?: string };
   const sources: Src[] = [];
   for (const h of boardOf(me)) {
-    const b = skillBlocked(G, pid, h);
-    if (filterForSkill(h) && (b === null || b === 'souls')) sources.push({ kind: 'skill', card: h });
+    for (const skillId of skillIdsOf(h)) {
+      const b = skillBlocked(G, pid, h, undefined, skillId);
+      if (filterForSkill(h, skillId) && (b === null || b === 'souls')) sources.push({ kind: 'skill', card: h, skillId });
+    }
   }
   for (const c of me.hand) if (filterForHandCard(c)) sources.push({ kind: 'card', card: c });
   const targets: (CardInstance | Ghost | undefined)[] = [undefined, 'ghost', ...boardUnits(G)];
   for (let n = 0; n < opts.targetCombos && sources.length && !owed; n++) {
     const src = pickOne(sources, rnd);
     const tgt = pickOne(targets, rnd);
-    const filter = src.kind === 'skill' ? filterForSkill(src.card)! : filterForHandCard(src.card)!;
+    const filter = src.kind === 'skill' ? filterForSkill(src.card, src.skillId)! : filterForHandCard(src.card)!;
     if (filter === 'noTarget' && tgt !== undefined) continue; // an unused extra target is harmless
     const tCard = tgt === 'ghost' ? undefined : tgt;
     let legal: boolean;
@@ -152,9 +167,11 @@ export function probeLegality(
       legal = !!own && (tgt === undefined || (tCard !== undefined && tCard.iid === own.iid));
     } else {
       legal = targetLegal(filter, tCard, src.kind === 'skill' ? src.card : undefined, pid)
-        && !(src.kind === 'skill' && skillExcludesSelf(src.card) && tCard?.iid === src.card.iid);
+        && !(src.kind === 'skill' && skillExcludesSelf(src.card, src.skillId) && tCard?.iid === src.card.iid);
     }
     const args = [src.card.iid, tgt === 'ghost' ? 'ghost-iid' : tCard?.iid];
+    // A skill other than the hero's first is named in the move's third argument.
+    if (src.kind === 'skill' && src.skillId !== skillIdsOf(src.card)[0]) args.push(src.skillId);
     const name = src.kind === 'skill' ? 'useSkill' : 'playCard';
     const r = callMove(G, ctx, pid, name, args, (g) => { g.players[pid].souls = 10; });
     const accepted = r.outcome === 'accepted';

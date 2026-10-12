@@ -13,14 +13,14 @@
  * modules that act (engine.ts) and the resolver tests call directly.
  */
 import '@/abilities';
-import type { CardInstance, GameState, PlayerID } from './types';
+import type { AbilityId, CardInstance, GameState, PlayerID } from './types';
 import { CARDS_BY_ID } from '@/cards';
 import type { Action } from './engine';
 import { getAbility } from './registry';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from './constants';
 import {
-  attackPower, findCardOnBoard, isBlocked, isRespawning, liveBoardCards, otherPlayer, stepInCandidates,
-  targetsFor, wornEquipment,
+  attackPower, findCardOnBoard, heroData, isBlocked, isRespawning, liveBoardCards, otherPlayer, resolveSkill,
+  stepInCandidates, targetsFor, wornEquipment,
 } from './query';
 
 // ---------- The turn's attack ----------
@@ -61,39 +61,51 @@ export function attackBlocked(G: GameState, pid: PlayerID): AttackBlock | null {
 
 // ---------- Hero skills ----------
 
-export type SkillBlock = 'noSkill' | 'down' | 'used' | 'attacked' | 'status' | 'souls' | 'target';
+export type SkillBlock = 'noSkill' | 'down' | 'used' | 'attacked' | 'status' | 'cooldown' | 'souls' | 'target';
 
-/** What a hero's skill may be aimed at: the live board cards its filter allows
- *  (minus the caster, for a skill that says `excludeSelf`), or 'none' for a skill
- *  that takes no target. No skill at all gives []. */
-export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance): CardInstance[] | 'none' {
-  const data = CARDS_BY_ID[hero.cardId];
-  const ability = data?.type === 'hero' && data.skill ? getAbility(data.skill) : undefined;
-  if (!ability) return [];
+/** What one of a hero's skills may be aimed at (`skillId` names it; left out,
+ *  the hero's first): the live board cards its filter allows (minus the
+ *  caster, for a skill that says `excludeSelf`), or 'none' for a skill that
+ *  takes no target. No such skill gives []. */
+export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, skillId?: AbilityId): CardInstance[] | 'none' {
+  const skill = resolveSkill(hero, skillId);
+  if (!skill) return [];
+  const { ability } = skill;
   if (ability.target === 'noTarget') return 'none';
   const targets = targetsFor(G, pid, ability.target, hero);
   return ability.excludeSelf ? targets.filter((t) => t.iid !== hero.iid) : targets;
 }
 
 /**
- * Why `hero` cannot use its skill right now, or null when it can: a hero with
- * a skill, alive, that has neither used it nor made the turn's attack, free of
- * the statuses that lock it, a soul to pay with, and a legal target. Whose turn
- * it is, is the caller's question.
+ * Why `hero` cannot use one of its skills right now, or null when it can: a
+ * hero with that skill (`skillId`; left out, its first), alive, that has not
+ * used a skill this turn (one skill per hero per turn) nor made the turn's
+ * attack, free of the statuses that lock it, with the skill off cooldown, a
+ * soul to pay with, and a legal target. Whose turn it is, is the caller's
+ * question. Checked in this order:
+ *  - 'noSkill'  the hero has no skills, or not the one named.
+ *  - 'down'     it is a corpse on the respawn timer.
+ *  - 'used'     it has used a skill this turn (either of its two).
+ *  - 'attacked' it made the turn's attack.
+ *  - 'status'   a status locks its skills (`isBlocked(hero, 'skill')`).
+ *  - 'cooldown' this skill is still cooling down (`hero.cooldowns`).
+ *  - 'souls'    the player has fewer than SKILL_COST souls.
+ *  - 'target'   there is nothing legal to aim it at — or `targetIid` is not.
  *
  * With `targetIid` given, that card must be one the skill may be aimed at
  * (`noTarget` skills ignore it). Without it, the question is whether the skill
  * could be used on SOME legal target.
  */
-export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, targetIid?: string): SkillBlock | null {
-  const data = CARDS_BY_ID[hero.cardId];
-  if (data?.type !== 'hero' || !data.skill || !getAbility(data.skill)) return 'noSkill';
+export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, targetIid?: string, skillId?: AbilityId): SkillBlock | null {
+  const skill = resolveSkill(hero, skillId);
+  if (!skill) return 'noSkill';
   if (isRespawning(hero)) return 'down';
   if (hero.skillUsedThisTurn) return 'used';
   if (hero.attackedThisTurn) return 'attacked';
   if (isBlocked(hero, 'skill')) return 'status';
+  if ((hero.cooldowns?.[skill.id] ?? 0) > 0) return 'cooldown';
   if (G.players[pid].souls < SKILL_COST) return 'souls';
-  const targets = skillTargets(G, pid, hero);
+  const targets = skillTargets(G, pid, hero, skill.id);
   if (targets === 'none') return null;
   if (targetIid === undefined) return targets.length > 0 ? null : 'target';
   return targets.some((t) => t.iid === targetIid) ? null : 'target';
@@ -278,9 +290,9 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
     case 'useSkill': {
       const found = findCardOnBoard(G, a.heroIid);
       if (!found || found.owner !== pid) return 'noHero';
-      const why = skillBlocked(G, pid, found.card, a.targetIid);
+      const why = skillBlocked(G, pid, found.card, a.targetIid, a.skillId);
       if (why) return why;
-      return a.targetIid === undefined && skillTargets(G, pid, found.card) !== 'none' ? 'target' : null;
+      return a.targetIid === undefined && skillTargets(G, pid, found.card, a.skillId) !== 'none' ? 'target' : null;
     }
     case 'playCard': {
       const why = playBlocked(G, pid, a.cardIid, a.targetIid, a.discardIid);
@@ -301,8 +313,9 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
  * Every action `pid` could make right now. In order: the attack, if open; each
  * card in hand, in hand order, on each of its legal targets in `targetsFor`
  * order (equipment on a hero at the cap is offered once per item it could
- * discard — the choice of which is the player's); each living hero's skill, in
- * board order, on each of its targets; retreats from the bench in
+ * discard — the choice of which is the player's); each living hero's skills, in
+ * board order and the hero's own order of skills, each on each of its targets
+ * (every action names its `skillId`); retreats from the bench in
  * `stepInCandidates` order; promotions (either seat's: `pid` may promote the
  * seat that owes one); and ending the turn last. Everything listed passes
  * `blocked`, so while a promotion is owed that is all there is.
@@ -329,9 +342,11 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
   }
 
   for (const hero of liveBoardCards(ps)) {
-    const targets = skillTargets(G, pid, hero);
-    if (targets === 'none') { offer({ type: 'useSkill', heroIid: hero.iid }); continue; }
-    for (const t of targets) offer({ type: 'useSkill', heroIid: hero.iid, targetIid: t.iid });
+    for (const skillId of heroData(hero)?.skills ?? []) {
+      const targets = skillTargets(G, pid, hero, skillId);
+      if (targets === 'none') { offer({ type: 'useSkill', heroIid: hero.iid, skillId }); continue; }
+      for (const t of targets) offer({ type: 'useSkill', heroIid: hero.iid, skillId, targetIid: t.iid });
+    }
   }
 
   for (const b of stepInCandidates(ps)) offer({ type: 'moveHero', fromSlot: (ps.bench.indexOf(b) + 1) as 1 | 2 | 3, toSlot: 0 });

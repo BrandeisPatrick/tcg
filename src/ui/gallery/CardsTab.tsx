@@ -9,6 +9,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import type { CardData, EquipmentCard } from '@/engine/types';
 import { HEROES, SPELLS, EQUIPMENT, ULTIMATES, CARDS_BY_ID } from '@/cards';
+import { heroAbilities } from '@/engine/query';
 import { CardFrame } from '../card/CardFrame';
 import { RoundCardIcon } from '../card/RoundCardIcon';
 import { HeroSlot } from '../board/HeroSlot';
@@ -28,8 +29,11 @@ function initialShow(): Show {
   return SHOWS.includes(s as Show) ? (s as Show) : 'all';
 }
 
+/** The rules text a card prints: its own, or — a hero — its abilities'. */
+const rulesOf = (c: CardData) => (c.type === 'hero' ? heroAbilities(c).map((x) => x.ability.text).join(' ') : c.text ?? '');
+
 const hit = (c: CardData, q: string) =>
-  !q || c.name.toLowerCase().includes(q) || c.id.includes(q) || (c.text ?? '').toLowerCase().includes(q);
+  !q || c.name.toLowerCase().includes(q) || c.id.includes(q) || rulesOf(c).toLowerCase().includes(q);
 
 /** "3–4 souls" from the cards themselves, so the label cannot drift from the data. */
 function costBand(cards: EquipmentCard[]): string {

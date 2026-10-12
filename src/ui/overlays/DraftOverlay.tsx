@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence, easeInOut } from 'framer-motion';
 import type { DraftState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, HEROES } from '@/cards';
+import { heroAbilities } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { fonts, spring, text } from '../tokens';
@@ -710,12 +711,12 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
         <Stat label="ATK" value={data.atk} />
         <Stat label="HP" value={data.hp} />
       </span>
-      {data.abilityName && (
-        <span style={{ ...text.body, fontSize: compact ? 12 : 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
-          <span style={{ color: lobby.cream, fontWeight: 700 }}>{data.abilityName}</span>
-          {data.text ? ` — ${data.text}` : ''}
+      {heroAbilities(data).map(({ ability }) => (
+        <span key={ability.id} style={{ ...text.body, fontSize: compact ? 12 : 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
+          <span style={{ color: lobby.cream, fontWeight: 700 }}>{ability.name}</span>
+          {ability.text ? ` — ${ability.text}` : ''}
         </span>
-      )}
+      ))}
     </motion.div>
   );
 }

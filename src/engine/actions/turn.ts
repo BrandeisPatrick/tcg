@@ -7,7 +7,7 @@
  */
 import type { CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID } from '@/cards';
-import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges } from '../statusOps';
+import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges, tickCooldowns } from '../statusOps';
 import { resolve } from '../death';
 import { heroData, liveBoardCards } from '../query';
 import { pushLog } from '../log';
@@ -65,6 +65,8 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   G.turnNumber = realTurn;
   G.attackUsed = false;
   tickStartOfTurn(G, ps);
+  // Skill cooldowns count the owner's turns, so they come down here too.
+  tickCooldowns(ps);
   // Count down Rem's "Lil Helpers" merges; expired ones return her to bench.
   tickRemMerges(G, ps);
   // Refill (not add) — no hoarding across turns. KO bounty banked this turn IS preserved

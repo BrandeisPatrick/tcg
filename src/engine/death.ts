@@ -15,8 +15,10 @@ import { RESPAWN_TURNS, SOULS_MAX } from './constants';
 /**
  * Process a hero's death in place: wipe active statuses, arm the respawn
  * timer, charge the death cost. Level / exp / equipment / atkMod / spiritMod /
- * hpMax all persist — only the live combat state (hp, statuses, turn flags)
- * resets. `tickRespawn` brings the hero back at full hp when the timer ticks down.
+ * hpMax and the skill cooldowns (timers of the owner's turns, not of the
+ * hero's life) all persist — only the live combat state (hp, statuses, turn
+ * flags) resets. `tickRespawn` brings the hero back at full hp when the timer
+ * ticks down.
  */
 export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} fell.`);
@@ -43,6 +45,7 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   if (sGain) hero.hpMax -= sGain.value;
   hero.statuses = [];
   hero.skillUsedThisTurn = false;
+  if (hero.lastSkillUsed !== undefined) hero.lastSkillUsed = undefined;
   hero.attackedThisTurn = false;
   hero.exhausted = true;
   hero.hp = 0;

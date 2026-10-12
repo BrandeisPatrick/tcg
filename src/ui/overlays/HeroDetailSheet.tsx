@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
-import type { CardInstance } from '@/engine/types';
+import type { AbilityId, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { getAbility } from '@/abilities';
+import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
-import { effectiveAtk, effectiveSpirit } from '@/engine/query';
+import { effectiveAtk, effectiveSpirit, heroAbilities } from '@/engine/query';
 import { SKILL_COST } from '@/engine/constants';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { StatusIcon } from '../card/StatusIcon';
@@ -39,16 +39,23 @@ export interface AttackOffer {
   onAttack: () => void;
 }
 
+/** One of the hero's skills as the sheet offers it: every gate for using it
+ *  is open (its turn, the hero's one skill of the turn, statuses, cooldown,
+ *  souls, a target), or the short reason it can't be used, shown inside its
+ *  skill card. */
+export interface SkillOffer {
+  canUse: boolean;
+  blockedReason?: string;
+}
+
 interface Props {
   card: CardInstance;
   /** True if this hero belongs to the local player. Drives the Skill action. */
   isMine?: boolean;
-  /** Every gate for using the skill is open (its turn, the hero's own once a
-   *  turn, statuses, souls). */
-  canUseSkill?: boolean;
-  /** Short reason why the skill can't be used, shown inside the skill card. */
-  skillBlockedReason?: string;
-  onUseSkill?: () => void;
+  /** Each skill's offer, by ability id. A skill with none is not usable. */
+  skills?: Record<AbilityId, SkillOffer>;
+  /** The player tapped this skill's card. */
+  onUseSkill?: (skillId: AbilityId) => void;
   /** The Attack plate — on the local player's Active only. */
   attack?: AttackOffer;
   /** Retreat lives on your Active's sheet: he goes to the bench and a bench
@@ -67,7 +74,7 @@ interface Props {
 }
 
 export function HeroDetailSheet({
-  card, isMine, canUseSkill, skillBlockedReason, onUseSkill, attack,
+  card, isMine, skills: skillOffers, onUseSkill, attack,
   retreat, onRetreat, onClose,
 }: Props) {
   const { isMobile, width: vw, height: vh } = useViewport();
@@ -75,21 +82,20 @@ export function HeroDetailSheet({
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') return null;
 
-  const skillAbility = data.skill ? getAbility(data.skill) : null;
-  const passiveAbility = data.passives?.[0] ? getAbility(data.passives[0]) : null;
+  // The hero's kit, skills first: a card for each skill (tap to use), a panel
+  // for each passive. Each ability names itself (`name`).
+  const kit = heroAbilities(data);
+  const skillAbilities = kit.filter((x) => x.kind === 'skill').map((x) => x.ability);
+  const passiveAbilities = kit.filter((x) => x.kind === 'passive').map((x) => x.ability);
   const attached = card.attached ?? [];
 
-  // Ability names carry the hero prefix ("Paige Plot Armor"); strip it so the
-  // skill/passive reads as just the ability ("Plot Armor") — the card already
-  // names the hero.
-  const stripHero = (n: string) => (n.startsWith(`${data.name} `) ? n.slice(data.name.length + 1) : n);
-  const skillName = skillAbility ? stripHero(extractAbilityName(skillAbility.prompt) ?? data.name) : '';
-  const passiveName = passiveAbility ? stripHero(extractAbilityName(passiveAbility.prompt) ?? `${data.name}'s Passive`) : '';
   // Ability prompts read "Hero Name — trigger: effect." — the extracted desc
-  // fragment starts lowercase; sentence-case it for the panel.
+  // fragment starts lowercase; sentence-case it for the panel. (Its own card
+  // text stands in for a prompt that says nothing.)
   const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-  const skillDesc = sentence(skillAbility ? (extractAbilityDesc(skillAbility.prompt) ?? skillAbility.prompt ?? '') : '');
-  const passiveDesc = sentence(passiveAbility ? (extractAbilityDesc(passiveAbility.prompt) ?? passiveAbility.prompt ?? data.text ?? '') : '');
+  const describe = (a: HeroAbilityDef) => sentence(extractAbilityDesc(a.prompt) ?? a.prompt ?? a.text);
+  // Which skill the hero has used this turn, so only that card reads USED.
+  const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
 
   // The card at the trading-card ratio (5:7). On desktop it stands as tall
   // as the window allows, up to 600, leaving room under it for Retreat and
@@ -211,34 +217,44 @@ export function HeroDetailSheet({
             color: poster.ink,
             padding: '13px 13px 8px',
           }}>
-            {/* Skill — tap to use; or a non-actionable Passive block. */}
-            {skillAbility ? (
-              <Block title="Skill">
-                <SkillActionCard
-                  name={skillName}
-                  description={skillDesc}
-                  mine={!!isMine}
-                  used={!!card.skillUsedThisTurn}
-                  canUse={!!canUseSkill}
-                  blockedReason={skillBlockedReason}
-                  onUse={onUseSkill ? () => { onUseSkill(); onClose(); } : undefined}
-                />
+            {/* Skills — tap one to use it (the hero uses one a turn); then
+                the non-actionable Passive blocks. */}
+            {skillAbilities.length > 0 && (
+              <Block title={skillAbilities.length > 1 ? 'Skills' : 'Skill'}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {skillAbilities.map((ability) => {
+                    const offer = skillOffers?.[ability.id];
+                    return (
+                      <SkillActionCard
+                        key={ability.id}
+                        name={ability.name}
+                        description={describe(ability)}
+                        mine={!!isMine}
+                        used={usedSkill === ability.id}
+                        canUse={!!offer?.canUse}
+                        blockedReason={offer?.blockedReason}
+                        onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
+                      />
+                    );
+                  })}
+                </div>
               </Block>
-            ) : passiveAbility ? (
-              <Block title="Passive">
+            )}
+            {passiveAbilities.map((ability) => (
+              <Block key={ability.id} title="Passive">
                 <PassivePanel
-                  name={passiveName}
-                  description={passiveDesc}
-                  trigger={passiveAbility.trigger}
+                  name={ability.name}
+                  description={describe(ability)}
+                  trigger={ability.trigger}
                 />
               </Block>
-            ) : null}
+            ))}
             {/* The Attack — your Active's other move. Beside a skill the two
                 are split by an "or": the Active does one a turn, and using
                 either spends the other. */}
             {attack && (
               <>
-                {skillAbility && <OrRule />}
+                {skillAbilities.length > 0 && <OrRule />}
                 <AttackPlate offer={attack} onAttack={() => { attack.onAttack(); onClose(); }} />
               </>
             )}
@@ -660,12 +676,8 @@ function ActionButton({
   );
 }
 
-// Split "Name — description" prompts into title + body for the panels.
-function extractAbilityName(prompt?: string): string | null {
-  if (!prompt) return null;
-  const idx = prompt.indexOf(' — ');
-  return idx > 0 ? prompt.slice(0, idx).trim() : null;
-}
+// The body of a "Name — description" prompt, for the panels (the name itself
+// is the ability's own `name`).
 function extractAbilityDesc(prompt?: string): string | null {
   if (!prompt) return null;
   const idx = prompt.indexOf(' — ');

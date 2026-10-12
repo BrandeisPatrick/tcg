@@ -1,12 +1,12 @@
 /**
- * A hero uses its skill. Costs SKILL_COST souls, once a turn per hero, and
- * gives up that hero's attack. `skillBlocked` (legality.ts) has already said it
+ * A hero uses one of its skills. Costs SKILL_COST souls, one skill a turn per
+ * hero (whichever of its skills), and gives up that hero's attack. A skill with
+ * a cooldown goes on cooldown. `skillBlocked` (legality.ts) has already said it
  * may be done and at whom; this only does it.
  */
-import type { CardInstance, GameState, PlayerID } from '../types';
+import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID } from '@/cards';
-import { getAbility } from '../registry';
-import { findCardOnBoard } from '../query';
+import { findCardOnBoard, resolveSkill } from '../query';
 import { SKILL_COST } from '../constants';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
@@ -15,12 +15,14 @@ import { withCast } from '../castContext';
 import { fireTriggers } from '../triggers';
 import { resolve } from '../death';
 
-export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid?: string) {
+/** `skillId` names the skill; left out, it is the hero's first. */
+export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid?: string, skillId?: AbilityId) {
   const ps = G.players[pid];
   const hero = findCardOnBoard(G, heroIid)!.card;
   const data = CARDS_BY_ID[hero.cardId];
-  if (data?.type !== 'hero' || !data.skill) return;
-  const ability = getAbility(data.skill)!;
+  const skill = resolveSkill(hero, skillId);
+  if (data?.type !== 'hero' || !skill) return;
+  const { id: abilityId, ability } = skill;
 
   // A skill that takes no target does not look at one.
   let target: CardInstance | undefined;
@@ -44,8 +46,12 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   withCast(hero, 'skill', () => {
     ability.run(G, { movingPlayer: pid }, { source: hero, target });
   });
-  // Spent for the turn: no second cast, and no attack from this hero.
+  // Spent for the turn: no second cast (of either skill), and no attack from
+  // this hero. The skill is remembered for Echo Shard and the hero sheet, and a
+  // skill with a cooldown goes on it.
   hero.skillUsedThisTurn = true;
+  hero.lastSkillUsed = abilityId;
+  if (ability.cooldown) (hero.cooldowns ??= {})[abilityId] = ability.cooldown;
   // Equipment reactive: Surge of Power fires after bearer used their skill.
   fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });
   resolve(G);
@@ -55,5 +61,6 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
     by: pid,
     cardId: hero.cardId,
     state: 'begin',
+    abilityId,
   };
 }
