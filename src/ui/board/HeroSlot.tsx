@@ -17,6 +17,7 @@ import { poster } from '../poster';
 import { LevelRing } from '../card/LevelRing';
 import { LevelTrim, trimInset } from '../card/LevelTrim';
 import { useStatTick } from './useStatTick';
+import type { ArmedPlay } from '../helpers';
 
 /**
  * The in-match hero tile, printed flat in the poster idiom: a charcoal frame
@@ -37,7 +38,7 @@ interface Props {
   owner: PlayerID;
   myId: PlayerID;
   isOpponent: boolean;
-  pending: { iid: string; kind: 'playCard' | 'useSkill'; filter: string } | null;
+  pending: ArmedPlay | null;
   isTargetable: boolean;
   isCurrentTurn?: boolean;
   compact?: boolean;
@@ -111,7 +112,8 @@ export function HeroSlot({
   // living print until the impact's shatter has played, then turns.
   const respawnLeft = useDelayedValue(card.respawnTurnsLeft ?? 0, hold.settle);
   const isCorpse = respawnLeft > 0;
-  const isArmedSource = !!pending && pending.kind === 'useSkill' && pending.iid === card.iid;
+  // The hero whose skill, or whose attack, is armed and waiting for a target.
+  const isArmedSource = !!pending && (pending.kind === 'useSkill' || pending.kind === 'attack') && pending.iid === card.iid;
   const attached = isCorpse ? [] : (card.attached ?? []);
   // On the small in-game tile we only have room for the primary keyword; the
   // identity colour keys the role band's left edge, as the draft dossier does.
@@ -149,7 +151,7 @@ export function HeroSlot({
   // A resting frame lightens on hover; a state-coloured frame keeps its signal.
   const restingFrame = borderColor === poster.edge;
   // Soft pulse behind the portrait: green while this tile is a legal target,
-  // red while its own skill is armed and waiting for one.
+  // red while its own skill or attack is armed and waiting for one.
   const pulse = isTargetable ? poster.target : isArmedSource ? poster.red : null;
 
   // Compact bench mode: smaller stats, bands and body.

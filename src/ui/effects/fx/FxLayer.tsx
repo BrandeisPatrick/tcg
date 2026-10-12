@@ -15,7 +15,7 @@
  * trade the combat choreographer makes).
  */
 import { useContext, useEffect, useRef, useState } from 'react';
-import type { CastFx, FxEvent, GameAction, HitFx } from '@/engine/types';
+import type { CastFx, FxEvent, GameAction, HitFx, PlayerID } from '@/engine/types';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { FX_INK, FX_TIMING, TAG_INFO, typeInk } from './fxCatalog';
@@ -23,7 +23,7 @@ import { buildFxTimeline, shieldSpilled, type FxItem, type FxTimeline } from './
 import { FxImpulseBus, FxImpulseContext, type FxImpulse, hitStrength } from './FxImpulse';
 import { type Pt, type Rect, angleOf, center, dist, restRect } from './geometry';
 import { AoeWave, Bolt, DrainStream, FxCardContext, LightningArc } from './primitives';
-import { HitImpact } from './hits';
+import { HitImpact, VolleyShot } from './hits';
 import { useStageEngine } from './stage/FxStage';
 import {
   CastFlare, EquipGlint, HealGlow, ImmuneStamp, LevelUpBurst, ReviveRays, ShieldDeflect, StatusStamp,
@@ -132,6 +132,11 @@ export function quake(bus: FxImpulseBus, rects: Map<string, Rect>, from: Pt, at:
   return timers;
 }
 
+/** The batch is a volley: the cast swings at every enemy hero, and the gun
+ *  going off at each is how it arrives (the cast sends no wave or bolt of its
+ *  own, and bobs no table). */
+const isVolley = (timeline: FxTimeline) => timeline.items.some((i) => i.ev.kind === 'swing');
+
 /** The cast's targets: every card its effects land on, other than the caster. */
 function castTargets(cast: CastFx, timeline: FxTimeline, rects: Map<string, Rect>): Pt[] {
   const seen = new Set<string>();
@@ -171,7 +176,7 @@ function FxBatch({ live }: { live: LiveBatch }) {
         const heavy = ev.castKind === 'ult';
         emit(ev.iid, { kind: 'cast', strength: heavy ? 1 : 0.4, duration: (FX_TIMING.castCharge + 180) / 1000 }, it.at);
         const src = rects.get(ev.iid);
-        if (src && castTargets(ev, timeline, rects).length > 1) {
+        if (src && !isVolley(timeline) && castTargets(ev, timeline, rects).length > 1) {
           timers.push(...quake(bus, rects, center(src), it.at + FX_TIMING.castCharge, heavy ? 1 : 0.7, ev.iid));
         }
       } else if (ev.kind === 'hit' && ev.amount > 0) {
@@ -180,8 +185,9 @@ function FxBatch({ live }: { live: LiveBatch }) {
         const angle = src && tgt && ev.source!.iid !== ev.iid ? angleOf(center(src), center(tgt)) : undefined;
         emit(ev.iid, { kind: ev.ko ? 'ko' : 'hit', angle, strength: hitStrength(ev.amount) }, it.at);
         // A skill's gunfire kicks its shooter back (GunBurst's volley leaves
-        // this long before the rounds land).
-        if (ev.type === 'attack' && angle != null && ev.tag !== 'ricochet' && ev.tag !== 'tesla') {
+        // this long before the rounds land). A volley's own hit does not: its
+        // swing already did.
+        if (ev.type === 'attack' && angle != null && ev.tag !== 'ricochet' && ev.tag !== 'tesla' && !it.volley) {
           emit(ev.source!.iid, { kind: 'fire', angle, strength: 0.5 }, it.at - FX_TIMING.volleyLead);
         }
         if (ev.ko && tgt) {
@@ -190,6 +196,12 @@ function FxBatch({ live }: { live: LiveBatch }) {
           timers.push(...quake(bus, rects, center(tgt), it.at + FX_TIMING.koBreak, 0.9, ev.iid));
           emit(ev.iid, { kind: 'slam', strength: 1 }, it.at + FX_TIMING.koStamp + 90);
         }
+      } else if (ev.kind === 'swing') {
+        // One swing of a volley: its shooter comes up and kicks back as the
+        // rounds leave, toward the hero it swings at.
+        const src = rects.get(ev.iid);
+        const tgt = rects.get(ev.targetIid);
+        if (src && tgt) emit(ev.iid, { kind: 'fire', angle: angleOf(center(src), center(tgt)), strength: 0.5 }, it.at - FX_TIMING.volleyLead);
       } else if (ev.kind === 'heal' && ev.amount > 0) {
         emit(ev.iid, { kind: 'heal', strength: 0.6 }, it.at);
       } else if (ev.kind === 'shield') {
@@ -252,14 +264,14 @@ function FxBatch({ live }: { live: LiveBatch }) {
       {/* Each effect is printed on its own card, and rides that card's kicks. */}
       {timeline.items.map((it) => (
         <FxCardContext.Provider key={`fx-${it.ev.seq}`} value={'iid' in it.ev ? it.ev.iid ?? null : null}>
-          {renderItem(it, rects, tiles, batch, statusIndex, hitIndex)}
+          {renderItem(it, rects, tiles, batch, statusIndex, hitIndex, cast?.by)}
         </FxCardContext.Provider>
       ))}
     </>
   );
 }
 
-function renderItem(it: FxItem, rects: Map<string, Rect>, tiles: Map<string, HTMLElement>, batch: FxEvent[], statusIndex: Map<string, number>, hitIndex: Map<string, number>) {
+function renderItem(it: FxItem, rects: Map<string, Rect>, tiles: Map<string, HTMLElement>, batch: FxEvent[], statusIndex: Map<string, number>, hitIndex: Map<string, number>, by?: PlayerID) {
   const ev = it.ev;
   const key = `fx-${ev.seq}`;
   switch (ev.kind) {
@@ -271,7 +283,14 @@ function renderItem(it: FxItem, rects: Map<string, Rect>, tiles: Map<string, HTM
       const sourceRect = ev.source ? rects.get(ev.source.iid) : undefined;
       const n = hitIndex.get(ev.iid) ?? 0;
       hitIndex.set(ev.iid, n + 1);
-      return <HitImpact key={key} ev={ev} rect={rect} sourceRect={sourceRect} tile={tiles.get(ev.iid)} at={it.at} hold={it.hold} ownerInk={ownerInk(ev.source?.owner)} index={n} />;
+      return <HitImpact key={key} ev={ev} rect={rect} sourceRect={sourceRect} tile={tiles.get(ev.iid)} at={it.at} hold={it.hold} ownerInk={ownerInk(ev.source?.owner)} index={n} gunfire={!it.volley} />;
+    }
+    case 'swing': {
+      // Only a volley's swings are ever in a timeline (see buildFxTimeline).
+      const from = rects.get(ev.iid);
+      const to = rects.get(ev.targetIid);
+      if (!from || !to) return null;
+      return <VolleyShot key={key} from={from} to={to} ink={ownerInk(by)} seed={ev.seq} at={it.at} />;
     }
     case 'heal': {
       const rect = rects.get(ev.iid);
@@ -337,7 +356,7 @@ function CastVisuals({ cast, item, batch, timeline, rects, origin, action }: {
   // A hero's plate names the skill the move used, when the move says.
   const used = cast.castKind === 'skill' && action?.kind === 'skill' && action.cardId === cast.cardId ? action.abilityId : undefined;
   const label = castLabel(cast.cardId, used);
-  const targets = castTargets(cast, timeline, rects);
+  const targets = isVolley(timeline) ? [] : castTargets(cast, timeline, rects);
   const from = cast.castKind === 'spell'
     ? (origin ?? (casterRect ? center(casterRect) : null))
     : (casterRect ? center(casterRect) : null);

@@ -124,13 +124,19 @@ try {
     const r6 = await b.clickEl(plate, { scroll: false });
     log('attack plate click', r6.hit);
     await b.settle(3);
-    // Film the attack: frames every 100ms while the walk is on screen.
+    // Film the attack: frames every 100ms while the walk is on screen. The
+    // choreographer walks the turn's attack alone: the FX layer mounts a batch
+    // only for what the swing set off (a proc), never for the swing and the hit
+    // it met — so a plain attack leaves no batch marker behind.
+    const myBatches = new Set();
     for (let t = 0; t <= 2600; t += 100) {
       if (t) await b.tick(100);
       await b.settle(1);
       const dial = await b.evaluate(`document.querySelector('[aria-label^="Turn "]')?.getAttribute('aria-label') ?? ''`);
+      for (const m of await b.evaluate(`[...document.querySelectorAll('[data-fx-batch]')].map((e) => e.getAttribute('data-fx-batch') + ':' + e.getAttribute('data-fx-total'))`)) myBatches.add(m);
       await shoot(`mine-${t}${/Battle/.test(dial) ? '-battle' : ''}`);
     }
+    log('fx batches while my attack played (seq:ms):', myBatches.size ? [...myBatches].join(', ') : 'none — walked by the choreographer alone');
   } else {
     log('no attack to make:', await b.evaluate(`document.querySelector('[aria-label="Hero sheet"]')?.innerText.replace(/\s+/g, ' ').slice(0, 200)`));
   }
@@ -151,7 +157,7 @@ try {
     await b.shot(join(OUT, `sheet-${p}.png`), { x: 0, y: p * 2400, width: 1440, height: Math.min(2400, h - p * 2400) });
     log('sheet', join(OUT, `sheet-${p}.png`));
   }
-  log('page errors:', b.errors.length ? b.errors.slice(0, 12) : 'none');
+  log('page errors (React warnings included):', b.errors.length ? b.errors.slice(0, 12) : 'none');
 } catch (e) {
   console.error('FAILED', e);
   await shoot('failure').catch(() => {});

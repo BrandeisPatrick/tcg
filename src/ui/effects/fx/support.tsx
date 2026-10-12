@@ -14,12 +14,14 @@ import { heroAbilities } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { statusChipText, statusClass } from '../../card/StatusIcon';
+import { StatusMark, markFor } from '../../card/statusMarks';
 import { FX_INK, FX_TIMING, NUMERAL_INK, TAG_INFO } from './fxCatalog';
-import { type Rect, center } from './geometry';
+import { useFxCalm } from './FxMotionContext';
+import { type Rect, center, seeded } from './geometry';
 import { EASE_OUT, Fixed, LightningArc, Numeral, Plate, Ring, Stamp, Wash, numeralSize, sec } from './primitives';
 import { DjinnGlyph, SleepLetters, onInk } from './hits';
 import { useStage } from './stage/FxStage';
-import { castCharge, castRelease, goldBurst, healRise, helix, shieldSkid } from './stage/emitters';
+import { castCharge, castRelease, embers, goldBurst, healRise, helix, puffs, ring, shieldSkid } from './stage/emitters';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -172,9 +174,19 @@ function statusInk(ev: StatusFx): string {
   return side === 'utility' ? poster.inkDim : side === 'debuff' ? poster.status.debuff : poster.status.buff;
 }
 
-/** A small printed glyph over the stamp for the statuses that have one. */
-function StatusGlyph({ id, color, size }: { id: StatusId; color: string; size: number }) {
+/** A small printed glyph over the stamp for the statuses that have one. Fixation,
+ *  Dome, Rooted, Rabbit and Last Stand wear the same mark as their chip
+ *  (statusMarks.tsx), an id the registry does not know wears its diamond tag, and
+ *  the rest are drawn here. */
+function StatusGlyph({ id, color, size, value }: { id: StatusId; color: string; size: number; value?: number }) {
   const s = { width: size, height: size, display: 'block' as const, filter: 'drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5))' };
+  if (markFor(id)) {
+    return (
+      <div style={s}>
+        <StatusMark id={id} color={color} outline={poster.ink} size={size} count={id === 'fixation' ? value : undefined} />
+      </div>
+    );
+  }
   switch (id) {
     case 'shield':
       return <svg viewBox="0 0 16 16" style={s}><path d="M8 1.2 L14 3 L14 8 C 14 11.5, 11.5 13.6, 8 14.8 C 4.5 13.6, 2 11.5, 2 8 L 2 3 Z" fill={color} stroke={poster.ink} strokeWidth="0.8" /></svg>;
@@ -246,11 +258,146 @@ function ChannelRing({ rect, at, hold, ink }: { rect: Rect; at: number; hold: nu
   );
 }
 
+// ---------------------------------------------------------------------------
+// Flourishes for the statuses that arrive with a picture of their own. Each is
+// printed inside the card's clipped box (Dome, Fixation, Rooted, Rabbit, Last
+// Stand); under calm motion only the wash, the mark and the sticker remain.
+// ---------------------------------------------------------------------------
+
+/** Dome: its outline draws itself up over the card from the base while the
+ *  light under it swells, and a ring runs out along the table. */
+function DomeRise({ rect, at, hold, ink }: { rect: Rect; at: number; hold: number; ink: string }) {
+  const calm = useFxCalm();
+  useStage((s) => s.at(at, (stage) => stage.add(ring({ at: center(rect), r0: rect.width * 0.35, r1: rect.width * 0.85, color: ink, width: 4, life: 560 }))));
+  if (calm) return null;
+  const { width: w, height: h } = rect;
+  const arc = `M ${w * 0.05} ${h * 0.94} C ${w * 0.05} ${h * 0.02}, ${w * 0.95} ${h * 0.02}, ${w * 0.95} ${h * 0.94}`;
+  const tr = { duration: sec(hold * 0.8), delay: sec(at), times: [0, 0.28, 0.78, 1], ease: 'easeOut' as const };
+  const stroke = (color: string, width: number) => (
+    <motion.path d={arc} fill="none" stroke={color} strokeWidth={width} strokeLinecap="round"
+      initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: [0, 1, 1, 1], opacity: [0, 1, 1, 0] }} transition={tr} />
+  );
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: [0, 0.5, 0.4, 0] }} transition={tr}
+        style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 62% 78% at 50% 100%, ${ink}, transparent 74%)` }}
+      />
+      <svg width={w} height={h} style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
+        {stroke(poster.ink, 9)}
+        {stroke(ink, 5)}
+        {stroke(FX_INK.cream, 1.6)}
+      </svg>
+    </>
+  );
+}
+
+/** Fixation: a ring closes in from beyond the card on its middle while a
+ *  crosshair flashes through it — the mark has found its target. */
+function LockOn({ rect, at, hold, ink }: { rect: Rect; at: number; hold: number; ink: string }) {
+  const calm = useFxCalm();
+  if (calm) return null;
+  const tr = { duration: sec(hold * 0.55), delay: sec(at + 140), times: [0, 0.2, 0.7, 1], ease: EASE_OUT };
+  const bar = { position: 'absolute' as const, background: ink, boxShadow: `0 0 0 1.5px ${poster.ink}` };
+  return (
+    <>
+      <Ring size={rect.width * 0.62} color={poster.ink} at={at} dur={520} from={2.1} to={0.8} width={8} peak={0.8} />
+      <Ring size={rect.width * 0.62} color={ink} at={at} dur={520} from={2.1} to={0.8} width={4} peak={1} />
+      <motion.div
+        initial={{ opacity: 0, scaleX: 0.2 }} animate={{ opacity: [0, 1, 1, 0], scaleX: [0.2, 1, 1, 1] }} transition={tr}
+        style={{ ...bar, left: 0, right: 0, top: '50%', height: 3, marginTop: -1.5 }}
+      />
+      <motion.div
+        initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 1, 1, 0], scaleY: [0.2, 1, 1, 1] }} transition={tr}
+        style={{ ...bar, top: 0, bottom: 0, left: '50%', width: 3, marginLeft: -1.5 }}
+      />
+    </>
+  );
+}
+
+/** Rooted: roots break through the paper at the card's foot and climb it —
+ *  each a curling stem that throws off a pair of shorter ones as it climbs. */
+function RootsGrow({ rect, at, hold, ink, seed }: { rect: Rect; at: number; hold: number; ink: string; seed: number }) {
+  const calm = useFxCalm();
+  useStage((s) => s.at(at + 60, (stage) => stage.add(puffs({
+    at: { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.96 }, seed, count: 7, speed: [30, 110], size: [8, 15], density: stage.density,
+  }))));
+  if (calm) return null;
+  const { width: w, height: h } = rect;
+  const rng = seeded(seed);
+  type Pt = [number, number];
+  /** A point `t` of the way along the cubic p0 to p3 (controls p1, p2). */
+  const along = (p0: Pt, p1: Pt, p2: Pt, p3: Pt, t: number): Pt => {
+    const u = 1 - t;
+    return [0, 1].map((k) => u * u * u * p0[k] + 3 * u * u * t * p1[k] + 3 * u * t * t * p2[k] + t * t * t * p3[k]) as Pt;
+  };
+  const strokes: { d: string; width: number; delay: number }[] = [];
+  [0.2, 0.5, 0.8].forEach((fx, i) => {
+    const x = w * fx;
+    const sway = (i % 2 ? -1 : 1) * w * (0.1 + rng() * 0.08);
+    const top = h * (0.34 + rng() * 0.18);
+    const p0: Pt = [x, h + 4], p1: Pt = [x + sway, h * 0.8], p2: Pt = [x - sway * 0.8, h * 0.58], p3: Pt = [x + sway * 0.3, top];
+    strokes.push({ d: `M ${p0} C ${p1} ${p2} ${p3}`, width: 5, delay: i * 90 });
+    // Two shorter roots leave the stem, one to each side, as it climbs.
+    ([[0.42, -1], [0.7, 1]] as const).forEach(([t, side], k) => {
+      const [bx, by] = along(p0, p1, p2, p3, t);
+      const reach = w * (0.12 + rng() * 0.06);
+      strokes.push({ d: `M ${bx} ${by} Q ${bx + side * reach * 0.4} ${by - h * 0.1} ${bx + side * reach} ${by - h * 0.13}`, width: 3, delay: i * 90 + 260 + k * 110 });
+    });
+  });
+  return (
+    <svg width={w} height={h} style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
+      {strokes.flatMap((st, i) => [{ color: poster.ink, width: st.width + 4 }, { color: ink, width: st.width }].map((line) => (
+        <motion.path key={`${i}-${line.width}`} d={st.d} fill="none" stroke={line.color} strokeWidth={line.width} strokeLinecap="round"
+          initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: [0, 1, 1, 1], opacity: [0, 1, 1, 0] }}
+          transition={{ duration: sec(hold * 0.8), delay: sec(at + st.delay), times: [0, 0.3, 0.78, 1], ease: 'easeOut' }} />
+      )))}
+    </svg>
+  );
+}
+
+/** Rabbit: a puff of white smoke where the hero stood. */
+function RabbitPoof({ rect, at, seed }: { rect: Rect; at: number; seed: number }) {
+  useStage((s) => s.at(at, (stage) => stage.add(puffs({
+    at: center(rect), seed, count: 12, ring: rect.width * 0.12, speed: [60, 170], size: [16, 30], life: [0.5, 0.9],
+    color: 'rgba(246, 240, 226, 0.85)', density: stage.density,
+  }))));
+  return <Wash color={FX_INK.cream} peak={0.7} at={at} dur={420} radial />;
+}
+
+/** Last Stand: columns of light climb the card and embers rise off it — a
+ *  charge building toward the strike. */
+function ChargeRise({ rect, at, hold, seed }: { rect: Rect; at: number; hold: number; seed: number }) {
+  const calm = useFxCalm();
+  useStage((s) => s.at(at, (stage) => stage.add(embers({
+    at: center(rect), seed, count: 12, color: FX_INK.gold, radius: [0, rect.width * 0.4], lift: [220, 400], size: [2, 3.4], density: stage.density,
+  }))));
+  if (calm) return null;
+  return (
+    <>
+      {[0.22, 0.5, 0.78].map((fx, i) => (
+        <motion.div key={i}
+          initial={{ y: '115%', opacity: 0 }}
+          animate={{ y: ['115%', '-70%'], opacity: [0, 0.85, 0.85, 0] }}
+          transition={{ duration: sec(Math.min(hold, 900) * 0.85), delay: sec(at + i * 110), ease: 'easeOut', times: [0, 0.2, 0.7, 1] }}
+          style={{
+            position: 'absolute', left: `${fx * 100}%`, marginLeft: -rect.width * 0.045, width: rect.width * 0.09, top: 0, height: '55%',
+            background: `linear-gradient(0deg, transparent, ${FX_INK.gold} 35%, ${FX_INK.cream} 60%, transparent)`,
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 export function StatusStamp({ rect, ev, at, hold, index = 0 }: { rect: Rect; ev: StatusFx; at: number; hold: number; index?: number }) {
   const ink = statusInk(ev);
   const text = statusChipText(ev.statusId, ev.value);
   const fontSize = clamp(rect.width * 0.085, 10, 15);
   const glyphSize = clamp(rect.width * 0.2, 18, 34);
+  // A mark is line art, so it stands clear of the sticker instead of tucking
+  // behind its edge as the solid glyphs do.
+  const marked = !!markFor(ev.statusId);
   const top = `${46 + index * 15}%`;
   const id = ev.statusId;
   const discharge = ev.tag === 'discharge';
@@ -274,6 +421,11 @@ export function StatusStamp({ rect, ev, at, hold, index = 0 }: { rect: Rect; ev:
           </>
         )}
         {id === 'reverb' && <Ring size={rect.width * 0.6} color={FX_INK.spirit} at={at} dur={800} from={0.3} to={1.9} width={2.5} dashed />}
+        {id === 'dome' && <DomeRise rect={rect} at={at} hold={hold} ink={ink} />}
+        {id === 'fixation' && <LockOn rect={rect} at={at} hold={hold} ink={ink} />}
+        {id === 'rooted' && <RootsGrow rect={rect} at={at} hold={hold} ink={ink} seed={ev.seq} />}
+        {id === 'rabbit' && <RabbitPoof rect={rect} at={at} seed={ev.seq} />}
+        {id === 'last_stand' && <ChargeRise rect={rect} at={at} hold={hold} seed={ev.seq} />}
       </Fixed>
       <Fixed rect={rect} z={86}>
         {id === 'stun' && <StunStars rect={rect} at={at} hold={hold} />}
@@ -293,13 +445,13 @@ export function StatusStamp({ rect, ev, at, hold, index = 0 }: { rect: Rect; ev:
           </div>
         )}
         {id !== 'stun' && id !== 'sleep' && id !== 'djinns_mark' && (
-          <div style={{ position: 'absolute', left: '50%', top: `calc(${top} - ${glyphSize * 1.05}px)`, transform: 'translateX(-50%)' }}>
+          <div style={{ position: 'absolute', left: '50%', top: `calc(${top} - ${glyphSize * 1.05 + (marked ? 12 : 0)}px)`, transform: 'translateX(-50%)' }}>
             <motion.div
               initial={{ scale: 0.4, opacity: 0, y: 6 }}
               animate={{ scale: [0.4, 1.15, 1, 1], opacity: [0, 1, 1, 0], y: [6, 0, 0, -4] }}
               transition={{ duration: sec(hold), delay: sec(at), times: [0, 0.15, 0.8, 1], ease: EASE_OUT }}
             >
-              <StatusGlyph id={id} color={ink} size={glyphSize} />
+              <StatusGlyph id={id} color={ink} size={marked ? glyphSize * 1.12 : glyphSize} value={ev.value} />
             </motion.div>
           </div>
         )}

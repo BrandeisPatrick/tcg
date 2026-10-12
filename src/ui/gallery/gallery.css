@@ -473,7 +473,7 @@
 @media (max-width: 767px) { .gal-status { grid-template-columns: minmax(0, 1fr); } }
 .gal-status__row {
   display: grid;
-  grid-template-columns: 122px minmax(0, 1fr);
+  grid-template-columns: 136px minmax(0, 1fr);
   column-gap: 10px;
   padding: 7px 0;
   border-bottom: 1px solid var(--g-rule);

@@ -11,6 +11,7 @@ import { Section } from './primitives';
 const MAGNITUDE: Record<string, number> = {
   bullet_resist: 3, spirit_resist: 3, shield: 5,
   weapon_power: 2, spirit_power: 2, bleed: 3,
+  fixation: 2, last_stand: 4,
 };
 
 const CLASSES: { id: StatusClass; title: string; aside: string }[] = [
@@ -46,7 +47,8 @@ export function StatusesTab() {
       })}
       <p className="gal-cap" style={{ marginTop: -8 }}>
         A chip reads label, magnitude, then turns left in brackets. Statuses that are simply on or off
-        (Stun, Silence, Disarm) print no magnitude.
+        (Stun, Silence, Disarm, Dome, Rooted, Rabbit) print no magnitude. Fixation, Dome, Rooted, Rabbit
+        and Last Stand wear a small mark before the label &mdash; the one their sticker wears when they land.
       </p>
     </>
   );

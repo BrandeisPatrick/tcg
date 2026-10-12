@@ -6,13 +6,14 @@ import { DealtTile } from './BoardIntro';
 import { RowPlaque, SlotWell } from './BoardTable';
 import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
+import type { ArmedPlay } from '../helpers';
 
 interface Props {
   ps: PlayerState;
   owner: PlayerID;
   myId: PlayerID;
   isOpponent: boolean;
-  pending: { iid: string; kind: 'playCard' | 'useSkill'; filter: string } | null;
+  pending: ArmedPlay | null;
   onTapHero: (c: CardInstance, owner: PlayerID) => void;
   onLongPressHero?: (c: CardInstance) => void;
   onEquipmentHover?: (eq: CardInstance | null) => void;

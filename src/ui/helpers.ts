@@ -2,9 +2,13 @@ import type { TargetFilter } from '@/abilities';
 import type { AbilityId } from '@/engine/types';
 import { poster } from './poster';
 
-/** A card the player has armed to play but not yet targeted/committed. */
+/** A card, skill or attack the player has armed but not yet aimed/committed. */
 export interface PendingPlay {
-  kind: 'playCard' | 'useSkill';
+  /** What is armed: a card from the hand, a hero's skill, or the Active's
+   *  basic attack (when it may name who it shoots: the hero has reach). */
+  kind: 'playCard' | 'useSkill' | 'attack';
+  /** The card in hand; for a skill, the hero using it; for the attack, the
+   *  Active making it. */
   iid: string;
   /** For a skill: which of the hero's skills is armed (the next tap aims it). */
   skillId?: AbilityId;
@@ -14,6 +18,10 @@ export interface PendingPlay {
    *  Which heroes actually glow is the engine's answer: board/targeting.ts. */
   filter: TargetFilter;
 }
+
+/** What the tiles need to know of what is armed: whose it is (for the frame
+ *  on an armed source), and what it is. */
+export type ArmedPlay = Pick<PendingPlay, 'iid' | 'kind' | 'filter'>;
 
 /**
  * Spirit-damage plum for the dark log — lighter than poster.stat.spirit

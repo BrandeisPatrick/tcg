@@ -24,10 +24,11 @@ import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
 import type { TurnPhase } from './board/TurnCompass';
 import {
-  actionRefusal, attackBlockReason, attackLine, moveBlockReason, playBlockReason, readyHeroes, retreatBlock,
+  actionRefusal, moveBlockReason, playBlockReason, readyHeroes, retreatBlock,
   skillBlockReason,
 } from './board/heroActions';
 import { isValidTarget } from './board/targeting';
+import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attackAim';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
 import { attackBlocked, cardCost, playBlocked, playTargets, skillBlocked, skillTargets } from '@/engine/legality';
@@ -39,7 +40,7 @@ import { FxLayer } from './effects/fx/FxLayer';
 import { FxImpulseBus, FxImpulseContext } from './effects/fx/FxImpulse';
 import { FxCalmContext, useCalmMotion } from './effects/fx/FxMotionContext';
 import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingContext';
-import { buildFxTimeline, walkedByChoreographer } from './effects/fx/fxTimeline';
+import { buildFxTimeline, freshBatch } from './effects/fx/fxTimeline';
 import { FxStageProvider } from './effects/fx/stage/FxStage';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
@@ -121,6 +122,10 @@ export function Board(props: BoardProps<GameState>) {
   // The turn's attack, being made. While non-null the choreographer is
   // walking its plan; when it finishes, the engine makes the attack for real.
   const [combatPlan, setCombatPlan] = useState<AttackPlan | null>(null);
+  // Who the walked attack was aimed at, when it was not the default target —
+  // the hero the player (or the AI) named. Left out, the engine's `attack`
+  // takes the first of `attackTargets`, as it does for every hero without reach.
+  const attackAimRef = useRef<string | undefined>(undefined);
   // Queued End Turn. If the player taps the button while a card or skill
   // reveal is in flight, we remember it here instead of silently dropping
   // the click, then fire once the reveal settles.
@@ -152,13 +157,14 @@ export function Board(props: BoardProps<GameState>) {
   // render, so the impact-delay context is in place on the very render the
   // HP changes and HeroSlot can hold its numbers until the bolt lands. The
   // high-water mark moves in an effect after commit; a remount seeds it from
-  // the current stream so old hits are never replayed. The basic attack is in
+  // the current stream so old hits are never replayed. The turn's attack is in
   // the stream, but the CombatChoreographer has already walked it before the
-  // engine resolved, so the fresh batch leaves out what it walked.
+  // engine resolved, so the fresh batch leaves out what it walked (a card's
+  // volley, inside its cast, was never walked: it stays, and plays).
   const lastSeenFxRef = useRef<number | null>(null);
   const maxFxSeq = G.fx.reduce((m, e) => Math.max(m, e.seq), 0);
   if (lastSeenFxRef.current === null) lastSeenFxRef.current = maxFxSeq;
-  const freshFx = G.fx.filter((e) => e.seq > (lastSeenFxRef.current ?? 0) && !walkedByChoreographer(e));
+  const freshFx = freshBatch(G.fx, lastSeenFxRef.current ?? 0);
   const freshFxKey = freshFx.length > 0 ? maxFxSeq : 0;
   useEffect(() => {
     if (maxFxSeq > (lastSeenFxRef.current ?? 0)) lastSeenFxRef.current = maxFxSeq;
@@ -262,22 +268,26 @@ export function Board(props: BoardProps<GameState>) {
     [G, mover, attackOpen],
   );
 
-  /** The choreographer has walked the attack: make it in the engine. The
-   *  turn stays with the player. (Stable apart from `moves`; the
-   *  choreographer keeps its callback in a ref.) */
+  /** The choreographer has walked the attack: make it in the engine, at the
+   *  hero it was aimed at. The turn stays with the player. (Stable apart from
+   *  `moves`; the choreographer keeps its callback in a ref.) */
   const handleCombatComplete = useCallback(() => {
+    const aim = attackAimRef.current;
+    attackAimRef.current = undefined;
     setCombatPlan(null);
-    try { moves.attack(); } catch {}
+    try { if (aim === undefined) moves.attack(); else moves.attack(aim); } catch {}
   }, [moves]);
 
-  /** Make the turn's attack. The player's Attack plate and the AI's
-   *  `attack` both come here, so either one is walked by the choreographer
-   *  before the engine makes it. The engine's own gate decides whether
-   *  there is an attack to make. */
-  const startAttack = useCallback(() => {
+  /** Make the turn's attack, at `targetIid` — left out, the default target.
+   *  The player's Attack plate and the AI's `attack` both come here, so either
+   *  one is walked by the choreographer before the engine makes it. The
+   *  engine's own gate decides whether there is an attack to make, and at
+   *  whom. */
+  const startAttack = useCallback((targetIid?: string) => {
     if (combatPlan || G.action?.state === 'begin') return;
-    if (attackBlocked(G, mover)) return;
-    setCombatPlan(forecastAttack(G, mover));
+    if (attackBlocked(G, mover, targetIid)) return;
+    attackAimRef.current = targetIid;
+    setCombatPlan(forecastAttack(G, mover, targetIid));
   }, [G, mover, combatPlan]);
 
   /** The turn button, and the AI's pass: end the turn. Ending it never
@@ -435,8 +445,9 @@ export function Board(props: BoardProps<GameState>) {
         // one place if a new move kind is added.
         const dispatch = moves as unknown as Record<string, (...args: unknown[]) => void>;
         // The attack goes the way the player's Attack plate does, so the AI's
-        // attack is walked by the choreographer like the player's.
-        if (best.move === 'attack') startAttack();
+        // attack is walked by the choreographer like the player's — at the
+        // hero it named, when it named one (the first target goes bare).
+        if (best.move === 'attack') startAttack(best.args[0] as string | undefined);
         else if (best.move === 'endTurn') endTurn();
         else if (dispatch[best.move]) dispatch[best.move](...best.args);
         else endTurn(); // unknown move kind — bail rather than freeze the AI loop
@@ -562,6 +573,7 @@ export function Board(props: BoardProps<GameState>) {
       // A tap on a hero the armed card cannot go to (a corpse, a rival for
       // gear, one already wearing the item) is refused with the reason.
       if (pending.kind === 'playCard') playCardOn(pending.iid, card.iid);
+      else if (pending.kind === 'attack') aimAttack(card.iid);
       else castSkill(pending.iid, card.iid, pending.skillId);
       setPending(null);
       return;
@@ -596,12 +608,23 @@ export function Board(props: BoardProps<GameState>) {
     });
   }
 
-  /** The Attack plate on your Active's sheet. */
+  /** The Attack plate on your Active's sheet. With one hero to hit the attack
+   *  goes at once; with more (a hero with reach) the board arms the attack and
+   *  lights the heroes it may name, like a skill waiting for its target. */
   function attackFromSheet() {
     if (!isMyTurn || actionLocked) return;
-    const no = actionRefusal(G, me, { type: 'attack' });
-    if (no) { showNotice(no.text, true); return; }
-    startAttack();
+    const tap = tapAttackPlate(G, me);
+    if (tap.do === 'refuse') showNotice(tap.refusal.text, true);
+    else if (tap.do === 'choose') setPending(tap.pending);
+    else startAttack();
+  }
+
+  /** A tap on a hero while the attack is armed: the attack at that hero, or the
+   *  engine's reason it cannot be made there. */
+  function aimAttack(targetIid: string) {
+    const tap = tapWhileAttackArmed(G, me, targetIid);
+    if (tap.do === 'refuse') showNotice(tap.refusal.text, true);
+    else startAttack(tap.target);
   }
 
   /** Swap the Active with this bench hero (the engine charges the souls). */
@@ -1014,13 +1037,7 @@ export function Board(props: BoardProps<GameState>) {
             }
             // The turn's attack is your Active's, offered on its sheet with
             // what it would do, or why it cannot be made.
-            const attackBlock = isMyActive && isMyTurn ? attackBlocked(G, me) : null;
-            const attack = !isMyActive ? undefined : {
-              line: isMyTurn && attackBlock === null ? attackLine(forecastAttack(G, me)) : undefined,
-              blockedReason: !isMyTurn ? 'Not your turn' : attackBlock ? attackBlockReason(attackBlock, hero) : undefined,
-              made: !!hero.attackedThisTurn,
-              onAttack: attackFromSheet,
-            };
+            const attack = !isMyActive ? undefined : { ...attackOffer(G, me, hero, isMyTurn), onAttack: attackFromSheet };
 
             return (
               <HeroDetailSheet

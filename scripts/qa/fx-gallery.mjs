@@ -33,6 +33,9 @@ const DEFAULT_DEMOS = [
   'Naptime — wakes (Abrams)', 'Charged → Discharge · Stun (Kelvin)', 'Killing Blow — execute (Abrams)', 'Ricochet → bench (Haze, Seven)',
   'Tesla chain → Haze', 'Storm Cloud pulse (Seven → all)', 'Heal 3 (Kelvin)', 'Shield absorbs 2, 1 spills',
   'Unstoppable — immune to damage', 'Three at once (Stun + Bleed + −BP)', 'KO Haze, then respawn her', 'Level up → 2 (Kelvin)',
+  // The primitives the new kits use: the volley, and the statuses they bring.
+  'Volley · Bullet Dance — a swing at each hero (3)', 'Volley · a Shield soaks one, another falls (3)',
+  'Dome', 'Fixation ×2', 'Rooted', 'Rabbit', 'Last Stand 5', 'Last Stand goes off (Kelvin → all, then heals)',
 ];
 const demos = DEMOS.length ? DEMOS : DEFAULT_DEMOS;
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
@@ -106,7 +109,7 @@ try {
     console.log('sheet', join(OUT, `sheet-${i}.png`));
     i++;
   }
-  console.log('page errors:', b.errors.length ? b.errors : 'none');
+  console.log('page errors (React warnings included):', b.errors.length ? b.errors : 'none');
 } finally {
   await b.close();
 }

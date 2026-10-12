@@ -2,6 +2,7 @@ import type { StatusId } from '@/engine/types';
 import { STATUSES_BY_ID } from '@/statuses';
 import { fonts } from '../tokens';
 import { poster } from '../poster';
+import { StatusMark } from './statusMarks';
 
 export type StatusClass = 'buff' | 'debuff' | 'utility';
 
@@ -45,17 +46,30 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 // Magnitude statuses render the value pill; binary statuses (value=1) hide it.
+// Fixation's value is its stack count and Last Stand's the damage it will deal,
+// so a single stack and a strike of 1 are printed too.
 const VALUE_STATUSES: Set<string> = new Set([
   'shield', 'bullet_resist', 'spirit_resist', 'weapon_power', 'spirit_power', 'bleed', 'healing_boost',
   'weapon_power_down', 'spirit_power_down', 'bullet_resist_down', 'spirit_resist_down',
-  'extra_attack', 'casting', 'casting_light',
+  'extra_attack', 'casting', 'casting_light', 'fixation', 'last_stand',
 ]);
+
+/** The words for a status: its short chip label, else the registry's display
+ *  title — never a raw snake_case id (a marked hero used to show "djinns_mark").
+ *  An id the registry does not know at all is spelled out from the id itself
+ *  ("mystery_status" → "Mystery status"), so a chip is never blank. */
+export function statusLabel(id: StatusId): string {
+  const known = STATUS_LABELS[id] ?? STATUSES_BY_ID[id]?.title;
+  if (known) return known;
+  const spelled = String(id ?? '').replace(/[_-]+/g, ' ').trim();
+  return spelled ? spelled.charAt(0).toUpperCase() + spelled.slice(1) : 'Status';
+}
 
 /** The chip's text for a status at a given magnitude — "Shield 3", "Stun",
  *  "−BP 2" — shared with the FX layer's status stamps so a stamp and the chip
  *  it lands as always read the same. */
 export function statusChipText(id: StatusId, value?: number): string {
-  const label = STATUS_LABELS[id] ?? STATUSES_BY_ID[id]?.title ?? id;
+  const label = statusLabel(id);
   const showValue = typeof value === 'number' && (VALUE_STATUSES.has(id) || value > 1);
   return showValue ? `${label} ${value}` : label;
 }
@@ -75,14 +89,14 @@ interface Props {
  */
 export function StatusIcon({ id, value, duration, size = 'normal' }: Props) {
   const color = colorFor(id);
-  // Short chip label if we have one, else the registry's display title —
-  // never the raw snake_case id (a marked hero used to show "djinns_mark").
-  const label = STATUS_LABELS[id] ?? STATUSES_BY_ID[id]?.title ?? id;
+  const label = statusLabel(id);
   const showValue = typeof value === 'number' && (VALUE_STATUSES.has(id) || value > 1);
   const showDuration = typeof duration === 'number' && duration > 0 && duration < 99;
 
   const padV = size === 'compact' ? 2 : size === 'large' ? 6 : 3;
   const padH = size === 'compact' ? 5 : size === 'large' ? 12 : 6;
+  // The mark in front of the label, for the statuses that wear one (statusMarks.tsx).
+  const markPx = size === 'compact' ? 10 : size === 'large' ? 15 : 12;
 
   return (
     <span
@@ -102,6 +116,7 @@ export function StatusIcon({ id, value, duration, size = 'normal' }: Props) {
         fontVariantNumeric: 'tabular-nums',
       }}
     >
+      <StatusMark id={id} color={poster.cream} size={markPx} />
       <span>{label}</span>
       {showValue && (
         <span style={{

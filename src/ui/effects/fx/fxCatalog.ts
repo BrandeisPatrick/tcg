@@ -22,6 +22,11 @@ export const FX_TIMING = {
   /** A gunfire hit's volley leaves this long before its rounds land — the
    *  muzzle flash, then three tracers in flight (travel + two round gaps). */
   volleyLead: 300,
+  /** A volley — a card swinging at every enemy hero, one `swing` each — fires
+   *  its swings in order, this far apart. Each carries a `volleyLead` of its own,
+   *  so the bursts overlap and the whole sweep is quick: four heroes land inside
+   *  a second, not four full attacks. */
+  volleyStep: 220,
   /** Between impacts on different targets in one batch (an AoE ripples). */
   stagger: 90,
   /** A status stamp lands this long after the hit on the same card… */
@@ -37,6 +42,8 @@ export const FX_TIMING = {
   shieldHold: 1000,
   immuneHold: 950,
   castHold: 850,
+  /** A volley swing's own item (the gun going off) outlives its impact this long. */
+  volleyHold: 400,
   reviveHold: 1300,
   levelHold: 1300,
   /** A kill: the impact, then the print breaks into shards this much later… */

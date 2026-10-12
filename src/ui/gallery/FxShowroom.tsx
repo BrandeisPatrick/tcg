@@ -53,7 +53,9 @@ const status = (iid: Id, statusId: StatusId, value: number, duration: number, de
   ({ kind: 'status', iid, statusId, value, duration, debuff, tag: o.tag });
 const cast = (castKind: 'skill' | 'spell' | 'ult' | 'equip', by: PlayerID, cardId: string, iid?: Id, targetIid?: Id): Ev =>
   ({ kind: 'cast', castKind, by, cardId, iid, targetIid });
-const shield = (iid: Id, absorbed: number, broken: boolean, type: DamageType): Ev => ({ kind: 'shield', iid, absorbed, broken, type });
+const shield = (iid: Id, absorbed: number, broken: boolean, type: DamageType, cast?: FxCastKind): Ev => ({ kind: 'shield', iid, absorbed, broken, type, cast });
+/** One swing of a volley, as the engine reports `attackAll`'s: pushed before its hit and Shield (cast 'attack'). */
+const volleySwing = (from: Id, to: Id, index: number): Ev => ({ kind: 'swing', iid: from, targetIid: to, index, raw: 3, targetHp: maxHp(to) });
 const immune = (iid: Id, what: 'damage' | StatusId): Ev => ({ kind: 'immune', iid, what });
 
 /** One beat of a basic attack, as the engine's attack plan would describe it. */
@@ -64,14 +66,15 @@ const swing = (from: Id, to: Id, dmg: number, o: Partial<AttackStep> = {}): Atta
   shieldAbsorbed: 0, ...o,
 });
 
-interface Demo { label: string; events: Ev[]; /** A basic attack: walked by the combat choreographer instead. */ plan?: AttackStep[] }
-interface Group { id: string; short: string; title: string; blurb: string; demos: Demo[] }
+export interface Demo { label: string; events: Ev[]; /** A basic attack: walked by the combat choreographer instead. */ plan?: AttackStep[] }
+export interface Group { id: string; short: string; title: string; blurb: string; demos: Demo[] }
 
 /** A group the stage does not drive: full-screen overlays with their own
  *  triggers, listed with the rest so every "fire this" lives in one place. */
 export interface ExtraGroup { id: string; short: string; title: string; blurb: string; body: ReactNode }
 
-const GROUPS: Group[] = [
+/** Every trigger on the stage, by group — exported so a spec can pin each demo's events to the shape the engine reports. */
+export const GROUPS: Group[] = [
   {
     id: 'attacks', short: 'Attacks',
     title: 'Basic attacks',
@@ -99,7 +102,7 @@ const GROUPS: Group[] = [
   {
     id: 'spells', short: 'Spells & ults',
     title: 'Spells & ultimates',
-    blurb: "A spell's bolt leaves the card reveal (left of centre on desktop); an ultimate waits for its name plate, then the linked hero flares heavier and the strike lands as a bolt or a shockwave with spokes.",
+    blurb: "A spell's bolt leaves the card reveal (left of centre on desktop); an ultimate waits for its name plate, then the linked hero flares heavier and the strike lands as a bolt or a shockwave with spokes. A volley is an ultimate that swings at every enemy hero: no wave, but the gun going off at each in turn — the muzzle flash on the shooter, a tracer, the impact — a Shield or a knockout inside it looking as it does for the turn's attack.",
     demos: [
       { label: 'Spell · Cold Front → Abrams', events: [cast('spell', '0', 'cold_front', 'y0', 'r0'), hit('r0', 4, 'spirit', { source: 'y0', cast: 'spell' })] },
       { label: 'Spell · Knockdown → Abrams', events: [cast('spell', '0', 'knockdown', 'y0', 'r0'), status('r0', 'stun', 1, 1, true)] },
@@ -109,6 +112,18 @@ const GROUPS: Group[] = [
       { label: 'Spell · Curse → Abrams', events: [cast('spell', '0', 'curse', 'y0', 'r0'), status('r0', 'silenced', 1, 3, true), status('r0', 'disarm', 1, 3, true)] },
       { label: 'Ult · Seismic Impact — spirit AoE + Stun', events: [cast('ult', '1', 'ult_abrams', 'r0'), hit('y0', 4, 'spirit', { source: 'r0', cast: 'ult' }), hit('y1', 4, 'spirit', { source: 'r0', cast: 'ult' }), hit('y2', 4, 'spirit', { source: 'r0', cast: 'ult' }), status('y0', 'stun', 1, 1, true)] },
       { label: 'Ult · Bullet Dance — gunfire AoE', events: [cast('ult', '1', 'ult_haze', 'r1'), hit('y0', 3, 'attack', { source: 'r1', cast: 'ult' }), hit('y1', 3, 'attack', { source: 'r1', cast: 'ult' }), hit('y2', 3, 'attack', { source: 'r1', cast: 'ult' })] },
+      { label: 'Volley · Bullet Dance — a swing at each hero (3)', events: [
+        cast('ult', '1', 'ult_haze', 'r1'),
+        volleySwing('r1', 'y0', 0), hit('y0', 3, 'attack', { source: 'r1', cast: 'attack' }),
+        volleySwing('r1', 'y1', 1), hit('y1', 3, 'attack', { source: 'r1', cast: 'attack' }),
+        volleySwing('r1', 'y2', 2), hit('y2', 3, 'attack', { source: 'r1', cast: 'attack' }),
+      ] },
+      { label: 'Volley · a Shield soaks one, another falls (3)', events: [
+        cast('ult', '1', 'ult_haze', 'r1'),
+        volleySwing('r1', 'y0', 0), shield('y0', 3, true, 'attack', 'attack'),
+        volleySwing('r1', 'y1', 1), hit('y1', 3, 'attack', { source: 'r1', cast: 'attack' }),
+        volleySwing('r1', 'y2', 2), hit('y2', 99, 'attack', { source: 'r1', cast: 'attack' }),
+      ] },
       { label: 'Ult · Assassinate → Abrams', events: [cast('ult', '0', 'ult_vindicta', undefined, 'r0'), hit('r0', 5, 'spirit', { cast: 'ult' })] },
       { label: 'Equip · Titanic Magazine → Kelvin', events: [cast('equip', '0', 'titanic_magazine', 'y0', 'y0')] },
     ],
@@ -146,6 +161,7 @@ const GROUPS: Group[] = [
       { label: 'Mystic Burst proc', events: [hit('r0', 1, 'spirit', { source: 'y0', tag: 'burst', cast: 'proc' })] },
       { label: 'Storm Cloud pulse (Seven → all)', events: [hit('y0', 2, 'spirit', { source: 'r2', tag: 'channel', cast: 'tick' }), hit('y1', 2, 'spirit', { source: 'r2', tag: 'channel', cast: 'tick' }), hit('y2', 2, 'spirit', { source: 'r2', tag: 'channel', cast: 'tick' })] },
       { label: 'Channel shockwave (Kelvin → all)', events: [hit('r0', 2, 'spirit', { source: 'y0', tag: 'channel', cast: 'tick' }), hit('r1', 2, 'spirit', { source: 'y0', tag: 'channel', cast: 'tick' }), hit('r2', 2, 'spirit', { source: 'y0', tag: 'channel', cast: 'tick' })] },
+      { label: 'Last Stand goes off (Kelvin → all, then heals)', events: [hit('r0', 6, 'spirit', { source: 'y0', tag: 'channel', cast: 'tick' }), hit('r1', 6, 'spirit', { source: 'y0', tag: 'channel', cast: 'tick' }), hit('r2', 6, 'spirit', { source: 'y0', tag: 'channel', cast: 'tick' }), heal('y0', 3)] },
       { label: 'Siphon Bullets (Kelvin ← Abrams)', events: [status('r0', 'siphon_drain', 1, 2, true, { tag: 'siphon' }), status('y0', 'siphon_gain', 1, 2, false, { tag: 'siphon' })] },
     ],
   },
@@ -165,7 +181,7 @@ const GROUPS: Group[] = [
   {
     id: 'stamps', short: 'Statuses',
     title: 'Status stamps',
-    blurb: 'A status lands as a slapped-on sticker in its class colour, with a glyph or a flourish where the status has one (stars for Stun, letters for Sleep, mark pips, a channel ring…).',
+    blurb: 'A status lands as a slapped-on sticker in its class colour, with a glyph or a flourish where the status has one (stars for Stun, letters for Sleep, mark pips, a channel ring, a reticle closing on its target, a dome rising, roots climbing the card, a rabbit in a puff of smoke, a charge rising…).',
     demos: [
       { label: 'Stun', events: [status('r0', 'stun', 1, 1, true)] },
       { label: 'Sleep', events: [status('r0', 'sleep', 6, 2, true)] },
@@ -182,6 +198,11 @@ const GROUPS: Group[] = [
       { label: '+Heal 2', events: [status('y0', 'healing_boost', 2, 999, false)] },
       { label: 'Healing blocked', events: [status('r0', 'healing_boost_down', 1, 2, true)] },
       { label: 'Charged', events: [status('r0', 'charged', 1, 2, true)] },
+      { label: 'Dome', events: [status('y0', 'dome', 1, 1, false)] },
+      { label: 'Fixation ×2', events: [status('r0', 'fixation', 2, 99, true)] },
+      { label: 'Rooted', events: [status('r0', 'rooted', 1, 2, true)] },
+      { label: 'Rabbit', events: [status('r0', 'rabbit', 1, 1, true)] },
+      { label: 'Last Stand 5', events: [status('y0', 'last_stand', 5, 1, false)] },
       { label: 'Three at once (Stun + Bleed + −BP)', events: [status('r0', 'stun', 1, 1, true), status('r0', 'bleed', 2, 2, true), status('r0', 'weapon_power_down', 1, 2, true)] },
     ],
   },

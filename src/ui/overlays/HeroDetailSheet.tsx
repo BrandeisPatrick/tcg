@@ -26,10 +26,13 @@ const eyebrow = {
 
 /** The turn's attack, offered on your Active's sheet: a swing at the rival
  *  Active for its bullet damage. Free, one-way, one a turn — and the Active
- *  makes it or uses its skill, not both. */
+ *  makes it or uses its skill, not both. A hero with reach may name any living
+ *  rival: the plate then still speaks for the default target (the first the
+ *  engine lists), and tapping it closes the sheet and asks who (`onAttack`; the
+ *  board arms the targeting, see board/attackAim.ts). */
 export interface AttackOffer {
   /** What the swing would do ("Hits Dynamo for 2 bullet damage"), while it
-   *  can be made. */
+   *  can be made — at the default target. */
   line?: string;
   /** Why it cannot be made right now ("No attacks on Turn 1"), printed in
    *  the line's place. */

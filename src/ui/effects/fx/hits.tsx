@@ -51,7 +51,7 @@ export function onInk(hex: string): string {
 // The dispatcher — one hit event → its intro, its type family, its stickers.
 // ---------------------------------------------------------------------------
 
-export function HitImpact({ ev, rect, sourceRect, tile, at, hold, ownerInk = FX_INK.gold, index = 0 }: {
+export function HitImpact({ ev, rect, sourceRect, tile, at, hold, ownerInk = FX_INK.gold, index = 0, gunfire = true }: {
   ev: HitFx;
   rect: Rect;
   sourceRect?: Rect | null;
@@ -64,6 +64,9 @@ export function HitImpact({ ev, rect, sourceRect, tile, at, hold, ownerInk = FX_
   ownerInk?: string;
   /** Which hit on this card within the batch — fans the numerals apart. */
   index?: number;
+  /** Whether a hit of gunfire fires its own volley of rounds. Off for a volley's
+   *  own hit: its swing already fired the gun (VolleyShot). */
+  gunfire?: boolean;
 }) {
   const seed = ev.seq;
   const tag = ev.tag;
@@ -93,7 +96,7 @@ export function HitImpact({ ev, rect, sourceRect, tile, at, hold, ownerInk = FX_
 
       {/* Impact by type */}
       {ev.type === 'attack' && (
-        <GunBurst rect={rect} amount={ev.amount} at={at} hold={hold} seed={seed} from={muzzle} ownerInk={ownerInk} volley={!!muzzle && !travelsItself} />
+        <GunBurst rect={rect} amount={ev.amount} at={at} hold={hold} seed={seed} from={muzzle} ownerInk={ownerInk} volley={gunfire && !!muzzle && !travelsItself} />
       )}
       {ev.type === 'spirit' && (
         <SpiritBurst rect={rect} at={at} hold={hold} seed={seed} accent={tag === 'djinns_mark' ? TAG_INFO.djinns_mark.ink : tag === 'life_drain' ? TAG_INFO.life_drain.ink : undefined} big={tag === 'djinns_mark' || tag === 'naptime'} />
@@ -199,6 +202,32 @@ export function GunBurst({ rect, amount, at, hold, seed, from, ownerInk = FX_INK
         <Wash color={FX_INK.bullet} peak={0.55} at={at} dur={hold * 0.8} radial origin={`${pts[0].x.toFixed(0)}px ${pts[0].y.toFixed(0)}px`} holdFrac={0.4} />
         <Sheen angle={dir} reach={Math.max(rect.width, rect.height)} at={at} />
         {pts.map((p, i) => <BulletHole key={i} x={p.x} y={p.y} size={holeSize} at={at + i * 65} hold={Math.max(400, hold - i * 65)} />)}
+      </Fixed>
+    </>
+  );
+}
+
+/** One swing of a volley — a card swinging at every enemy hero, as an
+ *  ultimate's `attackAll` does: the gun goes off on the attacker (the flash
+ *  lights its card from the muzzle; a casing and a tracer per round fly at the
+ *  target, in the attacker's ink) and the last round lands `at`. The impact is
+ *  the swing's own hit, drawn by HitImpact / ShieldDeflect; this is the
+ *  shooting — the same pieces the combat choreographer fires for the turn's
+ *  attack, so a swing that only meets a Shield or a shrug still fires. */
+export function VolleyShot({ from, to, ink, seed, at, z = 80 }: {
+  from: Rect; to: Rect; ink: string; seed: number; at: number; z?: number;
+}) {
+  const muzzle = edgePoint(from, center(to));
+  const gap = 50;
+  const start = at - FX_TIMING.volleyLead;
+  return (
+    <>
+      <Gunfire from={muzzle} to={edgePoint(to, center(from))} ink={ink} seed={seed + 5} at={start} dur={FX_TIMING.volleyLead - 2 * gap} rounds={3} gap={gap} />
+      <Fixed rect={from} clip z={z}>
+        {/* A flicker, not a tint: the swings come 220 ms apart, so each flash is
+            over by the next and the shooter is never left washed over. */}
+        <Wash color={ink} peak={0.42} at={start} dur={2 * gap + 150} radial holdFrac={0.5}
+          origin={`${(muzzle.x - from.left).toFixed(0)}px ${(muzzle.y - from.top).toFixed(0)}px`} />
       </Fixed>
     </>
   );

@@ -4,6 +4,7 @@ import { poster } from '../poster';
 import { RowPlaque } from './BoardTable';
 import { TurnCompass, type TurnPhase } from './TurnCompass';
 import { useViewport } from '../hooks/useViewport';
+import type { ArmedPlay } from '../helpers';
 
 interface Props {
   G: GameState;
@@ -13,7 +14,7 @@ interface Props {
   turn: number;
   /** Where the turn stands — printed by the compass. */
   phase: TurnPhase;
-  pending: { iid: string; kind: 'playCard' | 'useSkill'; filter: string } | null;
+  pending: ArmedPlay | null;
   onTapHero: (c: CardInstance, owner: PlayerID) => void;
   onLongPressHero?: (c: CardInstance) => void;
   onEquipmentHover?: (eq: CardInstance | null) => void;

@@ -12,7 +12,7 @@ event (`FxEvent` in `src/engine/types.ts`), with a monotonic `seq`:
 | kind      | when                                             | carries                                   |
 |-----------|--------------------------------------------------|-------------------------------------------|
 | `cast`    | a skill / spell / ult / equipment goes off        | caster iid, card, target — pushed FIRST   |
-| `swing`   | one swing of the turn's attack begins            | attacker, target, `index`, `raw` power, `label`, target HP |
+| `swing`   | one swing begins: the turn's attack, or a volley's | attacker, target, `index`, `raw` power, `label`, target HP |
 | `hit`     | damage landed (post-resist, post-shield)          | type, amount, KO, cast kind, source, tag  |
 | `heal`    | HP restored                                      | amount, tag, `from` (lifesteal victim)     |
 | `status`  | a status landed                                  | resulting value, class, tag               |
@@ -36,9 +36,16 @@ Rules the FX layer relies on (pinned by `tests/engine/fx-events.spec.ts`):
   the basic attack from the forecast BEFORE the engine makes it, so the
   match screen drops `swing` events and the `hit` / `shield` carrying cast
   `attack` (`walkedByChoreographer` in `fxTimeline.ts`, the one place that
-  decides; Board's fresh batch, the timeline, the FX layer and the final-blow
-  check all go through it). An Unstoppable shrug is not dropped — the walk has
-  no beat for it.
+  decides; Board's fresh batch (`freshBatch`), the timeline, the FX layer and
+  the final-blow check all go through it). An Unstoppable shrug is not dropped
+  — the walk has no beat for it.
+- **…unless it is a volley.** The turn's attack is a move of its own, so the
+  batch it comes in has no `cast`. A card that swings at the whole board
+  (`attackAll`, an ultimate's volley) emits the same `swing` → `hit` shape, but
+  inside its cast: a `swing` that FOLLOWS a `cast` in its batch is a volley's,
+  which nothing walked, so it is played (`walkedByChoreographer(ev, batch)` is
+  how an event is told which it belongs to; `tests/ui/fx-timeline.spec.ts`
+  pins both batch shapes on real engine runs).
 - **The forecast is the same stream.** `forecastAttack` (`engine/forecast.ts`)
   runs the real attack on a copy of the game (`simulate`) and reads these
   events back: a step per `swing`, its `finalDamage` and `shieldAbsorbed` from
@@ -121,6 +128,7 @@ caster lifts, motes wind in (240 ms) ─▶ bolt arcs over the table ─▶ impa
 a kill: impact ─▶ cracks ─▶ the card breaks (300 ms) ─▶ K.O. sticker slammed on (470 ms) ─▶ corpse look under the backing (650 ms)
 gunfire without a cast waits 300 ms for its volley to fly
 ultimates wait 600 ms for their name plate first; AoE impacts ripple by 90 ms per target
+a volley (a swing at every enemy hero): the swings fire in order, 220 ms apart, each with its own 300 ms of flight
 ```
 
 Animation families (`hits.tsx`, `support.tsx`, `shatter.tsx`, `primitives.tsx`):
@@ -159,13 +167,27 @@ Animation families (`hits.tsx`, `support.tsx`, `shatter.tsx`, `primitives.tsx`):
 - **support** — a cast draws motes down into the caster, flares, swings the
   ability plate up and lets go with a shockwave; healing lifts green crosses
   off the card toward the viewer; status stickers with a glyph or flourish
-  (stars orbiting for Stun, letters for Sleep, mark pips, a channel ring);
+  (stars orbiting for Stun, letters for Sleep, mark pips, a channel ring; the
+  newer statuses wear the mark their chip wears — `card/statusMarks.tsx`, one
+  drawing for both — with a reticle closing on a Fixation, a Dome's outline
+  drawing itself over the card, roots climbing a Rooted hero, a puff of smoke for
+  a Rabbit and columns of light rising for a Last Stand; an id the registry does
+  not know wears a plain diamond tag);
   the shield swinging up with its tally and sparks skidding off; Unstoppable
   in gold; a revive or level-up winding a column of glints up off the card;
   equip glint.
 - **the basic attack** (`CombatChoreographer.tsx`) — the same gunfire family
   walked beat by beat from the forecast before the engine resolves; a card that breaks stays
   under a grey veil until the engine turns it for real.
+- **a volley** (`VolleyShot` in `hits.tsx`, scheduled by `buildFxTimeline`) — an
+  ultimate that swings at every enemy hero, and quickly: per swing the gun goes
+  off on the attacker (the muzzle's flash lights its card, a casing and tracer
+  per round fly at the target, the shooter kicks back) and the hit lands as it
+  would for the turn's attack — holes, the amount, the shatter and K.O. sticker
+  on a kill, a Shield's deflect where one soaks it. The cast sends no wave of its
+  own (the gunfire is how it arrives); a swing that only meets a Shield or a
+  shrug still fires. The swings land `volleyStep` apart in the order the engine
+  swung, and the number on each hero waits for its own impact.
 - **the ultimate** (`UltMomentFlash.tsx`) — the name plate is dropped onto
   the table from above; where it lands every card bobs, a shockwave rolls
   out and speed lines burst from behind it.
@@ -178,4 +200,7 @@ landing.
 The Gallery (`?preview=1&tab=combat`) has a showroom that fires every one of
 these through the real `FxLayer`, FX stage, `HeroSlot`, timing context and
 impulse bus — and walks basic attacks through the real choreographer — with
-a `Calm motion` toggle to preview what reduced-motion players see.
+a `Calm motion` toggle to preview what reduced-motion players see. Its volley,
+Dome, Fixation, Rooted, Rabbit and Last Stand demos are shaped like the engine's
+own batches (`tests/ui/status-marks.spec.ts` pins them), and the Statuses tab
+lists every status in the registry with the chip it prints.

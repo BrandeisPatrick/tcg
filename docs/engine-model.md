@@ -67,7 +67,9 @@ file.
 - **Who the attack may name** — `reach` on a passive (or worn gear) lets its
   hero's basic attack name any living enemy hero, not only the rival Active;
   `attackTargets` is the one list, and the move, the forecast, the AI and
-  `legalActions` all read it.
+  `legalActions` all read it — and the board: with more than one entry the
+  Attack plate arms a targeting flow (`ui/board/attackAim.ts`) that lights
+  exactly that list and dispatches `attack(targetIid)`, the first target bare.
 - **A skill that costs HP** — `hpCost` on the skill: it is blocked unless the
   caster has more HP than that, and `useSkill` takes the HP straight off before
   the skill runs (through no Shield, setting off no trigger, never a kill).
@@ -116,4 +118,5 @@ file.
   hero tables.
 - **In the browser**: `scripts/qa/tutorial.mjs` and `match.mjs` at both sizes
   (they fail on any console error or React warning), `legality.mjs` for the
-  board's refusals on staged boards.
+  board's refusals on staged boards (a Dome, a Rooted hero, an attack that
+  names its target), `fx-gallery.mjs` / `fx-match.mjs` to film the effects.
