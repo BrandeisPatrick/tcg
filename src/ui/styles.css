@@ -447,3 +447,10 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
 .holo--wordmark .holo__shine {
   --holo-mark-size: var(--holo-mark-w, 150px) auto;
 }
+
+/* ===== Explain triggers =====
+   A coloured number or a status that says what it is when hovered or tapped
+   (ui/explain). On a hover device it is a keyboard stop too; the ring shows
+   only for keyboard focus, never for a mouse click. */
+[data-explain]:focus { outline: none; }
+[data-explain]:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 2px; }

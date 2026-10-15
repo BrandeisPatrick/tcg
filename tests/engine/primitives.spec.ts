@@ -138,7 +138,7 @@ const snapshot = (G: GameState) => JSON.stringify(G);
 describe('the new statuses', () => {
   it('are defined as the rules word them', () => {
     expect(STATUSES_BY_ID.fixation).toMatchObject({
-      title: 'Fixation', desc: 'Takes +<value> from the attacker fixed on it.', hvalue: -1,
+      title: 'Fixation', desc: 'When Haze attacks this hero, it takes +<value> damage. Up to 3; it falls off when the hero leaves the Active slot.', hvalue: -1,
       stack: { add: true, cap: 3, duration: 'reset' }, clearOnLeaveActive: true,
     });
     expect(FIXATION_CAP).toBe(3);

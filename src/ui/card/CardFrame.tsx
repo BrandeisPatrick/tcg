@@ -1,7 +1,8 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
 import { fonts, text } from '../tokens';
 import { poster } from '../poster';
 import { RuleText } from './RuleText';
+import { LiveScaleContext, faceScale } from './liveScale';
 import { CardShine, rarityInk } from './RarityFX';
 import {
   type Foil, type Holo, type HoloScope, type HoloStrength, type HoloPalette,
@@ -54,6 +55,10 @@ interface Props {
   holoMarkScale?: number;
   /** What the bands are made of; defaults to the game's amber–teal. */
   holoPalette?: HoloPalette;
+  /** A tap on a number or a status word in the rules text opens its popup (a
+   *  touch device). Off for a card whose own tap does something — the hand
+   *  fan plays or arms it — which keeps the tap; hovering still explains. */
+  tapExplains?: boolean;
   /** Turn the card to follow the pointer. Shares --px/--py with the foil, so
    *  the metal catches light because the card moved, which is the point. */
   tilt?: boolean;
@@ -231,7 +236,7 @@ export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
   cost: costInPlay, unaffordable = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
-  holoPalette = 'amber', tilt = false,
+  holoPalette = 'amber', tilt = false, tapExplains = true,
 }: Props) {
   const [hover, setHover] = useState(false);
   // Premium-plate flags, read once so the markup below stays declarative.
@@ -244,6 +249,9 @@ export function CardFrame({
   const reactive = physical ?? true;
   const lit = reactive && hover;
   const data = CARDS_BY_ID[cardId];
+  // The card prints its own numbers; the board (if there is one) says what
+  // the Spirit behind them comes to now (liveScale.ts).
+  const scale = faceScale(data, useContext(LiveScaleContext));
   const sz = SIZES[size];
   const rarity = data?.rarity ?? 1;
   const isHero = data?.type === 'hero';
@@ -449,7 +457,7 @@ export function CardFrame({
                   marginRight: 5,
                 }}>{l.tag}</span>
               )}
-              <RuleText text={l.body} />
+              <RuleText text={l.body} scale={scale} passTaps={!tapExplains} />
             </>
           );
           return (

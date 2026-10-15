@@ -106,7 +106,8 @@ exception or React `Warning:` (an explicit, commented allowlist at the top of
 each script is the only way out). `legality.mjs` stages boards a game rarely
 reaches — a free copied ultimate, a spell dropped on a corpse, an item a hero
 already wears, a hero at the equipment cap, a Dome, a Rooted hero, an attack
-that names its target, a volley, a Last Stand going off — by syncing a doctored
+that names its target, a volley, a Last Stand going off, a purple number and a
+status chip explaining themselves on hover or tap — by syncing a doctored
 state into the live client, and checks the hand, the glow, the refusal stickers
 and when each number moves with real mouse events. Set `DEV_URL` when the dev
 server is not on `http://localhost:5173`.

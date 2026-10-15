@@ -49,7 +49,13 @@ export const poster = {
     hpBright: '#e8633a',
     hpDim: '#9a6f68',
     shield: '#3f8f3a',
+    // What a printed number scales with (RuleText's `{sp:3}` / `{bp:3}`):
+    // plum grows with Spirit Power, a saddle brown with Bullet Power; plain
+    // ink is a flat number. Both read on the cream card (4.6:1 or better on
+    // paper, deep paper and the label band) and sit apart from the poster
+    // red and the ink.
     spirit: '#7a4a8a',
+    bullet: '#8a4f14',
   },
   status: {
     buff: '#3f8f3a',

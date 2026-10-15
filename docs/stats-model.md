@@ -67,3 +67,14 @@ timer.
 4. **Status text states the engine's numbers.** A status's `desc` and a card's
    text are read by players; when a number changes in `src/abilities`, change
    the words with it.
+5. **A number's colour says what it scales with.** Where the effect adds the
+   caster's Spirit Power to a number (`spi(source)`, `activeSpi`, `ultSpi`, a
+   channel's pulse), the card text marks that number `{sp:3}`; the card prints
+   3 in purple, and hovering (desktop) or tapping (phone) it says "3 + Spirit
+   Power". `{bp:3}` is the same for Bullet Power, in brown. `{sp:1/2}` is half
+   the Spirit, rounded down (Dynamo's and Paige's skills), `{sp:0}` the Spirit
+   itself (Wraith's Mixed Bullets). Every other number stays plain ink. Code
+   that reads card text as a string (a dossier, a search, the targeting banner,
+   an aria label) goes through `plainText`. `tests/ui/rule-text.spec.ts` reads
+   `src/abilities` and fails when a number that reads Spirit is not marked, or
+   one that does not is.

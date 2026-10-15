@@ -16,6 +16,7 @@ import { SPELLS, EQUIPMENT, CARDS_BY_ID } from '@/cards';
 import type { EquipmentCard, SpellCard } from '@/engine/types';
 import { RoundCardIcon } from '../card/RoundCardIcon';
 import { useViewport } from '../hooks/useViewport';
+import { plainText } from '../card/scaling';
 
 interface Props {
   slotIndex: number;
@@ -344,7 +345,7 @@ function PoolCard({ card, count, canAdd, onAdd }: {
               marginTop: 1,
             }}
           >
-            {card.text}
+            {plainText(card.text)}
           </span>
         )}
       </span>

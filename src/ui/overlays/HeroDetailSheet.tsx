@@ -12,7 +12,7 @@ import { LevelTrim } from '../card/LevelTrim';
 import { spring, text, fonts } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth, scrimStyle } from '../poster';
 import { PosterButton } from '../chrome';
-import { RuleText } from '../card/RuleText';
+import { RuleText, type Scale } from '../card/RuleText';
 import { useViewport } from '../hooks/useViewport';
 
 /** Stencil eyebrow — block titles, rail headers, stat labels and chips. */
@@ -92,11 +92,13 @@ export function HeroDetailSheet({
   const passiveAbilities = kit.filter((x) => x.kind === 'passive').map((x) => x.ability);
   const attached = card.attached ?? [];
 
-  // Ability prompts read "Hero Name — trigger: effect." — the extracted desc
-  // fragment starts lowercase; sentence-case it for the panel. (Its own card
-  // text stands in for a prompt that says nothing.)
+  // The panels print the ability's own card text, sentence-cased — the same
+  // marked words the card prints, so a number that scales with Spirit (or
+  // Bullet) Power is drawn in its colour with this hero's live figures behind
+  // it: base + what the hero has now.
   const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-  const describe = (a: HeroAbilityDef) => sentence(extractAbilityDesc(a.prompt) ?? a.prompt ?? a.text);
+  const describe = (a: HeroAbilityDef) => sentence(a.text);
+  const scale: Scale = { spirit: effectiveSpirit(card), bullet: effectiveAtk(card), who: data.name };
   // Which skill the hero has used this turn, so only that card reads USED.
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
 
@@ -232,6 +234,7 @@ export function HeroDetailSheet({
                         key={ability.id}
                         name={ability.name}
                         description={describe(ability)}
+                        scale={scale}
                         mine={!!isMine}
                         used={usedSkill === ability.id}
                         canUse={!!offer?.canUse}
@@ -248,6 +251,7 @@ export function HeroDetailSheet({
                 <PassivePanel
                   name={ability.name}
                   description={describe(ability)}
+                  scale={scale}
                   trigger={ability.trigger}
                 />
               </Block>
@@ -470,7 +474,7 @@ const TRIGGER_LABELS: Record<string, string> = {
  * Passive ability block: name + trigger chip + description. No action — passives
  * just fire when their trigger condition is met.
  */
-function PassivePanel({ name, description, trigger }: { name: string; description: string; trigger: string }) {
+function PassivePanel({ name, description, scale, trigger }: { name: string; description: string; scale: Scale; trigger: string }) {
   return (
     <div style={{
       padding: '12px 14px', borderRadius: 6,
@@ -482,7 +486,7 @@ function PassivePanel({ name, description, trigger }: { name: string; descriptio
       </div>
       {description && (
         <div style={{ ...text.body, color: poster.inkDim }}>
-          <RuleText text={description} />
+          <RuleText text={description} scale={scale} />
         </div>
       )}
     </div>
@@ -496,10 +500,11 @@ function PassivePanel({ name, description, trigger }: { name: string; descriptio
  * reason / enemy hero). The chip prints what it costs.
  */
 function SkillActionCard({
-  name, description, mine, used, canUse, blockedReason, onUse,
+  name, description, scale, mine, used, canUse, blockedReason, onUse,
 }: {
   name: string;
   description: string;
+  scale: Scale;
   mine: boolean;
   used: boolean;
   canUse: boolean;
@@ -545,7 +550,7 @@ function SkillActionCard({
       </div>
       {description && (
         <div style={{ ...text.body, color: fgDim }}>
-          <RuleText text={description} keywordColor={interactive ? fg : undefined} />
+          <RuleText text={description} keywordColor={interactive ? fg : undefined} scale={scale} />
         </div>
       )}
 
@@ -677,12 +682,4 @@ function ActionButton({
       </PosterButton>
     </div>
   );
-}
-
-// The body of a "Name — description" prompt, for the panels (the name itself
-// is the ability's own `name`).
-function extractAbilityDesc(prompt?: string): string | null {
-  if (!prompt) return null;
-  const idx = prompt.indexOf(' — ');
-  return idx > 0 ? prompt.slice(idx + 3).trim() : null;
 }

@@ -661,7 +661,7 @@ const eff_siphon_bullets: AbilityDef = {
 const skill_dynamo: HeroAbilityDef = {
   id: 'skill_dynamo', trigger: 'activate', target: 'allyHero',
   name: 'Rejuvenating Aurora',
-  text: 'Heal an ally 2 and grant +Bullet Power (1 + ½ Spirit) for 2 turns.',
+  text: 'Heal an ally 2 and grant +{sp:1/2} Bullet Power for 2 turns.',
   prompt: 'Dynamo Rejuvenating Aurora — heal an ally 2 + grant Bullet Power (1 + ½ Spirit) for 2 turns.',
   base: 2,
   scalesSpirit: true,
@@ -678,7 +678,7 @@ const skill_dynamo: HeroAbilityDef = {
 const skill_kelvin: HeroAbilityDef = {
   id: 'skill_kelvin', trigger: 'activate', target: 'enemyActive',
   name: 'Frost Grenade',
-  text: '1 spirit dmg to enemy Active + heal your Active 2.',
+  text: '{sp:1} spirit dmg to enemy Active + heal your Active 2.',
   prompt: 'Kelvin Frost Grenade — 1 spirit dmg to enemy Active + heal ally Active 2.',
   base: 1,
   scalesSpirit: true,
@@ -695,7 +695,7 @@ const skill_kelvin: HeroAbilityDef = {
 const skill_lady_geist: HeroAbilityDef = {
   id: 'skill_lady_geist', trigger: 'activate', target: 'enemyAny',
   name: 'Life Drain',
-  text: 'Deal 3 spirit to any enemy and heal for half the damage dealt.',
+  text: 'Deal {sp:3} spirit to any enemy and heal for half the damage dealt.',
   prompt: 'Lady Geist Life Drain — deal 3 spirit and heal for half the damage dealt.',
   base: 3,
   scalesSpirit: true,
@@ -710,7 +710,7 @@ const skill_lady_geist: HeroAbilityDef = {
 const skill_lash: HeroAbilityDef = {
   id: 'skill_lash', trigger: 'activate', target: 'enemyAny',
   name: 'Ground Strike',
-  text: '1 spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
+  text: '{sp:1} spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
   prompt: 'Lash Ground Strike — 1 spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
   base: 1,
   scalesSpirit: true,
@@ -728,7 +728,7 @@ const skill_lash: HeroAbilityDef = {
 const skill_paige: HeroAbilityDef = {
   id: 'skill_paige', trigger: 'activate', target: 'allyHero',
   name: 'Plot Armor',
-  text: 'Shield 2 on an ally and grant +Bullet Power (1 + ½ Spirit) for 2 turns.',
+  text: 'Shield 2 on an ally and grant +{sp:1/2} Bullet Resist for 2 turns.',
   prompt: 'Paige Plot Armor — Shield 2 + grant Bullet Resist (1 + ½ Spirit) for 2 turns.',
   base: 2,
   scalesSpirit: true,
@@ -747,7 +747,7 @@ const skill_paige: HeroAbilityDef = {
 const skill_seven_static: HeroAbilityDef = {
   id: 'skill_seven_static', trigger: 'activate', target: 'enemyActive',
   name: 'Static Charge',
-  text: '1 spirit dmg + Charged 2 — Stun 1 turn on expiry.',
+  text: '{sp:1} spirit dmg + Charged 2 — Stun 1 turn on expiry.',
   prompt: 'Seven Static Charge — 1 spirit dmg + Charged 2 turns. Stuns for 1 turn on expiry.',
   base: 1,
   scalesSpirit: true,
@@ -761,7 +761,7 @@ const skill_seven_static: HeroAbilityDef = {
 const skill_sinclair: HeroAbilityDef = {
   id: 'skill_sinclair', trigger: 'activate', target: 'enemyAny',
   name: 'Vexing Bolt',
-  text: '2 spirit dmg to any enemy.',
+  text: '{sp:2} spirit dmg to any enemy.',
   prompt: 'Sinclair Vexing Bolt — 2 spirit dmg to any enemy.',
   base: 2,
   scalesSpirit: true,
@@ -787,7 +787,7 @@ const skill_viscous: HeroAbilityDef = {
 const skill_yamato: HeroAbilityDef = {
   id: 'skill_yamato', trigger: 'activate', target: 'enemyAny',
   name: 'Power Slash',
-  text: '1 spirit dmg to any enemy.',
+  text: '{sp:1} spirit dmg to any enemy.',
   prompt: 'Yamato Power Slash — 1 spirit dmg.',
   base: 1,
   scalesSpirit: true,
@@ -878,7 +878,7 @@ const passive_mo_krill_burrow: HeroAbilityDef = {
 const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   name: 'Lil Helpers',
-  text: 'Merge into an ally as a buff: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns, then return to the bench.',
+  text: 'Merge into an ally as a buff: heal {sp:3} and grant +{sp:1} max HP for 3 turns, then return to the bench.',
   prompt: "Rem Lil Helpers — merge into an ally: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns.",
   base: 3,
   scalesSpirit: true,
@@ -932,7 +932,7 @@ const passive_vindicta_flight: HeroAbilityDef = {
 const passive_wraith_mixed: HeroAbilityDef = {
   id: 'passive_wraith_mixed', trigger: 'onAttack', target: 'self',
   name: 'Mixed Bullets',
-  text: 'Attacks deal Bullet Power (bullet) + Spirit Power (spirit).',
+  text: 'Attacks deal Bullet Power (bullet) + {sp:0} (spirit).',
   prompt: 'Mixed Bullets — attacks also deal Spirit Power as spirit damage.',
   run: (G, _ctx, { source, target }) => {
     if (!source || !target) return;

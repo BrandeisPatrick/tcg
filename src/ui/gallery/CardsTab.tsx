@@ -16,6 +16,7 @@ import { HeroSlot } from '../board/HeroSlot';
 import { useViewport } from '../hooks/useViewport';
 import { CardLightbox } from './CardLightbox';
 import { mockHeroInstance } from './mock';
+import { plainText } from '../card/scaling';
 import {
   Section, Sub, Caption, CardGrid, Fit, Grid, Segmented, type Option,
 } from './primitives';
@@ -30,7 +31,7 @@ function initialShow(): Show {
 }
 
 /** The rules text a card prints: its own, or — a hero — its abilities'. */
-const rulesOf = (c: CardData) => (c.type === 'hero' ? heroAbilities(c).map((x) => x.ability.text).join(' ') : c.text ?? '');
+const rulesOf = (c: CardData) => plainText(c.type === 'hero' ? heroAbilities(c).map((x) => x.ability.text).join(' ') : c.text);
 
 const hit = (c: CardData, q: string) =>
   !q || c.name.toLowerCase().includes(q) || c.id.includes(q) || rulesOf(c).toLowerCase().includes(q);

@@ -26,6 +26,7 @@ import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { useViewport } from '../hooks/useViewport';
+import { plainText } from '../card/scaling';
 
 interface Props {
   draft: DraftState;
@@ -714,7 +715,7 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
       {heroAbilities(data).map(({ ability }) => (
         <span key={ability.id} style={{ ...text.body, fontSize: compact ? 12 : 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
           <span style={{ color: lobby.cream, fontWeight: 700 }}>{ability.name}</span>
-          {ability.text ? ` — ${ability.text}` : ''}
+          {ability.text ? ` — ${plainText(ability.text)}` : ''}
         </span>
       ))}
     </motion.div>

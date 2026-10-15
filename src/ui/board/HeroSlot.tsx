@@ -11,6 +11,8 @@ import { effectiveAtk } from '@/engine/query';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { StatusIcon } from '../card/StatusIcon';
+import { Explain } from '../explain/Explain';
+import { statusContent } from '../explain/content';
 import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
 import { fonts, spring, text, statRow } from '../tokens';
 import { poster } from '../poster';
@@ -234,10 +236,20 @@ export function HeroSlot({
             display: 'flex', flexWrap: 'wrap', gap: 4,
             justifyContent: 'center',
             maxHeight: compact ? 36 : 54, overflow: 'hidden',
+            // The row lets taps through to the tile; each chip takes its own,
+            // to say what it is (Explain) — except while something is armed,
+            // when a tap on a chip is a tap on the tile and picks the target.
             pointerEvents: 'none',
           }}>
             {shownStatuses.slice(0, compact ? 3 : 5).map((s, i) => (
-              <StatusIcon key={i} id={s.id} value={s.value} duration={s.duration} size={compact ? 'compact' : 'normal'} />
+              <Explain
+                key={i}
+                content={statusContent(s.id, { value: s.value, duration: s.duration })}
+                passTaps={!!pending}
+                style={{ display: 'inline-flex', pointerEvents: 'auto' }}
+              >
+                <StatusIcon id={s.id} value={s.value} duration={s.duration} size={compact ? 'compact' : 'normal'} titled={false} />
+              </Explain>
             ))}
           </div>
         )}

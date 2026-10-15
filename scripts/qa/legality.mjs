@@ -30,6 +30,15 @@
  *   j  Last Stand set off by the start-of-turn tick: the engine strikes every
  *      rival hero at once, the tiles hold their numbers until the channel's
  *      strike reaches each, and the batch is played
+ *   k  a number's colour says what it scales with, and hovering or tapping it
+ *      (or a status) explains it. Kelvin with Spirit 2: his skill prints 3 in
+ *      purple; on a desktop hovering it shows "1 + Kelvin's Spirit Power 2 = 3"
+ *      and leaving hides it, on a phone (touch emulation, real touches) a tap
+ *      opens a popup card that a tap elsewhere or Escape closes, one at a time,
+ *      inside 390 px, and a tap on the number never uses the skill plate; a
+ *      status word in card text (Stun) and a Bleed chip on a tile explain
+ *      themselves the same way, a click on the chip still opens the sheet, and
+ *      with a card armed a tap on the chip picks the target, no popup
  *
  *   npm run dev            # in another terminal
  *   node scripts/qa/legality.mjs OUT_DIR [PORT] [desktop|mobile]
@@ -311,7 +320,7 @@ try {
   await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK}
     G.players['1'].active.statuses = [{ id: 'dome', value: 1, duration: 1 }];
   }`);
-  const domeChip = await b.evaluate(`(() => { const chip = ${tile(RIVAL_ACTIVE)}.querySelector('span[title^="Dome"]'); return chip ? { mark: chip.querySelector('svg[data-mark="dome"]') !== null, text: chip.textContent.trim() } : null; })()`);
+  const domeChip = await b.evaluate(`(() => { const chip = ${tile(RIVAL_ACTIVE)}.querySelector('span[data-status="dome"]'); return chip ? { mark: chip.querySelector('svg[data-mark="dome"]') !== null, text: chip.textContent.trim() } : null; })()`);
   check('the domed rival\'s tile carries a Dome chip with the dome mark', !!domeChip && domeChip.mark, JSON.stringify(domeChip));
   await openSheet(MY_ACTIVE);
   const domeSheet = await sheetText();
@@ -539,7 +548,7 @@ try {
     G.players['0'].hand = [];
     G.players['1'].hand = []; G.players['1'].souls = 0;
   }`);
-  const lsChip = await b.evaluate(`(() => { const chip = ${tile(MY_BENCH_0)}.querySelector('span[title^="Last Stand"]'); return chip ? { mark: chip.querySelector('svg[data-mark="last_stand"]') !== null, text: chip.textContent.trim() } : null; })()`);
+  const lsChip = await b.evaluate(`(() => { const chip = ${tile(MY_BENCH_0)}.querySelector('span[data-status="last_stand"]'); return chip ? { mark: chip.querySelector('svg[data-mark="last_stand"]') !== null, text: chip.textContent.trim() } : null; })()`);
   check('the bearer\'s tile prints "Last Stand 4 (1)" behind the rising-charge mark', !!lsChip && lsChip.mark && /^LastStand4\(1\)$/.test(lsChip.text.replace(/\s+/g, '')), JSON.stringify(lsChip));
   await shot('j-before');
   await b.clickEl(endTurn, { js: true, scroll: false });
@@ -574,6 +583,229 @@ try {
   check('…and each dropped when the channel\'s strike reached it (after its lead-in, one after another)', drops.every((t, k) => t !== undefined && t >= 250 && (k === 0 || t >= drops[k - 1] - 40)), JSON.stringify(drops));
   check('the batch is played: its length is a channel pulse\'s', [...strikeBatches.values()].some((total) => total >= 1900), JSON.stringify([...strikeBatches.values()]));
   await shot('j-after');
+
+  // ===== k: a number's colour says what it scales with; hovering or tapping it, or a status, explains it ===
+  console.log('\n(k) purple numbers and status chips explain themselves: hover on a desktop, tap on a phone');
+  const PURPLE = 'rgb(122, 74, 138)'; // poster.stat.spirit
+  const PAPER = 'rgb(242, 230, 203)'; // poster.paper, the type on the red skill plate
+  const touch = MODE === 'mobile';
+  await b.tick(2400); await b.settle(2);
+  // A phone is a finger: switch the page to touch (hover: none, pointer: coarse) and tap with real touches.
+  if (touch) {
+    await b.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    await b.settle(3);
+    check('the page now reports a touch device (no hover)', await b.evaluate(`!matchMedia('(hover: hover) and (pointer: fine)').matches`));
+  } else {
+    check('the page reports a device that hovers', await b.evaluate(`matchMedia('(hover: hover) and (pointer: fine)').matches`));
+  }
+  const touchTap = async (x, y) => {
+    await b.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    await b.tick(40); await b.settle(1);
+    await b.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await b.settle(4); await b.tick(120); await b.settle(2);
+  };
+  const centre = (finder) => b.evaluate(`(() => { const el = (${finder}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  /** Tap an element with a finger (phone) or click it (desktop), wherever it is on screen. */
+  const poke = async (finder) => {
+    const at = await centre(finder);
+    if (!at) throw new Error('poke: not found: ' + finder);
+    if (touch) await touchTap(at.x, at.y);
+    else { await b.clickAt(at.x, at.y); await b.settle(4); await b.tick(120); await b.settle(2); }
+  };
+  /** Move the mouse over an element (desktop hover). */
+  const hoverOver = async (finder) => {
+    const at = await centre(finder);
+    if (!at) throw new Error('hoverOver: not found: ' + finder);
+    await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+    await b.settle(4); await b.tick(120); await b.settle(2);
+  };
+  const hoverAway = async () => { await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 3, y: 3 }); await b.settle(4); await b.tick(120); await b.settle(2); };
+  /** The explanation cards open now: how many, in which mode, what they say, where they sit. */
+  const explained = () => b.evaluate(`(() => {
+    const els = [...document.querySelectorAll('[data-explain-card]')];
+    const r = els[0]?.getBoundingClientRect();
+    return { n: els.length, mode: els[0]?.getAttribute('data-explain-card') ?? null, role: els[0]?.getAttribute('role') ?? null,
+      text: els.map((e) => e.innerText.replace(/\\s+/g, ' ').trim()).join(' | '),
+      box: r ? { l: Math.round(r.left), t: Math.round(r.top), r: Math.round(r.right), b: Math.round(r.bottom) } : null };
+  })()`);
+  const SHEET = `document.querySelector('[aria-label="Hero sheet"]')`;
+  const sheetOpen = () => b.evaluate(`!!${SHEET}`);
+  const closeSheet = async () => { await b.clickEl(byText('Close'), { scroll: false }); await sheetGone(); };
+  const onScreen = (box) => !!box && box.l >= 0 && box.r <= W && box.t >= 0 && box.b <= H;
+  const press = async (key, code, vk) => {
+    await b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key, code, windowsVirtualKeyCode: vk });
+    await b.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: vk });
+    await b.settle(4); await b.tick(120); await b.settle(2);
+  };
+  /** A name on the open sheet: a place to tap that is nothing but paper. */
+  const nameOnSheet = (name) => `[...${SHEET}.querySelectorAll('span')].find((s) => s.textContent.trim() === ${JSON.stringify(name)})`;
+
+  // Kelvin with Spirit 2 in front (his skill is 1 spirit damage + Spirit), a Bleed on a hurt bench hero,
+  // and a Healing Rite in hand. His skill has been used, so its card is the flat outlined one.
+  // (The turn number is left as it is: setting it back would write a second "Turn 2" into the log.)
+  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK.replace('G.turnNumber = 2; ', '')}
+    G.players['0'].souls = 10;
+    const a = G.players['0'].active; a.cardId = 'hero_kelvin'; a.hp = a.hpMax = 6; a.spiritMod = 2; a.statuses = []; a.attached = []; a.skillUsedThisTurn = true;
+    const ben = G.players['0'].bench[0]; ben.hp = 3; ben.statuses = [{ id: 'bleed', value: 2, duration: 2 }];
+    G.players['0'].hand = [inst('qa-rite', 'healing_rite'), inst('qa-front', 'cold_front')];
+  }`);
+  await b.tick(1500); await b.settle(3);
+  const BENCH_NAME = await b.evaluate(`${tile(MY_BENCH_0)}.getAttribute('aria-label').split(' — ')[0]`);
+  await openSheet(MY_ACTIVE);
+  const NUM = `${SHEET}.querySelector('[data-scales="sp"]')`;
+  const numInfo = await b.evaluate(`(() => { const n = ${NUM}; if (!n) return null; const s = getComputedStyle(n); return { text: n.textContent.trim(), color: s.color, bg: s.backgroundColor }; })()`);
+  console.log('  skill number:', JSON.stringify(numInfo));
+  check('Kelvin\'s skill prints 3 (his 1 + his Spirit 2) in purple on the sheet', numInfo?.text === '3' && numInfo.color === PURPLE, JSON.stringify(numInfo));
+  check('…the sheet shows no raw markup', !/\{sp:|\{bp:/.test(await sheetText()), (await sheetText()).slice(0, 200));
+  await shot('k-sheet-before');
+
+  if (!touch) {
+    await hoverOver(NUM);
+    const tip = await explained();
+    console.log('  tooltip:', JSON.stringify(tip));
+    check('hovering the purple number shows a tooltip: "1 + Kelvin\'s Spirit Power 2 = 3"', tip.n === 1 && tip.role === 'tooltip' && tip.mode === 'hover' && /1 \+ Kelvin's Spirit Power 2 = 3/.test(tip.text), tip.text);
+    check('…it says what the colour means', /Purple numbers grow with Spirit Power/.test(tip.text), tip.text);
+    check('…and sits on the screen', onScreen(tip.box), JSON.stringify(tip.box));
+    await shot('k-sheet-tooltip');
+    await hoverAway();
+    check('moving off it hides the tooltip', (await explained()).n === 0);
+    // Keyboard: a focus that came from the keyboard shows it, and blurring hides it.
+    await press('Shift', 'ShiftLeft', 16);
+    await b.evaluate(`${NUM}.closest('[data-explain]').focus()`);
+    await b.settle(3);
+    check('keyboard-focusing the number shows the tooltip', (await explained()).n === 1 && (await explained()).role === 'tooltip');
+    await b.evaluate(`document.activeElement.blur()`);
+    await b.settle(3);
+    check('…and leaving it hides it', (await explained()).n === 0);
+  } else {
+    await poke(NUM);
+    const pop = await explained();
+    console.log('  popup:', JSON.stringify(pop));
+    check('tapping the purple number opens a popup card: "1 + Kelvin\'s Spirit Power 2 = 3"', pop.n === 1 && pop.role === 'dialog' && pop.mode === 'touch' && /1 \+ Kelvin's Spirit Power 2 = 3/.test(pop.text), pop.text);
+    check('…it stays on screen at 390 px', onScreen(pop.box), JSON.stringify(pop.box));
+    check('…and the sheet is still up', await sheetOpen());
+    await shot('k-sheet-popup');
+    // Tapping anywhere else closes it — here, the card's name band.
+    await poke(nameOnSheet('Kelvin'));
+    check('a tap anywhere else closes it (the sheet stays)', (await explained()).n === 0 && await sheetOpen());
+    // Escape closes it first, and only it.
+    await poke(NUM);
+    check('(open again)', (await explained()).n === 1);
+    await press('Escape', 'Escape', 27);
+    check('Escape closes the popup and leaves the sheet up', (await explained()).n === 0 && await sheetOpen());
+    await press('Escape', 'Escape', 27);
+    await sheetGone();
+    check('a second Escape closes the sheet', !(await sheetOpen()));
+    await openSheet(MY_ACTIVE);
+  }
+  await closeSheet();
+
+  // The same number on the red plate (the skill can be used): the colour moves to the number's ground,
+  // and a tap on it is the popup's, not the plate's — the skill is not used.
+  await stage(`(G) => { const a = G.players['0'].active; a.skillUsedThisTurn = false; a.attackedThisTurn = false; }`);
+  await openSheet(MY_ACTIVE);
+  const plateNum = await b.evaluate(`(() => { const n = ${NUM}; if (!n) return null; const s = getComputedStyle(n); return { text: n.textContent.trim(), color: s.color, bg: s.backgroundColor }; })()`);
+  console.log('  number on the plate:', JSON.stringify(plateNum));
+  check('on the red skill plate the number is cream on a purple ground', plateNum?.text === '3' && plateNum.bg === PURPLE && plateNum.color === PAPER, JSON.stringify(plateNum));
+  await shot('k-sheet-plate');
+  if (touch) {
+    const before = await G();
+    await poke(NUM);
+    const onPlate = await explained();
+    const after = await G();
+    check('tapping the number on the plate opens its popup and does not use the skill', onPlate.n === 1 && !after.players['0'].active.skillUsedThisTurn && after.players['0'].souls === before.players['0'].souls && await sheetOpen(), `${onPlate.text} used ${after.players['0'].active.skillUsedThisTurn}`);
+    await poke(nameOnSheet('Kelvin'));
+    check('(a tap elsewhere closes it)', (await explained()).n === 0);
+  }
+  await closeSheet();
+
+  // One at a time, and a status word in card text explains the status: Seven's skill has Stun in it.
+  await stage(`(G) => { const a = G.players['0'].active; a.cardId = 'hero_seven'; a.hp = a.hpMax = 4; a.spiritMod = 1; a.skillUsedThisTurn = true; }`);
+  await openSheet(MY_ACTIVE);
+  const STUN = `[...${SHEET}.querySelectorAll('[data-explain]')].find((e) => e.textContent.trim() === 'Stun')`;
+  const SEVEN_NUM = `${SHEET}.querySelector('[data-scales="sp"]').closest('[data-explain]')`;
+  if (!touch) {
+    await hoverOver(STUN);
+    const st = await explained();
+    check('hovering "Stun" in Seven\'s text says what Stun does', st.n === 1 && /stun/i.test(st.text) && /Cannot act, attack, or use skills\./.test(st.text), st.text);
+    await shot('k-keyword-tooltip');
+    await hoverAway();
+  } else {
+    await poke(SEVEN_NUM);
+    const first = await explained();
+    check('Seven: the number is open ("1 + Seven\'s Spirit Power 1 = 2")', first.n === 1 && /1 \+ Seven's Spirit Power 1 = 2/.test(first.text), first.text);
+    await poke(STUN);
+    const st = await explained();
+    check('tapping "Stun" opens its popup and closes the number\'s: one at a time', st.n === 1 && /Cannot act, attack, or use skills\./.test(st.text) && !/Spirit Power/.test(st.text), st.text);
+    check('…it stays on screen at 390 px', onScreen(st.box), JSON.stringify(st.box));
+    await shot('k-keyword-popup');
+    await poke(nameOnSheet('Seven'));
+    check('(a tap elsewhere closes it)', (await explained()).n === 0);
+  }
+  await closeSheet();
+
+  // A spell in hand prints its own number; its explanation says whose Spirit is behind it and what it is now.
+  // (Seven, in front, has Spirit 1.) On a phone a tap on a card in the fan is the card's: it arms, no popup.
+  const HAND_NUM = `(${HAND}).find((c) => c.getAttribute('aria-label').startsWith('Cold Front')).querySelector('[data-scales="sp"]')`;
+  const handNum = await b.evaluate(`(() => { const n = ${HAND_NUM}; if (!n) return null; const s = getComputedStyle(n); return { text: n.textContent.trim(), color: s.color }; })()`);
+  check('Cold Front in hand prints its own 4, in purple (not the live 5)', handNum?.text === '4' && handNum.color === PURPLE, JSON.stringify(handNum));
+  if (!touch) {
+    await hoverOver(HAND_NUM);
+    const handTip = await explained();
+    check('hovering it says "4 + your Active\'s Spirit Power (1 now)"', handTip.n === 1 && /4 \+ your Active's Spirit Power \(1 now\)/.test(handTip.text), handTip.text);
+    await shot('k-hand-tooltip');
+    await hoverAway();
+  } else {
+    await poke(HAND_NUM);
+    await b.tick(500); await b.settle(3);
+    check('a tap on its number arms the card (the tap is the card\'s) and opens no popup', /Enemy Active/.test(await text()) && (await explained()).n === 0, (await explained()).text);
+    await press('Escape', 'Escape', 27);
+    await b.tick(500); await b.settle(3);
+    check('(Escape disarms it)', !/Enemy Active/.test(await text()));
+  }
+
+  // A status chip on a tile.
+  const CHIP = `${tile(MY_BENCH_0)}.querySelector('[data-status="bleed"]')`;
+  if (!touch) {
+    await hoverOver(CHIP);
+    const chip = await explained();
+    console.log('  chip tooltip:', JSON.stringify(chip));
+    check('hovering the Bleed chip on a tile shows its title, its text with the value filled in, and the turns left', chip.n === 1 && /bleed/i.test(chip.text) && /Take 2 Pure dmg at start of turn/.test(chip.text) && /2 turns left/.test(chip.text), chip.text);
+    await shot('k-chip-tooltip');
+    await poke(CHIP);
+    await b.tick(900); await b.settle(3);
+    check('a click on the chip still opens the hero sheet', await sheetOpen() && new RegExp(BENCH_NAME, 'i').test(await sheetText()), (await sheetText()).slice(0, 80));
+    await closeSheet();
+    await hoverAway();
+  } else {
+    await poke(CHIP);
+    const chip = await explained();
+    console.log('  chip popup:', JSON.stringify(chip));
+    check('tapping the Bleed chip on a tile opens its popup, not the hero sheet', chip.n === 1 && chip.mode === 'touch' && /bleed/i.test(chip.text) && /Take 2 Pure dmg at start of turn/.test(chip.text) && /2 turns left/.test(chip.text) && !(await sheetOpen()), chip.text);
+    check('…it stays on screen at 390 px', onScreen(chip.box), JSON.stringify(chip.box));
+    await shot('k-chip-popup');
+    await touchTap(Math.round(W / 2), 2); // the very top of the page: nothing there to take the tap
+    check('a tap elsewhere closes it', (await explained()).n === 0);
+    // The tile off its chips still opens its sheet.
+    await b.clickEl(tile(MY_BENCH_0), { scroll: false });
+    await b.settle(4); await b.tick(900); await b.settle(3);
+    check('a tap on the tile (off its chips) still opens the sheet', await sheetOpen());
+    await closeSheet();
+  }
+
+  // With a card armed, every tap on the tile picks the target — the chip's included.
+  await b.tick(1500); await b.settle(2);
+  await b.clickEl(handCard('Healing Rite'), { scroll: false });
+  await b.settle(4); await b.tick(500); await b.settle(3);
+  check('Healing Rite is armed (the banner is up)', /Ally Hero/.test(await text()));
+  await poke(CHIP);
+  await b.tick(2400); await b.settle(3);
+  const armedAfter = await G();
+  const armedCard = await explained();
+  check('a tap on the chip with a card armed targets the tile: the card was played on it', !armedAfter.players['0'].hand.some((c) => c.iid === 'qa-rite') && armedAfter.players['0'].discard.some((c) => c.iid === 'qa-rite'), `hand ${armedAfter.players['0'].hand.map((c) => c.iid)}`);
+  check('…no popup opened and no sheet', armedCard.role !== 'dialog' && !(await sheetOpen()), JSON.stringify(armedCard));
+  await shot('k-armed-tap-targets');
+  if (touch) { await b.send('Emulation.setTouchEmulationEnabled', { enabled: false }); await b.settle(3); }
 } finally {
   const errors = b.errors.filter((e) => !ALLOWED_WARNINGS.some((re) => re.test(e)));
   console.log('\npage errors (React warnings included):', errors.length ? errors.slice(0, 10).map((e) => e.slice(0, 300)) : 'none');

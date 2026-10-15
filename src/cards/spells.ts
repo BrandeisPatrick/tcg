@@ -19,6 +19,8 @@ import type { SpellCard } from '@/engine/types';
  *   - Status keywords (Weaken, Stun, Disarm, Bleed, Bullet Resist, …)
  *   - Damage-type labels ("spirit damage")
  *   - Durations always read "for N turns"
+ *   - A number the effect adds your Active's Spirit Power to is marked
+ *     `{sp:4}` and printed purple (card/scaling.ts); every other number is flat.
  */
 export const SPELLS: SpellCard[] = [
   // ----- T1 (cost 1-2) — early reactive plays -----
@@ -26,7 +28,7 @@ export const SPELLS: SpellCard[] = [
   { id: 'rusted_barrel', name: 'Rusted Barrel', type: 'spell', rarity: 1, cost: 2, abilities: ['eff_rusted_barrel'], text: 'Apply Bullet Power −2 on enemy Active for 2 turns.' },
 
   // ----- T2 (cost 3-4) — control + tempo -----
-  { id: 'cold_front',     name: 'Cold Front',     type: 'spell', rarity: 2, cost: 4, abilities: ['eff_cold_front'],     text: 'Deal 4 spirit damage to enemy Active.' },
+  { id: 'cold_front',     name: 'Cold Front',     type: 'spell', rarity: 2, cost: 4, abilities: ['eff_cold_front'],     text: 'Deal {sp:4} spirit damage to enemy Active.' },
   { id: 'slowing_hex',    name: 'Slowing Hex',    type: 'spell', rarity: 2, cost: 3, abilities: ['eff_slowing_hex'],    text: 'Silence any enemy for 1 turn.' },
   { id: 'healbane',       name: 'Healbane',       type: 'spell', rarity: 2, cost: 3, abilities: ['eff_healbane'],       text: 'Block healing on any enemy for 2 turns.' },
   { id: 'spirit_sap',     name: 'Spirit Sap',     type: 'spell', rarity: 2, cost: 3, abilities: ['eff_spirit_sap'],     text: 'Apply Spirit Resist −2 to any enemy for 2 turns.' },
@@ -39,7 +41,7 @@ export const SPELLS: SpellCard[] = [
 
   // ----- Control pack (canon active items → spells) -----
   { id: 'debuff_remover', name: 'Debuff Remover', type: 'spell', rarity: 1, cost: 2, abilities: ['eff_debuff_remover'],   text: "Cleanse an ally's debuffs. Grant Shield 2." },
-  { id: 'silence_glyph',  name: 'Silence Glyph',  type: 'spell', rarity: 3, cost: 5, abilities: ['eff_silence_glyph'],    text: 'Deal 2 spirit damage to enemy Active and Silence it for 2 turns.' },
+  { id: 'silence_glyph',  name: 'Silence Glyph',  type: 'spell', rarity: 3, cost: 5, abilities: ['eff_silence_glyph'],    text: 'Deal {sp:2} spirit damage to enemy Active and Silence it for 2 turns.' },
   { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 2, cost: 4, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
   { id: 'active_reload',  name: 'Active Reload',  type: 'spell', rarity: 2, cost: 3, abilities: ['eff_active_reload'],     text: 'Your Active hero gains Extra Attack 1 this turn.' },
   { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, cost: 5, abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable for 1 turn.' },

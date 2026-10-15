@@ -104,7 +104,7 @@ export const STATUSES: StatusDef[] = [
   // `attackBonus(self, target)` hook. It lasts while the target stays in the lane
   // (it ends when the target leaves the Active slot), so it is applied with duration
   // 99, and every new stack starts the timer over.
-  { id: 'fixation',      title: 'Fixation',      desc: 'Takes +<value> from the attacker fixed on it.',           hvalue: -1, stack: { add: true, cap: FIXATION_CAP, duration: 'reset' }, clearOnLeaveActive: true },
+  { id: 'fixation',      title: 'Fixation',      desc: `When Haze attacks this hero, it takes +<value> damage. Up to ${FIXATION_CAP}; it falls off when the hero leaves the Active slot.`, hvalue: -1, stack: { add: true, cap: FIXATION_CAP, duration: 'reset' }, clearOnLeaveActive: true },
 
   // ----- Other debuff -----
   { id: 'weapon_power_down',   title: 'Bullet Power',  desc: 'Bullet Power −<value> on basic attacks.',                 hvalue: -1 },

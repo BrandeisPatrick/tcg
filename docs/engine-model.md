@@ -92,6 +92,13 @@ file.
   one that pays out souls `awardSouls`, one that returns a card to its owner's
   hand `returnToHand`; an ultimate that swings at the whole board calls
   `attackAll`. None of them is written twice.
+- **Card text** is read by players and by tests: mark each number the effect
+  adds Spirit Power to `{sp:N}` (Bullet Power `{bp:N}`) so it prints in its
+  colour and explains itself on hover or tap (`ui/card/scaling.ts`,
+  `ui/explain/`; the rule is in [stats-model.md](./stats-model.md) §3), and
+  word a status keyword by its registry name so a tap on it says what the
+  status does. A hero's sheet prints the ability's own `text` with the hero's
+  live figures behind it.
 - **Never** add a `cardId === '…'` to `src/engine`, a status list to the UI or
   the AI (the AI's `STATUS_WEIGHT` prices statuses; what a status does is only
   ever read from `StatusDef`), or a cost / target / cap check outside
@@ -119,4 +126,5 @@ file.
 - **In the browser**: `scripts/qa/tutorial.mjs` and `match.mjs` at both sizes
   (they fail on any console error or React warning), `legality.mjs` for the
   board's refusals on staged boards (a Dome, a Rooted hero, an attack that
-  names its target), `fx-gallery.mjs` / `fx-match.mjs` to film the effects.
+  names its target) and for a number's colour and what hovering or tapping it
+  (or a status) says, `fx-gallery.mjs` / `fx-match.mjs` to film the effects.

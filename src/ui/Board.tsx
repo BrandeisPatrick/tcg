@@ -7,6 +7,8 @@ import { findCardOnBoard, heroData, isRespawning, resolveSkill, stepInCandidates
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
 import { CardPreview } from './overlays/CardPreview';
+import { LiveScaleContext, boardLiveSpirit } from './card/liveScale';
+import { plainText } from './card/scaling';
 import { HeroDetailSheet, type SkillOffer } from './overlays/HeroDetailSheet';
 import { OpponentHand } from './board/OpponentHand';
 import { PosterBackdrop } from './PosterBackdrop';
@@ -496,6 +498,11 @@ export function Board(props: BoardProps<GameState>) {
     [G, me, pending],
   );
 
+  /** What the Spirit behind a card in hand comes to now (a spell's is your
+   *  Active's, an ultimate's its linked hero's): the card prints its own
+   *  number and its popover says "(N now)". */
+  const liveSpirit = useMemo(() => boardLiveSpirit(G, me), [G, me]);
+
   /** True while the player's next move must wait: a card-play / skill / ult
    *  reveal is mid-animation, the attack is being walked, or their Active has
    *  fallen and the choice of who steps up is still owed (its prompt may be
@@ -552,7 +559,7 @@ export function Board(props: BoardProps<GameState>) {
     setPending({
       kind: 'playCard', iid: c.iid,
       title: data.name,
-      desc: data.text ?? (equipment ? 'Attach to an ally hero.' : ''),
+      desc: plainText(data.text) || (equipment ? 'Attach to an ally hero.' : ''),
       // The banner's label and where it docks; which heroes glow is the engine's.
       filter: equipment ? 'allyHero' : getAbility(data.abilities[0])?.target ?? 'anyBoard',
     });
@@ -720,6 +727,7 @@ export function Board(props: BoardProps<GameState>) {
       <FxTimingContext.Provider value={fxHoldFor}>
       <FxImpulseContext.Provider value={fxBus}>
       <FxCalmContext.Provider value={calmMotion}>
+      <LiveScaleContext.Provider value={liveSpirit}>
       {/* The deal-in: the heroes are dealt onto the board as it first shows. */}
       <BoardIntro me={me}>
       <FxStageProvider density={isMobile ? 0.6 : 1}>
@@ -1202,6 +1210,7 @@ export function Board(props: BoardProps<GameState>) {
       )}
       </FxStageProvider>
       </BoardIntro>
+      </LiveScaleContext.Provider>
       </FxCalmContext.Provider>
       </FxImpulseContext.Provider>
       </FxTimingContext.Provider>

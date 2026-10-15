@@ -231,6 +231,8 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 selected={selected}
                 glow={selected ? (data?.type === 'ultimate' ? 'gold' : 'accent') : null}
                 unaffordable={unaffordable}
+                // A tap on a card in the fan plays or arms it, wherever it lands.
+                tapExplains={false}
               />
             </motion.div>
           );

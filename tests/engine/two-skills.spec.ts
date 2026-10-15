@@ -365,24 +365,27 @@ describe('the AI with a two-skill hero', () => {
 
 describe('what a hero card prints', () => {
   // Every skill and passive, as the hero card printed it before the hero's
-  // text moved onto the abilities: moving it changed no word.
+  // text moved onto the abilities: moving it changed no word. Since then the
+  // numbers that grow with Spirit Power carry their `{sp:N}` mark (the card
+  // prints N in purple, card/scaling.ts) in place of "(3 + Spirit)" and the
+  // like — and Paige's says Bullet Resist, which is what the skill grants.
   const PRINTED: Record<string, [kind: 'skill' | 'passive', name: string, text: string]> = {
     hero_abrams: ['passive', "Infernal Resilience", "Heals 1 at start of own turn while Active."],
     hero_haze: ['passive', "Fixation", "After Haze attacks, she gains Extra Attack 1 this turn."],
     hero_mo_krill: ['passive', "Burrow", "Cleanses all debuffs from self at start of own turn."],
-    hero_rem: ['skill', "Lil Helpers", "Merge into an ally as a buff: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns, then return to the bench."],
+    hero_rem: ['skill', "Lil Helpers", "Merge into an ally as a buff: heal {sp:3} and grant +{sp:1} max HP for 3 turns, then return to the bench."],
     hero_shiv: ['passive', "Serrated Knives", "Attacks apply Bleed 2 for 2 turns."],
     hero_vindicta: ['passive', "Flight", "Takes 1 less bullet damage from all sources."],
-    hero_wraith: ['passive', "Mixed Bullets", "Attacks deal Bullet Power (bullet) + Spirit Power (spirit)."],
-    hero_dynamo: ['skill', "Rejuvenating Aurora", "Heal an ally 2 and grant +Bullet Power (1 + ½ Spirit) for 2 turns."],
-    hero_kelvin: ['skill', "Frost Grenade", "1 spirit dmg to enemy Active + heal your Active 2."],
-    hero_lady_geist: ['skill', "Life Drain", "Deal 3 spirit to any enemy and heal for half the damage dealt."],
-    hero_lash: ['skill', "Ground Strike", "1 spirit dmg + Vulnerable (take +1 dmg) for 1 turn."],
-    hero_paige: ['skill', "Plot Armor", "Shield 2 on an ally and grant +Bullet Power (1 + ½ Spirit) for 2 turns."],
-    hero_seven: ['skill', "Static Charge", "1 spirit dmg + Charged 2 — Stun 1 turn on expiry."],
-    hero_sinclair: ['skill', "Vexing Bolt", "2 spirit dmg to any enemy."],
+    hero_wraith: ['passive', "Mixed Bullets", "Attacks deal Bullet Power (bullet) + {sp:0} (spirit)."],
+    hero_dynamo: ['skill', "Rejuvenating Aurora", "Heal an ally 2 and grant +{sp:1/2} Bullet Power for 2 turns."],
+    hero_kelvin: ['skill', "Frost Grenade", "{sp:1} spirit dmg to enemy Active + heal your Active 2."],
+    hero_lady_geist: ['skill', "Life Drain", "Deal {sp:3} spirit to any enemy and heal for half the damage dealt."],
+    hero_lash: ['skill', "Ground Strike", "{sp:1} spirit dmg + Vulnerable (take +1 dmg) for 1 turn."],
+    hero_paige: ['skill', "Plot Armor", "Shield 2 on an ally and grant +{sp:1/2} Bullet Resist for 2 turns."],
+    hero_seven: ['skill', "Static Charge", "{sp:1} spirit dmg + Charged 2 — Stun 1 turn on expiry."],
+    hero_sinclair: ['skill', "Vexing Bolt", "{sp:2} spirit dmg to any enemy."],
     hero_viscous: ['skill', "The Cube", "Gain Unstoppable 1 + heal 1."],
-    hero_yamato: ['skill', "Power Slash", "1 spirit dmg to any enemy."],
+    hero_yamato: ['skill', "Power Slash", "{sp:1} spirit dmg to any enemy."],
     hero_warden: ['skill', "Willpower", "Shield 3 on self."],
     hero_mirage: ['passive', "Djinn's Mark", "Attacks apply 1 stack of Djinn's Mark (max 4) for 3 turns. Mark detonates at max stacks or on expiry for 3 spirit dmg per stack."],
     hero_drifter: ['passive', "Bloodscent", "Heals for half the damage his attacks deal (bullet lifesteal)."],

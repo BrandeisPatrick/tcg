@@ -80,6 +80,9 @@ interface Props {
   duration?: number;
   /** 'compact' = bench portrait, 'normal' = active portrait, 'large' = preview sheet. */
   size?: 'compact' | 'normal' | 'large';
+  /** Carry the browser's own tooltip ("Shield 3 (2 turns)"). Off where the
+   *  chip is wrapped in an Explain, which says the same and more. */
+  titled?: boolean;
 }
 
 /**
@@ -87,7 +90,7 @@ interface Props {
  * edge. Mixed case at 12px so 'Bullet Res' / 'Spirit Res' stay
  * inside compact bench tiles (HeroSlot caps its rows at 36 / 54px).
  */
-export function StatusIcon({ id, value, duration, size = 'normal' }: Props) {
+export function StatusIcon({ id, value, duration, size = 'normal', titled = true }: Props) {
   const color = colorFor(id);
   const label = statusLabel(id);
   const showValue = typeof value === 'number' && (VALUE_STATUSES.has(id) || value > 1);
@@ -100,7 +103,8 @@ export function StatusIcon({ id, value, duration, size = 'normal' }: Props) {
 
   return (
     <span
-      title={`${label}${showValue ? ` ${value}` : ''}${showDuration ? ` (${duration} turns)` : ''}`}
+      data-status={id}
+      title={titled ? `${label}${showValue ? ` ${value}` : ''}${showDuration ? ` (${duration} turns)` : ''}` : undefined}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
         padding: `${padV}px ${padH}px`,
