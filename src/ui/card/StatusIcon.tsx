@@ -51,7 +51,7 @@ const STATUS_LABELS: Record<string, string> = {
 const VALUE_STATUSES: Set<string> = new Set([
   'shield', 'bullet_resist', 'spirit_resist', 'weapon_power', 'spirit_power', 'bleed', 'healing_boost',
   'weapon_power_down', 'spirit_power_down', 'bullet_resist_down', 'spirit_resist_down',
-  'extra_attack', 'casting', 'casting_light', 'fixation', 'last_stand',
+  'extra_attack', 'casting', 'casting_light', 'fixation', 'last_stand', 'return_fire',
 ]);
 
 /** The words for a status: its short chip label, else the registry's display

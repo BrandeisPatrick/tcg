@@ -113,6 +113,8 @@ export type TargetFilter =
   | 'enemyAny'
   | 'enemyHero'
   | 'enemyActive'
+  | 'allyBench'         // a bench ally who could step into the Active slot
+  | 'enemyBench'        // an enemy bench hero who could be dragged to the front
   | 'anyBoard';
 
 /**
@@ -135,6 +137,18 @@ export function targetsFor(G: GameState, pid: PlayerID, filter: TargetFilter, so
     case 'enemyAny': return enemy;
     case 'enemyHero': return heroes(enemy);
     case 'enemyActive': return enemy.filter((c) => c.zone === 'active');
+    // A bench hero who can take the front: alive, not bench-only, not Rooted —
+    // and, on your own side, only while your Active is free to leave it.
+    case 'allyBench': {
+      const ps = G.players[pid];
+      if (!ps.active || isRespawning(ps.active) || isBlocked(ps.active, 'move')) return [];
+      return stepInCandidates(ps).filter((b) => !isBlocked(b, 'move'));
+    }
+    case 'enemyBench': {
+      const ps = G.players[otherPlayer(pid)];
+      if (!ps.active) return [];
+      return stepInCandidates(ps).filter((b) => !isBlocked(b, 'move'));
+    }
     case 'anyBoard': return [...enemy, ...ally];
   }
 }
@@ -232,11 +246,15 @@ export function incomingDamage(card: CardInstance, amount: number, type: DamageT
 }
 
 /** How long a status lands for on `card`, after the `buffDuration` hooks of
- *  what it carries (Superior Duration stretches the bearer's buffs). */
+ *  what it carries (Superior Duration stretches the bearer's buffs) and, for a
+ *  debuff (a status whose `hvalue` is below 0), its `debuffDuration` hooks
+ *  (Debuff Reducer shortens them). */
 export function statusDuration(card: CardInstance, statusId: StatusId, duration: number): number {
+  const debuff = (STATUSES_BY_ID[statusId]?.hvalue ?? 0) < 0;
   let n = duration;
   for (const { ability } of abilitySources(card)) {
     if (ability.buffDuration) n = ability.buffDuration(card, statusId, n);
+    if (debuff && ability.debuffDuration) n = ability.debuffDuration(card, statusId, n);
   }
   return n;
 }
@@ -320,11 +338,14 @@ export function effectiveAtk(card: CardInstance): number {
   return attackPower(card).total;
 }
 
-/** Total spirit-power for skill scaling: equipment bonus + any Spirit Power status. */
+/** Total spirit-power for skill scaling: equipment bonus + any Spirit Power
+ *  status, less any Spirit Power − (Inhibitor, Spirit Snatch), never below 0. */
 export function effectiveSpirit(card: CardInstance): number {
   if (!card) return 0;
-  const fromBuff = (card.statuses ?? [])
+  const statuses = card.statuses ?? [];
+  const fromBuff = statuses
     .filter((s) => s.id === 'spirit_power')
     .reduce((a, s) => a + s.value, 0);
-  return (card.spiritMod ?? 0) + fromBuff;
+  const down = statuses.find((s) => s.id === 'spirit_power_down')?.value ?? 0;
+  return Math.max(0, (card.spiritMod ?? 0) + fromBuff - down);
 }

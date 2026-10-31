@@ -9,7 +9,7 @@
 import type { Ctx } from 'boardgame.io';
 import type { GameState, PlayerID } from '@/engine/types';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { attackBlocked, attackTargets } from '@/engine/legality';
+import { attackTargets, blocked } from '@/engine/legality';
 import { forecastAttack, simulate, type AttackPlan } from '@/engine/forecast';
 import { isRespawning, otherPlayer } from '@/engine/query';
 import { DeadlockGame } from '@/engine/game';
@@ -29,7 +29,10 @@ interface Evaluation {
 /** The forecast of the attack `pid` could make now, against the attack made on a clone. */
 function evaluate(G: GameState, ctx: Ctx, pid: PlayerID):
   Evaluation | { kind: 'blocked' } | { kind: 'rejected'; how: string } | { kind: 'missing' } {
-  if (attackBlocked(G, pid) !== null) return { kind: 'blocked' };
+  // The move's own gate: the attack rule, and nothing else owed first (a rival's
+  // fallen Active waiting to be replaced stops every move, and with reach a
+  // bench hero is still there to aim at).
+  if (blocked(G, pid, { type: 'attack' }) !== null) return { kind: 'blocked' };
   const foe = otherPlayer(pid);
   const tgt = attackTargets(G, pid)[0]; // who a bare attack swings at: the rival Active, unless it cannot be attacked
   const plan = forecastAttack(G, pid);

@@ -55,12 +55,13 @@ describe('Surge of Power', () => {
 });
 
 describe("Diviner's Kevlar", () => {
-  it('grants Shield 4 when the bearer casts their ultimate', () => {
+  it('grants Shield 6 and Spirit Power +2 (2 turns) when the bearer casts their ultimate', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     attach(G, hero, 'diviners_kevlar');
     fireTriggers(G, hero, 'onBearerUltCast', { reaction: true, movingPlayer: '0' });
-    expect(hero.statuses.find((s) => s.id === 'shield')?.value).toBe(4);
+    expect(hero.statuses.find((s) => s.id === 'shield')?.value).toBe(6);
+    expect(hero.statuses.find((s) => s.id === 'spirit_power')).toMatchObject({ value: 2, duration: 2 });
   });
 
   it('does NOT trigger on a plain skill use', () => {

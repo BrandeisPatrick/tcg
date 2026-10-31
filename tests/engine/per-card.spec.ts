@@ -101,21 +101,33 @@ describe('Spells — cost 5', () => {
 // ============================================================================
 
 describe('Equipment passives', () => {
-  it('Bullet Resilience grants permanent Bullet Resist 3', () => {
+  it('Bullet Resilience grants permanent Bullet Resist 2', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     ABILITIES_BY_ID['eff_bullet_resist'].run(G, { movingPlayer: '0' }, { source: t });
     const br = t.statuses.find((s) => s.id === 'bullet_resist');
-    expect(br?.value).toBe(3);
+    expect(br?.value).toBe(2);
     expect(br?.duration).toBeGreaterThanOrEqual(99);
   });
 
-  it('Spirit Resilience grants permanent Spirit Resist 3', () => {
+  it('Spirit Resilience grants permanent Spirit Resist 2', () => {
     const G = freshG();
     const t = G.players['0'].active!;
     ABILITIES_BY_ID['eff_spirit_resist'].run(G, { movingPlayer: '0' }, { source: t });
     const sr = t.statuses.find((s) => s.id === 'spirit_resist');
-    expect(sr?.value).toBe(3);
+    expect(sr?.value).toBe(2);
+  });
+
+  it('Resilience takes 2 more off a hit of its type only while below half HP', () => {
+    const t = { hp: 10, hpMax: 10 } as Parameters<NonNullable<typeof ABILITIES_BY_ID['eff_bullet_resist']['incoming']>>[0];
+    const bullet = ABILITIES_BY_ID['eff_bullet_resist'].incoming!;
+    const spirit = ABILITIES_BY_ID['eff_spirit_resist'].incoming!;
+    expect(bullet(t, 5, 'attack')).toBe(5);
+    t.hp = 4;
+    expect(bullet(t, 5, 'attack')).toBe(3);
+    expect(bullet(t, 5, 'spirit')).toBe(5);
+    expect(spirit(t, 5, 'spirit')).toBe(3);
+    expect(spirit(t, 1, 'spirit')).toBe(0);
   });
 });
 

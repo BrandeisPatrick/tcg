@@ -74,6 +74,11 @@ const STATUS_WEIGHT: Record<string, Weight> = {
   healing_boost_down: { scale: 2, turns: 2 },                // no healing at all for up to 2 turns, worth about 2 a turn
   // Immunity.
   unstoppable:   { scale: 3,   turns: 2 },                // a turn of immunity to damage and crowd control is worth a lot: about 6 a turn
+  dome:          { scale: 2,   turns: 1 },                // a turn no attack can reach the bearer: about a swing's damage
+  return_fire:   { scale: 1,   turns: 2, byValue: true }, // `value` bullet damage back at each swing that lands
+  // Rooted is flagged `cc` (Unstoppable clears it) but only stops a move, so it is
+  // priced here on its own rather than as a denied turn.
+  rooted:        { scale: 1,   turns: 1 },
   // Not here, on purpose: Shield (counted with the unit), Extra Attack and the Siphon
   // markers (bookkeeping), and the two channels, which `channelValue` prices.
 };

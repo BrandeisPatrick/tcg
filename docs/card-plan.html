@@ -1,0 +1,392 @@
+<title>Deadlock TCG Card Plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one narrow screen-print column — findings, then card tiles, then decks. */
+:root {
+  --paper: #f2e6cb;
+  --paper-deep: #e7d8b6;
+  --ink: #171410;
+  --ink-soft: #5b5246;
+  --rule: #cdbb94;
+  --red: #c4362a;
+  --gold: #b8932a;
+  --gold-fill: #d9b64a;
+  --spirit: #7a4a8a;
+  --bullet: #8a4f14;
+  --good: #3f8f3a;
+  --tile: #fbf4e2;
+  --display: "Saira Stencil One", "Arial Black", Impact, sans-serif;
+  --body: "Saira", "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12100d; --paper-deep: #1c1915; --ink: #ece2c9; --ink-soft: #a89c86; --rule: #3a342a;
+    --red: #e0554a; --gold: #d9b64a; --gold-fill: #d9b64a; --spirit: #b98ccb; --bullet: #d0904c;
+    --good: #6cc265; --tile: #1a1713; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12100d; --paper-deep: #1c1915; --ink: #ece2c9; --ink-soft: #a89c86; --rule: #3a342a;
+  --red: #e0554a; --gold: #d9b64a; --gold-fill: #d9b64a; --spirit: #b98ccb; --bullet: #d0904c;
+  --good: #6cc265; --tile: #1a1713; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+h1, h2 { font-family: var(--display); font-weight: 400; letter-spacing: .02em; text-wrap: balance; margin: 0; line-height: 1.05; }
+h1 { font-size: clamp(34px, 9vw, 52px); }
+h2 { font-size: 24px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+h2 small { font-family: var(--body); font-size: 13px; color: var(--ink-soft); letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
+p { margin: 0; }
+section { display: flex; flex-direction: column; gap: 14px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--red); }
+.lede { color: var(--ink-soft); max-width: 60ch; }
+.stamp { display: inline-block; border: 2px solid var(--red); color: var(--red); font-family: var(--display); font-size: 14px; padding: 2px 10px; transform: rotate(-2deg); align-self: flex-start; }
+header { display: flex; flex-direction: column; gap: 10px; border-bottom: 3px solid var(--ink); padding-bottom: 18px; }
+
+ul.issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+ul.issues li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+ul.issues li::before { content: "✕"; color: var(--red); font-weight: 700; }
+
+/* Win-rate chart: one 0–100% scale, 50% line marked. */
+.chart { display: flex; flex-direction: column; gap: 8px; }
+.row { display: grid; grid-template-columns: minmax(0, 9.5em) 1fr 3.2em; gap: 10px; align-items: center; font-size: 13.5px; }
+.row .nm { min-width: 0; overflow-wrap: anywhere; line-height: 1.2; }
+.row .nm span { display: block; color: var(--ink-soft); font-size: 11.5px; }
+.track { position: relative; height: 14px; background: var(--paper-deep); }
+.track::after { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; border-left: 2px dashed var(--ink-soft); }
+.bar { height: 100%; background: var(--red); }
+.bar.ok { background: var(--good); }
+.pct { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+.axis { display: grid; grid-template-columns: minmax(0, 9.5em) 1fr 3.2em; gap: 10px; font-size: 11px; color: var(--ink-soft); }
+.axis div { display: flex; justify-content: space-between; }
+.note { font-size: 13px; color: var(--ink-soft); }
+
+/* Card tiles */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.card { background: var(--tile); border: 2px solid var(--ink); padding: 12px 14px; display: grid; grid-template-columns: 40px 1fr; gap: 4px 12px; min-width: 0; }
+.cost { grid-row: span 3; width: 40px; height: 40px; border-radius: 50%; background: var(--gold-fill); color: #171410; font-family: var(--display); font-size: 22px; display: grid; place-items: center; border: 2px solid var(--ink); }
+.card h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 19px; line-height: 1.1; }
+.kind { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.fx { font-size: 14.5px; }
+.why { grid-column: 2; font-size: 13px; color: var(--ink-soft); border-top: 1px dashed var(--rule); padding-top: 6px; margin-top: 4px; }
+.sp { color: var(--spirit); font-weight: 700; }
+.bp { color: var(--bullet); font-weight: 700; }
+.tune { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.tune > div { display: grid; grid-template-columns: minmax(0, 1fr) 3em 3em minmax(0, 1.4fr); gap: 8px; align-items: baseline; }
+.tune .was { color: var(--red); text-decoration: line-through; text-align: right; font-variant-numeric: tabular-nums; }
+.tune .now { color: var(--good); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.tune .how { color: var(--ink-soft); font-size: 12.5px; }
+@media (max-width: 420px) { .tune > div { grid-template-columns: minmax(0, 1fr) 3em 3em; } .tune .how { grid-column: 1 / -1; } }
+h3.sub { margin: 6px 0 0; font-family: var(--body); font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+b { font-weight: 700; }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 1px 6px; border: 1.5px solid currentColor; margin-left: 4px; vertical-align: 2px; }
+.tag.new { color: var(--good); }
+
+/* Redesigns */
+.redo { display: flex; flex-direction: column; gap: 10px; }
+.redo .card { grid-template-columns: 1fr; }
+.ba { display: grid; grid-template-columns: 1fr; gap: 6px; font-size: 14px; }
+.ba .was { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--red); }
+.ba .now::before { content: "→ "; color: var(--good); font-weight: 700; }
+.stat { font-size: 12px; font-weight: 700; color: var(--red); letter-spacing: .04em; }
+
+/* Decks */
+.decks { display: flex; flex-direction: column; gap: 14px; }
+details.deck { background: var(--tile); border: 2px solid var(--ink); }
+details.deck summary { cursor: pointer; padding: 12px 14px; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+details.deck summary::-webkit-details-marker { display: none; }
+details.deck summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.dhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.dhead h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 21px; }
+.dhead .open { font-size: 12px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
+details[open] .open .closed-label, details:not([open]) .open .open-label { display: none; }
+.squad { font-size: 13px; color: var(--ink-soft); }
+.squad b { color: var(--ink); }
+.plan { font-size: 14px; }
+.list { border-top: 1px dashed var(--rule); padding: 10px 14px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 13.5px; }
+.list div { display: flex; gap: 8px; min-width: 0; }
+.list .c { font-family: var(--display); color: var(--gold); width: 1.4em; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
+.list .x { color: var(--ink-soft); font-size: 12px; }
+@media (max-width: 420px) { .list { grid-template-columns: 1fr; } }
+
+.decide { border: 3px solid var(--red); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.decide ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+footer { font-size: 12px; color: var(--ink-soft); border-top: 1px solid var(--rule); padding-top: 12px; }
+
+/* Core rules */
+.rulebox { background: var(--ink); color: var(--paper); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.rule { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; font-size: 15.5px; }
+.rule p { min-width: 0; }
+.rn { font-family: var(--display); font-size: 30px; line-height: 1; color: var(--gold-fill); }
+.chip { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 1px 7px; border-radius: 2px; color: #fbf4e2; }
+.sp-chip { background: #7a4a8a; }
+.eq-chip { background: #8a4f14; }
+.move { font-family: var(--body); font-size: 12px; font-weight: 700; color: var(--good); letter-spacing: .04em; white-space: nowrap; }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">Built · branch design/card-rules · not committed</span>
+    <h1>Card Plan</h1>
+    <p class="lede">Two batches: 22 new spells and 10 new items, all real Deadlock items with their real art. Also fixes for cards that broke the design rules, balance changes, and 5 rebuilt starter decks. The game now has 36 spells and 53 items. Every number here comes from 400 games where the AI played itself.</p>
+    <span class="stamp">Built, not committed</span>
+  </header>
+
+  <section class="rules">
+    <h2>Core rules <small>now in docs/card-design.md</small></h2>
+    <div class="rulebox">
+      <div class="rule"><span class="rn">1</span><p>An <b>active</b> item in Deadlock is always a <span class="chip sp-chip">Spell</span>. A <b>passive</b> item is always <span class="chip eq-chip">Equipment</span>. No exceptions.</p></div>
+      <div class="rule"><span class="rn">2</span><p>Keep the main game's flavor. Every card uses its item's current name, does what the item does in Deadlock, and keeps the item's shop slot (Weapon, Spirit or Vitality) and tier.</p></div>
+    </div>
+    <p class="note">Tiers map from shop price: 800 / 1,600 / 3,200 / 6,400 souls → T1 / T2 / T3 / T4. Spells top out at 5–6 souls, so a T4 active item becomes a 5–6 soul spell.</p>
+  </section>
+
+  <section>
+    <h2>What's wrong now</h2>
+    <ul class="issues">
+      <li><span><b>3 cards are the wrong type.</b> Healbane and Active Reload are passive in Deadlock but are spells here. Colossus is active in Deadlock but is equipment here.</span></li>
+      <li><span><b>7 cards use old or removed item names:</b> Debuff Remover, Silence Glyph, Curse, Improved Cooldown, Improved Burst, Improved Bullet Armor and Improved Spirit Armor.</span></li>
+      <li><span>The 5 starter decks use only <b>23 of 60</b> spells and items.</span></li>
+      <li><span>No spell draws cards, hits every enemy, or moves heroes around. The game can already pull, swap, apply <b>Dome</b> and apply <b>Rooted</b>, but no card does.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Win rate when played <small>400 AI games</small></h2>
+    <div class="chart" role="img" aria-label="Win rate of selected cards when played">
+      <div class="row"><div class="nm">Diviner's Kevlar<span>played 11×</span></div><div class="track"><div class="bar" style="width:9%"></div></div><div class="pct">9%</div></div>
+      <div class="row"><div class="nm">Knockdown<span>played 17×</span></div><div class="track"><div class="bar" style="width:24%"></div></div><div class="pct">24%</div></div>
+      <div class="row"><div class="nm">Burst Fire<span>played 27×</span></div><div class="track"><div class="bar" style="width:30%"></div></div><div class="pct">30%</div></div>
+      <div class="row"><div class="nm">Bullet Resilience<span>played 107×</span></div><div class="track"><div class="bar" style="width:34%"></div></div><div class="pct">34%</div></div>
+      <div class="row"><div class="nm">Superior Cooldown<span>played 53×</span></div><div class="track"><div class="bar" style="width:34%"></div></div><div class="pct">34%</div></div>
+      <div class="row"><div class="nm">Healbane<span>played 43×</span></div><div class="track"><div class="bar" style="width:35%"></div></div><div class="pct">35%</div></div>
+      <div class="row"><div class="nm">Cold Front<span>played 165×</span></div><div class="track"><div class="bar ok" style="width:58%"></div></div><div class="pct">58%</div></div>
+      <div class="row"><div class="nm">Improved Spirit<span>played 71×</span></div><div class="track"><div class="bar ok" style="width:69%"></div></div><div class="pct">69%</div></div>
+      <div class="axis"><span></span><div><span>0%</span><span>50%</span><span>100%</span></div><span></span></div>
+    </div>
+    <p class="note">The dashed line is 50%. A card played mostly while behind will look worse than it is.</p>
+  </section>
+
+  <section>
+    <h2>New spells <small>7 · all active items</small></h2>
+    <div class="cards">
+      <div class="card"><div class="cost">3</div><h3>Guardian Ward</h3><div class="kind">Spell · Vitality T2</div><p class="fx">Grant an ally <b>Shield 3</b>.</p><p class="why">In Deadlock, it puts a barrier on an ally.</p></div>
+      <div class="card"><div class="cost">6</div><h3>Warp Stone</h3><div class="kind">Spell · Vitality T3</div><p class="fx">Swap your Active with a bench ally. The hero stepping in gains <b>Bullet Resist 3</b> for 2 turns.</p><p class="why">In Deadlock, it teleports you and gives bullet resist.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Divine Barrier</h3><div class="kind">Spell · Vitality T4</div><p class="fx">Grant an ally <b>Shield 5</b> and cleanse its Stun, Silence, Disarm and Sleep.</p><p class="why">In Deadlock, it's a big barrier that saves an ally.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Ethereal Shift</h3><div class="kind">Spell · Spirit T4</div><p class="fx">An ally gains <b>Dome</b> for 1 turn: it can't be attacked.</p><p class="why">In Deadlock, you go untouchable for a moment.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Phantom Strike</h3><div class="kind">Spell · Vitality T4</div><p class="fx">Pull an enemy bench hero into their Active slot. Deal <span class="sp">2</span> spirit damage and <b>Disarm</b> it for 1 turn.</p><p class="why">In Deadlock, you blink onto a target and disarm it.</p></div>
+      <div class="card"><div class="cost">6</div><h3>Vortex Web</h3><div class="kind">Spell · Spirit T4</div><p class="fx">Deal <span class="sp">2</span> spirit damage to every enemy and <b>Root</b> them for 2 turns.</p><p class="why">In Deadlock, a web pulls in and holds every enemy nearby.</p></div>
+      <div class="card"><div class="cost">6</div><h3>Refresher</h3><div class="kind">Spell · Spirit T4</div><p class="fx">Draw 2 cards.</p><p class="why">In Deadlock, it resets your cooldowns. Here, more cards means more actions.</p></div>
+    </div>
+    <p class="note"><span class="sp">Purple</span> numbers add your Active's Spirit Power, as on the real cards.</p>
+  </section>
+
+  <section>
+    <h2>New equipment <small>2 · passive items</small></h2>
+    <div class="cards">
+      <div class="card"><div class="cost">3</div><h3>Long Range</h3><div class="kind">Equipment · Weapon T2</div><p class="fx">The bearer's attacks can target any enemy hero.</p><p class="why">In Deadlock, it boosts damage from range. Here it lets a gun build hit the bench.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Fortitude</h3><div class="kind">Equipment · Vitality T3</div><p class="fx">+2 HP. At the start of your turn, heal 2.</p><p class="why">In Deadlock, it gives health and fast regeneration.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rule fixes <small>type and name</small></h2>
+    <div class="redo">
+      <div class="card"><h3>Healbane <span class="move">Spell → Equipment</span></h3><div class="ba"><span class="was">3 souls · Block healing on any enemy 2 turns</span><span class="now">Vitality T2, 3 souls · When the bearer's skill, spell or ultimate damages an enemy, that enemy can't be healed for 2 turns</span></div></div>
+      <div class="card"><h3>Active Reload <span class="move">Spell → Equipment</span></h3><div class="ba"><span class="was">3 souls · Your Active gains Extra Attack 1 this turn</span><span class="now">Weapon T2, 3 souls · +1 Bullet Power. After the bearer attacks: heal 1</span></div></div>
+      <div class="card"><h3>Colossus <span class="move">Equipment → Spell</span></h3><div class="ba"><span class="was">6 souls · +5 HP, Bullet Resist 2</span><span class="now">Vitality T4, 6 souls · Your Active gains Bullet Resist 4 and Spirit Resist 4 for 2 turns. <b>Root</b> the enemy Active 1 turn</span></div></div>
+      <div class="card"><h3>Silence Glyph → Silence Wave</h3><div class="ba"><span class="now">Rename only. Same effect</span></div></div>
+      <div class="card"><h3>Curse → Cursed Relic</h3><div class="ba"><span class="now">Rename only. Same effect</span></div></div>
+      <div class="card"><h3>Debuff Remover → Dispel Magic</h3><div class="ba"><span class="was">Debuff Remover is now a passive item, Debuff Reducer</span><span class="now">Spell, Vitality T3, 5 souls · Cleanse an ally's debuffs and remove the enemy Active's buffs</span></div></div>
+      <div class="card"><h3>Improved Burst → Tankbuster</h3><div class="ba"><span class="was">When the bearer uses a skill, deal 2 spirit damage</span><span class="now">Renamed and reworked to the real item: when the bearer's skill, spell or ult deals 2 or more damage to an enemy, it takes 2 more pure damage</span></div></div>
+      <div class="card"><h3>Improved Bullet Armor, Improved Spirit Armor</h3><div class="ba"><span class="was">Items Deadlock merged into the Resilience items</span><span class="now">Retired. A saved deck that had one gets Bullet or Spirit Resilience instead</span></div></div>
+      <div class="card"><h3>Improved Cooldown → Compress Cooldown</h3><div class="ba"><span class="now">Rename only. Same effect</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Balance and tier changes</h2>
+    <div class="redo">
+      <div class="card"><h3>Knockdown <span class="stat">24% win</span></h3><div class="ba"><span class="was">6 souls</span><span class="now">5 souls, still T3 · Stun enemy Active 1 turn</span></div></div>
+      <div class="card"><h3>Bullet Resilience <span class="stat">34% win</span> · Spirit Resilience</h3><div class="ba"><span class="was">6 souls and 4 souls</span><span class="now">Both 5 souls, both T3 as in Deadlock</span></div></div>
+      <div class="card"><h3>Diviner's Kevlar <span class="stat">9% win</span></h3><div class="ba"><span class="was">7 souls · Shield 4 after the bearer's ultimate</span><span class="now">7 souls, still T4 · Shield 6 and +2 Spirit Power for 2 turns after the bearer's ultimate</span></div></div>
+      <div class="card"><h3>Superior / Transcendent Cooldown <span class="stat">34% win</span></h3><div class="ba"><span class="was">3 and 4 charges</span><span class="now">4 and 6 charges, same costs</span></div></div>
+      <div class="card"><h3>Echo Shard · Mystic Burst · Crippling Headshot</h3><div class="ba"><span class="now">Moved to their Deadlock tiers. Echo Shard costs 4 → 5. Mystic Burst costs 3 → 2. Crippling Headshot costs 5 → 7, applies −2 resists instead of −1, and gains +1 Bullet Power</span></div></div>
+    </div>
+    <p class="note">Burst Fire also tests weak (30%), but its effect is strong on paper. The AI may be equipping it on bench heroes that never attack. I'll check that before changing the card.</p>
+  </section>
+
+  <section>
+    <h2>Second batch <small>22 more cards · all real items</small></h2>
+    <p class="lede">Every card below is a current Deadlock shop item, checked on its own wiki page. Actives became spells, passives became equipment, and costs follow each item's tier. The art is the real shop icon, pulled from the wiki.</p>
+    <h3 class="sub">Spells · 14</h3>
+    <div class="cards">
+      <div class="card"><div class="cost">1</div><h3>Golden Goose Egg</h3><div class="kind">Spell · Spirit T1</div><p class="fx">Gain 2 souls. Your Active gains +1 max HP.</p><p class="why">In Deadlock, the egg hatches into souls and a permanent stat.</p></div>
+      <div class="card"><div class="cost">1</div><h3>Grit</h3><div class="kind">Spell · Vitality T1</div><p class="fx">Your Active gains <b>Shield 2</b>.</p><p class="why">A quick barrier.</p></div>
+      <div class="card"><div class="cost">2</div><h3>Blood Tribute</h3><div class="kind">Spell · Weapon T3</div><p class="fx">Your Active pays 3 HP and gains <b>Extra Attack 1</b> and +1 Bullet Power this turn.</p><p class="why">In Deadlock, it drains your health for fire rate. The cost is paid in blood, not souls.</p></div>
+      <div class="card"><div class="cost">3</div><h3>Return Fire</h3><div class="kind">Spell · Vitality T2</div><p class="fx">Your Active gains <b>Return Fire</b> 2 for 2 turns: an enemy attack that hits it costs the attacker 2 bullet damage.</p><p class="why">In Deadlock, it shoots back at whoever hits you. A new status.</p></div>
+      <div class="card"><div class="cost">3</div><h3>Fleetfoot</h3><div class="kind">Spell · Weapon T2</div><p class="fx">Your Active gains <b>Extra Attack 1</b> this turn and is no longer <b>Rooted</b>.</p><p class="why">In Deadlock, you shoot while sprinting and shrug off slows.</p></div>
+      <div class="card"><div class="cost">3</div><h3>Split Shot</h3><div class="kind">Spell · Weapon T2</div><p class="fx">Deal <span class="bp">half</span> your Active's Bullet Power as bullet damage to every enemy bench hero.</p><p class="why">In Deadlock, one shot fans out over several targets.</p></div>
+      <div class="card"><div class="cost">4</div><h3>Fury Trance</h3><div class="kind">Spell · Vitality T3</div><p class="fx">Your Active gains <b>Extra Attack 1</b> this turn and <b>Spirit Resist 3</b> for 2 turns, but is <b>Silenced</b> for 2 turns.</p><p class="why">In Deadlock, it buffs your gun but silences you. The downside is kept.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Healing Nova</h3><div class="kind">Spell · Vitality T3</div><p class="fx">Heal all allies 3.</p><p class="why">In Deadlock, a heal pulse for you and nearby allies.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Rescue Beam</h3><div class="kind">Spell · Vitality T3</div><p class="fx">A bench ally steps into your Active slot; the hero it rescues heals 4 on the bench.</p><p class="why">In Deadlock, it heals an ally and pulls them to safety. Warp Stone's defensive twin.</p></div>
+      <div class="card"><div class="cost">6</div><h3>Alchemical Fire</h3><div class="kind">Spell · Weapon T3</div><p class="fx">Deal <span class="sp">1</span> spirit damage to every enemy and apply <b>Bullet Resist −2</b> to them for 2 turns.</p><p class="why">In Deadlock, a burning area that strips bullet resist. Sets up a gun team.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Heroic Aura</h3><div class="kind">Spell · Weapon T3</div><p class="fx">All allies gain +1 Bullet Power and <b>Bullet Resist 1</b> for 2 turns.</p><p class="why">In Deadlock, an aura that speeds up your team's guns.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Shadow Weave</h3><div class="kind">Spell · Weapon T3</div><p class="fx">Your Active gains <b>Dome</b> for 1 turn and +2 Bullet Power for 2 turns.</p><p class="why">In Deadlock, stealth, then an ambush bonus. The gun twin of Ethereal Shift.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Infuser</h3><div class="kind">Spell · Vitality T4</div><p class="fx">Your Active gains +3 Spirit Power for 2 turns and heals 3.</p><p class="why">In Deadlock, a burst of spirit power and spirit lifesteal.</p></div>
+      <div class="card"><div class="cost">6</div><h3>Arctic Blast</h3><div class="kind">Spell · Spirit T4</div><p class="fx">Deal <span class="sp">2</span> spirit damage to every enemy. <b>Stun</b> the enemy Active for 1 turn.</p><p class="why">In Deadlock, an ice blast that freezes, then slows.</p></div>
+    </div>
+    <h3 class="sub">Equipment · 8</h3>
+    <div class="cards">
+      <div class="card"><div class="cost">2</div><h3>Headshot Booster</h3><div class="kind">Equipment · Weapon T1</div><p class="fx">Bearer's attacks deal +2 to an enemy at full HP.</p><p class="why">In Deadlock, your opening headshot hits harder.</p></div>
+      <div class="card"><div class="cost">2</div><h3>Spirit Strike</h3><div class="kind">Equipment · Spirit T1</div><p class="fx">Bearer's attacks apply <b>Spirit Resist −1</b> for 2 turns.</p><p class="why">The spirit twin of Bullet Resist Shredder.</p></div>
+      <div class="card"><div class="cost">3</div><h3>Mystic Vulnerability</h3><div class="kind">Equipment · Spirit T2</div><p class="fx">When the bearer's skill, spell or ult damages an enemy: <b>Spirit Resist −1</b> for 2 turns.</p><p class="why">The cheap version of Escalating Exposure.</p></div>
+      <div class="card"><div class="cost">3</div><h3>Mystic Slow</h3><div class="kind">Equipment · Spirit T2</div><p class="fx">When the bearer's skill, spell or ult damages an enemy: it is <b>Rooted</b> for 1 turn.</p><p class="why">In Deadlock, spirit damage slows. Here it stops a retreat.</p></div>
+      <div class="card"><div class="cost">3</div><h3>Slowing Bullets</h3><div class="kind">Equipment · Weapon T2</div><p class="fx">Bearer's attacks <b>Root</b> the target for 1 turn.</p><p class="why">The gun version of Mystic Slow.</p></div>
+      <div class="card"><div class="cost">3</div><h3>Debuff Reducer</h3><div class="kind">Equipment · Vitality T2</div><p class="fx">Debuffs on the bearer last 1 turn less, never under 1.</p><p class="why">In Deadlock, it shortens every negative effect on you.</p></div>
+      <div class="card"><div class="cost">5</div><h3>Spirit Snatch</h3><div class="kind">Equipment · Spirit T3</div><p class="fx">When the bearer's skill, spell or ult damages an enemy: it gets Spirit Power −1 and the bearer +1 Spirit Power, both for 2 turns.</p><p class="why">In Deadlock, it steals spirit from the hero you hit.</p></div>
+      <div class="card"><div class="cost">7</div><h3>Spiritual Overflow</h3><div class="kind">Equipment · Weapon T4</div><p class="fx">After bearer attacks: +1 Spirit Power for 2 turns, up to +3, and heal 1.</p><p class="why">In Deadlock, shooting heroes charges up spirit power. A gun-to-spirit bridge.</p></div>
+    </div>
+    <p class="note">Left out on purpose: items the game has removed (Enduring Spirit, Soul Rebirth), items that only make sense with melee or creeps (Melee Lifesteal, Monster Rounds), and Lucky Shot, whose coin flip would break the attack preview.</p>
+    <h3 class="sub">Tuned after the sim</h3>
+    <p class="note">The first 400-game run after the batch flagged six cards. Each moved within its tier; the second run puts all six within noise of 50%.</p>
+    <div class="tune">
+      <div><span>Alchemical Fire</span><span class="was">71%</span><span class="now">57%</span><span class="how">cost 5 → 6</span></div>
+      <div><span>Split Shot</span><span class="was">69%</span><span class="now">43%</span><span class="how">full → half Bullet Power, cost 4 → 3</span></div>
+      <div><span>Blood Tribute</span><span class="was">67%</span><span class="now">52%</span><span class="how">pays 2 → 3 HP</span></div>
+      <div><span>Infuser</span><span class="was">21%</span><span class="now">59%</span><span class="how">cost 6 → 5</span></div>
+      <div><span>Tankbuster</span><span class="was">23%</span><span class="now">52%</span><span class="how">fires on 3+ → 2+ damage</span></div>
+      <div><span>Phantom Strike</span><span class="was">30%</span><span class="now">46%</span><span class="how">cost 6 → 5</span></div>
+    </div>
+
+  </section>
+
+  <section>
+    <h2>Starter decks <small>15 cards each</small></h2>
+    <p class="lede">Each deck has at least 4 cards costing 2 or less, and suggests 4 heroes; the Loadout screen shows them under the deck. Tap a deck to see its list.</p>
+    <div class="decks">
+      <details class="deck">
+        <summary><div class="dhead"><h3>Gunline</h3><span class="open"><span class="closed-label">Show list ▾</span><span class="open-label">Hide ▴</span></span></div>
+          <p class="squad">Heroes: <b>Haze, Shiv, Drifter, Vindicta</b></p>
+          <p class="plan">Stack Bullet Power, grant extra attacks and shoot past the Active.</p></summary>
+        <div class="list">
+          <div><span class="c">1</span>Restorative Shot</div>
+          <div><span class="c">2</span>Extended Magazine ×2</div>
+          <div><span class="c">2</span>Headshot Booster <span class="x">new</span></div>
+          <div><span class="c">2</span>Rusted Barrel</div>
+          <div><span class="c">3</span>Active Reload <span class="x">now equipment</span></div>
+          <div><span class="c">3</span>Bullet Lifesteal</div>
+          <div><span class="c">3</span>Long Range <span class="x">new</span></div>
+          <div><span class="c">3</span>Slowing Bullets <span class="x">new</span></div>
+          <div><span class="c">3</span>Split Shot <span class="x">new</span></div>
+          <div><span class="c">4</span>Titanic Magazine</div>
+          <div><span class="c">5</span>Burst Fire</div>
+          <div><span class="c">5</span>Toxic Bullets</div>
+          <div><span class="c">7</span>Crippling Headshot</div>
+          <div><span class="c">7</span>Ricochet</div>
+        </div>
+      </details>
+      <details class="deck">
+        <summary><div class="dhead"><h3>Spellcaster</h3><span class="open"><span class="closed-label">Show list ▾</span><span class="open-label">Hide ▴</span></span></div>
+          <p class="squad">Heroes: <b>Lady Geist, Sinclair, Seven, Dynamo</b></p>
+          <p class="plan">Pile on Spirit Power and burn every enemy with skills and spells.</p></summary>
+        <div class="list">
+          <div><span class="c">1</span>Golden Goose Egg <span class="x">new</span></div>
+          <div><span class="c">1</span>Mystic Regeneration</div>
+          <div><span class="c">2</span>Extra Spirit ×2</div>
+          <div><span class="c">2</span>Mystic Burst</div>
+          <div><span class="c">3</span>Healbane <span class="x">now equipment</span></div>
+          <div><span class="c">3</span>Mystic Vulnerability <span class="x">new</span></div>
+          <div><span class="c">3</span>Spirit Sap</div>
+          <div><span class="c">4</span>Cold Front</div>
+          <div><span class="c">4</span>Improved Spirit</div>
+          <div><span class="c">6</span>Arctic Blast <span class="x">new</span></div>
+          <div><span class="c">6</span>Vortex Web <span class="x">new</span></div>
+          <div><span class="c">7</span>Escalating Exposure</div>
+          <div><span class="c">7</span>Mystic Reverb</div>
+          <div><span class="c">8</span>Boundless Spirit</div>
+        </div>
+      </details>
+      <details class="deck">
+        <summary><div class="dhead"><h3>Control</h3><span class="open"><span class="closed-label">Show list ▾</span><span class="open-label">Hide ▴</span></span></div>
+          <p class="squad">Heroes: <b>Kelvin, Wraith, Rem, Lash</b></p>
+          <p class="plan">Shut down the rival&#x27;s best hero, pull the next one forward, and outlast them.</p></summary>
+        <div class="list">
+          <div><span class="c">1</span>Extra Health</div>
+          <div><span class="c">1</span>Healing Rite</div>
+          <div><span class="c">1</span>Mystic Regeneration</div>
+          <div><span class="c">1</span>Restorative Shot</div>
+          <div><span class="c">3</span>Mystic Slow <span class="x">new</span></div>
+          <div><span class="c">3</span>Reactive Barrier</div>
+          <div><span class="c">3</span>Return Fire <span class="x">new</span></div>
+          <div><span class="c">3</span>Slowing Hex</div>
+          <div><span class="c">3</span>Suppressor</div>
+          <div><span class="c">5</span>Cursed Relic <span class="x">renamed</span></div>
+          <div><span class="c">5</span>Dispel Magic <span class="x">renamed</span></div>
+          <div><span class="c">5</span>Knockdown</div>
+          <div><span class="c">5</span>Phantom Strike <span class="x">new</span></div>
+          <div><span class="c">5</span>Rescue Beam <span class="x">new</span></div>
+          <div><span class="c">5</span>Silence Wave <span class="x">renamed</span></div>
+        </div>
+      </details>
+      <details class="deck">
+        <summary><div class="dhead"><h3>Tank &amp; Sustain</h3><span class="open"><span class="closed-label">Show list ▾</span><span class="open-label">Hide ▴</span></span></div>
+          <p class="squad">Heroes: <b>Abrams, Mo &amp; Krill, Warden, Paige</b></p>
+          <p class="plan">Park a wall in front that heals faster than it&#x27;s hit, then win the long game.</p></summary>
+        <div class="list">
+          <div><span class="c">1</span>Extra Health</div>
+          <div><span class="c">1</span>Grit <span class="x">new</span></div>
+          <div><span class="c">1</span>Restorative Shot</div>
+          <div><span class="c">2</span>Extra Regen ×2</div>
+          <div><span class="c">3</span>Debuff Reducer <span class="x">new</span></div>
+          <div><span class="c">3</span>Healing Booster</div>
+          <div><span class="c">3</span>Spirit Shielding</div>
+          <div><span class="c">3</span>Weapon Shielding</div>
+          <div><span class="c">5</span>Bullet Resilience</div>
+          <div><span class="c">5</span>Divine Barrier <span class="x">new</span></div>
+          <div><span class="c">5</span>Fortitude <span class="x">new</span></div>
+          <div><span class="c">5</span>Healing Nova <span class="x">new</span></div>
+          <div><span class="c">6</span>Colossus <span class="x">now a spell</span></div>
+          <div><span class="c">7</span>Leech</div>
+        </div>
+      </details>
+      <details class="deck">
+        <summary><div class="dhead"><h3>Tempo</h3><span class="open"><span class="closed-label">Show list ▾</span><span class="open-label">Hide ▴</span></span></div>
+          <p class="squad">Heroes: <b>Yamato, Viscous, Mirage, Haze</b></p>
+          <p class="plan">Cast skills twice, draw off every cast and get ultimates out early.</p></summary>
+        <div class="list">
+          <div><span class="c">1</span>Healing Rite</div>
+          <div><span class="c">1</span>Mystic Regeneration</div>
+          <div><span class="c">2</span>Extra Spirit</div>
+          <div><span class="c">2</span>Rusted Barrel</div>
+          <div><span class="c">3</span>Compress Cooldown <span class="x">renamed</span></div>
+          <div><span class="c">3</span>Fleetfoot <span class="x">new</span></div>
+          <div><span class="c">4</span>Fury Trance <span class="x">new</span></div>
+          <div><span class="c">5</span>Echo Shard</div>
+          <div><span class="c">5</span>Ethereal Shift <span class="x">new</span></div>
+          <div><span class="c">5</span>Infuser <span class="x">new</span></div>
+          <div><span class="c">5</span>Superior Cooldown</div>
+          <div><span class="c">5</span>Surge of Power</div>
+          <div><span class="c">5</span>Unstoppable</div>
+          <div><span class="c">6</span>Refresher <span class="x">new</span></div>
+          <div><span class="c">6</span>Warp Stone <span class="x">new</span></div>
+        </div>
+      </details>
+    </div>
+    <p class="note">Each starter takes three cards from the second batch. Every card but Healing Tempo is in some starter deck; the AI's three decks carry the rest and the new cards too.</p>
+  </section>
+
+  <section class="decide">
+    <span class="eyebrow">Where it stands</span>
+    <p>Everything on this page is built, tested (1,023 tests) and visible in the game, on the branch <b>design/card-rules</b>. Nothing is committed yet.</p>
+  </section>
+
+  <footer>Canon item types and tiers were checked against the Deadlock wiki on 30 Oct 2026; the item API was unreachable. Win rates come from 400 games of the game's AI against itself, with random hero drafts. A card is counted once per game, for the side that played it.</footer>
+</main>

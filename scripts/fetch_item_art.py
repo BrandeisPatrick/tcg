@@ -1,165 +1,209 @@
 #!/usr/bin/env python3
 """
-Fetch shop_image_webp for every TCG card from deadlock-api.com.
+Fetch the shop-icon art for every spell and equipment card from the Deadlock wiki.
 
-Edit EQ_MAP / SP_MAP below to add new cards. Run from project root:
+Card ids and names come from src/cards/spells.ts and src/cards/equipment.ts
+(each card's `name` is its canon item name). Each icon is downloaded from
+https://cdn.deadlock.wiki/<Name_With_Underscores>.png (falling back to the URL
+the wiki's MediaWiki API gives for File:<Name>.png) and encoded to WebP:
 
-    python3 scripts/fetch_item_art.py             # fetch everything
-    python3 scripts/fetch_item_art.py curse       # fetch one
-    python3 scripts/fetch_item_art.py curse mystic_burst   # fetch a few
+    spells     -> public/spells/<id>.webp
+    equipment  -> public/items/<id>.webp
 
-See public/ART_PIPELINE.md for the full pipeline + gotchas.
+Usage (works from any directory; paths resolve from this file):
+
+    python3 scripts/fetch_item_art.py                      # every spell + equipment card
+    python3 scripts/fetch_item_art.py curse warp_stone     # only these card ids
+    python3 scripts/fetch_item_art.py spell:grit=Grit "item:mystic_slow=Mystic Slow"
+        # cards not in the card files yet: <spell|item>:<id>=<Canon Name>
+
+Prints OK or MISS per card. A MISS keeps the existing file. Exit status is 1 if
+anything missed. Afterwards it lists cards that have no art and art files no
+card uses; it never deletes anything.
+
+WebP encoder, first one available: ffmpeg built with libwebp ($FFMPEG
+overrides the binary), cwebp (`brew install webp`), or Pillow in the Python
+running this script. Homebrew's ffmpeg ships without libwebp. Downloads go to
+$ART_TMP (default <system tmp>/wikiart). No third-party packages are required.
+
+See public/ART_PIPELINE.md.
 """
-import json, os, sys, urllib.request
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.parse
+import urllib.request
 
-# --- Passive items (rendered as Equipment) ---
-# Card-id keys map to the CANON item name used to look up shop art.
-# bullet_resist/spirit_resist are V1 card renames that still source art
-# from canon Bullet/Spirit Armor.
-EQ_MAP = {
-    'basic_magazine':       'Extended Magazine',
-    'extended_magazine':    'Extended Magazine',
-    'headshot_booster':     'Headshot Booster',
-    'extra_health':         'Extra Health',
-    'extra_spirit':         'Improved Spirit',
-    'improved_spirit':      'Improved Spirit',
-    'improved_cooldown':    'Compress Cooldown',   # renamed in canon
-    'mystic_burst':         'Mystic Burst',         # passive: bullet bonus on skill hit
-    'sprint_boots':         'Sprint Boots',         # passive: +speed/stamina
-    'berserker':            'Berserker',
-    'bullet_resist':        'Bullet Armor',         # V1 rename: art still from canon Bullet Armor
-    'spirit_resist':        'Spirit Armor',         # V1 rename: art still from canon Spirit Armor
-    'enduring_spirit':      'Enduring Spirit',
-    'extra_regen':          'Extra Regen',
-    'melee_lifesteal':      'Melee Lifesteal',
-    'monster_rounds':       'Monster Rounds',
-    'restorative_shot':     'Restorative Shot',     # V1 rename of bullet_lifesteal
-    'mystic_regeneration':  'Mystic Regeneration',  # V1 rename of spirit_lifesteal
-    'spirit_strike':        'Spirit Strike',
-    'mystic_vulnerability': 'Mystic Vulnerability', # passive: skill hits apply vuln
-    'enchanter_barrier':    'Reactive Barrier',     # passive: shield triggers on damage
-    'debuff_remover':       'Debuff Reducer',       # passive: debuff duration -1
-    'suppressor':           'Suppressor',           # passive: silence on parry
-    'frenzy':               'Frenzy',
-    'diviners_kevlar':      "Diviner's Kevlar",
-    'surge_of_power':       'Surge of Power',       # passive: stacks per skill use
-    'titanic_magazine':     'Titanic Magazine',
-    'mystic_reverb':        'Mystic Reverb',
-    'boundless_spirit':     'Boundless Spirit',
-    'inhibitor':            'Inhibitor',            # passive mythic: stacks ability resist
-    'mystic_expansion':     'Mystic Expansion',     # T1 spirit: +ability range (NEW)
-    'healing_booster':      'Healing Booster',
-    'weapon_shielding':     'Weapon Shielding',
-    'spirit_shielding':     'Spirit Shielding',
-    'glass_cannon':         'Glass Cannon',
-    'healing_tempo':        'Healing Tempo',
-    'bullet_resilience':    'Bullet Resilience',
-    'spirit_resilience':    'Spirit Resilience',
-    'bullet_resist_shredder': 'Bullet Resist Shredder',
-    # --- Newer cards (canon names) ---
-    'burst_fire':           'Burst Fire',
-    'ricochet':             'Ricochet',
-    'toxic_bullets':        'Toxic Bullets',
-    'tesla_bullets':        'Tesla Bullets',
-    'crippling_headshot':   'Crippling Headshot',
-    'colossus':             'Colossus',
-    'leech':                'Leech',
-    'siphon_bullets':       'Siphon Bullets',
-    'escalating_exposure':  'Escalating Exposure',
-    'superior_duration':    'Superior Duration',
-    'reactive_barrier':     'Reactive Barrier',
-    'bullet_lifesteal':     'Bullet Lifesteal',
-    'spirit_lifesteal':     'Spirit Lifesteal',
-    'improved_burst':       'Mystic Burst',
-    'superior_cooldown':    'Compress Cooldown',      # cooldown family art
-    'transcendent_cooldown':'Compress Cooldown',
-    'improved_bullet_armor':'Bullet Armor',
-    'improved_spirit_armor':'Spirit Armor',
-}
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SOURCES = (  # (card file, art dir, kind)
+    ('src/cards/spells.ts', 'public/spells', 'spell'),
+    ('src/cards/equipment.ts', 'public/items', 'item'),
+)
+CDN = 'https://cdn.deadlock.wiki/'
+API = 'https://deadlock.wiki/api.php'
+UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/130.0 Safari/537.36')
+QUALITY = 92        # lossy WebP; 200x200 icons land around 8-20 KB
+PAUSE = 0.3         # seconds between requests to the wiki
+TMP = os.environ.get('ART_TMP') or os.path.join(tempfile.gettempdir(), 'wikiart')
+PNG = b'\x89PNG\r\n\x1a\n'
 
-# --- Active items (rendered as Spells / one-shot casts) ---
-SP_MAP = {
-    'healing_rite':         'Healing Rite',
-    'cold_front':           'Cold Front',
-    'decay':                'Decay',
-    'ethereal_shift':       'Ethereal Shift',
-    'phantom_strike':       'Phantom Strike',
-    'echo_shard':           'Echo Shard',
-    'knockdown':            'Knockdown',
-    'silence_glyph':        'Silencer',
-    'disarming_hex':        'Disarming Hex',
-    'metal_skin':           'Metal Skin',           # active: bullet resist burst
-    'curse':                'Cursed Relic',         # renamed in canon
-    'divine_barrier':       'Divine Barrier',       # active: cast shield
-    'soul_rebirth':         'Soul Rebirth',         # canon-faithful: passive respawn-on-death (canon is T4 passive equipment)
-    'rusted_barrel':        'Rusted Barrel',        # T1 spirit active (NEW)
-    'golden_goose_egg':     'Golden Goose Egg',     # T1 spirit active (NEW)
-    'spirit_sap':           'Spirit Sap',
-    'slowing_hex':          'Slowing Hex',
-    'healbane':             'Healbane',
-    # --- Newer active items (canon names) ---
-    'active_reload':        'Active Reload',
-    'unstoppable':          'Unstoppable',
-    'debuff_remover':       'Debuff Reducer',  # closest canon (no active "Debuff Remover")
-}
-
-API = 'https://assets.deadlock-api.com/v2/items'
-CATALOGUE = '/tmp/dl_items.json'
+STR = r"""(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)")"""
+CARD_RE = re.compile(r'\bid:\s*' + STR + r'\s*,\s*name:\s*' + STR)
 
 
-def load_catalogue():
-    if not os.path.exists(CATALOGUE):
-        urllib.request.urlretrieve(API, CATALOGUE)
-    data = json.load(open(CATALOGUE))
-    return {d['name'].lower(): d for d in data if d.get('name')}
+def read_cards(path):
+    """[(id, name)] for every `id: '…', name: '…'` card entry in a .ts file."""
+    with open(path, encoding='utf-8') as f:
+        src = re.sub(r'/\*.*?\*/', '', f.read(), flags=re.S)
+    src = '\n'.join(l for l in src.splitlines() if not l.lstrip().startswith('//'))
+    unesc = lambda s: re.sub(r'\\(.)', r'\1', s)
+    return [(unesc(m.group(1) if m.group(1) is not None else m.group(2)),
+             unesc(m.group(3) if m.group(3) is not None else m.group(4)))
+            for m in CARD_RE.finditer(src)]
 
 
-def fetch(card_id, item_name, out_dir, by_name):
-    item = by_name.get(item_name.lower())
-    if not item:
-        print(f'MISS {card_id}: "{item_name}" not in catalogue')
-        return
-    url = (item.get('shop_image_webp') or item.get('shop_image')
-           or item.get('image_webp') or item.get('image'))
-    if not url:
-        print(f'NO_URL {card_id}')
-        return
-    out = f'{out_dir}/{card_id}.webp'
+def get(url):
+    req = urllib.request.Request(url, headers={'User-Agent': UA})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read()
+
+
+def download(name):
+    """PNG bytes of the item's wiki shop icon; raises if neither source has it."""
+    fname = name.replace(' ', '_') + '.png'
+    errors = []
     try:
-        urllib.request.urlretrieve(url, out)
-        print(f'OK   {card_id:25s} <- {item_name} ({os.path.getsize(out)} B)')
+        data = get(CDN + urllib.parse.quote(fname))   # ' -> %27, & -> %26
+        if data.startswith(PNG):
+            return data
+        errors.append('cdn: not a PNG')
     except Exception as e:
-        print(f'FAIL {card_id}: {e}')
+        errors.append(f'cdn: {e}')
+    try:
+        time.sleep(PAUSE)
+        query = urllib.parse.urlencode({
+            'action': 'query', 'prop': 'imageinfo', 'iiprop': 'url',
+            'format': 'json', 'redirects': 1, 'titles': 'File:' + fname})
+        pages = json.loads(get(f'{API}?{query}'))['query']['pages']
+        url = next((p['imageinfo'][0]['url'] for p in pages.values()
+                    if p.get('imageinfo')), None)
+        if not url:
+            raise LookupError(f'no File:{fname} on the wiki')
+        time.sleep(PAUSE)
+        data = get(url)
+        if data.startswith(PNG):
+            return data
+        errors.append('api: not a PNG')
+    except Exception as e:
+        errors.append(f'api: {e}')
+    raise RuntimeError('; '.join(errors))
 
 
-def main():
-    os.makedirs('public/items', exist_ok=True)
-    os.makedirs('public/spells', exist_ok=True)
+def pick_encoder():
+    """(label, encode(src_png, dst_webp)) for the first WebP encoder found."""
+    ffmpeg = os.environ.get('FFMPEG') or shutil.which('ffmpeg')
+    if ffmpeg:
+        listing = subprocess.run([ffmpeg, '-hide_banner', '-encoders'],
+                                 capture_output=True, text=True).stdout
+        if re.search(r'\blibwebp\b', listing):
+            return 'ffmpeg', lambda src, dst: subprocess.run(
+                [ffmpeg, '-y', '-loglevel', 'error', '-i', src, '-c:v', 'libwebp',
+                 '-quality', str(QUALITY), '-compression_level', '6', dst], check=True)
+    cwebp = shutil.which('cwebp')
+    if cwebp:
+        return 'cwebp', lambda src, dst: subprocess.run(
+            [cwebp, '-quiet', '-q', str(QUALITY), '-m', '6', src, '-o', dst], check=True)
+    try:
+        from PIL import Image, features
+        if features.check('webp'):
+            def pillow(src, dst):
+                with Image.open(src) as im:
+                    alpha = im.mode in ('RGBA', 'LA', 'PA') or 'transparency' in im.info
+                    im.convert('RGBA' if alpha else 'RGB').save(
+                        dst, 'WEBP', quality=QUALITY, method=6)
+            return 'Pillow', pillow
+    except ImportError:
+        pass
+    sys.exit('No WebP encoder found: need ffmpeg built with libwebp, '
+             'cwebp (brew install webp), or Pillow.')
 
-    opener = urllib.request.build_opener()
-    opener.addheaders = [
-        ('User-Agent', 'Mozilla/5.0'),
-        ('Referer', 'https://deadlock-api.com/'),
-    ]
-    urllib.request.install_opener(opener)
 
-    by_name = load_catalogue()
-    print(f'Loaded {len(by_name)} items from catalogue\n')
+def main(argv):
+    if any(a in ('-h', '--help') for a in argv):
+        print(__doc__)
+        return 0
+    out_dirs = {kind: d for _, d, kind in SOURCES}
+    only, extras = set(), []
+    for a in argv:
+        m = re.fullmatch(r'(spell|item):([A-Za-z0-9_]+)=(.+)', a)
+        if m:
+            extras.append(m.groups())
+        else:
+            only.add(a)
 
-    only = set(sys.argv[1:])
+    jobs, ids = [], {}   # jobs: (kind, id, name); ids: kind -> card ids
+    for card_file, _, kind in SOURCES:
+        cards = read_cards(os.path.join(ROOT, card_file))
+        ids[kind] = {cid for cid, _ in cards}
+        jobs += [(kind, cid, name) for cid, name in cards]
+    extra_ids = {cid for _, cid, _ in extras}
+    jobs = [j for j in jobs if j[1] not in extra_ids] + extras
+    for kind, cid, _ in extras:
+        ids[kind].add(cid)
+    if only or extras:
+        unknown = only - {cid for _, cid, _ in jobs}
+        jobs = [j for j in jobs if j[1] in only or j[1] in extra_ids]
+    else:
+        unknown = set()
 
-    print('=== Equipment ===')
-    for cid, name in EQ_MAP.items():
-        if only and cid not in only:
-            continue
-        fetch(cid, name, 'public/items', by_name)
+    os.makedirs(TMP, exist_ok=True)
+    label, encode = pick_encoder()
+    print(f'{len(jobs)} cards, encoder {label}, downloads in {TMP}\n')
+    fetched, missed = 0, sorted(unknown)
+    for cid in missed:
+        print(f'MISS {"?":5s} {cid:24s} not in the card files')
+    for i, (kind, cid, name) in enumerate(jobs):
+        if i:
+            time.sleep(PAUSE)
+        dst = os.path.join(ROOT, out_dirs[kind], cid + '.webp')
+        png, webp = os.path.join(TMP, cid + '.png'), os.path.join(TMP, cid + '.webp')
+        try:
+            with open(png, 'wb') as f:
+                f.write(download(name))
+            if os.path.exists(webp):
+                os.remove(webp)
+            encode(png, webp)
+            with open(webp, 'rb') as f:
+                head = f.read(12)
+            if head[:4] != b'RIFF' or head[8:12] != b'WEBP':
+                raise RuntimeError('encoder wrote no WebP')
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(webp, dst + '.part')
+            os.replace(dst + '.part', dst)
+            fetched += 1
+            print(f'OK   {kind:5s} {cid:24s} <- {name} ({os.path.getsize(dst)} B)')
+        except Exception as e:
+            kept = ' (kept existing file)' if os.path.exists(dst) else ''
+            print(f'MISS {kind:5s} {cid:24s} <- {name}: {e}{kept}')
+            missed.append(cid)
 
-    print('\n=== Spells ===')
-    for cid, name in SP_MAP.items():
-        if only and cid not in only:
-            continue
-        fetch(cid, name, 'public/spells', by_name)
+    print(f'\n{fetched} fetched, {len(missed)} missed'
+          + (': ' + ', '.join(missed) if missed else ''))
+    for _, out_dir, kind in SOURCES:
+        files = {f[:-5] for f in os.listdir(os.path.join(ROOT, out_dir))
+                 if f.endswith('.webp')}
+        if ids[kind] - files:
+            print(f'{out_dir}: no art for {", ".join(sorted(ids[kind] - files))}')
+        if files - ids[kind]:
+            print(f'{out_dir}: no card uses {", ".join(sorted(files - ids[kind]))}')
+    return 1 if missed else 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main(sys.argv[1:]))

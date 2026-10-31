@@ -43,15 +43,27 @@ describe('Mystic Burst family', () => {
     expect(enemy.hp).toBe(hp0 - 1);
   });
 
-  it('Improved Burst deals 2 spirit (tier-up)', () => {
+  it('Tankbuster adds 2 pure after a 2+ ability hit, past Spirit Resist', () => {
+    const G = freshGame();
+    const hero = G.players['0'].active!;
+    const enemy = G.players['1'].active!;
+    enemy.hp = enemy.hpMax = 20;
+    enemy.statuses.push({ id: 'spirit_resist', value: 5, duration: 999 });
+    attach(G, hero, 'improved_burst');
+
+    fireTriggers(G, hero, 'onBearerSkillDamage', { reaction: true, target: enemy, amount: 3, movingPlayer: '0' });
+    expect(enemy.hp).toBe(18);
+  });
+
+  it('Tankbuster stays quiet after a small hit (under 2)', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     const hp0 = enemy.hp;
     attach(G, hero, 'improved_burst');
 
-    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: '0' });
-    expect(enemy.hp).toBe(hp0 - 2);
+    fireTriggers(G, hero, 'onBearerSkillDamage', { reaction: true, target: enemy, amount: 1, movingPlayer: '0' });
+    expect(enemy.hp).toBe(hp0);
   });
 
   it('respects a spirit shield on the enemy active', () => {
@@ -80,8 +92,8 @@ describe('Mystic Burst family', () => {
   });
 
   it('cards expose the proposed flat magnitudes', () => {
-    expect(EQUIPMENT_BY_ID['mystic_burst'].cost).toBe(3);
-    expect(EQUIPMENT_BY_ID['improved_burst'].cost).toBe(5);
+    expect(EQUIPMENT_BY_ID['mystic_burst'].cost).toBe(2);
+    expect(EQUIPMENT_BY_ID['improved_burst']).toMatchObject({ name: 'Tankbuster', cost: 5 });
     expect(ABILITIES_BY_ID['eff_mystic_burst_proc'].base).toBe(1);
     expect(ABILITIES_BY_ID['eff_improved_burst_proc'].base).toBe(2);
   });

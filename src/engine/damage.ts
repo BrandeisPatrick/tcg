@@ -2,7 +2,7 @@ import type { CardInstance, DamageType, FxCastKind, FxTag, GameState, PlayerID }
 import { CARDS_BY_ID } from '@/cards';
 import { pushLog } from './log';
 import { incomingDamage, isRespawning } from './query';
-import { currentCast } from './castContext';
+import { currentCast, withCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { pushFx, fxSource } from './fx';
@@ -113,6 +113,18 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     }
     if (cast.kind === 'attack') {
       fireTriggers(G, cast.source, 'onAttack', { reaction: true, target });
+    }
+  }
+
+  // Return Fire: an enemy hero's swing that lands on a standing bearer comes
+  // back at the attacker as bullet damage. It is dealt in a proc frame, so it
+  // is no attack of its own: it fires no on-attack gear and cannot bounce back.
+  if (type === 'attack' && cast?.kind === 'attack' && cast.source && cast.source.ownerId !== target.ownerId
+      && CARDS_BY_ID[cast.source.cardId]?.type === 'hero' && target.hp > 0 && !isRespawning(target)) {
+    const returnFire = target.statuses.find((s) => s.id === 'return_fire');
+    const attacker = cast.source;
+    if (returnFire && attacker.hp > 0 && !isRespawning(attacker)) {
+      withCast(target, 'proc', () => damageUnit(G, attacker, returnFire.value, 'attack', 'Return Fire'));
     }
   }
 

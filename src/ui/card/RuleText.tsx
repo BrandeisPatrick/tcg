@@ -31,6 +31,7 @@ export const KEYWORDS: Record<string, string> = {
   'Weaken':         poster.status.debuff,
   'Fixation':       poster.status.debuff,
   'Rooted':         poster.status.debuff,
+  'Root':           poster.status.debuff,
   'Rabbit':         poster.status.debuff,
   // Buffs / defenses (print green)
   'Bullet Resist':  poster.status.buff,
@@ -43,6 +44,7 @@ export const KEYWORDS: Record<string, string> = {
   'Unstoppable':    poster.status.buff,
   'Dome':           poster.status.buff,
   'Last Stand':     poster.status.buff,
+  'Return Fire':    poster.status.buff,
   // Timing markers (ink)
   'On attach':      poster.ink,
   'Start of turn':  poster.ink,
@@ -72,6 +74,7 @@ export const KEYWORD_STATUS: Record<string, StatusId> = {
   'Weaken': 'weapon_power_down',
   'Fixation': 'fixation',
   'Rooted': 'rooted',
+  'Root': 'rooted',
   'Rabbit': 'rabbit',
   'Bullet Resist': 'bullet_resist',
   'Spirit Resist': 'spirit_resist',
@@ -81,6 +84,7 @@ export const KEYWORD_STATUS: Record<string, StatusId> = {
   'Unstoppable': 'unstoppable',
   'Dome': 'dome',
   'Last Stand': 'last_stand',
+  'Return Fire': 'return_fire',
 };
 
 /** A power or resist followed by a minus ("Bullet Resist −1") is the debuff. */

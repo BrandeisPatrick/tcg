@@ -71,18 +71,18 @@ describe('cooldown→draw family', () => {
     const G = freshGame();
     const pid: PlayerID = '0';
     const hero = G.players[pid].active!;
-    const eq = attach(G, hero, 'superior_cooldown'); // 3 charges
+    const eq = attach(G, hero, 'superior_cooldown'); // 4 charges
     // Fill hand to MAX_HAND (7).
     while (G.players[pid].hand.length < 7) G.players[pid].hand.push({ ...hero, iid: `filler-${G.players[pid].hand.length}` });
 
     fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });
-    expect(eq.charges).toBe(3); // fizzled, no charge spent
+    expect(eq.charges).toBe(4); // fizzled, no charge spent
     expect(hero.attached).toContain(eq);
   });
 
   it('tiers carry the expected charge counts', () => {
     expect(EQUIPMENT_BY_ID['improved_cooldown'].charges).toBe(2);
-    expect(EQUIPMENT_BY_ID['superior_cooldown'].charges).toBe(3);
-    expect(EQUIPMENT_BY_ID['transcendent_cooldown'].charges).toBe(4);
+    expect(EQUIPMENT_BY_ID['superior_cooldown'].charges).toBe(4);
+    expect(EQUIPMENT_BY_ID['transcendent_cooldown'].charges).toBe(6);
   });
 });

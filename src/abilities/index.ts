@@ -1,12 +1,12 @@
 import type { GameState, CardInstance, DamageType, PlayerID, StatusId } from '@/engine/types';
 import { CARDS_BY_ID, ULTIMATES } from '@/cards';
-import { STATUSES_BY_ID } from '@/statuses';
+import { DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from '@/engine/damage';
-import { resolve } from '@/engine/death';
+import { awardSouls, resolve } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
-import { findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, stepInCandidates, type TargetFilter } from '@/engine/query';
-import { swapIntoActive } from '@/engine/actions/board';
+import { attackPower, findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, stepInCandidates, type TargetFilter } from '@/engine/query';
+import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { newIid } from '@/engine/ids';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -94,6 +94,9 @@ export interface AbilityDef {
   /** How long a status lands for on the bearer (Superior Duration stretches
    *  its buffs). */
   buffDuration?: (self: CardInstance, statusId: StatusId, duration: number) => number;
+  /** How long a debuff (a status whose `hvalue` is below 0) lands for on the
+   *  bearer (Debuff Reducer shortens them). Read after `buffDuration`. */
+  debuffDuration?: (self: CardInstance, statusId: StatusId, duration: number) => number;
 }
 
 /** A hero's skill or passive: an AbilityDef that carries the `name` and `text`
@@ -125,6 +128,13 @@ export function activeSpi(G: GameState, pid: PlayerID): number {
 export function ultSpi(): number {
   const src = currentCast()?.source;
   return src ? effectiveSpirit(src) : 0;
+}
+
+// Helper: the player's Active, if it is standing (a corpse on the respawn
+// timer takes nothing). The "your Active gains …" spells aim here.
+function standingActive(G: GameState, pid: PlayerID): CardInstance | undefined {
+  const a = G.players[pid].active;
+  return a && !isRespawning(a) && a.hp > 0 ? a : undefined;
 }
 
 // Helper: deal damage to all of a player's board cards
@@ -173,14 +183,6 @@ const eff_slowing_hex: AbilityDef = {
   },
 };
 
-// Canon Healbane: reduces healing on target. TCG: block healing for 2 turns.
-const eff_healbane: AbilityDef = {
-  id: 'eff_healbane', trigger: 'onPlay', target: 'enemyAny',
-  prompt: 'Healbane — block healing on any enemy for 2 turns.',
-  run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'healing_boost_down', 1, 2);
-  },
-};
 
 // Canon Spirit Sap: reduces target's spirit resist. TCG: Spirit Vulnerable 2 for 2 turns.
 const eff_spirit_sap: AbilityDef = {
@@ -221,7 +223,9 @@ const eff_knockdown: AbilityDef = {
 
 // ----- Control spell pack (canon active items → spells) -----
 
-// Silence Glyph (canon T3 spirit): damage + Silence the enemy Active 2 turns.
+// Silence Wave (canon T3 spirit active, once named Silence Glyph — the card id
+// keeps the old name so saved decks still load): damage + Silence the enemy
+// Active 2 turns.
 const eff_silence_glyph: AbilityDef = {
   id: 'eff_silence_glyph', trigger: 'onPlay', target: 'enemyActive',
   base: 2,
@@ -233,13 +237,14 @@ const eff_silence_glyph: AbilityDef = {
   },
 };
 
-// Curse (canon T4 spirit): long lockdown on one enemy hero, Active or bench —
+// Cursed Relic (canon T4 spirit active, once named Curse — the id keeps the
+// old name): long lockdown on one enemy hero, Active or bench —
 // Silence (no skill) + Disarm (no attack) for 3 turns. On the Active it is
 // dead weight that pressures a retreat (no forced swap); on the bench it shuts
 // off a caster.
 const eff_curse: AbilityDef = {
   id: 'eff_curse', trigger: 'onPlay', target: 'enemyHero',
-  prompt: 'Curse — one enemy hero cannot use its skill or attack for 3 turns.',
+  prompt: 'Cursed Relic — one enemy hero cannot use its skill or attack for 3 turns.',
   run: (G, _ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'silenced', 1, 3);
@@ -247,15 +252,20 @@ const eff_curse: AbilityDef = {
   },
 };
 
-// Debuff Remover (canon vitality): cleanse a hero's debuffs + grant Shield 2.
+// Dispel Magic (canon T3 vitality active, once named Debuff Remover — the id
+// keeps the old name): purge an ally's debuffs and grant Shield 2; if it purged
+// anything, the ally also heals 3 (canon: a heal when a debuff is removed).
 const eff_debuff_remover: AbilityDef = {
   id: 'eff_debuff_remover', trigger: 'onPlay', target: 'allyHero',
+  prompt: 'Dispel Magic — cleanse an ally and shield it.',
   base: 2,
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
     if (!t) return;
+    const hadDebuff = t.statuses.some((st) => DEBUFF_IDS.has(st.id));
     cleanseDebuffs(t);
     addStatus(G, t, 'shield', 2, 999);
+    if (hadDebuff) healUnit(G, t, 3, 'Dispel Magic');
   },
 };
 
@@ -303,17 +313,6 @@ const eff_echo_shard: AbilityDef = {
   },
 };
 
-// Active Reload (canon T2 Weapon ACTIVE — timed reload → a fire-rate burst).
-// Per our active-item→spell rule it's a one-shot SPELL: your Active hero gains
-// Extra Attack 1 this turn (stacks with Burst Fire / Fixation).
-const eff_active_reload: AbilityDef = {
-  id: 'eff_active_reload', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Active Reload — your Active hero gains Extra Attack 1 this turn.',
-  run: (G, ctx) => {
-    const a = G.players[ctx.movingPlayer].active;
-    if (a && (a.respawnTurnsLeft ?? 0) === 0) grantExtraAttacks(a, 1);
-  },
-};
 
 // Bullet Resist is flat — Spirit Power scales spirit damage only.
 const eff_cast_metal_skin: AbilityDef = {
@@ -325,16 +324,348 @@ const eff_cast_metal_skin: AbilityDef = {
   },
 };
 
+// ----- Movement / protection / draw spells (canon active items) -----
+
+// Guardian Ward (canon T2 vitality active): a barrier on an ally.
+const eff_guardian_ward: AbilityDef = {
+  id: 'eff_guardian_ward', trigger: 'onPlay', target: 'allyHero',
+  prompt: 'Guardian Ward — Shield 3 on an ally.',
+  base: 3,
+  run: (G, _ctx, { target }) => {
+    if (target) addStatus(G, target, 'shield', 3, 999);
+  },
+};
+
+// Warp Stone (canon T3 vitality active): a short teleport that leaves you with
+// Bullet Resist. TCG: a bench ally swaps into the Active slot, free, and steps
+// in with Bullet Resist 3 for 2 turns.
+const eff_warp_stone: AbilityDef = {
+  id: 'eff_warp_stone', trigger: 'onPlay', target: 'allyBench',
+  prompt: 'Warp Stone — swap a bench ally into the Active slot.',
+  base: 3,
+  run: (G, ctx, { target }) => {
+    if (!target) return;
+    if (swapIntoActive(G, G.players[ctx.movingPlayer], target)) addStatus(G, target, 'bullet_resist', 3, 2);
+  },
+};
+
+// Divine Barrier (canon T4 vitality active): purges every debuff but a stun and
+// throws a barrier on the ally.
+const eff_divine_barrier: AbilityDef = {
+  id: 'eff_divine_barrier', trigger: 'onPlay', target: 'allyHero',
+  prompt: 'Divine Barrier — cleanse an ally (not Stun) and Shield it 4.',
+  base: 4,
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    target.statuses = target.statuses.filter((st) => st.id === 'stun' || !DEBUFF_IDS.has(st.id));
+    addStatus(G, target, 'shield', 4, 999);
+  },
+};
+
+// Ethereal Shift (canon T4 spirit active): a moment out of reach, then a
+// Spirit Power buff. TCG: Dome for 1 turn (no attack can target it) and
+// Spirit Power +1 for 2 turns.
+const eff_ethereal_shift: AbilityDef = {
+  id: 'eff_ethereal_shift', trigger: 'onPlay', target: 'allyHero',
+  prompt: 'Ethereal Shift — an ally cannot be attacked for 1 turn.',
+  base: 2,
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    addStatus(G, target, 'dome', 1, 1);
+    addStatus(G, target, 'spirit_power', 1, 2);
+  },
+};
+
+// Phantom Strike (canon T4 vitality active): teleport onto an enemy, pull it
+// down, hit it and disarm it. TCG: drag an enemy bench hero to the front, then
+// deal 2 + Spirit spirit damage and Disarm it 1 turn.
+const eff_phantom_strike: AbilityDef = {
+  id: 'eff_phantom_strike', trigger: 'onPlay', target: 'enemyBench',
+  prompt: 'Phantom Strike — drag an enemy bench hero to the front.',
+  scalesSpirit: true, base: 2,
+  run: (G, ctx, { target }) => {
+    if (!target) return;
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    if (!pullToActive(G, enemy, target)) return;
+    damageUnit(G, target, 2 + activeSpi(G, ctx.movingPlayer), 'spirit', 'Phantom Strike');
+    if (!isRespawning(target)) addStatus(G, target, 'disarm', 1, 1);
+    resolve(G);
+  },
+};
+
+// Vortex Web (canon T4 spirit active): a grenade that drags every enemy in and
+// slows them. TCG: 2 + Spirit spirit damage to every enemy hero, Rooted 2 turns.
+const eff_vortex_web: AbilityDef = {
+  id: 'eff_vortex_web', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Vortex Web — hit and root every enemy.',
+  scalesSpirit: true, base: 2,
+  run: (G, ctx) => {
+    const enemy = otherPlayer(ctx.movingPlayer);
+    const dmg = 2 + activeSpi(G, ctx.movingPlayer);
+    eachBoard(G, enemy, (c) => {
+      damageUnit(G, c, dmg, 'spirit', 'Vortex Web');
+      if (!isRespawning(c)) addStatus(G, c, 'rooted', 1, 2);
+    });
+  },
+};
+
+// Refresher (canon T4 spirit active): resets every cooldown. Read the way the
+// Cooldown family is: more casts = more options = cards. Draw 2.
+const eff_refresher: AbilityDef = {
+  id: 'eff_refresher', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Refresher — draw 2 cards.',
+  base: 2,
+  run: (G, ctx) => { drawCards(G, ctx.movingPlayer, 2); },
+};
+
+// Colossus (canon T4 vitality ACTIVE): grow huge — big resists, and nearby
+// enemies are slowed. TCG: your Active gains Bullet + Spirit Resist 4 for 2
+// turns, and the enemy Active is Rooted 1 turn.
+const eff_colossus_cast: AbilityDef = {
+  id: 'eff_colossus_cast', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Colossus — your Active gains Bullet and Spirit Resist 4.',
+  base: 4,
+  run: (G, ctx) => {
+    const mine = G.players[ctx.movingPlayer].active;
+    if (mine && !isRespawning(mine)) {
+      addStatus(G, mine, 'bullet_resist', 4, 2);
+      addStatus(G, mine, 'spirit_resist', 4, 2);
+    }
+    const theirs = G.players[otherPlayer(ctx.movingPlayer)].active;
+    if (theirs && !isRespawning(theirs)) addStatus(G, theirs, 'rooted', 1, 1);
+  },
+};
+
+// ----- More canon active items → spells (docs/card-design.md, 2026-10-30) -----
+
+// Golden Goose Egg (canon T1 spirit active): the egg hatches into souls and a
+// permanent stat. TCG: gain 2 souls, and your Active gains +1 max HP for good.
+const eff_golden_goose_egg: AbilityDef = {
+  id: 'eff_golden_goose_egg', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Golden Goose Egg — gain 2 souls; your Active gains +1 max HP.',
+  base: 2,
+  run: (G, ctx) => {
+    awardSouls(G, ctx.movingPlayer, 2, 'Golden Goose Egg');
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (!mine) return;
+    mine.hpMax += 1;
+    mine.hp += 1;
+    pushLog(G, `${CARDS_BY_ID[mine.cardId]?.name ?? mine.cardId} gains +1 max HP (Golden Goose Egg).`);
+  },
+};
+
+// Grit (canon T1 vitality active): a quick barrier. TCG: your Active gains Shield 2.
+const eff_grit: AbilityDef = {
+  id: 'eff_grit', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Grit — your Active gains Shield 2.',
+  base: 2,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (mine) addStatus(G, mine, 'shield', 2, 999);
+  },
+};
+
+// Return Fire (canon T2 vitality active): shoots back at whoever hits you.
+// TCG: your Active gains Return Fire 2 for 2 turns — an enemy swing that lands
+// on it costs the attacker 2 bullet damage (damageUnit, engine/damage.ts).
+const eff_return_fire: AbilityDef = {
+  id: 'eff_return_fire', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Return Fire — your Active shoots back for 2 turns.',
+  base: 2,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (mine) addStatus(G, mine, 'return_fire', 2, 2);
+  },
+};
+
+// Fleetfoot (canon T2 weapon active): shoot while sprinting and shrug off
+// slows. TCG: your Active gains Extra Attack 1 this turn and loses Rooted.
+const eff_fleetfoot: AbilityDef = {
+  id: 'eff_fleetfoot', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Fleetfoot — your Active gains Extra Attack 1 and shakes off Root.',
+  base: 1,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (!mine) return;
+    grantExtraAttacks(mine, 1);
+    mine.statuses = mine.statuses.filter((st) => st.id !== 'rooted');
+    pushLog(G, `${CARDS_BY_ID[mine.cardId]?.name ?? mine.cardId} gains Extra Attack 1 (Fleetfoot).`);
+  },
+};
+
+// Split Shot (canon T2 weapon active): the shot fans out. TCG: your Active's
+// swing, at its full Bullet Power (`attackPower`, read per hero), hits every
+// enemy bench hero as bullet damage. A spell, not an attack: it fires no
+// on-attack gear, and a Disarmed or Stunned Active has no shot to split.
+const eff_split_shot: AbilityDef = {
+  id: 'eff_split_shot', trigger: 'onPlay', target: 'noTarget',
+  prompt: "Split Shot — your Active's shot hits every enemy bench hero.",
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (!mine) return;
+    for (const b of G.players[otherPlayer(ctx.movingPlayer)].bench) {
+      // Half a swing to each: the shot is split, not multiplied.
+      if (b && !isRespawning(b)) damageUnit(G, b, Math.floor(attackPower(mine, b).total / 2), 'attack', 'Split Shot');
+    }
+    resolve(G);
+  },
+};
+
+// Blood Tribute (canon T3 weapon active): drains your health for fire rate.
+// TCG: the price is paid in blood, so it costs 2 souls — your Active pays 3 HP
+// (straight off, no trigger, never below 1) and gains Extra Attack 1 and +1
+// Bullet Power this turn.
+const eff_blood_tribute: AbilityDef = {
+  id: 'eff_blood_tribute', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Blood Tribute — your Active pays 3 HP for Extra Attack 1 and +1 Bullet Power.',
+  base: 1,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (!mine) return;
+    const paid = Math.min(3, mine.hp - 1);
+    if (paid > 0) {
+      mine.hp -= paid;
+      pushLog(G, `${CARDS_BY_ID[mine.cardId]?.name ?? mine.cardId} pays ${paid} HP (Blood Tribute).`);
+    }
+    grantExtraAttacks(mine, 1);
+    addStatus(G, mine, 'weapon_power', 1, 1);
+  },
+};
+
+// Healing Nova (canon T3 vitality active): a heal pulse for you and nearby
+// allies. TCG: heal every ally hero 3 (flat, like every heal).
+const eff_healing_nova: AbilityDef = {
+  id: 'eff_healing_nova', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Healing Nova — heal all allies 3.',
+  base: 3,
+  run: (G, ctx) => {
+    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 3, 'Healing Nova');
+  },
+};
+
+// Rescue Beam (canon T3 vitality active): pulls an ally to safety and heals
+// it. TCG: Warp Stone's defensive twin — a bench ally steps into your Active
+// slot, and the Active it rescues heals 4 on the bench.
+const eff_rescue_beam: AbilityDef = {
+  id: 'eff_rescue_beam', trigger: 'onPlay', target: 'allyBench',
+  prompt: 'Rescue Beam — swap a bench ally in; the hero it rescues heals 4.',
+  base: 4,
+  run: (G, ctx, { target }) => {
+    if (!target) return;
+    const ps = G.players[ctx.movingPlayer];
+    const rescued = ps.active;
+    if (rescued && swapIntoActive(G, ps, target)) healUnit(G, rescued, 4, 'Rescue Beam');
+  },
+};
+
+// Fury Trance (canon T3 vitality active): more fire rate and spirit resist,
+// but no abilities while it lasts. TCG: your Active gains Extra Attack 1 this
+// turn and Spirit Resist 3 for 2 turns, and is Silenced for 2 turns.
+const eff_fury_trance: AbilityDef = {
+  id: 'eff_fury_trance', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Fury Trance — Extra Attack 1 and Spirit Resist 3, but Silenced.',
+  base: 3,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (!mine) return;
+    grantExtraAttacks(mine, 1);
+    addStatus(G, mine, 'spirit_resist', 3, 2);
+    addStatus(G, mine, 'silenced', 1, 2);
+  },
+};
+
+// Alchemical Fire (canon T3 weapon active): a burning patch that strips
+// bullet resist. TCG: 1 + Spirit spirit damage to every enemy hero, and Bullet
+// Resist −2 on each for 2 turns — it sets up a gun team.
+const eff_alchemical_fire: AbilityDef = {
+  id: 'eff_alchemical_fire', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Alchemical Fire — burn every enemy and strip their bullet resist.',
+  scalesSpirit: true, base: 1,
+  run: (G, ctx) => {
+    const dmg = 1 + activeSpi(G, ctx.movingPlayer);
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => {
+      damageUnit(G, c, dmg, 'spirit', 'Alchemical Fire');
+      if (!isRespawning(c)) addStatus(G, c, 'bullet_resist_down', 2, 2);
+    });
+  },
+};
+
+// Heroic Aura (canon T3 weapon active): an aura that speeds up your team's
+// guns. TCG: every ally hero gains +1 Bullet Power and Bullet Resist 1 for 2 turns.
+const eff_heroic_aura: AbilityDef = {
+  id: 'eff_heroic_aura', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Heroic Aura — all allies gain +1 Bullet Power and Bullet Resist 1.',
+  base: 1,
+  run: (G, ctx) => {
+    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) {
+      addStatus(G, c, 'weapon_power', 1, 2);
+      addStatus(G, c, 'bullet_resist', 1, 2);
+    }
+  },
+};
+
+// Shadow Weave (canon T3 weapon active): stealth, then an ambush bonus — the
+// gun twin of Ethereal Shift. TCG: your Active gains Dome for 1 turn (no
+// attack can target it) and +2 Bullet Power for 2 turns.
+const eff_shadow_weave: AbilityDef = {
+  id: 'eff_shadow_weave', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Shadow Weave — your Active cannot be attacked for 1 turn and gains +2 Bullet Power.',
+  base: 2,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (!mine) return;
+    addStatus(G, mine, 'dome', 1, 1);
+    addStatus(G, mine, 'weapon_power', 2, 2);
+  },
+};
+
+// Infuser (canon T4 vitality active): a burst of spirit power and spirit
+// lifesteal. TCG: your Active gains +3 Spirit Power for 2 turns and heals 3.
+const eff_infuser: AbilityDef = {
+  id: 'eff_infuser', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Infuser — your Active gains +3 Spirit Power and heals 3.',
+  base: 3,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (!mine) return;
+    addStatus(G, mine, 'spirit_power', 3, 2);
+    healUnit(G, mine, 3, 'Infuser');
+  },
+};
+
+// Arctic Blast (canon T4 spirit active): an ice blast that freezes, then
+// slows. TCG: 2 + Spirit spirit damage to every enemy hero, then the enemy
+// Active it hit — if it is still standing — is Stunned 1 turn.
+const eff_arctic_blast: AbilityDef = {
+  id: 'eff_arctic_blast', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Arctic Blast — hit every enemy and stun the enemy Active.',
+  scalesSpirit: true, base: 2,
+  run: (G, ctx) => {
+    const enemy = otherPlayer(ctx.movingPlayer);
+    const frozen = G.players[enemy].active;
+    const dmg = 2 + activeSpi(G, ctx.movingPlayer);
+    eachBoard(G, enemy, (c) => { damageUnit(G, c, dmg, 'spirit', 'Arctic Blast'); });
+    if (frozen && !isRespawning(frozen) && frozen.hp > 0) addStatus(G, frozen, 'stun', 1, 1);
+  },
+};
+
 // ----- Equipment passive effects + on-attach -----
 
-// Bullet / Spirit Resilience: permanent resist stick (T3, cost 5).
+// Bullet / Spirit Resilience (canon T3 vitality): a permanent resist of 2, and
+// — as in Deadlock, where the item adds resist below 50% health — 2 more off
+// each hit of that type while the bearer is below half HP (the `incoming` hook).
+const belowHalf = (self: CardInstance) => self.hp < self.hpMax / 2;
 const eff_bullet_resist: AbilityDef = {
   id: 'eff_bullet_resist', trigger: 'onPlay', target: 'self',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 3, 999); },
+  base: 2,
+  incoming: (self, amount, type) => (type === 'attack' && belowHalf(self) ? Math.max(0, amount - 2) : amount),
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 2, 999); },
 };
 const eff_spirit_resist: AbilityDef = {
   id: 'eff_spirit_resist', trigger: 'onPlay', target: 'self',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 3, 999); },
+  base: 2,
+  incoming: (self, amount, type) => (type === 'spirit' && belowHalf(self) ? Math.max(0, amount - 2) : amount),
+  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 2, 999); },
 };
 
 // Healing chain: Extra Regen (+1 HP) → Healing Booster → Healing Tempo.
@@ -433,9 +764,19 @@ const eff_mystic_burst_proc: AbilityDef = {
   id: 'eff_mystic_burst_proc', trigger: 'onBearerSkillUsed', target: 'enemyActive',
   base: 1, run: mysticBurst(1, 'Mystic Burst'),
 };
+// Tankbuster (canon T3 spirit, once named Improved Burst — the card id keeps the
+// old name): a big ability hit deals extra damage that ignores spirit resist.
+// TCG: when the bearer's skill / spell / ult deals 2 or more to an enemy, it
+// takes 2 more as pure damage.
 const eff_improved_burst_proc: AbilityDef = {
-  id: 'eff_improved_burst_proc', trigger: 'onBearerSkillUsed', target: 'enemyActive',
-  base: 2, run: mysticBurst(2, 'Improved Burst'),
+  id: 'eff_improved_burst_proc', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  base: 2,
+  run: (G, _ctx, { target, params }) => {
+    const amount = params?.amount as number | undefined;
+    if (!target || isRespawning(target) || !amount || amount < 2) return;
+    damageUnit(G, target, 2, 'pure', 'Tankbuster', { tag: 'burst' });
+    resolve(G);
+  },
 };
 
 // ----- Cast-payoff items (functionality tied to skill / ult activation) -----
@@ -451,12 +792,17 @@ const eff_surge_of_power: AbilityDef = {
   run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'weapon_power', 2, 2); },
 };
 
-// Diviner's Kevlar: after the bearer casts their ultimate, gain Shield 4.
+// Diviner's Kevlar: after the bearer casts their ultimate, gain Shield 6 and
+// +2 Spirit Power for 2 turns (canon: a barrier and spirit power on ult cast).
 // Tied to ult activation (onBearerUltCast), not skill use.
 const eff_diviners_kevlar: AbilityDef = {
   id: 'eff_diviners_kevlar', trigger: 'onBearerUltCast', target: 'self',
-  base: 4,
-  run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 4, 999); },
+  base: 6,
+  run: (G, _ctx, { source }) => {
+    if (!source) return;
+    addStatus(G, source, 'shield', 6, 999);
+    addStatus(G, source, 'spirit_power', 2, 2);
+  },
 };
 
 
@@ -558,14 +904,14 @@ const eff_inhibitor: AbilityDef = {
   },
 };
 
-// Crippling Headshot (T3 weapon): attacks apply Vulnerable — Bullet + Spirit
-// Resist −1 (refresh, 2 turns).
+// Crippling Headshot (T4 weapon): +1 Bullet Power (on the card), and attacks
+// apply Vulnerable — Bullet + Spirit Resist −2 (refresh, 2 turns).
 const eff_crippling_headshot: AbilityDef = {
   id: 'eff_crippling_headshot', trigger: 'onAttack', target: 'self',
   run: (G, _ctx, { target }) => {
     if (!target) return;
-    addStatus(G, target, 'bullet_resist_down', 1, 2);
-    addStatus(G, target, 'spirit_resist_down', 1, 2);
+    addStatus(G, target, 'bullet_resist_down', 2, 2);
+    addStatus(G, target, 'spirit_resist_down', 2, 2);
   },
 };
 
@@ -580,23 +926,41 @@ const eff_berserker: AbilityDef = {
   },
 };
 
-// Colossus (T3 vitality): big HP (bonus on the card) + permanent Bullet Resist 2.
-const eff_colossus: AbilityDef = {
-  id: 'eff_colossus', trigger: 'onPlay', target: 'self',
-  base: 2,
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 2, 999); },
+// ----- Passive items moved from spells, and new passives -----
+
+// Healbane (canon T2 vitality PASSIVE): your spirit damage cuts the target's
+// healing. TCG: when the bearer's skill / spell / ult damages an enemy, it
+// cannot be healed for 2 turns.
+const eff_healbane: AbilityDef = {
+  id: 'eff_healbane', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  base: 1,
+  run: (G, _ctx, { target }) => { if (target && !isRespawning(target)) addStatus(G, target, 'healing_boost_down', 1, 2); },
 };
 
-// Improved Bullet / Spirit Armor (T3 vitality): tier-up resists (4).
-const eff_improved_bullet_armor: AbilityDef = {
-  id: 'eff_improved_bullet_armor', trigger: 'onPlay', target: 'self',
-  base: 5,
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 5, 999); },
+// Active Reload (canon T2 weapon PASSIVE): a well-timed reload grants fire
+// rate and bullet lifesteal. TCG: +1 Bullet Power (on the card) and heal 1
+// after each attack.
+const eff_active_reload: AbilityDef = {
+  id: 'eff_active_reload', trigger: 'onAttack', target: 'self',
+  base: 1,
+  run: (G, _ctx, { source, target }) => { if (source) healUnit(G, source, 1, 'Active Reload', { tag: 'lifesteal', from: target }); },
 };
-const eff_improved_spirit_armor: AbilityDef = {
-  id: 'eff_improved_spirit_armor', trigger: 'onPlay', target: 'self',
-  base: 5,
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 5, 999); },
+
+// Long Range (canon T2 weapon): bonus damage at range. TCG: the bearer's
+// attack may be aimed at any living enemy hero (the `reach` hook).
+const eff_long_range: AbilityDef = {
+  id: 'eff_long_range', trigger: 'ongoing', target: 'self',
+  base: 1,
+  reach: true,
+  run: () => {},
+};
+
+// Fortitude (canon T3 vitality): health and fast regeneration. TCG: +2 HP (on
+// the card) and heal 2 at the start of your turn.
+const eff_fortitude: AbilityDef = {
+  id: 'eff_fortitude', trigger: 'startOfTurn', target: 'self',
+  base: 2,
+  run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 2, 'Fortitude', { tag: 'regen' }); },
 };
 
 // Frenzy (T4 weapon): while the bearer is below half HP, +3 Bullet Power (the
@@ -650,6 +1014,87 @@ const eff_siphon_bullets: AbilityDef = {
       pushFx(G, { kind: 'status', iid: target.iid, statusId: 'siphon_drain', value: drain.value, duration: 2, debuff: true, tag: 'siphon', source: src });
       pushFx(G, { kind: 'status', iid: source.iid, statusId: 'siphon_gain', value: gain.value, duration: 2, debuff: false, tag: 'siphon', source: src });
     }
+  },
+};
+
+// ----- More canon passive items → equipment (docs/card-design.md, 2026-10-30) -----
+
+// Headshot Booster (canon T1 weapon): the opening headshot hits harder. TCG:
+// the bearer's swing at an enemy at full HP deals +2 (the attackBonus hook).
+const eff_headshot_booster: AbilityDef = {
+  id: 'eff_headshot_booster', trigger: 'ongoing', target: 'self',
+  base: 1,
+  attackBonus: (_self, target) => (target && target.hp >= target.hpMax ? { amount: 2, label: 'Headshot Booster: +2 at full HP' } : null),
+  run: () => {},
+};
+
+// Spirit Strike (canon T1 spirit): bullets that cut spirit resist — the spirit
+// twin of Bullet Resist Shredder. TCG: attacks apply Spirit Resist −1 for 2 turns.
+const eff_spirit_strike: AbilityDef = {
+  id: 'eff_spirit_strike', trigger: 'onAttack', target: 'self',
+  run: (G, _ctx, { target }) => { if (target && !isRespawning(target)) addStatus(G, target, 'spirit_resist_down', 1, 2); },
+};
+
+// Mystic Vulnerability (canon T2 spirit): your spirit damage lowers the
+// target's spirit resist — the cheap Escalating Exposure. TCG: when the bearer's
+// skill / spell / ult damages an enemy, Spirit Resist −1 for 2 turns.
+const eff_mystic_vulnerability: AbilityDef = {
+  id: 'eff_mystic_vulnerability', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  run: (G, _ctx, { target }) => { if (target && !isRespawning(target)) addStatus(G, target, 'spirit_resist_down', 1, 2); },
+};
+
+// Mystic Slow (canon T2 spirit): spirit damage slows. TCG: when the bearer's
+// skill / spell / ult damages an enemy, it is Rooted for 1 turn (no retreat).
+const eff_mystic_slow: AbilityDef = {
+  id: 'eff_mystic_slow', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  run: (G, _ctx, { target }) => { if (target && !isRespawning(target)) addStatus(G, target, 'rooted', 1, 1); },
+};
+
+// Slowing Bullets (canon T2 weapon): bullets slow — the gun version of Mystic
+// Slow. TCG: the bearer's attacks Root the target for 1 turn.
+const eff_slowing_bullets: AbilityDef = {
+  id: 'eff_slowing_bullets', trigger: 'onAttack', target: 'self',
+  run: (G, _ctx, { target }) => { if (target && !isRespawning(target)) addStatus(G, target, 'rooted', 1, 1); },
+};
+
+// Debuff Reducer (canon T2 vitality): shortens every negative effect on you.
+// TCG: a debuff on the bearer lands 1 turn shorter, never under 1 (the
+// debuffDuration hook). Permanent marks (99+) are left alone, and so are the
+// debuffs whose expiry is the payload — a shorter Charged, Djinn's Mark or
+// Reverb would only go off sooner.
+const GOES_OFF_ON_EXPIRY: ReadonlySet<StatusId> = new Set(['charged', 'djinns_mark', 'reverb']);
+const eff_debuff_reducer: AbilityDef = {
+  id: 'eff_debuff_reducer', trigger: 'ongoing', target: 'self',
+  base: 1,
+  debuffDuration: (_self, statusId, duration) =>
+    duration < 99 && !GOES_OFF_ON_EXPIRY.has(statusId) ? Math.max(1, duration - 1) : duration,
+  run: () => {},
+};
+
+// Spirit Snatch (canon T3 spirit): steals spirit power from the hero you hit.
+// TCG: when the bearer's skill / spell / ult damages an enemy, it gets Spirit
+// Power −1 and the bearer +1 Spirit Power, both for 2 turns.
+const eff_spirit_snatch: AbilityDef = {
+  id: 'eff_spirit_snatch', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  base: 1,
+  run: (G, _ctx, { source, target }) => {
+    if (!source || !target || isRespawning(target)) return;
+    addStatus(G, target, 'spirit_power_down', 1, 2);
+    addStatus(G, source, 'spirit_power', 1, 2);
+  },
+};
+
+// Spiritual Overflow (canon T4 weapon): shooting heroes charges up spirit
+// power — a gun-to-spirit bridge. TCG: after each swing, +1 Spirit Power for 2
+// turns (stacking like Berserker, up to +3) and heal 1.
+const eff_spiritual_overflow: AbilityDef = {
+  id: 'eff_spiritual_overflow', trigger: 'onAttack', target: 'self',
+  base: 1,
+  run: (G, _ctx, { source, target }) => {
+    if (!source || isRespawning(source)) return;
+    const cur = source.statuses.find((st) => st.id === 'spirit_power')?.value ?? 0;
+    addStatus(G, source, 'spirit_power', Math.min(3, cur + 1), 2);
+    healUnit(G, source, 1, 'Spiritual Overflow', { tag: 'lifesteal', from: target });
   },
 };
 
@@ -1203,12 +1648,16 @@ const eff_ult_drifter: AbilityDef = {
 const ABILITIES_LIST: AbilityDef[] = [
   // ----- Spells (15 cards) -----
   eff_healing_rite, eff_rusted_barrel,
-  eff_cold_front, eff_slowing_hex, eff_healbane, eff_spirit_sap,
+  eff_cold_front, eff_slowing_hex, eff_spirit_sap,
   eff_decay, eff_disarming_hex,
   eff_knockdown, eff_cast_metal_skin,
   // ----- Control spell pack (active items → spells) -----
   eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
-  eff_active_reload,
+  eff_guardian_ward, eff_warp_stone, eff_divine_barrier, eff_ethereal_shift,
+  eff_phantom_strike, eff_vortex_web, eff_refresher, eff_colossus_cast,
+  eff_golden_goose_egg, eff_grit, eff_return_fire, eff_fleetfoot, eff_split_shot,
+  eff_blood_tribute, eff_healing_nova, eff_rescue_beam, eff_fury_trance,
+  eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,
   // ----- Equipment passives (4 cards) -----
   eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
   // ----- Equipment reactive procs (5 cards) -----
@@ -1221,8 +1670,10 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_ricochet, eff_burst_fire,
   eff_toxic_bullets, eff_tesla_bullets, eff_suppressor, eff_reactive_barrier,
   eff_escalating_exposure, eff_inhibitor, eff_crippling_headshot, eff_berserker,
-  eff_colossus, eff_improved_bullet_armor, eff_improved_spirit_armor,
+  eff_healbane, eff_active_reload, eff_long_range, eff_fortitude,
   eff_frenzy, eff_siphon_bullets, eff_superior_duration,
+  eff_headshot_booster, eff_spirit_strike, eff_mystic_vulnerability, eff_mystic_slow,
+  eff_slowing_bullets, eff_debuff_reducer, eff_spirit_snatch, eff_spiritual_overflow,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige, skill_rem,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
