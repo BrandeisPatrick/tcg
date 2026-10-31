@@ -19,7 +19,7 @@ const MAGNITUDE_STATUSES: Set<StatusId> = new Set([
   'bleed', 'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power',
   'djinns_mark', 'weapon_power_down', 'spirit_power_down',
   'bullet_resist_down', 'spirit_resist_down', 'healing_boost', 'healing_boost_down',
-  'extra_attack', 'fixation', 'last_stand',
+  'extra_attack', 'fixation', 'last_stand', 'return_fire',
 ]);
 
 // Stat-reduction debuffs store a positive magnitude that represents a reduction.
@@ -37,8 +37,9 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  *  - Re-applying a status with the same id refreshes value/duration to the
  *    larger of the two — unless the status declares how it stacks
  *    (`StatusDef.stack`: Bleed and Djinn's Mark add their values up to a cap).
- *  - What the bearer carries may stretch the duration (`buffDuration` hooks:
- *    Superior Duration).
+ *  - What the bearer carries may stretch or shorten the duration
+ *    (`buffDuration` hooks: Superior Duration; `debuffDuration` hooks: Debuff
+ *    Reducer).
  *
  * A corpse on its respawn timer takes no status at all (nothing is logged or
  * shown): a swing's passives can run after the target was reaped (Ricochet's

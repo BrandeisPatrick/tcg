@@ -22,6 +22,8 @@ const TARGET_LABELS: Record<TargetFilter, string> = {
   enemyAny: 'Any Enemy',
   enemyHero: 'Enemy Hero',
   enemyActive: 'Enemy Active',
+  allyBench: 'Ally on Bench',
+  enemyBench: 'Enemy on Bench',
   anyBoard: 'Any Hero',
 };
 
@@ -29,7 +31,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
   // Anchor the banner AWAY from the rows it asks the player to tap: ally
   // targeting docks under the rival's hand (your rows stay clear), enemy
   // targeting docks above your hand (the rival's rows stay clear).
-  const anchorTop = filter === 'allyAny' || filter === 'allyHero' || filter === 'self';
+  const anchorTop = filter === 'allyAny' || filter === 'allyHero' || filter === 'allyBench' || filter === 'self';
   return (
     // Outer strip: spans the VISIBLE board area (viewport minus the open
     // panel via rightInset). Only left+right are set — adding a width would

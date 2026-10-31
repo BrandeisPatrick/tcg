@@ -2,6 +2,7 @@ import type { CardId } from '@/engine/types';
 import type { StoryRun, StoryNode } from './types';
 import { buildCampaign } from './campaign';
 import { STARTING_DECK } from './content';
+import { migrateCardIds } from '@/cards';
 
 const STORAGE_KEY = 'deadlock-tcg-story';
 
@@ -12,6 +13,7 @@ export function loadRun(): StoryRun | null {
     if (!raw) return null;
     const run = JSON.parse(raw) as StoryRun;
     if (!run?.nodes?.length) return null;
+    if (Array.isArray(run.deck)) run.deck = migrateCardIds(run.deck);
     return run;
   } catch {
     return null;

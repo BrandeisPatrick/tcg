@@ -30,3 +30,4 @@ sim-reports/
 
 # Frames written by the scripts/qa animation harness
 *-shots/
+__pycache__/

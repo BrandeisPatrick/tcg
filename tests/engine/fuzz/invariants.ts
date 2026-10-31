@@ -33,6 +33,10 @@ const isBenchOnly = (c: CardInstance): boolean => {
 };
 const isMergedRem = (c: CardInstance): boolean => c.cardId === 'hero_rem' && c.remMergeTurnsLeft != null;
 
+/** Souls a card pays out to whoever plays it, as its text says (Golden Goose
+ *  Egg: "Gain 2 souls"). Written from the cards, not read off the engine. */
+const SOULS_ON_PLAY: Record<string, number> = { golden_goose_egg: 2 };
+
 /** Invariants of a single state. */
 export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] {
   const out: Violation[] = [];
@@ -344,11 +348,14 @@ export function collectTransitionViolations(
   const played = move.name === 'playCard' && arg0 ? beforeHand.get(arg0) : undefined;
 
   if (!duplicated && move.name !== 'endTurn' && move.name !== 'completeAction' && move.name !== 'mulligan') {
-    // Souls: only the move's price and the KO bounty (+1 per enemy hero that fell, capped at 10).
+    // Souls: only the move's price, what the card played pays out (SOULS_ON_PLAY) and the
+    // KO bounty (+1 per enemy hero that fell), capped at 10.
     let cost = 0;
+    let payout = 0;
     if (played) {
       const d = CARDS_BY_ID[played.cardId];
       if (d && (d.type === 'spell' || d.type === 'equipment' || d.type === 'ultimate')) cost = played.costOverride ?? d.cost ?? 0;
+      payout = SOULS_ON_PLAY[played.cardId] ?? 0;
     } else if (move.name === 'useSkill') cost = SKILL_COST;
     else if (move.name === 'moveHero') {
       const [f, t] = move.args as [number, number];
@@ -356,9 +363,9 @@ export function collectTransitionViolations(
       const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
       if ((f === 0 || t === 0) && get(f) && get(t)) cost = RETREAT_COST;
     }
-    const wantMover = Math.min(SOULS_MAX, before.G.players[mover].souls - cost + fellOf(foe));
+    const wantMover = Math.min(SOULS_MAX, before.G.players[mover].souls - cost + payout + fellOf(foe));
     if (after.G.players[mover].souls !== wantMover) {
-      add('souls-delta', mover, `P${mover} souls ${before.G.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}; price ${cost} and ${fellOf(foe)} KO bounty give ${wantMover}`);
+      add('souls-delta', mover, `P${mover} souls ${before.G.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}; price ${cost}, payout ${payout} and ${fellOf(foe)} KO bounty give ${wantMover}`);
     }
     const wantFoe = Math.min(SOULS_MAX, before.G.players[foe].souls + fellOf(mover));
     if (after.G.players[foe].souls !== wantFoe) {

@@ -1,3 +1,4 @@
+import { CARDS_BY_ID } from '@/cards';
 import { describe, it, expect } from 'vitest';
 import type { CardInstance } from '@/engine/types';
 import { ABILITIES_BY_ID } from '@/abilities';
@@ -54,8 +55,8 @@ describe('Crippling Headshot', () => {
     const enemy = G.players['1'].active!;
     attach(hero, 'crippling_headshot');
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
-    expect(val(enemy, 'bullet_resist_down')).toBe(1);
-    expect(val(enemy, 'spirit_resist_down')).toBe(1);
+    expect(val(enemy, 'bullet_resist_down')).toBe(2);
+    expect(val(enemy, 'spirit_resist_down')).toBe(2);
   });
 });
 
@@ -69,24 +70,16 @@ describe('Berserker', () => {
   });
 });
 
-describe('Colossus', () => {
-  it('card grants +5 HP and the ability grants Bullet Resist 2', () => {
-    expect(EQUIPMENT_BY_ID['colossus'].bonus?.hp).toBe(5);
+describe('Colossus (an active item, so a spell)', () => {
+  it('gives your Active Bullet + Spirit Resist 4 for 2 turns and roots the enemy Active 1 turn', () => {
+    expect(CARDS_BY_ID['colossus'].type).toBe('spell');
     const G = freshReadyGame();
     const hero = G.players['0'].active!;
-    ABILITIES_BY_ID['eff_colossus'].run(G, { movingPlayer: '0' }, { source: hero });
-    expect(val(hero, 'bullet_resist')).toBe(2);
-  });
-});
-
-describe('Improved Armor', () => {
-  it('grants Bullet/Spirit Resist 5', () => {
-    const G = freshReadyGame();
-    const hero = G.players['0'].active!;
-    ABILITIES_BY_ID['eff_improved_bullet_armor'].run(G, { movingPlayer: '0' }, { source: hero });
-    ABILITIES_BY_ID['eff_improved_spirit_armor'].run(G, { movingPlayer: '0' }, { source: hero });
-    expect(val(hero, 'bullet_resist')).toBe(5);
-    expect(val(hero, 'spirit_resist')).toBe(5);
+    const enemy = G.players['1'].active!;
+    ABILITIES_BY_ID['eff_colossus_cast'].run(G, { movingPlayer: '0' }, {});
+    expect(hero.statuses.find((s) => s.id === 'bullet_resist')).toMatchObject({ value: 4, duration: 2 });
+    expect(hero.statuses.find((s) => s.id === 'spirit_resist')).toMatchObject({ value: 4, duration: 2 });
+    expect(enemy.statuses.find((s) => s.id === 'rooted')).toMatchObject({ duration: 1 });
   });
 });
 

@@ -1,3 +1,4 @@
+import { CARDS_BY_ID } from '@/cards';
 import { describe, it, expect } from 'vitest';
 import { freshReadyGame, makeAttack, makeHero } from './_helpers';
 import { INVALID, perform } from '@/engine/engine';
@@ -78,12 +79,12 @@ describe('Multi-attack: Extra Attack (N)', () => {
     expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBe(3);
   });
 
-  it('Burst Fire (equipment) and Active Reload (spell) stack Extra Attack', () => {
+  it('Burst Fire (equipment) and Fixation stack Extra Attack', () => {
     const G = freshReadyGame();
     const dyn = makeHero('hero_dynamo', '0', 'active', 0); // plain active
     G.players['0'].active = dyn;
-    getAbility('eff_burst_fire')!.run(G, { movingPlayer: '0' }, { source: dyn }); // +1 (each turn)
-    getAbility('eff_active_reload')!.run(G, { movingPlayer: '0' }, {});           // +1 (spell → active)
+    getAbility('eff_burst_fire')!.run(G, { movingPlayer: '0' }, { source: dyn });                       // +1 (each turn)
+    getAbility('passive_haze_fixation')!.run(G, { movingPlayer: '0' }, { source: dyn, params: { primary: true } }); // +1 (on the swing)
     expect(extraOf(dyn)).toBe(2);
   });
 
@@ -126,13 +127,15 @@ describe('Haze Fixation — reactive follow-up swing', () => {
   });
 });
 
-describe('Active Reload — Extra Attack spell', () => {
-  it('grants the caster\'s Active hero Extra Attack 1', () => {
+describe('Active Reload — passive equipment (docs/card-design.md)', () => {
+  it('is equipment with +1 Bullet Power, and heals its bearer 1 after an attack', () => {
+    expect(CARDS_BY_ID['active_reload']).toMatchObject({ type: 'equipment', bonus: { atk: 1 } });
     const G = freshReadyGame();
     const dyn = makeHero('hero_dynamo', '0', 'active', 0);
     G.players['0'].active = dyn;
-    getAbility('eff_active_reload')!.run(G, { movingPlayer: '0' }, {});
-    expect(extraOf(dyn)).toBe(1);
+    dyn.hp = 2;
+    getAbility('eff_active_reload')!.run(G, { movingPlayer: '0' }, { source: dyn });
+    expect(dyn.hp).toBe(3);
   });
 });
 

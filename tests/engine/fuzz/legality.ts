@@ -102,7 +102,7 @@ export function probeLegality(
       let candidates: unknown[][] = [];
       if (filter === 'noTarget') candidates = [[hero.iid]];
       else if (filter === 'self') candidates = [[hero.iid, hero.iid]];
-      else if (filter) candidates = liveTargets.filter((t) => targetLegal(filter, t, hero, pid) && !(skillExcludesSelf(hero, skillId) && t.iid === hero.iid)).map((t) => [hero.iid, t.iid]);
+      else if (filter) candidates = liveTargets.filter((t) => targetLegal(filter, t, hero, pid, G) && !(skillExcludesSelf(hero, skillId) && t.iid === hero.iid)).map((t) => [hero.iid, t.iid]);
       let eng = false;
       for (const args of candidates) {
         if (callMove(G, ctx, pid, 'useSkill', named(args)).outcome === 'accepted') { eng = true; break; }
@@ -167,7 +167,7 @@ export function probeLegality(
       const own = boardOf(me).find((c) => c.cardId === linkedId && !isRespawning(c));
       legal = !!own && (tgt === undefined || (tCard !== undefined && tCard.iid === own.iid));
     } else {
-      legal = targetLegal(filter, tCard, src.kind === 'skill' ? src.card : undefined, pid)
+      legal = targetLegal(filter, tCard, src.kind === 'skill' ? src.card : undefined, pid, G)
         && !(src.kind === 'skill' && skillExcludesSelf(src.card, src.skillId) && tCard?.iid === src.card.iid);
     }
     const args = [src.card.iid, tgt === 'ghost' ? 'ghost-iid' : tCard?.iid];

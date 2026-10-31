@@ -18,7 +18,7 @@ import { PosterBackdrop } from '../PosterBackdrop';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 import {
-  loadPlayerData, savePreferredHeroes, setSelectedDeckIndex, deleteDeck,
+  loadPlayerData, savePreferredHeroes, setSelectedDeckIndex, deleteDeck, resetStarterDecks,
   MAX_PREFERRED_HEROES, MAX_DECKS, DECK_SIZE,
 } from '@/storage/playerData';
 import type { DeckSlot } from '@/storage/playerData';
@@ -144,6 +144,7 @@ export function LoadoutScreen({ onBack, onEditDeck }: Props) {
             compact={isMobile}
             onSelect={(i) => { setSelectedDeckIndex(i); setData(loadPlayerData()); }}
             onDelete={(i) => { deleteDeck(i); setData(loadPlayerData()); }}
+            onReset={() => { resetStarterDecks(); setData(loadPlayerData()); }}
             onEdit={onEditDeck}
           />
         </div>
@@ -417,15 +418,18 @@ function PickSlot({ index, heroId, onClear }: {
 /* Decks — pick the one you take in                                    */
 /* ------------------------------------------------------------------ */
 
-function Decks({ decks, selected, compact, onSelect, onDelete, onEdit }: {
+function Decks({ decks, selected, compact, onSelect, onDelete, onReset, onEdit }: {
   decks: (DeckSlot | null)[];
   selected: number | null;
   compact: boolean;
   onSelect: (i: number) => void;
   onDelete: (i: number) => void;
+  onReset: () => void;
   onEdit: (i: number) => void;
 }) {
   const [confirming, setConfirming] = useState<number | null>(null);
+  // Resetting overwrites every slot, so it asks once more, the way Delete does.
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   return (
     <section>
@@ -446,6 +450,19 @@ function Decks({ decks, selected, compact, onSelect, onDelete, onEdit }: {
             onDeleteCancel={() => setConfirming(null)}
           />
         ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: compact ? 9 : 11, flexWrap: 'wrap' }}>
+        {confirmingReset ? (
+          <>
+            <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.14em', color: poster.redDeep }}>
+              Replace all {MAX_DECKS} decks?
+            </span>
+            <RowAction label="Reset" tone="red" onClick={() => { onReset(); setConfirmingReset(false); }} />
+            <RowAction label="Keep" tone="ink" onClick={() => setConfirmingReset(false)} />
+          </>
+        ) : (
+          <RowAction label="Reset to starter decks" tone="ink" onClick={() => setConfirmingReset(true)} />
+        )}
       </div>
     </section>
   );
@@ -580,6 +597,22 @@ function DeckRow({
           <span style={{ color: valid ? 'inherit' : active ? poster.red : poster.redDeep }}>{count}/{DECK_SIZE}</span>
           {' · '}{spells} spells · {count - spells} items
         </div>
+        {deck.heroes && deck.heroes.length > 0 && (
+          <div
+            style={{
+              ...text.label,
+              fontSize: 9.5,
+              letterSpacing: '0.12em',
+              marginTop: 2,
+              color: active ? poster.creamDim : poster.inkDim,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            For {deck.heroes.map((id) => CARDS_BY_ID[id]?.name ?? id).join(' · ')}
+          </div>
+        )}
       </button>
 
       {/* Actions */}

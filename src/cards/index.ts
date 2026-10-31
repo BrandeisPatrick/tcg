@@ -27,3 +27,19 @@ export function getCard(id: string): CardData {
 
 export { HEROES, SPELLS, EQUIPMENT, ULTIMATES };
 
+
+/**
+ * Cards taken out of the game, and the card a saved deck gets in their place.
+ * Deadlock merged Improved Bullet / Spirit Armor into the Resilience items
+ * (docs/card-design.md), so a deck that held one now holds the other.
+ */
+export const RETIRED_CARDS: Record<string, string> = {
+  improved_bullet_armor: 'bullet_resilience',
+  improved_spirit_armor: 'spirit_resilience',
+};
+
+/** A saved list of card ids brought up to date: a retired card becomes its
+ *  replacement, and an id the game no longer knows is dropped. */
+export function migrateCardIds(ids: string[]): string[] {
+  return ids.map((id) => RETIRED_CARDS[id] ?? id).filter((id) => id in CARDS_BY_ID);
+}

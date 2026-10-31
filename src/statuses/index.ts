@@ -56,6 +56,9 @@ export const STATUSES: StatusDef[] = [
   // Not crowd control, so it ticks at the start of its owner's turn like any buff: put up
   // for 1 turn on your own turn it covers the rival's turn and is gone when yours begins.
   { id: 'dome',          title: 'Dome',          desc: 'Cannot be the target of an attack.',                       hvalue:  2, untargetable: ['attack'] },
+  // Return Fire: an enemy swing that lands on the bearer comes back at the
+  // attacker as bullet damage (damageUnit, engine/damage.ts).
+  { id: 'return_fire',   title: 'Return Fire',   desc: 'When an enemy attack hits the bearer, the attacker takes <value> bullet damage.', hvalue: 1 },
 
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across

@@ -15,9 +15,11 @@ single-page React app.
 
 - **19 heroes** drawn from Deadlock's roster (Abrams, Haze, Vindicta, Lash,
   Paige, Dynamo, Kelvin, Seven, Sinclair, …) each with ATK / HP / skill / passive / ultimate.
-- **16 spells** (active items) and **44 equipment** (passive items) mapped 1:1
+- **36 spells** (active items) and **53 equipment** (passive items) mapped 1:1
   to canon Deadlock items, verified against the `is_active_item` field of the
   [deadlock-api.com](https://deadlock-api.com/) catalogue.
+  An active item is always a spell and a passive item is always equipment;
+  see [`docs/card-design.md`](./docs/card-design.md).
 - **Refill soul economy** (Hearthstone-style): your pool refills 1→10 over
   your first ten turns. No hoarding across turns. KO bounty (+1, capped at 10).
 - **Earn it in the lane:** the Active earns two exp for standing the turn, a

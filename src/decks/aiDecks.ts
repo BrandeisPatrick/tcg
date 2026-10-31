@@ -16,7 +16,12 @@ const AI_DECK_BALANCED: CardId[] = [
   'mystic_regeneration', 'knockdown',
   // New cards (mixed) — so the eval exercises them.
   'colossus', 'reactive_barrier', 'leech', 'transcendent_cooldown',
-  'improved_bullet_armor', 'siphon_bullets', 'improved_burst',
+  'fortitude', 'siphon_bullets', 'improved_burst',
+  // Movement / draw spells (docs/card-design.md pass).
+  'guardian_ward', 'warp_stone', 'refresher',
+  // Added 2026-10-30: the sustain / utility actives and passives.
+  'golden_goose_egg', 'grit', 'return_fire', 'healing_nova', 'rescue_beam',
+  'fury_trance', 'debuff_reducer', 'spirit_strike',
 ];
 
 const AI_DECK_AGGRO: CardId[] = [
@@ -29,6 +34,10 @@ const AI_DECK_AGGRO: CardId[] = [
   'mystic_burst', 'toxic_bullets', 'tesla_bullets', 'active_reload',
   'surge_of_power', 'berserker', 'crippling_headshot', 'frenzy',
   'bullet_lifesteal', 'inhibitor', 'burst_fire', 'ricochet',
+  'long_range',
+  // Added 2026-10-30: the gun actives and passives.
+  'headshot_booster', 'slowing_bullets', 'split_shot', 'fleetfoot', 'blood_tribute',
+  'shadow_weave', 'heroic_aura', 'alchemical_fire', 'spiritual_overflow',
 ];
 
 const AI_DECK_CONTROL: CardId[] = [
@@ -40,7 +49,11 @@ const AI_DECK_CONTROL: CardId[] = [
   'curse', 'silence_glyph', 'debuff_remover', 'unstoppable', 'echo_shard',
   'suppressor', 'escalating_exposure', 'mystic_reverb', 'improved_cooldown',
   'superior_cooldown', 'diviners_kevlar', 'spirit_lifesteal',
-  'improved_spirit_armor', 'superior_duration',
+  'divine_barrier', 'superior_duration',
+  // Movement / lockdown spells (docs/card-design.md pass).
+  'phantom_strike', 'vortex_web', 'ethereal_shift',
+  // Added 2026-10-30: the spirit / control actives and passives.
+  'mystic_vulnerability', 'mystic_slow', 'spirit_snatch', 'arctic_blast', 'infuser',
 ];
 
 export type ArchetypeName = 'balanced' | 'aggro' | 'control';

@@ -322,10 +322,10 @@ const CHANNEL_ULTS = ['eff_ult_dynamo', 'eff_ult_seven', 'eff_ult_warden'];
 /** Spirit scales these abilities through a skill's `scalesSpirit` flag too. */
 const READS_SPIRIT = new Set([...abilitiesReadingSpirit(), ...CHANNEL_ULTS]);
 
-/** Cards (or hero abilities) whose text may carry a Bullet Power mark. None does
- *  today: no card's number grows with Bullet Power. Add the id here when one
- *  does, with the code that adds it. */
-const BP_SCALING: string[] = [];
+/** Cards (or hero abilities) whose text may carry a Bullet Power mark. Split
+ *  Shot is the one so far: its damage is the Active's swing (`attackPower`).
+ *  Add the id here when another does, with the code that adds it. */
+const BP_SCALING: string[] = ['split_shot'];
 
 /** Where an ability's text is printed: a hero ability prints its own; a spell,
  *  an ultimate or a piece of gear prints the card's. */
@@ -397,7 +397,7 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     }
   });
 
-  it('nothing scales with Bullet Power yet; a {bp: appears only where the list says', () => {
+  it('a {bp: appears only where the list says', () => {
     const marked = [
       ...ALL_CARDS.filter((c) => c.type !== 'hero' && /\{bp:/.test(c.text ?? '')).map((c) => c.id),
       ...ABILITY_TEXT.filter((a) => /\{bp:/.test(a.text)).map((a) => a.id),

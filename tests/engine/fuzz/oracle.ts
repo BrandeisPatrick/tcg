@@ -115,6 +115,7 @@ export function targetLegal(
   target: CardInstance | undefined,
   source: CardInstance | undefined,
   pid: PlayerID,
+  G?: GameState,
 ): boolean {
   if (filter === 'noTarget') return target === undefined;
   if (!target) return false;
@@ -129,8 +130,22 @@ export function targetLegal(
     case 'enemyAny': return !ally;
     case 'enemyHero': return !ally && hero;
     case 'enemyActive': return !ally && target.zone === 'active';
+    // A bench hero who can take the front: not bench-only, not Rooted, with an
+    // Active on its side to trade places with — and on your own side, an Active
+    // that is alive and not Rooted itself.
+    case 'allyBench': {
+      const front = G?.players[pid].active;
+      return ally && benchMover(target) && !!front && !isRespawning(front) && !rooted(front);
+    }
+    case 'enemyBench': return !ally && benchMover(target) && !!G?.players[target.ownerId].active;
     case 'anyBoard': return true;
   }
+}
+
+const rooted = (c: CardInstance) => c.statuses.some((s) => s.id === 'rooted');
+function benchMover(c: CardInstance): boolean {
+  const d = CARDS_BY_ID[c.cardId] as { type?: string; flags?: { benchOnly?: boolean } } | undefined;
+  return c.zone === 'bench' && d?.type === 'hero' && !d.flags?.benchOnly && !rooted(c);
 }
 
 // ---------------------------------------------------------------------------

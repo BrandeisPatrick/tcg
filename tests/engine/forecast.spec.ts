@@ -143,13 +143,13 @@ const cases: Case[] = [
     oldPlanner: 'charged the patron for the Active only: 1 life',
   },
   {
-    name: "Crippling Headshot's Bullet Resist −1 lands after the first swing, so the second takes 1 more",
+    name: "Crippling Headshot's Bullet Resist −2 lands after the first swing, so the second takes 2 more",
     build: () => { const { G, attacker } = board('hero_dynamo'); wear(attacker, 'crippling_headshot'); extraAttacks(attacker, 1); return G; },
     steps: [
       { rawDamage: 3, finalDamage: 3, predictedHpAfter: 37 },
-      { rawDamage: 3, finalDamage: 4, predictedHpAfter: 33 },
+      { rawDamage: 3, finalDamage: 5, predictedHpAfter: 32 },
     ],
-    damageToActive: 7, patronDamage: 0, ko: false,
+    damageToActive: 8, patronDamage: 0, ko: false,
     oldPlanner: 'held the target\'s resist fixed across the swings: 6 damage',
   },
   {

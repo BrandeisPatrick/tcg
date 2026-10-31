@@ -1,4 +1,5 @@
 import type { CardId } from '@/engine/types';
+import { migrateCardIds } from '@/cards';
 
 export const MAX_DECKS = 5;
 export const DECK_SIZE = 15;
@@ -9,6 +10,9 @@ export interface DeckSlot {
   id: string;
   name: string;
   cards: CardId[];
+  /** The four heroes a starter deck is built for — a suggestion, shown with
+   *  the deck. Absent on a deck the player made. */
+  heroes?: CardId[];
 }
 
 export interface PlayerData {
@@ -24,93 +28,81 @@ export interface PlayerData {
 
 const STORAGE_KEY = 'deadlock-tcg-player';
 
-const DEFAULT_DECKS: DeckSlot[] = [
+/**
+ * The starter decks, one per way to play. Each opens with at least four cards
+ * that cost 2 souls or less, so the first turns have plays, and suggests the
+ * four heroes its plan is built for (`heroes`). Together they show nearly the
+ * whole card pool; the AI decks (decks/aiDecks.ts) carry the rest.
+ */
+export const STARTER_DECKS: DeckSlot[] = [
   {
-    id: 'deck_0', name: 'Balanced',
+    id: 'deck_0', name: 'Gunline',
+    heroes: ['hero_haze', 'hero_shiv', 'hero_drifter', 'hero_vindicta'],
     cards: [
-      'healing_rite', 'healing_rite',
-      'rusted_barrel', 'rusted_barrel',
-      'cold_front',
-      'slowing_hex',
+      'restorative_shot', 'headshot_booster',
       'extended_magazine', 'extended_magazine',
-      'extra_health', 'extra_health',
-      'restorative_shot',
-      'titanic_magazine',
-      'healing_booster',
-      'bullet_resilience',
-      'extra_regen',
+      'rusted_barrel',
+      'active_reload', 'long_range', 'slowing_bullets', 'bullet_lifesteal',
+      'titanic_magazine', 'split_shot',
+      'burst_fire', 'toxic_bullets',
+      'crippling_headshot', 'ricochet',
     ],
   },
   {
-    id: 'deck_1', name: 'Aggro',
+    id: 'deck_1', name: 'Spellcaster',
+    heroes: ['hero_lady_geist', 'hero_sinclair', 'hero_seven', 'hero_dynamo'],
     cards: [
-      'rusted_barrel', 'rusted_barrel',
-      'cold_front', 'cold_front',
-      'decay',
-      'knockdown',
-      'extended_magazine', 'extended_magazine',
-      'titanic_magazine', 'titanic_magazine',
-      'extra_regen',
-      'bullet_resist_shredder',
-      'glass_cannon',
-      'healing_rite',
-      'restorative_shot',
+      'golden_goose_egg', 'mystic_regeneration',
+      'extra_spirit', 'extra_spirit',
+      'mystic_burst',
+      'spirit_sap', 'healbane', 'mystic_vulnerability',
+      'cold_front', 'improved_spirit',
+      'vortex_web', 'arctic_blast',
+      'escalating_exposure', 'mystic_reverb', 'boundless_spirit',
     ],
   },
   {
     id: 'deck_2', name: 'Control',
+    heroes: ['hero_kelvin', 'hero_wraith', 'hero_rem', 'hero_lash'],
     cards: [
-      'healing_rite', 'healing_rite',
-      'slowing_hex', 'slowing_hex',
-      'healbane',
-      'metal_skin',
-      'disarming_hex',
-      'extra_health', 'extra_health',
-      'extra_spirit',
-      'healing_booster',
-      'weapon_shielding',
-      'spirit_resilience',
-      'bullet_resilience',
-      'mystic_regeneration',
+      'extra_health', 'healing_rite', 'restorative_shot', 'mystic_regeneration',
+      'slowing_hex', 'return_fire', 'suppressor', 'reactive_barrier', 'mystic_slow',
+      'knockdown', 'silence_glyph', 'curse', 'debuff_remover', 'rescue_beam',
+      'phantom_strike',
     ],
   },
   {
-    id: 'deck_3', name: 'Spirit Burst',
+    id: 'deck_3', name: 'Tank & Sustain',
+    heroes: ['hero_abrams', 'hero_mo_krill', 'hero_warden', 'hero_paige'],
     cards: [
-      'cold_front', 'cold_front',
-      'spirit_sap', 'spirit_sap',
-      'healbane',
-      'decay',
-      'extra_spirit', 'extra_spirit',
-      'improved_spirit', 'improved_spirit',
-      'mystic_regeneration',
-      'healing_rite',
-      'spirit_shielding',
-      'boundless_spirit',
-      'extra_regen',
-    ],
-  },
-  {
-    id: 'deck_4', name: 'Tank & Sustain',
-    cards: [
-      'healing_rite', 'healing_rite',
-      'metal_skin', 'metal_skin',
-      'slowing_hex',
-      'extra_health', 'extra_health',
+      'grit', 'extra_health', 'restorative_shot',
       'extra_regen', 'extra_regen',
-      'restorative_shot', 'restorative_shot',
-      'healing_booster',
-      'weapon_shielding',
-      'spirit_shielding',
-      'healing_tempo',
+      'healing_booster', 'weapon_shielding', 'spirit_shielding', 'debuff_reducer',
+      'bullet_resilience', 'fortitude', 'divine_barrier', 'healing_nova',
+      'colossus',
+      'leech',
+    ],
+  },
+  {
+    id: 'deck_4', name: 'Tempo',
+    heroes: ['hero_yamato', 'hero_viscous', 'hero_mirage', 'hero_haze'],
+    cards: [
+      'healing_rite', 'mystic_regeneration',
+      'extra_spirit', 'rusted_barrel',
+      'improved_cooldown', 'fleetfoot', 'fury_trance',
+      'echo_shard', 'superior_cooldown', 'surge_of_power', 'unstoppable',
+      'warp_stone', 'ethereal_shift',
+      'refresher', 'infuser',
     ],
   },
 ];
 
+const starterCopies = (): DeckSlot[] => STARTER_DECKS.map((d) => ({ ...d, cards: [...d.cards], heroes: d.heroes && [...d.heroes] }));
+
 function defaultPlayerData(): PlayerData {
   return {
     preferredHeroes: [null, null, null, null],
-    decks: DEFAULT_DECKS.map((d) => ({ ...d })),
+    decks: starterCopies(),
     selectedDeckIndex: 0,
     lessonsDone: [],
     tutorialDone: false,
@@ -127,7 +119,7 @@ export function loadPlayerData(): PlayerData {
         ? parsed.preferredHeroes.slice(0, MAX_PREFERRED_HEROES)
         : [null, null, null, null],
       decks: Array.isArray(parsed.decks)
-        ? parsed.decks.slice(0, MAX_DECKS)
+        ? parsed.decks.slice(0, MAX_DECKS).map(migrateDeck)
         : [null, null, null, null, null],
       selectedDeckIndex: parsed.selectedDeckIndex ?? null,
       lessonsDone: Array.isArray(parsed.lessonsDone) ? parsed.lessonsDone.filter((x: unknown) => typeof x === 'string') : [],
@@ -191,5 +183,21 @@ export function markLessonDone(id: string, total: number): void {
   if (already && data.tutorialDone === allDone) return;
   if (!already) data.lessonsDone.push(id);
   data.tutorialDone = allDone;
+  savePlayerData(data);
+}
+
+/** A saved deck with retired cards swapped for their replacements
+ *  (`migrateCardIds`); a slot that is not a deck stays empty. */
+function migrateDeck(deck: DeckSlot | null): DeckSlot | null {
+  if (!deck || !Array.isArray(deck.cards)) return null;
+  return { ...deck, cards: migrateCardIds(deck.cards) };
+}
+
+/** Put the starter decks back in every deck slot, replacing what is saved
+ *  there, and select the first. Hero picks and tutorial progress are kept. */
+export function resetStarterDecks(): void {
+  const data = loadPlayerData();
+  data.decks = starterCopies();
+  data.selectedDeckIndex = 0;
   savePlayerData(data);
 }
