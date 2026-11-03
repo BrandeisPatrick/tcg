@@ -1,9 +1,9 @@
 /**
  * What a hero can still do this turn, read the way the engine reads it. A
- * turn is the player's to spend on cards, skills and a retreat, with one
- * attack among them: every hero may use its skill once a turn (a soul each),
- * and the Active does one or the other — its skill or the attack. The board's
- * glint, the hero sheet's plates, the refusal stickers and the tutorial all
+ * turn is the player's to spend on cards, skills, retreats and attacks: every
+ * hero may use its skill once a turn (a soul each) and attack once a turn from
+ * the Active slot, and does one or the other — its skill or its attack. The
+ * board's glint, the hero sheet's plates, the refusal stickers and the tutorial all
  * ask the engine's own `skillBlocked` / `attackBlocked` / `playBlocked` /
  * `moveBlocked` (legality.ts), so none of them offers a move the engine would
  * refuse; this file only words the answers.
@@ -12,7 +12,7 @@ import type { AbilityId, CardInstance, GameState, PlayerID } from '@/engine/type
 import { CARDS_BY_ID } from '@/cards';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
 import {
-  blocked, cardCost, moveBlocked, skillBlocked,
+  blocked, cardCost, moveBlocked, retreatCost, skillBlocked,
   type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
 import { findCardOnBoard, heroData, isRespawning, isUntargetable, otherPlayer, resolveSkill } from '@/engine/query';
@@ -51,7 +51,8 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
 export function attackBlockReason(block: AttackBlock, active: CardInstance | null | undefined, rival?: CardInstance | null): string {
   switch (block) {
     case 'turn1': return 'No attacks on Turn 1';
-    case 'used': return active?.attackedThisTurn ? 'Attacked this turn' : "This turn's attack is spent";
+    // Attacks are per hero: 'used' is this Active's own swing, made this turn.
+    case 'used': return 'Attacked this turn';
     case 'skill': return 'Used its skill this turn';
     case 'cannot': return 'Cannot attack (status)';
     case 'noTarget': {
@@ -89,15 +90,17 @@ export function playBlockReason(block: PlayBlock, s: PlaySubject): string {
   }
 }
 
-/** The line the board's sticker prints on a swap that cannot be made. */
-export function moveBlockReason(block: MoveBlock): string {
+/** The line the board's sticker prints on a swap that cannot be made. `cost` is
+ *  what the Retreat costs right now (`retreatCost`, legality.ts); left out, the
+ *  base price. */
+export function moveBlockReason(block: MoveBlock, cost = RETREAT_COST): string {
   switch (block) {
     case 'same': return 'That hero is already there';
     case 'empty': return 'There is no hero in that slot';
     case 'benchOnly': return 'That hero can only fight from the bench';
     case 'down': return 'Down until it respawns';
     case 'rooted': return 'Rooted: cannot retreat or be swapped';
-    case 'souls': return `Need ${souls(RETREAT_COST)}`;
+    case 'souls': return `Need ${souls(cost)}`;
     case 'illegal': return 'Not a place on the board';
   }
 }
@@ -165,7 +168,7 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
         have: G.players[pid].souls,
       });
     }
-    case 'moveHero': return moveBlockReason(code as MoveBlock);
+    case 'moveHero': return moveBlockReason(code as MoveBlock, retreatCost(G, pid));
     case 'promoteToActive': return promoteBlockReason(code as PromoteBlock);
     case 'endTurn': return '';
   }
@@ -186,7 +189,7 @@ export function attackLine(plan: AttackPlan): string {
 }
 
 /** Every hero of `pid`'s that can still do something this turn: use one of
- *  its skills now, or — the Active — make the turn's attack while it is open. */
+ *  its skills now, or — the Active — attack while its attack is open. */
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {
   const ps = G.players[pid];
   const ready = new Set<string>();

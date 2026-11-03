@@ -14,10 +14,10 @@ import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID } from '@/statuses';
 import {
   LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_EQUIPMENT_PER_HERO, MAX_HAND, MAX_LEVEL,
-  RETREAT_COST, SKILL_COST, SOULS_MAX,
+  SKILL_COST, SOULS_MAX,
 } from '@/engine/constants';
 import { isRespawning, koPatronDamage, stepInCandidates } from '@/engine/query';
-import { PIDS, boardOf, describeUnit, everyCard, isHeroCard, other } from './oracle';
+import { PIDS, boardOf, describeUnit, everyCard, isHeroCard, other, retreatCostOracle } from './oracle';
 
 export interface Violation {
   /** Invariant name, e.g. `hero-hp-range`. */
@@ -361,7 +361,7 @@ export function collectTransitionViolations(
       const [f, t] = move.args as [number, number];
       const ps = before.G.players[mover];
       const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
-      if ((f === 0 || t === 0) && get(f) && get(t)) cost = RETREAT_COST;
+      if ((f === 0 || t === 0) && get(f) && get(t)) cost = retreatCostOracle(before.G, mover);
     }
     const wantMover = Math.min(SOULS_MAX, before.G.players[mover].souls - cost + payout + fellOf(foe));
     if (after.G.players[mover].souls !== wantMover) {
@@ -370,6 +370,21 @@ export function collectTransitionViolations(
     const wantFoe = Math.min(SOULS_MAX, before.G.players[foe].souls + fellOf(mover));
     if (after.G.players[foe].souls !== wantFoe) {
       add('souls-delta', foe, `P${foe} souls ${before.G.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; expected ${wantFoe}`);
+    }
+  }
+
+  // A Retreat spends the Swift of the hero that leaves the Active slot (its free Retreat is
+  // that one), and the hero that swung and left keeps its attack flag on the bench.
+  if (!duplicated && move.name === 'moveHero') {
+    const [f, t] = move.args as [number, number];
+    const leaving = before.G.players[mover].active;
+    const moved = leaving && (f === 0 || t === 0) && after.G.players[mover].active?.iid !== leaving.iid;
+    const now = moved ? boardOf(after.G.players[mover]).find((c) => c.iid === leaving!.iid) : undefined;
+    if (now && leaving!.statuses.some((s) => s.id === 'swift') && now.statuses.some((s) => s.id === 'swift')) {
+      add('swift-spent', now.iid, `${describeUnit(now)} retreated while Swift and is Swift still`);
+    }
+    if (now && leaving!.attackedThisTurn && !now.attackedThisTurn) {
+      add('attack-flag', now.iid, `${describeUnit(now)} attacked, retreated, and lost its attackedThisTurn on the bench`);
     }
   }
 

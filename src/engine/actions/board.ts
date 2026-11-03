@@ -8,15 +8,24 @@
  *
  * Every hero that leaves the Active slot goes through `leaveActive`
  * (lane.ts), which ends what only means something in the lane (Fixation).
+ * A hero that takes the slot by a move its player chose — the Retreat, or a
+ * card's `swapIntoActive` — sets off what it wears that listens for
+ * `onBearerStepIn` (Kinetic Dash); a promotion off a fallen Active and a drag
+ * to the front (`pullToActive`) do not.
  */
 import type { CardInstance, GameState, PlayerID, PlayerState } from '../types';
 import { CARDS_BY_ID } from '@/cards';
-import { RETREAT_COST } from '../constants';
 import { pushLog } from '../log';
 import { resolve } from '../death';
+import { retreatCost } from '../legality';
 import { stepInCandidates } from '../query';
 import { leaveActive } from '../lane';
+import { fireTriggers } from '../triggers';
 
+/** Swap the heroes in two slots. With the Active on one side it is a Retreat:
+ *  it charges `retreatCost` (read before the swap, off the hero leaving),
+ *  spends that hero's Swift, and the hero stepping in sets off its
+ *  `onBearerStepIn` gear. Between two bench slots it is a free shuffle. */
 export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot: 0|1|2|3) {
   const ps = G.players[pid];
   const get = (s: 0|1|2|3) => s === 0 ? ps.active! : ps.bench[s - 1]!;
@@ -29,16 +38,21 @@ export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot:
   const b = get(toSlot);
   // Retreat: swapping the Active with a bench hero charges souls (both are alive).
   const isRetreat = fromSlot === 0 || toSlot === 0;
+  const cost = isRetreat ? retreatCost(G, pid) : 0;
   if (isRetreat) {
-    ps.souls -= RETREAT_COST;
-    leaveActive(G, ps.active!); // the hero standing in the lane steps out of it
+    const leaving = ps.active!;
+    ps.souls -= cost;
+    // A Swift hero's free Retreat is the one it spends.
+    leaving.statuses = leaving.statuses.filter((s) => s.id !== 'swift');
+    leaveActive(G, leaving); // the hero standing in the lane steps out of it
   }
   set(fromSlot, b);
   set(toSlot, a);
   a.exhausted = true;
   b.exhausted = true;
   if (isRetreat) {
-    pushLog(G, `P${pid} retreated (-${RETREAT_COST} souls).`);
+    pushLog(G, `P${pid} retreated (${cost > 0 ? `-${cost} soul${cost === 1 ? '' : 's'}` : 'free'}).`);
+    fireTriggers(G, ps.active!, 'onBearerStepIn', { reaction: true });
   } else {
     pushLog(G, `P${pid} swapped bench slots ${fromSlot} <-> ${toSlot}.`);
   }
@@ -108,14 +122,19 @@ function swapWithActive(
 
 /**
  * A bench hero of `ps` steps into the Active slot, free: the Active takes the
- * slot it leaves (Mirage's Traveler). `leaveActive` runs for the hero who steps
- * out, and the log says "X steps in for Y." — pass `quiet` when the card's own
- * line already tells it. Returns whether the swap was made: it is not for a
- * hero who is not on `ps`'s bench, a fallen one, a bench-only one (Rem), or a
- * board with no Active.
+ * slot it leaves (Warp Stone, Rescue Beam, Majestic Leap, Mirage's Traveler).
+ * `leaveActive` runs for the hero who steps out, the hero who steps in sets off
+ * its `onBearerStepIn` gear (Kinetic Dash), and the log says "X steps in for
+ * Y." — pass `quiet` when the card's own line already tells it. The swap is
+ * free, so it neither costs souls nor spends a Swift. Returns whether it was
+ * made: it is not for a hero who is not on `ps`'s bench, a fallen one, a
+ * bench-only one (Rem), or a board with no Active.
  */
 export function swapIntoActive(G: GameState, ps: PlayerState, hero: CardInstance, opts: { quiet?: boolean } = {}): boolean {
-  return swapWithActive(G, ps, hero, opts.quiet ? null : (h, a) => `${h} steps in for ${a}.`);
+  const swapped = swapWithActive(G, ps, hero, opts.quiet ? null : (h, a) => `${h} steps in for ${a}.`);
+  // The player chose this move: the hero who stepped in sets off its step-in gear.
+  if (swapped) fireTriggers(G, ps.active!, 'onBearerStepIn', { reaction: true });
+  return swapped;
 }
 
 /**

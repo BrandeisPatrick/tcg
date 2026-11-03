@@ -88,11 +88,11 @@ export const STARTER_DECKS: DeckSlot[] = [
     heroes: ['hero_yamato', 'hero_viscous', 'hero_mirage', 'hero_haze'],
     cards: [
       'healing_rite', 'mystic_regeneration',
-      'extra_spirit', 'rusted_barrel',
-      'improved_cooldown', 'fleetfoot', 'fury_trance',
-      'echo_shard', 'superior_cooldown', 'surge_of_power', 'unstoppable',
+      'extra_spirit', 'rusted_barrel', 'sprint_boots',
+      'improved_cooldown', 'fleetfoot', 'fury_trance', 'majestic_leap',
+      'echo_shard', 'surge_of_power', 'unstoppable',
       'warp_stone', 'ethereal_shift',
-      'refresher', 'infuser',
+      'infuser',
     ],
   },
 ];

@@ -24,12 +24,13 @@ const eyebrow = {
   lineHeight: 1,
 } as const;
 
-/** The turn's attack, offered on your Active's sheet: a swing at the rival
- *  Active for its bullet damage. Free, one-way, one a turn — and the Active
- *  makes it or uses its skill, not both. A hero with reach may name any living
- *  rival: the plate then still speaks for the default target (the first the
- *  engine lists), and tapping it closes the sheet and asks who (`onAttack`; the
- *  board arms the targeting, see board/attackAim.ts). */
+/** Your Active's attack, offered on its sheet: a swing at the rival Active for
+ *  its bullet damage. Free, one-way, one a turn for each hero while it stands
+ *  in the Active slot (a hero a Retreat brings in after the swing has its
+ *  own) — and a hero makes it or uses its skill, not both. A hero with reach
+ *  may name any living rival: the plate then still speaks for the default
+ *  target (the first the engine lists), and tapping it closes the sheet and
+ *  asks who (`onAttack`; the board arms the targeting, see board/attackAim.ts). */
 export interface AttackOffer {
   /** What the swing would do ("Hits Dynamo for 2 bullet damage"), while it
    *  can be made — at the default target. */
@@ -37,7 +38,7 @@ export interface AttackOffer {
   /** Why it cannot be made right now ("No attacks on Turn 1"), printed in
    *  the line's place. */
   blockedReason?: string;
-  /** This hero made the turn's attack. */
+  /** This hero has attacked this turn. */
   made?: boolean;
   onAttack: () => void;
 }
@@ -288,8 +289,8 @@ export function HeroDetailSheet({
               ?? (retreat.incomingName
                 ? `${data.name} to bench · ${retreat.incomingName} to Active`
                 : `${data.name} to bench · you pick who goes in`)}
-            ariaLabel={`Retreat ${data.name} to the bench — costs ${retreat.cost} souls`}
-            badge={`−${retreat.cost}`}
+            ariaLabel={`Retreat ${data.name} to the bench — ${retreat.cost > 0 ? `costs ${retreat.cost} soul${retreat.cost === 1 ? '' : 's'}` : 'free'}`}
+            badge={retreat.cost > 0 ? `−${retreat.cost}` : 'Free'}
           />
         )}
         <PosterButton variant="ghost" size="sm" onClick={onClose} style={{ width: '100%' }}>

@@ -35,7 +35,7 @@ lock a skill. The engine fixes that by construction:
 |---|---|
 | `constants.ts` | every rule number (costs, caps, patron HP, soul ramp, respawn, levels) |
 | `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` / `resolveSkill` (a hero's kit: its skills, then passives; which skill a bare action names), `isBlocked` / `isUntargetable`, `hasReach`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, `checkWinner` |
-| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets`, `playBlocked` / `playTargets`, `cardCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else), `legalActions` |
+| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets`, `playBlocked` / `playTargets`, `cardCost`, `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `attack` (and `attackAll`, a swing at every enemy hero), `playCard`, `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters) |
 | `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts`, `deckOps.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp, the deck and the hand (`returnToHand`) |
@@ -52,6 +52,20 @@ it lists `legalActions` and ranks each by the position it leads to
 is worth is judgement, kept in one table (`STATUS_WEIGHT`) at the top of that
 file.
 
+## The turn
+
+A turn is the player's to spend on cards, skills, retreats and attacks in any
+order. **Attacks are per hero:** every hero may attack once a turn while it
+stands in the Active slot, so a Retreat after the swing brings in a hero with
+a swing of its own, and a hero that swung, retreated and came back cannot swing
+again. The gate reads the hero (`attackedThisTurn`, kept on the bench), not the
+turn; `G.attackUsed` only says the turn has seen an attack (the board's turn
+phase and the coach plate read it). A hero still does one or the other — its
+skill or its attack. Turn 1 has no attack, and a promotion off a fallen Active
+is free and brings in a hero who may attack. A Retreat costs `retreatCost`:
+`RETREAT_COST`, less what the hero leaving carries (`retreatDiscount`), and
+nothing while it is Swift — the Retreat spends the Swift.
+
 ## Adding or changing a card
 
 - **An effect** (a skill, a spell, an ultimate, an equipment proc) is an
@@ -61,9 +75,18 @@ file.
   takes, how long its buffs last — is a pure hook on the ability:
   `attackBonus(self, target)` (Frenzy; the swing passes its target, for a bonus
   that reads it — Fixation's stacks — and the card face passes none),
-  `incoming` (Vindicta's flight), `buffDuration` (Superior Duration).
-  `attackPower`, `damageUnit` and `addStatus` ask every ability the hero
-  carries; nothing else needs to know.
+  `incoming` (Vindicta's flight), `buffDuration` (Superior Duration),
+  `retreatDiscount` (Sprint Boots: souls off the bearer's Retreat, read by
+  `retreatCost`), `resists` (Enduring Speed: a status `addStatus` refuses to
+  put on the bearer, saying so in the log). `attackPower`, `damageUnit`,
+  `addStatus` and `retreatCost` ask every ability the hero carries; nothing
+  else needs to know.
+- **Gear that reacts to a move** listens for a trigger the engine fires
+  through `fireTriggers` with `reaction: true`: `onBearerStepIn` goes off for the
+  hero that takes the Active slot by a move its player chose — the Retreat
+  (`moveHero`) or a card's `swapIntoActive` — never by a promotion off a fallen
+  Active, nor when the rival drags it to the front (`pullToActive`). Kinetic
+  Dash listens for it.
 - **Who the attack may name** — `reach` on a passive (or worn gear) lets its
   hero's basic attack name any living enemy hero, not only the rival Active;
   `attackTargets` is the one list, and the move, the forecast, the AI and

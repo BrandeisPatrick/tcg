@@ -22,6 +22,8 @@ const AI_DECK_BALANCED: CardId[] = [
   // Added 2026-10-30: the sustain / utility actives and passives.
   'golden_goose_egg', 'grit', 'return_fire', 'healing_nova', 'rescue_beam',
   'fury_trance', 'debuff_reducer', 'spirit_strike',
+  // Added 2026-11-03: the free swap, now that the hero who steps in can swing.
+  'majestic_leap',
 ];
 
 const AI_DECK_AGGRO: CardId[] = [
@@ -38,6 +40,8 @@ const AI_DECK_AGGRO: CardId[] = [
   // Added 2026-10-30: the gun actives and passives.
   'headshot_booster', 'slowing_bullets', 'split_shot', 'fleetfoot', 'blood_tribute',
   'shadow_weave', 'heroic_aura', 'alchemical_fire', 'spiritual_overflow',
+  // Added 2026-11-03: swing, swap, swing again.
+  'sprint_boots', 'kinetic_dash',
 ];
 
 const AI_DECK_CONTROL: CardId[] = [
@@ -54,6 +58,8 @@ const AI_DECK_CONTROL: CardId[] = [
   'phantom_strike', 'vortex_web', 'ethereal_shift',
   // Added 2026-10-30: the spirit / control actives and passives.
   'mystic_vulnerability', 'mystic_slow', 'spirit_snatch', 'arctic_blast', 'infuser',
+  // Added 2026-11-03: a Retreat no Root can hold.
+  'enduring_speed',
 ];
 
 export type ArchetypeName = 'balanced' | 'aggro' | 'control';

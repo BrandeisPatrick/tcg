@@ -14,8 +14,9 @@ are a *bias, never a ceiling.*
 
 Mechanically guaranteed by:
 - **attack = bullet, skill = spirit** — two damage avenues on every hero. Each
-  hero's skill is once a turn; the Active either casts it or makes the turn's
-  attack, and a bench hero can only cast.
+  hero's skill is once a turn; the Active either casts it or attacks (once a
+  turn per hero, so a Retreat after the swing brings in a second swing), and a
+  bench hero can only cast.
 - **Every hero gains +1 HP / +1 BP / +1 Spirit per level** (`expSystem.ts`), and
   **every damaging skill *and* ultimate scales with the caster's Spirit** — so
   Spirit investment turns any hero into a caster (even passive/tank heroes, via

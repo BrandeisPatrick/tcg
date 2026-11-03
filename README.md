@@ -15,7 +15,7 @@ single-page React app.
 
 - **19 heroes** drawn from Deadlock's roster (Abrams, Haze, Vindicta, Lash,
   Paige, Dynamo, Kelvin, Seven, Sinclair, …) each with ATK / HP / skill / passive / ultimate.
-- **36 spells** (active items) and **53 equipment** (passive items) mapped 1:1
+- **37 spells** (active items) and **56 equipment** (passive items) mapped 1:1
   to canon Deadlock items, verified against the `is_active_item` field of the
   [deadlock-api.com](https://deadlock-api.com/) catalogue.
   An active item is always a spell and a passive item is always equipment;
@@ -27,14 +27,17 @@ single-page React app.
   to hand — one at a time, as each hero earns it. A fallen hero costs its
   patron its level: a leveled carry is the costliest to lose, and the one
   worth hunting. A patron at 0 — or every hero down at once — loses.
-- **The turn:** cards, skills and a retreat in any order, with one attack
-  among them. The attack is tapped on your Active's sheet: it swings at the
-  rival Active for its bullet damage, costs nothing, and is one-way — the
-  rival does not hit back. None on Turn 1. The turn button only ends the turn,
-  and ending it never attacks. The dial between the Actives shows the attack
-  without a word: quiet before it, with only its spinner moving; ringed with
-  bouncing level bars that thump on every swing while it lands; and left with
-  a short fringe once it is made.
+- **The turn:** cards, skills, retreats and attacks in any order. Every hero
+  may attack once a turn while it stands in the Active slot: swing, Retreat
+  (2 souls, less with Sprint Boots, free when Swift) to bring a fresh hero in,
+  and it swings too; a hero that swung and came back cannot swing again. The
+  attack is tapped on your Active's sheet: it swings at the rival Active for
+  its bullet damage, costs nothing, and is one-way — the rival does not hit
+  back. None on Turn 1. The turn button only ends the turn, and ending it
+  never attacks. The dial between the Actives shows the attacks without a
+  word: quiet before the first, with only its spinner moving; ringed with
+  bouncing level bars that thump on every swing while one lands; and left
+  with a short fringe once one is made.
 - **Active hero KO flow:** corpse stays in slot greyed-out with a rotating
   brass clock ring + countdown; on death the player is prompted to choose a
   bench hero to step up.

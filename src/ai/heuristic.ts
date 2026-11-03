@@ -9,10 +9,11 @@
  * That captures target choice, lethal and the value of gear and skills without
  * hand-tuning each case, and what a line leaves on the board: the statuses it
  * lands, the channel it starts, the Rem it merges. A turn is the player's to
- * spend on cards, skills and a retreat in any order, with at most one attack
- * among them — and ending the turn never attacks, so the AI has to choose
- * `attack` itself. The Active either attacks or uses its skill, so every line is
- * valued with the attack it leaves on the table.
+ * spend on cards, skills, retreats and attacks in any order — every hero may
+ * attack once a turn from the Active slot, so a Retreat after the swing brings
+ * in a hero with an attack of its own — and ending the turn never attacks, so
+ * the AI has to choose `attack` itself. The Active either attacks or uses its
+ * skill, so every line is valued with the attack it leaves on the table.
  *
  * Without lookahead (the eval framework's random agent, the MCTS bot's rollouts)
  * the moves are only listed, ranked by cheap per-move scores.
@@ -304,19 +305,43 @@ function scoreAttack(G: GameState, pid: PlayerID, targetIid?: string): number {
   return 15 + plan.damageToActive * 3 + (plan.defenderActiveKO ? 25 : 0);
 }
 
+/** Below this share of its HP a hero is about to die: an Active worth pulling
+ *  out, and a bench hero not worth sending in for its swing. */
+const ABOUT_TO_DIE = 0.35;
+
 /** A retreat's score, or null when the swap is not worth its souls. It is worth
- *  them when the hero stepping in is much fresher, or when the Active is
- *  crowd-controlled (dead weight whatever its HP). The AI still offers a retreat
- *  that is not worth it — the engine allows it — but ranks it behind everything. */
-function retreatPoints(active: CardInstance, incoming: CardInstance): number | null {
+ *  them when the hero stepping in is much fresher, when the Active is
+ *  crowd-controlled (dead weight whatever its HP), or when it buys an attack:
+ *  attacks are per hero, so after the Active has swung (or spent itself on its
+ *  skill) a hero who steps in and can still attack is a second swing this turn
+ *  — `bought` is that swing's crude score, from `attackBought`, and is only
+ *  counted for a hero not itself about to die in the lane. The AI still offers
+ *  a retreat that is not worth it — the engine allows it — but ranks it behind
+ *  everything. */
+function retreatPoints(active: CardInstance, incoming: CardInstance, bought: number | null = null): number | null {
   const activeFrac = active.hp / Math.max(1, active.hpMax);
-  const gain = incoming.hp / Math.max(1, incoming.hpMax) - activeFrac;
+  const incomingFrac = incoming.hp / Math.max(1, incoming.hpMax);
+  const gain = incomingFrac - activeFrac;
   const deadWeight = active.statuses.some((s) => CC_STATUSES.has(s.id));
-  if (gain < 0.25 && !deadWeight) return null;
+  const swing = bought !== null && incomingFrac >= ABOUT_TO_DIE ? bought : null;
+  if (gain < 0.25 && !deadWeight && swing === null) return null;
   let s = 10;
-  if (activeFrac < 0.35) s += 30; // about to die
+  if (activeFrac < ABOUT_TO_DIE) s += 30; // about to die
   if (deadWeight) s += 18;
+  if (swing !== null) s += swing;
   return s + Math.round(gain * 20);
+}
+
+/** The crude score of the attack retreat `a` buys, or null when it buys none:
+ *  the Active cannot attack now (it has swung, used its skill, or is locked
+ *  out) and the hero the retreat brings in can. Asked of the engine — the
+ *  retreat is made on a copy and the attack gate read after it — not worked
+ *  out here. */
+function attackBought(G: GameState, pid: PlayerID, a: Extract<Action, { type: 'moveHero' }>): number | null {
+  if (attackBlocked(G, pid) === null) return null;
+  const after = simulate(G, pid, a);
+  if (after.invalid || attackBlocked(after.G, pid) !== null) return null;
+  return scoreAttack(after.G, pid);
 }
 
 /** Where a retreat that is not worth it ranks: behind passing, behind every
@@ -342,7 +367,7 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
     case 'useSkill': return scoreSkill(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined);
     case 'moveHero': {
       const { active, incoming } = retreatPair(G, pid, a);
-      return retreatPoints(active, incoming) ?? NOT_WORTH_IT;
+      return retreatPoints(active, incoming, attackBought(G, pid, a)) ?? NOT_WORTH_IT;
     }
     // A promotion owed comes before everything: the healthiest hero steps up.
     case 'promoteToActive': return 50_000 + findCardOnBoard(G, a.benchIid)!.card.hp;
@@ -352,12 +377,14 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
 
 // ----- the lookahead ----------------------------------------------------------
 
-/** The position after `a`, on a copy. While the turn's attack is still available
+/** The position after `a`, on a copy. While an attack is still available
  *  after it, the line is played through the attack too — "this move, then the
  *  attack" — so a buff, a bench skill or a retreat is valued by the attack it
- *  improves, and sees lethal; the Active's own skill, which forfeits the attack,
- *  is weighed honestly against attacking. `endTurn` is scored as the position
- *  stands: ending the turn forfeits the attack. */
+ *  improves, and sees lethal; the Active's own skill, which forfeits its
+ *  attack, is weighed honestly against attacking. Attacks are per hero, so a
+ *  retreat after the swing is valued by the swing of the hero it brings in.
+ *  `endTurn` is scored as the position stands: ending the turn forfeits the
+ *  attack. */
 function lineAfter(G: GameState, pid: PlayerID, a: Action): GameState {
   if (a.type === 'endTurn') return G;
   const { G: g } = simulate(G, pid, a);
@@ -368,12 +395,14 @@ function lineAfter(G: GameState, pid: PlayerID, a: Action): GameState {
 /** The lookahead's score for `a`: the value of the position it leads to. A tiny
  *  bias toward acting (vs. passing) breaks ties so the AI takes value-neutral
  *  tempo plays instead of idling. A retreat that is not worth its souls is
- *  marked down so it ranks behind real plays — unless it wins the match. */
+ *  marked down so it ranks behind real plays — unless it wins the match. One
+ *  that buys an attack (`attackBought`) is worth them: its line already holds
+ *  the new Active's swing, and the position says what that swing is worth. */
 function lookaheadScore(G: GameState, pid: PlayerID, a: Action): number {
   let s = evalState(lineAfter(G, pid, a), pid) + (a.type === 'endTurn' ? 0 : 0.1);
   if (a.type === 'moveHero') {
     const { active, incoming } = retreatPair(G, pid, a);
-    if (retreatPoints(active, incoming) === null) s += NOT_WORTH_IT;
+    if (retreatPoints(active, incoming, attackBought(G, pid, a)) === null) s += NOT_WORTH_IT;
   }
   return s;
 }

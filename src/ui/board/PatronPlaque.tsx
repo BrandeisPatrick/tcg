@@ -8,7 +8,7 @@ import { useStatTick } from './useStatTick';
  * A patron's vitals as one narrow rule across the sheet — the rival's above
  * the top bench, yours below the bottom one. It carries everything the side
  * panel used to duplicate (patron HP, deck, discard, hand, souls) and the
- * turn's attack in glyphs and numerals rather than labelled rows, so the
+ * Active's attack in glyphs and numerals rather than labelled rows, so the
  * board is self-sufficient and the panel is free to be just the log.
  *
  * Sits inside the board's row stack as a real flex row, so nothing overlaps
@@ -43,7 +43,8 @@ export function PatronPlaque({
     : hpTick === 'up' ? poster.stat.hpBright
     : poster.stat.hp;
 
-  const attackLamp = attackOpen ? 'Ready to attack' : myTurn ? 'No attack left this turn' : 'Waiting for its turn';
+  // The Active has swung (or cannot): a Retreat may still bring in a hero who can.
+  const attackLamp = attackOpen ? 'Ready to attack' : myTurn ? 'Active has attacked' : 'Waiting for its turn';
 
   const num = isMobile ? 13 : 15;
   const glyph = isMobile ? 11 : 12;
@@ -136,8 +137,9 @@ export function PatronPlaque({
         size={glyph}
       />
 
-      {/* The turn's attack — the one state that isn't a number. Lit while
-          the patron whose turn it is can still make it. */}
+      {/* The Active's attack — the one state that isn't a number. Lit while
+          the patron whose turn it is has an Active that can still make one
+          (each hero swings once a turn: a Retreat after a swing relights it). */}
       <span
         role="img"
         aria-label={attackLamp}

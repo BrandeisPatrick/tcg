@@ -12,10 +12,11 @@
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
  *
- * A turn is yours to spend on cards, skills and a retreat, with one attack
- * among them: your Active makes it from its sheet, and the turn button only
- * ends the turn. In lessons 2 to 4 the kill is the attack, so the last tap is
- * the Attack plate on your Active's sheet.
+ * A turn is yours to spend on cards, skills, retreats and attacks: each hero
+ * attacks once a turn while it stands in the Active slot, from its sheet, and
+ * the turn button only ends the turn. In lessons 2 to 4 the kill is an attack,
+ * so the last tap is the Attack plate on your Active's sheet; lesson 4's is
+ * the swing of the hero a Retreat brings in.
  *
  * Nothing is read and dismissed: every step is a tap on the real thing, and
  * every lesson ends on the victory screen. Each step names exactly the
@@ -226,7 +227,7 @@ function endTurn(n: number, body: Text): CoachStep {
   };
 }
 
-/** Make the turn's attack: your Active swings at theirs, from the Attack
+/** Make your Active's attack: it swings at theirs, from the Attack
  *  plate on his sheet. In every lesson that asks for it the attack is the
  *  kill, so the match ends under this step. Like the skill, the line follows
  *  where the player is and names the next tap only — none while the swing
@@ -240,7 +241,7 @@ function attack(lead: (v: CoachView) => string): CoachStep {
       : `${lead(v)} Tap ${nameOf(mine(v)) || 'your Active'} to open his sheet.`),
     task: (v) => v.seen.attacks >= 1,
     ready: (v) => attackBlocked(v.G, v.me) === null,
-    blocked: 'No attack left this turn. End the turn; the next one has its own.',
+    blocked: 'Your Active has no attack left this turn. End the turn; the next one has its own.',
     spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
     allow: (v) => (v.sheetOpen ? [ATTACK_PLATE] : [tile(mine(v))]),
   };
@@ -453,7 +454,7 @@ export const LESSONS: Lesson[] = [
         body: (v) => (v.seen.swapped
           ? `${nameOf(mine(v))} is in. ${nameOf(myBench(v))} is on the bench, out of the fight.`
           : v.sheetOpen
-            ? `Attacks only ever hit the Active. Retreat costs ${RETREAT_COST} souls and swaps the two. Tap Retreat.`
+            ? `Attacks only ever hit the Active. Retreat costs ${RETREAT_COST} souls and swaps the two, and every hero gets its own attack from the Active slot. Tap Retreat.`
             : `Tap ${nameOf(mine(v)) || 'your Active'}, then Retreat: ${RETREAT_COST} souls swap him with ${nameOf(myBench(v)) || 'your bench hero'}.`),
         task: (v) => v.seen.swapped,
         // The engine's own question: is a swap with the bench open to you now?

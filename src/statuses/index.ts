@@ -59,6 +59,10 @@ export const STATUSES: StatusDef[] = [
   // Return Fire: an enemy swing that lands on the bearer comes back at the
   // attacker as bullet damage (damageUnit, engine/damage.ts).
   { id: 'return_fire',   title: 'Return Fire',   desc: 'When an enemy attack hits the bearer, the attacker takes <value> bullet damage.', hvalue: 1 },
+  // Swift (Fleetfoot): the bearer's Retreat costs nothing (`retreatCost`,
+  // engine/legality.ts). The Retreat spends it, and like Extra Attack it is a
+  // this-turn resource: `clearTurnFlags` sweeps what is left when the turn ends.
+  { id: 'swift',         title: 'Swift',         desc: "This hero's next Retreat this turn is free.", hvalue: 1 },
 
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across

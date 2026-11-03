@@ -17,7 +17,6 @@ import { MulliganOverlay } from './overlays/MulliganOverlay';
 import { DraftOverlay } from './overlays/DraftOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
-import { RETREAT_COST } from '@/engine/constants';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
@@ -33,7 +32,7 @@ import { isValidTarget } from './board/targeting';
 import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attackAim';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
-import { attackBlocked, cardCost, playBlocked, playTargets, skillBlocked, skillTargets } from '@/engine/legality';
+import { attackBlocked, cardCost, playBlocked, playTargets, retreatCost, skillBlocked, skillTargets } from '@/engine/legality';
 import { forecastAttack, type AttackPlan } from '@/engine/forecast';
 import { CombatChoreographer } from './effects/CombatChoreographer';
 import { SoulsRail } from './board/SoulsRail';
@@ -121,7 +120,7 @@ export function Board(props: BoardProps<GameState>) {
   // to a hero, this holds the incoming card + the target hero until the
   // player picks which existing item to discard (or cancels).
   const [replaceTarget, setReplaceTarget] = useState<{ incoming: CardInstance; hero: CardInstance } | null>(null);
-  // The turn's attack, being made. While non-null the choreographer is
+  // An attack, being made. While non-null the choreographer is
   // walking its plan; when it finishes, the engine makes the attack for real.
   const [combatPlan, setCombatPlan] = useState<AttackPlan | null>(null);
   // Who the walked attack was aimed at, when it was not the default target —
@@ -159,7 +158,7 @@ export function Board(props: BoardProps<GameState>) {
   // render, so the impact-delay context is in place on the very render the
   // HP changes and HeroSlot can hold its numbers until the bolt lands. The
   // high-water mark moves in an effect after commit; a remount seeds it from
-  // the current stream so old hits are never replayed. The turn's attack is in
+  // the current stream so old hits are never replayed. An Active's attack is in
   // the stream, but the CombatChoreographer has already walked it before the
   // engine resolved, so the fresh batch leaves out what it walked (a card's
   // volley, inside its cast, was never walked: it stays, and plays).
@@ -280,7 +279,7 @@ export function Board(props: BoardProps<GameState>) {
     try { if (aim === undefined) moves.attack(); else moves.attack(aim); } catch {}
   }, [moves]);
 
-  /** Make the turn's attack, at `targetIid` — left out, the default target.
+  /** Make the Active's attack, at `targetIid` — left out, the default target.
    *  The player's Attack plate and the AI's `attack` both come here, so either
    *  one is walked by the choreographer before the engine makes it. The
    *  engine's own gate decides whether there is an attack to make, and at
@@ -649,7 +648,7 @@ export function Board(props: BoardProps<GameState>) {
     if (!isMyTurn || actionLocked) return;
     const stepIns = stepInCandidates(G.players[me]);
     const why = retreatBlock(G, me, stepIns);
-    if (why) { showNotice(moveBlockReason(why), true); return; }
+    if (why) { showNotice(moveBlockReason(why, retreatCost(G, me)), true); return; }
     if (stepIns.length === 1) retreatTo(stepIns[0].iid);
     else if (stepIns.length > 1) setRetreatPick(true);
   }
@@ -1022,11 +1021,12 @@ export function Board(props: BoardProps<GameState>) {
             // right now (the engine's own `moveBlocked`).
             const stepIns = isMyActive ? stepInCandidates(G.players[me]) : [];
             const retreatWhy = retreatBlock(G, me, stepIns);
+            // The price is the engine's (`retreatCost`): gear and Swift lower it.
             const retreat = stepIns.length === 0 ? undefined : {
-              cost: RETREAT_COST,
+              cost: retreatCost(G, me),
               incomingName: stepIns.length === 1 ? CARDS_BY_ID[stepIns[0].cardId]?.name : undefined,
               blockedReason: !isMyTurn ? 'Not your turn'
-                : retreatWhy ? moveBlockReason(retreatWhy)
+                : retreatWhy ? moveBlockReason(retreatWhy, retreatCost(G, me))
                 : undefined,
             };
 
@@ -1043,8 +1043,8 @@ export function Board(props: BoardProps<GameState>) {
                   : undefined,
               };
             }
-            // The turn's attack is your Active's, offered on its sheet with
-            // what it would do, or why it cannot be made.
+            // Your Active's attack is offered on its sheet with what it would
+            // do, or why it cannot be made (each hero swings once a turn).
             const attack = !isMyActive ? undefined : { ...attackOffer(G, me, hero, isMyTurn), onAttack: attackFromSheet };
 
             return (
@@ -1107,7 +1107,7 @@ export function Board(props: BoardProps<GameState>) {
               key="retreat"
               candidates={stepInCandidates(G.players[me])}
               leavingName={CARDS_BY_ID[G.players[me].active.cardId]?.name ?? 'Your Active'}
-              retreat={{ cost: RETREAT_COST, onCancel: () => setRetreatPick(false) }}
+              retreat={{ cost: retreatCost(G, me), onCancel: () => setRetreatPick(false) }}
               onPick={(iid) => { setRetreatPick(false); retreatTo(iid); }}
             />
           )}

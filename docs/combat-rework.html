@@ -1,0 +1,229 @@
+<title>Lane Combos and Ricochet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one narrow screen-print column — findings, then card tiles, then decks. */
+:root {
+  --paper: #f2e6cb;
+  --paper-deep: #e7d8b6;
+  --ink: #171410;
+  --ink-soft: #5b5246;
+  --rule: #cdbb94;
+  --red: #c4362a;
+  --gold: #b8932a;
+  --gold-fill: #d9b64a;
+  --spirit: #7a4a8a;
+  --bullet: #8a4f14;
+  --good: #3f8f3a;
+  --tile: #fbf4e2;
+  --display: "Saira Stencil One", "Arial Black", Impact, sans-serif;
+  --body: "Saira", "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12100d; --paper-deep: #1c1915; --ink: #ece2c9; --ink-soft: #a89c86; --rule: #3a342a;
+    --red: #e0554a; --gold: #d9b64a; --gold-fill: #d9b64a; --spirit: #b98ccb; --bullet: #d0904c;
+    --good: #6cc265; --tile: #1a1713; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12100d; --paper-deep: #1c1915; --ink: #ece2c9; --ink-soft: #a89c86; --rule: #3a342a;
+  --red: #e0554a; --gold: #d9b64a; --gold-fill: #d9b64a; --spirit: #b98ccb; --bullet: #d0904c;
+  --good: #6cc265; --tile: #1a1713; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+h1, h2 { font-family: var(--display); font-weight: 400; letter-spacing: .02em; text-wrap: balance; margin: 0; line-height: 1.05; }
+h1 { font-size: clamp(34px, 9vw, 52px); }
+h2 { font-size: 24px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+h2 small { font-family: var(--body); font-size: 13px; color: var(--ink-soft); letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
+p { margin: 0; }
+section { display: flex; flex-direction: column; gap: 14px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--red); }
+.lede { color: var(--ink-soft); max-width: 60ch; }
+.stamp { display: inline-block; border: 2px solid var(--red); color: var(--red); font-family: var(--display); font-size: 14px; padding: 2px 10px; transform: rotate(-2deg); align-self: flex-start; }
+header { display: flex; flex-direction: column; gap: 10px; border-bottom: 3px solid var(--ink); padding-bottom: 18px; }
+
+ul.issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+ul.issues li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+ul.issues li::before { content: "✕"; color: var(--red); font-weight: 700; }
+
+/* Win-rate chart: one 0–100% scale, 50% line marked. */
+.chart { display: flex; flex-direction: column; gap: 8px; }
+.row { display: grid; grid-template-columns: minmax(0, 9.5em) 1fr 3.2em; gap: 10px; align-items: center; font-size: 13.5px; }
+.row .nm { min-width: 0; overflow-wrap: anywhere; line-height: 1.2; }
+.row .nm span { display: block; color: var(--ink-soft); font-size: 11.5px; }
+.track { position: relative; height: 14px; background: var(--paper-deep); }
+.track::after { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; border-left: 2px dashed var(--ink-soft); }
+.bar { height: 100%; background: var(--red); }
+.bar.ok { background: var(--good); }
+.pct { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+.axis { display: grid; grid-template-columns: minmax(0, 9.5em) 1fr 3.2em; gap: 10px; font-size: 11px; color: var(--ink-soft); }
+.axis div { display: flex; justify-content: space-between; }
+.note { font-size: 13px; color: var(--ink-soft); }
+
+/* Card tiles */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.card { background: var(--tile); border: 2px solid var(--ink); padding: 12px 14px; display: grid; grid-template-columns: 40px 1fr; gap: 4px 12px; min-width: 0; }
+.cost { grid-row: span 3; width: 40px; height: 40px; border-radius: 50%; background: var(--gold-fill); color: #171410; font-family: var(--display); font-size: 22px; display: grid; place-items: center; border: 2px solid var(--ink); }
+.card h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 19px; line-height: 1.1; }
+.kind { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.fx { font-size: 14.5px; }
+.why { grid-column: 2; font-size: 13px; color: var(--ink-soft); border-top: 1px dashed var(--rule); padding-top: 6px; margin-top: 4px; }
+.sp { color: var(--spirit); font-weight: 700; }
+.bp { color: var(--bullet); font-weight: 700; }
+.tune { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.tune > div { display: grid; grid-template-columns: minmax(0, 1fr) 3em 3em minmax(0, 1.4fr); gap: 8px; align-items: baseline; }
+.tune .was { color: var(--red); text-decoration: line-through; text-align: right; font-variant-numeric: tabular-nums; }
+.tune .now { color: var(--good); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.tune .how { color: var(--ink-soft); font-size: 12.5px; }
+@media (max-width: 420px) { .tune > div { grid-template-columns: minmax(0, 1fr) 3em 3em; } .tune .how { grid-column: 1 / -1; } }
+h3.sub { margin: 6px 0 0; font-family: var(--body); font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); }
+b { font-weight: 700; }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 1px 6px; border: 1.5px solid currentColor; margin-left: 4px; vertical-align: 2px; }
+.tag.new { color: var(--good); }
+
+/* Redesigns */
+.redo { display: flex; flex-direction: column; gap: 10px; }
+.redo .card { grid-template-columns: 1fr; }
+.ba { display: grid; grid-template-columns: 1fr; gap: 6px; font-size: 14px; }
+.ba .was { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--red); }
+.ba .now::before { content: "→ "; color: var(--good); font-weight: 700; }
+.stat { font-size: 12px; font-weight: 700; color: var(--red); letter-spacing: .04em; }
+
+/* Decks */
+.decks { display: flex; flex-direction: column; gap: 14px; }
+details.deck { background: var(--tile); border: 2px solid var(--ink); }
+details.deck summary { cursor: pointer; padding: 12px 14px; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+details.deck summary::-webkit-details-marker { display: none; }
+details.deck summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.dhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.dhead h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 21px; }
+.dhead .open { font-size: 12px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
+details[open] .open .closed-label, details:not([open]) .open .open-label { display: none; }
+.squad { font-size: 13px; color: var(--ink-soft); }
+.squad b { color: var(--ink); }
+.plan { font-size: 14px; }
+.list { border-top: 1px dashed var(--rule); padding: 10px 14px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 13.5px; }
+.list div { display: flex; gap: 8px; min-width: 0; }
+.list .c { font-family: var(--display); color: var(--gold); width: 1.4em; text-align: right; flex: none; font-variant-numeric: tabular-nums; }
+.list .x { color: var(--ink-soft); font-size: 12px; }
+@media (max-width: 420px) { .list { grid-template-columns: 1fr; } }
+
+.decide { border: 3px solid var(--red); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.decide ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+footer { font-size: 12px; color: var(--ink-soft); border-top: 1px solid var(--rule); padding-top: 12px; }
+
+/* Core rules */
+.rulebox { background: var(--ink); color: var(--paper); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.rule { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; font-size: 15.5px; }
+.rule p { min-width: 0; }
+.rn { font-family: var(--display); font-size: 30px; line-height: 1; color: var(--gold-fill); }
+.chip { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 1px 7px; border-radius: 2px; color: #fbf4e2; }
+.sp-chip { background: #7a4a8a; }
+.eq-chip { background: #8a4f14; }
+.move { font-family: var(--body); font-size: 12px; font-weight: 700; color: var(--good); letter-spacing: .04em; white-space: nowrap; }
+/* page-specific */
+.combo { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13.5px; }
+.combo .step { border: 2px solid var(--ink); padding: 6px 10px; background: var(--tile); font-weight: 700; }
+.combo .step small { display: block; font-weight: 600; font-size: 11px; color: var(--ink-soft); letter-spacing: .06em; text-transform: uppercase; }
+.combo .arrow { color: var(--ink-soft); font-weight: 700; }
+.combo .cost { width: auto; height: auto; border-radius: 0; background: none; border: 0; font-family: var(--body); font-size: 12px; color: var(--red); font-weight: 700; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px dashed var(--rule); vertical-align: top; }
+th { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+.wrap { overflow-x: auto; }
+.q { border-left: 4px solid var(--gold-fill); padding: 8px 12px; background: var(--tile); font-size: 14px; }
+.glyph { display: inline-grid; place-items: center; width: 22px; height: 22px; background: var(--ink); color: var(--paper); border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+.glyph svg { width: 16px; height: 16px; }
+</style>
+
+<main>
+  <header>
+    <span class="eyebrow">Proposal · not built</span>
+    <h1>Lane Combos and Ricochet</h1>
+    <p class="lede">Your three ideas from this morning, written up as rules so you can check them before I build: attacks per hero with retreat as the combo engine, Ricochet that spreads your on-hit debuffs to the whole enemy board, and a proper pictogram for every status.</p>
+    <span class="stamp">Awaiting your OK</span>
+  </header>
+
+  <section>
+    <h2>1 · Attacks are per hero</h2>
+    <p class="q">Today: one attack a turn, whoever is in front. Proposed: <b>every hero may attack once a turn while it stands in the Active slot.</b> Retreat (2 souls) swaps who stands there, so a turn can chain attackers.</p>
+    <div class="combo">
+      <span class="step">Haze attacks<small>3 bullet</small></span><span class="arrow">→</span>
+      <span class="cost">Retreat −2</span><span class="arrow">→</span>
+      <span class="step">Shiv attacks<small>2 bullet + Bleed</small></span><span class="arrow">→</span>
+      <span class="cost">Retreat −2</span><span class="arrow">→</span>
+      <span class="step">Abrams steps in<small>the tank takes the rival's turn</small></span>
+    </div>
+    <p class="note">Turn 5, 5 souls: two attacks and a wall in front, 1 soul left for a card. Later, with retreats made cheaper, all four heroes swing and the tank still ends up in front.</p>
+    <h3 class="sub">The rules</h3>
+    <ul class="issues">
+      <li><span>A hero attacks at most once a turn. One that attacked, retreated and came back cannot swing again.</span></li>
+      <li><span>A hero still does its skill <b>or</b> its attack, never both. Bench heroes still only cast.</span></li>
+      <li><span>No attack on Turn 1, as now. A hero that steps up because the Active fell may attack, as now.</span></li>
+      <li><span>Retreat stays at 2 souls by default. The whole combo is paid for in souls, so the soul curve (1 → 10) is what limits it early.</span></li>
+    </ul>
+    <h3 class="sub">How retreats get down to zero</h3>
+    <p class="lede">Real Deadlock mobility items, each a passive or active as the rules require. The retreating hero's own gear sets its price.</p>
+    <div class="wrap"><table>
+      <tr><th>Item</th><th>Type</th><th>Cost</th><th>Effect</th></tr>
+      <tr><td>Sprint Boots</td><td>Equipment · Vitality T1</td><td>2</td><td>Bearer's Retreat costs 1 less.</td></tr>
+      <tr><td>Enduring Speed</td><td>Equipment · Vitality T2</td><td>3</td><td>Bearer's Retreat costs 1 less, and it cannot be Rooted.</td></tr>
+      <tr><td>Kinetic Dash</td><td>Equipment · Weapon T2</td><td>3</td><td>When the bearer steps in by Retreat, +1 Bullet Power this turn.</td></tr>
+      <tr><td>Majestic Leap</td><td>Spell · Vitality T3</td><td>4</td><td>Your Active retreats free; the bench ally you pick steps in.</td></tr>
+      <tr><td>Fleetfoot <span class="tag">rework</span></td><td>Spell · Weapon T2</td><td>3</td><td>Your Active gains Extra Attack 1 this turn, and its Retreat this turn is free.</td></tr>
+    </table></div>
+    <p class="note">Already in the game and now combo pieces: Warp Stone and Rescue Beam (free swaps), Mirage's Traveler (a 2-soul free retreat), Phantom Strike (drag their caster forward, then chain into it).</p>
+    <h3 class="sub">What it costs to build, and the risk</h3>
+    <ul class="issues">
+      <li><span>Engine: the attack gate moves from "one this turn" to "this hero this turn"; a Retreat-cost rule that reads the Active's gear; a Swift status for the free-retreat cards.</span></li>
+      <li><span>The AI only looks one move ahead, so it won't see attack → retreat → attack on its own. It needs to value a fresh attacker in front, or it will fall behind a human who does.</span></li>
+      <li><span>Damage per turn goes up, so games get shorter. Plan: build it, run the 400-game sim, then tune Retreat cost or hero HP, not the combo itself.</span></li>
+      <li><span>Rule text in the README, the engine doc, the tutorial's first lesson and the fuzz oracle all say "one attack a turn" and get rewritten.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>2 · Ricochet spreads the hit</h2>
+    <p class="q"><b>Ricochet N:</b> after the bearer's attack lands, every other enemy hero takes N bullet damage, and the attack's on-hit debuffs land on them too. It fires on every swing, so Extra Attacks ricochet again.</p>
+    <h3 class="sub">What spreads, what doesn't</h3>
+    <div class="wrap"><table>
+      <tr><th>Spreads to the whole board</th><th>Stays on the main target</th></tr>
+      <tr><td>Bleed (Toxic Bullets, Shiv's knives), Bullet and Spirit Resist shreds, Root (Slowing Bullets), Bullet / Spirit Power down (Inhibitor), Mirage's Djinn's Mark, the stolen HP of Siphon Bullets</td><td>The bearer's own heals (lifesteal, Restorative Shot, Frenzy), Fixation's extra swing, Tesla's chain, the kill bounty and exp</td></tr>
+    </table></div>
+    <h3 class="sub">Where it comes from</h3>
+    <ul class="issues">
+      <li><span><b>Ricochet</b> (equipment, Weapon T4, 7): Ricochet 2 while worn. Today it deals 2 to the bench with no debuffs; it becomes the keyword.</span></li>
+      <li><span><b>Split Shot</b> (spell, Weapon T2, 3): reworked to "Your Active gains Ricochet 2 this turn." The one-shot volley it does today becomes a swing that carries your gear.</span></li>
+      <li><span>Later, if you want it: a hero whose gun bounces by nature. None of the 19 has that in Deadlock, so I'd leave heroes alone for now.</span></li>
+    </ul>
+    <p class="note">With per-hero attacks this is the payoff of a gun combo: Shiv with Ricochet bleeds everyone, then Haze swings twice into a shredded board.</p>
+  </section>
+
+  <section>
+    <h2>3 · A pictogram for every status</h2>
+    <p class="lede">Today 5 statuses have a drawn mark (Fixation, Dome, Rooted, Rabbit, Last Stand); the other 24 are text chips. Every status gets its own SVG mark in the same 16-unit line-art style, on its class colour: green buff, red debuff, ink for the rest. The same drawing lands as the sticker when the status is applied.</p>
+    <p class="q">Hover already works: pointing at a status chip (or tapping it on a phone) shows what it does and <b>"N turns left"</b>. I'll make sure every new mark keeps that, and add the turns to the sticker's flash too.</p>
+    <div class="wrap"><table>
+      <tr><th>Debuffs</th><th>Buffs and the rest</th></tr>
+      <tr><td>Stun · stars in a ring<br>Silenced · a mouth, barred<br>Disarm · a pistol, crossed<br>Sleep · three Zs<br>Rooted · roots (kept)<br>Rabbit · ears (kept)<br>Bleed · three drops<br>Charged · a bolt in a ring<br>Djinn's Mark · a flame with pips<br>Reverb · an echo of arcs<br>Siphoned · a cup draining<br>Bullet Power − · a bullet, down arrow<br>Spirit Power − · a spark, down arrow<br>Bullet Resist − · cracked plate<br>Spirit Resist − · cracked ward<br>No healing · a cross, barred<br>Fixation · reticle (kept)</td><td>Bullet Resist · a plate<br>Spirit Resist · a ward<br>Shield · a shield<br>Bullet Power + · a bullet, up arrow<br>Spirit Power + · a spark, up arrow<br>Unstoppable · a fist<br>Healing Boost · a cross<br>Dome · dome (kept)<br>Extra Attack · two muzzle flashes<br>Channeling · a ring of pulses<br>Return Fire · a bullet turning back<br>Last Stand · chevrons (kept)<br>Siphon · a cup filling</td></tr>
+    </table></div>
+  </section>
+
+  <section class="decide">
+    <span class="eyebrow">Your call</span>
+    <ol>
+      <li>Build all three, in this order: per-hero attacks with the mobility items, then Ricochet, then the pictograms? Each lands as its own commit with a sim run.</li>
+      <li>Keep Retreat at 2 souls and let the sim decide, or raise it to 3 now that a retreat buys an attack?</li>
+    </ol>
+  </section>
+
+  <footer>Item types and tiers checked on the Deadlock wiki, 3 Nov 2026. Enduring Speed is a Tier 2 Vitality passive built from Sprint Boots; Majestic Leap a Tier 3 Vitality active; Kinetic Dash a Tier 2 Weapon passive.</footer>
+</main>

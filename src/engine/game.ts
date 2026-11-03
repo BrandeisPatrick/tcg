@@ -60,8 +60,9 @@ export const DeadlockGame: Game<GameState> = {
     promoteToActive: ({ G, ctx, playerID }, benchIid: string) =>
       move(G, mover(ctx, playerID), { type: 'promoteToActive', benchIid }),
 
-    /** The turn's attack. Always the player whose turn it is. `targetIid` is left
-     *  off for the default target (the rival Active, unless the hero has reach). */
+    /** The Active's attack (each hero one a turn). Always the player whose turn
+     *  it is. `targetIid` is left off for the default target (the rival Active,
+     *  unless the hero has reach). */
     attack: ({ G, ctx }, targetIid?: string) => move(G, ctx.currentPlayer as PlayerID, { type: 'attack', targetIid }),
 
     /** End the turn — unless a promotion is owed, which comes first. */

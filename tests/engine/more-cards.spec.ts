@@ -170,13 +170,14 @@ describe('New spells', () => {
     expect(status(G.players['0'].active!, 'shield')?.value).toBe(2);
   });
 
-  it('Fleetfoot grants Extra Attack 1 and lifts Rooted', () => {
+  it('Fleetfoot grants Extra Attack 1 and Swift (lane-combos.spec has the free Retreat); a Root stays', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     addStatus(G, haze, 'rooted', 1, 2);
     expect(play(G, 'fleetfoot')).not.toBe(INVALID);
-    expect(status(haze, 'rooted')).toBeUndefined();
     expect(status(haze, 'extra_attack')?.value).toBe(1);
+    expect(status(haze, 'swift')).toMatchObject({ value: 1, duration: 1 });
+    expect(status(haze, 'rooted')).toBeDefined(); // the un-Root went in the 2026-11-03 rework
   });
 
   it('Split Shot hits every enemy bench hero for your Active\'s swing, and only the bench', () => {

@@ -100,8 +100,9 @@ describe('the Attack plate: one target attacks at once, more than one asks who',
     const { G } = duel();
     G.turnNumber = 1; // no attacks on Turn 1
     expect(tapAttackPlate(G, ME)).toEqual({ do: 'refuse', refusal: { code: 'turn1', text: 'No attacks on Turn 1' } });
-    const { G: H } = duel();
+    const { G: H, atk } = duel();
     H.attackUsed = true;
+    atk.attackedThisTurn = true; // this Active has swung
     expect(tapAttackPlate(H, ME)).toMatchObject({ do: 'refuse', refusal: { code: 'used' } });
   });
 
@@ -137,11 +138,12 @@ describe('an armed attack lights the heroes the engine says it may name', () => 
     expect(lit).toEqual(attackTargets(G, ME).map((h) => h.iid));
   });
 
-  it('glows nothing for an attack armed for a hero that is not the Active, or once the attack is spent', () => {
+  it('glows nothing for an attack armed for a hero that is not the Active, or once the Active has swung', () => {
     const { G, atk } = duel();
     const benched: PendingPlay = { ...armed(atk), iid: G.players[ME].bench[0]!.iid };
     expect(heroesOf(G).some((h) => isValidTarget(G, ME, benched, h))).toBe(false);
     G.attackUsed = true;
+    atk.attackedThisTurn = true;
     expect(heroesOf(G).some((h) => isValidTarget(G, ME, armed(atk), h))).toBe(false);
   });
 });

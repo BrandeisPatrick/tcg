@@ -2,7 +2,7 @@ import type { HeroCard } from '@/engine/types';
 
 /**
  * 19 heroes total. A hero carries one or two abilities: `skills` (Activate
- * trigger; a hero uses ONE skill a turn and gives up the turn's attack to use
+ * trigger; a hero uses ONE skill a turn and gives up its attack that turn to use
  * it; `[]` for a passive-only hero) and `passives` (always-on or trigger-based,
  * no cast). Today every hero has exactly one ability — a skill or a passive,
  * never both.

@@ -41,10 +41,10 @@ const lockIn = `[...document.querySelectorAll('button')].find((b) => b.textConte
 // The turn button — it only ever ends the turn; attacks are made from the
 // Active's sheet (here, by the AI through the same path).
 const turnButton = `document.querySelector('[aria-label="End Turn"]')`;
-// The mover's patron lamp says whether the turn's attack is still to make:
-// "Ready to attack" or "No attack left this turn" (the other seat's lamp
+// The mover's patron lamp says whether its Active can still attack:
+// "Ready to attack" or "Active has attacked" (the other seat's lamp
 // reads "Waiting for its turn").
-const LAMPS = ['Ready to attack', 'No attack left this turn'];
+const LAMPS = ['Ready to attack', 'Active has attacked'];
 const LOOK = `(() => {
   const dial = document.querySelector('[aria-label^="Turn "]');
   const over = [...document.querySelectorAll('*')].find((e) => e.children.length === 0 && /^(Victory|Defeat|Draw)$/.test(e.textContent.trim()));

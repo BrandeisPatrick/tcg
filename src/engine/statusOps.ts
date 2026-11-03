@@ -2,7 +2,7 @@ import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState, Fx
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from './damage';
 import { resolve, returnRemToBench } from './death';
-import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isRespawning, statusDuration } from './query';
+import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isRespawning, resistedBy, statusDuration } from './query';
 import { pushLog } from './log';
 import { CARDS_BY_ID } from '@/cards';
 import { fireTriggers } from './triggers';
@@ -32,6 +32,8 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
 /**
  * Apply a status to a target with Deadlock-style rules:
  *
+ *  - A status something the bearer carries `resists` is not applied at all
+ *    (Enduring Speed turns Rooted away); the log names what stopped it.
  *  - Unstoppable BLOCKS any incoming CC (stun / silence / disarm / sleep).
  *  - Applying Unstoppable itself CLEANSES any CC currently on the bearer.
  *  - Re-applying a status with the same id refreshes value/duration to the
@@ -53,6 +55,14 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
 export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number, opts?: { tag?: FxTag; ramp?: number; heal?: number }) {
   if (isRespawning(target)) return;
   const name = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
+
+  // What the bearer carries may refuse the status outright.
+  const resisted = resistedBy(target, id);
+  if (resisted) {
+    pushLog(G, `${name} resisted ${STATUSES_BY_ID[id]?.title ?? id} (${resisted}).`);
+    pushFx(G, { kind: 'immune', iid: target.iid, what: id });
+    return;
+  }
 
   duration = statusDuration(target, id, duration);
 
@@ -209,7 +219,7 @@ export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
  * (value = number of extra full-power basic swings). Stacks ADDITIVELY across
  * sources (Burst Fire + Active Reload + Fixation all add up), capped at
  * MAX_EXTRA_ATTACKS. Manipulated directly (not via addStatus) to avoid a log
- * line every turn from the always-on sources. Consumed by the turn's attack.
+ * line every turn from the always-on sources. Consumed by the bearer's attack.
  * A corpse is granted nothing (it takes no status, like addStatus).
  */
 export function grantExtraAttacks(card: CardInstance, count: number) {
@@ -217,7 +227,7 @@ export function grantExtraAttacks(card: CardInstance, count: number) {
   const ex = card.statuses.find((s) => s.id === 'extra_attack');
   if (ex) ex.value = Math.min(MAX_EXTRA_ATTACKS, ex.value + count);
   // Duration 99 = a non-expiring marker (the count is the payload, not a timer);
-  // it's consumed by the turn's attack and swept by clearTurnFlags, so the UI
+  // it's consumed by the bearer's attack and swept by clearTurnFlags, so the UI
   // shows "Extra Atk N" without a misleading turn countdown.
   else card.statuses.push({ id: 'extra_attack', value: Math.min(MAX_EXTRA_ATTACKS, count), duration: 99 });
 }
@@ -270,8 +280,9 @@ export function clearTurnFlags(ps: PlayerState) {
     c.attackedThisTurn = false;
     // Any unused Extra Attack stack expires at end of turn (it's a this-turn
     // resource); the attack consumes it, and a turn that ends without one
-    // lets it go.
-    c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack');
+    // lets it go. So does an unspent Swift (a free Retreat THIS turn), even one
+    // a buff-stretching item made last longer.
+    c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack' && s.id !== 'swift');
     // A merged Rem rides on her bearer, out of the board sweep above: clear
     // her skill flag here too, or she would come back from the merge with
     // her skill already spent for that turn.

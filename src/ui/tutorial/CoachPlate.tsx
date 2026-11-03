@@ -99,8 +99,9 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, r
     wasMyTurn.current = isMyTurn;
   }, [isMyTurn]);
 
-  // Count the attacks you have made: each time your turn's attack goes from
-  // open to made is one.
+  // Count the turns you have attacked in: each time your turn goes from no
+  // attack made to one (`G.attackUsed`) is one. A second hero's swing in the
+  // same turn does not count again; no lesson asks for more than one.
   const myAttackMade = isMyTurn && G.attackUsed;
   const wasMade = useRef(myAttackMade);
   useEffect(() => {

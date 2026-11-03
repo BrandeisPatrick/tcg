@@ -9,11 +9,13 @@
 
 /** Soul cost to activate a hero skill. Each hero may use its skill once a
  *  turn, so a full bench can cast several in one turn souls permitting; a hero
- *  that uses its skill gives up the turn's attack, and one that has attacked
+ *  that uses its skill gives up its attack this turn, and one that has attacked
  *  cannot use its skill. */
 export const SKILL_COST = 1;
 
-/** Souls to swap an Active with a bench hero (Pokémon-flavored). */
+/** Souls to swap an Active with a bench hero (Pokémon-flavored): the base price.
+ *  What a Retreat costs right now is `retreatCost` (legality.ts) — Sprint Boots
+ *  take a soul off, a Swift hero's is free. */
 export const RETREAT_COST = 2;
 
 /** Max equipment a hero can wear at once. Playing a 4th piece requires the

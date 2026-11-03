@@ -105,6 +105,30 @@ on the bearer costs the attacker bullet damage) and the `debuffDuration` hook
 (Debuff Reducer), the debuff twin of `buffDuration`. In the same pass Crippling
 Headshot gained +1 Bullet Power and Warp Stone went from 5 to 6 souls.
 
+### Added 2026-11-03
+
+Attacks became per hero (every hero may attack once a turn while it stands in
+the Active slot; see [engine-model.md](./engine-model.md)), so the swap after
+the swing is a play of its own. Four canon mobility items came with it, each
+on the side its `is_active_item` flag puts it:
+
+| Card | Type | Slot | Tier |
+|---|---|---|---|
+| Sprint Boots | Equipment | Vitality | T1 |
+| Enduring Speed | Equipment | Vitality | T2 |
+| Kinetic Dash | Equipment | Weapon | T2 |
+| Majestic Leap | Spell | Vitality | T3 |
+
+Majestic Leap sits under its band, at 4 souls: it is a free Retreat and
+nothing more (Warp Stone, at 6, adds Bullet Resist). Three rules came with
+them: the `retreatDiscount` hook (Sprint Boots, Enduring Speed: a soul off the
+bearer's Retreat, summed by `retreatCost`), the `resists` hook (Enduring Speed
+cannot be Rooted: `addStatus` turns the status away), and the
+`onBearerStepIn` trigger (Kinetic Dash: +1 Bullet Power for the hero a Retreat
+or a swap brings in). In the same pass **Fleetfoot** lost its un-Root and
+gained the **Swift** status — its Active gets Extra Attack 1 and a free
+Retreat this turn, so it can swing and then sprint out for the ally behind it.
+
 Card art comes from `scripts/fetch_item_art.py`, which needs the deadlock-api
 catalogue. Re-run it after a rename or a new card; until then a card without art
 shows its fallback glyph, and a renamed card keeps the old item's picture.

@@ -43,7 +43,11 @@ export interface AbilityDef {
     | 'onBearerSkillUsed'      // bearer used their skill (after run)
     | 'onBearerUltCast'        // bearer (or any ally hero) cast an ultimate
     | 'onBearerDamagedByBullet' // bearer just took bullet (attack-type) damage
-    | 'onBearerDamagedBySpirit'; // bearer just took spirit damage
+    | 'onBearerDamagedBySpirit' // bearer just took spirit damage
+    // bearer just took the Active slot by a move its player chose: a Retreat or
+    // a card's swap (Warp Stone, Rescue Beam, Majestic Leap, Traveler) — never
+    // a promotion off a fallen Active, nor a drag to the front by the rival.
+    | 'onBearerStepIn';
   target: TargetFilter;
   prompt?: string;
   /** A hero skill's or passive's display name ("Frost Grenade"), printed on
@@ -97,6 +101,14 @@ export interface AbilityDef {
   /** How long a debuff (a status whose `hvalue` is below 0) lands for on the
    *  bearer (Debuff Reducer shortens them). Read after `buffDuration`. */
   debuffDuration?: (self: CardInstance, statusId: StatusId, duration: number) => number;
+  /** Souls off the bearer's Retreat while it stands in the Active slot (Sprint
+   *  Boots: 1). Summed over what the hero leaving the slot carries by
+   *  `retreatCost` (engine/legality.ts), never below 0. */
+  retreatDiscount?: (self: CardInstance) => number;
+  /** The bearer cannot be given this status (Enduring Speed: Rooted). Asked by
+   *  `addStatus` before anything lands: a status the bearer resists is not
+   *  applied, and the log says what turned it away. */
+  resists?: (self: CardInstance, statusId: StatusId) => boolean;
 }
 
 /** A hero's skill or passive: an AbilityDef that carries the `name` and `text`
@@ -478,18 +490,19 @@ const eff_return_fire: AbilityDef = {
   },
 };
 
-// Fleetfoot (canon T2 weapon active): shoot while sprinting and shrug off
-// slows. TCG: your Active gains Extra Attack 1 this turn and loses Rooted.
+// Fleetfoot (canon T2 weapon active): a sprint you can shoot out of. TCG: your
+// Active gains Extra Attack 1 this turn and Swift — its Retreat this turn is
+// free, so it can swing and then sprint out for the bench ally behind it.
 const eff_fleetfoot: AbilityDef = {
   id: 'eff_fleetfoot', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Fleetfoot — your Active gains Extra Attack 1 and shakes off Root.',
+  prompt: 'Fleetfoot — your Active gains Extra Attack 1 and a free Retreat this turn.',
   base: 1,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
     if (!mine) return;
     grantExtraAttacks(mine, 1);
-    mine.statuses = mine.statuses.filter((st) => st.id !== 'rooted');
     pushLog(G, `${CARDS_BY_ID[mine.cardId]?.name ?? mine.cardId} gains Extra Attack 1 (Fleetfoot).`);
+    addStatus(G, mine, 'swift', 1, 1);
   },
 };
 
@@ -649,6 +662,19 @@ const eff_arctic_blast: AbilityDef = {
   },
 };
 
+// ----- Added 2026-11-03: the mobility active (docs/card-design.md) -----
+
+// Majestic Leap (canon T3 vitality active): a launch into the air that lands
+// you somewhere else. TCG: Warp Stone without the resist — your Active leaps
+// back to the bench, free, and the bench ally you pick steps in.
+const eff_majestic_leap: AbilityDef = {
+  id: 'eff_majestic_leap', trigger: 'onPlay', target: 'allyBench',
+  prompt: 'Majestic Leap — your Active leaps out; a bench ally steps in.',
+  run: (G, ctx, { target }) => {
+    if (target) swapIntoActive(G, G.players[ctx.movingPlayer], target);
+  },
+};
+
 // ----- Equipment passive effects + on-attach -----
 
 // Bullet / Spirit Resilience (canon T3 vitality): a permanent resist of 2, and
@@ -783,7 +809,7 @@ const eff_improved_burst_proc: AbilityDef = {
 
 // Surge of Power: after the bearer uses a skill, gain +2 Bullet Power through
 // its next turn (weapon_power, duration 2). The hero who uses its skill gives
-// up this turn's attack, so the surge has to outlast the turn to be swung
+// up its attack this turn, so the surge has to outlast the turn to be swung
 // with: skill now, the empowered attack next turn. Canon Surge of Power
 // empowers you right after a cast.
 const eff_surge_of_power: AbilityDef = {
@@ -1095,6 +1121,39 @@ const eff_spiritual_overflow: AbilityDef = {
     const cur = source.statuses.find((st) => st.id === 'spirit_power')?.value ?? 0;
     addStatus(G, source, 'spirit_power', Math.min(3, cur + 1), 2);
     healUnit(G, source, 1, 'Spiritual Overflow', { tag: 'lifesteal', from: target });
+  },
+};
+
+// ----- Added 2026-11-03: the mobility passives (docs/card-design.md) -----
+
+// Sprint Boots (canon T1 vitality): faster on your feet. TCG: the bearer's
+// Retreat costs 1 soul less (the retreatDiscount hook).
+const eff_sprint_boots: AbilityDef = {
+  id: 'eff_sprint_boots', trigger: 'ongoing', target: 'self',
+  base: 1,
+  retreatDiscount: () => 1,
+  run: () => {},
+};
+
+// Enduring Speed (canon T2 vitality): more speed, and slows do not hold you.
+// TCG: the bearer's Retreat costs 1 less, and it cannot be Rooted (the resists
+// hook turns the status away before it lands).
+const eff_enduring_speed: AbilityDef = {
+  id: 'eff_enduring_speed', trigger: 'ongoing', target: 'self',
+  base: 2,
+  retreatDiscount: () => 1,
+  resists: (_self, statusId) => statusId === 'rooted',
+  run: () => {},
+};
+
+// Kinetic Dash (canon T2 weapon): a dash that loads the gun. TCG: when the
+// bearer steps into the Active slot by a Retreat or a swap (onBearerStepIn),
+// +1 Bullet Power this turn — the hero who comes in after the swing hits harder.
+const eff_kinetic_dash: AbilityDef = {
+  id: 'eff_kinetic_dash', trigger: 'onBearerStepIn', target: 'self',
+  base: 1,
+  run: (G, _ctx, { source }) => {
+    if (source && !isRespawning(source)) addStatus(G, source, 'weapon_power', 1, 1);
   },
 };
 
@@ -1658,6 +1717,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_golden_goose_egg, eff_grit, eff_return_fire, eff_fleetfoot, eff_split_shot,
   eff_blood_tribute, eff_healing_nova, eff_rescue_beam, eff_fury_trance,
   eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,
+  eff_majestic_leap,
   // ----- Equipment passives (4 cards) -----
   eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
   // ----- Equipment reactive procs (5 cards) -----
@@ -1674,6 +1734,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_frenzy, eff_siphon_bullets, eff_superior_duration,
   eff_headshot_booster, eff_spirit_strike, eff_mystic_vulnerability, eff_mystic_slow,
   eff_slowing_bullets, eff_debuff_reducer, eff_spirit_snatch, eff_spiritual_overflow,
+  eff_sprint_boots, eff_enduring_speed, eff_kinetic_dash,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige, skill_rem,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,

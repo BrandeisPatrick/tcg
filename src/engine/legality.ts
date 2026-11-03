@@ -20,10 +20,10 @@ import { getAbility } from './registry';
 import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from './constants';
 import {
   attackPower, findCardOnBoard, hasReach, heroData, isBlocked, isRespawning, isUntargetable, liveBoardCards, otherPlayer,
-  resolveSkill, stepInCandidates, targetsFor, wornEquipment,
+  resolveSkill, retreatDiscount, stepInCandidates, targetsFor, wornEquipment,
 } from './query';
 
-// ---------- The turn's attack ----------
+// ---------- The Active's attack ----------
 
 /** The first player forgoes first strike: Turn 1 has no attack. One rule,
  *  read by the attack gate and the board, so they cannot drift apart. */
@@ -31,15 +31,18 @@ export function attackTurn(G: GameState): boolean {
   return (G.turnNumber ?? 1) > 1;
 }
 
-/** Why a player's Active cannot make the turn's attack. */
+/** Why a player's Active cannot attack. */
 export type AttackBlock = 'turn1' | 'used' | 'skill' | 'noActive' | 'cannot' | 'noTarget' | 'target';
 
 /** The reasons that stop the Active attacking whatever it aims at — the ones
- *  about the attacker and the turn, in the order `attackBlocked` checks them. */
+ *  about the attacker and the turn, in the order `attackBlocked` checks them.
+ *  Attacks are per hero: the gate asks whether THIS hero has swung this turn
+ *  (`attackedThisTurn`, which it keeps on the bench), not whether anyone has
+ *  (`G.attackUsed`). */
 function attackerBlock(G: GameState, pid: PlayerID): 'turn1' | 'used' | 'noActive' | 'skill' | null {
   if (!attackTurn(G)) return 'turn1';
-  if (G.attackUsed) return 'used';
   const active = G.players[pid].active;
+  if (active?.attackedThisTurn && !isRespawning(active)) return 'used';
   if (!active || isRespawning(active)) return 'noActive';
   if (active.skillUsedThisTurn) return 'skill';
   return null;
@@ -74,16 +77,18 @@ export function attackTargets(G: GameState, pid: PlayerID): CardInstance[] {
   return aimable(G, pid, active).filter((t) => attackPower(active, t).total > 0);
 }
 
-/** Why `pid`'s Active cannot make the turn's attack right now, or null when it
- *  can. One gate, read by the `attack` move, the forecast, the AI and the
- *  board, so they cannot drift apart. `targetIid` names who is to be swung at;
- *  left out, it is the first of `attackTargets` (the rival Active, unless
- *  the hero has reach). Checked in this order:
+/** Why `pid`'s Active cannot attack right now, or null when it can. One gate,
+ *  read by the `attack` move, the forecast, the AI and the board, so they cannot
+ *  drift apart. Every hero may attack once a turn while it stands in the Active
+ *  slot: attack, Retreat a fresh hero in, and it may attack too. `targetIid`
+ *  names who is to be swung at; left out, it is the first of `attackTargets`
+ *  (the rival Active, unless the hero has reach). Checked in this order:
  *   - 'turn1'    Turn 1 has no attack (the first player forgoes first strike).
- *   - 'used'     this turn's attack has been made. One a turn, whoever is
- *                Active: the hero who steps in after it cannot swing again.
+ *   - 'used'     this Active has attacked this turn. It keeps the flag on the
+ *                bench, so a hero that swung, retreated and came back cannot
+ *                swing again; the hero it swapped with still can.
  *   - 'noActive' there is no living Active. A fallen one is replaced first —
- *                the attack belongs to the hero who steps up.
+ *                the hero who steps up has an attack of its own.
  *   - 'skill'    the Active used its skill this turn; a hero does one or the
  *                other.
  *   - 'noTarget' there is no legal target: the rival has no living Active to
@@ -126,14 +131,15 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
 /**
  * Why `hero` cannot use one of its skills right now, or null when it can: a
  * hero with that skill (`skillId`; left out, its first), alive, that has not
- * used a skill this turn (one skill per hero per turn) nor made the turn's
- * attack, free of the statuses that lock it, with the skill off cooldown, a
+ * used a skill this turn (one skill per hero per turn) nor attacked this turn,
+ * free of the statuses that lock it, with the skill off cooldown, a
  * soul to pay with, and a legal target. Whose turn it is, is the caller's
  * question. Checked in this order:
  *  - 'noSkill'  the hero has no skills, or not the one named.
  *  - 'down'     it is a corpse on the respawn timer.
  *  - 'used'     it has used a skill this turn (either of its two).
- *  - 'attacked' it made the turn's attack.
+ *  - 'attacked' it attacked this turn (from the Active slot; it keeps the flag
+ *               on the bench).
  *  - 'status'   a status locks its skills (`isBlocked(hero, 'skill')`).
  *  - 'cooldown' this skill is still cooling down (`hero.cooldowns`).
  *  - 'hp'       the skill costs HP (`hpCost`) and the hero does not have more
@@ -250,6 +256,21 @@ export function playBlocked(
 
 // ---------- Moving heroes ----------
 
+/**
+ * Souls `pid`'s Retreat costs right now: RETREAT_COST, less the `retreatDiscount`
+ * hooks of what the hero leaving the Active slot carries (Sprint Boots, Enduring
+ * Speed), and nothing at all while that hero is Swift (Fleetfoot) — never below
+ * 0. The one price: `moveBlocked` checks it, `moveHero` charges it, the board
+ * prints it and the fuzz oracle checks it. A Retreat spends the Swift
+ * (`moveHero`).
+ */
+export function retreatCost(G: GameState, pid: PlayerID): number {
+  const leaving = G.players[pid].active;
+  if (!leaving) return RETREAT_COST;
+  if (leaving.statuses.some((s) => s.id === 'swift')) return 0;
+  return Math.max(0, RETREAT_COST - retreatDiscount(leaving));
+}
+
 export type MoveBlock = 'same' | 'empty' | 'benchOnly' | 'down' | 'rooted' | 'souls' | 'illegal';
 
 /** Why `pid` cannot swap the heroes in two slots (0 = Active, 1..3 = bench),
@@ -258,10 +279,11 @@ export type MoveBlock = 'same' | 'empty' | 'benchOnly' | 'down' | 'rooted' | 'so
  *  slots outside 0..3 are no slots. A bench-only hero (Rem) never takes the
  *  Active slot, whichever side of the swap she is on. Swapping the Active with a
  *  bench hero is a Retreat: both must be alive, neither may be Rooted (a status
- *  that blocks 'move', on either side of the swap), and it costs RETREAT_COST
+ *  that blocks 'move', on either side of the swap), and it costs `retreatCost`
  *  souls. Bench-to-bench swaps are free, and a Rooted hero may still be moved
- *  between bench slots. (The forced promotion of a fallen Active is not a swap:
- *  `promoteBlocked`.) */
+ *  between bench slots. A Retreat may come after the Active's attack: the hero
+ *  who steps in may attack too. (The forced promotion of a fallen Active is not
+ *  a swap: `promoteBlocked`.) */
 export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlot: number): MoveBlock | null {
   const isSlot = (s: number) => s === 0 || s === 1 || s === 2 || s === 3;
   if (!isSlot(fromSlot) || !isSlot(toSlot)) return 'illegal';
@@ -277,7 +299,7 @@ export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlo
     if (data?.type === 'hero' && data.flags?.benchOnly) return 'benchOnly';
     if (isRespawning(a) || isRespawning(b)) return 'down';
     if (isBlocked(a, 'move') || isBlocked(b, 'move')) return 'rooted';
-    if (ps.souls < RETREAT_COST) return 'souls';
+    if (ps.souls < retreatCost(G, pid)) return 'souls';
   }
   return null;
 }
@@ -364,16 +386,17 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
 }
 
 /**
- * Every action `pid` could make right now. In order: the attack, if open — once
- * per hero it may swing at (`attackTargets`), the first as the bare action (a
- * bare `attack` swings at it) and any others naming theirs; each
+ * Every action `pid` could make right now. In order: the Active's attack, if
+ * open — once per hero it may swing at (`attackTargets`), the first as the bare
+ * action (a bare `attack` swings at it) and any others naming theirs; each
  * card in hand, in hand order, on each of its legal targets in `targetsFor`
  * order (equipment on a hero at the cap is offered once per item it could
  * discard — the choice of which is the player's); each living hero's skills, in
  * board order and the hero's own order of skills, each on each of its targets
  * (every action names its `skillId`); retreats from the bench in
- * `stepInCandidates` order; promotions (either seat's: `pid` may promote the
- * seat that owes one); and ending the turn last. Everything listed passes
+ * `stepInCandidates` order, after the attack as before it (the hero who steps
+ * in may attack too); promotions (either seat's: `pid` may promote the seat
+ * that owes one); and ending the turn last. Everything listed passes
  * `blocked`, so while a promotion is owed that is all there is.
  */
 export function legalActions(G: GameState, pid: PlayerID): Action[] {

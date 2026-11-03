@@ -49,7 +49,7 @@ interface Props {
   onEquipmentHover?: (eq: CardInstance | null) => void;
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
   /** This hero can still do something this turn — use its skill, or (the
-   *  Active) make the turn's attack. A glint sweeps across the portrait. */
+   *  Active) attack. A glint sweeps across the portrait. */
   ready?: boolean;
 }
 

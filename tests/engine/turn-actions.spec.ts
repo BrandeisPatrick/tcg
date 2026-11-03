@@ -11,11 +11,12 @@ import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame, configureReadyMatch, makeHero } from './_helpers';
 
-// A turn is the player's to spend on cards, skills and a retreat in any order,
-// with at most one attack among them: `attack` makes the Active swing one-way
-// at the rival Active and keeps the turn; `endTurn` hands it over and never
-// attacks. Each hero may use its skill once a turn, and a hero does one or the
-// other — skill or attack.
+// A turn is the player's to spend on cards, skills, retreats and attacks in any
+// order: `attack` makes the Active swing one-way at the rival Active and keeps
+// the turn; `endTurn` hands it over and never attacks. Attacks are per hero —
+// each may attack once a turn from the Active slot, so a Retreat after the swing
+// brings in a hero who may swing too. Each hero may use its skill once a turn,
+// and a hero does one or the other — skill or attack.
 
 beforeAll(configureReadyMatch);
 
@@ -76,7 +77,7 @@ describe('turn actions: the attack is a move', () => {
     expect(after.G.players['1'].active!.hp).toBe(before.G.players['1'].active!.hp);
   });
 
-  it('there is one attack a turn: a second one is rejected, and endTurn does not swing again', () => {
+  it('a hero attacks once a turn: its second attack is rejected, and endTurn does not swing again', () => {
     const c = newClient();
     c.moves.endTurn?.();
     (c.moves as any).attack();
@@ -222,7 +223,7 @@ describe('turn actions: skill or attack', () => {
     expect(me.bench[2]!.skillUsedThisTurn).toBe(false);
   });
 
-  it('after the attack a retreat brings in a hero who cannot attack again; the attacker keeps its skill spent', () => {
+  it('after the attack a retreat brings in a hero who may attack too; the attacker keeps its skill spent', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 9;
@@ -233,12 +234,17 @@ describe('turn actions: skill or attack', () => {
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE'); // Haze back in
     expect(me.active!.cardId).toBe('hero_haze');
-    expect(attackBlocked(G, '0')).toBe('used');
+    expect(attackBlocked(G, '0')).toBeNull(); // Haze has not swung this turn
     const hp = rival.hp;
-    expect(runMove('attack', G, '0')).toBe('INVALID_MOVE');
-    expect(rival.hp).toBe(hp);
-    // Lash made the attack: her skill stays shut from the bench as well.
+    expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
+    expect(rival.hp).toBeLessThan(hp);
+    // Lash made an attack: her skill stays shut from the bench as well.
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).toBe('INVALID_MOVE');
+    // And she cannot swing again if she comes back.
+    expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE');
+    expect(me.active!.iid).toBe(lash.iid);
+    expect(attackBlocked(G, '0')).toBe('used');
+    expect(runMove('attack', G, '0')).toBe('INVALID_MOVE');
   });
 
   it('after a skill, a retreat brings in a hero who may make the attack', () => {
@@ -302,7 +308,7 @@ describe('AI: the attack is a choice', () => {
     const cases: [AttackBlock | null, (G: GameState) => void][] = [
       [null, () => {}],
       ['turn1', (G) => { G.turnNumber = 1; }],
-      ['used', (G) => { G.attackUsed = true; }],
+      ['used', (G) => { G.attackUsed = true; G.players['1'].active!.attackedThisTurn = true; }],
       ['noActive', (G) => { G.players['1'].active!.respawnTurnsLeft = 2; }],
       ['skill', (G) => { G.players['1'].active!.skillUsedThisTurn = true; }],
       ['noTarget', (G) => { G.players['0'].active!.respawnTurnsLeft = 2; }],

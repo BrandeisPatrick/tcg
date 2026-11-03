@@ -259,6 +259,27 @@ export function statusDuration(card: CardInstance, statusId: StatusId, duration:
   return n;
 }
 
+/** Souls off `card`'s Retreat: the sum of the `retreatDiscount` hooks of what it
+ *  carries (Sprint Boots, Enduring Speed). `retreatCost` (legality.ts) asks it of
+ *  the hero leaving the Active slot and keeps the price at 0 or more. */
+export function retreatDiscount(card: CardInstance): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n += ability.retreatDiscount?.(card) ?? 0;
+  return n;
+}
+
+/** The card that keeps `statusId` off `card` — the worn item's (or, for a
+ *  passive, the hero's own) name — or undefined when nothing it carries
+ *  `resists` it (Enduring Speed turns Rooted away). `addStatus` asks first. */
+export function resistedBy(card: CardInstance, statusId: StatusId): string | undefined {
+  for (const { ability, equip } of abilitySources(card)) {
+    if (!ability.resists?.(card, statusId)) continue;
+    const by = CARDS_BY_ID[(equip ?? card).cardId];
+    return by?.name ?? (equip ?? card).cardId;
+  }
+  return undefined;
+}
+
 /** True when `card`'s basic attack may be aimed at any living enemy hero, not
  *  only the rival Active: something the hero carries — a passive, or worn gear —
  *  has `reach`. The one reading of it; `attackTargets` (legality.ts) asks here. */

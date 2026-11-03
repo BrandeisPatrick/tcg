@@ -700,7 +700,7 @@ describe('an attack that names its target', () => {
     expect(swings[0]).toMatchObject({ iid: atk.iid, targetIid: foes[2].iid, index: 0, raw: 3 });
     expect(G.attackUsed).toBe(true);
     expect(atk.attackedThisTurn).toBe(true);
-    expect(attackBlocked(G, '0', foes[1].iid)).toBe('used'); // one attack a turn, whoever it names
+    expect(attackBlocked(G, '0', foes[1].iid)).toBe('used'); // one attack a turn for this hero, whoever it names
 
     // The same through the game's move, and a bare move is still the Active.
     const H = duel(REACHER);
@@ -790,9 +790,12 @@ describe('an attack that names its target', () => {
     G.turnNumber = 1;
     expect(attackBlocked(G, '0', ghost)).toBe('turn1');
     G.turnNumber = 2;
-    G.attackUsed = true;
+    G.attackUsed = true; // another hero's swing this turn does not close this one's
+    expect(attackBlocked(G, '0', foes[0].iid)).toBeNull();
+    atk.attackedThisTurn = true;
     expect(attackBlocked(G, '0', ghost)).toBe('used');
     G.attackUsed = false;
+    atk.attackedThisTurn = false;
     atk.skillUsedThisTurn = true;
     expect(attackBlocked(G, '0', ghost)).toBe('skill');
     atk.skillUsedThisTurn = false;

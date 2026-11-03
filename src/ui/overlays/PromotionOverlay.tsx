@@ -102,7 +102,7 @@ export function PromotionOverlay({ candidates, leavingName, retreat, onPick }: P
 
         <span style={{ ...text.body, color: poster.inkDim, textAlign: 'center' }}>
           {retreat
-            ? `${leavingName} takes their bench slot. Retreat costs ${retreat.cost} souls.`
+            ? `${leavingName} takes their bench slot. ${retreat.cost > 0 ? `Retreat costs ${retreat.cost} soul${retreat.cost === 1 ? '' : 's'}.` : 'This Retreat is free.'}`
             : 'The fallen hero takes their bench slot to respawn.'}
         </span>
         {retreat && (

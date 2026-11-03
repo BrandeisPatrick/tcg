@@ -94,7 +94,7 @@ export interface CardInstance {
   statuses: StatusInstance[];
   exhausted: boolean;
   /** This hero used a skill this turn. Each hero may use one skill a turn, and
-   *  a hero that has done so cannot make the turn's attack. */
+   *  a hero that has done so cannot attack this turn. */
   skillUsedThisTurn: boolean;
   /** The skill this hero used this turn (set by `useSkill`, cleared with the
    *  other turn flags): what Echo Shard repeats, and which of two skills the
@@ -106,8 +106,10 @@ export interface CardInstance {
    *  field. Ticks at the start of the owner's turn (docs/stats-model.md §1); a
    *  fall and a respawn leave it as it is. */
   cooldowns?: Partial<Record<AbilityId, number>>;
-  /** This hero made the turn's attack, so it cannot use its skill this turn
-   *  (it keeps the flag if it retreats to the bench afterwards). */
+  /** This hero attacked this turn. Attacks are per hero — the attack gate reads
+   *  this flag, not `GameState.attackUsed` — so it cannot attack again this
+   *  turn, nor use its skill. It keeps the flag if it retreats to the bench
+   *  afterwards: a hero that swung, retreated and came back cannot swing again. */
   attackedThisTurn?: boolean;
   /** Per-instance play-cost override. When set, used instead of the card
    *  definition's cost — e.g. Sinclair's free (0-cost) copied ultimate. */
@@ -121,7 +123,7 @@ export interface CardInstance {
   // Multi-attack is modeled via the `extra_attack` STATUS (value = N extra
   // full-power swings queued for this turn). It stacks additively across
   // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed by the
-  // turn's attack — see grantExtraAttacks / actions/attack.ts. Each bonus swing
+  // bearer's attack — see grantExtraAttacks / actions/attack.ts. Each bonus swing
   // re-fires onAttack procs (so Ricochet / Toxic Bullets / Djinn's Mark all proc
   // per swing).
   /**
@@ -395,11 +397,14 @@ export interface GameState {
    */
   draftTurnsOffset: number;
   mulliganPending: boolean;       // true after draft completes until player resolves opening mulligan
-  /** This turn's attack has been made. A turn is the player's to spend on
-   *  cards, skills and a retreat in any order, with at most one attack among
-   *  them: the `attack` move, the Active swinging one-way at the rival Active.
-   *  Ending the turn never attacks. One attack a turn whoever is Active, so a
-   *  hero who steps in after it cannot swing again. Reset at each turn start. */
+  /** An attack has been made this turn. A turn is the player's to spend on
+   *  cards, skills, retreats and attacks in any order: every hero may attack
+   *  once a turn while it stands in the Active slot (the `attack` move, the
+   *  Active swinging one-way at the rival Active), so the hero a Retreat brings
+   *  in after a swing may swing too. Ending the turn never attacks. The gate is
+   *  per hero (`CardInstance.attackedThisTurn`); this flag only says whether
+   *  the turn has seen an attack yet — the board's turn phase and the coach
+   *  plate read it. Reset at each turn start. */
   attackUsed: boolean;
   /** Set by the `resolve` pass when a player's Active is a corpse and an
    *  eligible bench hero can step up — i.e. a forced promotion is owed. The AI

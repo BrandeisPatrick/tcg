@@ -10,6 +10,7 @@ import type { CardInstance, GameState, PlayerID, PlayerState } from '@/engine/ty
 import { CARDS_BY_ID } from '@/cards';
 import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
+import { RETREAT_COST } from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
 
 export const PIDS: PlayerID[] = ['0', '1'];
@@ -150,29 +151,49 @@ function benchMover(c: CardInstance): boolean {
 
 // ---------------------------------------------------------------------------
 // Rules oracle: the basic attack. Written from the rules, not copied from
-// `attackTargets` / `attackBlocked`: the attack is open when it is not Turn 1,
-// not yet made this turn, and the Active is standing and has not used its skill;
-// it may be aimed at the rival's living Active — or, if a passive of the hero's or
-// a piece of gear it wears has `reach`, at any living enemy hero — and never at a
-// hero under a Dome.
+// `attackTargets` / `attackBlocked`: attacks are per hero, so the attack is open
+// when it is not Turn 1, the Active is standing, this hero has not attacked this
+// turn (whoever else has) and it has not used its skill; it may be aimed at the
+// rival's living Active — or, if a passive of the hero's or a piece of gear it
+// wears has `reach`, at any living enemy hero — and never at a hero under a Dome.
 // ---------------------------------------------------------------------------
 
-/** Does a passive of the hero's, or gear it wears, give its attack reach? */
-export function carriesReach(hero: CardInstance): boolean {
+/** The ability ids a hero carries: its own passives, then its worn gear's. */
+function carriedAbilityIds(hero: CardInstance): string[] {
   const data = CARDS_BY_ID[hero.cardId];
   const worn = (hero.attached ?? []).flatMap((a) => {
     const d = CARDS_BY_ID[a.cardId];
     return d?.type === 'equipment' ? d.abilities ?? [] : [];
   });
-  const ids = [...(data?.type === 'hero' ? data.passives ?? [] : []), ...worn];
-  return ids.some((id) => !!getAbility(id)?.reach);
+  return [...(data?.type === 'hero' ? data.passives ?? [] : []), ...worn];
 }
 
-/** Is the turn's attack open to `pid`'s Active at all (whoever it might aim at,
- *  and whatever the swing would deal)? */
+/** Does a passive of the hero's, or gear it wears, give its attack reach? */
+export function carriesReach(hero: CardInstance): boolean {
+  return carriedAbilityIds(hero).some((id) => !!getAbility(id)?.reach);
+}
+
+/** Is an attack open to `pid`'s Active at all (whoever it might aim at, and
+ *  whatever the swing would deal)? */
 export function attackOpenFor(G: GameState, pid: PlayerID): boolean {
   const active = G.players[pid].active;
-  return G.turnNumber > 1 && !G.attackUsed && !!active && !isRespawning(active) && !active.skillUsedThisTurn;
+  return G.turnNumber > 1 && !!active && !isRespawning(active) && !active.attackedThisTurn && !active.skillUsedThisTurn;
+}
+
+// ---------------------------------------------------------------------------
+// Rules oracle: the Retreat's price. Written from the card text, not copied from
+// `retreatCost`: 2 souls, a soul off for each "Retreat costs 1 less" the hero
+// leaving the Active slot carries (Sprint Boots, Enduring Speed: their
+// `retreatDiscount` hooks), nothing while that hero is Swift; never below 0.
+// ---------------------------------------------------------------------------
+
+/** What `pid`'s Retreat costs, by the rules. */
+export function retreatCostOracle(G: GameState, pid: PlayerID): number {
+  const leaving = G.players[pid].active;
+  if (!leaving) return RETREAT_COST;
+  if (leaving.statuses.some((s) => s.id === 'swift')) return 0;
+  const off = carriedAbilityIds(leaving).reduce((n, id) => n + (getAbility(id)?.retreatDiscount?.(leaving) ?? 0), 0);
+  return Math.max(0, RETREAT_COST - off);
 }
 
 /** The heroes `pid`'s Active may aim its attack at, in board order (the rival's

@@ -8,14 +8,14 @@ import type { CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { legalActions, skillBlocked } from '@/engine/legality';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST } from '@/engine/constants';
+import { MAX_EQUIPMENT_PER_HERO } from '@/engine/constants';
 import { attackPower, isRespawning, liveBoardCards, otherPlayer } from '@/engine/query';
 import type { Snapshot, StepInfo } from './driver';
 import { chaosMove } from './driver';
 import { moveTags, signatureOf, type Hit } from './hits';
 import {
   attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, diffPaths, filterForHandCard, filterForSkill,
-  skillCooling, skillExcludesSelf, skillIdsOf, targetLegal,
+  retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf, targetLegal,
 } from './oracle';
 import type { TargetFilter } from '@/abilities';
 
@@ -209,10 +209,17 @@ export function probeLegality(
             else legal = true;
           } else legal = true;
         }
-        const r = callMove(G, ctx, pid, 'moveHero', [from, to], (g) => { g.players[pid].souls = Math.max(g.players[pid].souls, RETREAT_COST); });
+        // The Retreat's price is the oracle's own (`retreatCostOracle`): enough souls are handed over…
+        const price = retreatCostOracle(G, pid);
+        const r = callMove(G, ctx, pid, 'moveHero', [from, to], (g) => { g.players[pid].souls = Math.max(g.players[pid].souls, price); });
         const accepted = r.outcome === 'accepted';
         if (accepted && !legal) add(`moveHero-accepts-illegal:${reason}`, 'moveHero', [from, to], `moveHero(${String(from)}, ${String(to)}) accepted; rules say ${reason}`);
         else if (!accepted && legal) add('moveHero-rejects-legal', 'moveHero', [from, to], `moveHero(${from}, ${to}) is a legal swap but the engine ${r.outcome} it`);
+        // …and a soul short of it, a legal Retreat that costs anything is refused.
+        if (legal && (from === 0 || to === 0) && price > 0) {
+          const short = callMove(G, ctx, pid, 'moveHero', [from, to], (g) => { g.players[pid].souls = price - 1; });
+          if (short.outcome === 'accepted') add('moveHero-accepts-illegal:souls', 'moveHero', [from, to], `moveHero(${from}, ${to}) accepted with ${price - 1} souls; the rules price the Retreat at ${price}`);
+        }
       }
     }
   }
