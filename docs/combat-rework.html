@@ -146,14 +146,14 @@ th { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: v
 
 <main>
   <header>
-    <span class="eyebrow">Proposal · not built</span>
+    <span class="eyebrow">Built · main · 3 Nov 2026</span>
     <h1>Lane Combos and Ricochet</h1>
-    <p class="lede">Your three ideas from this morning, written up as rules so you can check them before I build: attacks per hero with retreat as the combo engine, Ricochet that spreads your on-hit debuffs to the whole enemy board, and a proper pictogram for every status.</p>
-    <span class="stamp">Awaiting your OK</span>
+    <p class="lede">Your three ideas, now rules in the game: attacks per hero with Retreat as the combo engine, Ricochet that spreads your on-hit debuffs to the whole enemy board, and a drawn pictogram for every status. Three commits on main, 1,082 tests.</p>
+    <span class="stamp">Built</span>
   </header>
 
   <section>
-    <h2>1 · Attacks are per hero</h2>
+    <h2>1 · Attacks are per hero <small>commit e971923</small></h2>
     <p class="q">Today: one attack a turn, whoever is in front. Proposed: <b>every hero may attack once a turn while it stands in the Active slot.</b> Retreat (2 souls) swaps who stands there, so a turn can chain attackers.</p>
     <div class="combo">
       <span class="step">Haze attacks<small>3 bullet</small></span><span class="arrow">→</span>
@@ -191,7 +191,7 @@ th { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: v
   </section>
 
   <section>
-    <h2>2 · Ricochet spreads the hit</h2>
+    <h2>2 · Ricochet spreads the hit <small>commit 156659c</small></h2>
     <p class="q"><b>Ricochet N:</b> after the bearer's attack lands, every other enemy hero takes N bullet damage, and the attack's on-hit debuffs land on them too. It fires on every swing, so Extra Attacks ricochet again.</p>
     <h3 class="sub">What spreads, what doesn't</h3>
     <div class="wrap"><table>
@@ -208,7 +208,7 @@ th { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: v
   </section>
 
   <section>
-    <h2>3 · A pictogram for every status</h2>
+    <h2>3 · A pictogram for every status <small>commit ae3e1a0</small></h2>
     <p class="lede">Today 5 statuses have a drawn mark (Fixation, Dome, Rooted, Rabbit, Last Stand); the other 24 are text chips. Every status gets its own SVG mark in the same 16-unit line-art style, on its class colour: green buff, red debuff, ink for the rest. The same drawing lands as the sticker when the status is applied.</p>
     <p class="q">Hover already works: pointing at a status chip (or tapping it on a phone) shows what it does and <b>"N turns left"</b>. I'll make sure every new mark keeps that, and add the turns to the sticker's flash too.</p>
     <div class="wrap"><table>
@@ -218,11 +218,13 @@ th { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: v
   </section>
 
   <section class="decide">
-    <span class="eyebrow">Your call</span>
-    <ol>
-      <li>Build all three, in this order: per-hero attacks with the mobility items, then Ricochet, then the pictograms? Each lands as its own commit with a sim run.</li>
-      <li>Keep Retreat at 2 souls and let the sim decide, or raise it to 3 now that a retreat buys an attack?</li>
-    </ol>
+    <span class="eyebrow">Where it stands</span>
+    <ul class="issues">
+      <li><span>Played on the real board: Haze attacked and knocked Dynamo out, retreated for 2 souls, Shiv stepped in and attacked, and his Bleed landed with its new mark. The patron lamp now reads "Ready to attack" again after a Retreat.</span></li>
+      <li><span>Retreat stayed at 2 souls. In the 400-game sim the mean game went from 13.9 to 13.2 turns: the AI chains attacks, but not enough to change the pace much. A human will chain harder; if games get too short, Retreat cost and hero HP are the levers.</span></li>
+      <li><span>The AI's retreat-into-a-fresh-attacker change won 52.4% of 3,000 games against the old AI: a small, consistent edge.</span></li>
+      <li><span>Not changed: the tutorial still teaches the old one-attack rhythm beyond its retreat lesson.</span></li>
+    </ul>
   </section>
 
   <footer>Item types and tiers checked on the Deadlock wiki, 3 Nov 2026. Enduring Speed is a Tier 2 Vitality passive built from Sprint Boots; Majestic Leap a Tier 3 Vitality active; Kinetic Dash a Tier 2 Weapon passive.</footer>
