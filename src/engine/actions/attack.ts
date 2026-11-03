@@ -12,13 +12,17 @@
  * Every swing is reported as a `swing` event BEFORE its damage, so the stream
  * reads "this swing, then what it did" — and the forecast (forecast.ts) is
  * just this action run on a copy and read back.
+ *
+ * Ricochet N (`ricochetPower`): a swing that lands bounces, and every other
+ * living enemy hero takes N bullet damage and the swing's on-hit debuffs. Each
+ * swing bounces, Extra Attacks too; a bounce never bounces again.
  */
 import type { CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID } from '@/cards';
 import { damageUnit } from '../damage';
 import { resolve } from '../death';
 import { attackTargets } from '../legality';
-import { attackPower, findCardOnBoard, isRespawning, isUntargetable, targetsFor, type AttackPower } from '../query';
+import { attackPower, findCardOnBoard, isRespawning, isUntargetable, ricochetPower, targetsFor, type AttackPower } from '../query';
 import { fireTriggers } from '../triggers';
 import { withCast } from '../castContext';
 import { pushFx } from '../fx';
@@ -41,8 +45,8 @@ export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
   // Reload, Burst Fire, Fixation — the value of the `extra_attack` status,
   // read after the primary swing because Fixation grants one there). Each
   // re-fires the attacker's onAttack procs (lifesteal, bleed, Djinn's Mark,
-  // Ricochet AoE, Tesla chain). Power is re-read every swing so mid-attack
-  // threshold gear (Frenzy) stays honest. ----
+  // Tesla chain) and bounces again with Ricochet. Power is re-read every swing
+  // so mid-attack threshold gear (Frenzy) stays honest. ----
   const extras = atk.statuses.find((s) => s.id === 'extra_attack')?.value ?? 0;
   let index = 1;
   for (let i = 0; i < extras; i++) {
@@ -64,19 +68,20 @@ export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
  * attacks the whole board. It is not the hero's attack: `G.attackUsed` and the
  * attacker's flags are left as they are, and Extra Attacks are neither read nor
  * spent. A hero a Dome keeps from being the target of an attack is skipped, and
- * so is a swing that would deal nothing (the attacker is Disarmed, say).
+ * so is a swing that would deal nothing (the attacker is Disarmed, say). The
+ * volley does not ricochet: it already reaches every hero a bounce would.
  */
 export function attackAll(G: GameState, attacker: CardInstance) {
   if (isRespawning(attacker)) return;
   let index = 0;
   for (const foe of targetsFor(G, attacker.ownerId, 'enemyHero')) {
     if (attacker.hp <= 0) break;
-    // A hero an earlier swing's follow-through (a chain, a bounce) already took
-    // down is not hit again.
+    // A hero an earlier swing's follow-through (a chain, a detonation) already
+    // took down is not hit again.
     if (foe.hp <= 0 || isUntargetable(foe, 'attack')) continue;
     const power = attackPower(attacker, foe);
     if (power.total <= 0) continue;
-    swing(G, attacker, foe, index++, power);
+    swing(G, attacker, foe, index++, power, false);
   }
   resolve(G);
 }
@@ -84,8 +89,9 @@ export function attackAll(G: GameState, attacker: CardInstance) {
 /** One swing at `power`: the event, the damage, then the follow-through. The
  *  attacker's worn equipment reacts inside damageUnit (HP already off, and only
  *  when damage got through); its passives follow once the damage call has
- *  returned, with how much got through (Drifter's Bloodscent heals half of it). */
-function swing(G: GameState, atk: CardInstance, target: CardInstance, index: number, power: AttackPower) {
+ *  returned, with how much got through (Drifter's Bloodscent heals half of it).
+ *  Then, if the swing landed, it bounces (`bounces` off: the volley). */
+function swing(G: GameState, atk: CardInstance, target: CardInstance, index: number, power: AttackPower, bounces = true) {
   const extra = index > 0;
   pushFx(G, {
     kind: 'swing', iid: atk.iid, targetIid: target.iid, index, raw: power.total,
@@ -101,4 +107,24 @@ function swing(G: GameState, atk: CardInstance, target: CardInstance, index: num
   // grants its extra attack only here, so the extra swings it spawns don't
   // re-trigger it.
   fireTriggers(G, atk, 'onAttack', { only: 'passives', target, params: extra ? { dealt } : { primary: true, dealt } });
+
+  // ---- Ricochet: a swing that got through bounces to every other living enemy
+  // hero a Dome does not cover, for N bullet damage each. A bounce is the
+  // swing's bullet, so it is dealt in an attack frame — the gear reacts and the
+  // passives follow as for the swing, each told `bounce` so the attacker's own
+  // heals and chains stay with the swing and its on-hit debuffs spread. A kill
+  // takes the usual path: the exp to the frame's source, the KO bounty and the
+  // patron's loss when the attack resolves. Only the swing reads Ricochet, so a
+  // bounce never bounces. ----
+  const n = bounces && dealt > 0 ? ricochetPower(atk) : 0;
+  if (n <= 0) return;
+  for (const foe of targetsFor(G, atk.ownerId, 'enemyHero')) {
+    if (atk.hp <= 0) break; // Return Fire has dropped the attacker: its bullets stop
+    if (foe === target || foe.hp <= 0 || isUntargetable(foe, 'attack')) continue;
+    let hit = 0;
+    withCast(atk, 'attack', () => {
+      hit = damageUnit(G, foe, n, 'attack', `${atkName} (Ricochet)`, { tag: 'ricochet' });
+    }, { bounce: true });
+    fireTriggers(G, atk, 'onAttack', { only: 'passives', target: foe, params: { dealt: hit, bounce: true } });
+  }
 }

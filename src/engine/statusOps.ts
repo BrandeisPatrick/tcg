@@ -19,7 +19,7 @@ const MAGNITUDE_STATUSES: Set<StatusId> = new Set([
   'bleed', 'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power',
   'djinns_mark', 'weapon_power_down', 'spirit_power_down',
   'bullet_resist_down', 'spirit_resist_down', 'healing_boost', 'healing_boost_down',
-  'extra_attack', 'fixation', 'last_stand', 'return_fire',
+  'extra_attack', 'fixation', 'last_stand', 'return_fire', 'ricochet',
 ]);
 
 // Stat-reduction debuffs store a positive magnitude that represents a reduction.
@@ -44,9 +44,9 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  *    Reducer).
  *
  * A corpse on its respawn timer takes no status at all (nothing is logged or
- * shown): a swing's passives can run after the target was reaped (Ricochet's
- * own resolve), and a hero would otherwise respawn still carrying what landed
- * on its body.
+ * shown): an effect can reach a hero already reaped (an ultimate's gear on a
+ * linked hero who fell), and a hero would otherwise respawn still carrying what
+ * landed on its body.
  *
  * `opts.ramp` marks a channel that escalates: its value climbs by `ramp`
  * after each pulse (see tickCastingPulses). `opts.heal` is the HP the bearer
@@ -280,9 +280,10 @@ export function clearTurnFlags(ps: PlayerState) {
     c.attackedThisTurn = false;
     // Any unused Extra Attack stack expires at end of turn (it's a this-turn
     // resource); the attack consumes it, and a turn that ends without one
-    // lets it go. So does an unspent Swift (a free Retreat THIS turn), even one
-    // a buff-stretching item made last longer.
-    c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack' && s.id !== 'swift');
+    // lets it go. So does an unspent Swift (a free Retreat THIS turn) and a
+    // Ricochet granted for this turn (Split Shot), even one a buff-stretching
+    // item made last longer.
+    c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack' && s.id !== 'swift' && s.id !== 'ricochet');
     // A merged Rem rides on her bearer, out of the board sweep above: clear
     // her skill flag here too, or she would come back from the merge with
     // her skill already spent for that turn.

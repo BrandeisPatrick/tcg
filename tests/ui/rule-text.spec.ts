@@ -322,10 +322,11 @@ const CHANNEL_ULTS = ['eff_ult_dynamo', 'eff_ult_seven', 'eff_ult_warden'];
 /** Spirit scales these abilities through a skill's `scalesSpirit` flag too. */
 const READS_SPIRIT = new Set([...abilitiesReadingSpirit(), ...CHANNEL_ULTS]);
 
-/** Cards (or hero abilities) whose text may carry a Bullet Power mark. Split
- *  Shot is the one so far: its damage is the Active's swing (`attackPower`).
- *  Add the id here when another does, with the code that adds it. */
-const BP_SCALING: string[] = ['split_shot'];
+/** Cards (or hero abilities) whose text may carry a Bullet Power mark. None
+ *  does today: Split Shot carried one while its damage was the Active's swing
+ *  (`attackPower`), and lost it when it became Ricochet 2. Add the id here when
+ *  another does, with the code that adds it. */
+const BP_SCALING: string[] = [];
 
 /** Where an ability's text is printed: a hero ability prints its own; a spell,
  *  an ultimate or a piece of gear prints the card's. */

@@ -117,10 +117,11 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'inhibitor', name: 'Inhibitor', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_inhibitor'], text: "Bearer's attacks apply Bullet Power −1 and Spirit Power −1 for 2 turns." },
   // Siphon Bullets (T4): attacks temporarily steal 1 max HP (reverts after 2 turns).
   { id: 'siphon_bullets', name: 'Siphon Bullets', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_siphon_bullets'], text: "After bearer attacks: steal 1 max HP from the target for 2 turns." },
-  // Ricochet (canon T4 Weapon): bullets ricochet to nearby enemies — every time
-  // the bearer attacks, the shot bounces for 2 to all OTHER enemies (the bench).
-  // Fires per swing, so it scales with Extra Attack into a board-wipe engine.
-  { id: 'ricochet', name: 'Ricochet', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_ricochet'], text: 'After the bearer attacks, deal 2 to all other enemies (the enemy bench).' },
+  // Ricochet (canon T4 Weapon): bullets ricochet to nearby enemies — the keyword,
+  // Ricochet 2 while worn. Every swing that lands bounces to all OTHER enemy
+  // heroes with its on-hit debuffs, so it scales with Extra Attack and with the
+  // bearer's debuff gear.
+  { id: 'ricochet', name: 'Ricochet', type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_ricochet'], text: "Ricochet 2: after the bearer's attack lands, every other enemy hero takes 2 bullet damage and the attack's on-hit debuffs." },
   { id: 'healing_tempo',  name: 'Healing Tempo',  type: 'equipment', rarity: 4, tier: 4, cost: 7, bonus: { atk: 2 }, abilities: ['eff_healing_tempo'], text: '+2 Bullet Power. Healing Boost 4.' },
   { id: 'boundless_spirit', name: 'Boundless Spirit', type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { spirit: 5, hp: 3 }, text: '+5 Spirit Power. +3 HP.' },
   { id: 'glass_cannon',   name: 'Glass Cannon',   type: 'equipment', rarity: 4, tier: 4, cost: 8, bonus: { atk: 6, hp: -1 }, text: '+6 Bullet Power. −1 max HP.' },

@@ -34,7 +34,7 @@ lock a skill. The engine fixes that by construction:
 | Module | Holds |
 |---|---|
 | `constants.ts` | every rule number (costs, caps, patron HP, soul ramp, respawn, levels) |
-| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` / `resolveSkill` (a hero's kit: its skills, then passives; which skill a bare action names), `isBlocked` / `isUntargetable`, `hasReach`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, `checkWinner` |
+| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` / `resolveSkill` (a hero's kit: its skills, then passives; which skill a bare action names), `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, `checkWinner` |
 | `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets`, `playBlocked` / `playTargets`, `cardCost`, `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `attack` (and `attackAll`, a swing at every enemy hero), `playCard`, `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters) |
@@ -66,6 +66,24 @@ is free and brings in a hero who may attack. A Retreat costs `retreatCost`:
 `RETREAT_COST`, less what the hero leaving carries (`retreatDiscount`), and
 nothing while it is Swift — the Retreat spends the Swift.
 
+**Ricochet.** A swing whose damage gets through bounces: every other living
+enemy hero a Dome does not cover takes N bullet damage, where N is
+`ricochetPower` — a `ricochet` status on the attacker (Split Shot, swept with
+Swift when the turn ends) plus the `ricochet` hooks of what it carries (the
+Ricochet item: 2). Each swing bounces, Extra Attacks too; a swing absorbed to 0
+does not, and a bounce never bounces again (only `swing` reads it). The
+volley of `attackAll` does not ricochet. A bounce is the swing's bullet, so it
+is dealt in an attack frame marked `bounce` (`withCast(atk, 'attack', fn,
+{ bounce: true })`): the attacker's gear reacts and its passives follow as for
+the swing, each with `bounce: true` and never `primary`. What the swing puts on
+its target spreads (Bleed, the resist and power shreds, Root, Djinn's Mark,
+Siphon's steal); what it does for the attacker stays with the swing — every
+self-heal, Tesla's chain, Mixed Bullets' spirit half, Fixation's extra swing —
+each of those procs returns on `bounce`. A bounce meets the hero's own Bullet
+Resist, Shield and Return Fire, and a kill by it is the attacker's: the exp
+through the frame's source, the KO bounty and the patron's loss when the attack
+resolves, once, at its end.
+
 ## Adding or changing a card
 
 - **An effect** (a skill, a spell, an ultimate, an equipment proc) is an
@@ -78,7 +96,8 @@ nothing while it is Swift — the Retreat spends the Swift.
   `incoming` (Vindicta's flight), `buffDuration` (Superior Duration),
   `retreatDiscount` (Sprint Boots: souls off the bearer's Retreat, read by
   `retreatCost`), `resists` (Enduring Speed: a status `addStatus` refuses to
-  put on the bearer, saying so in the log). `attackPower`, `damageUnit`,
+  put on the bearer, saying so in the log), `ricochet` (the Ricochet item: the
+  bearer's swing bounces, summed by `ricochetPower`). `attackPower`, `damageUnit`,
   `addStatus` and `retreatCost` ask every ability the hero carries; nothing
   else needs to know.
 - **Gear that reacts to a move** listens for a trigger the engine fires

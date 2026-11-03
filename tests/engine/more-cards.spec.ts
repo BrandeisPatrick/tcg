@@ -180,18 +180,13 @@ describe('New spells', () => {
     expect(status(haze, 'rooted')).toBeDefined(); // the un-Root went in the 2026-11-03 rework
   });
 
-  it('Split Shot hits every enemy bench hero for your Active\'s swing, and only the bench', () => {
+  it('Split Shot gives your Active Ricochet 2 this turn and shoots nothing itself (ricochet.spec has the bounce)', () => {
     const G = freshReadyGame();
     hpPool(G, '1');
     const haze = G.players['0'].active!;
-    const abrams = G.players['1'].active!;
-    const bench = board(G, '1').slice(1);
-    haze.atkMod = 2; // Haze swings for 5: half of it, 2, lands on each bench hero
-    const want = bench.map((b) => 20 - Math.floor(attackPower(haze, b).total / 2));
     expect(play(G, 'split_shot')).not.toBe(INVALID);
-    expect(bench.map((b) => b.hp)).toEqual(want);
-    for (const b of bench) expect(b.hp, b.cardId).toBeLessThan(20);
-    expect(abrams.hp).toBe(20);
+    expect(status(haze, 'ricochet')).toMatchObject({ value: 2, duration: 1 });
+    for (const c of board(G, '1')) expect(c.hp, c.cardId).toBe(20);
   });
 
   it('Blood Tribute pays 3 HP (never below 1) for Extra Attack 1 and +1 Bullet Power this turn', () => {

@@ -124,8 +124,8 @@ export interface CardInstance {
   // full-power swings queued for this turn). It stacks additively across
   // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed by the
   // bearer's attack — see grantExtraAttacks / actions/attack.ts. Each bonus swing
-  // re-fires onAttack procs (so Ricochet / Toxic Bullets / Djinn's Mark all proc
-  // per swing).
+  // re-fires onAttack procs (so Toxic Bullets / Djinn's Mark proc per swing)
+  // and bounces again with Ricochet.
   /**
    * Rem's "Lil Helpers" merge: when Rem casts her skill she leaves her bench
    * slot and attaches to an ally as a temporary buff. These live on the Rem
@@ -228,7 +228,7 @@ export type FxTag =
   | 'life_drain'     // Lady Geist's Life Drain hit
   | 'lifesteal'      // healing drawn out of a struck enemy (Bloodscent, Leech…)
   | 'mixed_bullets'  // Wraith's spirit rider on her bullet
-  | 'ricochet'       // Ricochet bouncing to the bench
+  | 'ricochet'       // a Ricochet bounce off the swing to another enemy hero
   | 'tesla'          // Tesla Bullets chaining to the bench
   | 'burst'          // Mystic Burst proc after a skill
   | 'channel'        // a channeled ultimate's end-of-turn pulse

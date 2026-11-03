@@ -77,6 +77,7 @@ const STATUS_WEIGHT: Record<string, Weight> = {
   unstoppable:   { scale: 3,   turns: 2 },                // a turn of immunity to damage and crowd control is worth a lot: about 6 a turn
   dome:          { scale: 2,   turns: 1 },                // a turn no attack can reach the bearer: about a swing's damage
   return_fire:   { scale: 1,   turns: 2, byValue: true }, // `value` bullet damage back at each swing that lands
+  ricochet:      { scale: 2,   turns: 1, byValue: true }, // `value` bullet damage to each other enemy hero on a swing this turn, its debuffs aside
   // Rooted is flagged `cc` (Unstoppable clears it) but only stops a move, so it is
   // priced here on its own rather than as a denied turn.
   rooted:        { scale: 1,   turns: 1 },
@@ -297,7 +298,7 @@ function scoreSkill(pid: PlayerID, target?: CardInstance): number {
  *  its target, plus a premium for a KO. With lookahead a win is `evalState`'s
  *  verdict instead. Both are read off the engine's own run of the attack —
  *  "wins" means what the rules mean: the knockout's patron life, a board wipe,
- *  a Ricochet that drops the last bench hero, a merged Rem who walks off the
+ *  a Ricochet bounce that drops the last bench hero, a merged Rem who walks off the
  *  fallen bearer, and a mutual wipe that goes to P0. */
 function scoreAttack(G: GameState, pid: PlayerID, targetIid?: string): number {
   if (checkWinner(simulate(G, pid, { type: 'attack', targetIid }).G)?.winner === pid) return DECISIVE;

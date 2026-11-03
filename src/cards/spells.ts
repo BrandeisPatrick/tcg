@@ -63,13 +63,12 @@ export const SPELLS: SpellCard[] = [
   { id: 'colossus',       name: 'Colossus',       type: 'spell', rarity: 3, cost: 6, abilities: ['eff_colossus_cast'],  text: 'Your Active gains Bullet Resist 4 and Spirit Resist 4 for 2 turns. The enemy Active is Rooted for 1 turn.' },
 
   // ----- More canon active items (docs/card-design.md, added 2026-10-30) -----
-  // A brown `{bp:0}` is your Active's Bullet Power itself (card/scaling.ts).
   // Blood Tribute is a T3 item at 2 souls: the rest of its price is paid in HP.
   { id: 'golden_goose_egg', name: 'Golden Goose Egg', type: 'spell', rarity: 1, cost: 1, abilities: ['eff_golden_goose_egg'], text: 'Gain 2 souls. Your Active gains +1 max HP.' },
   { id: 'grit',             name: 'Grit',             type: 'spell', rarity: 1, cost: 1, abilities: ['eff_grit'],             text: 'Your Active gains Shield 2.' },
   { id: 'return_fire',      name: 'Return Fire',      type: 'spell', rarity: 2, cost: 3, abilities: ['eff_return_fire'],      text: 'Your Active gains Return Fire 2 for 2 turns: an enemy attack that hits it costs the attacker 2 bullet damage.' },
   { id: 'fleetfoot',        name: 'Fleetfoot',        type: 'spell', rarity: 2, cost: 3, abilities: ['eff_fleetfoot'],        text: 'Your Active gains Extra Attack 1 this turn, and its Retreat this turn is free.' },
-  { id: 'split_shot',       name: 'Split Shot',       type: 'spell', rarity: 2, cost: 3, abilities: ['eff_split_shot'],       text: "Your Active's shot splits: deal {bp:1/2} bullet damage to every enemy bench hero." },
+  { id: 'split_shot',       name: 'Split Shot',       type: 'spell', rarity: 2, cost: 3, abilities: ['eff_split_shot'],       text: 'Your Active gains Ricochet 2 this turn.' },
   { id: 'blood_tribute',    name: 'Blood Tribute',    type: 'spell', rarity: 3, cost: 2, abilities: ['eff_blood_tribute'],    text: 'Your Active pays 3 HP (never below 1) and gains Extra Attack 1 and +1 Bullet Power this turn.' },
   { id: 'healing_nova',     name: 'Healing Nova',     type: 'spell', rarity: 3, cost: 5, abilities: ['eff_healing_nova'],     text: 'Heal all allies 3.' },
   { id: 'rescue_beam',      name: 'Rescue Beam',      type: 'spell', rarity: 3, cost: 5, abilities: ['eff_rescue_beam'],      text: 'A bench ally steps into your Active slot; the hero it rescues heals 4 on the bench.' },

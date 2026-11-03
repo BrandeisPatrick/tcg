@@ -111,14 +111,17 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     if (cast.kind === 'skill' || cast.kind === 'spell' || cast.kind === 'ult') {
       fireTriggers(G, cast.source, 'onBearerSkillDamage', { reaction: true, target, amount: dmg });
     }
+    // A Ricochet bounce is an attack frame marked `bounce`: the gear hears it,
+    // so what belongs to the swing alone (a heal, a chain) can sit it out.
     if (cast.kind === 'attack') {
-      fireTriggers(G, cast.source, 'onAttack', { reaction: true, target });
+      fireTriggers(G, cast.source, 'onAttack', { reaction: true, target, params: cast.bounce ? { bounce: true } : undefined });
     }
   }
 
   // Return Fire: an enemy hero's swing that lands on a standing bearer comes
-  // back at the attacker as bullet damage. It is dealt in a proc frame, so it
-  // is no attack of its own: it fires no on-attack gear and cannot bounce back.
+  // back at the attacker as bullet damage — a Ricochet bounce too, which is the
+  // swing's bullet. It is dealt in a proc frame, so it is no attack of its own:
+  // it fires no on-attack gear and cannot bounce back.
   if (type === 'attack' && cast?.kind === 'attack' && cast.source && cast.source.ownerId !== target.ownerId
       && CARDS_BY_ID[cast.source.cardId]?.type === 'hero' && target.hp > 0 && !isRespawning(target)) {
     const returnFire = target.statuses.find((s) => s.id === 'return_fire');
@@ -150,7 +153,7 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   // Surface the hit for the FX layer. The basic swing is in the stream like
   // everything else, filed 'attack' (the board skips it: the combat
   // choreographer has already walked it); anything riding on a swing (Tesla,
-  // Ricochet, a Djinn's Mark detonation) carries a tag and is filed as a proc.
+  // a Ricochet bounce, a Djinn's Mark detonation) carries a tag and is filed as a proc.
   pushFx(G, {
     kind: 'hit', iid: target.iid, amount: dmg, type, ko: target.hp <= 0,
     cast: fxCast, source: fxFrom, tag: fx?.tag, stacks: fx?.stacks,

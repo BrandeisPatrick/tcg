@@ -35,7 +35,9 @@ export interface Firing {
   amount?: number;
   /** Extra parameters for the abilities. A swing's passives get `primary`
    *  (Haze's Fixation fires on the main swing only) and `dealt` (Bloodscent's
-   *  heal). Worn equipment also gets itself as `equip` and `amount`. */
+   *  heal); a Ricochet bounce's get `bounce` instead of `primary`, and so does
+   *  the gear that reacts to it (a heal or a chain sits a bounce out). Worn
+   *  equipment also gets itself as `equip` and `amount`. */
   params?: Record<string, unknown>;
   /** Fire as a reaction: worn equipment only, each ability in a 'proc' frame. */
   reaction?: boolean;

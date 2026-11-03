@@ -110,7 +110,8 @@ Headshot gained +1 Bullet Power and Warp Stone went from 5 to 6 souls.
 Attacks became per hero (every hero may attack once a turn while it stands in
 the Active slot; see [engine-model.md](./engine-model.md)), so the swap after
 the swing is a play of its own. Four canon mobility items came with it, each
-on the side its `is_active_item` flag puts it:
+on the side its `is_active_item` flag puts it, and the **Ricochet** keyword
+reworked two weapon cards (marked *rework*):
 
 | Card | Type | Slot | Tier |
 |---|---|---|---|
@@ -118,6 +119,8 @@ on the side its `is_active_item` flag puts it:
 | Enduring Speed | Equipment | Vitality | T2 |
 | Kinetic Dash | Equipment | Weapon | T2 |
 | Majestic Leap | Spell | Vitality | T3 |
+| Ricochet *rework* | Equipment | Weapon | T4 |
+| Split Shot *rework* | Spell | Weapon | T2 |
 
 Majestic Leap sits under its band, at 4 souls: it is a free Retreat and
 nothing more (Warp Stone, at 6, adds Bullet Resist). Three rules came with
@@ -128,6 +131,11 @@ cannot be Rooted: `addStatus` turns the status away), and the
 or a swap brings in). In the same pass **Fleetfoot** lost its un-Root and
 gained the **Swift** status — its Active gets Extra Attack 1 and a free
 Retreat this turn, so it can swing and then sprint out for the ally behind it.
+Ricochet N (every other enemy hero takes N bullet damage and the swing's
+on-hit debuffs, each swing that lands; see engine-model.md) replaced the
+Ricochet item's bench damage (it is now Ricochet 2 while worn, at the same 7
+souls) and Split Shot's half-a-swing volley (now "Your Active gains Ricochet 2
+this turn", at the same 3).
 
 Card art comes from `scripts/fetch_item_art.py`, which needs the deadlock-api
 catalogue. Re-run it after a rename or a new card; until then a card without art

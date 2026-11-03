@@ -5,7 +5,7 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { awardSouls, resolve } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import { drawCards, consumeEquipment } from '@/engine/deckOps';
-import { attackPower, findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, stepInCandidates, type TargetFilter } from '@/engine/query';
+import { findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, stepInCandidates, type TargetFilter } from '@/engine/query';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { newIid } from '@/engine/ids';
@@ -109,6 +109,9 @@ export interface AbilityDef {
    *  `addStatus` before anything lands: a status the bearer resists is not
    *  applied, and the log says what turned it away. */
   resists?: (self: CardInstance, statusId: StatusId) => boolean;
+  /** Ricochet the bearer's swing carries (the Ricochet item: 2). Summed with a
+   *  `ricochet` status by `ricochetPower`, which the swing reads to bounce. */
+  ricochet?: (self: CardInstance) => number;
 }
 
 /** A hero's skill or passive: an AbilityDef that carries the `name` and `text`
@@ -506,21 +509,17 @@ const eff_fleetfoot: AbilityDef = {
   },
 };
 
-// Split Shot (canon T2 weapon active): the shot fans out. TCG: your Active's
-// swing, at its full Bullet Power (`attackPower`, read per hero), hits every
-// enemy bench hero as bullet damage. A spell, not an attack: it fires no
-// on-attack gear, and a Disarmed or Stunned Active has no shot to split.
+// Split Shot (canon T2 weapon active): the shot fans out. TCG: your Active
+// gains Ricochet 2 this turn — each of its swings that lands bounces for 2 to
+// every other enemy hero, carrying the swing's on-hit debuffs (actions/attack.ts).
+// Like Swift, `clearTurnFlags` sweeps it when the turn ends.
 const eff_split_shot: AbilityDef = {
   id: 'eff_split_shot', trigger: 'onPlay', target: 'noTarget',
-  prompt: "Split Shot — your Active's shot hits every enemy bench hero.",
+  prompt: 'Split Shot — your Active gains Ricochet 2 this turn.',
+  base: 2,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
-    if (!mine) return;
-    for (const b of G.players[otherPlayer(ctx.movingPlayer)].bench) {
-      // Half a swing to each: the shot is split, not multiplied.
-      if (b && !isRespawning(b)) damageUnit(G, b, Math.floor(attackPower(mine, b).total / 2), 'attack', 'Split Shot');
-    }
-    resolve(G);
+    if (mine) addStatus(G, mine, 'ricochet', 2, 1);
   },
 };
 
@@ -716,7 +715,10 @@ const eff_bullet_resist_shredder_proc: AbilityDef = {
 // Restorative Shot: after bearer's basic attack, heal 1.
 const eff_restorative_shot_proc: AbilityDef = {
   id: 'eff_restorative_shot_proc', trigger: 'onAttack', target: 'self',
-  run: (G, _ctx, { source, target }) => { if (source) healUnit(G, source, 1, 'Restorative Shot', { tag: 'lifesteal', from: target }); },
+  run: (G, _ctx, { source, target, params }) => {
+    if (params?.bounce) return; // a self-heal: once a swing, not once a Ricochet bounce
+    if (source) healUnit(G, source, 1, 'Restorative Shot', { tag: 'lifesteal', from: target });
+  },
 };
 
 // Extra Regen: at the start of the bearer's turn, heal 1 (regen-over-time).
@@ -737,7 +739,10 @@ const eff_mystic_regeneration_proc: AbilityDef = {
 const eff_bullet_lifesteal: AbilityDef = {
   id: 'eff_bullet_lifesteal', trigger: 'onAttack', target: 'self',
   base: 2,
-  run: (G, _ctx, { source, target }) => { if (source) healUnit(G, source, 2, 'Bullet Lifesteal', { tag: 'lifesteal', from: target }); },
+  run: (G, _ctx, { source, target, params }) => {
+    if (params?.bounce) return; // a self-heal (Leech's too): once a swing, not once a Ricochet bounce
+    if (source) healUnit(G, source, 2, 'Bullet Lifesteal', { tag: 'lifesteal', from: target });
+  },
 };
 const eff_spirit_lifesteal: AbilityDef = {
   id: 'eff_spirit_lifesteal', trigger: 'onBearerSkillDamage', target: 'self',
@@ -832,21 +837,15 @@ const eff_diviners_kevlar: AbilityDef = {
 };
 
 
-// Ricochet (canon T4 Weapon): bullets ricochet to nearby enemies — after the
-// bearer attacks, the shot bounces for 2 damage to every OTHER enemy (the enemy
-// bench). Re-fires on every swing, so it scales hard with Extra Attack — a
-// board-wipe engine. Fired via the onAttack path inside damageUnit.
+// Ricochet (canon T4 Weapon): bullets ricochet to nearby enemies. TCG: the
+// keyword, Ricochet 2 while worn (the `ricochet` hook, read by `ricochetPower`):
+// each swing that lands bounces for 2 to every other enemy hero and carries the
+// swing's on-hit debuffs with it (actions/attack.ts). Nothing to fire.
 const eff_ricochet: AbilityDef = {
-  id: 'eff_ricochet', trigger: 'onAttack', target: 'self',
+  id: 'eff_ricochet', trigger: 'ongoing', target: 'self',
   base: 2,
-  run: (G, _ctx, { source }) => {
-    if (!source) return;
-    const enemy = G.players[otherPlayer(source.ownerId)];
-    for (const b of enemy.bench) {
-      if (b && (b.respawnTurnsLeft ?? 0) === 0) damageUnit(G, b, 2, 'attack', 'Ricochet', { tag: 'ricochet' });
-    }
-    resolve(G);
-  },
+  ricochet: () => 2,
+  run: () => {},
 };
 
 // Burst Fire (canon T3 Weapon): a burst of extra shots — grants Extra Attack 1
@@ -880,13 +879,15 @@ const eff_toxic_bullets: AbilityDef = {
 
 // Tesla Bullets (canon T3 weapon): the shot "jumps" — chain 1 bullet damage to
 // an enemy bench hero. Runs in proc cast-context so it doesn't re-fire onAttack.
+// A hero an earlier bounce took down (0 HP, reaped when the attack resolves) is
+// no jump.
 const eff_tesla_bullets: AbilityDef = {
   id: 'eff_tesla_bullets', trigger: 'onAttack', target: 'self',
   base: 1,
-  run: (G, _ctx, { source }) => {
-    if (!source) return;
+  run: (G, _ctx, { source, params }) => {
+    if (!source || params?.bounce) return; // a chain: once a swing, not once a Ricochet bounce
     const enemy = otherPlayer(source.ownerId);
-    const jump = G.players[enemy].bench.find((b) => b && (b.respawnTurnsLeft ?? 0) === 0);
+    const jump = G.players[enemy].bench.find((b) => b && !isRespawning(b) && b.hp > 0);
     if (jump) damageUnit(G, jump, 1, 'attack', 'Tesla Bullets', { tag: 'tesla' });
   },
 };
@@ -969,7 +970,10 @@ const eff_healbane: AbilityDef = {
 const eff_active_reload: AbilityDef = {
   id: 'eff_active_reload', trigger: 'onAttack', target: 'self',
   base: 1,
-  run: (G, _ctx, { source, target }) => { if (source) healUnit(G, source, 1, 'Active Reload', { tag: 'lifesteal', from: target }); },
+  run: (G, _ctx, { source, target, params }) => {
+    if (params?.bounce) return; // a self-heal: once a swing, not once a Ricochet bounce
+    if (source) healUnit(G, source, 1, 'Active Reload', { tag: 'lifesteal', from: target });
+  },
 };
 
 // Long Range (canon T2 weapon): bonus damage at range. TCG: the bearer's
@@ -995,7 +999,8 @@ const eff_frenzy: AbilityDef = {
   id: 'eff_frenzy', trigger: 'onAttack', target: 'self',
   base: 2,
   attackBonus: (self) => (self.hp < self.hpMax / 2 ? { amount: 3, label: 'Frenzy: +3 <½ HP' } : null),
-  run: (G, _ctx, { source, target }) => {
+  run: (G, _ctx, { source, target, params }) => {
+    if (params?.bounce) return; // a self-heal: once a swing, not once a Ricochet bounce
     if (source && source.hp < source.hpMax / 2) healUnit(G, source, 2, 'Frenzy', { tag: 'lifesteal', from: target });
   },
 };
@@ -1019,8 +1024,8 @@ const eff_superior_duration: AbilityDef = {
 const eff_siphon_bullets: AbilityDef = {
   id: 'eff_siphon_bullets', trigger: 'onAttack', target: 'self',
   run: (G, _ctx, { source, target }) => {
-    // A corpse is neither robbed nor fed: by the time this fires, Ricochet's own
-    // resolve may already have reaped the target.
+    // A corpse is neither robbed nor fed. A Ricochet bounce steals too: the
+    // stolen HP is the swing's debuff, and spreads with it.
     if (!source || !target || isRespawning(source) || isRespawning(target)) return;
     const bump = (c: CardInstance, id: StatusId) => {
       let s = c.statuses.find((x) => x.id === id);
@@ -1116,7 +1121,8 @@ const eff_spirit_snatch: AbilityDef = {
 const eff_spiritual_overflow: AbilityDef = {
   id: 'eff_spiritual_overflow', trigger: 'onAttack', target: 'self',
   base: 1,
-  run: (G, _ctx, { source, target }) => {
+  run: (G, _ctx, { source, target, params }) => {
+    if (params?.bounce) return; // the bearer's own charge and heal: once a swing, not once a Ricochet bounce
     if (!source || isRespawning(source)) return;
     const cur = source.statuses.find((st) => st.id === 'spirit_power')?.value ?? 0;
     addStatus(G, source, 'spirit_power', Math.min(3, cur + 1), 2);
@@ -1354,7 +1360,8 @@ const passive_abrams_heal: HeroAbilityDef = {
 // Fixation: canon Haze ramps with sustained fire. TCG: after Haze makes her
 // attack, she gains Extra Attack 1 (a follow-up swing the same turn). Fires only
 // on her primary swing (`params.primary`) so the follow-up doesn't re-trigger it
-// into an endless chain. Stacks with Burst Fire / Active Reload.
+// into an endless chain — nor does a Ricochet bounce, which never carries
+// `primary`. Stacks with Burst Fire / Active Reload.
 const passive_haze_fixation: HeroAbilityDef = {
   id: 'passive_haze_fixation', trigger: 'onAttack', target: 'self',
   name: 'Fixation',
@@ -1438,8 +1445,8 @@ const passive_wraith_mixed: HeroAbilityDef = {
   name: 'Mixed Bullets',
   text: 'Attacks deal Bullet Power (bullet) + {sp:0} (spirit).',
   prompt: 'Mixed Bullets — attacks also deal Spirit Power as spirit damage.',
-  run: (G, _ctx, { source, target }) => {
-    if (!source || !target) return;
+  run: (G, _ctx, { source, target, params }) => {
+    if (!source || !target || params?.bounce) return; // her spirit half rides the swing, not a Ricochet bounce
     const sp = effectiveSpirit(source);
     if (sp > 0) damageUnit(G, target, sp, 'spirit', 'Mixed Bullets', { tag: 'mixed_bullets', source, cast: 'proc' });
   },
@@ -1454,6 +1461,7 @@ const passive_drifter_bloodscent: HeroAbilityDef = {
   text: 'Heals for half the damage his attacks deal (bullet lifesteal).',
   prompt: 'Bloodscent — Drifter heals for half the damage his attacks deal.',
   run: (G, _ctx, { source, target, params }) => {
+    if (params?.bounce) return; // a self-heal: off the swing, not off a Ricochet bounce
     const dealt = (params?.dealt as number | undefined) ?? 0;
     const heal = Math.floor(dealt / 2);
     if (source && heal > 0) healUnit(G, source, heal, 'Bloodscent', { tag: 'lifesteal', from: target });

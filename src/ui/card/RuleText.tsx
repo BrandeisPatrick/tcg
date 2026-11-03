@@ -46,6 +46,7 @@ export const KEYWORDS: Record<string, string> = {
   'Last Stand':     poster.status.buff,
   'Return Fire':    poster.status.buff,
   'Swift':          poster.status.buff,
+  'Ricochet':       poster.status.buff,
   // Timing markers (ink)
   'On attach':      poster.ink,
   'Start of turn':  poster.ink,
@@ -87,6 +88,7 @@ export const KEYWORD_STATUS: Record<string, StatusId> = {
   'Last Stand': 'last_stand',
   'Return Fire': 'return_fire',
   'Swift': 'swift',
+  'Ricochet': 'ricochet',
 };
 
 /** A power or resist followed by a minus ("Bullet Resist −1") is the debuff. */

@@ -33,7 +33,9 @@ single-page React app.
   and it swings too; a hero that swung and came back cannot swing again. The
   attack is tapped on your Active's sheet: it swings at the rival Active for
   its bullet damage, costs nothing, and is one-way — the rival does not hit
-  back. None on Turn 1. The turn button only ends the turn, and ending it
+  back. None on Turn 1. Ricochet N (the Ricochet item, Split Shot) makes each
+  swing that lands bounce: every other enemy hero takes N bullet damage and the
+  swing's on-hit debuffs. The turn button only ends the turn, and ending it
   never attacks. The dial between the Actives shows the attacks without a
   word: quiet before the first, with only its spinner moving; ringed with
   bouncing level bars that thump on every swing while one lands; and left

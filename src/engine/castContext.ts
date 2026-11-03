@@ -17,12 +17,21 @@ export type CastKind = 'skill' | 'attack' | 'spell' | 'ult' | 'proc';
 interface CastFrame {
   source: CardInstance | null;
   kind: CastKind;
+  /** An attack frame that is a Ricochet bounce, not the swing itself: damageUnit
+   *  hands the attacker's on-attack gear `bounce: true`, so a heal or a chain
+   *  that belongs to the swing stays out of it (actions/attack.ts). */
+  bounce?: true;
+}
+
+/** What a frame says beyond its source and kind. */
+export interface CastOpts {
+  bounce?: true;
 }
 
 const stack: CastFrame[] = [];
 
-export function pushCast(source: CardInstance | null, kind: CastKind) {
-  stack.push({ source, kind });
+export function pushCast(source: CardInstance | null, kind: CastKind, opts: CastOpts = {}) {
+  stack.push(opts.bounce ? { source, kind, bounce: true } : { source, kind });
 }
 
 export function popCast() {
@@ -34,8 +43,8 @@ export function currentCast(): CastFrame | null {
 }
 
 /** Wrap a function call in push/pop. Safe even if fn throws. */
-export function withCast<T>(source: CardInstance | null, kind: CastKind, fn: () => T): T {
-  pushCast(source, kind);
+export function withCast<T>(source: CardInstance | null, kind: CastKind, fn: () => T, opts?: CastOpts): T {
+  pushCast(source, kind, opts);
   try {
     return fn();
   } finally {

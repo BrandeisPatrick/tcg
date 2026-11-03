@@ -175,8 +175,8 @@ describe('Lifesteal — heal half the damage dealt', () => {
   });
 });
 
-describe('Ricochet — canon AoE on attack', () => {
-  it('each attack bounces 2 to every enemy bench hero, scaling with Extra Attack', () => {
+describe('Ricochet — canon AoE on attack (ricochet.spec has the keyword)', () => {
+  it('each swing bounces 2 to every enemy bench hero, scaling with Extra Attack', () => {
     const G = freshReadyGame();
     G.players['0'].active = makeHero('hero_dynamo', '0', 'active', 0); // no Fixation
     soloAttacker(G, '0');
@@ -187,7 +187,7 @@ describe('Ricochet — canon AoE on attack', () => {
     const bench0 = G.players['1'].bench.find(Boolean) as CardInstance;
     bench0.hp = bench0.hpMax = 99;
     const before = bench0.hp;
-    grantExtraAttacks(atk, 1); // 2 swings → 2 ricochet pulses → 4 to the bench hero
+    grantExtraAttacks(atk, 1); // 2 swings → 2 bounces → 4 to the bench hero
     makeAttack(G, '0');
     expect(before - bench0.hp).toBe(4);
   });

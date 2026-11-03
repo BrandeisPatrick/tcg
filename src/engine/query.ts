@@ -268,6 +268,15 @@ export function retreatDiscount(card: CardInstance): number {
   return n;
 }
 
+/** How hard `card`'s swing bounces: the value of a `ricochet` status on it plus
+ *  the sum of the `ricochet` hooks of what it carries (the Ricochet item: 2).
+ *  0 means it does not. `swing` (actions/attack.ts) asks it once a swing. */
+export function ricochetPower(card: CardInstance): number {
+  let n = card.statuses.find((s) => s.id === 'ricochet')?.value ?? 0;
+  for (const { ability } of abilitySources(card)) n += ability.ricochet?.(card) ?? 0;
+  return n;
+}
+
 /** The card that keeps `statusId` off `card` — the worn item's (or, for a
  *  passive, the hero's own) name — or undefined when nothing it carries
  *  `resists` it (Enduring Speed turns Rooted away). `addStatus` asks first. */

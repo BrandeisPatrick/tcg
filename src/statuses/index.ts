@@ -63,6 +63,10 @@ export const STATUSES: StatusDef[] = [
   // engine/legality.ts). The Retreat spends it, and like Extra Attack it is a
   // this-turn resource: `clearTurnFlags` sweeps what is left when the turn ends.
   { id: 'swift',         title: 'Swift',         desc: "This hero's next Retreat this turn is free.", hvalue: 1 },
+  // Ricochet (Split Shot): the bearer's swing bounces (`ricochetPower`, read by
+  // the swing in actions/attack.ts; the Ricochet item adds its own through a
+  // hook). Granted for this turn, so `clearTurnFlags` sweeps it with Swift.
+  { id: 'ricochet',      title: 'Ricochet',      desc: "After the bearer's attack lands, every other enemy hero takes <value> bullet damage and the attack's on-hit debuffs.", hvalue: 1 },
 
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across

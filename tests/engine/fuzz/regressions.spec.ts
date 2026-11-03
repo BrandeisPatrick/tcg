@@ -75,10 +75,12 @@ function mergeRem(G: GameState, slot: 1 | 2 | 3, bearer: CardInstance): CardInst
 // E1  addStatus put statuses on a corpse  (fixed: a corpse takes no status, at the source)
 //     Reached through a swing's onAttack passives running after the target was already reaped
 //     by Ricochet's own resolve(), and through an ultimate's onBearerUltCast gear on a linked
-//     hero who is a corpse.
+//     hero who is a corpse. Ricochet became a keyword on 2026-11-03 and no longer reaps
+//     mid-attack (the attack resolves once, at its end), so E1a and E1c now guard the outcome:
+//     the knocked-out hero comes back clean.
 // ===========================================================================
 describe('E1 a corpse carries no statuses', () => {
-  it('precondition: Ricochet reaps the target mid-attack and the hero is a corpse afterwards', () => {
+  it('precondition: Shiv with Ricochet knocks the target out and the hero is a corpse afterwards', () => {
     const G = game();
     const shiv = makeHero('hero_shiv', '0', 'active', 0);
     wear(shiv, 'ricochet');

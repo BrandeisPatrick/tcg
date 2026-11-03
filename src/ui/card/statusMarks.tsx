@@ -27,9 +27,8 @@
  *   last_stand  a column of chevrons climbing    swift      a boot and speed lines
  *   ricochet    a shot bouncing off two walls
  *
- * Swift and Ricochet are drawn ahead of the registry listing them, so they
- * print the moment they land. An id with no drawing (a future id, a typo)
- * gets the diamond tag instead, so there is never a blank chip or sticker.
+ * An id with no drawing (a future id, a typo) gets the diamond tag instead,
+ * so there is never a blank chip or sticker.
  *
  * Drawn on a 16-unit grid in `currentColor` line art: the chip prints it in
  * cream on its class colour, the sticker in the status ink over a wider ink
