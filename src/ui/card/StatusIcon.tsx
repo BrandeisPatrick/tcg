@@ -98,7 +98,7 @@ export function StatusIcon({ id, value, duration, size = 'normal', titled = true
 
   const padV = size === 'compact' ? 2 : size === 'large' ? 6 : 3;
   const padH = size === 'compact' ? 5 : size === 'large' ? 12 : 6;
-  // The mark in front of the label, for the statuses that wear one (statusMarks.tsx).
+  // The mark in front of the label — every status wears one (statusMarks.tsx).
   const markPx = size === 'compact' ? 10 : size === 'large' ? 15 : 12;
 
   return (

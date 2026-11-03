@@ -181,7 +181,7 @@ export const GROUPS: Group[] = [
   {
     id: 'stamps', short: 'Statuses',
     title: 'Status stamps',
-    blurb: 'A status lands as a slapped-on sticker in its class colour, with a glyph or a flourish where the status has one (stars for Stun, letters for Sleep, mark pips, a channel ring, a reticle closing on its target, a dome rising, roots climbing the card, a rabbit in a puff of smoke, a charge rising…).',
+    blurb: 'A status lands as a slapped-on sticker in its class colour, under the mark its chip wears and the turns it lasts ("2t"), with a flourish where the status has one (stars for Stun, letters for Sleep, a pip per Djinn stack, a channel ring, a reticle closing on its target, a dome rising, roots climbing the card, a rabbit in a puff of smoke, a charge rising…).',
     demos: [
       { label: 'Stun', events: [status('r0', 'stun', 1, 1, true)] },
       { label: 'Sleep', events: [status('r0', 'sleep', 6, 2, true)] },
@@ -204,6 +204,15 @@ export const GROUPS: Group[] = [
       { label: 'Rabbit', events: [status('r0', 'rabbit', 1, 1, true)] },
       { label: 'Last Stand 5', events: [status('y0', 'last_stand', 5, 1, false)] },
       { label: 'Three at once (Stun + Bleed + −BP)', events: [status('r0', 'stun', 1, 1, true), status('r0', 'bleed', 2, 2, true), status('r0', 'weapon_power_down', 1, 2, true)] },
+      // The rest of the marks, one per card, so every drawing can be seen landing.
+      { label: 'Six more marks · Spirit Res, +SPI, Extra Atk, Return Fire, Swift, Channel', events: [
+        status('y0', 'spirit_resist', 2, 2, false), status('y1', 'spirit_power', 2, 2, false), status('y2', 'extra_attack', 1, 1, false),
+        status('r0', 'return_fire', 2, 2, false), status('r1', 'swift', 1, 1, false), status('r2', 'casting_light', 2, 3, false),
+      ] },
+      { label: 'Six more marks · Reverb, −SPI, −B.Res, Bullet Res, Siphon, Ricochet', events: [
+        status('r0', 'reverb', 3, 1, true), status('r1', 'spirit_power_down', 2, 2, true), status('r2', 'bullet_resist_down', 2, 2, true),
+        status('y0', 'bullet_resist', 3, 2, false), status('y1', 'siphon_gain', 1, 2, false), status('y2', 'ricochet', 1, 1, false),
+      ] },
     ],
   },
   {

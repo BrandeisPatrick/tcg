@@ -2,7 +2,8 @@
  * Everything that happens on a card that is not a hit: a caster's skill
  * trigger (motes drawn down into the card, the flare, the ability plate
  * swinging up, the shockwave as it lets go), healing lifting off the card, a
- * status slapped on as a sticker (with a glyph or a flourish per status), a
+ * status slapped on as a sticker (under the mark its chip wears, with the turns
+ * it lasts, and a flourish for some), a
  * Shield deflect, an Unstoppable shrug, a revive, a level-up, an equipment
  * attach. As with hits, the card carries the print and the FX stage throws
  * whatever leaves it.
@@ -14,12 +15,13 @@ import { heroAbilities } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { statusChipText, statusClass } from '../../card/StatusIcon';
-import { StatusMark, markFor } from '../../card/statusMarks';
+import { StatusMark } from '../../card/statusMarks';
+import { fonts } from '../../tokens';
 import { FX_INK, FX_TIMING, NUMERAL_INK, TAG_INFO } from './fxCatalog';
 import { useFxCalm } from './FxMotionContext';
 import { type Rect, center, seeded } from './geometry';
 import { EASE_OUT, Fixed, LightningArc, Numeral, Plate, Ring, Stamp, Wash, numeralSize, sec } from './primitives';
-import { DjinnGlyph, SleepLetters, onInk } from './hits';
+import { SleepLetters, onInk } from './hits';
 import { useStage } from './stage/FxStage';
 import { castCharge, castRelease, embers, goldBurst, healRise, helix, puffs, ring, shieldSkid } from './stage/emitters';
 
@@ -174,44 +176,41 @@ function statusInk(ev: StatusFx): string {
   return side === 'utility' ? poster.inkDim : side === 'debuff' ? poster.status.debuff : poster.status.buff;
 }
 
-/** A small printed glyph over the stamp for the statuses that have one. Fixation,
- *  Dome, Rooted, Rabbit and Last Stand wear the same mark as their chip
- *  (statusMarks.tsx), an id the registry does not know wears its diamond tag, and
- *  the rest are drawn here. */
-function StatusGlyph({ id, color, size, value }: { id: StatusId; color: string; size: number; value?: number }) {
-  const s = { width: size, height: size, display: 'block' as const, filter: 'drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5))' };
-  if (markFor(id)) {
-    return (
-      <div style={s}>
-        <StatusMark id={id} color={color} outline={poster.ink} size={size} count={id === 'fixation' ? value : undefined} />
-      </div>
-    );
-  }
-  switch (id) {
-    case 'shield':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M8 1.2 L14 3 L14 8 C 14 11.5, 11.5 13.6, 8 14.8 C 4.5 13.6, 2 11.5, 2 8 L 2 3 Z" fill={color} stroke={poster.ink} strokeWidth="0.8" /></svg>;
-    case 'silenced':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M3 5 H11 A2 2 0 0 1 13 7 V9 A2 2 0 0 1 11 11 H7 L4 13.5 V11 H3 A2 2 0 0 1 1 9 V7 A2 2 0 0 1 3 5 Z" fill={FX_INK.cream} stroke={poster.ink} strokeWidth="0.8" /><line x1="2" y1="14" x2="14" y2="2" stroke={color} strokeWidth="2.2" strokeLinecap="round" /></svg>;
-    case 'disarm':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M5 5 L8 1 L11 5 Z" fill={FX_INK.cream} /><rect x="5" y="5" width="6" height="9" rx="0.6" fill={FX_INK.cream} stroke={poster.ink} strokeWidth="0.6" /><line x1="2" y1="14" x2="14" y2="2" stroke={color} strokeWidth="2.2" strokeLinecap="round" /></svg>;
-    case 'bleed':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M8 1 C 10.5 5, 13 8, 13 10.5 A5 5 0 0 1 3 10.5 C 3 8, 5.5 5, 8 1 Z" fill={color} stroke={poster.ink} strokeWidth="0.8" /></svg>;
-    case 'healing_boost':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M6 1 H10 V6 H15 V10 H10 V15 H6 V10 H1 V6 H6 Z" fill={color} stroke={poster.ink} strokeWidth="0.8" /></svg>;
-    case 'healing_boost_down':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M6 1 H10 V6 H15 V10 H10 V15 H6 V10 H1 V6 H6 Z" fill={FX_INK.cream} stroke={poster.ink} strokeWidth="0.8" /><line x1="2" y1="14" x2="14" y2="2" stroke={color} strokeWidth="2.2" strokeLinecap="round" /></svg>;
-    case 'weapon_power': case 'spirit_power': case 'bullet_resist': case 'spirit_resist':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M8 2 L14 9 H10 V14 H6 V9 H2 Z" fill={color} stroke={poster.ink} strokeWidth="0.8" strokeLinejoin="round" /></svg>;
-    case 'weapon_power_down': case 'spirit_power_down': case 'bullet_resist_down': case 'spirit_resist_down':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M8 14 L2 7 H6 V2 H10 V7 H14 Z" fill={color} stroke={poster.ink} strokeWidth="0.8" strokeLinejoin="round" /></svg>;
-    case 'charged':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M9 1 L3 9 H7.5 L6 15 L13 6 H8.5 Z" fill={FX_INK.lightning} stroke={poster.ink} strokeWidth="0.8" strokeLinejoin="round" /></svg>;
-    case 'siphon_drain': case 'siphon_gain':
-      return <svg viewBox="0 0 16 16" style={s}><path d="M8 14 C 4 11, 1 9, 1 5.5 C 1 3, 3 1, 5 1 C 6.5 1, 7.5 2, 8 3 C 8.5 2, 9.5 1, 11 1 C 13 1, 15 3, 15 5.5 C 15 9, 12 11, 8 14 Z" fill={id === 'siphon_gain' ? poster.red : poster.inkDim} stroke={poster.ink} strokeWidth="0.8" /></svg>;
-    default:
-      return null;
-  }
+/** The mark over a stamp: the drawing its chip wears (statusMarks.tsx), in the
+ *  status ink over an ink underlay. The reticle carries Fixation's stack. */
+function StampMark({ id, color, size, value }: { id: StatusId; color: string; size: number; value?: number }) {
+  return (
+    <div style={{ width: size, height: size, display: 'block', filter: 'drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5))' }}>
+      <StatusMark id={id} color={color} outline={poster.ink} size={size} count={id === 'fixation' ? value : undefined} />
+    </div>
+  );
 }
+
+/** The turns a status lasts, small beside its mark ("2t"), in the sticker's
+ *  type; nothing for one that runs until something ends it (99 and up). On
+ *  the mark's right, or its left where the sticker sits on its right. */
+function StampTurns({ duration, color, fontSize, side = 'right' }: { duration: number; color: string; fontSize: number; side?: 'left' | 'right' }) {
+  if (!(duration > 0 && duration < 99)) return null;
+  const ink = poster.ink;
+  return (
+    <span data-turns={duration} style={{
+      position: 'absolute', bottom: 1,
+      ...(side === 'right' ? { left: '100%', marginLeft: 2 } : { right: '100%', marginRight: 3 }),
+      // The sticker's own type: stencil capitals ("2T"); the stencil's small t
+      // reads as a dagger at this size.
+      fontFamily: fonts.display, fontSize, letterSpacing: '0.1em', lineHeight: 1, whiteSpace: 'nowrap', textTransform: 'uppercase',
+      color, opacity: 0.9,
+      textShadow: `1px 0 0 ${ink}, -1px 0 0 ${ink}, 0 1px 0 ${ink}, 0 -1px 0 ${ink}, 0 2px 0 rgba(0, 0, 0, 0.5)`,
+    }}>{duration}t</span>
+  );
+}
+
+/** How a mark pops up over its stamp and goes with it. */
+const markPop = (at: number, hold: number) => ({
+  initial: { scale: 0.4, opacity: 0, y: 6 },
+  animate: { scale: [0.4, 1.15, 1, 1], opacity: [0, 1, 1, 0], y: [6, 0, 0, -4] },
+  transition: { duration: sec(hold), delay: sec(at), times: [0, 0.15, 0.8, 1], ease: EASE_OUT },
+});
 
 /** Three stars circling above a stunned hero — an orbit seen edge-on, so
  *  each star swells as it swings round the near side and passes behind. */
@@ -392,15 +391,28 @@ function ChargeRise({ rect, at, hold, seed }: { rect: Rect; at: number; hold: nu
 
 export function StatusStamp({ rect, ev, at, hold, index = 0 }: { rect: Rect; ev: StatusFx; at: number; hold: number; index?: number }) {
   const ink = statusInk(ev);
+  // The mark prints in the status ink; the dim ink of a status that is neither
+  // buff nor debuff would vanish on its own underlay, so that one prints in paper.
+  const markInk = ink === poster.inkDim ? onInk(ink) : ink;
   const text = statusChipText(ev.statusId, ev.value);
   const fontSize = clamp(rect.width * 0.085, 10, 15);
   const glyphSize = clamp(rect.width * 0.2, 18, 34);
-  // A mark is line art, so it stands clear of the sticker instead of tucking
-  // behind its edge as the solid glyphs do.
-  const marked = !!markFor(ev.statusId);
+  const turnsSize = Math.max(10, Math.round(fontSize * 0.85));
   const top = `${46 + index * 15}%`;
   const id = ev.statusId;
   const discharge = ev.tag === 'discharge';
+  const label = discharge ? `Discharge · ${text}` : text;
+  // The mark stands clear above its sticker. A second or third sticker on the
+  // same card lands too close under the one before for that, so its mark sits
+  // smaller at the sticker's left end instead (the width is the stencil's,
+  // near enough).
+  const stacked = index > 0;
+  const markSize = stacked ? glyphSize * 0.8 : glyphSize * 1.12;
+  const clearance = fontSize * 0.8 + 6;
+  const halfWidth = (label.length * fontSize * 0.68 + fontSize * 1.1) / 2;
+  const markAt = stacked
+    ? { left: `max(2px, calc(50% - ${halfWidth + markSize + 4}px))`, top: `calc(${top} - ${markSize / 2}px)` }
+    : { left: '50%', top: `calc(${top} - ${markSize + clearance}px)`, transform: 'translateX(-50%)' };
   return (
     <>
       {/* Flourishes per status, behind the sticker. */}
@@ -430,32 +442,29 @@ export function StatusStamp({ rect, ev, at, hold, index = 0 }: { rect: Rect; ev:
       <Fixed rect={rect} z={86}>
         {id === 'stun' && <StunStars rect={rect} at={at} hold={hold} />}
         {id === 'sleep' && <SleepLetters rect={rect} at={at} dur={hold} ink={TAG_INFO.naptime.ink} z={86} />}
-        {id === 'djinns_mark' && (
-          <div style={{ position: 'absolute', left: 0, right: 0, top: `calc(${top} - ${glyphSize * 1.15}px)`, display: 'flex', justifyContent: 'center', gap: 4 }}>
-            {Array.from({ length: clamp(ev.value, 1, 4) }, (_, i) => (
-              <motion.div key={i}
-                initial={{ scale: 0.4, opacity: 0, y: 6 }}
-                animate={{ scale: [0.4, 1.15, 1, 1], opacity: [0, 1, 1, 0], y: [6, 0, 0, -4] }}
-                transition={{ duration: sec(hold), delay: sec(at + i * 70), times: [0, 0.15, 0.8, 1], ease: EASE_OUT }}
-                style={{ width: glyphSize * 0.75, height: glyphSize * 0.75, filter: 'drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5))' }}
-              >
-                <DjinnGlyph color={TAG_INFO.djinns_mark.ink} />
+        {id === 'djinns_mark' ? (
+          // A pip of the mark per stack, the turns beside the last.
+          <div style={{ position: 'absolute', left: 0, right: 0, top: `calc(${top} - ${glyphSize * 0.75 + clearance}px)`, display: 'flex', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', display: 'flex', gap: 4 }}>
+              {Array.from({ length: clamp(ev.value, 1, 4) }, (_, i) => (
+                <motion.div key={i} {...markPop(at + i * 70, hold)}>
+                  <StampMark id={id} color={TAG_INFO.djinns_mark.ink} size={glyphSize * 0.75} />
+                </motion.div>
+              ))}
+              <motion.div {...markPop(at + (clamp(ev.value, 1, 4) - 1) * 70, hold)} style={{ position: 'absolute', left: '100%', top: 0, bottom: 0 }}>
+                <StampTurns duration={ev.duration} color={TAG_INFO.djinns_mark.ink} fontSize={turnsSize} />
               </motion.div>
-            ))}
+            </div>
           </div>
-        )}
-        {id !== 'stun' && id !== 'sleep' && id !== 'djinns_mark' && (
-          <div style={{ position: 'absolute', left: '50%', top: `calc(${top} - ${glyphSize * 1.05 + (marked ? 12 : 0)}px)`, transform: 'translateX(-50%)' }}>
-            <motion.div
-              initial={{ scale: 0.4, opacity: 0, y: 6 }}
-              animate={{ scale: [0.4, 1.15, 1, 1], opacity: [0, 1, 1, 0], y: [6, 0, 0, -4] }}
-              transition={{ duration: sec(hold), delay: sec(at), times: [0, 0.15, 0.8, 1], ease: EASE_OUT }}
-            >
-              <StatusGlyph id={id} color={ink} size={marked ? glyphSize * 1.12 : glyphSize} value={ev.value} />
+        ) : (
+          <div style={{ position: 'absolute', ...markAt }}>
+            <motion.div {...markPop(at, hold)} style={{ position: 'relative' }}>
+              <StampMark id={id} color={markInk} size={markSize} value={ev.value} />
+              <StampTurns duration={ev.duration} color={markInk} fontSize={turnsSize} side={stacked ? 'left' : 'right'} />
             </motion.div>
           </div>
         )}
-        <Stamp text={discharge ? `Discharge · ${text}` : text} sticker={ink} ink={onInk(ink)} fontSize={fontSize} at={at} dur={hold} top={top} rotate={-6 + index * 3} />
+        <Stamp text={label} sticker={ink} ink={onInk(ink)} fontSize={fontSize} at={at} dur={hold} top={top} rotate={-6 + index * 3} />
       </Fixed>
     </>
   );

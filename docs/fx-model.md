@@ -166,13 +166,17 @@ Animation families (`hits.tsx`, `support.tsx`, `shatter.tsx`, `primitives.tsx`):
   (Seven's storm rains lightning instead).
 - **support** — a cast draws motes down into the caster, flares, swings the
   ability plate up and lets go with a shockwave; healing lifts green crosses
-  off the card toward the viewer; status stickers with a glyph or flourish
-  (stars orbiting for Stun, letters for Sleep, mark pips, a channel ring; the
-  newer statuses wear the mark their chip wears — `card/statusMarks.tsx`, one
-  drawing for both — with a reticle closing on a Fixation, a Dome's outline
-  drawing itself over the card, roots climbing a Rooted hero, a puff of smoke for
-  a Rabbit and columns of light rising for a Last Stand; an id the registry does
-  not know wears a plain diamond tag);
+  off the card toward the viewer; status stickers under the mark their chip
+  wears — every status has one, drawn in `card/statusMarks.tsx` on a 16-unit
+  grid in `currentColor` line art, one drawing for chip and sticker — with the
+  turns it lasts printed small beside it in the sticker's stencil capitals
+  ("2T"; none for a status with no end, 99 and up). A second or third sticker on
+  one card wears its mark smaller at its left end, clear of the one above. Some
+  add a flourish: stars orbiting for Stun, letters for Sleep, a flame pip per
+  Djinn stack, a channel ring, a reticle closing on a Fixation, a Dome's outline
+  drawing itself over the card, roots climbing a Rooted hero, a puff of smoke
+  for a Rabbit and columns of light rising for a Last Stand. An id nothing has
+  been drawn for wears a plain diamond tag;
   the shield swinging up with its tally and sparks skidding off; Unstoppable
   in gold; a revive or level-up winding a column of glints up off the card;
   equip glint.

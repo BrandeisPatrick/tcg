@@ -1,24 +1,32 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { STATUSES } from '@/statuses';
 import type { FxEvent, StatusFx } from '@/engine/types';
 import { buildFxTimeline, volleySwings } from '@/ui/effects/fx/fxTimeline';
 import { StatusIcon, statusChipText, statusLabel } from '@/ui/card/StatusIcon';
-import { StatusMark, markFor } from '@/ui/card/statusMarks';
+import { MARKED_IDS, StatusMark, markFor } from '@/ui/card/statusMarks';
 import { StatusStamp } from '@/ui/effects/fx/support';
+import { Explain } from '@/ui/explain/Explain';
+import { statusContent } from '@/ui/explain/content';
+import { explainStore } from '@/ui/explain/store';
 import { GROUPS } from '@/ui/gallery/FxShowroom';
 import { StatusesTab } from '@/ui/gallery/StatusesTab';
 
 // A status is printed twice: as a chip on the hero's tile and sheet (StatusIcon),
 // and as the sticker the FX layer slaps on when it lands (StatusStamp). Every
-// status in the registry has both, none is ever blank, and the five the new kits
-// bring — Fixation, Dome, Rooted, Rabbit, Last Stand — wear a mark of their own
-// on both, the same drawing; an id the registry has never heard of gets a plain
+// status in the registry has both, none is ever blank, and every one wears a
+// drawn mark of its own on both, the same drawing (the two channels share the
+// ring). Two ids are drawn ahead of the registry — Swift and Ricochet — so they
+// print the moment they land. An id nothing has been drawn for gets a plain
 // diamond tag and a label spelled out of its id, and never throws.
 
+/** The five the new kits brought, which also have a flourish on the sticker. */
 const MARKED = ['fixation', 'dome', 'rooted', 'rabbit', 'last_stand'] as const;
+/** Drawn before the registry lists them. */
+const AHEAD = ['swift', 'ricochet'] as const;
 const UNKNOWN = 'mystery_status';
+const ALL = [...new Set([...STATUSES.map((s) => s.id), ...AHEAD])];
 
 /** What React prints for text: the apostrophe of "Djinn's Mark" is an entity. */
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
@@ -31,57 +39,102 @@ const sticker = (id: string, value = 2) => {
 };
 
 describe('which statuses wear a mark', () => {
-  it('the five new ones have a mark of their own', () => {
+  it('every status in the registry wears a drawing of its own, not the diamond', () => {
+    for (const s of STATUSES) expect(markFor(s.id), s.id).not.toBe('unknown');
+  });
+
+  it('each wears the drawing named for it; the light channel wears the channel ring', () => {
+    for (const id of ALL) expect(markFor(id), id).toBe(id === 'casting_light' ? 'casting' : id);
     for (const id of MARKED) expect(markFor(id), id).toBe(id);
   });
 
-  it('an id the registry does not know wears the diamond tag, and the rest of the registry wears none (their label or flourish says it)', () => {
-    expect(markFor(UNKNOWN)).toBe('unknown');
-    expect(markFor('')).toBe('unknown');
-    const unmarked = STATUSES.filter((s) => !(MARKED as readonly string[]).includes(s.id));
-    expect(unmarked.length).toBeGreaterThan(0);
-    for (const s of unmarked) expect(markFor(s.id), s.id).toBeNull();
+  it('Swift and Ricochet have their marks whether or not the registry lists them yet', () => {
+    expect(markFor('swift')).toBe('swift');
+    expect(markFor('ricochet')).toBe('ricochet');
+    for (const id of AHEAD) expect(MARKED_IDS, id).toContain(id);
   });
 
-  it('a mark is drawn for the ones that wear one and for nothing else', () => {
-    for (const s of STATUSES) {
-      const svg = renderToStaticMarkup(createElement(StatusMark, { id: s.id, color: '#fff', size: 12 }));
-      if (markFor(s.id)) expect(svg, s.id).toContain(`data-mark="${markFor(s.id)}"`);
-      else expect(svg, s.id).toBe('');
+  it('an id nothing has been drawn for wears the diamond tag — an Object key included', () => {
+    expect(markFor(UNKNOWN)).toBe('unknown');
+    expect(markFor('')).toBe('unknown');
+    expect(markFor('constructor')).toBe('unknown');
+    expect(markFor('toString')).toBe('unknown');
+  });
+
+  it('every status prints its mark; nothing prints blank', () => {
+    for (const id of [...ALL, UNKNOWN]) {
+      const svg = renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', size: 12 }));
+      expect(svg, id).toContain(`data-mark="${markFor(id)}"`);
+      expect(svg, id).toMatch(/<(path|circle|rect|ellipse)\b/);
     }
   });
 
   it('every mark is a different drawing', () => {
-    const drawings = [...MARKED, UNKNOWN].map((id) => renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', size: 12 })).replace(/data-mark="[a-z_]+"/, ''));
+    const kinds = [...new Set([...ALL, UNKNOWN].map((id) => markFor(id)))];
+    const drawings = kinds.map((k) => renderToStaticMarkup(createElement(StatusMark, { id: k === 'unknown' ? UNKNOWN : k, color: '#fff', size: 12 })).replace(/data-mark="[a-z_]+"/, ''));
     expect(new Set(drawings).size).toBe(drawings.length);
+  });
+
+  it('every mark is line art on the 16-unit grid in the colour it is given: round caps and joins, 1.7 on a chip, 2 over its ink underlay', () => {
+    for (const id of [...ALL, UNKNOWN]) {
+      const chipMark = renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', size: 12 }));
+      expect(chipMark, id).toContain('viewBox="0 0 16 16"');
+      expect(chipMark, id).toContain('stroke-linecap="round"');
+      expect(chipMark, id).toContain('stroke-linejoin="round"');
+      expect(chipMark, id).toContain('stroke-width="1.7"');
+      // Nothing but the colour it was handed: every other paint is currentColor.
+      expect(chipMark.replace('color="#fff"', ''), id).not.toMatch(/#[0-9a-f]{3,8}\b|rgb/i);
+      const sticker = renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', outline: '#000', size: 40 }));
+      expect(sticker, id).toContain('stroke-width="2"');
+      expect(sticker, id).toContain('stroke-width="4"');
+    }
   });
 });
 
 describe('every status has a chip and a sticker, and neither is blank', () => {
-  for (const s of STATUSES) {
-    it(`${s.id}: the chip reads its label${markFor(s.id) ? ' behind its mark' : ''}, the sticker its chip text`, () => {
-      const c = chip(s.id);
+  for (const id of ALL) {
+    it(`${id}: the chip reads its label behind its mark, the sticker its chip text under the same mark`, () => {
+      const c = chip(id);
       expect(c.length).toBeGreaterThan(0);
-      expect(c).toContain(esc(statusLabel(s.id)));
-      expect(statusLabel(s.id).trim().length).toBeGreaterThan(0);
-      if (markFor(s.id)) expect(c).toContain(`data-mark="${s.id}"`);
-      else expect(c).not.toContain('data-mark');
+      expect(c).toContain(esc(statusLabel(id)));
+      expect(statusLabel(id).trim().length).toBeGreaterThan(0);
+      expect(c).toContain(`data-mark="${markFor(id)}"`);
+      // The mark comes first, then the label.
+      expect(c.indexOf('data-mark')).toBeLessThan(c.indexOf(`>${esc(statusLabel(id))}<`));
 
-      const st = sticker(s.id, 3);
+      const st = sticker(id, 3);
       expect(st.length).toBeGreaterThan(0);
-      expect(st).toContain(esc(statusChipText(s.id, 3)));
-      if (markFor(s.id)) expect(st).toContain(`data-mark="${s.id}"`);
+      expect(st).toContain(esc(statusChipText(id, 3)));
+      expect(st).toContain(`data-mark="${markFor(id)}"`);
     });
   }
 
-  it('the chip prints in all three sizes, with its stack and its turns', () => {
+  it('the chip prints in all three sizes, with its mark and its turns', () => {
     for (const size of ['compact', 'normal', 'large'] as const) {
-      for (const id of MARKED) {
+      for (const id of ALL) {
         const c = chip(id, 3, size);
-        expect(c, `${id} ${size}`).toContain(`data-mark="${id}"`);
+        expect(c, `${id} ${size}`).toContain(`data-mark="${markFor(id)}"`);
         expect(c, `${id} ${size}`).toContain('(2)'); // turns left
       }
     }
+  });
+
+  it('the sticker prints the turns a status lasts beside its mark ("2t"), and none for one with no end', () => {
+    for (const id of ALL) {
+      expect(sticker(id, 3), id).toMatch(/data-turns="2"[^>]*>2t</);
+    }
+    const lasting = (id: string, duration: number) => {
+      const ev: StatusFx = { kind: 'status', seq: 7, iid: 'card', statusId: id, value: 2, duration, debuff: false };
+      return renderToStaticMarkup(createElement(StatusStamp, { rect: { left: 40, top: 60, width: 180, height: 240 }, ev, at: 0, hold: 1050 }));
+    };
+    expect(lasting('shield', 999)).not.toContain('data-turns');
+    expect(lasting('fixation', 99)).not.toContain('data-turns');
+    expect(lasting('stun', 0)).not.toContain('data-turns');
+    expect(lasting('stun', 1)).toMatch(/>1t</);
+    // Djinn's Mark: a pip of the mark per stack, the turns once, beside them.
+    const djinn = sticker('djinns_mark', 3);
+    expect(djinn.match(/data-mark="djinns_mark"/g)).toHaveLength(3);
+    expect(djinn.match(/data-turns=/g)).toHaveLength(1);
   });
 
   it('Fixation always prints its stack, one stack included; Last Stand its strike; the on-or-off ones no number', () => {
@@ -98,6 +151,36 @@ describe('every status has a chip and a sticker, and neither is blank', () => {
     const pill = renderToStaticMarkup(createElement(StatusMark, { id: 'fixation', color: '#fff', size: 12 }));
     expect(pill).not.toContain('<text');
   });
+});
+
+describe('hover or tap a marked chip: it still says what it does and the turns left', () => {
+  afterEach(() => { explainStore.close(); (globalThis as { window?: unknown }).window = realWindow; });
+  const realWindow = (globalThis as { window?: unknown }).window;
+  /** The chip as a hero's tile wraps it (HeroSlot): an Explain round the chip, opened. */
+  const opened = (id: string, mode: 'hover' | 'touch') => {
+    const content = statusContent(id, { value: 2, duration: 2 });
+    const markup = () => renderToStaticMarkup(createElement(Explain, {
+      content, children: createElement(StatusIcon, { id, value: 2, duration: 2, size: 'compact', titled: false }),
+    }));
+    const key = /data-explain="([^"]+)"/.exec(markup())?.[1] ?? '';
+    explainStore.open(key, mode);
+    return { out: markup(), content };
+  };
+
+  for (const mode of ['hover', 'touch'] as const) {
+    it(`on a device that ${mode === 'hover' ? 'hovers' : 'taps'}, every status: its mark, its title, its description and "2 turns left."`, () => {
+      if (mode === 'touch') (globalThis as { window?: unknown }).window = { matchMedia: () => ({ matches: false }) };
+      for (const s of STATUSES) {
+        const { out, content } = opened(s.id, mode);
+        expect(out, s.id).toContain(`data-mark="${markFor(s.id)}"`);
+        expect(out, s.id).toMatch(mode === 'hover' ? /role="tooltip"/ : /role="dialog"/);
+        expect(out, s.id).toContain(esc(content.title));
+        expect(out, s.id).toContain(esc(s.desc.replace(/<value>/g, '2')));
+        expect(out, s.id).toContain('2 turns left.');
+        explainStore.close();
+      }
+    });
+  }
 });
 
 describe('an id nobody has registered', () => {
@@ -126,8 +209,13 @@ describe('the Gallery lists every status', () => {
     expect(tab.match(/gal-status__row/g)).toHaveLength(STATUSES.length);
     for (const s of STATUSES) {
       expect(tab, s.id).toContain(`<span class="gal-status__id">${s.id}</span>`);
+      expect(tab, s.id).toContain(`data-mark="${markFor(s.id)}"`);
     }
-    for (const id of MARKED) expect(tab, id).toContain(`data-mark="${id}"`);
+  });
+
+  it('…and lays out every drawn mark, the ones ahead of the registry too', () => {
+    for (const id of [...MARKED_IDS, ...AHEAD]) expect(tab, id).toContain(`data-mark-sample="${id}"`);
+    expect(tab).not.toContain('data-mark="unknown"');
   });
 
   it('each new status is under the class its definition gives it', () => {
@@ -144,6 +232,11 @@ describe('the Combat showroom has a demo for each of them', () => {
   /** The showroom's events, stamped as the engine would. */
   const stamped = (label: string): FxEvent[] => demos.find((d) => d.label === label)!.events.map((e, i) => ({ ...e, seq: i + 1 }) as FxEvent);
   const statusOf = (label: string) => stamped(label).filter((e): e is StatusFx => e.kind === 'status');
+
+  it('every mark can be seen landing: some demo lands each status, Swift and Ricochet included', () => {
+    const landed = new Set(demos.flatMap((d) => d.events).filter((e) => e.kind === 'status').map((e) => (e as StatusFx).statusId));
+    for (const id of ALL) expect(landed.has(id), id).toBe(true);
+  });
 
   it('a Dome going up, a Fixation stack landing, Rooted and Rabbit landing, a Last Stand taking hold', () => {
     expect(statusOf('Dome').map((e) => e.statusId)).toEqual(['dome']);
