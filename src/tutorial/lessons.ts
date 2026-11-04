@@ -3,15 +3,20 @@
  * own small fight on the scripted path Story uses (`StorySetup`): fixed
  * rosters, no draft, and custom numbers on every hero so the move being
  * taught is exactly the move that wins. Every turn runs Income → Shop → Act →
- * End: the souls arrive, the shop opens (buy, then Done), then the heroes act
- * (abilities, a Retreat, the attack — which ends the Act), then End Turn.
+ * End: the souls arrive, the shop opens (tap an icon to buy: the card lands in
+ * your hand; then Done), a card in the hand goes onto a hero with a tap on it
+ * and a tap on the hero, then the heroes act (abilities, a Retreat, the attack
+ * — which ends the Act), then End Turn.
  *
  *   1  The Skill        Kelvin vs a hurt Lash. Close the shop; Frost Grenade ends it.
  *   2  The Shop         Yamato buys Extended Magazine (a tier 1 item, two
- *                       souls of the turn's four), and the swing it adds is
- *                       the kill — the attack ends the Act.
- *   3  Active Items     Kelvin wears Cold Front. Using it is his one ability
- *                       of the turn, and its blast is the kill.
+ *                       souls of the turn's four): it lands in the hand, he
+ *                       puts it on, and the swing it adds is the kill — the
+ *                       attack ends the Act.
+ *   3  Active Items     Kelvin holds Cold Front, a gift. Put on, it starts on
+ *                       cooldown — ready in two turns — so today Frost
+ *                       Grenade and the attack finish Lash: an ability, then
+ *                       the one attack that ends the Act.
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
  *
@@ -27,12 +32,13 @@
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { effectiveAtk, heroAbilities, isRespawning, itemPrice, stepInCandidates, wornActives, wornItems } from '@/engine/query';
-import { activateBlocked, attackBlocked, buyBlocked, skillBlocked } from '@/engine/legality';
-import { LANE_INCOME, RETREAT_COST } from '@/engine/constants';
+import { effectiveAtk, heroAbilities, isRespawning, itemPrice, stepInCandidates, wornItems } from '@/engine/query';
+import { attackBlocked, buyBlocked, playBlocked, skillBlocked } from '@/engine/legality';
+import { ACTIVE_COOLDOWN, LANE_INCOME, RETREAT_COST } from '@/engine/constants';
 import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
-import { SHOP_DONE, SHOP_SHEET } from '@/ui/overlays/ShopSheet';
+import { SHOP_DONE, SHOP_SHEET, buyLabel } from '@/ui/overlays/ShopSheet';
+import { inHandLabel } from '@/ui/board/Hand';
 
 /* ------------------------------------------------------------------ */
 /* The matches                                                         */
@@ -151,6 +157,11 @@ export function hasEquipment(G: GameState, me: PlayerID): boolean {
 /** True when your hero `who` wears the item `id`. */
 function wears(c: CardInstance | null, id: CardId): boolean {
   return !!c && wornItems(c).some((it) => it.cardId === id);
+}
+
+/** Your card `id` in the hand, if one is there. */
+function inHand(v: CoachView, id: CardId): CardInstance | undefined {
+  return v.G.players[v.me].hand.find((c) => c.cardId === id);
 }
 
 /* ------------------------------------------------------------------ */
@@ -274,24 +285,44 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
   };
 }
 
-/** Buy `itemId` for your Active from the shop sheet: its Buy button (the
- *  build's, lit as the next item it can afford, comes first). */
+/** Buy `itemId` from the shop sheet: a tap on its icon (the build's, lit as
+ *  the next item the hero can afford, or the catalogue's) and the card lands
+ *  in your hand. */
 function buy(id: string, title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
   const label = cardName(itemId);
   return {
     id,
     title,
     shop: true,
-    body: (v) => `${lead(v)} Tap Buy on ${label}.`,
-    task: (v) => wears(mine(v), itemId),
-    // The engine's own question: on sale, room on the hero, and the souls for it.
-    ready: (v) => {
-      const me = mine(v);
-      return !!me && v.G.step === 'shop' && buyBlocked(v.G, v.me, itemId, me.iid) === null;
-    },
+    body: (v) => `${lead(v)} Tap its icon: the card lands in your hand.`,
+    task: (v) => !!inHand(v, itemId) || wears(mine(v), itemId),
+    // The engine's own question: the shop open, on sale, and the souls for it.
+    ready: (v) => v.G.step === 'shop' && buyBlocked(v.G, v.me, itemId) === null,
     blocked: `${label} is out of reach this turn. End the turn — ${word(LANE_INCOME)} more souls arrive at the start of the next, on top of what you keep.`,
     spot: () => [SHOP],
-    allow: (v) => [`Buy ${label} for ${nameOf(mine(v))}`],
+    allow: () => [`*${buyLabel(itemId)}`],
+  };
+}
+
+/** Put the card `itemId` from your hand on your Active: a tap on the card,
+ *  then a tap on the hero — free, and no ability of his. */
+function play(id: string, title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
+  const label = cardName(itemId);
+  return {
+    id,
+    title,
+    body: (v) => (v.targeting
+      ? `${lead(v)} Now tap ${nameOf(mine(v)) || 'your Active'}.`
+      : `${lead(v)} Tap ${label} in your hand, then tap ${nameOf(mine(v)) || 'your Active'}.`),
+    task: (v) => wears(mine(v), itemId),
+    // The engine's own question: the card in the hand, and room on the hero.
+    ready: (v) => {
+      const card = inHand(v, itemId), me = mine(v);
+      return !!card && !!me && playBlocked(v.G, v.me, card.iid, me.iid) === null;
+    },
+    blocked: `${label} cannot go on now. End the turn; it waits in your hand.`,
+    spot: (v) => (v.targeting ? [tile(mine(v))] : [inHandLabel(label)]),
+    allow: (v) => (v.targeting ? [tile(mine(v))] : [inHandLabel(label)]),
   };
 }
 
@@ -305,40 +336,6 @@ function done(id: string, title: string, body: Text): CoachStep {
     task: (v) => v.seen.closedShop,
     spot: () => [SHOP],
     allow: () => [SHOP_DONE_BUTTON],
-  };
-}
-
-/** Use the active item `itemId` your Active wears on their Active — the
- *  three-tap flow through the hero sheet, gated tap by tap. */
-function useItem(title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
-  const label = cardName(itemId);
-  const item = (v: CoachView) => {
-    const me = mine(v);
-    return me ? wornActives(me).find((it) => it.cardId === itemId) : undefined;
-  };
-  return {
-    id: 'item',
-    title,
-    body: (v) => {
-      const me = mine(v), them = theirs(v);
-      if (v.targeting) return `${lead(v)} Now tap ${nameOf(them) || 'their Active'}.`;
-      if (v.sheetOpen) return `${lead(v)} Tap ${label}, then tap ${nameOf(them) || 'their Active'}.`;
-      return `${lead(v)} Tap ${nameOf(me) || 'your Active'} to open the sheet, tap ${label}, then tap ${nameOf(them) || 'their Active'}.`;
-    },
-    task: (v) => v.seen.usedItem,
-    ready: (v) => {
-      const it = item(v), them = theirs(v);
-      return !!it && !!them && activateBlocked(v.G, v.me, it.iid, them.iid) === null;
-    },
-    blocked: `${label} is not ready this turn. End the turn; it comes back.`,
-    spot: (v) =>
-      v.targeting ? [tile(theirs(v))]
-      : v.sheetOpen ? ['Hero sheet']
-      : [tile(mine(v))],
-    allow: (v) =>
-      v.targeting ? [tile(theirs(v))]
-      : v.sheetOpen ? [`~${label}`]
-      : [tile(mine(v))],
   };
 }
 
@@ -386,12 +383,13 @@ export const LESSONS: Lesson[] = [
     id: 'souls',
     number: 2,
     title: 'The Shop',
-    blurb: 'Four souls, one item. Its swing is the kill.',
+    blurb: 'Four souls, one item: buy it, put it on. Its swing is the kill.',
     face: 'hero_yamato',
-    outro: 'Souls carry over: what you do not spend stays, and four more arrive every turn. Items stay on the hero, through death too.',
+    outro: 'Souls carry over: what you do not spend stays, and four more arrive every turn. A card bought waits in your hand until you put it on a hero; once on, it stays, through death too.',
     // Yamato swings for 2 at a Lash on 3. Extended Magazine — his build's first
-    // item, a tier 1 for two of the turn's four souls — makes it 3, and the
-    // swing that ends the Act is the kill. Turn two, so there is an attack.
+    // item, a tier 1 for two of the turn's four souls — makes it 3 once it is
+    // on him, and the swing that ends the Act is the kill. Turn two, so there
+    // is an attack.
     setup: () => fight({
       startTurn: 2,
       playerHeroes: ['hero_yamato'],
@@ -399,8 +397,9 @@ export const LESSONS: Lesson[] = [
     }),
     steps: [
       buy('buy', 'Shop', 'extended_magazine',
-        (v) => `Income paid you ${soulsText(LANE_INCOME)}: you hold ${souls(v)}. The shop opens on ${nameOf(mine(v))}'s build, the next item he can afford lit. Extended Magazine is tier 1: ${soulsText(itemPrice('extended_magazine'))}, +1 Bullet Power.`),
-      done('done', 'Done', (v) => `Bought: it stays on ${nameOf(mine(v))}, and the ${soulsText(souls(v))} you did not spend stay with you. Tap Done to close the shop.`),
+        (v) => `Income paid you ${soulsText(LANE_INCOME)}: you hold ${souls(v)}. ${nameOf(mine(v))}'s build leads the shop, the next item he can afford lit: Extended Magazine, tier 1 for ${soulsText(itemPrice('extended_magazine'))}, +1 Bullet Power.`),
+      done('done', 'Done', (v) => `Bought: the card waits in your hand, and the ${soulsText(souls(v))} you did not spend stay with you. Tap Done to close the shop.`),
+      play('play', 'Put It On', 'extended_magazine', () => 'A card in your hand goes onto a hero for nothing, in the shop or after it.'),
       attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends the Act.`),
     ],
   },
@@ -409,18 +408,23 @@ export const LESSONS: Lesson[] = [
     id: 'level',
     number: 3,
     title: 'Active Items',
-    blurb: 'Kelvin wears Cold Front. Use it.',
+    blurb: 'Kelvin holds Cold Front. Put it on; it needs time.',
     face: 'hero_kelvin',
-    outro: "An active item is the hero's one ability that turn, like a skill; then it cools down for a turn or two. Hard crowd control has charges instead.",
-    // Kelvin starts wearing Cold Front, ready: four spirit damage, and Lash
-    // stands at four. Using it is Kelvin's ability for the turn.
+    outro: `An active item is the hero's one ability that turn, like a skill. It goes on cooling down — ready in ${word(ACTIVE_COOLDOWN.low)} turns — and cools down again after each use; hard crowd control has charges instead.`,
+    // Kelvin holds Cold Front, a gift: put on, it starts on its cooldown, so it
+    // cannot be the kill today. Lash stands at three: Frost Grenade's one
+    // spirit damage, then Kelvin's swing of two, finish him — an ability, then
+    // the attack that ends the Act. Turn two, so there is an attack.
     setup: () => fight({
+      startTurn: 2,
       playerItems: ['cold_front'],
-      enemyHeroStats: [{ hp: 4 }],
+      enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      done('shop', 'The Shop', 'Kelvin already wears an item: Cold Front, an active one. Nothing to buy this turn: tap Done.'),
-      useItem('Use the Item', 'cold_front', () => 'Cold Front: four spirit damage to their Active. Using it is Kelvin\'s one ability this turn.'),
+      done('shop', 'The Shop', 'Cold Front waits in your hand — a gift, an active item. Nothing to buy this turn: tap Done.'),
+      play('play', 'Put It On', 'cold_front', () => 'An active item works from the hero who wears it.'),
+      useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns (its plate on ${nameOf(mine(v))}'s sheet says so). Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage.`),
+      attack((v) => `${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}. One ability each, then one attack — it ends the Act.`),
     ],
   },
 

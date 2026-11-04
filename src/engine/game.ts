@@ -50,13 +50,17 @@ export const DeadlockGame: Game<GameState> = {
       if (G.action) G.action.state = 'done';
     },
 
-    /** The shop step: buy an item on sale for one of your heroes (bench and
-     *  corpses included). */
-    buy: ({ G, ctx, playerID }, itemId: string, heroIid: string) =>
-      move(G, mover(ctx, playerID), { type: 'buy', itemId, heroIid }),
+    /** The shop step: buy an item on sale; the card goes to your hand. */
+    buy: ({ G, ctx, playerID }, itemId: string) => move(G, mover(ctx, playerID), { type: 'buy', itemId }),
 
-    /** The shop step: sell a worn item (a full refund on the turn it was bought, else half). */
+    /** The shop step: sell a card from your hand or a worn item (a full refund
+     *  on the turn it was bought, else half). */
     sell: ({ G, ctx, playerID }, itemIid: string) => move(G, mover(ctx, playerID), { type: 'sell', itemIid }),
+
+    /** Either step: play a card from your hand onto one of your heroes (bench
+     *  and corpses included). Free; not the hero's ability for the turn. */
+    playCard: ({ G, ctx, playerID }, cardIid: string, heroIid: string) =>
+      move(G, mover(ctx, playerID), { type: 'playCard', cardIid, heroIid }),
 
     /** The shop step: move a worn item to another of your heroes. */
     moveItem: ({ G, ctx, playerID }, itemIid: string, toHeroIid: string) =>

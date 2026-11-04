@@ -105,7 +105,7 @@ export function rewardChoices(run: StoryRun, node: StoryNode): RewardChoice[] {
 
 // ---- battle setup ------------------------------------------------------------
 /** Build the StorySetup payload for a battle node: the player's roster and
- *  the supplies waiting for this fight (free items, souls in hand) vs a
+ *  the supplies waiting for this fight (free cards in the hand, souls) vs a
  *  scaled, deterministically-generated opponent with its war chest. */
 export function buildStoryMatch(run: StoryRun, node: StoryNode): StorySetup {
   const r = rng(run.seed ^ hashStr(node.id) ^ 0xb47713);

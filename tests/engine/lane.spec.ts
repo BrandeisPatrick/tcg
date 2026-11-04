@@ -28,6 +28,8 @@ function ultCardsOnBoard(G: GameState, pid: PlayerID): string[] {
     for (const a of c.attached ?? []) walk(a);
   };
   for (const c of [G.players[pid].active, ...G.players[pid].bench]) if (c) walk(c);
+  // …and in the hand: nothing is ever dealt into it (a card enters it only by a buy).
+  for (const c of G.players[pid].hand) walk(c);
   return out;
 }
 /** Why `hero` cannot use its ultimate now (null: it can). */
@@ -88,9 +90,10 @@ describe('a hero unlocks its ultimate at Level 2', () => {
     expect(ultBlock(G, ps.active!)).toBeNull();
     expect(ultBlock(G, ps.bench[1]!)).toBe('locked');
     expect(G.log.some((l) => l.text === 'Haze unlocked Bullet Dance.')).toBe(true);
-    // Nothing is dealt: the ultimate is one of Haze's kit abilities, and no card of it is on the board.
+    // Nothing is dealt: the ultimate is one of Haze's kit abilities, and no card of it is in the hand or on the board.
     expect(kitAbilityIds(ps.active!)).toContain('eff_ult_haze');
     expect(ultCardsOnBoard(G, '0')).toEqual([]);
+    expect(ps.hand).toEqual([]);
   });
 
   it('a kill blow that levels the attacker unlocks its ultimate mid-turn; the attack has ended the Act, so it waits a turn', () => {

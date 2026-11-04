@@ -1,11 +1,13 @@
 /**
  * The AI and the shop (src/ai/heuristic.ts). In the shop step it names one
- * move by rule, not by lookahead: the next item of the Active's default build
- * it can afford (the market's stand-in when the build item is off sale), then
- * the bench's; it saves when the Active's next item is two turns of income
- * away or less; it never sells or moves an item; and it closes the shop when
- * it is done. Every move it names is one the engine takes — and two AIs play a
- * drafted match through a boardgame.io Client to the end without a stall.
+ * move by rule, not by lookahead: a card in its hand is played at once onto
+ * the hero it bought it for (it never holds one), or sold when no hero can take
+ * it; else the next item of the Active's default build it can afford (the
+ * market's stand-in when the build item is off sale), then the bench's; it
+ * saves when the Active's next item is two turns of income away or less; it
+ * never sells or moves a worn item; and it closes the shop when it is done.
+ * Every move it names is one the engine takes — and two AIs play a drafted
+ * match through a boardgame.io Client to the end without a stall.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Ctx } from 'boardgame.io';
@@ -20,7 +22,7 @@ import { marketStandIn, onSale } from '@/engine/market';
 import { seededRandom } from '@/engine/rng';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { freshReadyGame, giveItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem } from './_helpers';
 
 const ctxFor = (pid: PlayerID) => ({ currentPlayer: pid, numPlayers: 2, turn: 2 }) as unknown as Ctx;
 
@@ -36,9 +38,31 @@ function aiShopMove(G: GameState, pid: PlayerID = '0'): Action {
   const moves = enumerateAIMoves(G, ctxFor(pid));
   expect(moves).toHaveLength(1);
   const [m] = moves;
-  if (m.move === 'buy') return { type: 'buy', itemId: m.args[0], heroIid: m.args[1] };
+  if (m.move === 'buy') {
+    expect(m.args).toHaveLength(1);
+    return { type: 'buy', itemId: m.args[0] };
+  }
+  if (m.move === 'playCard') return { type: 'playCard', cardIid: m.args[0], heroIid: m.args[1] };
+  if (m.move === 'sell') return { type: 'sell', itemIid: m.args[0] };
   expect(m).toMatchObject({ move: 'closeShop', args: [] });
   return { type: 'closeShop' };
+}
+
+/** Make the AI's shop move on G, which the engine must take; returns it. */
+function step(G: GameState, pid: PlayerID = '0'): Action {
+  const a = aiShopMove(G, pid);
+  expect(blocked(G, pid, a), JSON.stringify(a)).toBeNull();
+  expect(perform(G, pid, a)).not.toBe(INVALID);
+  return a;
+}
+
+/** The AI buys `itemId` and, as its very next move, plays it onto `heroIid`. */
+function expectBuysFor(G: GameState, itemId: string, heroIid: string) {
+  expect(step(G)).toEqual({ type: 'buy', itemId });
+  const card = G.players['0'].hand.at(-1)!;
+  expect(card.cardId).toBe(itemId);
+  expect(step(G)).toEqual({ type: 'playCard', cardIid: card.iid, heroIid });
+  expect(G.players['0'].hand).toEqual([]);
 }
 
 const saved = getMatchConfig();
@@ -48,28 +72,32 @@ afterEach(() => {
 });
 
 describe('the AI in the shop step', () => {
-  it('names one move, a buy the engine takes or closeShop, and shops until it closes — never selling or moving an item', () => {
+  it('names one move — a buy, the card it bought played at once, or closeShop — each one the engine takes, until it closes with an empty hand', () => {
     for (const souls of [0, 1, 2, 4, 7, 8, 16, 40]) {
       const G = shop(souls);
       const buys: string[] = [];
-      for (let i = 0; i < 20; i++) {
-        const a = aiShopMove(G);
-        expect(blocked(G, '0', a), `${souls} souls: ${JSON.stringify(a)}`).toBeNull();
-        expect(perform(G, '0', a)).not.toBe(INVALID);
+      let last: Action | undefined;
+      for (let i = 0; i < 40; i++) {
+        const a = step(G);
+        if (last?.type === 'buy') expect(a.type, `${souls} souls: a card bought is played next`).toBe('playCard');
+        expect(['buy', 'playCard', 'closeShop'], `${souls} souls: ${JSON.stringify(a)}`).toContain(a.type);
+        last = a;
         if (a.type === 'closeShop') break;
-        buys.push((a as { itemId: string }).itemId);
+        if (a.type === 'buy') buys.push(a.itemId);
       }
       expect(G.step, `${souls} souls`).toBe('act');
+      expect(G.players['0'].hand, `${souls} souls`).toEqual([]);
       expect(G.players['0'].souls).toBeGreaterThanOrEqual(0);
       if (souls < 2) expect(buys).toEqual([]);
     }
   });
 
-  it('buys the Active\'s next build item first: its first signature item', () => {
+  it('buys the Active\'s next build item first — its first signature item — and plays it onto the Active', () => {
     const G = shop(20);
     const haze = G.players['0'].active!;
     expect(defaultBuild(haze.cardId)[0]).toBe('active_reload');
-    expect(aiShopMove(G)).toEqual({ type: 'buy', itemId: 'active_reload', heroIid: haze.iid });
+    expectBuysFor(G, 'active_reload', haze.iid);
+    expect(haze.attached!.map((it) => it.cardId)).toEqual(['active_reload']);
   });
 
   it('a build item off sale: it buys the market\'s stand-in, same tab and tier', () => {
@@ -80,7 +108,7 @@ describe('the AI in the shop step', () => {
     expect(standIn).toBeDefined();
     expect(onSale(G, standIn)).toBe(true);
     expect([itemCard(standIn)!.slot, itemCard(standIn)!.tier]).toEqual([itemCard('active_reload')!.slot, itemCard('active_reload')!.tier]);
-    expect(aiShopMove(G)).toEqual({ type: 'buy', itemId: standIn, heroIid: haze.iid });
+    expectBuysFor(G, standIn, haze.iid);
   });
 
   it('saves for the Active\'s next item when it is two turns of income away or less, and spends nothing on the bench meanwhile', () => {
@@ -90,14 +118,38 @@ describe('the AI in the shop step', () => {
     expect(defaultBuild('hero_vindicta')[0]).toBe('long_range');   // tier 2: 4 souls, affordable
     expect(aiShopMove(G)).toEqual({ type: 'closeShop' });
     G.players['0'].souls = 8;
-    expect(aiShopMove(G)).toEqual({ type: 'buy', itemId: 'burst_fire', heroIid: haze.iid });
+    expectBuysFor(G, 'burst_fire', haze.iid);
   });
 
-  it('with nothing left on the Active\'s build it can wear, it shops for the bench', () => {
+  it('with nothing left on the Active\'s build it can wear, it shops for the bench — and plays the card onto the hero it bought it for', () => {
     const G = shop(4);
     const haze = G.players['0'].active!;
     for (const id of defaultBuild(haze.cardId).slice(0, 3)) giveItem(G, haze, id); // full, and nothing later is an upgrade of these
-    expect(aiShopMove(G)).toEqual({ type: 'buy', itemId: 'long_range', heroIid: G.players['0'].bench[0]!.iid });
+    expectBuysFor(G, 'long_range', G.players['0'].bench[0]!.iid);
+  });
+
+  it('a card it did not buy this turn (a Story reward) goes onto the first hero whose build asks for it, else one wearing its component, else the first it may go on', () => {
+    const G = shop(0);
+    const me = G.players['0'];
+    const [haze, vindicta, lash] = [me.active!, me.bench[0]!, me.bench[1]!];
+    expect(defaultBuild('hero_haze')).not.toContain('long_range');
+    const reward = giveCard(G, '0', 'long_range');                 // Vindicta's first build item
+    expect(step(G)).toEqual({ type: 'playCard', cardIid: reward.iid, heroIid: vindicta.iid });
+    giveItem(G, lash, 'extra_health');
+    const fortitude = giveCard(G, '0', 'fortitude');               // in no build here; it upgrades Lash's Extra Health
+    expect(step(G)).toEqual({ type: 'playCard', cardIid: fortitude.iid, heroIid: lash.iid });
+    const regen = giveCard(G, '0', 'extra_regen');                 // in no build, upgrading nothing
+    expect(step(G)).toEqual({ type: 'playCard', cardIid: regen.iid, heroIid: haze.iid });
+    expect(aiShopMove(G)).toEqual({ type: 'closeShop' });
+  });
+
+  it('a card no hero of its can take is sold back, for what was paid on its buy turn', () => {
+    const G = shop(0);
+    const me = G.players['0'];
+    for (const hero of [me.active!, ...me.bench]) giveItem(G, hero!, 'extra_health');
+    const card = giveCard(G, '0', 'extra_health', { turn: 2, paid: 2 }); // a duplicate for every hero
+    expect(step(G)).toEqual({ type: 'sell', itemIid: card.iid });
+    expect([me.hand, me.souls]).toEqual([[], 2]);
   });
 });
 

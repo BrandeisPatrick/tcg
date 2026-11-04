@@ -5,13 +5,16 @@
  *  - a random slice of the rest — per tab, MARKET_SLICE items of each higher
  *    tier, drawn uniformly without replacement from the items that are no
  *    hero's signature (fewer when a tier runs short);
- *  - the two signature items of every hero drafted, on either side, put on
- *    sale as the hero is picked.
+ *  - the two signature items of every hero drafted, on either side, and
+ *    every item of its build (the human seat's saved build, an AI seat's
+ *    default one: `buildOf`), put on sale as the hero is picked — so a build
+ *    set up before the match can always be bought.
  * A scripted match (a Story fight, a lesson) opens with both rosters'
- * signatures already on sale.
+ * signatures and builds already on sale.
  */
-import type { CardId, GameState, ItemSlot, ItemTier } from './types';
+import type { CardId, GameState, ItemSlot, ItemTier, PlayerID } from './types';
 import { CARDS_BY_ID, HEROES, ITEMS, itemCard } from '@/cards';
+import { defaultBuild } from '@/cards/builds';
 import { MARKET_SLICE } from './constants';
 import { drawWithoutReplacement, seededRandom } from './rng';
 
@@ -41,6 +44,23 @@ export function addSignatures(G: Pick<GameState, 'market'>, heroId: CardId): voi
   const data = CARDS_BY_ID[heroId];
   if (data?.type !== 'hero') return;
   for (const id of data.signature) if (!G.market.includes(id)) G.market.push(id);
+}
+
+/** The build `pid` follows for its hero `heroId`, in order: the human seat's
+ *  own (`G.playerBuilds`, the player's saved builds), else the hero's default
+ *  (cards/builds.ts) — every AI seat's. */
+export function buildOf(G: Pick<GameState, 'playerBuilds' | 'humanSeat'>, pid: PlayerID, heroId: CardId): CardId[] {
+  const own = pid === G.humanSeat ? G.playerBuilds?.[heroId] : undefined;
+  return own && own.length > 0 ? [...own] : defaultBuild(heroId);
+}
+
+/** A hero joins `pid`'s side (a draft pick, or a scripted roster): its
+ *  signature items go on sale, then every item of its build (`buildOf`) not
+ *  on sale yet, in build order. */
+export function addHero(G: Pick<GameState, 'market' | 'playerBuilds' | 'humanSeat'>, pid: PlayerID, heroId: CardId): void {
+  if (CARDS_BY_ID[heroId]?.type !== 'hero') return;
+  addSignatures(G, heroId);
+  for (const id of buildOf(G, pid, heroId)) if (itemCard(id) && !G.market.includes(id)) G.market.push(id);
 }
 
 /** Everything on sale this match, in the order it was put on sale. */

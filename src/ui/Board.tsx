@@ -3,7 +3,10 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
 import type { AbilityId, GameState, CardId, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
-import { findCardOnBoard, findWornItem, isRespawning, kitAbilityIds, otherPlayer, resolveSkill, stepInCandidates, ultimateCard, wornActives } from '@/engine/query';
+import {
+  findCardOnBoard, findWornItem, handCard, isRespawning, kitAbilityIds, otherPlayer, resolveSkill, slotCap, stepInCandidates,
+  ultimateCard, wornActives,
+} from '@/engine/query';
 import { humanSeat } from './seat';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
@@ -12,6 +15,7 @@ import { LiveScaleContext, boardLiveSpirit } from './card/liveScale';
 import { plainText } from './card/scaling';
 import { HeroDetailSheet, type SkillOffer } from './overlays/HeroDetailSheet';
 import { ShopSheet } from './overlays/ShopSheet';
+import { OpponentHand } from './board/OpponentHand';
 import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
 import { DraftOverlay } from './overlays/DraftOverlay';
@@ -19,19 +23,22 @@ import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
-import { BoardTable, boardRows, boardGutter, vitalsPull } from './board/BoardTable';
+import { BoardTable, boardRows, boardGutter, vitalsPull, tablePad } from './board/BoardTable';
 import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
 import type { TurnPhase } from './board/TurnCompass';
 import {
-  SHOP_OPEN, actionRefusal, activateBlockReason, moveBlockReason, readyHeroes, retreatBlock,
+  SHOP_OPEN, actionRefusal, activateBlockReason, moveBlockReason, playBlockReason, readyHeroes, retreatBlock,
   skillBlockReason,
 } from './board/heroActions';
 import { isValidTarget } from './board/targeting';
 import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attackAim';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
-import { activateBlocked, activateTargets, attackBlocked, retreatCost, skillBlocked, skillTargets } from '@/engine/legality';
+import {
+  activateBlocked, activateTargets, attackBlocked, playBlocked, playTargets, retreatCost, sellBlocked, sellRefund, skillBlocked,
+  skillTargets,
+} from '@/engine/legality';
 import type { Action } from '@/engine/engine';
 import { forecastAttack, type AttackPlan } from '@/engine/forecast';
 import { CombatChoreographer } from './effects/CombatChoreographer';
@@ -43,6 +50,8 @@ import { FxCalmContext, useCalmMotion } from './effects/fx/FxMotionContext';
 import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingContext';
 import { buildFxTimeline, freshBatch } from './effects/fx/fxTimeline';
 import { FxStageProvider } from './effects/fx/stage/FxStage';
+import { Bolt } from './effects/fx/primitives';
+import { FX_INK } from './effects/fx/fxCatalog';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
@@ -55,6 +64,7 @@ import { poster } from './poster';
 import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer, PANEL_WIDTH } from './side-panel/PanelDrawer';
 import { PATRON_NAMES } from './board/patrons';
+import { HandTray } from './board/HandTray';
 import type { PendingPlay } from './helpers';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { markLessonDone } from '@/storage/playerData';
@@ -69,9 +79,22 @@ const AI_THINK_MS = 800;        // delay between AI moves; also gives combat ani
 /** The longest the board stays up after the match is decided, so the blow
  *  that decided it can be seen landing before the result sheet takes over. */
 const FINAL_BLOW_MAX_MS = 2800;
-/** Phones: room above the sheet for the System menu's gear (top 12 + 40px),
- *  so the paper's top edge clears it at a tall phone's fit scale. */
-const PHONE_HEADROOM = 40;
+/** Phones: how much of the rival's face-down backs shows above the sheet's
+ *  top edge, in stage px (~21–30px on screen at a phone's fit scale). The
+ *  rest of the fan sits behind the paper, and the row it used to fill — about
+ *  a seventh of the stage's height — goes to the board. */
+const RIVAL_PEEK = 36;
+/** How far the fan's wrapper pulls the sheet up over it: OpponentHand's box
+ *  (4px inset + 92px backs + 8px) and the row gap, less the paper's top margin
+ *  and the backs' 4px inset, leaves RIVAL_PEEK of the backs in sight. */
+const PHONE_RIVAL_TUCK = 4 + 92 + 8 + boardRows.gap(true) - tablePad(true).top - 4 - RIVAL_PEEK;
+/** Room above the fan for its outer backs, which ride up as it widens. With
+ *  it, at a tall phone's fit scale (~0.84) the paper's top edge clears the
+ *  System menu's gear (top 12 + 40px); on a shorter phone the sheet is
+ *  scaled narrow enough to pass left of it instead. */
+const PHONE_RIVAL_HEADROOM = 20;
+/** How long a bought card's flight from the shop to the hand takes, ms. */
+const BUY_FLIGHT_MS = 360;
 /** What a click must land on to NOT cancel an armed card or skill. */
 const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="tab"]';
 
@@ -111,9 +134,11 @@ export function Board(props: BoardProps<GameState>) {
     if (pref === 'closed') return false;
     return window.innerWidth >= 1100;
   });
-  // The card shown at full size: a worn item's chip (by its instance, so a
-  // hover peek closes if the item goes) or an item in the shop (by its id).
-  const [preview, setPreview] = useState<{ cardId: CardId; iid?: string; hover: boolean } | null>(null);
+  // The card shown at full size: a card in the hand or a worn item's chip (by
+  // its instance, so a hover peek closes if it goes), or an item in the shop
+  // (by its id, with what it would cost). A card in the hand held in the shop
+  // step offers its sale.
+  const [preview, setPreview] = useState<{ cardId: CardId; iid?: string; hover: boolean; cost?: number; inHand?: boolean } | null>(null);
   const [heroDetail, setHeroDetail] = useState<CardInstance | null>(null);
   // Retreat with more than one bench hero able to go in: the chooser is up
   // until the player picks who (or backs out).
@@ -122,6 +147,16 @@ export function Board(props: BoardProps<GameState>) {
   // board's Shop button brings it back). Every turn opens with it up.
   const [shopHidden, setShopHidden] = useState(false);
   useEffect(() => { setShopHidden(false); }, [G.turnNumber]);
+  // A card bought: where its icon was, until the card lands in the hand and
+  // the flight to it starts; then the flight, and the card fading in under it.
+  const buyFromRef = useRef<{ x: number; y: number } | null>(null);
+  const [flight, setFlight] = useState<{ key: number; from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
+  const [arriving, setArriving] = useState<string | null>(null);
+  const handCardRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const registerHandCard = useCallback((iid: string, el: HTMLElement | null) => {
+    if (el) handCardRefs.current.set(iid, el);
+    else handCardRefs.current.delete(iid);
+  }, []);
   // An attack, being made. While non-null the choreographer is
   // walking its plan; when it finishes, the engine makes the attack for real.
   const [combatPlan, setCombatPlan] = useState<AttackPlan | null>(null);
@@ -234,8 +269,23 @@ export function Board(props: BoardProps<GameState>) {
   }, [isMobile]);
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
-  // The phone's controls row — the targeting banner docks above it.
-  const controlsRowRef = useRef<HTMLDivElement>(null);
+  // The hand row (strip + phone controls) — the targeting banner docks above
+  // it on phones, and the shop sheet stays clear of it.
+  const handRowRef = useRef<HTMLDivElement>(null);
+  // How much of the screen's bottom the hand row takes: the shop sheet leaves
+  // it clear, so a card bought is seen landing in the hand.
+  const [handInset, setHandInset] = useState(0);
+  useEffect(() => {
+    const el = handRowRef.current;
+    if (!el) return;
+    const measure = () => setHandInset(Math.max(0, Math.round(window.innerHeight - el.getBoundingClientRect().top)));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+    // The row mounts once the draft is over, and moves when the layout flips.
+  }, [isMobile, !!G.draft, !!ctx.gameover]);
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
     if (el) {
       slotRefs.current.set(iid, el);
@@ -363,11 +413,42 @@ export function Board(props: BoardProps<GameState>) {
     return () => window.removeEventListener('click', onClick);
   }, [pending]);
 
-  // Safety net: if the previewed worn item is no longer worn, drop the preview.
+  // Safety net: if the previewed card is no longer in a hand or worn, drop the
+  // preview (a held one too: its sale would name a card that is gone).
   useEffect(() => {
-    if (!preview?.hover || !preview.iid) return;
-    if (!findWornItem(G, preview.iid)) setPreview(null);
+    if (!preview?.iid) return;
+    const gone = !findWornItem(G, preview.iid) && !(['0', '1'] as PlayerID[]).some((pid) => handCard(G, pid, preview.iid!));
+    if (gone) setPreview(null);
   }, [G, preview]);
+
+  // A card bought lands in the hand: fly it there from the icon that bought
+  // it — the cast bolt, gold — and let the card fade in as it lands. On a
+  // phone the strip scrolls to it first. The card is known as arriving from
+  // the render it first shows in (a buy is waiting to fly, and it is new), so
+  // it mounts already fading in on its spot rather than rising from below.
+  const myHandKey = G.players[me].hand.map((c) => c.iid).join(',');
+  const shownHand = useRef<string[]>([]);
+  const fresh = buyFromRef.current ? G.players[me].hand.find((c) => !shownHand.current.includes(c.iid))?.iid ?? null : null;
+  const freshRef = useRef<string | null>(null);
+  freshRef.current = fresh;
+  const arrivingIid = fresh ?? arriving;
+  useEffect(() => {
+    shownHand.current = myHandKey ? myHandKey.split(',') : [];
+    const from = buyFromRef.current;
+    const iid = freshRef.current;
+    // A hand that changed without a card from the shop (a sale, a play) flies nothing.
+    if (!from || !iid) return;
+    buyFromRef.current = null;
+    const el = handCardRefs.current.get(iid);
+    if (!el) return;
+    el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    const r = el.getBoundingClientRect();
+    setArriving(iid);
+    setFlight({ key: Date.now(), from, to: { x: r.left + r.width / 2, y: r.top + r.height / 2 } });
+    const t = setTimeout(() => { setFlight(null); setArriving(null); }, BUY_FLIGHT_MS + 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myHandKey]);
 
   // Stuck-hover guard: if the cursor leaves the document or stops moving for
   // ~2.5s while a hover preview is open, close it. Catches the case where the
@@ -495,15 +576,77 @@ export function Board(props: BoardProps<GameState>) {
   // wraps `blocked`, legality.ts). A move it will not make is said on the
   // sticker instead of being dispatched to go nowhere.
 
-  /** Make a shop move once the engine says it may be made; a refusal is said
-   *  on the sticker. */
-  function shopMove(a: Extract<Action, { type: 'buy' | 'sell' | 'moveItem' }>) {
+  /** Make a shop move — or put a card from the hand on a hero — once the
+   *  engine says it may be made; a refusal is said on the sticker. A buy
+   *  names the icon it came from: the card flies from there to the hand. */
+  function shopMove(a: Extract<Action, { type: 'buy' | 'sell' | 'moveItem' | 'playCard' }>, from?: DOMRect) {
     if (!isMyTurn || actionLocked) return;
     const no = actionRefusal(G, me, a);
     if (no) { showNotice(no.text, true); return; }
-    if (a.type === 'buy') moves.buy(a.itemId, a.heroIid);
-    else if (a.type === 'sell') moves.sell(a.itemIid);
+    if (a.type === 'buy') {
+      buyFromRef.current = from ? { x: from.left + from.width / 2, y: from.top + from.height / 2 } : null;
+      moves.buy(a.itemId);
+    } else if (a.type === 'sell') moves.sell(a.itemIid);
+    else if (a.type === 'playCard') moves.playCard(a.cardIid, a.heroIid);
     else moves.moveItem(a.itemIid, a.toHeroIid);
+  }
+
+  /** Put a card from the hand on a hero, once the engine says it may go
+   *  there; a refusal (a full hero, one already wearing it, not yours) is
+   *  said on the sticker and the card stays in the hand. */
+  function playCardOn(cardIid: string, heroIid: string) {
+    if (!isMyTurn || actionLocked) return;
+    const no = actionRefusal(G, me, { type: 'playCard', cardIid, heroIid });
+    if (no) { showNotice(no.text, true); return; }
+    moves.playCard(cardIid, heroIid);
+  }
+
+  /** Why no hero of yours can take the card `c` right now, in the words of
+   *  the first hero's refusal (every one is full, or wears it). */
+  function stuckReason(c: CardInstance): string {
+    const heroes = [G.players[me].active, ...G.players[me].bench].filter((h): h is CardInstance => !!h);
+    const first = heroes[0];
+    const why = first ? playBlocked(G, me, c.iid, first.iid) : null;
+    return why ? playBlockReason(why, { item: CARDS_BY_ID[c.cardId]?.name, hero: CARDS_BY_ID[first!.cardId]?.name, slots: slotCap(G, me) }) : 'No hero can take it now';
+  }
+
+  /** A tap on a card in the hand: armed, the heroes it may go on glow, and the
+   *  next tap on one of them puts it on. The shop sheet steps aside while a
+   *  card is armed, so the heroes can be seen (its Shop button brings it
+   *  back). */
+  function onTapCardInHand(c: CardInstance) {
+    if (!isMyTurn || actionLocked) return;
+    if (playTargets(G, me, c.iid).length === 0) { showNotice(stuckReason(c), true); return; }
+    const data = CARDS_BY_ID[c.cardId];
+    setPreview(null);
+    if (G.step === 'shop') setShopHidden(true);
+    setPending({
+      kind: 'playCard', iid: c.iid,
+      title: data?.name ?? 'Card',
+      desc: 'Put it on one of your heroes.',
+      filter: 'allyHero',
+    });
+  }
+
+  /** A card from the hand let go over the board (a desktop drag): onto the
+   *  hero under the pointer, if it is one; else armed, as a tap would. */
+  function onHandDragEnd(c: CardInstance, x: number, y: number) {
+    if (!isMyTurn || actionLocked) return;
+    for (const [iid, el] of slotRefs.current.entries()) {
+      const rect = el.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        playCardOn(c.iid, iid);
+        setPending(null);
+        return;
+      }
+    }
+    onTapCardInHand(c);
+  }
+
+  /** Hold a card in the hand: the full card. In your shop step it offers the
+   *  card's sale (all you paid, the turn you bought it; half after). */
+  function holdHandCard(c: CardInstance) {
+    setPreview({ cardId: c.cardId, iid: c.iid, hover: false, inHand: true });
   }
 
   /** Close the shop: the turn moves on to its act. */
@@ -535,9 +678,11 @@ export function Board(props: BoardProps<GameState>) {
   function onTapHero(card: CardInstance) {
     if (pending) {
       if (!isMyTurn || actionLocked) return;
-      // A tap on a hero the armed skill or item cannot be aimed at (a corpse,
-      // the wrong side) is refused with the reason.
-      if (pending.kind === 'activate') fireItem(pending.iid, card.iid);
+      // A tap on a hero the armed card, skill or item cannot go to or be
+      // aimed at (a full hero, a corpse for a skill, the wrong side) is
+      // refused with the reason.
+      if (pending.kind === 'playCard') playCardOn(pending.iid, card.iid);
+      else if (pending.kind === 'activate') fireItem(pending.iid, card.iid);
       else if (pending.kind === 'attack') aimAttack(card.iid);
       else castSkill(pending.iid, card.iid, pending.skillId);
       setPending(null);
@@ -688,26 +833,56 @@ export function Board(props: BoardProps<GameState>) {
   // you (auto-play).
   const shopOpen = isMyTurn && !G.draft && G.step === 'shop' && !ctx.gameover && !autoPlay;
   const shopShown = shopOpen && !shopHidden;
-  const turnControls = (variant: 'dock' | 'tray') => (
-    <BoardControls
-      variant={variant}
-      isMyTurn={isMyTurn}
-      busy={turnBusy}
-      hasPending={!!pending}
-      autoPlay={autoPlay}
-      onEndTurn={pressTurnButton}
-      onCancel={() => setPending(null)}
-      onToggleAuto={() => setAutoPlay((v) => !v)}
-      onShop={shopOpen && shopHidden ? () => setShopHidden(false) : undefined}
-    />
-  );
+  const reopenShop = shopOpen && shopHidden ? () => { setPending(null); setShopHidden(false); } : undefined;
 
-  // Phones: the turn controls as a row under the fitted stage, at full size.
-  const controlsRow = (
-    <div ref={controlsRowRef} style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, alignSelf: 'stretch', padding: '6px 0 8px' }}>
-      {turnControls('tray')}
+  // The hand and, on phones, the turn controls under it. Desktop mounts it as
+  // the last row of the fitted stage; phones mount it below the stage, at
+  // full size (see the fit box in the column below).
+  // zIndex 2 keeps the hand row above the board plane (zIndex 1), so cards
+  // rising on select/hover/drag pass OVER the sheet's bottom edge instead of
+  // sliding beneath it.
+  const handRow = (
+    <div ref={handRowRef} style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, alignSelf: isMobile ? 'stretch' : undefined }}>
+      <HandTray
+        cards={G.players[me].hand}
+        disabled={!isMyTurn || actionLocked}
+        pending={pending}
+        isMyTurn={isMyTurn}
+        busy={turnBusy}
+        hasPending={!!pending}
+        playable={(c) => playTargets(G, me, c.iid).length > 0}
+        onTap={onTapCardInHand}
+        onLongPress={holdHandCard}
+        onHover={(c) => setPreview(c ? { cardId: c.cardId, iid: c.iid, hover: true, inHand: true } : null)}
+        onDragEndOver={onHandDragEnd}
+        onBlocked={(c) => showNotice(stuckReason(c), true)}
+        onEndTurn={pressTurnButton}
+        onCancel={() => setPending(null)}
+        autoPlay={autoPlay}
+        onToggleAuto={() => setAutoPlay((v) => !v)}
+        onShop={reopenShop}
+        arriving={arrivingIid}
+        registerCard={registerHandCard}
+      />
     </div>
   );
+
+  // What the held preview of a card in your hand offers: its sale, in your
+  // shop step (greyed, with the engine's reason, when it cannot be sold).
+  const previewSale = (() => {
+    if (!preview || preview.hover || !preview.inHand || !preview.iid) return undefined;
+    const card = handCard(G, me, preview.iid);
+    if (!card || !isMyTurn || G.step !== 'shop') return undefined;
+    const refund = sellRefund(G, card);
+    const name = CARDS_BY_ID[card.cardId]?.name ?? card.cardId;
+    const no = sellBlocked(G, me, card.iid) ? actionRefusal(G, me, { type: 'sell', itemIid: card.iid }) : null;
+    return {
+      label: `Sell +${refund}`,
+      ariaLabel: `Sell ${name} for ${refund} soul${refund === 1 ? '' : 's'}`,
+      blockedReason: no?.text,
+      onPress: () => { shopMove({ type: 'sell', itemIid: card.iid }); setPreview(null); },
+    };
+  })();
 
   return (
     <LayoutGroup>
@@ -786,15 +961,31 @@ export function Board(props: BoardProps<GameState>) {
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
           }}>
+          {/* Rival's fan tucks behind the sheet's top edge — a small negative
+              margin lets the card backs peek over the paper (the sheet stacks
+              above via zIndex), so the face-down hand rests AT the board
+              instead of floating in the room. Phones sink it deeper: only a
+              strip of the backs shows, and the row it used to fill goes to
+              the board (see RIVAL_PEEK). Not in a lesson: the phone coach
+              plate sits in that row, above the board, and would cover the
+              sheet's top. */}
+          <div style={{
+            flex: '0 0 auto', position: 'relative', zIndex: 0,
+            ...(isMobile && !isTutorial
+              ? { marginBottom: -PHONE_RIVAL_TUCK, paddingTop: PHONE_RIVAL_HEADROOM }
+              : { marginBottom: isMobile ? 0 : -10 }),
+          }}>
+            <OpponentHand cards={G.players[opp].hand} />
+          </div>
+
           {/* 3×3 BOARD GRID — the three rows (opp bench, lane, my bench)
               sit on one flat cream sheet (BoardTable), a print floating on
-              the blurred scene. Same flat plane on desktop and mobile. Phones
-              leave room above it for the System menu's gear, except in a
-              lesson, where the coach plate takes that row. */}
+              the blurred scene. Same flat plane on desktop and mobile. */}
           <div style={{
+            // Stacks the sheet above the rival's fan so the paper's top edge
+            // overlaps the tucked card bottoms (see OpponentHand wrapper).
             position: 'relative',
             zIndex: 1,
-            paddingTop: isMobile && !isTutorial ? PHONE_HEADROOM : 0,
           }}>
           <div style={{
             position: 'relative',
@@ -920,17 +1111,29 @@ export function Board(props: BoardProps<GameState>) {
                 zIndex: 2,
                 pointerEvents: 'none',
               }}>
-                {turnControls('dock')}
+                <BoardControls
+                  variant="dock"
+                  isMyTurn={isMyTurn}
+                  busy={turnBusy}
+                  hasPending={!!pending}
+                  autoPlay={autoPlay}
+                  onEndTurn={pressTurnButton}
+                  onCancel={() => setPending(null)}
+                  onToggleAuto={() => setAutoPlay((v) => !v)}
+                  onShop={reopenShop}
+                />
               </div>
             )}
           </div>
           </div>
+
+          {!isMobile && handRow}
         </div>
         </div>
 
-        {/* Phones: the turn controls sit under the fitted stage at their own
-            full size — scaled with the board they were too small to read. */}
-        {isMobile && controlsRow}
+        {/* Phones: the hand sits under the fitted stage at its own full
+            size — scaled with the board it was too small to read. */}
+        {isMobile && handRow}
         </div>
 
         {/* PANEL DRAWER — slides in from the right edge, toggled by a thin
@@ -954,8 +1157,9 @@ export function Board(props: BoardProps<GameState>) {
               // inset its centring so it tracks the visible board, not the
               // full viewport (its right end used to slide under the sheet).
               rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0}
-              // Phones: sit above the full-size controls row, not on it.
-              dockAbove={isMobile ? controlsRowRef : undefined}
+              // Phones: the full-size hand strip reaches well above the
+              // desktop dock height — sit above it, not on its cards.
+              dockAbove={isMobile ? handRowRef : undefined}
             />
           )}
         </AnimatePresence>
@@ -968,8 +1172,23 @@ export function Board(props: BoardProps<GameState>) {
         />
 
         <AnimatePresence>
-          {preview && <CardPreview key={(preview.iid ?? preview.cardId) + (preview.hover ? '-h' : '-p')} cardId={preview.cardId} hover={preview.hover} onClose={() => setPreview(null)} />}
+          {preview && (
+            <CardPreview
+              key={(preview.iid ?? preview.cardId) + (preview.hover ? '-h' : '-p')}
+              cardId={preview.cardId}
+              cost={preview.cost}
+              // A card in the hand is paid for: no coin.
+              hideCost={preview.inHand}
+              hover={preview.hover}
+              action={previewSale}
+              onClose={() => setPreview(null)}
+            />
+          )}
         </AnimatePresence>
+
+        {/* A card bought flies from its icon in the shop to the hand: the
+            cast bolt, in gold. */}
+        {flight && <Bolt key={flight.key} from={flight.from} to={flight.to} color={FX_INK.gold} dur={BUY_FLIGHT_MS} size={7} embers={45} />}
 
         <AnimatePresence>
           {heroDetail && (() => {
@@ -1051,7 +1270,9 @@ export function Board(props: BoardProps<GameState>) {
               onMove={shopMove}
               onDone={closeShop}
               onHide={() => setShopHidden(true)}
-              onPreview={(cardId) => setPreview({ cardId, hover: false })}
+              onPreview={({ cardId, cost, iid }) => setPreview({ cardId, cost, iid, hover: false, inHand: !!iid })}
+              bottomInset={handInset}
+              rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0}
             />
           )}
         </AnimatePresence>

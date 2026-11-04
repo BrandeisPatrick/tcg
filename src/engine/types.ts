@@ -5,9 +5,10 @@ export type CardId = string;
 export type AbilityId = string;
 export type StatusId = string;
 export type PlayerID = '0' | '1';
-/** Where a card instance is: a hero in the Active slot or on the bench, or
- *  an item worn by a hero (in its `attached` list). */
-export type Zone = 'active' | 'bench' | 'equipment';
+/** Where a card instance is: an item in its owner's hand (bought, not yet
+ *  played onto a hero), a hero in the Active slot or on the bench, or an item
+ *  worn by a hero (in its `attached` list). */
+export type Zone = 'hand' | 'active' | 'bench' | 'equipment';
 
 export type DamageType = 'attack' | 'spirit' | 'pure';
 
@@ -146,14 +147,19 @@ export interface CardInstance {
    *  instance's own `cooldowns`, keyed by its card id, and travels with it too. */
   charges?: number;
   /** An item: the engine turn it was bought on — sold back on that turn it
-   *  refunds what was paid. */
+   *  refunds what was paid. Absent on a card that was not bought (a Story
+   *  reward). */
   boughtOnTurn?: number;
   /** An item: the souls paid for it (its price, or the difference for an
-   *  upgrade). */
+   *  upgrade bought while its component was on its owner's side). */
   paid?: number;
-  /** An upgrade bought this turn: the component it replaced, given back should
-   *  the upgrade be sold on the same turn. Dropped when the turn ends. */
+  /** An upgrade bought and played this turn: the component its play consumed,
+   *  given back should the upgrade be sold on the same turn — to the hero that
+   *  wore it (`replacedFrom`), or to the hand it came from. Dropped when the
+   *  turn ends. */
   replaced?: CardInstance;
+  /** The hero `replaced` was worn by; absent when it came from the hand. */
+  replacedFrom?: string;
   /** A hero: the items whose first equip has paid it EXP_ON_EQUIP, so buying
    *  one back (or moving it in) pays nothing more. */
   equippedIds?: CardId[];
@@ -201,6 +207,11 @@ export interface PlayerState {
   hp: number;
   hpMax: number;
   souls: number;
+  /** The items bought and not yet played onto a hero, in the order they came
+   *  (zone 'hand'). A card enters the hand only by `buy` (and a Story reward);
+   *  there is no deck, no draw and no cap. They count in net worth at list
+   *  price. */
+  hand: CardInstance[];
   active: CardInstance | null;
   bench: (CardInstance | null)[]; // length 3
   /** The side's heroes have felled the enemy Walker: every hero has the flex
@@ -455,8 +466,14 @@ export interface GameState {
   seed: number;
   /** What the shop sells this match, in the order it was put on sale: every
    *  tier 1 item, the random slice drawn from `seed` before the draft, then the
-   *  signature items of each hero as it was drafted. Fixed once the draft ends. */
+   *  signature items and the build of each hero as it was drafted. Fixed once
+   *  the draft ends. */
   market: CardId[];
+  /** The builds the human seat brought: the player's saved builds, by hero,
+   *  from the match config at setup. A hero they do not name, and every hero
+   *  of an AI seat, follows its default build (cards/builds.ts). Read through
+   *  `buildOf` (market.ts). */
+  playerBuilds?: Record<CardId, CardId[]>;
   /** The step of the turn in play: 'shop' (buy, sell, move items, then close
    *  the shop) until `closeShop`, then 'act' (abilities, a Retreat, the
    *  attack). Every turn opens on 'shop'; `endTurn` is legal in either. */

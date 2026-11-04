@@ -6,15 +6,16 @@
  * targets, items, the shop, hero moves and who the attack may name.
  *
  * A probe move the engine accepts is also held to the transition rules and the
- * state invariants (invariants.ts) — so a sale or a move of an item, which the
- * AI's rule-based shop never makes, is checked as closely as a live move.
+ * state invariants (invariants.ts) — so a sale or a move of an item, or a card
+ * played onto a hero the AI would not pick, which the AI's rule-based shop never
+ * makes, is checked as closely as a live move.
  */
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { CARDS_BY_ID, ITEMS } from '@/cards';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { legalActions, skillBlocked } from '@/engine/legality';
-import { attackPower, isRespawning, liveBoardCards, otherPlayer } from '@/engine/query';
+import { attackPower, checkWinner, isRespawning, liveBoardCards, otherPlayer } from '@/engine/query';
 import type { TargetFilter } from '@/abilities';
 import type { Snapshot, StepInfo } from './driver';
 import { chaosMove } from './driver';
@@ -22,9 +23,9 @@ import { moveTags, signatureOf, type Hit } from './hits';
 import { collectInvariantViolations, collectTransitionViolations } from './invariants';
 import {
   activateBlockedOracle, activateTargetsOracle, attackOpenFor, attackTargetsOracle, boardOf, boardUnits, buyBlockedOracle,
-  buyPriceOracle, callMove, closeShopBlockedOracle, diffPaths, filterForItem, filterForSkill, firstSkillOf, isMergedRem,
-  itemData, moveItemBlockedOracle, retreatCostOracle, seatOnTurn, sellBlockedOracle, skillCooling, skillExcludesSelf,
-  skillIdsOf, slottedHeroOf, targetLegal, ultLocked, wornItemsOf,
+  buyPriceOracle, callMove, closeShopBlockedOracle, diffPaths, filterForItem, filterForSkill, firstSkillOf, handOf, isMergedRem,
+  itemData, moveItemBlockedOracle, playBlockedOracle, retreatCostOracle, seatOnTurn, sellBlockedOracle, skillCooling,
+  skillExcludesSelf, skillIdsOf, targetLegal, ultLocked, wornItemsOf,
 } from './oracle';
 
 export interface ProbeOpts {
@@ -34,17 +35,19 @@ export interface ProbeOpts {
   targetCombos: number;
   /** Chance that a decision point also gets the full moveHero sweep. */
   moveHeroSweep: number;
-  /** (item x hero) purchases tried per decision point of the shop step (sales and moves: a third as many). */
+  /** Purchases tried per decision point of the shop step (sales and moves: a third as many). */
   shopCombos: number;
+  /** (card x hero) plays tried per decision point, in either step. */
+  playCombos: number;
 }
 
-export const DEFAULT_PROBE: ProbeOpts = { chaosPerStep: 3, targetCombos: 8, moveHeroSweep: 0.2, shopCombos: 6 };
+export const DEFAULT_PROBE: ProbeOpts = { chaosPerStep: 3, targetCombos: 8, moveHeroSweep: 0.2, shopCombos: 6, playCombos: 4 };
 
 const pickOne = <T,>(arr: T[], r: () => number): T => arr[Math.floor(r() * arr.length)];
 const isBenchOnly = (c: CardInstance) => !!(CARDS_BY_ID[c.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly;
 const isRooted = (c: CardInstance) => c.statuses.some((s) => s.id === 'rooted');
 
-/** The shop's moves, and the act step's. */
+/** The shop's moves, and the act step's. (A card played from the hand is either step's.) */
 const SHOP_TYPES = new Set(['buy', 'sell', 'moveItem', 'closeShop']);
 const ACT_TYPES = new Set(['attack', 'useSkill', 'activate', 'moveHero']);
 
@@ -101,9 +104,13 @@ export function probeLegality(
   let standing: Set<string> | undefined;
   const checkAccepted = (before: GameState, after: GameState, name: string, args: unknown[]) => {
     standing ??= new Set(collectInvariantViolations(G, ctx).map((v) => v.key));
+    // A move made on a clone runs no `endIf`: one that ends the match is judged as the client
+    // would see it, game over (a patron at 0 is then no breach).
+    const over = checkWinner(after);
+    const ctxAfter = over ? ({ ...ctx, gameover: over } as Ctx) : ctx;
     const vs = [
-      ...collectTransitionViolations({ G: before, ctx }, { G: after, ctx }, { name, args }, true),
-      ...collectInvariantViolations(after, ctx).filter((v) => !standing!.has(v.key)),
+      ...collectTransitionViolations({ G: before, ctx }, { G: after, ctx: ctxAfter }, { name, args }, true),
+      ...collectInvariantViolations(after, ctxAfter).filter((v) => !standing!.has(v.key)),
     ];
     for (const v of vs) add(`probe:${v.id}`, name, args, `${name}(${JSON.stringify(args)}) on a clone: ${v.message}`);
   };
@@ -292,7 +299,9 @@ export function probeLegality(
     if (active) probes.push({ name: 'activate', args: [active.iid] });
     const hero = boardOf(me)[0];
     const cheap = (G.market ?? []).find((id) => itemData(id)?.tier === 1);
-    if (hero && cheap) probes.push({ name: 'buy', args: [cheap, hero.iid] });
+    if (cheap) probes.push({ name: 'buy', args: [cheap] });
+    const held = handOf(G, pid)[0];
+    if (held && hero) probes.push({ name: 'playCard', args: [held.iid, hero.iid] });
     for (const p of probes) {
       const r = callMove(G, ctx, pid, p.name, p.args, (g) => { g.players[pid].souls = 40; });
       if (r.outcome === 'accepted') add('owed-promotion-skippable', p.name, p.args, `P${pid} owes a promotion (pendingPromotion) yet ${p.name} is accepted`);
@@ -337,6 +346,8 @@ export function probeLegality(
 
   // ---------------------------------------------------------------- H: the shop and the step
   if (!owed) probeShop(G, ctx, pid, rnd, opts, shop, { add, checkAccepted, checkRefused });
+  // ---------------------------------------------------------------- I: the hand, in either step
+  if (!owed) probePlays(G, ctx, pid, rnd, opts, { add, checkAccepted, checkRefused });
 }
 
 interface Report {
@@ -348,8 +359,9 @@ interface Report {
 /** A legalActions entry as a comparable key. */
 function actionKey(a: { type: string } & Record<string, unknown>): string {
   switch (a.type) {
-    case 'buy': return `buy ${a.itemId} -> ${a.heroIid}`;
+    case 'buy': return `buy ${a.itemId}`;
     case 'sell': return `sell ${a.itemIid}`;
+    case 'playCard': return `playCard ${a.cardIid} -> ${a.heroIid}`;
     case 'moveItem': return `moveItem ${a.itemIid} -> ${a.toHeroIid}`;
     case 'activate': return `activate ${a.itemIid}${a.targetIid === undefined ? '' : ` -> ${a.targetIid}`}`;
     default: return a.type;
@@ -367,14 +379,16 @@ function setDiff(engine: string[], oracle: string[]): string {
 
 /**
  * H — the shop (rules.md §3–§4), at a decision point with no promotion owed:
- *  - `legalActions` lists exactly the shop moves the oracle allows in the shop step, and no
- *    act move there; in the act step it lists no shop move, and exactly the item uses the
- *    oracle allows, one per target;
- *  - sampled purchases (market items and others × the player's heroes and others; real souls
- *    or plenty), sales, moves and the shop's close are accepted exactly when the oracle allows
- *    them — a purchase a soul short of its price never is;
+ *  - `legalActions` lists exactly the shop moves the oracle allows in the shop step (a buy per
+ *    item on sale the souls cover, a sale per hand card and per worn item no upgrade claims,
+ *    the moves, the close), and no act move there; in the act step it lists no shop move, and
+ *    exactly the item uses the oracle allows, one per target;
+ *  - sampled purchases (market items, the upgrades of what is worn or held, others, junk; real
+ *    souls or plenty), sales (hand cards, worn items, the rival's, heroes, junk), moves and the
+ *    shop's close are accepted exactly when the oracle allows them — a purchase a soul short of
+ *    its price never is;
  *  - an act move (an ability, an item, a Retreat, the attack) is refused in the shop step, a
- *    shop move in the act step, and the seat not on turn is refused every shop move;
+ *    shop move in the act step, and the seat not on turn is refused every shop move and play;
  * each on a clone; what the engine accepts is held to the transition rules, what it refuses
  * must leave the state untouched.
  */
@@ -407,7 +421,8 @@ function probeShop(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
   if (onTurn && shop) {
     // What the engine lists, against the oracle.
     const oracle: string[] = [];
-    for (const itemId of G.market ?? []) for (const h of mine) if (buyBlockedOracle(G, pid, itemId, h.iid) === null) oracle.push(`buy ${itemId} -> ${h.iid}`);
+    for (const itemId of G.market ?? []) if (buyBlockedOracle(G, pid, itemId) === null) oracle.push(`buy ${itemId}`);
+    for (const c of handOf(G, pid)) if (sellBlockedOracle(G, pid, c.iid) === null) oracle.push(`sell ${c.iid}`);
     for (const h of mine) {
       for (const it of wornItemsOf(h)) {
         if (sellBlockedOracle(G, pid, it.iid) === null) oracle.push(`sell ${it.iid}`);
@@ -422,7 +437,37 @@ function probeShop(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
     const act = listed.filter((a) => ACT_TYPES.has(a.type));
     if (act.length) add('shop-offers-act-move', act[0].type, [], `legalActions offers ${act.map((a) => actionKey(a as never)).join(', ')} in the shop step`);
 
-    // Purchases: the market and beyond, the player's heroes and beyond, with real souls or plenty.
+    // Purchases: the market and beyond — an upgrade of something the player wears or holds now
+    // and then — with real souls or plenty.
+    const owned = [...myItems, ...handOf(G, pid)].map((c) => c.cardId);
+    for (let n = 0; n < opts.shopCombos; n++) {
+      const x = rnd();
+      let itemId: unknown;
+      if (x < 0.6 && G.market?.length) itemId = pickOne(G.market, rnd);
+      else if (x < 0.75 && owned.length) {
+        const ups = ITEMS.filter((i) => owned.includes(i.upgradesFrom ?? '')).map((i) => i.id);
+        itemId = ups.length ? pickOne(ups, rnd) : pickOne(owned, rnd);
+      } else if (x < 0.92) itemId = pickOne(ITEMS, rnd).id;
+      else itemId = pickOne(['hero_haze', 'ult_lash', 'nope', undefined], rnd);
+      const souls = rnd() < 0.5 ? undefined : Math.max(me.souls, 40);
+      const reason = buyBlockedOracle(G, pid, itemId, souls ?? me.souls);
+      const ok = probe(pid, 'buy', [itemId], reason, 'buy', souls);
+      // A soul short of the price is never enough.
+      if (ok && reason === null && rnd() < 0.5) {
+        const price = buyPriceOracle(G, pid, itemId);
+        if (price > 0) probe(pid, 'buy', [itemId], 'souls', 'buy', price - 1);
+      }
+    }
+    // Sales and moves: the player's own cards mostly (held or worn), an enemy's, a hero, junk.
+    const held = handOf(G, pid);
+    const itemPool = () => {
+      const x = rnd();
+      if (x < 0.5 && myItems.length) return pickOne(myItems, rnd).iid;
+      if (x < 0.75 && held.length) return pickOne(held, rnd).iid;
+      if (x < 0.85 && theirItems.length) return pickOne(theirItems, rnd).iid;
+      if (x < 0.95 && (mergedRems.length || mine.length)) return pickOne([...mergedRems, ...mine], rnd).iid;
+      return 'ghost-iid';
+    };
     const heroPool = () => {
       const x = rnd();
       if (x < 0.75 && mine.length) return pickOne(mine, rnd).iid;
@@ -430,36 +475,6 @@ function probeShop(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
       if (x < 0.9 && mergedRems.length) return pickOne(mergedRems, rnd).iid;
       if (x < 0.95 && myItems.length) return pickOne(myItems, rnd).iid;
       return rnd() < 0.5 ? 'ghost-iid' : undefined;
-    };
-    for (let n = 0; n < opts.shopCombos; n++) {
-      const heroIid = heroPool();
-      const hero = slottedHeroOf(G, pid, heroIid);
-      const x = rnd();
-      let itemId: unknown;
-      if (x < 0.6 && G.market?.length) itemId = pickOne(G.market, rnd);
-      else if (x < 0.75 && hero && wornItemsOf(hero).length) {
-        // An item the hero wears (a duplicate), or one built from it (an upgrade).
-        const worn = pickOne(wornItemsOf(hero), rnd).cardId;
-        const ups = ITEMS.filter((i) => i.upgradesFrom === worn).map((i) => i.id);
-        itemId = ups.length && rnd() < 0.7 ? pickOne(ups, rnd) : worn;
-      } else if (x < 0.92) itemId = pickOne(ITEMS, rnd).id;
-      else itemId = pickOne(['hero_haze', 'ult_lash', 'nope', undefined], rnd);
-      const souls = rnd() < 0.5 ? undefined : Math.max(me.souls, 40);
-      const reason = buyBlockedOracle(G, pid, itemId, heroIid, souls ?? me.souls);
-      const ok = probe(pid, 'buy', [itemId, heroIid], reason, 'buy', souls);
-      // A soul short of the price is never enough.
-      if (ok && reason === null && hero && rnd() < 0.5) {
-        const price = buyPriceOracle(hero, itemId);
-        if (price > 0) probe(pid, 'buy', [itemId, heroIid], 'souls', 'buy', price - 1);
-      }
-    }
-    // Sales and moves: the player's own worn items mostly, an enemy's, a hero, junk.
-    const itemPool = () => {
-      const x = rnd();
-      if (x < 0.75 && myItems.length) return pickOne(myItems, rnd).iid;
-      if (x < 0.85 && theirItems.length) return pickOne(theirItems, rnd).iid;
-      if (x < 0.95 && (mergedRems.length || mine.length)) return pickOne([...mergedRems, ...mine], rnd).iid;
-      return 'ghost-iid';
     };
     const few = Math.max(1, Math.round(opts.shopCombos / 3));
     for (let n = 0; n < few; n++) {
@@ -510,32 +525,38 @@ function probeShop(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
     if (JSON.stringify([...engine].sort()) !== JSON.stringify([...oracle].sort())) {
       add('activate-offers', 'activate', [], `legalActions' item uses differ from the rules: ${setDiff(engine, oracle)}`);
     }
-    // The shop's moves are refused in the act step.
-    const shopMoves = shopProbes(G, pid);
+    // The shop's moves are refused in the act step (a card played is the act step's too).
+    const shopMoves = shopProbes(G, pid, false);
     for (let n = 0; n < 2 && shopMoves.length; n++) {
       const m = pickOne(shopMoves, rnd);
       probe(pid, m.name, m.args, 'not-shop-step', 'shop-move-in-act-step', Math.max(me.souls, 40));
     }
   }
 
-  // The seat not on turn has no shop, in either step.
-  const offTurn = legalActions(G, foe).filter((a) => SHOP_TYPES.has(a.type));
+  // The seat not on turn has no shop and plays nothing, in either step.
+  const offTurn = legalActions(G, foe).filter((a) => SHOP_TYPES.has(a.type) || a.type === 'playCard');
   if (offTurn.length) add('off-turn-offers-shop-move', offTurn[0].type, [], `legalActions offers P${foe} (not on turn) ${offTurn.map((a) => actionKey(a as never)).join(', ')}`);
-  const theirMoves = shopProbes(G, foe);
+  const theirMoves = shopProbes(G, foe, true);
   if (theirMoves.length) {
     const m = pickOne(theirMoves, rnd);
     probe(foe, m.name, m.args, 'not-your-turn', 'shop-move-off-turn', Math.max(G.players[foe].souls, 40));
   }
 }
 
-/** Shop moves for `seat` that would be legal were its shop open: the cheapest market item
- *  for a hero with room, a sale and a move of a worn item, closing the shop. */
-function shopProbes(G: GameState, seat: PlayerID): { name: string; args: unknown[] }[] {
+/** Shop moves for `seat` that would be legal were its shop open: the cheapest market item,
+ *  a sale of a hand card and of a worn item, a move of a worn item, closing the shop — and,
+ *  with `plays`, a hand card played onto a hero with room. */
+function shopProbes(G: GameState, seat: PlayerID, plays: boolean): { name: string; args: unknown[] }[] {
   const heroes = boardOf(G.players[seat]);
   const out: { name: string; args: unknown[] }[] = [{ name: 'closeShop', args: [] }];
-  const roomy = heroes.find((h) => wornItemsOf(h).length < 3);
-  const cheap = (G.market ?? []).find((id) => itemData(id)?.tier === 1 && roomy && !wornItemsOf(roomy).some((a) => a.cardId === id));
-  if (roomy && cheap) out.push({ name: 'buy', args: [cheap, roomy.iid] });
+  const cheap = (G.market ?? []).find((id) => itemData(id)?.tier === 1);
+  if (cheap) out.push({ name: 'buy', args: [cheap] });
+  const held = handOf(G, seat)[0];
+  if (held) {
+    out.push({ name: 'sell', args: [held.iid] });
+    const room = heroes.find((h) => wornItemsOf(h).length < 3 && !wornItemsOf(h).some((a) => a.cardId === held.cardId));
+    if (plays && room) out.push({ name: 'playCard', args: [held.iid, room.iid] });
+  }
   const worn = heroes.flatMap((h) => wornItemsOf(h).map((item) => ({ item, bearer: h })));
   if (worn.length) {
     const { item, bearer } = worn[0];
@@ -544,4 +565,66 @@ function shopProbes(G: GameState, seat: PlayerID): { name: string; args: unknown
     if (to) out.push({ name: 'moveItem', args: [item.iid, to.iid] });
   }
   return out;
+}
+
+/**
+ * I — the hand, at a decision point with no promotion owed, in either step of the turn
+ * (and after the attack, when nothing but ending the turn is left):
+ *  - `legalActions` lists exactly the plays the oracle allows: each hand card onto each of
+ *    the player's heroes in a slot it may go on (none after the attack, none for the seat
+ *    not on turn);
+ *  - sampled plays (the player's hand cards mostly — a rival's card, a worn item, a hero,
+ *    junk now and then — onto its heroes, a rival's, a merged Rem, an item, junk) are
+ *    accepted exactly when the oracle allows them;
+ * each on a clone; what the engine accepts is held to the transition rules (the card leaves
+ * the hand for the hero, its component consumed, its cooldown, charges, bonus and
+ * experience; never over the slot cap), what it refuses must leave the state untouched.
+ */
+function probePlays(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opts: ProbeOpts, rep: Report) {
+  const { add, checkAccepted, checkRefused } = rep;
+  const foe = otherPlayer(pid);
+  const me = G.players[pid];
+  const mine = boardOf(me);
+  const held = handOf(G, pid);
+
+  const oracle: string[] = [];
+  for (const c of held) for (const h of mine) if (playBlockedOracle(G, pid, c.iid, h.iid) === null) oracle.push(`playCard ${c.iid} -> ${h.iid}`);
+  const engine = legalActions(G, pid).filter((a) => a.type === 'playCard').map((a) => actionKey(a as never));
+  if (JSON.stringify([...engine].sort()) !== JSON.stringify([...oracle].sort())) {
+    add('play-offers', 'playCard', [], `legalActions' card plays differ from the rules (${G.step} step${G.attackUsed ? ', after the attack' : ''}): ${setDiff(engine, oracle)}`);
+  }
+
+  const theirHand = handOf(G, foe);
+  const theirs = boardOf(G.players[foe]);
+  const myItems = mine.flatMap((h) => wornItemsOf(h));
+  const mergedRems = boardUnits(G).flatMap((h) => (h.attached ?? []).filter(isMergedRem));
+  const cardPool = () => {
+    const x = rnd();
+    if (x < 0.8 && held.length) return pickOne(held, rnd).iid;
+    if (x < 0.86 && theirHand.length) return pickOne(theirHand, rnd).iid;
+    if (x < 0.92 && myItems.length) return pickOne(myItems, rnd).iid;
+    if (x < 0.96 && mine.length) return pickOne(mine, rnd).iid;
+    return rnd() < 0.5 ? 'ghost-iid' : undefined;
+  };
+  const heroPool = () => {
+    const x = rnd();
+    if (x < 0.8 && mine.length) return pickOne(mine, rnd).iid;
+    if (x < 0.88 && theirs.length) return pickOne(theirs, rnd).iid;
+    if (x < 0.92 && mergedRems.length) return pickOne(mergedRems, rnd).iid;
+    if (x < 0.96 && myItems.length) return pickOne(myItems, rnd).iid;
+    return rnd() < 0.5 ? 'ghost-iid' : undefined;
+  };
+  // With nothing in the hand there is little to learn: a probe or two of junk.
+  const tries = held.length ? opts.playCombos : 1;
+  for (let n = 0; n < tries; n++) {
+    const args = [cardPool(), heroPool()];
+    const reason = playBlockedOracle(G, pid, args[0], args[1]);
+    const r = callMove(G, ctx, pid, 'playCard', args);
+    const accepted = r.outcome === 'accepted';
+    if (r.outcome === 'threw') add('move-threw', 'playCard', args, `playCard(${JSON.stringify(args)}) threw: ${String(r.error).slice(0, 140)}`);
+    else if (accepted && reason !== null) add(`playCard-accepts-illegal:${reason}`, 'playCard', args, `playCard(${JSON.stringify(args)}) by P${pid} was accepted; the rules refuse it (${reason})`);
+    else if (!accepted && reason === null) add('playCard-rejects-legal', 'playCard', args, `playCard(${JSON.stringify(args)}) by P${pid} is legal by the rules but the engine rejected it`);
+    else if (accepted) checkAccepted(G, r.G, 'playCard', args);
+    else checkRefused(G, r.G, 'playCard', args);
+  }
 }

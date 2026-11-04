@@ -6,9 +6,9 @@ import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
 import { CARDS_BY_ID } from '@/cards';
 import { LANE_INCOME, PRICE, RETREAT_COST } from '@/engine/constants';
-import { buyBlocked, buyPrice } from '@/engine/legality';
-import { findCardOnBoard, itemPrice, netWorth } from '@/engine/query';
-import { freshReadyGame, configureReadyMatch, giveItem, readyClient } from './_helpers';
+import { buyBlocked, buyPrice, playBlocked } from '@/engine/legality';
+import { itemPrice, netWorth } from '@/engine/query';
+import { freshReadyGame, configureReadyMatch, giveCard, giveItem, readyClient } from './_helpers';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 // Every turn opens in its shop step: `readyClient()` stands past turn 1's.
@@ -43,14 +43,34 @@ describe('souls economy', () => {
     me.souls = 5;
     // Extended Magazine: a tier 1 passive item, +1 Bullet Power, at its tier's price.
     expect(itemPrice('extended_magazine')).toBe(PRICE[1]);
-    const r = runMove('buy', G, '0', 'extended_magazine', me.active!.iid);
+    const r = runMove('buy', G, '0', 'extended_magazine');
     expect(r).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(5 - PRICE[1]);
-    // Titanic Magazine is tier 2 (4 souls): 3 left is not enough.
-    expect(itemPrice('titanic_magazine')).toBe(PRICE[2]);
-    expect(runMove('buy', G, '0', 'titanic_magazine', me.bench[0]!.iid)).toBe('INVALID_MOVE');
-    expect(buyBlocked(G, '0', 'titanic_magazine', me.bench[0]!.iid)).toBe('souls');
+    expect(me.hand.map((c) => c.cardId)).toEqual(['extended_magazine']);
+    // Toxic Bullets is tier 3 (8 souls): 3 left is not enough.
+    expect(itemPrice('toxic_bullets')).toBe(PRICE[3]);
+    expect(runMove('buy', G, '0', 'toxic_bullets')).toBe('INVALID_MOVE');
+    expect(buyBlocked(G, '0', 'toxic_bullets')).toBe('souls');
     expect(me.souls).toBe(5 - PRICE[1]);
+    expect(me.hand).toHaveLength(1);
+  });
+
+  it('souls are paid at the shop, not at play: a card played from the hand costs nothing, with no souls left too', () => {
+    const G = freshReadyGame({ step: 'shop' });
+    const me = G.players['0'];
+    me.souls = PRICE[1];
+    expect(runMove('buy', G, '0', 'extended_magazine')).not.toBe('INVALID_MOVE');
+    expect(me.souls).toBe(0);
+    const [card] = me.hand;
+    expect(playBlocked(G, '0', card.iid, me.active!.iid)).toBeNull();
+    expect(runMove('playCard', G, '0', card.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
+    expect(me.souls).toBe(0);
+    expect(me.active!.attached!.map((it) => it.cardId)).toEqual(['extended_magazine']);
+    // A free card (a Story reward) is played the same way, in the act step too.
+    G.step = 'act';
+    const reward = giveCard(G, '0', 'toxic_bullets');
+    expect(runMove('playCard', G, '0', reward.iid, me.bench[0]!.iid)).not.toBe('INVALID_MOVE');
+    expect(me.souls).toBe(0);
   });
 
   it('the AI never offers a buy it cannot afford: with nothing affordable it closes the shop', async () => {
@@ -67,11 +87,25 @@ describe('souls economy', () => {
           expect(m.move, `${souls} souls`).toBe('closeShop');
           continue;
         }
-        expect(buyPrice(findCardOnBoard(G, m.args[1])!.card, m.args[0]), `${souls} souls`).toBeLessThanOrEqual(souls);
-        expect(buyBlocked(G, '0', m.args[0], m.args[1]), `${souls} souls`).toBeNull();
+        expect(m.args, `${souls} souls`).toHaveLength(1);
+        expect(buyPrice(G, '0', m.args[0]), `${souls} souls`).toBeLessThanOrEqual(souls);
+        expect(buyBlocked(G, '0', m.args[0]), `${souls} souls`).toBeNull();
       }
     }
     G.players['0'].souls = 1; // nothing in the market costs less than PRICE[1]
+    expect(enumerateAIMoves(G, ctx)[0].move).toBe('closeShop');
+  });
+
+  it('the AI with no souls still plays a card it holds — the play is free — before it closes the shop', async () => {
+    const { enumerateAIMoves } = await import('@/ai/heuristic');
+    const G = freshReadyGame({ step: 'shop' });
+    const ctx: any = { currentPlayer: '0', turn: 2, numPlayers: 2 };
+    G.players['0'].souls = 0;
+    const card = giveCard(G, '0', 'active_reload'); // Haze's first build item
+    const [m] = enumerateAIMoves(G, ctx);
+    expect(m).toMatchObject({ move: 'playCard', args: [card.iid, G.players['0'].active!.iid] });
+    expect(runMove(m.move, G, '0', ...m.args)).not.toBe('INVALID_MOVE');
+    expect(G.players['0'].souls).toBe(0);
     expect(enumerateAIMoves(G, ctx)[0].move).toBe('closeShop');
   });
 
@@ -132,6 +166,23 @@ describe('souls economy', () => {
     }
   });
 
+  it('net worth counts the hand at list price too: a side holding 8 souls of cards is 8 ahead', () => {
+    for (const [cards, bonus] of [[['toxic_bullets'], 1], [['extended_magazine', 'extra_health'], 0], [['glass_cannon'], 2]] as [CardId[], number][]) {
+      const c = readyClient();
+      c.moves.endTurn?.(); // → P1
+      const s = c.getState()!;
+      const G = structuredClone(s.G) as GameState;
+      G.players['0'].souls = 0;
+      G.players['1'].souls = 0;
+      for (const id of cards) giveCard(G, '1', id);
+      const worth = cards.reduce((n, id) => n + itemPrice(id), 0);
+      expect(netWorth(G, '1') - netWorth(G, '0'), cards.join(' + ')).toBe(worth);
+      (c as any).store.dispatch({ type: 'SYNC', state: { ...s, G } });
+      c.moves.endTurn?.(); // → P0, `worth` behind
+      expect(snap(c).G.players['0'].souls, cards.join(' + ')).toBe(LANE_INCOME + bonus);
+    }
+  });
+
   it('a kill pays the victim\'s level + 1 to its opponent', () => {
     const G = freshG();
     const victim = G.players['1'].active!;
@@ -156,6 +207,7 @@ describe('souls economy', () => {
     };
     const richest = freshG();
     gear(richest, '1', 'active', 'extended_magazine'); // 2 souls of gear, nobody else wears any
+    giveCard(richest, '0', 'glass_cannon'); // a card in a hand is no hero's: it makes nobody richer
     expect(kill(richest)).toBe(1 + 1 + 2);
     const tied = freshG();
     gear(tied, '1', 'active', 'extended_magazine');

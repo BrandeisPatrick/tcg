@@ -22,7 +22,7 @@ import { legalActions } from '@/engine/legality';
 import type { Action } from '@/engine/engine';
 import { ITEMS } from '@/cards';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { allIids, boardOf, itemData, skillIdsOf, wornItemsOf } from './oracle';
+import { allIids, boardOf, handOf, itemData, skillIdsOf, wornItemsOf } from './oracle';
 
 export type Policy = 'heuristic' | 'randomLegal' | 'chaos';
 const CHAOS_RATE = 0.3;
@@ -140,19 +140,20 @@ export function marketSeedFor(seed: number): number {
   return (Math.imul(seed >>> 0, 0x9e3779b1) ^ 0x6a09e667) >>> 0;
 }
 
-const CHAOS_NAMES = ['buy', 'sell', 'moveItem', 'closeShop', 'activate', 'useSkill', 'moveHero', 'promoteToActive', 'attack', 'endTurn'] as const;
+const CHAOS_NAMES = ['buy', 'sell', 'moveItem', 'closeShop', 'playCard', 'activate', 'useSkill', 'moveHero', 'promoteToActive', 'attack', 'endTurn'] as const;
 /** Ids that name no item: a hero, an ultimate, nonsense. */
 const JUNK_ITEM_IDS = ['hero_haze', 'ult_lash', 'eff_cold_front', 'nope', ''];
 
 /** A random-but-plausible move: real iids from anywhere in G (the player's own
- *  heroes and worn items most of the time), real item ids from the market (and
- *  now and then one off it, or one that names no item), slots 0..3 (with an
- *  occasional out-of-range or missing one), or sometimes nonsense. */
+ *  heroes, worn items and hand cards most of the time), real item ids from the
+ *  market (and now and then one off it, or one that names no item), slots 0..3
+ *  (with an occasional out-of-range or missing one), or sometimes nonsense. */
 export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name: string; args: unknown[] } {
   const iids = allIids(G);
   const mine = G.players[pid];
   const myBoard = boardOf(mine).map((c) => c.iid);
   const myItems = boardOf(mine).flatMap((c) => wornItemsOf(c));
+  const myHand = handOf(G, pid);
   const anyIid = () => (r() < 0.06 ? `nope-${Math.floor(r() * 1000)}` : iids.length ? pick(iids, r) : 'x');
   const maybe = <T,>(v: T, pMissing = 0.12): T | undefined => (r() < pMissing ? undefined : v);
   const slot = () => {
@@ -165,6 +166,12 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
   const myItem = (actives = false) => {
     const pool = actives ? myItems.filter((c) => itemData(c.cardId)?.type === 'spell') : myItems;
     return pool.length && r() < 0.8 ? pick(pool, r).iid : anyIid();
+  };
+  /** A card of the player's own: from the hand most of the time, else a worn item, else anything. */
+  const myCard = () => {
+    const x = r();
+    if (x < 0.7 && myHand.length) return pick(myHand, r).iid;
+    return x < 0.85 ? myItem() : anyIid();
   };
   const itemId = () => {
     const x = r();
@@ -180,11 +187,14 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
   const name = pick([...CHAOS_NAMES], r);
   switch (name) {
     case 'buy':
-      return { name, args: [maybe(itemId(), 0.04), maybe(myHero(), 0.06)] };
+      // Now and then a stray second argument, as the old two-argument buy made: the move ignores it.
+      return { name, args: r() < 0.15 ? [maybe(itemId(), 0.04), myHero()] : [maybe(itemId(), 0.04)] };
     case 'sell':
-      return { name, args: [maybe(myItem(), 0.05)] };
+      return { name, args: [maybe(myCard(), 0.05)] };
     case 'moveItem':
-      return { name, args: [maybe(myItem(), 0.05), maybe(myHero(), 0.06)] };
+      return { name, args: [maybe(r() < 0.8 ? myItem() : myCard(), 0.05), maybe(myHero(), 0.06)] };
+    case 'playCard':
+      return { name, args: [maybe(myCard(), 0.05), maybe(myHero(), 0.06)] };
     case 'activate': {
       const args: unknown[] = [maybe(myItem(true), 0.04)];
       if (r() < 0.75) args.push(maybe(anyIid(), 0.2));
@@ -312,33 +322,43 @@ export function playGame(opts: PlayOpts): GameRecord {
   }));
 }
 
-/** The shop's moves (the shop step of a turn). */
-const SHOP_TYPES: ReadonlySet<Action['type']> = new Set(['buy', 'sell', 'moveItem', 'closeShop']);
+/** The moves of the shop step a random seat makes there: the shop's, and a card played. */
+const SHOP_TYPES: ReadonlySet<Action['type']> = new Set(['buy', 'sell', 'moveItem', 'playCard', 'closeShop']);
 
-/** A shop move as a client call. */
+/** A shop-step move as a client call. */
 function shopCall(a: Action): { name: string; args: unknown[] } {
   switch (a.type) {
-    case 'buy': return { name: 'buy', args: [a.itemId, a.heroIid] };
+    case 'buy': return { name: 'buy', args: [a.itemId] };
     case 'sell': return { name: 'sell', args: [a.itemIid] };
     case 'moveItem': return { name: 'moveItem', args: [a.itemIid, a.toHeroIid] };
+    case 'playCard': return { name: 'playCard', args: [a.cardIid, a.heroIid] };
     default: return { name: 'closeShop', args: [] };
   }
 }
 
 /**
- * A random legal shop move, for the randomLegal seats: the AI's own shop step is
- * one rule-based move (its build's next item, or closing the shop), so it never
- * sells or moves an item. This picks a kind of shop move the engine lists now —
- * buy, sell, move or close — uniformly, then one of that kind, so the seat shops
- * at random, sells and moves items, and still closes the shop within a few
- * moves. Undefined when the engine lists no shop move.
+ * A random legal shop-step move, for the randomLegal seats: the AI's own shop
+ * step is one rule-based move (play the card it just bought, buy its build's
+ * next item, or close the shop), so it never holds a card or sells or moves a
+ * worn one. This picks a kind of move the engine lists now — buy, sell, move,
+ * play or close — uniformly, then one of that kind, so the seat shops at random,
+ * holds cards across turns, plays them onto any hero, sells and moves items, and
+ * still closes the shop within a few moves. Undefined when the engine lists none.
  */
 function randomShopMove(G: GameState, pid: PlayerID, r: () => number): { name: string; args: unknown[] } | undefined {
   const shop = legalActions(G, pid).filter((a) => SHOP_TYPES.has(a.type));
   if (!shop.length) return undefined;
   const kinds = [...new Set(shop.map((a) => a.type))];
   const kind = pick(kinds, r);
-  return shopCall(pick(shop.filter((a) => a.type === kind), r));
+  let options = shop.filter((a) => a.type === kind);
+  // Half the time a purchase is an upgrade of a card on the side, when one is on sale: the
+  // discounts, the claims and the settlement of one upgrade by another need them.
+  if (kind === 'buy' && r() < 0.5) {
+    const owned = new Set([...handOf(G, pid), ...boardOf(G.players[pid]).flatMap((h) => wornItemsOf(h))].map((c) => c.cardId));
+    const ups = options.filter((a) => a.type === 'buy' && owned.has(itemData(a.itemId)?.upgradesFrom ?? ''));
+    if (ups.length) options = ups;
+  }
+  return shopCall(pick(options, r));
 }
 
 function chooseMove(

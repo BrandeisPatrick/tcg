@@ -53,6 +53,12 @@ export function isRespawning(card: CardInstance): boolean {
   return (card.respawnTurnsLeft ?? 0) > 0;
 }
 
+/** A player's heroes in a slot, in board order — the Active, then bench
+ *  1..3 — standing or on the respawn timer. */
+export function slottedHeroes(ps: PlayerState): CardInstance[] {
+  return [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c);
+}
+
 /** A player's living heroes in board order: the Active, then bench 1..3. */
 export function liveBoardCards(ps: PlayerState): CardInstance[] {
   const out: CardInstance[] = [];
@@ -115,6 +121,32 @@ export function heroWorth(hero: CardInstance): number {
   return wornItems(hero).reduce((n, it) => n + itemPrice(it.cardId), 0);
 }
 
+/** The list price of the cards in a player's hand. */
+export function handWorth(ps: PlayerState): number {
+  return ps.hand.reduce((n, c) => n + itemPrice(c.cardId), 0);
+}
+
+/** The card with this iid in `pid`'s hand, or undefined. */
+export function handCard(G: GameState, pid: PlayerID, iid: string): CardInstance | undefined {
+  return G.players[pid].hand.find((c) => c.iid === iid);
+}
+
+/** True for a card bought for the difference: an upgrade priced against a
+ *  component on its owner's side, which its play will consume. (A card that
+ *  was not bought — a Story reward — never is.) */
+export function boughtAtDiscount(card: CardInstance): boolean {
+  return card.paid !== undefined && card.paid < itemPrice(card.cardId);
+}
+
+/** `pid`'s copies of the item `cardId`: those in its hand, then those its
+ *  heroes wear (`heroesOf`: the slotted ones in board order, then a Rem merged
+ *  into one of them). */
+export function copiesOnSide(G: GameState, pid: PlayerID, cardId: CardId): CardInstance[] {
+  const ps = G.players[pid];
+  const worn = heroesOf(ps).flatMap((h) => wornItems(h).filter((it) => it.cardId === cardId));
+  return [...ps.hand.filter((c) => c.cardId === cardId), ...worn];
+}
+
 /** Every hero a side has, wherever it stands: the Active, the bench (corpses
  *  included) and a Rem merged into an ally, who rides in its `attached` list. */
 export function heroesOf(ps: PlayerState): CardInstance[] {
@@ -123,11 +155,11 @@ export function heroesOf(ps: PlayerState): CardInstance[] {
 }
 
 /** A side's net worth: the souls it holds plus the list price of every item
- *  its heroes wear. The comeback at income time and the richest-hero bounty
- *  read it. */
+ *  its heroes wear and every card in its hand. The comeback at income time
+ *  reads it. */
 export function netWorth(G: GameState, pid: PlayerID): number {
   const ps = G.players[pid];
-  return ps.souls + heroesOf(ps).reduce((n, h) => n + heroWorth(h), 0);
+  return ps.souls + heroesOf(ps).reduce((n, h) => n + heroWorth(h), 0) + handWorth(ps);
 }
 
 /** True when `hero` wears strictly more (by list price) than every other hero

@@ -7,7 +7,10 @@ import { playGame, type GameRecord, type Policy, type Snapshot, type StepInfo } 
 import { collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { moveTags, signatureOf, type Hit } from './hits';
 import { resolveSkill, isRespawning } from '@/engine/query';
-import { PIDS, heroesOfSide, slottedHeroOf, upgradeComponentOracle } from './oracle';
+import {
+  PIDS, buyPriceOracle, handCardOf, heroesOfSide, itemData, itemPriceOracle, playConsumesOracle, restoredBySaleOracle,
+  slottedHeroOf, wornItemOf,
+} from './oracle';
 
 interface Mix { label: string; policies: Record<'0' | '1', Policy>; prefer?: Partial<Record<'0' | '1', string[]>> }
 
@@ -55,8 +58,21 @@ export interface Coverage {
   attacks: number;
   kos: number;
   buys: number;
+  /** Purchases priced at the difference (a free copy of the component on the side). */
+  discountBuys: number;
+  /** Cards played from the hand onto a hero. */
+  plays: number;
+  /** Plays that consumed a component (an upgrade taking its place). */
   upgrades: number;
+  /** Plays whose consumed copy from the hand settled a component of its own. */
+  settlements: number;
+  /** Plays of a card held from an earlier turn (or never bought: a reward). */
+  heldPlays: number;
   sells: number;
+  /** Sales of a card in the hand. */
+  handSells: number;
+  /** Same-turn sales of a worn upgrade that put its component back (onto a hero or into the hand). */
+  restores: number;
   moveItems: number;
   activates: number;
 }
@@ -66,7 +82,10 @@ export function runInvariantMix(mixIndex: number, games: number): MixRun {
   const mix = MIXES[mixIndex];
   const hits: Hit[] = [];
   const records: GameRecord[] = [];
-  const coverage: Coverage = { remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0, buys: 0, upgrades: 0, sells: 0, moveItems: 0, activates: 0 };
+  const coverage: Coverage = {
+    remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0, buys: 0, discountBuys: 0, plays: 0, upgrades: 0,
+    settlements: 0, heldPlays: 0, sells: 0, handSells: 0, restores: 0, moveItems: 0, activates: 0,
+  };
   for (let i = 0; i < games; i++) {
     const seed = seedFor(mixIndex, i);
     let active = new Set<string>();
@@ -121,10 +140,23 @@ function tally(c: Coverage, before: Snapshot, after: Snapshot, m: StepInfo) {
   }
   if (m.name === 'buy') {
     c.buys++;
-    const hero = slottedHeroOf(before.G, pid, m.args[1]);
-    if (hero && upgradeComponentOracle(hero, m.args[0])) c.upgrades++;
+    if (itemData(m.args[0]) && buyPriceOracle(before.G, pid, m.args[0]) < itemPriceOracle(m.args[0])) c.discountBuys++;
   }
-  if (m.name === 'sell') c.sells++;
+  if (m.name === 'playCard') {
+    c.plays++;
+    const card = handCardOf(before.G, pid, m.args[0]);
+    const hero = slottedHeroOf(before.G, pid, m.args[1]);
+    const taken = card && hero ? playConsumesOracle(before.G, pid, card, hero) : [];
+    if (taken.length) c.upgrades++;
+    if (taken.length > 1) c.settlements++;
+    if (card && card.boughtOnTurn !== before.G.turnNumber) c.heldPlays++;
+  }
+  if (m.name === 'sell') {
+    c.sells++;
+    if (handCardOf(before.G, pid, m.args[0])) c.handSells++;
+    const worn = wornItemOf(before.G, pid, m.args[0]);
+    if (worn && restoredBySaleOracle(before.G, pid, worn.item, worn.bearer).length) c.restores++;
+  }
   if (m.name === 'moveItem') c.moveItems++;
   if (m.name === 'activate') c.activates++;
   // Heroes that fell during the move, on either side.

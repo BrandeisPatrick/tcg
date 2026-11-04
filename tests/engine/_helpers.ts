@@ -37,10 +37,14 @@ export const TEST_SEED = 1;
  * Battle-ready GameState with both rosters already on the board (no draft),
  * in the act step of P0's first turn as the second mover (the pie rule: P1
  * took engine turn 1), so P0 may attack, use abilities and items, and retreat.
- * Nobody wears anything and nobody has souls; the market is TEST_SEED's, both
- * rosters' signatures on sale. `setup()` itself returns empty players + a
- * pending draft, so tests that read `players['0'].active` must build a ready
- * state via this helper instead. Pass `{ step: 'shop' }` for the shop step.
+ * Nobody wears anything, both hands are empty and nobody has souls. The market
+ * is TEST_SEED's with both rosters' signature items on sale — signatures only:
+ * this is a hand-built state, so unlike a drafted or scripted match
+ * (`addHero`, market.ts) the heroes' builds are not added, which leaves the
+ * tests that need an item off sale plenty to pick from.
+ * `setup()` itself returns empty players + a pending draft, so tests that read
+ * `players['0'].active` must build a ready state via this helper instead. Pass
+ * `{ step: 'shop' }` for the shop step.
  */
 export function freshReadyGame(opts: { step?: GameState['step'] } = {}): GameState {
   const counters = newCounters();
@@ -108,17 +112,59 @@ export function useItem(G: GameState, pid: PlayerID, itemId: CardId, targetIid?:
 }
 
 /**
- * Buy `itemId` for `hero` as `pid` through the engine's front door (the shop
- * step of `pid`'s turn, souls enough). Throws, naming the reason, when the
- * engine refuses. Returns the item instance the hero now wears.
+ * Buy `itemId` as `pid` through the engine's front door (the shop step of
+ * `pid`'s turn, souls enough): the price is paid and the card goes to the
+ * hand. Throws, naming the reason, when the engine refuses. Returns the card,
+ * now the last of `pid`'s hand.
  */
-export function buyItem(G: GameState, pid: PlayerID, itemId: CardId, hero: CardInstance): CardInstance {
-  const a = { type: 'buy' as const, itemId, heroIid: hero.iid };
+export function buyToHand(G: GameState, pid: PlayerID, itemId: CardId): CardInstance {
+  const a = { type: 'buy' as const, itemId };
   const why = blocked(G, pid, a);
   if (perform(G, pid, a) === INVALID) throw new Error(`buying ${itemId} was refused: ${why}`);
-  const item = [...(hero.attached ?? [])].reverse().find((it) => it.cardId === itemId);
-  if (!item || !findWornItem(G, item.iid, pid)) throw new Error(`${itemId} is not on ${hero.cardId} after the buy`);
-  return item;
+  const card = G.players[pid].hand.at(-1);
+  if (!card || card.cardId !== itemId) throw new Error(`${itemId} is not in the hand after the buy`);
+  return card;
+}
+
+/**
+ * Play `card` from `pid`'s hand onto its hero `hero` through the engine's
+ * front door (either step of `pid`'s turn). Throws, naming the reason, when
+ * the engine refuses. Returns the card, which the hero now wears.
+ */
+export function playItem(G: GameState, pid: PlayerID, card: CardInstance, hero: CardInstance): CardInstance {
+  const a = { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid };
+  const why = blocked(G, pid, a);
+  if (perform(G, pid, a) === INVALID) throw new Error(`playing ${card.cardId} on ${hero.cardId} was refused: ${why}`);
+  const worn = findWornItem(G, card.iid, pid);
+  if (!worn || worn.bearer.iid !== hero.iid) throw new Error(`${card.cardId} is not on ${hero.cardId} after the play`);
+  return worn.item;
+}
+
+/**
+ * Buy `itemId` as `pid` and play it at once onto `hero` (`buyToHand`, then
+ * `playItem`): what a purchase for one hero takes now that a card goes to the
+ * hand first. Throws, naming the reason, when either is refused. Returns the
+ * item the hero now wears.
+ */
+export function buyItem(G: GameState, pid: PlayerID, itemId: CardId, hero: CardInstance): CardInstance {
+  return playItem(G, pid, buyToHand(G, pid, itemId), hero);
+}
+
+/**
+ * Put a card of `itemId` straight into `pid`'s hand, as a Story reward is
+ * given (no purchase recorded) — or, with `bought`, as if it had been bought on
+ * that engine turn for that many souls. No souls, no market, no step. Returns
+ * the card.
+ */
+export function giveCard(G: GameState, pid: PlayerID, itemId: CardId, bought?: { turn: number; paid: number }): CardInstance {
+  if (!itemCard(itemId)) throw new Error(`not an item: ${itemId}`);
+  const card = makeInstance(allocatorOf(G), itemId, pid, 'hand');
+  if (bought) {
+    card.boughtOnTurn = bought.turn;
+    card.paid = bought.paid;
+  }
+  G.players[pid].hand.push(card);
+  return card;
 }
 
 /**

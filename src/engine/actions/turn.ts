@@ -126,7 +126,12 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   tickEndOfTurnCC(G, G.players[pid]);
   clearTurnFlags(G.players[pid]);
   // An upgrade bought this turn can no longer be sold back for its component.
-  for (const hero of heroesOf(ps)) for (const it of wornItems(hero)) if (it.replaced) it.replaced = undefined;
+  for (const hero of heroesOf(ps)) {
+    for (const it of wornItems(hero)) {
+      if (it.replaced) it.replaced = undefined;
+      if (it.replacedFrom) it.replacedFrom = undefined;
+    }
+  }
 }
 
 /**

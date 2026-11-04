@@ -1,7 +1,8 @@
 /**
  * Shared helpers for the fuzz harness: card enumeration, rules oracles — which
  * targets an ability or an active item may be aimed at, what an item costs and
- * what a sale brings back, who may buy, sell, move and use which item — direct
+ * what a sale brings back, who may buy, sell, move, play and use which card,
+ * what a play consumes and what a same-turn sale puts back — direct
  * (non-client) move calls on a cloned state, and a structural diff. Nothing here
  * mutates the live G — every helper that runs the engine does it on a
  * structuredClone.
@@ -41,9 +42,11 @@ export function boardOf(ps: PlayerState): CardInstance[] {
 }
 
 /** Every card instance anywhere in G — the heroes in the slots and everything
- *  they carry (worn items, a merged Rem and what she wears) — with a label for
- *  where it sits. There is no hand, deck or discard pile: a card is on the board
- *  or it is gone. */
+ *  they carry (worn items, a merged Rem and what she wears), and the cards in
+ *  each player's hand (place 'hand') — with a label for where it sits. There is
+ *  no deck and no discard pile: a card is on the board, in a hand, or gone. (A
+ *  component an upgrade consumed this turn is kept on the upgrade's `replaced`,
+ *  out of play: it is not walked.) */
 export function everyCard(G: GameState): { card: CardInstance; place: string; pid: PlayerID }[] {
   const out: { card: CardInstance; place: string; pid: PlayerID }[] = [];
   const seen = new Set<CardInstance>();
@@ -57,8 +60,19 @@ export function everyCard(G: GameState): { card: CardInstance; place: string; pi
     const ps = G.players[pid];
     if (ps.active) walk(ps.active, 'active', pid);
     ps.bench.forEach((b, i) => { if (b) walk(b, `bench${i}`, pid); });
+    for (const c of ps.hand ?? []) walk(c, 'hand', pid);
   }
   return out;
+}
+
+/** The cards in `pid`'s hand, in the order they came. */
+export function handOf(G: GameState, pid: PlayerID): CardInstance[] {
+  return G.players[pid].hand ?? [];
+}
+
+/** The card with this iid in `pid`'s hand. */
+export function handCardOf(G: GameState, pid: PlayerID, iid: unknown): CardInstance | undefined {
+  return typeof iid === 'string' ? handOf(G, pid).find((c) => c.iid === iid) : undefined;
 }
 
 export function allIids(G: GameState): string[] {
@@ -240,13 +254,22 @@ export function retreatCostOracle(G: GameState, pid: PlayerID): number {
 }
 
 // ---------------------------------------------------------------------------
-// Rules oracle: items. Written from rules.md §2–§5, NOT copied from query.ts /
-// legality.ts: an item lists at PRICE by its tier; an upgrade bought over the
-// component its data names costs the difference and takes its place; a sale
-// refunds what was paid on the engine turn it was bought, else half the price
-// rounded down; a hero wears MAX_ITEMS (FLEX_SLOT more once its side has the
-// flex slot), never two of one item; a merged Rem is a hero riding on her
-// ally, never an item.
+// Rules oracle: items. Written from rules.md §2–§5 and the hand's rules (the
+// step 2b brief), NOT copied from query.ts / legality.ts: an item lists at PRICE
+// by its tier; a card bought goes to the hand, an upgrade costing the
+// difference while a free copy of the component its data names is on the
+// buyer's side (in its hand, or worn by one of its heroes in a slot — not a
+// merged Rem's), a copy being claimed by each upgrade of it in the hand bought
+// for the difference; a card played onto a hero consumes its component — the
+// copy the hero wears, else one in the hand (one bought at full price first),
+// else, for a card bought for the difference, the copy another of the player's
+// heroes wears — and a hand copy bought for the difference settles its own
+// component the same way; a sale refunds what was paid on the engine turn it
+// was bought, else half the price rounded down, and a worn upgrade sold on its
+// buy turn puts its component back (onto the hero it came from while it has
+// room and wears no copy, else into the hand); a hero wears MAX_ITEMS (FLEX_SLOT
+// more once its side has the flex slot), never two of one item; a merged Rem is
+// a hero riding on her ally, never an item.
 // ---------------------------------------------------------------------------
 
 /** What an item lists at: its tier's price. Anything that is no item lists at 0. */
@@ -265,25 +288,128 @@ export function slotCapOracle(G: GameState, pid: PlayerID): number {
   return MAX_ITEMS + (G.players[pid].flexSlot ? FLEX_SLOT : 0);
 }
 
-/** The worn item buying `itemId` for `hero` would replace: the component the
- *  item's data says it is built from, when the hero wears it. */
+/** The worn item an upgrade `itemId` played onto `hero` takes the place of: the
+ *  component the item's data says it is built from, when the hero wears it. */
 export function upgradeComponentOracle(hero: CardInstance, itemId: unknown): CardInstance | undefined {
   const from = itemData(itemId)?.upgradesFrom;
   return from ? wornItemsOf(hero).find((a) => a.cardId === from) : undefined;
 }
 
-/** What buying `itemId` for `hero` costs: its price, or — over a component it
- *  wears — the difference. */
-export function buyPriceOracle(hero: CardInstance, itemId: unknown): number {
-  const component = upgradeComponentOracle(hero, itemId);
-  return Math.max(0, itemPriceOracle(itemId) - (component ? itemPriceOracle(component.cardId) : 0));
+/** A card bought for the difference: less was paid than its list price. A card
+ *  that was not bought (a Story reward) never was. */
+export function boughtAtDiscountOracle(card: CardInstance): boolean {
+  return card.paid !== undefined && card.paid < itemPriceOracle(card.cardId);
 }
 
-/** What selling `item` brings back: what was paid for it when it was bought on
- *  this engine turn, else half its price, rounded down. */
+/** `pid`'s copies of `cardId` on its side: in its hand, and worn by its heroes —
+ *  those in a slot (corpses included) and a Rem merged into one of them. */
+export function copiesOnSideOracle(G: GameState, pid: PlayerID, cardId: unknown): CardInstance[] {
+  const worn = heroesOfSide(G.players[pid]).flatMap((h) => wornItemsOf(h));
+  return [...handOf(G, pid), ...worn].filter((c) => c.cardId === cardId);
+}
+
+/** The copies of `componentId` on `pid`'s side no upgrade has claimed: each upgrade
+ *  of it in the hand bought for the difference claims one (its play will consume it). */
+export function freeCopiesOracle(G: GameState, pid: PlayerID, componentId: unknown): number {
+  const claims = handOf(G, pid).filter((c) => boughtAtDiscountOracle(c) && itemData(c.cardId)?.upgradesFrom === componentId).length;
+  return copiesOnSideOracle(G, pid, componentId).length - claims;
+}
+
+/** What `pid` pays for `itemId`: its price, less its component's while a free copy of
+ *  the component is on its side. Never below 0; anything that is no item lists at 0. */
+export function buyPriceOracle(G: GameState, pid: PlayerID, itemId: unknown): number {
+  const from = itemData(itemId)?.upgradesFrom;
+  const off = from && freeCopiesOracle(G, pid, from) > 0 ? itemPriceOracle(from) : 0;
+  return Math.max(0, itemPriceOracle(itemId) - off);
+}
+
+/** What selling `item` (in the hand or worn) brings back: what was paid for it
+ *  when it was bought on this engine turn, else half its price, rounded down. */
 export function sellRefundOracle(G: GameState, item: CardInstance): number {
   if (item.boughtOnTurn === G.turnNumber) return item.paid ?? itemPriceOracle(item.cardId);
   return Math.floor(itemPriceOracle(item.cardId) / 2);
+}
+
+/** One component a play consumes: the card, and the hero that wore it (absent:
+ *  it came from the hand). */
+export interface ConsumedOracle { item: CardInstance; from?: CardInstance }
+
+/**
+ * Everything `card` (in `pid`'s hand) played onto `hero` consumes, in order:
+ * the component it takes — the copy `hero` wears; else a copy in the hand, one
+ * bought at full price before one bought for the difference; else, when `card`
+ * was bought for the difference, the copy another of `pid`'s heroes wears (those
+ * in a slot in board order, then a merged Rem); else none — and then, when that component came from the
+ * hand and was itself bought for the difference, the component it settles the
+ * same way (with no hero of its own), and so on. Read on the board before the
+ * play; a card already taken is not taken twice.
+ */
+export function playConsumesOracle(G: GameState, pid: PlayerID, card: CardInstance, hero: CardInstance | undefined): ConsumedOracle[] {
+  const out: ConsumedOracle[] = [];
+  const gone = new Set<string>([card.iid]);
+  let next: CardInstance | undefined = card;
+  let target = hero;
+  while (next) {
+    const taking: CardInstance = next;
+    const from = itemData(taking.cardId)?.upgradesFrom;
+    if (!from) break;
+    let taken: ConsumedOracle | undefined;
+    const worn = target ? wornItemsOf(target).find((a) => a.cardId === from && !gone.has(a.iid)) : undefined;
+    if (worn) taken = { item: worn, from: target };
+    if (!taken) {
+      const held = handOf(G, pid).filter((c) => c.cardId === from && !gone.has(c.iid));
+      const inHand = held.find((c) => !boughtAtDiscountOracle(c)) ?? held[0];
+      if (inHand) taken = { item: inHand };
+    }
+    if (!taken && boughtAtDiscountOracle(taking)) {
+      for (const h of heroesOfSide(G.players[pid])) {
+        if (h === target) continue;
+        const it = wornItemsOf(h).find((a) => a.cardId === from && !gone.has(a.iid));
+        if (it) { taken = { item: it, from: h }; break; }
+      }
+    }
+    if (!taken) break;
+    out.push(taken);
+    gone.add(taken.item.iid);
+    // Only a copy from the hand bought for the difference settles a component of its own.
+    next = !taken.from && boughtAtDiscountOracle(taken.item) ? taken.item : undefined;
+    target = undefined;
+  }
+  return out;
+}
+
+/** Where one component a same-turn sale puts back lands: on that hero, or in the hand. */
+export interface RestoredOracle { item: CardInstance; to: CardInstance | 'hand' }
+
+/**
+ * What selling the worn `item` (its bearer `bearer`) puts back, read on the board
+ * before the sale: nothing unless it was bought on this engine turn and holds the
+ * component its play consumed (`replaced`); then that component goes onto the hero
+ * it came from (`replacedFrom`) while that hero — one of `pid`'s in a slot — has
+ * room and wears no copy, else into the hand; and the component it consumed in
+ * turn after it, the same way.
+ */
+export function restoredBySaleOracle(G: GameState, pid: PlayerID, item: CardInstance, bearer: CardInstance): RestoredOracle[] {
+  if (item.boughtOnTurn !== G.turnNumber) return [];
+  const out: RestoredOracle[] = [];
+  const wearing = new Map<string, string[]>();
+  const worn = (h: CardInstance) => {
+    if (!wearing.has(h.iid)) wearing.set(h.iid, wornItemsOf(h).filter((a) => a.iid !== item.iid).map((a) => a.cardId));
+    return wearing.get(h.iid)!;
+  };
+  if (!wornItemsOf(bearer).some((a) => a.iid === item.iid)) return [];
+  let comp = item.replaced;
+  let fromIid = item.replacedFrom;
+  while (comp) {
+    const hero = fromIid !== undefined ? slottedHeroOf(G, pid, fromIid) : undefined;
+    if (hero && worn(hero).length < slotCapOracle(G, pid) && !worn(hero).includes(comp.cardId)) {
+      worn(hero).push(comp.cardId);
+      out.push({ item: comp, to: hero });
+    } else out.push({ item: comp, to: 'hand' });
+    fromIid = comp.replacedFrom;
+    comp = comp.replaced;
+  }
+  return out;
 }
 
 /** True while `hero` wears CATEGORY_SPIKE_ITEMS or more items of the tab `slot`
@@ -358,8 +484,14 @@ export function bountyOracle(G: GameState, hero: CardInstance): number {
   return (hero.level ?? 1) + KILL_BOUNTY_BASE + (richest ? RICHEST_BOUNTY_BONUS : 0);
 }
 
-/** A side's net worth by the rules: its souls plus what its heroes wear. */
+/** A side's net worth by the rules: its souls, plus the list price of what its heroes
+ *  wear and of every card in its hand. */
 export function netWorthOracle(G: GameState, pid: PlayerID): number {
+  return netWorthOracleWithoutHand(G, pid) + handOf(G, pid).reduce((n, c) => n + itemPriceOracle(c.cardId), 0);
+}
+
+/** The same, the hand left out: what a net worth that forgot the hand would read. */
+export function netWorthOracleWithoutHand(G: GameState, pid: PlayerID): number {
   return G.players[pid].souls + heroesOfSide(G.players[pid]).reduce((n, h) => n + wornWorth(h), 0);
 }
 
@@ -376,9 +508,10 @@ export function attackTargetsOracle(G: GameState, pid: PlayerID): CardInstance[]
 }
 
 // ---------------------------------------------------------------------------
-// Rules oracle: the shop and the active items — who may buy, sell, move and use
-// what, right now. Each answers null for "allowed", else a short reason (for
-// the probes' tags; only allowed / refused is compared with the engine).
+// Rules oracle: the shop, the hand and the active items — who may buy, sell,
+// move, play and use what, right now. Each answers null for "allowed", else a
+// short reason (for the probes' tags; only allowed / refused is compared with
+// the engine).
 // ---------------------------------------------------------------------------
 
 /** The seat whose turn it is, from the engine turn: the first mover's on odd
@@ -417,34 +550,55 @@ export function wornItemOf(G: GameState, pid: PlayerID, iid: unknown): { item: C
   return undefined;
 }
 
-/** Why `pid` may not buy `itemId` for its hero `heroIid`: the shop is shut; it
- *  is no item, or not in this match's market; no hero of `pid`'s stands in a
- *  slot with that iid (bench and corpses count, a merged Rem does not); the hero
- *  wears one already; its slots are full and it is no upgrade of a worn
- *  component; `souls` (the player's, unless given) fall short of the price. */
-export function buyBlockedOracle(G: GameState, pid: PlayerID, itemId: unknown, heroIid: unknown, souls = G.players[pid].souls): string | null {
+/** Why `pid` may not buy `itemId`: the shop is shut; it is no item, or not in this
+ *  match's market; `souls` (the player's, unless given) fall short of its price
+ *  (`buyPriceOracle`). No hero is named: the card goes to the hand. */
+export function buyBlockedOracle(G: GameState, pid: PlayerID, itemId: unknown, souls = G.players[pid].souls): string | null {
   const shut = shopShutOracle(G, pid);
   if (shut) return shut;
   const data = itemData(itemId);
   if (!data) return 'no-item';
   if (!(G.market ?? []).includes(data.id)) return 'off-market';
-  const hero = slottedHeroOf(G, pid, heroIid);
-  if (!hero) return 'no-hero';
-  const worn = wornItemsOf(hero);
-  if (worn.some((a) => a.cardId === data.id)) return 'duplicate';
-  if (!upgradeComponentOracle(hero, data.id) && worn.length >= slotCapOracle(G, pid)) return 'full';
-  if (souls < buyPriceOracle(hero, data.id)) return 'souls';
+  if (souls < buyPriceOracle(G, pid, data.id)) return 'souls';
   return null;
 }
 
-/** Why `pid` may not sell `itemIid`: the shop is shut, or none of its heroes in a slot wears it. */
-export function sellBlockedOracle(G: GameState, pid: PlayerID, itemIid: unknown): string | null {
-  return shopShutOracle(G, pid) ?? (wornItemOf(G, pid, itemIid) ? null : 'not-worn');
+/** Why `pid` may not sell `iid`: the shop is shut; it is neither a card in its hand nor
+ *  an item one of its heroes in a slot wears; or it is the last free copy of a component
+ *  an upgrade in its hand was bought for the difference against (claimed). */
+export function sellBlockedOracle(G: GameState, pid: PlayerID, iid: unknown): string | null {
+  const shut = shopShutOracle(G, pid);
+  if (shut) return shut;
+  const card = handCardOf(G, pid, iid) ?? wornItemOf(G, pid, iid)?.item;
+  if (!card) return 'not-owned';
+  if (freeCopiesOracle(G, pid, card.cardId) <= 0) return 'claimed';
+  return null;
+}
+
+/** Why `pid` may not play `cardIid` from its hand onto its hero `heroIid`: an owed
+ *  promotion comes first; nothing but ending the turn follows the attack; it is not
+ *  `pid`'s turn (the draft included); no such card is in its hand; no hero of its in a
+ *  slot has that iid (bench and corpses count, a merged Rem does not); the hero wears
+ *  one already; or its slots are full and the card upgrades nothing it wears. Either
+ *  step of the turn. */
+export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, heroIid: unknown): string | null {
+  if (G.pendingPromotion !== undefined) return 'promotion-owed';
+  if (G.attackUsed) return 'act-over';
+  if (seatOnTurn(G) !== pid) return 'not-your-turn';
+  const card = handCardOf(G, pid, cardIid);
+  if (!card) return 'not-in-hand';
+  const hero = slottedHeroOf(G, pid, heroIid);
+  if (!hero) return 'no-hero';
+  const worn = wornItemsOf(hero);
+  if (worn.some((a) => a.cardId === card.cardId)) return 'duplicate';
+  if (!upgradeComponentOracle(hero, card.cardId) && worn.length >= slotCapOracle(G, pid)) return 'full';
+  return null;
 }
 
 /** Why `pid` may not move `itemIid` to its hero `toHeroIid`: the shop is shut;
- *  none of its heroes in a slot wears it; the hero is none of its own in a slot,
- *  or the one wearing it; the hero wears one already; or its slots are full. */
+ *  none of its heroes in a slot wears it (a card in the hand is played, not
+ *  moved); the hero is none of its own in a slot, or the one wearing it; the hero
+ *  wears one already; or its slots are full. */
 export function moveItemBlockedOracle(G: GameState, pid: PlayerID, itemIid: unknown, toHeroIid: unknown): string | null {
   const shut = shopShutOracle(G, pid);
   if (shut) return shut;

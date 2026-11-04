@@ -5,10 +5,11 @@
  * left here is judgement — how good a move, or the position it leaves, is.
  *
  * In the shop step it shops by rule, not by lookahead: each hero follows its
- * build (cards/builds.ts) — the Active first, then the bench — buying the next
- * build item it can afford (or the market's stand-in for one off sale), saving
- * when the Active's next item is one or two turns of income away, never
- * selling; then it closes the shop.
+ * build (`buildOf`: the default build for an AI seat) — the Active first, then
+ * the bench — buying the next build item it can afford (or the market's
+ * stand-in for one off sale), saving when the Active's next item is one or two
+ * turns of income away, never selling; each card it buys it plays at once onto
+ * the hero it bought it for, so it never holds one; then it closes the shop.
  *
  * With lookahead (the default) every candidate is made on a copy through the
  * engine (`simulate`), and the resulting position is scored by `evalState`.
@@ -30,16 +31,17 @@
 import type { Ctx } from 'boardgame.io';
 import type { CardId, GameState, PlayerID, PlayerState, CardInstance, StatusInstance } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
-import { defaultBuild } from '@/cards/builds';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
   checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, isRespawning, itemCooldown, liveBoardCards,
-  otherPlayer, resolveSkill, slotCap, wornItems,
+  otherPlayer, resolveSkill, slotCap, slottedHeroes, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
-import { attackBlocked, buyBlocked, buyPrice, legalActions, upgradeComponent } from '@/engine/legality';
-import { marketStandIn } from '@/engine/market';
+import {
+  attackBlocked, buyBlocked, buyPrice, legalActions, playTargets, sellBlocked, upgradeComponent,
+} from '@/engine/legality';
+import { buildOf, marketStandIn } from '@/engine/market';
 import { forecastAttack, simulate } from '@/engine/forecast';
 import { LANE_INCOME } from '@/engine/constants';
 
@@ -289,21 +291,21 @@ function hasOrPast(hero: CardInstance, itemId: CardId): boolean {
 }
 
 /**
- * What `hero`'s build still has to buy in this market, in build order: each
- * item it neither wears nor has built past — the item itself, or the cheapest
- * on-sale item of its tab and tier when the market lacks it — that it could
- * wear: into a free slot, or as an upgrade of an item it wears. Souls and the
- * step are not asked; the caller does that.
+ * What `hero`'s build (`buildOf`) still has to buy in this market, in build
+ * order: each item it neither wears nor has built past — the item itself, or
+ * the cheapest on-sale item of its tab and tier when the market lacks it —
+ * that it could wear: into a free slot, or as an upgrade of an item it wears.
+ * Souls and the step are not asked; the caller does that.
  */
 function buildBuys(G: GameState, pid: PlayerID, hero: CardInstance): BuildBuy[] {
   const out: BuildBuy[] = [];
   const taken = wornItems(hero).map((it) => it.cardId);
-  for (const id of defaultBuild(hero.cardId)) {
+  for (const id of buildOf(G, pid, hero.cardId)) {
     if (hasOrPast(hero, id)) continue;
     const itemId = marketStandIn(G, id, taken);
     if (!itemId || taken.includes(itemId)) continue;
     if (!upgradeComponent(hero, itemId) && wornItems(hero).length >= slotCap(G, pid)) continue;
-    out.push({ itemId, heroIid: hero.iid, cost: buyPrice(hero, itemId) });
+    out.push({ itemId, heroIid: hero.iid, cost: buyPrice(G, pid, itemId) });
     taken.push(itemId);
   }
   return out;
@@ -322,20 +324,57 @@ function heroShopping(G: GameState, pid: PlayerID, hero: CardInstance, souls: nu
   return later ? { buy: later, save: false } : { save: false };
 }
 
-/** The AI's shop move: the Active's build first, then each bench hero's; a
- *  saving Active spends nothing on the bench. Nothing to buy: close the shop.
- *  Every buy it names is one the engine allows. */
-function shopMove(G: GameState, pid: PlayerID): Action {
+/** The purchase the AI makes next, and for whom: the Active's build first,
+ *  then each bench hero's; a saving Active spends nothing on the bench.
+ *  Undefined when there is nothing to buy. Every buy it names is one the
+ *  engine allows. */
+function planPurchase(G: GameState, pid: PlayerID): BuildBuy | undefined {
   const ps = G.players[pid];
-  const heroes = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c);
-  for (const [i, hero] of heroes.entries()) {
+  for (const [i, hero] of slottedHeroes(ps).entries()) {
     const plan = heroShopping(G, pid, hero, ps.souls);
-    if (plan.buy && buyBlocked(G, pid, plan.buy.itemId, hero.iid) === null) {
-      return { type: 'buy', itemId: plan.buy.itemId, heroIid: hero.iid };
-    }
+    if (plan.buy && buyBlocked(G, pid, plan.buy.itemId) === null) return plan.buy;
     if (plan.save && i === 0) break;
   }
-  return { type: 'closeShop' };
+  return undefined;
+}
+
+/**
+ * The hero the AI puts `card` (in its hand) on: the one it bought it for —
+ * the plan made just before the purchase, read again on the same position with
+ * the card unbought and its price back, names it — else, for a card it did not
+ * buy this turn (a Story reward, a card bought by hand before auto-play took
+ * over), the first hero whose build still asks for it, else one wearing its
+ * component, else the first it may go on. Undefined when no hero can take it.
+ */
+function playTargetFor(G: GameState, pid: PlayerID, card: CardInstance): CardInstance | undefined {
+  const legal = playTargets(G, pid, card.iid);
+  if (legal.length === 0) return undefined;
+  if (card.boughtOnTurn === G.turnNumber) {
+    const ps = G.players[pid];
+    const unbought: GameState = {
+      ...G,
+      players: { ...G.players, [pid]: { ...ps, hand: ps.hand.filter((c) => c !== card), souls: ps.souls + (card.paid ?? 0) } },
+    };
+    const plan = planPurchase(unbought, pid);
+    const meant = plan?.itemId === card.cardId ? legal.find((h) => h.iid === plan.heroIid) : undefined;
+    if (meant) return meant;
+  }
+  return legal.find((h) => buildBuys(G, pid, h).some((b) => b.itemId === card.cardId))
+    ?? legal.find((h) => upgradeComponent(h, card.cardId))
+    ?? legal[0];
+}
+
+/** The AI's shop move. A card in its hand goes on at once (it never holds
+ *  one), or — no hero can take it — is sold back; then the next purchase its
+ *  builds ask for; then it closes the shop. */
+function shopMove(G: GameState, pid: PlayerID): Action {
+  for (const card of G.players[pid].hand) {
+    const hero = playTargetFor(G, pid, card);
+    if (hero) return { type: 'playCard', cardIid: card.iid, heroIid: hero.iid };
+    if (sellBlocked(G, pid, card.iid) === null) return { type: 'sell', itemIid: card.iid };
+  }
+  const next = planPurchase(G, pid);
+  return next ? { type: 'buy', itemId: next.itemId } : { type: 'closeShop' };
 }
 
 /** The extra worth of `pid`'s souls while they count toward its Active's next
@@ -350,19 +389,21 @@ function saveValue(G: GameState, pid: PlayerID): number {
 }
 
 interface MoveOption {
-  move: 'buy' | 'sell' | 'moveItem' | 'closeShop' | 'activate' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
+  move: 'buy' | 'sell' | 'moveItem' | 'closeShop' | 'playCard' | 'activate' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
   args: any[];
   score: number;
 }
 
 /** An engine action in the form the callers dispatch: the boardgame.io move and
- *  its arguments (buy [item, hero], sell [item], moveItem [item, hero],
- *  closeShop [], activate [item, target?], useSkill [hero, target?, skill?],
- *  moveHero [from, to], promoteToActive [iid], attack [target?], endTurn []). */
+ *  its arguments (buy [item], sell [card], moveItem [item, hero], closeShop [],
+ *  playCard [card, hero], activate [item, target?], useSkill [hero, target?,
+ *  skill?], moveHero [from, to], promoteToActive [iid], attack [target?],
+ *  endTurn []). */
 function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
   const present = (...xs: (string | undefined)[]) => xs.filter((x): x is string => x !== undefined);
   switch (a.type) {
-    case 'buy': return { move: 'buy', args: [a.itemId, a.heroIid] };
+    case 'buy': return { move: 'buy', args: [a.itemId] };
+    case 'playCard': return { move: 'playCard', args: [a.cardIid, a.heroIid] };
     case 'sell': return { move: 'sell', args: [a.itemIid] };
     case 'moveItem': return { move: 'moveItem', args: [a.itemIid, a.toHeroIid] };
     case 'closeShop': return { move: 'closeShop', args: [] };
@@ -485,6 +526,7 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
     case 'attack': return scoreAttack(G, pid, a.targetIid);
     // The shop is shopped by rule (`shopMove`); these rank the plain list only.
     case 'buy': return 20;
+    case 'playCard': return 22;
     case 'sell': return -50;
     case 'moveItem': return -40;
     case 'closeShop': return 1;
@@ -581,7 +623,8 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
       .sort((a, b) => b.score - a.score);
   }
 
-  // The shop step is shopped by the build, one purchase at a time, and closed.
+  // The shop step is shopped by the build, one purchase at a time — each card
+  // played as soon as it is bought — and closed.
   if (G.step === 'shop') {
     return [{ ...toMove(G, shopMove(G, pid)), score: 1 }];
   }

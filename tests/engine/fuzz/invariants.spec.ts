@@ -1,8 +1,10 @@
 /**
  * Invariants over whole seeded games. Five policy mixes play (heuristic, random-legal and chaos seats, plus two spotlight rosters); every state
  * (accepted move or not) is checked by `checkInvariants`, every accepted move by
- * `checkTransition` — the shop's purchases, sales and moves among them (a random
- * seat shops at random; the AI's shop buys its build and closes). Violations the engine has TODAY are allowlisted in KNOWN —
+ * `checkTransition` — the shop's purchases, sales and moves and the cards played
+ * from the hand among them (a random seat shops and plays at random, holds cards
+ * into later turns and sells them from the hand; the AI's shop buys its build,
+ * plays each card at once and closes). Violations the engine has TODAY are allowlisted in KNOWN —
  * each entry says why — so the suite is green now and an entry can be deleted the
  * day its bug is fixed. A violation with a signature not covered fails the test
  * with the seed / step / move that produced it (replay: `playGame({ seed, policies, prefer })`
@@ -34,11 +36,17 @@ describe('invariants hold in every state of seeded games', () => {
         expect(coverage.buys, 'nothing was ever bought').toBeGreaterThan(0);
         expect(coverage.activates, 'no active item was ever used').toBeGreaterThan(0);
       }
-      // Every seat shops; a random seat sells and moves items too (the AI's shop never does).
+      // Every seat shops and plays what it buys, upgrades among them; a random seat sells (from
+      // the hand too), moves items and plays a card held from an earlier turn (the AI never does).
       expect(coverage.buys, 'nothing was ever bought').toBeGreaterThan(0);
+      expect(coverage.plays, 'no card was ever played').toBeGreaterThan(0);
+      expect(coverage.discountBuys, 'no upgrade was ever bought for the difference').toBeGreaterThan(0);
+      expect(coverage.upgrades, 'no play ever consumed a component').toBeGreaterThan(0);
       if (Object.values(mix.policies).some((p) => p !== 'heuristic')) {
         expect(coverage.sells, 'nothing was ever sold').toBeGreaterThan(0);
+        expect(coverage.handSells, 'no card was ever sold from the hand').toBeGreaterThan(0);
         expect(coverage.moveItems, 'no item was ever moved').toBeGreaterThan(0);
+        expect(coverage.heldPlays, 'no card held from an earlier turn was ever played').toBeGreaterThan(0);
       }
       // The harness has to actually play: a game that never leaves the draft checks nothing.
       expect(games.every((g) => g.steps > 20)).toBe(true);

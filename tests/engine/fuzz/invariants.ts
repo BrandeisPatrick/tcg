@@ -7,9 +7,14 @@
  * first appears, instead of on every later step of a corrupted game.
  *
  * The rules they hold the engine to are rules.md §2–§5 (souls, the turn's shop
- * and act steps, items, abilities), read through the oracles in oracle.ts —
- * written from the rules and the card texts, never from the engine's own
- * functions.
+ * and act steps, items, abilities) and the hand's (a card bought goes to the
+ * hand and is played from it onto a hero), read through the oracles in
+ * oracle.ts — written from the rules and the card texts, never from the
+ * engine's own functions. The four the user named: `hand-owner` (a card in a
+ * hand is its player's), `hand-bought-turn` (a hand card's `boughtOnTurn` is a
+ * turn already played), `net-worth-hand` (net worth — the engine's, and the
+ * one the income's comeback reads — counts the hand at list price) and
+ * `play-slot-cap` (a card played never leaves a hero over its slot cap).
  *
  * Nothing here mutates G (it is frozen by immer in a live client).
  */
@@ -22,12 +27,13 @@ import {
   ACTIVE_COOLDOWN, COMEBACK_STEPS, EXP_ON_EQUIP, HARD_CC_CHARGES, LANE_INCOME, LEVEL_ATK_BONUS, LEVEL_HP_BONUS,
   LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_LEVEL, PRICE, SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN,
 } from '@/engine/constants';
-import { attackPower, isRespawning, koPatronDamage, stepInCandidates } from '@/engine/query';
+import { attackPower, isRespawning, koPatronDamage, netWorth, stepInCandidates } from '@/engine/query';
 import {
   MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, bountyOracle, buyBlockedOracle, buyPriceOracle,
-  closeShopBlockedOracle, describeUnit, everyCard, hasSpikeOracle, isHeroCard, isMergedRem, itemData, moveItemBlockedOracle,
-  netWorthOracle, other, retreatCostOracle, sellBlockedOracle, sellRefundOracle, slotCapOracle, slottedHeroOf, totalExp,
-  ultCooldownOracle, ultLocked, upgradeComponentOracle, wornItemOf, wornItemsOf,
+  closeShopBlockedOracle, describeUnit, everyCard, handCardOf, handOf, hasSpikeOracle, heroesOfSide, isHeroCard, isMergedRem, itemData,
+  moveItemBlockedOracle, netWorthOracle, netWorthOracleWithoutHand, other, playBlockedOracle, playConsumesOracle,
+  restoredBySaleOracle, retreatCostOracle, sellBlockedOracle, sellRefundOracle, slotCapOracle, slottedHeroOf, totalExp,
+  ultCooldownOracle, ultLocked, wornItemOf, wornItemsOf, type ConsumedOracle, type RestoredOracle,
 } from './oracle';
 
 interface Violation {
@@ -54,9 +60,12 @@ export const SOULS_ON_USE: Readonly<Record<string, number>> = { golden_goose_egg
 
 /** The moves of the shop step (rules.md §3). */
 const SHOP_MOVES = ['buy', 'sell', 'moveItem', 'closeShop'];
-/** Everything the shop step accepts: its own moves, ending the turn, an owed
- *  promotion and the board's reveal bookkeeping. */
-const SHOP_STEP_MOVES = [...SHOP_MOVES, 'endTurn', 'promoteToActive', 'completeAction'];
+/** Everything the shop step accepts: its own moves, a card played from the hand
+ *  (legal in either step), ending the turn, an owed promotion and the board's
+ *  reveal bookkeeping. */
+const SHOP_STEP_MOVES = [...SHOP_MOVES, 'playCard', 'endTurn', 'promoteToActive', 'completeAction'];
+/** The moves that put items on and take them off heroes: the shop's and a card played. */
+const ITEM_MOVES = [...SHOP_MOVES, 'playCard'];
 
 /** The full cooldown an active item of `tier` starts on (before any Cooldown item). */
 const fullItemCooldown = (tier: number) => (tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
@@ -69,13 +78,47 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
   const over = !!ctx.gameover;
   const current = ctx.currentPlayer as PlayerID;
 
-  // ---- uniqueness + ownership over every card anywhere ----
+  // ---- uniqueness + ownership over every card anywhere (the hands included) ----
   const seen = new Map<string, string>();
   for (const { card, place, pid } of everyCard(G)) {
     const prev = seen.get(card.iid);
     if (prev) add('iid-unique', card.iid, `iid ${card.iid} (${card.cardId}) is in both ${prev} and ${place} (P${pid})`);
     else seen.set(card.iid, place);
-    if (card.ownerId !== pid) add('owner-matches', card.iid, `${card.cardId}#${card.iid} sits in P${pid}'s ${place} but ownerId is ${card.ownerId}`);
+    // A card in a hand is its player's (`hand-owner`); one on the board, its side's.
+    if (card.ownerId !== pid) add(place === 'hand' ? 'hand-owner' : 'owner-matches', card.iid, `${card.cardId}#${card.iid} sits in P${pid}'s ${place} but ownerId is ${card.ownerId}`);
+  }
+
+  // ---- the hands: items bought (or given) and not yet played ----
+  for (const pid of PIDS) {
+    for (const c of handOf(G, pid)) {
+      const d = itemData(c.cardId);
+      const label = `${c.cardId}#${c.iid} in P${pid}'s hand`;
+      // An item, in zone 'hand', worn by nobody, carrying nothing, set going by nothing yet:
+      // its cooldown starts when it is played; no component is held for it. Only a hard
+      // crowd-control item put back by a same-turn sale carries charges: the ones it had left.
+      const wrong: string[] = [];
+      if (!d) wrong.push('no item');
+      if (c.zone !== 'hand') wrong.push(`zone '${c.zone}'`);
+      if (c.attachedTo !== undefined) wrong.push(`attachedTo ${c.attachedTo}`);
+      if ((c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
+      if (Object.keys(c.cooldowns ?? {}).length) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
+      const hardCC = d?.type === 'spell' && !!d.hardCC;
+      if (c.charges !== undefined && (!hardCC || !Number.isInteger(c.charges) || c.charges < 0 || c.charges > HARD_CC_CHARGES)) wrong.push(`charges ${c.charges}`);
+      if (c.replaced || c.replacedFrom !== undefined) wrong.push(`holds the ${c.replaced?.cardId ?? '?'} it replaced`);
+      if (wrong.length) add('hand-card-state', c.iid, `${label}: ${wrong.join('; ')}`);
+      // What a purchase records: an engine turn already played, and a price the tier allows.
+      if (c.boughtOnTurn !== undefined && (!Number.isInteger(c.boughtOnTurn) || c.boughtOnTurn < 1 || c.boughtOnTurn > G.turnNumber)) {
+        add('hand-bought-turn', c.iid, `${label} was bought on turn ${c.boughtOnTurn} (it is turn ${G.turnNumber})`);
+      }
+      if (d && c.paid !== undefined && (!Number.isInteger(c.paid) || c.paid < 0 || c.paid > PRICE[d.tier])) {
+        add('hand-purchase-record', c.iid, `${label} records ${c.paid} souls paid (tier ${d.tier} lists at ${PRICE[d.tier]})`);
+      }
+    }
+    // Net worth counts the hand: the engine's reading is the rules' — souls, worn items and
+    // hand cards at list price.
+    if (!G.draft && netWorth(G, pid) !== netWorthOracle(G, pid)) {
+      add('net-worth-hand', pid, `P${pid}'s net worth reads ${netWorth(G, pid)}; souls, worn items and the hand at list price make ${netWorthOracle(G, pid)} (${netWorthOracleWithoutHand(G, pid)} without the hand)`);
+    }
   }
 
   // ---- the draft ----
@@ -289,6 +332,11 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     if (a.replaced && (a.boughtOnTurn !== G.turnNumber || pid !== current || a.replaced.cardId !== d.upgradesFrom)) {
       add('item-purchase-record', `${a.iid}-replaced`, `${a.cardId}#${a.iid} (bought on turn ${a.boughtOnTurn}, P${pid}) still holds the ${a.replaced.cardId} it replaced on turn ${G.turnNumber} (P${current} on turn; it upgrades ${d.upgradesFrom})`);
     }
+    // The hero a held component came from rides with it, and is one of the side's own (a Rem
+    // who has merged since included: the component then goes back to the hand).
+    if (a.replacedFrom !== undefined && (!a.replaced || !heroesOfSide(G.players[pid]).some((h) => h.iid === a.replacedFrom))) {
+      add('item-purchase-record', `${a.iid}-replacedFrom`, `${a.cardId}#${a.iid} names ${a.replacedFrom} as where its component came from, ${a.replaced ? 'no hero of its side' : 'but holds no component'}`);
+    }
   }
 }
 
@@ -384,12 +432,13 @@ export function collectTransitionViolations(
     add('step-change', move.name, `${move.name} moved the step from ${before.G.step} to ${after.G.step} within the turn`);
   }
 
-  // ---- what the rules allow: an accepted shop move or item use the oracle refuses ----
+  // ---- what the rules allow: an accepted shop move, card play or item use the oracle refuses ----
   {
     const B = before.G;
-    const why = move.name === 'buy' ? buyBlockedOracle(B, mover, args[0], args[1])
+    const why = move.name === 'buy' ? buyBlockedOracle(B, mover, args[0])
       : move.name === 'sell' ? sellBlockedOracle(B, mover, args[0])
       : move.name === 'moveItem' ? moveItemBlockedOracle(B, mover, args[0], args[1])
+      : move.name === 'playCard' ? playBlockedOracle(B, mover, args[0], args[1])
       : move.name === 'closeShop' ? closeShopBlockedOracle(B, mover)
       : move.name === 'activate' ? activateBlockedOracle(B, mover, args[0], args[1])
       : null;
@@ -424,31 +473,39 @@ export function collectTransitionViolations(
     }
   }
 
-  // ---- what a shop move does to the cards (worked out on the board before it) ----
+  // ---- what an item move does to the cards (worked out on the board before it) ----
   const B = before.G;
-  const bought = move.name === 'buy' ? slottedHeroOf(B, mover, args[1]) : undefined;
-  const component = bought ? upgradeComponentOracle(bought, args[0]) : undefined;
-  const sold = move.name === 'sell' ? wornItemOf(B, mover, args[0]) : undefined;
-  /** A same-turn upgrade's sale gives back the component it replaced (one moved since has let it go). */
-  const restored = sold && sold.item.boughtOnTurn === B.turnNumber ? sold.item.replaced : undefined;
+  /** A purchase: the item bought — a card for the hand, no hero named. */
+  const boughtId = move.name === 'buy' && itemData(args[0]) ? String(args[0]) : undefined;
+  /** A play: the card from the hand, the hero it goes on, and what it consumes. */
+  const playedCard = move.name === 'playCard' ? handCardOf(B, mover, args[0]) : undefined;
+  const playedOn = playedCard ? slottedHeroOf(B, mover, args[1]) : undefined;
+  const consumed: ConsumedOracle[] = playedCard && playedOn ? playConsumesOracle(B, mover, playedCard, playedOn) : [];
+  /** A sale: a card from the hand, or a worn item and its bearer — and what a same-turn
+   *  upgrade's sale puts back, and where. */
+  const soldHand = move.name === 'sell' ? handCardOf(B, mover, args[0]) : undefined;
+  const sold = move.name === 'sell' && !soldHand ? wornItemOf(B, mover, args[0]) : undefined;
+  const restored: RestoredOracle[] = sold ? restoredBySaleOracle(B, mover, sold.item, sold.bearer) : [];
   const moved = move.name === 'moveItem' ? wornItemOf(B, mover, args[0]) : undefined;
   const movedTo = moved ? slottedHeroOf(B, mover, args[1]) : undefined;
 
-  // Cards do not vanish: every card anywhere before is still somewhere after — but for
-  // the item a sale takes off and the component an upgrade replaces. And none appears
-  // from nowhere: a purchase brings its one item, a same-turn upgrade's sale its component.
+  // Cards do not vanish: every card anywhere before (the hands included) is still somewhere
+  // after — but for the card a sale takes and the components a play consumes. And none
+  // appears from nowhere: a purchase brings its one card into the buyer's hand, a same-turn
+  // upgrade's sale the components it puts back.
   {
     const beforeIids = new Map(everyCard(before.G).map((x) => [x.card.iid, x]));
     const afterCards = everyCard(after.G);
     const afterIids = new Set(afterCards.map((x) => x.card.iid));
-    const mayGo = new Set([component?.iid, sold?.item.iid].filter((x): x is string => !!x));
+    const mayGo = new Set([...consumed.map((c) => c.item.iid), sold?.item.iid, soldHand?.iid].filter((x): x is string => !!x));
     for (const [iid, x] of beforeIids) {
       if (!afterIids.has(iid) && !mayGo.has(iid)) add('card-vanished', iid, `${x.card.cardId}#${iid} (${x.place}) of P${x.pid} is nowhere after ${move.name}`);
     }
     const fresh = afterCards.filter((x) => !beforeIids.has(x.card.iid));
-    const purchase = bought ? fresh.find((x) => x.card.cardId === args[0] && x.place === `attached:${bought.iid}`) : undefined;
+    const purchase = boughtId ? fresh.find((x) => x.card.cardId === boughtId && x.place === 'hand' && x.pid === mover) : undefined;
+    const back = new Set(restored.map((r) => r.item.iid));
     for (const x of fresh) {
-      if (x === purchase || (restored && x.card.iid === restored.iid)) continue;
+      if (x === purchase || back.has(x.card.iid)) continue;
       add('card-appeared', x.card.iid, `${x.card.cardId}#${x.card.iid} (${x.place}) of P${x.pid} appeared after ${move.name}(${JSON.stringify(args)})`);
     }
   }
@@ -504,14 +561,15 @@ export function collectTransitionViolations(
   };
 
   if (!duplicated && move.name !== 'endTurn') {
-    // Souls: only the move's price (an item's — the difference for an upgrade —, a
-    // Retreat's; abilities are free), what a sale refunds, what an item used pays out
-    // (SOULS_ON_USE) and the bounty of each enemy hero that fell (its level + 1, + 2 for
-    // the richest hero on the board). Moving an item or closing the shop is free. No ceiling.
+    // Souls: only the move's price (an item's — the difference for an upgrade whose
+    // component has a free copy on the side —, a Retreat's; abilities are free), what a sale
+    // refunds, what an item used pays out (SOULS_ON_USE) and the bounty of each enemy hero
+    // that fell (its level + 1, + 2 for the richest hero on the board). Playing a card,
+    // moving an item and closing the shop are free. No ceiling.
     let cost = 0;
     let payout = 0;
-    if (move.name === 'buy' && bought) cost = buyPriceOracle(bought, args[0]);
-    else if (move.name === 'sell' && sold) payout = sellRefundOracle(B, sold.item);
+    if (move.name === 'buy' && boughtId) cost = buyPriceOracle(B, mover, boughtId);
+    else if (move.name === 'sell' && (soldHand || sold)) payout = sellRefundOracle(B, soldHand ?? sold!.item);
     else if (move.name === 'activate') {
       const used = wornItemOf(B, mover, args[0]);
       payout = used ? SOULS_ON_USE[used.item.cardId] ?? 0 : 0;
@@ -575,34 +633,76 @@ export function collectTransitionViolations(
     return undefined;
   };
 
-  // A purchase: the item goes on at once, recording the engine turn and what was paid; an
-  // active starts on its full cooldown (less the bearer's Cooldown family, never under 1)
-  // or, hard crowd control, with HARD_CC_CHARGES charges; a passive has neither; an
-  // upgrade keeps the component it replaced aside for the turn.
-  if (!duplicated && bought) {
-    const hero1 = heroes1.get(bought.iid);
-    const fresh = hero1 ? wornItemsOf(hero1).filter((a) => a.cardId === args[0] && !wornItemsOf(bought).some((x) => x.iid === a.iid)) : [];
-    const d = itemData(args[0]);
-    if (!hero1 || !d || fresh.length !== 1) {
-      add('bought-item-state', bought.iid, `buy(${JSON.stringify(args)}) was accepted but ${describeUnit(hero1)} wears ${fresh.length} new ${String(args[0])}`);
+  // A purchase: exactly one card joins the buyer's hand, at its end — the item bought, its
+  // owner's, recording the engine turn and what was paid (the oracle's price). The rest of
+  // the hand is as it was, and no hero is touched (the `equip-bonus` rule sees to that).
+  if (!duplicated && boughtId) {
+    const hand0 = handOf(B, mover);
+    const hand1 = handOf(after.G, mover);
+    const fresh = hand1.slice(hand0.length);
+    const problems: string[] = [];
+    if (hand1.slice(0, hand0.length).map((c) => c.iid).join() !== hand0.map((c) => c.iid).join() || fresh.length !== 1) {
+      problems.push(`the hand went [${hand0.map((c) => c.cardId).join(', ')}] -> [${hand1.map((c) => c.cardId).join(', ')}]`);
     } else {
-      const it = fresh[0];
-      const problems: string[] = [];
-      const price = buyPriceOracle(bought, d.id);
-      if (it.boughtOnTurn !== B.turnNumber) problems.push(`boughtOnTurn ${it.boughtOnTurn} (turn ${B.turnNumber})`);
-      if (it.paid !== price) problems.push(`paid ${it.paid} (price ${price})`);
+      const card = fresh[0];
+      const price = buyPriceOracle(B, mover, boughtId);
+      if (card.cardId !== boughtId) problems.push(`the new card is ${card.cardId}`);
+      if (card.ownerId !== mover) problems.push(`owned by P${card.ownerId}`);
+      if (card.boughtOnTurn !== B.turnNumber) problems.push(`boughtOnTurn ${card.boughtOnTurn} (turn ${B.turnNumber})`);
+      if (card.paid !== price) problems.push(`paid ${card.paid} (price ${price})`);
+    }
+    if (problems.length) add('bought-card-state', `${mover}-${boughtId}`, `buy(${JSON.stringify(args)}) by P${mover}: ${problems.join('; ')}`);
+  }
+
+  // A play: the card leaves the hand and is worn by the hero named, its purchase record with
+  // it; an active starts on its full cooldown (its bearer's Cooldown family taken off, never
+  // under 1, read once the component has left) or, hard crowd control, with HARD_CC_CHARGES
+  // charges (or those it carried back into the hand); a passive has neither. What it consumes (the oracle's) is out of play — in no
+  // hand, on no hero — and, the card bought this turn, held on it for a same-turn sale, each
+  // settled component on the copy that settled it. A play never leaves a hero over its cap.
+  if (!duplicated && playedCard && playedOn) {
+    const hero1 = heroes1.get(playedOn.iid);
+    const now = wornAfter(playedCard.iid);
+    const d = itemData(playedCard.cardId);
+    const problems: string[] = [];
+    if (handCardOf(after.G, mover, playedCard.iid)) problems.push('it is still in the hand');
+    if (!now || now.bearer.iid !== playedOn.iid || !d || !hero1) {
+      problems.push(now ? `it is worn by ${now.bearer.cardId}#${now.bearer.iid}` : 'it is worn by nobody');
+    } else {
+      const it = now.item;
       const cd = it.cooldowns?.[d.id];
+      const keys = Object.keys(it.cooldowns ?? {});
       if (d.type === 'spell' && d.hardCC) {
-        if (it.charges !== HARD_CC_CHARGES || cd !== undefined) problems.push(`hard crowd control with charges ${it.charges} and cooldown ${cd} (${HARD_CC_CHARGES} charges, no cooldown)`);
+        const want = playedCard.charges ?? HARD_CC_CHARGES;
+        if (it.charges !== want || keys.length) problems.push(`hard crowd control with charges ${it.charges} and cooldowns ${JSON.stringify(it.cooldowns)} (${want} charges, no cooldown)`);
       } else if (d.type === 'spell') {
         const want = activeCooldownOracle(hero1, d.tier);
-        if (cd !== want || it.charges !== undefined) problems.push(`an active on cooldown ${cd}${it.charges !== undefined ? ` with charges ${it.charges}` : ''} (its full cooldown here is ${want})`);
-      } else if (Object.keys(it.cooldowns ?? {}).length || it.charges !== undefined) {
+        if (cd !== want || keys.length !== 1 || it.charges !== undefined) problems.push(`an active on cooldowns ${JSON.stringify(it.cooldowns)}${it.charges !== undefined ? ` with charges ${it.charges}` : ''} (its full cooldown here is ${want})`);
+      } else if (keys.length || it.charges !== undefined) {
         problems.push(`a passive with cooldowns ${JSON.stringify(it.cooldowns)} / charges ${it.charges}`);
       }
-      if (component ? it.replaced?.iid !== component.iid : it.replaced !== undefined) problems.push(`replaced ${it.replaced?.cardId}#${it.replaced?.iid} (the component it upgrades is ${component ? `${component.cardId}#${component.iid}` : 'not worn'})`);
-      if (component && wornItemsOf(hero1).some((a) => a.iid === component.iid)) problems.push(`the component ${component.cardId} is still worn`);
-      if (problems.length) add('bought-item-state', it.iid, `${d.id} bought for ${hero1.cardId}#${hero1.iid}: ${problems.join('; ')}`);
+      if (it.boughtOnTurn !== playedCard.boughtOnTurn || it.paid !== playedCard.paid) problems.push(`purchase record ${playedCard.boughtOnTurn}/${playedCard.paid} -> ${it.boughtOnTurn}/${it.paid}`);
+      const held = playedCard.boughtOnTurn === B.turnNumber ? consumed[0] : undefined;
+      if (held ? it.replaced?.iid !== held.item.iid || it.replacedFrom !== held.from?.iid : it.replaced !== undefined || it.replacedFrom !== undefined) {
+        problems.push(`holds ${it.replaced ? `${it.replaced.cardId}#${it.replaced.iid} from ${it.replacedFrom ?? 'the hand'}` : 'nothing'} (the rules: ${held ? `${held.item.cardId}#${held.item.iid} from ${held.from ? `${held.from.cardId}#${held.from.iid}` : 'the hand'}` : 'nothing'})`);
+      } else if (held) {
+        let link = it.replaced;
+        for (const next of consumed.slice(1)) {
+          if (!link || link.replaced?.iid !== next.item.iid || link.replacedFrom !== next.from?.iid) {
+            problems.push(`the ${link?.cardId ?? '?'} it consumed does not hold the ${next.item.cardId}#${next.item.iid} it settled`);
+            break;
+          }
+          link = link.replaced;
+        }
+      }
+    }
+    for (const c of consumed) {
+      const still = everyCard(after.G).find((x) => x.card.iid === c.item.iid);
+      if (still) problems.push(`the consumed ${c.item.cardId}#${c.item.iid} is still in ${still.place}`);
+    }
+    if (problems.length) add('played-card-state', playedCard.iid, `${playedCard.cardId}#${playedCard.iid} played on ${playedOn.cardId}#${playedOn.iid}: ${problems.join('; ')}`);
+    if (hero1 && wornItemsOf(hero1).length > slotCapOracle(after.G, mover)) {
+      add('play-slot-cap', playedOn.iid, `${describeUnit(hero1)} wears ${wornItemsOf(hero1).length} items after playCard(${JSON.stringify(args)}) (cap ${slotCapOracle(after.G, mover)})`);
     }
   }
 
@@ -619,30 +719,38 @@ export function collectTransitionViolations(
       if (JSON.stringify(it.cooldowns ?? {}) !== JSON.stringify(was.cooldowns ?? {})) problems.push(`cooldowns ${JSON.stringify(was.cooldowns ?? {})} -> ${JSON.stringify(it.cooldowns ?? {})}`);
       if (it.charges !== was.charges) problems.push(`charges ${was.charges} -> ${it.charges}`);
       if (it.boughtOnTurn !== was.boughtOnTurn || it.paid !== was.paid) problems.push(`purchase record ${was.boughtOnTurn}/${was.paid} -> ${it.boughtOnTurn}/${it.paid}`);
-      if (it.replaced) problems.push(`still holds the ${it.replaced.cardId} it replaced`);
+      if (it.replaced || it.replacedFrom !== undefined) problems.push(`still holds the ${it.replaced?.cardId ?? '?'} it replaced`);
       if (problems.length) add('moved-item-state', it.iid, `${it.cardId}#${it.iid} moved ${moved.bearer.cardId} -> ${movedTo.cardId}: ${problems.join('; ')}`);
     }
   }
 
-  // A sale: the item is gone from the board, and a same-turn upgrade's component is back on its bearer.
-  if (!duplicated && sold) {
-    const still = everyCard(after.G).find((x) => x.card.iid === sold.item.iid);
-    if (still) add('sold-item-gone', sold.item.iid, `${sold.item.cardId}#${sold.item.iid} was sold but is still in ${still.place}`);
-    if (restored) {
-      const bearer1 = heroes1.get(sold.bearer.iid);
-      if (!bearer1 || !wornItemsOf(bearer1).some((a) => a.iid === restored.iid)) {
-        add('sold-item-gone', `${sold.item.iid}-component`, `${sold.item.cardId} was sold on the turn it was bought but the ${restored.cardId} it replaced is not back on ${sold.bearer.cardId}`);
+  // A sale: the card is gone — out of the hand, off the board — and a same-turn upgrade's
+  // components are back where the rules put them: each on the hero it came from while that
+  // hero has room and wears no copy, else in the hand; none still holds a component.
+  if (!duplicated && (soldHand || sold)) {
+    const card = soldHand ?? sold!.item;
+    const after1 = everyCard(after.G);
+    const still = after1.find((x) => x.card.iid === card.iid);
+    if (still) add('sold-item-gone', card.iid, `${card.cardId}#${card.iid} was sold but is still in ${still.place}`);
+    for (const r of restored) {
+      const where = after1.find((x) => x.card.iid === r.item.iid);
+      const want = r.to === 'hand' ? 'hand' : `attached:${r.to.iid}`;
+      if (where?.place !== want) {
+        add('sold-item-gone', `${card.iid}-${r.item.iid}`, `${card.cardId} was sold on the turn it was bought but the ${r.item.cardId} it consumed is ${where ? `in ${where.place}` : 'nowhere'}, not ${r.to === 'hand' ? 'back in the hand' : `back on ${r.to.cardId}#${r.to.iid}`}`);
+      } else if (where.card.replaced || where.card.replacedFrom !== undefined) {
+        add('sold-item-gone', `${card.iid}-${r.item.iid}-held`, `the ${r.item.cardId} put back by ${card.cardId}'s sale still holds the ${where.card.replaced?.cardId ?? '?'} it consumed`);
       }
     }
   }
 
   // What items give (rules.md §4): a passive's printed bonus sits on its bearer while it is
-  // worn — on with a purchase (less the component an upgrade replaces), off with a sale (the
-  // component back, for a same-turn upgrade), across with a move — and the Vitality spike's
-  // +1 max HP while the hero wears 3+ Vitality items; a level the purchase's exp earns adds
-  // its own. Current HP moves with the max on the way on (never below 1, and a corpse stays
-  // at 0) and is clamped to the new max on the way off. A shop move touches no other hero.
-  if (!duplicated && SHOP_MOVES.includes(move.name)) {
+  // worn — on with a play (and off the hero each component it consumes came from), off with a
+  // sale (each component back on its hero, for a same-turn upgrade), across with a move —
+  // and the Vitality spike's +1 max HP while the hero wears 3+ Vitality items; a level the
+  // play's exp earns adds its own. Current HP moves with the max on the way on (never below
+  // 1, and a corpse stays at 0) and is clamped to the new max on the way off. A purchase
+  // touches no hero (the card goes to the hand), and no item move touches any other hero.
+  if (!duplicated && ITEM_MOVES.includes(move.name)) {
     type Bonus = { atk: number; spirit: number; hp: number };
     const gains = new Map<string, { bonus: Bonus; on: boolean; off: boolean }>();
     const change = (iid: string | undefined, cardId: string | undefined, sign: 1 | -1) => {
@@ -653,8 +761,14 @@ export function collectTransitionViolations(
       if (sign > 0) g.on = true; else g.off = true;
       gains.set(iid, g);
     };
-    if (bought) { change(bought.iid, String(args[0]), 1); change(bought.iid, component?.cardId, -1); }
-    if (sold) { change(sold.bearer.iid, sold.item.cardId, -1); change(sold.bearer.iid, restored?.cardId, 1); }
+    if (playedCard && playedOn) {
+      change(playedOn.iid, playedCard.cardId, 1);
+      for (const c of consumed) if (c.from) change(c.from.iid, c.item.cardId, -1);
+    }
+    if (sold) {
+      change(sold.bearer.iid, sold.item.cardId, -1);
+      for (const r of restored) if (r.to !== 'hand') change(r.to.iid, r.item.cardId, 1);
+    }
     if (moved && movedTo) { change(moved.bearer.iid, moved.item.cardId, -1); change(movedTo.iid, moved.item.cardId, 1); }
     for (const [iid, h0] of heroes0) {
       const h1 = heroes1.get(iid);
@@ -679,17 +793,17 @@ export function collectTransitionViolations(
     }
   }
 
-  // Exp for wearing (rules.md §4): EXP_ON_EQUIP the first time a hero wears an item it
-  // buys — never for a corpse, a rebuy (`equippedIds` remembers what it has worn) or a
-  // move; nothing else a shop move does earns any. A hero never forgets what it has worn.
-  if (!duplicated && SHOP_MOVES.includes(move.name)) {
+  // Exp for wearing (rules.md §4): EXP_ON_EQUIP the first time a hero wears an item played
+  // onto it — never for a corpse, a re-play (`equippedIds` remembers what it has worn) or a
+  // move; a purchase, a sale and the close earn none. A hero never forgets what it has worn.
+  if (!duplicated && ITEM_MOVES.includes(move.name)) {
     for (const [iid, h0] of heroes0) {
       const h1 = heroes1.get(iid);
       if (!h1) continue;
-      const first = !!bought && bought.iid === iid && !isRespawning(h0) && !(h0.equippedIds ?? []).includes(String(args[0]));
+      const first = !!playedCard && playedOn?.iid === iid && !isRespawning(h0) && !(h0.equippedIds ?? []).includes(playedCard.cardId);
       const want = first ? Math.min(MAX_TOTAL_EXP, totalExp(h0) + EXP_ON_EQUIP) - totalExp(h0) : 0;
       if (totalExp(h1) - totalExp(h0) !== want) add('equip-exp', iid, `${h1.cardId}#${iid} exp ${totalExp(h0)} -> ${totalExp(h1)} (Lv${h0.level ?? 1} -> Lv${h1.level ?? 1}) after ${move.name}(${JSON.stringify(args)}); the rules give ${want >= 0 ? '+' : ''}${want}`);
-      if (first && !(h1.equippedIds ?? []).includes(String(args[0]))) add('equip-exp', `${iid}-ids`, `${h1.cardId}#${iid} wore ${String(args[0])} for the first time but does not remember it`);
+      if (first && !(h1.equippedIds ?? []).includes(playedCard!.cardId)) add('equip-exp', `${iid}-ids`, `${h1.cardId}#${iid} wore ${playedCard!.cardId} for the first time but does not remember it`);
     }
   }
   if (!duplicated) {
@@ -723,8 +837,8 @@ export function collectTransitionViolations(
   // Cooldowns count their owner's turns (rules.md §5): at the start of a player's turn each of
   // its heroes' and items' cooldowns comes down by one (gone at 0), on a corpse and a merged
   // Rem too; nothing else moves a cooldown but the ability or item that starts it — a skill
-  // or ultimate used (the `ability-cooldown` rule), an item bought or used (the
-  // `bought-item-state` / `activate-spends` rules), and Refresher, which takes the player's
+  // or ultimate used (the `ability-cooldown` rule), an item played or used (the
+  // `played-card-state` / `activate-spends` rules), and Refresher, which takes the player's
   // Active and the items it wears off cooldown. A card that comes or goes is left out.
   if (!duplicated) {
     // (A turn handed over has begun even when its start ends the match — a Bleed tick that
@@ -751,7 +865,7 @@ export function collectTransitionViolations(
         const v1 = now.get(key);
         let want: number | undefined | 'any' = v0;
         if (started === pid) want = v0 === undefined || v0 - 1 <= 0 ? undefined : v0 - 1;
-        else if (key === usedSkill || (usedItem && owner === usedItem.item.iid)) want = 'any';
+        else if (key === usedSkill || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';
         else if (refreshed.has(owner) && v1 === undefined) want = undefined;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);
       }
@@ -779,7 +893,9 @@ export function collectTransitionViolations(
 
   // A new turn: the turn counter steps by one, and the income lands on top of what was banked
   // (LANE_INCOME, the comeback a side trailing on net worth — souls plus the list price of
-  // every worn item — is owed, and the second mover's bonus on its first turn).
+  // every worn item and every card in the hand — is owed, and the second mover's bonus on
+  // its first turn). An income that only adds up with the hands left out of net worth is
+  // `net-worth-hand`'s.
   if (newTurn) {
     const cur = after.ctx.currentPlayer as PlayerID;
     const ended = other(cur);
@@ -791,10 +907,15 @@ export function collectTransitionViolations(
     // of the new player's heroes its channel pulses felled at the end of its turn (they are
     // paid before the income), so either reading is the rule's.
     const comeback = (gap: number) => COMEBACK_STEPS.reduce((n, [by, bonus]) => (gap >= by ? Math.max(n, bonus) : n), 0);
-    const gap = netWorthOracle(B, ended) - netWorthOracle(B, cur);
     const seat = cur !== firstOf(after.G) && after.G.turnNumber === 2 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
-    const choices = [...new Set([gap, gap + bountyOf(cur)].map((g) => B.players[cur].souls + LANE_INCOME + comeback(g) + seat + bounty))];
-    if (!choices.includes(after.G.players[cur].souls)) add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${after.G.players[cur].souls} souls; banked ${B.players[cur].souls}, the income (+${bounty} in bounties) says ${choices.join(' or ')}`);
+    const incomes = (gap: number) => [...new Set([gap, gap + bountyOf(cur)].map((g) => B.players[cur].souls + LANE_INCOME + comeback(g) + seat + bounty))];
+    const choices = incomes(netWorthOracle(B, ended) - netWorthOracle(B, cur));
+    const got = after.G.players[cur].souls;
+    if (!choices.includes(got)) {
+      const handless = incomes(netWorthOracleWithoutHand(B, ended) - netWorthOracleWithoutHand(B, cur));
+      if (handless.includes(got)) add('net-worth-hand', `${cur}-income`, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls: the comeback left the hands out of net worth (counted, the income says ${choices.join(' or ')})`);
+      else add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls; banked ${B.players[cur].souls}, the income (+${bounty} in bounties) says ${choices.join(' or ')}`);
+    }
   }
   return out;
 }

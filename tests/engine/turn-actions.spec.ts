@@ -8,7 +8,7 @@ import { addStatus, clearTurnFlags, tickCooldowns, tickRemMerges } from '@/engin
 import { resolve } from '@/engine/death';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch, giveItem, makeHero, passTurn, readyClient } from './_helpers';
+import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, passTurn, readyClient } from './_helpers';
 
 // A turn opens in its shop step (buy, sell and move items, then close the
 // shop); its act step is the player's to spend on abilities (each hero one a
@@ -115,13 +115,15 @@ describe('turn actions: the attack is a move', () => {
     expect(haze.statuses.some((s) => s.id === 'bleed')).toBe(false);
   });
 
-  it('the attack ends the Act: after it a bench skill, an active item and a retreat are refused; endTurn is not', () => {
+  it('the attack ends the Act: after it a bench skill, an active item, a card from the hand and a retreat are refused; endTurn is not', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 5;
     const rival = sturdyRival(G);
     const grit = giveItem(G, me.bench[0]!, 'grit'); // Vindicta wears a ready Grit
+    const card = giveCard(G, '0', 'extended_magazine');
     expect(blocked(G, '0', { type: 'activate', itemIid: grit.iid })).toBeNull();
+    expect(blocked(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: me.active!.iid })).toBeNull();
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     const lash = me.bench[1]!; // Lash carries a skill; the Active (Haze) is passive-only
     const hpBefore = rival.hp;
@@ -130,6 +132,9 @@ describe('turn actions: the attack is a move', () => {
     expect(runMove('activate', G, '0', grit.iid)).toBe('INVALID_MOVE');
     expect(blocked(G, '0', { type: 'activate', itemIid: grit.iid })).toBe('actOver');
     expect(grit.cooldowns).toBeUndefined(); // not used: still ready
+    expect(runMove('playCard', G, '0', card.iid, me.active!.iid)).toBe('INVALID_MOVE');
+    expect(blocked(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: me.active!.iid })).toBe('actOver');
+    expect(me.hand).toEqual([card]);
     expect(runMove('moveHero', G, '0', 1, 0)).toBe('INVALID_MOVE');
     expect(me.souls).toBe(5);
     expect(blocked(G, '0', { type: 'endTurn' })).toBeNull();
@@ -468,20 +473,63 @@ describe('AI: the attack is a choice', () => {
     }
 
     // Its shop step, the Active already wearing its build's first item: one move
-    // at a time, each one the engine takes and none a second copy of what the
-    // hero wears, until it closes the shop.
+    // at a time, each one the engine takes — a buy, then the card played at once
+    // onto a hero that does not wear one — until it closes the shop, its hand empty.
     const shop = freshReadyGame({ step: 'shop' });
     shop.turnNumber = 3; // P1's own turn 2
     shop.players['1'].souls = 30;
     giveItem(shop, shop.players['1'].active!, 'healing_booster');
-    for (let guard = 0; shop.step === 'shop' && guard < 20; guard++) {
+    let last = '';
+    for (let guard = 0; shop.step === 'shop' && guard < 40; guard++) {
       const moves = enumerateAIMoves(shop, ctx('1'));
       expect(moves).toHaveLength(1);
       const [m] = moves;
-      if (m.move === 'buy') expect(wornItems(findCardOnBoard(shop, m.args[1])!.card).map((it) => it.cardId)).not.toContain(m.args[0]);
+      if (last === 'buy') expect(m.move, 'a card bought is played at once').toBe('playCard');
+      if (m.move === 'playCard') {
+        const card = shop.players['1'].hand.find((c) => c.iid === m.args[0])!;
+        expect(wornItems(findCardOnBoard(shop, m.args[1])!.card).map((it) => it.cardId)).not.toContain(card.cardId);
+      }
       expect(runMove(m.move, shop, '1', ...m.args)).not.toBe('INVALID_MOVE');
+      last = m.move;
     }
     expect(shop.step).toBe('act');
+    expect(shop.players['1'].hand).toEqual([]);
+  });
+
+  it('never offers a card play the engine refuses: not a duplicate, not a full hero, not a rival — in the act step either', () => {
+    const G = freshReadyGame();
+    G.turnNumber = 3; // P1's own turn 2, its act step
+    const ai = G.players['1'];
+    const active = ai.active!;
+    giveItem(G, active, 'extended_magazine');
+    const full = ai.bench[0]!;
+    for (const id of ['extra_health', 'extra_regen', 'sprint_boots']) giveItem(G, full, id);
+    const copy = giveCard(G, '1', 'extended_magazine');
+    const spirit = giveCard(G, '1', 'extra_spirit');
+    for (const lookahead of [false, true]) {
+      const plays = enumerateAIMoves(G, ctx('1'), lookahead).filter((m) => m.move === 'playCard');
+      expect(plays.some((m) => m.args[0] === copy.iid && m.args[1] === active.iid)).toBe(false);
+      expect(plays.some((m) => m.args[1] === full.iid)).toBe(false);
+      expect(plays.some((m) => [G.players['0'].active, ...G.players['0'].bench].some((h) => h?.iid === m.args[1]))).toBe(false);
+      for (const m of plays) expect(runMove(m.move, structuredClone(G), '1', ...m.args), JSON.stringify(m.args)).not.toBe('INVALID_MOVE');
+    }
+    expect(enumerateAIMoves(G, ctx('1'), false).some((m) => m.move === 'playCard' && m.args[0] === spirit.iid)).toBe(true);
+  });
+
+  it('buffs before it attacks: a card in its hand that adds attack is played ahead of the attack', () => {
+    const G = freshReadyGame();
+    G.turnNumber = 3; // P1's own turn 2, its act step
+    const ai = G.players['1'];
+    const mag = giveCard(G, '1', 'extended_magazine'); // bought by hand before auto-play took over
+    G.players['0'].active!.hp = G.players['0'].active!.hpMax = 30; // nobody falls
+    // Only the card and the attack to weigh: the bench has used its skills, the Retreat is made.
+    for (const b of ai.bench) if (b) b.skillUsedThisTurn = true;
+    G.retreatUsed = true;
+    const all = enumerateAIMoves(G, ctx('1'));
+    const magOnActive = all.findIndex((m) => m.move === 'playCard' && m.args[0] === mag.iid && m.args[1] === ai.active!.iid);
+    expect(magOnActive).toBeGreaterThanOrEqual(0);
+    expect(magOnActive).toBeLessThan(all.findIndex((m) => m.move === 'attack'));
+    expect(all[0]).toMatchObject({ move: 'playCard', args: [mag.iid, ai.active!.iid] });
   });
 
   it('a promotion owed by the other seat comes first, highest HP first', () => {

@@ -7,12 +7,12 @@ import type { CardId, CardInstance, GameState, PlayerID, PlayerState } from '../
 import { CARDS_BY_ID, HEROES, itemCard } from '@/cards';
 import { getMatchConfig, scriptedSetup, type HeroStatOverride } from '@/storage/matchConfig';
 import { allocatorFor, allocatorOf, newCounters, type IidAllocator } from '../ids';
-import { attachItem, makeInstance, syncVitalitySpike } from '../instances';
+import { makeInstance } from '../instances';
 import { pushLog } from '../log';
-import { activeCooldown, otherPlayer, slotCap, wornItems } from '../query';
-import { addSignatures, openingMarket } from '../market';
+import { otherPlayer } from '../query';
+import { addHero, openingMarket } from '../market';
 import { newSeed } from '../rng';
-import { HARD_CC_CHARGES, PATRON_HP, SOULS_START } from '../constants';
+import { PATRON_HP, SOULS_START } from '../constants';
 
 /** Empty PlayerState used while the pre-match draft is running — no heroes
  *  yet. Replaced via `buildPlayer()` once the 8th draft pick lands. */
@@ -22,6 +22,7 @@ function makeEmptyPlayer(pid: PlayerID): PlayerState {
     hp: PATRON_HP,
     hpMax: PATRON_HP,
     souls: SOULS_START,
+    hand: [],
     active: null,
     bench: [null, null, null],
     flexSlot: false,
@@ -85,33 +86,31 @@ export function buildPlayer(ids: IidAllocator, pid: PlayerID, heroes: string[], 
     hp: patronHp,
     hpMax: patronHp,
     souls: opts.souls ?? SOULS_START,
+    hand: [],
     active,
     bench,
     flexSlot: false,
   };
 }
 
-/** Put the free items a scripted match hands `pid` on its heroes: each on the
- *  first hero, Active first, with a free slot that does not already wear it,
- *  set up as if bought before the match (an active on its full cooldown, hard
- *  crowd control with its charges) — free, and without the equip experience.
- *  An item no hero has room for is left out. */
-function giveItems(G: GameState, pid: PlayerID, itemIds: CardId[]) {
-  const ps = G.players[pid];
-  const heroes = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c);
+/** Put the free cards a scripted match hands `pid` (a Story reward) into its
+ *  hand, to be played onto a hero like any other: free, so no purchase is
+ *  recorded on them. An id that names no item is left out. */
+function giveCards(G: GameState, pid: PlayerID, itemIds: CardId[]) {
   for (const id of itemIds) {
     const data = itemCard(id);
-    const hero = data && heroes.find((h) => wornItems(h).length < slotCap(G, pid) && !wornItems(h).some((it) => it.cardId === id));
-    if (!data || !hero) continue;
-    const item = makeInstance(allocatorOf(G), id, pid, 'equipment');
-    if (data.type === 'spell') {
-      if (data.hardCC) item.charges = HARD_CC_CHARGES;
-      else item.cooldowns = { [id]: activeCooldown(hero, data.tier) };
-    }
-    attachItem(hero, item);
-    syncVitalitySpike(hero);
-    pushLog(G, `P${pid} starts with ${data.name} on ${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId}.`);
+    if (!data) continue;
+    G.players[pid].hand.push(makeInstance(allocatorOf(G), id, pid, 'hand'));
+    pushLog(G, `P${pid} starts with ${data.name} in hand.`);
   }
+}
+
+/** The builds the human seat brings (`G.playerBuilds`): the match config's,
+ *  copied, when there is a human seat to bring them. */
+function playerBuilds(seat: PlayerID | null): Record<CardId, CardId[]> | undefined {
+  const builds = getMatchConfig().builds;
+  if (seat === null || !builds) return undefined;
+  return Object.fromEntries(Object.entries(builds).map(([hero, ids]) => [hero, [...ids]]));
 }
 
 /** Overwrite a roster's printed numbers (Active first, then the bench).
@@ -134,8 +133,9 @@ function applyHeroStats(ps: PlayerState, stats?: (HeroStatOverride | undefined)[
 
 /** The opening state of a game: a pre-match draft, or — for a scripted match
  *  (a Story node or tutorial lesson) — both players built straight from the
- *  given rosters. Either way the match seed (the config's, else a fresh one)
- *  draws the market now, before any pick. A drafted match's first mover is the
+ *  given rosters, both rosters' signatures and builds on sale. Either way the
+ *  match seed (the config's, else a fresh one) draws the market now, before
+ *  any pick. A drafted match's first mover is the
  *  seat that drafts second; a scripted one opens on seat 0's turn, so its first
  *  mover is set to make that turn seat 0's: seat 0 on an odd opening turn,
  *  seat 1 on an even one (seat 0 is then the second mover, as in a drafted
@@ -144,6 +144,7 @@ export function setupGame(): GameState {
   const counters = newCounters();
   const seed = (getMatchConfig().seed ?? newSeed()) >>> 0;
   const market = openingMarket(seed);
+  const human = humanSeat();
   // Scripted match (Story node or tutorial lesson): skip the draft entirely
   // and build both players from the given rosters. Enemy heroes carry the
   // setup's scaling buff.
@@ -162,25 +163,27 @@ export function setupGame(): GameState {
       },
       turnNumber: startTurn,
       firstMover: startTurn % 2 === 1 ? '0' : '1',
-      humanSeat: humanSeat(),
+      humanSeat: human,
       log: [{ turn: startTurn, text: 'Battle begins.' }],
       draft: null,
       // realTurn = ctx.turn - offset, and ctx.turn starts at 1.
       draftTurnsOffset: 1 - startTurn,
       seed,
       market,
+      playerBuilds: playerBuilds(human),
       step: 'shop',
       attackUsed: false,
       retreatUsed: false,
       action: null,
       fx: [],
     };
-    for (const id of [...story.playerHeroes, ...story.enemyHeroes]) addSignatures(G, id);
+    for (const id of story.playerHeroes) addHero(G, '0', id);
+    for (const id of story.enemyHeroes) addHero(G, '1', id);
     // A lesson builds the exact situation it teaches: custom attack,
     // health and experience per hero, by roster position.
     applyHeroStats(G.players['0'], story.playerHeroStats);
     applyHeroStats(G.players['1'], story.enemyHeroStats);
-    giveItems(G, '0', story.playerItems ?? []);
+    giveCards(G, '0', story.playerItems ?? []);
     return G;
   }
 
@@ -193,7 +196,7 @@ export function setupGame(): GameState {
     // The draft comes before the match's first turn: engine turn 0.
     turnNumber: 0,
     firstMover: otherPlayer(DRAFT_ORDER[0]),
-    humanSeat: humanSeat(),
+    humanSeat: human,
     log: [{ turn: 0, text: 'Draft begins.' }],
     draft: {
       pool: HEROES.map((h) => h.id),
@@ -204,6 +207,7 @@ export function setupGame(): GameState {
     draftTurnsOffset: 0,  // set in draftPick when draft completes
     seed,
     market,
+    playerBuilds: playerBuilds(human),
     step: 'shop',
     attackUsed: false,
     retreatUsed: false,
@@ -215,7 +219,8 @@ export function setupGame(): GameState {
 /**
  * Pre-match hero draft pick (`draftPickBlocked` has checked it is the player's
  * pick from the pool). Removes the hero from the pool, puts its signature
- * items on sale, and says whether the boardgame.io turn ends — when the next
+ * items and its build on sale (`addHero`: the picker's own build of it), and
+ * says whether the boardgame.io turn ends — when the next
  * pick belongs to the other player — or stays (consecutive snake picks). The
  * final pick builds both players from the drafted heroes and always ends the
  * draft's turn: the next boardgame.io turn is the first mover's (seat 0 picks
@@ -229,7 +234,7 @@ export function draftPick(G: GameState, ctx: { currentPlayer: string; turn: numb
   draft.pool = draft.pool.filter((id) => id !== heroId);
   draft.picks[picker].push(heroId);
   draft.currentIndex++;
-  addSignatures(G, heroId);
+  addHero(G, picker, heroId);
 
   const data = CARDS_BY_ID[heroId];
   pushLog(G, `P${picker} drafted ${data?.name ?? heroId}.`);

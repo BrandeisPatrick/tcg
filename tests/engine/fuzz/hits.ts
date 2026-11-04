@@ -1,15 +1,18 @@
 /**
  * Violation bookkeeping shared by the fuzz specs: a `Hit` is one violation with
  * the seed / step / move that produced it, a stable `signature`, and `tags`
- * naming the context (the item bought or used, an upgrade, a merged Rem, a hole
- * on the bench, the turn's step…) so a KNOWN allowlist entry can be as narrow as
- * the bug it documents.
+ * naming the context (the item bought, played or used, a discount, what a play
+ * consumes, a merged Rem, a hole on the bench, the turn's step…) so a KNOWN
+ * allowlist entry can be as narrow as the bug it documents.
  */
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { isRespawning } from '@/engine/query';
 import type { Snapshot } from './driver';
-import { boardOf, boardUnits, isMergedRem, itemData, slottedHeroOf, slotCapOracle, upgradeComponentOracle, wornItemOf, wornItemsOf } from './oracle';
+import {
+  boardOf, boardUnits, boughtAtDiscountOracle, buyPriceOracle, handCardOf, handOf, isMergedRem, itemData, itemPriceOracle,
+  playConsumesOracle, slottedHeroOf, slotCapOracle, wornItemOf, wornItemsOf,
+} from './oracle';
 
 export interface Hit {
   /** `<invariant or check>@<move name>` plus `#chaos` when the move was made up by the chaos generator. */
@@ -82,16 +85,32 @@ export function moveTags(snap: Snapshot, name: string, args: unknown[]): string[
   if (name === 'buy') {
     tags.push(...itemTags(typeof args[0] === 'string' ? args[0] : undefined));
     if (typeof args[0] === 'string' && itemData(args[0]) && !(G.market ?? []).includes(args[0])) tags.push('item:off-market');
+    if (itemData(args[0]) && buyPriceOracle(G, pid, args[0]) < itemPriceOracle(args[0])) tags.push('buy:discount');
+    if (itemData(args[0])?.upgradesFrom) tags.push('buy:upgrade');
+  } else if (name === 'playCard') {
+    const card = handCardOf(G, pid, args[0]);
+    tags.push(...(card ? itemTags(card.cardId) : ['card:not-in-hand']));
+    if (card && boughtAtDiscountOracle(card)) tags.push('card:bought-at-discount');
+    if (card && card.boughtOnTurn === undefined) tags.push('card:not-bought');
+    if (card && card.boughtOnTurn !== undefined && card.boughtOnTurn !== G.turnNumber) tags.push('card:held-from-before');
     const hero = slottedHeroOf(G, pid, args[1]);
     if (!hero) tags.push('hero:unknown');
     else {
       tags.push(`hero:${hero.cardId}`);
       if (isRespawning(hero)) tags.push('hero:corpse');
-      if (upgradeComponentOracle(hero, args[0])) tags.push('buy:upgrade');
-      if (wornItemsOf(hero).some((a) => a.cardId === args[0])) tags.push('buy:duplicate');
-      if (wornItemsOf(hero).length >= slotCapOracle(G, pid)) tags.push('buy:full');
       if ((hero.attached ?? []).some(isMergedRem)) tags.push('hero:rem-merged-in');
+      if (card) {
+        const taken = playConsumesOracle(G, pid, card, hero);
+        if (taken.length) tags.push(`play:consumes-from-${!taken[0].from ? 'hand' : taken[0].from === hero ? 'hero' : 'other-hero'}`);
+        if (taken.length > 1) tags.push('play:settles');
+        if (wornItemsOf(hero).some((a) => a.cardId === card.cardId)) tags.push('play:duplicate');
+        if (wornItemsOf(hero).length >= slotCapOracle(G, pid)) tags.push('play:full');
+      }
     }
+  } else if (name === 'sell' && handCardOf(G, pid, args[0])) {
+    const held = handCardOf(G, pid, args[0])!;
+    tags.push(...itemTags(held.cardId), 'sell:hand');
+    if (held.boughtOnTurn === G.turnNumber) tags.push('item:bought-this-turn');
   } else if (name === 'sell' || name === 'moveItem' || name === 'activate') {
     const worn = wornItemOf(G, pid, args[0]);
     tags.push(...(worn ? itemTags(worn.item.cardId) : ['item:not-worn']));
@@ -115,6 +134,7 @@ export function moveTags(snap: Snapshot, name: string, args: unknown[]): string[
     tags.push(`from:${String(args[0])}`, `to:${String(args[1])}`);
   }
   tags.push(`step:${G.step}`);
+  if (handOf(G, pid).length) tags.push('hand:holding');
   if (boardOf(me).some(isMergedRem) || boardOf(me).some((c) => (c.attached ?? []).some(isMergedRem))) tags.push('rem:merged');
   if (me.bench.some((b) => b == null)) tags.push('bench:hole');
   if (me.active && isRespawning(me.active)) tags.push('active:corpse');

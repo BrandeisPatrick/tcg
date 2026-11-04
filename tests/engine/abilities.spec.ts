@@ -104,7 +104,7 @@ function boardCards(G: GameState, pid: PlayerID): CardInstance[] {
 }
 
 describe('Ultimates are kit abilities, never cards', () => {
-  it('no ultimate is ever dealt: a played-out match leaves no card of one on the board, every ultimate a kit ability', async () => {
+  it('no ultimate is ever dealt: a played-out match leaves no card of one in a hand or on the board, every ultimate a kit ability', async () => {
     const { Client } = await import('boardgame.io/client');
     const { enumerateAIMoves } = await import('@/ai/heuristic');
     const { configureReadyMatch } = await import('./_helpers');
@@ -125,6 +125,7 @@ describe('Ultimates are kit abilities, never cards', () => {
     const G = client.getState()!.G as GameState;
     for (const pid of ['0', '1'] as PlayerID[]) {
       expect(boardCards(G, pid).filter((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate'), pid).toEqual([]);
+      expect(G.players[pid].hand.filter((c) => CARDS_BY_ID[c.cardId]?.type !== 'spell' && CARDS_BY_ID[c.cardId]?.type !== 'equipment'), pid).toEqual([]);
       for (const h of heroesOf(G.players[pid])) expect(kitAbilityIds(h), h.cardId).toContain(heroData(h)!.ult);
     }
   });

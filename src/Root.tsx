@@ -8,7 +8,7 @@ import { PosterBackdrop } from './ui/PosterBackdrop';
 import { SystemLayer } from './ui/system/SystemMenu';
 import type { CardId } from './engine/types';
 import { setMatchConfig, getMatchConfig } from './storage/matchConfig';
-import { getPreferredHeroes } from './storage/playerData';
+import { getPreferredHeroes, loadPlayerData } from './storage/playerData';
 import { LESSONS, lessonById } from './tutorial/lessons';
 import { LessonsScreen } from './ui/tutorial/LessonsScreen';
 import type { StoryRun, StoryNode } from './story/types';
@@ -80,6 +80,7 @@ export function Root() {
     if (s === 'match') {
       setMatchConfig({
         heroPreferences: getPreferredHeroes(),
+        builds: loadPlayerData().builds,
         story: undefined,
       });
       return { screen: 'match' };
@@ -121,6 +122,8 @@ export function Root() {
     const prefs = getPreferredHeroes();
     setMatchConfig({
       heroPreferences: prefs,
+      // The player's saved builds: each drafted hero's goes on sale with it.
+      builds: loadPlayerData().builds,
       featuredHero,
       // Clear both scripted setups so a Quick Match runs the normal draft path.
       story: undefined,
@@ -142,6 +145,7 @@ export function Root() {
       pendingBattleNode.current = node.id;
       setMatchConfig({
         heroPreferences: [null, null, null, null],
+        builds: loadPlayerData().builds,
         story: buildStoryMatch(current, node),
       });
       setMatchEpoch((e) => e + 1);

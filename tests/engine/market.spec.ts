@@ -2,19 +2,24 @@
  * The market (src/engine/market.ts): what the shop sells in one match. It is
  * drawn from the match seed before the first pick — every tier 1 item, then per
  * tab MARKET_SLICE items of each higher tier from the items that are no hero's
- * signature — and each drafted hero's two signature items join it as the hero
- * is picked (a scripted match opens with both rosters' on sale). Being drawn
- * from `G.seed`, it replays from G alone, whatever Math.random does.
+ * signature — and as each hero is picked its two signature items join it, then
+ * every item of the picker's build of it (`buildOf`: the human seat's saved
+ * build, `G.playerBuilds`, else the default build — every AI seat's), so a
+ * build set up before the match can always be bought. A scripted match opens
+ * with both rosters' on sale; `freshReadyGame`, a hand-built state, adds the
+ * signatures only. Being drawn from `G.seed`, it replays from G alone, whatever
+ * Math.random does.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import type { CardId, GameState, ItemTier } from '@/engine/types';
 import { CARDS_BY_ID, HEROES, ITEMS, itemCard } from '@/cards';
+import { defaultBuild } from '@/cards/builds';
 import { DeadlockGame } from '@/engine/game';
 import { setupGame } from '@/engine/actions/setup';
 import { MARKET_SLICE } from '@/engine/constants';
 import {
-  ITEM_SLOTS, SIGNATURE_ITEMS, marketByTab, marketItems, marketStandIn, onSale, openingMarket,
+  ITEM_SLOTS, SIGNATURE_ITEMS, buildOf, marketByTab, marketItems, marketStandIn, onSale, openingMarket,
 } from '@/engine/market';
 import { drawWithoutReplacement, seededRandom } from '@/engine/rng';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
@@ -30,6 +35,14 @@ const signatureOf = (heroId: CardId): CardId[] => {
 const newSignatures = (market: CardId[], heroes: CardId[]): CardId[] => {
   const out: CardId[] = [];
   for (const h of heroes) for (const id of signatureOf(h)) if (!market.includes(id) && !out.includes(id)) out.push(id);
+  return out;
+};
+/** What a hero joining a side adds to `market`: its signature items, then the items of the
+ *  build its side follows (left out: its default build), in order, each once, minus those
+ *  already on sale. */
+const newOnSale = (market: CardId[], heroId: CardId, build: CardId[] = defaultBuild(heroId)): CardId[] => {
+  const out: CardId[] = [];
+  for (const id of [...signatureOf(heroId), ...build]) if (itemCard(id) && !market.includes(id) && !out.includes(id)) out.push(id);
   return out;
 };
 /** The non-signature items of one tab and tier: what the random slice draws from. */
@@ -91,8 +104,8 @@ describe('the opening market is drawn from the seed', () => {
   });
 });
 
-describe('signature items join the market', () => {
-  it('each draft pick puts the hero\'s two signature items on sale, each once, at the end', () => {
+describe('signature items and builds join the market', () => {
+  it('each draft pick puts the hero\'s two signature items, then its build, on sale — each once, at the end', () => {
     setMatchConfig({ heroPreferences: [null, null, null, null], seed: 77 });
     const client = Client({ game: DeadlockGame, numPlayers: 2 });
     client.start();
@@ -100,14 +113,15 @@ describe('signature items join the market', () => {
     expect(G0.draft).not.toBeNull();
     expect(G0.seed).toBe(77);
     expect(marketItems(G0)).toEqual(openingMarket(77));
-    // Yamato's Extended Magazine is a tier 1 item, already on sale: only Shadow Weave joins.
+    // Yamato's Extended Magazine is a tier 1 item, already on sale: Shadow Weave joins, then his build's.
     const picks = ['hero_yamato', 'hero_kelvin', 'hero_haze', 'hero_paige', 'hero_wraith', 'hero_dynamo', 'hero_lash', 'hero_abrams'];
     let expected = openingMarket(77);
     for (const heroId of picks) {
       client.moves.draftPick(heroId);
-      expected = [...expected, ...newSignatures(expected, [heroId])];
-      expect(marketItems(client.getState()!.G as GameState), heroId).toEqual(expected);
-      for (const id of signatureOf(heroId)) expect(onSale(client.getState()!.G as GameState, id), `${heroId}: ${id}`).toBe(true);
+      expected = [...expected, ...newOnSale(expected, heroId)];
+      const G = client.getState()!.G as GameState;
+      expect(marketItems(G), heroId).toEqual(expected);
+      for (const id of [...signatureOf(heroId), ...defaultBuild(heroId)]) expect(onSale(G, id), `${heroId}: ${id}`).toBe(true);
     }
     const G = client.getState()!.G as GameState;
     expect(G.draft).toBeNull();
@@ -115,15 +129,53 @@ describe('signature items join the market', () => {
     client.stop();
   });
 
-  it('a scripted match opens with both rosters\' signature items on sale (and so does freshReadyGame)', () => {
+  it('the human seat\'s own build goes on sale with its pick; an AI seat\'s pick brings the default build', () => {
+    const shelf = openingMarket(77);
+    // Items no list here would put on sale: off the opening shelf, no signature, in neither default build.
+    const defaults = [...defaultBuild('hero_haze'), ...defaultBuild('hero_kelvin')];
+    const spare = ITEMS.filter((i) => !shelf.includes(i.id) && !SIGNATURE_ITEMS.has(i.id) && !defaults.includes(i.id)).map((i) => i.id);
+    const mine = spare.slice(0, 4);
+    const theirs = spare.slice(4, 6);
+    const builds = { hero_haze: mine, hero_kelvin: theirs };
+    setMatchConfig({ heroPreferences: [null, null, null, null], seed: 77, builds });
+    const client = Client({ game: DeadlockGame, numPlayers: 2 });
+    client.start();
+    const G0 = client.getState()!.G as GameState;
+    expect(G0.humanSeat).toBe('0');
+    expect(G0.playerBuilds).toEqual(builds);
+    expect(G0.playerBuilds!.hero_haze).not.toBe(mine); // a copy, not the config's own list
+    expect(buildOf(G0, '0', 'hero_haze')).toEqual(mine);
+    expect(buildOf(G0, '1', 'hero_haze')).toEqual(defaultBuild('hero_haze'));
+    expect(buildOf(G0, '0', 'hero_lash')).toEqual(defaultBuild('hero_lash')); // a hero the player did not build
+    client.moves.draftPick('hero_haze');   // seat 0, the human seat: its own build
+    client.moves.draftPick('hero_kelvin'); // seat 1, an AI seat: the default build, whatever the player saved
+    const G = client.getState()!.G as GameState;
+    const afterHaze = [...shelf, ...newOnSale(shelf, 'hero_haze', mine)];
+    expect(marketItems(G)).toEqual([...afterHaze, ...newOnSale(afterHaze, 'hero_kelvin')]);
+    for (const id of mine) expect(onSale(G, id), id).toBe(true);
+    for (const id of theirs) expect(onSale(G, id), id).toBe(false);
+    client.stop();
+  });
+
+  it('with no human seat nobody\'s saved builds are read: every pick brings its default build', () => {
+    setMatchConfig({ heroPreferences: [null, null, null, null], seed: 77, humanSeat: null, builds: { hero_haze: ['curse'] } });
+    const G = setupGame();
+    expect(G.playerBuilds).toBeUndefined();
+    expect(buildOf(G, '0', 'hero_haze')).toEqual(defaultBuild('hero_haze'));
+  });
+
+  it('a scripted match opens with both rosters\' signature items and builds on sale; freshReadyGame with their signatures only', () => {
     configureReadyMatch();
     const client = Client({ game: DeadlockGame, numPlayers: 2 });
     client.start();
     const G = client.getState()!.G as GameState;
-    const want = [...openingMarket(TEST_SEED), ...newSignatures(openingMarket(TEST_SEED), [...TEST_ROSTERS['0'], ...TEST_ROSTERS['1']])];
+    let want = openingMarket(TEST_SEED);
+    for (const h of [...TEST_ROSTERS['0'], ...TEST_ROSTERS['1']]) want = [...want, ...newOnSale(want, h)];
     expect(marketItems(G)).toEqual(want);
-    for (const h of [...TEST_ROSTERS['0'], ...TEST_ROSTERS['1']]) for (const id of signatureOf(h)) expect(onSale(G, id), id).toBe(true);
-    expect(marketItems(freshReadyGame())).toEqual(want);
+    for (const h of [...TEST_ROSTERS['0'], ...TEST_ROSTERS['1']]) {
+      for (const id of [...signatureOf(h), ...defaultBuild(h)]) expect(onSale(G, id), `${h}: ${id}`).toBe(true);
+    }
+    expect(marketItems(freshReadyGame())).toEqual([...openingMarket(TEST_SEED), ...newSignatures(openingMarket(TEST_SEED), [...TEST_ROSTERS['0'], ...TEST_ROSTERS['1']])]);
     client.stop();
   });
 });
@@ -156,7 +208,7 @@ describe('the market replays from G alone', () => {
     for (const G of [a, b, c]) expect(G.market).toEqual(openingMarket(G.seed));
   });
 
-  it('a drafted market is the seed\'s opening market plus the picks\' signatures, however Math.random moves during the draft', () => {
+  it('a drafted market is the seed\'s opening market plus the picks\' signatures and builds, however Math.random moves during the draft', () => {
     const run = (noise: number) => {
       setMatchConfig({ heroPreferences: [null, null, null, null], seed: 9001 });
       vi.spyOn(Math, 'random').mockReturnValue(noise);
@@ -171,7 +223,9 @@ describe('the market replays from G alone', () => {
     const one = run(0.1);
     const two = run(0.9);
     expect(two.G.market).toEqual(one.G.market);
-    expect(one.G.market).toEqual([...openingMarket(one.G.seed), ...newSignatures(openingMarket(one.G.seed), one.picks)]);
+    let want = openingMarket(one.G.seed);
+    for (const id of one.picks) want = [...want, ...newOnSale(want, id)];
+    expect(one.G.market).toEqual(want);
   });
 });
 

@@ -756,7 +756,7 @@ function RewardSheet({ reward, onPreview, onClose }: {
 
         <p style={{ ...text.body, margin: prints ? '0 0 16px' : 0, color: poster.inkSoft }}>
           {prints
-            ? 'Your side starts the next fight with these: each item goes on a hero for free (the Active first), and the souls are yours before the first income. Supply stops add more; winning that fight spends them all.'
+            ? 'Your side starts the next fight with these: each item is a free card in your hand, to put on any hero, and the souls are yours before the first income. Supply stops add more; winning that fight spends them all.'
             : 'Nothing yet. A supply stop offers an item or souls; what you take waits here for your next fight.'}
         </p>
 

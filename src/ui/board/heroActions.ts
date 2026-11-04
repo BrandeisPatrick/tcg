@@ -1,25 +1,27 @@
 /**
  * What a hero can still do this turn, read the way the engine reads it. A
- * turn opens on its shop step (buy, sell and move items, then close the shop),
- * then its act: every hero may use one ability a turn (a skill, an active item
- * it wears or, from Level 2, its ultimate — all free), one Retreat, and the
- * Active makes the turn's attack, which ends the turn's Act. The board's glint,
- * the hero sheet's plates, the shop sheet, the refusal stickers and the
- * tutorial all ask the engine's own `skillBlocked` / `activateBlocked` /
- * `attackBlocked` / `buyBlocked` / `moveBlocked` (legality.ts) and `blocked`,
- * which knows the step, so none of them offers a move the engine would refuse;
- * this file only words the answers.
+ * turn opens on its shop step (buy — the card goes to the hand —, sell and
+ * move items, then close the shop), then its act: every hero may use one
+ * ability a turn (a skill, an active item it wears or, from Level 2, its
+ * ultimate — all free), one Retreat, and the Active makes the turn's attack,
+ * which ends the turn's Act. A card in the hand is played onto a hero in
+ * either step, free. The board's glint, the hero sheet's plates, the shop
+ * sheet, the refusal stickers and the tutorial all ask the engine's own
+ * `skillBlocked` / `activateBlocked` / `attackBlocked` / `buyBlocked` /
+ * `playBlocked` / `moveBlocked` (legality.ts) and `blocked`, which knows the
+ * step, so none of them offers a move the engine would refuse; this file only
+ * words the answers.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import {
   activateBlocked, blocked, buyPrice, moveBlocked, retreatCost, skillBlocked,
-  type ActivateBlock, type AttackBlock, type MoveBlock, type PromoteBlock, type ShopBlock, type SkillBlock,
+  type ActivateBlock, type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type ShopBlock, type SkillBlock,
 } from '@/engine/legality';
 import {
-  findCardOnBoard, findWornItem, isRespawning, isUntargetable, itemCooldown, kitAbilityIds, otherPlayer, resolveSkill,
-  slotCap, wornActives,
+  findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, kitAbilityIds, otherPlayer,
+  resolveSkill, slotCap, wornActives,
 } from '@/engine/query';
 import type { Action } from '@/engine/engine';
 import type { AttackPlan } from '@/engine/forecast';
@@ -132,8 +134,22 @@ export function shopBlockReason(block: ShopBlock, s: ShopSubject = {}): string {
     case 'duplicate': return `${s.hero ?? 'That hero'} already wears ${s.item ?? 'one'}`;
     case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items — sell one first`;
     case 'souls': return s.cost === undefined ? 'Not enough souls' : `Need ${souls(s.cost)}${s.have === undefined ? '' : ` — you have ${s.have}`}`;
-    case 'notWorn': return 'Not one of your items';
+    case 'notOwned': return 'Not one of your cards';
+    case 'claimed': return `An upgrade in your hand was bought against ${s.item ?? 'it'} — play or sell that first`;
+    case 'notWorn': return 'Not one of your worn items';
     case 'same': return `It is already on ${s.hero ?? 'that hero'}`;
+  }
+}
+
+/** The line the sticker prints on a card from the hand that cannot go onto
+ *  the hero it was played on. */
+export function playBlockReason(block: PlayBlock, s: ShopSubject = {}): string {
+  switch (block) {
+    case 'notYourTurn': return 'Not your turn';
+    case 'notInHand': return 'That card is not in your hand';
+    case 'noHero': return 'Play it onto one of your heroes';
+    case 'duplicate': return `${s.hero ?? 'That hero'} already wears ${s.item ?? 'one'}`;
+    case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items — sell one first`;
   }
 }
 
@@ -218,14 +234,18 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
       if (code === 'target' && a.targetIid !== undefined) return `Not a valid target for ${nameOf(worn?.item) || 'that item'}`;
       return activateBlockReason(code as ActivateBlock, worn?.item, worn?.bearer);
     }
-    case 'buy': {
-      const hero = findCardOnBoard(G, a.heroIid)?.card;
-      return shopBlockReason(code as ShopBlock, {
-        item: cardName(a.itemId), hero: nameOf(hero) || undefined,
-        cost: hero ? buyPrice(hero, a.itemId) : undefined, have: G.players[pid].souls, slots: slotCap(G, pid),
+    case 'buy':
+      return shopBlockReason(code as ShopBlock, { item: cardName(a.itemId), cost: buyPrice(G, pid, a.itemId), have: G.players[pid].souls });
+    case 'sell': {
+      const card = handCard(G, pid, a.itemIid) ?? findWornItem(G, a.itemIid, pid)?.item;
+      return shopBlockReason(code as ShopBlock, { item: nameOf(card) || undefined });
+    }
+    case 'playCard': {
+      const card = handCard(G, pid, a.cardIid);
+      return playBlockReason(code as PlayBlock, {
+        item: nameOf(card) || undefined, hero: nameOf(findCardOnBoard(G, a.heroIid)?.card) || undefined, slots: slotCap(G, pid),
       });
     }
-    case 'sell': return shopBlockReason(code as ShopBlock);
     case 'moveItem': {
       const worn = findWornItem(G, a.itemIid, pid);
       return shopBlockReason(code as ShopBlock, {

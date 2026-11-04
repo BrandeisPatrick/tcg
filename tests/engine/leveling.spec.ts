@@ -7,7 +7,7 @@ import { reapDead } from '@/engine/death';
 import { withCast } from '@/engine/castContext';
 import { INVALID, perform } from '@/engine/engine';
 import { findWornItem } from '@/engine/query';
-import { buyItem, freshReadyGame, giveItem } from './_helpers';
+import { buyItem, buyToHand, freshReadyGame, giveItem, playItem } from './_helpers';
 
 function freshG(): GameState {
   return freshReadyGame();
@@ -86,12 +86,14 @@ describe('hero leveling: grantExp', () => {
 });
 
 describe('hero leveling triggers', () => {
-  it('buying an item grants +1 exp to the bearer, once per item id', () => {
+  it('equipping an item — playing it from the hand — grants +1 exp to the bearer, once per item id; holding it grants nothing', () => {
     const G = freshReadyGame({ step: 'shop' });
     const h = G.players['0'].active!;
     const before = h.exp ?? 0;
     G.players['0'].souls = 10;
-    const mag = buyItem(G, '0', 'extended_magazine', h);
+    const held = buyToHand(G, '0', 'extended_magazine');
+    expect((h.exp ?? 0) - before).toBe(0);
+    const mag = playItem(G, '0', held, h);
     expect((h.exp ?? 0) - before).toBe(1);
     // Sold and bought back, it pays nothing more: that item's first equip is paid.
     expect(perform(G, '0', { type: 'sell', itemIid: mag.iid })).not.toBe(INVALID);

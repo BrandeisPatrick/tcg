@@ -25,9 +25,8 @@ export interface StorySetup {
   /** The rival patron's HP, when it differs from `patronHp` (a lesson whose
    *  one kill is the win). */
   enemyPatronHp?: number;
-  /** Items the player's side starts the fight wearing, free (a Story reward):
-   *  each goes on the first hero, Active first, with a free slot that does not
-   *  wear it already. */
+  /** Cards the player starts the fight holding, free (a Story reward): in the
+   *  hand at the first turn, to be played onto a hero like any bought card. */
   playerItems?: CardId[];
   /** Souls each side holds before its first income (a Story reward, a deeper
    *  opponent's war chest, a lesson's budget). */
@@ -48,6 +47,10 @@ interface MatchConfig {
   heroPreferences: (CardId | null)[];
   /** The match seed (the market is drawn from it); a fresh one when left out. */
   seed?: number;
+  /** The human seat's builds — the player's saved builds, by hero. Each
+   *  drafted hero's build goes on sale with it; a hero not named here (and
+   *  every hero of an AI seat) follows its default build. */
+  builds?: Record<CardId, CardId[]>;
   /** The hero the title's Quick Match card featured — the recommended first
    *  pick: the draft opens focused on it for the first choice only. Unset for
    *  a deep-linked match or a rematch, where nothing is pre-selected. */

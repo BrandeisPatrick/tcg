@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, PlayerID } from '@/engine/types';
 import { INVALID, perform } from '@/engine/engine';
-import { buyBlocked } from '@/engine/legality';
+import { playBlocked } from '@/engine/legality';
 import { isRespawning, itemResist, slotCap, wornItems } from '@/engine/query';
 import { beginTurn } from '@/engine/actions/turn';
 import { resolve } from '@/engine/death';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { withCast } from '@/engine/castContext';
-import { buyItem, freshReadyGame, giveItem } from './_helpers';
+import { buyItem, buyToHand, freshReadyGame, giveItem } from './_helpers';
 
 /**
  * Per-card test scenarios for the V1 minimal item set: active items (spells)
@@ -266,16 +266,18 @@ describe('Spell scaling treats corpse Active as 0 Spirit', () => {
 // ============================================================================
 
 describe('item slots (3 per hero)', () => {
-  it('refuses a 4th item to a full hero; selling one frees the slot', () => {
+  it('a play onto a full hero is refused — there is no discard; selling one frees the slot', () => {
     const G = freshReadyGame({ step: 'shop' });
     G.players['0'].souls = 99;
     const hero = G.players['0'].active!;
     const worn = ['extra_spirit', 'extra_health', 'restorative_shot'].map((id) => buyItem(G, '0', id, hero));
     expect(wornItems(hero)).toHaveLength(slotCap(G, '0'));
-    const fourth = { type: 'buy' as const, itemId: 'extended_magazine', heroIid: hero.iid };
-    expect(buyBlocked(G, '0', fourth.itemId, hero.iid)).toBe('full');
+    const card = buyToHand(G, '0', 'extended_magazine');           // the buy itself names no hero
+    const fourth = { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid };
+    expect(playBlocked(G, '0', card.iid, hero.iid)).toBe('full');
     expect(perform(G, '0', fourth)).toBe(INVALID);
     expect(wornItems(hero)).toHaveLength(3);
+    expect(G.players['0'].hand).toEqual([card]);
     // No discarding at the cap: a sale makes the room.
     expect(perform(G, '0', { type: 'sell', itemIid: worn[0].iid })).not.toBe(INVALID);
     expect(perform(G, '0', fourth)).not.toBe(INVALID);

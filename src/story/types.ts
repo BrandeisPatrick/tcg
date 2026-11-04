@@ -24,8 +24,8 @@ export interface StoryNode {
 }
 
 /** What the next fight starts with, gathered at supply stops on the way to
- *  it (rewards add up until a fight is over): items your side wears from the
- *  first turn, free, and souls in hand before the first income. */
+ *  it (rewards add up until a fight is over): items as free cards in the hand
+ *  from the first turn, and souls held before the first income. */
 export interface FightReward {
   items: CardId[];
   souls: number;

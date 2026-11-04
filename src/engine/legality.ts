@@ -19,9 +19,9 @@ import type { Action } from './engine';
 import { getAbility } from './registry';
 import { RETREAT_COST, ULT_UNLOCK_LEVEL } from './constants';
 import {
-  attackPower, findCardOnBoard, findWornItem, hasReach, isBlocked, isRespawning, isUntargetable, itemCooldown, itemPrice,
-  kitAbilityIds, liveBoardCards, otherPlayer, resolveSkill, retreatDiscount, slotCap, stepInCandidates, targetsFor,
-  wornActives, wornItems,
+  attackPower, boughtAtDiscount, copiesOnSide, findCardOnBoard, findWornItem, handCard, hasReach, heroesOf, isBlocked, isRespawning,
+  isUntargetable, itemCooldown, itemPrice, kitAbilityIds, liveBoardCards, otherPlayer, resolveSkill, retreatDiscount,
+  slotCap, slottedHeroes, stepInCandidates, targetsFor, wornActives, wornItems,
 } from './query';
 import { marketItems, onSale } from './market';
 import { seatToMove } from './rounds';
@@ -219,9 +219,9 @@ export function activateBlocked(G: GameState, pid: PlayerID, itemIid: string, ta
   return targets.some((t) => t.iid === targetIid) ? null : 'target';
 }
 
-// ---------- The shop ----------
+// ---------- The shop and the hand ----------
 
-export type ShopBlock = 'notYourTurn' | 'notShop' | 'noItem' | 'notOnSale' | 'noHero' | 'duplicate' | 'full' | 'souls' | 'notWorn' | 'same';
+export type ShopBlock = 'notYourTurn' | 'notShop' | 'noItem' | 'notOnSale' | 'souls' | 'notOwned' | 'claimed' | 'notWorn' | 'noHero' | 'same' | 'duplicate' | 'full';
 
 /** Why the shop is shut to `pid`: not its turn (the draft included), or its
  *  turn is past the shop step. */
@@ -238,63 +238,80 @@ function slottedHero(G: GameState, pid: PlayerID, heroIid: string): CardInstance
   return found && found.owner === pid ? found.card : undefined;
 }
 
-/** The worn item buying `itemId` for `hero` would replace: the component it
- *  upgrades from (`upgradesFrom`), when the hero wears it. */
+/** The worn item an upgrade played onto `hero` takes the place of: the
+ *  component it upgrades from (`upgradesFrom`), when the hero wears it. */
 export function upgradeComponent(hero: CardInstance, itemId: CardId): CardInstance | undefined {
   const from = itemCard(itemId)?.upgradesFrom;
   return from ? wornItems(hero).find((it) => it.cardId === from) : undefined;
 }
 
-/** Souls `itemId` costs bought for `hero`: its price, or — an upgrade of an
- *  item the hero wears — the difference. */
-export function buyPrice(hero: CardInstance, itemId: CardId): number {
-  const component = upgradeComponent(hero, itemId);
-  return Math.max(0, itemPrice(itemId) - (component ? itemPrice(component.cardId) : 0));
+/** How many of `pid`'s copies of the item `componentId` are free to price an
+ *  upgrade at the difference: the copies on its side (`copiesOnSide`: in its
+ *  hand, or worn by one of its heroes) less the upgrades of it in its hand
+ *  already bought for the difference — each of those will consume a copy when
+ *  it is played. */
+export function freeComponents(G: GameState, pid: PlayerID, componentId: CardId): number {
+  const claimed = G.players[pid].hand.filter((c) => boughtAtDiscount(c) && itemCard(c.cardId)?.upgradesFrom === componentId).length;
+  return copiesOnSide(G, pid, componentId).length - claimed;
 }
 
-/** Souls selling `item` brings back: what was paid for it when it was bought
- *  this turn, else half its price, rounded down. */
+/** Souls `pid` pays for `itemId`: its price, or — an upgrade whose component
+ *  is on its side (worn by one of its heroes or in its hand) and not already
+ *  spoken for by another upgrade in its hand — the difference. */
+export function buyPrice(G: GameState, pid: PlayerID, itemId: CardId): number {
+  const from = itemCard(itemId)?.upgradesFrom;
+  const off = from && freeComponents(G, pid, from) > 0 ? itemPrice(from) : 0;
+  return Math.max(0, itemPrice(itemId) - off);
+}
+
+/** Souls selling `item` (in the hand or worn) brings back: what was paid for
+ *  it when it was bought this turn, else half its price, rounded down. */
 export function sellRefund(G: GameState, item: CardInstance): number {
   if (item.boughtOnTurn === G.turnNumber) return item.paid ?? itemPrice(item.cardId);
   return Math.floor(itemPrice(item.cardId) / 2);
 }
 
 /**
- * Why `pid` cannot buy `itemId` for its hero `heroIid` right now, or null when
- * it can. Checked in this order:
+ * Why `pid` cannot buy `itemId` right now, or null when it can. The card goes
+ * to the hand: no hero is chosen at the shop. Checked in this order:
  *  - 'notYourTurn' it is not `pid`'s turn.
  *  - 'notShop'   the shop step is over (`closeShop`).
  *  - 'noItem'    no item has that id.
  *  - 'notOnSale' this match's market does not sell it.
- *  - 'noHero'    no hero of `pid` in a slot has that iid (bench and corpses count).
- *  - 'duplicate' the hero already wears one.
- *  - 'full'      the hero's slots are full (`slotCap`) and it is no upgrade of
- *                an item the hero wears.
  *  - 'souls'     `pid` has fewer souls than `buyPrice`.
  */
-export function buyBlocked(G: GameState, pid: PlayerID, itemId: CardId, heroIid: string): ShopBlock | null {
+export function buyBlocked(G: GameState, pid: PlayerID, itemId: CardId): ShopBlock | null {
   const shut = shopShut(G, pid);
   if (shut) return shut;
   if (!itemCard(itemId)) return 'noItem';
   if (!onSale(G, itemId)) return 'notOnSale';
-  const hero = slottedHero(G, pid, heroIid);
-  if (!hero) return 'noHero';
-  if (wornItems(hero).some((it) => it.cardId === itemId)) return 'duplicate';
-  if (!upgradeComponent(hero, itemId) && wornItems(hero).length >= slotCap(G, pid)) return 'full';
-  if (G.players[pid].souls < buyPrice(hero, itemId)) return 'souls';
+  if (G.players[pid].souls < buyPrice(G, pid, itemId)) return 'souls';
   return null;
 }
 
-/** Why `pid` cannot sell its item `itemIid` now: the shop is shut to it, or
- *  no hero of its in a slot wears it ('notWorn'). */
+/** `pid`'s card with this iid: in its hand, or worn by one of its heroes in a slot. */
+function ownedItem(G: GameState, pid: PlayerID, iid: string): CardInstance | undefined {
+  return handCard(G, pid, iid) ?? findWornItem(G, iid, pid)?.item;
+}
+
+/** Why `pid` cannot sell its card `itemIid` now: the shop is shut to it; it
+ *  holds no such card in its hand and none of its heroes in a slot wears it
+ *  ('notOwned'); or it is the last free copy of a component an upgrade in its
+ *  hand was bought for the difference against ('claimed': that upgrade will
+ *  consume it — play or sell the upgrade first). */
 export function sellBlocked(G: GameState, pid: PlayerID, itemIid: string): ShopBlock | null {
-  return shopShut(G, pid) ?? (findWornItem(G, itemIid, pid) ? null : 'notWorn');
+  const shut = shopShut(G, pid);
+  if (shut) return shut;
+  const item = ownedItem(G, pid, itemIid);
+  if (!item) return 'notOwned';
+  if (freeComponents(G, pid, item.cardId) <= 0) return 'claimed';
+  return null;
 }
 
 /** Why `pid` cannot move its item `itemIid` to its hero `toHeroIid` now: the
- *  shop is shut, it wears no such item ('notWorn'), no such hero ('noHero'),
- *  the item is already there ('same'), the hero wears one ('duplicate'), or
- *  its slots are full ('full'). */
+ *  shop is shut, it wears no such item ('notWorn': a card in the hand is
+ *  played, not moved), no such hero ('noHero'), the item is already there
+ *  ('same'), the hero wears one ('duplicate'), or its slots are full ('full'). */
 export function moveItemBlocked(G: GameState, pid: PlayerID, itemIid: string, toHeroIid: string): ShopBlock | null {
   const shut = shopShut(G, pid);
   if (shut) return shut;
@@ -311,6 +328,71 @@ export function moveItemBlocked(G: GameState, pid: PlayerID, itemIid: string, to
 /** Why `pid` cannot close the shop now: it is not its turn, or it is closed. */
 export function closeShopBlocked(G: GameState, pid: PlayerID): ShopBlock | null {
   return shopShut(G, pid);
+}
+
+export type PlayBlock = 'notYourTurn' | 'notInHand' | 'noHero' | 'duplicate' | 'full';
+
+/**
+ * Why `pid` cannot play its card `cardIid` from the hand onto its hero
+ * `heroIid` right now, or null when it can. Placing your own card is free and
+ * is no shopping: it is legal in the shop step and in the act step (the step
+ * and the end of the Act are `blocked`'s to say), and it is not the hero's
+ * ability for the turn. Checked in this order:
+ *  - 'notYourTurn' it is not `pid`'s turn (the draft included).
+ *  - 'notInHand'   no card in `pid`'s hand has that iid.
+ *  - 'noHero'      no hero of `pid` in a slot has that iid (bench and corpses count).
+ *  - 'duplicate'   the hero already wears one.
+ *  - 'full'        the hero's slots are full (`slotCap`) and the card is no
+ *                  upgrade of an item the hero wears (which takes its place).
+ */
+export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIid: string): PlayBlock | null {
+  if (G.draft || seatToMove(G) !== pid) return 'notYourTurn';
+  const card = handCard(G, pid, cardIid);
+  if (!card) return 'notInHand';
+  const hero = slottedHero(G, pid, heroIid);
+  if (!hero) return 'noHero';
+  if (wornItems(hero).some((it) => it.cardId === card.cardId)) return 'duplicate';
+  if (!upgradeComponent(hero, card.cardId) && wornItems(hero).length >= slotCap(G, pid)) return 'full';
+  return null;
+}
+
+/** The heroes `pid` could play its card `cardIid` onto right now, in board
+ *  order (the Active, then the bench): those `playBlocked` lets it go on. */
+export function playTargets(G: GameState, pid: PlayerID, cardIid: string): CardInstance[] {
+  return slottedHeroes(G.players[pid]).filter((h) => playBlocked(G, pid, cardIid, h.iid) === null);
+}
+
+/** What an upgrade played onto a hero consumes, and where from. */
+export interface TakenComponent {
+  item: CardInstance;
+  /** The hero that wore it; absent when it came from the hand. */
+  from?: CardInstance;
+}
+
+/**
+ * The component the card `card` consumes when it is played onto `hero` (left
+ * out: when it is settled as another upgrade's component), or undefined when
+ * it consumes none and goes on as a plain item: the copy `hero` wears; else a
+ * copy in `pid`'s hand (one bought at full price first); else — a card bought
+ * for the difference, whose price counted on a copy — the copy another of
+ * `pid`'s heroes wears (`heroesOf`: a merged Rem's too). A card that upgrades
+ * nothing consumes nothing.
+ */
+export function playComponent(G: GameState, pid: PlayerID, card: CardInstance, hero?: CardInstance): TakenComponent | undefined {
+  const from = itemCard(card.cardId)?.upgradesFrom;
+  if (!from) return undefined;
+  const worn = hero && wornItems(hero).find((it) => it.cardId === from);
+  if (worn) return { item: worn, from: hero };
+  const held = G.players[pid].hand.filter((c) => c !== card && c.cardId === from);
+  const inHand = held.find((c) => !boughtAtDiscount(c)) ?? held[0];
+  if (inHand) return { item: inHand };
+  if (!boughtAtDiscount(card)) return undefined;
+  for (const h of heroesOf(G.players[pid])) {
+    if (h === hero) continue;
+    const it = wornItems(h).find((x) => x.cardId === from);
+    if (it) return { item: it, from: h };
+  }
+  return undefined;
 }
 
 // ---------- Moving heroes ----------
@@ -404,6 +486,9 @@ export function draftPickBlocked(G: GameState, pid: PlayerID, heroId: string): D
 
 /** The moves of the shop step. */
 const SHOP_MOVES: ReadonlySet<Action['type']> = new Set(['buy', 'sell', 'moveItem', 'closeShop']);
+/** The moves legal in either step: placing a card from the hand, ending the
+ *  turn, an owed promotion. */
+const ANY_STEP_MOVES: ReadonlySet<Action['type']> = new Set(['playCard', 'endTurn', 'promoteToActive']);
 
 /** Why `a` cannot be made by `pid` right now, or null when it can — the
  *  dispatch `perform` runs before it mutates anything. An action must name a
@@ -416,9 +501,9 @@ const SHOP_MOVES: ReadonlySet<Action['type']> = new Set(['buy', 'sell', 'moveIte
  *  included, happens around a corpse in the lane. The turn's two steps split
  *  the rest: in the shop step only the shop's moves (`buy`, `sell`, `moveItem`,
  *  `closeShop`, for the player whose turn it is) are legal, in the act step
- *  everything else ('shopOpen' / 'notShop'). `endTurn` is legal in either. Once
- *  the turn's attack is made ('actOver') nothing is legal but ending the turn
- *  and a promotion. */
+ *  everything else ('shopOpen' / 'notShop'). Placing a card from the hand
+ *  (`playCard`) and `endTurn` are legal in either. Once the turn's attack is
+ *  made ('actOver') nothing is legal but ending the turn and a promotion. */
 export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   if (!G.players[pid]) return 'noPlayer';
   if (G.pendingPromotion) {
@@ -427,7 +512,7 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
     if (!owed) return 'promotionOwed';
   }
   if (G.attackUsed && a.type !== 'endTurn' && a.type !== 'promoteToActive' && a.type !== 'attack') return 'actOver';
-  if (!G.draft && G.step === 'shop' && !SHOP_MOVES.has(a.type) && a.type !== 'endTurn' && a.type !== 'promoteToActive') return 'shopOpen';
+  if (!G.draft && G.step === 'shop' && !SHOP_MOVES.has(a.type) && !ANY_STEP_MOVES.has(a.type)) return 'shopOpen';
   switch (a.type) {
     case 'attack':
       return G.draft ? 'draft' : attackBlocked(G, pid, a.targetIid);
@@ -449,7 +534,9 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
     case 'promoteToActive':
       return promoteBlocked(G, a.benchIid);
     case 'buy':
-      return buyBlocked(G, pid, a.itemId, a.heroIid);
+      return buyBlocked(G, pid, a.itemId);
+    case 'playCard':
+      return playBlocked(G, pid, a.cardIid, a.heroIid);
     case 'sell':
       return sellBlocked(G, pid, a.itemIid);
     case 'moveItem':
@@ -465,17 +552,18 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
 
 /**
  * Every action `pid` could make right now. In the shop step of its turn: each
- * item on sale for each of its heroes in a slot, in market and board order;
- * each worn item's sale, and its move to each other hero; closing the shop.
- * In the act step: the Active's attack, if open — once per hero it may swing
+ * item on sale it can pay for, in market order; each card in its hand sold,
+ * and each worn item sold and moved to each other hero; each card in its hand
+ * played onto each hero it may go on; closing the shop. In the act step: the
+ * Active's attack, if open — once per hero it may swing
  * at (`attackTargets`), the first as the bare action (a bare `attack` swings
  * at it) and any others naming theirs; each living hero's active items, in
  * board and worn order, each on each of its targets; each living hero's kit
  * abilities (`kitAbilityIds`: its skills, its ultimate, a borrowed ultimate),
  * in board order and the kit's own order, each on each of its targets (every
  * action names its `skillId`); retreats from the bench in `stepInCandidates`
- * order (before the attack: the hero who steps in may make it). Then, in
- * either step, promotions (either seat's: `pid` may promote the seat that owes
+ * order (before the attack: the hero who steps in may make it); each card in
+ * its hand played onto each hero it may go on. Then, in either step, promotions (either seat's: `pid` may promote the seat that owes
  * one) and ending the turn last. Everything listed passes `blocked`, so while
  * a promotion is owed that is all there is, and once the attack is made only
  * the end of the turn is left.
@@ -485,16 +573,21 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
   const out: Action[] = [];
   const offer = (a: Action) => { if (blocked(G, pid, a) === null) out.push(a); };
 
+  const heroes = slottedHeroes(ps);
+  const plays = () => {
+    for (const card of ps.hand) for (const h of heroes) offer({ type: 'playCard', cardIid: card.iid, heroIid: h.iid });
+  };
   if (G.step === 'shop') {
     if (!G.draft && seatToMove(G) === pid) {
-      const heroes = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c);
-      for (const itemId of marketItems(G)) for (const h of heroes) offer({ type: 'buy', itemId, heroIid: h.iid });
+      for (const itemId of marketItems(G)) offer({ type: 'buy', itemId });
+      for (const card of ps.hand) offer({ type: 'sell', itemIid: card.iid });
       for (const h of heroes) {
         for (const it of wornItems(h)) {
           offer({ type: 'sell', itemIid: it.iid });
           for (const to of heroes) if (to !== h) offer({ type: 'moveItem', itemIid: it.iid, toHeroIid: to.iid });
         }
       }
+      plays();
       offer({ type: 'closeShop' });
     }
   } else {
@@ -517,6 +610,7 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
     }
 
     for (const b of stepInCandidates(ps)) offer({ type: 'moveHero', fromSlot: (ps.bench.indexOf(b) + 1) as 1 | 2 | 3, toSlot: 0 });
+    plays();
   }
   // A promotion may be made for either seat: the one owed is on the other side of the table
   // when its Active fell to this seat's attack.

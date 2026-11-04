@@ -62,7 +62,7 @@ function runAITurn(client: ReturnType<typeof newClient>, maxMoves = 12) {
 }
 
 describe('Deadlock TCG engine smoke', () => {
-  it('initializes a match with two full boards, turn 1 opening on its shop with the income banked', () => {
+  it('initializes a match with two full boards and empty hands, turn 1 opening on its shop with the income banked', () => {
     const c = newClient();
     const { G, ctx } = snap(c);
     expect(G.players['0'].hp).toBe(PATRON_HP);
@@ -71,6 +71,9 @@ describe('Deadlock TCG engine smoke', () => {
     expect(G.players['1'].active).not.toBeNull();
     expect(G.players['0'].bench.filter(Boolean).length).toBe(3);
     expect(G.players['1'].bench.filter(Boolean).length).toBe(3);
+    // No deck and no draw: a card enters the hand only by a buy.
+    expect(G.players['0'].hand).toEqual([]);
+    expect(G.players['1'].hand).toEqual([]);
     // After T1 begin, P0 has its first income and stands in the shop step.
     expect(G.step).toBe('shop');
     expect(G.players['0'].souls).toBe(LANE_INCOME);
@@ -124,6 +127,8 @@ describe('Deadlock TCG engine smoke', () => {
     const { G } = snap(c);
     // The patrons took real damage (both start at PATRON_HP: a sum under 2 × PATRON_HP is a fall paid for or a push).
     expect(G.players['0'].hp + G.players['1'].hp).toBeLessThan(2 * PATRON_HP);
+    // The AI never holds a card: whatever it bought, it played.
+    expect(G.players['1'].hand).toEqual([]);
   });
 
   it('damage pipeline: spirit ignores armor, pure ignores shield', async () => {

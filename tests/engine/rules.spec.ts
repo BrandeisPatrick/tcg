@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { DeadlockGame } from '@/engine/game';
 import { damageUnit } from '@/engine/damage';
 import { reapDead, resolve } from '@/engine/death';
-import { buyBlocked } from '@/engine/legality';
+import { playBlocked } from '@/engine/legality';
 import { findCardOnBoard, findWornItem, heroData, heroesOf, kitAbilityIds, slotCap, wornItems } from '@/engine/query';
 import { MAX_ITEMS } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
@@ -209,13 +209,14 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
     onBegin({ G, ctx: { turn, currentPlayer: pid, numPlayers: 2 } as any, events: {} as any, random: {} as any });
   }
 
-  it('no ultimate is ever a card: it is a kit ability, and no card of one is on the board, however late the turn or high the level', () => {
+  it('no ultimate is ever a card: it is a kit ability, and no card of one is in the hand or on the board, however late the turn or high the level', () => {
     const G = freshG();
     for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
     for (let t = 2; t < 12; t += 2) {
       runOnBegin(G, t, '0');
       for (const h of heroesOf(G.players['0'])) expect(kitAbilityIds(h), h.cardId).toContain(heroData(h)!.ult);
       expect(boardCards(G, '0').filter((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate')).toEqual([]);
+      expect(G.players['0'].hand).toEqual([]); // nothing is drawn: a card enters the hand only by a buy
     }
   });
 
@@ -236,35 +237,42 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
 });
 
 // ============================================================================
-// Item cap = MAX_ITEMS (3) per hero: a full hero buys no 4th, it sells one first
+// Item cap = MAX_ITEMS (3) per hero: a card played onto a full hero is refused
+// (there is no discard), it sells one first
 // ============================================================================
-describe('rule: a full hero buys nothing more until it sells', () => {
-  /** P0's Active, in the shop step with souls to spare, wearing three bought items. */
+describe('rule: a full hero takes no card from the hand until it sells', () => {
+  /** P0's Active, in the shop step with souls to spare, wearing three bought items, and a
+   *  fourth card in the hand. */
   function full() {
     const G = freshReadyGame({ step: 'shop' });
     G.players['0'].souls = 99;
     const hero = G.players['0'].active!;
     for (const itemId of ['extra_spirit', 'extra_health', 'restorative_shot']) buyItem(G, '0', itemId, hero);
-    return { G, hero };
+    expect(runMove('buy', G, '0', 'extended_magazine')).not.toBe('INVALID_MOVE'); // a buy names no hero: never 'full'
+    return { G, hero, card: G.players['0'].hand[0] };
   }
 
-  it('a 4th buy for a hero at the cap is INVALID_MOVE ("full")', () => {
-    const { G, hero } = full();
+  it('a 4th card played onto a hero at the cap is INVALID_MOVE ("full"), and stays in the hand', () => {
+    const { G, hero, card } = full();
     expect(slotCap(G, '0')).toBe(MAX_ITEMS);
     expect(wornItems(hero).length).toBe(3);
-    expect(buyBlocked(G, '0', 'extended_magazine', hero.iid)).toBe('full');
-    expect(runMove('buy', G, '0', 'extended_magazine', hero.iid)).toBe('INVALID_MOVE');
+    expect(playBlocked(G, '0', card.iid, hero.iid)).toBe('full');
+    expect(runMove('playCard', G, '0', card.iid, hero.iid)).toBe('INVALID_MOVE');
     expect(wornItems(hero).length).toBe(3);
+    expect(G.players['0'].hand).toEqual([card]);
+    // Another hero with room takes it.
+    expect(runMove('playCard', G, '0', card.iid, G.players['0'].bench[0]!.iid)).not.toBe('INVALID_MOVE');
   });
 
-  it('selling a worn item frees its slot: the 4th buy then succeeds and the sold item is gone', () => {
-    const { G, hero } = full();
+  it('selling a worn item frees its slot: the 4th card then goes on and the sold item is gone', () => {
+    const { G, hero, card } = full();
     const sold = wornItems(hero)[0];
     expect(runMove('sell', G, '0', sold.iid)).not.toBe('INVALID_MOVE');
     expect(findWornItem(G, sold.iid)).toBeNull();
-    expect(buyBlocked(G, '0', 'extended_magazine', hero.iid)).toBeNull();
-    expect(runMove('buy', G, '0', 'extended_magazine', hero.iid)).not.toBe('INVALID_MOVE');
+    expect(playBlocked(G, '0', card.iid, hero.iid)).toBeNull();
+    expect(runMove('playCard', G, '0', card.iid, hero.iid)).not.toBe('INVALID_MOVE');
     expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'extended_magazine']);
+    expect(G.players['0'].hand).toEqual([]);
   });
 });
 
