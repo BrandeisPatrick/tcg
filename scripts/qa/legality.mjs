@@ -946,6 +946,46 @@ try {
   })()`);
   check('the engine refuses it: "The shop is closed until your next turn"', !!outside.refusal && outside.refusal.code === 'notShop' && /The shop is closed until your next turn/.test(outside.refusal.text), JSON.stringify(outside.refusal));
   check('…and a buy sent anyway changes nothing', !outside.moved && outside.hand === 0 && outside.souls === 10, JSON.stringify(outside));
+
+  // ===== o: the map ======================================================================
+  console.log('\n(o) the map: each rule reads its track; the Mid-Boss in the pit is a target of the attack, takes the swing, and hits back at the End');
+  await b.tick(2400); await b.settle(2);
+  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK.replace('G.turnNumber = 2; ', 'G.turnNumber = 8; ')}
+    G.boss = inst('qa-boss', 'boss_midboss', { ownerId: 'none', zone: 'pit', hp: 10, hpMax: 10 });
+    G.bossDamage = { '0': 0, '1': 0 }; G.bossLastHit = null; G.bossAttacker = null; G.bossRespawnRound = 4;
+    G.players['1'].structures = [{ kind: 'guardian', hp: 1, max: 4 }, { kind: 'walker', hp: 6, max: 6 }, { kind: 'patron', hp: 8, max: 8 }];
+  }`);
+  const strip = await b.evaluate(`[...document.querySelectorAll('[aria-label*=" structures: "]')].map((e) => e.getAttribute('aria-label'))`);
+  check('each side\'s rule reads its structures: the rival on 15 of 18, the Guardian on 1', strip.some((l) => /structures: 15 of 18 HP — Guardian 1 of 4, Walker 6 of 6, Patron 8 of 8/.test(l)) && strip.some((l) => /structures: 18 of 18 HP/.test(l)), JSON.stringify(strip));
+  const plate = `document.querySelector('[aria-label^="Mid-Boss —"]')`;
+  check('the Mid-Boss stands in the pit with its HP and both tallies', /Mid-Boss — 10 of 10 HP; damage: you 0, rival 0/.test(await b.evaluate(`${plate}?.getAttribute('aria-label') ?? ''`)));
+  await shot('o-pit');
+  await openSheet(MY_ACTIVE);
+  await b.clickEl(`document.querySelector('[aria-label="Hero sheet"] [aria-label^="Attack"]')`, { scroll: false });
+  await b.settle(4);
+  await sheetGone();
+  await textWith(/Choose who/);
+  const bossLit = await b.evaluate(`getComputedStyle(${plate}).borderTopColor`);
+  check('with the attack armed the Mid-Boss lights as a target', bossLit === TARGET_GREEN, bossLit);
+  await shot('o-armed');
+  const swingAt = (await G()).players['0'].active;
+  await b.clickEl(plate, { scroll: false });
+  await b.settle(4);
+  let og = await G();
+  for (let t = 0; t < 8000 && !og.attackUsed; t += 100) { await b.tick(100); await b.settle(1); og = await G(); }
+  await b.tick(1500); await b.settle(3);
+  og = await G();
+  const power = await b.evaluate(`(async () => { const q = await import('/src/engine/query.ts'); const G = ${CLIENT}.getState().G; return q.attackPower(G.players['0'].active).total; })()`);
+  check('a tap on it makes the attack at it: its HP, your tally and the hero it owes a blow', og.attackUsed && og.boss?.hp === 10 - power && og.bossDamage['0'] === power && og.bossAttacker === swingAt.iid, JSON.stringify({ boss: og.boss?.hp, tally: og.bossDamage, attacker: og.bossAttacker, power }));
+  check('…and no rival hero took it', [og.players['1'].active, ...og.players['1'].bench].every((h) => h.hp === 30));
+  await shot('o-after-swing');
+  const hpBefore = og.players['0'].active.hp;
+  await b.clickEl(endTurn, { scroll: false });
+  await b.settle(4);
+  const ended = await G();
+  check('at your End the Mid-Boss hits that hero back for 2', ended.players['0'].active.iid === swingAt.iid && ended.players['0'].active.hp === hpBefore - 2, `${hpBefore} -> ${ended.players['0'].active.hp}`);
+  await b.tick(600); await b.settle(2);
+  await shot('o-blow');
 } finally {
   const errors = b.errors.filter((e) => !ALLOWED_WARNINGS.some((re) => re.test(e)));
   console.log('\npage errors (React warnings included):', errors.length ? errors.slice(0, 10).map((e) => e.slice(0, 300)) : 'none');
