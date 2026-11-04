@@ -1,6 +1,6 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { animate, motion, type AnimationPlaybackControls } from 'framer-motion';
-import type { CardInstance, PlayerID } from '@/engine/types';
+import type { CardInstance, PlayerID, StatusInstance } from '@/engine/types';
 import { useFxHold } from '../effects/fx/FxTimingContext';
 import { LIFT_VAR, TILT_PERSPECTIVE, fromHere, kickFor, useFxImpulse } from '../effects/fx/FxImpulse';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
@@ -157,6 +157,7 @@ export function HeroSlot({
   const pulse = isTargetable ? poster.target : isArmedSource ? poster.red : null;
 
   // Compact bench mode: smaller stats, bands and body.
+  const ringSize = compact ? 22 : 28;
   const statSize = compact ? 12 : 15;
   const iconSize = compact ? 11 : 13;
   const bodyPadding = compact ? '4px 6px 5px' : '5px 9px 6px';
@@ -231,27 +232,7 @@ export function HeroSlot({
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: PRINT_EDGE, pointerEvents: 'none' }} />
 
         {!isCorpse && shownStatuses.length > 0 && (
-          <div style={{
-            position: 'absolute', top: 6, left: 6, right: 6,
-            display: 'flex', flexWrap: 'wrap', gap: 4,
-            justifyContent: 'center',
-            maxHeight: compact ? 36 : 54, overflow: 'hidden',
-            // The row lets taps through to the tile; each chip takes its own,
-            // to say what it is (Explain) — except while something is armed,
-            // when a tap on a chip is a tap on the tile and picks the target.
-            pointerEvents: 'none',
-          }}>
-            {shownStatuses.slice(0, compact ? 3 : 5).map((s, i) => (
-              <Explain
-                key={i}
-                content={statusContent(s.id, { value: s.value, duration: s.duration })}
-                passTaps={!!pending}
-                style={{ display: 'inline-flex', pointerEvents: 'auto' }}
-              >
-                <StatusIcon id={s.id} value={s.value} duration={s.duration} size={compact ? 'compact' : 'normal'} titled={false} />
-              </Explain>
-            ))}
-          </div>
+          <StatusRow statuses={shownStatuses} compact={!!compact} ringSize={ringSize} passTaps={!!pending} />
         )}
 
         {/* Attached chips — bottom-left of portrait. Equipment shows item art;
@@ -358,7 +339,7 @@ export function HeroSlot({
             <LevelRing
               level={level}
               exp={card.exp ?? 0}
-              size={compact ? 22 : 28}
+              size={ringSize}
             />
           </div>
         )}
@@ -472,6 +453,81 @@ export function HeroSlot({
           The frame's inner corner is its 10px radius less the 2px border. */}
       {!isCorpse && <LevelTrim level={level} radius={8} compact={compact} />}
     </motion.button>
+    </div>
+  );
+}
+
+// The server renderer (a test) warns about layout effects; there is nothing to lay out.
+const useLayoutEffectSafe = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+/**
+ * The status chips across the top of the portrait. The row starts at the left
+ * and stops short of the level ring (top-right), so no chip ever prints under
+ * it. A chip too wide for the row prints terse (mark, value, turns) and the
+ * Explain still names it — on a phone that is nearly every chip, on desktop
+ * only the longest words. Fit is measured, not guessed: the row's width
+ * changes with the screen (a phone tile is ~110px, a desktop one 180) and the
+ * words run from "Stun" to "Return Fire". Each change is measured with every
+ * chip whole, before paint.
+ */
+function StatusRow({ statuses, compact, ringSize, passTaps }: {
+  statuses: StatusInstance[];
+  compact: boolean;
+  ringSize: number;
+  passTaps: boolean;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  const shown = statuses.slice(0, compact ? 3 : 5);
+  const [rowW, setRowW] = useState(0);
+  useLayoutEffectSafe(() => {
+    const el = row.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setRowW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Which chips print terse, and for which row width + chip set that was
+  // measured. A stale key renders every chip whole, so the measure below sees
+  // the full widths; the layout effect settles it before the frame paints.
+  const key = `${rowW}|${shown.map((s) => `${s.id}:${s.value}:${s.duration}`).join(',')}`;
+  const [fit, setFit] = useState<{ key: string; terse: ReadonlySet<number> }>({ key: '', terse: new Set() });
+  const measuring = fit.key !== key;
+  useLayoutEffectSafe(() => {
+    if (!measuring || !row.current) return;
+    const room = row.current.clientWidth;
+    const terse = new Set<number>();
+    row.current.querySelectorAll<HTMLElement>('[data-status]').forEach((chip, i) => {
+      if (room > 0 && chip.offsetWidth > room) terse.add(i);
+    });
+    setFit({ key, terse });
+  });
+  return (
+    <div ref={row} style={{
+      // Clear of the ring (top:5 right:5), with a hair of air before it.
+      position: 'absolute', top: 6, left: 6, right: 6 + ringSize + 4,
+      display: 'flex', flexWrap: 'wrap', gap: 4,
+      justifyContent: 'flex-start',
+      maxHeight: compact ? 36 : 54, overflow: 'hidden',
+      // The row lets taps through to the tile; each chip takes its own,
+      // to say what it is (Explain) — except while something is armed,
+      // when a tap on a chip is a tap on the tile and picks the target.
+      pointerEvents: 'none',
+    }}>
+      {shown.map((s, i) => (
+        <Explain
+          key={i}
+          content={statusContent(s.id, { value: s.value, duration: s.duration })}
+          passTaps={passTaps}
+          style={{ display: 'inline-flex', pointerEvents: 'auto' }}
+        >
+          <StatusIcon
+            id={s.id} value={s.value} duration={s.duration}
+            size={compact ? 'compact' : 'normal'}
+            titled={false}
+            terse={!measuring && fit.terse.has(i)}
+          />
+        </Explain>
+      ))}
     </div>
   );
 }

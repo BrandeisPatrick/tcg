@@ -54,11 +54,14 @@ export function BoardControls({
   if (variant === 'tray') {
     // Mobile hand-tray row: Auto · status/cancel · turn button, thumb-side last.
     // pointerEvents:auto — the tray shell above is pointer-transparent.
+    // The tray is drawn at full size under the fitted board (Board.tsx), so
+    // the row has to fit a 360px phone by itself: Auto pins left, the turn
+    // button right, and the turn button gives up the slack (below).
     return (
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        justifyContent: 'flex-end',
-        paddingRight: 8,
+        display: 'flex', alignItems: 'center', gap: 8,
+        justifyContent: 'space-between',
+        padding: '0 8px',
         pointerEvents: 'auto',
       }}>
         <AutoSwitch autoPlay={autoPlay} onToggleAuto={onToggleAuto} onDark />
@@ -80,8 +83,10 @@ export function BoardControls({
             ariaLabel={END_TURN}
             style={{
               // A fixed width, so the row never shifts while the status
-              // beside it changes.
-              width: 146,
+              // beside it changes — set by the screen, not the status: a
+              // narrow phone narrows it (the label is ~81px) so Auto and the
+              // widest status ("Auto-play on", 131px) still fit beside it.
+              width: 'clamp(104px, calc(100vw - 256px), 146px)',
               padding: '12px 0',
               letterSpacing: '0.16em',
               textAlign: 'center',

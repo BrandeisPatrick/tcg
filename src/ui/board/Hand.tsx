@@ -52,8 +52,25 @@ function cardOverlap(total: number): number {
 }
 
 /**
- * The overlap table above is tuned for a desktop-width strip, so on a phone
- * even a small hand is wider than the screen and the outermost cards get
+ * Phones get no fan at all: a flat strip of whole cards, side by side, that
+ * scrolls sideways. Shrinking the arc to fit a 390px screen left 5–7 cards
+ * covering each other's names and rules, and the outer ones sank under the
+ * controls row. At full size the third card peeks in from the edge, which is
+ * what says the strip scrolls.
+ */
+const CARD_H = 188;
+const STRIP_GAP = 8;
+const STRIP_SIDE = 12;
+/** The armed card's lift on the strip — CardFrame adds its own 8px
+ *  selected nudge on top, ~14px in all. */
+const STRIP_LIFT = 6;
+/** Room above the cards for that lift: a scroller clips what rises out of it. */
+const STRIP_TOP = 18;
+const STRIP_BOTTOM = 6;
+
+/**
+ * The overlap table above is tuned for a desktop-width strip, so on a narrow
+ * window even a small hand is wider than the screen and the outermost cards get
  * clipped by the viewport edge. Rather than crushing the spacing (which
  * collides the name plates), shrink the whole fan to fit: the cards keep
  * their proportions and stay legible, just smaller.
@@ -67,7 +84,7 @@ function fanScale(total: number, viewportW: number): number {
 
 export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, onHover, onDragEndOver, onUnaffordable }: Props) {
   const total = cards.length;
-  const { width: viewportW } = useViewport();
+  const { width: viewportW, isMobile } = useViewport();
   // Per-card timers held in refs so they survive re-renders. Without this,
   // the closure variables get re-created each render, leaving stale timers
   // dangling and the preview "stuck" open.
@@ -93,31 +110,12 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
     }
   };
 
-  return (
-    <div
-      onMouseLeave={closePreview}
-      onPointerLeave={closePreview}
-      style={{
-        display: 'flex',
-        gap: 0,
-        padding: '14px 0 4px',
-        overflow: 'visible',
-        justifyContent: 'center',
-        alignItems: 'flex-end',
-        minHeight: 180,
-        // Shrink-to-fit on narrow screens so no card is clipped by the
-        // viewport edge (see fanScale). 1 on any normal desktop width.
-        transform: `scale(${fanScale(total, viewportW)})`,
-        transformOrigin: 'bottom center',
-        // The fan strip spans the full row width; without this it eats clicks
-        // meant for anything it overlaps (the End Turn shelf sat unreachable
-        // under it). Cards re-enable pointer events individually below.
-        pointerEvents: 'none',
-      }}>
+  const content = (
+    <>
       {/* The hand row floats under the cream sheet on the dark scene, so the
           empty label is a cream stencil eyebrow, not ink. */}
       {total === 0 && (
-        <div style={{ fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.creamDim, padding: 32 }}>
+        <div style={{ fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.creamDim, padding: 32, margin: isMobile ? 'auto' : undefined }}>
           Hand empty.
         </div>
       )}
@@ -128,8 +126,8 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
           const cost = cardCost(c);
           const unaffordable = !disabled && mySouls < cost;
           const cardDisabled = disabled || unaffordable;
-          const rot = selected ? 0 : fanRotation(i, total);
-          const y = selected ? -42 : fanY(i, total);
+          const rot = isMobile || selected ? 0 : fanRotation(i, total);
+          const y = isMobile ? (selected ? -STRIP_LIFT : 0) : selected ? -42 : fanY(i, total);
 
           // Dim must live in the `animate` target, not `style` — framer's
           // animate={{ opacity: 1 }} overrides a style-prop opacity, which
@@ -149,6 +147,13 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
           let zIndex = i;
           if (selected) zIndex = 100;
           if (isHovered) zIndex = 200;
+          // On the strip nothing overlaps, so no hover relief; auto margins on
+          // the ends centre a short hand and fall to 0 once it overflows, so
+          // the first card can always be scrolled back to.
+          const stripMargins = {
+            marginLeft: i === 0 ? 'auto' : 0,
+            marginRight: i === total - 1 ? 'auto' : 0,
+          };
 
           return (
             <motion.div
@@ -156,17 +161,19 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
               layoutId={`card-${c.iid}`}
               layout
               initial={{ opacity: 0, y: 120, scale: 0.5 }}
-              animate={{ opacity: targetOpacity, y, scale: selected ? 1.06 : 1, rotate: rot }}
+              animate={{ opacity: targetOpacity, y, scale: selected && !isMobile ? 1.06 : 1, rotate: rot }}
               exit={{ opacity: 0, y: -60, scale: 0.5, transition: { duration: 0.25 } }}
               transition={spring.default}
-              drag={!cardDisabled}
+              // Phones play by tap (arm, then tap a target): a drag would
+              // fight the strip's own sideways scroll.
+              drag={!isMobile && !cardDisabled}
               dragSnapToOrigin
               dragElastic={0.18}
               dragMomentum={false}
               onDragEnd={(_, info) => {
                 if (onDragEndOver) onDragEndOver(c, info.point.x, info.point.y);
               }}
-              whileTap={{ scale: selected ? 1.06 : 0.98 }}
+              whileTap={{ scale: selected && !isMobile ? 1.06 : 0.98 }}
               // No whileHover lift — caused mouseenter/leave oscillation that
               // trapped the preview open. Layout-driven margin/zIndex via React
               // state below instead.
@@ -193,6 +200,13 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 }
               }}
               onPointerUp={() => clearPress(c.iid)}
+              // A thumb that starts on a card and scrolls the strip hands the
+              // gesture to the browser: no long-press preview, no hover peek.
+              onPointerCancel={() => {
+                clearHover(c.iid);
+                clearPress(c.iid);
+                if (currentHover.current === c.iid) closePreview();
+              }}
               onClick={() => {
                 // Cancel any pending hover-preview timer: with a ~350ms fuse it
                 // fires AFTER the tap arms targeting and parks a full-size
@@ -212,11 +226,15 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 // the single position driver. A CSS transition here used to
                 // double-animate against the layout spring and made hand
                 // reflow (hover relief, card played/drawn) visibly chop.
-                marginLeft,
+                ...(isMobile ? stripMargins : { marginLeft }),
+                flex: isMobile ? '0 0 auto' : undefined,
+                scrollSnapAlign: isMobile ? 'start' : undefined,
                 cursor: cardDisabled ? 'default' : 'pointer',
                 transformOrigin: 'bottom center',
-                zIndex,
-                touchAction: 'none',
+                zIndex: isMobile ? undefined : zIndex,
+                // The strip pans sideways under the thumb; the desktop fan
+                // keeps every gesture for framer's drag.
+                touchAction: isMobile ? 'pan-x' : 'none',
                 // Unaffordable cards print greyer; CardFrame's red cost coin
                 // still carries the "can't pay" signal through the wash.
                 filter: unaffordable ? 'saturate(0.55)' : undefined,
@@ -238,6 +256,62 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
           );
         })}
       </AnimatePresence>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <motion.div
+        // The strip scrolls; framer has to measure that offset for the cards'
+        // layout animations (draw, play, reflow) to start from the right place.
+        layoutScroll
+        className="hand-strip"
+        onMouseLeave={closePreview}
+        onPointerLeave={closePreview}
+        style={{
+          display: 'flex',
+          gap: STRIP_GAP,
+          alignItems: 'flex-end',
+          padding: `${STRIP_TOP}px ${STRIP_SIDE}px ${STRIP_BOTTOM}px`,
+          // Holds its height with no cards too, so the board above does not
+          // rescale the moment the last card is played.
+          minHeight: STRIP_TOP + CARD_H + STRIP_BOTTOM,
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          scrollSnapType: 'x proximity',
+          scrollPaddingInline: STRIP_SIDE,
+          overscrollBehaviorX: 'contain',
+          // Nothing overlaps the strip on a phone (the controls row is in flow
+          // below it), so it takes its own touches — the thumb scrolls it.
+          pointerEvents: 'auto',
+        }}>
+        {content}
+      </motion.div>
+    );
+  }
+
+  return (
+    <div
+      onMouseLeave={closePreview}
+      onPointerLeave={closePreview}
+      style={{
+        display: 'flex',
+        gap: 0,
+        padding: '14px 0 4px',
+        overflow: 'visible',
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        minHeight: 180,
+        // Shrink-to-fit on narrow screens so no card is clipped by the
+        // viewport edge (see fanScale). 1 on any normal desktop width.
+        transform: `scale(${fanScale(total, viewportW)})`,
+        transformOrigin: 'bottom center',
+        // The fan strip spans the full row width; without this it eats clicks
+        // meant for anything it overlaps (the End Turn shelf sat unreachable
+        // under it). Cards re-enable pointer events individually below.
+        pointerEvents: 'none',
+      }}>
+      {content}
     </div>
   );
 }

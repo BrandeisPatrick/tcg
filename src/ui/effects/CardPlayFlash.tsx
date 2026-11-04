@@ -156,12 +156,14 @@ export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
         </span>
       </motion.div>
       {/* Skip hint — fades in after the card lands so it never competes with
-          the reveal pop itself. */}
+          the reveal pop itself. It leaves with the scrim: an exit that kept
+          the entry's 0.6s delay left the hint alone on screen for a second
+          after the card had gone — over the hand strip, on a phone. */}
       {onSkip && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 0.7 }}
-          exit={{ opacity: 0 }}
+          exit={{ opacity: 0, transition: { duration: 0.2 } }}
           transition={{ delay: 0.6, duration: 0.35 }}
           style={{
             position: 'fixed',

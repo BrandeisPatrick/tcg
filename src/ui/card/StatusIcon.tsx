@@ -83,21 +83,29 @@ interface Props {
   /** Carry the browser's own tooltip ("Shield 3 (2 turns)"). Off where the
    *  chip is wrapped in an Explain, which says the same and more. */
   titled?: boolean;
+  /** Print the mark, value and turns without the word, a little tighter — for
+   *  a tile too narrow to hold the whole chip beside its level ring. The mark
+   *  still says which status it is, and the Explain around it names it. */
+  terse?: boolean;
 }
 
 /**
  * Status chip — a flat print: solid class colour, cream label, a 1px ink
  * edge. Mixed case at 12px so 'Bullet Res' / 'Spirit Res' stay
  * inside compact bench tiles (HeroSlot caps its rows at 36 / 54px).
+ * `terse` drops the word where even that is too wide (HeroSlot decides).
  */
-export function StatusIcon({ id, value, duration, size = 'normal', titled = true }: Props) {
+export function StatusIcon({ id, value, duration, size = 'normal', titled = true, terse = false }: Props) {
   const color = colorFor(id);
   const label = statusLabel(id);
   const showValue = typeof value === 'number' && (VALUE_STATUSES.has(id) || value > 1);
   const showDuration = typeof duration === 'number' && duration > 0 && duration < 99;
 
   const padV = size === 'compact' ? 2 : size === 'large' ? 6 : 3;
-  const padH = size === 'compact' ? 5 : size === 'large' ? 12 : 6;
+  // A terse chip trims its sides and gaps too: on a 360px phone the Active
+  // tile's row beside the ring is ~62px, and mark + value + turns must fit it.
+  const padH = (size === 'compact' ? 5 : size === 'large' ? 12 : 6) - (terse ? 2 : 0);
+  const gap = terse ? 3 : 4;
   // The mark in front of the label — every status wears one (statusMarks.tsx).
   const markPx = size === 'compact' ? 10 : size === 'large' ? 15 : 12;
 
@@ -106,7 +114,7 @@ export function StatusIcon({ id, value, duration, size = 'normal', titled = true
       data-status={id}
       title={titled ? `${label}${showValue ? ` ${value}` : ''}${showDuration ? ` (${duration} turns)` : ''}` : undefined}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
+        display: 'inline-flex', alignItems: 'center', gap,
         padding: `${padV}px ${padH}px`,
         background: color,
         color: poster.cream,
@@ -121,7 +129,7 @@ export function StatusIcon({ id, value, duration, size = 'normal', titled = true
       }}
     >
       <StatusMark id={id} color={poster.cream} size={markPx} />
-      <span>{label}</span>
+      {!terse && <span>{label}</span>}
       {showValue && (
         <span style={{
           padding: '0 4px',

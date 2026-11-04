@@ -22,6 +22,11 @@ button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearan
 *::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.28); border-radius: 4px; }
 *::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.45); }
 
+/* The phone hand strip (board/Hand.tsx) scrolls sideways with no bar: the
+   card peeking in at the edge already says there is more. */
+.hand-strip { scrollbar-width: none; }
+.hand-strip::-webkit-scrollbar { display: none; }
+
 /* Every screen sits above the fixed zIndex-0 PosterBackdrop. */
 #root > * { position: relative; z-index: 1; }
 

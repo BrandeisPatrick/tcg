@@ -9,7 +9,8 @@ import { useViewport } from '../hooks/useViewport';
  * scene. On desktop the turn controls live on the sheet's right rail
  * (Board mounts the BoardControls dock there), so the fan takes the full
  * row; phones keep the controls here as a row under the hand, the turn
- * button at the thumb edge.
+ * button at the thumb edge. The phone hand is a flat strip (see Hand) in
+ * flow above that row, so no card ever sits under it.
  */
 export function HandTray({
   cards, disabled, pending, isMyTurn, busy, hasPending, mySouls,
@@ -57,7 +58,9 @@ export function HandTray({
           filter: 'blur(2px)',
         }} />
       )}
-      <div style={{ minWidth: 0 }}>
+      {/* Phones: the strip runs past the board's 6px side padding to the
+          screen edges, so a card scrolls off the glass, not off a margin. */}
+      <div style={{ minWidth: 0, margin: isMobile ? '0 -6px' : undefined }}>
         <Hand
           cards={cards}
           disabled={disabled}

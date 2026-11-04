@@ -20,7 +20,7 @@ import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
-import { BoardTable, boardRows, boardGutter, vitalsPull } from './board/BoardTable';
+import { BoardTable, boardRows, boardGutter, vitalsPull, tablePad } from './board/BoardTable';
 import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
 import type { TurnPhase } from './board/TurnCompass';
@@ -70,6 +70,20 @@ const AI_THINK_MS = 800;        // delay between AI moves; also gives combat ani
 /** The longest the board stays up after the match is decided, so the blow
  *  that decided it can be seen landing before the result sheet takes over. */
 const FINAL_BLOW_MAX_MS = 2800;
+/** Phones: how much of the rival's face-down backs shows above the sheet's
+ *  top edge, in stage px (~21–30px on screen at a phone's fit scale). The
+ *  rest of the fan sits behind the paper, and the row it used to fill — about
+ *  a seventh of the stage's height — goes to the board. */
+const RIVAL_PEEK = 36;
+/** How far the fan's wrapper pulls the sheet up over it: OpponentHand's box
+ *  (4px inset + 92px backs + 8px) and the row gap, less the paper's top margin
+ *  and the backs' 4px inset, leaves RIVAL_PEEK of the backs in sight. */
+const PHONE_RIVAL_TUCK = 4 + 92 + 8 + boardRows.gap(true) - tablePad(true).top - 4 - RIVAL_PEEK;
+/** Room above the fan for its outer backs, which ride up as it widens. With
+ *  it, at a tall phone's fit scale (~0.84) the paper's top edge clears the
+ *  System menu's gear (top 12 + 40px); on a shorter phone the sheet is
+ *  scaled narrow enough to pass left of it instead. */
+const PHONE_RIVAL_HEADROOM = 20;
 /** What a click must land on to NOT cancel an armed card or skill. */
 const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="tab"]';
 
@@ -239,6 +253,8 @@ export function Board(props: BoardProps<GameState>) {
   }, [isMobile]);
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
+  // The hand row (strip + phone controls) — the targeting banner docks above it on phones.
+  const handRowRef = useRef<HTMLDivElement>(null);
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
     if (el) {
       slotRefs.current.set(iid, el);
@@ -720,6 +736,39 @@ export function Board(props: BoardProps<GameState>) {
     );
   }
 
+  // The hand and, on phones, the turn controls under it. Desktop mounts it as
+  // the last row of the fitted stage; phones mount it below the stage, at
+  // full size (see the fit box in the column below).
+  // zIndex 2 keeps the hand row above the board plane (zIndex 1), so cards
+  // rising on select/hover/drag pass OVER the sheet's bottom edge instead of
+  // sliding beneath it.
+  const handRow = (
+    <div ref={handRowRef} style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, alignSelf: isMobile ? 'stretch' : undefined }}>
+      <HandTray
+        cards={G.players[me].hand}
+        disabled={!isMyTurn}
+        pending={pending}
+        isMyTurn={isMyTurn}
+        busy={turnBusy}
+        hasPending={!!pending}
+        mySouls={G.players[me].souls}
+        onTap={onTapCardInHand}
+        onLongPress={(c) => setPreview({ card: c, hover: false })}
+        onHover={(c) => setPreview(c ? { card: c, hover: true } : null)}
+        onDragEndOver={onHandDragEnd}
+        onUnaffordable={(c) => {
+          setRefusals((n) => n + 1);
+          const no = actionRefusal(G, me, { type: 'playCard', cardIid: c.iid });
+          if (no) showNotice(no.text, true);
+        }}
+        onEndTurn={pressTurnButton}
+        onCancel={() => setPending(null)}
+        autoPlay={autoPlay}
+        onToggleAuto={() => setAutoPlay((v) => !v)}
+      />
+    </div>
+  );
+
   return (
     <LayoutGroup>
       <CombatProgressContext.Provider value={combatProgress}>
@@ -744,7 +793,7 @@ export function Board(props: BoardProps<GameState>) {
         {/* MAIN COLUMN — battle stage centered, side panel lives in a
             drawer slid in from the right (toggled by the chevron tab). */}
         <div
-          ref={fitContainerRef}
+          ref={isMobile ? undefined : fitContainerRef}
           style={{
             flex: '1 1 auto',
             maxWidth: 1100,
@@ -764,8 +813,22 @@ export function Board(props: BoardProps<GameState>) {
             justifyContent: 'center',
             alignItems: 'center',
             minHeight: 0,
-            height: 'calc(100vh - 32px)',
+            // Phones: the visible height (dvh — 100vh runs under a mobile
+            // browser's toolbar) less the 6px top padding, a matching 6px
+            // under the controls and the home-indicator inset (the page is
+            // viewport-fit=cover). The flat 32px it replaced was height the
+            // fit-scale took from the board.
+            height: isMobile ? 'calc(100dvh - 12px - env(safe-area-inset-bottom, 0px))' : 'calc(100vh - 32px)',
           }}>
+        {/* Phones fit the stage into what the hand row leaves (the row stays
+            out of the scale, below); elsewhere this box is not drawn and the
+            column fits the whole stage, hand included. */}
+        <div
+          ref={isMobile ? fitContainerRef : undefined}
+          style={isMobile ? {
+            flex: '1 1 0', minHeight: 0, width: '100%',
+            display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+          } : { display: 'contents' }}>
         <div
           ref={fitContentRef}
           style={{
@@ -786,8 +849,17 @@ export function Board(props: BoardProps<GameState>) {
           {/* Rival's fan tucks behind the sheet's top edge — a small negative
               margin lets the card backs peek over the paper (the sheet stacks
               above via zIndex), so the face-down hand rests AT the board
-              instead of floating in the room. Mobile keeps the flat gap. */}
-          <div style={{ flex: '0 0 auto', position: 'relative', zIndex: 0, marginBottom: isMobile ? 0 : -10 }}>
+              instead of floating in the room. Phones sink it deeper: only a
+              strip of the backs shows, and the row it used to fill goes to
+              the board (see RIVAL_PEEK). Not in a lesson: the phone coach
+              plate sits in that row, above the board, and would cover the
+              sheet's top. */}
+          <div style={{
+            flex: '0 0 auto', position: 'relative', zIndex: 0,
+            ...(isMobile && !isTutorial
+              ? { marginBottom: -PHONE_RIVAL_TUCK, paddingTop: PHONE_RIVAL_HEADROOM }
+              : { marginBottom: isMobile ? 0 : -10 }),
+          }}>
             <OpponentHand cards={G.players[opp].hand} />
           </div>
 
@@ -939,35 +1011,13 @@ export function Board(props: BoardProps<GameState>) {
           </div>
           </div>
 
-          {/* zIndex 2 keeps the hand row above the board plane (zIndex 1),
-              so cards rising on select/hover/drag pass OVER the sheet's
-              bottom edge instead of sliding beneath it. */}
-          <div style={{ flex: '0 0 auto', position: 'relative', zIndex: 2 }}>
-            <HandTray
-              cards={G.players[me].hand}
-              disabled={!isMyTurn}
-              pending={pending}
-              isMyTurn={isMyTurn}
-              busy={turnBusy}
-              hasPending={!!pending}
-              mySouls={G.players[me].souls}
-              onTap={onTapCardInHand}
-              onLongPress={(c) => setPreview({ card: c, hover: false })}
-              onHover={(c) => setPreview(c ? { card: c, hover: true } : null)}
-              onDragEndOver={onHandDragEnd}
-              onUnaffordable={(c) => {
-                setRefusals((n) => n + 1);
-                const no = actionRefusal(G, me, { type: 'playCard', cardIid: c.iid });
-                if (no) showNotice(no.text, true);
-              }}
-              onEndTurn={pressTurnButton}
-              onCancel={() => setPending(null)}
-              autoPlay={autoPlay}
-              onToggleAuto={() => setAutoPlay((v) => !v)}
-            />
-          </div>
+          {!isMobile && handRow}
+        </div>
         </div>
 
+        {/* Phones: the hand sits under the fitted stage at its own full
+            size — scaled with the board it was too small to read. */}
+        {isMobile && handRow}
         </div>
 
         {/* PANEL DRAWER — slides in from the right edge, toggled by a thin
@@ -991,6 +1041,9 @@ export function Board(props: BoardProps<GameState>) {
               // inset its centring so it tracks the visible board, not the
               // full viewport (its right end used to slide under the sheet).
               rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0}
+              // Phones: the full-size hand strip reaches well above the
+              // desktop dock height — sit above it, not on its cards.
+              dockAbove={isMobile ? handRowRef : undefined}
             />
           )}
         </AnimatePresence>
