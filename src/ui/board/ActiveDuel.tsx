@@ -46,6 +46,12 @@ export function ActiveDuel({
       margin: isMobile ? '0 auto' : undefined,
       justifyContent: 'center',
       height: '100%',
+      // The one row is the lane's height, whatever the tiles would rather
+      // be: an auto row grows to a tile's own height (the portrait's at the
+      // column's width, plus the label band — 228px on a 121px phone column,
+      // the lane being 206) and the row below then paints over the tile's
+      // bottom. The cells shrink instead (ActiveSlot's minHeight: 0).
+      gridTemplateRows: 'minmax(0, 1fr)',
       alignItems: 'stretch',
     }}>
       {/* Lane label — sits at the left edge of the row, matching the Bench

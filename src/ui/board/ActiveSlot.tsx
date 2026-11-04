@@ -39,6 +39,8 @@ export function ActiveSlot({
       justifyContent: 'center',
       alignItems: 'center',
       height: '100%',
+      // A grid cell is as tall as its row, not its content (ActiveDuel).
+      minHeight: 0,
     }}>
       {/* The 'Lane' plaque lives in ActiveDuel, in the sheet's left gutter. */}
       <div style={{ width: '100%', height: '100%', maxHeight: 280 }}>

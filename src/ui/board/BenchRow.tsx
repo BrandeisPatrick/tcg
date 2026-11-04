@@ -59,6 +59,9 @@ export function BenchRow({
         width: isMobile ? '100%' : undefined,
         maxWidth: isMobile ? 420 : undefined,
         height: '100%',
+        // The row is the bench's height; a tile never grows it (ActiveDuel
+        // says why).
+        gridTemplateRows: 'minmax(0, 1fr)',
       }}>
         <AnimatePresence mode="popLayout">
           {slots.map((c, i) => c ? (
