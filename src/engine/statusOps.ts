@@ -53,7 +53,10 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  * recovers when the status goes off (Last Stand, in tickStartOfTurn).
  */
 export function addStatus(G: GameState, target: CardInstance, id: StatusId, value: number, duration: number, opts?: { tag?: FxTag; ramp?: number; heal?: number }) {
-  if (isRespawning(target)) return;
+  // Nothing lands on a hero who is down: respawning, or at 0 HP and not yet
+  // reaped (a kill is processed when the action resolves, after the on-hit
+  // passives have run — a mark on the fallen would only be wiped with them).
+  if (isRespawning(target) || target.hp <= 0) return;
   const name = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
 
   // What the bearer carries may refuse the status outright.

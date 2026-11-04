@@ -1333,6 +1333,10 @@ const passive_mirage_djinns_mark: HeroAbilityDef = {
   prompt: "Djinn's Mark — attacks apply 1 stack (max 4) for 3 turns. Detonates at 4 stacks or on expiry for 3 spirit dmg per stack.",
   run: (G, _ctx, { source, target }) => {
     if (!source || !target) return;
+    // A swing that drops its target, or Mirage himself (Return Fire), marks
+    // nothing: no stack, and no detonation — the fallen hero's statuses go
+    // with the kill when the attack resolves.
+    if (target.hp <= 0 || source.hp <= 0 || isRespawning(target)) return;
     addStatus(G, target, 'djinns_mark', 1, 3);
     const mark = target.statuses.find((s) => s.id === 'djinns_mark');
     if (mark && mark.value >= 4) {

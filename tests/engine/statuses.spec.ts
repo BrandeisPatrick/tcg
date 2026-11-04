@@ -389,6 +389,16 @@ describe('status texts match the rules', () => {
     expect(desc('charged')).toContain('Stun for 1 turn.');
   });
 
+  it('nothing lands on a hero at 0 HP — down, not yet reaped', () => {
+    const G = freshG();
+    const t = G.players['1'].active!;
+    t.hp = 0;
+    addStatus(G, t, 'bleed', 2, 2);
+    addStatus(G, t, 'djinns_mark', 1, 3);
+    expect(t.statuses).toHaveLength(0);
+    expect(G.fx.some((e) => e.kind === 'status')).toBe(false);
+  });
+
   it("Djinn's Mark detonates for 3 spirit damage per stack", () => {
     const G = freshG();
     const t = G.players['1'].active!;

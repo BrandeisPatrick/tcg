@@ -84,6 +84,38 @@ describe("board FX stream — Djinn's Mark", () => {
     expect(target.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
   });
 
+  it('a hero the swing drops takes no stack and no detonation — the mark never fires on the fallen', () => {
+    const G = freshReadyGame();
+    const mirage = makeHero('hero_mirage', '0', 'active', 0);
+    G.players['0'].active = mirage;
+    const target = G.players['1'].active!;
+    target.hp = 30; target.hpMax = 30;
+    const passive = getAbility('passive_mirage_djinns_mark')!;
+    for (let i = 0; i < 3; i++) passive.run(G, { movingPlayer: '0' }, { source: mirage, target });
+    // The swing is lethal; the kill is reaped when the attack resolves, after
+    // the passive has had its turn.
+    target.hp = 1;
+    G.fx = [];
+    makeAttack(G, '0');
+    const marks = G.fx.filter((e): e is StatusFx => e.kind === 'status' && e.statusId === 'djinns_mark');
+    expect(marks).toHaveLength(0);
+    expect(hits(G).some((h) => h.tag === 'djinns_mark')).toBe(false);
+    expect(G.log.some((l) => /Djinn's Mark detonates/.test(l.text))).toBe(false);
+    expect(target.hp).toBe(0);
+  });
+
+  it('nor does it when Return Fire has dropped Mirage on his own swing', () => {
+    const G = freshReadyGame();
+    const mirage = makeHero('hero_mirage', '0', 'active', 0);
+    const target = G.players['1'].active!;
+    target.hp = 30; target.hpMax = 30;
+    mirage.hp = 0; // dropped by the counter inside the swing, not yet reaped
+    G.fx = [];
+    getAbility('passive_mirage_djinns_mark')!.run(G, { movingPlayer: '0' }, { source: mirage, target });
+    expect(target.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
+    expect(G.fx).toHaveLength(0);
+  });
+
   it('the expiry detonation is a tagged tick too', () => {
     const G = freshReadyGame();
     const target = G.players['1'].active!;
