@@ -36,7 +36,7 @@ import { poster } from '../poster';
  */
 
 /** Where a tile sits: its side's Active, or a bench slot left to right. */
-export type DealSlot = 'active' | 0 | 1 | 2;
+type DealSlot = 'active' | 0 | 1 | 2;
 
 // The timeline, in ms from the board first showing.
 const LEAD_MS = 160;      // the board settles before the first card leaves

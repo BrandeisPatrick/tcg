@@ -9,12 +9,9 @@ import { poster } from '../poster';
  * Mount as the last child of a `position: relative; overflow: hidden;
  * isolation: isolate` container with a border-radius (the layer inherits it
  * and blends against the card alone). Renders nothing unless `cast` is set,
- * so hosts that still mount it for a rarity treatment get a matte card;
- * `rarity` and `board` are accepted for those call sites.
+ * so a card that is not being dealt stays matte.
  */
 export function CardShine({ cast = false }: {
-  rarity: 1 | 2 | 3 | 4;
-  board?: boolean;
   /** Render the scripted one-shot sheen bar (the play-cast reveal animates the
    *  `--cast` var to sweep it across, since no pointer is over the card). */
   cast?: boolean;

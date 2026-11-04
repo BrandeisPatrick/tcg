@@ -6,7 +6,6 @@ import { numberContent, statusContent } from '../explain/content';
 import { KINDS, parseMarkup, shownNumber, type NumberSpec, type Scale } from './scaling';
 
 export type { Scale } from './scaling';
-export { plainText } from './scaling';
 
 /**
  * Rule-text keywords that get auto-bolded inside `RuleText`. The keyword's
@@ -122,8 +121,6 @@ function escapeRegex(s: string) {
 
 interface Props {
   text: string;
-  /** Override the inherit color for non-keyword spans (default: inherit) */
-  baseColor?: string;
   /** The keyword inks are picked for cream paper; on a solid action plate
    *  (the red skill plate) they sink into the fill. There, every keyword is
    *  printed in this colour — the plate's own type — and heavier, so it
@@ -147,13 +144,13 @@ interface Props {
  * explains it (Explain). Splits on the markup first, then on the keyword
  * regex (capturing group) so matches and gaps alternate in the output array.
  */
-export function RuleText({ text, baseColor, keywordColor, scale, passTaps }: Props) {
+export function RuleText({ text, keywordColor, scale, passTaps }: Props) {
   if (!text) return null;
   return (
     <>
       {parseMarkup(text).map((tok, i) => (tok.type === 'num'
         ? <ScalingNumber key={i} spec={tok} scale={scale} plate={keywordColor} passTaps={passTaps} />
-        : <Keywords key={i} text={tok.text} baseColor={baseColor} keywordColor={keywordColor} passTaps={passTaps} />))}
+        : <Keywords key={i} text={tok.text} keywordColor={keywordColor} passTaps={passTaps} />))}
     </>
   );
 }
@@ -176,12 +173,12 @@ function ScalingNumber({ spec, scale, plate, passTaps }: { spec: NumberSpec; sca
 }
 
 /** A run of plain text with its keywords bolded and its status words explained. */
-function Keywords({ text, baseColor, keywordColor, passTaps }: { text: string; baseColor?: string; keywordColor?: string; passTaps?: boolean }) {
+function Keywords({ text, keywordColor, passTaps }: { text: string; keywordColor?: string; passTaps?: boolean }) {
   const parts = text.split(KEYWORD_REGEX);
   const out: ReactNode[] = parts.map((part, i) => {
     const color = KEYWORDS[part];
     if (!color) {
-      return baseColor ? <span key={i} style={{ color: baseColor }}>{part}</span> : <span key={i}>{part}</span>;
+      return <span key={i}>{part}</span>;
     }
     const word = (
       <strong style={keywordColor ? { color: keywordColor, fontWeight: 800 } : { color, fontWeight: 700 }}>{part}</strong>

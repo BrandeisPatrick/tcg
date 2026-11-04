@@ -14,6 +14,7 @@ import type { CardData } from '@/engine/types';
 import { heroAbilities } from '@/engine/query';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
+import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
 import { SwordIcon, HeartIcon } from './Icons';
 
 type Size = 'hand' | 'full';
@@ -64,7 +65,8 @@ interface Props {
   tilt?: boolean;
 }
 
-const SIZES: Record<Size, { w: number; h: number }> = {
+/** The two sizes a card is printed at, in px. */
+export const SIZES: Record<Size, { w: number; h: number }> = {
   hand: { w: 134, h: 188 },
   full: { w: 300, h: 420 },
 };
@@ -200,12 +202,12 @@ function ArtImg({ src, cardId }: { src: string; cardId: string }) {
 
 function ArtWindow({ data }: { data: CardData | undefined }) {
   if (!data) return null;
-  if (data.type === 'hero') return <HeroPortrait cardId={data.id} full />;
+  if (data.type === 'hero') return <HeroPortrait cardId={data.id} />;
   if (data.type === 'ultimate') {
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%', background: poster.ground }}>
         <div style={{ position: 'absolute', inset: 0, opacity: 0.7, filter: 'saturate(0.94) contrast(1.05)' }}>
-          <HeroPortrait cardId={data.linkedHero} full />
+          <HeroPortrait cardId={data.linkedHero} />
         </div>
         {/* ULT wordmark — a cream stencil over the dimmed linked-hero portrait */}
         <div style={{
@@ -227,8 +229,8 @@ function ArtWindow({ data }: { data: CardData | undefined }) {
       </div>
     );
   }
-  if (data.type === 'spell') return <ArtImg src={`${import.meta.env.BASE_URL}spells/${data.id}.webp`} cardId={data.id} />;
-  if (data.type === 'equipment') return <ArtImg src={`${import.meta.env.BASE_URL}items/${data.id}.webp`} cardId={data.id} />;
+  if (data.type === 'spell') return <ArtImg src={`${SPELL_IMG_BASE}${data.id}.webp`} cardId={data.id} />;
+  if (data.type === 'equipment') return <ArtImg src={`${ITEM_IMG_BASE}${data.id}.webp`} cardId={data.id} />;
   return null;
 }
 
@@ -501,7 +503,7 @@ export function CardFrame({
       </div>
 
       {/* Cast sheen — only the scripted play-cast bar; the print is otherwise matte */}
-      <CardShine rarity={rarity} cast={castSheen} />
+      <CardShine cast={castSheen} />
 
       {/* Iridescence over the whole sheet. Above the bands, so it washes the
           rules text too — the reason `art` is the default scope. */}

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { PosterButton } from '../chrome';
+import { SIZES } from '../card/CardFrame';
 import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
@@ -17,8 +18,8 @@ import { useViewport } from '../hooks/useViewport';
 export const STICK = { desk: 54, phone: 44 } as const;
 
 /** CardFrame's hand size — the grid fits cards to this. */
-export const HAND = { w: 134, h: 188 } as const;
-export const FULL = { w: 300, h: 420 } as const;
+export const HAND = SIZES.hand;
+export const FULL = SIZES.full;
 
 export function Section({ title, count, aside, id, children }: {
   title: string;
@@ -60,8 +61,8 @@ export function Notes({ label = 'Notes', children }: { label?: string; children:
   );
 }
 
-export function Row({ children, gap }: { children: ReactNode; gap?: number }) {
-  return <div className="gal-row" style={gap != null ? { gap } : undefined}>{children}</div>;
+export function Row({ children }: { children: ReactNode }) {
+  return <div className="gal-row">{children}</div>;
 }
 
 /** The poster button at the Gallery's size: the same plate, less air. */
@@ -106,7 +107,6 @@ export interface Option<T extends string> {
   label: string;
   /** A count printed after the label. */
   n?: number;
-  disabled?: boolean;
 }
 
 /** One-of-many, as joined stencil plates. */
@@ -141,7 +141,6 @@ export function Segmented<T extends string>({ label, name, value, onChange, opti
             type="button"
             className="gal-seg__opt"
             aria-pressed={value === o.id}
-            disabled={o.disabled}
             onClick={() => onChange(o.id)}
           >
             {o.label}
@@ -196,16 +195,15 @@ const FitContext = createContext(1);
  * left, and always one row — where the row does not fit it scrolls
  * sideways, because four finishes are compared side by side or not at all.
  */
-export function CardGrid({ children, gap = 10, pack = 'spread', phoneMin = 104 }: {
+export function CardGrid({ children, gap = 10, pack = 'spread' }: {
   children: ReactNode;
   gap?: number;
   pack?: 'spread' | 'start';
-  /** The narrowest a card may be drawn on a phone before a column is dropped. */
-  phoneMin?: number;
 }) {
   const { isMobile } = useViewport();
   const [ref, w] = useWidth<HTMLDivElement>();
-  const min = isMobile ? phoneMin : HAND.w;
+  // On a phone a card may be drawn down to 104px before a column is dropped.
+  const min = isMobile ? 104 : HAND.w;
   const n = Children.count(children);
   const fit = Math.max(1, Math.floor((w + gap) / (min + gap)));
   const cell = (w - gap * (fit - 1)) / fit;
@@ -243,17 +241,16 @@ export function CardGrid({ children, gap = 10, pack = 'spread', phoneMin = 104 }
  * optional label beneath. The box is sized to the scaled card so the grid
  * lays out against what is actually drawn.
  */
-export function Fit({ label, children, size = HAND }: {
+export function Fit({ label, children }: {
   label?: ReactNode;
   children: ReactNode;
-  size?: { w: number; h: number };
 }) {
   const scale = useContext(FitContext);
   return (
-    <figure style={{ margin: 0, width: size.w * scale }}>
-      <div style={{ width: size.w * scale, height: size.h * scale }}>
+    <figure style={{ margin: 0, width: HAND.w * scale }}>
+      <div style={{ width: HAND.w * scale, height: HAND.h * scale }}>
         {scale === 1 ? children : (
-          <div style={{ width: size.w, height: size.h, transform: `scale(${scale})`, transformOrigin: '0 0' }}>
+          <div style={{ width: HAND.w, height: HAND.h, transform: `scale(${scale})`, transformOrigin: '0 0' }}>
             {children}
           </div>
         )}

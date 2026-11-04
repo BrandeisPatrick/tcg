@@ -5,19 +5,16 @@ import { useEffect, useRef, useState } from 'react';
  * `'down'` for decreases (damage / debuff), `null` when no change is in
  * flight.
  */
-export type TickDirection = 'up' | 'down' | null;
+type TickDirection = 'up' | 'down' | null;
 
 /**
- * Watch a numeric value and emit a transient direction signal for `ms`
+ * Watch a numeric value and emit a transient direction signal for 600
  * milliseconds after every change. Caller renders an animation off the
  * signal — pulse + colour flash on the stat number itself — then naturally
  * settles back to its steady-state appearance when the signal returns to
- * null.
- *
- * Replaces the floating ±N number system: HP and BP changes animate ON the
- * number on the card instead of as a separate floater layer.
+ * null. HP and BP changes animate ON the number on the card.
  */
-export function useStatTick(value: number, ms = 600): TickDirection {
+export function useStatTick(value: number): TickDirection {
   const [tick, setTick] = useState<TickDirection>(null);
   const prev = useRef(value);
   useEffect(() => {
@@ -25,8 +22,8 @@ export function useStatTick(value: number, ms = 600): TickDirection {
     const dir: TickDirection = value > prev.current ? 'up' : 'down';
     prev.current = value;
     setTick(dir);
-    const t = setTimeout(() => setTick(null), ms);
+    const t = setTimeout(() => setTick(null), 600);
     return () => clearTimeout(t);
-  }, [value, ms]);
+  }, [value]);
   return tick;
 }

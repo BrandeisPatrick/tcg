@@ -4,7 +4,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { effectiveAtk } from '@/engine/query';
 import { fonts, spring, text } from '../tokens';
-import { poster, sheetStyle, scrimStyle } from '../poster';
+import { atkInk, hpInk, poster, sheetStyle, scrimStyle } from '../poster';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 
@@ -142,7 +142,7 @@ function CandidateCard({ card, onPick, isMobile }: { card: CardInstance; onPick:
       }}
     >
       <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, background: '#0f1214' }}>
-        <HeroPortrait cardId={card.cardId} full />
+        <HeroPortrait cardId={card.cardId} />
         {/* Inner edge — the print sits slightly recessed in its frame. */}
         <div aria-hidden style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -175,11 +175,8 @@ function CandidateCard({ card, onPick, isMobile }: { card: CardInstance; onPick:
           // Same ink rule as HeroSlot: each stat keeps its hue (ink for BP,
           // red for HP) and only shifts bright/dim to show drift from the
           // printed base.
-          const atkColor = atk > baseAtk ? poster.stat.atkBright : atk < baseAtk ? poster.stat.atkDim : poster.stat.atk;
-          const hpColor =
-            card.hp < card.hpMax ? poster.stat.hpDim
-            : card.hpMax > baseHp ? poster.stat.hpBright
-            : poster.stat.hp;
+          const atkColor = atkInk(atk, baseAtk);
+          const hpColor = hpInk(card.hp, card.hpMax, baseHp);
           return (
             <div style={{ display: 'inline-flex', gap: 12, alignItems: 'baseline' }}>
               <span style={{ ...text.numeric, color: atkColor }}>{atk}</span>

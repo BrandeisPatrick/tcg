@@ -12,7 +12,7 @@
  */
 import type { CardInstance } from './types';
 
-export type CastKind = 'skill' | 'attack' | 'spell' | 'ult' | 'proc';
+type CastKind = 'skill' | 'attack' | 'spell' | 'ult' | 'proc';
 
 interface CastFrame {
   source: CardInstance | null;
@@ -24,17 +24,17 @@ interface CastFrame {
 }
 
 /** What a frame says beyond its source and kind. */
-export interface CastOpts {
+interface CastOpts {
   bounce?: true;
 }
 
 const stack: CastFrame[] = [];
 
-export function pushCast(source: CardInstance | null, kind: CastKind, opts: CastOpts = {}) {
+function pushCast(source: CardInstance | null, kind: CastKind, opts: CastOpts = {}) {
   stack.push(opts.bounce ? { source, kind, bounce: true } : { source, kind });
 }
 
-export function popCast() {
+function popCast() {
   stack.pop();
 }
 

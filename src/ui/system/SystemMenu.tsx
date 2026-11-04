@@ -6,6 +6,7 @@ import { PosterButton } from '../chrome';
 import { useSettings, updateSettings, APP_STORAGE_KEYS, type AppSettings } from '@/storage/settings';
 import { useViewport } from '../hooks/useViewport';
 import { ArtCredits } from './ArtCredits';
+import { BASE } from '@/art/assets';
 
 /**
  * Persistent system layer — the one piece of chrome that exists on every
@@ -72,7 +73,7 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
       try { localStorage.removeItem(key); } catch {}
     }
     // Full reload back to the title so every in-memory store re-seeds.
-    window.location.href = import.meta.env.BASE_URL ?? '/';
+    window.location.href = BASE;
   }
 
   return (

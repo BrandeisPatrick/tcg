@@ -1,5 +1,5 @@
 import type { GameState, CardInstance, DamageType, PlayerID, StatusId } from '@/engine/types';
-import { CARDS_BY_ID, ULTIMATES } from '@/cards';
+import { CARDS_BY_ID, cardName, ULTIMATES } from '@/cards';
 import { DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { awardSouls, resolve } from '@/engine/death';
@@ -121,7 +121,7 @@ export type HeroAbilityDef = AbilityDef & { name: string; text: string };
 
 // Helper: total spirit-stat bonus from the source (equipment + Spirit Power buff).
 // Used by HERO skills where the source IS the casting hero.
-export function spi(source?: CardInstance): number {
+function spi(source?: CardInstance): number {
   return source ? effectiveSpirit(source) : 0;
 }
 
@@ -131,7 +131,7 @@ export function spi(source?: CardInstance): number {
 // Corpse active = no scaling.
 export function activeSpi(G: GameState, pid: PlayerID): number {
   const a = G.players[pid].active;
-  if (!a || (a.respawnTurnsLeft ?? 0) > 0) return 0;
+  if (!a || isRespawning(a)) return 0;
   return effectiveSpirit(a);
 }
 
@@ -140,7 +140,7 @@ export function activeSpi(G: GameState, pid: PlayerID): number {
 // linked hero is the cast-context source — read its effective Spirit here so a
 // spirit-built hero's ultimate scales (e.g. a Spirit Abrams). 0 if no linked
 // hero on board (e.g. a Sinclair-copied ult).
-export function ultSpi(): number {
+function ultSpi(): number {
   const src = currentCast()?.source;
   return src ? effectiveSpirit(src) : 0;
 }
@@ -307,7 +307,7 @@ const eff_echo_shard: AbilityDef = {
   run: (G, ctx, _args) => {
     const ps = G.players[ctx.movingPlayer];
     const hero = ps.active;
-    if (!hero || (hero.respawnTurnsLeft ?? 0) > 0) { pushLog(G, 'Echo Shard fizzled — no active hero.'); return; }
+    if (!hero || isRespawning(hero)) { pushLog(G, 'Echo Shard fizzled — no active hero.'); return; }
     const data = CARDS_BY_ID[hero.cardId];
     if (data?.type !== 'hero' || data.skills.length === 0) { pushLog(G, 'Echo Shard fizzled — hero has no skill.'); return; }
     // The skill it used this turn, again — else its first.
@@ -465,7 +465,7 @@ const eff_golden_goose_egg: AbilityDef = {
     if (!mine) return;
     mine.hpMax += 1;
     mine.hp += 1;
-    pushLog(G, `${CARDS_BY_ID[mine.cardId]?.name ?? mine.cardId} gains +1 max HP (Golden Goose Egg).`);
+    pushLog(G, `${cardName(mine.cardId)} gains +1 max HP (Golden Goose Egg).`);
   },
 };
 
@@ -504,7 +504,7 @@ const eff_fleetfoot: AbilityDef = {
     const mine = standingActive(G, ctx.movingPlayer);
     if (!mine) return;
     grantExtraAttacks(mine, 1);
-    pushLog(G, `${CARDS_BY_ID[mine.cardId]?.name ?? mine.cardId} gains Extra Attack 1 (Fleetfoot).`);
+    pushLog(G, `${cardName(mine.cardId)} gains Extra Attack 1 (Fleetfoot).`);
     addStatus(G, mine, 'swift', 1, 1);
   },
 };
@@ -537,7 +537,7 @@ const eff_blood_tribute: AbilityDef = {
     const paid = Math.min(3, mine.hp - 1);
     if (paid > 0) {
       mine.hp -= paid;
-      pushLog(G, `${CARDS_BY_ID[mine.cardId]?.name ?? mine.cardId} pays ${paid} HP (Blood Tribute).`);
+      pushLog(G, `${cardName(mine.cardId)} pays ${paid} HP (Blood Tribute).`);
     }
     grantExtraAttacks(mine, 1);
     addStatus(G, mine, 'weapon_power', 1, 1);
@@ -709,7 +709,7 @@ const eff_healing_tempo: AbilityDef = {
 // Bullet Resist Shredder: bearer's attacks apply Bullet Vulnerable 1 for 1 turn.
 const eff_bullet_resist_shredder_proc: AbilityDef = {
   id: 'eff_bullet_resist_shredder_proc', trigger: 'onAttack', target: 'self',
-  run: (G, _ctx, { source, target }) => { if (target) addStatus(G, target, 'bullet_resist_down', 1, 1); },
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bullet_resist_down', 1, 1); },
 };
 
 // Restorative Shot: after bearer's basic attack, heal 1.
@@ -1340,7 +1340,7 @@ const passive_mirage_djinns_mark: HeroAbilityDef = {
     addStatus(G, target, 'djinns_mark', 1, 3);
     const mark = target.statuses.find((s) => s.id === 'djinns_mark');
     if (mark && mark.value >= 4) {
-      pushLog(G, `${CARDS_BY_ID[target.cardId]?.name ?? target.cardId} — Djinn's Mark detonates.`);
+      pushLog(G, `${cardName(target.cardId)} — Djinn's Mark detonates.`);
       damageUnit(G, target, 3 * mark.value, 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value, source, cast: 'proc' });
       target.statuses = target.statuses.filter((s) => s.id !== 'djinns_mark');
     }
@@ -1399,7 +1399,7 @@ const skill_rem: HeroAbilityDef = {
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {
     if (!source || !target || target === source) return;
-    if ((target.respawnTurnsLeft ?? 0) > 0) return; // can't merge into a corpse
+    if (isRespawning(target)) return; // can't merge into a corpse
     const s = effectiveSpirit(source);
     const hpBuff = 1 + s;
     target.hpMax += hpBuff;
@@ -1414,7 +1414,7 @@ const skill_rem: HeroAbilityDef = {
     source.remMergeTurnsLeft = 3;
     source.remMergeHpBuff = hpBuff;
     (target.attached ??= []).push(source);
-    pushLog(G, `Rem merges into ${CARDS_BY_ID[target.cardId]?.name ?? target.cardId}.`);
+    pushLog(G, `Rem merges into ${cardName(target.cardId)}.`);
   },
 };
 
@@ -1601,7 +1601,7 @@ const eff_ult_sinclair: AbilityDef = {
   run: (G, ctx) => {
     const pid = ctx.movingPlayer;
     const enemyActive = G.players[otherPlayer(pid)].active;
-    if (!enemyActive || (enemyActive.respawnTurnsLeft ?? 0) > 0) {
+    if (!enemyActive || isRespawning(enemyActive)) {
       pushLog(G, 'Audience Participation: no enemy ultimate to copy.');
       return;
     }

@@ -69,10 +69,10 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
   // stays consistent with `hue`).
   const hue = isMyTurn ? poster.you : poster.rival;
 
-  // Turn-change ripple — replaces the old full-width TurnBanner. When
-  // `isMyTurn` flips we bump a key so AnimatePresence mounts one fresh
-  // ring-burst that scales out and fades. The initial mount is skipped
-  // so the ripple doesn't fire on game load. Self-cleans (no timer).
+  // Turn-change ripple. When `isMyTurn` flips we bump a key so
+  // AnimatePresence mounts one fresh ring-burst that scales out and fades.
+  // The initial mount is skipped so the ripple doesn't fire on game load.
+  // Self-cleans (no timer).
   const [rippleKey, setRippleKey] = useState(0);
   const lastMyTurnRef = useRef(isMyTurn);
   useEffect(() => {
@@ -178,9 +178,8 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
         </span>
       </div>
 
-      {/* Ring-bursts — one on every isMyTurn flip (it replaces the old "Your
-          Move / Rival's Move" banner, and is skipped on first mount so it
-          doesn't fire on game load), and a heavier one for every attack
+      {/* Ring-bursts — one on every isMyTurn flip (skipped on first mount so
+          it doesn't fire on game load), and a heavier one for every attack
           step. */}
       <AnimatePresence>
         {rippleKey > 0 && <RingBurst key={`turn-${rippleKey}`} hue={hue} weight={1.5} reach={1.65} />}

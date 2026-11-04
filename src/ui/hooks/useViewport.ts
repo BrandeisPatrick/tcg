@@ -7,16 +7,15 @@ import { useEffect, useState } from 'react';
  *
  * Breakpoints: mobile ≤767 (phones), tablet 768–1023, desktop ≥1024.
  */
-export interface Viewport {
+interface Viewport {
   width: number;
   height: number;
   isMobile: boolean;
   isTablet: boolean;
-  isDesktop: boolean;
 }
 
 export const MOBILE_MAX = 767;
-export const TABLET_MAX = 1023;
+const TABLET_MAX = 1023;
 
 function read(): Viewport {
   const width = typeof window !== 'undefined' ? window.innerWidth : 1280;
@@ -26,7 +25,6 @@ function read(): Viewport {
     height,
     isMobile: width <= MOBILE_MAX,
     isTablet: width > MOBILE_MAX && width <= TABLET_MAX,
-    isDesktop: width > TABLET_MAX,
   };
 }
 

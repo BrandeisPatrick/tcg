@@ -10,8 +10,7 @@
  */
 import { fonts } from '@/ui/tokens';
 import { poster } from '@/ui/poster';
-
-const BASE = import.meta.env.BASE_URL ?? '/';
+import { BASE } from './assets';
 
 export interface CreditLink {
   label: string;
@@ -39,7 +38,7 @@ export interface ArtCredit {
   thumb: CreditThumb;
 }
 
-export interface CreditGroup {
+interface CreditGroup {
   id: string;
   title: string;
   blurb: string;

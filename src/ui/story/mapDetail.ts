@@ -39,7 +39,7 @@ export type Tier = 'always' | 'mid' | 'near';
  *  can show at: a phone's cover (0.78) for `always`, then the band floors
  *  (2.4, 3.6). Type is sized × `--line`, so this is its largest size in map
  *  units — what the clearance checks must assume. */
-export const LINE_AT: Record<Tier, number> = {
+const LINE_AT: Record<Tier, number> = {
   always: Math.sqrt(1.7 / 0.78),
   mid: Math.sqrt(1.7 / 2.4),
   near: Math.sqrt(1.7 / 3.6),
@@ -187,7 +187,7 @@ export type VignetteId =
   | 'liberty' | 'chrysler' | 'brooklynBridge' | 'gwb' | 'verrazzano'
   | 'wonderWheel' | 'unisphere' | 'ballpark' | 'lighthouse' | 'ferry';
 
-export interface Landmark {
+interface Landmark {
   id: VignetteId;
   lat: number;
   lng: number;

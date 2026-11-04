@@ -39,8 +39,9 @@ import { useId, type CSSProperties } from 'react';
 import type { StatusId } from '@/engine/types';
 import { fonts } from '../tokens';
 import { poster } from '../poster';
+import { BASE } from '@/art/assets';
 
-export type MarkKind =
+type MarkKind =
   // Debuffs
   | 'stun' | 'silenced' | 'disarm' | 'sleep' | 'bleed' | 'charged' | 'djinns_mark' | 'reverb'
   | 'siphon_drain' | 'weapon_power_down' | 'spirit_power_down' | 'bullet_resist_down'
@@ -172,7 +173,6 @@ const SOURCE: Record<MarkKind, Source> = {
 };
 
 /** The URL of a picture under `public/`, wherever the app is served from. */
-const BASE = import.meta.env.BASE_URL ?? '/';
 const urlOf = (file: string) => `${BASE}${file}`;
 
 // ---------------------------------------------------------------------------

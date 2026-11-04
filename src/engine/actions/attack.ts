@@ -18,7 +18,7 @@
  * swing bounces, Extra Attacks too; a bounce never bounces again.
  */
 import type { CardInstance, GameState, PlayerID } from '../types';
-import { CARDS_BY_ID } from '@/cards';
+import { cardName } from '@/cards';
 import { damageUnit } from '../damage';
 import { resolve } from '../death';
 import { attackTargets } from '../legality';
@@ -98,7 +98,7 @@ function swing(G: GameState, atk: CardInstance, target: CardInstance, index: num
     label: extra ? 'Extra Attack' : power.parts.find((p) => p.bonus)?.label,
     targetHp: target.hp,
   });
-  const atkName = CARDS_BY_ID[atk.cardId]?.name ?? atk.cardId;
+  const atkName = cardName(atk.cardId);
   let dealt = 0;
   withCast(atk, 'attack', () => {
     dealt = damageUnit(G, target, power.total, 'attack', extra ? `${atkName} (Extra Attack)` : atkName);

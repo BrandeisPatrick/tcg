@@ -27,7 +27,7 @@ export const CAMERA_HEIGHT = 640;
  *  shadows imply: overhead, a little behind the top edge of the screen. */
 export const LIGHT = { x: 0.08, y: 0.4 } as const;
 
-export interface Projected { x: number; y: number; k: number }
+interface Projected { x: number; y: number; k: number }
 
 /** Table space → screen. `k` is the magnification at that height. */
 export function project(cam: Camera, x: number, y: number, z: number): Projected {

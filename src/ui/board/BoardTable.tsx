@@ -36,8 +36,8 @@ export const boardGutter = (mobile: boolean) => (mobile
   : { left: 76, right: 150 });
 
 /** How far the cream sheet extends beyond the rows' bounding box — the
- *  paper margin. Exported so corner fixtures (PatronPlaque) can anchor to
- *  the same edges the sheet actually occupies. */
+ *  paper margin. Exported so Board can tuck the rival's hand under the
+ *  same top edge the sheet actually occupies. */
 export const tablePad = (mobile: boolean) => ({
   x: mobile ? 8 : 34,
   top: mobile ? 12 : 24,

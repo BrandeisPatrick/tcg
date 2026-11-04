@@ -58,7 +58,7 @@ export const FX_TIMING = {
   koSettle: 1450,
 } as const;
 
-export interface TagInfo {
+interface TagInfo {
   /** Sticker text at impact. */
   label: string;
   /** The effect's own ink (a hero's identity colour where it has one). */
@@ -105,9 +105,9 @@ export function numeralInk(type: DamageType, ko = false): string {
   return type === 'spirit' ? NUMERAL_INK.spirit : type === 'pure' ? NUMERAL_INK.pure : NUMERAL_INK.attack;
 }
 
-/** The damage-type ink: bullet vermillion, spirit plum, pure teal, KO wine. */
-export function typeInk(type: DamageType, ko = false): string {
-  return damageFxColor(type, ko);
+/** The damage-type ink: bullet vermillion, spirit plum, pure teal. */
+export function typeInk(type: DamageType): string {
+  return damageFxColor(type);
 }
 
 /** Inks the FX layer uses beyond the damage types. */

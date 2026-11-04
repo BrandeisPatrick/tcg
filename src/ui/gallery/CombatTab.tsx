@@ -147,7 +147,7 @@ function StatTickDemo() {
       <div style={{ width: 132, aspectRatio: '3 / 4', flexShrink: 0 }}>
         <HeroSlot
           card={card}
-          owner="0" myId="0" isOpponent={false}
+          owner="0" myId="0"
           pending={null} isTargetable={false}
           isCurrentTurn={false}
           compact
@@ -199,11 +199,11 @@ function RemMergeDemo() {
   return (
     <div style={{ display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
       <div style={{ width: 150, aspectRatio: '3 / 4', flexShrink: 0 }}>
-        <HeroSlot card={bearerCard} owner="0" myId="0" isOpponent={false}
+        <HeroSlot card={bearerCard} owner="0" myId="0"
           pending={null} isTargetable={false} isCurrentTurn onTap={() => {}} />
       </div>
       <div style={{ width: 110, aspectRatio: '3 / 4', flexShrink: 0 }}>
-        <HeroSlot card={remBench} owner="0" myId="0" isOpponent={false} compact
+        <HeroSlot card={remBench} owner="0" myId="0" compact
           pending={null} isTargetable={false} isCurrentTurn ready onTap={() => {}} />
       </div>
       <div style={{ flex: '1 1 220px', minWidth: 0, alignSelf: 'flex-start' }}>

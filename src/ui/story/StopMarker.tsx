@@ -7,6 +7,7 @@ import { fonts, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { KIND_INK, KIND_LABEL, StopGlyph } from './StopGlyph';
 import { MAP_W, MAP_H, coverScale, toScreen, zoomProgress, type Camera, type Frame } from './mapCamera';
+import { HERO_IMG_BASE } from '@/art/assets';
 
 /**
  * The stops, as stamps printed over the sheet — drawn at a near-constant
@@ -27,16 +28,15 @@ import { MAP_W, MAP_H, coverScale, toScreen, zoomProgress, type Camera, type Fra
  * marker is a button: pressing it SELECTS the stop, it never acts.
  */
 
-const HERO_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
 const BOSS_EXTRA = 10;
 const TAG_FONT = 10;
 const TAG_H = 19;
 const TAG_GAP = 4;
 const PENNANT_W = 35, PENNANT_H = 29;
 
-export type TagSide = 'below' | 'above' | 'right' | 'left';
+type TagSide = 'below' | 'above' | 'right' | 'left';
 
-export interface StopView {
+interface StopView {
   node: StoryNode;
   kind: NodeKind;
   state: StopState;
@@ -355,7 +355,7 @@ function ClearedCoin({ size, stamp }: { size: number; stamp: boolean }) {
 
 function Face({ id, size, flat }: { id: string; size: number; flat: boolean }) {
   return (
-    <img src={`${HERO_BASE}${id}_mm.webp`} alt="" draggable={false}
+    <img src={`${HERO_IMG_BASE}${id}_mm.webp`} alt="" draggable={false}
       style={{
         width: size, height: size, borderRadius: '50%', objectFit: 'cover', display: 'block',
         filter: flat ? 'grayscale(1)' : undefined, opacity: flat ? 0.5 : 1,

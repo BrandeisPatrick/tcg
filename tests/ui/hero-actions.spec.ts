@@ -73,11 +73,10 @@ describe('the attack, as the sheet words it', () => {
 
   it('says the Active has swung; the hero who comes in after it has a swing of its own', () => {
     const G = freshReadyGame();
-    const haze = G.players['0'].active!;
     const lash = LASH(G);
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     expect(attackBlocked(G, '0')).toBe('used');
-    expect(attackBlockReason('used', haze)).toBe('Attacked this turn');
+    expect(attackBlockReason('used')).toBe('Attacked this turn');
     G.players['0'].souls = 2;
     expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE'); // Lash steps in
     expect(G.players['0'].active!.iid).toBe(lash.iid);

@@ -848,19 +848,19 @@ describe('an attack that names its target', () => {
   });
 
   it('the sheet words the new refusals', () => {
-    const { G, rival, atk } = duel(REACHER);
+    const { G, rival } = duel(REACHER);
     addStatus(G, rival, 'dome', 1, 1);
-    expect(attackBlockReason('noTarget', atk, rival)).toBe('Their Active cannot be attacked this turn');
-    expect(attackBlockReason('noTarget', atk)).toBe('No rival Active to hit');
-    expect(attackBlockReason('noTarget', atk, { ...rival, statuses: [] })).toBe('No rival Active to hit');
-    expect(attackBlockReason('noTarget', atk, { ...rival, respawnTurnsLeft: 2 })).toBe('No rival Active to hit');
-    expect(attackBlockReason('target', atk).length).toBeGreaterThan(0);
+    expect(attackBlockReason('noTarget', rival)).toBe('Their Active cannot be attacked this turn');
+    expect(attackBlockReason('noTarget')).toBe('No rival Active to hit');
+    expect(attackBlockReason('noTarget', { ...rival, statuses: [] })).toBe('No rival Active to hit');
+    expect(attackBlockReason('noTarget', { ...rival, respawnTurnsLeft: 2 })).toBe('No rival Active to hit');
+    expect(attackBlockReason('target').length).toBeGreaterThan(0);
     // …and the board's gate says the same through the engine's own code.
     const domed = duel(TALLY);
     addStatus(domed.G, domed.rival, 'dome', 1, 1);
     expect(actionRefusal(domed.G, '0', { type: 'attack' })).toEqual({ code: 'noTarget', text: 'Their Active cannot be attacked this turn' });
     const named = duel(TALLY);
-    expect(actionRefusal(named.G, '0', { type: 'attack', targetIid: named.foes[1].iid })).toEqual({ code: 'target', text: attackBlockReason('target', named.atk) });
+    expect(actionRefusal(named.G, '0', { type: 'attack', targetIid: named.foes[1].iid })).toEqual({ code: 'target', text: attackBlockReason('target') });
     expect(actionRefusal(named.G, '0', { type: 'attack' })).toBeNull();
   });
 });

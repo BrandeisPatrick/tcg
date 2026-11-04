@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { cardCost } from '@/engine/legality';
-import { CardFrame } from '../card/CardFrame';
+import { CardFrame, SIZES } from '../card/CardFrame';
 import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
@@ -37,7 +37,7 @@ function fanY(i: number, total: number): number {
   return Math.min(offset * offset * 2.5, 32);
 }
 /** Hand card width (CardFrame SIZES.hand) — the fan's own geometry. */
-const CARD_W = 134;
+const CARD_W = SIZES.hand.w;
 
 function cardOverlap(total: number): number {
   if (total <= 2) return 20;
@@ -60,7 +60,7 @@ function cardOverlap(total: number): number {
  * scrolls, and the row leaves the board the height it needs — a held card
  * (long press) opens the full-size preview to read.
  */
-const CARD_H = 188;
+const CARD_H = SIZES.hand.h;
 /** The strip's cards, as a fraction of the fan's. The frame is drawn at the
  *  fan's size and scaled, so its type stays set as designed. */
 const STRIP_SCALE = 0.8;

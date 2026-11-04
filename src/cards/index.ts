@@ -25,6 +25,11 @@ export function getCard(id: string): CardData {
   return c;
 }
 
+/** The name a card prints, or its id when no card has it. */
+export function cardName(id: string): string {
+  return CARDS_BY_ID[id]?.name ?? id;
+}
+
 export { HEROES, SPELLS, EQUIPMENT, ULTIMATES };
 
 

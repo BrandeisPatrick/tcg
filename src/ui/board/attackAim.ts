@@ -28,14 +28,14 @@ export function attackOffer(G: GameState, me: PlayerID, hero: CardInstance, isMy
   return {
     line: isMyTurn && block === null ? attackLine(forecastAttack(G, me)) : undefined,
     blockedReason: !isMyTurn ? 'Not your turn'
-      : block ? attackBlockReason(block, hero, G.players[otherPlayer(me)].active)
+      : block ? attackBlockReason(block, G.players[otherPlayer(me)].active)
       : undefined,
     made: !!hero.attackedThisTurn,
   };
 }
 
 /** What a tap on the Attack plate does. */
-export type AttackPlateTap =
+type AttackPlateTap =
   /** The engine will not make the attack: say why. */
   | { do: 'refuse'; refusal: Refusal }
   /** One hero to hit: the attack goes at once, at the default target. */
@@ -63,7 +63,7 @@ export function tapAttackPlate(G: GameState, me: PlayerID): AttackPlateTap {
 }
 
 /** What a tap on a hero does while the attack is armed. */
-export type AttackAimTap =
+type AttackAimTap =
   /** Not a hero the attack may name: the engine's reason, for the sticker. */
   | { do: 'refuse'; refusal: Refusal }
   /** Make the attack. `target` names who it shoots, and is left out for the

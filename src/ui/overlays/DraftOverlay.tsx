@@ -18,10 +18,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence, easeInOut } from 'framer-motion';
 import type { DraftState, PlayerID } from '@/engine/types';
-import { CARDS_BY_ID, HEROES } from '@/cards';
-import { heroAbilities } from '@/engine/query';
+import { CARDS_BY_ID, cardName, HEROES } from '@/cards';
+import { heroAbilities, otherPlayer } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { heroArtFocus } from '@/cards/art/heroArt';
+import { HERO_IMG_BASE } from '@/art/assets';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { getMatchConfig } from '@/storage/matchConfig';
@@ -34,8 +35,6 @@ interface Props {
   me: PlayerID;
   onPick: (heroId: string) => void;
 }
-
-const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
 
 // Lobby palette — ink ground, cream type, and the three state colours the
 // mockup uses on card frames: gold for locked, green for the live pick,
@@ -66,7 +65,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   const aiTurn = !myTurn && draft.currentIndex < draft.order.length;
   const complete = draft.currentIndex >= draft.order.length;
   const myPicks = draft.picks[me];
-  const oppId: PlayerID = me === '0' ? '1' : '0';
+  const oppId: PlayerID = otherPlayer(me);
   const oppPicks = draft.picks[oppId];
   const pool = draft.pool;
 
@@ -101,7 +100,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
     const nextPref = prefs.find((id) => pool.includes(id) && !autoPickedRef.current.has(id));
     if (!nextPref) return;
     setFocused(nextPref);
-    setAutoName(CARDS_BY_ID[nextPref]?.name ?? nextPref);
+    setAutoName(cardName(nextPref));
     const t = setTimeout(() => {
       autoPickedRef.current.add(nextPref);
       setAutoName(null);
@@ -346,10 +345,6 @@ function LobbyBackdrop({ focused }: { focused: string | null }) {
 }
 
 // =============================================================================
-// HEADER PIECES
-// =============================================================================
-
-// =============================================================================
 // RIVAL STRIP
 // =============================================================================
 
@@ -413,7 +408,7 @@ function PickSide({ picks, side, tone, live, compact }: {
             initial={{ opacity: 0, y: -10, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={spring.default}
-            title={CARDS_BY_ID[id]?.name ?? id}
+            title={cardName(id)}
             style={{
               width: w,
               height: h,
@@ -486,13 +481,12 @@ function pulseCurve(from: string, to: string): number[] {
 const PULSE_TIMES = Array.from({ length: 17 }, (_, i) => i / 16);
 
 /** A face-down card: ink plate, thin edge, the dial mark in the middle. */
-function CardBack({ w, h, live, tone, numeral, label }: {
+function CardBack({ w, h, live, tone, numeral }: {
   w: number | string;
   h: number | string;
   live?: boolean;
   tone: 'red' | 'green' | 'gold' | 'dim';
   numeral?: string;
-  label?: string;
 }) {
   const color = tone === 'red' ? lobby.red
     : tone === 'green' ? lobby.green
@@ -541,11 +535,6 @@ function CardBack({ w, h, live, tone, numeral, label }: {
         })}
         <circle cx="20" cy="20" r="2" fill={lobby.faint} stroke="none" />
       </svg>
-      {label && (
-        <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.22em', color: live ? lobby.cream : lobby.dim, textAlign: 'center', padding: '0 6px' }}>
-          {label}
-        </span>
-      )}
     </div>
   );
 }
@@ -641,8 +630,8 @@ function PreferredCluster({ ids, pool }: { ids: string[]; pool: string[] }) {
         <img
           key={id}
           src={`${HERO_IMG_BASE}${id}_sm.webp`}
-          alt={CARDS_BY_ID[id]?.name ?? id}
-          title={CARDS_BY_ID[id]?.name ?? id}
+          alt={cardName(id)}
+          title={cardName(id)}
           draggable={false}
           style={{
             width: 34,
@@ -802,7 +791,7 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
   preview?: boolean;
 }) {
   const color = tone === 'gold' ? lobby.gold : lobby.green;
-  const name = CARDS_BY_ID[heroId]?.name ?? heroId;
+  const name = cardName(heroId);
   return (
     <motion.div
       layout

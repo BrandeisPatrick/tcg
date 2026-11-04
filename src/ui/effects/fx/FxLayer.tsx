@@ -46,7 +46,7 @@ interface LiveBatch {
   action: GameAction | null;
 }
 
-export interface FxLayerProps {
+interface FxLayerProps {
   /** The events not yet played. Identity may change every render; `batchKey`
    *  (the batch's highest seq) is what marks a new batch. */
   batch: FxEvent[];

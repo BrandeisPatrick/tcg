@@ -11,7 +11,7 @@
  */
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { HEROES, CARDS_BY_ID } from '@/cards';
+import { HEROES, CARDS_BY_ID, cardName } from '@/cards';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
@@ -23,8 +23,7 @@ import {
 } from '@/storage/playerData';
 import type { DeckSlot } from '@/storage/playerData';
 import type { CardId } from '@/engine/types';
-
-const HERO_IMG = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
+import { HERO_IMG_BASE } from '@/art/assets';
 
 interface Props {
   onBack: () => void;
@@ -265,7 +264,7 @@ function Squad({ slots, onAdd, onClear, compact, split }: {
               }}
             >
               <img
-                src={`${HERO_IMG}${hero.id}_card.webp`}
+                src={`${HERO_IMG_BASE}${hero.id}_card.webp`}
                 alt=""
                 draggable={false}
                 loading="lazy"
@@ -337,7 +336,7 @@ function PickSlot({ index, heroId, onClear }: {
   heroId: CardId | null;
   onClear: () => void;
 }) {
-  const name = heroId ? CARDS_BY_ID[heroId]?.name ?? heroId : null;
+  const name = heroId ? cardName(heroId) : null;
   return (
     <motion.button
       type="button"
@@ -363,7 +362,7 @@ function PickSlot({ index, heroId, onClear }: {
       {heroId ? (
         <>
           <img
-            src={`${HERO_IMG}${heroId}_card.webp`}
+            src={`${HERO_IMG_BASE}${heroId}_card.webp`}
             alt=""
             draggable={false}
             style={{
@@ -610,7 +609,7 @@ function DeckRow({
               textOverflow: 'ellipsis',
             }}
           >
-            For {deck.heroes.map((id) => CARDS_BY_ID[id]?.name ?? id).join(' · ')}
+            For {deck.heroes.map((id) => cardName(id)).join(' · ')}
           </div>
         )}
       </button>

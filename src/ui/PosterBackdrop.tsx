@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { useSettings } from '@/storage/settings';
+import { ART_BASE } from '@/art/assets';
 import { useAmbientLoop, type Loop } from './hooks/useAmbientLoop';
 
 /**
@@ -19,8 +20,6 @@ import { useAmbientLoop, type Loop } from './hooks/useAmbientLoop';
  * Only opacity is animated on the screen wrapper above, so fixed
  * positioning is not broken by an ancestor transform.
  */
-
-const ART_BASE = `${import.meta.env.BASE_URL ?? '/'}art/`;
 
 // The scene, blurred, desaturated, darkened and washed teal ahead of time.
 // The blur leaves only low frequencies, so a small image scaled up holds.

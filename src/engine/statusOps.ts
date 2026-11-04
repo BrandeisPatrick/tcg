@@ -4,7 +4,7 @@ import { damageUnit, healUnit } from './damage';
 import { resolve, returnRemToBench } from './death';
 import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isRespawning, resistedBy, statusDuration } from './query';
 import { pushLog } from './log';
-import { CARDS_BY_ID } from '@/cards';
+import { cardName } from '@/cards';
 import { fireTriggers } from './triggers';
 import { currentCast } from './castContext';
 import { pushFx, fxSource } from './fx';
@@ -57,7 +57,7 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
   // reaped (a kill is processed when the action resolves, after the on-hit
   // passives have run — a mark on the fallen would only be wiped with them).
   if (isRespawning(target) || target.hp <= 0) return;
-  const name = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
+  const name = cardName(target.cardId);
 
   // What the bearer carries may refuse the status outright.
   const resisted = resistedBy(target, id);
@@ -150,21 +150,21 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
     const charged = c.statuses.find((s) => s.id === 'charged');
     if (charged && charged.duration === 1) {
       addStatus(G, c, 'stun', 1, 1, { tag: 'discharge' });
-      pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} discharges: Stun for 1 turn.`);
+      pushLog(G, `${cardName(c.cardId)} discharges: Stun for 1 turn.`);
     }
     // Djinn's Mark: detonates on natural expiry (timer reaches 1 = about to
     // tick to 0) for 3 spirit damage per stack. The mark itself is removed
     // by the standard duration-decay path immediately after.
     const mark = c.statuses.find((s) => s.id === 'djinns_mark');
     if (mark && mark.duration === 1) {
-      pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Djinn's Mark detonates.`);
+      pushLog(G, `${cardName(c.cardId)} — Djinn's Mark detonates.`);
       damageUnit(G, c, 3 * mark.value, 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value });
     }
     // Reverb (Mystic Reverb): delayed echo. Detonates on natural expiry for its
     // stored value as spirit damage, then the decay path removes it below.
     const reverb = c.statuses.find((s) => s.id === 'reverb');
     if (reverb && reverb.duration === 1) {
-      pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} — Mystic Reverb echoes.`);
+      pushLog(G, `${cardName(c.cardId)} — Mystic Reverb echoes.`);
       damageUnit(G, c, reverb.value, 'spirit', 'Mystic Reverb', { tag: 'reverb' });
     }
     // Last Stand: a delayed strike from the bearer's side. When its timer reaches 1 (about
@@ -173,7 +173,7 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
     // it carries nothing). The decay path removes it below.
     const lastStand = c.statuses.find((s) => s.id === 'last_stand');
     if (lastStand && lastStand.duration === 1) {
-      const name = CARDS_BY_ID[c.cardId]?.name ?? c.cardId;
+      const name = cardName(c.cardId);
       pushLog(G, `${name} — Last Stand goes off.`);
       const perHit = lastStand.value + effectiveSpirit(c);
       for (const e of liveBoardCards(G.players[otherPlayer(ps.id)])) {
@@ -208,7 +208,7 @@ export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
     const sleeping = c.statuses.find((s) => s.id === 'sleep');
     if (sleeping && sleeping.duration === 1 && sleeping.value > 0) {
       c.statuses = c.statuses.filter((s) => s !== sleeping);
-      pushLog(G, `${CARDS_BY_ID[c.cardId]?.name ?? c.cardId} wakes — Naptime detonates.`);
+      pushLog(G, `${cardName(c.cardId)} wakes — Naptime detonates.`);
       damageUnit(G, c, sleeping.value, 'spirit', 'Naptime', { tag: 'naptime' });
     }
     c.statuses = c.statuses
@@ -320,7 +320,7 @@ export function tickCastingPulses(G: GameState, ps: PlayerState) {
     const heavy = c.statuses.find((s) => s.id === 'casting');
     const channel = heavy ?? c.statuses.find((s) => s.id === 'casting_light');
     if (!channel) continue;
-    const name = CARDS_BY_ID[c.cardId]?.name ?? c.cardId;
+    const name = cardName(c.cardId);
 
     // Interruptible: hard CC that pins the caster suppresses this turn's pulse.
     if (isBlocked(c, 'pulse')) {

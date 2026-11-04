@@ -4,14 +4,12 @@ import { poster } from '../poster';
 interface Props {
   source: { x: number; y: number } | null;
   active: boolean;
-  /** Head + origin dot colour; the shaft is always cream on an ink keyline. */
-  color?: string;
 }
 
 // Curved SVG arrow from `source` to the live pointer position — a cream
 // ribbon with ink edges and a red head, printed flat over the sheet.
 // Mount when targeting is active; the cursor is tracked via a window pointermove listener.
-export function DragArrow({ source, active, color = poster.red }: Props) {
+export function DragArrow({ source, active }: Props) {
   const [pt, setPt] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -113,14 +111,14 @@ export function DragArrow({ source, active, color = poster.red }: Props) {
       {/* Arrow head — red with an ink edge */}
       <polygon
         points={`${ex},${ey} ${leftX},${leftY} ${rightX},${rightY}`}
-        fill={color}
+        fill={poster.red}
         stroke={poster.ink}
         strokeWidth="1.5"
         strokeLinejoin="round"
         filter="url(#arrow-glow)"
       />
       {/* Origin dot */}
-      <circle cx={sx} cy={sy} r="6" fill={color} stroke={poster.ink} strokeWidth="1.5" opacity="0.9" />
+      <circle cx={sx} cy={sy} r="6" fill={poster.red} stroke={poster.ink} strokeWidth="1.5" opacity="0.9" />
     </svg>
   );
 }

@@ -15,8 +15,9 @@ import { useViewport } from '../hooks/useViewport';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { loadPlayerData } from '@/storage/playerData';
 import { LESSONS, type LessonId } from '@/tutorial/lessons';
+import { ART_BASE } from '@/art/assets';
 
-const COVER = `${import.meta.env.BASE_URL ?? '/'}art/bill_tutorial.webp`;
+const COVER = `${ART_BASE}bill_tutorial.webp`;
 
 interface Props {
   onBack: () => void;
@@ -264,7 +265,7 @@ function LessonRow({
           }}
         >
           <span style={{ display: 'block', width: '100%', height: '100%', borderRadius: 5, overflow: 'hidden' }}>
-            <HeroPortrait cardId={face} full />
+            <HeroPortrait cardId={face} />
           </span>
         </span>
 

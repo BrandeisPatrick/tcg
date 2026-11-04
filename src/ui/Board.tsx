@@ -106,7 +106,6 @@ export function Board(props: BoardProps<GameState>) {
   const following = lesson ? nextLesson(lesson.id) : undefined;
   // Combat tempo honours the system-menu speed setting live.
   const { combatSpeed } = useSettings();
-  // The backdrop's slow push-in runs only when neither the settings sheet
   const [pending, setPending] = useState<PendingPlay | null>(null);
   // Taps on cards the player cannot pay for. The coach counts them: one
   // lesson has the player feel the soul limit before it explains it.
@@ -423,15 +422,6 @@ export function Board(props: BoardProps<GameState>) {
     };
   }, [preview]);
 
-  // HP / BP change animations are now driven by `useStatTick` inside
-  // HeroSlot (per-card) and the vitals rules (patron HP) — no central floater
-  // pushes here. Removing the old HP-diff effect also drops the
-  // combat-vs-card-diff deduplication ref it used to need.
-
-  // Turn-change acknowledgement now lives on the TurnCompass itself
-  // (ring-burst + chevron flip + hue swap on isMyTurn change). No
-  // banner needed.
-
   // The opponent ('1') is always AI-driven; the local player is too while
   // auto-play is on. The AI holds while an attack is being walked or a
   // card-play / skill / ult reveal is in flight (so it doesn't fire its next
@@ -699,14 +689,13 @@ export function Board(props: BoardProps<GameState>) {
     const isStory = !!getMatchConfig().story;
     const won = gameover.winner === me;
     // Story battles return to the campaign map (win advances, loss ends the
-    // run); a draw counts as a loss so the run still resolves. Quick Match
-    // offers Rematch (fresh mount via Root's matchEpoch) and Main Menu.
+    // run). Quick Match offers Rematch (fresh mount via Root's matchEpoch)
+    // and Main Menu.
     return (
       <MatchEndScreen
         G={G}
         me={me}
         won={won}
-        draw={!!gameover.draw}
         isStory={isStory}
         isTutorial={isTutorial}
         lessonNumber={lesson?.number}
@@ -907,7 +896,6 @@ export function Board(props: BoardProps<GameState>) {
                 hostile
                 attackOpen={!isMyTurn && attackOpen}
                 projectedDamage={ctx.currentPlayer === me ? projectedPatronDamage : 0}
-                side="top"
                 isMobile={isMobile}
                 myTurn={!isMyTurn}
               />
@@ -972,7 +960,6 @@ export function Board(props: BoardProps<GameState>) {
                 ps={G.players[me]}
                 attackOpen={isMyTurn && attackOpen}
                 projectedDamage={ctx.currentPlayer !== me ? projectedPatronDamage : 0}
-                side="bottom"
                 isMobile={isMobile}
                 myTurn={isMyTurn}
               />

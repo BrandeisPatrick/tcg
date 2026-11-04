@@ -6,10 +6,6 @@ import { poster, chamfer, posterButtonSkins, type PosterButtonVariant, clipBoth 
 /**
  * Shared chrome. Every screen outside the card art itself is now printed in
  * the poster idiom, so this file holds exactly one primitive: the button.
- *
- * (It used to carry a parlor set — MenuShell, BackPlaque, ScreenHeading,
- * GameButton — for the parchment collection screens. Those screens moved to
- * the poster sheet, and the parlor set went with them.)
  */
 
 /**

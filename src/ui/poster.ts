@@ -64,6 +64,16 @@ export const poster = {
   },
 } as const;
 
+/** The ink a hero's Bullet Power prints in: the stat ink at its printed base,
+ *  bright above it, dim below. */
+export const atkInk = (atk: number, base: number): string =>
+  atk > base ? poster.stat.atkBright : atk < base ? poster.stat.atkDim : poster.stat.atk;
+
+/** The ink a hero's HP prints in: dim while it is hurt, bright while its max
+ *  HP is raised above the printed base, else the stat ink. */
+export const hpInk = (hp: number, hpMax: number, base: number): string =>
+  hp < hpMax ? poster.stat.hpDim : hpMax > base ? poster.stat.hpBright : poster.stat.hp;
+
 /** Flat soul coin — gold with an ink rim; `empty` is an ink outline. */
 export const soulCoin = (size: number, empty = false) => ({
   width: size,

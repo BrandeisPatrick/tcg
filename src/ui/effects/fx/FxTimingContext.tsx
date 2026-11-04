@@ -20,7 +20,7 @@ export interface FxHold {
 
 export type FxHoldResolver = (iid: string) => FxHold;
 
-export const NO_HOLD: FxHold = { impact: 0, settle: 0 };
+const NO_HOLD: FxHold = { impact: 0, settle: 0 };
 
 export const FxTimingContext = createContext<FxHoldResolver>(() => NO_HOLD);
 

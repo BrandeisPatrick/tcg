@@ -73,7 +73,6 @@ export function BenchRow({
                 card={c}
                 owner={owner}
                 myId={myId}
-                isOpponent={isOpponent}
                 pending={pending}
                 isTargetable={isTargetable(c)}
                 compact

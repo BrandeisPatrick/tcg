@@ -19,13 +19,11 @@ import { StatusMark } from '../../card/statusMarks';
 import { fonts } from '../../tokens';
 import { FX_INK, FX_TIMING, NUMERAL_INK, TAG_INFO } from './fxCatalog';
 import { useFxCalm } from './FxMotionContext';
-import { type Rect, center, seeded } from './geometry';
+import { type Rect, center, clamp, seeded } from './geometry';
 import { EASE_OUT, Fixed, LightningArc, Numeral, Plate, Ring, Stamp, Wash, numeralSize, sec } from './primitives';
 import { SleepLetters, onInk } from './hits';
 import { useStage } from './stage/FxStage';
 import { castCharge, castRelease, embers, goldBurst, healRise, helix, puffs, ring, shieldSkid } from './stage/emitters';
-
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** The name to print on a caster's plate — a hero's ability, a card's name.
  *  `abilityId` names the ability a hero used (`G.action.abilityId`); left out,

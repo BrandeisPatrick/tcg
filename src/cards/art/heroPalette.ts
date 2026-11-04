@@ -9,7 +9,7 @@
 // Heroes outside the canon Deadlock roster (TCG-original Rem) get a hand-
 // picked triplet that fits their mechanics in this game.
 
-export interface HeroIdentity {
+interface HeroIdentity {
   primary: string;     // dominant color
   accent: string;      // secondary
   /** 1–3 short keyword tags. First entry is the "primary" archetype and is

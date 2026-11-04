@@ -99,7 +99,7 @@ export function OpponentHand({ cards }: Props) {
           );
         })}
       </AnimatePresence>
-      {/* No count chip — the rival PatronPlaque on the sheet's corner is the
+      {/* No count chip — the rival PatronPlaque above the top bench is the
           canonical hand counter; the fan itself just shows the cards. */}
     </div>
   );

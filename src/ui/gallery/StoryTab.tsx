@@ -10,7 +10,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import type { CardId } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
+import { cardName } from '@/cards';
 import type { NodeKind, StoryRun } from '@/story/types';
 import { newRun, clearNode } from '@/story/storyRun';
 import { randomStartingHeroes, recruitChoices, supplyChoices } from '@/story/content';
@@ -271,7 +271,7 @@ function PickSection({ runs }: { runs: Runs }) {
             subtitle={open.subtitle}
             options={open.options}
             confirmVerb={open.verb}
-            onPick={(id) => { setTook(`${open.verb} ${CARDS_BY_ID[id]?.name ?? id}`); setOpen(null); }}
+            onPick={(id) => { setTook(`${open.verb} ${cardName(id)}`); setOpen(null); }}
             onCancel={() => setOpen(null)}
           />
         )}

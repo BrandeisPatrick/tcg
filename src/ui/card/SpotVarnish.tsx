@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import { useSettings } from '@/storage/settings';
+import { ART_BASE } from '@/art/assets';
 
 /** Which plates the premium sheet got.
  *  - `stamp` — metallic ink only (keyline + type band + name)
@@ -166,8 +167,7 @@ export function HoloLayer({ variant, strength = 'medium', markScale = 1, palette
   if (variant === 'wordmark') {
     // The asset path depends on the build base (GitHub Pages serves /tcg/),
     // which CSS cannot read — so the mask URL is injected rather than declared.
-    const base = import.meta.env.BASE_URL ?? '/';
-    style['--holo-mark'] = `url("${base}art/deadlock_wordmark_ink.png")`;
+    style['--holo-mark'] = `url("${ART_BASE}deadlock_wordmark_ink.png")`;
     style['--holo-mark-w'] = `${Math.round(150 * markScale)}px`;
   }
   return (

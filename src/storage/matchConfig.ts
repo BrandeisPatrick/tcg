@@ -30,8 +30,6 @@ export interface StorySetup {
    *  dealt) — the later tutorial lessons start mid-fight rather than making
    *  the player replay the opening every time. */
   startTurn?: number;
-  /** Rival patron lives, when they should differ from yours. */
-  enemyPatronHp?: number;
   /** Custom attack / health / experience per hero, so a lesson can build the
    *  exact situation it teaches: a hero one point short of a level, a rival
    *  who falls to precisely the taught move. */
@@ -39,7 +37,7 @@ export interface StorySetup {
   enemyHeroStats?: (HeroStatOverride | undefined)[];
 }
 
-export interface MatchConfig {
+interface MatchConfig {
   playerDeck: CardId[];
   heroPreferences: (CardId | null)[];
   /** The hero the title's Quick Match card featured — the recommended first

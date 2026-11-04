@@ -1,5 +1,5 @@
 import type { CardInstance, DamageType, FxCastKind, FxTag, GameState, PlayerID } from './types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { incomingDamage, isRespawning } from './query';
 import { currentCast, withCast } from './castContext';
@@ -11,7 +11,7 @@ import { EXP_ON_KILL } from './constants';
 /** Presentation hints for the FX layer, passed by call sites whose damage is
  *  one of a kind (a Djinn's Mark detonation, a Killing Blow execute, a Tesla
  *  chain…). Everything else is inferred from the cast context. */
-export interface DamageFxOpts {
+interface DamageFxOpts {
   tag?: FxTag;
   /** Who did it, when the cast context doesn't know (a passive firing outside
    *  its owner's cast frame, a status ticking on its own). */
@@ -88,14 +88,14 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   const hpBefore = target.hp;
   target.hp -= dmg;
 
-  const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
+  const targetName = cardName(target.cardId);
   let effectiveSource = sourceName;
   if (!effectiveSource) {
     const cast = currentCast();
     // Procs (kind='proc') already pass their own sourceName; only fill in for
     // skill/spell/ult/attack frames.
     if (cast && cast.source && cast.kind !== 'proc') {
-      effectiveSource = CARDS_BY_ID[cast.source.cardId]?.name ?? cast.source.cardId;
+      effectiveSource = cardName(cast.source.cardId);
     }
   }
   const arrow = effectiveSource ? `${effectiveSource} → ${targetName}` : targetName;
@@ -183,7 +183,7 @@ export function damagePlayer(G: GameState, pid: PlayerID, amount: number): numbe
 
 /** Presentation hints for a heal: 'lifesteal' streams motes from the unit the
  *  HP was drawn out of; 'regen' is the quiet start-of-turn tick. */
-export interface HealFxOpts {
+interface HealFxOpts {
   tag?: FxTag;
   from?: CardInstance | null;
 }
@@ -193,7 +193,7 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
   if (amount <= 0) return 0;
   if (isRespawning(target)) return 0;                  // corpse on the respawn timer
   if (target.hp <= 0) return 0;                        // dead, not yet reaped — a heal must not undo the KO
-  const targetName = CARDS_BY_ID[target.cardId]?.name ?? target.cardId;
+  const targetName = cardName(target.cardId);
   if (target.statuses.some((s) => s.id === 'healing_boost_down')) {
     pushLog(G, `${targetName} could not be healed (Healing Blocked).`);
     return 0;
@@ -209,7 +209,7 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
     let effectiveSource = sourceName;
     if (!effectiveSource) {
       if (cast && cast.source && cast.kind !== 'proc') {
-        const srcName = CARDS_BY_ID[cast.source.cardId]?.name ?? cast.source.cardId;
+        const srcName = cardName(cast.source.cardId);
         if (srcName !== targetName) effectiveSource = srcName;
       }
     }

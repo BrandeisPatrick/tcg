@@ -6,7 +6,7 @@
  * may be done and at whom; this only does it.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, cardName } from '@/cards';
 import { findCardOnBoard, resolveSkill } from '../query';
 import { SKILL_COST } from '../constants';
 import { pushLog } from '../log';
@@ -36,7 +36,7 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   // Format mirrors playCard so CardPlayFlash can show the hero card the
   // same way it shows the spell/equipment card on play.
   const heroName = data.name;
-  const targetName = target ? (CARDS_BY_ID[target.cardId]?.name ?? target.cardId) : null;
+  const targetName = target ? cardName(target.cardId) : null;
   pushLog(G, `P${pid} used skill: ${heroName}${targetName ? ` on ${targetName}` : ''}.`);
 
   // HP the skill costs comes straight off the caster: through no Shield or

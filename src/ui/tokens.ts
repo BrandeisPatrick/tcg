@@ -21,14 +21,6 @@ export const palette = {
   spirit: '#7a4a8a',       // muted plum
   pure: '#3a7a86',         // deep teal — desaturated
 
-  // Card-type ribbons — cream-frame friendly
-  type: {
-    hero:      { from: '#3d2a14', to: '#1a0f06', accent: '#cc8932', ribbon: '#996018' },  // dark brass
-    spell:     { from: '#2a1840', to: '#120822', accent: '#c878f0', ribbon: '#7a4a8a' },  // muted plum
-    equipment: { from: '#1a3320', to: '#0a1a0d', accent: '#6dc04b', ribbon: '#4a7030' },  // forest
-    ultimate:  { from: '#0a3a35', to: '#031a18', accent: '#98ffde', ribbon: '#b07825' },  // brass (accent)
-  },
-
   // Cream/parchment for card description bodies
   card: {
     body: '#f7e7d1',
@@ -50,13 +42,6 @@ export const fonts = {
   script:  '"Caveat Brush", "Marker Felt", "Bradley Hand", "Segoe Script", cursive',
 } as const;
 
-// Shadows are now warm brown drops onto parchment, not black on dark.
-export const shadow = {
-  md: '0 4px 12px rgba(40, 20, 0, 0.22)',
-  lg: '0 12px 32px rgba(40, 20, 0, 0.28)',
-  glowAccent: '0 0 0 1px rgba(176, 120, 37, 0.55), 0 0 24px rgba(176, 120, 37, 0.4)',
-} as const;
-
 export const radius = {
   sm: 4,
   md: 6,
@@ -73,15 +58,10 @@ export const spring = {
 
 // "Card got hit" ink by damage type — the colour tells you the type; the
 // HP-number pulse tells you the amount. Read by the FX layer (effects/fx).
-export function damageFxColor(type: 'attack' | 'spirit' | 'pure', ko = false): string {
-  if (ko) return palette.danger;            // wine for a kill, regardless of type
+export function damageFxColor(type: 'attack' | 'spirit' | 'pure'): string {
   return type === 'spirit' ? palette.spirit
     : type === 'pure' ? palette.pure
     : palette.hp;                            // 'attack' → bullet vermillion
-}
-
-export function typeTint(t: 'hero' | 'spell' | 'equipment' | 'ultimate') {
-  return palette.type[t];
 }
 
 /**

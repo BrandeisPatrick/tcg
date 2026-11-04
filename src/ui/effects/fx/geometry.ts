@@ -9,9 +9,10 @@ export interface Rect { left: number; top: number; width: number; height: number
 export const center = (r: Rect): Pt => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
 export const dist = (a: Pt, b: Pt): number => Math.hypot(b.x - a.x, b.y - a.y);
 export const angleOf = (a: Pt, b: Pt): number => Math.atan2(b.y - a.y, b.x - a.x);
-export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-export function toRect(el: Element): Rect {
+function toRect(el: Element): Rect {
   const b = el.getBoundingClientRect();
   return { left: b.left, top: b.top, width: b.width, height: b.height };
 }
@@ -51,30 +52,11 @@ export function seeded(seed: number): () => number {
   };
 }
 
-export interface PathBox {
+interface PathBox {
   /** SVG path data in the box's local coordinates. */
   d: string;
   /** Viewport box the SVG should occupy. */
   box: Rect;
-}
-
-/** A quadratic arc from `a` to `b`, bowing sideways by `bulge` of the
- *  distance. Boxed with padding so strokes and heads never clip. */
-export function curvePath(a: Pt, b: Pt, bulge = 0.18, pad = 28): PathBox {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
-  const d = dist(a, b) || 1;
-  const nx = -(b.y - a.y) / d;
-  const ny = (b.x - a.x) / d;
-  const c = { x: mx + nx * d * bulge, y: my + ny * d * bulge };
-  const left = Math.min(a.x, b.x, c.x) - pad;
-  const top = Math.min(a.y, b.y, c.y) - pad;
-  const right = Math.max(a.x, b.x, c.x) + pad;
-  const bottom = Math.max(a.y, b.y, c.y) + pad;
-  const box = { left, top, width: right - left, height: bottom - top };
-  const lx = (p: Pt) => (p.x - left).toFixed(1);
-  const ly = (p: Pt) => (p.y - top).toFixed(1);
-  return { d: `M ${lx(a)} ${ly(a)} Q ${lx(c)} ${ly(c)} ${lx(b)} ${ly(b)}`, box };
 }
 
 /** A lightning path: `segments` joints from `a` to `b`, each thrown sideways

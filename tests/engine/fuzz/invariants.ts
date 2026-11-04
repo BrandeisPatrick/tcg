@@ -19,7 +19,7 @@ import {
 import { isRespawning, koPatronDamage, stepInCandidates } from '@/engine/query';
 import { PIDS, boardOf, describeUnit, everyCard, isHeroCard, other, retreatCostOracle } from './oracle';
 
-export interface Violation {
+interface Violation {
   /** Invariant name, e.g. `hero-hp-range`. */
   id: string;
   /** id + subject; the edge-trigger key. */
@@ -253,7 +253,7 @@ function hasDuplicateIids(G: GameState): boolean {
   return false;
 }
 
-export interface MoveInfo { name: string; args: unknown[] }
+interface MoveInfo { name: string; args: unknown[] }
 
 /** Rules about how one move may change the state. `accepted` is whether the
  *  client's state id advanced. */

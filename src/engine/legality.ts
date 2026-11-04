@@ -327,7 +327,7 @@ export function promoteBlocked(G: GameState, benchIid: string): PromoteBlock | n
 
 // ---------- The draft and the opening mulligan ----------
 
-export type DraftBlock = 'noDraft' | 'notYourPick' | 'notInPool';
+type DraftBlock = 'noDraft' | 'notYourPick' | 'notInPool';
 
 /** Why `pid` cannot draft `heroId` now: there is a draft, it is their pick,
  *  and the hero is still in the pool. */

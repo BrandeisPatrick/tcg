@@ -22,6 +22,7 @@ import {
   type Camera, type Frame, type Pad,
 } from './mapCamera';
 import { useMapCamera, useRest, useRaster, ZOOM_STEP, type MapCamera } from './useMapCamera';
+import { ART_BASE } from '@/art/assets';
 
 interface StoryMapScreenProps {
   run: StoryRun | null;
@@ -390,7 +391,7 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
 /** The paper's tooth, baked from PAPER_MOTTLE (scripts/art/bake_mottle.mjs):
  *  a plain see-through tile, so a sheet tile rasterises it as an image
  *  instead of running the turbulence again, and no blend needs a layer. */
-const TOOTH = `url("${import.meta.env.BASE_URL ?? '/'}art/paper_mottle.png")`;
+const TOOTH = `url("${ART_BASE}paper_mottle.png")`;
 
 // The run panel is the heaviest thing docked on the map; it only needs to
 // redraw when the run changes, not when the selection does.

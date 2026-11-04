@@ -25,8 +25,6 @@ export function PatronPlaque({
   /** Patron HP the other side's open attack would cost this one: the life a
    *  knocked-out Active takes with it. */
   projectedDamage?: number;
-  /** Which end of the board this row sits at. */
-  side: 'top' | 'bottom';
   isMobile: boolean;
   /** Highlight while it's this patron's turn. */
   myTurn?: boolean;

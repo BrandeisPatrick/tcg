@@ -48,7 +48,7 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
 /** The line the hero sheet prints on an attack that cannot be made. Name the
  *  rival's Active to get the line for one who cannot be attacked (a Dome)
  *  rather than for one who is not there. */
-export function attackBlockReason(block: AttackBlock, active: CardInstance | null | undefined, rival?: CardInstance | null): string {
+export function attackBlockReason(block: AttackBlock, rival?: CardInstance | null): string {
   switch (block) {
     case 'turn1': return 'No attacks on Turn 1';
     // Attacks are per hero: 'used' is this Active's own swing, made this turn.
@@ -65,7 +65,7 @@ export function attackBlockReason(block: AttackBlock, active: CardInstance | nul
 }
 
 /** Who and what a card refusal is about, so its line can name them. */
-export interface PlaySubject {
+interface PlaySubject {
   /** The card in hand ("Extended Magazine"). */
   card: string;
   /** The hero it was aimed at, when one was named. */
@@ -150,7 +150,7 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
   switch (a.type) {
     case 'attack':
       if (code === 'draft') return 'Pick your heroes first';
-      return attackBlockReason(code as AttackBlock, G.players[pid].active, G.players[otherPlayer(pid)].active);
+      return attackBlockReason(code as AttackBlock, G.players[otherPlayer(pid)].active);
     case 'useSkill': {
       const card = findCardOnBoard(G, a.heroIid)?.card;
       const hero = nameOf(card);

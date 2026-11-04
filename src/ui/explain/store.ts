@@ -18,9 +18,9 @@
 
 export type ExplainMode = 'hover' | 'touch';
 
-export interface Open { id: string; mode: ExplainMode }
+interface Open { id: string; mode: ExplainMode }
 
-export interface ExplainStore {
+interface ExplainStore {
   /** The popover that is open, if any. */
   get(): Open | null;
   open(id: string, mode: ExplainMode): void;
@@ -59,7 +59,7 @@ export interface TriggerEvent {
   currentTarget?: { matches?: (selector: string) => boolean } | null;
 }
 
-export interface TriggerHandlers {
+interface TriggerHandlers {
   /** DOM listeners to add to the trigger, by event name. The hover ones are
    *  native on purpose: React derives mouseenter from the pair of mouseover /
    *  mouseout, and drops the enter whenever the element the pointer came from

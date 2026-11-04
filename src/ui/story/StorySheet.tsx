@@ -7,7 +7,7 @@
  */
 import type { CSSProperties, ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, cardName } from '@/cards';
 import type { StoryRun } from '@/story/types';
 import { REGIONS } from '@/story/campaign';
 import { fonts, spring, text } from '../tokens';
@@ -251,7 +251,7 @@ function Outcome({ run, compact }: { run: StoryRun; compact: boolean }) {
               <figure key={id} style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 6, width: w }}>
                 <FramedPortrait hero={id} w={w} h={h} border={poster.you} />
                 <figcaption style={{ ...text.label, fontSize: 10, letterSpacing: '0.06em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {CARDS_BY_ID[id]?.name ?? id}
+                  {cardName(id)}
                 </figcaption>
               </figure>
             ) : (

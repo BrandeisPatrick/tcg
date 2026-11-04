@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CardInstance, DamageType, FxCastKind, FxEvent, FxSource, FxTag, PlayerID, StatusId } from '@/engine/types';
 import type { AttackPlan, AttackStep } from '@/engine/forecast';
+import { otherPlayer } from '@/engine/query';
 import { CARDS_BY_ID } from '@/cards';
 import { HeroSlot } from '../board/HeroSlot';
 import { CombatChoreographer } from '../effects/CombatChoreographer';
@@ -66,8 +67,8 @@ const swing = (from: Id, to: Id, dmg: number, o: Partial<AttackStep> = {}): Atta
   shieldAbsorbed: 0, ...o,
 });
 
-export interface Demo { label: string; events: Ev[]; /** A basic attack: walked by the combat choreographer instead. */ plan?: AttackStep[] }
-export interface Group { id: string; short: string; title: string; blurb: string; demos: Demo[] }
+interface Demo { label: string; events: Ev[]; /** A basic attack: walked by the combat choreographer instead. */ plan?: AttackStep[] }
+interface Group { id: string; short: string; title: string; blurb: string; demos: Demo[] }
 
 /** A group the stage does not drive: full-screen overlays with their own
  *  triggers, listed with the rest so every "fire this" lives in one place. */
@@ -294,7 +295,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
   const attackRef = useRef<AttackPlan | null>(null);
   const swingPlan = (steps: AttackStep[], label: string) => {
     const by = STAGE[steps[0].attackerIid as Id].owner;
-    attackRef.current = { attackerId: by, defenderId: by === '0' ? '1' : '0', steps, damageToActive: 0, patronDamage: 0, defenderActiveKO: null };
+    attackRef.current = { attackerId: by, defenderId: otherPlayer(by), steps, damageToActive: 0, patronDamage: 0, defenderActiveKO: null };
     setAttack(attackRef.current);
     setPlaying(label);
   };
@@ -378,7 +379,6 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
       <HeroSlot
         card={card(id)}
         owner={STAGE[id].owner} myId="0"
-        isOpponent={STAGE[id].owner === '1'}
         pending={null} isTargetable={false}
         isCurrentTurn={STAGE[id].zone === 'active'}
         compact={compact || active < 150}

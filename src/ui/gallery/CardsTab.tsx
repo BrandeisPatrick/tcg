@@ -136,7 +136,7 @@ export function CardsTab() {
                   <div key={h.id} style={{ aspectRatio: '3 / 4' }}>
                     <HeroSlot
                       card={mockHeroInstance(h)}
-                      owner="0" myId="0" isOpponent={false}
+                      owner="0" myId="0"
                       pending={null} isTargetable={false}
                       isCurrentTurn={false}
                       compact
@@ -190,7 +190,7 @@ export function CardsTab() {
                 <Grid min={isMobile ? 88 : 104} gap={isMobile ? 10 : 14}>
                   {list.map((c) => (
                     <button key={c.id} type="button" className="gal-icon" aria-label={`${c.name} — open at full size`} onClick={() => setOpen(c.id)}>
-                      <RoundCardIcon cardId={c.id} size={isMobile ? 64 : 72} showName={false} />
+                      <RoundCardIcon cardId={c.id} size={isMobile ? 64 : 72} />
                       <span>{c.name}</span>
                     </button>
                   ))}

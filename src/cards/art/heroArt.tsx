@@ -1,19 +1,14 @@
 import { getHeroIdentity } from './heroPalette';
 import { poster } from '@/ui/poster';
+import { HERO_IMG_BASE } from '@/art/assets';
 
 interface PortraitProps {
   cardId: string;
-  size?: number;
-  full?: boolean;       // fill container with object-cover
-  className?: string;
-  variant?: 'card' | 'mm' | 'sm';   // which asset variant to use
 }
 
 // Real hero card art lives in public/heroes/<cardId>_<variant>.webp.
-// Prefix with Vite's BASE_URL so the path resolves under "/" (local dev)
-// and "/deadlock-tcg/" (GitHub Pages production build).
 function imageUrl(cardId: string, variant: 'card' | 'mm' | 'sm') {
-  return `${import.meta.env.BASE_URL}heroes/${cardId}_${variant}.webp`;
+  return `${HERO_IMG_BASE}${cardId}_${variant}.webp`;
 }
 
 /**
@@ -27,7 +22,7 @@ function imageUrl(cardId: string, variant: 'card' | 'mm' | 'sm') {
  * Dynamo's centre is his coat and mechanical arm; his helmeted head floats
  * at the upper right, half cut off by a centred crop.
  */
-export const HERO_ART_FOCUS: Record<string, { splash?: string; card?: string }> = {
+const HERO_ART_FOCUS: Record<string, { splash?: string; card?: string }> = {
   hero_mo_krill: { splash: '62% 22%' },
   hero_dynamo: { splash: '84% 22%' },
 };
@@ -37,15 +32,14 @@ export function heroArtFocus(cardId: string, kind: 'splash' | 'card', fallback: 
   return HERO_ART_FOCUS[cardId]?.[kind] ?? fallback;
 }
 
-export function HeroPortrait({ cardId, size, full = false, className, variant = 'card' }: PortraitProps) {
+export function HeroPortrait({ cardId }: PortraitProps) {
   const id = getHeroIdentity(cardId);
-  const url = imageUrl(cardId, variant);
+  const url = imageUrl(cardId, 'card');
   return (
     <div
-      className={className}
       style={{
-        width: size ?? '100%',
-        height: size ?? '100%',
+        width: '100%',
+        height: '100%',
         position: 'relative',
         overflow: 'hidden',
         background: poster.ground,
@@ -62,7 +56,7 @@ export function HeroPortrait({ cardId, size, full = false, className, variant = 
         style={{
           width: '100%',
           height: '100%',
-          objectFit: full ? 'cover' : 'contain',
+          objectFit: 'cover',
           objectPosition: 'center 30%',
           display: 'block',
           maskImage: 'radial-gradient(ellipse 90% 80% at 50% 45%, black 70%, transparent 100%)',

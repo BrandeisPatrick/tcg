@@ -29,9 +29,8 @@ import { BoardTab } from './gallery/BoardTab';
 import { StatusesTab } from './gallery/StatusesTab';
 import { OverlaysTab } from './gallery/OverlaysTab';
 import { StoryTab } from './gallery/StoryTab';
+import { BASE } from '@/art/assets';
 import './gallery/gallery.css';
-
-const BASE = import.meta.env.BASE_URL ?? '/';
 
 type Tab = 'cards' | 'combat' | 'foil' | 'board' | 'statuses' | 'overlays' | 'story' | 'credits';
 

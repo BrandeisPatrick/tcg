@@ -4,15 +4,11 @@ import { CARDS_BY_ID } from '@/cards';
 import { fonts } from '../tokens';
 import { poster } from '../poster';
 import { rarityInk } from './RarityFX';
+import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
 
 interface Props {
   cardId: string;
   size?: number;
-  selected?: boolean;
-  /** Render the card name below the circle. Default true (standalone gallery /
-   *  shop icons). Inline list rows that print their own name pass false so the
-   *  label doesn't duplicate and overflow the tiny icon wrapper. */
-  showName?: boolean;
 }
 
 function CardGlyph({ cardId, accent }: { cardId: string; accent: string }) {
@@ -123,9 +119,8 @@ function CircleArt({ data }: { data: CardData | undefined }) {
   if (!data) return null;
   const isSpell = data.type === 'spell';
   const isEquip = data.type === 'equipment';
-  const basePath = import.meta.env.BASE_URL ?? '/';
-  const src = isSpell ? `${basePath}spells/${data.id}.webp`
-            : isEquip ? `${basePath}items/${data.id}.webp`
+  const src = isSpell ? `${SPELL_IMG_BASE}${data.id}.webp`
+            : isEquip ? `${ITEM_IMG_BASE}${data.id}.webp`
             : null;
 
   return (
@@ -153,12 +148,10 @@ function CircleArt({ data }: { data: CardData | undefined }) {
 /**
  * Round card medallion — cover-cropped art inside a charcoal ring, a flat
  * rarity dot sitting on the ring at two o'clock, an ink type tag at the
- * bottom for the gallery sizes, and an optional stencilled name below.
- * `selected` (shop focus) swaps the ring for the poster red.
+ * bottom for the gallery sizes. Every host prints the card's name itself.
  */
-export function RoundCardIcon({ cardId, size = 130, selected = false, showName = true }: Props) {
+export function RoundCardIcon({ cardId, size = 130 }: Props) {
   const data = CARDS_BY_ID[cardId];
-  const name = data?.name ?? cardId;
   const rarity = data?.rarity ?? 1;
 
   const typeLabel = data?.type === 'spell' ? 'Spell'
@@ -178,14 +171,9 @@ export function RoundCardIcon({ cardId, size = 130, selected = false, showName =
         borderRadius: '50%',
         position: 'relative',
         overflow: 'hidden',
-        border: selected
-          ? `3px solid ${poster.red}`
-          : `2px solid ${poster.frame}`,
+        border: `2px solid ${poster.frame}`,
         background: poster.ground,
-        boxShadow: selected
-          ? '0 6px 14px rgba(0, 0, 0, 0.35)'
-          : '0 2px 6px rgba(0, 0, 0, 0.25)',
-        transition: 'border-color 0.3s, box-shadow 0.3s',
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
       }}>
         {/* Card art fills circle */}
         <CircleArt data={data} />
@@ -221,22 +209,6 @@ export function RoundCardIcon({ cardId, size = 130, selected = false, showName =
         boxSizing: 'border-box',
         pointerEvents: 'none',
       }} />
-
-      {/* Name below — standalone icons only; inline rows print their own. */}
-      {showName && (
-        <div style={{
-          marginTop: 10,
-          fontFamily: fonts.display,
-          fontSize: 14,
-          color: selected ? poster.red : poster.ink,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          lineHeight: 1.2,
-          transition: 'color 0.3s',
-        }}>
-          {name}
-        </div>
-      )}
     </div>
   );
 }

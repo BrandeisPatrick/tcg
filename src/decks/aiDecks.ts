@@ -62,7 +62,7 @@ const AI_DECK_CONTROL: CardId[] = [
   'enduring_speed',
 ];
 
-export type ArchetypeName = 'balanced' | 'aggro' | 'control';
+type ArchetypeName = 'balanced' | 'aggro' | 'control';
 export const AI_DECKS_BY_NAME: Record<ArchetypeName, CardId[]> = {
   balanced: AI_DECK_BALANCED,
   aggro: AI_DECK_AGGRO,

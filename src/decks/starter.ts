@@ -1,6 +1,6 @@
 import type { CardId } from '@/engine/types';
 
-export interface DeckBlueprint {
+interface DeckBlueprint {
   id: string;
   title: string;
   heroes: [CardId, CardId, CardId, CardId];

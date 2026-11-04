@@ -70,7 +70,7 @@ const DRAG_THRESHOLD = 4;
  *  two notches of a mouse wheel turned at an ordinary pace (~150-250ms) —
  *  otherwise the stall lands mid-zoom instead of after it. */
 const RASTER_COMMIT_MS = 320;
-export const FLY_MS = 450;
+const FLY_MS = 450;
 /** One zoom step: the +/− buttons and a double tap. */
 export const ZOOM_STEP = 1.4;
 /** Two taps on bare map this close in time (ms) and space (px) zoom in. */

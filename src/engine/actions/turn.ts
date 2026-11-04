@@ -6,10 +6,10 @@
  * boards and decks — so both do nothing until the draft is over.
  */
 import type { CardInstance, GameState, PlayerID } from '../types';
-import { CARDS_BY_ID } from '@/cards';
+import { cardName } from '@/cards';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges, tickCooldowns } from '../statusOps';
 import { resolve } from '../death';
-import { heroData, liveBoardCards } from '../query';
+import { heroData, isRespawning, liveBoardCards } from '../query';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { fireTriggers, type Trigger } from '../triggers';
@@ -40,8 +40,8 @@ function fireBoardTriggers(G: GameState, pid: PlayerID, trigger: Trigger) {
 function tickRespawn(G: GameState, pid: PlayerID) {
   const ps = G.players[pid];
   const corpses: CardInstance[] = [];
-  if (ps.active && (ps.active.respawnTurnsLeft ?? 0) > 0) corpses.push(ps.active);
-  for (const b of ps.bench) if (b && (b.respawnTurnsLeft ?? 0) > 0) corpses.push(b);
+  if (ps.active && isRespawning(ps.active)) corpses.push(ps.active);
+  for (const b of ps.bench) if (b && isRespawning(b)) corpses.push(b);
 
   for (const hero of corpses) {
     hero.respawnTurnsLeft = (hero.respawnTurnsLeft ?? 0) - 1;
@@ -49,7 +49,7 @@ function tickRespawn(G: GameState, pid: PlayerID) {
       hero.respawnTurnsLeft = undefined;
       hero.hp = hero.hpMax;
       hero.exhausted = false;
-      pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} respawned.`);
+      pushLog(G, `${cardName(hero.cardId)} respawned.`);
       pushFx(G, { kind: 'revive', iid: hero.iid });
     }
   }

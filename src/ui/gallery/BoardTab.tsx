@@ -155,7 +155,7 @@ function LevelEdgeSheet({ rewound }: { rewound: boolean }) {
               <div key={lv} style={{ width: 180, height: row.compact ? 180 : 280 }}>
                 <HeroSlot
                   card={card(row, lv)}
-                  owner={row.owner} myId="0" isOpponent={row.owner !== '0'}
+                  owner={row.owner} myId="0"
                   pending={null} isTargetable={row.target}
                   compact={row.compact}
                   onTap={() => {}}

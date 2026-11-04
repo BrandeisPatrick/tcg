@@ -169,7 +169,7 @@ function carriedAbilityIds(hero: CardInstance): string[] {
 }
 
 /** Does a passive of the hero's, or gear it wears, give its attack reach? */
-export function carriesReach(hero: CardInstance): boolean {
+function carriesReach(hero: CardInstance): boolean {
   return carriedAbilityIds(hero).some((id) => !!getAbility(id)?.reach);
 }
 
@@ -212,12 +212,12 @@ export function attackTargetsOracle(G: GameState, pid: PlayerID): CardInstance[]
 // Direct move calls on a clone (what heuristic.ts simulateMove does).
 // ---------------------------------------------------------------------------
 
-export type Outcome = 'accepted' | 'rejected' | 'threw';
-export interface CallResult { outcome: Outcome; G: GameState; error?: unknown }
+type Outcome = 'accepted' | 'rejected' | 'threw';
+interface CallResult { outcome: Outcome; G: GameState; error?: unknown }
 
 const SWALLOW_EVENTS = new Proxy({}, { get: () => () => undefined });
 
-export function cloneG(G: GameState): GameState {
+function cloneG(G: GameState): GameState {
   return structuredClone(G) as GameState;
 }
 

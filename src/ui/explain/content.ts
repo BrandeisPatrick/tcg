@@ -25,14 +25,14 @@ export function numberContent(n: NumberSpec, scale?: Scale): ExplainContent {
 }
 
 /** What a status does. `value` fills the registry's `<value>` for a chip on a
- *  hero; `valueWord` stands in for it where no number is known (a keyword in
- *  card text with nothing after it). `duration` is the chip's turns left. */
+ *  hero; where no number is known (a keyword in card text with nothing after
+ *  it) an N stands in for it. `duration` is the chip's turns left. */
 export function statusContent(
   id: StatusId,
-  { value, duration, valueWord = 'N' }: { value?: number; duration?: number; valueWord?: string } = {},
+  { value, duration }: { value?: number; duration?: number } = {},
 ): ExplainContent {
   const def = STATUSES_BY_ID[id];
-  const desc = (def?.desc ?? '').replace(/<value>/g, value === undefined ? valueWord : String(value));
+  const desc = (def?.desc ?? '').replace(/<value>/g, value === undefined ? 'N' : String(value));
   const turns = typeof duration === 'number' && duration > 0 && duration < 99
     ? `${duration} turn${duration === 1 ? '' : 's'} left.`
     : null;

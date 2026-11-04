@@ -20,7 +20,7 @@ import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { allIids, boardOf } from './oracle';
 
 export type Policy = 'heuristic' | 'randomLegal' | 'chaos';
-export const CHAOS_RATE = 0.3;
+const CHAOS_RATE = 0.3;
 
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -33,7 +33,7 @@ export function mulberry32(seed: number): () => number {
 }
 
 /** Run `fn` with Math.random pinned to a seeded generator; always restores it. */
-export function withPinnedRandom<T>(seed: number, fn: () => T): T {
+function withPinnedRandom<T>(seed: number, fn: () => T): T {
   const original = Math.random;
   Math.random = mulberry32(seed);
   try {
@@ -72,7 +72,7 @@ export interface MoveRecord {
 export interface StepInfo extends MoveRecord { seed: number }
 export interface Snapshot { G: GameState; ctx: Ctx }
 
-export interface PlayOpts {
+interface PlayOpts {
   seed: number;
   policies: Record<PlayerID, Policy>;
   /** Real match turns before the game is called a stalemate. */

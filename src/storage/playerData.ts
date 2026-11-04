@@ -15,7 +15,7 @@ export interface DeckSlot {
   heroes?: CardId[];
 }
 
-export interface PlayerData {
+interface PlayerData {
   preferredHeroes: (CardId | null)[];
   decks: (DeckSlot | null)[];
   selectedDeckIndex: number | null;
@@ -130,7 +130,7 @@ export function loadPlayerData(): PlayerData {
   }
 }
 
-export function savePlayerData(data: PlayerData): void {
+function savePlayerData(data: PlayerData): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 

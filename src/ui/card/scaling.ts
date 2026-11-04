@@ -59,7 +59,7 @@ export interface NumberSpec {
   per: number;
 }
 
-export type Token =
+type Token =
   | { type: 'text'; text: string }
   | ({ type: 'num'; raw: string } & NumberSpec);
 
@@ -83,7 +83,7 @@ export function parseMarkup(text: string): Token[] {
 }
 
 /** Is this number nothing but the stat itself (`{sp:0}`)? */
-export const isBareStat = (n: NumberSpec): boolean => n.base === 0 && n.per === 1;
+const isBareStat = (n: NumberSpec): boolean => n.base === 0 && n.per === 1;
 
 /** The stat a number reads, from the figures at hand. */
 function statOf(n: NumberSpec, scale?: Scale): number | undefined {
@@ -116,7 +116,7 @@ export function plainText(text: string | undefined): string {
 }
 
 /** What the popover says about a number. */
-export interface NumberExplanation {
+interface NumberExplanation {
   title: string;
   /** The ink the number is printed in: the popover's accent. */
   accent: string;

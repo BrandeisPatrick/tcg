@@ -25,11 +25,8 @@ import { loadRun } from '@/story/storyRun';
 import { CARDS_BY_ID, HEROES, SPELLS, EQUIPMENT } from '@/cards';
 import type { CardId } from '@/engine/types';
 import { heroArtFocus } from '@/cards/art/heroArt';
+import { ART_BASE, BASE, HERO_IMG_BASE } from '@/art/assets';
 import { LESSONS } from '@/tutorial/lessons';
-
-const BASE = import.meta.env.BASE_URL ?? '/';
-const ART_BASE = `${BASE}art/`;
-const HERO_BASE = `${BASE}heroes/`;
 
 // Print palette — the sheet's own inks, deliberately flatter and blacker
 // than the parlor tokens so the poster reads as printed, not upholstered.
@@ -237,7 +234,7 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
             status={status.quick}
             cta="Play"
             tag={`Featured · ${featuredName}`}
-            art={{ src: `${HERO_BASE}${featured}_splash.webp`, objectPosition: heroArtFocus(featured, 'splash', '50% 18%') }}
+            art={{ src: `${HERO_IMG_BASE}${featured}_splash.webp`, objectPosition: heroArtFocus(featured, 'splash', '50% 18%') }}
             onClick={() => onPlay(featured)}
             ariaLabel="Start Quick Match vs AI"
             compact={isMobile}

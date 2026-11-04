@@ -7,7 +7,7 @@
  */
 import { type Pt, seeded } from './geometry';
 
-export interface Shard {
+interface Shard {
   /** The shard's outline in the card's own pixels, clockwise. */
   poly: Pt[];
   centroid: Pt;
@@ -15,7 +15,7 @@ export interface Shard {
   inner: boolean;
 }
 
-export interface ShatterPlan {
+interface ShatterPlan {
   impact: Pt;
   shards: Shard[];
   /** SVG path data for every crack, in the card's own pixels. */

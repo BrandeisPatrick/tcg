@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL } from '@/engine/constants';
 import { fonts } from '../tokens';
 import { poster } from '../poster';
@@ -14,12 +13,10 @@ export function LevelRing({
   level,
   exp,
   size = 26,
-  style,
 }: {
   level: number;
   exp: number;
   size?: number;
-  style?: CSSProperties;
 }) {
   const clampedLevel = Math.max(START_LEVEL, Math.min(MAX_LEVEL, level)) as 1 | 2 | 3 | 4;
   const atMax = clampedLevel >= MAX_LEVEL;
@@ -64,7 +61,6 @@ export function LevelRing({
         width: size,
         height: size,
         display: 'inline-block',
-        ...style,
       }}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }}>

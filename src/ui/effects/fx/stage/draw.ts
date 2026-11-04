@@ -41,7 +41,7 @@ function rgb(color: string): [number, number, number, number] {
   return c;
 }
 
-export function withAlpha(color: string, a: number): string {
+function withAlpha(color: string, a: number): string {
   const [r, g, b, base] = rgb(color);
   return `rgba(${r}, ${g}, ${b}, ${Math.round(base * a * 1000) / 1000})`;
 }

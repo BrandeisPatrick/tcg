@@ -33,7 +33,7 @@ export const ABS_MAX_SCALE = 4.6;
  *  comes to rest, never during a gesture. */
 export const LOD_MID = 2.4;
 export const LOD_NEAR = 3.6;
-export type LodBand = 'far' | 'mid' | 'near';
+type LodBand = 'far' | 'mid' | 'near';
 export function lodBand(s: number): LodBand {
   return s >= LOD_NEAR ? 'near' : s >= LOD_MID ? 'mid' : 'far';
 }

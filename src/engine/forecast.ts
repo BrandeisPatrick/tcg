@@ -7,11 +7,11 @@
  * and the state it really left.
  */
 import type { FxEvent, GameState, HitFx, PlayerID, SwingFx } from './types';
-import { CARDS_BY_ID } from '@/cards';
+import { cardName } from '@/cards';
 import { INVALID, perform, type Action } from './engine';
 import { findCardOnBoard, otherPlayer } from './query';
 
-export interface SimResult {
+interface SimResult {
   /** The copy, after the action. */
   G: GameState;
   /** What the action appended to `G.fx`, seqs included — exactly what making
@@ -109,7 +109,7 @@ export function forecastAttack(G: GameState, pid: PlayerID, targetIid?: string):
   const hpAfter = findCardOnBoard(after, aimedAt)!.card.hp;
   const nameOf = (iid: string) => {
     const cardId = findCardOnBoard(G, iid)!.card.cardId;
-    return CARDS_BY_ID[cardId]?.name ?? cardId;
+    return cardName(cardId);
   };
 
   swings.forEach(({ swing: s, events: mine }, i) => {

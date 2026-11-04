@@ -7,12 +7,12 @@
  * ultimate: the card is dealt to its owner's hand the moment it happens.
  */
 import type { CardInstance, GameState, PlayerState } from './types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
 import { allocatorOf } from './ids';
 import { makeInstance } from './deckOps';
-import { liveBoardCards } from './query';
+import { isRespawning, liveBoardCards } from './query';
 import {
   LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_HAND, MAX_LEVEL, START_LEVEL,
   ULT_UNLOCK_LEVEL,
@@ -22,7 +22,7 @@ import {
  *  the ultimate it may have earned (see `dealEarnedUltimates`). */
 export function grantExp(G: GameState, card: CardInstance, amount: number): number {
   if (amount <= 0) return 0;
-  if ((card.respawnTurnsLeft ?? 0) > 0) return 0;
+  if (isRespawning(card)) return 0;
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') return 0;
   const startLevel = (card.level ?? START_LEVEL) as 1 | 2 | 3 | 4;
@@ -75,6 +75,6 @@ export function dealEarnedUltimates(G: GameState, ps: PlayerState) {
     const ult = makeInstance(ids, data.ult, ps.id, 'hand');
     ps.hand.push(ult);
     ps.ultsConsumed.push(data.ult);
-    pushLog(G, `P${ps.id} unlocked ${CARDS_BY_ID[data.ult]?.name ?? data.ult}.`);
+    pushLog(G, `P${ps.id} unlocked ${cardName(data.ult)}.`);
   }
 }

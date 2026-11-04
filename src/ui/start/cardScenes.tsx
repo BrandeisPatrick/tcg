@@ -14,7 +14,7 @@
 import { poster } from '../poster';
 
 /** Screen-print halftone — a dot field that fades out, as a reusable def. */
-function Halftone({ id, from, to = 0 }: { id: string; from: number; to?: number }) {
+function Halftone({ id, from }: { id: string; from: number }) {
   return (
     <>
       <pattern id={`${id}-dots`} width="6" height="6" patternUnits="userSpaceOnUse">
@@ -22,7 +22,7 @@ function Halftone({ id, from, to = 0 }: { id: string; from: number; to?: number 
       </pattern>
       <linearGradient id={`${id}-fade`} x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stopColor="#fff" stopOpacity={from} />
-        <stop offset="100%" stopColor="#fff" stopOpacity={to} />
+        <stop offset="100%" stopColor="#fff" stopOpacity={0} />
       </linearGradient>
       <mask id={`${id}-mask`}>
         <rect width="400" height="260" fill={`url(#${id}-fade)`} />

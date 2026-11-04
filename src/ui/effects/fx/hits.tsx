@@ -29,13 +29,12 @@ import { poster } from '../../poster';
 import { fonts } from '../../tokens';
 import { FX_INK, FX_TIMING, TAG_INFO, numeralInk, tagLead } from './fxCatalog';
 import { useFxCalm } from './FxMotionContext';
-import { type Pt, type Rect, angleOf, center, edgePoint, scatterInRect, seeded } from './geometry';
+import { type Pt, type Rect, angleOf, center, clamp, edgePoint, scatterInRect, seeded } from './geometry';
 import { Bolt, EASE_OUT, Fixed, Gunfire, LightningArc, Numeral, Ring, Sheen, Stamp, Wash, numeralSize, sec } from './primitives';
 import { ShatterPieces, TearHalves } from './shatter';
 import { useStage } from './stage/FxStage';
 import { bleedSpill, castCharge, chads, gunImpact, koBlast, pureTear, ring, sparks, spiritBurst, stampDust } from './stage/emitters';
 
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const stampSize = (rect: Rect) => clamp(Math.round(rect.width * 0.1), 11, 22);
 
 /** Ink that reads on a sticker of `hex` — dark type on a light ink, paper on a dark one. */
@@ -237,7 +236,7 @@ export function VolleyShot({ from, to, ink, seed, at, z = 80 }: {
 // Spirit — arcane.
 // ---------------------------------------------------------------------------
 
-export function SpiritBurst({ rect, at, hold, seed, accent, big = false, z = 80 }: {
+function SpiritBurst({ rect, at, hold, seed, accent, big = false, z = 80 }: {
   rect: Rect; at: number; hold: number; seed: number; accent?: string; big?: boolean; z?: number;
 }) {
   const ink = accent ?? FX_INK.spirit;
@@ -284,7 +283,7 @@ export function SpiritBurst({ rect, at, hold, seed, accent, big = false, z = 80 
 /** Pure damage rips the print across. With the card's live `tile` the two
  *  halves really part — curling up off the table over a dark gap — before
  *  they close again; the stage throws glass off either side of the rip. */
-export function PureBurst({ rect, tile, at, hold, seed, z = 80 }: {
+function PureBurst({ rect, tile, at, hold, seed, z = 80 }: {
   rect: Rect; tile?: HTMLElement | null; at: number; hold: number; seed: number; z?: number;
 }) {
   const rng = seeded(seed);
@@ -326,7 +325,7 @@ export function PureBurst({ rect, tile, at, hold, seed, z = 80 }: {
   );
 }
 
-export function BleedDrips({ rect, amount, at, hold, seed, z = 80 }: { rect: Rect; amount: number; at: number; hold: number; seed: number; z?: number }) {
+function BleedDrips({ rect, amount, at, hold, seed, z = 80 }: { rect: Rect; amount: number; at: number; hold: number; seed: number; z?: number }) {
   const rng = seeded(seed);
   const n = clamp(1 + amount, 2, 5);
   // What runs down the print drips off its lower edge onto the paper.
@@ -407,7 +406,7 @@ export function KoSticker({ rect, at, hold, seed }: { rect: Rect; at: number; ho
 // ---------------------------------------------------------------------------
 
 /** Mirage's mark — a crescent with a flame. */
-export function DjinnGlyph({ color }: { color: string }) {
+function DjinnGlyph({ color }: { color: string }) {
   return (
     <svg viewBox="0 0 24 24" width="100%" height="100%">
       <path d="M14 3 A 9 9 0 1 0 14 21 A 7 7 0 1 1 14 3 Z" fill={color} stroke={poster.ink} strokeWidth="1" />

@@ -16,12 +16,12 @@ import type { Scale } from './scaling';
  * the explanation is the formula alone. A hero in play never comes through
  * here: the sheet reads the hero itself (HeroDetailSheet).
  */
-export type LiveSpirit = (card: CardData) => number | undefined;
+type LiveSpirit = (card: CardData) => number | undefined;
 
 export const LiveScaleContext = createContext<LiveSpirit>(() => undefined);
 
 /** Whose Spirit Power a card's numbers add, in the explanation's words. */
-export function whoScales(card: CardData): string {
+function whoScales(card: CardData): string {
   if (card.type === 'hero') return card.name;
   if (card.type === 'ultimate') return CARDS_BY_ID[card.linkedHero]?.name ?? 'its hero';
   return 'your Active';

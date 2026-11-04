@@ -23,8 +23,8 @@ import { MAP_W, MAP_H } from './mapCamera';
  */
 
 type V = { x: number; y: number };
-export interface Leg { key: string; from: StoryNode; to: StoryNode; p: [V, V, V, V] }
-export type LegState = 'travelled' | 'open' | 'locked';
+interface Leg { key: string; from: StoryNode; to: StoryNode; p: [V, V, V, V] }
+type LegState = 'travelled' | 'open' | 'locked';
 
 /** A leg's key as an SVG id (keys hold a '>', which url(#…) will not take). */
 const maskId = (leg: Leg) => `story-draw-${leg.key.replace(/[^\w-]/g, '_')}`;
@@ -63,7 +63,7 @@ export function routeLegs(nodes: StoryNode[]): Leg[] {
   return [...legs.values()];
 }
 
-export function legState(run: StoryRun, leg: Leg): LegState {
+function legState(run: StoryRun, leg: Leg): LegState {
   const cleared = run.clearedNodeIds;
   if (!cleared.includes(leg.from.id)) return 'locked';
   if (cleared.includes(leg.to.id)) return 'travelled';

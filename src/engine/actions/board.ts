@@ -14,7 +14,7 @@
  * to the front (`pullToActive`) do not.
  */
 import type { CardInstance, GameState, PlayerID, PlayerState } from '../types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from '../log';
 import { resolve } from '../death';
 import { retreatCost } from '../legality';
@@ -90,9 +90,6 @@ export function promoteToActive(G: GameState, benchHeroIid: string) {
   resolve(G);
 }
 
-/** The name a log line calls a card by. */
-const nameOf = (card: CardInstance) => CARDS_BY_ID[card.cardId]?.name ?? card.cardId;
-
 /**
  * Trade the Active of `ps` with `hero`, a bench hero of the same player: the
  * Active goes to the slot `hero` leaves. No souls, and neither hero is
@@ -116,7 +113,7 @@ function swapWithActive(
   ps.bench[slotIdx] = active;
   active.zone = 'bench';
   active.slot = (slotIdx + 1) as 1 | 2 | 3;
-  if (say) pushLog(G, say(nameOf(stepsIn), nameOf(active)));
+  if (say) pushLog(G, say(cardName(stepsIn.cardId), cardName(active.cardId)));
   return true;
 }
 

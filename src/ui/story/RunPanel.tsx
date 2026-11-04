@@ -16,12 +16,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, cardName } from '@/cards';
 import type { CardId } from '@/engine/types';
 import type { StoryRun, StoryNode } from '@/story/types';
 import { effectiveKind, routeProgress, stopState, type RouteProgress } from '@/story/describe';
 import { HeroBadge } from '@/cards/art/heroArt';
-import { CardFrame } from '../card/CardFrame';
+import { CardFrame, SIZES } from '../card/CardFrame';
 import { CardPreview } from '../overlays/CardPreview';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth, scrimStyle, sheetStyle, tileShadow } from '../poster';
@@ -173,7 +173,7 @@ function PanelBody({ run, header = true, onPreview, onOpenDeck, onFocusStop, onA
                   key={id}
                   type="button"
                   onClick={() => onPreview(id)}
-                  aria-label={`${CARDS_BY_ID[id]?.name ?? id}: show card`}
+                  aria-label={`${cardName(id)}: show card`}
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.97 }}
                   transition={spring.snappy}
@@ -403,13 +403,13 @@ function Pips({ run, route }: { run: StoryRun; route: RouteProgress }) {
   );
 }
 
-function BossBadge({ hero, down, name, size = 34 }: { hero?: CardId; down: boolean; name?: string; size?: number }) {
+function BossBadge({ hero, down, name }: { hero?: CardId; down: boolean; name?: string }) {
   return (
     <span
       title={name ? `Boss: ${name}` : undefined}
       style={{ position: 'relative', display: 'block', borderRadius: 8, border: `2px solid ${poster.red}`, flexShrink: 0 }}
     >
-      {hero ? <HeroBadge cardId={hero} size={size} /> : <span style={{ display: 'block', width: size, height: size }} />}
+      {hero ? <HeroBadge cardId={hero} size={34} /> : <span style={{ display: 'block', width: 34, height: 34 }} />}
       {down && (
         <span
           aria-hidden
@@ -670,9 +670,9 @@ function DeckSheet({ deck, onPreview, onClose }: {
   const gap = isMobile ? 10 : 14;
   const pad = isMobile ? 14 : 28;
   const room = width - (isMobile ? 24 : 64) - pad * 2;
-  const cols = isMobile ? 3 : Math.max(1, Math.min(5, Math.floor((room + gap) / (134 + gap))));
-  const scale = isMobile ? Math.min(1, (room - gap * (cols - 1)) / cols / 134) : 1;
-  const sheetW = isMobile ? undefined : cols * 134 + (cols - 1) * gap + pad * 2;
+  const cols = isMobile ? 3 : Math.max(1, Math.min(5, Math.floor((room + gap) / (SIZES.hand.w + gap))));
+  const scale = isMobile ? Math.min(1, (room - gap * (cols - 1)) / cols / SIZES.hand.w) : 1;
+  const sheetW = isMobile ? undefined : cols * SIZES.hand.w + (cols - 1) * gap + pad * 2;
   const close = useRef<HTMLDivElement>(null);
   useEffect(() => { close.current?.querySelector('button')?.focus(); }, []);
 
@@ -742,7 +742,7 @@ function DeckSheet({ deck, onPreview, onClose }: {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${cols}, ${134 * scale}px)`,
+            gridTemplateColumns: `repeat(${cols}, ${SIZES.hand.w * scale}px)`,
             justifyContent: isMobile ? 'space-between' : 'start',
             gap: `${gap + 6}px ${gap}px`,
           }}
@@ -752,21 +752,21 @@ function DeckSheet({ deck, onPreview, onClose }: {
               key={id}
               type="button"
               onClick={() => onPreview(id)}
-              aria-label={`${CARDS_BY_ID[id]?.name ?? id}${n > 1 ? `, ${n} copies` : ''}: show card`}
+              aria-label={`${cardName(id)}${n > 1 ? `, ${n} copies` : ''}: show card`}
               initial={{ y: 14, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ ...spring.default, delay: Math.min(i, 12) * 0.03 }}
               style={{
                 position: 'relative',
-                width: 134 * scale,
-                height: 188 * scale,
+                width: SIZES.hand.w * scale,
+                height: SIZES.hand.h * scale,
                 padding: 0,
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer',
               }}
             >
-              <span style={{ display: 'block', width: 134, height: 188, transform: scale === 1 ? undefined : `scale(${scale})`, transformOrigin: '0 0' }}>
+              <span style={{ display: 'block', width: SIZES.hand.w, height: SIZES.hand.h, transform: scale === 1 ? undefined : `scale(${scale})`, transformOrigin: '0 0' }}>
                 <CardFrame cardId={id} size="hand" />
               </span>
               {n > 1 && (

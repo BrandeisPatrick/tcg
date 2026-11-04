@@ -53,7 +53,6 @@ export function ActiveSlot({
                 card={card}
                 owner={owner}
                 myId={myId}
-                isOpponent={isOpponent}
                 pending={pending}
                 isTargetable={isTargetable(card)}
                 isCurrentTurn={isCurrentTurn}

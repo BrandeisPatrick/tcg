@@ -13,7 +13,7 @@
  */
 import { poster } from '../../../poster';
 import { FX_INK } from '../fxCatalog';
-import { type Pt, dist, seeded } from '../geometry';
+import { type Pt, clamp, dist, seeded } from '../geometry';
 import { type Ent, type Particle, particle } from './sim';
 
 type Range = [number, number];
@@ -21,7 +21,6 @@ type Range = [number, number];
 const TAU = Math.PI * 2;
 const MS = 1 / 1000;
 const span = (rng: () => number, [lo, hi]: Range) => lo + rng() * (hi - lo);
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const count = (n: number, density = 1) => Math.max(1, Math.round(n * density));
 /** A throw angle: inside a cone when the burst has a direction, all round otherwise. */
 const aim = (rng: () => number, dir: number | undefined, spread: number) =>
@@ -89,7 +88,7 @@ export function chads(o: Burst & { colors: string[]; back?: string }): Ent[] {
 }
 
 /** Splinters of glass or crystal. */
-export function shards(o: Burst & { color: string; alt?: string }): Ent[] {
+function shards(o: Burst & { color: string; alt?: string }): Ent[] {
   return launch(o, { speed: [90, 300], lift: [300, 600], size: [6, 11], spread: 2.4, stagger: 30 }, (rng, base) => particle({
     kind: 'shard', ...base, z: 4,
     gravity: 1500, drag: 0.5, bounce: 0.3,
@@ -146,7 +145,7 @@ export function puffs(o: Burst & { color?: string; ring?: number; life?: Range }
 }
 
 /** The comic-book star at an impact. */
-export function flash(o: { at: Pt; r: number; color: string; alt?: string; spikes?: number; seed: number; z?: number; life?: number; delay?: number; rot?: number; lance?: number }): Ent[] {
+function flash(o: { at: Pt; r: number; color: string; alt?: string; spikes?: number; seed: number; z?: number; life?: number; delay?: number; rot?: number; lance?: number }): Ent[] {
   return [{
     t: 'flash', x: o.at.x, y: o.at.y, z: o.z ?? 10, r: o.r, spikes: o.spikes ?? 6,
     rot: o.rot ?? seeded(o.seed)() * TAU, lance: o.lance ?? 0, color: o.color, alt: o.alt ?? FX_INK.cream,

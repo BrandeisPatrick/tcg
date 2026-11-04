@@ -25,7 +25,7 @@ import { withCast } from './castContext';
 
 export type Trigger = AbilityDef['trigger'];
 
-export interface Firing {
+interface Firing {
   /** Whose turn the engine is working in — the abilities' `ctx.movingPlayer`.
    *  Defaults to the bearer's owner, which is who it is in every real case. */
   movingPlayer?: PlayerID;

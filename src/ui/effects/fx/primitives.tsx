@@ -22,7 +22,7 @@ import { poster, chamfer, clipBoth } from '../../poster';
 import { FX_INK } from './fxCatalog';
 import { TILT_PERSPECTIVE, fromHere, kickFor, useFxImpulse } from './FxImpulse';
 import { useFxCalm } from './FxMotionContext';
-import { type Pt, type Rect, angleOf, dist, jaggedPath, seeded } from './geometry';
+import { type Pt, type Rect, angleOf, clamp, dist, jaggedPath, seeded } from './geometry';
 import { useStage } from './stage/FxStage';
 import { bolt, drainOrbs, lightningStrike, muzzleBlast, tracers, waveFront } from './stage/emitters';
 
@@ -200,10 +200,8 @@ export function Stamp({ text, at = 0, dur = 900, sticker = poster.ink, ink = pos
   );
 }
 
-const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
 /** Type size for the amount on a card of this width. */
-export const numeralSize = (rect: Rect) => clampN(Math.round(rect.width * 0.2), 19, 42);
+export const numeralSize = (rect: Rect) => clamp(Math.round(rect.width * 0.2), 19, 42);
 
 /** The amount, printed big at the impact — stencil digits in the effect's
  *  ink with a paper keyline and a hard ink drop. The digits fall onto the

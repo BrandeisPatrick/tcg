@@ -144,7 +144,7 @@ export function setupGame(): GameState {
       counters,
       players: {
         '0': buildPlayer(ids, '0', story.playerHeroes, story.playerDeck, { patronHp: story.patronHp, ordered: story.orderedPlayerDeck }),
-        '1': buildPlayer(ids, '1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.enemyPatronHp ?? story.patronHp }),
+        '1': buildPlayer(ids, '1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.patronHp }),
       },
       turnNumber: startTurn,
       log: [{ turn: startTurn, text: 'Battle begins.' }],

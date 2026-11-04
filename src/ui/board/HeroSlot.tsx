@@ -10,12 +10,13 @@ import { CARDS_BY_ID } from '@/cards';
 import { effectiveAtk } from '@/engine/query';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
+import { ITEM_IMG_BASE } from '@/art/assets';
 import { StatusIcon } from '../card/StatusIcon';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
 import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
 import { fonts, spring, text, statRow } from '../tokens';
-import { poster } from '../poster';
+import { atkInk, hpInk, poster } from '../poster';
 import { LevelRing } from '../card/LevelRing';
 import { LevelTrim, trimInset } from '../card/LevelTrim';
 import { useStatTick } from './useStatTick';
@@ -39,7 +40,6 @@ interface Props {
   card: CardInstance;
   owner: PlayerID;
   myId: PlayerID;
-  isOpponent: boolean;
   pending: ArmedPlay | null;
   isTargetable: boolean;
   isCurrentTurn?: boolean;
@@ -97,14 +97,10 @@ export function HeroSlot({
   // bright, debuffed/damaged → dim grey. A locked hue means a glance always
   // identifies which stat is which; the shade carries the state.
   const baseAtk = data.atk;
-  const atkColor = atk > baseAtk ? poster.stat.atkBright : atk < baseAtk ? poster.stat.atkDim : poster.stat.atk;
+  const atkColor = atkInk(atk, baseAtk);
   const baseHp = data.hp;
-  const hpColor =
-    shownHp < card.hpMax ? poster.stat.hpDim
-    : card.hpMax > baseHp ? poster.stat.hpBright
-    : poster.stat.hp;
-  // Pulse the stat number on the card whenever its value changes — this
-  // replaces the old floating ±N number above the card.
+  const hpColor = hpInk(shownHp, card.hpMax, baseHp);
+  // Pulse the stat number on the card whenever its value changes.
   const hpTick = useStatTick(shownHp);
   const bpTick = useStatTick(atk);
   const shieldValue = shownStatuses.find((s) => s.id === 'shield')?.value ?? 0;
@@ -226,7 +222,7 @@ export function HeroSlot({
           filter: isCorpse ? 'grayscale(0.95) brightness(0.4) contrast(0.9)' : undefined,
           transition: 'filter 600ms ease',
         }}>
-          <HeroPortrait cardId={card.cardId} full />
+          <HeroPortrait cardId={card.cardId} />
         </div>
         {/* Inner edge — the print sits slightly recessed in its frame. */}
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: PRINT_EDGE, pointerEvents: 'none' }} />
@@ -270,7 +266,7 @@ export function HeroSlot({
                   {isMerged ? (
                     <HeroBadge cardId={eq.cardId} size={dim} />
                   ) : (
-                    <img src={`${import.meta.env.BASE_URL}items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
+                    <img src={`${ITEM_IMG_BASE}${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
                   )}

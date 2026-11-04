@@ -1,20 +1,19 @@
 import { motion } from 'framer-motion';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
-import { isRespawning } from '@/engine/query';
+import { cardName } from '@/cards';
+import { isRespawning, otherPlayer } from '@/engine/query';
 import { heroArtFocus } from '@/cards/art/heroArt';
+import { HERO_IMG_BASE } from '@/art/assets';
 import { fonts, spring } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { useViewport } from '../hooks/useViewport';
 
-const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
-
 /**
  * Full-screen match epilogue, printed as one cream sheet floating on the
  * blurred scene. A brush-script lead-in carries the patron flavor line into
- * an unambiguous VICTORY / DEFEAT / DRAW headline, both teams' final rosters
+ * an unambiguous VICTORY / DEFEAT headline, both teams' final rosters
  * sit beneath as small charcoal-framed portraits (fallen heroes greyed under
  * a red K.O. sticker), a strip of ink tags holds the numbers, and the exits
  * are poster buttons: Rematch + Main Menu (or Return to Map for story
@@ -22,13 +21,12 @@ const HERO_IMG_BASE = `${import.meta.env.BASE_URL ?? '/'}heroes/`;
  * PosterBackdrop.
  */
 export function MatchEndScreen({
-  G, me, won, draw, isStory, isTutorial = false,
+  G, me, won, isStory, isTutorial = false,
   onRematch, onMenu, onStoryReturn, lessonNumber, lessonOutro, onNextLesson, onLessons,
 }: {
   G: GameState;
   me: PlayerID;
   won: boolean;
-  draw: boolean;
   isStory: boolean;
   /** A coached lesson rather than a real match — the exits funnel forward
    *  into a Quick Match instead of offering to run the lesson again. */
@@ -45,15 +43,13 @@ export function MatchEndScreen({
   onStoryReturn: () => void;
 }) {
   const { isMobile } = useViewport();
-  const opp: PlayerID = me === '0' ? '1' : '0';
-  // Verdict ink: victory prints in ink, defeat in the poster's one red, a
-  // draw in dimmed ink. The winning side's roster label takes the same tone.
-  const tone = draw ? poster.inkDim : won ? poster.ink : poster.red;
-  const headline = draw ? 'Draw' : won ? 'Victory' : 'Defeat';
-  const flavor = draw
-    ? 'Both patrons stand — the city holds its breath.'
-    : isTutorial
-      ? (won ? (lessonOutro ?? 'Lesson over. The real tables are downstairs.') : 'No matter — you know the moves now.')
+  const opp: PlayerID = otherPlayer(me);
+  // Verdict ink: victory prints in ink, defeat in the poster's one red. The
+  // winning side's roster label takes the same tone.
+  const tone = won ? poster.ink : poster.red;
+  const headline = won ? 'Victory' : 'Defeat';
+  const flavor = isTutorial
+    ? (won ? (lessonOutro ?? 'Lesson over. The real tables are downstairs.') : 'No matter — you know the moves now.')
     : isStory
       ? (won ? 'The block is yours — press on uptown.' : 'Your run ends in the old city.')
       : (won ? 'The rival patron falls.' : 'Your patron is outflanked.');
@@ -154,11 +150,11 @@ export function MatchEndScreen({
             alignItems: 'center',
           }}
         >
-          <RosterStrip label="Your team" team={myTeam} fallen={fallen} accent={won && !draw ? tone : poster.inkDim} />
+          <RosterStrip label="Your team" team={myTeam} fallen={fallen} accent={won ? tone : poster.inkDim} />
           <div aria-hidden style={{
             fontFamily: fonts.display, fontSize: 15, color: poster.inkFaint, letterSpacing: '0.2em',
           }}>VS</div>
-          <RosterStrip label="Rival team" team={opTeam} fallen={fallen} accent={!won && !draw ? tone : poster.inkDim} />
+          <RosterStrip label="Rival team" team={opTeam} fallen={fallen} accent={!won ? tone : poster.inkDim} />
         </motion.div>
 
         {/* Stat strip — one ink tag per number. */}
@@ -246,7 +242,7 @@ function RosterStrip({ label, team, fallen, accent }: {
       <div style={{ display: 'flex', gap: 8 }}>
         {team.map((c, i) => {
           const dead = fallen(c);
-          const name = CARDS_BY_ID[c.cardId]?.name ?? c.cardId;
+          const name = cardName(c.cardId);
           return (
             // Charcoal frame around the portrait; a fallen hero's frame goes
             // flat (no lift, edge-grey border) under the K.O. sticker.

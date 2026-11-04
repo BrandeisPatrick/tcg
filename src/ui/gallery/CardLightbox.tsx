@@ -112,7 +112,7 @@ export function CardLightbox({ ids, id, onPick, onClose }: {
           {isMobile && nav(-1, 'Previous card', '←')}
           {onTable && (
             <div title="As it appears on the table" style={{ flexShrink: 0 }}>
-              <RoundCardIcon cardId={id} size={52} showName={false} />
+              <RoundCardIcon cardId={id} size={52} />
             </div>
           )}
           <div style={{ minWidth: 0, textAlign: onTable ? 'left' : 'center', color: poster.cream, fontFamily: fonts.ui }}>

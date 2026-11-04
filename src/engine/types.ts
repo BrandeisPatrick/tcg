@@ -15,7 +15,7 @@ export type Zone =
 
 export type DamageType = 'attack' | 'spirit' | 'pure';
 
-export type CardType = 'hero' | 'spell' | 'equipment' | 'ultimate';
+type CardType = 'hero' | 'spell' | 'equipment' | 'ultimate';
 
 export interface BaseCard {
   id: CardId;
@@ -69,7 +69,6 @@ export interface StatusInstance {
   id: StatusId;
   value: number;
   duration: number;
-  sourceIid?: string;
   /** A channel that escalates: `value` climbs by `ramp` after each pulse
    *  (Seven's Storm Cloud marks its `casting` status with 1). Absent on
    *  everything else. */
@@ -352,7 +351,6 @@ export interface LevelUpFx extends FxBase {
 }
 
 export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx;
-export type FxKind = FxEvent['kind'];
 
 /**
  * Pre-match hero draft. Both players take turns picking 4 heroes each from

@@ -123,14 +123,13 @@ export function Sticker({ label, ink, outline, glyph, small }: {
 
 /** A hero in the charcoal frame every card on the table wears (LessonRow's
  *  portrait). With no hero, `children` prints in the frame instead. */
-export function FramedPortrait({ hero, w, h, border, children, style }: {
+export function FramedPortrait({ hero, w, h, border, children }: {
   hero?: string;
   w: number;
   h: number;
   /** A keyline round the frame: gold for your heroes, red for a boss. */
   border?: string;
   children?: ReactNode;
-  style?: CSSProperties;
 }) {
   return (
     <span
@@ -146,7 +145,6 @@ export function FramedPortrait({ hero, w, h, border, children, style }: {
         border: border ? `2px solid ${border}` : undefined,
         boxShadow: '0 4px 10px rgba(0, 0, 0, 0.25)',
         boxSizing: 'border-box',
-        ...style,
       }}
     >
       <span
@@ -162,7 +160,7 @@ export function FramedPortrait({ hero, w, h, border, children, style }: {
           background: poster.ground,
         }}
       >
-        {hero ? <HeroPortrait cardId={hero} full /> : children}
+        {hero ? <HeroPortrait cardId={hero} /> : children}
       </span>
     </span>
   );

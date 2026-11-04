@@ -26,7 +26,7 @@
  */
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, cardName } from '@/cards';
 import { effectiveAtk, heroAbilities, isRespawning, stepInCandidates } from '@/engine/query';
 import { attackBlocked, cardCost, playBlocked, skillBlocked } from '@/engine/legality';
 import { RETREAT_COST, SKILL_COST } from '@/engine/constants';
@@ -86,7 +86,6 @@ export const emptySeen: CoachSeen = {
 export interface CoachView {
   G: GameState;
   me: PlayerID;
-  isMyTurn: boolean;
   seen: CoachSeen;
   /** A card or skill is armed and waiting for its target. */
   targeting: boolean;
@@ -98,8 +97,6 @@ export interface CoachView {
   sheetHero: CardId | null;
   /** Taps on cards the player could not pay for, so far. */
   refusals: number;
-  /** The id of the last tap-to-continue step the player answered. */
-  acked: string | null;
 }
 
 /**
@@ -114,7 +111,7 @@ export type GateSpec = string;
 const RIVAL: PlayerID = '1';
 const alive = (c: CardInstance | null | undefined): c is CardInstance => !!c && !isRespawning(c);
 const nameOf = (c: CardInstance | null | undefined) =>
-  c ? CARDS_BY_ID[c.cardId]?.name ?? c.cardId : '';
+  c ? cardName(c.cardId) : '';
 /** The hero tile announces itself as "Kelvin — 2 attack, 6 health". */
 const tile = (c: CardInstance | null | undefined) => (c ? `${nameOf(c)} —` : '');
 /** The Attack plate on the open hero sheet; its accessible name starts
@@ -196,9 +193,6 @@ export interface CoachStep {
   spot: (v: CoachView) => GateSpec[];
   /** What may be tapped. Defaults to `spot`. */
   allow?: (v: CoachView) => GateSpec[];
-  /** The lit things are not controls (a rule, a fallen hero): a tap on any
-   *  of them is the answer, and `task` reads `acked`. */
-  tap?: boolean;
 }
 
 export const RIVAL_TURN = "Rival's turn. Watch — their Active gets one move too: its skill, or an attack on yours.";

@@ -22,7 +22,7 @@ import type { Ctx } from 'boardgame.io';
 import type { GameState, PlayerID, PlayerState, CardInstance, StatusInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
-import { checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, liveBoardCards, otherPlayer, resolveSkill } from '@/engine/query';
+import { checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, resolveSkill } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import { perform, type Action } from '@/engine/engine';
 import { attackBlocked, cardCost, legalActions } from '@/engine/legality';
@@ -214,7 +214,7 @@ function evalState(g: GameState, pid: PlayerID): number {
       for (const rem of mergedRem(c)) s += sign * presence(rem);
     }
     for (const c of [ps.active, ...ps.bench]) {
-      if (c && (c.respawnTurnsLeft ?? 0) > 0) s -= sign * 5; // corpse = lost presence
+      if (c && isRespawning(c)) s -= sign * 5; // corpse = lost presence
     }
   };
   tally(me, foe, 1);

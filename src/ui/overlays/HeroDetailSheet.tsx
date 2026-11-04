@@ -6,6 +6,7 @@ import { STATUSES_BY_ID } from '@/statuses';
 import { effectiveAtk, effectiveSpirit, heroAbilities } from '@/engine/query';
 import { SKILL_COST } from '@/engine/constants';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
+import { ITEM_IMG_BASE } from '@/art/assets';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { LevelTrim } from '../card/LevelTrim';
@@ -179,7 +180,7 @@ export function HeroDetailSheet({
           margin: '6px 6px 0', borderRadius: 6,
           background: '#0f1214',
         }}>
-          <HeroPortrait cardId={data.id} full />
+          <HeroPortrait cardId={data.id} />
           {/* Inner edge — the print sits slightly recessed in its frame. */}
           <div aria-hidden style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -377,7 +378,7 @@ export function HeroDetailSheet({
                       {merged ? (
                         <HeroBadge cardId={eq.cardId} size={32} />
                       ) : (
-                        <img src={`${import.meta.env.BASE_URL}items/${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
+                        <img src={`${ITEM_IMG_BASE}${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       )}

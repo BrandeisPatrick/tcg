@@ -10,7 +10,7 @@
  * hook books nothing — sparks are exactly the "things that fly" a
  * reduced-motion player asked not to see.
  */
-import { createContext, useContext, useEffect, useMemo, useRef, type DependencyList, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useFxCalm } from '../FxMotionContext';
 import { type Bounds, boundsOf, paint } from './draw';
 import { CAMERA_HEIGHT, type Camera, type Ent, type World, createWorld, step } from './sim';
@@ -24,11 +24,11 @@ const MAX_DPR = 2;
 const MAX_DT = 0.05;
 
 /** The canvas's layer: above every wash and sticker, below the numerals. */
-export const STAGE_Z = 88;
+const STAGE_Z = 88;
 
 interface Cue { due: number; fn: () => void; dead: boolean }
 
-export class FxStageEngine {
+class FxStageEngine {
   readonly world: World = createWorld();
   /** Thins bursts on small screens; emitters read it through `add`'s caller. */
   density = 1;
@@ -163,15 +163,15 @@ export function useStageEngine(): FxStageEngine | null {
   return useContext(FxStageContext);
 }
 
-export interface StageScope {
+interface StageScope {
   /** Book `fn` for `ms` after this component mounted. */
   at(ms: number, fn: (stage: FxStageEngine) => void): void;
 }
 
 /** Book stage cues for the life of the calling component. `setup` runs once
- *  on mount (and again if `deps` change); every cue it books is cancelled on
- *  unmount. Books nothing under calm motion or without a stage. */
-export function useStage(setup: (scope: StageScope) => void, deps: DependencyList = []): void {
+ *  on mount; every cue it books is cancelled on unmount. Books nothing under
+ *  calm motion or without a stage. */
+export function useStage(setup: (scope: StageScope) => void): void {
   const engine = useContext(FxStageContext);
   const calm = useFxCalm();
   useEffect(() => {
@@ -180,5 +180,5 @@ export function useStage(setup: (scope: StageScope) => void, deps: DependencyLis
     setup({ at: (ms, fn) => { cancels.push(engine.cue(ms, () => fn(engine))); } });
     return () => cancels.forEach((c) => c());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, calm, ...deps]);
+  }, [engine, calm]);
 }

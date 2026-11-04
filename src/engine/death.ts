@@ -6,10 +6,10 @@
  * promotion).
  */
 import type { CardInstance, GameState, PlayerID, PlayerState } from './types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { damagePlayer } from './damage';
-import { isRespawning, koPatronDamage, stepInCandidates } from './query';
+import { isRespawning, koPatronDamage, otherPlayer, stepInCandidates } from './query';
 import { leaveActive } from './lane';
 import { RESPAWN_TURNS, SOULS_MAX } from './constants';
 
@@ -36,10 +36,10 @@ export function awardSouls(G: GameState, pid: PlayerID, n: number, reason?: stri
  * flags) resets. `tickRespawn` brings the hero back at full hp when the timer
  * ticks down.
  */
-export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
-  pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} fell.`);
+function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
+  pushLog(G, `${cardName(hero.cardId)} fell.`);
   // The KO bounty is capped at the soul ceiling (and never subtracts: see awardSouls).
-  const oppId: PlayerID = ps.id === '0' ? '1' : '0';
+  const oppId: PlayerID = otherPlayer(ps.id);
   awardSouls(G, oppId, 1, 'KO bounty');
   // The patron pays the fallen hero's level: a leveled carry is the costliest
   // loss on the board.
@@ -64,7 +64,7 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   hero.respawnTurnsLeft = RESPAWN_TURNS;
   // Level + exp + stat mods INTENTIONALLY persist through respawn — the
   // hero comes back at full hp with their rank intact (see leveling.spec).
-  pushLog(G, `${CARDS_BY_ID[hero.cardId]?.name ?? hero.cardId} respawning in (${RESPAWN_TURNS}).`);
+  pushLog(G, `${cardName(hero.cardId)} respawning in (${RESPAWN_TURNS}).`);
 }
 
 /**
@@ -122,7 +122,7 @@ export function reapDead(G: GameState, ps: PlayerState) {
 
 /** Does this player owe a forced promotion — Active is a corpse AND an eligible
  *  (alive, non-bench-only) bench hero can step up? */
-export function needsPromotion(ps: PlayerState): boolean {
+function needsPromotion(ps: PlayerState): boolean {
   if (!ps.active || !isRespawning(ps.active)) return false;
   return stepInCandidates(ps).length > 0;
 }

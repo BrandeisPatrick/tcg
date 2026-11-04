@@ -7,7 +7,7 @@ import { playGame, type GameRecord, type Policy, type Snapshot, type StepInfo } 
 import { collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { moveTags, signatureOf, type Hit } from './hits';
 
-export interface Mix { label: string; policies: Record<'0' | '1', Policy>; prefer?: Partial<Record<'0' | '1', string[]>> }
+interface Mix { label: string; policies: Record<'0' | '1', Policy>; prefer?: Partial<Record<'0' | '1', string[]>> }
 
 export const MIXES: Mix[] = [
   { label: 'heuristic-vs-heuristic', policies: { '0': 'heuristic', '1': 'heuristic' } },
@@ -30,7 +30,7 @@ export const MIXES: Mix[] = [
 /** Seeds are fixed per mix so a failure names a game that can be replayed. */
 export const seedFor = (mixIndex: number, i: number) => 100 + mixIndex * 10_000 + i;
 
-export function makeHit(mix: string, before: Snapshot, m: StepInfo, check: string, message: string): Hit {
+function makeHit(mix: string, before: Snapshot, m: StepInfo, check: string, message: string): Hit {
   return {
     signature: signatureOf(check, m.name, m.chaos),
     mix,
@@ -44,8 +44,8 @@ export function makeHit(mix: string, before: Snapshot, m: StepInfo, check: strin
   };
 }
 
-export interface Coverage { remMerges: number; ultsPlayed: number; freeCopiesPlayed: number; attacks: number; kos: number }
-export interface MixRun { hits: Hit[]; games: GameRecord[]; coverage: Coverage }
+interface Coverage { remMerges: number; ultsPlayed: number; freeCopiesPlayed: number; attacks: number; kos: number }
+interface MixRun { hits: Hit[]; games: GameRecord[]; coverage: Coverage }
 
 export function runInvariantMix(mixIndex: number, games: number): MixRun {
   const mix = MIXES[mixIndex];

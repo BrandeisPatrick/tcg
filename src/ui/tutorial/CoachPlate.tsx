@@ -65,8 +65,6 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, r
   const [ticked, setTicked] = useState(false);
   const [open, setOpen] = useState(true);
   const [seen, setSeen] = useState<CoachSeen>(emptySeen);
-  // A step that only asks for a tap on the thing it lit records the tap here.
-  const [acked, setAcked] = useState<string | null>(null);
   // Set when a tap lands on the sealed area, so the plate can answer it with
   // a flick rather than letting the press feel broken. Self-clearing, so the
   // shake plays once per blocked tap.
@@ -132,7 +130,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, r
   // ---- the step, and which mode it is in ----
   const current = steps[step];
   const done = step >= steps.length;
-  const view: CoachView = { G, me, isMyTurn, seen, targeting, attacking, sheetOpen: sheetHero !== null, sheetHero, refusals, acked };
+  const view: CoachView = { G, me, seen, targeting, attacking, sheetOpen: sheetHero !== null, sheetHero, refusals };
   const complete = !!current?.task && current.task(view);
   /** A card or skill reveal is still on screen. */
   const revealUp = G.action?.state === 'begin';
@@ -163,10 +161,9 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, r
     : hold ? NONE
     : blocked ? [TURN_BUTTON]
     : current.spot!(view);
-  const allowList = !gated || hold || current.tap ? NONE
+  const allowList = !gated || hold ? NONE
     : blocked ? [TURN_BUTTON]
     : (current.allow ?? current.spot!)(view);
-  const tapToContinue = gated && !hold && !blocked && !!current.tap;
   const spotKey = spotList.join('|');
   const allowKey = allowList.join('|');
   const spot = useMemo(() => (spotKey ? spotKey.split('|') : NONE), [spotKey]);
@@ -241,7 +238,6 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, r
           allow={allow}
           dim={hold ? 0.3 : 0.62}
           onBlocked={() => setNudge(true)}
-          onTap={tapToContinue ? () => setAcked(current.id) : undefined}
         />
       )}
     <AnimatePresence>

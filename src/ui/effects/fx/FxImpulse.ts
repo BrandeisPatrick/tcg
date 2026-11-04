@@ -94,7 +94,7 @@ export const TILT_PERSPECTIVE = 760;
  *  1 at the top of a lift (see HeroSlot's TILE_SHADOW). */
 export const LIFT_VAR = '--fx-lift';
 
-export interface Kick {
+interface Kick {
   /** Transform keyframes for the tile — every track returns to rest.
    *  `rotateX` / `rotateY` tip the card out of the table plane (degrees). */
   keyframes: {

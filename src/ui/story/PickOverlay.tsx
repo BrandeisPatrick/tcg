@@ -14,8 +14,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CardId } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
-import { CardFrame } from '../card/CardFrame';
+import { cardName } from '@/cards';
+import { CardFrame, SIZES } from '../card/CardFrame';
 import { fonts, spring, text } from '../tokens';
 import { poster, scrimStyle } from '../poster';
 import { CREDIT_CLEAR } from './MapControls';
@@ -33,8 +33,8 @@ interface PickOverlayProps {
   onCancel?: () => void;
 }
 
-const FULL = { w: 300, h: 420 };
-const HAND = { w: 134, h: 188 };
+const FULL = SIZES.full;
+const HAND = SIZES.hand;
 /** Below this width the row of full cards gives way to strip + large card. */
 const NARROW = 700;
 
@@ -43,7 +43,7 @@ export function PickOverlay({ kind, title, subtitle, options, confirmVerb, onPic
   const narrow = width < NARROW;
   const [selected, setSelected] = useState<number | null>(() => (narrow ? 0 : null));
   const chosen = selected != null ? options[selected] : undefined;
-  const name = chosen ? CARDS_BY_ID[chosen]?.name ?? chosen : '';
+  const name = chosen ? cardName(chosen) : '';
 
   const confirm = () => { if (chosen) onPick(chosen); };
 
@@ -226,7 +226,7 @@ function OptionButton({ id, i, selected, onSelect, what, size, children }: {
         data-pick={i}
         onClick={() => onSelect(i)}
         aria-pressed={on}
-        aria-label={`${CARDS_BY_ID[id]?.name ?? id} (${i + 1})${on ? ', chosen' : ''}`}
+        aria-label={`${cardName(id)} (${i + 1})${on ? ', chosen' : ''}`}
         aria-keyshortcuts={String(i + 1)}
         // The cards not chosen step back by darkening, never by fading: a
         // printed card stays opaque, so nothing behind the scrim shows through.

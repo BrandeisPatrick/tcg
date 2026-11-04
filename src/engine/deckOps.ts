@@ -4,7 +4,7 @@
  * can draw cards without importing the turn pipeline (a circular import).
  */
 import type { CardInstance, GameState, PlayerID, PlayerState } from './types';
-import { CARDS_BY_ID, getCard } from '@/cards';
+import { CARDS_BY_ID, cardName, getCard } from '@/cards';
 import { allocatorOf, type IidAllocator } from './ids';
 import { pushLog } from './log';
 import { MAX_HAND } from './constants';
@@ -48,7 +48,7 @@ export function drawCards(G: GameState, pid: PlayerID, n: number): number {
     const card = ps.deck.pop()!;
     card.zone = 'hand';
     ps.hand.push(card);
-    pushLog(G, `P${pid} drew ${CARDS_BY_ID[card.cardId]?.name ?? card.cardId}.`);
+    pushLog(G, `P${pid} drew ${cardName(card.cardId)}.`);
     drawn++;
   }
   return drawn;
@@ -60,7 +60,7 @@ export function drawCards(G: GameState, pid: PlayerID, n: number): number {
  * and the log says so. Returns the new card, or null when it was lost.
  */
 export function returnToHand(G: GameState, ps: PlayerState, cardId: string): CardInstance | null {
-  const name = CARDS_BY_ID[cardId]?.name ?? cardId;
+  const name = cardName(cardId);
   if (ps.hand.length >= MAX_HAND) {
     pushLog(G, `P${ps.id}'s hand is full — ${name} is lost.`);
     return null;

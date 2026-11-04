@@ -75,7 +75,7 @@ export function heroData(card: CardInstance): HeroCard | undefined {
  *  roster is on the respawn timer at once (a board wipe). A mutual wipe goes
  *  to the player (P0). This is boardgame.io's `endIf`: it runs after every
  *  move on the already-resolved state. */
-export function checkWinner(G: GameState): { winner?: PlayerID; draw?: boolean } | undefined {
+export function checkWinner(G: GameState): { winner?: PlayerID } | undefined {
   const down = (pid: PlayerID) => G.players[pid].hp <= 0 || boardWiped(G.players[pid]);
   const p0Down = down('0');
   const p1Down = down('1');
@@ -92,7 +92,7 @@ function boardWiped(ps: PlayerState): boolean {
     (c): c is CardInstance => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero',
   );
   if (heroes.length === 0) return false; // pre-match / nothing to wipe yet
-  return heroes.every((c) => (c.respawnTurnsLeft ?? 0) > 0 || c.hp <= 0);
+  return heroes.every((c) => isRespawning(c) || c.hp <= 0);
 }
 
 /** Patron HP a hero's fall costs its owner: the fallen hero's level, so a
@@ -157,7 +157,7 @@ export function targetsFor(G: GameState, pid: PlayerID, filter: TargetFilter, so
 
 /** One ability a board hero carries, and the equipment it came from (absent
  *  for the hero's own passives). */
-export interface AbilitySource {
+interface AbilitySource {
   ability: AbilityDef;
   equip?: CardInstance;
 }
@@ -193,7 +193,7 @@ export function wornEquipment(card: CardInstance): CardInstance[] {
 // ---------- A hero's kit ----------
 
 /** One skill a hero can use: its id, and the ability that does it. */
-export interface HeroSkill {
+interface HeroSkill {
   id: AbilityId;
   ability: AbilityDef;
 }
