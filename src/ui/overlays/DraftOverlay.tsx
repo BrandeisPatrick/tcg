@@ -11,14 +11,18 @@
 //   ▸ YOUR team as four numbered tarot-style cards; the slot being drafted
 //     previews the focused hero in green, locked picks turn gold
 //   ▸ a chamfered LOCK button (Enter works too) — the one true "draft" trigger
+//   ▸ the market — what the shop sells this match, fixed before the first
+//     pick, each drafted hero's signature items joining it — in a compact
+//     list by tab
 //
 // Snake order is driven by the engine; this overlay only dispatches
 // draftPick when it's the local player's turn.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence, easeInOut } from 'framer-motion';
-import type { DraftState, PlayerID } from '@/engine/types';
+import type { CardId, DraftState, ItemTier, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, cardName, HEROES } from '@/cards';
+import { ITEM_SLOTS, marketByTab, SIGNATURE_ITEMS } from '@/engine/market';
 import { heroAbilities, otherPlayer } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { heroArtFocus } from '@/cards/art/heroArt';
@@ -31,6 +35,8 @@ import { plainText } from '../card/scaling';
 
 interface Props {
   draft: DraftState;
+  /** What the shop sells this match (`G.market`). */
+  market: CardId[];
   currentPlayer: PlayerID;
   me: PlayerID;
   onPick: (heroId: string) => void;
@@ -56,7 +62,7 @@ const NUMERALS = ['I', 'II', 'III', 'IV'];
 /** The hero the lobby focuses when nothing still available holds it: the
  *  title's featured hero while it is in the pool, otherwise any free hero at
  *  random rather than always the first tile of the grid. */
-export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
+export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props) {
   // The roster grid + four cards need real width; below this everything
   // stacks tighter and the page may scroll.
   const { width } = useViewport();
@@ -259,7 +265,72 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           compact={isMobile}
         />
       </div>
+
+      <MarketPanel market={market} compact={isMobile} />
     </motion.div>
+  );
+}
+
+// =============================================================================
+// MARKET
+// =============================================================================
+
+const TAB_WORD = { weapon: 'Weapon', spirit: 'Spirit', vitality: 'Vitality' } as const;
+const TIERS: ItemTier[] = [1, 2, 3, 4];
+
+/** The market, before and through the draft: three columns (one a phone
+ *  folds away behind its title), each tab's items by tier. A drafted hero's
+ *  signature items join as it is picked, and are marked. */
+function MarketPanel({ market, compact }: { market: CardId[]; compact: boolean }) {
+  const byTab = marketByTab({ market });
+  const body = (
+    <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: compact ? 10 : 18, marginTop: 8 }}>
+      {ITEM_SLOTS.map((slot) => (
+        <div key={slot} aria-label={`${TAB_WORD[slot]} items on sale`}>
+          <div style={{ ...text.label, fontSize: 10, letterSpacing: '0.24em', color: lobby.gold, marginBottom: 4 }}>{TAB_WORD[slot]}</div>
+          {TIERS.map((tier) => byTab[slot][tier].length > 0 && (
+            <div key={tier} style={{ fontSize: 11.5, lineHeight: 1.45, color: lobby.dim }}>
+              <span style={{ ...text.label, fontSize: 9, letterSpacing: '0.16em', color: lobby.faint, marginRight: 6 }}>T{tier}</span>
+              {byTab[slot][tier].map((id, i) => (
+                <span key={id} style={{ color: SIGNATURE_ITEMS.has(id) ? lobby.cream : undefined }}>
+                  {i > 0 ? ' · ' : ''}{cardName(id)}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+  const title = (
+    <span style={{ ...text.label, fontSize: compact ? 10 : 11, letterSpacing: '0.26em', color: lobby.cream }}>
+      Market · {market.length} items on sale this match
+    </span>
+  );
+  return (
+    <section
+      aria-label="Market"
+      style={{
+        position: 'relative', zIndex: 1,
+        border: `1px solid ${lobby.edge}`, background: 'rgba(21, 25, 28, 0.82)',
+        padding: compact ? '8px 10px' : '10px 16px',
+      }}
+    >
+      {compact ? (
+        <details>
+          <summary style={{ cursor: 'pointer' }}>{title}</summary>
+          {body}
+        </details>
+      ) : (
+        <>
+          {title}
+          <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.14em', color: lobby.faint, marginLeft: 12 }}>
+            bright: a drafted hero's signature item
+          </span>
+          {body}
+        </>
+      )}
+    </section>
   );
 }
 

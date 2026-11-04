@@ -7,20 +7,18 @@
  * of the draft's last turn (engine turn 0) is no match turn either.
  */
 import type { CardInstance, GameState, PlayerID } from '../types';
-import { CARDS_BY_ID, cardName } from '@/cards';
+import { cardName } from '@/cards';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges, tickCooldowns } from '../statusOps';
 import { resolve } from '../death';
-import { attackPower, comebackBonus, heroData, isRespawning, liveBoardCards, otherPlayer, wornEquipment } from '../query';
+import { attackPower, comebackBonus, heroData, heroesOf, isRespawning, liveBoardCards, otherPlayer, wornItems } from '../query';
 import { ownTurn, secondMover } from '../rounds';
-import { getAbility } from '../registry';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { fireTriggers, type Trigger } from '../triggers';
 import { grantExp } from '../expSystem';
-import { drawCards } from '../deckOps';
 import { damagePlayer } from '../damage';
 import {
-  DRAW_PER_TURN, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, LANE_INCOME, SECOND_MOVER_FIRST_INCOME_BONUS,
+  EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, LANE_INCOME, SECOND_MOVER_FIRST_INCOME_BONUS,
 } from '../constants';
 
 /** Fire a turn-edge trigger for every living hero of `pid`: the hero's own
@@ -42,26 +40,10 @@ function income(G: GameState, pid: PlayerID): { total: number; comeback: number;
 }
 
 /**
- * What a hero's worn items give it on arrival comes back with it: the items
- * that apply a lasting status when worn (Bullet and Spirit Resilience, Healing
- * Booster and Tempo) apply it again, since a death wipes statuses and keeps the
- * items. (Stat bonuses live on the hero's modifiers and never left.)
- */
-function reapplyWornItems(G: GameState, pid: PlayerID, hero: CardInstance) {
-  for (const eq of wornEquipment(hero)) {
-    const data = CARDS_BY_ID[eq.cardId];
-    if (data?.type !== 'equipment') continue;
-    for (const id of data.abilities ?? []) {
-      const ability = getAbility(id);
-      if (ability?.trigger === 'onPlay') ability.run(G, { movingPlayer: pid }, { source: eq, target: hero });
-    }
-  }
-}
-
-/**
  * Tick down respawn timers on heroes that are currently corpses in their slots.
  * On reaching 0 the hero returns to full HP in the same slot, its level and
- * its items intact.
+ * its items intact (what an item gives is read off it, or sits on the hero's
+ * modifiers: nothing to put back).
  */
 function tickRespawn(G: GameState, pid: PlayerID) {
   const ps = G.players[pid];
@@ -77,21 +59,22 @@ function tickRespawn(G: GameState, pid: PlayerID) {
       hero.exhausted = false;
       pushLog(G, `${cardName(hero.cardId)} respawned.`);
       pushFx(G, { kind: 'revive', iid: hero.iid });
-      reapplyWornItems(G, pid, hero);
     }
   }
 }
 
-/** The start of `pid`'s turn. `ctxTurn` is boardgame.io's turn count, which
- *  includes the draft's turns; the engine turn is that minus the offset
- *  captured when the draft finished. In order: the turn's flags reset, the
- *  start-of-turn ticks, cooldowns and Rem's merge, the income, the draw,
- *  respawns, the start-of-turn passives and gear, and the state-based pass. */
+/** The start of `pid`'s turn — its Income, before the shop opens. `ctxTurn` is
+ *  boardgame.io's turn count, which includes the draft's turns; the engine turn
+ *  is that minus the offset captured when the draft finished. In order: the
+ *  turn's flags reset and the step is the shop, the start-of-turn ticks,
+ *  cooldowns (heroes' and items') and Rem's merge, the income, respawns, the
+ *  start-of-turn passives and gear, and the state-based pass. */
 export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   if (G.draft) return;
   const ps = G.players[pid];
   const realTurn = ctxTurn - G.draftTurnsOffset;
   G.turnNumber = realTurn;
+  G.step = 'shop';
   G.attackUsed = false;
   G.retreatUsed = false;
   tickStartOfTurn(G, ps);
@@ -105,8 +88,6 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   ps.souls += paid.total;
   const extras = [paid.comeback ? `+${paid.comeback} comeback` : '', paid.seat ? `+${paid.seat} second mover` : ''].filter(Boolean);
   pushLog(G, `P${pid} +${paid.total} Souls (income${extras.length ? `, ${extras.join(', ')}` : ''}).`);
-  // Draw from deck
-  drawCards(G, pid, DRAW_PER_TURN);
   // Respawn ticks ONLY for the player whose turn is starting, so a corpse
   // decrements once per round (on its owner's turn) — RESPAWN_TURNS = 3 means
   // 3 of the owner's turns of downtime.
@@ -144,6 +125,8 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
   tickEndOfTurnCC(G, G.players[pid]);
   clearTurnFlags(G.players[pid]);
+  // An upgrade bought this turn can no longer be sold back for its component.
+  for (const hero of heroesOf(ps)) for (const it of wornItems(hero)) if (it.replaced) it.replaced = undefined;
 }
 
 /**

@@ -6,21 +6,27 @@
  */
 import type {
   AbilityId,
+  CardId,
   CardInstance,
   DamageType,
   EquipmentCard,
   GameState,
   HeroCard,
+  ItemSlot,
+  ItemTier,
   PlayerID,
   PlayerState,
   StatusId,
   UltimateCard,
 } from './types';
-import { CARDS_BY_ID, ULTIMATES } from '@/cards';
+import { CARDS_BY_ID, ULTIMATES, itemCard } from '@/cards';
 import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
-import { COMEBACK_STEPS, KILL_BOUNTY_BASE, RICHEST_BOUNTY_BONUS, START_LEVEL } from './constants';
+import {
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, COMEBACK_STEPS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE,
+  RICHEST_BOUNTY_BONUS, START_LEVEL,
+} from './constants';
 import { secondMover } from './rounds';
 
 // ---------- The board ----------
@@ -96,16 +102,17 @@ export function koPatronDamage(hero: CardInstance): number {
 
 // ---------- Worth ----------
 
-/** What an item lists at: today the card's printed cost (the shop's tier
- *  price replaces it). Anything that is not an item lists at 0. */
-export function listPrice(cardId: string): number {
-  const data = CARDS_BY_ID[cardId];
-  return data?.type === 'equipment' || data?.type === 'spell' ? data.cost ?? 0 : 0;
+/** What an item lists at: its tier's price (`PRICE`). Anything that is not
+ *  an item lists at 0. The shop charges it, a sale refunds it (or half), and
+ *  net worth counts every worn item at it. */
+export function itemPrice(cardId: CardId): number {
+  const data = itemCard(cardId);
+  return data ? PRICE[data.tier] : 0;
 }
 
 /** The list price of everything `hero` wears. */
 export function heroWorth(hero: CardInstance): number {
-  return wornEquipment(hero).reduce((n, eq) => n + listPrice(eq.cardId), 0);
+  return wornItems(hero).reduce((n, it) => n + itemPrice(it.cardId), 0);
 }
 
 /** Every hero a side has, wherever it stands: the Active, the bench (corpses
@@ -230,11 +237,71 @@ export function abilitySources(card: CardInstance): AbilitySource[] {
   return out;
 }
 
-/** The equipment `card` wears, in worn order. A merged Rem rides in the same
- *  `attached` list but is a hero, not equipment: she takes no slot of the cap and
- *  can never be the piece discarded to make room. */
+/** The passive items (equipment) `card` wears, in worn order: what its
+ *  triggers and pure hooks are read off (`abilitySources`). */
 export function wornEquipment(card: CardInstance): CardInstance[] {
   return (card.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment');
+}
+
+/** Every item `card` wears, active or passive, in worn order: what fills its
+ *  slots. A merged Rem rides in the same `attached` list but is a hero, not an
+ *  item: she takes no slot and cannot be sold or moved. */
+export function wornItems(card: CardInstance): CardInstance[] {
+  return (card.attached ?? []).filter((a) => !!itemCard(a.cardId));
+}
+
+/** The active items `card` wears, in worn order: the ones it can use. */
+export function wornActives(card: CardInstance): CardInstance[] {
+  return (card.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'spell');
+}
+
+/** How many items a hero of `pid` may wear: MAX_ITEMS, and FLEX_SLOT more once
+ *  the side has the flex slot. */
+export function slotCap(G: GameState, pid: PlayerID): number {
+  return MAX_ITEMS + (G.players[pid].flexSlot ? FLEX_SLOT : 0);
+}
+
+/** The worn item with this iid on one of `pid`'s heroes in a slot (Active or
+ *  bench, standing or not) — or, without `pid`, on either side — and who wears
+ *  it; null when there is none. A merged Rem's items are out of reach until she
+ *  is back on the bench. */
+export function findWornItem(G: GameState, iid: string, pid?: PlayerID): { owner: PlayerID; bearer: CardInstance; item: CardInstance } | null {
+  for (const owner of (pid ? [pid] : ['0', '1']) as PlayerID[]) {
+    const ps = G.players[owner];
+    for (const hero of [ps.active, ...ps.bench]) {
+      const item = hero && wornItems(hero).find((it) => it.iid === iid);
+      if (item) return { owner, bearer: hero!, item };
+    }
+  }
+  return null;
+}
+
+/** How many items of each tab `card` wears. */
+export function tabCounts(card: CardInstance): Record<ItemSlot, number> {
+  const out: Record<ItemSlot, number> = { weapon: 0, spirit: 0, vitality: 0 };
+  for (const it of wornItems(card)) out[itemCard(it.cardId)!.slot]++;
+  return out;
+}
+
+/** True while `card` has the category spike of `slot`: it wears
+ *  CATEGORY_SPIKE_ITEMS or more items of that tab (+1 Bullet Power for
+ *  Weapon, +1 Spirit Power for Spirit, +1 max HP for Vitality). Read off what
+ *  it wears, never stored on its modifiers. */
+export function hasSpike(card: CardInstance, slot: ItemSlot): boolean {
+  return tabCounts(card)[slot] >= CATEGORY_SPIKE_ITEMS;
+}
+
+/** Own turns an active item of `tier` waits after use (and when bought) on
+ *  `bearer`: ACTIVE_COOLDOWN by tier, less the bearer's `cooldownCut` hooks
+ *  (the Cooldown family), never under 1. */
+export function activeCooldown(bearer: CardInstance, tier: ItemTier): number {
+  const base = tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high;
+  return Math.max(1, base - cooldownCut(bearer, 'item'));
+}
+
+/** Own turns the active item `item` has left to cool down (0: ready). */
+export function itemCooldown(item: CardInstance): number {
+  return item.cooldowns?.[item.cardId] ?? 0;
 }
 
 // ---------- A hero's kit ----------
@@ -344,6 +411,34 @@ export function retreatDiscount(card: CardInstance): number {
   return n;
 }
 
+/** Own turns off the cooldowns `card` starts — its ultimate's ('ult') or its
+ *  active items' ('item') — summed over the `cooldownCut` hooks of what it
+ *  carries (Compress, Superior and Transcendent Cooldown). The callers keep the
+ *  result at 1 or more. */
+export function cooldownCut(card: CardInstance, kind: 'ult' | 'item'): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n += ability.cooldownCut?.(card, kind) ?? 0;
+  return n;
+}
+
+/** The resist to `type` damage what `card` wears gives it (Bullet and Spirit
+ *  Resilience): the largest of its `resist` hooks. `damageUnit` takes the
+ *  larger of this and a resist status. */
+export function itemResist(card: CardInstance, type: DamageType): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n = Math.max(n, ability.resist?.(card, type) ?? 0);
+  return n;
+}
+
+/** The Healing Boost what `card` wears gives it (Healing Booster, Healing
+ *  Tempo): the largest of its `healingBoost` hooks. `healUnit` takes the larger
+ *  of this and a Healing Boost status. */
+export function itemHealingBoost(card: CardInstance): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n = Math.max(n, ability.healingBoost?.(card) ?? 0);
+  return n;
+}
+
 /** How hard `card`'s swing bounces: the value of a `ricochet` status on it plus
  *  the sum of the `ricochet` hooks of what it carries (the Ricochet item: 2).
  *  0 means it does not. `swing` (actions/attack.ts) asks it once a swing. */
@@ -406,7 +501,8 @@ export interface AttackPower {
  * forecast and the card face all read it, so nothing added on top of a hero's
  * attack (Frenzy) can swing through a lockout:
  *  - 0 when the hero cannot attack (Stun, Disarm, Sleep, a heavy channel);
- *  - else printed attack + modifiers + Weapon Power, floored at 0;
+ *  - else printed attack + modifiers + Weapon Power + the Weapon category
+ *    spike, floored at 0;
  *  - minus Weaken (Rusted Barrel and any future "ATK-down"), floored at 0;
  *  - plus each `attackBonus` hook of what the hero carries.
  * It reads `card.hp` for hooks like Frenzy's, so a caller simulating a swing
@@ -423,7 +519,9 @@ export function attackPower(card: CardInstance, target?: CardInstance): AttackPo
     .filter((s) => s.id === 'weapon_power')
     .reduce((a, s) => a + s.value, 0);
   if (weaponPower) parts.push({ label: 'Weapon Power', amount: weaponPower });
-  let total = Math.max(0, data.atk + card.atkMod + weaponPower);
+  const spike = hasSpike(card, 'weapon') ? 1 : 0;
+  if (spike) parts.push({ label: 'Weapon spike', amount: spike });
+  let total = Math.max(0, data.atk + card.atkMod + weaponPower + spike);
   const weak = card.statuses.find((s) => s.id === 'weapon_power_down');
   if (weak) {
     const weakened = Math.max(0, total - weak.value);
@@ -444,8 +542,9 @@ export function effectiveAtk(card: CardInstance): number {
   return attackPower(card).total;
 }
 
-/** Total spirit-power for skill scaling: equipment bonus + any Spirit Power
- *  status, less any Spirit Power − (Inhibitor, Spirit Snatch), never below 0. */
+/** Total spirit-power for skill scaling: item bonuses and levels (the
+ *  modifier), any Spirit Power status and the Spirit category spike, less any
+ *  Spirit Power − (Inhibitor, Spirit Snatch), never below 0. */
 export function effectiveSpirit(card: CardInstance): number {
   if (!card) return 0;
   const statuses = card.statuses ?? [];
@@ -453,5 +552,6 @@ export function effectiveSpirit(card: CardInstance): number {
     .filter((s) => s.id === 'spirit_power')
     .reduce((a, s) => a + s.value, 0);
   const down = statuses.find((s) => s.id === 'spirit_power_down')?.value ?? 0;
-  return Math.max(0, (card.spiritMod ?? 0) + fromBuff - down);
+  const spike = card.attached && hasSpike(card, 'spirit') ? 1 : 0;
+  return Math.max(0, (card.spiritMod ?? 0) + fromBuff + spike - down);
 }

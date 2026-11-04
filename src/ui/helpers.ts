@@ -2,13 +2,15 @@ import type { TargetFilter } from '@/abilities';
 import type { AbilityId } from '@/engine/types';
 import { poster } from './poster';
 
-/** A card, skill or attack the player has armed but not yet aimed/committed. */
+/** A skill, an active item or the attack the player has armed but not yet
+ *  aimed/committed. */
 export interface PendingPlay {
-  /** What is armed: a card from the hand, a hero's skill, or the Active's
-   *  basic attack (when it may name who it shoots: the hero has reach). */
-  kind: 'playCard' | 'useSkill' | 'attack';
-  /** The card in hand; for a skill, the hero using it; for the attack, the
-   *  Active making it. */
+  /** What is armed: a hero's skill (or ultimate), an active item a hero wears,
+   *  or the Active's basic attack (when it may name who it shoots: the hero
+   *  has reach). */
+  kind: 'useSkill' | 'activate' | 'attack';
+  /** For a skill, the hero using it; for an item, the item; for the attack,
+   *  the Active making it. */
   iid: string;
   /** For a skill: which of the hero's skills is armed (the next tap aims it). */
   skillId?: AbilityId;

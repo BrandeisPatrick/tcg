@@ -1,7 +1,7 @@
 import type { CardInstance, DamageType, FxCastKind, FxTag, GameState, PlayerID } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
-import { incomingDamage, isRespawning } from './query';
+import { incomingDamage, isRespawning, itemHealingBoost, itemResist } from './query';
 import { currentCast, withCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
@@ -48,16 +48,12 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   let dmg = amount;
 
   // Net resist: buff − shred. Positive = damage reduction, negative = amplification.
-  if (type === 'attack') {
-    const resist = target.statuses.find((s) => s.id === 'bullet_resist')?.value ?? 0;
-    const shred = target.statuses.find((s) => s.id === 'bullet_resist_down')?.value ?? 0;
-    const net = resist - shred;
-    if (net > 0) dmg = Math.max(0, dmg - net);
-    else if (net < 0) dmg += Math.abs(net);
-  }
-  if (type === 'spirit') {
-    const resist = target.statuses.find((s) => s.id === 'spirit_resist')?.value ?? 0;
-    const shred = target.statuses.find((s) => s.id === 'spirit_resist_down')?.value ?? 0;
+  // The buff is the larger of a resist status and what the target wears (the
+  // Resilience items' `resist` hook).
+  if (type === 'attack' || type === 'spirit') {
+    const [buffId, shredId] = type === 'attack' ? ['bullet_resist', 'bullet_resist_down'] : ['spirit_resist', 'spirit_resist_down'];
+    const resist = Math.max(target.statuses.find((s) => s.id === buffId)?.value ?? 0, itemResist(target, type));
+    const shred = target.statuses.find((s) => s.id === shredId)?.value ?? 0;
     const net = resist - shred;
     if (net > 0) dmg = Math.max(0, dmg - net);
     else if (net < 0) dmg += Math.abs(net);
@@ -198,11 +194,12 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
     pushLog(G, `${targetName} could not be healed (Healing Blocked).`);
     return 0;
   }
-  const targetBoost = target.statuses.find((s) => s.id === 'healing_boost')?.value ?? 0;
+  // Healing Boost: the larger of a status and what the unit wears (Healing
+  // Booster and Tempo), on the healed unit and on the caster of the heal.
+  const boost = (c: CardInstance) => Math.max(c.statuses.find((s) => s.id === 'healing_boost')?.value ?? 0, itemHealingBoost(c));
+  const targetBoost = boost(target);
   const cast = currentCast();
-  const casterBoost = (cast?.source && cast.source !== target)
-    ? (cast.source.statuses.find((s) => s.id === 'healing_boost')?.value ?? 0)
-    : 0;
+  const casterBoost = cast?.source && cast.source !== target ? boost(cast.source) : 0;
   const healed = Math.min(amount + targetBoost + casterBoost, target.hpMax - target.hp);
   target.hp += healed;
   if (healed > 0) {

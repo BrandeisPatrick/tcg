@@ -12,6 +12,7 @@ import { HEROES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { tickCooldowns } from '@/engine/statusOps';
 import { skillBlocked } from '@/engine/legality';
+import { kitAbilityIds } from '@/engine/query';
 import { ULT_COOLDOWN, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { makeAttack } from './_helpers';
@@ -34,6 +35,7 @@ function freshG(casterHero: string, enemyHero = 'hero_abrams', level: 1 | 2 | 3 
   G.draft = null;
   G.turnNumber = 2;
   G.firstMover = '1';
+  G.step = 'act'; // past the turn's shop: abilities are act moves
   const p0 = G.players['0'], p1 = G.players['1'];
   p0.active = makeHero(casterHero, '0', 'active', 0, level);
   p0.bench = [makeHero('hero_kelvin', '0', 'bench', 1), null, null];
@@ -43,6 +45,18 @@ function freshG(casterHero: string, enemyHero = 'hero_abrams', level: 1 | 2 | 3 
   for (const e of [p1.active, ...p1.bench]) if (e) { e.hp = 99; e.hpMax = 99; }
   p0.souls = 0; p1.souls = 0;
   return G;
+}
+
+/** The ultimates' cards anywhere on `pid`'s side of the board — its heroes and
+ *  what they wear: none ever, an ultimate being a kit ability. */
+function ultCardsOnBoard(G: GameState, pid: PlayerID): string[] {
+  const out: string[] = [];
+  const walk = (c: CardInstance) => {
+    if (CARDS_BY_ID[c.cardId]?.type === 'ultimate') out.push(c.cardId);
+    for (const a of c.attached ?? []) walk(a);
+  };
+  for (const c of [G.players[pid].active, ...G.players[pid].bench]) if (c) walk(c);
+  return out;
 }
 
 function use(G: GameState, hero: CardInstance, abilityId: string, targetIid?: string) {
@@ -73,7 +87,8 @@ describe('ultimates resolve through the real useSkill flow, free, as kit abiliti
       expect(caster.cooldowns?.[hero.ult!]).toBe(ULT_COOLDOWN); // on its cooldown
       expect(caster.skillUsedThisTurn).toBe(true);              // the hero's one ability this turn
       expect(G.action?.kind).toBe('ult');
-      expect(G.players['0'].hand.some((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate')).toBe(false);
+      expect(kitAbilityIds(caster)).toContain(hero.ult!);       // a kit ability…
+      expect(ultCardsOnBoard(G, '0')).toEqual([]);              // …and no card of it anywhere
     });
   }
 

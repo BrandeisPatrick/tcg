@@ -1,21 +1,26 @@
 /**
  * What a hero can still do this turn, read the way the engine reads it. A
- * turn is the player's to spend on cards, abilities and one Retreat, then one
- * attack: every hero may use one ability a turn (a skill or, from Level 2, its
- * ultimate — all free), and the Active makes the turn's attack, which ends the
- * turn's Act. The board's glint, the hero sheet's plates, the refusal stickers
- * and the tutorial all ask the engine's own `skillBlocked` / `attackBlocked` /
- * `playBlocked` / `moveBlocked` (legality.ts), so none of them offers a move the
- * engine would refuse; this file only words the answers.
+ * turn opens on its shop step (buy, sell and move items, then close the shop),
+ * then its act: every hero may use one ability a turn (a skill, an active item
+ * it wears or, from Level 2, its ultimate — all free), one Retreat, and the
+ * Active makes the turn's attack, which ends the turn's Act. The board's glint,
+ * the hero sheet's plates, the shop sheet, the refusal stickers and the
+ * tutorial all ask the engine's own `skillBlocked` / `activateBlocked` /
+ * `attackBlocked` / `buyBlocked` / `moveBlocked` (legality.ts) and `blocked`,
+ * which knows the step, so none of them offers a move the engine would refuse;
+ * this file only words the answers.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { CARDS_BY_ID, cardName } from '@/cards';
+import { RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import {
-  blocked, cardCost, moveBlocked, retreatCost, skillBlocked,
-  type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type SkillBlock,
+  activateBlocked, blocked, buyPrice, moveBlocked, retreatCost, skillBlocked,
+  type ActivateBlock, type AttackBlock, type MoveBlock, type PromoteBlock, type ShopBlock, type SkillBlock,
 } from '@/engine/legality';
-import { findCardOnBoard, isRespawning, isUntargetable, kitAbilityIds, otherPlayer, resolveSkill } from '@/engine/query';
+import {
+  findCardOnBoard, findWornItem, isRespawning, isUntargetable, itemCooldown, kitAbilityIds, otherPlayer, resolveSkill,
+  slotCap, wornActives,
+} from '@/engine/query';
 import type { Action } from '@/engine/engine';
 import type { AttackPlan } from '@/engine/forecast';
 
@@ -25,6 +30,9 @@ const nameOf = (card: CardInstance | null | undefined) => (card ? CARDS_BY_ID[ca
 
 /** The line printed when the turn's attack has ended its Act. */
 export const ACT_OVER = 'The attack ended your turn';
+
+/** The line printed on an act move made while the shop is still open. */
+export const SHOP_OPEN = 'Close the shop first';
 
 /** The line the hero sheet prints on an ability (a skill, or the ultimate)
  *  that cannot be used. Name the hero and the ability (left out: its first
@@ -38,6 +46,7 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       if (!hero || !last || !skill || last === skill.id) return 'Already used';
       const lastKind = resolveSkill(hero, last)?.kind;
       if (lastKind === 'ult' || lastKind === 'borrowed') return 'Used its ultimate this turn';
+      if (!lastKind) return `Used ${cardName(last)} this turn`;
       return skill.kind === 'skill' ? 'Used its other skill this turn' : 'Used its skill this turn';
     }
     case 'actOver': return ACT_OVER;
@@ -72,30 +81,59 @@ export function attackBlockReason(block: AttackBlock, rival?: CardInstance | nul
   }
 }
 
-/** Who and what a card refusal is about, so its line can name them. */
-interface PlaySubject {
-  /** The card in hand ("Extended Magazine"). */
-  card: string;
-  /** The hero it was aimed at, when one was named. */
-  hero?: string;
-  /** What the card costs: the engine's `cardCost`, an override included. */
-  cost: number;
-  /** The souls the player has — printed after the price when given. */
-  have?: number;
+/** The line the hero sheet prints on an active item that cannot be used.
+ *  Name the item to get how long its cooldown has to run, and its bearer to
+ *  get which ability it used instead. */
+export function activateBlockReason(block: ActivateBlock, item?: CardInstance, bearer?: CardInstance): string {
+  switch (block) {
+    case 'noItem': return 'Not one of your items';
+    case 'passive': return 'A passive item: always on';
+    case 'actOver': return ACT_OVER;
+    case 'down': return 'Down until it respawns';
+    case 'used': {
+      const last = bearer?.lastSkillUsed;
+      if (!last || last === item?.cardId) return 'Already used';
+      const kind = bearer && resolveSkill(bearer, last)?.kind;
+      return kind === 'ult' || kind === 'borrowed' ? 'Used its ultimate this turn' : kind ? 'Used its skill this turn' : `Used ${cardName(last)} this turn`;
+    }
+    case 'status': return 'Cannot use abilities (status)';
+    case 'charges': return 'No charges left';
+    case 'cooldown': {
+      const left = item ? itemCooldown(item) : 0;
+      return left > 0 ? `Ready in ${left} turn${left === 1 ? '' : 's'}` : 'On cooldown';
+    }
+    case 'target': return 'No valid target';
+  }
 }
 
-/** The line the board's sticker prints on a card that cannot be played. Every
- *  `PlayBlock` has one. 'full' is answered on the board with a chooser (which
- *  item goes) rather than a sticker; its line is the fallback. */
-export function playBlockReason(block: PlayBlock, s: PlaySubject): string {
+/** Who and what a shop refusal is about, so its line can name them. */
+interface ShopSubject {
+  /** The item ("Extended Magazine"). */
+  item?: string;
+  /** The hero it was to go on, when one was named. */
+  hero?: string;
+  /** What it would cost (`buyPrice`). */
+  cost?: number;
+  /** The souls the player has. */
+  have?: number;
+  /** The slots a hero has (`slotCap`). */
+  slots?: number;
+}
+
+/** The line the shop sheet and the sticker print on a shop move the engine
+ *  will not make. */
+export function shopBlockReason(block: ShopBlock, s: ShopSubject = {}): string {
   switch (block) {
-    case 'notInHand': return `${s.card} is not in your hand`;
-    case 'actOver': return ACT_OVER;
-    case 'souls': return `Need ${souls(s.cost)}${s.have === undefined ? '' : ` — you have ${s.have}`}`;
-    case 'target': return `Not a valid target for ${s.card}`;
-    case 'duplicate': return s.hero ? `${s.hero} already wears ${s.card}` : `Every hero already wears ${s.card}`;
-    case 'full': return `${s.hero ?? 'That hero'} wears ${MAX_EQUIPMENT_PER_HERO} items — pick one to replace`;
-    case 'discard': return `${s.hero ?? 'That hero'} is not wearing that item`;
+    case 'notYourTurn': return 'Not your turn';
+    case 'notShop': return 'The shop is closed until your next turn';
+    case 'noItem': return 'No such item';
+    case 'notOnSale': return `${s.item ?? 'That item'} is not on sale this match`;
+    case 'noHero': return 'That is not one of your heroes';
+    case 'duplicate': return `${s.hero ?? 'That hero'} already wears ${s.item ?? 'one'}`;
+    case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items — sell one first`;
+    case 'souls': return s.cost === undefined ? 'Not enough souls' : `Need ${souls(s.cost)}${s.have === undefined ? '' : ` — you have ${s.have}`}`;
+    case 'notWorn': return 'Not one of your items';
+    case 'same': return `It is already on ${s.hero ?? 'that hero'}`;
   }
 }
 
@@ -159,6 +197,7 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
   // Owed by either seat, a promotion comes before anything else at the table.
   if (code === 'promotionOwed') return 'Choose who steps up first';
   if (code === 'actOver') return ACT_OVER;
+  if (code === 'shopOpen') return SHOP_OPEN;
   switch (a.type) {
     case 'attack':
       if (code === 'draft') return 'Pick your heroes first';
@@ -174,18 +213,30 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
       }
       return skillBlockReason(code as SkillBlock, card, a.skillId);
     }
-    case 'playCard': {
-      const card = G.players[pid].hand.find((c) => c.iid === a.cardIid);
-      return playBlockReason(code as PlayBlock, {
-        card: nameOf(card) || 'That card',
-        hero: nameOf(a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : null) || undefined,
-        cost: card ? cardCost(card) : 0,
-        have: G.players[pid].souls,
+    case 'activate': {
+      const worn = findWornItem(G, a.itemIid, pid);
+      if (code === 'target' && a.targetIid !== undefined) return `Not a valid target for ${nameOf(worn?.item) || 'that item'}`;
+      return activateBlockReason(code as ActivateBlock, worn?.item, worn?.bearer);
+    }
+    case 'buy': {
+      const hero = findCardOnBoard(G, a.heroIid)?.card;
+      return shopBlockReason(code as ShopBlock, {
+        item: cardName(a.itemId), hero: nameOf(hero) || undefined,
+        cost: hero ? buyPrice(hero, a.itemId) : undefined, have: G.players[pid].souls, slots: slotCap(G, pid),
       });
     }
+    case 'sell': return shopBlockReason(code as ShopBlock);
+    case 'moveItem': {
+      const worn = findWornItem(G, a.itemIid, pid);
+      return shopBlockReason(code as ShopBlock, {
+        item: nameOf(worn?.item) || undefined, hero: nameOf(findCardOnBoard(G, a.toHeroIid)?.card) || undefined, slots: slotCap(G, pid),
+      });
+    }
+    case 'closeShop': return shopBlockReason(code as ShopBlock);
     case 'moveHero': return moveBlockReason(code as MoveBlock, retreatCost(G, pid));
     case 'promoteToActive': return promoteBlockReason(code as PromoteBlock);
     case 'endTurn': return '';
+    default: return code;
   }
 }
 
@@ -204,14 +255,18 @@ export function attackLine(plan: AttackPlan): string {
 }
 
 /** Every hero of `pid`'s that can still do something this turn: use one of
- *  its kit abilities now (a skill, its ultimate, a borrowed ultimate), or — the
- *  Active — make the turn's attack while it is open. */
+ *  its kit abilities now (a skill, its ultimate, a borrowed ultimate) or an
+ *  active item it wears, or — the Active — make the turn's attack while it is
+ *  open. Nobody glints while the shop is open: nothing on the board can act
+ *  until it closes. */
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {
   const ps = G.players[pid];
   const ready = new Set<string>();
+  if (G.step === 'shop') return ready;
   for (const hero of [ps.active, ...ps.bench]) {
     if (!hero) continue;
-    const abilityOpen = kitAbilityIds(hero).some((id) => skillBlocked(G, pid, hero, undefined, id) === null);
+    const abilityOpen = kitAbilityIds(hero).some((id) => skillBlocked(G, pid, hero, undefined, id) === null)
+      || wornActives(hero).some((it) => activateBlocked(G, pid, it.iid) === null);
     if (abilityOpen || (hero === ps.active && attackOpen)) ready.add(hero.iid);
   }
   return ready;

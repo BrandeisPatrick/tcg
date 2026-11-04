@@ -25,30 +25,7 @@ import { addStatus, grantExtraAttacks } from '@/engine/statusOps';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { statusOfKeyword } from '@/ui/card/RuleText';
 import { forecastMismatches } from './fuzz/forecast';
-import { freshReadyGame, makeAttack, makeHero, nextTestIid } from './_helpers';
-
-/** Put a copy of `cardId` in `pid`'s hand with souls to spare; returns it. */
-function inHand(G: GameState, pid: PlayerID, cardId: string): CardInstance {
-  const card = {
-    iid: nextTestIid('h'), cardId, ownerId: pid, zone: 'hand' as const, attached: [],
-    hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
-  };
-  G.players[pid].hand.push(card);
-  G.players[pid].souls = 10;
-  return card;
-}
-
-function play(G: GameState, cardId: string, targetIid?: string) {
-  const card = inHand(G, '0', cardId);
-  return perform(G, '0', { type: 'playCard', cardIid: card.iid, targetIid });
-}
-
-function wear(hero: CardInstance, cardId: string) {
-  hero.attached = [...(hero.attached ?? []), {
-    iid: nextTestIid('e'), cardId, ownerId: hero.ownerId, zone: 'equipment' as CardInstance['zone'], attached: [],
-    hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
-  }];
-}
+import { freshReadyGame, giveItem, makeAttack, makeHero, useItem } from './_helpers';
 
 const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === id);
 const hps = (cs: CardInstance[]) => cs.map((c) => c.hp);
@@ -58,7 +35,7 @@ const ctx = (pid: PlayerID) => ({ currentPlayer: pid, turn: 2, numPlayers: 2 }) 
 function lane(hero = 'hero_dynamo', ...gear: string[]) {
   const G = freshReadyGame();
   const atk = G.players['0'].active = makeHero(hero, '0', 'active', 0);
-  for (const id of gear) wear(atk, id);
+  for (const id of gear) giveItem(G, atk, id);
   const foe = G.players['1'];
   const bench = foe.bench.filter((b): b is CardInstance => !!b);
   for (const c of [foe.active!, ...bench]) { c.hpMax = 20; c.hp = 20; }
@@ -247,9 +224,9 @@ describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
     haze.level = 3; // her Fixation swings
     const bench = G.players['1'].bench.filter((b): b is CardInstance => !!b);
     for (const b of bench) { b.hpMax = 20; b.hp = 20; }
-    expect(play(G, 'split_shot')).not.toBe(INVALID);
+    useItem(G, '0', 'split_shot'); // Haze's ability of the turn; she may still attack
     expect(status(haze, 'ricochet')).toMatchObject({ value: 2, duration: 1 });
-    expect(hps(bench)).toEqual([20, 20, 20]); // the card itself shoots nothing
+    expect(hps(bench)).toEqual([20, 20, 20]); // the item itself shoots nothing
     makeAttack(G, '0');
     expect(hps(bench)).toEqual([16, 16, 16]); // Haze swings twice (Fixation)
     endTurnEffects(G, '0');
@@ -259,8 +236,8 @@ describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
   it('stretched by Superior Duration it is still gone when the turn ends', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
-    wear(haze, 'superior_duration');
-    expect(play(G, 'split_shot')).not.toBe(INVALID);
+    giveItem(G, haze, 'superior_duration');
+    useItem(G, '0', 'split_shot');
     expect(status(haze, 'ricochet')?.duration).toBe(2);
     endTurnEffects(G, '0');
     expect(status(haze, 'ricochet')).toBeUndefined();
@@ -268,15 +245,15 @@ describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
 
   it('adds to a worn Ricochet: 4 a bounce', () => {
     const { G, atk, bench } = lane('hero_dynamo', 'ricochet');
-    expect(play(G, 'split_shot')).not.toBe(INVALID);
+    useItem(G, '0', 'split_shot');
     expect(ricochetPower(atk)).toBe(4);
     makeAttack(G, '0');
     expect(hps(bench)).toEqual([16, 16, 16]);
   });
 
   it('the cards print the keyword, and the rule text bolds and explains it', () => {
-    expect(CARDS_BY_ID['split_shot']).toMatchObject({ cost: 3, text: 'Your Active gains Ricochet 2 this turn.' });
-    expect(CARDS_BY_ID['ricochet']).toMatchObject({ cost: 7, tier: 4 });
+    expect(CARDS_BY_ID['split_shot']).toMatchObject({ slot: 'weapon', tier: 2, text: 'Your Active gains Ricochet 2 this turn.' });
+    expect(CARDS_BY_ID['ricochet']).toMatchObject({ slot: 'weapon', tier: 4 });
     expect((CARDS_BY_ID['ricochet'] as { text: string }).text).toMatch(/^Ricochet 2: /);
     expect(statusOfKeyword('Ricochet', ' 2 this turn.')).toEqual({ id: 'ricochet', value: 2 });
     expect(STATUSES_BY_ID['ricochet']).toMatchObject({ title: 'Ricochet', hvalue: 1 });
@@ -285,10 +262,9 @@ describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
 
 describe('The AI and the forecast', () => {
   /** The position, read straight off the AI (ai-valuation.spec): with no souls and
-   *  no hand, passing is scored as the position stands. P1 is the seat to move. */
+   *  no items, passing is scored as the position stands. P1 is the seat to move. */
   function standing(G: GameState): number {
     G.players['1'].souls = 0;
-    G.players['1'].hand = [];
     return enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'endTurn')!.score;
   }
 

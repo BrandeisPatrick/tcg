@@ -7,10 +7,10 @@ import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 import { CARDS_BY_ID } from '@/cards';
-import { effectiveAtk } from '@/engine/query';
+import { effectiveAtk, itemCooldown } from '@/engine/query';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
-import { ITEM_IMG_BASE } from '@/art/assets';
+import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
 import { StatusIcon } from '../card/StatusIcon';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
@@ -268,7 +268,7 @@ export function HeroSlot({
                   {isMerged ? (
                     <HeroBadge cardId={eq.cardId} size={dim} />
                   ) : (
-                    <img src={`${ITEM_IMG_BASE}${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
+                    <img src={`${eqData?.type === 'spell' ? SPELL_IMG_BASE : ITEM_IMG_BASE}${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
                   )}
@@ -279,13 +279,21 @@ export function HeroSlot({
                       background: poster.green,
                     }}>{eq.remMergeTurnsLeft}</span>
                   )}
-                  {/* Charge counter — consumable gear (cooldown→draw family) only.
-                      Ink sticker that turns red on the last charge. */}
+                  {/* Charge counter — a hard crowd-control active's uses left this
+                      match. Ink sticker that turns red on the last charge. */}
                   {!isMerged && eq.charges != null && (
                     <span aria-label={`${eq.charges} charges left`} style={{
                       ...chipPill(compact),
                       background: eq.charges <= 1 ? poster.red : poster.ink,
                     }}>{eq.charges}</span>
+                  )}
+                  {/* Cooldown — an active item's own turns left before it can be
+                      used again; the art dims under it. */}
+                  {!isMerged && eq.charges == null && itemCooldown(eq) > 0 && (
+                    <span aria-label={`ready in ${itemCooldown(eq)} turns`} style={{
+                      ...chipPill(compact),
+                      background: poster.inkDim,
+                    }}>{itemCooldown(eq)}</span>
                   )}
                 </div>
               );

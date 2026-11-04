@@ -10,7 +10,7 @@
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { findCardOnBoard, resolveSkill, ultimateCard } from '../query';
+import { cooldownCut, findCardOnBoard, resolveSkill, ultimateCard } from '../query';
 import { SKILL_COOLDOWN, ULT_COOLDOWN } from '../constants';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
@@ -53,11 +53,14 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
 
   // Spent for the turn before it runs: the hero's one ability, remembered for
   // Echo Shard and the hero sheet. A skill and an ultimate go on their
-  // cooldowns; a borrowed ultimate is used up.
+  // cooldowns (an ultimate's cut by the Cooldown family, never under 1); a
+  // borrowed ultimate is used up.
   hero.skillUsedThisTurn = true;
   hero.lastSkillUsed = abilityId;
   if (kind === 'borrowed') hero.borrowedUlt = undefined;
-  else (hero.cooldowns ??= {})[abilityId] = kind === 'ult' ? ULT_COOLDOWN : ability.cooldown ?? SKILL_COOLDOWN;
+  else (hero.cooldowns ??= {})[abilityId] = kind === 'ult'
+    ? Math.max(1, ULT_COOLDOWN - cooldownCut(hero, 'ult'))
+    : ability.cooldown ?? SKILL_COOLDOWN;
 
   // Cast context: equipment triggers (Mystic Burst, Mystic Vulnerability,
   // Suppressor, Mystic Reverb) read this to know "bearer's skill damaged X".
@@ -67,8 +70,8 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   withCast(hero, ult ? 'ult' : 'skill', () => {
     ability.run(G, { movingPlayer: pid }, { source: hero, target });
   });
-  // Worn reactions: Diviner's Kevlar after an ultimate, Surge of Power and the
-  // Cooldown family after a skill.
+  // Worn reactions: Diviner's Kevlar after an ultimate, Surge of Power and
+  // Mystic Burst after a skill.
   fireTriggers(G, hero, ult ? 'onBearerUltCast' : 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });
   resolve(G);
   G.action = {

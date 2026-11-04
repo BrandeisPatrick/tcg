@@ -11,7 +11,7 @@ import { grantExp } from '@/engine/expSystem';
 import { INVALID, perform } from '@/engine/engine';
 import { skillBlocked } from '@/engine/legality';
 import { forecastAttack } from '@/engine/forecast';
-import { checkWinner, koPatronDamage } from '@/engine/query';
+import { checkWinner, kitAbilityIds, koPatronDamage } from '@/engine/query';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
 import {
@@ -19,8 +19,17 @@ import {
 } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
 
-const ultsInHand = (G: GameState, pid: PlayerID) =>
-  G.players[pid].hand.filter((c) => c.cardId.startsWith('ult_')).map((c) => c.cardId);
+/** The ultimates' cards anywhere on `pid`'s side of the board — its heroes and
+ *  what they wear: none ever, an ultimate being a kit ability. */
+function ultCardsOnBoard(G: GameState, pid: PlayerID): string[] {
+  const out: string[] = [];
+  const walk = (c: CardInstance) => {
+    if (CARDS_BY_ID[c.cardId]?.type === 'ultimate') out.push(c.cardId);
+    for (const a of c.attached ?? []) walk(a);
+  };
+  for (const c of [G.players[pid].active, ...G.players[pid].bench]) if (c) walk(c);
+  return out;
+}
 /** Why `hero` cannot use its ultimate now (null: it can). */
 const ultBlock = (G: GameState, hero: CardInstance) =>
   skillBlocked(G, hero.ownerId, hero, undefined, (CARDS_BY_ID[hero.cardId] as { ult: string }).ult);
@@ -64,25 +73,24 @@ describe('exp comes from the lane', () => {
 describe('a hero unlocks its ultimate at Level 2', () => {
   it('no ultimate is open while every hero is Level 1, however late the turn', () => {
     const G = freshReadyGame();
-    G.players['0'].hand = [];
     for (let t = 2; t <= 20; t += 2) {
       beginTurn(G, '0', t);
       expect(ultBlock(G, G.players['0'].active!)).toBe('locked');
-      expect(ultsInHand(G, '0')).toEqual([]);
+      expect(ultCardsOnBoard(G, '0')).toEqual([]);
     }
   });
 
   it("reaching Level 2 unlocks that hero's ultimate at once — and only that hero's; nothing is dealt", () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
-    const hand = ps.hand.length;
     grantExp(G, ps.active!, LEVEL_THRESHOLDS[0]);
     expect(ps.active!.level).toBe(ULT_UNLOCK_LEVEL);
     expect(ultBlock(G, ps.active!)).toBeNull();
     expect(ultBlock(G, ps.bench[1]!)).toBe('locked');
     expect(G.log.some((l) => l.text === 'Haze unlocked Bullet Dance.')).toBe(true);
-    expect(ps.hand.length).toBe(hand);
-    expect(ultsInHand(G, '0')).toEqual([]);
+    // Nothing is dealt: the ultimate is one of Haze's kit abilities, and no card of it is on the board.
+    expect(kitAbilityIds(ps.active!)).toContain('eff_ult_haze');
+    expect(ultCardsOnBoard(G, '0')).toEqual([]);
   });
 
   it('a kill blow that levels the attacker unlocks its ultimate mid-turn; the attack has ended the Act, so it waits a turn', () => {

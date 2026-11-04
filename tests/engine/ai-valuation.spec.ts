@@ -3,7 +3,7 @@ import { enumerateAIMoves } from '@/ai/heuristic';
 import { INVALID, perform } from '@/engine/engine';
 import { effectiveAtk, liveBoardCards } from '@/engine/query';
 import type { CardInstance, GameState, PlayerID, StatusInstance } from '@/engine/types';
-import { freshReadyGame, makeHero } from './_helpers';
+import { freshReadyGame, giveItem, makeHero } from './_helpers';
 
 // What the AI makes of a position: `evalState` (src/ai/heuristic.ts) prices the
 // statuses a unit carries, the channel it is running and a Rem merged into it.
@@ -13,11 +13,10 @@ import { freshReadyGame, makeHero } from './_helpers';
 
 const ctx = (pid: PlayerID) => ({ currentPlayer: pid, turn: 2, numPlayers: 2 }) as any;
 
-/** The position, read straight off the AI: with no souls and no hand the list is the
- *  attack and passing, and passing is scored as the position stands. */
+/** The position, read straight off the AI in the act step: with no souls and no
+ *  items, passing is scored as the position stands. */
 function standing(G: GameState): number {
   G.players['1'].souls = 0;
-  G.players['1'].hand = [];
   return enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'endTurn')!.score;
 }
 
@@ -155,7 +154,6 @@ describe('AI valuation: a position is worth to one seat what it costs the other'
     foe(G).attached = [rem];
     const score = (pid: PlayerID) => {
       G.players[pid].souls = 0;
-      G.players[pid].hand = [];
       return enumerateAIMoves(G, ctx(pid)).find((m) => m.move === 'endTurn')!.score;
     };
     expect(score('0') + score('1')).toBeCloseTo(0);
@@ -199,7 +197,6 @@ describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
     const G = remGame();
     const ai = G.players['1'];
     ai.souls = 1;
-    ai.hand = [];
     own(G).hp = 2;
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect(best.move).toBe('useSkill');
@@ -207,40 +204,41 @@ describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
   });
 });
 
-describe('AI valuation: control cards and channel ultimates get played', () => {
-  /** P1 with only `cardId` in hand and the souls to pay for it, no bench to cast from. */
-  function holding(cardId: string, souls: number) {
+describe('AI valuation: control items and channel ultimates get used', () => {
+  /** P1 whose Active wears the active item `cardId` alone, ready to use, and
+   *  nobody on the bench to use anything else. */
+  function wearing(cardId: string) {
     const G = freshReadyGame();
     const ai = G.players['1'];
     ai.bench = [null, null, null];
-    ai.souls = souls;
-    ai.hand = [{ ...ai.deck[0], cardId, iid: 'held', zone: 'hand' as const }];
-    return G;
+    const item = giveItem(G, ai.active!, cardId);
+    return { G, item };
   }
 
-  // Each of these is a play whose whole worth is a status; with the attack
-  // available too, it comes first — the line is "this, then the attack".
-  for (const [cardId, souls, why] of [
-    ['knockdown', 6, 'a Stun on the Active'],
-    ['decay', 5, 'Bleed 3 for 2 turns'],
-    ['disarming_hex', 5, 'a Disarm for 2 turns'],
-    ['curse', 5, 'Silence and Disarm for 3 turns'],
-    ['slowing_hex', 3, 'a Silence'],
-    ['metal_skin', 6, 'Bullet Resist 5 for 2 turns'],
+  // Each of these is an item whose whole worth is a status; with the attack
+  // available too, using it comes first — the line is "this, then the attack" —
+  // though using it puts it on cooldown or spends one of its charges.
+  for (const [cardId, why] of [
+    ['knockdown', 'a Stun on the Active'],
+    ['decay', 'Bleed 3 for 2 turns'],
+    ['disarming_hex', 'a Disarm for 2 turns'],
+    ['curse', 'Silence and Disarm for 3 turns'],
+    ['slowing_hex', 'a Silence'],
+    ['metal_skin', 'Bullet Resist 5 for 2 turns'],
   ] as const) {
-    it(`plays ${cardId.replace('_', ' ')} (${why}) ahead of the attack alone`, () => {
-      const best = enumerateAIMoves(holding(cardId, souls), ctx('1'))[0];
-      expect(best.move).toBe('playCard');
-      expect(best.args[0]).toBe('held');
+    it(`uses ${cardId.replace('_', ' ')} (${why}) ahead of the attack alone`, () => {
+      const { G, item } = wearing(cardId);
+      const best = enumerateAIMoves(G, ctx('1'))[0];
+      expect(best.move).toBe('activate');
+      expect(best.args[0]).toBe(item.iid);
     });
   }
 
-  /** P1 whose `hero` (Level 2: its ultimate unlocked) stands in `slot`, nothing in hand and nobody else on the bench. */
+  /** P1 whose `hero` (Level 2: its ultimate unlocked) stands in `slot`, wearing nothing, and nobody else on the bench. */
   function unlocked(hero: string, slot: 'active' | 'bench' = 'active') {
     const G = freshReadyGame();
     const ai = G.players['1'];
     ai.bench = [null, null, null];
-    ai.hand = [];
     ai.souls = 0; // ultimates cost nothing
     const h = makeHero(hero, '1', slot, slot === 'active' ? 0 : 1);
     h.level = 2;
@@ -282,7 +280,7 @@ describe('AI valuation: control cards and channel ultimates get played', () => {
   });
 
   it('still sees lethal first, whatever a status is worth', () => {
-    const G = holding('knockdown', 6);
+    const { G } = wearing('knockdown');
     G.players['0'].active!.hp = 1;
     G.players['0'].hp = 1;
     const top = enumerateAIMoves(G, ctx('1'))[0];

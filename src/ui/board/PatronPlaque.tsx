@@ -1,21 +1,21 @@
 import { motion } from 'framer-motion';
-import type { GameState, PlayerID } from '@/engine/types';
+import type { GameState, PlayerID, TurnStep } from '@/engine/types';
 import { fonts, text } from '../tokens';
 import { poster, soulCoin } from '../poster';
 import { useStatTick } from './useStatTick';
 
 /**
  * A patron's vitals as one narrow rule across the sheet — the rival's above
- * the top bench, yours below the bottom one. It carries everything the side
- * panel used to duplicate (patron HP, deck, discard, hand, souls) and the
- * Active's attack in glyphs and numerals rather than labelled rows, so the
- * board is self-sufficient and the panel is free to be just the log.
+ * the top bench, yours below the bottom one. It carries patron HP, souls, the
+ * step of the turn (Shop or Act, while it is this patron's) and the Active's
+ * attack in glyphs and numerals rather than labelled rows, so the board is
+ * self-sufficient and the panel is free to be just the log.
  *
  * Sits inside the board's row stack as a real flex row, so nothing overlaps
  * the sheet's edge the way the old corner plate did.
  */
 export function PatronPlaque({
-  label, ps, hostile, attackOpen, projectedDamage, isMobile, myTurn,
+  label, ps, hostile, attackOpen, projectedDamage, isMobile, myTurn, step,
 }: {
   label: string;
   ps: GameState['players'][PlayerID];
@@ -28,6 +28,8 @@ export function PatronPlaque({
   isMobile: boolean;
   /** Highlight while it's this patron's turn. */
   myTurn?: boolean;
+  /** The step of the turn, printed while it is this patron's. */
+  step?: TurnStep;
 }) {
   const accent = hostile ? poster.rival : poster.you;
   const hpFrac = Math.max(0, Math.min(1, ps.hp / ps.hpMax));
@@ -42,7 +44,11 @@ export function PatronPlaque({
     : poster.stat.hp;
 
   // The turn's attack has been made (or cannot be): it ends the turn's Act.
-  const attackLamp = attackOpen ? 'Ready to attack' : myTurn ? 'Active has attacked' : 'Waiting for its turn';
+  // In the shop it waits for the shop to close.
+  const attackLamp = attackOpen ? 'Ready to attack'
+    : myTurn && step === 'shop' ? 'Shopping'
+    : myTurn ? 'Active has attacked'
+    : 'Waiting for its turn';
 
   const num = isMobile ? 13 : 15;
   const glyph = isMobile ? 11 : 12;
@@ -124,10 +130,14 @@ export function PatronPlaque({
         )}
       </span>
 
-      {/* Counts — glyph plus numeral, no labels. */}
-      <Stat glyph={<DeckGlyph size={glyph} />} value={ps.deck.length} title="Deck" size={glyph} />
-      <Stat glyph={<DiscardGlyph size={glyph} />} value={ps.discard.length} title="Discard" size={glyph} />
-      <Stat glyph={<HandGlyph size={glyph} />} value={ps.hand.length} title="Hand" size={glyph} />
+      {/* The step of this patron's turn, in words. */}
+      {myTurn && step && (
+        <span style={{ ...text.label, fontSize: glyph - 2, letterSpacing: '0.2em', color: accent, flexShrink: 0 }}>
+          {step === 'shop' ? 'Shop' : 'Act'}
+        </span>
+      )}
+
+      {/* Souls — glyph plus numeral, no label. */}
       <Stat
         glyph={<span style={soulCoin(glyph - 2)} />}
         value={ps.souls}
@@ -176,38 +186,5 @@ function Stat({ glyph, value, title, size }: {
       {glyph}
       {value}
     </span>
-  );
-}
-
-/** Stacked cards, face down — the draw pile. */
-function DeckGlyph({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden style={{ display: 'block' }}>
-      <rect x="2.5" y="1.5" width="8" height="11" rx="1.5" fill="none" stroke={poster.inkDim} strokeWidth="1.3" />
-      <rect x="5.5" y="3.5" width="8" height="11" rx="1.5" fill={poster.paperBand} stroke={poster.ink} strokeWidth="1.3" />
-    </svg>
-  );
-}
-
-/** A card set aside — the discard pile. */
-function DiscardGlyph({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden style={{ display: 'block' }}>
-      <rect x="3" y="2.5" width="10" height="11" rx="1.5" fill="none" stroke={poster.inkDim} strokeWidth="1.3" strokeDasharray="2.4 2" />
-      <path d="M5.5 8.5 L10.5 8.5" stroke={poster.inkDim} strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/** Three cards fanned — the hand. */
-function HandGlyph({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden style={{ display: 'block' }}>
-      <g fill={poster.paperBand} stroke={poster.ink} strokeWidth="1.2" strokeLinejoin="round">
-        <rect x="1.6" y="5" width="5.2" height="8" rx="1" transform="rotate(-16 4.2 9)" />
-        <rect x="5.4" y="4" width="5.2" height="8" rx="1" />
-        <rect x="9.2" y="5" width="5.2" height="8" rx="1" transform="rotate(16 11.8 9)" />
-      </g>
-    </svg>
   );
 }

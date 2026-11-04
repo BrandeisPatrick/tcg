@@ -32,3 +32,11 @@ export function ownTurn(G: Pick<GameState, 'turnNumber' | 'firstMover'>, pid: Pl
   const t = Math.max(0, G.turnNumber ?? 0);
   return pid === firstMover(G) ? Math.ceil(t / 2) : Math.floor(t / 2);
 }
+
+/** The seat whose turn it is: the first mover's on odd engine turns, the
+ *  second mover's on even ones; null before the first turn (the draft). */
+export function seatToMove(G: Pick<GameState, 'turnNumber' | 'firstMover'>): PlayerID | null {
+  const t = G.turnNumber ?? 0;
+  if (t < 1) return null;
+  return t % 2 === 1 ? firstMover(G) : secondMover(G);
+}

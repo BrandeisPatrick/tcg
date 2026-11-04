@@ -336,7 +336,7 @@ describe('Support — Rem Lil Helpers (merge)', () => {
   });
 
   it('drafted first, bench-only Rem still starts on the bench (not Active)', () => {
-    const ps = buildPlayer(allocatorFor(newCounters()), '0', ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist'], []);
+    const ps = buildPlayer(allocatorFor(newCounters()), '0', ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist']);
     expect(ps.active?.cardId).toBe('hero_warden');       // first non-bench-only
     expect(ps.active?.cardId).not.toBe('hero_rem');
     expect(ps.bench.some((b) => b?.cardId === 'hero_rem')).toBe(true);

@@ -1,4 +1,4 @@
-import type { CardData } from '@/engine/types';
+import type { CardData, CardId, ItemCard } from '@/engine/types';
 import { HEROES, HEROES_BY_ID } from './heroes';
 import { SPELLS, SPELLS_BY_ID } from './spells';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from './equipment';
@@ -12,6 +12,10 @@ export const CARDS_BY_ID: Record<string, CardData> = {
   ...EQUIPMENT_BY_ID,
   ...ULTIMATES_BY_ID,
 };
+
+/** Every item the shop can sell, actives (spells) then passives (equipment),
+ *  in catalogue order. */
+export const ITEMS: ItemCard[] = [...SPELLS, ...EQUIPMENT];
 
 // 1-based set index for card display (e.g., "DLK · 03/64")
 export const CARD_INDEX: Record<string, number> = Object.fromEntries(
@@ -30,13 +34,20 @@ export function cardName(id: string): string {
   return CARDS_BY_ID[id]?.name ?? id;
 }
 
+/** The item behind an id — an active (spell) or a passive (equipment) — or
+ *  undefined for a hero, an ultimate or an unknown id. */
+export function itemCard(id: CardId | undefined): ItemCard | undefined {
+  const data = id === undefined ? undefined : CARDS_BY_ID[id];
+  return data?.type === 'spell' || data?.type === 'equipment' ? data : undefined;
+}
+
 export { HEROES, SPELLS, EQUIPMENT, ULTIMATES };
 
 
 /**
- * Cards taken out of the game, and the card a saved deck gets in their place.
+ * Cards taken out of the game, and the card a saved build gets in their place.
  * Deadlock merged Improved Bullet / Spirit Armor into the Resilience items
- * (docs/card-design.md), so a deck that held one now holds the other.
+ * (docs/card-design.md), so a build that held one now holds the other.
  */
 export const RETIRED_CARDS: Record<string, string> = {
   improved_bullet_armor: 'bullet_resilience',

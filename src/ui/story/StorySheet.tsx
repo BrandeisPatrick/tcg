@@ -10,6 +10,7 @@ import { motion } from 'framer-motion';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import type { StoryRun } from '@/story/types';
 import { REGIONS } from '@/story/campaign';
+import { isFight } from '@/story/storyRun';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth, scrimStyle, sheetStyle } from '../poster';
 import { PosterButton } from '../chrome';
@@ -161,9 +162,9 @@ function Intro({ compact }: { compact: boolean }) {
       </div>
       <Rule />
       <p style={{ ...text.body, margin: 0, fontSize: compact ? 13.5 : 14.5, color: poster.inkSoft, maxWidth: 520 }}>
-        Start with one hero and recruit up to four. Build a deck from what you find on the way.
-        Three routes run out of the Battery, and each one ends at a boss. Every block is harder
-        than the last.
+        Start with one hero and recruit up to four. Supply stops hand out items and souls for
+        your next fight. Three routes run out of the Battery, and each one ends at a boss. Every
+        block is harder than the last.
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -209,6 +210,7 @@ function Outcome({ run, compact }: { run: StoryRun; compact: boolean }) {
   const won = run.status === 'won';
   const bosses = run.nodes.filter((n) => n.kind === 'boss');
   const bossesDown = bosses.filter((b) => run.clearedNodeIds.includes(b.id)).length;
+  const fightsWon = run.nodes.filter((n) => isFight(n.kind) && run.clearedNodeIds.includes(n.id)).length;
   const last = run.currentNodeId ? run.nodes.find((n) => n.id === run.currentNodeId) : undefined;
   const line = won
     ? 'All three bosses are down. Every route out of the Battery is yours.'
@@ -238,7 +240,7 @@ function Outcome({ run, compact }: { run: StoryRun; compact: boolean }) {
       >
         <Fact label="Stops cleared" value={`${run.clearedNodeIds.length}/${run.nodes.length}`} compact={compact} />
         <Fact label="Bosses" value={`${bossesDown}/${bosses.length}`} compact={compact} rule />
-        <Fact label="Deck" value={String(run.deck.length)} compact={compact} rule />
+        <Fact label="Fights won" value={String(fightsWon)} compact={compact} rule />
       </dl>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

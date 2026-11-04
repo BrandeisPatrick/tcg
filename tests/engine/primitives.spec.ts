@@ -1,26 +1,24 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { INVALID_MOVE } from 'boardgame.io/core';
-import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { ABILITIES_BY_ID, type AbilityDef, type HeroAbilityDef } from '@/abilities';
 import { CARDS_BY_ID } from '@/cards';
-import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
-import { STARTER_DECK_AI } from '@/decks/starter';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { FIXATION_CAP, MAX_HAND, RETREAT_COST } from '@/engine/constants';
+import { FIXATION_CAP, RETREAT_COST } from '@/engine/constants';
 import { attackAll } from '@/engine/actions/attack';
 import { promoteToActive, pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
-import { returnToHand } from '@/engine/deckOps';
+import { detachItem } from '@/engine/instances';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { autoPromoteAi, awardSouls, resolve } from '@/engine/death';
 import { INVALID, perform } from '@/engine/engine';
 import { forecastAttack } from '@/engine/forecast';
 import { DeadlockGame } from '@/engine/game';
 import {
-  attackBlocked, attackTargets, blocked, legalActions, moveBlocked, playBlocked, promoteBlocked, skillBlocked, skillTargets,
+  activateBlocked, activateTargets, attackBlocked, attackTargets, blocked, legalActions, moveBlocked, promoteBlocked, skillBlocked,
+  skillTargets,
 } from '@/engine/legality';
 import { pushLog } from '@/engine/log';
 import {
@@ -30,14 +28,14 @@ import { registerAbilities } from '@/engine/registry';
 import { addStatus, leaveActive, tickCastingPulses, tickEndOfTurnCC, tickStartOfTurn } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID, SwingFx } from '@/engine/types';
 import { actionRefusal, attackBlockReason, moveBlockReason, skillBlockReason } from '@/ui/board/heroActions';
-import { freshReadyGame, makeHero } from './_helpers';
+import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveItem, makeHero, passTurn, readyClient } from './_helpers';
 
 // The primitives the new hero kits are built from — an attack that names its
 // target, Fixation, Dome, Rooted, Rabbit, Last Stand, a pull, a swap-in, HP as a
-// cost, souls and a card back in hand. No card of the real roster uses them yet,
-// so each is played here on throwaway heroes and abilities registered for this
-// file (the real roster is left as it is; replay-trace.ts proves the game plays
-// the same). One describe per primitive.
+// cost and souls. No card of the real roster uses them yet, so each is played
+// here on throwaway heroes and abilities registered for this file (the real
+// roster is left as it is; replay-trace.ts proves the game plays the same). One
+// describe per primitive.
 
 const REACHER = 'hero_test_reacher'; // passive Long Arm: its attack may be aimed at any enemy hero
 const FIXER = 'hero_test_fixer';     // passive Fixed Eye: +1 to its swing per Fixation stack on the hero it swings at
@@ -79,12 +77,14 @@ const calm: HeroAbilityDef = {
   run: (G, _ctx, { source }) => { if (source) healUnit(G, source, 2, 'Calm'); },
 };
 
+// Every hero names two signature items; these are tier 1, always on sale, so a
+// match with a throwaway hero in it sells what it would have sold anyway.
 const throwaway = (id: string, name: string, over: Partial<HeroCard> = {}): HeroCard =>
-  ({ id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, skills: [], ...over });
+  ({ id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, skills: [], signature: ['extended_magazine', 'extra_spirit'], ...over });
 
 beforeAll(() => {
   registerAbilities([longArm, fixedEye, tally, bloodPrice, gearReach, calm]);
-  CARDS_BY_ID[LONG_BARREL] = { id: LONG_BARREL, name: 'Long Barrel', type: 'equipment', rarity: 2, tier: 2, abilities: [gearReach.id] };
+  CARDS_BY_ID[LONG_BARREL] = { id: LONG_BARREL, name: 'Long Barrel', type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, abilities: [gearReach.id] };
   CARDS_BY_ID[REACHER] = throwaway(REACHER, 'Reacher', { passives: [longArm.id] });
   CARDS_BY_ID[FIXER] = throwaway(FIXER, 'Fixer', { passives: [fixedEye.id] });
   CARDS_BY_ID[TALLY] = throwaway(TALLY, 'Tally', { passives: [tally.id] });
@@ -102,17 +102,6 @@ function runMove(name: string, G: GameState, pid: PlayerID, ...args: unknown[]) 
   return fn({ G, ctx: { currentPlayer: pid, numPlayers: 2, turn: 1 } as any, playerID: pid, events: {} as any, random: {} as any }, ...args);
 }
 const ctxFor = (pid: PlayerID) => ({ currentPlayer: pid, turn: 2, numPlayers: 2 }) as unknown as Ctx;
-
-/** Put a piece of gear on a hero. */
-function wear(bearer: CardInstance, cardId: string): CardInstance {
-  const eq: CardInstance = {
-    iid: `eq-${cardId}-${bearer.iid}`, cardId, ownerId: bearer.ownerId, zone: 'equipment',
-    attachedTo: bearer.iid, hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
-    statuses: [], exhausted: false, skillUsedThisTurn: false,
-  };
-  (bearer.attached ??= []).push(eq);
-  return eq;
-}
 
 /** P0's Active is `cardId` (atk 3), with souls to spare; the rival side (Abrams, then Dynamo / Kelvin / Seven)
  *  stands 30 deep, so a swing is read off its HP. Turn 2: P0 may attack. */
@@ -320,23 +309,21 @@ describe('Dome', () => {
     expect(snapshot(G)).toBe(before);
   });
 
-  it('a Dome on a bench hero changes nothing for the attack on the Active, and the Active\'s Dome stops only the attack, not a skill or a spell', () => {
-    const { G, rival, foes } = duel(TALLY);
+  it('a Dome on a bench hero changes nothing for the attack on the Active, and the Active\'s Dome stops only the attack, not a skill or an active item', () => {
+    const { G, atk, rival, foes } = duel(TALLY);
     addStatus(G, foes[2], 'dome', 1, 1);
     expect(attackTargets(G, '0')).toEqual([rival]);
     expect(attackBlocked(G, '0')).toBeNull();
-    // "Cannot be the target of an attack": a skill or a spell can still be aimed at the domed Active.
+    // "Cannot be the target of an attack": a skill or an active item can still be aimed at the domed Active.
     addStatus(G, rival, 'dome', 1, 1);
     const lash = G.players['0'].bench[1]!;
     expect(CARDS_BY_ID[lash.cardId]).toMatchObject({ id: 'hero_lash' });
     expect(skillTargets(G, '0', lash)).toContain(rival);
     expect(skillBlocked(G, '0', lash, rival.iid)).toBeNull();
-    const spell: CardInstance = {
-      iid: 'spell-cold-front', cardId: 'cold_front', ownerId: '0', zone: 'hand', hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
-      statuses: [], exhausted: false, skillUsedThisTurn: false,
-    };
-    G.players['0'].hand.push(spell);
-    expect(playBlocked(G, '0', spell.iid, rival.iid)).toBeNull();
+    const coldFront = giveItem(G, atk, 'cold_front'); // ready: spirit damage to the enemy Active
+    expect(activateTargets(G, '0', coldFront, atk)).toContain(rival);
+    expect(activateBlocked(G, '0', coldFront.iid, rival.iid)).toBeNull();
+    expect(blocked(G, '0', { type: 'activate', itemIid: coldFront.iid, targetIid: rival.iid })).toBeNull();
     expect(attackBlocked(G, '0')).toBe('noTarget'); // while the swing at the same hero is not
   });
 
@@ -460,7 +447,7 @@ describe('Rooted', () => {
 
     const I = game();
     const guarded = I.players['0'].active!;
-    wear(guarded, 'reactive_barrier');
+    giveItem(I, guarded, 'reactive_barrier');
     addStatus(I, guarded, 'rooted', 1, 1);
     expect(status(guarded, 'shield')).toMatchObject({ value: 3 });
   });
@@ -682,11 +669,11 @@ describe('an attack that names its target', () => {
 
   it('gear can give a hero reach, and taking it away takes the reach away', () => {
     const { G, atk, foes } = duel(TALLY);
-    const barrel = wear(atk, LONG_BARREL);
+    const barrel = giveItem(G, atk, LONG_BARREL);
     expect(hasReach(atk)).toBe(true);
     expect(attackTargets(G, '0')).toEqual(foes);
     expect(attackBlocked(G, '0', foes[3].iid)).toBeNull();
-    atk.attached = atk.attached!.filter((a) => a !== barrel);
+    detachItem(atk, barrel);
     expect(hasReach(atk)).toBe(false);
     expect(attackTargets(G, '0')).toEqual([foes[0]]);
   });
@@ -713,23 +700,21 @@ describe('an attack that names its target', () => {
   it('through a real boardgame.io match: the move takes the target, and a bare move swings at the Active', () => {
     const saved = getMatchConfig();
     setMatchConfig({
-      playerDeck: [], heroPreferences: [null, null, null, null],
+      heroPreferences: [null, null, null, null],
+      seed: TEST_SEED,
       story: {
         playerHeroes: [REACHER, 'hero_lash', 'hero_paige', 'hero_vindicta'],
-        playerDeck: AI_DECKS_BY_NAME.aggro,
-        enemyHeroes: STARTER_DECK_AI.heroes,
-        enemyDeck: AI_DECKS_BY_NAME.control,
+        enemyHeroes: TEST_ROSTERS['1'],
         enemyBuff: { atk: 0, hp: 20 }, // nobody falls to one swing
       },
     });
     const quiet = console.error;
     try {
       const turnTwo = () => {
-        const c = Client({ game: DeadlockGame, numPlayers: 2 });
-        c.start();
+        const c = readyClient(); // P0's turn 1, its shop closed
+        passTurn(c);             // Turn 1 has no attack; P1 passes too…
+        passTurn(c);             // …and P0's second turn, past its shop, opens the attack
         const moves = c.moves as any;
-        moves.endTurn(); // Turn 1 has no attack; P1 passes too…
-        moves.endTurn(); // …and P0's second turn opens the attack
         const G = () => c.getState()!.G as GameState;
         const foes = [G().players['1'].active!, ...G().players['1'].bench] as CardInstance[];
         return { moves, G, foes, hp: foes.map((f) => f.hp), now: () => foes.map((f) => findCardOnBoard(G(), f.iid)!.card.hp) };
@@ -831,7 +816,6 @@ describe('an attack that names its target', () => {
 
   it('the AI lists the attacks as moves: [] for the default, [targetIid] for the others', () => {
     const { G, me, foes } = duel(REACHER);
-    me.hand = [];
     me.souls = 0; // nothing but the attacks and the end of the turn: no Retreat, and the bench has used its skills
     for (const b of me.bench) if (b) b.skillUsedThisTurn = true;
     const options = enumerateAIMoves(G, ctxFor('0'), false);
@@ -882,7 +866,7 @@ describe('attackAll', () => {
 
   it('fires worn on-attack gear once per swing', () => {
     const { G, atk, foes } = duel(TALLY);
-    wear(atk, 'toxic_bullets'); // Bleed 1 on whoever the bearer hits
+    giveItem(G, atk, 'toxic_bullets'); // Bleed 1 on whoever the bearer hits
     attackAll(G, atk);
     for (const f of foes) expect(status(f, 'bleed'), f.cardId).toMatchObject({ value: 1 });
   });
@@ -1127,7 +1111,7 @@ describe('a skill that costs HP', () => {
     // Spirit Shielding grants Shield 2 whenever its bearer takes spirit damage: it takes none here.
     const geared = duel(PAYER);
     geared.atk.hp = 4;
-    wear(geared.atk, 'spirit_shielding');
+    giveItem(geared.G, geared.atk, 'spirit_shielding');
     expect(perform(geared.G, '0', { type: 'useSkill', heroIid: geared.atk.iid, targetIid: geared.rival.iid })).not.toBe(INVALID);
     expect(geared.atk.hp).toBe(2);
     expect(has(geared.atk, 'shield')).toBe(false);
@@ -1191,42 +1175,6 @@ describe('awardSouls', () => {
     expect(isRespawning(victim)).toBe(true);
     expect(G.players['0'].souls).toBe(4); // its level (1) + 1
     expect(G.log.some((l) => l.text === 'P0 +2 Souls (KO bounty).')).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-
-describe('returnToHand', () => {
-  it('puts a fresh copy of the card in the hand', () => {
-    const G = freshReadyGame();
-    const me = G.players['0'];
-    me.hand = me.hand.slice(0, 3);
-    const iids = new Set([...me.hand, ...me.deck, ...me.discard].map((c) => c.iid));
-    const card = returnToHand(G, me, 'ult_shiv')!;
-    expect(card).toBeTruthy();
-    expect(me.hand).toHaveLength(4);
-    expect(me.hand.at(-1)).toBe(card);
-    expect(card).toMatchObject({ cardId: 'ult_shiv', ownerId: '0', zone: 'hand', statuses: [] });
-    expect(iids.has(card.iid)).toBe(false);
-    expect(G.log.at(-1)!.text).toBe('Killing Blow returns to P0\'s hand.');
-    // Another one is another instance.
-    const again = returnToHand(G, me, 'ult_shiv')!;
-    expect(again.iid).not.toBe(card.iid);
-  });
-
-  it('respects the hand limit: a full hand loses it, and says so', () => {
-    const G = freshReadyGame();
-    const me = G.players['0'];
-    while (me.hand.length < MAX_HAND - 1) me.hand.push(me.deck.pop()!);
-    expect(me.hand).toHaveLength(MAX_HAND - 1);
-    expect(returnToHand(G, me, 'ult_shiv')).not.toBeNull(); // the last place
-    expect(me.hand).toHaveLength(MAX_HAND);
-    const counter = G.counters.iid;
-    const before = me.hand.map((c) => c.iid);
-    expect(returnToHand(G, me, 'ult_shiv')).toBeNull();     // no place left
-    expect(me.hand.map((c) => c.iid)).toEqual(before);
-    expect(G.counters.iid).toBe(counter);                    // nothing was made
-    expect(G.log.at(-1)!.text).toBe('P0\'s hand is full — Killing Blow is lost.');
   });
 });
 

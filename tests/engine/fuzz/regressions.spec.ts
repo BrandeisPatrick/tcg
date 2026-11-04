@@ -8,7 +8,10 @@
  * never pass for the wrong reason (a bad setup).
  *
  * Ids (E = engine bug, M = mirror bug: the UI / AI copy disagrees with the
- * engine) match the table in the harness report.
+ * engine) match the table in the harness report. The redesign took the hand,
+ * the deck and the discard pile away: a reproduction whose rule survived is kept
+ * in the shop's terms (a spell is an active item a hero wears and uses, a piece
+ * of gear is bought, sold or moved), and says what it was.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'boardgame.io/client';
@@ -18,12 +21,11 @@ import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { resolve } from '@/engine/death';
 import { addStatus, grantExtraAttacks, tickRemMerges } from '@/engine/statusOps';
-import { consumeEquipment } from '@/engine/deckOps';
-import { blocked, legalActions, skillBlocked } from '@/engine/legality';
-import { wornEquipment } from '@/engine/query';
+import { blocked, buyBlocked, legalActions, moveItemBlocked, sellBlocked, skillBlocked } from '@/engine/legality';
+import { wornItems } from '@/engine/query';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { configureReadyMatch, freshReadyGame, makeHero, nextTestIid } from '../_helpers';
+import { buyItem, configureReadyMatch, freshReadyGame, giveItem, makeHero } from '../_helpers';
 import { forecastMismatches } from './forecast';
 import { everyCard } from './oracle';
 
@@ -37,23 +39,6 @@ function runMove(name: string, G: GameState, pid: PlayerID, ...args: unknown[]) 
   return fn({ G, ctx: ctxFor(pid), playerID: pid, events: { endTurn() {} }, random: {} }, ...args);
 }
 
-function card(cardId: string, owner: PlayerID, zone: CardInstance['zone'] = 'hand'): CardInstance {
-  return {
-    iid: nextTestIid(), cardId, ownerId: owner, zone, attached: [], hp: 0, hpMax: 0,
-    atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
-  };
-}
-function toHand(G: GameState, pid: PlayerID, cardId: string): CardInstance {
-  const c = card(cardId, pid);
-  G.players[pid].hand.push(c);
-  return c;
-}
-function wear(hero: CardInstance, cardId: string): CardInstance {
-  const e = card(cardId, hero.ownerId, 'equipment');
-  e.attachedTo = hero.iid;
-  (hero.attached ??= []).push(e);
-  return e;
-}
 const anywhere = (G: GameState, iid: string) => everyCard(G).find((x) => x.card.iid === iid)?.card;
 /** `hero` uses its ultimate (a kit ability, unlocked at Level 2: the hero is raised to it). */
 function useUlt(G: GameState, hero: CardInstance, targetIid?: string) {
@@ -62,11 +47,17 @@ function useUlt(G: GameState, hero: CardInstance, targetIid?: string) {
   return runMove('useSkill', G, hero.ownerId, hero.iid, targetIid, ult);
 }
 
-/** P0 (Haze active; Vindicta / Lash / Paige on the bench), turn 2, with souls to spend. */
+/** P0 (Haze active; Vindicta / Lash / Paige on the bench), turn 2, the act step, with souls to spend. */
 function game(): GameState {
   const G = freshReadyGame();
   G.players['0'].souls = 10;
   G.players['1'].souls = 10;
+  return G;
+}
+/** The same in the shop step of P0's turn. */
+function shopGame(): GameState {
+  const G = game();
+  G.step = 'shop';
   return G;
 }
 /** A merged Rem: she sits on P0's bench slot `slot` (1..3), then casts her skill on `bearer`. */
@@ -90,7 +81,7 @@ describe('E1 a corpse carries no statuses', () => {
   it('precondition: Shiv with Ricochet knocks the target out and the hero is a corpse afterwards', () => {
     const G = game();
     const shiv = makeHero('hero_shiv', '0', 'active', 0);
-    wear(shiv, 'ricochet');
+    giveItem(G, shiv, 'ricochet');
     G.players['0'].active = shiv;
     const foe = G.players['1'].active!;
     foe.hp = 1;
@@ -101,7 +92,7 @@ describe('E1 a corpse carries no statuses', () => {
   it('E1a Shiv\'s Bleed does not land on the Active he just knocked out (fuzz: heuristic-vs-heuristic seed 145 step 64 is the Weapon Shielding variant)', () => {
     const G = game();
     const shiv = makeHero('hero_shiv', '0', 'active', 0);
-    wear(shiv, 'ricochet');
+    giveItem(G, shiv, 'ricochet');
     G.players['0'].active = shiv;
     const foe = G.players['1'].active!;
     foe.hp = 1;
@@ -109,23 +100,30 @@ describe('E1 a corpse carries no statuses', () => {
     expect(foe.statuses).toEqual([]);
   });
 
-  it('E1b Diviner\'s Kevlar does not shield the corpse of the hero whose ultimate is cast', () => {
+  it('precondition: a standing Lash who uses her ultimate is shielded by her Diviner\'s Kevlar', () => {
+    const G = game();
+    const lash = G.players['0'].bench[1]!;
+    giveItem(G, lash, 'diviners_kevlar');
+    expect(useUlt(G, lash)).not.toBe(INVALID_MOVE);
+    expect(lash.statuses.map((s) => s.id)).toContain('shield');
+  });
+
+  it('E1b Diviner\'s Kevlar never shields a corpse: a fallen hero cannot use its ultimate (it was an ultimate card played for a fallen hero)', () => {
     const G = game();
     const lash = G.players['0'].bench[1]!;
     expect(lash.cardId).toBe('hero_lash');
+    giveItem(G, lash, 'diviners_kevlar');
     lash.hp = 0;
     lash.respawnTurnsLeft = 3;
-    wear(lash, 'diviners_kevlar');
-    const ult = toHand(G, '0', 'ult_lash');
-    runMove('playCard', G, '0', ult.iid);
+    expect(useUlt(G, lash)).toBe(INVALID_MOVE);
     expect(lash.statuses).toEqual([]);
   });
 
   it('E1c Siphon Bullets neither robs nor feeds a corpse (Ricochet reaped the target first)', () => {
     const G = game();
     const shiv = makeHero('hero_shiv', '0', 'active', 0);
-    wear(shiv, 'ricochet');
-    wear(shiv, 'siphon_bullets');
+    giveItem(G, shiv, 'ricochet');
+    giveItem(G, shiv, 'siphon_bullets');
     G.players['0'].active = shiv;
     const foe = G.players['1'].active!;
     foe.hp = 1;
@@ -217,65 +215,74 @@ describe('E2 Soul Exchange keeps HP inside 0..hpMax and leaves corpses alone', (
 });
 
 // ===========================================================================
-// E3  A merged Rem was counted — and could be discarded — as equipment  (fixed: wornEquipment)
-//     playCard counted `target.attached.length` (Rem included) against MAX_EQUIPMENT_PER_HERO and
-//     let `discardIid` name her; the AI counted and scored the same way (it picked her as the
-//     "worst" piece), and the board's replace overlay lists her (a UI fix, still to come).
+// E3  A merged Rem was counted — and could be discarded — as equipment  (fixed: wornItems)
+//     playCard counted `target.attached.length` (Rem included) against the cap and let the
+//     discard name her; the AI counted and scored the same way. There is no discard now (a full
+//     hero sells), so the rule is the shop's: a merged Rem takes no item slot — two items and
+//     Rem leave room for a third, bought or moved in — and she is never sold or moved as an item.
 // ===========================================================================
-describe('E3 a merged Rem is not an equipment slot', () => {
-  const remGame = (equipCount: number) => {
+describe('E3 a merged Rem takes no item slot', () => {
+  /** P0's Active wearing the first `n` of three items with Rem merged into it, in the shop step. */
+  const remGame = (n: number) => {
     const G = game();
     const bearer = G.players['0'].active!;
-    ['extra_health', 'extended_magazine', 'restorative_shot'].slice(0, equipCount).forEach((id) => wear(bearer, id));
+    ['extra_health', 'extended_magazine', 'restorative_shot'].slice(0, n).forEach((id) => giveItem(G, bearer, id));
     const rem = mergeRem(G, 2, bearer);
+    G.step = 'shop';
     return { G, bearer, rem };
   };
 
-  it('precondition: with 3 pieces of gear and no Rem a 4th without a discard is refused', () => {
-    const G = game();
+  it('precondition: with 3 items and no Rem a 4th is refused as full, and a sale frees the slot', () => {
+    const G = shopGame();
     const bearer = G.players['0'].active!;
-    ['extra_health', 'extended_magazine', 'restorative_shot'].forEach((id) => wear(bearer, id));
-    expect(runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, bearer.iid)).toBe(INVALID_MOVE);
+    const items = ['extra_health', 'extended_magazine', 'restorative_shot'].map((id) => giveItem(G, bearer, id));
+    expect(buyBlocked(G, '0', 'extra_spirit', bearer.iid)).toBe('full');
+    expect(runMove('buy', G, '0', 'extra_spirit', bearer.iid)).toBe(INVALID_MOVE);
+    expect(runMove('sell', G, '0', items[1].iid)).not.toBe(INVALID_MOVE);
+    expect(runMove('buy', G, '0', 'extra_spirit', bearer.iid)).not.toBe(INVALID_MOVE);
   });
 
-  it('E3a two items + Rem: a third item needs no discard (the cap counts equipment only)', () => {
-    const { G, bearer } = remGame(2);
-    const r = runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, bearer.iid);
-    expect(r).not.toBe(INVALID_MOVE);
-  });
-
-  it('E3b Rem cannot be named as the item to discard', () => {
-    const { G, bearer, rem } = remGame(3);
-    const r = runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, bearer.iid, rem.iid);
-    expect(r).toBe(INVALID_MOVE);
-    expect(G.players['0'].discard.some((c) => c.cardId === 'hero_rem')).toBe(false);
-  });
-
-  it('E3c a discard never ends with more than 3 pieces of gear', () => {
-    const { G, bearer, rem } = remGame(3);
-    runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, bearer.iid, rem.iid);
-    const gear = (bearer.attached ?? []).filter((a) => a.cardId !== 'hero_rem');
-    expect(gear.length).toBeLessThanOrEqual(3);
-  });
-
-  it('M3d the AI never offers to discard the merged Rem', () => {
+  it('E3a two items + Rem: a third item may be bought for the bearer (the cap counts items only)', () => {
     const { G, bearer, rem } = remGame(2);
-    toHand(G, '0', 'extra_spirit');
-    const offers = enumerateAIMoves(G, ctxFor('0'), false)
-      .filter((m) => m.move === 'playCard' && m.args[1] === bearer.iid && m.args[2] === rem.iid);
-    expect(offers).toEqual([]);
+    expect(buyBlocked(G, '0', 'extra_spirit', bearer.iid)).toBeNull();
+    expect(runMove('buy', G, '0', 'extra_spirit', bearer.iid)).not.toBe(INVALID_MOVE);
+    expect(wornItems(bearer).map((it) => it.cardId)).toEqual(['extra_health', 'extended_magazine', 'extra_spirit']);
+    expect(bearer.attached).toContain(rem);
   });
 
-  it('E3d Rem + 3 pieces of gear is at the cap: the 4th needs a discard, and only a worn piece can be named', () => {
-    const { G, bearer, rem } = remGame(3);
-    const eq = toHand(G, '0', 'extra_spirit');
-    expect(blocked(G, '0', { type: 'playCard', cardIid: eq.iid, targetIid: bearer.iid })).toBe('full');
-    const gear = wornEquipment(bearer);
-    expect(gear.map((g) => g.cardId)).toEqual(['extra_health', 'extended_magazine', 'restorative_shot']); // worn order, no Rem
-    expect(blocked(G, '0', { type: 'playCard', cardIid: eq.iid, targetIid: bearer.iid, discardIid: rem.iid })).toBe('discard');
-    const named = legalActions(G, '0').filter((a) => a.type === 'playCard' && a.cardIid === eq.iid && a.targetIid === bearer.iid);
-    expect(named.map((a) => (a as { discardIid?: string }).discardIid)).toEqual(gear.map((g) => g.iid));
-    expect(blocked(G, '0', { type: 'playCard', cardIid: eq.iid, targetIid: bearer.iid, discardIid: gear[1].iid })).toBeNull();
+  it('E3b two items + Rem: a third item may be moved in from another hero', () => {
+    const { G, bearer } = remGame(2);
+    const spirit = giveItem(G, G.players['0'].bench[0]!, 'extra_spirit');
+    expect(moveItemBlocked(G, '0', spirit.iid, bearer.iid)).toBeNull();
+    expect(runMove('moveItem', G, '0', spirit.iid, bearer.iid)).not.toBe(INVALID_MOVE);
+    expect(wornItems(bearer)).toHaveLength(3);
+  });
+
+  it('E3c three items + Rem is full: neither a purchase nor a move fits a fourth (but an upgrade of a worn one does)', () => {
+    const { G, bearer } = remGame(3);
+    const spirit = giveItem(G, G.players['0'].bench[0]!, 'extra_spirit');
+    expect(buyBlocked(G, '0', 'extra_spirit', bearer.iid)).toBe('full');
+    expect(moveItemBlocked(G, '0', spirit.iid, bearer.iid)).toBe('full');
+    expect(buyBlocked(G, '0', 'titanic_magazine', bearer.iid)).toBeNull(); // over Extended Magazine
+  });
+
+  it('E3d Rem is never sold or moved as an item', () => {
+    const { G, bearer, rem } = remGame(2);
+    const souls = G.players['0'].souls;
+    expect(sellBlocked(G, '0', rem.iid)).toBe('notWorn');
+    expect(runMove('sell', G, '0', rem.iid)).toBe(INVALID_MOVE);
+    expect(runMove('moveItem', G, '0', rem.iid, G.players['0'].bench[0]!.iid)).toBe(INVALID_MOVE);
+    expect(bearer.attached).toContain(rem);
+    expect(G.players['0'].souls).toBe(souls);
+  });
+
+  it('M3d neither legalActions nor the AI offers to sell or move the merged Rem', () => {
+    const { G, rem } = remGame(2);
+    const named = legalActions(G, '0').filter((a) => (a.type === 'sell' || a.type === 'moveItem') && a.itemIid === rem.iid);
+    expect(named).toEqual([]);
+    expect(legalActions(G, '0').some((a) => a.type === 'sell')).toBe(true); // her bearer's items are on offer
+    const ai = enumerateAIMoves(G, ctxFor('0'), false).filter((m) => m.args.includes(rem.iid));
+    expect(ai).toEqual([]);
   });
 });
 
@@ -414,14 +421,17 @@ describe('E5 moveHero', () => {
 
 // ===========================================================================
 // E6  useSkill / playCard never checked the ability's TargetFilter
-//     (fixed: legality.ts skillBlocked / playBlocked validate against targetsFor;
-//     E6i, Rem aimed at herself: fixed by the skill's `excludeSelf`)
+//     (fixed: legality.ts skillBlocked / activateBlocked validate against targetsFor;
+//     E6i, Rem aimed at herself: fixed by the skill's `excludeSelf`). A spell played from
+//     the hand is an active item now, used by the hero wearing it.
 // ===========================================================================
 describe('E6 targets are validated against the ability\'s TargetFilter', () => {
   it('precondition: the AI aims Cold Front at the enemy Active and the engine takes it', () => {
     const G = game();
-    const c = toHand(G, '0', 'cold_front');
-    expect(runMove('playCard', G, '0', c.iid, G.players['1'].active!.iid)).not.toBe(INVALID_MOVE);
+    const c = giveItem(G, G.players['0'].active!, 'cold_front');
+    const foe = G.players['1'].active!.iid;
+    expect(enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'activate' && m.args[0] === c.iid && m.args[1] === foe)).toBe(true);
+    expect(runMove('activate', G, '0', c.iid, foe)).not.toBe(INVALID_MOVE);
   });
 
   it('E6a a "self" skill (Viscous) cannot be aimed at an enemy', () => {
@@ -434,31 +444,32 @@ describe('E6 targets are validated against the ability\'s TargetFilter', () => {
     expect(foe.statuses.some((s) => s.id === 'unstoppable')).toBe(false);
   });
 
-  it('E6b an enemy-Active spell cannot be played on your own hero', () => {
+  it('E6b an enemy-Active item cannot be aimed at your own hero', () => {
     const G = game();
-    const c = toHand(G, '0', 'cold_front');
+    const c = giveItem(G, G.players['0'].active!, 'cold_front');
     const own = G.players['0'].bench[0]!;
-    expect(runMove('playCard', G, '0', c.iid, own.iid)).toBe(INVALID_MOVE);
+    expect(runMove('activate', G, '0', c.iid, own.iid)).toBe(INVALID_MOVE);
   });
 
-  it('E6c an enemy-Active spell cannot be played on an enemy bench hero', () => {
+  it('E6c an enemy-Active item cannot be aimed at an enemy bench hero', () => {
     const G = game();
-    const c = toHand(G, '0', 'cold_front');
-    expect(runMove('playCard', G, '0', c.iid, G.players['1'].bench[0]!.iid)).toBe(INVALID_MOVE);
+    const c = giveItem(G, G.players['0'].active!, 'cold_front');
+    expect(runMove('activate', G, '0', c.iid, G.players['1'].bench[0]!.iid)).toBe(INVALID_MOVE);
   });
 
-  it('E6d a targeted spell needs a target (no souls and no card for nothing)', () => {
+  it('E6d a targeted item needs a target (no ability and no cooldown spent for nothing)', () => {
     const G = game();
-    const c = toHand(G, '0', 'cold_front');
+    const haze = G.players['0'].active!;
+    const c = giveItem(G, haze, 'cold_front');
     const souls = G.players['0'].souls;
-    expect(runMove('playCard', G, '0', c.iid)).toBe(INVALID_MOVE);
-    expect(G.players['0'].souls).toBe(souls);
+    expect(runMove('activate', G, '0', c.iid)).toBe(INVALID_MOVE);
+    expect([G.players['0'].souls, haze.skillUsedThisTurn, c.cooldowns]).toEqual([souls, false, undefined]);
   });
 
   it('E6e an unknown iid is not a target', () => {
     const G = game();
-    const c = toHand(G, '0', 'cold_front');
-    expect(runMove('playCard', G, '0', c.iid, 'no-such-iid')).toBe(INVALID_MOVE);
+    const c = giveItem(G, G.players['0'].active!, 'cold_front');
+    expect(runMove('activate', G, '0', c.iid, 'no-such-iid')).toBe(INVALID_MOVE);
   });
 
   it('E6f a skill cannot target a corpse (and a corpse takes no status)', () => {
@@ -541,17 +552,28 @@ describe('E7 a missing iid is a rejected move, not a TypeError', () => {
 
 describe('E7 junk arguments of every kind are INVALID, never a throw', () => {
   const junk: unknown[] = [undefined, null, 7, '', 'no-such-iid', {}, [], NaN];
-  const withHole = () => {
+  const withHole = (step: GameState['step'] = 'act') => {
     const G = game();
+    G.step = step;
     G.players['0'].bench[0] = null; // the hole a merged Rem leaves
+    giveItem(G, G.players['0'].active!, 'cold_front'); // something worn, for the item moves to miss
     return G;
   };
 
-  it.each(['useSkill', 'playCard', 'promoteToActive'])('%s with junk ids', (move) => {
+  it.each(['useSkill', 'activate', 'promoteToActive'])('%s with junk ids', (move) => {
     for (const a of junk) for (const b of junk) {
       const G = withHole();
       const before = JSON.stringify(G);
       expect(runMove(move, G, '0', a, b, a), `${move}(${String(a)}, ${String(b)})`).toBe(INVALID_MOVE);
+      expect(JSON.stringify(G)).toBe(before);
+    }
+  });
+
+  it.each(['buy', 'sell', 'moveItem'])('%s with junk ids, in the shop step', (move) => {
+    for (const a of junk) for (const b of junk) {
+      const G = withHole('shop');
+      const before = JSON.stringify(G);
+      expect(runMove(move, G, '0', a, b), `${move}(${String(a)}, ${String(b)})`).toBe(INVALID_MOVE);
       expect(JSON.stringify(G)).toBe(before);
     }
   });
@@ -570,82 +592,92 @@ describe('E7 junk arguments of every kind are INVALID, never a throw', () => {
 });
 
 // ===========================================================================
-// E8  Replaced equipment kept its bonuses  (fixed: discarding an item takes its stat bonus back)
-//     applyOnPlay adds `bonus` to atkMod / hpMax / spiritMod; nothing removed it when the item was
-//     discarded to make room or broke. (Statuses an item grants when played — Bullet Resist and the
-//     like — are not tracked back to it and stay; that is a separate, larger question.)
+// E8  Replaced equipment kept its bonuses  (fixed: an item that comes off takes its bonus back)
+//     applyOnPlay added `bonus` to atkMod / hpMax / spiritMod and nothing removed it when the item
+//     was discarded to make room. There is no discard now: an item comes off when it is sold,
+//     when an upgrade replaces it, or when it is moved to another hero — and its bonus goes
+//     with it every time (HP the hero no longer has room for goes too; Glass Cannon's −1 max HP
+//     comes back, but the HP it cost is not healed).
 // ===========================================================================
-describe('E8 discarding equipment takes its bonus away', () => {
-  it('E8a the +2 HP of Extra Health leaves with it', () => {
-    const G = game();
+describe('E8 an item that comes off takes its bonus with it', () => {
+  it('E8a selling Extra Health takes its +2 HP away', () => {
+    const G = shopGame();
     const hero = G.players['0'].active!;
     const base = hero.hpMax;
-    const hp = wearByPlay(G, hero, 'extra_health');
-    expect(hero.hpMax).toBe(base + 2);
-    wearByPlay(G, hero, 'extended_magazine');
-    wearByPlay(G, hero, 'extra_spirit');
-    runMove('playCard', G, '0', toHand(G, '0', 'titanic_magazine').iid, hero.iid, hp.iid);
+    const hp = buyItem(G, '0', 'extra_health', hero);
+    expect([hero.hpMax, hero.hp]).toEqual([base + 2, base + 2]);
+    expect(runMove('sell', G, '0', hp.iid)).not.toBe(INVALID_MOVE);
     expect(hero.attached!.some((a) => a.iid === hp.iid)).toBe(false);
-    expect(hero.hpMax).toBe(base);
+    expect([hero.hpMax, hero.hp]).toEqual([base, base]);
   });
 
-  it('E8b every stat of the printed bonus goes with the item, and HP with no room left goes too', () => {
-    const G = game();
+  it('E8b an upgrade takes its component\'s bonus away and brings its own', () => {
+    const G = shopGame();
     const hero = G.players['0'].active!;
     const { atkMod, spiritMod, hpMax } = hero;
-    const boundless = wearByPlay(G, hero, 'boundless_spirit'); // +5 spirit, +3 HP
-    const magazine = wearByPlay(G, hero, 'titanic_magazine');  // +2 attack
-    wearByPlay(G, hero, 'extra_health');
-    expect([hero.atkMod, hero.spiritMod, hero.hpMax]).toEqual([atkMod + 2, spiritMod + 5, hpMax + 3 + 2]);
-    hero.hp = hero.hpMax;
-    runMove('playCard', G, '0', toHand(G, '0', 'improved_spirit').iid, hero.iid, boundless.iid);
-    expect([hero.atkMod, hero.spiritMod, hero.hpMax]).toEqual([atkMod + 2, spiritMod + 2, hpMax + 2]);
-    expect(hero.hp).toBe(hero.hpMax);
-    expect(G.players['0'].discard.map((c) => c.iid)).toContain(boundless.iid);
-    expect(hero.attached!.some((a) => a.iid === magazine.iid)).toBe(true); // what stays, stays
+    buyItem(G, '0', 'extended_magazine', hero);  // +1 attack
+    buyItem(G, '0', 'titanic_magazine', hero);   // +2 attack, over Extended Magazine
+    expect(hero.atkMod).toBe(atkMod + 2);
+    buyItem(G, '0', 'extra_spirit', hero);       // +1 spirit
+    buyItem(G, '0', 'improved_spirit', hero);    // +2 spirit, over Extra Spirit
+    expect(wornItems(hero).map((it) => it.cardId)).toEqual(['titanic_magazine', 'improved_spirit']);
+    expect([hero.atkMod, hero.spiritMod, hero.hpMax]).toEqual([atkMod + 2, spiritMod + 2, hpMax]);
+    // (a fifth first wearing would level the hero up: Boundless Spirit on a fresh board)
+    const H = shopGame();
+    const bearer = H.players['0'].active!;
+    giveItem(H, bearer, 'improved_spirit');      // +2 spirit
+    const before = { ...bearer };
+    H.players['0'].souls = 20;
+    buyItem(H, '0', 'boundless_spirit', bearer); // +5 spirit, +3 HP, over Improved Spirit
+    expect([bearer.spiritMod, bearer.hpMax, bearer.hp]).toEqual([before.spiritMod - 2 + 5, before.hpMax + 3, before.hp + 3]);
+    expect(wornItems(bearer).map((it) => it.cardId)).toEqual(['boundless_spirit']);
   });
 
-  it('E8c HP already lost stays lost; a negative bonus (Glass Cannon) gives its max HP back', () => {
-    const G = game();
+  it('E8c HP already lost stays lost, a full hero is clamped to its new max; Glass Cannon\'s −1 comes back unhealed', () => {
+    const G = shopGame();
     const hero = G.players['0'].active!;
     const base = hero.hpMax;
-    const hp = wearByPlay(G, hero, 'extra_health');
-    const cannon = wearByPlay(G, hero, 'glass_cannon'); // +6 attack, -1 max HP
-    wearByPlay(G, hero, 'extended_magazine');
-    expect(hero.hpMax).toBe(base + 2 - 1);
+    const hp = giveItem(G, hero, 'extra_health');
     hero.hp = 3;
-    runMove('playCard', G, '0', toHand(G, '0', 'extra_spirit').iid, hero.iid, hp.iid);
-    expect([hero.hpMax, hero.hp]).toEqual([base - 1, 3]); // the lost HP is not refunded or double-counted
-    const G2 = game();
-    const h2 = G2.players['0'].active!;
-    const base2 = h2.hpMax;
-    const cannon2 = wearByPlay(G2, h2, 'glass_cannon');
-    wearByPlay(G2, h2, 'extra_health'); wearByPlay(G2, h2, 'extended_magazine');
-    h2.hp = h2.hpMax; // full
-    runMove('playCard', G2, '0', toHand(G2, '0', 'extra_spirit').iid, h2.iid, cannon2.iid);
-    expect(h2.hpMax).toBe(base2 + 2); // the -1 is back
-    expect(h2.hp).toBe(base2 + 2 - 1); // …but the HP it cost is not healed
-    expect(cannon.iid).not.toBe(cannon2.iid);
+    runMove('sell', G, '0', hp.iid);
+    expect([hero.hpMax, hero.hp]).toEqual([base, 3]); // the lost HP is not refunded or double-counted
+    const full = giveItem(G, hero, 'extra_health');
+    expect(hero.hp).toBe(5);
+    hero.hp = hero.hpMax;
+    runMove('sell', G, '0', full.iid);
+    expect([hero.hpMax, hero.hp]).toEqual([base, base]); // no room for the 2 it gave
+    const cannon = giveItem(G, hero, 'glass_cannon'); // +6 attack, −1 max HP
+    expect(hero.hpMax).toBe(base - 1);
+    const hpAfterCannon = hero.hp;
+    runMove('sell', G, '0', cannon.iid);
+    expect(hero.hpMax).toBe(base); // the −1 is back…
+    expect(hero.hp).toBe(hpAfterCannon); // …but the HP it cost is not healed
   });
 
-  it('E8d a spent charge item takes its bonus with it too (consumeEquipment)', () => {
-    const G = game();
+  it('E8d moving an item takes its bonus from one hero to the other', () => {
+    const G = shopGame();
+    const haze = G.players['0'].active!;
+    const vind = G.players['0'].bench[0]!;
+    const [h0, v0] = [{ ...haze }, { ...vind }];
+    const titanic = giveItem(G, haze, 'titanic_magazine');
+    const health = giveItem(G, haze, 'extra_health');
+    expect(runMove('moveItem', G, '0', titanic.iid, vind.iid)).not.toBe(INVALID_MOVE);
+    expect(runMove('moveItem', G, '0', health.iid, vind.iid)).not.toBe(INVALID_MOVE);
+    expect([haze.atkMod, haze.hpMax, haze.hp]).toEqual([h0.atkMod, h0.hpMax, h0.hpMax]);
+    expect([vind.atkMod, vind.hpMax, vind.hp]).toEqual([v0.atkMod + 2, v0.hpMax + 2, v0.hp + 2]);
+  });
+
+  it('E8e an upgrade sold on the turn it was bought gives its component back, bonus and all', () => {
+    const G = shopGame();
     const hero = G.players['0'].active!;
-    const base = hero.hpMax;
-    const worn = wearByPlay(G, hero, 'extra_health');
-    expect(hero.hpMax).toBe(base + 2);
-    consumeEquipment(G, hero, worn);
-    expect(hero.hpMax).toBe(base);
-    expect(hero.attached!.some((a) => a.iid === worn.iid)).toBe(false);
-    expect(G.players['0'].discard.some((c) => c.iid === worn.iid)).toBe(true);
+    const atk = hero.atkMod;
+    buyItem(G, '0', 'extended_magazine', hero);
+    const titanic = buyItem(G, '0', 'titanic_magazine', hero);
+    expect(runMove('sell', G, '0', titanic.iid)).not.toBe(INVALID_MOVE);
+    expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extended_magazine']);
+    expect(hero.atkMod).toBe(atk + 1);
   });
 });
-function wearByPlay(G: GameState, hero: CardInstance, cardId: string): CardInstance {
-  const c = toHand(G, '0', cardId);
-  G.players['0'].souls = 10; // the price is not what is under test
-  expect(runMove('playCard', G, '0', c.iid, hero.iid)).not.toBe(INVALID_MOVE);
-  return c;
-}
 
 // ===========================================================================
 // M1  skillBlocked ignored target availability  (fixed: legality.skillBlocked asks targetsFor)
@@ -709,7 +741,7 @@ describe('M2 the attack forecast matches what the attack does', () => {
 
   it('M2d Ricochet knocking out a bench hero costs the patron a life (plan.patronDamage)', () => {
     const { G, atk, foe } = duel('hero_haze');
-    wear(atk, 'ricochet');
+    giveItem(G, atk, 'ricochet');
     G.players['1'].bench[0]!.hp = 1;
     expect(foe.hp).toBe(40);
     expect(forecastMismatches(G, ctxFor('0'), '0')).toEqual([]);
@@ -717,7 +749,7 @@ describe('M2 the attack forecast matches what the attack does', () => {
 
   it('M2e the target\'s Weapon Shielding (Shield 2 after each bullet) is in the plan of a two-swing attack', () => {
     const { G, atk, foe } = duel('hero_haze', 5);
-    wear(foe, 'weapon_shielding');
+    giveItem(G, foe, 'weapon_shielding');
     // Haze swings twice (Fixation). hp 5: swing 1 -> 2 (+Shield 2), swing 2 is soaked down to 1 — no KO.
     expect(atk.cardId).toBe('hero_haze');
     expect(forecastMismatches(G, ctxFor('0'), '0')).toEqual([]);
@@ -725,16 +757,17 @@ describe('M2 the attack forecast matches what the attack does', () => {
 
   it('M2f Bullet Resist Shredder (+1 damage on the next swing) is in the plan of a two-swing attack', () => {
     const { G, atk } = duel('hero_haze', 40);
-    wear(atk, 'bullet_resist_shredder');
+    giveItem(G, atk, 'bullet_resist_shredder');
     expect(forecastMismatches(G, ctxFor('0'), '0')).toEqual([]);
   });
 });
 
 // ===========================================================================
 // M3  The AI's own copy of the rules  (fixed: the AI plays the engine's legalActions)
-//     It had its own cost (blind to costOverride), its own target test (a self-cast ultimate
-//     never matched) and its own skill gate (Rem on Rem). Ultimates are kit abilities now:
-//     a borrowed one (Sinclair's copy) and a self-cast one are offered like any skill.
+//     It had its own cost, its own target test (a self-cast ultimate never matched) and its own
+//     skill gate (Rem on Rem). Ultimates are kit abilities now: a borrowed one (Sinclair's
+//     copy) and a self-cast one are offered like any skill, and an active item like its
+//     bearer's ability.
 // ===========================================================================
 describe('M3 the AI sees every legal play', () => {
   it('precondition: the engine takes a borrowed ultimate at 0 souls, once', () => {
@@ -767,7 +800,6 @@ describe('M3 the AI sees every legal play', () => {
     const yamato = makeHero('hero_yamato', '0', 'active', 0);
     yamato.level = 2;
     G.players['0'].active = yamato;
-    G.players['0'].hand = [];
     const offered = enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'useSkill' && m.args[0] === yamato.iid && m.args[2] === 'eff_ult_yamato');
     expect(offered).toBe(true);
   });
@@ -776,9 +808,19 @@ describe('M3 the AI sees every legal play', () => {
     const G = game();
     const rem = makeHero('hero_rem', '0', 'bench', 1);
     G.players['0'].bench = [rem, null, null]; // a short list: the AI keeps only its top 12 moves
-    G.players['0'].hand = [];
     const selfCast = enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'useSkill' && m.args[0] === rem.iid && m.args[1] === rem.iid);
     expect(selfCast).toBe(false);
+  });
+
+  it('M3e an active item worn on the bench is offered as its bearer\'s ability, on each of its targets', () => {
+    const G = game();
+    const paige = G.players['0'].bench[2]!;
+    const ward = giveItem(G, paige, 'guardian_ward'); // "Grant an ally Shield 3."
+    const offered = legalActions(G, '0').filter((a) => a.type === 'activate' && a.itemIid === ward.iid).map((a) => (a as { targetIid?: string }).targetIid);
+    const allies = [G.players['0'].active!, ...G.players['0'].bench].map((c) => c!.iid);
+    expect(offered).toEqual(allies);
+    expect(runMove('activate', G, '0', ward.iid, allies[0])).not.toBe(INVALID_MOVE);
+    expect(paige.skillUsedThisTurn).toBe(true);
   });
 });
 
@@ -806,10 +848,14 @@ describe('M4 a promotion owed is the only legal move', () => {
     expect(runMove('endTurn', owed(), '0')).toBe(INVALID_MOVE);
   });
 
-  it('M4b a spell is refused while the seat owes a promotion', () => {
+  it('M4b an active item is refused while the seat owes a promotion, and so is the shop', () => {
     const G = owed();
-    const heal = toHand(G, '0', 'healing_rite');
-    expect(runMove('playCard', G, '0', heal.iid, G.players['0'].bench[1]!.iid)).toBe(INVALID_MOVE);
+    const heal = giveItem(G, G.players['0'].bench[1]!, 'healing_rite');
+    expect(runMove('activate', G, '0', heal.iid, G.players['0'].bench[1]!.iid)).toBe(INVALID_MOVE);
+    G.step = 'shop';
+    expect(blocked(G, '0', { type: 'buy', itemId: 'extra_spirit', heroIid: G.players['0'].bench[0]!.iid })).toBe('promotionOwed');
+    expect(runMove('buy', G, '0', 'extra_spirit', G.players['0'].bench[0]!.iid)).toBe(INVALID_MOVE);
+    expect(runMove('closeShop', G, '0')).toBe(INVALID_MOVE);
   });
 
   it('M4c the only legal action is a promotion for the owed seat\'s bench — made from either seat', () => {

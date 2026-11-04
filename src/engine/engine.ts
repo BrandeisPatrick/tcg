@@ -10,23 +10,31 @@
  * action has the cards.
  */
 import '@/abilities';
-import type { AbilityId, GameState, PlayerID } from './types';
+import type { AbilityId, CardId, GameState, PlayerID } from './types';
 import { blocked } from './legality';
 import { assertNoCast } from './castContext';
 import { attack } from './actions/attack';
-import { playCard } from './actions/playCard';
+import { activate } from './actions/activate';
 import { useSkill } from './actions/useSkill';
 import { moveHero, promoteToActive } from './actions/board';
+import { buy, closeShop, moveItem, sell } from './actions/shop';
 
 /** What `perform` returns for an action that is not allowed (the adapter maps
  *  it to boardgame.io's INVALID_MOVE). */
 export const INVALID: unique symbol = Symbol('INVALID');
 
 export type Action =
+  // The shop step.
+  | { type: 'buy'; itemId: CardId; heroIid: string }
+  | { type: 'sell'; itemIid: string }
+  | { type: 'moveItem'; itemIid: string; toHeroIid: string }
+  | { type: 'closeShop' }
+  // The act step.
   | { type: 'attack'; targetIid?: string }               // no targetIid = the first of `attackTargets`
   | { type: 'useSkill'; heroIid: string; skillId?: AbilityId; targetIid?: string }   // no skillId = the hero's first skill
-  | { type: 'playCard'; cardIid: string; targetIid?: string; discardIid?: string }
+  | { type: 'activate'; itemIid: string; targetIid?: string }
   | { type: 'moveHero'; fromSlot: 0 | 1 | 2 | 3; toSlot: 0 | 1 | 2 | 3 }
+  // Either step.
   | { type: 'promoteToActive'; benchIid: string }
   | { type: 'endTurn' };                         // validity only; the adapter calls events.endTurn()
 
@@ -36,9 +44,13 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
   assertNoCast();
   if (blocked(G, pid, a) !== null) return INVALID;
   switch (a.type) {
+    case 'buy': return buy(G, pid, a.itemId, a.heroIid);
+    case 'sell': return sell(G, pid, a.itemIid);
+    case 'moveItem': return moveItem(G, pid, a.itemIid, a.toHeroIid);
+    case 'closeShop': return closeShop(G);
     case 'attack': return attack(G, pid, a.targetIid);
     case 'useSkill': return useSkill(G, pid, a.heroIid, a.targetIid, a.skillId);
-    case 'playCard': return playCard(G, pid, a.cardIid, a.targetIid, a.discardIid);
+    case 'activate': return activate(G, pid, a.itemIid, a.targetIid);
     case 'moveHero': return moveHero(G, pid, a.fromSlot, a.toSlot);
     case 'promoteToActive': return promoteToActive(G, a.benchIid);
     case 'endTurn': return; // the adapter ends the turn

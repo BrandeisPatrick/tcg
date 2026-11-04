@@ -5,17 +5,22 @@ export type CardId = string;
 export type AbilityId = string;
 export type StatusId = string;
 export type PlayerID = '0' | '1';
-export type Zone =
-  | 'deck'
-  | 'hand'
-  | 'active'
-  | 'bench'
-  | 'equipment'
-  | 'discard';
+/** Where a card instance is: a hero in the Active slot or on the bench, or
+ *  an item worn by a hero (in its `attached` list). */
+export type Zone = 'active' | 'bench' | 'equipment';
 
 export type DamageType = 'attack' | 'spirit' | 'pure';
 
 type CardType = 'hero' | 'spell' | 'equipment' | 'ultimate';
+
+/** An item's shop tab, from Deadlock's shop: Weapon items work through attacks
+ *  and Bullet Power, Spirit items through skills and spirit damage, Vitality
+ *  items through HP, healing, shields and resists. */
+export type ItemSlot = 'weapon' | 'spirit' | 'vitality';
+
+/** An item's shop tier, from Deadlock's shop (800 / 1600 / 3200 / 6400 souls
+ *  there). Its price here is `PRICE[tier]` (constants.ts). */
+export type ItemTier = 1 | 2 | 3 | 4;
 
 export interface BaseCard {
   id: CardId;
@@ -40,25 +45,45 @@ export interface HeroCard extends Omit<BaseCard, 'text'> {
    *  ULT_UNLOCK_LEVEL and on its own cooldown. Its card (`ULTIMATES`, the one
    *  whose `abilities[0]` it is) only names and draws it. */
   ult?: AbilityId;
+  /** The hero's two signature items, chosen to fit its kit (one of tier 1 or
+   *  2): both are on sale in any match the hero is drafted into. */
+  signature: [CardId, CardId];
   flags?: { benchOnly?: boolean };
 }
 
-export interface SpellCard extends BaseCard {
-  type: 'spell';
-  abilities: AbilityId[];
-  cost?: number;
+/** What every item shares, active or passive: its shop tab and tier (its price
+ *  is the tier's, `PRICE[tier]`), and the item it upgrades, when Deadlock builds
+ *  it from one in this catalogue: bought for a hero wearing that component, it
+ *  costs the difference and takes the component's place. */
+interface ItemFields {
+  slot: ItemSlot;
+  tier: ItemTier;
+  upgradesFrom?: CardId;
 }
 
-export interface EquipmentCard extends BaseCard {
+/** An ACTIVE item (Deadlock's `is_active_item`): worn like any item, and used
+ *  from its bearer's sheet as that hero's one ability of the turn. Its first
+ *  ability's target filter says what it is aimed at; every onPlay ability runs
+ *  when it is used. It then cools down (ACTIVE_COOLDOWN by tier), or, for hard
+ *  crowd control, spends one of its HARD_CC_CHARGES. */
+export interface SpellCard extends BaseCard, ItemFields {
+  type: 'spell';
+  abilities: AbilityId[];
+  /** Hard crowd control (its effect stuns, silences, disarms, roots, sleeps or
+   *  curses an enemy): HARD_CC_CHARGES uses a match and no cooldown. */
+  hardCC?: true;
+}
+
+/** A PASSIVE item: always on while worn — its stat `bonus` and its abilities'
+ *  triggers and hooks. */
+export interface EquipmentCard extends BaseCard, ItemFields {
   type: 'equipment';
-  tier: 1 | 2 | 3 | 4;
   abilities?: AbilityId[];
   bonus?: { atk?: number; hp?: number; spirit?: number };
-  cost?: number;
-  /** Charge-based gear: number of times its reactive trigger fires before the
-   *  item is consumed (cooldown→draw family). Omitted for normal equipment. */
-  charges?: number;
 }
+
+/** Any item the shop sells: an active (spell) or a passive (equipment). */
+export type ItemCard = SpellCard | EquipmentCard;
 
 /** An ultimate's face: its name, text and art. The ultimate itself is a kit
  *  ability of its hero (`HeroCard.ult`), used from the hero sheet and never
@@ -115,15 +140,27 @@ export interface CardInstance {
    *  Audience Participation copies the enemy Active's. Gone once used; it
    *  needs no level and has no cooldown, and it stays through a death. */
   borrowedUlt?: AbilityId;
-  /** Per-instance play-cost override. When set, used instead of the card
-   *  definition's cost. */
-  costOverride?: number;
-  /**
-   * Charge-based equipment counter (cooldown→draw family). Initialized from the
-   * card's `charges` when attached; each qualifying trigger spends one, and the
-   * item is consumed (sent to discard) when it hits 0. Undefined for normal gear.
-   */
+  /** A hard crowd-control active's uses left this match (HARD_CC_CHARGES when
+   *  bought; it travels with the item). At 0 the item stays worn but cannot be
+   *  used. Undefined on every other card. An active's cooldown lives in this
+   *  instance's own `cooldowns`, keyed by its card id, and travels with it too. */
   charges?: number;
+  /** An item: the engine turn it was bought on — sold back on that turn it
+   *  refunds what was paid. */
+  boughtOnTurn?: number;
+  /** An item: the souls paid for it (its price, or the difference for an
+   *  upgrade). */
+  paid?: number;
+  /** An upgrade bought this turn: the component it replaced, given back should
+   *  the upgrade be sold on the same turn. Dropped when the turn ends. */
+  replaced?: CardInstance;
+  /** A hero: the items whose first equip has paid it EXP_ON_EQUIP, so buying
+   *  one back (or moving it in) pays nothing more. */
+  equippedIds?: CardId[];
+  /** A hero: the Vitality category spike's +1 max HP is on its `hpMax` (it
+   *  wears 3+ Vitality items). Kept so the point comes off when the spike is
+   *  lost. */
+  vitalitySpike?: true;
   // Multi-attack is modeled via the `extra_attack` STATUS (value = N extra
   // full-power swings queued for this turn). It stacks additively across
   // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed by the
@@ -164,13 +201,11 @@ export interface PlayerState {
   hp: number;
   hpMax: number;
   souls: number;
-  deck: CardInstance[];
-  hand: CardInstance[];
   active: CardInstance | null;
   bench: (CardInstance | null)[]; // length 3
-  discard: CardInstance[];
-  /** Deck archetype this player drafted (for eval/balance tracking). */
-  archetype?: string;
+  /** The side's heroes have felled the enemy Walker: every hero has the flex
+   *  slot, MAX_ITEMS + FLEX_SLOT items (`slotCap`). Set by the map (step 4). */
+  flexSlot: boolean;
 }
 
 export interface LogEntry {
@@ -180,13 +215,13 @@ export interface LogEntry {
 
 /**
  * One "action" the player or AI just took — drives the matching reveal
- * animation (card-play flash, skill flash, ult flash) and the UI/AI lock that
+ * animation (item flash, skill flash, ult flash) and the UI/AI lock that
  * prevents the next move until the animation finishes. State transitions
  * `begin` → `done` via the `completeAction` move once the UI's animation
  * timeout fires. Engine moves do not gate themselves on this — tests bypass
  * the UI and the lock lives at the dispatch layer.
  */
-export type GameActionKind = 'play' | 'skill' | 'ult';
+export type GameActionKind = 'item' | 'skill' | 'ult';
 
 export interface GameAction {
   id: string;
@@ -208,7 +243,8 @@ export interface GameAction {
 // ---------------------------------------------------------------------------
 
 /** How an effect came about. The FX layer picks its animation family from
- *  this: a skill / spell / ult is a cast (a bolt leaves the caster), a proc is
+ *  this: a skill / spell (an active item) / ult is a cast (a bolt leaves the
+ *  caster), a proc is
  *  a passive going off, a tick is a start- or end-of-turn resolution. The
  *  basic swing is 'attack' — the engine reports it like everything else, but
  *  the combat choreographer has already walked it from the forecast BEFORE the
@@ -329,10 +365,10 @@ export interface SwingFx extends FxBase {
 }
 
 /** A cast just happened — pushed BEFORE its effects so the batch reads as
- *  "this caster did the following". `iid` is the casting unit on the board
- *  (the hero for a skill or an ultimate — `cardId` then names the ultimate's
- *  face — the channelling Active for a spell, the bearer for equipment);
- *  absent when nobody's there. */
+ *  "this caster did the following". `iid` is the casting unit on the board:
+ *  the hero for a skill or an ultimate (`cardId` then names the ultimate's
+ *  face), the bearer for an active item ('spell', `cardId` the item) and for
+ *  an item put on ('equip'); absent when nobody's there. */
 export interface CastFx extends FxBase {
   kind: 'cast';
   castKind: 'skill' | 'spell' | 'ult' | 'equip';
@@ -360,10 +396,11 @@ export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx 
 /**
  * Pre-match hero draft. Both players take turns picking 4 heroes each from
  * the full pool in snake order (seat 0 first). While `draft != null` the
- * regular match gates are inactive and the DraftOverlay is displayed. On the
- * 8th pick the move builds both PlayerStates from the drafted heroes, clears
- * `draft` and ends the draft's turn: the first mover (seat 1, the pie rule)
- * opens engine turn 1.
+ * regular match gates are inactive and the DraftOverlay is displayed, the
+ * market beside it (each pick puts the hero's signature items on sale). On
+ * the 8th pick the move builds both PlayerStates from the drafted heroes,
+ * clears `draft` and ends the draft's turn: the first mover (seat 1, the pie
+ * rule) opens engine turn 1.
  */
 export interface DraftState {
   pool: CardId[];                                 // remaining hero ids
@@ -382,6 +419,10 @@ export interface Counters {
   /** Last `G.action` id handed out. */
   action: number;
 }
+
+/** The two steps of a turn a player acts in (rules: Income → Shop → Act → End;
+ *  Income and End run on their own). */
+export type TurnStep = 'shop' | 'act';
 
 export interface GameState {
   /** Id / FX-seq / action-id counters — see ids.ts. */
@@ -409,7 +450,17 @@ export interface GameState {
    * draftTurnsOffset`. Set when the last pick ends the draft's turn.
    */
   draftTurnsOffset: number;
-  mulliganPending: boolean;       // true after draft completes until player resolves opening mulligan
+  /** The match seed. The market is drawn from it (market.ts, through rng.ts),
+   *  so a match's market replays from G alone. */
+  seed: number;
+  /** What the shop sells this match, in the order it was put on sale: every
+   *  tier 1 item, the random slice drawn from `seed` before the draft, then the
+   *  signature items of each hero as it was drafted. Fixed once the draft ends. */
+  market: CardId[];
+  /** The step of the turn in play: 'shop' (buy, sell, move items, then close
+   *  the shop) until `closeShop`, then 'act' (abilities, a Retreat, the
+   *  attack). Every turn opens on 'shop'; `endTurn` is legal in either. */
+  step: TurnStep;
   /** The turn's attack has been made. One basic attack a turn per player: this
    *  is its gate, and the attack ends the Act — after it nothing is legal but
    *  `endTurn` (and an owed promotion). Ending the turn never attacks. Reset at

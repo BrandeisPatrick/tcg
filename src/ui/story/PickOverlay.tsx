@@ -1,8 +1,9 @@
 /**
- * The story mode's 1-of-3 pick — a starting hero, a recruit, or a card from
- * a cache. The options are the game's real cards, dealt onto the scrim; a
- * press selects one and the button under them names what you are about to
- * take, so a pick is never one stray tap.
+ * The story mode's 1-of-3 pick — a starting hero, a recruit, or a supply
+ * from a cache (an item, or souls, for the next fight). The options are the
+ * game's real cards (souls print as a card of their own), dealt onto the
+ * scrim; a press selects one and the button under them names what you are
+ * about to take, so a pick is never one stray tap.
  *
  * Wide screens lay the three full-size cards in a row (scaled down as a
  * group when the window is short of room). Phones show the three as a strip
@@ -13,23 +14,23 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import type { CardId } from '@/engine/types';
-import { cardName } from '@/cards';
-import { CardFrame, SIZES } from '../card/CardFrame';
+import { SIZES } from '../card/CardFrame';
 import { fonts, spring, text } from '../tokens';
 import { poster, scrimStyle } from '../poster';
 import { CREDIT_CLEAR } from './MapControls';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
+import { OptionFace, optionName, type PickOption } from './RewardFace';
 
-interface PickOverlayProps {
-  kind: 'hero' | 'card';
+interface PickOverlayProps<T extends PickOption> {
+  /** A hero (the start, a recruit) or a supply (an item or souls). */
+  kind: 'hero' | 'supply';
   title: string;
   subtitle?: string;
-  options: CardId[];
+  options: T[];
   /** Verb on the confirm button: 'Start with' | 'Recruit' | 'Take'. */
   confirmVerb: string;
-  onPick: (id: CardId) => void;
+  onPick: (option: T) => void;
   onCancel?: () => void;
 }
 
@@ -38,14 +39,14 @@ const HAND = SIZES.hand;
 /** Below this width the row of full cards gives way to strip + large card. */
 const NARROW = 700;
 
-export function PickOverlay({ kind, title, subtitle, options, confirmVerb, onPick, onCancel }: PickOverlayProps) {
+export function PickOverlay<T extends PickOption>({ kind, title, subtitle, options, confirmVerb, onPick, onCancel }: PickOverlayProps<T>) {
   const { width, height } = useViewport();
   const narrow = width < NARROW;
   const [selected, setSelected] = useState<number | null>(() => (narrow ? 0 : null));
   const chosen = selected != null ? options[selected] : undefined;
-  const name = chosen ? cardName(chosen) : '';
+  const name = chosen !== undefined ? optionName(chosen) : '';
 
-  const confirm = () => { if (chosen) onPick(chosen); };
+  const confirm = () => { if (chosen !== undefined) onPick(chosen); };
 
   // The overlay takes focus as it opens, so a key never lands on the button
   // that opened it (the stop card's Go, still mounted underneath).
@@ -85,7 +86,7 @@ export function PickOverlay({ kind, title, subtitle, options, confirmVerb, onPic
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
-  const what = kind === 'hero' ? 'hero' : 'card';
+  const what = kind;
 
   return (
     <motion.div
@@ -171,17 +172,17 @@ export function PickOverlay({ kind, title, subtitle, options, confirmVerb, onPic
         <PosterButton
           variant="paper"
           onClick={confirm}
-          disabled={!chosen}
-          ariaLabel={chosen ? `${confirmVerb} ${name}` : `Pick one ${what}`}
+          disabled={chosen === undefined}
+          ariaLabel={chosen !== undefined ? `${confirmVerb} ${name}` : `Pick one ${what}`}
           style={{
             minWidth: narrow ? undefined : 260,
             whiteSpace: 'nowrap',
             // The outline a disabled plate prints is ink; on the dark scrim
             // it has to be cream to be seen at all.
-            ...(!chosen ? { color: poster.creamDim, border: `2px solid ${poster.creamFaint}` } : {}),
+            ...(chosen === undefined ? { color: poster.creamDim, border: `2px solid ${poster.creamFaint}` } : {}),
           }}
         >
-          {chosen ? `${confirmVerb} ${name} ›` : 'Pick one'}
+          {chosen !== undefined ? `${confirmVerb} ${name} ›` : 'Pick one'}
         </PosterButton>
         {onCancel && (
           <PosterButton variant="ghost" size={narrow ? 'sm' : 'md'} onClick={onCancel} ariaLabel="Back" style={{ minHeight: 40 }}>
@@ -194,7 +195,7 @@ export function PickOverlay({ kind, title, subtitle, options, confirmVerb, onPic
 }
 
 interface DealProps {
-  options: CardId[];
+  options: PickOption[];
   selected: number | null;
   onSelect: (i: number) => void;
   width: number;
@@ -208,8 +209,8 @@ const deal = {
 };
 const dealt = { show: { transition: { staggerChildren: 0.08, delayChildren: 0.08 } } };
 
-function OptionButton({ id, i, selected, onSelect, what, size, children }: {
-  id: CardId;
+function OptionButton({ option, i, selected, onSelect, what, size, children }: {
+  option: PickOption;
   i: number;
   selected: number | null;
   onSelect: (i: number) => void;
@@ -226,7 +227,7 @@ function OptionButton({ id, i, selected, onSelect, what, size, children }: {
         data-pick={i}
         onClick={() => onSelect(i)}
         aria-pressed={on}
-        aria-label={`${cardName(id)} (${i + 1})${on ? ', chosen' : ''}`}
+        aria-label={`${optionName(option)} (${i + 1})${on ? ', chosen' : ''}`}
         aria-keyshortcuts={String(i + 1)}
         // The cards not chosen step back by darkening, never by fading: a
         // printed card stays opaque, so nothing behind the scrim shows through.
@@ -276,9 +277,9 @@ function WideDeal({ options, selected, onSelect, width, height, what }: DealProp
           transformOrigin: '0 0',
         }}
       >
-        {options.map((id, i) => (
-          <OptionButton key={id + i} id={id} i={i} selected={selected} onSelect={onSelect} what={what} size={FULL}>
-            <CardFrame cardId={id} size="full" glow={selected === i ? 'gold' : null} />
+        {options.map((o, i) => (
+          <OptionButton key={optionName(o) + i} option={o} i={i} selected={selected} onSelect={onSelect} what={what} size={FULL}>
+            <OptionFace option={o} size="full" glow={selected === i ? 'gold' : null} />
           </OptionButton>
         ))}
       </motion.div>
@@ -327,9 +328,9 @@ function NarrowDeal({ options, selected, onSelect, width, what }: DealProps) {
             transformOrigin: '0 0',
           }}
         >
-          {options.map((id, i) => (
-            <OptionButton key={id + i} id={id} i={i} selected={selected} onSelect={onSelect} what={what} size={HAND}>
-              <CardFrame cardId={id} size="hand" glow={selected === i ? 'gold' : null} />
+          {options.map((o, i) => (
+            <OptionButton key={optionName(o) + i} option={o} i={i} selected={selected} onSelect={onSelect} what={what} size={HAND}>
+              <OptionFace option={o} size="hand" glow={selected === i ? 'gold' : null} />
             </OptionButton>
           ))}
         </motion.div>
@@ -349,9 +350,9 @@ function NarrowDeal({ options, selected, onSelect, width, what }: DealProps) {
         }}
       >
         <AnimatePresence mode="popLayout" initial={false}>
-          {chosen && big > 0 && (
+          {chosen !== undefined && big > 0 && (
             <motion.div
-              key={chosen}
+              key={`${optionName(chosen)}-${selected}`}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -359,7 +360,7 @@ function NarrowDeal({ options, selected, onSelect, width, what }: DealProps) {
               style={{ width: FULL.w * big, height: FULL.h * big }}
             >
               <div style={{ width: FULL.w, height: FULL.h, transform: big === 1 ? undefined : `scale(${big})`, transformOrigin: '0 0' }}>
-                <CardFrame cardId={chosen} size="full" physical={false} />
+                <OptionFace option={chosen} size="full" physical={false} />
               </div>
             </motion.div>
           )}

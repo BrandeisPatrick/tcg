@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
 import type { AbilityId, CardInstance } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
-import { effectiveAtk, effectiveSpirit, heroAbilities, ultimateCard } from '@/engine/query';
+import { effectiveAtk, effectiveSpirit, heroAbilities, itemCooldown, ultimateCard, wornActives } from '@/engine/query';
 import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
-import { ITEM_IMG_BASE } from '@/art/assets';
+import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { LevelTrim } from '../card/LevelTrim';
@@ -45,9 +45,10 @@ export interface AttackOffer {
 }
 
 /** One of the hero's kit abilities (a skill, its ultimate, a borrowed
- *  ultimate) as the sheet offers it: every gate for using it is open (its turn,
- *  the hero's one ability of the turn, the unlock level, statuses, cooldown, a
- *  target), or the short reason it can't be used, shown inside its plate. */
+ *  ultimate) or an active item it wears, as the sheet offers it: every gate for
+ *  using it is open (its turn, the hero's one ability of the turn, the unlock
+ *  level, statuses, cooldown or charges, a target), or the short reason it
+ *  can't be used, shown inside its plate. */
 export interface SkillOffer {
   canUse: boolean;
   blockedReason?: string;
@@ -62,6 +63,10 @@ interface Props {
   skills?: Record<AbilityId, SkillOffer>;
   /** The player tapped this ability's plate. */
   onUseSkill?: (skillId: AbilityId) => void;
+  /** Each worn active item's offer, by item iid. */
+  items?: Record<string, SkillOffer>;
+  /** The player tapped this active item's plate. */
+  onUseItem?: (itemIid: string) => void;
   /** The Attack plate — on the local player's Active only. */
   attack?: AttackOffer;
   /** Retreat lives on your Active's sheet: he goes to the bench and a bench
@@ -80,7 +85,7 @@ interface Props {
 }
 
 export function HeroDetailSheet({
-  card, isMine, skills: skillOffers, onUseSkill, attack,
+  card, isMine, skills: skillOffers, onUseSkill, items: itemOffers, onUseItem, attack,
   retreat, onRetreat, onClose,
 }: Props) {
   const { isMobile, width: vw, height: vh } = useViewport();
@@ -121,6 +126,17 @@ export function HeroDetailSheet({
   // (A copy of the hero's own ultimate is no second ability: `kitAbilityIds` lists it once.)
   const borrowed = card.borrowedUlt !== data.ult ? card.borrowedUlt : undefined;
   const ults = [ultPlate(data.ult, false), ultPlate(borrowed, true)].filter((u): u is NonNullable<typeof u> => !!u);
+  // The active items it wears: a plate each, like a skill's — its cooldown, or
+  // for hard crowd control its charges, on the chip.
+  const actives = wornActives(card).map((it) => {
+    const face = itemCard(it.cardId);
+    const left = itemCooldown(it);
+    const status = usedSkill === it.cardId ? undefined
+      : it.charges != null ? `${it.charges} charge${it.charges === 1 ? '' : 's'}`
+      : left > 0 ? `${left} turn${left === 1 ? '' : 's'}`
+      : undefined;
+    return { iid: it.iid, cardId: it.cardId, name: face?.name ?? it.cardId, text: sentence(face?.text ?? ''), status };
+  });
 
   // The card at the trading-card ratio (5:7). On desktop it stands as tall
   // as the window allows, up to 600, leaving room under it for Retreat and
@@ -361,6 +377,30 @@ export function HeroDetailSheet({
             </SidePanel>
           )}
 
+          {/* Active items — plates like the skill's: the hero's one ability a
+              turn covers them too, then each cools down (or spends a charge). */}
+          {actives.length > 0 && (
+            <SidePanel title={actives.length > 1 ? 'Active items' : 'Active item'}>
+              {actives.map((a) => {
+                const offer = itemOffers?.[a.iid];
+                return (
+                  <SkillActionCard
+                    key={a.iid}
+                    name={a.name}
+                    description={a.text}
+                    scale={scale}
+                    mine={!!isMine}
+                    used={usedSkill === a.cardId}
+                    canUse={!!offer?.canUse}
+                    blockedReason={offer?.blockedReason}
+                    chipLabel={a.status}
+                    onUse={onUseItem ? () => { onUseItem(a.iid); onClose(); } : undefined}
+                  />
+                );
+              })}
+            </SidePanel>
+          )}
+
           {/* Stats — Level + BP / HP / SPI, pulled off the card face */}
           <SidePanel title="Stats">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -405,7 +445,7 @@ export function HeroDetailSheet({
           )}
 
           {attached.length > 0 && (
-            <SidePanel title="Equipment">
+            <SidePanel title="Items">
               {attached.map((eq) => {
                 const eqData = CARDS_BY_ID[eq.cardId];
                 const merged = eqData?.type === 'hero';
@@ -421,7 +461,7 @@ export function HeroDetailSheet({
                       {merged ? (
                         <HeroBadge cardId={eq.cardId} size={32} />
                       ) : (
-                        <img src={`${ITEM_IMG_BASE}${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
+                        <img src={`${eqData?.type === 'spell' ? SPELL_IMG_BASE : ITEM_IMG_BASE}${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       )}
@@ -445,6 +485,11 @@ export function HeroDetailSheet({
                       {!merged && eq.charges != null && (
                         <div style={{ ...text.body, fontSize: 12, color: poster.inkFaint }}>
                           {eq.charges} charge{eq.charges === 1 ? '' : 's'} left
+                        </div>
+                      )}
+                      {!merged && itemCooldown(eq) > 0 && (
+                        <div style={{ ...text.body, fontSize: 12, color: poster.inkFaint }}>
+                          ready in {itemCooldown(eq)} turn{itemCooldown(eq) === 1 ? '' : 's'}
                         </div>
                       )}
                     </div>

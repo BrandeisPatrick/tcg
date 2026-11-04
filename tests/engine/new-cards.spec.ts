@@ -1,43 +1,23 @@
 /**
  * The cards added and moved in the card-design pass (docs/card-design.md):
- * movement / protection / draw spells, the passive items that were spells, and
- * the two bench target filters Warp Stone and Phantom Strike aim with.
+ * movement / protection / cooldown active items (spells, used with `activate`
+ * as the bearer's one ability of the turn), the passive items that were
+ * spells, and the two bench target filters Warp Stone and Phantom Strike aim
+ * with.
  *
  * Board (freshReadyGame): P0 Haze (active) · Vindicta / Lash / Paige;
  *                         P1 Abrams (active) · Dynamo / Kelvin / Seven.
  */
 import { describe, it, expect } from 'vitest';
-import type { CardInstance, GameState, PlayerID } from '@/engine/types';
+import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID, SPELLS, EQUIPMENT } from '@/cards';
 import { addStatus } from '@/engine/statusOps';
 import { INVALID, perform } from '@/engine/engine';
-import { attackTargets, playBlocked } from '@/engine/legality';
-import { targetsFor } from '@/engine/query';
+import { activateBlocked, attackTargets, blocked } from '@/engine/legality';
+import { activeCooldown, itemCooldown, itemPrice, targetsFor } from '@/engine/query';
 import { fireTriggers } from '@/engine/triggers';
-import { freshReadyGame, nextTestIid } from './_helpers';
-
-/** Put a copy of `cardId` in `pid`'s hand with souls to spare; returns it. */
-function inHand(G: GameState, pid: PlayerID, cardId: string): CardInstance {
-  const card = {
-    iid: nextTestIid('h'), cardId, ownerId: pid, zone: 'hand' as const, attached: [],
-    hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
-  };
-  G.players[pid].hand.push(card);
-  G.players[pid].souls = 10;
-  return card;
-}
-
-function play(G: GameState, cardId: string, targetIid?: string) {
-  const card = inHand(G, '0', cardId);
-  return perform(G, '0', { type: 'playCard', cardIid: card.iid, targetIid });
-}
-
-function wear(hero: CardInstance, cardId: string) {
-  hero.attached = [...(hero.attached ?? []), {
-    iid: nextTestIid('e'), cardId, ownerId: hero.ownerId, zone: 'equipment' as CardInstance['zone'], attached: [],
-    hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
-  }];
-}
+import { PRICE } from '@/engine/constants';
+import { freshReadyGame, giveItem, useItem } from './_helpers';
 
 const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === id);
 const ids = (cards: CardInstance[]) => cards.map((c) => c.cardId);
@@ -60,8 +40,12 @@ describe('Card types follow the active / passive rule', () => {
     expect(CARDS_BY_ID['improved_burst'].name).toBe('Tankbuster');
   });
 
-  it('spells stay in the 1–6 band and no two cards share an id', () => {
-    for (const s of SPELLS) expect(s.cost, s.id).toBeLessThanOrEqual(6);
+  it('every item sits on a shop tab at a tier and is priced by it, and no two items share an id', () => {
+    for (const item of [...SPELLS, ...EQUIPMENT]) {
+      expect(['weapon', 'spirit', 'vitality'], item.id).toContain(item.slot);
+      expect([1, 2, 3, 4], item.id).toContain(item.tier);
+      expect(itemPrice(item.id), item.id).toBe(PRICE[item.tier]);
+    }
     const all = [...SPELLS, ...EQUIPMENT].map((c) => c.id);
     expect(new Set(all).size).toBe(all.length);
   });
@@ -87,11 +71,11 @@ describe('Bench target filters', () => {
   });
 });
 
-describe('New spells', () => {
+describe('New active items', () => {
   it('Guardian Ward shields an ally 3', () => {
     const G = freshReadyGame();
     const paige = G.players['0'].bench[2]!;
-    expect(play(G, 'guardian_ward', paige.iid)).not.toBe(INVALID);
+    useItem(G, '0', 'guardian_ward', paige.iid);
     expect(status(paige, 'shield')?.value).toBe(3);
   });
 
@@ -99,7 +83,7 @@ describe('New spells', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const lash = G.players['0'].bench[1]!;
-    expect(play(G, 'warp_stone', lash.iid)).not.toBe(INVALID);
+    useItem(G, '0', 'warp_stone', lash.iid);
     expect(G.players['0'].active!.iid).toBe(lash.iid);
     expect(G.players['0'].bench[1]!.iid).toBe(haze.iid);
     expect(status(lash, 'bullet_resist')).toMatchObject({ value: 3, duration: 2 });
@@ -107,9 +91,9 @@ describe('New spells', () => {
 
   it('Warp Stone cannot be aimed at the Active or an enemy', () => {
     const G = freshReadyGame();
-    const card = inHand(G, '0', 'warp_stone');
-    expect(playBlocked(G, '0', card.iid, G.players['0'].active!.iid)).toBe('target');
-    expect(playBlocked(G, '0', card.iid, G.players['1'].bench[0]!.iid)).toBe('target');
+    const item = giveItem(G, G.players['0'].active!, 'warp_stone');
+    expect(activateBlocked(G, '0', item.iid, G.players['0'].active!.iid)).toBe('target');
+    expect(activateBlocked(G, '0', item.iid, G.players['1'].bench[0]!.iid)).toBe('target');
   });
 
   it('Divine Barrier cleanses every debuff but Stun and shields 4', () => {
@@ -118,7 +102,8 @@ describe('New spells', () => {
     addStatus(G, haze, 'bleed', 2, 3);
     addStatus(G, haze, 'silenced', 1, 2);
     addStatus(G, haze, 'stun', 1, 1);
-    expect(play(G, 'divine_barrier', haze.iid)).not.toBe(INVALID);
+    // A Stunned hero uses nothing: a bench ally wears it.
+    useItem(G, '0', 'divine_barrier', haze.iid, G.players['0'].bench[0]!);
     expect(status(haze, 'bleed')).toBeUndefined();
     expect(status(haze, 'silenced')).toBeUndefined();
     expect(status(haze, 'stun')).toBeDefined();
@@ -128,7 +113,7 @@ describe('New spells', () => {
   it('Ethereal Shift puts a Dome up: the rival cannot attack that hero', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
-    expect(play(G, 'ethereal_shift', haze.iid)).not.toBe(INVALID);
+    useItem(G, '0', 'ethereal_shift', haze.iid);
     expect(status(haze, 'dome')).toBeDefined();
     expect(status(haze, 'spirit_power')).toMatchObject({ value: 1, duration: 2 });
     expect(attackTargets(G, '1')).toEqual([]);
@@ -139,7 +124,7 @@ describe('New spells', () => {
     const abrams = G.players['1'].active!;
     const kelvin = G.players['1'].bench[1]!;
     const hp0 = kelvin.hp;
-    expect(play(G, 'phantom_strike', kelvin.iid)).not.toBe(INVALID);
+    useItem(G, '0', 'phantom_strike', kelvin.iid);
     expect(G.players['1'].active!.iid).toBe(kelvin.iid);
     expect(G.players['1'].bench[1]!.iid).toBe(abrams.iid);
     expect(kelvin.hp).toBeLessThan(hp0);
@@ -150,29 +135,60 @@ describe('New spells', () => {
     const G = freshReadyGame();
     const foes = [G.players['1'].active!, ...G.players['1'].bench.filter((b): b is CardInstance => !!b)];
     for (const f of foes) { f.hpMax = 20; f.hp = 20; }
-    expect(play(G, 'vortex_web')).not.toBe(INVALID);
+    useItem(G, '0', 'vortex_web');
     for (const f of foes) {
       expect(f.hp, f.cardId).toBeLessThan(20);
       expect(status(f, 'rooted'), f.cardId).toMatchObject({ duration: 2 });
     }
   });
 
-  it('Refresher draws 2', () => {
+  /** P0 with Lash stepped up to the Active slot (a Retreat): an Active with a
+   *  skill and an ultimate. */
+  function lashAtTheFront() {
     const G = freshReadyGame();
-    const before = G.players['0'].hand.length;
-    expect(play(G, 'refresher')).not.toBe(INVALID);
-    // The Refresher left the hand; two cards came in.
-    expect(G.players['0'].hand.length).toBe(before + 2);
+    const ps = G.players['0'];
+    const lash = ps.bench[1]!;
+    ps.souls = 1;
+    expect(perform(G, '0', { type: 'moveHero', fromSlot: 2, toSlot: 0 })).not.toBe(INVALID);
+    expect(ps.active).toBe(lash);
+    return { G, lash };
+  }
+
+  it("Refresher takes your Active's skill, ultimate and active items off cooldown — not a hard-CC item's charges, nor its own", () => {
+    const { G, lash } = lashAtTheFront();
+    lash.cooldowns = { skill_lash: 1, eff_ult_lash: 3 };
+    const coldFront = giveItem(G, lash, 'cold_front', { cooldown: 2 });
+    const knockdown = giveItem(G, lash, 'knockdown');
+    knockdown.charges = 1;
+    const paige = G.players['0'].bench[2]!;
+    paige.cooldowns = { skill_paige: 1 }; // a bench hero's are its own
+    const refresher = useItem(G, '0', 'refresher', undefined, lash);
+    expect(lash.cooldowns?.skill_lash ?? 0).toBe(0);
+    expect(lash.cooldowns?.eff_ult_lash ?? 0).toBe(0);
+    expect(itemCooldown(coldFront)).toBe(0);
+    expect(knockdown.charges).toBe(1);
+    expect(itemCooldown(refresher)).toBe(activeCooldown(lash, 4)); // its own starts after it runs
+    expect(paige.cooldowns).toEqual({ skill_paige: 1 });
+  });
+
+  it('Refresher worn on the bench readies your Active for this very turn', () => {
+    const { G, lash } = lashAtTheFront();
+    lash.cooldowns = { skill_lash: 1 };
+    const skill = { type: 'useSkill' as const, heroIid: lash.iid, targetIid: G.players['1'].active!.iid };
+    expect(blocked(G, '0', skill)).toBe('cooldown');
+    useItem(G, '0', 'refresher', undefined, G.players['0'].bench[2]!);
+    expect(blocked(G, '0', skill)).toBeNull();
   });
 
   it('Dispel Magic cleanses, shields 2, and heals 3 only when it removed something', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     haze.hpMax = 10; haze.hp = 5;
-    expect(play(G, 'debuff_remover', haze.iid)).not.toBe(INVALID);
+    useItem(G, '0', 'debuff_remover', haze.iid);
     expect(haze.hp).toBe(5);
     addStatus(G, haze, 'bleed', 1, 2);
-    expect(play(G, 'debuff_remover', haze.iid)).not.toBe(INVALID);
+    // Haze has used its ability this turn: a bench ally wears the second.
+    useItem(G, '0', 'debuff_remover', haze.iid, G.players['0'].bench[0]!);
     expect(status(haze, 'bleed')).toBeUndefined();
     expect(haze.hp).toBe(8);
   });
@@ -183,7 +199,7 @@ describe('New and moved equipment', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     expect(ids(attackTargets(G, '0'))).toEqual(['hero_abrams']);
-    wear(haze, 'long_range');
+    giveItem(G, haze, 'long_range');
     expect(ids(attackTargets(G, '0'))).toEqual(['hero_abrams', 'hero_dynamo', 'hero_kelvin', 'hero_seven']);
   });
 
@@ -191,7 +207,7 @@ describe('New and moved equipment', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const abrams = G.players['1'].active!;
-    wear(haze, 'healbane');
+    giveItem(G, haze, 'healbane');
     fireTriggers(G, haze, 'onBearerSkillDamage', { reaction: true, target: abrams, amount: 2, movingPlayer: '0' });
     expect(status(abrams, 'healing_boost_down')).toMatchObject({ duration: 2 });
   });
@@ -199,8 +215,8 @@ describe('New and moved equipment', () => {
   it('Fortitude heals its bearer 2 at the start of the turn', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
+    giveItem(G, haze, 'fortitude');
     haze.hpMax = 10; haze.hp = 5;
-    wear(haze, 'fortitude');
     fireTriggers(G, haze, 'startOfTurn', { reaction: true, movingPlayer: '0' });
     expect(haze.hp).toBe(7);
   });

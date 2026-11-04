@@ -1,10 +1,10 @@
 /**
  * Headless AI-vs-AI balance simulator: the numbers the redesign's sim gates
- * are judged on (seat 50 ± 3, every hero 45–55, and the length and item gates
- * once the engine has its round cap and shop).
+ * are judged on (seat 50 ± 3, every hero 45–55, no item in more than 40% of
+ * builds, and the length gate once the engine has its round cap).
  *
- * The real boardgame.io engine plays every game (souls, draws, combat, endIf)
- * with the heuristic AI in both seats.
+ * The real boardgame.io engine plays every game (income, the shop, abilities,
+ * combat, endIf) with the heuristic AI in both seats.
  *
  * Seat-mirrored. A draft is sampled once (eight uniform picks in the engine's
  * snake order, which split the pool into the first drafter's four heroes and
@@ -12,17 +12,23 @@
  * draftPick: once as sampled, once with the two sets swapped between the
  * seats. Every set sits in seat 0 once and in seat 1 once, so the draft's luck
  * cancels out of the seat numbers and the seat cancels out of the hero
- * numbers. Both games of a pair run on one engine seed, so each seat keeps its
- * deck and shuffle while the heroes change places: each set plays both decks.
+ * numbers. Both games of a pair run on one match seed (the match config's
+ * `seed`), so they share one market: every tier 1 item, the seed's random
+ * slice and the eight heroes' signature items. Each set shops from the same
+ * market from both seats.
  *
- * Reproducible. Math.random, which the engine reads for the decks and their
- * shuffles, is pinned to a seeded mulberry32 for every game (as in
- * scripts/eval/ai-vs-ai.ts and tests/engine/fuzz/driver.ts), and the drafts
- * draw from a stream of their own, so one SEED replays the run game for game.
+ * Reproducible. The drafts and the match seeds come from streams of their own
+ * off SEED, and Math.random (which the engine reads only for a match seed the
+ * config does not give, and the AI only for draft picks the sim makes itself)
+ * is pinned to a seeded mulberry32 for every game all the same (as in
+ * scripts/eval/ai-vs-ai.ts and tests/engine/fuzz/driver.ts), so one SEED
+ * replays the run game for game.
  *
  * Own turns. Lengths are counted in own turns (one player's turns) through
  * `ownTurns`, the one place engine turns are converted; it reads the engine's
- * own counting (src/engine/rounds.ts) and `G.firstMover`.
+ * own counting (src/engine/rounds.ts) and `G.firstMover`. Round r holds both
+ * players' r-th own turns, so a purchase is made in the round whose number is
+ * the buyer's own turn.
  *
  * Seats. The pie rule: seat 0 drafts first and seat 1 moves first, so the
  * report gives the first mover's win rate and the first drafter's, each with
@@ -35,15 +41,22 @@
  * engine settles on the HP left and then for the second mover, is scored here
  * as a draw.
  *
+ * The shop. What each seat buys, sells and uses is read off the board after
+ * every move (scripts/eval/ledger.ts), not off G.log, which keeps only its
+ * last 200 lines: purchases per player, sells, souls banked at the end, actives
+ * used, items by share of builds (the item gate) and the round of the first
+ * tier 3 and tier 4 purchase.
+ *
  *   npx vite-node scripts/balance-sim.ts [games=2500] [capOwnTurns=20]
  *
  * Env: SEED (default 1). An odd game count is rounded up to whole pairs.
  * Writes sim-reports/latest.md and sim-reports/latest.json (sim-reports/ is
  * gitignored); the JSON keeps every draft and game, so the tables and the fit
- * can be recomputed without replaying anything.
+ * can be recomputed without replaying anything (a pair's market is
+ * `openingMarket(engineSeed)` plus its eight heroes' signatures).
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
-import type { CardInstance, GameState, PlayerID, PlayerState } from '@/engine/types';
+import type { GameState, ItemSlot, ItemTier, PlayerID, PlayerState } from '@/engine/types';
 import { fitTeams, gamesNeeded, mulberry32, wilson, type Interval, type TeamFit } from './eval/stats';
 
 const PAIRS = Math.max(1, Math.ceil((Number(process.argv[2]) || 2500) / 2));
@@ -52,19 +65,27 @@ const GAMES = 2 * PAIRS;
 const CAP = Number(process.argv[3]) || 20;
 const SEED = Number(process.env.SEED ?? 1);
 const MOVES_PER_TURN_CAP = 40; // safety against a stuck turn
+/** The item gate: no item in more than this share of builds. */
+const ITEM_GATE = 0.4;
 
-// Pin before the engine modules load: setup, the decks and the shuffles read Math.random.
+// Pin before the engine modules load, as every driver does.
 let rand = mulberry32(SEED);
 Math.random = () => rand();
 const { Client } = await import('boardgame.io/client');
 const { DeadlockGame } = await import('@/engine/game');
 const { setupGame } = await import('@/engine/actions/setup');
 const { enumerateAIMoves } = await import('@/ai/heuristic');
-const { CARDS_BY_ID } = await import('@/cards');
+const { CARDS_BY_ID, ITEMS } = await import('@/cards');
 const { setMatchConfig } = await import('@/storage/matchConfig');
+const { heroesOf } = await import('@/engine/query');
 const rounds = await import('@/engine/rounds');
-// The AI plays both seats: no human seat, so both are promoted on the spot.
-setMatchConfig({ playerDeck: [], heroPreferences: [null, null, null, null], humanSeat: null });
+const { shopLedger } = await import('./eval/ledger');
+
+/** The match config for one game: no human seat (the AI plays both, and both
+ *  are promoted on the spot) and the pair's match seed. */
+const configure = (seed?: number) =>
+  setMatchConfig({ heroPreferences: [null, null, null, null], humanSeat: null, ...(seed === undefined ? {} : { seed }) });
+configure();
 
 type Seat = PlayerID;
 const SEATS: Seat[] = ['0', '1'];
@@ -91,24 +112,42 @@ function ownTurns(G: GameState, seat: Seat = firstMover(G)): number {
   return rounds.ownTurn(G, seat);
 }
 
-const isHero = (c: CardInstance | null): c is CardInstance => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero';
-
-/** Every hero a side has, wherever it stands: the Active, the bench, and a Rem
- *  merged into an ally (she rides in its `attached` list, not on a slot). */
-function heroesOf(ps: PlayerState): CardInstance[] {
-  const slotted = [ps.active, ...ps.bench].filter(isHero);
-  return [...slotted, ...slotted.flatMap((c) => (c.attached ?? []).filter((a) => a.remMergeTurnsLeft != null))];
-}
-
 /** The engine's loss test (`checkWinner` in query.ts): the patron at 0 HP. */
 function down(ps: PlayerState): boolean {
   return ps.hp <= 0;
+}
+
+/** One seat's shopping in one game, read off the board (scripts/eval/ledger.ts). */
+interface SeatShop {
+  /** Items bought; an upgrade over a worn component counts once, as the item it became. */
+  buys: number;
+  /** Of them, upgrades (paid the difference). */
+  upgrades: number;
+  /** Purchases by tier: tier 1, 2, 3, 4. */
+  tiers: number[];
+  /** Souls paid for them. */
+  spent: number;
+  /** Items sold. The AI never sells, so this should stay 0. */
+  sells: number;
+  /** Active items used. */
+  actives: number;
+  /** Souls on hand when the game ended. */
+  soulsEnd: number;
+  /** The round of this seat's first purchase of a tier 3 item, and of a tier 4
+   *  one (an upgrade into that tier counts); null for none. */
+  firstT3: number | null;
+  firstT4: number | null;
+  /** What each of the seat's heroes bought (its hero-build), by hero id in
+   *  pick order, in purchase order. */
+  bought: Record<string, string[]>;
 }
 
 interface GameRecord {
   pair: number;
   /** The second game of the pair: the first drafter's set sat in seat 1. */
   swapped: boolean;
+  /** The match seed both games of the pair ran on: the market's. */
+  engineSeed: number;
   /** Each seat's heroes in pick order; the first is its starting Active
    *  unless it is bench-only (Rem). */
   seats: Record<Seat, string[]>;
@@ -126,6 +165,9 @@ interface GameRecord {
   kills: Record<Seat, number>;
   /** Times the patron-HP lead passed from one seat to the other. */
   leadChanges: number;
+  shop: Record<Seat, SeatShop>;
+  /** The AI moves the engine accepted, by move. */
+  moves: Record<string, number>;
   /** The sim's own interventions: AI moves the engine refused (the turn was
    *  ended instead), turns the per-turn move cap cut short, and a game the move
    *  guard stopped. */
@@ -134,9 +176,13 @@ interface GameRecord {
   stuck: boolean;
 }
 
-/** One game of a pair: `seats` says which four heroes each seat drafts. */
-function playGame(seats: Record<Seat, string[]>, seed: number): Omit<GameRecord, 'pair' | 'swapped' | 'seats'> {
+type Played = Omit<GameRecord, 'pair' | 'swapped' | 'engineSeed' | 'seats'>;
+
+/** One game of a pair: `seats` says which four heroes each seat drafts. Returns
+ *  the record and the market the game was played with. */
+function playGame(seats: Record<Seat, string[]>, seed: number, engineSeed: number): { played: Played; market: string[] } {
   rand = mulberry32(seed);
+  configure(engineSeed);
   const client = Client({ game: DeadlockGame as any, numPlayers: 2 });
   client.start();
   let st: any = client.getState();
@@ -156,7 +202,7 @@ function playGame(seats: Record<Seat, string[]>, seed: number): Omit<GameRecord,
   // The board is read after every move. A hero whose respawn timer appears, or
   // restarts higher than it was, has fallen: a kill for the other seat. The
   // patron-HP difference changing sign is a lead change (a tie keeps the
-  // previous leader).
+  // previous leader). The ledger diffs the worn items: purchases, sales, uses.
   const timers = new Map<string, number>();
   const kills: Record<Seat, number> = { '0': 0, '1': 0 };
   let leader = 0, leadChanges = 0;
@@ -176,7 +222,9 @@ function playGame(seats: Record<Seat, string[]>, seed: number): Omit<GameRecord,
     }
   };
   observe(st.G);
+  const ledger = shopLedger(st.G);
 
+  const moves: Record<string, number> = {};
   let refused = 0, cutTurns = 0, movesThisTurn = 0, lastTurn = -1, guard = 0;
   while (!st.ctx.gameover && ownTurns(st.G) <= CAP && guard++ < 50_000) {
     const G: GameState = st.G;
@@ -186,35 +234,63 @@ function playGame(seats: Record<Seat, string[]>, seed: number): Omit<GameRecord,
     const cut = movesThisTurn >= MOVES_PER_TURN_CAP && !G.pendingPromotion;
     if (cut) cutTurns++;
     const best = cut ? undefined : enumerateAIMoves(G, ctx)[0];
+    const move = best?.move ?? 'endTurn';
     const before = st._stateID;
-    if (!best || best.move === 'endTurn') client.moves.endTurn();
-    else (client.moves as any)[best.move](...best.args);
+    if (!best || move === 'endTurn') client.moves.endTurn();
+    else (client.moves as any)[move](...best.args);
     st = client.getState();
     movesThisTurn++;
     // A move the engine refused changes nothing: end the turn so the game goes on.
     if (st._stateID === before && !st.ctx.gameover) {
-      if (best && best.move !== 'endTurn') refused++;
+      if (move !== 'endTurn') refused++;
       client.moves.endTurn();
       st = client.getState();
+    } else if (best) {
+      moves[move] = (moves[move] ?? 0) + 1;
     }
     observe(st.G);
+    ledger.observe(st.G);
   }
   client.stop();
 
   const G: GameState = st.G;
+  const shop = {} as Record<Seat, SeatShop>;
+  for (const seat of SEATS) {
+    const mine = ledger.purchases.filter((p) => p.seat === seat);
+    const bought: Record<string, string[]> = Object.fromEntries(seats[seat].map((id) => [id, [] as string[]]));
+    for (const p of mine) (bought[p.hero] ??= []).push(p.item);
+    const first = (tier: ItemTier) => mine.find((p) => p.tier === tier)?.round ?? null;
+    shop[seat] = {
+      buys: mine.length,
+      upgrades: mine.filter((p) => p.upgradeOf).length,
+      tiers: ([1, 2, 3, 4] as ItemTier[]).map((t) => mine.filter((p) => p.tier === t).length),
+      spent: mine.reduce((s, p) => s + p.paid, 0),
+      sells: ledger.sales.filter((e) => e.seat === seat).length,
+      actives: ledger.uses.filter((e) => e.seat === seat).length,
+      soulsEnd: G.players[seat].souls,
+      firstT3: first(3),
+      firstT4: first(4),
+      bought,
+    };
+  }
   const over = st.ctx.gameover as { winner?: Seat } | undefined;
   const mutual = !!over && down(G.players['0']) && down(G.players['1']);
   return {
-    firstMover: mover,
-    end: !over ? 'cap' : mutual ? 'mutual' : 'win',
-    winner: over && !mutual ? over.winner ?? null : null,
-    engineTurns: G.turnNumber ?? 0,
-    ownTurns: over ? ownTurns(G) : Math.min(ownTurns(G), CAP),
-    kills,
-    leadChanges,
-    refused,
-    cutTurns,
-    stuck: !over && ownTurns(G) <= CAP,
+    market: [...G.market],
+    played: {
+      firstMover: mover,
+      end: !over ? 'cap' : mutual ? 'mutual' : 'win',
+      winner: over && !mutual ? over.winner ?? null : null,
+      engineTurns: G.turnNumber ?? 0,
+      ownTurns: over ? ownTurns(G) : Math.min(ownTurns(G), CAP),
+      kills,
+      leadChanges,
+      shop,
+      moves,
+      refused,
+      cutTurns,
+      stuck: !over && ownTurns(G) <= CAP,
+    },
   };
 }
 
@@ -223,9 +299,12 @@ console.log(`Balance sim: ${GAMES} seat-mirrored games (${PAIRS} drafts, each fr
 const t0 = Date.now();
 const drafts: string[][] = [];
 const games: GameRecord[] = [];
+/** Per item: the games it was on sale in, and the hero-builds those games had. */
+const offered = new Map<string, { games: number; heroBuilds: number }>();
 for (let pair = 0; pair < PAIRS; pair++) {
   const seed = (SEED * 100_003 + pair) >>> 0;
   const draw = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+  const engineSeed = Math.floor(mulberry32((seed ^ 0x85ebca6b) >>> 0)() * 2 ** 32) >>> 0;
   const pool = [...POOL];
   const picks = ORDER.map(() => pool.splice(Math.floor(draw() * pool.length), 1)[0]);
   drafts.push(picks);
@@ -233,7 +312,14 @@ for (let pair = 0; pair < PAIRS; pair++) {
   const second = picks.filter((_, k) => ORDER[k] === '1');
   for (const swapped of [false, true]) {
     const seats: Record<Seat, string[]> = swapped ? { '0': second, '1': first } : { '0': first, '1': second };
-    games.push({ pair, swapped, seats, ...playGame(seats, seed) });
+    const { played, market } = playGame(seats, seed, engineSeed);
+    games.push({ pair, swapped, engineSeed, seats, ...played });
+    for (const id of new Set(market)) {
+      const o = offered.get(id) ?? { games: 0, heroBuilds: 0 };
+      o.games++;
+      o.heroBuilds += seats['0'].length + seats['1'].length;
+      offered.set(id, o);
+    }
   }
   if ((pair + 1) % 125 === 0) process.stderr.write(`  …${2 * (pair + 1)}/${GAMES}\n`);
 }
@@ -262,6 +348,7 @@ const seat0Role = movers.size > 1 ? 'drafts first' : movers.has('0') ? 'drafts f
 const movedFirst = wilson(decisive.filter((g) => g.winner === g.firstMover).length, decisive.length);
 const draftedFirst = wilson(decisive.filter((g) => g.winner === ORDER[0]).length, decisive.length);
 const moverSeats = [...movers].sort().map((s) => `seat ${s}`).join(' or ');
+const secondSeats = [...new Set(games.map((g) => rival(g.firstMover)))].sort().map((s) => `seat ${s}`).join(' or ');
 // A pair whose two games went to the same seat was decided by the seat (each
 // set won once); one whose games went to different seats was won twice by the
 // same set, from both seats: the draft outweighed the seat.
@@ -318,6 +405,92 @@ const killsBySeat: Record<Seat, number> = { '0': mean(games.map((g) => g.kills['
 const leadChanges = mean(games.map((g) => g.leadChanges));
 const withLeadChange = games.filter((g) => g.leadChanges > 0).length / GAMES;
 
+// The shop. A player is one seat of one game.
+interface Player { g: GameRecord; seat: Seat; shop: SeatShop }
+const players: Player[] = games.flatMap((g) => SEATS.map((seat) => ({ g, seat, shop: g.shop[seat] })));
+const groups = {
+  all: players,
+  firstMover: players.filter((p) => p.seat === p.g.firstMover),
+  secondMover: players.filter((p) => p.seat !== p.g.firstMover),
+  seat0: players.filter((p) => p.seat === '0'),
+  seat1: players.filter((p) => p.seat === '1'),
+  winner: players.filter((p) => p.g.end === 'win' && p.g.winner === p.seat),
+  loser: players.filter((p) => p.g.end === 'win' && p.g.winner !== p.seat),
+};
+type Group = keyof typeof groups;
+/** The mean of `f` over each group of players. */
+const perPlayer = (f: (s: SeatShop) => number) =>
+  Object.fromEntries((Object.keys(groups) as Group[]).map((k) => [k, mean(groups[k].map((p) => f(p.shop)))])) as Record<Group, number>;
+const purchases = perPlayer((s) => s.buys);
+const upgrades = perPlayer((s) => s.upgrades);
+const spent = perPlayer((s) => s.spent);
+const tierBuys = [0, 1, 2, 3].map((t) => mean(players.map((p) => p.shop.tiers[t])));
+const soulsBanked = perPlayer((s) => s.soulsEnd);
+const activesPerPlayer = perPlayer((s) => s.actives);
+const activesPerGame = mean(games.map((g) => g.shop['0'].actives + g.shop['1'].actives));
+const sells = players.reduce((s, p) => s + p.shop.sells, 0);
+
+type TierKey = 'firstT3' | 'firstT4';
+/** Mean, median, range and the share with none of a list of rounds (null: none). */
+const roundStats = (xs: (number | null)[]) => {
+  const have = xs.filter((x): x is number => x !== null).sort((a, b) => a - b);
+  return {
+    mean: have.length ? mean(have) : null,
+    median: have[have.length >> 1] ?? null,
+    min: have[0] ?? null,
+    max: have[have.length - 1] ?? null,
+    none: xs.length - have.length,
+    noneShare: xs.length ? (xs.length - have.length) / xs.length : 0,
+  };
+};
+const gameFirst = (g: GameRecord, key: TierKey) => {
+  const xs = SEATS.map((s) => g.shop[s][key]).filter((x): x is number => x !== null);
+  return xs.length ? Math.min(...xs) : null;
+};
+/** The round of the first purchase of a tier: each game's, by either seat, and
+ *  each player's own, by role. */
+const firstTier = (key: TierKey) => ({
+  perGame: roundStats(games.map((g) => gameFirst(g, key))),
+  firstMover: roundStats(groups.firstMover.map((p) => p.shop[key])),
+  secondMover: roundStats(groups.secondMover.map((p) => p.shop[key])),
+});
+const firstT3 = firstTier('firstT3');
+const firstT4 = firstTier('firstT4');
+
+// Items by share of builds. A hero-build is one drafted hero in one game (eight
+// a game); an item is in it when that hero bought it at least once.
+const heroBuilds = games.reduce((s, g) => s + g.seats['0'].length + g.seats['1'].length, 0);
+const itemTally = new Map<string, { builds: number; sides: number; buys: number }>();
+const itemOf = (id: string) => itemTally.get(id) ?? itemTally.set(id, { builds: 0, sides: 0, buys: 0 }).get(id)!;
+for (const p of players) {
+  const side = new Set<string>();
+  for (const items of Object.values(p.shop.bought)) {
+    for (const id of items) itemOf(id).buys++;
+    for (const id of new Set(items)) { itemOf(id).builds++; side.add(id); }
+  }
+  for (const id of side) itemOf(id).sides++;
+}
+const itemRows = ITEMS.map((item) => {
+  const t = itemTally.get(item.id) ?? { builds: 0, sides: 0, buys: 0 };
+  const o = offered.get(item.id) ?? { games: 0, heroBuilds: 0 };
+  return {
+    id: item.id,
+    name: item.name,
+    slot: item.slot as ItemSlot,
+    tier: item.tier as ItemTier,
+    ...t,
+    share: heroBuilds ? t.builds / heroBuilds : 0,
+    sideShare: players.length ? t.sides / players.length : 0,
+    onSale: o.games,
+    shareOnSale: o.heroBuilds ? t.builds / o.heroBuilds : 0,
+  };
+}).sort((a, b) => b.share - a.share || b.buys - a.buys || a.name.localeCompare(b.name));
+const boughtRows = itemRows.filter((r) => r.builds > 0);
+const neverBought = itemRows.filter((r) => r.builds === 0 && r.onSale > 0);
+const neverOnSale = itemRows.filter((r) => r.onSale === 0);
+const overGate = itemRows.filter((r) => r.share > ITEM_GATE);
+const topItem = itemRows[0];
+
 // Pick order. Each sampled draft's two first picks (pick 1 by the first
 // drafter, pick 2 by the second), and the team's result from both seatings.
 const firstPicks = new Map(POOL.map((id) => [id, { byFirst: 0, bySecond: 0, team: tally() }]));
@@ -344,10 +517,19 @@ const halfWidth = (w: Interval) => (w.hi - w.lo) / 2;
 const heroShare = ORDER.length / POOL.length; // eight heroes of the pool play each game
 const need = { seat: gamesNeeded(0.03), hero: gamesNeeded(0.03, { share: heroShare }) };
 
-// Health: what the sim did that a player would not.
+// Health: what the sim did that a player would not, and the ledger checked
+// against the moves the engine accepted.
 const refused = games.reduce((s, g) => s + g.refused, 0);
 const cutTurns = games.reduce((s, g) => s + g.cutTurns, 0);
 const stuck = games.filter((g) => g.stuck).length;
+const accepted: Record<string, number> = {};
+for (const g of games) for (const [m, c] of Object.entries(g.moves)) accepted[m] = (accepted[m] ?? 0) + c;
+const seen = {
+  buy: players.reduce((s, p) => s + p.shop.buys, 0),
+  sell: sells,
+  activate: players.reduce((s, p) => s + p.shop.actives, 0),
+};
+const ledgerMismatch = (Object.keys(seen) as (keyof typeof seen)[]).filter((m) => seen[m] !== (accepted[m] ?? 0));
 
 // Gates.
 type Verdict = 'PASS' | 'FAIL' | 'not yet';
@@ -369,19 +551,28 @@ const gates: { gate: string; target: string; today: string; verdict: Verdict; wh
     gate: 'Length', target: 'mean 8–10 own turns, under 2% at the cap',
     today: `mean ${mean(lengths).toFixed(1)} own turns, ${pct(capped / GAMES)} at the sim's cap`,
     verdict: 'not yet',
-    why: `the gate is set for the redesigned match, which ends by rule after round 12 and is paced by the shop; today's engine has neither, so games end when a patron falls (to kills and to pushes into an empty lane) and the only cap is this sim's stalemate guard (${CAP} own turns)`,
+    why: `the gate is set for the redesigned match, which ends by rule after round 12; the round cap and the structures come with the map (step 4), so today games end when a patron falls (to kills and to pushes into an empty lane) and the only cap is this sim's stalemate guard (${CAP} own turns)`,
   },
   {
-    gate: 'Items', target: 'no item in more than 40% of builds',
-    today: '—',
-    verdict: 'not yet',
-    why: 'there is no shop or build yet: items come from a random archetype deck, not from a choice',
+    gate: 'Items', target: `no item in more than ${ITEM_GATE * 100}% of builds`,
+    today: overGate.length
+      ? `${overGate.length} above: ${overGate.map((r) => `${r.name} ${pct(r.share)}`).join(', ')}`
+      : topItem && topItem.builds ? `top ${topItem.name}, ${pct(topItem.share)} of hero-builds` : 'nothing bought',
+    verdict: overGate.length === 0 && seen.buy > 0 ? 'PASS' : 'FAIL',
   },
 ];
 
 // ---------------------------------------------------------------- report
+const f1 = (x: number | null) => (x === null ? '—' : x.toFixed(1));
+/** A per-player mean by role; by seat as well when the roles changed seats. */
+const roles = (r: Record<Group, number>, digits = 1) =>
+  `the first mover (${moverSeats}) ${r.firstMover.toFixed(digits)}, the second (${secondSeats}) ${r.secondMover.toFixed(digits)}` +
+  (movers.size > 1 ? `; seat 0 ${r.seat0.toFixed(digits)}, seat 1 ${r.seat1.toFixed(digits)}` : '');
+const tierLine = (label: string, s: ReturnType<typeof firstTier>) =>
+  `- First tier ${label} purchase, by either seat: round **${f1(s.perGame.mean)}** on average (median ${s.perGame.median ?? '—'}, ${s.perGame.min ?? '—'}–${s.perGame.max ?? '—'}); none in **${pct(s.perGame.noneShare)}** of games. Each player's own first: the first mover's own turn ${f1(s.firstMover.mean)} (none ${pct(s.firstMover.noneShare)}), the second mover's ${f1(s.secondMover.mean)} (none ${pct(s.secondMover.noneShare)}).\n`;
+
 let md = `# Balance sim: ${n(GAMES)} seat-mirrored games\n\n`;
-md += `_SEED ${SEED}. ${n(PAIRS)} sampled drafts (uniform picks in the snake order), each played twice with the two hero sets swapped between the seats, on one engine seed per pair. Heuristic AI in both seats. Lengths in own turns (one player's turns; a game that ends on engine turn T lasted ceil(T / 2) of them). Cap ${CAP} own turns each. ${seconds.toFixed(1)} s, ${((seconds * 1000) / GAMES).toFixed(0)} ms a game._\n\n`;
+md += `_SEED ${SEED}. ${n(PAIRS)} sampled drafts (uniform picks in the snake order), each played twice with the two hero sets swapped between the seats, on one match seed per pair (one market for both games). Heuristic AI in both seats. Lengths in own turns (one player's turns; a game that ends on engine turn T lasted ceil(T / 2) of them). Cap ${CAP} own turns each. ${seconds.toFixed(1)} s, ${((seconds * 1000) / GAMES).toFixed(0)} ms a game._\n\n`;
 
 md += `## Gates\n`;
 md += `| Gate | Target | Today | |\n|---|---|---|---|\n`;
@@ -409,7 +600,8 @@ md += `## Joint fit: hero effects net of their teammates\n`;
 if (fit) {
   md += `Logistic regression over ${n(fit.games)} decisive games: logit P(seat 0 wins) = seat + Σ hero(seat 0) − Σ hero(seat 1), by Newton steps (${fit.iterations} iterations, ${fit.converged ? 'converged' : 'did not converge'}). `;
   md += `A team's result credits all four of its heroes, so each coefficient is that hero's effect with its teammates and opponents held apart; the effects sum to zero, so each is against the average hero. `;
-  md += `"Even matchup" is σ(coefficient): the win rate a hero gives an otherwise average team against an average team, with no seat edge.\n\n`;
+  md += `"Even matchup" is σ(coefficient): the win rate a hero gives an otherwise average team against an average team, with no seat edge. `;
+  md += `Items are not in the fit: the AI buys each hero's default build, so an item's effect cannot be told apart from its heroes'.\n\n`;
   md += `- Seat term: **${fit.seat.coef.toFixed(3)} ± ${fit.seat.se.toFixed(3)}** log-odds, so seat 0 wins ${pct(sigmoid(fit.seat.coef))} between two average teams.\n\n`;
   md += `| Hero | coefficient ± SE | 95% CI | even matchup |\n|---|---:|---|---:|\n`;
   for (const m of fit.members) {
@@ -426,6 +618,25 @@ md += `- By own turns: ${[...byOwnTurn.entries()].sort((a, b) => a[0] - b[0]).ma
 md += `- Kills per game: **${killsPerGame.toFixed(2)}** (seat 0 scores ${killsBySeat['0'].toFixed(2)}, seat 1 ${killsBySeat['1'].toFixed(2)}).\n`;
 md += `- Lead changes per game (the patron-HP difference changing sign): **${leadChanges.toFixed(2)}**; ${pct(withLeadChange)} of games have at least one.\n\n`;
 
+md += `## Shop\n`;
+md += `Read off the board after every move: an item instance that appears is a purchase (an upgrade over a worn component counts once, as the item it became, at the difference it cost), one that goes with no upgrade in its place was sold, an active whose cooldown rises or whose charges fall was used. A player is one seat of one game; a purchase is made on the buyer's own turn, whose number is the round's.\n\n`;
+md += `- Purchases per player per game: **${purchases.all.toFixed(2)}** (${roles(purchases, 2)}), of them ${upgrades.all.toFixed(2)} upgrades; ${spent.all.toFixed(1)} souls spent. By tier: ${tierBuys.map((x, t) => `T${t + 1} ${x.toFixed(2)}`).join(' · ')}.\n`;
+md += `- Sells: **${n(sells)}** in all (the AI never sells).\n`;
+md += `- Souls banked at the end, per player: **${soulsBanked.all.toFixed(1)}** (${roles(soulsBanked)}; the winner ${soulsBanked.winner.toFixed(1)}, the loser ${soulsBanked.loser.toFixed(1)}).\n`;
+md += `- Actives used per game (both players): **${activesPerGame.toFixed(2)}**; per player, ${roles(activesPerPlayer, 2)}.\n`;
+md += tierLine('3', firstT3);
+md += tierLine('4', firstT4);
+md += `\n### Items by share of builds\n`;
+md += `A hero-build is one drafted hero in one game: eight a game, ${n(heroBuilds)} in all. An item's **share of builds** is the share of hero-builds that bought it at least once (an upgrade counts for the item it became; its component, bought before, for itself); the item gate flags any item above ${ITEM_GATE * 100}%. Also shown: the share of (game, side) pairs in which any of the side's four heroes bought it, how many games had it on sale, and its share of the hero-builds of those games.\n\n`;
+md += `| Item | tab, tier | hero-builds | share of builds | (game, side) | on sale (games) | share when on sale | |\n|---|---|---:|---:|---:|---:|---:|---|\n`;
+for (const r of boughtRows) {
+  md += `| ${r.name} | ${r.slot} T${r.tier} | ${n(r.builds)} | ${pct(r.share)} | ${pct(r.sideShare)} | ${n(r.onSale)} | ${pct(r.shareOnSale)} | ${r.share > ITEM_GATE ? `above ${ITEM_GATE * 100}%` : ''} |\n`;
+}
+if (!boughtRows.length) md += `| _(nothing bought)_ | | 0 | | | | | |\n`;
+if (neverBought.length) md += `\nOn sale but never bought (${neverBought.length}): ${neverBought.map((r) => `${r.name} (${r.slot} T${r.tier}, ${n(r.onSale)} games)`).join(', ')}.\n`;
+if (neverOnSale.length) md += `\nNever on sale (${neverOnSale.length}): ${neverOnSale.map((r) => r.name).join(', ')}.\n`;
+md += `\n`;
+
 md += `## Draft pick order\n`;
 md += `Picks are uniform, so first-pick counts are flat by construction; they are logged so a draft policy can be judged once one replaces the random picks. A team's first pick is its starting Active (Rem, who is bench-only, excepted).\n\n`;
 md += `| Hero | first picks (first drafter / second) | team win rate when first pick |\n|---|---:|---|\n`;
@@ -436,6 +647,10 @@ md += `## Precision and health\n`;
 md += `- This run: the seat rate is known to ±${(halfWidth(seat0) * 100).toFixed(1)} points, a hero's to about ±${(halfWidth(wilson(medianHeroDecisive / 2, medianHeroDecisive)) * 100).toFixed(1)} (median ${n(medianHeroDecisive)} decisive games).\n`;
 md += `- For ±3 points at 95%: the seat needs ${n(need.seat)} decisive games; each hero ${n(need.hero)} games, since ${ORDER.length} of the ${POOL.length} heroes play each game.\n`;
 md += `- The sim stepped in: ${n(refused)} AI moves refused by the engine (the turn was ended instead), ${n(cutTurns)} turns cut at ${MOVES_PER_TURN_CAP} moves, ${n(stuck)} games stopped by the move guard.\n`;
+md += `- Moves the engine accepted: ${Object.entries(accepted).sort((a, b) => b[1] - a[1]).map(([m, c]) => `${m} ${n(c)}`).join(' · ')}. `;
+md += ledgerMismatch.length
+  ? `**The board and the moves disagree** on ${ledgerMismatch.map((m) => `${m} (board ${n(seen[m])}, moves ${n(accepted[m] ?? 0)})`).join(', ')}.\n`
+  : `The board agrees: ${n(seen.buy)} purchases, ${n(seen.sell)} sales, ${n(seen.activate)} actives used.\n`;
 
 mkdirSync('sim-reports', { recursive: true });
 writeFileSync('sim-reports/latest.md', md);
@@ -449,9 +664,15 @@ writeFileSync('sim-reports/latest.json', JSON.stringify({
     ownTurns: { mean: mean(lengths), median: sortedLengths[sortedLengths.length >> 1] ?? 0, min: sortedLengths[0] ?? 0, max: sortedLengths[sortedLengths.length - 1] ?? 0, capShare: capped / GAMES, histogram: Object.fromEntries(byOwnTurn) },
     killsPerGame, killsBySeat, leadChanges, withLeadChange,
   },
+  shop: {
+    perPlayer: { purchases, upgrades, spent, soulsBanked, actives: activesPerPlayer, byTier: tierBuys },
+    activesPerGame, sells,
+    firstT3, firstT4,
+    items: { heroBuilds, gate: ITEM_GATE, rows: itemRows },
+  },
   picks: { order: ORDER, firstPicks: firstPickRows.map(({ id, byFirst, bySecond, team, rate }) => ({ id, byFirst, bySecond, team, rate })), slots },
   precision: { seatHalfWidth: halfWidth(seat0), medianHeroDecisive, gamesNeededFor3Points: need },
-  health: { refused, cutTurns, stuck },
+  health: { refused, cutTurns, stuck, accepted, ledger: seen, ledgerMismatch },
   drafts,
   records: games,
 }, null, 1));

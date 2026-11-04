@@ -4,12 +4,11 @@ import { useSettings } from '@/storage/settings';
 import { App } from './App';
 import { StartScreen } from './ui/start/StartScreen';
 import { LoadoutScreen } from './ui/collection/LoadoutScreen';
-import { DeckEditorScreen } from './ui/collection/DeckEditorScreen';
 import { PosterBackdrop } from './ui/PosterBackdrop';
 import { SystemLayer } from './ui/system/SystemMenu';
 import type { CardId } from './engine/types';
 import { setMatchConfig, getMatchConfig } from './storage/matchConfig';
-import { getPreferredHeroes, getSelectedDeck } from './storage/playerData';
+import { getPreferredHeroes } from './storage/playerData';
 import { LESSONS, lessonById } from './tutorial/lessons';
 import { LessonsScreen } from './ui/tutorial/LessonsScreen';
 import type { StoryRun, StoryNode } from './story/types';
@@ -43,19 +42,17 @@ function prefetchStoryMap() {
 type View =
   | { screen: 'start' }
   | { screen: 'loadout' }
-  | { screen: 'deckEdit'; slotIndex: number }
   | { screen: 'story' }
   | { screen: 'lessons' }
   | { screen: 'match' };
 
 /** Point the match config at one tutorial lesson: its fixed match, and its
  *  id so the coach knows which script to run. Ignores the player's loadout
- *  on purpose — the lessons refer to specific heroes and cards. */
+ *  on purpose — the lessons refer to specific heroes and items. */
 function configureLesson(id: string): boolean {
   const lesson = lessonById(id) ?? LESSONS.find((l) => String(l.number) === id);
   if (!lesson) return false;
   setMatchConfig({
-    playerDeck: [],
     heroPreferences: [null, null, null, null],
     tutorial: lesson.setup(),
     lesson: lesson.id,
@@ -65,24 +62,23 @@ function configureLesson(id: string): boolean {
 
 export function Root() {
   // Deep-link an initial screen via the URL, e.g. ?screen=match (jumps straight
-  // into a Quick Match draft), ?screen=loadout|story|lessons, ?lesson=<id|n>
-  // (straight into one tutorial lesson), or ?screen=deckEdit&slot=N. Only
-  // activates when the param is present, so the normal entry (no query) still
-  // lands on the start screen.
+  // into a Quick Match draft), ?screen=loadout|story|lessons, or
+  // ?lesson=<id|n> (straight into one tutorial lesson). Only activates when
+  // the param is present, so the normal entry (no query) still lands on the
+  // start screen.
   const [view, setView] = useState<View>(() => {
     const q = new URLSearchParams(window.location.search);
     const s = q.get('screen');
     if (s === 'loadout' || s === 'story' || s === 'lessons') return { screen: s };
-    // Pre-merge links, kept working: both halves now live on one sheet.
-    if (s === 'heroes' || s === 'decks') return { screen: 'loadout' };
-    if (s === 'deckEdit') return { screen: 'deckEdit', slotIndex: Number(q.get('slot') ?? 0) || 0 };
+    // Older links, kept working: the hero picks live on the loadout sheet
+    // (the deck editor went with the deck).
+    if (s === 'heroes' || s === 'decks' || s === 'deckEdit') return { screen: 'loadout' };
     // The old single-lesson link now opens the list.
     if (s === 'tutorial') return { screen: 'lessons' };
     const lesson = q.get('lesson');
     if (lesson && configureLesson(lesson)) return { screen: 'match' };
     if (s === 'match') {
       setMatchConfig({
-        playerDeck: getSelectedDeck()?.cards ?? [],
         heroPreferences: getPreferredHeroes(),
         story: undefined,
       });
@@ -109,7 +105,6 @@ export function Root() {
   const goStart = useCallback(() => setView({ screen: 'start' }), []);
   const goLoadout = useCallback(() => setView({ screen: 'loadout' }), []);
   const goStory = useCallback(() => setView({ screen: 'story' }), []);
-  const goEditDeck = useCallback((idx: number) => setView({ screen: 'deckEdit', slotIndex: idx }), []);
 
   // The tutorial is a list of lessons, each a real match on a fixed, lopsided
   // setup — the same scripted path Story uses, plus the coach plate.
@@ -123,10 +118,8 @@ export function Root() {
   // From the title, `featuredHero` is the hero on the Quick Match card — the
   // draft's recommended first pick. A rematch passes none.
   const goMatch = useCallback((featuredHero?: CardId) => {
-    const deck = getSelectedDeck();
     const prefs = getPreferredHeroes();
     setMatchConfig({
-      playerDeck: deck?.cards ?? [],
       heroPreferences: prefs,
       featuredHero,
       // Clear both scripted setups so a Quick Match runs the normal draft path.
@@ -148,7 +141,6 @@ export function Root() {
       if (!current) return current;
       pendingBattleNode.current = node.id;
       setMatchConfig({
-        playerDeck: [],
         heroPreferences: [null, null, null, null],
         story: buildStoryMatch(current, node),
       });
@@ -180,7 +172,6 @@ export function Root() {
   // mounted at a time; match keys on epoch so a rematch also gets a fresh fade.
   const screenKey =
     view.screen === 'match' ? `match-${matchEpoch}` :
-    view.screen === 'deckEdit' ? `deckEdit-${view.slotIndex}` :
     view.screen;
 
   // System-menu exit: conceding a story battle retreats to the campaign map
@@ -237,16 +228,7 @@ export function Root() {
             />
           )}
           {view.screen === 'loadout' && (
-            <LoadoutScreen
-              onBack={goStart}
-              onEditDeck={goEditDeck}
-            />
-          )}
-          {view.screen === 'deckEdit' && (
-            <DeckEditorScreen
-              slotIndex={view.slotIndex}
-              onBack={goLoadout}
-            />
+            <LoadoutScreen onBack={goStart} />
           )}
           {view.screen === 'lessons' && (
             <LessonsScreen onBack={goStart} onStart={goLesson} />

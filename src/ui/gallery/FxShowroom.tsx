@@ -342,11 +342,6 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
     respawnTurnsLeft: dead.has(id) ? 3 : undefined,
   });
 
-  const spellOrigin = useCallback(() => ({
-    x: Math.min(330, Math.max(170, window.innerWidth * 0.2)),
-    y: window.innerHeight / 2,
-  }), []);
-
   // ---- layout ---------------------------------------------------------------
   // Beside the triggers when there is room for both, pinned above them when
   // there is not. Either way the tiles are sized so the whole stage, its
@@ -450,7 +445,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
           ))}
         </div>
       </div>
-      <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
+      <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} />
       <AnimatePresence>
         {attack && <CombatChoreographer plan={attack} me="0" slotRefs={slotRefs.current} stepDuration={COMBAT_STEP_MS} onComplete={resolveAttack} />}
       </AnimatePresence>

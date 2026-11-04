@@ -250,13 +250,14 @@ export function tickRemMerges(G: GameState, ps: PlayerState) {
 }
 
 /**
- * Tick every cooldown of `ps`'s heroes (skills and ultimates) down by one, at
- * the start of their owner's turn (docs/stats-model.md §1): an entry that
- * reaches 0 is removed, and an empty map is removed with it, so a hero that is
- * off cooldown is back to having no field at all. It counts the owner's turns,
- * so a hero on the respawn timer and a merged Rem (out of the board sweep,
- * riding on her bearer) tick like the rest — a fall and a respawn leave a
- * cooldown as it is.
+ * Tick every cooldown of `ps`'s heroes (skills and ultimates) and of the
+ * active items they wear down by one, at the start of their owner's turn
+ * (docs/stats-model.md §1): an entry that reaches 0 is removed, and an empty
+ * map is removed with it, so a hero or an item that is off cooldown is back to
+ * having no field at all. It counts the owner's turns, so a hero on the
+ * respawn timer, its items and a merged Rem (out of the board sweep, riding on
+ * her bearer, her own items with her) tick like the rest — a fall and a
+ * respawn leave a cooldown as it is.
  */
 export function tickCooldowns(ps: PlayerState) {
   const tick = (c: CardInstance) => {
@@ -269,11 +270,11 @@ export function tickCooldowns(ps: PlayerState) {
     }
     if (Object.keys(cooldowns).length === 0) delete c.cooldowns;
   };
-  for (const c of [ps.active, ...ps.bench]) {
-    if (!c) continue;
+  const walk = (c: CardInstance) => {
     tick(c);
-    for (const a of c.attached ?? []) tick(a);
-  }
+    for (const a of c.attached ?? []) walk(a);
+  };
+  for (const c of [ps.active, ...ps.bench]) if (c) walk(c);
 }
 
 export function clearTurnFlags(ps: PlayerState) {

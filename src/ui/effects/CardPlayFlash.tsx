@@ -9,8 +9,8 @@ import { useViewport } from '../hooks/useViewport';
 export const CARD_REVEAL_MS = 1350;
 
 /**
- * Drives the card / hero reveal animation off `G.action`. While the engine's
- * action is `state: 'begin'` and matches a `play` (spell/equipment) or
+ * Drives the item / hero reveal animation off `G.action`. While the engine's
+ * action is `state: 'begin'` and matches an `item` (an active item used) or a
  * `skill` (hero activation), the overlay renders the relevant card mid-screen.
  * Ultimates are handled by `UltMomentFlash` instead.
  *
@@ -28,7 +28,7 @@ interface Props {
 
 export function CardPlayFlash({ G, onSkip }: Props) {
   const action = G.action;
-  const matching = action && action.state === 'begin' && (action.kind === 'play' || action.kind === 'skill');
+  const matching = action && action.state === 'begin' && (action.kind === 'item' || action.kind === 'skill');
   return (
     <AnimatePresence>
       {matching && (
@@ -36,7 +36,7 @@ export function CardPlayFlash({ G, onSkip }: Props) {
           key={action.id}
           cardId={action.cardId}
           caster={action.by === '0' ? 'P0' : 'P1'}
-          kind={action.kind === 'skill' ? 'skill' : 'play'}
+          kind={action.kind === 'skill' ? 'skill' : 'item'}
           onSkip={onSkip}
         />
       )}
@@ -57,20 +57,20 @@ const tagStyle = {
   whiteSpace: 'nowrap',
 } as const;
 
-export function CardPlayOverlay({ cardId, caster, kind = 'play', onSkip }: {
-  cardId: string; caster: 'P0' | 'P1'; kind?: 'play' | 'skill'; onSkip?: () => void;
+export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
+  cardId: string; caster: 'P0' | 'P1'; kind?: 'item' | 'skill'; onSkip?: () => void;
 }) {
   const isOwn = caster === 'P0';
   // Owner accent on the caption: gold for you, red for the rival.
   const accent = isOwn ? poster.you : poster.rival;
-  const verb = kind === 'skill' ? 'used' : 'played';
+  const verb = 'used';
   const { isMobile } = useViewport();
   const dur = CARD_REVEAL_MS / 1000;
   // Once the action has resolved the overlay is only fading out; it must not
   // keep swallowing taps meant for the board underneath.
   const present = useIsPresent();
   // Desktop: anchor the reveal to the left margin so the board — where the
-  // spell is about to land — stays readable behind it. Phones center it
+  // item's effect is about to land — stays readable behind it. Phones center it
   // (no side margin to borrow).
   const anchorLeft = isMobile ? '50%' : 'clamp(170px, 20vw, 330px)';
   return (

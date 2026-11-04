@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
-import { HEROES, SPELLS, EQUIPMENT, ULTIMATES } from '@/cards';
+import { CARDS_BY_ID, HEROES, SPELLS, EQUIPMENT, ULTIMATES } from '@/cards';
 import { DeadlockGame } from '@/engine/game';
+import { heroData, heroesOf, kitAbilityIds } from '@/engine/query';
 
 function freshGame(): GameState {
   const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
@@ -94,8 +95,16 @@ describe('Abilities — every card has a registered, executable ability', () => 
   });
 });
 
+/** Every card on `pid`'s side of the board: its heroes and, worn by them, what they carry. */
+function boardCards(G: GameState, pid: PlayerID): CardInstance[] {
+  const out: CardInstance[] = [];
+  const walk = (c: CardInstance) => { out.push(c); for (const a of c.attached ?? []) walk(a); };
+  for (const c of [G.players[pid].active, ...G.players[pid].bench]) if (c) walk(c);
+  return out;
+}
+
 describe('Ultimates are kit abilities, never cards', () => {
-  it('no ultimate is ever dealt: a played-out match leaves none in a hand or a discard', async () => {
+  it('no ultimate is ever dealt: a played-out match leaves no card of one on the board, every ultimate a kit ability', async () => {
     const { Client } = await import('boardgame.io/client');
     const { enumerateAIMoves } = await import('@/ai/heuristic');
     const { configureReadyMatch } = await import('./_helpers');
@@ -115,8 +124,8 @@ describe('Ultimates are kit abilities, never cards', () => {
     }
     const G = client.getState()!.G as GameState;
     for (const pid of ['0', '1'] as PlayerID[]) {
-      const piles = [...G.players[pid].hand, ...G.players[pid].discard];
-      expect(piles.filter((c) => c.cardId.startsWith('ult_')), pid).toEqual([]);
+      expect(boardCards(G, pid).filter((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate'), pid).toEqual([]);
+      for (const h of heroesOf(G.players[pid])) expect(kitAbilityIds(h), h.cardId).toContain(heroData(h)!.ult);
     }
   });
 });

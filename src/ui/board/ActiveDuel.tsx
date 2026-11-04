@@ -87,7 +87,7 @@ export function ActiveDuel({
           background: `linear-gradient(180deg, transparent 0%, ${poster.inkFaint} 18%, ${poster.inkFaint} 82%, transparent 100%)`,
           pointerEvents: 'none',
         }} />
-        <TurnCompass isMyTurn={isMyTurn} turn={turn} phase={phase} />
+        <TurnCompass isMyTurn={isMyTurn} turn={turn} phase={phase} step={G.draft ? undefined : G.step} />
       </div>
 
       {/* My Active (right) */}

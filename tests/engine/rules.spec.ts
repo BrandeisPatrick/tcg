@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { damageUnit } from '@/engine/damage';
 import { reapDead, resolve } from '@/engine/death';
-import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch, makeAttack } from './_helpers';
+import { buyBlocked } from '@/engine/legality';
+import { findCardOnBoard, findWornItem, heroData, heroesOf, kitAbilityIds, slotCap, wornItems } from '@/engine/query';
+import { MAX_ITEMS } from '@/engine/constants';
+import { CARDS_BY_ID } from '@/cards';
+import type { CardInstance, GameState, PlayerID } from '@/engine/types';
+import { freshReadyGame, configureReadyMatch, makeAttack, readyClient, passTurn, buyItem } from './_helpers';
 
 // Client-based tests boot straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -18,12 +21,20 @@ function runMove(name: string, G: GameState, pid: PlayerID, ...args: any[]) {
   return fn({ G, ctx: { currentPlayer: pid, numPlayers: 2, turn: 1 } as any, playerID: pid, events: {} as any, random: {} as any }, ...args);
 }
 
+/** Every card on `pid`'s side of the board: its heroes and, worn by them, what they carry. */
+function boardCards(G: GameState, pid: PlayerID): CardInstance[] {
+  const out: CardInstance[] = [];
+  const walk = (c: CardInstance) => { out.push(c); for (const a of c.attached ?? []) walk(a); };
+  for (const c of [G.players[pid].active, ...G.players[pid].bench]) if (c) walk(c);
+  return out;
+}
+
 describe('rule: each hero uses its skill once per turn', () => {
   it('rejects a second use by the same hero, but not a different hero', () => {
     const G = freshG();
     const me = G.players['0'];
     const enemy = G.players['1'];
-    // Aggro deck heroes: [haze (passive), vindicta (passive), lash (skill), paige (skill)].
+    // P0's roster (TEST_ROSTERS): [haze (passive), vindicta (passive), lash (skill), paige (skill)].
     // Pick the two skill heroes — Lash + Paige — for this per-turn-cap test.
     const hero1 = me.bench[1]!;  // Lash
     const hero2 = me.bench[2]!;  // Paige
@@ -38,8 +49,7 @@ describe('rule: each hero uses its skill once per turn', () => {
   });
 
   it('the hero\'s flag clears when its turn ends, so it casts again next turn', () => {
-    const c = Client({ game: DeadlockGame, numPlayers: 2 });
-    c.start();
+    const c = readyClient(); // turn 1, its shop closed: the act step
     let g = c.getState()!.G as GameState;
     // Use a skill — Lash on bench (active Haze is passive-only).
     const hero = g.players['0'].bench[1]!;  // Lash
@@ -52,9 +62,10 @@ describe('rule: each hero uses its skill once per turn', () => {
     c.moves.endTurn?.();
     g = c.getState()!.G as GameState;
     expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(false);
-    // P0's next turn: Lash casts again (its cooldown of 1 has run out at the turn start).
-    c.moves.endTurn?.();
+    // P0's next turn, its shop closed: Lash casts again (its cooldown of 1 has run out at the turn start).
+    passTurn(c);
     g = c.getState()!.G as GameState;
+    expect(g.step).toBe('act');
     const soulsBefore = g.players['0'].souls;
     (c.moves as any).useSkill(hero.iid, g.players['1'].active!.iid);
     g = c.getState()!.G as GameState;
@@ -89,7 +100,7 @@ describe('rule: abilities are free', () => {
 });
 
 describe('rule: hero respawn after KO', () => {
-  it("a KO'd hero stays on the board as a corpse (not in discard)", () => {
+  it("a KO'd hero stays on the board as a corpse (it never leaves the board)", () => {
     const G = freshG();
     // Use P0 so we don't trigger AI auto-promote (which moves the corpse to
     // the bench). The "corpse stays on board" rule is what's under test here.
@@ -97,7 +108,7 @@ describe('rule: hero respawn after KO', () => {
     const targetIid = hero.iid;
     damageUnit(G, hero, 9999, 'pure');
     reapDead(G, G.players['0']);
-    expect(G.players['0'].discard.some((c: any) => c.iid === targetIid)).toBe(false);
+    expect(findCardOnBoard(G, targetIid)).toEqual({ owner: '0', card: hero });
     expect(G.players['0'].active?.iid).toBe(targetIid);
     expect((G.players['0'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
   });
@@ -198,13 +209,13 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
     onBegin({ G, ctx: { turn, currentPlayer: pid, numPlayers: 2 } as any, events: {} as any, random: {} as any });
   }
 
-  it('no ultimate is ever a card in hand, however late the turn or high the level', () => {
+  it('no ultimate is ever a card: it is a kit ability, and no card of one is on the board, however late the turn or high the level', () => {
     const G = freshG();
-    G.players['0'].hand = [];
     for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
     for (let t = 2; t < 12; t += 2) {
       runOnBegin(G, t, '0');
-      expect(G.players['0'].hand.filter((c) => c.cardId.startsWith('ult_')).length).toBe(0);
+      for (const h of heroesOf(G.players['0'])) expect(kitAbilityIds(h), h.cardId).toContain(heroData(h)!.ult);
+      expect(boardCards(G, '0').filter((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate')).toEqual([]);
     }
   });
 
@@ -214,7 +225,7 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
     for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
     // Nobody on the other side falls (a kill would pay a bounty).
     for (const h of [G.players['1'].active, ...G.players['1'].bench]) if (h) h.hp = h.hpMax = 50;
-    // Aggro deck heroes: Haze, Vindicta, Lash, Paige → their ultimates (Vindicta's needs a target).
+    // P0's roster: Haze, Vindicta, Lash, Paige → their ultimates (Vindicta's needs a target).
     const [haze, vindicta, lash, paige] = [G.players['0'].active!, ...G.players['0'].bench] as NonNullable<typeof G.players['0']['active']>[];
     expect(runMove('useSkill', G, '0', haze.iid, undefined, 'eff_ult_haze')).not.toBe('INVALID_MOVE');
     expect(runMove('useSkill', G, '0', vindicta.iid, G.players['1'].active!.iid, 'eff_ult_vindicta')).not.toBe('INVALID_MOVE');
@@ -225,57 +236,35 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
 });
 
 // ============================================================================
-// Equipment cap = 3 per hero (the 4th attach must specify a discard target)
+// Item cap = MAX_ITEMS (3) per hero: a full hero buys no 4th, it sells one first
 // ============================================================================
-describe('rule: equipment cap forces a discard pick', () => {
-  it('4th attach without discardIid is INVALID_MOVE', () => {
-    const G = freshG();
+describe('rule: a full hero buys nothing more until it sells', () => {
+  /** P0's Active, in the shop step with souls to spare, wearing three bought items. */
+  function full() {
+    const G = freshReadyGame({ step: 'shop' });
     G.players['0'].souls = 99;
     const hero = G.players['0'].active!;
-    const ids = ['extra_spirit', 'extra_health', 'restorative_shot', 'extended_magazine'];
-    let lastResult: any;
-    for (const cardId of ids) {
-      const newCard = {
-        iid: `tmp-${cardId}`, cardId, ownerId: '0' as PlayerID, zone: 'hand',
-        hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [],
-        exhausted: false, skillUsedThisTurn: false,
-      } as any;
-      G.players['0'].hand.push(newCard);
-      lastResult = runMove('playCard', G, '0', newCard.iid, hero.iid);
-    }
-    expect(hero.attached?.length).toBe(3);
-    expect(lastResult).toBe('INVALID_MOVE');
+    for (const itemId of ['extra_spirit', 'extra_health', 'restorative_shot']) buyItem(G, '0', itemId, hero);
+    return { G, hero };
+  }
+
+  it('a 4th buy for a hero at the cap is INVALID_MOVE ("full")', () => {
+    const { G, hero } = full();
+    expect(slotCap(G, '0')).toBe(MAX_ITEMS);
+    expect(wornItems(hero).length).toBe(3);
+    expect(buyBlocked(G, '0', 'extended_magazine', hero.iid)).toBe('full');
+    expect(runMove('buy', G, '0', 'extended_magazine', hero.iid)).toBe('INVALID_MOVE');
+    expect(wornItems(hero).length).toBe(3);
   });
 
-  it('4th attach WITH discardIid succeeds and discards the named item', () => {
-    const G = freshG();
-    G.players['0'].souls = 99;
-    const hero = G.players['0'].active!;
-    // Fill to cap with three pieces.
-    for (const cardId of ['extra_spirit', 'extra_health', 'restorative_shot']) {
-      const c = {
-        iid: `pre-${cardId}`, cardId, ownerId: '0' as PlayerID, zone: 'hand',
-        hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [],
-        exhausted: false, skillUsedThisTurn: false,
-      } as any;
-      G.players['0'].hand.push(c);
-      runMove('playCard', G, '0', c.iid, hero.iid);
-    }
-    expect(hero.attached?.length).toBe(3);
-    const discardTarget = hero.attached![0];
-    // 4th attach naming the first item as the discard.
-    const fourth = {
-      iid: 'fourth', cardId: 'extended_magazine', ownerId: '0' as PlayerID, zone: 'hand',
-      hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [],
-      exhausted: false, skillUsedThisTurn: false,
-    } as any;
-    G.players['0'].hand.push(fourth);
-    const r = runMove('playCard', G, '0', fourth.iid, hero.iid, discardTarget.iid);
-    expect(r).not.toBe('INVALID_MOVE');
-    expect(hero.attached?.length).toBe(3);
-    // The picked item moved to discard.
-    expect(hero.attached!.find((e) => e.iid === discardTarget.iid)).toBeUndefined();
-    expect(G.players['0'].discard.some((c) => c.iid === discardTarget.iid)).toBe(true);
+  it('selling a worn item frees its slot: the 4th buy then succeeds and the sold item is gone', () => {
+    const { G, hero } = full();
+    const sold = wornItems(hero)[0];
+    expect(runMove('sell', G, '0', sold.iid)).not.toBe('INVALID_MOVE');
+    expect(findWornItem(G, sold.iid)).toBeNull();
+    expect(buyBlocked(G, '0', 'extended_magazine', hero.iid)).toBeNull();
+    expect(runMove('buy', G, '0', 'extended_magazine', hero.iid)).not.toBe('INVALID_MOVE');
+    expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'extended_magazine']);
   });
 });
 

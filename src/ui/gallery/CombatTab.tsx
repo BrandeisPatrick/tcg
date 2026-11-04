@@ -23,10 +23,10 @@ export function CombatTab() {
       blurb: 'Full screen. A spell or equipment played from hand, or a hero using a skill: the card sits on screen for about 1.7 s with a caption.',
       body: (
         <>
-          <CardPlayTrigger label="You — Spell" cardId="cold_front" caster="P0" />
+          <CardPlayTrigger label="You — Active item" cardId="cold_front" caster="P0" />
           <CardPlayTrigger label="You — Equipment" cardId="restorative_shot" caster="P0" />
           <CardPlayTrigger label="You — Skill" cardId="hero_paige" caster="P0" kind="skill" />
-          <CardPlayTrigger label="Rival — Spell" cardId="disarming_hex" caster="P1" />
+          <CardPlayTrigger label="Rival — Active item" cardId="disarming_hex" caster="P1" />
           <CardPlayTrigger label="Rival — Equipment" cardId="weapon_shielding" caster="P1" />
           <CardPlayTrigger label="Rival — Skill" cardId="hero_kelvin" caster="P1" kind="skill" />
         </>
@@ -97,8 +97,8 @@ function AutoExit({ ms, onDone, children }: { ms: number; onDone: () => void; ch
   return <>{children}</>;
 }
 
-function CardPlayTrigger({ label, cardId, caster, kind = 'play' }: {
-  label: string; cardId: string; caster: 'P0' | 'P1'; kind?: 'play' | 'skill';
+function CardPlayTrigger({ label, cardId, caster, kind = 'item' }: {
+  label: string; cardId: string; caster: 'P0' | 'P1'; kind?: 'item' | 'skill';
 }) {
   const [active, setActive] = useState(false);
   return (

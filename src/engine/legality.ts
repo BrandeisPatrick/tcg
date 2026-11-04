@@ -13,15 +13,18 @@
  * modules that act (engine.ts) and the resolver tests call directly.
  */
 import '@/abilities';
-import type { AbilityId, CardInstance, GameState, PlayerID } from './types';
-import { CARDS_BY_ID } from '@/cards';
+import type { AbilityId, CardId, CardInstance, GameState, PlayerID } from './types';
+import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { Action } from './engine';
 import { getAbility } from './registry';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, ULT_UNLOCK_LEVEL } from './constants';
+import { RETREAT_COST, ULT_UNLOCK_LEVEL } from './constants';
 import {
-  attackPower, findCardOnBoard, hasReach, isBlocked, isRespawning, isUntargetable, kitAbilityIds, liveBoardCards, otherPlayer,
-  resolveSkill, retreatDiscount, stepInCandidates, targetsFor, wornEquipment,
+  attackPower, findCardOnBoard, findWornItem, hasReach, isBlocked, isRespawning, isUntargetable, itemCooldown, itemPrice,
+  kitAbilityIds, liveBoardCards, otherPlayer, resolveSkill, retreatDiscount, slotCap, stepInCandidates, targetsFor,
+  wornActives, wornItems,
 } from './query';
+import { marketItems, onSale } from './market';
+import { seatToMove } from './rounds';
 
 // ---------- The Active's attack ----------
 
@@ -164,82 +167,150 @@ export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, ta
   return targets.some((t) => t.iid === targetIid) ? null : 'target';
 }
 
-// ---------- Playing a card ----------
+// ---------- Active items ----------
 
-export type PlayBlock = 'notInHand' | 'actOver' | 'souls' | 'target' | 'duplicate' | 'full' | 'discard';
+export type ActivateBlock = 'noItem' | 'passive' | 'actOver' | 'down' | 'used' | 'status' | 'charges' | 'cooldown' | 'target';
 
-/** Souls a card costs to play: the instance's own override first, else its
- *  printed cost. Heroes and ultimates are never played. */
-export function cardCost(card: CardInstance): number {
-  const data = CARDS_BY_ID[card.cardId];
-  if (data?.type === 'spell' || data?.type === 'equipment') {
-    return card.costOverride ?? data.cost ?? 0;
-  }
-  return 0;
-}
-
-/** What a card in hand may be aimed at, or 'none' when there is nothing to
- *  aim: a spell that takes no target. Equipment goes on one of your living
- *  heroes. Anything else (an ultimate card is never held) has no targets. */
-export function playTargets(G: GameState, pid: PlayerID, card: CardInstance): CardInstance[] | 'none' {
-  const data = CARDS_BY_ID[card.cardId];
-  if (data?.type === 'equipment') return targetsFor(G, pid, 'allyHero');
+/** What the active item `item`, worn by `bearer`, may be aimed at: the live
+ *  board cards its first ability's filter allows (as the card it was always
+ *  read from), or 'none' for one that takes no target. A passive item has []. */
+export function activateTargets(G: GameState, pid: PlayerID, item: CardInstance, bearer: CardInstance): CardInstance[] | 'none' {
+  const data = itemCard(item.cardId);
   if (data?.type !== 'spell') return [];
   const filter = getAbility(data.abilities[0])?.target ?? 'noTarget';
   if (filter === 'noTarget') return 'none';
-  return targetsFor(G, pid, filter);
+  return targetsFor(G, pid, filter, bearer);
 }
 
 /**
- * Why `pid` cannot play `cardIid` right now, or null when they can. In hand,
- * before the turn's attack has ended the Act, paid for, and aimed at something
- * legal:
- *  - a spell takes the target its first ability's filter allows (a card that
- *    takes no target ignores one);
- *  - equipment goes on one of your living heroes ('target'), not one that
- *    already wears it ('duplicate'), and a hero at the cap needs a worn item
- *    named to discard — 'full' when none is named, 'discard' when it is not
- *    worn equipment. (A merged Rem is not equipment: she takes no slot and
- *    cannot be named.)
- * Without `targetIid` the question is whether the card is playable on SOME
- * target; a discard is then assumed to be available.
+ * Why `pid` cannot use the active item `itemIid` right now, or null when it
+ * can: an item one of its heroes in a slot wears, an active one, in a turn
+ * whose attack has not ended the Act, its bearer standing, not yet having used
+ * its one ability this turn (skill, item and ultimate share it), free of the
+ * statuses that lock abilities, the item ready — off cooldown, or for hard
+ * crowd control with a charge left — and a legal target. Whose turn it is, and
+ * the step, are the caller's question (`blocked`). Checked in this order:
+ *  - 'noItem'   no hero of `pid` in a slot wears it.
+ *  - 'passive'  it is a passive item: nothing to use.
+ *  - 'actOver'  the turn's attack has been made: it ends the Act.
+ *  - 'down'     its bearer is a corpse on the respawn timer.
+ *  - 'used'     its bearer has used an ability this turn.
+ *  - 'status'   a status locks its bearer's abilities (`isBlocked(…, 'skill')`).
+ *  - 'charges'  hard crowd control with no charge left this match.
+ *  - 'cooldown' it is still cooling down.
+ *  - 'target'   nothing legal to aim it at — or `targetIid` is not.
  */
-export function playBlocked(
-  G: GameState, pid: PlayerID, cardIid: string, targetIid?: string, discardIid?: string,
-): PlayBlock | null {
-  const card = G.players[pid].hand.find((c) => c.iid === cardIid);
-  const data = card && CARDS_BY_ID[card.cardId];
-  if (!card || !data) return 'notInHand';
+export function activateBlocked(G: GameState, pid: PlayerID, itemIid: string, targetIid?: string): ActivateBlock | null {
+  const worn = findWornItem(G, itemIid, pid);
+  if (!worn) return 'noItem';
+  const { bearer, item } = worn;
+  const data = itemCard(item.cardId);
+  if (data?.type !== 'spell') return 'passive';
   if (G.attackUsed) return 'actOver';
-  if (G.players[pid].souls < cardCost(card)) return 'souls';
+  if (isRespawning(bearer)) return 'down';
+  if (bearer.skillUsedThisTurn) return 'used';
+  if (isBlocked(bearer, 'skill')) return 'status';
+  if (data.hardCC) {
+    if ((item.charges ?? 0) <= 0) return 'charges';
+  } else if (itemCooldown(item) > 0) return 'cooldown';
+  const targets = activateTargets(G, pid, item, bearer);
+  if (targets === 'none') return null;
+  if (targetIid === undefined) return targets.length > 0 ? null : 'target';
+  return targets.some((t) => t.iid === targetIid) ? null : 'target';
+}
 
-  if (data.type === 'spell') {
-    const filter = getAbility(data.abilities[0])?.target ?? 'noTarget';
-    if (filter === 'noTarget') return null;
-    const targets = targetsFor(G, pid, filter);
-    if (targetIid === undefined) return targets.length > 0 ? null : 'target';
-    return targets.some((t) => t.iid === targetIid) ? null : 'target';
-  }
+// ---------- The shop ----------
 
-  if (data.type === 'equipment') {
-    const heroes = playTargets(G, pid, card) as CardInstance[];
-    const wears = (hero: CardInstance) => wornEquipment(hero).some((eq) => eq.cardId === card.cardId);
-    if (targetIid === undefined) {
-      if (heroes.length === 0) return 'target';
-      return heroes.some((h) => !wears(h)) ? null : 'duplicate';
-    }
-    const hero = heroes.find((h) => h.iid === targetIid);
-    if (!hero) return 'target';
-    if (wears(hero)) return 'duplicate';
-    const worn = wornEquipment(hero);
-    if (worn.length >= MAX_EQUIPMENT_PER_HERO) {
-      if (!discardIid) return 'full';
-      if (!worn.some((eq) => eq.iid === discardIid)) return 'discard';
-    }
-    return null;
-  }
+export type ShopBlock = 'notYourTurn' | 'notShop' | 'noItem' | 'notOnSale' | 'noHero' | 'duplicate' | 'full' | 'souls' | 'notWorn' | 'same';
 
-  return 'target'; // a hero or an ultimate card has nothing to aim at and nowhere to go
+/** Why the shop is shut to `pid`: not its turn (the draft included), or its
+ *  turn is past the shop step. */
+function shopShut(G: GameState, pid: PlayerID): 'notYourTurn' | 'notShop' | null {
+  if (G.draft || seatToMove(G) !== pid) return 'notYourTurn';
+  if (G.step !== 'shop') return 'notShop';
+  return null;
+}
+
+/** `pid`'s hero in a slot (the Active or a bench hero, standing or on the
+ *  respawn timer) with this iid. */
+function slottedHero(G: GameState, pid: PlayerID, heroIid: string): CardInstance | undefined {
+  const found = findCardOnBoard(G, heroIid);
+  return found && found.owner === pid ? found.card : undefined;
+}
+
+/** The worn item buying `itemId` for `hero` would replace: the component it
+ *  upgrades from (`upgradesFrom`), when the hero wears it. */
+export function upgradeComponent(hero: CardInstance, itemId: CardId): CardInstance | undefined {
+  const from = itemCard(itemId)?.upgradesFrom;
+  return from ? wornItems(hero).find((it) => it.cardId === from) : undefined;
+}
+
+/** Souls `itemId` costs bought for `hero`: its price, or — an upgrade of an
+ *  item the hero wears — the difference. */
+export function buyPrice(hero: CardInstance, itemId: CardId): number {
+  const component = upgradeComponent(hero, itemId);
+  return Math.max(0, itemPrice(itemId) - (component ? itemPrice(component.cardId) : 0));
+}
+
+/** Souls selling `item` brings back: what was paid for it when it was bought
+ *  this turn, else half its price, rounded down. */
+export function sellRefund(G: GameState, item: CardInstance): number {
+  if (item.boughtOnTurn === G.turnNumber) return item.paid ?? itemPrice(item.cardId);
+  return Math.floor(itemPrice(item.cardId) / 2);
+}
+
+/**
+ * Why `pid` cannot buy `itemId` for its hero `heroIid` right now, or null when
+ * it can. Checked in this order:
+ *  - 'notYourTurn' it is not `pid`'s turn.
+ *  - 'notShop'   the shop step is over (`closeShop`).
+ *  - 'noItem'    no item has that id.
+ *  - 'notOnSale' this match's market does not sell it.
+ *  - 'noHero'    no hero of `pid` in a slot has that iid (bench and corpses count).
+ *  - 'duplicate' the hero already wears one.
+ *  - 'full'      the hero's slots are full (`slotCap`) and it is no upgrade of
+ *                an item the hero wears.
+ *  - 'souls'     `pid` has fewer souls than `buyPrice`.
+ */
+export function buyBlocked(G: GameState, pid: PlayerID, itemId: CardId, heroIid: string): ShopBlock | null {
+  const shut = shopShut(G, pid);
+  if (shut) return shut;
+  if (!itemCard(itemId)) return 'noItem';
+  if (!onSale(G, itemId)) return 'notOnSale';
+  const hero = slottedHero(G, pid, heroIid);
+  if (!hero) return 'noHero';
+  if (wornItems(hero).some((it) => it.cardId === itemId)) return 'duplicate';
+  if (!upgradeComponent(hero, itemId) && wornItems(hero).length >= slotCap(G, pid)) return 'full';
+  if (G.players[pid].souls < buyPrice(hero, itemId)) return 'souls';
+  return null;
+}
+
+/** Why `pid` cannot sell its item `itemIid` now: the shop is shut to it, or
+ *  no hero of its in a slot wears it ('notWorn'). */
+export function sellBlocked(G: GameState, pid: PlayerID, itemIid: string): ShopBlock | null {
+  return shopShut(G, pid) ?? (findWornItem(G, itemIid, pid) ? null : 'notWorn');
+}
+
+/** Why `pid` cannot move its item `itemIid` to its hero `toHeroIid` now: the
+ *  shop is shut, it wears no such item ('notWorn'), no such hero ('noHero'),
+ *  the item is already there ('same'), the hero wears one ('duplicate'), or
+ *  its slots are full ('full'). */
+export function moveItemBlocked(G: GameState, pid: PlayerID, itemIid: string, toHeroIid: string): ShopBlock | null {
+  const shut = shopShut(G, pid);
+  if (shut) return shut;
+  const worn = findWornItem(G, itemIid, pid);
+  if (!worn) return 'notWorn';
+  const to = slottedHero(G, pid, toHeroIid);
+  if (!to) return 'noHero';
+  if (to.iid === worn.bearer.iid) return 'same';
+  if (wornItems(to).some((it) => it.cardId === worn.item.cardId)) return 'duplicate';
+  if (wornItems(to).length >= slotCap(G, pid)) return 'full';
+  return null;
+}
+
+/** Why `pid` cannot close the shop now: it is not its turn, or it is closed. */
+export function closeShopBlocked(G: GameState, pid: PlayerID): ShopBlock | null {
+  return shopShut(G, pid);
 }
 
 // ---------- Moving heroes ----------
@@ -316,7 +387,7 @@ export function promoteBlocked(G: GameState, benchIid: string): PromoteBlock | n
   return 'notOnBench';
 }
 
-// ---------- The draft and the opening mulligan ----------
+// ---------- The draft ----------
 
 type DraftBlock = 'noDraft' | 'notYourPick' | 'notInPool';
 
@@ -329,22 +400,25 @@ export function draftPickBlocked(G: GameState, pid: PlayerID, heroId: string): D
   return null;
 }
 
-export function mulliganBlocked(G: GameState): 'noMulligan' | null {
-  return G.mulliganPending ? null : 'noMulligan';
-}
-
 // ---------- One question for every action ----------
+
+/** The moves of the shop step. */
+const SHOP_MOVES: ReadonlySet<Action['type']> = new Set(['buy', 'sell', 'moveItem', 'closeShop']);
 
 /** Why `a` cannot be made by `pid` right now, or null when it can — the
  *  dispatch `perform` runs before it mutates anything. An action must name a
- *  target whenever the ability or card takes one (the per-move functions above
+ *  target whenever the ability or item takes one (the per-move functions above
  *  also answer the looser "is there some target" when it is left off).
  *
  *  While a promotion is owed (`G.pendingPromotion`: a seat's Active has fallen
  *  and a bench hero can step up) the only legal action is that promotion — for
  *  that seat's bench, made from either seat — so nothing, the end of the turn
- *  included, happens around a corpse in the lane. Once the turn's attack is
- *  made ('actOver') nothing is legal but ending the turn and a promotion. */
+ *  included, happens around a corpse in the lane. The turn's two steps split
+ *  the rest: in the shop step only the shop's moves (`buy`, `sell`, `moveItem`,
+ *  `closeShop`, for the player whose turn it is) are legal, in the act step
+ *  everything else ('shopOpen' / 'notShop'). `endTurn` is legal in either. Once
+ *  the turn's attack is made ('actOver') nothing is legal but ending the turn
+ *  and a promotion. */
 export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   if (!G.players[pid]) return 'noPlayer';
   if (G.pendingPromotion) {
@@ -353,6 +427,7 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
     if (!owed) return 'promotionOwed';
   }
   if (G.attackUsed && a.type !== 'endTurn' && a.type !== 'promoteToActive' && a.type !== 'attack') return 'actOver';
+  if (!G.draft && G.step === 'shop' && !SHOP_MOVES.has(a.type) && a.type !== 'endTurn' && a.type !== 'promoteToActive') return 'shopOpen';
   switch (a.type) {
     case 'attack':
       return G.draft ? 'draft' : attackBlocked(G, pid, a.targetIid);
@@ -363,66 +438,86 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
       if (why) return why;
       return a.targetIid === undefined && skillTargets(G, pid, found.card, a.skillId) !== 'none' ? 'target' : null;
     }
-    case 'playCard': {
-      const why = playBlocked(G, pid, a.cardIid, a.targetIid, a.discardIid);
+    case 'activate': {
+      const why = activateBlocked(G, pid, a.itemIid, a.targetIid);
       if (why) return why;
-      const card = G.players[pid].hand.find((c) => c.iid === a.cardIid)!;
-      return a.targetIid === undefined && playTargets(G, pid, card) !== 'none' ? 'target' : null;
+      const { item, bearer } = findWornItem(G, a.itemIid, pid)!;
+      return a.targetIid === undefined && activateTargets(G, pid, item, bearer) !== 'none' ? 'target' : null;
     }
     case 'moveHero':
       return moveBlocked(G, pid, a.fromSlot, a.toSlot);
     case 'promoteToActive':
       return promoteBlocked(G, a.benchIid);
+    case 'buy':
+      return buyBlocked(G, pid, a.itemId, a.heroIid);
+    case 'sell':
+      return sellBlocked(G, pid, a.itemIid);
+    case 'moveItem':
+      return moveItemBlocked(G, pid, a.itemIid, a.toHeroIid);
+    case 'closeShop':
+      return closeShopBlocked(G, pid);
     case 'endTurn':
       return null;
+    default:
+      return 'unknown';
   }
 }
 
 /**
- * Every action `pid` could make right now. In order: the Active's attack, if
- * open — once per hero it may swing at (`attackTargets`), the first as the bare
- * action (a bare `attack` swings at it) and any others naming theirs; each
- * card in hand, in hand order, on each of its legal targets in `targetsFor`
- * order (equipment on a hero at the cap is offered once per item it could
- * discard — the choice of which is the player's); each living hero's kit
- * abilities (`kitAbilityIds`: its skills, its ultimate, a borrowed ultimate), in
- * board order and the kit's own order, each on each of its targets (every
+ * Every action `pid` could make right now. In the shop step of its turn: each
+ * item on sale for each of its heroes in a slot, in market and board order;
+ * each worn item's sale, and its move to each other hero; closing the shop.
+ * In the act step: the Active's attack, if open — once per hero it may swing
+ * at (`attackTargets`), the first as the bare action (a bare `attack` swings
+ * at it) and any others naming theirs; each living hero's active items, in
+ * board and worn order, each on each of its targets; each living hero's kit
+ * abilities (`kitAbilityIds`: its skills, its ultimate, a borrowed ultimate),
+ * in board order and the kit's own order, each on each of its targets (every
  * action names its `skillId`); retreats from the bench in `stepInCandidates`
- * order (before the attack: the hero who steps in may make it); promotions
- * (either seat's: `pid` may promote the seat that owes one); and ending the turn
- * last. Everything listed passes `blocked`, so while a promotion is owed that is
- * all there is, and once the attack is made only the end of the turn is left.
+ * order (before the attack: the hero who steps in may make it). Then, in
+ * either step, promotions (either seat's: `pid` may promote the seat that owes
+ * one) and ending the turn last. Everything listed passes `blocked`, so while
+ * a promotion is owed that is all there is, and once the attack is made only
+ * the end of the turn is left.
  */
 export function legalActions(G: GameState, pid: PlayerID): Action[] {
   const ps = G.players[pid];
   const out: Action[] = [];
   const offer = (a: Action) => { if (blocked(G, pid, a) === null) out.push(a); };
 
-  attackTargets(G, pid).forEach((t, i) => offer(i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }));
+  if (G.step === 'shop') {
+    if (!G.draft && seatToMove(G) === pid) {
+      const heroes = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c);
+      for (const itemId of marketItems(G)) for (const h of heroes) offer({ type: 'buy', itemId, heroIid: h.iid });
+      for (const h of heroes) {
+        for (const it of wornItems(h)) {
+          offer({ type: 'sell', itemIid: it.iid });
+          for (const to of heroes) if (to !== h) offer({ type: 'moveItem', itemIid: it.iid, toHeroIid: to.iid });
+        }
+      }
+      offer({ type: 'closeShop' });
+    }
+  } else {
+    attackTargets(G, pid).forEach((t, i) => offer(i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }));
 
-  for (const card of ps.hand) {
-    const targets = playTargets(G, pid, card);
-    if (targets === 'none') { offer({ type: 'playCard', cardIid: card.iid }); continue; }
-    const equipment = CARDS_BY_ID[card.cardId]?.type === 'equipment';
-    for (const t of targets) {
-      const worn = wornEquipment(t);
-      if (equipment && worn.length >= MAX_EQUIPMENT_PER_HERO) {
-        for (const eq of worn) offer({ type: 'playCard', cardIid: card.iid, targetIid: t.iid, discardIid: eq.iid });
-      } else {
-        offer({ type: 'playCard', cardIid: card.iid, targetIid: t.iid });
+    for (const hero of liveBoardCards(ps)) {
+      for (const item of wornActives(hero)) {
+        const targets = activateTargets(G, pid, item, hero);
+        if (targets === 'none') { offer({ type: 'activate', itemIid: item.iid }); continue; }
+        for (const t of targets) offer({ type: 'activate', itemIid: item.iid, targetIid: t.iid });
       }
     }
-  }
 
-  for (const hero of liveBoardCards(ps)) {
-    for (const skillId of kitAbilityIds(hero)) {
-      const targets = skillTargets(G, pid, hero, skillId);
-      if (targets === 'none') { offer({ type: 'useSkill', heroIid: hero.iid, skillId }); continue; }
-      for (const t of targets) offer({ type: 'useSkill', heroIid: hero.iid, skillId, targetIid: t.iid });
+    for (const hero of liveBoardCards(ps)) {
+      for (const skillId of kitAbilityIds(hero)) {
+        const targets = skillTargets(G, pid, hero, skillId);
+        if (targets === 'none') { offer({ type: 'useSkill', heroIid: hero.iid, skillId }); continue; }
+        for (const t of targets) offer({ type: 'useSkill', heroIid: hero.iid, skillId, targetIid: t.iid });
+      }
     }
-  }
 
-  for (const b of stepInCandidates(ps)) offer({ type: 'moveHero', fromSlot: (ps.bench.indexOf(b) + 1) as 1 | 2 | 3, toSlot: 0 });
+    for (const b of stepInCandidates(ps)) offer({ type: 'moveHero', fromSlot: (ps.bench.indexOf(b) + 1) as 1 | 2 | 3, toSlot: 0 });
+  }
   // A promotion may be made for either seat: the one owed is on the other side of the table
   // when its Active fell to this seat's attack.
   for (const seat of ['0', '1'] as PlayerID[]) {

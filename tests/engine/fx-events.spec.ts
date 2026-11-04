@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
-import { freshReadyGame, makeAttack, makeHero, configureReadyMatch } from './_helpers';
+import { freshReadyGame, makeAttack, makeHero, configureReadyMatch, readyClient } from './_helpers';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { withCast } from '@/engine/castContext';
@@ -284,19 +284,15 @@ describe('board FX stream — casts and the turn flush', () => {
   beforeAll(configureReadyMatch);
 
   it('useSkill pushes the cast first, then its effects; the end of the turn flushes the stream', () => {
-    const client = Client({ game: DeadlockGame, numPlayers: 2 });
-    client.start();
-    // Give P0 a caster: swap Lash (bench, enemyAny skill) into the Active slot
-    // via the promotion-free path — build state directly through moves is
-    // awkward, so read the bench and use the skill from the bench-only-safe
-    // hero list. Lash's Ground Strike targets any enemy and can be cast from
-    // the Active slot only, so retreat is not needed: use P0's Active (Haze)
-    // has no skill — instead pick Paige's Plot Armor (allyHero) from bench?
-    // Skills are Active-only, so move Lash up (retreat costs 2 souls: give them).
+    // Seat 0's turn 1, past its shop step: abilities are made in the act step.
+    const client = readyClient();
+    // Give P0 a caster in the Active slot: Haze has no skill, so Lash (her
+    // skill aims at any enemy) steps up from the bench by a Retreat, which
+    // costs a soul: fund it.
     let s = client.getState()!;
     let G = s.G as GameState;
     const lash = G.players['0'].bench.find((b) => b?.cardId === 'hero_lash')!;
-    // Fund the retreat + the skill.
+    // Fund the retreat (the skill is free).
     (client as any).store.dispatch({ type: 'UPDATE', state: { ...s, G: { ...G, players: { ...G.players, '0': { ...G.players['0'], souls: 5 } } } } });
     client.moves.moveHero!(lash.slot, 0);
     s = client.getState()!; G = s.G as GameState;

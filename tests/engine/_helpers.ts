@@ -1,11 +1,15 @@
-import type { GameState, CardInstance, PlayerID } from '@/engine/types';
+import { Client } from 'boardgame.io/client';
+import type { CardId, GameState, CardInstance, PlayerID } from '@/engine/types';
+import { DeadlockGame } from '@/engine/game';
 import { buildPlayer } from '@/engine/actions/setup';
-import { allocatorFor, newCounters } from '@/engine/ids';
+import { allocatorFor, allocatorOf, newCounters } from '@/engine/ids';
 import { INVALID, perform } from '@/engine/engine';
 import { blocked } from '@/engine/legality';
-import { STARTER_DECK_PLAYER, STARTER_DECK_AI } from '@/decks/starter';
-import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
-import { CARDS_BY_ID } from '@/cards';
+import { findWornItem } from '@/engine/query';
+import { addSignatures, openingMarket } from '@/engine/market';
+import { attachItem, makeInstance, syncVitalitySpike } from '@/engine/instances';
+import { CARDS_BY_ID, itemCard } from '@/cards';
+import { HARD_CC_CHARGES } from '@/engine/constants';
 import { setMatchConfig } from '@/storage/matchConfig';
 
 let testIids = 1;
@@ -18,26 +22,34 @@ export function nextTestIid(prefix = 't'): string {
   return `${prefix}${testIids++}`;
 }
 
+/** The two rosters the engine tests were written against: seat 0 Haze
+ *  (Active), Vindicta, Lash, Paige; seat 1 Abrams (Active), Dynamo, Kelvin,
+ *  Seven. */
+export const TEST_ROSTERS: Record<PlayerID, CardId[]> = {
+  '0': ['hero_haze', 'hero_vindicta', 'hero_lash', 'hero_paige'],
+  '1': ['hero_abrams', 'hero_dynamo', 'hero_kelvin', 'hero_seven'],
+};
+
+/** The seed the test games draw their market from. */
+export const TEST_SEED = 1;
+
 /**
- * Battle-ready GameState with both rosters already on the board (no draft).
- *
- * Reproduces the historical default the engine tests were written against:
- *   P0 = starter Aggro — Haze (active), Vindicta / Lash / Paige (bench)
- *   P1 = starter Control — Abrams (active), Dynamo / Kelvin / Seven (bench)
- *
- * It is P0's first turn as the second mover (the pie rule: P1 took engine
- * turn 1), so P0 may attack. `setup()` itself returns empty players + a
+ * Battle-ready GameState with both rosters already on the board (no draft),
+ * in the act step of P0's first turn as the second mover (the pie rule: P1
+ * took engine turn 1), so P0 may attack, use abilities and items, and retreat.
+ * Nobody wears anything and nobody has souls; the market is TEST_SEED's, both
+ * rosters' signatures on sale. `setup()` itself returns empty players + a
  * pending draft, so tests that read `players['0'].active` must build a ready
- * state via this helper instead.
+ * state via this helper instead. Pass `{ step: 'shop' }` for the shop step.
  */
-export function freshReadyGame(): GameState {
+export function freshReadyGame(opts: { step?: GameState['step'] } = {}): GameState {
   const counters = newCounters();
   const ids = allocatorFor(counters);
-  return {
+  const G: GameState = {
     counters,
     players: {
-      '0': buildPlayer(ids, '0', STARTER_DECK_PLAYER.heroes, AI_DECKS_BY_NAME.aggro),
-      '1': buildPlayer(ids, '1', STARTER_DECK_AI.heroes, AI_DECKS_BY_NAME.control),
+      '0': buildPlayer(ids, '0', TEST_ROSTERS['0']),
+      '1': buildPlayer(ids, '1', TEST_ROSTERS['1']),
     },
     // Turn 2, P0's: the first mover (P1) forgoes first strike on turn 1, P0 may attack.
     turnNumber: 2,
@@ -46,32 +58,106 @@ export function freshReadyGame(): GameState {
     log: [{ turn: 1, text: 'Battle begins.' }],
     draft: null,
     draftTurnsOffset: 0,
-    mulliganPending: false,
+    seed: TEST_SEED,
+    market: openingMarket(TEST_SEED),
+    step: opts.step ?? 'act',
     attackUsed: false,
     retreatUsed: false,
     action: null,
     fx: [],
-  } as unknown as GameState;
+  };
+  for (const id of [...TEST_ROSTERS['0'], ...TEST_ROSTERS['1']]) addSignatures(G, id);
+  return G;
+}
+
+/**
+ * Put the item `itemId` on `hero` directly, as if bought earlier: its bonus on
+ * the hero, the Vitality spike synced, an active ready to use (no cooldown) —
+ * or, with `cooldown`, cooling for that many own turns — and a hard crowd-control
+ * active with its full charges. No souls, no market, no step: for tests that
+ * need a hero wearing something. Returns the item instance.
+ */
+export function giveItem(G: GameState, hero: CardInstance, itemId: CardId, opts: { cooldown?: number } = {}): CardInstance {
+  const data = itemCard(itemId);
+  if (!data) throw new Error(`not an item: ${itemId}`);
+  const item = makeInstance(allocatorOf(G), itemId, hero.ownerId, 'equipment');
+  if (data.type === 'spell') {
+    if (data.hardCC) item.charges = HARD_CC_CHARGES;
+    else if (opts.cooldown) item.cooldowns = { [itemId]: opts.cooldown };
+  }
+  attachItem(hero, item);
+  syncVitalitySpike(hero);
+  return item;
+}
+
+/**
+ * Give `bearer` (left out: `pid`'s Active) the active item `itemId`, ready
+ * (`giveItem`), and use it as `pid` — aimed at `targetIid` when it takes a
+ * target — through the engine's front door: the bearer's one ability of the
+ * turn, in the act step. Throws, naming the reason, when the engine refuses.
+ * Returns the item instance (now cooling down, or a charge spent).
+ */
+export function useItem(G: GameState, pid: PlayerID, itemId: CardId, targetIid?: string, bearer?: CardInstance): CardInstance {
+  const hero = bearer ?? G.players[pid].active;
+  if (!hero) throw new Error(`P${pid} has no Active to wear ${itemId}`);
+  const item = giveItem(G, hero, itemId);
+  const a = { type: 'activate' as const, itemIid: item.iid, targetIid };
+  const why = blocked(G, pid, a);
+  if (perform(G, pid, a) === INVALID) throw new Error(`${itemId} was refused: ${why}`);
+  return item;
+}
+
+/**
+ * Buy `itemId` for `hero` as `pid` through the engine's front door (the shop
+ * step of `pid`'s turn, souls enough). Throws, naming the reason, when the
+ * engine refuses. Returns the item instance the hero now wears.
+ */
+export function buyItem(G: GameState, pid: PlayerID, itemId: CardId, hero: CardInstance): CardInstance {
+  const a = { type: 'buy' as const, itemId, heroIid: hero.iid };
+  const why = blocked(G, pid, a);
+  if (perform(G, pid, a) === INVALID) throw new Error(`buying ${itemId} was refused: ${why}`);
+  const item = [...(hero.attached ?? [])].reverse().find((it) => it.cardId === itemId);
+  if (!item || !findWornItem(G, item.iid, pid)) throw new Error(`${itemId} is not on ${hero.cardId} after the buy`);
+  return item;
 }
 
 /**
  * Make the engine's `setup()` build a battle-ready match (no draft) so a
  * boardgame.io Client boots straight into turn 1 with both boards populated.
  * Uses the story branch (which bypasses the draft) with a zero stat buff so it
- * behaves like a normal match. Call in beforeAll for Client-based specs.
+ * behaves like a normal match, and TEST_SEED for the market. The first turn
+ * opens in its shop step. Call in beforeAll for Client-based specs.
  */
 export function configureReadyMatch(): void {
   setMatchConfig({
-    playerDeck: [],
     heroPreferences: [null, null, null, null],
+    seed: TEST_SEED,
     story: {
-      playerHeroes: STARTER_DECK_PLAYER.heroes,
-      playerDeck: AI_DECKS_BY_NAME.aggro,
-      enemyHeroes: STARTER_DECK_AI.heroes,
-      enemyDeck: AI_DECKS_BY_NAME.control,
+      playerHeroes: TEST_ROSTERS['0'],
+      enemyHeroes: TEST_ROSTERS['1'],
       enemyBuff: { atk: 0, hp: 0 },
     },
   });
+}
+
+/**
+ * A boardgame.io Client of the ready match (`configureReadyMatch` must have
+ * run), started — on seat 0's turn 1 (seat 0 moves first in a scripted match,
+ * with its first income banked) — and, unless `shop` is asked for, past that
+ * turn's shop step into its act step.
+ */
+export function readyClient(opts: { shop?: boolean } = {}) {
+  const client = Client({ game: DeadlockGame, numPlayers: 2 });
+  client.start();
+  if (!opts.shop) client.moves.closeShop();
+  return client;
+}
+
+/** End the turn on `client` and close the next turn's shop: the next player
+ *  stands in its act step. */
+export function passTurn(client: ReturnType<typeof readyClient>): void {
+  client.moves.endTurn();
+  client.moves.closeShop();
 }
 
 /**

@@ -5,11 +5,13 @@ import { fireTriggers } from '@/engine/triggers';
 import { EQUIPMENT_BY_ID } from '@/cards/equipment';
 import { ABILITIES_BY_ID } from '@/abilities';
 import { HEROES } from '@/cards';
+import { itemPrice } from '@/engine/query';
+import { PRICE } from '@/engine/constants';
 
 function freshGame(): GameState {
   const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
   const G = JSON.parse(JSON.stringify(setup)) as GameState;
-  // setup leaves heroes in deck/hand (active is null); stand one up per side.
+  // setup opens the draft (no Active yet); stand one up per side.
   for (const pid of ['0', '1'] as PlayerID[]) {
     const h = HEROES[0];
     G.players[pid].active = {
@@ -92,8 +94,10 @@ describe('Mystic Burst family', () => {
   });
 
   it('cards expose the proposed flat magnitudes', () => {
-    expect(EQUIPMENT_BY_ID['mystic_burst'].cost).toBe(2);
-    expect(EQUIPMENT_BY_ID['improved_burst']).toMatchObject({ name: 'Tankbuster', cost: 5 });
+    expect(EQUIPMENT_BY_ID['mystic_burst']).toMatchObject({ slot: 'spirit', tier: 1 });
+    expect(itemPrice('mystic_burst')).toBe(PRICE[1]);
+    expect(EQUIPMENT_BY_ID['improved_burst']).toMatchObject({ name: 'Tankbuster', slot: 'spirit', tier: 3, upgradesFrom: 'mystic_burst' });
+    expect(itemPrice('improved_burst')).toBe(PRICE[3]);
     expect(ABILITIES_BY_ID['eff_mystic_burst_proc'].base).toBe(1);
     expect(ABILITIES_BY_ID['eff_improved_burst_proc'].base).toBe(2);
   });

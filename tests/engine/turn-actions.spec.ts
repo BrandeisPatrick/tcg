@@ -1,31 +1,27 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
 import { attackBlocked, attackTurn, blocked, type AttackBlock } from '@/engine/legality';
-import { forecastAttack } from '@/engine/forecast';
-import { effectiveAtk, liveBoardCards } from '@/engine/query';
+import { forecastAttack, simulate } from '@/engine/forecast';
+import { effectiveAtk, findCardOnBoard, liveBoardCards, wornItems } from '@/engine/query';
 import { addStatus, clearTurnFlags, tickCooldowns, tickRemMerges } from '@/engine/statusOps';
 import { resolve } from '@/engine/death';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch, makeHero } from './_helpers';
+import { freshReadyGame, configureReadyMatch, giveItem, makeHero, passTurn, readyClient } from './_helpers';
 
-// A turn is the player's to spend on cards, abilities (each hero one a turn,
-// free) and one Retreat, and then one attack: `attack` makes the Active swing
-// one-way at the rival Active, and it ends the Act — after it only `endTurn`
-// (and an owed promotion) is left; `endTurn` hands the turn over and never
-// attacks. A Retreat before the attack lets the hero who steps in make it, and
-// a hero that used its ability may still attack.
+// A turn opens in its shop step (buy, sell and move items, then close the
+// shop); its act step is the player's to spend on abilities (each hero one a
+// turn, free: a skill, an active item it wears or its ultimate) and one
+// Retreat, and then one attack: `attack` makes the Active swing one-way at the
+// rival Active, and it ends the Act — after it only `endTurn` (and an owed
+// promotion) is left; `endTurn` hands the turn over and never attacks. A
+// Retreat before the attack lets the hero who steps in make it, and a hero
+// that used its ability may still attack.
 
 beforeAll(configureReadyMatch);
 
-function newClient() {
-  const client = Client({ game: DeadlockGame, numPlayers: 2 });
-  client.start();
-  return client;
-}
-function snap(c: ReturnType<typeof newClient>) {
+function snap(c: ReturnType<typeof readyClient>) {
   const s = c.getState();
   if (!s) throw new Error('no state');
   return { G: s.G as GameState, ctx: s.ctx as Ctx };
@@ -48,10 +44,12 @@ function sturdyRival(G: GameState) {
 
 describe('turn actions: the attack is a move', () => {
   it('Turn 1 has no attack: the move is rejected and the turn simply ends', () => {
-    const c = newClient();
+    const c = readyClient(); // P0's turn 1, past its shop: the act step
     const before = snap(c);
+    expect(before.G.step).toBe('act');
     expect(attackTurn(before.G)).toBe(false);
     expect(attackBlocked(before.G, '0')).toBe('turn1');
+    expect(blocked(before.G, '0', { type: 'attack' })).toBe('turn1');
     (c.moves as any).attack();
     expect(snap(c).G.attackUsed).toBe(false);
     expect(activeHp(snap(c).G)).toEqual(activeHp(before.G));
@@ -61,8 +59,8 @@ describe('turn actions: the attack is a move', () => {
   });
 
   it('attack strikes the rival Active, costs nothing and keeps the turn', () => {
-    const c = newClient();
-    c.moves.endTurn?.(); // → P1, turn 2
+    const c = readyClient();
+    passTurn(c); // → P1, turn 2, past its shop
     const before = snap(c);
     expect(before.ctx.currentPlayer).toBe('1');
     expect(attackBlocked(before.G, '1')).toBeNull();
@@ -77,8 +75,8 @@ describe('turn actions: the attack is a move', () => {
   });
 
   it('one attack a turn: a second is rejected, and endTurn does not swing again', () => {
-    const c = newClient();
-    c.moves.endTurn?.();
+    const c = readyClient();
+    passTurn(c); // → P1, turn 2, past its shop
     (c.moves as any).attack();
     const struck = activeHp(snap(c).G);
     expect(attackBlocked(snap(c).G, '1')).toBe('used');
@@ -93,10 +91,10 @@ describe('turn actions: the attack is a move', () => {
   });
 
   it('ending the turn without attacking deals no damage', () => {
-    const c = newClient();
-    c.moves.endTurn?.(); // → P1, turn 2: the attack is open
+    const c = readyClient();
+    passTurn(c); // → P1, turn 2, past its shop: the attack is open
     const before = snap(c);
-    expect(attackBlocked(before.G, '1')).toBeNull();
+    expect(blocked(before.G, '1', { type: 'attack' })).toBeNull();
     c.moves.endTurn?.(); // P1 lets it go
     const after = snap(c);
     expect(after.ctx.currentPlayer).toBe('0');
@@ -117,17 +115,21 @@ describe('turn actions: the attack is a move', () => {
     expect(haze.statuses.some((s) => s.id === 'bleed')).toBe(false);
   });
 
-  it('the attack ends the Act: after it a bench skill, a card and a retreat are refused; endTurn is not', () => {
+  it('the attack ends the Act: after it a bench skill, an active item and a retreat are refused; endTurn is not', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 5;
     const rival = sturdyRival(G);
+    const grit = giveItem(G, me.bench[0]!, 'grit'); // Vindicta wears a ready Grit
+    expect(blocked(G, '0', { type: 'activate', itemIid: grit.iid })).toBeNull();
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     const lash = me.bench[1]!; // Lash carries a skill; the Active (Haze) is passive-only
     const hpBefore = rival.hp;
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).toBe('INVALID_MOVE');
     expect(rival.hp).toBe(hpBefore);
-    expect(runMove('playCard', G, '0', me.hand[0].iid, me.active!.iid)).toBe('INVALID_MOVE');
+    expect(runMove('activate', G, '0', grit.iid)).toBe('INVALID_MOVE');
+    expect(blocked(G, '0', { type: 'activate', itemIid: grit.iid })).toBe('actOver');
+    expect(grit.cooldowns).toBeUndefined(); // not used: still ready
     expect(runMove('moveHero', G, '0', 1, 0)).toBe('INVALID_MOVE');
     expect(me.souls).toBe(5);
     expect(blocked(G, '0', { type: 'endTurn' })).toBeNull();
@@ -150,9 +152,9 @@ describe('turn actions: the attack is a move', () => {
   });
 
   it('a channeler cannot attack, and its ultimate pulses at the end of the turn', () => {
-    const c = newClient();
-    c.moves.endTurn?.(); // → P1, turn 2
-    c.moves.endTurn?.(); // → P0, turn 3
+    const c = readyClient();
+    passTurn(c); // → P1, turn 2
+    passTurn(c); // → P0, turn 3, past its shop
     // Hand P0 a channeling Dynamo through the store's own state.
     const state = c.getState()!;
     const G = structuredClone(state.G) as GameState;
@@ -162,6 +164,7 @@ describe('turn actions: the attack is a move', () => {
     (c as any).store.dispatch({ type: 'SYNC', state: { ...state, G } });
 
     expect(attackBlocked(snap(c).G, '0')).toBe('cannot');
+    expect(blocked(snap(c).G, '0', { type: 'attack' })).toBe('cannot');
     const benchBefore = snap(c).G.players['1'].bench.map((b) => b?.hp);
     (c.moves as any).attack();
     expect(snap(c).G.attackUsed).toBe(false);
@@ -276,8 +279,8 @@ describe('turn actions: abilities, then the attack', () => {
   });
 
   it('the flags reset when the next turn begins', () => {
-    const c = newClient();
-    c.moves.endTurn?.(); // → P1, turn 2
+    const c = readyClient();
+    passTurn(c); // → P1, turn 2, past its shop
     let G = snap(c).G;
     const dynamo = G.players['1'].bench.find((b) => b?.cardId === 'hero_dynamo')!;
     (c.moves as any).moveHero(1, 2);                                    // a free bench shuffle…
@@ -290,8 +293,9 @@ describe('turn actions: abilities, then the attack', () => {
     expect(G.attackUsed).toBe(true);
     expect(G.retreatUsed).toBe(true);
     expect(G.players['1'].bench.concat(G.players['1'].active).find((b) => b?.iid === dynamo.iid)!.skillUsedThisTurn).toBe(true);
-    c.moves.endTurn?.(); // → P0, turn 3
+    c.moves.endTurn?.(); // → P0, turn 3: its shop step
     G = snap(c).G;
+    expect(G.step).toBe('shop');
     expect(G.attackUsed).toBe(false);
     expect(G.retreatUsed).toBe(false);
     expect(attackBlocked(G, '0')).toBeNull();
@@ -325,8 +329,7 @@ describe('AI: the attack is a choice', () => {
   });
 
   it('attacks rather than ending the turn when there is nothing else to do', () => {
-    const G = freshReadyGame(); // the AI holds no souls: no retreat; its bench has used its skills
-    G.players['1'].hand = [];
+    const G = freshReadyGame(); // the AI holds no souls: no retreat; its bench has used its skills; it wears no item
     for (const b of G.players['1'].bench) if (b) b.skillUsedThisTurn = true;
     expect(enumerateAIMoves(G, ctx('1'))[0].move).toBe('attack');
   });
@@ -421,7 +424,6 @@ describe('AI: the attack is a choice', () => {
   // scored as the position stands: `evalState` read straight off the list.
   const standing = (G: GameState) => {
     G.players['1'].souls = 0;
-    G.players['1'].hand = [];
     const pass = enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'endTurn');
     return pass!.score;
   };
@@ -443,42 +445,20 @@ describe('AI: the attack is a choice', () => {
     expect(standing(theirs) - base).toBeCloseTo(1.5 + 4);
   });
 
-  it('offers a hero at the gear cap every item it could discard, and lets the lookahead pick', () => {
-    const G = freshReadyGame();
-    const ai = G.players['1'];
-    ai.souls = 5;
-    ai.bench = [null, null, null]; // a short list: the AI keeps only its top 12 moves
-    const hero = ai.active!;
-    const gear = (cardId: string, iid: string) =>
-      ({ ...ai.deck[0], cardId, iid, zone: 'equipment' as const, attachedTo: hero.iid, attached: [] });
-    hero.attached = [gear('extended_magazine', 'atk'), gear('extra_health', 'hp'), gear('extra_spirit', 'spi')];
-    ai.hand = [{ ...ai.deck[1], cardId: 'restorative_shot', iid: 'new', zone: 'hand' as const }];
-    for (const lookahead of [false, true]) {
-      const plays = enumerateAIMoves(G, ctx('1'), lookahead).filter((m) => m.move === 'playCard' && m.args[1] === hero.iid);
-      expect(plays.map((m) => m.args[2]).sort(), `lookahead ${lookahead}`).toEqual(['atk', 'hp', 'spi']);
-    }
-    // Which piece goes is read off the position each leaves: the +2 HP and the
-    // +1 Bullet Power are worth keeping, the Spirit Power on a hero whose
-    // skill takes none is not.
-    const best = enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'playCard' && m.args[1] === hero.iid)!;
-    expect(best.args[2]).toBe('spi');
-  });
-
   it('never ranks a move the engine would reject', () => {
     const G = freshReadyGame();
     const ai = G.players['1'];
     ai.souls = 9;
-    // Gear the Active already wears, and a second copy in hand.
-    const worn = { ...ai.deck[0], cardId: 'extended_magazine', iid: 'worn', zone: 'equipment' as const };
-    ai.active!.attached = [worn];
-    ai.hand = [{ ...ai.deck[1], cardId: 'extended_magazine', iid: 'copy', zone: 'hand' as const }];
-    // A bench hero locked in a heavy channel: no skill from him.
+    // An item the Active wears that is still cooling down, and a bench hero
+    // locked in a heavy channel: no skill from him, and no use of his item.
+    const cooling = giveItem(G, ai.active!, 'cold_front', { cooldown: 1 });
     const dynamo = ai.bench.find((b) => b?.cardId === 'hero_dynamo')!;
+    const grit = giveItem(G, dynamo, 'grit');
     addStatus(G, dynamo, 'casting', 3, 3);
 
     for (const lookahead of [false, true]) {
       const moves = enumerateAIMoves(G, ctx('1'), lookahead);
-      expect(moves.some((m) => m.move === 'playCard' && m.args[1] === ai.active!.iid)).toBe(false);
+      expect(moves.some((m) => m.move === 'activate' && [cooling.iid, grit.iid].includes(m.args[0]))).toBe(false);
       expect(moves.some((m) => m.move === 'useSkill' && m.args[0] === dynamo.iid)).toBe(false);
       // …and everything it does offer, the engine takes.
       for (const m of moves) {
@@ -486,6 +466,22 @@ describe('AI: the attack is a choice', () => {
         expect(runMove(m.move, structuredClone(G), '1', ...m.args)).not.toBe('INVALID_MOVE');
       }
     }
+
+    // Its shop step, the Active already wearing its build's first item: one move
+    // at a time, each one the engine takes and none a second copy of what the
+    // hero wears, until it closes the shop.
+    const shop = freshReadyGame({ step: 'shop' });
+    shop.turnNumber = 3; // P1's own turn 2
+    shop.players['1'].souls = 30;
+    giveItem(shop, shop.players['1'].active!, 'healing_booster');
+    for (let guard = 0; shop.step === 'shop' && guard < 20; guard++) {
+      const moves = enumerateAIMoves(shop, ctx('1'));
+      expect(moves).toHaveLength(1);
+      const [m] = moves;
+      if (m.move === 'buy') expect(wornItems(findCardOnBoard(shop, m.args[1])!.card).map((it) => it.cardId)).not.toContain(m.args[0]);
+      expect(runMove(m.move, shop, '1', ...m.args)).not.toBe('INVALID_MOVE');
+    }
+    expect(shop.step).toBe('act');
   });
 
   it('a promotion owed by the other seat comes first, highest HP first', () => {
@@ -504,32 +500,30 @@ describe('AI: the attack is a choice', () => {
     expect(G.pendingPromotion).toBeUndefined();
   });
 
-  it('buffs before it attacks: gear that adds attack is played ahead of the attack', () => {
+  it('buffs before it attacks: an active item that adds attack is used ahead of the attack', () => {
     const G = freshReadyGame();
     const ai = G.players['1'];
-    ai.souls = 2;
-    ai.hand = [{ ...ai.deck[0], cardId: 'extended_magazine', iid: 'mag', zone: 'hand' }];
-    // With the bench's skills on offer too, the magazine still comes before the attack…
+    // Shadow Weave, worn and ready on the Active: +2 Bullet Power (and a Dome).
+    const weave = giveItem(G, ai.active!, 'shadow_weave');
+    const used = simulate(G, '1', { type: 'activate', itemIid: weave.iid });
+    expect(used.invalid).toBeFalsy();
+    expect(forecastAttack(used.G, '1').damageToActive).toBeGreaterThan(forecastAttack(G, '1').damageToActive);
+    // With the bench's skills on offer too, the item still comes before the attack…
     const all = enumerateAIMoves(G, ctx('1'));
-    const magOnActive = all.findIndex((m) => m.move === 'playCard' && m.args[0] === 'mag' && m.args[1] === ai.active!.iid);
-    expect(magOnActive).toBeGreaterThanOrEqual(0);
-    expect(magOnActive).toBeLessThan(all.findIndex((m) => m.move === 'attack'));
-    // …and with only the gear and the attack to weigh (the bench has used its
-    // skills) it is the first choice. A 1-soul skill like Dynamo's Bullet Power
-    // buff is worth more than the 2-soul magazine now that the position prices
-    // the buff's status; that is not what this test is about. Nor is the Retreat
-    // that would send a harder hitter in: the turn's one has been made.
+    const weaveAt = all.findIndex((m) => m.move === 'activate' && m.args[0] === weave.iid);
+    expect(weaveAt).toBeGreaterThanOrEqual(0);
+    expect(weaveAt).toBeLessThan(all.findIndex((m) => m.move === 'attack'));
+    // …and with only the item and the attack to weigh (the bench has used its
+    // skills; with no souls there is no Retreat) it is the first choice.
     for (const b of ai.bench) if (b) b.skillUsedThisTurn = true;
-    G.retreatUsed = true;
     const best = enumerateAIMoves(G, ctx('1'))[0];
-    expect(best.move).toBe('playCard');
-    expect(best.args[0]).toBe('mag');
+    expect(best.move).toBe('activate');
+    expect(best.args[0]).toBe(weave.iid);
   });
 
   it('plays a bench skill ahead of the attack, which it leaves open', () => {
     const G = freshReadyGame();
-    G.players['1'].souls = 1;
-    G.players['1'].hand = []; // just the skills and the attack to weigh
+    G.players['1'].souls = 1; // nobody wears an item: just the skills, a Retreat and the attack to weigh
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect(best.move).toBe('useSkill');
     expect(best.args[0]).not.toBe(G.players['1'].active!.iid);
@@ -540,7 +534,6 @@ describe('AI: the attack is a choice', () => {
     const ai = G.players['1'];
     ai.active = makeHero('hero_lady_geist', '1', 'active', 0); // 1 attack, a 3-damage skill
     ai.bench = [null, null, null];
-    ai.hand = [];
     ai.souls = 1;
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect(best.move).toBe('useSkill');
@@ -548,7 +541,7 @@ describe('AI: the attack is a choice', () => {
   });
 
   it('an AI-played match, both seats, reaches a result', () => {
-    const c = newClient();
+    const c = readyClient({ shop: true }); // the AI shops too
     let guard = 0;
     while (!snap(c).ctx.gameover && guard++ < 5000) {
       const { G, ctx: live } = snap(c);

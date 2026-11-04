@@ -1,59 +1,53 @@
 /**
  * The tutorial — four short lessons, one thing each, and every lesson its
  * own small fight on the scripted path Story uses (`StorySetup`): fixed
- * rosters, no draft, no mulligan, and custom numbers on every hero so the
- * move being taught is exactly the move that wins:
+ * rosters, no draft, and custom numbers on every hero so the move being
+ * taught is exactly the move that wins. Every turn runs Income → Shop → Act →
+ * End: the souls arrive, the shop opens (buy, then Done), then the heroes act
+ * (abilities, a Retreat, the attack — which ends the Act), then End Turn.
  *
- *   1  The Skill        Kelvin vs a hurt Lash, no cards. Frost Grenade ends it.
- *   2  Souls and Gear   one card you cannot afford yet; souls carry over, so
- *                       next turn you can, and the attack it adds is the kill.
- *   3  Level Up         Kelvin a point short of Level 2; gear tips him over,
- *                       and the levelled swing is the kill.
+ *   1  The Skill        Kelvin vs a hurt Lash. Close the shop; Frost Grenade ends it.
+ *   2  The Shop         Yamato buys Extended Magazine (a tier 1 item, two
+ *                       souls of the turn's four), and the swing it adds is
+ *                       the kill — the attack ends the Act.
+ *   3  Active Items     Kelvin wears Cold Front. Using it is his one ability
+ *                       of the turn, and its blast is the kill.
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
  *
- * A turn is yours to spend on cards, abilities (free) and one Retreat; the
- * Active's attack comes last, from its sheet, and ends the turn's play — the
- * turn button only ends the turn. In lessons 2 to 4 the kill is an attack,
- * so the last tap is the Attack plate on your Active's sheet; lesson 4's is
- * the swing of the hero a Retreat brings in. In every lesson the rival's
- * patron has one point left, so the kill is the win.
- *
- * Nothing is read and dismissed: every step is a tap on the real thing, and
- * every lesson ends on the victory screen. Each step names exactly the
- * control that performs it (the gate lets nothing else through), waits out
- * the rival's turn, and — should the player arrive short of souls — points
- * at the turn button instead of asking for a move that cannot be made.
+ * In every lesson the rival's patron has one point left, so the kill is the
+ * win. Nothing is read and dismissed: every step is a tap on the real thing,
+ * and every lesson ends on the victory screen. Each step names exactly the
+ * control that performs it (the gate lets nothing else through), waits out the
+ * rival's turn, and — should the move be out of reach — points at the turn
+ * button instead of asking for a move that cannot be made. A turn that opens
+ * in the shop where the step has nothing to buy asks for Done first (the
+ * coach's shop prompt, `SHOP_PROMPT`).
  */
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { effectiveAtk, heroAbilities, isRespawning, stepInCandidates } from '@/engine/query';
-import { attackBlocked, cardCost, playBlocked, skillBlocked } from '@/engine/legality';
+import { effectiveAtk, heroAbilities, isRespawning, itemPrice, stepInCandidates, wornActives, wornItems } from '@/engine/query';
+import { activateBlocked, attackBlocked, buyBlocked, skillBlocked } from '@/engine/legality';
 import { LANE_INCOME, RETREAT_COST } from '@/engine/constants';
-import { PATRON_NAMES } from '@/ui/board/patrons';
 import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
+import { SHOP_DONE, SHOP_SHEET } from '@/ui/overlays/ShopSheet';
 
 /* ------------------------------------------------------------------ */
 /* The matches                                                         */
 /* ------------------------------------------------------------------ */
 
-/** A lesson's fight: one or two heroes of yours against Lash, nobody holding
- *  cards unless the lesson deals them, and no scaling on the rival. Decks
- *  are dealt top-down (`orderedPlayerDeck`) because the scripts name the
- *  cards they ask for. The rival's patron is down to its last point, so the
- *  one kill each lesson builds to is the win (a wiped board alone is not). */
+/** A lesson's fight: one or two heroes of yours against Lash, no scaling on
+ *  the rival. The rival's patron is down to its last point, so the one kill
+ *  each lesson builds to is the win (a wiped board alone is not). */
 function fight(over: Partial<StorySetup> = {}): StorySetup {
   return {
     playerHeroes: ['hero_kelvin'],
-    playerDeck: [],
     enemyHeroes: ['hero_lash'],
-    enemyDeck: [],
     enemyBuff: { atk: 0, hp: 0 },
     patronHp: 4,
     enemyPatronHp: 1,
-    orderedPlayerDeck: true,
     ...over,
   };
 }
@@ -65,11 +59,15 @@ function fight(over: Partial<StorySetup> = {}): StorySetup {
 /** Monotonic latches the coach sets as it watches play — once set, they
  *  stay set, so a step can't un-complete when the turn rolls over. */
 export interface CoachSeen {
-  playedCard: boolean;
+  /** Some hero of yours wears an item. */
   equipped: boolean;
   usedSkill: boolean;
+  /** You used an active item. */
+  usedItem: boolean;
   castUlt: boolean;
   swapped: boolean;
+  /** You have closed the shop at least once. */
+  closedShop: boolean;
   /** How many attacks you have made. */
   attacks: number;
   /** How many of your turns you have ended. */
@@ -77,11 +75,12 @@ export interface CoachSeen {
 }
 
 export const emptySeen: CoachSeen = {
-  playedCard: false,
   equipped: false,
   usedSkill: false,
+  usedItem: false,
   castUlt: false,
   swapped: false,
+  closedShop: false,
   attacks: 0,
   turnsEnded: 0,
 };
@@ -90,7 +89,7 @@ export interface CoachView {
   G: GameState;
   me: PlayerID;
   seen: CoachSeen;
-  /** A card or skill is armed and waiting for its target. */
+  /** A skill or item is armed and waiting for its target. */
   targeting: boolean;
   /** Your attack is being walked, before the engine makes it. */
   attacking: boolean;
@@ -98,16 +97,14 @@ export interface CoachView {
   sheetOpen: boolean;
   /** …and whose it is. */
   sheetHero: CardId | null;
-  /** Taps on cards the player could not pay for, so far. */
-  refusals: number;
 }
 
 /**
  * A gate spec names something on screen by its accessible name:
  *   `Kelvin —`                 first element whose aria-label starts with this
- *   `*Healing Rite`            every element whose aria-label starts with this
+ *   `*Buy Grit`                every element whose aria-label starts with this
  *   `~Retreat`                 first button whose text contains this
- *   `Amber Hand: >> Souls:`    the second, looked up inside the first
+ *   `Shop sheet >> Souls:`     the second, looked up inside the first
  */
 export type GateSpec = string;
 
@@ -129,9 +126,6 @@ function activeOf(G: GameState, pid: PlayerID): CardInstance | null {
 function benchOf(G: GameState, pid: PlayerID): CardInstance | null {
   return G.players[pid].bench.find(alive) ?? null;
 }
-function inHand(G: GameState, me: PlayerID, id: CardId): boolean {
-  return G.players[me].hand.some((c) => c.cardId === id);
-}
 /** "Frost Grenade" — the hero's first skill by its own name, exactly as the
  *  sheet prints it. */
 function skillNameOf(c: CardInstance | null): string {
@@ -141,34 +135,22 @@ function skillNameOf(c: CardInstance | null): string {
   return heroAbilities(data).find((x) => x.kind === 'skill')?.ability.name || 'the skill';
 }
 
-/** The copy of a card in your hand, if you hold one. */
-function held(G: GameState, me: PlayerID, id: CardId): CardInstance | undefined {
-  return G.players[me].hand.find((c) => c.cardId === id);
-}
-/** What that copy costs to play — the engine's `cardCost`, as the hand prints
- *  it. Once it has left your hand (a step's words stay up a beat after the
- *  card is played) the printed cost stands in, so the line does not change. */
-function costOf(G: GameState, me: PlayerID, id: CardId): number {
-  const card = held(G, me, id);
-  if (card) return cardCost(card);
-  const data = CARDS_BY_ID[id];
-  return data && (data.type === 'spell' || data.type === 'equipment') ? data.cost ?? 0 : 0;
-}
 /** A number in the coach's voice: "two". */
 const word = (n: number) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? String(n);
 /** A count of souls, in the coach's voice: "two souls". */
 function soulsText(n: number): string {
   return `${word(n)} soul${n === 1 ? '' : 's'}`;
 }
-const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** True once any hero of yours is wearing a piece of equipment. */
+/** True once any hero of yours wears an item. */
 export function hasEquipment(G: GameState, me: PlayerID): boolean {
   const ps = G.players[me];
-  return [ps.active, ...ps.bench].some((c) => {
-    if (!c) return false;
-    return (c.attached ?? []).some((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment');
-  });
+  return [ps.active, ...ps.bench].some((c) => !!c && wornItems(c).length > 0);
+}
+
+/** True when your hero `who` wears the item `id`. */
+function wears(c: CardInstance | null, id: CardId): boolean {
+  return !!c && wornItems(c).some((it) => it.cardId === id);
 }
 
 /* ------------------------------------------------------------------ */
@@ -197,14 +179,23 @@ export interface CoachStep {
   spot: (v: CoachView) => GateSpec[];
   /** What may be tapped. Defaults to `spot`. */
   allow?: (v: CoachView) => GateSpec[];
+  /** A step taken in the shop: while it is up, the coach does not ask for
+   *  Done first (`SHOP_PROMPT`). */
+  shop?: true;
 }
 
-export const RIVAL_TURN = "Rival's turn. Watch — their heroes use their skills, then their Active attacks yours.";
+export const RIVAL_TURN = "Rival's turn. Watch — the souls arrive, they shop, their heroes use their abilities, then their Active attacks yours.";
 
 /** The turn button, by its name. */
 export const TURN_BUTTON: GateSpec = END_TURN;
 
-const YOU = `${PATRON_NAMES.you}:`;
+/** The shop sheet, and its Done button, by their names. */
+export const SHOP: GateSpec = SHOP_SHEET;
+export const SHOP_DONE_BUTTON: GateSpec = SHOP_DONE;
+
+/** What the coach says when your turn opens in the shop and the step up has
+ *  nothing to buy: Done first, then the step. */
+export const SHOP_PROMPT = 'Your turn opens with its income, then the shop. Nothing to buy now: tap Done to move on to the Act.';
 
 const mine = (v: CoachView) => activeOf(v.G, v.me);
 const theirs = (v: CoachView) => activeOf(v.G, RIVAL);
@@ -212,18 +203,6 @@ const myBench = (v: CoachView) => benchOf(v.G, v.me);
 const hpOf = (c: CardInstance | null) => (c ? `${c.hp} of ${c.hpMax}` : '');
 const atkOf = (c: CardInstance | null) => (c ? effectiveAtk(c) : 0);
 const souls = (v: CoachView) => v.G.players[v.me].souls;
-
-/** End the turn — the n-th time this lesson. */
-function endTurn(n: number, body: Text): CoachStep {
-  return {
-    id: `end${n}`,
-    title: 'End the Turn',
-    body,
-    task: (v) => v.seen.turnsEnded >= n,
-    wait: () => null,
-    spot: () => [TURN_BUTTON],
-  };
-}
 
 /** Make your Active's attack: it swings at theirs, from the Attack
  *  plate on his sheet. In every lesson that asks for it the attack is the
@@ -256,19 +235,6 @@ function look(id: string, title: string, who: (v: CoachView) => CardInstance | n
     ready: (v) => !!who(v),
     blocked: 'Nothing to look at there any more. End the turn.',
     spot: (v) => [tile(who(v))].filter(Boolean),
-  };
-}
-
-/** …and close it again, having read what it says. */
-function close(id: string, title: string, body: Text): CoachStep {
-  return {
-    id,
-    title,
-    body,
-    task: (v) => !v.sheetOpen,
-    wait: () => null,
-    spot: () => ['Hero sheet'],
-    allow: () => ['~Close'],
   };
 }
 
@@ -308,22 +274,71 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
   };
 }
 
-/** Play a card from hand onto your Active: tap it, then tap him. */
-function playOnActive(id: string, title: string, cardId: CardId, cardName: string, lead: (v: CoachView) => string, done: (v: CoachView) => boolean): CoachStep {
+/** Buy `itemId` for your Active from the shop sheet: its Buy button (the
+ *  build's, lit as the next item it can afford, comes first). */
+function buy(id: string, title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
+  const label = cardName(itemId);
   return {
     id,
     title,
-    body: (v) => (v.targeting
-      ? `${lead(v)} Now tap ${nameOf(mine(v)) || 'your Active'}.`
-      : `${lead(v)} Tap ${cardName}, then tap ${nameOf(mine(v)) || 'your Active'}.`),
-    task: done,
-    // The engine's own question: in hand, paid for, and aimed at your Active.
+    shop: true,
+    body: (v) => `${lead(v)} Tap Buy on ${label}.`,
+    task: (v) => wears(mine(v), itemId),
+    // The engine's own question: on sale, room on the hero, and the souls for it.
     ready: (v) => {
-      const card = held(v.G, v.me, cardId), target = mine(v);
-      return !!card && !!target && playBlocked(v.G, v.me, card.iid, target.iid) === null;
+      const me = mine(v);
+      return !!me && v.G.step === 'shop' && buyBlocked(v.G, v.me, itemId, me.iid) === null;
     },
-    blocked: `${cardName} costs more than you have. End the turn — ${word(LANE_INCOME)} more souls arrive, on top of what you keep.`,
-    spot: (v) => (v.targeting ? [tile(mine(v))] : [`*${cardName}`]),
+    blocked: `${label} is out of reach this turn. End the turn — ${word(LANE_INCOME)} more souls arrive at the start of the next, on top of what you keep.`,
+    spot: () => [SHOP],
+    allow: (v) => [`Buy ${label} for ${nameOf(mine(v))}`],
+  };
+}
+
+/** Close the shop: the turn moves on to its Act. */
+function done(id: string, title: string, body: Text): CoachStep {
+  return {
+    id,
+    title,
+    shop: true,
+    body,
+    task: (v) => v.seen.closedShop,
+    spot: () => [SHOP],
+    allow: () => [SHOP_DONE_BUTTON],
+  };
+}
+
+/** Use the active item `itemId` your Active wears on their Active — the
+ *  three-tap flow through the hero sheet, gated tap by tap. */
+function useItem(title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
+  const label = cardName(itemId);
+  const item = (v: CoachView) => {
+    const me = mine(v);
+    return me ? wornActives(me).find((it) => it.cardId === itemId) : undefined;
+  };
+  return {
+    id: 'item',
+    title,
+    body: (v) => {
+      const me = mine(v), them = theirs(v);
+      if (v.targeting) return `${lead(v)} Now tap ${nameOf(them) || 'their Active'}.`;
+      if (v.sheetOpen) return `${lead(v)} Tap ${label}, then tap ${nameOf(them) || 'their Active'}.`;
+      return `${lead(v)} Tap ${nameOf(me) || 'your Active'} to open the sheet, tap ${label}, then tap ${nameOf(them) || 'their Active'}.`;
+    },
+    task: (v) => v.seen.usedItem,
+    ready: (v) => {
+      const it = item(v), them = theirs(v);
+      return !!it && !!them && activateBlocked(v.G, v.me, it.iid, them.iid) === null;
+    },
+    blocked: `${label} is not ready this turn. End the turn; it comes back.`,
+    spot: (v) =>
+      v.targeting ? [tile(theirs(v))]
+      : v.sheetOpen ? ['Hero sheet']
+      : [tile(mine(v))],
+    allow: (v) =>
+      v.targeting ? [tile(theirs(v))]
+      : v.sheetOpen ? [`~${label}`]
+      : [tile(mine(v))],
   };
 }
 
@@ -354,14 +369,15 @@ export const LESSONS: Lesson[] = [
     id: 'skill',
     number: 1,
     title: 'The Skill',
-    blurb: "One on one, no cards. Kelvin's skill ends it.",
+    blurb: "One on one. Close the shop; Kelvin's skill ends it.",
     face: 'hero_kelvin',
-    outro: 'A skill costs nothing, and it comes back every turn.',
+    outro: 'A turn runs Income, Shop, Act, End. A skill costs nothing, and it comes back every turn.',
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
     // is the whole fight.
     setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
-      look('look', 'One on One', mine, (v) => `${nameOf(mine(v))} against ${nameOf(theirs(v))}, no cards. ${nameOf(theirs(v))} is already hurt: ${hpOf(theirs(v))}. Every hero carries a skill on his sheet. Tap ${nameOf(mine(v))} to open his sheet.`),
+      done('shop', 'Your Turn', (v) => `Every turn runs Income, Shop, Act, End. Income paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}), and the shop is open. Nothing to buy in this lesson: tap Done to move on to the Act.`),
+      look('look', 'One on One', mine, (v) => `${nameOf(mine(v))} against ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Every hero carries a skill on his sheet. Tap ${nameOf(mine(v))} to open his sheet.`),
       useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to their Active. Skills cost no souls.`),
     ],
   },
@@ -369,59 +385,42 @@ export const LESSONS: Lesson[] = [
   {
     id: 'souls',
     number: 2,
-    title: 'Souls and Gear',
-    blurb: "One card you can't afford yet. Then you can.",
-    face: 'hero_kelvin',
-    outro: 'Souls carry over: what you do not spend stays, and four more arrive every turn. Gear stays on.',
-    // Lash at three: Kelvin's plain swing of two would not finish him, and
-    // with Glass Cannon's six on top it does. Its eight souls are two turns of
-    // income: the first turn's four cannot pay for it, the four kept and the
-    // four more of the next can. The rival's attack is one-way, so nothing
-    // wears Lash down in between — the gear is the kill.
+    title: 'The Shop',
+    blurb: 'Four souls, one item. Its swing is the kill.',
+    face: 'hero_yamato',
+    outro: 'Souls carry over: what you do not spend stays, and four more arrive every turn. Items stay on the hero, through death too.',
+    // Yamato swings for 2 at a Lash on 3. Extended Magazine — his build's first
+    // item, a tier 1 for two of the turn's four souls — makes it 3, and the
+    // swing that ends the Act is the kill. Turn two, so there is an attack.
     setup: () => fight({
-      playerDeck: ['glass_cannon'],
+      startTurn: 2,
+      playerHeroes: ['hero_yamato'],
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      {
-        id: 'broke',
-        title: 'Souls',
-        body: (v) => `Cards cost souls. The rail on your rule says you have ${souls(v)}, and Glass Cannon costs ${soulsText(costOf(v.G, v.me, 'glass_cannon'))}. Tap Glass Cannon.`,
-        task: (v) => v.refusals >= 1 || souls(v) >= costOf(v.G, v.me, 'glass_cannon') || !inHand(v.G, v.me, 'glass_cannon'),
-        spot: () => [`${YOU} >> Souls:`, '*Glass Cannon'],
-        allow: () => ['*Glass Cannon'],
-      },
-      endTurn(1, `Refused. Souls carry over: what you do not spend stays, and ${word(LANE_INCOME)} more arrive at the start of each of your turns — ${word(2 * LANE_INCOME)} next turn. Nobody attacks on the first turn, so tap End Turn.`),
-      playOnActive('gear', 'Gear', 'glass_cannon', 'Glass Cannon',
-        () => `${sentence(soulsText(2 * LANE_INCOME))} this turn: the ${word(LANE_INCOME)} you kept and ${word(LANE_INCOME)} more. Glass Cannon is +6 attack, and gear stays on the hero.`,
-        (v) => v.seen.equipped),
-      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends your turn.`),
+      buy('buy', 'Shop', 'extended_magazine',
+        (v) => `Income paid you ${soulsText(LANE_INCOME)}: you hold ${souls(v)}. The shop opens on ${nameOf(mine(v))}'s build, the next item he can afford lit. Extended Magazine is tier 1: ${soulsText(itemPrice('extended_magazine'))}, +1 Bullet Power.`),
+      done('done', 'Done', (v) => `Bought: it stays on ${nameOf(mine(v))}, and the ${soulsText(souls(v))} you did not spend stay with you. Tap Done to close the shop.`),
+      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends the Act.`),
     ],
   },
 
   {
     id: 'level',
     number: 3,
-    title: 'Level Up',
-    blurb: 'A point of experience short. Gear tips him over.',
+    title: 'Active Items',
+    blurb: 'Kelvin wears Cold Front. Use it.',
     face: 'hero_kelvin',
-    outro: 'Gear, kills and standing the turn all earn experience — the Active earns the most. A level raises the numbers, and Level 2 unlocks the hero\'s ultimate on his sheet.',
-    // Kelvin one point short of Level 2 and Lash at three: the point that
-    // comes with the gear is the level, and the level is the point of attack
-    // that finishes the fight. Turn two, so there is an attack to make.
+    outro: "An active item is the hero's one ability that turn, like a skill; then it cools down for a turn or two. Hard crowd control has charges instead.",
+    // Kelvin starts wearing Cold Front, ready: four spirit damage, and Lash
+    // stands at four. Using it is Kelvin's ability for the turn.
     setup: () => fight({
-      startTurn: 2,
-      playerDeck: ['extra_health'],
-      playerHeroStats: [{ exp: 4 }],
-      enemyHeroStats: [{ hpMax: 3 }],
+      playerItems: ['cold_front'],
+      enemyHeroStats: [{ hp: 4 }],
     }),
     steps: [
-      look('look', 'Nearly There', mine, (v) => `The ring in the corner of ${nameOf(mine(v))}'s card is experience. He is one point short of Level 2. Tap ${nameOf(mine(v))} to see the ring.`),
-      close('close', 'Level 1', 'Level 1, the ring nearly full. Gear counts as experience: attaching an item gives the bearer a point. Tap Close.'),
-      playOnActive('gear', 'Tip It Over', 'extra_health', 'Extra Health',
-        (v) => `${sentence(soulsText(costOf(v.G, v.me, 'extra_health')))}, one item. Extra Health's point is the one he needs — Level 2, and his attack goes up with it.`,
-        (v) => v.seen.equipped),
-      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}.`),
+      done('shop', 'The Shop', 'Kelvin already wears an item: Cold Front, an active one. Nothing to buy this turn: tap Done.'),
+      useItem('Use the Item', 'cold_front', () => 'Cold Front: four spirit damage to their Active. Using it is Kelvin\'s one ability this turn.'),
     ],
   },
 
@@ -443,6 +442,7 @@ export const LESSONS: Lesson[] = [
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
+      done('shop', 'The Shop', 'The shop is open, as every turn. Keep your souls this time: tap Done.'),
       look('look', 'Spent', mine, (v) => `${nameOf(mine(v))} is at ${hpOf(mine(v))}: ${nameOf(theirs(v))}'s next attack finishes him, and his own swing of ${atkOf(mine(v))} cannot finish ${nameOf(theirs(v))}. ${nameOf(myBench(v))} waits fresh on your bench. Tap ${nameOf(mine(v))}.`),
       // Retreat is the Active's own move and lives on his sheet, which the
       // step before has just opened. Should it be closed, the step opens it
@@ -459,7 +459,7 @@ export const LESSONS: Lesson[] = [
         // The engine's own question: is a swap with the bench open to you now?
         ready: (v) => {
           const stepIns = stepInCandidates(v.G.players[v.me]);
-          return stepIns.length > 0 && retreatBlock(v.G, v.me, stepIns) === null;
+          return v.G.step === 'act' && stepIns.length > 0 && retreatBlock(v.G, v.me, stepIns) === null;
         },
         blocked: `Retreat costs ${soulsText(RETREAT_COST)}, one a turn, before the attack. End the turn, then come back to it.`,
         spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),

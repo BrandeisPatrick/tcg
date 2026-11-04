@@ -12,23 +12,27 @@ export interface HeroStatOverride {
 
 /**
  * Direct match setup for Story mode — bypasses the pre-match hero draft and
- * builds both players from explicit rosters/decks, with a flat stat buff on
- * every enemy hero (opponents scale up as the campaign progresses) and an
- * optional patron-HP override (shorter early fights, epic late ones).
+ * builds both players from explicit rosters, with a flat stat buff on every
+ * enemy hero (opponents scale up as the campaign progresses) and an optional
+ * patron-HP override (shorter early fights, epic late ones). The market is the
+ * match seed's, with both rosters' signature items on sale.
  */
 export interface StorySetup {
   playerHeroes: CardId[];   // 1..4
-  playerDeck: CardId[];
   enemyHeroes: CardId[];    // 1..4
-  enemyDeck: CardId[];
   enemyBuff: { atk: number; hp: number };
   patronHp?: number;
   /** The rival patron's HP, when it differs from `patronHp` (a lesson whose
    *  one kill is the win). */
   enemyPatronHp?: number;
-  /** Deal the player's deck in the order given instead of shuffling it, so a
-   *  scripted lesson can name the cards in the opening hand. */
-  orderedPlayerDeck?: boolean;
+  /** Items the player's side starts the fight wearing, free (a Story reward):
+   *  each goes on the first hero, Active first, with a free slot that does not
+   *  wear it already. */
+  playerItems?: CardId[];
+  /** Souls each side holds before its first income (a Story reward, a deeper
+   *  opponent's war chest, a lesson's budget). */
+  playerSouls?: number;
+  enemySouls?: number;
   /** Open the match on a later engine turn — a lesson that starts mid-fight
    *  (from turn 2 on, the first turn has its attack). Seat 0 opens it either
    *  way: on an even turn it is the second mover. */
@@ -41,8 +45,9 @@ export interface StorySetup {
 }
 
 interface MatchConfig {
-  playerDeck: CardId[];
   heroPreferences: (CardId | null)[];
+  /** The match seed (the market is drawn from it); a fresh one when left out. */
+  seed?: number;
   /** The hero the title's Quick Match card featured — the recommended first
    *  pick: the draft opens focused on it for the first choice only. Unset for
    *  a deep-linked match or a rematch, where nothing is pre-selected. */
@@ -51,7 +56,7 @@ interface MatchConfig {
   story?: StorySetup;
   /**
    * When present, the game skips the draft and builds the coached tutorial
-   * battle. Same shape as `story` (fixed rosters, fixed decks) but kept on its
+   * battle. Same shape as `story` (fixed rosters) but kept on its
    * own field so nothing downstream mistakes a lesson for a campaign node —
    * conceding returns to the title, not to the map.
    */
@@ -64,7 +69,6 @@ interface MatchConfig {
 }
 
 let current: MatchConfig = {
-  playerDeck: [],
   heroPreferences: [null, null, null, null],
 };
 

@@ -13,17 +13,18 @@
  *  before the turn's attack. */
 export const RETREAT_COST = 1;
 
-/** Max equipment a hero can wear at once. Playing a 4th piece requires the
- *  player to choose one of the existing items to discard. */
-export const MAX_EQUIPMENT_PER_HERO = 3;
+/** Items a hero can wear at once. A full hero buys nothing more (sell one
+ *  first) except an upgrade of an item it wears, which takes that item's place. */
+export const MAX_ITEMS = 3;
 
-/** Max cards a player may hold. Draws past this are lost (they fizzle). */
-export const MAX_HAND = 7;
+/** The extra slot every hero of a side has once that side's heroes have felled
+ *  the enemy Walker (`PlayerState.flexSlot`; `slotCap` in query.ts). */
+export const FLEX_SLOT = 1;
 
 /** Hard ceiling on stacked Extra Attacks (a loop backstop, not a balance gate). */
 export const MAX_EXTRA_ATTACKS = 6;
 
-// ---------- Patron, souls, drawing ----------
+// ---------- Patron and souls ----------
 
 /** Patron HP — the ONLY way it drops is a hero death, which costs the fallen
  *  hero's level (`koPatronDamage` in query.ts, charged in killInPlace), and
@@ -56,8 +57,29 @@ export const KILL_BOUNTY_BASE = 1;
  *  pays nothing extra). */
 export const RICHEST_BOUNTY_BONUS = 2;
 
-export const INITIAL_DRAW = 3;
-export const DRAW_PER_TURN = 1;
+// ---------- The shop ----------
+
+/** What an item costs, by its tier: Deadlock's 1 : 2 : 4 : 8 ladder. An
+ *  upgrade bought over its component costs the difference. Net worth counts
+ *  every worn item at this price. */
+export const PRICE: Readonly<Record<1 | 2 | 3 | 4, number>> = { 1: 2, 2: 4, 3: 8, 4: 16 };
+
+/** The market's random slice, drawn from the match seed before the draft: per
+ *  tab, this many items of each tier (tier 1 is always on sale in full, and the
+ *  heroes' signature items join as they are drafted). Fewer when a tier runs short. */
+export const MARKET_SLICE: readonly (readonly [tier: 2 | 3 | 4, count: number])[] = [[2, 2], [3, 2], [4, 1]];
+
+/** Own turns an active item waits after it is used, and when it is bought:
+ *  `low` for tiers 1–2, `high` for tiers 3–4. Hard crowd control uses charges
+ *  instead. */
+export const ACTIVE_COOLDOWN = { low: 2, high: 3 } as const;
+
+/** Uses a hard crowd-control active has per match (no cooldown). */
+export const HARD_CC_CHARGES = 2;
+
+/** A hero wearing this many items of one tab gets that tab's category spike:
+ *  +1 Bullet Power (Weapon), +1 Spirit Power (Spirit) or +1 max HP (Vitality). */
+export const CATEGORY_SPIKE_ITEMS = 3;
 
 // ---------- Abilities ----------
 

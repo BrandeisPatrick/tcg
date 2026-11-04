@@ -11,12 +11,13 @@ import { motion } from 'framer-motion';
 import { CardFrame } from '../card/CardFrame';
 import { RoundCardIcon } from '../card/RoundCardIcon';
 import { CARDS_BY_ID } from '@/cards';
+import { PRICE } from '@/engine/constants';
 import { poster, scrimStyle } from '../poster';
 import { fonts } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
 import { FULL } from './primitives';
 
-const TYPE_LABEL = { hero: 'Hero', spell: 'Spell', equipment: 'Equipment', ultimate: 'Ultimate' } as const;
+const TYPE_LABEL = { hero: 'Hero', spell: 'Active item', equipment: 'Passive item', ultimate: 'Ultimate' } as const;
 
 export function CardLightbox({ ids, id, onPick, onClose }: {
   /** The set being walked, in the order it was on screen. */
@@ -61,8 +62,8 @@ export function CardLightbox({ ids, id, onPick, onClose }: {
   const scale = Math.min(1, room / FULL.h, (width - 32) / FULL.w);
   const glow = data.type === 'ultimate' || (data.type === 'equipment' && data.tier === 3) ? 'gold' : null;
   const meta = [
-    data.type === 'equipment' ? `Equipment · Tier ${data.tier}` : TYPE_LABEL[data.type],
-    onTable && data.cost != null ? `${data.cost} soul${data.cost === 1 ? '' : 's'}` : null,
+    onTable ? `${TYPE_LABEL[data.type]} · ${data.slot[0].toUpperCase()}${data.slot.slice(1)} · Tier ${data.tier}` : TYPE_LABEL[data.type],
+    onTable ? `${PRICE[data.tier]} souls` : null,
     data.type === 'hero' ? `${data.atk} BP · ${data.hp} HP` : null,
   ].filter(Boolean).join(' · ');
 

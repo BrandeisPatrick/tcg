@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
-import type { AbilityId, GameState, CardInstance, PlayerID } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
-import { findCardOnBoard, isRespawning, kitAbilityIds, otherPlayer, resolveSkill, stepInCandidates, ultimateCard } from '@/engine/query';
+import type { AbilityId, GameState, CardId, CardInstance, PlayerID } from '@/engine/types';
+import { CARDS_BY_ID, itemCard } from '@/cards';
+import { findCardOnBoard, findWornItem, isRespawning, kitAbilityIds, otherPlayer, resolveSkill, stepInCandidates, ultimateCard, wornActives } from '@/engine/query';
 import { humanSeat } from './seat';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
@@ -11,29 +11,28 @@ import { CardPreview } from './overlays/CardPreview';
 import { LiveScaleContext, boardLiveSpirit } from './card/liveScale';
 import { plainText } from './card/scaling';
 import { HeroDetailSheet, type SkillOffer } from './overlays/HeroDetailSheet';
-import { OpponentHand } from './board/OpponentHand';
+import { ShopSheet } from './overlays/ShopSheet';
 import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
-import { MulliganOverlay } from './overlays/MulliganOverlay';
 import { DraftOverlay } from './overlays/DraftOverlay';
 import { PromotionOverlay } from './overlays/PromotionOverlay';
-import { EquipmentReplaceOverlay } from './overlays/EquipmentReplaceOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
-import { BoardTable, boardRows, boardGutter, vitalsPull, tablePad } from './board/BoardTable';
+import { BoardTable, boardRows, boardGutter, vitalsPull } from './board/BoardTable';
 import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
 import type { TurnPhase } from './board/TurnCompass';
 import {
-  actionRefusal, moveBlockReason, playBlockReason, readyHeroes, retreatBlock,
+  SHOP_OPEN, actionRefusal, activateBlockReason, moveBlockReason, readyHeroes, retreatBlock,
   skillBlockReason,
 } from './board/heroActions';
 import { isValidTarget } from './board/targeting';
 import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attackAim';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
-import { attackBlocked, cardCost, playBlocked, playTargets, retreatCost, skillBlocked, skillTargets } from '@/engine/legality';
+import { activateBlocked, activateTargets, attackBlocked, retreatCost, skillBlocked, skillTargets } from '@/engine/legality';
+import type { Action } from '@/engine/engine';
 import { forecastAttack, type AttackPlan } from '@/engine/forecast';
 import { CombatChoreographer } from './effects/CombatChoreographer';
 import { SoulsRail } from './board/SoulsRail';
@@ -50,13 +49,12 @@ import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { useSettings, getSettings } from '@/storage/settings';
 import { useFitScale } from './hooks/useFitScale';
-import { useViewport, MOBILE_MAX } from './hooks/useViewport';
+import { useViewport } from './hooks/useViewport';
 import { fonts, spring } from './tokens';
 import { poster } from './poster';
 import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer, PANEL_WIDTH } from './side-panel/PanelDrawer';
 import { PATRON_NAMES } from './board/patrons';
-import { HandTray } from './board/HandTray';
 import type { PendingPlay } from './helpers';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { markLessonDone } from '@/storage/playerData';
@@ -71,20 +69,9 @@ const AI_THINK_MS = 800;        // delay between AI moves; also gives combat ani
 /** The longest the board stays up after the match is decided, so the blow
  *  that decided it can be seen landing before the result sheet takes over. */
 const FINAL_BLOW_MAX_MS = 2800;
-/** Phones: how much of the rival's face-down backs shows above the sheet's
- *  top edge, in stage px (~21–30px on screen at a phone's fit scale). The
- *  rest of the fan sits behind the paper, and the row it used to fill — about
- *  a seventh of the stage's height — goes to the board. */
-const RIVAL_PEEK = 36;
-/** How far the fan's wrapper pulls the sheet up over it: OpponentHand's box
- *  (4px inset + 92px backs + 8px) and the row gap, less the paper's top margin
- *  and the backs' 4px inset, leaves RIVAL_PEEK of the backs in sight. */
-const PHONE_RIVAL_TUCK = 4 + 92 + 8 + boardRows.gap(true) - tablePad(true).top - 4 - RIVAL_PEEK;
-/** Room above the fan for its outer backs, which ride up as it widens. With
- *  it, at a tall phone's fit scale (~0.84) the paper's top edge clears the
- *  System menu's gear (top 12 + 40px); on a shorter phone the sheet is
- *  scaled narrow enough to pass left of it instead. */
-const PHONE_RIVAL_HEADROOM = 20;
+/** Phones: room above the sheet for the System menu's gear (top 12 + 40px),
+ *  so the paper's top edge clears it at a tall phone's fit scale. */
+const PHONE_HEADROOM = 40;
 /** What a click must land on to NOT cancel an armed card or skill. */
 const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="tab"]';
 
@@ -110,9 +97,6 @@ export function Board(props: BoardProps<GameState>) {
   // Combat tempo honours the system-menu speed setting live.
   const { combatSpeed } = useSettings();
   const [pending, setPending] = useState<PendingPlay | null>(null);
-  // Taps on cards the player cannot pay for. The coach counts them: one
-  // lesson has the player feel the soul limit before it explains it.
-  const [refusals, setRefusals] = useState(0);
   // Auto-play: when on, the same AI that runs the opponent also drives the
   // local player's turns, so the match plays itself hands-free. Toggle in the
   // top-right; flip off any time to take control back.
@@ -127,15 +111,17 @@ export function Board(props: BoardProps<GameState>) {
     if (pref === 'closed') return false;
     return window.innerWidth >= 1100;
   });
-  const [preview, setPreview] = useState<{ card: CardInstance; hover: boolean } | null>(null);
+  // The card shown at full size: a worn item's chip (by its instance, so a
+  // hover peek closes if the item goes) or an item in the shop (by its id).
+  const [preview, setPreview] = useState<{ cardId: CardId; iid?: string; hover: boolean } | null>(null);
   const [heroDetail, setHeroDetail] = useState<CardInstance | null>(null);
   // Retreat with more than one bench hero able to go in: the chooser is up
   // until the player picks who (or backs out).
   const [retreatPick, setRetreatPick] = useState(false);
-  // Equipment replacement flow: when the player tries to attach a 4th piece
-  // to a hero, this holds the incoming card + the target hero until the
-  // player picks which existing item to discard (or cancels).
-  const [replaceTarget, setReplaceTarget] = useState<{ incoming: CardInstance; hero: CardInstance } | null>(null);
+  // The shop sheet, put away by the player while the shop is still open (the
+  // board's Shop button brings it back). Every turn opens with it up.
+  const [shopHidden, setShopHidden] = useState(false);
+  useEffect(() => { setShopHidden(false); }, [G.turnNumber]);
   // An attack, being made. While non-null the choreographer is
   // walking its plan; when it finishes, the engine makes the attack for real.
   const [combatPlan, setCombatPlan] = useState<AttackPlan | null>(null);
@@ -152,8 +138,9 @@ export function Board(props: BoardProps<GameState>) {
   // its one attack, which ends it. The dial marks the attack: 'battle' while
   // the choreographer walks it, 'regroup' once it is made, 'prepare' before.
   const turnPhase: TurnPhase = combatPlan ? 'battle' : G.attackUsed ? 'regroup' : 'prepare';
-  /** The mover's attack can still be made — and is not being made already. */
-  const attackOpen = !ctx.gameover && !combatPlan && attackBlocked(G, mover) === null;
+  /** The mover's attack can still be made — its shop closed, and it is not
+   *  being made already. */
+  const attackOpen = !ctx.gameover && !combatPlan && G.step === 'act' && attackBlocked(G, mover) === null;
   // The ready glint: your heroes that can still do something this turn —
   // none while an attack is being walked, when nothing can be done.
   const readyIids = useMemo(
@@ -198,13 +185,6 @@ export function Board(props: BoardProps<GameState>) {
     (iid) => ({ impact: fxTimeline.impactDelay[iid] ?? 0, settle: fxTimeline.koCorpse[iid] ?? 0 }),
     [fxTimeline],
   );
-  // The spell reveal (CardPlayFlash) sits left of centre on desktop and
-  // centred on phones; a spell's bolt leaves from there. Read at fire time so
-  // it tracks the live viewport without a dependency on the breakpoint hook.
-  const spellOrigin = useCallback(() => ({
-    x: window.innerWidth <= MOBILE_MAX ? window.innerWidth / 2 : Math.min(330, Math.max(170, window.innerWidth * 0.2)),
-    y: window.innerHeight / 2,
-  }), []);
   // When our Active is KO'd by a skill / spell, the promotion prompt waits for
   // the shatter to play instead of covering it.
   const myActiveIid = G.players[me].active?.iid;
@@ -224,9 +204,8 @@ export function Board(props: BoardProps<GameState>) {
     ? { total: combatPlan.steps.length, currentBeat: combatBeat, attackerIsMe: combatPlan.attackerId === me }
     : null, [combatPlan, combatBeat, me]);
 
-  // Ephemeral feedback sticker — explains otherwise-silent no-ops (unaffordable
-  // card, invalid target — printed red as warnings) and confirms
-  // fire-and-forget actions (mulligan — printed ink).
+  // Ephemeral feedback sticker — explains otherwise-silent no-ops (an
+  // unaffordable item, an invalid target — printed red as warnings).
   const [notice, setNotice] = useState<{ id: number; msg: string; warn: boolean } | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showNotice = useCallback((msg: string, warn = false) => {
@@ -236,8 +215,8 @@ export function Board(props: BoardProps<GameState>) {
   }, []);
   useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
 
-  // Scale the battle stage to fit shorter viewports so the hand row never gets
-  // clipped off the bottom of the screen.
+  // Scale the battle stage to fit shorter viewports so the controls row never
+  // gets clipped off the bottom of the screen.
   const { containerRef: fitContainerRef, contentRef: fitContentRef, scale: fitScale } = useFitScale();
   // Phone widths reflow the board to a narrower, shorter-row layout (cards
   // shrink to ~⅓ of the viewport width) instead of overflowing off the side.
@@ -255,8 +234,8 @@ export function Board(props: BoardProps<GameState>) {
   }, [isMobile]);
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
-  // The hand row (strip + phone controls) — the targeting banner docks above it on phones.
-  const handRowRef = useRef<HTMLDivElement>(null);
+  // The phone's controls row — the targeting banner docks above it.
+  const controlsRowRef = useRef<HTMLDivElement>(null);
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
     if (el) {
       slotRefs.current.set(iid, el);
@@ -370,7 +349,7 @@ export function Board(props: BoardProps<GameState>) {
 
   // Tap-away: while a card or skill is armed, a click on anything that is
   // not a control — the sheet, the room, the log — backs out of targeting,
-  // the way Escape does. Controls (hero tiles, hand cards, buttons) handle
+  // the way Escape does. Controls (hero tiles, item chips, buttons) handle
   // their own clicks and may re-arm; this listener sits on window, after
   // React's handlers have run, and only acts on non-interactive targets.
   useEffect(() => {
@@ -384,18 +363,10 @@ export function Board(props: BoardProps<GameState>) {
     return () => window.removeEventListener('click', onClick);
   }, [pending]);
 
-  // Safety net: if the previewed card (hand or attached equipment) is no longer present, drop the preview.
+  // Safety net: if the previewed worn item is no longer worn, drop the preview.
   useEffect(() => {
-    if (!preview?.hover) return;
-    const targetIid = preview.card.iid;
-    const inHand = (['0', '1'] as PlayerID[]).some((pid) =>
-      G.players[pid].hand.some((c) => c.iid === targetIid)
-    );
-    const inAttached = (['0', '1'] as PlayerID[]).some((pid) => {
-      const all = [G.players[pid].active, ...G.players[pid].bench].filter(Boolean) as CardInstance[];
-      return all.some((h) => (h.attached ?? []).some((eq) => eq.iid === targetIid));
-    });
-    if (!inHand && !inAttached) setPreview(null);
+    if (!preview?.hover || !preview.iid) return;
+    if (!findWornItem(G, preview.iid)) setPreview(null);
   }, [G, preview]);
 
   // Stuck-hover guard: if the cursor leaves the document or stops moving for
@@ -498,17 +469,17 @@ export function Board(props: BoardProps<GameState>) {
   }, [G.action?.id, G.action?.state, G.action?.kind, moves, ctx.gameover]);
 
   /** The glow on the tiles: is this hero a legal target for what is armed?
-   *  The engine answers (`isValidTarget` asks `playBlocked` / `skillBlocked`),
-   *  so the corpse rule, the filters, an item already worn and the equipment
-   *  cap are written once, in the engine. */
+   *  The engine answers (`isValidTarget` asks `skillBlocked` /
+   *  `activateBlocked` / `attackBlocked`), so the corpse rule and the filters
+   *  are written once, in the engine. */
   const isTargetable = useCallback(
     (card: CardInstance): boolean => isValidTarget(G, me, pending, card),
     [G, me, pending],
   );
 
-  /** What the Spirit behind a card in hand comes to now (a spell's is your
-   *  Active's, an ultimate's its linked hero's): the card prints its own
-   *  number and its popover says "(N now)". */
+  /** What the Spirit behind a card's numbers comes to now (an active item's
+   *  is your Active's, an ultimate's its linked hero's): the card prints its
+   *  own number and its popover says "(N now)". */
   const liveSpirit = useMemo(() => boardLiveSpirit(G, me), [G, me]);
 
   /** True while the player's next move must wait: a card-play / skill / ult
@@ -524,22 +495,31 @@ export function Board(props: BoardProps<GameState>) {
   // wraps `blocked`, legality.ts). A move it will not make is said on the
   // sticker instead of being dispatched to go nowhere.
 
-  /** Play a card from hand once the engine says it may be played. A hero at
-   *  the equipment cap opens the replace chooser instead (the engine wants to
-   *  be told which item goes); any other refusal is said on the sticker and
-   *  the card stays in hand. */
-  function playCardOn(cardIid: string, targetIid?: string, discardIid?: string) {
-    const no = actionRefusal(G, me, { type: 'playCard', cardIid, targetIid, discardIid });
-    if (no?.code === 'full') {
-      const incoming = G.players[me].hand.find((c) => c.iid === cardIid);
-      const hero = targetIid ? findCardOnBoard(G, targetIid)?.card : undefined;
-      if (incoming && hero) setReplaceTarget({ incoming, hero });
-      return;
-    }
+  /** Make a shop move once the engine says it may be made; a refusal is said
+   *  on the sticker. */
+  function shopMove(a: Extract<Action, { type: 'buy' | 'sell' | 'moveItem' }>) {
+    if (!isMyTurn || actionLocked) return;
+    const no = actionRefusal(G, me, a);
     if (no) { showNotice(no.text, true); return; }
-    if (discardIid) moves.playCard(cardIid, targetIid, discardIid);
-    else if (targetIid) moves.playCard(cardIid, targetIid);
-    else moves.playCard(cardIid);
+    if (a.type === 'buy') moves.buy(a.itemId, a.heroIid);
+    else if (a.type === 'sell') moves.sell(a.itemIid);
+    else moves.moveItem(a.itemIid, a.toHeroIid);
+  }
+
+  /** Close the shop: the turn moves on to its act. */
+  function closeShop() {
+    if (!isMyTurn || actionLocked) return;
+    const no = actionRefusal(G, me, { type: 'closeShop' });
+    if (no) { showNotice(no.text, true); return; }
+    moves.closeShop();
+  }
+
+  /** Use an active item once the engine says it may be used. */
+  function fireItem(itemIid: string, targetIid?: string) {
+    const no = actionRefusal(G, me, { type: 'activate', itemIid, targetIid });
+    if (no) { showNotice(no.text, true); return; }
+    if (targetIid) moves.activate(itemIid, targetIid);
+    else moves.activate(itemIid);
   }
 
   /** Use one of a hero's skills once the engine says it may be used. */
@@ -552,42 +532,12 @@ export function Board(props: BoardProps<GameState>) {
     moves.useSkill(...args);
   }
 
-  /** Arm a card that needs a target: the board lights what it may be aimed
-   *  at and waits for a tap. With nothing it could be aimed at, the sticker
-   *  says why instead. */
-  function armCard(c: CardInstance) {
-    const data = CARDS_BY_ID[c.cardId];
-    if (!data || data.type === 'hero') return;
-    const why = playBlocked(G, me, c.iid); // no target named: playable on SOME target?
-    if (why) {
-      showNotice(playBlockReason(why, { card: data.name, cost: cardCost(c), have: G.players[me].souls }), true);
-      return;
-    }
-    const equipment = data.type === 'equipment';
-    setPending({
-      kind: 'playCard', iid: c.iid,
-      title: data.name,
-      desc: plainText(data.text) || (equipment ? 'Attach to an ally hero.' : ''),
-      // The banner's label and where it docks; which heroes glow is the engine's.
-      filter: equipment ? 'allyHero' : getAbility(data.abilities[0])?.target ?? 'anyBoard',
-    });
-  }
-
-  function onTapCardInHand(c: CardInstance) {
-    if (!isMyTurn) return;
-    if (actionLocked) return;
-    // Nothing to aim — a plain spell, or a self-cast ultimate (Yamato's), which
-    // the engine lands on its own hero: it goes now.
-    if (playTargets(G, me, c) === 'none') { playCardOn(c.iid); return; }
-    armCard(c);
-  }
-
   function onTapHero(card: CardInstance) {
     if (pending) {
       if (!isMyTurn || actionLocked) return;
-      // A tap on a hero the armed card cannot go to (a corpse, a rival for
-      // gear, one already wearing the item) is refused with the reason.
-      if (pending.kind === 'playCard') playCardOn(pending.iid, card.iid);
+      // A tap on a hero the armed skill or item cannot be aimed at (a corpse,
+      // the wrong side) is refused with the reason.
+      if (pending.kind === 'activate') fireItem(pending.iid, card.iid);
       else if (pending.kind === 'attack') aimAttack(card.iid);
       else castSkill(pending.iid, card.iid, pending.skillId);
       setPending(null);
@@ -623,6 +573,29 @@ export function Board(props: BoardProps<GameState>) {
       title: ult ? `${data.name} · ${ult.name}` : `${data.name} · Skill`,
       desc: (ult ? plainText(ult.text) : ability.prompt) || 'Choose a target.',
       filter: ability.target,
+    });
+  }
+
+  /**
+   * Try to use an active item a hero wears. Asks the engine first
+   * (`activateBlocked`); an item that takes no target goes at once, one that
+   * does arms the targeting like a skill.
+   */
+  function tryUseItem(itemIid: string) {
+    if (!isMyTurn) return;
+    if (actionLocked) return;
+    const worn = findWornItem(G, itemIid, me);
+    const data = worn && itemCard(worn.item.cardId);
+    if (!worn || data?.type !== 'spell') return;
+    const why = activateBlocked(G, me, itemIid);
+    if (why) { showNotice(activateBlockReason(why, worn.item, worn.bearer), true); return; }
+    const targets = activateTargets(G, me, worn.item, worn.bearer);
+    if (targets === 'none') { fireItem(itemIid); return; }
+    setPending({
+      kind: 'activate', iid: itemIid,
+      title: `${CARDS_BY_ID[worn.bearer.cardId]?.name ?? ''} · ${data.name}`,
+      desc: plainText(data.text) || 'Choose a target.',
+      filter: getAbility(data.abilities[0])?.target ?? 'anyBoard',
     });
   }
 
@@ -665,32 +638,6 @@ export function Board(props: BoardProps<GameState>) {
     else if (stepIns.length > 1) setRetreatPick(true);
   }
 
-  function onHandDragEnd(c: CardInstance, x: number, y: number) {
-    if (!isMyTurn || actionLocked) return;
-    // Nothing to aim: it goes, wherever it was let go.
-    if (playTargets(G, me, c) === 'none') { playCardOn(c.iid); setPending(null); return; }
-
-    let targetIid: string | null = null;
-    for (const [iid, el] of slotRefs.current.entries()) {
-      const rect = el.getBoundingClientRect();
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        targetIid = iid;
-        break;
-      }
-    }
-
-    // Let go over a hero: the same question a tap on it asks of the engine.
-    // A corpse, a hero the card cannot go to, one already wearing the item is
-    // refused with the reason, and the card stays in hand.
-    if (targetIid) {
-      playCardOn(c.iid, targetIid);
-      setPending(null);
-      return;
-    }
-    // Let go over nothing: armed, as a tap would, to pick a hero.
-    armCard(c);
-  }
-
   if (gameover) {
     const isStory = !!getMatchConfig().story;
     const won = gameover.winner === me;
@@ -722,6 +669,7 @@ export function Board(props: BoardProps<GameState>) {
     return (
       <DraftOverlay
         draft={G.draft}
+        market={G.market}
         currentPlayer={ctx.currentPlayer as PlayerID}
         me={me}
         onPick={(heroId) => (moves as any).draftPick(heroId)}
@@ -729,42 +677,35 @@ export function Board(props: BoardProps<GameState>) {
     );
   }
 
-  // The hand and, on phones, the turn controls under it. Desktop mounts it as
-  // the last row of the fitted stage; phones mount it below the stage, at
-  // full size (see the fit box in the column below).
-  // zIndex 2 keeps the hand row above the board plane (zIndex 1), so cards
-  // rising on select/hover/drag pass OVER the sheet's bottom edge instead of
-  // sliding beneath it.
   // An equipped item's chip previews the item (CardPreview, centre screen).
   // Under a pointer it is a peek that leaves with the pointer; on a phone
   // there is no pointer to leave, so the tap opens the held preview, which
   // stays until the next tap.
-  const previewEquipment = (eq: CardInstance | null) => setPreview(eq ? { card: eq, hover: !isMobile } : null);
+  const previewEquipment = (eq: CardInstance | null) => setPreview(eq ? { cardId: eq.cardId, iid: eq.iid, hover: !isMobile } : null);
 
-  const handRow = (
-    <div ref={handRowRef} style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, alignSelf: isMobile ? 'stretch' : undefined }}>
-      <HandTray
-        cards={G.players[me].hand}
-        disabled={!isMyTurn}
-        pending={pending}
-        isMyTurn={isMyTurn}
-        busy={turnBusy}
-        hasPending={!!pending}
-        mySouls={G.players[me].souls}
-        onTap={onTapCardInHand}
-        onLongPress={(c) => setPreview({ card: c, hover: false })}
-        onHover={(c) => setPreview(c ? { card: c, hover: true } : null)}
-        onDragEndOver={onHandDragEnd}
-        onUnaffordable={(c) => {
-          setRefusals((n) => n + 1);
-          const no = actionRefusal(G, me, { type: 'playCard', cardIid: c.iid });
-          if (no) showNotice(no.text, true);
-        }}
-        onEndTurn={pressTurnButton}
-        onCancel={() => setPending(null)}
-        autoPlay={autoPlay}
-        onToggleAuto={() => setAutoPlay((v) => !v)}
-      />
+  // The shop sheet is up through your turn's shop step, unless you put it
+  // away (the controls' Shop button brings it back) or the AI is shopping for
+  // you (auto-play).
+  const shopOpen = isMyTurn && !G.draft && G.step === 'shop' && !ctx.gameover && !autoPlay;
+  const shopShown = shopOpen && !shopHidden;
+  const turnControls = (variant: 'dock' | 'tray') => (
+    <BoardControls
+      variant={variant}
+      isMyTurn={isMyTurn}
+      busy={turnBusy}
+      hasPending={!!pending}
+      autoPlay={autoPlay}
+      onEndTurn={pressTurnButton}
+      onCancel={() => setPending(null)}
+      onToggleAuto={() => setAutoPlay((v) => !v)}
+      onShop={shopOpen && shopHidden ? () => setShopHidden(false) : undefined}
+    />
+  );
+
+  // Phones: the turn controls as a row under the fitted stage, at full size.
+  const controlsRow = (
+    <div ref={controlsRowRef} style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, alignSelf: 'stretch', padding: '6px 0 8px' }}>
+      {turnControls('tray')}
     </div>
   );
 
@@ -808,7 +749,7 @@ export function Board(props: BoardProps<GameState>) {
             // Center the stage vertically so unused space spreads to top/bottom
             // rather than ballooning the active row. When the stage is taller
             // than the viewport, useFitScale shrinks it (transform below) so the
-            // hand row stays on-screen instead of overflowing off the bottom.
+            // controls stay on-screen instead of overflowing off the bottom.
             justifyContent: 'center',
             alignItems: 'center',
             minHeight: 0,
@@ -819,9 +760,9 @@ export function Board(props: BoardProps<GameState>) {
             // fit-scale took from the board.
             height: isMobile ? 'calc(100dvh - 12px - env(safe-area-inset-bottom, 0px))' : 'calc(100vh - 32px)',
           }}>
-        {/* Phones fit the stage into what the hand row leaves (the row stays
-            out of the scale, below); elsewhere this box is not drawn and the
-            column fits the whole stage, hand included. */}
+        {/* Phones fit the stage into what the controls row leaves (the row
+            stays out of the scale, below); elsewhere this box is not drawn and
+            the column fits the whole stage. */}
         <div
           ref={isMobile ? fitContainerRef : undefined}
           style={isMobile ? {
@@ -845,31 +786,15 @@ export function Board(props: BoardProps<GameState>) {
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
           }}>
-          {/* Rival's fan tucks behind the sheet's top edge — a small negative
-              margin lets the card backs peek over the paper (the sheet stacks
-              above via zIndex), so the face-down hand rests AT the board
-              instead of floating in the room. Phones sink it deeper: only a
-              strip of the backs shows, and the row it used to fill goes to
-              the board (see RIVAL_PEEK). Not in a lesson: the phone coach
-              plate sits in that row, above the board, and would cover the
-              sheet's top. */}
-          <div style={{
-            flex: '0 0 auto', position: 'relative', zIndex: 0,
-            ...(isMobile && !isTutorial
-              ? { marginBottom: -PHONE_RIVAL_TUCK, paddingTop: PHONE_RIVAL_HEADROOM }
-              : { marginBottom: isMobile ? 0 : -10 }),
-          }}>
-            <OpponentHand cards={G.players[opp].hand} />
-          </div>
-
           {/* 3×3 BOARD GRID — the three rows (opp bench, lane, my bench)
               sit on one flat cream sheet (BoardTable), a print floating on
-              the blurred scene. Same flat plane on desktop and mobile. */}
+              the blurred scene. Same flat plane on desktop and mobile. Phones
+              leave room above it for the System menu's gear, except in a
+              lesson, where the coach plate takes that row. */}
           <div style={{
-            // Stacks the sheet above the rival's fan so the paper's top edge
-            // overlaps the tucked card bottoms (see OpponentHand wrapper).
             position: 'relative',
             zIndex: 1,
+            paddingTop: isMobile && !isTutorial ? PHONE_HEADROOM : 0,
           }}>
           <div style={{
             position: 'relative',
@@ -889,7 +814,7 @@ export function Board(props: BoardProps<GameState>) {
             <BoardTable isMobile={isMobile} />
 
             {/* RIVAL VITALS — a narrow rule capping the top of the stack.
-                Patron HP, deck, discard, hand, souls and skill readiness live
+                Patron HP, souls, the turn's step and the attack lamp live
                 here on the board rather than only in the panel, and being a
                 real row it can't overlap the sheet's edge the way the old
                 corner plate did. */}
@@ -902,6 +827,7 @@ export function Board(props: BoardProps<GameState>) {
                 projectedDamage={ctx.currentPlayer === me ? projectedPatronDamage : 0}
                 isMobile={isMobile}
                 myTurn={!isMyTurn}
+                step={G.step}
               />
             </div>
 
@@ -966,6 +892,7 @@ export function Board(props: BoardProps<GameState>) {
                 projectedDamage={ctx.currentPlayer !== me ? projectedPatronDamage : 0}
                 isMobile={isMobile}
                 myTurn={isMyTurn}
+                step={G.step}
               />
             </div>
 
@@ -978,8 +905,8 @@ export function Board(props: BoardProps<GameState>) {
 
             {/* Turn control dock — printed in the sheet's right margin,
                 centred on the lane. Lives inside the plane so it reads as
-                part of the board. Phones keep the controls in the hand tray
-                instead. */}
+                part of the board. Phones keep the controls in a row under the
+                stage instead. */}
             {!isMobile && (
               <div style={{
                 position: 'absolute',
@@ -993,28 +920,17 @@ export function Board(props: BoardProps<GameState>) {
                 zIndex: 2,
                 pointerEvents: 'none',
               }}>
-                <BoardControls
-                  variant="dock"
-                  isMyTurn={isMyTurn}
-                  busy={turnBusy}
-                  hasPending={!!pending}
-                  autoPlay={autoPlay}
-                  onEndTurn={pressTurnButton}
-                  onCancel={() => setPending(null)}
-                  onToggleAuto={() => setAutoPlay((v) => !v)}
-                />
+                {turnControls('dock')}
               </div>
             )}
           </div>
           </div>
-
-          {!isMobile && handRow}
         </div>
         </div>
 
-        {/* Phones: the hand sits under the fitted stage at its own full
-            size — scaled with the board it was too small to read. */}
-        {isMobile && handRow}
+        {/* Phones: the turn controls sit under the fitted stage at their own
+            full size — scaled with the board they were too small to read. */}
+        {isMobile && controlsRow}
         </div>
 
         {/* PANEL DRAWER — slides in from the right edge, toggled by a thin
@@ -1038,9 +954,8 @@ export function Board(props: BoardProps<GameState>) {
               // inset its centring so it tracks the visible board, not the
               // full viewport (its right end used to slide under the sheet).
               rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0}
-              // Phones: the full-size hand strip reaches well above the
-              // desktop dock height — sit above it, not on its cards.
-              dockAbove={isMobile ? handRowRef : undefined}
+              // Phones: sit above the full-size controls row, not on it.
+              dockAbove={isMobile ? controlsRowRef : undefined}
             />
           )}
         </AnimatePresence>
@@ -1053,7 +968,7 @@ export function Board(props: BoardProps<GameState>) {
         />
 
         <AnimatePresence>
-          {preview && <CardPreview key={preview.card.iid + (preview.hover ? '-h' : '-p')} cardId={preview.card.cardId} cost={cardCost(preview.card)} hover={preview.hover} onClose={() => setPreview(null)} />}
+          {preview && <CardPreview key={(preview.iid ?? preview.cardId) + (preview.hover ? '-h' : '-p')} cardId={preview.cardId} hover={preview.hover} onClose={() => setPreview(null)} />}
         </AnimatePresence>
 
         <AnimatePresence>
@@ -1072,27 +987,38 @@ export function Board(props: BoardProps<GameState>) {
             const stepIns = isMyActive ? stepInCandidates(G.players[me]) : [];
             const retreatWhy = retreatBlock(G, me, stepIns);
             // The price is the engine's (`retreatCost`): gear and Swift lower it.
+            // Nothing on the board acts while your shop is open: it closes first.
+            const shopFirst = isMyTurn && G.step === 'shop';
             const retreat = stepIns.length === 0 ? undefined : {
               cost: retreatCost(G, me),
               incomingName: stepIns.length === 1 ? CARDS_BY_ID[stepIns[0].cardId]?.name : undefined,
               blockedReason: !isMyTurn ? 'Not your turn'
+                : shopFirst ? SHOP_OPEN
                 : retreatWhy ? moveBlockReason(retreatWhy, retreatCost(G, me))
                 : undefined,
             };
 
             // Any of your heroes may use one ability a turn, on the engine's
-            // own terms (`skillBlocked`) — each of its skills, its ultimate and
-            // a borrowed ultimate asked on its own.
+            // own terms (`skillBlocked`, `activateBlocked`) — each of its
+            // skills, its ultimate, a borrowed ultimate and each active item it
+            // wears asked on its own.
+            const offer = (block: string | null, why: () => string): SkillOffer => ({
+              canUse: isMine && isMyTurn && !shopFirst && block === null,
+              blockedReason: !isMine ? undefined
+                : !isMyTurn ? 'Not your turn'
+                : shopFirst ? SHOP_OPEN
+                : block ? why()
+                : undefined,
+            });
             const skillOffers: Record<AbilityId, SkillOffer> = {};
             for (const skillId of kitAbilityIds(hero)) {
               const block = isMine ? skillBlocked(G, me, hero, undefined, skillId) : null;
-              skillOffers[skillId] = {
-                canUse: isMine && isMyTurn && block === null,
-                blockedReason: !isMine ? undefined
-                  : !isMyTurn ? 'Not your turn'
-                  : block ? skillBlockReason(block, hero, skillId)
-                  : undefined,
-              };
+              skillOffers[skillId] = offer(block, () => skillBlockReason(block!, hero, skillId));
+            }
+            const itemOffers: Record<string, SkillOffer> = {};
+            for (const it of wornActives(hero)) {
+              const block = isMine ? activateBlocked(G, me, it.iid) : null;
+              itemOffers[it.iid] = offer(block, () => activateBlockReason(block!, it, hero));
             }
             // Your Active's attack is offered on its sheet with what it would
             // do, or why it cannot be made (one a turn, and it ends the turn).
@@ -1104,6 +1030,8 @@ export function Board(props: BoardProps<GameState>) {
                 isMine={isMine}
                 skills={skillOffers}
                 onUseSkill={(skillId) => tryUseSkill(hero, skillId)}
+                items={itemOffers}
+                onUseItem={tryUseItem}
                 attack={attack}
                 retreat={retreat}
                 onRetreat={startRetreat}
@@ -1113,16 +1041,17 @@ export function Board(props: BoardProps<GameState>) {
           })()}
         </AnimatePresence>
 
+        {/* The shop sheet: up through your turn's shop step. */}
         <AnimatePresence>
-          {G.mulliganPending && (
-            <MulliganOverlay
-              cards={G.players[me].hand}
-              onConfirm={(iids) => {
-                (moves as any).mulligan(iids);
-                showNotice(iids.length === 0
-                  ? 'Kept opening hand'
-                  : `Swapped ${iids.length} card${iids.length === 1 ? '' : 's'}`);
-              }}
+          {shopShown && (
+            <ShopSheet
+              key="shop"
+              G={G}
+              me={me}
+              onMove={shopMove}
+              onDone={closeShop}
+              onHide={() => setShopHidden(true)}
+              onPreview={(cardId) => setPreview({ cardId, hover: false })}
             />
           )}
         </AnimatePresence>
@@ -1136,7 +1065,7 @@ export function Board(props: BoardProps<GameState>) {
             // Single source of truth: the engine's `resolve` pass flags when a
             // promotion is owed. (No recompute of the corpse/candidate condition.)
             // Shown late when a KO animation is still playing on our Active.
-            if (pendingPromotionShown !== me || G.pendingPromotion !== me || G.mulliganPending) return null;
+            if (pendingPromotionShown !== me || G.pendingPromotion !== me) return null;
             const candidates = stepInCandidates(ps);
             if (candidates.length === 0) return null;
             return (
@@ -1160,20 +1089,6 @@ export function Board(props: BoardProps<GameState>) {
               leavingName={CARDS_BY_ID[G.players[me].active.cardId]?.name ?? 'Your Active'}
               retreat={{ cost: retreatCost(G, me), onCancel: () => setRetreatPick(false) }}
               onPick={(iid) => { setRetreatPick(false); retreatTo(iid); }}
-            />
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {replaceTarget && (
-            <EquipmentReplaceOverlay
-              incoming={replaceTarget.incoming}
-              hero={replaceTarget.hero}
-              onPick={(discardIid) => {
-                playCardOn(replaceTarget.incoming.iid, replaceTarget.hero.iid, discardIid);
-                setReplaceTarget(null);
-              }}
-              onCancel={() => setReplaceTarget(null)}
             />
           )}
         </AnimatePresence>
@@ -1204,9 +1119,9 @@ export function Board(props: BoardProps<GameState>) {
 
         {/* Board FX — skill flares and bolts, type-coloured impacts, status
             stamps, heals, shields, revives — anchored to the hero slots. */}
-        <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} action={G.action} />
+        <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} action={G.action} />
 
-        {/* Feedback sticker — one ink label above the hand (red when it is
+        {/* Feedback sticker — one ink label above the controls (red when it is
             a warning). Explains silent no-ops and confirms fire-and-forget
             actions. */}
         <AnimatePresence>
@@ -1253,7 +1168,6 @@ export function Board(props: BoardProps<GameState>) {
           targeting={!!pending}
           attacking={isMyTurn && !!combatPlan}
           sheetHero={heroDetail?.cardId ?? null}
-          refusals={refusals}
           lesson={lesson}
           onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
           onLessons={matchNav ? matchNav.toLessons : undefined}

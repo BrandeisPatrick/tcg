@@ -12,6 +12,7 @@ import {
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { heroAbilities } from '@/engine/query';
+import { PRICE } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
@@ -82,8 +83,8 @@ function typeLabel(data: CardData | undefined): string {
   if (!data) return '';
   switch (data.type) {
     case 'hero': return 'Hero';
-    case 'spell': return 'Spell';
-    case 'equipment': return `Item · Tier ${data.tier ?? 1}`;
+    case 'spell': return `Active · Tier ${data.tier}`;
+    case 'equipment': return `Item · Tier ${data.tier}`;
     case 'ultimate': return 'Ultimate';
   }
 }
@@ -295,7 +296,7 @@ export function CardFrame({
   };
 
   const artH = size === 'full' ? '58%' : '55%';
-  const printedCost = data && (data.type === 'spell' || data.type === 'equipment') ? data.cost ?? 0 : 0;
+  const printedCost = data && (data.type === 'spell' || data.type === 'equipment') ? PRICE[data.tier] : 0;
   const cost = costInPlay ?? printedCost;
   // A card with no price prints no coin (a hero, an ultimate's face) — but a
   // copy made free prints a 0, so it does not look like a card with no cost.

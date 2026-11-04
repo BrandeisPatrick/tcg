@@ -4,6 +4,7 @@ import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
+import type { TurnStep } from '@/engine/types';
 
 /** Where a turn stands against its attack (one a turn, and it ends the turn's
  *  play): 'prepare' before it, 'battle' while it is walked, 'regroup' once it
@@ -13,10 +14,16 @@ export type TurnPhase = 'prepare' | 'battle' | 'regroup';
 /** The phase in words — for the dial's accessible name only. */
 const PHASE_WORD: Record<TurnPhase, string> = { prepare: 'Prepare', battle: 'Battle', regroup: 'Prepare' };
 
+/** The turn's step in words: printed under the dial and in its name. */
+const STEP_WORD: Record<TurnStep, string> = { shop: 'Shop', act: 'Act' };
+
 interface Props {
   isMyTurn: boolean;
   turn: number;
   phase: TurnPhase;
+  /** The step of the turn in play (`G.step`): the dial prints it under itself.
+   *  Left out (the gallery's demos), no step is shown. */
+  step?: TurnStep;
   /** Override for the ambient `CombatProgressContext` value — only the
    *  preview gallery passes this so it can demo the combat-mode ring
    *  without a real attack. Live game always reads context. */
@@ -25,8 +32,8 @@ interface Props {
 
 /**
  * Persistent turn indicator pinned at the centre of the duel divider: whose
- * turn it is, which turn, and where in the turn — before its attack, the
- * attack, after it.
+ * turn it is, which turn, its step (Shop, then Act — printed under the dial)
+ * and where in the turn — before its attack, the attack, after it.
  *
  * The dial: a flat paper disc with ink rings, the turn numeral at its
  * centre, and an external chevron pointing at whichever player owns the
@@ -59,7 +66,7 @@ const BREATHE: Loop = {
   easing: 'ease-in-out',
 };
 
-export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
+export function TurnCompass({ isMyTurn, turn, phase, step, combatOverride }: Props) {
   const contextCombat = useCombatProgress();
   const combat = combatOverride !== undefined ? combatOverride : contextCombat;
   // Hue follows the turn owner — gold when it's the player's move, red
@@ -87,7 +94,7 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
   // starts the animation over.
   const beat = battle && combat && combat.currentBeat < combat.total ? combat.currentBeat : null;
   const thump = beat === null ? undefined : `turn-compass-thump-${beat % 2 ? 'b' : 'a'} 0.4s ease-out`;
-  const name = `Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"} · ${PHASE_WORD[phase]} phase`;
+  const name = `Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"} · ${step ? `${STEP_WORD[step]} step · ` : ''}${PHASE_WORD[phase]} phase`;
   // Breathe only on the player's turn — doubles as a "you're up" signal and
   // stops the loop during rival turns, settling back over 0.3s.
   const breathe = useAmbientLoop<HTMLDivElement>(isMyTurn ? BREATHE : null, 300);
@@ -210,6 +217,28 @@ export function TurnCompass({ isMyTurn, turn, phase, combatOverride }: Props) {
             : <path d="M0 6 L10 6 L5 0 Z" fill="currentColor" />}
         </svg>
       </motion.div>
+
+      {/* The step in words, under the dial and clear of the chevron: Shop
+          until the shop closes, then Act. */}
+      {step && (
+        <span aria-hidden style={{
+          position: 'absolute',
+          top: SIZE + 12,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          fontFamily: fonts.display,
+          fontSize: 9,
+          letterSpacing: '0.3em',
+          paddingLeft: '0.3em',
+          textTransform: 'uppercase',
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
+          color: step === 'shop' ? hue : poster.inkDim,
+          pointerEvents: 'none',
+        }}>
+          {STEP_WORD[step]}
+        </span>
+      )}
 
       {/* Keyframes — declared inline so the component is self-contained and
           can be dropped into PreviewGallery without external CSS. */}

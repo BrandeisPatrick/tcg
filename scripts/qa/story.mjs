@@ -4,7 +4,9 @@
  * a stop selects before it acts, the frontier opens in view and clear of the
  * docks, every stop sits exactly on its map point at any zoom, the wheel
  * zooms about the cursor, the sheet never shows its edge, the picks clear
- * their stops, the run panel flies to a stop, and a run can be abandoned.
+ * their stops, a supply (an item or souls) waits for the next fight, goes
+ * into it and is spent by it, the run panel flies to a stop, and a run can
+ * be abandoned.
  * And how the map moves: nothing but the camera writes to the page while a
  * gesture runs, a throw glides on and a touch stops it, a double tap zooms
  * in about the point.
@@ -52,6 +54,12 @@ const button = (prefix) => `[...document.querySelectorAll('button')].find((b) =>
 const inDialog = (dialog, prefix) => `[...document.querySelectorAll('[role="dialog"][aria-label=${JSON.stringify(dialog)}] button')].find((b) => (b.getAttribute('aria-label') ?? '').startsWith(${JSON.stringify(prefix)}))`;
 const readRun = () => b.evaluate(`JSON.parse(localStorage.getItem('${KEY}'))`);
 const writeRun = (run) => b.evaluate(`localStorage.setItem('${KEY}', ${JSON.stringify(JSON.stringify(run))})`);
+/** Import the module instance the app holds — after an HMR update its URL
+ *  carries a ?t= stamp, and a bare import would load a second copy. */
+const appModule = (path) => `import(performance.getEntriesByType('resource').map((e) => e.name).find((n) => n.includes(${JSON.stringify(path)})) ?? ${JSON.stringify(path)})`;
+/** What the next fight starts with, in the run panel's words. */
+const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`;
+const suppliesText = (r) => [r.items.length ? plural(r.items.length, 'item') : '', r.souls > 0 ? plural(r.souls, 'soul') : ''].filter(Boolean).join(' · ') || 'Nothing yet';
 /** Every stop marker: id, state (from its label), and its centre. */
 const STOPS = `[...document.querySelectorAll('[data-stop]')].map((el) => {
   const r = el.getBoundingClientRect();
@@ -276,6 +284,13 @@ try {
   const bat = stops.find((s) => s.id === 'battery');
   check('1d Battery Park in view, clear of the docks', onScreen(bat) && !inDock(bat, await b.evaluate(DOCKS)), `${Math.round(bat.x)},${Math.round(bat.y)}`);
 
+  // Supplies waiting for the first fight (as a cache would leave them): the
+  // fight must start with them, and only winning it spends them.
+  const supplies = { items: ['extra_health'], souls: 4 };
+  await writeRun({ ...run, nextFight: supplies });
+  await toMap();
+  run = await readRun();
+
   // ---- 2. press Battery → card → Fight → board; back again, run intact ----------
   const hit = await b.clickEl(stopEl('battery'));
   await sleep(500);
@@ -288,10 +303,16 @@ try {
   await sleep(800);
   await shot('match');
   check('2b Fight opens the match board', board);
+  const setup = await b.evaluate(`${appModule('/src/storage/matchConfig.ts')}.then((m) => m.getMatchConfig().story ?? null)`);
+  check('2b the fight starts with the supplies waiting: free items and souls in hand, the rival with no deck',
+    JSON.stringify(setup?.playerItems) === JSON.stringify(supplies.items) && setup?.playerSouls === supplies.souls
+      && setup?.enemySouls === 0 && !('playerDeck' in (setup ?? {})) && !('enemyDeck' in (setup ?? {})),
+    JSON.stringify(setup && { playerItems: setup.playerItems, playerSouls: setup.playerSouls, enemySouls: setup.enemySouls }));
   const before = run;
   await toMap();
   run = await readRun();
-  check('2c back via ?screen=story, the run is intact', JSON.stringify(run) === JSON.stringify(before));
+  check('2c back via ?screen=story, the run is intact (the supplies still waiting)', JSON.stringify(run) === JSON.stringify(before)
+    && JSON.stringify(run.nextFight) === JSON.stringify(supplies));
 
   // ---- 2d. a won battle: the stop stamps, the camera lands there, then flies on -
   await b.clickEl(stopEl('battery'));
@@ -302,10 +323,7 @@ try {
   // What the board does on a win. Import the module instance the app holds —
   // after an HMR update its URL carries a ?t= stamp, and a bare import would
   // load a second copy with no exit handler registered.
-  await b.evaluate(`(() => {
-    const url = performance.getEntriesByType('resource').map((e) => e.name).find((n) => n.includes('/src/story/storyRun.ts')) ?? '/src/story/storyRun.ts';
-    return import(url).then((m) => m.finishStoryBattle(true));
-  })()`);
+  await b.evaluate(`${appModule('/src/story/storyRun.ts')}.then((m) => m.finishStoryBattle(true))`);
   await b.waitFor(`document.querySelector('[data-stop="battery"]')`, { timeout: 15000 });
   await sleep(380);
   const landing = await b.evaluate(STOPS);
@@ -320,6 +338,8 @@ try {
   check('2e the arrival opens on the stamped stop, then frames the new frontier',
     Math.hypot(batL.x - W / 2, batL.y - H / 2) < Math.max(W, H) * 0.35 && open2.every((s) => onScreen(s) && !inDock(s, docks2)),
     `landed ${Math.round(batL.x)},${Math.round(batL.y)}; open ${open2.map((s) => `${s.id}@${Math.round(s.x)},${Math.round(s.y)}`).join(' ')}`);
+  run = await readRun();
+  check('2f the won fight spent the supplies', run.nextFight?.items.length === 0 && run.nextFight?.souls === 0, JSON.stringify(run.nextFight));
 
   // ---- 3. doctored mid-run: the frontier opens in view ----------------------------
   run = await readRun();
@@ -500,23 +520,55 @@ try {
       && !(await b.evaluate(`!!document.querySelector('[aria-label="Times Square, Recruit"]')`)),
     `heroes ${run.heroes.length}, cleared ${run.clearedNodeIds.join(',')}`);
 
-  // ---- 8. full roster: the next recruit stop reads Supply → Take ------------------
+  // ---- 8. full roster: the next recruit stop reads Supply → Take an item --------
   await toMap();
   const met = (await b.evaluate(STOPS)).find((s) => s.id === 'themet');
-  const deckBefore = run.deck.length;
+  const waiting = run.nextFight;
   check('8a with a full roster the recruit stop reads Supply', run.heroes.length === 4 && / — Supply — open$/.test(met.label), met.label);
   await b.clickEl(stopEl('themet'));
   await sleep(500);
   await shot('stopcard-supply');
   await b.clickEl(button('Open the cache at The Met'));
-  await b.waitFor(`document.querySelector('[role="dialog"][aria-label="Take a supply"] [data-pick="0"]')`);
+  const PICKS = `[...document.querySelectorAll('[role="dialog"][aria-label="Take a supply"] [data-pick]')].map((el) => el.getAttribute('aria-label'))`;
+  await b.waitFor(`document.querySelector('[role="dialog"][aria-label="Take a supply"] [data-pick="2"]')`);
   await sleep(800);
+  await shot('pick-supply');
+  const offered = await b.evaluate(PICKS);
   await b.clickEl(`document.querySelector('[data-pick="0"]')`);
+  await sleep(300);
+  const takeLabel = await b.evaluate(`${inDialog('Take a supply', 'Take ')}?.getAttribute('aria-label') ?? null`);
+  await b.clickEl(inDialog('Take a supply', 'Take '));
+  await sleep(800);
+  run = await readRun();
+  const took = run.nextFight.items.at(-1);
+  const tookName = took && await b.evaluate(`import('/src/cards/index.ts').then((m) => m.CARDS_BY_ID[${JSON.stringify(took)}]?.name ?? null)`);
+  check('8b the cache offers two items, then souls; Take an item: it waits for the next fight, the stop cleared',
+    offered.length === 3 && !/ souls? \(/.test(offered[0]) && !/ souls? \(/.test(offered[1]) && /^\d+ souls? \(3\)/.test(offered[2])
+      && run.nextFight.items.length === waiting.items.length + 1 && run.nextFight.souls === waiting.souls
+      && takeLabel === `Take ${tookName}` && run.clearedNodeIds.includes('themet'),
+    `offered ${offered.join(' | ')}; took ${took} via "${takeLabel}"; next fight ${JSON.stringify(run.nextFight)}`);
+
+  // ---- 8c. …or souls: they add up with the item already waiting -------------------
+  await toMap();
+  const held = run.nextFight;
+  await b.clickEl(stopEl('liberty_sp'));
+  await sleep(500);
+  await b.clickEl(button('Open the cache at Liberty State Park'));
+  await b.waitFor(`document.querySelector('[role="dialog"][aria-label="Take a supply"] [data-pick="2"]')`);
+  await sleep(800);
+  const purse = Number((await b.evaluate(PICKS))[2]?.match(/^(\d+) souls?/)?.[1] ?? 0);
+  await b.clickEl(`document.querySelector('[data-pick="2"]')`);
   await sleep(300);
   await b.clickEl(inDialog('Take a supply', 'Take '));
   await sleep(800);
   run = await readRun();
-  check('8b Take: deck +1 and the stop cleared', run.deck.length === deckBefore + 1 && run.clearedNodeIds.includes('themet'), `deck ${deckBefore} → ${run.deck.length}`);
+  const told = suppliesText(run.nextFight);
+  const shown = await b.evaluate(`[...document.querySelectorAll('button')].some((x) => (x.getAttribute('aria-label') ?? '').includes(${JSON.stringify(`next fight`)}) && (x.getAttribute('aria-label') ?? '').includes(${JSON.stringify(`: ${told}`)}))`);
+  await shot('supplies-waiting');
+  check('8c Take souls: they add to the item waiting, and the run panel says so',
+    purse > 0 && run.nextFight.souls === held.souls + purse && run.nextFight.items.length === held.items.length
+      && run.clearedNodeIds.includes('liberty_sp') && shown,
+    `purse ${purse}; next fight ${JSON.stringify(run.nextFight)}; panel shows "${told}": ${shown}`);
 
   // ---- 9. the run panel flies to a stop and selects it ---------------------------
   await writeRun(mid);

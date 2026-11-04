@@ -2,8 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { ABILITIES_BY_ID, type HeroAbilityDef } from '@/abilities';
 import { CARDS_BY_ID, HEROES } from '@/cards';
-import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
-import { STARTER_DECK_AI } from '@/decks/starter';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { damageUnit } from '@/engine/damage';
 import { resolve } from '@/engine/death';
@@ -16,7 +14,7 @@ import { beginTurn } from '@/engine/actions/turn';
 import { clearTurnFlags, tickCooldowns } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { setMatchConfig } from '@/storage/matchConfig';
-import { freshReadyGame, makeHero } from './_helpers';
+import { freshReadyGame, makeHero, TEST_ROSTERS, TEST_SEED, useItem } from './_helpers';
 
 // A hero may carry one or two skills, each with its own cooldown (one own turn
 // when its data names none), and uses one ability a turn. No hero of the real
@@ -48,7 +46,9 @@ const chill: HeroAbilityDef = {
   run: (G, _ctx, { target }) => { if (target) damageUnit(G, target, 2, 'spirit'); },
 };
 
-const throwaway = (id: string, name: string, skills: string[]): HeroCard => ({ id, name, type: 'hero', rarity: 3, atk: 2, hp: 8, skills });
+const throwaway = (id: string, name: string, skills: string[]): HeroCard => ({
+  id, name, type: 'hero', rarity: 3, atk: 2, hp: 8, skills, signature: ['extra_spirit', 'mystic_burst'],
+});
 
 beforeAll(() => {
   registerAbilities([bolt, surge, chill]);
@@ -84,22 +84,24 @@ const useSkill = (G: GameState, twin: CardInstance, skillId?: string, targetIid?
   perform(G, '0', { type: 'useSkill', heroIid: twin.iid, skillId, targetIid });
 
 /** A boardgame.io match with the throwaway heroes on P0's board: the twin
- *  Active, the cool hero and the real Lash and Paige on the bench. */
+ *  Active, the cool hero and the real Lash and Paige on the bench. It stands in
+ *  the act step of P0's turn 1 (every turn opens in its shop step: closed here). */
 function twinClient() {
   setMatchConfig({
-    playerDeck: [], heroPreferences: [null, null, null, null],
+    heroPreferences: [null, null, null, null],
+    seed: TEST_SEED,
     story: {
       playerHeroes: [TWIN, COOL, 'hero_lash', 'hero_paige'],
-      playerDeck: AI_DECKS_BY_NAME.aggro,
-      enemyHeroes: STARTER_DECK_AI.heroes,
-      enemyDeck: AI_DECKS_BY_NAME.control,
+      enemyHeroes: TEST_ROSTERS['1'],
       enemyBuff: { atk: 0, hp: 0 },
     },
   });
   const c = Client({ game: DeadlockGame, numPlayers: 2 });
   c.start();
+  c.moves.closeShop();
   const G = () => c.getState()!.G as GameState;
-  const endTurns = (n: number) => { for (let i = 0; i < n; i++) c.moves.endTurn?.(); };
+  /** End `n` turns, then close the shop of the turn that opens. */
+  const endTurns = (n: number) => { for (let i = 0; i < n; i++) c.moves.endTurn?.(); c.moves.closeShop(); };
   return { c, G, endTurns, moves: c.moves as any };
 }
 
@@ -300,14 +302,10 @@ describe('a skill the hero does not have', () => {
 });
 
 describe('Echo Shard', () => {
-  const shard = (): CardInstance => ({
-    iid: 'echo-1', cardId: 'echo_shard', ownerId: '0', zone: 'hand', attached: [],
-    hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
-  });
-  const play = (G: GameState) => {
-    G.players['0'].hand.push(shard());
-    expect(perform(G, '0', { type: 'playCard', cardIid: 'echo-1' })).not.toBe(INVALID);
-  };
+  /** Echo Shard, worn and used by a bench hero (Vindicta): the item is ITS one
+   *  ability this turn, so the Active's skill before it stands in no way, and
+   *  "your Active" is the player's Active, the twin. */
+  const play = (G: GameState) => { useItem(G, '0', 'echo_shard', undefined, G.players['0'].bench[0]!); };
 
   it('repeats the skill the hero used this turn — the second one, when that was used', () => {
     const { G, twin, rival, benched } = twinGame();
@@ -344,7 +342,6 @@ describe('Echo Shard', () => {
 describe('the AI with a two-skill hero', () => {
   it('names the second skill in the move, and leaves the first unnamed', () => {
     const { G, twin, rival } = twinGame();
-    G.players['0'].hand = [];
     for (const lookahead of [false, true]) {
       const moves = enumerateAIMoves(G, ctxFor('0'), lookahead).filter((m) => m.move === 'useSkill' && m.args[0] === twin.iid);
       expect(moves.map((m) => m.args), `lookahead ${lookahead}`).toContainEqual([twin.iid, rival.iid]);

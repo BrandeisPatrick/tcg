@@ -4,8 +4,7 @@ import { DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { awardSouls, resolve } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
-import { drawCards, consumeEquipment } from '@/engine/deckOps';
-import { findCardOnBoard, heroData, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, stepInCandidates, ultimateCard, type TargetFilter } from '@/engine/query';
+import { findCardOnBoard, heroData, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, stepInCandidates, ultimateCard, wornItems, type TargetFilter } from '@/engine/query';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -112,6 +111,16 @@ export interface AbilityDef {
   /** Ricochet the bearer's swing carries (the Ricochet item: 2). Summed with a
    *  `ricochet` status by `ricochetPower`, which the swing reads to bounce. */
   ricochet?: (self: CardInstance) => number;
+  /** Own turns off the cooldowns the bearer starts: its ultimate's ('ult') or
+   *  its active items' ('item') — the Cooldown family. Summed by `cooldownCut`;
+   *  a cooldown never goes under 1. */
+  cooldownCut?: (self: CardInstance, kind: 'ult' | 'item') => number;
+  /** Resist the bearer has to a damage type while it wears this (Bullet and
+   *  Spirit Resilience). `damageUnit` takes the larger of it and a resist status. */
+  resist?: (self: CardInstance, type: DamageType) => number;
+  /** Healing Boost the bearer has while it wears this (Healing Booster and
+   *  Tempo). `healUnit` takes the larger of it and a Healing Boost status. */
+  healingBoost?: (self: CardInstance) => number;
 }
 
 /** A hero's skill or passive: an AbilityDef that carries the `name` and `text`
@@ -125,10 +134,10 @@ function spi(source?: CardInstance): number {
   return source ? effectiveSpirit(source) : 0;
 }
 
-// Helper: spirit scaling sourced from the player's ACTIVE hero. Used by SPELLS
-// (where `source` is the spell card itself, which has no spiritMod) — the
-// active hero "channels" the spell, so their spirit boosts the magnitude.
-// Corpse active = no scaling.
+// Helper: spirit scaling sourced from the player's ACTIVE hero. Used by active
+// items (spells, where `source` is the item itself, which has no spiritMod):
+// "your Active" is the player's Active, whoever wears the item, and its spirit
+// boosts the magnitude. Corpse active = no scaling.
 export function activeSpi(G: GameState, pid: PlayerID): number {
   const a = G.players[pid].active;
   if (!a || isRespawning(a)) return 0;
@@ -169,9 +178,9 @@ function eachBoard(G: GameState, pid: PlayerID, fn: (c: CardInstance) => void) {
   resolve(G);
 }
 
-// ----- Spells (7 cards) -----
+// ----- Active items (spells) -----
 
-// Cost 1 — T1 floor. Heals are flat (Spirit Power scales spirit damage only).
+// Tier 1. Heals are flat (Spirit Power scales spirit damage only).
 const eff_healing_rite: AbilityDef = {
   id: 'eff_healing_rite', trigger: 'onPlay', target: 'allyHero',
   prompt: 'Healing Rite — heal an ally for 2.',
@@ -190,7 +199,7 @@ const eff_rusted_barrel: AbilityDef = {
   },
 };
 
-// Cost 3 — T2 spirit burst.
+// Tier 2 spirit burst.
 const eff_cold_front: AbilityDef = {
   id: 'eff_cold_front', trigger: 'onPlay', target: 'enemyActive',
   prompt: 'Cold Front — 4 spirit damage to enemy Active.',
@@ -219,7 +228,7 @@ const eff_spirit_sap: AbilityDef = {
   },
 };
 
-// Cost 5 — T3 premium DoT.
+// Tier 3 premium DoT.
 const eff_decay: AbilityDef = {
   id: 'eff_decay', trigger: 'onPlay', target: 'enemyActive',
   prompt: 'Decay — apply Bleed 3 for 2 turns.',
@@ -237,7 +246,7 @@ const eff_disarming_hex: AbilityDef = {
   },
 };
 
-// Cost 6 — short, sharp hard CC: a clean 1-turn stun (Curse is the long sister).
+// Short, sharp hard CC: a clean 1-turn stun (Cursed Relic is the long sister).
 const eff_knockdown: AbilityDef = {
   id: 'eff_knockdown', trigger: 'onPlay', target: 'enemyActive',
   prompt: 'Knockdown — Stun the enemy Active for 1 turn.',
@@ -295,9 +304,9 @@ const eff_debuff_remover: AbilityDef = {
   },
 };
 
-// Unstoppable (canon T4 vitality, as a spell): the active hero gains
-// Unstoppable for 1 turn (cleanses CC on apply; immune to damage + CC). Strong,
-// but it's a one-shot card so the cost is the balance lever.
+// Unstoppable (canon T4 vitality active): an ally gains Unstoppable for 1 turn
+// (cleanses CC on apply; immune to damage + CC). Strong, so it is a tier 4
+// price and a 3-turn cooldown.
 const eff_unstoppable_cast: AbilityDef = {
   id: 'eff_unstoppable_cast', trigger: 'onPlay', target: 'allyHero',
   base: 1,
@@ -309,8 +318,8 @@ const eff_unstoppable_cast: AbilityDef = {
 
 // Echo Shard (canon: recast last ability): the active hero uses their skill
 // AGAIN this turn — bypasses the one-ability-a-turn limit and the skill's
-// cooldown, and re-fires onBearerSkillUsed so cast-payoff gear (Cooldown draw,
-// Mystic Burst, Surge) triggers a second time. Auto-targets to match the
+// cooldown, and re-fires onBearerSkillUsed so cast-payoff gear (Mystic Burst,
+// Surge of Power) triggers a second time. Auto-targets to match the
 // skill's filter (enemy Active for offense, the hero itself for buffs). Fizzles
 // politely on a skill-less / passive hero. It repeats a skill, never an
 // ultimate: after an ultimate it casts the hero's first skill.
@@ -437,13 +446,22 @@ const eff_vortex_web: AbilityDef = {
   },
 };
 
-// Refresher (canon T4 spirit active): resets every cooldown. Read the way the
-// Cooldown family is: more casts = more options = cards. Draw 2.
+// Refresher (canon T4 spirit active): resets every cooldown. TCG: your
+// Active's skills, its ultimate and the active items it wears come off
+// cooldown (hard crowd control keeps its spent charges). Worn on the bench it
+// readies the Active for this very turn; Refresher's own cooldown starts after
+// it runs, so it never resets itself.
 const eff_refresher: AbilityDef = {
   id: 'eff_refresher', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Refresher — draw 2 cards.',
-  base: 2,
-  run: (G, ctx) => { drawCards(G, ctx.movingPlayer, 2); },
+  prompt: "Refresher — your Active's cooldowns are reset.",
+  base: 3,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (!mine) return;
+    delete mine.cooldowns;
+    for (const it of wornItems(mine)) delete it.cooldowns;
+    pushLog(G, `${cardName(mine.cardId)}'s cooldowns are reset (Refresher).`);
+  },
 };
 
 // Colossus (canon T4 vitality ACTIVE): grow huge — big resists, and nearby
@@ -689,32 +707,40 @@ const eff_majestic_leap: AbilityDef = {
 
 // ----- Equipment passive effects + on-attach -----
 
-// Bullet / Spirit Resilience (canon T3 vitality): a permanent resist of 2, and
-// — as in Deadlock, where the item adds resist below 50% health — 2 more off
-// each hit of that type while the bearer is below half HP (the `incoming` hook).
+// Bullet / Spirit Resilience (canon T3 vitality): a resist of 2 while worn (the
+// `resist` hook) and — as in Deadlock, where the item adds resist below 50%
+// health — 2 more off each hit of that type while the bearer is below half HP
+// (the `incoming` hook). Read off the item, so it moves and sells with it.
 const belowHalf = (self: CardInstance) => self.hp < self.hpMax / 2;
 const eff_bullet_resist: AbilityDef = {
-  id: 'eff_bullet_resist', trigger: 'onPlay', target: 'self',
+  id: 'eff_bullet_resist', trigger: 'ongoing', target: 'self',
   base: 2,
+  resist: (_self, type) => (type === 'attack' ? 2 : 0),
   incoming: (self, amount, type) => (type === 'attack' && belowHalf(self) ? Math.max(0, amount - 2) : amount),
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'bullet_resist', 2, 999); },
+  run: () => {},
 };
 const eff_spirit_resist: AbilityDef = {
-  id: 'eff_spirit_resist', trigger: 'onPlay', target: 'self',
+  id: 'eff_spirit_resist', trigger: 'ongoing', target: 'self',
   base: 2,
+  resist: (_self, type) => (type === 'spirit' ? 2 : 0),
   incoming: (self, amount, type) => (type === 'spirit' && belowHalf(self) ? Math.max(0, amount - 2) : amount),
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'spirit_resist', 2, 999); },
+  run: () => {},
 };
 
 // Healing chain: Extra Regen (+1 HP) → Healing Booster → Healing Tempo.
-// Booster and Tempo grant the Healing Boost keyword at escalating magnitudes.
+// Booster and Tempo give the bearer Healing Boost at escalating magnitudes
+// while worn (the `healingBoost` hook): heals it receives and heals it casts.
 const eff_healing_booster: AbilityDef = {
-  id: 'eff_healing_booster', trigger: 'onPlay', target: 'self',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'healing_boost', 2, 999); },
+  id: 'eff_healing_booster', trigger: 'ongoing', target: 'self',
+  base: 2,
+  healingBoost: () => 2,
+  run: () => {},
 };
 const eff_healing_tempo: AbilityDef = {
-  id: 'eff_healing_tempo', trigger: 'onPlay', target: 'self',
-  run: (G, _ctx, { source, target }) => { const t = target ?? source; if (t) addStatus(G, t, 'healing_boost', 4, 999); },
+  id: 'eff_healing_tempo', trigger: 'ongoing', target: 'self',
+  base: 4,
+  healingBoost: () => 4,
+  run: () => {},
 };
 
 // ----- Equipment reactive triggers -----
@@ -775,23 +801,26 @@ const eff_spirit_shield_proc: AbilityDef = {
   run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 2, 999); },
 };
 
-// Cooldown family (Improved / Superior Cooldown, Refresher): each time the
-// bearer uses a skill, draw a card and spend one of the item's charges. When
-// the charges run out the item breaks (goes to discard, freeing the slot).
-// Shared by all three — the charge count lives on the equipment instance.
-// If the draw fizzles (hand full / deck empty) no charge is spent, so the
-// value is held rather than wasted.
-const eff_cooldown_draw: AbilityDef = {
-  id: 'eff_cooldown_draw', trigger: 'onBearerSkillUsed', target: 'self',
-  run: (G, _ctx, { source, params }) => {
-    const eq = params?.equip as CardInstance | undefined;
-    if (!source || !eq || (eq.charges ?? 0) <= 0) return;
-    const drew = drawCards(G, source.ownerId, 1);
-    if (drew > 0) {
-      eq.charges = (eq.charges ?? 0) - 1;
-      if (eq.charges <= 0) consumeEquipment(G, source, eq);
-    }
-  },
+// Cooldown family (canon Compress → Superior → Transcendent Cooldown): the
+// bearer's ultimate, and from Superior up its active items, cool down faster
+// (the `cooldownCut` hook, read when the cooldown starts; never under 1).
+const eff_compress_cooldown: AbilityDef = {
+  id: 'eff_compress_cooldown', trigger: 'ongoing', target: 'self',
+  base: 2,
+  cooldownCut: (_self, kind) => (kind === 'ult' ? 1 : 0),
+  run: () => {},
+};
+const eff_superior_cooldown: AbilityDef = {
+  id: 'eff_superior_cooldown', trigger: 'ongoing', target: 'self',
+  base: 3,
+  cooldownCut: () => 1,
+  run: () => {},
+};
+const eff_transcendent_cooldown: AbilityDef = {
+  id: 'eff_transcendent_cooldown', trigger: 'ongoing', target: 'self',
+  base: 5,
+  cooldownCut: (_self, kind) => (kind === 'ult' ? 2 : 1),
+  run: () => {},
 };
 
 // Mystic Burst family: each time the bearer uses a skill, hit the enemy active
@@ -1727,12 +1756,11 @@ const eff_ult_drifter: AbilityDef = {
 };
 
 const ABILITIES_LIST: AbilityDef[] = [
-  // ----- Spells (15 cards) -----
+  // ----- Active items (spells) -----
   eff_healing_rite, eff_rusted_barrel,
   eff_cold_front, eff_slowing_hex, eff_spirit_sap,
   eff_decay, eff_disarming_hex,
   eff_knockdown, eff_cast_metal_skin,
-  // ----- Control spell pack (active items → spells) -----
   eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
   eff_guardian_ward, eff_warp_stone, eff_divine_barrier, eff_ethereal_shift,
   eff_phantom_strike, eff_vortex_web, eff_refresher, eff_colossus_cast,
@@ -1740,12 +1768,13 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_blood_tribute, eff_healing_nova, eff_rescue_beam, eff_fury_trance,
   eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,
   eff_majestic_leap,
-  // ----- Equipment passives (4 cards) -----
+  // ----- Passive items: resists and healing boost while worn -----
   eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
-  // ----- Equipment reactive procs (5 cards) -----
+  // ----- Passive items: procs and hooks -----
   eff_bullet_resist_shredder_proc,
   eff_restorative_shot_proc, eff_extra_regen_proc, eff_mystic_regeneration_proc,
-  eff_bullet_shield_proc, eff_spirit_shield_proc, eff_cooldown_draw,
+  eff_bullet_shield_proc, eff_spirit_shield_proc,
+  eff_compress_cooldown, eff_superior_cooldown, eff_transcendent_cooldown,
   eff_mystic_burst_proc, eff_improved_burst_proc,
   eff_bullet_lifesteal, eff_spirit_lifesteal,
   eff_surge_of_power, eff_diviners_kevlar, eff_mystic_reverb,

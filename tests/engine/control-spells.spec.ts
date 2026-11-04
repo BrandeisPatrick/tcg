@@ -3,9 +3,9 @@ import type { GameState } from '@/engine/types';
 import { ABILITIES_BY_ID } from '@/abilities';
 import { addStatus } from '@/engine/statusOps';
 import { INVALID, perform } from '@/engine/engine';
-import { playBlocked } from '@/engine/legality';
+import { activateBlocked } from '@/engine/legality';
 import { isBlocked } from '@/engine/query';
-import { freshReadyGame, makeHero } from './_helpers';
+import { freshReadyGame, giveItem, makeHero } from './_helpers';
 
 const run = (id: string, G: GameState, args: any) =>
   ABILITIES_BY_ID[id].run(G, { movingPlayer: '0' }, args);
@@ -42,16 +42,15 @@ describe('Curse', () => {
 
   it('lands on any one enemy hero, bench included: no skill and no attack', () => {
     const G = freshReadyGame();
-    const curse = { iid: 'curse-1', cardId: 'curse', ownerId: '0' as const, zone: 'hand' as const, attached: [], hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false };
-    G.players['0'].hand.push(curse);
-    G.players['0'].souls = 10;
+    const curse = giveItem(G, G.players['0'].active!, 'curse');
     const benched = G.players['1'].bench[0]!;
     // Never one of your own.
-    expect(playBlocked(G, '0', curse.iid, G.players['0'].active!.iid)).toBe('target');
-    expect(playBlocked(G, '0', curse.iid, G.players['1'].active!.iid)).toBeNull();
-    expect(perform(G, '0', { type: 'playCard', cardIid: curse.iid, targetIid: benched.iid })).not.toBe(INVALID);
+    expect(activateBlocked(G, '0', curse.iid, G.players['0'].active!.iid)).toBe('target');
+    expect(activateBlocked(G, '0', curse.iid, G.players['1'].active!.iid)).toBeNull();
+    expect(perform(G, '0', { type: 'activate', itemIid: curse.iid, targetIid: benched.iid })).not.toBe(INVALID);
     expect(isBlocked(benched, 'skill')).toBe(true);
     expect(isBlocked(benched, 'attack')).toBe(true);
+    expect(curse.charges).toBe(1); // hard crowd control: a charge spent, no cooldown
   });
 });
 

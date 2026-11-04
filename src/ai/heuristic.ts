@@ -4,31 +4,44 @@
  * has already said yes to, and it never has to be taught a new rule. What is
  * left here is judgement — how good a move, or the position it leaves, is.
  *
+ * In the shop step it shops by rule, not by lookahead: each hero follows its
+ * build (cards/builds.ts) — the Active first, then the bench — buying the next
+ * build item it can afford (or the market's stand-in for one off sale), saving
+ * when the Active's next item is one or two turns of income away, never
+ * selling; then it closes the shop.
+ *
  * With lookahead (the default) every candidate is made on a copy through the
  * engine (`simulate`), and the resulting position is scored by `evalState`.
  * That captures target choice, lethal and the value of gear, skills and
  * ultimates without hand-tuning each case, and what a line leaves on the board:
  * the statuses it lands, the channel it starts, the Rem it merges, the souls it
- * banks. A turn is the player's to spend on cards, abilities (one per hero,
- * skill or ultimate, all free) and one Retreat, and then one attack, which ends
+ * banks. A turn's act is the player's to spend on abilities (one per hero —
+ * skill, active item or ultimate, all free) and one Retreat, and then one
+ * attack, which ends
  * it: after the attack only `endTurn` is left. Ending the turn never attacks,
  * so the AI has to choose `attack` itself. Every line before the attack is
  * valued with the attack still to come (if making it helps), so a buff, a
- * bench skill or a Retreat is weighed by the swing it sets up, and attacking
+ * bench skill, an item or a Retreat is weighed by the swing it sets up, and attacking
  * early — which forfeits everything else — only wins when nothing else adds.
  *
  * Without lookahead (the eval framework's random agent, the MCTS bot's rollouts)
  * the moves are only listed, ranked by cheap per-move scores.
  */
 import type { Ctx } from 'boardgame.io';
-import type { GameState, PlayerID, PlayerState, CardInstance, StatusInstance } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
+import type { CardId, GameState, PlayerID, PlayerState, CardInstance, StatusInstance } from '@/engine/types';
+import { CARDS_BY_ID, itemCard } from '@/cards';
+import { defaultBuild } from '@/cards/builds';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
-import { checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, isRespawning, liveBoardCards, otherPlayer, resolveSkill } from '@/engine/query';
+import {
+  checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, isRespawning, itemCooldown, liveBoardCards,
+  otherPlayer, resolveSkill, slotCap, wornItems,
+} from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
-import { attackBlocked, cardCost, legalActions } from '@/engine/legality';
+import { attackBlocked, buyBlocked, buyPrice, legalActions, upgradeComponent } from '@/engine/legality';
+import { marketStandIn } from '@/engine/market';
 import { forecastAttack, simulate } from '@/engine/forecast';
+import { LANE_INCOME } from '@/engine/constants';
 
 // ----- what a status is worth ---------------------------------------------------
 // The numbers `evalState` pays for statuses and channels, in its own units (a
@@ -117,22 +130,27 @@ function heroThreat(c: CardInstance): number {
   return t;
 }
 
-// Value of a hero's attached equipment's ABILITY procs (lifesteal, burst,
-// resist, draw, etc.). Stat-stick bonuses (+atk/+spirit/+hp) are already
-// reflected via heroThreat/hp, so this only scores the proc gear the bot was
-// previously blind to — without it the 1-ply lookahead sees no benefit to
-// equipping a proc item (attaching changes nothing on the board *this* turn).
+/** How much of an active item's worth is still there while it cools down
+ *  (a turn or two away from use again): the lookahead sees the use cost it. */
+const COOLING_SHARE = 0.5;
+
+// Value of what a hero wears beyond its stat bonuses (+atk/+spirit/+hp, which
+// heroThreat and hp already show): a passive item's ability procs and hooks
+// (lifesteal, burst, resist…), and an active item's effect, ready to use. The
+// 1-ply lookahead sees no benefit in a proc item otherwise (wearing one changes
+// nothing on the board this turn), and using an active puts it on cooldown or
+// spends a charge, which is the price the lookahead weighs its effect against.
 function equipValue(c: CardInstance): number {
-  if (!c.attached) return 0;
   let v = 0;
-  for (const eq of c.attached) {
-    const data = CARDS_BY_ID[eq.cardId];
-    if (data?.type !== 'equipment' || !data.abilities) continue;
-    for (const aid of data.abilities) {
-      const ab = getAbility(aid);
-      v += ab?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
+  for (const it of wornItems(c)) {
+    const data = itemCard(it.cardId)!;
+    if (data.type === 'equipment') {
+      for (const aid of data.abilities ?? []) v += getAbility(aid)?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
+      continue;
     }
-    if (eq.charges != null) v += eq.charges; // card-draw fuses
+    const worth = getAbility(data.abilities[0])?.base ?? 3;
+    if (data.hardCC) v += worth * Math.min(it.charges ?? 0, 1) + (it.charges ?? 0);
+    else v += itemCooldown(it) > 0 ? worth * COOLING_SHARE : worth;
   }
   return v;
 }
@@ -144,6 +162,14 @@ const DECISIVE = 1_000_000;
  *  them (or wins a bounty) is a little better than one that does not — small
  *  beside a point of HP (2), so it tips ties rather than steering play. */
 const SOUL = 0.3;
+
+/** Own turns of income the AI saves for its Active's next build item rather
+ *  than spend on the bench (and values its souls more while it does). */
+const SAVE_TURNS = 2;
+
+/** What a soul is worth on top of SOUL while it counts toward the Active's next
+ *  build item, that item one or two turns of income away. */
+const SAVE_SOUL = 0.2;
 
 /** What an unused borrowed ultimate (Sinclair's copy) is worth to its holder,
  *  as a share of the ultimate's `base`: it is that effect, banked for later. */
@@ -220,8 +246,9 @@ function evalState(g: GameState, pid: PlayerID): number {
   const foe = g.players[en];
   // Patron HP is the win condition — weight it heavily.
   let s = (me.hp - foe.hp) * 12;
-  // Souls carry over from turn to turn: a little for each one banked.
-  s += (me.souls - foe.souls) * SOUL;
+  // Souls carry over from turn to turn: a little for each one banked, a little
+  // more while they count toward the next build item.
+  s += (me.souls - foe.souls) * SOUL + saveValue(g, pid) - saveValue(g, en);
   const tally = (ps: PlayerState, rivals: PlayerState, sign: number) => {
     const enemies = liveBoardCards(rivals).length;
     for (const c of liveBoardCards(ps)) {
@@ -242,20 +269,104 @@ function evalState(g: GameState, pid: PlayerID): number {
   return s;
 }
 
+// ----- shopping by the build ---------------------------------------------------
+
+/** A purchase a hero's build asks for: the item (the build's, or the market's
+ *  stand-in for it), for whom, and what it would cost. */
+interface BuildBuy {
+  itemId: CardId;
+  heroIid: string;
+  cost: number;
+}
+
+/** True when `hero` wears `itemId` or an item built from it (Improved Spirit
+ *  covers the Extra Spirit a build lists first). */
+function hasOrPast(hero: CardInstance, itemId: CardId): boolean {
+  return wornItems(hero).some((it) => {
+    for (let id: CardId | undefined = it.cardId; id; id = itemCard(id)?.upgradesFrom) if (id === itemId) return true;
+    return false;
+  });
+}
+
+/**
+ * What `hero`'s build still has to buy in this market, in build order: each
+ * item it neither wears nor has built past — the item itself, or the cheapest
+ * on-sale item of its tab and tier when the market lacks it — that it could
+ * wear: into a free slot, or as an upgrade of an item it wears. Souls and the
+ * step are not asked; the caller does that.
+ */
+function buildBuys(G: GameState, pid: PlayerID, hero: CardInstance): BuildBuy[] {
+  const out: BuildBuy[] = [];
+  const taken = wornItems(hero).map((it) => it.cardId);
+  for (const id of defaultBuild(hero.cardId)) {
+    if (hasOrPast(hero, id)) continue;
+    const itemId = marketStandIn(G, id, taken);
+    if (!itemId || taken.includes(itemId)) continue;
+    if (!upgradeComponent(hero, itemId) && wornItems(hero).length >= slotCap(G, pid)) continue;
+    out.push({ itemId, heroIid: hero.iid, cost: buyPrice(hero, itemId) });
+    taken.push(itemId);
+  }
+  return out;
+}
+
+/** What `hero` does in the shop with `souls`: buys its next build item when it
+ *  can; saves when that item is SAVE_TURNS of income away or less; otherwise
+ *  buys the first later build item it can afford, if any. */
+function heroShopping(G: GameState, pid: PlayerID, hero: CardInstance, souls: number): { buy?: BuildBuy; save: boolean } {
+  const buys = buildBuys(G, pid, hero);
+  const next = buys[0];
+  if (!next) return { save: false };
+  if (next.cost <= souls) return { buy: next, save: false };
+  if (next.cost - souls <= SAVE_TURNS * LANE_INCOME) return { save: true };
+  const later = buys.find((b) => b.cost <= souls);
+  return later ? { buy: later, save: false } : { save: false };
+}
+
+/** The AI's shop move: the Active's build first, then each bench hero's; a
+ *  saving Active spends nothing on the bench. Nothing to buy: close the shop.
+ *  Every buy it names is one the engine allows. */
+function shopMove(G: GameState, pid: PlayerID): Action {
+  const ps = G.players[pid];
+  const heroes = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c);
+  for (const [i, hero] of heroes.entries()) {
+    const plan = heroShopping(G, pid, hero, ps.souls);
+    if (plan.buy && buyBlocked(G, pid, plan.buy.itemId, hero.iid) === null) {
+      return { type: 'buy', itemId: plan.buy.itemId, heroIid: hero.iid };
+    }
+    if (plan.save && i === 0) break;
+  }
+  return { type: 'closeShop' };
+}
+
+/** The extra worth of `pid`'s souls while they count toward its Active's next
+ *  build item, that item SAVE_TURNS of income away or less. */
+function saveValue(G: GameState, pid: PlayerID): number {
+  const active = G.players[pid].active;
+  const next = active ? buildBuys(G, pid, active)[0] : undefined;
+  if (!next) return 0;
+  const souls = G.players[pid].souls;
+  if (next.cost - souls > SAVE_TURNS * LANE_INCOME) return 0;
+  return Math.min(souls, next.cost) * SAVE_SOUL;
+}
+
 interface MoveOption {
-  move: 'playCard' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
+  move: 'buy' | 'sell' | 'moveItem' | 'closeShop' | 'activate' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
   args: any[];
   score: number;
 }
 
 /** An engine action in the form the callers dispatch: the boardgame.io move and
- *  its arguments (playCard [card, target?, discard?], useSkill [hero, target?,
- *  skill?], moveHero [from, to], promoteToActive [iid], attack [target?],
- *  endTurn []). */
+ *  its arguments (buy [item, hero], sell [item], moveItem [item, hero],
+ *  closeShop [], activate [item, target?], useSkill [hero, target?, skill?],
+ *  moveHero [from, to], promoteToActive [iid], attack [target?], endTurn []). */
 function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
   const present = (...xs: (string | undefined)[]) => xs.filter((x): x is string => x !== undefined);
   switch (a.type) {
-    case 'playCard': return { move: 'playCard', args: present(a.cardIid, a.targetIid, a.discardIid) };
+    case 'buy': return { move: 'buy', args: [a.itemId, a.heroIid] };
+    case 'sell': return { move: 'sell', args: [a.itemIid] };
+    case 'moveItem': return { move: 'moveItem', args: [a.itemIid, a.toHeroIid] };
+    case 'closeShop': return { move: 'closeShop', args: [] };
+    case 'activate': return { move: 'activate', args: present(a.itemIid, a.targetIid) };
     case 'useSkill': {
       // The skill is named only when it is not the hero's first (the move's default),
       // so a one-skill hero's move is the one it always was; a skill with no target
@@ -274,31 +385,18 @@ function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
 }
 
 // ----- the crude per-move scores ---------------------------------------------
-// What ranks the plain list (no lookahead), fed by the action: cards and skills
-// above passing, the attack by the damage it would land.
+// What ranks the plain list (no lookahead), fed by the action: items and
+// skills above passing, the attack by the damage it would land.
 
-function scorePlayCard(G: GameState, pid: PlayerID, card: CardInstance, target?: CardInstance): number {
-  const data = CARDS_BY_ID[card.cardId];
-  if (!data) return 0;
-  const cost = cardCost(card);
-  const ps = G.players[pid];
-  let s = 5;
-  if (data.type === 'spell') s += 20;
-  if (data.type === 'equipment') {
-    s += 10;
-    if (data.bonus?.atk) s += data.bonus.atk * 6;
-    if (data.bonus?.spirit) s += data.bonus.spirit * 6;  // Spirit gear was ignored — casters never built
-    if (data.bonus?.hp) s += data.bonus.hp * 3;
-  }
+/** A crude active item's score, as the spell it was: above a skill, more on an
+ *  enemy it could finish or an ally in trouble. */
+function scoreActivate(pid: PlayerID, target?: CardInstance): number {
+  let s = 25;
   if (target && target.ownerId !== pid) {
     s += 5;
-    // Prefer targets we can kill outright
-    if (data.type === 'spell' && target.hp <= 3) s += 25;
+    if (target.hp <= 3) s += 25;
   }
   if (target && target.ownerId === pid && target.hp < target.hpMax / 2) s += 8;
-  // Cost-efficiency: penalize plays that would empty the pool of a big spend.
-  // Encourages chaining cheap plays before dumping a mythic.
-  if (cost >= 7 && ps.souls - cost < 1) s -= 6;
   return s;
 }
 
@@ -385,12 +483,14 @@ function retreatPair(G: GameState, pid: PlayerID, a: Extract<Action, { type: 'mo
 function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
   switch (a.type) {
     case 'attack': return scoreAttack(G, pid, a.targetIid);
-    case 'playCard': {
-      const card = G.players[pid].hand.find((c) => c.iid === a.cardIid)!;
-      const target = a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined;
-      // Gear named to go is weighed as the play it would be: the better the piece, the less this is worth.
-      const gone = a.discardIid ? target?.attached?.find((e) => e.iid === a.discardIid) : undefined;
-      return scorePlayCard(G, pid, card, target) - (gone ? scorePlayCard(G, pid, gone, target) : 0);
+    // The shop is shopped by rule (`shopMove`); these rank the plain list only.
+    case 'buy': return 20;
+    case 'sell': return -50;
+    case 'moveItem': return -40;
+    case 'closeShop': return 1;
+    case 'activate': {
+      const found = findWornItem(G, a.itemIid, pid);
+      return found ? scoreActivate(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined) : 0;
     }
     case 'useSkill': {
       const hero = findCardOnBoard(G, a.heroIid)?.card;
@@ -466,11 +566,12 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
     return opts.sort((a, b) => b.score - a.score).slice(0, 8);
   }
 
-  // Everything the engine allows, in its order: the attack, cards, skills,
-  // retreats, promotions, and ending the turn last. While a promotion is owed
-  // that is the promotion alone — for whichever seat owes it, made from either
-  // (on the board the local player answers the prompt themselves and the AI
-  // loop waits rather than ask, unless auto-play is driving their seat).
+  // Everything the engine allows, in its order: in the shop step the shop's
+  // moves, in the act step the attack, items, skills and retreats; then
+  // promotions, and ending the turn last. While a promotion is owed that is the
+  // promotion alone — for whichever seat owes it, made from either (on the
+  // board the local player answers the prompt themselves and the AI loop waits
+  // rather than ask, unless auto-play is driving their seat).
   const actions = legalActions(G, pid);
 
   // A promotion needs no weighing: the healthiest hero steps up.
@@ -478,6 +579,11 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true): Move
     return actions
       .map((a): MoveOption => ({ ...toMove(G, a), score: crudeScore(G, pid, a) }))
       .sort((a, b) => b.score - a.score);
+  }
+
+  // The shop step is shopped by the build, one purchase at a time, and closed.
+  if (G.step === 'shop') {
+    return [{ ...toMove(G, shopMove(G, pid)), score: 1 }];
   }
 
   // What attacking as things stand is worth (the position as it is when there

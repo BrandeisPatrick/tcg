@@ -1,16 +1,22 @@
 /**
- * Shared helpers for the fuzz harness: card enumeration, a rules oracle for
- * "is this target legal for this ability", direct (non-client) move calls on a
- * cloned state, and a structural diff. Nothing here mutates the live G — every
- * helper that runs the engine does it on a structuredClone.
+ * Shared helpers for the fuzz harness: card enumeration, rules oracles — which
+ * targets an ability or an active item may be aimed at, what an item costs and
+ * what a sale brings back, who may buy, sell, move and use which item — direct
+ * (non-client) move calls on a cloned state, and a structural diff. Nothing here
+ * mutates the live G — every helper that runs the engine does it on a
+ * structuredClone.
  */
 import { INVALID_MOVE } from 'boardgame.io/core';
 import type { Ctx } from 'boardgame.io';
-import type { CardInstance, GameState, PlayerID, PlayerState } from '@/engine/types';
+import type { CardId, CardInstance, GameState, ItemCard, ItemSlot, ItemTier, PlayerID, PlayerState } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
+import { STATUSES_BY_ID } from '@/statuses';
 import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
-import { KILL_BOUNTY_BASE, RETREAT_COST, RICHEST_BOUNTY_BONUS, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import {
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, LEVEL_THRESHOLDS, MAX_ITEMS, PRICE, RETREAT_COST,
+  RICHEST_BOUNTY_BONUS, ULT_COOLDOWN, ULT_UNLOCK_LEVEL,
+} from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
 
 export const PIDS: PlayerID[] = ['0', '1'];
@@ -19,30 +25,38 @@ export const other = (p: PlayerID): PlayerID => (p === '0' ? '1' : '0');
 export const isHeroCard = (c: CardInstance | null | undefined): boolean =>
   !!c && CARDS_BY_ID[c.cardId]?.type === 'hero';
 
+/** A Rem merged into an ally: she rides in its `attached` list, a hero, not an item. */
+export const isMergedRem = (c: CardInstance): boolean => c.cardId === 'hero_rem' && c.remMergeTurnsLeft != null;
+
+/** The item card behind an id — an ACTIVE item is a 'spell', a PASSIVE one 'equipment' —
+ *  or undefined for a hero, an ultimate, an unknown id or no string at all. */
+export function itemData(cardId: unknown): ItemCard | undefined {
+  const d = typeof cardId === 'string' && Object.prototype.hasOwnProperty.call(CARDS_BY_ID, cardId) ? CARDS_BY_ID[cardId] : undefined;
+  return d?.type === 'spell' || d?.type === 'equipment' ? d : undefined;
+}
+
 /** Active + bench, nulls dropped (corpses included). */
 export function boardOf(ps: PlayerState): CardInstance[] {
   return [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c);
 }
 
-/** Every card instance anywhere in G, with a label for where it sits. */
+/** Every card instance anywhere in G — the heroes in the slots and everything
+ *  they carry (worn items, a merged Rem and what she wears) — with a label for
+ *  where it sits. There is no hand, deck or discard pile: a card is on the board
+ *  or it is gone. */
 export function everyCard(G: GameState): { card: CardInstance; place: string; pid: PlayerID }[] {
   const out: { card: CardInstance; place: string; pid: PlayerID }[] = [];
+  const seen = new Set<CardInstance>();
+  const walk = (c: CardInstance, place: string, pid: PlayerID) => {
+    if (seen.has(c)) return; // a corrupted state could hang a card inside itself
+    seen.add(c);
+    out.push({ card: c, place, pid });
+    for (const a of c.attached ?? []) walk(a, `attached:${c.iid}`, pid);
+  };
   for (const pid of PIDS) {
     const ps = G.players[pid];
-    ps.hand.forEach((c) => out.push({ card: c, place: 'hand', pid }));
-    ps.deck.forEach((c) => out.push({ card: c, place: 'deck', pid }));
-    ps.discard.forEach((c) => out.push({ card: c, place: 'discard', pid }));
-    const board: [string, CardInstance | null][] = [['active', ps.active]];
-    ps.bench.forEach((b, i) => board.push([`bench${i}`, b]));
-    for (const [place, c] of board) {
-      if (!c) continue;
-      out.push({ card: c, place, pid });
-      for (const a of c.attached ?? []) {
-        out.push({ card: a, place: `attached:${c.iid}`, pid });
-        // A bench Rem can wear gear and carries it along when she merges.
-        for (const n of a.attached ?? []) out.push({ card: n, place: `attached:${a.iid}`, pid });
-      }
-    }
+    if (ps.active) walk(ps.active, 'active', pid);
+    ps.bench.forEach((b, i) => { if (b) walk(b, `bench${i}`, pid); });
   }
   return out;
 }
@@ -58,7 +72,10 @@ export function boardUnits(G: GameState): CardInstance[] {
 
 export function describeUnit(c: CardInstance | null | undefined): string {
   if (!c) return 'none';
-  const eq = (c.attached ?? []).map((a) => a.cardId).join('+') || '-';
+  const eq = (c.attached ?? []).map((a) => {
+    const cd = a.cooldowns?.[a.cardId];
+    return `${a.cardId}${cd ? `(cd${cd})` : ''}${a.charges !== undefined ? `(x${a.charges})` : ''}`;
+  }).join('+') || '-';
   const st = c.statuses.map((s) => `${s.id}:${s.value}/${s.duration}`).join(',') || '-';
   const dead = isRespawning(c) ? ` CORPSE(${c.respawnTurnsLeft})` : '';
   return `${c.cardId}#${c.iid} hp ${c.hp}/${c.hpMax} lv${c.level ?? '?'} spirit+${c.spiritMod} atk+${c.atkMod} eq[${eq}] st[${st}]${dead}`;
@@ -69,14 +86,14 @@ export function describeUnit(c: CardInstance | null | undefined): string {
 // TargetFilter doc in abilities/index.ts, NOT copied from the engine or the AI.
 // ---------------------------------------------------------------------------
 
-/** The TargetFilter that governs a hand card (a spell: its first ability;
- *  equipment: an own hero). An ultimate is never a card in hand. */
-export function filterForHandCard(card: CardInstance): TargetFilter | 'equipment' | null {
-  const d = CARDS_BY_ID[card.cardId];
+/** The TargetFilter that governs a worn item: an ACTIVE item is aimed by its
+ *  first ability's filter (as the spell it was always read from); a PASSIVE
+ *  item is never used ('passive'); anything that is no item has none. */
+export function filterForItem(card: CardInstance): TargetFilter | 'passive' | null {
+  const d = itemData(card.cardId);
   if (!d) return null;
-  if (d.type === 'equipment') return 'equipment';
-  if (d.type === 'spell') return getAbility(d.abilities[0])?.target ?? null;
-  return null;
+  if (d.type === 'equipment') return 'passive';
+  return getAbility(d.abilities[0])?.target ?? 'noTarget';
 }
 
 /** The kit abilities a hero may use, in order: the skills its card lists (one
@@ -128,10 +145,11 @@ export function ultLocked(hero: CardInstance, skillId: string): boolean {
   return d?.type === 'hero' && d.ult === skillId && (hero.level ?? 1) < ULT_UNLOCK_LEVEL;
 }
 
-/** Is `target` a legal choice for `filter`, cast by `pid` from `source`?
- *  A target must be on the board and alive (a corpse "can't be targeted"). */
+/** Is `target` a legal choice for `filter`, cast by `pid` from `source` (a
+ *  hero using a skill, or the hero wearing an active item)? A target must be on
+ *  the board and alive (a corpse "can't be targeted"). */
 export function targetLegal(
-  filter: TargetFilter | 'equipment',
+  filter: TargetFilter,
   target: CardInstance | undefined,
   source: CardInstance | undefined,
   pid: PlayerID,
@@ -143,7 +161,6 @@ export function targetLegal(
   const ally = target.ownerId === pid;
   const hero = isHeroCard(target);
   switch (filter) {
-    case 'equipment': return ally && hero;
     case 'self': return !!source && target.iid === source.iid;
     case 'allyAny': return ally;
     case 'allyHero': return ally && hero;
@@ -168,16 +185,23 @@ function benchMover(c: CardInstance): boolean {
   return c.zone === 'bench' && d?.type === 'hero' && !d.flags?.benchOnly && !rooted(c);
 }
 
+/** A status on the hero locks its abilities (Stun, Silence, Sleep, a channel…): the
+ *  statuses' own data says which block 'skill'. An active item is an ability too. */
+export function abilitiesLocked(hero: CardInstance): boolean {
+  return hero.statuses.some((s) => STATUSES_BY_ID[s.id]?.blocks?.includes('skill'));
+}
+
 // ---------------------------------------------------------------------------
 // Rules oracle: the basic attack. Written from the rules, not copied from
-// `attackTargets` / `attackBlocked`: one attack a turn, so it is open when it
-// is not Turn 1, the turn's attack has not been made, and the Active is
-// standing (whatever abilities it used first); it may be aimed at the rival's
-// living Active — or, if a passive of the hero's or a piece of gear it wears
-// has `reach`, at any living enemy hero — and never at a hero under a Dome.
+// `attackTargets` / `attackBlocked`: one attack a turn, in the act step, so it is
+// open when it is not Turn 1, the shop is closed, the turn's attack has not
+// been made, and the Active is standing (whatever abilities it used first); it
+// may be aimed at the rival's living Active — or, if a passive of the hero's or
+// a piece of gear it wears has `reach`, at any living enemy hero — and never at
+// a hero under a Dome.
 // ---------------------------------------------------------------------------
 
-/** The ability ids a hero carries: its own passives, then its worn gear's. */
+/** The ability ids a hero carries: its own passives, then its worn passive items'. */
 function carriedAbilityIds(hero: CardInstance): string[] {
   const data = CARDS_BY_ID[hero.cardId];
   const worn = (hero.attached ?? []).flatMap((a) => {
@@ -196,7 +220,7 @@ function carriesReach(hero: CardInstance): boolean {
  *  whatever the swing would deal)? */
 export function attackOpenFor(G: GameState, pid: PlayerID): boolean {
   const active = G.players[pid].active;
-  return G.turnNumber > 1 && !G.attackUsed && !!active && !isRespawning(active);
+  return !G.draft && G.step === 'act' && G.turnNumber > 1 && !G.attackUsed && !!active && !isRespawning(active);
 }
 
 // ---------------------------------------------------------------------------
@@ -216,10 +240,102 @@ export function retreatCostOracle(G: GameState, pid: PlayerID): number {
 }
 
 // ---------------------------------------------------------------------------
+// Rules oracle: items. Written from rules.md §2–§5, NOT copied from query.ts /
+// legality.ts: an item lists at PRICE by its tier; an upgrade bought over the
+// component its data names costs the difference and takes its place; a sale
+// refunds what was paid on the engine turn it was bought, else half the price
+// rounded down; a hero wears MAX_ITEMS (FLEX_SLOT more once its side has the
+// flex slot), never two of one item; a merged Rem is a hero riding on her
+// ally, never an item.
+// ---------------------------------------------------------------------------
+
+/** What an item lists at: its tier's price. Anything that is no item lists at 0. */
+export function itemPriceOracle(cardId: unknown): number {
+  const d = itemData(cardId);
+  return d ? PRICE[d.tier] : 0;
+}
+
+/** The items a hero wears, actives and passives, in worn order (a merged Rem is not one). */
+export function wornItemsOf(hero: CardInstance): CardInstance[] {
+  return (hero.attached ?? []).filter((a) => !!itemData(a.cardId));
+}
+
+/** How many items a hero of `pid` may wear. */
+export function slotCapOracle(G: GameState, pid: PlayerID): number {
+  return MAX_ITEMS + (G.players[pid].flexSlot ? FLEX_SLOT : 0);
+}
+
+/** The worn item buying `itemId` for `hero` would replace: the component the
+ *  item's data says it is built from, when the hero wears it. */
+export function upgradeComponentOracle(hero: CardInstance, itemId: unknown): CardInstance | undefined {
+  const from = itemData(itemId)?.upgradesFrom;
+  return from ? wornItemsOf(hero).find((a) => a.cardId === from) : undefined;
+}
+
+/** What buying `itemId` for `hero` costs: its price, or — over a component it
+ *  wears — the difference. */
+export function buyPriceOracle(hero: CardInstance, itemId: unknown): number {
+  const component = upgradeComponentOracle(hero, itemId);
+  return Math.max(0, itemPriceOracle(itemId) - (component ? itemPriceOracle(component.cardId) : 0));
+}
+
+/** What selling `item` brings back: what was paid for it when it was bought on
+ *  this engine turn, else half its price, rounded down. */
+export function sellRefundOracle(G: GameState, item: CardInstance): number {
+  if (item.boughtOnTurn === G.turnNumber) return item.paid ?? itemPriceOracle(item.cardId);
+  return Math.floor(itemPriceOracle(item.cardId) / 2);
+}
+
+/** True while `hero` wears CATEGORY_SPIKE_ITEMS or more items of the tab `slot`
+ *  (the category spike: +1 on that tab's line). */
+export function hasSpikeOracle(hero: CardInstance, slot: ItemSlot): boolean {
+  return wornItemsOf(hero).filter((a) => itemData(a.cardId)!.slot === slot).length >= CATEGORY_SPIKE_ITEMS;
+}
+
+/** The Cooldown family, from the card texts: own turns off the cooldowns the
+ *  bearer starts — its ultimate's and its active items'. Compress Cooldown "The
+ *  bearer's ultimate cools down 1 turn faster"; Superior "ultimate and active
+ *  items cool down 1 turn faster"; Transcendent "ultimate cools down 2 turns
+ *  faster, and its active items 1 turn faster". Never under 1 turn. */
+export const COOLDOWN_CUT: Readonly<Record<CardId, { ult: number; item: number }>> = {
+  improved_cooldown: { ult: 1, item: 0 },
+  superior_cooldown: { ult: 1, item: 1 },
+  transcendent_cooldown: { ult: 2, item: 1 },
+};
+
+/** Own turns `hero`'s worn Cooldown family takes off what it starts. */
+export function cooldownCutOracle(hero: CardInstance, kind: 'ult' | 'item'): number {
+  return wornItemsOf(hero).reduce((n, a) => n + (COOLDOWN_CUT[a.cardId]?.[kind] ?? 0), 0);
+}
+
+/** The cooldown an active item of `tier` starts on its bearer (bought, or used):
+ *  2 own turns for tiers 1–2, 3 for tiers 3–4, less the bearer's Cooldown
+ *  family, never under 1. */
+export function activeCooldownOracle(bearer: CardInstance, tier: ItemTier): number {
+  const full = tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high;
+  return Math.max(1, full - cooldownCutOracle(bearer, 'item'));
+}
+
+/** The cooldown an ultimate starts: ULT_COOLDOWN less the Cooldown family, never under 1. */
+export function ultCooldownOracle(hero: CardInstance): number {
+  return Math.max(1, ULT_COOLDOWN - cooldownCutOracle(hero, 'ult'));
+}
+
+/** A hero's experience as one number: the thresholds of every level it has
+ *  climbed past plus its surplus toward the next. */
+export function totalExp(hero: CardInstance): number {
+  const level = hero.level ?? 1;
+  return LEVEL_THRESHOLDS.slice(0, level - 1).reduce((a, b) => a + b, 0) + (hero.exp ?? 0);
+}
+
+/** The most experience a hero can hold (every threshold climbed). */
+export const MAX_TOTAL_EXP = LEVEL_THRESHOLDS.reduce((a, b) => a + b, 0);
+
+// ---------------------------------------------------------------------------
 // Rules oracle: what a kill pays. Written from rules.md §2, not copied from
 // `killBounty`: the victim's level plus one, and two more when the victim was
-// strictly the richest hero on the board — the highest list price (today the
-// printed cost) of worn items among every hero of both sides; a tie pays no
+// strictly the richest hero on the board — the highest list price of the items
+// it wears (actives and passives) among every hero of both sides; a tie pays no
 // extra. Worn items survive a death, so the board after the move says it.
 // ---------------------------------------------------------------------------
 
@@ -229,12 +345,9 @@ export function heroesOfSide(ps: PlayerState): CardInstance[] {
   return [...slotted, ...slotted.flatMap((c) => (c.attached ?? []).filter(isHeroCard))];
 }
 
-/** The list price of what a hero wears: the printed cost of each worn item. */
+/** The list price of what a hero wears: PRICE by tier of each worn item. */
 export function wornWorth(hero: CardInstance): number {
-  return (hero.attached ?? []).reduce((n, a) => {
-    const d = CARDS_BY_ID[a.cardId];
-    return n + (d?.type === 'equipment' ? d.cost ?? 0 : 0);
-  }, 0);
+  return wornItemsOf(hero).reduce((n, a) => n + itemPriceOracle(a.cardId), 0);
 }
 
 /** What the fall of `hero` pays its opponent, by the rules, read on the board `G`. */
@@ -260,6 +373,136 @@ export function attackTargetsOracle(G: GameState, pid: PlayerID): CardInstance[]
   const alive = boardOf(foe).filter((c) => isHeroCard(c) && !isRespawning(c));
   const reachable = carriesReach(active) ? alive : alive.filter((c) => c.iid === foe.active?.iid);
   return reachable.filter((c) => !c.statuses.some((s) => s.id === 'dome'));
+}
+
+// ---------------------------------------------------------------------------
+// Rules oracle: the shop and the active items — who may buy, sell, move and use
+// what, right now. Each answers null for "allowed", else a short reason (for
+// the probes' tags; only allowed / refused is compared with the engine).
+// ---------------------------------------------------------------------------
+
+/** The seat whose turn it is, from the engine turn: the first mover's on odd
+ *  turns, the other seat's on even ones; nobody's before turn 1 or in the draft. */
+export function seatOnTurn(G: GameState): PlayerID | null {
+  if (G.draft || !(G.turnNumber >= 1)) return null;
+  const first = G.firstMover ?? '0';
+  return G.turnNumber % 2 === 1 ? first : other(first);
+}
+
+/** Why the shop is shut to `pid` (rules.md §3): an owed promotion comes before
+ *  everything, the shop is the current player's own, it is open only in the
+ *  shop step, and nothing but ending the turn follows the attack. */
+export function shopShutOracle(G: GameState, pid: PlayerID): string | null {
+  if (G.pendingPromotion !== undefined) return 'promotion-owed';
+  if (seatOnTurn(G) !== pid) return 'not-your-turn';
+  if (G.step !== 'shop') return 'not-shop-step';
+  if (G.attackUsed) return 'act-over';
+  return null;
+}
+
+/** `pid`'s hero standing in a slot (the Active or the bench, corpses included) with this iid. */
+export function slottedHeroOf(G: GameState, pid: PlayerID, iid: unknown): CardInstance | undefined {
+  if (typeof iid !== 'string') return undefined;
+  return boardOf(G.players[pid]).find((c) => c.iid === iid && isHeroCard(c));
+}
+
+/** The item with this iid one of `pid`'s heroes in a slot wears, and its bearer.
+ *  A merged Rem's items are out of reach until she is back on the bench. */
+export function wornItemOf(G: GameState, pid: PlayerID, iid: unknown): { item: CardInstance; bearer: CardInstance } | undefined {
+  if (typeof iid !== 'string') return undefined;
+  for (const bearer of boardOf(G.players[pid])) {
+    const item = wornItemsOf(bearer).find((a) => a.iid === iid);
+    if (item) return { item, bearer };
+  }
+  return undefined;
+}
+
+/** Why `pid` may not buy `itemId` for its hero `heroIid`: the shop is shut; it
+ *  is no item, or not in this match's market; no hero of `pid`'s stands in a
+ *  slot with that iid (bench and corpses count, a merged Rem does not); the hero
+ *  wears one already; its slots are full and it is no upgrade of a worn
+ *  component; `souls` (the player's, unless given) fall short of the price. */
+export function buyBlockedOracle(G: GameState, pid: PlayerID, itemId: unknown, heroIid: unknown, souls = G.players[pid].souls): string | null {
+  const shut = shopShutOracle(G, pid);
+  if (shut) return shut;
+  const data = itemData(itemId);
+  if (!data) return 'no-item';
+  if (!(G.market ?? []).includes(data.id)) return 'off-market';
+  const hero = slottedHeroOf(G, pid, heroIid);
+  if (!hero) return 'no-hero';
+  const worn = wornItemsOf(hero);
+  if (worn.some((a) => a.cardId === data.id)) return 'duplicate';
+  if (!upgradeComponentOracle(hero, data.id) && worn.length >= slotCapOracle(G, pid)) return 'full';
+  if (souls < buyPriceOracle(hero, data.id)) return 'souls';
+  return null;
+}
+
+/** Why `pid` may not sell `itemIid`: the shop is shut, or none of its heroes in a slot wears it. */
+export function sellBlockedOracle(G: GameState, pid: PlayerID, itemIid: unknown): string | null {
+  return shopShutOracle(G, pid) ?? (wornItemOf(G, pid, itemIid) ? null : 'not-worn');
+}
+
+/** Why `pid` may not move `itemIid` to its hero `toHeroIid`: the shop is shut;
+ *  none of its heroes in a slot wears it; the hero is none of its own in a slot,
+ *  or the one wearing it; the hero wears one already; or its slots are full. */
+export function moveItemBlockedOracle(G: GameState, pid: PlayerID, itemIid: unknown, toHeroIid: unknown): string | null {
+  const shut = shopShutOracle(G, pid);
+  if (shut) return shut;
+  const worn = wornItemOf(G, pid, itemIid);
+  if (!worn) return 'not-worn';
+  const to = slottedHeroOf(G, pid, toHeroIid);
+  if (!to) return 'no-hero';
+  if (to.iid === worn.bearer.iid) return 'same-hero';
+  if (wornItemsOf(to).some((a) => a.cardId === worn.item.cardId)) return 'duplicate';
+  if (wornItemsOf(to).length >= slotCapOracle(G, pid)) return 'full';
+  return null;
+}
+
+/** Why `pid` may not close the shop: it is shut to `pid` already. */
+export function closeShopBlockedOracle(G: GameState, pid: PlayerID): string | null {
+  return shopShutOracle(G, pid);
+}
+
+/** Who an active item may be aimed at, by its bearer: the board cards its first
+ *  ability's TargetFilter allows with the bearer as the source, or 'none' for an
+ *  item that takes no target. A passive item, or no item, has []. */
+export function activateTargetsOracle(G: GameState, pid: PlayerID, item: CardInstance, bearer: CardInstance): CardInstance[] | 'none' {
+  const filter = filterForItem(item);
+  if (filter === null || filter === 'passive') return [];
+  if (filter === 'noTarget') return 'none';
+  return boardUnits(G).filter((t) => targetLegal(filter, t, bearer, pid, G));
+}
+
+/**
+ * Why `pid` may not use the item `itemIid` aimed at `targetIid` (rules.md §3 and
+ * §5): an owed promotion comes first; items are used in the act step and not
+ * after the attack; the item is worn by one of `pid`'s heroes in a slot (bench
+ * included) and is an ACTIVE one; its bearer stands, has not used its one
+ * ability this turn (skill, item and ultimate share it) and no status locks its
+ * abilities; a hard crowd-control item has a charge left (it has no cooldown),
+ * any other is off cooldown; and the target is one its filter allows — named
+ * when the item takes one. Whose turn it is, boardgame.io sees to.
+ */
+export function activateBlockedOracle(G: GameState, pid: PlayerID, itemIid: unknown, targetIid?: unknown): string | null {
+  if (G.draft) return 'draft';
+  if (G.pendingPromotion !== undefined) return 'promotion-owed';
+  if (G.step !== 'act') return 'shop-step';
+  if (G.attackUsed) return 'act-over';
+  const worn = wornItemOf(G, pid, itemIid);
+  if (!worn) return 'not-worn';
+  const { item, bearer } = worn;
+  const data = itemData(item.cardId)!;
+  if (data.type !== 'spell') return 'passive';
+  if (isRespawning(bearer)) return 'bearer-down';
+  if (bearer.skillUsedThisTurn) return 'bearer-used';
+  if (abilitiesLocked(bearer)) return 'bearer-locked';
+  if (data.hardCC) {
+    if (!((item.charges ?? 0) > 0)) return 'no-charges';
+  } else if ((item.cooldowns?.[item.cardId] ?? 0) > 0) return 'cooling';
+  const targets = activateTargetsOracle(G, pid, item, bearer);
+  if (targets === 'none') return null;
+  if (targetIid === undefined) return 'missing-target';
+  return targets.some((t) => t.iid === targetIid) ? null : 'bad-target';
 }
 
 // ---------------------------------------------------------------------------

@@ -4,8 +4,8 @@
 // angular window onto an old New York street. Along the foot of the sheet,
 // the five modes are dealt as tall framed cards in the game's own menu-card
 // idiom: hero art edge to edge inside a charcoal frame, a cream label band
-// beneath. Every card shows real save state (selected deck, campaign
-// progress, squad picks) so the poster reads as a game that remembers you,
+// beneath. Every card shows real save state (squad picks, campaign
+// progress, lessons done) so the poster reads as a game that remembers you,
 // not a set of links. The tutorial sits second, straight after Quick Match,
 // and until it has been played its card wears the red "Start here" tag —
 // the one bit of steering the sheet does.
@@ -73,7 +73,6 @@ interface StartScreenProps {
 function useTitleStatus() {
   return useMemo(() => {
     const data = loadPlayerData();
-    const deck = data.selectedDeckIndex != null ? data.decks[data.selectedDeckIndex] : null;
     const picks = data.preferredHeroes.filter(Boolean).length;
     const run = loadRun();
     const active = !!run && run.status === 'active';
@@ -85,12 +84,11 @@ function useTitleStatus() {
           ? 'Run lost · start again'
           : `Run · ${run.clearedNodeIds.length}/${run.nodes.length} blocks · ${run.heroes.length} ${run.heroes.length === 1 ? 'hero' : 'heroes'}`;
     return {
-      quick: deck ? `Deck · ${deck.name}` : 'Deck · Starter',
+      quick: 'Draft · shop · fight',
       story,
       storyActive: active,
-      // One line for both halves of the merged sheet: who you asked the draft
-      // for, and what you're carrying.
-      loadout: `${picks}/${MAX_PREFERRED_HEROES} squad · ${deck ? deck.name : 'no deck'}`,
+      // One line for the sheet: who you asked the draft for, and their builds.
+      loadout: `${picks}/${MAX_PREFERRED_HEROES} squad · builds`,
       tutorial: data.tutorialDone
         ? `${LESSONS.length}/${LESSONS.length} lessons · play any again`
         : data.lessonsDone.length
@@ -264,7 +262,7 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
             status={status.loadout}
             art={{ src: `${ART_BASE}bill_decks.webp`, objectPosition: '50% 34%' }}
             onClick={onLoadout}
-            ariaLabel="Set your squad and deck"
+            ariaLabel="Set your squad and builds"
             compact={isMobile}
           />
           <ModeCard

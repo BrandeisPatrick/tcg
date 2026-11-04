@@ -4,9 +4,8 @@ import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
-import { configureReadyMatch } from './_helpers';
-import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
-import { PATRON_HP } from '@/engine/constants';
+import { configureReadyMatch, passTurn } from './_helpers';
+import { LANE_INCOME, PATRON_HP } from '@/engine/constants';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -23,7 +22,21 @@ function snap(client: ReturnType<typeof newClient>) {
   return { G: s.G as GameState, ctx: s.ctx as Ctx };
 }
 
+/** Shop by the AI's rule until the shop is closed: every turn opens in its
+ *  shop step, where only the shop's moves (and ending the turn) are legal. */
+function shopAsAI(client: ReturnType<typeof newClient>, maxMoves = 12) {
+  for (let i = 0; i < maxMoves; i++) {
+    const { G, ctx } = snap(client);
+    if (ctx.gameover || G.step !== 'shop') return;
+    const best = enumerateAIMoves(G, ctx)[0];
+    if (!best || best.move === 'endTurn') break;
+    (client.moves as any)[best.move](...best.args);
+  }
+  if (!snap(client).ctx.gameover && snap(client).G.step === 'shop') client.moves.closeShop();
+}
+
 function runAITurn(client: ReturnType<typeof newClient>, maxMoves = 12) {
+  shopAsAI(client);
   for (let i = 0; i < maxMoves; i++) {
     const { G, ctx } = snap(client);
     if (ctx.gameover) return;
@@ -49,7 +62,7 @@ function runAITurn(client: ReturnType<typeof newClient>, maxMoves = 12) {
 }
 
 describe('Deadlock TCG engine smoke', () => {
-  it('initializes a match with two full boards and 3-card hands', () => {
+  it('initializes a match with two full boards, turn 1 opening on its shop with the income banked', () => {
     const c = newClient();
     const { G, ctx } = snap(c);
     expect(G.players['0'].hp).toBe(PATRON_HP);
@@ -58,10 +71,10 @@ describe('Deadlock TCG engine smoke', () => {
     expect(G.players['1'].active).not.toBeNull();
     expect(G.players['0'].bench.filter(Boolean).length).toBe(3);
     expect(G.players['1'].bench.filter(Boolean).length).toBe(3);
-    // After T1 begin, P0 drew 1 (3 + 1 = 4)
-    expect(G.players['0'].hand.length).toBe(4);
-    // Deck = the configured aggro list minus the 4 cards now in hand.
-    expect(G.players['0'].hand.length + G.players['0'].deck.length).toBe(AI_DECKS_BY_NAME.aggro.length);
+    // After T1 begin, P0 has its first income and stands in the shop step.
+    expect(G.step).toBe('shop');
+    expect(G.players['0'].souls).toBe(LANE_INCOME);
+    expect(G.players['1'].souls).toBe(0);
     expect(ctx.currentPlayer).toBe('0');
   });
 
@@ -81,7 +94,7 @@ describe('Deadlock TCG engine smoke', () => {
 
   it('AI heuristic plays at least one move that is not endTurn', () => {
     const c = newClient();
-    c.moves.endTurn?.(); // pass to AI
+    passTurn(c); // pass to AI, its shop closed: the act step
     const { G, ctx } = snap(c);
     expect(ctx.currentPlayer).toBe('1');
     const moves = enumerateAIMoves(G, ctx);
@@ -95,7 +108,8 @@ describe('Deadlock TCG engine smoke', () => {
       const { ctx } = snap(c);
       if (ctx.gameover) break;
       if (ctx.currentPlayer === '0') {
-        // Player just plays first available high-value option
+        // Player shops as the AI would, then plays the first available high-value option
+        shopAsAI(c);
         const { G } = snap(c);
         const opts = enumerateAIMoves(G, ctx);
         const best = opts[0];
@@ -108,8 +122,8 @@ describe('Deadlock TCG engine smoke', () => {
       }
     }
     const { G } = snap(c);
-    // Both HPs went down meaningfully
-    expect(G.players['0'].hp + G.players['1'].hp).toBeLessThan(40);
+    // The patrons took real damage (both start at PATRON_HP: a sum under 2 × PATRON_HP is a fall paid for or a push).
+    expect(G.players['0'].hp + G.players['1'].hp).toBeLessThan(2 * PATRON_HP);
   });
 
   it('damage pipeline: spirit ignores armor, pure ignores shield', async () => {
