@@ -251,7 +251,9 @@ export function HeroSlot({
                   onMouseEnter={(e) => { e.stopPropagation(); onEquipmentHover?.(eq); }}
                   onMouseLeave={(e) => { e.stopPropagation(); onEquipmentHover?.(null); }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
+                  // A tap previews the item too — a phone has no hover to
+                  // enter (Board makes the tap's preview the held kind).
+                  onClick={(e) => { e.stopPropagation(); onEquipmentHover?.(eq); }}
                   style={{
                     position: 'relative',
                     width: dim,

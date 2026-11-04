@@ -742,6 +742,12 @@ export function Board(props: BoardProps<GameState>) {
   // zIndex 2 keeps the hand row above the board plane (zIndex 1), so cards
   // rising on select/hover/drag pass OVER the sheet's bottom edge instead of
   // sliding beneath it.
+  // An equipped item's chip previews the item (CardPreview, centre screen).
+  // Under a pointer it is a peek that leaves with the pointer; on a phone
+  // there is no pointer to leave, so the tap opens the held preview, which
+  // stays until the next tap.
+  const previewEquipment = (eq: CardInstance | null) => setPreview(eq ? { card: eq, hover: !isMobile } : null);
+
   const handRow = (
     <div ref={handRowRef} style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, alignSelf: isMobile ? 'stretch' : undefined }}>
       <HandTray
@@ -916,7 +922,7 @@ export function Board(props: BoardProps<GameState>) {
                 pending={pending}
                 onTapHero={onTapHero}
                 onLongPressHero={(c) => setHeroDetail(c)}
-                onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
+                onEquipmentHover={previewEquipment}
                 isTargetable={isTargetable}
                 registerSlotRef={registerSlotRef}
               />
@@ -936,7 +942,7 @@ export function Board(props: BoardProps<GameState>) {
                 pending={pending}
                 onTapHero={onTapHero}
                 onLongPressHero={(c) => setHeroDetail(c)}
-                onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
+                onEquipmentHover={previewEquipment}
                 isTargetable={isTargetable}
                 registerSlotRef={registerSlotRef}
                 readyIids={readyIids}
@@ -952,7 +958,7 @@ export function Board(props: BoardProps<GameState>) {
                 pending={pending}
                 onTapHero={onTapHero}
                 onLongPressHero={(c) => setHeroDetail(c)}
-                onEquipmentHover={(eq) => setPreview(eq ? { card: eq, hover: true } : null)}
+                onEquipmentHover={previewEquipment}
                 isTargetable={isTargetable}
                 registerSlotRef={registerSlotRef}
                 readyIids={readyIids}

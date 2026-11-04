@@ -55,10 +55,15 @@ function cardOverlap(total: number): number {
  * Phones get no fan at all: a flat strip of whole cards, side by side, that
  * scrolls sideways. Shrinking the arc to fit a 390px screen left 5–7 cards
  * covering each other's names and rules, and the outer ones sank under the
- * controls row. At full size the third card peeks in from the edge, which is
- * what says the strip scrolls.
+ * controls row. The cards print at four fifths of the fan's size: three fit
+ * a 390px screen with a sliver of the fourth, which is what says the strip
+ * scrolls, and the row leaves the board the height it needs — a held card
+ * (long press) opens the full-size preview to read.
  */
 const CARD_H = 188;
+/** The strip's cards, as a fraction of the fan's. The frame is drawn at the
+ *  fan's size and scaled, so its type stays set as designed. */
+const STRIP_SCALE = 0.8;
 const STRIP_GAP = 8;
 const STRIP_SIDE = 12;
 /** The armed card's lift on the strip — CardFrame adds its own 8px
@@ -155,6 +160,20 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
             marginRight: i === total - 1 ? 'auto' : 0,
           };
 
+          const frame = (
+            <CardFrame
+              cardId={c.cardId}
+              size="hand"
+              // The price this copy costs — a free copied ultimate prints 0.
+              cost={cost}
+              selected={selected}
+              glow={selected ? (data?.type === 'ultimate' ? 'gold' : 'accent') : null}
+              unaffordable={unaffordable}
+              // A tap on a card in the fan plays or arms it, wherever it lands.
+              tapExplains={false}
+            />
+          );
+
           return (
             <motion.div
               key={c.iid}
@@ -227,6 +246,8 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 // double-animate against the layout spring and made hand
                 // reflow (hover relief, card played/drawn) visibly chop.
                 ...(isMobile ? stripMargins : { marginLeft }),
+                // The strip's card takes the scaled frame's footprint.
+                ...(isMobile ? { width: CARD_W * STRIP_SCALE, height: CARD_H * STRIP_SCALE } : {}),
                 flex: isMobile ? '0 0 auto' : undefined,
                 scrollSnapAlign: isMobile ? 'start' : undefined,
                 cursor: cardDisabled ? 'default' : 'pointer',
@@ -241,17 +262,11 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
                 pointerEvents: 'auto', // opt back in under the strip's pointerEvents:none
               }}
             >
-              <CardFrame
-                cardId={c.cardId}
-                size="hand"
-                // The price this copy costs — a free copied ultimate prints 0.
-                cost={cost}
-                selected={selected}
-                glow={selected ? (data?.type === 'ultimate' ? 'gold' : 'accent') : null}
-                unaffordable={unaffordable}
-                // A tap on a card in the fan plays or arms it, wherever it lands.
-                tapExplains={false}
-              />
+              {isMobile ? (
+                <div style={{ width: CARD_W, height: CARD_H, transform: `scale(${STRIP_SCALE})`, transformOrigin: 'top left' }}>
+                  {frame}
+                </div>
+              ) : frame}
             </motion.div>
           );
         })}
@@ -275,7 +290,7 @@ export function Hand({ cards, disabled, pending, mySouls, onTap, onLongPress, on
           padding: `${STRIP_TOP}px ${STRIP_SIDE}px ${STRIP_BOTTOM}px`,
           // Holds its height with no cards too, so the board above does not
           // rescale the moment the last card is played.
-          minHeight: STRIP_TOP + CARD_H + STRIP_BOTTOM,
+          minHeight: STRIP_TOP + CARD_H * STRIP_SCALE + STRIP_BOTTOM,
           overflowX: 'auto',
           overflowY: 'hidden',
           scrollSnapType: 'x proximity',

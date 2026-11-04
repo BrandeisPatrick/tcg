@@ -8,30 +8,33 @@ interface Props {
   /** What this copy costs, when it is an instance (see CardFrame `cost`). */
   cost?: number;
   onClose: () => void;
-  hover?: boolean; // when true: floats non-blocking near the side, no backdrop
+  /** A peek while the pointer rests on the card: no scrim, and it blocks
+   *  nothing (the owner closes it when the pointer leaves). Off, it is the
+   *  held preview: a scrim, and a tap anywhere closes it. */
+  hover?: boolean;
 }
 
+/**
+ * The one place a card is previewed: the centre of the screen, at the full
+ * card's size, wherever the preview came from (a hand card hovered or held,
+ * an equipped item's chip, the story run's deck). Fixed spot, fixed size —
+ * the eye learns where to look, and a phone never has it hanging off an edge.
+ */
 export function CardPreview({ cardId, cost, onClose, hover = false }: Props) {
   if (hover) {
     return (
-      <motion.div
-        initial={{ opacity: 0, x: 20, scale: 0.92 }}
-        animate={{ opacity: 1, x: 0, scale: 1 }}
-        exit={{ opacity: 0, x: 10, scale: 0.95 }}
-        transition={spring.snappy}
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: 'calc(50% - 240px)',
-          transform: 'translateY(-50%)',
-          zIndex: 92,
-          pointerEvents: 'none',
+      <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 92, pointerEvents: 'none' }}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={spring.snappy}
           // One neutral drop — the print floats over the sheet with no colour cast.
-          filter: 'drop-shadow(0 16px 28px rgba(0, 0, 0, 0.55))',
-        }}
-      >
-        <CardFrame cardId={cardId} cost={cost} size="full" />
-      </motion.div>
+          style={{ filter: 'drop-shadow(0 16px 28px rgba(0, 0, 0, 0.55))' }}
+        >
+          <CardFrame cardId={cardId} cost={cost} size="full" />
+        </motion.div>
+      </div>
     );
   }
   return (
