@@ -4,7 +4,9 @@
  * Pieces that make it FAIR (vs. the naive sim):
  *  - **Agent ladder** (random / heuristic / MCTS) so we can measure the skill
  *    gap and de-confound a weak bot from real imbalance.
- *  - **Seeded determinism** so a balance change can be A/B'd on identical games.
+ *  - **Seeded determinism** so a balance change can be A/B'd on identical games:
+ *    the draft picks, the agents and Math.random (which the engine reads for
+ *    the decks and their shuffles) all draw from streams of the game's seed.
  *  - **Matchup control** (random drafts, or forcing a hero onto a side) so a
  *    specific card can be tested at higher N.
  *  - **Wilson confidence intervals** so we only flag statistically real outliers.
@@ -19,31 +21,15 @@ import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { CARDS_BY_ID } from '@/cards';
 import type { GameState, PlayerState, PlayerID } from '@/engine/types';
+// The seeded PRNG (mulberry32) and the Wilson interval live with the other
+// statistics, which have tests of their own.
+import { mulberry32 as rng, wilson } from './stats';
+
+export { rng, wilson };
 
 export type AgentKind = 'random' | 'heuristic' | 'mcts';
 
-// ---- seeded PRNG (mulberry32) ------------------------------------------------
-export function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 const pick = <T>(arr: T[], r: () => number): T => arr[Math.floor(r() * arr.length)];
-
-// ---- Wilson score interval (95% by default) ----------------------------------
-export function wilson(wins: number, n: number, z = 1.96): { lo: number; hi: number; p: number } {
-  if (n === 0) return { lo: 0, hi: 0, p: 0 };
-  const p = wins / n;
-  const z2 = z * z;
-  const denom = 1 + z2 / n;
-  const center = (p + z2 / (2 * n)) / denom;
-  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
-  return { p, lo: center - half, hi: center + half };
-}
 
 // ---- agents ------------------------------------------------------------------
 // Plain legal-move list (no lookahead) — for the MCTS bot's rollouts and the
@@ -126,6 +112,20 @@ export async function runGame(opts: {
   mctsIterations?: number;
   mctsDepth?: number;
 }): Promise<GameResult> {
+  // The engine reads Math.random for the decks and their shuffles: pin it to a
+  // stream of this game's seed for the length of the game and restore it after,
+  // as scripts/eval/ai-vs-ai.ts and tests/engine/fuzz/driver.ts do, so the same
+  // seed plays the same game. (The games of a batch run one after another.)
+  const original = Math.random;
+  Math.random = rng((opts.seed ^ 0xc2b2ae35) >>> 0);
+  try {
+    return await playGame(opts);
+  } finally {
+    Math.random = original;
+  }
+}
+
+async function playGame(opts: Parameters<typeof runGame>[0]): Promise<GameResult> {
   const r = rng(opts.seed);
   const game = { ...(DeadlockGame as any), seed: opts.seed };
   const client = Client({ game, numPlayers: 2 });

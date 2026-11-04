@@ -8,6 +8,7 @@
 import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
+import { PATRON_HP } from '@/engine/constants';
 import type { GameState } from '@/engine/types';
 
 const GAMES = Number(process.argv[2] ?? 300);
@@ -26,7 +27,9 @@ function playOne(): R {
   client.start();
   let st: any = client.getState();
   let guard = 0, movesThisTurn = 0, lastTurn = -1;
-  let hp0 = 8, hp1 = 8;            // patron HP trackers (PATRON_HP = 8)
+  // Patron HP trackers. They start where the patrons do, so the first KO of
+  // a game registers as a drop (a tracker below the patron's real HP misses it).
+  let hp0 = PATRON_HP, hp1 = PATRON_HP;
   const r: R = { kills0: 0, kills1: 0 };
 
   while (st && !st.ctx.gameover) {
