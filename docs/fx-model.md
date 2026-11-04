@@ -167,8 +167,10 @@ Animation families (`hits.tsx`, `support.tsx`, `shatter.tsx`, `primitives.tsx`):
 - **support** — a cast draws motes down into the caster, flares, swings the
   ability plate up and lets go with a shockwave; healing lifts green crosses
   off the card toward the viewer; status stickers under the mark their chip
-  wears — every status has one, drawn in `card/statusMarks.tsx` on a 16-unit
-  grid in `currentColor` line art, one drawing for chip and sticker — with the
+  wears — every status has one (`card/statusMarks.tsx`): Deadlock's own HUD
+  icon for the status, or for the item that grants it, painted in the status
+  ink through a mask over an ink underlay, one picture for chip and sticker —
+  with the
   turns it lasts printed small beside it in the sticker's stencil capitals
   ("2T"; none for a status with no end, 99 and up). A second or third sticker on
   one card wears its mark smaller at its left end, clear of the one above. Some

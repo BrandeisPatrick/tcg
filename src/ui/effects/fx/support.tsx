@@ -177,7 +177,7 @@ function statusInk(ev: StatusFx): string {
 }
 
 /** The mark over a stamp: the drawing its chip wears (statusMarks.tsx), in the
- *  status ink over an ink underlay. The reticle carries Fixation's stack. */
+ *  status ink over an ink underlay. Haze's head carries Fixation's stack. */
 function StampMark({ id, color, size, value }: { id: StatusId; color: string; size: number; value?: number }) {
   return (
     <div style={{ width: size, height: size, display: 'block', filter: 'drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5))' }}>

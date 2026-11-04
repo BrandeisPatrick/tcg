@@ -16,14 +16,15 @@ import { StatusesTab } from '@/ui/gallery/StatusesTab';
 // A status is printed twice: as a chip on the hero's tile and sheet (StatusIcon),
 // and as the sticker the FX layer slaps on when it lands (StatusStamp). Every
 // status in the registry has both, none is ever blank, and every one wears a
-// drawn mark of its own on both, the same drawing (the two channels share the
-// ring). Two ids are drawn ahead of the registry — Swift and Ricochet — so they
-// print the moment they land. An id nothing has been drawn for gets a plain
-// diamond tag and a label spelled out of its id, and never throws.
+// mark of its own on both, the same picture (the two channels share one):
+// Deadlock's own HUD icon for the status, or for the item that grants it, every
+// one painted in the chip's colour. Two ids have theirs ahead of the registry — Swift and Ricochet —
+// so they print the moment they land. An id nothing has been set aside for gets
+// a plain diamond tag and a label spelled out of its id, and never throws.
 
 /** The five the new kits brought, which also have a flourish on the sticker. */
 const MARKED = ['fixation', 'dome', 'rooted', 'rabbit', 'last_stand'] as const;
-/** Drawn before the registry lists them. */
+/** Given their pictures before the registry lists them. */
 const AHEAD = ['swift', 'ricochet'] as const;
 const UNKNOWN = 'mystery_status';
 const ALL = [...new Set([...STATUSES.map((s) => s.id), ...AHEAD])];
@@ -39,11 +40,11 @@ const sticker = (id: string, value = 2) => {
 };
 
 describe('which statuses wear a mark', () => {
-  it('every status in the registry wears a drawing of its own, not the diamond', () => {
+  it('every status in the registry wears a picture of its own, not the diamond', () => {
     for (const s of STATUSES) expect(markFor(s.id), s.id).not.toBe('unknown');
   });
 
-  it('each wears the drawing named for it; the light channel wears the channel ring', () => {
+  it('each wears the picture named for it; the light channel wears the channel ring', () => {
     for (const id of ALL) expect(markFor(id), id).toBe(id === 'casting_light' ? 'casting' : id);
     for (const id of MARKED) expect(markFor(id), id).toBe(id);
   });
@@ -54,7 +55,7 @@ describe('which statuses wear a mark', () => {
     for (const id of AHEAD) expect(MARKED_IDS, id).toContain(id);
   });
 
-  it('an id nothing has been drawn for wears the diamond tag — an Object key included', () => {
+  it('an id nothing has been set aside for wears the diamond tag — an Object key included', () => {
     expect(markFor(UNKNOWN)).toBe('unknown');
     expect(markFor('')).toBe('unknown');
     expect(markFor('constructor')).toBe('unknown');
@@ -63,30 +64,49 @@ describe('which statuses wear a mark', () => {
 
   it('every status prints its mark; nothing prints blank', () => {
     for (const id of [...ALL, UNKNOWN]) {
-      const svg = renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', size: 12 }));
-      expect(svg, id).toContain(`data-mark="${markFor(id)}"`);
-      expect(svg, id).toMatch(/<(path|circle|rect|ellipse)\b/);
+      const mark = renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', size: 12 }));
+      expect(mark, id).toContain(`data-mark="${markFor(id)}"`);
+      // The game's glyph as an image, or the diamond drawn here.
+      expect(mark, id).toMatch(/<image |<path\b/);
     }
   });
 
-  it('every mark is a different drawing', () => {
+  it('every mark is a different picture', () => {
     const kinds = [...new Set([...ALL, UNKNOWN].map((id) => markFor(id)))];
-    const drawings = kinds.map((k) => renderToStaticMarkup(createElement(StatusMark, { id: k === 'unknown' ? UNKNOWN : k, color: '#fff', size: 12 })).replace(/data-mark="[a-z_]+"/, ''));
-    expect(new Set(drawings).size).toBe(drawings.length);
+    const pictures = kinds.map((k) => renderToStaticMarkup(createElement(StatusMark, { id: k === 'unknown' ? UNKNOWN : k, color: '#fff', size: 12 })).replace(/data-mark="[a-z_]+"/, ''));
+    expect(new Set(pictures).size).toBe(pictures.length);
   });
 
-  it('every mark is line art on the 16-unit grid in the colour it is given: round caps and joins, 1.7 on a chip, 2 over its ink underlay', () => {
+  it("the game's own icons are used where it has one; an item's status wears the item's glyph", () => {
+    const at = (id: string) => renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', size: 12 }));
+    for (const id of ['stun', 'silenced', 'disarm', 'sleep', 'bleed', 'rooted', 'rabbit', 'charged', 'djinns_mark', 'fixation',
+      'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable', 'healing_boost', 'extra_attack',
+      'swift', 'last_stand', 'healing_boost_down', 'bullet_resist_down', 'spirit_resist_down', 'casting', 'casting_light',
+      'return_fire', 'ricochet', 'reverb', 'dome', 'siphon_drain', 'siphon_gain', 'weapon_power_down', 'spirit_power_down']) {
+      expect(at(id), id).toContain('/status/');
+      expect(at(id), id).toContain('.png');
+      expect(at(id), id).not.toContain('<img ');
+    }
+    // A stat's drop wears the stat's icon with an arrow down; the Siphon pair the item's glyph, an arrow each way.
+    for (const id of ['weapon_power_down', 'spirit_power_down']) expect(at(id), id).toMatch(/\/status\/[a-z_]+\.png[\s\S]*data-badge="down"/);
+    expect(at('siphon_drain')).toMatch(/\/status\/siphon_bullets\.png[\s\S]*data-badge="down"/);
+    expect(at('siphon_gain')).toMatch(/\/status\/siphon_bullets\.png[\s\S]*data-badge="up"/);
+    for (const [id, file] of [['return_fire', 'return_fire'], ['ricochet', 'ricochet'], ['reverb', 'mystic_reverb'], ['dome', 'ethereal_shift']]) {
+      expect(at(id), id).toContain(`href="/status/${file}.png"`);
+    }
+  });
+
+  it('every mark is painted in the colour it is given and nothing else; over art it stands on an ink underlay', () => {
     for (const id of [...ALL, UNKNOWN]) {
       const chipMark = renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', size: 12 }));
-      expect(chipMark, id).toContain('viewBox="0 0 16 16"');
-      expect(chipMark, id).toContain('stroke-linecap="round"');
-      expect(chipMark, id).toContain('stroke-linejoin="round"');
-      expect(chipMark, id).toContain('stroke-width="1.7"');
-      // Nothing but the colour it was handed: every other paint is currentColor.
-      expect(chipMark.replace('color="#fff"', ''), id).not.toMatch(/#[0-9a-f]{3,8}\b|rgb/i);
+      expect(chipMark, id).toContain('width:12px');
+      // Every mark is painted in the colour: the glyphs through the filter, the diamond by its stroke.
+      expect(chipMark, id).toContain('#fff');
+      expect(chipMark, id).not.toContain('#000');
       const sticker = renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', outline: '#000', size: 40 }));
-      expect(sticker, id).toContain('stroke-width="2"');
-      expect(sticker, id).toContain('stroke-width="4"');
+      expect(sticker, id).toContain('#000');
+      // A glyph's ink is a dilation of the glyph itself; the diamond strokes it.
+      expect(sticker, id).toMatch(/<feMorphology [^>]*operator="dilate"[\s\S]*flood-color="#000"|stroke="#000"/);
     }
   });
 });
@@ -145,11 +165,11 @@ describe('every status has a chip and a sticker, and neither is blank', () => {
     for (const id of ['dome', 'rooted', 'rabbit']) expect(statusChipText(id, 1), id).toBe(statusLabel(id));
   });
 
-  it('the reticle on the sticker carries the stack count; on a chip the pill does', () => {
+  it('the head on the sticker carries the stack count; on a chip the pill does', () => {
     const st = sticker('fixation', 3);
-    expect(st).toMatch(/data-mark="fixation"[\s\S]*?<text[^>]*>3<\/text>/);
+    expect(st).toMatch(/data-mark="fixation"[\s\S]*?data-count="3"[^>]*>3</);
     const pill = renderToStaticMarkup(createElement(StatusMark, { id: 'fixation', color: '#fff', size: 12 }));
-    expect(pill).not.toContain('<text');
+    expect(pill).not.toContain('data-count');
   });
 });
 

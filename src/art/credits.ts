@@ -104,6 +104,18 @@ export const ART_CREDITS: CreditGroup[] = [
         thumb: { kind: 'image', src: `${BASE}heroes/hero_abrams_splash.webp`, position: '50% 18%' },
       },
       {
+        id: 'status-icons',
+        title: 'Status icons',
+        by: 'The game\'s own HUD icons for its status effects, stats and items, from the Deadlock wiki\'s asset mirror.',
+        where: 'The mark on every status chip and sticker: Stun, Silence, Sleep, Bleed, the armours, Fire Rate, Fixation and the rest. A status an item grants wears the item\'s glyph; a channel wears Dynamo\'s Singularity.',
+        links: [
+          { label: 'Deadlock wiki', href: 'https://deadlock.wiki/' },
+          STEAM,
+        ],
+        terms: `${VALVE} Painted in the chip\'s colour through a mask.`,
+        thumb: { kind: 'image', src: `${BASE}status/stun.png`, fit: 'contain', ground: '#2a2a2a' },
+      },
+      {
         id: 'hero-icons',
         title: 'Hero badges',
         by: 'The game\'s own hero icons, through the community-run Deadlock Assets API.',
@@ -222,7 +234,7 @@ export const ART_CREDITS: CreditGroup[] = [
 
 /** Everything on screen that is not in the list above. */
 export const ORIGINAL_ART_NOTE =
-  'Everything else — the Story skyline, the level rings, the status and card icons, the fallback card glyphs, the sheets and the table itself — was drawn for this game.';
+  'Everything else — the Story skyline, the level rings, the card icons, the fallback card glyphs, the unknown-status mark, the sheets and the table itself — was drawn for this game.';
 
 export const ART_DISCLAIMER =
   'Deadlock and all related assets © Valve Corporation. A non-commercial fan project, not affiliated with Valve. The source code is MIT; the art stays its owners\'. Any piece is removed or replaced on request.';

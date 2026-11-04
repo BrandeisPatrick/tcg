@@ -35,6 +35,15 @@ from their "Deadlock Graphical Library" collection.
   `public/spells/` and `public/items/` are the game's own icons and shop art,
   pulled from the community asset bucket at https://deadlock-api.com/
   (https://assets.deadlock-api.com/). See `public/ART_PIPELINE.md`.
+- The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,
+  Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, Fixation, the armours
+  and their reduction icons, Barrier, Healing, the damage heart, Fire Rate,
+  the sprint boot, Unstoppable, Warden's Last Stand, Dynamo's Singularity for
+  a channel, and the item glyphs of Mystic Reverb, Siphon Bullets, Return
+  Fire, Ethereal Shift and Ricochet for the statuses those grant) are the
+  game's own HUD icons, fetched from the Deadlock wiki's asset mirror
+  (`https://cdn.deadlock.wiki/<File_Name>.png`) and used as they are: white
+  glyphs on transparency, painted in the chip's colour through an SVG filter.
 
 ## Menu card bills
 
@@ -86,8 +95,9 @@ Bundled through Fontsource under the SIL Open Font License 1.1:
 
 The Story card's dusk skyline (`src/ui/start/cardScenes.tsx`) is hand-authored
 SVG drawn for this project in the poster palette, with the campaign route
-climbing the city. The level rings, status and card icons, the fallback card
-glyphs, the title screen, draft lobby and match board are likewise original.
+climbing the city. The level rings, the card icons, the unknown-status mark,
+the fallback card glyphs, the title screen, draft lobby and match board are
+likewise original.
 
 ## Disclaimer
 
