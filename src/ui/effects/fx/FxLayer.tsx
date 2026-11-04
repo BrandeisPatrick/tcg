@@ -15,7 +15,7 @@
  * trade the combat choreographer makes).
  */
 import { useContext, useEffect, useRef, useState } from 'react';
-import type { CastFx, FxEvent, GameAction, HitFx, PlayerID } from '@/engine/types';
+import type { CastFx, FxEvent, GameAction, HitFx, Owner, PlayerID } from '@/engine/types';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { poster } from '../../poster';
 import { FX_INK, FX_TIMING, TAG_INFO, typeInk } from './fxCatalog';
@@ -87,7 +87,9 @@ export function FxLayer({ batch, batchKey, slotRefs, action = null }: FxLayerPro
   return <>{live.map((b) => <FxBatch key={b.key} live={b} />)}</>;
 }
 
-const ownerInk = (owner: '0' | '1' | undefined) => (owner === '1' ? poster.rival : poster.you);
+/** A shot's ink by whose it is: yours gold, the rival's red, the Mid-Boss's
+ *  (owned by nobody) the pure-damage ink of its blow. */
+const ownerInk = (owner: Owner | undefined) => (owner === '1' ? poster.rival : owner === 'none' ? FX_INK.pure : poster.you);
 
 /** The colour a spell or ult's bolt draws in — what it is about to do. */
 function effectInk(batch: FxEvent[], casterIid: string | undefined): string {

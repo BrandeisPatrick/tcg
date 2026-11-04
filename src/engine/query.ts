@@ -14,9 +14,11 @@ import type {
   HeroCard,
   ItemSlot,
   ItemTier,
+  Owner,
   PlayerID,
   PlayerState,
   StatusId,
+  StructureKind,
   UltimateCard,
 } from './types';
 import { CARDS_BY_ID, ULTIMATES, itemCard } from '@/cards';
@@ -25,9 +27,9 @@ import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import {
   ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, COMEBACK_STEPS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE,
-  RICHEST_BOUNTY_BONUS, START_LEVEL,
+  RICHEST_BOUNTY_BONUS, RICH_RESPAWN_PENALTY, START_LEVEL,
 } from './constants';
-import { secondMover } from './rounds';
+import { pushMultiplier, respawnTurns, round, secondMover } from './rounds';
 
 // ---------- The board ----------
 
@@ -35,16 +37,36 @@ export function otherPlayer(id: PlayerID): PlayerID {
   return id === '0' ? '1' : '0';
 }
 
-/** The board card with this iid, or null. An empty slot is nobody: a missing or
- *  junk iid (`undefined`, a number…) finds nothing, so callers can treat "not
- *  found" as the one answer for every id that names no card. */
-export function findCardOnBoard(G: GameState, iid: string): { owner: PlayerID; card: CardInstance } | null {
+/** The board card with this iid, or null: a hero in a slot, or the Mid-Boss in
+ *  the pit (owned by nobody). An empty slot is nobody: a missing or junk iid
+ *  (`undefined`, a number…) finds nothing, so callers can treat "not found" as
+ *  the one answer for every id that names no card. */
+export function findCardOnBoard(G: GameState, iid: string): { owner: Owner; card: CardInstance } | null {
   for (const pid of ['0', '1'] as PlayerID[]) {
     const ps = G.players[pid];
     if (ps.active && ps.active.iid === iid) return { owner: pid, card: ps.active };
     for (const b of ps.bench) if (b && b.iid === iid) return { owner: pid, card: b };
   }
+  if (G.boss && G.boss.iid === iid) return { owner: 'none', card: G.boss };
   return null;
+}
+
+/** The seat a hero or an item belongs to. Only the Mid-Boss belongs to no
+ *  seat, and nothing that asks this is ever handed it: a programming error
+ *  if it is. */
+export function seatOf(card: CardInstance): PlayerID {
+  if (card.ownerId === 'none') throw new Error(`${card.cardId}#${card.iid} belongs to no seat`);
+  return card.ownerId;
+}
+
+/** True for the Mid-Boss: the unit in the pit. */
+export function isBoss(card: CardInstance | null | undefined): boolean {
+  return card?.zone === 'pit';
+}
+
+/** The Mid-Boss, while it stands in the pit (up, and not yet reaped at 0 HP). */
+export function standingBoss(G: GameState): CardInstance | null {
+  return G.boss && G.boss.hp > 0 ? G.boss : null;
 }
 
 /** True when a hero is currently a corpse waiting to respawn (greyed in UI,
@@ -85,25 +107,95 @@ export function heroData(card: CardInstance): HeroCard | undefined {
   return data?.type === 'hero' ? data : undefined;
 }
 
-/** One way to lose: your patron's HP reaches 0. A board with every hero down
- *  is no loss (the rival's Active pushes into the empty lane at the end of its
- *  turn instead, endTurnEffects). Should both patrons fall to one action, the
- *  one with more HP left wins, and on a tie the second mover. This is
- *  boardgame.io's `endIf`: it runs after every move on the already-resolved
- *  state. */
-export function checkWinner(G: GameState): { winner?: PlayerID } | undefined {
-  if (G.draft) return undefined;
-  const p0 = G.players['0'].hp;
-  const p1 = G.players['1'].hp;
-  if (p0 > 0 && p1 > 0) return undefined;
-  if (p0 <= 0 && p1 <= 0) return { winner: p0 > p1 ? '0' : p1 > p0 ? '1' : secondMover(G) };
-  return { winner: p0 <= 0 ? '1' : '0' };
+// ---------- The map ----------
+
+/** A side's structure of `kind` (every track has all three; one not on a
+ *  scripted track has `max` 0). */
+export function structureOf(ps: PlayerState, kind: StructureKind) {
+  return ps.structures.find((s) => s.kind === kind)!;
 }
 
-/** Patron HP a hero's fall costs its owner: the fallen hero's level, so a
- *  leveled carry is the costliest to lose — and the one worth hunting. */
-export function koPatronDamage(hero: CardInstance): number {
-  return hero.level ?? START_LEVEL;
+/** The structure HP a side has left, its three together. */
+export function structureHp(ps: PlayerState): number {
+  return ps.structures.reduce((n, s) => n + Math.max(0, s.hp), 0);
+}
+
+/** The front standing structure of a side — where the next push lands — or
+ *  undefined once its Patron has fallen. */
+export function frontStructure(ps: PlayerState) {
+  return ps.structures.find((s) => s.hp > 0);
+}
+
+/** True once a side's Patron has fallen: that side has lost. */
+export function patronFallen(ps: PlayerState): boolean {
+  return structureOf(ps, 'patron').hp <= 0;
+}
+
+/** How a match decided on what stands was settled. */
+export type StandingVerdict = 'structures' | 'netWorth' | 'secondMover';
+
+/** Who wins on what stands — the round cap's verdict, and the verdict when
+ *  both Patrons fall to one action: more structure HP; on a tie, more net
+ *  worth; still tied, the second mover. */
+export function standingVerdict(G: GameState): { winner: PlayerID; by: StandingVerdict } {
+  const s0 = structureHp(G.players['0']);
+  const s1 = structureHp(G.players['1']);
+  if (s0 !== s1) return { winner: s0 > s1 ? '0' : '1', by: 'structures' };
+  const w0 = netWorth(G, '0');
+  const w1 = netWorth(G, '1');
+  if (w0 !== w1) return { winner: w0 > w1 ? '0' : '1', by: 'netWorth' };
+  return { winner: secondMover(G), by: 'secondMover' };
+}
+
+/** How a match is won: the rival's Patron falls — to the push of a kill, or
+ *  of an Active into an empty lane; both at once goes to what stands
+ *  (`standingVerdict`) — or round ROUND_CAP ends (`G.capped`) and what stands
+ *  decides. A board with every hero down is no loss by itself. This is
+ *  boardgame.io's `endIf`: it runs after every move and turn edge on the
+ *  already-resolved state. */
+export function checkWinner(G: GameState): { winner?: PlayerID } | undefined {
+  if (G.draft) return undefined;
+  const down0 = patronFallen(G.players['0']);
+  const down1 = patronFallen(G.players['1']);
+  if (down0 && down1) return { winner: standingVerdict(G).winner };
+  if (down0 || down1) return { winner: down0 ? '1' : '0' };
+  if (G.capped) return { winner: standingVerdict(G).winner };
+  return undefined;
+}
+
+/** The structure HP a hero's fall pushes into its side's front structure:
+ *  its level plus KILL_BOUNTY_BASE (the kill bounty's own number, without
+ *  the richest hero's bonus), doubled in the late game. */
+export function killPush(G: GameState, hero: CardInstance): number {
+  return ((hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE) * pushMultiplier(G);
+}
+
+/** Own turns a hero that falls now waits before it respawns: the round's
+ *  band (`respawnTurns`), and RICH_RESPAWN_PENALTY more when it is strictly
+ *  the richest hero on the board. */
+export function respawnTimer(G: GameState, hero: CardInstance): number {
+  return respawnTurns(G) + (isRichestHero(G, hero) ? RICH_RESPAWN_PENALTY : 0);
+}
+
+/** True while `pid`'s Rejuvenator can bring a hero back: a credit left, in a
+ *  round it is good through. */
+export function reviveReady(G: GameState, pid: PlayerID): boolean {
+  const ps = G.players[pid];
+  return ps.reviveCredits > 0 && round(G) <= ps.reviveUntilRound;
+}
+
+/** Who takes the Mid-Boss falling now, and what settled it: the side that
+ *  dealt it more damage; on a tie, the side behind on net worth; still tied,
+ *  the side that landed the last hit (seat 0 should nobody have — no boss
+ *  dies unhit). */
+export function bossTaker(G: GameState): { pid: PlayerID; by: 'damage' | 'netWorth' | 'lastHit' } {
+  const d0 = G.bossDamage['0'];
+  const d1 = G.bossDamage['1'];
+  if (d0 !== d1) return { pid: d0 > d1 ? '0' : '1', by: 'damage' };
+  const w0 = netWorth(G, '0');
+  const w1 = netWorth(G, '1');
+  if (w0 !== w1) return { pid: w0 < w1 ? '0' : '1', by: 'netWorth' };
+  return { pid: G.bossLastHit ?? '0', by: 'lastHit' };
 }
 
 // ---------- Worth ----------
@@ -173,7 +265,7 @@ export function isRichestHero(G: GameState, hero: CardInstance): boolean {
 
 /** Souls a kill pays the victim's opponent: the victim's level plus
  *  KILL_BOUNTY_BASE, and RICHEST_BOUNTY_BONUS more when it was strictly the
- *  richest hero on the board. */
+ *  richest hero on the board. (The push is the same level + 1, `killPush`.) */
 export function killBounty(G: GameState, hero: CardInstance): number {
   return (hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE + (isRichestHero(G, hero) ? RICHEST_BOUNTY_BONUS : 0);
 }

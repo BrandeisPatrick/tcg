@@ -39,6 +39,7 @@ import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
 import { SHOP_DONE, SHOP_SHEET, buyLabel } from '@/ui/overlays/ShopSheet';
 import { inHandLabel } from '@/ui/board/Hand';
+import { mapLesson } from './mapLesson';
 
 /* ------------------------------------------------------------------ */
 /* The matches                                                         */
@@ -343,7 +344,7 @@ function done(id: string, title: string, body: Text): CoachStep {
 /* The lessons                                                         */
 /* ------------------------------------------------------------------ */
 
-export type LessonId = 'skill' | 'souls' | 'level' | 'bench';
+export type LessonId = 'skill' | 'souls' | 'level' | 'bench' | 'map';
 
 export interface Lesson {
   id: LessonId;
@@ -472,6 +473,9 @@ export const LESSONS: Lesson[] = [
       attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))}, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. ${nameOf(myBench(v))} sits it out on the bench.`),
     ],
   },
+
+  // 5 The Map — its own file (mapLesson.ts), made of the builders above.
+  mapLesson({ fight, done, useSkill, attack, turnButton: TURN_BUTTON }),
 ];
 
 export function lessonById(id: string | undefined | null): Lesson | undefined {

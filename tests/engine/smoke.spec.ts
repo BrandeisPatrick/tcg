@@ -5,7 +5,8 @@ import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { configureReadyMatch, passTurn } from './_helpers';
-import { LANE_INCOME, PATRON_HP } from '@/engine/constants';
+import { LANE_INCOME, STRUCTURES } from '@/engine/constants';
+import { structureHp } from '@/engine/query';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -65,8 +66,11 @@ describe('Deadlock TCG engine smoke', () => {
   it('initializes a match with two full boards and empty hands, turn 1 opening on its shop with the income banked', () => {
     const c = newClient();
     const { G, ctx } = snap(c);
-    expect(G.players['0'].hp).toBe(PATRON_HP);
-    expect(G.players['1'].hp).toBe(PATRON_HP);
+    // Both sides' tracks stand whole: Guardian, Walker, Patron.
+    const track = STRUCTURES.reduce((n, [, hp]) => n + hp, 0);
+    expect(structureHp(G.players['0'])).toBe(track);
+    expect(structureHp(G.players['1'])).toBe(track);
+    expect(G.players['0'].structures.map((s) => s.kind)).toEqual(['guardian', 'walker', 'patron']);
     expect(G.players['0'].active).not.toBeNull();
     expect(G.players['1'].active).not.toBeNull();
     expect(G.players['0'].bench.filter(Boolean).length).toBe(3);
@@ -125,8 +129,9 @@ describe('Deadlock TCG engine smoke', () => {
       }
     }
     const { G } = snap(c);
-    // The patrons took real damage (both start at PATRON_HP: a sum under 2 × PATRON_HP is a fall paid for or a push).
-    expect(G.players['0'].hp + G.players['1'].hp).toBeLessThan(2 * PATRON_HP);
+    // The structures took real damage (both tracks start whole: a sum under twice a track is a kill's push or a lane's).
+    const track = STRUCTURES.reduce((n, [, hp]) => n + hp, 0);
+    expect(structureHp(G.players['0']) + structureHp(G.players['1'])).toBeLessThan(2 * track);
     // The AI never holds a card: whatever it bought, it played.
     expect(G.players['1'].hand).toEqual([]);
   });

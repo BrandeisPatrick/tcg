@@ -21,7 +21,7 @@ import { RETREAT_COST, ULT_UNLOCK_LEVEL } from './constants';
 import {
   attackPower, boughtAtDiscount, copiesOnSide, findCardOnBoard, findWornItem, handCard, hasReach, heroesOf, isBlocked, isRespawning,
   isUntargetable, itemCooldown, itemPrice, kitAbilityIds, liveBoardCards, otherPlayer, resolveSkill, retreatDiscount,
-  slotCap, slottedHeroes, stepInCandidates, targetsFor, wornActives, wornItems,
+  slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, wornActives, wornItems,
 } from './query';
 import { marketItems, onSale } from './market';
 import { seatToMove } from './rounds';
@@ -53,7 +53,8 @@ function attackerBlock(G: GameState, pid: PlayerID): 'turn1' | 'used' | 'noActiv
 /** Everyone `active` could aim a basic attack at, were it free to make one: the
  *  rival's living Active — or, with reach, every living enemy hero in
  *  `targetsFor` order — minus any hero a status makes untargetable for an
- *  attack (Dome). Whether the swing would deal anything is a separate question. */
+ *  attack (Dome); then the Mid-Boss, while it stands in the pit. Whether the
+ *  swing would deal anything is a separate question. */
 function aimable(G: GameState, pid: PlayerID, active: CardInstance): CardInstance[] {
   let foes: CardInstance[];
   if (hasReach(active)) {
@@ -62,16 +63,20 @@ function aimable(G: GameState, pid: PlayerID, active: CardInstance): CardInstanc
     const rival = G.players[otherPlayer(pid)].active;
     foes = rival && !isRespawning(rival) ? [rival] : [];
   }
-  return foes.filter((t) => !isUntargetable(t, 'attack'));
+  foes = foes.filter((t) => !isUntargetable(t, 'attack'));
+  const boss = standingBoss(G);
+  return boss ? [...foes, boss] : foes;
 }
 
 /**
  * The one list of what `pid`'s Active may swing at this turn: the rival's living
  * Active, or — with reach — every living enemy hero, in `targetsFor` order; never
- * a hero a Dome makes untargetable, and only those the swing would hurt. Empty
- * when the Active cannot attack for any of `attackBlocked`'s reasons. The first
- * of the list is who a bare `attack` swings at; the board, the AI and
- * `legalActions` offer one attack per hero in it.
+ * a hero a Dome makes untargetable, and only those the swing would hurt; and
+ * last, the Mid-Boss while it stands in the pit (an attack at it is the turn's
+ * attack like any other). Empty when the Active cannot attack for any of
+ * `attackBlocked`'s reasons. The first of the list is who a bare `attack`
+ * swings at — the rival Active, or the boss when no enemy hero can be hit;
+ * the board, the AI and `legalActions` offer one attack per target in it.
  */
 export function attackTargets(G: GameState, pid: PlayerID): CardInstance[] {
   if (attackerBlock(G, pid) !== null) return [];
@@ -92,8 +97,8 @@ export function attackTargets(G: GameState, pid: PlayerID): CardInstance[] {
  *                the hero who steps up may make the attack.
  *   - 'noTarget' there is no legal target: the rival has no living Active to
  *                swing at (or, with reach, no living hero), or all of them are
- *                untargetable (a Dome).
- *   - 'target'   `targetIid` names a hero the attack may not be aimed at: not on
+ *                untargetable (a Dome) — and no Mid-Boss stands in the pit.
+ *   - 'target'   `targetIid` names a unit the attack may not be aimed at: not on
  *                the board, not an enemy, fallen, domed, or on the bench of a
  *                hero without reach.
  *   - 'cannot'   the swing would deal nothing: Stun, Disarm, Sleep, a heavy

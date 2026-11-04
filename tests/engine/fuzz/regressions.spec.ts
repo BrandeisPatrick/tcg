@@ -24,7 +24,7 @@ import { enumerateAIMoves } from '@/ai/heuristic';
 import { resolve } from '@/engine/death';
 import { addStatus, grantExtraAttacks, tickRemMerges } from '@/engine/statusOps';
 import { blocked, legalActions, moveItemBlocked, playBlocked, playTargets, sellBlocked, skillBlocked } from '@/engine/legality';
-import { wornItems } from '@/engine/query';
+import { seatOf, wornItems } from '@/engine/query';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { buyItem, configureReadyMatch, freshReadyGame, giveCard, giveItem, makeHero } from '../_helpers';
@@ -46,7 +46,7 @@ const anywhere = (G: GameState, iid: string) => everyCard(G).find((x) => x.card.
 function useUlt(G: GameState, hero: CardInstance, targetIid?: string) {
   hero.level = Math.max(2, hero.level ?? 1) as 2 | 3 | 4;
   const ult = (CARDS_BY_ID[hero.cardId] as { ult?: string }).ult;
-  return runMove('useSkill', G, hero.ownerId, hero.iid, targetIid, ult);
+  return runMove('useSkill', G, seatOf(hero), hero.iid, targetIid, ult);
 }
 
 /** P0 (Haze active; Vindicta / Lash / Paige on the bench), turn 2, the act step, with souls to spend. */

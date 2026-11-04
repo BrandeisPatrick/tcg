@@ -20,7 +20,7 @@ import { INVALID, perform } from '@/engine/engine';
 import { attackAll } from '@/engine/actions/attack';
 import { endTurnEffects } from '@/engine/actions/turn';
 import { forecastAttack } from '@/engine/forecast';
-import { ricochetPower } from '@/engine/query';
+import { ricochetPower, structureHp } from '@/engine/query';
 import { addStatus, grantExtraAttacks } from '@/engine/statusOps';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { statusOfKeyword } from '@/ui/card/RuleText';
@@ -189,17 +189,17 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
 describe('A bounce that knocks a hero out', () => {
   // The bounce is dealt in the attacker's own attack frame, so the kill is the
   // attacker's by the path every kill takes: the exp in damageUnit (the frame's
-  // source), the KO bounty and the patron's loss when the attack resolves.
-  it("pays the KO bounty to the attacker's side and the exp to the attacker; the patron pays the hero's level", () => {
+  // source), the KO bounty and the push into its side's structures when the attack resolves.
+  it("pays the KO bounty to the attacker's side and the exp to the attacker; the push is the hero's level + 1", () => {
     const { G, atk, bench } = lane('hero_dynamo', 'ricochet');
     bench[0].hp = 2;
     G.players['0'].souls = 0;
-    const patron = G.players['1'].hp;
+    const structures = structureHp(G.players['1']);
     makeAttack(G, '0');
     expect(bench[0].respawnTurnsLeft).toBeGreaterThan(0);
     expect(G.players['0'].souls).toBe((bench[0].level ?? 1) + 1); // the bounty: its level + 1
     expect(atk.exp).toBe(EXP_ON_KILL);
-    expect(G.players['1'].hp).toBe(patron - (bench[0].level ?? 1));
+    expect(structureHp(G.players['1'])).toBe(structures - ((bench[0].level ?? 1) + 1));
   });
 
   it("takes nothing more from the attack: the next swing's bounce and Tesla jump pass it by", () => {
@@ -286,7 +286,7 @@ describe('The AI and the forecast', () => {
     const plan = forecastAttack(G, '0');
     expect(plan.steps.map((s) => s.finalDamage)).toEqual([3, 3]);
     expect(plan.steps.map((s) => s.predictedHpAfter)).toEqual([17, 14]);
-    expect(plan).toMatchObject({ damageToActive: 6, patronDamage: 2, defenderActiveKO: null });
+    expect(plan).toMatchObject({ damageToActive: 6, pushDamage: 4, defenderActiveKO: null });
     expect(forecastMismatches(G, ctx('0'), '0')).toEqual([]);
   });
 

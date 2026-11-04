@@ -20,6 +20,7 @@ import { atkInk, hpInk, poster } from '../poster';
 import { LevelRing } from '../card/LevelRing';
 import { LevelTrim, trimInset } from '../card/LevelTrim';
 import { useStatTick } from './useStatTick';
+import { FlexSocket } from './FlexSocket';
 import type { ArmedPlay } from '../helpers';
 
 /**
@@ -51,11 +52,13 @@ interface Props {
   /** This hero can still do something this turn — use its skill, or (the
    *  Active) attack. A glint sweeps across the portrait. */
   ready?: boolean;
+  /** Its side has the flex slot (the enemy Walker fell): a fourth chip socket. */
+  flexSlot?: boolean;
 }
 
 export function HeroSlot({
   card, owner, myId, pending, isTargetable, isCurrentTurn, compact,
-  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready,
+  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready, flexSlot,
 }: Props) {
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let pressFired = false;
@@ -234,13 +237,13 @@ export function HeroSlot({
 
         {/* Attached chips — bottom-left of portrait. Equipment shows item art;
             a merged hero (Rem · Lil Helpers) shows her portrait + turn countdown. */}
-        {attached.length > 0 && (
+        {(attached.length > 0 || flexSlot) && (
           <div style={{
             position: 'absolute', left: 4, bottom: 4,
             display: 'flex', flexDirection: 'row', gap: 3,
             ...(isCorpse ? { filter: 'grayscale(1) brightness(0.7)', opacity: 0.8 } : {}),
           }}>
-            {attached.slice(0, compact ? 3 : 4).map((eq) => {
+            {attached.slice(0, compact && !flexSlot ? 3 : 4).map((eq) => {
               const eqData = CARDS_BY_ID[eq.cardId];
               const isMerged = eqData?.type === 'hero'; // Rem merged in
               const dim = compact ? 18 : 24;
@@ -298,6 +301,7 @@ export function HeroSlot({
                 </div>
               );
             })}
+            {flexSlot && attached.filter((a) => CARDS_BY_ID[a.cardId]?.type !== 'hero').length < 4 && <FlexSocket compact={compact} />}
           </div>
         )}
 
@@ -590,7 +594,9 @@ function chipPill(compact: boolean | undefined): CSSProperties {
  * Renders the in-slot respawn state over the greyed portrait: a dim wash, a
  * slow rotating cream clock ring, an hourglass glyph and a red countdown
  * sticker. On the last turn (1T) the wash turns green and pulses faster to
- * signal "about to revive."
+ * signal "about to revive", and the sticker says the hero is back next turn —
+ * the whole wait in rounds 1–4, where a fall costs a single turn (the timer
+ * grows by the round it fell in, and by one for the richest hero).
  */
 function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: boolean }) {
   const isLast = turnsLeft === 1;
@@ -678,8 +684,12 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
         lineHeight: 1,
         whiteSpace: 'nowrap',
       }}>
-        <span>Respawn</span>
-        <span style={{ fontVariantNumeric: 'tabular-nums' }}>({turnsLeft})</span>
+        {isLast ? <span>{compact ? 'Next turn' : 'Back next turn'}</span> : (
+          <>
+            <span>Respawn</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>({turnsLeft})</span>
+          </>
+        )}
       </div>
     </div>
   );

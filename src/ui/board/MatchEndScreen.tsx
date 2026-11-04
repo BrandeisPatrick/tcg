@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { cardName } from '@/cards';
-import { isRespawning, otherPlayer } from '@/engine/query';
+import { isRespawning, otherPlayer, standingVerdict, structureHp } from '@/engine/query';
+import { ROUND_CAP } from '@/engine/constants';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { fonts, spring } from '../tokens';
@@ -48,11 +49,16 @@ export function MatchEndScreen({
   // winning side's roster label takes the same tone.
   const tone = won ? poster.ink : poster.red;
   const headline = won ? 'Victory' : 'Defeat';
+  // The round cap decided it: nobody's Patron fell, and what stood won.
+  const cap = G.capped ? standingVerdict(G) : null;
+  const capLine = cap ? `Round ${ROUND_CAP} over · ${cap.by === 'structures' ? 'more structure HP' : cap.by === 'netWorth' ? 'structures tied, more net worth' : 'all tied, the second mover'}` : null;
   const flavor = isTutorial
     ? (won ? (lessonOutro ?? 'Lesson over. The real tables are downstairs.') : 'No matter — you know the moves now.')
     : isStory
       ? (won ? 'The block is yours — press on uptown.' : 'Your run ends in the old city.')
-      : (won ? 'The rival patron falls.' : 'Your patron is outflanked.');
+      : cap
+        ? (won ? 'The clock runs out with your line standing.' : 'The clock runs out on your line.')
+        : (won ? 'The rival patron falls.' : 'Your patron is outflanked.');
 
   const myPs = G.players[me];
   const opPs = G.players[opp];
@@ -60,10 +66,12 @@ export function MatchEndScreen({
   const myTeam = [myPs.active, ...myPs.bench].filter(Boolean) as CardInstance[];
   const opTeam = [opPs.active, ...opPs.bench].filter(Boolean) as CardInstance[];
 
+  const trackOf = (ps: typeof myPs) => ps.structures.reduce((n, s) => n + s.max, 0);
   const stats: Array<{ label: string; value: string }> = [
     { label: 'Turns', value: String(G.turnNumber) },
-    { label: 'Your patron', value: `${Math.max(0, myPs.hp)} HP` },
-    { label: 'Rival patron', value: `${Math.max(0, opPs.hp)} HP` },
+    { label: 'Your structures', value: `${structureHp(myPs)}/${trackOf(myPs)}` },
+    { label: 'Rival structures', value: `${structureHp(opPs)}/${trackOf(opPs)}` },
+    { label: 'Mid-Boss', value: `${G.record[me].bossKills}–${G.record[opp].bossKills}` },
     { label: 'Heroes lost', value: `${myTeam.filter(fallen).length}–${opTeam.filter(fallen).length}` },
   ];
 
@@ -136,6 +144,13 @@ export function MatchEndScreen({
           }}>{headline}</h1>
           {/* Red register rule — the poster's one accent, under the headline. */}
           <div aria-hidden style={{ width: 56, height: 3, background: poster.red, marginTop: 6 }} />
+          {/* The round cap's verdict, when it decided the match. */}
+          {capLine && (
+            <div style={{
+              fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase',
+              color: poster.inkDim, marginTop: 4,
+            }}>{capLine}</div>
+          )}
         </motion.div>
 
         {/* Final rosters — yours left, rival right (stacked on phones). */}

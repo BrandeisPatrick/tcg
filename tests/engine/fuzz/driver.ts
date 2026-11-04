@@ -19,6 +19,7 @@ import type { GameState, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { legalActions } from '@/engine/legality';
+import { MATCH_TURNS } from '@/engine/rounds';
 import type { Action } from '@/engine/engine';
 import { ITEMS } from '@/cards';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
@@ -80,7 +81,8 @@ export interface Snapshot { G: GameState; ctx: Ctx }
 interface PlayOpts {
   seed: number;
   policies: Record<PlayerID, Policy>;
-  /** Real match turns before the game is called a stalemate. */
+  /** Real match turns before the game is called a stalemate: MATCH_TURNS (the
+   *  round cap's last turn) unless a spec asks for fewer — a guard no match reaches. */
   turnCap?: number;
   /** Accepted moves one seat may make in one turn before the driver ends it. */
   movesPerTurnCap?: number;
@@ -221,7 +223,7 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
 }
 
 export function playGame(opts: PlayOpts): GameRecord {
-  const turnCap = opts.turnCap ?? 40;
+  const turnCap = opts.turnCap ?? MATCH_TURNS;
   const movesPerTurnCap = opts.movesPerTurnCap ?? 40;
   const chaosRate = opts.chaosRate ?? CHAOS_RATE;
   const policyRandom = mulberry32((opts.seed ^ 0x9e3779b9) >>> 0);

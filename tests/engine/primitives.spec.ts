@@ -22,7 +22,7 @@ import {
 } from '@/engine/legality';
 import { pushLog } from '@/engine/log';
 import {
-  attackPower, effectiveAtk, findCardOnBoard, hasReach, isBlocked, isRespawning, isUntargetable, targetsFor,
+  attackPower, effectiveAtk, findCardOnBoard, hasReach, isBlocked, isRespawning, isUntargetable, structureHp, targetsFor,
 } from '@/engine/query';
 import { registerAbilities } from '@/engine/registry';
 import { addStatus, leaveActive, tickCastingPulses, tickEndOfTurnCC, tickStartOfTurn } from '@/engine/statusOps';
@@ -301,7 +301,7 @@ describe('Dome', () => {
     const plan = forecastAttack(G, '0');
     expect(plan.steps).toEqual([]);
     expect(plan.damageToActive).toBe(0);
-    expect(plan.patronDamage).toBe(0);
+    expect(plan.pushDamage).toBe(0);
     expect(plan.defenderActiveKO).toBeNull();
     const before = snapshot(G);
     expect(perform(G, '0', { type: 'attack' })).toBe(INVALID);
@@ -808,7 +808,7 @@ describe('an attack that names its target', () => {
       });
       expect(plan.damageToActive, target.cardId).toBe(target.hp - after.hp);
       expect(plan.defenderActiveKO, target.cardId).toBe(after.hp <= 0 ? target.iid : null);
-      expect(plan.patronDamage, target.cardId).toBe(G.players['1'].hp - real.players['1'].hp);
+      expect(plan.pushDamage, target.cardId).toBe(structureHp(G.players['1']) - structureHp(real.players['1']));
     }
     // The default is the rival Active, as before.
     expect(forecastAttack(G, '0')).toEqual(forecastAttack(G, '0', foes[0].iid));
@@ -897,14 +897,14 @@ describe('attackAll', () => {
     expect(snapshot(disarmed.G)).toBe(before);
   });
 
-  it('ends with the state-based pass: a hero it finishes falls, costs its patron its level and pays a bounty', () => {
+  it('ends with the state-based pass: a hero it finishes falls, pushes its level + 1 into its structures and pays a bounty', () => {
     const { G, me, atk, foes } = duel(TALLY);
     foes[2].hp = 3;
     me.souls = 4;
-    const patron = G.players['1'].hp;
+    const structures = structureHp(G.players['1']);
     attackAll(G, atk);
     expect(isRespawning(foes[2])).toBe(true);
-    expect(G.players['1'].hp).toBe(patron - 1);
+    expect(structureHp(G.players['1'])).toBe(structures - 2);
     expect(me.souls).toBe(6); // its level (1) + 1
     expect(G.log.some((l) => l.text === 'P0 +2 Souls (KO bounty).')).toBe(true);
   });

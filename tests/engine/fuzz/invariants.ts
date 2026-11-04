@@ -14,25 +14,33 @@
  * hand is its player's), `hand-bought-turn` (a hand card's `boughtOnTurn` is a
  * turn already played), `net-worth-hand` (net worth — the engine's, and the
  * one the income's comeback reads — counts the hand at list price) and
- * `play-slot-cap` (a card played never leaves a hero over its slot cap).
+ * `play-slot-cap` (a card played never leaves a hero over its slot cap). The
+ * map's (rules.md §6): each side's track and its order (`structures-*`), what a
+ * push takes (`structure-delta`: a kill's level + 1, an empty lane's bullet
+ * power, doubled from round 9), the flex slot (`flex-slot-walker`), the
+ * Mid-Boss (`boss-*`), the Rejuvenator (`revive-*`), the respawn timer by the
+ * round (`respawn-timer-start`) and the round cap (`round-cap`,
+ * `game-over-winner`).
  *
  * Nothing here mutates G (it is frozen by immer in a live client).
  */
 import type { Ctx } from 'boardgame.io';
-import type { CardInstance, GameState, PlayerID, PlayerState } from '@/engine/types';
+import type { CardInstance, FxEvent, GameState, PlayerID, PlayerState } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID } from '@/statuses';
 import { getAbility } from '@/abilities';
 import {
-  ACTIVE_COOLDOWN, COMEBACK_STEPS, EXP_ON_EQUIP, HARD_CC_CHARGES, LANE_INCOME, LEVEL_ATK_BONUS, LEVEL_HP_BONUS,
-  LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_LEVEL, PRICE, SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN,
+  ACTIVE_COOLDOWN, BOSS_CARD_ID, BOSS_HP, BOSS_SOULS, BOSS_SPAWN_ROUND, COMEBACK_STEPS, EXP_ON_EQUIP, GUARDIAN_BOUNTY,
+  HARD_CC_CHARGES, LANE_INCOME, LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_LEVEL, PRICE,
+  REVIVE_CREDITS, ROUND_CAP, SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN,
 } from '@/engine/constants';
-import { attackPower, isRespawning, koPatronDamage, netWorth, stepInCandidates } from '@/engine/query';
+import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/query';
 import {
   MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, bountyOracle, buyBlockedOracle, buyPriceOracle,
   closeShopBlockedOracle, describeUnit, everyCard, handCardOf, handOf, hasSpikeOracle, heroesOfSide, isHeroCard, isMergedRem, itemData,
-  moveItemBlockedOracle, netWorthOracle, netWorthOracleWithoutHand, other, playBlockedOracle, playConsumesOracle,
-  restoredBySaleOracle, retreatCostOracle, sellBlockedOracle, sellRefundOracle, slotCapOracle, slottedHeroOf, totalExp,
+  killPushOracle, moveItemBlockedOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, playBlockedOracle,
+  playConsumesOracle, pushMultiplierOracle, respawnTimerOracle, restoredBySaleOracle, retreatCostOracle, roundOracle,
+  sellBlockedOracle, sellRefundOracle, slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp,
   ultCooldownOracle, ultLocked, wornItemOf, wornItemsOf, type ConsumedOracle, type RestoredOracle,
 } from './oracle';
 
@@ -165,8 +173,38 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     if (!Number.isFinite(ps.souls) || ps.souls < 0 || !Number.isInteger(ps.souls)) {
       add('souls-range', pid, `P${pid} souls ${ps.souls} is not a whole number of 0 or more`);
     }
-    if (!Number.isFinite(ps.hp) || ps.hp > ps.hpMax) add('patron-range', pid, `P${pid} patron hp ${ps.hp} > hpMax ${ps.hpMax}`);
-    if (!G.draft && ps.hp <= 0 && !over) add('patron-dead-no-gameover', pid, `P${pid} patron hp ${ps.hp} but the game is not over`);
+
+    // ---- the structures (rules.md §6): Guardian → Walker → Patron, pushed front first ----
+    const track = ps.structures ?? [];
+    if (track.map((s) => s.kind).join(',') !== 'guardian,walker,patron') {
+      add('structures-shape', pid, `P${pid}'s track is [${track.map((s) => s.kind).join(', ')}], not Guardian, Walker, Patron`);
+    }
+    for (const s of track) {
+      if (!Number.isInteger(s.hp) || !Number.isInteger(s.max) || s.hp < 0 || s.max < 0 || s.hp > s.max) {
+        add('structure-range', `${pid}-${s.kind}`, `P${pid}'s ${s.kind} has ${s.hp} of ${s.max} HP`);
+      }
+    }
+    // A push takes the front standing structure first: none behind a standing one is scratched.
+    const firstStanding = track.findIndex((s) => s.hp > 0);
+    track.forEach((s, i) => {
+      if (firstStanding >= 0 && i > firstStanding && s.hp < s.max) add('structure-order', `${pid}-${s.kind}`, `P${pid}'s ${s.kind} lost HP (${s.hp}/${s.max}) behind its standing ${track[firstStanding].kind}`);
+    });
+    const patron = patronOf(ps);
+    if (!patron || patron.max < 1) add('structures-shape', `${pid}-patron`, `P${pid}'s track has no Patron`);
+    if (!G.draft && patron && patron.hp <= 0 && !over) add('patron-dead-no-gameover', pid, `P${pid}'s Patron has fallen but the game is not over`);
+    // The flex slot is a felled enemy Walker's — and a track with no Walker never gives it.
+    if (!G.draft) {
+      const walker = (G.players[other(pid)].structures ?? []).find((s) => s.kind === 'walker');
+      const felled = !!walker && walker.max > 0 && walker.hp <= 0;
+      if (!!ps.flexSlot !== felled) add('flex-slot-walker', pid, `P${pid} has flexSlot=${!!ps.flexSlot} but the enemy Walker ${felled ? 'has fallen' : 'stands (or is not on the track)'}`);
+    }
+    // The Rejuvenator: 0..REVIVE_CREDITS revives, gone once the round they were good through is over.
+    if (!Number.isInteger(ps.reviveCredits) || ps.reviveCredits < 0 || ps.reviveCredits > REVIVE_CREDITS) {
+      add('revive-credits', pid, `P${pid} holds ${ps.reviveCredits} revive credits (0..${REVIVE_CREDITS})`);
+    }
+    if (!G.draft && !over && ps.reviveCredits > 0 && roundOracle(G) > ps.reviveUntilRound) {
+      add('revive-lapsed', pid, `P${pid} still holds ${ps.reviveCredits} revive credits in round ${roundOracle(G)}; they were good through round ${ps.reviveUntilRound}`);
+    }
 
     if (G.draft) continue; // no boards yet
 
@@ -220,6 +258,45 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
         add('stale-turn-flag', c.iid, `P${pid} is not on turn but ${describeUnit(c)} has skillUsed=${c.skillUsedThisTurn}`);
       }
     }
+  }
+
+  // ---- the Mid-Boss (rules.md §6) ----
+  if (!G.draft && G.turnNumber >= 1) {
+    const boss = G.boss;
+    const r = roundOracle(G);
+    if (boss) {
+      const wrong: string[] = [];
+      if (boss.zone !== 'pit') wrong.push(`zone '${boss.zone}'`);
+      if (boss.cardId !== BOSS_CARD_ID) wrong.push(`cardId ${boss.cardId}`);
+      if (boss.ownerId !== 'none') wrong.push(`owned by P${boss.ownerId}`);
+      if (boss.hpMax !== BOSS_HP || !Number.isInteger(boss.hp) || boss.hp < 0 || boss.hp > boss.hpMax) wrong.push(`hp ${boss.hp}/${boss.hpMax}`);
+      if (boss.hp <= 0 && !over) wrong.push('at 0 HP and not taken');
+      if (boss.statuses.length) wrong.push(`carries ${boss.statuses.map((s) => s.id).join('+')}`);
+      if ((boss.attached ?? []).length) wrong.push('carries cards');
+      if (wrong.length) add('boss-state', boss.iid, `the Mid-Boss: ${wrong.join('; ')}`);
+      if (r < BOSS_SPAWN_ROUND) add('boss-early', boss.iid, `the Mid-Boss stands in round ${r}, before round ${BOSS_SPAWN_ROUND}`);
+      // Only swings hurt it, and each swing's HP is tallied for its side: the tallies are what it lost.
+      const lost = boss.hpMax - boss.hp;
+      if (G.bossDamage['0'] + G.bossDamage['1'] !== lost) add('boss-tally', 'sum', `the Mid-Boss has lost ${lost} HP but the tallies read ${G.bossDamage['0']}–${G.bossDamage['1']}`);
+    } else if (!over && r >= G.bossRespawnRound) {
+      add('boss-due', 'pit', `round ${r} has begun but the Mid-Boss, due in round ${G.bossRespawnRound}, is not up`);
+    }
+    for (const pid of PIDS) {
+      const d = G.bossDamage[pid];
+      if (!Number.isInteger(d) || d < 0) add('boss-tally', pid, `P${pid}'s damage to the Mid-Boss reads ${d}`);
+    }
+  }
+
+  // ---- the round cap (rules.md §6) and who won ----
+  if (!G.draft && !over && (G.turnNumber > 2 * ROUND_CAP || G.capped)) {
+    add('round-cap', 'turn', `engine turn ${G.turnNumber} (capped=${G.capped}) and the match is still on: round ${ROUND_CAP} is the last`);
+  }
+  if (!G.draft && over) {
+    const fallen = PIDS.filter((pid) => (patronOf(G.players[pid])?.hp ?? 1) <= 0);
+    const want = fallen.length === 1 ? other(fallen[0]) : fallen.length === 2 || G.capped ? standingWinnerOracle(G) : undefined;
+    const got = (ctx.gameover as { winner?: PlayerID } | undefined)?.winner;
+    if (want === undefined) add('game-over-winner', 'reason', `the match is over with no Patron fallen and no cap reached (winner P${got})`);
+    else if (got !== want) add('game-over-winner', 'winner', `P${got} won; the rules give P${want} (${fallen.length ? `fallen Patron: P${fallen.join(', P')}` : 'the round cap'})`);
   }
 
   // ---- the turn: its number, and whose it is (the pie rule) ----
@@ -362,6 +439,65 @@ function heroesByIid(ps: PlayerState): Map<string, CardInstance> {
 /** Every hero of both sides by iid. */
 const allHeroes = (G: GameState) => new Map([...heroesByIid(G.players['0']), ...heroesByIid(G.players['1'])]);
 
+/** What the move pushed onto the FX stream: everything past `before`'s last event —
+ *  or, a turn handed over (its end flushes the stream first), all of `after`'s. */
+function freshEvents(before: GameState, after: GameState, handOver: boolean): FxEvent[] {
+  if (handOver) return after.fx ?? [];
+  const seen = (before.fx ?? []).reduce((m, e) => Math.max(m, e.seq), 0);
+  return (after.fx ?? []).filter((e) => e.seq > seen);
+}
+
+/** One fall of a hero during a move: the hero (as the move left it), the levels it may
+ *  have fallen at (the one it had before the move, or a level gained in it — a kill's exp
+ *  on a hero that fell to Return Fire), and whether it paid — a fall to the Mid-Boss's
+ *  blow pays no bounty and pushes nothing. */
+interface Fall { hero: CardInstance; levels: number[]; paid: boolean }
+
+/** The falls of `pid`'s heroes during a move: every hero standing before it that ends it a
+ *  corpse, and every 'revive' the move pushed for a hero standing before it (the
+ *  Rejuvenator's revive in place, or a fall and a respawn inside one hand-over) — each
+ *  revive is a fall that came back. A boss's knockout hit marks one of them unpaid. */
+function fallsDuring(before: GameState, after: GameState, pid: PlayerID, fresh: FxEvent[]): Fall[] {
+  const was = heroesByIid(before.players[pid]);
+  const bossIid = before.boss?.iid;
+  const count = (pred: (e: FxEvent) => string | undefined) => {
+    const m = new Map<string, number>();
+    for (const e of fresh) { const iid = pred(e); if (iid) m.set(iid, (m.get(iid) ?? 0) + 1); }
+    return m;
+  };
+  const revives = count((e) => (e.kind === 'revive' ? e.iid : undefined));
+  const bossBlows = count((e) => (e.kind === 'hit' && e.ko && !!bossIid && e.source?.iid === bossIid ? e.iid : undefined));
+  const out: Fall[] = [];
+  for (const [iid, h] of heroesByIid(after.players[pid])) {
+    const prev = was.get(iid);
+    if (!prev || isRespawning(prev)) continue; // a corpse that respawns is no fall
+    const n = (revives.get(iid) ?? 0) + (isRespawning(h) ? 1 : 0);
+    let unpaid = bossBlows.get(iid) ?? 0;
+    const levels = [...new Set([prev.level ?? 1, h.level ?? 1])];
+    for (let k = 0; k < n; k++) out.push({ hero: h, levels, paid: unpaid-- <= 0 });
+  }
+  return out;
+}
+
+/** True when `pid`'s Guardian stood before the move and has fallen after it. */
+function guardianFell(before: GameState, after: GameState, pid: PlayerID): boolean {
+  const g0 = before.players[pid].structures.find((s) => s.kind === 'guardian');
+  const g1 = after.players[pid].structures.find((s) => s.kind === 'guardian');
+  return !!g0 && !!g1 && g0.hp > 0 && g1.hp <= 0;
+}
+
+/** Who may have taken a Mid-Boss that fell during the move, by the rules: the side
+ *  that dealt it more damage (its tallies stay until the next one rises); on a tie, the
+ *  side behind on net worth as it fell (before its reward), then the last hit's — both
+ *  sides are returned when the tie leaves it open to this oracle. Empty: none fell. */
+function bossTakersOracle(before: GameState, after: GameState): PlayerID[] {
+  if (!before.boss || after.boss) return [];
+  const d0 = after.bossDamage['0'];
+  const d1 = after.bossDamage['1'];
+  if (d0 !== d1) return [d0 > d1 ? '0' : '1'];
+  return ['0', '1'];
+}
+
 function hasDuplicateIids(G: GameState): boolean {
   const seen = new Set<string>();
   for (const { card } of everyCard(G)) {
@@ -445,31 +581,74 @@ export function collectTransitionViolations(
     if (why) add('accepted-illegal', move.name, `${move.name}(${JSON.stringify(args)}) by P${mover} was accepted but the rules refuse it: ${why}`);
   }
 
-  // The patron only loses HP when one of its heroes falls — the level of each
-  // hero that went from alive to a corpse during this move (the level it fell
-  // at: a level persists through death) — and, at the end of a turn, when the
-  // ending player's Active pushes into a lane its rival has left empty: then
-  // the rival's patron loses that Active's bullet power. It never gains any.
-  // (Skipped once an iid is duplicated: hero identity is the iid, and a clone of
-  // a card — already reported as `iid-unique` — would make the count meaningless.)
+  // The structures (rules.md §6) only lose HP to pushes: each hero of the side that
+  // fell during the move pushes its level + 1 (doubled from round 9) — a fall to the
+  // Mid-Boss's blow excepted — and, at the end of a turn, the ending player's standing
+  // Active pushes its bullet power into a lane its rival left empty. Front first; what
+  // is left past the Patron is lost. They never gain any. An end of turn spans the
+  // End step and the next turn's start, which can be two rounds: either round's
+  // multiplier is the rule's for a fall in it. (Skipped once an iid is duplicated:
+  // hero identity is the iid, and a clone of a card — already reported as `iid-unique`
+  // — would make the count meaningless.)
   const duplicated = hasDuplicateIids(before.G) || hasDuplicateIids(after.G);
   // (A push that ends the match leaves the turn with the player who made it.)
   const ending = move.name === 'endTurn' ? before.ctx.currentPlayer as PlayerID : undefined;
+  const handOver = move.name === 'endTurn' && switched;
+  const fresh = freshEvents(before.G, after.G, handOver);
+  const falls = (pid: PlayerID) => fallsDuring(before.G, after.G, pid, fresh);
+  const rounds = [...new Set([roundOracle(before.G), roundOracle(after.G)])];
   for (const pid of duplicated ? [] : PIDS) {
-    const b = before.G.players[pid];
-    const a = after.G.players[pid];
-    const was = heroesByIid(b);
-    let owed = 0;
-    const names: string[] = [];
-    for (const [iid, h] of heroesByIid(a)) {
-      const prev = was.get(iid);
-      if (prev && !isRespawning(prev) && isRespawning(h)) { owed += koPatronDamage(h); names.push(`${h.cardId} Lv${h.level ?? 1}`); }
+    const was = structureHpOracle(before.G.players[pid]);
+    const now = structureHpOracle(after.G.players[pid]);
+    const drop = was - now;
+    const paid = falls(pid).filter((f) => f.paid);
+    let sums = new Set([0]);
+    for (const f of paid) {
+      const next = new Set<number>();
+      for (const s of sums) for (const r of rounds) for (const lv of f.levels) next.add(s + killPushOracle(lv, r));
+      sums = next;
     }
-    const drop = b.hp - a.hp;
     const pusher = ending !== undefined && pid === other(ending) ? before.G.players[ending].active : null;
-    const push = pusher && !isRespawning(pusher) ? attackPower(pusher).total : 0;
-    if (drop !== owed && !(push > 0 && drop === owed + push)) {
-      add('patron-delta', pid, `P${pid} patron hp ${b.hp} -> ${a.hp} (drop ${drop}) but its fallen heroes owe ${owed} [${names.join(',')}]${push > 0 ? ` (or ${owed + push} with the empty-lane push)` : ''}`);
+    const lane = pusher && !isRespawning(pusher) ? attackPower(pusher).total * pushMultiplierOracle(roundOracle(before.G)) : 0;
+    const options = [...new Set([...sums].flatMap((s) => (lane > 0 ? [s, s + lane] : [s])).map((s) => Math.min(s, was)))];
+    if (!options.includes(drop)) {
+      add('structure-delta', pid, `P${pid}'s structures ${was} -> ${now} (drop ${drop}) after ${move.name}; its falls [${paid.map((f) => `${f.hero.cardId} Lv${f.levels.join('/')}`).join(', ')}]${lane > 0 ? ` and an empty-lane push of ${lane}` : ''} give ${options.sort((x, y) => x - y).join(' or ')}`);
+    }
+  }
+
+  // The record counts up only, and in a move the kills it counts are the falls that paid.
+  for (const pid of duplicated ? [] : PIDS) {
+    const r0 = before.G.record[pid];
+    const r1 = after.G.record[pid];
+    for (const k of Object.keys(r0) as (keyof typeof r0)[]) {
+      if (r1[k] < r0[k]) add('record-monotonic', `${pid}-${k}`, `P${pid}'s record ${k} went ${r0[k]} -> ${r1[k]}`);
+    }
+    const paidKills = falls(other(pid)).filter((f) => f.paid).length;
+    if (r1.kills - r0.kills !== paidKills) add('record-kills', pid, `P${pid}'s kills went ${r0.kills} -> ${r1.kills} after ${move.name}; ${paidKills} enemy heroes fell to it`);
+  }
+
+  // A fallen hero waits by the round it fell in (rules.md §6): 1 own turn in rounds 1–4, 2 in
+  // 5–8, 3 from 9, one more for the strictly richest hero. A side with a live Rejuvenator
+  // spends a credit instead and the hero is back in place at full HP; a side whose credits
+  // outlast the move had none of its heroes end the move as a corpse. (An end of turn is
+  // left out: the next turn's start ticks its own timers.)
+  if (!duplicated && !handOver) {
+    for (const pid of PIDS) {
+      const ps0 = before.G.players[pid];
+      const ps1 = after.G.players[pid];
+      const fallen = falls(pid);
+      const took = !!before.G.boss && !after.G.boss && after.G.record[pid].bossKills > before.G.record[pid].bossKills;
+      const credited = fresh.filter((e) => e.kind === 'revive' && e.credit && heroesByIid(ps1).has(e.iid)).length;
+      const live = ps0.reviveCredits > 0 && roundOracle(before.G) <= ps0.reviveUntilRound;
+      if (credited > 0 && !live) add('revive-spend', pid, `P${pid}'s Rejuvenator revived ${credited} hero(es) with no live credit (${ps0.reviveCredits}, through round ${ps0.reviveUntilRound})`);
+      const want = took ? REVIVE_CREDITS : ps0.reviveCredits - credited;
+      if (ps1.reviveCredits !== want) add('revive-spend', `${pid}-count`, `P${pid}'s revive credits ${ps0.reviveCredits} -> ${ps1.reviveCredits} after ${credited} revive(s)${took ? ' and the Mid-Boss taken' : ''}; the rules give ${want}`);
+      for (const f of fallen) {
+        if (!isRespawning(f.hero)) continue;
+        const timer = respawnTimerOracle(after.G, f.hero, roundOracle(before.G));
+        if (f.hero.respawnTurnsLeft !== timer) add('respawn-timer-start', f.hero.iid, `${describeUnit(f.hero)} fell in round ${roundOracle(before.G)} with a timer of ${f.hero.respawnTurnsLeft}; the rules give ${timer}`);
+        if (live && ps0.reviveCredits - credited > 0) add('revive-owed', f.hero.iid, `${describeUnit(f.hero)} fell while P${pid} held ${ps0.reviveCredits - credited} live revive credit(s) after the others, and stayed down`);
+      }
     }
   }
 
@@ -490,14 +669,16 @@ export function collectTransitionViolations(
   const movedTo = moved ? slottedHeroOf(B, mover, args[1]) : undefined;
 
   // Cards do not vanish: every card anywhere before (the hands included) is still somewhere
-  // after — but for the card a sale takes and the components a play consumes. And none
-  // appears from nowhere: a purchase brings its one card into the buyer's hand, a same-turn
-  // upgrade's sale the components it puts back.
+  // after — but for the card a sale takes, the components a play consumes and a Mid-Boss
+  // that falls. And none appears from nowhere: a purchase brings its one card into the
+  // buyer's hand, a same-turn upgrade's sale the components it puts back, a round's start
+  // the Mid-Boss.
   {
     const beforeIids = new Map(everyCard(before.G).map((x) => [x.card.iid, x]));
     const afterCards = everyCard(after.G);
     const afterIids = new Set(afterCards.map((x) => x.card.iid));
-    const mayGo = new Set([...consumed.map((c) => c.item.iid), sold?.item.iid, soldHand?.iid].filter((x): x is string => !!x));
+    const fellBoss = before.G.boss && !after.G.boss ? before.G.boss.iid : undefined;
+    const mayGo = new Set([...consumed.map((c) => c.item.iid), sold?.item.iid, soldHand?.iid, fellBoss].filter((x): x is string => !!x));
     for (const [iid, x] of beforeIids) {
       if (!afterIids.has(iid) && !mayGo.has(iid)) add('card-vanished', iid, `${x.card.cardId}#${iid} (${x.place}) of P${x.pid} is nowhere after ${move.name}`);
     }
@@ -506,6 +687,7 @@ export function collectTransitionViolations(
     const back = new Set(restored.map((r) => r.item.iid));
     for (const x of fresh) {
       if (x === purchase || back.has(x.card.iid)) continue;
+      if (x.place === 'pit' && handOver) continue;
       add('card-appeared', x.card.iid, `${x.card.cardId}#${x.card.iid} (${x.place}) of P${x.pid} appeared after ${move.name}(${JSON.stringify(args)})`);
     }
   }
@@ -549,23 +731,22 @@ export function collectTransitionViolations(
   }
 
   // ---- bookkeeping of what a move costs and gives ----
-  /** The bounties the heroes of `pid` that fell during the move pay their opponent (`bountyOracle`). */
-  const bountyOf = (pid: PlayerID) => {
-    const was = heroesByIid(before.G.players[pid]);
-    let n = 0;
-    for (const [iid, h] of heroesByIid(after.G.players[pid])) {
-      const prev = was.get(iid);
-      if (prev && !isRespawning(prev) && isRespawning(h)) n += bountyOracle(after.G, h);
-    }
-    return n;
-  };
+  /** What the falls of `pid`'s heroes during the move pay their opponent: each paid fall's
+   *  bounty (`bountyOracle`), and the Guardian's bounty should the pushes fell `pid`'s. */
+  const bountyOf = (pid: PlayerID) =>
+    falls(pid).filter((f) => f.paid).reduce((n, f) => n + bountyOracle(after.G, f.hero), 0)
+    + (guardianFell(before.G, after.G, pid) ? GUARDIAN_BOUNTY : 0);
+  const takers = bossTakersOracle(before.G, after.G);
 
-  if (!duplicated && move.name !== 'endTurn') {
+  if (!duplicated && move.name !== 'endTurn' && takers.length < 2) {
     // Souls: only the move's price (an item's — the difference for an upgrade whose
     // component has a free copy on the side —, a Retreat's; abilities are free), what a sale
-    // refunds, what an item used pays out (SOULS_ON_USE) and the bounty of each enemy hero
-    // that fell (its level + 1, + 2 for the richest hero on the board). Playing a card,
-    // moving an item and closing the shop are free. No ceiling.
+    // refunds, what an item used pays out (SOULS_ON_USE), the bounty of each enemy hero
+    // that fell (its level + 1, + 2 for the richest hero on the board), the Guardian's
+    // bounty when a push fells the rival's, and the Mid-Boss's souls to the side that takes
+    // it. Playing a card, moving an item and closing the shop are free. No ceiling. (A
+    // Mid-Boss whose tallies tie is settled by net worth as it falls: left out.)
+    const boss = (pid: PlayerID) => (takers[0] === pid ? BOSS_SOULS : 0);
     let cost = 0;
     let payout = 0;
     if (move.name === 'buy' && boughtId) cost = buyPriceOracle(B, mover, boughtId);
@@ -579,11 +760,11 @@ export function collectTransitionViolations(
       const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
       if ((f === 0 || t === 0) && get(f) && get(t)) cost = retreatCostOracle(B, mover);
     }
-    const wantMover = B.players[mover].souls - cost + payout + bountyOf(foe);
+    const wantMover = B.players[mover].souls - cost + payout + bountyOf(foe) + boss(mover);
     if (after.G.players[mover].souls !== wantMover) {
-      add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost}, payout ${payout} and ${bountyOf(foe)} in bounties give ${wantMover}`);
+      add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost}, payout ${payout}, ${bountyOf(foe)} in bounties and ${boss(mover)} for the Mid-Boss give ${wantMover}`);
     }
-    const wantFoe = B.players[foe].souls + bountyOf(mover);
+    const wantFoe = B.players[foe].souls + bountyOf(mover) + boss(foe);
     if (after.G.players[foe].souls !== wantFoe) {
       add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; expected ${wantFoe}`);
     }
@@ -901,14 +1082,16 @@ export function collectTransitionViolations(
     const ended = other(cur);
     if (after.G.turnNumber !== B.turnNumber + 1) add('turn-number-step', 'turn', `turnNumber ${B.turnNumber} -> ${after.G.turnNumber} after endTurn`);
     // A hero of the side that ended its turn that falls in the hand-over (a Naptime burst at
-    // the end of its turn, reaped by the new turn's resolve) pays the new player its bounty too.
+    // the end of its turn) pays the new player its bounty too, and so does its Guardian should
+    // the push fell it.
     const bounty = bountyOf(ended);
-    // The comeback reads the net worths at the income: the ender may have banked the bounties
-    // of the new player's heroes its channel pulses felled at the end of its turn (they are
-    // paid before the income), so either reading is the rule's.
+    // The comeback reads the net worths at the income: what the End step paid either side
+    // (bounties, a felled Guardian's bounty) is paid before it, what the new turn's start ticks
+    // fell after it — so any of those readings is the rule's.
     const comeback = (gap: number) => COMEBACK_STEPS.reduce((n, [by, bonus]) => (gap >= by ? Math.max(n, bonus) : n), 0);
     const seat = cur !== firstOf(after.G) && after.G.turnNumber === 2 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
-    const incomes = (gap: number) => [...new Set([gap, gap + bountyOf(cur)].map((g) => B.players[cur].souls + LANE_INCOME + comeback(g) + seat + bounty))];
+    const shifts = [0, bountyOf(cur)].flatMap((up) => [0, bountyOf(ended)].map((down) => up - down));
+    const incomes = (gap: number) => [...new Set(shifts.map((d) => B.players[cur].souls + LANE_INCOME + comeback(gap + d) + seat + bounty))];
     const choices = incomes(netWorthOracle(B, ended) - netWorthOracle(B, cur));
     const got = after.G.players[cur].souls;
     if (!choices.includes(got)) {

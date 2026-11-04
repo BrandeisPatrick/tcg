@@ -9,7 +9,7 @@
 import type { FxEvent, GameState, HitFx, PlayerID, SwingFx } from './types';
 import { cardName } from '@/cards';
 import { INVALID, perform, type Action } from './engine';
-import { findCardOnBoard, otherPlayer } from './query';
+import { findCardOnBoard, otherPlayer, structureHp } from './query';
 
 interface SimResult {
   /** The copy, after the action. */
@@ -40,8 +40,8 @@ export function simulate(G: GameState, pid: PlayerID, a: Action, opts: { keepLog
 export interface AttackStep {
   attackerIid: string;
   attackerName: string;
-  /** iid of the defending hero: the rival's living Active, or the hero a
-   *  reaching attacker named. */
+  /** iid of the defending unit: the rival's living Active, the hero a
+   *  reaching attacker named, or the Mid-Boss. */
   targetIid: string;
   targetName: string;
   /** HP the swing's own hit took off the target after mitigation (shield/armor). */
@@ -71,14 +71,14 @@ export interface AttackPlan {
   defenderId: PlayerID;
   steps: AttackStep[];
   /** HP the target (the defender's Active, unless the attack names another
-   *  hero) loses over the whole attack (clamped ≥ 0) — swings, riders and
-   *  detonations together. */
+   *  hero or the Mid-Boss) loses over the whole attack (clamped ≥ 0) — swings,
+   *  riders and detonations together. */
   damageToActive: number;
-  /** Patron HP the attack costs the defender: the fallen hero's level when
-   *  its Active is knocked out (`koPatronDamage`), 0 otherwise. The swings
-   *  themselves never reach the patron — damage past 0 HP is discarded, not
-   *  spilled. */
-  patronDamage: number;
+  /** Structure HP the attack costs the defender: the push of each of its
+   *  heroes the attack fells (`killPush`: the level + 1, doubled in the late
+   *  game), 0 when none falls. The swings themselves never reach a structure
+   *  — damage past 0 HP is discarded, not spilled. */
+  pushDamage: number;
   /** iid of the target if it fell during the attack. */
   defenderActiveKO: string | null;
 }
@@ -92,7 +92,7 @@ export interface AttackPlan {
  */
 export function forecastAttack(G: GameState, pid: PlayerID, targetIid?: string): AttackPlan {
   const defenderId = otherPlayer(pid);
-  const plan: AttackPlan = { attackerId: pid, defenderId, steps: [], damageToActive: 0, patronDamage: 0, defenderActiveKO: null };
+  const plan: AttackPlan = { attackerId: pid, defenderId, steps: [], damageToActive: 0, pushDamage: 0, defenderActiveKO: null };
   const { G: after, events, invalid } = simulate(G, pid, { type: 'attack', targetIid });
   if (invalid) return plan;
 
@@ -106,7 +106,10 @@ export function forecastAttack(G: GameState, pid: PlayerID, targetIid?: string):
   if (swings.length === 0) return plan;
   const aimedAt = swings[0].swing.targetIid;
   const hpBefore = swings[0].swing.targetHp;
-  const hpAfter = findCardOnBoard(after, aimedAt)!.card.hp;
+  // A hero that falls stays in its slot (or the Rejuvenator brings it straight
+  // back: it fell all the same); a Mid-Boss that falls leaves the pit.
+  const revived = events.some((e) => e.kind === 'revive' && e.iid === aimedAt);
+  const hpAfter = revived ? 0 : findCardOnBoard(after, aimedAt)?.card.hp ?? 0;
   const nameOf = (iid: string) => {
     const cardId = findCardOnBoard(G, iid)!.card.cardId;
     return cardName(cardId);
@@ -134,7 +137,7 @@ export function forecastAttack(G: GameState, pid: PlayerID, targetIid?: string):
   });
 
   plan.damageToActive = Math.max(0, hpBefore - hpAfter);
-  plan.patronDamage = Math.max(0, G.players[defenderId].hp - after.players[defenderId].hp);
+  plan.pushDamage = Math.max(0, structureHp(G.players[defenderId]) - structureHp(after.players[defenderId]));
   plan.defenderActiveKO = hpAfter <= 0 ? aimedAt : null;
   return plan;
 }

@@ -3,7 +3,7 @@ import { DeadlockGame } from '@/engine/game';
 import { damageUnit } from '@/engine/damage';
 import { reapDead, resolve } from '@/engine/death';
 import { playBlocked } from '@/engine/legality';
-import { findCardOnBoard, findWornItem, heroData, heroesOf, kitAbilityIds, slotCap, wornItems } from '@/engine/query';
+import { findCardOnBoard, findWornItem, heroData, heroesOf, kitAbilityIds, slotCap, structureHp, wornItems } from '@/engine/query';
 import { MAX_ITEMS } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
@@ -113,7 +113,7 @@ describe('rule: hero respawn after KO', () => {
     expect((G.players['0'].active?.respawnTurnsLeft ?? 0)).toBeGreaterThan(0);
   });
 
-  it('respawning hero returns to life after RESPAWN_TURNS', () => {
+  it('respawning hero returns to life when its timer runs out', () => {
     const G = freshG();
     const hero = G.players['0'].active!;
     damageUnit(G, hero, 9999, 'pure');
@@ -134,16 +134,16 @@ describe('rule: hero respawn after KO', () => {
     expect(corpse.respawnTurnsLeft).toBeUndefined();
   });
 
-  it("hero KO costs the patron the fallen hero's level (overflow discarded)", () => {
+  it("hero KO pushes the fallen hero's level + 1 into its structures (overflow discarded)", () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hp = 3;
     target.level = 3;
-    const beforePatron = G.players['1'].hp;
+    const before = structureHp(G.players['1']);
     damageUnit(G, target, 8, 'pure'); // 3 to KO, 5 overflow discarded
     expect(target.hp).toBe(0);
     reapDead(G, G.players['1']);
-    expect(G.players['1'].hp).toBe(beforePatron - 3); // death-only patron model: a Level 3 hero costs 3
+    expect(structureHp(G.players['1'])).toBe(before - 4); // a Level 3 hero pushes 4
   });
 
   it("AI auto-promotes the strongest bench hero when its Active dies", () => {

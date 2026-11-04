@@ -16,13 +16,20 @@
  * Ricochet N (`ricochetPower`): a swing that lands bounces, and every other
  * living enemy hero takes N bullet damage and the swing's on-hit debuffs. Each
  * swing bounces, Extra Attacks too; a bounce never bounces again.
+ *
+ * The Mid-Boss in the pit may be the target instead (`attackTargets` offers
+ * it). A swing at it is bullets and nothing more: no passive or worn item
+ * reacts, it does not bounce, and the hero is marked to take the boss's blow
+ * back at its End step (`G.bossAttacker`).
  */
 import type { CardInstance, GameState, PlayerID } from '../types';
 import { cardName } from '@/cards';
 import { damageUnit } from '../damage';
 import { resolve } from '../death';
 import { attackTargets } from '../legality';
-import { attackPower, findCardOnBoard, isRespawning, isUntargetable, ricochetPower, targetsFor, type AttackPower } from '../query';
+import {
+  attackPower, findCardOnBoard, isBoss, isRespawning, isUntargetable, ricochetPower, seatOf, targetsFor, type AttackPower,
+} from '../query';
 import { fireTriggers } from '../triggers';
 import { withCast } from '../castContext';
 import { pushFx } from '../fx';
@@ -35,6 +42,7 @@ export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
   // `attackTargets` is empty.
   const target = (targetIid === undefined ? attackTargets(G, pid)[0] : findCardOnBoard(G, targetIid)?.card)!;
   G.attackUsed = true;
+  if (isBoss(target)) G.bossAttacker = atk.iid;
 
   // ---- The primary swing. ----
   swing(G, atk, target, 0, attackPower(atk, target));
@@ -54,8 +62,8 @@ export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
     swing(G, atk, target, index++, power);
   }
   atk.statuses = atk.statuses.filter((s) => s.id !== 'extra_attack');
-  // The patron is only damaged when a hero dies (its level, `koPatronDamage`,
-  // charged in killInPlace), never by the swings themselves.
+  // Structures are only pushed when a hero dies (killInPlace), never by the
+  // swings themselves; a Mid-Boss at 0 HP is taken here too.
   resolve(G);
 }
 
@@ -72,7 +80,7 @@ export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
 export function attackAll(G: GameState, attacker: CardInstance) {
   if (isRespawning(attacker)) return;
   let index = 0;
-  for (const foe of targetsFor(G, attacker.ownerId, 'enemyHero')) {
+  for (const foe of targetsFor(G, seatOf(attacker), 'enemyHero')) {
     if (attacker.hp <= 0) break;
     // A hero an earlier swing's follow-through (a chain, a detonation) already
     // took down is not hit again.
@@ -101,6 +109,8 @@ function swing(G: GameState, atk: CardInstance, target: CardInstance, index: num
   withCast(atk, 'attack', () => {
     dealt = damageUnit(G, target, power.total, 'attack', extra ? `${atkName} (Extra Attack)` : atkName);
   });
+  // Bullets into the Mid-Boss are all a swing at it is: nothing reacts, nothing bounces.
+  if (isBoss(target)) return;
   // `primary: true` marks the hero's main swing of the turn — Haze's Fixation
   // grants its extra attack only here, so the extra swings it spawns don't
   // re-trigger it.
@@ -116,7 +126,7 @@ function swing(G: GameState, atk: CardInstance, target: CardInstance, index: num
   // bounce never bounces. ----
   const n = bounces && dealt > 0 ? ricochetPower(atk) : 0;
   if (n <= 0) return;
-  for (const foe of targetsFor(G, atk.ownerId, 'enemyHero')) {
+  for (const foe of targetsFor(G, seatOf(atk), 'enemyHero')) {
     if (atk.hp <= 0) break; // Return Fire has dropped the attacker: its bullets stop
     if (foe === target || foe.hp <= 0 || isUntargetable(foe, 'attack')) continue;
     let hit = 0;

@@ -1,11 +1,12 @@
-import type { CardInstance, DamageType, FxCastKind, FxTag, GameState, PlayerID } from './types';
+import type { CardInstance, DamageType, FxCastKind, FxTag, GameState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
-import { incomingDamage, isRespawning, itemHealingBoost, itemResist } from './query';
+import { incomingDamage, isBoss, isRespawning, itemHealingBoost, itemResist, seatOf } from './query';
 import { currentCast, withCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { pushFx, fxSource } from './fx';
+import { tallyBossHit } from './map';
 import { EXP_ON_KILL } from './constants';
 
 /** Presentation hints for the FX layer, passed by call sites whose damage is
@@ -29,10 +30,14 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   if (amount <= 0) return 0;
   // Corpses can't take more damage — they're already KO'd waiting to respawn.
   if (isRespawning(target)) return 0;
+  const cast = currentCast();
+  // The Mid-Boss in the pit takes the basic swing's own bullets and nothing
+  // else: no ability, item, proc, rider, Ricochet bounce or tick reaches it.
+  const pit = isBoss(target);
+  if (pit && !(type === 'attack' && cast?.kind === 'attack' && !cast.bounce && !!cast.source)) return 0;
   // Incoming-damage hooks come before everything else (Vindicta's flight takes
   // 1 off a bullet — she's literally above the gunfire).
   amount = incomingDamage(target, amount, type);
-  const cast = currentCast();
   // The FX layer's notion of who did this and how: an explicit hint wins, then
   // the cast frame, then "a status ticking on its own".
   const castKind: FxCastKind = fx?.cast ?? cast?.kind ?? 'tick';
@@ -98,9 +103,19 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   const typeLabel = type === 'attack' ? 'bullet' : type;
   pushLog(G, `${arrow}: ${dmg} ${typeLabel} dmg (${targetName} ${target.hp} HP).`);
 
-  // The patron is ONLY damaged when a hero dies (its level, in killInPlace) —
-  // excess past 0 HP is discarded, not spilled. Just clamp.
+  // Structures are only pushed when a hero dies (killInPlace) — excess past
+  // 0 HP is discarded, not spilled. Just clamp.
   if (target.hp < 0) target.hp = 0;
+
+  // A swing at the Mid-Boss: the HP it took off counts for the attacker's side
+  // (the side with more takes the boss when it falls), and that is all —
+  // nothing the attacker carries reacts to a hit on it, and its fall earns no
+  // kill exp (its reward is the boss's own, map.ts).
+  if (pit) {
+    tallyBossHit(G, seatOf(cast!.source!), hpBefore - target.hp);
+    pushFx(G, { kind: 'hit', iid: target.iid, amount: dmg, type, ko: target.hp <= 0, cast: fxCast, source: fxFrom });
+    return dmg;
+  }
 
   // Worn-equipment reactions to the damage, through the one trigger dispatcher.
   if (cast && cast.source) {
@@ -169,13 +184,6 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   return dmg;
 }
 
-export function damagePlayer(G: GameState, pid: PlayerID, amount: number): number {
-  if (amount <= 0) return 0;
-  G.players[pid].hp -= amount;
-  const teamName = pid === '0' ? 'Amber Hand' : 'Sapphire Flame';
-  pushLog(G, `${teamName} patron: ${amount} dmg (${G.players[pid].hp} HP).`);
-  return amount;
-}
 
 /** Presentation hints for a heal: 'lifesteal' streams motes from the unit the
  *  HP was drawn out of; 'regen' is the quiet start-of-turn tick. */

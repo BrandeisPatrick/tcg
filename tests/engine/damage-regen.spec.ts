@@ -4,6 +4,7 @@ import type { GameState, CardInstance } from '@/engine/types';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
+import { structureHp } from '@/engine/query';
 import { withCast } from '@/engine/castContext';
 import { freshReadyGame, nextTestIid } from './_helpers';
 
@@ -136,16 +137,16 @@ describe('damage: mitigation pipeline order', () => {
     expect(t.statuses.find((s) => s.id === 'shield')?.value).toBe(10);
   });
 
-  it("hero death costs the patron the fallen hero's level (overflow is discarded)", () => {
+  it("hero death pushes the fallen hero's level + 1 into its structures (overflow is discarded)", () => {
     const G = freshG();
     const t = G.players['1'].active!;
     t.hp = 2;
     t.level = 2;
-    const patronBefore = G.players['1'].hp;
+    const before = structureHp(G.players['1']);
     damageUnit(G, t, 10, 'spirit'); // 8 overflow is discarded, not spilled
     expect(t.hp).toBe(0);
     reapDead(G, G.players['1']);
-    expect(patronBefore - G.players['1'].hp).toBe(2); // a Level 2 hero costs 2
+    expect(before - structureHp(G.players['1'])).toBe(3); // a Level 2 hero pushes 3
   });
 
   it('Zero / negative damage is a no-op and does NOT fire equipment triggers', () => {

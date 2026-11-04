@@ -1,17 +1,18 @@
 /**
  * "Earn it in the lane": the Active earns more exp than the bench, a hero's
  * ultimate (a kit ability, never a card) unlocks the moment it reaches
- * ULT_UNLOCK_LEVEL, and a fall costs the patron the fallen hero's level.
+ * ULT_UNLOCK_LEVEL, and a fall pushes the fallen hero's level + 1 into its
+ * side's structures.
  */
 import { describe, it, expect } from 'vitest';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame } from './_helpers';
+import { freshReadyGame, setTrack } from './_helpers';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
 import { grantExp } from '@/engine/expSystem';
 import { INVALID, perform } from '@/engine/engine';
 import { skillBlocked } from '@/engine/legality';
 import { forecastAttack } from '@/engine/forecast';
-import { checkWinner, kitAbilityIds, koPatronDamage } from '@/engine/query';
+import { checkWinner, killPush, kitAbilityIds, seatOf, structureHp } from '@/engine/query';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
 import {
@@ -34,7 +35,7 @@ function ultCardsOnBoard(G: GameState, pid: PlayerID): string[] {
 }
 /** Why `hero` cannot use its ultimate now (null: it can). */
 const ultBlock = (G: GameState, hero: CardInstance) =>
-  skillBlocked(G, hero.ownerId, hero, undefined, (CARDS_BY_ID[hero.cardId] as { ult: string }).ult);
+  skillBlocked(G, seatOf(hero), hero, undefined, (CARDS_BY_ID[hero.cardId] as { ult: string }).ult);
 
 describe('exp comes from the lane', () => {
   it('at the end of the turn the Active earns EXP_PER_TURN_ACTIVE and each bench hero EXP_PER_TURN_BENCH', () => {
@@ -118,46 +119,47 @@ describe('a hero unlocks its ultimate at Level 2', () => {
   });
 });
 
-describe("a fall costs the patron the fallen hero's level", () => {
-  it('koPatronDamage is the level', () => {
-    const h = freshReadyGame().players['1'].active!;
-    expect(koPatronDamage(h)).toBe(1);
+describe("a fall pushes the fallen hero's level + 1 into its side's structures", () => {
+  it('killPush is the level + 1', () => {
+    const G = freshReadyGame();
+    const h = G.players['1'].active!;
+    expect(killPush(G, h)).toBe(2);
     h.level = 3;
-    expect(koPatronDamage(h)).toBe(3);
+    expect(killPush(G, h)).toBe(4);
   });
 
-  it('a Level 2 hero reaped costs 2; a Level 1 hero costs 1', () => {
+  it('a Level 2 hero reaped pushes 3; a Level 1 hero 2', () => {
     const G = freshReadyGame();
     const ps = G.players['1'];
     ps.active!.level = 2;
     ps.active!.hp = 1;
     ps.bench[0]!.hp = 1;
-    const before = ps.hp;
+    const before = structureHp(ps);
     damageUnit(G, ps.active!, 5, 'pure');
     damageUnit(G, ps.bench[0]!, 5, 'pure');
     reapDead(G, ps);
-    expect(before - ps.hp).toBe(3);
+    expect(before - structureHp(ps)).toBe(5);
   });
 
-  it('the attack forecast promises the level and the attack delivers it', () => {
+  it('the attack forecast promises the push and the attack delivers it', () => {
     const G = freshReadyGame();
     const t = G.players['1'].active!;
     t.level = 2;
     t.hp = 1;
     const plan = forecastAttack(G, '0');
     expect(plan.defenderActiveKO).toBe(t.iid);
-    expect(plan.patronDamage).toBe(2);
-    const before = G.players['1'].hp;
+    expect(plan.pushDamage).toBe(3);
+    const before = structureHp(G.players['1']);
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
-    expect(before - G.players['1'].hp).toBe(2);
+    expect(before - structureHp(G.players['1'])).toBe(3);
   });
 
-  it('a fall that drains the patron ends the match', () => {
+  it('a fall whose push fells the Patron ends the match', () => {
     const G = freshReadyGame();
     const t = G.players['1'].active!;
     t.level = 2;
     t.hp = 1;
-    G.players['1'].hp = 2;
+    setTrack(G, '1', { patron: 3 });
     expect(checkWinner(G)).toBeUndefined();
     perform(G, '0', { type: 'attack' });
     expect(checkWinner(G)?.winner).toBe('0');

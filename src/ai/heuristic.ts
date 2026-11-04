@@ -27,23 +27,32 @@
  *
  * Without lookahead (the eval framework's random agent, the MCTS bot's rollouts)
  * the moves are only listed, ranked by cheap per-move scores.
+ *
+ * The map. Structure HP is the win condition, the Patron's weighed highest;
+ * the flex slot and a live Rejuvenator are worth having; a Mid-Boss in the pit
+ * is worth the side its damage tally favours, more as it runs low (whoever
+ * leads the tally takes it when it falls); and a hero that has attacked the
+ * boss has its blow at the End step still to take. So the AI finishes the boss
+ * when the swing kills it and the tally gives it to its side, chips it when
+ * the rival's Active is a poor target (a Dome, an Unstoppable, a lane left
+ * empty), and otherwise leaves it be.
  */
 import type { Ctx } from 'boardgame.io';
-import type { CardId, GameState, PlayerID, PlayerState, CardInstance, StatusInstance } from '@/engine/types';
+import type { CardId, GameState, PlayerID, PlayerState, CardInstance, StatusInstance, StructureKind } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
-  checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, isRespawning, itemCooldown, liveBoardCards,
-  otherPlayer, resolveSkill, slotCap, slottedHeroes, wornItems,
+  checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, isBoss, isRespawning, itemCooldown, liveBoardCards,
+  otherPlayer, resolveSkill, reviveReady, slotCap, slottedHeroes, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
 import {
-  attackBlocked, buyBlocked, buyPrice, legalActions, playTargets, sellBlocked, upgradeComponent,
+  attackBlocked, attackTargets, buyBlocked, buyPrice, legalActions, playTargets, sellBlocked, upgradeComponent,
 } from '@/engine/legality';
 import { buildOf, marketStandIn } from '@/engine/market';
 import { forecastAttack, simulate } from '@/engine/forecast';
-import { LANE_INCOME } from '@/engine/constants';
+import { BOSS_RETALIATION, LANE_INCOME } from '@/engine/constants';
 
 // ----- what a status is worth ---------------------------------------------------
 // The numbers `evalState` pays for statuses and channels, in its own units (a
@@ -160,6 +169,34 @@ function equipValue(c: CardInstance): number {
 /** What a won game is worth, in the units of `evalState`: more than any position. */
 const DECISIVE = 1_000_000;
 
+/** What a point of each structure's HP is worth: the win condition, the
+ *  Patron (the last, and the loss) highest. A kill pushes the victim's level +
+ *  1 (doubled from round 9), so a fresh kill into a Guardian is worth 16 here,
+ *  against 2 for a point of a hero's HP. */
+const STRUCTURE_WEIGHT: Record<StructureKind, number> = { guardian: 8, walker: 10, patron: 14 };
+
+/** What the flex slot (the rival's Walker felled) is worth to a side: a fourth
+ *  item on every hero, about a tier 2 item's value. */
+const FLEX_SLOT_VALUE = 6;
+
+/** What one live Rejuvenator credit is worth: a death that does not keep its
+ *  hero off the board (it comes back at full HP), about a hero's presence. */
+const REVIVE_CREDIT_VALUE = 8;
+
+/** What a point of lead in the Mid-Boss's damage tally is worth, at the most:
+ *  the side ahead takes it when it falls, so the lead counts for more as the
+ *  boss runs low — from half this on a fresh boss to all of it on its last HP.
+ *  A swing of three into a fresh boss is then worth a little more than the
+ *  blow it hits back with (BOSS_RETALIATION HP, worth 4): worth making when the
+ *  rival's Active is a poor target, never before a fair one (3 HP off a hero
+ *  is worth 6). */
+const BOSS_LEAD = 2.5;
+
+/** The most a tally lead is worth (`BOSS_LEAD`), either way: half the boss's
+ *  reward (its souls and two credits, about 17) — a boss in hand beats one in
+ *  the pit, so a swing that takes it gains, and one that hands it over loses. */
+const BOSS_STAKE_CAP = 8;
+
 /** What a soul in hand is worth: souls carry over now, so a line that banks
  *  them (or wins a bounty) is a little better than one that does not — small
  *  beside a point of HP (2), so it tips ties rather than steering play. */
@@ -233,8 +270,46 @@ function borrowedValue(c: CardInstance): number {
   return (getAbility(c.borrowedUlt)?.base ?? 3) * BORROWED_SHARE;
 }
 
+/** What a side's standing structures are worth (`STRUCTURE_WEIGHT`). */
+function structureValue(ps: PlayerState): number {
+  return ps.structures.reduce((n, st) => n + Math.max(0, st.hp) * STRUCTURE_WEIGHT[st.kind], 0);
+}
+
+/** What the map's other prizes are worth to a side: the flex slot, and the
+ *  Rejuvenator's credits while they are live. */
+function mapPrizes(g: GameState, pid: PlayerID): number {
+  const ps = g.players[pid];
+  return (ps.flexSlot ? FLEX_SLOT_VALUE : 0) + (reviveReady(g, pid) ? ps.reviveCredits * REVIVE_CREDIT_VALUE : 0);
+}
+
+/** What the Mid-Boss in the pit is worth to `pid` over the rival (the rival's
+ *  is its negative): its damage lead (`BOSS_LEAD`, more as the boss runs low,
+ *  at most BOSS_STAKE_CAP either way). Its reward, once taken, is in the souls
+ *  and credits it gave. */
+function bossStake(g: GameState, pid: PlayerID): number {
+  const boss = g.boss;
+  if (!boss || boss.hp <= 0) return 0;
+  const lead = g.bossDamage[pid] - g.bossDamage[otherPlayer(pid)];
+  const low = 1 - boss.hp / Math.max(1, boss.hpMax);
+  const v = lead * BOSS_LEAD * (0.5 + 0.5 * low);
+  return Math.max(-BOSS_STAKE_CAP, Math.min(BOSS_STAKE_CAP, v));
+}
+
+/** The blow the Mid-Boss still owes the hero that attacked it this turn, as
+ *  that hero's side feels it: its HP (BOSS_RETALIATION, worth 2 a point), or —
+ *  a blow that would fell it — the hero itself. */
+function bossBlow(g: GameState, pid: PlayerID): number {
+  const iid = g.bossAttacker;
+  if (!iid || !g.boss || g.boss.hp <= 0) return 0;
+  const hero = findCardOnBoard(g, iid);
+  if (!hero || hero.owner !== pid || isRespawning(hero.card)) return 0;
+  return hero.card.hp <= BOSS_RETALIATION ? presence(hero.card) + 5 : BOSS_RETALIATION * 2;
+}
+
 /** Position value from `pid`'s perspective (higher = better for pid). It counts
- *  each living hero's HP, offense (attack plus its best skill), shield and worn
+ *  the structures each side has standing, the flex slot and a live
+ *  Rejuvenator, the Mid-Boss's damage lead and the blow it still owes; each
+ *  living hero's HP, offense (attack plus its best skill), shield and worn
  *  gear, plus the statuses it carries, the channel it is running, the merged
  *  Rem it wears and a borrowed ultimate it holds, each fallen hero as a lost
  *  presence, and the souls each side banks. */
@@ -246,8 +321,11 @@ function evalState(g: GameState, pid: PlayerID): number {
   const en = otherPlayer(pid);
   const me = g.players[pid];
   const foe = g.players[en];
-  // Patron HP is the win condition — weight it heavily.
-  let s = (me.hp - foe.hp) * 12;
+  // The structures are the win condition — weighed heavily, the Patron most.
+  let s = structureValue(me) - structureValue(foe);
+  s += mapPrizes(g, pid) - mapPrizes(g, en);
+  s += bossStake(g, pid);
+  s -= bossBlow(g, pid) - bossBlow(g, en);
   // Souls carry over from turn to turn: a little for each one banked, a little
   // more while they count toward the next build item.
   s += (me.souls - foe.souls) * SOUL + saveValue(g, pid) - saveValue(g, en);
@@ -456,13 +534,30 @@ function scoreSkill(pid: PlayerID, target?: CardInstance, ultimate = false): num
  *  the crude list: a win outranks everything; else the damage it would land on
  *  its target, plus a premium for a KO. With lookahead a win is `evalState`'s
  *  verdict instead. Both are read off the engine's own run of the attack —
- *  "wins" means what the rules mean: the knockout's patron life, a Ricochet
- *  bounce that drops the last bench hero, a merged Rem who walks off the fallen
- *  bearer. */
+ *  "wins" means what the rules mean: the knockout's push into the last
+ *  structure, a Ricochet bounce that drops a bench hero, a merged Rem who walks
+ *  off the fallen bearer. An attack at the Mid-Boss is `scoreBossAttack`'s. */
 function scoreAttack(G: GameState, pid: PlayerID, targetIid?: string): number {
-  if (checkWinner(simulate(G, pid, { type: 'attack', targetIid }).G)?.winner === pid) return DECISIVE;
+  const after = simulate(G, pid, { type: 'attack', targetIid }).G;
+  if (checkWinner(after)?.winner === pid) return DECISIVE;
+  const target = targetIid === undefined ? attackTargets(G, pid)[0] : findCardOnBoard(G, targetIid)?.card;
+  if (isBoss(target)) return scoreBossAttack(G, pid, after);
   const plan = forecastAttack(G, pid, targetIid);
   return 15 + plan.damageToActive * 3 + (plan.defenderActiveKO ? 25 : 0);
+}
+
+/** The crude score of an attack at the Mid-Boss (`after`: the position it
+ *  leaves). Finish it when the swing kills it and it goes to this side; never
+ *  hand it to the rival; chip it when no enemy hero is a target worth the
+ *  swing (none can be hit, or the best swing at one lands nothing); else leave
+ *  it be. */
+function scoreBossAttack(G: GameState, pid: PlayerID, after: GameState): number {
+  if (!after.boss) return after.record[pid].bossKills > G.record[pid].bossKills ? 60 : -60;
+  const heroes = attackTargets(G, pid).filter((t) => !isBoss(t));
+  const best = Math.max(0, ...heroes.map((t) => forecastAttack(G, pid, t.iid).damageToActive));
+  if (best > 0) return -5;
+  const dealt = G.boss ? G.boss.hp - after.boss.hp : 0;
+  return 10 + dealt;
 }
 
 /** Below this share of its HP a hero is about to die: an Active worth pulling

@@ -5,10 +5,36 @@ export type CardId = string;
 export type AbilityId = string;
 export type StatusId = string;
 export type PlayerID = '0' | '1';
+/** Who a card instance belongs to: a seat — or nobody, the Mid-Boss in the
+ *  pit (`GameState.boss`). Read a seat-owned card's seat through `seatOf`
+ *  (query.ts). */
+export type Owner = PlayerID | 'none';
 /** Where a card instance is: an item in its owner's hand (bought, not yet
- *  played onto a hero), a hero in the Active slot or on the bench, or an item
- *  worn by a hero (in its `attached` list). */
-export type Zone = 'hand' | 'active' | 'bench' | 'equipment';
+ *  played onto a hero), a hero in the Active slot or on the bench, an item
+ *  worn by a hero (in its `attached` list), or the Mid-Boss in the pit
+ *  between the two lanes. */
+export type Zone = 'hand' | 'active' | 'bench' | 'equipment' | 'pit';
+
+/** The three structures of a side's track, front to back: damage goes to the
+ *  front standing one, and what is left over carries on to the next. */
+export type StructureKind = 'guardian' | 'walker' | 'patron';
+
+/** One structure of a side's track. A structure at 0 HP has fallen; one with
+ *  `max` 0 is not on this track at all (a scripted match's shorter one). */
+export interface Structure {
+  kind: StructureKind;
+  hp: number;
+  max: number;
+}
+
+/** A track's HP by structure, for a match that does not use `STRUCTURES` (a
+ *  Story fight's or a lesson's): a structure left out is not on the track
+ *  (its `max` is 0), and the Patron always is. */
+export type TrackHp = Partial<Record<StructureKind, number>>;
+
+/** What pushed into a structure: a kill (the victim's level + 1), or an
+ *  Active pushing into a lane its rival left empty (its bullet power). */
+export type PushCause = 'kill' | 'lane';
 
 export type DamageType = 'attack' | 'spirit' | 'pure';
 
@@ -113,7 +139,7 @@ export interface StatusInstance {
 export interface CardInstance {
   iid: string;
   cardId: CardId;
-  ownerId: PlayerID;
+  ownerId: Owner;
   zone: Zone;
   slot?: 0 | 1 | 2 | 3;
   attachedTo?: string;
@@ -204,8 +230,11 @@ export interface CardInstance {
 
 export interface PlayerState {
   id: PlayerID;
-  hp: number;
-  hpMax: number;
+  /** The side's track, front to back: Guardian, Walker, Patron (always these
+   *  three, in this order — `STRUCTURES`, or a scripted match's own). Pushes
+   *  take the front standing one first (`pushStructures`, map.ts). The Patron
+   *  falling loses the match. */
+  structures: Structure[];
   souls: number;
   /** The items bought and not yet played onto a hero, in the order they came
    *  (zone 'hand'). A card enters the hand only by `buy` (and a Story reward);
@@ -215,8 +244,33 @@ export interface PlayerState {
   active: CardInstance | null;
   bench: (CardInstance | null)[]; // length 3
   /** The side's heroes have felled the enemy Walker: every hero has the flex
-   *  slot, MAX_ITEMS + FLEX_SLOT items (`slotCap`). Set by the map (step 4). */
+   *  slot, MAX_ITEMS + FLEX_SLOT items (`slotCap`). Set when that Walker falls
+   *  (map.ts). */
   flexSlot: boolean;
+  /** The Rejuvenator: revives this side has left — a hero of it that falls
+   *  comes straight back in place, at full HP, one credit spent. Set to
+   *  REVIVE_CREDITS when the side takes the Mid-Boss; 0 once the window shuts. */
+  reviveCredits: number;
+  /** The last round the credits are good through (they lapse at its end). */
+  reviveUntilRound: number;
+}
+
+/** What the map has seen one side do this match: the result sheet and the
+ *  sims read it. */
+export interface MapRecord {
+  /** Enemy heroes that fell to this side — a kill the Rejuvenator undid
+   *  included (it still paid and pushed). The Mid-Boss's blow kills nobody's. */
+  kills: number;
+  /** Pushes this side made into the rival's structures (kills and empty
+   *  lanes), and the structure HP they took. */
+  pushes: number;
+  pushDamage: number;
+  /** Mid-Bosses this side took, and of them, the ones taken while it trailed
+   *  on net worth. */
+  bossKills: number;
+  bossKillsBehind: number;
+  /** Heroes of this side the Rejuvenator brought straight back. */
+  revives: number;
 }
 
 export interface LogEntry {
@@ -286,11 +340,12 @@ export type FxTag =
   | 'combo'          // Mo & Krill's Combo drain
   | 'siphon';        // Siphon Bullets' max-HP transfer
 
-/** Who caused an effect, as far as the board can point at them. */
+/** Who caused an effect, as far as the board can point at them (the Mid-Boss
+ *  belongs to nobody). */
 export interface FxSource {
   iid: string;
   cardId: CardId;
-  owner: PlayerID;
+  owner: Owner;
 }
 
 interface FxBase {
@@ -389,10 +444,12 @@ export interface CastFx extends FxBase {
   targetIid?: string;
 }
 
-/** A corpse came back at full HP. */
+/** A corpse came back at full HP — or, `credit`, a hero the Rejuvenator
+ *  brought straight back where it fell. */
 export interface ReviveFx extends FxBase {
   kind: 'revive';
   iid: string;
+  credit?: true;
 }
 
 /** A hero reached a new level. */
@@ -402,7 +459,37 @@ export interface LevelUpFx extends FxBase {
   level: number;
 }
 
-export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx;
+/** A push hit a structure: `side`'s `structure` lost `amount` and has `hp`
+ *  left. One per structure a push reaches. */
+export interface PushFx extends FxBase {
+  kind: 'push';
+  side: PlayerID;
+  structure: StructureKind;
+  amount: number;
+  hp: number;
+  cause: PushCause;
+}
+
+/** A structure fell: `side`'s `structure`, to the other side's push. */
+export interface FallFx extends FxBase {
+  kind: 'fall';
+  side: PlayerID;
+  structure: StructureKind;
+}
+
+/** The Mid-Boss: it rose in the pit ('spawn'), it fell ('death': `pid` took
+ *  it, settled `by` the damage tally, net worth or the last hit), and its
+ *  reward ('award': `pid`'s souls and Rejuvenator credits). Its hits are
+ *  `hit` events like any unit's. */
+export interface BossFx extends FxBase {
+  kind: 'boss';
+  what: 'spawn' | 'death' | 'award';
+  iid: string;
+  pid?: PlayerID;
+  by?: 'damage' | 'netWorth' | 'lastHit';
+}
+
+export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx | PushFx | FallFx | BossFx;
 
 /**
  * Pre-match hero draft. Both players take turns picking 4 heroes each from
@@ -485,6 +572,29 @@ export interface GameState {
   attackUsed: boolean;
   /** The turn's Retreat has been made (one a turn). Reset at each turn start. */
   retreatUsed: boolean;
+  /** The Mid-Boss standing in the pit between the lanes (zone 'pit', owned by
+   *  nobody, `boss_midboss`), or null while it is not up — before round
+   *  BOSS_SPAWN_ROUND, and from its death until it returns. Only basic attacks
+   *  reach it (`attackTargets` offers it); no status or ability does. */
+  boss: CardInstance | null;
+  /** The damage each side has dealt the boss standing in the pit: the side
+   *  with more takes it when it falls. Zeroed when a boss rises. */
+  bossDamage: { '0': number; '1': number };
+  /** The side that landed the last hit on the boss in the pit (the last
+   *  tie-break of who takes it); null before any hit. */
+  bossLastHit: PlayerID | null;
+  /** The round at whose start the boss next rises (BOSS_SPAWN_ROUND, then
+   *  BOSS_RESPAWN_ROUNDS after the round it died in). */
+  bossRespawnRound: number;
+  /** The hero that attacked the boss this turn: at the End step the boss hits
+   *  it back for BOSS_RETALIATION. Cleared at each turn start. */
+  bossAttacker: string | null;
+  /** Round ROUND_CAP is over (set as the second mover's own turn ROUND_CAP
+   *  ends): the match is decided on what stands (`checkWinner`). */
+  capped: boolean;
+  /** What each side has done on the map this match (kills, pushes, bosses,
+   *  revives). */
+  record: { '0': MapRecord; '1': MapRecord };
   /** Set by the `resolve` pass when the human seat's Active is a corpse and an
    *  eligible bench hero can step up — a forced promotion is owed, and the UI
    *  asks who (PromotionOverlay), or the auto-play loop answers. Every other

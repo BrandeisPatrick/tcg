@@ -1,4 +1,4 @@
-import type { CardId, PlayerID } from '@/engine/types';
+import type { CardId, PlayerID, TrackHp } from '@/engine/types';
 
 /** Custom numbers for one hero of a scripted match, by roster position
  *  (Active first, then the bench). `hpMax` sets a hero's full health and
@@ -14,17 +14,24 @@ export interface HeroStatOverride {
  * Direct match setup for Story mode — bypasses the pre-match hero draft and
  * builds both players from explicit rosters, with a flat stat buff on every
  * enemy hero (opponents scale up as the campaign progresses) and an optional
- * patron-HP override (shorter early fights, epic late ones). The market is the
- * match seed's, with both rosters' signature items on sale.
+ * shorter structure track (quick early fights, epic late ones). The market is
+ * the match seed's, with both rosters' signature items on sale.
  */
 export interface StorySetup {
   playerHeroes: CardId[];   // 1..4
   enemyHeroes: CardId[];    // 1..4
   enemyBuff: { atk: number; hp: number };
+  /** A track of the Patron alone, at this HP, for both sides (Story pacing);
+   *  left out, the standard track (STRUCTURES) — unless `structures` names one. */
   patronHp?: number;
-  /** The rival patron's HP, when it differs from `patronHp` (a lesson whose
-   *  one kill is the win). */
+  /** The rival's Patron-alone track, when it differs from `patronHp` (a
+   *  lesson whose one kill is the win). */
   enemyPatronHp?: number;
+  /** Both sides' track by structure (a structure left out is not on it), when
+   *  it is neither the standard one nor a Patron alone: a lesson about the map. */
+  structures?: TrackHp;
+  /** The rival's track, when it differs from `structures`. */
+  enemyStructures?: TrackHp;
   /** Cards the player starts the fight holding, free (a Story reward): in the
    *  hand at the first turn, to be played onto a hero like any bought card. */
   playerItems?: CardId[];

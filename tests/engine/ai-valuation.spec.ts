@@ -4,6 +4,7 @@ import { INVALID, perform } from '@/engine/engine';
 import { effectiveAtk, liveBoardCards } from '@/engine/query';
 import type { CardInstance, GameState, PlayerID, StatusInstance } from '@/engine/types';
 import { freshReadyGame, giveItem, makeHero } from './_helpers';
+import { newTrack } from '@/engine/map';
 
 // What the AI makes of a position: `evalState` (src/ai/heuristic.ts) prices the
 // statuses a unit carries, the channel it is running and a Rem merged into it.
@@ -282,7 +283,7 @@ describe('AI valuation: control items and channel ultimates get used', () => {
   it('still sees lethal first, whatever a status is worth', () => {
     const { G } = wearing('knockdown');
     G.players['0'].active!.hp = 1;
-    G.players['0'].hp = 1;
+    G.players['0'].structures = newTrack({ patron: 1 }); // the kill's push fells the Patron
     const top = enumerateAIMoves(G, ctx('1'))[0];
     expect(top.move).toBe('attack');
     expect(top.score).toBeGreaterThanOrEqual(1_000_000);
