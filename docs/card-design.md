@@ -11,8 +11,8 @@ comes from the main game:
 
 | In Deadlock | In the TCG |
 |---|---|
-| **Active** item (you press a key to use it) | **Spell**: played from hand, resolves once, discarded |
-| **Passive** item (always on once bought) | **Equipment**: attached to a hero, stays on |
+| **Active** item (you press a key to use it) | **Spell** (an active item): bought into the hand, played onto a hero, then used from that hero's sheet as its ability of the turn, on a cooldown (hard crowd control: two charges a match) |
+| **Passive** item (always on once bought) | **Equipment** (a passive item): bought into the hand, played onto a hero, always on while worn |
 
 The source of truth is the item's `is_active_item` flag in the
 [deadlock-api.com](https://deadlock-api.com/) catalogue
@@ -36,10 +36,10 @@ A Deadlock player should recognise every card on sight.
 - **Canon slot.** The item's shop slot sets its lean: **Weapon** items work through
   attacks and Bullet Power, **Spirit** items through skills and spirit damage,
   **Vitality** items through HP, healing, shields and resists.
-- **Canon tier.** A card's tier and cost band follow the item's shop tier
-  (800 / 1600 / 3200 / 6400 souls → T1 / T2 / T3 / T4) as far as the cost bands
-  allow. Spells stop at the T3 band (5–6 souls), so a T4 active item is a 5–6
-  soul spell. An early, cheap card comes from a cheap item.
+- **Canon tier.** A card's tier follows the item's shop tier (800 / 1600 /
+  3200 / 6400 souls → T1 / T2 / T3 / T4), and its price is the tier's:
+  `PRICE` = 2 / 4 / 8 / 16 souls (an upgrade bought while its component is on
+  your side costs the difference). An early, cheap card comes from a cheap item.
 - **Families stay families.** Upgrade lines (Extra Spirit → Improved Spirit →
   Boundless Spirit, the Cooldown line, the Lifesteal line into Leech) keep their
   order: the higher tier is the stronger, costlier card.
@@ -140,3 +140,37 @@ this turn", at the same 3).
 Card art comes from `scripts/fetch_item_art.py`, which needs the deadlock-api
 catalogue. Re-run it after a rename or a new card; until then a card without art
 shows its fallback glyph, and a renamed card keeps the old item's picture.
+
+## 4. Signature items and default builds
+
+Every hero has two **signature items** (`HeroCard.signature`), chosen to fit its
+kit — gun heroes lean Weapon, casters Spirit, tanks Vitality — one of them tier
+1 or 2. Both go on sale in any match the hero is drafted into, and so does every
+item of its build: the player's saved build for a hero they drafted, the
+default build below for the AI's (`src/cards/builds.ts`), so a build set up
+before the match can always be bought. A default build starts with the
+signatures, then two tier 2, one tier 3 and one tier 4 that fit the kit, six
+items for three slots: the later ones go on as upgrades of the earlier where
+Deadlock builds them so, or into a slot that opens.
+
+| Hero | Signature 1 | Signature 2 | Default build (in order) |
+|---|---|---|---|
+| Abrams | Healing Booster (passive, Vitality T2) | Fortitude (passive, Vitality T3) | Healing Booster → Fortitude → Bullet Lifesteal → Spirit Shielding → Bullet Resilience → Healing Tempo |
+| Drifter | Restorative Shot (passive, Weapon T1) | Frenzy (passive, Weapon T4) | Restorative Shot → Frenzy → Bullet Lifesteal → Kinetic Dash → Berserker → Leech |
+| Dynamo | Compress Cooldown (passive, Spirit T2) | Rescue Beam (active, Vitality T3) | Compress Cooldown → Rescue Beam → Healing Booster → Guardian Ward → Superior Cooldown → Transcendent Cooldown |
+| Haze | Active Reload (passive, Weapon T2) | Burst Fire (passive, Weapon T3) | Active Reload → Burst Fire → Titanic Magazine → Kinetic Dash → Toxic Bullets → Ricochet |
+| Kelvin | Cold Front (active, Spirit T2) | Knockdown (active, Spirit T3) | Cold Front → Knockdown → Improved Spirit → Spirit Shielding → Silence Wave → Arctic Blast |
+| Lady Geist | Mystic Vulnerability (passive, Spirit T2) | Spirit Snatch (passive, Spirit T3) | Mystic Vulnerability → Spirit Snatch → Improved Spirit → Spirit Lifesteal → Decay → Escalating Exposure |
+| Lash | Mystic Slow (passive, Spirit T2) | Tankbuster (passive, Spirit T3) | Mystic Slow → Tankbuster → Improved Spirit → Suppressor → Decay → Boundless Spirit |
+| Mirage | Fleetfoot (active, Weapon T2) | Tesla Bullets (passive, Weapon T3) | Fleetfoot → Tesla Bullets → Active Reload → Slowing Bullets → Toxic Bullets → Ricochet |
+| Mo & Krill | Spirit Lifesteal (passive, Vitality T2) | Bullet Resilience (passive, Vitality T3) | Spirit Lifesteal → Bullet Resilience → Guardian Ward → Weapon Shielding → Metal Skin → Infuser |
+| Paige | Guardian Ward (active, Vitality T2) | Dispel Magic (active, Vitality T3) | Guardian Ward → Dispel Magic → Healing Booster → Return Fire → Healing Nova → Divine Barrier |
+| Rem | Extra Spirit (passive, Spirit T1) | Healing Nova (active, Vitality T3) | Extra Spirit → Healing Nova → Improved Spirit → Healing Booster → Superior Duration → Boundless Spirit |
+| Seven | Spirit Sap (active, Spirit T2) | Surge of Power (passive, Spirit T3) | Spirit Sap → Surge of Power → Compress Cooldown → Improved Spirit → Superior Cooldown → Boundless Spirit |
+| Shiv | Slowing Bullets (passive, Weapon T2) | Berserker (passive, Weapon T3) | Slowing Bullets → Berserker → Active Reload → Titanic Magazine → Toxic Bullets → Crippling Headshot |
+| Sinclair | Slowing Hex (active, Spirit T2) | Disarming Hex (active, Spirit T3) | Slowing Hex → Disarming Hex → Improved Spirit → Mystic Vulnerability → Silence Wave → Vortex Web |
+| Vindicta | Long Range (passive, Weapon T2) | Toxic Bullets (passive, Weapon T3) | Long Range → Toxic Bullets → Titanic Magazine → Split Shot → Tesla Bullets → Crippling Headshot |
+| Viscous | Reactive Barrier (passive, Vitality T2) | Spirit Resilience (passive, Vitality T3) | Reactive Barrier → Spirit Resilience → Debuff Reducer → Improved Spirit → Fortitude → Unstoppable |
+| Warden | Weapon Shielding (passive, Vitality T2) | Metal Skin (active, Vitality T3) | Weapon Shielding → Metal Skin → Bullet Lifesteal → Enduring Speed → Fortitude → Leech |
+| Wraith | Spirit Strike (passive, Spirit T1) | Spiritual Overflow (passive, Weapon T4) | Spirit Strike → Spiritual Overflow → Split Shot → Spirit Lifesteal → Spirit Snatch → Ricochet |
+| Yamato | Extended Magazine (passive, Weapon T1) | Shadow Weave (active, Weapon T3) | Extended Magazine → Shadow Weave → Titanic Magazine → Kinetic Dash → Heroic Aura → Glass Cannon |

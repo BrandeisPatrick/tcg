@@ -35,11 +35,13 @@ lock a skill. The engine fixes that by construction:
 |---|---|
 | `constants.ts` | every rule number (costs, caps, patron HP, income and comeback, bounty, cooldowns, respawn, levels) |
 | `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn |
-| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skills, its ultimate, a borrowed ultimate; which one an action names), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, worth (`listPrice`, `heroWorth`, `netWorth`, `isRichestHero`, `killBounty`, `comebackBonus`), `checkWinner` |
-| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `playBlocked` / `playTargets`, `cardCost`, `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else; after the turn's attack only `endTurn` is left), `legalActions` |
+| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skills, its ultimate, a borrowed ultimate; which one an action names), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `copiesOnSide`, `boughtAtDiscount`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`, `isRichestHero`, `killBounty`, `comebackBonus`), `checkWinner` |
+| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the shop (`buyBlocked`, `buyPrice`, `freeComponents`, `sellBlocked`, `sellRefund`, `moveItemBlocked`, `closeShopBlocked`), the hand (`playBlocked`, `playTargets`, `playComponent`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else; the step splits the rest; after the turn's attack only `endTurn` is left), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
-| `actions/` | what each action does once it is legal: `attack` (and `attackAll`, a swing at every enemy hero), `playCard`, `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters) |
-| `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts`, `deckOps.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp, the deck and the hand (`returnToHand`) |
+| `actions/` | what each action does once it is legal: `shop` (`buy`, `sell`, `moveItem`, `closeShop`), `playCard` (a card from the hand onto a hero), `activate` (an active item), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the market) |
+| `market.ts`, `rng.ts` | the match's market, drawn from `G.seed` (`openingMarket`, `addHero` / `buildOf`, `marketItems`, `onSale`, `marketByTab`, `marketStandIn`) and the seeded generator it draws with |
+| `instances.ts` | card instances and items going on and off heroes: `makeInstance`, `attachItem` / `detachItem` (a passive's bonus on and off), `syncVitalitySpike` |
+| `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp |
 | `lane.ts` | `leaveActive`: what ends when a hero leaves the Active slot (a leaf, so death, statuses and the board moves all call it) |
 | `triggers.ts`, `registry.ts` | the one dispatcher for hero passives and worn equipment; abilities register themselves at load |
 | `forecast.ts` | `simulate(G, pid, action)` and `forecastAttack(G, pid, targetIid?)` |
@@ -68,13 +70,63 @@ seat is asked (`pendingPromotion`).
 **Income.** Souls accumulate: nothing refills and nothing is lost at the end of
 a turn. At the start of every own turn (the first included) the lane pays
 `LANE_INCOME`, plus a comeback for a side that trails on net worth — souls
-plus the list price of every item its heroes wear (`netWorth`): +1 at 8
-behind, +2 at 16 (`COMEBACK_STEPS`) — and `SECOND_MOVER_FIRST_INCOME_BONUS` on
-the second mover's first. Then cooldowns and respawn timers tick (on corpses
-too) and the turn's card is drawn.
+plus the list price of every item its heroes wear and every card in its hand
+(`netWorth`): +1 at 8 behind, +2 at 16 (`COMEBACK_STEPS`) — and
+`SECOND_MOVER_FIRST_INCOME_BONUS` on the second mover's first. Cooldowns (the
+heroes' and the worn items') and respawn timers tick, on corpses too. There is
+no deck and nothing is drawn. The turn then opens on its shop step
+(`G.step = 'shop'`).
 
-**Abilities.** Each hero uses one ability a turn — a skill or its ultimate —
-and abilities cost nothing. A skill waits its `cooldown` in own turns after
+**The shop and the hand.** A turn has two steps. In the shop step only the
+shop's moves are legal for the player whose turn it is — `buy`, `sell`,
+`moveItem`, `closeShop` — plus `playCard`, `endTurn` and an owed promotion;
+`closeShop` moves the turn to its act step, where everything else is legal and
+the shop is shut (`blocked` answers `'shopOpen'` / `'notShop'`).
+- `buy(itemId)` pays `buyPrice`: `PRICE[tier]` (2 / 4 / 8 / 16), less the
+  component's price when a free copy of the item's `upgradesFrom` is on the
+  buyer's side — in its hand, or worn by one of its heroes (`freeComponents`:
+  the copies less the upgrades of that component already in the hand bought
+  for the difference, each of which will consume one). The new card goes to
+  `PlayerState.hand` (zone `'hand'`) with `boughtOnTurn` and `paid`. No hero is
+  chosen at the shop; the hand has no cap. A Story reward is a free card in the
+  hand at the start of the fight (no purchase record).
+- `playCard(cardIid, heroIid)` puts a card from the hand on one of the
+  player's heroes in a slot — the bench and corpses included — in either step,
+  never after the turn's attack. It is free, is not shopping and is not the
+  hero's ability for the turn. The hero needs a free slot (`slotCap`: 3, 4 with
+  the flex slot) unless it wears the card's component, and may not wear a copy
+  already (`playBlocked`). An active starts on its full cooldown
+  (`activeCooldown`) or, hard crowd control, with `HARD_CC_CHARGES`; a passive's
+  `bonus` goes on; the hero earns `EXP_ON_EQUIP` the first time it wears that
+  item. An upgrade consumes its component (`playComponent`): the copy the hero
+  wears, whose place it takes; else a copy in the hand; else — bought for the
+  difference — the copy another of the player's heroes wears; with none it goes
+  on as a plain item. A component from the hand that was itself bought for the
+  difference settles its own component the same way.
+- `sell(iid)` takes back a card from the hand or an item a hero wears: what
+  was paid on the turn it was bought, else half its price. A worn upgrade sold
+  on its buy turn gives back what its play consumed (`replaced`,
+  `replacedFrom`): onto the hero that wore it, room permitting, else into the
+  hand. The last free copy of a component an upgrade in the hand was bought
+  against cannot be sold (`'claimed'`). `moveItem` moves a worn item to
+  another hero; its cooldown and charges travel with it.
+- Items stay on through death. A hero wearing three items of one tab has that
+  tab's category spike (+1 Bullet Power, Spirit Power or max HP), read off what
+  it wears.
+
+**The market.** `G.market` is fixed before the first pick from `G.seed`: every
+tier 1 item and a seeded slice (2 T2 + 2 T3 + 1 T4 per tab, signatures
+excluded). As each hero is drafted its two signature items and every item of
+its build join (`addHero`): the human seat's saved build (`G.playerBuilds`,
+from the match config), every other seat's default (`cards/builds.ts`), so a
+build set up before the match can always be bought. A scripted match adds both
+rosters. The AI buys its build's next item and plays it at once onto the hero
+it bought it for, so it never holds a card.
+
+**Abilities.** Each hero uses one ability a turn — a skill, an active item it
+wears (`activate`, in a cast frame whose source is the bearer; it then cools
+down 2 own turns for tiers 1–2, 3 for tiers 3–4, or spends one of a hard
+crowd-control item's charges), or its ultimate — and abilities cost nothing. A skill waits its `cooldown` in own turns after
 use (`SKILL_COOLDOWN` = 1, every turn, when its data names none). The ultimate
 is a kit ability, not a card: `HeroCard.ult` names its ability, it unlocks at
 `ULT_UNLOCK_LEVEL` (2) and waits `ULT_COOLDOWN` (3) own turns after each use.
@@ -169,9 +221,8 @@ resolves, once, at its end.
   (Last Stand; the status instance carries its own `heal`).
 - **Moving heroes, souls, cards** — a card that puts a bench hero in the Active
   slot calls `swapIntoActive`, one that drags an enemy there `pullToActive`,
-  one that pays out souls `awardSouls`, one that returns a card to its owner's
-  hand `returnToHand`; an ultimate that swings at the whole board calls
-  `attackAll`. None of them is written twice.
+  one that pays out souls `awardSouls`; an ultimate that swings at the whole
+  board calls `attackAll`. None of them is written twice.
 - **Card text** is read by players and by tests: mark each number the effect
   adds Spirit Power to `{sp:N}` (Bullet Power `{bp:N}`) so it prints in its
   colour and explains itself on hover or tap (`ui/card/scaling.ts`,
