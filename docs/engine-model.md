@@ -33,9 +33,10 @@ lock a skill. The engine fixes that by construction:
 
 | Module | Holds |
 |---|---|
-| `constants.ts` | every rule number (costs, caps, patron HP, soul ramp, respawn, levels) |
-| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` / `resolveSkill` (a hero's kit: its skills, then passives; which skill a bare action names), `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, `checkWinner` |
-| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets`, `playBlocked` / `playTargets`, `cardCost`, `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else), `legalActions` |
+| `constants.ts` | every rule number (costs, caps, patron HP, income and comeback, bounty, cooldowns, respawn, levels) |
+| `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn |
+| `query.ts` | pure reads: the board, `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skills, its ultimate, a borrowed ultimate; which one an action names), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, `wornEquipment`, worth (`listPrice`, `heroWorth`, `netWorth`, `isRichestHero`, `killBounty`, `comebackBonus`), `checkWinner` |
+| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `playBlocked` / `playTargets`, `cardCost`, `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else; after the turn's attack only `endTurn` is left), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `attack` (and `attackAll`, a swing at every enemy hero), `playCard`, `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters) |
 | `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts`, `deckOps.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp, the deck and the hand (`returnToHand`) |
@@ -54,17 +55,54 @@ file.
 
 ## The turn
 
-A turn is the player's to spend on cards, skills, retreats and attacks in any
-order. **Attacks are per hero:** every hero may attack once a turn while it
-stands in the Active slot, so a Retreat after the swing brings in a hero with
-a swing of its own, and a hero that swung, retreated and came back cannot swing
-again. The gate reads the hero (`attackedThisTurn`, kept on the bench), not the
-turn; `G.attackUsed` only says the turn has seen an attack (the board's turn
-phase and the coach plate read it). A hero still does one or the other — its
-skill or its attack. Turn 1 has no attack, and a promotion off a fallen Active
-is free and brings in a hero who may attack. A Retreat costs `retreatCost`:
-`RETREAT_COST`, less what the hero leaving carries (`retreatDiscount`), and
-nothing while it is Swift — the Retreat spends the Swift.
+**Seats.** The pie rule: seat 0 drafts first and seat 1 moves first
+(`G.firstMover`). The last pick ends the draft's turn, so engine turn 1 opens
+with a real `beginTurn` for the first mover (the draft itself is turn 0). A
+scripted match (a Story node, a lesson) opens on seat 0's turn, its first mover
+set to match. `rounds.ts` converts: the first mover's own turn r is engine turn
+2r − 1, the second mover's 2r, and round r holds both. Nothing in the engine is
+seat 0's by default any more except `G.humanSeat` (seat 0, or null in a sim):
+a fallen Active is promoted on the spot for every other seat, and the human
+seat is asked (`pendingPromotion`).
+
+**Income.** Souls accumulate: nothing refills and nothing is lost at the end of
+a turn. At the start of every own turn (the first included) the lane pays
+`LANE_INCOME`, plus a comeback for a side that trails on net worth — souls
+plus the list price of every item its heroes wear (`netWorth`): +1 at 8
+behind, +2 at 16 (`COMEBACK_STEPS`) — and `SECOND_MOVER_FIRST_INCOME_BONUS` on
+the second mover's first. Then cooldowns and respawn timers tick (on corpses
+too) and the turn's card is drawn.
+
+**Abilities.** Each hero uses one ability a turn — a skill or its ultimate —
+and abilities cost nothing. A skill waits its `cooldown` in own turns after
+use (`SKILL_COOLDOWN` = 1, every turn, when its data names none). The ultimate
+is a kit ability, not a card: `HeroCard.ult` names its ability, it unlocks at
+`ULT_UNLOCK_LEVEL` (2) and waits `ULT_COOLDOWN` (3) own turns after each use.
+It runs through `useSkill` like a skill, in an `'ult'` cast frame, and sets off
+`onBearerUltCast`. Sinclair's ultimate borrows the rival Active's
+(`borrowedUlt`): a kit ability used once, free, with no level or cooldown.
+Echo Shard repeats a skill, never an ultimate.
+
+**The Act.** One basic attack a turn per player (`G.attackUsed`), and it ends
+the Act: after it nothing is legal but `endTurn` and an owed promotion
+(`blocked` answers `'actOver'`). A hero that used its ability may still attack.
+A Retreat comes before the attack — the hero who steps in makes it — and one a
+turn (`G.retreatUsed`); it costs `retreatCost`: `RETREAT_COST`, less what the
+hero leaving carries (`retreatDiscount`), and nothing while it is Swift — the
+Retreat spends the Swift. Extra swings exist only as explicit `extra_attack`
+grants (Haze's Fixation from Level 3, Burst Fire, Fleetfoot, Fury Trance, Blood
+Tribute), all inside the one attack. Turn 1 has no attack, and a promotion off
+a fallen Active is free and brings in a hero who may make the attack if none
+has been made.
+
+**Kills and the end.** A kill pays the victim's opponent its level + 1, and 2
+more if it was strictly the richest hero on the board (`killBounty`); the
+patron loses the victim's level; the hero respawns with its items and level
+(an item that puts a lasting status on its bearer when worn puts it back). A
+board with every hero down is no loss by itself: at the end of a turn, if the
+rival has no standing hero, the ending player's standing Active pushes its
+bullet power into the rival's patron. A patron at 0 loses; if both fall to one
+action, the one with more HP left wins, and on a tie the second mover.
 
 **Ricochet.** A swing whose damage gets through bounces: every other living
 enemy hero a Dome does not cover takes N bullet damage, where N is
