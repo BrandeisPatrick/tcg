@@ -2,6 +2,26 @@ import { motion } from 'framer-motion';
 import { CardFrame } from '../card/CardFrame';
 import { spring } from '../tokens';
 import { scrimStyle } from '../poster';
+import { useViewport } from '../hooks/useViewport';
+
+/** The full card's size (CardFrame SIZES.full) and the phone's share of it:
+ *  the whole card filled a phone's width edge to edge. Fixed, not fluid — the
+ *  preview is the same size every time it opens on a given screen. */
+const FULL_W = 300;
+const FULL_H = 420;
+const PHONE_SCALE = 0.8;
+
+/** The card at the preview's size: drawn at full size and scaled, so its
+ *  type stays set as designed. */
+function PreviewCard({ cardId, cost, scale }: { cardId: string; cost?: number; scale: number }) {
+  return (
+    <div style={{ width: FULL_W * scale, height: FULL_H * scale }}>
+      <div style={{ width: FULL_W, height: FULL_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+        <CardFrame cardId={cardId} cost={cost} size="full" />
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   cardId: string;
@@ -21,6 +41,8 @@ interface Props {
  * the eye learns where to look, and a phone never has it hanging off an edge.
  */
 export function CardPreview({ cardId, cost, onClose, hover = false }: Props) {
+  const { isMobile } = useViewport();
+  const scale = isMobile ? PHONE_SCALE : 1;
   if (hover) {
     return (
       <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 92, pointerEvents: 'none' }}>
@@ -32,7 +54,7 @@ export function CardPreview({ cardId, cost, onClose, hover = false }: Props) {
           // One neutral drop — the print floats over the sheet with no colour cast.
           style={{ filter: 'drop-shadow(0 16px 28px rgba(0, 0, 0, 0.55))' }}
         >
-          <CardFrame cardId={cardId} cost={cost} size="full" />
+          <PreviewCard cardId={cardId} cost={cost} scale={scale} />
         </motion.div>
       </div>
     );
@@ -56,7 +78,7 @@ export function CardPreview({ cardId, cost, onClose, hover = false }: Props) {
         exit={{ scale: 0.85, opacity: 0 }}
         transition={spring.snappy}
       >
-        <CardFrame cardId={cardId} cost={cost} size="full" />
+        <PreviewCard cardId={cardId} cost={cost} scale={scale} />
       </motion.div>
     </motion.div>
   );
