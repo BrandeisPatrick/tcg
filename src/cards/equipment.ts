@@ -137,7 +137,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'spiritual_overflow',   name: 'Spiritual Overflow',   type: 'equipment', rarity: 4, tier: 4, cost: 7, abilities: ['eff_spiritual_overflow'],   text: 'After bearer attacks: +1 Spirit Power for 2 turns (up to +3) and heal 1.' },
 
   // ----- Mobility (docs/card-design.md, added 2026-11-03) -----
-  // A Retreat is 2 souls (RETREAT_COST); these make the swap after the swing cheap.
+  // A Retreat is 1 soul (RETREAT_COST), one a turn, before the attack; these make it cheap.
   { id: 'sprint_boots',   name: 'Sprint Boots',   type: 'equipment', rarity: 1, tier: 1, cost: 2, abilities: ['eff_sprint_boots'],   text: "Bearer's Retreat costs 1 less." },
   { id: 'enduring_speed', name: 'Enduring Speed', type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_enduring_speed'], text: "Bearer's Retreat costs 1 less, and it cannot be Rooted." },
   { id: 'kinetic_dash',   name: 'Kinetic Dash',   type: 'equipment', rarity: 2, tier: 2, cost: 3, abilities: ['eff_kinetic_dash'],   text: 'When the bearer steps into the Active slot by a Retreat or a swap: +1 Bullet Power this turn.' },

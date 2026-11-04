@@ -295,10 +295,10 @@ export function CardFrame({
   };
 
   const artH = size === 'full' ? '58%' : '55%';
-  const printedCost = data && data.type !== 'hero' ? data.cost ?? 0 : 0;
+  const printedCost = data && (data.type === 'spell' || data.type === 'equipment') ? data.cost ?? 0 : 0;
   const cost = costInPlay ?? printedCost;
-  // A card with no price prints no coin — but a copy made free (Sinclair's
-  // copied ultimate) prints a 0, so it does not look like a card with no cost.
+  // A card with no price prints no coin (a hero, an ultimate's face) — but a
+  // copy made free prints a 0, so it does not look like a card with no cost.
   const showCost = !isHero && (cost > 0 || cost !== printedCost);
   const showStats = isHero;
 

@@ -22,6 +22,7 @@ import { consumeEquipment } from '@/engine/deckOps';
 import { blocked, legalActions, skillBlocked } from '@/engine/legality';
 import { wornEquipment } from '@/engine/query';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
+import { CARDS_BY_ID } from '@/cards';
 import { configureReadyMatch, freshReadyGame, makeHero, nextTestIid } from '../_helpers';
 import { forecastMismatches } from './forecast';
 import { everyCard } from './oracle';
@@ -54,6 +55,12 @@ function wear(hero: CardInstance, cardId: string): CardInstance {
   return e;
 }
 const anywhere = (G: GameState, iid: string) => everyCard(G).find((x) => x.card.iid === iid)?.card;
+/** `hero` uses its ultimate (a kit ability, unlocked at Level 2: the hero is raised to it). */
+function useUlt(G: GameState, hero: CardInstance, targetIid?: string) {
+  hero.level = Math.max(2, hero.level ?? 1) as 2 | 3 | 4;
+  const ult = (CARDS_BY_ID[hero.cardId] as { ult?: string }).ult;
+  return runMove('useSkill', G, hero.ownerId, hero.iid, targetIid, ult);
+}
 
 /** P0 (Haze active; Vindicta / Lash / Paige on the bench), turn 2, with souls to spend. */
 function game(): GameState {
@@ -148,7 +155,8 @@ describe('E1 a corpse carries no statuses', () => {
 
 // ===========================================================================
 // E2  Lady Geist's Soul Exchange swapped raw HP  (fixed: two living Actives, each clamped to its own max)
-//     eff_ult_lady_geist did `ally.hp = enemy.hp`: no clamp to hpMax and no corpse check.
+//     eff_ult_lady_geist did `ally.hp = enemy.hp`: no clamp to hpMax and no corpse check. (The
+//     ultimate is a kit ability now, used through useSkill.)
 // ===========================================================================
 describe('E2 Soul Exchange keeps HP inside 0..hpMax and leaves corpses alone', () => {
   const geistGame = () => {
@@ -168,7 +176,7 @@ describe('E2 Soul Exchange keeps HP inside 0..hpMax and leaves corpses alone', (
     const { G, geist, foe } = geistGame();
     geist.hp = 1;
     foe.hpMax = foe.hp = 12;
-    runMove('playCard', G, '0', toHand(G, '0', 'ult_lady_geist').iid);
+    expect(useUlt(G, geist)).not.toBe(INVALID_MOVE);
     expect(geist.hp).toBeLessThanOrEqual(geist.hpMax);
   });
 
@@ -177,21 +185,21 @@ describe('E2 Soul Exchange keeps HP inside 0..hpMax and leaves corpses alone', (
     geist.hp = 5;
     foe.hp = 0;
     foe.respawnTurnsLeft = 3;
-    runMove('playCard', G, '0', toHand(G, '0', 'ult_lady_geist').iid);
+    useUlt(G, geist);
     expect(foe.hp).toBe(0);
     expect(geist.hp).toBe(5);
   });
 
   it('E2c each hero keeps what its own max HP holds, and the HP that fits changes hands', () => {
     const { G, geist, foe } = geistGame();
-    geist.hp = 1;                    // 1 / 4
+    geist.hp = 1;                    // 1 / 5 (Level 2: one more max HP)
     foe.hpMax = 12; foe.hp = 9;      // 9 / 12
-    runMove('playCard', G, '0', toHand(G, '0', 'ult_lady_geist').iid);
-    expect([geist.hp, foe.hp]).toEqual([4, 1]); // 9 clamps to Geist's max 4; Geist's 1 goes across
+    expect(useUlt(G, geist)).not.toBe(INVALID_MOVE);
+    expect([geist.hp, foe.hp]).toEqual([geist.hpMax, 1]); // 9 clamps to Geist's max; Geist's 1 goes across
     expect(G.log.some((l) => l.text === 'Souls swapped.')).toBe(true);
   });
 
-  it('E2d a corpse on either side: it fizzles with a log line and nobody changes', () => {
+  it('E2d a corpse on either side: nobody changes — a fallen Geist cannot cast it, a fallen rival makes it fizzle', () => {
     for (const side of ['ally', 'foe'] as const) {
       const { G, geist, foe } = geistGame();
       geist.hp = 2;
@@ -200,9 +208,10 @@ describe('E2 Soul Exchange keeps HP inside 0..hpMax and leaves corpses alone', (
       corpse.hp = 0;
       corpse.respawnTurnsLeft = 3;
       const before = [geist.hp, foe.hp];
-      runMove('playCard', G, '0', toHand(G, '0', 'ult_lady_geist').iid);
+      const r = useUlt(G, geist);
       expect([geist.hp, foe.hp], side).toEqual(before);
-      expect(G.log.some((l) => l.text.startsWith('Soul Exchange fizzled')), side).toBe(true);
+      if (side === 'ally') expect(r).toBe(INVALID_MOVE);
+      else expect(G.log.some((l) => l.text.startsWith('Soul Exchange fizzled')), side).toBe(true);
     }
   });
 });
@@ -328,7 +337,7 @@ describe('E4 Rem returns to a real bench slot', () => {
 //     (fixed: moveBlocked refuses junk slots, a hole on either side, and Rem in slot 0)
 // ===========================================================================
 describe('E5 moveHero', () => {
-  it('precondition: a plain retreat swaps Active and bench hero and charges 2 souls', () => {
+  it('precondition: a plain retreat swaps Active and bench hero and charges 1 soul', () => {
     const G = game();
     const me = G.players['0'];
     const active = me.active!;
@@ -336,7 +345,7 @@ describe('E5 moveHero', () => {
     expect(runMove('moveHero', G, '0', 1, 0)).not.toBe(INVALID_MOVE);
     expect(me.active).toBe(vind);
     expect(me.bench[0]).toBe(active);
-    expect(me.souls).toBe(8);
+    expect(me.souls).toBe(9);
   });
 
   it('E5a slots outside 0..3 are refused and leave the bench at length 3', () => {
@@ -468,8 +477,7 @@ describe('E6 targets are validated against the ability\'s TargetFilter', () => {
     const yamato = makeHero('hero_yamato', '0', 'active', 0);
     G.players['0'].active = yamato;
     const foe = G.players['1'].active!;
-    const ult = toHand(G, '0', 'ult_yamato');
-    expect(runMove('playCard', G, '0', ult.iid, foe.iid)).toBe(INVALID_MOVE);
+    expect(useUlt(G, yamato, foe.iid)).toBe(INVALID_MOVE);
     expect(foe.statuses.some((s) => s.id === 'unstoppable')).toBe(false);
   });
 
@@ -725,38 +733,42 @@ describe('M2 the attack forecast matches what the attack does', () => {
 // ===========================================================================
 // M3  The AI's own copy of the rules  (fixed: the AI plays the engine's legalActions)
 //     It had its own cost (blind to costOverride), its own target test (a self-cast ultimate
-//     never matched) and its own skill gate (Rem on Rem).
+//     never matched) and its own skill gate (Rem on Rem). Ultimates are kit abilities now:
+//     a borrowed one (Sinclair's copy) and a self-cast one are offered like any skill.
 // ===========================================================================
 describe('M3 the AI sees every legal play', () => {
-  it('precondition: the engine plays a free copied ultimate at 0 souls', () => {
+  it('precondition: the engine takes a borrowed ultimate at 0 souls, once', () => {
     const G = game();
     G.players['0'].souls = 0;
-    const copy = toHand(G, '0', 'ult_haze');
-    copy.costOverride = 0; // what eff_ult_sinclair stamps on its copy
-    expect(runMove('playCard', G, '0', copy.iid)).not.toBe(INVALID_MOVE);
+    const haze = G.players['0'].active!;
+    haze.borrowedUlt = 'eff_ult_lash'; // what eff_ult_sinclair leaves on its caster
+    expect(runMove('useSkill', G, '0', haze.iid, undefined, 'eff_ult_lash')).not.toBe(INVALID_MOVE);
+    expect(haze.borrowedUlt).toBeUndefined();
   });
 
-  it('M3a Sinclair\'s free copy (costOverride 0) is offered at 0 souls', () => {
+  it('M3a a borrowed ultimate is offered at 0 souls', () => {
     const G = game();
     G.players['0'].souls = 0;
-    const copy = toHand(G, '0', 'ult_haze');
-    copy.costOverride = 0;
-    const offered = enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'playCard' && m.args[0] === copy.iid);
+    const haze = G.players['0'].active!;
+    haze.borrowedUlt = 'eff_ult_lash';
+    const offered = enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'useSkill' && m.args[0] === haze.iid && m.args[2] === 'eff_ult_lash');
     expect(offered).toBe(true);
   });
 
-  it('precondition: the engine plays Yamato\'s self-cast ultimate with no target', () => {
+  it('precondition: the engine takes Yamato\'s self-cast ultimate aimed at himself', () => {
     const G = game();
-    G.players['0'].active = makeHero('hero_yamato', '0', 'active', 0);
-    const ult = toHand(G, '0', 'ult_yamato');
-    expect(runMove('playCard', G, '0', ult.iid)).not.toBe(INVALID_MOVE);
+    const yamato = makeHero('hero_yamato', '0', 'active', 0);
+    G.players['0'].active = yamato;
+    expect(useUlt(G, yamato, yamato.iid)).not.toBe(INVALID_MOVE);
   });
 
   it('M3b Yamato\'s self-cast ultimate is offered', () => {
     const G = game();
-    G.players['0'].active = makeHero('hero_yamato', '0', 'active', 0);
-    const ult = toHand(G, '0', 'ult_yamato');
-    const offered = enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'playCard' && m.args[0] === ult.iid);
+    const yamato = makeHero('hero_yamato', '0', 'active', 0);
+    yamato.level = 2;
+    G.players['0'].active = yamato;
+    G.players['0'].hand = [];
+    const offered = enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'useSkill' && m.args[0] === yamato.iid && m.args[2] === 'eff_ult_yamato');
     expect(offered).toBe(true);
   });
 

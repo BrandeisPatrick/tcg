@@ -183,8 +183,9 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     expect(hps(bench)).toEqual([17, 18, 18]);
   });
 
-  it("Haze's Fixation grants its one extra swing, not one a bounce", () => {
+  it("Haze's Fixation (from Level 3) grants its one extra swing, not one a bounce", () => {
     const { G, atk, bench } = lane('hero_haze', 'ricochet');
+    atk.level = 3;
     const fx = G.fx.length;
     makeAttack(G, '0');
     expect(swingsSince(G, fx)).toHaveLength(2);
@@ -219,7 +220,7 @@ describe('A bounce that knocks a hero out', () => {
     const patron = G.players['1'].hp;
     makeAttack(G, '0');
     expect(bench[0].respawnTurnsLeft).toBeGreaterThan(0);
-    expect(G.players['0'].souls).toBe(1);
+    expect(G.players['0'].souls).toBe((bench[0].level ?? 1) + 1); // the bounty: its level + 1
     expect(atk.exp).toBe(EXP_ON_KILL);
     expect(G.players['1'].hp).toBe(patron - (bench[0].level ?? 1));
   });
@@ -243,6 +244,7 @@ describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
   it('its swing bounces, and the end of the turn takes the Ricochet away', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
+    haze.level = 3; // her Fixation swings
     const bench = G.players['1'].bench.filter((b): b is CardInstance => !!b);
     for (const b of bench) { b.hpMax = 20; b.hp = 20; }
     expect(play(G, 'split_shot')).not.toBe(INVALID);

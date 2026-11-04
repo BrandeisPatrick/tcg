@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
-import { attackBlocked } from '@/engine/legality';
+import { attackBlocked, cardCost } from '@/engine/legality';
+import { LANE_INCOME, RETREAT_COST } from '@/engine/constants';
 import { forecastAttack } from '@/engine/forecast';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { setMatchConfig } from '@/storage/matchConfig';
@@ -12,7 +13,8 @@ import { lessonById, type LessonId } from '@/tutorial/lessons';
 // Every lesson is staged so the move it teaches is the move that wins. The
 // attack is one-way and is the player's to make, so the numbers are pinned
 // here, played through the engine: the taught line wins, and the line that
-// skips the lesson does not.
+// skips the lesson does not. The rival's patron has one point left, so the
+// one kill is the win.
 
 function lesson(id: LessonId) {
   setMatchConfig({ playerDeck: [], heroPreferences: [null, null, null, null], tutorial: lessonById(id)!.setup(), lesson: id });
@@ -37,18 +39,21 @@ function rivalTurn(c: LessonClient) {
 }
 
 describe('the tutorial is staged so the taught move wins', () => {
-  it('Lesson 2: Kelvin swings for 2 at a Lash on 3; the magazine is the kill', () => {
+  it('Lesson 2: Glass Cannon costs two turns of income; Kelvin swings for 2 at a Lash on 3, and the gear is the kill', () => {
     for (const geared of [false, true]) {
       const c = lesson('souls');
+      expect(state(c).G.players['0'].souls).toBe(LANE_INCOME);     // Turn 1: four souls…
+      expect(cardCost(card(c, 'glass_cannon'))).toBe(2 * LANE_INCOME); // …and the card costs eight
       moves(c).endTurn();           // Turn 1: nobody attacks
-      rivalTurn(c);                 // Turn 2: the rival's move cannot heal Lash
+      rivalTurn(c);                 // Turn 2: the rival's move cannot heal Lash, nor kill Kelvin
       const { G } = state(c);
       expect(G.turnNumber).toBe(3);
+      expect(G.players['0'].souls).toBe(2 * LANE_INCOME); // the four kept and four more
       expect(G.players['1'].active!.hp).toBe(3);
-      if (geared) moves(c).playCard(card(c, 'extended_magazine').iid, G.players['0'].active!.iid);
+      if (geared) moves(c).playCard(card(c, 'glass_cannon').iid, G.players['0'].active!.iid);
       expect(attackBlocked(state(c).G, '0')).toBeNull();
       moves(c).attack();
-      expect(state(c).ctx.gameover?.winner, geared ? 'with the magazine' : 'without it').toBe(geared ? '0' : undefined);
+      expect(state(c).ctx.gameover?.winner, geared ? 'with the cannon' : 'without it').toBe(geared ? '0' : undefined);
     }
   });
 
@@ -72,9 +77,9 @@ describe('the tutorial is staged so the taught move wins', () => {
     expect(forecastAttack(G, '0').defenderActiveKO).toBeNull();      // Kelvin's swing
     expect(forecastAttack(G, '1').defenderActiveKO).toBe(kelvin.iid); // Lash's, next turn
     expect(lash.hp).toBe(3);
-    moves(c).moveHero(1, 0);        // retreat: Yamato in, for the two souls turn 3 brings
+    moves(c).moveHero(1, 0);        // retreat: Yamato in, for a soul of the turn's income
     expect(state(c).G.players['0'].active!.cardId).toBe('hero_yamato');
-    expect(state(c).G.players['0'].souls).toBe(0);
+    expect(state(c).G.players['0'].souls).toBe(LANE_INCOME - RETREAT_COST);
     moves(c).attack();
     expect(state(c).ctx.gameover?.winner).toBe('0');
   });

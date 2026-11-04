@@ -7,16 +7,11 @@
 
 // ---------- Costs and limits ----------
 
-/** Soul cost to activate a hero skill. Each hero may use its skill once a
- *  turn, so a full bench can cast several in one turn souls permitting; a hero
- *  that uses its skill gives up its attack this turn, and one that has attacked
- *  cannot use its skill. */
-export const SKILL_COST = 1;
-
-/** Souls to swap an Active with a bench hero (Pokémon-flavored): the base price.
- *  What a Retreat costs right now is `retreatCost` (legality.ts) — Sprint Boots
- *  take a soul off, a Swift hero's is free. */
-export const RETREAT_COST = 2;
+/** Souls to swap the Active with a bench hero: the base price. What a Retreat
+ *  costs right now is `retreatCost` (legality.ts) — Sprint Boots take a soul
+ *  off, a Swift hero's is free. A player retreats at most once a turn, and only
+ *  before the turn's attack. */
+export const RETREAT_COST = 1;
 
 /** Max equipment a hero can wear at once. Playing a 4th piece requires the
  *  player to choose one of the existing items to discard. */
@@ -31,29 +26,53 @@ export const MAX_EXTRA_ATTACKS = 6;
 // ---------- Patron, souls, drawing ----------
 
 /** Patron HP — the ONLY way it drops is a hero death, which costs the fallen
- *  hero's level (`koPatronDamage` in query.ts, charged in killInPlace). Tuned
- *  via the eval sim for pacing. */
+ *  hero's level (`koPatronDamage` in query.ts, charged in killInPlace), and
+ *  the push into an empty lane at the end of a turn (endTurnEffects). */
 export const PATRON_HP = 10;
 
+/** Souls a player holds before their first turn's income. */
 export const SOULS_START = 0;
 
-/** The soul ceiling (the refill table tails at it). A KO bounty is capped
- *  here so it can never subtract from a player already at the ceiling. */
-export const SOULS_MAX = 10;
+/** Souls accumulate: nothing refills and nothing is lost at the end of a turn.
+ *  At the start of each of a player's own turns (their first included) the
+ *  lane pays this much. */
+export const LANE_INCOME = 4;
 
-/** Refill economy (Hearthstone-style): at the start of each of your turns,
- *  your pool is REFILLED to N — anything banked from last turn is lost. The
- *  ramp climbs 1 → 10 by your 10th turn, then caps. */
-export const SOULS_REFILL_TABLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+/** The comeback at income time: a player whose net worth (souls on hand plus
+ *  the list price of every item their heroes wear, `netWorth` in query.ts)
+ *  trails the rival's by at least the first number gets the second on top of
+ *  the lane income. The largest step that applies is paid. */
+export const COMEBACK_STEPS: readonly (readonly [behindBy: number, bonus: number])[] = [[8, 1], [16, 2]];
+
+/** Extra souls on the second mover's first income (the pie rule's dial; the
+ *  pricing pass may raise it). */
+export const SECOND_MOVER_FIRST_INCOME_BONUS = 0;
+
+/** A kill pays the victim's opponent the victim's level plus this. */
+export const KILL_BOUNTY_BASE = 1;
+
+/** …and this much more when the victim was strictly the richest hero on the
+ *  board (the highest list-price total of worn items among all eight; a tie
+ *  pays nothing extra). */
+export const RICHEST_BOUNTY_BONUS = 2;
 
 export const INITIAL_DRAW = 3;
 export const DRAW_PER_TURN = 1;
 
-// ---------- Turn structure and death ----------
+// ---------- Abilities ----------
 
-/** The level at which a hero has earned its ultimate: reaching it deals the
- *  ult card to its owner's hand (`dealEarnedUltimates` in expSystem.ts). */
+/** Own turns a hero skill waits after use when its data names no `cooldown`:
+ *  1 is usable every turn, as a skill always was. Abilities cost nothing. */
+export const SKILL_COOLDOWN = 1;
+
+/** The level at which a hero's ultimate unlocks. It is a kit ability, not a
+ *  card: free, used like a skill (it is the hero's one ability that turn). */
 export const ULT_UNLOCK_LEVEL = 2;
+
+/** Own turns an ultimate waits after use. */
+export const ULT_COOLDOWN = 3;
+
+// ---------- Turn structure and death ----------
 
 /** Turns a hero takes to respawn after being KO'd. Long enough that death
  *  matters, short enough that you can rebuild. Hero stays in their slot,

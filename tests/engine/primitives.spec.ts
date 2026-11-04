@@ -9,7 +9,7 @@ import { STARTER_DECK_AI } from '@/decks/starter';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { FIXATION_CAP, MAX_HAND, RETREAT_COST, SOULS_MAX } from '@/engine/constants';
+import { FIXATION_CAP, MAX_HAND, RETREAT_COST } from '@/engine/constants';
 import { attackAll } from '@/engine/actions/attack';
 import { promoteToActive, pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
@@ -699,8 +699,7 @@ describe('an attack that names its target', () => {
     expect(swings).toHaveLength(1);
     expect(swings[0]).toMatchObject({ iid: atk.iid, targetIid: foes[2].iid, index: 0, raw: 3 });
     expect(G.attackUsed).toBe(true);
-    expect(atk.attackedThisTurn).toBe(true);
-    expect(attackBlocked(G, '0', foes[1].iid)).toBe('used'); // one attack a turn for this hero, whoever it names
+    expect(attackBlocked(G, '0', foes[1].iid)).toBe('used'); // one attack a turn, whoever it names
 
     // The same through the game's move, and a bare move is still the Active.
     const H = duel(REACHER);
@@ -784,20 +783,18 @@ describe('an attack that names its target', () => {
     expect(attackTargets(G, '0')).toEqual(foes.slice(0, 3)); // the fallen are not in the list
   });
 
-  it('keeps its reasons and their order: turn1, used, noActive, skill, noTarget, then target, then cannot', () => {
+  it('keeps its reasons and their order: turn1, used, noActive, noTarget, then target, then cannot', () => {
     const { G, me, atk, foes } = duel(REACHER);
     const ghost = 'ghost-iid';
     G.turnNumber = 1;
     expect(attackBlocked(G, '0', ghost)).toBe('turn1');
     G.turnNumber = 2;
-    G.attackUsed = true; // another hero's swing this turn does not close this one's
-    expect(attackBlocked(G, '0', foes[0].iid)).toBeNull();
-    atk.attackedThisTurn = true;
+    G.attackUsed = true; // the turn's one attack is made: whoever stands in the slot, it is spent
+    expect(attackBlocked(G, '0', foes[0].iid)).toBe('used');
     expect(attackBlocked(G, '0', ghost)).toBe('used');
     G.attackUsed = false;
-    atk.attackedThisTurn = false;
-    atk.skillUsedThisTurn = true;
-    expect(attackBlocked(G, '0', ghost)).toBe('skill');
+    atk.skillUsedThisTurn = true; // an ability first does not spend it
+    expect(attackBlocked(G, '0', foes[0].iid)).toBeNull();
     atk.skillUsedThisTurn = false;
     addStatus(G, atk, 'stun', 1, 1);
     expect(attackBlocked(G, '0', foes[0].iid)).toBe('cannot');
@@ -835,7 +832,8 @@ describe('an attack that names its target', () => {
   it('the AI lists the attacks as moves: [] for the default, [targetIid] for the others', () => {
     const { G, me, foes } = duel(REACHER);
     me.hand = [];
-    me.souls = 0; // nothing but the attacks and the end of the turn
+    me.souls = 0; // nothing but the attacks and the end of the turn: no Retreat, and the bench has used its skills
+    for (const b of me.bench) if (b) b.skillUsedThisTurn = true;
     const options = enumerateAIMoves(G, ctxFor('0'), false);
     const attacks = options.filter((o) => o.move === 'attack').map((o) => o.args);
     expect(attacks).toHaveLength(4);
@@ -878,7 +876,6 @@ describe('attackAll', () => {
     for (const f of foes) expect(f.hp, f.cardId).toBe(27);
     expect(swungAt).toEqual(foes.map((f) => f.iid));  // the passive followed through once per swing
     expect(G.attackUsed).toBe(false);
-    expect(atk.attackedThisTurn).toBeFalsy();
     expect(attackBlocked(G, '0')).toBeNull();          // the attack itself is still there to make
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
   });
@@ -924,8 +921,8 @@ describe('attackAll', () => {
     attackAll(G, atk);
     expect(isRespawning(foes[2])).toBe(true);
     expect(G.players['1'].hp).toBe(patron - 1);
-    expect(me.souls).toBe(5);
-    expect(G.log.some((l) => l.text === 'P0 +1 Souls (KO bounty).')).toBe(true);
+    expect(me.souls).toBe(6); // its level (1) + 1
+    expect(G.log.some((l) => l.text === 'P0 +2 Souls (KO bounty).')).toBe(true);
   });
 });
 
@@ -1084,7 +1081,7 @@ describe('a skill that costs HP', () => {
     expect(atk.hp).toBe(1);
   });
 
-  it('comes after the lockouts and the cooldown, and before the souls', () => {
+  it('comes after the lockouts and the cooldown; there is no soul to pay', () => {
     const { G, me, atk } = duel(PAYER);
     atk.hp = 1;
     addStatus(G, atk, 'silenced', 1, 1);
@@ -1096,7 +1093,7 @@ describe('a skill that costs HP', () => {
     me.souls = 0;
     expect(skillBlocked(G, '0', atk)).toBe('hp');
     atk.hp = 5;
-    expect(skillBlocked(G, '0', atk)).toBe('souls');
+    expect(skillBlocked(G, '0', atk)).toBeNull();
   });
 
   it('is paid straight off the hero before the skill runs, and the skill still happens', () => {
@@ -1105,7 +1102,7 @@ describe('a skill that costs HP', () => {
     expect(perform(G, '0', { type: 'useSkill', heroIid: atk.iid, targetIid: rival.iid })).not.toBe(INVALID);
     expect(atk.hp).toBe(3);
     expect(rival.hp).toBe(28);
-    expect(me.souls).toBe(9); // the soul as ever
+    expect(me.souls).toBe(10); // no soul: abilities are free
     const lines = G.log.map((l) => l.text);
     const used = lines.indexOf('P0 used skill: Payer on Abrams.');
     const paid = lines.indexOf('Payer pays 2 HP.');
@@ -1171,23 +1168,18 @@ describe('awardSouls', () => {
     expect(G.log.at(-1)!.text).toBe('P1 +1 Souls.');
   });
 
-  it('is capped at SOULS_MAX, says only what it gave, and never subtracts', () => {
+  it('has no ceiling, says only what it gave, and never subtracts', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    me.souls = SOULS_MAX - 1;
-    expect(awardSouls(G, '0', 5, 'big')).toBe(1);
-    expect(me.souls).toBe(SOULS_MAX);
-    expect(G.log.at(-1)!.text).toBe('P0 +1 Souls (big).');
+    me.souls = 9;
+    expect(awardSouls(G, '0', 5, 'big')).toBe(5);
+    expect(me.souls).toBe(14);
+    expect(G.log.at(-1)!.text).toBe('P0 +5 Souls (big).');
     const lines = G.log.length;
-    expect(awardSouls(G, '0', 3, 'at the cap')).toBe(0);
-    expect(me.souls).toBe(SOULS_MAX);
-    expect(G.log).toHaveLength(lines); // nothing gained, nothing said
-    me.souls = SOULS_MAX + 2;         // (not a state the game reaches)
-    expect(awardSouls(G, '0', 3, 'over')).toBe(0);
-    expect(me.souls).toBe(SOULS_MAX + 2);
     expect(awardSouls(G, '0', 0)).toBe(0);
     expect(awardSouls(G, '0', -4)).toBe(0);
-    expect(me.souls).toBe(SOULS_MAX + 2);
+    expect(me.souls).toBe(14);
+    expect(G.log).toHaveLength(lines); // nothing gained, nothing said
   });
 
   it('is what the KO bounty pays through, in the words it always used', () => {
@@ -1197,8 +1189,8 @@ describe('awardSouls', () => {
     damageUnit(G, victim, 99, 'pure');
     resolve(G);
     expect(isRespawning(victim)).toBe(true);
-    expect(G.players['0'].souls).toBe(3);
-    expect(G.log.some((l) => l.text === 'P0 +1 Souls (KO bounty).')).toBe(true);
+    expect(G.players['0'].souls).toBe(4); // its level (1) + 1
+    expect(G.log.some((l) => l.text === 'P0 +2 Souls (KO bounty).')).toBe(true);
   });
 });
 

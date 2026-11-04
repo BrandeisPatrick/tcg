@@ -22,7 +22,6 @@ describe('rule: each hero uses its skill once per turn', () => {
   it('rejects a second use by the same hero, but not a different hero', () => {
     const G = freshG();
     const me = G.players['0'];
-    me.souls = 9; // enough to pay the 1-soul skill cost twice over
     const enemy = G.players['1'];
     // Aggro deck heroes: [haze (passive), vindicta (passive), lash (skill), paige (skill)].
     // Pick the two skill heroes — Lash + Paige — for this per-turn-cap test.
@@ -53,19 +52,19 @@ describe('rule: each hero uses its skill once per turn', () => {
     c.moves.endTurn?.();
     g = c.getState()!.G as GameState;
     expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(false);
-    // P0's next turn: Lash casts again.
+    // P0's next turn: Lash casts again (its cooldown of 1 has run out at the turn start).
     c.moves.endTurn?.();
     g = c.getState()!.G as GameState;
     const soulsBefore = g.players['0'].souls;
     (c.moves as any).useSkill(hero.iid, g.players['1'].active!.iid);
     g = c.getState()!.G as GameState;
     expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(true);
-    expect(g.players['0'].souls).toBe(soulsBefore - 1);
+    expect(g.players['0'].souls).toBe(soulsBefore);
   });
 });
 
-describe('rule: skills cost 1 soul', () => {
-  it('useSkill spends 1 soul on success', () => {
+describe('rule: abilities are free', () => {
+  it('useSkill spends no souls', () => {
     const G = freshG();
     const me = G.players['0'];
     me.souls = 3;
@@ -73,18 +72,18 @@ describe('rule: skills cost 1 soul', () => {
     const target = G.players['1'].active!;
     const r = runMove('useSkill', G, '0', hero.iid, target.iid);
     expect(r).not.toBe('INVALID_MOVE');
-    expect(me.souls).toBe(2);
+    expect(me.souls).toBe(3);
   });
 
-  it('useSkill is INVALID_MOVE when souls < 1', () => {
+  it('useSkill needs no souls at all', () => {
     const G = freshG();
     const me = G.players['0'];
     me.souls = 0;
     const hero = me.bench[1]!;  // Lash
     const target = G.players['1'].active!;
     const r = runMove('useSkill', G, '0', hero.iid, target.iid);
-    expect(r).toBe('INVALID_MOVE');
-    expect(hero.skillUsedThisTurn).toBe(false);
+    expect(r).not.toBe('INVALID_MOVE');
+    expect(hero.skillUsedThisTurn).toBe(true);
     expect(me.souls).toBe(0);
   });
 });
@@ -189,56 +188,39 @@ describe('rule: hero respawn after KO', () => {
 });
 
 // ============================================================================
-// Ultimate unlock at turn 5
+// The ultimate: a kit ability, unlocked at Level 2
 // ============================================================================
-describe('rule: a hero earns its ultimate at Level 2', () => {
+describe('rule: a hero unlocks its ultimate at Level 2', () => {
   // Drive the engine's turn.onBegin directly: it's the same handler the
-  // client invokes, but bypassing the client lets us prime an empty hand so
-  // the unlock isn't gated by MAX_HAND from passive draws.
+  // client invokes.
   function runOnBegin(G: GameState, turn: number, pid: PlayerID) {
     const onBegin = (DeadlockGame.turn as any).onBegin;
     onBegin({ G, ctx: { turn, currentPlayer: pid, numPlayers: 2 } as any, events: {} as any, random: {} as any });
   }
 
-  it('no ult enters hand while every hero is Level 1, however late the turn', () => {
-    const G = freshG();
-    G.players['0'].hand = [];
-    for (let t = 1; t < 12; t += 2) {
-      runOnBegin(G, t, '0');
-      expect(G.players['0'].hand.filter((c) => c.cardId.startsWith('ult_')).length).toBe(0);
-      G.players['0'].hand = [];
-    }
-  });
-
-  it('every ult a hero has earned (Level 2) is dealt at the start of a turn', () => {
+  it('no ultimate is ever a card in hand, however late the turn or high the level', () => {
     const G = freshG();
     G.players['0'].hand = [];
     for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
-    runOnBegin(G, 3, '0');
-    const ultsInHand = new Set(G.players['0'].hand.filter((c) => c.cardId.startsWith('ult_')).map((c) => c.cardId));
-    // Aggro deck heroes: Haze, Vindicta, Lash, Paige → their ults.
-    for (const ult of ['ult_haze', 'ult_vindicta', 'ult_lash', 'ult_paige']) {
-      expect(ultsInHand.has(ult)).toBe(true);
+    for (let t = 2; t < 12; t += 2) {
+      runOnBegin(G, t, '0');
+      expect(G.players['0'].hand.filter((c) => c.cardId.startsWith('ult_')).length).toBe(0);
     }
   });
 
-  it('an ult held back by a full hand is dealt at a later turn start (not consumed)', () => {
+  it('every hero at Level 2 may use its ultimate, free, through useSkill', () => {
     const G = freshG();
-    // Fill the hand so no ult fits.
-    while (G.players['0'].hand.length < 7) {
-      G.players['0'].hand.push({
-        iid: `fill-${G.players['0'].hand.length}`, cardId: 'healing_rite',
-        ownerId: '0', zone: 'hand', hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
-        statuses: [], exhausted: false, skillUsedThisTurn: false,
-      } as any);
-    }
-    G.players['0'].active!.level = 2;
-    runOnBegin(G, 3, '0');
-    expect(G.players['0'].ultsConsumed.length).toBe(0);
-    // Empty hand and retry next turn — the ult should still be deliverable.
-    G.players['0'].hand = [];
-    runOnBegin(G, 5, '0');
-    expect(G.players['0'].ultsConsumed.length).toBeGreaterThan(0);
+    G.players['0'].souls = 0;
+    for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
+    // Nobody on the other side falls (a kill would pay a bounty).
+    for (const h of [G.players['1'].active, ...G.players['1'].bench]) if (h) h.hp = h.hpMax = 50;
+    // Aggro deck heroes: Haze, Vindicta, Lash, Paige → their ultimates (Vindicta's needs a target).
+    const [haze, vindicta, lash, paige] = [G.players['0'].active!, ...G.players['0'].bench] as NonNullable<typeof G.players['0']['active']>[];
+    expect(runMove('useSkill', G, '0', haze.iid, undefined, 'eff_ult_haze')).not.toBe('INVALID_MOVE');
+    expect(runMove('useSkill', G, '0', vindicta.iid, G.players['1'].active!.iid, 'eff_ult_vindicta')).not.toBe('INVALID_MOVE');
+    expect(runMove('useSkill', G, '0', lash.iid, undefined, 'eff_ult_lash')).not.toBe('INVALID_MOVE');
+    expect(runMove('useSkill', G, '0', paige.iid, undefined, 'eff_ult_paige')).not.toBe('INVALID_MOVE');
+    expect(G.players['0'].souls).toBe(0);
   });
 });
 

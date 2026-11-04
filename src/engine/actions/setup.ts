@@ -10,8 +10,8 @@ import { getAIDeckTagged } from '@/decks/aiDecks';
 import { allocatorFor, allocatorOf, newCounters, type IidAllocator } from '../ids';
 import { makeInstance } from '../deckOps';
 import { pushLog } from '../log';
+import { otherPlayer } from '../query';
 import { INITIAL_DRAW, PATRON_HP, SOULS_START } from '../constants';
-import { soulRefillForTurn } from './turn';
 
 /** Empty PlayerState used while the pre-match draft is running — no heroes,
  *  no deck. Replaced via `buildPlayer()` once the 8th draft pick lands. */
@@ -26,13 +26,21 @@ function makeEmptyPlayer(pid: PlayerID): PlayerState {
     active: null,
     bench: [null, null, null],
     discard: [],
-    ultsConsumed: [],
   };
 }
 
 /** Snake draft order for 4 picks per player (8 total).
- *  P0 picks at indexes 0, 3, 4, 7; P1 picks at 1, 2, 5, 6. */
+ *  P0 picks at indexes 0, 3, 4, 7; P1 picks at 1, 2, 5, 6. The pie rule: the
+ *  seat that drafts first moves second, so seat 1 takes the first turn — and
+ *  seat 0's last pick ends the draft's turn and hands it over. */
 const DRAFT_ORDER: PlayerID[] = ['0', '1', '1', '0', '0', '1', '1', '0'];
+
+/** The seat a person plays, from the match config: seat 0 unless the config
+ *  says otherwise (null: the AI plays both seats). */
+function humanSeat(): PlayerID | null {
+  const seat = getMatchConfig().humanSeat;
+  return seat === undefined ? '0' : seat;
+}
 
 function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -103,7 +111,6 @@ export function buildPlayer(ids: IidAllocator, pid: PlayerID, heroes: string[], 
     active,
     bench,
     discard: [],
-    ultsConsumed: [],
   };
 }
 
@@ -127,7 +134,10 @@ function applyHeroStats(ps: PlayerState, stats?: (HeroStatOverride | undefined)[
 
 /** The opening state of a game: a pre-match draft, or — for a scripted match
  *  (a Story node or tutorial lesson) — both players built straight from the
- *  given roster and deck. */
+ *  given roster and deck. A drafted match's first mover is the seat that drafts
+ *  second; a scripted one opens on seat 0's turn, so its first mover is set
+ *  to make that turn seat 0's: seat 0 on an odd opening turn, seat 1 on an
+ *  even one (seat 0 is then the second mover, as in a drafted match). */
 export function setupGame(): GameState {
   const counters = newCounters();
   // Scripted match (Story node or tutorial lesson): skip the draft entirely
@@ -137,22 +147,25 @@ export function setupGame(): GameState {
 
   if (story) {
     const ids = allocatorFor(counters);
-    // A lesson may open mid-match: the turn counter starts at `startTurn`,
-    // so the first refill and the ultimate unlock see the right turn.
+    // A lesson may open mid-match: the turn counter starts at `startTurn`
+    // (from turn 2 on the first turn has its attack).
     const startTurn = Math.max(1, Math.floor(story.startTurn ?? 1));
     const G: GameState = {
       counters,
       players: {
         '0': buildPlayer(ids, '0', story.playerHeroes, story.playerDeck, { patronHp: story.patronHp, ordered: story.orderedPlayerDeck }),
-        '1': buildPlayer(ids, '1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.patronHp }),
+        '1': buildPlayer(ids, '1', story.enemyHeroes, story.enemyDeck, { buff: story.enemyBuff, patronHp: story.enemyPatronHp ?? story.patronHp }),
       },
       turnNumber: startTurn,
+      firstMover: startTurn % 2 === 1 ? '0' : '1',
+      humanSeat: humanSeat(),
       log: [{ turn: startTurn, text: 'Battle begins.' }],
       draft: null,
       // realTurn = ctx.turn - offset, and ctx.turn starts at 1.
       draftTurnsOffset: 1 - startTurn,
       mulliganPending: false,
       attackUsed: false,
+      retreatUsed: false,
       action: null,
       fx: [],
     };
@@ -171,8 +184,11 @@ export function setupGame(): GameState {
       '0': makeEmptyPlayer('0'),
       '1': makeEmptyPlayer('1'),
     },
-    turnNumber: 1,
-    log: [{ turn: 1, text: 'Draft begins.' }],
+    // The draft comes before the match's first turn: engine turn 0.
+    turnNumber: 0,
+    firstMover: otherPlayer(DRAFT_ORDER[0]),
+    humanSeat: humanSeat(),
+    log: [{ turn: 0, text: 'Draft begins.' }],
     draft: {
       pool: HEROES.map((h) => h.id),
       order: [...DRAFT_ORDER],
@@ -182,6 +198,7 @@ export function setupGame(): GameState {
     draftTurnsOffset: 0,  // set in draftPick when draft completes
     mulliganPending: false,
     attackUsed: false,
+    retreatUsed: false,
     action: null,
     fx: [],
   };
@@ -191,9 +208,10 @@ export function setupGame(): GameState {
  * Pre-match hero draft pick (`draftPickBlocked` has checked it is the player's
  * pick from the pool). Removes the hero from the pool and says whether the
  * boardgame.io turn ends — when the next pick belongs to the other player —
- * or stays (consecutive snake picks). On the final pick, finalizes both
- * players' PlayerStates with the drafted heroes and flips `mulliganPending`
- * so the MulliganOverlay takes over.
+ * or stays (consecutive snake picks). The final pick builds both players from
+ * the drafted heroes and always ends the draft's turn: the next boardgame.io
+ * turn is the first mover's (seat 0 picks last, seat 1 moves first), and it
+ * opens as engine turn 1 with a real `beginTurn` — income, ticks and all.
  */
 export function draftPick(G: GameState, ctx: { currentPlayer: string; turn: number }, heroId: string): { endTurn: boolean } {
   const draft = G.draft!;
@@ -220,12 +238,11 @@ export function draftPick(G: GameState, ctx: { currentPlayer: string; turn: numb
     G.players['1'].archetype = aiTag.archetype;
     G.draft = null;
     G.mulliganPending = false;
-    G.draftTurnsOffset = ctx.turn - 1;
-    G.turnNumber = 1;
-    const currentPs = G.players[ctx.currentPlayer as PlayerID];
-    currentPs.souls = soulRefillForTurn(1);
+    // The draft's turn ends now; the next boardgame.io turn is engine turn 1.
+    // Until it begins the match is still at turn 0 (no turn's end to run).
+    G.draftTurnsOffset = ctx.turn;
     pushLog(G, 'Match begins.');
-    return { endTurn: ctx.currentPlayer !== '0' };
+    return { endTurn: true };
   }
 
   return { endTurn: draft.order[draft.currentIndex] !== ctx.currentPlayer };

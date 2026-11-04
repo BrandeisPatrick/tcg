@@ -64,8 +64,8 @@ const cases: Case[] = [
     damageToActive: 9, patronDamage: 0, ko: false,
   },
   {
-    name: 'Haze: Fixation grants one follow-up swing after her primary',
-    build: () => board('hero_haze').G,
+    name: 'Haze from Level 3: Fixation grants one follow-up swing after her primary',
+    build: () => { const { G, attacker } = board('hero_haze'); attacker.level = 3; return G; },
     steps: [
       { rawDamage: 3, finalDamage: 3, predictedHpAfter: 37, bonusLabel: undefined },
       { rawDamage: 3, finalDamage: 3, predictedHpAfter: 34, bonusLabel: 'Extra Attack' },
@@ -74,7 +74,7 @@ const cases: Case[] = [
   },
   {
     name: 'Haze at the Extra Attack cap: Fixation cannot raise it, so she swings 7 times, not 8',
-    build: () => { const { G, attacker } = board('hero_haze'); extraAttacks(attacker, 6); return G; },
+    build: () => { const { G, attacker } = board('hero_haze'); attacker.level = 3; extraAttacks(attacker, 6); return G; },
     steps: Array.from({ length: 7 }, (_, i) => ({
       rawDamage: 3, finalDamage: 3, predictedHpAfter: 37 - 3 * i, bonusLabel: i === 0 ? undefined : 'Extra Attack',
     })),
@@ -211,8 +211,7 @@ describe('forecastAttack when there is no attack to make', () => {
   const blocks: [string, () => GameState, string][] = [
     ['a stunned Frenzy bearer (the +3 rides on a swing, it does not make one)', stunnedFrenzy, 'cannot'],
     ['Turn 1', () => { const G = board('hero_dynamo').G; G.turnNumber = 1; return G; }, 'turn1'],
-    ['an Active that has attacked this turn', () => { const { G, attacker } = board('hero_dynamo'); G.attackUsed = true; attacker.attackedThisTurn = true; return G; }, 'used'],
-    ['an Active that used its skill', () => { const { G, attacker } = board('hero_dynamo'); attacker.skillUsedThisTurn = true; return G; }, 'skill'],
+    ['a turn whose attack has been made', () => { const G = board('hero_dynamo').G; G.attackUsed = true; return G; }, 'used'],
     ['no rival Active', () => { const G = board('hero_dynamo').G; G.players['1'].active = null; return G; }, 'noTarget'],
     ['a rival corpse in the lane', () => { const { G, defender } = board('hero_dynamo'); defender.hp = 0; defender.respawnTurnsLeft = 2; return G; }, 'noTarget'],
   ];

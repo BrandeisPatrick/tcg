@@ -89,8 +89,9 @@ export function SidePanel({
                 display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
                 paddingBottom: 3, borderBottom: `1px dashed ${poster.edge}`,
               }}>
-                <span style={eyebrow}>Turn</span>
-                <span style={{ ...heading, fontSize: 14 }}>{g.turn}</span>
+                {/* Turn 0 is the draft, before the match's first turn. */}
+                <span style={eyebrow}>{g.turn > 0 ? 'Turn' : 'Draft'}</span>
+                {g.turn > 0 && <span style={{ ...heading, fontSize: 14 }}>{g.turn}</span>}
               </div>
               {g.entries.map((e, i) => {
                 const c = logEntryColor(e.text);

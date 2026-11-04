@@ -189,7 +189,6 @@ describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
     const rem = makeHero('hero_rem', '0', 'bench', 3);
     theirs.bench[2] = rem;
     const before = standing(G);
-    theirs.souls = 1;
     expect(perform(G, '0', { type: 'useSkill', heroIid: rem.iid, targetIid: foe(G).iid })).not.toBe(INVALID);
     expect(liveBoardCards(theirs).includes(rem)).toBe(false);
     // The rival gained the HP she granted (+1 max HP, 2 a point, so −2 here), not lost a hero.
@@ -236,30 +235,50 @@ describe('AI valuation: control cards and channel ultimates get played', () => {
     });
   }
 
-  it('casts Singularity, a channel, when it can pay for it', () => {
-    const G = holding('ult_dynamo', 9);
-    G.players['1'].active = makeHero('hero_dynamo', '1', 'active', 0);
+  /** P1 whose `hero` (Level 2: its ultimate unlocked) stands in `slot`, nothing in hand and nobody else on the bench. */
+  function unlocked(hero: string, slot: 'active' | 'bench' = 'active') {
+    const G = freshReadyGame();
+    const ai = G.players['1'];
+    ai.bench = [null, null, null];
+    ai.hand = [];
+    ai.souls = 0; // ultimates cost nothing
+    const h = makeHero(hero, '1', slot, slot === 'active' ? 0 : 1);
+    h.level = 2;
+    if (slot === 'active') ai.active = h; else ai.bench[0] = h;
+    return { G, h };
+  }
+  const usesUlt = (G: GameState, h: CardInstance, ult: string) => {
     const best = enumerateAIMoves(G, ctx('1'))[0];
-    expect(best.move).toBe('playCard');
-    expect(best.args[0]).toBe('held');
+    expect(best.move, ult).toBe('useSkill');
+    expect(best.args[0], ult).toBe(h.iid);
+    expect(best.args[2], ult).toBe(ult);
+  };
+
+  it('casts Singularity, a channel, once Dynamo has unlocked it', () => {
+    const { G, h } = unlocked('hero_dynamo');
+    usesUlt(G, h, 'eff_ult_dynamo');
   });
 
   it('casts Storm Cloud and Last Stand too', () => {
-    for (const [ult, hero, souls] of [['ult_seven', 'hero_seven', 8], ['ult_warden', 'hero_warden', 9]] as const) {
-      const G = holding(ult, souls);
-      G.players['1'].active = makeHero(hero, '1', 'active', 0);
-      const best = enumerateAIMoves(G, ctx('1'))[0];
-      expect(best.move, ult).toBe('playCard');
-      expect(best.args[0], ult).toBe('held');
+    for (const [hero, ult] of [['hero_seven', 'eff_ult_seven'], ['hero_warden', 'eff_ult_warden']] as const) {
+      const { G, h } = unlocked(hero);
+      usesUlt(G, h, ult);
     }
   });
 
-  it('casts Naptime (a Sleep with a wake-up burst) and Eternal Night (two Silences)', () => {
-    for (const [ult, souls] of [['ult_rem', 7], ['ult_drifter', 8]] as const) {
-      const best = enumerateAIMoves(holding(ult, souls), ctx('1'))[0];
-      expect(best.move, ult).toBe('playCard');
-      expect(best.args[0], ult).toBe('held');
-    }
+  it('casts Naptime (a Sleep with a wake-up burst, from the bench) and Eternal Night (two Silences)', () => {
+    const rem = unlocked('hero_rem', 'bench');
+    usesUlt(rem.G, rem.h, 'eff_ult_rem');
+    const drifter = unlocked('hero_drifter');
+    usesUlt(drifter.G, drifter.h, 'eff_ult_drifter');
+  });
+
+  it('uses an ultimate it has borrowed (Sinclair\'s copy), free', () => {
+    const { G, h } = unlocked('hero_sinclair');
+    h.skillUsedThisTurn = false;
+    h.cooldowns = { skill_sinclair: 1, eff_ult_sinclair: 2 }; // nothing else of its own to use
+    h.borrowedUlt = 'eff_ult_lash';
+    usesUlt(G, h, 'eff_ult_lash');
   });
 
   it('still sees lethal first, whatever a status is worth', () => {

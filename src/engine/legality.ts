@@ -17,34 +17,33 @@ import type { AbilityId, CardInstance, GameState, PlayerID } from './types';
 import { CARDS_BY_ID } from '@/cards';
 import type { Action } from './engine';
 import { getAbility } from './registry';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from './constants';
+import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, ULT_UNLOCK_LEVEL } from './constants';
 import {
-  attackPower, findCardOnBoard, hasReach, heroData, isBlocked, isRespawning, isUntargetable, liveBoardCards, otherPlayer,
+  attackPower, findCardOnBoard, hasReach, isBlocked, isRespawning, isUntargetable, kitAbilityIds, liveBoardCards, otherPlayer,
   resolveSkill, retreatDiscount, stepInCandidates, targetsFor, wornEquipment,
 } from './query';
 
 // ---------- The Active's attack ----------
 
-/** The first player forgoes first strike: Turn 1 has no attack. One rule,
- *  read by the attack gate and the board, so they cannot drift apart. */
+/** The first mover forgoes first strike: Turn 1 (the engine's first, the
+ *  first mover's own turn 1) has no attack. One rule, read by the attack gate
+ *  and the board, so they cannot drift apart. */
 export function attackTurn(G: GameState): boolean {
   return (G.turnNumber ?? 1) > 1;
 }
 
 /** Why a player's Active cannot attack. */
-export type AttackBlock = 'turn1' | 'used' | 'skill' | 'noActive' | 'cannot' | 'noTarget' | 'target';
+export type AttackBlock = 'turn1' | 'used' | 'noActive' | 'cannot' | 'noTarget' | 'target';
 
 /** The reasons that stop the Active attacking whatever it aims at — the ones
  *  about the attacker and the turn, in the order `attackBlocked` checks them.
- *  Attacks are per hero: the gate asks whether THIS hero has swung this turn
- *  (`attackedThisTurn`, which it keeps on the bench), not whether anyone has
- *  (`G.attackUsed`). */
-function attackerBlock(G: GameState, pid: PlayerID): 'turn1' | 'used' | 'noActive' | 'skill' | null {
+ *  A player makes one attack a turn (`G.attackUsed`), whoever stands in the
+ *  Active slot; a hero that used its ability this turn may still make it. */
+function attackerBlock(G: GameState, pid: PlayerID): 'turn1' | 'used' | 'noActive' | null {
   if (!attackTurn(G)) return 'turn1';
+  if (G.attackUsed) return 'used';
   const active = G.players[pid].active;
-  if (active?.attackedThisTurn && !isRespawning(active)) return 'used';
   if (!active || isRespawning(active)) return 'noActive';
-  if (active.skillUsedThisTurn) return 'skill';
   return null;
 }
 
@@ -79,18 +78,15 @@ export function attackTargets(G: GameState, pid: PlayerID): CardInstance[] {
 
 /** Why `pid`'s Active cannot attack right now, or null when it can. One gate,
  *  read by the `attack` move, the forecast, the AI and the board, so they cannot
- *  drift apart. Every hero may attack once a turn while it stands in the Active
- *  slot: attack, Retreat a fresh hero in, and it may attack too. `targetIid`
- *  names who is to be swung at; left out, it is the first of `attackTargets`
- *  (the rival Active, unless the hero has reach). Checked in this order:
- *   - 'turn1'    Turn 1 has no attack (the first player forgoes first strike).
- *   - 'used'     this Active has attacked this turn. It keeps the flag on the
- *                bench, so a hero that swung, retreated and came back cannot
- *                swing again; the hero it swapped with still can.
+ *  drift apart. A player makes one basic attack a turn, from whoever stands in
+ *  the Active slot when it is made — a Retreat before it lets the hero who steps
+ *  in make it — and the attack ends the turn's Act. `targetIid` names who is to
+ *  be swung at; left out, it is the first of `attackTargets` (the rival Active,
+ *  unless the hero has reach). Checked in this order:
+ *   - 'turn1'    Turn 1 has no attack (the first mover forgoes first strike).
+ *   - 'used'     the turn's attack has been made (`G.attackUsed`).
  *   - 'noActive' there is no living Active. A fallen one is replaced first —
- *                the hero who steps up has an attack of its own.
- *   - 'skill'    the Active used its skill this turn; a hero does one or the
- *                other.
+ *                the hero who steps up may make the attack.
  *   - 'noTarget' there is no legal target: the rival has no living Active to
  *                swing at (or, with reach, no living hero), or all of them are
  *                untargetable (a Dome).
@@ -111,14 +107,15 @@ export function attackBlocked(G: GameState, pid: PlayerID, targetIid?: string): 
   return null;
 }
 
-// ---------- Hero skills ----------
+// ---------- Hero abilities: skills and ultimates ----------
 
-export type SkillBlock = 'noSkill' | 'down' | 'used' | 'attacked' | 'status' | 'cooldown' | 'hp' | 'souls' | 'target';
+export type SkillBlock = 'noSkill' | 'actOver' | 'down' | 'locked' | 'used' | 'status' | 'cooldown' | 'hp' | 'target';
 
-/** What one of a hero's skills may be aimed at (`skillId` names it; left out,
- *  the hero's first): the live board cards its filter allows (minus the
- *  caster, for a skill that says `excludeSelf`), or 'none' for a skill that
- *  takes no target. No such skill gives []. */
+/** What one of a hero's kit abilities may be aimed at (`skillId` names it —
+ *  a skill, its ultimate or a borrowed ultimate; left out, the hero's first
+ *  skill): the live board cards its filter allows (minus the caster, for an
+ *  ability that says `excludeSelf`), or 'none' for one that takes no target.
+ *  No such ability gives []. */
 export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, skillId?: AbilityId): CardInstance[] | 'none' {
   const skill = resolveSkill(hero, skillId);
   if (!skill) return [];
@@ -129,38 +126,38 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
 }
 
 /**
- * Why `hero` cannot use one of its skills right now, or null when it can: a
- * hero with that skill (`skillId`; left out, its first), alive, that has not
- * used a skill this turn (one skill per hero per turn) nor attacked this turn,
- * free of the statuses that lock it, with the skill off cooldown, a
- * soul to pay with, and a legal target. Whose turn it is, is the caller's
- * question. Checked in this order:
- *  - 'noSkill'  the hero has no skills, or not the one named.
+ * Why `hero` cannot use one of its kit abilities right now, or null when it
+ * can: a hero with that ability (`skillId`: a skill, its ultimate or a borrowed
+ * ultimate; left out, its first skill), in a turn whose attack has not ended
+ * the Act, alive, its ultimate unlocked, that has not used an ability this turn
+ * (one per hero per turn, skill and ultimate alike), free of the statuses that
+ * lock it, with the ability off cooldown and a legal target. Abilities cost no
+ * souls. Whose turn it is, is the caller's question. Checked in this order:
+ *  - 'noSkill'  the hero has no such ability.
+ *  - 'actOver'  the turn's attack has been made: it ends the Act.
  *  - 'down'     it is a corpse on the respawn timer.
- *  - 'used'     it has used a skill this turn (either of its two).
- *  - 'attacked' it attacked this turn (from the Active slot; it keeps the flag
- *               on the bench).
- *  - 'status'   a status locks its skills (`isBlocked(hero, 'skill')`).
- *  - 'cooldown' this skill is still cooling down (`hero.cooldowns`).
- *  - 'hp'       the skill costs HP (`hpCost`) and the hero does not have more
+ *  - 'locked'   it is the hero's ultimate and the hero is below ULT_UNLOCK_LEVEL.
+ *  - 'used'     it has used an ability this turn (any of its kit).
+ *  - 'status'   a status locks its abilities (`isBlocked(hero, 'skill')`).
+ *  - 'cooldown' this ability is still cooling down (`hero.cooldowns`).
+ *  - 'hp'       the ability costs HP (`hpCost`) and the hero does not have more
  *               than that: it can pay what it has left, never its last.
- *  - 'souls'    the player has fewer than SKILL_COST souls.
  *  - 'target'   there is nothing legal to aim it at — or `targetIid` is not.
  *
- * With `targetIid` given, that card must be one the skill may be aimed at
- * (`noTarget` skills ignore it). Without it, the question is whether the skill
+ * With `targetIid` given, that card must be one the ability may be aimed at
+ * (`noTarget` abilities ignore it). Without it, the question is whether it
  * could be used on SOME legal target.
  */
 export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, targetIid?: string, skillId?: AbilityId): SkillBlock | null {
   const skill = resolveSkill(hero, skillId);
   if (!skill) return 'noSkill';
+  if (G.attackUsed) return 'actOver';
   if (isRespawning(hero)) return 'down';
+  if (skill.kind === 'ult' && (hero.level ?? 1) < ULT_UNLOCK_LEVEL) return 'locked';
   if (hero.skillUsedThisTurn) return 'used';
-  if (hero.attackedThisTurn) return 'attacked';
   if (isBlocked(hero, 'skill')) return 'status';
   if ((hero.cooldowns?.[skill.id] ?? 0) > 0) return 'cooldown';
   if (skill.ability.hpCost && hero.hp <= skill.ability.hpCost) return 'hp';
-  if (G.players[pid].souls < SKILL_COST) return 'souls';
   const targets = skillTargets(G, pid, hero, skill.id);
   if (targets === 'none') return null;
   if (targetIid === undefined) return targets.length > 0 ? null : 'target';
@@ -169,43 +166,36 @@ export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, ta
 
 // ---------- Playing a card ----------
 
-export type PlayBlock = 'notInHand' | 'souls' | 'target' | 'duplicate' | 'full' | 'discard';
+export type PlayBlock = 'notInHand' | 'actOver' | 'souls' | 'target' | 'duplicate' | 'full' | 'discard';
 
-/** Souls a card costs to play: the instance's own override first (Sinclair's
- *  free copied ultimate), else its printed cost. Heroes are never played. */
+/** Souls a card costs to play: the instance's own override first, else its
+ *  printed cost. Heroes and ultimates are never played. */
 export function cardCost(card: CardInstance): number {
   const data = CARDS_BY_ID[card.cardId];
-  if (data?.type === 'spell' || data?.type === 'equipment' || data?.type === 'ultimate') {
+  if (data?.type === 'spell' || data?.type === 'equipment') {
     return card.costOverride ?? data.cost ?? 0;
   }
   return 0;
 }
 
-/** The hero an ultimate belongs to, if it is alive on `pid`'s board. */
-function linkedHero(G: GameState, pid: PlayerID, ultCardId: string): CardInstance | undefined {
-  const linkedId = (CARDS_BY_ID[ultCardId] as { linkedHero?: string } | undefined)?.linkedHero;
-  return liveBoardCards(G.players[pid]).find((c) => c.cardId === linkedId);
-}
-
 /** What a card in hand may be aimed at, or 'none' when there is nothing to
- *  aim: a spell or ultimate that takes no target, or a self-cast ultimate
- *  (Yamato's), which the engine lands on its own hero. Equipment goes on one
- *  of your living heroes. Anything else has no targets. */
+ *  aim: a spell that takes no target. Equipment goes on one of your living
+ *  heroes. Anything else (an ultimate card is never held) has no targets. */
 export function playTargets(G: GameState, pid: PlayerID, card: CardInstance): CardInstance[] | 'none' {
   const data = CARDS_BY_ID[card.cardId];
   if (data?.type === 'equipment') return targetsFor(G, pid, 'allyHero');
-  if (data?.type !== 'spell' && data?.type !== 'ultimate') return [];
+  if (data?.type !== 'spell') return [];
   const filter = getAbility(data.abilities[0])?.target ?? 'noTarget';
-  if (filter === 'noTarget' || (data.type === 'ultimate' && filter === 'self')) return 'none';
+  if (filter === 'noTarget') return 'none';
   return targetsFor(G, pid, filter);
 }
 
 /**
  * Why `pid` cannot play `cardIid` right now, or null when they can. In hand,
- * paid for, and aimed at something legal:
- *  - a spell or ultimate takes the target its first ability's filter allows
- *    (a self-cast ultimate lands on its own living hero; a card that takes no
- *    target ignores one);
+ * before the turn's attack has ended the Act, paid for, and aimed at something
+ * legal:
+ *  - a spell takes the target its first ability's filter allows (a card that
+ *    takes no target ignores one);
  *  - equipment goes on one of your living heroes ('target'), not one that
  *    already wears it ('duplicate'), and a hero at the cap needs a worn item
  *    named to discard — 'full' when none is named, 'discard' when it is not
@@ -220,15 +210,13 @@ export function playBlocked(
   const card = G.players[pid].hand.find((c) => c.iid === cardIid);
   const data = card && CARDS_BY_ID[card.cardId];
   if (!card || !data) return 'notInHand';
+  if (G.attackUsed) return 'actOver';
   if (G.players[pid].souls < cardCost(card)) return 'souls';
 
-  if (data.type === 'spell' || data.type === 'ultimate') {
+  if (data.type === 'spell') {
     const filter = getAbility(data.abilities[0])?.target ?? 'noTarget';
     if (filter === 'noTarget') return null;
-    // A self-cast ultimate is aimed at its own living hero, which is also what
-    // an omitted target resolves to; with that hero down there is nowhere to land.
-    const source = data.type === 'ultimate' ? linkedHero(G, pid, card.cardId) : undefined;
-    const targets = targetsFor(G, pid, filter, source);
+    const targets = targetsFor(G, pid, filter);
     if (targetIid === undefined) return targets.length > 0 ? null : 'target';
     return targets.some((t) => t.iid === targetIid) ? null : 'target';
   }
@@ -251,7 +239,7 @@ export function playBlocked(
     return null;
   }
 
-  return 'target'; // a hero card has nothing to aim at and nowhere to go
+  return 'target'; // a hero or an ultimate card has nothing to aim at and nowhere to go
 }
 
 // ---------- Moving heroes ----------
@@ -271,23 +259,25 @@ export function retreatCost(G: GameState, pid: PlayerID): number {
   return Math.max(0, RETREAT_COST - retreatDiscount(leaving));
 }
 
-export type MoveBlock = 'same' | 'empty' | 'benchOnly' | 'down' | 'rooted' | 'souls' | 'illegal';
+export type MoveBlock = 'same' | 'actOver' | 'empty' | 'benchOnly' | 'down' | 'rooted' | 'retreated' | 'souls' | 'illegal';
 
 /** Why `pid` cannot swap the heroes in two slots (0 = Active, 1..3 = bench),
- *  or null when they can. A swap trades two OCCUPIED slots: a hole is nobody to
- *  trade with (the Active walking into a hole would leave the lane empty), and
- *  slots outside 0..3 are no slots. A bench-only hero (Rem) never takes the
- *  Active slot, whichever side of the swap she is on. Swapping the Active with a
- *  bench hero is a Retreat: both must be alive, neither may be Rooted (a status
- *  that blocks 'move', on either side of the swap), and it costs `retreatCost`
- *  souls. Bench-to-bench swaps are free, and a Rooted hero may still be moved
- *  between bench slots. A Retreat may come after the Active's attack: the hero
- *  who steps in may attack too. (The forced promotion of a fallen Active is not
- *  a swap: `promoteBlocked`.) */
+ *  or null when they can. Nothing moves once the turn's attack has ended the
+ *  Act. A swap trades two OCCUPIED slots: a hole is nobody to trade with (the
+ *  Active walking into a hole would leave the lane empty), and slots outside
+ *  0..3 are no slots. A bench-only hero (Rem) never takes the Active slot,
+ *  whichever side of the swap she is on. Swapping the Active with a bench hero
+ *  is a Retreat: both must be alive, neither may be Rooted (a status that
+ *  blocks 'move', on either side of the swap), the player has not retreated
+ *  this turn (one a turn), and it costs `retreatCost` souls. Bench-to-bench
+ *  swaps are free, and a Rooted hero may still be moved between bench slots. A
+ *  Retreat comes before the attack: the hero who steps in may make it. (The
+ *  forced promotion of a fallen Active is not a swap: `promoteBlocked`.) */
 export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlot: number): MoveBlock | null {
   const isSlot = (s: number) => s === 0 || s === 1 || s === 2 || s === 3;
   if (!isSlot(fromSlot) || !isSlot(toSlot)) return 'illegal';
   if (fromSlot === toSlot) return 'same';
+  if (G.attackUsed) return 'actOver';
   const ps = G.players[pid];
   const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
   const a = get(fromSlot);
@@ -299,6 +289,7 @@ export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlo
     if (data?.type === 'hero' && data.flags?.benchOnly) return 'benchOnly';
     if (isRespawning(a) || isRespawning(b)) return 'down';
     if (isBlocked(a, 'move') || isBlocked(b, 'move')) return 'rooted';
+    if (G.retreatUsed) return 'retreated';
     if (ps.souls < retreatCost(G, pid)) return 'souls';
   }
   return null;
@@ -346,13 +337,14 @@ export function mulliganBlocked(G: GameState): 'noMulligan' | null {
 
 /** Why `a` cannot be made by `pid` right now, or null when it can — the
  *  dispatch `perform` runs before it mutates anything. An action must name a
- *  target whenever the skill or card takes one (the per-move functions above
+ *  target whenever the ability or card takes one (the per-move functions above
  *  also answer the looser "is there some target" when it is left off).
  *
  *  While a promotion is owed (`G.pendingPromotion`: a seat's Active has fallen
  *  and a bench hero can step up) the only legal action is that promotion — for
  *  that seat's bench, made from either seat — so nothing, the end of the turn
- *  included, happens around a corpse in the lane. */
+ *  included, happens around a corpse in the lane. Once the turn's attack is
+ *  made ('actOver') nothing is legal but ending the turn and a promotion. */
 export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   if (!G.players[pid]) return 'noPlayer';
   if (G.pendingPromotion) {
@@ -360,6 +352,7 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
     const owed = G.players[G.pendingPromotion].bench.some((b) => b != null && b.iid === a.benchIid);
     if (!owed) return 'promotionOwed';
   }
+  if (G.attackUsed && a.type !== 'endTurn' && a.type !== 'promoteToActive' && a.type !== 'attack') return 'actOver';
   switch (a.type) {
     case 'attack':
       return G.draft ? 'draft' : attackBlocked(G, pid, a.targetIid);
@@ -391,13 +384,14 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
  * action (a bare `attack` swings at it) and any others naming theirs; each
  * card in hand, in hand order, on each of its legal targets in `targetsFor`
  * order (equipment on a hero at the cap is offered once per item it could
- * discard — the choice of which is the player's); each living hero's skills, in
- * board order and the hero's own order of skills, each on each of its targets
- * (every action names its `skillId`); retreats from the bench in
- * `stepInCandidates` order, after the attack as before it (the hero who steps
- * in may attack too); promotions (either seat's: `pid` may promote the seat
- * that owes one); and ending the turn last. Everything listed passes
- * `blocked`, so while a promotion is owed that is all there is.
+ * discard — the choice of which is the player's); each living hero's kit
+ * abilities (`kitAbilityIds`: its skills, its ultimate, a borrowed ultimate), in
+ * board order and the kit's own order, each on each of its targets (every
+ * action names its `skillId`); retreats from the bench in `stepInCandidates`
+ * order (before the attack: the hero who steps in may make it); promotions
+ * (either seat's: `pid` may promote the seat that owes one); and ending the turn
+ * last. Everything listed passes `blocked`, so while a promotion is owed that is
+ * all there is, and once the attack is made only the end of the turn is left.
  */
 export function legalActions(G: GameState, pid: PlayerID): Action[] {
   const ps = G.players[pid];
@@ -421,7 +415,7 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
   }
 
   for (const hero of liveBoardCards(ps)) {
-    for (const skillId of heroData(hero)?.skills ?? []) {
+    for (const skillId of kitAbilityIds(hero)) {
       const targets = skillTargets(G, pid, hero, skillId);
       if (targets === 'none') { offer({ type: 'useSkill', heroIid: hero.iid, skillId }); continue; }
       for (const t of targets) offer({ type: 'useSkill', heroIid: hero.iid, skillId, targetIid: t.iid });

@@ -15,7 +15,7 @@ import { chaosMove } from './driver';
 import { moveTags, signatureOf, type Hit } from './hits';
 import {
   attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, diffPaths, filterForHandCard, filterForSkill,
-  retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf, targetLegal,
+  firstSkillOf, retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf, targetLegal, ultLocked,
 } from './oracle';
 import type { TargetFilter } from '@/abilities';
 
@@ -85,18 +85,21 @@ export function probeLegality(
   }
 
   // While a promotion is owed the engine refuses everything else (section F); the rest of
-  // the probes ask about moves in an ordinary position.
+  // the probes ask about moves in an ordinary position. Once the turn's attack is made the
+  // Act is over and only ending the turn is left: B and E check that refusal, D skips it.
   const owed = G.pendingPromotion !== undefined;
+  const actOver = G.attackUsed;
 
   // ---------------------------------------------------------------- B: skillBlocked <=> useSkill
-  // Each skill of each hero on its own. The move is useSkill(hero, target?, skill?): the
-  // hero's first skill is the default and goes unnamed, any other is named.
+  // Each kit ability of each hero on its own (its skills, its ultimate, a borrowed ultimate).
+  // The move is useSkill(hero, target?, skill?): the hero's first skill is the default and
+  // goes unnamed, any other ability is named.
   const enemy = G.players[otherPlayer(pid)];
   const liveTargets = [...liveBoardCards(enemy), ...liveBoardCards(me)];
   for (const hero of owed ? [] : boardOf(me)) {
     const skillIds = skillIdsOf(hero);
     for (const skillId of skillIds) {
-      const named = (args: unknown[]) => (skillId === skillIds[0] ? args : [args[0], args[1], skillId]);
+      const named = (args: unknown[]) => (skillId === firstSkillOf(hero) ? args : [args[0], args[1], skillId]);
       const ui = skillBlocked(G, pid, hero, undefined, skillId) === null;
       const filter = filterForSkill(hero, skillId);
       let candidates: unknown[][] = [];
@@ -116,10 +119,17 @@ export function probeLegality(
         add('skill-gate', 'useSkill', named([hero.iid]), `skillBlocked says ${hero.cardId}#${hero.iid} is blocked from ${skillId} (${why}) but useSkill succeeds`,
           [`reason:ui-blocks-${why}`]);
       }
-      // A skill that is cooling down is never usable, whatever else is open — the rules
-      // say so on their own, so this holds even if the gate and the engine both forgot it.
+      // An ability that is cooling down, a locked ultimate, or any ability once the Act is
+      // over, is never usable, whatever else is open — the rules say so on their own, so
+      // this holds even if the gate and the engine both forgot it.
       if (eng && skillCooling(hero, skillId)) {
         add('skill-cooldown', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid} has ${skillId} cooling down (${hero.cooldowns?.[skillId]}) but useSkill succeeds`);
+      }
+      if (eng && ultLocked(hero, skillId)) {
+        add('ult-locked', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid} is level ${hero.level ?? 1} but its ultimate ${skillId} is accepted`);
+      }
+      if (eng && actOver) {
+        add('act-over', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid}'s ${skillId} is accepted after the turn's attack`);
       }
     }
   }
@@ -142,12 +152,12 @@ export function probeLegality(
   for (const h of boardOf(me)) {
     for (const skillId of skillIdsOf(h)) {
       const b = skillBlocked(G, pid, h, undefined, skillId);
-      if (filterForSkill(h, skillId) && (b === null || b === 'souls')) sources.push({ kind: 'skill', card: h, skillId });
+      if (filterForSkill(h, skillId) && b === null) sources.push({ kind: 'skill', card: h, skillId });
     }
   }
   for (const c of me.hand) if (filterForHandCard(c)) sources.push({ kind: 'card', card: c });
   const targets: (CardInstance | Ghost | undefined)[] = [undefined, 'ghost', ...boardUnits(G)];
-  for (let n = 0; n < opts.targetCombos && sources.length && !owed; n++) {
+  for (let n = 0; n < opts.targetCombos && sources.length && !owed && !actOver; n++) {
     const src = pickOne(sources, rnd);
     const tgt = pickOne(targets, rnd);
     const filter = src.kind === 'skill' ? filterForSkill(src.card, src.skillId)! : filterForHandCard(src.card)!;
@@ -160,19 +170,13 @@ export function probeLegality(
         && !!bearer
         && !(bearer.attached ?? []).some((a) => a.cardId === src.card.cardId)
         && (bearer.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment').length < MAX_EQUIPMENT_PER_HERO;
-    } else if (src.kind === 'card' && filter === 'self') {
-      // Yamato's self-cast ultimate: aimed at nothing, it lands on its own living hero; aimed at
-      // that hero it does the same. Nothing else is a legal target.
-      const linkedId = (CARDS_BY_ID[src.card.cardId] as { linkedHero?: string }).linkedHero;
-      const own = boardOf(me).find((c) => c.cardId === linkedId && !isRespawning(c));
-      legal = !!own && (tgt === undefined || (tCard !== undefined && tCard.iid === own.iid));
     } else {
       legal = targetLegal(filter, tCard, src.kind === 'skill' ? src.card : undefined, pid, G)
         && !(src.kind === 'skill' && skillExcludesSelf(src.card, src.skillId) && tCard?.iid === src.card.iid);
     }
     const args = [src.card.iid, tgt === 'ghost' ? 'ghost-iid' : tCard?.iid];
-    // A skill other than the hero's first is named in the move's third argument.
-    if (src.kind === 'skill' && src.skillId !== skillIdsOf(src.card)[0]) args.push(src.skillId);
+    // An ability other than the hero's first skill is named in the move's third argument.
+    if (src.kind === 'skill' && src.skillId !== firstSkillOf(src.card)) args.push(src.skillId);
     const name = src.kind === 'skill' ? 'useSkill' : 'playCard';
     const r = callMove(G, ctx, pid, name, args, (g) => { g.players[pid].souls = 10; });
     const accepted = r.outcome === 'accepted';
@@ -197,6 +201,7 @@ export function probeLegality(
         let reason = 'valid';
         if (!ok(from) || !ok(to)) reason = 'bad-slot';
         else if (from === to) reason = 'same-slot';
+        else if (actOver) reason = 'act-over'; // nothing moves once the turn's attack is made
         else {
           const a = get(from), b = get(to);
           if (!a) reason = 'no-hero-at-from';
@@ -206,6 +211,7 @@ export function probeLegality(
             if (isRespawning(a) || isRespawning(b)) reason = 'corpse-swap';
             else if (isBenchOnly(incoming)) reason = 'bench-only-to-active';
             else if (isRooted(a) || isRooted(b)) reason = 'rooted'; // Rooted: no retreat, whichever side of the swap it is on
+            else if (G.retreatUsed) reason = 'second-retreat'; // one Retreat a turn
             else legal = true;
           } else legal = true;
         }

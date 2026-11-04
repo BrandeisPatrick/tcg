@@ -2,12 +2,12 @@
  * The Active's attack: it swings at its target — the rival Active, or with
  * reach any living enemy hero the player names — for its bullet damage, then
  * once more at the same hero for each Extra Attack it has queued. It costs
- * nothing, it is one-way — the defender does not strike back — and the turn
- * stays with the player, who can go on playing cards, skills and a retreat
- * before `endTurn`. Attacks are per hero: this one marks its attacker, and a
- * hero a Retreat brings in afterwards may attack too. `attackBlocked`
- * (legality.ts) holds every condition, so this assumes a living Active, a
- * legal target and a swing that deals something.
+ * nothing and it is one-way — the defender does not strike back. A player
+ * makes one a turn (`G.attackUsed`), and it ends the turn's Act: after it
+ * nothing is left but `endTurn` (and a promotion owed). Extra swings come only
+ * from explicit grants (Haze's Fixation, Burst Fire, Fleetfoot, Fury Trance,
+ * Blood Tribute). `attackBlocked` (legality.ts) holds every condition, so this
+ * assumes a living Active, a legal target and a swing that deals something.
  *
  * Every swing is reported as a `swing` event BEFORE its damage, so the stream
  * reads "this swing, then what it did" — and the forecast (forecast.ts) is
@@ -27,16 +27,14 @@ import { fireTriggers } from '../triggers';
 import { withCast } from '../castContext';
 import { pushFx } from '../fx';
 
-/** Make the Active's attack: mark the attacker (and that the turn has seen an
- *  attack), swing, then each Extra Attack. The target is `targetIid`, left out
- *  the first of `attackTargets`. */
+/** Make the turn's attack: mark it made, swing, then each Extra Attack. The
+ *  target is `targetIid`, left out the first of `attackTargets`. */
 export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
   const atk = G.players[pid].active!;
-  // Who is swung at is settled before the attacker is marked: once it is,
+  // Who is swung at is settled before the attack is marked: once it is,
   // `attackTargets` is empty.
   const target = (targetIid === undefined ? attackTargets(G, pid)[0] : findCardOnBoard(G, targetIid)?.card)!;
   G.attackUsed = true;
-  atk.attackedThisTurn = true;
 
   // ---- The primary swing. ----
   swing(G, atk, target, 0, attackPower(atk, target));
@@ -65,9 +63,9 @@ export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
  * A full-power swing at every living enemy hero, in `targetsFor` order: each is
  * its own `swing` (index 0, 1, 2, ...) with its power read for that hero, its
  * own on-attack procs, and the state-based pass at the end. For an ultimate that
- * attacks the whole board. It is not the hero's attack: `G.attackUsed` and the
- * attacker's flags are left as they are, and Extra Attacks are neither read nor
- * spent. A hero a Dome keeps from being the target of an attack is skipped, and
+ * attacks the whole board. It is not the turn's attack: `G.attackUsed` is left
+ * as it is, and Extra Attacks are neither read nor spent. A hero a Dome keeps
+ * from being the target of an attack is skipped, and
  * so is a swing that would deal nothing (the attacker is Disarmed, say). The
  * volley does not ricochet: it already reaches every hero a bounce would.
  */

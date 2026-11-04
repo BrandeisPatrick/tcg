@@ -5,18 +5,19 @@
  * move being taught is exactly the move that wins:
  *
  *   1  The Skill        Kelvin vs a hurt Lash, no cards. Frost Grenade ends it.
- *   2  Souls and Gear   one card you cannot afford yet; next turn you can,
- *                       and the point of attack it adds is the kill.
+ *   2  Souls and Gear   one card you cannot afford yet; souls carry over, so
+ *                       next turn you can, and the attack it adds is the kill.
  *   3  Level Up         Kelvin a point short of Level 2; gear tips him over,
  *                       and the levelled swing is the kill.
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
  *
- * A turn is yours to spend on cards, skills, retreats and attacks: each hero
- * attacks once a turn while it stands in the Active slot, from its sheet, and
- * the turn button only ends the turn. In lessons 2 to 4 the kill is an attack,
+ * A turn is yours to spend on cards, abilities (free) and one Retreat; the
+ * Active's attack comes last, from its sheet, and ends the turn's play — the
+ * turn button only ends the turn. In lessons 2 to 4 the kill is an attack,
  * so the last tap is the Attack plate on your Active's sheet; lesson 4's is
- * the swing of the hero a Retreat brings in.
+ * the swing of the hero a Retreat brings in. In every lesson the rival's
+ * patron has one point left, so the kill is the win.
  *
  * Nothing is read and dismissed: every step is a tap on the real thing, and
  * every lesson ends on the victory screen. Each step names exactly the
@@ -29,7 +30,7 @@ import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { effectiveAtk, heroAbilities, isRespawning, stepInCandidates } from '@/engine/query';
 import { attackBlocked, cardCost, playBlocked, skillBlocked } from '@/engine/legality';
-import { RETREAT_COST, SKILL_COST } from '@/engine/constants';
+import { LANE_INCOME, RETREAT_COST } from '@/engine/constants';
 import { PATRON_NAMES } from '@/ui/board/patrons';
 import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
@@ -41,7 +42,8 @@ import { END_TURN } from '@/ui/board/BoardControls';
 /** A lesson's fight: one or two heroes of yours against Lash, nobody holding
  *  cards unless the lesson deals them, and no scaling on the rival. Decks
  *  are dealt top-down (`orderedPlayerDeck`) because the scripts name the
- *  cards they ask for. */
+ *  cards they ask for. The rival's patron is down to its last point, so the
+ *  one kill each lesson builds to is the win (a wiped board alone is not). */
 function fight(over: Partial<StorySetup> = {}): StorySetup {
   return {
     playerHeroes: ['hero_kelvin'],
@@ -50,6 +52,7 @@ function fight(over: Partial<StorySetup> = {}): StorySetup {
     enemyDeck: [],
     enemyBuff: { atk: 0, hp: 0 },
     patronHp: 4,
+    enemyPatronHp: 1,
     orderedPlayerDeck: true,
     ...over,
   };
@@ -149,12 +152,13 @@ function costOf(G: GameState, me: PlayerID, id: CardId): number {
   const card = held(G, me, id);
   if (card) return cardCost(card);
   const data = CARDS_BY_ID[id];
-  return data && data.type !== 'hero' ? data.cost ?? 0 : 0;
+  return data && (data.type === 'spell' || data.type === 'equipment') ? data.cost ?? 0 : 0;
 }
+/** A number in the coach's voice: "two". */
+const word = (n: number) => ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? String(n);
 /** A count of souls, in the coach's voice: "two souls". */
 function soulsText(n: number): string {
-  const word = ['no', 'one', 'two', 'three', 'four', 'five', 'six'][n] ?? String(n);
-  return `${word} soul${n === 1 ? '' : 's'}`;
+  return `${word(n)} soul${n === 1 ? '' : 's'}`;
 }
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -195,7 +199,7 @@ export interface CoachStep {
   allow?: (v: CoachView) => GateSpec[];
 }
 
-export const RIVAL_TURN = "Rival's turn. Watch — their Active gets one move too: its skill, or an attack on yours.";
+export const RIVAL_TURN = "Rival's turn. Watch — their heroes use their skills, then their Active attacks yours.";
 
 /** The turn button, by its name. */
 export const TURN_BUTTON: GateSpec = END_TURN;
@@ -235,7 +239,7 @@ function attack(lead: (v: CoachView) => string): CoachStep {
       : `${lead(v)} Tap ${nameOf(mine(v)) || 'your Active'} to open his sheet.`),
     task: (v) => v.seen.attacks >= 1,
     ready: (v) => attackBlocked(v.G, v.me) === null,
-    blocked: 'Your Active has no attack left this turn. End the turn; the next one has its own.',
+    blocked: 'Your attack is spent this turn. End the turn; the next one has its own.',
     spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
     allow: (v) => (v.sheetOpen ? [ATTACK_PLATE] : [tile(mine(v))]),
   };
@@ -291,7 +295,7 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
       const me = mine(v);
       return me && skillBlocked(v.G, v.me, me) === 'status'
         ? `${nameOf(me)} is locked down and cannot act. End the turn.`
-        : `A skill costs ${SKILL_COST} soul and needs a fresh turn. End the turn — souls refill.`;
+        : 'That skill needs a fresh turn. End the turn; it comes back.';
     },
     spot: (v) =>
       v.targeting ? [tile(theirs(v))]
@@ -318,7 +322,7 @@ function playOnActive(id: string, title: string, cardId: CardId, cardName: strin
       const card = held(v.G, v.me, cardId), target = mine(v);
       return !!card && !!target && playBlocked(v.G, v.me, card.iid, target.iid) === null;
     },
-    blocked: `${cardName} costs more than you have left. End the turn — souls refill.`,
+    blocked: `${cardName} costs more than you have. End the turn — ${word(LANE_INCOME)} more souls arrive, on top of what you keep.`,
     spot: (v) => (v.targeting ? [tile(mine(v))] : [`*${cardName}`]),
   };
 }
@@ -352,13 +356,13 @@ export const LESSONS: Lesson[] = [
     title: 'The Skill',
     blurb: "One on one, no cards. Kelvin's skill ends it.",
     face: 'hero_kelvin',
-    outro: 'A skill costs one soul, and it comes back every turn.',
+    outro: 'A skill costs nothing, and it comes back every turn.',
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
     // is the whole fight.
     setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
       look('look', 'One on One', mine, (v) => `${nameOf(mine(v))} against ${nameOf(theirs(v))}, no cards. ${nameOf(theirs(v))} is already hurt: ${hpOf(theirs(v))}. Every hero carries a skill on his sheet. Tap ${nameOf(mine(v))} to open his sheet.`),
-      useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to their Active. It costs one soul, and you have ${souls(v)}.`),
+      useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to their Active. Skills cost no souls.`),
     ],
   },
 
@@ -368,28 +372,30 @@ export const LESSONS: Lesson[] = [
     title: 'Souls and Gear',
     blurb: "One card you can't afford yet. Then you can.",
     face: 'hero_kelvin',
-    outro: 'Souls refill at the start of your turn, one more each time. Gear stays on.',
+    outro: 'Souls carry over: what you do not spend stays, and four more arrive every turn. Gear stays on.',
     // Lash at three: Kelvin's plain swing of two would not finish him, and
-    // with the magazine's point on top it does. The rival's attack is
-    // one-way, so nothing wears Lash down in between — the gear is the kill.
+    // with Glass Cannon's six on top it does. Its eight souls are two turns of
+    // income: the first turn's four cannot pay for it, the four kept and the
+    // four more of the next can. The rival's attack is one-way, so nothing
+    // wears Lash down in between — the gear is the kill.
     setup: () => fight({
-      playerDeck: ['extended_magazine'],
+      playerDeck: ['glass_cannon'],
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
       {
         id: 'broke',
         title: 'Souls',
-        body: (v) => `Cards cost souls. The rail on your rule says you have ${souls(v)}, and Extended Magazine costs ${soulsText(costOf(v.G, v.me, 'extended_magazine'))}. Tap Extended Magazine.`,
-        task: (v) => v.refusals >= 1 || souls(v) >= costOf(v.G, v.me, 'extended_magazine') || !inHand(v.G, v.me, 'extended_magazine'),
-        spot: () => [`${YOU} >> Souls:`, '*Extended Magazine'],
-        allow: () => ['*Extended Magazine'],
+        body: (v) => `Cards cost souls. The rail on your rule says you have ${souls(v)}, and Glass Cannon costs ${soulsText(costOf(v.G, v.me, 'glass_cannon'))}. Tap Glass Cannon.`,
+        task: (v) => v.refusals >= 1 || souls(v) >= costOf(v.G, v.me, 'glass_cannon') || !inHand(v.G, v.me, 'glass_cannon'),
+        spot: () => [`${YOU} >> Souls:`, '*Glass Cannon'],
+        allow: () => ['*Glass Cannon'],
       },
-      endTurn(1, 'Refused. Souls refill at the start of each of your turns, one more each time — two next turn. Nobody attacks on the first turn, so tap End Turn.'),
-      playOnActive('gear', 'Gear', 'extended_magazine', 'Extended Magazine',
-        (v) => `${sentence(soulsText(costOf(v.G, v.me, 'extended_magazine')))} this turn. Extended Magazine is +1 attack, and gear stays on the hero.`,
+      endTurn(1, `Refused. Souls carry over: what you do not spend stays, and ${word(LANE_INCOME)} more arrive at the start of each of your turns — ${word(2 * LANE_INCOME)} next turn. Nobody attacks on the first turn, so tap End Turn.`),
+      playOnActive('gear', 'Gear', 'glass_cannon', 'Glass Cannon',
+        () => `${sentence(soulsText(2 * LANE_INCOME))} this turn: the ${word(LANE_INCOME)} you kept and ${word(LANE_INCOME)} more. Glass Cannon is +6 attack, and gear stays on the hero.`,
         (v) => v.seen.equipped),
-      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. Your Active does one thing a turn — its skill or an attack — and the attack is free.`),
+      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends your turn.`),
     ],
   },
 
@@ -399,7 +405,7 @@ export const LESSONS: Lesson[] = [
     title: 'Level Up',
     blurb: 'A point of experience short. Gear tips him over.',
     face: 'hero_kelvin',
-    outro: 'Gear, kills and standing the turn all earn experience — the Active earns the most. A level raises the numbers, and Level 2 brings the hero\'s ultimate.',
+    outro: 'Gear, kills and standing the turn all earn experience — the Active earns the most. A level raises the numbers, and Level 2 unlocks the hero\'s ultimate on his sheet.',
     // Kelvin one point short of Level 2 and Lash at three: the point that
     // comes with the gear is the level, and the level is the point of attack
     // that finishes the fight. Turn two, so there is an attack to make.
@@ -429,8 +435,7 @@ export const LESSONS: Lesson[] = [
     // Kelvin at one point of health with Yamato fresh behind him, Lash at
     // three: Kelvin's swing of two cannot finish Lash, and Lash's next attack
     // would finish Kelvin. Yamato swings for three, and his swing kills Lash.
-    // Turn three, so there are exactly the two souls a retreat costs — none
-    // left over for a skill.
+    // Turn three, so the attack is open; the turn's income pays the retreat.
     setup: () => fight({
       startTurn: 3,
       playerHeroes: ['hero_kelvin', 'hero_yamato'],
@@ -448,15 +453,15 @@ export const LESSONS: Lesson[] = [
         body: (v) => (v.seen.swapped
           ? `${nameOf(mine(v))} is in. ${nameOf(myBench(v))} is on the bench, out of the fight.`
           : v.sheetOpen
-            ? `Attacks only ever hit the Active. Retreat costs ${RETREAT_COST} souls and swaps the two, and every hero gets its own attack from the Active slot. Tap Retreat.`
-            : `Tap ${nameOf(mine(v)) || 'your Active'}, then Retreat: ${RETREAT_COST} souls swap him with ${nameOf(myBench(v)) || 'your bench hero'}.`),
+            ? `Attacks only ever hit the Active. Retreat costs ${soulsText(RETREAT_COST)} and swaps the two — one a turn, before the attack — and the hero who steps in makes your attack. Tap Retreat.`
+            : `Tap ${nameOf(mine(v)) || 'your Active'}, then Retreat: ${soulsText(RETREAT_COST)} swaps him with ${nameOf(myBench(v)) || 'your bench hero'}.`),
         task: (v) => v.seen.swapped,
         // The engine's own question: is a swap with the bench open to you now?
         ready: (v) => {
           const stepIns = stepInCandidates(v.G.players[v.me]);
           return stepIns.length > 0 && retreatBlock(v.G, v.me, stepIns) === null;
         },
-        blocked: `Retreat costs ${RETREAT_COST} souls. End the turn to refill, then come back to it.`,
+        blocked: `Retreat costs ${soulsText(RETREAT_COST)}, one a turn, before the attack. End the turn, then come back to it.`,
         spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
         allow: (v) => (v.sheetOpen ? ['~Retreat'] : [tile(mine(v))]),
       },

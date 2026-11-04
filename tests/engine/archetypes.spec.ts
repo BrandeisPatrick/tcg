@@ -82,6 +82,7 @@ describe('Multi-attack: Extra Attack (N)', () => {
   it('Burst Fire (equipment) and Fixation stack Extra Attack', () => {
     const G = freshReadyGame();
     const dyn = makeHero('hero_dynamo', '0', 'active', 0); // plain active
+    dyn.level = 3; // Fixation works from Level 3
     G.players['0'].active = dyn;
     getAbility('eff_burst_fire')!.run(G, { movingPlayer: '0' }, { source: dyn });                       // +1 (each turn)
     getAbility('passive_haze_fixation')!.run(G, { movingPlayer: '0' }, { source: dyn, params: { primary: true } }); // +1 (on the swing)
@@ -90,6 +91,7 @@ describe('Multi-attack: Extra Attack (N)', () => {
 
   it('Fixation grants Extra Attack only on the primary swing (no endless chain)', () => {
     const haze = makeHero('hero_haze', '0');
+    haze.level = 3;
     // Primary swing → grants 1.
     getAbility('passive_haze_fixation')!.run({} as GameState, { movingPlayer: '0' }, { source: haze, params: { primary: true } });
     expect(extraOf(haze)).toBe(1);
@@ -100,9 +102,24 @@ describe('Multi-attack: Extra Attack (N)', () => {
 });
 
 describe('Haze Fixation — reactive follow-up swing', () => {
-  it('Haze attacks twice (primary + Fixation extra) through the attack phase', () => {
+  it('below Level 3 Fixation is idle: Haze swings once', () => {
+    for (const level of [1, 2] as const) {
+      const G = freshReadyGame();
+      const haze = makeHero('hero_haze', '0', 'active', 0);
+      haze.level = level;
+      G.players['0'].active = haze;
+      soloAttacker(G, '0');
+      const def = G.players['1'].active!;
+      def.hp = def.hpMax = 99;
+      makeAttack(G, '0');
+      expect(def.hp, `level ${level}`).toBe(99 - effectiveAtk(haze));
+    }
+  });
+
+  it('from Level 3 Haze attacks twice (primary + Fixation extra) through the attack phase', () => {
     const G = freshReadyGame();
     const haze = makeHero('hero_haze', '0', 'active', 0);
+    haze.level = 3;
     G.players['0'].active = haze;
     soloAttacker(G, '0');
     const def = G.players['1'].active!;

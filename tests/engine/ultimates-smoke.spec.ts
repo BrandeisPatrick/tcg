@@ -88,14 +88,20 @@ describe('ultimate-specific behaviour', () => {
     expect(50 - enemy.hp).toBe(7);
   });
 
-  it('Sinclair copies the enemy Active ult into hand at 0 cost', () => {
+  it('Sinclair borrows the enemy Active\'s ultimate as a one-shot kit ability (nothing goes to the hand)', () => {
     const G = freshG('hero_sinclair', 'hero_dynamo');
+    const sinclair = G.players['0'].active!;
     const before = G.players['0'].hand.length;
-    getAbility('eff_ult_sinclair')!.run(G, { movingPlayer: '0' }, {});
-    expect(G.players['0'].hand.length).toBe(before + 1);
-    const copy = G.players['0'].hand[G.players['0'].hand.length - 1];
-    expect(copy.cardId).toBe('ult_dynamo');
-    expect(copy.costOverride).toBe(0);
+    getAbility('eff_ult_sinclair')!.run(G, { movingPlayer: '0' }, { source: sinclair });
+    expect(sinclair.borrowedUlt).toBe('eff_ult_dynamo');
+    expect(G.players['0'].hand.length).toBe(before);
+  });
+
+  it('Sinclair cannot borrow his own ultimate', () => {
+    const G = freshG('hero_sinclair', 'hero_sinclair');
+    const sinclair = G.players['0'].active!;
+    getAbility('eff_ult_sinclair')!.run(G, { movingPlayer: '0' }, { source: sinclair });
+    expect(sinclair.borrowedUlt).toBeUndefined();
   });
 
   it('Mirage repositions off Active and gains Shield 3', () => {

@@ -3,7 +3,8 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import type { BoardProps } from 'boardgame.io/react';
 import type { AbilityId, GameState, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { findCardOnBoard, heroData, isRespawning, resolveSkill, stepInCandidates } from '@/engine/query';
+import { findCardOnBoard, isRespawning, kitAbilityIds, otherPlayer, resolveSkill, stepInCandidates, ultimateCard } from '@/engine/query';
+import { humanSeat } from './seat';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
 import { CardPreview } from './overlays/CardPreview';
@@ -89,7 +90,9 @@ const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], 
 
 export function Board(props: BoardProps<GameState>) {
   const { G, ctx, moves } = props;
-  const me: PlayerID = '0';
+  // The seat played here (the board lays itself out for seat 0) and the rival's.
+  const me: PlayerID = humanSeat(G);
+  const opp: PlayerID = otherPlayer(me);
   const matchNav = useMatchNav();
   const isMyTurn = ctx.currentPlayer === me;
   // A tutorial lesson is built from a scripted setup like a Story node, but it
@@ -145,9 +148,9 @@ export function Board(props: BoardProps<GameState>) {
   // the click, then fire once the reveal settles.
   const queuedEndRef = useRef(false);
   const mover = ctx.currentPlayer as PlayerID;
-  // A turn is the player's to spend on cards, skills and a retreat, with one
-  // attack among them. The dial marks the attack: 'battle' while the
-  // choreographer walks it, 'regroup' once it is made, 'prepare' before.
+  // A turn is the player's to spend on cards, abilities and a retreat, then
+  // its one attack, which ends it. The dial marks the attack: 'battle' while
+  // the choreographer walks it, 'regroup' once it is made, 'prepare' before.
   const turnPhase: TurnPhase = combatPlan ? 'battle' : G.attackUsed ? 'regroup' : 'prepare';
   /** The mover's attack can still be made — and is not being made already. */
   const attackOpen = !ctx.gameover && !combatPlan && attackBlocked(G, mover) === null;
@@ -422,15 +425,15 @@ export function Board(props: BoardProps<GameState>) {
     };
   }, [preview]);
 
-  // The opponent ('1') is always AI-driven; the local player is too while
-  // auto-play is on. The AI holds while an attack is being walked or a
+  // The rival's seat (whichever is not `me`) is always AI-driven; the local
+  // player's is too while auto-play is on. The AI holds while an attack is being walked or a
   // card-play / skill / ult reveal is in flight (so it doesn't fire its next
   // move on top of its previous animation), and while our Active has fallen
   // and the choice of who steps up is ours to make: the rest of the rival's
   // turn must not play out against a lane we have not refilled. Under
   // auto-play nobody answers that prompt, so the loop makes the promotion
   // itself — the enumerator returns an owed promotion first, from either seat.
-  const aiControlled = ctx.currentPlayer === '1' || (autoPlay && ctx.currentPlayer === me);
+  const aiControlled = ctx.currentPlayer !== me || autoPlay;
   const aiHolds = !!ctx.gameover || !aiControlled || !!combatPlan || G.action?.state === 'begin'
     || (G.pendingPromotion === me && !autoPlay);
 
@@ -598,8 +601,9 @@ export function Board(props: BoardProps<GameState>) {
   }
 
   /**
-   * Try to activate one of this hero's skills. Asks the engine first
-   * (`skillBlocked`), so the UI never opens a stale targeting overlay.
+   * Try to use one of this hero's kit abilities — a skill, its ultimate or a
+   * borrowed ultimate. Asks the engine first (`skillBlocked`), so the UI never
+   * opens a stale targeting overlay.
    */
   function tryUseSkill(card: CardInstance, skillId: AbilityId) {
     if (!isMyTurn) return;
@@ -607,15 +611,17 @@ export function Board(props: BoardProps<GameState>) {
     const why = skillBlocked(G, me, card, undefined, skillId);
     if (why) { if (why !== 'noSkill') showNotice(skillBlockReason(why, card, skillId), true); return; }
     const data = CARDS_BY_ID[card.cardId];
-    const ability = resolveSkill(card, skillId)?.ability;
+    const kit = resolveSkill(card, skillId);
+    const ability = kit?.ability;
     if (data?.type !== 'hero' || !ability) return;
     if (skillTargets(G, me, card, skillId) === 'none') { castSkill(card.iid, undefined, skillId); return; }
-    // A skill aimed at its own hero asks for nothing.
+    // An ability aimed at its own hero asks for nothing.
     if (ability.target === 'self') { castSkill(card.iid, card.iid, skillId); return; }
+    const ult = kit.kind === 'skill' ? undefined : ultimateCard(skillId);
     setPending({
       kind: 'useSkill', iid: card.iid, skillId,
-      title: `${data.name} · Skill`,
-      desc: ability.prompt ?? 'Choose a target.',
+      title: ult ? `${data.name} · ${ult.name}` : `${data.name} · Skill`,
+      desc: (ult ? plainText(ult.text) : ability.prompt) || 'Choose a target.',
       filter: ability.target,
     });
   }
@@ -708,8 +714,6 @@ export function Board(props: BoardProps<GameState>) {
       />
     );
   }
-
-  const opp: PlayerID = '1';
 
   // Pre-match draft: render only the DraftOverlay; suppress the rest of the
   // board chrome. Boardgame.io currentPlayer drives whose pick it is, so we
@@ -1076,10 +1080,11 @@ export function Board(props: BoardProps<GameState>) {
                 : undefined,
             };
 
-            // Any of your heroes may use one skill a turn, on the engine's own
-            // terms (`skillBlocked`) — each of its skills asked on its own.
+            // Any of your heroes may use one ability a turn, on the engine's
+            // own terms (`skillBlocked`) — each of its skills, its ultimate and
+            // a borrowed ultimate asked on its own.
             const skillOffers: Record<AbilityId, SkillOffer> = {};
-            for (const skillId of heroData(hero)?.skills ?? []) {
+            for (const skillId of kitAbilityIds(hero)) {
               const block = isMine ? skillBlocked(G, me, hero, undefined, skillId) : null;
               skillOffers[skillId] = {
                 canUse: isMine && isMyTurn && block === null,
@@ -1090,7 +1095,7 @@ export function Board(props: BoardProps<GameState>) {
               };
             }
             // Your Active's attack is offered on its sheet with what it would
-            // do, or why it cannot be made (each hero swings once a turn).
+            // do, or why it cannot be made (one a turn, and it ends the turn).
             const attack = !isMyActive ? undefined : { ...attackOffer(G, me, hero, isMyTurn), onAttack: attackFromSheet };
 
             return (

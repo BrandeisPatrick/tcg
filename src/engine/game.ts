@@ -30,6 +30,9 @@ export const DeadlockGame: Game<GameState> = {
   setup: () => setupGame(),
 
   turn: {
+    // Round robin from seat 0: a drafted match opens on seat 0's first pick
+    // (the last pick hands the first turn to seat 1, `draftPick`); a scripted
+    // one opens on seat 0's turn.
     onBegin: ({ G, ctx }) => beginTurn(G, ctx.currentPlayer as PlayerID, ctx.turn),
     onEnd: ({ G, ctx }) => endTurnEffects(G, ctx.currentPlayer as PlayerID),
   },
@@ -50,7 +53,8 @@ export const DeadlockGame: Game<GameState> = {
     playCard: ({ G, ctx, playerID }, cardIid: string, targetIid?: string, discardIid?: string) =>
       move(G, mover(ctx, playerID), { type: 'playCard', cardIid, targetIid, discardIid }),
 
-    /** `skillId` is left off for the hero's first skill. */
+    /** A kit ability: a skill, the hero's ultimate or a borrowed ultimate,
+     *  named by `skillId` (left off for the hero's first skill). */
     useSkill: ({ G, ctx, playerID }, heroIid: string, targetIid?: string, skillId?: string) =>
       move(G, mover(ctx, playerID), { type: 'useSkill', heroIid, targetIid, skillId }),
 
@@ -60,9 +64,9 @@ export const DeadlockGame: Game<GameState> = {
     promoteToActive: ({ G, ctx, playerID }, benchIid: string) =>
       move(G, mover(ctx, playerID), { type: 'promoteToActive', benchIid }),
 
-    /** The Active's attack (each hero one a turn). Always the player whose turn
-     *  it is. `targetIid` is left off for the default target (the rival Active,
-     *  unless the hero has reach). */
+    /** The turn's attack (one a turn; it ends the Act). Always the player whose
+     *  turn it is. `targetIid` is left off for the default target (the rival
+     *  Active, unless the hero has reach). */
     attack: ({ G, ctx }, targetIid?: string) => move(G, ctx.currentPlayer as PlayerID, { type: 'attack', targetIid }),
 
     /** End the turn — unless a promotion is owed, which comes first. */
@@ -72,7 +76,7 @@ export const DeadlockGame: Game<GameState> = {
     },
 
     /** Pre-match hero draft pick; the last pick finalizes both rosters and
-     *  hands over to the opening mulligan. */
+     *  ends the draft's turn, handing the first turn to the first mover. */
     draftPick: ({ G, ctx, events }, heroId: string) => {
       if (draftPickBlocked(G, ctx.currentPlayer as PlayerID, heroId)) return INVALID_MOVE;
       if (draftPick(G, ctx, heroId).endTurn) events.endTurn();

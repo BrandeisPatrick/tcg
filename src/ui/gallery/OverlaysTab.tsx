@@ -14,10 +14,11 @@ import { mockHeroInstance, mockEquipInstance } from './mock';
 import { Section, Caption } from './primitives';
 
 const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
-  { id: 'ready',    label: 'Your Active, both ready', hint: 'Skill or Attack: each plate is its button, and the “or” between them says the Active does one a turn.' },
-  { id: 'skilled',  label: 'Skill used',              hint: 'The skill reads USED; the Attack goes flat with “Used its skill this turn”.' },
-  { id: 'attacked', label: 'Attacked',                hint: 'The Attack reads USED; the skill goes flat with “Attacked this turn”.' },
+  { id: 'ready',    label: 'Your Active, all ready',  hint: 'Skill, Ultimate and Attack: each plate is its button, and the “then” before the Attack says abilities come first.' },
+  { id: 'skilled',  label: 'Skill used',              hint: 'The skill reads USED and the Ultimate waits for the next turn; the Attack is still there.' },
+  { id: 'attacked', label: 'Attacked',                hint: 'The Attack reads USED; every ability goes flat with “The attack ended your turn”.' },
   { id: 'turn1',    label: 'Turn 1',                  hint: 'The skill is there; the Attack is flat with “No attacks on Turn 1”.' },
+  { id: 'locked',   label: 'Ultimate locked',         hint: 'Below Level 2 the Ultimate plate is flat, chipped “Lv 2”: “Unlocks at Level 2”.' },
   { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the Passive panel, and the Attack under it.' },
   { id: 'bench',    label: 'A bench hero',            hint: 'Its skill can be used from the bench. No Attack — only the Active swings.' },
   { id: 'blocked',  label: 'Not your turn',           hint: 'Both plates flat, with the reason.' },
@@ -51,20 +52,24 @@ export function OverlaysTab() {
     const attackBlocked = (blockedReason: string, made = false) => {
       props.attack = { ...props.attack!, line: undefined, blockedReason, made };
     };
-    // Every skill of the hero shown, in one state.
+    // Every ability of the hero shown (its skills and its ultimate), in one state.
     const eachSkill = (offer: SkillOffer) => {
-      props.skills = Object.fromEntries(shown.skills.map((id) => [id, offer]));
+      props.skills = Object.fromEntries([...shown.skills, ...(shown.ult ? [shown.ult] : [])].map((id) => [id, offer]));
     };
+    // The ultimate is unlocked (Level 2) unless the state says otherwise.
+    card = { ...card, level: 2 };
     eachSkill({ canUse: true });
     if (s === 'skilled') {
-      card = { ...card, skillUsedThisTurn: true };
-      eachSkill({ canUse: false });
-      attackBlocked('Used its skill this turn');
+      card = { ...card, skillUsedThisTurn: true, lastSkillUsed: shown.skills[0] ?? shown.ult };
+      eachSkill({ canUse: false, blockedReason: 'Used its skill this turn' });
     }
     if (s === 'attacked') {
-      card = { ...card, attackedThisTurn: true };
-      eachSkill({ canUse: false, blockedReason: 'Attacked this turn' });
+      eachSkill({ canUse: false, blockedReason: 'The attack ended your turn' });
       attackBlocked('Attacked this turn', true);
+    }
+    if (s === 'locked') {
+      card = { ...card, level: 1 };
+      if (shown.ult) props.skills = { ...props.skills, [shown.ult]: { canUse: false, blockedReason: 'Unlocks at Level 2' } };
     }
     if (s === 'turn1') attackBlocked('No attacks on Turn 1');
     if (s === 'bench') { card = { ...card, zone: 'bench', slot: 1 }; props.attack = undefined; }
@@ -87,7 +92,7 @@ export function OverlaysTab() {
       props.onRetreat = () => setToast('Retreated');
     }
     if (s === 'broke') {
-      props.retreat = { cost: RETREAT_COST, blockedReason: `Need ${RETREAT_COST} souls` };
+      props.retreat = { cost: RETREAT_COST, blockedReason: `Need ${RETREAT_COST} soul${RETREAT_COST === 1 ? '' : 's'}` };
       props.onRetreat = () => {};
     }
     props.card = card;
@@ -111,9 +116,9 @@ export function OverlaysTab() {
     >
       <Caption>
         The sheet that rises when a hero is tapped. Its plates <strong>are</strong> the actions: tap the
-        skill card to use the skill (any of your heroes, once a turn, a soul each), and on your Active tap
-        Attack to swing at their Active — free, one-way, and instead of the skill, not as well. A hero with a
-        passive shows a Passive block that cannot be pressed. Pick a hero, then a state.
+        skill card to use the skill, or from Level 2 the Ultimate (any of your heroes, one ability a turn,
+        free), and on your Active tap Attack to swing at their Active — free, one-way, and the end of the
+        turn. A hero with a passive shows a Passive block that cannot be pressed. Pick a hero, then a state.
       </Caption>
 
       <div className="gal-pick">

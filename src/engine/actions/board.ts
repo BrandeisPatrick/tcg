@@ -23,9 +23,10 @@ import { leaveActive } from '../lane';
 import { fireTriggers } from '../triggers';
 
 /** Swap the heroes in two slots. With the Active on one side it is a Retreat:
- *  it charges `retreatCost` (read before the swap, off the hero leaving),
- *  spends that hero's Swift, and the hero stepping in sets off its
- *  `onBearerStepIn` gear. Between two bench slots it is a free shuffle. */
+ *  it charges `retreatCost` (read before the swap, off the hero leaving), is
+ *  the turn's one Retreat (`G.retreatUsed`), spends that hero's Swift, and the
+ *  hero stepping in sets off its `onBearerStepIn` gear. Between two bench slots
+ *  it is a free shuffle. */
 export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot: 0|1|2|3) {
   const ps = G.players[pid];
   const get = (s: 0|1|2|3) => s === 0 ? ps.active! : ps.bench[s - 1]!;
@@ -42,6 +43,7 @@ export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot:
   if (isRetreat) {
     const leaving = ps.active!;
     ps.souls -= cost;
+    G.retreatUsed = true;
     // A Swift hero's free Retreat is the one it spends.
     leaving.statuses = leaving.statuses.filter((s) => s.id !== 'swift');
     leaveActive(G, leaving); // the hero standing in the lane steps out of it

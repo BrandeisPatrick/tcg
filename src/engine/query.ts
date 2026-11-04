@@ -14,12 +14,14 @@ import type {
   PlayerID,
   PlayerState,
   StatusId,
+  UltimateCard,
 } from './types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, ULTIMATES } from '@/cards';
 import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
-import { START_LEVEL } from './constants';
+import { COMEBACK_STEPS, KILL_BOUNTY_BASE, RICHEST_BOUNTY_BONUS, START_LEVEL } from './constants';
+import { secondMover } from './rounds';
 
 // ---------- The board ----------
 
@@ -71,34 +73,79 @@ export function heroData(card: CardInstance): HeroCard | undefined {
   return data?.type === 'hero' ? data : undefined;
 }
 
-/** Two ways to lose: your patron HP hits 0 (the death tax), or your whole
- *  roster is on the respawn timer at once (a board wipe). A mutual wipe goes
- *  to the player (P0). This is boardgame.io's `endIf`: it runs after every
- *  move on the already-resolved state. */
+/** One way to lose: your patron's HP reaches 0. A board with every hero down
+ *  is no loss (the rival's Active pushes into the empty lane at the end of its
+ *  turn instead, endTurnEffects). Should both patrons fall to one action, the
+ *  one with more HP left wins, and on a tie the second mover. This is
+ *  boardgame.io's `endIf`: it runs after every move on the already-resolved
+ *  state. */
 export function checkWinner(G: GameState): { winner?: PlayerID } | undefined {
-  const down = (pid: PlayerID) => G.players[pid].hp <= 0 || boardWiped(G.players[pid]);
-  const p0Down = down('0');
-  const p1Down = down('1');
-  if (p0Down && p1Down) return { winner: '0' };
-  if (p0Down) return { winner: '1' };
-  if (p1Down) return { winner: '0' };
-  return undefined;
-}
-
-/** True when a player still has heroes but every one of them is KO'd (on the
- *  respawn timer) at the same moment. */
-function boardWiped(ps: PlayerState): boolean {
-  const heroes = [ps.active, ...ps.bench].filter(
-    (c): c is CardInstance => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero',
-  );
-  if (heroes.length === 0) return false; // pre-match / nothing to wipe yet
-  return heroes.every((c) => isRespawning(c) || c.hp <= 0);
+  if (G.draft) return undefined;
+  const p0 = G.players['0'].hp;
+  const p1 = G.players['1'].hp;
+  if (p0 > 0 && p1 > 0) return undefined;
+  if (p0 <= 0 && p1 <= 0) return { winner: p0 > p1 ? '0' : p1 > p0 ? '1' : secondMover(G) };
+  return { winner: p0 <= 0 ? '1' : '0' };
 }
 
 /** Patron HP a hero's fall costs its owner: the fallen hero's level, so a
  *  leveled carry is the costliest to lose — and the one worth hunting. */
 export function koPatronDamage(hero: CardInstance): number {
   return hero.level ?? START_LEVEL;
+}
+
+// ---------- Worth ----------
+
+/** What an item lists at: today the card's printed cost (the shop's tier
+ *  price replaces it). Anything that is not an item lists at 0. */
+export function listPrice(cardId: string): number {
+  const data = CARDS_BY_ID[cardId];
+  return data?.type === 'equipment' || data?.type === 'spell' ? data.cost ?? 0 : 0;
+}
+
+/** The list price of everything `hero` wears. */
+export function heroWorth(hero: CardInstance): number {
+  return wornEquipment(hero).reduce((n, eq) => n + listPrice(eq.cardId), 0);
+}
+
+/** Every hero a side has, wherever it stands: the Active, the bench (corpses
+ *  included) and a Rem merged into an ally, who rides in its `attached` list. */
+export function heroesOf(ps: PlayerState): CardInstance[] {
+  const slotted = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c && !!heroData(c));
+  return [...slotted, ...slotted.flatMap((c) => (c.attached ?? []).filter((a) => !!heroData(a)))];
+}
+
+/** A side's net worth: the souls it holds plus the list price of every item
+ *  its heroes wear. The comeback at income time and the richest-hero bounty
+ *  read it. */
+export function netWorth(G: GameState, pid: PlayerID): number {
+  const ps = G.players[pid];
+  return ps.souls + heroesOf(ps).reduce((n, h) => n + heroWorth(h), 0);
+}
+
+/** True when `hero` wears strictly more (by list price) than every other hero
+ *  on the board, both sides counted; a tie for the top makes nobody richest. */
+export function isRichestHero(G: GameState, hero: CardInstance): boolean {
+  const mine = heroWorth(hero);
+  if (mine <= 0) return false;
+  const others = (['0', '1'] as PlayerID[]).flatMap((pid) => heroesOf(G.players[pid])).filter((h) => h.iid !== hero.iid);
+  return others.every((h) => heroWorth(h) < mine);
+}
+
+/** Souls a kill pays the victim's opponent: the victim's level plus
+ *  KILL_BOUNTY_BASE, and RICHEST_BOUNTY_BONUS more when it was strictly the
+ *  richest hero on the board. */
+export function killBounty(G: GameState, hero: CardInstance): number {
+  return (hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE + (isRichestHero(G, hero) ? RICHEST_BOUNTY_BONUS : 0);
+}
+
+/** The comeback `pid` collects with its income: the largest COMEBACK_STEPS
+ *  bonus whose deficit its net worth trails the rival's by. */
+export function comebackBonus(G: GameState, pid: PlayerID): number {
+  const behind = netWorth(G, otherPlayer(pid)) - netWorth(G, pid);
+  let bonus = 0;
+  for (const [by, add] of COMEBACK_STEPS) if (behind >= by) bonus = Math.max(bonus, add);
+  return bonus;
 }
 
 // ---------- Targets ----------
@@ -192,26 +239,55 @@ export function wornEquipment(card: CardInstance): CardInstance[] {
 
 // ---------- A hero's kit ----------
 
-/** One skill a hero can use: its id, and the ability that does it. */
-interface HeroSkill {
+/** What kind of kit ability a hero uses: one of its skills, its own ultimate,
+ *  or an ultimate it has borrowed (Sinclair's copy, `borrowedUlt`). */
+export type KitKind = 'skill' | 'ult' | 'borrowed';
+
+/** One ability a hero can use: its id, the ability that does it, and its kind. */
+export interface KitAbility {
   id: AbilityId;
   ability: AbilityDef;
+  kind: KitKind;
+}
+
+/** The abilities `card` may choose to use, in order: its skills, its
+ *  ultimate, then an ultimate it has borrowed. Every one is used through
+ *  `useSkill` naming its id; the legal-move list, the hero sheet and the
+ *  board's ready glint all walk this list. */
+export function kitAbilityIds(card: CardInstance): AbilityId[] {
+  const data = heroData(card);
+  if (!data) return [];
+  const out = [...data.skills];
+  if (data.ult) out.push(data.ult);
+  if (card.borrowedUlt && !out.includes(card.borrowedUlt)) out.push(card.borrowedUlt);
+  return out;
 }
 
 /**
- * The skill `skillId` names on `card` — left out, the hero's first — or
- * undefined when the card is no hero, has no skills, does not have that one, or
- * the ability is not registered. The one reading of "which skill": the rules
+ * The kit ability `skillId` names on `card` — left out, the hero's first
+ * skill — or undefined when the card is no hero, has no such ability, or the
+ * ability is not registered. The one reading of "which ability": the rules
  * (legality, `useSkill`), the AI and the board all ask here, so a bare action
  * means the same thing to every one of them.
  */
-export function resolveSkill(card: CardInstance, skillId?: AbilityId): HeroSkill | undefined {
-  const skills = heroData(card)?.skills;
-  if (!skills || skills.length === 0) return undefined;
-  const id = skillId === undefined ? skills[0] : skillId;
-  if (!skills.includes(id)) return undefined;
+export function resolveSkill(card: CardInstance, skillId?: AbilityId): KitAbility | undefined {
+  const data = heroData(card);
+  if (!data) return undefined;
+  const id = skillId === undefined ? data.skills[0] : skillId;
+  if (id === undefined) return undefined;
+  const kind: KitKind | undefined = data.skills.includes(id) ? 'skill'
+    : id === data.ult ? 'ult'
+    : id === card.borrowedUlt ? 'borrowed'
+    : undefined;
+  if (!kind) return undefined;
   const ability = getAbility(id);
-  return ability ? { id, ability } : undefined;
+  return ability ? { id, ability, kind } : undefined;
+}
+
+/** The card that names and draws the ultimate `abilityId` (its first ability),
+ *  or undefined for an ability no ultimate card carries. */
+export function ultimateCard(abilityId: AbilityId | undefined): UltimateCard | undefined {
+  return abilityId === undefined ? undefined : ULTIMATES.find((u) => u.abilities[0] === abilityId);
 }
 
 /**

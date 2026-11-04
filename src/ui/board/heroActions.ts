@@ -1,21 +1,21 @@
 /**
  * What a hero can still do this turn, read the way the engine reads it. A
- * turn is the player's to spend on cards, skills, retreats and attacks: every
- * hero may use its skill once a turn (a soul each) and attack once a turn from
- * the Active slot, and does one or the other — its skill or its attack. The
- * board's glint, the hero sheet's plates, the refusal stickers and the tutorial all
- * ask the engine's own `skillBlocked` / `attackBlocked` / `playBlocked` /
- * `moveBlocked` (legality.ts), so none of them offers a move the engine would
- * refuse; this file only words the answers.
+ * turn is the player's to spend on cards, abilities and one Retreat, then one
+ * attack: every hero may use one ability a turn (a skill or, from Level 2, its
+ * ultimate — all free), and the Active makes the turn's attack, which ends the
+ * turn's Act. The board's glint, the hero sheet's plates, the refusal stickers
+ * and the tutorial all ask the engine's own `skillBlocked` / `attackBlocked` /
+ * `playBlocked` / `moveBlocked` (legality.ts), so none of them offers a move the
+ * engine would refuse; this file only words the answers.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
+import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import {
   blocked, cardCost, moveBlocked, retreatCost, skillBlocked,
   type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
-import { findCardOnBoard, heroData, isRespawning, isUntargetable, otherPlayer, resolveSkill } from '@/engine/query';
+import { findCardOnBoard, isRespawning, isUntargetable, kitAbilityIds, otherPlayer, resolveSkill } from '@/engine/query';
 import type { Action } from '@/engine/engine';
 import type { AttackPlan } from '@/engine/forecast';
 
@@ -23,22 +23,31 @@ import type { AttackPlan } from '@/engine/forecast';
 const souls = (n: number) => `${n} soul${n === 1 ? '' : 's'}`;
 const nameOf = (card: CardInstance | null | undefined) => (card ? CARDS_BY_ID[card.cardId]?.name ?? '' : '');
 
-/** The line the hero sheet prints on a skill that cannot be used. Name the
- *  hero and the skill (left out: its first) to get the lines that need them:
- *  how long a cooldown has to run, and that it was the hero's other skill that
- *  was used. */
+/** The line printed when the turn's attack has ended its Act. */
+export const ACT_OVER = 'The attack ended your turn';
+
+/** The line the hero sheet prints on an ability (a skill, or the ultimate)
+ *  that cannot be used. Name the hero and the ability (left out: its first
+ *  skill) to get the lines that need them: how long a cooldown has to run, and
+ *  that it was another of the hero's abilities that was used. */
 export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId?: AbilityId): string {
   const skill = hero && resolveSkill(hero, skillId);
   switch (block) {
-    case 'used': return hero?.lastSkillUsed && skill && hero.lastSkillUsed !== skill.id ? 'Used its other skill this turn' : 'Already used';
-    case 'attacked': return 'Attacked this turn';
-    case 'status': return 'Cannot use skill (status)';
+    case 'used': {
+      const last = hero?.lastSkillUsed;
+      if (!hero || !last || !skill || last === skill.id) return 'Already used';
+      const lastKind = resolveSkill(hero, last)?.kind;
+      if (lastKind === 'ult' || lastKind === 'borrowed') return 'Used its ultimate this turn';
+      return skill.kind === 'skill' ? 'Used its other skill this turn' : 'Used its skill this turn';
+    }
+    case 'actOver': return ACT_OVER;
+    case 'locked': return `Unlocks at Level ${ULT_UNLOCK_LEVEL}`;
+    case 'status': return 'Cannot use abilities (status)';
     case 'cooldown': {
       const left = (skill && hero?.cooldowns?.[skill.id]) || 0;
       return left > 0 ? `Ready in ${left} turn${left === 1 ? '' : 's'}` : 'On cooldown';
     }
     case 'hp': return skill?.ability.hpCost ? `Needs more than ${skill.ability.hpCost} HP` : 'Not enough HP';
-    case 'souls': return `Need ${souls(SKILL_COST)}`;
     case 'target': return 'No valid target';
     case 'down': return 'Down until it respawns';
     case 'noSkill': return '';
@@ -51,9 +60,8 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
 export function attackBlockReason(block: AttackBlock, rival?: CardInstance | null): string {
   switch (block) {
     case 'turn1': return 'No attacks on Turn 1';
-    // Attacks are per hero: 'used' is this Active's own swing, made this turn.
+    // One attack a turn: 'used' is the turn's attack, made.
     case 'used': return 'Attacked this turn';
-    case 'skill': return 'Used its skill this turn';
     case 'cannot': return 'Cannot attack (status)';
     case 'noTarget': {
       const domed = !!rival && !isRespawning(rival) && isUntargetable(rival, 'attack');
@@ -82,6 +90,7 @@ interface PlaySubject {
 export function playBlockReason(block: PlayBlock, s: PlaySubject): string {
   switch (block) {
     case 'notInHand': return `${s.card} is not in your hand`;
+    case 'actOver': return ACT_OVER;
     case 'souls': return `Need ${souls(s.cost)}${s.have === undefined ? '' : ` — you have ${s.have}`}`;
     case 'target': return `Not a valid target for ${s.card}`;
     case 'duplicate': return s.hero ? `${s.hero} already wears ${s.card}` : `Every hero already wears ${s.card}`;
@@ -96,6 +105,8 @@ export function playBlockReason(block: PlayBlock, s: PlaySubject): string {
 export function moveBlockReason(block: MoveBlock, cost = RETREAT_COST): string {
   switch (block) {
     case 'same': return 'That hero is already there';
+    case 'actOver': return ACT_OVER;
+    case 'retreated': return 'One Retreat a turn';
     case 'empty': return 'There is no hero in that slot';
     case 'benchOnly': return 'That hero can only fight from the bench';
     case 'down': return 'Down until it respawns';
@@ -147,6 +158,7 @@ export function actionRefusal(G: GameState, pid: PlayerID, a: Action): Refusal |
 function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): string {
   // Owed by either seat, a promotion comes before anything else at the table.
   if (code === 'promotionOwed') return 'Choose who steps up first';
+  if (code === 'actOver') return ACT_OVER;
   switch (a.type) {
     case 'attack':
       if (code === 'draft') return 'Pick your heroes first';
@@ -155,8 +167,11 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
       const card = findCardOnBoard(G, a.heroIid)?.card;
       const hero = nameOf(card);
       if (code === 'noHero') return 'That is not one of your heroes';
-      if (code === 'noSkill') return `${hero} has no skill`;
-      if (code === 'target' && a.targetIid !== undefined) return `Not a valid target for ${hero}'s skill`;
+      if (code === 'noSkill') return `${hero} has no such ability`;
+      if (code === 'target' && a.targetIid !== undefined) {
+        const kind = card && resolveSkill(card, a.skillId)?.kind;
+        return `Not a valid target for ${hero}'s ${kind && kind !== 'skill' ? 'ultimate' : 'skill'}`;
+      }
       return skillBlockReason(code as SkillBlock, card, a.skillId);
     }
     case 'playCard': {
@@ -189,14 +204,15 @@ export function attackLine(plan: AttackPlan): string {
 }
 
 /** Every hero of `pid`'s that can still do something this turn: use one of
- *  its skills now, or — the Active — attack while its attack is open. */
+ *  its kit abilities now (a skill, its ultimate, a borrowed ultimate), or — the
+ *  Active — make the turn's attack while it is open. */
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {
   const ps = G.players[pid];
   const ready = new Set<string>();
   for (const hero of [ps.active, ...ps.bench]) {
     if (!hero) continue;
-    const skillOpen = (heroData(hero)?.skills ?? []).some((id) => skillBlocked(G, pid, hero, undefined, id) === null);
-    if (skillOpen || (hero === ps.active && attackOpen)) ready.add(hero.iid);
+    const abilityOpen = kitAbilityIds(hero).some((id) => skillBlocked(G, pid, hero, undefined, id) === null);
+    if (abilityOpen || (hero === ps.active && attackOpen)) ready.add(hero.iid);
   }
   return ready;
 }

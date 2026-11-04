@@ -1,4 +1,4 @@
-import type { CardId } from '@/engine/types';
+import type { CardId, PlayerID } from '@/engine/types';
 
 /** Custom numbers for one hero of a scripted match, by roster position
  *  (Active first, then the bench). `hpMax` sets a hero's full health and
@@ -23,12 +23,15 @@ export interface StorySetup {
   enemyDeck: CardId[];
   enemyBuff: { atk: number; hp: number };
   patronHp?: number;
+  /** The rival patron's HP, when it differs from `patronHp` (a lesson whose
+   *  one kill is the win). */
+  enemyPatronHp?: number;
   /** Deal the player's deck in the order given instead of shuffling it, so a
    *  scripted lesson can name the cards in the opening hand. */
   orderedPlayerDeck?: boolean;
-  /** Open the match on a later turn (souls already ramped, ultimates already
-   *  dealt) — the later tutorial lessons start mid-fight rather than making
-   *  the player replay the opening every time. */
+  /** Open the match on a later engine turn — a lesson that starts mid-fight
+   *  (from turn 2 on, the first turn has its attack). Seat 0 opens it either
+   *  way: on an even turn it is the second mover. */
   startTurn?: number;
   /** Custom attack / health / experience per hero, so a lesson can build the
    *  exact situation it teaches: a hero one point short of a level, a rival
@@ -55,6 +58,9 @@ interface MatchConfig {
   tutorial?: StorySetup;
   /** Which lesson `tutorial` is — picks the coach's script. */
   lesson?: string;
+  /** The seat a person plays (seat 0 when left out); null when the AI plays
+   *  both seats, as in the balance sim: then both seats promote on the spot. */
+  humanSeat?: PlayerID | null;
 }
 
 let current: MatchConfig = {

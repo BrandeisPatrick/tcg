@@ -112,7 +112,8 @@ export function HeroSlot({
   const isCorpse = respawnLeft > 0;
   // The hero whose skill, or whose attack, is armed and waiting for a target.
   const isArmedSource = !!pending && (pending.kind === 'useSkill' || pending.kind === 'attack') && pending.iid === card.iid;
-  const attached = isCorpse ? [] : (card.attached ?? []);
+  // Worn items stay on through a death: a corpse shows its gear too, greyed.
+  const attached = card.attached ?? [];
   // On the small in-game tile we only have room for the primary keyword; the
   // identity colour keys the role band's left edge, as the draft dossier does.
   const identity = getHeroIdentity(card.cardId);
@@ -237,6 +238,7 @@ export function HeroSlot({
           <div style={{
             position: 'absolute', left: 4, bottom: 4,
             display: 'flex', flexDirection: 'row', gap: 3,
+            ...(isCorpse ? { filter: 'grayscale(1) brightness(0.7)', opacity: 0.8 } : {}),
           }}>
             {attached.slice(0, compact ? 3 : 4).map((eq) => {
               const eqData = CARDS_BY_ID[eq.cardId];

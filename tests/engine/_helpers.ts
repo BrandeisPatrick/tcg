@@ -25,8 +25,10 @@ export function nextTestIid(prefix = 't'): string {
  *   P0 = starter Aggro — Haze (active), Vindicta / Lash / Paige (bench)
  *   P1 = starter Control — Abrams (active), Dynamo / Kelvin / Seven (bench)
  *
- * `setup()` itself returns empty players + a pending draft, so tests that read
- * `players['0'].active` must build a ready state via this helper instead.
+ * It is P0's first turn as the second mover (the pie rule: P1 took engine
+ * turn 1), so P0 may attack. `setup()` itself returns empty players + a
+ * pending draft, so tests that read `players['0'].active` must build a ready
+ * state via this helper instead.
  */
 export function freshReadyGame(): GameState {
   const counters = newCounters();
@@ -37,13 +39,16 @@ export function freshReadyGame(): GameState {
       '0': buildPlayer(ids, '0', STARTER_DECK_PLAYER.heroes, AI_DECKS_BY_NAME.aggro),
       '1': buildPlayer(ids, '1', STARTER_DECK_AI.heroes, AI_DECKS_BY_NAME.control),
     },
-    // Turn 2 so P0 may attack (P0 forgoes first strike on turn 1).
+    // Turn 2, P0's: the first mover (P1) forgoes first strike on turn 1, P0 may attack.
     turnNumber: 2,
+    firstMover: '1',
+    humanSeat: '0',
     log: [{ turn: 1, text: 'Battle begins.' }],
     draft: null,
     draftTurnsOffset: 0,
     mulliganPending: false,
     attackUsed: false,
+    retreatUsed: false,
     action: null,
     fx: [],
   } as unknown as GameState;

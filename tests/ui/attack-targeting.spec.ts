@@ -100,9 +100,8 @@ describe('the Attack plate: one target attacks at once, more than one asks who',
     const { G } = duel();
     G.turnNumber = 1; // no attacks on Turn 1
     expect(tapAttackPlate(G, ME)).toEqual({ do: 'refuse', refusal: { code: 'turn1', text: 'No attacks on Turn 1' } });
-    const { G: H, atk } = duel();
-    H.attackUsed = true;
-    atk.attackedThisTurn = true; // this Active has swung
+    const { G: H } = duel();
+    H.attackUsed = true; // the turn's attack has been made
     expect(tapAttackPlate(H, ME)).toMatchObject({ do: 'refuse', refusal: { code: 'used' } });
   });
 
@@ -143,7 +142,6 @@ describe('an armed attack lights the heroes the engine says it may name', () => 
     const benched: PendingPlay = { ...armed(atk), iid: G.players[ME].bench[0]!.iid };
     expect(heroesOf(G).some((h) => isValidTarget(G, ME, benched, h))).toBe(false);
     G.attackUsed = true;
-    atk.attackedThisTurn = true;
     expect(heroesOf(G).some((h) => isValidTarget(G, ME, armed(atk), h))).toBe(false);
   });
 });
@@ -261,7 +259,6 @@ describe('a Dome on the rival Active, as the plate words it', () => {
     rival.hp = 0; rival.respawnTurnsLeft = 2;
     expect(attackOffer(G, ME, haze, true).blockedReason).toBe('No rival Active to hit');
     expect(attackOffer(G, ME, haze, false).blockedReason).toBe('Not your turn');
-    haze.attackedThisTurn = true;
     G.attackUsed = true;
     expect(attackOffer(G, ME, haze, true)).toMatchObject({ blockedReason: 'Attacked this turn', made: true });
   });

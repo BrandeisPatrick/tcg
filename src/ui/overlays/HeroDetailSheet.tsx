@@ -3,8 +3,8 @@ import type { AbilityId, CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
-import { effectiveAtk, effectiveSpirit, heroAbilities } from '@/engine/query';
-import { SKILL_COST } from '@/engine/constants';
+import { effectiveAtk, effectiveSpirit, heroAbilities, ultimateCard } from '@/engine/query';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { ITEM_IMG_BASE } from '@/art/assets';
 import { StatusIcon } from '../card/StatusIcon';
@@ -26,12 +26,12 @@ const eyebrow = {
 } as const;
 
 /** Your Active's attack, offered on its sheet: a swing at the rival Active for
- *  its bullet damage. Free, one-way, one a turn for each hero while it stands
- *  in the Active slot (a hero a Retreat brings in after the swing has its
- *  own) — and a hero makes it or uses its skill, not both. A hero with reach
- *  may name any living rival: the plate then still speaks for the default
- *  target (the first the engine lists), and tapping it closes the sheet and
- *  asks who (`onAttack`; the board arms the targeting, see board/attackAim.ts). */
+ *  its bullet damage. Free and one-way, one a turn — and it ends the turn's
+ *  Act, so abilities and a Retreat come before it (a hero may use its ability
+ *  and then attack). A hero with reach may name any living rival: the plate
+ *  then still speaks for the default target (the first the engine lists), and
+ *  tapping it closes the sheet and asks who (`onAttack`; the board arms the
+ *  targeting, see board/attackAim.ts). */
 export interface AttackOffer {
   /** What the swing would do ("Hits Dynamo for 2 bullet damage"), while it
    *  can be made — at the default target. */
@@ -39,15 +39,15 @@ export interface AttackOffer {
   /** Why it cannot be made right now ("No attacks on Turn 1"), printed in
    *  the line's place. */
   blockedReason?: string;
-  /** This hero has attacked this turn. */
+  /** The turn's attack has been made, by this hero. */
   made?: boolean;
   onAttack: () => void;
 }
 
-/** One of the hero's skills as the sheet offers it: every gate for using it
- *  is open (its turn, the hero's one skill of the turn, statuses, cooldown,
- *  souls, a target), or the short reason it can't be used, shown inside its
- *  skill card. */
+/** One of the hero's kit abilities (a skill, its ultimate, a borrowed
+ *  ultimate) as the sheet offers it: every gate for using it is open (its turn,
+ *  the hero's one ability of the turn, the unlock level, statuses, cooldown, a
+ *  target), or the short reason it can't be used, shown inside its plate. */
 export interface SkillOffer {
   canUse: boolean;
   blockedReason?: string;
@@ -57,9 +57,10 @@ interface Props {
   card: CardInstance;
   /** True if this hero belongs to the local player. Drives the Skill action. */
   isMine?: boolean;
-  /** Each skill's offer, by ability id. A skill with none is not usable. */
+  /** Each kit ability's offer, by ability id: the skills, the ultimate and a
+   *  borrowed ultimate. One with none is not usable. */
   skills?: Record<AbilityId, SkillOffer>;
-  /** The player tapped this skill's card. */
+  /** The player tapped this ability's plate. */
   onUseSkill?: (skillId: AbilityId) => void;
   /** The Attack plate — on the local player's Active only. */
   attack?: AttackOffer;
@@ -101,8 +102,25 @@ export function HeroDetailSheet({
   const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
   const describe = (a: HeroAbilityDef) => sentence(a.text);
   const scale: Scale = { spirit: effectiveSpirit(card), bullet: effectiveAtk(card), who: data.name };
-  // Which skill the hero has used this turn, so only that card reads USED.
+  // Which ability the hero has used this turn, so only that plate reads USED.
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
+  // The ultimate: a kit ability, named and worded by its card; locked below
+  // Level 2, then on its cooldown. A borrowed one (Sinclair's copy) is used once.
+  const level = card.level ?? 1;
+  const ultPlate = (abilityId: AbilityId | undefined, borrowed: boolean) => {
+    const face = ultimateCard(abilityId);
+    if (!abilityId || !face) return null;
+    const left = card.cooldowns?.[abilityId] ?? 0;
+    const status = usedSkill === abilityId ? undefined
+      : borrowed ? 'Once'
+      : level < ULT_UNLOCK_LEVEL ? `Lv ${ULT_UNLOCK_LEVEL}`
+      : left > 0 ? `${left} turn${left === 1 ? '' : 's'}`
+      : undefined;
+    return { abilityId, name: borrowed ? `${face.name} (borrowed)` : face.name, text: sentence(face.text ?? ''), status };
+  };
+  // (A copy of the hero's own ultimate is no second ability: `kitAbilityIds` lists it once.)
+  const borrowed = card.borrowedUlt !== data.ult ? card.borrowedUlt : undefined;
+  const ults = [ultPlate(data.ult, false), ultPlate(borrowed, true)].filter((u): u is NonNullable<typeof u> => !!u);
 
   // The card at the trading-card ratio (5:7). On desktop it stands as tall
   // as the window allows, up to 600, leaving room under it for Retreat and
@@ -204,9 +222,9 @@ export function HeroDetailSheet({
         </div>
 
         {/* TEXT BOARD — the cream rules band under the art. Holds the hero's
-            own ability (Skill/Passive) and, on your Active, the turn's
-            Attack. The Ultimate is NOT shown here (it's cast from hand), so
-            the content fits without scrolling. */}
+            own ability (Skill/Passive) and, on your Active, the turn's Attack.
+            The Ultimate sits in the rail beside the card (live state: locked,
+            cooling down), so the content fits without scrolling. */}
         <div style={{
           flex: '1 1 auto', minHeight: 0,
           display: 'flex', flexDirection: 'column',
@@ -218,7 +236,7 @@ export function HeroDetailSheet({
         }}>
           {/* Rules content — Skill (tap-to-use) or Passive, then the Attack
               on your Active. The overflowY is a safety for an unusually long
-              skill; with no ultimate here it does not normally scroll. */}
+              skill. */}
           <div style={{
             flex: '1 1 auto', minHeight: 0, overflowY: 'auto',
             color: poster.ink,
@@ -258,12 +276,11 @@ export function HeroDetailSheet({
                 />
               </Block>
             ))}
-            {/* The Attack — your Active's other move. Beside a skill the two
-                are split by an "or": the Active does one a turn, and using
-                either spends the other. */}
+            {/* The Attack — your Active's turn-ending move. Abilities come
+                first: the attack ends the Act. */}
             {attack && (
               <>
-                {skillAbilities.length > 0 && <OrRule />}
+                {skillAbilities.length > 0 && <ThenRule />}
                 <AttackPlate offer={attack} onAttack={() => { attack.onAttack(); onClose(); }} />
               </>
             )}
@@ -318,6 +335,32 @@ export function HeroDetailSheet({
             overflowY: isMobile ? undefined : 'auto',
           }}
         >
+          {/* The Ultimate — a plate like a skill's: locked until Level 2, then
+              free on its cooldown; the hero's one ability a turn covers it and
+              the skill alike. A borrowed one (Sinclair's copy) is used once. */}
+          {ults.length > 0 && (
+            <SidePanel title="Ultimate">
+              {ults.map((u) => {
+                const offer = skillOffers?.[u.abilityId];
+                return (
+                  <SkillActionCard
+                    key={u.abilityId}
+                    name={u.name}
+                    description={u.text}
+                    scale={scale}
+                    mine={!!isMine}
+                    used={usedSkill === u.abilityId}
+                    canUse={!!offer?.canUse}
+                    blockedReason={offer?.blockedReason}
+                    chipLabel={u.status}
+                    ultimate
+                    onUse={onUseSkill ? () => { onUseSkill(u.abilityId); onClose(); } : undefined}
+                  />
+                );
+              })}
+            </SidePanel>
+          )}
+
           {/* Stats — Level + BP / HP / SPI, pulled off the card face */}
           <SidePanel title="Stats">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -496,13 +539,15 @@ function PassivePanel({ name, description, scale, trigger }: { name: string; des
 }
 
 /**
- * The Skill card IS the "use skill" button. When the skill is usable (it's the
- * player's hero and all gates pass) the whole card is a pressable red action
- * plate; otherwise it renders as a flat, outlined info card (USED / blocked
- * reason / enemy hero). The chip prints what it costs.
+ * The ability plate IS the "use" button — a skill's, or the ultimate's. When
+ * the ability is usable (it's the player's hero and all gates pass) the whole
+ * plate is a pressable red action plate (gold-edged for an ultimate);
+ * otherwise it renders as a flat, outlined info card (USED / blocked reason /
+ * enemy hero). The chip says it is free — abilities cost no souls — or, given
+ * `chipLabel`, what holds it (the unlock level, the turns of cooldown left).
  */
 function SkillActionCard({
-  name, description, scale, mine, used, canUse, blockedReason, onUse,
+  name, description, scale, mine, used, canUse, blockedReason, onUse, chipLabel, ultimate = false,
 }: {
   name: string;
   description: string;
@@ -512,6 +557,8 @@ function SkillActionCard({
   canUse: boolean;
   blockedReason?: string;
   onUse?: () => void;
+  chipLabel?: string;
+  ultimate?: boolean;
 }) {
   const interactive = mine && !!onUse && canUse && !used;
 
@@ -520,7 +567,7 @@ function SkillActionCard({
   const fgDim = interactive ? poster.paper : poster.inkDim;
   const chip = used
     ? { label: 'USED', color: poster.inkFaint }
-    : { label: `${SKILL_COST} soul${SKILL_COST === 1 ? '' : 's'}`, color: interactive ? poster.paper : poster.inkDim };
+    : { label: chipLabel ?? 'Free', color: interactive ? poster.paper : poster.inkDim };
 
   return (
     <motion.div
@@ -532,12 +579,12 @@ function SkillActionCard({
         ...(interactive
           ? {
               background: poster.red,
-              border: `2px solid ${poster.red}`,
+              border: `2px solid ${ultimate ? poster.gold : poster.red}`,
               ...clipBoth(chamfer(8)),
             }
           : {
               background: 'transparent',
-              border: `1px solid ${poster.inkRule}`,
+              border: `1px solid ${ultimate ? poster.gold : poster.inkRule}`,
               borderRadius: 6,
             }),
         color: fg,
@@ -569,12 +616,13 @@ function SkillActionCard({
   );
 }
 
-/** The either/or between your Active's skill and its attack: one a turn. */
-function OrRule() {
+/** Between your Active's abilities and its attack: the abilities come first,
+ *  and the attack ends the turn's Act. */
+function ThenRule() {
   return (
-    <div role="separator" aria-label="or — one a turn" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '-4px 0 10px' }}>
+    <div role="separator" aria-label="then — the attack ends the turn" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '-4px 0 10px' }}>
       <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
-      <span aria-hidden style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>or · one a turn</span>
+      <span aria-hidden style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>then · the attack ends the turn</span>
       <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
     </div>
   );

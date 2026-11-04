@@ -21,13 +21,19 @@
  * draw from a stream of their own, so one SEED replays the run game for game.
  *
  * Own turns. Lengths are counted in own turns (one player's turns) through
- * `ownTurns`, the one place engine turns are converted.
+ * `ownTurns`, the one place engine turns are converted; it reads the engine's
+ * own counting (src/engine/rounds.ts) and `G.firstMover`.
  *
- * Seat-neutral. A fallen Active is replaced by one rule on both sides (the
- * healthiest bench hero, the first slot on a tie): the engine applies it to
- * seat 1 at once and asks seat 0, whose promotion the AI makes by the same
- * rule. Both sides down at once, which the engine gives to seat 0 (the human
- * seat), is scored as a draw.
+ * Seats. The pie rule: seat 0 drafts first and seat 1 moves first, so the
+ * report gives the first mover's win rate and the first drafter's, each with
+ * its interval (in this engine every game has the same pair, so the two are
+ * complements; the report reads each game's `firstMover` all the same).
+ *
+ * Seat-neutral. The match config names no human seat, so the engine replaces
+ * a fallen Active on both sides at once by one rule (the healthiest bench
+ * hero, the first slot on a tie). Both patrons falling to one action, which the
+ * engine settles on the HP left and then for the second mover, is scored here
+ * as a draw.
  *
  *   npx vite-node scripts/balance-sim.ts [games=2500] [capOwnTurns=20]
  *
@@ -55,6 +61,10 @@ const { DeadlockGame } = await import('@/engine/game');
 const { setupGame } = await import('@/engine/actions/setup');
 const { enumerateAIMoves } = await import('@/ai/heuristic');
 const { CARDS_BY_ID } = await import('@/cards');
+const { setMatchConfig } = await import('@/storage/matchConfig');
+const rounds = await import('@/engine/rounds');
+// The AI plays both seats: no human seat, so both are promoted on the spot.
+setMatchConfig({ playerDeck: [], heroPreferences: [null, null, null, null], humanSeat: null });
 
 type Seat = PlayerID;
 const SEATS: Seat[] = ['0', '1'];
@@ -65,27 +75,20 @@ const BLANK = setupGame().draft!;
 const POOL = [...BLANK.pool];
 const ORDER = [...BLANK.order] as Seat[];
 
-/** The seat that moves first: `G.firstMover` once the engine has the field,
- *  seat 0 (today's rule) until then. */
-function firstMover(G: GameState): Seat {
-  return (G as GameState & { firstMover?: Seat }).firstMover ?? '0';
-}
+/** The seat that moved first: the engine's `G.firstMover` (seat 1, by the pie rule). */
+const firstMover = (G: GameState): Seat => rounds.firstMover(G);
 
 /**
- * Engine turns to own turns, the one conversion the report uses.
+ * Engine turns to own turns, the one conversion the report uses: the engine's
+ * own `ownTurn` (src/engine/rounds.ts), which reads `G.firstMover`.
  * `G.turnNumber` counts both players' turns; round r holds each player's r-th
  * own turn, the first mover's at engine turn 2r − 1 and the second mover's at
- * 2r. Today seat 0 always moves first, so a game that ends on engine turn T
- * lasted ceil(T / 2) own turns. The redesign's pie rule hands the first move
- * to the second drafter, and the engine will then expose `G.firstMover` and a
- * `round()` helper that replace this one; until then the field is read
- * whenever it exists. Returns the own turns `seat` has begun: ceil(T / 2) for
- * the first mover, floor(T / 2) for the second. Read for the first mover (the
- * default) it is the round in progress, which is a finished game's length.
+ * 2r. Returns the own turns `seat` has begun: ceil(T / 2) for the first mover,
+ * floor(T / 2) for the second. Read for the first mover (the default) it is
+ * the round in progress, which is a finished game's length.
  */
 function ownTurns(G: GameState, seat: Seat = firstMover(G)): number {
-  const t = G.turnNumber ?? 0;
-  return seat === firstMover(G) ? Math.ceil(t / 2) : Math.floor(t / 2);
+  return rounds.ownTurn(G, seat);
 }
 
 const isHero = (c: CardInstance | null): c is CardInstance => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero';
@@ -97,11 +100,9 @@ function heroesOf(ps: PlayerState): CardInstance[] {
   return [...slotted, ...slotted.flatMap((c) => (c.attached ?? []).filter((a) => a.remMergeTurnsLeft != null))];
 }
 
-/** The engine's loss test (`checkWinner` in query.ts): the patron at 0 HP, or
- *  every slotted hero down at once. */
+/** The engine's loss test (`checkWinner` in query.ts): the patron at 0 HP. */
 function down(ps: PlayerState): boolean {
-  const slotted = [ps.active, ...ps.bench].filter(isHero);
-  return ps.hp <= 0 || (slotted.length > 0 && slotted.every((c) => (c.respawnTurnsLeft ?? 0) > 0 || c.hp <= 0));
+  return ps.hp <= 0;
 }
 
 interface GameRecord {
@@ -113,9 +114,8 @@ interface GameRecord {
   seats: Record<Seat, string[]>;
   /** Seat 0 makes the engine's first pick; this is who took the first turn. */
   firstMover: Seat;
-  /** A win; both sides down at once (the engine gives that to seat 0, a
-   *  tie-break that favours the human seat, so it is scored here as a draw);
-   *  or still running at the cap. */
+  /** A win; both patrons down to one action (scored here as a draw); or still
+   *  running at the cap. */
   end: 'win' | 'mutual' | 'cap';
   winner: Seat | null;
   engineTurns: number;
@@ -256,6 +256,12 @@ const capped = games.filter((g) => g.end === 'cap').length;
 const seat0 = wilson(wins['0'], decisive.length);
 const movers = new Set(games.map((g) => g.firstMover));
 const seat0Role = movers.size > 1 ? 'drafts first' : movers.has('0') ? 'drafts first and moves first' : 'drafts first, moves second';
+// The pie rule's two roles, each read off the game: the seat that took the
+// first turn (`G.firstMover`), and the seat that made the first pick (the
+// engine's snake order opens on ORDER[0]).
+const movedFirst = wilson(decisive.filter((g) => g.winner === g.firstMover).length, decisive.length);
+const draftedFirst = wilson(decisive.filter((g) => g.winner === ORDER[0]).length, decisive.length);
+const moverSeats = [...movers].sort().map((s) => `seat ${s}`).join(' or ');
 // A pair whose two games went to the same seat was decided by the seat (each
 // set won once); one whose games went to different seats was won twice by the
 // same set, from both seats: the draft outweighed the seat.
@@ -347,9 +353,9 @@ const stuck = games.filter((g) => g.stuck).length;
 type Verdict = 'PASS' | 'FAIL' | 'not yet';
 const gates: { gate: string; target: string; today: string; verdict: Verdict; why?: string }[] = [
   {
-    gate: 'Seat', target: 'seat 0 wins 50 ± 3%',
-    today: ci(seat0),
-    verdict: Math.abs(seat0.p - 0.5) <= 0.03 ? 'PASS' : 'FAIL',
+    gate: 'Seat', target: 'the first mover wins 50 ± 3%',
+    today: ci(movedFirst),
+    verdict: Math.abs(movedFirst.p - 0.5) <= 0.03 ? 'PASS' : 'FAIL',
   },
   {
     gate: 'Heroes', target: 'every hero 45–55%',
@@ -363,7 +369,7 @@ const gates: { gate: string; target: string; today: string; verdict: Verdict; wh
     gate: 'Length', target: 'mean 8–10 own turns, under 2% at the cap',
     today: `mean ${mean(lengths).toFixed(1)} own turns, ${pct(capped / GAMES)} at the sim's cap`,
     verdict: 'not yet',
-    why: `the gate is set for the redesigned match, which ends by rule after round 12 and is paced by the shop; today's engine has neither, so games end at a patron KO or a board wipe and the only cap is this sim's stalemate guard (${CAP} own turns)`,
+    why: `the gate is set for the redesigned match, which ends by rule after round 12 and is paced by the shop; today's engine has neither, so games end when a patron falls (to kills and to pushes into an empty lane) and the only cap is this sim's stalemate guard (${CAP} own turns)`,
   },
   {
     gate: 'Items', target: 'no item in more than 40% of builds',
@@ -383,8 +389,10 @@ for (const g of gates) md += `| ${g.gate} | ${g.target} | ${g.today} | **${g.ver
 md += `\n`;
 
 md += `## Seats\n`;
-md += `- Seat 0 (${seat0Role}) win rate: **${ci(seat0)}** over ${n(decisive.length)} decisive games.\n`;
-md += `- Seat 0 won ${n(wins['0'])}, seat 1 won ${n(wins['1'])}; ${n(mutual)} ended with both sides down at once (the engine gives those to seat 0; here they are draws); ${n(capped)} reached the cap.\n`;
+md += `- Moved first (${moverSeats}): **${ci(movedFirst)}** over ${n(decisive.length)} decisive games.\n`;
+md += `- Drafted first (seat ${ORDER[0]}): **${ci(draftedFirst)}**.\n`;
+md += `- Seat 0 (${seat0Role}) win rate: ${ci(seat0)}.\n`;
+md += `- Seat 0 won ${n(wins['0'])}, seat 1 won ${n(wins['1'])}; ${n(mutual)} ended with both patrons falling to one action (draws here); ${n(capped)} reached the cap.\n`;
 md += `- Of ${n(completePairs)} pairs with two decisive games: seat 0 won both ${n(sweptBySeat['0'])} times and seat 1 ${n(sweptBySeat['1'])} (the seat decided), and the same hero set won both ${n(sweptBySet)} times (the draft outweighed the seat).\n\n`;
 
 md += `## Heroes (both games of every pair)\n`;
@@ -434,7 +442,7 @@ writeFileSync('sim-reports/latest.md', md);
 writeFileSync('sim-reports/latest.json', JSON.stringify({
   seed: SEED, games: GAMES, pairs: PAIRS, capOwnTurns: CAP, seconds,
   gates,
-  seats: { decisive: decisive.length, wins, mutual, capped, seat0, pairs: { complete: completePairs, sweptBySeat, sweptBySet } },
+  seats: { decisive: decisive.length, wins, mutual, capped, seat0, movedFirst, draftedFirst, pairs: { complete: completePairs, sweptBySeat, sweptBySet } },
   heroes: heroRows.map((r) => ({ id: r.id, name: r.name, ...r.all, rate: r.rate, bySeat: r.seat })),
   fit: fit ?? { error: fitError },
   pace: {

@@ -12,12 +12,15 @@ import type { Ctx } from 'boardgame.io';
 import type { CardInstance, GameState, PlayerID, PlayerState } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID } from '@/statuses';
+import { getAbility } from '@/abilities';
 import {
-  LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_EQUIPMENT_PER_HERO, MAX_HAND, MAX_LEVEL,
-  SKILL_COST, SOULS_MAX,
+  COMEBACK_STEPS, LANE_INCOME, LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS,
+  MAX_EQUIPMENT_PER_HERO, MAX_HAND, MAX_LEVEL, SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN, ULT_COOLDOWN,
 } from '@/engine/constants';
-import { isRespawning, koPatronDamage, stepInCandidates } from '@/engine/query';
-import { PIDS, boardOf, describeUnit, everyCard, isHeroCard, other, retreatCostOracle } from './oracle';
+import { attackPower, isRespawning, koPatronDamage, stepInCandidates } from '@/engine/query';
+import {
+  PIDS, boardOf, bountyOracle, describeUnit, everyCard, isHeroCard, netWorthOracle, other, retreatCostOracle, ultLocked,
+} from './oracle';
 
 interface Violation {
   /** Invariant name, e.g. `hero-hp-range`. */
@@ -32,6 +35,11 @@ const isBenchOnly = (c: CardInstance): boolean => {
   return d?.type === 'hero' && !!d.flags?.benchOnly;
 };
 const isMergedRem = (c: CardInstance): boolean => c.cardId === 'hero_rem' && c.remMergeTurnsLeft != null;
+
+/** The seat a person plays (seat 0 unless the state says otherwise; null: none). */
+const humanOf = (G: GameState): PlayerID | null => (G.humanSeat === undefined ? '0' : G.humanSeat);
+/** Who moves first, by the state (seat 0 when a hand-built state says nothing). */
+const firstOf = (G: GameState): PlayerID => G.firstMover ?? '0';
 
 /** Souls a card pays out to whoever plays it, as its text says (Golden Goose
  *  Egg: "Gain 2 souls"). Written from the cards, not read off the engine. */
@@ -85,8 +93,9 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     const ps: PlayerState = G.players[pid];
 
     // ---- player scalars ----
-    if (!Number.isFinite(ps.souls) || ps.souls < 0 || ps.souls > SOULS_MAX || !Number.isInteger(ps.souls)) {
-      add('souls-range', pid, `P${pid} souls ${ps.souls} outside 0..${SOULS_MAX}`);
+    // Souls accumulate with no ceiling, but never go negative or fractional.
+    if (!Number.isFinite(ps.souls) || ps.souls < 0 || !Number.isInteger(ps.souls)) {
+      add('souls-range', pid, `P${pid} souls ${ps.souls} is not a whole number of 0 or more`);
     }
     if (!Number.isFinite(ps.hp) || ps.hp > ps.hpMax) add('patron-range', pid, `P${pid} patron hp ${ps.hp} > hpMax ${ps.hpMax}`);
     if (!G.draft && ps.hp <= 0 && !over) add('patron-dead-no-gameover', pid, `P${pid} patron hp ${ps.hp} but the game is not over`);
@@ -110,9 +119,10 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       if (isRespawning(ps.active) && !over) {
         const candidates = stepInCandidates(ps).length;
         if (candidates > 0) {
+          // Every seat the AI plays is promoted on the spot; the human seat is asked.
           const owes = G.pendingPromotion === pid;
-          if (pid === '1') add('active-corpse-unresolved', pid, `P1's Active is a corpse with ${candidates} step-in candidate(s); resolve() should have auto-promoted`);
-          else if (!owes) add('active-corpse-unresolved', pid, `P0's Active is a corpse with ${candidates} step-in candidate(s) but G.pendingPromotion is ${G.pendingPromotion}`);
+          if (pid !== humanOf(G)) add('active-corpse-unresolved', pid, `P${pid} (an AI seat) has a corpse Active with ${candidates} step-in candidate(s); resolve() should have auto-promoted`);
+          else if (!owes) add('active-corpse-unresolved', pid, `P${pid} (the human seat) has a corpse Active with ${candidates} step-in candidate(s) but G.pendingPromotion is ${G.pendingPromotion}`);
         }
       }
     }
@@ -159,34 +169,23 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     // ---- turn flags ----
     for (const { c } of units) {
       if (isRespawning(c)) continue;
-      if (pid !== current && (c.skillUsedThisTurn || c.attackedThisTurn)) {
-        add('stale-turn-flag', c.iid, `P${pid} is not on turn but ${describeUnit(c)} has skillUsed=${c.skillUsedThisTurn} attacked=${c.attackedThisTurn}`);
+      if (pid !== current && c.skillUsedThisTurn) {
+        add('stale-turn-flag', c.iid, `P${pid} is not on turn but ${describeUnit(c)} has skillUsed=${c.skillUsedThisTurn}`);
       }
     }
   }
 
-  // ---- a wiped board ends the game ----
+  // ---- the turn: its number, and whose it is (the pie rule) ----
+  // A board with every hero down is no loss any more (the rival pushes into the
+  // empty lane at the end of its turn), so there is no wipe check.
   if (!G.draft && !over) {
-    for (const pid of PIDS) {
-      const heroes = boardOf(G.players[pid]).filter(isHeroCard);
-      if (heroes.length > 0 && heroes.every((c) => isRespawning(c) || c.hp <= 0)) {
-        add('board-wiped-no-gameover', pid, `every hero of P${pid} is down but the game is not over`);
-      }
-    }
-  }
-
-  // ---- the turn's attack ----
-  if (!G.draft && !over) {
-    const mover = G.players[current];
-    const flagged = boardOf(mover).filter((c) => c.attackedThisTurn && !isRespawning(c));
-    if (G.attackUsed) {
-      const attackerGone = boardOf(mover).some((c) => isRespawning(c));
-      if (flagged.length === 0 && !attackerGone) add('attack-flag', current, `G.attackUsed is set but no hero of P${current} has attackedThisTurn and none has fallen`);
-    } else if (flagged.length > 0) {
-      add('attack-flag', current, `${describeUnit(flagged[0])} has attackedThisTurn but G.attackUsed is false`);
-    }
     if (G.turnNumber !== ctx.turn - G.draftTurnsOffset) {
       add('turn-number-sync', 'turn', `G.turnNumber ${G.turnNumber} != ctx.turn ${ctx.turn} - offset ${G.draftTurnsOffset}`);
+    }
+    // Engine turn T is the first mover's when odd, the second mover's when even.
+    const owner = G.turnNumber % 2 === 1 ? firstOf(G) : other(firstOf(G));
+    if (G.turnNumber >= 1 && current !== owner) {
+      add('turn-owner-parity', 'turn', `engine turn ${G.turnNumber} belongs to P${owner} (first mover P${firstOf(G)}) but P${current} is on turn`);
     }
   }
 
@@ -273,12 +272,16 @@ export function collectTransitionViolations(
   }
   if (before.G.draft || after.G.draft) return out;
 
-  // The patron only loses HP when one of its heroes falls: the level of each
+  // The patron only loses HP when one of its heroes falls — the level of each
   // hero that went from alive to a corpse during this move (the level it fell
-  // at — a level persists through death), and it never gains any.
+  // at: a level persists through death) — and, at the end of a turn, when the
+  // ending player's Active pushes into a lane its rival has left empty: then
+  // the rival's patron loses that Active's bullet power. It never gains any.
   // (Skipped once an iid is duplicated: hero identity is the iid, and a clone of
   // a card — already reported as `iid-unique` — would make the count meaningless.)
   const duplicated = hasDuplicateIids(before.G) || hasDuplicateIids(after.G);
+  // (A push that ends the match leaves the turn with the player who made it.)
+  const ending = move.name === 'endTurn' ? before.ctx.currentPlayer as PlayerID : undefined;
   for (const pid of duplicated ? [] : PIDS) {
     const b = before.G.players[pid];
     const a = after.G.players[pid];
@@ -290,8 +293,10 @@ export function collectTransitionViolations(
       if (prev && !isRespawning(prev) && isRespawning(h)) { owed += koPatronDamage(h); names.push(`${h.cardId} Lv${h.level ?? 1}`); }
     }
     const drop = b.hp - a.hp;
-    if (drop !== owed) {
-      add('patron-delta', pid, `P${pid} patron hp ${b.hp} -> ${a.hp} (drop ${drop}) but its fallen heroes owe ${owed} [${names.join(',')}]`);
+    const pusher = ending !== undefined && pid === other(ending) ? before.G.players[ending].active : null;
+    const push = pusher && !isRespawning(pusher) ? attackPower(pusher).total : 0;
+    if (drop !== owed && !(push > 0 && drop === owed + push)) {
+      add('patron-delta', pid, `P${pid} patron hp ${b.hp} -> ${a.hp} (drop ${drop}) but its fallen heroes owe ${owed} [${names.join(',')}]${push > 0 ? ` (or ${owed + push} with the empty-lane push)` : ''}`);
     }
   }
 
@@ -315,11 +320,23 @@ export function collectTransitionViolations(
   if (move.name === 'endTurn' && switched && !after.ctx.gameover) {
     const ended = before.ctx.currentPlayer as PlayerID;
     for (const c of boardOf(after.G.players[ended])) {
-      if (!isRespawning(c) && (c.skillUsedThisTurn || c.attackedThisTurn)) {
+      if (!isRespawning(c) && c.skillUsedThisTurn) {
         add('end-turn-flags', c.iid, `${describeUnit(c)} kept its turn flags after P${ended} ended the turn`);
       }
     }
     if (after.G.attackUsed) add('end-turn-flags', 'attackUsed', 'G.attackUsed is still set at the start of the next turn');
+    if (after.G.retreatUsed) add('end-turn-flags', 'retreatUsed', 'G.retreatUsed is still set at the start of the next turn');
+  }
+
+  // The Act: once the turn's attack is made, nothing but ending the turn (and an
+  // owed promotion, and the board's reveal bookkeeping) is accepted.
+  if (before.G.attackUsed && !['endTurn', 'promoteToActive', 'completeAction'].includes(move.name)) {
+    add('act-over', move.name, `${move.name} was accepted after the turn's attack had ended the Act`);
+  }
+  // One Retreat a turn.
+  if (move.name === 'moveHero' && before.G.retreatUsed) {
+    const [f, t] = move.args as [number, number];
+    if (f === 0 || t === 0) add('retreat-once', 'moveHero', `a second Retreat was accepted in one turn`);
   }
 
   // A hero's level only goes up (it persists through death and respawn).
@@ -334,12 +351,13 @@ export function collectTransitionViolations(
   // ---- bookkeeping of what a move costs and gives ----
   const mover = before.ctx.currentPlayer as PlayerID;
   const foe = other(mover);
-  const fellOf = (pid: PlayerID) => {
+  /** The bounties the heroes of `pid` that fell during the move pay their opponent (`bountyOracle`). */
+  const bountyOf = (pid: PlayerID) => {
     const was = heroesByIid(before.G.players[pid]);
     let n = 0;
     for (const [iid, h] of heroesByIid(after.G.players[pid])) {
       const prev = was.get(iid);
-      if (prev && !isRespawning(prev) && isRespawning(h)) n++;
+      if (prev && !isRespawning(prev) && isRespawning(h)) n += bountyOracle(after.G, h);
     }
     return n;
   };
@@ -348,33 +366,52 @@ export function collectTransitionViolations(
   const played = move.name === 'playCard' && arg0 ? beforeHand.get(arg0) : undefined;
 
   if (!duplicated && move.name !== 'endTurn' && move.name !== 'completeAction' && move.name !== 'mulligan') {
-    // Souls: only the move's price, what the card played pays out (SOULS_ON_PLAY) and the
-    // KO bounty (+1 per enemy hero that fell), capped at 10.
+    // Souls: only the move's price (a card's cost, a Retreat's — abilities are free), what
+    // the card played pays out (SOULS_ON_PLAY) and the bounty of each enemy hero that fell
+    // (its level + 1, + 2 for the richest hero on the board). No ceiling.
     let cost = 0;
     let payout = 0;
     if (played) {
       const d = CARDS_BY_ID[played.cardId];
-      if (d && (d.type === 'spell' || d.type === 'equipment' || d.type === 'ultimate')) cost = played.costOverride ?? d.cost ?? 0;
+      if (d && (d.type === 'spell' || d.type === 'equipment')) cost = played.costOverride ?? d.cost ?? 0;
       payout = SOULS_ON_PLAY[played.cardId] ?? 0;
-    } else if (move.name === 'useSkill') cost = SKILL_COST;
-    else if (move.name === 'moveHero') {
+    } else if (move.name === 'moveHero') {
       const [f, t] = move.args as [number, number];
       const ps = before.G.players[mover];
       const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
       if ((f === 0 || t === 0) && get(f) && get(t)) cost = retreatCostOracle(before.G, mover);
     }
-    const wantMover = Math.min(SOULS_MAX, before.G.players[mover].souls - cost + payout + fellOf(foe));
+    const wantMover = before.G.players[mover].souls - cost + payout + bountyOf(foe);
     if (after.G.players[mover].souls !== wantMover) {
-      add('souls-delta', mover, `P${mover} souls ${before.G.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}; price ${cost}, payout ${payout} and ${fellOf(foe)} KO bounty give ${wantMover}`);
+      add('souls-delta', mover, `P${mover} souls ${before.G.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}; price ${cost}, payout ${payout} and ${bountyOf(foe)} in bounties give ${wantMover}`);
     }
-    const wantFoe = Math.min(SOULS_MAX, before.G.players[foe].souls + fellOf(mover));
+    const wantFoe = before.G.players[foe].souls + bountyOf(mover);
     if (after.G.players[foe].souls !== wantFoe) {
       add('souls-delta', foe, `P${foe} souls ${before.G.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; expected ${wantFoe}`);
     }
   }
 
-  // A Retreat spends the Swift of the hero that leaves the Active slot (its free Retreat is
-  // that one), and the hero that swung and left keeps its attack flag on the bench.
+  // A kit ability, used: the hero is spent for the turn, and its cooldown is armed — a skill's
+  // own (SKILL_COOLDOWN unless its data names one), an ultimate's ULT_COOLDOWN — or a borrowed
+  // ultimate is gone. A locked ultimate (below the unlock level) is never used.
+  if (!duplicated && move.name === 'useSkill' && typeof move.args[0] === 'string') {
+    const hero0 = heroesByIid(before.G.players[mover]).get(move.args[0] as string);
+    const hero1 = heroesByIid(after.G.players[mover]).get(move.args[0] as string);
+    const d = hero0 && CARDS_BY_ID[hero0.cardId];
+    if (hero0 && hero1 && d?.type === 'hero') {
+      const id = typeof move.args[2] === 'string' ? (move.args[2] as string) : d.skills[0];
+      if (ultLocked(hero0, id)) add('ult-locked', hero0.iid, `${describeUnit(hero0)} used its ultimate below the unlock level`);
+      const borrowed = hero0.borrowedUlt === id && d.ult !== id && !d.skills.includes(id);
+      if (borrowed) {
+        if (hero1.borrowedUlt === id) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used its borrowed ultimate and still holds it`);
+      } else {
+        const want = d.ult === id ? ULT_COOLDOWN : getAbility(id)?.cooldown ?? SKILL_COOLDOWN;
+        if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
+      }
+    }
+  }
+
+  // A Retreat spends the Swift of the hero that leaves the Active slot (its free Retreat is that one).
   if (!duplicated && move.name === 'moveHero') {
     const [f, t] = move.args as [number, number];
     const leaving = before.G.players[mover].active;
@@ -382,9 +419,6 @@ export function collectTransitionViolations(
     const now = moved ? boardOf(after.G.players[mover]).find((c) => c.iid === leaving!.iid) : undefined;
     if (now && leaving!.statuses.some((s) => s.id === 'swift') && now.statuses.some((s) => s.id === 'swift')) {
       add('swift-spent', now.iid, `${describeUnit(now)} retreated while Swift and is Swift still`);
-    }
-    if (now && leaving!.attackedThisTurn && !now.attackedThisTurn) {
-      add('attack-flag', now.iid, `${describeUnit(now)} attacked, retreated, and lost its attackedThisTurn on the bench`);
     }
   }
 
@@ -441,16 +475,24 @@ export function collectTransitionViolations(
     }
   }
 
-  // A new turn: the turn counter steps by one, the souls are REFILLED to the table value
-  // (1, 2 ... 10 over the player's first ten turns), and one card is drawn if there is room.
+  // A new turn: the turn counter steps by one, the income lands on top of what was banked
+  // (LANE_INCOME, the comeback a side trailing on net worth is owed, and the second mover's
+  // bonus on its first turn), and one card is drawn if there is room.
   if (move.name === 'endTurn' && switched && !after.ctx.gameover) {
     const cur = after.ctx.currentPlayer as PlayerID;
+    const ended = other(cur);
     if (after.G.turnNumber !== before.G.turnNumber + 1) add('turn-number-step', 'turn', `turnNumber ${before.G.turnNumber} -> ${after.G.turnNumber} after endTurn`);
-    // A rival hero that falls while the turn is handed over (a Naptime burst at the end of its own
-    // turn, reaped by the new turn's resolve) still pays its bounty on top of the refill.
-    const bounty = fellOf(other(cur));
-    const wantSouls = Math.min(SOULS_MAX, Math.floor((after.G.turnNumber - 1) / 2) + 1 + bounty);
-    if (after.G.players[cur].souls !== wantSouls) add('souls-refill', cur, `P${cur} starts turn ${after.G.turnNumber} with ${after.G.players[cur].souls} souls, the refill table (+${bounty} KO bounty) says ${wantSouls}`);
+    // A hero of the side that ended its turn that falls in the hand-over (a Naptime burst at
+    // the end of its turn, reaped by the new turn's resolve) pays the new player its bounty too.
+    const bounty = bountyOf(ended);
+    // The comeback reads the net worths at the income: the ender may have banked the bounties
+    // of the new player's heroes its channel pulses felled at the end of its turn (they are
+    // paid before the income), so either reading is the rule's.
+    const comeback = (gap: number) => COMEBACK_STEPS.reduce((n, [by, add]) => (gap >= by ? Math.max(n, add) : n), 0);
+    const gap = netWorthOracle(before.G, ended) - netWorthOracle(before.G, cur);
+    const seat = cur !== firstOf(after.G) && after.G.turnNumber === 2 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
+    const choices = [...new Set([gap, gap + bountyOf(cur)].map((g) => before.G.players[cur].souls + LANE_INCOME + comeback(g) + seat + bounty))];
+    if (!choices.includes(after.G.players[cur].souls)) add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${after.G.players[cur].souls} souls; banked ${before.G.players[cur].souls}, the income (+${bounty} in bounties) says ${choices.join(' or ')}`);
     const pb = before.G.players[cur];
     const pa = after.G.players[cur];
     if (pb.hand.length < 7 && pb.deck.length > 0 && pa.deck.length !== pb.deck.length - 1) {

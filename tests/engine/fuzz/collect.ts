@@ -6,6 +6,7 @@
 import { playGame, type GameRecord, type Policy, type Snapshot, type StepInfo } from './driver';
 import { collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { moveTags, signatureOf, type Hit } from './hits';
+import { resolveSkill } from '@/engine/query';
 
 interface Mix { label: string; policies: Record<'0' | '1', Policy>; prefer?: Partial<Record<'0' | '1', string[]>> }
 
@@ -97,13 +98,10 @@ function tally(c: Coverage, before: Snapshot, m: StepInfo) {
   if (m.name === 'attack') c.attacks++;
   if (m.name === 'useSkill') {
     const hero = [me.active, ...me.bench].find((h) => h && h.iid === m.args[0]);
-    if (hero?.cardId === 'hero_rem') c.remMerges++;
-  }
-  if (m.name === 'playCard') {
-    const card = me.hand.find((h) => h.iid === m.args[0]);
-    if (card && card.cardId.startsWith('ult_')) {
-      c.ultsPlayed++;
-      if (card.costOverride !== undefined) c.freeCopiesPlayed++;
-    }
+    const kind = hero && resolveSkill(hero, typeof m.args[2] === 'string' ? m.args[2] : undefined)?.kind;
+    if (hero?.cardId === 'hero_rem' && kind === 'skill') c.remMerges++;
+    // An ultimate is a kit ability now: its own, or one borrowed from the rival (Sinclair's copy).
+    if (kind === 'ult' || kind === 'borrowed') c.ultsPlayed++;
+    if (kind === 'borrowed') c.freeCopiesPlayed++;
   }
 }

@@ -1,7 +1,7 @@
 /**
- * The Attack plate and the attack's targeting, read off the engine. Each hero
- * attacks once a turn from the Active slot, at the rival Active — unless it has
- * reach (`attackTargets`, legality.ts), when it may name any living enemy hero. With
+ * The Attack plate and the attack's targeting, read off the engine. The Active
+ * makes the turn's one attack, at the rival Active — unless it has reach
+ * (`attackTargets`, legality.ts), when it may name any living enemy hero. With
  * one hero to hit, the plate attacks at once, as it always has; with more, the
  * sheet closes and the board lights the heroes the attack may name, the way a
  * skill's targeting does, and a tap on one makes the attack at it. This file only
@@ -30,7 +30,7 @@ export function attackOffer(G: GameState, me: PlayerID, hero: CardInstance, isMy
     blockedReason: !isMyTurn ? 'Not your turn'
       : block ? attackBlockReason(block, G.players[otherPlayer(me)].active)
       : undefined,
-    made: !!hero.attackedThisTurn,
+    made: isMyTurn && G.attackUsed && G.players[me].active?.iid === hero.iid,
   };
 }
 

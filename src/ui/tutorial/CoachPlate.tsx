@@ -82,9 +82,8 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, r
     lastActionRef.current = actionId;
     setSeen((s) => ({
       ...s,
-      // An ultimate is still a card leaving your hand, so it satisfies the
-      // "play a card" step as readily as a spell does.
-      playedCard: s.playedCard || actionKind === 'play' || actionKind === 'ult',
+      // An ultimate is a kit ability, used from the hero's sheet — not a card.
+      playedCard: s.playedCard || actionKind === 'play',
       castUlt: s.castUlt || actionKind === 'ult',
       usedSkill: s.usedSkill || actionKind === 'skill',
     }));
@@ -98,8 +97,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, r
   }, [isMyTurn]);
 
   // Count the turns you have attacked in: each time your turn goes from no
-  // attack made to one (`G.attackUsed`) is one. A second hero's swing in the
-  // same turn does not count again; no lesson asks for more than one.
+  // attack made to one (`G.attackUsed`) is one — there is one attack a turn.
   const myAttackMade = isMyTurn && G.attackUsed;
   const wasMade = useRef(myAttackMade);
   useEffect(() => {

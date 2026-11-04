@@ -4,14 +4,16 @@ import { fonts } from '../tokens';
 import { poster, chamfer, soulCoin, clipBoth } from '../poster';
 import { boardRows } from './BoardTable';
 import { useViewport } from '../hooks/useViewport';
-import { SOULS_MAX } from '@/engine/constants';
 
 interface Props {
   rivalSouls: number;
   yourSouls: number;
 }
 
-const CAP = SOULS_MAX;   // a full rack renders without an overflow tail
+/** The most coins a rack draws. Souls accumulate with no ceiling: past this
+ *  the stencilled numeral still counts every one, and a "+N" tail says how
+ *  many the rack has no socket for. */
+const RACK = 10;
 
 /** Hook: track the current "slot count" for a player. The slot count
  *  rebases to the current souls when souls go UP (a refill / gain) and
@@ -38,7 +40,8 @@ function useSlotCount(souls: number): number {
  * a tally column printed in the margin. Each rack is a slim paper tab
  * holding a stack of flat gold soul-coins: gaining a soul pops a coin into
  * the next socket, spending one leaves the socket as an empty ink outline.
- * The stencilled numeral at the rack's anchor end is the at-a-glance count.
+ * The stencilled numeral at the rack's anchor end is the at-a-glance count —
+ * the whole bank, which carries from turn to turn and has no cap.
  * Rival's rack anchors at the TOP row, yours at the BOTTOM.
  */
 export function SoulsRail({ rivalSouls, yourSouls }: Props) {
@@ -100,11 +103,10 @@ function Rack({ filled, slots, side, mobile }: {
   // noise. 14px coins + a bigger stencilled count keep it glanceable.
   const coin = mobile ? 10 : 14;
   // Always show at least 3 sockets so the tab reads as a coin rack even
-  // before the economy spins up; clamp to CAP and show a "+N" overflow
-  // tail for any souls past it. Cap is a soft guard — V1 economy
-  // shouldn't push past ~6 in normal play.
-  const rendered = Math.min(Math.max(slots, 3), CAP);
-  const overflow = Math.max(0, slots - CAP);
+  // before the economy spins up; draw at most RACK and show a "+N" overflow
+  // tail for the souls past it (banked souls run well past ten).
+  const rendered = Math.min(Math.max(slots, 3), RACK);
+  const overflow = Math.max(0, filled - RACK);
   // Rival's rack reads top-down (numeral at the top edge, coins growing
   // toward the lane); yours reads bottom-up via column-reverse (numeral
   // at the bottom edge). Socket index 0 sits at the anchor end; the

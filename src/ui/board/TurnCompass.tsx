@@ -5,9 +5,9 @@ import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 
-/** Where a turn stands against its attacks (one per hero, from the Active
- *  slot): 'prepare' before the first, 'battle' while one is walked, 'regroup'
- *  once one is made (`G.attackUsed`). */
+/** Where a turn stands against its attack (one a turn, and it ends the turn's
+ *  play): 'prepare' before it, 'battle' while it is walked, 'regroup' once it
+ *  is made (`G.attackUsed`). */
 export type TurnPhase = 'prepare' | 'battle' | 'regroup';
 
 /** The phase in words — for the dial's accessible name only. */

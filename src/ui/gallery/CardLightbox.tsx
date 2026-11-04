@@ -62,7 +62,7 @@ export function CardLightbox({ ids, id, onPick, onClose }: {
   const glow = data.type === 'ultimate' || (data.type === 'equipment' && data.tier === 3) ? 'gold' : null;
   const meta = [
     data.type === 'equipment' ? `Equipment · Tier ${data.tier}` : TYPE_LABEL[data.type],
-    data.type !== 'hero' && data.cost != null ? `${data.cost} soul${data.cost === 1 ? '' : 's'}` : null,
+    onTable && data.cost != null ? `${data.cost} soul${data.cost === 1 ? '' : 's'}` : null,
     data.type === 'hero' ? `${data.atk} BP · ${data.hp} HP` : null,
   ].filter(Boolean).join(' · ');
 

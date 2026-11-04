@@ -2,21 +2,21 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
-import { attackBlocked, attackTurn, type AttackBlock } from '@/engine/legality';
+import { attackBlocked, attackTurn, blocked, type AttackBlock } from '@/engine/legality';
 import { forecastAttack } from '@/engine/forecast';
 import { effectiveAtk, liveBoardCards } from '@/engine/query';
-import { addStatus, clearTurnFlags, tickRemMerges } from '@/engine/statusOps';
+import { addStatus, clearTurnFlags, tickCooldowns, tickRemMerges } from '@/engine/statusOps';
 import { resolve } from '@/engine/death';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame, configureReadyMatch, makeHero } from './_helpers';
 
-// A turn is the player's to spend on cards, skills, retreats and attacks in any
-// order: `attack` makes the Active swing one-way at the rival Active and keeps
-// the turn; `endTurn` hands it over and never attacks. Attacks are per hero —
-// each may attack once a turn from the Active slot, so a Retreat after the swing
-// brings in a hero who may swing too. Each hero may use its skill once a turn,
-// and a hero does one or the other — skill or attack.
+// A turn is the player's to spend on cards, abilities (each hero one a turn,
+// free) and one Retreat, and then one attack: `attack` makes the Active swing
+// one-way at the rival Active, and it ends the Act — after it only `endTurn`
+// (and an owed promotion) is left; `endTurn` hands the turn over and never
+// attacks. A Retreat before the attack lets the hero who steps in make it, and
+// a hero that used its ability may still attack.
 
 beforeAll(configureReadyMatch);
 
@@ -70,14 +70,13 @@ describe('turn actions: the attack is a move', () => {
     const after = snap(c);
     expect(after.ctx.currentPlayer).toBe('1'); // still P1's turn
     expect(after.G.attackUsed).toBe(true);
-    expect(after.G.players['1'].active!.attackedThisTurn).toBe(true);
     expect(after.G.players['1'].souls).toBe(before.G.players['1'].souls);
     // One-way: the rival Active took the swing, the attacker took nothing back.
     expect(after.G.players['0'].active!.hp).toBeLessThan(before.G.players['0'].active!.hp);
     expect(after.G.players['1'].active!.hp).toBe(before.G.players['1'].active!.hp);
   });
 
-  it('a hero attacks once a turn: its second attack is rejected, and endTurn does not swing again', () => {
+  it('one attack a turn: a second is rejected, and endTurn does not swing again', () => {
     const c = newClient();
     c.moves.endTurn?.();
     (c.moves as any).attack();
@@ -118,7 +117,7 @@ describe('turn actions: the attack is a move', () => {
     expect(haze.statuses.some((s) => s.id === 'bleed')).toBe(false);
   });
 
-  it('after the attack the turn still takes moves: a bench skill', () => {
+  it('the attack ends the Act: after it a bench skill, a card and a retreat are refused; endTurn is not', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 5;
@@ -126,9 +125,12 @@ describe('turn actions: the attack is a move', () => {
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     const lash = me.bench[1]!; // Lash carries a skill; the Active (Haze) is passive-only
     const hpBefore = rival.hp;
-    expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).not.toBe('INVALID_MOVE');
-    expect(rival.hp).toBeLessThan(hpBefore);
-    expect(me.souls).toBe(4);
+    expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).toBe('INVALID_MOVE');
+    expect(rival.hp).toBe(hpBefore);
+    expect(runMove('playCard', G, '0', me.hand[0].iid, me.active!.iid)).toBe('INVALID_MOVE');
+    expect(runMove('moveHero', G, '0', 1, 0)).toBe('INVALID_MOVE');
+    expect(me.souls).toBe(5);
+    expect(blocked(G, '0', { type: 'endTurn' })).toBeNull();
   });
 
   it('a fallen Active is replaced before the attack: the move waits for the promotion', () => {
@@ -170,22 +172,22 @@ describe('turn actions: the attack is a move', () => {
   });
 });
 
-describe('turn actions: skill or attack', () => {
-  it('the Active that used its skill cannot attack', () => {
+describe('turn actions: abilities, then the attack', () => {
+  it('the Active that used its skill may still make the attack', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 5;
     me.active = makeHero('hero_lady_geist', '0', 'active', 0);
     const rival = sturdyRival(G);
     expect(runMove('useSkill', G, '0', me.active.iid, rival.iid)).not.toBe('INVALID_MOVE');
-    expect(attackBlocked(G, '0')).toBe('skill');
+    expect(attackBlocked(G, '0')).toBeNull();
     const hp = rival.hp;
-    expect(runMove('attack', G, '0')).toBe('INVALID_MOVE');
-    expect(rival.hp).toBe(hp);
-    expect(G.attackUsed).toBe(false); // still there for a hero who steps in
+    expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
+    expect(rival.hp).toBeLessThan(hp);
+    expect(me.souls).toBe(5); // abilities are free
   });
 
-  it('the Active that attacked cannot use its skill; a bench hero still can', () => {
+  it('the Active that attacked cannot use its skill afterwards, and neither can a bench hero', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 5;
@@ -193,11 +195,11 @@ describe('turn actions: skill or attack', () => {
     const rival = sturdyRival(G);
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     expect(runMove('useSkill', G, '0', me.active.iid, rival.iid)).toBe('INVALID_MOVE');
-    expect(me.souls).toBe(5); // nothing spent on the rejected skill
-    expect(runMove('useSkill', G, '0', me.bench[1]!.iid, rival.iid)).not.toBe('INVALID_MOVE'); // Lash
+    expect(runMove('useSkill', G, '0', me.bench[1]!.iid, rival.iid)).toBe('INVALID_MOVE'); // Lash
+    expect(me.souls).toBe(5);
   });
 
-  it('two different heroes each use their skill in one turn; the same hero cannot twice', () => {
+  it('two different heroes each use their skill in one turn, free; the same hero cannot twice', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 3;
@@ -206,48 +208,40 @@ describe('turn actions: skill or attack', () => {
     const rival = sturdyRival(G);
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).not.toBe('INVALID_MOVE');
     expect(runMove('useSkill', G, '0', paige.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
-    expect(me.souls).toBe(1);
+    expect(me.souls).toBe(3);
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).toBe('INVALID_MOVE');
-    expect(me.souls).toBe(1);
     // Bench skills leave the Active's attack where it was.
     expect(attackBlocked(G, '0')).toBeNull();
   });
 
-  it('each skill still costs a soul: a second hero waits for the souls to pay', () => {
+  it('abilities cost no souls: with none at all, two heroes use theirs', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    me.souls = 1;
+    me.souls = 0;
     const rival = sturdyRival(G);
     expect(runMove('useSkill', G, '0', me.bench[1]!.iid, rival.iid)).not.toBe('INVALID_MOVE');
-    expect(runMove('useSkill', G, '0', me.bench[2]!.iid, me.active!.iid)).toBe('INVALID_MOVE');
-    expect(me.bench[2]!.skillUsedThisTurn).toBe(false);
+    expect(runMove('useSkill', G, '0', me.bench[2]!.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
+    expect(me.souls).toBe(0);
   });
 
-  it('after the attack a retreat brings in a hero who may attack too; the attacker keeps its skill spent', () => {
+  it('a retreat before the attack lets the hero who steps in make it; after the attack nothing moves', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 9;
     const rival = sturdyRival(G);
-    expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE'); // Lash steps in
+    expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE'); // Lash steps in, for 1 soul
+    expect(me.souls).toBe(8);
     const lash = me.active!;
     expect(lash.cardId).toBe('hero_lash');
-    expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
-    expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE'); // Haze back in
-    expect(me.active!.cardId).toBe('hero_haze');
-    expect(attackBlocked(G, '0')).toBeNull(); // Haze has not swung this turn
     const hp = rival.hp;
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     expect(rival.hp).toBeLessThan(hp);
-    // Lash made an attack: her skill stays shut from the bench as well.
-    expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).toBe('INVALID_MOVE');
-    // And she cannot swing again if she comes back.
-    expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE');
+    expect(runMove('moveHero', G, '0', 2, 0)).toBe('INVALID_MOVE'); // Haze stays out
     expect(me.active!.iid).toBe(lash.iid);
     expect(attackBlocked(G, '0')).toBe('used');
-    expect(runMove('attack', G, '0')).toBe('INVALID_MOVE');
   });
 
-  it('after a skill, a retreat brings in a hero who may make the attack', () => {
+  it('one Retreat a turn; the hero who stepped in may use its skill and still attack', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 9;
@@ -255,15 +249,14 @@ describe('turn actions: skill or attack', () => {
     expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE'); // Lash steps in
     const lash = me.active!;
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).not.toBe('INVALID_MOVE');
-    expect(attackBlocked(G, '0')).toBe('skill');
-    expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE'); // Haze back in
-    expect(me.active!.cardId).toBe('hero_haze');
     expect(attackBlocked(G, '0')).toBeNull();
+    expect(runMove('moveHero', G, '0', 2, 0)).toBe('INVALID_MOVE'); // a second Retreat
+    expect(me.active!.iid).toBe(lash.iid);
+    // Bench to bench is no Retreat: still free, still open.
+    expect(runMove('moveHero', G, '0', 1, 3)).not.toBe('INVALID_MOVE');
     const hp = rival.hp;
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     expect(rival.hp).toBeLessThan(hp);
-    expect(me.active!.attackedThisTurn).toBe(true);
-    expect(lash.attackedThisTurn).toBeFalsy();
   });
 
   it('a merged Rem comes back from the merge with her skill ready', () => {
@@ -276,28 +269,33 @@ describe('turn actions: skill or attack', () => {
     expect(rem.zone).toBe('equipment'); // riding on the Active, off the bench
     clearTurnFlags(me);                  // her turn ends…
     rem.remMergeTurnsLeft = 1;
-    tickRemMerges(G, me);                // …and on a later one the merge runs out
+    tickCooldowns(me);                   // …a later one starts: her skill's cooldown runs out
+    tickRemMerges(G, me);                // …and so does the merge
     expect(me.bench).toContain(rem);
     expect(runMove('useSkill', G, '0', rem.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
   });
 
   it('the flags reset when the next turn begins', () => {
     const c = newClient();
-    c.moves.endTurn?.(); // → P1, turn 2 (one soul)
+    c.moves.endTurn?.(); // → P1, turn 2
     let G = snap(c).G;
     const dynamo = G.players['1'].bench.find((b) => b?.cardId === 'hero_dynamo')!;
-    (c.moves as any).useSkill(dynamo.iid, G.players['1'].active!.iid); // a bench skill…
+    (c.moves as any).moveHero(1, 2);                                    // a free bench shuffle…
+    G = snap(c).G;
+    (c.moves as any).useSkill(dynamo.iid, G.players['1'].active!.iid); // …a bench skill…
+    G = snap(c).G;
+    (c.moves as any).moveHero(1, 0);                                    // …the Retreat…
     (c.moves as any).attack();                                          // …and the attack
     G = snap(c).G;
     expect(G.attackUsed).toBe(true);
-    expect(G.players['1'].active!.attackedThisTurn).toBe(true);
-    expect(G.players['1'].bench.find((b) => b?.iid === dynamo.iid)!.skillUsedThisTurn).toBe(true);
+    expect(G.retreatUsed).toBe(true);
+    expect(G.players['1'].bench.concat(G.players['1'].active).find((b) => b?.iid === dynamo.iid)!.skillUsedThisTurn).toBe(true);
     c.moves.endTurn?.(); // → P0, turn 3
     G = snap(c).G;
     expect(G.attackUsed).toBe(false);
+    expect(G.retreatUsed).toBe(false);
     expect(attackBlocked(G, '0')).toBeNull();
-    expect(G.players['1'].active!.attackedThisTurn).toBe(false);
-    expect(G.players['1'].bench.find((b) => b?.iid === dynamo.iid)!.skillUsedThisTurn).toBe(false);
+    expect(G.players['1'].bench.concat(G.players['1'].active).find((b) => b?.iid === dynamo.iid)!.skillUsedThisTurn).toBe(false);
   });
 });
 
@@ -308,9 +306,9 @@ describe('AI: the attack is a choice', () => {
     const cases: [AttackBlock | null, (G: GameState) => void][] = [
       [null, () => {}],
       ['turn1', (G) => { G.turnNumber = 1; }],
-      ['used', (G) => { G.attackUsed = true; G.players['1'].active!.attackedThisTurn = true; }],
+      ['used', (G) => { G.attackUsed = true; }],
       ['noActive', (G) => { G.players['1'].active!.respawnTurnsLeft = 2; }],
-      ['skill', (G) => { G.players['1'].active!.skillUsedThisTurn = true; }],
+      [null, (G) => { G.players['1'].active!.skillUsedThisTurn = true; }], // an ability does not spend the attack
       ['noTarget', (G) => { G.players['0'].active!.respawnTurnsLeft = 2; }],
       ['cannot', (G) => { addStatus(G, G.players['1'].active!, 'stun', 1, 1); }],
     ];
@@ -327,15 +325,16 @@ describe('AI: the attack is a choice', () => {
   });
 
   it('attacks rather than ending the turn when there is nothing else to do', () => {
-    const G = freshReadyGame(); // the AI holds no souls: no skills or retreat
+    const G = freshReadyGame(); // the AI holds no souls: no retreat; its bench has used its skills
     G.players['1'].hand = [];
+    for (const b of G.players['1'].bench) if (b) b.skillUsedThisTurn = true;
     expect(enumerateAIMoves(G, ctx('1'))[0].move).toBe('attack');
   });
 
   // The attack that wins the match is ranked above everything in the plain
   // move list. Only the Active swings and the swings never reach the patron:
-  // a win is a knockout that costs the last patron life or leaves the rival
-  // with no hero standing.
+  // a win is a knockout that costs the last patron life. A board with every
+  // hero down is no loss by itself.
   const LETHAL = 1_000_000;
   const attackScore = (G: GameState) => enumerateAIMoves(G, ctx('1'), false).find((m) => m.move === 'attack')!.score;
   /** P0's bench, all down on the respawn timer. */
@@ -351,13 +350,13 @@ describe('AI: the attack is a choice', () => {
     expect(attackScore(G)).toBe(LETHAL);
   });
 
-  it('ranks the attack as lethal when its knockout leaves the rival no hero standing', () => {
+  it('a knockout that leaves the rival no hero standing is not lethal: a wiped board is no loss', () => {
     const G = freshReadyGame();
     const p0 = G.players['0'];
     p0.active!.hp = 1;
     benchDown(G);
-    expect(p0.hp).toBeGreaterThan(1); // the patron itself would survive
-    expect(attackScore(G)).toBe(LETHAL);
+    expect(p0.hp).toBeGreaterThan(1); // the patron itself survives
+    expect(attackScore(G)).toBeLessThan(LETHAL);
   });
 
   it('a knockout with a patron life to spare and a hero to step in is not lethal', () => {
@@ -383,22 +382,6 @@ describe('AI: the attack is a choice', () => {
     expect(attackScore(G)).toBeLessThan(LETHAL);
   });
 
-  it('a merged Rem who walks off the fallen bearer keeps the rival in the match', () => {
-    const G = freshReadyGame();
-    const p0 = G.players['0'];
-    const bearer = p0.active!;
-    bearer.hp = 1;
-    benchDown(G);
-    p0.bench[2] = null; // the slot she returns to
-    const rem = makeHero('hero_rem', '0', 'equipment', 3);
-    rem.attachedTo = bearer.iid;
-    rem.remMergeTurnsLeft = 2;
-    rem.remMergeHpBuff = 0;
-    bearer.attached = [rem];
-    expect(attackScore(G)).toBeLessThan(LETHAL);
-    bearer.attached = []; // without her, the same knockout wipes the board
-    expect(attackScore(G)).toBe(LETHAL);
-  });
 
   // With lookahead the position after each line is scored, so a won game has to
   // look different from a good position: the winning line ranks first, whatever
@@ -416,11 +399,13 @@ describe('AI: the attack is a choice', () => {
     winsFirst(G);
   });
 
-  it('with lookahead the attack that leaves the rival no hero standing ranks first, decisively', () => {
+  it('with lookahead the knockout that leaves the rival no hero standing is a good line, not a won game', () => {
     const G = freshReadyGame();
     G.players['0'].active!.hp = 1;
     benchDown(G);
-    winsFirst(G);
+    const attack = enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'attack')!;
+    expect(attack.score).toBeLessThan(LETHAL);
+    expect(attack.score).toBeGreaterThan(enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'endTurn')!.score);
   });
 
   it('with lookahead a won game is worth more than any position, a lost one less', () => {
@@ -532,8 +517,10 @@ describe('AI: the attack is a choice', () => {
     // …and with only the gear and the attack to weigh (the bench has used its
     // skills) it is the first choice. A 1-soul skill like Dynamo's Bullet Power
     // buff is worth more than the 2-soul magazine now that the position prices
-    // the buff's status; that is not what this test is about.
+    // the buff's status; that is not what this test is about. Nor is the Retreat
+    // that would send a harder hitter in: the turn's one has been made.
     for (const b of ai.bench) if (b) b.skillUsedThisTurn = true;
+    G.retreatUsed = true;
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect(best.move).toBe('playCard');
     expect(best.args[0]).toBe('mag');
@@ -548,7 +535,7 @@ describe('AI: the attack is a choice', () => {
     expect(best.args[0]).not.toBe(G.players['1'].active!.iid);
   });
 
-  it("weighs the Active's skill against its attack, and casts when the skill is worth more", () => {
+  it("casts the Active's skill ahead of its attack: it may make both", () => {
     const G = freshReadyGame();
     const ai = G.players['1'];
     ai.active = makeHero('hero_lady_geist', '1', 'active', 0); // 1 attack, a 3-damage skill

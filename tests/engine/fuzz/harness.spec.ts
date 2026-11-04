@@ -45,7 +45,7 @@ describe('the invariants fire on states built to break them', () => {
     ['equipment-duplicate', (G) => { const h = G.players['0'].active!; h.attached = [equip('extra_spirit', '0', h), equip('extra_spirit', '0', h)]; }],
     ['attached-foreign', (G) => { const h = G.players['0'].active!; h.attached = [{ ...G.players['0'].bench[0]! }]; }],
     ['hero-in-pile', (G) => { const h = makeHero('hero_shiv', '0', 'discard'); G.players['0'].discard.push(h); }],
-    ['souls-range', (G) => { G.players['0'].souls = 11; }],
+    ['souls-range', (G) => { G.players['0'].souls = 1.5; }],
     ['souls-range', (G) => { G.players['0'].souls = -1; }],
     ['patron-range', (G) => { G.players['0'].hp = G.players['0'].hpMax + 1; }],
     ['patron-dead-no-gameover', (G) => { G.players['1'].hp = 0; }],
@@ -61,9 +61,11 @@ describe('the invariants fire on states built to break them', () => {
     ['level-exp', (G) => { G.players['0'].active!.level = 4; G.players['0'].active!.exp = 2; }],
     ['level-range', (G) => { G.players['0'].active!.level = 5 as 4; }],
     ['stale-turn-flag', (G) => { G.players['1'].active!.skillUsedThisTurn = true; }],
-    ['attack-flag', (G) => { G.attackUsed = true; }],
-    ['attack-flag', (G) => { G.players['0'].active!.attackedThisTurn = true; }],
     ['turn-number-sync', (G) => { G.turnNumber = 9; }],
+    // Engine turn 2 is the second mover's: with P0 moving first it is not P0's.
+    ['turn-owner-parity', (G) => { G.firstMover = '0'; }],
+    // An AI seat is promoted on the spot; with no human seat, P0 is one too.
+    ['active-corpse-unresolved', (G) => { G.humanSeat = null; const a = G.players['0'].active!; a.hp = 0; a.respawnTurnsLeft = 3; G.pendingPromotion = '0'; }],
     ['log-cap', (G) => { for (let i = 0; i < 201; i++) G.log.push({ turn: 1, text: 'x' }); }],
     ['fx-seq-monotonic', (G) => { G.fx = [{ kind: 'revive', iid: 'a', seq: 5 }, { kind: 'revive', iid: 'b', seq: 5 }]; }],
     ['roster-duplicate', (G) => { G.players['1'].bench[0] = makeHero('hero_haze', '1', 'bench', 1); }],
@@ -117,13 +119,49 @@ describe('the transition rules fire', () => {
     collectTransitionViolations(p.before, c ? { G: p.after.G, ctx: c } : p.after, { name, args }, true).map((v) => v.id);
   const heroIid = (p: ReturnType<typeof pair>) => p.before.G.players['0'].active!.iid;
 
-  it('souls: a skill that costs 2, or a bounty with no KO', () => {
-    const p = pair((G) => { G.players['0'].souls -= 2; });
-    expect(moveIds(p, 'useSkill', [heroIid(p)])).toContain('souls-delta');
-    const q = pair((G) => { G.players['0'].souls = G.players['0'].souls; });
-    expect(moveIds(q, 'useSkill', [heroIid(q)])).toContain('souls-delta'); // the soul was not charged
-    const r = pair((G) => { G.players['0'].souls -= 1; });
+  it('souls: an ability that charges any, or a bounty with no KO', () => {
+    const p = pair((G) => { G.players['0'].souls -= 1; });
+    expect(moveIds(p, 'useSkill', [heroIid(p)])).toContain('souls-delta'); // abilities are free
+    const q = pair((G) => { G.players['1'].souls += 2; });
+    expect(moveIds(q, 'useSkill', [heroIid(q)])).toContain('souls-delta'); // a bounty nobody earned
+    const r = pair(() => undefined);
     expect(moveIds(r, 'useSkill', [heroIid(r)])).not.toContain('souls-delta');
+  });
+  it('a kill pays the victim\'s level + 1 to its opponent, and 2 more for the richest hero', () => {
+    const fall = (G: GameState) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 3; G.players['1'].hp -= 1; };
+    const right = pair((G) => { fall(G); G.players['0'].souls += 2; });
+    expect(moveIds(right, 'attack', [])).not.toContain('souls-delta');
+    const flat = pair((G) => { fall(G); G.players['0'].souls += 1; }); // the old flat bounty
+    expect(moveIds(flat, 'attack', [])).toContain('souls-delta');
+    // The fallen hero wears the only item on the board: it was the richest.
+    const rich = (G: GameState) => { const h = G.players['1'].bench[0]!; h.attached = [equip('extra_health', '1', h)]; };
+    const before = clean();
+    rich(before);
+    const after = structuredClone(before) as GameState;
+    fall(after);
+    after.players['0'].souls += 4;
+    expect(collectTransitionViolations({ G: before, ctx: ctx() }, { G: after, ctx: ctx() }, { name: 'attack', args: [] }, true).map((v) => v.id)).not.toContain('souls-delta');
+  });
+  it('the Act: after the attack only endTurn and a promotion are accepted; one Retreat a turn', () => {
+    const p = pair(() => undefined);
+    p.before.G.attackUsed = true;
+    expect(moveIds(p, 'useSkill', [heroIid(p)])).toContain('act-over');
+    expect(moveIds(p, 'promoteToActive', [])).not.toContain('act-over');
+    const q = pair(() => undefined);
+    q.before.G.retreatUsed = true;
+    expect(moveIds(q, 'moveHero', [1, 0])).toContain('retreat-once');
+    expect(moveIds(q, 'moveHero', [1, 2])).not.toContain('retreat-once');
+  });
+  it('an ability arms its cooldown: a skill its own, an ultimate ULT_COOLDOWN; a locked ultimate is never used', () => {
+    const skill = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 1 }; });
+    const lash = skill.before.G.players['0'].bench[1]!.iid;
+    expect(moveIds(skill, 'useSkill', [lash])).not.toContain('ability-cooldown');
+    const unarmed = pair(() => undefined);
+    expect(moveIds(unarmed, 'useSkill', [lash])).toContain('ability-cooldown');
+    const ult = pair((G) => { G.players['0'].bench[1]!.cooldowns = { eff_ult_lash: 3 }; });
+    expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-locked'); // Lash is level 1
+    ult.before.G.players['0'].bench[1]!.level = 2;
+    expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).not.toContain('ult-locked');
   });
   it('a card played stays in the hand / ends nowhere / gives a different bonus', () => {
     const before = clean();
@@ -165,26 +203,44 @@ describe('the transition rules fire', () => {
       return { before: { G: before, ctx: ctx() }, after: { G: after, ctx: ctx({ currentPlayer: '1', turn: 3 }) } };
     };
     // P1's turn starts: the corpse must tick to 2 — not tick, wrong
-    let p = base((G) => { G.turnNumber = 3; G.players['1'].souls = 2; });
+    let p = base((G) => { G.turnNumber = 3; G.players['1'].souls = 4; });
     let ids3 = moveIds(p, 'endTurn', [], p.after.ctx);
     expect(ids3).toContain('respawn-timer');
-    // refill table: turn 3 -> 2 souls; 5 is wrong
+    expect(ids3).not.toContain('souls-income');
+    // the income: 4 on top of what was banked (0 here); 5 is wrong, and so is a refill to 2
     p = base((G) => { G.turnNumber = 3; G.players['1'].souls = 5; G.players['1'].bench[0]!.respawnTurnsLeft = 2; });
     ids3 = moveIds(p, 'endTurn', [], p.after.ctx);
-    expect(ids3).toContain('souls-refill');
+    expect(ids3).toContain('souls-income');
     expect(ids3).not.toContain('respawn-timer');
+    p = base((G) => { G.turnNumber = 3; G.players['1'].souls = 2; G.players['1'].bench[0]!.respawnTurnsLeft = 2; });
+    expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('souls-income');
+    // a side 8 behind on net worth gets 1 more: P0 banked 8, P1 nothing
+    before.players['0'].souls = 8;
+    p = base((G) => { G.turnNumber = 3; G.players['1'].souls = 5; G.players['1'].bench[0]!.respawnTurnsLeft = 2; });
+    expect(moveIds(p, 'endTurn', [], p.after.ctx)).not.toContain('souls-income');
+    before.players['0'].souls = 0;
     // the turn counter must step by one
     p = base((G) => { G.turnNumber = 7; G.players['1'].bench[0]!.respawnTurnsLeft = 2; });
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('turn-number-step');
     // a draw is owed: deck unchanged with room in hand
-    p = base((G) => { G.turnNumber = 3; G.players['1'].souls = 2; G.players['1'].bench[0]!.respawnTurnsLeft = 2; });
+    p = base((G) => { G.turnNumber = 3; G.players['1'].souls = 4; G.players['1'].bench[0]!.respawnTurnsLeft = 2; });
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('turn-draw');
   });
-  it('a wiped board with the game still running', () => {
+  it('a wiped board is no loss: nothing is reported while the game runs on', () => {
     const G = clean();
     for (const c of [G.players['1'].active!, ...G.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 3; }
-    expect(ids(G)).toContain('board-wiped-no-gameover');
-    expect(ids(G, ctx({ gameover: { winner: '0' } } as Partial<Ctx>))).not.toContain('board-wiped-no-gameover');
+    expect(ids(G)).toEqual([]);
+  });
+  it('the empty-lane push: at the end of a turn the rival\'s patron may lose the Active\'s bullet power', () => {
+    const before = clean();
+    for (const c of [before.players['1'].active!, ...before.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 3; }
+    const after = structuredClone(before) as GameState;
+    after.players['1'].hp -= 3; // Haze's 3 Bullet Power
+    const end = (a: GameState, name: string) => collectTransitionViolations({ G: before, ctx: ctx() }, { G: a, ctx: ctx({ currentPlayer: '1', turn: 3 }) }, { name, args: [] }, true).map((v) => v.id);
+    expect(end(after, 'endTurn')).not.toContain('patron-delta');
+    expect(end(after, 'useSkill')).toContain('patron-delta');
+    after.players['1'].hp -= 1;
+    expect(end(after, 'endTurn')).toContain('patron-delta');
   });
   it('a rejected move that replaced G', () => {
     expect(ids2(pair(() => undefined), 'playCard', false)).toContain('rejected-move-changed-state');
@@ -208,7 +264,7 @@ describe('the driver', () => {
     let refused = 0;
     let taken = 0;
     playGame({
-      seed: 8, policies: { '0': 'chaos', '1': 'randomLegal' },
+      seed: 13, policies: { '0': 'chaos', '1': 'randomLegal' },
       afterMove: (_b, _a, m, accepted) => { if (m.chaos) (accepted ? taken++ : refused++); },
     });
     expect(refused).toBeGreaterThan(0);

@@ -2,10 +2,11 @@ import type { HeroCard } from '@/engine/types';
 
 /**
  * 19 heroes total. A hero carries one or two abilities: `skills` (Activate
- * trigger; a hero uses ONE skill a turn and gives up its attack that turn to use
- * it; `[]` for a passive-only hero) and `passives` (always-on or trigger-based,
- * no cast). Today every hero has exactly one ability — a skill or a passive,
- * never both.
+ * trigger; free, each on its own cooldown; `[]` for a passive-only hero) and
+ * `passives` (always-on or trigger-based, no cast) — today every hero has
+ * exactly one of the two, never both — plus its ultimate (`ult`, an ability
+ * id), unlocked at Level 2. A hero uses one ability a turn (a skill or its
+ * ultimate), and the Active may still make the turn's attack after it.
  *
  * Split (8 passive / 11 skill):
  *   PASSIVE: Abrams, Drifter, Haze, Mirage, Mo & Krill, Shiv, Vindicta, Wraith
@@ -34,7 +35,7 @@ export const HEROES: HeroCard[] = [
     hp: 5,
     skills: [],
     passives: ['passive_abrams_heal'],
-    ult: 'ult_abrams',
+    ult: 'eff_ult_abrams',
   },
   {
     id: 'hero_haze',
@@ -45,7 +46,7 @@ export const HEROES: HeroCard[] = [
     hp: 5,
     skills: [],
     passives: ['passive_haze_fixation'],
-    ult: 'ult_haze',
+    ult: 'eff_ult_haze',
   },
   {
     id: 'hero_mo_krill',
@@ -56,7 +57,7 @@ export const HEROES: HeroCard[] = [
     hp: 7,
     skills: [],
     passives: ['passive_mo_krill_burrow'],
-    ult: 'ult_mo_krill',
+    ult: 'eff_ult_mo_krill',
   },
   {
     id: 'hero_rem',
@@ -66,7 +67,7 @@ export const HEROES: HeroCard[] = [
     atk: 1,
     hp: 4,
     skills: ['skill_rem'],
-    ult: 'ult_rem',
+    ult: 'eff_ult_rem',
     flags: { benchOnly: true },
   },
   {
@@ -78,7 +79,7 @@ export const HEROES: HeroCard[] = [
     hp: 5,
     skills: [],
     passives: ['passive_shiv_bleed'],
-    ult: 'ult_shiv',
+    ult: 'eff_ult_shiv',
   },
   {
     id: 'hero_vindicta',
@@ -89,7 +90,7 @@ export const HEROES: HeroCard[] = [
     hp: 5,
     skills: [],
     passives: ['passive_vindicta_flight'],
-    ult: 'ult_vindicta',
+    ult: 'eff_ult_vindicta',
   },
   {
     id: 'hero_wraith',
@@ -100,7 +101,7 @@ export const HEROES: HeroCard[] = [
     hp: 6,
     skills: [],
     passives: ['passive_wraith_mixed'],
-    ult: 'ult_wraith',
+    ult: 'eff_ult_wraith',
   },
 
   // ----- SKILL-only heroes -----
@@ -112,7 +113,7 @@ export const HEROES: HeroCard[] = [
     atk: 3,
     hp: 6,
     skills: ['skill_dynamo'],
-    ult: 'ult_dynamo',
+    ult: 'eff_ult_dynamo',
   },
   {
     id: 'hero_kelvin',
@@ -122,7 +123,7 @@ export const HEROES: HeroCard[] = [
     atk: 2,
     hp: 6,
     skills: ['skill_kelvin'],
-    ult: 'ult_kelvin',
+    ult: 'eff_ult_kelvin',
   },
   {
     id: 'hero_lady_geist',
@@ -132,7 +133,7 @@ export const HEROES: HeroCard[] = [
     atk: 1,
     hp: 4,
     skills: ['skill_lady_geist'],
-    ult: 'ult_lady_geist',
+    ult: 'eff_ult_lady_geist',
   },
   {
     id: 'hero_lash',
@@ -142,7 +143,7 @@ export const HEROES: HeroCard[] = [
     atk: 1,
     hp: 4,
     skills: ['skill_lash'],
-    ult: 'ult_lash',
+    ult: 'eff_ult_lash',
   },
   {
     id: 'hero_paige',
@@ -152,7 +153,7 @@ export const HEROES: HeroCard[] = [
     atk: 2,
     hp: 4,
     skills: ['skill_paige'],
-    ult: 'ult_paige',
+    ult: 'eff_ult_paige',
   },
   {
     id: 'hero_seven',
@@ -162,7 +163,7 @@ export const HEROES: HeroCard[] = [
     atk: 2,
     hp: 4,
     skills: ['skill_seven_static'],
-    ult: 'ult_seven',
+    ult: 'eff_ult_seven',
   },
   {
     id: 'hero_sinclair',
@@ -172,7 +173,7 @@ export const HEROES: HeroCard[] = [
     atk: 1,
     hp: 4,
     skills: ['skill_sinclair'],
-    ult: 'ult_sinclair',
+    ult: 'eff_ult_sinclair',
   },
   {
     id: 'hero_viscous',
@@ -182,7 +183,7 @@ export const HEROES: HeroCard[] = [
     atk: 2,
     hp: 4,
     skills: ['skill_viscous'],
-    ult: 'ult_viscous',
+    ult: 'eff_ult_viscous',
   },
   {
     id: 'hero_yamato',
@@ -192,7 +193,7 @@ export const HEROES: HeroCard[] = [
     atk: 2,
     hp: 6,
     skills: ['skill_yamato'],
-    ult: 'ult_yamato',
+    ult: 'eff_ult_yamato',
   },
   {
     id: 'hero_warden',
@@ -202,7 +203,7 @@ export const HEROES: HeroCard[] = [
     atk: 2,
     hp: 5,
     skills: ['skill_warden'],
-    ult: 'ult_warden',
+    ult: 'eff_ult_warden',
   },
   {
     id: 'hero_mirage',
@@ -213,7 +214,7 @@ export const HEROES: HeroCard[] = [
     hp: 6,
     skills: [],
     passives: ['passive_mirage_djinns_mark'],
-    ult: 'ult_mirage',
+    ult: 'eff_ult_mirage',
   },
   {
     id: 'hero_drifter',
@@ -224,7 +225,7 @@ export const HEROES: HeroCard[] = [
     hp: 5,
     skills: [],
     passives: ['passive_drifter_bloodscent'],
-    ult: 'ult_drifter',
+    ult: 'eff_ult_drifter',
   },
 ];
 

@@ -250,12 +250,13 @@ export function tickRemMerges(G: GameState, ps: PlayerState) {
 }
 
 /**
- * Tick every skill cooldown of `ps`'s heroes down by one, at the start of their
- * owner's turn (docs/stats-model.md §1): an entry that reaches 0 is removed, and
- * an empty map is removed with it, so a hero that is off cooldown is back to
- * having no field at all. It counts the owner's turns, so a hero on the
- * respawn timer and a merged Rem (out of the board sweep, riding on her
- * bearer) tick like the rest — a fall and a respawn leave a cooldown as it is.
+ * Tick every cooldown of `ps`'s heroes (skills and ultimates) down by one, at
+ * the start of their owner's turn (docs/stats-model.md §1): an entry that
+ * reaches 0 is removed, and an empty map is removed with it, so a hero that is
+ * off cooldown is back to having no field at all. It counts the owner's turns,
+ * so a hero on the respawn timer and a merged Rem (out of the board sweep,
+ * riding on her bearer) tick like the rest — a fall and a respawn leave a
+ * cooldown as it is.
  */
 export function tickCooldowns(ps: PlayerState) {
   const tick = (c: CardInstance) => {
@@ -280,7 +281,6 @@ export function clearTurnFlags(ps: PlayerState) {
     c.exhausted = false;
     c.skillUsedThisTurn = false;
     if (c.lastSkillUsed !== undefined) c.lastSkillUsed = undefined;
-    c.attackedThisTurn = false;
     // Any unused Extra Attack stack expires at end of turn (it's a this-turn
     // resource); the attack consumes it, and a turn that ends without one
     // lets it go. So does an unspent Swift (a free Retreat THIS turn) and a

@@ -5,7 +5,7 @@ import {
   attackBlocked, cardCost, moveBlocked, playBlocked, skillBlocked,
   type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
-import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, SKILL_COST } from '@/engine/constants';
+import { MAX_EQUIPMENT_PER_HERO, RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { heroData } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
 import { STATUSES } from '@/statuses';
@@ -23,7 +23,7 @@ import { freshReadyGame, nextTestIid } from '../engine/_helpers';
 // `blocked`) — never by its own copy of the rules. These pin the UI to the
 // engine over the boards the old copies got wrong: a corpse on the rival's
 // bench, a hero already wearing the item, a hero at the equipment cap, a free
-// copied ultimate, a stunned hero.
+// borrowed ultimate, a stunned hero.
 
 const ME: PlayerID = '0';
 
@@ -160,7 +160,7 @@ describe('the glow on the tiles is the engine\'s answer', () => {
       expect(isValidTarget(G, ME, armedSkill(lash), target), nameOf(target)).toBe(false);
     }
     expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid })).toEqual({
-      code: 'status', text: 'Cannot use skill (status)',
+      code: 'status', text: 'Cannot use abilities (status)',
     });
     const item = give(G, 'extended_magazine');
     expect(isValidTarget(G, ME, armed(item), lash)).toBe(true);
@@ -189,26 +189,36 @@ describe('the glow on the tiles is the engine\'s answer', () => {
   });
 });
 
-describe('what a card costs is the engine\'s answer', () => {
-  it('Sinclair\'s copied ultimate is free: 0 souls, playable with none', () => {
+describe('what an ability costs is the engine\'s answer: nothing', () => {
+  it('a borrowed ultimate (Sinclair\'s copy) is free: usable with no souls', () => {
     const G = board();
     G.players[ME].souls = 0;
-    const copy = give(G, 'ult_abrams', { costOverride: 0 });
-    expect(cardCost(copy)).toBe(0);
-    expect(playBlocked(G, ME, copy.iid)).toBeNull();
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: copy.iid })).toBeNull();
-    expect(taken(G, { type: 'playCard', cardIid: copy.iid })).toBe(true);
+    const haze = G.players[ME].active!;
+    haze.borrowedUlt = 'eff_ult_abrams';
+    const use: Action = { type: 'useSkill', heroIid: haze.iid, skillId: 'eff_ult_abrams' };
+    expect(skillBlocked(G, ME, haze, undefined, 'eff_ult_abrams')).toBeNull();
+    expect(actionRefusal(G, ME, use)).toBeNull();
+    expect(taken(G, use)).toBe(true);
   });
 
-  it('the same ultimate without the override costs its printed price, and says so', () => {
+  it('a hero\'s own ultimate is locked below Level 2, and says so; at it, it is free', () => {
     const G = board();
     G.players[ME].souls = 0;
-    const real = give(G, 'ult_abrams');
-    expect(cardCost(real)).toBe((CARDS_BY_ID.ult_abrams as { cost: number }).cost);
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: real.iid })).toEqual({
-      code: 'souls', text: `Need ${cardCost(real)} souls — you have 0`,
-    });
-    expect(taken(G, { type: 'playCard', cardIid: real.iid })).toBe(false);
+    const haze = G.players[ME].active!;
+    const use: Action = { type: 'useSkill', heroIid: haze.iid, skillId: 'eff_ult_haze' };
+    expect(actionRefusal(G, ME, use)).toEqual({ code: 'locked', text: `Unlocks at Level ${ULT_UNLOCK_LEVEL}` });
+    expect(taken(G, use)).toBe(false);
+    haze.level = ULT_UNLOCK_LEVEL;
+    expect(actionRefusal(G, ME, use)).toBeNull();
+    expect(taken(G, use)).toBe(true);
+  });
+
+  it('an ultimate card is never played from a hand', () => {
+    const G = board();
+    const card = give(G, 'ult_abrams');
+    expect(cardCost(card)).toBe(0);
+    expect(playBlocked(G, ME, card.iid)).toBe('target');
+    expect(taken(G, { type: 'playCard', cardIid: card.iid })).toBe(false);
   });
 });
 
@@ -240,16 +250,27 @@ describe('a refused move is said, with the engine\'s own code', () => {
     G.players[ME].souls = RETREAT_COST - 1;
     expect(moveBlocked(G, ME, 1, 0)).toBe('souls');
     expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toEqual({
-      code: 'souls', text: `Need ${RETREAT_COST} souls`,
+      code: 'souls', text: `Need ${RETREAT_COST} soul${RETREAT_COST === 1 ? '' : 's'}`,
     });
   });
 
-  it('a skill without the soul says so', () => {
+  it('a second retreat in a turn says one a turn', () => {
     const G = board();
-    G.players[ME].souls = SKILL_COST - 1;
+    G.retreatUsed = true;
+    expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toEqual({ code: 'retreated', text: 'One Retreat a turn' });
+  });
+
+  it('anything but ending the turn after the attack says the attack ended the turn', () => {
+    const G = board();
+    G.attackUsed = true;
     const lash = G.players[ME].bench[1]!;
-    expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid })?.text)
-      .toBe(`Need ${SKILL_COST} soul`);
+    const rite = give(G, 'healing_rite');
+    const over = { code: 'actOver', text: 'The attack ended your turn' };
+    expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid })).toEqual(over);
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: rite.iid, targetIid: G.players[ME].active!.iid })).toEqual(over);
+    expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toEqual(over);
+    expect(actionRefusal(G, ME, { type: 'attack' })?.code).toBe('used');
+    expect(actionRefusal(G, ME, { type: 'endTurn' })).toBeNull();
   });
 
   it('while a promotion is owed, everything else waits for it', () => {
@@ -278,10 +299,10 @@ describe('a refused move is said, with the engine\'s own code', () => {
 // below is keyed by the engine's own union, so a code added there is a compile
 // error here until it is worded.
 describe('every block code has words', () => {
-  const skill: Record<SkillBlock, true> = { noSkill: true, down: true, used: true, attacked: true, status: true, cooldown: true, hp: true, souls: true, target: true };
-  const attack: Record<AttackBlock, true> = { turn1: true, used: true, skill: true, noActive: true, cannot: true, noTarget: true, target: true };
-  const play: Record<PlayBlock, true> = { notInHand: true, souls: true, target: true, duplicate: true, full: true, discard: true };
-  const move: Record<MoveBlock, true> = { same: true, empty: true, benchOnly: true, down: true, rooted: true, souls: true, illegal: true };
+  const skill: Record<SkillBlock, true> = { noSkill: true, actOver: true, down: true, locked: true, used: true, status: true, cooldown: true, hp: true, target: true };
+  const attack: Record<AttackBlock, true> = { turn1: true, used: true, noActive: true, cannot: true, noTarget: true, target: true };
+  const play: Record<PlayBlock, true> = { notInHand: true, actOver: true, souls: true, target: true, duplicate: true, full: true, discard: true };
+  const move: Record<MoveBlock, true> = { same: true, actOver: true, empty: true, benchOnly: true, down: true, rooted: true, retreated: true, souls: true, illegal: true };
   const promote: Record<PromoteBlock, true> = { notOnBench: true, notOwed: true, down: true, benchOnly: true };
 
   it('skills: all but noSkill (nothing to say: there is no skill to offer)', () => {
@@ -320,6 +341,9 @@ describe('every block code has words', () => {
     expect(skillBlockReason('used', lash)).toBe('Already used');
     expect(skillBlockReason('used', { ...lash, lastSkillUsed: skillId }, skillId)).toBe('Already used');
     expect(skillBlockReason('used', { ...lash, lastSkillUsed: 'some_other_skill' }, skillId)).toBe('Used its other skill this turn');
+    // Skill and ultimate share the one ability a turn, and the line says which was used.
+    expect(skillBlockReason('used', { ...lash, lastSkillUsed: 'eff_ult_lash' }, skillId)).toBe('Used its ultimate this turn');
+    expect(skillBlockReason('used', { ...lash, lastSkillUsed: skillId }, 'eff_ult_lash')).toBe('Used its skill this turn');
   });
 });
 

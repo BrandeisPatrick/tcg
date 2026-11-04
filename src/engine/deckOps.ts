@@ -29,7 +29,6 @@ export function makeInstance(ids: IidAllocator, cardId: string, ownerId: PlayerI
     statuses: [],
     exhausted: false,
     skillUsedThisTurn: false,
-    attackedThisTurn: false,
     // Hero leveling: start at Lv1 with 0 exp.
     ...(isHero ? { exp: 0, level: 1 as const } : {}),
   };
@@ -55,9 +54,9 @@ export function drawCards(G: GameState, pid: PlayerID, n: number): number {
 }
 
 /**
- * Put a fresh copy of `cardId` into `ps`'s hand (a card that comes back — a
- * spent ultimate, say). A full hand (MAX_HAND) has no room for it: it is lost,
- * and the log says so. Returns the new card, or null when it was lost.
+ * Put a fresh copy of `cardId` into `ps`'s hand (a card that comes back). A
+ * full hand (MAX_HAND) has no room for it: it is lost, and the log says so.
+ * Returns the new card, or null when it was lost.
  */
 export function returnToHand(G: GameState, ps: PlayerState, cardId: string): CardInstance | null {
   const name = cardName(cardId);

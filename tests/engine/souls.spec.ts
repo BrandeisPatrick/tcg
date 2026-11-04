@@ -5,7 +5,9 @@ import type { GameState, PlayerID } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
-import { freshReadyGame, configureReadyMatch } from './_helpers';
+import { CARDS_BY_ID } from '@/cards';
+import { LANE_INCOME, RETREAT_COST } from '@/engine/constants';
+import { freshReadyGame, configureReadyMatch, nextTestIid } from './_helpers';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -31,10 +33,10 @@ function freshG(): GameState {
 }
 
 describe('souls economy', () => {
-  it('T1 player refills to 1 soul (refill ramp 1/2/3/4/5/6/7); opponent at 0 until their turn', () => {
+  it('the income: the player on turn 1 has LANE_INCOME souls; the other has none until its turn', () => {
     const c = newClient();
     const { G } = snap(c);
-    expect(G.players['0'].souls).toBe(1);
+    expect(G.players['0'].souls).toBe(LANE_INCOME);
     expect(G.players['1'].souls).toBe(0);
   });
 
@@ -70,48 +72,86 @@ describe('souls economy', () => {
     }
   });
 
-  it('souls REFILL each turn (no hoarding) — unspent souls are lost', () => {
+  it('souls accumulate: what a turn does not spend carries over, and each own turn adds the income', () => {
     const c = newClient();
-    // P0 T1: refills to 1. Don't spend. End → P1 T1. End → P0 T2.
+    // P0 T1: 4. Don't spend. End → P1 T2. End → P0 T3.
     c.moves.endTurn?.();
     c.moves.endTurn?.();
     const { G } = snap(c);
-    // P0 should now be at exactly 2 (T2 refill), not 1 + 2 = 3.
-    expect(G.players['0'].souls).toBe(2);
+    expect(G.players['0'].souls).toBe(2 * LANE_INCOME);
   });
 
-  it('soul refill caps at the table tail (10)', () => {
+  it('souls have no ceiling', () => {
     const c = newClient();
-    // Step through many endTurns; refill ramps 1..10 then holds at the tail.
-    // Hero levelling makes auto-combat lethal enough that patrons can die
-    // before we get there, so guard each iteration against gameover and
-    // assert the cap held regardless of how far we reached.
-    for (let i = 0; i < 13; i++) {
-      const { ctx } = snap(c);
-      if (ctx.gameover) break;
-      c.moves.endTurn?.();
-    }
+    // Nobody acts, so nobody falls: each own turn banks the income on top.
+    for (let i = 0; i < 6; i++) c.moves.endTurn?.();
     const { G } = snap(c);
-    expect(G.players['0'].souls).toBeLessThanOrEqual(10);
-    // A few more P0 turns; still capped, not climbing past the tail.
-    for (let i = 0; i < 4; i++) {
-      const { ctx: c2 } = snap(c);
-      if (c2.gameover) break;
-      c.moves.endTurn?.();
-    }
-    const { G: G2 } = snap(c);
-    expect(G2.players['0'].souls).toBeLessThanOrEqual(10);
+    expect(snap(c).ctx.gameover).toBeUndefined();
+    expect(G.players['0'].souls).toBe(4 * LANE_INCOME);
+    expect(G.players['0'].souls).toBeGreaterThan(10);
   });
 
-  it('+1 souls bounty awarded to opponent on enemy hero KO', () => {
+  it('the comeback: a side 8 behind on net worth gets 1 more with its income, 16 behind 2 more', () => {
+    for (const [ahead, bonus] of [[7, 0], [8, 1], [15, 1], [16, 2]] as const) {
+      const c = newClient();
+      c.moves.endTurn?.(); // → P1, turn 2
+      const s = c.getState()!;
+      const G = structuredClone(s.G) as GameState;
+      G.players['1'].souls = ahead; // P1 banks a lead; P0 holds 4 from its first turn
+      G.players['0'].souls = 0;
+      (c as any).store.dispatch({ type: 'SYNC', state: { ...s, G } });
+      c.moves.endTurn?.(); // → P0, turn 3: P0 trails by `ahead`
+      expect(snap(c).G.players['0'].souls, `${ahead} behind`).toBe(LANE_INCOME + bonus);
+    }
+  });
+
+  it('net worth counts worn items at their price: a side whose heroes wear 8 souls of gear is 8 ahead', () => {
+    const c = newClient();
+    c.moves.endTurn?.(); // → P1
+    const s = c.getState()!;
+    const G = structuredClone(s.G) as GameState;
+    G.players['0'].souls = 0;
+    G.players['1'].souls = 0;
+    const bearer = G.players['1'].active!;
+    for (const id of ['glass_cannon']) {
+      expect((CARDS_BY_ID[id] as { cost?: number }).cost).toBe(8);
+      bearer.attached = [...(bearer.attached ?? []), { ...bearer, iid: nextTestIid(), cardId: id, zone: 'equipment', attachedTo: bearer.iid, attached: [], statuses: [] }];
+    }
+    (c as any).store.dispatch({ type: 'SYNC', state: { ...s, G } });
+    c.moves.endTurn?.(); // → P0, 8 behind
+    expect(snap(c).G.players['0'].souls).toBe(LANE_INCOME + 1);
+  });
+
+  it('a kill pays the victim\'s level + 1 to its opponent', () => {
     const G = freshG();
     const victim = G.players['1'].active!;
+    victim.level = 2;
     const killerPid: PlayerID = '0';
     const before = G.players[killerPid].souls;
     // Drop victim to 0 HP with pure damage then reap
     damageUnit(G, victim, victim.hp + 99, 'pure');
     reapDead(G, G.players['1']);
-    expect(G.players[killerPid].souls).toBe(before + 1);
+    expect(G.players[killerPid].souls).toBe(before + 3);
+  });
+
+  it('a kill of the strictly richest hero on the board pays 2 more; a tie for richest does not', () => {
+    const gear = (G: GameState, pid: PlayerID, hero: 'active' | 0, id: string) => {
+      const h = hero === 'active' ? G.players[pid].active! : G.players[pid].bench[hero]!;
+      h.attached = [...(h.attached ?? []), { ...h, iid: nextTestIid(), cardId: id, zone: 'equipment', attachedTo: h.iid, attached: [], statuses: [] }];
+    };
+    const kill = (G: GameState) => {
+      const victim = G.players['1'].active!;
+      damageUnit(G, victim, victim.hp + 99, 'pure');
+      reapDead(G, G.players['1']);
+      return G.players['0'].souls;
+    };
+    const richest = freshG();
+    gear(richest, '1', 'active', 'extended_magazine'); // 2 souls of gear, nobody else wears any
+    expect(kill(richest)).toBe(1 + 1 + 2);
+    const tied = freshG();
+    gear(tied, '1', 'active', 'extended_magazine');
+    gear(tied, '0', 0, 'extra_spirit'); // a hero on the other side wears as much
+    expect(kill(tied)).toBe(1 + 1);
   });
 
   it('no bounty when an ally hero is reaped on the killer side (own-board death credits the opponent, not you)', () => {
@@ -123,24 +163,26 @@ describe('souls economy', () => {
     damageUnit(G, victim, victim.hp + 99, 'pure');
     reapDead(G, G.players['0']);
     expect(G.players['0'].souls).toBe(selfBefore); // self unchanged
-    expect(G.players['1'].souls).toBe(oppBefore + 1); // opp gets bounty
+    expect(G.players['1'].souls).toBe(oppBefore + 2); // opp gets bounty (level 1 + 1)
   });
 
-  it('retreat (swap Active with bench hero) costs 2 souls', () => {
+  it('retreat (swap Active with bench hero) costs RETREAT_COST (1 soul), once a turn', () => {
     const G = freshG();
     G.players['0'].souls = 5;
     const before = G.players['0'].souls;
     const r = runMove('moveHero', G, '0', 1, 0);
     expect(r).not.toBe('INVALID_MOVE');
-    expect(G.players['0'].souls).toBe(before - 2);
+    expect(G.players['0'].souls).toBe(before - RETREAT_COST);
+    expect(runMove('moveHero', G, '0', 2, 0)).toBe('INVALID_MOVE');
+    expect(G.players['0'].souls).toBe(before - RETREAT_COST);
   });
 
-  it('retreat is rejected when souls < 2', () => {
+  it('retreat is rejected with no soul to pay', () => {
     const G = freshG();
-    G.players['0'].souls = 1;
+    G.players['0'].souls = 0;
     const r = runMove('moveHero', G, '0', 1, 0);
     expect(r).toBe('INVALID_MOVE');
-    expect(G.players['0'].souls).toBe(1); // unchanged
+    expect(G.players['0'].souls).toBe(0); // unchanged
   });
 
   it('retreat needs two living heroes — a fallen bench hero cannot be sent in', () => {
@@ -191,7 +233,9 @@ describe('souls economy', () => {
     const G = freshG();
     G.players['1'].souls = 3;
     G.players['1'].hand = []; // a short list: nothing is cut from it
-    // Active is full HP, no debuffs — no reason to retreat. The engine allows it, so it is listed.
+    // Active is full HP, no debuffs, and nobody on the bench hits harder — no reason to
+    // retreat. The engine allows it, so it is listed.
+    for (const b of G.players['1'].bench) if (b) b.atkMod = (CARDS_BY_ID['hero_abrams'] as { atk: number }).atk - (CARDS_BY_ID[b.cardId] as { atk: number }).atk;
     const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
     for (const lookahead of [false, true]) {
       const moves = enumerateAIMoves(G, ctx, lookahead);
@@ -244,7 +288,7 @@ describe('souls economy', () => {
   it('AI cannot retreat when it lacks souls (cost-filtered out)', async () => {
     const { enumerateAIMoves } = await import('@/ai/heuristic');
     const G = freshG();
-    G.players['1'].souls = 1;          // below RETREAT_COST
+    G.players['1'].souls = RETREAT_COST - 1; // below RETREAT_COST
     G.players['1'].active!.hp = 1;     // would want to retreat
     G.players['1'].active!.hpMax = 10;
     const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };

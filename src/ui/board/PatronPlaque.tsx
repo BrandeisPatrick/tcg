@@ -41,7 +41,7 @@ export function PatronPlaque({
     : hpTick === 'up' ? poster.stat.hpBright
     : poster.stat.hp;
 
-  // The Active has swung (or cannot): a Retreat may still bring in a hero who can.
+  // The turn's attack has been made (or cannot be): it ends the turn's Act.
   const attackLamp = attackOpen ? 'Ready to attack' : myTurn ? 'Active has attacked' : 'Waiting for its turn';
 
   const num = isMobile ? 13 : 15;

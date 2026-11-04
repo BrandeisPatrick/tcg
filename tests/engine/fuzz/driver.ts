@@ -17,7 +17,7 @@ import type { GameState, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { allIids, boardOf } from './oracle';
+import { allIids, boardOf, skillIdsOf } from './oracle';
 
 export type Policy = 'heuristic' | 'randomLegal' | 'chaos';
 const CHAOS_RATE = 0.3;
@@ -143,7 +143,14 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
     }
     case 'useSkill': {
       const hero = myBoard.length && r() < 0.8 ? pick(myBoard, r) : anyIid();
-      return { name, args: [maybe(hero, 0.03), maybe(anyIid(), 0.3)] };
+      const args: unknown[] = [maybe(hero, 0.03), maybe(anyIid(), 0.3)];
+      // Now and then a named ability: one of the hero's kit (an ultimate among them), or junk.
+      if (r() < 0.35) {
+        const kit = boardOf(mine).find((c) => c.iid === hero);
+        const ids = kit ? skillIdsOf(kit) : [];
+        args.push(ids.length && r() < 0.8 ? pick(ids, r) : pick(['eff_ult_haze', 'skill_kelvin', 'nope'], r));
+      }
+      return { name, args };
     }
     case 'moveHero':
       return { name, args: [slot(), slot()] };

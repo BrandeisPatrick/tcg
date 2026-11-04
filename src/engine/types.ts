@@ -32,10 +32,14 @@ export interface HeroCard extends Omit<BaseCard, 'text'> {
   atk: number;
   hp: number;
   /** The skills the hero may use, in order: one or two, none for a passive-only
-   *  hero. A bare `useSkill` names `skills[0]`. A hero uses one skill a turn. */
+   *  hero. A bare `useSkill` names `skills[0]`. A hero uses one ability a turn
+   *  (a skill or its ultimate). */
   skills: AbilityId[];
   passives?: AbilityId[];
-  ult?: CardId;
+  /** The ultimate's ability id: a kit ability like a skill, unlocked at
+   *  ULT_UNLOCK_LEVEL and on its own cooldown. Its card (`ULTIMATES`, the one
+   *  whose `abilities[0]` it is) only names and draws it. */
+  ult?: AbilityId;
   flags?: { benchOnly?: boolean };
 }
 
@@ -56,11 +60,13 @@ export interface EquipmentCard extends BaseCard {
   charges?: number;
 }
 
+/** An ultimate's face: its name, text and art. The ultimate itself is a kit
+ *  ability of its hero (`HeroCard.ult`), used from the hero sheet and never
+ *  dealt, held or paid for. */
 export interface UltimateCard extends BaseCard {
   type: 'ultimate';
   linkedHero: CardId;
   abilities: AbilityId[];
-  cost?: number;
 }
 
 export type CardData = HeroCard | SpellCard | EquipmentCard | UltimateCard;
@@ -92,26 +98,25 @@ export interface CardInstance {
   spiritMod: number;
   statuses: StatusInstance[];
   exhausted: boolean;
-  /** This hero used a skill this turn. Each hero may use one skill a turn, and
-   *  a hero that has done so cannot attack this turn. */
+  /** This hero used an ability this turn — a skill or its ultimate. Each hero
+   *  uses one a turn; the Active may still make the turn's attack after it. */
   skillUsedThisTurn: boolean;
-  /** The skill this hero used this turn (set by `useSkill`, cleared with the
-   *  other turn flags): what Echo Shard repeats, and which of two skills the
-   *  hero sheet marks USED. Bookkeeping, so the replay trace ignores it. */
+  /** The ability this hero used this turn (set by `useSkill`, cleared with the
+   *  other turn flags): what Echo Shard repeats (a skill only), and which
+   *  plate the hero sheet marks USED. Bookkeeping, so the replay trace ignores it. */
   lastSkillUsed?: AbilityId;
-  /** Turns of its owner left before each skill may be used again (the
-   *  ability's `cooldown`). Present only once a skill has set one: the map is
-   *  dropped when it empties, so a hero that never used a cooldown skill has no
-   *  field. Ticks at the start of the owner's turn (docs/stats-model.md §1); a
-   *  fall and a respawn leave it as it is. */
+  /** Own turns left before each kit ability may be used again: a skill's
+   *  `cooldown` (SKILL_COOLDOWN when its data names none), an ultimate's
+   *  ULT_COOLDOWN. Present only once an ability has set one: the map is dropped
+   *  when it empties. Ticks at the start of the owner's turn (docs/stats-model.md
+   *  §1), on a corpse too; a fall and a respawn leave it as it is. */
   cooldowns?: Partial<Record<AbilityId, number>>;
-  /** This hero attacked this turn. Attacks are per hero — the attack gate reads
-   *  this flag, not `GameState.attackUsed` — so it cannot attack again this
-   *  turn, nor use its skill. It keeps the flag if it retreats to the bench
-   *  afterwards: a hero that swung, retreated and came back cannot swing again. */
-  attackedThisTurn?: boolean;
+  /** An ultimate this hero may use once, free, as a kit ability: Sinclair's
+   *  Audience Participation copies the enemy Active's. Gone once used; it
+   *  needs no level and has no cooldown, and it stays through a death. */
+  borrowedUlt?: AbilityId;
   /** Per-instance play-cost override. When set, used instead of the card
-   *  definition's cost — e.g. Sinclair's free (0-cost) copied ultimate. */
+   *  definition's cost. */
   costOverride?: number;
   /**
    * Charge-based equipment counter (cooldown→draw family). Initialized from the
@@ -164,7 +169,6 @@ export interface PlayerState {
   active: CardInstance | null;
   bench: (CardInstance | null)[]; // length 3
   discard: CardInstance[];
-  ultsConsumed: string[]; // ult cardIds that have already entered hand this match
   /** Deck archetype this player drafted (for eval/balance tracking). */
   archetype?: string;
 }
@@ -326,8 +330,9 @@ export interface SwingFx extends FxBase {
 
 /** A cast just happened — pushed BEFORE its effects so the batch reads as
  *  "this caster did the following". `iid` is the casting unit on the board
- *  (the hero for a skill, the linked hero for an ult, the channelling Active
- *  for a spell, the bearer for equipment); absent when nobody's there. */
+ *  (the hero for a skill or an ultimate — `cardId` then names the ultimate's
+ *  face — the channelling Active for a spell, the bearer for equipment);
+ *  absent when nobody's there. */
 export interface CastFx extends FxBase {
   kind: 'cast';
   castKind: 'skill' | 'spell' | 'ult' | 'equip';
@@ -354,10 +359,11 @@ export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx 
 
 /**
  * Pre-match hero draft. Both players take turns picking 4 heroes each from
- * the full pool in snake order. While `draft != null` the regular match
- * gates (mulligan, normal moves) are inactive and the DraftOverlay is
- * displayed. On the 8th pick the move finalizes both PlayerStates with the
- * drafted heroes, clears `draft`, and flips `mulliganPending` to true.
+ * the full pool in snake order (seat 0 first). While `draft != null` the
+ * regular match gates are inactive and the DraftOverlay is displayed. On the
+ * 8th pick the move builds both PlayerStates from the drafted heroes, clears
+ * `draft` and ends the draft's turn: the first mover (seat 1, the pie rule)
+ * opens engine turn 1.
  */
 export interface DraftState {
   pool: CardId[];                                 // remaining hero ids
@@ -381,34 +387,40 @@ export interface GameState {
   /** Id / FX-seq / action-id counters — see ids.ts. */
   counters: Counters;
   players: { '0': PlayerState; '1': PlayerState };
+  /** The engine turn: both players' turns counted together, 1 the first
+   *  mover's first. Own turns and rounds are read off it by rounds.ts. 0 between
+   *  the last draft pick and the first turn. */
   turnNumber: number;
+  /** The seat that takes the first turn. The pie rule: seat 0 drafts first, so
+   *  seat 1 moves first in a drafted match; a scripted match names its own
+   *  (seat 0 by default). Read it through `firstMover` (rounds.ts). */
+  firstMover: PlayerID;
+  /** The seat a person plays, or null when the AI plays both (a sim). Only that
+   *  seat is asked who steps up when its Active falls (`pendingPromotion`); every
+   *  other seat is promoted on the spot. Seat 0 by default. */
+  humanSeat: PlayerID | null;
   log: LogEntry[];
   /** Pre-match hero draft. Null once draft completes. */
   draft: DraftState | null;
   /**
-   * Offset between boardgame.io's ctx.turn and the "real match turn". The
-   * draft phase uses boardgame.io turns for snake-order ownership, which
-   * inflates ctx.turn by ~5 turns before the match proper starts. This
-   * offset is set at the moment of draft completion so that turn.onBegin
-   * can compute `realTurn = ctx.turn - draftTurnsOffset` for soul refill +
-   * draw rules.
+   * Offset between boardgame.io's ctx.turn and the engine turn. The draft
+   * uses boardgame.io turns for its snake order, so the match's first turn is
+   * a later ctx.turn; `beginTurn` reads `G.turnNumber = ctx.turn -
+   * draftTurnsOffset`. Set when the last pick ends the draft's turn.
    */
   draftTurnsOffset: number;
   mulliganPending: boolean;       // true after draft completes until player resolves opening mulligan
-  /** An attack has been made this turn. A turn is the player's to spend on
-   *  cards, skills, retreats and attacks in any order: every hero may attack
-   *  once a turn while it stands in the Active slot (the `attack` move, the
-   *  Active swinging one-way at the rival Active), so the hero a Retreat brings
-   *  in after a swing may swing too. Ending the turn never attacks. The gate is
-   *  per hero (`CardInstance.attackedThisTurn`); this flag only says whether
-   *  the turn has seen an attack yet — the board's turn phase and the coach
-   *  plate read it. Reset at each turn start. */
+  /** The turn's attack has been made. One basic attack a turn per player: this
+   *  is its gate, and the attack ends the Act — after it nothing is legal but
+   *  `endTurn` (and an owed promotion). Ending the turn never attacks. Reset at
+   *  each turn start. */
   attackUsed: boolean;
-  /** Set by the `resolve` pass when a player's Active is a corpse and an
-   *  eligible bench hero can step up — i.e. a forced promotion is owed. The AI
-   *  side is auto-promoted inside `resolve`, so in practice this only flags the
-   *  local player ('0'): the UI shows the PromotionOverlay (human) or the
-   *  auto-play loop resolves it. Cleared once a promotion lands. */
+  /** The turn's Retreat has been made (one a turn). Reset at each turn start. */
+  retreatUsed: boolean;
+  /** Set by the `resolve` pass when the human seat's Active is a corpse and an
+   *  eligible bench hero can step up — a forced promotion is owed, and the UI
+   *  asks who (PromotionOverlay), or the auto-play loop answers. Every other
+   *  seat is promoted inside `resolve`. Cleared once a promotion lands. */
   pendingPromotion?: PlayerID;
   /** Current resolving action (card play / skill / ult). UI watches this to
    *  trigger the reveal animation and pause further input until the player

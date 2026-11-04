@@ -1,13 +1,12 @@
 /**
- * Attacks are per hero (docs/engine-model.md, "The turn"): every hero may
- * attack once a turn while it stands in the Active slot, so a Retreat after the
- * swing brings in a hero with a swing of its own, and a hero that swung,
- * retreated and came back cannot swing again. With it, the cards of the
- * 2026-11-03 pass (docs/card-design.md) that play the swap: Sprint Boots and
- * Enduring Speed (the `retreatDiscount` hook, and Enduring Speed's `resists`),
- * Fleetfoot's Swift (a free Retreat), Kinetic Dash (the `onBearerStepIn`
- * trigger) and Majestic Leap (a free swap) — and the AI, which has to see that
- * the swap after the swing is worth its souls.
+ * One attack a turn (docs/engine-model.md, "The turn"): the attack ends the
+ * Act, so a Retreat comes before it — the hero who steps in makes the turn's
+ * attack — and one Retreat a turn. With it, the cards of the 2026-11-03 pass
+ * (docs/card-design.md) that play the swap: Sprint Boots and Enduring Speed
+ * (the `retreatDiscount` hook, and Enduring Speed's `resists`), Fleetfoot's
+ * Swift (a free Retreat), Kinetic Dash (the `onBearerStepIn` trigger) and
+ * Majestic Leap (a free swap) — and the AI, which has to see when a swap
+ * before the swing is worth its soul.
  *
  * Board (freshReadyGame): P0 Haze (active) · Vindicta / Lash / Paige;
  *                         P1 Abrams (active) · Dynamo / Kelvin / Seven.
@@ -76,35 +75,31 @@ function built(souls: number) {
   return { G, me, haze: me.active!, vindicta: me.bench[0]!, shiv: me.bench[1]!, abrams: G.players['1'].active! };
 }
 
-describe('Attacks are per hero', () => {
-  it('attack, Retreat, and the hero who steps in attacks too', () => {
-    const { G, me, haze, shiv, abrams } = built(2);
+describe('One attack a turn, and the Retreat before it', () => {
+  it('the attack ends the Act: no Retreat and no second attack after it', () => {
+    const { G, me, haze, abrams } = built(2);
     makeAttack(G, '0');
-    expect(haze.attackedThisTurn).toBe(true);
+    expect(G.attackUsed).toBe(true);
     expect(attackBlocked(G, '0')).toBe('used');
-    const afterHaze = abrams.hp;
+    expect(moveBlocked(G, '0', 2, 0)).toBe('actOver');
+    expect(retreat(G, 2)).toBe(INVALID);
+    expect(me.active!.iid).toBe(haze.iid);
+    const hp = abrams.hp;
+    expect(perform(G, '0', { type: 'attack' })).toBe(INVALID);
+    expect(abrams.hp).toBe(hp);
+    expect(legalActions(G, '0')).toEqual([{ type: 'endTurn' }]);
+  });
+
+  it('a Retreat before the attack lets the hero who steps in make it', () => {
+    const { G, me, shiv, abrams } = built(2);
     expect(retreat(G, 2)).not.toBe(INVALID);
     expect(me.active!.iid).toBe(shiv.iid);
     expect(attackBlocked(G, '0')).toBeNull();
     expect(legalActions(G, '0').some((a) => a.type === 'attack')).toBe(true);
-    makeAttack(G, '0');
-    expect(abrams.hp).toBeLessThan(afterHaze);
-    expect(shiv.attackedThisTurn).toBe(true);
-    expect(G.attackUsed).toBe(true);
-  });
-
-  it('the hero that attacked cannot attack again after it comes back', () => {
-    const { G, me, haze, abrams } = built(10);
-    makeAttack(G, '0');
-    expect(retreat(G, 2)).not.toBe(INVALID); // Shiv in, Haze to bench slot 2
-    makeAttack(G, '0');
-    expect(retreat(G, 2)).not.toBe(INVALID); // Haze back
-    expect(me.active!.iid).toBe(haze.iid);
-    expect(haze.attackedThisTurn).toBe(true); // kept on the bench
-    expect(attackBlocked(G, '0')).toBe('used');
     const hp = abrams.hp;
-    expect(perform(G, '0', { type: 'attack' })).toBe(INVALID);
-    expect(abrams.hp).toBe(hp);
+    makeAttack(G, '0');
+    expect(abrams.hp).toBeLessThan(hp);
+    expect(G.attackUsed).toBe(true);
   });
 
   it('Turn 1 still has no attack, for the Active or the hero a Retreat brings in', () => {
@@ -115,7 +110,7 @@ describe('Attacks are per hero', () => {
     expect(attackBlocked(G, '0')).toBe('turn1');
   });
 
-  it('a hero still does one or the other: the one that used its skill cannot attack, the one it swaps with can', () => {
+  it('a hero that used its ability may still make the attack', () => {
     const G = freshReadyGame();
     hpPool(G, '1');
     const me = G.players['0'];
@@ -124,15 +119,14 @@ describe('Attacks are per hero', () => {
     const abrams = G.players['1'].active!;
     expect(retreat(G, 2)).not.toBe(INVALID); // Lash in
     expect(perform(G, '0', { type: 'useSkill', heroIid: lash.iid, targetIid: abrams.iid })).not.toBe(INVALID);
-    expect(attackBlocked(G, '0')).toBe('skill');
-    expect(retreat(G, 2)).not.toBe(INVALID); // Haze back, fresh
     expect(attackBlocked(G, '0')).toBeNull();
-    expect(me.active!.cardId).toBe('hero_haze');
+    const hp = abrams.hp;
+    makeAttack(G, '0');
+    expect(abrams.hp).toBeLessThan(hp);
   });
 
-  it('the hero a promotion brings in after a death may attack; the promotion is free', () => {
+  it('the hero a promotion brings in after a death may make the attack; the promotion is free', () => {
     const { G, me, haze, shiv } = built(0);
-    makeAttack(G, '0');
     haze.hp = 0;
     resolve(G);
     expect(G.pendingPromotion).toBe('0');
@@ -144,28 +138,32 @@ describe('Attacks are per hero', () => {
 
 describe('The Retreat\'s price', () => {
   it('is RETREAT_COST with nothing worn', () => {
-    const { G } = built(10);
+    const { G, me } = built(10);
     expect(retreatCost(G, '0')).toBe(RETREAT_COST);
-    expect(RETREAT_COST).toBe(2);
+    expect(RETREAT_COST).toBe(1);
+    expect(retreat(G, 2)).not.toBe(INVALID);
+    expect(me.souls).toBe(9);
+    expect(lastLog(G)).toBe('P0 retreated (-1 soul).');
   });
 
-  it('Sprint Boots take a soul off: 1 soul is enough, 0 is not', () => {
-    const { G, me, haze } = built(1);
+  it('Sprint Boots take a soul off: the Retreat is free; it is still the turn\'s one', () => {
+    const { G, me, haze } = built(0);
     wear(haze, 'sprint_boots');
-    expect(retreatCost(G, '0')).toBe(1);
+    expect(retreatCost(G, '0')).toBe(0);
     expect(moveBlocked(G, '0', 2, 0)).toBeNull();
     expect(retreat(G, 2)).not.toBe(INVALID);
     expect(me.souls).toBe(0);
-    expect(lastLog(G)).toBe('P0 retreated (-1 soul).');
-    // Back the other way the price is Shiv's, who wears nothing.
-    expect(retreatCost(G, '0')).toBe(2);
-    expect(moveBlocked(G, '0', 2, 0)).toBe('souls');
+    expect(lastLog(G)).toBe('P0 retreated (free).');
+    // Back the other way the price is Shiv's, who wears nothing — and a second Retreat is not to be had.
+    expect(retreatCost(G, '0')).toBe(1);
+    me.souls = 5;
+    expect(moveBlocked(G, '0', 2, 0)).toBe('retreated');
   });
 
   it('only what the hero leaving the slot wears counts', () => {
     const { G, shiv } = built(10);
     wear(shiv, 'sprint_boots');
-    expect(retreatCost(G, '0')).toBe(2);
+    expect(retreatCost(G, '0')).toBe(1);
   });
 
   it('Sprint Boots and Enduring Speed together make it free', () => {
@@ -186,9 +184,11 @@ describe('The Retreat\'s price', () => {
     expect(me.souls).toBe(0);
     expect(status(haze, 'swift')).toBeUndefined();
     me.souls = 4;
+    expect(retreat(G, 2)).toBe(INVALID); // one Retreat a turn
+    G.retreatUsed = false;                // a later turn
     expect(retreat(G, 2)).not.toBe(INVALID); // Haze back in, paid for this time
-    expect(me.souls).toBe(2);
-    expect(retreatCost(G, '0')).toBe(2);
+    expect(me.souls).toBe(3);
+    expect(retreatCost(G, '0')).toBe(1);
   });
 
   it('a free swap does not spend a Swift', () => {
@@ -279,14 +279,20 @@ describe('Enduring Speed cannot be Rooted', () => {
 });
 
 describe('Majestic Leap', () => {
-  it('your Active retreats free and the bench ally you pick steps in — after a swing, a fresh attacker', () => {
+  it('your Active leaps out free and the bench ally you pick steps in to make the attack; the turn\'s Retreat is still there', () => {
     const { G, me, haze, shiv } = built(10);
-    makeAttack(G, '0');
     expect(play(G, 'majestic_leap', shiv.iid)).not.toBe(INVALID);
     expect(me.souls).toBe(10 - 4); // the card's price, and no Retreat charge
     expect(me.active!.iid).toBe(shiv.iid);
     expect(me.bench[1]!.iid).toBe(haze.iid);
+    expect(G.retreatUsed).toBe(false);
     expect(attackBlocked(G, '0')).toBeNull();
+  });
+
+  it('is a card, so the attack ends its window too', () => {
+    const { G, shiv } = built(10);
+    makeAttack(G, '0');
+    expect(play(G, 'majestic_leap', shiv.iid)).toBe(INVALID);
   });
 
   it('needs a bench ally to aim at, and a Root on either side holds it', () => {
@@ -298,8 +304,8 @@ describe('Majestic Leap', () => {
 });
 
 describe('Fleetfoot', () => {
-  it('Extra Attack 1 and a free Retreat: swing twice, swap for nothing, and the new Active swings', () => {
-    const { G, me, haze, abrams } = built(10);
+  it('Extra Attack 1: the Active\'s attack swings twice', () => {
+    const { G, me, haze } = built(10);
     expect(play(G, 'fleetfoot')).not.toBe(INVALID);
     expect(me.souls).toBe(7);
     expect(status(haze, 'extra_attack')?.value).toBe(1);
@@ -307,6 +313,11 @@ describe('Fleetfoot', () => {
     const fx0 = G.fx.length;
     makeAttack(G, '0');
     expect(G.fx.slice(fx0).filter((e) => e.kind === 'swing' && e.iid === haze.iid).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('Swift makes the turn\'s Retreat free: swap for nothing, and the new Active makes the attack', () => {
+    const { G, me, abrams } = built(10);
+    expect(play(G, 'fleetfoot')).not.toBe(INVALID);
     expect(retreat(G, 1)).not.toBe(INVALID);
     expect(me.souls).toBe(7);
     const hp = abrams.hp;
@@ -334,7 +345,7 @@ describe('The new cards', () => {
   });
 });
 
-describe('The AI swaps after the swing', () => {
+describe('The AI retreats before it attacks when the swap is worth it', () => {
   const ctx = (pid: PlayerID) => ({ currentPlayer: pid, turn: 2, numPlayers: 2 }) as any;
   const asAction = (m: { move: string; args: any[] }): Action => {
     switch (m.move) {
@@ -344,26 +355,29 @@ describe('The AI swaps after the swing', () => {
       default: throw new Error(`unexpected move ${m.move}`);
     }
   };
+  /** Haze Weakened to 1 Bullet Power, with Shiv (2, and his Bleed) and Drifter (3) on the bench:
+   *  harder hitters to send in. */
+  const weakened = () => {
+    const b = built(2);
+    addStatus(b.G, b.haze, 'weapon_power_down', 2, 2);
+    return b;
+  };
 
-  it('ranks the Retreat to a fresh attacker above ending the turn once the Active has swung', () => {
-    for (const lookahead of [true, false]) {
-      const { G } = built(2);
-      makeAttack(G, '0');
-      const moves = enumerateAIMoves(G, ctx('0'), lookahead);
-      const at = (m: string) => moves.findIndex((o) => o.move === m);
-      expect(at('moveHero'), `lookahead ${lookahead}`).toBeGreaterThanOrEqual(0);
-      expect(at('moveHero'), `lookahead ${lookahead}`).toBeLessThan(at('endTurn'));
-      expect(moves[0].move, `lookahead ${lookahead}`).toBe('moveHero');
-    }
+  it('sends in a harder hitter ahead of the attack, with lookahead', () => {
+    const { G } = weakened();
+    const moves = enumerateAIMoves(G, ctx('0'));
+    expect(moves[0].move).toBe('moveHero');
+    expect(moves[0].args[0]).not.toBe(1); // not Vindicta, who hits no harder
   });
 
-  it('swings before it swaps: a Retreat that only trades one attack for another is not worth its souls', () => {
-    const { G } = built(2);
+  it('attacks without swapping when no bench hero hits harder: a Retreat for nothing is not worth its soul', () => {
+    const { G, me } = built(2);
+    me.bench = [me.bench[0], null, null]; // Vindicta alone behind Haze: 2 Bullet Power to Haze's 3
     expect(enumerateAIMoves(G, ctx('0'))[0].move).toBe('attack');
   });
 
-  it('plays the turn through: attack, Retreat, attack', () => {
-    const { G, me } = built(2);
+  it('plays the turn through: Retreat, attack, end', () => {
+    const { G, me } = weakened();
     const made: string[] = [];
     for (let guard = 0; guard < 10; guard++) {
       const best = enumerateAIMoves(G, ctx('0'))[0];
@@ -371,8 +385,7 @@ describe('The AI swaps after the swing', () => {
       if (best.move === 'endTurn') break;
       expect(perform(G, '0', asAction(best)), best.move).not.toBe(INVALID);
     }
-    expect(made).toEqual(['attack', 'moveHero', 'attack', 'endTurn']);
-    expect(board(G, '0').filter((c) => c.attackedThisTurn)).toHaveLength(2);
-    expect(me.souls).toBe(0);
+    expect(made).toEqual(['moveHero', 'attack', 'endTurn']);
+    expect(me.souls).toBe(1);
   });
 });
