@@ -5,6 +5,8 @@ Written 2026-11-03 after a phone playtest. Companion to
 [engine-model.md](./engine-model.md) (where the rules live). This page says
 what the game is today, why that does not play well, and the design to replace
 it with. Nothing here is built yet; the last section is the order to build it.
+[mechanics-survey.md](./mechanics-survey.md) (2026-11-04) tests this plan
+against about forty games and corrects it in places; read its §3 before building.
 
 ## 1. What the game is today
 

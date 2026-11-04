@@ -152,7 +152,8 @@ scripts/
 ├── art/, geo/   Bakes (backdrop, paper mottle, the story map's geometry) and the hero crop sources
 ├── fetch_item_art.py, crop_heroes.py    The art pipeline (public/ART_PIPELINE.md)
 └── balance-sim.ts, replay-trace.ts      A one-shot balance sim; the engine-change replay trace
-docs/            Design and model notes: cards, engine, stats, balance, ultimates, FX, testing, sharing
+docs/            Design and model notes: cards, engine, stats, balance, ultimates, FX, testing, sharing,
+                 playability (the redesign) and the mechanics survey that tests it
 ```
 
 ## Disclaimer
