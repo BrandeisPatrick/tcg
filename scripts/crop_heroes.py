@@ -8,9 +8,10 @@ or `python3 scripts/crop_heroes.py wraith abrams` to crop a subset.
 from PIL import Image
 import os, sys
 
-SRC = '/Users/patrickli/Downloads'
+# The source frames, kept beside this script (public/art/CREDITS.md says where
+# they came from); each is named by the hash the compilation gave it.
+SRC = 'scripts/art/hero_sources'
 DST = 'public/heroes'
-PFX = 'a-quick-compilation-of-all-the-updated-hero-select-screens-v0-'
 
 # x_pct: horizontal center of crop as fraction of source width
 # y_top_pct: top of crop as fraction of source height (default 0 — start at top)
@@ -43,7 +44,7 @@ TARGET_ASPECT = TARGET_W / TARGET_H  # ~0.737
 
 def crop_one(hero, cfg):
     cfg = {**DEFAULT, **cfg}
-    src = f'{SRC}/{PFX}{cfg["hash"]}.webp'
+    src = f'{SRC}/{cfg["hash"]}.webp'
     img = Image.open(src)
     W, H = img.size
     crop_h = int(H * cfg['h_pct'])

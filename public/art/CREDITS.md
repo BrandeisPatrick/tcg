@@ -7,11 +7,10 @@ step whenever a picture is added or replaced.
 
 ## Deadlock brand assets (Valve)
 
-- `deadlock_wordmark.png` — https://www.steamgriddb.com/logo/130957 (SteamGridDB,
-  by user "Lovely"). Kept as the source for the derived file below; not shown
-  itself.
-- `deadlock_wordmark_ink.png` — the wordmark above, flattened to solid ink from
-  its own alpha for the title sheet's flat screen-print look.
+- `deadlock_wordmark_ink.png` — Valve's wordmark, from
+  https://www.steamgriddb.com/logo/130957 (SteamGridDB, by user "Lovely"),
+  flattened to solid ink from its own alpha for the title sheet's flat
+  screen-print look. The source logo is not kept here; the link is.
 - `menu_scene.jpg`, `menu_street.jpg` — official Deadlock screenshots from the
   Steam store page (https://store.steampowered.com/app/1422450/), downscaled.
   `menu_scene` is the blurred ground every screen floats on; `menu_street` is
@@ -28,7 +27,7 @@ from their "Deadlock Graphical Library" collection.
   (`hero_<id>_splash.webp`) are crops of Valve's official hero-select screens,
   taken from a community compilation posted to r/DeadlockTheGame ("A quick
   compilation of all the updated hero select screens"). The source frames are
-  kept in `public/_audit/hero_sources/`; `scripts/crop_heroes.py` cuts the
+  kept in `scripts/art/hero_sources/`; `scripts/crop_heroes.py` cuts the
   portraits from them. Rem has no updated select screen, so her portrait comes
   from the asset mirror below.
 - The small hero icons (`_mm.webp`, `_sm.webp`) and everything in
@@ -72,14 +71,6 @@ owner:
   (https://www.artstation.com/artwork/kN9Bax, images 9 and 5; profile
   https://www.artstation.com/evstratiyart). Valve's art, under the same
   fair-use terms as the rest of this project; replaceable on request.
-- `bill_heroes.webp` — "Deadlock Vindicta Fan Art Poster Design" by **Dsgnmon**,
-  published at https://dribbble.com/shots/25066548-Deadlock-Vindicta-Fan-Art-Poster-Design
-  and marked "Fan art by © Dsgnmon 2024. All rights reserved." It fronted the
-  Tutorial card until the poster above replaced it and is not on any screen
-  now; it stays in the folder under the same terms (ask Dsgnmon before
-  shipping it anywhere public, replace on request) in case a card needs it
-  again.
-
 ## Type
 
 Bundled through Fontsource under the SIL Open Font License 1.1:

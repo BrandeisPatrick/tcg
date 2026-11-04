@@ -59,15 +59,17 @@ single-page React app.
 - **A skill per hero per turn:** every hero, bench included, can use its
   skill once a turn for a soul. The Active does one or the other — its skill
   or the attack.
-- **41 bitmap card-art assets** pulled from the community asset bucket; SVG
-  fallback glyphs for cards that don't have canon art yet.
+- **The game's own art:** every spell and equipment card wears its canon shop
+  tile, the heroes their select-screen portraits, every status its HUD icon
+  painted in the chip's colour (`public/art/CREDITS.md` says where each piece
+  came from); SVG fallback glyphs cover a card that has none.
 - **AI opponent** that plays only the engine's own legal moves and ranks them
   by a 1-ply lookahead (sees lethal, on-attach equipment, forced promotion when
   the Active dies, and prices statuses, channelled ultimates and a merged Rem).
 - **One rulebook:** every rule lives in one engine function that the board,
   the AI and the attack preview all ask; the preview is the real attack run on
   a copy. See [`docs/engine-model.md`](./docs/engine-model.md).
-- **~700 tests**, including a seeded fuzz suite that plays thousands of
+- **~1,100 tests**, including a seeded fuzz suite that plays thousands of
   games (the real AI, random legal play and malformed moves) and checks the
   state after every move, and a replay trace (`scripts/replay-trace.ts`) that
   proves an engine change altered only what it meant to.
@@ -85,7 +87,7 @@ npx tsc --noEmit   # type-check
 ## Re-fetching card art
 
 ```bash
-python3 scripts/fetch_item_art.py              # all 41 cards
+python3 scripts/fetch_item_art.py              # every spell and equipment
 python3 scripts/fetch_item_art.py curse        # one card
 ```
 
@@ -128,15 +130,29 @@ src/
 ├── abilities/   60+ effect handlers (onPlay, startOfTurn, activate, etc.)
 ├── decks/       Starter Aggro + Control 20-card lists
 ├── ai/          Heuristic move enumerator + scorer
+├── story/       The campaign: the route, its stops and their fights
+├── tutorial/    The lessons the coach walks
+├── storage/     What persists between matches (player data, match config)
+├── art/         The credits table the Gallery renders
+├── qa/          The virtual clock the QA films run on (?vtclock=1)
 ├── ui/          React components (Board, HeroSlot, CardFrame, side panel,
 │                hero detail sheet, mulligan, promotion overlay, …)
 │   └── effects/fx/  the board-FX player (timeline scheduler, animation families,
 │                    and stage/ — the canvas particle world with height)
 └── statuses/    Status taxonomy + display metadata
 public/
-├── heroes/      Hero portrait .webp (3 sizes each)
+├── heroes/      Hero portraits .webp (card, mini and small, plus a wide splash)
 ├── items/       Equipment shop-tile .webp
-└── spells/      Active-item shop-tile .webp
+├── spells/      Active-item shop-tile .webp
+├── status/      The game's HUD icons for statuses, painted in code
+└── art/         Title posters, the backdrop, the wordmark; CREDITS.md
+scripts/
+├── qa/          Headless-Chrome films and checks against the dev server (above)
+├── eval/        AI-vs-AI harness, card and hero win-rate reports (docs/testing-model.md)
+├── art/, geo/   Bakes (backdrop, paper mottle, the story map's geometry) and the hero crop sources
+├── fetch_item_art.py, crop_heroes.py    The art pipeline (public/ART_PIPELINE.md)
+└── balance-sim.ts, replay-trace.ts      A one-shot balance sim; the engine-change replay trace
+docs/            Design and model notes: cards, engine, stats, balance, ultimates, FX, testing, sharing
 ```
 
 ## Disclaimer
