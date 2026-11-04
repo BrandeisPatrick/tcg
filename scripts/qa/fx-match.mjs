@@ -1,9 +1,11 @@
 /**
- * Live-match FX QA — draft a roster, use Kelvin's Frost Grenade for real,
- * film the skill's FX, end the turn and film the rival's turn (its skills,
- * and its attack walked by the combat choreographer), then make your own
- * attack from your Active's sheet and film that. Frames land in OUT_DIR with
- * a contact sheet.
+ * Live-match FX QA — draft a roster, let the rival take the first turn (the
+ * pie rule), then in your shop buy the build's lit item and film its flight
+ * from the icon to the hand, close the shop, use Kelvin's Frost Grenade for
+ * real and film the skill's FX, end the turn and film the rival's turn (its
+ * shopping, skills, and its attack walked by the combat choreographer), then
+ * close your next shop and make your own attack from your Active's sheet and
+ * film that. Frames land in OUT_DIR with a contact sheet.
  *
  *   npm run dev            # in another terminal
  *   node scripts/qa/fx-match.mjs OUT_DIR [PORT] [desktop|mobile]
@@ -35,10 +37,8 @@ try {
     const state = await b.evaluate(`(() => {
       const lock = ${byText('Lock')};
       const draftOpen = !!document.querySelector('[aria-label^="Select "]') || !!lock;
-      const mulligan = ${byTextStartExpr('Lock In')};
-      return { draftOpen, lockLive: !!lock, mulligan: !!mulligan };
+      return { draftOpen, lockLive: !!lock };
     })()`);
-    if (state.mulligan) break;
     if (!state.draftOpen) { await b.tick(300); await b.settle(2); const board = await b.evaluate(`!!${byAria('End Turn')}`); if (board) break; continue; }
     if (state.lockLive) {
       let picked = null;
@@ -54,15 +54,28 @@ try {
     await b.tick(400);
     await b.settle(2);
   }
-  if (await b.evaluate(`!!${byTextStartExpr('Lock In')}`)) {
-    await shoot('mulligan');
-    await b.clickEl(byTextStartExpr('Lock In'), { js: true, scroll: false });
-    await b.settle(3);
-  }
   await b.waitFor(byAria('End Turn'), { timeout: 8000 });
+  // The pie rule: you drafted first, so the rival takes the first turn. Wait for your shop.
+  const shopUp = `!!document.querySelector('[aria-label="Shop sheet"]')`;
+  for (let t = 0; t < 40000 && !(await b.evaluate(shopUp)); t += 250) { await b.tick(250); await b.settle(1); }
   await b.tick(600);
   await b.settle(2);
-  await shoot('turn1-board');
+  await shoot('shop');
+  // ---- Buy the build's next affordable item (the lit icon) and film its flight to the hand.
+  const lit = `[...document.querySelectorAll('[aria-label="Shop sheet"] [aria-label^="Buy "]')].find((e) => !e.getAttribute('aria-disabled'))`;
+  if (await b.evaluate(`!!(${lit})`)) {
+    log('buying:', await b.evaluate(`(${lit}).getAttribute('aria-label')`));
+    const rb = await b.clickEl(lit, { scroll: false });
+    log('shop icon click', rb.hit);
+    await b.settle(3);
+    for (let t = 0; t <= 600; t += 60) { if (t) await b.tick(60); await b.settle(1); await shoot(`buy-${t}`); }
+    log('hand:', await b.evaluate(`[...document.querySelectorAll('[aria-label*=", in your hand"]')].map((e) => e.getAttribute('aria-label').split(',')[0])`));
+  } else {
+    log('nothing affordable to buy');
+  }
+  await b.clickEl(byAria('Done shopping'), { scroll: false });
+  await b.settle(3); await b.tick(600); await b.settle(2);
+  await shoot('turn-board');
 
   // ---- Use Kelvin's skill on the rival active.
   const kelvin = byAriaStart('Kelvin —');
@@ -112,6 +125,8 @@ try {
     await b.tick(250); await b.settle(1);
   }
   await b.tick(1500); await b.settle(2);
+  // Your turn opens in the shop: close it, then act.
+  if (await b.evaluate(shopUp)) { await b.clickEl(byAria('Done shopping'), { scroll: false }); await b.settle(3); await b.tick(800); await b.settle(2); }
   const r5 = await b.clickEl(`${lane}.at(-1)`, { scroll: false });
   log('my active click', r5.hit);
   await b.settle(3);

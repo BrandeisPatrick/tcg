@@ -127,12 +127,16 @@ interface SeatShop {
   tiers: number[];
   /** Souls paid for them. */
   spent: number;
+  /** Cards played from the hand onto a hero (the AI plays each as it buys it). */
+  plays: number;
   /** Items sold. The AI never sells, so this should stay 0. */
   sells: number;
   /** Active items used. */
   actives: number;
   /** Souls on hand when the game ended. */
   soulsEnd: number;
+  /** Cards still in the hand when the game ended (the AI holds none). */
+  handEnd: number;
   /** The round of this seat's first purchase of a tier 3 item, and of a tier 4
    *  one (an upgrade into that tier counts); null for none. */
   firstT3: number | null;
@@ -258,16 +262,18 @@ function playGame(seats: Record<Seat, string[]>, seed: number, engineSeed: numbe
   for (const seat of SEATS) {
     const mine = ledger.purchases.filter((p) => p.seat === seat);
     const bought: Record<string, string[]> = Object.fromEntries(seats[seat].map((id) => [id, [] as string[]]));
-    for (const p of mine) (bought[p.hero] ??= []).push(p.item);
+    for (const p of mine) if (p.hero) (bought[p.hero] ??= []).push(p.item);
     const first = (tier: ItemTier) => mine.find((p) => p.tier === tier)?.round ?? null;
     shop[seat] = {
       buys: mine.length,
       upgrades: mine.filter((p) => p.upgradeOf).length,
       tiers: ([1, 2, 3, 4] as ItemTier[]).map((t) => mine.filter((p) => p.tier === t).length),
       spent: mine.reduce((s, p) => s + p.paid, 0),
+      plays: ledger.plays.filter((e) => e.seat === seat).length,
       sells: ledger.sales.filter((e) => e.seat === seat).length,
       actives: ledger.uses.filter((e) => e.seat === seat).length,
       soulsEnd: G.players[seat].souls,
+      handEnd: G.players[seat].hand.length,
       firstT3: first(3),
       firstT4: first(4),
       bought,
@@ -426,6 +432,8 @@ const upgrades = perPlayer((s) => s.upgrades);
 const spent = perPlayer((s) => s.spent);
 const tierBuys = [0, 1, 2, 3].map((t) => mean(players.map((p) => p.shop.tiers[t])));
 const soulsBanked = perPlayer((s) => s.soulsEnd);
+const handLeft = perPlayer((s) => s.handEnd);
+const handLeftAny = players.filter((p) => p.shop.handEnd > 0).length;
 const activesPerPlayer = perPlayer((s) => s.actives);
 const activesPerGame = mean(games.map((g) => g.shop['0'].actives + g.shop['1'].actives));
 const sells = players.reduce((s, p) => s + p.shop.sells, 0);
@@ -526,6 +534,7 @@ const accepted: Record<string, number> = {};
 for (const g of games) for (const [m, c] of Object.entries(g.moves)) accepted[m] = (accepted[m] ?? 0) + c;
 const seen = {
   buy: players.reduce((s, p) => s + p.shop.buys, 0),
+  playCard: players.reduce((s, p) => s + p.shop.plays, 0),
   sell: sells,
   activate: players.reduce((s, p) => s + p.shop.actives, 0),
 };
@@ -619,9 +628,10 @@ md += `- Kills per game: **${killsPerGame.toFixed(2)}** (seat 0 scores ${killsBy
 md += `- Lead changes per game (the patron-HP difference changing sign): **${leadChanges.toFixed(2)}**; ${pct(withLeadChange)} of games have at least one.\n\n`;
 
 md += `## Shop\n`;
-md += `Read off the board after every move: an item instance that appears is a purchase (an upgrade over a worn component counts once, as the item it became, at the difference it cost), one that goes with no upgrade in its place was sold, an active whose cooldown rises or whose charges fall was used. A player is one seat of one game; a purchase is made on the buyer's own turn, whose number is the round's.\n\n`;
+md += `Read off the board after every move: a card instance that appears (in a hand, where a purchase goes) is a purchase (an upgrade over a component counts once, as the item it became, at the difference it cost), one that goes from a hand onto a hero was played, one that goes with no upgrade holding it was sold, an active whose cooldown rises or whose charges fall was used. A player is one seat of one game; a purchase is made on the buyer's own turn, whose number is the round's.\n\n`;
 md += `- Purchases per player per game: **${purchases.all.toFixed(2)}** (${roles(purchases, 2)}), of them ${upgrades.all.toFixed(2)} upgrades; ${spent.all.toFixed(1)} souls spent. By tier: ${tierBuys.map((x, t) => `T${t + 1} ${x.toFixed(2)}`).join(' · ')}.\n`;
-md += `- Sells: **${n(sells)}** in all (the AI never sells).\n`;
+md += `- Sells: **${n(sells)}** in all (the AI never sells). Plays from the hand per player: ${perPlayer((s) => s.plays).all.toFixed(2)} (the AI plays each card as it buys it).\n`;
+md += `- Cards left in the hand at the end, per player: **${handLeft.all.toFixed(2)}**; ${n(handLeftAny)} of ${n(players.length)} players ended holding any (the AI never holds a card).\n`;
 md += `- Souls banked at the end, per player: **${soulsBanked.all.toFixed(1)}** (${roles(soulsBanked)}; the winner ${soulsBanked.winner.toFixed(1)}, the loser ${soulsBanked.loser.toFixed(1)}).\n`;
 md += `- Actives used per game (both players): **${activesPerGame.toFixed(2)}**; per player, ${roles(activesPerPlayer, 2)}.\n`;
 md += tierLine('3', firstT3);
@@ -665,7 +675,8 @@ writeFileSync('sim-reports/latest.json', JSON.stringify({
     killsPerGame, killsBySeat, leadChanges, withLeadChange,
   },
   shop: {
-    perPlayer: { purchases, upgrades, spent, soulsBanked, actives: activesPerPlayer, byTier: tierBuys },
+    perPlayer: { purchases, upgrades, spent, soulsBanked, handLeft, actives: activesPerPlayer, byTier: tierBuys },
+    handLeftAny,
     activesPerGame, sells,
     firstT3, firstT4,
     items: { heroBuilds, gate: ITEM_GATE, rows: itemRows },

@@ -304,10 +304,32 @@ try {
   await shot('match');
   check('2b Fight opens the match board', board);
   const setup = await b.evaluate(`${appModule('/src/storage/matchConfig.ts')}.then((m) => m.getMatchConfig().story ?? null)`);
-  check('2b the fight starts with the supplies waiting: free items and souls in hand, the rival with no deck',
+  check('2b the fight starts with the supplies waiting: free cards and souls, the rival with no deck',
     JSON.stringify(setup?.playerItems) === JSON.stringify(supplies.items) && setup?.playerSouls === supplies.souls
       && setup?.enemySouls === 0 && !('playerDeck' in (setup ?? {})) && !('enemyDeck' in (setup ?? {})),
     JSON.stringify(setup && { playerItems: setup.playerItems, playerSouls: setup.playerSouls, enemySouls: setup.enemySouls }));
+  // The free item is a card in the hand as the fight opens — on nobody yet, and bought by nobody.
+  const startHand = await b.evaluate(`(() => {
+    const root = document.getElementById('root');
+    const key = Object.keys(root).find((k) => k.startsWith('__reactContainer'));
+    const stack = [root[key]];
+    while (stack.length) {
+      const f = stack.pop();
+      if (!f) continue;
+      if (f.stateNode && f.stateNode.client && f.stateNode.client.store) {
+        const G = f.stateNode.client.getState().G;
+        const worn = [G.players['0'].active, ...G.players['0'].bench].filter(Boolean).flatMap((h) => (h.attached ?? []).map((a) => a.cardId));
+        return { hand: G.players['0'].hand.map((c) => ({ id: c.cardId, zone: c.zone, bought: c.boughtOnTurn ?? null })), worn };
+      }
+      if (f.sibling) stack.push(f.sibling);
+      if (f.child) stack.push(f.child);
+    }
+    return null;
+  })()`);
+  const handShows = await b.evaluate(`[...document.querySelectorAll('[aria-label^="Extra Health, in your hand"]')].length > 0`);
+  check('2b the free item waits in the hand as the fight opens (on no hero, bought by nobody), and the board shows it',
+    JSON.stringify(startHand?.hand) === JSON.stringify([{ id: 'extra_health', zone: 'hand', bought: null }]) && startHand?.worn.length === 0 && handShows,
+    JSON.stringify({ ...startHand, handShows }));
   const before = run;
   await toMap();
   run = await readRun();
