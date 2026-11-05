@@ -3,10 +3,11 @@
  * own small fight on the scripted path Story uses (`StorySetup`): fixed
  * rosters, no draft, and custom numbers on every hero so the move being
  * taught is exactly the move that wins. Every turn runs Income → Shop → Act →
- * End: the souls arrive, the shop opens (tap an icon to buy: the card lands in
- * your hand; then Done), a card in the hand goes onto a hero with a tap on it
- * and a tap on the hero, then the heroes act (abilities, a Retreat, the attack
- * — which ends the Act), then End Turn.
+ * End, the beats the dial under the turn number lights: the souls arrive and
+ * count up, the shop opens (tap a tile to buy: the card lands in your hand;
+ * then Done), a card in the hand goes onto a hero with a tap on it and a tap
+ * on the hero, then the heroes act (abilities, a Retreat, the attack — which
+ * ends the Act, and the turn's End follows on its own).
  *
  *   1  The Skill        Kelvin vs a hurt Lash. Close the shop; Frost Grenade ends it.
  *   2  The Shop         Yamato buys Extended Magazine (a tier 1 item, two
@@ -195,7 +196,7 @@ export interface CoachStep {
   shop?: true;
 }
 
-export const RIVAL_TURN = "Rival's turn. Watch — the souls arrive, they shop, their heroes use their abilities, then their Active attacks yours.";
+export const RIVAL_TURN = "Rival's turn. Watch its beats pass on the dial: Income, Shop, Act — abilities, then the attack — and End.";
 
 /** The turn button, by its name. */
 export const TURN_BUTTON: GateSpec = END_TURN;
@@ -206,7 +207,7 @@ export const SHOP_DONE_BUTTON: GateSpec = SHOP_DONE;
 
 /** What the coach says when your turn opens in the shop and the step up has
  *  nothing to buy: Done first, then the step. */
-export const SHOP_PROMPT = 'Your turn opens with its income, then the shop. Nothing to buy now: tap Done to move on to the Act.';
+export const SHOP_PROMPT = 'Your turn opened on its Income, and the shop is up. Nothing to buy now: tap Done to move on to the Act.';
 
 const mine = (v: CoachView) => activeOf(v.G, v.me);
 const theirs = (v: CoachView) => activeOf(v.G, RIVAL);
@@ -285,7 +286,7 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
   };
 }
 
-/** Buy `itemId` from the shop sheet: a tap on its icon (the build's, lit as
+/** Buy `itemId` from the shop sheet: a tap on its tile (the build's, lit as
  *  the next item the hero can afford, or the catalogue's) and the card lands
  *  in your hand. */
 function buy(id: string, title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
@@ -294,7 +295,7 @@ function buy(id: string, title: string, itemId: CardId, lead: (v: CoachView) => 
     id,
     title,
     shop: true,
-    body: (v) => `${lead(v)} Tap its icon: the card lands in your hand.`,
+    body: (v) => `${lead(v)} Tap its tile: the card lands in your hand.`,
     task: (v) => !!inHand(v, itemId) || wears(mine(v), itemId),
     // The engine's own question: the shop open, on sale, and the souls for it.
     ready: (v) => v.G.step === 'shop' && buyBlocked(v.G, v.me, itemId) === null,
@@ -313,7 +314,7 @@ function play(id: string, title: string, itemId: CardId, lead: (v: CoachView) =>
     title,
     body: (v) => (v.targeting
       ? `${lead(v)} Now tap ${nameOf(mine(v)) || 'your Active'}.`
-      : `${lead(v)} Tap ${label} in your hand, then tap ${nameOf(mine(v)) || 'your Active'}.`),
+      : `${lead(v)} Tap ${label} in your hand, under the board, then tap ${nameOf(mine(v)) || 'your Active'}.`),
     task: (v) => wears(mine(v), itemId),
     // The engine's own question: the card in the hand, and room on the hero.
     ready: (v) => {
@@ -366,14 +367,14 @@ export const LESSONS: Lesson[] = [
     id: 'skill',
     number: 1,
     title: 'The Skill',
-    blurb: "One on one. Close the shop; Kelvin's skill ends it.",
+    blurb: "Income, Shop, Act, End. Kelvin's skill ends it.",
     face: 'hero_kelvin',
-    outro: 'A turn runs Income, Shop, Act, End. A skill costs nothing, and it comes back every turn.',
+    outro: 'Every turn runs Income, Shop, Act, End — the dial lights each one. A skill costs nothing, and it comes back every turn.',
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
     // is the whole fight.
     setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
-      done('shop', 'Your Turn', (v) => `Every turn runs Income, Shop, Act, End. Income paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}), and the shop is open. Nothing to buy in this lesson: tap Done to move on to the Act.`),
+      done('shop', 'Your Turn', (v) => `Every turn runs four beats, lit on the dial: Income, Shop, Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}), and the shop is up. Nothing to buy in this lesson: tap Done to move on to the Act.`),
       look('look', 'One on One', mine, (v) => `${nameOf(mine(v))} against ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Every hero carries a skill on his sheet. Tap ${nameOf(mine(v))} to open his sheet.`),
       useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to their Active. Skills cost no souls.`),
     ],
@@ -383,7 +384,7 @@ export const LESSONS: Lesson[] = [
     id: 'souls',
     number: 2,
     title: 'The Shop',
-    blurb: 'Four souls, one item: buy it, put it on. Its swing is the kill.',
+    blurb: 'Four souls, one tile: buy it, put it on. Its swing is the kill.',
     face: 'hero_yamato',
     outro: 'Souls carry over: what you do not spend stays, and four more arrive every turn. A card bought waits in your hand until you put it on a hero; once on, it stays, through death too.',
     // Yamato swings for 2 at a Lash on 3. Extended Magazine — his build's first
@@ -397,10 +398,10 @@ export const LESSONS: Lesson[] = [
     }),
     steps: [
       buy('buy', 'Shop', 'extended_magazine',
-        (v) => `Income paid you ${soulsText(LANE_INCOME)}: you hold ${souls(v)}. ${nameOf(mine(v))}'s build leads the shop, the next item he can afford lit: Extended Magazine, tier 1 for ${soulsText(itemPrice('extended_magazine'))}, +1 Bullet Power.`),
-      done('done', 'Done', (v) => `Bought: the card waits in your hand, and the ${soulsText(souls(v))} you did not spend stay with you. Tap Done to close the shop.`),
-      play('play', 'Put It On', 'extended_magazine', () => 'A card in your hand goes onto a hero for nothing, in the shop or after it.'),
-      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends the Act.`),
+        (v) => `Income paid you ${soulsText(LANE_INCOME)}: you hold ${souls(v)}. The shop opens on ${nameOf(mine(v))}'s build, the next item he can afford lit in gold: Extended Magazine, tier 1 for ${soulsText(itemPrice('extended_magazine'))}, +1 Bullet Power. Hold a tile to read it.`),
+      done('done', 'Done', (v) => `Bought: the card flew to your hand, and the ${soulsText(souls(v))} you did not spend stay with you. Tap Done to close the shop.`),
+      play('play', 'Put It On', 'extended_magazine', () => 'A card in your hand goes onto a hero for nothing, in the Shop or the Act.'),
+      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends the Act, and the turn's End follows on its own.`),
     ],
   },
 
@@ -421,9 +422,9 @@ export const LESSONS: Lesson[] = [
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      done('shop', 'The Shop', 'Cold Front waits in your hand — a gift, an active item. Nothing to buy this turn: tap Done.'),
+      done('shop', 'The Shop', 'Cold Front waits in your hand, under the board — a gift, an active item; its tile bears a bolt. Nothing to buy this turn: tap Done.'),
       play('play', 'Put It On', 'cold_front', () => 'An active item works from the hero who wears it.'),
-      useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns (its plate on ${nameOf(mine(v))}'s sheet says so). Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage.`),
+      useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns — its plate on ${nameOf(mine(v))}'s sheet shows the dial. Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage.`),
       attack((v) => `${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}. One ability each, then one attack — it ends the Act.`),
     ],
   },
@@ -446,7 +447,7 @@ export const LESSONS: Lesson[] = [
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      done('shop', 'The Shop', 'The shop is open, as every turn. Keep your souls this time: tap Done.'),
+      done('shop', 'The Shop', 'Income paid, and the shop is up, as every turn. Keep your souls this time: tap Done.'),
       look('look', 'Spent', mine, (v) => `${nameOf(mine(v))} is at ${hpOf(mine(v))}: ${nameOf(theirs(v))}'s next attack finishes him, and his own swing of ${atkOf(mine(v))} cannot finish ${nameOf(theirs(v))}. ${nameOf(myBench(v))} waits fresh on your bench. Tap ${nameOf(mine(v))}.`),
       // Retreat is the Active's own move and lives on his sheet, which the
       // step before has just opened. Should it be closed, the step opens it
