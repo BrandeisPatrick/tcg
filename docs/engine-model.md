@@ -33,12 +33,13 @@ lock a skill. The engine fixes that by construction:
 
 | Module | Holds |
 |---|---|
-| `constants.ts` | every rule number (costs, caps, patron HP, income and comeback, bounty, cooldowns, respawn, levels) |
-| `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn |
-| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skills, its ultimate, a borrowed ultimate; which one an action names), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `copiesOnSide`, `boughtAtDiscount`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`, `isRichestHero`, `killBounty`, `comebackBonus`), `checkWinner` |
+| `constants.ts` | every rule number (costs, caps, income and comeback, bounty, cooldowns, levels; the map's: `STRUCTURES`, the Guardian's bounty, the late game, the Mid-Boss, the Rejuvenator, the respawn bands, `ROUND_CAP`) |
+| `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn — and the map's clocks: `lateGame` / `pushMultiplier`, `respawnTurns`, `bossReturnRound`, `reviveLastRound`, `endsRound` / `endsLastRound`, `MATCH_TURNS` |
+| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skills, its ultimate, a borrowed ultimate; which one an action names), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `copiesOnSide`, `boughtAtDiscount`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`, `isRichestHero`, `killBounty`, `comebackBonus`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
 | `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the shop (`buyBlocked`, `buyPrice`, `freeComponents`, `sellBlocked`, `sellRefund`, `moveItemBlocked`, `closeShopBlocked`), the hand (`playBlocked`, `playTargets`, `playComponent`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else; the step splits the rest; after the turn's attack only `endTurn` is left), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `shop` (`buy`, `sell`, `moveItem`, `closeShop`), `playCard` (a card from the hand onto a hero), `activate` (an active item), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the market) |
+| `map.ts`, `souls.ts` | the map: `newTrack`, `pushStructures` (front first, the Guardian's bounty, the Walker's flex slot), the Mid-Boss (`riseBoss`, `tallyBossHit`, `reapBoss`), the Rejuvenator lapsing (`lapseRevives`); `awardSouls`, the one way souls are paid |
 | `market.ts`, `rng.ts` | the match's market, drawn from `G.seed` (`openingMarket`, `addHero` / `buildOf`, `marketItems`, `onSale`, `marketByTab`, `marketStandIn`) and the seeded generator it draws with |
 | `instances.ts` | card instances and items going on and off heroes: `makeInstance`, `attachItem` / `detachItem` (a passive's bonus on and off), `syncVitalitySpike` |
 | `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp |
@@ -148,13 +149,56 @@ a fallen Active is free and brings in a hero who may make the attack if none
 has been made.
 
 **Kills and the end.** A kill pays the victim's opponent its level + 1, and 2
-more if it was strictly the richest hero on the board (`killBounty`); the
-patron loses the victim's level; the hero respawns with its items and level
-(an item that puts a lasting status on its bearer when worn puts it back). A
-board with every hero down is no loss by itself: at the end of a turn, if the
-rival has no standing hero, the ending player's standing Active pushes its
-bullet power into the rival's patron. A patron at 0 loses; if both fall to one
-action, the one with more HP left wins, and on a tie the second mover.
+more if it was strictly the richest hero on the board (`killBounty`), and pushes
+the same level + 1 into the victim's side's structures (`killPush`); the hero
+respawns with its items and level after `respawnTimer` own turns. A board with
+every hero down is no loss by itself: at the End, if the rival has no standing
+hero, the ending player's standing Active pushes its bullet power into the
+rival's structures. How a match ends is the map's (below).
+
+## The map
+
+**Structures.** Each side has a track, Guardian 4 → Walker 6 → Patron 8
+(`PlayerState.structures`; a Story fight or a lesson may give a shorter one,
+`StorySetup.patronHp` / `structures`). `pushStructures` damages the front
+standing structure and carries the rest on; what is left past the Patron is
+lost. A felled Guardian pays the pushing side `GUARDIAN_BOUNTY` souls, a felled
+Walker gives every hero of that side the flex slot (`slotCap`), a felled Patron
+loses the match. Pushes come from kills and from an empty lane, both doubled
+from round `LATE_GAME_ROUND` (`pushMultiplier`). Every structure hit is a
+`push` event and every fall a `fall` event.
+
+**The Mid-Boss** (`G.boss`: a card instance in the pit, zone `'pit'`, owned by
+`'none'`) rises at the start of round `BOSS_SPAWN_ROUND` and again
+`BOSS_RESPAWN_ROUNDS` after the round it died in (`riseBoss`, every turn's
+start). `attackTargets` offers it after the enemy heroes — the attack's own
+rules hold — and a swing at it is bullets alone: `damageUnit` lets only a
+swing's own hit through (no ability, proc, rider, bounce or tick), nothing the
+attacker carries reacts, it does not ricochet, `addStatus` refuses it and
+`targetsFor` never lists it. Each side's damage is tallied (`G.bossDamage`); at
+0 HP the state-based pass gives it to the side with more (`bossTaker`: then the
+side behind on net worth, then the last hit), with `BOSS_SOULS` souls and the
+Rejuvenator. At the End of a turn in which a hero attacked it, it hits that
+hero for `BOSS_RETALIATION` pure damage; a death from it pays no bounty and
+pushes nothing (`fallToBoss`).
+
+**The Rejuvenator.** `reviveCredits` revives, good through round
+`reviveUntilRound` (`reviveLastRound`): a hero of the side that falls while one
+is live is paid for and pushed as usual, then comes straight back in place at
+full HP with its items and level (a `revive` event with `credit`), a credit
+spent. Credits lapse as their last round ends (`lapseRevives`).
+
+**Respawn by round.** A fallen hero waits `respawnTurns` own turns — 1 in
+rounds 1–4, 2 in rounds 5–8, 3 from round 9 — and one more when it was
+strictly the richest hero on the board (`respawnTimer`).
+
+**The end.** `checkWinner` (boardgame.io's `endIf`): a side whose Patron has
+fallen loses; both at once, and round `ROUND_CAP` ending (`G.capped`, set as
+the second mover's own turn 12 ends, so no turn 25 begins), go to
+`standingVerdict` — more structure HP, then more net worth, then the second
+mover. `G.record` keeps what each side did on the map (kills, pushes and their
+damage, Mid-Bosses taken and those taken from behind, revives) for the result
+sheet and the sims.
 
 **Ricochet.** A swing whose damage gets through bounces: every other living
 enemy hero a Dome does not cover takes N bullet damage, where N is
@@ -171,7 +215,7 @@ Siphon's steal); what it does for the attacker stays with the swing — every
 self-heal, Tesla's chain, Mixed Bullets' spirit half, Fixation's extra swing —
 each of those procs returns on `bounce`. A bounce meets the hero's own Bullet
 Resist, Shield and Return Fire, and a kill by it is the attacker's: the exp
-through the frame's source, the KO bounty and the patron's loss when the attack
+through the frame's source, the KO bounty and the push when the attack
 resolves, once, at its end.
 
 ## Adding or changing a card

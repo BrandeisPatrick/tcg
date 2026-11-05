@@ -3,6 +3,7 @@ import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { poster } from '../poster';
 import { RowPlaque } from './BoardTable';
 import { TurnCompass, type TurnPhase } from './TurnCompass';
+import { BossPit } from './BossPit';
 import { useViewport } from '../hooks/useViewport';
 import type { ArmedPlay } from '../helpers';
 
@@ -88,6 +89,8 @@ export function ActiveDuel({
           pointerEvents: 'none',
         }} />
         <TurnCompass isMyTurn={isMyTurn} turn={turn} phase={phase} step={G.draft ? undefined : G.step} />
+        {/* The pit: the Mid-Boss between the two Actives, from round 4. */}
+        <BossPit G={G} me={me} pending={pending} onTapHero={onTapHero} isTargetable={isTargetable} registerSlotRef={registerSlotRef} isMobile={isMobile} />
       </div>
 
       {/* My Active (right) */}

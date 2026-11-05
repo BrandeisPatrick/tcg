@@ -25,7 +25,7 @@
  * throws, or names a move this engine lacks stops the run with a message
  * saying so (exit code 2).
  *
- *   npx vite-node scripts/eval/ai-vs-ai.ts [games=1000] [turnCap=40]
+ *   npx vite-node scripts/eval/ai-vs-ai.ts [games=1000] [turnCap=MATCH_TURNS]
  *
  * Env: SEED (default 1) picks another set of games. Reports the new AI's
  * win-rate over the decisive games with a 95% Wilson interval; a stalemate (the
@@ -34,9 +34,10 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { mulberry32, wilson } from './stats';
+import { MATCH_TURNS } from '@/engine/rounds';
 
 const GAMES = Number(process.argv[2] ?? 1000);
-const TURN_CAP = Number(process.argv[3] ?? 40);
+const TURN_CAP = Number(process.argv[3] ?? MATCH_TURNS); // the round cap ends every match by then
 const SEED = Number(process.env.SEED ?? 1);
 const MOVES_PER_TURN_CAP = 40;
 /** The frozen baseline, imported by path so the script type-checks without it. */

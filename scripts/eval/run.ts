@@ -14,11 +14,12 @@
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { itemCard } from '@/cards';
+import { MATCH_TURNS } from '@/engine/rounds';
 import { runBatch, runGame, wilson, heroName, type GameResult, type AgentKind } from './framework';
 
 const MODE = (process.argv[2] ?? 'full') as 'smoke' | 'full';
 const N = Number(process.argv[3] ?? (MODE === 'smoke' ? 6 : 1000));
-const TURN_CAP = 40; // engine turns: 20 own turns each
+const TURN_CAP = MATCH_TURNS; // engine turns: the round cap ends every match by then
 const MCTS_ITER = 40;
 const MCTS_GAMES = MODE === 'smoke' ? 4 : 60;
 const LADDER_GAMES = MODE === 'smoke' ? 20 : 400;

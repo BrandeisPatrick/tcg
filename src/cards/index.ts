@@ -29,9 +29,13 @@ export function getCard(id: string): CardData {
   return c;
 }
 
-/** The name a card prints, or its id when no card has it. */
+/** The board's units that are no card in the catalogue, by id: the Mid-Boss
+ *  in the pit (engine/map.ts). */
+const UNIT_NAMES: Readonly<Record<string, string>> = { boss_midboss: 'Mid-Boss' };
+
+/** The name a card prints — or a unit of the pit's — or its id when nothing has it. */
 export function cardName(id: string): string {
-  return CARDS_BY_ID[id]?.name ?? id;
+  return CARDS_BY_ID[id]?.name ?? UNIT_NAMES[id] ?? id;
 }
 
 /** The item behind an id — an active (spell) or a passive (equipment) — or

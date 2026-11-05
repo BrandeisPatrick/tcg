@@ -3,7 +3,8 @@
  * choreographer walks and what the AI scores) must equal the attack the `attack` move then
  * makes. The forecast IS that attack run on a copy, so this is the check that it stays so:
  * the move is made on a clone through the game's own move function and everything the forecast
- * claims is read back off the result — the target's HP and fate, the patron, and the very
+ * claims is read back off the result — the target's HP and fate (a hero the Rejuvenator brings
+ * straight back fell all the same; a Mid-Boss that falls leaves the pit), the push, and the very
  * events the attack appends to G.fx (same seqs).
  */
 import type { Ctx } from 'boardgame.io';
@@ -11,7 +12,7 @@ import type { GameState, PlayerID } from '@/engine/types';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { attackTargets, blocked } from '@/engine/legality';
 import { forecastAttack, simulate, type AttackPlan } from '@/engine/forecast';
-import { isRespawning, otherPlayer } from '@/engine/query';
+import { isRespawning, otherPlayer, structureHp } from '@/engine/query';
 import { DeadlockGame } from '@/engine/game';
 import type { Snapshot, StepInfo } from './driver';
 import { signatureOf, type Hit } from './hits';
@@ -38,12 +39,17 @@ function evaluate(G: GameState, ctx: Ctx, pid: PlayerID):
   const plan = forecastAttack(G, pid);
   const r = callMove(G, ctx, pid, 'attack', []);
   if (r.outcome !== 'accepted') return { kind: 'rejected', how: r.outcome };
-  const t2 = boardOf(r.G.players[foe]).find((c) => c.iid === tgt.iid);
+  const t2 = tgt.zone === 'pit'
+    ? (r.G.boss?.iid === tgt.iid ? r.G.boss : { ...tgt, hp: 0 })
+    : boardOf(r.G.players[foe]).find((c) => c.iid === tgt.iid);
   if (!t2) return { kind: 'missing' };
 
   const mismatches: Mismatch[] = [];
-  const fell = isRespawning(t2) || t2.hp <= 0;
-  const lost = Math.max(0, tgt.hp - t2.hp);
+  const seen = G.fx.reduce((m, e) => Math.max(m, e.seq), 0);
+  const revived = r.G.fx.some((e) => e.kind === 'revive' && e.iid === tgt.iid && e.seq > seen);
+  const fell = revived || isRespawning(t2) || t2.hp <= 0;
+  const endHp = revived ? 0 : t2.hp;
+  const lost = Math.max(0, tgt.hp - endHp);
   const last = plan.steps[plan.steps.length - 1];
   if ((plan.defenderActiveKO !== null) !== fell || (fell && plan.defenderActiveKO !== tgt.iid)) {
     mismatches.push({ check: 'forecast-ko', message: `plan.defenderActiveKO=${plan.defenderActiveKO} but the target ${fell ? 'fell' : 'survived'} (hp ${tgt.hp} -> ${t2.hp})` });
@@ -51,13 +57,13 @@ function evaluate(G: GameState, ctx: Ctx, pid: PlayerID):
   if (plan.damageToActive !== lost) {
     mismatches.push({ check: 'forecast-damage', message: `plan.damageToActive ${plan.damageToActive} but the target went ${tgt.hp} -> ${t2.hp} (lost ${lost})` });
   }
-  const patronLost = G.players[foe].hp - r.G.players[foe].hp;
-  if (plan.patronDamage !== patronLost) {
-    mismatches.push({ check: 'forecast-patron', message: `plan.patronDamage ${plan.patronDamage} but the defender's patron lost ${patronLost}` });
+  const pushed = structureHp(G.players[foe]) - structureHp(r.G.players[foe]);
+  if (plan.pushDamage !== pushed) {
+    mismatches.push({ check: 'forecast-push', message: `plan.pushDamage ${plan.pushDamage} but the defender's structures lost ${pushed}` });
   }
   if (!last) mismatches.push({ check: 'forecast-no-steps', message: 'attackBlocked is null yet the plan has no step' });
-  else if (last.predictedHpAfter !== Math.max(0, t2.hp)) {
-    mismatches.push({ check: 'forecast-final-hp', message: `last step predicts hp ${last.predictedHpAfter} but the target ends on ${t2.hp}` });
+  else if (last.predictedHpAfter !== Math.max(0, endHp)) {
+    mismatches.push({ check: 'forecast-final-hp', message: `last step predicts hp ${last.predictedHpAfter} but the target ends on ${endHp}` });
   }
   // What each swing's own hit took is what the stream says the basic hits took.
   const realHits = r.G.fx.slice(G.fx.length).filter((e) => e.kind === 'hit' && e.cast === 'attack' && e.iid === tgt.iid);

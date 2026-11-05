@@ -1,11 +1,12 @@
 import { Client } from 'boardgame.io/client';
-import type { CardId, GameState, CardInstance, PlayerID } from '@/engine/types';
+import type { CardId, GameState, CardInstance, PlayerID, TrackHp } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
-import { buildPlayer } from '@/engine/actions/setup';
+import { buildPlayer, freshMap } from '@/engine/actions/setup';
 import { allocatorFor, allocatorOf, newCounters } from '@/engine/ids';
 import { INVALID, perform } from '@/engine/engine';
 import { blocked } from '@/engine/legality';
-import { findWornItem } from '@/engine/query';
+import { findWornItem, seatOf, structureHp } from '@/engine/query';
+import { newTrack } from '@/engine/map';
 import { addSignatures, openingMarket } from '@/engine/market';
 import { attachItem, makeInstance, syncVitalitySpike } from '@/engine/instances';
 import { CARDS_BY_ID, itemCard } from '@/cards';
@@ -32,6 +33,17 @@ export const TEST_ROSTERS: Record<PlayerID, CardId[]> = {
 
 /** The seed the test games draw their market from. */
 export const TEST_SEED = 1;
+
+/** The structure HP `pid` has standing (Guardian + Walker + Patron). */
+export function structuresOf(G: GameState, pid: PlayerID): number {
+  return structureHp(G.players[pid]);
+}
+
+/** Put `pid` on a track of its own: `hp` by structure, the rest off it (a
+ *  Patron at 1 makes the next push the win). */
+export function setTrack(G: GameState, pid: PlayerID, hp: TrackHp) {
+  G.players[pid].structures = newTrack(hp);
+}
 
 /**
  * Battle-ready GameState with both rosters already on the board (no draft),
@@ -67,6 +79,7 @@ export function freshReadyGame(opts: { step?: GameState['step'] } = {}): GameSta
     step: opts.step ?? 'act',
     attackUsed: false,
     retreatUsed: false,
+    ...freshMap(),
     action: null,
     fx: [],
   };
@@ -84,7 +97,7 @@ export function freshReadyGame(opts: { step?: GameState['step'] } = {}): GameSta
 export function giveItem(G: GameState, hero: CardInstance, itemId: CardId, opts: { cooldown?: number } = {}): CardInstance {
   const data = itemCard(itemId);
   if (!data) throw new Error(`not an item: ${itemId}`);
-  const item = makeInstance(allocatorOf(G), itemId, hero.ownerId, 'equipment');
+  const item = makeInstance(allocatorOf(G), itemId, seatOf(hero), 'equipment');
   if (data.type === 'spell') {
     if (data.hardCC) item.charges = HARD_CC_CHARGES;
     else if (opts.cooldown) item.cooldowns = { [itemId]: opts.cooldown };

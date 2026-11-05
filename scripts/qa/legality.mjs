@@ -51,6 +51,13 @@
  *      it cost
  *   n  a buy outside the shop step is refused: no sheet, no Shop button, and
  *      the engine turns the move down ("The shop is closed until your next turn")
+ *   o  the map: each side's rule reads its structures; the Mid-Boss in the pit
+ *      lights as a target while the attack is armed, a tap on it makes the
+ *      attack at it (its HP, your tally), and the turn then ends on its own,
+ *      the boss's blow at your End played inside the hand-over (the dial on
+ *      End, its fx batch up)
+ *   p  an empty lane pushed at your End: the rival's Guardian falls, pays its
+ *      souls, and its sticker is up through the hand-over's End beat
  *
  *   npm run dev            # in another terminal
  *   node scripts/qa/legality.mjs OUT_DIR [PORT] [desktop|mobile]
@@ -1006,6 +1013,83 @@ try {
   })()`);
   check('the engine refuses it: "The shop is closed until your next turn"', !!outside.refusal && outside.refusal.code === 'notShop' && /The shop is closed until your next turn/.test(outside.refusal.text), JSON.stringify(outside.refusal));
   check('…and a buy sent anyway changes nothing', !outside.moved && outside.hand === 0 && outside.souls === 10, JSON.stringify(outside));
+
+  // ===== o: the map ======================================================================
+  console.log('\n(o) the map: each rule reads its track; the Mid-Boss in the pit is a target of the attack, takes the swing, and hits back at the End');
+  await b.tick(2400); await b.settle(2);
+  // (The turn number is left as it is, as in (k): the boss is staged in the pit by hand.)
+  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK}
+    G.boss = inst('qa-boss', 'boss_midboss', { ownerId: 'none', zone: 'pit', hp: 10, hpMax: 10 });
+    G.bossDamage = { '0': 0, '1': 0 }; G.bossLastHit = null; G.bossAttacker = null; G.bossRespawnRound = 4;
+    G.players['1'].structures = [{ kind: 'guardian', hp: 1, max: 4 }, { kind: 'walker', hp: 6, max: 6 }, { kind: 'patron', hp: 8, max: 8 }];
+  }`);
+  const strip = await b.evaluate(`[...document.querySelectorAll('[aria-label*=" structures: "]')].map((e) => e.getAttribute('aria-label'))`);
+  check('each side\'s rule reads its structures: the rival on 15 of 18, the Guardian on 1', strip.some((l) => /structures: 15 of 18 HP — Guardian 1 of 4, Walker 6 of 6, Patron 8 of 8/.test(l)) && strip.some((l) => /structures: 18 of 18 HP/.test(l)), JSON.stringify(strip));
+  const plate = `document.querySelector('[aria-label^="Mid-Boss —"]')`;
+  check('the Mid-Boss stands in the pit with its HP and both tallies', /Mid-Boss — 10 of 10 HP; damage: you 0, rival 0/.test(await b.evaluate(`${plate}?.getAttribute('aria-label') ?? ''`)));
+  await shot('o-pit');
+  await openSheet(MY_ACTIVE);
+  await b.clickEl(`document.querySelector('[aria-label="Hero sheet"] [aria-label^="Attack"]')`, { scroll: false });
+  await b.settle(4);
+  await sheetGone();
+  await textWith(/Choose who/);
+  const bossLit = await b.evaluate(`getComputedStyle(${plate}).borderTopColor`);
+  check('with the attack armed the Mid-Boss lights as a target', bossLit === TARGET_GREEN, bossLit);
+  await shot('o-armed');
+  const swingAt = (await G()).players['0'].active;
+  await b.clickEl(plate, { scroll: false });
+  await b.settle(4);
+  let og = await G();
+  for (let t = 0; t < 8000 && !og.attackUsed; t += 100) { await b.tick(100); await b.settle(1); og = await G(); }
+  // Read as the attack is made: the turn then ends on its own, and its End brings the boss's blow.
+  const power = await b.evaluate(`(async () => { const q = await import('/src/engine/query.ts'); const G = ${CLIENT}.getState().G; return q.attackPower(G.players['0'].active).total; })()`);
+  check('a tap on it makes the attack at it: its HP, your tally and the hero it owes a blow', og.attackUsed && og.boss?.hp === 10 - power && og.bossDamage['0'] === power && og.bossAttacker === swingAt.iid, JSON.stringify({ boss: og.boss?.hp, tally: og.bossDamage, attacker: og.bossAttacker, power }));
+  check('…and no rival hero took it', [og.players['1'].active, ...og.players['1'].bench].every((h) => h.hp === 30));
+  await shot('o-after-swing');
+  const hpBefore = og.players['0'].active.hp;
+  // No tap: the turn ends on its own. Watch the hand-over, a frame at a time, for the blow.
+  const DIAL = `document.querySelector('[aria-label^="Turn "][aria-label*=" step · "]')?.getAttribute('aria-label') ?? ''`;
+  let handed = false, blowInEnd = false, blowShot = false;
+  for (let t = 0; t < 4000; t += 50) {
+    await b.tick(50); await b.settle(1);
+    const now = await b.evaluate(`({ who: ${CLIENT}.getState().ctx.currentPlayer, dial: ${DIAL}, batches: document.querySelectorAll('[data-fx-batch]').length })`);
+    if (now.who !== '0') handed = true;
+    if (handed && / · Your Move · End step/.test(now.dial) && now.batches > 0) {
+      blowInEnd = true;
+      if (!blowShot) { blowShot = true; await shot('o-blow'); }
+    }
+    if (handed && !/ · End step/.test(now.dial)) break;
+  }
+  const ended = await G();
+  check('after the attack the turn ended on its own, no tap', handed);
+  check('at your End the Mid-Boss hits that hero back for 2', ended.players['0'].active.iid === swingAt.iid && ended.players['0'].active.hp === hpBefore - 2, `${hpBefore} -> ${ended.players['0'].active.hp}`);
+  check('…and its blow plays inside the hand-over: an fx batch while the dial is on your End', blowInEnd);
+
+  // ===== p: a fall at the End, inside the hand-over ====================================
+  console.log('\n(p) an empty lane pushed at your End: the rival\'s Guardian falls, and its sticker plays through the hand-over');
+  await b.tick(2400); await b.settle(2);
+  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK}
+    G.boss = null; G.bossAttacker = null; G.bossRespawnRound = 99;
+    G.players['1'].structures = [{ kind: 'guardian', hp: 1, max: 4 }, { kind: 'walker', hp: 6, max: 6 }, { kind: 'patron', hp: 8, max: 8 }];
+    for (const h of [G.players['1'].active, ...G.players['1'].bench]) { h.hp = 0; h.respawnTurnsLeft = 1; }
+  }`);
+  const soulsBefore = (await G()).players['0'].souls;
+  const FALL_STICKER = `[...document.querySelectorAll('[data-fall]')].map((e) => e.getAttribute('data-fall'))`;
+  await b.clickEl(endTurn, { scroll: false });
+  await b.settle(3);
+  let stickerInEnd = false, fallShot = false;
+  for (let t = 0; t < 4000; t += 50) {
+    const now = await b.evaluate(`({ dial: ${DIAL}, falls: ${FALL_STICKER} })`);
+    if (/ · Your Move · End step/.test(now.dial) && now.falls.includes('guardian')) {
+      stickerInEnd = true;
+      if (!fallShot) { fallShot = true; await shot('p-fall'); }
+    }
+    if (stickerInEnd && !/ · End step/.test(now.dial)) break;
+    await b.tick(50); await b.settle(1);
+  }
+  const gp = await G();
+  check('the empty lane was pushed at your End: the rival Guardian is down and paid you its souls', gp.players['1'].structures[0].hp === 0 && gp.players['0'].souls === soulsBefore + 2, JSON.stringify({ guardian: gp.players['1'].structures[0].hp, souls: [soulsBefore, gp.players['0'].souls] }));
+  check('…and the "Guardian down" sticker is up while the dial is on your End', stickerInEnd);
 } finally {
   const errors = b.errors.filter((e) => !ALLOWED_WARNINGS.some((re) => re.test(e)));
   console.log('\npage errors (React warnings included):', errors.length ? errors.slice(0, 10).map((e) => e.slice(0, 300)) : 'none');

@@ -1,5 +1,5 @@
 /**
- * The tutorial — four short lessons, one thing each, and every lesson its
+ * The tutorial — five short lessons, one thing each, and every lesson its
  * own small fight on the scripted path Story uses (`StorySetup`): fixed
  * rosters, no draft, and custom numbers on every hero so the move being
  * taught is exactly the move that wins. Every turn runs Income → Shop → Act →
@@ -20,10 +20,16 @@
  *                       the one attack that ends the Act.
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
+ *   5  The Map          Round 4: Frost Grenade's kill pushes the rival's
+ *                       Guardian down, the attack goes into the Mid-Boss, and
+ *                       the End that follows pushes the empty lane into the
+ *                       Patron (mapLesson.ts).
  *
- * In every lesson the rival's patron has one point left, so the kill is the
- * win. Nothing is read and dismissed: every step is a tap on the real thing,
- * and every lesson ends on the victory screen. Each step names exactly the
+ * In lessons 1–4 the rival's patron has one point left, so the kill is the
+ * win (lesson 5 sets both tracks itself). Nothing is read and dismissed:
+ * every step is a tap on the real thing (lesson 5's last is the End that
+ * follows the attack on its own, watched), and every lesson ends on the
+ * victory screen. Each step names exactly the
  * control that performs it (the gate lets nothing else through), waits out the
  * rival's turn, and — should the move be out of reach — points at the turn
  * button instead of asking for a move that cannot be made. A turn that opens
@@ -40,6 +46,7 @@ import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
 import { SHOP_DONE, SHOP_SHEET, buyLabel } from '@/ui/overlays/ShopSheet';
 import { inHandLabel } from '@/ui/board/Hand';
+import { mapLesson } from './mapLesson';
 
 /* ------------------------------------------------------------------ */
 /* The matches                                                         */
@@ -344,7 +351,7 @@ function done(id: string, title: string, body: Text): CoachStep {
 /* The lessons                                                         */
 /* ------------------------------------------------------------------ */
 
-export type LessonId = 'skill' | 'souls' | 'level' | 'bench';
+export type LessonId = 'skill' | 'souls' | 'level' | 'bench' | 'map';
 
 export interface Lesson {
   id: LessonId;
@@ -473,6 +480,9 @@ export const LESSONS: Lesson[] = [
       attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))}, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. ${nameOf(myBench(v))} sits it out on the bench.`),
     ],
   },
+
+  // 5 The Map — its own file (mapLesson.ts), made of the builders above.
+  mapLesson({ fight, done, useSkill, attack }),
 ];
 
 export function lessonById(id: string | undefined | null): Lesson | undefined {

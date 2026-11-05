@@ -3,7 +3,7 @@ import { forecastAttack } from '@/engine/forecast';
 import { effectiveAtk } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, makeAttack, makeHero } from './_helpers';
+import { freshReadyGame, makeAttack, makeHero, structuresOf } from './_helpers';
 import { INVALID, perform } from '@/engine/engine';
 
 function freshG(): GameState {
@@ -115,7 +115,7 @@ describe('combat plan invariant', () => {
     expect(plan.steps.some((s) => s.predictedKO)).toBe(true);
   });
 
-  it('with no living rival Active the plan is empty, and the attack is refused: the patron is not hit', () => {
+  it('with no living rival Active the plan is empty, and the attack is refused: no structure is hit', () => {
     const vacate: [string, (G: GameState) => void][] = [
       ['no Active', (G) => { G.players['1'].active = null; }],
       ['a corpse in the lane', (G) => { G.players['1'].active!.hp = 0; G.players['1'].active!.respawnTurnsLeft = 2; }],
@@ -126,15 +126,15 @@ describe('combat plan invariant', () => {
       const plan = forecastAttack(G, '0');
       expect(plan.steps, label).toEqual([]);
       expect(plan.damageToActive, label).toBe(0);
-      expect(plan.patronDamage, label).toBe(0);
+      expect(plan.pushDamage, label).toBe(0);
       expect(plan.defenderActiveKO, label).toBeNull();
-      const patronBefore = G.players['1'].hp;
+      const structuresBefore = structuresOf(G, '1');
       expect(perform(G, '0', { type: 'attack' }), label).toBe(INVALID);
-      expect(G.players['1'].hp, label).toBe(patronBefore);
+      expect(structuresOf(G, '1'), label).toBe(structuresBefore);
     }
   });
 
-  it("a KO costs the defender's patron the one life the engine takes — the overflow is not spilled", () => {
+  it("a KO pushes the victim's level + 1 into the defender's structures — the overflow is not spilled", () => {
     const G = freshG();
     plainActive(G);
     soloAttacker(G, '0');
@@ -143,23 +143,23 @@ describe('combat plan invariant', () => {
     const plan = forecastAttack(G, '0');
     expect(plan.defenderActiveKO).toBe(target.iid);
     expect(plan.steps[0].finalDamage).toBe(3);
-    expect(plan.patronDamage).toBe(1);
-    const patronBefore = G.players['1'].hp;
+    expect(plan.pushDamage).toBe(2); // Level 1: level + 1
+    const structuresBefore = structuresOf(G, '1');
     makeAttack(G, '0');
-    expect(patronBefore - G.players['1'].hp).toBe(plan.patronDamage);
+    expect(structuresBefore - structuresOf(G, '1')).toBe(plan.pushDamage);
   });
 
-  it('an attack the rival Active survives costs its patron nothing', () => {
+  it('an attack the rival Active survives pushes nothing', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hp = target.hpMax = 30;
     const plan = forecastAttack(G, '0');
     expect(plan.damageToActive).toBeGreaterThan(0);
     expect(plan.defenderActiveKO).toBeNull();
-    expect(plan.patronDamage).toBe(0);
-    const patronBefore = G.players['1'].hp;
+    expect(plan.pushDamage).toBe(0);
+    const structuresBefore = structuresOf(G, '1');
     makeAttack(G, '0');
-    expect(G.players['1'].hp).toBe(patronBefore);
+    expect(structuresOf(G, '1')).toBe(structuresBefore);
   });
 
   it('plan does NOT mutate game state', () => {

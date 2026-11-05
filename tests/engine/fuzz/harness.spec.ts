@@ -16,8 +16,8 @@ import * as query from '@/engine/query';
 import { getAbility } from '@/abilities';
 import { ITEMS } from '@/cards';
 import { openingMarket } from '@/engine/market';
-import { HARD_CC_CHARGES, PRICE } from '@/engine/constants';
-import { freshReadyGame, giveCard, giveItem, makeHero, nextTestIid } from '../_helpers';
+import { BOSS_CARD_ID, BOSS_HP, HARD_CC_CHARGES, PRICE, REVIVE_CREDITS, ROUND_CAP } from '@/engine/constants';
+import { freshReadyGame, giveCard, giveItem, makeHero, nextTestIid, setTrack } from '../_helpers';
 import { SOULS_ON_USE, checkInvariants, checkTransition, collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { chaosMove, marketSeedFor, mulberry32, playGame } from './driver';
 import {
@@ -39,6 +39,27 @@ const loose = (G: GameState, cardId: string, owner: PlayerID): CardInstance => {
   const it = giveItem(G, host, cardId);
   it.attachedTo = undefined;
   return it;
+};
+/** `pid` has felled the enemy Guardian and Walker: the flex slot is its, as the rules give it. */
+const flex = (G: GameState, pid: PlayerID) => {
+  G.players[pid].flexSlot = true;
+  for (const s of G.players[pid === '0' ? '1' : '0'].structures) if (s.kind !== 'patron') s.hp = 0;
+};
+/** Push `n` off `pid`'s structures, front first, as the engine does. */
+const pushOff = (G: GameState, pid: PlayerID, n: number) => {
+  for (const s of G.players[pid].structures) { const k = Math.min(s.hp, n); s.hp -= k; n -= k; }
+};
+/** The Mid-Boss in the pit, at `hp`, as the engine raises it (round 4 on). */
+const raiseBoss = (G: GameState, hp = BOSS_HP): CardInstance => {
+  G.turnNumber = 8; G.draftTurnsOffset = 0; // round 4, P0's turn (P1 moved first): read with ctx turn 8
+  const boss: CardInstance = {
+    iid: 'boss1', cardId: BOSS_CARD_ID, ownerId: 'none', zone: 'pit', attached: [], hp, hpMax: BOSS_HP,
+    atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
+  };
+  G.boss = boss;
+  G.bossDamage = { '0': BOSS_HP - hp, '1': 0 };
+  G.bossRespawnRound = 4;
+  return boss;
 };
 /** P0's heroes on the clean board: Haze (Active), Vindicta, Lash, Paige. */
 const p0 = (G: GameState) => ({ haze: G.players['0'].active!, vindicta: G.players['0'].bench[0]!, lash: G.players['0'].bench[1]!, paige: G.players['0'].bench[2]! });
@@ -81,8 +102,30 @@ describe('the invariants fire on states built to break them', () => {
     ['attached-foreign', (G) => { const it = giveItem(G, p0(G).haze, 'extra_spirit'); it.attached = [loose(G, 'grit', '0')]; }],
     ['souls-range', (G) => { G.players['0'].souls = 1.5; }],
     ['souls-range', (G) => { G.players['0'].souls = -1; }],
-    ['patron-range', (G) => { G.players['0'].hp = G.players['0'].hpMax + 1; }],
-    ['patron-dead-no-gameover', (G) => { G.players['1'].hp = 0; }],
+    // ---- the map ----
+    ['structure-range', (G) => { G.players['0'].structures[0].hp = G.players['0'].structures[0].max + 1; }],
+    ['structure-range', (G) => { G.players['0'].structures[1].hp = -1; }],
+    ['structures-shape', (G) => { G.players['0'].structures.reverse(); }],
+    ['structures-shape', (G) => { G.players['1'].structures.pop(); }],
+    // the Walker scratched while the Guardian in front of it stands
+    ['structure-order', (G) => { G.players['1'].structures[1].hp -= 1; }],
+    ['patron-dead-no-gameover', (G) => { for (const s of G.players['1'].structures) s.hp = 0; }],
+    // the flex slot without the enemy Walker felled, and the Walker felled without it
+    ['flex-slot-walker', (G) => { G.players['0'].flexSlot = true; }],
+    ['flex-slot-walker', (G) => { for (const s of G.players['1'].structures) if (s.kind !== 'patron') s.hp = 0; }],
+    ['revive-credits', (G) => { G.players['0'].reviveCredits = REVIVE_CREDITS + 1; G.players['0'].reviveUntilRound = 9; }],
+    // credits good through round 0, still held in round 1
+    ['revive-lapsed', (G) => { G.players['0'].reviveCredits = 1; G.players['0'].reviveUntilRound = 0; }],
+    ['boss-early', (G) => { raiseBoss(G); G.turnNumber = 2; }],
+    ['boss-state', (G) => { raiseBoss(G).statuses.push({ id: 'bleed', value: 1, duration: 2 }); }],
+    ['boss-state', (G) => { raiseBoss(G).ownerId = '1'; }],
+    ['boss-state', (G) => { raiseBoss(G).hp = 0; }],
+    ['boss-tally', (G) => { raiseBoss(G, 6); G.bossDamage = { '0': 1, '1': 1 }; }],
+    ['boss-tally', (G) => { raiseBoss(G); G.bossDamage = { '0': -1, '1': 1 }; }],
+    // round 4 has begun and no boss is up
+    ['boss-due', (G) => { raiseBoss(G); G.boss = null; }],
+    ['round-cap', (G) => { G.capped = true; }],
+    ['round-cap', (G) => { G.turnNumber = 2 * ROUND_CAP + 2; }],
     ['active-present', (G) => { G.players['0'].active = null; }],
     ['active-not-bench-only', (G) => { G.players['0'].active = makeHero('hero_rem', '0', 'active', 0); }],
     ['active-corpse-unresolved', (G) => { const a = G.players['1'].active!; a.hp = 0; a.respawnTurnsLeft = 3; }],
@@ -162,7 +205,7 @@ describe('the invariants fire on states built to break them', () => {
 
   it('what the rules allow is not reported: the flex slot\'s fourth item, a merged Rem beside three items, a same-turn upgrade holding its component, cards held', () => {
     const G = clean();
-    G.players['0'].flexSlot = true;
+    flex(G, '0');
     for (const id of ['extra_spirit', 'extra_health', 'extended_magazine', 'grit']) giveItem(G, p0(G).haze, id);
     expect(ids(G)).toEqual([]);
     const H = clean();
@@ -198,8 +241,42 @@ describe('the invariants fire on states built to break them', () => {
 
   it('a state that is merely finished (game over) is not reported for the winner\'s patron or a corpse Active', () => {
     const G = clean();
-    G.players['1'].hp = 0;
+    for (const s of G.players['1'].structures) s.hp = 0;
     expect(ids(G, ctx({ gameover: { winner: '0' } } as Partial<Ctx>))).not.toContain('patron-dead-no-gameover');
+  });
+
+  it('a match over names the winner the rules give: the side whose Patron stands, or — the round cap — what stands', () => {
+    const G = clean();
+    for (const s of G.players['1'].structures) s.hp = 0;
+    expect(ids(G, ctx({ gameover: { winner: '0' } } as Partial<Ctx>))).not.toContain('game-over-winner');
+    expect(ids(G, ctx({ gameover: { winner: '1' } } as Partial<Ctx>))).toContain('game-over-winner');
+    // No Patron fell and no cap: no reason for a result.
+    expect(ids(clean(), ctx({ gameover: { winner: '0' } } as Partial<Ctx>))).toContain('game-over-winner');
+    // The cap: more structure HP wins; a tie, more net worth; still tied, the second mover (P0 here).
+    const C = clean();
+    C.capped = true;
+    pushOff(C, '0', 3);
+    expect(ids(C, ctx({ gameover: { winner: '1' } } as Partial<Ctx>))).not.toContain('game-over-winner');
+    expect(ids(C, ctx({ gameover: { winner: '0' } } as Partial<Ctx>))).toContain('game-over-winner');
+    const T = clean();
+    T.capped = true;
+    expect(ids(T, ctx({ gameover: { winner: '0' } } as Partial<Ctx>))).not.toContain('game-over-winner');
+    T.players['1'].souls = 5;
+    expect(ids(T, ctx({ gameover: { winner: '1' } } as Partial<Ctx>))).not.toContain('game-over-winner');
+  });
+
+  it('the map as the rules leave it is not reported: a felled Guardian, a Mid-Boss chipped by both, a live Rejuvenator, a Patron-only track', () => {
+    const G = clean();
+    pushOff(G, '1', 5); // the Guardian down, the Walker scratched
+    G.players['0'].reviveCredits = 2; G.players['0'].reviveUntilRound = 6;
+    const boss = raiseBoss(G, 7);
+    G.bossDamage = { '0': 2, '1': 1 };
+    expect(boss.hp).toBe(7);
+    expect(ids(G, ctx({ turn: 8 }))).toEqual([]);
+    const S = clean();
+    setTrack(S, '0', { patron: 4 });
+    setTrack(S, '1', { patron: 1 });
+    expect(ids(S)).toEqual([]);
   });
 });
 
@@ -229,14 +306,27 @@ describe('the transition rules fire', () => {
     };
     return { ...p, check };
   }
-  it('patron loses hp with no hero falling', () => {
-    expect(ids2(pair((G) => { G.players['1'].hp -= 1; }))).toContain('patron-delta');
+  it('structures lose HP with no hero falling', () => {
+    expect(ids2(pair((G) => { pushOff(G, '1', 1); }))).toContain('structure-delta');
   });
-  it('a hero falls and the patron does not pay', () => {
-    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 3; }))).toContain('patron-delta');
+  it('a hero falls and pushes nothing', () => {
+    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 1; }))).toContain('structure-delta');
   });
-  it('a hero falls and the patron pays exactly 1: fine', () => {
-    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 3; G.players['1'].hp -= 1; }))).not.toContain('patron-delta');
+  it('a hero falls and pushes its level + 1 (2 for a fresh one): fine; the old 1 is not', () => {
+    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 1; pushOff(G, '1', 2); }))).not.toContain('structure-delta');
+    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 1; pushOff(G, '1', 1); }))).toContain('structure-delta');
+  });
+  it('a hero that falls in round 1 waits one own turn — not the old three', () => {
+    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 1; pushOff(G, '1', 2); }))).not.toContain('respawn-timer-start');
+    expect(ids2(pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 3; pushOff(G, '1', 2); }))).toContain('respawn-timer-start');
+  });
+  it('a side with a live Rejuvenator has its fallen hero back in place, a credit spent', () => {
+    const base = clean();
+    base.players['1'].reviveCredits = 2; base.players['1'].reviveUntilRound = 3;
+    const stayedDown = pair((G) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 1; pushOff(G, '1', 2); }, base);
+    expect(ids2(stayedDown)).toContain('revive-owed');
+    const kept = pair((G) => { G.players['1'].reviveCredits = 1; }, base);
+    expect(ids2(kept)).toContain('revive-spend');
   });
   it('an item vanishes from the board; one appears from nowhere', () => {
     const base = clean();
@@ -286,7 +376,7 @@ describe('the transition rules fire', () => {
     expect(moveIds(r, 'useSkill', [heroIid(r)])).not.toContain('souls-delta');
   });
   it('a kill pays the victim\'s level + 1 to its opponent, and 2 more for the richest hero (by the list price of every worn item, actives too)', () => {
-    const fall = (G: GameState) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 3; G.players['1'].hp -= 1; };
+    const fall = (G: GameState) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 1; pushOff(G, '1', 2); };
     const right = pair((G) => { fall(G); G.players['0'].souls += 2; });
     expect(moveIds(right, 'attack', [])).not.toContain('souls-delta');
     const flat = pair((G) => { fall(G); G.players['0'].souls += 1; }); // the old flat bounty
@@ -501,7 +591,7 @@ describe('the transition rules fire', () => {
     expect(play.check((A) => { giveItem(A, A.players['0'].active!, 'mystic_burst'); })).toContain('play-slot-cap');
     // with the flex slot a fourth is no breach
     const F = shopGame();
-    F.players['0'].flexSlot = true;
+    flex(F, '0');
     for (const id of ['extra_health', 'extra_regen', 'mystic_burst']) giveItem(F, p0(F).haze, id);
     const fourth = giveCard(F, '0', 'extra_spirit', { turn: 2, paid: 2 });
     expect(made(F, 'playCard', [fourth.iid, p0(F).haze.iid]).check()).toEqual([]);
@@ -776,16 +866,16 @@ describe('the transition rules fire', () => {
     for (const c of [G.players['1'].active!, ...G.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 3; }
     expect(ids(G)).toEqual([]);
   });
-  it('the empty-lane push: at the end of a turn the rival\'s patron may lose the Active\'s bullet power', () => {
+  it('the empty-lane push: at the end of a turn the rival\'s structures may lose the Active\'s bullet power', () => {
     const before = clean();
     for (const c of [before.players['1'].active!, ...before.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 3; }
     const after = structuredClone(before) as GameState;
-    after.players['1'].hp -= 3; // Haze's 3 Bullet Power
+    pushOff(after, '1', 3); // Haze's 3 Bullet Power
     const end = (a: GameState, name: string) => collectTransitionViolations({ G: before, ctx: ctx() }, { G: a, ctx: ctx({ currentPlayer: '1', turn: 3 }) }, { name, args: [] }, true).map((v) => v.id);
-    expect(end(after, 'endTurn')).not.toContain('patron-delta');
-    expect(end(after, 'useSkill')).toContain('patron-delta');
-    after.players['1'].hp -= 1;
-    expect(end(after, 'endTurn')).toContain('patron-delta');
+    expect(end(after, 'endTurn')).not.toContain('structure-delta');
+    expect(end(after, 'useSkill')).toContain('structure-delta');
+    pushOff(after, '1', 1);
+    expect(end(after, 'endTurn')).toContain('structure-delta');
   });
   it('a rejected move that replaced G', () => {
     expect(ids2(pair(() => undefined), 'useSkill', false)).toContain('rejected-move-changed-state');

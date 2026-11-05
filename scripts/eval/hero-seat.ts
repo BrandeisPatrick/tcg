@@ -14,11 +14,11 @@ import { enumerateAIMoves } from '@/ai/heuristic';
 import { CARDS_BY_ID } from '@/cards';
 import { setMatchConfig } from '@/storage/matchConfig';
 import { heroesOf } from '@/engine/query';
-import { firstMover } from '@/engine/rounds';
+import { MATCH_TURNS, firstMover } from '@/engine/rounds';
 import type { GameState, PlayerID } from '@/engine/types';
 
 const GAMES = Number(process.argv[2] ?? 600);
-const TURN_CAP = 40; // engine turns
+const TURN_CAP = MATCH_TURNS; // engine turns: the round cap ends every match by then
 setMatchConfig({ heroPreferences: [null, null, null, null], humanSeat: null });
 
 type Seat = PlayerID;

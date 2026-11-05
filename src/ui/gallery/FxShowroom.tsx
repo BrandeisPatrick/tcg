@@ -295,7 +295,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
   const attackRef = useRef<AttackPlan | null>(null);
   const swingPlan = (steps: AttackStep[], label: string) => {
     const by = STAGE[steps[0].attackerIid as Id].owner;
-    attackRef.current = { attackerId: by, defenderId: otherPlayer(by), steps, damageToActive: 0, patronDamage: 0, defenderActiveKO: null };
+    attackRef.current = { attackerId: by, defenderId: otherPlayer(by), steps, damageToActive: 0, pushDamage: 0, defenderActiveKO: null };
     setAttack(attackRef.current);
     setPlaying(label);
   };

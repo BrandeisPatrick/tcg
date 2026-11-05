@@ -9,14 +9,14 @@
  */
 import { INVALID_MOVE } from 'boardgame.io/core';
 import type { Ctx } from 'boardgame.io';
-import type { CardId, CardInstance, GameState, ItemCard, ItemSlot, ItemTier, PlayerID, PlayerState } from '@/engine/types';
+import type { CardId, CardInstance, GameState, ItemCard, ItemSlot, ItemTier, Owner, PlayerID, PlayerState } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID } from '@/statuses';
 import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, LEVEL_THRESHOLDS, MAX_ITEMS, PRICE, RETREAT_COST,
-  RICHEST_BOUNTY_BONUS, ULT_COOLDOWN, ULT_UNLOCK_LEVEL,
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
+  MAX_ITEMS, PRICE, RESPAWN_BY_ROUND, RETREAT_COST, RICHEST_BOUNTY_BONUS, RICH_RESPAWN_PENALTY, ULT_COOLDOWN, ULT_UNLOCK_LEVEL,
 } from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
 
@@ -42,15 +42,16 @@ export function boardOf(ps: PlayerState): CardInstance[] {
 }
 
 /** Every card instance anywhere in G — the heroes in the slots and everything
- *  they carry (worn items, a merged Rem and what she wears), and the cards in
- *  each player's hand (place 'hand') — with a label for where it sits. There is
- *  no deck and no discard pile: a card is on the board, in a hand, or gone. (A
- *  component an upgrade consumed this turn is kept on the upgrade's `replaced`,
- *  out of play: it is not walked.) */
-export function everyCard(G: GameState): { card: CardInstance; place: string; pid: PlayerID }[] {
-  const out: { card: CardInstance; place: string; pid: PlayerID }[] = [];
+ *  they carry (worn items, a merged Rem and what she wears), the cards in each
+ *  player's hand (place 'hand'), and the Mid-Boss in the pit (place 'pit',
+ *  owned by nobody) — with a label for where it sits. There is no deck and no
+ *  discard pile: a card is on the board, in a hand, or gone. (A component an
+ *  upgrade consumed this turn is kept on the upgrade's `replaced`, out of
+ *  play: it is not walked.) */
+export function everyCard(G: GameState): { card: CardInstance; place: string; pid: Owner }[] {
+  const out: { card: CardInstance; place: string; pid: Owner }[] = [];
   const seen = new Set<CardInstance>();
-  const walk = (c: CardInstance, place: string, pid: PlayerID) => {
+  const walk = (c: CardInstance, place: string, pid: Owner) => {
     if (seen.has(c)) return; // a corrupted state could hang a card inside itself
     seen.add(c);
     out.push({ card: c, place, pid });
@@ -62,6 +63,7 @@ export function everyCard(G: GameState): { card: CardInstance; place: string; pi
     ps.bench.forEach((b, i) => { if (b) walk(b, `bench${i}`, pid); });
     for (const c of ps.hand ?? []) walk(c, 'hand', pid);
   }
+  if (G.boss) walk(G.boss, 'pit', 'none');
   return out;
 }
 
@@ -172,6 +174,8 @@ export function targetLegal(
   if (filter === 'noTarget') return target === undefined;
   if (!target) return false;
   if (isRespawning(target)) return false;
+  // The Mid-Boss in the pit: no ability or item is ever aimed at it.
+  if (target.zone === 'pit') return false;
   const ally = target.ownerId === pid;
   const hero = isHeroCard(target);
   switch (filter) {
@@ -188,7 +192,7 @@ export function targetLegal(
       const front = G?.players[pid].active;
       return ally && benchMover(target) && !!front && !isRespawning(front) && !rooted(front);
     }
-    case 'enemyBench': return !ally && benchMover(target) && !!G?.players[target.ownerId].active;
+    case 'enemyBench': return !ally && benchMover(target) && target.ownerId !== 'none' && !!G?.players[target.ownerId].active;
     case 'anyBoard': return true;
   }
 }
@@ -484,6 +488,71 @@ export function bountyOracle(G: GameState, hero: CardInstance): number {
   return (hero.level ?? 1) + KILL_BOUNTY_BASE + (richest ? RICHEST_BOUNTY_BONUS : 0);
 }
 
+/** Strictly the richest hero on the board, by the rules (a tie for the top: nobody). */
+export function richestOracle(G: GameState, hero: CardInstance): boolean {
+  const mine = wornWorth(hero);
+  const others = PIDS.flatMap((p) => heroesOfSide(G.players[p])).filter((h) => h.iid !== hero.iid);
+  return mine > 0 && others.every((h) => wornWorth(h) < mine);
+}
+
+// ---------------------------------------------------------------------------
+// Rules oracle: the map (rules.md §6). Written from the rules, not copied from
+// map.ts / rounds.ts: round r is both players' r-th own turns, engine turns
+// 2r − 1 and 2r; a kill pushes the victim's level + 1 into its side's front
+// structure, an empty lane its pusher's bullet power, both doubled from round
+// 9; a fallen hero waits 1 own turn in rounds 1–4, 2 in rounds 5–8, 3 from
+// round 9, one more when it was strictly the richest; what stands decides on
+// more structure HP, then more net worth, then the second mover.
+// ---------------------------------------------------------------------------
+
+/** The round engine turn `G.turnNumber` belongs to. */
+export function roundOracle(G: GameState): number {
+  return Math.ceil(Math.max(0, G.turnNumber ?? 0) / 2);
+}
+
+/** What a push is multiplied by in round `r`. */
+export function pushMultiplierOracle(r: number): number {
+  return r >= LATE_GAME_ROUND ? LATE_PUSH_MULTIPLIER : 1;
+}
+
+/** What the fall of a hero of `level` pushes in round `r`. */
+export function killPushOracle(level: number, r: number): number {
+  return (level + KILL_BOUNTY_BASE) * pushMultiplierOracle(r);
+}
+
+/** The own turns a hero that falls in round `r` waits, before the richest penalty. */
+export function respawnBandOracle(r: number): number {
+  let turns = RESPAWN_BY_ROUND[0][1];
+  for (const [from, n] of RESPAWN_BY_ROUND) if (r >= from) turns = n;
+  return turns;
+}
+
+/** The respawn timer of `hero` falling in round `r` on the board `G`. */
+export function respawnTimerOracle(G: GameState, hero: CardInstance, r: number): number {
+  return respawnBandOracle(r) + (richestOracle(G, hero) ? RICH_RESPAWN_PENALTY : 0);
+}
+
+/** A side's standing structure HP. */
+export function structureHpOracle(ps: PlayerState): number {
+  return (ps.structures ?? []).reduce((n, s) => n + Math.max(0, s.hp), 0);
+}
+
+/** A side's Patron (always the last of its track). */
+export function patronOf(ps: PlayerState) {
+  return (ps.structures ?? []).find((s) => s.kind === 'patron');
+}
+
+/** Who wins on what stands: more structure HP, then more net worth, then the second mover. */
+export function standingWinnerOracle(G: GameState): PlayerID {
+  const s0 = structureHpOracle(G.players['0']);
+  const s1 = structureHpOracle(G.players['1']);
+  if (s0 !== s1) return s0 > s1 ? '0' : '1';
+  const w0 = netWorthOracle(G, '0');
+  const w1 = netWorthOracle(G, '1');
+  if (w0 !== w1) return w0 > w1 ? '0' : '1';
+  return other(G.firstMover ?? '0');
+}
+
 /** A side's net worth by the rules: its souls, plus the list price of what its heroes
  *  wear and of every card in its hand. */
 export function netWorthOracle(G: GameState, pid: PlayerID): number {
@@ -495,16 +564,19 @@ export function netWorthOracleWithoutHand(G: GameState, pid: PlayerID): number {
   return G.players[pid].souls + heroesOfSide(G.players[pid]).reduce((n, h) => n + wornWorth(h), 0);
 }
 
-/** The heroes `pid`'s Active may aim its attack at, in board order (the rival's
- *  Active, then its bench). Silent on whether the attack is open and whether the
- *  swing would deal anything: those are asked on their own. */
+/** What `pid`'s Active may aim its attack at, in board order (the rival's
+ *  Active, then its bench), and last the Mid-Boss while it stands in the pit
+ *  (from round 4: rules.md §6). Silent on whether the attack is open and
+ *  whether the swing would deal anything: those are asked on their own. */
 export function attackTargetsOracle(G: GameState, pid: PlayerID): CardInstance[] {
   const active = G.players[pid].active;
   const foe = G.players[other(pid)];
   if (!active) return [];
   const alive = boardOf(foe).filter((c) => isHeroCard(c) && !isRespawning(c));
   const reachable = carriesReach(active) ? alive : alive.filter((c) => c.iid === foe.active?.iid);
-  return reachable.filter((c) => !c.statuses.some((s) => s.id === 'dome'));
+  const heroes = reachable.filter((c) => !c.statuses.some((s) => s.id === 'dome'));
+  const boss = G.boss && G.boss.zone === 'pit' && G.boss.hp > 0 ? [G.boss] : [];
+  return [...heroes, ...boss];
 }
 
 // ---------------------------------------------------------------------------

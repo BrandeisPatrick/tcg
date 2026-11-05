@@ -3,30 +3,56 @@
  * pre-match snake draft. boardgame.io's `setup` and the `draftPick` move call
  * these (game.ts).
  */
-import type { CardId, CardInstance, GameState, PlayerID, PlayerState } from '../types';
+import type { CardId, CardInstance, GameState, PlayerID, PlayerState, TrackHp } from '../types';
 import { CARDS_BY_ID, HEROES, itemCard } from '@/cards';
-import { getMatchConfig, scriptedSetup, type HeroStatOverride } from '@/storage/matchConfig';
+import { getMatchConfig, scriptedSetup, type HeroStatOverride, type StorySetup } from '@/storage/matchConfig';
 import { allocatorFor, allocatorOf, newCounters, type IidAllocator } from '../ids';
 import { makeInstance } from '../instances';
 import { pushLog } from '../log';
 import { otherPlayer } from '../query';
 import { addHero, openingMarket } from '../market';
+import { newRecord, newTrack } from '../map';
 import { newSeed } from '../rng';
-import { PATRON_HP, SOULS_START } from '../constants';
+import { BOSS_SPAWN_ROUND, SOULS_START } from '../constants';
 
 /** Empty PlayerState used while the pre-match draft is running — no heroes
  *  yet. Replaced via `buildPlayer()` once the 8th draft pick lands. */
 function makeEmptyPlayer(pid: PlayerID): PlayerState {
   return {
     id: pid,
-    hp: PATRON_HP,
-    hpMax: PATRON_HP,
+    structures: newTrack(),
     souls: SOULS_START,
     hand: [],
     active: null,
     bench: [null, null, null],
     flexSlot: false,
+    reviveCredits: 0,
+    reviveUntilRound: 0,
   };
+}
+
+/** The map's part of a fresh game: no Mid-Boss until round BOSS_SPAWN_ROUND,
+ *  no cap reached, nothing on the record. (Hand-built test states use it too.) */
+export function freshMap(): Pick<GameState, 'boss' | 'bossDamage' | 'bossLastHit' | 'bossRespawnRound' | 'bossAttacker' | 'capped' | 'record'> {
+  return {
+    boss: null,
+    bossDamage: { '0': 0, '1': 0 },
+    bossLastHit: null,
+    bossRespawnRound: BOSS_SPAWN_ROUND,
+    bossAttacker: null,
+    capped: false,
+    record: { '0': newRecord(), '1': newRecord() },
+  };
+}
+
+/** The track a scripted match gives a side: its own by structure, else a
+ *  Patron alone at the setup's patron HP, else the standard one. */
+function scriptedTrack(story: StorySetup, pid: PlayerID): TrackHp | undefined {
+  const rival = pid === '1';
+  const own = rival ? story.enemyStructures ?? story.structures : story.structures;
+  if (own) return own;
+  const patron = rival ? story.enemyPatronHp ?? story.patronHp : story.patronHp;
+  return patron === undefined ? undefined : { patron };
 }
 
 /** Snake draft order for 4 picks per player (8 total).
@@ -45,15 +71,15 @@ function humanSeat(): PlayerID | null {
 interface RosterOpts {
   /** Flat stat buff applied to every hero (Story mode enemy scaling). */
   buff?: { atk: number; hp: number };
-  /** Patron-HP override for this match (Story pacing). */
-  patronHp?: number;
+  /** The side's track, when it is not the standard one (Story pacing, a lesson). */
+  track?: TrackHp;
   /** Souls held before the first income (SOULS_START when left out). */
   souls?: number;
 }
 
 /** Build a PlayerState from a 1-4 hero roster. Heroes beyond the first fill
  *  the bench (length 3, padded with null). Used by both the draft path
- *  (exactly 4 heroes) and Story mode (1-4 heroes, optional buff/patron HP).
+ *  (exactly 4 heroes) and Story mode (1-4 heroes, optional buff and track).
  *  `ids` names every card it makes (see ids.ts). */
 export function buildPlayer(ids: IidAllocator, pid: PlayerID, heroes: string[], opts: RosterOpts = {}): PlayerState {
   const roster = heroes.slice(0, 4);
@@ -80,16 +106,16 @@ export function buildPlayer(ids: IidAllocator, pid: PlayerID, heroes: string[], 
     }
   }
 
-  const patronHp = opts.patronHp ?? PATRON_HP;
   return {
     id: pid,
-    hp: patronHp,
-    hpMax: patronHp,
+    structures: newTrack(opts.track),
     souls: opts.souls ?? SOULS_START,
     hand: [],
     active,
     bench,
     flexSlot: false,
+    reviveCredits: 0,
+    reviveUntilRound: 0,
   };
 }
 
@@ -158,8 +184,8 @@ export function setupGame(): GameState {
     const G: GameState = {
       counters,
       players: {
-        '0': buildPlayer(ids, '0', story.playerHeroes, { patronHp: story.patronHp, souls: story.playerSouls }),
-        '1': buildPlayer(ids, '1', story.enemyHeroes, { buff: story.enemyBuff, patronHp: story.enemyPatronHp ?? story.patronHp, souls: story.enemySouls }),
+        '0': buildPlayer(ids, '0', story.playerHeroes, { track: scriptedTrack(story, '0'), souls: story.playerSouls }),
+        '1': buildPlayer(ids, '1', story.enemyHeroes, { buff: story.enemyBuff, track: scriptedTrack(story, '1'), souls: story.enemySouls }),
       },
       turnNumber: startTurn,
       firstMover: startTurn % 2 === 1 ? '0' : '1',
@@ -174,6 +200,7 @@ export function setupGame(): GameState {
       step: 'shop',
       attackUsed: false,
       retreatUsed: false,
+      ...freshMap(),
       action: null,
       fx: [],
     };
@@ -211,6 +238,7 @@ export function setupGame(): GameState {
     step: 'shop',
     attackUsed: false,
     retreatUsed: false,
+    ...freshMap(),
     action: null,
     fx: [],
   };

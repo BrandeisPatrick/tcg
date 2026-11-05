@@ -61,6 +61,7 @@ export function ActiveSlot({
                 onEquipmentHover={onEquipmentHover}
                 registerSlotRef={registerSlotRef}
                 ready={readyIids?.has(card.iid)}
+                flexSlot={ps.flexSlot}
               />
             </DealtTile>
           ) : (

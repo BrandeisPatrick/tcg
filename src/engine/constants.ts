@@ -4,6 +4,7 @@
  * nothing has to be kept in step by hand. (Card stats live on the cards; this
  * is only the table's own arithmetic.)
  */
+import type { StructureKind } from './types';
 
 // ---------- Costs and limits ----------
 
@@ -24,12 +25,7 @@ export const FLEX_SLOT = 1;
 /** Hard ceiling on stacked Extra Attacks (a loop backstop, not a balance gate). */
 export const MAX_EXTRA_ATTACKS = 6;
 
-// ---------- Patron and souls ----------
-
-/** Patron HP — the ONLY way it drops is a hero death, which costs the fallen
- *  hero's level (`koPatronDamage` in query.ts, charged in killInPlace), and
- *  the push into an empty lane at the end of a turn (endTurnEffects). */
-export const PATRON_HP = 10;
+// ---------- Souls ----------
 
 /** Souls a player holds before their first turn's income. */
 export const SOULS_START = 0;
@@ -49,7 +45,8 @@ export const COMEBACK_STEPS: readonly (readonly [behindBy: number, bonus: number
  *  pricing pass may raise it). */
 export const SECOND_MOVER_FIRST_INCOME_BONUS = 0;
 
-/** A kill pays the victim's opponent the victim's level plus this. */
+/** A kill pays the victim's opponent the victim's level plus this — and
+ *  pushes the same into the victim's side's front structure. */
 export const KILL_BOUNTY_BASE = 1;
 
 /** …and this much more when the victim was strictly the richest hero on the
@@ -94,12 +91,52 @@ export const ULT_UNLOCK_LEVEL = 2;
 /** Own turns an ultimate waits after use. */
 export const ULT_COOLDOWN = 3;
 
-// ---------- Turn structure and death ----------
+// ---------- The map: structures, pushes, the Mid-Boss, the round cap ----------
 
-/** Turns a hero takes to respawn after being KO'd. Long enough that death
- *  matters, short enough that you can rebuild. Hero stays in their slot,
- *  greyed-out, while this counts down. */
-export const RESPAWN_TURNS = 3;
+/** Each side's track, front to back, with its HP: damage goes to the front
+ *  standing structure and what is left over carries on to the next. The
+ *  Patron falling loses the match. */
+export const STRUCTURES: readonly (readonly [kind: StructureKind, hp: number])[] = [['guardian', 4], ['walker', 6], ['patron', 8]];
+
+/** Souls to the side whose push fells the rival's Guardian. (The Walker's
+ *  fall gives that side the flex slot, FLEX_SLOT.) */
+export const GUARDIAN_BOUNTY = 2;
+
+/** From this round on a push — a kill's or an empty lane's — deals
+ *  LATE_PUSH_MULTIPLIER times as much. */
+export const LATE_GAME_ROUND = 9;
+export const LATE_PUSH_MULTIPLIER = 2;
+
+/** The last round: once both players' own turn ROUND_CAP is over, the side
+ *  with more structure HP wins (then the richer side, then the second mover). */
+export const ROUND_CAP = 12;
+
+/** The Mid-Boss's card id: no card in the catalogue, a unit of the pit. */
+export const BOSS_CARD_ID = 'boss_midboss';
+/** The round at whose start the Mid-Boss first rises in the pit. */
+export const BOSS_SPAWN_ROUND = 4;
+/** The Mid-Boss's HP. */
+export const BOSS_HP = 10;
+/** What the Mid-Boss hits the hero that attacked it for, at that player's End
+ *  step (pure damage; a death from it pays no bounty and pushes nothing). */
+export const BOSS_RETALIATION = 2;
+/** Rounds after the round it died in that the Mid-Boss rises again. */
+export const BOSS_RESPAWN_ROUNDS = 4;
+/** Souls to the side that takes the Mid-Boss. */
+export const BOSS_SOULS = 4;
+/** The Rejuvenator the taker gets with them: this many revives, good through
+ *  the end of round (the round it was taken + REVIVE_ROUNDS). */
+export const REVIVE_CREDITS = 2;
+export const REVIVE_ROUNDS = 2;
+
+// ---------- Death ----------
+
+/** Own turns a fallen hero waits in its slot before it respawns, by the round
+ *  it fell in: the first pair whose round it has reached (1 in rounds 1–4, 2
+ *  in rounds 5–8, 3 from round 9). */
+export const RESPAWN_BY_ROUND: readonly (readonly [fromRound: number, turns: number])[] = [[1, 1], [5, 2], [9, 3]];
+/** …and this many more when the hero was strictly the richest on the board. */
+export const RICH_RESPAWN_PENALTY = 1;
 
 // ---------- Leveling ----------
 // Heroes start at Lv1, climb to Lv4 (cap). Step costs are 5 → 7 → 9 exp

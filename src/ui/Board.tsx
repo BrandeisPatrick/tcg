@@ -311,14 +311,14 @@ export function Board(props: BoardProps<GameState>) {
     }
   }, []);
 
-  // What the mover's attack would cost the other patron, for the hatched
-  // slice on its HP bar: the life a knocked-out Active takes with it — the
-  // swings themselves never reach a patron. (The per-hero ▼N badges were
+  // What the mover's attack would push off the other side's structures, for
+  // the hatched pips on its strip: the push of a hero it knocks out — the
+  // swings themselves never reach a structure. (The per-hero ▼N badges were
   // removed as visual noise — combat choreographer shows damage events when
   // they land.) Projected only while the mover's attack is still there to be
   // made.
   const projectedPatronDamage = useMemo(
-    () => (attackOpen ? forecastAttack(G, mover).patronDamage : 0),
+    () => (attackOpen ? forecastAttack(G, mover).pushDamage : 0),
     [G, mover, attackOpen],
   );
 

@@ -51,7 +51,6 @@ type Line = { g: number; step?: number; move?: string; args?: unknown[]; forced?
 async function record(games: number, out: string) {
   const SEED = Number(process.env.SEED ?? 1);
   const IGNORE = new Set((process.env.IGNORE ?? 'seq,lastSkillUsed,vitalitySpike').split(',').filter(Boolean));
-  const TURN_CAP = 40;
   const MOVES_PER_TURN_CAP = 40;
 
   // Pin before the engine modules load: setup reads Math.random for the match seed.
@@ -60,6 +59,8 @@ async function record(games: number, out: string) {
   const { Client } = await import('boardgame.io/client');
   const { DeadlockGame } = await import('@/engine/game');
   const { enumerateAIMoves } = await import('@/ai/heuristic');
+  // The round cap ends every match by its last engine turn: a guard no game reaches.
+  const { MATCH_TURNS: TURN_CAP } = await import('@/engine/rounds');
 
   const IID_KEYS = new Set(['iid', 'attachedTo', 'sourceIid', 'targetIid']);
   let iidMap = new Map<string, string>();

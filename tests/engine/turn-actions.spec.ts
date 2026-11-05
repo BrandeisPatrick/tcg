@@ -3,12 +3,12 @@ import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
 import { attackBlocked, attackTurn, blocked, type AttackBlock } from '@/engine/legality';
 import { forecastAttack, simulate } from '@/engine/forecast';
-import { effectiveAtk, findCardOnBoard, liveBoardCards, wornItems } from '@/engine/query';
+import { effectiveAtk, findCardOnBoard, liveBoardCards, structureHp, structureOf, wornItems } from '@/engine/query';
 import { addStatus, clearTurnFlags, tickCooldowns, tickRemMerges } from '@/engine/statusOps';
 import { resolve } from '@/engine/death';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, passTurn, readyClient } from './_helpers';
+import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, passTurn, readyClient, setTrack } from './_helpers';
 
 // A turn opens in its shop step (buy, sell and move items, then close the
 // shop); its act step is the player's to spend on abilities (each hero one a
@@ -99,8 +99,8 @@ describe('turn actions: the attack is a move', () => {
     const after = snap(c);
     expect(after.ctx.currentPlayer).toBe('0');
     expect(activeHp(after.G)).toEqual(activeHp(before.G));
-    expect([after.G.players['0'].hp, after.G.players['1'].hp])
-      .toEqual([before.G.players['0'].hp, before.G.players['1'].hp]);
+    expect([structureHp(after.G.players['0']), structureHp(after.G.players['1'])])
+      .toEqual([structureHp(before.G.players['0']), structureHp(before.G.players['1'])]);
   });
 
   it("the attack is one-way: the defender's onAttack passive (Shiv's Bleed) does not land on the attacker", () => {
@@ -350,11 +350,11 @@ describe('AI: the attack is a choice', () => {
     for (const b of G.players['0'].bench) if (b) { b.hp = 0; b.respawnTurnsLeft = 2; }
   };
 
-  it("ranks the attack as lethal when its knockout takes the rival patron's last life", () => {
+  it("ranks the attack as lethal when its knockout's push fells the rival Patron", () => {
     const G = freshReadyGame();
     const p0 = G.players['0'];
     p0.active!.hp = 1;
-    p0.hp = 1;
+    setTrack(G, '0', { patron: 1 });
     expect(attackScore(G)).toBe(LETHAL);
   });
 
@@ -363,15 +363,15 @@ describe('AI: the attack is a choice', () => {
     const p0 = G.players['0'];
     p0.active!.hp = 1;
     benchDown(G);
-    expect(p0.hp).toBeGreaterThan(1); // the patron itself survives
+    expect(structureHp(p0)).toBeGreaterThan(2); // the structures outlast the push
     expect(attackScore(G)).toBeLessThan(LETHAL);
   });
 
-  it('a knockout with a patron life to spare and a hero to step in is not lethal', () => {
+  it('a knockout with structure HP to spare and a hero to step in is not lethal', () => {
     const G = freshReadyGame();
     const p0 = G.players['0'];
     p0.active!.hp = 1;
-    p0.hp = 2;
+    setTrack(G, '0', { patron: 3 }); // the push of 2 leaves the Patron standing
     expect(forecastAttack(G, '1').defenderActiveKO).toBe(p0.active!.iid);
     expect(attackScore(G)).toBeLessThan(LETHAL);
   });
@@ -382,11 +382,11 @@ describe('AI: the attack is a choice', () => {
     p0.active!.hp = p0.active!.hpMax = 30;
     const swing = forecastAttack(G, '1').damageToActive;
     p0.active!.hp = p0.active!.hpMax = swing + 1; // the Active survives the swing
-    p0.hp = 1;
+    setTrack(G, '0', { patron: 1 });
     // What the old check summed — every live hero's attack against Active HP
     // plus patron HP — calls this lethal; it is not.
     const summed = liveBoardCards(G.players['1']).reduce((n, c) => n + effectiveAtk(c), 0);
-    expect(summed).toBeGreaterThanOrEqual(p0.active!.hp + p0.hp);
+    expect(summed).toBeGreaterThanOrEqual(p0.active!.hp + structureHp(p0));
     expect(attackScore(G)).toBeLessThan(LETHAL);
   });
 
@@ -400,10 +400,10 @@ describe('AI: the attack is a choice', () => {
     expect(top.score).toBeGreaterThanOrEqual(LETHAL);
   };
 
-  it('with lookahead the attack that takes the rival patron\'s last life ranks first, decisively', () => {
+  it('with lookahead the attack whose push fells the rival Patron ranks first, decisively', () => {
     const G = freshReadyGame();
     G.players['0'].active!.hp = 1;
-    G.players['0'].hp = 1;
+    setTrack(G, '0', { patron: 1 });
     winsFirst(G);
   });
 
@@ -418,10 +418,10 @@ describe('AI: the attack is a choice', () => {
 
   it('with lookahead a won game is worth more than any position, a lost one less', () => {
     const won = freshReadyGame();
-    won.players['0'].hp = 0; // the rival patron has already fallen
+    structureOf(won.players['0'], 'patron').hp = 0; // the rival Patron has already fallen
     expect(enumerateAIMoves(won, ctx('1')).every((m) => m.score >= LETHAL)).toBe(true);
     const lost = freshReadyGame();
-    lost.players['1'].hp = 0;
+    structureOf(lost.players['1'], 'patron').hp = 0;
     expect(enumerateAIMoves(lost, ctx('1')).every((m) => m.score < -LETHAL + 1)).toBe(true); // + the 0.1 bias toward acting
   });
 

@@ -212,7 +212,8 @@ export function probeLegality(
       if (gate === null || gate === 'missing-target') sources.push({ kind: 'item', item });
     }
   }
-  const targets: (CardInstance | Ghost | undefined)[] = [undefined, 'ghost', ...boardUnits(G)];
+  // The Mid-Boss is among the targets tried: no ability or item may ever be aimed at it.
+  const targets: (CardInstance | Ghost | undefined)[] = [undefined, 'ghost', ...boardUnits(G), ...(G.boss ? [G.boss] : [])];
   for (let n = 0; n < opts.targetCombos && sources.length && !owed && !actOver && !shop; n++) {
     const src = pickOne(sources, rnd);
     const tgt = pickOne(targets, rnd);
@@ -309,12 +310,13 @@ export function probeLegality(
   }
 
   // ---------------------------------------------------------------- G: who the attack may name
-  // With the attack open, `attack(targetIid)` is accepted exactly for the heroes the rules oracle
-  // lists (a bare `attack` when it lists any), a refusal leaves the state as it was, and
-  // `legalActions` offers one attack per listed hero, the first of them as the bare action.
+  // With the attack open, `attack(targetIid)` is accepted exactly for the units the rules oracle
+  // lists — the enemy heroes it may reach, then the Mid-Boss while it stands (a bare `attack`
+  // when it lists any) — a refusal leaves the state as it was, and `legalActions` offers one
+  // attack per listed unit, the first of them as the bare action.
   const attacker = me.active;
   if (!owed && attacker && attackOpenFor(G, pid)) {
-    const units = boardUnits(G);
+    const units = [...boardUnits(G), ...(G.boss ? [G.boss] : [])];
     const want = attackTargetsOracle(G, pid).filter((t) => attackPower(attacker, t).total > 0);
     const wantIids = want.map((t) => t.iid);
     const tries: (string | undefined)[] = [undefined, 'ghost-iid', ...units.map((c) => c.iid)];
@@ -323,7 +325,7 @@ export function probeLegality(
       const legal = iid === undefined ? want.length > 0 : wantIids.includes(iid);
       const unit = units.find((c) => c.iid === iid);
       const who = iid === undefined ? 'no target' : unit ? `${unit.cardId}#${unit.iid}${isRespawning(unit) ? ' (corpse)' : ''}` : 'an unknown iid';
-      const kind = iid === undefined ? 'bare' : !unit ? 'ghost' : isRespawning(unit) ? 'corpse' : unit.ownerId === pid ? 'ally' : unit.zone === 'active' ? 'active' : 'bench';
+      const kind = iid === undefined ? 'bare' : !unit ? 'ghost' : isRespawning(unit) ? 'corpse' : unit.zone === 'pit' ? 'boss' : unit.ownerId === pid ? 'ally' : unit.zone === 'active' ? 'active' : 'bench';
       const r = callMove(G, ctx, pid, 'attack', args);
       if (r.outcome === 'threw') {
         add('move-threw', 'attack', args, `attack(${JSON.stringify(args)}) threw: ${String(r.error).slice(0, 140)}`);

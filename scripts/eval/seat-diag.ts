@@ -3,8 +3,9 @@
  * KO race to find WHY the first mover wins: who scores the first KO, KO counts
  * per seat, first-KO→win correlation, and the round the first KO lands. A KO
  * is read off the board: a hero whose respawn timer appears, or restarts
- * higher than it was (patron HP also falls to pushes into an empty lane, so
- * its drops are no KO count). The pie rule: seat 1 moves first (read off
+ * higher than it was (structures also fall to pushes into an empty lane, so
+ * their drops are no KO count; a kill the Rejuvenator undoes leaves no timer
+ * and is not counted here — the balance sim reads the engine's record). The pie rule: seat 1 moves first (read off
  * `G.firstMover`). No human seat: both seats are promoted on the spot, as in
  * the balance sim.
  *
@@ -15,11 +16,11 @@ import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { setMatchConfig } from '@/storage/matchConfig';
 import { heroesOf } from '@/engine/query';
-import { firstMover, round } from '@/engine/rounds';
+import { MATCH_TURNS, firstMover, round } from '@/engine/rounds';
 import type { GameState, PlayerID } from '@/engine/types';
 
 const GAMES = Number(process.argv[2] ?? 300);
-const TURN_CAP = 40; // engine turns
+const TURN_CAP = MATCH_TURNS; // engine turns: the round cap ends every match by then
 setMatchConfig({ heroPreferences: [null, null, null, null], humanSeat: null });
 
 type Seat = PlayerID;

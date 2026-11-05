@@ -81,6 +81,7 @@ export function BenchRow({
                 onEquipmentHover={onEquipmentHover}
                 registerSlotRef={registerSlotRef}
                 ready={readyIids?.has(c.iid)}
+                flexSlot={ps.flexSlot}
               />
             </DealtTile>
           ) : (

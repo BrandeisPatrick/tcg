@@ -11,7 +11,6 @@ function freshGame(): GameState {
   // Pre-damage so heals show effect; mark all skills as used so refresh-ult shows effect.
   for (const pid of ['0','1'] as PlayerID[]) {
     const ps = G.players[pid];
-    ps.hp = 12;
     if (ps.active) { ps.active.hp = Math.max(1, Math.floor(ps.active.hpMax / 2)); ps.active.skillUsedThisTurn = true; }
     for (const b of ps.bench) if (b) { b.hp = Math.max(1, Math.floor(b.hpMax / 2)); b.skillUsedThisTurn = true; }
   }

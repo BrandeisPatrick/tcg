@@ -10,8 +10,9 @@
  */
 import { runBatch, wilson } from './framework';
 import { itemCard } from '@/cards';
+import { MATCH_TURNS } from '@/engine/rounds';
 const N = Number(process.argv[2] ?? 400);
-const res = await runBatch({ games: N, masterSeed: 7007, agents: { '0': 'heuristic', '1': 'heuristic' }, turnCap: 40 });
+const res = await runBatch({ games: N, masterSeed: 7007, agents: { '0': 'heuristic', '1': 'heuristic' }, turnCap: MATCH_TURNS });
 const stat: Record<string, { g: number; w: number; uses: number }> = {};
 const lens: number[] = []; let stale = 0;
 for (const r of res) {

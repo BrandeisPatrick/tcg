@@ -4,7 +4,7 @@ import { DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from '@/engine/damage';
 import { awardSouls, resolve } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
-import { findCardOnBoard, heroData, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, stepInCandidates, ultimateCard, wornItems, type TargetFilter } from '@/engine/query';
+import { findCardOnBoard, heroData, isRespawning, liveBoardCards, otherPlayer, effectiveSpirit, resolveSkill, seatOf, stepInCandidates, ultimateCard, wornItems, type TargetFilter } from '@/engine/query';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -928,7 +928,7 @@ const eff_tesla_bullets: AbilityDef = {
   base: 1,
   run: (G, _ctx, { source, params }) => {
     if (!source || params?.bounce) return; // a chain: once a swing, not once a Ricochet bounce
-    const enemy = otherPlayer(source.ownerId);
+    const enemy = otherPlayer(seatOf(source));
     const jump = G.players[enemy].bench.find((b) => b && !isRespawning(b) && b.hp > 0);
     if (jump) damageUnit(G, jump, 1, 'attack', 'Tesla Bullets', { tag: 'tesla' });
   },

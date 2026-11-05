@@ -1,7 +1,8 @@
 /**
  * Headless AI-vs-AI balance simulator: the numbers the redesign's sim gates
  * are judged on (seat 50 ± 3, every hero 45–55, no item in more than 40% of
- * builds, and the length gate once the engine has its round cap).
+ * builds, a mean length of 8–10 own turns with under 2% of games decided by
+ * the round cap).
  *
  * The real boardgame.io engine plays every game (income, the shop, abilities,
  * combat, endIf) with the heuristic AI in both seats.
@@ -37,9 +38,15 @@
  *
  * Seat-neutral. The match config names no human seat, so the engine replaces
  * a fallen Active on both sides at once by one rule (the healthiest bench
- * hero, the first slot on a tie). Both patrons falling to one action, which the
- * engine settles on the HP left and then for the second mover, is scored here
- * as a draw.
+ * hero, the first slot on a tie). Both Patrons falling to one action is
+ * settled by the engine on what stands (structure HP, net worth, the second
+ * mover), and counted here as decided, apart.
+ *
+ * The map. Read off the engine's own record (`G.record`: kills, pushes and the
+ * structure HP they took, Mid-Bosses taken and the ones taken while behind on
+ * net worth, Rejuvenator revives) and the board: structure HP at the end, the
+ * share of games the round cap decides and on what, lead changes measured on
+ * total structure HP.
  *
  * The shop. What each seat buys, sells and uses is read off the board after
  * every move (scripts/eval/ledger.ts), not off G.log, which keeps only its
@@ -47,7 +54,7 @@
  * used, items by share of builds (the item gate) and the round of the first
  * tier 3 and tier 4 purchase.
  *
- *   npx vite-node scripts/balance-sim.ts [games=2500] [capOwnTurns=20]
+ *   npx vite-node scripts/balance-sim.ts [games=2500] [guardOwnTurns=13]
  *
  * Env: SEED (default 1). An odd game count is rounded up to whole pairs.
  * Writes sim-reports/latest.md and sim-reports/latest.json (sim-reports/ is
@@ -61,8 +68,6 @@ import { fitTeams, gamesNeeded, mulberry32, wilson, type Interval, type TeamFit 
 
 const PAIRS = Math.max(1, Math.ceil((Number(process.argv[2]) || 2500) / 2));
 const GAMES = 2 * PAIRS;
-/** Own turns each before the sim calls a game at the cap (the old 40 engine turns). */
-const CAP = Number(process.argv[3]) || 20;
 const SEED = Number(process.env.SEED ?? 1);
 const MOVES_PER_TURN_CAP = 40; // safety against a stuck turn
 /** The item gate: no item in more than this share of builds. */
@@ -77,9 +82,13 @@ const { setupGame } = await import('@/engine/actions/setup');
 const { enumerateAIMoves } = await import('@/ai/heuristic');
 const { CARDS_BY_ID, ITEMS } = await import('@/cards');
 const { setMatchConfig } = await import('@/storage/matchConfig');
-const { heroesOf } = await import('@/engine/query');
+const { heroesOf, patronFallen, standingVerdict, structureHp } = await import('@/engine/query');
 const rounds = await import('@/engine/rounds');
+const { ROUND_CAP } = await import('@/engine/constants');
 const { shopLedger } = await import('./eval/ledger');
+/** The sim's own guard, in own turns: past the round cap, which ends every match first
+ *  (`MATCH_TURNS`); a game still running there is a stalled one. */
+const CAP = Number(process.argv[3]) || ROUND_CAP + 1;
 
 /** The match config for one game: no human seat (the AI plays both, and both
  *  are promoted on the spot) and the pair's match seed. */
@@ -112,9 +121,9 @@ function ownTurns(G: GameState, seat: Seat = firstMover(G)): number {
   return rounds.ownTurn(G, seat);
 }
 
-/** The engine's loss test (`checkWinner` in query.ts): the patron at 0 HP. */
+/** The engine's loss test (`checkWinner` in query.ts): the Patron fallen. */
 function down(ps: PlayerState): boolean {
-  return ps.hp <= 0;
+  return patronFallen(ps);
 }
 
 /** One seat's shopping in one game, read off the board (scripts/eval/ledger.ts). */
@@ -157,17 +166,30 @@ interface GameRecord {
   seats: Record<Seat, string[]>;
   /** Seat 0 makes the engine's first pick; this is who took the first turn. */
   firstMover: Seat;
-  /** A win; both patrons down to one action (scored here as a draw); or still
-   *  running at the cap. */
-  end: 'win' | 'mutual' | 'cap';
+  /** A Patron fell ('win'); both fell to one action ('mutual', settled on what
+   *  stands); the round cap decided it ('cap', on what stands); or the sim's
+   *  guard stopped it ('guard', never expected). */
+  end: 'win' | 'mutual' | 'cap' | 'guard';
   winner: Seat | null;
+  /** What settled a game decided on what stands (the round cap, or both
+   *  Patrons at once): structure HP, net worth or the second mover. */
+  verdict: 'structures' | 'netWorth' | 'secondMover' | null;
+  /** Structure HP each seat had standing at the end (of 18), and each
+   *  structure's — Guardian, Walker, Patron. */
+  structures: Record<Seat, number>;
+  track: Record<Seat, number[]>;
+  /** The engine's record of the map, per seat. */
+  record: GameState['record'];
+  /** Each Mid-Boss taken, in order: who took it, the round, and whether the
+   *  taker trailed on net worth as it fell. */
+  bosses: { seat: Seat; round: number; behind: boolean }[];
   engineTurns: number;
   /** The game's length; a game stopped at the cap counts the cap (the round
    *  after it had begun, but nobody moved in it). */
   ownTurns: number;
   /** Enemy heroes each seat felled. */
   kills: Record<Seat, number>;
-  /** Times the patron-HP lead passed from one seat to the other. */
+  /** Times the lead on total structure HP passed from one seat to the other. */
   leadChanges: number;
   shop: Record<Seat, SeatShop>;
   /** The AI moves the engine accepted, by move. */
@@ -203,27 +225,27 @@ function playGame(seats: Record<Seat, string[]>, seed: number, engineSeed: numbe
   }
   const mover = firstMover(st.G);
 
-  // The board is read after every move. A hero whose respawn timer appears, or
-  // restarts higher than it was, has fallen: a kill for the other seat. The
-  // patron-HP difference changing sign is a lead change (a tie keeps the
-  // previous leader). The ledger diffs the worn items: purchases, sales, uses.
-  const timers = new Map<string, number>();
-  const kills: Record<Seat, number> = { '0': 0, '1': 0 };
+  // The board is read after every move. The total structure HP difference
+  // changing sign is a lead change (a tie keeps the previous leader). Each
+  // Mid-Boss taken is read off the record as it is taken, with the round and
+  // whether the taker was behind. The ledger diffs the worn items: purchases,
+  // sales, uses. (Kills, pushes and revives are the engine's record: a kill the
+  // Rejuvenator undoes leaves no respawn timer to see.)
   let leader = 0, leadChanges = 0;
+  const bosses: { seat: Seat; round: number; behind: boolean }[] = [];
+  let lastRecord = structuredClone(st.G.record) as GameState['record'];
   const observe = (G: GameState) => {
-    for (const seat of SEATS) {
-      for (const h of heroesOf(G.players[seat])) {
-        const now = h.respawnTurnsLeft ?? 0;
-        const was = timers.get(h.iid) ?? 0;
-        if (now > 0 && (was === 0 || now > was)) kills[rival(seat)]++;
-        timers.set(h.iid, now);
-      }
-    }
-    const sign = Math.sign(G.players['0'].hp - G.players['1'].hp);
+    const sign = Math.sign(structureHp(G.players['0']) - structureHp(G.players['1']));
     if (sign !== 0) {
       if (leader !== 0 && sign !== leader) leadChanges++;
       leader = sign;
     }
+    for (const seat of SEATS) {
+      const took = G.record[seat].bossKills - lastRecord[seat].bossKills;
+      const behind = G.record[seat].bossKillsBehind - lastRecord[seat].bossKillsBehind;
+      for (let k = 0; k < took; k++) bosses.push({ seat, round: rounds.round(G), behind: k < behind });
+    }
+    lastRecord = structuredClone(G.record);
   };
   observe(st.G);
   const ledger = shopLedger(st.G);
@@ -280,16 +302,22 @@ function playGame(seats: Record<Seat, string[]>, seed: number, engineSeed: numbe
     };
   }
   const over = st.ctx.gameover as { winner?: Seat } | undefined;
-  const mutual = !!over && down(G.players['0']) && down(G.players['1']);
+  const fell = SEATS.filter((s) => down(G.players[s]));
+  const end: GameRecord['end'] = !over ? 'guard' : fell.length === 2 ? 'mutual' : fell.length === 1 ? 'win' : 'cap';
   return {
     market: [...G.market],
     played: {
       firstMover: mover,
-      end: !over ? 'cap' : mutual ? 'mutual' : 'win',
-      winner: over && !mutual ? over.winner ?? null : null,
+      end,
+      winner: over ? over.winner ?? null : null,
+      verdict: end === 'cap' || end === 'mutual' ? standingVerdict(G).by : null,
+      structures: { '0': structureHp(G.players['0']), '1': structureHp(G.players['1']) },
+      track: { '0': G.players['0'].structures.map((s) => s.hp), '1': G.players['1'].structures.map((s) => s.hp) },
+      record: structuredClone(G.record),
+      bosses,
       engineTurns: G.turnNumber ?? 0,
       ownTurns: over ? ownTurns(G) : Math.min(ownTurns(G), CAP),
-      kills,
+      kills: { '0': G.record['0'].kills, '1': G.record['1'].kills },
       leadChanges,
       shop,
       moves,
@@ -339,12 +367,15 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
 const nameOf = (id: string) => CARDS_BY_ID[id]?.name ?? id;
 
-// Seats.
-const decisive = games.filter((g) => g.end === 'win');
+// Seats. Every game the engine ends has a winner (a Patron falling, or what stands
+// at the round cap); only a game the sim's guard stopped has none.
+const decided = (g: GameRecord) => g.winner !== null;
+const decisive = games.filter(decided);
 const wins: Record<Seat, number> = { '0': 0, '1': 0 };
 for (const g of decisive) wins[g.winner!]++;
 const mutual = games.filter((g) => g.end === 'mutual').length;
 const capped = games.filter((g) => g.end === 'cap').length;
+const guarded = games.filter((g) => g.end === 'guard').length;
 const seat0 = wilson(wins['0'], decisive.length);
 const movers = new Set(games.map((g) => g.firstMover));
 const seat0Role = movers.size > 1 ? 'drafts first' : movers.has('0') ? 'drafts first and moves first' : 'drafts first, moves second';
@@ -373,7 +404,7 @@ type Tally = { games: number; decisive: number; wins: number };
 const tally = (): Tally => ({ games: 0, decisive: 0, wins: 0 });
 const add = (t: Tally, g: GameRecord, seat: Seat) => {
   t.games++;
-  if (g.end === 'win') { t.decisive++; if (g.winner === seat) t.wins++; }
+  if (decided(g)) { t.decisive++; if (g.winner === seat) t.wins++; }
 };
 const heroTally = new Map(POOL.map((id) => [id, { all: tally(), seat: { '0': tally(), '1': tally() } as Record<Seat, Tally> }]));
 for (const g of games) {
@@ -407,6 +438,40 @@ const sortedLengths = [...lengths].sort((a, b) => a - b);
 const byOwnTurn = new Map<number, number>();
 for (const l of lengths) byOwnTurn.set(l, (byOwnTurn.get(l) ?? 0) + 1);
 const killsPerGame = mean(games.map((g) => g.kills['0'] + g.kills['1']));
+
+// The map.
+const allBosses = games.flatMap((g) => g.bosses.map((b) => ({ g, ...b })));
+const withBoss = games.filter((g) => g.bosses.length > 0);
+const map = {
+  structures: {
+    winner: mean(decisive.map((g) => g.structures[g.winner!])),
+    loser: mean(decisive.map((g) => g.structures[rival(g.winner!)])),
+    seat0: mean(games.map((g) => g.structures['0'])),
+    seat1: mean(games.map((g) => g.structures['1'])),
+  },
+  verdicts: {
+    structures: games.filter((g) => g.end === 'cap' && g.verdict === 'structures').length,
+    netWorth: games.filter((g) => g.end === 'cap' && g.verdict === 'netWorth').length,
+    secondMover: games.filter((g) => g.end === 'cap' && g.verdict === 'secondMover').length,
+  },
+  pushesPerGame: mean(games.map((g) => g.record['0'].pushes + g.record['1'].pushes)),
+  pushDamagePerGame: mean(games.map((g) => g.record['0'].pushDamage + g.record['1'].pushDamage)),
+  guardians: mean(games.map((g) => SEATS.filter((s) => g.track[s][0] <= 0).length)),
+  walkers: mean(games.map((g) => SEATS.filter((s) => g.track[s][1] <= 0).length)),
+  boss: {
+    total: allBosses.length,
+    perGame: allBosses.length / GAMES,
+    anyShare: withBoss.length / GAMES,
+    bySeat: { '0': allBosses.filter((b) => b.seat === '0').length, '1': allBosses.filter((b) => b.seat === '1').length } as Record<Seat, number>,
+    firstMover: allBosses.filter((b) => b.seat === b.g.firstMover).length,
+    secondMover: allBosses.filter((b) => b.seat !== b.g.firstMover).length,
+    behind: allBosses.filter((b) => b.behind).length,
+    behindShare: allBosses.length ? allBosses.filter((b) => b.behind).length / allBosses.length : 0,
+    takerWon: withBoss.length ? withBoss.filter((g) => g.winner === g.bosses[0].seat).length / withBoss.length : 0,
+    firstRound: withBoss.length ? mean(withBoss.map((g) => g.bosses[0].round)) : null,
+  },
+  revivesPerGame: mean(games.map((g) => g.record['0'].revives + g.record['1'].revives)),
+};
 const killsBySeat: Record<Seat, number> = { '0': mean(games.map((g) => g.kills['0'])), '1': mean(games.map((g) => g.kills['1'])) };
 const leadChanges = mean(games.map((g) => g.leadChanges));
 const withLeadChange = games.filter((g) => g.leadChanges > 0).length / GAMES;
@@ -420,8 +485,8 @@ const groups = {
   secondMover: players.filter((p) => p.seat !== p.g.firstMover),
   seat0: players.filter((p) => p.seat === '0'),
   seat1: players.filter((p) => p.seat === '1'),
-  winner: players.filter((p) => p.g.end === 'win' && p.g.winner === p.seat),
-  loser: players.filter((p) => p.g.end === 'win' && p.g.winner !== p.seat),
+  winner: players.filter((p) => decided(p.g) && p.g.winner === p.seat),
+  loser: players.filter((p) => decided(p.g) && p.g.winner !== p.seat),
 };
 type Group = keyof typeof groups;
 /** The mean of `f` over each group of players. */
@@ -558,9 +623,8 @@ const gates: { gate: string; target: string; today: string; verdict: Verdict; wh
   },
   {
     gate: 'Length', target: 'mean 8–10 own turns, under 2% at the cap',
-    today: `mean ${mean(lengths).toFixed(1)} own turns, ${pct(capped / GAMES)} at the sim's cap`,
-    verdict: 'not yet',
-    why: `the gate is set for the redesigned match, which ends by rule after round 12; the round cap and the structures come with the map (step 4), so today games end when a patron falls (to kills and to pushes into an empty lane) and the only cap is this sim's stalemate guard (${CAP} own turns)`,
+    today: `mean ${mean(lengths).toFixed(1)} own turns, ${pct(capped / GAMES)} decided by the round cap${guarded ? `, ${n(guarded)} stopped by the sim's guard` : ''}`,
+    verdict: mean(lengths) >= 8 && mean(lengths) <= 10 && capped / GAMES < 0.02 && guarded === 0 ? 'PASS' : 'FAIL',
   },
   {
     gate: 'Items', target: `no item in more than ${ITEM_GATE * 100}% of builds`,
@@ -592,7 +656,7 @@ md += `## Seats\n`;
 md += `- Moved first (${moverSeats}): **${ci(movedFirst)}** over ${n(decisive.length)} decisive games.\n`;
 md += `- Drafted first (seat ${ORDER[0]}): **${ci(draftedFirst)}**.\n`;
 md += `- Seat 0 (${seat0Role}) win rate: ${ci(seat0)}.\n`;
-md += `- Seat 0 won ${n(wins['0'])}, seat 1 won ${n(wins['1'])}; ${n(mutual)} ended with both patrons falling to one action (draws here); ${n(capped)} reached the cap.\n`;
+md += `- Seat 0 won ${n(wins['0'])}, seat 1 won ${n(wins['1'])}; ${n(capped)} were decided by the round cap and ${n(mutual)} by both Patrons falling to one action (both on what stands); ${n(guarded)} were stopped by the sim's guard.\n`;
 md += `- Of ${n(completePairs)} pairs with two decisive games: seat 0 won both ${n(sweptBySeat['0'])} times and seat 1 ${n(sweptBySeat['1'])} (the seat decided), and the same hero set won both ${n(sweptBySet)} times (the draft outweighed the seat).\n\n`;
 
 md += `## Heroes (both games of every pair)\n`;
@@ -622,10 +686,18 @@ if (fit) {
 md += `\n`;
 
 md += `## Pace\n`;
-md += `- Length: mean **${mean(lengths).toFixed(1)}** own turns, median ${sortedLengths[sortedLengths.length >> 1] ?? 0}, min ${sortedLengths[0] ?? 0}, max ${sortedLengths[sortedLengths.length - 1] ?? 0}; **${pct(capped / GAMES)}** reached the cap (all games, a capped game counted at the cap).\n`;
+md += `- Length: mean **${mean(lengths).toFixed(1)}** own turns, median ${sortedLengths[sortedLengths.length >> 1] ?? 0}, min ${sortedLengths[0] ?? 0}, max ${sortedLengths[sortedLengths.length - 1] ?? 0}; **${pct(capped / GAMES)}** decided by the round cap (round ${ROUND_CAP}).\n`;
 md += `- By own turns: ${[...byOwnTurn.entries()].sort((a, b) => a[0] - b[0]).map(([t, c]) => `${t}: ${n(c)}`).join(' · ')}\n`;
 md += `- Kills per game: **${killsPerGame.toFixed(2)}** (seat 0 scores ${killsBySeat['0'].toFixed(2)}, seat 1 ${killsBySeat['1'].toFixed(2)}).\n`;
-md += `- Lead changes per game (the patron-HP difference changing sign): **${leadChanges.toFixed(2)}**; ${pct(withLeadChange)} of games have at least one.\n\n`;
+md += `- Lead changes per game (the total structure HP difference changing sign): **${leadChanges.toFixed(2)}**; ${pct(withLeadChange)} of games have at least one.\n\n`;
+
+md += `## The map\n`;
+md += `Read off the engine's record (\`G.record\`) and the board at the end. A track is Guardian 4 · Walker 6 · Patron 8 (18 HP); a kill pushes the victim's level + 1, an empty lane the Active's bullet power, both doubled from round 9.\n\n`;
+md += `- Structure HP standing at the end: the winner **${map.structures.winner.toFixed(1)}**, the loser **${map.structures.loser.toFixed(1)}**; by seat, seat 0 ${map.structures.seat0.toFixed(1)}, seat 1 ${map.structures.seat1.toFixed(1)}.\n`;
+md += `- Decided by the round cap: **${pct(capped / GAMES)}** of games (${n(capped)}): on structure HP ${n(map.verdicts.structures)}, on net worth ${n(map.verdicts.netWorth)}, for the second mover ${n(map.verdicts.secondMover)}. Both Patrons at once: ${n(mutual)}.\n`;
+md += `- Pushes per game: **${map.pushesPerGame.toFixed(2)}**, taking **${map.pushDamagePerGame.toFixed(1)}** structure HP; Guardians felled per game ${map.guardians.toFixed(2)}, Walkers ${map.walkers.toFixed(2)} (the flex slot).\n`;
+md += `- Mid-Boss: **${map.boss.perGame.toFixed(2)}** taken per game (${n(map.boss.total)} in all; ${pct(map.boss.anyShare)} of games see one taken). By seat: seat 0 ${n(map.boss.bySeat['0'])}, seat 1 ${n(map.boss.bySeat['1'])}; by role: the first mover ${n(map.boss.firstMover)}, the second ${n(map.boss.secondMover)}. Taken by the side behind on net worth: **${pct(map.boss.behindShare)}** (${n(map.boss.behind)}). The taker won ${pct(map.boss.takerWon)} of the games it was taken in (the first taker's result). First taken in round ${f1(map.boss.firstRound)} on average.\n`;
+md += `- Rejuvenator revives per game: **${map.revivesPerGame.toFixed(2)}**.\n\n`;
 
 md += `## Shop\n`;
 md += `Read off the board after every move: a card instance that appears (in a hand, where a purchase goes) is a purchase (an upgrade over a component counts once, as the item it became, at the difference it cost), one that goes from a hand onto a hero was played, one that goes with no upgrade holding it was sold, an active whose cooldown rises or whose charges fall was used. A player is one seat of one game; a purchase is made on the buyer's own turn, whose number is the round's.\n\n`;
@@ -674,6 +746,7 @@ writeFileSync('sim-reports/latest.json', JSON.stringify({
     ownTurns: { mean: mean(lengths), median: sortedLengths[sortedLengths.length >> 1] ?? 0, min: sortedLengths[0] ?? 0, max: sortedLengths[sortedLengths.length - 1] ?? 0, capShare: capped / GAMES, histogram: Object.fromEntries(byOwnTurn) },
     killsPerGame, killsBySeat, leadChanges, withLeadChange,
   },
+  map,
   shop: {
     perPlayer: { purchases, upgrades, spent, soulsBanked, handLeft, actives: activesPerPlayer, byTier: tierBuys },
     handLeftAny,
