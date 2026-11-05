@@ -7,10 +7,10 @@
  */
 import { Fragment, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import type { CardData } from '@/engine/types';
+import type { CardData, ItemTier } from '@/engine/types';
 import { HEROES, SPELLS, EQUIPMENT, ULTIMATES, CARDS_BY_ID } from '@/cards';
 import { heroAbilities } from '@/engine/query';
-import { PRICE } from '@/engine/constants';
+import { ITEM_TIERS, PRICE } from '@/engine/constants';
 import { CardFrame } from '../card/CardFrame';
 import { RoundCardIcon } from '../card/RoundCardIcon';
 import { HeroSlot } from '../board/HeroSlot';
@@ -24,7 +24,7 @@ import {
 
 type Show = 'all' | 'heroes' | 'spells' | 'equipment' | 'ultimates' | 'icons' | 'states';
 const SHOWS: Show[] = ['all', 'heroes', 'spells', 'equipment', 'ultimates', 'icons', 'states'];
-const TIERS = [1, 2, 3, 4] as const;
+const TIERS = ITEM_TIERS;
 
 function initialShow(): Show {
   const s = new URLSearchParams(window.location.search).get('show');
@@ -38,7 +38,7 @@ const hit = (c: CardData, q: string) =>
   !q || c.name.toLowerCase().includes(q) || c.id.includes(q) || rulesOf(c).toLowerCase().includes(q);
 
 /** "4 souls": a tier's price, from the shop's own table. */
-const tierPrice = (tier: 1 | 2 | 3 | 4) => `${PRICE[tier]} souls`;
+const tierPrice = (tier: ItemTier) => `${PRICE[tier]} souls`;
 
 const count = (n: number, of: number) => (n === of ? n : `${n} of ${of}`);
 

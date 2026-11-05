@@ -5,7 +5,7 @@ import type { SpellCard } from '@/engine/types';
  * every active item that becomes a card is a spell — see docs/card-design.md.
  * A hero buys one in the shop and wears it like any item; it is used from the
  * bearer's sheet as that hero's one ability of the turn, then cools down (2 own
- * turns for tiers 1–2, 3 for tiers 3–4). Hard crowd control (`hardCC`: a stun,
+ * turns for tiers 1–2, 3 for tiers 3 and up). Hard crowd control (`hardCC`: a stun,
  * a silence, a disarm, a root, a curse on an enemy) has 2 uses a match instead.
  *
  * Slot (shop tab) and tier are Deadlock's, read off the shop list of the

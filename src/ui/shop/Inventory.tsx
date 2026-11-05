@@ -12,7 +12,7 @@ import { fonts, spring, text } from '../tokens';
 import { poster, shopInk } from '../poster';
 import { ShopTile } from './ShopTile';
 import { usePress } from './usePress';
-import { soulsWord } from './itemFacts';
+import { TIERS, soulsWord } from './itemFacts';
 import { shake } from './shake';
 import type { TipRequest } from './tips';
 
@@ -198,6 +198,12 @@ function EmptySlot({ size }: { size: number }) {
   );
 }
 
+/** The tier diamonds' size on a hand thumbnail `width` px wide: about a
+ *  seventh of it, and never so big that a diamond for every tier (and a 1px
+ *  gap between each) overflows the foot inside its border. */
+const diamondSize = (width: number) =>
+  Math.max(3, Math.min(Math.round(width * 0.14), Math.floor((width - 3 - (TIERS.length - 1)) / TIERS.length)));
+
 /** A card in the hand as a thumbnail: the item's art on a small card, its
  *  foot in the category's colour with the tier's diamonds. */
 function HandThumb({ card, width, selected, onTap, onTip }: {
@@ -236,7 +242,7 @@ function HandThumb({ card, width, selected, onTap, onTip }: {
         position: 'absolute', left: 0, right: 0, bottom: 0, top: width - 3,
         background: ink, display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <TierDiamonds tier={data.tier} size={Math.max(4, Math.round(width * 0.14))} ink={poster.ink} faint="rgba(23, 20, 16, 0.35)" />
+        <TierDiamonds tier={data.tier} size={diamondSize(width)} ink={poster.ink} faint="rgba(23, 20, 16, 0.35)" />
       </span>
     </motion.button>
   );

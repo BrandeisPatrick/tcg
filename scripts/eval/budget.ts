@@ -37,7 +37,7 @@
  * match's mean length in own turns and `first` the mean own turn of a player's
  * first purchase at the item's tier; it stays worn through death. An active
  * starts on its cooldown (ACTIVE_COOLDOWN: 2 own turns for tiers 1–2, 3 for
- * tiers 3–4), so it fires the turns it is worn ÷ its cooldown; a hard
+ * tiers 3 and up), so it fires the turns it is worn ÷ its cooldown; a hard
  * crowd-control active has HARD_CC_CHARGES uses and no cooldown, so it fires
  * min(2, turns worn). `components` multiplies the yield by the life;
  * `budgetValue` prices the totals at the budget's rates (DAMAGE to SOUL) and
@@ -53,7 +53,7 @@
  * less lethal match raises P_STAY, and with it every second covered turn, every
  * debuff and every damage over time, so read them again off the tuned sim.
  *
- *   npx vite-node scripts/eval/budget.ts [sim.json] [--length L --t1 a --t2 b --t3 c --t4 d --attack A]
+ *   npx vite-node scripts/eval/budget.ts [sim.json] [--length L --t1 a … --t5 e --attack A]
  *
  * prints the table (item, tab, tier, price, value, value ÷ price, verdict)
  * sorted by tab and then tier, the pace it used and the verdicts by tier. The
@@ -69,7 +69,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CardId, ItemCard, ItemTier } from '@/engine/types';
 import { ITEMS, itemCard } from '@/cards';
-import { ACTIVE_COOLDOWN, HARD_CC_CHARGES, PRICE, RETREAT_COST } from '@/engine/constants';
+import { ACTIVE_COOLDOWN, HARD_CC_CHARGES, ITEM_TIERS, PRICE, RETREAT_COST } from '@/engine/constants';
 import { ITEM_SLOTS } from '@/engine/market';
 
 // ---------------------------------------------------------------- components and pace
@@ -92,9 +92,10 @@ export interface Pace {
 
 /** Today's measured pace, from the 2,500-game sim before tuning: 5.4 own turns;
  *  a player's first purchase of tier 3 on own turn 3.8 and of tier 4 on 5.5
- *  (tiers 1 and 2 are estimates until the sim measures them); a mean Active
- *  bullet power of 2.5. */
-export const TODAY: Pace = { length: 5.4, firstBuy: { 1: 1.5, 2: 1.6, 3: 3.8, 4: 5.5 }, attack: 2.5 };
+ *  (tiers 1, 2 and 5 are estimates until the sim measures them: tier 5, which
+ *  that sim had not got, two own turns from the end of the 9-turn match the
+ *  gates aim at); a mean Active bullet power of 2.5. */
+export const TODAY: Pace = { length: 5.4, firstBuy: { 1: 1.5, 2: 1.6, 3: 3.8, 4: 5.5, 5: 7 }, attack: 2.5 };
 
 // ---------------------------------------------------------------- the budget's rates
 
@@ -649,7 +650,13 @@ export interface ReportPace {
   firstBuy: Partial<Record<ItemTier, number>>;
 }
 
-const TIERS: readonly ItemTier[] = [1, 2, 3, 4];
+const TIERS: readonly ItemTier[] = ITEM_TIERS;
+
+/** The tier a report key or a flag names ("3", "T3", "tier3"), if the shop has it. */
+function tierNamed(key: string): ItemTier | undefined {
+  const n = Number(/^(?:t|tier)?(\d+)$/i.exec(key)?.[1]);
+  return (TIERS as readonly number[]).includes(n) ? (n as ItemTier) : undefined;
+}
 
 /** An object's own fields, or undefined for anything else. */
 function fields(x: unknown): Record<string, unknown> | undefined {
@@ -686,21 +693,21 @@ function meanOf(x: unknown): number | undefined {
   return meanOf(o.all) ?? meanOf(o.perPlayer);
 }
 
-/** A by-tier table of means: an array (tier 1 first) or an object keyed 1–4
- *  (or T1–T4, tier1–tier4). */
+/** A by-tier table of means: an array (tier 1 first) or an object keyed by
+ *  tier (1, T1 or tier1, for each tier of the shop). */
 function byTier(x: unknown): Partial<Record<ItemTier, number>> {
   const out: Partial<Record<ItemTier, number>> = {};
   if (Array.isArray(x)) {
-    x.slice(0, 4).forEach((v, i) => {
+    x.slice(0, TIERS.length).forEach((v, i) => {
       const m = meanOf(v);
       if (m !== undefined) out[(i + 1) as ItemTier] = m;
     });
     return out;
   }
   for (const [key, v] of Object.entries(fields(x) ?? {})) {
-    const tier = /^(?:t|tier)?([1-4])$/i.exec(key)?.[1];
+    const tier = tierNamed(key);
     const m = meanOf(v);
-    if (tier && m !== undefined) out[Number(tier) as ItemTier] = m;
+    if (tier && m !== undefined) out[tier] = m;
   }
   return out;
 }
@@ -730,7 +737,7 @@ export function paceFromReport(report: unknown): ReportPace {
 
 // ---------------------------------------------------------------- the command line
 
-const USAGE = 'Usage: npx vite-node scripts/eval/budget.ts [sim.json] [--length L --t1 a --t2 b --t3 c --t4 d --attack A]';
+const USAGE = `Usage: npx vite-node scripts/eval/budget.ts [sim.json] [--length L ${TIERS.map((t) => `--t${t} N`).join(' ')} --attack A]`;
 
 /** Stop on a command line this script cannot run, saying why. */
 function usage(why: string): never {
@@ -738,7 +745,7 @@ function usage(why: string): never {
   process.exit(2);
 }
 
-type Flag = 'length' | 't1' | 't2' | 't3' | 't4' | 'attack';
+type Flag = 'length' | 'attack' | `t${ItemTier}`;
 /** Where a number of the pace came from. */
 type Source = 'flag' | 'sim' | 'today';
 
@@ -753,7 +760,8 @@ function main(argv: string[]): void {
   const flags: Partial<Record<Flag, number>> = {};
   let file: string | undefined;
   for (let i = 0; i < argv.length; i++) {
-    const m = /^--(length|t1|t2|t3|t4|attack)(?:=(.*))?$/.exec(argv[i]);
+    const m = /^--(length|attack|t\d+)(?:=(.*))?$/.exec(argv[i]);
+    if (m && m[1].startsWith('t') && !tierNamed(m[1])) usage(`No tier ${m[1].slice(1)} in the shop: --${m[1]}.`);
     if (m) {
       const raw = m[2] ?? argv[++i];
       const value = Number(raw);
@@ -804,7 +812,7 @@ function main(argv: string[]): void {
     + `; an extra attack doubles a swing of ${num(attack)} bullet power (${attackFrom}).`
     + (file !== undefined ? ` Sim report: ${file}.` : ''));
   out.push(`Life: a passive is worn ${TIERS.map((t) => `T${t} ${num(turnsWorn(t, pace))}`).join(' · ')} own turns; `
-    + `an active fires that ÷ ${ACTIVE_COOLDOWN.low} (tiers 1–2) or ÷ ${ACTIVE_COOLDOWN.high} (tiers 3–4), a hard-CC active min(${HARD_CC_CHARGES}, that).`);
+    + `an active fires that ÷ ${ACTIVE_COOLDOWN.low} (tiers 1–2) or ÷ ${ACTIVE_COOLDOWN.high} (tiers 3 and up), a hard-CC active min(${HARD_CC_CHARGES}, that).`);
   const r1 = (x: number) => x.toFixed(1);
   out.push(`Rates: damage ${r1(DAMAGE)}, heal or shield ${r1(HEAL)}, a stat ${r1(STAT)} a turn held, hard CC ${r1(CC_ACTIVE)} a turn on the Active and ${r1(CC_BENCH)} on the bench, `
     + `an extra attack ${r1(EXTRA_ATTACK * attack)} (${EXTRA_ATTACK} × ${num(attack)}), a soul ${r1(SOUL)}; values to the ${GRAIN} grain. `

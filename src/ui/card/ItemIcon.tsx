@@ -22,6 +22,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import type { CardId } from '@/engine/types';
 import { itemCard } from '@/cards';
+import { ITEM_TIERS } from '@/engine/constants';
 import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
 import { fonts } from '../tokens';
 import { poster, shopInk } from '../poster';
@@ -176,12 +177,13 @@ export function ItemIcon({ itemId, size = 44, grey = false, lit = false, selecte
   );
 }
 
-/** Four small diamonds, `tier` of them filled: the tier's mark in a tier
- *  row's header and the tooltip. */
+/** A small diamond for each tier of the shop (ITEM_TIERS, five), `tier` of
+ *  them filled: the tier's mark in a tier row's header, the tooltip and a card
+ *  in the hand. */
 export function TierDiamonds({ tier, size = 7, ink = poster.cream, faint = poster.creamFaint }: { tier: number; size?: number; ink?: string; faint?: string }) {
   return (
     <span aria-hidden style={{ display: 'inline-flex', gap: Math.max(1, Math.round(size * 0.3)), alignItems: 'center', lineHeight: 0 }}>
-      {[1, 2, 3, 4].map((i) => (
+      {ITEM_TIERS.map((i) => (
         <svg key={i} viewBox="0 0 10 10" width={size} height={size}>
           <path d="M5 0.6 L9.4 5 L5 9.4 L0.6 5 Z" fill={i <= tier ? ink : 'none'} stroke={i <= tier ? ink : faint} strokeWidth="1.2" />
         </svg>

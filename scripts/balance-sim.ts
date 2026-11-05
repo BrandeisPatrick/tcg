@@ -92,7 +92,7 @@ const { CARDS_BY_ID, ITEMS } = await import('@/cards');
 const { setMatchConfig } = await import('@/storage/matchConfig');
 const { heroesOf, patronFallen, standingVerdict, structureHp } = await import('@/engine/query');
 const rounds = await import('@/engine/rounds');
-const { BOSS_SPAWN_ROUND, ROUND_CAP } = await import('@/engine/constants');
+const { BOSS_SPAWN_ROUND, ITEM_TIERS, ROUND_CAP } = await import('@/engine/constants');
 const { shopLedger } = await import('./eval/ledger');
 /** The sim's own guard, in own turns: past the round cap, which ends every match first
  *  (`MATCH_TURNS`); a game still running there is a stalled one. */
@@ -147,7 +147,7 @@ interface SeatShop {
   buys: number;
   /** Of them, upgrades (paid the difference). */
   upgrades: number;
-  /** Purchases by tier: tier 1, 2, 3, 4. */
+  /** Purchases by tier, tier 1 first (ITEM_TIERS). */
   tiers: number[];
   /** Souls paid for them. */
   spent: number;
@@ -165,7 +165,7 @@ interface SeatShop {
    *  one (an upgrade into that tier counts); null for none. */
   firstT3: number | null;
   firstT4: number | null;
-  /** The round of this seat's first purchase of each tier (1–4), null for none. */
+  /** The round of this seat's first purchase of each tier (ITEM_TIERS, tier 1 first), null for none. */
   firstByTier: (number | null)[];
   /** What each of the seat's heroes bought (its hero-build), by hero id in
    *  pick order, in purchase order. */
@@ -306,7 +306,7 @@ function playGame(seats: Record<Seat, string[]>, seed: number, engineSeed: numbe
     shop[seat] = {
       buys: mine.length,
       upgrades: mine.filter((p) => p.upgradeOf).length,
-      tiers: ([1, 2, 3, 4] as ItemTier[]).map((t) => mine.filter((p) => p.tier === t).length),
+      tiers: ITEM_TIERS.map((t) => mine.filter((p) => p.tier === t).length),
       spent: mine.reduce((s, p) => s + p.paid, 0),
       plays: ledger.plays.filter((e) => e.seat === seat).length,
       sells: ledger.sales.filter((e) => e.seat === seat).length,
@@ -315,7 +315,7 @@ function playGame(seats: Record<Seat, string[]>, seed: number, engineSeed: numbe
       handEnd: G.players[seat].hand.length,
       firstT3: first(3),
       firstT4: first(4),
-      firstByTier: ([1, 2, 3, 4] as ItemTier[]).map(first),
+      firstByTier: ITEM_TIERS.map(first),
       bought,
     };
   }
@@ -525,7 +525,7 @@ function runStrength(strength: Strength) {
   const purchases = perPlayer((s) => s.buys);
   const upgrades = perPlayer((s) => s.upgrades);
   const spent = perPlayer((s) => s.spent);
-  const tierBuys = [0, 1, 2, 3].map((t) => mean(players.map((p) => p.shop.tiers[t])));
+  const tierBuys = ITEM_TIERS.map((_, i) => mean(players.map((p) => p.shop.tiers[i] ?? 0)));
   const soulsBanked = perPlayer((s) => s.soulsEnd);
   const handLeft = perPlayer((s) => s.handEnd);
   const handLeftAny = players.filter((p) => p.shop.handEnd > 0).length;
@@ -561,7 +561,7 @@ function runStrength(strength: Strength) {
   const firstT4 = firstTier('firstT4');
   /** Each player's own first purchase of each tier: the mean round over the
    *  players who made one (the budget's turns worn start here). */
-  const firstByTier = Object.fromEntries(([1, 2, 3, 4] as const).map((t) => [t, roundStats(players.map((p) => p.shop.firstByTier[t - 1])).mean]));
+  const firstByTier = Object.fromEntries(ITEM_TIERS.map((t, i) => [t, roundStats(players.map((p) => p.shop.firstByTier[i] ?? null)).mean]));
 
   // Items by share of builds. A hero-build is one drafted hero in one game (eight
   // a game); an item is in it when that hero bought it at least once.
@@ -744,7 +744,7 @@ function runStrength(strength: Strength) {
   md += `- Cards left in the hand at the end, per player: **${handLeft.all.toFixed(2)}**; ${n(handLeftAny)} of ${n(players.length)} players ended holding any (the AI never holds a card).\n`;
   md += `- Souls banked at the end, per player: **${soulsBanked.all.toFixed(1)}** (${roles(soulsBanked)}; the winner ${soulsBanked.winner.toFixed(1)}, the loser ${soulsBanked.loser.toFixed(1)}).\n`;
   md += `- Actives used per game (both players): **${activesPerGame.toFixed(2)}**; per player, ${roles(activesPerPlayer, 2)}.\n`;
-  md += `- Each player's own first purchase, mean round by tier: ${([1, 2, 3, 4] as const).map((t) => `T${t} ${f1(firstByTier[t])}`).join(' · ')}.\n`;
+  md += `- Each player's own first purchase, mean round by tier: ${ITEM_TIERS.map((t) => `T${t} ${f1(firstByTier[t])}`).join(' · ')}.\n`;
   md += tierLine('3', firstT3);
   md += tierLine('4', firstT4);
   md += `\n### Items by share of builds\n`;

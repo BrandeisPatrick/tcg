@@ -8,12 +8,13 @@
  */
 import type { CardId, ItemSlot, ItemTier } from '@/engine/types';
 import { ITEMS, itemCard } from '@/cards';
-import { ACTIVE_COOLDOWN, HARD_CC_CHARGES, PRICE } from '@/engine/constants';
+import { ACTIVE_COOLDOWN, HARD_CC_CHARGES, ITEM_TIERS, PRICE } from '@/engine/constants';
 
 /** Deadlock's tab order: Weapon · Vitality · Spirit. */
 export const SHOP_TABS: readonly ItemSlot[] = ['weapon', 'vitality', 'spirit'];
 export const CATEGORY_WORD: Record<ItemSlot, string> = { weapon: 'Weapon', vitality: 'Vitality', spirit: 'Spirit' };
-export const TIERS: readonly ItemTier[] = [1, 2, 3, 4];
+/** The shop's tiers, cheapest first (ITEM_TIERS): a row each. */
+export const TIERS: readonly ItemTier[] = ITEM_TIERS;
 
 /** "1 soul", "4 souls". */
 export const soulsWord = (n: number) => `${n} soul${n === 1 ? '' : 's'}`;

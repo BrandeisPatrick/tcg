@@ -15,11 +15,16 @@
 import type { CardId, GameState, ItemSlot, ItemTier, PlayerID } from './types';
 import { CARDS_BY_ID, HEROES, ITEMS, itemCard } from '@/cards';
 import { defaultBuild } from '@/cards/builds';
-import { MARKET_SLICE } from './constants';
+import { ITEM_TIERS, MARKET_SLICE } from './constants';
 import { drawWithoutReplacement, seededRandom } from './rng';
 
 /** The three shop tabs, in the order the shop shows them. */
 export const ITEM_SLOTS: readonly ItemSlot[] = ['weapon', 'spirit', 'vitality'];
+
+/** An empty list for each tier (ITEM_TIERS), to sort items into by tier. */
+export function tierLists(): Record<ItemTier, CardId[]> {
+  return Object.fromEntries(ITEM_TIERS.map((t) => [t, [] as CardId[]])) as Record<ItemTier, CardId[]>;
+}
 
 /** Every hero's signature items: never in the random slice (they go on sale
  *  with their heroes). */
@@ -76,8 +81,7 @@ export function onSale(G: Pick<GameState, 'market'>, itemId: CardId): boolean {
 /** The market by tab and tier, cheapest tier first and catalogue order within
  *  a tier — the shop sheet's and the draft's lists. */
 export function marketByTab(G: Pick<GameState, 'market'>): Record<ItemSlot, Record<ItemTier, CardId[]>> {
-  const tiers = (): Record<ItemTier, CardId[]> => ({ 1: [], 2: [], 3: [], 4: [] });
-  const out: Record<ItemSlot, Record<ItemTier, CardId[]>> = { weapon: tiers(), spirit: tiers(), vitality: tiers() };
+  const out: Record<ItemSlot, Record<ItemTier, CardId[]>> = { weapon: tierLists(), spirit: tierLists(), vitality: tierLists() };
   for (const item of ITEMS) {
     if (onSale(G, item.id)) out[item.slot][item.tier].push(item.id);
   }

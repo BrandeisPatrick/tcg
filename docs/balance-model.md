@@ -75,6 +75,14 @@ in any seat.
 - Base skill damage **1–2**; heals/shields flat (Spirit scales **damage** only).
 - Leveling **+1/+1/+1** (HP/BP/Spirit) per level, cap Lv4.
 
+## 6. Tier 5 in the item budget
+
+The item budget ([card-design.md](./card-design.md) §3, 2026-11-05) wears an
+item 8 / 6 / 4 / 3 own turns at tiers 1–4. A tier-5 item (24 souls) is worn for
+about 2 own turns, so a permanent +1 stat is worth 1.4 there; a tier-5 card has
+to earn its 24 with an effect that decides a late match (a second attack, a
+revive, a wipe of statuses, a structure push), not with stats.
+
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).
 - Mirage's Djinn's Mark burst (2/stack ×4) at the compressed scale.

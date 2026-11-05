@@ -29,7 +29,7 @@ describe('items', () => {
 
   it('an item costs its tier\'s price, and nothing that is no item has one', () => {
     for (const item of ITEMS) expect(itemPrice(item.id), item.id).toBe(PRICE[item.tier]);
-    expect(PRICE).toEqual({ 1: 2, 2: 4, 3: 8, 4: 16 });
+    expect(PRICE).toEqual({ 1: 2, 2: 4, 3: 8, 4: 16, 5: 24 });
     expect(itemPrice('hero_haze')).toBe(0);
     expect(itemPrice('ult_haze')).toBe(0);
     expect(itemPrice('no_such_item')).toBe(0);

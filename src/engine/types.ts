@@ -45,9 +45,10 @@ type CardType = 'hero' | 'spell' | 'equipment' | 'ultimate';
  *  items through HP, healing, shields and resists. */
 export type ItemSlot = 'weapon' | 'spirit' | 'vitality';
 
-/** An item's shop tier, from Deadlock's shop (800 / 1600 / 3200 / 6400 souls
- *  there). Its price here is `PRICE[tier]` (constants.ts). */
-export type ItemTier = 1 | 2 | 3 | 4;
+/** An item's shop tier, from Deadlock's shop (800 / 1,600 / 3,200 / 6,400 /
+ *  9,999 souls there). Its price here is `PRICE[tier]` (constants.ts), and
+ *  `ITEM_TIERS` lists them: every list of tiers reads that one. */
+export type ItemTier = 1 | 2 | 3 | 4 | 5;
 
 export interface BaseCard {
   id: CardId;

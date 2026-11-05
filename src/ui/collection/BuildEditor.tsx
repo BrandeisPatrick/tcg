@@ -25,6 +25,7 @@ import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import type { CardId, ItemSlot, ItemTier } from '@/engine/types';
 import { HEROES, ITEMS, cardName } from '@/cards';
 import { BUILD_SIZE, defaultBuild } from '@/cards/builds';
+import { tierLists } from '@/engine/market';
 import { getBuild, saveBuild } from '@/storage/playerData';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { ShopTile } from '../shop/ShopTile';
@@ -40,8 +41,7 @@ import { useViewport } from '../hooks/useViewport';
  *  match's shop sets its rows in, so a tile sits where the player will find
  *  it there. */
 const CATALOGUE: Record<ItemSlot, Record<ItemTier, CardId[]>> = (() => {
-  const tiers = (): Record<ItemTier, CardId[]> => ({ 1: [], 2: [], 3: [], 4: [] });
-  const out: Record<ItemSlot, Record<ItemTier, CardId[]>> = { weapon: tiers(), vitality: tiers(), spirit: tiers() };
+  const out: Record<ItemSlot, Record<ItemTier, CardId[]>> = { weapon: tierLists(), vitality: tierLists(), spirit: tierLists() };
   for (const item of ITEMS) out[item.slot][item.tier].push(item.id);
   return out;
 })();

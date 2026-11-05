@@ -38,9 +38,12 @@ A Deadlock player should recognise every card on sight.
   attacks and Bullet Power, **Spirit** items through skills and spirit damage,
   **Vitality** items through HP, healing, shields and resists.
 - **Canon tier.** A card's tier follows the item's shop tier (800 / 1600 /
-  3200 / 6400 souls → T1 / T2 / T3 / T4), and its price is the tier's:
-  `PRICE` = 2 / 4 / 8 / 16 souls (an upgrade bought while its component is on
-  your side costs the difference). An early, cheap card comes from a cheap item.
+  3200 / 6400 / 9999 souls → T1 / T2 / T3 / T4 / T5), and its price is the
+  tier's: `PRICE` = 2 / 4 / 8 / 16 / 24 souls (an upgrade bought while its
+  component is on your side costs the difference). Tiers 1–4 are 2 × cost ÷
+  800; tier 5 is 24 rather than 25, 1.5 × tier 4 as 9,999 is 1.56 × 6,400, so
+  an upgrade over a tier-4 component costs a whole 8 and a half-price sale
+  refunds a whole 12. An early, cheap card comes from a cheap item.
 - **Families stay families.** Upgrade lines (Extra Spirit → Improved Spirit →
   Boundless Spirit, the Cooldown line, the Lifesteal line into Leech) keep their
   order: the higher tier is the stronger, costlier card.

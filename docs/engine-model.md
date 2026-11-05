@@ -83,7 +83,7 @@ shop's moves are legal for the player whose turn it is — `buy`, `sell`,
 `moveItem`, `closeShop` — plus `playCard`, `endTurn` and an owed promotion;
 `closeShop` moves the turn to its act step, where everything else is legal and
 the shop is shut (`blocked` answers `'shopOpen'` / `'notShop'`).
-- `buy(itemId)` pays `buyPrice`: `PRICE[tier]` (2 / 4 / 8 / 16), less the
+- `buy(itemId)` pays `buyPrice`: `PRICE[tier]` (2 / 4 / 8 / 16 / 24), less the
   component's price when a free copy of the item's `upgradesFrom` is on the
   buyer's side — in its hand, or worn by one of its heroes (`freeComponents`:
   the copies less the upgrades of that component already in the hand bought
@@ -116,7 +116,7 @@ the shop is shut (`blocked` answers `'shopOpen'` / `'notShop'`).
   it wears.
 
 **The market.** `G.market` is fixed before the first pick from `G.seed`: every
-tier 1 item and a seeded slice (2 T2 + 2 T3 + 1 T4 per tab, signatures
+tier 1 item and a seeded slice (2 T2 + 2 T3 + 1 T4 + 1 T5 per tab, signatures
 excluded). As each hero is drafted its two signature items and every item of
 its build join (`addHero`): the human seat's saved build (`G.playerBuilds`,
 from the match config), every other seat's default (`cards/builds.ts`), so a
@@ -126,7 +126,7 @@ it bought it for, so it never holds a card.
 
 **Abilities.** Each hero uses one ability a turn — a skill, an active item it
 wears (`activate`, in a cast frame whose source is the bearer; it then cools
-down 2 own turns for tiers 1–2, 3 for tiers 3–4, or spends one of a hard
+down 2 own turns for tiers 1–2, 3 for tiers 3 and up, or spends one of a hard
 crowd-control item's charges), or its ultimate — and abilities cost nothing. A skill waits its `cooldown` in own turns after
 use (`SKILL_COOLDOWN` = 1, every turn, when its data names none). The ultimate
 is a kit ability, not a card: `HeroCard.ult` names its ability, it unlocks at

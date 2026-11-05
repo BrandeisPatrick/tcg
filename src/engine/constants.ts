@@ -4,7 +4,7 @@
  * nothing has to be kept in step by hand. (Card stats live on the cards; this
  * is only the table's own arithmetic.)
  */
-import type { StructureKind } from './types';
+import type { ItemTier, StructureKind } from './types';
 
 // ---------- Costs and limits ----------
 
@@ -56,19 +56,28 @@ export const RICHEST_BOUNTY_BONUS = 2;
 
 // ---------- The shop ----------
 
-/** What an item costs, by its tier: Deadlock's 1 : 2 : 4 : 8 ladder. An
- *  upgrade bought over its component costs the difference. Net worth counts
- *  every worn item at this price. */
-export const PRICE: Readonly<Record<1 | 2 | 3 | 4, number>> = { 1: 2, 2: 4, 3: 8, 4: 16 };
+/** What an item costs, by its tier: Deadlock's 1 : 2 : 4 : 8 ladder (800 to
+ *  6,400 souls there, 2 × cost ÷ 800 here), and its tier 5 at 9,999 there, 24
+ *  here: 1.5 × tier 4 as 9,999 is 1.56 × 6,400, so an upgrade over a tier-4
+ *  component stays a whole 8 and a half-price sale a whole 12. An upgrade
+ *  bought over its component costs the difference. Net worth counts every worn
+ *  item at this price. */
+export const PRICE: Readonly<Record<ItemTier, number>> = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 24 };
+
+/** The shop's tiers, cheapest first: PRICE's keys (whole-number keys list in
+ *  ascending order). The market, the shop's rows, the tier marks, the build
+ *  editor and the gallery all walk this list, so a new tier is its `ItemTier`,
+ *  its PRICE and its MARKET_SLICE entry, and nothing else. */
+export const ITEM_TIERS: readonly ItemTier[] = Object.keys(PRICE).map(Number) as ItemTier[];
 
 /** The market's random slice, drawn from the match seed before the draft: per
  *  tab, this many items of each tier (tier 1 is always on sale in full, and the
  *  heroes' signature items join as they are drafted). Fewer when a tier runs short. */
-export const MARKET_SLICE: readonly (readonly [tier: 2 | 3 | 4, count: number])[] = [[2, 2], [3, 2], [4, 1]];
+export const MARKET_SLICE: readonly (readonly [tier: ItemTier, count: number])[] = [[2, 2], [3, 2], [4, 1], [5, 1]];
 
 /** Own turns an active item waits after it is used, and when it is bought:
- *  `low` for tiers 1–2, `high` for tiers 3–4. Hard crowd control uses charges
- *  instead. */
+ *  `low` for tiers 1–2, `high` for tiers 3 and up. Hard crowd control uses
+ *  charges instead. */
 export const ACTIVE_COOLDOWN = { low: 2, high: 3 } as const;
 
 /** Uses a hard crowd-control active has per match (no cooldown). */
