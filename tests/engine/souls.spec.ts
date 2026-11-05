@@ -47,10 +47,10 @@ describe('souls economy', () => {
     expect(r).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(5 - PRICE[1]);
     expect(me.hand.map((c) => c.cardId)).toEqual(['extended_magazine']);
-    // Toxic Bullets is tier 3 (8 souls): 3 left is not enough.
-    expect(itemPrice('toxic_bullets')).toBe(PRICE[3]);
-    expect(runMove('buy', G, '0', 'toxic_bullets')).toBe('INVALID_MOVE');
-    expect(buyBlocked(G, '0', 'toxic_bullets')).toBe('souls');
+    // Sharpshooter (Vindicta's signature, so on sale) is tier 3 (8 souls): 3 left is not enough.
+    expect(itemPrice('sharpshooter')).toBe(PRICE[3]);
+    expect(runMove('buy', G, '0', 'sharpshooter')).toBe('INVALID_MOVE');
+    expect(buyBlocked(G, '0', 'sharpshooter')).toBe('souls');
     expect(me.souls).toBe(5 - PRICE[1]);
     expect(me.hand).toHaveLength(1);
   });

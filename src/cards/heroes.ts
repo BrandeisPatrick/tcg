@@ -101,7 +101,7 @@ export const HEROES: HeroCard[] = [
     skills: [],
     passives: ['passive_vindicta_flight'],
     ult: 'eff_ult_vindicta',
-    signature: ['long_range', 'toxic_bullets'],
+    signature: ['long_range', 'sharpshooter'],
   },
   {
     id: 'hero_wraith',
