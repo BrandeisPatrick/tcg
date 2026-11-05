@@ -38,7 +38,8 @@ from their "Deadlock Graphical Library" collection.
   Deadlock wiki's asset mirror (`https://cdn.deadlock.wiki/<Item_Name>.png`),
   encoded to WebP by `scripts/fetch_item_art.py`. The first set came through the
   asset bucket above; the 41 items added on 2026-11-05 (Monster Rounds through
-  Spirit Burn, docs/card-design.md) came from the wiki. See
+  Spirit Burn, docs/card-design.md) and the six tier-5 items after them
+  (Haunting Shot through Prism Blast) came from the wiki. See
   `public/ART_PIPELINE.md`.
 - The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,
   Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, Fixation, the armours
