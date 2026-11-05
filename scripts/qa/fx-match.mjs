@@ -1,11 +1,13 @@
 /**
  * Live-match FX QA — draft a roster, let the rival take the first turn (the
- * pie rule), then in your shop buy the build's lit item and film its flight
- * from the icon to the hand, close the shop, use Kelvin's Frost Grenade for
- * real and film the skill's FX, end the turn and film the rival's turn (its
- * shopping, skills, and its attack walked by the combat choreographer), then
- * close your next shop and make your own attack from your Active's sheet and
- * film that. Frames land in OUT_DIR with a contact sheet.
+ * pie rule), then — once your turn's Income beat has played — buy a tile on
+ * the shop sheet and film its flight from the tile to the hand, close the
+ * shop, use Kelvin's Frost Grenade for real and film the skill's FX, end the
+ * turn and film the rival's turn (its beats on the dial, its shopping, skills,
+ * and its attack walked by the combat choreographer), then close your next
+ * shop and make your own attack from your Active's sheet and film that — and
+ * the End beat after it, as the turn ends on its own. Frames land in OUT_DIR
+ * with a contact sheet.
  *
  *   npm run dev            # in another terminal
  *   node scripts/qa/fx-match.mjs OUT_DIR [PORT] [desktop|mobile]
@@ -61,7 +63,7 @@ try {
   await b.tick(600);
   await b.settle(2);
   await shoot('shop');
-  // ---- Buy the build's next affordable item (the lit icon) and film its flight to the hand.
+  // ---- Buy a tile you can afford and film its flight to the hand.
   const lit = `[...document.querySelectorAll('[aria-label="Shop sheet"] [aria-label^="Buy "]')].find((e) => !e.getAttribute('aria-disabled'))`;
   if (await b.evaluate(`!!(${lit})`)) {
     log('buying:', await b.evaluate(`(${lit}).getAttribute('aria-label')`));
@@ -149,8 +151,15 @@ try {
       await b.settle(1);
       const dial = await b.evaluate(`document.querySelector('[aria-label^="Turn "]')?.getAttribute('aria-label') ?? ''`);
       for (const m of await b.evaluate(`[...document.querySelectorAll('[data-fx-batch]')].map((e) => e.getAttribute('data-fx-batch') + ':' + e.getAttribute('data-fx-total'))`)) myBatches.add(m);
-      await shoot(`mine-${t}${/Battle/.test(dial) ? '-battle' : ''}`);
+      await shoot(`mine-${t}${/Battle/.test(dial) ? '-battle' : /End step/.test(dial) ? '-end' : ''}`);
     }
+    // The attack ends the turn's play: the turn ends on its own, after the End beat.
+    let ended = false;
+    for (let t = 0; t < 4000 && !ended; t += 200) {
+      await b.tick(200); await b.settle(1);
+      ended = await b.evaluate(`/Rival's Move/.test(document.querySelector('[aria-label^="Turn "]')?.getAttribute('aria-label') ?? '')`);
+    }
+    log('the turn ended on its own after the attack:', ended);
     log('fx batches while my attack played (seq:ms):', myBatches.size ? [...myBatches].join(', ') : 'none — walked by the choreographer alone');
   } else {
     log('no attack to make:', await b.evaluate(`document.querySelector('[aria-label="Hero sheet"]')?.innerText.replace(/\s+/g, ' ').slice(0, 200)`));

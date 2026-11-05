@@ -41,10 +41,14 @@
  *      status word in card text (Stun) and a Bleed chip on a tile explain
  *      themselves the same way, a click on the chip still opens the sheet, and
  *      with a card armed a tap on the chip picks the target, no popup
- *   l  the shop sheet: an icon you cannot afford is greyed, and tapping it is
- *      refused with "Need N souls — you have M" — nothing bought
+ *   l  the shop sheet: a tile you cannot afford is greyed, its tier's price in
+ *      the warning ink, and tapping it is refused with "Need N souls — you have
+ *      M" — nothing bought; held, a tile opens its tooltip (name, price, tier)
+ *      and the header shows the souls a buy would leave, a tap elsewhere puts
+ *      it away, and a second tap on the tile opens the full card
  *   m  a buy lands in the hand (the card flies there), and sold back the same
- *      turn — held in the hand, Sell on its preview — refunds all it cost
+ *      turn — held in the sheet's hand row, Sell on its tooltip — refunds all
+ *      it cost
  *   n  a buy outside the shop step is refused: no sheet, no Shop button, and
  *      the engine turns the move down ("The shop is closed until your next turn")
  *
@@ -102,8 +106,22 @@ const CLIENT = `(() => {
 })()`;
 const G = () => b.evaluate(`(() => { const c = ${CLIENT}; return JSON.parse(JSON.stringify(c.getState().G)); })()`);
 
-/** Sync `G` after `mutate(G)` (a function source, run in the page) has doctored a copy. */
+/** Wait until it is your turn again, its hand-over beats played (End, then your Income): the turn
+ *  ends on its own once its attack is made, so a case that attacked hands the next one the rival's
+ *  turn. Should the rival's attack drop your Active, the first hero offered steps up. */
+const myTurn = async () => {
+  if ((await b.evaluate(`${CLIENT}.getState().ctx.currentPlayer`)) === '0') return;
+  for (let t = 0; t < 120000; t += 200) {
+    await b.tick(200); await b.settle(1);
+    if (await b.evaluate(`!!document.querySelector('[aria-label="Choose your new Active"] button')`)) { await b.evaluate(`document.querySelector('[aria-label="Choose your new Active"] button').click()`); await b.settle(3); }
+    if ((await b.evaluate(`${CLIENT}.getState().ctx.currentPlayer`)) === '0') break;
+  }
+  await b.tick(2400); await b.settle(3);
+};
+
+/** Sync `G` after `mutate(G)` (a function source, run in the page) has doctored a copy — on your turn. */
 const stage = async (mutate) => {
+  await myTurn();
   await b.evaluate(`(() => {
     const c = ${CLIENT};
     const st = c.getState();
@@ -184,8 +202,10 @@ const MY_ACTIVE = 4, RIVAL_BENCH_0 = 0, RIVAL_ACTIVE = 3, MY_BENCH_0 = 5;
 const myActiveName = tileNames[MY_ACTIVE];
 /** A board a swing can be made on: Turn 2 (Turn 1 has no attack), the shop closed (the act step), nothing
  *  spent, every hero standing at 30 and clean. */
+// Any turn of yours has its attack: you move second, so your first turn is engine turn 2 — the turn
+// number is left as it is (setting it back would write a second "Turn N" into the log).
 const READY_TO_ATTACK = `
-  G.turnNumber = 2; G.step = 'act'; G.attackUsed = false; G.retreatUsed = false; G.action = null; G.pendingPromotion = null;
+  G.step = 'act'; G.attackUsed = false; G.retreatUsed = false; G.action = null; G.pendingPromotion = null;
   for (const pid of ['0', '1']) for (const h of [G.players[pid].active, ...G.players[pid].bench]) {
     if (!h) continue;
     h.hp = h.hpMax = 30; h.respawnTurnsLeft = 0; h.statuses = []; h.skillUsedThisTurn = false; h.cooldowns = undefined;
@@ -445,9 +465,9 @@ try {
       walked = walked || (await b.evaluate(`!!${byTextStart('Skip')}`));
       g = await G();
     }
-    await b.tick(1500); await b.settle(3);
-    g = await G();
+    // Read as the attack is made: the turn then ends on its own.
     const foes = [g.players['1'].active, ...g.players['1'].bench].map((h) => h.hp);
+    await b.tick(1500); await b.settle(3);
     console.log(`  ${label}: walked=${walked} rival HP [active, bench x3]`, JSON.stringify(foes));
     return { g, walked, foes };
   };
@@ -584,8 +604,15 @@ try {
     attackBatches += (await fxBatches()).length;
     g = await G();
   }
-  for (let t = 0; t < 3000; t += 100) { await b.tick(100); await b.settle(1); attackBatches += (await fxBatches()).length; }
-  const struck = (await G()).players['1'].active.hp;
+  // Until the turn ends on its own: the hand-over plays the end of turn's own batch.
+  let handedOver = false;
+  for (let t = 0; t < 3000 && !handedOver; t += 100) {
+    await b.tick(100); await b.settle(1);
+    handedOver = (await b.evaluate(`${CLIENT}.getState().ctx.currentPlayer`)) !== '0';
+    if (!handedOver) attackBatches += (await fxBatches()).length;
+  }
+  check('after the attack the turn ended on its own, no tap', handedOver);
+  const struck = g.players['1'].active.hp;
   console.log(`  the attack: walked=${walkedAttack}, fx batches while it played and after: ${attackBatches}, rival Active ${rivalHp[0]} -> ${struck}`);
   check('the choreographer walked the turn\'s attack', walkedAttack && g.attackUsed);
   check('…and the FX layer played nothing of it: no fx batch at all (no double play)', attackBatches === 0, `${attackBatches}`);
@@ -603,6 +630,9 @@ try {
     bearer.statuses = [{ id: 'last_stand', value: 4, duration: 1, heal: 3 }];
     G.players['0'].hand = [];
     G.players['1'].hand = []; G.players['1'].souls = 0;
+    // The rival as a run's early turns have it — no levels, no items — however many turns the
+    // cases before have played: its own end of turn then adds nothing to the strike's batch.
+    for (const h of [G.players['1'].active, ...G.players['1'].bench]) if (h) { h.attached = []; h.level = 1; h.exp = 0; }
   }`);
   const lsChip = await b.evaluate(`(() => { const chip = ${tile(MY_BENCH_0)}.querySelector('span[data-status="last_stand"]'); return chip ? { mark: chip.querySelector('[data-mark="last_stand"]') !== null, text: chip.textContent.trim() } : null; })()`);
   // (A phone prints its chips terse beside the level ring: the value and the turns, "4 (1)".)
@@ -700,7 +730,7 @@ try {
   // Kelvin with Spirit 2 in front (his skill is 1 spirit damage + Spirit), a Bleed on a hurt bench hero,
   // and a Healing Rite in hand. His skill has been used, so its card is the flat outlined one.
   // (The turn number is left as it is: setting it back would write a second "Turn 2" into the log.)
-  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK.replace('G.turnNumber = 2; ', '')}
+  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK}
     G.players['0'].souls = 10;
     const a = G.players['0'].active; a.cardId = 'hero_kelvin'; a.hp = a.hpMax = 6; a.spiritMod = 2; a.statuses = []; a.attached = []; a.skillUsedThisTurn = true;
     const ben = G.players['0'].bench[0]; ben.hp = 3; ben.statuses = [{ id: 'bleed', value: 2, duration: 2 }];
@@ -802,10 +832,15 @@ try {
   await closeSheet();
 
   // An active item in hand prints its own number; its explanation says whose Spirit is behind it and what it is
-  // now. (Seven, in front, has Spirit 1.) On a phone a tap on a card in the strip is the card's: it arms, no popup.
-  const HAND_NUM = `(${HAND}).find((c) => c.getAttribute('aria-label').startsWith('Cold Front')).querySelector('[data-scales="sp"]')`;
-  const handNum = await b.evaluate(`(() => { const n = ${HAND_NUM}; if (!n) return null; const s = getComputedStyle(n); return { text: n.textContent.trim(), color: s.color }; })()`);
-  check('Cold Front in hand prints its own 4, in purple (not the live 5)', handNum?.text === '4' && handNum.color === PURPLE, JSON.stringify(handNum));
+  // now. (Seven, in front, has Spirit 1.) A phone's hand is compact thumbnails with no rule text: there the
+  // check is that the card prints none, and that a tap on it is the card's — it arms, no popup.
+  const HAND_CARD = `(${HAND}).find((c) => c.getAttribute('aria-label').startsWith('Cold Front'))`;
+  const HAND_NUM = `${HAND_CARD}.querySelector('[data-scales="sp"]')`;
+  if (touch) check('the phone hand prints Cold Front as a thumbnail, no number on it', await b.evaluate(`!!(${HAND_CARD}) && !(${HAND_CARD}).querySelector('[data-scales]')`));
+  else {
+    const handNum = await b.evaluate(`(() => { const n = ${HAND_NUM}; if (!n) return null; const s = getComputedStyle(n); return { text: n.textContent.trim(), color: s.color }; })()`);
+    check('Cold Front in hand prints its own 4, in purple (not the live 5)', handNum?.text === '4' && handNum.color === PURPLE, JSON.stringify(handNum));
+  }
   if (!touch) {
     await hoverOver(HAND_NUM);
     const handTip = await explained();
@@ -813,9 +848,9 @@ try {
     await shot('k-hand-tooltip');
     await hoverAway();
   } else {
-    await poke(HAND_NUM);
+    await poke(HAND_CARD);
     await b.tick(500); await b.settle(3);
-    check('a tap on its number arms the card (the tap is the card\'s) and opens no popup', /Ally Hero/.test(await text()) && (await explained()).n === 0, (await explained()).text);
+    check('a tap on the card arms it and opens no popup', /Ally Hero/.test(await text()) && (await explained()).n === 0, (await explained()).text);
     await press('Escape', 'Escape', 27);
     await b.tick(500); await b.settle(3);
     check('(Escape disarms it)', !/Ally Hero/.test(await text()));
@@ -870,7 +905,7 @@ try {
   const shopIcon = (prefix) => `[...${SHEET_SHOP}.querySelectorAll('[aria-label^=${JSON.stringify(prefix)}]')].pop()`;
   await b.tick(2400); await b.settle(2);
   // (The turn number is left as it is, as in (k): setting it back would write a second "Turn 2" into the log.)
-  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK.replace('G.turnNumber = 2; ', '')}
+  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK}
     G.step = 'shop'; G.players['0'].souls = 1; G.players['0'].hand = [];
     if (!G.market.includes('titanic_magazine')) G.market.push('titanic_magazine');
     for (const h of [G.players['0'].active, ...G.players['0'].bench]) h.attached = [];
@@ -879,7 +914,7 @@ try {
   check('the shop sheet is up in the shop step', await b.evaluate(`!!${SHEET_SHOP}`));
   const dear = await b.evaluate(`(() => { const e = ${shopIcon('Buy Titanic Magazine')}; return e ? { label: e.getAttribute('aria-label'), grey: e.getAttribute('aria-disabled') } : null; })()`);
   check('Titanic Magazine (4 souls) is greyed with 1 soul', !!dear && dear.grey === 'true' && /not enough souls/.test(dear.label), JSON.stringify(dear));
-  check('the sheet prints no item names', !(await b.evaluate(`${SHEET_SHOP}.innerText`)).includes('Titanic Magazine'));
+  check('the sheet prints no item names', !(await b.evaluate(`${SHEET_SHOP}.innerText`)).toLowerCase().includes('titanic magazine'));
   await shot('l-shop-greyed');
   await b.clickEl(shopIcon('Buy Titanic Magazine'), { scroll: true });
   await b.settle(4);
@@ -889,12 +924,37 @@ try {
   check('nothing was bought: no card in hand, the soul kept', gl.players['0'].hand.length === 0 && gl.players['0'].souls === 1);
   await b.tick(900); await b.settle(2);
   await shot('l-shop-refused');
+  // Held, the tile opens its tooltip over the sheet, and the header previews the souls a buy would leave.
+  const holdTile = async (finder) => {
+    const p = await b.evaluate(`(() => { const e = ${finder}; if (!e) return null; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    if (!p) return null;
+    await b.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y });
+    await b.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button: 'left', buttons: 1, clickCount: 1 });
+    await b.tick(600); await b.settle(3);
+    await b.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button: 'left', buttons: 0, clickCount: 1 });
+    await b.settle(4); await b.tick(300); await b.settle(3);
+    return p;
+  };
+  const TIP = `document.querySelector('[aria-label="Titanic Magazine — item details"]')`;
+  const heldAt = await holdTile(shopIcon('Buy Titanic Magazine'));
+  const tipText = await b.evaluate(`${TIP}?.innerText.replace(/\\s+/g, ' ') ?? ''`);
+  check('held, the tile opens its tooltip: name, price, tier and category', /TITANIC MAGAZINE/i.test(tipText) && /Tier 2/i.test(tipText) && /Weapon/i.test(tipText) && /\b4\b/.test(tipText), tipText);
+  check('…saying what it needs ("Need 4 souls — you have 1")', /Need 4 souls — you have 1/.test(tipText));
+  check('…and the header shows the souls the buy would leave', await b.evaluate(`!!document.querySelector('[aria-label="Shop sheet"] [aria-label^="Souls: 1, 3 short of it"]')`));
+  await shot('l-shop-tooltip');
+  await b.clickAt(4, H - 4); await b.settle(3); await b.tick(300); await b.settle(2);
+  check('a tap elsewhere puts the tooltip away, and buys nothing', !(await b.evaluate(`!!${TIP}`)) && (await G()).players['0'].hand.length === 0);
+  await holdTile(shopIcon('Buy Titanic Magazine'));
+  if (heldAt) { await b.clickAt(heldAt.x, heldAt.y); await b.settle(4); await b.tick(500); await b.settle(3); }
+  check('a second tap on the tile opens the full card', !(await b.evaluate(`!!${TIP}`)) && /Titanic Magazine/i.test(await b.evaluate(`document.body.innerText`)) && (await G()).players['0'].hand.length === 0);
+  await shot('l-shop-full-card');
+  await b.clickAt(4, 4); await b.settle(3); await b.tick(400); await b.settle(2);
 
   // ===== m: a buy, and its sale the same turn ============================================
   console.log('\n(m) a buy lands in the hand; sold back the same turn it refunds all it cost');
   await b.tick(2400); await b.settle(2);
   // (The turn number is left as it is, as in (k): setting it back would write a second "Turn 2" into the log.)
-  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK.replace('G.turnNumber = 2; ', '')}
+  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK}
     G.step = 'shop'; G.players['0'].souls = 10; G.players['0'].hand = [];
     if (!G.market.includes('titanic_magazine')) G.market.push('titanic_magazine');
     for (const h of [G.players['0'].active, ...G.players['0'].bench]) h.attached = [];
@@ -921,17 +981,17 @@ try {
     await b.settle(4); await b.tick(400); await b.settle(3);
   }
   const sellBtn = `document.querySelector('[aria-label="Sell Titanic Magazine for 4 souls"]')`;
-  check('held, the card opens full size with "Sell +4"', await b.evaluate(`!!${sellBtn}`) && /Sell \+4/.test(await text()));
+  check('held, its tooltip offers "Sell +4", all it cost: bought this turn', await b.evaluate(`!!${sellBtn}`) && /Sell \+4/.test(await text()) && /bought this turn/.test(await text()));
   await shot('m-held-sell');
   if (await b.evaluate(`!!${sellBtn}`)) { await b.clickEl(sellBtn, { scroll: false }); await b.settle(4); await b.tick(600); await b.settle(3); }
   const gs = await G();
   check('sold the same turn: all 4 souls back, the card gone', gs.players['0'].souls === 10 && !gs.players['0'].hand.some((c) => c.cardId === 'titanic_magazine'), `souls ${gs.players['0'].souls}`);
-  check('…and the preview closed', !(await b.evaluate(`!!${sellBtn}`)));
+  check('…and the tooltip closed', !(await b.evaluate(`!!${sellBtn}`)));
 
   // ===== n: a buy outside the shop step ==================================================
   console.log('\n(n) a buy outside the shop step is refused');
   await b.tick(1500); await b.settle(2);
-  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK.replace('G.turnNumber = 2; ', '')} G.players['0'].souls = 10; G.players['0'].hand = []; }`);
+  await stage(`(G) => { ${PAGE} ${READY_TO_ATTACK} G.players['0'].souls = 10; G.players['0'].hand = []; }`);
   check('in the act step there is no shop sheet and no Shop button', !(await b.evaluate(`!!${SHEET_SHOP}`)) && !(await b.evaluate(`!!document.querySelector('[aria-label="Open the shop"]')`)));
   const outside = await b.evaluate(`(async () => {
     const h = await import('/src/ui/board/heroActions.ts');

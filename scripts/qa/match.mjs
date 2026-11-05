@@ -2,10 +2,10 @@
  * Full-match playtest — draft a real match, switch Auto on so the AI plays
  * both seats, and tick the virtual clock until the result sheet. Reads the
  * turn dial, the mover's attack lamp and the turn button on the way, so it
- * reports every state the turn flow went through (whose move, which step —
- * Shop or Act — and phase, whether the turn's attack was still to make, what
- * the button offered) and stops with a failure if the match sits still for a
- * minute of game time. The lessons walk four short scripted fights; this is
+ * reports every state the turn flow went through (whose move, which beat of
+ * the turn's spine — Income, Shop, Act, End — and phase, whether the turn's
+ * attack was still to make, what the button offered) and stops with a failure
+ * if the match sits still for a minute of game time. The lessons walk four short scripted fights; this is
  * the long way round: the shop every turn, promotions, respawns, ultimates and
  * a real ending.
  *
@@ -94,7 +94,7 @@ try {
     const s = await b.evaluate(LOOK);
     if (s.over) { result = s.over; break; }
     if (!s.dial) continue;
-    const m = s.dial.match(/^Turn \d+ · (.+?) · (\w+) phase/);  // "Your Move · Shop step", "Prepare"
+    const m = s.dial.match(/^Turn \d+ · (.+?) · (\w+) phase/);  // "Your Move · Income step", "Prepare"
     if (m) states.add(`${m[1]} · ${m[2]} · ${s.lamp ?? 'attack: —'} · button: ${s.button}`);
     if (s.dial === lastDial) {
       if (++still > STALL_TICKS) {
