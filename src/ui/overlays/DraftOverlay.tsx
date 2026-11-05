@@ -12,17 +12,18 @@
 //     previews the focused hero in green, locked picks turn gold
 //   ▸ a chamfered LOCK button (Enter works too) — the one true "draft" trigger
 //   ▸ the market — what the shop sells this match, fixed before the first
-//     pick, each drafted hero's signature items joining it — in a compact
-//     list by tab
+//     pick — in the shop's own tiles by category and tier, each drafted
+//     hero's signature items and build joining it as the hero is picked
+//     (DraftMarket)
+//   ▸ one line under the title: who drafts first, and so moves second
 //
 // Snake order is driven by the engine; this overlay only dispatches
 // draftPick when it's the local player's turn.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence, easeInOut } from 'framer-motion';
-import type { CardId, DraftState, ItemTier, PlayerID } from '@/engine/types';
+import type { CardId, DraftState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, cardName, HEROES } from '@/cards';
-import { ITEM_SLOTS, marketByTab, SIGNATURE_ITEMS } from '@/engine/market';
 import { heroAbilities, otherPlayer } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { heroArtFocus } from '@/cards/art/heroArt';
@@ -32,6 +33,7 @@ import { poster, chamfer, clipBoth } from '../poster';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { useViewport } from '../hooks/useViewport';
 import { plainText } from '../card/scaling';
+import { DraftMarket } from './DraftMarket';
 
 interface Props {
   draft: DraftState;
@@ -132,6 +134,11 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
     [],
   );
 
+  // The pie rule: the seat that drafts first moves second.
+  const seating = draft.order[0] === me
+    ? 'You draft first; the rival moves first.'
+    : 'The rival drafts first; you move first.';
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -186,6 +193,7 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
           <span style={{ ...text.label, fontSize: isMobile ? 10 : 11, letterSpacing: isMobile ? '0.18em' : '0.3em', color: lobby.dim, whiteSpace: 'nowrap' }}>
             {complete ? 'Complete' : `${draft.currentIndex + 1}/${draft.order.length}`}
           </span>
+          {!isMobile && <Seating line={seating} compact={false} />}
         </div>
         {isMobile ? (
           <LockButton
@@ -197,6 +205,7 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
         ) : <span aria-hidden />}
         <span aria-hidden />
       </div>
+      {isMobile && <Seating line={seating} compact />}
 
       {/* The pick strips, with the LOCK plate in the middle of the line
           where the two banners meet — level with the crews' cards, on the
@@ -266,71 +275,27 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
         />
       </div>
 
-      <MarketPanel market={market} compact={isMobile} />
+      <DraftMarket market={market} draft={draft} me={me} compact={isMobile} />
     </motion.div>
   );
 }
 
 // =============================================================================
-// MARKET
+// SEATING
 // =============================================================================
 
-const TAB_WORD = { weapon: 'Weapon', spirit: 'Spirit', vitality: 'Vitality' } as const;
-const TIERS: ItemTier[] = [1, 2, 3, 4];
-
-/** The market, before and through the draft: three columns (one a phone
- *  folds away behind its title), each tab's items by tier. A drafted hero's
- *  signature items join as it is picked, and are marked. */
-function MarketPanel({ market, compact }: { market: CardId[]; compact: boolean }) {
-  const byTab = marketByTab({ market });
-  const body = (
-    <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: compact ? 10 : 18, marginTop: 8 }}>
-      {ITEM_SLOTS.map((slot) => (
-        <div key={slot} aria-label={`${TAB_WORD[slot]} items on sale`}>
-          <div style={{ ...text.label, fontSize: 10, letterSpacing: '0.24em', color: lobby.gold, marginBottom: 4 }}>{TAB_WORD[slot]}</div>
-          {TIERS.map((tier) => byTab[slot][tier].length > 0 && (
-            <div key={tier} style={{ fontSize: 11.5, lineHeight: 1.45, color: lobby.dim }}>
-              <span style={{ ...text.label, fontSize: 9, letterSpacing: '0.16em', color: lobby.faint, marginRight: 6 }}>T{tier}</span>
-              {byTab[slot][tier].map((id, i) => (
-                <span key={id} style={{ color: SIGNATURE_ITEMS.has(id) ? lobby.cream : undefined }}>
-                  {i > 0 ? ' · ' : ''}{cardName(id)}
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-  const title = (
-    <span style={{ ...text.label, fontSize: compact ? 10 : 11, letterSpacing: '0.26em', color: lobby.cream }}>
-      Market · {market.length} items on sale this match
-    </span>
-  );
+/** Who drafts first and so moves second, in one line: under the title on a
+ *  phone, beside it on a wide screen. */
+function Seating({ line, compact }: { line: string; compact: boolean }) {
   return (
-    <section
-      aria-label="Market"
-      style={{
-        position: 'relative', zIndex: 1,
-        border: `1px solid ${lobby.edge}`, background: 'rgba(21, 25, 28, 0.82)',
-        padding: compact ? '8px 10px' : '10px 16px',
-      }}
-    >
-      {compact ? (
-        <details>
-          <summary style={{ cursor: 'pointer' }}>{title}</summary>
-          {body}
-        </details>
-      ) : (
-        <>
-          {title}
-          <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.14em', color: lobby.faint, marginLeft: 12 }}>
-            bright: a drafted hero's signature item
-          </span>
-          {body}
-        </>
-      )}
-    </section>
+    <span style={{
+      position: 'relative', zIndex: 1,
+      ...text.label, fontSize: compact ? 10 : 10.5, letterSpacing: compact ? '0.14em' : '0.2em',
+      color: lobby.dim, whiteSpace: 'nowrap',
+      ...(compact ? { display: 'block', textAlign: 'center', marginTop: -4 } : { marginLeft: 6 }),
+    }}>
+      {line}
+    </span>
   );
 }
 
