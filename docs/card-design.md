@@ -164,7 +164,7 @@ their names, tabs and tiers, so none retired. The other 63 items were tested:
    verb: a cheaper Retreat, a bench swap (stepping in), or the bench.
 
 41 became cards (36 passives, 5 actives), 6 were folded and 16 skipped. The 17
-items of the shop's tier 5 wait on a decision.
+items of the shop's tier 5 waited on a decision (see the next section).
 
 | Tab | T1 | T2 | T3 | T4 |
 |---|---|---|---|---|
@@ -340,12 +340,7 @@ item has, brings it back within a step.
 - **Magic Carpet** (test 3): an escape whose board verb, the free Retreat, is
   Majestic Leap's.
 
-**Tier 5, awaiting a decision** (not added, not folded into tier 4):
-- **Weapon:** Haunting Shot, Infinite Rounds, Runed Gauntlets.
-- **Vitality:** Celestial Blessing, Cloak of Opportunity, Electric Slippers,
-  Eternal Gift, Nullification Burst, Seraphim Wings, Shadow Strike.
-- **Spirit:** Frostbite Charm, Mystic Conduit, Mystical Piano, Omnicharge
-  Signet, Prism Blast, Shrink Ray, Unstable Concoction.
+**Tier 5** was left for a decision here, and decided in the next section.
 
 **Upgrade chains.**
 - New:
@@ -371,6 +366,73 @@ No hook, status or targeting rule was added. A swing now tells the attacker's
 on-hit gear the damage it dealt (`amount`), so Weakening Headshot and Headhunter
 can tell a hit that found its target at full HP.
 
+### Added 2026-11-05: tier 5
+
+The decision: add every suitable item, tier 5 included. The same shop list
+carries 17 items at tier 5 and 9,999 souls (the wiki files all 17 under Street
+Brawl). The rung is in §2: `PRICE[5]` is 24. The market's random slice draws one
+tier-5 item a tab. A tier-5 active cools down 3 own turns, and hard crowd
+control keeps its two charges. No tier-5 item has a component, so none has a
+chain.
+
+**The budget at tier 5.** A tier-5 item is worn about 2 own turns
+([balance-model.md](./balance-model.md) §6).
+- **Values:** a permanent +1 stat is worth 1.4. An active that cools down gets
+  ⅔ of a use, since it starts on its 3-turn cooldown. A hard crowd-control
+  active gets its 2 charges.
+- **The card:** it has to earn its 24 with an effect that can decide a late
+  match, not with stats: about 12 souls a turn worn. The band is the rule's ¾
+  to 1½ × price, 18–36. The other rates are those above.
+- **Test 3 at tier 5:** the verb has to carry the price in those two turns, at
+  some number on this board's scale. A verb that cannot fails the test.
+
+6 became cards (3 passives, 3 actives) and 11 were skipped.
+
+| Tab | T5 |
+|---|---|
+| Weapon | 0 · 0 → 2 · 0 |
+| Vitality | 0 · 0 → 0 · 1 |
+| Spirit | 0 · 0 → 1 · 2 |
+
+134 cards became 140 (95 passives, 45 actives).
+
+| Card | Tab · tier | Price | Effect | Budget (souls) |
+|---|---|---|---|---|
+| Haunting Shot | Weapon T5 | 24 | Each swing: every enemy loses a third of its HP, crippled | a third of about 9 HP on 3.2 enemies = 9.6; −2 and −2 on their next turn 0.7 + 1.9; no healing 0.6; Root 0.6 → 13.4 a swing × 0.7 × 2 → **19.0** |
+| Infinite Rounds | Weapon T5 | 24 | Extra Attack 3 each turn; every swing pierces as Armor Piercer's | extra swings 5 × (0.65 + 0.45 + 0.3) × 0.7 = 4.9; 2.5 into the bench and 0.8 of armour on 0.7 × 2.4 swings = 5.5 → 10.4 a turn × 2 → **21.0** |
+| Nullification Burst | Vitality T5 · active, hard CC | 24 | Every enemy: buffs stripped, {sp:1}, no healing, Rooted 2 turns | a charge: buffs about 1 a hero × 3.2 = 3.2; (1 + 1.5) × 3.2 = 8.0; no healing 0.6; Root (0.4 + 0.22) × 2 = 1.2 → 13.0 × 2 charges → **26.0** |
+| Frostbite Charm | Spirit T5 | 24 | +4 Spirit Power; its ability hits freeze: Stun, 7 more | 4 × 1.4 = 5.6; 0.7 hits × 2 turns × (7 + Stun 2.0) = 12.6 → **18.0** |
+| Mystical Piano | Spirit T5 · active, hard CC | 24 | Stun and Root every enemy hero for 2 turns | a charge: Stun 2 × (2.0 + 1.0 × 2.2) = 8.4; Root 1.2 → 9.6 × 2 charges → **19.5** |
+| Prism Blast | Spirit T5 · active | 24 | Your Active turns Unstoppable; {sp:7} to every enemy | a use: (7 + 1.5) × 3.2 = 27.2; Unstoppable 3.1 → 30.3 × ⅔ of a use → **20.0** |
+
+Infinite Rounds pierces as Armor Piercer does. Worn beside Armor Piercer, it
+leaves the piercing to that card, so a swing pierces once.
+
+**Skipped:**
+- **Test 1** (expressible):
+  - Runed Gauntlets: a heavy melee, and its cooldown cut is the Cooldown family's.
+  - Shadow Strike: its payoff is a melee attack from stealth.
+  - Omnicharge Signet: ability charges.
+  - Eternal Gift: random stats need dice, and its respawn cut is the rules'.
+  - Unstable Concoction: a death that cuts its own respawn; without the cut,
+    the death hands the rival a kill and a push.
+- **Test 3** (meaningful at tier 5):
+  - Celestial Blessing: a team heal and cleanse is about 8 a use (a heal is
+    half a soul an HP), so about 5 at ⅔ of a use.
+  - Cloak of Opportunity: it fires when hard CC lands on the bearer, 0.2 a
+    turn, so about 3 in two turns; Indomitable carries its verb at tier 4.
+  - Electric Slippers: sliding is movement; its board verb, the step-in, comes
+    0.2 a turn.
+  - Seraphim Wings: airborne has no board meaning; always on, it is a stat line.
+  - Shrink Ray: size and speed; its board verb, Fleetfoot's swing and sprint,
+    is about 3.
+- **Tests 1 and 3:** Mystic Conduit. Its cooldown and range cuts fail test 1,
+  and what is left is a Spirit Power aura, a stat line.
+
+**Builds.** Haze takes Infinite Rounds and Wraith Haunting Shot as the sixth
+item, in place of Ricochet. The casters keep the tier-4 upgrade of their
+signature as theirs: an upgrade takes no new slot, and a tier-5 card needs one.
+
 ## 4. Signature items and default builds
 
 Every hero has two **signature items** (`HeroCard.signature`), chosen to fit its
@@ -379,16 +441,17 @@ kit — gun heroes lean Weapon, casters Spirit, tanks Vitality — one of them t
 item of its build: the player's saved build for a hero they drafted, the
 default build below for the AI's (`src/cards/builds.ts`), so a build set up
 before the match can always be bought. A default build starts with the
-signatures, then two tier 2, one tier 3 and one tier 4 that fit the kit, six
-items for three slots: the later ones go on as upgrades of the earlier where
-Deadlock builds them so, or into a slot that opens.
+signatures, then two tier 2, one tier 3 and one tier 4 that fit the kit (a
+tier-5 card in place of the tier 4 for a hero whose kit wants a late spike),
+six items for three slots: the later ones go on as upgrades of the earlier
+where Deadlock builds them so, or into a slot that opens.
 
 | Hero | Signature 1 | Signature 2 | Default build (in order) |
 |---|---|---|---|
 | Abrams | Healing Booster (passive, Vitality T2) | Fortitude (passive, Vitality T3) | Healing Booster → Fortitude → Bullet Lifesteal → Spirit Shielding → Bullet Resilience → Cheat Death |
 | Drifter | Restorative Shot (passive, Weapon T1) | Frenzy (passive, Weapon T4) | Restorative Shot → Frenzy → Bullet Lifesteal → Stalker → Berserker → Leech |
 | Dynamo | Compress Cooldown (passive, Spirit T2) | Rescue Beam (active, Vitality T3) | Compress Cooldown → Rescue Beam → Healing Booster → Duration Extender → Superior Cooldown → Transcendent Cooldown |
-| Haze | Active Reload (passive, Weapon T2) | Burst Fire (passive, Weapon T3) | Active Reload → Burst Fire → Titanic Magazine → Intensifying Magazine → Toxic Bullets → Ricochet |
+| Haze | Active Reload (passive, Weapon T2) | Burst Fire (passive, Weapon T3) | Active Reload → Burst Fire → Titanic Magazine → Intensifying Magazine → Toxic Bullets → Infinite Rounds |
 | Kelvin | Cold Front (active, Spirit T2) | Knockdown (active, Spirit T3) | Cold Front → Knockdown → Improved Spirit → Spirit Shielding → Silence Wave → Arctic Blast |
 | Lady Geist | Mystic Vulnerability (passive, Spirit T2) | Spirit Snatch (passive, Spirit T3) | Mystic Vulnerability → Spirit Snatch → Improved Spirit → Spirit Lifesteal → Decay → Escalating Exposure |
 | Lash | Mystic Slow (passive, Spirit T2) | Tankbuster (passive, Spirit T3) | Mystic Slow → Tankbuster → Improved Spirit → Suppressor → Decay → Lightning Scroll |
@@ -402,5 +465,5 @@ Deadlock builds them so, or into a slot that opens.
 | Vindicta | Long Range (passive, Weapon T2) | Sharpshooter (passive, Weapon T3) | Long Range → Sharpshooter → Titanic Magazine → Opening Rounds → Toxic Bullets → Crippling Headshot |
 | Viscous | Reactive Barrier (passive, Vitality T2) | Spirit Resilience (passive, Vitality T3) | Reactive Barrier → Spirit Resilience → Debuff Reducer → Improved Spirit → Fortitude → Indomitable |
 | Warden | Weapon Shielding (passive, Vitality T2) | Metal Skin (active, Vitality T3) | Weapon Shielding → Metal Skin → Bullet Lifesteal → Enduring Speed → Fortitude → Juggernaut |
-| Wraith | Spirit Strike (passive, Spirit T1) | Spiritual Overflow (passive, Weapon T4) | Spirit Strike → Spiritual Overflow → Mystic Shot → Spirit Lifesteal → Spirit Snatch → Ricochet |
+| Wraith | Spirit Strike (passive, Spirit T1) | Spiritual Overflow (passive, Weapon T4) | Spirit Strike → Spiritual Overflow → Mystic Shot → Spirit Lifesteal → Spirit Snatch → Haunting Shot |
 | Yamato | Extended Magazine (passive, Weapon T1) | Shadow Weave (active, Weapon T3) | Extended Magazine → Shadow Weave → Titanic Magazine → Kinetic Dash → Heroic Aura → Glass Cannon |
