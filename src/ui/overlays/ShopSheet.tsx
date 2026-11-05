@@ -1,65 +1,66 @@
 /**
- * The shop — the turn's shop step, as a sheet laid out like Deadlock's own
- * shop, and printed in icons only: no item's name or text appears on it (a
- * long press, or the info toggle, opens the full card). It opens at the start
- * of your turn and stays until you are done (Done — Skip when nothing on sale
- * is affordable — closes the shop and the turn moves on to its act; Hide only
- * puts the sheet away, and the board's Shop button brings it back).
+ * The shop — the turn's shop step, laid out as Deadlock's own shop and printed
+ * in its look (a graphite panel, the three categories in their colours) with
+ * the game's type and plaque for the souls. No item's name or text is printed
+ * on the sheet: a tile is the item's own icon, and a hold (a mouse rest on a
+ * desktop) opens its tooltip; a second tap there opens the full card.
  *
- *   header     your souls, large, and what next turn's income brings (the
- *              comeback too, while you trail on net worth)
- *   builds     each hero's pre-configured build, six icons in build order:
+ *   economy    your souls, large — and the souls a held item would leave —
+ *              what next turn's income brings (the comeback while you trail),
+ *              your net worth against the rival's, the cards in your hand
+ *   builds     each drafted hero's pre-configured build, six tiles in order:
  *              what it has ticked, the next one you can afford lit, one this
- *              market does not sell greyed with the item that stands in for it
- *   catalogue  the market by tab — Weapon · Vitality · Spirit, in Deadlock's
- *              colours — in tier rows whose header carries the tier's price
- *              (in the warning ink while you cannot pay it)
- *   inventory  each hero's slots, tinted by what fills them, and the hand as
- *              the unassigned row
+ *              market does not sell greyed with its stand-in inset
+ *   catalogue  the market by category — Weapon · Vitality · Spirit — in tier
+ *              rows headed by the tier's price (in the warning ink while you
+ *              cannot pay it); tabs on a phone, side by side on a desktop
+ *   inventory  each hero's slots, a worn item's tile in its category's
+ *              colour, and the hand as the unassigned row
  *
- * Tap an icon to buy: the card goes to your hand (the board flies it there).
- * Tap a card in the hand, then a hero, to put it on; tap a worn item to sell
- * it or move it to another hero; hold a card in the hand to see it and sell it.
- * Every move asks the engine first (`actionRefusal` over `blocked`): a move it
- * will not make is greyed here, or refused on the board's sticker with the
- * reason — never dispatched to go nowhere.
+ * Tap a tile to buy: the card goes to your hand (the board flies it there).
+ * Tap a card in the hand to sell it or put it on a hero; tap a worn item to
+ * sell it or move it. Every move asks the engine first (`actionRefusal` over
+ * `blocked`): one it will not make is greyed here, or refused on the board's
+ * sticker with the reason — never dispatched to go nowhere. Done closes the
+ * shop (Skip when nothing on sale is affordable); Hide puts the sheet away and
+ * the board's Shop button brings it back.
  */
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { CardId, CardInstance, GameState, ItemSlot, ItemTier, PlayerID } from '@/engine/types';
-import { cardName, itemCard } from '@/cards';
-import { buyBlocked, buyPrice, moveItemBlocked, playBlocked, sellRefund } from '@/engine/legality';
-import { comebackBonus, slotCap, slottedHeroes, wornItems } from '@/engine/query';
-import { buildOf, marketByTab, marketItems, marketStandIn, onSale } from '@/engine/market';
+import { buyBlocked, buyPrice, sellBlocked, sellRefund } from '@/engine/legality';
+import { findWornItem, handCard, itemCooldown, slotCap, slottedHeroes, wornItems } from '@/engine/query';
+import { marketByTab, marketItems } from '@/engine/market';
 import type { Action } from '@/engine/engine';
-import { LANE_INCOME, PRICE } from '@/engine/constants';
-import { HeroBadge } from '@/cards/art/heroArt';
-import { ItemIcon, type ItemIconMarks } from '../card/ItemIcon';
+import { PRICE } from '@/engine/constants';
 import { PosterButton } from '../chrome';
 import { fonts, spring, text } from '../tokens';
-import { poster, sheetStyle, soulCoin, tabInk } from '../poster';
+import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
+import { actionRefusal } from '../board/heroActions';
+import { ShopTile } from '../shop/ShopTile';
+import { TierRows } from '../shop/TierRows';
+import { CategoryBanner, CategoryTabs } from '../shop/CategoryTabs';
+import { BuildStrip, buyLabel } from '../shop/BuildStrip';
+import { Inventory } from '../shop/Inventory';
+import { EconomyHeader } from '../shop/EconomyHeader';
+import { ItemTooltip, type TooltipSale } from '../shop/ItemTooltip';
+import { SHOP_TABS, soulsWord } from '../shop/itemFacts';
+import { nextTip, type TipRequest } from '../shop/tips';
 
 /** The sheet's accessible name: the tutorial's gate finds it by this. */
 export const SHOP_SHEET = 'Shop sheet';
 /** The button that closes the shop (printed Done, or Skip with nothing to buy). */
 export const SHOP_DONE = 'Done shopping';
-/** The name a buyable icon announces itself by: "Buy Extended Magazine — 2
- *  souls". The tutorial's gate and the QA scripts find it by its start. */
-export const buyLabel = (itemId: CardId) => `Buy ${cardName(itemId)}`;
+export { buyLabel };
 
-/** Deadlock's tab order. */
-const TABS: readonly ItemSlot[] = ['weapon', 'vitality', 'spirit'];
-const TAB_WORD: Record<ItemSlot, string> = { weapon: 'Weapon', vitality: 'Vitality', spirit: 'Spirit' };
-const TIERS: readonly ItemTier[] = [1, 2, 3, 4];
-/** A press this long opens the card instead of tapping it. */
-const LONG_PRESS_MS = 450;
 /** Room the sheet leaves at the top of the screen for the System menu's gear
  *  (top 12 + 40px, and a margin). */
 const SYSTEM_GEAR_CLEARANCE = 58;
-
-/** "1 soul", "4 souls". */
-const souls = (n: number) => `${n} soul${n === 1 ? '' : 's'}`;
+/** Below this width a desktop sheet keeps the phone's tabs: three columns
+ *  side by side would leave a column two tiles wide. */
+const SIDE_BY_SIDE_MIN = 1000;
 
 type ShopMove = Extract<Action, { type: 'buy' | 'sell' | 'moveItem' | 'playCard' }>;
 
@@ -67,14 +68,14 @@ interface Props {
   G: GameState;
   me: PlayerID;
   /** Make a shop move (the board asks the engine and dispatches it); a buy
-   *  passes the icon it came from, for the flight to the hand. */
+   *  passes the tile it came from, for the flight to the hand. */
   onMove: (a: ShopMove, from?: DOMRect) => void;
   /** Close the shop: the turn moves on to its act. */
   onDone: () => void;
   /** Put the sheet away; the shop stays open. */
   onHide: () => void;
-  /** Open an item's card at full size: what it costs you now (an icon on
-   *  sale), or the card in your hand it is (the board offers its sale). */
+  /** Open an item's card at full size: what it costs you now (a tile on
+   *  sale), or the card it is (in your hand, or worn). */
   onPreview: (p: { cardId: CardId; cost?: number; iid?: string }) => void;
   /** Px at the bottom of the screen the sheet leaves clear: the hand row, so
    *  a card bought is seen landing in it. */
@@ -84,317 +85,103 @@ interface Props {
   rightInset?: number;
 }
 
-/** True when `hero` wears `itemId`, or an item built from it (Improved Spirit
- *  covers the Extra Spirit a build lists first). */
-function hasOrPast(hero: CardInstance, itemId: CardId): boolean {
-  return wornItems(hero).some((it) => {
-    for (let id: CardId | undefined = it.cardId; id; id = itemCard(id)?.upgradesFrom) if (id === itemId) return true;
-    return false;
-  });
-}
-
-/** Tap and long-press on one control: a press held LONG_PRESS_MS fires
- *  `onLong` and swallows the click that ends it. */
-function usePress(onTap: () => void, onLong: () => void) {
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  const fired = useRef(false);
-  const clear = () => { if (timer.current) { clearTimeout(timer.current); timer.current = undefined; } };
-  useEffect(() => clear, []);
-  return {
-    onPointerDown: () => {
-      fired.current = false;
-      clear();
-      timer.current = setTimeout(() => { fired.current = true; onLong(); }, LONG_PRESS_MS);
-    },
-    onPointerUp: clear,
-    onPointerLeave: clear,
-    onPointerCancel: clear,
-    onClick: () => {
-      clear();
-      if (fired.current) { fired.current = false; return; }
-      onTap();
-    },
-    // A held press on a phone opens the browser's own menu otherwise.
-    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
-  };
-}
-
-/** One item icon as a control: tap, long press, and its name for a screen
- *  reader (the sheet prints none). */
-function IconButton({ itemId, size, label, grey, lit, selected, marks, onTap, onLong }: {
-  itemId: CardId; size: number; label: string; grey?: boolean; lit?: boolean; selected?: boolean; marks?: ItemIconMarks;
-  onTap: (rect: DOMRect) => void; onLong: () => void;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const press = usePress(() => onTap(ref.current!.getBoundingClientRect()), onLong);
-  return (
-    <motion.button
-      ref={ref}
-      type="button"
-      aria-label={label}
-      aria-disabled={grey || undefined}
-      whileTap={{ scale: 0.92 }}
-      transition={spring.snappy}
-      {...press}
-      style={{
-        padding: 0, border: 'none', background: 'none', cursor: 'pointer', lineHeight: 0,
-        touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
-      } as CSSProperties}
-    >
-      <ItemIcon itemId={itemId} size={size} grey={grey} lit={lit} selected={selected} marks={marks} />
-    </motion.button>
-  );
-}
-
 export function ShopSheet({ G, me, onMove, onDone, onHide, onPreview, bottomInset, rightInset = 0 }: Props) {
-  const { isMobile } = useViewport();
+  const { isMobile, width } = useViewport();
+  const sideBySide = !isMobile && width - rightInset >= SIDE_BY_SIDE_MIN;
   const ps = G.players[me];
   const heroes = slottedHeroes(ps);
   const [tab, setTab] = useState<ItemSlot>('weapon');
-  // Info: a tap opens the card instead of buying it.
-  const [info, setInfo] = useState(false);
   // The card in the hand picked up to be put on a hero, and the worn item whose sale or move is being chosen.
   const [armed, setArmed] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [tip, setTipState] = useState<TipRequest | null>(null);
+  const setTip = useCallback((req: TipRequest | null) => setTipState((cur) => nextTip(cur, req)), []);
   const market = useMemo(() => marketByTab(G), [G]);
-  // A card or item that has gone (played, sold, moved) is let go of.
+
+  // A card or item that has gone (played, sold, moved) is let go of, and its tooltip with it.
   useEffect(() => { if (armed && !ps.hand.some((c) => c.iid === armed)) setArmed(null); }, [armed, ps.hand]);
   useEffect(() => {
     if (picked && !heroes.some((h) => wornItems(h).some((it) => it.iid === picked))) setPicked(null);
   }, [picked, heroes]);
+  useEffect(() => {
+    if (tip?.iid && !handCard(G, me, tip.iid) && !findWornItem(G, tip.iid, me)) setTipState(null);
+  }, [G, me, tip]);
 
   const cap = slotCap(G, me);
-  const icon = isMobile ? 44 : 46;
+  const tile = isMobile ? 44 : 42;
+  const gap = 6;
   // Two heroes a row on a phone: a fourth (flex) slot shrinks them to fit 390px.
-  const slot = isMobile ? (cap > 3 ? 28 : 34) : 38;
-  const comeback = comebackBonus(G, me);
+  const slot = isMobile ? (cap > 3 ? 30 : 34) : 34;
   const anyAffordable = marketItems(G).some((id) => buyBlocked(G, me, id) === null);
   /** Copies of an item on your side: in the hand, and worn. */
-  const held = (id: CardId) => ps.hand.some((c) => c.cardId === id);
-  const worn = (id: CardId) => heroes.some((h) => wornItems(h).some((it) => it.cardId === id));
+  const owned = (id: CardId) => ps.hand.some((c) => c.cardId === id) || heroes.some((h) => wornItems(h).some((it) => it.cardId === id));
 
-  const buy = (itemId: CardId, rect: DOMRect) => {
-    if (info) { onPreview({ cardId: itemId, cost: buyPrice(G, me, itemId) }); return; }
-    onMove({ type: 'buy', itemId }, rect);
+  const buy = (itemId: CardId, rect: DOMRect) => onMove({ type: 'buy', itemId }, rect);
+
+  /** A tile on sale in the catalogue. */
+  const marketTile = (id: CardId, tier: ItemTier) => {
+    const price = buyPrice(G, me, id);
+    const can = buyBlocked(G, me, id) === null;
+    const discount = price < PRICE[tier];
+    return (
+      <ShopTile
+        key={id}
+        itemId={id}
+        size={tile}
+        grey={!can}
+        marks={{ owned: owned(id), ...(discount ? { discount: price } : {}) }}
+        label={`${buyLabel(id)} — ${soulsWord(price)}${discount ? ' (an upgrade, at the difference)' : ''}${can ? '' : ' — not enough souls'}`}
+        onTap={(r) => buy(id, r)}
+        onLong={(r) => setTip({ itemId: id, anchor: r, source: 'market' })}
+        onHover={(r) => setTip(r ? { itemId: id, anchor: r, source: 'market', passive: true } : null)}
+      />
+    );
   };
-  const preview = (itemId: CardId) => onPreview({ cardId: itemId, cost: buyPrice(G, me, itemId) });
+  const catalogue = (slotOf: ItemSlot) => (
+    <TierRows
+      slot={slotOf}
+      byTier={market[slotOf]}
+      gap={gap}
+      short={(tier) => ps.souls < PRICE[tier]}
+      renderTile={marketTile}
+      empty={<span style={{ ...text.label, fontSize: 10, color: poster.creamFaint }}>—</span>}
+    />
+  );
 
-  // ---------------------------------------------------------------- header
-  // The sheet's controls: the info toggle, Hide and Done (Skip with nothing
-  // to buy). In the header on a desktop; on a phone in a footer, at the thumb.
+  // ---------------------------------------------------------------- the tooltip
+  const tipped = tip ? tooltipFor(G, me, tip, (a) => { onMove(a); setTipState(null); }) : null;
+  const heldPrice = tip && tip.source === 'market' ? buyPrice(G, me, tip.itemId) : undefined;
+  const openCard = tip ? () => {
+    onPreview({ cardId: tip.itemId, cost: heldPrice, iid: tip.iid });
+    setTipState(null);
+  } : undefined;
+
+  // ---------------------------------------------------------------- controls
+  // The sheet's buttons: Hide and Done (Skip with nothing to buy). In the
+  // header on a desktop; on a phone in a footer, at the thumb.
   const controls = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <button
-        type="button"
-        aria-pressed={info}
-        aria-label="Info: a tap opens the card"
-        onClick={() => setInfo((v) => !v)}
-        style={{
-          width: 32, height: 32, borderRadius: '50%', cursor: 'pointer',
-          border: `2px solid ${poster.ink}`,
-          background: info ? poster.ink : 'transparent',
-          color: info ? poster.paper : poster.ink,
-          fontFamily: fonts.display, fontSize: 16, lineHeight: 1,
-        }}
-      >i</button>
-      <PosterButton variant="paper" size="sm" onClick={onHide} ariaLabel="Hide the shop" style={{ padding: '7px 11px' }}>Hide</PosterButton>
-      <PosterButton variant="ink" size="sm" onClick={onDone} ariaLabel={SHOP_DONE} style={{ padding: '7px 13px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      <PosterButton variant="ghost" size="sm" onClick={onHide} ariaLabel="Hide the shop" style={{ padding: '8px 12px' }}>Hide</PosterButton>
+      <PosterButton variant="paper" size="sm" onClick={onDone} ariaLabel={SHOP_DONE} style={{ padding: '8px 16px' }}>
         {anyAffordable ? 'Done' : 'Skip'}
       </PosterButton>
     </div>
   );
-  const header = (
-    <div style={{
-      display: 'flex', flexDirection: 'column', gap: 6,
-      padding: isMobile ? '10px 12px 9px' : '12px 18px 10px',
-      borderBottom: `1.5px solid ${poster.ink}`,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <h2 style={{ margin: 0, fontFamily: fonts.display, fontSize: 22, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1 }}>Shop</h2>
-        <span style={{ flex: 1 }} />
-        {!isMobile && controls}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span aria-label={`Souls: ${ps.souls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <span aria-hidden style={soulCoin(22)} />
-          <span style={{ ...text.numeric, fontFamily: fonts.display, fontSize: 30, lineHeight: 1 }}>{ps.souls}</span>
-        </span>
-        <span aria-label={`Next turn: ${LANE_INCOME} souls${comeback ? `, and ${comeback} comeback` : ''}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <Pill>+{LANE_INCOME} next turn</Pill>
-          {comeback > 0 && <Pill ink={poster.status.buff}>+{comeback} comeback</Pill>}
-        </span>
-      </div>
-    </div>
-  );
 
-  // ---------------------------------------------------------------- builds
   const builds = (
-    <Section title="Builds" note="next affordable lit">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {heroes.map((h) => <BuildRow key={h.iid} G={G} me={me} hero={h} size={icon} onBuy={buy} onPreview={preview} />)}
-      </div>
+    <Section title="Builds">
+      <BuildStrip G={G} me={me} heroes={heroes} size={tile} gap={isMobile ? 4 : 5} onBuy={buy} onTip={setTip} />
     </Section>
   );
-
-  // ---------------------------------------------------------------- catalogue
-  const catalogue = (
-    <Section title="Catalogue">
-      <div role="tablist" aria-label="Shop tabs" style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-        {TABS.map((t) => {
-          const { tint, deep } = tabInk(t);
-          const on = tab === t;
-          return (
-            <button
-              key={t}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => setTab(t)}
-              style={{
-                flex: 1, padding: '8px 4px', cursor: 'pointer',
-                fontFamily: fonts.display, fontSize: 12.5, letterSpacing: '0.12em', textTransform: 'uppercase',
-                border: `2px solid ${deep}`,
-                borderRadius: 6,
-                background: on ? tint : 'transparent',
-                color: deep,
-                boxShadow: on ? `inset 0 -3px 0 ${deep}` : undefined,
-              }}
-            >
-              {TAB_WORD[t]}
-            </button>
-          );
-        })}
-      </div>
-      <div role="tabpanel" aria-label={`${TAB_WORD[tab]} items`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {TIERS.map((tier) => {
-          const ids = market[tab][tier];
-          if (ids.length === 0) return null;
-          const short = ps.souls < PRICE[tier];
-          return (
-            <div key={tier}>
-              <div aria-label={`Tier ${tier}: ${souls(PRICE[tier])}`} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.18em', color: poster.inkDim }}>Tier {tier}</span>
-                <span aria-hidden style={soulCoin(11)} />
-                <span style={{ ...text.numeric, fontFamily: fonts.display, fontSize: 14, lineHeight: 1, color: short ? poster.redDeep : poster.ink }}>{PRICE[tier]}</span>
-                <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                {ids.map((id) => {
-                  const price = buyPrice(G, me, id);
-                  const can = buyBlocked(G, me, id) === null;
-                  const discount = price < PRICE[tier];
-                  return (
-                    <IconButton
-                      key={id}
-                      itemId={id}
-                      size={icon}
-                      grey={!can}
-                      marks={{ held: held(id), worn: worn(id), discount }}
-                      label={`${buyLabel(id)} — ${souls(price)}${discount ? ' (an upgrade, at the difference)' : ''}${can ? '' : ' — not enough souls'}`}
-                      onTap={(r) => buy(id, r)}
-                      onLong={() => preview(id)}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Section>
-  );
-
-  // ---------------------------------------------------------------- inventory
-  const armedCard = armed ? ps.hand.find((c) => c.iid === armed) : undefined;
-  const pickedWorn = picked ? heroes.flatMap((h) => wornItems(h).map((it) => ({ it, bearer: h }))).find((x) => x.it.iid === picked) : undefined;
   const inventory = (
-    <Section title="Inventory" note={armedCard ? 'tap a hero to put it on' : `${cap} slots a hero`}>
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
-        {heroes.map((h) => {
-          const items = wornItems(h);
-          const canTake = !!armedCard && playBlocked(G, me, armedCard.iid, h.iid) === null;
-          return (
-            <div
-              key={h.iid}
-              role={armedCard ? 'button' : undefined}
-              aria-label={armedCard ? `Put ${cardName(armedCard.cardId)} on ${cardName(h.cardId)}` : `${cardName(h.cardId)}'s slots`}
-              onClick={armedCard ? () => { onMove({ type: 'playCard', cardIid: armedCard.iid, heroIid: h.iid }); setArmed(null); } : undefined}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: 4, minWidth: 0,
-                borderRadius: 8,
-                border: `1.5px ${canTake ? 'solid' : 'dashed'} ${canTake ? poster.target : poster.inkRule}`,
-                background: canTake ? 'rgba(98, 196, 98, 0.14)' : 'transparent',
-                cursor: armedCard ? (canTake ? 'pointer' : 'not-allowed') : 'default',
-              }}
-            >
-              <HeroBadge cardId={h.cardId} size={isMobile ? 26 : 30} />
-              <div style={{ display: 'flex', gap: 3, minWidth: 0 }}>
-                {Array.from({ length: cap }, (_, i) => {
-                  const it = items[i];
-                  if (!it) return <EmptySlot key={i} size={slot} />;
-                  return (
-                    <IconButton
-                      key={it.iid}
-                      itemId={it.cardId}
-                      size={slot}
-                      selected={picked === it.iid}
-                      label={`${cardName(it.cardId)}, worn by ${cardName(h.cardId)} — sell or move it`}
-                      onTap={() => { if (!armedCard) setPicked(picked === it.iid ? null : it.iid); }}
-                      onLong={() => onPreview({ cardId: it.cardId })}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {pickedWorn && (
-        <div role="group" aria-label="Sell or move the item" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8, padding: 6, borderRadius: 8, background: 'rgba(23, 20, 16, 0.06)' }}>
-          <ItemIcon itemId={pickedWorn.it.cardId} size={30} />
-          <PosterButton variant="red" size="sm" onClick={() => { onMove({ type: 'sell', itemIid: pickedWorn.it.iid }); setPicked(null); }}
-            ariaLabel={`Sell ${cardName(pickedWorn.it.cardId)} for ${souls(sellRefund(G, pickedWorn.it))}`} style={{ padding: '7px 11px' }}>
-            Sell +{sellRefund(G, pickedWorn.it)}
-          </PosterButton>
-          {heroes.length > 1 && <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.16em', color: poster.inkDim }}>Move to</span>}
-          {heroes.filter((h) => h.iid !== pickedWorn.bearer.iid).map((to) => {
-            const no = moveItemBlocked(G, me, pickedWorn.it.iid, to.iid);
-            return (
-              <button key={to.iid} type="button" disabled={!!no}
-                aria-label={`Move ${cardName(pickedWorn.it.cardId)} to ${cardName(to.cardId)}`}
-                onClick={() => { onMove({ type: 'moveItem', itemIid: pickedWorn.it.iid, toHeroIid: to.iid }); setPicked(null); }}
-                style={{ padding: 0, border: 'none', background: 'none', cursor: no ? 'not-allowed' : 'pointer', opacity: no ? 0.35 : 1, lineHeight: 0 }}>
-                <HeroBadge cardId={to.cardId} size={30} />
-              </button>
-            );
-          })}
-          <span style={{ flex: 1 }} />
-          <button type="button" aria-label="Keep it" onClick={() => setPicked(null)}
-            style={{ border: 'none', background: 'none', cursor: 'pointer', fontFamily: fonts.display, fontSize: 16, color: poster.inkDim }}>×</button>
-        </div>
-      )}
-
-      {/* The hand: what is bought and not yet on a hero — the unassigned row. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, minHeight: slot + 6 }}>
-        <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.18em', color: poster.inkDim, width: isMobile ? 34 : 40, flexShrink: 0 }}>Hand</span>
-        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', minWidth: 0 }}>
-          {ps.hand.length === 0 && (
-            <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.14em', color: poster.inkFaint }}>Bought cards land here</span>
-          )}
-          {ps.hand.map((c) => (
-            <IconButton
-              key={c.iid}
-              itemId={c.cardId}
-              size={slot}
-              selected={armed === c.iid}
-              label={`${cardName(c.cardId)}, in your hand — tap, then a hero, to put it on; hold to see it or sell it`}
-              onTap={() => { setPicked(null); setArmed(armed === c.iid ? null : c.iid); }}
-              onLong={() => onPreview({ cardId: c.cardId, iid: c.iid })}
-            />
-          ))}
-        </div>
-      </div>
+    <Section title="Inventory" note={`${cap} slots a hero`}>
+      <Inventory
+        G={G} me={me} heroes={heroes} cap={cap} slot={slot}
+        columns={isMobile ? 2 : sideBySide ? 1 : 2}
+        armed={armed} picked={picked}
+        onArm={setArmed} onPick={setPicked}
+        onMove={onMove} onTip={setTip}
+      />
     </Section>
   );
 
@@ -407,140 +194,125 @@ export function ShopSheet({ G, me, onMove, onDone, onHide, onPreview, bottomInse
       position: 'fixed', left: 0, right: rightInset, top: 0, bottom: bottomInset, zIndex: 88,
       display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center',
       padding: isMobile ? 6 : 16,
-      // Clear of the System menu's gear (top 12 + 40px) in the top corner.
       paddingTop: SYSTEM_GEAR_CLEARANCE,
       pointerEvents: 'none',
     }}>
-    <motion.div
-      role="dialog"
-      aria-label={SHOP_SHEET}
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 24 }}
-      transition={spring.snappy}
-      style={{
-        pointerEvents: 'auto',
-        width: isMobile ? '100%' : 'min(940px, 100%)',
-        maxHeight: '100%',
-        display: 'flex', flexDirection: 'column',
-        borderRadius: 14,
-        overflow: 'hidden',
-        color: poster.ink,
-        fontFamily: fonts.ui,
-        ...sheetStyle,
-      }}
-    >
-      {header}
-      <div style={{
-        flex: '1 1 auto', minHeight: 0,
-        overflowY: 'auto', overflowX: 'hidden',
-        padding: isMobile ? '10px 12px 14px' : '14px 18px 18px',
-        display: 'flex', flexDirection: 'column', gap: 16,
-      }}>
-        {isMobile ? (
-          <>
-            {builds}
-            {catalogue}
-            {inventory}
-          </>
-        ) : (
-          <>
+      <motion.div
+        role="dialog"
+        aria-label={SHOP_SHEET}
+        initial={{ opacity: 0, y: 28, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 24, transition: { duration: 0.16 } }}
+        transition={spring.snappy}
+        style={{
+          pointerEvents: 'auto',
+          width: isMobile ? '100%' : sideBySide ? 'min(1100px, 100%)' : 'min(760px, 100%)',
+          maxHeight: '100%',
+          display: 'flex', flexDirection: 'column',
+          borderRadius: 12,
+          overflow: 'hidden',
+          background: poster.frame,
+          border: `1.5px solid ${poster.edge}`,
+          boxShadow: '0 40px 90px rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.4)',
+          color: poster.cream,
+          fontFamily: fonts.ui,
+        }}
+      >
+        <EconomyHeader G={G} me={me} preview={heldPrice} compact={isMobile} controls={isMobile ? undefined : controls} />
+        <div style={{
+          flex: '1 1 auto', minHeight: 0,
+          overflowY: 'auto', overflowX: 'hidden',
+          padding: isMobile ? '10px 12px 14px' : '14px 18px 18px',
+          display: 'flex', flexDirection: 'column', gap: 14,
+        }}>
+          {sideBySide ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 22, alignItems: 'start' }}>
-              {catalogue}
-              {builds}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, alignItems: 'start' }}>
+                {SHOP_TABS.map((s) => (
+                  <div key={s} style={{ minWidth: 0 }}>
+                    <CategoryBanner slot={s} />
+                    {catalogue(s)}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {builds}
+                {inventory}
+              </div>
             </div>
-            {inventory}
-          </>
-        )}
-      </div>
-      {isMobile && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', borderTop: `1.5px solid ${poster.ink}` }}>
-          {controls}
+          ) : (
+            <>
+              {builds}
+              <section aria-label="Catalogue" style={{ minWidth: 0 }}>
+                {/* The tabs ride the top of the scroll, so a category is a tap away anywhere in it. */}
+                <div style={{ position: 'sticky', top: isMobile ? -10 : -14, zIndex: 2, background: poster.frame, margin: isMobile ? '0 -12px' : '0 -18px', padding: isMobile ? '0 4px' : '0 10px' }}>
+                  <CategoryTabs tab={tab} onTab={setTab} compact={isMobile} />
+                </div>
+                <div id="shop-panel" role="tabpanel" aria-labelledby={`shop-tab-${tab}`} style={{ paddingTop: 12 }}>
+                  {catalogue(tab)}
+                </div>
+              </section>
+              {inventory}
+            </>
+          )}
         </div>
-      )}
-    </motion.div>
-    </div>
-  );
-}
+        {isMobile && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', borderTop: `1px solid ${poster.edge}` }}>
+            {controls}
+          </div>
+        )}
+      </motion.div>
 
-/**
- * One hero's build in order, six icons: what it wears (or has built past)
- * ticked; a copy waiting in your hand marked; the next one you can afford lit
- * (tap: buy it); one this market does not sell greyed, with the item that
- * stands in for it inset (tap buys the stand-in).
- */
-function BuildRow({ G, me, hero, size, onBuy, onPreview }: {
-  G: GameState; me: PlayerID; hero: CardInstance; size: number;
-  onBuy: (id: CardId, rect: DOMRect) => void; onPreview: (id: CardId) => void;
-}) {
-  const ps = G.players[me];
-  const taken = wornItems(hero).map((it) => it.cardId);
-  const name = cardName(hero.cardId);
-  let lit = false;
-  return (
-    <div role="group" aria-label={`${name}'s build`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <HeroBadge cardId={hero.cardId} size={Math.round(size * 0.78)} />
-      <div style={{ display: 'flex', gap: 4 }}>
-        {buildOf(G, me, hero.cardId).map((id) => {
-          const owned = hasOrPast(hero, id);
-          const sale = onSale(G, id);
-          const stand = sale ? id : marketStandIn(G, id, taken);
-          const inHand = ps.hand.some((c) => c.cardId === (stand ?? id));
-          const can = !!stand && buyBlocked(G, me, stand) === null;
-          const next = !owned && !inHand && can && !lit;
-          if (next) lit = true;
-          const marks: ItemIconMarks = { worn: owned, held: !owned && inHand, ...(stand && stand !== id ? { standIn: stand } : {}) };
-          const price = stand ? buyPrice(G, me, stand) : 0;
-          const label = owned ? `${cardName(id)} — ${name} has it`
-            : !stand ? `${cardName(id)} — not on sale this match`
-            : `${buyLabel(stand)} for ${name}'s build — ${souls(price)}${stand !== id ? ` (it stands in for ${cardName(id)})` : ''}${can ? '' : ' — not enough souls'}`;
-          return (
-            <IconButton
-              key={id}
-              itemId={id}
-              size={size}
-              lit={next}
-              grey={!owned && (!sale || !can)}
-              marks={marks}
-              label={label}
-              onTap={(r) => { if (owned || !stand) onPreview(id); else onBuy(stand, r); }}
-              onLong={() => onPreview(stand ?? id)}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {tip && tipped && (
+            <ItemTooltip
+              key={`${tip.source}-${tip.iid ?? tip.itemId}-${tip.passive ? 'h' : 'p'}`}
+              itemId={tip.itemId}
+              anchor={tip.anchor}
+              price={heldPrice}
+              souls={tip.source === 'market' ? ps.souls : undefined}
+              sale={tipped.sale}
+              live={tipped.live}
+              note={tipped.note}
+              passive={tip.passive}
+              onOpenCard={openCard}
+              onClose={() => setTipState(null)}
             />
-          );
-        })}
-      </div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }
 
-function EmptySlot({ size }: { size: number }) {
-  return (
-    <span aria-hidden style={{
-      width: size, height: size, flexShrink: 0, boxSizing: 'border-box',
-      borderRadius: Math.round(size * 0.22),
-      border: `1.5px dashed ${poster.inkFaint}`,
-      background: 'rgba(23, 20, 16, 0.04)',
-    }} />
-  );
+/** What a tooltip says beyond the item itself: on a card you own, its sale
+ *  (asked of the engine: greyed with the reason when it cannot be sold now)
+ *  and, worn, its cooldown or charges. */
+function tooltipFor(G: GameState, me: PlayerID, tip: TipRequest, move: (a: ShopMove) => void): { sale?: TooltipSale; live?: { cooldown?: number; charges?: number }; note?: string } | null {
+  if (tip.source === 'market' || tip.source === 'build') return {};
+  const card: CardInstance | undefined = tip.source === 'hand' ? handCard(G, me, tip.iid!) : findWornItem(G, tip.iid!, me)?.item;
+  if (!card) return null;
+  const refund = sellRefund(G, card);
+  const blockedReason = sellBlocked(G, me, card.iid) ? actionRefusal(G, me, { type: 'sell', itemIid: card.iid })?.text : undefined;
+  const sale: TooltipSale = {
+    refund,
+    full: card.boughtOnTurn === G.turnNumber,
+    onSell: () => move({ type: 'sell', itemIid: card.iid }),
+    blockedReason,
+  };
+  if (tip.source === 'hand') return { sale, note: 'In your hand: tap it, then a hero, to put it on.' };
+  return { sale, live: { cooldown: itemCooldown(card) || undefined, charges: card.charges ?? undefined } };
 }
 
-function Pill({ children, ink = poster.ink }: { children: ReactNode; ink?: string }) {
+function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <span style={{
-      ...text.label, fontSize: 10, letterSpacing: '0.14em',
-      padding: '4px 8px', borderRadius: 999,
-      border: `1.5px solid ${ink}`, color: ink, whiteSpace: 'nowrap',
-    }}>{children}</span>
-  );
-}
-
-function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
-  return (
-    <section style={{ minWidth: 0 }}>
+    <section aria-label={title} style={{ minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
-        <h3 style={{ margin: 0, fontFamily: fonts.display, fontSize: 14, fontWeight: 400, letterSpacing: '0.14em', textTransform: 'uppercase', lineHeight: 1 }}>{title}</h3>
-        {note && <span style={{ ...text.label, fontSize: 9, letterSpacing: '0.16em', color: poster.inkDim }}>{note}</span>}
-        <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
+        <h3 style={{ margin: 0, fontFamily: fonts.display, fontSize: 13, fontWeight: 400, letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1, color: poster.cream }}>{title}</h3>
+        {note && <span style={{ ...text.label, fontSize: 9, letterSpacing: '0.16em', color: poster.creamDim }}>{note}</span>}
+        <span aria-hidden style={{ flex: 1, height: 1, background: poster.edge }} />
       </div>
       {children}
     </section>
