@@ -1,5 +1,13 @@
 # Playability — why it is not fun yet, and what to build
 
+> **Status, 2026-11-05.** The `gameplay-redesign` branch built this plan as [mechanics-survey.md](./mechanics-survey.md) and the 2026-11-04 proposal revised it; [README.md](../README.md) and [engine-model.md](./engine-model.md) describe the game as it now plays. Where each of the proposal's six tabs ended up:
+> - **The loop:** built (Income · Shop · Act · End, a match capped at round 12), with one change: the hand came back, as where a bought card waits until it is played onto a hero. The last sim, before the full shop, measured 5.4 own turns against the 8–10 target.
+> - **Souls & shop:** built as the market fixed before turn one, changed: each drafted hero's build goes on sale beside its signatures, a tier 5 at 24 souls joins the ladder and the slice, and the catalogue grew to 140 items ([card-design.md](./card-design.md) §3).
+> - **The turn:** built (free abilities, one attack ends the Act, Retreat 1, the pie rule, no first-turn attack, actives start on cooldown); cards are played from the hand in the shop or the Act, and the second mover's income bonus stays at 0.
+> - **The map:** built (Guardian · Walker · Patron, the Mid-Boss from round 4, the Rejuvenator, respawn by round), changed: every kill pushes, bench included, and a boss still tied on net worth goes to the last hit. Revive credits cannot be stolen.
+> - **Heroes:** in part. Free kits on cooldowns, the ultimate at level 2 and Haze's second swing at level 3 are built; the level-up choice, second skills and Lash's rewrite are deferred.
+> - **Proof & order:** the 2,500-game seat-mirrored sim, both AI strengths, restricted play, the budget script and the difficulty dial are built. The pricing pass stopped early and its numbers were reverted, so numbers are set by reasoning and the gates wait for a testing round ([balance-model.md](./balance-model.md)).
+
 Written 2026-11-03 after a phone playtest. Companion to
 [balance-model.md](./balance-model.md) (what the numbers were meant to do) and
 [engine-model.md](./engine-model.md) (where the rules live). This page says

@@ -28,11 +28,14 @@ python3 scripts/fetch_item_art.py spell:grit=Grit "item:mystic_slow=Mystic Slow"
                                                       # cards not in the card files yet
 ```
 
-WebP encoder, first found: ffmpeg with libwebp (`FFMPEG=…` to pick one),
-`cwebp` (`brew install webp`), or Pillow in the running Python. Homebrew's
-ffmpeg has no libwebp, so on a bare Mac install `webp` or run the script with a
-Python that has Pillow. Downloads land in `$ART_TMP` (default
-`<system tmp>/wikiart`).
+The normal WebP route is `brew install webp`, which gives `cwebp`, or an ffmpeg
+built with libwebp (`FFMPEG=…` picks the binary; Homebrew's ffmpeg has no
+libwebp). The script takes the first it finds: ffmpeg with libwebp, then
+`cwebp`, then Pillow in the running Python. An honest User-Agent is required:
+every request to the wiki names this project, never a browser (`UA` at the top
+of each script), and both fetch scripts, this one and
+`scripts/art/fetch_map_icons.py`, now send one. Downloads land in `$ART_TMP`
+(default `<system tmp>/wikiart`).
 
 ### Heroes
 

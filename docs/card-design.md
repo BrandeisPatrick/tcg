@@ -65,11 +65,11 @@ API was unreachable). These were fixed:
 | Curse | Old name | **Cursed Relic** (active, Spirit T4) |
 | Improved Cooldown | Old name | **Compress Cooldown** (passive, Spirit T2) |
 | Improved Burst | Old name | **Tankbuster** (passive, Spirit T3) |
-| Improved Bullet / Spirit Armor | Merged into the Resilience items in Deadlock | Retired; saved decks get Bullet / Spirit Resilience instead |
+| Improved Bullet / Spirit Armor | Merged into the Resilience items in Deadlock | Retired; saved builds get Bullet / Spirit Resilience instead |
 | Echo Shard, Mystic Burst, Spirit Resilience, Crippling Headshot | Wrong tier | Moved to their Deadlock tier |
 
 A renamed card keeps its old id (`debuff_remover`, `silence_glyph`, `curse`,
-`improved_cooldown`, `improved_burst`) so saved decks still load; only the
+`improved_cooldown`, `improved_burst`) so saved builds still load; only the
 printed name changes. A retired card is listed in `RETIRED_CARDS`
 (`src/cards/index.ts`), which `migrateCardIds` uses to update old saves.
 

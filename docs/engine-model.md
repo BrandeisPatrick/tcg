@@ -143,10 +143,11 @@ A Retreat comes before the attack — the hero who steps in makes it — and one
 turn (`G.retreatUsed`); it costs `retreatCost`: `RETREAT_COST`, less what the
 hero leaving carries (`retreatDiscount`), and nothing while it is Swift — the
 Retreat spends the Swift. Extra swings exist only as explicit `extra_attack`
-grants (Haze's Fixation from Level 3, Burst Fire, Fleetfoot, Fury Trance, Blood
-Tribute), all inside the one attack. Turn 1 has no attack, and a promotion off
-a fallen Active is free and brings in a hero who may make the attack if none
-has been made.
+grants (Haze's Fixation from Level 3, Burst Fire, Express Shot, Spellslinger,
+Infinite Rounds, Fleetfoot, Fury Trance, Blood Tribute, Vampiric Burst), all
+inside the one attack. Turn 1 has no attack, and a promotion off a fallen
+Active is free and brings in a hero who may make the attack if none has been
+made.
 
 **Kills and the end.** A kill pays the victim's opponent its level + 1, and 2
 more if it was strictly the richest hero on the board (`killBounty`), and pushes
@@ -231,9 +232,13 @@ resolves, once, at its end.
   `retreatDiscount` (Sprint Boots: souls off the bearer's Retreat, read by
   `retreatCost`), `resists` (Enduring Speed: a status `addStatus` refuses to
   put on the bearer, saying so in the log), `ricochet` (the Ricochet item: the
-  bearer's swing bounces, summed by `ricochetPower`). `attackPower`, `damageUnit`,
-  `addStatus` and `retreatCost` ask every ability the hero carries; nothing
-  else needs to know.
+  bearer's swing bounces, summed by `ricochetPower`), `debuffDuration` (Debuff
+  Reducer), `cooldownCut` (the Cooldown family: own turns off the cooldowns the
+  bearer starts, never below 1), `resist` (Bullet and Spirit Resilience) and
+  `healingBoost` (Healing Booster). `attackPower`, `damageUnit`, `healUnit`,
+  `addStatus`, `retreatCost` and the cooldowns (`activeCooldown`, the
+  ultimate's in `useSkill`) ask every ability the hero carries; nothing else
+  needs to know.
 - **Gear that reacts to a move** listens for a trigger the engine fires
   through `fireTriggers` with `reaction: true`: `onBearerStepIn` goes off for the
   hero that takes the Active slot by a move its player chose — the Retreat
