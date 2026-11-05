@@ -1,22 +1,24 @@
 /**
  * Loadout — the one screen you set yourself up on: the squad you want the
- * draft to hand you, and what each of them buys in the shop (its build).
+ * draft to hand you, and what each hero buys in the shop (its build, edited
+ * in BuildEditor and read by every match).
  *
  * Printed in the poster idiom — cream sheet on the blurred night scene, flat
  * ink, one red — so the menu reads as the same object as the title screen and
- * the table.
+ * the table; the build editor's catalogue is the shop's graphite panel.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { HEROES, cardName, itemCard } from '@/cards';
+import { HEROES, cardName } from '@/cards';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
-import { getBuild, loadPlayerData, savePreferredHeroes, MAX_PREFERRED_HEROES } from '@/storage/playerData';
+import { loadPlayerData, savePreferredHeroes, MAX_PREFERRED_HEROES } from '@/storage/playerData';
 import type { CardId } from '@/engine/types';
 import { HERO_IMG_BASE } from '@/art/assets';
+import { BuildEditor } from './BuildEditor';
 
 interface Props {
   onBack: () => void;
@@ -30,6 +32,10 @@ export function LoadoutScreen({ onBack }: Props) {
 
   const [data, setData] = useState(() => loadPlayerData());
   const slots = padSlots(data.preferredHeroes);
+  // The squad's heroes in pick order — the build editor lists them first
+  // (one list per squad, so the editor's hero row is not rebuilt each render).
+  const squadKey = slots.filter((s): s is CardId => s !== null).join('|');
+  const squad = useMemo<CardId[]>(() => (squadKey ? squadKey.split('|') : []), [squadKey]);
 
   function writeSlots(next: (CardId | null)[]) {
     savePreferredHeroes(next);
@@ -63,7 +69,9 @@ export function LoadoutScreen({ onBack }: Props) {
         background: poster.ground,
         color: poster.ink,
         fontFamily: fonts.ui,
-        overflowX: 'hidden',
+        // clip, not hidden: hidden makes a scroll container, and the build
+        // editor's strip could no longer stick to the top of the screen.
+        overflowX: 'clip',
       }}
     >
       <PosterBackdrop />
@@ -79,7 +87,7 @@ export function LoadoutScreen({ onBack }: Props) {
           width: '100%',
           maxWidth: 1380,
           borderRadius: isMobile ? 18 : 28,
-          overflow: 'hidden',
+          overflow: 'clip',
           padding: isMobile ? '14px 14px 20px' : 'clamp(18px, 2.4vh, 28px) clamp(22px, 3vw, 38px) clamp(24px, 3vh, 34px)',
           ...sheetStyle,
         }}
@@ -129,7 +137,10 @@ export function LoadoutScreen({ onBack }: Props) {
             compact={isMobile}
             split={split}
           />
-          <Builds heroes={slots.filter((s): s is CardId => s !== null)} compact={isMobile} />
+          <section aria-label="Builds">
+            <SectionHead title="Builds" />
+            <BuildEditor squad={squad} />
+          </section>
         </div>
       </motion.section>
     </div>
@@ -394,49 +405,5 @@ function PickSlot({ index, heroId, onClear }: {
         </span>
       )}
     </motion.button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Builds — what the squad buys in the shop                            */
-/* ------------------------------------------------------------------ */
-
-/** The build each squad hero shops from: its items in buying order, tab and
- *  tier beside each. Read-only for now — the shop opens on it in a match. */
-function Builds({ heroes, compact }: { heroes: CardId[]; compact: boolean }) {
-  return (
-    <section aria-label="Builds">
-      <SectionHead title="Builds" note="What the shop opens on" />
-      {heroes.length === 0 ? (
-        <p style={{ ...text.label, fontSize: 10.5, letterSpacing: '0.12em', color: poster.inkDim, margin: 0 }}>
-          Pick heroes for your squad to see what each one buys.
-        </p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 9 : 11 }}>
-          {heroes.map((heroId) => (
-            <div key={heroId} style={{ border: `1.5px solid ${poster.inkRule}`, padding: compact ? '9px 11px' : '10px 13px', ...clipBoth(chamfer(9)) }}>
-              <div style={{ fontFamily: fonts.display, fontSize: compact ? 15 : 17, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.1 }}>
-                {cardName(heroId)}
-              </div>
-              <ol style={{ margin: '6px 0 0', paddingLeft: 18, display: 'grid', gap: 2 }}>
-                {getBuild(heroId).map((id) => {
-                  const item = itemCard(id);
-                  return (
-                    <li key={id} style={{ fontSize: 12.5, lineHeight: 1.35 }}>
-                      {cardName(id)}
-                      {item && (
-                        <span style={{ ...text.label, fontSize: 9, letterSpacing: '0.14em', color: poster.inkDim, marginLeft: 6 }}>
-                          {item.slot} · T{item.tier}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
