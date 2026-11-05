@@ -46,8 +46,8 @@ SOURCES = (  # (card file, art dir, kind)
 )
 CDN = 'https://cdn.deadlock.wiki/'
 API = 'https://deadlock.wiki/api.php'
-UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/130.0 Safari/537.36')
+UA = ('deadlock-tcg/0.0.1 (non-commercial Deadlock fan card game; '
+      'scripts/fetch_item_art.py; +https://github.com/BrandeisPatrick/tcg)')
 QUALITY = 92        # lossy WebP; 200x200 icons land around 8-20 KB
 PAUSE = 0.3         # seconds between requests to the wiki
 TMP = os.environ.get('ART_TMP') or os.path.join(tempfile.gettempdir(), 'wikiart')
