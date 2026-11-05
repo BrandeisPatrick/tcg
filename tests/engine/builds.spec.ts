@@ -69,13 +69,14 @@ describe('default builds', () => {
     expect(BUILD_SIZE).toBe(6);
   });
 
-  it.each(HEROES.map((h) => [h.id, h] as const))('%s: six different known items — its signatures, then tiers 2, 2, 3, 4', (_id, hero) => {
+  it.each(HEROES.map((h) => [h.id, h] as const))('%s: six different known items — its signatures, then tiers 2, 2, 3 and 4 (or a tier-5 card)', (_id, hero) => {
     const build = defaultBuild(hero.id);
     expect(build).toHaveLength(BUILD_SIZE);
     for (const id of build) expect(itemCard(id), `${hero.id}: ${id}`).toBeDefined();
     expect(new Set(build).size, hero.id).toBe(build.length);
     expect(build.slice(0, 2)).toEqual(hero.signature);
-    expect(build.slice(2).map(tier), `${hero.id}: ${build.slice(2).join(', ')}`).toEqual([2, 2, 3, 4]);
+    const tiers = build.slice(2).map(tier);
+    expect(tiers, `${hero.id}: ${build.slice(2).join(', ')}`).toEqual([2, 2, 3, tiers[3] === 5 ? 5 : 4]);
   });
 
   it('defaultBuild hands out a copy, and nothing for an id that names no hero', () => {
