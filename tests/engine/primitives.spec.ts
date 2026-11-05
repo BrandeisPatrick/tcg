@@ -449,7 +449,7 @@ describe('Rooted', () => {
     const guarded = I.players['0'].active!;
     giveItem(I, guarded, 'reactive_barrier');
     addStatus(I, guarded, 'rooted', 1, 1);
-    expect(status(guarded, 'shield')).toMatchObject({ value: 3 });
+    expect(status(guarded, 'shield')).toMatchObject({ value: 4 });
   });
 
   it('ticks at the end of the afflicted turn: a stored 1 denies one turn, a stored 2 denies two', () => {
@@ -866,9 +866,9 @@ describe('attackAll', () => {
 
   it('fires worn on-attack gear once per swing', () => {
     const { G, atk, foes } = duel(TALLY);
-    giveItem(G, atk, 'toxic_bullets'); // Bleed 1 on whoever the bearer hits
+    giveItem(G, atk, 'toxic_bullets'); // Bleed 2 on whoever the bearer hits
     attackAll(G, atk);
-    for (const f of foes) expect(status(f, 'bleed'), f.cardId).toMatchObject({ value: 1 });
+    for (const f of foes) expect(status(f, 'bleed'), f.cardId).toMatchObject({ value: 2 });
   });
 
   it('reads each swing\'s power for its own target, and uses no Extra Attack', () => {

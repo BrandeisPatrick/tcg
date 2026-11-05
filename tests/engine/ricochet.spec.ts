@@ -118,7 +118,7 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     const { G, enemies } = lane('hero_dynamo', 'ricochet', 'toxic_bullets', 'slowing_bullets');
     makeAttack(G, '0');
     for (const c of enemies) {
-      expect(status(c, 'bleed'), c.cardId).toMatchObject({ value: 1 });
+      expect(status(c, 'bleed'), c.cardId).toMatchObject({ value: 2 });
       expect(status(c, 'rooted'), c.cardId).toBeDefined();
     }
   });
@@ -157,7 +157,7 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     const fx = G.fx.length;
     makeAttack(G, '0');
     expect(hitsSince(G, fx, 'tesla')).toHaveLength(1);
-    expect(hps(bench)).toEqual([17, 18, 18]);
+    expect(hps(bench)).toEqual([16, 18, 18]);
   });
 
   it("Haze's Fixation (from Level 3) grants its one extra swing, not one a bounce", () => {
@@ -204,20 +204,20 @@ describe('A bounce that knocks a hero out', () => {
 
   it("takes nothing more from the attack: the next swing's bounce and Tesla jump pass it by", () => {
     const { G, atk, bench } = lane('hero_dynamo', 'ricochet', 'tesla_bullets');
-    bench[0].hp = 2;
+    bench[0].hp = 3;
     grantExtraAttacks(atk, 1);
     const fx = G.fx.length;
     makeAttack(G, '0');
-    // Swing 1: Tesla 1 and the bounce 2 drop it. Swing 2: Tesla jumps to Kelvin.
+    // Swing 1: Tesla 2 and the bounce 2 drop it. Swing 2: Tesla jumps to Kelvin.
     const onIt = hitsSince(G, fx).filter((e) => e.iid === bench[0].iid);
     expect(onIt.map((e) => e.tag)).toEqual(['tesla', 'ricochet']);
     expect(onIt[1].ko).toBe(true);
     expect(hitsSince(G, fx, 'tesla').map((e) => e.iid)).toEqual([bench[0].iid, bench[1].iid]);
-    expect(hps(bench.slice(1))).toEqual([15, 16]);
+    expect(hps(bench.slice(1))).toEqual([14, 16]);
   });
 });
 
-describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
+describe('Split Shot: your Active gains Ricochet 1 this turn', () => {
   it('its swing bounces, and the end of the turn takes the Ricochet away', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
@@ -225,10 +225,10 @@ describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
     const bench = G.players['1'].bench.filter((b): b is CardInstance => !!b);
     for (const b of bench) { b.hpMax = 20; b.hp = 20; }
     useItem(G, '0', 'split_shot'); // Haze's ability of the turn; she may still attack
-    expect(status(haze, 'ricochet')).toMatchObject({ value: 2, duration: 1 });
+    expect(status(haze, 'ricochet')).toMatchObject({ value: 1, duration: 1 });
     expect(hps(bench)).toEqual([20, 20, 20]); // the item itself shoots nothing
     makeAttack(G, '0');
-    expect(hps(bench)).toEqual([16, 16, 16]); // Haze swings twice (Fixation)
+    expect(hps(bench)).toEqual([18, 18, 18]); // Haze swings twice (Fixation)
     endTurnEffects(G, '0');
     expect(status(haze, 'ricochet')).toBeUndefined();
   });
@@ -238,21 +238,21 @@ describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
     const haze = G.players['0'].active!;
     giveItem(G, haze, 'superior_duration');
     useItem(G, '0', 'split_shot');
-    expect(status(haze, 'ricochet')?.duration).toBe(2);
+    expect(status(haze, 'ricochet')?.duration).toBe(3); // 1, and Superior Duration's 2
     endTurnEffects(G, '0');
     expect(status(haze, 'ricochet')).toBeUndefined();
   });
 
-  it('adds to a worn Ricochet: 4 a bounce', () => {
+  it('adds to a worn Ricochet: 3 a bounce', () => {
     const { G, atk, bench } = lane('hero_dynamo', 'ricochet');
     useItem(G, '0', 'split_shot');
-    expect(ricochetPower(atk)).toBe(4);
+    expect(ricochetPower(atk)).toBe(3);
     makeAttack(G, '0');
-    expect(hps(bench)).toEqual([16, 16, 16]);
+    expect(hps(bench)).toEqual([17, 17, 17]);
   });
 
   it('the cards print the keyword, and the rule text bolds and explains it', () => {
-    expect(CARDS_BY_ID['split_shot']).toMatchObject({ slot: 'weapon', tier: 2, text: 'Your Active gains Ricochet 2 this turn.' });
+    expect(CARDS_BY_ID['split_shot']).toMatchObject({ slot: 'weapon', tier: 2, text: 'Your Active gains Ricochet 1 this turn.' });
     expect(CARDS_BY_ID['ricochet']).toMatchObject({ slot: 'weapon', tier: 4 });
     expect((CARDS_BY_ID['ricochet'] as { text: string }).text).toMatch(/^Ricochet 2: /);
     expect(statusOfKeyword('Ricochet', ' 2 this turn.')).toEqual({ id: 'ricochet', value: 2 });

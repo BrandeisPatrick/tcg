@@ -68,12 +68,12 @@ describe('Card types follow the active / passive rule', () => {
 });
 
 describe('Tuning', () => {
-  it('Crippling Headshot adds +1 Bullet Power to its bearer', () => {
+  it('Crippling Headshot adds +2 Bullet Power to its bearer', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const atk0 = haze.atkMod;
     giveItem(G, haze, 'crippling_headshot');
-    expect(haze.atkMod).toBe(atk0 + 1);
+    expect(haze.atkMod).toBe(atk0 + 2);
   });
 
   it("Warp Stone is a tier 3 Vitality item at its tier's price", () => {
@@ -161,12 +161,12 @@ describe('New active items', () => {
     expect(status(haze, 'rooted')).toBeDefined(); // the un-Root went in the 2026-11-03 rework
   });
 
-  it('Split Shot gives your Active Ricochet 2 this turn and shoots nothing itself (ricochet.spec has the bounce)', () => {
+  it('Split Shot gives your Active Ricochet 1 this turn and shoots nothing itself (ricochet.spec has the bounce)', () => {
     const G = freshReadyGame();
     hpPool(G, '1');
     const haze = G.players['0'].active!;
     useItem(G, '0', 'split_shot');
-    expect(status(haze, 'ricochet')).toMatchObject({ value: 2, duration: 1 });
+    expect(status(haze, 'ricochet')).toMatchObject({ value: 1, duration: 1 });
     for (const c of board(G, '1')) expect(c.hp, c.cardId).toBe(20);
   });
 
@@ -187,13 +187,13 @@ describe('New active items', () => {
     expect(haze.hp).toBe(1);
   });
 
-  it('Healing Nova heals every ally 3 and no enemy', () => {
+  it('Healing Nova heals every ally 5 and no enemy', () => {
     const G = freshReadyGame();
     hpPool(G, '0');
     hpPool(G, '1');
     for (const c of [...board(G, '0'), ...board(G, '1')]) c.hp = 15;
     useItem(G, '0', 'healing_nova');
-    for (const c of board(G, '0')) expect(c.hp, c.cardId).toBe(18);
+    for (const c of board(G, '0')) expect(c.hp, c.cardId).toBe(20);
     for (const c of board(G, '1')) expect(c.hp, c.cardId).toBe(15);
   });
 
@@ -245,11 +245,11 @@ describe('New active items', () => {
     }
   });
 
-  it('Heroic Aura gives every ally +1 Bullet Power and Bullet Resist 1 for 2 turns', () => {
+  it('Heroic Aura gives every ally +2 Bullet Power and Bullet Resist 1 for 2 turns', () => {
     const G = freshReadyGame();
     useItem(G, '0', 'heroic_aura');
     for (const c of board(G, '0')) {
-      expect(status(c, 'weapon_power'), c.cardId).toMatchObject({ value: 1, duration: 2 });
+      expect(status(c, 'weapon_power'), c.cardId).toMatchObject({ value: 2, duration: 2 });
       expect(status(c, 'bullet_resist'), c.cardId).toMatchObject({ value: 1, duration: 2 });
     }
     for (const c of board(G, '1')) expect(status(c, 'weapon_power'), c.cardId).toBeUndefined();

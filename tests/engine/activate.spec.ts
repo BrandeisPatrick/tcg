@@ -61,7 +61,7 @@ describe('an active item is its bearer\'s one ability of the turn', () => {
     const me = G.players['0'];
     const [haze, vindicta] = [me.active!, me.bench[0]!];
     const foe = G.players['1'].active!;
-    foe.hp = 3;
+    foe.hp = 2; // Cold Front's 2 fells it
     vindicta.hp -= 2;
     giveItem(G, vindicta, 'mystic_regeneration'); // after the bearer's skill / spell / ult damages an enemy: heal 1
     const [vinHp, hazeExp] = [vindicta.hp, haze.exp];

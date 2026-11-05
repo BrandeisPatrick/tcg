@@ -49,13 +49,13 @@ describe('Active items — tier 1', () => {
 });
 
 describe('Active items — tiers 2 and 3', () => {
-  it('Cold Front deals 4 spirit damage (+ caster Spirit) to enemy Active', () => {
+  it('Cold Front deals 2 spirit damage (+ caster Spirit) to enemy Active', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hpMax = 30; target.hp = 30;
     const before = target.hp;
     ABILITIES_BY_ID['eff_cold_front'].run(G, { movingPlayer: '0' }, { target });
-    expect(before - target.hp).toBe(4);
+    expect(before - target.hp).toBe(2);
   });
 
   it('Decay applies Bleed 3 for 2 turns (6 pure damage total over two ticks)', () => {

@@ -180,7 +180,7 @@ describe('New active items', () => {
     expect(blocked(G, '0', skill)).toBeNull();
   });
 
-  it('Dispel Magic cleanses, shields 2, and heals 3 only when it removed something', () => {
+  it('Dispel Magic cleanses, shields 4, and heals 4 only when it removed something', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     haze.hpMax = 10; haze.hp = 5;
@@ -190,7 +190,7 @@ describe('New active items', () => {
     // Haze has used its ability this turn: a bench ally wears the second.
     useItem(G, '0', 'debuff_remover', haze.iid, G.players['0'].bench[0]!);
     expect(status(haze, 'bleed')).toBeUndefined();
-    expect(haze.hp).toBe(8);
+    expect(haze.hp).toBe(9);
   });
 });
 

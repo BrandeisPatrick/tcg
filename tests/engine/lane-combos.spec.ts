@@ -189,20 +189,20 @@ describe('The Retreat\'s price', () => {
     const { G, me, haze } = built(10);
     giveItem(G, haze, 'superior_duration');
     useItem(G, '0', 'fleetfoot');
-    expect(status(haze, 'swift')?.duration).toBe(2);
+    expect(status(haze, 'swift')?.duration).toBe(3); // 1, and Superior Duration's 2
     clearTurnFlags(me);
     expect(status(haze, 'swift')).toBeUndefined();
   });
 });
 
-describe('Kinetic Dash: +1 Bullet Power for the hero that steps in', () => {
+describe('Kinetic Dash: +3 Bullet Power for the hero that steps in', () => {
   it('fires on a Retreat', () => {
     const { G, shiv, abrams } = built(2);
     giveItem(G, shiv, 'kinetic_dash');
     const bare = attackPower(shiv, abrams).total;
     expect(retreat(G, 2)).not.toBe(INVALID);
-    expect(status(shiv, 'weapon_power')).toMatchObject({ value: 1, duration: 1 });
-    expect(attackPower(shiv, abrams).total).toBe(bare + 1);
+    expect(status(shiv, 'weapon_power')).toMatchObject({ value: 3, duration: 1 });
+    expect(attackPower(shiv, abrams).total).toBe(bare + 3);
   });
 
   it('fires on an item\'s swap (Warp Stone, Majestic Leap)', () => {
@@ -211,7 +211,7 @@ describe('Kinetic Dash: +1 Bullet Power for the hero that steps in', () => {
       giveItem(G, shiv, 'kinetic_dash');
       useItem(G, '0', card, shiv.iid);
       expect(G.players['0'].active!.iid, card).toBe(shiv.iid);
-      expect(status(shiv, 'weapon_power'), card).toMatchObject({ value: 1, duration: 1 });
+      expect(status(shiv, 'weapon_power'), card).toMatchObject({ value: 3, duration: 1 });
     }
   });
 

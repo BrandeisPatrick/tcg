@@ -23,7 +23,7 @@ describe('the tooltip reads the item as Deadlock lays it out', () => {
   it('an effect keeps its words, with its scaling marks for RuleText', () => {
     expect(statLines('cold_front')).toEqual([]);
     expect(effectText('cold_front')).toBe(itemCard('cold_front')!.text);
-    expect(effectText('cold_front')).toContain('{sp:4}');
+    expect(effectText('cold_front')).toContain('{sp:2}');
   });
 
   it('every item with a stat bonus prints a line for each stat, and no stat sentence twice', () => {

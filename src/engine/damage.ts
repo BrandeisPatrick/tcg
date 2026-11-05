@@ -123,9 +123,11 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
       fireTriggers(G, cast.source, 'onBearerSkillDamage', { reaction: true, target, amount: dmg });
     }
     // A Ricochet bounce is an attack frame marked `bounce`: the gear hears it,
-    // so what belongs to the swing alone (a heal, a chain) can sit it out.
+    // so what belongs to the swing alone (a heal, a chain) can sit it out. The
+    // gear is told what the hit dealt (`amount`), so a headshot item can tell a
+    // hit that found its target at full HP (Weakening Headshot, Headhunter).
     if (cast.kind === 'attack') {
-      fireTriggers(G, cast.source, 'onAttack', { reaction: true, target, params: cast.bounce ? { bounce: true } : undefined });
+      fireTriggers(G, cast.source, 'onAttack', { reaction: true, target, amount: dmg, params: cast.bounce ? { bounce: true } : undefined });
     }
   }
 

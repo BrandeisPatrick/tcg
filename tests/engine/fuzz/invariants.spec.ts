@@ -21,8 +21,17 @@ import { formatList, fuzzGames } from './oracle';
 
 const GAMES = fuzzGames(80);
 
-/** Violations the engine has today, each with its reason (none: every finding is fixed). */
-const KNOWN: Known[] = [];
+/** Violations the engine has today, each with its reason. */
+const KNOWN: Known[] = [
+  {
+    id: 'revive-spend@endTurn',
+    why: 'An oracle gap, not an engine fault: the revive-spend count models a revive but not the Rejuvenator lapsing in the same move. '
+      + 'An End step that both ends the match (no hand-over, so the check runs) and closes the credits\' last round revives a hero, '
+      + 'then lapses the rest, as the rules say; the oracle reads the lapse as a second credit spent. '
+      + 'Seen once the catalogue grew to the full shop (2026-11-05): seed 40155, spotlight-randomLegal.',
+    when: (h) => /revive credits \d+ -> 0 after \d+ revive/.test(h.message),
+  },
+];
 
 describe('invariants hold in every state of seeded games', () => {
   MIXES.forEach((mix, mixIndex) => {

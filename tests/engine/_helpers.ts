@@ -31,8 +31,12 @@ export const TEST_ROSTERS: Record<PlayerID, CardId[]> = {
   '1': ['hero_abrams', 'hero_dynamo', 'hero_kelvin', 'hero_seven'],
 };
 
-/** The seed the test games draw their market from. */
-export const TEST_SEED = 1;
+/** The seed the test games draw their market from: its random slice sells
+ *  what the tests buy beside the rosters' signatures (Titanic Magazine,
+ *  Improved Spirit, Heroic Aura, Alchemical Fire, Boundless Spirit) and Haze's
+ *  build item Intensifying Magazine, so no build of the rosters asks for a
+ *  stand-in. Seed 1 did until the catalogue grew to the full shop (2026-11-05). */
+export const TEST_SEED = 120238;
 
 /** The structure HP `pid` has standing (Guardian + Walker + Patron). */
 export function structuresOf(G: GameState, pid: PlayerID): number {

@@ -55,7 +55,7 @@ describe('Curse', () => {
 });
 
 describe('Debuff Remover', () => {
-  it('cleanses debuffs (incl. CC) and grants Shield 2', () => {
+  it('cleanses debuffs (incl. CC) and grants Shield 4', () => {
     const G = freshReadyGame();
     const t = G.players['0'].active!;
     addStatus(G, t, 'bleed', 2, 3);
@@ -63,7 +63,7 @@ describe('Debuff Remover', () => {
     run('eff_debuff_remover', G, { target: t });
     expect(t.statuses.find((s) => s.id === 'bleed')).toBeUndefined();
     expect(t.statuses.find((s) => s.id === 'stun')).toBeUndefined();
-    expect(t.statuses.find((s) => s.id === 'shield')?.value).toBe(2);
+    expect(t.statuses.find((s) => s.id === 'shield')?.value).toBe(4);
   });
 });
 
