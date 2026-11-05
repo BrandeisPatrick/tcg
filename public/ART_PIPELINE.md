@@ -67,6 +67,31 @@ HERO_MAP = {
 Hero portraits are already pulled and live in `public/heroes/`. No re-run needed
 unless a new hero is added.
 
+## The map's icons
+
+The structures strip on each side's rule, the Mid-Boss's pit and the
+Rejuvenator tag print the game's own pictures, from the Deadlock wiki like the
+item art, into `public/art/map_<name>.png`:
+
+| File | Wiki file |
+|---|---|
+| `map_guardian.png` | `Guardian.png` (the Lane Guardian; `Guardian Icon.png` redirects to it) |
+| `map_walker.png` | `Walker Icon.png` |
+| `map_patron.png` | `Patron.png` (`Patron Icon.png` redirects to it) |
+| `map_mid_boss.png` | `Mid-Boss model.png` (the Midboss page's picture: the wiki has no Mid-Boss icon) |
+| `map_rejuvenator.png` | `Rejuvenator.png` (the buff's icon) |
+
+```bash
+python3 scripts/art/fetch_map_icons.py              # all five
+python3 scripts/art/fetch_map_icons.py walker       # just these
+```
+
+The script (stdlib only) asks the CDN first and the MediaWiki API second, with a
+User-Agent naming this project, and downscales each file to 128 px with ffmpeg
+(Lanczos; any ffmpeg will do, the files stay PNG). The board draws them in
+`src/ui/board/MapIcon.tsx`, the art on the graphite ground inside its owner's
+keyline. Credits: `public/art/CREDITS.md` and `src/art/credits.ts`.
+
 ## The backdrop
 
 Every sheet floats on `public/art/menu_scene_ground.png`: the night scene

@@ -43,6 +43,16 @@ from their "Deadlock Graphical Library" collection.
   game's own HUD icons, fetched from the Deadlock wiki's asset mirror
   (`https://cdn.deadlock.wiki/<File_Name>.png`) and used as they are: white
   glyphs on transparency, painted in the chip's colour through an SVG filter.
+- The map icons (`map_guardian.png`, `map_walker.png`, `map_patron.png`,
+  `map_mid_boss.png`, `map_rejuvenator.png` in this folder) are the game's own
+  pictures from the same mirror: the wiki's `Guardian.png` (the Lane Guardian;
+  `Guardian Icon.png` redirects to it), `Walker Icon.png`, `Patron.png`
+  (`Patron Icon.png` redirects to it), `Mid-Boss model.png` (the Midboss page's
+  picture; the wiki has no Mid-Boss icon) and `Rejuvenator.png` (the buff's
+  icon), downscaled to 128 px. They print on each side's structures strip, the
+  Mid-Boss's pit, the Rejuvenator tag and the match-end tags.
+  `scripts/art/fetch_map_icons.py` fetches them again (see
+  `public/ART_PIPELINE.md`).
 
 ## Menu card bills
 
