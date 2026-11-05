@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import type { GameState, PlayerID, CardInstance } from '@/engine/types';
 import { cardName } from '@/cards';
@@ -10,6 +11,7 @@ import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { useViewport } from '../hooks/useViewport';
+import { MapIcon } from './MapIcon';
 
 /**
  * Full-screen match epilogue, printed as one cream sheet floating on the
@@ -67,11 +69,15 @@ export function MatchEndScreen({
   const opTeam = [opPs.active, ...opPs.bench].filter(Boolean) as CardInstance[];
 
   const trackOf = (ps: typeof myPs) => ps.structures.reduce((n, s) => n + s.max, 0);
-  const stats: Array<{ label: string; value: string }> = [
+  // A side's track as its icons, a fallen one greyed (the strip's own look).
+  const trackIcons = (ps: typeof myPs, ink: string) => ps.structures.filter((s) => s.max > 0).map((s) => (
+    <MapIcon key={s.kind} kind={s.kind} size={16} ink={s.hp > 0 ? ink : poster.creamFaint} grey={s.hp <= 0} />
+  ));
+  const stats: Array<{ label: string; value: string; icons?: ReactNode }> = [
     { label: 'Turns', value: String(G.turnNumber) },
-    { label: 'Your structures', value: `${structureHp(myPs)}/${trackOf(myPs)}` },
-    { label: 'Rival structures', value: `${structureHp(opPs)}/${trackOf(opPs)}` },
-    { label: 'Mid-Boss', value: `${G.record[me].bossKills}–${G.record[opp].bossKills}` },
+    { label: 'Your structures', value: `${structureHp(myPs)}/${trackOf(myPs)}`, icons: trackIcons(myPs, poster.you) },
+    { label: 'Rival structures', value: `${structureHp(opPs)}/${trackOf(opPs)}`, icons: trackIcons(opPs, poster.rival) },
+    { label: 'Mid-Boss', value: `${G.record[me].bossKills}–${G.record[opp].bossKills}`, icons: <MapIcon kind="mid_boss" size={16} zoom={1.2} /> },
     { label: 'Heroes lost', value: `${myTeam.filter(fallen).length}–${opTeam.filter(fallen).length}` },
   ];
 
@@ -194,10 +200,13 @@ export function MatchEndScreen({
                 letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.creamDim,
                 lineHeight: 1,
               }}>{s.label}</span>
-              <span style={{
-                fontFamily: fonts.display, fontSize: 18, lineHeight: 1,
-                fontVariantNumeric: 'tabular-nums', color: poster.paper,
-              }}>{s.value}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {s.icons && <span style={{ display: 'inline-flex', gap: 3 }}>{s.icons}</span>}
+                <span style={{
+                  fontFamily: fonts.display, fontSize: 18, lineHeight: 1,
+                  fontVariantNumeric: 'tabular-nums', color: poster.paper,
+                }}>{s.value}</span>
+              </span>
             </div>
           ))}
         </motion.div>

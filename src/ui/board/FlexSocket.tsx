@@ -3,30 +3,26 @@ import { poster } from '../poster';
 /**
  * The flex slot on a hero tile: once its side has felled the enemy Walker
  * every hero may wear a fourth item, and until it does the fourth socket sits
- * empty beside its worn chips — a dashed gold square the size of a chip.
+ * empty beside its worn chips — the shop inventory's empty slot (a dashed
+ * square), a chip's size and corner, drawn to read over the portrait: a cream
+ * dash on a film of ink, lifted off the art by the chips' own drop.
  */
 export function FlexSocket({ size }: { size: number }) {
-  const dim = size;
   return (
-    <div
+    <span
       role="img"
       aria-label="Flex slot: room for a fourth item"
       title="Flex slot — the enemy Walker fell: room for a fourth item"
       style={{
-        width: dim, height: dim,
+        display: 'block',
+        width: size, height: size,
         boxSizing: 'border-box',
-        borderRadius: 4,
-        border: `1.5px dashed ${poster.you}`,
-        background: 'rgba(217, 182, 74, 0.18)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: poster.you,
-        fontSize: Math.round(dim * 0.55),
-        fontWeight: 800,
-        lineHeight: 1,
+        borderRadius: Math.max(3, Math.round(size * 0.18)),
+        border: `1.5px dashed ${poster.creamDim}`,
+        background: 'rgba(23, 20, 16, 0.55)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
         pointerEvents: 'none',
       }}
-    >
-      +
-    </div>
+    />
   );
 }

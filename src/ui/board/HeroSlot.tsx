@@ -689,18 +689,21 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
             fill={poster.cream} stroke={poster.ink} strokeWidth="2.5" strokeLinejoin="round" />
         </svg>
       </div>
-      {/* Countdown sticker — RESPAWN (3), the poster's red action sticker */}
+      {/* Countdown sticker — RESPAWN (3), the poster's red action sticker;
+          on the last turn it turns the wash's green with ink type (the
+          shop's green tag), and says the hero is back next turn. */}
       <div style={{
         position: 'absolute',
         bottom: compact ? 10 : 18,
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: compact ? '3px 8px' : '4px 10px',
-        background: poster.red,
-        color: poster.paper,
+        background: isLast ? poster.green : poster.red,
+        color: isLast ? poster.ink : poster.paper,
         borderRadius: 3,
+        boxShadow: '0 3px 8px rgba(0, 0, 0, 0.35)',
         fontFamily: fonts.display,
         fontSize: compact ? 9 : 10,
-        letterSpacing: '0.24em',
+        letterSpacing: '0.2em',
         textTransform: 'uppercase',
         lineHeight: 1,
         whiteSpace: 'nowrap',

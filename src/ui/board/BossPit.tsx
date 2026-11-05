@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, animate, motion, type AnimationPlaybackControls } from 'framer-motion';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { BOSS_RESPAWN_ROUNDS, BOSS_RETALIATION, BOSS_SOULS, REVIVE_CREDITS, REVIVE_ROUNDS } from '@/engine/constants';
@@ -10,17 +10,22 @@ import type { ExplainContent } from '../explain/content';
 import { FX_INK } from '../effects/fx/fxCatalog';
 import { fonts, spring, text } from '../tokens';
 import { poster } from '../poster';
+import { MapIcon } from './MapIcon';
 import type { ArmedPlay } from '../helpers';
 
 /**
  * The pit between the two Actives (ActiveDuel's middle column), where the
- * Mid-Boss stands from round 4: a small plate with its HP and each side's
- * damage tally — the side with more takes it when it falls. While your attack
- * is armed it lights as a target like a hero, and a tap on it makes the attack
- * at it; otherwise a tap explains it. The combat choreographer and the FX
- * layer find it by its iid (`registerSlotRef`), so a swing at it is walked
- * like any other, and its blow back at the End step leaves from it. With no
- * boss up the pit says the round it rises in.
+ * Mid-Boss stands from round 4. Its plate is the shop's graphite (the Income
+ * plate's: an edge keyline, cream type, the stencil numerals): the game's own
+ * picture of the Mid-Boss, its HP as pips in the HP ink, and each side's
+ * damage as a tag in its ink — the side with more takes it when it falls, and
+ * its tag is filled while it leads. While your attack is armed the plate lights
+ * as a target like a hero, and a tap on it makes the attack at it; otherwise a
+ * tap explains it. The combat choreographer and the FX layer find it by its
+ * iid (`registerSlotRef`), so a swing at it is walked like any other, and its
+ * blow back at the End step leaves from it. With no boss up the pit is an
+ * empty slot on the paper, the Mid-Boss greyed in it, naming the round it
+ * rises in (or returns in, once one has been taken).
  */
 export function BossPit({ G, me, pending, onTapHero, isTargetable, registerSlotRef, isMobile }: {
   G: GameState;
@@ -32,6 +37,7 @@ export function BossPit({ G, me, pending, onTapHero, isTargetable, registerSlotR
   isMobile: boolean;
 }) {
   const boss = G.draft ? null : standingBoss(G);
+  const width = isMobile ? 112 : 166;
   return (
     <div style={{
       position: 'absolute', top: isMobile ? 2 : 8, left: 0, right: 0,
@@ -47,7 +53,7 @@ export function BossPit({ G, me, pending, onTapHero, isTargetable, registerSlotR
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 1.25, filter: 'brightness(2)' }}
             transition={spring.bouncy}
-            style={{ pointerEvents: 'auto', width: isMobile ? '100%' : 150, maxWidth: isMobile ? 112 : 150 }}
+            style={{ pointerEvents: 'auto', width: '100%', maxWidth: width }}
           >
             <BossPlate
               G={G} me={me} boss={boss} pending={pending} onTapHero={onTapHero}
@@ -60,22 +66,9 @@ export function BossPit({ G, me, pending, onTapHero, isTargetable, registerSlotR
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            role="img"
-            aria-label={`Mid-Boss — rises in round ${G.bossRespawnRound}`}
-            style={{
-              ...text.label,
-              fontSize: isMobile ? 8 : 9.5,
-              letterSpacing: '0.16em',
-              color: poster.inkDim,
-              textAlign: 'center',
-              lineHeight: 1.3,
-              padding: '2px 6px',
-              border: `1px dashed ${poster.inkFaint}`,
-              borderRadius: 4,
-              background: 'rgba(242, 230, 203, 0.6)',
-            }}
+            style={{ width: '100%', maxWidth: width }}
           >
-            Mid-Boss<br />round {G.bossRespawnRound}
+            <EmptyPit round={G.bossRespawnRound} taken={G.record['0'].bossKills + G.record['1'].bossKills > 0} isMobile={isMobile} />
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -126,9 +119,10 @@ function BossPlate({ G, me, boss, pending, onTapHero, targetable, registerSlotRe
   // Its blow at the End step: the plate lunges as the hit leaves it.
   const struck = useStrike(G, boss.iid);
 
-  const frac = Math.max(0, Math.min(1, boss.hp / Math.max(1, boss.hpMax)));
-  const label = `Mid-Boss — ${boss.hp} of ${boss.hpMax} HP; damage: you ${G.bossDamage[me]}, rival ${G.bossDamage[rival]}`;
-  const border = targetable ? poster.target : poster.ink;
+  const mine = G.bossDamage[me];
+  const theirs = G.bossDamage[rival];
+  const label = `Mid-Boss — ${boss.hp} of ${boss.hpMax} HP; damage: you ${mine}, rival ${theirs}`;
+  const pip = isMobile ? { w: 5.5, h: 7, gap: 1.5 } : { w: 7.5, h: 9, gap: 2 };
   return (
     <div data-fx-rest style={{ width: '100%' }}>
       <Explain content={explainBoss(boss)} passTaps={armed} style={{ display: 'block', width: '100%' }}>
@@ -140,42 +134,102 @@ function BossPlate({ G, me, boss, pending, onTapHero, targetable, registerSlotRe
           animate={struck ? { y: [0, 6, 0], scale: [1, 1.06, 1] } : { y: 0, scale: 1 }}
           transition={{ duration: 0.4 }}
           style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: isMobile ? 2 : 4,
+            display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: isMobile ? 4 : 6,
             width: '100%',
-            padding: isMobile ? '3px 5px 4px' : '6px 8px 7px',
-            borderRadius: 6,
-            border: `2px solid ${border}`,
-            boxShadow: targetable ? `inset 0 0 0 2px ${poster.target}, 0 6px 14px rgba(0,0,0,0.3)` : '0 6px 14px rgba(0,0,0,0.3)',
+            padding: isMobile ? '4px 5px 5px' : '6px 8px 8px',
+            borderRadius: 8,
+            // Lit as a target like a hero tile: the green frame.
+            border: `${targetable ? 2 : 1.5}px solid ${targetable ? poster.target : poster.edge}`,
+            boxShadow: targetable
+              ? `inset 0 0 0 1px ${poster.target}, 0 0 14px 2px rgba(98, 196, 98, 0.45), 0 8px 18px rgba(0, 0, 0, 0.35)`
+              : '0 8px 18px rgba(0, 0, 0, 0.35)',
             background: poster.frame,
             color: poster.cream,
             cursor: armed ? 'crosshair' : 'help',
             font: 'inherit',
+            textAlign: 'left',
           }}
         >
-          <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 4 }}>
-            <span style={{
-              fontFamily: fonts.display, fontSize: isMobile ? 9.5 : 12, letterSpacing: '0.12em',
-              textTransform: 'uppercase', whiteSpace: 'nowrap',
-            }}>Mid-Boss</span>
-            <span style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: isMobile ? 10 : 12, fontVariantNumeric: 'tabular-nums' }}>
-              {boss.hp}<span style={{ opacity: 0.55, fontWeight: 700 }}>/{boss.hpMax}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 5 : 8 }}>
+            <MapIcon kind="mid_boss" size={isMobile ? 26 : 34} zoom={1.2} />
+            <span style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 3 : 4, minWidth: 0, flex: 1 }}>
+              {/* Its name and HP — side by side on a desktop, stacked in a phone's narrow pit. */}
+              <span style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'baseline', justifyContent: 'space-between', gap: isMobile ? 2 : 4 }}>
+                <span style={{ ...text.label, fontSize: isMobile ? 7.5 : 9, letterSpacing: '0.18em', color: poster.creamDim, whiteSpace: 'nowrap' }}>Mid-Boss</span>
+                <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 11 : 14, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: poster.cream, whiteSpace: 'nowrap' }}>
+                  {boss.hp}<span style={{ color: poster.creamFaint }}>/{boss.hpMax}</span>
+                </span>
+              </span>
+              {/* Its HP — a pip a point, emptied as the sides chip it down. */}
+              <span aria-hidden style={{ display: 'flex', gap: pip.gap }}>
+                {Array.from({ length: boss.hpMax }, (_, k) => {
+                  const up = k < boss.hp;
+                  return (
+                    <span key={k} style={{
+                      flex: `0 1 ${pip.w}px`, minWidth: 2, height: pip.h, borderRadius: 1, boxSizing: 'border-box',
+                      background: up ? poster.stat.hp : 'transparent',
+                      border: `1px solid ${up ? poster.stat.hp : poster.creamFaint}`,
+                      transition: 'background-color 200ms ease, border-color 200ms ease',
+                    }} />
+                  );
+                })}
+              </span>
             </span>
           </span>
-          {/* Its HP — the bar empties as the sides chip it down. */}
-          <span aria-hidden style={{ position: 'relative', height: isMobile ? 4 : 5, background: poster.edge, borderRadius: 2, overflow: 'hidden' }}>
-            <motion.span
-              animate={{ width: `${frac * 100}%` }}
-              transition={{ duration: 0.3 }}
-              style={{ position: 'absolute', top: 0, bottom: 0, left: 0, background: FX_INK.pure }}
-            />
-          </span>
-          {/* Each side's damage: the side with more takes it. */}
-          <span style={{ display: 'flex', justifyContent: 'space-between', fontFamily: fonts.ui, fontWeight: 700, fontSize: isMobile ? 8.5 : 10, fontVariantNumeric: 'tabular-nums' }}>
-            <span style={{ color: poster.you }} title="Your damage to it">You {G.bossDamage[me]}</span>
-            <span style={{ color: poster.rival }} title="The rival's damage to it">Rival {G.bossDamage[rival]}</span>
+          {/* Each side's damage: the side with more takes it — its tag filled. */}
+          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 4 }}>
+            <Tally ink={poster.you} leads={mine > theirs} isMobile={isMobile} title="Your damage to it">You {mine}</Tally>
+            <Tally ink={poster.rival} leads={theirs > mine} isMobile={isMobile} title="The rival's damage to it">Rival {theirs}</Tally>
           </span>
         </motion.button>
       </Explain>
+    </div>
+  );
+}
+
+/** A side's damage tag: the shop's pill in the side's ink, filled while it leads. */
+function Tally({ ink, leads, isMobile, title, children }: { ink: string; leads: boolean; isMobile: boolean; title: string; children: ReactNode }) {
+  return (
+    <span title={title} style={{
+      ...text.label,
+      fontSize: isMobile ? 7 : 8.5,
+      letterSpacing: '0.1em',
+      padding: isMobile ? '2px 5px' : '2px 7px',
+      borderRadius: 999,
+      border: `1.5px solid ${ink}`,
+      background: leads ? ink : 'transparent',
+      color: leads ? poster.ink : ink,
+      whiteSpace: 'nowrap',
+      fontVariantNumeric: 'tabular-nums',
+      lineHeight: 1.1,
+    }}>{children}</span>
+  );
+}
+
+/** No boss in the pit: an empty slot on the paper (the board's own dashed
+ *  outline), the Mid-Boss greyed in it and the round it rises — or, once one
+ *  has been taken, returns — in. */
+function EmptyPit({ round, taken, isMobile }: { round: number; taken: boolean; isMobile: boolean }) {
+  const verb = taken ? 'returns' : 'rises';
+  return (
+    <div
+      role="img"
+      aria-label={`Mid-Boss — ${verb} in round ${round}`}
+      title={`The Mid-Boss ${verb} in round ${round}`}
+      style={{
+        display: 'flex', alignItems: 'center', gap: isMobile ? 5 : 8,
+        padding: isMobile ? '4px 5px' : '6px 8px',
+        borderRadius: 8,
+        border: `1.5px dashed ${poster.inkFaint}`,
+        background: 'rgba(242, 230, 203, 0.6)',
+      }}
+    >
+      <MapIcon kind="mid_boss" size={isMobile ? 22 : 30} zoom={1.2} grey ink={poster.inkFaint} />
+      <span style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 2 : 3, minWidth: 0, whiteSpace: 'nowrap' }}>
+        <span style={{ ...text.label, fontSize: isMobile ? 7.5 : 9, letterSpacing: '0.18em', color: poster.inkDim }}>Mid-Boss</span>
+        <span style={{ ...text.label, fontSize: isMobile ? 7 : 8.5, letterSpacing: '0.12em', color: poster.inkDim }}>{verb} in</span>
+        <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 10 : 12.5, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1, color: poster.ink, fontVariantNumeric: 'tabular-nums' }}>Round {round}</span>
+      </span>
     </div>
   );
 }

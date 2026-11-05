@@ -59,23 +59,25 @@ export function PatronPlaque({
         pointerEvents: 'none',
       }}
     >
-      {/* Patron — a dot and the name, in the owner's ink. */}
-      <span style={{
+      {/* Patron — a dot and the name, in the owner's ink. A phone keeps the
+          dot alone (the rule's name says the rest), so its structures have
+          the room to read at 390 px. */}
+      <span title={label} style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         ...text.label,
-        fontSize: isMobile ? 9 : 10.5,
+        fontSize: 10.5,
         letterSpacing: '0.18em',
         color: accent,
         whiteSpace: 'nowrap',
         flexShrink: 0,
       }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0 }} />
-        {label}
+        {!isMobile && label}
       </span>
 
-      {/* The structures — Guardian · Walker · Patron as pips, taking the
-          slack so the two rows line up; what an incoming knockout would push
-          off is hatched. Then the Rejuvenator, while the side holds one. */}
+      {/* The structures — Guardian · Walker · Patron, each its icon and its
+          HP pips, front first; what an incoming knockout would push off is
+          hatched. Then the Rejuvenator, while the side holds one. */}
       <StructuresStrip ps={ps} label={label} accent={accent} projected={projectedDamage} isMobile={isMobile} />
       <RejuvenatorMark ps={ps} isMobile={isMobile} />
 
