@@ -52,6 +52,7 @@ const OFL = 'SIL Open Font License 1.1, bundled through Fontsource.';
 const STEAM: CreditLink = { label: 'Deadlock on Steam', href: 'https://store.steampowered.com/app/1422450/' };
 const DL_API: CreditLink = { label: 'deadlock-api.com', href: 'https://deadlock-api.com/' };
 const DL_BUCKET: CreditLink = { label: 'Assets API', href: 'https://assets.deadlock-api.com/' };
+const DL_WIKI_ITEMS: CreditLink = { label: 'Deadlock wiki', href: 'https://deadlock.wiki/Items' };
 const FONTSOURCE: CreditLink = { label: 'Fontsource', href: 'https://fontsource.org/' };
 const EVSTRATIY_POST: CreditLink = { label: 'ArtStation post', href: 'https://www.artstation.com/artwork/kN9Bax' };
 const EVSTRATIY: CreditLink = { label: 'Evgeniy Evstratiy', href: 'https://www.artstation.com/evstratiyart' };
@@ -138,9 +139,9 @@ export const ART_CREDITS: CreditGroup[] = [
       {
         id: 'items',
         title: 'Spell and item art',
-        by: 'The game\'s shop art for each item, through the Deadlock Assets API.',
+        by: 'The game\'s shop art for each item, from the Deadlock wiki\'s asset mirror; the first set came through the Deadlock Assets API.',
         where: 'The picture on every spell and equipment card, and the round icons on the table.',
-        links: [DL_API, DL_BUCKET],
+        links: [DL_WIKI_ITEMS, DL_API, DL_BUCKET],
         terms: VALVE,
         thumb: { kind: 'image', src: `${BASE}spells/cold_front.webp`, position: '50% 40%' },
       },

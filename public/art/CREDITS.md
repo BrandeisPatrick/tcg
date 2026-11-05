@@ -30,10 +30,16 @@ from their "Deadlock Graphical Library" collection.
   kept in `scripts/art/hero_sources/`; `scripts/crop_heroes.py` cuts the
   portraits from them. Rem has no updated select screen, so her portrait comes
   from the asset mirror below.
-- The small hero icons (`_mm.webp`, `_sm.webp`) and everything in
-  `public/spells/` and `public/items/` are the game's own icons and shop art,
+- The small hero icons (`_mm.webp`, `_sm.webp`) are the game's own icons,
   pulled from the community asset bucket at https://deadlock-api.com/
-  (https://assets.deadlock-api.com/). See `public/ART_PIPELINE.md`.
+  (https://assets.deadlock-api.com/).
+- Everything in `public/spells/` and `public/items/` is the game's own shop art
+  for each item, one icon per card: the wiki's 200×200 shop icon from the
+  Deadlock wiki's asset mirror (`https://cdn.deadlock.wiki/<Item_Name>.png`),
+  encoded to WebP by `scripts/fetch_item_art.py`. The first set came through the
+  asset bucket above; the 41 items added on 2026-11-05 (Monster Rounds through
+  Spirit Burn, docs/card-design.md) came from the wiki. See
+  `public/ART_PIPELINE.md`.
 - The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,
   Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, Fixation, the armours
   and their reduction icons, Barrier, Healing, the damage heart, Fire Rate,
