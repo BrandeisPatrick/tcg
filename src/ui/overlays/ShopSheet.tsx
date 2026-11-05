@@ -193,8 +193,10 @@ export function ShopSheet({ G, me, onMove, onDone, onHide, onPreview, bottomInse
     <div style={{
       position: 'fixed', left: 0, right: rightInset, top: 0, bottom: bottomInset, zIndex: 88,
       display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center',
-      padding: isMobile ? 6 : 16,
       paddingTop: SYSTEM_GEAR_CLEARANCE,
+      paddingRight: isMobile ? 6 : 16,
+      paddingBottom: isMobile ? 6 : 16,
+      paddingLeft: isMobile ? 6 : 16,
       pointerEvents: 'none',
     }}>
       <motion.div
