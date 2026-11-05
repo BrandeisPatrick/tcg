@@ -31,7 +31,7 @@ import type { CardId, DraftState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, cardName, HEROES } from '@/cards';
 import { heroAbilities, otherPlayer } from '@/engine/query';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
-import { heroArtFocus } from '@/cards/art/heroArt';
+import { heroPortraitArt } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
@@ -966,6 +966,7 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
 }) {
   const color = tone === 'gold' ? lobby.gold : lobby.green;
   const name = cardName(heroId);
+  const art = heroPortraitArt(heroId);
   return (
     <motion.div
       layout
@@ -987,12 +988,12 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.img
           key={heroId}
-          src={`${HERO_IMG_BASE}${heroId}_splash.webp`}
+          src={art.src}
           onError={(e) => {
             const img = e.currentTarget;
-            if (!img.dataset.fallback) {
+            if (art.fallback && !img.dataset.fallback) {
               img.dataset.fallback = '1';
-              img.src = `${HERO_IMG_BASE}${heroId}_card.webp`;
+              img.src = art.fallback;
             }
           }}
           alt=""
@@ -1007,7 +1008,7 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            objectPosition: heroArtFocus(heroId, 'splash', '50% 20%'),
+            objectPosition: art.objectPosition,
             userSelect: 'none',
           }}
         />

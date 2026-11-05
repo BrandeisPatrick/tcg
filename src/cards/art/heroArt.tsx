@@ -32,6 +32,28 @@ export function heroArtFocus(cardId: string, kind: 'splash' | 'card', fallback: 
   return HERO_ART_FOCUS[cardId]?.[kind] ?? fallback;
 }
 
+/**
+ * Heroes whose splash cannot be cover-cropped into a 5:7 box at all: Mo &
+ * Krill's is a wide landscape of a mole the size of a truck, so any portrait
+ * slice shows Krill beside a dark void or Mo's snout alone. Their card art
+ * frames the pair, so a portrait box draws that instead of the splash.
+ */
+const PORTRAIT_FROM_CARD_ART = new Set(['hero_mo_krill']);
+
+/** The art for a 5:7 portrait box (the draft's team cards): the splash with
+ *  its focus and the card art as the fallback, or the card art outright where
+ *  the splash's composition cannot be cropped to a portrait. */
+export function heroPortraitArt(cardId: string): { src: string; fallback: string | null; objectPosition: string } {
+  if (PORTRAIT_FROM_CARD_ART.has(cardId)) {
+    return { src: imageUrl(cardId, 'card'), fallback: null, objectPosition: heroArtFocus(cardId, 'card', '50% 14%') };
+  }
+  return {
+    src: `${HERO_IMG_BASE}${cardId}_splash.webp`,
+    fallback: imageUrl(cardId, 'card'),
+    objectPosition: heroArtFocus(cardId, 'splash', '50% 20%'),
+  };
+}
+
 export function HeroPortrait({ cardId }: PortraitProps) {
   const id = getHeroIdentity(cardId);
   const url = imageUrl(cardId, 'card');
