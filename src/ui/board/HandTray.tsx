@@ -9,8 +9,10 @@ import { useViewport } from '../hooks/useViewport';
  * scene. On desktop the turn controls live on the sheet's right rail
  * (Board mounts the BoardControls dock there), so the fan takes the full
  * row; phones keep the controls here as a row under the hand, the turn
- * button at the thumb edge. The phone hand is a flat strip (see Hand) in
- * flow above that row, so no card ever sits under it.
+ * button at the thumb edge. The phone hand is a flat strip of compact cards
+ * (see Hand) in flow above that row, so no card ever sits under it. An
+ * empty hand takes no room on either: the row is the controls alone on a
+ * phone and nothing on a desktop, and the stage re-fits to what it gains.
  */
 export function HandTray({
   cards, disabled, pending, isMyTurn, busy, hasPending, playable,
@@ -44,9 +46,11 @@ export function HandTray({
   // (hand cards, the mobile controls row) opt back in with 'auto'.
   return (
     <div style={isMobile ? {
-      display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 8, pointerEvents: 'none',
+      // No gap: the strip carries its own foot, and an empty one is not drawn.
+      display: 'flex', flexDirection: 'column', paddingBottom: 8, pointerEvents: 'none',
     } : {
-      paddingBottom: 16, pointerEvents: 'none', position: 'relative',
+      // The fan carries its own foot (Hand), so an empty hand is no height.
+      pointerEvents: 'none', position: 'relative',
     }}>
       {/* Contact shade — a flat pool of neutral black under the fan so the
           held cards read as lifted off the scene rather than floating free.

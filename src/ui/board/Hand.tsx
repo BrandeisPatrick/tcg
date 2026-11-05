@@ -1,11 +1,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties, type TouchEvent } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { CardFrame, SIZES } from '../card/CardFrame';
-import { fonts, spring } from '../tokens';
-import { poster } from '../poster';
+import { spring } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
+import { usePress } from '../shop/usePress';
+import { HandThumb, THUMB_H, THUMB_W } from './HandThumb';
 
 /** The name a hand card announces itself by: "Cold Front, in your hand". The
  *  tutorial's gate and the QA scripts find a card in the hand by it. */
@@ -64,25 +65,19 @@ function cardOverlap(total: number): number {
 }
 
 /**
- * Phones get no fan at all: a flat strip of whole cards, side by side, that
- * scrolls sideways. Shrinking the arc to fit a 390px screen left 5–7 cards
- * covering each other's names and rules, and the outer ones sank under the
- * controls row. The cards print at four fifths of the fan's size: three fit
- * a 390px screen with a sliver of the fourth, which is what says the strip
- * scrolls, and the row leaves the board the height it needs — a held card
- * (long press) opens the full-size preview to read.
+ * Phones get no fan: a flat strip of compact cards (HandThumb — the item's art
+ * over a foot in its category's colour) side by side, that scrolls sideways
+ * when it overflows. Whole cards, even at four fifths of the fan's size, left
+ * room for three across a 390px screen and took a fifth of its height from
+ * the board; a held card (long press) opens the full card to read.
  */
-const CARD_H = SIZES.hand.h;
-/** The strip's cards, as a fraction of the fan's. The frame is drawn at the
- *  fan's size and scaled, so its type stays set as designed. */
-const STRIP_SCALE = 0.8;
-const STRIP_GAP = 8;
+const STRIP_GAP = 6;
 const STRIP_SIDE = 12;
-/** The armed card's lift on the strip — CardFrame adds its own 8px
- *  selected nudge on top, ~14px in all. */
+/** The armed card's lift on the strip. */
 const STRIP_LIFT = 6;
-/** Room above the cards for that lift: a scroller clips what rises out of it. */
-const STRIP_TOP = 18;
+/** Room above the cards for that lift, an active's bolt and the armed ring: a
+ *  scroller clips what rises out of it. */
+const STRIP_TOP = 14;
 const STRIP_BOTTOM = 6;
 
 /**
@@ -111,6 +106,16 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
   // Visual-hover state — separate from the preview-trigger ref/timer above;
   // this one drives the layout shift that prevents text clipping.
   const [hoveredIid, setHoveredIid] = useState<string | null>(null);
+  // An empty hand takes no room: no label, no height held for it. It folds
+  // away once the last card has finished leaving, so that card's exit plays.
+  const [lastTotal, setLastTotal] = useState(total);
+  const [leaving, setLeaving] = useState(false);
+  if (total !== lastTotal) {
+    setLastTotal(total);
+    setLeaving(total === 0 && lastTotal > 0);
+  }
+  if (total === 0 && !leaving) return null;
+
   const hoveredIdx = hoveredIid ? cards.findIndex((c) => c.iid === hoveredIid) : -1;
   const clearHover = (iid: string) => {
     const t = hoverTimers.current.get(iid);
@@ -126,30 +131,93 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
       if (onHover) onHover(null);
     }
   };
+  /** What each card is now: armed, one no hero can take, or not to be touched. */
+  const stateOf = (c: CardInstance) => {
+    const selected = pending?.iid === c.iid;
+    // A card no hero can take right now (every one full, or wearing it).
+    const stuck = !disabled && !playable(c);
+    const cardDisabled = disabled || stuck;
+    // Dim must live in the `animate` target, not `style` — framer's
+    // animate={{ opacity: 1 }} overrides a style-prop opacity, which
+    // silently disabled the stuck/disabled fade entirely.
+    const opacity = cardDisabled && !selected ? (stuck ? 0.55 : 0.6) : 1;
+    const label = `${inHandLabel(CARDS_BY_ID[c.cardId]?.name ?? c.cardId)}${stuck ? ' — no hero can take it now' : ''}`;
+    return { selected, stuck, cardDisabled, opacity, label };
+  };
+  const done = () => setLeaving(false);
 
-  const content = (
-    <>
-      {/* The hand row floats under the cream sheet on the dark scene, so the
-          empty label is a cream stencil eyebrow, not ink. */}
-      {total === 0 && (
-        <div style={{ fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.creamDim, padding: 32, margin: isMobile ? 'auto' : undefined }}>
-          Hand empty.
-        </div>
-      )}
-      <AnimatePresence>
+  if (isMobile) {
+    return (
+      <motion.div
+        // The strip scrolls; framer has to measure that offset for the cards'
+        // layout animations (a card arriving, played, the rest closing up) to
+        // start from the right place.
+        layoutScroll
+        className="hand-strip"
+        style={{
+          display: 'flex',
+          gap: STRIP_GAP,
+          alignItems: 'flex-end',
+          padding: `${STRIP_TOP}px ${STRIP_SIDE}px ${STRIP_BOTTOM}px`,
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          scrollSnapType: 'x proximity',
+          scrollPaddingInline: STRIP_SIDE,
+          overscrollBehaviorX: 'contain',
+          // Nothing overlaps the strip on a phone (the controls row is in flow
+          // below it), so it takes its own touches — the thumb scrolls it.
+          pointerEvents: 'auto',
+        }}>
+        <AnimatePresence onExitComplete={done}>
+          {cards.map((c, i) => (
+            <StripCard
+              key={c.iid}
+              card={c}
+              {...stateOf(c)}
+              // Auto margins on the ends centre a short hand and fall to 0
+              // once it overflows, so the first card can always be scrolled back to.
+              first={i === 0}
+              last={i === total - 1}
+              landing={arriving === c.iid}
+              onTap={onTap}
+              onLongPress={onLongPress}
+              onHover={onHover}
+              onBlocked={onBlocked}
+              registerCard={registerCard}
+            />
+          ))}
+        </AnimatePresence>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div
+      onMouseLeave={closePreview}
+      onPointerLeave={closePreview}
+      style={{
+        display: 'flex',
+        gap: 0,
+        // The tray's own foot is in the bottom padding: an empty hand takes
+        // none of it.
+        padding: '14px 0 20px',
+        overflow: 'visible',
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        // Shrink-to-fit on narrow screens so no card is clipped by the
+        // viewport edge (see fanScale). 1 on any normal desktop width.
+        transform: `scale(${fanScale(total, viewportW)})`,
+        transformOrigin: 'bottom center',
+        // The fan strip spans the full row width; without this it eats clicks
+        // meant for anything it overlaps (the End Turn shelf sat unreachable
+        // under it). Cards re-enable pointer events individually below.
+        pointerEvents: 'none',
+      }}>
+      <AnimatePresence onExitComplete={done}>
         {cards.map((c, i) => {
-          const data = CARDS_BY_ID[c.cardId];
-          const selected = pending?.iid === c.iid;
-          // A card no hero can take right now (every one full, or wearing it).
-          const stuck = !disabled && !playable(c);
-          const cardDisabled = disabled || stuck;
-          const rot = isMobile || selected ? 0 : fanRotation(i, total);
-          const y = isMobile ? (selected ? -STRIP_LIFT : 0) : selected ? -42 : fanY(i, total);
-
-          // Dim must live in the `animate` target, not `style` — framer's
-          // animate={{ opacity: 1 }} overrides a style-prop opacity, which
-          // silently disabled the stuck/disabled fade entirely.
-          const targetOpacity = cardDisabled && !selected ? (stuck ? 0.55 : 0.6) : 1;
+          const { selected, stuck, cardDisabled, opacity, label } = stateOf(c);
+          const rot = selected ? 0 : fanRotation(i, total);
+          const y = selected ? -42 : fanY(i, total);
           // A card just bought fades in on its own spot as the board's flight
           // lands there; one dealt any other way rises in from below.
           const landing = arriving === c.iid;
@@ -167,26 +235,6 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
           let zIndex = i;
           if (selected) zIndex = 100;
           if (isHovered) zIndex = 200;
-          // On the strip nothing overlaps, so no hover relief; auto margins on
-          // the ends centre a short hand and fall to 0 once it overflows, so
-          // the first card can always be scrolled back to.
-          const stripMargins = {
-            marginLeft: i === 0 ? 'auto' : 0,
-            marginRight: i === total - 1 ? 'auto' : 0,
-          };
-
-          const frame = (
-            <CardFrame
-              cardId={c.cardId}
-              size="hand"
-              // Paid for at the shop: putting it on a hero costs nothing.
-              hideCost
-              selected={selected}
-              glow={selected ? 'accent' : null}
-              // A tap on a card in the fan arms it, wherever it lands.
-              tapExplains={false}
-            />
-          );
 
           return (
             <motion.div
@@ -194,19 +242,17 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
               layoutId={`card-${c.iid}`}
               layout
               initial={landing ? { opacity: 0 } : { opacity: 0, y: 120, scale: 0.5 }}
-              animate={{ opacity: targetOpacity, y, scale: selected && !isMobile ? 1.06 : 1, rotate: rot }}
+              animate={{ opacity, y, scale: selected ? 1.06 : 1, rotate: rot }}
               exit={{ opacity: 0, y: -60, scale: 0.5, transition: { duration: 0.25 } }}
               transition={landing ? { ...spring.default, opacity: { delay: 0.32, duration: 0.2 } } : spring.default}
-              // Phones play by tap (arm, then tap a target): a drag would
-              // fight the strip's own sideways scroll.
-              drag={!isMobile && !cardDisabled}
+              drag={!cardDisabled}
               dragSnapToOrigin
               dragElastic={0.18}
               dragMomentum={false}
               onDragEnd={(_, info) => {
                 if (onDragEndOver) onDragEndOver(c, info.point.x, info.point.y);
               }}
-              whileTap={{ scale: selected && !isMobile ? 1.06 : 0.98 }}
+              whileTap={{ scale: selected ? 1.06 : 0.98 }}
               // No whileHover lift — caused mouseenter/leave oscillation that
               // trapped the preview open. Layout-driven margin/zIndex via React
               // state below instead.
@@ -233,8 +279,6 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
                 }
               }}
               onPointerUp={() => clearPress(c.iid)}
-              // A thumb that starts on a card and scrolls the strip hands the
-              // gesture to the browser: no long-press preview, no hover peek.
               onPointerCancel={() => {
                 clearHover(c.iid);
                 clearPress(c.iid);
@@ -252,96 +296,117 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
                 if (stuck) onBlocked?.(c);
               }}
               role="button"
-              aria-label={`${inHandLabel(data?.name ?? c.cardId)}${stuck ? ' — no hero can take it now' : ''}`}
+              aria-label={label}
+              aria-pressed={selected}
               style={{
                 // No CSS transition on marginLeft — the framer `layout` prop is
                 // the single position driver. A CSS transition here used to
                 // double-animate against the layout spring and made hand
                 // reflow (hover relief, card played/drawn) visibly chop.
-                ...(isMobile ? stripMargins : { marginLeft }),
-                // The strip's card takes the scaled frame's footprint.
-                ...(isMobile ? { width: CARD_W * STRIP_SCALE, height: CARD_H * STRIP_SCALE } : {}),
-                flex: isMobile ? '0 0 auto' : undefined,
-                scrollSnapAlign: isMobile ? 'start' : undefined,
+                marginLeft,
                 cursor: cardDisabled ? 'default' : 'pointer',
                 transformOrigin: 'bottom center',
-                zIndex: isMobile ? undefined : zIndex,
-                // The strip pans sideways under the thumb; the desktop fan
-                // keeps every gesture for framer's drag.
-                touchAction: isMobile ? 'pan-x' : 'none',
+                zIndex,
+                // The fan keeps every gesture for framer's drag.
+                touchAction: 'none',
                 // A card no hero can take prints greyer.
                 filter: stuck ? 'saturate(0.55)' : undefined,
-                pointerEvents: 'auto', // opt back in under the strip's pointerEvents:none
+                pointerEvents: 'auto', // opt back in under the fan's pointerEvents:none
               }}
             >
               {/* The card's box, registered for the board's flight to it —
                   on an inner node: AnimatePresence's own child takes no ref. */}
-              {isMobile ? (
-                <div ref={(el) => registerCard?.(c.iid, el)} style={{ width: CARD_W, height: CARD_H, transform: `scale(${STRIP_SCALE})`, transformOrigin: 'top left' }}>
-                  {frame}
-                </div>
-              ) : <div ref={(el) => registerCard?.(c.iid, el)}>{frame}</div>}
+              <div ref={(el) => registerCard?.(c.iid, el)}>
+                <CardFrame
+                  cardId={c.cardId}
+                  size="hand"
+                  // Paid for at the shop: putting it on a hero costs nothing.
+                  hideCost
+                  selected={selected}
+                  glow={selected ? 'accent' : null}
+                  // A tap on a card in the fan arms it, wherever it lands.
+                  tapExplains={false}
+                />
+              </div>
             </motion.div>
           );
         })}
       </AnimatePresence>
-    </>
-  );
-
-  if (isMobile) {
-    return (
-      <motion.div
-        // The strip scrolls; framer has to measure that offset for the cards'
-        // layout animations (draw, play, reflow) to start from the right place.
-        layoutScroll
-        className="hand-strip"
-        onMouseLeave={closePreview}
-        onPointerLeave={closePreview}
-        style={{
-          display: 'flex',
-          gap: STRIP_GAP,
-          alignItems: 'flex-end',
-          padding: `${STRIP_TOP}px ${STRIP_SIDE}px ${STRIP_BOTTOM}px`,
-          // Holds its height with no cards too, so the board above does not
-          // rescale the moment the last card is played.
-          minHeight: STRIP_TOP + CARD_H * STRIP_SCALE + STRIP_BOTTOM,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          scrollSnapType: 'x proximity',
-          scrollPaddingInline: STRIP_SIDE,
-          overscrollBehaviorX: 'contain',
-          // Nothing overlaps the strip on a phone (the controls row is in flow
-          // below it), so it takes its own touches — the thumb scrolls it.
-          pointerEvents: 'auto',
-        }}>
-        {content}
-      </motion.div>
-    );
-  }
-
-  return (
-    <div
-      onMouseLeave={closePreview}
-      onPointerLeave={closePreview}
-      style={{
-        display: 'flex',
-        gap: 0,
-        padding: '14px 0 4px',
-        overflow: 'visible',
-        justifyContent: 'center',
-        alignItems: 'flex-end',
-        minHeight: 180,
-        // Shrink-to-fit on narrow screens so no card is clipped by the
-        // viewport edge (see fanScale). 1 on any normal desktop width.
-        transform: `scale(${fanScale(total, viewportW)})`,
-        transformOrigin: 'bottom center',
-        // The fan strip spans the full row width; without this it eats clicks
-        // meant for anything it overlaps (the End Turn shelf sat unreachable
-        // under it). Cards re-enable pointer events individually below.
-        pointerEvents: 'none',
-      }}>
-      {content}
     </div>
   );
 }
 
+/**
+ * One card on the phone's strip. A tap arms it (a card no hero can take says
+ * why instead); a press held opens the full card, and the tap that ends it is
+ * swallowed — the browser's own click too, which would land on the preview
+ * that has just opened under the finger and close it; a thumb that scrolls the
+ * strip from it hands the gesture to the browser (pan-x) and fires neither. No
+ * hover peek under a finger.
+ */
+function StripCard({ card: c, selected, stuck, cardDisabled, opacity, label, first, last, landing, onTap, onLongPress, onHover, onBlocked, registerCard }: {
+  card: CardInstance;
+  selected: boolean;
+  stuck: boolean;
+  cardDisabled: boolean;
+  opacity: number;
+  label: string;
+  first: boolean;
+  last: boolean;
+  landing: boolean;
+} & Pick<Props, 'onTap' | 'onLongPress' | 'onHover' | 'onBlocked' | 'registerCard'>) {
+  // Set when a held press has opened the full card, until the finger lifts.
+  const held = useRef(false);
+  const press = usePress(
+    () => {
+      if (!cardDisabled) onTap(c);
+      // Tapping a card no hero can take on your own turn gets explicit
+      // feedback instead of a silent no-op.
+      else if (stuck) onBlocked?.(c);
+    },
+    () => { held.current = true; onLongPress?.(c); },
+    onHover ? (on) => onHover(on ? c : null) : undefined,
+  );
+  return (
+    <motion.div
+      layoutId={`card-${c.iid}`}
+      layout
+      // A card just bought fades in on its own spot as the board's flight
+      // lands there; one dealt any other way rises into the strip.
+      initial={landing ? { opacity: 0 } : { opacity: 0, y: 36, scale: 0.6 }}
+      animate={{ opacity, y: selected ? -STRIP_LIFT : 0, scale: 1 }}
+      exit={{ opacity: 0, y: -24, scale: 0.6, transition: { duration: 0.22 } }}
+      transition={landing ? { ...spring.default, opacity: { delay: 0.32, duration: 0.2 } } : spring.default}
+      whileTap={{ scale: 0.94 }}
+      {...press}
+      onPointerDown={(e) => { held.current = false; press.onPointerDown(e); }}
+      // A finger lifted after a held press: no click is made of it.
+      onTouchEnd={(e: TouchEvent) => { if (held.current) { held.current = false; e.preventDefault(); } }}
+      role="button"
+      aria-label={label}
+      aria-pressed={selected}
+      style={{
+        marginLeft: first ? 'auto' : 0,
+        marginRight: last ? 'auto' : 0,
+        flex: '0 0 auto',
+        width: THUMB_W,
+        height: THUMB_H,
+        scrollSnapAlign: 'start',
+        cursor: cardDisabled ? 'default' : 'pointer',
+        // The strip pans sideways under the thumb.
+        touchAction: 'pan-x',
+        // A card no hero can take prints greyer.
+        filter: stuck ? 'saturate(0.55)' : undefined,
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
+      } as CSSProperties}
+    >
+      {/* The card's box, registered for the board's flight to it —
+          on an inner node: AnimatePresence's own child takes no ref. */}
+      <div ref={(el) => registerCard?.(c.iid, el)}>
+        <HandThumb cardId={c.cardId} armed={selected} />
+      </div>
+    </motion.div>
+  );
+}

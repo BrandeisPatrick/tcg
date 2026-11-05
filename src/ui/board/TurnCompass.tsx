@@ -4,7 +4,9 @@ import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
+import { useViewport } from '../hooks/useViewport';
 import type { TurnStep } from '@/engine/types';
+import { BEAT_WORD, TURN_BEATS, useTurnBeat, type TurnBeat } from './turnBeat';
 
 /** Where a turn stands against its attack (one a turn, and it ends the turn's
  *  play): 'prepare' before it, 'battle' while it is walked, 'regroup' once it
@@ -14,15 +16,14 @@ export type TurnPhase = 'prepare' | 'battle' | 'regroup';
 /** The phase in words — for the dial's accessible name only. */
 const PHASE_WORD: Record<TurnPhase, string> = { prepare: 'Prepare', battle: 'Battle', regroup: 'Prepare' };
 
-/** The turn's step in words: printed under the dial and in its name. */
-const STEP_WORD: Record<TurnStep, string> = { shop: 'Shop', act: 'Act' };
 
 interface Props {
   isMyTurn: boolean;
   turn: number;
   phase: TurnPhase;
-  /** The step of the turn in play (`G.step`): the dial prints it under itself.
-   *  Left out (the gallery's demos), no step is shown. */
+  /** The step of the turn in play (`G.step`): with it the dial prints the
+   *  turn's beats under itself — Income · Shop · Act · End, the one the turn
+   *  is on lit (turnBeat.ts). Left out (the gallery's demos), none are shown. */
   step?: TurnStep;
   /** Override for the ambient `CombatProgressContext` value — only the
    *  preview gallery passes this so it can demo the combat-mode ring
@@ -32,8 +33,9 @@ interface Props {
 
 /**
  * Persistent turn indicator pinned at the centre of the duel divider: whose
- * turn it is, which turn, its step (Shop, then Act — printed under the dial)
- * and where in the turn — before its attack, the attack, after it.
+ * turn it is, which turn, the turn's beat (Income · Shop · Act · End, printed
+ * under the dial with the one it is on lit, for both players' turns) and
+ * where in the turn — before its attack, the attack, after it.
  *
  * The dial: a flat paper disc with ink rings, the turn numeral at its
  * centre, and an external chevron pointing at whichever player owns the
@@ -66,9 +68,16 @@ const BREATHE: Loop = {
   easing: 'ease-in-out',
 };
 
-export function TurnCompass({ isMyTurn, turn, phase, step, combatOverride }: Props) {
+export function TurnCompass({ isMyTurn: moverIsMe, turn: engineTurn, phase, step, combatOverride }: Props) {
   const contextCombat = useCombatProgress();
   const combat = combatOverride !== undefined ? combatOverride : contextCombat;
+  const { isMobile } = useViewport();
+  // The turn's beat. Through a hand-over's End beat the dial still belongs
+  // to the player whose turn just ended, so everything below reads `isMyTurn`
+  // from the beat rather than from the mover.
+  const spine = useTurnBeat({ turn: engineTurn, isMyTurn: moverIsMe, step: step ?? 'act', attackMade: phase === 'regroup' });
+  const isMyTurn = step ? spine.mine : moverIsMe;
+  const turn = step ? spine.turn : engineTurn;
   // Hue follows the turn owner — gold when it's the player's move, red
   // when it's the rival's. Matches the board-wide "you = gold, rival =
   // red" convention. During combat the ring's fill colour follows the
@@ -94,7 +103,7 @@ export function TurnCompass({ isMyTurn, turn, phase, step, combatOverride }: Pro
   // starts the animation over.
   const beat = battle && combat && combat.currentBeat < combat.total ? combat.currentBeat : null;
   const thump = beat === null ? undefined : `turn-compass-thump-${beat % 2 ? 'b' : 'a'} 0.4s ease-out`;
-  const name = `Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"} · ${step ? `${STEP_WORD[step]} step · ` : ''}${PHASE_WORD[phase]} phase`;
+  const name = `Turn ${turn} · ${isMyTurn ? 'Your Move' : "Rival's Move"} · ${step ? `${BEAT_WORD[spine.beat]} step · ` : ''}${PHASE_WORD[phase]} phase`;
   // Breathe only on the player's turn — doubles as a "you're up" signal and
   // stops the loop during rival turns, settling back over 0.3s.
   const breathe = useAmbientLoop<HTMLDivElement>(isMyTurn ? BREATHE : null, 300);
@@ -218,27 +227,8 @@ export function TurnCompass({ isMyTurn, turn, phase, step, combatOverride }: Pro
         </svg>
       </motion.div>
 
-      {/* The step in words, under the dial and clear of the chevron: Shop
-          until the shop closes, then Act. */}
-      {step && (
-        <span aria-hidden style={{
-          position: 'absolute',
-          top: SIZE + 12,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          fontFamily: fonts.display,
-          fontSize: 9,
-          letterSpacing: '0.3em',
-          paddingLeft: '0.3em',
-          textTransform: 'uppercase',
-          lineHeight: 1,
-          whiteSpace: 'nowrap',
-          color: step === 'shop' ? hue : poster.inkDim,
-          pointerEvents: 'none',
-        }}>
-          {STEP_WORD[step]}
-        </span>
-      )}
+      {/* The turn's beats, under the dial and clear of the chevron. */}
+      {step && <BeatStrip beat={spine.beat} hue={hue} words={!isMobile} />}
 
       {/* Keyframes — declared inline so the component is self-contained and
           can be dropped into PreviewGallery without external CSS. */}
@@ -275,6 +265,61 @@ export function TurnCompass({ isMyTurn, turn, phase, step, combatOverride }: Pro
           .turn-compass-sweep { animation: none; }
         }
       `}</style>
+    </div>
+  );
+}
+
+/**
+ * Income · Shop · Act · End under the dial, the beat the turn is on lit in
+ * the turn owner's colour. A desktop's divider is wide enough for the four
+ * words; a phone's prints four marks and the lit beat's word under them.
+ */
+function BeatStrip({ beat, hue, words }: { beat: TurnBeat; hue: string; words: boolean }) {
+  const at = TURN_BEATS.indexOf(beat);
+  const word = (b: TurnBeat, on: boolean) => ({
+    fontFamily: fonts.display,
+    fontSize: words ? (on ? 12 : 10) : 9.5,
+    letterSpacing: words ? '0.14em' : '0.2em',
+    paddingLeft: words ? '0.14em' : '0.2em',
+    textTransform: 'uppercase' as const,
+    lineHeight: 1,
+    whiteSpace: 'nowrap' as const,
+    color: on ? hue : poster.inkFaint,
+    transition: 'color 0.25s ease',
+    key: b,
+  });
+  return (
+    <div aria-hidden style={{
+      position: 'absolute', top: SIZE + 12, left: '50%', transform: 'translateX(-50%)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+      pointerEvents: 'none',
+    }}>
+      {words ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {TURN_BEATS.map((b, i) => {
+            const { key, ...style } = word(b, i === at);
+            return (
+              <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                {i > 0 && <span style={{ width: 3, height: 3, borderRadius: '50%', background: poster.inkFaint }} />}
+                <span style={style}>{BEAT_WORD[b]}</span>
+              </span>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {TURN_BEATS.map((b, i) => (
+              <span key={b} style={{
+                width: i === at ? 12 : 6, height: 4, borderRadius: 2,
+                background: i === at ? hue : i < at ? poster.inkDim : poster.inkFaint,
+                transition: 'width 0.25s ease, background-color 0.25s ease',
+              }} />
+            ))}
+          </div>
+          {(() => { const { key, ...style } = word(beat, true); return <span key={key} style={style}>{BEAT_WORD[beat]}</span>; })()}
+        </>
+      )}
     </div>
   );
 }

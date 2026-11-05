@@ -1,128 +1,167 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
-import { spring, text } from '../tokens';
+import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
 
 interface Props {
   cards: CardInstance[];
+  /** Where the sheet's top edge is, px down from the top of the box the
+   *  backs hang in (Board's band above the sheet). */
+  edge: number;
+  /** Phone-size backs. */
+  compact?: boolean;
 }
 
-// The rival's hand, face down: what it has bought and not yet put on a hero
-// (the AI plays each card as soon as it buys it, so a back shows for a beat).
-// Mirror of the player's Hand fanning math, but inverted: cards open downward
-// from a top anchor, so they look like an opponent's hand seen across the sheet.
+/** A back's size and how much of it shows over the paper's top edge, in
+ *  stage px: enough for the printer's dial mark to read. */
+const BACK = {
+  phone: { w: 40, h: 56, peek: 36, overlap: -14, chip: 18 },
+  desktop: { w: 56, h: 80, peek: 46, overlap: -18, chip: 22 },
+} as const;
+/** At most this many backs are drawn: the chip says how many there are. */
+const MAX_BACKS = 4;
+
+// The rival's hand, face down: what it has bought and not yet put on a hero —
+// the AI plays each card as soon as it buys it, so a back shows for a beat,
+// rising from behind the paper and sinking back as it goes onto a hero. Seen
+// across the table the fan opens downward from a top anchor: the outer backs
+// tilt out at their feet and ride up a little.
 function fanRotation(i: number, total: number): number {
   if (total <= 2) return 0;
-  const center = (total - 1) / 2;
-  const offset = i - center;
-  const max = Math.min(6, 18 / total);
-  return -offset * max;
+  const offset = i - (total - 1) / 2;
+  return -offset * Math.min(5, 15 / total);
 }
 function fanY(i: number, total: number): number {
   if (total <= 2) return 0;
-  const center = (total - 1) / 2;
-  const offset = Math.abs(i - center);
-  return -Math.min(offset * offset * 1.6, 18);
-}
-function cardOverlap(total: number): number {
-  if (total <= 2) return 14;
-  if (total <= 3) return 8;
-  if (total <= 4) return -8;
-  if (total <= 5) return -22;
-  if (total <= 6) return -38;
-  if (total <= 7) return -50;
-  return -60;
+  const offset = Math.abs(i - (total - 1) / 2);
+  return -Math.min(offset * offset * 1.6, 8);
 }
 
-const CARD_W = 64;
-const CARD_H = 92;
-
-export function OpponentHand({ cards }: Props) {
+/**
+ * The rival's card backs, hung absolutely at the top edge of the board: they
+ * peek over the paper and the rest is tucked behind it (Board stacks the sheet
+ * above this box), so they never take room of their own — an empty hand holds
+ * no row open and a card held for a beat moves nothing. A chip beside them
+ * says how many cards the rival holds.
+ */
+export function OpponentHand({ cards, edge, compact = false }: Props) {
   const total = cards.length;
+  const { w, h, peek, overlap, chip } = compact ? BACK.phone : BACK.desktop;
+  const shown = cards.slice(0, MAX_BACKS);
+  const fanW = shown.length * w + Math.max(0, shown.length - 1) * overlap;
   return (
-    <div style={{
-      position: 'relative',
-      display: 'flex',
-      gap: 0,
-      justifyContent: 'center',
-      alignItems: 'flex-start',
-      padding: '4px 0 8px',
-      minHeight: CARD_H + 4,
-      // Purely decorative strip — never intercept clicks meant for the
-      // board rows it can overlap.
-      pointerEvents: 'none',
-    }}>
-      {/* Ambient shade behind the fan — a flat pool of neutral black where
-          the rival's card backs peek over the sheet's top edge, so the ink
-          plates read as resting there instead of pasted on the paper.
-          Painted before the cards; their transforms stack them above it. */}
+    <div
+      role={total > 0 ? 'img' : undefined}
+      aria-label={total > 0 ? `Rival's hand: ${total} card${total === 1 ? '' : 's'}` : undefined}
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: edge - peek,
+        height: h,
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        // Purely decorative — never intercept clicks meant for the board.
+        pointerEvents: 'none',
+      }}
+    >
+      {/* Ambient shade where the backs meet the paper's edge — a flat pool of
+          neutral black, so the ink plates read as resting there instead of
+          pasted on the scene. Painted first: the backs stack above it. */}
       {total > 0 && (
         <div aria-hidden style={{
           position: 'absolute',
           left: '50%',
-          bottom: -6,
-          width: Math.min(560, total * (CARD_W + 8) + 120),
-          height: 54,
+          top: peek - 30,
+          width: fanW + 90,
+          height: 34,
           transform: 'translateX(-50%)',
           background: 'radial-gradient(ellipse 50% 100% at 50% 100%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.14) 55%, transparent 78%)',
           filter: 'blur(2px)',
         }} />
       )}
-      {/* The strip hangs above the sheet on the dark scene, so the empty
-          label is cream, not ink. */}
-      {total === 0 && (
-        <div style={{ ...text.label, fontSize: 11, letterSpacing: '0.18em', color: poster.creamDim, padding: '20px 0' }}>
-          Rival — no cards in hand
-        </div>
-      )}
       <AnimatePresence>
-        {cards.map((c, i) => {
-          const rot = fanRotation(i, total);
-          const y = fanY(i, total);
-          return (
-            <motion.div
-              key={c.iid}
-              layoutId={`oppcard-${c.iid}`}
-              layout
-              initial={{ opacity: 0, y: -50, scale: 0.6 }}
-              animate={{ opacity: 1, y, scale: 1, rotate: rot }}
-              exit={{ opacity: 0, y: 60, scale: 0.5, transition: { duration: 0.25 } }}
-              transition={spring.default}
-              style={{
-                marginLeft: i === 0 ? 0 : cardOverlap(total),
-                transformOrigin: 'top center',
-                zIndex: i,
-                width: CARD_W,
-                height: CARD_H,
-              }}
-            >
-              <CardBack />
-            </motion.div>
-          );
-        })}
+        {shown.map((c, i) => (
+          <motion.div
+            key={c.iid}
+            // Rises from behind the paper; sinks back behind it as it is played.
+            initial={{ opacity: 0, y: peek }}
+            animate={{ opacity: 1, y: fanY(i, shown.length), rotate: fanRotation(i, shown.length) }}
+            exit={{ opacity: 0, y: peek + 12, transition: { duration: 0.25 } }}
+            transition={spring.default}
+            style={{
+              flex: '0 0 auto',
+              marginLeft: i === 0 ? 0 : overlap,
+              transformOrigin: 'top center',
+              zIndex: i,
+              width: w,
+              height: h,
+            }}
+          >
+            <CardBack radius={compact ? 7 : 9} />
+          </motion.div>
+        ))}
       </AnimatePresence>
-      {/* No count chip — the backs are the count. */}
+      <AnimatePresence>
+        {total > 0 && (
+          <motion.span
+            key="count"
+            aria-hidden
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.6, transition: { duration: 0.2 } }}
+            transition={spring.default}
+            style={{
+              position: 'absolute',
+              // Beside the fan, centred in the strip of it that shows.
+              left: `calc(50% + ${fanW / 2 + 6}px)`,
+              top: (peek - chip) / 2,
+              minWidth: chip,
+              height: chip,
+              padding: '0 5px',
+              boxSizing: 'border-box',
+              borderRadius: chip / 2,
+              background: poster.ink,
+              border: `1.5px solid ${poster.rival}`,
+              color: poster.cream,
+              fontFamily: fonts.display,
+              fontSize: compact ? 11 : 13,
+              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontVariantNumeric: 'tabular-nums',
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.45)',
+            }}
+          >
+            {total}
+          </motion.span>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 /** Face-down card — the lobby's ink plate: charcoal panel, thin edge and
- *  the printer's dial mark centred in faint cream. Static by design: the
- *  border pulse is the draft's "live pick" signal, not the rival's hand. */
-function CardBack() {
+ *  the printer's dial mark in faint cream, high enough on the plate to show
+ *  over the paper's edge. Static by design: the border pulse is the draft's
+ *  "live pick" signal, not the rival's hand. */
+function CardBack({ radius }: { radius: number }) {
   return (
     <div style={{
       width: '100%', height: '100%',
       boxSizing: 'border-box',
-      borderRadius: 10,
+      borderRadius: radius,
       background: poster.panel,
       border: `2px solid ${poster.edge}`,
       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.45)',
       display: 'flex',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       justifyContent: 'center',
+      paddingTop: '12%',
     }}>
-      <svg viewBox="0 0 40 40" width="38%" height="38%" fill="none" stroke={poster.creamFaint} strokeWidth="1.4" aria-hidden>
+      <svg viewBox="0 0 40 40" width="62%" fill="none" stroke={poster.creamFaint} strokeWidth="1.6" aria-hidden>
         <circle cx="20" cy="20" r="15.5" />
         <circle cx="20" cy="20" r="6.5" />
         {Array.from({ length: 8 }).map((_, i) => {

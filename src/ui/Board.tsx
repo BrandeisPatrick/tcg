@@ -65,6 +65,9 @@ import { SidePanel } from './side-panel/SidePanel';
 import { PanelDrawer, PANEL_WIDTH } from './side-panel/PanelDrawer';
 import { PATRON_NAMES } from './board/patrons';
 import { HandTray } from './board/HandTray';
+import { shake } from './shop/shake';
+import { useTurnBeat } from './board/turnBeat';
+import { IncomeTick } from './board/IncomeTick';
 import type { PendingPlay } from './helpers';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { markLessonDone } from '@/storage/playerData';
@@ -79,22 +82,21 @@ const AI_THINK_MS = 800;        // delay between AI moves; also gives combat ani
 /** The longest the board stays up after the match is decided, so the blow
  *  that decided it can be seen landing before the result sheet takes over. */
 const FINAL_BLOW_MAX_MS = 2800;
-/** Phones: how much of the rival's face-down backs shows above the sheet's
- *  top edge, in stage px (~21–30px on screen at a phone's fit scale). The
- *  rest of the fan sits behind the paper, and the row it used to fill — about
- *  a seventh of the stage's height — goes to the board. */
-const RIVAL_PEEK = 36;
-/** How far the fan's wrapper pulls the sheet up over it: OpponentHand's box
- *  (4px inset + 92px backs + 8px) and the row gap, less the paper's top margin
- *  and the backs' 4px inset, leaves RIVAL_PEEK of the backs in sight. */
-const PHONE_RIVAL_TUCK = 4 + 92 + 8 + boardRows.gap(true) - tablePad(true).top - 4 - RIVAL_PEEK;
-/** Room above the fan for its outer backs, which ride up as it widens. With
- *  it, at a tall phone's fit scale (~0.84) the paper's top edge clears the
- *  System menu's gear (top 12 + 40px); on a shorter phone the sheet is
- *  scaled narrow enough to pass left of it instead. */
-const PHONE_RIVAL_HEADROOM = 20;
+/** The band above the sheet, in stage px, where the rival's card backs hang:
+ *  absolutely, peeking over the paper's top edge with the rest tucked behind
+ *  it (OpponentHand), so they never take room of their own — an empty hand
+ *  holds no row open, and a card the AI holds for a beat moves nothing.
+ *  Phones: at a tall phone's fit scale (~0.84) the paper's top edge clears the
+ *  System menu's gear (top 12 + 40px); on a shorter phone the sheet is scaled
+ *  narrow enough to pass left of it instead. In a lesson the phone's coach
+ *  plate sits there, above the board. Desktop: the backs' peek. */
+const RIVAL_BAND = { phone: 52, lesson: 96, desktop: 40 } as const;
+const rivalBand = (mobile: boolean, lesson: boolean) => (mobile ? (lesson ? RIVAL_BAND.lesson : RIVAL_BAND.phone) : RIVAL_BAND.desktop);
 /** How long a bought card's flight from the shop to the hand takes, ms. */
 const BUY_FLIGHT_MS = 360;
+/** How long your turn holds on its End beat after the attack has been made,
+ *  before it ends on its own, ms. */
+const AUTO_END_MS = 500;
 /** What a click must land on to NOT cancel an armed card or skill. */
 const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="tab"]';
 
@@ -173,6 +175,10 @@ export function Board(props: BoardProps<GameState>) {
   // its one attack, which ends it. The dial marks the attack: 'battle' while
   // the choreographer walks it, 'regroup' once it is made, 'prepare' before.
   const turnPhase: TurnPhase = combatPlan ? 'battle' : G.attackUsed ? 'regroup' : 'prepare';
+  // The turn's beat (Income · Shop · Act · End) as the dial shows it: a
+  // turn's hand-over plays its End and the next one's Income before the shop
+  // sheet comes up (turnBeat.ts).
+  const spine = useTurnBeat({ turn: G.draft ? 0 : G.turnNumber, isMyTurn, step: G.step, attackMade: G.attackUsed && !combatPlan });
   /** The mover's attack can still be made — its shop closed, and it is not
    *  being made already. */
   const attackOpen = !ctx.gameover && !combatPlan && G.step === 'act' && attackBlocked(G, mover) === null;
@@ -372,6 +378,20 @@ export function Board(props: BoardProps<GameState>) {
     queuedEndRef.current = false;
     endTurn();
   }, [combatPlan, G.action?.state, ctx.currentPlayer, ctx.gameover, me, endTurn]);
+
+  // The attack ends the turn's play: once it has been walked and made, your
+  // turn ends on its own after a short End beat on the dial — no tap — unless
+  // a promotion is owed (it comes first) or Auto is playing the turn. The
+  // timer checks the turn it was set for is still the one in play.
+  const liveTurnRef = useRef(G.turnNumber);
+  liveTurnRef.current = G.turnNumber;
+  useEffect(() => {
+    if (!isMyTurn || autoPlay || ctx.gameover || !G.attackUsed || combatPlan) return;
+    if (G.pendingPromotion === me || G.action?.state === 'begin') return;
+    const turnAt = G.turnNumber;
+    const t = setTimeout(() => { if (liveTurnRef.current === turnAt) endTurn(); }, AUTO_END_MS);
+    return () => clearTimeout(t);
+  }, [isMyTurn, autoPlay, ctx.gameover, G.attackUsed, combatPlan, G.pendingPromotion, G.action?.state, G.turnNumber, me, endTurn]);
 
   // Targeting needs the board visible — close any hover/long-press preview the
   // moment a pending action arms, AND any that opens mid-targeting (a hover
@@ -597,7 +617,7 @@ export function Board(props: BoardProps<GameState>) {
   function playCardOn(cardIid: string, heroIid: string) {
     if (!isMyTurn || actionLocked) return;
     const no = actionRefusal(G, me, { type: 'playCard', cardIid, heroIid });
-    if (no) { showNotice(no.text, true); return; }
+    if (no) { showNotice(no.text, true); shake(slotRefs.current.get(heroIid)); return; }
     moves.playCard(cardIid, heroIid);
   }
 
@@ -832,7 +852,9 @@ export function Board(props: BoardProps<GameState>) {
   // away (the controls' Shop button brings it back) or the AI is shopping for
   // you (auto-play).
   const shopOpen = isMyTurn && !G.draft && G.step === 'shop' && !ctx.gameover && !autoPlay;
-  const shopShown = shopOpen && !shopHidden;
+  // It comes up once the hand-over's beats have played: your Income first.
+  const shopShown = shopOpen && !shopHidden && !spine.edge;
+  const incomeShown = !G.draft && !ctx.gameover && isMyTurn && spine.edge && spine.beat === 'income' && spine.mine;
   const reopenShop = shopOpen && shopHidden ? () => { setPending(null); setShopHidden(false); } : undefined;
 
   // The hand and, on phones, the turn controls under it. Desktop mounts it as
@@ -961,21 +983,16 @@ export function Board(props: BoardProps<GameState>) {
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
           }}>
-          {/* Rival's fan tucks behind the sheet's top edge — a small negative
-              margin lets the card backs peek over the paper (the sheet stacks
-              above via zIndex), so the face-down hand rests AT the board
-              instead of floating in the room. Phones sink it deeper: only a
-              strip of the backs shows, and the row it used to fill goes to
-              the board (see RIVAL_PEEK). Not in a lesson: the phone coach
-              plate sits in that row, above the board, and would cover the
-              sheet's top. */}
-          <div style={{
-            flex: '0 0 auto', position: 'relative', zIndex: 0,
-            ...(isMobile && !isTutorial
-              ? { marginBottom: -PHONE_RIVAL_TUCK, paddingTop: PHONE_RIVAL_HEADROOM }
-              : { marginBottom: isMobile ? 0 : -10 }),
-          }}>
-            <OpponentHand cards={G.players[opp].hand} />
+          {/* The band above the sheet (see RIVAL_BAND): the rival's backs hang
+              in it at the paper's top edge, peeking over it and tucked behind
+              it (the sheet stacks above via zIndex), so the face-down hand
+              rests AT the board and never moves it. */}
+          <div style={{ flex: '0 0 auto', position: 'relative', zIndex: 0, height: rivalBand(isMobile, isTutorial) }}>
+            <OpponentHand
+              cards={G.players[opp].hand}
+              edge={rivalBand(isMobile, isTutorial) + boardRows.gap(isMobile) - tablePad(isMobile).top}
+              compact={isMobile}
+            />
           </div>
 
           {/* 3×3 BOARD GRID — the three rows (opp bench, lane, my bench)
@@ -1260,6 +1277,11 @@ export function Board(props: BoardProps<GameState>) {
           })()}
         </AnimatePresence>
 
+        {/* Your turn's Income beat: the souls count up before the shop opens. */}
+        <AnimatePresence>
+          {incomeShown && <IncomeTick key={`income-${G.turnNumber}`} G={G} me={me} rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0} />}
+        </AnimatePresence>
+
         {/* The shop sheet: up through your turn's shop step. */}
         <AnimatePresence>
           {shopShown && (
@@ -1356,7 +1378,9 @@ export function Board(props: BoardProps<GameState>) {
               style={{
                 position: 'fixed',
                 left: 0, right: 0,
-                bottom: 196,
+                // Above the hand row: on a phone just over it, on a desktop
+                // no lower than the old dock height.
+                bottom: isMobile ? handInset + 12 : Math.max(196, handInset + 12),
                 display: 'flex',
                 justifyContent: 'center',
                 pointerEvents: 'none',
