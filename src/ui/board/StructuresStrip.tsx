@@ -146,9 +146,11 @@ function Segment({ s, pushed, accent, isMobile }: { s: Structure; pushed: number
           background: poster.inkDim, pointerEvents: 'none',
         }} />
       )}
-      {/* The fall: the K.O. sticker's own, slapped on the structure for a moment. */}
+      {/* The fall: the K.O. sticker's own, slapped on the structure for a moment.
+          A phone's segment is narrower than the sticker: it is centred a little
+          to the right, so the front one stays on the paper. */}
       {falling && (
-        <span aria-hidden data-fall={s.kind} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 3 }}>
+        <span aria-hidden data-fall={s.kind} style={{ position: 'absolute', inset: isMobile ? '0 -28px 0 0' : 0, pointerEvents: 'none', zIndex: 3 }}>
           <Stamp
             text={`${NAME[s.kind]} down`}
             sticker={poster.red}
