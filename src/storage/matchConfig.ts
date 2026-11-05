@@ -1,4 +1,5 @@
 import type { CardId, PlayerID, TrackHp } from '@/engine/types';
+import type { AiStrength } from '@/ai/heuristic';
 
 /** Custom numbers for one hero of a scripted match, by roster position
  *  (Active first, then the bench). `hpMax` sets a hero's full health and
@@ -76,6 +77,10 @@ interface MatchConfig {
   /** The seat a person plays (seat 0 when left out); null when the AI plays
    *  both seats, as in the balance sim: then both seats promote on the spot. */
   humanSeat?: PlayerID | null;
+  /** How hard the AI seat plays ('normal' when left out). A Quick Match
+   *  takes the player's saved choice, which the draft can change; Story and
+   *  the lessons leave it out. */
+  aiStrength?: AiStrength;
 }
 
 let current: MatchConfig = {

@@ -81,6 +81,7 @@ export function Root() {
       setMatchConfig({
         heroPreferences: getPreferredHeroes(),
         builds: loadPlayerData().builds,
+        aiStrength: loadPlayerData().aiStrength,
         story: undefined,
       });
       return { screen: 'match' };
@@ -124,6 +125,9 @@ export function Root() {
       heroPreferences: prefs,
       // The player's saved builds: each drafted hero's goes on sale with it.
       builds: loadPlayerData().builds,
+      // How hard the rival plays, as last set on the draft (Story and the
+      // lessons leave it out: they play 'normal').
+      aiStrength: loadPlayerData().aiStrength,
       featuredHero,
       // Clear both scripted setups so a Quick Match runs the normal draft path.
       story: undefined,

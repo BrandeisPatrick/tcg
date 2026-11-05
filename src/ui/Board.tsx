@@ -33,7 +33,7 @@ import {
 } from './board/heroActions';
 import { isValidTarget } from './board/targeting';
 import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attackAim';
-import { enumerateAIMoves } from '@/ai/heuristic';
+import { DEFAULT_AI_STRENGTH, enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
 import {
   activateBlocked, activateTargets, attackBlocked, playBlocked, playTargets, retreatCost, sellBlocked, sellRefund, skillBlocked,
@@ -514,11 +514,19 @@ export function Board(props: BoardProps<GameState>) {
     if (aiHolds) return;
     const t = setTimeout(() => {
       try {
+        // The rival plays at the match's strength (a Quick Match's is the
+        // player's choice; Story and the lessons set none: 'normal'), your
+        // own seat under auto-play at 'normal'. Read as each move is chosen,
+        // not at mount: the draft's Rival AI control sets it while this
+        // board is up.
+        const strength = ctx.currentPlayer !== me
+          ? getMatchConfig().aiStrength ?? DEFAULT_AI_STRENGTH
+          : DEFAULT_AI_STRENGTH;
         // enumerate inside the try — if the heuristic ever throws, falling
         // through to ending the turn keeps the match moving instead of
         // freezing the AI's turn forever (nothing else would re-arm this
         // effect).
-        const opts = enumerateAIMoves(G, ctx);
+        const opts = enumerateAIMoves(G, ctx, true, { strength });
         if (opts.length === 0) { endTurn(); return; }
         const best = opts[0];
         // boardgame.io types `moves` as Record<string, (...args: unknown[]) => void>
@@ -538,7 +546,7 @@ export function Board(props: BoardProps<GameState>) {
       }
     }, AI_THINK_MS);
     return () => clearTimeout(t);
-  }, [aiHolds, ctx, G, moves, startAttack, endTurn]);
+  }, [aiHolds, ctx, G, me, moves, startAttack, endTurn]);
 
   // AI watchdog. The loop above re-arms on state changes — but a dispatched
   // move the engine rejects (INVALID_MOVE) leaves G untouched, so nothing

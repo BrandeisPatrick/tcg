@@ -1,15 +1,19 @@
 import type { CardId } from '@/engine/types';
 import { itemCard, migrateCardIds } from '@/cards';
 import { BUILD_SIZE, DEFAULT_BUILDS, defaultBuild } from '@/cards/builds';
+import { AI_STRENGTHS, DEFAULT_AI_STRENGTH, type AiStrength } from '@/ai/heuristic';
 
 export const MAX_PREFERRED_HEROES = 4;
 
 /**
  * The save's schema. Version 1 had no version field and kept up to five
  * 15-card decks; version 2 keeps a build per hero instead (the decks are
- * dropped on load: the shop replaced the deck).
+ * dropped on load: the shop replaced the deck); version 3 adds the rival AI's
+ * strength (a save from before it plays 'normal').
  */
-const PLAYER_DATA_VERSION = 2;
+const PLAYER_DATA_VERSION = 3;
+/** The first version that keeps builds: an older save's are not carried over. */
+const BUILDS_SINCE = 2;
 
 interface PlayerData {
   version: number;
@@ -22,6 +26,8 @@ interface PlayerData {
   /** Every lesson finished — the title stops flagging the tutorial as the
    *  place to start. */
   tutorialDone: boolean;
+  /** How hard the rival AI plays a Quick Match, as last set on the draft. */
+  aiStrength: AiStrength;
 }
 
 const STORAGE_KEY = 'deadlock-tcg-player';
@@ -33,6 +39,7 @@ function defaultPlayerData(): PlayerData {
     builds: {},
     lessonsDone: [],
     tutorialDone: false,
+    aiStrength: DEFAULT_AI_STRENGTH,
   };
 }
 
@@ -46,6 +53,12 @@ function migrateBuild(ids: unknown): CardId[] {
     if (itemCard(id) && !out.includes(id)) out.push(id);
   }
   return out.slice(0, BUILD_SIZE);
+}
+
+/** A saved strength, or 'normal' for anything that is not one (none saved, an
+ *  old save, a value this version does not know). */
+function migrateStrength(raw: unknown): AiStrength {
+  return AI_STRENGTHS.find((s) => s === raw) ?? DEFAULT_AI_STRENGTH;
 }
 
 /** The saved builds, each brought up to date; a hero the game does not know,
@@ -71,10 +84,12 @@ export function loadPlayerData(): PlayerData {
       preferredHeroes: Array.isArray(parsed.preferredHeroes)
         ? parsed.preferredHeroes.slice(0, MAX_PREFERRED_HEROES)
         : [null, null, null, null],
-      // A version-1 save's `decks` are not carried over: builds start from the defaults.
-      builds: parsed.version === PLAYER_DATA_VERSION ? migrateBuilds(parsed.builds) : {},
+      // A version-1 save's `decks` are not carried over: builds start from the
+      // defaults. Versions 2 and 3 keep theirs.
+      builds: typeof parsed.version === 'number' && parsed.version >= BUILDS_SINCE ? migrateBuilds(parsed.builds) : {},
       lessonsDone: Array.isArray(parsed.lessonsDone) ? parsed.lessonsDone.filter((x: unknown) => typeof x === 'string') : [],
       tutorialDone: parsed.tutorialDone === true,
+      aiStrength: migrateStrength(parsed.aiStrength),
     };
   } catch {
     return defaultPlayerData();
@@ -106,6 +121,18 @@ export function saveBuild(heroId: CardId, items: CardId[]): void {
   const build = migrateBuild(items);
   if (build.length > 0) data.builds[heroId] = build;
   else delete data.builds[heroId];
+  savePlayerData(data);
+}
+
+/** How hard the rival AI plays a Quick Match: the player's choice, else 'normal'. */
+export function getAiStrength(): AiStrength {
+  return loadPlayerData().aiStrength;
+}
+
+/** Save how hard the rival AI plays the next Quick Match. */
+export function saveAiStrength(strength: AiStrength): void {
+  const data = loadPlayerData();
+  data.aiStrength = migrateStrength(strength);
   savePlayerData(data);
 }
 
