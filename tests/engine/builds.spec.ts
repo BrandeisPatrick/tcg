@@ -16,12 +16,12 @@ import { getBuild, saveBuild } from '@/storage/playerData';
 const tier = (id: string) => itemCard(id)!.tier;
 
 describe('items', () => {
-  it('every item is an active (spell) or a passive (equipment) item, with a tab and a tier 1–4', () => {
+  it('every item is an active (spell) or a passive (equipment) item, with a tab and a tier 1–5', () => {
     expect(ITEMS.length).toBeGreaterThan(0);
     for (const item of ITEMS) {
       expect(['spell', 'equipment'], item.id).toContain(item.type);
       expect(ITEM_SLOTS, item.id).toContain(item.slot);
-      expect([1, 2, 3, 4], item.id).toContain(item.tier);
+      expect([1, 2, 3, 4, 5], item.id).toContain(item.tier);
       expect(itemCard(item.id), item.id).toBe(item);
     }
     expect(new Set(ITEMS.map((i) => i.id)).size).toBe(ITEMS.length);

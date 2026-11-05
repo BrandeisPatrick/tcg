@@ -234,10 +234,10 @@ describe('reading the market', () => {
 
   it('onSale and marketByTab agree with the list: each item on sale under its tab and tier, once', () => {
     const byTab = marketByTab(G);
-    const listed = ITEM_SLOTS.flatMap((slot) => ([1, 2, 3, 4] as const).flatMap((tier) => byTab[slot][tier]));
+    const listed = ITEM_SLOTS.flatMap((slot) => ([1, 2, 3, 4, 5] as const).flatMap((tier) => byTab[slot][tier]));
     expect([...listed].sort()).toEqual([...marketItems(G)].sort());
     for (const slot of ITEM_SLOTS) {
-      for (const tier of [1, 2, 3, 4] as const) {
+      for (const tier of [1, 2, 3, 4, 5] as const) {
         for (const id of byTab[slot][tier]) expect([itemCard(id)!.slot, itemCard(id)!.tier], id).toEqual([slot, tier]);
       }
     }

@@ -189,6 +189,15 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'lightning_scroll',      name: 'Lightning Scroll',      type: 'equipment', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'mystic_slow', bonus: { hp: 2 }, abilities: ['eff_lightning_scroll'], text: '+2 HP. After the bearer casts its ultimate: every enemy takes 3 spirit damage, and the enemy Active is Stunned for 1 turn.' },
   { id: 'mercurial_magnum',      name: 'Mercurial Magnum',      type: 'equipment', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'quicksilver_reload', bonus: { spirit: 3 }, abilities: ['eff_mercurial_magnum', 'eff_mercurial_magnum_shot'], text: '+3 Spirit Power. After the bearer uses a skill: the enemy Active takes 2 spirit damage. After the bearer attacks: the target takes 1 spirit damage.' },
   { id: 'spirit_burn',           name: 'Spirit Burn',           type: 'equipment', rarity: 4, slot: 'spirit', tier: 4, bonus: { spirit: 3 }, abilities: ['eff_spirit_burn'], text: "+3 Spirit Power. A hit of 3 or more from the bearer's skill / spell / ult burns: 3 more spirit damage, then Bleed 2 and no healing for 2 turns." },
+
+  // ----- Added 2026-11-05: tier 5, Deadlock's 9,999-soul items (docs/card-design.md) -----
+  // Worn about two own turns, a tier-5 card earns its 24 souls with an effect
+  // that can decide a late match, not with stats; the budget behind each number
+  // is in the audit section of docs/card-design.md. No tier-5 item has a component.
+  { id: 'haunting_shot',   name: 'Haunting Shot',   type: 'equipment', rarity: 4, slot: 'weapon', tier: 5, abilities: ['eff_haunting_shot'], text: 'After the bearer attacks: every enemy hero takes spirit damage equal to a third of its HP, rounded up. Each gets Bullet Power −2, Spirit Power −2 and no healing for 2 turns, and is Rooted for 1 turn.' },
+  // Infinite Rounds pierces as Armor Piercer does; worn beside it, a swing pierces once.
+  { id: 'infinite_rounds', name: 'Infinite Rounds', type: 'equipment', rarity: 4, slot: 'weapon', tier: 5, abilities: ['eff_infinite_rounds', 'eff_infinite_rounds_pierce'], text: 'The bearer gains Extra Attack 3 each turn. Its attacks pierce: they ignore Bullet Resist and Shield, and the first enemy bench hero takes the swing too.' },
+  { id: 'frostbite_charm', name: 'Frostbite Charm', type: 'equipment', rarity: 4, slot: 'spirit', tier: 5, bonus: { spirit: 4 }, abilities: ['eff_frostbite_charm'], text: "+4 Spirit Power. When the bearer's skill / spell / ult damages an enemy: it takes 7 more spirit damage and is Stunned for 1 turn." },
 ];
 
 export const EQUIPMENT_BY_ID = Object.fromEntries(EQUIPMENT.map((e) => [e.id, e])) as Record<string, EquipmentCard>;

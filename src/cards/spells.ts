@@ -84,6 +84,13 @@ export const SPELLS: SpellCard[] = [
   { id: 'vampiric_burst', name: 'Vampiric Burst', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'bullet_lifesteal', abilities: ['eff_vampiric_burst'], text: 'Your Active heals 4, gains Extra Attack 2 this turn and +3 Bullet Power for 2 turns.' },
   { id: 'focus_lens',     name: 'Focus Lens',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, upgradesFrom: 'spirit_sap', hardCC: true, abilities: ['eff_focus_lens'], text: 'Silence any enemy for 2 turns. It gets Spirit Resist −2 for 2 turns and a Reverb of 2.' },
   { id: 'scourge',        name: 'Scourge',        type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_scourge'], text: 'An ally is cleansed of its debuffs and gains Spirit Resist 3 for 2 turns. Every enemy takes {sp:2} spirit damage.' },
+
+  // ----- Tier 5 (added 2026-11-05: Deadlock's 9,999-soul items, docs/card-design.md) -----
+  // Nullification Burst and Mystical Piano root or stun the whole enemy side:
+  // hard crowd control, two charges a match. Prism Blast cools down 3 own turns.
+  { id: 'nullification_burst', name: 'Nullification Burst', type: 'spell', rarity: 4, slot: 'vitality', tier: 5, hardCC: true, abilities: ['eff_nullification_burst'], text: 'Every enemy hero loses its buffs and takes {sp:1} spirit damage. They cannot be healed and are Rooted for 2 turns.' },
+  { id: 'mystical_piano',      name: 'Mystical Piano',      type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, hardCC: true, abilities: ['eff_mystical_piano'], text: 'Stun every enemy hero for 2 turns and Root them for 2 turns.' },
+  { id: 'prism_blast',         name: 'Prism Blast',         type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, abilities: ['eff_prism_blast'], text: 'Your Active gains Unstoppable for 1 turn. Every enemy takes {sp:7} spirit damage.' },
 ];
 
 export const SPELLS_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s])) as Record<string, SpellCard>;

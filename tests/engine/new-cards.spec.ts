@@ -43,7 +43,7 @@ describe('Card types follow the active / passive rule', () => {
   it('every item sits on a shop tab at a tier and is priced by it, and no two items share an id', () => {
     for (const item of [...SPELLS, ...EQUIPMENT]) {
       expect(['weapon', 'spirit', 'vitality'], item.id).toContain(item.slot);
-      expect([1, 2, 3, 4], item.id).toContain(item.tier);
+      expect([1, 2, 3, 4, 5], item.id).toContain(item.tier);
       expect(itemPrice(item.id), item.id).toBe(PRICE[item.tier]);
     }
     const all = [...SPELLS, ...EQUIPMENT].map((c) => c.id);

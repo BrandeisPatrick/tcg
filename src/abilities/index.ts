@@ -1441,32 +1441,45 @@ const eff_spirit_rend_drain: AbilityDef = {
   },
 };
 
-// Armor Piercer (canon T4 weapon): bullets that pierce through enemies and
-// ignore bullet resist. TCG: +2 Bullet Power (on the card). A swing at a hero
-// is raised by what its Bullet Resist and Shield would take off (the
-// attackBonus hook), so it lands whole. The first enemy bench hero behind the
-// target takes the swing too, dealt in the proc's frame: no gear fires on it,
-// and it does not bounce. Not on a bounce, nor in an ultimate's volley, which
-// reaches every hero already.
-const eff_armor_piercer: AbilityDef = {
-  id: 'eff_armor_piercer', trigger: 'onAttack', target: 'self',
-  base: 3,
-  attackBonus: (_self, target) => {
+/** A piercing swing's lift (the attackBonus hook, labelled for the item): what
+ *  the hero it is aimed at would take off it with its Bullet Resist and its
+ *  Shield, so it lands whole. Nothing against the Mid-Boss. */
+function throughArmour(label: string): NonNullable<AbilityDef['attackBonus']> {
+  return (_self, target) => {
     if (!target || isBoss(target)) return null;
     const resist = Math.max(target.statuses.find((s) => s.id === 'bullet_resist')?.value ?? 0, itemResist(target, 'attack'));
     const shred = target.statuses.find((s) => s.id === 'bullet_resist_down')?.value ?? 0;
     const shield = target.statuses.find((s) => s.id === 'shield')?.value ?? 0;
     const through = Math.max(0, resist - shred) + shield;
-    return through > 0 ? { amount: through, label: 'Armor Piercer: through armour' } : null;
-  },
-  run: (G, _ctx, { source, target, params }) => {
+    return through > 0 ? { amount: through, label } : null;
+  };
+}
+
+/** A piercing swing's follow-through: the first enemy bench hero behind the
+ *  target takes the swing too, dealt in the proc's frame (the item's `label`),
+ *  so no gear fires on it and it does not bounce. Not on a bounce, nor in an
+ *  ultimate's volley, which reaches every hero already. */
+function pierceBehind(label: string): AbilityDef['run'] {
+  return (G, _ctx, { source, target, params }) => {
     if (!source || !target || params?.bounce || !G.attackUsed || isRespawning(source)) return;
     const behind = G.players[otherPlayer(seatOf(source))].bench
       .find((b) => !!b && b !== target && !isRespawning(b) && b.hp > 0 && !isUntargetable(b, 'attack'));
     if (!behind) return;
     const power = attackPower(source, behind).total;
-    if (power > 0) damageUnit(G, behind, power, 'attack', 'Armor Piercer', { tag: 'ricochet' });
-  },
+    if (power > 0) damageUnit(G, behind, power, 'attack', label, { tag: 'ricochet' });
+  };
+}
+
+// Armor Piercer (canon T4 weapon): bullets that pierce through enemies and
+// ignore bullet resist. TCG: +2 Bullet Power (on the card). A swing at a hero
+// is raised by what its Bullet Resist and Shield would take off (the
+// attackBonus hook), so it lands whole, and the first enemy bench hero behind
+// the target takes the swing too (`throughArmour`, `pierceBehind`).
+const eff_armor_piercer: AbilityDef = {
+  id: 'eff_armor_piercer', trigger: 'onAttack', target: 'self',
+  base: 3,
+  attackBonus: throughArmour('Armor Piercer: through armour'),
+  run: pierceBehind('Armor Piercer'),
 };
 
 // Silencer (canon T4 weapon): bullets build up to a Silence. TCG: +5 Bullet
@@ -1805,6 +1818,130 @@ const eff_spirit_burn: AbilityDef = {
       addStatus(G, target, 'healing_boost_down', 1, 2);
     }
     resolve(G);
+  },
+};
+
+// ----- Added 2026-11-05: tier 5, Deadlock's 9,999-soul items (docs/card-design.md) -----
+// Worn about two own turns, a tier-5 card earns its 24 souls with an effect
+// that can decide a late match — a second attack and more, a stun or a wipe of
+// buffs on the whole enemy side, a hit on every enemy at once — not with
+// stats. The numbers come from the budget written beside each card.
+
+// Haunting Shot (canon T5 weapon): the next bullet haunts — it cuts the
+// enemy's damage, healing and speed, deals bonus spirit damage by its current
+// health, and is big enough to pass through everyone in line. TCG: after each
+// swing of the turn's attack (not a bounce, nor an ultimate's volley) every
+// standing enemy hero takes spirit damage of a third of its HP, rounded up,
+// then Bullet Power −2, Spirit Power −2 and no healing for 2 turns, and Rooted
+// for 1 turn (slowed: no Retreat). Dealt in the bearer's proc frame, so no gear
+// of its own fires on it.
+const eff_haunting_shot: AbilityDef = {
+  id: 'eff_haunting_shot', trigger: 'onAttack', target: 'self',
+  base: 3,
+  run: (G, _ctx, { source, params }) => {
+    if (!source || params?.bounce || !G.attackUsed || isRespawning(source)) return;
+    for (const c of liveBoardCards(G.players[otherPlayer(seatOf(source))])) {
+      if (!heroData(c) || c.hp <= 0) continue;
+      damageUnit(G, c, Math.ceil(c.hp / 3), 'spirit', 'Haunting Shot', { tag: 'burst' });
+      if (c.hp <= 0) continue;
+      addStatus(G, c, 'weapon_power_down', 2, 2);
+      addStatus(G, c, 'spirit_power_down', 2, 2);
+      addStatus(G, c, 'healing_boost_down', 1, 2);
+      addStatus(G, c, 'rooted', 1, 1);
+    }
+  },
+};
+
+// Infinite Rounds (canon T5 weapon): fire rate, and ammo that never runs out;
+// its bullets often turn unavoidable, piercing through enemies and ignoring
+// their bullet resist. TCG: the bearer gains Extra Attack 3 each turn (as
+// Burst Fire grants one), and its swings pierce as Armor Piercer's do. Worn
+// beside Armor Piercer it leaves the piercing to that card: a swing pierces once.
+const eff_infinite_rounds: AbilityDef = {
+  id: 'eff_infinite_rounds', trigger: 'startOfTurn', target: 'self',
+  base: 3,
+  run: (_G, _ctx, { source }) => { if (source) grantExtraAttacks(source, 3); },
+};
+const wearsArmorPiercer = (c: CardInstance | undefined) => !!c && wornItems(c).some((it) => it.cardId === 'armor_piercer');
+const infiniteThrough = throughArmour('Infinite Rounds: through armour');
+const infinitePierce = pierceBehind('Infinite Rounds');
+const eff_infinite_rounds_pierce: AbilityDef = {
+  id: 'eff_infinite_rounds_pierce', trigger: 'onAttack', target: 'self',
+  base: 3,
+  attackBonus: (self, target) => (wearsArmorPiercer(self) ? null : infiniteThrough(self, target)),
+  run: (G, ctx, args) => { if (!wearsArmorPiercer(args.source)) infinitePierce(G, ctx, args); },
+};
+
+// Frostbite Charm (canon T5 spirit): the imbued ability gains spirit power,
+// and what it damages is frozen and takes bonus damage. TCG: +4 Spirit Power
+// (on the card); when the bearer's skill / spell / ult damages an enemy, it
+// takes 7 more spirit damage and, still standing, is Stunned for 1 turn.
+const eff_frostbite_charm: AbilityDef = {
+  id: 'eff_frostbite_charm', trigger: 'onBearerSkillDamage', target: 'enemyActive',
+  base: 7,
+  run: (G, _ctx, { target }) => {
+    if (!target || isRespawning(target) || target.hp <= 0) return;
+    damageUnit(G, target, 7, 'spirit', 'Frostbite Charm', { tag: 'burst' });
+    if (target.hp > 0) addStatus(G, target, 'stun', 1, 1);
+    resolve(G);
+  },
+};
+
+// Mystical Piano (canon T5 spirit active): after a short delay every enemy in
+// a wide area is stunned and its stamina drained, then dazed. TCG: every enemy
+// hero is Stunned for 2 turns and Rooted for 2 turns (no stamina, no Retreat):
+// hard crowd control, two charges a match.
+const eff_mystical_piano: AbilityDef = {
+  id: 'eff_mystical_piano', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Mystical Piano — stun and root every enemy hero for 2 turns.',
+  base: 2,
+  run: (G, ctx) => {
+    for (const c of liveBoardCards(G.players[otherPlayer(ctx.movingPlayer)])) {
+      if (!heroData(c) || c.hp <= 0) continue;
+      addStatus(G, c, 'stun', 1, 2);
+      addStatus(G, c, 'rooted', 1, 2);
+    }
+  },
+};
+
+// Nullification Burst (canon T5 vitality active): a wave that strips every
+// positive effect off the enemies it reaches and stops their stamina and their
+// healing. TCG: every enemy hero loses its buffs (a Shield, Unstoppable, a
+// Dome, a channel: every status that helps it), takes {sp:1} spirit damage,
+// cannot be healed for 2 turns and is Rooted for 2 turns (no stamina, no
+// Retreat): hard crowd control, two charges a match.
+const eff_nullification_burst: AbilityDef = {
+  id: 'eff_nullification_burst', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Nullification Burst — strip every enemy hero of its buffs, burn it, and stop its healing and its Retreat.',
+  scalesSpirit: true, base: 1,
+  run: (G, ctx) => {
+    const dmg = 1 + activeSpi(G, ctx.movingPlayer);
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => {
+      if (!heroData(c) || c.hp <= 0) return;
+      const before = c.statuses.length;
+      c.statuses = c.statuses.filter((s) => (STATUSES_BY_ID[s.id]?.hvalue ?? 0) <= 0);
+      if (c.statuses.length < before) pushLog(G, `${cardName(c.cardId)} loses its buffs (Nullification Burst).`);
+      damageUnit(G, c, dmg, 'spirit', 'Nullification Burst');
+      if (c.hp <= 0) return;
+      addStatus(G, c, 'healing_boost_down', 1, 2);
+      addStatus(G, c, 'rooted', 1, 2);
+    });
+  },
+};
+
+// Prism Blast (canon T5 spirit active): a void state, untargetable and
+// invincible, while lasers turn round you and burn everything near. TCG: your
+// Active gains Unstoppable for 1 turn (no damage, no crowd control lands), and
+// every enemy takes {sp:7} spirit damage.
+const eff_prism_blast: AbilityDef = {
+  id: 'eff_prism_blast', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Prism Blast — your Active turns untouchable and every enemy takes 7 spirit damage.',
+  scalesSpirit: true, base: 7,
+  run: (G, ctx) => {
+    const mine = standingActive(G, ctx.movingPlayer);
+    if (mine) addStatus(G, mine, 'unstoppable', 1, 1);
+    const dmg = 7 + activeSpi(G, ctx.movingPlayer);
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit', 'Prism Blast'); });
   },
 };
 
@@ -2402,6 +2539,9 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_radiant_regeneration, eff_radiant_regeneration_ult, eff_torment_pulse,
   eff_focus_lens, eff_lightning_scroll, eff_mercurial_magnum, eff_mercurial_magnum_shot,
   eff_scourge, eff_spirit_burn,
+  // ----- Added 2026-11-05: tier 5 -----
+  eff_haunting_shot, eff_infinite_rounds, eff_infinite_rounds_pierce, eff_frostbite_charm,
+  eff_mystical_piano, eff_nullification_burst, eff_prism_blast,
   // ----- Hero skills -----
   skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige, skill_rem,
   skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
