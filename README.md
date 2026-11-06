@@ -25,8 +25,6 @@ A Quick Match goes like this.
 - A snake draft, four heroes each: one Active in the lane, three on the bench.
 - The pie rule: you draft first, and the rival moves first. Its first turn has
   no attack.
-- The match's market (below) is on screen before the first pick, so you can
-  draft against it. The same screen sets the rival AI's strength.
 
 ### Souls
 
@@ -122,8 +120,9 @@ Each level gives +1 HP, +1 Bullet Power and +1 Spirit Power.
 ### The rival AI
 
 The rival picks only from the engine's legal moves. It shops its build by rule
-and weighs everything else by playing it on a copy of the game. The draft
-screen sets its strength, and the choice is saved:
+and weighs everything else by playing it on a copy of the game. Every match
+plays Normal for now; the engine keeps three strengths for the sims, and no
+screen sets them:
 
 - **Easy:** Normal with seeded noise in its choices; it buys the first
   affordable build item and never saves.
@@ -132,7 +131,6 @@ screen sets its strength, and the choice is saved:
 - **Hard:** plays every line out to the turn's attack at each target it could
   aim at, and retreats only when that shows a gain.
 
-Story and the lessons always play Normal.
 
 ## The items
 
