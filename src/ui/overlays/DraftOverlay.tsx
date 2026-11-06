@@ -11,7 +11,6 @@
 //   ▸ YOUR team as four numbered tarot-style cards; the slot being drafted
 //     previews the focused hero in green, locked picks turn gold
 //   ▸ a chamfered LOCK button (Enter works too) — the one true "draft" trigger
-//   ▸ one line under the title: who drafts first, and so moves second
 //
 // Snake order is driven by the engine; this overlay only dispatches
 // draftPick when it's the local player's turn.
@@ -132,11 +131,6 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
     [],
   );
 
-  // The pie rule: the seat that drafts first moves second.
-  const seating = draft.order[0] === me
-    ? 'You draft first; the rival moves first.'
-    : 'The rival drafts first; you move first.';
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -192,7 +186,6 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           <span style={{ ...text.label, fontSize: isMobile ? 10 : 11, letterSpacing: isMobile ? '0.18em' : '0.3em', color: lobby.dim, whiteSpace: 'nowrap' }}>
             {complete ? 'Complete' : `${draft.currentIndex + 1}/${draft.order.length}`}
           </span>
-          {!isMobile && <Seating line={seating} compact={false} />}
         </div>
         {isMobile && (
           <>
@@ -206,7 +199,6 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           </>
         )}
       </div>
-      {isMobile && <Seating line={seating} compact />}
 
       {/* The pick strips, with the LOCK plate in the middle of the line
           where the two banners meet — level with the crews' cards, on the
@@ -277,25 +269,6 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
       </div>
 
     </motion.div>
-  );
-}
-
-// =============================================================================
-// SEATING
-// =============================================================================
-
-/** Who drafts first and so moves second, in one line: under the title on a
- *  phone, beside it on a wide screen. */
-function Seating({ line, compact }: { line: string; compact: boolean }) {
-  return (
-    <span style={{
-      position: 'relative', zIndex: 1,
-      ...text.label, fontSize: compact ? 10 : 10.5, letterSpacing: compact ? '0.14em' : '0.2em',
-      color: lobby.dim, whiteSpace: 'nowrap',
-      ...(compact ? { display: 'block', textAlign: 'center', marginTop: -4 } : { marginLeft: 6 }),
-    }}>
-      {line}
-    </span>
   );
 }
 
