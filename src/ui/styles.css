@@ -17,6 +17,15 @@ body {
 button { font-family: inherit; color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
 #root { display: flex; flex-direction: column; min-height: 100vh; }
 
+/* The shop's three categories in Deadlock's own colours: Weapon amber,
+   Vitality green, Spirit purple. The only colours the shop adds to the
+   poster's inks (poster.ts `shopInk` reads them). */
+:root {
+  --shop-weapon: #e09a3e;
+  --shop-vitality: #7db352;
+  --shop-spirit: #a07ad0;
+}
+
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.28); border-radius: 4px; }

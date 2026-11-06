@@ -5,17 +5,50 @@ export type CardId = string;
 export type AbilityId = string;
 export type StatusId = string;
 export type PlayerID = '0' | '1';
-export type Zone =
-  | 'deck'
-  | 'hand'
-  | 'active'
-  | 'bench'
-  | 'equipment'
-  | 'discard';
+/** Who a card instance belongs to: a seat — or nobody, the Mid-Boss in the
+ *  pit (`GameState.boss`). Read a seat-owned card's seat through `seatOf`
+ *  (query.ts). */
+export type Owner = PlayerID | 'none';
+/** Where a card instance is: an item in its owner's hand (bought, not yet
+ *  played onto a hero), a hero in the Active slot or on the bench, an item
+ *  worn by a hero (in its `attached` list), or the Mid-Boss in the pit
+ *  between the two lanes. */
+export type Zone = 'hand' | 'active' | 'bench' | 'equipment' | 'pit';
+
+/** The three structures of a side's track, front to back: damage goes to the
+ *  front standing one, and what is left over carries on to the next. */
+export type StructureKind = 'guardian' | 'walker' | 'patron';
+
+/** One structure of a side's track. A structure at 0 HP has fallen; one with
+ *  `max` 0 is not on this track at all (a scripted match's shorter one). */
+export interface Structure {
+  kind: StructureKind;
+  hp: number;
+  max: number;
+}
+
+/** A track's HP by structure, for a match that does not use `STRUCTURES` (a
+ *  Story fight's or a lesson's): a structure left out is not on the track
+ *  (its `max` is 0), and the Patron always is. */
+export type TrackHp = Partial<Record<StructureKind, number>>;
+
+/** What pushed into a structure: a kill (the victim's level + 1), or an
+ *  Active pushing into a lane its rival left empty (its bullet power). */
+export type PushCause = 'kill' | 'lane';
 
 export type DamageType = 'attack' | 'spirit' | 'pure';
 
 type CardType = 'hero' | 'spell' | 'equipment' | 'ultimate';
+
+/** An item's shop tab, from Deadlock's shop: Weapon items work through attacks
+ *  and Bullet Power, Spirit items through skills and spirit damage, Vitality
+ *  items through HP, healing, shields and resists. */
+export type ItemSlot = 'weapon' | 'spirit' | 'vitality';
+
+/** An item's shop tier, from Deadlock's shop (800 / 1,600 / 3,200 / 6,400 /
+ *  9,999 souls there). Its price here is `PRICE[tier]` (constants.ts), and
+ *  `ITEM_TIERS` lists them: every list of tiers reads that one. */
+export type ItemTier = 1 | 2 | 3 | 4 | 5;
 
 export interface BaseCard {
   id: CardId;
@@ -32,35 +65,61 @@ export interface HeroCard extends Omit<BaseCard, 'text'> {
   atk: number;
   hp: number;
   /** The skills the hero may use, in order: one or two, none for a passive-only
-   *  hero. A bare `useSkill` names `skills[0]`. A hero uses one skill a turn. */
+   *  hero. A bare `useSkill` names `skills[0]`. A hero uses one ability a turn
+   *  (a skill or its ultimate). */
   skills: AbilityId[];
   passives?: AbilityId[];
-  ult?: CardId;
+  /** The ultimate's ability id: a kit ability like a skill, unlocked at
+   *  ULT_UNLOCK_LEVEL and on its own cooldown. Its card (`ULTIMATES`, the one
+   *  whose `abilities[0]` it is) only names and draws it. */
+  ult?: AbilityId;
+  /** The hero's two signature items, chosen to fit its kit (one of tier 1 or
+   *  2): both are on sale in any match the hero is drafted into. */
+  signature: [CardId, CardId];
   flags?: { benchOnly?: boolean };
 }
 
-export interface SpellCard extends BaseCard {
+/** What every item shares, active or passive: its shop tab and tier (its price
+ *  is the tier's, `PRICE[tier]`), and the item it upgrades, when Deadlock builds
+ *  it from one in this catalogue: bought for a hero wearing that component, it
+ *  costs the difference and takes the component's place. */
+interface ItemFields {
+  slot: ItemSlot;
+  tier: ItemTier;
+  upgradesFrom?: CardId;
+}
+
+/** An ACTIVE item (Deadlock's `is_active_item`): worn like any item, and used
+ *  from its bearer's sheet as that hero's one ability of the turn. Its first
+ *  ability's target filter says what it is aimed at; every onPlay ability runs
+ *  when it is used. It then cools down (ACTIVE_COOLDOWN by tier), or, for hard
+ *  crowd control, spends one of its HARD_CC_CHARGES. */
+export interface SpellCard extends BaseCard, ItemFields {
   type: 'spell';
   abilities: AbilityId[];
-  cost?: number;
+  /** Hard crowd control (its effect stuns, silences, disarms, roots, sleeps or
+   *  curses an enemy): HARD_CC_CHARGES uses a match and no cooldown. */
+  hardCC?: true;
 }
 
-export interface EquipmentCard extends BaseCard {
+/** A PASSIVE item: always on while worn — its stat `bonus` and its abilities'
+ *  triggers and hooks. */
+export interface EquipmentCard extends BaseCard, ItemFields {
   type: 'equipment';
-  tier: 1 | 2 | 3 | 4;
   abilities?: AbilityId[];
   bonus?: { atk?: number; hp?: number; spirit?: number };
-  cost?: number;
-  /** Charge-based gear: number of times its reactive trigger fires before the
-   *  item is consumed (cooldown→draw family). Omitted for normal equipment. */
-  charges?: number;
 }
 
+/** Any item the shop sells: an active (spell) or a passive (equipment). */
+export type ItemCard = SpellCard | EquipmentCard;
+
+/** An ultimate's face: its name, text and art. The ultimate itself is a kit
+ *  ability of its hero (`HeroCard.ult`), used from the hero sheet and never
+ *  dealt, held or paid for. */
 export interface UltimateCard extends BaseCard {
   type: 'ultimate';
   linkedHero: CardId;
   abilities: AbilityId[];
-  cost?: number;
 }
 
 export type CardData = HeroCard | SpellCard | EquipmentCard | UltimateCard;
@@ -81,7 +140,7 @@ export interface StatusInstance {
 export interface CardInstance {
   iid: string;
   cardId: CardId;
-  ownerId: PlayerID;
+  ownerId: Owner;
   zone: Zone;
   slot?: 0 | 1 | 2 | 3;
   attachedTo?: string;
@@ -92,33 +151,49 @@ export interface CardInstance {
   spiritMod: number;
   statuses: StatusInstance[];
   exhausted: boolean;
-  /** This hero used a skill this turn. Each hero may use one skill a turn, and
-   *  a hero that has done so cannot attack this turn. */
+  /** This hero used an ability this turn — a skill or its ultimate. Each hero
+   *  uses one a turn; the Active may still make the turn's attack after it. */
   skillUsedThisTurn: boolean;
-  /** The skill this hero used this turn (set by `useSkill`, cleared with the
-   *  other turn flags): what Echo Shard repeats, and which of two skills the
-   *  hero sheet marks USED. Bookkeeping, so the replay trace ignores it. */
+  /** The ability this hero used this turn (set by `useSkill`, cleared with the
+   *  other turn flags): what Echo Shard repeats (a skill only), and which
+   *  plate the hero sheet marks USED. Bookkeeping, so the replay trace ignores it. */
   lastSkillUsed?: AbilityId;
-  /** Turns of its owner left before each skill may be used again (the
-   *  ability's `cooldown`). Present only once a skill has set one: the map is
-   *  dropped when it empties, so a hero that never used a cooldown skill has no
-   *  field. Ticks at the start of the owner's turn (docs/stats-model.md §1); a
-   *  fall and a respawn leave it as it is. */
+  /** Own turns left before each kit ability may be used again: a skill's
+   *  `cooldown` (SKILL_COOLDOWN when its data names none), an ultimate's
+   *  ULT_COOLDOWN. Present only once an ability has set one: the map is dropped
+   *  when it empties. Ticks at the start of the owner's turn (docs/stats-model.md
+   *  §1), on a corpse too; a fall and a respawn leave it as it is. */
   cooldowns?: Partial<Record<AbilityId, number>>;
-  /** This hero attacked this turn. Attacks are per hero — the attack gate reads
-   *  this flag, not `GameState.attackUsed` — so it cannot attack again this
-   *  turn, nor use its skill. It keeps the flag if it retreats to the bench
-   *  afterwards: a hero that swung, retreated and came back cannot swing again. */
-  attackedThisTurn?: boolean;
-  /** Per-instance play-cost override. When set, used instead of the card
-   *  definition's cost — e.g. Sinclair's free (0-cost) copied ultimate. */
-  costOverride?: number;
-  /**
-   * Charge-based equipment counter (cooldown→draw family). Initialized from the
-   * card's `charges` when attached; each qualifying trigger spends one, and the
-   * item is consumed (sent to discard) when it hits 0. Undefined for normal gear.
-   */
+  /** An ultimate this hero may use once, free, as a kit ability: Sinclair's
+   *  Audience Participation copies the enemy Active's. Gone once used; it
+   *  needs no level and has no cooldown, and it stays through a death. */
+  borrowedUlt?: AbilityId;
+  /** A hard crowd-control active's uses left this match (HARD_CC_CHARGES when
+   *  bought; it travels with the item). At 0 the item stays worn but cannot be
+   *  used. Undefined on every other card. An active's cooldown lives in this
+   *  instance's own `cooldowns`, keyed by its card id, and travels with it too. */
   charges?: number;
+  /** An item: the engine turn it was bought on — sold back on that turn it
+   *  refunds what was paid. Absent on a card that was not bought (a Story
+   *  reward). */
+  boughtOnTurn?: number;
+  /** An item: the souls paid for it (its price, or the difference for an
+   *  upgrade bought while its component was on its owner's side). */
+  paid?: number;
+  /** An upgrade bought and played this turn: the component its play consumed,
+   *  given back should the upgrade be sold on the same turn — to the hero that
+   *  wore it (`replacedFrom`), or to the hand it came from. Dropped when the
+   *  turn ends. */
+  replaced?: CardInstance;
+  /** The hero `replaced` was worn by; absent when it came from the hand. */
+  replacedFrom?: string;
+  /** A hero: the items whose first equip has paid it EXP_ON_EQUIP, so buying
+   *  one back (or moving it in) pays nothing more. */
+  equippedIds?: CardId[];
+  /** A hero: the Vitality category spike's +1 max HP is on its `hpMax` (it
+   *  wears 3+ Vitality items). Kept so the point comes off when the spike is
+   *  lost. */
+  vitalitySpike?: true;
   // Multi-attack is modeled via the `extra_attack` STATUS (value = N extra
   // full-power swings queued for this turn). It stacks additively across
   // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed by the
@@ -156,17 +231,47 @@ export interface CardInstance {
 
 export interface PlayerState {
   id: PlayerID;
-  hp: number;
-  hpMax: number;
+  /** The side's track, front to back: Guardian, Walker, Patron (always these
+   *  three, in this order — `STRUCTURES`, or a scripted match's own). Pushes
+   *  take the front standing one first (`pushStructures`, map.ts). The Patron
+   *  falling loses the match. */
+  structures: Structure[];
   souls: number;
-  deck: CardInstance[];
+  /** The items bought and not yet played onto a hero, in the order they came
+   *  (zone 'hand'). A card enters the hand only by `buy` (and a Story reward);
+   *  there is no deck, no draw and no cap. They count in net worth at list
+   *  price. */
   hand: CardInstance[];
   active: CardInstance | null;
   bench: (CardInstance | null)[]; // length 3
-  discard: CardInstance[];
-  ultsConsumed: string[]; // ult cardIds that have already entered hand this match
-  /** Deck archetype this player drafted (for eval/balance tracking). */
-  archetype?: string;
+  /** The side's heroes have felled the enemy Walker: every hero has the flex
+   *  slot, MAX_ITEMS + FLEX_SLOT items (`slotCap`). Set when that Walker falls
+   *  (map.ts). */
+  flexSlot: boolean;
+  /** The Rejuvenator: revives this side has left — a hero of it that falls
+   *  comes straight back in place, at full HP, one credit spent. Set to
+   *  REVIVE_CREDITS when the side takes the Mid-Boss; 0 once the window shuts. */
+  reviveCredits: number;
+  /** The last round the credits are good through (they lapse at its end). */
+  reviveUntilRound: number;
+}
+
+/** What the map has seen one side do this match: the result sheet and the
+ *  sims read it. */
+export interface MapRecord {
+  /** Enemy heroes that fell to this side — a kill the Rejuvenator undid
+   *  included (it still paid and pushed). The Mid-Boss's blow kills nobody's. */
+  kills: number;
+  /** Pushes this side made into the rival's structures (kills and empty
+   *  lanes), and the structure HP they took. */
+  pushes: number;
+  pushDamage: number;
+  /** Mid-Bosses this side took, and of them, the ones taken while it trailed
+   *  on net worth. */
+  bossKills: number;
+  bossKillsBehind: number;
+  /** Heroes of this side the Rejuvenator brought straight back. */
+  revives: number;
 }
 
 export interface LogEntry {
@@ -176,13 +281,13 @@ export interface LogEntry {
 
 /**
  * One "action" the player or AI just took — drives the matching reveal
- * animation (card-play flash, skill flash, ult flash) and the UI/AI lock that
+ * animation (item flash, skill flash, ult flash) and the UI/AI lock that
  * prevents the next move until the animation finishes. State transitions
  * `begin` → `done` via the `completeAction` move once the UI's animation
  * timeout fires. Engine moves do not gate themselves on this — tests bypass
  * the UI and the lock lives at the dispatch layer.
  */
-export type GameActionKind = 'play' | 'skill' | 'ult';
+export type GameActionKind = 'item' | 'skill' | 'ult';
 
 export interface GameAction {
   id: string;
@@ -204,7 +309,8 @@ export interface GameAction {
 // ---------------------------------------------------------------------------
 
 /** How an effect came about. The FX layer picks its animation family from
- *  this: a skill / spell / ult is a cast (a bolt leaves the caster), a proc is
+ *  this: a skill / spell (an active item) / ult is a cast (a bolt leaves the
+ *  caster), a proc is
  *  a passive going off, a tick is a start- or end-of-turn resolution. The
  *  basic swing is 'attack' — the engine reports it like everything else, but
  *  the combat choreographer has already walked it from the forecast BEFORE the
@@ -235,11 +341,12 @@ export type FxTag =
   | 'combo'          // Mo & Krill's Combo drain
   | 'siphon';        // Siphon Bullets' max-HP transfer
 
-/** Who caused an effect, as far as the board can point at them. */
+/** Who caused an effect, as far as the board can point at them (the Mid-Boss
+ *  belongs to nobody). */
 export interface FxSource {
   iid: string;
   cardId: CardId;
-  owner: PlayerID;
+  owner: Owner;
 }
 
 interface FxBase {
@@ -325,9 +432,10 @@ export interface SwingFx extends FxBase {
 }
 
 /** A cast just happened — pushed BEFORE its effects so the batch reads as
- *  "this caster did the following". `iid` is the casting unit on the board
- *  (the hero for a skill, the linked hero for an ult, the channelling Active
- *  for a spell, the bearer for equipment); absent when nobody's there. */
+ *  "this caster did the following". `iid` is the casting unit on the board:
+ *  the hero for a skill or an ultimate (`cardId` then names the ultimate's
+ *  face), the bearer for an active item ('spell', `cardId` the item) and for
+ *  an item put on ('equip'); absent when nobody's there. */
 export interface CastFx extends FxBase {
   kind: 'cast';
   castKind: 'skill' | 'spell' | 'ult' | 'equip';
@@ -337,10 +445,12 @@ export interface CastFx extends FxBase {
   targetIid?: string;
 }
 
-/** A corpse came back at full HP. */
+/** A corpse came back at full HP — or, `credit`, a hero the Rejuvenator
+ *  brought straight back where it fell. */
 export interface ReviveFx extends FxBase {
   kind: 'revive';
   iid: string;
+  credit?: true;
 }
 
 /** A hero reached a new level. */
@@ -350,14 +460,46 @@ export interface LevelUpFx extends FxBase {
   level: number;
 }
 
-export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx;
+/** A push hit a structure: `side`'s `structure` lost `amount` and has `hp`
+ *  left. One per structure a push reaches. */
+export interface PushFx extends FxBase {
+  kind: 'push';
+  side: PlayerID;
+  structure: StructureKind;
+  amount: number;
+  hp: number;
+  cause: PushCause;
+}
+
+/** A structure fell: `side`'s `structure`, to the other side's push. */
+export interface FallFx extends FxBase {
+  kind: 'fall';
+  side: PlayerID;
+  structure: StructureKind;
+}
+
+/** The Mid-Boss: it rose in the pit ('spawn'), it fell ('death': `pid` took
+ *  it, settled `by` the damage tally, net worth or the last hit), and its
+ *  reward ('award': `pid`'s souls and Rejuvenator credits). Its hits are
+ *  `hit` events like any unit's. */
+export interface BossFx extends FxBase {
+  kind: 'boss';
+  what: 'spawn' | 'death' | 'award';
+  iid: string;
+  pid?: PlayerID;
+  by?: 'damage' | 'netWorth' | 'lastHit';
+}
+
+export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx | PushFx | FallFx | BossFx;
 
 /**
  * Pre-match hero draft. Both players take turns picking 4 heroes each from
- * the full pool in snake order. While `draft != null` the regular match
- * gates (mulligan, normal moves) are inactive and the DraftOverlay is
- * displayed. On the 8th pick the move finalizes both PlayerStates with the
- * drafted heroes, clears `draft`, and flips `mulliganPending` to true.
+ * the full pool in snake order (seat 0 first). While `draft != null` the
+ * regular match gates are inactive and the DraftOverlay is displayed, the
+ * market beside it (each pick puts the hero's signature items on sale). On
+ * the 8th pick the move builds both PlayerStates from the drafted heroes,
+ * clears `draft` and ends the draft's turn: the first mover (seat 1, the pie
+ * rule) opens engine turn 1.
  */
 export interface DraftState {
   pool: CardId[];                                 // remaining hero ids
@@ -377,38 +519,87 @@ export interface Counters {
   action: number;
 }
 
+/** The two steps of a turn a player acts in (rules: Income → Shop → Act → End;
+ *  Income and End run on their own). */
+export type TurnStep = 'shop' | 'act';
+
 export interface GameState {
   /** Id / FX-seq / action-id counters — see ids.ts. */
   counters: Counters;
   players: { '0': PlayerState; '1': PlayerState };
+  /** The engine turn: both players' turns counted together, 1 the first
+   *  mover's first. Own turns and rounds are read off it by rounds.ts. 0 between
+   *  the last draft pick and the first turn. */
   turnNumber: number;
+  /** The seat that takes the first turn. The pie rule: seat 0 drafts first, so
+   *  seat 1 moves first in a drafted match; a scripted match names its own
+   *  (seat 0 by default). Read it through `firstMover` (rounds.ts). */
+  firstMover: PlayerID;
+  /** The seat a person plays, or null when the AI plays both (a sim). Only that
+   *  seat is asked who steps up when its Active falls (`pendingPromotion`); every
+   *  other seat is promoted on the spot. Seat 0 by default. */
+  humanSeat: PlayerID | null;
   log: LogEntry[];
   /** Pre-match hero draft. Null once draft completes. */
   draft: DraftState | null;
   /**
-   * Offset between boardgame.io's ctx.turn and the "real match turn". The
-   * draft phase uses boardgame.io turns for snake-order ownership, which
-   * inflates ctx.turn by ~5 turns before the match proper starts. This
-   * offset is set at the moment of draft completion so that turn.onBegin
-   * can compute `realTurn = ctx.turn - draftTurnsOffset` for soul refill +
-   * draw rules.
+   * Offset between boardgame.io's ctx.turn and the engine turn. The draft
+   * uses boardgame.io turns for its snake order, so the match's first turn is
+   * a later ctx.turn; `beginTurn` reads `G.turnNumber = ctx.turn -
+   * draftTurnsOffset`. Set when the last pick ends the draft's turn.
    */
   draftTurnsOffset: number;
-  mulliganPending: boolean;       // true after draft completes until player resolves opening mulligan
-  /** An attack has been made this turn. A turn is the player's to spend on
-   *  cards, skills, retreats and attacks in any order: every hero may attack
-   *  once a turn while it stands in the Active slot (the `attack` move, the
-   *  Active swinging one-way at the rival Active), so the hero a Retreat brings
-   *  in after a swing may swing too. Ending the turn never attacks. The gate is
-   *  per hero (`CardInstance.attackedThisTurn`); this flag only says whether
-   *  the turn has seen an attack yet — the board's turn phase and the coach
-   *  plate read it. Reset at each turn start. */
+  /** The match seed. The market is drawn from it (market.ts, through rng.ts),
+   *  so a match's market replays from G alone. */
+  seed: number;
+  /** What the shop sells this match, in the order it was put on sale: every
+   *  tier 1 item, the random slice drawn from `seed` before the draft, then the
+   *  signature items and the build of each hero as it was drafted. Fixed once
+   *  the draft ends. */
+  market: CardId[];
+  /** The builds the human seat brought: the player's saved builds, by hero,
+   *  from the match config at setup. A hero they do not name, and every hero
+   *  of an AI seat, follows its default build (cards/builds.ts). Read through
+   *  `buildOf` (market.ts). */
+  playerBuilds?: Record<CardId, CardId[]>;
+  /** The step of the turn in play: 'shop' (buy, sell, move items, then close
+   *  the shop) until `closeShop`, then 'act' (abilities, a Retreat, the
+   *  attack). Every turn opens on 'shop'; `endTurn` is legal in either. */
+  step: TurnStep;
+  /** The turn's attack has been made. One basic attack a turn per player: this
+   *  is its gate, and the attack ends the Act — after it nothing is legal but
+   *  `endTurn` (and an owed promotion). Ending the turn never attacks. Reset at
+   *  each turn start. */
   attackUsed: boolean;
-  /** Set by the `resolve` pass when a player's Active is a corpse and an
-   *  eligible bench hero can step up — i.e. a forced promotion is owed. The AI
-   *  side is auto-promoted inside `resolve`, so in practice this only flags the
-   *  local player ('0'): the UI shows the PromotionOverlay (human) or the
-   *  auto-play loop resolves it. Cleared once a promotion lands. */
+  /** The turn's Retreat has been made (one a turn). Reset at each turn start. */
+  retreatUsed: boolean;
+  /** The Mid-Boss standing in the pit between the lanes (zone 'pit', owned by
+   *  nobody, `boss_midboss`), or null while it is not up — before round
+   *  BOSS_SPAWN_ROUND, and from its death until it returns. Only basic attacks
+   *  reach it (`attackTargets` offers it); no status or ability does. */
+  boss: CardInstance | null;
+  /** The damage each side has dealt the boss standing in the pit: the side
+   *  with more takes it when it falls. Zeroed when a boss rises. */
+  bossDamage: { '0': number; '1': number };
+  /** The side that landed the last hit on the boss in the pit (the last
+   *  tie-break of who takes it); null before any hit. */
+  bossLastHit: PlayerID | null;
+  /** The round at whose start the boss next rises (BOSS_SPAWN_ROUND, then
+   *  BOSS_RESPAWN_ROUNDS after the round it died in). */
+  bossRespawnRound: number;
+  /** The hero that attacked the boss this turn: at the End step the boss hits
+   *  it back for BOSS_RETALIATION. Cleared at each turn start. */
+  bossAttacker: string | null;
+  /** Round ROUND_CAP is over (set as the second mover's own turn ROUND_CAP
+   *  ends): the match is decided on what stands (`checkWinner`). */
+  capped: boolean;
+  /** What each side has done on the map this match (kills, pushes, bosses,
+   *  revives). */
+  record: { '0': MapRecord; '1': MapRecord };
+  /** Set by the `resolve` pass when the human seat's Active is a corpse and an
+   *  eligible bench hero can step up — a forced promotion is owed, and the UI
+   *  asks who (PromotionOverlay), or the auto-play loop answers. Every other
+   *  seat is promoted inside `resolve`. Cleared once a promotion lands. */
   pendingPromotion?: PlayerID;
   /** Current resolving action (card play / skill / ult). UI watches this to
    *  trigger the reveal animation and pause further input until the player

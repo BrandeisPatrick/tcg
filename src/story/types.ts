@@ -3,8 +3,8 @@ import type { CardId } from '@/engine/types';
 /**
  * Story (campaign) mode. A roguelike run over a vintage New York City map:
  * the player starts with a single hero, fights along a branching node path,
- * recruits up to 4 heroes and builds a deck via 1-of-3 choices, while the
- * opponents scale up the deeper they go.
+ * recruits up to 4 heroes and gathers supplies for the next fight via 1-of-3
+ * choices, while the opponents scale up the deeper they go.
  */
 export type NodeKind = 'battle' | 'elite' | 'recruit' | 'supply' | 'boss';
 
@@ -23,6 +23,18 @@ export interface StoryNode {
   enemy?: CardId;
 }
 
+/** What the next fight starts with, gathered at supply stops on the way to
+ *  it (rewards add up until a fight is over): items as free cards in the hand
+ *  from the first turn, and souls held before the first income. */
+export interface FightReward {
+  items: CardId[];
+  souls: number;
+}
+
+/** One of the three things a supply stop offers: an item, or a purse of
+ *  souls. */
+export type RewardChoice = { item: CardId } | { souls: number };
+
 export interface StoryRun {
   seed: number;
   nodes: StoryNode[];
@@ -31,6 +43,7 @@ export interface StoryRun {
   currentNodeId: string | null;
   clearedNodeIds: string[];
   heroes: CardId[];     // recruited roster, 1..4
-  deck: CardId[];       // spell / equipment deck, grows via supply nodes
+  /** The supplies waiting for the next fight; that fight spends them. */
+  nextFight: FightReward;
   status: 'active' | 'won' | 'lost';
 }

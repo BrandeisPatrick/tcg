@@ -5,19 +5,35 @@
  *      (each skill of each hero on its own; a skill still cooling down never succeeds);
  *   C  a rejected move leaves the state untouched (validate before mutate), and the engine
  *      never throws on garbage arguments;
- *   D  targets: the engine accepts exactly the targets the ability's TargetFilter allows
- *      (rules oracle in oracle.ts, written from the TargetFilter doc, not from the engine);
+ *   D  targets and item use: a skill is accepted exactly on the targets its TargetFilter allows,
+ *      and an item worn on either side is used exactly when the item oracle says so — an
+ *      active one, in the act step, by a standing bearer that has not used its ability and no
+ *      status locks, ready (off cooldown, or a hard crowd-control charge left), on a target its
+ *      first ability's filter allows with the bearer as the source (rules oracles in oracle.ts,
+ *      written from the TargetFilter doc and rules.md, not from the engine);
  *   E  moveHero: legal swaps accepted, junk slots / an emptied Active / a bench-only hero in
- *      the Active slot refused;
+ *      the Active slot / any swap in the shop step refused;
  *   F  an owed promotion (G.pendingPromotion) leaves the promotion as the only legal action,
- *      endTurn and attack included (B, D and E are asked of ordinary positions);
+ *      endTurn, the attack, an item, a card from the hand and the shop included (B, D, E, H and
+ *      I are asked of ordinary positions);
  *   G  the attack: `attack(targetIid)` is accepted exactly for the heroes the rules oracle lists
  *      (the rival Active, or any living enemy hero for a hero with reach, never one under a
- *      Dome), a refusal changes nothing, and legalActions offers one attack per listed hero.
+ *      Dome), a refusal changes nothing, and legalActions offers one attack per listed hero;
+ *   H  the shop: sampled purchases (on the market or off it, an upgrade of what is held or worn
+ *      — the difference while a free copy is on the side —, souls short), sales (from the hand,
+ *      off a hero, a copy an upgrade in the hand claims), moves and the close are accepted
+ *      exactly when the shop oracle allows them; a shop move is refused in the act step and to
+ *      the seat not on turn, an act move in the shop step; and legalActions lists exactly the
+ *      shop moves the oracle allows (in the shop step) and the item uses (in the act step);
+ *   I  the hand: in either step, legalActions lists exactly the plays the oracle allows (each
+ *      hand card onto each hero of the side in a slot it may go on; none after the attack and
+ *      none for the seat not on turn), and sampled plays (its cards or not, onto its heroes, a
+ *      rival's, a merged Rem, junk) are accepted exactly when the oracle allows them.
  *
- * Everything is checked on structuredClones at the decision points of seeded live games.
- * KNOWN lists what the engine does today; see regressions.spec.ts for a minimal
- * reproduction of each.
+ * Everything is checked on structuredClones at the decision points of seeded live games; a
+ * probe move the engine accepts is also held to the transition rules and the state
+ * invariants (`probe:<id>` signatures). KNOWN lists what the engine does today; see
+ * regressions.spec.ts for a minimal reproduction of each.
  */
 import { describe, expect, it } from 'vitest';
 import { MIXES, seedFor } from './collect';

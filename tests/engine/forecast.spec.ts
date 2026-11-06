@@ -5,6 +5,7 @@ import { attackBlocked } from '@/engine/legality';
 import { addStatus } from '@/engine/statusOps';
 import type { CardInstance, GameState } from '@/engine/types';
 import { freshReadyGame, makeHero } from './_helpers';
+import { structureHp } from '@/engine/query';
 
 /**
  * The forecast is the real attack run on a copy and read back, so it can never
@@ -40,7 +41,7 @@ interface Case {
   /** What each swing does, in order. */
   steps: Partial<AttackStep>[];
   damageToActive: number;
-  patronDamage: number;
+  pushDamage: number;
   /** The defender's Active falls. */
   ko: boolean;
   /** How a mirror of the resolver (the planner this forecast replaced) got this board wrong, if it did. */
@@ -61,24 +62,24 @@ const cases: Case[] = [
       { rawDamage: 6, finalDamage: 6, predictedHpAfter: 34, predictedKO: false, shieldAbsorbed: 0, bonusLabel: 'Frenzy: +3 <½ HP' },
       { rawDamage: 3, finalDamage: 3, predictedHpAfter: 31, predictedKO: false, shieldAbsorbed: 0, bonusLabel: 'Extra Attack' },
     ],
-    damageToActive: 9, patronDamage: 0, ko: false,
+    damageToActive: 9, pushDamage: 0, ko: false,
   },
   {
-    name: 'Haze: Fixation grants one follow-up swing after her primary',
-    build: () => board('hero_haze').G,
+    name: 'Haze from Level 3: Fixation grants one follow-up swing after her primary',
+    build: () => { const { G, attacker } = board('hero_haze'); attacker.level = 3; return G; },
     steps: [
       { rawDamage: 3, finalDamage: 3, predictedHpAfter: 37, bonusLabel: undefined },
       { rawDamage: 3, finalDamage: 3, predictedHpAfter: 34, bonusLabel: 'Extra Attack' },
     ],
-    damageToActive: 6, patronDamage: 0, ko: false,
+    damageToActive: 6, pushDamage: 0, ko: false,
   },
   {
     name: 'Haze at the Extra Attack cap: Fixation cannot raise it, so she swings 7 times, not 8',
-    build: () => { const { G, attacker } = board('hero_haze'); extraAttacks(attacker, 6); return G; },
+    build: () => { const { G, attacker } = board('hero_haze'); attacker.level = 3; extraAttacks(attacker, 6); return G; },
     steps: Array.from({ length: 7 }, (_, i) => ({
       rawDamage: 3, finalDamage: 3, predictedHpAfter: 37 - 3 * i, bonusLabel: i === 0 ? undefined : 'Extra Attack',
     })),
-    damageToActive: 21, patronDamage: 0, ko: false,
+    damageToActive: 21, pushDamage: 0, ko: false,
     oldPlanner: 'added Fixation\'s +1 on top of the cap: 8 swings, 24 damage',
   },
   {
@@ -92,7 +93,7 @@ const cases: Case[] = [
       { rawDamage: 3, finalDamage: 1, shieldAbsorbed: 2, predictedHpAfter: 39 },
       { rawDamage: 3, finalDamage: 3, shieldAbsorbed: 0, predictedHpAfter: 36 },
     ],
-    damageToActive: 4, patronDamage: 0, ko: false,
+    damageToActive: 4, pushDamage: 0, ko: false,
   },
   {
     name: 'an Unstoppable target shrugs off every swing',
@@ -105,7 +106,7 @@ const cases: Case[] = [
       { rawDamage: 3, finalDamage: 0, predictedHpAfter: 40, predictedKO: false },
       { rawDamage: 3, finalDamage: 0, predictedHpAfter: 40, predictedKO: false },
     ],
-    damageToActive: 0, patronDamage: 0, ko: false,
+    damageToActive: 0, pushDamage: 0, ko: false,
   },
   {
     name: "Wraith's Mixed Bullets rider (her Spirit as a second hit) finishes the target after the bullet",
@@ -118,18 +119,18 @@ const cases: Case[] = [
     // does not break the card on it) — the rider does, and the FX layer plays
     // that knockout. The plan still says she fell.
     steps: [{ rawDamage: 2, finalDamage: 2, predictedHpAfter: 0, predictedKO: false }],
-    damageToActive: 4, patronDamage: 1, ko: true,
+    damageToActive: 4, pushDamage: 2, ko: true,
     oldPlanner: 'saw only the 2-damage bullet: 2 HP left, no patron life, 2 damage',
   },
   {
     name: "Mirage's Djinn's Mark detonates when the swing makes the 4th stack: the target takes 12 more",
     build: () => { const { G, defender } = board('hero_mirage'); addStatus(G, defender, 'djinns_mark', 3, 3); return G; },
     steps: [{ rawDamage: 3, finalDamage: 3, predictedHpAfter: 25, predictedKO: false }],
-    damageToActive: 15, patronDamage: 0, ko: false,
+    damageToActive: 15, pushDamage: 0, ko: false,
     oldPlanner: 'saw only the 3-damage bullet: 37 HP left, 3 damage',
   },
   {
-    name: 'Ricochet drops the last bench hero as the swing drops the Active: the patron pays two lives',
+    name: 'Ricochet drops the last bench hero as the swing drops the Active: both falls push (level + 1 each)',
     build: () => {
       const { G, attacker, defender } = board('hero_dynamo');
       wear(attacker, 'ricochet');
@@ -139,7 +140,7 @@ const cases: Case[] = [
       return G;
     },
     steps: [{ rawDamage: 3, finalDamage: 3, predictedHpAfter: 0, predictedKO: true }],
-    damageToActive: 3, patronDamage: 2, ko: true,
+    damageToActive: 3, pushDamage: 4, ko: true,
     oldPlanner: 'charged the patron for the Active only: 1 life',
   },
   {
@@ -149,7 +150,7 @@ const cases: Case[] = [
       { rawDamage: 3, finalDamage: 3, predictedHpAfter: 37 },
       { rawDamage: 3, finalDamage: 5, predictedHpAfter: 32 },
     ],
-    damageToActive: 8, patronDamage: 0, ko: false,
+    damageToActive: 8, pushDamage: 0, ko: false,
     oldPlanner: 'held the target\'s resist fixed across the swings: 6 damage',
   },
   {
@@ -161,7 +162,7 @@ const cases: Case[] = [
       return G;
     },
     steps: [{ rawDamage: 3, finalDamage: 2, predictedHpAfter: 38 }],
-    damageToActive: 2, patronDamage: 0, ko: false,
+    damageToActive: 2, pushDamage: 0, ko: false,
   },
 ];
 
@@ -175,7 +176,7 @@ describe('forecastAttack reads the real attack', () => {
     // The forecast never touches the game it was asked about.
     expect(G).toEqual(snapshot);
 
-    expect(plan).toMatchObject({ attackerId: '0', defenderId: '1', damageToActive: c.damageToActive, patronDamage: c.patronDamage });
+    expect(plan).toMatchObject({ attackerId: '0', defenderId: '1', damageToActive: c.damageToActive, pushDamage: c.pushDamage });
     expect(plan.defenderActiveKO).toBe(c.ko ? target.iid : null);
     expect(plan.steps).toHaveLength(c.steps.length);
     c.steps.forEach((want, i) => {
@@ -187,7 +188,7 @@ describe('forecastAttack reads the real attack', () => {
     expect(perform(real, '0', { type: 'attack' })).not.toBe(INVALID);
     const realTarget = [real.players['1'].active, ...real.players['1'].bench].find((x) => x?.iid === target.iid)!;
     expect(plan.damageToActive).toBe(Math.max(0, target.hp - realTarget.hp));
-    expect(plan.patronDamage).toBe(G.players['1'].hp - real.players['1'].hp);
+    expect(plan.pushDamage).toBe(structureHp(G.players['1']) - structureHp(real.players['1']));
     expect(plan.defenderActiveKO).toBe(realTarget.hp <= 0 ? target.iid : null);
     const last = plan.steps[plan.steps.length - 1];
     expect(last.predictedHpAfter).toBe(Math.max(0, realTarget.hp));
@@ -211,8 +212,7 @@ describe('forecastAttack when there is no attack to make', () => {
   const blocks: [string, () => GameState, string][] = [
     ['a stunned Frenzy bearer (the +3 rides on a swing, it does not make one)', stunnedFrenzy, 'cannot'],
     ['Turn 1', () => { const G = board('hero_dynamo').G; G.turnNumber = 1; return G; }, 'turn1'],
-    ['an Active that has attacked this turn', () => { const { G, attacker } = board('hero_dynamo'); G.attackUsed = true; attacker.attackedThisTurn = true; return G; }, 'used'],
-    ['an Active that used its skill', () => { const { G, attacker } = board('hero_dynamo'); attacker.skillUsedThisTurn = true; return G; }, 'skill'],
+    ['a turn whose attack has been made', () => { const G = board('hero_dynamo').G; G.attackUsed = true; return G; }, 'used'],
     ['no rival Active', () => { const G = board('hero_dynamo').G; G.players['1'].active = null; return G; }, 'noTarget'],
     ['a rival corpse in the lane', () => { const { G, defender } = board('hero_dynamo'); defender.hp = 0; defender.respawnTurnsLeft = 2; return G; }, 'noTarget'],
   ];
@@ -221,7 +221,7 @@ describe('forecastAttack when there is no attack to make', () => {
     const snapshot = structuredClone(G);
     expect(attackBlocked(G, '0')).toBe(why);
     const plan = forecastAttack(G, '0');
-    expect(plan).toEqual({ attackerId: '0', defenderId: '1', steps: [], damageToActive: 0, patronDamage: 0, defenderActiveKO: null });
+    expect(plan).toEqual({ attackerId: '0', defenderId: '1', steps: [], damageToActive: 0, pushDamage: 0, defenderActiveKO: null });
     expect(simulate(G, '0', { type: 'attack' })).toMatchObject({ invalid: true, events: [] });
     expect(G).toEqual(snapshot);
   });
@@ -237,7 +237,7 @@ describe('simulate', () => {
     expect(ran.G.attackUsed).toBe(true);
     expect(G).toEqual(snapshot);
 
-    const refused = simulate(G, '0', { type: 'playCard', cardIid: 'not-a-card' });
+    const refused = simulate(G, '0', { type: 'activate', itemIid: 'not-an-item' });
     expect(refused.invalid).toBe(true);
     expect(refused.events).toEqual([]);
     expect(refused.G).toEqual({ ...G, log: [] }); // the copy, left as it was

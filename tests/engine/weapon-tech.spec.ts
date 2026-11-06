@@ -49,7 +49,7 @@ describe('Toxic Bullets', () => {
     attach(G, hero, 'toxic_bullets');
 
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
-    expect(enemy.statuses.find((s) => s.id === 'bleed')?.value).toBe(1);
+    expect(enemy.statuses.find((s) => s.id === 'bleed')?.value).toBe(2);
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
@@ -58,7 +58,7 @@ describe('Toxic Bullets', () => {
 });
 
 describe('Tesla Bullets', () => {
-  it('chains 1 damage to an enemy bench hero on attack', () => {
+  it('chains 2 damage to an enemy bench hero on attack', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
@@ -66,7 +66,7 @@ describe('Tesla Bullets', () => {
     attach(G, hero, 'tesla_bullets');
 
     fireTriggers(G, hero, 'onAttack', { reaction: true, movingPlayer: '0', target: enemy });
-    expect(bench.hp).toBe(9); // 10 - 1 chain
+    expect(bench.hp).toBe(8); // 10 - 2 chain
   });
 
   it('no-ops when there is no enemy bench hero', () => {
@@ -93,12 +93,12 @@ describe('Suppressor', () => {
 });
 
 describe('Reactive Barrier', () => {
-  it('grants Shield 3 when the bearer suffers CC', () => {
+  it('grants Shield 4 when the bearer suffers CC', () => {
     const G = freshGame();
     const hero = G.players['0'].active!;
     attach(G, hero, 'reactive_barrier');
     // Applying a stun fires onBearerCCSuffered via statusOps.
     addStatus(G, hero, 'stun', 1, 2);
-    expect(hero.statuses.find((s) => s.id === 'shield')?.value).toBe(3);
+    expect(hero.statuses.find((s) => s.id === 'shield')?.value).toBe(4);
   });
 });

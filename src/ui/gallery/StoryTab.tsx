@@ -11,14 +11,15 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import type { CardId } from '@/engine/types';
 import { cardName } from '@/cards';
-import type { NodeKind, StoryRun } from '@/story/types';
+import type { NodeKind, RewardChoice, StoryRun } from '@/story/types';
 import { newRun, clearNode } from '@/story/storyRun';
-import { randomStartingHeroes, recruitChoices, supplyChoices } from '@/story/content';
+import { randomStartingHeroes, recruitChoices, rewardChoices } from '@/story/content';
 import { StopGlyph, KIND_INK, KIND_LABEL, Sticker } from '../story/StopGlyph';
 import { StopCard } from '../story/StopCard';
 import { RunPanel } from '../story/RunPanel';
 import { StorySheet } from '../story/StorySheet';
 import { PickOverlay } from '../story/PickOverlay';
+import { optionName } from '../story/RewardFace';
 import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { Section, Sub, Caption, Chip } from './primitives';
@@ -34,25 +35,32 @@ function useRuns() {
   return useMemo(() => {
     const fresh = newRun('hero_kelvin');
     // Battery and Wall Street down: City Hall and the other route heads open.
+    // The rosters and the supplies waiting for the next fight are set by
+    // hand, so each panel shows a different state.
     const early = { ...clear(fresh, ['battery', 'wallst']), heroes: ['hero_kelvin', 'hero_haze'] };
-    const full = { ...early, heroes: ['hero_kelvin', 'hero_haze', 'hero_lash', 'hero_paige'] };
-    // Up the Spine to the Cloisters (a cache), then to the boss.
+    const full = {
+      ...early,
+      heroes: ['hero_kelvin', 'hero_haze', 'hero_lash', 'hero_paige'],
+      nextFight: { items: ['extra_spirit'], souls: 4 },
+    };
+    // Up the Spine to the Cloisters (a cache), then to the boss with the
+    // item taken there.
     const toCache = { ...clear(early, ['cityhall', 'timessq', 'themet', 'reservoir']), heroes: ['hero_kelvin', 'hero_haze', 'hero_lash'] };
-    const toBoss = clear(toCache, ['cloisters']);
+    const toBoss = { ...clear(toCache, ['cloisters']), nextFight: { items: ['metal_skin'], souls: 0 } };
     const mid = {
       ...clear(fresh, ['battery', 'wallst', 'cityhall', 'bkbridge']),
       heroes: ['hero_kelvin', 'hero_haze', 'hero_viscous'],
-      deck: [...fresh.deck, 'healing_rite', 'extra_health'],
+      nextFight: { items: [], souls: 4 },
     };
+    // Two caches since the last fight: items from one, souls from the other.
     const late = {
       ...clear(fresh, ['battery', ...SPINE, 'bkbridge', 'gowanus', 'botanic', 'liberty_sp']),
       heroes: ['hero_kelvin', 'hero_haze', 'hero_lash', 'hero_paige'],
-      deck: [...fresh.deck, 'healing_rite', 'extra_health', 'cold_front', 'extended_magazine', 'rusted_barrel'],
+      nextFight: { items: ['healing_booster', 'cold_front'], souls: 8 },
     };
     const won = {
       ...clear(fresh, ['battery', ...SPINE, ...BOROUGHS, ...GATES]),
       heroes: ['hero_kelvin', 'hero_haze', 'hero_lash', 'hero_paige'],
-      deck: late.deck,
     };
     const lost = { ...mid, status: 'lost' as const };
     return { fresh, early, full, toCache, toBoss, mid, late, won, lost };
@@ -160,17 +168,17 @@ function StopCardsSection({ runs }: { runs: Runs }) {
 function RunPanelSection({ runs }: { runs: Runs }) {
   const [log, setLog] = useState<string | null>(null);
   const panels: { label: string; run: StoryRun }[] = [
-    { label: 'Fresh run', run: runs.fresh },
-    { label: 'Mid-run', run: runs.mid },
-    { label: 'Full roster, a boss down', run: runs.late },
+    { label: 'Fresh run, no supplies yet', run: runs.fresh },
+    { label: 'Mid-run, souls waiting', run: runs.mid },
+    { label: 'Full roster, a boss down, items and souls waiting', run: runs.late },
   ];
   const focus = (label: string) => (n: { name?: string; id: string }) => setLog(`${label}: show ${n.name ?? n.id}`);
   return (
     <Section title="Run panel" aside={log ? <span style={{ color: poster.stat.atkBright }}>{log}</span> : undefined}>
       <Caption>
-        The run at a glance, in ink so it reads over land and water. Press a hero or View for the cards, a
-        route for its next stop; Abandon asks first. On a phone it folds to the bar, which opens the same
-        panel as a sheet.
+        The run at a glance, in ink so it reads over land and water. Press a hero for the card, View for
+        what the next fight starts with (the items and souls taken at supply stops), a route for its next
+        stop; Abandon asks first. On a phone it folds to the bar, which opens the same panel as a sheet.
       </Caption>
       <Sub title="Desktop" note="288 wide" />
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 18 }}>
@@ -228,31 +236,42 @@ function SheetsSection({ runs }: { runs: Runs }) {
   );
 }
 
+type Pick = { title: string; subtitle: string; verb: string } & (
+  | { kind: 'hero'; options: CardId[] }
+  | { kind: 'supply'; options: RewardChoice[] }
+);
+
 function PickSection({ runs }: { runs: Runs }) {
-  const [open, setOpen] = useState<null | { kind: 'hero' | 'card'; title: string; subtitle: string; verb: string; options: CardId[] }>(null);
+  const [open, setOpen] = useState<Pick | null>(null);
   const [took, setTook] = useState<string | null>(null);
-  const picks = [
+  const picks: { label: string; hint: string; make: () => Pick }[] = [
     {
       label: 'Starting hero',
       hint: 'Three heroes dealt at random; one starts the run.',
-      make: () => ({ kind: 'hero' as const, title: 'Choose your first hero', subtitle: 'They start the run with you. Recruit three more on the way.', verb: 'Start with', options: randomStartingHeroes() }),
+      make: () => ({ kind: 'hero', title: 'Choose your first hero', subtitle: 'They start the run with you. Recruit three more on the way.', verb: 'Start with', options: randomStartingHeroes() }),
     },
     {
       label: 'Recruit',
       hint: 'A recruit stop: three heroes you do not have yet.',
-      make: () => ({ kind: 'hero' as const, title: 'Recruit a hero', subtitle: 'Brooklyn Bridge · one joins your roster', verb: 'Recruit', options: recruitChoices(runs.early, node(runs.early, 'bkbridge')) }),
+      make: () => ({ kind: 'hero', title: 'Recruit a hero', subtitle: 'Brooklyn Bridge · one joins your roster', verb: 'Recruit', options: recruitChoices(runs.early, node(runs.early, 'bkbridge')) }),
     },
     {
-      label: 'Supply cache',
-      hint: 'A cache: three cards, one goes in your deck.',
-      make: () => ({ kind: 'card' as const, title: 'Open the cache', subtitle: 'The Cloisters · one card goes in your deck', verb: 'Take', options: supplyChoices(runs.toCache, node(runs.toCache, 'cloisters')) }),
+      label: 'Supply, near the Battery',
+      hint: 'A recruit stop with a full roster: two tier 1–2 items or 4 souls, for the next fight.',
+      make: () => ({ kind: 'supply', title: 'Take a supply', subtitle: 'Brooklyn Bridge · one goes with you to the next fight', verb: 'Take', options: rewardChoices(runs.full, node(runs.full, 'bkbridge')) }),
+    },
+    {
+      label: 'Supply cache, deep',
+      hint: 'A cache before a boss: two tier 3–4 items or 12 souls.',
+      make: () => ({ kind: 'supply', title: 'Take a supply', subtitle: 'The Cloisters · one goes with you to the next fight', verb: 'Take', options: rewardChoices(runs.toCache, node(runs.toCache, 'cloisters')) }),
     },
   ];
   return (
     <Section title="Pick" aside={took ? <span style={{ color: poster.stat.atkBright }}>{took}</span> : undefined}>
       <Caption>
         The real overlay. Press a card to choose it, then the button that names it; 1–3, Enter and Escape
-        work too. Below 700px wide it turns into a strip with the chosen card large.
+        work too. Below 700px wide it turns into a strip with the chosen card large. A supply's third
+        choice, souls, prints as a card of its own.
       </Caption>
       <div className="gal-pick">
         {picks.map((p) => (
@@ -263,15 +282,27 @@ function PickSection({ runs }: { runs: Runs }) {
         ))}
       </div>
       <AnimatePresence>
-        {open && (
+        {open?.kind === 'hero' && (
           <PickOverlay
             key={open.title}
-            kind={open.kind}
+            kind="hero"
             title={open.title}
             subtitle={open.subtitle}
             options={open.options}
             confirmVerb={open.verb}
             onPick={(id) => { setTook(`${open.verb} ${cardName(id)}`); setOpen(null); }}
+            onCancel={() => setOpen(null)}
+          />
+        )}
+        {open?.kind === 'supply' && (
+          <PickOverlay
+            key={open.subtitle}
+            kind="supply"
+            title={open.title}
+            subtitle={open.subtitle}
+            options={open.options}
+            confirmVerb={open.verb}
+            onPick={(choice) => { setTook(`${open.verb} ${optionName(choice)}`); setOpen(null); }}
             onCancel={() => setOpen(null)}
           />
         )}

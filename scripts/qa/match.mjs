@@ -2,11 +2,12 @@
  * Full-match playtest — draft a real match, switch Auto on so the AI plays
  * both seats, and tick the virtual clock until the result sheet. Reads the
  * turn dial, the mover's attack lamp and the turn button on the way, so it
- * reports every state the turn flow went through (whose move, which phase,
- * whether the turn's attack was still to make, what the button offered) and
- * stops with a failure if the match sits still for a minute of game time.
- * The lessons walk four short scripted fights; this is the long way round:
- * draws, promotions, respawns, ultimates and a real ending.
+ * reports every state the turn flow went through (whose move, which beat of
+ * the turn's spine — Income, Shop, Act, End — and phase, whether the turn's
+ * attack was still to make, what the button offered) and stops with a failure
+ * if the match sits still for a minute of game time. The lessons walk four short scripted fights; this is
+ * the long way round: the shop every turn, promotions, respawns, ultimates and
+ * a real ending.
  *
  *   npm run dev            # in another terminal
  *   node scripts/qa/match.mjs OUT_DIR [PORT] [desktop|mobile]
@@ -37,14 +38,13 @@ const TICK_MS = 400;
 const STALL_TICKS = 60_000 / TICK_MS;
 const MAX_TICKS = 3000;
 
-const lockIn = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Lock In'))`;
 // The turn button — it only ever ends the turn; attacks are made from the
 // Active's sheet (here, by the AI through the same path).
 const turnButton = `document.querySelector('[aria-label="End Turn"]')`;
 // The mover's patron lamp says whether its Active can still attack:
-// "Ready to attack" or "Active has attacked" (the other seat's lamp
-// reads "Waiting for its turn").
-const LAMPS = ['Ready to attack', 'Active has attacked'];
+// "Shopping" (the shop is still open), "Ready to attack" or "Active has
+// attacked" (the other seat's lamp reads "Waiting for its turn").
+const LAMPS = ['Shopping', 'Ready to attack', 'Active has attacked'];
 const LOOK = `(() => {
   const dial = document.querySelector('[aria-label^="Turn "]');
   const over = [...document.querySelectorAll('*')].find((e) => e.children.length === 0 && /^(Victory|Defeat|Draw)$/.test(e.textContent.trim()));
@@ -68,9 +68,9 @@ try {
   for (let i = 0; i < 80; i++) {
     const st = await b.evaluate(`(() => {
       const lock = ${byText('Lock')};
-      return { draft: !!document.querySelector('[aria-label^="Select "]') || !!lock, live: !!lock, mulligan: !!${lockIn}, board: !!${turnButton} };
+      return { draft: !!document.querySelector('[aria-label^="Select "]') || !!lock, live: !!lock, board: !!${turnButton} };
     })()`);
-    if (st.mulligan || (!st.draft && st.board)) break;
+    if (!st.draft && st.board) break;
     if (st.live) {
       await b.evaluate(`document.querySelector('[aria-label^="Select "]').click()`);
       await b.settle(3);
@@ -79,7 +79,6 @@ try {
     }
     await b.tick(TICK_MS); await b.settle(2);
   }
-  if (await b.evaluate(`!!${lockIn}`)) { await b.clickEl(lockIn, { js: true, scroll: false }); await b.settle(3); }
   await b.waitFor(turnButton, { timeout: 8000 });
   await b.tick(600); await b.settle(2);
   await b.shot(join(OUT, `${MODE}-start.png`));
@@ -95,7 +94,7 @@ try {
     const s = await b.evaluate(LOOK);
     if (s.over) { result = s.over; break; }
     if (!s.dial) continue;
-    const m = s.dial.match(/^Turn \d+ · (.+?) · (\w+) phase/);
+    const m = s.dial.match(/^Turn \d+ · (.+?) · (\w+) phase/);  // "Your Move · Income step", "Prepare"
     if (m) states.add(`${m[1]} · ${m[2]} · ${s.lamp ?? 'attack: —'} · button: ${s.button}`);
     if (s.dial === lastDial) {
       if (++still > STALL_TICKS) {

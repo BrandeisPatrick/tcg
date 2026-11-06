@@ -45,8 +45,10 @@ interface Firing {
   only?: 'passives' | 'equipment';
 }
 
-/** Run every ability on `bearer` that listens for `trigger`. */
+/** Run every ability on `bearer` that listens for `trigger`. The Mid-Boss
+ *  (owned by nobody) carries none. */
 export function fireTriggers(G: GameState, bearer: CardInstance, trigger: Trigger, firing: Firing = {}): void {
+  if (bearer.ownerId === 'none') return;
   const { target, amount, params, reaction } = firing;
   const only = reaction ? 'equipment' : firing.only;
   const ctx = { movingPlayer: firing.movingPlayer ?? bearer.ownerId };

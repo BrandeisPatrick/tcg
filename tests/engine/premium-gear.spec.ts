@@ -169,12 +169,12 @@ describe('Siphon Bullets', () => {
 });
 
 describe('Superior Duration', () => {
-  it("extends the bearer's own buffs by 1 turn (debuffs unaffected)", () => {
+  it("extends the bearer's own buffs by 2 turns (debuffs unaffected)", () => {
     const G = freshReadyGame();
     const hero = G.players['0'].active!;
     attach(hero, 'superior_duration');
-    addStatus(G, hero, 'weapon_power', 2, 2); // buff → 2 + 1 = 3
-    expect(dur(hero, 'weapon_power')).toBe(3);
+    addStatus(G, hero, 'weapon_power', 2, 2); // buff → 2 + 2 = 4
+    expect(dur(hero, 'weapon_power')).toBe(4);
     addStatus(G, hero, 'bleed', 2, 2); // debuff → unchanged
     expect(dur(hero, 'bleed')).toBe(2);
   });

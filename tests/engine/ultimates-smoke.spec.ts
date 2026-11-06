@@ -3,9 +3,9 @@ import { DeadlockGame } from '@/engine/game';
 import { ULTIMATES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { addStatus, tickCastingPulses } from '@/engine/statusOps';
-import { effectiveAtk } from '@/engine/query';
+import { effectiveAtk, kitAbilityIds } from '@/engine/query';
 import { damageUnit } from '@/engine/damage';
-import type { GameState, CardInstance } from '@/engine/types';
+import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 
 let seq = 0;
 function makeHero(cardId: string, ownerId: '0' | '1', zone: CardInstance['zone'], slot: 0 | 1 | 2 | 3): CardInstance {
@@ -30,6 +30,18 @@ function freshG(casterHero = 'hero_seven', enemyHero = 'hero_abrams'): GameState
   p1.bench = [makeHero('hero_lash', '1', 'bench', 1), makeHero('hero_dynamo', '1', 'bench', 2), null];
   p0.souls = 10; p1.souls = 10;
   return G;
+}
+
+/** The ultimates' cards anywhere on `pid`'s side of the board — its heroes and
+ *  what they wear: none ever, an ultimate being a kit ability. */
+function ultCardsOnBoard(G: GameState, pid: PlayerID): string[] {
+  const out: string[] = [];
+  const walk = (c: CardInstance) => {
+    if (CARDS_BY_ID[c.cardId]?.type === 'ultimate') out.push(c.cardId);
+    for (const a of c.attached ?? []) walk(a);
+  };
+  for (const c of [G.players[pid].active, ...G.players[pid].bench]) if (c) walk(c);
+  return out;
 }
 
 function targetFor(G: GameState, t: string): CardInstance | undefined {
@@ -88,14 +100,20 @@ describe('ultimate-specific behaviour', () => {
     expect(50 - enemy.hp).toBe(7);
   });
 
-  it('Sinclair copies the enemy Active ult into hand at 0 cost', () => {
+  it('Sinclair borrows the enemy Active\'s ultimate as a one-shot kit ability (no card of it appears anywhere)', () => {
     const G = freshG('hero_sinclair', 'hero_dynamo');
-    const before = G.players['0'].hand.length;
-    getAbility('eff_ult_sinclair')!.run(G, { movingPlayer: '0' }, {});
-    expect(G.players['0'].hand.length).toBe(before + 1);
-    const copy = G.players['0'].hand[G.players['0'].hand.length - 1];
-    expect(copy.cardId).toBe('ult_dynamo');
-    expect(copy.costOverride).toBe(0);
+    const sinclair = G.players['0'].active!;
+    getAbility('eff_ult_sinclair')!.run(G, { movingPlayer: '0' }, { source: sinclair });
+    expect(sinclair.borrowedUlt).toBe('eff_ult_dynamo');
+    expect(kitAbilityIds(sinclair)).toContain('eff_ult_dynamo');
+    expect(ultCardsOnBoard(G, '0')).toEqual([]);
+  });
+
+  it('Sinclair cannot borrow his own ultimate', () => {
+    const G = freshG('hero_sinclair', 'hero_sinclair');
+    const sinclair = G.players['0'].active!;
+    getAbility('eff_ult_sinclair')!.run(G, { movingPlayer: '0' }, { source: sinclair });
+    expect(sinclair.borrowedUlt).toBeUndefined();
   });
 
   it('Mirage repositions off Active and gains Shield 3', () => {

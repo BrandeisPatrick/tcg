@@ -8,7 +8,7 @@
  * walkable.
  *
  *   npm run dev            # in another terminal
- *   node scripts/qa/tutorial.mjs OUT_DIR [PORT] [desktop|mobile] [skill|souls|level|bench|all]
+ *   node scripts/qa/tutorial.mjs OUT_DIR [PORT] [desktop|mobile] [skill|souls|level|bench|map|all]
  */
 import { launch } from './cdp.mjs';
 import { mkdirSync } from 'node:fs';
@@ -29,7 +29,7 @@ const OUT = resolve(process.argv[2] ?? './tutorial-shots');
 const PORT = Number(process.argv[3] ?? 9337);
 const MODE = process.argv[4] ?? 'desktop';
 const WHICH = process.argv[5] ?? 'all';
-const LESSONS = WHICH === 'all' ? ['skill', 'souls', 'level', 'bench'] : [WHICH];
+const LESSONS = WHICH === 'all' ? ['skill', 'souls', 'level', 'bench', 'map'] : [WHICH];
 mkdirSync(OUT, { recursive: true });
 const W = MODE === 'mobile' ? 390 : 1440, H = MODE === 'mobile' ? 844 : 900;
 

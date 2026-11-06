@@ -1,8 +1,8 @@
-import type { CardId } from '@/engine/types';
+import type { CardId, ItemTier } from '@/engine/types';
 import type { StoryRun, StoryNode, NodeKind } from './types';
 import { REGIONS } from './campaign';
-import { enemyRosterSize, enemyBuff, patronHpForDepth, nodeLabel } from './content';
-import { isReachable } from './storyRun';
+import { enemyRosterSize, enemyBuff, enemySouls, patronHpForDepth, nodeLabel, supplyOffer } from './content';
+import { isFight, isReachable } from './storyRun';
 
 /**
  * What a stop on the story map IS, in words a panel can print: its route and
@@ -15,8 +15,9 @@ import { isReachable } from './storyRun';
 const START_REGION = 'start';
 const START_ROUTE_NAME = 'The Battery';
 
-/** A recruit stop with a full roster pays out a card instead, so it reads as
- *  a supply stop everywhere the player looks. */
+/** A recruit stop with a full roster pays out supplies instead (an item or
+ *  souls for the next fight), so it reads as a supply stop everywhere the
+ *  player looks. */
 export function effectiveKind(run: StoryRun, node: StoryNode): NodeKind {
   return node.kind === 'recruit' && run.heroes.length >= 4 ? 'supply' : node.kind;
 }
@@ -40,11 +41,12 @@ export interface StopFacts {
   foes: number;         // 0 when not combat
   buff: { atk: number; hp: number };
   patronHp: number;     // both patrons' HP at the stop (a fall costs the fallen hero's level); 0 when not combat
+  warChest: number;     // souls the opponent holds before its first income; 0 when not combat
+  /** A supply stop's offer: the tiers of its two items, or the souls instead. */
+  offer?: { tiers: ItemTier[]; souls: number };
   leader?: CardId;
   lockedBy?: StoryNode;
 }
-
-const isCombat = (k: NodeKind) => k === 'battle' || k === 'elite' || k === 'boss';
 
 /** A route's stops in order, the shared start left out. */
 function routeStopsOf(run: StoryRun, region: string | undefined): StoryNode[] {
@@ -76,7 +78,7 @@ export function stopFacts(run: StoryRun, node: StoryNode): StopFacts {
   const isStart = node.region === START_REGION;
   const route = REGIONS.find((r) => r.id === node.region);
   const stops = routeStopsOf(run, node.region);
-  const combat = isCombat(kind);
+  const combat = isFight(kind);
   return {
     node,
     kind,
@@ -89,6 +91,8 @@ export function stopFacts(run: StoryRun, node: StoryNode): StopFacts {
     foes: combat ? enemyRosterSize(node.depth, node.kind) : 0,
     buff: combat ? enemyBuff(node.depth, node.kind) : { atk: 0, hp: 0 },
     patronHp: combat ? patronHpForDepth(node.depth) : 0,
+    warChest: combat ? enemySouls(node.depth, node.kind) : 0,
+    offer: kind === 'supply' ? supplyOffer(node.depth) : undefined,
     leader: node.enemy,
     lockedBy: state === 'locked' ? blockerOf(run, node) : undefined,
   };

@@ -64,6 +64,20 @@ export const poster = {
   },
 } as const;
 
+/** A shop category's inks, read off its token (styles.css: `--shop-weapon`,
+ *  `--shop-vitality`, `--shop-spirit` — Deadlock's own amber, green and
+ *  purple): the ink itself (a tile's frame, a lit tab's rule), `deep` — the
+ *  ink pressed darker, for a keyline or a word drawn on it — and `wash`, a
+ *  faint film of it on the shop's graphite panel. */
+export const shopInk = (slot: 'weapon' | 'vitality' | 'spirit'): { ink: string; deep: string; wash: string } => {
+  const ink = `var(--shop-${slot})`;
+  return {
+    ink,
+    deep: `color-mix(in srgb, ${ink} 50%, ${poster.ink})`,
+    wash: `color-mix(in srgb, ${ink} 16%, transparent)`,
+  };
+};
+
 /** The ink a hero's Bullet Power prints in: the stat ink at its printed base,
  *  bright above it, dim below. */
 export const atkInk = (atk: number, base: number): string =>

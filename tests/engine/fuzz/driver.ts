@@ -3,9 +3,11 @@
  *
  * One call plays one whole game through a real boardgame.io Client with
  * `DeadlockGame` (draft included), so turn flow, endIf, onBegin and onEnd all
- * run. Three random streams keep a seed reproducible and keep observers honest:
+ * run. The match seed (`marketSeedFor(seed)`, handed to the match config) draws
+ * the market, so a seed is also a market. Three random streams keep a seed
+ * reproducible and keep observers honest:
  *   - the ENGINE stream: `Math.random` is pinned to mulberry32(seed) for the
- *     length of the game (shuffles, the AI deck pick, draft picks) and restored
+ *     length of the game (draft picks, the AI's tie-breaks) and restored
  *     afterwards, even if the game throws;
  *   - the POLICY stream: random-legal / chaos choices;
  *   - the HOOK stream: handed to hooks that want randomness of their own, so
@@ -16,8 +18,12 @@ import type { Ctx } from 'boardgame.io';
 import type { GameState, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
+import { legalActions } from '@/engine/legality';
+import { MATCH_TURNS } from '@/engine/rounds';
+import type { Action } from '@/engine/engine';
+import { ITEMS } from '@/cards';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { allIids, boardOf } from './oracle';
+import { allIids, boardOf, handOf, itemData, skillIdsOf, wornItemsOf } from './oracle';
 
 export type Policy = 'heuristic' | 'randomLegal' | 'chaos';
 const CHAOS_RATE = 0.3;
@@ -75,14 +81,17 @@ export interface Snapshot { G: GameState; ctx: Ctx }
 interface PlayOpts {
   seed: number;
   policies: Record<PlayerID, Policy>;
-  /** Real match turns before the game is called a stalemate. */
+  /** Real match turns before the game is called a stalemate: MATCH_TURNS (the
+   *  round cap's last turn) unless a spec asks for fewer — a guard no match reaches. */
   turnCap?: number;
   /** Accepted moves one seat may make in one turn before the driver ends it. */
   movesPerTurnCap?: number;
   chaosRate?: number;
   /** Heroes a seat tries to draft first (each pick takes the first one still in the
    *  pool), so rare interactions — Rem's merge, Sinclair's copied ultimate — are
-   *  played far more often than a uniform draft would. The rest is random. */
+   *  played far more often than a uniform draft would. The rest is random. The
+   *  list is taken in an order the seed draws, so the line-up (who stands Active,
+   *  who gets a hero both seats want) varies from seed to seed. */
   prefer?: Partial<Record<PlayerID, string[]>>;
   /** Before every attempt, with the state the move will be made from. May
    *  return nothing; throw to abort the game. `hookRandom` is a private stream. */
@@ -111,15 +120,42 @@ function pick<T>(arr: T[], r: () => number): T {
   return arr[Math.floor(r() * arr.length)];
 }
 
-const CHAOS_NAMES = ['playCard', 'useSkill', 'moveHero', 'promoteToActive', 'attack', 'endTurn'] as const;
+/** Each seat's preferences in an order drawn from `r` (a Fisher–Yates shuffle). */
+function seededOrder(prefer: Partial<Record<PlayerID, string[]>>, r: () => number): Partial<Record<PlayerID, string[]>> {
+  const out: Partial<Record<PlayerID, string[]>> = {};
+  for (const pid of ['0', '1'] as PlayerID[]) {
+    const list = prefer[pid];
+    if (!list) continue;
+    const a = [...list];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(r() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    out[pid] = a;
+  }
+  return out;
+}
 
-/** A random-but-plausible move: real iids from anywhere in G, slots 0..3 (with
- *  an occasional out-of-range or missing one), or sometimes nonsense. */
+/** The match seed a game's market is drawn from: a fixed function of the game seed,
+ *  so a seed replays its market whatever the engine stream has drawn first. */
+export function marketSeedFor(seed: number): number {
+  return (Math.imul(seed >>> 0, 0x9e3779b1) ^ 0x6a09e667) >>> 0;
+}
+
+const CHAOS_NAMES = ['buy', 'sell', 'moveItem', 'closeShop', 'playCard', 'activate', 'useSkill', 'moveHero', 'promoteToActive', 'attack', 'endTurn'] as const;
+/** Ids that name no item: a hero, an ultimate, nonsense. */
+const JUNK_ITEM_IDS = ['hero_haze', 'ult_lash', 'eff_cold_front', 'nope', ''];
+
+/** A random-but-plausible move: real iids from anywhere in G (the player's own
+ *  heroes, worn items and hand cards most of the time), real item ids from the
+ *  market (and now and then one off it, or one that names no item), slots 0..3
+ *  (with an occasional out-of-range or missing one), or sometimes nonsense. */
 export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name: string; args: unknown[] } {
   const iids = allIids(G);
   const mine = G.players[pid];
-  const myHand = mine.hand.map((c) => c.iid);
   const myBoard = boardOf(mine).map((c) => c.iid);
+  const myItems = boardOf(mine).flatMap((c) => wornItemsOf(c));
+  const myHand = handOf(G, pid);
   const anyIid = () => (r() < 0.06 ? `nope-${Math.floor(r() * 1000)}` : iids.length ? pick(iids, r) : 'x');
   const maybe = <T,>(v: T, pMissing = 0.12): T | undefined => (r() < pMissing ? undefined : v);
   const slot = () => {
@@ -128,22 +164,54 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
     if (x < 0.1) return undefined;
     return Math.floor(r() * 4);
   };
+  const myHero = () => (myBoard.length && r() < 0.8 ? pick(myBoard, r) : anyIid());
+  const myItem = (actives = false) => {
+    const pool = actives ? myItems.filter((c) => itemData(c.cardId)?.type === 'spell') : myItems;
+    return pool.length && r() < 0.8 ? pick(pool, r).iid : anyIid();
+  };
+  /** A card of the player's own: from the hand most of the time, else a worn item, else anything. */
+  const myCard = () => {
+    const x = r();
+    if (x < 0.7 && myHand.length) return pick(myHand, r).iid;
+    return x < 0.85 ? myItem() : anyIid();
+  };
+  const itemId = () => {
+    const x = r();
+    if (x < 0.75 && G.market?.length) return pick(G.market, r);
+    if (x < 0.9) return pick(ITEMS, r).id;
+    return pick(JUNK_ITEM_IDS, r);
+  };
   // The bookkeeping moves, now and then: they must be harmless outside their window.
   if (r() < 0.08) {
-    const extra = pick(['completeAction', 'mulligan', 'draftPick'], r);
+    const extra = pick(['completeAction', 'draftPick'], r);
     return { name: extra, args: extra === 'draftPick' ? [r() < 0.5 ? 'hero_haze' : anyIid()] : [] };
   }
   const name = pick([...CHAOS_NAMES], r);
   switch (name) {
-    case 'playCard': {
-      const card = myHand.length && r() < 0.8 ? pick(myHand, r) : anyIid();
-      const args: unknown[] = [maybe(card, 0.03), maybe(anyIid(), 0.25)];
-      if (r() < 0.3) args.push(maybe(anyIid(), 0.4));
+    case 'buy':
+      // Now and then a stray second argument, as the old two-argument buy made: the move ignores it.
+      return { name, args: r() < 0.15 ? [maybe(itemId(), 0.04), myHero()] : [maybe(itemId(), 0.04)] };
+    case 'sell':
+      return { name, args: [maybe(myCard(), 0.05)] };
+    case 'moveItem':
+      return { name, args: [maybe(r() < 0.8 ? myItem() : myCard(), 0.05), maybe(myHero(), 0.06)] };
+    case 'playCard':
+      return { name, args: [maybe(myCard(), 0.05), maybe(myHero(), 0.06)] };
+    case 'activate': {
+      const args: unknown[] = [maybe(myItem(true), 0.04)];
+      if (r() < 0.75) args.push(maybe(anyIid(), 0.2));
       return { name, args };
     }
     case 'useSkill': {
       const hero = myBoard.length && r() < 0.8 ? pick(myBoard, r) : anyIid();
-      return { name, args: [maybe(hero, 0.03), maybe(anyIid(), 0.3)] };
+      const args: unknown[] = [maybe(hero, 0.03), maybe(anyIid(), 0.3)];
+      // Now and then a named ability: one of the hero's kit (an ultimate among them), or junk.
+      if (r() < 0.35) {
+        const kit = boardOf(mine).find((c) => c.iid === hero);
+        const ids = kit ? skillIdsOf(kit) : [];
+        args.push(ids.length && r() < 0.8 ? pick(ids, r) : pick(['eff_ult_haze', 'skill_kelvin', 'nope'], r));
+      }
+      return { name, args };
     }
     case 'moveHero':
       return { name, args: [slot(), slot()] };
@@ -155,16 +223,17 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
 }
 
 export function playGame(opts: PlayOpts): GameRecord {
-  const turnCap = opts.turnCap ?? 40;
+  const turnCap = opts.turnCap ?? MATCH_TURNS;
   const movesPerTurnCap = opts.movesPerTurnCap ?? 40;
   const chaosRate = opts.chaosRate ?? CHAOS_RATE;
   const policyRandom = mulberry32((opts.seed ^ 0x9e3779b9) >>> 0);
   const hookRandom = mulberry32((opts.seed ^ 0x85ebca6b) >>> 0);
   const savedConfig = getMatchConfig();
+  const prefer = seededOrder(opts.prefer ?? {}, mulberry32((opts.seed ^ 0x27d4eb2f) >>> 0));
 
   return withQuietBgio(() => withPinnedRandom(opts.seed, () => {
-    // No scripted setup: the real draft path.
-    setMatchConfig({ playerDeck: [], heroPreferences: [null, null, null, null] });
+    // No scripted setup: the real draft path, on a market the seed draws.
+    setMatchConfig({ heroPreferences: [null, null, null, null], seed: marketSeedFor(opts.seed) });
     try {
       const client = Client({ game: { ...DeadlockGame, seed: `fuzz-${opts.seed}` } as any, numPlayers: 2 });
       client.start();
@@ -191,7 +260,7 @@ export function playGame(opts: PlayOpts): GameRecord {
         let rec: MoveRecord;
         if (G.draft) {
           const pool = G.draft.pool;
-          const wanted = (opts.prefer?.[pid] ?? []).find((h) => pool.includes(h));
+          const wanted = (prefer[pid] ?? []).find((h) => pool.includes(h));
           // Math.random is drawn either way so a preference never shifts the engine's stream.
           const roll = pool[Math.floor(Math.random() * pool.length)];
           rec = { step, name: 'draftPick', args: [wanted ?? roll], player: pid, policy: 'draft', chaos: false };
@@ -208,7 +277,7 @@ export function playGame(opts: PlayOpts): GameRecord {
         const stateId = st._stateID;
         let error: unknown;
         try {
-          (client.moves as any)[rec.name](...rec.args);
+          (client.moves as Record<string, (...a: unknown[]) => void>)[rec.name](...rec.args);
         } catch (e) {
           error = e;
           threw.push({ move: rec, error: String((e as Error)?.stack ?? e).split('\n').slice(0, 3).join(' | ') });
@@ -255,6 +324,45 @@ export function playGame(opts: PlayOpts): GameRecord {
   }));
 }
 
+/** The moves of the shop step a random seat makes there: the shop's, and a card played. */
+const SHOP_TYPES: ReadonlySet<Action['type']> = new Set(['buy', 'sell', 'moveItem', 'playCard', 'closeShop']);
+
+/** A shop-step move as a client call. */
+function shopCall(a: Action): { name: string; args: unknown[] } {
+  switch (a.type) {
+    case 'buy': return { name: 'buy', args: [a.itemId] };
+    case 'sell': return { name: 'sell', args: [a.itemIid] };
+    case 'moveItem': return { name: 'moveItem', args: [a.itemIid, a.toHeroIid] };
+    case 'playCard': return { name: 'playCard', args: [a.cardIid, a.heroIid] };
+    default: return { name: 'closeShop', args: [] };
+  }
+}
+
+/**
+ * A random legal shop-step move, for the randomLegal seats: the AI's own shop
+ * step is one rule-based move (play the card it just bought, buy its build's
+ * next item, or close the shop), so it never holds a card or sells or moves a
+ * worn one. This picks a kind of move the engine lists now — buy, sell, move,
+ * play or close — uniformly, then one of that kind, so the seat shops at random,
+ * holds cards across turns, plays them onto any hero, sells and moves items, and
+ * still closes the shop within a few moves. Undefined when the engine lists none.
+ */
+function randomShopMove(G: GameState, pid: PlayerID, r: () => number): { name: string; args: unknown[] } | undefined {
+  const shop = legalActions(G, pid).filter((a) => SHOP_TYPES.has(a.type));
+  if (!shop.length) return undefined;
+  const kinds = [...new Set(shop.map((a) => a.type))];
+  const kind = pick(kinds, r);
+  let options = shop.filter((a) => a.type === kind);
+  // Half the time a purchase is an upgrade of a card on the side, when one is on sale: the
+  // discounts, the claims and the settlement of one upgrade by another need them.
+  if (kind === 'buy' && r() < 0.5) {
+    const owned = new Set([...handOf(G, pid), ...boardOf(G.players[pid]).flatMap((h) => wornItemsOf(h))].map((c) => c.cardId));
+    const ups = options.filter((a) => a.type === 'buy' && owned.has(itemData(a.itemId)?.upgradesFrom ?? ''));
+    if (ups.length) options = ups;
+  }
+  return shopCall(pick(options, r));
+}
+
 function chooseMove(
   G: GameState,
   ctx: Ctx,
@@ -274,6 +382,12 @@ function chooseMove(
     if (policy === 'heuristic') {
       const best = enumerateAIMoves(G, ctx)[0];
       return best ? { ...base, name: best.move, args: best.args, chaos: false } : { ...base, name: 'endTurn', args: [], chaos: false };
+    }
+    // randomLegal (and the chaos seat between its inventions): the shop at random, then the
+    // AI's list of act moves at random. An owed promotion comes first (the AI lists it alone).
+    if (G.step === 'shop' && G.pendingPromotion === undefined) {
+      const m = randomShopMove(G, pid, r);
+      if (m) return { ...base, ...m, chaos: false };
     }
     const opts = enumerateAIMoves(G, ctx, false);
     const o = opts.length ? pick(opts, r) : undefined;

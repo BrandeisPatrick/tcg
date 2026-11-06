@@ -2,7 +2,7 @@ import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState, Fx
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from './damage';
 import { resolve, returnRemToBench } from './death';
-import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isRespawning, resistedBy, statusDuration } from './query';
+import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isBoss, isRespawning, resistedBy, seatOf, statusDuration } from './query';
 import { pushLog } from './log';
 import { cardName } from '@/cards';
 import { fireTriggers } from './triggers';
@@ -46,7 +46,9 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  * A corpse on its respawn timer takes no status at all (nothing is logged or
  * shown): an effect can reach a hero already reaped (an ultimate's gear on a
  * linked hero who fell), and a hero would otherwise respawn still carrying what
- * landed on its body.
+ * landed on its body. Nor does the Mid-Boss in the pit: it is immune to every
+ * status (no ability or item can aim at it, and nothing riding on a swing at
+ * it fires).
  *
  * `opts.ramp` marks a channel that escalates: its value climbs by `ramp`
  * after each pulse (see tickCastingPulses). `opts.heal` is the HP the bearer
@@ -56,7 +58,7 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
   // Nothing lands on a hero who is down: respawning, or at 0 HP and not yet
   // reaped (a kill is processed when the action resolves, after the on-hit
   // passives have run — a mark on the fallen would only be wiped with them).
-  if (isRespawning(target) || target.hp <= 0) return;
+  if (isRespawning(target) || target.hp <= 0 || isBoss(target)) return;
   const name = cardName(target.cardId);
 
   // What the bearer carries may refuse the status outright.
@@ -250,12 +252,14 @@ export function tickRemMerges(G: GameState, ps: PlayerState) {
 }
 
 /**
- * Tick every skill cooldown of `ps`'s heroes down by one, at the start of their
- * owner's turn (docs/stats-model.md §1): an entry that reaches 0 is removed, and
- * an empty map is removed with it, so a hero that is off cooldown is back to
+ * Tick every cooldown of `ps`'s heroes (skills and ultimates) and of the
+ * active items they wear down by one, at the start of their owner's turn
+ * (docs/stats-model.md §1): an entry that reaches 0 is removed, and an empty
+ * map is removed with it, so a hero or an item that is off cooldown is back to
  * having no field at all. It counts the owner's turns, so a hero on the
- * respawn timer and a merged Rem (out of the board sweep, riding on her
- * bearer) tick like the rest — a fall and a respawn leave a cooldown as it is.
+ * respawn timer, its items and a merged Rem (out of the board sweep, riding on
+ * her bearer, her own items with her) tick like the rest — a fall and a
+ * respawn leave a cooldown as it is.
  */
 export function tickCooldowns(ps: PlayerState) {
   const tick = (c: CardInstance) => {
@@ -268,11 +272,11 @@ export function tickCooldowns(ps: PlayerState) {
     }
     if (Object.keys(cooldowns).length === 0) delete c.cooldowns;
   };
-  for (const c of [ps.active, ...ps.bench]) {
-    if (!c) continue;
+  const walk = (c: CardInstance) => {
     tick(c);
-    for (const a of c.attached ?? []) tick(a);
-  }
+    for (const a of c.attached ?? []) walk(a);
+  };
+  for (const c of [ps.active, ...ps.bench]) if (c) walk(c);
 }
 
 export function clearTurnFlags(ps: PlayerState) {
@@ -280,7 +284,6 @@ export function clearTurnFlags(ps: PlayerState) {
     c.exhausted = false;
     c.skillUsedThisTurn = false;
     if (c.lastSkillUsed !== undefined) c.lastSkillUsed = undefined;
-    c.attackedThisTurn = false;
     // Any unused Extra Attack stack expires at end of turn (it's a this-turn
     // resource); the attack consumes it, and a turn that ends without one
     // lets it go. So does an unspent Swift (a free Retreat THIS turn) and a
@@ -329,7 +332,7 @@ export function tickCastingPulses(G: GameState, ps: PlayerState) {
     }
 
     const perTick = channel.value + effectiveSpirit(c);
-    const enemyId = otherPlayer(c.ownerId);
+    const enemyId = otherPlayer(seatOf(c));
     let totalDealt = 0;
     for (const e of liveBoardCards(G.players[enemyId])) {
       totalDealt += damageUnit(G, e, perTick, 'spirit', name, { tag: 'channel', source: c });

@@ -23,6 +23,7 @@ function freshGame(): GameState {
   }
   G.draft = null;   // setup() opens a draft; this is a battle already under way
   G.turnNumber = 2; // past the turn-1 no-attack guard
+  G.step = 'act';   // the shop closed: the attack is made in the act step
   return G;
 }
 

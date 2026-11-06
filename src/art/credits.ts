@@ -52,6 +52,7 @@ const OFL = 'SIL Open Font License 1.1, bundled through Fontsource.';
 const STEAM: CreditLink = { label: 'Deadlock on Steam', href: 'https://store.steampowered.com/app/1422450/' };
 const DL_API: CreditLink = { label: 'deadlock-api.com', href: 'https://deadlock-api.com/' };
 const DL_BUCKET: CreditLink = { label: 'Assets API', href: 'https://assets.deadlock-api.com/' };
+const DL_WIKI_ITEMS: CreditLink = { label: 'Deadlock wiki', href: 'https://deadlock.wiki/Items' };
 const FONTSOURCE: CreditLink = { label: 'Fontsource', href: 'https://fontsource.org/' };
 const EVSTRATIY_POST: CreditLink = { label: 'ArtStation post', href: 'https://www.artstation.com/artwork/kN9Bax' };
 const EVSTRATIY: CreditLink = { label: 'Evgeniy Evstratiy', href: 'https://www.artstation.com/evstratiyart' };
@@ -115,6 +116,18 @@ export const ART_CREDITS: CreditGroup[] = [
         thumb: { kind: 'image', src: `${BASE}status/stun.png`, fit: 'contain', ground: '#2a2a2a' },
       },
       {
+        id: 'map-icons',
+        title: 'Map icons',
+        by: 'The game\'s own pictures of its lane structures and the Mid-Boss, from the Deadlock wiki\'s asset mirror: the Lane Guardian, the Walker and the Patron icons, the Mid-Boss model (the wiki has no icon of it) and the Rejuvenator\'s buff icon.',
+        where: 'The structures on each side\'s rule, the Mid-Boss\'s plate in the pit, the Rejuvenator tag a side wears after taking it, and the match-end tags.',
+        links: [
+          { label: 'Deadlock wiki', href: 'https://deadlock.wiki/Structures' },
+          STEAM,
+        ],
+        terms: `${VALVE} Downscaled to 128 px for the web.`,
+        thumb: { kind: 'image', src: `${BASE}art/map_walker.png`, fit: 'contain', ground: '#2a2a2a' },
+      },
+      {
         id: 'hero-icons',
         title: 'Hero badges',
         by: 'The game\'s own hero icons, through the community-run Deadlock Assets API.',
@@ -126,9 +139,9 @@ export const ART_CREDITS: CreditGroup[] = [
       {
         id: 'items',
         title: 'Spell and item art',
-        by: 'The game\'s shop art for each item, through the Deadlock Assets API.',
+        by: 'The game\'s shop art for each item, from the Deadlock wiki\'s asset mirror; the first set came through the Deadlock Assets API.',
         where: 'The picture on every spell and equipment card, and the round icons on the table.',
-        links: [DL_API, DL_BUCKET],
+        links: [DL_WIKI_ITEMS, DL_API, DL_BUCKET],
         terms: VALVE,
         thumb: { kind: 'image', src: `${BASE}spells/cold_front.webp`, position: '50% 40%' },
       },

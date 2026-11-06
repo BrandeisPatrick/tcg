@@ -1,4 +1,5 @@
-import type { CardId } from '@/engine/types';
+import type { CardId, PlayerID, TrackHp } from '@/engine/types';
+import type { AiStrength } from '@/ai/heuristic';
 
 /** Custom numbers for one hero of a scripted match, by roster position
  *  (Active first, then the bench). `hpMax` sets a hero's full health and
@@ -12,23 +13,36 @@ export interface HeroStatOverride {
 
 /**
  * Direct match setup for Story mode — bypasses the pre-match hero draft and
- * builds both players from explicit rosters/decks, with a flat stat buff on
- * every enemy hero (opponents scale up as the campaign progresses) and an
- * optional patron-HP override (shorter early fights, epic late ones).
+ * builds both players from explicit rosters, with a flat stat buff on every
+ * enemy hero (opponents scale up as the campaign progresses) and an optional
+ * shorter structure track (quick early fights, epic late ones). The market is
+ * the match seed's, with both rosters' signature items on sale.
  */
 export interface StorySetup {
   playerHeroes: CardId[];   // 1..4
-  playerDeck: CardId[];
   enemyHeroes: CardId[];    // 1..4
-  enemyDeck: CardId[];
   enemyBuff: { atk: number; hp: number };
+  /** A track of the Patron alone, at this HP, for both sides (Story pacing);
+   *  left out, the standard track (STRUCTURES) — unless `structures` names one. */
   patronHp?: number;
-  /** Deal the player's deck in the order given instead of shuffling it, so a
-   *  scripted lesson can name the cards in the opening hand. */
-  orderedPlayerDeck?: boolean;
-  /** Open the match on a later turn (souls already ramped, ultimates already
-   *  dealt) — the later tutorial lessons start mid-fight rather than making
-   *  the player replay the opening every time. */
+  /** The rival's Patron-alone track, when it differs from `patronHp` (a
+   *  lesson whose one kill is the win). */
+  enemyPatronHp?: number;
+  /** Both sides' track by structure (a structure left out is not on it), when
+   *  it is neither the standard one nor a Patron alone: a lesson about the map. */
+  structures?: TrackHp;
+  /** The rival's track, when it differs from `structures`. */
+  enemyStructures?: TrackHp;
+  /** Cards the player starts the fight holding, free (a Story reward): in the
+   *  hand at the first turn, to be played onto a hero like any bought card. */
+  playerItems?: CardId[];
+  /** Souls each side holds before its first income (a Story reward, a deeper
+   *  opponent's war chest, a lesson's budget). */
+  playerSouls?: number;
+  enemySouls?: number;
+  /** Open the match on a later engine turn — a lesson that starts mid-fight
+   *  (from turn 2 on, the first turn has its attack). Seat 0 opens it either
+   *  way: on an even turn it is the second mover. */
   startTurn?: number;
   /** Custom attack / health / experience per hero, so a lesson can build the
    *  exact situation it teaches: a hero one point short of a level, a rival
@@ -38,8 +52,13 @@ export interface StorySetup {
 }
 
 interface MatchConfig {
-  playerDeck: CardId[];
   heroPreferences: (CardId | null)[];
+  /** The match seed (the market is drawn from it); a fresh one when left out. */
+  seed?: number;
+  /** The human seat's builds — the player's saved builds, by hero. Each
+   *  drafted hero's build goes on sale with it; a hero not named here (and
+   *  every hero of an AI seat) follows its default build. */
+  builds?: Record<CardId, CardId[]>;
   /** The hero the title's Quick Match card featured — the recommended first
    *  pick: the draft opens focused on it for the first choice only. Unset for
    *  a deep-linked match or a rematch, where nothing is pre-selected. */
@@ -48,17 +67,23 @@ interface MatchConfig {
   story?: StorySetup;
   /**
    * When present, the game skips the draft and builds the coached tutorial
-   * battle. Same shape as `story` (fixed rosters, fixed decks) but kept on its
+   * battle. Same shape as `story` (fixed rosters) but kept on its
    * own field so nothing downstream mistakes a lesson for a campaign node —
    * conceding returns to the title, not to the map.
    */
   tutorial?: StorySetup;
   /** Which lesson `tutorial` is — picks the coach's script. */
   lesson?: string;
+  /** The seat a person plays (seat 0 when left out); null when the AI plays
+   *  both seats, as in the balance sim: then both seats promote on the spot. */
+  humanSeat?: PlayerID | null;
+  /** How hard the AI seat plays ('normal' when left out). A Quick Match
+   *  takes the player's saved choice, which the draft can change; Story and
+   *  the lessons leave it out. */
+  aiStrength?: AiStrength;
 }
 
 let current: MatchConfig = {
-  playerDeck: [],
   heroPreferences: [null, null, null, null],
 };
 

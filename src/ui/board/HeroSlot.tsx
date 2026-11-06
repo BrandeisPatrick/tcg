@@ -7,10 +7,10 @@ import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 import { CARDS_BY_ID } from '@/cards';
-import { effectiveAtk } from '@/engine/query';
+import { effectiveAtk, hasSpike, itemCooldown } from '@/engine/query';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
-import { ITEM_IMG_BASE } from '@/art/assets';
+import { ItemIcon } from '../card/ItemIcon';
 import { StatusIcon } from '../card/StatusIcon';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
@@ -20,6 +20,8 @@ import { atkInk, hpInk, poster } from '../poster';
 import { LevelRing } from '../card/LevelRing';
 import { LevelTrim, trimInset } from '../card/LevelTrim';
 import { useStatTick } from './useStatTick';
+import { SpikeMark } from './SpikeMark';
+import { FlexSocket } from './FlexSocket';
 import type { ArmedPlay } from '../helpers';
 
 /**
@@ -51,11 +53,13 @@ interface Props {
   /** This hero can still do something this turn — use its skill, or (the
    *  Active) attack. A glint sweeps across the portrait. */
   ready?: boolean;
+  /** Its side has the flex slot (the enemy Walker fell): a fourth chip socket. */
+  flexSlot?: boolean;
 }
 
 export function HeroSlot({
   card, owner, myId, pending, isTargetable, isCurrentTurn, compact,
-  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready,
+  onTap, onLongPress, onEquipmentHover, registerSlotRef, ready, flexSlot,
 }: Props) {
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let pressFired = false;
@@ -112,7 +116,13 @@ export function HeroSlot({
   const isCorpse = respawnLeft > 0;
   // The hero whose skill, or whose attack, is armed and waiting for a target.
   const isArmedSource = !!pending && (pending.kind === 'useSkill' || pending.kind === 'attack') && pending.iid === card.iid;
-  const attached = isCorpse ? [] : (card.attached ?? []);
+  // Worn items stay on through a death: a corpse shows its gear too, greyed.
+  const attached = card.attached ?? [];
+  // The flex slot's empty fourth socket: the side has it and the hero wears
+  // fewer than four items (a merged Rem is no item).
+  const flexSocket = !!flexSlot && attached.filter((a) => CARDS_BY_ID[a.cardId]?.type !== 'hero').length < 4;
+  // A chip's size: a size down when four squares (the socket counted) share the row.
+  const chipDim = compact || attached.length + (flexSocket ? 1 : 0) > 3 ? 22 : 26;
   // On the small in-game tile we only have room for the primary keyword; the
   // identity colour keys the role band's left edge, as the draft dossier does.
   const identity = getHeroIdentity(card.cardId);
@@ -231,19 +241,35 @@ export function HeroSlot({
           <StatusRow statuses={shownStatuses} compact={!!compact} ringSize={ringSize} passTaps={!!pending} />
         )}
 
-        {/* Attached chips — bottom-left of portrait. Equipment shows item art;
-            a merged hero (Rem · Lil Helpers) shows her portrait + turn countdown. */}
-        {attached.length > 0 && (
+        {/* Worn chips — along the foot of the portrait, every item the hero
+            wears (a fourth in the flex slot too): its icon on a keyline of
+            its category's colour, the turns its cooldown has left over a
+            dimmed face, or a hard crowd-control item's charges as pips. A
+            merged hero (Rem · Lil Helpers) shows her portrait + turn
+            countdown. Once the side has the flex slot (it felled the enemy
+            Walker) an empty fourth socket waits beside them, a chip's size.
+            22px chips fit four abreast on a bench tile 111px wide (a 360px
+            phone); a row as wide as a desktop tile's prints them a size up
+            (the container query). A Spirit spike, which no stat on the tile
+            shows, is marked beside them — on a line of its own above when
+            four chips leave it no room. */}
+        {(attached.length > 0 || flexSocket) && (
           <div style={{
-            position: 'absolute', left: 4, bottom: 4,
-            display: 'flex', flexDirection: 'row', gap: 3,
+            position: 'absolute', left: 4, right: 4, bottom: 4,
+            display: 'flex', flexWrap: 'wrap-reverse', alignItems: 'center', gap: 3,
+            containerType: 'inline-size', containerName: 'worn',
+            pointerEvents: 'none',
+            ...(isCorpse ? { filter: 'grayscale(1) brightness(0.7)', opacity: 0.8 } : {}),
           }}>
-            {attached.slice(0, compact ? 3 : 4).map((eq) => {
+            <style>{'@container worn (min-width: 150px) { [data-worn] { zoom: 1.3; } }'}</style>
+            {attached.map((eq) => {
               const eqData = CARDS_BY_ID[eq.cardId];
               const isMerged = eqData?.type === 'hero'; // Rem merged in
-              const dim = compact ? 18 : 24;
+              const dim = chipDim;
+              const cooldown = isMerged ? 0 : itemCooldown(eq);
               return (
                 <div key={eq.iid}
+                  data-worn
                   onMouseEnter={(e) => { e.stopPropagation(); onEquipmentHover?.(eq); }}
                   onMouseLeave={(e) => { e.stopPropagation(); onEquipmentHover?.(null); }}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -254,40 +280,47 @@ export function HeroSlot({
                     position: 'relative',
                     width: dim,
                     height: dim,
-                    borderRadius: 4,
-                    background: poster.frame,
-                    border: `1.5px solid ${isMerged ? poster.green : poster.cream}`,
-                    overflow: 'hidden',
+                    flexShrink: 0,
+                    borderRadius: Math.max(3, Math.round(dim * 0.18)),
                     cursor: 'help',
+                    pointerEvents: 'auto',
+                    // A dark drop lifts the chip off the portrait behind it.
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
+                    ...(isMerged ? {
+                      background: poster.frame,
+                      border: `1.5px solid ${poster.green}`,
+                      overflow: 'hidden',
+                    } : {}),
                   }}
                   title={isMerged
                     ? `${eqData?.name} merged — ${eq.remMergeTurnsLeft ?? 0} turn(s) left`
+                    : eq.charges != null ? `${eqData?.name} — ${eq.charges} charge${eq.charges === 1 ? '' : 's'} left`
+                    : cooldown > 0 ? `${eqData?.name} — ready in ${cooldown} turn${cooldown === 1 ? '' : 's'}`
                     : eqData?.name}>
                   {isMerged ? (
-                    <HeroBadge cardId={eq.cardId} size={dim} />
+                    <HeroBadge cardId={eq.cardId} size={dim - 3} />
                   ) : (
-                    <img src={`${ITEM_IMG_BASE}${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+                    <ItemIcon
+                      itemId={eq.cardId}
+                      size={dim}
+                      chip
+                      marks={{ cooldown: cooldown > 0 ? cooldown : undefined, charges: eq.charges ?? undefined }}
+                    />
                   )}
-                  {/* Merge countdown (Rem) — green sticker, mirrors the charge pill. */}
+                  {/* Merge countdown (Rem) — green sticker in the corner. */}
                   {isMerged && eq.remMergeTurnsLeft != null && (
                     <span aria-label={`${eq.remMergeTurnsLeft} turns left`} style={{
                       ...chipPill(compact),
                       background: poster.green,
                     }}>{eq.remMergeTurnsLeft}</span>
                   )}
-                  {/* Charge counter — consumable gear (cooldown→draw family) only.
-                      Ink sticker that turns red on the last charge. */}
-                  {!isMerged && eq.charges != null && (
-                    <span aria-label={`${eq.charges} charges left`} style={{
-                      ...chipPill(compact),
-                      background: eq.charges <= 1 ? poster.red : poster.ink,
-                    }}>{eq.charges}</span>
-                  )}
                 </div>
               );
             })}
+            {flexSocket && <span data-worn style={{ display: 'inline-flex' }}><FlexSocket size={chipDim} /></span>}
+            {hasSpike(card, 'spirit') && (
+              <span data-worn style={{ display: 'inline-flex', pointerEvents: 'auto' }}><SpikeMark slot="spirit" size={compact ? 12 : 14} /></span>
+            )}
           </div>
         )}
 
@@ -418,6 +451,7 @@ export function HeroSlot({
                 : { scale: 1, color: atkColor }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             >{atk}</motion.span>
+            {hasSpike(card, 'weapon') && <SpikeMark slot="weapon" size={compact ? 10 : 12} style={{ alignSelf: 'flex-start', marginLeft: -1 }} />}
           </span>
           {shieldValue > 0 && (
             <span style={{ ...statRow.pair(statSize) }}>
@@ -442,6 +476,7 @@ export function HeroSlot({
                 : { scale: 1, color: hpColor }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             >{shownHp}</motion.span>
+            {hasSpike(card, 'vitality') && <SpikeMark slot="vitality" size={compact ? 10 : 12} style={{ alignSelf: 'flex-start', marginLeft: -1 }} />}
           </span>
         </div>
         )}
@@ -580,7 +615,9 @@ function chipPill(compact: boolean | undefined): CSSProperties {
  * Renders the in-slot respawn state over the greyed portrait: a dim wash, a
  * slow rotating cream clock ring, an hourglass glyph and a red countdown
  * sticker. On the last turn (1T) the wash turns green and pulses faster to
- * signal "about to revive."
+ * signal "about to revive", and the sticker says the hero is back next turn —
+ * the whole wait in rounds 1–4, where a fall costs a single turn (the timer
+ * grows by the round it fell in, and by one for the richest hero).
  */
 function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: boolean }) {
   const isLast = turnsLeft === 1;
@@ -652,24 +689,31 @@ function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: bo
             fill={poster.cream} stroke={poster.ink} strokeWidth="2.5" strokeLinejoin="round" />
         </svg>
       </div>
-      {/* Countdown sticker — RESPAWN (3), the poster's red action sticker */}
+      {/* Countdown sticker — RESPAWN (3), the poster's red action sticker;
+          on the last turn it turns the wash's green with ink type (the
+          shop's green tag), and says the hero is back next turn. */}
       <div style={{
         position: 'absolute',
         bottom: compact ? 10 : 18,
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: compact ? '3px 8px' : '4px 10px',
-        background: poster.red,
-        color: poster.paper,
+        background: isLast ? poster.green : poster.red,
+        color: isLast ? poster.ink : poster.paper,
         borderRadius: 3,
+        boxShadow: '0 3px 8px rgba(0, 0, 0, 0.35)',
         fontFamily: fonts.display,
         fontSize: compact ? 9 : 10,
-        letterSpacing: '0.24em',
+        letterSpacing: '0.2em',
         textTransform: 'uppercase',
         lineHeight: 1,
         whiteSpace: 'nowrap',
       }}>
-        <span>Respawn</span>
-        <span style={{ fontVariantNumeric: 'tabular-nums' }}>({turnsLeft})</span>
+        {isLast ? <span>{compact ? 'Next turn' : 'Back next turn'}</span> : (
+          <>
+            <span>Respawn</span>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>({turnsLeft})</span>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,43 +1,41 @@
 /**
  * Loadout — the one screen you set yourself up on: the squad you want the
- * draft to hand you, and the deck you take in with them. They used to be two
- * separate menu entries, which meant two trips to answer one question ("am I
- * ready to play?"); merged, the answer is on a single sheet.
+ * draft to hand you, and what each hero buys in the shop (its build, edited
+ * in BuildEditor and read by every match).
  *
  * Printed in the poster idiom — cream sheet on the blurred night scene, flat
  * ink, one red — so the menu reads as the same object as the title screen and
- * the table. Deck contents still open in their own editor: that's a different
- * job (fifteen cards), not a different answer.
+ * the table; the build editor's catalogue is the shop's graphite panel.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { HEROES, CARDS_BY_ID, cardName } from '@/cards';
+import { HEROES, cardName } from '@/cards';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
-import {
-  loadPlayerData, savePreferredHeroes, setSelectedDeckIndex, deleteDeck, resetStarterDecks,
-  MAX_PREFERRED_HEROES, MAX_DECKS, DECK_SIZE,
-} from '@/storage/playerData';
-import type { DeckSlot } from '@/storage/playerData';
+import { loadPlayerData, savePreferredHeroes, MAX_PREFERRED_HEROES } from '@/storage/playerData';
 import type { CardId } from '@/engine/types';
 import { HERO_IMG_BASE } from '@/art/assets';
+import { BuildEditor } from './BuildEditor';
 
 interface Props {
   onBack: () => void;
-  onEditDeck: (slotIndex: number) => void;
 }
 
-export function LoadoutScreen({ onBack, onEditDeck }: Props) {
+export function LoadoutScreen({ onBack }: Props) {
   const { isMobile, width } = useViewport();
   // Two columns only where both halves keep a workable width; below that the
-  // hero grid squeezes to three-across and the deck rows lose their numbers.
+  // hero grid squeezes to three-across.
   const split = width >= 1080;
 
   const [data, setData] = useState(() => loadPlayerData());
   const slots = padSlots(data.preferredHeroes);
+  // The squad's heroes in pick order — the build editor lists them first
+  // (one list per squad, so the editor's hero row is not rebuilt each render).
+  const squadKey = slots.filter((s): s is CardId => s !== null).join('|');
+  const squad = useMemo<CardId[]>(() => (squadKey ? squadKey.split('|') : []), [squadKey]);
 
   function writeSlots(next: (CardId | null)[]) {
     savePreferredHeroes(next);
@@ -71,7 +69,9 @@ export function LoadoutScreen({ onBack, onEditDeck }: Props) {
         background: poster.ground,
         color: poster.ink,
         fontFamily: fonts.ui,
-        overflowX: 'hidden',
+        // clip, not hidden: hidden makes a scroll container, and the build
+        // editor's strip could no longer stick to the top of the screen.
+        overflowX: 'clip',
       }}
     >
       <PosterBackdrop />
@@ -87,7 +87,7 @@ export function LoadoutScreen({ onBack, onEditDeck }: Props) {
           width: '100%',
           maxWidth: 1380,
           borderRadius: isMobile ? 18 : 28,
-          overflow: 'hidden',
+          overflow: 'clip',
           padding: isMobile ? '14px 14px 20px' : 'clamp(18px, 2.4vh, 28px) clamp(22px, 3vw, 38px) clamp(24px, 3vh, 34px)',
           ...sheetStyle,
         }}
@@ -137,15 +137,10 @@ export function LoadoutScreen({ onBack, onEditDeck }: Props) {
             compact={isMobile}
             split={split}
           />
-          <Decks
-            decks={data.decks}
-            selected={data.selectedDeckIndex}
-            compact={isMobile}
-            onSelect={(i) => { setSelectedDeckIndex(i); setData(loadPlayerData()); }}
-            onDelete={(i) => { deleteDeck(i); setData(loadPlayerData()); }}
-            onReset={() => { resetStarterDecks(); setData(loadPlayerData()); }}
-            onEdit={onEditDeck}
-          />
+          <section aria-label="Builds">
+            <SectionHead title="Builds" />
+            <BuildEditor squad={squad} />
+          </section>
         </div>
       </motion.section>
     </div>
@@ -409,259 +404,6 @@ function PickSlot({ index, heroId, onClear }: {
           {index + 1}
         </span>
       )}
-    </motion.button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Decks — pick the one you take in                                    */
-/* ------------------------------------------------------------------ */
-
-function Decks({ decks, selected, compact, onSelect, onDelete, onReset, onEdit }: {
-  decks: (DeckSlot | null)[];
-  selected: number | null;
-  compact: boolean;
-  onSelect: (i: number) => void;
-  onDelete: (i: number) => void;
-  onReset: () => void;
-  onEdit: (i: number) => void;
-}) {
-  const [confirming, setConfirming] = useState<number | null>(null);
-  // Resetting overwrites every slot, so it asks once more, the way Delete does.
-  const [confirmingReset, setConfirmingReset] = useState(false);
-
-  return (
-    <section>
-      <SectionHead title="Deck" note={`${DECK_SIZE} cards`} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 7 : 9 }}>
-        {Array.from({ length: MAX_DECKS }).map((_, i) => (
-          <DeckRow
-            key={i}
-            index={i}
-            deck={decks[i] ?? null}
-            active={selected === i}
-            confirming={confirming === i}
-            compact={compact}
-            onSelect={() => onSelect(i)}
-            onEdit={() => onEdit(i)}
-            onDeleteIntent={() => setConfirming(i)}
-            onDeleteConfirm={() => { onDelete(i); setConfirming(null); }}
-            onDeleteCancel={() => setConfirming(null)}
-          />
-        ))}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: compact ? 9 : 11, flexWrap: 'wrap' }}>
-        {confirmingReset ? (
-          <>
-            <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.14em', color: poster.redDeep }}>
-              Replace all {MAX_DECKS} decks?
-            </span>
-            <RowAction label="Reset" tone="red" onClick={() => { onReset(); setConfirmingReset(false); }} />
-            <RowAction label="Keep" tone="ink" onClick={() => setConfirmingReset(false)} />
-          </>
-        ) : (
-          <RowAction label="Reset to starter decks" tone="ink" onClick={() => setConfirmingReset(true)} />
-        )}
-      </div>
-    </section>
-  );
-}
-
-function DeckRow({
-  index, deck, active, confirming, compact,
-  onSelect, onEdit, onDeleteIntent, onDeleteConfirm, onDeleteCancel,
-}: {
-  index: number;
-  deck: DeckSlot | null;
-  active: boolean;
-  confirming: boolean;
-  compact: boolean;
-  onSelect: () => void;
-  onEdit: () => void;
-  onDeleteIntent: () => void;
-  onDeleteConfirm: () => void;
-  onDeleteCancel: () => void;
-}) {
-  if (!deck) {
-    return (
-      <motion.button
-        type="button"
-        onClick={onEdit}
-        aria-label={`Build a deck in slot ${index + 1}`}
-        whileHover={{ y: -2 }}
-        whileTap={{ scale: 0.99 }}
-        transition={spring.snappy}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          width: '100%',
-          padding: compact ? '13px 14px' : '15px 16px',
-          border: `1.5px dashed ${poster.inkDim}`,
-          background: 'transparent',
-          color: poster.inkDim,
-          cursor: 'pointer',
-          textAlign: 'left',
-        }}
-      >
-        <span style={{ ...text.label, fontSize: 11, color: poster.inkDim, fontVariantNumeric: 'tabular-nums' }}>
-          {index + 1}
-        </span>
-        <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.12em', textTransform: 'uppercase', lineHeight: 1 }}>
-          New Deck
-        </span>
-      </motion.button>
-    );
-  }
-
-  const count = deck.cards.length;
-  const valid = count === DECK_SIZE;
-  const spells = deck.cards.filter((id) => CARDS_BY_ID[id]?.type === 'spell').length;
-
-  return (
-    <motion.div
-      layout
-      transition={spring.snappy}
-      style={{
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        gap: compact ? 9 : 12,
-        padding: compact ? '10px 11px' : '11px 13px',
-        // The chosen deck prints as a solid ink bar; the rest are outlines.
-        background: active ? poster.ink : 'transparent',
-        color: active ? poster.paper : poster.ink,
-        border: `1.5px solid ${active ? poster.ink : poster.inkRule}`,
-        ...clipBoth(chamfer(9)),
-      }}
-    >
-      {/* Slot numeral / active mark */}
-      <span
-        aria-hidden
-        style={{
-          ...text.label,
-          fontSize: 11,
-          width: 14,
-          flexShrink: 0,
-          textAlign: 'center',
-          color: active ? poster.gold : poster.inkDim,
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {active ? '●' : index + 1}
-      </span>
-
-      {/* Name + make-up. Clicking the body chooses the deck. */}
-      <button
-        type="button"
-        onClick={valid && !active ? onSelect : undefined}
-        disabled={!valid || active}
-        aria-label={active ? `${deck.name}, in use` : `Take ${deck.name} into matches`}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: 'block',
-          textAlign: 'left',
-          border: 'none',
-          background: 'none',
-          padding: 0,
-          color: 'inherit',
-          cursor: valid && !active ? 'pointer' : 'default',
-        }}
-      >
-        <div
-          style={{
-            fontFamily: fonts.display,
-            fontSize: compact ? 15 : 17,
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            lineHeight: 1.1,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {deck.name || `Deck ${index + 1}`}
-        </div>
-        <div
-          style={{
-            ...text.label,
-            fontSize: 9.5,
-            letterSpacing: '0.16em',
-            marginTop: 3,
-            color: active ? poster.creamDim : poster.inkDim,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          <span style={{ color: valid ? 'inherit' : active ? poster.red : poster.redDeep }}>{count}/{DECK_SIZE}</span>
-          {' · '}{spells} spells · {count - spells} items
-        </div>
-        {deck.heroes && deck.heroes.length > 0 && (
-          <div
-            style={{
-              ...text.label,
-              fontSize: 9.5,
-              letterSpacing: '0.12em',
-              marginTop: 2,
-              color: active ? poster.creamDim : poster.inkDim,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            For {deck.heroes.map((id) => cardName(id)).join(' · ')}
-          </div>
-        )}
-      </button>
-
-      {/* Actions */}
-      {confirming ? (
-        <>
-          <RowAction label="Delete" tone="red" onClick={onDeleteConfirm} />
-          <RowAction label="Keep" tone={active ? 'cream' : 'ink'} onClick={onDeleteCancel} />
-        </>
-      ) : (
-        <>
-          <RowAction label="Edit" tone={active ? 'cream' : 'ink'} onClick={onEdit} />
-          <RowAction label="×" tone={active ? 'cream' : 'ink'} onClick={onDeleteIntent} ariaLabel={`Delete ${deck.name}`} />
-        </>
-      )}
-    </motion.div>
-  );
-}
-
-function RowAction({ label, tone, onClick, ariaLabel }: {
-  label: string;
-  tone: 'ink' | 'cream' | 'red';
-  onClick: () => void;
-  ariaLabel?: string;
-}) {
-  const color = tone === 'red' ? poster.red : tone === 'cream' ? poster.cream : poster.ink;
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      aria-label={ariaLabel ?? label}
-      whileHover={{ y: -1 }}
-      whileTap={{ scale: 0.95 }}
-      transition={spring.snappy}
-      style={{
-        flexShrink: 0,
-        padding: label === '×' ? '5px 9px' : '5px 11px',
-        border: `1.5px solid ${tone === 'red' ? poster.red : color}`,
-        background: 'transparent',
-        color,
-        opacity: tone === 'cream' ? 0.8 : 1,
-        ...clipBoth(chamfer(5)),
-        fontFamily: fonts.display,
-        fontSize: 10.5,
-        letterSpacing: '0.16em',
-        textTransform: 'uppercase',
-        lineHeight: 1.2,
-        cursor: 'pointer',
-      }}
-    >
-      {label}
     </motion.button>
   );
 }

@@ -8,7 +8,7 @@ import { currentCast } from '@/engine/castContext';
 import { INVALID, perform } from '@/engine/engine';
 import { registerAbilities } from '@/engine/registry';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
-import type { CardInstance, FxEvent, GameState, HitFx, ShieldFx, SwingFx } from '@/engine/types';
+import type { CardInstance, FxEvent, GameState, HeroCard, HitFx, ShieldFx, SwingFx } from '@/engine/types';
 import { freshReadyGame, makeHero } from '../engine/_helpers';
 
 /** The FX scheduler is pure — pin the beat structure HeroSlot and FxLayer
@@ -178,10 +178,12 @@ describe('a Shield spilling', () => {
 // (cast 'attack') — the shape of the turn's attack, which the combat
 // choreographer walks and the board skips. The volley is not the turn's attack:
 // nothing walked it, so the timeline must play it. These read real engine
-// batches: the throwaway ultimate is played through `perform`, like any card,
-// and the turn's attack is made through it too.
+// batches: the throwaway ultimate is a kit ability of a throwaway hero (Lash's
+// numbers), used through `perform` like any ability, and the turn's attack is
+// made through it too.
 
 const VOLLEY_ULT = 'ult_ui_volley';
+const VOLLEY_HERO = 'hero_ui_volley';
 const volleyEffect: AbilityDef = {
   id: 'eff_ui_volley', trigger: 'onPlay', target: 'noTarget', base: 3,
   run: (G) => { const caster = currentCast()?.source; if (caster) attackAll(G, caster); },
@@ -189,19 +191,22 @@ const volleyEffect: AbilityDef = {
 
 beforeAll(() => {
   registerAbilities([volleyEffect]);
-  CARDS_BY_ID[VOLLEY_ULT] = { id: VOLLEY_ULT, name: 'Volley', type: 'ultimate', rarity: 4, cost: 0, linkedHero: 'hero_lash', abilities: [volleyEffect.id] };
+  CARDS_BY_ID[VOLLEY_ULT] = { id: VOLLEY_ULT, name: 'Volley', type: 'ultimate', rarity: 4, linkedHero: VOLLEY_HERO, abilities: [volleyEffect.id] };
+  CARDS_BY_ID[VOLLEY_HERO] = { ...(CARDS_BY_ID.hero_lash as HeroCard), id: VOLLEY_HERO, ult: volleyEffect.id };
 });
-afterAll(() => { delete CARDS_BY_ID[VOLLEY_ULT]; });
+afterAll(() => { delete CARDS_BY_ID[VOLLEY_ULT]; delete CARDS_BY_ID[VOLLEY_HERO]; });
 
 /** What a batch holds, in order — for reading a stream at a glance. */
 const shape = (batch: FxEvent[]) => batch.map((e) => (e.kind === 'hit' || e.kind === 'shield' || e.kind === 'immune' ? `${e.kind}:${e.cast ?? ''}` : e.kind));
 const isAttackEvent = (e: FxEvent) => e.kind === 'swing' || ((e.kind === 'hit' || e.kind === 'shield') && e.cast === 'attack');
 
-/** P0's Active is Lash (no passive to add events of its own); the rival side
- *  (Abrams, then Dynamo / Kelvin / Seven) stands 30 deep. */
+/** P0's Active is a Lash whose ultimate is the volley, unlocked (no passive to
+ *  add events of its own); the rival side (Abrams, then Dynamo / Kelvin / Seven)
+ *  stands 30 deep. */
 function table() {
   const G = freshReadyGame();
-  const lash = makeHero('hero_lash', '0', 'active', 0);
+  const lash = makeHero(VOLLEY_HERO, '0', 'active', 0);
+  lash.level = 2;
   G.players['0'].active = lash;
   const foe = G.players['1'];
   const foes = [foe.active!, ...foe.bench] as CardInstance[];
@@ -216,12 +221,8 @@ function made(G: GameState, move: () => void) {
   move();
   return { batch: G.fx.slice(before), seen };
 }
-const playVolley = (G: GameState, iid = 'ui-volley-1') => {
-  G.players['0'].hand.push({
-    iid, cardId: VOLLEY_ULT, ownerId: '0', zone: 'hand', attached: [],
-    hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
-  });
-  expect(perform(G, '0', { type: 'playCard', cardIid: iid })).not.toBe(INVALID);
+const playVolley = (G: GameState) => {
+  expect(perform(G, '0', { type: 'useSkill', heroIid: G.players['0'].active!.iid, skillId: volleyEffect.id })).not.toBe(INVALID);
 };
 const makeTurnAttack = (G: GameState) => expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
 

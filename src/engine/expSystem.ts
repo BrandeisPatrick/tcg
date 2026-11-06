@@ -1,25 +1,21 @@
 /**
- * Hero leveling, and the ultimate a level earns. Heroes start at Lv1 and climb
- * to the cap (the numbers are in constants.ts). Exp comes from the lane: the
- * Active earns more at the end of its owner's turn than a bench hero does, and
- * attaching equipment and landing a kill blow earn more still. It persists
- * across respawn. A hero that reaches ULT_UNLOCK_LEVEL has earned its
- * ultimate: the card is dealt to its owner's hand the moment it happens.
+ * Hero leveling. Heroes start at Lv1 and climb to the cap (the numbers are in
+ * constants.ts). Exp comes from the lane: the Active earns more at the end of
+ * its owner's turn than a bench hero does, and attaching equipment and landing
+ * a kill blow earn more still. It persists across respawn. A hero that reaches
+ * ULT_UNLOCK_LEVEL has unlocked its ultimate, a kit ability it uses from its
+ * sheet (legality's `skillBlocked` reads the level); the log says so.
  */
-import type { CardInstance, GameState, PlayerState } from './types';
+import type { CardInstance, GameState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
-import { allocatorOf } from './ids';
-import { makeInstance } from './deckOps';
-import { isRespawning, liveBoardCards } from './query';
+import { isRespawning, ultimateCard } from './query';
 import {
-  LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_HAND, MAX_LEVEL, START_LEVEL,
-  ULT_UNLOCK_LEVEL,
+  LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL, ULT_UNLOCK_LEVEL,
 } from './constants';
 
-/** Returns the number of levels gained (0 if no level-up). A level-up deals
- *  the ultimate it may have earned (see `dealEarnedUltimates`). */
+/** Returns the number of levels gained (0 if no level-up). */
 export function grantExp(G: GameState, card: CardInstance, amount: number): number {
   if (amount <= 0) return 0;
   if (isRespawning(card)) return 0;
@@ -51,30 +47,9 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
     card.spiritMod += spiritGain;
     pushLog(G, `${data.name} reached Level ${level} (+${atkGain} Bullet Power, +${hpGain} HP, +${spiritGain} Spirit Power).`);
     pushFx(G, { kind: 'levelup', iid: card.iid, level });
-    const ps = G.players[card.ownerId];
-    if (ps) dealEarnedUltimates(G, ps);
+    if (data.ult && startLevel < ULT_UNLOCK_LEVEL && level >= ULT_UNLOCK_LEVEL) {
+      pushLog(G, `${data.name} unlocked ${cardName(ultimateCard(data.ult)?.id ?? data.ult)}.`);
+    }
   }
   return gained;
-}
-
-/**
- * Deal the ultimate of every living hero of `ps` that has earned it (reached
- * ULT_UNLOCK_LEVEL) and not yet received it — once per match per ult, hand
- * space permitting. Runs on every level-up, so the card arrives the moment it
- * is earned (mid-turn included), and at the start of each turn for one a full
- * hand held back.
- */
-export function dealEarnedUltimates(G: GameState, ps: PlayerState) {
-  const ids = allocatorOf(G);
-  for (const hero of liveBoardCards(ps)) {
-    const data = CARDS_BY_ID[hero.cardId];
-    if (data?.type !== 'hero' || !data.ult) continue;
-    if ((hero.level ?? START_LEVEL) < ULT_UNLOCK_LEVEL) continue;
-    if (ps.ultsConsumed.includes(data.ult)) continue;
-    if (ps.hand.length >= MAX_HAND) break;
-    const ult = makeInstance(ids, data.ult, ps.id, 'hand');
-    ps.hand.push(ult);
-    ps.ultsConsumed.push(data.ult);
-    pushLog(G, `P${ps.id} unlocked ${cardName(data.ult)}.`);
-  }
 }

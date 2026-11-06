@@ -1,7 +1,7 @@
 /**
- * The Attack plate and the attack's targeting, read off the engine. Each hero
- * attacks once a turn from the Active slot, at the rival Active — unless it has
- * reach (`attackTargets`, legality.ts), when it may name any living enemy hero. With
+ * The Attack plate and the attack's targeting, read off the engine. The Active
+ * makes the turn's one attack, at the rival Active — unless it has reach
+ * (`attackTargets`, legality.ts), when it may name any living enemy hero. With
  * one hero to hit, the plate attacks at once, as it always has; with more, the
  * sheet closes and the board lights the heroes the attack may name, the way a
  * skill's targeting does, and a tap on one makes the attack at it. This file only
@@ -16,7 +16,7 @@ import { otherPlayer } from '@/engine/query';
 import { forecastAttack } from '@/engine/forecast';
 import type { PendingPlay } from '../helpers';
 import type { AttackOffer } from '../overlays/HeroDetailSheet';
-import { actionRefusal, attackBlockReason, attackLine, type Refusal } from './heroActions';
+import { SHOP_OPEN, actionRefusal, attackBlockReason, attackLine, type Refusal } from './heroActions';
 
 /** What the Active's sheet prints on its Attack plate: what the swing at the
  *  default target would do, or why it cannot be made (a Dome on the rival
@@ -25,12 +25,14 @@ import { actionRefusal, attackBlockReason, attackLine, type Refusal } from './he
  *  could name. */
 export function attackOffer(G: GameState, me: PlayerID, hero: CardInstance, isMyTurn: boolean): Omit<AttackOffer, 'onAttack'> {
   const block = isMyTurn ? attackBlocked(G, me) : null;
+  const shopOpen = isMyTurn && G.step === 'shop';
   return {
-    line: isMyTurn && block === null ? attackLine(forecastAttack(G, me)) : undefined,
+    line: isMyTurn && !shopOpen && block === null ? attackLine(forecastAttack(G, me)) : undefined,
     blockedReason: !isMyTurn ? 'Not your turn'
+      : shopOpen ? SHOP_OPEN
       : block ? attackBlockReason(block, G.players[otherPlayer(me)].active)
       : undefined,
-    made: !!hero.attackedThisTurn,
+    made: isMyTurn && G.attackUsed && G.players[me].active?.iid === hero.iid,
   };
 }
 

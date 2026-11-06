@@ -3,7 +3,8 @@ import { enumerateAIMoves } from '@/ai/heuristic';
 import { INVALID, perform } from '@/engine/engine';
 import { effectiveAtk, liveBoardCards } from '@/engine/query';
 import type { CardInstance, GameState, PlayerID, StatusInstance } from '@/engine/types';
-import { freshReadyGame, makeHero } from './_helpers';
+import { freshReadyGame, giveItem, makeHero } from './_helpers';
+import { newTrack } from '@/engine/map';
 
 // What the AI makes of a position: `evalState` (src/ai/heuristic.ts) prices the
 // statuses a unit carries, the channel it is running and a Rem merged into it.
@@ -13,11 +14,10 @@ import { freshReadyGame, makeHero } from './_helpers';
 
 const ctx = (pid: PlayerID) => ({ currentPlayer: pid, turn: 2, numPlayers: 2 }) as any;
 
-/** The position, read straight off the AI: with no souls and no hand the list is the
- *  attack and passing, and passing is scored as the position stands. */
+/** The position, read straight off the AI in the act step: with no souls and no
+ *  items, passing is scored as the position stands. */
 function standing(G: GameState): number {
   G.players['1'].souls = 0;
-  G.players['1'].hand = [];
   return enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'endTurn')!.score;
 }
 
@@ -155,7 +155,6 @@ describe('AI valuation: a position is worth to one seat what it costs the other'
     foe(G).attached = [rem];
     const score = (pid: PlayerID) => {
       G.players[pid].souls = 0;
-      G.players[pid].hand = [];
       return enumerateAIMoves(G, ctx(pid)).find((m) => m.move === 'endTurn')!.score;
     };
     expect(score('0') + score('1')).toBeCloseTo(0);
@@ -189,7 +188,6 @@ describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
     const rem = makeHero('hero_rem', '0', 'bench', 3);
     theirs.bench[2] = rem;
     const before = standing(G);
-    theirs.souls = 1;
     expect(perform(G, '0', { type: 'useSkill', heroIid: rem.iid, targetIid: foe(G).iid })).not.toBe(INVALID);
     expect(liveBoardCards(theirs).includes(rem)).toBe(false);
     // The rival gained the HP she granted (+1 max HP, 2 a point, so −2 here), not lost a hero.
@@ -200,7 +198,6 @@ describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
     const G = remGame();
     const ai = G.players['1'];
     ai.souls = 1;
-    ai.hand = [];
     own(G).hp = 2;
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect(best.move).toBe('useSkill');
@@ -208,64 +205,85 @@ describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
   });
 });
 
-describe('AI valuation: control cards and channel ultimates get played', () => {
-  /** P1 with only `cardId` in hand and the souls to pay for it, no bench to cast from. */
-  function holding(cardId: string, souls: number) {
+describe('AI valuation: control items and channel ultimates get used', () => {
+  /** P1 whose Active wears the active item `cardId` alone, ready to use, and
+   *  nobody on the bench to use anything else. */
+  function wearing(cardId: string) {
     const G = freshReadyGame();
     const ai = G.players['1'];
     ai.bench = [null, null, null];
-    ai.souls = souls;
-    ai.hand = [{ ...ai.deck[0], cardId, iid: 'held', zone: 'hand' as const }];
-    return G;
+    const item = giveItem(G, ai.active!, cardId);
+    return { G, item };
   }
 
-  // Each of these is a play whose whole worth is a status; with the attack
-  // available too, it comes first — the line is "this, then the attack".
-  for (const [cardId, souls, why] of [
-    ['knockdown', 6, 'a Stun on the Active'],
-    ['decay', 5, 'Bleed 3 for 2 turns'],
-    ['disarming_hex', 5, 'a Disarm for 2 turns'],
-    ['curse', 5, 'Silence and Disarm for 3 turns'],
-    ['slowing_hex', 3, 'a Silence'],
-    ['metal_skin', 6, 'Bullet Resist 5 for 2 turns'],
+  // Each of these is an item whose whole worth is a status; with the attack
+  // available too, using it comes first — the line is "this, then the attack" —
+  // though using it puts it on cooldown or spends one of its charges.
+  for (const [cardId, why] of [
+    ['knockdown', 'a Stun on the Active'],
+    ['decay', 'Bleed 3 for 2 turns'],
+    ['disarming_hex', 'a Disarm for 2 turns'],
+    ['curse', 'Silence and Disarm for 3 turns'],
+    ['slowing_hex', 'a Silence'],
+    ['metal_skin', 'Bullet Resist 5 for 2 turns'],
   ] as const) {
-    it(`plays ${cardId.replace('_', ' ')} (${why}) ahead of the attack alone`, () => {
-      const best = enumerateAIMoves(holding(cardId, souls), ctx('1'))[0];
-      expect(best.move).toBe('playCard');
-      expect(best.args[0]).toBe('held');
+    it(`uses ${cardId.replace('_', ' ')} (${why}) ahead of the attack alone`, () => {
+      const { G, item } = wearing(cardId);
+      const best = enumerateAIMoves(G, ctx('1'))[0];
+      expect(best.move).toBe('activate');
+      expect(best.args[0]).toBe(item.iid);
     });
   }
 
-  it('casts Singularity, a channel, when it can pay for it', () => {
-    const G = holding('ult_dynamo', 9);
-    G.players['1'].active = makeHero('hero_dynamo', '1', 'active', 0);
+  /** P1 whose `hero` (Level 2: its ultimate unlocked) stands in `slot`, wearing nothing, and nobody else on the bench. */
+  function unlocked(hero: string, slot: 'active' | 'bench' = 'active') {
+    const G = freshReadyGame();
+    const ai = G.players['1'];
+    ai.bench = [null, null, null];
+    ai.souls = 0; // ultimates cost nothing
+    const h = makeHero(hero, '1', slot, slot === 'active' ? 0 : 1);
+    h.level = 2;
+    if (slot === 'active') ai.active = h; else ai.bench[0] = h;
+    return { G, h };
+  }
+  const usesUlt = (G: GameState, h: CardInstance, ult: string) => {
     const best = enumerateAIMoves(G, ctx('1'))[0];
-    expect(best.move).toBe('playCard');
-    expect(best.args[0]).toBe('held');
+    expect(best.move, ult).toBe('useSkill');
+    expect(best.args[0], ult).toBe(h.iid);
+    expect(best.args[2], ult).toBe(ult);
+  };
+
+  it('casts Singularity, a channel, once Dynamo has unlocked it', () => {
+    const { G, h } = unlocked('hero_dynamo');
+    usesUlt(G, h, 'eff_ult_dynamo');
   });
 
   it('casts Storm Cloud and Last Stand too', () => {
-    for (const [ult, hero, souls] of [['ult_seven', 'hero_seven', 8], ['ult_warden', 'hero_warden', 9]] as const) {
-      const G = holding(ult, souls);
-      G.players['1'].active = makeHero(hero, '1', 'active', 0);
-      const best = enumerateAIMoves(G, ctx('1'))[0];
-      expect(best.move, ult).toBe('playCard');
-      expect(best.args[0], ult).toBe('held');
+    for (const [hero, ult] of [['hero_seven', 'eff_ult_seven'], ['hero_warden', 'eff_ult_warden']] as const) {
+      const { G, h } = unlocked(hero);
+      usesUlt(G, h, ult);
     }
   });
 
-  it('casts Naptime (a Sleep with a wake-up burst) and Eternal Night (two Silences)', () => {
-    for (const [ult, souls] of [['ult_rem', 7], ['ult_drifter', 8]] as const) {
-      const best = enumerateAIMoves(holding(ult, souls), ctx('1'))[0];
-      expect(best.move, ult).toBe('playCard');
-      expect(best.args[0], ult).toBe('held');
-    }
+  it('casts Naptime (a Sleep with a wake-up burst, from the bench) and Eternal Night (two Silences)', () => {
+    const rem = unlocked('hero_rem', 'bench');
+    usesUlt(rem.G, rem.h, 'eff_ult_rem');
+    const drifter = unlocked('hero_drifter');
+    usesUlt(drifter.G, drifter.h, 'eff_ult_drifter');
+  });
+
+  it('uses an ultimate it has borrowed (Sinclair\'s copy), free', () => {
+    const { G, h } = unlocked('hero_sinclair');
+    h.skillUsedThisTurn = false;
+    h.cooldowns = { skill_sinclair: 1, eff_ult_sinclair: 2 }; // nothing else of its own to use
+    h.borrowedUlt = 'eff_ult_lash';
+    usesUlt(G, h, 'eff_ult_lash');
   });
 
   it('still sees lethal first, whatever a status is worth', () => {
-    const G = holding('knockdown', 6);
+    const { G } = wearing('knockdown');
     G.players['0'].active!.hp = 1;
-    G.players['0'].hp = 1;
+    G.players['0'].structures = newTrack({ patron: 1 }); // the kill's push fells the Patron
     const top = enumerateAIMoves(G, ctx('1'))[0];
     expect(top.move).toBe('attack');
     expect(top.score).toBeGreaterThanOrEqual(1_000_000);

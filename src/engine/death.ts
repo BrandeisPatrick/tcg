@@ -1,49 +1,49 @@
 /**
  * Death and the state-based pass that follows every change to the board: a
- * hero at 0 HP falls in place (respawn timer, a patron tax of its level, KO
- * bounty), and a fallen Active is replaced. `resolve` is the one entry point;
- * call it after ANY mutation (combat, ability, status tick, turn start,
- * promotion).
+ * hero at 0 HP falls in place (the kill bounty, the push into its side's
+ * structures, then the Rejuvenator's revive or the respawn timer), the
+ * Mid-Boss at 0 HP falls (map.ts), and a fallen Active is replaced. `resolve`
+ * is the one entry point; call it after ANY mutation (combat, ability, status
+ * tick, turn start, promotion).
  */
 import type { CardInstance, GameState, PlayerID, PlayerState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
-import { damagePlayer } from './damage';
-import { isRespawning, koPatronDamage, otherPlayer, stepInCandidates } from './query';
+import { pushFx } from './fx';
+import {
+  isRespawning, isRichestHero, killBounty, killPush, otherPlayer, respawnTimer, reviveReady, stepInCandidates,
+} from './query';
 import { leaveActive } from './lane';
-import { RESPAWN_TURNS, SOULS_MAX } from './constants';
+import { awardSouls } from './souls';
+import { pushStructures, reapBoss } from './map';
+
+export { awardSouls };
 
 /**
- * Give `pid` `n` souls, up to the ceiling (SOULS_MAX). A bounty must never
- * subtract: a pool already at the ceiling is left as it is. The log says what
- * was gained (nothing is logged when nothing was) and why. Returns the souls
- * actually gained.
+ * Process a hero's death in place: pay the kill bounty and push into its
+ * side's structures (both to and for the victim's opponent, whatever dealt
+ * the blow: a status tick's source is theirs, Return Fire is theirs — and
+ * neither for a fall to the Mid-Boss's blow, `unpaid`), wipe the statuses,
+ * then either revive it on the spot (its side's Rejuvenator, a credit spent)
+ * or arm the respawn timer (`respawnTimer`: by the round, longer for the
+ * richest hero). Level / exp / equipment / atkMod / spiritMod / hpMax and the
+ * cooldowns (timers of the owner's turns, not of the hero's life) all persist
+ * — only the live combat state (hp, statuses, turn flags) resets.
+ * `tickRespawn` brings the hero back at full hp when the timer runs out.
  */
-export function awardSouls(G: GameState, pid: PlayerID, n: number, reason?: string): number {
-  const player = G.players[pid];
-  const before = player.souls;
-  player.souls = Math.max(before, Math.min(SOULS_MAX, before + n));
-  const gained = player.souls - before;
-  if (gained > 0) pushLog(G, `P${pid} +${gained} Souls${reason ? ` (${reason})` : ''}.`);
-  return gained;
-}
-
-/**
- * Process a hero's death in place: wipe active statuses, arm the respawn
- * timer, charge the death cost. Level / exp / equipment / atkMod / spiritMod /
- * hpMax and the skill cooldowns (timers of the owner's turns, not of the
- * hero's life) all persist — only the live combat state (hp, statuses, turn
- * flags) resets. `tickRespawn` brings the hero back at full hp when the timer
- * ticks down.
- */
-function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
+function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, opts: { unpaid?: boolean } = {}) {
   pushLog(G, `${cardName(hero.cardId)} fell.`);
-  // The KO bounty is capped at the soul ceiling (and never subtracts: see awardSouls).
   const oppId: PlayerID = otherPlayer(ps.id);
-  awardSouls(G, oppId, 1, 'KO bounty');
-  // The patron pays the fallen hero's level: a leveled carry is the costliest
-  // loss on the board.
-  damagePlayer(G, ps.id, koPatronDamage(hero));
+  if (!opts.unpaid) {
+    // The kill bounty: the victim's level plus one, and two more for the
+    // richest hero on the board. Then the push: the same level plus one
+    // (doubled in the late game) into the victim's side's front structure.
+    awardSouls(G, oppId, killBounty(G, hero), isRichestHero(G, hero) ? 'KO bounty, richest hero' : 'KO bounty');
+    G.record[oppId].kills++;
+    pushStructures(G, ps.id, killPush(G, hero), 'kill');
+  }
+  // The respawn timer, by the round it falls in (one more for the richest hero).
+  const timer = respawnTimer(G, hero);
   // Rem rescue: a merged Rem detaches to safety (back to the bench) instead of
   // dying with the body — and her granted max-HP is reverted here too. (A
   // merged Rem is the only attached card that carries a merge timer.)
@@ -58,13 +58,31 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance) {
   hero.statuses = [];
   hero.skillUsedThisTurn = false;
   if (hero.lastSkillUsed !== undefined) hero.lastSkillUsed = undefined;
-  hero.attackedThisTurn = false;
+  // The Rejuvenator: a credit brings the hero straight back where it fell, at
+  // full HP with its items and level (the kill above has paid and pushed).
+  if (reviveReady(G, ps.id)) {
+    ps.reviveCredits--;
+    hero.hp = hero.hpMax;
+    hero.exhausted = false;
+    G.record[ps.id].revives++;
+    pushLog(G, `${cardName(hero.cardId)} is revived by the Rejuvenator (${ps.reviveCredits} left).`);
+    pushFx(G, { kind: 'revive', iid: hero.iid, credit: true });
+    return;
+  }
   hero.exhausted = true;
   hero.hp = 0;
-  hero.respawnTurnsLeft = RESPAWN_TURNS;
+  hero.respawnTurnsLeft = timer;
   // Level + exp + stat mods INTENTIONALLY persist through respawn — the
   // hero comes back at full hp with their rank intact (see leveling.spec).
-  pushLog(G, `${cardName(hero.cardId)} respawning in (${RESPAWN_TURNS}).`);
+  pushLog(G, `${cardName(hero.cardId)} respawning in (${timer}).`);
+}
+
+/** `hero` of `ps` has fallen to the Mid-Boss's blow (`hp` 0, the End step):
+ *  it falls as any hero does — the Rejuvenator still revives it — but the
+ *  boss pays no bounty and pushes nothing. */
+export function fallToBoss(G: GameState, ps: PlayerState, hero: CardInstance) {
+  if (hero.hp > 0 || hero.respawnTurnsLeft != null) return;
+  killInPlace(G, ps, hero, { unpaid: true });
 }
 
 /**
@@ -104,10 +122,7 @@ export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInst
 /**
  * Sweep a player's board for heroes that just hit 0 HP. The hero stays in its
  * slot — `killInPlace` arms the respawn timer instead of moving them out.
- * Then, for AI (player '1'), immediately auto-promote a bench hero into the
- * vacated Active slot so the engine never sits idle waiting on AI's turn to
- * pick a replacement. Player '0' (the human) keeps the manual choice via the
- * PromotionOverlay.
+ * (`resolve` then promotes a bench hero into a fallen Active's slot.)
  */
 export function reapDead(G: GameState, ps: PlayerState) {
   if (ps.active && ps.active.hp <= 0 && ps.active.respawnTurnsLeft == null) {
@@ -133,10 +148,13 @@ function needsPromotion(ps: PlayerState): boolean {
  * board to a stable state in ONE fixed, linear order so no caller can forget a
  * step or leave a half-resolved board:
  *
- *   1. Reap dead heroes (both players) — arm respawn timers + the patron tax.
- *   2. Forced promotions — the AI side ('1') auto-promotes its strongest bench
- *      hero immediately; the local side ('0') is surfaced via `pendingPromotion`
- *      for the UI (human modal) or the auto-play loop to resolve.
+ *   1. Reap dead heroes (both players) — the bounty and the push, then a
+ *      revive or the respawn timer — and a Mid-Boss at 0 HP (map.ts).
+ *   2. Forced promotions — every seat the AI plays (all but `G.humanSeat`)
+ *      auto-promotes its strongest bench hero immediately; the human seat is
+ *      surfaced via `pendingPromotion` for the UI (human modal) or the
+ *      auto-play loop to resolve. With no human seat (a sim) both seats
+ *      promote on the spot, by the same rule.
  *
  * The win check is intentionally NOT here — boardgame.io's `endIf` is the
  * canonical gate and runs after every move on the already-resolved state.
@@ -144,12 +162,14 @@ function needsPromotion(ps: PlayerState): boolean {
 export function resolve(G: GameState) {
   reapDead(G, G.players['0']);
   reapDead(G, G.players['1']);
-  autoPromoteAi(G, G.players['1']);
-  G.pendingPromotion = needsPromotion(G.players['0']) ? '0' : undefined;
+  reapBoss(G);
+  const human = G.humanSeat === undefined ? '0' : G.humanSeat;
+  for (const pid of ['0', '1'] as PlayerID[]) if (pid !== human) autoPromoteAi(G, G.players[pid]);
+  G.pendingPromotion = human !== null && needsPromotion(G.players[human]) ? human : undefined;
 }
 
 /**
- * If AI's Active is a corpse and there's an alive bench hero, swap the
+ * If an AI seat's Active is a corpse and there's an alive bench hero, swap the
  * strongest bench hero into Active. Heuristic: highest current HP. The dying
  * corpse takes the bench slot the new Active vacated and continues its
  * respawn countdown there.

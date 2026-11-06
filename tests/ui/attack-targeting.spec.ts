@@ -4,8 +4,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Client } from 'boardgame.io/client';
 import type { HeroAbilityDef } from '@/abilities';
 import { CARDS_BY_ID } from '@/cards';
-import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
-import { STARTER_DECK_AI } from '@/decks/starter';
 import { DeadlockGame } from '@/engine/game';
 import { forecastAttack } from '@/engine/forecast';
 import { attackBlocked, attackTargets } from '@/engine/legality';
@@ -15,11 +13,11 @@ import { addStatus } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from '@/ui/board/attackAim';
-import { actionRefusal, attackLine } from '@/ui/board/heroActions';
+import { SHOP_OPEN, actionRefusal, attackLine } from '@/ui/board/heroActions';
 import { isValidTarget } from '@/ui/board/targeting';
 import { HeroDetailSheet } from '@/ui/overlays/HeroDetailSheet';
 import type { PendingPlay } from '@/ui/helpers';
-import { freshReadyGame, makeHero } from '../engine/_helpers';
+import { freshReadyGame, makeHero, TEST_ROSTERS, TEST_SEED } from '../engine/_helpers';
 
 // A hero with reach may name who its attack shoots. The Attack plate on its
 // sheet then arms a targeting flow (the heroes the engine says it may name glow,
@@ -36,7 +34,9 @@ const longArm: HeroAbilityDef = {
   id: 'ui_passive_long_arm', name: 'Long Arm', text: 'Its attack may be aimed at any enemy hero.',
   trigger: 'ongoing', target: 'self', reach: true, run: () => {},
 };
-const throwaway = (id: string, name: string): HeroCard => ({ id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, skills: [], passives: [longArm.id] });
+const throwaway = (id: string, name: string): HeroCard => ({
+  id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, skills: [], passives: [longArm.id], signature: ['extra_spirit', 'mystic_burst'],
+});
 
 beforeAll(() => {
   registerAbilities([longArm]);
@@ -100,9 +100,8 @@ describe('the Attack plate: one target attacks at once, more than one asks who',
     const { G } = duel();
     G.turnNumber = 1; // no attacks on Turn 1
     expect(tapAttackPlate(G, ME)).toEqual({ do: 'refuse', refusal: { code: 'turn1', text: 'No attacks on Turn 1' } });
-    const { G: H, atk } = duel();
-    H.attackUsed = true;
-    atk.attackedThisTurn = true; // this Active has swung
+    const { G: H } = duel();
+    H.attackUsed = true; // the turn's attack has been made
     expect(tapAttackPlate(H, ME)).toMatchObject({ do: 'refuse', refusal: { code: 'used' } });
   });
 
@@ -143,7 +142,6 @@ describe('an armed attack lights the heroes the engine says it may name', () => 
     const benched: PendingPlay = { ...armed(atk), iid: G.players[ME].bench[0]!.iid };
     expect(heroesOf(G).some((h) => isValidTarget(G, ME, benched, h))).toBe(false);
     G.attackUsed = true;
-    atk.attackedThisTurn = true;
     expect(heroesOf(G).some((h) => isValidTarget(G, ME, armed(atk), h))).toBe(false);
   });
 });
@@ -183,12 +181,11 @@ describe('a tap while the attack is armed', () => {
   it('what the board dispatches is the engine\'s attack: the named bench hero takes the swing, a bare move hits the Active (a real match)', () => {
     const saved = getMatchConfig();
     setMatchConfig({
-      playerDeck: [], heroPreferences: [null, null, null, null],
+      heroPreferences: [null, null, null, null],
+      seed: TEST_SEED,
       story: {
         playerHeroes: [REACHER, 'hero_lash', 'hero_paige', 'hero_vindicta'],
-        playerDeck: AI_DECKS_BY_NAME.aggro,
-        enemyHeroes: STARTER_DECK_AI.heroes,
-        enemyDeck: AI_DECKS_BY_NAME.control,
+        enemyHeroes: TEST_ROSTERS['1'],
         enemyBuff: { atk: 0, hp: 20 }, // nobody falls to one swing
       },
     });
@@ -197,9 +194,11 @@ describe('a tap while the attack is armed', () => {
         const c = Client({ game: DeadlockGame, numPlayers: 2 });
         c.start();
         const moves = c.moves as any;
-        moves.endTurn(); // Turn 1 has no attack; P1 passes too…
-        moves.endTurn(); // …and P0's second turn opens the attack
+        moves.endTurn(); // Turn 1 has no attack (a turn may end from its shop); P1 passes too…
+        moves.endTurn(); // …and P0's second turn opens the attack, once its shop is closed
         const G = () => c.getState()!.G as GameState;
+        expect(tapAttackPlate(G(), ME)).toEqual({ do: 'refuse', refusal: { code: 'shopOpen', text: SHOP_OPEN } });
+        moves.closeShop();
         const foes = [G().players['1'].active!, ...G().players['1'].bench] as CardInstance[];
         return { moves, G, foes, hp: foes.map((f) => f.hp), now: () => foes.map((f) => findCardOnBoard(G(), f.iid)!.card.hp) };
       };
@@ -261,7 +260,6 @@ describe('a Dome on the rival Active, as the plate words it', () => {
     rival.hp = 0; rival.respawnTurnsLeft = 2;
     expect(attackOffer(G, ME, haze, true).blockedReason).toBe('No rival Active to hit');
     expect(attackOffer(G, ME, haze, false).blockedReason).toBe('Not your turn');
-    haze.attackedThisTurn = true;
     G.attackUsed = true;
     expect(attackOffer(G, ME, haze, true)).toMatchObject({ blockedReason: 'Attacked this turn', made: true });
   });

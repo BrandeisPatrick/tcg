@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, CardInstance } from '@/engine/types';
-import { DeadlockGame } from '@/engine/game';
 import { grantExp } from '@/engine/expSystem';
 import { LEVEL_THRESHOLDS } from '@/engine/constants';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
 import { withCast } from '@/engine/castContext';
-import { freshReadyGame, nextTestIid } from './_helpers';
+import { INVALID, perform } from '@/engine/engine';
+import { findWornItem } from '@/engine/query';
+import { buyItem, buyToHand, freshReadyGame, giveItem, playItem } from './_helpers';
 
 function freshG(): GameState {
   return freshReadyGame();
@@ -85,28 +86,18 @@ describe('hero leveling: grantExp', () => {
 });
 
 describe('hero leveling triggers', () => {
-  it('equipping an item grants +1 exp to the bearer', () => {
-    const G = freshG();
+  it('equipping an item — playing it from the hand — grants +1 exp to the bearer, once per item id; holding it grants nothing', () => {
+    const G = freshReadyGame({ step: 'shop' });
     const h = G.players['0'].active!;
     const before = h.exp ?? 0;
-    // Hand-build an equipment instance and route it through playCard so
-    // applyOnPlay fires.
-    const mag = G.players['0'].deck.find((c) => c.cardId === 'extended_magazine');
-    if (!mag) {
-      // Aggro starter has extended_magazine in deck; fall back gracefully if not.
-      G.players['0'].hand.push({
-        iid: 'z', cardId: 'extended_magazine', ownerId: '0', zone: 'hand',
-        hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
-        statuses: [], exhausted: false, skillUsedThisTurn: false,
-      });
-    } else {
-      mag.zone = 'hand';
-      G.players['0'].hand.push(mag);
-      G.players['0'].deck = G.players['0'].deck.filter((c) => c !== mag);
-    }
-    G.players['0'].souls = 5;
-    const handCard = G.players['0'].hand[G.players['0'].hand.length - 1];
-    (DeadlockGame as any).moves.playCard({ G, ctx: { currentPlayer: '0' } }, handCard.iid, h.iid);
+    G.players['0'].souls = 10;
+    const held = buyToHand(G, '0', 'extended_magazine');
+    expect((h.exp ?? 0) - before).toBe(0);
+    const mag = playItem(G, '0', held, h);
+    expect((h.exp ?? 0) - before).toBe(1);
+    // Sold and bought back, it pays nothing more: that item's first equip is paid.
+    expect(perform(G, '0', { type: 'sell', itemIid: mag.iid })).not.toBe(INVALID);
+    buyItem(G, '0', 'extended_magazine', h);
     expect((h.exp ?? 0) - before).toBe(1);
   });
 
@@ -156,28 +147,18 @@ describe('equipment persists through death', () => {
   it('attached equipment stays on the bearer when they die and respawn', () => {
     const G = freshG();
     const target = G.players['1'].active!;
-    // Hand-build an equipment instance and attach it directly.
-    const eq: CardInstance = {
-      iid: nextTestIid('eq'),
-      cardId: 'extended_magazine',
-      ownerId: '1',
-      zone: 'equipment',
-      attachedTo: target.iid,
-      hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0,
-      statuses: [], exhausted: false, skillUsedThisTurn: false,
-    };
-    target.attached = [eq];
-    target.atkMod = 1; // simulate +1 ATK from Extended Magazine bonus
-    const discardCountBefore = G.players['1'].discard.length;
+    // Put the item on directly: its +1 Bullet Power goes onto the bearer.
+    const eq = giveItem(G, target, 'extended_magazine');
+    expect(target.atkMod).toBe(1);
     target.hp = 1;
     const hero = G.players['0'].active!;
     withCast(hero, 'attack', () => damageUnit(G, target, 5, 'attack'));
     reapDead(G, G.players['1']);
-    // Equipment is still on the bearer.
+    expect(target.respawnTurnsLeft).toBeGreaterThan(0);
+    // Equipment is still on the bearer: nothing left the board with the fall.
     expect(target.attached?.length).toBe(1);
     expect(target.attached?.[0].cardId).toBe('extended_magazine');
-    // Nothing was added to discard.
-    expect(G.players['1'].discard.length).toBe(discardCountBefore);
+    expect(findWornItem(G, eq.iid, '1')?.bearer).toBe(target);
     // atkMod persists since the equipment is still there.
     expect(target.atkMod).toBe(1);
   });

@@ -2,8 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import { ABILITIES_BY_ID, type HeroAbilityDef } from '@/abilities';
 import { CARDS_BY_ID, HEROES } from '@/cards';
-import { AI_DECKS_BY_NAME } from '@/decks/aiDecks';
-import { STARTER_DECK_AI } from '@/decks/starter';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { damageUnit } from '@/engine/damage';
 import { resolve } from '@/engine/death';
@@ -16,11 +14,12 @@ import { beginTurn } from '@/engine/actions/turn';
 import { clearTurnFlags, tickCooldowns } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { setMatchConfig } from '@/storage/matchConfig';
-import { freshReadyGame, makeHero } from './_helpers';
+import { freshReadyGame, makeHero, TEST_ROSTERS, TEST_SEED, useItem } from './_helpers';
 
-// A hero may carry one or two skills, each with its own cooldown, and uses one
-// of them a turn. No hero of the real roster has two yet, so these specs play
-// throwaway cards registered here — the real roster is left as it is.
+// A hero may carry one or two skills, each with its own cooldown (one own turn
+// when its data names none), and uses one ability a turn. No hero of the real
+// roster has two yet, so these specs play throwaway cards registered here — the
+// real roster is left as it is.
 
 const TWIN = 'hero_test_twin';   // two skills: Test Bolt, then Test Surge
 const COOL = 'hero_test_cool';   // one skill, with a cooldown of 2
@@ -47,7 +46,9 @@ const chill: HeroAbilityDef = {
   run: (G, _ctx, { target }) => { if (target) damageUnit(G, target, 2, 'spirit'); },
 };
 
-const throwaway = (id: string, name: string, skills: string[]): HeroCard => ({ id, name, type: 'hero', rarity: 3, atk: 2, hp: 8, skills });
+const throwaway = (id: string, name: string, skills: string[]): HeroCard => ({
+  id, name, type: 'hero', rarity: 3, atk: 2, hp: 8, skills, signature: ['extra_spirit', 'mystic_burst'],
+});
 
 beforeAll(() => {
   registerAbilities([bolt, surge, chill]);
@@ -83,22 +84,24 @@ const useSkill = (G: GameState, twin: CardInstance, skillId?: string, targetIid?
   perform(G, '0', { type: 'useSkill', heroIid: twin.iid, skillId, targetIid });
 
 /** A boardgame.io match with the throwaway heroes on P0's board: the twin
- *  Active, the cool hero and the real Lash and Paige on the bench. */
+ *  Active, the cool hero and the real Lash and Paige on the bench. It stands in
+ *  the act step of P0's turn 1 (every turn opens in its shop step: closed here). */
 function twinClient() {
   setMatchConfig({
-    playerDeck: [], heroPreferences: [null, null, null, null],
+    heroPreferences: [null, null, null, null],
+    seed: TEST_SEED,
     story: {
       playerHeroes: [TWIN, COOL, 'hero_lash', 'hero_paige'],
-      playerDeck: AI_DECKS_BY_NAME.aggro,
-      enemyHeroes: STARTER_DECK_AI.heroes,
-      enemyDeck: AI_DECKS_BY_NAME.control,
+      enemyHeroes: TEST_ROSTERS['1'],
       enemyBuff: { atk: 0, hp: 0 },
     },
   });
   const c = Client({ game: DeadlockGame, numPlayers: 2 });
   c.start();
+  c.moves.closeShop();
   const G = () => c.getState()!.G as GameState;
-  const endTurns = (n: number) => { for (let i = 0; i < n; i++) c.moves.endTurn?.(); };
+  /** End `n` turns, then close the shop of the turn that opens. */
+  const endTurns = (n: number) => { for (let i = 0; i < n; i++) c.moves.endTurn?.(); c.moves.closeShop(); };
   return { c, G, endTurns, moves: c.moves as any };
 }
 
@@ -127,9 +130,9 @@ describe('two skills on one hero', () => {
     const before = JSON.stringify(G);
     expect(useSkill(G, twin, SURGE)).toBe(INVALID);
     expect(JSON.stringify(G)).toBe(before);
-    // …and what is on the hero's sheet: neither skill is offered, and the hero gave up its attack.
+    // …and what is on the hero's sheet: neither skill is offered; the attack still is.
     expect(legalActions(G, '0').some((a) => a.type === 'useSkill' && a.heroIid === twin.iid)).toBe(false);
-    expect(blocked(G, '0', { type: 'attack' })).toBe('skill');
+    expect(blocked(G, '0', { type: 'attack' })).toBeNull();
   });
 
   it('on the owner\'s next turn both skills are available again', () => {
@@ -178,17 +181,17 @@ describe('a skill\'s cooldown', () => {
     const stuck = JSON.stringify(G());
     moves.useSkill(cool.iid, rival.iid);
     expect(JSON.stringify(G())).toBe(stuck);                            // refused, untouched
-    // A one-skill hero without a cooldown never gains the field.
+    // Lash's skill (cooldown 1) is back every turn: it sets its field, which is gone again by her next turn.
     moves.useSkill(lash.iid, G().players['1'].active!.iid);
-    expect('cooldowns' in G().players['0'].bench[1]!).toBe(false);
+    expect(G().players['0'].bench[1]!.cooldowns).toEqual({ skill_lash: 1 });
 
     endTurns(2);                                                        // turn 3: the clock reached 0
     const warm = G().players['0'].bench[0]!;
     expect('cooldowns' in warm).toBe(false);
+    expect('cooldowns' in G().players['0'].bench[1]!).toBe(false);
     expect(skillBlocked(G(), '0', warm, rival.iid)).toBeNull();
     moves.useSkill(cool.iid, G().players['1'].active!.iid);
     expect(G().players['0'].bench[0]!.cooldowns).toEqual({ [CHILL]: 2 });
-    expect('cooldowns' in G().players['0'].bench[1]!).toBe(false);
   });
 
   it('is not cleared by a fall, and counts the owner\'s turns whether the hero is up or down', () => {
@@ -251,10 +254,10 @@ describe('a bare useSkill', () => {
     expect(four.G.action).toMatchObject({ kind: 'skill', abilityId: SURGE });
   });
 
-  it('sets no cooldowns field for a skill without one', () => {
+  it('puts a skill whose data names no cooldown on the default one (SKILL_COOLDOWN, one own turn)', () => {
     const { G, twin, rival } = twinGame();
     useSkill(G, twin, BOLT, rival.iid);
-    expect('cooldowns' in twin).toBe(false);
+    expect(twin.cooldowns).toEqual({ [BOLT]: 1 });
   });
 
   it('forgets the skill with the turn\'s other flags, and when the hero falls', () => {
@@ -299,14 +302,10 @@ describe('a skill the hero does not have', () => {
 });
 
 describe('Echo Shard', () => {
-  const shard = (): CardInstance => ({
-    iid: 'echo-1', cardId: 'echo_shard', ownerId: '0', zone: 'hand', attached: [],
-    hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
-  });
-  const play = (G: GameState) => {
-    G.players['0'].hand.push(shard());
-    expect(perform(G, '0', { type: 'playCard', cardIid: 'echo-1' })).not.toBe(INVALID);
-  };
+  /** Echo Shard, worn and used by a bench hero (Vindicta): the item is ITS one
+   *  ability this turn, so the Active's skill before it stands in no way, and
+   *  "your Active" is the player's Active, the twin. */
+  const play = (G: GameState) => { useItem(G, '0', 'echo_shard', undefined, G.players['0'].bench[0]!); };
 
   it('repeats the skill the hero used this turn — the second one, when that was used', () => {
     const { G, twin, rival, benched } = twinGame();
@@ -343,7 +342,6 @@ describe('Echo Shard', () => {
 describe('the AI with a two-skill hero', () => {
   it('names the second skill in the move, and leaves the first unnamed', () => {
     const { G, twin, rival } = twinGame();
-    G.players['0'].hand = [];
     for (const lookahead of [false, true]) {
       const moves = enumerateAIMoves(G, ctxFor('0'), lookahead).filter((m) => m.move === 'useSkill' && m.args[0] === twin.iid);
       expect(moves.map((m) => m.args), `lookahead ${lookahead}`).toContainEqual([twin.iid, rival.iid]);
@@ -371,7 +369,7 @@ describe('what a hero card prints', () => {
   // like — and Paige's says Bullet Resist, which is what the skill grants.
   const PRINTED: Record<string, [kind: 'skill' | 'passive', name: string, text: string]> = {
     hero_abrams: ['passive', "Infernal Resilience", "Heals 1 at start of own turn while Active."],
-    hero_haze: ['passive', "Fixation", "After Haze attacks, she gains Extra Attack 1 this turn."],
+    hero_haze: ['passive', "Fixation", "From Level 3: after Haze attacks, she gains Extra Attack 1 this turn."],
     hero_mo_krill: ['passive', "Burrow", "Cleanses all debuffs from self at start of own turn."],
     hero_rem: ['skill', "Lil Helpers", "Merge into an ally as a buff: heal {sp:3} and grant +{sp:1} max HP for 3 turns, then return to the bench."],
     hero_shiv: ['passive', "Serrated Knives", "Attacks apply Bleed 2 for 2 turns."],

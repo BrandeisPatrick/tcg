@@ -1,12 +1,17 @@
+import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import type { AbilityId, CardInstance } from '@/engine/types';
-import { CARDS_BY_ID } from '@/cards';
+import type { AbilityId, CardId, CardInstance, ItemSlot } from '@/engine/types';
+import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
-import { effectiveAtk, effectiveSpirit, heroAbilities } from '@/engine/query';
-import { SKILL_COST } from '@/engine/constants';
+import {
+  activeCooldown, cooldownCut, effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, itemCooldown, ultimateCard, wornActives,
+} from '@/engine/query';
+import { HARD_CC_CHARGES, ULT_COOLDOWN, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
-import { ITEM_IMG_BASE } from '@/art/assets';
+import { ItemIcon } from '../card/ItemIcon';
+import { SpikeMark } from '../board/SpikeMark';
+import { ChargePips, CooldownDial, LockGlyph } from './AbilityDial';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { LevelTrim } from '../card/LevelTrim';
@@ -26,12 +31,12 @@ const eyebrow = {
 } as const;
 
 /** Your Active's attack, offered on its sheet: a swing at the rival Active for
- *  its bullet damage. Free, one-way, one a turn for each hero while it stands
- *  in the Active slot (a hero a Retreat brings in after the swing has its
- *  own) — and a hero makes it or uses its skill, not both. A hero with reach
- *  may name any living rival: the plate then still speaks for the default
- *  target (the first the engine lists), and tapping it closes the sheet and
- *  asks who (`onAttack`; the board arms the targeting, see board/attackAim.ts). */
+ *  its bullet damage. Free and one-way, one a turn — and it ends the turn's
+ *  Act, so abilities and a Retreat come before it (a hero may use its ability
+ *  and then attack). A hero with reach may name any living rival: the plate
+ *  then still speaks for the default target (the first the engine lists), and
+ *  tapping it closes the sheet and asks who (`onAttack`; the board arms the
+ *  targeting, see board/attackAim.ts). */
 export interface AttackOffer {
   /** What the swing would do ("Hits Dynamo for 2 bullet damage"), while it
    *  can be made — at the default target. */
@@ -39,15 +44,16 @@ export interface AttackOffer {
   /** Why it cannot be made right now ("No attacks on Turn 1"), printed in
    *  the line's place. */
   blockedReason?: string;
-  /** This hero has attacked this turn. */
+  /** The turn's attack has been made, by this hero. */
   made?: boolean;
   onAttack: () => void;
 }
 
-/** One of the hero's skills as the sheet offers it: every gate for using it
- *  is open (its turn, the hero's one skill of the turn, statuses, cooldown,
- *  souls, a target), or the short reason it can't be used, shown inside its
- *  skill card. */
+/** One of the hero's kit abilities (a skill, its ultimate, a borrowed
+ *  ultimate) or an active item it wears, as the sheet offers it: every gate for
+ *  using it is open (its turn, the hero's one ability of the turn, the unlock
+ *  level, statuses, cooldown or charges, a target), or the short reason it
+ *  can't be used, shown inside its plate. */
 export interface SkillOffer {
   canUse: boolean;
   blockedReason?: string;
@@ -57,10 +63,15 @@ interface Props {
   card: CardInstance;
   /** True if this hero belongs to the local player. Drives the Skill action. */
   isMine?: boolean;
-  /** Each skill's offer, by ability id. A skill with none is not usable. */
+  /** Each kit ability's offer, by ability id: the skills, the ultimate and a
+   *  borrowed ultimate. One with none is not usable. */
   skills?: Record<AbilityId, SkillOffer>;
-  /** The player tapped this skill's card. */
+  /** The player tapped this ability's plate. */
   onUseSkill?: (skillId: AbilityId) => void;
+  /** Each worn active item's offer, by item iid. */
+  items?: Record<string, SkillOffer>;
+  /** The player tapped this active item's plate. */
+  onUseItem?: (itemIid: string) => void;
   /** The Attack plate — on the local player's Active only. */
   attack?: AttackOffer;
   /** Retreat lives on your Active's sheet: he goes to the bench and a bench
@@ -79,7 +90,7 @@ interface Props {
 }
 
 export function HeroDetailSheet({
-  card, isMine, skills: skillOffers, onUseSkill, attack,
+  card, isMine, skills: skillOffers, onUseSkill, items: itemOffers, onUseItem, attack,
   retreat, onRetreat, onClose,
 }: Props) {
   const { isMobile, width: vw, height: vh } = useViewport();
@@ -101,8 +112,52 @@ export function HeroDetailSheet({
   const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
   const describe = (a: HeroAbilityDef) => sentence(a.text);
   const scale: Scale = { spirit: effectiveSpirit(card), bullet: effectiveAtk(card), who: data.name };
-  // Which skill the hero has used this turn, so only that card reads USED.
+  // The category spike, marked on the stat it raises (3+ items of a tab).
+  const spike = (slot: ItemSlot) => (hasSpike(card, slot) ? <SpikeMark slot={slot} size={12} style={{ marginTop: 1 }} /> : undefined);
+  // Which ability the hero has used this turn, so only that plate reads USED.
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
+  // The ultimate: a kit ability, named and worded by its card, drawn by its
+  // hero's portrait; locked below Level 2, then on its cooldown — ULT_COOLDOWN
+  // less the Cooldown family's cut is the dial's full turn. A borrowed one
+  // (Sinclair's copy) is used once and has no cooldown.
+  const level = card.level ?? 1;
+  const ultFull = Math.max(1, ULT_COOLDOWN - cooldownCut(card, 'ult'));
+  const ultPlate = (abilityId: AbilityId | undefined, borrowed: boolean) => {
+    const face = ultimateCard(abilityId);
+    if (!abilityId || !face) return null;
+    return {
+      abilityId,
+      borrowed,
+      heroId: face.linkedHero,
+      name: borrowed ? `${face.name} (borrowed)` : face.name,
+      text: sentence(face.text ?? ''),
+      locked: !borrowed && level < ULT_UNLOCK_LEVEL,
+      left: borrowed ? 0 : card.cooldowns?.[abilityId] ?? 0,
+    };
+  };
+  // (A copy of the hero's own ultimate is no second ability: `kitAbilityIds` lists it once.)
+  const borrowed = card.borrowedUlt !== data.ult ? card.borrowedUlt : undefined;
+  const ults = [ultPlate(data.ult, false), ultPlate(borrowed, true)].filter((u): u is NonNullable<typeof u> => !!u);
+  // The active items it wears: a plate each, like a skill's, with the item's
+  // own icon — its cooldown on a dial (the full turn is the bearer's
+  // `activeCooldown` for its tier), or for hard crowd control its charges as
+  // pips; greyed while it cools or has no charge left.
+  const actives = wornActives(card).map((it) => {
+    const face = itemCard(it.cardId);
+    const left = itemCooldown(it);
+    const hardCC = face?.type === 'spell' && !!face.hardCC;
+    const charges = hardCC ? it.charges ?? 0 : undefined;
+    return {
+      iid: it.iid,
+      cardId: it.cardId,
+      name: face?.name ?? it.cardId,
+      text: sentence(face?.text ?? ''),
+      left,
+      full: Math.max(left, face ? activeCooldown(card, face.tier) : left),
+      charges,
+      greyed: left > 0 || charges === 0,
+    };
+  });
 
   // The card at the trading-card ratio (5:7). On desktop it stands as tall
   // as the window allows, up to 600, leaving room under it for Retreat and
@@ -204,9 +259,9 @@ export function HeroDetailSheet({
         </div>
 
         {/* TEXT BOARD — the cream rules band under the art. Holds the hero's
-            own ability (Skill/Passive) and, on your Active, the turn's
-            Attack. The Ultimate is NOT shown here (it's cast from hand), so
-            the content fits without scrolling. */}
+            own ability (Skill/Passive) and, on your Active, the turn's Attack.
+            The Ultimate sits in the rail beside the card (live state: locked,
+            cooling down), so the content fits without scrolling. */}
         <div style={{
           flex: '1 1 auto', minHeight: 0,
           display: 'flex', flexDirection: 'column',
@@ -218,7 +273,7 @@ export function HeroDetailSheet({
         }}>
           {/* Rules content — Skill (tap-to-use) or Passive, then the Attack
               on your Active. The overflowY is a safety for an unusually long
-              skill; with no ultimate here it does not normally scroll. */}
+              skill. */}
           <div style={{
             flex: '1 1 auto', minHeight: 0, overflowY: 'auto',
             color: poster.ink,
@@ -258,12 +313,11 @@ export function HeroDetailSheet({
                 />
               </Block>
             ))}
-            {/* The Attack — your Active's other move. Beside a skill the two
-                are split by an "or": the Active does one a turn, and using
-                either spends the other. */}
+            {/* The Attack — your Active's turn-ending move. Abilities come
+                first: the attack ends the Act. */}
             {attack && (
               <>
-                {skillAbilities.length > 0 && <OrRule />}
+                {skillAbilities.length > 0 && <ThenRule />}
                 <AttackPlate offer={attack} onAttack={() => { attack.onAttack(); onClose(); }} />
               </>
             )}
@@ -310,106 +364,201 @@ export function HeroDetailSheet({
           exit={{ opacity: 0, x: -12 }}
           transition={{ ...spring.snappy, delay: 0.05 }}
           style={{
-            display: 'flex', flexDirection: 'column', gap: 12,
             // On phones the rail sits below the card and flows with the page
-            // scroll (no inner cap); on desktop it's a fixed-width side rail.
-            width: isMobile ? cardW : 280,
-            maxHeight: isMobile ? undefined : cardH,
-            overflowY: isMobile ? undefined : 'auto',
+            // scroll (no inner cap); on desktop it's a fixed-width side rail
+            // as tall as the card's column (card, Retreat, Close), scrolling
+            // inside it when its panels run longer.
+            width: isMobile ? cardW : 300,
+            ...(isMobile
+              ? { display: 'flex', flexDirection: 'column', gap: 12 }
+              : { alignSelf: 'stretch', position: 'relative' }),
           }}
         >
-          {/* Stats — Level + BP / HP / SPI, pulled off the card face */}
-          <SidePanel title="Stats">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <LevelRing level={card.level ?? 1} exp={card.exp ?? 0} size={42} />
-              <div style={{ ...eyebrow, fontSize: 14, letterSpacing: '0.12em', color: poster.ink }}>
-                Level {card.level ?? 1}
+          <div style={isMobile ? { display: 'contents' } : {
+            position: 'absolute', inset: 0, overflowY: 'auto',
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+            {/* The Ultimate — a plate like a skill's: locked until Level 2, then
+                free on its cooldown; the hero's one ability a turn covers it and
+                the skill alike. A borrowed one (Sinclair's copy) is used once. */}
+            {ults.length > 0 && (
+              <SidePanel title="Ultimate">
+                {ults.map((u) => {
+                  const offer = skillOffers?.[u.abilityId];
+                  const used = usedSkill === u.abilityId;
+                  const interactive = !!isMine && !!onUseSkill && !!offer?.canUse && !used;
+                  const marks = plateMarks(interactive);
+                  // Locked: a lock on the hero's portrait and "Lv 2" in the chip's
+                  // place. On its cooldown (from the turn it is used): the dial.
+                  const status = u.locked ? (
+                    <span role="img" aria-label={`Unlocks at Level ${ULT_UNLOCK_LEVEL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <LockGlyph size={12} color={marks.ink} />
+                      <span style={{ ...eyebrow, fontSize: 10, color: marks.ink }}>Lv {ULT_UNLOCK_LEVEL}</span>
+                    </span>
+                  ) : u.left > 0 ? (
+                    <CooldownDial left={u.left} full={ultFull} ink={marks.ink} track={marks.track} label={readyIn(u.left, ultFull)} />
+                  ) : undefined;
+                  return (
+                    <SkillActionCard
+                      key={u.abilityId}
+                      name={u.name}
+                      description={u.text}
+                      scale={scale}
+                      mine={!!isMine}
+                      used={used}
+                      canUse={!!offer?.canUse}
+                      blockedReason={offer?.blockedReason}
+                      chipLabel={u.borrowed ? 'Once' : undefined}
+                      status={status}
+                      greyed={u.locked || u.left > 0}
+                      art={<UltArt heroId={u.heroId} locked={u.locked} />}
+                      ultimate
+                      onUse={onUseSkill ? () => { onUseSkill(u.abilityId); onClose(); } : undefined}
+                    />
+                  );
+                })}
+              </SidePanel>
+            )}
+
+            {/* Active items — plates like the skill's: the hero's one ability a
+                turn covers them too, then each cools down (or spends a charge). */}
+            {actives.length > 0 && (
+              <SidePanel title={actives.length > 1 ? 'Active items' : 'Active item'}>
+                {actives.map((a) => {
+                  const offer = itemOffers?.[a.iid];
+                  const used = usedSkill === a.cardId;
+                  const interactive = !!isMine && !!onUseItem && !!offer?.canUse && !used;
+                  const marks = plateMarks(interactive);
+                  const status = a.charges !== undefined ? (
+                    <ChargePips
+                      left={a.charges}
+                      total={HARD_CC_CHARGES}
+                      ink={marks.ink}
+                      faint={marks.faint}
+                      label={`${a.charges} of ${HARD_CC_CHARGES} charges left`}
+                    />
+                  ) : a.left > 0 ? (
+                    <CooldownDial left={a.left} full={a.full} ink={marks.ink} track={marks.track} label={readyIn(a.left, a.full)} />
+                  ) : undefined;
+                  return (
+                    <SkillActionCard
+                      key={a.iid}
+                      name={a.name}
+                      description={a.text}
+                      scale={scale}
+                      mine={!!isMine}
+                      used={used}
+                      canUse={!!offer?.canUse}
+                      blockedReason={offer?.blockedReason}
+                      status={status}
+                      greyed={a.greyed}
+                      art={<ItemIcon itemId={a.cardId} size={40} grey={a.greyed} />}
+                      onUse={onUseItem ? () => { onUseItem(a.iid); onClose(); } : undefined}
+                    />
+                  );
+                })}
+              </SidePanel>
+            )}
+
+            {/* Stats — Level + BP / HP / SPI, pulled off the card face */}
+            <SidePanel title="Stats">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <LevelRing level={card.level ?? 1} exp={card.exp ?? 0} size={42} />
+                <div style={{ ...eyebrow, fontSize: 14, letterSpacing: '0.12em', color: poster.ink }}>
+                  Level {card.level ?? 1}
+                </div>
               </div>
-            </div>
-            <div style={{
-              display: 'flex', justifyContent: 'space-around', alignItems: 'center',
-              marginTop: 4, paddingTop: 11,
-              borderTop: `1px solid ${poster.inkRule}`,
-            }}>
-              <RailStat label="BP" value={effectiveAtk(card)} color={poster.stat.atk} />
-              <RailStat label="HP" value={`${card.hp}/${card.hpMax}`} color={poster.stat.hp} />
-              <RailStat label="SPI" value={effectiveSpirit(card)} color={poster.stat.spirit} />
-            </div>
-          </SidePanel>
+              <div style={{
+                display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+                marginTop: 4, paddingTop: 11,
+                borderTop: `1px solid ${poster.inkRule}`,
+              }}>
+                <RailStat label="BP" value={effectiveAtk(card)} color={poster.stat.atk} mark={spike('weapon')} />
+                <RailStat label="HP" value={`${card.hp}/${card.hpMax}`} color={poster.stat.hp} mark={spike('vitality')} />
+                <RailStat label="SPI" value={effectiveSpirit(card)} color={poster.stat.spirit} mark={spike('spirit')} />
+              </div>
+            </SidePanel>
 
-          {card.statuses.length > 0 && (
-            <SidePanel title="Active Effects">
-              {card.statuses.map((s, i) => {
-                const def = STATUSES_BY_ID[s.id];
-                return (
-                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    {/* Pill + title on one row; description spans the FULL panel
-                        width below so it reads without cramped wrapping. */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                      <StatusIcon id={s.id} value={s.value} duration={s.duration} size="large" />
-                      <div style={{ ...text.label, color: poster.ink, minWidth: 0 }}>
-                        {def?.title ?? s.id}
+            {card.statuses.length > 0 && (
+              <SidePanel title="Active Effects">
+                {card.statuses.map((s, i) => {
+                  const def = STATUSES_BY_ID[s.id];
+                  return (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {/* Pill + title on one row; description spans the FULL panel
+                          width below so it reads without cramped wrapping. */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <StatusIcon id={s.id} value={s.value} duration={s.duration} size="large" />
+                        <div style={{ ...text.label, color: poster.ink, minWidth: 0 }}>
+                          {def?.title ?? s.id}
+                        </div>
+                      </div>
+                      <div style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>
+                        {def?.desc.replace('<value>', String(s.value))}{' '}
+                        <span style={{ color: poster.inkFaint }}>({s.duration}) left</span>
                       </div>
                     </div>
-                    <div style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>
-                      {def?.desc.replace('<value>', String(s.value))}{' '}
-                      <span style={{ color: poster.inkFaint }}>({s.duration}) left</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </SidePanel>
-          )}
+                  );
+                })}
+              </SidePanel>
+            )}
 
-          {attached.length > 0 && (
-            <SidePanel title="Equipment">
-              {attached.map((eq) => {
-                const eqData = CARDS_BY_ID[eq.cardId];
-                const merged = eqData?.type === 'hero';
-                const acc = merged ? poster.status.buff : poster.edge;
-                return (
-                  <div key={eq.iid} style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
-                    <div style={{
-                      width: 32, height: 32, flexShrink: 0,
-                      borderRadius: 6, overflow: 'hidden',
-                      background: poster.frame, border: `1.5px solid ${acc}`,
-                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
-                    }}>
+            {attached.length > 0 && (
+              <SidePanel title="Items">
+                {attached.map((eq) => {
+                  const eqData = CARDS_BY_ID[eq.cardId];
+                  const merged = eqData?.type === 'hero';
+                  return (
+                    <div key={eq.iid} style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
                       {merged ? (
-                        <HeroBadge cardId={eq.cardId} size={32} />
+                        <div style={{
+                          width: 34, height: 34, flexShrink: 0,
+                          borderRadius: 6, overflow: 'hidden',
+                          background: poster.frame, border: `1.5px solid ${poster.status.buff}`,
+                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
+                        }}>
+                          <HeroBadge cardId={eq.cardId} size={31} />
+                        </div>
                       ) : (
-                        <img src={`${ITEM_IMG_BASE}${eq.cardId}.webp`} alt="" loading="lazy" decoding="async"
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <ItemIcon
+                          itemId={eq.cardId}
+                          size={34}
+                          marks={{ cooldown: itemCooldown(eq) || undefined, charges: eq.charges ?? undefined }}
+                        />
                       )}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <div style={{ ...text.label, color: poster.ink }}>
-                        {eqData?.name ?? eq.cardId}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div style={{ ...text.label, color: poster.ink }}>
+                          {eqData?.name ?? eq.cardId}
+                        </div>
+                        {/* What the item does — the panel should explain the effect,
+                            not just name it. */}
+                        {!merged && eqData?.text && (
+                          <div style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>
+                            <RuleText text={eqData.text} />
+                          </div>
+                        )}
+                        {merged && eq.remMergeTurnsLeft != null && (
+                          <div style={{ ...text.body, fontSize: 12, color: poster.status.buff }}>
+                            merged · {eq.remMergeTurnsLeft}t left
+                          </div>
+                        )}
+                        {!merged && eq.charges != null && (
+                          <div style={{ ...text.body, fontSize: 12, color: poster.inkFaint }}>
+                            {eq.charges} charge{eq.charges === 1 ? '' : 's'} left
+                          </div>
+                        )}
+                        {!merged && itemCooldown(eq) > 0 && (
+                          <div style={{ ...text.body, fontSize: 12, color: poster.inkFaint }}>
+                            ready in {itemCooldown(eq)} turn{itemCooldown(eq) === 1 ? '' : 's'}
+                          </div>
+                        )}
                       </div>
-                      {/* What the item does — the panel should explain the effect,
-                          not just name it. */}
-                      {!merged && eqData?.text && (
-                        <div style={{ ...text.body, fontSize: 12, color: poster.inkDim }}>
-                          <RuleText text={eqData.text} />
-                        </div>
-                      )}
-                      {merged && eq.remMergeTurnsLeft != null && (
-                        <div style={{ ...text.body, fontSize: 12, color: poster.status.buff }}>
-                          merged · {eq.remMergeTurnsLeft}t left
-                        </div>
-                      )}
-                      {!merged && eq.charges != null && (
-                        <div style={{ ...text.body, fontSize: 12, color: poster.inkFaint }}>
-                          {eq.charges} charge{eq.charges === 1 ? '' : 's'} left
-                        </div>
-                      )}
                     </div>
-                  </div>
-                );
-              })}
-            </SidePanel>
-          )}
+                  );
+                })}
+              </SidePanel>
+            )}
+          </div>
         </motion.div>
       )}
       </div>{/* end card + rail row */}
@@ -430,10 +579,13 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 
 /** Stat readout for the off-card stat rail: big tabular number in its stat
  *  ink over a small stencil label. */
-function RailStat({ label, value, color }: { label: string; value: any; color: string }) {
+function RailStat({ label, value, color, mark }: { label: string; value: any; color: string; mark?: ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
-      <span style={{ ...text.numeric, fontSize: 20, color }}>{value}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 3 }}>
+        <span style={{ ...text.numeric, fontSize: 20, color }}>{value}</span>
+        {mark}
+      </span>
       <span style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>{label}</span>
     </div>
   );
@@ -449,6 +601,9 @@ function SidePanel({ title, children }: { title: string; children: React.ReactNo
       borderRadius: 10,
       overflow: 'hidden',
       color: poster.ink,
+      // In the desktop rail (a capped, scrolling column) a panel keeps its
+      // height: the rail scrolls rather than clipping each panel's foot.
+      flexShrink: 0,
     }}>
       <div style={{
         padding: '8px 12px',
@@ -495,14 +650,53 @@ function PassivePanel({ name, description, scale, trigger }: { name: string; des
   );
 }
 
+/** The inks a plate's marks print in: cream on the red action plate, ink on
+ *  the flat outlined one. */
+function plateMarks(interactive: boolean) {
+  return interactive
+    ? { ink: poster.paper, track: 'rgba(242, 230, 203, 0.32)', faint: 'rgba(242, 230, 203, 0.55)' }
+    : { ink: poster.ink, track: poster.inkRule, faint: poster.inkFaint };
+}
+
+/** A cooldown dial's name: "Ready in 2 turns · cooldown 3". */
+const readyIn = (left: number, full: number) => `Ready in ${left} turn${left === 1 ? '' : 's'} · cooldown ${full}`;
+
+/** The ultimate's face on its plate: its hero's portrait, keyed in the
+ *  ultimate's gold; below Level 2, greyed under a lock. */
+function UltArt({ heroId, locked }: { heroId: CardId; locked: boolean }) {
+  return (
+    <span style={{
+      position: 'relative', display: 'inline-block', width: 40, height: 40,
+      borderRadius: 7, overflow: 'hidden', lineHeight: 0,
+      boxShadow: `0 0 0 1.5px ${poster.gold}, 0 2px 4px rgba(0, 0, 0, 0.35)`,
+    }}>
+      <span style={{ display: 'block', filter: locked ? 'grayscale(1) brightness(0.5)' : undefined }}>
+        <HeroBadge cardId={heroId} size={40} />
+      </span>
+      {locked && (
+        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <LockGlyph size={20} color={poster.cream} hole={poster.ink} />
+        </span>
+      )}
+    </span>
+  );
+}
+
 /**
- * The Skill card IS the "use skill" button. When the skill is usable (it's the
- * player's hero and all gates pass) the whole card is a pressable red action
- * plate; otherwise it renders as a flat, outlined info card (USED / blocked
- * reason / enemy hero). The chip prints what it costs.
+ * The ability plate IS the "use" button — a skill's, the ultimate's or an
+ * active item's. When the ability is usable (it's the player's hero and all
+ * gates pass) the whole plate is a pressable red action plate (gold-edged for
+ * an ultimate); otherwise it renders as a flat, outlined info card (USED /
+ * blocked reason / enemy hero). The chip says it is free — abilities cost no
+ * souls — or `chipLabel` ("Once"); `status` draws what holds it instead (the
+ * cooldown dial, a hard crowd-control item's charge pips, the ultimate's
+ * lock). The rail's plates carry their `art` at the left: the item's icon,
+ * the ultimate's hero. The name stays the plate's first words, which is how a
+ * plate is found by its text.
  */
 function SkillActionCard({
-  name, description, scale, mine, used, canUse, blockedReason, onUse,
+  name, description, scale, mine, used, canUse, blockedReason, onUse, chipLabel, ultimate = false,
+  art, status, greyed = false,
 }: {
   name: string;
   description: string;
@@ -512,43 +706,36 @@ function SkillActionCard({
   canUse: boolean;
   blockedReason?: string;
   onUse?: () => void;
+  chipLabel?: string;
+  ultimate?: boolean;
+  /** The plate's picture, at its left: an item's icon, the ultimate's hero. */
+  art?: ReactNode;
+  /** What holds it, drawn — a cooldown dial, charge pips, a lock — in the
+   *  chip's place (after USED, the turn it was used). */
+  status?: ReactNode;
+  /** Cooling down, out of charges or locked: its words step back. */
+  greyed?: boolean;
 }) {
   const interactive = mine && !!onUse && canUse && !used;
 
   // Ink on the outlined plate; cream on the red action plate.
-  const fg = interactive ? poster.paper : poster.ink;
+  const fg = interactive ? poster.paper : greyed ? poster.inkDim : poster.ink;
   const fgDim = interactive ? poster.paper : poster.inkDim;
   const chip = used
     ? { label: 'USED', color: poster.inkFaint }
-    : { label: `${SKILL_COST} soul${SKILL_COST === 1 ? '' : 's'}`, color: interactive ? poster.paper : poster.inkDim };
+    : status ? null
+    : { label: chipLabel ?? 'Free', color: interactive ? poster.paper : poster.inkDim };
 
-  return (
-    <motion.div
-      role={interactive ? 'button' : undefined}
-      whileTap={interactive ? { scale: 0.985 } : undefined}
-      onClick={interactive ? (e) => { e.stopPropagation(); onUse!(); } : undefined}
-      style={{
-        padding: '14px 14px 12px',
-        ...(interactive
-          ? {
-              background: poster.red,
-              border: `2px solid ${poster.red}`,
-              ...clipBoth(chamfer(8)),
-            }
-          : {
-              background: 'transparent',
-              border: `1px solid ${poster.inkRule}`,
-              borderRadius: 6,
-            }),
-        color: fg,
-        cursor: interactive ? 'pointer' : 'default',
-        opacity: used ? 0.7 : 1,
-        WebkitTapHighlightColor: 'transparent',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
-        <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: fg }}>{name}</span>
-        <span style={{ flexShrink: 0, ...eyebrow, fontSize: 10, color: chip.color }}>{chip.label}</span>
+  const body = (
+    <>
+      <div style={{ display: 'flex', alignItems: status ? 'center' : 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+        <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: fg, minWidth: 0 }}>{name}</span>
+        {(chip || status) && (
+          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {chip && <span style={{ ...eyebrow, fontSize: 10, color: chip.color }}>{chip.label}</span>}
+            {status}
+          </span>
+        )}
       </div>
       {description && (
         <div style={{ ...text.body, color: fgDim }}>
@@ -565,16 +752,50 @@ function SkillActionCard({
           textAlign: 'center', ...text.body, color: poster.inkDim,
         }}>{blockedReason}</div>
       )}
+    </>
+  );
+
+  return (
+    <motion.div
+      role={interactive ? 'button' : undefined}
+      whileTap={interactive ? { scale: 0.985 } : undefined}
+      onClick={interactive ? (e) => { e.stopPropagation(); onUse!(); } : undefined}
+      style={{
+        padding: art ? '12px 14px 12px 12px' : '14px 14px 12px',
+        ...(interactive
+          ? {
+              background: poster.red,
+              border: `2px solid ${ultimate ? poster.gold : poster.red}`,
+              ...clipBoth(chamfer(8)),
+            }
+          : {
+              background: 'transparent',
+              border: `1px solid ${ultimate ? poster.gold : poster.inkRule}`,
+              borderRadius: 6,
+            }),
+        color: fg,
+        cursor: interactive ? 'pointer' : 'default',
+        opacity: used ? 0.7 : 1,
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      {art ? (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <span aria-hidden style={{ flexShrink: 0, lineHeight: 0, paddingTop: 2 }}>{art}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>{body}</div>
+        </div>
+      ) : body}
     </motion.div>
   );
 }
 
-/** The either/or between your Active's skill and its attack: one a turn. */
-function OrRule() {
+/** Between your Active's abilities and its attack: the abilities come first,
+ *  and the attack ends the turn's Act. */
+function ThenRule() {
   return (
-    <div role="separator" aria-label="or — one a turn" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '-4px 0 10px' }}>
+    <div role="separator" aria-label="then — the attack ends the turn" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '-4px 0 10px' }}>
       <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
-      <span aria-hidden style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>or · one a turn</span>
+      <span aria-hidden style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>then · the attack ends the turn</span>
       <span aria-hidden style={{ flex: 1, height: 1, background: poster.inkRule }} />
     </div>
   );

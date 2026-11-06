@@ -6,15 +6,15 @@ import { effectiveSpirit, isRespawning } from '@/engine/query';
 import type { Scale } from './scaling';
 
 /**
- * What a card that is not in play says about its scaling numbers. A spell is
- * scaled by your Active (`activeSpi`), an ultimate by its linked hero, a hero
- * card by the hero itself — so a printed "4" explains itself as "4 + your
+ * What a card's face says about its scaling numbers. An active item (a spell)
+ * is scaled by your Active (`activeSpi`), an ultimate by its linked hero, a
+ * hero card by the hero itself — so a printed "4" explains itself as "4 + your
  * Active's Spirit Power", and in a match, with "(2 now)" behind it.
  *
  * The board provides the live figure through this context; everywhere else
- * (the draft, the deck editor, the gallery, the Cards tab) there is none, and
- * the explanation is the formula alone. A hero in play never comes through
- * here: the sheet reads the hero itself (HeroDetailSheet).
+ * (the draft, the gallery, the Cards tab) there is none, and the explanation
+ * is the formula alone. A hero in play never comes through here: the sheet
+ * reads the hero itself (HeroDetailSheet).
  */
 type LiveSpirit = (card: CardData) => number | undefined;
 
@@ -34,9 +34,9 @@ export function faceScale(card: CardData | undefined, live: LiveSpirit): Scale |
   return { who: whoScales(card), spirit: live(card), printed: true };
 }
 
-/** The live Spirit behind a card in this player's hand, from the match state:
- *  their Active's for a spell, the linked hero's (if it stands on their board)
- *  for an ultimate. */
+/** The live Spirit behind a card's numbers for this player, from the match
+ *  state: their Active's for an active item, the linked hero's (if it stands
+ *  on their board) for an ultimate. */
 export function boardLiveSpirit(G: GameState, me: PlayerID): LiveSpirit {
   return (card) => {
     if (card.type === 'spell') return activeSpi(G, me);

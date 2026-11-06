@@ -3,26 +3,32 @@
  * meant to and nothing else.
  *
  * `record` plays N AI-vs-AI games through the real boardgame.io Client, with
- * Math.random pinned to a seeded mulberry32 per game (the draft, the deck
- * shuffles and the AI's draft jitter all draw from it), and writes one JSON line
- * per move: the move made and a hash of the state after it. Two engines that
- * play the same games move for move write identical files, so a refactor that
- * claims to change nothing must reproduce the previous trace byte for byte, and
- * a rule change must diverge only in the games it explains. `compare` says
- * which games diverge and at which move.
+ * Math.random pinned to a seeded mulberry32 per game (the match seed, which
+ * draws the market, and the draft both come from it), and writes one JSON line
+ * per move: the move made (shop moves included) and a hash of the state after
+ * it. Two engines that play the same games move for move write identical
+ * files, so a refactor that claims to change nothing must reproduce the
+ * previous trace byte for byte, and a rule change must diverge only in the
+ * games it explains. `compare` says which games diverge and at which move.
  *
  *   npx vite-node scripts/replay-trace.ts record [games=300] [out=sim-reports/trace.jsonl]
  *   npx vite-node scripts/replay-trace.ts compare before.jsonl after.jsonl [shown=8]
  *
  * Env: SEED (default 1). IGNORE — comma list of keys dropped from the hashed
- * state wherever they occur (default `seq,lastSkillUsed`); name a new
- * bookkeeping field there when you add one, and say so. `lastSkillUsed` is the
- * skill a hero used this turn (kept for Echo Shard and the hero sheet): it
- * says nothing the moves have not, so a trace from before it existed still
- * matches. Instance ids are relabelled by order of first appearance, so two
- * engines that number their cards differently hash alike when they hold the
- * same cards in the same places; G.action's id and abilityId (which skill the
- * board's skill flash names) are dropped.
+ * state wherever they occur (default `seq,lastSkillUsed,vitalitySpike`); name
+ * a new bookkeeping field there when you add one, and say so. A field belongs
+ * there when it says nothing the moves and the rest of the state have not:
+ * `lastSkillUsed` is the skill or active item a hero used this turn (kept for
+ * Echo Shard and the hero sheet), and `vitalitySpike` only marks that the
+ * Vitality spike's +1 is already on `hpMax`, which the worn items and `hpMax`
+ * show. The shop's other fields stay hashed because they change what a later
+ * move does: an item's `boughtOnTurn`, `paid` and `replaced` (what selling it
+ * back refunds or restores), a hero's `equippedIds` (whether a purchase pays
+ * experience), and `cooldowns` and `charges` (whether an active can be used).
+ * Instance ids are relabelled by order of first appearance, so two engines
+ * that number their cards differently hash alike when they hold the same cards
+ * in the same places; G.action's id and abilityId (which skill the board's
+ * skill flash names) are dropped.
  */
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -44,16 +50,17 @@ type Line = { g: number; step?: number; move?: string; args?: unknown[]; forced?
 
 async function record(games: number, out: string) {
   const SEED = Number(process.env.SEED ?? 1);
-  const IGNORE = new Set((process.env.IGNORE ?? 'seq,lastSkillUsed').split(',').filter(Boolean));
-  const TURN_CAP = 40;
+  const IGNORE = new Set((process.env.IGNORE ?? 'seq,lastSkillUsed,vitalitySpike').split(',').filter(Boolean));
   const MOVES_PER_TURN_CAP = 40;
 
-  // Pin before the engine modules load: setup and the decks read Math.random.
+  // Pin before the engine modules load: setup reads Math.random for the match seed.
   let rand = mulberry32(SEED);
   Math.random = () => rand();
   const { Client } = await import('boardgame.io/client');
   const { DeadlockGame } = await import('@/engine/game');
   const { enumerateAIMoves } = await import('@/ai/heuristic');
+  // The round cap ends every match by its last engine turn: a guard no game reaches.
+  const { MATCH_TURNS: TURN_CAP } = await import('@/engine/rounds');
 
   const IID_KEYS = new Set(['iid', 'attachedTo', 'sourceIid', 'targetIid']);
   let iidMap = new Map<string, string>();

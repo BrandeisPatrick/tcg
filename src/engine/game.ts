@@ -12,9 +12,9 @@ import { INVALID_MOVE } from 'boardgame.io/core';
 import type { GameState, PlayerID } from './types';
 import { INVALID, perform, type Action } from './engine';
 import { checkWinner } from './query';
-import { draftPickBlocked, mulliganBlocked } from './legality';
+import { draftPickBlocked } from './legality';
 import { beginTurn, endTurnEffects } from './actions/turn';
-import { draftPick, mulligan, setupGame } from './actions/setup';
+import { draftPick, setupGame } from './actions/setup';
 
 /** Who is moving: the client's seat, or whoever's turn it is. */
 const mover = (ctx: { currentPlayer: string }, playerID?: string | null) => (playerID ?? ctx.currentPlayer) as PlayerID;
@@ -30,6 +30,9 @@ export const DeadlockGame: Game<GameState> = {
   setup: () => setupGame(),
 
   turn: {
+    // Round robin from seat 0: a drafted match opens on seat 0's first pick
+    // (the last pick hands the first turn to seat 1, `draftPick`); a scripted
+    // one opens on seat 0's turn.
     onBegin: ({ G, ctx }) => beginTurn(G, ctx.currentPlayer as PlayerID, ctx.turn),
     onEnd: ({ G, ctx }) => endTurnEffects(G, ctx.currentPlayer as PlayerID),
   },
@@ -40,17 +43,38 @@ export const DeadlockGame: Game<GameState> = {
      * action has finished playing. Flips `G.action.state` begin → done. The
      * dispatcher (player input / AI loop) treats anything other than `begin`
      * as not-locked. Engine resolution doesn't gate itself on this — only the
-     * UI/AI input layer does. The next playCard / useSkill overwrites
+     * UI/AI input layer does. The next activate / useSkill overwrites
      * `G.action` with a fresh `begin` state.
      */
     completeAction: ({ G }) => {
       if (G.action) G.action.state = 'done';
     },
 
-    playCard: ({ G, ctx, playerID }, cardIid: string, targetIid?: string, discardIid?: string) =>
-      move(G, mover(ctx, playerID), { type: 'playCard', cardIid, targetIid, discardIid }),
+    /** The shop step: buy an item on sale; the card goes to your hand. */
+    buy: ({ G, ctx, playerID }, itemId: string) => move(G, mover(ctx, playerID), { type: 'buy', itemId }),
 
-    /** `skillId` is left off for the hero's first skill. */
+    /** The shop step: sell a card from your hand or a worn item (a full refund
+     *  on the turn it was bought, else half). */
+    sell: ({ G, ctx, playerID }, itemIid: string) => move(G, mover(ctx, playerID), { type: 'sell', itemIid }),
+
+    /** Either step: play a card from your hand onto one of your heroes (bench
+     *  and corpses included). Free; not the hero's ability for the turn. */
+    playCard: ({ G, ctx, playerID }, cardIid: string, heroIid: string) =>
+      move(G, mover(ctx, playerID), { type: 'playCard', cardIid, heroIid }),
+
+    /** The shop step: move a worn item to another of your heroes. */
+    moveItem: ({ G, ctx, playerID }, itemIid: string, toHeroIid: string) =>
+      move(G, mover(ctx, playerID), { type: 'moveItem', itemIid, toHeroIid }),
+
+    /** Close the shop: the turn moves on to its act step. */
+    closeShop: ({ G, ctx, playerID }) => move(G, mover(ctx, playerID), { type: 'closeShop' }),
+
+    /** Use an active item a hero wears (that hero's one ability this turn). */
+    activate: ({ G, ctx, playerID }, itemIid: string, targetIid?: string) =>
+      move(G, mover(ctx, playerID), { type: 'activate', itemIid, targetIid }),
+
+    /** A kit ability: a skill, the hero's ultimate or a borrowed ultimate,
+     *  named by `skillId` (left off for the hero's first skill). */
     useSkill: ({ G, ctx, playerID }, heroIid: string, targetIid?: string, skillId?: string) =>
       move(G, mover(ctx, playerID), { type: 'useSkill', heroIid, targetIid, skillId }),
 
@@ -60,9 +84,9 @@ export const DeadlockGame: Game<GameState> = {
     promoteToActive: ({ G, ctx, playerID }, benchIid: string) =>
       move(G, mover(ctx, playerID), { type: 'promoteToActive', benchIid }),
 
-    /** The Active's attack (each hero one a turn). Always the player whose turn
-     *  it is. `targetIid` is left off for the default target (the rival Active,
-     *  unless the hero has reach). */
+    /** The turn's attack (one a turn; it ends the Act). Always the player whose
+     *  turn it is. `targetIid` is left off for the default target (the rival
+     *  Active, unless the hero has reach). */
     attack: ({ G, ctx }, targetIid?: string) => move(G, ctx.currentPlayer as PlayerID, { type: 'attack', targetIid }),
 
     /** End the turn — unless a promotion is owed, which comes first. */
@@ -72,15 +96,10 @@ export const DeadlockGame: Game<GameState> = {
     },
 
     /** Pre-match hero draft pick; the last pick finalizes both rosters and
-     *  hands over to the opening mulligan. */
+     *  ends the draft's turn, handing the first turn to the first mover. */
     draftPick: ({ G, ctx, events }, heroId: string) => {
       if (draftPickBlocked(G, ctx.currentPlayer as PlayerID, heroId)) return INVALID_MOVE;
       if (draftPick(G, ctx, heroId).endTurn) events.endTurn();
-    },
-
-    mulligan: ({ G }) => {
-      if (mulliganBlocked(G)) return INVALID_MOVE;
-      mulligan(G);
     },
   },
 

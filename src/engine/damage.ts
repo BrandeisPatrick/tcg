@@ -1,11 +1,12 @@
-import type { CardInstance, DamageType, FxCastKind, FxTag, GameState, PlayerID } from './types';
+import type { CardInstance, DamageType, FxCastKind, FxTag, GameState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
-import { incomingDamage, isRespawning } from './query';
+import { incomingDamage, isBoss, isRespawning, itemHealingBoost, itemResist, seatOf } from './query';
 import { currentCast, withCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { pushFx, fxSource } from './fx';
+import { tallyBossHit } from './map';
 import { EXP_ON_KILL } from './constants';
 
 /** Presentation hints for the FX layer, passed by call sites whose damage is
@@ -29,10 +30,14 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   if (amount <= 0) return 0;
   // Corpses can't take more damage — they're already KO'd waiting to respawn.
   if (isRespawning(target)) return 0;
+  const cast = currentCast();
+  // The Mid-Boss in the pit takes the basic swing's own bullets and nothing
+  // else: no ability, item, proc, rider, Ricochet bounce or tick reaches it.
+  const pit = isBoss(target);
+  if (pit && !(type === 'attack' && cast?.kind === 'attack' && !cast.bounce && !!cast.source)) return 0;
   // Incoming-damage hooks come before everything else (Vindicta's flight takes
   // 1 off a bullet — she's literally above the gunfire).
   amount = incomingDamage(target, amount, type);
-  const cast = currentCast();
   // The FX layer's notion of who did this and how: an explicit hint wins, then
   // the cast frame, then "a status ticking on its own".
   const castKind: FxCastKind = fx?.cast ?? cast?.kind ?? 'tick';
@@ -48,16 +53,12 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   let dmg = amount;
 
   // Net resist: buff − shred. Positive = damage reduction, negative = amplification.
-  if (type === 'attack') {
-    const resist = target.statuses.find((s) => s.id === 'bullet_resist')?.value ?? 0;
-    const shred = target.statuses.find((s) => s.id === 'bullet_resist_down')?.value ?? 0;
-    const net = resist - shred;
-    if (net > 0) dmg = Math.max(0, dmg - net);
-    else if (net < 0) dmg += Math.abs(net);
-  }
-  if (type === 'spirit') {
-    const resist = target.statuses.find((s) => s.id === 'spirit_resist')?.value ?? 0;
-    const shred = target.statuses.find((s) => s.id === 'spirit_resist_down')?.value ?? 0;
+  // The buff is the larger of a resist status and what the target wears (the
+  // Resilience items' `resist` hook).
+  if (type === 'attack' || type === 'spirit') {
+    const [buffId, shredId] = type === 'attack' ? ['bullet_resist', 'bullet_resist_down'] : ['spirit_resist', 'spirit_resist_down'];
+    const resist = Math.max(target.statuses.find((s) => s.id === buffId)?.value ?? 0, itemResist(target, type));
+    const shred = target.statuses.find((s) => s.id === shredId)?.value ?? 0;
     const net = resist - shred;
     if (net > 0) dmg = Math.max(0, dmg - net);
     else if (net < 0) dmg += Math.abs(net);
@@ -102,9 +103,19 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   const typeLabel = type === 'attack' ? 'bullet' : type;
   pushLog(G, `${arrow}: ${dmg} ${typeLabel} dmg (${targetName} ${target.hp} HP).`);
 
-  // The patron is ONLY damaged when a hero dies (its level, in killInPlace) —
-  // excess past 0 HP is discarded, not spilled. Just clamp.
+  // Structures are only pushed when a hero dies (killInPlace) — excess past
+  // 0 HP is discarded, not spilled. Just clamp.
   if (target.hp < 0) target.hp = 0;
+
+  // A swing at the Mid-Boss: the HP it took off counts for the attacker's side
+  // (the side with more takes the boss when it falls), and that is all —
+  // nothing the attacker carries reacts to a hit on it, and its fall earns no
+  // kill exp (its reward is the boss's own, map.ts).
+  if (pit) {
+    tallyBossHit(G, seatOf(cast!.source!), hpBefore - target.hp);
+    pushFx(G, { kind: 'hit', iid: target.iid, amount: dmg, type, ko: target.hp <= 0, cast: fxCast, source: fxFrom });
+    return dmg;
+  }
 
   // Worn-equipment reactions to the damage, through the one trigger dispatcher.
   if (cast && cast.source) {
@@ -112,9 +123,11 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
       fireTriggers(G, cast.source, 'onBearerSkillDamage', { reaction: true, target, amount: dmg });
     }
     // A Ricochet bounce is an attack frame marked `bounce`: the gear hears it,
-    // so what belongs to the swing alone (a heal, a chain) can sit it out.
+    // so what belongs to the swing alone (a heal, a chain) can sit it out. The
+    // gear is told what the hit dealt (`amount`), so a headshot item can tell a
+    // hit that found its target at full HP (Weakening Headshot, Headhunter).
     if (cast.kind === 'attack') {
-      fireTriggers(G, cast.source, 'onAttack', { reaction: true, target, params: cast.bounce ? { bounce: true } : undefined });
+      fireTriggers(G, cast.source, 'onAttack', { reaction: true, target, amount: dmg, params: cast.bounce ? { bounce: true } : undefined });
     }
   }
 
@@ -173,13 +186,6 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   return dmg;
 }
 
-export function damagePlayer(G: GameState, pid: PlayerID, amount: number): number {
-  if (amount <= 0) return 0;
-  G.players[pid].hp -= amount;
-  const teamName = pid === '0' ? 'Amber Hand' : 'Sapphire Flame';
-  pushLog(G, `${teamName} patron: ${amount} dmg (${G.players[pid].hp} HP).`);
-  return amount;
-}
 
 /** Presentation hints for a heal: 'lifesteal' streams motes from the unit the
  *  HP was drawn out of; 'regen' is the quiet start-of-turn tick. */
@@ -198,11 +204,12 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
     pushLog(G, `${targetName} could not be healed (Healing Blocked).`);
     return 0;
   }
-  const targetBoost = target.statuses.find((s) => s.id === 'healing_boost')?.value ?? 0;
+  // Healing Boost: the larger of a status and what the unit wears (Healing
+  // Booster and Tempo), on the healed unit and on the caster of the heal.
+  const boost = (c: CardInstance) => Math.max(c.statuses.find((s) => s.id === 'healing_boost')?.value ?? 0, itemHealingBoost(c));
+  const targetBoost = boost(target);
   const cast = currentCast();
-  const casterBoost = (cast?.source && cast.source !== target)
-    ? (cast.source.statuses.find((s) => s.id === 'healing_boost')?.value ?? 0)
-    : 0;
+  const casterBoost = cast?.source && cast.source !== target ? boost(cast.source) : 0;
   const healed = Math.min(amount + targetBoost + casterBoost, target.hpMax - target.hp);
   target.hp += healed;
   if (healed > 0) {

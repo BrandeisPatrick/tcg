@@ -407,7 +407,7 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
   });
 
   it('the spells and ultimates the marks were written for print them', () => {
-    expect(SPELLS.find((s) => s.id === 'cold_front')!.text).toBe('Deal {sp:4} spirit damage to enemy Active.');
+    expect(SPELLS.find((s) => s.id === 'cold_front')!.text).toBe('Deal {sp:2} spirit damage to enemy Active.');
     expect(ULTIMATES.find((u) => u.id === 'ult_seven')!.text).toContain('{sp:2} → {sp:3} → {sp:4}');
     expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Deal {sp:5} spirit to any enemy; {sp:9} instead if it is below half HP.');
   });

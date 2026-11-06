@@ -295,7 +295,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
   const attackRef = useRef<AttackPlan | null>(null);
   const swingPlan = (steps: AttackStep[], label: string) => {
     const by = STAGE[steps[0].attackerIid as Id].owner;
-    attackRef.current = { attackerId: by, defenderId: otherPlayer(by), steps, damageToActive: 0, patronDamage: 0, defenderActiveKO: null };
+    attackRef.current = { attackerId: by, defenderId: otherPlayer(by), steps, damageToActive: 0, pushDamage: 0, defenderActiveKO: null };
     setAttack(attackRef.current);
     setPlaying(label);
   };
@@ -341,11 +341,6 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
     exp: 0,
     respawnTurnsLeft: dead.has(id) ? 3 : undefined,
   });
-
-  const spellOrigin = useCallback(() => ({
-    x: Math.min(330, Math.max(170, window.innerWidth * 0.2)),
-    y: window.innerHeight / 2,
-  }), []);
 
   // ---- layout ---------------------------------------------------------------
   // Beside the triggers when there is room for both, pinned above them when
@@ -450,7 +445,7 @@ export function FxShowroom({ extra = [] }: { extra?: ExtraGroup[] }) {
           ))}
         </div>
       </div>
-      <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} spellOrigin={spellOrigin} />
+      <FxLayer batch={batch} batchKey={batchKey} slotRefs={slotRefs.current} />
       <AnimatePresence>
         {attack && <CombatChoreographer plan={attack} me="0" slotRefs={slotRefs.current} stepDuration={COMBAT_STEP_MS} onComplete={resolveAttack} />}
       </AnimatePresence>

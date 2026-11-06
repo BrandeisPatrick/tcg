@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
-import { HEROES, SPELLS, EQUIPMENT, ULTIMATES } from '@/cards';
+import { CARDS_BY_ID, HEROES, SPELLS, EQUIPMENT, ULTIMATES } from '@/cards';
 import { DeadlockGame } from '@/engine/game';
+import { heroData, heroesOf, kitAbilityIds } from '@/engine/query';
 
 function freshGame(): GameState {
   const setup = (DeadlockGame as any).setup({ ctx: { numPlayers: 2, currentPlayer: '0' } });
@@ -10,7 +11,6 @@ function freshGame(): GameState {
   // Pre-damage so heals show effect; mark all skills as used so refresh-ult shows effect.
   for (const pid of ['0','1'] as PlayerID[]) {
     const ps = G.players[pid];
-    ps.hp = 12;
     if (ps.active) { ps.active.hp = Math.max(1, Math.floor(ps.active.hpMax / 2)); ps.active.skillUsedThisTurn = true; }
     for (const b of ps.bench) if (b) { b.hp = Math.max(1, Math.floor(b.hpMax / 2)); b.skillUsedThisTurn = true; }
   }
@@ -94,21 +94,38 @@ describe('Abilities — every card has a registered, executable ability', () => 
   });
 });
 
-describe('Ult unlock — no double issuance', () => {
-  it('ultsConsumed has no duplicates after several turns', async () => {
+/** Every card on `pid`'s side of the board: its heroes and, worn by them, what they carry. */
+function boardCards(G: GameState, pid: PlayerID): CardInstance[] {
+  const out: CardInstance[] = [];
+  const walk = (c: CardInstance) => { out.push(c); for (const a of c.attached ?? []) walk(a); };
+  for (const c of [G.players[pid].active, ...G.players[pid].bench]) if (c) walk(c);
+  return out;
+}
+
+describe('Ultimates are kit abilities, never cards', () => {
+  it('no ultimate is ever dealt: a played-out match leaves no card of one in a hand or on the board, every ultimate a kit ability', async () => {
     const { Client } = await import('boardgame.io/client');
+    const { enumerateAIMoves } = await import('@/ai/heuristic');
+    const { configureReadyMatch } = await import('./_helpers');
+    const { getMatchConfig, setMatchConfig } = await import('@/storage/matchConfig');
+    const saved = getMatchConfig();
+    configureReadyMatch();
     const client = Client({ game: DeadlockGame, numPlayers: 2 });
     client.start();
-    for (let t = 0; t < 12; t++) {
-      const s = client.getState();
-      if (s?.ctx.gameover) break;
-      client.moves.endTurn?.();
+    setMatchConfig(saved);
+    for (let guard = 0; guard < 600 && !client.getState()!.ctx.gameover; guard++) {
+      const { G: g, ctx } = client.getState()!;
+      const before = client.getState()!._stateID;
+      const best = enumerateAIMoves(g as GameState, ctx)[0];
+      if (!best || best.move === 'endTurn') client.moves.endTurn?.();
+      else (client.moves as any)[best.move](...best.args);
+      if (client.getState()!._stateID === before) client.moves.endTurn?.();
     }
     const G = client.getState()!.G as GameState;
     for (const pid of ['0', '1'] as PlayerID[]) {
-      const consumed = G.players[pid].ultsConsumed;
-      const set = new Set(consumed);
-      expect(set.size).toBe(consumed.length);
+      expect(boardCards(G, pid).filter((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate'), pid).toEqual([]);
+      expect(G.players[pid].hand.filter((c) => CARDS_BY_ID[c.cardId]?.type !== 'spell' && CARDS_BY_ID[c.cardId]?.type !== 'equipment'), pid).toEqual([]);
+      for (const h of heroesOf(G.players[pid])) expect(kitAbilityIds(h), h.cardId).toContain(heroData(h)!.ult);
     }
   });
 });

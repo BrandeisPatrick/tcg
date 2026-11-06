@@ -6,6 +6,11 @@
 import { playGame, type GameRecord, type Policy, type Snapshot, type StepInfo } from './driver';
 import { collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { moveTags, signatureOf, type Hit } from './hits';
+import { resolveSkill, isRespawning } from '@/engine/query';
+import {
+  PIDS, buyPriceOracle, handCardOf, heroesOfSide, itemData, itemPriceOracle, playConsumesOracle, restoredBySaleOracle,
+  slottedHeroOf, wornItemOf,
+} from './oracle';
 
 interface Mix { label: string; policies: Record<'0' | '1', Policy>; prefer?: Partial<Record<'0' | '1', string[]>> }
 
@@ -14,7 +19,8 @@ export const MIXES: Mix[] = [
   { label: 'randomLegal-vs-heuristic', policies: { '0': 'randomLegal', '1': 'heuristic' } },
   { label: 'chaos-vs-randomLegal', policies: { '0': 'chaos', '1': 'randomLegal' } },
   // Spotlight mixes: the rosters are loaded with the heroes whose rules are most intricate
-  // (Rem merges, Sinclair copies an ultimate, Mirage swaps, Wraith / Mirage riders, Lady Geist swaps HP).
+  // (Rem merges, Sinclair copies an ultimate, Mirage swaps, Wraith / Mirage riders, Lady Geist swaps HP)
+  // and whose builds hold active items (Sinclair's hexes, Mo & Krill's wards, Rem's Healing Nova).
   {
     label: 'spotlight-heuristic',
     policies: { '0': 'heuristic', '1': 'heuristic' },
@@ -44,14 +50,42 @@ function makeHit(mix: string, before: Snapshot, m: StepInfo, check: string, mess
   };
 }
 
-interface Coverage { remMerges: number; ultsPlayed: number; freeCopiesPlayed: number; attacks: number; kos: number }
+/** What the accepted moves of a mix exercised, so a spec can insist the rare paths are really played. */
+export interface Coverage {
+  remMerges: number;
+  ultsPlayed: number;
+  freeCopiesPlayed: number;
+  attacks: number;
+  kos: number;
+  buys: number;
+  /** Purchases priced at the difference (a free copy of the component on the side). */
+  discountBuys: number;
+  /** Cards played from the hand onto a hero. */
+  plays: number;
+  /** Plays that consumed a component (an upgrade taking its place). */
+  upgrades: number;
+  /** Plays whose consumed copy from the hand settled a component of its own. */
+  settlements: number;
+  /** Plays of a card held from an earlier turn (or never bought: a reward). */
+  heldPlays: number;
+  sells: number;
+  /** Sales of a card in the hand. */
+  handSells: number;
+  /** Same-turn sales of a worn upgrade that put its component back (onto a hero or into the hand). */
+  restores: number;
+  moveItems: number;
+  activates: number;
+}
 interface MixRun { hits: Hit[]; games: GameRecord[]; coverage: Coverage }
 
 export function runInvariantMix(mixIndex: number, games: number): MixRun {
   const mix = MIXES[mixIndex];
   const hits: Hit[] = [];
   const records: GameRecord[] = [];
-  const coverage: Coverage = { remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0 };
+  const coverage: Coverage = {
+    remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0, buys: 0, discountBuys: 0, plays: 0, upgrades: 0,
+    settlements: 0, heldPlays: 0, sells: 0, handSells: 0, restores: 0, moveItems: 0, activates: 0,
+  };
   for (let i = 0; i < games; i++) {
     const seed = seedFor(mixIndex, i);
     let active = new Set<string>();
@@ -70,7 +104,7 @@ export function runInvariantMix(mixIndex: number, games: number): MixRun {
           if (!active.has(v.key)) hits.push(makeHit(mix.label, before, m, v.id, v.message));
         }
         active = now;
-        if (accepted) tally(coverage, before, m);
+        if (accepted) tally(coverage, before, after, m);
         // A move taken from the legal-move list that the live client refuses.
         if (!accepted && !m.chaos && m.policy !== 'fallback' && m.name !== 'endTurn') {
           hits.push(makeHit(mix.label, before, m, 'legal-move-rejected', `${m.policy} chose ${m.name} and the engine refused it`));
@@ -91,19 +125,43 @@ export function runInvariantMix(mixIndex: number, games: number): MixRun {
   return { hits, games: records, coverage };
 }
 
-/** What an accepted move exercised, so a spec can insist the rare paths are really played. */
-function tally(c: Coverage, before: Snapshot, m: StepInfo) {
-  const me = before.G.players[before.ctx.currentPlayer as '0' | '1'];
+/** What an accepted move exercised. */
+function tally(c: Coverage, before: Snapshot, after: Snapshot, m: StepInfo) {
+  const pid = before.ctx.currentPlayer as '0' | '1';
+  const me = before.G.players[pid];
   if (m.name === 'attack') c.attacks++;
   if (m.name === 'useSkill') {
     const hero = [me.active, ...me.bench].find((h) => h && h.iid === m.args[0]);
-    if (hero?.cardId === 'hero_rem') c.remMerges++;
+    const kind = hero && resolveSkill(hero, typeof m.args[2] === 'string' ? m.args[2] : undefined)?.kind;
+    if (hero?.cardId === 'hero_rem' && kind === 'skill') c.remMerges++;
+    // An ultimate is a kit ability now: its own, or one borrowed from the rival (Sinclair's copy).
+    if (kind === 'ult' || kind === 'borrowed') c.ultsPlayed++;
+    if (kind === 'borrowed') c.freeCopiesPlayed++;
+  }
+  if (m.name === 'buy') {
+    c.buys++;
+    if (itemData(m.args[0]) && buyPriceOracle(before.G, pid, m.args[0]) < itemPriceOracle(m.args[0])) c.discountBuys++;
   }
   if (m.name === 'playCard') {
-    const card = me.hand.find((h) => h.iid === m.args[0]);
-    if (card && card.cardId.startsWith('ult_')) {
-      c.ultsPlayed++;
-      if (card.costOverride !== undefined) c.freeCopiesPlayed++;
-    }
+    c.plays++;
+    const card = handCardOf(before.G, pid, m.args[0]);
+    const hero = slottedHeroOf(before.G, pid, m.args[1]);
+    const taken = card && hero ? playConsumesOracle(before.G, pid, card, hero) : [];
+    if (taken.length) c.upgrades++;
+    if (taken.length > 1) c.settlements++;
+    if (card && card.boughtOnTurn !== before.G.turnNumber) c.heldPlays++;
+  }
+  if (m.name === 'sell') {
+    c.sells++;
+    if (handCardOf(before.G, pid, m.args[0])) c.handSells++;
+    const worn = wornItemOf(before.G, pid, m.args[0]);
+    if (worn && restoredBySaleOracle(before.G, pid, worn.item, worn.bearer).length) c.restores++;
+  }
+  if (m.name === 'moveItem') c.moveItems++;
+  if (m.name === 'activate') c.activates++;
+  // Heroes that fell during the move, on either side.
+  for (const p of PIDS) {
+    const alive = new Set(heroesOfSide(before.G.players[p]).filter((h) => !isRespawning(h)).map((h) => h.iid));
+    c.kos += heroesOfSide(after.G.players[p]).filter((h) => alive.has(h.iid) && isRespawning(h)).length;
   }
 }

@@ -7,9 +7,10 @@
  */
 import { Fragment, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import type { CardData, EquipmentCard } from '@/engine/types';
+import type { CardData, ItemTier } from '@/engine/types';
 import { HEROES, SPELLS, EQUIPMENT, ULTIMATES, CARDS_BY_ID } from '@/cards';
 import { heroAbilities } from '@/engine/query';
+import { ITEM_TIERS, PRICE } from '@/engine/constants';
 import { CardFrame } from '../card/CardFrame';
 import { RoundCardIcon } from '../card/RoundCardIcon';
 import { HeroSlot } from '../board/HeroSlot';
@@ -23,7 +24,7 @@ import {
 
 type Show = 'all' | 'heroes' | 'spells' | 'equipment' | 'ultimates' | 'icons' | 'states';
 const SHOWS: Show[] = ['all', 'heroes', 'spells', 'equipment', 'ultimates', 'icons', 'states'];
-const TIERS = [1, 2, 3, 4] as const;
+const TIERS = ITEM_TIERS;
 
 function initialShow(): Show {
   const s = new URLSearchParams(window.location.search).get('show');
@@ -36,13 +37,8 @@ const rulesOf = (c: CardData) => plainText(c.type === 'hero' ? heroAbilities(c).
 const hit = (c: CardData, q: string) =>
   !q || c.name.toLowerCase().includes(q) || c.id.includes(q) || rulesOf(c).toLowerCase().includes(q);
 
-/** "3–4 souls" from the cards themselves, so the label cannot drift from the data. */
-function costBand(cards: EquipmentCard[]): string {
-  const costs = cards.map((c) => c.cost ?? 0);
-  const lo = Math.min(...costs);
-  const hi = Math.max(...costs);
-  return lo === hi ? `${lo} souls` : `${lo}–${hi} souls`;
-}
+/** "4 souls": a tier's price, from the shop's own table. */
+const tierPrice = (tier: ItemTier) => `${PRICE[tier]} souls`;
 
 const count = (n: number, of: number) => (n === of ? n : `${n} of ${of}`);
 
@@ -149,20 +145,20 @@ export function CardsTab() {
           )}
 
           {wants('spells') && spells.length > 0 && (
-            <Section title="Spells" count={count(spells.length, SPELLS.length)}>
+            <Section title="Active items" count={count(spells.length, SPELLS.length)}>
               <CardGrid>{spells.map((s) => card(s))}</CardGrid>
             </Section>
           )}
 
           {wants('equipment') && gear.length > 0 && (
-            <Section title="Equipment" count={count(gear.length, EQUIPMENT.length)} aside={!isMobile && 'Tier 3 wears the gold frame'}>
+            <Section title="Passive items" count={count(gear.length, EQUIPMENT.length)} aside={!isMobile && 'Tier 3 wears the gold frame'}>
               {TIERS.map((t) => {
                 const row = gear.filter((g) => g.tier === t);
                 if (row.length === 0) return null;
                 const all = EQUIPMENT.filter((g) => g.tier === t);
                 return (
                   <Fragment key={t}>
-                    <Sub title={`Tier ${t}`} note={`${costBand(all)} · ${count(row.length, all.length)}`} />
+                    <Sub title={`Tier ${t}`} note={`${tierPrice(t)} · ${count(row.length, all.length)}`} />
                     <CardGrid>{row.map((e) => card(e, e.tier === 3 ? 'gold' : null))}</CardGrid>
                   </Fragment>
                 );
@@ -223,8 +219,8 @@ function States() {
     <>
       <Section title="Long-press preview">
         <Caption>
-          Hold any card in a match to bring it up at this size (CardFrame size=&quot;full&quot;). The Gallery opens
-          the same view on a tap.
+          Hold a hero or an item in a match (or in the shop) to bring it up at this size (CardFrame
+          size=&quot;full&quot;). The Gallery opens the same view on a tap.
         </Caption>
         <div className="gal-scroller gal-scroller--bleed">
           <CardFrame cardId="hero_haze" size="full" glow="accent" />
@@ -235,12 +231,12 @@ function States() {
 
       <Section title="Unaffordable">
         <Caption>
-          When the soul cost cannot be paid the hand card dims and its ink cost coin flips to warning red.
-          Affordable, unaffordable as the hand draws it, and the red coin on its own.
+          When an item's price cannot be paid its card dims and its ink price coin flips to warning red.
+          Affordable, unaffordable as the shop draws it, and the red coin on its own.
         </Caption>
         <CardGrid pack="start" gap={14}>
           <Fit label="Affordable"><CardFrame cardId="metal_skin" size="hand" /></Fit>
-          <Fit label="In hand">
+          <Fit label="In the shop">
             <div style={{ opacity: 0.42, filter: 'saturate(0.55)' }}>
               <CardFrame cardId="metal_skin" size="hand" unaffordable />
             </div>

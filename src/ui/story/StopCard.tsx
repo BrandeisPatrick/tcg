@@ -11,6 +11,7 @@
 import { CARDS_BY_ID } from '@/cards';
 import type { StoryRun, StoryNode } from '@/story/types';
 import { stopFacts, type StopFacts } from '@/story/describe';
+import { rewardSummary } from './RewardFace';
 import { HeroBadge } from '@/cards/art/heroArt';
 import { fonts, text } from '../tokens';
 import { poster, sheetStyle } from '../poster';
@@ -167,6 +168,11 @@ function CombatBody({ f, compact }: { f: StopFacts; compact: boolean }) {
               Beat them to take the route.
             </span>
           )}
+          {f.warChest > 0 && (
+            <span style={{ ...text.body, fontSize: 11.5, color: poster.inkSoft, lineHeight: 1.3 }}>
+              They start with {f.warChest} souls to spend.
+            </span>
+          )}
         </span>
       </div>
 
@@ -238,20 +244,21 @@ function Fact({ label, value, compact, rule, small }: {
 /** A recruit or a cache: what is on offer, and what you already hold. */
 function OfferBody({ f, run, compact }: { f: StopFacts; run: StoryRun; compact: boolean }) {
   const paysOut = f.node.kind === 'recruit' && f.kind === 'supply';
+  const tiers = f.offer ? `tier ${f.offer.tiers.join('–')}` : '';
   const line = f.state === 'cleared'
     ? 'You have been here. Nothing is left to take.'
     : f.kind === 'recruit'
       ? 'Three heroes are waiting here. One joins you.'
-      : 'A cache of three cards. One goes in your deck.';
+      : `A cache: two items (${tiers}) or ${f.offer?.souls ?? 0} souls. Take one for your next fight.`;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 10 : 12 }}>
       <p style={{ ...text.body, margin: 0, fontSize: compact ? 13 : 14, color: poster.inkSoft }}>
         {line}
         {paysOut && f.state !== 'cleared' && (
-          <> Your roster is full, so this stop pays out a card instead.</>
+          <> Your roster is full, so this stop pays out supplies instead.</>
         )}
       </p>
-      {f.kind === 'recruit' ? <RosterStrip run={run} /> : <DeckLine run={run} />}
+      {f.kind === 'recruit' ? <RosterStrip run={run} /> : <RewardLine run={run} />}
     </div>
   );
 }
@@ -292,7 +299,8 @@ function RosterStrip({ run }: { run: StoryRun }) {
   );
 }
 
-function DeckLine({ run }: { run: StoryRun }) {
+/** What the next fight already starts with. */
+function RewardLine({ run }: { run: StoryRun }) {
   return (
     <div
       style={{
@@ -304,9 +312,9 @@ function DeckLine({ run }: { run: StoryRun }) {
       }}
     >
       <StopGlyph kind="supply" color={KIND_INK.supply} size={16} />
-      <span style={{ ...eyebrow, fontSize: 9.5, color: poster.inkDim }}>Your deck</span>
-      <span style={{ ...text.label, fontSize: 12, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
-        {run.deck.length} cards
+      <span style={{ ...eyebrow, fontSize: 9.5, color: poster.inkDim, whiteSpace: 'nowrap' }}>Next fight</span>
+      <span style={{ ...text.label, fontSize: 12, marginLeft: 'auto', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+        {rewardSummary(run.nextFight)}
       </span>
     </div>
   );

@@ -3,26 +3,27 @@
  * `beginTurn` runs for the player whose turn is starting, `endTurnEffects` for
  * the one whose turn is ending. During the draft, turns only decide who picks
  * next — the match's start- and end-of-turn pipeline must not fire on empty
- * boards and decks — so both do nothing until the draft is over.
+ * boards and decks — so both do nothing until the draft is over, and the end
+ * of the draft's last turn (engine turn 0) is no match turn either.
  */
 import type { CardInstance, GameState, PlayerID } from '../types';
 import { cardName } from '@/cards';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges, tickCooldowns } from '../statusOps';
-import { resolve } from '../death';
-import { heroData, isRespawning, liveBoardCards } from '../query';
+import { fallToBoss, resolve } from '../death';
+import {
+  attackPower, comebackBonus, findCardOnBoard, heroData, heroesOf, isRespawning, liveBoardCards, otherPlayer, standingBoss,
+  standingVerdict, structureHp, wornItems,
+} from '../query';
+import { endsLastRound, ownTurn, pushMultiplier, round, secondMover } from '../rounds';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { fireTriggers, type Trigger } from '../triggers';
-import { dealEarnedUltimates, grantExp } from '../expSystem';
-import { drawCards } from '../deckOps';
-import { DRAW_PER_TURN, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, SOULS_REFILL_TABLE } from '../constants';
-
-/** Souls a player's pool is refilled to at the start of their turn. */
-export function soulRefillForTurn(globalTurn: number): number {
-  // globalTurn 1 → my turn 1 (idx 0), globalTurn 3 → my turn 2 (idx 1), ...
-  const idx = Math.floor((globalTurn - 1) / 2);
-  return SOULS_REFILL_TABLE[Math.min(idx, SOULS_REFILL_TABLE.length - 1)];
-}
+import { grantExp } from '../expSystem';
+import { damageUnit } from '../damage';
+import { lapseRevives, pushStructures, riseBoss } from '../map';
+import {
+  BOSS_RETALIATION, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, LANE_INCOME, ROUND_CAP, SECOND_MOVER_FIRST_INCOME_BONUS,
+} from '../constants';
 
 /** Fire a turn-edge trigger for every living hero of `pid`: the hero's own
  *  passives, then what it wears (Extra Regen heals 1 each start of turn). */
@@ -33,9 +34,20 @@ function fireBoardTriggers(G: GameState, pid: PlayerID, trigger: Trigger) {
   }
 }
 
+/** Souls `pid` collects at the start of its own turn: the lane's income, the
+ *  comeback a trailing side is owed (`comebackBonus`, read before the income
+ *  lands), and the second mover's bonus on its first turn. */
+function income(G: GameState, pid: PlayerID): { total: number; comeback: number; seat: number } {
+  const comeback = comebackBonus(G, pid);
+  const seat = pid === secondMover(G) && ownTurn(G, pid) === 1 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
+  return { total: LANE_INCOME + comeback + seat, comeback, seat };
+}
+
 /**
  * Tick down respawn timers on heroes that are currently corpses in their slots.
- * On reaching 0 the hero returns to full HP in the same slot.
+ * On reaching 0 the hero returns to full HP in the same slot, its level and
+ * its items intact (what an item gives is read off it, or sits on the hero's
+ * modifiers: nothing to put back).
  */
 function tickRespawn(G: GameState, pid: PlayerID) {
   const ps = G.players[pid];
@@ -55,40 +67,53 @@ function tickRespawn(G: GameState, pid: PlayerID) {
   }
 }
 
-/** The start of `pid`'s turn. `ctxTurn` is boardgame.io's turn count, which
- *  includes the draft's turns; the match's own turn number is that minus the
- *  offset captured when the draft finished. */
+/** The start of `pid`'s turn — its Income, before the shop opens. `ctxTurn` is
+ *  boardgame.io's turn count, which includes the draft's turns; the engine turn
+ *  is that minus the offset captured when the draft finished. In order: the
+ *  turn's flags reset and the step is the shop, the Mid-Boss rises if its
+ *  round has come, the start-of-turn ticks, cooldowns (heroes' and items') and
+ *  Rem's merge, the income, respawns, the start-of-turn passives and gear, and
+ *  the state-based pass. */
 export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   if (G.draft) return;
   const ps = G.players[pid];
   const realTurn = ctxTurn - G.draftTurnsOffset;
   G.turnNumber = realTurn;
+  G.step = 'shop';
   G.attackUsed = false;
+  G.retreatUsed = false;
+  G.bossAttacker = null;
+  riseBoss(G);
   tickStartOfTurn(G, ps);
-  // Skill cooldowns count the owner's turns, so they come down here too.
+  // Cooldowns count the owner's turns, so they come down here too (on a corpse as well).
   tickCooldowns(ps);
   // Count down Rem's "Lil Helpers" merges; expired ones return her to bench.
   tickRemMerges(G, ps);
-  // Refill (not add) — no hoarding across turns. KO bounty banked this turn IS preserved
-  // until the NEXT refill, so a kill mid-turn still gives you something to spend right away.
-  ps.souls = soulRefillForTurn(realTurn);
-  // Draw from deck
-  drawCards(G, pid, DRAW_PER_TURN);
-  // An ultimate a hero earned while this hand was full is dealt now.
-  dealEarnedUltimates(G, ps);
+  // Income: souls accumulate — nothing banked is lost, and the lane pays on
+  // top of it every own turn, the first included.
+  const paid = income(G, pid);
+  ps.souls += paid.total;
+  const extras = [paid.comeback ? `+${paid.comeback} comeback` : '', paid.seat ? `+${paid.seat} second mover` : ''].filter(Boolean);
+  pushLog(G, `P${pid} +${paid.total} Souls (income${extras.length ? `, ${extras.join(', ')}` : ''}).`);
   // Respawn ticks ONLY for the player whose turn is starting, so a corpse
-  // decrements once per round (on its owner's turn) — RESPAWN_TURNS = 3 means
-  // 3 of the owner's turns of downtime. (Ticking both players here was a bug:
-  // it double-ticked corpses, halving respawn time so KOs felt near-instant.)
+  // decrements once per round (on its owner's turn): a timer of N is N of the
+  // owner's turns of downtime (`respawnTimer`, by the round it fell in).
   tickRespawn(G, pid);
   fireBoardTriggers(G, pid, 'startOfTurn');
   resolve(G);
   pushLog(G, `--- Turn ${realTurn}, player ${pid} ---`);
 }
 
-/** The end of `pid`'s turn. */
+/** The end of `pid`'s turn — its End step. In order: the end-of-turn
+ *  passives, the channels' pulses, the state-based pass (what they felled pays
+ *  and pushes now), the push into an empty lane, the Mid-Boss's blow at the
+ *  hero that attacked it, exp for standing the turn, the CC that ran its
+ *  course, the turn flags, and a last state-based pass; then, as a round ends,
+ *  a Rejuvenator past its last round lapses, and after round ROUND_CAP the
+ *  match is decided on what stands (`G.capped`). */
 export function endTurnEffects(G: GameState, pid: PlayerID) {
-  if (G.draft) return;
+  // The draft's turns, and the last one (which hands the first turn over), are no match turns.
+  if (G.draft || G.turnNumber < 1) return;
   // The board-FX stream is flushed here, ahead of everything the turn's end does
   // (and so ahead of the next turn's start, which follows in the same reducer
   // call). What the board sees after `endTurn` is then one batch: the end-of-turn
@@ -100,6 +125,12 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   // Channeled ultimates (Dynamo / Seven / Warden) pulse their AoE at the
   // end of the turn, after everything the player did in it.
   tickCastingPulses(G, G.players[pid]);
+  resolve(G);
+  // A lane the rival has left empty is pushed into, at the Active's power as
+  // the turn left it.
+  pushIntoEmptyLane(G, pid);
+  // The Mid-Boss hits back at the hero that attacked it this turn.
+  bossStrikesBack(G, pid);
   // Hero leveling: the lane is where a hero grows. The Active earns more for
   // standing the turn than a bench hero does.
   const ps = G.players[pid];
@@ -110,4 +141,60 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
   tickEndOfTurnCC(G, G.players[pid]);
   clearTurnFlags(G.players[pid]);
+  // An upgrade bought this turn can no longer be sold back for its component.
+  for (const hero of heroesOf(ps)) {
+    for (const it of wornItems(hero)) {
+      if (it.replaced) it.replaced = undefined;
+      if (it.replacedFrom) it.replacedFrom = undefined;
+    }
+  }
+  // What the End step felled (a Naptime wake-up burst) pays and pushes now.
+  resolve(G);
+  lapseRevives(G, pid);
+  if (endsLastRound(G, pid)) {
+    G.capped = true;
+    const v = standingVerdict(G);
+    const why = v.by === 'structures' ? 'more structure HP' : v.by === 'netWorth' ? 'structure HP tied, more net worth' : 'all tied, the second mover';
+    pushLog(G, `Round ${ROUND_CAP} is over: structures ${structureHp(G.players['0'])}–${structureHp(G.players['1'])}. P${v.winner} wins (${why}).`);
+  }
+}
+
+/**
+ * The push into an empty lane: when the turn ends with every hero of the
+ * rival down, the ending player's standing Active pushes its bullet power
+ * (doubled in the late game) into the rival's front structure. (A board wipe
+ * is no loss by itself: this is how an empty lane costs its side.)
+ */
+function pushIntoEmptyLane(G: GameState, pid: PlayerID) {
+  const rival = otherPlayer(pid);
+  const standing = (c: CardInstance) => !isRespawning(c) && c.hp > 0;
+  if (liveBoardCards(G.players[rival]).some(standing)) return;
+  const active = G.players[pid].active;
+  if (!active || !standing(active)) return;
+  const power = attackPower(active).total;
+  if (power <= 0) return;
+  pushLog(G, `${cardName(active.cardId)} pushes into the empty lane (round ${round(G)}).`);
+  pushStructures(G, rival, power * pushMultiplier(G), 'lane');
+}
+
+/**
+ * The Mid-Boss's blow: the hero of `pid` that attacked it this turn takes
+ * BOSS_RETALIATION pure damage from it (Unstoppable shrugs it off, nothing
+ * else stops it). A hero it fells falls in place — the Rejuvenator still
+ * revives it — but the boss pays no bounty and pushes nothing.
+ */
+function bossStrikesBack(G: GameState, pid: PlayerID) {
+  const boss = standingBoss(G);
+  const iid = G.bossAttacker;
+  G.bossAttacker = null;
+  if (!boss || !iid) return;
+  const found = findCardOnBoard(G, iid);
+  if (!found || found.owner !== pid || isRespawning(found.card) || found.card.hp <= 0) return;
+  const hero = found.card;
+  pushLog(G, `The Mid-Boss strikes back at ${cardName(hero.cardId)}.`);
+  damageUnit(G, hero, BOSS_RETALIATION, 'pure', 'Mid-Boss', { source: boss });
+  if (hero.hp <= 0) {
+    fallToBoss(G, G.players[pid], hero);
+    resolve(G);
+  }
 }

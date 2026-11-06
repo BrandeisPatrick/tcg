@@ -1,6 +1,10 @@
 /**
- * Per-hero SEAT sensitivity. For each hero, win-rate when drafted by P0 vs P1.
- * A hero with a small (or negative) P0−P1 gap is seat-robust / good going second.
+ * Per-hero SEAT sensitivity. For each hero, its team's win-rate when it moved
+ * first and when it moved second. The pie rule: seat 0 drafts first and seat 1
+ * moves first, so in a drafted match the first mover is seat 1 (read off
+ * `G.firstMover` all the same). A hero with a small (or negative) gap is
+ * seat-robust / good going second. No human seat: both seats are promoted on
+ * the spot, as in the balance sim.
  *
  * Run:  npx vite-node scripts/eval/hero-seat.ts [games]
  */
@@ -8,31 +12,27 @@ import { Client } from 'boardgame.io/client';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { CARDS_BY_ID } from '@/cards';
-import type { GameState, PlayerState } from '@/engine/types';
+import { setMatchConfig } from '@/storage/matchConfig';
+import { heroesOf } from '@/engine/query';
+import { MATCH_TURNS, firstMover } from '@/engine/rounds';
+import type { GameState, PlayerID } from '@/engine/types';
 
 const GAMES = Number(process.argv[2] ?? 600);
-const TURN_CAP = 40;
+const TURN_CAP = MATCH_TURNS; // engine turns: the round cap ends every match by then
+setMatchConfig({ heroPreferences: [null, null, null, null], humanSeat: null });
 
-function roster(ps: PlayerState): string[] {
-  // A merged Rem rides in an ally's `attached` list, not on a slot: she is
-  // still this side's hero, so her games count for her.
-  const slots = [ps.active, ...ps.bench];
-  const merged = slots.flatMap((c) => (c?.attached ?? []).filter((a) => a.remMergeTurnsLeft != null));
-  return [...slots, ...merged]
-    .filter((c): c is NonNullable<typeof c> => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero')
-    .map((c) => c.cardId);
-}
-
-type Seat = '0' | '1';
-const stat: Record<string, { p0g: number; p0w: number; p1g: number; p1w: number }> = {};
-const bump = (id: string) => (stat[id] ??= { p0g: 0, p0w: 0, p1g: 0, p1w: 0 });
+type Seat = PlayerID;
+// Per hero: games and wins with its team moving first, and moving second.
+const stat: Record<string, { fg: number; fw: number; sg: number; sw: number }> = {};
+const bump = (id: string) => (stat[id] ??= { fg: 0, fw: 0, sg: 0, sw: 0 });
 
 function playOne() {
   const client = Client({ game: DeadlockGame as any, numPlayers: 2 });
   client.start();
   let st: any = client.getState();
   let guard = 0, movesThisTurn = 0, lastTurn = -1;
-  let r0: string[] = [], r1: string[] = [], captured = false;
+  let rosters: Record<Seat, string[]> | null = null;
+  let mover: Seat = '1';
 
   while (st && !st.ctx.gameover) {
     const G: GameState = st.G; const ctx = st.ctx;
@@ -43,7 +43,11 @@ function playOne() {
       client.moves.draftPick(pool[Math.floor(Math.random() * pool.length)]);
       st = client.getState(); if (st._stateID === before) break; continue;
     }
-    if (!captured) { r0 = roster(G.players['0']); r1 = roster(G.players['1']); captured = true; }
+    // A merged Rem rides in an ally's `attached` list: heroesOf still finds her.
+    if (!rosters) {
+      rosters = { '0': heroesOf(G.players['0']).map((c) => c.cardId), '1': heroesOf(G.players['1']).map((c) => c.cardId) };
+      mover = firstMover(G);
+    }
     if ((G.turnNumber ?? 0) > TURN_CAP) break;
     if (ctx.turn !== lastTurn) { lastTurn = ctx.turn; movesThisTurn = 0; }
     const best = enumerateAIMoves(G, ctx)[0];
@@ -53,26 +57,32 @@ function playOne() {
     st = client.getState(); movesThisTurn++;
     if (st._stateID === before && !st.ctx.gameover) client.moves.endTurn();
   }
+  client.stop();
   const w = st?.ctx?.gameover?.winner as Seat | undefined;
-  if (w !== '0' && w !== '1') return;
-  for (const h of r0) { const s = bump(h); s.p0g++; if (w === '0') s.p0w++; }
-  for (const h of r1) { const s = bump(h); s.p1g++; if (w === '1') s.p1w++; }
+  if ((w !== '0' && w !== '1') || !rosters) return;
+  for (const seat of ['0', '1'] as Seat[]) {
+    for (const h of rosters[seat]) {
+      const s = bump(h);
+      if (seat === mover) { s.fg++; if (w === seat) s.fw++; }
+      else { s.sg++; if (w === seat) s.sw++; }
+    }
+  }
 }
 
 for (let i = 0; i < GAMES; i++) playOne();
 
 const rows = Object.entries(stat).map(([id, s]) => {
-  const p0 = s.p0g ? (100 * s.p0w / s.p0g) : 0;
-  const p1 = s.p1g ? (100 * s.p1w / s.p1g) : 0;
-  return { name: CARDS_BY_ID[id]?.name ?? id, p0, p1, gap: p0 - p1, n: s.p0g + s.p1g };
+  const first = s.fg ? (100 * s.fw / s.fg) : 0;
+  const second = s.sg ? (100 * s.sw / s.sg) : 0;
+  return { name: CARDS_BY_ID[id]?.name ?? id, first, second, gap: first - second, n: s.fg + s.sg };
 }).sort((a, b) => a.gap - b.gap); // smallest gap first = most seat-robust
 
 console.log(`\n# Per-hero seat sensitivity — ${GAMES} games`);
-console.log(`(P0 win% when this hero is on P0's team · P1 win% when on P1's team · gap = P0−P1; smaller gap = better going second)\n`);
-console.log(`| Hero | P0 win% | P1 win% | gap | n |`);
+console.log(`(win% when this hero's team moved first · when it moved second · gap = first − second; smaller gap = better going second)\n`);
+console.log(`| Hero | moved first win% | moved second win% | gap | n |`);
 console.log(`|---|---:|---:|---:|---:|`);
 for (const r of rows) {
-  console.log(`| ${r.name} | ${r.p0.toFixed(0)}% | ${r.p1.toFixed(0)}% | ${r.gap >= 0 ? '+' : ''}${r.gap.toFixed(0)} | ${r.n} |`);
+  console.log(`| ${r.name} | ${r.first.toFixed(0)}% | ${r.second.toFixed(0)}% | ${r.gap >= 0 ? '+' : ''}${r.gap.toFixed(0)} | ${r.n} |`);
 }
-const avgGap = rows.reduce((a, r) => a + r.gap, 0) / rows.length;
-console.log(`\nMean gap across heroes: +${avgGap.toFixed(1)}  (this ≈ the structural seat skew)`);
+const avgGap = rows.reduce((a, r) => a + r.gap, 0) / (rows.length || 1);
+console.log(`\nMean gap across heroes: ${avgGap >= 0 ? '+' : ''}${avgGap.toFixed(1)}  (this ≈ the structural edge of moving first)`);

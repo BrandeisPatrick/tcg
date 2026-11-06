@@ -1,9 +1,9 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import type { CardId } from '@/engine/types';
-import type { StoryRun, StoryNode } from '@/story/types';
-import { randomStartingHeroes, recruitChoices, supplyChoices } from '@/story/content';
-import { newRun, clearNode, isReachable } from '@/story/storyRun';
+import type { StoryRun, StoryNode, RewardChoice } from '@/story/types';
+import { randomStartingHeroes, recruitChoices, rewardChoices } from '@/story/content';
+import { newRun, clearNode, isReachable, takeReward } from '@/story/storyRun';
 import { effectiveKind, stopState } from '@/story/describe';
 import { useSettings } from '@/storage/settings';
 import { PosterButton } from '../chrome';
@@ -33,7 +33,8 @@ interface StoryMapScreenProps {
 
 type PickState =
   | { mode: 'start'; options: CardId[] }
-  | { mode: 'node'; node: StoryNode; kind: 'hero' | 'card'; options: CardId[] }
+  | { mode: 'node'; node: StoryNode; kind: 'hero'; options: CardId[] }
+  | { mode: 'node'; node: StoryNode; kind: 'supply'; options: RewardChoice[] }
   | null;
 
 /** The opening view comes no closer than this (× cover). */
@@ -230,19 +231,19 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
     if (kind === 'recruit') {
       setPick({ mode: 'node', node, kind: 'hero', options: recruitChoices(run, node) });
     } else if (kind === 'supply') {
-      setPick({ mode: 'node', node, kind: 'card', options: supplyChoices(run, node) });
+      setPick({ mode: 'node', node, kind: 'supply', options: rewardChoices(run, node) });
     } else {
       onBattle(node); // battle / elite / boss
     }
   };
 
-  const resolveChoice = (id: CardId) => {
+  // A recruit joins the roster; a supply waits for the next fight.
+  const resolveChoice = (choice: { hero: CardId } | { supply: RewardChoice }) => {
     if (!run || !pick || pick.mode !== 'node') return;
-    let next = clearNode(run, pick.node.id);
-    next = pick.kind === 'hero'
-      ? { ...next, heroes: [...next.heroes, id] }
-      : { ...next, deck: [...next.deck, id] };
-    onUpdateRun(next);
+    const next = clearNode(run, pick.node.id);
+    onUpdateRun('hero' in choice
+      ? { ...next, heroes: [...next.heroes, choice.hero] }
+      : takeReward(next, choice.supply));
     setPick(null);
     setSelectedId(null);
     if (!calm) setStampId(pick.node.id);
@@ -364,22 +365,34 @@ export function StoryMapScreen({ run, onUpdateRun, onBattle, onExit }: StoryMapS
             key="start"
             kind="hero"
             title="Choose your first hero"
-            subtitle="Recruit more allies and build your deck as you fight uptown."
+            subtitle="Recruit more allies and gather supplies as you fight uptown."
             options={pick.options}
             confirmVerb="Start with"
             onPick={startRun}
             onCancel={() => setPick(null)}
           />
         )}
-        {pick?.mode === 'node' && (
+        {pick?.mode === 'node' && pick.kind === 'hero' && (
           <PickOverlay
             key="node"
-            kind={pick.kind}
-            title={pick.kind === 'hero' ? 'Recruit a hero' : 'Take a supply'}
-            subtitle={pick.kind === 'hero' ? 'Add one to your roster (up to four).' : 'Add one card to your deck.'}
+            kind="hero"
+            title="Recruit a hero"
+            subtitle="Add one to your roster (up to four)."
             options={pick.options}
-            confirmVerb={pick.kind === 'hero' ? 'Recruit' : 'Take'}
-            onPick={resolveChoice}
+            confirmVerb="Recruit"
+            onPick={(hero) => resolveChoice({ hero })}
+            onCancel={() => setPick(null)}
+          />
+        )}
+        {pick?.mode === 'node' && pick.kind === 'supply' && (
+          <PickOverlay
+            key="node"
+            kind="supply"
+            title="Take a supply"
+            subtitle="For your next fight: an item your heroes start wearing, or souls to spend."
+            options={pick.options}
+            confirmVerb="Take"
+            onPick={(supply) => resolveChoice({ supply })}
             onCancel={() => setPick(null)}
           />
         )}

@@ -1,17 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { ABILITIES_BY_ID } from '@/abilities';
 import type { GameState, PlayerID } from '@/engine/types';
-import { DeadlockGame } from '@/engine/game';
+import { INVALID, perform } from '@/engine/engine';
+import { playBlocked } from '@/engine/legality';
+import { isRespawning, itemResist, slotCap, wornItems } from '@/engine/query';
+import { beginTurn } from '@/engine/actions/turn';
+import { resolve } from '@/engine/death';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { withCast } from '@/engine/castContext';
-import { freshReadyGame } from './_helpers';
+import { buyItem, buyToHand, freshReadyGame, giveItem } from './_helpers';
 
 /**
- * Per-card test scenarios for the V1 minimal spell + equipment set.
+ * Per-card test scenarios for the V1 minimal item set: active items (spells)
+ * and passive items (equipment).
  *
- * Scope: every spell + equipment effect we actually ship. Each test sets up
- * a fresh game, applies the card's ability (or a controlled state mutation
+ * Scope: every active and passive item effect we actually ship. Each test sets
+ * up a fresh game, applies the card's ability (or a controlled state mutation
  * that mirrors it), and asserts the post-state matches the card's text.
  */
 
@@ -20,10 +25,10 @@ function freshG(): GameState {
 }
 
 // ============================================================================
-// Spells (7 cards)
+// Active items (7 cards)
 // ============================================================================
 
-describe('Spells — cost 1', () => {
+describe('Active items — tier 1', () => {
   it('Healing Rite heals 2 (flat, no Spirit scaling)', () => {
     const G = freshG();
     const target = G.players['0'].bench[0]!;
@@ -43,14 +48,14 @@ describe('Spells — cost 1', () => {
   });
 });
 
-describe('Spells — cost 3', () => {
-  it('Cold Front deals 4 spirit damage (+ caster Spirit) to enemy Active', () => {
+describe('Active items — tiers 2 and 3', () => {
+  it('Cold Front deals 2 spirit damage (+ caster Spirit) to enemy Active', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     target.hpMax = 30; target.hp = 30;
     const before = target.hp;
     ABILITIES_BY_ID['eff_cold_front'].run(G, { movingPlayer: '0' }, { target });
-    expect(before - target.hp).toBe(4);
+    expect(before - target.hp).toBe(2);
   });
 
   it('Decay applies Bleed 3 for 2 turns (6 pure damage total over two ticks)', () => {
@@ -77,7 +82,7 @@ describe('Spells — cost 3', () => {
   });
 });
 
-describe('Spells — cost 5', () => {
+describe('Active items — tier 3 control and resist', () => {
   it('Knockdown applies Stun 1T (no Disarm)', () => {
     const G = freshG();
     const target = G.players['1'].active!;
@@ -101,22 +106,33 @@ describe('Spells — cost 5', () => {
 // ============================================================================
 
 describe('Equipment passives', () => {
-  it('Bullet Resilience grants permanent Bullet Resist 2', () => {
-    const G = freshG();
-    const t = G.players['0'].active!;
-    ABILITIES_BY_ID['eff_bullet_resist'].run(G, { movingPlayer: '0' }, { source: t });
-    const br = t.statuses.find((s) => s.id === 'bullet_resist');
-    expect(br?.value).toBe(2);
-    expect(br?.duration).toBeGreaterThanOrEqual(99);
-  });
-
-  it('Spirit Resilience grants permanent Spirit Resist 2', () => {
-    const G = freshG();
-    const t = G.players['0'].active!;
-    ABILITIES_BY_ID['eff_spirit_resist'].run(G, { movingPlayer: '0' }, { source: t });
-    const sr = t.statuses.find((s) => s.id === 'spirit_resist');
-    expect(sr?.value).toBe(2);
-  });
+  // Resist 2 read off the item (the `resist` hook), not a status: a hit of its
+  // type deals 2 less while it is worn, and a death, which wipes the statuses,
+  // takes nothing away.
+  for (const [itemId, name, type, other, status] of [
+    ['bullet_resilience', 'Bullet', 'attack', 'spirit', 'bullet_resist'],
+    ['spirit_resilience', 'Spirit', 'spirit', 'attack', 'spirit_resist'],
+  ] as const) {
+    it(`${name} Resilience: a ${name.toLowerCase()} hit deals 2 less while worn — no status, and still after a death`, () => {
+      const G = freshG();
+      const t = G.players['1'].bench[0]!;
+      t.hpMax = 30; t.hp = 30; // above half HP: the resist alone
+      giveItem(G, t, itemId);
+      expect(t.statuses.some((s) => s.id === status)).toBe(false);
+      expect(itemResist(t, type)).toBe(2);
+      damageUnit(G, t, 5, type);
+      expect(t.hp).toBe(27);
+      damageUnit(G, t, 5, other); // the other type passes in full
+      expect(t.hp).toBe(22);
+      damageUnit(G, t, 99, 'pure');
+      resolve(G);
+      expect(isRespawning(t)).toBe(true);
+      for (let turn = 3; isRespawning(t) && turn < 20; turn += 2) beginTurn(G, '1', turn);
+      expect(t.hp).toBe(30);
+      damageUnit(G, t, 5, type);
+      expect(t.hp).toBe(27);
+    });
+  }
 
   it('Resilience takes 2 more off a hit of its type only while below half HP', () => {
     const t = { hp: 10, hpMax: 10 } as Parameters<NonNullable<typeof ABILITIES_BY_ID['eff_bullet_resist']['incoming']>>[0];
@@ -246,25 +262,26 @@ describe('Spell scaling treats corpse Active as 0 Spirit', () => {
 });
 
 // ============================================================================
-// Equipment cap (3 per hero) — sanity that the engine still enforces it
+// Item slots (3 per hero) — sanity that the engine still enforces the cap
 // ============================================================================
 
-describe('equipment cap (3 per hero)', () => {
-  it('rejects a 4th equipment without a discard target', () => {
-    const G = freshG();
+describe('item slots (3 per hero)', () => {
+  it('a play onto a full hero is refused — there is no discard; selling one frees the slot', () => {
+    const G = freshReadyGame({ step: 'shop' });
     G.players['0'].souls = 99;
     const hero = G.players['0'].active!;
-    const ids = ['extra_spirit', 'extra_health', 'restorative_shot', 'extended_magazine'];
-    const playFn = (DeadlockGame as any).moves.playCard;
-    let lastResult: any;
-    for (const cardId of ids) {
-      const newCard = { iid: `tmp-${cardId}`, cardId, ownerId: '0', zone: 'hand', hp: 0, hpMax: 0, atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false } as any;
-      G.players['0'].hand.push(newCard);
-      lastResult = playFn({ G, ctx: { currentPlayer: '0' } as any, playerID: '0', events: {} as any, random: {} as any }, newCard.iid, hero.iid);
-    }
-    // First three attach; the fourth call returns INVALID_MOVE.
-    expect(hero.attached?.length).toBe(3);
-    expect(lastResult).toBe('INVALID_MOVE');
+    const worn = ['extra_spirit', 'extra_health', 'restorative_shot'].map((id) => buyItem(G, '0', id, hero));
+    expect(wornItems(hero)).toHaveLength(slotCap(G, '0'));
+    const card = buyToHand(G, '0', 'extended_magazine');           // the buy itself names no hero
+    const fourth = { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid };
+    expect(playBlocked(G, '0', card.iid, hero.iid)).toBe('full');
+    expect(perform(G, '0', fourth)).toBe(INVALID);
+    expect(wornItems(hero)).toHaveLength(3);
+    expect(G.players['0'].hand).toEqual([card]);
+    // No discarding at the cap: a sale makes the room.
+    expect(perform(G, '0', { type: 'sell', itemIid: worn[0].iid })).not.toBe(INVALID);
+    expect(perform(G, '0', fourth)).not.toBe(INVALID);
+    expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'extended_magazine']);
   });
 });
 

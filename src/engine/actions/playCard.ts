@@ -1,129 +1,76 @@
 /**
- * Play a card from hand: a spell or ultimate takes effect and goes to the
- * discard; equipment attaches to a hero. `playBlocked` (legality.ts) has
- * already said it may be played and where; this only does it.
+ * Play a card from the hand onto a hero: the item goes on and is worn from
+ * then on. `playBlocked` (legality.ts) has said it may be played there; this
+ * only does it. Placing your own card is free, is no shopping and is not the
+ * hero's ability for the turn: it is legal in the shop step and in the act.
+ *
+ * An active starts on its full cooldown — or, hard crowd control, with
+ * HARD_CC_CHARGES uses (a card that has been worn before keeps the charges it
+ * had left); a passive's stat bonus goes onto the hero. An upgrade
+ * consumes its component (`playComponent`): the copy the hero wears, whose
+ * place it takes; else one in the hand; else — bought for the difference —
+ * the copy another of your heroes wears; with none, it goes on as a plain
+ * item. A component taken from the hand that was itself bought for the
+ * difference brings its own component along. The hero earns EXP_ON_EQUIP the
+ * first time it wears this item.
  */
 import type { CardInstance, GameState, PlayerID } from '../types';
-import { CARDS_BY_ID } from '@/cards';
-import { getAbility } from '../registry';
-import { findCardOnBoard, wornEquipment } from '../query';
-import { cardCost } from '../legality';
-import { EXP_ON_EQUIP, MAX_EQUIPMENT_PER_HERO } from '../constants';
+import { cardName, itemCard } from '@/cards';
+import { activeCooldown, boughtAtDiscount, findCardOnBoard, handCard, isRespawning } from '../query';
+import { playComponent, type TakenComponent } from '../legality';
+import { attachItem, detachItem, syncVitalitySpike } from '../instances';
+import { grantExp } from '../expSystem';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
-import { nextActionId } from '../ids';
-import { withCast } from '../castContext';
-import { fireTriggers } from '../triggers';
-import { grantExp } from '../expSystem';
-import { discardEquipment } from '../deckOps';
-import { resolve } from '../death';
+import { EXP_ON_EQUIP, HARD_CC_CHARGES } from '../constants';
 
-function applyOnPlay(G: GameState, pid: PlayerID, source: CardInstance, target?: CardInstance) {
-  const data = CARDS_BY_ID[source.cardId];
-  const abilityIds: string[] =
-    data?.type === 'spell' ? data.abilities :
-    data?.type === 'equipment' ? data.abilities ?? [] :
-    data?.type === 'ultimate' ? data.abilities :
-    [];
-
-  // Only fire abilities marked with the onPlay trigger. Equipment can also
-  // declare reactive triggers (onBearerSkillDamage, onAttack, onBearerCCSuffered,
-  // onBearerSkillUsed, onBearerUltCast) which must NOT fire on attach — those
-  // are driven by the engine's trigger dispatcher at the appropriate game event.
-  for (const aid of abilityIds) {
-    const a = getAbility(aid);
-    if (a && a.trigger === 'onPlay') {
-      a.run(G, { movingPlayer: pid }, { source, target });
+/** Take `taken` out of play (off its hero, or out of the hand). A component
+ *  from the hand that was bought for the difference settles its own price:
+ *  its component goes too, kept on it so a same-turn sale can put both back. */
+function consume(G: GameState, pid: PlayerID, taken: TakenComponent) {
+  const { item, from } = taken;
+  if (from) {
+    detachItem(from, item);
+    syncVitalitySpike(from);
+  } else {
+    G.players[pid].hand = G.players[pid].hand.filter((c) => c !== item);
+  }
+  if (!from && boughtAtDiscount(item)) {
+    const inner = playComponent(G, pid, item);
+    if (inner) {
+      consume(G, pid, inner);
+      item.replaced = inner.item;
+      item.replacedFrom = inner.from?.iid;
     }
-  }
-  if (data?.type === 'equipment' && target && data.bonus) {
-    if (data.bonus.atk) target.atkMod += data.bonus.atk;
-    if (data.bonus.hp) { target.hpMax += data.bonus.hp; target.hp += data.bonus.hp; }
-    if (data.bonus.spirit) target.spiritMod += data.bonus.spirit;
-  }
-  // Charge-based gear (cooldown→draw family): seed the instance's charge meter.
-  if (data?.type === 'equipment' && data.charges) {
-    source.charges = data.charges;
-  }
-  // Hero leveling: the bearer earns EXP_ON_EQUIP when an item is attached.
-  if (data?.type === 'equipment' && target && CARDS_BY_ID[target.cardId]?.type === 'hero') {
-    grantExp(G, target, EXP_ON_EQUIP);
   }
 }
 
-export function playCard(G: GameState, pid: PlayerID, cardIid: string, targetIid?: string, discardIid?: string) {
+export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: string) {
   const ps = G.players[pid];
-  const idx = ps.hand.findIndex((c) => c.iid === cardIid);
-  const card = ps.hand[idx];
-  const data = CARDS_BY_ID[card.cardId];
-  const cost = cardCost(card);
+  const card = handCard(G, pid, cardIid)!;
+  const hero: CardInstance = findCardOnBoard(G, heroIid)!.card;
+  const data = itemCard(card.cardId)!;
+  const taken = playComponent(G, pid, card, hero);
 
-  // What the card lands on. A card that takes no target does not look at one;
-  // a self-cast ultimate (Yamato's Shadow Transformation) lands on its own
-  // hero — there is nothing for the caster to aim, so resolve it here.
-  let target: CardInstance | undefined;
-  if (data.type === 'equipment') {
-    target = findCardOnBoard(G, targetIid!)?.card;
-  } else if (data.type === 'spell' || data.type === 'ultimate') {
-    const filter = getAbility(data.abilities[0])?.target ?? 'noTarget';
-    if (targetIid && filter !== 'noTarget') target = findCardOnBoard(G, targetIid)?.card;
-    else if (data.type === 'ultimate' && filter === 'self') {
-      target = [ps.active, ...ps.bench].find(
-        (c): c is CardInstance => !!c && c.cardId === data.linkedHero && (c.respawnTurnsLeft ?? 0) === 0,
-      );
-    }
-  }
-
-  if (data.type === 'equipment' && target) {
-    // Equipment cap: a hero at the cap gives up the item the caller named.
-    if (wornEquipment(target).length >= MAX_EQUIPMENT_PER_HERO) {
-      const dropped = wornEquipment(target).find((eq) => eq.iid === discardIid)!;
-      discardEquipment(G, target, dropped);
-      pushLog(G, `${CARDS_BY_ID[target.cardId]?.name} discarded ${CARDS_BY_ID[dropped.cardId]?.name} to make room.`);
-    }
-    card.attachedTo = target.iid;
-  }
-
-  ps.souls -= cost;
-  ps.hand.splice(idx, 1);
-
-  // Cast context: spells channel through the active hero (so spell damage
-  // can scale with Spirit and trigger the active hero's equipment).
-  // Ults are sourced from their linked hero on the caster's board.
-  // The FX layer's cast event goes out FIRST so the effects that follow
-  // read as this card's (the bolt leaves the caster, the hits land).
+  ps.hand = ps.hand.filter((c) => c !== card);
+  if (taken) consume(G, pid, taken);
   if (data.type === 'spell') {
-    pushFx(G, { kind: 'cast', castKind: 'spell', by: pid, cardId: card.cardId, iid: ps.active?.iid, targetIid: target?.iid });
-    withCast(ps.active, 'spell', () => applyOnPlay(G, pid, card, target));
-  } else if (data.type === 'ultimate') {
-    const linked = [ps.active, ...ps.bench].find((c) => c?.cardId === data.linkedHero) ?? null;
-    pushFx(G, { kind: 'cast', castKind: 'ult', by: pid, cardId: card.cardId, iid: linked?.iid, targetIid: target?.iid });
-    withCast(linked, 'ult', () => applyOnPlay(G, pid, card, target));
-    if (linked) fireTriggers(G, linked, 'onBearerUltCast', { reaction: true, movingPlayer: pid });
-  } else {
-    pushFx(G, { kind: 'cast', castKind: 'equip', by: pid, cardId: card.cardId, iid: target?.iid, targetIid: target?.iid });
-    applyOnPlay(G, pid, card, target);
+    if (data.hardCC) card.charges ??= HARD_CC_CHARGES;
+    else card.cooldowns = { [card.cardId]: activeCooldown(hero, data.tier) };
+  }
+  attachItem(hero, card);
+  syncVitalitySpike(hero);
+  // Sold back on the turn it was bought, the upgrade gives its component back.
+  if (taken && card.boughtOnTurn === G.turnNumber) {
+    card.replaced = taken.item;
+    card.replacedFrom = taken.from?.iid;
   }
 
-  if (data.type === 'spell' || data.type === 'ultimate') {
-    card.zone = 'discard';
-    ps.discard.push(card);
-  } else if (data.type === 'equipment' && target) {
-    card.zone = 'equipment';
-    if (!target.attached) target.attached = [];
-    target.attached.push(card);
+  const took = taken ? ` (it takes ${cardName(taken.item.cardId)}${taken.from && taken.from !== hero ? ` from ${cardName(taken.from.cardId)}` : taken.from ? '' : ' from the hand'})` : '';
+  pushLog(G, `P${pid} played ${data.name} on ${cardName(hero.cardId)}${took}.`);
+  pushFx(G, { kind: 'cast', castKind: 'equip', by: pid, cardId: card.cardId, iid: hero.iid, targetIid: hero.iid });
+  if (!isRespawning(hero) && !(hero.equippedIds ?? []).includes(card.cardId)) {
+    (hero.equippedIds ??= []).push(card.cardId);
+    grantExp(G, hero, EXP_ON_EQUIP);
   }
-
-  pushLog(G, `P${pid} played ${data.name}${target ? ` on ${CARDS_BY_ID[target.cardId]?.name}` : ''}.`);
-  resolve(G);
-  // Record the action so the UI can play the matching reveal animation
-  // (CardPlayFlash for spell/equipment, UltMomentFlash for ultimate)
-  // and lock further input until completeAction fires.
-  G.action = {
-    id: nextActionId(G),
-    kind: data.type === 'ultimate' ? 'ult' : 'play',
-    by: pid,
-    cardId: card.cardId,
-    state: 'begin',
-  };
 }

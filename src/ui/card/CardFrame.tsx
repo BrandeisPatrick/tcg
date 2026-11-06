@@ -12,6 +12,7 @@ import {
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { heroAbilities } from '@/engine/query';
+import { PRICE } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
@@ -36,6 +37,9 @@ interface Props {
   /** Player can't pay this card's soul cost right now — the cost coin flips
    *  to warning red so the greyed-out card explains itself at a glance. */
   unaffordable?: boolean;
+  /** Print no cost coin: a card in the hand is paid for, and placing it on a
+   *  hero costs nothing. */
+  hideCost?: boolean;
   /** Pointer feedback — the frame lights and the card lifts under the
    *  cursor. On by default; the scripted cast overlay passes false because it
    *  animates its own motion. */
@@ -82,8 +86,8 @@ function typeLabel(data: CardData | undefined): string {
   if (!data) return '';
   switch (data.type) {
     case 'hero': return 'Hero';
-    case 'spell': return 'Spell';
-    case 'equipment': return `Item · Tier ${data.tier ?? 1}`;
+    case 'spell': return `Active · Tier ${data.tier}`;
+    case 'equipment': return `Item · Tier ${data.tier}`;
     case 'ultimate': return 'Ultimate';
   }
 }
@@ -236,7 +240,7 @@ function ArtWindow({ data }: { data: CardData | undefined }) {
 
 export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
-  cost: costInPlay, unaffordable = false, physical, castSheen = false, foil = null,
+  cost: costInPlay, unaffordable = false, hideCost = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
   holoPalette = 'amber', tilt = false, tapExplains = true,
 }: Props) {
@@ -295,11 +299,11 @@ export function CardFrame({
   };
 
   const artH = size === 'full' ? '58%' : '55%';
-  const printedCost = data && data.type !== 'hero' ? data.cost ?? 0 : 0;
+  const printedCost = data && (data.type === 'spell' || data.type === 'equipment') ? PRICE[data.tier] : 0;
   const cost = costInPlay ?? printedCost;
-  // A card with no price prints no coin — but a copy made free (Sinclair's
-  // copied ultimate) prints a 0, so it does not look like a card with no cost.
-  const showCost = !isHero && (cost > 0 || cost !== printedCost);
+  // A card with no price prints no coin (a hero, an ultimate's face) — but a
+  // copy made free prints a 0, so it does not look like a card with no cost.
+  const showCost = !isHero && !hideCost && (cost > 0 || cost !== printedCost);
   const showStats = isHero;
 
   return (

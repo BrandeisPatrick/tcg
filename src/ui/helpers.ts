@@ -2,13 +2,15 @@ import type { TargetFilter } from '@/abilities';
 import type { AbilityId } from '@/engine/types';
 import { poster } from './poster';
 
-/** A card, skill or attack the player has armed but not yet aimed/committed. */
+/** A card from the hand, a skill, an active item or the attack the player has
+ *  armed but not yet aimed/committed. */
 export interface PendingPlay {
-  /** What is armed: a card from the hand, a hero's skill, or the Active's
+  /** What is armed: a card in the hand (to be put on one of your heroes), a
+   *  hero's skill (or ultimate), an active item a hero wears, or the Active's
    *  basic attack (when it may name who it shoots: the hero has reach). */
-  kind: 'playCard' | 'useSkill' | 'attack';
-  /** The card in hand; for a skill, the hero using it; for the attack, the
-   *  Active making it. */
+  kind: 'playCard' | 'useSkill' | 'activate' | 'attack';
+  /** For a card, the card in the hand; for a skill, the hero using it; for an
+   *  item, the item; for the attack, the Active making it. */
   iid: string;
   /** For a skill: which of the hero's skills is armed (the next tap aims it). */
   skillId?: AbilityId;
@@ -41,7 +43,7 @@ export const LOG_SPIRIT_PLUM = '#b48cc4';
  *   attack arrow / KO / fell / overflow       → rival red
  *   healed / respawned / refresh              → green
  *   gained <status> / cleansed / discharges   → spirit plum
- *   used skill / played / promoted / unlocked → your gold
+ *   used skill / ultimate / played / promoted → your gold
  *   Mulligan / Turn marker                    → dim cream
  *   everything else                           → cream
  */
@@ -49,7 +51,7 @@ export function logEntryColor(s: string): string {
   if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.rival;
   if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return poster.green;
   if (/gained |cleansed|discharges|resisted/i.test(s)) return LOG_SPIRIT_PLUM;
-  if (/used skill:|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return poster.you;
+  if (/used (skill|ultimate):|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return poster.you;
   if (/Mulligan|---/i.test(s)) return poster.creamDim;
   return poster.cream;
 }

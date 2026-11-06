@@ -6,20 +6,30 @@
  */
 import type {
   AbilityId,
+  CardId,
   CardInstance,
   DamageType,
   EquipmentCard,
   GameState,
   HeroCard,
+  ItemSlot,
+  ItemTier,
+  Owner,
   PlayerID,
   PlayerState,
   StatusId,
+  StructureKind,
+  UltimateCard,
 } from './types';
-import { CARDS_BY_ID } from '@/cards';
+import { CARDS_BY_ID, ULTIMATES, itemCard } from '@/cards';
 import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
-import { START_LEVEL } from './constants';
+import {
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, COMEBACK_STEPS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE,
+  RICHEST_BOUNTY_BONUS, RICH_RESPAWN_PENALTY, START_LEVEL,
+} from './constants';
+import { pushMultiplier, respawnTurns, round, secondMover } from './rounds';
 
 // ---------- The board ----------
 
@@ -27,22 +37,48 @@ export function otherPlayer(id: PlayerID): PlayerID {
   return id === '0' ? '1' : '0';
 }
 
-/** The board card with this iid, or null. An empty slot is nobody: a missing or
- *  junk iid (`undefined`, a number…) finds nothing, so callers can treat "not
- *  found" as the one answer for every id that names no card. */
-export function findCardOnBoard(G: GameState, iid: string): { owner: PlayerID; card: CardInstance } | null {
+/** The board card with this iid, or null: a hero in a slot, or the Mid-Boss in
+ *  the pit (owned by nobody). An empty slot is nobody: a missing or junk iid
+ *  (`undefined`, a number…) finds nothing, so callers can treat "not found" as
+ *  the one answer for every id that names no card. */
+export function findCardOnBoard(G: GameState, iid: string): { owner: Owner; card: CardInstance } | null {
   for (const pid of ['0', '1'] as PlayerID[]) {
     const ps = G.players[pid];
     if (ps.active && ps.active.iid === iid) return { owner: pid, card: ps.active };
     for (const b of ps.bench) if (b && b.iid === iid) return { owner: pid, card: b };
   }
+  if (G.boss && G.boss.iid === iid) return { owner: 'none', card: G.boss };
   return null;
+}
+
+/** The seat a hero or an item belongs to. Only the Mid-Boss belongs to no
+ *  seat, and nothing that asks this is ever handed it: a programming error
+ *  if it is. */
+export function seatOf(card: CardInstance): PlayerID {
+  if (card.ownerId === 'none') throw new Error(`${card.cardId}#${card.iid} belongs to no seat`);
+  return card.ownerId;
+}
+
+/** True for the Mid-Boss: the unit in the pit. */
+export function isBoss(card: CardInstance | null | undefined): boolean {
+  return card?.zone === 'pit';
+}
+
+/** The Mid-Boss, while it stands in the pit (up, and not yet reaped at 0 HP). */
+export function standingBoss(G: GameState): CardInstance | null {
+  return G.boss && G.boss.hp > 0 ? G.boss : null;
 }
 
 /** True when a hero is currently a corpse waiting to respawn (greyed in UI,
  *  can't act / be targeted / take damage / receive statuses). */
 export function isRespawning(card: CardInstance): boolean {
   return (card.respawnTurnsLeft ?? 0) > 0;
+}
+
+/** A player's heroes in a slot, in board order — the Active, then bench
+ *  1..3 — standing or on the respawn timer. */
+export function slottedHeroes(ps: PlayerState): CardInstance[] {
+  return [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c);
 }
 
 /** A player's living heroes in board order: the Active, then bench 1..3. */
@@ -71,34 +107,176 @@ export function heroData(card: CardInstance): HeroCard | undefined {
   return data?.type === 'hero' ? data : undefined;
 }
 
-/** Two ways to lose: your patron HP hits 0 (the death tax), or your whole
- *  roster is on the respawn timer at once (a board wipe). A mutual wipe goes
- *  to the player (P0). This is boardgame.io's `endIf`: it runs after every
- *  move on the already-resolved state. */
+// ---------- The map ----------
+
+/** A side's structure of `kind` (every track has all three; one not on a
+ *  scripted track has `max` 0). */
+export function structureOf(ps: PlayerState, kind: StructureKind) {
+  return ps.structures.find((s) => s.kind === kind)!;
+}
+
+/** The structure HP a side has left, its three together. */
+export function structureHp(ps: PlayerState): number {
+  return ps.structures.reduce((n, s) => n + Math.max(0, s.hp), 0);
+}
+
+/** The front standing structure of a side — where the next push lands — or
+ *  undefined once its Patron has fallen. */
+export function frontStructure(ps: PlayerState) {
+  return ps.structures.find((s) => s.hp > 0);
+}
+
+/** True once a side's Patron has fallen: that side has lost. */
+export function patronFallen(ps: PlayerState): boolean {
+  return structureOf(ps, 'patron').hp <= 0;
+}
+
+/** How a match decided on what stands was settled. */
+export type StandingVerdict = 'structures' | 'netWorth' | 'secondMover';
+
+/** Who wins on what stands — the round cap's verdict, and the verdict when
+ *  both Patrons fall to one action: more structure HP; on a tie, more net
+ *  worth; still tied, the second mover. */
+export function standingVerdict(G: GameState): { winner: PlayerID; by: StandingVerdict } {
+  const s0 = structureHp(G.players['0']);
+  const s1 = structureHp(G.players['1']);
+  if (s0 !== s1) return { winner: s0 > s1 ? '0' : '1', by: 'structures' };
+  const w0 = netWorth(G, '0');
+  const w1 = netWorth(G, '1');
+  if (w0 !== w1) return { winner: w0 > w1 ? '0' : '1', by: 'netWorth' };
+  return { winner: secondMover(G), by: 'secondMover' };
+}
+
+/** How a match is won: the rival's Patron falls — to the push of a kill, or
+ *  of an Active into an empty lane; both at once goes to what stands
+ *  (`standingVerdict`) — or round ROUND_CAP ends (`G.capped`) and what stands
+ *  decides. A board with every hero down is no loss by itself. This is
+ *  boardgame.io's `endIf`: it runs after every move and turn edge on the
+ *  already-resolved state. */
 export function checkWinner(G: GameState): { winner?: PlayerID } | undefined {
-  const down = (pid: PlayerID) => G.players[pid].hp <= 0 || boardWiped(G.players[pid]);
-  const p0Down = down('0');
-  const p1Down = down('1');
-  if (p0Down && p1Down) return { winner: '0' };
-  if (p0Down) return { winner: '1' };
-  if (p1Down) return { winner: '0' };
+  if (G.draft) return undefined;
+  const down0 = patronFallen(G.players['0']);
+  const down1 = patronFallen(G.players['1']);
+  if (down0 && down1) return { winner: standingVerdict(G).winner };
+  if (down0 || down1) return { winner: down0 ? '1' : '0' };
+  if (G.capped) return { winner: standingVerdict(G).winner };
   return undefined;
 }
 
-/** True when a player still has heroes but every one of them is KO'd (on the
- *  respawn timer) at the same moment. */
-function boardWiped(ps: PlayerState): boolean {
-  const heroes = [ps.active, ...ps.bench].filter(
-    (c): c is CardInstance => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero',
-  );
-  if (heroes.length === 0) return false; // pre-match / nothing to wipe yet
-  return heroes.every((c) => isRespawning(c) || c.hp <= 0);
+/** The structure HP a hero's fall pushes into its side's front structure:
+ *  its level plus KILL_BOUNTY_BASE (the kill bounty's own number, without
+ *  the richest hero's bonus), doubled in the late game. */
+export function killPush(G: GameState, hero: CardInstance): number {
+  return ((hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE) * pushMultiplier(G);
 }
 
-/** Patron HP a hero's fall costs its owner: the fallen hero's level, so a
- *  leveled carry is the costliest to lose — and the one worth hunting. */
-export function koPatronDamage(hero: CardInstance): number {
-  return hero.level ?? START_LEVEL;
+/** Own turns a hero that falls now waits before it respawns: the round's
+ *  band (`respawnTurns`), and RICH_RESPAWN_PENALTY more when it is strictly
+ *  the richest hero on the board. */
+export function respawnTimer(G: GameState, hero: CardInstance): number {
+  return respawnTurns(G) + (isRichestHero(G, hero) ? RICH_RESPAWN_PENALTY : 0);
+}
+
+/** True while `pid`'s Rejuvenator can bring a hero back: a credit left, in a
+ *  round it is good through. */
+export function reviveReady(G: GameState, pid: PlayerID): boolean {
+  const ps = G.players[pid];
+  return ps.reviveCredits > 0 && round(G) <= ps.reviveUntilRound;
+}
+
+/** Who takes the Mid-Boss falling now, and what settled it: the side that
+ *  dealt it more damage; on a tie, the side behind on net worth; still tied,
+ *  the side that landed the last hit (seat 0 should nobody have — no boss
+ *  dies unhit). */
+export function bossTaker(G: GameState): { pid: PlayerID; by: 'damage' | 'netWorth' | 'lastHit' } {
+  const d0 = G.bossDamage['0'];
+  const d1 = G.bossDamage['1'];
+  if (d0 !== d1) return { pid: d0 > d1 ? '0' : '1', by: 'damage' };
+  const w0 = netWorth(G, '0');
+  const w1 = netWorth(G, '1');
+  if (w0 !== w1) return { pid: w0 < w1 ? '0' : '1', by: 'netWorth' };
+  return { pid: G.bossLastHit ?? '0', by: 'lastHit' };
+}
+
+// ---------- Worth ----------
+
+/** What an item lists at: its tier's price (`PRICE`). Anything that is not
+ *  an item lists at 0. The shop charges it, a sale refunds it (or half), and
+ *  net worth counts every worn item at it. */
+export function itemPrice(cardId: CardId): number {
+  const data = itemCard(cardId);
+  return data ? PRICE[data.tier] : 0;
+}
+
+/** The list price of everything `hero` wears. */
+export function heroWorth(hero: CardInstance): number {
+  return wornItems(hero).reduce((n, it) => n + itemPrice(it.cardId), 0);
+}
+
+/** The list price of the cards in a player's hand. */
+export function handWorth(ps: PlayerState): number {
+  return ps.hand.reduce((n, c) => n + itemPrice(c.cardId), 0);
+}
+
+/** The card with this iid in `pid`'s hand, or undefined. */
+export function handCard(G: GameState, pid: PlayerID, iid: string): CardInstance | undefined {
+  return G.players[pid].hand.find((c) => c.iid === iid);
+}
+
+/** True for a card bought for the difference: an upgrade priced against a
+ *  component on its owner's side, which its play will consume. (A card that
+ *  was not bought — a Story reward — never is.) */
+export function boughtAtDiscount(card: CardInstance): boolean {
+  return card.paid !== undefined && card.paid < itemPrice(card.cardId);
+}
+
+/** `pid`'s copies of the item `cardId`: those in its hand, then those its
+ *  heroes wear (`heroesOf`: the slotted ones in board order, then a Rem merged
+ *  into one of them). */
+export function copiesOnSide(G: GameState, pid: PlayerID, cardId: CardId): CardInstance[] {
+  const ps = G.players[pid];
+  const worn = heroesOf(ps).flatMap((h) => wornItems(h).filter((it) => it.cardId === cardId));
+  return [...ps.hand.filter((c) => c.cardId === cardId), ...worn];
+}
+
+/** Every hero a side has, wherever it stands: the Active, the bench (corpses
+ *  included) and a Rem merged into an ally, who rides in its `attached` list. */
+export function heroesOf(ps: PlayerState): CardInstance[] {
+  const slotted = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c && !!heroData(c));
+  return [...slotted, ...slotted.flatMap((c) => (c.attached ?? []).filter((a) => !!heroData(a)))];
+}
+
+/** A side's net worth: the souls it holds plus the list price of every item
+ *  its heroes wear and every card in its hand. The comeback at income time
+ *  reads it. */
+export function netWorth(G: GameState, pid: PlayerID): number {
+  const ps = G.players[pid];
+  return ps.souls + heroesOf(ps).reduce((n, h) => n + heroWorth(h), 0) + handWorth(ps);
+}
+
+/** True when `hero` wears strictly more (by list price) than every other hero
+ *  on the board, both sides counted; a tie for the top makes nobody richest. */
+export function isRichestHero(G: GameState, hero: CardInstance): boolean {
+  const mine = heroWorth(hero);
+  if (mine <= 0) return false;
+  const others = (['0', '1'] as PlayerID[]).flatMap((pid) => heroesOf(G.players[pid])).filter((h) => h.iid !== hero.iid);
+  return others.every((h) => heroWorth(h) < mine);
+}
+
+/** Souls a kill pays the victim's opponent: the victim's level plus
+ *  KILL_BOUNTY_BASE, and RICHEST_BOUNTY_BONUS more when it was strictly the
+ *  richest hero on the board. (The push is the same level + 1, `killPush`.) */
+export function killBounty(G: GameState, hero: CardInstance): number {
+  return (hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE + (isRichestHero(G, hero) ? RICHEST_BOUNTY_BONUS : 0);
+}
+
+/** The comeback `pid` collects with its income: the largest COMEBACK_STEPS
+ *  bonus whose deficit its net worth trails the rival's by. */
+export function comebackBonus(G: GameState, pid: PlayerID): number {
+  const behind = netWorth(G, otherPlayer(pid)) - netWorth(G, pid);
+  let bonus = 0;
+  for (const [by, add] of COMEBACK_STEPS) if (behind >= by) bonus = Math.max(bonus, add);
+  return bonus;
 }
 
 // ---------- Targets ----------
@@ -183,35 +361,124 @@ export function abilitySources(card: CardInstance): AbilitySource[] {
   return out;
 }
 
-/** The equipment `card` wears, in worn order. A merged Rem rides in the same
- *  `attached` list but is a hero, not equipment: she takes no slot of the cap and
- *  can never be the piece discarded to make room. */
+/** The passive items (equipment) `card` wears, in worn order: what its
+ *  triggers and pure hooks are read off (`abilitySources`). */
 export function wornEquipment(card: CardInstance): CardInstance[] {
   return (card.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment');
 }
 
+/** Every item `card` wears, active or passive, in worn order: what fills its
+ *  slots. A merged Rem rides in the same `attached` list but is a hero, not an
+ *  item: she takes no slot and cannot be sold or moved. */
+export function wornItems(card: CardInstance): CardInstance[] {
+  return (card.attached ?? []).filter((a) => !!itemCard(a.cardId));
+}
+
+/** The active items `card` wears, in worn order: the ones it can use. */
+export function wornActives(card: CardInstance): CardInstance[] {
+  return (card.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'spell');
+}
+
+/** How many items a hero of `pid` may wear: MAX_ITEMS, and FLEX_SLOT more once
+ *  the side has the flex slot. */
+export function slotCap(G: GameState, pid: PlayerID): number {
+  return MAX_ITEMS + (G.players[pid].flexSlot ? FLEX_SLOT : 0);
+}
+
+/** The worn item with this iid on one of `pid`'s heroes in a slot (Active or
+ *  bench, standing or not) — or, without `pid`, on either side — and who wears
+ *  it; null when there is none. A merged Rem's items are out of reach until she
+ *  is back on the bench. */
+export function findWornItem(G: GameState, iid: string, pid?: PlayerID): { owner: PlayerID; bearer: CardInstance; item: CardInstance } | null {
+  for (const owner of (pid ? [pid] : ['0', '1']) as PlayerID[]) {
+    const ps = G.players[owner];
+    for (const hero of [ps.active, ...ps.bench]) {
+      const item = hero && wornItems(hero).find((it) => it.iid === iid);
+      if (item) return { owner, bearer: hero!, item };
+    }
+  }
+  return null;
+}
+
+/** How many items of each tab `card` wears. */
+export function tabCounts(card: CardInstance): Record<ItemSlot, number> {
+  const out: Record<ItemSlot, number> = { weapon: 0, spirit: 0, vitality: 0 };
+  for (const it of wornItems(card)) out[itemCard(it.cardId)!.slot]++;
+  return out;
+}
+
+/** True while `card` has the category spike of `slot`: it wears
+ *  CATEGORY_SPIKE_ITEMS or more items of that tab (+1 Bullet Power for
+ *  Weapon, +1 Spirit Power for Spirit, +1 max HP for Vitality). Read off what
+ *  it wears, never stored on its modifiers. */
+export function hasSpike(card: CardInstance, slot: ItemSlot): boolean {
+  return tabCounts(card)[slot] >= CATEGORY_SPIKE_ITEMS;
+}
+
+/** Own turns an active item of `tier` waits after use (and when bought) on
+ *  `bearer`: ACTIVE_COOLDOWN by tier, less the bearer's `cooldownCut` hooks
+ *  (the Cooldown family), never under 1. */
+export function activeCooldown(bearer: CardInstance, tier: ItemTier): number {
+  const base = tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high;
+  return Math.max(1, base - cooldownCut(bearer, 'item'));
+}
+
+/** Own turns the active item `item` has left to cool down (0: ready). */
+export function itemCooldown(item: CardInstance): number {
+  return item.cooldowns?.[item.cardId] ?? 0;
+}
+
 // ---------- A hero's kit ----------
 
-/** One skill a hero can use: its id, and the ability that does it. */
-interface HeroSkill {
+/** What kind of kit ability a hero uses: one of its skills, its own ultimate,
+ *  or an ultimate it has borrowed (Sinclair's copy, `borrowedUlt`). */
+export type KitKind = 'skill' | 'ult' | 'borrowed';
+
+/** One ability a hero can use: its id, the ability that does it, and its kind. */
+export interface KitAbility {
   id: AbilityId;
   ability: AbilityDef;
+  kind: KitKind;
+}
+
+/** The abilities `card` may choose to use, in order: its skills, its
+ *  ultimate, then an ultimate it has borrowed. Every one is used through
+ *  `useSkill` naming its id; the legal-move list, the hero sheet and the
+ *  board's ready glint all walk this list. */
+export function kitAbilityIds(card: CardInstance): AbilityId[] {
+  const data = heroData(card);
+  if (!data) return [];
+  const out = [...data.skills];
+  if (data.ult) out.push(data.ult);
+  if (card.borrowedUlt && !out.includes(card.borrowedUlt)) out.push(card.borrowedUlt);
+  return out;
 }
 
 /**
- * The skill `skillId` names on `card` — left out, the hero's first — or
- * undefined when the card is no hero, has no skills, does not have that one, or
- * the ability is not registered. The one reading of "which skill": the rules
+ * The kit ability `skillId` names on `card` — left out, the hero's first
+ * skill — or undefined when the card is no hero, has no such ability, or the
+ * ability is not registered. The one reading of "which ability": the rules
  * (legality, `useSkill`), the AI and the board all ask here, so a bare action
  * means the same thing to every one of them.
  */
-export function resolveSkill(card: CardInstance, skillId?: AbilityId): HeroSkill | undefined {
-  const skills = heroData(card)?.skills;
-  if (!skills || skills.length === 0) return undefined;
-  const id = skillId === undefined ? skills[0] : skillId;
-  if (!skills.includes(id)) return undefined;
+export function resolveSkill(card: CardInstance, skillId?: AbilityId): KitAbility | undefined {
+  const data = heroData(card);
+  if (!data) return undefined;
+  const id = skillId === undefined ? data.skills[0] : skillId;
+  if (id === undefined) return undefined;
+  const kind: KitKind | undefined = data.skills.includes(id) ? 'skill'
+    : id === data.ult ? 'ult'
+    : id === card.borrowedUlt ? 'borrowed'
+    : undefined;
+  if (!kind) return undefined;
   const ability = getAbility(id);
-  return ability ? { id, ability } : undefined;
+  return ability ? { id, ability, kind } : undefined;
+}
+
+/** The card that names and draws the ultimate `abilityId` (its first ability),
+ *  or undefined for an ability no ultimate card carries. */
+export function ultimateCard(abilityId: AbilityId | undefined): UltimateCard | undefined {
+  return abilityId === undefined ? undefined : ULTIMATES.find((u) => u.abilities[0] === abilityId);
 }
 
 /**
@@ -265,6 +532,34 @@ export function statusDuration(card: CardInstance, statusId: StatusId, duration:
 export function retreatDiscount(card: CardInstance): number {
   let n = 0;
   for (const { ability } of abilitySources(card)) n += ability.retreatDiscount?.(card) ?? 0;
+  return n;
+}
+
+/** Own turns off the cooldowns `card` starts — its ultimate's ('ult') or its
+ *  active items' ('item') — summed over the `cooldownCut` hooks of what it
+ *  carries (Compress, Superior and Transcendent Cooldown). The callers keep the
+ *  result at 1 or more. */
+export function cooldownCut(card: CardInstance, kind: 'ult' | 'item'): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n += ability.cooldownCut?.(card, kind) ?? 0;
+  return n;
+}
+
+/** The resist to `type` damage what `card` wears gives it (Bullet and Spirit
+ *  Resilience): the largest of its `resist` hooks. `damageUnit` takes the
+ *  larger of this and a resist status. */
+export function itemResist(card: CardInstance, type: DamageType): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n = Math.max(n, ability.resist?.(card, type) ?? 0);
+  return n;
+}
+
+/** The Healing Boost what `card` wears gives it (Healing Booster, Healing
+ *  Tempo): the largest of its `healingBoost` hooks. `healUnit` takes the larger
+ *  of this and a Healing Boost status. */
+export function itemHealingBoost(card: CardInstance): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n = Math.max(n, ability.healingBoost?.(card) ?? 0);
   return n;
 }
 
@@ -330,7 +625,8 @@ export interface AttackPower {
  * forecast and the card face all read it, so nothing added on top of a hero's
  * attack (Frenzy) can swing through a lockout:
  *  - 0 when the hero cannot attack (Stun, Disarm, Sleep, a heavy channel);
- *  - else printed attack + modifiers + Weapon Power, floored at 0;
+ *  - else printed attack + modifiers + Weapon Power + the Weapon category
+ *    spike, floored at 0;
  *  - minus Weaken (Rusted Barrel and any future "ATK-down"), floored at 0;
  *  - plus each `attackBonus` hook of what the hero carries.
  * It reads `card.hp` for hooks like Frenzy's, so a caller simulating a swing
@@ -347,7 +643,9 @@ export function attackPower(card: CardInstance, target?: CardInstance): AttackPo
     .filter((s) => s.id === 'weapon_power')
     .reduce((a, s) => a + s.value, 0);
   if (weaponPower) parts.push({ label: 'Weapon Power', amount: weaponPower });
-  let total = Math.max(0, data.atk + card.atkMod + weaponPower);
+  const spike = hasSpike(card, 'weapon') ? 1 : 0;
+  if (spike) parts.push({ label: 'Weapon spike', amount: spike });
+  let total = Math.max(0, data.atk + card.atkMod + weaponPower + spike);
   const weak = card.statuses.find((s) => s.id === 'weapon_power_down');
   if (weak) {
     const weakened = Math.max(0, total - weak.value);
@@ -368,8 +666,9 @@ export function effectiveAtk(card: CardInstance): number {
   return attackPower(card).total;
 }
 
-/** Total spirit-power for skill scaling: equipment bonus + any Spirit Power
- *  status, less any Spirit Power − (Inhibitor, Spirit Snatch), never below 0. */
+/** Total spirit-power for skill scaling: item bonuses and levels (the
+ *  modifier), any Spirit Power status and the Spirit category spike, less any
+ *  Spirit Power − (Inhibitor, Spirit Snatch), never below 0. */
 export function effectiveSpirit(card: CardInstance): number {
   if (!card) return 0;
   const statuses = card.statuses ?? [];
@@ -377,5 +676,6 @@ export function effectiveSpirit(card: CardInstance): number {
     .filter((s) => s.id === 'spirit_power')
     .reduce((a, s) => a + s.value, 0);
   const down = statuses.find((s) => s.id === 'spirit_power_down')?.value ?? 0;
-  return Math.max(0, (card.spiritMod ?? 0) + fromBuff - down);
+  const spike = card.attached && hasSpike(card, 'spirit') ? 1 : 0;
+  return Math.max(0, (card.spiritMod ?? 0) + fromBuff + spike - down);
 }

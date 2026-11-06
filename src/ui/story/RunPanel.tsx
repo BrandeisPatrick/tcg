@@ -1,35 +1,37 @@
 /**
- * The run at a glance — the story map's HUD. Your roster, your deck, and the
- * three routes out of the Battery with how far along each one you are and
- * the boss waiting at its end. Pressing a route asks the map to show its next
- * stop; pressing a hero or a card shows it full size.
+ * The run at a glance — the story map's HUD. Your roster, the supplies your
+ * next fight starts with, and the three routes out of the Battery with how
+ * far along each one you are and the boss waiting at its end. Pressing a
+ * route asks the map to show its next stop; pressing a hero or an item shows
+ * it full size.
  *
  * Chrome is ink: a dark panel, so it reads over cream land and dark water
  * alike. On desktop it is the full panel; on a phone it folds to a bar that
  * opens the same panel as a bottom sheet. Either way it is a plain box that
  * fills the slot the map screen gives it.
  *
- * The sheets it opens (the deck, the phone run sheet, a card preview) are
- * portalled to the body, so a transform on the screen's docking wrapper can
- * never trap them.
+ * The sheets it opens (the next fight's supplies, the phone run sheet, a
+ * card preview) are portalled to the body, so a transform on the screen's
+ * docking wrapper can never trap them.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import type { CardId } from '@/engine/types';
-import type { StoryRun, StoryNode } from '@/story/types';
+import type { FightReward, StoryRun, StoryNode } from '@/story/types';
 import { effectiveKind, routeProgress, stopState, type RouteProgress } from '@/story/describe';
 import { HeroBadge } from '@/cards/art/heroArt';
 import { CardFrame, SIZES } from '../card/CardFrame';
 import { CardPreview } from '../overlays/CardPreview';
 import { fonts, spring, text } from '../tokens';
-import { poster, chamfer, clipBoth, scrimStyle, sheetStyle, tileShadow } from '../poster';
+import { poster, scrimStyle, sheetStyle, soulCoin, tileShadow } from '../poster';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 import { KIND_LABEL, StopGlyph, FramedPortrait, eyebrow } from './StopGlyph';
+import { SoulsFace, rewardSummary } from './RewardFace';
 
-const Z = { runSheet: 70, deck: 80 } as const; // CardPreview sits at 90
+const Z = { runSheet: 70, reward: 80 } as const; // CardPreview sits at 90
 
 /** Escape closes the topmost thing this panel opened, and only that: the
  *  listener runs in the capture phase and stops the key there, so the map
@@ -57,12 +59,12 @@ export function RunPanel({ run, compact, onFocusStop, onAbandon }: {
   onAbandon: () => void;
 }) {
   const [preview, setPreview] = useState<CardId | null>(null);
-  const [deckOpen, setDeckOpen] = useState(false);
+  const [rewardOpen, setRewardOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   useEscape(
     preview ? () => setPreview(null)
-      : deckOpen ? () => setDeckOpen(false)
+      : rewardOpen ? () => setRewardOpen(false)
       : sheetOpen ? () => setSheetOpen(false)
       : null,
   );
@@ -72,7 +74,7 @@ export function RunPanel({ run, compact, onFocusStop, onAbandon }: {
       run={run}
       header={!inSheet}
       onPreview={setPreview}
-      onOpenDeck={() => setDeckOpen(true)}
+      onOpenReward={() => setRewardOpen(true)}
       onFocusStop={(n) => {
         // From the phone sheet, get out of the way first so the map can
         // show the stop it is about to fly to.
@@ -117,8 +119,8 @@ export function RunPanel({ run, compact, onFocusStop, onAbandon }: {
             )}
           </AnimatePresence>
           <AnimatePresence>
-            {deckOpen && (
-              <DeckSheet key="deck" deck={run.deck} onPreview={setPreview} onClose={() => setDeckOpen(false)} />
+            {rewardOpen && (
+              <RewardSheet key="reward" reward={run.nextFight} onPreview={setPreview} onClose={() => setRewardOpen(false)} />
             )}
           </AnimatePresence>
           <AnimatePresence>
@@ -133,12 +135,12 @@ export function RunPanel({ run, compact, onFocusStop, onAbandon }: {
 
 // ---- the panel ---------------------------------------------------------------
 
-function PanelBody({ run, header = true, onPreview, onOpenDeck, onFocusStop, onAbandon }: {
+function PanelBody({ run, header = true, onPreview, onOpenReward, onFocusStop, onAbandon }: {
   run: StoryRun;
   /** The phone sheet pins its own header (with the close), so it drops this one. */
   header?: boolean;
   onPreview: (id: CardId) => void;
-  onOpenDeck: () => void;
+  onOpenReward: () => void;
   onFocusStop: (node: StoryNode) => void;
   onAbandon: () => void;
 }) {
@@ -146,6 +148,7 @@ function PanelBody({ run, header = true, onPreview, onOpenDeck, onFocusStop, onA
   const start = run.nodes.find((n) => n.region === 'start');
   const startOpen = !!start && stopState(run, start) !== 'cleared';
   const bossesDown = routes.filter((r) => r.bossDown).length;
+  const supplies = rewardSummary(run.nextFight);
 
   return (
     <>
@@ -204,15 +207,17 @@ function PanelBody({ run, header = true, onPreview, onOpenDeck, onFocusStop, onA
         </Block>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 12, borderTop: `1px solid ${poster.edge}` }}>
-          <span style={{ ...eyebrow, color: poster.creamDim }}>Deck</span>
-          <span style={{ ...text.label, fontSize: 13, color: poster.cream, fontVariantNumeric: 'tabular-nums' }}>
-            {run.deck.length} cards
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+            <span style={{ ...eyebrow, color: poster.creamDim }}>Next fight</span>
+            <span style={{ ...text.label, fontSize: 13, color: poster.cream, fontVariantNumeric: 'tabular-nums' }}>
+              {supplies}
+            </span>
           </span>
           <PosterButton
             variant="ghost"
             size="sm"
-            onClick={onOpenDeck}
-            ariaLabel={`View your deck, ${run.deck.length} cards`}
+            onClick={onOpenReward}
+            ariaLabel={`View what your next fight starts with: ${supplies}`}
             style={{ marginLeft: 'auto', minHeight: 40, padding: '9px 14px', fontSize: 11, letterSpacing: '0.18em' }}
           >
             View
@@ -449,7 +454,7 @@ function AbandonFooter({ onAbandon }: { onAbandon: () => void }) {
       {asking ? (
         <div role="group" aria-label="Abandon this run?" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ ...text.body, margin: 0, fontSize: 12.5, color: poster.cream, lineHeight: 1.4 }}>
-            Abandon this run? Your roster and deck are lost.
+            Abandon this run? Your roster and supplies are lost.
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <PosterButton variant="red" size="sm" onClick={onAbandon} ariaLabel="Abandon this run" style={confirmButton}>
@@ -490,7 +495,8 @@ function AbandonFooter({ onAbandon }: { onAbandon: () => void }) {
 
 // ---- phone -------------------------------------------------------------------
 
-/** The phone's folded panel: roster, deck, bosses, and the way to open it. */
+/** The phone's folded panel: roster, the next fight's supplies, bosses, and
+ *  the way to open it. */
 function CompactBar({ run, onOpen }: { run: StoryRun; onOpen: () => void }) {
   const bosses = routeProgress(run);
   const down = bosses.filter((r) => r.bossDown).length;
@@ -498,7 +504,7 @@ function CompactBar({ run, onOpen }: { run: StoryRun; onOpen: () => void }) {
     <motion.button
       type="button"
       onClick={onOpen}
-      aria-label={`Story run: ${run.heroes.length} of 4 heroes, ${run.deck.length} cards, ${down} of ${bosses.length} bosses. Open the run`}
+      aria-label={`Story run: ${run.heroes.length} of 4 heroes, next fight: ${rewardSummary(run.nextFight)}, ${down} of ${bosses.length} bosses. Open the run`}
       whileTap={{ scale: 0.99 }}
       transition={spring.snappy}
       style={{
@@ -535,7 +541,7 @@ function CompactBar({ run, onOpen }: { run: StoryRun; onOpen: () => void }) {
           );
         })}
       </span>
-      <BarStat label="Deck" value={String(run.deck.length)} />
+      <SuppliesStat reward={run.nextFight} />
       <BarStat label="Bosses" value={`${down}/${bosses.length}`} />
       <span style={{ ...text.label, marginLeft: 'auto', fontSize: 11, letterSpacing: '0.16em', color: poster.cream, whiteSpace: 'nowrap' }}>
         Run ▴
@@ -544,7 +550,30 @@ function CompactBar({ run, onOpen }: { run: StoryRun; onOpen: () => void }) {
   );
 }
 
-function BarStat({ label, value }: { label: string; value: string }) {
+/** The next fight's supplies on the folded bar, in the room one stat has
+ *  (a 360px phone has no more): the item count, with the souls beside it as
+ *  a coin and their number; souls alone print as souls. */
+function SuppliesStat({ reward }: { reward: FightReward }) {
+  const n = reward.items.length;
+  const s = reward.souls;
+  if (n === 0 && s > 0) return <BarStat label="Souls" value={`+${s}`} />;
+  return (
+    <BarStat
+      label="Items"
+      value={s > 0 ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          {n}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+            <span style={soulCoin(9)} />
+            {s}
+          </span>
+        </span>
+      ) : String(n)}
+    />
+  );
+}
+
+function BarStat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
       <span style={{ fontFamily: fonts.display, fontSize: 16, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
@@ -635,46 +664,36 @@ function CloseX({ onClose, label, color }: { onClose: () => void; label: string;
   );
 }
 
-// ---- the deck ----------------------------------------------------------------
+// ---- the next fight ------------------------------------------------------------
 
-const TYPE_ORDER: Record<string, number> = { spell: 0, equipment: 1, ultimate: 2, hero: 3 };
-
-/** The run's deck as the cards themselves: one print per card, a count on
- *  the copies, spells before items, cheapest first. */
-function deckRows(deck: CardId[]): { id: CardId; n: number }[] {
-  const counts = new Map<CardId, number>();
-  for (const id of deck) counts.set(id, (counts.get(id) ?? 0) + 1);
-  const cost = (id: CardId) => {
-    const d = CARDS_BY_ID[id];
-    return d && 'cost' in d ? d.cost ?? 0 : 0;
-  };
-  return [...counts.entries()]
-    .map(([id, n]) => ({ id, n }))
-    .sort((a, b) => {
-      const da = CARDS_BY_ID[a.id], db = CARDS_BY_ID[b.id];
-      return (TYPE_ORDER[da?.type ?? ''] ?? 9) - (TYPE_ORDER[db?.type ?? ''] ?? 9)
-        || cost(a.id) - cost(b.id)
-        || (da?.name ?? a.id).localeCompare(db?.name ?? b.id);
-    });
-}
-
-function DeckSheet({ deck, onPreview, onClose }: {
-  deck: CardId[];
+/** What the next fight starts with, as the prints themselves: each item
+ *  (press one to see it full size), then the souls. */
+function RewardSheet({ reward, onPreview, onClose }: {
+  reward: FightReward;
   onPreview: (id: CardId) => void;
   onClose: () => void;
 }) {
   const { isMobile, width } = useViewport();
-  const rows = deckRows(deck);
-  // Desktop: as many hand prints as fit, up to five, and the sheet sized to
-  // them. Phones fit three across, the print scaled to the sheet's width.
+  const prints = reward.items.length + (reward.souls > 0 ? 1 : 0);
+  // Desktop: as many hand prints as fit, up to five (never under three, so
+  // the copy has room), and the sheet sized to them. Phones fit three
+  // across, the print scaled to the sheet's width.
   const gap = isMobile ? 10 : 14;
   const pad = isMobile ? 14 : 28;
   const room = width - (isMobile ? 24 : 64) - pad * 2;
-  const cols = isMobile ? 3 : Math.max(1, Math.min(5, Math.floor((room + gap) / (SIZES.hand.w + gap))));
+  const fit = Math.max(1, Math.min(5, Math.floor((room + gap) / (SIZES.hand.w + gap))));
+  const cols = isMobile ? 3 : Math.min(fit, Math.max(3, prints));
   const scale = isMobile ? Math.min(1, (room - gap * (cols - 1)) / cols / SIZES.hand.w) : 1;
   const sheetW = isMobile ? undefined : cols * SIZES.hand.w + (cols - 1) * gap + pad * 2;
+  const summary = rewardSummary(reward);
   const close = useRef<HTMLDivElement>(null);
   useEffect(() => { close.current?.querySelector('button')?.focus(); }, []);
+  const print = { width: SIZES.hand.w * scale, height: SIZES.hand.h * scale };
+  const scaled = (child: ReactNode) => (
+    <span style={{ display: 'block', width: SIZES.hand.w, height: SIZES.hand.h, transform: scale === 1 ? undefined : `scale(${scale})`, transformOrigin: '0 0' }}>
+      {child}
+    </span>
+  );
 
   return (
     <motion.div
@@ -685,7 +704,7 @@ function DeckSheet({ deck, onPreview, onClose }: {
       onClick={onClose}
       style={{
         ...scrimStyle,
-        zIndex: Z.deck,
+        zIndex: Z.reward,
         alignItems: 'flex-start',
         overflowY: 'auto',
         padding: isMobile ? '64px 12px 16px' : '56px 32px 32px',
@@ -694,7 +713,7 @@ function DeckSheet({ deck, onPreview, onClose }: {
       <motion.section
         role="dialog"
         aria-modal="true"
-        aria-label={`Your deck, ${deck.length} cards`}
+        aria-label={`Your next fight starts with: ${summary}`}
         initial={{ y: 24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 12, opacity: 0, transition: { duration: 0.15 } }}
@@ -723,74 +742,59 @@ function DeckSheet({ deck, onPreview, onClose }: {
           }}
         >
           <h2 style={{ margin: 0, fontFamily: fonts.display, fontWeight: 400, fontSize: isMobile ? 22 : 28, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1 }}>
-            Your deck
+            Next fight
           </h2>
           <span style={{ ...eyebrow, color: poster.inkDim, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-            {deck.length} cards
+            {summary}
           </span>
           <div ref={close} style={{ marginLeft: 'auto' }}>
-            <PosterButton variant="paper" size="sm" onClick={onClose} ariaLabel="Close your deck" style={{ minHeight: 40 }}>
+            <PosterButton variant="paper" size="sm" onClick={onClose} ariaLabel="Close the next fight's supplies" style={{ minHeight: 40 }}>
               Close
             </PosterButton>
           </div>
         </header>
 
-        <p style={{ ...text.body, margin: '0 0 16px', color: poster.inkSoft }}>
-          Every card you will draw from in the next fight. Supply stops add one more.
+        <p style={{ ...text.body, margin: prints ? '0 0 16px' : 0, color: poster.inkSoft }}>
+          {prints
+            ? 'Your side starts the next fight with these: each item is a free card in your hand, to put on any hero, and the souls are yours before the first income. Supply stops add more; winning that fight spends them all.'
+            : 'Nothing yet. A supply stop offers an item or souls; what you take waits here for your next fight.'}
         </p>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${cols}, ${SIZES.hand.w * scale}px)`,
-            justifyContent: isMobile ? 'space-between' : 'start',
-            gap: `${gap + 6}px ${gap}px`,
-          }}
-        >
-          {rows.map(({ id, n }, i) => (
-            <motion.button
-              key={id}
-              type="button"
-              onClick={() => onPreview(id)}
-              aria-label={`${cardName(id)}${n > 1 ? `, ${n} copies` : ''}: show card`}
-              initial={{ y: 14, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ ...spring.default, delay: Math.min(i, 12) * 0.03 }}
-              style={{
-                position: 'relative',
-                width: SIZES.hand.w * scale,
-                height: SIZES.hand.h * scale,
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-              }}
-            >
-              <span style={{ display: 'block', width: SIZES.hand.w, height: SIZES.hand.h, transform: scale === 1 ? undefined : `scale(${scale})`, transformOrigin: '0 0' }}>
-                <CardFrame cardId={id} size="hand" />
-              </span>
-              {n > 1 && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: -7,
-                    right: -7,
-                    padding: '5px 7px 5px',
-                    background: poster.ink,
-                    color: poster.paper,
-                    fontFamily: fonts.display,
-                    fontSize: 12,
-                    letterSpacing: '0.06em',
-                    lineHeight: 1,
-                    ...clipBoth(chamfer(4)),
-                  }}
-                >
-                  ×{n}
-                </span>
-              )}
-            </motion.button>
-          ))}
-        </div>
+        {prints > 0 && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${cols}, ${print.width}px)`,
+              justifyContent: isMobile ? 'space-between' : 'start',
+              gap: `${gap + 6}px ${gap}px`,
+            }}
+          >
+            {reward.items.map((id, i) => (
+              <motion.button
+                key={`${id}-${i}`}
+                type="button"
+                onClick={() => onPreview(id)}
+                aria-label={`${cardName(id)}: show card`}
+                initial={{ y: 14, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ ...spring.default, delay: Math.min(i, 12) * 0.03 }}
+                style={{ ...print, position: 'relative', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+              >
+                {scaled(<CardFrame cardId={id} size="hand" />)}
+              </motion.button>
+            ))}
+            {reward.souls > 0 && (
+              <motion.div
+                initial={{ y: 14, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ ...spring.default, delay: Math.min(reward.items.length, 12) * 0.03 }}
+                style={{ ...print, textAlign: 'center' }}
+              >
+                {scaled(<SoulsFace souls={reward.souls} size="hand" />)}
+              </motion.div>
+            )}
+          </div>
+        )}
       </motion.section>
     </motion.div>
   );

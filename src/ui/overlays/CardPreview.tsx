@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
 import { CardFrame } from '../card/CardFrame';
-import { spring } from '../tokens';
-import { scrimStyle } from '../poster';
+import { PosterButton } from '../chrome';
+import { fonts, spring } from '../tokens';
+import { poster, scrimStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 
 /** The full card's size (CardFrame SIZES.full) and the phone's share of it:
@@ -13,25 +14,39 @@ const PHONE_SCALE = 0.8;
 
 /** The card at the preview's size: drawn at full size and scaled, so its
  *  type stays set as designed. */
-function PreviewCard({ cardId, cost, scale }: { cardId: string; cost?: number; scale: number }) {
+function PreviewCard({ cardId, cost, hideCost, scale }: { cardId: string; cost?: number; hideCost?: boolean; scale: number }) {
   return (
     <div style={{ width: FULL_W * scale, height: FULL_H * scale }}>
       <div style={{ width: FULL_W, height: FULL_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-        <CardFrame cardId={cardId} cost={cost} size="full" />
+        <CardFrame cardId={cardId} cost={cost} hideCost={hideCost} size="full" />
       </div>
     </div>
   );
+}
+
+/** One thing the held preview offers under the card — selling a card in
+ *  the hand. Greyed, with the reason under it, when it cannot be done now. */
+export interface PreviewAction {
+  label: string;
+  ariaLabel: string;
+  onPress: () => void;
+  /** Why it cannot be done right now; set, the button is greyed. */
+  blockedReason?: string;
 }
 
 interface Props {
   cardId: string;
   /** What this copy costs, when it is an instance (see CardFrame `cost`). */
   cost?: number;
+  /** Print no cost coin (a card in the hand is paid for). */
+  hideCost?: boolean;
   onClose: () => void;
   /** A peek while the pointer rests on the card: no scrim, and it blocks
    *  nothing (the owner closes it when the pointer leaves). Off, it is the
    *  held preview: a scrim, and a tap anywhere closes it. */
   hover?: boolean;
+  /** What the held preview offers under the card. */
+  action?: PreviewAction;
 }
 
 /**
@@ -40,7 +55,7 @@ interface Props {
  * an equipped item's chip, the story run's deck). Fixed spot, fixed size —
  * the eye learns where to look, and a phone never has it hanging off an edge.
  */
-export function CardPreview({ cardId, cost, onClose, hover = false }: Props) {
+export function CardPreview({ cardId, cost, hideCost, onClose, hover = false, action }: Props) {
   const { isMobile } = useViewport();
   const scale = isMobile ? PHONE_SCALE : 1;
   if (hover) {
@@ -54,7 +69,7 @@ export function CardPreview({ cardId, cost, onClose, hover = false }: Props) {
           // One neutral drop — the print floats over the sheet with no colour cast.
           style={{ filter: 'drop-shadow(0 16px 28px rgba(0, 0, 0, 0.55))' }}
         >
-          <PreviewCard cardId={cardId} cost={cost} scale={scale} />
+          <PreviewCard cardId={cardId} cost={cost} hideCost={hideCost} scale={scale} />
         </motion.div>
       </div>
     );
@@ -77,8 +92,29 @@ export function CardPreview({ cardId, cost, onClose, hover = false }: Props) {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.85, opacity: 0 }}
         transition={spring.snappy}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}
       >
-        <PreviewCard cardId={cardId} cost={cost} scale={scale} />
+        <PreviewCard cardId={cardId} cost={cost} hideCost={hideCost} scale={scale} />
+        {action && (
+          // The card's one move, under it. Its own tap does not close the
+          // preview through the scrim: the move closes it when it is made.
+          <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <PosterButton
+              variant={action.blockedReason ? 'paper' : 'red'}
+              size="sm"
+              disabled={!!action.blockedReason}
+              onClick={action.onPress}
+              ariaLabel={action.ariaLabel}
+            >
+              {action.label}
+            </PosterButton>
+            {action.blockedReason && (
+              <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: poster.cream, textAlign: 'center', maxWidth: FULL_W * scale }}>
+                {action.blockedReason}
+              </span>
+            )}
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );

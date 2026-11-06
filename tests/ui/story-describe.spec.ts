@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { StoryRun } from '@/story/types';
 import { newRun, clearNode } from '@/story/storyRun';
-import { enemyRosterSize, enemyBuff, patronHpForDepth } from '@/story/content';
+import { enemyRosterSize, enemyBuff, enemySouls, patronHpForDepth, supplyOffer } from '@/story/content';
 import { effectiveKind, stopState, stopFacts, routeProgress } from '@/story/describe';
 
 // The panels print these facts, so they are pinned against the campaign as
@@ -83,6 +83,8 @@ describe('stopFacts', () => {
       expect(f.foes).toBe(enemyRosterSize(n.depth, n.kind));
       expect(f.buff).toEqual(enemyBuff(n.depth, n.kind));
       expect(f.patronHp).toBe(patronHpForDepth(n.depth));
+      expect(f.warChest).toBe(enemySouls(n.depth, n.kind));
+      expect(f.offer).toBeUndefined();
     }
     const city = stopFacts(run, node(run, 'cityhall'));
     expect(city.leader).toBe('hero_mo_krill');
@@ -99,7 +101,16 @@ describe('stopFacts', () => {
     expect(f.combat).toBe(false);
     expect(f.foes).toBe(0);
     expect(f.patronHp).toBe(0);
+    expect(f.warChest).toBe(0);
     expect(f.buff).toEqual({ atk: 0, hp: 0 });
+  });
+
+  it('prints a supply stop\'s offer, a full roster\'s recruit stop too', () => {
+    const run = newRun('hero_kelvin');
+    expect(stopFacts(run, node(run, 'cloisters')).offer).toEqual(supplyOffer(6));
+    expect(stopFacts(run, node(run, 'wallst')).offer).toBeUndefined();
+    const full = { ...run, heroes: ['hero_kelvin', 'hero_haze', 'hero_abrams', 'hero_yamato'] };
+    expect(stopFacts(full, node(full, 'wallst')).offer).toEqual(supplyOffer(1));
   });
 
   it('points a locked stop at the earliest uncleared stop before it', () => {

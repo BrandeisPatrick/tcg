@@ -30,10 +30,17 @@ from their "Deadlock Graphical Library" collection.
   kept in `scripts/art/hero_sources/`; `scripts/crop_heroes.py` cuts the
   portraits from them. Rem has no updated select screen, so her portrait comes
   from the asset mirror below.
-- The small hero icons (`_mm.webp`, `_sm.webp`) and everything in
-  `public/spells/` and `public/items/` are the game's own icons and shop art,
+- The small hero icons (`_mm.webp`, `_sm.webp`) are the game's own icons,
   pulled from the community asset bucket at https://deadlock-api.com/
-  (https://assets.deadlock-api.com/). See `public/ART_PIPELINE.md`.
+  (https://assets.deadlock-api.com/).
+- Everything in `public/spells/` and `public/items/` is the game's own shop art
+  for each item, one icon per card: the wiki's 200×200 shop icon from the
+  Deadlock wiki's asset mirror (`https://cdn.deadlock.wiki/<Item_Name>.png`),
+  encoded to WebP by `scripts/fetch_item_art.py`. The first set came through the
+  asset bucket above; the 41 items added on 2026-11-05 (Monster Rounds through
+  Spirit Burn, docs/card-design.md) and the six tier-5 items after them
+  (Haunting Shot through Prism Blast) came from the wiki. See
+  `public/ART_PIPELINE.md`.
 - The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,
   Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, Fixation, the armours
   and their reduction icons, Barrier, Healing, the damage heart, Fire Rate,
@@ -43,6 +50,16 @@ from their "Deadlock Graphical Library" collection.
   game's own HUD icons, fetched from the Deadlock wiki's asset mirror
   (`https://cdn.deadlock.wiki/<File_Name>.png`) and used as they are: white
   glyphs on transparency, painted in the chip's colour through an SVG filter.
+- The map icons (`map_guardian.png`, `map_walker.png`, `map_patron.png`,
+  `map_mid_boss.png`, `map_rejuvenator.png` in this folder) are the game's own
+  pictures from the same mirror: the wiki's `Guardian.png` (the Lane Guardian;
+  `Guardian Icon.png` redirects to it), `Walker Icon.png`, `Patron.png`
+  (`Patron Icon.png` redirects to it), `Mid-Boss model.png` (the Midboss page's
+  picture; the wiki has no Mid-Boss icon) and `Rejuvenator.png` (the buff's
+  icon), downscaled to 128 px. They print on each side's structures strip, the
+  Mid-Boss's pit, the Rejuvenator tag and the match-end tags.
+  `scripts/art/fetch_map_icons.py` fetches them again (see
+  `public/ART_PIPELINE.md`).
 
 ## Menu card bills
 

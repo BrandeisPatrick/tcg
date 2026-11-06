@@ -4,50 +4,46 @@
  * Pieces that make it FAIR (vs. the naive sim):
  *  - **Agent ladder** (random / heuristic / MCTS) so we can measure the skill
  *    gap and de-confound a weak bot from real imbalance.
- *  - **Seeded determinism** so a balance change can be A/B'd on identical games.
+ *  - **Seeded determinism** so a balance change can be A/B'd on identical games:
+ *    the draft picks, the agents, the match seed (the market) and Math.random
+ *    all draw from streams of the game's seed.
  *  - **Matchup control** (random drafts, or forcing a hero onto a side) so a
  *    specific card can be tested at higher N.
  *  - **Wilson confidence intervals** so we only flag statistically real outliers.
+ *  - **Seat-neutral promotions**: no human seat, so the engine replaces a
+ *    fallen Active on both sides by one rule (as in the balance sim).
  *
- * The runner drives the real boardgame.io engine (souls/draw/combat/endIf all
- * run) via a Client, and only calls the seat's agent during the MATCH phase;
- * drafts are handled here (seeded) so draft policy is independent of play skill.
+ * The runner drives the real boardgame.io engine (income, the shop, combat,
+ * endIf all run) via a Client, and only calls the seat's agent during the
+ * MATCH phase; drafts are handled here (seeded) so draft policy is independent
+ * of play skill. What each side buys, sells and uses is read off the board
+ * after every move (ledger.ts).
  */
 import { Client } from 'boardgame.io/client';
 import { MCTSBot } from 'boardgame.io/ai';
 import { DeadlockGame } from '@/engine/game';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { CARDS_BY_ID } from '@/cards';
-import type { GameState, PlayerState, PlayerID } from '@/engine/types';
+import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
+import { heroesOf } from '@/engine/query';
+import { firstMover, ownTurn } from '@/engine/rounds';
+import type { GameState, PlayerID } from '@/engine/types';
+import { shopLedger, wornBySide } from './ledger';
+// The seeded PRNG (mulberry32) and the Wilson interval live with the other
+// statistics, which have tests of their own.
+import { mulberry32 as rng, wilson } from './stats';
+
+export { rng, wilson };
 
 export type AgentKind = 'random' | 'heuristic' | 'mcts';
 
-// ---- seeded PRNG (mulberry32) ------------------------------------------------
-export function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 const pick = <T>(arr: T[], r: () => number): T => arr[Math.floor(r() * arr.length)];
-
-// ---- Wilson score interval (95% by default) ----------------------------------
-export function wilson(wins: number, n: number, z = 1.96): { lo: number; hi: number; p: number } {
-  if (n === 0) return { lo: 0, hi: 0, p: 0 };
-  const p = wins / n;
-  const z2 = z * z;
-  const denom = 1 + z2 / n;
-  const center = (p + z2 / (2 * n)) / denom;
-  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
-  return { p, lo: center - half, hi: center + half };
-}
 
 // ---- agents ------------------------------------------------------------------
 // Plain legal-move list (no lookahead) — for the MCTS bot's rollouts and the
 // random agent. The heuristic agent calls enumerateAIMoves with lookahead on.
+// In the shop step every agent gets the heuristic's one shopping move (it buys
+// by the hero's build), so the agents differ in how they act, not in what they buy.
 const enumerate = (G: any, ctx: any) =>
   enumerateAIMoves(G, ctx, false).map((o) => ({ move: o.move, args: o.args }));
 
@@ -85,36 +81,23 @@ function makeAgent(kind: AgentKind, r: () => number, mctsIterations: number, mct
 export type GameResult = {
   winner: PlayerID | undefined;       // undefined = stalemate
   stalemate: boolean;
-  length: number;                     // real match turns
+  length: number;                     // engine turns (both players' turns together)
+  /** The length in own turns: the rounds the first mover began. */
+  ownTurns: number;
+  /** The seat that took the first turn (seat 1 in a drafted match: the pie rule). */
+  firstMover: PlayerID;
   heroes: Record<PlayerID, string[]>;
-  equips: Record<PlayerID, string[]>; // equipment cardIds actually built, per side
-  spells: Record<PlayerID, string[]>; // spell cardIds actually cast (from discard), per side
-  archetypes: Record<PlayerID, string>; // deck archetype each side drafted
+  /** Items each side bought, in the order bought (an upgrade as the item it became). */
+  buys: Record<PlayerID, string[]>;
+  /** Active items each side used, one entry per use. */
+  actives: Record<PlayerID, string[]>;
+  /** Items each side sold (the heuristic never sells). */
+  sells: Record<PlayerID, number>;
+  /** Items each side's heroes wore when the game ended, actives and passives. */
+  worn: Record<PlayerID, string[]>;
+  /** Souls each side held when the game ended. */
+  souls: Record<PlayerID, number>;
 };
-
-/** Spell cardIds in a player's discard at game end = spells they actually cast. */
-function discardSpells(ps: PlayerState): string[] {
-  return ps.discard.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'spell').map((c) => c.cardId);
-}
-
-/** Equipment ids attached on a side's board heroes at game end (what got built). */
-function boardEquips(ps: PlayerState): string[] {
-  const out: string[] = [];
-  for (const c of [ps.active, ...ps.bench]) {
-    for (const eq of c?.attached ?? []) out.push(eq.cardId);
-  }
-  return out;
-}
-
-function boardHeroes(ps: PlayerState): string[] {
-  // A merged Rem rides in an ally's `attached` list, not on a slot: she is
-  // still this side's hero, so her games count for her.
-  const slots = [ps.active, ...ps.bench];
-  const merged = slots.flatMap((c) => (c?.attached ?? []).filter((a) => a.remMergeTurnsLeft != null));
-  return [...slots, ...merged]
-    .filter((c): c is NonNullable<typeof c> => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero')
-    .map((c) => c.cardId);
-}
 
 export async function runGame(opts: {
   seed: number;
@@ -126,6 +109,25 @@ export async function runGame(opts: {
   mctsIterations?: number;
   mctsDepth?: number;
 }): Promise<GameResult> {
+  // Math.random (which the engine reads only for a match seed the config does
+  // not give) is pinned to a stream of this game's seed for the length of the
+  // game, as scripts/eval/ai-vs-ai.ts and tests/engine/fuzz/driver.ts do, and
+  // the match config gives a match seed of the game's own (the market) and no
+  // human seat; both are restored after, so the same seed plays the same game.
+  // (The games of a batch run one after another.)
+  const original = Math.random;
+  const config = getMatchConfig();
+  Math.random = rng((opts.seed ^ 0xc2b2ae35) >>> 0);
+  setMatchConfig({ heroPreferences: [null, null, null, null], humanSeat: null, seed: (opts.seed ^ 0x27d4eb2f) >>> 0 });
+  try {
+    return await playGame(opts);
+  } finally {
+    Math.random = original;
+    setMatchConfig(config);
+  }
+}
+
+async function playGame(opts: Parameters<typeof runGame>[0]): Promise<GameResult> {
   const r = rng(opts.seed);
   const game = { ...(DeadlockGame as any), seed: opts.seed };
   const client = Client({ game, numPlayers: 2 });
@@ -142,6 +144,7 @@ export async function runGame(opts: {
 
   const moveCap = opts.movesPerTurnCap ?? 40;
   let st: any = client.getState();
+  const ledger = shopLedger(st.G);
   let guard = 0, movesThisTurn = 0, lastTurn = -1;
 
   while (st && !st.ctx.gameover) {
@@ -180,18 +183,27 @@ export async function runGame(opts: {
       client.moves.endTurn();
       st = client.getState();
     }
+    ledger.observe(st.G);
   }
+  client.stop();
 
   const G: GameState = st.G;
   const over = st.ctx.gameover;
+  const bySide = <T>(f: (pid: PlayerID) => T) => ({ '0': f('0'), '1': f('1') }) as Record<PlayerID, T>;
   return {
     winner: over?.winner,
     stalemate: !over,
     length: G.turnNumber ?? 0,
-    heroes: { '0': boardHeroes(G.players['0']), '1': boardHeroes(G.players['1']) },
-    equips: { '0': boardEquips(G.players['0']), '1': boardEquips(G.players['1']) },
-    spells: { '0': discardSpells(G.players['0']), '1': discardSpells(G.players['1']) },
-    archetypes: { '0': G.players['0'].archetype ?? '?', '1': G.players['1'].archetype ?? '?' },
+    ownTurns: ownTurn(G, firstMover(G)),
+    firstMover: firstMover(G),
+    // A merged Rem rides in an ally's `attached` list, not on a slot: she is
+    // still this side's hero, so her games count for her (heroesOf finds her).
+    heroes: bySide((pid) => heroesOf(G.players[pid]).map((c) => c.cardId)),
+    buys: bySide((pid) => ledger.purchases.filter((p) => p.seat === pid).map((p) => p.item)),
+    actives: bySide((pid) => ledger.uses.filter((u) => u.seat === pid).map((u) => u.item)),
+    sells: bySide((pid) => ledger.sales.filter((s) => s.seat === pid).length),
+    worn: bySide((pid) => wornBySide(G.players[pid])),
+    souls: bySide((pid) => G.players[pid].souls),
   };
 }
 
@@ -222,3 +234,4 @@ export async function runBatch(opts: {
 export function heroName(id: string): string {
   return CARDS_BY_ID[id]?.name ?? id;
 }
+
