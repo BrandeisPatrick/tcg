@@ -36,6 +36,7 @@ describe('an active item is its bearer\'s one ability of the turn', () => {
   it('after the item, the bearer\'s skill and ultimate are spent — after a skill, its items — and the other heroes are free', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
+    me.souls = 20; // a skill and an ultimate cost souls: enough for any of them
     const foe = G.players['1'].active!;
     const [lash, paige] = [me.bench[1]!, me.bench[2]!];
     lash.level = 2; // its ultimate unlocked

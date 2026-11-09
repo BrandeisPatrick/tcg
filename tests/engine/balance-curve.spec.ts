@@ -5,7 +5,7 @@ import { getAbility } from '@/abilities';
 import { grantExp } from '@/engine/expSystem';
 import { effectiveAtk } from '@/engine/query';
 import { withCast } from '@/engine/castContext';
-import type { GameState, CardInstance, PlayerID } from '@/engine/types';
+import type { GameState, CardInstance, HeroCard, PlayerID } from '@/engine/types';
 
 let seq = 0;
 function makeHero(cardId: string, ownerId: PlayerID, zone: CardInstance['zone'], slot: 0 | 1 | 2 | 3): CardInstance {
@@ -23,15 +23,17 @@ function freshG(): GameState {
   )) as GameState;
 }
 
-describe('leveling — universal stat growth', () => {
-  it('grants +1 HP / +1 BP / +1 Spirit per level (≈ +3 each at Lv4)', () => {
+describe("leveling — each hero's own growth", () => {
+  it("each level adds the hero's growth (Lady Geist: +2 Spirit a level, +6 at Lv4, no Attack or HP)", () => {
     const G = freshG();
     const c = makeHero('hero_lady_geist', '0', 'active', 0);
+    const data = CARDS_BY_ID['hero_lady_geist'] as HeroCard;
+    expect(data.growth).toEqual({ atk: 0, hp: 0, spirit: 2 });
     grantExp(G, c, 21); // cumulative cap → Lv4 (5 + 7 + 9)
     expect(c.level).toBe(4);
-    expect(c.atkMod).toBe(3);
-    expect(c.spiritMod).toBe(3); // the V1 change — was 0 before
-    expect(c.hpMax).toBe((CARDS_BY_ID['hero_lady_geist'] as any).hp + 3);
+    expect(c.atkMod).toBe(0);
+    expect(c.spiritMod).toBe(6);
+    expect(c.hpMax).toBe(data.hp);
   });
 });
 
@@ -41,20 +43,22 @@ describe('skills scale with Spirit into the late game', () => {
     const caster = makeHero('hero_lady_geist', '0', 'active', 0);
     const dummy = makeHero('hero_abrams', '1', 'active', 0);
     dummy.hp = dummy.hpMax = 99;
+    G.players['1'].active = dummy;
+    G.players['1'].bench = [null, null, null];
     const skill = getAbility('skill_lady_geist')!;
 
     const before1 = dummy.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
-    const lv1Dmg = before1 - dummy.hp; // base 3
+    skill.run(G, { movingPlayer: '0' }, { source: caster });
+    const lv1Dmg = before1 - dummy.hp; // {sp:1}, Spirit 0
 
-    grantExp(G, caster, 21); // → Lv4, +3 Spirit (5 + 7 + 9)
+    grantExp(G, caster, 21); // → Lv4, +6 Spirit (5 + 7 + 9)
     const before4 = dummy.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
-    const lv4Dmg = before4 - dummy.hp; // 3 + 3
+    skill.run(G, { movingPlayer: '0' }, { source: caster });
+    const lv4Dmg = before4 - dummy.hp; // 1 + 6
 
-    expect(lv1Dmg).toBe(3);
+    expect(lv1Dmg).toBe(1);
     expect(lv4Dmg).toBeGreaterThan(lv1Dmg);
-    expect(lv4Dmg).toBe(6);
+    expect(lv4Dmg).toBe(7);
   });
 });
 
@@ -70,17 +74,17 @@ describe('any hero can be built into a spirit caster (no role cap)', () => {
 
     // base Abrams (0 Spirit)
     const b0 = enemy.hp;
-    withCast(abrams, 'ult', () => ult.run(G, { movingPlayer: '0' }, { source: abrams }));
+    withCast(abrams, 'ult', () => ult.run(G, { movingPlayer: '0' }, { source: abrams, target: enemy }));
     const baseDmg = b0 - enemy.hp;
 
     // spirit-built Abrams (+5 Spirit from items/levels)
     abrams.spiritMod = 5;
     const b1 = enemy.hp;
-    withCast(abrams, 'ult', () => ult.run(G, { movingPlayer: '0' }, { source: abrams }));
+    withCast(abrams, 'ult', () => ult.run(G, { movingPlayer: '0' }, { source: abrams, target: enemy }));
     const spiritDmg = b1 - enemy.hp;
 
-    expect(baseDmg).toBe(4);
-    expect(spiritDmg).toBe(9); // 4 + 5 Spirit — the cap is gone
+    expect(baseDmg).toBe(6);
+    expect(spiritDmg).toBe(11); // 6 + 5 Spirit — the cap is gone
   });
 });
 
@@ -94,10 +98,14 @@ describe('early survivability — no Lv1 one-shots', () => {
 
   it("a Lv1 caster's skill alone cannot kill a fresh squishy (4 HP)", () => {
     const G = freshG();
-    const caster = makeHero('hero_lady_geist', '0', 'active', 0); // strongest base skill (3, Life Drain)
-    const dummy = makeHero('hero_kelvin', '1', 'active', 0); // 4 HP
+    const caster = makeHero('hero_yamato', '0', 'active', 0); // strongest base damage skill ({sp:2}, Flying Slash)
+    const dummy = makeHero('hero_seven', '1', 'active', 0); // 4 HP
+    G.players['1'].active = dummy;
+    G.players['1'].bench = [null, null, null];
+    expect(dummy.hpMax).toBe(4);
     const before = dummy.hp;
-    getAbility('skill_lady_geist')!.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
+    getAbility('skill_yamato')!.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
+    expect(before - dummy.hp).toBe(2);
     expect(before - dummy.hp).toBeLessThan(dummy.hpMax); // survives the cast
     expect(dummy.hp).toBeGreaterThan(0);
   });

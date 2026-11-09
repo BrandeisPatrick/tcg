@@ -33,6 +33,10 @@ function ultCardsOnBoard(G: GameState, pid: PlayerID): string[] {
   for (const c of G.players[pid].hand) walk(c);
   return out;
 }
+/** Souls enough for any ultimate (a large one costs 12): what is checked here
+ *  is the unlock, not the price. */
+const SOULS = 20;
+
 /** Why `hero` cannot use its ultimate now (null: it can). */
 const ultBlock = (G: GameState, hero: CardInstance) =>
   skillBlocked(G, seatOf(hero), hero, undefined, (CARDS_BY_ID[hero.cardId] as { ult: string }).ult);
@@ -86,6 +90,7 @@ describe('a hero unlocks its ultimate at Level 2', () => {
   it("reaching Level 2 unlocks that hero's ultimate at once — and only that hero's; nothing is dealt", () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
+    ps.souls = SOULS;
     grantExp(G, ps.active!, LEVEL_THRESHOLDS[0]);
     expect(ps.active!.level).toBe(ULT_UNLOCK_LEVEL);
     expect(ultBlock(G, ps.active!)).toBeNull();
@@ -100,6 +105,7 @@ describe('a hero unlocks its ultimate at Level 2', () => {
   it('a kill blow that levels the attacker unlocks its ultimate mid-turn; the attack has ended the Act, so it waits a turn', () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
+    ps.souls = SOULS;
     ps.active!.exp = LEVEL_THRESHOLDS[0] - EXP_ON_KILL;
     G.players['1'].active!.hp = 1;
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
@@ -112,6 +118,7 @@ describe('a hero unlocks its ultimate at Level 2', () => {
   it('a hero that levels on the bench unlocks its ultimate too, and may use it from there', () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
+    ps.souls = SOULS;
     const lash = ps.bench[1]!;
     grantExp(G, lash, LEVEL_THRESHOLDS[0]);
     expect(ultBlock(G, lash)).toBeNull();

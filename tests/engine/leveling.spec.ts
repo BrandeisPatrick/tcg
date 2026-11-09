@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { GameState, CardInstance } from '@/engine/types';
+import type { GameState, CardInstance, HeroCard } from '@/engine/types';
+import { CARDS_BY_ID } from '@/cards';
 import { grantExp } from '@/engine/expSystem';
 import { LEVEL_THRESHOLDS } from '@/engine/constants';
 import { damageUnit } from '@/engine/damage';
@@ -11,6 +12,11 @@ import { freshReadyGame, giveCard, giveItem, playItem, playNew } from './_helper
 
 function freshG(): GameState {
   return freshReadyGame();
+}
+
+/** What a level adds to `hero`: its card's `growth`. */
+function growthOf(hero: CardInstance): HeroCard['growth'] {
+  return (CARDS_BY_ID[hero.cardId] as HeroCard).growth;
 }
 
 describe('hero leveling: grantExp', () => {
@@ -166,23 +172,24 @@ describe('equipment persists through death', () => {
   });
 });
 
-describe('level-up stat bonuses', () => {
-  it('Lv1 → Lv2 grants +1 ATK, +1 HP/hpMax, +1 Spirit', () => {
+describe("level-up stat bonuses: each level adds the hero's own growth", () => {
+  it('Lv1 → Lv2 adds its growth (Haze: +3 Attack, +1 HP/hpMax, +0 Spirit)', () => {
     const G = freshG();
     const h = G.players['0'].active!;
+    expect(growthOf(h)).toEqual({ atk: 3, hp: 1, spirit: 0 });
     const atk0 = h.atkMod;
     const spi0 = h.spiritMod;
     const hpMax0 = h.hpMax;
     const hp0 = h.hp;
     grantExp(G, h, 5); // Lv1 → Lv2
     expect(h.level).toBe(2);
-    expect(h.atkMod - atk0).toBe(1);
-    expect(h.spiritMod - spi0).toBe(1);
+    expect(h.atkMod - atk0).toBe(3);
+    expect(h.spiritMod - spi0).toBe(0);
     expect(h.hpMax - hpMax0).toBe(1);
     expect(h.hp - hp0).toBe(1);  // healed too
   });
 
-  it('Lv4 cap = +3 ATK / +3 HP / +3 Spirit cumulative', () => {
+  it('Lv4 cap = 3 × its growth cumulative (Haze: +9 Attack / +3 HP / +0 Spirit)', () => {
     const G = freshG();
     const h = G.players['0'].active!;
     const atk0 = h.atkMod;
@@ -190,47 +197,49 @@ describe('level-up stat bonuses', () => {
     const hpMax0 = h.hpMax;
     grantExp(G, h, 21); // all the way to Lv4 (5 + 7 + 9)
     expect(h.level).toBe(4);
-    expect(h.atkMod - atk0).toBe(3);
-    expect(h.spiritMod - spi0).toBe(3);
+    expect(h.atkMod - atk0).toBe(9);
+    expect(h.spiritMod - spi0).toBe(0);
     expect(h.hpMax - hpMax0).toBe(3);
   });
 
-  it('level-up grants +1 Spirit per level (Spirit is a real build axis)', () => {
+  it("level-up grants a caster's Spirit growth every level (Seven: +3 a level — Spirit is a real build axis)", () => {
     const G = freshG();
-    const h = G.players['0'].active!;
+    const h = G.players['1'].bench.find((b) => b?.cardId === 'hero_seven')!;
+    expect(growthOf(h).spirit).toBe(3);
     const spi0 = h.spiritMod;
     grantExp(G, h, 5);
-    expect(h.spiritMod - spi0).toBe(1); // L2
+    expect(h.spiritMod - spi0).toBe(3); // L2
     grantExp(G, h, 7);
-    expect(h.spiritMod - spi0).toBe(2); // L3
+    expect(h.spiritMod - spi0).toBe(6); // L3
     grantExp(G, h, 9);
-    expect(h.spiritMod - spi0).toBe(3); // L4
+    expect(h.spiritMod - spi0).toBe(9); // L4
   });
 
-  it('multi-step single grant applies bonuses for every step jumped', () => {
+  it('multi-step single grant applies the growth for every step jumped', () => {
     const G = freshG();
     const h = G.players['0'].active!;
     const atk0 = h.atkMod;
     grantExp(G, h, 12); // Lv1 → Lv3 (5 + 7 = 12 exp consumed)
     expect(h.level).toBe(3);
-    expect(h.atkMod - atk0).toBe(2);
+    expect(h.atkMod - atk0).toBe(2 * 3);
   });
 
   it('death PRESERVES hpMax + atkMod gained from leveling', () => {
     const G = freshG();
-    const target = G.players['1'].active!;
+    const target = G.players['1'].active!; // Abrams: +1 Attack, +2 HP a level
+    expect(growthOf(target)).toEqual({ atk: 1, hp: 2, spirit: 0 });
     const baseHpMax = target.hpMax;
-    grantExp(G, target, 21); // → Lv4, +3 atk / +3 hpMax / +3 spirit
-    expect(target.hpMax).toBe(baseHpMax + 3);
+    grantExp(G, target, 21); // → Lv4, +3 atk / +6 hpMax / +0 spirit
+    expect(target.hpMax).toBe(baseHpMax + 6);
     expect(target.atkMod).toBe(3);
-    expect(target.spiritMod).toBe(3);
+    expect(target.spiritMod).toBe(0);
     target.hp = 1;
     const hero = G.players['0'].active!;
     withCast(hero, 'attack', () => damageUnit(G, target, 5, 'attack'));
     reapDead(G, G.players['1']);
     expect(target.level).toBe(4);             // level persists
-    expect(target.hpMax).toBe(baseHpMax + 3); // hpMax persists
+    expect(target.hpMax).toBe(baseHpMax + 6); // hpMax persists
     expect(target.atkMod).toBe(3);            // atkMod persists
-    expect(target.spiritMod).toBe(3);         // spiritMod persists
+    expect(target.spiritMod).toBe(0);         // spiritMod persists
   });
 });

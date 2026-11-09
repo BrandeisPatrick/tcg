@@ -10,7 +10,8 @@
  * difference). (The draw and the discard in detail: hand.spec.)
  *
  * Board (freshReadyGame): P0's Active is made a Level 2 Viscous — The Cube is
- * a skill on a 2-turn cooldown, and her ultimate is unlocked.
+ * a skill on the SKILL_COOLDOWN (1 own turn), and his ultimate is unlocked —
+ * with souls enough for either.
  */
 import { describe, it, expect } from 'vitest';
 import { itemCard } from '@/cards';
@@ -18,12 +19,14 @@ import { upgradesOf } from '@/cards/decks';
 import { getAbility } from '@/abilities';
 import { INVALID, perform } from '@/engine/engine';
 import { activeCooldown, cooldownCut, itemCooldown, itemPrice } from '@/engine/query';
-import { PRICE, ULT_COOLDOWN } from '@/engine/constants';
+import { PRICE, SKILL_COOLDOWN, ULT_COOLDOWN } from '@/engine/constants';
 import { freshReadyGame, giveItem, makeHero, stackDeck, useItem } from './_helpers';
 
-/** P0's Active made a Level 2 Viscous wearing `gear`. */
+/** P0's Active made a Level 2 Viscous wearing `gear`, with souls to pay for
+ *  his skill or his ultimate. */
 function viscous(...gear: string[]) {
   const G = freshReadyGame();
+  G.players['0'].souls = 20;
   const hero = G.players['0'].active = makeHero('hero_viscous', '0', 'active', 0);
   hero.level = 2;
   for (const id of gear) giveItem(G, hero, id);
@@ -90,9 +93,9 @@ describe('The Cooldown family is the draw engine', () => {
     expect(activeCooldown(hero, 4, 0)).toBe(1);
   });
 
-  it("leaves a skill's cooldown alone: The Cube still waits 2", () => {
+  it("leaves a skill's cooldown alone: The Cube still waits SKILL_COOLDOWN", () => {
     const { G, hero } = viscous(TRANSCENDENT);
     expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, targetIid: hero.iid })).not.toBe(INVALID);
-    expect(hero.cooldowns?.skill_viscous).toBe(2);
+    expect(hero.cooldowns?.skill_viscous).toBe(SKILL_COOLDOWN);
   });
 });

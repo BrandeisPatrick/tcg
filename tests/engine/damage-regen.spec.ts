@@ -10,7 +10,8 @@ import { freshReadyGame, nextTestIid } from './_helpers';
 
 /**
  * Damage + regeneration detail tests. Validates the mitigation pipeline
- * (Vulnerable / resists / shield / Unstoppable / Vindicta Flight), and the
+ * (Vulnerable / resists / shield / Invulnerable — not Unstoppable, nor
+ * Vindicta's Flight any more), and the
  * heal pipeline (hpMax cap / Healing Blocked / corpse block / per-source).
  */
 
@@ -89,30 +90,46 @@ describe('damage: mitigation pipeline order', () => {
     expect(t.statuses.find((s) => s.id === 'shield')?.value).toBe(5);
   });
 
-  it('Unstoppable blocks all damage types', () => {
+  it('Invulnerable blocks all damage types; Unstoppable (crowd control alone) blocks none', () => {
     const G = freshG();
     const t = G.players['1'].active!;
-    addStatus(G, t, 'unstoppable', 1, 99);
+    addStatus(G, t, 'invulnerable', 1, 99);
     const before = t.hp;
     damageUnit(G, t, 5, 'attack');
     damageUnit(G, t, 5, 'spirit');
     damageUnit(G, t, 5, 'pure');
     expect(t.hp).toBe(before);
+    const u = G.players['1'].bench[0]!;
+    u.hp = u.hpMax = 30;
+    addStatus(G, u, 'unstoppable', 1, 99);
+    damageUnit(G, u, 5, 'attack');
+    damageUnit(G, u, 5, 'spirit');
+    damageUnit(G, u, 5, 'pure');
+    expect(u.hp).toBe(30 - 15);
   });
 
-  it('Vindicta Flight: -1 attack damage only, not spirit/pure', () => {
+  it('Vindicta Flight: no damage reduction any more (attack/spirit/pure land in full); her swing adds {sp:1} spirit', () => {
     const G = freshG();
-    // Vindicta is on bench in starter (hpMax=8). Bump her HP to test all three
+    // Vindicta is on the bench in the test roster. Bump her HP to test all three
     // damage types without bumping into the 0-HP overflow clamp.
     const v = G.players['0'].bench.find((b) => b?.cardId === 'hero_vindicta')!;
     v.hpMax = 30;
     v.hp = 30;
-    damageUnit(G, v, 4, 'attack'); // 4 - 1 = 3
-    expect(v.hp).toBe(27);
-    damageUnit(G, v, 4, 'spirit'); // full 4 (no flight reduction)
-    expect(v.hp).toBe(23);
+    damageUnit(G, v, 4, 'attack'); // full 4 (Flight takes nothing off)
+    expect(v.hp).toBe(26);
+    damageUnit(G, v, 4, 'spirit'); // full 4
+    expect(v.hp).toBe(22);
     damageUnit(G, v, 2, 'pure'); // full 2
-    expect(v.hp).toBe(21);
+    expect(v.hp).toBe(20);
+    // Flight rides on her swing instead: {sp:1} spirit to the hero she hits.
+    const foe = G.players['1'].active!;
+    foe.hp = foe.hpMax = 30;
+    v.spiritMod = 1;
+    ABILITIES_BY_ID.passive_vindicta_flight.run(G, { movingPlayer: '0' }, { source: v, target: foe });
+    expect(foe.hp).toBe(30 - 2);
+    // …but not on a Ricochet bounce.
+    ABILITIES_BY_ID.passive_vindicta_flight.run(G, { movingPlayer: '0' }, { source: v, target: foe, params: { bounce: true } });
+    expect(foe.hp).toBe(30 - 2);
   });
 
   it('Corpse cannot take damage (returns 0)', () => {

@@ -48,6 +48,8 @@ const chill: HeroAbilityDef = {
 
 const throwaway = (id: string, name: string, skills: string[]): HeroCard => ({
   id, name, type: 'hero', rarity: 3, atk: 2, hp: 8, skills, signature: ['extra_spirit', 'mystic_burst'],
+  growth: { atk: 1, hp: 1, spirit: 1 }, retreat: 1,
+  profile: { role: 'Spirit caster', mix: { tank: 0, damage: 2, control: 0, support: 0 }, reach: 'many', curve: 'mid' },
 });
 
 beforeAll(() => {
@@ -364,31 +366,30 @@ describe('the AI with a two-skill hero', () => {
 });
 
 describe('what a hero card prints', () => {
-  // Every skill and passive, as the hero card printed it before the hero's
-  // text moved onto the abilities: moving it changed no word. Since then the
-  // numbers that grow with Spirit Power carry their `{sp:N}` mark (the card
-  // prints N in purple, card/scaling.ts) in place of "(3 + Spirit)" and the
-  // like — and Paige's says Bullet Resist, which is what the skill grants.
+  // Every skill and passive, as the hero card prints it (docs/hero-design.md
+  // §8): one skill or one passive a hero, its name and its text. The numbers
+  // that grow with Spirit Power carry their `{sp:N}` mark (the card prints N in
+  // purple, card/scaling.ts).
   const PRINTED: Record<string, [kind: 'skill' | 'passive', name: string, text: string]> = {
-    hero_abrams: ['passive', "Infernal Resilience", "Heals 1 at start of own turn while Active."],
-    hero_haze: ['passive', "Fixation", "From Level 3: after Haze attacks, she gains Extra Attack 1 this turn."],
-    hero_mo_krill: ['passive', "Burrow", "Cleanses all debuffs from self at start of own turn."],
-    hero_rem: ['skill', "Lil Helpers", "Merge into an ally as a buff: heal {sp:3} and grant +{sp:1} max HP for 3 turns, then return to the bench."],
-    hero_shiv: ['passive', "Serrated Knives", "Attacks apply Bleed 2 for 2 turns."],
-    hero_vindicta: ['passive', "Flight", "Takes 1 less bullet damage from all sources."],
-    hero_wraith: ['passive', "Mixed Bullets", "Attacks deal Bullet Power (bullet) + {sp:0} (spirit)."],
-    hero_dynamo: ['skill', "Rejuvenating Aurora", "Heal an ally 2 and grant +{sp:1/2} Bullet Power for 2 turns."],
-    hero_kelvin: ['skill', "Frost Grenade", "{sp:1} spirit dmg to enemy Active + heal your Active 2."],
-    hero_lady_geist: ['skill', "Life Drain", "Deal {sp:3} spirit to any enemy and heal for half the damage dealt."],
-    hero_lash: ['skill', "Ground Strike", "{sp:1} spirit dmg + Vulnerable (take +1 dmg) for 1 turn."],
-    hero_paige: ['skill', "Plot Armor", "Shield 2 on an ally and grant +{sp:1/2} Bullet Resist for 2 turns."],
-    hero_seven: ['skill', "Static Charge", "{sp:1} spirit dmg + Charged 2 — Stun 1 turn on expiry."],
-    hero_sinclair: ['skill', "Vexing Bolt", "{sp:2} spirit dmg to any enemy."],
-    hero_viscous: ['skill', "The Cube", "Gain Unstoppable 1 + heal 1."],
-    hero_yamato: ['skill', "Power Slash", "{sp:1} spirit dmg to any enemy."],
-    hero_warden: ['skill', "Willpower", "Shield 3 on self."],
-    hero_mirage: ['passive', "Djinn's Mark", "Attacks apply 1 stack of Djinn's Mark (max 4) for 3 turns. Mark detonates at max stacks or on expiry for 3 spirit dmg per stack."],
-    hero_drifter: ['passive', "Bloodscent", "Heals for half the damage his attacks deal (bullet lifesteal)."],
+    hero_abrams: ['passive', "Infernal Resilience", "At the start of your turn, if Abrams is Active, he heals 2."],
+    hero_haze: ['passive', "Fixation", "Each attack adds a Fixation stack to the target (max 2). Haze deals +1 bullet damage per stack to it until it leaves the Active slot."],
+    hero_mo_krill: ['skill', "Sand Blast", "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn (it can't attack)."],
+    hero_rem: ['skill', "Tag Along", "Rem naps on one of your heroes: it heals {sp:4}, and Rem heals 2."],
+    hero_shiv: ['skill', "Serrated Knives", "Throw a knife: deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns."],
+    hero_vindicta: ['passive', "Flight", "Vindicta flies: her attacks also deal {sp:1} spirit damage."],
+    hero_wraith: ['skill', "Full Auto", "Wraith gets +2 Attack for 2 turns."],
+    hero_dynamo: ['skill', "Kinetic Pulse", "Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air)."],
+    hero_kelvin: ['skill', "Frost Grenade", "Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each."],
+    hero_lady_geist: ['skill', "Essence Bomb", "Lady Geist pays 1 HP: deal {sp:1} spirit damage to every enemy."],
+    hero_lash: ['skill', "Ground Strike", "Slam down: deal {sp:1} spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat)."],
+    hero_paige: ['skill', "Plot Armor", "Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns."],
+    hero_seven: ['skill', "Lightning Ball", "Roll a ball of lightning through the enemy team: deal {sp:1} spirit damage to every enemy."],
+    hero_sinclair: ['skill', "Rabbit Hex", "Hex the enemy Active into a Rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage."],
+    hero_viscous: ['skill', "The Cube", "Cube one of your heroes: it takes no damage until your next turn."],
+    hero_yamato: ['skill', "Flying Slash", "Grapple onto any enemy, bench too, and slash it: deal {sp:2} spirit damage."],
+    hero_warden: ['skill', "Willpower", "A barrier and a burst of speed: Shield 3 on Warden, and Swift (his next retreat is free)."],
+    hero_mirage: ['passive', "Djinn's Mark", "Each attack adds a Djinn's Mark to the target (max 3). The third mark detonates them all: deal {sp:4} spirit damage."],
+    hero_drifter: ['passive', "Bloodscent", "His attacks deal +1 bullet damage to a hero below half HP. Each knockout while he is Active gives him +1 Attack for the game (max +2)."],
   };
 
   it('heroAbilities lists skills, then passives, with names and texts, for every hero', () => {
@@ -418,13 +419,16 @@ describe('what a hero card prints', () => {
     }
   });
 
-  it('each ability\'s name is the one its prompt has always opened with (the sheet and the coach name the same skill)', () => {
+  it('each ability carries no prompt of its own: its name is the one place the sheet and the coach read it from, one per hero', () => {
+    const names = new Set<string>();
     for (const hero of HEROES) {
       for (const { ability } of heroAbilities(hero)) {
-        const head = (ability.prompt ?? '').split(' — ')[0].trim();
-        const named = head.startsWith(`${hero.name} `) ? head.slice(hero.name.length + 1) : head;
-        expect(ability.name, ability.id).toBe(named);
+        expect(ability.prompt, ability.id).toBeUndefined();
+        expect(ability.name.startsWith(`${hero.name} `), ability.id).toBe(false);
+        expect(names.has(ability.name), ability.name).toBe(false);
+        names.add(ability.name);
       }
     }
+    expect(names.size).toBe(HEROES.length);
   });
 });
