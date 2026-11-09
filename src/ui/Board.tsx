@@ -4,7 +4,7 @@ import type { BoardProps } from 'boardgame.io/react';
 import type { AbilityId, GameState, CardId, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import {
-  findCardOnBoard, findWornItem, handCard, isRespawning, itemPrice, kitAbilityIds, otherPlayer, resolveSkill, slotCap, stepInCandidates,
+  abilityAim, findCardOnBoard, findWornItem, handCard, isRespawning, itemPrice, kitAbilityIds, otherPlayer, resolveSkill, slotCap, stepInCandidates,
   ultimateCard, wornActives,
 } from '@/engine/query';
 import { upgradesOf } from '@/cards/decks';
@@ -699,9 +699,9 @@ export function Board(props: BoardProps<GameState>) {
   }
 
   /**
-   * Try to use one of this hero's kit abilities — a skill, its ultimate or a
-   * borrowed ultimate. Asks the engine first (`skillBlocked`), so the UI never
-   * opens a stale targeting overlay.
+   * Try to use one of this hero's kit abilities — its skill or its ultimate.
+   * Asks the engine first (`skillBlocked`), so the UI never opens a stale
+   * targeting overlay.
    */
   function tryUseSkill(card: CardInstance, skillId: AbilityId) {
     if (!isMyTurn) return;
@@ -713,14 +713,17 @@ export function Board(props: BoardProps<GameState>) {
     const ability = kit?.ability;
     if (data?.type !== 'hero' || !ability) return;
     if (skillTargets(G, me, card, skillId) === 'none') { castSkill(card.iid, undefined, skillId); return; }
-    // An ability aimed at its own hero asks for nothing.
-    if (ability.target === 'self') { castSkill(card.iid, card.iid, skillId); return; }
+    // An ability aimed at its own hero asks for nothing. What it is aimed at
+    // is the engine's reading (`abilityAim`: Traveler and Audience
+    // Participation aim by the board).
+    const aim = abilityAim(G, me, card, ability)?.target ?? ability.target;
+    if (aim === 'self') { castSkill(card.iid, card.iid, skillId); return; }
     const ult = kit.kind === 'skill' ? undefined : ultimateCard(skillId);
     setPending({
       kind: 'useSkill', iid: card.iid, skillId,
       title: ult ? `${data.name} · ${ult.name}` : `${data.name} · Skill`,
-      desc: (ult ? plainText(ult.text) : ability.prompt) || 'Choose a target.',
-      filter: ability.target,
+      desc: plainText(ult ? ult.text : ability.text ?? ability.prompt) || 'Choose a target.',
+      filter: aim,
     });
   }
 
@@ -1191,9 +1194,8 @@ export function Board(props: BoardProps<GameState>) {
             };
 
             // Any of your heroes may use one ability a turn, on the engine's
-            // own terms (`skillBlocked`, `activateBlocked`) — each of its
-            // skills, its ultimate, a borrowed ultimate and each active item it
-            // wears asked on its own.
+            // own terms (`skillBlocked`, `activateBlocked`) — its skill, its
+            // ultimate and each active item it wears asked on its own.
             const offer = (block: string | null, why: () => string): SkillOffer => ({
               canUse: isMine && isMyTurn && !discardFirst && block === null,
               blockedReason: !isMine ? undefined

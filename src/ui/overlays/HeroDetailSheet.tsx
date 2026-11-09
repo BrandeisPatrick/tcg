@@ -5,10 +5,11 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import {
-  activeCooldown, cooldownCut, effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, itemCooldown, ultimateCard, wornActives,
+  activeCooldown, cooldownCut, effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, itemCooldown, kitCost, ultimateCard, wornActives,
 } from '@/engine/query';
 import { HARD_CC_CHARGES, ULT_COOLDOWN, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
+import { ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
 import { SpikeMark } from '../board/SpikeMark';
 import { ChargePips, CooldownDial, LockGlyph } from './AbilityDial';
@@ -49,10 +50,10 @@ export interface AttackOffer {
   onAttack: () => void;
 }
 
-/** One of the hero's kit abilities (a skill, its ultimate, a borrowed
- *  ultimate) or an active item it wears, as the sheet offers it: every gate for
- *  using it is open (its turn, the hero's one ability of the turn, the unlock
- *  level, statuses, cooldown or charges, a target), or the short reason it
+/** One of the hero's kit abilities (its skill, its ultimate) or an active
+ *  item it wears, as the sheet offers it: every gate for using it is open (its
+ *  turn, the hero's one ability of the turn, the unlock level, statuses,
+ *  cooldown or charges, the souls it costs, a target), or the short reason it
  *  can't be used, shown inside its plate. */
 export interface SkillOffer {
   canUse: boolean;
@@ -63,8 +64,8 @@ interface Props {
   card: CardInstance;
   /** True if this hero belongs to the local player. Drives the Skill action. */
   isMine?: boolean;
-  /** Each kit ability's offer, by ability id: the skills, the ultimate and a
-   *  borrowed ultimate. One with none is not usable. */
+  /** Each kit ability's offer, by ability id: the skill and the ultimate. One
+   *  with none is not usable. */
   skills?: Record<AbilityId, SkillOffer>;
   /** The player tapped this ability's plate. */
   onUseSkill?: (skillId: AbilityId) => void;
@@ -116,28 +117,28 @@ export function HeroDetailSheet({
   const spike = (slot: ItemSlot) => (hasSpike(card, slot) ? <SpikeMark slot={slot} size={12} style={{ marginTop: 1 }} /> : undefined);
   // Which ability the hero has used this turn, so only that plate reads USED.
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
-  // The ultimate: a kit ability, named and worded by its card, drawn by its
-  // hero's portrait; locked below Level 2, then on its cooldown — ULT_COOLDOWN
-  // less the Cooldown family's cut is the dial's full turn. A borrowed one
-  // (Sinclair's copy) is used once and has no cooldown.
+  // What a kit ability costs, on its plate: "2 souls" (`kitCost`, the
+  // engine's own price).
+  const price = (abilityId: AbilityId) => {
+    const n = kitCost(card, abilityId);
+    return n > 0 ? `${n} soul${n === 1 ? '' : 's'}` : undefined;
+  };
+  // The ultimate: a button printed on the card like a Pokémon attack, named
+  // and worded by its card and showing the hero's own ultimate icon; locked
+  // below Level 2, then on its cooldown — ULT_COOLDOWN (less what the hero
+  // wears takes off) is the dial's full turn — and it costs its size's souls.
   const level = card.level ?? 1;
   const ultFull = Math.max(1, ULT_COOLDOWN - cooldownCut(card, 'ult'));
-  const ultPlate = (abilityId: AbilityId | undefined, borrowed: boolean) => {
-    const face = ultimateCard(abilityId);
-    if (!abilityId || !face) return null;
-    return {
-      abilityId,
-      borrowed,
-      heroId: face.linkedHero,
-      name: borrowed ? `${face.name} (borrowed)` : face.name,
-      text: sentence(face.text ?? ''),
-      locked: !borrowed && level < ULT_UNLOCK_LEVEL,
-      left: borrowed ? 0 : card.cooldowns?.[abilityId] ?? 0,
-    };
-  };
-  // (A copy of the hero's own ultimate is no second ability: `kitAbilityIds` lists it once.)
-  const borrowed = card.borrowedUlt !== data.ult ? card.borrowedUlt : undefined;
-  const ults = [ultPlate(data.ult, false), ultPlate(borrowed, true)].filter((u): u is NonNullable<typeof u> => !!u);
+  const ultFace = ultimateCard(data.ult);
+  const ult = data.ult && ultFace ? {
+    abilityId: data.ult,
+    heroId: ultFace.linkedHero,
+    name: ultFace.name,
+    size: ultFace.size,
+    text: sentence(ultFace.text ?? ''),
+    locked: level < ULT_UNLOCK_LEVEL,
+    left: card.cooldowns?.[data.ult] ?? 0,
+  } : undefined;
   // The active items it wears: a plate each, like a skill's, with the item's
   // own icon — its cooldown on a dial (the full turn is the bearer's
   // `activeCooldown` for its tier), or for hard crowd control its charges as
@@ -286,6 +287,9 @@ export function HeroDetailSheet({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {skillAbilities.map((ability) => {
                     const offer = skillOffers?.[ability.id];
+                    const left = card.cooldowns?.[ability.id] ?? 0;
+                    const full = Math.max(left, ability.cooldown ?? 1);
+                    const marks = plateMarks(!!isMine && !!onUseSkill && !!offer?.canUse && usedSkill !== ability.id);
                     return (
                       <SkillActionCard
                         key={ability.id}
@@ -296,6 +300,9 @@ export function HeroDetailSheet({
                         used={usedSkill === ability.id}
                         canUse={!!offer?.canUse}
                         blockedReason={offer?.blockedReason}
+                        price={price(ability.id)}
+                        status={left > 0 ? <CooldownDial left={left} full={full} ink={marks.ink} track={marks.track} label={readyIn(left, full)} /> : undefined}
+                        greyed={left > 0}
                         onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
                       />
                     );
@@ -313,11 +320,50 @@ export function HeroDetailSheet({
                 />
               </Block>
             ))}
+            {/* The Ultimate — a button printed on the card, like a Pokémon
+                attack: the hero's own ultimate icon, its price in souls,
+                locked until Level 2, then waiting out its cooldown after each
+                use. It and the skill share the hero's one ability a turn. */}
+            {ult && (() => {
+              const offer = skillOffers?.[ult.abilityId];
+              const used = usedSkill === ult.abilityId;
+              const interactive = !!isMine && !!onUseSkill && !!offer?.canUse && !used;
+              const marks = plateMarks(interactive);
+              // Locked: a lock on the icon and "Lv 2" beside the price. On its
+              // cooldown (from the turn it is used): the dial.
+              const status = ult.locked ? (
+                <span role="img" aria-label={`Unlocks at Level ${ULT_UNLOCK_LEVEL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <LockGlyph size={12} color={marks.ink} />
+                  <span style={{ ...eyebrow, fontSize: 10, color: marks.ink }}>Lv {ULT_UNLOCK_LEVEL}</span>
+                </span>
+              ) : ult.left > 0 ? (
+                <CooldownDial left={ult.left} full={ultFull} ink={marks.ink} track={marks.track} label={readyIn(ult.left, ultFull)} />
+              ) : undefined;
+              return (
+                <Block title={`Ultimate · ${ult.size}`}>
+                  <SkillActionCard
+                    name={ult.name}
+                    description={ult.text}
+                    scale={scale}
+                    mine={!!isMine}
+                    used={used}
+                    canUse={!!offer?.canUse}
+                    blockedReason={offer?.blockedReason}
+                    price={price(ult.abilityId)}
+                    status={status}
+                    greyed={ult.locked || ult.left > 0}
+                    art={<UltArt heroId={ult.heroId} locked={ult.locked} />}
+                    ultimate
+                    onUse={onUseSkill ? () => { onUseSkill(ult.abilityId); onClose(); } : undefined}
+                  />
+                </Block>
+              );
+            })()}
             {/* The Attack — your Active's turn-ending move. Abilities come
                 first: the attack ends the Act. */}
             {attack && (
               <>
-                {skillAbilities.length > 0 && <ThenRule />}
+                {(skillAbilities.length > 0 || !!ult) && <ThenRule />}
                 <AttackPlate offer={attack} onAttack={() => { attack.onAttack(); onClose(); }} />
               </>
             )}
@@ -378,48 +424,6 @@ export function HeroDetailSheet({
             position: 'absolute', inset: 0, overflowY: 'auto',
             display: 'flex', flexDirection: 'column', gap: 12,
           }}>
-            {/* The Ultimate — a plate like a skill's: locked until Level 2, then
-                free on its cooldown; the hero's one ability a turn covers it and
-                the skill alike. A borrowed one (Sinclair's copy) is used once. */}
-            {ults.length > 0 && (
-              <SidePanel title="Ultimate">
-                {ults.map((u) => {
-                  const offer = skillOffers?.[u.abilityId];
-                  const used = usedSkill === u.abilityId;
-                  const interactive = !!isMine && !!onUseSkill && !!offer?.canUse && !used;
-                  const marks = plateMarks(interactive);
-                  // Locked: a lock on the hero's portrait and "Lv 2" in the chip's
-                  // place. On its cooldown (from the turn it is used): the dial.
-                  const status = u.locked ? (
-                    <span role="img" aria-label={`Unlocks at Level ${ULT_UNLOCK_LEVEL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                      <LockGlyph size={12} color={marks.ink} />
-                      <span style={{ ...eyebrow, fontSize: 10, color: marks.ink }}>Lv {ULT_UNLOCK_LEVEL}</span>
-                    </span>
-                  ) : u.left > 0 ? (
-                    <CooldownDial left={u.left} full={ultFull} ink={marks.ink} track={marks.track} label={readyIn(u.left, ultFull)} />
-                  ) : undefined;
-                  return (
-                    <SkillActionCard
-                      key={u.abilityId}
-                      name={u.name}
-                      description={u.text}
-                      scale={scale}
-                      mine={!!isMine}
-                      used={used}
-                      canUse={!!offer?.canUse}
-                      blockedReason={offer?.blockedReason}
-                      chipLabel={u.borrowed ? 'Once' : undefined}
-                      status={status}
-                      greyed={u.locked || u.left > 0}
-                      art={<UltArt heroId={u.heroId} locked={u.locked} />}
-                      ultimate
-                      onUse={onUseSkill ? () => { onUseSkill(u.abilityId); onClose(); } : undefined}
-                    />
-                  );
-                })}
-              </SidePanel>
-            )}
-
             {/* Active items — plates like the skill's: the hero's one ability a
                 turn covers them too, then each cools down (or spends a charge). */}
             {actives.length > 0 && (
@@ -476,6 +480,13 @@ export function HeroDetailSheet({
                 <RailStat label="BP" value={effectiveAtk(card)} color={poster.stat.atk} mark={spike('weapon')} />
                 <RailStat label="HP" value={`${card.hp}/${card.hpMax}`} color={poster.stat.hp} mark={spike('vitality')} />
                 <RailStat label="SPI" value={effectiveSpirit(card)} color={poster.stat.spirit} mark={spike('spirit')} />
+              </div>
+              {/* What the card is built from (docs/hero-design.md): its role and
+                  curve, what a level adds, and what its Retreat costs. */}
+              <div style={{ ...text.body, fontSize: 12, color: poster.inkDim, paddingTop: 9, borderTop: `1px solid ${poster.inkRule}` }}>
+                {data.profile.role} · peaks {data.profile.curve} · each level {growthLine(data.growth)}
+                <br />
+                Retreat {data.retreat === 0 ? 'free' : `${data.retreat} soul${data.retreat === 1 ? '' : 's'}`}
               </div>
             </SidePanel>
 
@@ -658,21 +669,29 @@ function plateMarks(interactive: boolean) {
     : { ink: poster.ink, track: poster.inkRule, faint: poster.inkFaint };
 }
 
+/** What a level adds, in words: "+1 BP, +2 HP". */
+function growthLine(g: { atk: number; hp: number; spirit: number }): string {
+  return [g.atk && `+${g.atk} BP`, g.hp && `+${g.hp} HP`, g.spirit && `+${g.spirit} SPI`].filter(Boolean).join(', ');
+}
+
 /** A cooldown dial's name: "Ready in 2 turns · cooldown 3". */
 const readyIn = (left: number, full: number) => `Ready in ${left} turn${left === 1 ? '' : 's'} · cooldown ${full}`;
 
-/** The ultimate's face on its plate: its hero's portrait, keyed in the
- *  ultimate's gold; below Level 2, greyed under a lock. */
+/** The ultimate's face on its button: the hero's own Deadlock ultimate icon
+ *  (a white glyph, `public/ult`), on the ink ground keyed in the ultimate's
+ *  gold; below Level 2, dimmed under a lock. */
 function UltArt({ heroId, locked }: { heroId: CardId; locked: boolean }) {
   return (
     <span style={{
       position: 'relative', display: 'inline-block', width: 40, height: 40,
       borderRadius: 7, overflow: 'hidden', lineHeight: 0,
+      background: poster.ink,
       boxShadow: `0 0 0 1.5px ${poster.gold}, 0 2px 4px rgba(0, 0, 0, 0.35)`,
     }}>
-      <span style={{ display: 'block', filter: locked ? 'grayscale(1) brightness(0.5)' : undefined }}>
-        <HeroBadge cardId={heroId} size={40} />
-      </span>
+      <img
+        src={ultIconSrc(heroId)} alt="" draggable={false}
+        style={{ display: 'block', width: 40, height: 40, padding: 5, boxSizing: 'border-box', objectFit: 'contain', opacity: locked ? 0.35 : 1 }}
+      />
       {locked && (
         <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <LockGlyph size={20} color={poster.cream} hole={poster.ink} />
@@ -687,16 +706,17 @@ function UltArt({ heroId, locked }: { heroId: CardId; locked: boolean }) {
  * active item's. When the ability is usable (it's the player's hero and all
  * gates pass) the whole plate is a pressable red action plate (gold-edged for
  * an ultimate); otherwise it renders as a flat, outlined info card (USED /
- * blocked reason / enemy hero). The chip says it is free — abilities cost no
- * souls — or `chipLabel` ("Once"); `status` draws what holds it instead (the
- * cooldown dial, a hard crowd-control item's charge pips, the ultimate's
- * lock). The rail's plates carry their `art` at the left: the item's icon,
- * the ultimate's hero. The name stays the plate's first words, which is how a
- * plate is found by its text.
+ * blocked reason / enemy hero). A skill and the ultimate print their `price`
+ * in souls; an active item's chip says it is free, or `chipLabel`; `status`
+ * draws what holds it beside the price, in the chip's place (the cooldown
+ * dial, a hard crowd-control item's charge pips, the ultimate's lock). A plate
+ * may carry its `art` at the left: the item's icon, the ultimate's icon. The
+ * name stays the plate's first words, which is how a plate is found by its
+ * text.
  */
 function SkillActionCard({
   name, description, scale, mine, used, canUse, blockedReason, onUse, chipLabel, ultimate = false,
-  art, status, greyed = false,
+  art, status, greyed = false, price,
 }: {
   name: string;
   description: string;
@@ -715,6 +735,9 @@ function SkillActionCard({
   status?: ReactNode;
   /** Cooling down, out of charges or locked: its words step back. */
   greyed?: boolean;
+  /** What it costs to use, printed on the plate: a skill's or the ultimate's
+   *  souls ("8 souls"). Absent: an item's chip, free. */
+  price?: string;
 }) {
   const interactive = mine && !!onUse && canUse && !used;
 
@@ -723,15 +746,17 @@ function SkillActionCard({
   const fgDim = interactive ? poster.paper : poster.inkDim;
   const chip = used
     ? { label: 'USED', color: poster.inkFaint }
-    : status ? null
+    : status || price ? null
     : { label: chipLabel ?? 'Free', color: interactive ? poster.paper : poster.inkDim };
+  const cost = !used && price ? { label: price, color: interactive ? poster.gold : poster.inkDim } : null;
 
   const body = (
     <>
       <div style={{ display: 'flex', alignItems: status ? 'center' : 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
         <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: fg, minWidth: 0 }}>{name}</span>
-        {(chip || status) && (
+        {(chip || status || cost) && (
           <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {cost && <span style={{ ...eyebrow, fontSize: 10, color: cost.color }}>{cost.label}</span>}
             {chip && <span style={{ ...eyebrow, fontSize: 10, color: chip.color }}>{chip.label}</span>}
             {status}
           </span>

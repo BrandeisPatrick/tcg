@@ -2,9 +2,10 @@
  * What a hero can still do this turn, read the way the engine reads it. A
  * turn opens with its income and its draw; then the player puts heroes from
  * the hand on the bench (free) and items from the hand on heroes (their
- * price), every hero may use one ability a turn (a skill, an active item it
- * wears or, from Level 2, its ultimate — all free), one Retreat, and the
- * Active makes the turn's attack, which ends the turn. The board's glint, the
+ * price), every hero may use one ability a turn (its skill or, from Level 2,
+ * its ultimate, each for its souls; or an active item it wears, free), one
+ * Retreat (the leaving hero's own price), and the Active makes the turn's
+ * attack, which ends the turn. The board's glint, the
  * hero sheet's plates, the hand, the refusal stickers and the tutorial all ask
  * the engine's own `skillBlocked` / `activateBlocked` / `attackBlocked` /
  * `playBlocked` / `placeHeroBlocked` / `moveBlocked` (legality.ts) and
@@ -13,14 +14,14 @@
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import {
   activateBlocked, blocked, moveBlocked, playCost, retreatCost, skillBlocked,
   type ActivateBlock, type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
   type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
 import {
-  findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, itemPrice, kitAbilityIds, otherPlayer,
+  findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, otherPlayer,
   resolveSkill, slotCap, wornActives,
 } from '@/engine/query';
 import type { Action } from '@/engine/engine';
@@ -47,7 +48,7 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       const last = hero?.lastSkillUsed;
       if (!hero || !last || !skill || last === skill.id) return 'Already used';
       const lastKind = resolveSkill(hero, last)?.kind;
-      if (lastKind === 'ult' || lastKind === 'borrowed') return 'Used its ultimate this turn';
+      if (lastKind === 'ult') return 'Used its ultimate this turn';
       if (!lastKind) return `Used ${cardName(last)} this turn`;
       return skill.kind === 'skill' ? 'Used its other skill this turn' : 'Used its skill this turn';
     }
@@ -57,6 +58,10 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
     case 'cooldown': {
       const left = (skill && hero?.cooldowns?.[skill.id]) || 0;
       return left > 0 ? `Ready in ${left} turn${left === 1 ? '' : 's'}` : 'On cooldown';
+    }
+    case 'souls': {
+      const cost = hero && skill ? kitCost(hero, skill.id) : 0;
+      return cost > 0 ? `Need ${souls(cost)}` : 'Not enough souls';
     }
     case 'hp': return skill?.ability.hpCost ? `Needs more than ${skill.ability.hpCost} HP` : 'Not enough HP';
     case 'target': return 'No valid target';
@@ -96,7 +101,7 @@ export function activateBlockReason(block: ActivateBlock, item?: CardInstance, b
       const last = bearer?.lastSkillUsed;
       if (!last || last === item?.cardId) return 'Already used';
       const kind = bearer && resolveSkill(bearer, last)?.kind;
-      return kind === 'ult' || kind === 'borrowed' ? 'Used its ultimate this turn' : kind ? 'Used its skill this turn' : `Used ${cardName(last)} this turn`;
+      return kind === 'ult' ? 'Used its ultimate this turn' : kind ? 'Used its skill this turn' : `Used ${cardName(last)} this turn`;
     }
     case 'status': return 'Cannot use abilities (status)';
     case 'charges': return 'No charges left';
@@ -171,9 +176,9 @@ export function discardBlockReason(block: DiscardBlock): string {
 }
 
 /** The line the board's sticker prints on a swap that cannot be made. `cost` is
- *  what the Retreat costs right now (`retreatCost`, legality.ts); left out, the
- *  base price. */
-export function moveBlockReason(block: MoveBlock, cost = RETREAT_COST): string {
+ *  what the Retreat costs right now (`retreatCost`, legality.ts): the leaving
+ *  hero's own price. Left out, the line names no number. */
+export function moveBlockReason(block: MoveBlock, cost?: number): string {
   switch (block) {
     case 'same': return 'That hero is already there';
     case 'actOver': return ACT_OVER;
@@ -182,7 +187,7 @@ export function moveBlockReason(block: MoveBlock, cost = RETREAT_COST): string {
     case 'benchOnly': return 'That hero can only fight from the bench';
     case 'down': return 'Down until it respawns';
     case 'rooted': return 'Rooted: cannot retreat or be swapped';
-    case 'souls': return `Need ${souls(cost)}`;
+    case 'souls': return cost === undefined ? 'Not enough souls' : `Need ${souls(cost)}`;
     case 'illegal': return 'Not a place on the board';
   }
 }
@@ -285,7 +290,7 @@ export function attackLine(plan: AttackPlan): string {
 }
 
 /** Every hero of `pid`'s that can still do something this turn: use one of
- *  its kit abilities now (a skill, its ultimate, a borrowed ultimate) or an
+ *  its kit abilities now (its skill or its ultimate, souls in hand) or an
  *  active item it wears, or — the Active — make the turn's attack while it is
  *  open. Nobody glints while a choice is owed (a discard, the first Active). */
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {

@@ -28,6 +28,7 @@ const STATUS_LABELS: Record<string, string> = {
   spirit_resist: 'Spirit Res',
   shield:        'Shield',
   unstoppable:   'Unstop',
+  invulnerable:  'Invuln',
   healing_boost: '+Heal',
   extra_attack:  'Extra Atk',
   casting:       'Channel',

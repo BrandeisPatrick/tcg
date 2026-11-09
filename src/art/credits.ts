@@ -137,6 +137,15 @@ export const ART_CREDITS: CreditGroup[] = [
         thumb: { kind: 'image', src: `${BASE}heroes/hero_abrams_mm.webp`, position: '50% 30%' },
       },
       {
+        id: 'ult-icons',
+        title: 'Ultimate icons',
+        by: 'The game\'s own icon of each hero\'s ultimate ability (its fourth, `signature4`), through the community-run Deadlock Assets API.',
+        where: 'The ultimate button printed on each hero card, on the hero sheet.',
+        links: [DL_API, DL_BUCKET],
+        terms: `${VALVE} White glyphs, shown on the button\'s ink ground.`,
+        thumb: { kind: 'image', src: `${BASE}ult/abrams.webp`, fit: 'contain', ground: '#2a2a2a' },
+      },
+      {
         id: 'items',
         title: 'Spell and item art',
         by: 'The game\'s shop art for each item, from the Deadlock wiki\'s asset mirror; the first set came through the Deadlock Assets API.',

@@ -33,6 +33,11 @@ from their "Deadlock Graphical Library" collection.
 - The small hero icons (`_mm.webp`, `_sm.webp`) are the game's own icons,
   pulled from the community asset bucket at https://deadlock-api.com/
   (https://assets.deadlock-api.com/).
+- The ultimate icons in `public/ult/` (`<hero>.webp`, the hero id without its
+  `hero_` prefix) are the game's own icon of each hero's ultimate, the
+  deadlock-api's `signature4` ability image (field `image_webp`), from the same
+  API. White glyphs, shown on the ink ground of the ultimate button printed on
+  each hero card.
 - Everything in `public/spells/` and `public/items/` is the game's own shop art
   for each item, one icon per card: the wiki's 200×200 shop icon from the
   Deadlock wiki's asset mirror (`https://cdn.deadlock.wiki/<Item_Name>.png`),

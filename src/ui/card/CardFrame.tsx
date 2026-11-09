@@ -11,8 +11,8 @@ import {
 } from './SpotVarnish';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
-import { heroAbilities } from '@/engine/query';
-import { PRICE } from '@/engine/constants';
+import { heroAbilities, ultimateCard } from '@/engine/query';
+import { PRICE, ULT_COST } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
@@ -30,8 +30,8 @@ interface Props {
    *  where the stat badge is noise — the reveal is about the skill). */
   hideStats?: boolean;
   /** The soul cost to print on the coin, for a card that is an instance in
-   *  hand: the engine's `cardCost`, which honours an override (Sinclair's copied
-   *  ultimate is free). Omitted, the card's printed cost — right for the deck
+   *  hand: what playing it costs now (an evolving upgrade costs the
+   *  difference). Omitted, the card's printed cost — right for the deck
    *  editor, the collection and the gallery, where no instance exists. */
   cost?: number;
   /** Player can't pay this card's soul cost right now — the cost coin flips
@@ -440,26 +440,36 @@ export function CardFrame({
           {data?.name ?? cardId}
         </div>
 
-        {/* Body text (effect) — Skill / Passive label is inlined as a bold
-            prefix on the same row as the effect description. A hero prints
-            its abilities, skills first, one line each; any other card prints
-            its own text. */}
+        {/* Body text (effect) — the Skill / Passive / Ult label is inlined as
+            a bold prefix on the same row as the effect description, a skill's
+            and the ultimate's with their price in souls. A hero prints its
+            skill or passive, then its ultimate (the button printed on the
+            card: its name, and on a full-size card its text); any other card
+            prints its own text. */}
         {(() => {
-          const lines: { key: string; tag: 'Skill' | 'Passive' | null; body: string }[] = data?.type === 'hero'
-            ? heroAbilities(data).map(({ kind, ability }) => ({ key: ability.id, tag: kind === 'skill' ? 'Skill' : 'Passive', body: ability.text }))
-            : data?.text ? [{ key: 'text', tag: null, body: data.text }] : [];
+          const ult = data?.type === 'hero' ? ultimateCard(data.ult) : undefined;
+          const isHand = size === 'hand';
+          const lines: { key: string; kind: 'skill' | 'passive' | 'ult' | null; tag: string | null; body: string }[] = data?.type === 'hero'
+            ? [
+              ...heroAbilities(data).map(({ kind, ability }) => ({
+                key: ability.id, kind,
+                tag: kind === 'skill' ? `Skill${ability.souls ? ` · ${ability.souls}` : ''}` : 'Passive',
+                body: ability.text,
+              })),
+              ...(ult ? [{ key: ult.id, kind: 'ult' as const, tag: `Ult · ${ULT_COST[ult.size]}`, body: isHand ? ult.name : `${ult.name}: ${ult.text ?? ''}` }] : []),
+            ]
+            : data?.text ? [{ key: 'text', kind: null, tag: null, body: data.text }] : [];
           if (lines.length === 0) return null;
           // Hand-size cards are 134×188 — give the effect every pixel:
           // tighter line-height, smaller font, full ink for sharper reads.
-          const isHand = size === 'hand';
           const line = (l: (typeof lines)[number]) => (
             <>
               {l.tag && (
                 <span style={{
                   fontWeight: 700,
-                  // Skill in the poster red, Passive in dim ink — both read as
-                  // bold labels and stay clearly distinct at a glance.
-                  color: l.tag === 'Skill' ? poster.red : poster.inkDim,
+                  // Skill in the poster red, Passive in dim ink, Ult in full
+                  // ink — bold labels, clearly distinct at a glance.
+                  color: l.kind === 'skill' ? poster.red : l.kind === 'ult' ? poster.ink : poster.inkDim,
                   marginRight: 5,
                 }}>{l.tag}</span>
               )}

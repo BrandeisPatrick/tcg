@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { HEROES } from '@/cards';
-import { RETREAT_COST } from '@/engine/constants';
 import { HeroDetailSheet, type SkillOffer } from '../overlays/HeroDetailSheet';
 import { PromotionOverlay } from '../overlays/PromotionOverlay';
 import { poster } from '../poster';
@@ -30,6 +29,9 @@ const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
 /** The passive-only hero the "Passive-only Active" state falls back to when
  *  the picked hero has a skill. */
 const PASSIVE_STAND_IN = 'hero_abrams';
+
+/** What the promotion sheet's Retreat costs: Kelvin is the one leaving. */
+const KELVIN_RETREAT = HEROES.find((h) => h.id === 'hero_kelvin')?.retreat ?? 1;
 
 export function OverlaysTab() {
   const [heroId, setHeroId] = useState('hero_kelvin');
@@ -88,11 +90,12 @@ export function OverlaysTab() {
         ],
         attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('improved_cooldown', 2)],
       };
-      props.retreat = { cost: RETREAT_COST, incomingName: 'Yamato' };
+      props.retreat = { cost: shown.retreat, incomingName: 'Yamato' };
       props.onRetreat = () => setToast('Retreated');
     }
     if (s === 'broke') {
-      props.retreat = { cost: RETREAT_COST, blockedReason: `Need ${RETREAT_COST} soul${RETREAT_COST === 1 ? '' : 's'}` };
+      const cost = Math.max(1, shown.retreat);
+      props.retreat = { cost, blockedReason: `Need ${cost} soul${cost === 1 ? '' : 's'}` };
       props.onRetreat = () => {};
     }
     props.card = card;
@@ -178,7 +181,7 @@ function NewActiveDemo() {
             key={mode}
             candidates={candidates}
             leavingName="Kelvin"
-            retreat={mode === 'retreat' ? { cost: RETREAT_COST, onCancel: () => setMode(null) } : undefined}
+            retreat={mode === 'retreat' ? { cost: KELVIN_RETREAT, onCancel: () => setMode(null) } : undefined}
             onPick={() => setMode(null)}
           />
         )}

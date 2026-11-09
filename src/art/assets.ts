@@ -12,3 +12,12 @@ export const HERO_IMG_BASE = `${BASE}heroes/`;
 export const ITEM_IMG_BASE = `${BASE}items/`;
 /** Spell art (public/spells). */
 export const SPELL_IMG_BASE = `${BASE}spells/`;
+/** The heroes' ultimate icons (public/ult): each hero's own Deadlock ultimate
+ *  icon, the deadlock-api's `signature4` ability image, named by the hero id
+ *  without its `hero_` prefix (`hero_mo_krill` → `mo_krill.webp`). */
+export const ULT_IMG_BASE = `${BASE}ult/`;
+
+/** The ultimate icon of the hero `heroId` (the button printed on its card). */
+export function ultIconSrc(heroId: string): string {
+  return `${ULT_IMG_BASE}${heroId.replace(/^hero_/, '')}.webp`;
+}

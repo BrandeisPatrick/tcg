@@ -28,6 +28,7 @@
  *   bullet_resist  Bullet_Armor    spirit_resist  Spirit_Armor     shield  Barrier
  *   weapon_power  Bullet_damage    spirit_power  Spirit_Icon       healing_boost  Healing
  *   unstoppable  Status_Unstoppable   extra_attack  Fire_Rate      swift  Move_speed_sprint
+ *   invulnerable  Status_Unstoppable, an arrow up (no crowd control, and no damage either)
  *   last_stand  Last_Stand (Warden)  return_fire  Return_Fire_v1   ricochet  Ricochet_v1
  *   dome  Ethereal_Shift_v1   siphon_gain  Siphon_Bullets_v1, an arrow up
  *   casting / casting_light  Singularity: Dynamo's channelled ultimate, the game's glyph for a channel
@@ -47,7 +48,7 @@ type MarkKind =
   | 'siphon_drain' | 'weapon_power_down' | 'spirit_power_down' | 'bullet_resist_down'
   | 'spirit_resist_down' | 'healing_boost_down' | 'fixation' | 'rooted' | 'rabbit'
   // Buffs and the rest
-  | 'bullet_resist' | 'spirit_resist' | 'shield' | 'weapon_power' | 'spirit_power' | 'unstoppable'
+  | 'bullet_resist' | 'spirit_resist' | 'shield' | 'weapon_power' | 'spirit_power' | 'unstoppable' | 'invulnerable'
   | 'healing_boost' | 'extra_attack' | 'casting' | 'return_fire' | 'siphon_gain' | 'dome' | 'last_stand'
   | 'swift' | 'ricochet'
   // An id with no picture.
@@ -60,7 +61,7 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
     'stun', 'silenced', 'disarm', 'sleep', 'bleed', 'charged', 'djinns_mark', 'reverb',
     'siphon_drain', 'weapon_power_down', 'spirit_power_down', 'bullet_resist_down',
     'spirit_resist_down', 'healing_boost_down', 'fixation', 'rooted', 'rabbit',
-    'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable',
+    'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable', 'invulnerable',
     'healing_boost', 'extra_attack', 'casting', 'return_fire', 'siphon_gain', 'dome', 'last_stand',
     'swift', 'ricochet',
   ] as const).map((id): [string, MarkKind] => [id, id]),
@@ -82,7 +83,8 @@ export const MARKED_IDS: readonly string[] = [...MARK_OF.keys()];
 // ---------------------------------------------------------------------------
 
 /** A small arrow in the mark's corner, for a status the game has no icon of
- *  its own for but whose opposite it has: the drop of a stat, a transfer. */
+ *  its own for but whose opposite it has: the drop of a stat, a transfer — or
+ *  one a step past it (Invulnerable is Unstoppable that takes no damage too). */
 type Badge = 'down' | 'up';
 
 /** A glyph file's size in pixels, and the box inside it its picture fills
@@ -160,6 +162,7 @@ const SOURCE: Record<MarkKind, Source> = {
   weapon_power: glyph('weapon_power'),
   spirit_power: glyph('spirit_power'),
   unstoppable: glyph('unstoppable'),
+  invulnerable: glyph('unstoppable', 'up'),
   healing_boost: glyph('healing_boost'),
   extra_attack: glyph('extra_attack'),
   casting: glyph('casting'),
