@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { Hand } from './Hand';
 import { BoardControls } from './BoardControls';
@@ -6,20 +7,26 @@ import { useViewport } from '../hooks/useViewport';
 
 /**
  * Bottom row: the hand fan, floating under the cream sheet on the dark
- * scene. On desktop the turn controls live on the sheet's right rail
- * (Board mounts the BoardControls dock there), so the fan takes the full
- * row; phones keep the controls here as a row under the hand, the turn
- * button at the thumb edge. The phone hand is a flat strip of compact cards
- * (see Hand) in flow above that row, so no card ever sits under it. An
- * empty hand takes no room on either: the row is the controls alone on a
- * phone and nothing on a desktop, and the stage re-fits to what it gains.
+ * scene, between your deck (left) and your discard pile (right) — `piles`,
+ * the two of them (CardPiles), which the tray splits to either end. On
+ * desktop the turn controls live on the sheet's right rail (Board mounts the
+ * BoardControls dock there), so the fan takes the middle of the row; phones
+ * keep the controls here as a row under the hand, the turn button at the
+ * thumb edge, and the piles as small chips in a slim row above the strip.
+ * The phone hand is a flat strip of compact cards (see Hand) in flow above
+ * the controls, so no card ever sits under it.
  */
 export function HandTray({
-  cards, disabled, pending, isMyTurn, busy, hasPending, playable,
+  cards, souls, disabled, pending, isMyTurn, busy, hasPending, playable,
   onTap, onLongPress, onHover, onDragEndOver, onBlocked, onEndTurn, onCancel,
-  autoPlay, onToggleAuto, onShop, arriving, registerCard,
+  autoPlay, onToggleAuto, arriving, registerCard, deckPile, discardPile,
 }: {
   cards: CardInstance[];
+  souls: number;
+  /** Your deck and your discard pile (DeckPile, DiscardPile), drawn at the
+   *  row's two ends. */
+  deckPile?: ReactNode;
+  discardPile?: ReactNode;
   disabled: boolean;
   pending: PendingPlay | null;
   isMyTurn: boolean;
@@ -35,8 +42,6 @@ export function HandTray({
   onCancel: () => void;
   autoPlay: boolean;
   onToggleAuto: () => void;
-  /** The shop is open and its sheet put away: the controls offer it back. */
-  onShop?: () => void;
   arriving?: string | null;
   registerCard?: (iid: string, el: HTMLElement | null) => void;
 }) {
@@ -68,9 +73,22 @@ export function HandTray({
       )}
       {/* Phones: the strip runs past the board's 6px side padding to the
           screen edges, so a card scrolls off the glass, not off a margin. */}
-      <div style={{ minWidth: 0, margin: isMobile ? '0 -6px' : undefined }}>
+      {isMobile && (deckPile || discardPile) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '2px 10px 0', pointerEvents: 'auto' }}>
+          {deckPile}
+          {discardPile}
+        </div>
+      )}
+      {!isMobile && deckPile && (
+        <div style={{ position: 'absolute', left: 0, bottom: 22, pointerEvents: 'auto', zIndex: 1 }}>{deckPile}</div>
+      )}
+      {!isMobile && discardPile && (
+        <div style={{ position: 'absolute', right: 0, bottom: 22, pointerEvents: 'auto', zIndex: 1 }}>{discardPile}</div>
+      )}
+      <div style={{ minWidth: 0, margin: isMobile ? '0 -6px' : '0 76px' }}>
         <Hand
           cards={cards}
+          souls={souls}
           disabled={disabled}
           pending={pending}
           playable={playable}
@@ -93,7 +111,6 @@ export function HandTray({
           onEndTurn={onEndTurn}
           onCancel={onCancel}
           onToggleAuto={onToggleAuto}
-          onShop={onShop}
         />
       )}
     </div>

@@ -84,7 +84,7 @@ function useTitleStatus() {
           ? 'Run lost · start again'
           : `Run · ${run.clearedNodeIds.length}/${run.nodes.length} blocks · ${run.heroes.length} ${run.heroes.length === 1 ? 'hero' : 'heroes'}`;
     return {
-      quick: 'Draft · shop · fight',
+      quick: 'Draft · draw · fight',
       story,
       storyActive: active,
       // One line for the sheet: who you asked the draft for, and their builds.

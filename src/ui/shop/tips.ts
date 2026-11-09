@@ -1,14 +1,15 @@
 import type { CardId } from '@/engine/types';
 
 /** A tooltip asked for: the item, the tile it was opened from, and what kind
- *  of tile — an item on sale (`market`), a build's item you already have
- *  (`build`), an item worn by one of your heroes (`worn`, by its instance) or
- *  a card in your hand (`hand`, by its instance). A `passive` one is a mouse
- *  resting on the tile: it takes no taps and goes when the mouse does. */
+ *  of tile — an item of the catalogue (`catalogue`), one of the deck being
+ *  built (`deck`), a build's item (`build`), an item worn by one of your
+ *  heroes (`worn`, by its instance) or a card in your hand (`hand`, by its
+ *  instance). A `passive` one is a mouse resting on the tile: it takes no taps
+ *  and goes when the mouse does. */
 export interface TipRequest {
   itemId: CardId;
   anchor: DOMRect;
-  source: 'market' | 'build' | 'worn' | 'hand';
+  source: 'catalogue' | 'deck' | 'build' | 'worn' | 'hand';
   iid?: string;
   passive?: boolean;
 }

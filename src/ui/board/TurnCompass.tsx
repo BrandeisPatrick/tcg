@@ -5,7 +5,6 @@ import { poster } from '../poster';
 import { useCombatProgress, type CombatProgress } from '../effects/CombatProgressContext';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 import { useViewport } from '../hooks/useViewport';
-import type { TurnStep } from '@/engine/types';
 import { BEAT_WORD, TURN_BEATS, useTurnBeat, type TurnBeat } from './turnBeat';
 
 /** Where a turn stands against its attack (one a turn, and it ends the turn's
@@ -21,10 +20,10 @@ interface Props {
   isMyTurn: boolean;
   turn: number;
   phase: TurnPhase;
-  /** The step of the turn in play (`G.step`): with it the dial prints the
-   *  turn's beats under itself — Income · Shop · Act · End, the one the turn
-   *  is on lit (turnBeat.ts). Left out (the gallery's demos), none are shown. */
-  step?: TurnStep;
+  /** The dial prints the turn's beats under itself — Income · Act · End, the
+   *  one the turn is on lit (turnBeat.ts). Left out (the gallery's demos, the
+   *  draft), none are shown. */
+  beats?: boolean;
   /** Override for the ambient `CombatProgressContext` value — only the
    *  preview gallery passes this so it can demo the combat-mode ring
    *  without a real attack. Live game always reads context. */
@@ -33,7 +32,7 @@ interface Props {
 
 /**
  * Persistent turn indicator pinned at the centre of the duel divider: whose
- * turn it is, which turn, the turn's beat (Income · Shop · Act · End, printed
+ * turn it is, which turn, the turn's beat (Income · Act · End, printed
  * under the dial with the one it is on lit, for both players' turns) and
  * where in the turn — before its attack, the attack, after it.
  *
@@ -68,14 +67,14 @@ const BREATHE: Loop = {
   easing: 'ease-in-out',
 };
 
-export function TurnCompass({ isMyTurn: moverIsMe, turn: engineTurn, phase, step, combatOverride }: Props) {
+export function TurnCompass({ isMyTurn: moverIsMe, turn: engineTurn, phase, beats: step, combatOverride }: Props) {
   const contextCombat = useCombatProgress();
   const combat = combatOverride !== undefined ? combatOverride : contextCombat;
   const { isMobile } = useViewport();
   // The turn's beat. Through a hand-over's End beat the dial still belongs
   // to the player whose turn just ended, so everything below reads `isMyTurn`
   // from the beat rather than from the mover.
-  const spine = useTurnBeat({ turn: engineTurn, isMyTurn: moverIsMe, step: step ?? 'act', attackMade: phase === 'regroup' });
+  const spine = useTurnBeat({ turn: engineTurn, isMyTurn: moverIsMe, attackMade: phase === 'regroup' });
   const isMyTurn = step ? spine.mine : moverIsMe;
   const turn = step ? spine.turn : engineTurn;
   // Hue follows the turn owner — gold when it's the player's move, red
@@ -270,9 +269,9 @@ export function TurnCompass({ isMyTurn: moverIsMe, turn: engineTurn, phase, step
 }
 
 /**
- * Income · Shop · Act · End under the dial, the beat the turn is on lit in
- * the turn owner's colour. A desktop's divider is wide enough for the four
- * words; a phone's prints four marks and the lit beat's word under them.
+ * Income · Act · End under the dial, the beat the turn is on lit in the turn
+ * owner's colour. A desktop's divider is wide enough for the three words; a
+ * phone's prints three marks and the lit beat's word under them.
  */
 function BeatStrip({ beat, hue, words }: { beat: TurnBeat; hue: string; words: boolean }) {
   const at = TURN_BEATS.indexOf(beat);

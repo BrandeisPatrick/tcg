@@ -1,6 +1,7 @@
 import type { CardId } from '@/engine/types';
 import { itemCard, migrateCardIds } from '@/cards';
 import { BUILD_SIZE, DEFAULT_BUILDS, defaultBuild } from '@/cards/builds';
+import { DECK_SIZE, MAX_COPIES } from '@/engine/constants';
 import { AI_STRENGTHS, DEFAULT_AI_STRENGTH, type AiStrength } from '@/ai/heuristic';
 
 export const MAX_PREFERRED_HEROES = 4;
@@ -9,9 +10,12 @@ export const MAX_PREFERRED_HEROES = 4;
  * The save's schema. Version 1 had no version field and kept up to five
  * 15-card decks; version 2 keeps a build per hero instead (the decks are
  * dropped on load: the shop replaced the deck); version 3 adds the rival AI's
- * strength (a save from before it plays 'normal').
+ * strength (a save from before it plays 'normal'); version 4 brings a deck
+ * back — one deck of items (DECK_SIZE, at most MAX_COPIES of one), the deck
+ * builder's — beside the builds, which make the deck of a player who saved
+ * none (a save from before it has none).
  */
-const PLAYER_DATA_VERSION = 3;
+const PLAYER_DATA_VERSION = 4;
 /** The first version that keeps builds: an older save's are not carried over. */
 const BUILDS_SINCE = 2;
 
@@ -28,6 +32,10 @@ interface PlayerData {
   tutorialDone: boolean;
   /** How hard the rival AI plays a Quick Match, as last set on the draft. */
   aiStrength: AiStrength;
+  /** The deck builder's deck: item ids, at most DECK_SIZE, at most MAX_COPIES
+   *  of one. A match uses it once it holds DECK_SIZE; until then (and with
+   *  none) the deck is made from the drafted heroes' builds. */
+  deck: CardId[];
 }
 
 const STORAGE_KEY = 'deadlock-tcg-player';
@@ -40,7 +48,23 @@ function defaultPlayerData(): PlayerData {
     lessonsDone: [],
     tutorialDone: false,
     aiStrength: DEFAULT_AI_STRENGTH,
+    deck: [],
   };
+}
+
+/** A saved deck brought up to date: retired items swapped for their
+ *  replacements, unknown ids and anything that is no item dropped, at most
+ *  MAX_COPIES of one item, at most DECK_SIZE in all. */
+function migrateDeck(ids: unknown): CardId[] {
+  if (!Array.isArray(ids)) return [];
+  const out: CardId[] = [];
+  const count: Record<CardId, number> = {};
+  for (const id of migrateCardIds(ids.filter((x): x is string => typeof x === 'string'))) {
+    if (!itemCard(id) || (count[id] ?? 0) >= MAX_COPIES) continue;
+    count[id] = (count[id] ?? 0) + 1;
+    out.push(id);
+  }
+  return out.slice(0, DECK_SIZE);
 }
 
 /** A saved build brought up to date: retired items swapped for their
@@ -90,6 +114,9 @@ export function loadPlayerData(): PlayerData {
       lessonsDone: Array.isArray(parsed.lessonsDone) ? parsed.lessonsDone.filter((x: unknown) => typeof x === 'string') : [],
       tutorialDone: parsed.tutorialDone === true,
       aiStrength: migrateStrength(parsed.aiStrength),
+      // A deck saved by version 1 was the old deck game's (heroes and 15 cards):
+      // not carried over. Version 4 keeps its own.
+      deck: typeof parsed.version === 'number' && parsed.version >= 4 ? migrateDeck(parsed.deck) : [],
     };
   } catch {
     return defaultPlayerData();
@@ -121,6 +148,19 @@ export function saveBuild(heroId: CardId, items: CardId[]): void {
   const build = migrateBuild(items);
   if (build.length > 0) data.builds[heroId] = build;
   else delete data.builds[heroId];
+  savePlayerData(data);
+}
+
+/** The deck builder's deck (may be short of DECK_SIZE, or empty: none saved). */
+export function getDeck(): CardId[] {
+  return loadPlayerData().deck;
+}
+
+/** Save the deck builder's deck (an empty one clears it: the builds make the
+ *  deck again). */
+export function saveDeck(ids: CardId[]): void {
+  const data = loadPlayerData();
+  data.deck = migrateDeck(ids);
   savePlayerData(data);
 }
 

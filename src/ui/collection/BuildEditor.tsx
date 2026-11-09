@@ -1,7 +1,9 @@
 /**
- * The build editor — the Loadout screen's half where each hero's build is
- * set: the six items it buys in the shop, in order, which every match reads
- * (storage/playerData.ts). Printed like the shop, in icons only: the hero's
+ * The build editor — the Loadout screen's part where each hero's build is
+ * set: the six items it wants, in order (storage/playerData.ts). A player who
+ * has saved no deck is dealt one made from their drafted heroes' builds
+ * (`deckFromBuilds`), and the rival AI's deck is made from its heroes'
+ * default builds. Printed like the deck builder, in icons only: the hero's
  * name and the three tab words are the only words on it.
  *
  *   heroes     every hero's head, the squad's first; the one being edited
@@ -25,7 +27,7 @@ import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import type { CardId, ItemSlot, ItemTier } from '@/engine/types';
 import { HEROES, ITEMS, cardName } from '@/cards';
 import { BUILD_SIZE, defaultBuild } from '@/cards/builds';
-import { tierLists } from '@/engine/market';
+import { tierLists } from '@/cards/decks';
 import { getBuild, saveBuild } from '@/storage/playerData';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { ShopTile } from '../shop/ShopTile';

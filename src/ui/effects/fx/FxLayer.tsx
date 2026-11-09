@@ -140,7 +140,7 @@ function castTargets(cast: CastFx, timeline: FxTimeline, rects: Map<string, Rect
   const targets: Pt[] = [];
   for (const it of timeline.items) {
     const e = it.ev;
-    if (e.kind === 'cast' || !('iid' in e) || e.iid === cast.iid || seen.has(e.iid)) continue;
+    if (e.kind === 'cast' || e.kind === 'deck' || !('iid' in e) || e.iid === cast.iid || seen.has(e.iid)) continue;
     if (e.kind === 'heal' && e.tag === 'lifesteal') continue;   // drawn back, not cast out
     seen.add(e.iid);
     const r = rects.get(e.iid);

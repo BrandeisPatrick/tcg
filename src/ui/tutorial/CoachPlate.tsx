@@ -11,8 +11,6 @@
  * Each render the plate is in exactly one mode:
  *   wait     — the rival is moving (or a stated step is holding for a
  *              moment). Light scrim, nothing tappable, no Next.
- *   shop     — your turn has opened in the shop and the step up has nothing
- *              to buy: Done first (`SHOP_PROMPT`), then the step.
  *   blocked  — the task cannot be done right now. The plate says so and
  *              opens the turn button (End Turn) instead, so the player is
  *              never boxed in.
@@ -32,7 +30,7 @@ import { poster, chamfer, PAPER_MOTTLE, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { markLessonDone } from '@/storage/playerData';
 import {
-  LESSONS, RIVAL_TURN, SHOP, SHOP_DONE_BUTTON, SHOP_PROMPT, TURN_BUTTON, emptySeen, hasEquipment,
+  LESSONS, RIVAL_TURN, TURN_BUTTON, emptySeen, hasEquipment,
   type CoachSeen, type CoachView, type GateSpec, type Lesson,
 } from '@/tutorial/lessons';
 import { TutorialGate } from './TutorialGate';
@@ -88,12 +86,6 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
     }));
   }, [actionId, actionKind]);
 
-  // The shop closed on your turn: the turn moved on to its Act.
-  const shopClosed = isMyTurn && !G.draft && G.step === 'act';
-  useEffect(() => {
-    if (shopClosed) setSeen((s) => (s.closedShop ? s : { ...s, closedShop: true }));
-  }, [shopClosed]);
-
   // Count the turns you have ended: each my-turn → rival-turn edge is one.
   const wasMyTurn = useRef(isMyTurn);
   useEffect(() => {
@@ -110,8 +102,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
     wasMade.current = myAttackMade;
   }, [myAttackMade]);
 
-  // Items are read off the board rather than off the action feed: a purchase
-  // sets no action.
+  // Items are read off the board rather than off the action feed.
   const equipped = hasEquipment(G, me);
   useEffect(() => {
     if (equipped) setSeen((s) => (s.equipped ? s : { ...s, equipped: true }));
@@ -144,13 +135,10 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
     : current.wait ? current.wait(view)
     : !isMyTurn ? RIVAL_TURN
     : null;
-  // Your turn opened in the shop, and the step up has nothing to buy: Done first.
-  const shopFirst = !!current && !done && !complete && !waitText && !current.shop && isMyTurn && !G.draft && G.step === 'shop';
-  const blocked = !!current && !waitText && !shopFirst && !complete && !!current.ready && !current.ready(view);
+  const blocked = !!current && !waitText && !complete && !!current.ready && !current.ready(view);
 
   const bodyText = done ? lesson.outro
     : waitText ? waitText
-    : shopFirst ? SHOP_PROMPT
     : blocked ? pick(current.blocked ?? current.body, view)
     : pick(current.body, view);
 
@@ -165,11 +153,9 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
   const hold = ticked || !!waitText || revealUp || attacking;
   const spotList = !gated ? NONE
     : hold ? NONE
-    : shopFirst ? [SHOP]
     : blocked ? [TURN_BUTTON]
     : current.spot!(view);
   const allowList = !gated || hold ? NONE
-    : shopFirst ? [SHOP_DONE_BUTTON]
     : blocked ? [TURN_BUTTON]
     : (current.allow ?? current.spot!)(view);
   const spotKey = spotList.join('|');
@@ -215,7 +201,6 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
 
   const status = ticked ? 'Done'
     : waitText ? 'Rival moves'
-    : shopFirst ? 'Shop open'
     : blocked ? 'Not yet'
     : 'Your move';
   // The action button: Skip, except while the plate is holding for the
@@ -330,7 +315,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
               always lands the new text; the fade-in is decoration. */}
           <div>
             <motion.div
-              key={done ? 'done' : `${current.id}:${waitText ? 'w' : shopFirst ? 's' : blocked ? 'b' : 'l'}`}
+              key={done ? 'done' : `${current.id}:${waitText ? 'w' : blocked ? 'b' : 'l'}`}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
@@ -345,7 +330,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
                   marginBottom: isMobile ? 2 : 4,
                 }}
               >
-                {done ? `${lesson.title} · done` : shopFirst ? 'The Shop' : current.title}
+                {done ? `${lesson.title} · done` : current.title}
               </div>
               <div style={{ ...text.body, fontSize: isMobile ? 11 : 12.5, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
                 {bodyText}

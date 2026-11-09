@@ -4,9 +4,11 @@ import type { BoardProps } from 'boardgame.io/react';
 import type { AbilityId, GameState, CardId, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import {
-  findCardOnBoard, findWornItem, handCard, isRespawning, kitAbilityIds, otherPlayer, resolveSkill, slotCap, stepInCandidates,
+  findCardOnBoard, findWornItem, handCard, isRespawning, itemPrice, kitAbilityIds, otherPlayer, resolveSkill, slotCap, stepInCandidates,
   ultimateCard, wornActives,
 } from '@/engine/query';
+import { upgradesOf } from '@/cards/decks';
+import { RESPAWN_TURNS } from '@/engine/constants';
 import { humanSeat } from './seat';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
@@ -14,7 +16,9 @@ import { CardPreview } from './overlays/CardPreview';
 import { LiveScaleContext, boardLiveSpirit } from './card/liveScale';
 import { plainText } from './card/scaling';
 import { HeroDetailSheet, type SkillOffer } from './overlays/HeroDetailSheet';
-import { ShopSheet } from './overlays/ShopSheet';
+import { DiscardOverlay } from './overlays/DiscardOverlay';
+import { UpgradePicker } from './overlays/UpgradePicker';
+import { DeckPile, DiscardPile, CardPiles } from './board/CardPiles';
 import { OpponentHand } from './board/OpponentHand';
 import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
@@ -28,7 +32,7 @@ import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
 import type { TurnPhase } from './board/TurnCompass';
 import {
-  SHOP_OPEN, actionRefusal, activateBlockReason, moveBlockReason, playBlockReason, readyHeroes, retreatBlock,
+  DISCARD_FIRST, actionRefusal, activateBlockReason, moveBlockReason, placeBlockReason, playBlockReason, readyHeroes, retreatBlock,
   skillBlockReason,
 } from './board/heroActions';
 import { isValidTarget } from './board/targeting';
@@ -36,7 +40,7 @@ import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attack
 import { DEFAULT_AI_STRENGTH, enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
 import {
-  activateBlocked, activateTargets, attackBlocked, playBlocked, playTargets, retreatCost, sellBlocked, sellRefund, skillBlocked,
+  activateBlocked, activateTargets, attackBlocked, placeHeroBlocked, playBlocked, playCost, playTargets, retreatCost, skillBlocked,
   skillTargets,
 } from '@/engine/legality';
 import type { Action } from '@/engine/engine';
@@ -50,8 +54,6 @@ import { FxCalmContext, useCalmMotion } from './effects/fx/FxMotionContext';
 import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingContext';
 import { buildFxTimeline, freshBatch } from './effects/fx/fxTimeline';
 import { FxStageProvider } from './effects/fx/stage/FxStage';
-import { Bolt } from './effects/fx/primitives';
-import { FX_INK } from './effects/fx/fxCatalog';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
@@ -92,8 +94,6 @@ const FINAL_BLOW_MAX_MS = 2800;
  *  plate sits there, above the board. Desktop: the backs' peek. */
 const RIVAL_BAND = { phone: 52, lesson: 96, desktop: 40 } as const;
 const rivalBand = (mobile: boolean, lesson: boolean) => (mobile ? (lesson ? RIVAL_BAND.lesson : RIVAL_BAND.phone) : RIVAL_BAND.desktop);
-/** How long a bought card's flight from the shop to the hand takes, ms. */
-const BUY_FLIGHT_MS = 360;
 /** How long your turn holds on its End beat after the attack has been made,
  *  before it ends on its own, ms. */
 const AUTO_END_MS = 500;
@@ -137,23 +137,17 @@ export function Board(props: BoardProps<GameState>) {
     return window.innerWidth >= 1100;
   });
   // The card shown at full size: a card in the hand or a worn item's chip (by
-  // its instance, so a hover peek closes if it goes), or an item in the shop
-  // (by its id, with what it would cost). A card in the hand held in the shop
-  // step offers its sale.
+  // its instance, so a hover peek closes if it goes).
   const [preview, setPreview] = useState<{ cardId: CardId; iid?: string; hover: boolean; cost?: number; inHand?: boolean } | null>(null);
   const [heroDetail, setHeroDetail] = useState<CardInstance | null>(null);
   // Retreat with more than one bench hero able to go in: the chooser is up
   // until the player picks who (or backs out).
   const [retreatPick, setRetreatPick] = useState(false);
-  // The shop sheet, put away by the player while the shop is still open (the
-  // board's Shop button brings it back). Every turn opens with it up.
-  const [shopHidden, setShopHidden] = useState(false);
-  useEffect(() => { setShopHidden(false); }, [G.turnNumber]);
-  // A card bought: where its icon was, until the card lands in the hand and
-  // the flight to it starts; then the flight, and the card fading in under it.
-  const buyFromRef = useRef<{ x: number; y: number } | null>(null);
-  const [flight, setFlight] = useState<{ key: number; from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
-  const [arriving, setArriving] = useState<string | null>(null);
+  // An item put on a hero that could make one of several upgrades: the play
+  // waits on the player's pick (UpgradePicker), or is backed out of.
+  const [upgradePick, setUpgradePick] = useState<{ cardIid: string; heroIid: string; itemId: CardId; options: readonly CardId[] } | null>(null);
+  // Where each card in the hand is on screen: the animation layer flies cards
+  // to and from them.
   const handCardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const registerHandCard = useCallback((iid: string, el: HTMLElement | null) => {
     if (el) handCardRefs.current.set(iid, el);
@@ -175,13 +169,11 @@ export function Board(props: BoardProps<GameState>) {
   // its one attack, which ends it. The dial marks the attack: 'battle' while
   // the choreographer walks it, 'regroup' once it is made, 'prepare' before.
   const turnPhase: TurnPhase = combatPlan ? 'battle' : G.attackUsed ? 'regroup' : 'prepare';
-  // The turn's beat (Income · Shop · Act · End) as the dial shows it: a
-  // turn's hand-over plays its End and the next one's Income before the shop
-  // sheet comes up (turnBeat.ts).
-  const spine = useTurnBeat({ turn: G.draft ? 0 : G.turnNumber, isMyTurn, step: G.step, attackMade: G.attackUsed && !combatPlan });
-  /** The mover's attack can still be made — its shop closed, and it is not
-   *  being made already. */
-  const attackOpen = !ctx.gameover && !combatPlan && G.step === 'act' && attackBlocked(G, mover) === null;
+  // The turn's beat (Income · Act · End) as the dial shows it: a turn's
+  // hand-over plays its End and the next one's Income (turnBeat.ts).
+  const spine = useTurnBeat({ turn: G.draft ? 0 : G.turnNumber, isMyTurn, attackMade: G.attackUsed && !combatPlan });
+  /** The mover's attack can still be made, and it is not being made already. */
+  const attackOpen = !ctx.gameover && !combatPlan && !G.pendingDiscard && attackBlocked(G, mover) === null;
   // The ready glint: your heroes that can still do something this turn —
   // none while an attack is being walked, when nothing can be done.
   const readyIids = useMemo(
@@ -276,10 +268,9 @@ export function Board(props: BoardProps<GameState>) {
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
   // The hand row (strip + phone controls) — the targeting banner docks above
-  // it on phones, and the shop sheet stays clear of it.
+  // it on phones, and the sticker sits above it.
   const handRowRef = useRef<HTMLDivElement>(null);
-  // How much of the screen's bottom the hand row takes: the shop sheet leaves
-  // it clear, so a card bought is seen landing in the hand.
+  // How much of the screen's bottom the hand row takes.
   const [handInset, setHandInset] = useState(0);
   useEffect(() => {
     const el = handRowRef.current;
@@ -353,8 +344,9 @@ export function Board(props: BoardProps<GameState>) {
     if (combatPlan) return;
     // Our Active has fallen and the choice of who steps up is still owed (its
     // prompt may be waiting out the knockout). That comes first: the turn
-    // does not end with a corpse in the lane.
+    // does not end with a corpse in the lane. So does a draw card's discard.
     if (mover === me && G.pendingPromotion === me) return;
+    if (G.pendingDiscard) return;
     // A card or skill reveal is in flight. Don't drop the click: remember
     // the player's intent and let the drain effect below fire it once the
     // reveal settles. (The AI re-fires via its own effect, so only queue for
@@ -366,7 +358,7 @@ export function Board(props: BoardProps<GameState>) {
     }
     queuedEndRef.current = false;
     moves.endTurn();
-  }, [G.action?.state, G.pendingPromotion, mover, combatPlan, moves, me]);
+  }, [G.action?.state, G.pendingPromotion, G.pendingDiscard, mover, combatPlan, moves, me]);
 
   // Drain a queued press once the reveal finishes. If the turn has already
   // flipped (or the game ended) we just clear the flag so a stale intent
@@ -387,11 +379,11 @@ export function Board(props: BoardProps<GameState>) {
   liveTurnRef.current = G.turnNumber;
   useEffect(() => {
     if (!isMyTurn || autoPlay || ctx.gameover || !G.attackUsed || combatPlan) return;
-    if (G.pendingPromotion === me || G.action?.state === 'begin') return;
+    if (G.pendingPromotion === me || G.pendingDiscard || G.action?.state === 'begin') return;
     const turnAt = G.turnNumber;
     const t = setTimeout(() => { if (liveTurnRef.current === turnAt) endTurn(); }, AUTO_END_MS);
     return () => clearTimeout(t);
-  }, [isMyTurn, autoPlay, ctx.gameover, G.attackUsed, combatPlan, G.pendingPromotion, G.action?.state, G.turnNumber, me, endTurn]);
+  }, [isMyTurn, autoPlay, ctx.gameover, G.attackUsed, combatPlan, G.pendingPromotion, G.pendingDiscard, G.action?.state, G.turnNumber, me, endTurn]);
 
   // Targeting needs the board visible — close any hover/long-press preview the
   // moment a pending action arms, AND any that opens mid-targeting (a hover
@@ -399,23 +391,24 @@ export function Board(props: BoardProps<GameState>) {
   // never sits on top of the very targets the player is being asked to pick.
   useEffect(() => { if (pending && preview) setPreview(null); }, [pending, preview]);
 
-  // Layered Escape: back out of the innermost mode first — the retreat
-  // chooser, an open hero sheet, an armed targeting state — before the key
-  // reaches the SystemLayer's pause-menu toggle. Capture phase +
-  // stopImmediatePropagation so the system listener (bubble phase on window)
-  // never sees the press.
+  // Layered Escape: back out of the innermost mode first — the upgrade
+  // picker, the retreat chooser, an open hero sheet, an armed targeting state
+  // — before the key reaches the SystemLayer's pause-menu toggle. Capture
+  // phase + stopImmediatePropagation so the system listener (bubble phase on
+  // window) never sees the press.
   useEffect(() => {
-    if (!pending && !heroDetail && !retreatPick) return;
+    if (!pending && !heroDetail && !retreatPick && !upgradePick) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopImmediatePropagation();
-      if (retreatPick) setRetreatPick(false);
+      if (upgradePick) setUpgradePick(null);
+      else if (retreatPick) setRetreatPick(false);
       else if (heroDetail) setHeroDetail(null);
       else setPending(null);
     };
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
-  }, [pending, heroDetail, retreatPick]);
+  }, [pending, heroDetail, retreatPick, upgradePick]);
 
   // Tap-away: while a card or skill is armed, a click on anything that is
   // not a control — the sheet, the room, the log — backs out of targeting,
@@ -440,35 +433,6 @@ export function Board(props: BoardProps<GameState>) {
     const gone = !findWornItem(G, preview.iid) && !(['0', '1'] as PlayerID[]).some((pid) => handCard(G, pid, preview.iid!));
     if (gone) setPreview(null);
   }, [G, preview]);
-
-  // A card bought lands in the hand: fly it there from the icon that bought
-  // it — the cast bolt, gold — and let the card fade in as it lands. On a
-  // phone the strip scrolls to it first. The card is known as arriving from
-  // the render it first shows in (a buy is waiting to fly, and it is new), so
-  // it mounts already fading in on its spot rather than rising from below.
-  const myHandKey = G.players[me].hand.map((c) => c.iid).join(',');
-  const shownHand = useRef<string[]>([]);
-  const fresh = buyFromRef.current ? G.players[me].hand.find((c) => !shownHand.current.includes(c.iid))?.iid ?? null : null;
-  const freshRef = useRef<string | null>(null);
-  freshRef.current = fresh;
-  const arrivingIid = fresh ?? arriving;
-  useEffect(() => {
-    shownHand.current = myHandKey ? myHandKey.split(',') : [];
-    const from = buyFromRef.current;
-    const iid = freshRef.current;
-    // A hand that changed without a card from the shop (a sale, a play) flies nothing.
-    if (!from || !iid) return;
-    buyFromRef.current = null;
-    const el = handCardRefs.current.get(iid);
-    if (!el) return;
-    el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-    const r = el.getBoundingClientRect();
-    setArriving(iid);
-    setFlight({ key: Date.now(), from, to: { x: r.left + r.width / 2, y: r.top + r.height / 2 } });
-    const t = setTimeout(() => { setFlight(null); setArriving(null); }, BUY_FLIGHT_MS + 500);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myHandKey]);
 
   // Stuck-hover guard: if the cursor leaves the document or stops moving for
   // ~2.5s while a hover preview is open, close it. Catches the case where the
@@ -506,8 +470,12 @@ export function Board(props: BoardProps<GameState>) {
   // auto-play nobody answers that prompt, so the loop makes the promotion
   // itself — the enumerator returns an owed promotion first, from either seat.
   const aiControlled = ctx.currentPlayer !== me || autoPlay;
+  // The opening's first Active and a draw card's discard are the player's own
+  // to answer too, unless auto-play is driving their seat.
   const aiHolds = !!ctx.gameover || !aiControlled || !!combatPlan || G.action?.state === 'begin'
-    || (G.pendingPromotion === me && !autoPlay);
+    || (G.pendingPromotion === me && !autoPlay)
+    || (G.pendingActive === me && !autoPlay)
+    || (G.pendingDiscard?.pid === me && !autoPlay);
 
   // AI loop: enumerate, play the best move, end the turn when that is best.
   useEffect(() => {
@@ -587,10 +555,11 @@ export function Board(props: BoardProps<GameState>) {
   const liveSpirit = useMemo(() => boardLiveSpirit(G, me), [G, me]);
 
   /** True while the player's next move must wait: a card-play / skill / ult
-   *  reveal is mid-animation, the attack is being walked, or their Active has
-   *  fallen and the choice of who steps up is still owed (its prompt may be
-   *  waiting out the knockout). */
-  const actionLocked = G.action?.state === 'begin' || !!combatPlan || G.pendingPromotion === me;
+   *  reveal is mid-animation, the attack is being walked, or a choice is still
+   *  owed — who steps up for a fallen Active (its prompt may be waiting out the
+   *  knockout), the first Active, a draw card's discard. */
+  const actionLocked = G.action?.state === 'begin' || !!combatPlan || G.pendingPromotion === me
+    || !!G.pendingActive || !!G.pendingDiscard;
   /** The turn button shows as working: locked, or holding a queued press. */
   const turnBusy = isMyTurn && (actionLocked || queuedEndRef.current);
   const pressTurnButton = () => { setPending(null); endTurn(); };
@@ -599,85 +568,96 @@ export function Board(props: BoardProps<GameState>) {
   // wraps `blocked`, legality.ts). A move it will not make is said on the
   // sticker instead of being dispatched to go nowhere.
 
-  /** Make a shop move — or put a card from the hand on a hero — once the
-   *  engine says it may be made; a refusal is said on the sticker. A buy
-   *  names the icon it came from: the card flies from there to the hand. */
-  function shopMove(a: Extract<Action, { type: 'buy' | 'sell' | 'moveItem' | 'playCard' }>, from?: DOMRect) {
-    if (!isMyTurn || actionLocked) return;
-    const no = actionRefusal(G, me, a);
-    if (no) { showNotice(no.text, true); return; }
-    if (a.type === 'buy') {
-      buyFromRef.current = from ? { x: from.left + from.width / 2, y: from.top + from.height / 2 } : null;
-      moves.buy(a.itemId);
-    } else if (a.type === 'sell') moves.sell(a.itemIid);
-    else if (a.type === 'playCard') moves.playCard(a.cardIid, a.heroIid);
-    else moves.moveItem(a.itemIid, a.toHeroIid);
-  }
-
-  /** Put a card from the hand on a hero, once the engine says it may go
-   *  there; a refusal (a full hero, one already wearing it, not yours) is
-   *  said on the sticker and the card stays in the hand. */
+  /** Put the item `cardIid` from the hand on a hero, once the engine says it
+   *  may go there; a refusal (a full hero, one already wearing it, not enough
+   *  souls) is said on the sticker and the card stays in the hand. An item
+   *  that could make one of several upgrades asks which first. */
   function playCardOn(cardIid: string, heroIid: string) {
     if (!isMyTurn || actionLocked) return;
     const no = actionRefusal(G, me, { type: 'playCard', cardIid, heroIid });
     if (no) { showNotice(no.text, true); shake(slotRefs.current.get(heroIid)); return; }
+    const card = handCard(G, me, cardIid);
+    const options = card ? upgradesOf(card.cardId) : [];
+    if (card && options.length > 1) { setUpgradePick({ cardIid, heroIid, itemId: card.cardId, options }); return; }
     moves.playCard(cardIid, heroIid);
   }
 
-  /** Why no hero of yours can take the card `c` right now, in the words of
-   *  the first hero's refusal (every one is full, or wears it). */
-  function stuckReason(c: CardInstance): string {
-    const heroes = [G.players[me].active, ...G.players[me].bench].filter((h): h is CardInstance => !!h);
-    const first = heroes[0];
-    const why = first ? playBlocked(G, me, c.iid, first.iid) : null;
-    return why ? playBlockReason(why, { item: CARDS_BY_ID[c.cardId]?.name, hero: CARDS_BY_ID[first!.cardId]?.name, slots: slotCap(G, me) }) : 'No hero can take it now';
+  /** The upgrade picked for the play that waited on it. */
+  function pickUpgrade(upgradeId: CardId) {
+    const pick = upgradePick;
+    setUpgradePick(null);
+    if (!pick || !isMyTurn || actionLocked) return;
+    const no = actionRefusal(G, me, { type: 'playCard', cardIid: pick.cardIid, heroIid: pick.heroIid, upgradeId });
+    if (no) { showNotice(no.text, true); return; }
+    moves.playCard(pick.cardIid, pick.heroIid, upgradeId);
   }
 
-  /** A tap on a card in the hand: armed, the heroes it may go on glow, and the
-   *  next tap on one of them puts it on. The shop sheet steps aside while a
-   *  card is armed, so the heroes can be seen (its Shop button brings it
-   *  back). */
+  /** Why the card `c` cannot be played right now, in the engine's words: a
+   *  hero with no room on the board, an item no hero can take (the first
+   *  hero's refusal: full, wearing it, too dear). */
+  function stuckReason(c: CardInstance): string {
+    if (CARDS_BY_ID[c.cardId]?.type === 'hero') {
+      const why = placeHeroBlocked(G, me, c.iid);
+      return why ? placeBlockReason(why) : 'It cannot go on the board now';
+    }
+    const heroes = [G.players[me].active, ...G.players[me].bench].filter((h): h is CardInstance => !!h);
+    const first = heroes[0];
+    if (!first) return 'Put a hero on the board first';
+    const why = playBlocked(G, me, c.iid, first.iid);
+    return why ? playBlockReason(why, {
+      item: CARDS_BY_ID[c.cardId]?.name, hero: CARDS_BY_ID[first.cardId]?.name, slots: slotCap(G, me),
+      cost: playCost(first, c.cardId), have: G.players[me].souls,
+    }) : 'No hero can take it now';
+  }
+
+  /** Put the hero `c` from the hand on the board: into the lane when it is
+   *  empty, else onto the bench. Free. */
+  function placeFromHand(c: CardInstance) {
+    const toActive = placeHeroBlocked(G, me, c.iid, true) === null;
+    const no = actionRefusal(G, me, { type: 'placeHero', cardIid: c.iid, toActive });
+    if (no) { showNotice(no.text, true); return; }
+    if (toActive) moves.placeHero(c.iid, true);
+    else moves.placeHero(c.iid);
+  }
+
+  /** A tap on a card in the hand. A hero goes on the board at once (the lane
+   *  when it is empty, else the bench). An item is armed: the heroes it may go
+   *  on glow, and the next tap on one of them puts it on for its price. */
   function onTapCardInHand(c: CardInstance) {
     if (!isMyTurn || actionLocked) return;
-    if (playTargets(G, me, c.iid).length === 0) { showNotice(stuckReason(c), true); return; }
     const data = CARDS_BY_ID[c.cardId];
+    if (data?.type === 'hero') { setPreview(null); placeFromHand(c); return; }
+    if (playTargets(G, me, c.iid).length === 0) { showNotice(stuckReason(c), true); return; }
     setPreview(null);
-    if (G.step === 'shop') setShopHidden(true);
+    const price = itemPrice(c.cardId);
     setPending({
       kind: 'playCard', iid: c.iid,
       title: data?.name ?? 'Card',
-      desc: 'Put it on one of your heroes.',
+      desc: `${price} soul${price === 1 ? '' : 's'} — put it on one of your heroes (an upgrade on the hero wearing its part costs the difference).`,
       filter: 'allyHero',
     });
   }
 
   /** A card from the hand let go over the board (a desktop drag): onto the
-   *  hero under the pointer, if it is one; else armed, as a tap would. */
+   *  hero under the pointer, if it is one; else as a tap would. */
   function onHandDragEnd(c: CardInstance, x: number, y: number) {
     if (!isMyTurn || actionLocked) return;
-    for (const [iid, el] of slotRefs.current.entries()) {
-      const rect = el.getBoundingClientRect();
-      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-        playCardOn(c.iid, iid);
-        setPending(null);
-        return;
+    if (CARDS_BY_ID[c.cardId]?.type !== 'hero') {
+      for (const [iid, el] of slotRefs.current.entries()) {
+        const rect = el.getBoundingClientRect();
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          playCardOn(c.iid, iid);
+          setPending(null);
+          return;
+        }
       }
     }
     onTapCardInHand(c);
   }
 
-  /** Hold a card in the hand: the full card. In your shop step it offers the
-   *  card's sale (all you paid, the turn you bought it; half after). */
+  /** Hold a card in the hand: the full card. */
   function holdHandCard(c: CardInstance) {
     setPreview({ cardId: c.cardId, iid: c.iid, hover: false, inHand: true });
-  }
-
-  /** Close the shop: the turn moves on to its act. */
-  function closeShop() {
-    if (!isMyTurn || actionLocked) return;
-    const no = actionRefusal(G, me, { type: 'closeShop' });
-    if (no) { showNotice(no.text, true); return; }
-    moves.closeShop();
   }
 
   /** Use an active item once the engine says it may be used. */
@@ -850,14 +830,7 @@ export function Board(props: BoardProps<GameState>) {
   // stays until the next tap.
   const previewEquipment = (eq: CardInstance | null) => setPreview(eq ? { cardId: eq.cardId, iid: eq.iid, hover: !isMobile } : null);
 
-  // The shop sheet is up through your turn's shop step, unless you put it
-  // away (the controls' Shop button brings it back) or the AI is shopping for
-  // you (auto-play).
-  const shopOpen = isMyTurn && !G.draft && G.step === 'shop' && !ctx.gameover && !autoPlay;
-  // It comes up once the hand-over's beats have played: your Income first.
-  const shopShown = shopOpen && !shopHidden && !spine.edge;
   const incomeShown = !G.draft && !ctx.gameover && isMyTurn && spine.edge && spine.beat === 'income' && spine.mine;
-  const reopenShop = shopOpen && shopHidden ? () => { setPending(null); setShopHidden(false); } : undefined;
 
   // The hand and, on phones, the turn controls under it. Desktop mounts it as
   // the last row of the fitted stage; phones mount it below the stage, at
@@ -869,12 +842,15 @@ export function Board(props: BoardProps<GameState>) {
     <div ref={handRowRef} style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, alignSelf: isMobile ? 'stretch' : undefined }}>
       <HandTray
         cards={G.players[me].hand}
+        souls={G.players[me].souls}
         disabled={!isMyTurn || actionLocked}
         pending={pending}
         isMyTurn={isMyTurn}
         busy={turnBusy}
         hasPending={!!pending}
-        playable={(c) => playTargets(G, me, c.iid).length > 0}
+        playable={(c) => (CARDS_BY_ID[c.cardId]?.type === 'hero'
+          ? placeHeroBlocked(G, me, c.iid) === null || placeHeroBlocked(G, me, c.iid, true) === null
+          : playTargets(G, me, c.iid).length > 0)}
         onTap={onTapCardInHand}
         onLongPress={holdHandCard}
         onHover={(c) => setPreview(c ? { cardId: c.cardId, iid: c.iid, hover: true, inHand: true } : null)}
@@ -884,29 +860,12 @@ export function Board(props: BoardProps<GameState>) {
         onCancel={() => setPending(null)}
         autoPlay={autoPlay}
         onToggleAuto={() => setAutoPlay((v) => !v)}
-        onShop={reopenShop}
-        arriving={arrivingIid}
         registerCard={registerHandCard}
+        deckPile={<DeckPile count={G.players[me].deck.length} owner="you" size={isMobile ? 'chip' : 'full'} accent={poster.you} />}
+        discardPile={<DiscardPile cards={G.players[me].discard} owner="you" size={isMobile ? 'chip' : 'full'} accent={poster.you} />}
       />
     </div>
   );
-
-  // What the held preview of a card in your hand offers: its sale, in your
-  // shop step (greyed, with the engine's reason, when it cannot be sold).
-  const previewSale = (() => {
-    if (!preview || preview.hover || !preview.inHand || !preview.iid) return undefined;
-    const card = handCard(G, me, preview.iid);
-    if (!card || !isMyTurn || G.step !== 'shop') return undefined;
-    const refund = sellRefund(G, card);
-    const name = CARDS_BY_ID[card.cardId]?.name ?? card.cardId;
-    const no = sellBlocked(G, me, card.iid) ? actionRefusal(G, me, { type: 'sell', itemIid: card.iid }) : null;
-    return {
-      label: `Sell +${refund}`,
-      ariaLabel: `Sell ${name} for ${refund} soul${refund === 1 ? '' : 's'}`,
-      blockedReason: no?.text,
-      onPress: () => { shopMove({ type: 'sell', itemIid: card.iid }); setPreview(null); },
-    };
-  })();
 
   return (
     <LayoutGroup>
@@ -995,6 +954,10 @@ export function Board(props: BoardProps<GameState>) {
               edge={rivalBand(isMobile, isTutorial) + boardRows.gap(isMobile) - tablePad(isMobile).top}
               compact={isMobile}
             />
+            {/* The rival's deck and discard pile, at the band's left. */}
+            <div style={{ position: 'absolute', left: isMobile ? 4 : 0, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}>
+              <CardPiles ps={G.players[opp]} owner="rival" compact />
+            </div>
           </div>
 
           {/* 3×3 BOARD GRID — the three rows (opp bench, lane, my bench)
@@ -1037,7 +1000,6 @@ export function Board(props: BoardProps<GameState>) {
                 projectedDamage={ctx.currentPlayer === me ? projectedPatronDamage : 0}
                 isMobile={isMobile}
                 myTurn={!isMyTurn}
-                step={G.step}
               />
             </div>
 
@@ -1102,7 +1064,6 @@ export function Board(props: BoardProps<GameState>) {
                 projectedDamage={ctx.currentPlayer !== me ? projectedPatronDamage : 0}
                 isMobile={isMobile}
                 myTurn={isMyTurn}
-                step={G.step}
               />
             </div>
 
@@ -1139,7 +1100,6 @@ export function Board(props: BoardProps<GameState>) {
                   onEndTurn={pressTurnButton}
                   onCancel={() => setPending(null)}
                   onToggleAuto={() => setAutoPlay((v) => !v)}
-                  onShop={reopenShop}
                 />
               </div>
             )}
@@ -1196,18 +1156,12 @@ export function Board(props: BoardProps<GameState>) {
               key={(preview.iid ?? preview.cardId) + (preview.hover ? '-h' : '-p')}
               cardId={preview.cardId}
               cost={preview.cost}
-              // A card in the hand is paid for: no coin.
-              hideCost={preview.inHand}
               hover={preview.hover}
-              action={previewSale}
               onClose={() => setPreview(null)}
             />
           )}
         </AnimatePresence>
 
-        {/* A card bought flies from its icon in the shop to the hand: the
-            cast bolt, in gold. */}
-        {flight && <Bolt key={flight.key} from={flight.from} to={flight.to} color={FX_INK.gold} dur={BUY_FLIGHT_MS} size={7} embers={45} />}
 
         <AnimatePresence>
           {heroDetail && (() => {
@@ -1225,13 +1179,13 @@ export function Board(props: BoardProps<GameState>) {
             const stepIns = isMyActive ? stepInCandidates(G.players[me]) : [];
             const retreatWhy = retreatBlock(G, me, stepIns);
             // The price is the engine's (`retreatCost`): gear and Swift lower it.
-            // Nothing on the board acts while your shop is open: it closes first.
-            const shopFirst = isMyTurn && G.step === 'shop';
+            // Nothing on the board acts while a draw card's discard is owed.
+            const discardFirst = isMyTurn && !!G.pendingDiscard;
             const retreat = stepIns.length === 0 ? undefined : {
               cost: retreatCost(G, me),
               incomingName: stepIns.length === 1 ? CARDS_BY_ID[stepIns[0].cardId]?.name : undefined,
               blockedReason: !isMyTurn ? 'Not your turn'
-                : shopFirst ? SHOP_OPEN
+                : discardFirst ? DISCARD_FIRST
                 : retreatWhy ? moveBlockReason(retreatWhy, retreatCost(G, me))
                 : undefined,
             };
@@ -1241,10 +1195,10 @@ export function Board(props: BoardProps<GameState>) {
             // skills, its ultimate, a borrowed ultimate and each active item it
             // wears asked on its own.
             const offer = (block: string | null, why: () => string): SkillOffer => ({
-              canUse: isMine && isMyTurn && !shopFirst && block === null,
+              canUse: isMine && isMyTurn && !discardFirst && block === null,
               blockedReason: !isMine ? undefined
                 : !isMyTurn ? 'Not your turn'
-                : shopFirst ? SHOP_OPEN
+                : discardFirst ? DISCARD_FIRST
                 : block ? why()
                 : undefined,
             });
@@ -1279,24 +1233,47 @@ export function Board(props: BoardProps<GameState>) {
           })()}
         </AnimatePresence>
 
-        {/* Your turn's Income beat: the souls count up before the shop opens. */}
+        {/* Your turn's Income beat: the souls count up as the card is drawn. */}
         <AnimatePresence>
           {incomeShown && <IncomeTick key={`income-${G.turnNumber}`} G={G} me={me} rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0} />}
         </AnimatePresence>
 
-        {/* The shop sheet: up through your turn's shop step. */}
+        {/* The match's opening: the heroes in your opening hand, one of which
+            takes the lane. Blocks the board until it is chosen. */}
         <AnimatePresence>
-          {shopShown && (
-            <ShopSheet
-              key="shop"
-              G={G}
-              me={me}
-              onMove={shopMove}
-              onDone={closeShop}
-              onHide={() => setShopHidden(true)}
-              onPreview={({ cardId, cost, iid }) => setPreview({ cardId, cost, iid, hover: false, inHand: !!iid })}
-              bottomInset={handInset}
-              rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0}
+          {G.pendingActive === me && !autoPlay && (
+            <PromotionOverlay
+              key="opening"
+              opening
+              candidates={G.players[me].hand.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'hero' && !(CARDS_BY_ID[c.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly)}
+              leavingName=""
+              onPick={(iid) => moves.chooseActive(iid)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* A draw card's discard: pick the cards from your hand. */}
+        <AnimatePresence>
+          {G.pendingDiscard?.pid === me && !autoPlay && G.action?.state !== 'begin' && (
+            <DiscardOverlay
+              key={`discard-${G.counters?.fx ?? 0}`}
+              hand={G.players[me].hand}
+              count={G.pendingDiscard.count}
+              drawCard={G.pendingDiscard.cardId}
+              onDiscard={(iids) => moves.discard(iids)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* An item that could make one of several upgrades: which one. */}
+        <AnimatePresence>
+          {upgradePick && (
+            <UpgradePicker
+              key="upgrade"
+              itemId={upgradePick.itemId}
+              options={upgradePick.options}
+              onPick={pickUpgrade}
+              onCancel={() => setUpgradePick(null)}
             />
           )}
         </AnimatePresence>
@@ -1317,7 +1294,8 @@ export function Board(props: BoardProps<GameState>) {
               <PromotionOverlay
                 key="promotion"
                 candidates={candidates}
-                leavingName={CARDS_BY_ID[ps.active!.cardId]?.name ?? 'Your Active'}
+                leavingName={ps.active ? CARDS_BY_ID[ps.active.cardId]?.name ?? 'Your Active' : 'Your Active'}
+                backIn={ps.active ? RESPAWN_TURNS : 0}
                 onPick={(iid) => (moves as any).promoteToActive(iid)}
               />
             );

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, animate, motion, type AnimationPlaybackControls } from 'framer-motion';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { BOSS_RESPAWN_ROUNDS, BOSS_RETALIATION, BOSS_SOULS, REVIVE_CREDITS, REVIVE_ROUNDS } from '@/engine/constants';
+import { BOSS_RESPAWN_ROUNDS, BOSS_RETALIATION, REVIVE_CREDITS, REVIVE_ROUNDS } from '@/engine/constants';
 import { standingBoss } from '@/engine/query';
 import { fromHere, kickFor, useFxImpulse } from '../effects/fx/FxImpulse';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
@@ -85,7 +85,7 @@ function explainBoss(boss: CardInstance): ExplainContent {
     lines: [
       'Your Active may attack it instead of their Active. Only basic attacks hurt it; no ability, item or status touches it.',
       `At the End of a turn it hits the hero that attacked it for ${BOSS_RETALIATION}.`,
-      `When it falls, the side that dealt it more damage takes it: ${BOSS_SOULS} souls and the Rejuvenator — ${REVIVE_CREDITS} revives for ${REVIVE_ROUNDS} more rounds.`,
+      `When it falls, the side that dealt it more damage takes it: the Rejuvenator — ${REVIVE_CREDITS} revives for ${REVIVE_ROUNDS} more rounds.`,
       `It rises again ${BOSS_RESPAWN_ROUNDS} rounds after it falls.`,
     ],
   };

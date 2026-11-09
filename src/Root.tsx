@@ -81,6 +81,7 @@ export function Root() {
       setMatchConfig({
         heroPreferences: getPreferredHeroes(),
         builds: loadPlayerData().builds,
+        deck: loadPlayerData().deck,
         story: undefined,
       });
       return { screen: 'match' };
@@ -122,8 +123,10 @@ export function Root() {
     const prefs = getPreferredHeroes();
     setMatchConfig({
       heroPreferences: prefs,
-      // The player's saved builds: each drafted hero's goes on sale with it.
+      // The player's saved deck, and the builds a deck is made from when it
+      // is not a full one.
       builds: loadPlayerData().builds,
+      deck: loadPlayerData().deck,
       featuredHero,
       // Clear both scripted setups so a Quick Match runs the normal draft path.
       story: undefined,
@@ -146,6 +149,7 @@ export function Root() {
       setMatchConfig({
         heroPreferences: [null, null, null, null],
         builds: loadPlayerData().builds,
+        deck: loadPlayerData().deck,
         story: buildStoryMatch(current, node),
       });
       setMatchEpoch((e) => e + 1);

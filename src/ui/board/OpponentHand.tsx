@@ -21,9 +21,9 @@ const BACK = {
 /** At most this many backs are drawn: the chip says how many there are. */
 const MAX_BACKS = 4;
 
-// The rival's hand, face down: what it has bought and not yet put on a hero —
-// the AI plays each card as soon as it buys it, so a back shows for a beat,
-// rising from behind the paper and sinking back as it goes onto a hero. Seen
+// The rival's hand, face down: the heroes and items it has drawn and not yet
+// played — a back rises from behind the paper as it draws and sinks back as
+// the card goes onto the board. Seen
 // across the table the fan opens downward from a top anchor: the outer backs
 // tilt out at their feet and ride up a little.
 function fanRotation(i: number, total: number): number {
@@ -147,7 +147,7 @@ export function OpponentHand({ cards, edge, compact = false }: Props) {
  *  the printer's dial mark in faint cream, high enough on the plate to show
  *  over the paper's edge. Static by design: the border pulse is the draft's
  *  "live pick" signal, not the rival's hand. */
-function CardBack({ radius }: { radius: number }) {
+export function CardBack({ radius }: { radius: number }) {
   return (
     <div style={{
       width: '100%', height: '100%',

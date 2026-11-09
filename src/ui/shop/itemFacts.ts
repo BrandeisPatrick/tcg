@@ -1,10 +1,10 @@
 /**
- * What the shop says about an item, read off its data the way Deadlock's own
+ * What an item's tooltip says, read off its data the way Deadlock's own shop
  * tooltip lays it out: the category and tier, the stat lines (its `bonus`),
  * what it does beyond them (its text, less the stat sentences already shown),
  * whether it is an active — and its cooldown or charges — and what it builds
- * from and into. The shop sheet, the draft's market and the build editor all
- * read these; nothing here touches a match.
+ * from and into. The deck builder and the build editor read these; nothing
+ * here touches a match.
  */
 import type { CardId, ItemSlot, ItemTier } from '@/engine/types';
 import { ITEMS, itemCard } from '@/cards';
@@ -67,7 +67,7 @@ export function useFacts(itemId: CardId): UseFacts {
   const data = itemCard(itemId);
   if (!data || data.type !== 'spell') return { kind: 'passive' };
   if (data.hardCC) return { kind: 'active', charges: HARD_CC_CHARGES };
-  return { kind: 'active', cooldown: data.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high };
+  return { kind: 'active', cooldown: data.cooldown ?? (data.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high) };
 }
 
 /** The component this item is built from, when it has one in the catalogue. */

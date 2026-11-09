@@ -1,4 +1,4 @@
-import type { GameState, PlayerID, TurnStep } from '@/engine/types';
+import type { GameState, PlayerID } from '@/engine/types';
 import { structureHp } from '@/engine/query';
 import { fonts, text } from '../tokens';
 import { poster, soulCoin } from '../poster';
@@ -9,7 +9,7 @@ import { RejuvenatorMark } from './RejuvenatorMark';
  * A patron's vitals as one narrow rule across the sheet — the rival's above
  * the top bench, yours below the bottom one. It carries the side's structures
  * (Guardian · Walker · Patron, `StructuresStrip`), its Rejuvenator while it
- * holds one, souls, the step of the turn (Shop or Act, while it is this
+ * holds one, souls, the step of the turn (while it is this
  * patron's) and the Active's attack in glyphs and numerals rather than
  * labelled rows, so the board is self-sufficient and the panel is free to be
  * just the log.
@@ -18,7 +18,7 @@ import { RejuvenatorMark } from './RejuvenatorMark';
  * the sheet's edge the way the old corner plate did.
  */
 export function PatronPlaque({
-  label, ps, hostile, attackOpen, projectedDamage, isMobile, myTurn, step,
+  label, ps, hostile, attackOpen, projectedDamage, isMobile, myTurn,
 }: {
   label: string;
   ps: GameState['players'][PlayerID];
@@ -31,15 +31,11 @@ export function PatronPlaque({
   isMobile: boolean;
   /** Highlight while it's this patron's turn. */
   myTurn?: boolean;
-  /** The step of the turn, printed while it is this patron's. */
-  step?: TurnStep;
 }) {
   const accent = hostile ? poster.rival : poster.you;
 
   // The turn's attack has been made (or cannot be): it ends the turn's Act.
-  // In the shop it waits for the shop to close.
   const attackLamp = attackOpen ? 'Ready to attack'
-    : myTurn && step === 'shop' ? 'Shopping'
     : myTurn ? 'Active has attacked'
     : 'Waiting for its turn';
 
@@ -81,12 +77,6 @@ export function PatronPlaque({
       <StructuresStrip ps={ps} label={label} accent={accent} projected={projectedDamage} isMobile={isMobile} />
       <RejuvenatorMark ps={ps} isMobile={isMobile} />
 
-      {/* The step of this patron's turn, in words. */}
-      {myTurn && step && (
-        <span style={{ ...text.label, fontSize: glyph - 2, letterSpacing: '0.2em', color: accent, flexShrink: 0 }}>
-          {step === 'shop' ? 'Shop' : 'Act'}
-        </span>
-      )}
 
       {/* Souls — glyph plus numeral, no label. */}
       <Stat

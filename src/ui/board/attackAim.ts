@@ -16,7 +16,7 @@ import { otherPlayer } from '@/engine/query';
 import { forecastAttack } from '@/engine/forecast';
 import type { PendingPlay } from '../helpers';
 import type { AttackOffer } from '../overlays/HeroDetailSheet';
-import { SHOP_OPEN, actionRefusal, attackBlockReason, attackLine, type Refusal } from './heroActions';
+import { actionRefusal, attackBlockReason, attackLine, type Refusal } from './heroActions';
 
 /** What the Active's sheet prints on its Attack plate: what the swing at the
  *  default target would do, or why it cannot be made (a Dome on the rival
@@ -25,11 +25,9 @@ import { SHOP_OPEN, actionRefusal, attackBlockReason, attackLine, type Refusal }
  *  could name. */
 export function attackOffer(G: GameState, me: PlayerID, hero: CardInstance, isMyTurn: boolean): Omit<AttackOffer, 'onAttack'> {
   const block = isMyTurn ? attackBlocked(G, me) : null;
-  const shopOpen = isMyTurn && G.step === 'shop';
   return {
-    line: isMyTurn && !shopOpen && block === null ? attackLine(forecastAttack(G, me)) : undefined,
+    line: isMyTurn && block === null ? attackLine(forecastAttack(G, me)) : undefined,
     blockedReason: !isMyTurn ? 'Not your turn'
-      : shopOpen ? SHOP_OPEN
       : block ? attackBlockReason(block, G.players[otherPlayer(me)].active)
       : undefined,
     made: isMyTurn && G.attackUsed && G.players[me].active?.iid === hero.iid,

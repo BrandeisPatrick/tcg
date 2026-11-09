@@ -7,8 +7,6 @@ import { PosterButton } from '../chrome';
  *  tutorial's gate finds it. */
 export const END_TURN = 'End Turn';
 
-/** The button that brings the shop sheet back while the shop is open. */
-export const OPEN_SHOP = 'Open the shop';
 
 interface Props {
   isMyTurn: boolean;
@@ -19,9 +17,6 @@ interface Props {
   onEndTurn: () => void;
   onCancel: () => void;
   onToggleAuto: () => void;
-  /** The shop is open and its sheet put away: the status slot offers a Shop
-   *  button that brings the sheet back. */
-  onShop?: () => void;
   /** 'dock' mounts the cluster in the sheet's right rail (desktop) as a
    *  vertical stack printed on the paper: ghost status capsule, the paper
    *  turn button, and the AUTO ink tag. 'tray' is the flat row used
@@ -42,7 +37,7 @@ type StatusTone = 'dim' | 'gold' | 'green';
  * in a fixed-height slot so nothing reflows.
  */
 export function BoardControls({
-  isMyTurn, busy, hasPending, autoPlay, onEndTurn, onCancel, onToggleAuto, onShop, variant,
+  isMyTurn, busy, hasPending, autoPlay, onEndTurn, onCancel, onToggleAuto, variant,
 }: Props) {
   const status = !isMyTurn
     ? { key: 'rival', label: "Rival's move", tone: 'dim' as StatusTone, pulse: true }
@@ -72,7 +67,7 @@ export function BoardControls({
       }}>
         <AutoSwitch autoPlay={autoPlay} onToggleAuto={onToggleAuto} onDark />
         <div style={{ height: 32, display: 'flex', alignItems: 'center' }}>
-          <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} onShop={onShop} onDark />
+          <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} onDark />
         </div>
         {/* Hot = full paper; cold (busy) dims. The button stays ENABLED while
             busy so Board can queue the click. */}
@@ -118,7 +113,7 @@ export function BoardControls({
         height: 30,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} onShop={onShop} />
+        <StatusOrCancel status={status} hasPending={hasPending} onCancel={onCancel} />
       </div>
 
       {/* The turn button — the paper PosterButton, two-line label so the
@@ -171,17 +166,16 @@ export function BoardControls({
   );
 }
 
-/** Status readout, the red Cancel button while a skill or item is armed, or
- *  the Shop button while the shop is open with its sheet put away. The
+/** Status readout, or the red Cancel button while a card, a skill or an item
+ *  is armed. The
  *  readout is a ghost capsule (outline only, like a disabled PosterButton)
  *  with a lamp dot; `onDark` swaps its ink outline for the cream/edge skin used
  *  on the dark scene. Keyed pop-in only — an AnimatePresence exit/enter swap
  *  here wedged mid-flight and left the slot permanently empty. */
-function StatusOrCancel({ status, hasPending, onCancel, onShop, onDark = false }: {
+function StatusOrCancel({ status, hasPending, onCancel, onDark = false }: {
   status: { key: string; label: string; tone: StatusTone; pulse: boolean };
   hasPending: boolean;
   onCancel: () => void;
-  onShop?: () => void;
   onDark?: boolean;
 }) {
   if (hasPending) {
@@ -202,25 +196,7 @@ function StatusOrCancel({ status, hasPending, onCancel, onShop, onDark = false }
       </motion.div>
     );
   }
-  if (onShop) {
-    return (
-      <motion.div
-        key="shop"
-        initial={{ opacity: 0, y: 5 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={spring.default}
-        style={{ display: 'flex' }}
-      >
-        <PosterButton
-          variant="ink"
-          size="sm"
-          onClick={onShop}
-          ariaLabel={OPEN_SHOP}
-          style={{ padding: '6px 14px', whiteSpace: 'nowrap', border: `2px solid ${poster.you}` }}
-        >Shop</PosterButton>
-      </motion.div>
-    );
-  }
+
   const lamp = status.tone === 'green'
     ? poster.green
     : status.tone === 'gold'

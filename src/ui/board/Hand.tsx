@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRef, useState, type CSSProperties, type TouchEvent } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
+import { itemPrice } from '@/engine/query';
 import { CardFrame, SIZES } from '../card/CardFrame';
 import { spring } from '../tokens';
 import { useViewport } from '../hooks/useViewport';
@@ -13,13 +14,17 @@ import { HandThumb, THUMB_H, THUMB_W } from './HandThumb';
 export const inHandLabel = (name: string) => `${name}, in your hand`;
 
 interface Props {
-  /** The cards in your hand: bought (or given) and not yet played onto a
-   *  hero. Each is paid for: playing it costs nothing. */
+  /** The cards in your hand: heroes and items, drawn (or given) and not yet
+   *  played. A hero goes on the bench for free; an item onto a hero for its
+   *  price, printed on its coin. */
   cards: CardInstance[];
+  /** Your souls: an item whose price is more prints its coin red. */
+  souls: number;
   disabled: boolean;
   pending: { iid: string } | null;
-  /** True while some hero of yours could take this card right now (the
-   *  engine's `playTargets`). A card no hero can take prints dimmed. */
+  /** True while the card can be played right now: a hero onto the board, an
+   *  item onto some hero of yours (the engine's `playTargets`, souls
+   *  included). One that cannot prints dimmed. */
   playable: (c: CardInstance) => boolean;
   onTap: (c: CardInstance) => void;
   onLongPress?: (c: CardInstance) => void;
@@ -28,10 +33,11 @@ interface Props {
   /** Fired when the player taps a card no hero can take — lets the Board say
    *  why instead of a silent no-op. */
   onBlocked?: (c: CardInstance) => void;
-  /** The card that has just come from the shop: it fades in where it lands,
-   *  while the board flies it there from the icon that bought it. */
+  /** A card arriving from elsewhere on the board: it fades in where it
+   *  lands, while the board flies it there. */
   arriving?: string | null;
-  /** Where each card is on screen, for the board's flight to it. */
+  /** Where each card is on screen, for the board's (and the animation
+   *  layer's) flights to it. */
   registerCard?: (iid: string, el: HTMLElement | null) => void;
 }
 
@@ -94,7 +100,7 @@ function fanScale(total: number, viewportW: number): number {
   return Math.min(1, avail / natural);
 }
 
-export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, onHover, onDragEndOver, onBlocked, arriving, registerCard }: Props) {
+export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongPress, onHover, onDragEndOver, onBlocked, arriving, registerCard }: Props) {
   const total = cards.length;
   const { width: viewportW, isMobile } = useViewport();
   // Per-card timers held in refs so they survive re-renders. Without this,
@@ -141,8 +147,12 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
     // animate={{ opacity: 1 }} overrides a style-prop opacity, which
     // silently disabled the stuck/disabled fade entirely.
     const opacity = cardDisabled && !selected ? (stuck ? 0.55 : 0.6) : 1;
-    const label = `${inHandLabel(CARDS_BY_ID[c.cardId]?.name ?? c.cardId)}${stuck ? ' — no hero can take it now' : ''}`;
-    return { selected, stuck, cardDisabled, opacity, label };
+    const price = itemPrice(c.cardId);
+    const unaffordable = price > souls;
+    const isHero = CARDS_BY_ID[c.cardId]?.type === 'hero';
+    const why = !stuck ? '' : isHero ? ' — no room on the board now' : unaffordable ? ` — costs ${price} souls` : ' — no hero can take it now';
+    const label = `${inHandLabel(CARDS_BY_ID[c.cardId]?.name ?? c.cardId)}${why}`;
+    return { selected, stuck, cardDisabled, opacity, label, unaffordable };
   };
   const done = () => setLeaving(false);
 
@@ -215,11 +225,11 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
       }}>
       <AnimatePresence onExitComplete={done}>
         {cards.map((c, i) => {
-          const { selected, stuck, cardDisabled, opacity, label } = stateOf(c);
+          const { selected, stuck, cardDisabled, opacity, label, unaffordable } = stateOf(c);
           const rot = selected ? 0 : fanRotation(i, total);
           const y = selected ? -42 : fanY(i, total);
-          // A card just bought fades in on its own spot as the board's flight
-          // lands there; one dealt any other way rises in from below.
+          // A card flown in fades in on its own spot as the board's flight
+          // lands there; one drawn rises in from below.
           const landing = arriving === c.iid;
 
           const isHovered = hoveredIid === c.iid;
@@ -320,8 +330,8 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
                 <CardFrame
                   cardId={c.cardId}
                   size="hand"
-                  // Paid for at the shop: putting it on a hero costs nothing.
-                  hideCost
+                  // The price an item costs to put on a hero (red: not enough souls).
+                  unaffordable={unaffordable}
                   selected={selected}
                   glow={selected ? 'accent' : null}
                   // A tap on a card in the fan arms it, wherever it lands.
@@ -344,13 +354,14 @@ export function Hand({ cards, disabled, pending, playable, onTap, onLongPress, o
  * strip from it hands the gesture to the browser (pan-x) and fires neither. No
  * hover peek under a finger.
  */
-function StripCard({ card: c, selected, stuck, cardDisabled, opacity, label, first, last, landing, onTap, onLongPress, onHover, onBlocked, registerCard }: {
+function StripCard({ card: c, selected, stuck, cardDisabled, opacity, label, unaffordable, first, last, landing, onTap, onLongPress, onHover, onBlocked, registerCard }: {
   card: CardInstance;
   selected: boolean;
   stuck: boolean;
   cardDisabled: boolean;
   opacity: number;
   label: string;
+  unaffordable: boolean;
   first: boolean;
   last: boolean;
   landing: boolean;
@@ -371,8 +382,8 @@ function StripCard({ card: c, selected, stuck, cardDisabled, opacity, label, fir
     <motion.div
       layoutId={`card-${c.iid}`}
       layout
-      // A card just bought fades in on its own spot as the board's flight
-      // lands there; one dealt any other way rises into the strip.
+      // A card flown in fades in on its own spot as the board's flight lands
+      // there; one drawn rises into the strip.
       initial={landing ? { opacity: 0 } : { opacity: 0, y: 36, scale: 0.6 }}
       animate={{ opacity, y: selected ? -STRIP_LIFT : 0, scale: 1 }}
       exit={{ opacity: 0, y: -24, scale: 0.6, transition: { duration: 0.22 } }}
@@ -405,7 +416,7 @@ function StripCard({ card: c, selected, stuck, cardDisabled, opacity, label, fir
       {/* The card's box, registered for the board's flight to it —
           on an inner node: AnimatePresence's own child takes no ref. */}
       <div ref={(el) => registerCard?.(c.iid, el)}>
-        <HandThumb cardId={c.cardId} armed={selected} />
+        <HandThumb cardId={c.cardId} armed={selected} unaffordable={unaffordable} />
       </div>
     </motion.div>
   );

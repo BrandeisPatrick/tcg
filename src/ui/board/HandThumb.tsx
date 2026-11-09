@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import type { CardId } from '@/engine/types';
 import { itemCard } from '@/cards';
+import { HERO_IMG_BASE } from '@/art/assets';
+import { PRICE } from '@/engine/constants';
+import { fonts } from '../tokens';
 import { TierDiamonds, itemArtUrl } from '../card/ItemIcon';
 import { poster, shopInk } from '../poster';
 
@@ -19,16 +22,18 @@ const BOLT = 15;
  * A card in the phone's hand, compact: card-shaped, the item's own shop art
  * (never redrawn) framed in its category's colour — Weapon amber, Vitality
  * green, Spirit purple — over a foot in that colour with the tier's diamonds,
- * as the shop's hand row prints it. No name and no price: the card is paid
- * for, its name is its accessible label, and a long press opens the full card.
- * An active item carries the shop's bolt. `armed` rings it in the green the
- * heroes it may go on glow in (the strip lifts it).
+ * and its price on a coin at the top left (red when it cannot be paid for
+ * now, `unaffordable`). A hero card is its portrait in a charcoal frame, its
+ * foot blank: it goes on the bench for free. No name: it is the accessible
+ * label, and a long press opens the full card. An active item carries the
+ * shop's bolt. `armed` rings it in the green the heroes it may go on glow in
+ * (the strip lifts it).
  */
-export function HandThumb({ cardId, armed = false }: { cardId: CardId; armed?: boolean }) {
+export function HandThumb({ cardId, armed = false, unaffordable = false }: { cardId: CardId; armed?: boolean; unaffordable?: boolean }) {
   const data = itemCard(cardId);
   const [failed, setFailed] = useState(false);
   const ink = data ? shopInk(data.slot).ink : poster.edge;
-  const url = itemArtUrl(cardId);
+  const url = data ? itemArtUrl(cardId) : `${HERO_IMG_BASE}${cardId}_sm.webp`;
   return (
     <span style={{ position: 'relative', display: 'block', width: THUMB_W, height: THUMB_H }}>
       <span style={{
@@ -66,6 +71,15 @@ export function HandThumb({ cardId, armed = false }: { cardId: CardId; armed?: b
           </span>
         )}
       </span>
+      {/* The price, half over the top-left corner. */}
+      {data && (
+        <span aria-hidden style={{
+          position: 'absolute', top: -4, left: -4, minWidth: BOLT, height: BOLT, padding: '0 3px', boxSizing: 'border-box',
+          borderRadius: BOLT / 2, background: unaffordable ? poster.red : poster.gold, color: poster.ink,
+          boxShadow: `0 0 0 1.5px ${poster.frame}`, fontFamily: fonts.display, fontSize: 9.5, lineHeight: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
+        }}>{PRICE[data.tier]}</span>
+      )}
       {/* An active item: the shop's bolt, half over the top-right corner. */}
       {data?.type === 'spell' && (
         <span aria-hidden style={{
