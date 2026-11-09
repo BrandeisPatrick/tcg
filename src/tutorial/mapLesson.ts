@@ -56,13 +56,14 @@ export function mapLesson(kit: LessonKit): Lesson {
     outro: `A kill pushes the fallen hero's level + 1 into its side's structures, front first; fell the Patron to win. Take the Mid-Boss for the Rejuvenator — ${REVIVE_CREDITS} revives.`,
     // Round 4, your turn first (engine turn 7): the Mid-Boss rises as it opens.
     // Lash stands on one point, alone; the rival's track is a Guardian of 2 and
-    // a Patron of 2 — the kill's push of 2 fells the Guardian, and Kelvin's
-    // push of 2 into the empty lane at the End fells the Patron.
+    // a Patron of 1 — the kill's push of 2 fells the Guardian, and Kelvin's
+    // push of his bullet power, 1, into the empty lane at the End fells the
+    // Patron. Frost Grenade costs three of the turn's five souls.
     setup: () => kit.fight({
       startTurn: 7,
       enemyHeroStats: [{ hp: 1, hpMax: 3 }],
       structures: { guardian: 4, walker: 6, patron: 8 },
-      enemyStructures: { guardian: 2, patron: 2 },
+      enemyStructures: { guardian: 2, patron: 1 },
     }),
     steps: [
       kit.look('look', 'The Map', mine, (v) => `Each side has a track of structures on its rule — Guardian, Walker, Patron; the rival's is short today: ${rivalTrack(v)}. Fell its Patron to win. It is round 4: the Mid-Boss has risen in the pit between the Actives. Tap ${name(mine(v))} to open his sheet.`),

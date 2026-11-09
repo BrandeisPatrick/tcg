@@ -37,9 +37,9 @@
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { effectiveAtk, heroAbilities, isRespawning, itemPrice, stepInCandidates, wornItems } from '@/engine/query';
-import { attackBlocked, playBlocked, skillBlocked } from '@/engine/legality';
-import { ACTIVE_COOLDOWN, LANE_INCOME, RETREAT_COST } from '@/engine/constants';
+import { effectiveAtk, heroAbilities, isRespawning, itemPrice, kitCost, stepInCandidates, wornItems } from '@/engine/query';
+import { attackBlocked, playBlocked, retreatCost, skillBlocked, skillTargets } from '@/engine/legality';
+import { ACTIVE_COOLDOWN, LANE_INCOME } from '@/engine/constants';
 import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
 import { inHandLabel } from '@/ui/board/Hand';
@@ -245,9 +245,16 @@ function look(id: string, title: string, who: (v: CoachView) => CardInstance | n
   };
 }
 
-/** Use your Active's skill on their Active — the three-tap flow through the
- *  hero sheet, gated tap by tap. The line follows the phase the player is
- *  in, so it always names the next tap and only the next tap. */
+/** True when your Active's skill is aimed (a tap on a target after the
+ *  plate); one that hits every enemy goes off from the plate. */
+function aimedSkill(v: CoachView): boolean {
+  const me = mine(v);
+  return !!me && skillTargets(v.G, v.me, me) !== 'none';
+}
+
+/** Use your Active's skill (on their Active, when it is aimed) — the flow
+ *  through the hero sheet, gated tap by tap. The line follows the phase the
+ *  player is in, so it always names the next tap and only the next tap. */
 function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
   return {
     id: 'skill',
@@ -255,9 +262,10 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
     body: (v) => {
       const me = mine(v), them = theirs(v);
       const skill = skillNameOf(me);
+      const at = aimedSkill(v) ? `, then tap ${nameOf(them) || 'their Active'}` : '';
       if (v.targeting) return `${lead(v)} Now tap ${nameOf(them) || 'their Active'}.`;
-      if (v.sheetOpen) return `${lead(v)} Tap ${skill}, then tap ${nameOf(them) || 'their Active'}.`;
-      return `${lead(v)} Tap ${nameOf(me) || 'your Active'} to open the sheet, tap ${skill}, then tap ${nameOf(them) || 'their Active'}.`;
+      if (v.sheetOpen) return `${lead(v)} Tap ${skill}${at}.`;
+      return `${lead(v)} Tap ${nameOf(me) || 'your Active'} to open the sheet, tap ${skill}${at}.`;
     },
     task: (v) => v.seen.usedSkill,
     ready: (v) => {
@@ -266,8 +274,9 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
     },
     blocked: (v) => {
       const me = mine(v);
-      return me && skillBlocked(v.G, v.me, me) === 'status'
-        ? `${nameOf(me)} is locked down and cannot act. End the turn.`
+      const why = me ? skillBlocked(v.G, v.me, me) : null;
+      return why === 'status' ? `${nameOf(me)} is locked down and cannot act. End the turn.`
+        : why === 'souls' ? `${skillNameOf(me)} costs ${soulsText(kitCost(me!))}. End the turn; ${word(LANE_INCOME)} more arrive.`
         : 'That skill needs a fresh turn. End the turn; it comes back.';
     },
     spot: (v) =>
@@ -332,13 +341,14 @@ export const LESSONS: Lesson[] = [
     title: 'The Skill',
     blurb: "Income, Act, End. Kelvin's skill ends it.",
     face: 'hero_kelvin',
-    outro: 'Every turn runs Income, Act, End — the dial lights each one. A skill costs nothing, and it comes back every turn.',
+    outro: "Every turn runs Income, Act, End — the dial lights each one. A skill costs souls, printed on its plate, and it is ready again on your next turn. The ultimate is the other button on the card: from Level 2, for more souls.",
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
-    // is the whole fight.
+    // (to every enemy, and he is the only one) is the whole fight. It costs
+    // three of the turn's five souls.
     setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
       look('look', 'One on One', mine, (v) => `Every turn runs three beats, lit on the dial: Income (souls and a card), Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}). ${nameOf(mine(v))} faces ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Tap ${nameOf(mine(v))} to open his sheet.`),
-      useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to their Active. Skills cost no souls.`),
+      useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to every enemy, for ${soulsText(mine(v) ? kitCost(mine(v)!) : 0)} — a skill's price is on its plate.`),
     ],
   },
 
@@ -373,17 +383,20 @@ export const LESSONS: Lesson[] = [
     face: 'hero_kelvin',
     outro: `An active item is the hero's one ability that turn, like a skill. It goes on cooling down — ready in ${word(ACTIVE_COOLDOWN.low)} turns — and cools down again after each use; hard crowd control has charges instead.`,
     // Kelvin holds Cold Front, a gift: put on, it starts on its cooldown, so it
-    // cannot be the kill today. Lash stands at three: Frost Grenade's one
-    // spirit damage, then Kelvin's swing of two, finish him — an ability, then
-    // the attack that ends the Act. Turn two, so there is an attack.
+    // cannot be the kill today. Lash stands at two: Frost Grenade's one
+    // spirit damage, then Kelvin's swing of one, finish him — an ability, then
+    // the attack that ends the Act. Turn two, so there is an attack. Two
+    // souls kept from before and the turn's five pay for both: Cold Front
+    // four, Frost Grenade three.
     setup: () => fight({
       startTurn: 2,
       playerItems: ['cold_front'],
-      enemyHeroStats: [{ hp: 3 }],
+      playerSouls: 2,
+      enemyHeroStats: [{ hp: 2 }],
     }),
     steps: [
       play('play', 'Put It On', 'cold_front', () => `Cold Front waits in your hand, under the board — a gift, an active item; its card bears a bolt, and its price is ${soulsText(itemPrice('cold_front'))}. An active item works from the hero who wears it.`),
-      useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns — its plate on ${nameOf(mine(v))}'s sheet shows the dial. Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage.`),
+      useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns — its plate on ${nameOf(mine(v))}'s sheet shows the dial. Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage, for ${soulsText(mine(v) ? kitCost(mine(v)!) : 0)}.`),
       attack((v) => `${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}. One ability each, then one attack — it ends the Act.`),
     ],
   },
@@ -396,9 +409,10 @@ export const LESSONS: Lesson[] = [
     face: 'hero_yamato',
     outro: 'Rotate. A worn Active on the bench is a hero saved.',
     // Kelvin at one point of health with Yamato fresh behind him, Lash at
-    // three: Kelvin's swing of two cannot finish Lash, and Lash's next attack
+    // three: Kelvin's swing of one cannot finish Lash, and Lash's next attack
     // would finish Kelvin. Yamato swings for three, and his swing kills Lash.
-    // Turn three, so the attack is open; the turn's income pays the retreat.
+    // Turn three, so the attack is open; the turn's income pays the retreat
+    // (Kelvin's own price, printed on his sheet).
     setup: () => fight({
       startTurn: 3,
       playerHeroes: ['hero_kelvin', 'hero_yamato'],
@@ -416,15 +430,15 @@ export const LESSONS: Lesson[] = [
         body: (v) => (v.seen.swapped
           ? `${nameOf(mine(v))} is in. ${nameOf(myBench(v))} is on the bench, out of the fight.`
           : v.sheetOpen
-            ? `Attacks only ever hit the Active. Retreat costs ${soulsText(RETREAT_COST)} and swaps the two — one a turn, before the attack — and the hero who steps in makes your attack. Tap Retreat.`
-            : `Tap ${nameOf(mine(v)) || 'your Active'}, then Retreat: ${soulsText(RETREAT_COST)} swaps him with ${nameOf(myBench(v)) || 'your bench hero'}.`),
+            ? `Attacks only ever hit the Active. Retreat swaps the two — one a turn, before the attack — and the hero who steps in makes your attack. Each hero prints his own price: ${nameOf(mine(v))}'s is ${soulsText(retreatCost(v.G, v.me))}. Tap Retreat.`
+            : `Tap ${nameOf(mine(v)) || 'your Active'}, then Retreat: ${soulsText(retreatCost(v.G, v.me))} swaps him with ${nameOf(myBench(v)) || 'your bench hero'}.`),
         task: (v) => v.seen.swapped,
         // The engine's own question: is a swap with the bench open to you now?
         ready: (v) => {
           const stepIns = stepInCandidates(v.G.players[v.me]);
           return stepIns.length > 0 && retreatBlock(v.G, v.me, stepIns) === null;
         },
-        blocked: `Retreat costs ${soulsText(RETREAT_COST)}, one a turn, before the attack. End the turn, then come back to it.`,
+        blocked: (v) => `Retreat costs ${soulsText(retreatCost(v.G, v.me))}, one a turn, before the attack. End the turn, then come back to it.`,
         spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
         allow: (v) => (v.sheetOpen ? ['~Retreat'] : [tile(mine(v))]),
       },
