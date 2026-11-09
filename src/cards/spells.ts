@@ -77,7 +77,7 @@ export const SPELLS: SpellCard[] = [
 
   // ----- Tier 4 -----
   { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
-  { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable for 1 turn.' },
+  { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable and Invulnerable for 1 turn.' },
   { id: 'curse',          name: 'Cursed Relic',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, hardCC: true, abilities: ['eff_curse'], text: 'Silence and Disarm one enemy hero for 3 turns: no skill, no attack.' },
   { id: 'divine_barrier', name: 'Divine Barrier', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'guardian_ward', abilities: ['eff_divine_barrier'], text: "Cleanse an ally's debuffs except Stun and grant it Shield 4." },
   { id: 'ethereal_shift', name: 'Ethereal Shift', type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_ethereal_shift'],   text: 'An ally gains Dome for 1 turn and +1 Spirit Power for 2 turns.' },
@@ -99,7 +99,7 @@ export const SPELLS: SpellCard[] = [
   // hard crowd control, two charges a match. Prism Blast cools down 3 own turns.
   { id: 'nullification_burst', name: 'Nullification Burst', type: 'spell', rarity: 4, slot: 'vitality', tier: 5, hardCC: true, abilities: ['eff_nullification_burst'], text: 'Every enemy hero loses its buffs and takes {sp:1} spirit damage. They cannot be healed and are Rooted for 2 turns.' },
   { id: 'mystical_piano',      name: 'Mystical Piano',      type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, hardCC: true, abilities: ['eff_mystical_piano'], text: 'Stun every enemy hero for 2 turns and Root them for 2 turns.' },
-  { id: 'prism_blast',         name: 'Prism Blast',         type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, abilities: ['eff_prism_blast'], text: 'Your Active gains Unstoppable for 1 turn. Every enemy takes {sp:7} spirit damage.' },
+  { id: 'prism_blast',         name: 'Prism Blast',         type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, abilities: ['eff_prism_blast'], text: 'Your Active gains Unstoppable and Invulnerable for 1 turn. Every enemy takes {sp:7} spirit damage.' },
 ];
 
 export const SPELLS_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s])) as Record<string, SpellCard>;

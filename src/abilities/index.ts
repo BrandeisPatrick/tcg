@@ -5,9 +5,10 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { awardSouls, resolve } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
-  attackPower, findCardOnBoard, heroData, isBoss, isRespawning, isUntargetable, itemCooldown, itemResist, liveBoardCards, otherPlayer,
-  effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornActives, wornItems, type TargetFilter,
+  abilityAim, attackPower, effectiveAtk, findCardOnBoard, heroData, isBoss, isRespawning, isUntargetable, itemCooldown, itemResist, liveBoardCards,
+  otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornActives, wornItems, type TargetFilter,
 } from '@/engine/query';
+import { DJINN_CAP } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -49,7 +50,10 @@ export interface AbilityDef {
     // bearer just took the Active slot by a move its player chose: a Retreat or
     // a card's swap (Warp Stone, Rescue Beam, Majestic Leap, Traveler) — never
     // a promotion off a fallen Active, nor a drag to the front by the rival.
-    | 'onBearerStepIn';
+    | 'onBearerStepIn'
+    // A hero's passive: an enemy hero was knocked out while the bearer stood in
+    // its side's Active slot (Drifter's Bloodscent). `target` is the fallen hero.
+    | 'onRivalFall';
   target: TargetFilter;
   prompt?: string;
   /** A hero skill's or passive's display name ("Frost Grenade"), printed on
@@ -64,6 +68,17 @@ export interface AbilityDef {
    *  `CardInstance.cooldowns`, ticked at the start of the owner's turn
    *  (docs/stats-model.md §1). An ultimate's is ULT_COOLDOWN. */
   cooldown?: number;
+  /** A hero skill only: the souls it costs to use (1–3, docs/hero-design.md
+   *  §2). An ultimate's cost is its card's size (`ULT_COST`); `kitCost`
+   *  (engine/query.ts) reads both. */
+  souls?: number;
+  /** What the ability is aimed at when that depends on the board rather than
+   *  being fixed (`target`): the filter (and whether the caster is left out)
+   *  for `hero` of `pid` now, or null when it cannot be aimed at all (Traveler
+   *  away from the Active slot; Audience Participation, which aims as the
+   *  ultimate it copies does, with nothing to copy). `abilityAim`
+   *  (engine/query.ts) is the one reading of it. */
+  aim?: (G: GameState, pid: PlayerID, hero: CardInstance) => { target: TargetFilter; excludeSelf?: boolean } | null;
   /** A hero skill only: HP the caster pays to use it. The skill is blocked
    *  unless the caster has MORE than this (`skillBlocked`'s 'hp'), and the
    *  payment comes straight off its HP before the skill runs — through no Shield
@@ -153,17 +168,17 @@ export function activeSpi(G: GameState, pid: PlayerID): number {
 }
 
 // Helper: spirit scaling for ULTIMATES. An ultimate runs inside
-// withCast(hero, 'ult', …), so the hero using it — its own, or Sinclair with a
-// borrowed one — is the cast-context source: read its effective Spirit here so
-// a spirit-built hero's ultimate scales (e.g. a Spirit Abrams).
+// withCast(hero, 'ult', …), so the hero using it — its own, or Sinclair casting
+// a copy as his own — is the cast-context source: read its effective Spirit
+// here so a spirit-built hero's ultimate scales (e.g. a Spirit Abrams).
 function ultSpi(): number {
   const src = currentCast()?.source;
   return src ? effectiveSpirit(src) : 0;
 }
 
-// Helper: the hero an ultimate centred on its caster acts through (Dynamo
-// channels, Mirage slips away). The hero using it — `source`, its own hero or
-// Sinclair with a borrowed copy — when it stands on the mover's side; else the
+// Helper: the hero an ultimate centred on its caster acts through (Mo & Krill
+// and Warden heal). The hero using it — `source`, its own hero or Sinclair
+// casting a copy — when it stands on the mover's side; else the
 // ultimate's own hero on that side, if one stands there (a handler run without
 // a caster).
 function ultCaster(G: GameState, pid: PlayerID, source: CardInstance | undefined, heroId: string): CardInstance | undefined {
@@ -314,14 +329,18 @@ const eff_debuff_remover: AbilityDef = {
 };
 
 // Unstoppable (canon T4 vitality active): an ally gains Unstoppable for 1 turn
-// (cleanses CC on apply; immune to damage + CC). Strong, so it is a tier 4
-// price and a 3-turn cooldown.
+// (cleanses CC on apply; immune to CC) and is Invulnerable for it (immune to
+// damage) — the two halves the one status used to be before the hero doc made
+// Unstoppable crowd control alone. Strong, so it is a tier 4 price and a
+// 3-turn cooldown.
 const eff_unstoppable_cast: AbilityDef = {
   id: 'eff_unstoppable_cast', trigger: 'onPlay', target: 'allyHero',
   base: 1,
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
-    if (t) addStatus(G, t, 'unstoppable', 1, 1);
+    if (!t) return;
+    addStatus(G, t, 'unstoppable', 1, 1);
+    addStatus(G, t, 'invulnerable', 1, 1);
   },
 };
 
@@ -1147,9 +1166,9 @@ const eff_slowing_bullets: AbilityDef = {
 // Debuff Reducer (canon T2 vitality): shortens every negative effect on you.
 // TCG: a debuff on the bearer lands 1 turn shorter, never under 1 (the
 // debuffDuration hook). Permanent marks (99+) are left alone, and so are the
-// debuffs whose expiry is the payload — a shorter Charged, Djinn's Mark or
-// Reverb would only go off sooner.
-const GOES_OFF_ON_EXPIRY: ReadonlySet<StatusId> = new Set(['charged', 'djinns_mark', 'reverb']);
+// debuffs whose expiry is the payload — a shorter Charged or Reverb would only
+// go off sooner.
+const GOES_OFF_ON_EXPIRY: ReadonlySet<StatusId> = new Set(['charged', 'reverb']);
 const eff_debuff_reducer: AbilityDef = {
   id: 'eff_debuff_reducer', trigger: 'ongoing', target: 'self',
   base: 1,
@@ -1948,122 +1967,144 @@ const eff_prism_blast: AbilityDef = {
   scalesSpirit: true, base: 7,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
-    if (mine) addStatus(G, mine, 'unstoppable', 1, 1);
+    if (mine) {
+      addStatus(G, mine, 'unstoppable', 1, 1);
+      addStatus(G, mine, 'invulnerable', 1, 1);
+    }
     const dmg = 7 + activeSpi(G, ctx.movingPlayer);
     eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit', 'Prism Blast'); });
   },
 };
 
-// ----- Hero skills (active, "Activate" trigger) -----
-// Each skill declares its scaling (spirit / bullet / both / none).
-// Base damage stays its original type. Scaling adds a second damage event of the matching type.
+// ----- Hero skills (docs/hero-design.md §8) -----
+// A hero has one skill or one passive. A skill costs its `souls` (1–3) and then
+// waits SKILL_COOLDOWN; the hero uses one ability a turn. A number marked
+// {sp:N} adds the hero's Spirit: spi(source) here, the hero using it.
 
-// Heals are flat — Spirit Power scales spirit damage only.
-const skill_dynamo: HeroAbilityDef = {
-  id: 'skill_dynamo', trigger: 'activate', target: 'allyHero', cooldown: 1,
-  name: 'Rejuvenating Aurora',
-  text: 'Heal an ally 2 and grant +{sp:1/2} Bullet Power for 2 turns.',
-  prompt: 'Dynamo Rejuvenating Aurora — heal an ally 2 + grant Bullet Power (1 + ½ Spirit) for 2 turns.',
-  base: 2,
+// The enemy Active, if it stands, read BEFORE a skill's damage: what the text
+// puts on "the enemy Active" goes on the hero that was there, not on one an AI
+// seat promoted into a slot the damage emptied.
+function enemyActiveOf(G: GameState, pid: PlayerID): CardInstance | undefined {
+  return standingActive(G, otherPlayer(pid));
+}
+
+// Mo & Krill — Sand Blast: blind the enemy carry so it can't shoot.
+const skill_mo_krill: HeroAbilityDef = {
+  id: 'skill_mo_krill', trigger: 'activate', target: 'enemyActive', souls: 2,
+  name: 'Sand Blast',
+  text: "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn (it can't attack).",
+  base: 1,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
-    healUnit(G, target, 2);
-    addStatus(G, target, 'weapon_power', 1 + Math.floor(spi(source) / 2), 2);
+    damageUnit(G, target, 1 + spi(source), 'spirit');
+    addStatus(G, target, 'disarm', 1, 1);
   },
 };
 
-// Canon Frost Grenade damages enemies + heals allies in the cloud. Here it
-// damages the enemy Active and heals OUR Active — so when Kelvin is fronting he
-// hits and heals himself (a hit-and-heal frontline caster).
-const skill_kelvin: HeroAbilityDef = {
-  id: 'skill_kelvin', trigger: 'activate', target: 'enemyActive', cooldown: 1,
-  name: 'Frost Grenade',
-  text: '{sp:1} spirit dmg to enemy Active + heal your Active 2.',
-  prompt: 'Kelvin Frost Grenade — 1 spirit dmg to enemy Active + heal ally Active 2.',
-  base: 1,
-  scalesSpirit: true,
-  run: (G, ctx, { source, target }) => {
-    if (target) damageUnit(G, target, 1 + spi(source), 'spirit');
-    const ally = G.players[ctx.movingPlayer].active;
-    if (ally) healUnit(G, ally, 2);
-  },
-};
-
-// Lady Geist — Life Drain (her in-game #2): deal spirit damage and heal herself
-// for HALF the damage dealt (spirit lifesteal). Scales: more Spirit = bigger
-// drain, and Healing Boost items add flat N to the heal.
-const skill_lady_geist: HeroAbilityDef = {
-  id: 'skill_lady_geist', trigger: 'activate', target: 'enemyAny', cooldown: 1,
-  name: 'Life Drain',
-  text: 'Deal {sp:3} spirit to any enemy and heal for half the damage dealt.',
-  prompt: 'Lady Geist Life Drain — deal 3 spirit and heal for half the damage dealt.',
+// Viscous — The Cube, his signature (Patrick's call, hero-design §5): one of
+// his heroes takes no damage until his next turn. Invulnerable is not crowd
+// control, so it ticks at the start of its owner's turn: put on for 1 turn on
+// his turn, it covers the rival's turn and is gone when his next one begins.
+const skill_viscous: HeroAbilityDef = {
+  id: 'skill_viscous', trigger: 'activate', target: 'allyHero', souls: 3,
+  name: 'The Cube',
+  text: 'Cube one of your heroes: it takes no damage until your next turn.',
   base: 3,
-  scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
-    if (!target || !source) return;
-    const dealt = damageUnit(G, target, 3 + spi(source), 'spirit', 'Life Drain', { tag: 'life_drain' });
-    const heal = Math.floor(dealt / 2);
-    if (heal > 0) healUnit(G, source, heal, 'Life Drain', { tag: 'lifesteal', from: target });
+  run: (G, _ctx, { target }) => {
+    if (target) addStatus(G, target, 'invulnerable', 1, 1);
   },
 };
 
-const skill_lash: HeroAbilityDef = {
-  id: 'skill_lash', trigger: 'activate', target: 'enemyAny', cooldown: 1,
-  name: 'Ground Strike',
-  text: '{sp:1} spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
-  prompt: 'Lash Ground Strike — 1 spirit dmg + Vulnerable (take +1 dmg) for 1 turn.',
+// Lady Geist — Essence Bomb: she bleeds herself to bomb the whole enemy side.
+const skill_lady_geist: HeroAbilityDef = {
+  id: 'skill_lady_geist', trigger: 'activate', target: 'noTarget', souls: 2, hpCost: 1,
+  name: 'Essence Bomb',
+  text: 'Lady Geist pays 1 HP: deal {sp:1} spirit damage to every enemy.',
+  base: 1,
+  scalesSpirit: true,
+  run: (G, ctx, { source }) => {
+    const dmg = 1 + spi(source);
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit'); });
+  },
+};
+
+// Shiv — Serrated Knives: the bleed that was his free on-hit passive, now a
+// thrown knife he pays for.
+const skill_shiv: HeroAbilityDef = {
+  id: 'skill_shiv', trigger: 'activate', target: 'enemyActive', souls: 2,
+  name: 'Serrated Knives',
+  text: 'Throw a knife: deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns.',
   base: 1,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     if (!target) return;
     damageUnit(G, target, 1 + spi(source), 'spirit');
-    // Vulnerable: amplify all incoming damage (bullet + spirit). Helps the team
-    // secure a kill (the only win-route) rather than denying a turn like Stun did.
-    addStatus(G, target, 'bullet_resist_down', 1, 1);
-    addStatus(G, target, 'spirit_resist_down', 1, 1);
+    addStatus(G, target, 'bleed', 1, 2);
   },
 };
 
-// Shields are flat — Spirit Power scales spirit damage only.
-const skill_paige: HeroAbilityDef = {
-  id: 'skill_paige', trigger: 'activate', target: 'allyHero', cooldown: 1,
-  name: 'Plot Armor',
-  text: 'Shield 2 on an ally and grant +{sp:1/2} Bullet Resist for 2 turns.',
-  prompt: 'Paige Plot Armor — Shield 2 + grant Bullet Resist (1 + ½ Spirit) for 2 turns.',
+// Warden — Willpower: a barrier and a burst of speed. Swift is this turn's: a
+// Retreat after it is free, and what is left is swept when the turn ends.
+const skill_warden: HeroAbilityDef = {
+  id: 'skill_warden', trigger: 'activate', target: 'self', souls: 2,
+  name: 'Willpower',
+  text: 'A barrier and a burst of speed: Shield 3 on Warden, and Swift (his next retreat is free).',
+  base: 3,
+  run: (G, _ctx, { source, target }) => {
+    const t = target ?? source;
+    if (!t) return;
+    addStatus(G, t, 'shield', 3, 999);
+    addStatus(G, t, 'swift', 1, 1);
+  },
+};
+
+// Wraith — Full Auto: she spins up her gun. +2 Bullet Power for 2 of her turns.
+const skill_wraith: HeroAbilityDef = {
+  id: 'skill_wraith', trigger: 'activate', target: 'self', souls: 2,
+  name: 'Full Auto',
+  text: 'Wraith gets +2 Attack for 2 turns.',
   base: 2,
-  scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
-    if (!target) return;
-    addStatus(G, target, 'shield', 2, 999);
-    // Defensive buff (distinct from Dynamo's offensive +Bullet Power) so the two
-    // support lanes don't overlap.
-    addStatus(G, target, 'bullet_resist', 1 + Math.floor(spi(source) / 2), 2);
+    const t = target ?? source;
+    if (t) addStatus(G, t, 'weapon_power', 2, 2);
   },
 };
 
-// Static Charge: 1 spirit dmg upfront + apply Charged for 2 turns; on expiry
-// the tick handler converts it to a 1-turn Stun. Gives Control immediate
-// pressure plus a long-fuse stun setup.
-const skill_seven_static: HeroAbilityDef = {
-  id: 'skill_seven_static', trigger: 'activate', target: 'enemyActive', cooldown: 1,
-  name: 'Static Charge',
-  text: '{sp:1} spirit dmg + Charged 2 — Stun 1 turn on expiry.',
-  prompt: 'Seven Static Charge — 1 spirit dmg + Charged 2 turns. Stuns for 1 turn on expiry.',
+// Seven — Lightning Ball: zaps the whole enemy team.
+const skill_seven: HeroAbilityDef = {
+  id: 'skill_seven', trigger: 'activate', target: 'noTarget', souls: 2,
+  name: 'Lightning Ball',
+  text: 'Roll a ball of lightning through the enemy team: deal {sp:1} spirit damage to every enemy.',
   base: 1,
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
-    if (!target) return;
-    damageUnit(G, target, 1 + spi(source), 'spirit');
-    addStatus(G, target, 'charged', 1, 2);
+  run: (G, ctx, { source }) => {
+    const dmg = 1 + spi(source);
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit'); });
   },
 };
 
-const skill_sinclair: HeroAbilityDef = {
-  id: 'skill_sinclair', trigger: 'activate', target: 'enemyAny', cooldown: 1,
-  name: 'Vexing Bolt',
-  text: '{sp:2} spirit dmg to any enemy.',
-  prompt: 'Sinclair Vexing Bolt — 2 spirit dmg to any enemy.',
+// Lash — Ground Strike: control 3 needs hard control in the skill, so the slam
+// pins the enemy Active (Rooted: it cannot retreat or be swapped).
+const skill_lash: HeroAbilityDef = {
+  id: 'skill_lash', trigger: 'activate', target: 'noTarget', souls: 3,
+  name: 'Ground Strike',
+  text: "Slam down: deal {sp:1} spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat).",
+  base: 1,
+  scalesSpirit: true,
+  run: (G, ctx, { source }) => {
+    const front = enemyActiveOf(G, ctx.movingPlayer);
+    const dmg = 1 + spi(source);
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit'); });
+    if (front) addStatus(G, front, 'rooted', 1, 1);
+  },
+};
+
+// Yamato — Flying Slash: she grapples onto any enemy, bench too.
+const skill_yamato: HeroAbilityDef = {
+  id: 'skill_yamato', trigger: 'activate', target: 'enemyHero', souls: 2,
+  name: 'Flying Slash',
+  text: 'Grapple onto any enemy, bench too, and slash it: deal {sp:2} spirit damage.',
   base: 2,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2071,71 +2112,100 @@ const skill_sinclair: HeroAbilityDef = {
   },
 };
 
-// The Cube waits two of Viscous's turns: Unstoppable lasts through the rival's
-// turn, so a free Cube every turn would be immunity to every hit for good.
-const skill_viscous: HeroAbilityDef = {
-  id: 'skill_viscous', trigger: 'activate', target: 'self', cooldown: 2,
-  name: 'The Cube',
-  text: 'Gain Unstoppable 1 + heal 1.',
-  prompt: 'Viscous The Cube — Unstoppable 1 + heal 1.',
+// Dynamo — Kinetic Pulse: knocks the enemy team into the air. A flat 1: the
+// card prints no Spirit on it.
+const skill_dynamo: HeroAbilityDef = {
+  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget', souls: 3,
+  name: 'Kinetic Pulse',
+  text: 'Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air).',
   base: 1,
-  run: (G, _ctx, { source, target }) => {
-    const t = target ?? source;
-    if (!t) return;
-    addStatus(G, t, 'unstoppable', 1, 1);
-    healUnit(G, t, 1);
+  run: (G, ctx) => {
+    const front = enemyActiveOf(G, ctx.movingPlayer);
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, 1, 'spirit'); });
+    if (front) addStatus(G, front, 'disarm', 1, 1);
   },
 };
 
-const skill_yamato: HeroAbilityDef = {
-  id: 'skill_yamato', trigger: 'activate', target: 'enemyAny', cooldown: 1,
-  name: 'Power Slash',
-  text: '{sp:1} spirit dmg to any enemy.',
-  prompt: 'Yamato Power Slash — 1 spirit dmg.',
+// Kelvin — Frost Grenade: chills every enemy and heals his whole team; the
+// heal grows with his Spirit (support 3).
+const skill_kelvin: HeroAbilityDef = {
+  id: 'skill_kelvin', trigger: 'activate', target: 'noTarget', souls: 3,
+  name: 'Frost Grenade',
+  text: 'Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each.',
   base: 1,
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => { if (target) damageUnit(G, target, 1 + spi(source), 'spirit'); },
-};
-
-// Warden skill: hardens himself with a Shield. Canon Warden hunkers down
-// behind his shackle barrier before unleashing Last Stand — TCG abstraction
-// is a flat self-buff Shield.
-const skill_warden: HeroAbilityDef = {
-  id: 'skill_warden', trigger: 'activate', target: 'self', cooldown: 1,
-  name: 'Willpower',
-  text: 'Shield 3 on self.',
-  prompt: 'Warden Willpower — Shield 3 on self.',
-  base: 3,
-  run: (G, _ctx, { source, target }) => {
-    const t = target ?? source;
-    if (t) addStatus(G, t, 'shield', 3, 999);
+  run: (G, ctx, { source }) => {
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, 1, 'spirit'); });
+    const heal = 1 + spi(source);
+    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, heal, 'Frost Grenade');
   },
 };
 
-// ----- Hero passives (always-on or trigger-based, no Activate) -----
+// Paige — Plot Armor: shields her carry and boosts its gun.
+const skill_paige: HeroAbilityDef = {
+  id: 'skill_paige', trigger: 'activate', target: 'allyHero', souls: 2,
+  name: 'Plot Armor',
+  text: 'Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns.',
+  base: 2,
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
+    if (!target) return;
+    addStatus(G, target, 'shield', 2 + spi(source), 999);
+    addStatus(G, target, 'weapon_power', 1, 2);
+  },
+};
 
-// Mirage Djinn's Mark: stacks (max 4) on every attack. Auto-detonates when
-// stacks hit 4 (immediately) OR when the 3-turn timer expires — whichever
-// comes first. Detonation deals 2 spirit damage per stack and resets the mark.
-// The on-expire half lives in statusOps.tickStartOfTurn; this passive owns
-// the on-attack stack application + the at-cap detonation.
+// Rem — Tag Along: he naps on one of his heroes and both heal. (He no longer
+// merges into it: the merge's machinery in the engine has no card that uses it.)
+const skill_rem: HeroAbilityDef = {
+  id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true, souls: 2,
+  name: 'Tag Along',
+  text: 'Rem naps on one of your heroes: it heals {sp:4}, and Rem heals 2.',
+  base: 4,
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
+    if (!source || !target || target === source) return;
+    healUnit(G, target, 4 + spi(source), 'Tag Along');
+    healUnit(G, source, 2, 'Tag Along');
+  },
+};
+
+// Sinclair — Rabbit Hex: the engine's rabbit (no attack, no abilities) for the
+// rival's next turn, and it takes +1 damage (both resists down) for the rest
+// of this one.
+const skill_sinclair: HeroAbilityDef = {
+  id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive', souls: 3,
+  name: 'Rabbit Hex',
+  text: "Hex the enemy Active into a Rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage.",
+  base: 3,
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    addStatus(G, target, 'rabbit', 1, 1);
+    addStatus(G, target, 'bullet_resist_down', 1, 1);
+    addStatus(G, target, 'spirit_resist_down', 1, 1);
+  },
+};
+
+// ----- Hero passives (always on, no cast) -----
+
+// Mirage — Djinn's Mark: each swing marks its target (a Ricochet bounce marks
+// the hero it reaches too), the timer starting over with each mark; the mark
+// that makes DJINN_CAP detonates them all. One that runs out of time fades.
 const passive_mirage_djinns_mark: HeroAbilityDef = {
   id: 'passive_mirage_djinns_mark', trigger: 'onAttack', target: 'self',
   name: "Djinn's Mark",
-  text: "Attacks apply 1 stack of Djinn's Mark (max 4) for 3 turns. Mark detonates at max stacks or on expiry for 3 spirit dmg per stack.",
-  prompt: "Djinn's Mark — attacks apply 1 stack (max 4) for 3 turns. Detonates at 4 stacks or on expiry for 3 spirit dmg per stack.",
+  text: "Each attack adds a Djinn's Mark to the target (max 3). The third mark detonates them all: deal {sp:4} spirit damage.",
   run: (G, _ctx, { source, target }) => {
     if (!source || !target) return;
     // A swing that drops its target, or Mirage himself (Return Fire), marks
-    // nothing: no stack, and no detonation — the fallen hero's statuses go
-    // with the kill when the attack resolves.
+    // nothing: the fallen hero's statuses go with the kill when the attack resolves.
     if (target.hp <= 0 || source.hp <= 0 || isRespawning(target)) return;
     addStatus(G, target, 'djinns_mark', 1, 3);
     const mark = target.statuses.find((s) => s.id === 'djinns_mark');
-    if (mark && mark.value >= 4) {
+    if (mark && mark.value >= DJINN_CAP) {
+      target.statuses = target.statuses.filter((s) => s !== mark);
       pushLog(G, `${cardName(target.cardId)} — Djinn's Mark detonates.`);
-      damageUnit(G, target, 3 * mark.value, 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value, source, cast: 'proc' });
-      target.statuses = target.statuses.filter((s) => s.id !== 'djinns_mark');
+      damageUnit(G, target, 4 + effectiveSpirit(source), 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value, source, cast: 'proc' });
     }
   },
 };
@@ -2143,294 +2213,237 @@ const passive_mirage_djinns_mark: HeroAbilityDef = {
 const passive_abrams_heal: HeroAbilityDef = {
   id: 'passive_abrams_heal', trigger: 'startOfTurn', target: 'self',
   name: 'Infernal Resilience',
-  text: 'Heals 1 at start of own turn while Active.',
-  prompt: 'Infernal Resilience — start of own turn while Active: heal 1.',
+  text: 'At the start of your turn, if Abrams is Active, he heals 2.',
   run: (G, _ctx, { source }) => {
     if (!source) return;
     const found = findCardOnBoard(G, source.iid);
     if (found && found.card === source && source.zone === 'active') {
-      healUnit(G, source, 1, 'Infernal Resilience', { tag: 'regen' });
+      healUnit(G, source, 2, 'Infernal Resilience', { tag: 'regen' });
     }
   },
 };
 
-// Fixation: canon Haze ramps with sustained fire. TCG: from Level 3, after Haze
-// makes her attack she gains Extra Attack 1 (a follow-up swing the same turn).
-// Fires only on her primary swing (`params.primary`) so the follow-up doesn't
-// re-trigger it into an endless chain — nor does a Ricochet bounce, which never
-// carries `primary`. Stacks with Burst Fire / Active Reload.
-const HAZE_FIXATION_LEVEL = 3;
+// Haze — Fixation: each of her swings adds a stack to its target (up to
+// FIXATION_CAP), and her swings deal +1 bullet damage per stack to it. The
+// stacks fall off when it leaves the Active slot (the status says so); a
+// Ricochet bounce adds none — she is fixed on the hero she shoots.
 const passive_haze_fixation: HeroAbilityDef = {
   id: 'passive_haze_fixation', trigger: 'onAttack', target: 'self',
   name: 'Fixation',
-  text: 'From Level 3: after Haze attacks, she gains Extra Attack 1 this turn.',
-  prompt: 'Fixation — from Level 3, after Haze attacks, she gains Extra Attack 1 this turn.',
-  run: (_G, _ctx, { source, params }) => {
-    if (source && params?.primary && (source.level ?? 1) >= HAZE_FIXATION_LEVEL) grantExtraAttacks(source, 1);
+  text: 'Each attack adds a Fixation stack to the target (max 2). Haze deals +1 bullet damage per stack to it until it leaves the Active slot.',
+  attackBonus: (_self, target) => {
+    const n = target?.statuses.find((s) => s.id === 'fixation')?.value ?? 0;
+    return n > 0 ? { amount: n, label: `Fixation +${n}` } : null;
+  },
+  run: (G, _ctx, { target, params }) => {
+    if (!target || params?.bounce || target.hp <= 0 || isRespawning(target)) return;
+    addStatus(G, target, 'fixation', 1, 99);
   },
 };
 
-// Burrow: cleanses all debuffs from self at the start of own turn (only while Active).
-const passive_mo_krill_burrow: HeroAbilityDef = {
-  id: 'passive_mo_krill_burrow', trigger: 'startOfTurn', target: 'self',
-  name: 'Burrow',
-  text: 'Cleanses all debuffs from self at start of own turn.',
-  prompt: 'Burrow — start of own turn: cleanse all debuffs from self.',
-  run: (G, _ctx, { source }) => {
-    if (source && source.zone === 'active') cleanseDebuffs(source);
-  },
-};
-
-// Rem — Lil Helpers: she merges into a chosen ally as a temporary equipment.
-// On cast: heal the bearer (3 + Rem's Spirit), grant +(1 + Rem's Spirit) max HP,
-// and move Rem from her bench slot into the bearer's attached list for 3 turns.
-// The countdown + return-to-bench live in tickRemMerges; bearer-death rescue in
-// killInPlace. Scaling snapshots Rem's Spirit at cast time.
-const skill_rem: HeroAbilityDef = {
-  id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true, cooldown: 1,
-  name: 'Lil Helpers',
-  text: 'Merge into an ally as a buff: heal {sp:3} and grant +{sp:1} max HP for 3 turns, then return to the bench.',
-  prompt: "Rem Lil Helpers — merge into an ally: heal (3 + Spirit) and grant +(1 + Spirit) max HP for 3 turns.",
-  base: 3,
-  scalesSpirit: true,
-  run: (G, ctx, { source, target }) => {
-    if (!source || !target || target === source) return;
-    if (isRespawning(target)) return; // can't merge into a corpse
-    const s = effectiveSpirit(source);
-    const hpBuff = 1 + s;
-    target.hpMax += hpBuff;
-    target.hp += hpBuff;
-    healUnit(G, target, 3 + s, 'Lil Helpers');
-    // Move Rem out of her bench slot and attach her to the bearer.
-    const ps = G.players[ctx.movingPlayer];
-    const idx = ps.bench.findIndex((b) => b === source);
-    if (idx >= 0) ps.bench[idx] = null;
-    source.zone = 'equipment';
-    source.attachedTo = target.iid;
-    source.remMergeTurnsLeft = 3;
-    source.remMergeHpBuff = hpBuff;
-    (target.attached ??= []).push(source);
-    pushLog(G, `Rem merges into ${cardName(target.cardId)}.`);
-  },
-};
-
-// On every attack Shiv lands, apply Bleed 1 (2 turns) to the target.
-const passive_shiv_bleed: HeroAbilityDef = {
-  id: 'passive_shiv_bleed', trigger: 'onAttack', target: 'self',
-  name: 'Serrated Knives',
-  text: 'Attacks apply Bleed 2 for 2 turns.',
-  prompt: "Serrated Knives — attacks apply Bleed 2 for 2 turns.",
-  run: (G, _ctx, { source, target }) => {
-    if (source && target) addStatus(G, target, 'bleed', 2, 2);
-  },
-};
-
-// Flight: takes 1 less bullet damage from every source. A pure hook —
-// damageUnit asks it (`incomingDamage`) before anything else touches the hit.
+// Vindicta — Flight: she floats above the fight, and every swing of hers also
+// lands {sp:1} spirit damage (not a Ricochet bounce: the bounce is her bullet alone).
 const passive_vindicta_flight: HeroAbilityDef = {
-  id: 'passive_vindicta_flight', trigger: 'ongoing', target: 'self',
+  id: 'passive_vindicta_flight', trigger: 'onAttack', target: 'self',
   name: 'Flight',
-  text: 'Takes 1 less bullet damage from all sources.',
-  prompt: 'Flight — takes 1 less bullet damage from all sources.',
-  incoming: (_self, amount, type) => (type === 'attack' ? Math.max(0, amount - 1) : amount),
-  run: () => {},
-};
-
-// Mixed Bullets: Wraith's basic attack deals Bullet Power as bullet damage
-// (the normal swing) PLUS her full Spirit Power as a second spirit-damage hit —
-// so Weapon AND Spirit items both scale her, and she pierces either single
-// resist. Fires on every swing (Extra Attacks too) like Shiv's bleed.
-const passive_wraith_mixed: HeroAbilityDef = {
-  id: 'passive_wraith_mixed', trigger: 'onAttack', target: 'self',
-  name: 'Mixed Bullets',
-  text: 'Attacks deal Bullet Power (bullet) + {sp:0} (spirit).',
-  prompt: 'Mixed Bullets — attacks also deal Spirit Power as spirit damage.',
+  text: 'Vindicta flies: her attacks also deal {sp:1} spirit damage.',
   run: (G, _ctx, { source, target, params }) => {
-    if (!source || !target || params?.bounce) return; // her spirit half rides the swing, not a Ricochet bounce
-    const sp = effectiveSpirit(source);
-    if (sp > 0) damageUnit(G, target, sp, 'spirit', 'Mixed Bullets', { tag: 'mixed_bullets', source, cast: 'proc' });
+    if (!source || !target || params?.bounce || target.hp <= 0 || isRespawning(target)) return;
+    damageUnit(G, target, 1 + effectiveSpirit(source), 'spirit', 'Flight', { source, cast: 'proc' });
   },
 };
 
-// Bloodscent: bullet lifesteal — Drifter heals for HALF the damage his attacks
-// deal (the dealt amount is plumbed in via params.dealt from the attack action).
-// Scales with weapon power, Extra Attack swings, and Healing Boost items.
+// Drifter — Bloodscent: his swing hits a hero below half HP for 1 more, and
+// every enemy hero knocked out while he stands in the lane grows his Attack for
+// the game, up to BLOODSCENT_MAX (counted in his `tally`, which a fall keeps).
+const BLOODSCENT_MAX = 2;
 const passive_drifter_bloodscent: HeroAbilityDef = {
-  id: 'passive_drifter_bloodscent', trigger: 'onAttack', target: 'self',
+  id: 'passive_drifter_bloodscent', trigger: 'onRivalFall', target: 'self',
   name: 'Bloodscent',
-  text: 'Heals for half the damage his attacks deal (bullet lifesteal).',
-  prompt: 'Bloodscent — Drifter heals for half the damage his attacks deal.',
-  run: (G, _ctx, { source, target, params }) => {
-    if (params?.bounce) return; // a self-heal: off the swing, not off a Ricochet bounce
-    const dealt = (params?.dealt as number | undefined) ?? 0;
-    const heal = Math.floor(dealt / 2);
-    if (source && heal > 0) healUnit(G, source, heal, 'Bloodscent', { tag: 'lifesteal', from: target });
+  text: 'His attacks deal +1 bullet damage to a hero below half HP. Each knockout while he is Active gives him +1 Attack for the game (max +2).',
+  attackBonus: (_self, target) => (target && heroData(target) && belowHalf(target) ? { amount: 1, label: 'Bloodscent +1' } : null),
+  run: (G, _ctx, { source }) => {
+    if (!source) return;
+    const id = 'passive_drifter_bloodscent';
+    const kills = source.tally?.[id] ?? 0;
+    if (kills >= BLOODSCENT_MAX) return;
+    (source.tally ??= {})[id] = kills + 1;
+    source.atkMod += 1;
+    pushLog(G, `Bloodscent: ${cardName(source.cardId)} gains +1 Attack for the game (${kills + 1} of ${BLOODSCENT_MAX}).`);
   },
 };
 
 // ----- Ultimates -----
-// Kit abilities: `source` is the hero using it (its own, or Sinclair with a
-// borrowed copy), and the cast frame's source too, so `ultSpi` scales it.
-// `base` here is the AI heuristic's magnitude proxy, same as everywhere else.
+// Buttons printed on the hero card: `source` is the hero using it (its own, or
+// Sinclair casting a copy as his own), and the cast frame's source too, so
+// `ultSpi` scales it. `base` here is the AI heuristic's magnitude proxy, same as
+// everywhere else. Each is one or two effects, as the hero doc writes it.
+
+// The attack of the hero using an ultimate, as its card shows it (Haze's Bullet Dance).
+function ultAtk(): number {
+  const src = currentCast()?.source;
+  return src ? effectiveAtk(src) : 0;
+}
+
+// The enemy heroes standing, read before an ultimate's damage (see enemyActiveOf).
+function enemiesOf(G: GameState, pid: PlayerID): CardInstance[] {
+  return liveBoardCards(G.players[otherPlayer(pid)]).filter((c) => !!heroData(c) && c.hp > 0);
+}
+
 const eff_ult_abrams: AbilityDef = {
-  id: 'eff_ult_abrams', trigger: 'onPlay', target: 'noTarget',
-  base: 4,
-  run: (G, ctx) => {
-    const enemy = otherPlayer(ctx.movingPlayer);
-    const s = ultSpi();
-    eachBoard(G, enemy, (c) => damageUnit(G, c, 4 + s, 'spirit'));
-    const act = G.players[enemy].active;
-    if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
+  id: 'eff_ult_abrams', trigger: 'onPlay', target: 'enemyActive',
+  base: 6,
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    damageUnit(G, target, 6 + ultSpi(), 'spirit', 'Seismic Impact');
+    addStatus(G, target, 'stun', 1, 1);
   },
 };
-// Singularity — canon vortex channel. Dynamo locks into the channel (no attack,
-// no skill) and tears the enemy board apart with a 3-spirit AoE pulse at the end
-// of each of his next 3 turns (9 per enemy total; scales with Spirit). Pulses
-// resolve in tickCastingPulses; the lockout is the `casting` status.
+// Singularity: one turn that stuns every enemy, then the pull's damage.
 const eff_ult_dynamo: AbilityDef = {
   id: 'eff_ult_dynamo', trigger: 'onPlay', target: 'noTarget',
-  base: 3,
-  run: (G, ctx, { source }) => {
-    const dynamo = ultCaster(G, ctx.movingPlayer, source, 'hero_dynamo');
-    if (!dynamo) { pushLog(G, 'Singularity fizzled — no caster on the board.'); return; }
-    addStatus(G, dynamo, 'casting', 3, 3);
-    pushLog(G, `${cardName(dynamo.cardId)} channels Singularity.`);
+  base: 2,
+  run: (G, ctx) => {
+    const foes = enemiesOf(G, ctx.movingPlayer);
+    for (const c of foes) addStatus(G, c, 'stun', 1, 1);
+    const dmg = 2 + ultSpi();
+    for (const c of foes) damageUnit(G, c, dmg, 'spirit', 'Singularity');
+    resolve(G);
   },
 };
+// Bullet Dance: Haze's Attack, as bullet damage, at every enemy — it grows as
+// she does (+3 Attack a level). Bullets, but no swing: nothing rides on it.
 const eff_ult_haze: AbilityDef = {
   id: 'eff_ult_haze', trigger: 'onPlay', target: 'noTarget',
   base: 3,
-  run: (G, ctx) => { const s = ultSpi(); eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 3 + s, 'attack')); },
+  run: (G, ctx) => {
+    const dmg = ultAtk();
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'attack', 'Bullet Dance'); });
+  },
 };
 const eff_ult_kelvin: AbilityDef = {
   id: 'eff_ult_kelvin', trigger: 'onPlay', target: 'noTarget',
-  base: 7,
-  run: (G, ctx) => { for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 7, 'Frozen Shelter'); },
-};
-// Soul Exchange: the two Actives trade current HP. Only two living Actives can
-// trade (a corpse has no HP to give or take), and each hero takes no more than
-// its own max HP can hold, so the swap can never push a hero over its max or
-// knock one out.
-const eff_ult_lady_geist: AbilityDef = {
-  id: 'eff_ult_lady_geist', trigger: 'onPlay', target: 'noTarget',
+  base: 4,
   run: (G, ctx) => {
-    const ally = G.players[ctx.movingPlayer].active;
-    const enemy = G.players[otherPlayer(ctx.movingPlayer)].active;
-    if (!ally || !enemy || isRespawning(ally) || isRespawning(enemy)) {
-      pushLog(G, 'Soul Exchange fizzled — both Actives must be standing.');
-      return;
-    }
-    const allyHp = ally.hp;
-    ally.hp = Math.min(enemy.hp, ally.hpMax);
-    enemy.hp = Math.min(allyHp, enemy.hpMax);
-    pushLog(G, 'Souls swapped.');
+    const heal = 4 + ultSpi();
+    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, heal, 'Frozen Shelter');
+    const front = enemyActiveOf(G, ctx.movingPlayer);
+    if (front) addStatus(G, front, 'rooted', 1, 2);
+  },
+};
+// Soul Exchange: Lady Geist and the enemy Active trade their HP (each takes no
+// more than its own max HP holds, so the swap knocks nobody out), then she hits
+// it. The lower she has dropped, the harder it flips the duel.
+const eff_ult_lady_geist: AbilityDef = {
+  id: 'eff_ult_lady_geist', trigger: 'onPlay', target: 'enemyActive',
+  base: 3,
+  run: (G, _ctx, { source, target }) => {
+    if (!target || !source || isRespawning(source) || source.hp <= 0) return;
+    const mine = source.hp;
+    source.hp = Math.min(target.hp, source.hpMax);
+    target.hp = Math.min(mine, target.hpMax);
+    pushLog(G, `Soul Exchange: ${cardName(source.cardId)} and ${cardName(target.cardId)} swap HP.`);
+    damageUnit(G, target, 3 + ultSpi(), 'spirit', 'Soul Exchange');
   },
 };
 const eff_ult_lash: AbilityDef = {
   id: 'eff_ult_lash', trigger: 'onPlay', target: 'noTarget',
-  base: 5,
+  base: 3,
   run: (G, ctx) => {
-    const enemy = otherPlayer(ctx.movingPlayer);
-    const s = ultSpi();
-    eachBoard(G, enemy, (c) => damageUnit(G, c, 5 + s, 'spirit'));
-    const act = G.players[enemy].active;
-    if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
+    const foes = enemiesOf(G, ctx.movingPlayer);
+    const dmg = 3 + ultSpi();
+    for (const c of foes) damageUnit(G, c, dmg, 'spirit', 'Death Slam');
+    for (const c of foes) addStatus(G, c, 'stun', 1, 1);
+    resolve(G);
   },
 };
 const eff_ult_mo_krill: AbilityDef = {
   id: 'eff_ult_mo_krill', trigger: 'onPlay', target: 'enemyActive',
-  base: 6,
+  base: 4,
   run: (G, ctx, { source, target }) => {
     if (!target) return;
-    addStatus(G, target, 'stun', 1, 1);
-    const dealt = damageUnit(G, target, 6 + ultSpi(), 'spirit', 'Combo', { tag: 'combo' });
+    const dealt = damageUnit(G, target, 4 + ultSpi(), 'spirit', 'Combo', { tag: 'combo' });
     const mk = ultCaster(G, ctx.movingPlayer, source, 'hero_mo_krill');
     if (mk && dealt > 0) healUnit(G, mk, dealt, 'Combo', { tag: 'lifesteal', from: target });
+    addStatus(G, target, 'stun', 1, 1);
   },
 };
 const eff_ult_paige: AbilityDef = {
   id: 'eff_ult_paige', trigger: 'onPlay', target: 'noTarget',
-  base: 4,
+  base: 2,
   run: (G, ctx) => {
-    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 4, 'Rallying Charge');
     const s = ultSpi();
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => damageUnit(G, c, 4 + s, 'spirit'));
+    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 3 + s, 'Rallying Charge');
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, 2 + s, 'spirit', 'Rallying Charge'); });
   },
 };
+// Naptime: a Sleep is a Stun for each of its turns (hero-design §3).
 const eff_ult_rem: AbilityDef = {
   id: 'eff_ult_rem', trigger: 'onPlay', target: 'enemyActive',
-  base: 6,
-  // Naptime: sleep the enemy Active; the stored value (6) is the wake-up burst,
-  // dealt when it wakes (any damage) or when the sleep expires (statusOps).
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'sleep', 6 + ultSpi(), 2); },
+  base: 4,
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'sleep', 1, 2); },
 };
-// Storm Cloud — canon escalating lightning channel. Seven lifts into the storm
-// (locked out, `casting`) and rains an AoE that RAMPS each turn: 2 → 3 → 4
-// spirit (+Spirit) over 3 turns (9 per enemy, back-loaded). The channel carries
-// `ramp: 1`, and tickCastingPulses adds it to the value after each pulse.
 const eff_ult_seven: AbilityDef = {
   id: 'eff_ult_seven', trigger: 'onPlay', target: 'noTarget',
-  base: 2,
-  run: (G, ctx, { source }) => {
-    const seven = ultCaster(G, ctx.movingPlayer, source, 'hero_seven');
-    if (!seven) { pushLog(G, 'Storm Cloud fizzled — no caster on the board.'); return; }
-    addStatus(G, seven, 'casting', 2, 3, { ramp: 1 });
-    pushLog(G, `${cardName(seven.cardId)} channels Storm Cloud.`);
+  base: 5,
+  run: (G, ctx) => {
+    const dmg = 5 + ultSpi();
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit', 'Storm Cloud'); });
   },
 };
+// Killing Blow keeps its condition (hero-design §3): the hit, then a target it
+// has left below half HP is knocked out.
 const eff_ult_shiv: AbilityDef = {
   id: 'eff_ult_shiv', trigger: 'onPlay', target: 'enemyActive',
   base: 5,
   run: (G, _ctx, { target }) => {
     if (!target) return;
-    // Killing Blow: execute a target already below half HP, else a 5 spirit hit.
-    if (target.hp <= target.hpMax / 2) damageUnit(G, target, 999, 'pure', 'Killing Blow', { tag: 'execute' });
-    else damageUnit(G, target, 5 + ultSpi(), 'spirit', 'Killing Blow');
+    damageUnit(G, target, 5 + ultSpi(), 'spirit', 'Killing Blow');
+    if (target.hp > 0 && !isRespawning(target) && belowHalf(target)) {
+      damageUnit(G, target, 999, 'pure', 'Killing Blow', { tag: 'execute' });
+    }
   },
 };
+// Audience Participation: the enemy Active's ultimate, cast at once as
+// Sinclair's own — his souls, his Spirit, aimed as that ultimate aims (`aim`).
+// Nothing to copy (no enemy Active, one with no ultimate, or another Sinclair's)
+// and it cannot be used.
+function copiedUlt(G: GameState, pid: PlayerID): AbilityDef | undefined {
+  const front = standingActive(G, otherPlayer(pid));
+  const id = front ? heroData(front)?.ult : undefined;
+  return id && id !== 'eff_ult_sinclair' ? getAbility(id) : undefined;
+}
 const eff_ult_sinclair: AbilityDef = {
   id: 'eff_ult_sinclair', trigger: 'onPlay', target: 'noTarget',
-  // Audience Participation: borrow the enemy Active hero's ultimate. The hero
-  // using it (Sinclair) gains it as a one-shot kit ability (`borrowedUlt`):
-  // free, no level or cooldown, gone once used. One borrowed at a time — a new
-  // copy replaces an unused one — and never Sinclair's own.
-  run: (G, ctx, { source }) => {
-    const pid = ctx.movingPlayer;
-    const caster = source && heroData(source) && !isRespawning(source) ? source : undefined;
-    const enemyActive = G.players[otherPlayer(pid)].active;
-    if (!caster || !enemyActive || isRespawning(enemyActive)) {
-      pushLog(G, 'Audience Participation: no enemy ultimate to copy.');
-      return;
-    }
-    const ult = heroData(enemyActive)?.ult;
-    if (!ult || ult === heroData(caster)?.ult) { pushLog(G, 'Audience Participation: nothing to copy.'); return; }
-    caster.borrowedUlt = ult;
-    pushLog(G, `Audience Participation: ${cardName(caster.cardId)} borrows ${cardName(ultimateCard(ult)?.id ?? ult)} (free, once).`);
+  base: 4,
+  aim: (G, pid, hero) => {
+    const copied = copiedUlt(G, pid);
+    return copied ? abilityAim(G, pid, hero, copied) : null;
+  },
+  run: (G, ctx, { source, target }) => {
+    const copied = copiedUlt(G, ctx.movingPlayer);
+    if (!copied || !source) { pushLog(G, 'Audience Participation: no enemy ultimate to copy.'); return; }
+    pushLog(G, `Audience Participation: ${cardName(source.cardId)} casts ${cardName(ultimateCard(copied.id)?.id ?? copied.id)}.`);
+    copied.run(G, ctx, { source, target });
   },
 };
 const eff_ult_vindicta: AbilityDef = {
-  id: 'eff_ult_vindicta', trigger: 'onPlay', target: 'enemyAny',
-  base: 5,
-  run: (G, _ctx, { target }) => {
-    if (!target) return;
-    // Assassinate: 9 spirit to a target already below half HP, else 5.
-    const dmg = (target.hp <= target.hpMax / 2 ? 9 : 5) + ultSpi();
-    damageUnit(G, target, dmg, 'spirit', 'Assassinate');
-  },
+  id: 'eff_ult_vindicta', trigger: 'onPlay', target: 'enemyHero',
+  base: 8,
+  run: (G, _ctx, { target }) => { if (target) damageUnit(G, target, 8 + ultSpi(), 'spirit', 'Assassinate'); },
 };
 const eff_ult_viscous: AbilityDef = {
   id: 'eff_ult_viscous', trigger: 'onPlay', target: 'noTarget',
-  base: 3,
-  run: (G, ctx, { source }) => {
-    const vis = ultCaster(G, ctx.movingPlayer, source, 'hero_viscous');
-    if (vis) addStatus(G, vis, 'unstoppable', 1, 1);
-    const enemy = otherPlayer(ctx.movingPlayer);
-    const s = ultSpi();
-    eachBoard(G, enemy, (c) => damageUnit(G, c, 3 + s, 'spirit'));
-    const act = G.players[enemy].active;
-    if (act && (act.respawnTurnsLeft ?? 0) === 0) addStatus(G, act, 'stun', 1, 1);
+  base: 2,
+  run: (G, ctx) => {
+    const front = enemyActiveOf(G, ctx.movingPlayer);
+    const dmg = 2 + ultSpi();
+    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit', 'Goo Ball'); });
+    if (front) addStatus(G, front, 'stun', 1, 1);
   },
 };
+// Shadow Transformation: +3 Bullet Power and Unstoppable (no crowd control) for
+// two of her turns — both buffs tick at the start of her turns.
 const eff_ult_yamato: AbilityDef = {
   id: 'eff_ult_yamato', trigger: 'onPlay', target: 'self',
   base: 3,
@@ -2438,69 +2451,55 @@ const eff_ult_yamato: AbilityDef = {
     const t = target ?? source;
     if (!t) return;
     addStatus(G, t, 'weapon_power', 3, 2);
-    addStatus(G, t, 'unstoppable', 1, 1);
-    healUnit(G, t, 5, 'Shadow Transformation');
+    addStatus(G, t, 'unstoppable', 1, 2);
   },
 };
-
-// Wraith ultimate: Telekinesis. Lifts the enemy Active for spirit damage + Stun 1.
 const eff_ult_wraith: AbilityDef = {
   id: 'eff_ult_wraith', trigger: 'onPlay', target: 'enemyActive',
-  base: 4,
+  base: 5,
   run: (G, _ctx, { target }) => {
     if (!target) return;
-    damageUnit(G, target, 4 + ultSpi(), 'spirit');
+    damageUnit(G, target, 5 + ultSpi(), 'spirit', 'Telekinesis');
     addStatus(G, target, 'stun', 1, 1);
   },
 };
-
-// Last Stand — canon drain channel. The LIGHT channel variant: Warden keeps
-// attacking and using Willpower while a 2-spirit (+Spirit) AoE pulse drains the
-// whole enemy board at the end of each of his next 3 turns, healing him for the
-// total. A grindy drain-tank wincon rather than a burst wipe. Pulse + lifesteal
-// resolve in tickCastingPulses; `casting_light` does NOT lock him out.
+// Last Stand: one drain from the enemy Active, Warden healing what it dealt.
 const eff_ult_warden: AbilityDef = {
-  id: 'eff_ult_warden', trigger: 'onPlay', target: 'noTarget',
-  base: 2,
-  run: (G, ctx, { source }) => {
+  id: 'eff_ult_warden', trigger: 'onPlay', target: 'enemyActive',
+  base: 6,
+  run: (G, ctx, { source, target }) => {
+    if (!target) return;
+    const dealt = damageUnit(G, target, 6 + ultSpi(), 'spirit', 'Last Stand');
     const warden = ultCaster(G, ctx.movingPlayer, source, 'hero_warden');
-    if (!warden) { pushLog(G, 'Last Stand fizzled — no caster on the board.'); return; }
-    addStatus(G, warden, 'casting_light', 2, 3);
-    pushLog(G, `${cardName(warden.cardId)} braces — Last Stand begins draining.`);
+    if (warden && dealt > 0) healUnit(G, warden, dealt, 'Last Stand', { tag: 'lifesteal', from: target });
   },
 };
-
-// Mirage ultimate Traveler: canon Mirage teleports himself to safety. TCG
-// mapping: a free reposition — if Mirage is Active, swap him to the bench with
-// an available ally (no Retreat cost), then grant Shield 3 ("barrier on
-// arrival"). A cheap escape/tempo tool, not a finisher.
+// Traveler: Mirage, in the Active slot, trades places with the bench ally the
+// player picks (a free swap: it steps in), and both get Shield 2. Away from the
+// lane there is nobody to swap with, so it cannot be used.
 const eff_ult_mirage: AbilityDef = {
-  id: 'eff_ult_mirage', trigger: 'onPlay', target: 'noTarget',
-  run: (G, ctx, { source }) => {
+  id: 'eff_ult_mirage', trigger: 'onPlay', target: 'allyBench',
+  base: 2,
+  aim: (G, pid, hero) => (G.players[pid].active === hero ? { target: 'allyBench', excludeSelf: true } : null),
+  run: (G, ctx, { source, target }) => {
     const ps = G.players[ctx.movingPlayer];
-    const mirage = ultCaster(G, ctx.movingPlayer, source, 'hero_mirage');
-    if (!mirage) { pushLog(G, 'Traveler fizzled.'); return; }
-    if (ps.active === mirage) {
-      // The first ally who can take the front steps in; the line below tells the story.
-      const benchAlly = stepInCandidates(ps)[0];
-      if (benchAlly) swapIntoActive(G, ps, benchAlly, { quiet: true });
-    }
-    addStatus(G, mirage, 'shield', 3, 999);
-    pushLog(G, `Traveler: ${cardName(mirage.cardId)} slips to safety (Shield 3).`);
+    if (!source || !target || ps.active !== source) { pushLog(G, 'Traveler fizzled.'); return; }
+    swapIntoActive(G, ps, target, { quiet: true });
+    addStatus(G, source, 'shield', 2, 999);
+    addStatus(G, target, 'shield', 2, 999);
+    pushLog(G, `Traveler: ${cardName(source.cardId)} swaps with ${cardName(target.cardId)} (Shield 2 each).`);
   },
 };
-
-// Drifter ultimate Eternal Night: canon wraps up to 2 enemies in isolating
-// darkness. TCG mapping: Silence the enemy Active + one bench hero for 2 turns
-// (they can't cast skills/ults). Stops the opponent from answering with skill
-// counter-plays.
+// Eternal Night: one target alone in the dark, taking +1 damage of either type
+// for 3 of the caster's turns (both resists down: they tick on its own turns).
 const eff_ult_drifter: AbilityDef = {
-  id: 'eff_ult_drifter', trigger: 'onPlay', target: 'noTarget',
-  run: (G, ctx) => {
-    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
-    if (enemy.active && (enemy.active.respawnTurnsLeft ?? 0) === 0) addStatus(G, enemy.active, 'silenced', 1, 2);
-    const benchHero = enemy.bench.find((b) => b && (b.respawnTurnsLeft ?? 0) === 0);
-    if (benchHero) addStatus(G, benchHero, 'silenced', 1, 2);
+  id: 'eff_ult_drifter', trigger: 'onPlay', target: 'enemyActive',
+  base: 5,
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    damageUnit(G, target, 5 + ultSpi(), 'spirit', 'Eternal Night');
+    addStatus(G, target, 'bullet_resist_down', 1, 3);
+    addStatus(G, target, 'spirit_resist_down', 1, 3);
   },
 };
 
@@ -2552,11 +2551,11 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_haunting_shot, eff_infinite_rounds, eff_infinite_rounds_pierce, eff_frostbite_charm,
   eff_mystical_piano, eff_nullification_burst, eff_prism_blast,
   // ----- Hero skills -----
-  skill_dynamo, skill_kelvin, skill_lady_geist, skill_lash, skill_paige, skill_rem,
-  skill_seven_static, skill_sinclair, skill_viscous, skill_yamato, skill_warden,
+  skill_mo_krill, skill_viscous, skill_lady_geist, skill_shiv, skill_warden, skill_wraith,
+  skill_seven, skill_lash, skill_yamato, skill_dynamo, skill_kelvin, skill_paige, skill_rem,
+  skill_sinclair,
   // ----- Hero passives -----
-  passive_abrams_heal, passive_haze_fixation, passive_mo_krill_burrow,
-  passive_shiv_bleed, passive_vindicta_flight, passive_wraith_mixed, passive_drifter_bloodscent,
+  passive_abrams_heal, passive_haze_fixation, passive_vindicta_flight, passive_drifter_bloodscent,
   passive_mirage_djinns_mark,
   // ----- Ultimates -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
