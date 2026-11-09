@@ -78,14 +78,18 @@ discard pile. A drafted match builds each deck as the last pick lands
 legal one, else the deck its heroes' builds make (`deckFromBuilds`,
 cards/decks.ts: the builds read across, round by round) — and its four drafted
 heroes, shuffled from the match seed (`nextRandom`, counted in
-`G.counters.rng`, so a game replays from G alone). Each side draws OPENING_HAND
-with at least one hero that can stand in the lane (`dealOpeningHand`: a hand
-with none swaps a random item for a random such hero of the deck) and puts one
-hero from it in the lane as its first Active: an AI seat at once, the human
-seat when asked (`G.pendingActive`: only `chooseActive` is legal, for that
-seat's hand, from either seat). A scripted match (a Story fight, a lesson)
-keeps its rosters on the board and deals from a deck of items (`StorySetup`
-may name the decks, top first, and the opening hand's size).
+`G.counters.rng`, so a game replays from G alone). At the last pick the decks
+are stocked unseen (`stockDeck`) and each side chooses its first Active from
+its drafted heroes in the deck (`openingCandidates`): an AI seat at once
+(`openingPick`: most HP, then attack), the human seat when asked
+(`G.pendingActive`: only `chooseActive` is legal, for that seat's deck, from
+either seat; the draft's turn is held until then). The choice finishes the
+opening (`finishOpening`): the AI's pick, both decks shuffled (`shuffleDeck`),
+each side dealt OPENING_DRAW, and the draft's turn ended so turn 1 opens on a
+dealt board. A scripted match (a Story fight, a lesson) keeps its rosters on
+the board and deals from a deck of items (`dealOpeningHand`, with the Pocket
+hero guarantee; `StorySetup` may name the decks, top first, and the opening
+hand's size).
 
 **Income and the draw.** Souls accumulate: nothing refills and nothing is lost
 at the end of a turn. At the start of every own turn (the first included) the
@@ -101,9 +105,10 @@ turn's attack, which ends it.
 
 **The hand.** It holds heroes and items (zone `'hand'`); every move from it
 is `pid`'s own turn's, before the attack.
-- `placeHero(cardIid, toActive?)` puts a hero on the first free bench slot
-  (`freeBenchSlot`: not one a merged Rem will come back to) or, `toActive`,
-  into an EMPTY Active slot. Free. The state-based pass follows, so a hero
+- `placeHero(cardIid, toActive?, slot?)` puts a hero on the bench slot named
+  (`slot` 1-3, free: not held, not one a merged Rem will come back to), else
+  its first free bench slot (`freeBenchSlot`) or, `toActive`, into an EMPTY
+  Active slot. Free. Every placement is a `place` deck FX event. The state-based pass follows, so a hero
   benched while the lane is open steps up (an AI seat's at once, the human
   seat is asked).
 - `playCard(cardIid, heroIid, upgradeId?)` puts an item on one of the

@@ -25,9 +25,22 @@ with less to rebuild.
 
 ## Start of the match
 
-- You draw 5 cards, and at least one of them is always a hero (the Pocket rule).
-  - If the 5 hold no hero, swap a random non-hero in the hand for a random hero from the deck.
-- You put one hero from your hand in the lane as your Active. That is your only hero on the board for now. The others come as you draw them.
+Patrick, 2026-11-09: "the player at beginning of the game, player should decide which hero to draw
+at turn 1, it is like rotation selection so it also fits a small screen like mobile."
+
+- Each side chooses its starting hero from its 4 drafted heroes, not from whatever the deal
+  happened to bring. The chosen hero goes straight to the Active slot.
+  - You choose on a carousel that fits a phone: one large hero card in the middle (the real
+    card: stats, skill, ultimate), its neighbours peeking in at the sides; swipe, tap the arrows
+    or a neighbour, or use the keyboard's arrows; one button confirms ("Start with Warden").
+  - The rival AI picks its own, with its own valuation; its choice stays hidden until you confirm.
+- Then each side draws 4 cards from the rest of its deck (the other 3 heroes and the 16 items).
+  That is 5 cards dealt, as before: the hero and the 4.
+  - The Pocket hero guarantee is not needed here: every side opens with a hero in the lane.
+- That is your only hero on the board for now. The others come as you draw them.
+- The opening plays in this order: both sides choose; both Actives fly to their lanes (yours from
+  the picker's card, the rival's face down, turning over as it lands); the remaining heroes
+  shuffle into each deck, with the riffle; each side is dealt its 4.
 
 ## Each turn
 
@@ -114,5 +127,27 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
   face up, the rival's stay backs), each batch once (`admitBatch`: the layer
   mounts on the opening's batch, and StrictMode replays a mount's effects in
   development); `useTickedCount` makes the piles' counts
-  tick as cards leave and land. The first-Active prompt waits for the opening
-  to play. Under reduced motion nothing flies and everything just updates.
+  tick as cards leave and land. Under reduced motion nothing flies and
+  everything just updates.
+- The opening (2026-11-09): the draft's last pick stocks each deck unseen and
+  holds its turn; the carousel (`OpeningPicker`) offers your drafted heroes
+  from the deck (`openingCandidates`; Rem cannot lead); `chooseActive` puts
+  yours in the lane, makes the AI's pick (most HP, then attack), shuffles
+  both decks and deals `OPENING_DRAW` (4), then ends the draft's turn so turn 1
+  opens on a dealt board. `dealOpeningHand` and its guarantee stay for scripted
+  matches only. The opening batch plans, per side: the `place` flight (after
+  the lead), the three other heroes into the deck, the riffle, the deal —
+  both sides at once, ~2.3 s. A drafted match has no `BoardIntro` deal-in
+  (`enabled` false), so nothing lands a tile early.
+- Placing a hero (2026-11-09): a tap on a hero in your hand picks it up (it
+  lifts; the free bench wells, and the lane when it is open, glow; the banner
+  says "Choose a spot for Mirage"); a tap on a lit well places it there — that
+  tap is the confirmation — and a tap on the card again, or on the table, puts
+  it back. `placeHero` takes an optional bench `slot` (1-3; a taken or
+  out-of-range one is refused: `slotTaken`, `badSlot`); without one it is
+  first-free as before, which is what the AI plays. Every placement — yours,
+  the rival's, the first Actives — is a `place` deck FX event, flown by the
+  motion layer from the hand card (the rival's as a back that turns over) to
+  the slot, the real tile hidden until it lands; the AI's next move waits for
+  the rival's flight plus `PLACE_SETTLE_MS` (500), not at all under reduced
+  motion. The coach's gate steps aside while a hero is picked up.
