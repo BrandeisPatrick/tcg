@@ -119,9 +119,9 @@ export function OverlaysTab() {
     >
       <Caption>
         The sheet that rises when a hero is tapped. Its plates <strong>are</strong> the actions: tap the
-        skill card to use the skill, or from Level 2 the Ultimate (any of your heroes, one ability a turn,
-        free), and on your Active tap Attack to swing at their Active — free, one-way, and the end of the
-        turn. A hero with a passive shows a Passive block that cannot be pressed. Pick a hero, then a state.
+        skill card to use the skill, or from Level 2 the Ultimate button printed on the card (any of your
+        heroes, one ability a turn, for the souls on its plate), and on your Active tap Attack to swing at
+        their Active — free, one-way, and the end of the turn. A hero with a passive shows a Passive block that cannot be pressed. Pick a hero, then a state.
       </Caption>
 
       <div className="gal-pick">
