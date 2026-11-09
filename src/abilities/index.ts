@@ -71,6 +71,10 @@ export interface AbilityDef {
   hpCost?: number;
   /** If true, hero's spiritMod adds to the skill's damage/heal/effect magnitude as spirit-type damage. */
   scalesSpirit?: boolean;
+  /** A draw card's draw: the cards it draws and the cards it then makes its
+   *  player discard from the hand (the Cooldown family). Its `run` does it;
+   *  this says it, for the AI's worth of the card (ai/heuristic.ts). */
+  draw?: { cards: number; discard: number };
   /** Base magnitude (dmg/heal/shield). Read by the AI heuristic as its
    *  proxy for how much an ability is worth (ai/heuristic.ts), and pinned
    *  by souls.spec / mystic-burst.spec. Not rendered anywhere. */
@@ -819,17 +823,17 @@ function drawThenDiscard(draw: number, discard: number, cardId: string): Ability
 }
 const eff_compress_cooldown: AbilityDef = {
   id: 'eff_compress_cooldown', trigger: 'onPlay', target: 'noTarget',
-  base: 2,
+  draw: { cards: 2, discard: 1 },
   run: drawThenDiscard(2, 1, 'improved_cooldown'),
 };
 const eff_superior_cooldown: AbilityDef = {
   id: 'eff_superior_cooldown', trigger: 'onPlay', target: 'noTarget',
-  base: 4,
+  draw: { cards: 4, discard: 2 },
   run: drawThenDiscard(4, 2, 'superior_cooldown'),
 };
 const eff_transcendent_cooldown: AbilityDef = {
   id: 'eff_transcendent_cooldown', trigger: 'onPlay', target: 'noTarget',
-  base: 8,
+  draw: { cards: 8, discard: 4 },
   run: drawThenDiscard(8, 4, 'transcendent_cooldown'),
 };
 

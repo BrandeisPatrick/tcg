@@ -524,7 +524,7 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
  * hand that may stand there), a promotion (either seat's: `pid` may promote
  * the seat that owes one), or a draw card's discard (each card of the hand,
  * one at a time — a `discard` move may name several at once, up to what is
- * owed). Otherwise, on its own turn: the Active's attack, if open — once per
+ * owed). Otherwise: the Active's attack, if open — once per
  * hero it may swing at (`attackTargets`), the first as the bare action (a bare
  * `attack` swings at it) and any others naming theirs; each living hero's
  * active items, in board and worn order, each on each of its targets; each
@@ -534,7 +534,8 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
  * `stepInCandidates` order (before the attack: the hero who steps in may make
  * it); each item in its hand put on each hero it may go on (one action per
  * upgrade it could make, when it could make several); each hero in its hand
- * put on the bench, and straight into an empty Active slot. Then promotions
+ * put on the bench, and straight into an empty Active slot (the hand's plays
+ * only on `pid`'s own turn). Then promotions
  * and ending the turn last. Everything listed passes `blocked`, so once the
  * attack is made only the end of the turn is left.
  */
@@ -549,7 +550,9 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
   }
   if (G.pendingDiscard) {
     if (G.pendingDiscard.pid === pid) for (const c of ps.hand) offer({ type: 'discard', cardIids: [c.iid] });
-  } else if (!G.draft && seatToMove(G) === pid) {
+  } else if (!G.draft) {
+    // The hand's plays are `pid`'s own turn's (`blocked` says notYourTurn
+    // otherwise); the board's moves are listed as `blocked` judges them.
     attackTargets(G, pid).forEach((t, i) => offer(i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }));
 
     for (const hero of liveBoardCards(ps)) {

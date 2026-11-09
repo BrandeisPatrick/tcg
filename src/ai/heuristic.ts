@@ -51,7 +51,7 @@ import type { CardId, GameState, PlayerID, PlayerState, CardInstance, StatusInst
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
-  checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, isBoss, isRespawning, itemCooldown,
+  checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroWorth, isBoss, isRespawning, itemCooldown,
   itemPrice, liveBoardCards, otherPlayer, resolveSkill, reviveReady, slottedHeroes, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
@@ -182,6 +182,12 @@ function heroThreat(c: CardInstance): number {
  *  (a turn or two away from use again): the lookahead sees the use cost it. */
 const COOLING_SHARE = 0.5;
 
+/** What a worn draw card is worth for each card it nets (draws less
+ *  discards), ready or cooling alike: what a cast gains shows in the hand it
+ *  leaves (`handValue`), so a cast is weighed by the cards it brings and the
+ *  hero's ability it spends, not by the card going on cooldown. */
+const DRAW_NET_CARD = 2;
+
 // Value of what a hero wears beyond its stat bonuses (+atk/+spirit/+hp, which
 // heroThreat and hp already show): a passive item's ability procs and hooks
 // (lifesteal, burst, resist…), and an active item's effect, ready to use. The
@@ -196,7 +202,9 @@ function equipValue(c: CardInstance): number {
       for (const aid of data.abilities ?? []) v += getAbility(aid)?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
       continue;
     }
-    const worth = getAbility(data.abilities[0])?.base ?? 3;
+    const first = getAbility(data.abilities[0]);
+    if (first?.draw) { v += (first.draw.cards - first.draw.discard) * DRAW_NET_CARD; continue; }
+    const worth = first?.base ?? 3;
     if (data.hardCC) v += worth * Math.min(it.charges ?? 0, 1) + (it.charges ?? 0);
     else v += itemCooldown(it) > 0 ? worth * COOLING_SHARE : worth;
   }
@@ -244,9 +252,18 @@ const SOUL = 0.3;
 const HAND_HERO = 6;
 
 /** What an item card in the hand is worth: a base, plus this share of its
- *  price — under what it is worth worn (`equipValue`, its stats), so it is
- *  played once it can be paid for. Drawing is worth about this a card. */
-const HAND_ITEM = { base: 1, perSoul: 0.25 } as const;
+ *  price — well under what it is worth worn (`WORN_PRICE` of its price, and its
+ *  stats and effects), so it is played once it can be paid for. Drawing is
+ *  worth about this a card. */
+const HAND_ITEM = { base: 0.5, perSoul: 0.1 } as const;
+
+/** What a worn item is worth for each soul of its list price, on top of what
+ *  the position reads off it (its stats in `presence`, its effects in
+ *  `equipValue`): a card's price is its designed worth (docs/card-design.md
+ *  §3), most of which the one-ply evaluation cannot see — a proc to come, a
+ *  resist against the next hit. Above a soul's own worth (SOUL), so paying for
+ *  an item and putting it on is worth it, and an evolve gains the difference. */
+const WORN_PRICE = 0.5;
 
 /** The tie-break for putting an item on the hero whose build lists it (or an
  *  item it builds into), and for picking the upgrade a build names: well under
@@ -380,7 +397,7 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
       // point of HP — weight it like HP (×2), not ×1 (which made the bot
       // under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
-      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + statusValue(c) + channelValue(c, enemies) + borrowedValue(c));
+      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies) + borrowedValue(c));
       // Merging Rem into an ally is not the loss of a hero.
       for (const rem of mergedRem(c)) s += sign * presence(rem);
     }

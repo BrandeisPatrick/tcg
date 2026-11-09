@@ -153,7 +153,7 @@ export function HeroDetailSheet({
       name: face?.name ?? it.cardId,
       text: sentence(face?.text ?? ''),
       left,
-      full: Math.max(left, face ? activeCooldown(card, face.tier) : left),
+      full: Math.max(left, face ? activeCooldown(card, face.tier, face.type === 'spell' ? face.cooldown : undefined) : left),
       charges,
       greyed: left > 0 || charges === 0,
     };

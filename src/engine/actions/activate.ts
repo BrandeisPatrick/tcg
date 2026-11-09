@@ -47,7 +47,7 @@ export function activate(G: GameState, pid: PlayerID, itemIid: string, targetIid
   // The cooldown starts once the effect is done, so a Refresher never resets
   // its own.
   if (data.hardCC) item.charges = Math.max(0, (item.charges ?? 0) - 1);
-  else (item.cooldowns ??= {})[item.cardId] = activeCooldown(bearer, data.tier);
+  else (item.cooldowns ??= {})[item.cardId] = activeCooldown(bearer, data.tier, data.cooldown);
 
   resolve(G);
   G.action = {

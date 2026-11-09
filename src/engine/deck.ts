@@ -119,18 +119,25 @@ export function drawCards(G: GameState, pid: PlayerID, n: number): CardInstance[
 
 /**
  * The opening hand: `n` cards (OPENING_HAND) from the top of the shuffled
- * deck, at least one a hero when the deck holds one — the Pocket rule: a hand
- * with no hero swaps a random card of it for a random hero of the deck (which
- * takes the card's place in the deck, and the deck is shuffled again).
+ * deck, at least one a hero that can stand in the lane when the deck holds
+ * one — the Pocket rule: a hand with none swaps a random non-hero of it for a
+ * random such hero of the deck (which takes the card's place in the deck, and
+ * the deck is shuffled again). A bench-only hero (Rem) does not count: the
+ * opening needs an Active.
  */
 export function dealOpeningHand(G: GameState, pid: PlayerID, n: number = OPENING_HAND) {
   const ps = G.players[pid];
   drawCards(G, pid, n);
   const isHero = (c: CardInstance) => CARDS_BY_ID[c.cardId]?.type === 'hero';
-  if (ps.hand.length === 0 || ps.hand.some(isHero)) return;
-  const heroes = ps.deck.filter(isHero);
-  if (heroes.length === 0) return;
-  const out = ps.hand[Math.floor(nextRandom(G) * ps.hand.length)];
+  const canLead = (c: CardInstance) => {
+    const d = CARDS_BY_ID[c.cardId];
+    return d?.type === 'hero' && !d.flags?.benchOnly;
+  };
+  if (ps.hand.length === 0 || ps.hand.some(canLead)) return;
+  const heroes = ps.deck.filter(canLead);
+  const others = ps.hand.filter((c) => !isHero(c));
+  if (heroes.length === 0 || others.length === 0) return;
+  const out = others[Math.floor(nextRandom(G) * others.length)];
   const hero = heroes[Math.floor(nextRandom(G) * heroes.length)];
   ps.hand[ps.hand.indexOf(out)] = hero;
   ps.deck[ps.deck.indexOf(hero)] = out;
@@ -144,7 +151,8 @@ export function dealOpeningHand(G: GameState, pid: PlayerID, n: number = OPENING
 // ---------- The discard pile ----------
 
 /** Put `card` on `pid`'s discard pile, out of whatever it was in (its owner
- *  takes it off the hero or out of the hand first). */
+ *  takes it off the hero or out of the hand first). A hero card carries no
+ *  items there: what it wore goes to the pile beside it. */
 export function toDiscard(G: GameState, pid: PlayerID, card: CardInstance) {
   card.zone = 'discard';
   card.attachedTo = undefined;
@@ -152,6 +160,11 @@ export function toDiscard(G: GameState, pid: PlayerID, card: CardInstance) {
   card.cooldowns = undefined;
   G.players[pid].discard.push(card);
   pushFx(G, { kind: 'deck', what: 'discard', pid, iid: card.iid, cardId: card.cardId });
+  const worn = (card.attached ?? []).filter((a) => !!itemCard(a.cardId));
+  if (worn.length > 0) {
+    card.attached = (card.attached ?? []).filter((a) => !itemCard(a.cardId));
+    for (const it of worn) toDiscard(G, pid, it);
+  }
 }
 
 /** A draw card's discard: `pid` owes `count` cards from its hand (fewer when

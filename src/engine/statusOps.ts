@@ -276,7 +276,8 @@ export function tickCooldowns(ps: PlayerState) {
     tick(c);
     for (const a of c.attached ?? []) walk(a);
   };
-  for (const c of [ps.active, ...ps.bench]) if (c) walk(c);
+  // A hero waiting in the hand counts its owner's turns too (as a corpse does).
+  for (const c of [ps.active, ...ps.bench, ...ps.hand]) if (c) walk(c);
 }
 
 export function clearTurnFlags(ps: PlayerState) {
