@@ -54,6 +54,7 @@ import { FxCalmContext, useCalmMotion } from './effects/fx/FxMotionContext';
 import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingContext';
 import { buildFxTimeline, freshBatch } from './effects/fx/fxTimeline';
 import { FxStageProvider } from './effects/fx/stage/FxStage';
+import { DeckMotionLayer, DeckMotionProvider, useDeckMotion } from './motion';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
@@ -208,6 +209,10 @@ export function Board(props: BoardProps<GameState>) {
   }, [maxFxSeq]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fxTimeline = useMemo(() => buildFxTimeline(freshFx), [freshFxKey]);
+  // The deck's motion (ui/motion): the batch's `deck` events as flights
+  // between the deck, the hand and the discard pile, planned on this render
+  // so the hand knows which cards are landing.
+  const deckMotion = useDeckMotion(freshFx, freshFxKey, G, me);
   // The tiles' recoil channel (FxLayer / CombatChoreographer emit, HeroSlot
   // listens) and the calm-motion switch every FX primitive reads. The FX
   // stage — the canvas where sparks, bolts and debris have height — is
@@ -223,6 +228,9 @@ export function Board(props: BoardProps<GameState>) {
   const myActiveIid = G.players[me].active?.iid;
   const koSettleDelay = myActiveIid ? (fxTimeline.koSettle[myActiveIid] ?? 0) : 0;
   const pendingPromotionShown = useDelayedValue(G.pendingPromotion, koSettleDelay);
+  // The first-Active prompt waits for the opening's deal (the heroes into the
+  // deck, the draw) to play.
+  const pendingActiveShown = useDelayedValue(G.pendingActive, deckMotion.openingDelay);
   // The final blow gets to land. When the move that ended the match came
   // with a cast or a kill, the board stays up until that batch has played —
   // the bolt, the card breaking, the K.O. sticker — and only then hands over
@@ -864,6 +872,7 @@ export function Board(props: BoardProps<GameState>) {
         autoPlay={autoPlay}
         onToggleAuto={() => setAutoPlay((v) => !v)}
         registerCard={registerHandCard}
+        arriving={deckMotion.arriving}
         deckPile={<DeckPile count={G.players[me].deck.length} owner="you" size={isMobile ? 'chip' : 'full'} accent={poster.you} />}
         discardPile={<DiscardPile cards={G.players[me].discard} owner="you" size={isMobile ? 'chip' : 'full'} accent={poster.you} />}
       />
@@ -876,6 +885,7 @@ export function Board(props: BoardProps<GameState>) {
       <FxTimingContext.Provider value={fxHoldFor}>
       <FxImpulseContext.Provider value={fxBus}>
       <FxCalmContext.Provider value={calmMotion}>
+      <DeckMotionProvider ticker={deckMotion.ticker}>
       <LiveScaleContext.Provider value={liveSpirit}>
       {/* The deal-in: the heroes are dealt onto the board as it first shows. */}
       <BoardIntro me={me}>
@@ -1243,7 +1253,7 @@ export function Board(props: BoardProps<GameState>) {
         {/* The match's opening: the heroes in your opening hand, one of which
             takes the lane. Blocks the board until it is chosen. */}
         <AnimatePresence>
-          {G.pendingActive === me && !autoPlay && (
+          {G.pendingActive === me && pendingActiveShown === me && !autoPlay && (
             <PromotionOverlay
               key="opening"
               opening
@@ -1346,6 +1356,9 @@ export function Board(props: BoardProps<GameState>) {
             stamps, heals, shields, revives — anchored to the hero slots. */}
         <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} action={G.action} />
 
+        {/* The deck's motion — cards between the deck, the hand and the discard pile. */}
+        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} ticker={deckMotion.ticker} />
+
         {/* Feedback sticker — one ink label above the controls (red when it is
             a warning). Explains silent no-ops and confirms fire-and-forget
             actions. */}
@@ -1404,6 +1417,7 @@ export function Board(props: BoardProps<GameState>) {
       </FxStageProvider>
       </BoardIntro>
       </LiveScaleContext.Provider>
+      </DeckMotionProvider>
       </FxCalmContext.Provider>
       </FxImpulseContext.Provider>
       </FxTimingContext.Provider>

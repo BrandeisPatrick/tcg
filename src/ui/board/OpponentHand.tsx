@@ -53,6 +53,7 @@ export function OpponentHand({ cards, edge, compact = false }: Props) {
     <div
       role={total > 0 ? 'img' : undefined}
       aria-label={total > 0 ? `Rival's hand: ${total} card${total === 1 ? '' : 's'}` : undefined}
+      data-hand="rival"
       style={{
         position: 'absolute',
         left: 0,
@@ -85,6 +86,8 @@ export function OpponentHand({ cards, edge, compact = false }: Props) {
         {shown.map((c, i) => (
           <motion.div
             key={c.iid}
+            // The motion layer finds the back a draw flies to by it.
+            data-hand-card={c.iid}
             // Rises from behind the paper; sinks back behind it as it is played.
             initial={{ opacity: 0, y: peek }}
             animate={{ opacity: 1, y: fanY(i, shown.length), rotate: fanRotation(i, shown.length) }}

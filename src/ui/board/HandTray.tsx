@@ -42,7 +42,7 @@ export function HandTray({
   onCancel: () => void;
   autoPlay: boolean;
   onToggleAuto: () => void;
-  arriving?: string | null;
+  arriving?: string | readonly string[] | null;
   registerCard?: (iid: string, el: HTMLElement | null) => void;
 }) {
   const { isMobile } = useViewport();
