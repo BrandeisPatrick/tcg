@@ -112,7 +112,8 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
 - A returning hero goes to the hand even when it is full (the cap of 10 limits draws).
 - An empty lane (a fallen Active gone to the hand) can take a hero straight from
   the hand. A hero benched while the lane is open steps up, as a promotion.
-- The hero guarantee asks for a hero that can stand in the lane (Rem cannot).
+- The hero guarantee asks for a hero that can stand in the lane. Every hero can since Rem
+  stands in the lane (2026-11-09); the rule stays for a bench-only card.
 - The Cooldown items are actives now (they were passives in Deadlock and here),
   so they leave the cooldown-cut rule behind. Their icons moved to `public/spells`.
 - A draw card owes no more discards than the hand holds.
@@ -131,7 +132,7 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
   everything just updates.
 - The opening (2026-11-09): the draft's last pick stocks each deck unseen and
   holds its turn; the carousel (`OpeningPicker`) offers your drafted heroes
-  from the deck (`openingCandidates`; Rem cannot lead); `chooseActive` puts
+  from the deck (`openingCandidates`; Rem can lead since 2026-11-09); `chooseActive` puts
   yours in the lane, makes the AI's pick (most HP, then attack), shuffles
   both decks and deals `OPENING_DRAW` (4), then ends the draft's turn so turn 1
   opens on a dealt board. `dealOpeningHand` and its guarantee stay for scripted

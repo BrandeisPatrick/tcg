@@ -358,11 +358,12 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
   can take no damage on any rival turn. The hero doc prices it that way; play
   will show whether it needs a longer wait (docs/hero-design.md, As built).
 - **Machinery no card uses.** Since the hero rebuild no hero opens a channel
-  (`casting` / `casting_light`, `tickCastingPulses`), puts on Charged, or
-  merges Rem into an ally (`remMergeTurnsLeft`, `tickRemMerges`,
-  `returnRemToBench`), and the FX layer's Naptime wake-up tag has no burst to
-  play. Each still works and is still tested with its state set by hand;
-  remove it, or give it to a card, in a cleanup pass.
+  (`casting` / `casting_light`, `tickCastingPulses`) or puts on Charged, the
+  FX layer's Naptime wake-up tag has no burst to play, and since Rem stands in
+  the lane (2026-11-09) no hero is bench-only (`flags.benchOnly`). Each still
+  works and is still tested with its state set by hand; remove it, or give it
+  to a card, in a cleanup pass. (The old merge machinery — `remMergeTurnsLeft`,
+  `tickRemMerges`, `returnRemToBench` — is Rem's Tag Along ride again.)
 - **`scripts/qa/legality.mjs`** still checks Sinclair's borrowed ultimate, which
   is gone (Audience Participation casts the copy at once). Not run during
   design work; fix it with the scripts' port to the hand.

@@ -54,7 +54,7 @@ lock a skill. The engine fixes that by construction:
 Card behaviour is `src/abilities/index.ts` (one `AbilityDef` per effect);
 status semantics are `src/statuses/index.ts`. The AI is `src/ai/heuristic.ts`:
 it lists `legalActions` and ranks each by the position it leads to
-(`evalState`). What it thinks a status, a channelled ultimate or a merged Rem
+(`evalState`). What it thinks a status, a channelled ultimate or a riding Rem
 is worth is judgement, kept in one table (`STATUS_WEIGHT`) at the top of that
 file.
 
@@ -106,7 +106,7 @@ turn's attack, which ends it.
 **The hand.** It holds heroes and items (zone `'hand'`); every move from it
 is `pid`'s own turn's, before the attack.
 - `placeHero(cardIid, toActive?, slot?)` puts a hero on the bench slot named
-  (`slot` 1-3, free: not held, not one a merged Rem will come back to), else
+  (`slot` 1-3, free: not held, not one a riding Rem will come back to), else
   its first free bench slot (`freeBenchSlot`) or, `toActive`, into an EMPTY
   Active slot. Free. Every placement is a `place` deck FX event. The state-based pass follows, so a hero
   benched while the lane is open steps up (an AI seat's at once, the human
@@ -137,8 +137,9 @@ is `pid`'s own turn's, before the attack.
   items count in net worth at list price (a hero card at 0).
 
 Every move of a card between the deck, the hand and the discard pile is a
-`deck` FX event (`shuffle`, `draw`, `discard`, `upgrade`, `toHand`), for the
-board's animation layer; the FX timeline ignores them.
+`deck` FX event (`shuffle`, `draw`, `discard`, `upgrade`, `toHand`), and so
+are a placement (`place`) and a hero's ride on an ally (`rideOn`, `rideOff`),
+for the board's animation layer; the FX timeline ignores them.
 
 **The heroes.** Each hero card is built to [hero-design.md](hero-design.md):
 its Level 1 `atk` and `hp` (4 + its tank score, moved a point by its curve),
@@ -389,7 +390,11 @@ resolves, once, at its end.
 - **Moving heroes, souls, cards** — a card that puts a bench hero in the Active
   slot calls `swapIntoActive`, one that drags an enemy there `pullToActive`,
   one that pays out souls `awardSouls`; an ultimate that swings at the whole
-  board calls `attackAll`. None of them is written twice.
+  board calls `attackAll`; a skill that makes its hero equipment on an ally
+  calls `rideOn` (Rem's Tag Along: out of its slot into the bearer's
+  `attached` for N of its owner's turns, out of reach of every target and
+  sweep; `tickRemMerges` counts the ride down and `returnRemToBench` ends it,
+  the bearer's fall included). None of them is written twice.
 - **Card text** is read by players and by tests: mark each number the effect
   adds Spirit Power to `{sp:N}` (Bullet Power `{bp:N}`) so it prints in its
   colour and explains itself on hover or tap (`ui/card/scaling.ts`,

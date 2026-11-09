@@ -2,7 +2,8 @@
 
 Status, 2026-11-09: **21 heroes are built to these cards** (branch `deck-and-heroes`; see "As
 built" at the end): the 19 of step 2, and in step 3 Victor and Silver with their charged ultimates,
-on the trigger prompt system of section 6 (`src/engine/prompts.ts`). The other 23 cards in section 8
+on the trigger prompt system of section 6 (`src/engine/prompts.ts`), and Rem rebuilt to Patrick's
+call of the same day (section 5: she stands in the lane, Tag Along a ride). The other 23 cards in section 8
 are not built yet; nor are the later parts of section 6 (chains, and an auto/on/off setting — how to
 add them is in [engine-model.md](engine-model.md), "Trigger prompts"). The rules below are
 binding for every hero card; the proposed cards for all 44 Deadlock heroes are listed at the end. A visual version with portraits:
@@ -117,6 +118,10 @@ One soul buys about one point of effect, the same rate items are priced at.
   - In Deadlock, dealing damage builds her bloodlust toward the transformation, so this matches the real game.
 - **Haze:** Bullet Dance deals her Attack as bullet damage to every enemy. She starts at Attack 1 and grows +3 Attack a level, so the ultimate grows with her.
 - **Shiv:** a damage tank (HP 6, Attack 1, grows +2 Attack a level) who keeps his execute.
+- **Rem** (2026-11-09): Rem can stand in the lane; Tag Along makes her equipment for 2 turns: "Rem rides on another of your heroes as equipment for 2 turns: it heals 4✦. Then Rem returns to your bench."
+  - She is no longer bench-only: she can open the match, go into an empty lane, step up when the Active falls and be retreated to.
+  - She rides on another standing hero of her side, bench or Active. While she rides she can't be hit or targeted and uses nothing; when the ride is over she returns to her bench slot, and if her bearer falls first she jumps back to the bench.
+  - Riding off from the lane leaves it empty, and her side chooses who steps up, as when an Active falls.
 
 ## 6. Trigger prompts: one shared system
 
@@ -421,10 +426,10 @@ HP 5 · Attack 1 · Retreat 1 · per level +2 Spirit
 
 **Rem** · in the game today — peaks late, one target; mix tank 0 · damage 0 · control 1 · support 3  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
-- Skill, 2 souls — **Tag Along**: Rem naps on one of your heroes: it heals 4✦, and Rem heals 2.
+- Skill, 2 souls — **Tag Along**: Rem rides on another of your heroes as equipment for 2 turns: it heals 4✦. Then Rem returns to your bench.
 - Ultimate, small, 4 souls — **Naptime**: Sleep the enemy Active 2 turns.
-- Why: Rem is the tiny support who naps on his allies to heal them and sends the enemy Active to sleep, and his Spirit growth makes both strong late.
-- Changed from today: Stats stay 1/4: the late -1 cannot be paid because HP 4 and Attack 1 are both at the floor. Tag Along drops the merge and max-HP buff for a plain heal on both; Naptime becomes small, just the 2-turn sleep, since his damage score is 0.
+- Why: Rem is the tiny support who rides on her allies to heal them and sends the enemy Active to sleep, and her Spirit growth makes both strong late. She stands in the lane like any hero, and riding off is her way out of a lane she is losing.
+- Changed from today: Stats stay 1/4: the late -1 cannot be paid because HP 4 and Attack 1 are both at the floor. Rem is no longer bench-only (Patrick, 2026-11-09). Tag Along keeps the ride (the old merge) but drops its max-HP buff for a plain heal on the bearer, lasts 2 turns and works from the lane too; Naptime becomes small, just the 2-turn sleep, since her damage score is 0.
 
 **Ivy** — peaks mid, one target; mix tank 0 · damage 1 · control 1 · support 3  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
@@ -499,8 +504,8 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
   (`ULT_COST`: 4, 8, 12). Both are paid from the same souls as items, before the effect runs.
   Echo Shard's repeat of a skill is the item's own effect and pays nothing.
 - **Retreat.** `RETREAT_COST` is gone: a Retreat costs the leaving hero's printed `retreat`, less
-  Sprint Boots and the like, and nothing while it is Swift. Rem's 0 never applies: he still never
-  stands in the lane (bench-only, as before).
+  Sprint Boots and the like, and nothing while it is Swift. Rem's 0 applies since she stands in the
+  lane (2026-11-09; she was bench-only until then).
 - **Growth.** The flat +1/+1/+1 a level is gone: a level adds the card's `growth`. Rem keeps the
   floors (Attack 1, HP 4) and so a point more at Level 2, as section 7 says.
 - **Stun at 3 points.** The clash with balance-model.md and CLAUDE.md (2.0) is left as it is: these
@@ -552,8 +557,8 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
   Active, or another Sinclair there, there is nothing to copy and it cannot be used. The old
   borrowed copy (a free ultimate kept for later) is gone. **Rabbit Hex** uses the engine's rabbit
   (no attack, skills, ultimates or active items).
-- **Rem — Tag Along** aims at another hero of his side. He no longer merges into it; the engine's
-  merge machinery stays, with no card using it.
+- **Rem — Tag Along** aims at another standing hero of her side and rides on it for 2 turns (see
+  "Rem in the lane" below; until 2026-11-09 it was a plain heal and Rem was bench-only).
 - **Warden — Willpower's Swift** is the engine's: a free Retreat this turn.
 - **Yamato — Shadow Transformation's** Unstoppable lasts two of her turns, as its +3 Attack does.
 - **Dynamo, Seven, Warden** no longer channel: their ultimates are one hit each. The channel
@@ -571,6 +576,43 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 - The AI plays the same legality: it uses skills and ultimates when it can pay and the lookahead
   says they gain more than the souls they cost (a soul in hand is worth 0.3, so it spends freely).
   It no longer prices a Sleep's value as a wake-up burst.
+
+### Rem in the lane, and Tag Along as a ride (2026-11-09)
+
+Built on `deck-and-heroes` to Patrick's call in section 5. Where the call is silent, the build reads
+it this way:
+
+- **Bench-only is gone, the rule stays.** Rem's card drops `flags.benchOnly`, so she opens the match
+  (`openingCandidates`), goes into an empty lane, steps up, is retreated to, counts for a scripted
+  match's hero guarantee and leads a story roster named first. The engine keeps the bench-only rule
+  for a card that may want it; no card sets it, and its tests run it on a card flagged by hand.
+- **The ride is the old merge's machinery** (`rideOn` and `returnRemToBench` in death.ts,
+  `tickRemMerges`, the slot kept in legality.ts). "2 turns" is 2 of her owner's turns, counted at the
+  start of each: used on her turn, she rides through the rival's turn, her next turn and the rival's
+  after it, and is back on the bench as her second turn after the ride begins.
+- **The heal** is 4 + Rem's Spirit on the bearer, no higher than its max HP. Rem herself no longer
+  heals, and the ride grants no max HP.
+- **Targets.** Another standing hero of her side, bench or Active: not herself, not a corpse, not an
+  enemy. The board lights exactly those.
+- **While she rides** she is out of every slot: nothing hits or aims at her (an "every enemy" effect
+  passes her by), she uses nothing (no Tag Along, Naptime or worn active), her items stay on her, and
+  she takes none of the bearer's item slots. Her statuses wait, as they did on the old merge.
+- **Coming back.** From the bench her slot is kept for her. From the lane she takes the first free
+  bench slot; with none free she rides on one more turn and tries again. If her bearer falls she
+  jumps back to the bench at once; if no bench slot is free then (she rode from the lane and the
+  bench has filled since), she cannot stay on a corpse and goes back to the hand, at full HP, as a
+  fallen hero does.
+- **Riding off from the lane** leaves it empty: the human seat gets the promotion sheet, said as a
+  ride ("Rem Rides Off"), and an AI seat promotes its healthiest bench hero at once. The hero who
+  steps up may still make the turn's attack.
+- **The board.** A riding Rem is a chip among her bearer's items with her turns left, and a line on
+  its sheet ("riding · back to the bench in 2 turns"). She flies from her slot onto the chip and
+  back (the `rideOn` / `rideOff` deck events). Her draft keyword "Bench Healer" is now "Ride-Along".
+- **The AI** counts a riding Rem as the hero she is, her gear with her, so a ride costs it only its
+  souls and it rides where the heal gains. A ride out of a lane it is losing (Rem about to die, or
+  the rival's Active able to fell her in one swing) is worth half her presence on top
+  (`RIDE_TO_SAFETY`), since its one-move lookahead cannot see the swing she dodges. It puts Rem in
+  an empty lane as any hero.
 
 ### Step 3 (2026-11-09): trigger prompts, charged ultimates, Victor and Silver
 
