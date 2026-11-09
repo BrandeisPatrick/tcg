@@ -10,8 +10,11 @@
  * stay backs, a discard lands face up on the pile. Each frame of a flight
  * the ghost chases its destination's live box (the hand closes up, a strip
  * scrolls), so it lands on the card it becomes; the real card is kept out of
- * sight until then. Starting boxes are measured as the batch arrives, while
- * a card leaving the hand is still in it.
+ * sight until then (a placed hero's hand card AND the tile it becomes, under
+ * one iid). Starting boxes are measured as the batch arrives, while a card
+ * leaving the hand is still in it; a placement whose card has already gone
+ * (the opening picker's) starts from the box Board recorded as it was tapped
+ * (`origins`).
  *
  * The riffle after a shuffle is three backs splaying off the deck and back.
  */
@@ -44,6 +47,9 @@ interface Props {
   handRefs: Map<string, HTMLElement>;
   /** Where each hero's slot is (Board's registry). */
   slotRefs: Map<string, HTMLElement>;
+  /** Where a card was as the player tapped it to place it (Board's record,
+   *  by iid): a placement starts there when the card is no longer on screen. */
+  origins?: Map<string, Rect>;
   ticker: PileTicker;
 }
 
@@ -82,34 +88,47 @@ function pileEl(pile: 'deck' | 'discard', owner: Owner): Element | null {
   return box ? (box.firstElementChild ?? box) : null;
 }
 
-export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, ticker }: Props) {
+export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins, ticker }: Props) {
   const { isMobile } = useViewport();
   const [live, setLive] = useState<Live[]>([]);
   const [riffles, setRiffles] = useState<LiveRiffle[]>([]);
   const boxes = useRef(new Map<string, HTMLDivElement>());
   const plates = useRef(new Map<string, HTMLDivElement>());
-  /** The real cards kept out of sight, by the flight hiding them. */
-  const hidden = useRef(new Map<string, HTMLElement>());
+  /** The real cards kept out of sight, by the flight hiding them (a hand card
+   *  and the slot tile it becomes are two). */
+  const hidden = useRef(new Map<string, Set<HTMLElement>>());
   /** The batch last put up (admitBatch). */
   const admitted = useRef(0);
   const ownerOf = (pid: PlayerID): Owner => (pid === me ? 'you' : 'rival');
 
-  /** The hand card a flight hides: yours by Board's registry, the rival's
-   *  back by its data attribute. */
-  const hideTarget = (iid: string): HTMLElement | null =>
-    handRefs.get(iid) ?? document.querySelector<HTMLElement>(`[data-hand-card="${iid}"]`);
+  /** What a flight hides for `iid`: its hand card (yours by Board's
+   *  registry, the rival's back by its data attribute) and its slot tile (a
+   *  hero placed), whichever are on screen. */
+  const hideTargets = (iid: string): HTMLElement[] => {
+    const out: HTMLElement[] = [];
+    const hand = handRefs.get(iid) ?? document.querySelector<HTMLElement>(`[data-hand-card="${iid}"]`);
+    if (hand) out.push(hand);
+    // The tile itself carries a shared layoutId, and framer's projection
+    // writes its own inline visibility each frame; its rest wrapper (a plain
+    // div, the box the FX layer measures) holds what is set on it.
+    const slot = slotRefs.get(iid);
+    if (slot) out.push(slot.closest<HTMLElement>('[data-fx-rest]') ?? slot);
+    return out;
+  };
 
-  const hide = (key: string, iid: string): boolean => {
-    if (hidden.current.has(key)) return true;
-    const el = hideTarget(iid);
-    if (!el) return false;
-    el.style.visibility = 'hidden';
-    hidden.current.set(key, el);
-    return true;
+  /** Keep every target of `iid` out of sight — called each frame too, so one
+   *  that mounts late (the tile of a hero placed) is caught as it comes. */
+  const hide = (key: string, iid: string) => {
+    let set = hidden.current.get(key);
+    for (const el of hideTargets(iid)) {
+      if (set?.has(el)) continue;
+      el.style.visibility = 'hidden';
+      (set ??= new Set()).add(el);
+    }
+    if (set) hidden.current.set(key, set);
   };
   const unhide = (key: string) => {
-    const el = hidden.current.get(key);
-    if (el) el.style.visibility = '';
+    for (const el of hidden.current.get(key) ?? []) el.style.visibility = '';
     hidden.current.delete(key);
   };
 
@@ -124,6 +143,8 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, ticker 
         const owner = ownerOf(a.pid);
         const card = a.iid ? (handRefs.get(a.iid) ?? document.querySelector(`[data-hand-card="${a.iid}"]`)) : null;
         if (card) return toRect(card);
+        const origin = a.iid ? origins?.get(a.iid) : undefined;
+        if (origin) return origin;
         const root = document.querySelector(`[data-hand="${owner}"]`);
         if (!root) return null;
         const r = toRect(root);
@@ -158,7 +179,9 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, ticker 
     const t0 = performance.now();
     const fresh: Live[] = [];
     for (const f of plan.flights) {
-      const thumb = isMobile && f.pid === me && (f.to.kind === 'hand' || f.from.kind === 'hand');
+      // The phone hand's thumb, to or from it; a hero placed flies as the
+      // full card, to grow into its tile.
+      const thumb = isMobile && f.pid === me && f.what !== 'place' && (f.to.kind === 'hand' || f.from.kind === 'hand');
       const natural = thumb ? { w: THUMB_W, h: THUMB_H } : SIZES.hand;
       const from = measure(f.from, natural) ?? measure(f.to, natural);
       if (!from) continue;
@@ -241,7 +264,7 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, ticker 
 
   // Leaving: nothing stays hidden.
   useEffect(() => () => {
-    for (const el of hidden.current.values()) el.style.visibility = '';
+    for (const set of hidden.current.values()) for (const el of set) el.style.visibility = '';
     hidden.current.clear();
   }, []);
 

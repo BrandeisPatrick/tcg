@@ -7,9 +7,14 @@
  * exercise it directly. `DeckMotionLayer` plays the plan.
  *
  * What one batch of events becomes:
- *   shuffle   the opening: the side's drafted heroes appear over the table and
- *             fly into its deck one after another, then the deck riffles; any
- *             other shuffle is the riffle alone
+ *   place     a hero flies to the slot it was put in — from the hand card
+ *             (yours face up; the rival's leaves as a back and turns over as
+ *             it lands), or, the opening, from the picker's card (yours) and
+ *             the rival's hand (its first Active, hidden until then); the real
+ *             tile stays out of sight until it lands
+ *   shuffle   the opening: the side's drafted heroes still in its deck appear
+ *             over the table and fly into it one after another, then the deck
+ *             riffles; any other shuffle is the riffle alone
  *   draw      a card flies from the deck to the hand (yours lands face up,
  *             the rival's stays face down); the deck's count ticks as it leaves
  *   discard   a card flies from the hand (or off the hero that wore it) to
@@ -18,9 +23,10 @@
  *             the deck
  *   toHand    a fallen hero flies from its slot back to the hand
  *
- * Each side has its own cursor, so both sides' openings play at once; within a
- * side a run of cards is staggered (a draw of 8 lands in ~1.2 s), and a riffle
- * or an upgrade waits for the run before it. Nothing here blocks input or
+ * Each side has its own cursor, so both sides' openings play at once (the
+ * Actives fly, the heroes go in, the decks riffle, the hands are dealt);
+ * within a side a run of cards is staggered (a draw of 8 lands in ~1.2 s), and
+ * a placement, a riffle or an upgrade waits for the run before it. Nothing here blocks input or
  * reads back into the game: the plan is presentation only.
  */
 import type { CardId, DeckFx, FxEvent, GameState, PlayerID } from '@/engine/types';
@@ -125,11 +131,12 @@ export function locate(G: GameState | null | undefined, pid: PlayerID, iid: stri
   return null;
 }
 
-/** The heroes a side has at the opening, wherever they are: its drafted
- *  four, in the deck, the hand or already in the lane. */
+/** The heroes a side shuffles into its deck at the opening: its drafted
+ *  heroes less the one it chose for the lane — in the deck, or dealt to the
+ *  hand by the batch. */
 export function openingHeroes(G: GameState, pid: PlayerID): { iid: string; cardId: CardId }[] {
   const ps = G.players[pid];
-  const all = [...ps.deck, ...ps.hand, ps.active, ...ps.bench];
+  const all = [...ps.deck, ...ps.hand];
   return all
     .filter((c): c is NonNullable<typeof c> => !!c && CARDS_BY_ID[c.cardId]?.type === 'hero')
     .map((c) => ({ iid: c.iid, cardId: c.cardId }));
@@ -144,11 +151,13 @@ export interface PlanInput {
   after: GameState;
 }
 
-/** True when `batch` is the match's opening: the first shuffle after the
- *  draft (the last pick builds the decks and deals, in one batch). */
+/** True when `batch` is the match's opening: the shuffle that follows the
+ *  first Actives' choice (the human seat's `chooseActive`, or the draft's
+ *  last pick when no seat is human — the Actives, the shuffles and the deal
+ *  come in one batch), or a scripted match's first batch. */
 export function isOpening(events: readonly DeckFx[], input: PlanInput): boolean {
   if (!events.some((e) => e.what === 'shuffle')) return false;
-  if (input.before?.draft) return true;
+  if (input.before?.draft || input.before?.pendingActive) return true;
   return !input.before && input.after.turnNumber <= 1;
 }
 
@@ -272,6 +281,22 @@ export function planDeckMotion(batch: readonly FxEvent[], input: PlanInput): Dec
         c.end = Math.max(c.end, at + T.flight);
         break;
       }
+      case 'place': {
+        // After whatever the side has in the air: the opening's lead, a turn's draw.
+        const at = c.end;
+        flights.push({
+          key: `${ev.seq}`, what: 'place', pid, cardId: ev.cardId, iid: ev.iid,
+          at, hold: 0, dur: T.flight,
+          from: { kind: 'hand', pid, iid: ev.iid }, to: { kind: 'slot', iid: ev.iid! },
+          // Yours was face up in the hand (or on the picker); the rival's
+          // leaves its hand as a back and turns over as it lands.
+          faces: { start: faceFor(pid), end: 'face' },
+          hide: ev.iid,
+        });
+        c.end = at + T.flight;
+        c.next = c.end;
+        break;
+      }
     }
   }
 
@@ -282,6 +307,12 @@ export function planDeckMotion(batch: readonly FxEvent[], input: PlanInput): Dec
     ...ticks.map((t) => t.at),
   );
   return { flights, ticks, riffles, total, opening };
+}
+
+/** ms after the batch arrives that the last placement of a side other than
+ *  `me` has landed: the AI's next move waits for it. 0 when there is none. */
+export function rivalPlacedBy(plan: DeckMotionPlan, me: PlayerID): number {
+  return Math.max(0, ...plan.flights.filter((f) => f.what === 'place' && f.pid !== me).map((f) => f.at + f.hold + f.dur));
 }
 
 /** The cards of `me`'s hand a plan flies in: the hand fades them in where

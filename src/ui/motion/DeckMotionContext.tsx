@@ -11,7 +11,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import type { FxEvent, GameState, PlayerID } from '@/engine/types';
 import { useCalmMotion } from '../effects/fx/FxMotionContext';
-import { EMPTY_PLAN, arrivingIids, planDeckMotion, type DeckMotionPlan } from './deckMotionPlan';
+import { EMPTY_PLAN, arrivingIids, planDeckMotion, rivalPlacedBy, type DeckMotionPlan } from './deckMotionPlan';
 import { PileTicker, type PileKey } from './pileTicker';
 
 const DeckMotionContext = createContext<PileTicker | null>(null);
@@ -39,8 +39,11 @@ export interface DeckMotion {
   /** The cards of your hand the plan flies in. */
   arriving: string[];
   /** ms the opening's motion takes (0 when this batch is not the opening, or
-   *  under calm motion): the first-Active prompt waits this long. */
+   *  under calm motion). */
   openingDelay: number;
+  /** ms until the rival's last placement in this batch has landed (0 when
+   *  there is none, or under calm motion): the AI's next move waits for it. */
+  rivalPlaced: number;
   ticker: PileTicker;
   calm: boolean;
 }
@@ -64,5 +67,5 @@ export function useDeckMotion(freshFx: readonly FxEvent[], freshFxKey: number, G
   useEffect(() => { beforeRef.current = G; }, [G]);
   useEffect(() => () => ticker.clear(), [ticker]);
   const arriving = useMemo(() => arrivingIids(plan, me), [plan, me]);
-  return { plan, arriving, openingDelay: plan.opening ? plan.total : 0, ticker, calm };
+  return { plan, arriving, openingDelay: plan.opening ? plan.total : 0, rivalPlaced: rivalPlacedBy(plan, me), ticker, calm };
 }

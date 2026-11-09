@@ -12,17 +12,38 @@ import type { DeckFx, FxEvent, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { upgradesOf } from '@/cards/decks';
 import { openDraftedMatch } from '@/engine/actions/setup';
-import { discardFromHand, heroToHand } from '@/engine/deck';
-import { OPENING_HAND } from '@/engine/constants';
+import { discardFromHand, drawCards, heroToHand } from '@/engine/deck';
+import { INVALID, perform } from '@/engine/engine';
+import { OPENING_DRAW } from '@/engine/constants';
 import {
-  DECK_MOTION as T, EMPTY_PLAN, admitBatch, arrivingIids, deckEvents, locate, planDeckMotion, PileTicker,
+  DECK_MOTION as T, EMPTY_PLAN, admitBatch, arrivingIids, deckEvents, locate, planDeckMotion, rivalPlacedBy, PileTicker,
 } from '@/ui/motion';
 import { freshBatch } from '@/ui/effects/fx/fxTimeline';
-import { TEST_ROSTERS, freshReadyGame, playNew, stackDeck, useItem } from '../engine/_helpers';
+import { TEST_ROSTERS, freshReadyGame, giveCard, playNew, stackDeck, useItem } from '../engine/_helpers';
 import { playGame } from '../engine/fuzz/driver';
 
 const snapshot = (G: GameState): GameState => structuredClone(G);
 const ofKind = (plan: ReturnType<typeof planDeckMotion>, what: DeckFx['what']) => plan.flights.filter((f) => f.what === what);
+
+/** A drafted match's opening, as the board sees it: the draft's last pick
+ *  stocks the decks and asks seat 0 (the human seat) for its first Active;
+ *  the choice is the batch that places both Actives, shuffles the heroes in
+ *  and deals. Returns the game before that batch and after it, with the hero
+ *  chosen. */
+function opening() {
+  const G = freshReadyGame();
+  const drafting = snapshot(G);
+  drafting.draft = { pool: [], order: [], currentIndex: 8, picks: { '0': [], '1': [] } };
+  G.fx = [];
+  const picks = { '0': TEST_ROSTERS['0'].slice(0, 4), '1': TEST_ROSTERS['1'].slice(0, 4) };
+  openDraftedMatch(G, picks);
+  // The last pick's batch: nothing flies yet (the decks are stocked unseen; the picker is up).
+  expect(planDeckMotion(G.fx, { me: '0', before: drafting, after: G })).toBe(EMPTY_PLAN);
+  const before = snapshot(G);
+  const chosen = G.players['0'].deck.find((c) => CARDS_BY_ID[c.cardId]?.type === 'hero')!;
+  expect(perform(G, '0', { type: 'chooseActive', cardIid: chosen.iid })).not.toBe(INVALID);
+  return { G, before, picks, chosen };
+}
 
 describe('deck motion plan', () => {
   it('a batch with no deck events plans nothing', () => {
@@ -185,42 +206,104 @@ describe('deck motion plan', () => {
     expect(plan.ticks).toEqual([]);
   });
 
-  it('the opening: each side’s heroes fly into its deck, it riffles, then the hand is dealt — both sides at once', () => {
-    const G = freshReadyGame();
-    const before = snapshot(G);
-    before.draft = { pool: [], order: [], currentIndex: 8, picks: { '0': [], '1': [] } };
-    G.fx = [];
-    const picks = { '0': TEST_ROSTERS['0'].slice(0, 4), '1': TEST_ROSTERS['1'].slice(0, 4) };
-    openDraftedMatch(G, picks);
+  it('the opening, in order: both Actives fly to the lane, each side’s other heroes fly into its deck, it riffles, then OPENING_DRAW is dealt — both sides at once', () => {
+    const { G, before, picks, chosen } = opening();
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
     expect(plan.opening).toBe(true);
 
     for (const pid of ['0', '1'] as const) {
+      const ps = G.players[pid];
+      const active = ps.active!;
+      // 1. The Active, first: from the picker's card (yours) or the rival's hand, to the lane.
+      const [placed, ...more] = ofKind(plan, 'place').filter((f) => f.pid === pid);
+      expect(more).toEqual([]);
+      expect(placed.iid).toBe(active.iid);
+      expect(placed.at).toBe(T.lead);
+      expect(placed.from).toEqual({ kind: 'hand', pid, iid: active.iid });
+      expect(placed.to).toEqual({ kind: 'slot', iid: active.iid });
+      expect(placed.hide).toBe(active.iid);
+      const landed = T.lead + T.flight;
+      // 2. The other three heroes into the deck — never the Active — then the riffle.
       const heroesIn = ofKind(plan, 'shuffle').filter((f) => f.pid === pid);
-      expect(heroesIn.map((f) => f.cardId).sort()).toEqual([...picks[pid]].sort());
-      expect(heroesIn.every((f) => CARDS_BY_ID[f.cardId!]?.type === 'hero')).toBe(true);
+      expect(heroesIn.map((f) => f.cardId).sort()).toEqual([...picks[pid]].filter((id) => id !== active.cardId).sort());
+      expect(heroesIn).toHaveLength(3);
       heroesIn.forEach((f, i) => {
-        expect(f.at).toBe(T.lead + i * T.fanIn);
-        expect(f.from).toEqual({ kind: 'stage', pid, i, n: 4 });
+        expect(f.at).toBe(landed + i * T.fanIn);
+        expect(f.from).toEqual({ kind: 'stage', pid, i, n: 3 });
         expect(f.to).toEqual({ kind: 'pile', pile: 'deck', pid });
       });
       const riffle = plan.riffles.find((r) => r.pid === pid)!;
-      const lastHeroIn = T.lead + 3 * T.fanIn + T.flight;
+      const lastHeroIn = landed + 2 * T.fanIn + T.flight;
       expect(riffle.at).toBe(lastHeroIn);
+      // 3. The deal of OPENING_DRAW waits for the riffle, then runs.
       const draws = ofKind(plan, 'draw').filter((f) => f.pid === pid);
-      expect(draws).toHaveLength(OPENING_HAND);
-      // The deal waits for the riffle, then runs.
-      expect(draws[0].at).toBe(lastHeroIn + T.riffle);
+      expect(draws).toHaveLength(OPENING_DRAW);
       draws.forEach((f, i) => expect(f.at).toBe(lastHeroIn + T.riffle + i * T.stagger));
     }
-    // The sides run on their own clocks: the rival's first hero leaves with yours.
-    expect(ofKind(plan, 'shuffle').filter((f) => f.at === T.lead)).toHaveLength(2);
+    // Yours leaves face up (the picker showed it); the rival's leaves as a back and turns over as it lands.
+    expect(ofKind(plan, 'place').find((f) => f.pid === '0')!.faces).toEqual({ start: 'face', end: 'face' });
+    expect(ofKind(plan, 'place').find((f) => f.pid === '1')!.faces).toEqual({ start: 'back', end: 'face' });
+    expect(ofKind(plan, 'place').find((f) => f.pid === '0')!.iid).toBe(chosen.iid);
+    // The sides run on their own clocks: both Actives leave together.
+    expect(ofKind(plan, 'place').filter((f) => f.at === T.lead)).toHaveLength(2);
     // What arrives in your hand is in your hand.
     const inHand = new Set(G.players['0'].hand.map((c) => c.iid));
+    expect(arrivingIids(plan, '0')).toHaveLength(OPENING_DRAW);
     for (const iid of arrivingIids(plan, '0')) expect(inHand.has(iid)).toBe(true);
-    // The prompt for the first Active waits for all of it.
-    expect(plan.total).toBeGreaterThanOrEqual(T.lead + 3 * T.fanIn + T.flight + T.riffle + (OPENING_HAND - 1) * T.stagger + T.flight);
+    // The whole opening lands in under three seconds; the AI's first move waits for the rival's Active.
+    expect(plan.total).toBe(T.lead + T.flight + 2 * T.fanIn + T.flight + T.riffle + (OPENING_DRAW - 1) * T.stagger + T.flight);
     expect(plan.total).toBeLessThan(3000);
+    expect(rivalPlacedBy(plan, '0')).toBe(T.lead + T.flight);
+  });
+
+  it('a hero you place flies face up from its hand card to the slot you chose, the tile hidden until it lands', () => {
+    const G = freshReadyGame();
+    const me = G.players['0'];
+    me.bench[1] = null;
+    me.bench[2] = null;
+    const kelvin = giveCard(G, '0', 'hero_kelvin');
+    G.fx = [];
+    const before = snapshot(G);
+    expect(locate(before, '0', kelvin.iid)).toEqual({ kind: 'hand' });
+    expect(perform(G, '0', { type: 'placeHero', cardIid: kelvin.iid, slot: 3 })).not.toBe(INVALID);
+    const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
+    const [placed] = ofKind(plan, 'place');
+    expect(placed).toMatchObject({ pid: '0', iid: kelvin.iid, cardId: 'hero_kelvin', at: 0, hold: 0, dur: T.flight });
+    expect(placed.from).toEqual({ kind: 'hand', pid: '0', iid: kelvin.iid });
+    expect(placed.to).toEqual({ kind: 'slot', iid: kelvin.iid });
+    expect(placed.faces).toEqual({ start: 'face', end: 'face' });
+    expect(placed.hide).toBe(kelvin.iid);
+    expect(plan.ticks).toEqual([]);
+    expect(plan.opening).toBe(false);
+    expect(arrivingIids(plan, '0')).toEqual([]);
+    // Nothing of the rival's was placed: the AI need not wait.
+    expect(rivalPlacedBy(plan, '0')).toBe(0);
+  });
+
+  it("the rival's hero leaves its hand as a back and turns face up as it lands; after its turn's draw, the placement waits for the draw", () => {
+    const G = freshReadyGame();
+    const rival = G.players['1'];
+    rival.bench[0] = null;
+    const [kelvin] = stackDeck(G, '1', ['hero_kelvin']);
+    G.turnNumber = 3; // the rival's turn
+    G.fx = [];
+    const before = snapshot(G);
+    // Its draw and its placement in one batch (a turn's start, then the play).
+    drawCards(G, '1', 1);
+    expect(perform(G, '1', { type: 'placeHero', cardIid: kelvin.iid })).not.toBe(INVALID);
+    const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
+    const [placed] = ofKind(plan, 'place');
+    expect(placed.pid).toBe('1');
+    expect(placed.faces).toEqual({ start: 'back', end: 'face' });
+    expect(placed.from).toEqual({ kind: 'hand', pid: '1', iid: kelvin.iid });
+    expect(placed.to).toEqual({ kind: 'slot', iid: kelvin.iid });
+    expect(placed.hide).toBe(kelvin.iid);
+    const draws = ofKind(plan, 'draw');
+    const drawsEnd = Math.max(...draws.map((f) => f.at + f.dur));
+    expect(placed.at).toBe(drawsEnd);
+    expect(rivalPlacedBy(plan, '0')).toBe(placed.at + T.flight);
+    // Under calm motion the board plans nothing, so there is nothing to wait for.
+    expect(rivalPlacedBy(EMPTY_PLAN, '0')).toBe(0);
   });
 
   it('a shuffle outside the opening is the riffle alone, and the run after it waits', () => {
@@ -296,13 +379,10 @@ describe('the layer puts each batch up once', () => {
   // mount's effects twice in development. Put up twice, the opening's flights
   // and riffles were in the air twice under one key ("Encountered two children
   // with the same key") and each deck held every card dealt twice.
-  it('the opening, put up again for the same batch (StrictMode replaying the mount), flies once and ticks each deck once', () => {
-    const G = freshReadyGame();
-    const before = snapshot(G);
-    before.draft = { pool: [], order: [], currentIndex: 8, picks: { '0': [], '1': [] } };
-    G.fx = [];
-    openDraftedMatch(G, { '0': TEST_ROSTERS['0'].slice(0, 4), '1': TEST_ROSTERS['1'].slice(0, 4) });
+  it('the opening, put up again for the same batch (StrictMode replaying the mount), flies once — each placement included — and ticks each deck once', () => {
+    const { G, before } = opening();
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
+    expect(ofKind(plan, 'place')).toHaveLength(2);
     const planKey = Math.max(...G.fx.map((e) => e.seq));
     const ticker = new PileTicker();
     const last = { current: 0 };
@@ -311,6 +391,7 @@ describe('the layer puts each batch up once', () => {
       if (admitBatch(last, planKey, plan, ticker, ownerOf)) up.push(...plan.flights.map((f) => f.key));
     }
     expect(up).toEqual(plan.flights.map((f) => f.key));
+    expect(up.filter((k) => ofKind(plan, 'place').some((f) => f.key === k))).toHaveLength(2);
     for (const pid of ['0', '1'] as const) {
       const dealt = ofKind(plan, 'draw').filter((f) => f.pid === pid).length;
       expect(dealt).toBeGreaterThan(0);
