@@ -274,16 +274,25 @@ describe('a drafted match deals the deck', () => {
 
   it('the opening\'s Pocket rule (dealOpeningHand, which a drafted match no longer uses): a hand with no hero that can lead swaps a non-hero for one from the deck', async () => {
     const { dealOpeningHand } = await import('@/engine/deck');
-    const { freshReadyGame, stackDeck } = await import('./_helpers');
-    const G = freshReadyGame();
-    G.players['0'].deck = [];
-    stackDeck(G, '0', ['grit', 'grit', 'hero_rem', 'grit', 'grit', 'grit', 'hero_kelvin', 'grit']);
-    dealOpeningHand(G, '0');
-    const hand = ids(G.players['0'].hand);
+    const { freshReadyGame, stackDeck, withBenchOnly } = await import('./_helpers');
+    const deal = () => {
+      const G = freshReadyGame();
+      G.players['0'].deck = [];
+      stackDeck(G, '0', ['grit', 'grit', 'hero_rem', 'grit', 'grit', 'grit', 'hero_kelvin', 'grit']);
+      dealOpeningHand(G, '0');
+      return G;
+    };
+    // Rem can lead now: a hand with her needs no swap.
+    const G = deal();
+    expect(ids(G.players['0'].hand)).toEqual(['grit', 'grit', 'hero_rem', 'grit', 'grit'].slice(0, OPENING_HAND));
+    expect(ids(G.players['0'].hand)).not.toContain('hero_kelvin');
+    // A bench-only hero (no card is one now: Rem flagged by hand) does not count: Kelvin is swapped in.
+    const B = withBenchOnly('hero_rem', deal);
+    const hand = ids(B.players['0'].hand);
     expect(hand).toHaveLength(OPENING_HAND);
-    expect(hand).toContain('hero_kelvin');       // Rem cannot lead: Kelvin was swapped in
+    expect(hand).toContain('hero_kelvin');
     expect(hand).toContain('hero_rem');
-    expect(ids(G.players['0'].deck)).toHaveLength(3);
+    expect(ids(B.players['0'].deck)).toHaveLength(3);
   });
 });
 

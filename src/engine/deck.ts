@@ -137,8 +137,8 @@ export function drawCards(G: GameState, pid: PlayerID, n: number): CardInstance[
  * deck, at least one a hero that can stand in the lane when the deck holds
  * one — the Pocket rule: a hand with none swaps a random non-hero of it for a
  * random such hero of the deck (which takes the card's place in the deck, and
- * the deck is shuffled again). A bench-only hero (Rem) does not count: the
- * opening needs an Active.
+ * the deck is shuffled again). A bench-only hero (`flags.benchOnly`, which
+ * no card sets now) does not count: the opening needs an Active.
  */
 export function dealOpeningHand(G: GameState, pid: PlayerID, n: number = OPENING_HAND) {
   const ps = G.players[pid];

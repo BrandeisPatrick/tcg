@@ -78,7 +78,7 @@ const ITEM_MOVES = ['playCard'];
 /** The full cooldown an active item starts on: its own (the draw cards' 2), else its tier's. */
 const fullItemCooldown = (d: ItemCard) => (d.type === 'spell' && d.cooldown !== undefined ? d.cooldown : d.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
 
-/** The bench-only hero (Rem) never stands in the Active slot. */
+/** A bench-only hero (`flags.benchOnly`; no card is one since Rem stands in the lane) never stands in the Active slot. */
 const benchOnlyCard = (cardId: string) => !!(CARDS_BY_ID[cardId] as { flags?: { benchOnly?: boolean } } | undefined)?.flags?.benchOnly;
 
 /** Invariants of a single state. */

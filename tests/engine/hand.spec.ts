@@ -31,7 +31,7 @@ import {
 } from '@/engine/constants';
 import { setMatchConfig } from '@/storage/matchConfig';
 import {
-  configureReadyMatch, freshReadyGame, giveCard, giveItem, makeAttack, makeHero, playItem, playNew, readyClient, stackDeck,
+  configureReadyMatch, freshReadyGame, giveCard, giveItem, makeAttack, makeHero, playItem, playNew, readyClient, stackDeck, withBenchOnly,
 } from './_helpers';
 
 /** P0's turn (engine turn 2) with `souls` to spend. */
@@ -361,14 +361,17 @@ describe('heroes from the hand', () => {
     expect(seven.zone).toBe('active');
   });
 
-  it('a bench-only hero never takes the lane; an item is no hero to place', () => {
+  it('a bench-only hero never takes the lane (no card is one now: Rem flagged by hand, who takes it unflagged); an item is no hero to place', () => {
     const G = turn(0);
     G.players['0'].active = null;
     G.players['0'].bench[2] = null;
     const rem = giveCard(G, '0', 'hero_rem');
     const item = giveCard(G, '0', 'grit');
-    expect(placeHeroBlocked(G, '0', rem.iid, true)).toBe('benchOnly');
-    expect(placeHeroBlocked(G, '0', rem.iid)).toBeNull();
+    expect(placeHeroBlocked(G, '0', rem.iid, true)).toBeNull();
+    withBenchOnly('hero_rem', () => {
+      expect(placeHeroBlocked(G, '0', rem.iid, true)).toBe('benchOnly');
+      expect(placeHeroBlocked(G, '0', rem.iid)).toBeNull();
+    });
     expect(placeHeroBlocked(G, '0', item.iid)).toBe('notHero');
   });
 

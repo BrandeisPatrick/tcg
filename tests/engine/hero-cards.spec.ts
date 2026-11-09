@@ -173,8 +173,8 @@ describe('card text names its damage type; an ultimate is one or two effects in 
 
 describe('the Retreat costs the leaving hero\'s printed souls', () => {
   it('each hero, standing in the Active slot, retreats for its own price, and the engine charges exactly that', () => {
+    // Rem among them: she stands in the lane now, and retreats for her 0.
     for (const h of HEROES) {
-      if (h.flags?.benchOnly) continue; // Rem never stands in the lane
       const G = freshReadyGame();
       const me = G.players['0'];
       me.active!.cardId = h.id;

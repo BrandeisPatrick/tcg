@@ -56,13 +56,13 @@ export const HEROES: HeroCard[] = [
     signature: ['spirit_lifesteal', 'bullet_resilience'],
   },
   {
-    // Rem never takes the Active slot: he fights from the bench.
+    // Rem stands in the lane like any hero (Patrick, 2026-11-09: no longer
+    // bench-only); Tag Along makes her equipment on an ally for 2 turns.
     id: 'hero_rem', name: 'Rem', type: 'hero', rarity: 3,
     atk: 1, hp: 4, growth: { atk: 0, hp: 1, spirit: 3 }, retreat: 0,
     profile: { role: 'Support', mix: { tank: 0, damage: 0, control: 1, support: 3 }, reach: 'one', curve: 'late' },
     skills: ['skill_rem'], ult: 'eff_ult_rem',
     signature: ['extra_spirit', 'healing_nova'],
-    flags: { benchOnly: true },
   },
   {
     id: 'hero_shiv', name: 'Shiv', type: 'hero', rarity: 3,

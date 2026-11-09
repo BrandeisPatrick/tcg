@@ -372,7 +372,8 @@ export function freeBenchSlots(ps: PlayerState): (1 | 2 | 3)[] {
  *  - 'notHero'     the card is an item: it goes on a hero (`playCard`).
  *  - 'occupied'    `toActive`, and the Active slot holds a hero (standing or
  *                  a corpse: a bench hero steps up to a corpse's slot).
- *  - 'benchOnly'   `toActive`, and the hero never takes the Active slot (Rem).
+ *  - 'benchOnly'   `toActive`, and the hero never takes the Active slot
+ *                  (`flags.benchOnly`; no card sets it now).
  *  - 'badSlot'     `slot` is no bench slot (not 1, 2 or 3).
  *  - 'slotTaken'   `slot` holds a hero (standing or a corpse), or a merged Rem
  *                  will come back to it.
@@ -465,8 +466,8 @@ export type MoveBlock = 'same' | 'actOver' | 'empty' | 'benchOnly' | 'down' | 'r
  *  or null when they can. Nothing moves once the turn's attack has ended the
  *  Act. A swap trades two OCCUPIED slots: a hole is nobody to trade with (the
  *  Active walking into a hole would leave the lane empty), and slots outside
- *  0..3 are no slots. A bench-only hero (Rem) never takes the Active slot,
- *  whichever side of the swap she is on. Swapping the Active with a bench hero
+ *  0..3 are no slots. A bench-only hero (`flags.benchOnly`, which no card sets
+ *  now) never takes the Active slot, whichever side of the swap it is on. Swapping the Active with a bench hero
  *  is a Retreat: both must be alive, neither may be Rooted (a status that
  *  blocks 'move', on either side of the swap), the player has not retreated
  *  this turn (one a turn), and it costs `retreatCost` souls. Bench-to-bench

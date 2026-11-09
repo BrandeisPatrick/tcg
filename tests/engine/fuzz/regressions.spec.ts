@@ -17,7 +17,7 @@
  * or evolved), and says what it was; one about a sale or a move of an item —
  * gone with the shop, with no deck equivalent — stays skipped, saying so.
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, onTestFinished } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { INVALID_MOVE } from 'boardgame.io/core';
@@ -30,7 +30,7 @@ import { kitCost, seatOf, wornItems } from '@/engine/query';
 import { ULT_COST } from '@/engine/constants';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { configureReadyMatch, freshReadyGame, giveCard, giveItem, makeHero, playNew } from '../_helpers';
+import { configureReadyMatch, flagBenchOnly, freshReadyGame, giveCard, giveItem, makeHero, playNew } from '../_helpers';
 import { forecastMismatches } from './forecast';
 import { everyCard } from './oracle';
 
@@ -418,7 +418,8 @@ describe('E5 moveHero', () => {
     expect(me.bench[2]).not.toBeNull();
   });
 
-  it('E5d Rem cannot take the Active slot from either side of the swap', () => {
+  it('E5d a bench-only hero cannot take the Active slot from either side of the swap (no card is one now: Rem flagged by hand)', () => {
+    onTestFinished(flagBenchOnly('hero_rem'));
     for (const [from, to] of [[0, 2], [2, 0]] as const) {
       const G = game();
       const me = G.players['0'];
@@ -727,7 +728,8 @@ describe('M1 skillBlocked agrees there is something to aim at', () => {
     expect(skillBlocked(G, '0', mk)).toBeNull();
     expect(sandBlast(G).map((a) => (a as { targetIid?: string }).targetIid)).toEqual([G.players['1'].active!.iid]);
     const foe = G.players['1'];
-    foe.bench = [makeHero('hero_rem', '1', 'bench', 1), null, null]; // Rem cannot step up
+    onTestFinished(flagBenchOnly('hero_rem'));
+    foe.bench = [makeHero('hero_rem', '1', 'bench', 1), null, null]; // bench-only (flagged by hand): cannot step up
     foe.active!.hp = 0;
     foe.active!.respawnTurnsLeft = 3;
     resolve(G);

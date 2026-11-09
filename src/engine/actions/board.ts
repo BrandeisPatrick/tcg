@@ -118,7 +118,7 @@ function swapWithActive(
  * Y." — pass `quiet` when the card's own line already tells it. The swap is
  * free, so it neither costs souls nor spends a Swift. Returns whether it was
  * made: it is not for a hero who is not on `ps`'s bench, a fallen one, a
- * bench-only one (Rem), or a board with no Active.
+ * bench-only one (`flags.benchOnly`), or a board with no Active.
  */
 export function swapIntoActive(G: GameState, ps: PlayerState, hero: CardInstance, opts: { quiet?: boolean } = {}): boolean {
   const swapped = swapWithActive(G, ps, hero, opts.quiet ? null : (h, a) => `${h} steps in for ${a}.`);

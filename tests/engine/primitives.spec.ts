@@ -28,7 +28,7 @@ import { registerAbilities } from '@/engine/registry';
 import { addStatus, leaveActive, tickCastingPulses, tickEndOfTurnCC, tickStartOfTurn } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID, SwingFx } from '@/engine/types';
 import { actionRefusal, attackBlockReason, moveBlockReason, skillBlockReason } from '@/ui/board/heroActions';
-import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveItem, makeHero, passTurn, readyClient } from './_helpers';
+import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveItem, makeHero, passTurn, readyClient, withBenchOnly } from './_helpers';
 
 // The primitives the new hero kits are built from — an attack that names its
 // target, Fixation, Dome, Rooted, Rabbit, Last Stand, a pull, a swap-in, HP as a
@@ -974,7 +974,7 @@ describe('swapIntoActive and pullToActive', () => {
     expect(me.active!.statuses.map((s) => s.id)).toEqual(['fixation']); // the new one keeps its own
   });
 
-  it('refuse what they should: a fallen hero, a bench-only hero, a hero who is not on that bench, a board with no Active', () => {
+  it('refuse what they should: a fallen hero, a bench-only hero (no card is one now: Rem flagged by hand), a hero who is not on that bench, a board with no Active', () => withBenchOnly('hero_rem', () => {
     const cases: [string, (G: GameState) => { ps: GameState['players']['0']; hero: CardInstance }][] = [
       ['a corpse', (G) => { const h = G.players['0'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 2; return { ps: G.players['0'], hero: h }; }],
       ['a bench-only hero', (G) => { const h = makeHero('hero_rem', '0', 'bench', 3); G.players['0'].bench[2] = h; return { ps: G.players['0'], hero: h }; }],
@@ -991,7 +991,7 @@ describe('swapIntoActive and pullToActive', () => {
       expect(pullToActive(G, ps, hero), label).toBe(false);
       expect(snapshot(G), label).toBe(before);
     }
-  });
+  }));
 
   it("Mirage's Traveler uses the swap: the ally named steps in and both get Shield 2, as the swap and two Shields by hand do; it names only an ally who could step in", () => {
     // The Traveler as its card reads, written out by hand: Mirage swaps with the
@@ -1016,7 +1016,8 @@ describe('swapIntoActive and pullToActive', () => {
       expect(now.log.some((l) => l.text.includes('steps in for')), `bench ${slot + 1}`).toBe(false);
     }
 
-    // Whom it may name: a living bench ally who could step in, never a fallen or a bench-only one.
+    // Whom it may name: a living bench ally who could step in, never a fallen or a bench-only one
+    // (no card is bench-only now: Rem is flagged by hand for that case).
     const cases: [string, (G: GameState) => void, string[]][] = [
       ['Mirage fronts with allies behind her', mirageActive, ['hero_vindicta', 'hero_lash', 'hero_paige']],
       ['the first ally has fallen', (G) => { mirageActive(G); const b = G.players['0'].bench[0]!; b.hp = 0; b.respawnTurnsLeft = 2; }, ['hero_lash', 'hero_paige']],
@@ -1030,10 +1031,12 @@ describe('swapIntoActive and pullToActive', () => {
       ['a hole where the first ally stood', (G) => { mirageActive(G); G.players['0'].bench[0] = null; }, ['hero_lash', 'hero_paige']],
     ];
     for (const [label, stage, named] of cases) {
-      const G = freshReadyGame();
-      stage(G);
-      const aimed = skillTargets(G, '0', G.players['0'].active!, 'eff_ult_mirage');
-      expect(aimed === 'none' ? aimed : aimed.map((c) => c.cardId), label).toEqual(named);
+      withBenchOnly('hero_rem', () => {
+        const G = freshReadyGame();
+        stage(G);
+        const aimed = skillTargets(G, '0', G.players['0'].active!, 'eff_ult_mirage');
+        expect(aimed === 'none' ? aimed : aimed.map((c) => c.cardId), label).toEqual(named);
+      });
     }
 
     // Away from the Active slot it names nobody, and run anyway it fizzles: only the log moves.

@@ -238,3 +238,29 @@ export function makeHero(
     exp: 0,
   };
 }
+
+/**
+ * Make `cardId` a bench-only hero (`flags.benchOnly`) until the returned undo is
+ * called. No card is bench-only since Rem stands in the lane (Patrick,
+ * 2026-11-09); the engine keeps the rule, dormant, and its tests run it on a
+ * card flagged this way.
+ */
+export function flagBenchOnly(cardId: CardId = 'hero_rem'): () => void {
+  const card = CARDS_BY_ID[cardId] as { flags?: { benchOnly?: boolean } };
+  const was = card.flags;
+  card.flags = { ...was, benchOnly: true };
+  return () => {
+    if (was === undefined) delete card.flags;
+    else card.flags = was;
+  };
+}
+
+/** `fn` run with `cardId` flagged bench-only (`flagBenchOnly`), undone after. */
+export function withBenchOnly<T>(cardId: CardId, fn: () => T): T {
+  const undo = flagBenchOnly(cardId);
+  try {
+    return fn();
+  } finally {
+    undo();
+  }
+}

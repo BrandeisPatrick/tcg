@@ -99,7 +99,7 @@ export function laneOpen(ps: PlayerState): boolean {
 
 /** The bench heroes who can take the Active slot right now: alive (not a
  *  corpse, nor a hero at 0 HP whose fall waits on a trigger prompt), and not
- *  bench-only (Rem). One list for the forced promotion off a fallen Active,
+ *  bench-only (`flags.benchOnly`, which no card sets now). One list for the forced promotion off a fallen Active,
  *  the paid retreat, the AI and the board, so they cannot disagree. */
 export function stepInCandidates(ps: PlayerState): CardInstance[] {
   return ps.bench.filter((b): b is CardInstance => {

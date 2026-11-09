@@ -7,7 +7,7 @@
  * Also pins the driver's contract (reproducible, accepts / rejects as the engine
  * does) and the rules oracles against hand-built boards.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Ctx } from 'boardgame.io';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { resolve } from '@/engine/death';
@@ -17,7 +17,7 @@ import { ITEMS } from '@/cards';
 import {
   BOSS_CARD_ID, BOSS_HP, HARD_CC_CHARGES, LANE_INCOME, MAX_HAND, PRICE, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP, ULT_COOLDOWN, ULT_COST,
 } from '@/engine/constants';
-import { freshReadyGame, giveCard, giveItem, makeHero, nextTestIid, setTrack, stackDeck } from '../_helpers';
+import { flagBenchOnly, freshReadyGame, giveCard, giveItem, makeHero, nextTestIid, setTrack, stackDeck, withBenchOnly } from '../_helpers';
 import { SOULS_ON_USE, checkInvariants, checkTransition, collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { chaosMove, marketSeedFor, mulberry32, playGame } from './driver';
 import {
@@ -154,7 +154,8 @@ describe('the invariants fire on states built to break them', () => {
     ['active-corpse-unresolved', (G) => { G.players['1'].active = null; }],
     // …and the human seat is asked.
     ['active-corpse-unresolved', (G) => { G.players['0'].active = null; }],
-    ['active-not-bench-only', (G) => { G.players['0'].active = makeHero('hero_rem', '0', 'active', 0); }],
+    // (no card is bench-only now: Rem is flagged by hand for the case)
+    ['active-not-bench-only', (G) => { onTestFinished(flagBenchOnly('hero_rem')); G.players['0'].active = makeHero('hero_rem', '0', 'active', 0); }],
     ['active-corpse-unresolved', (G) => { const a = G.players['1'].active!; a.hp = 0; a.respawnTurnsLeft = 3; }],
     ['pending-promotion-stale', (G) => { G.pendingPromotion = '0'; }],
     ['status-sanity', (G) => { G.players['0'].active!.statuses.push({ id: 'stun', value: 1, duration: 0 }); }],
@@ -1126,7 +1127,9 @@ describe('the rules oracles', () => {
     expect(placeHeroBlockedOracle(G, '0', 'ghost', false)).toBe('not-in-hand');
     G.players['0'].active = null;
     expect(placeHeroBlockedOracle(G, '0', yam.iid, true)).toBeNull(); // an empty lane: straight in
-    expect(placeHeroBlockedOracle(G, '0', giveCard(G, '0', 'hero_rem').iid, true)).toBe('bench-only');
+    const rem = giveCard(G, '0', 'hero_rem');
+    expect(placeHeroBlockedOracle(G, '0', rem.iid, true)).toBeNull(); // Rem stands in the lane now
+    expect(withBenchOnly('hero_rem', () => placeHeroBlockedOracle(G, '0', rem.iid, true))).toBe('bench-only'); // a bench-only hero would not
     // A merged Rem keeps her slot: a hero from the hand takes the next.
     const R = clean();
     mergeRem(R, p0(R).haze);
@@ -1142,7 +1145,9 @@ describe('the rules oracles', () => {
     expect(chooseActiveBlockedOracle(O, 'ghost')).toBe('not-in-deck');
     expect(chooseActiveBlockedOracle(O, giveCard(O, '0', 'hero_abrams').iid)).toBe('not-in-deck');
     expect(chooseActiveBlockedOracle(O, intoDeck(giveCard(O, '0', 'grit')).iid)).toBe('not-hero');
-    expect(chooseActiveBlockedOracle(O, intoDeck(giveCard(O, '0', 'hero_rem')).iid)).toBe('bench-only');
+    const remInDeck = intoDeck(giveCard(O, '0', 'hero_rem'));
+    expect(chooseActiveBlockedOracle(O, remInDeck.iid)).toBeNull(); // Rem may open now
+    expect(withBenchOnly('hero_rem', () => chooseActiveBlockedOracle(O, remInDeck.iid))).toBe('bench-only');
     expect(placeHeroBlockedOracle(O, '0', haze.iid, true)).toBe('active-owed');
     // A discard: owed, one card up to what is owed, none twice, each in the hand.
     const D = clean();

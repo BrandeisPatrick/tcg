@@ -19,7 +19,7 @@ import {
 } from '@/ui/board/heroActions';
 import { statusClass } from '@/ui/card/StatusIcon';
 import type { PendingPlay } from '@/ui/helpers';
-import { freshReadyGame, giveCard, giveItem } from '../engine/_helpers';
+import { freshReadyGame, giveCard, giveItem, withBenchOnly } from '../engine/_helpers';
 
 // The board lights the heroes an armed skill or active item may be aimed at
 // and the heroes a card from the hand may go on, the hand dims what cannot be
@@ -320,7 +320,9 @@ describe('the hand\'s plays are the engine\'s answer', () => {
     const rem = intoDeck(giveCard(G, ME, 'hero_rem'));
     const kelvin = intoDeck(giveCard(G, ME, 'hero_kelvin'));
     const grit = intoDeck(giveCard(G, ME, 'grit'));
-    expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: rem.iid })).toEqual({ code: 'benchOnly', text: 'That hero can only fight from the bench' });
+    // Rem may open now; a bench-only hero (no card is one now: Rem flagged by hand) may not.
+    expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: rem.iid })).toBeNull();
+    expect(withBenchOnly('hero_rem', () => actionRefusal(G, ME, { type: 'chooseActive', cardIid: rem.iid }))).toEqual({ code: 'benchOnly', text: 'That hero can only fight from the bench' });
     expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: grit.iid })).toEqual({ code: 'notHero', text: 'Choose a hero' });
     expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: card.iid })).toEqual({ code: 'notInDeck', text: 'That hero is not one of yours' });
     expect(actionRefusal(G, ME, { type: 'attack' })).toEqual({ code: 'activeOwed', text: 'Put your first Active in the lane' });

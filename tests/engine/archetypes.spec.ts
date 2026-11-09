@@ -1,6 +1,6 @@
 import { CARDS_BY_ID } from '@/cards';
 import { describe, it, expect } from 'vitest';
-import { freshReadyGame, makeAttack, makeHero } from './_helpers';
+import { freshReadyGame, makeAttack, makeHero, withBenchOnly } from './_helpers';
 import { INVALID, perform } from '@/engine/engine';
 import { tickCastingPulses, addStatus, tickRemMerges } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
@@ -365,10 +365,13 @@ describe('Support — Rem: Tag Along, and the merge machinery (a merged Rem set 
     expect(rem.remMergeTurnsLeft).toBeUndefined();
   });
 
-  it('drafted first, bench-only Rem still starts on the bench (not Active)', () => {
-    const ps = buildPlayer(allocatorFor(newCounters()), '0', ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist']);
-    expect(ps.active?.cardId).toBe('hero_warden');       // first non-bench-only
-    expect(ps.active?.cardId).not.toBe('hero_rem');
-    expect(ps.bench.some((b) => b?.cardId === 'hero_rem')).toBe(true);
+  it('named first in a roster, Rem is its Active; a bench-only hero (none now: Rem flagged by hand) starts on the bench', () => {
+    const roster = ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist'];
+    const ps = buildPlayer(allocatorFor(newCounters()), '0', roster);
+    expect(ps.active?.cardId).toBe('hero_rem');
+    expect(ps.bench.map((b) => b?.cardId)).toEqual(['hero_warden', 'hero_mo_krill', 'hero_lady_geist']);
+    const flagged = withBenchOnly('hero_rem', () => buildPlayer(allocatorFor(newCounters()), '0', roster));
+    expect(flagged.active?.cardId).toBe('hero_warden');       // first non-bench-only
+    expect(flagged.bench.some((b) => b?.cardId === 'hero_rem')).toBe(true);
   });
 });

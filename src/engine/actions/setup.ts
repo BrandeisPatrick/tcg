@@ -88,10 +88,10 @@ interface RosterOpts {
  *  empty. `ids` names every card it makes (see ids.ts). */
 export function buildPlayer(ids: IidAllocator, pid: PlayerID, heroes: string[], opts: RosterOpts = {}): PlayerState {
   const roster = heroes.slice(0, 4);
-  // A bench-only hero (Rem) must never start as the Active — pick the first
-  // non-bench-only hero for the Active slot; the rest fill the bench in draft
-  // order. (Without this, drafting Rem first put her in the Active slot, which
-  // breaks her merge skill that assumes she's on the bench.)
+  // A bench-only hero (`flags.benchOnly`) must never start as the Active —
+  // pick the first one that may stand there; the rest fill the bench in draft
+  // order. No card is bench-only now (Rem stands in the lane, 2026-11-09), so
+  // the first hero named is the Active.
   const isBenchOnly = (id: string) => !!(CARDS_BY_ID[id] as { flags?: { benchOnly?: boolean } } | undefined)?.flags?.benchOnly;
   const activeIdx = roster.findIndex((id) => !isBenchOnly(id));
   const activeId = roster[activeIdx >= 0 ? activeIdx : 0];

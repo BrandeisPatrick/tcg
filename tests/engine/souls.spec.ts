@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, onTestFinished } from 'vitest';
 import { DeadlockGame } from '@/engine/game';
 import type { CardId, GameState, PlayerID } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
@@ -337,9 +337,11 @@ describe('souls economy', () => {
     expect(Math.max(...retreats.map((m) => m.score))).toBeGreaterThanOrEqual(28);
   });
 
-  it('AI never retreats into a fallen or bench-only hero', async () => {
+  it('AI never retreats into a fallen or bench-only hero (no card is bench-only now: Rem flagged by hand)', async () => {
     const { enumerateAIMoves } = await import('@/ai/heuristic');
-    const { makeHero } = await import('./_helpers');
+    const { makeHero, flagBenchOnly } = await import('./_helpers');
+    const undo = flagBenchOnly('hero_rem');
+    onTestFinished(undo);
     const G = freshG();
     G.players['1'].souls = 3;
     G.players['1'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 }); // wants out

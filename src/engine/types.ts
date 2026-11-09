@@ -109,6 +109,9 @@ export interface HeroCard extends Omit<BaseCard, 'text'> {
   /** The hero's two signature items, chosen to fit its kit (one of tier 1 or
    *  2): both are on sale in any match the hero is drafted into. */
   signature: [CardId, CardId];
+  /** `benchOnly`: the hero never takes the Active slot. No card sets it since
+   *  Rem stands in the lane (2026-11-09); the engine keeps the rule for one
+   *  that may. */
   flags?: { benchOnly?: boolean };
 }
 
