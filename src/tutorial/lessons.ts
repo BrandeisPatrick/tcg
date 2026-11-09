@@ -1,19 +1,19 @@
 /**
  * The tutorial — five short lessons, one thing each, and every lesson its
  * own small fight on the scripted path Story uses (`StorySetup`): fixed
- * rosters, no draft, and custom numbers on every hero so the move being
- * taught is exactly the move that wins. Every turn runs Income → Shop → Act →
- * End, the beats the dial under the turn number lights: the souls arrive and
- * count up, the shop opens (tap a tile to buy: the card lands in your hand;
- * then Done), a card in the hand goes onto a hero with a tap on it and a tap
- * on the hero, then the heroes act (abilities, a Retreat, the attack — which
- * ends the Act, and the turn's End follows on its own).
+ * rosters on the board, no draft, a deck the lesson names (most of them none:
+ * nothing is drawn but what the lesson deals), and custom numbers on every
+ * hero so the move being taught is exactly the move that wins. Every turn runs
+ * Income → Act → End, the beats the dial under the turn number lights: the
+ * souls arrive and count up and a card is drawn, then the player plays from
+ * the hand (a hero onto the bench for free, an item onto a hero for its price:
+ * a tap on it and a tap on the hero) and the heroes act (abilities, a Retreat,
+ * the attack — which ends the Act, and the turn's End follows on its own).
  *
- *   1  The Skill        Kelvin vs a hurt Lash. Close the shop; Frost Grenade ends it.
- *   2  The Shop         Yamato buys Extended Magazine (a tier 1 item, two
- *                       souls of the turn's four): it lands in the hand, he
- *                       puts it on, and the swing it adds is the kill — the
- *                       attack ends the Act.
+ *   1  The Skill        Kelvin vs a hurt Lash. Frost Grenade ends it.
+ *   2  The Hand         Yamato draws Extended Magazine (a tier 1 item, two of
+ *                       the turn's five souls); he puts it on, and the swing
+ *                       it adds is the kill — the attack ends the Act.
  *   3  Active Items     Kelvin holds Cold Front, a gift. Put on, it starts on
  *                       cooldown — ready in two turns — so today Frost
  *                       Grenade and the attack finish Lash: an ability, then
@@ -29,22 +29,19 @@
  * win (lesson 5 sets both tracks itself). Nothing is read and dismissed:
  * every step is a tap on the real thing (lesson 5's last is the End that
  * follows the attack on its own, watched), and every lesson ends on the
- * victory screen. Each step names exactly the
- * control that performs it (the gate lets nothing else through), waits out the
- * rival's turn, and — should the move be out of reach — points at the turn
- * button instead of asking for a move that cannot be made. A turn that opens
- * in the shop where the step has nothing to buy asks for Done first (the
- * coach's shop prompt, `SHOP_PROMPT`).
+ * victory screen. Each step names exactly the control that performs it (the
+ * gate lets nothing else through), waits out the rival's turn, and — should
+ * the move be out of reach — points at the turn button instead of asking for
+ * a move that cannot be made.
  */
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { effectiveAtk, heroAbilities, isRespawning, itemPrice, stepInCandidates, wornItems } from '@/engine/query';
-import { attackBlocked, buyBlocked, playBlocked, skillBlocked } from '@/engine/legality';
+import { attackBlocked, playBlocked, skillBlocked } from '@/engine/legality';
 import { ACTIVE_COOLDOWN, LANE_INCOME, RETREAT_COST } from '@/engine/constants';
 import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
-import { SHOP_DONE, SHOP_SHEET, buyLabel } from '@/ui/overlays/ShopSheet';
 import { inHandLabel } from '@/ui/board/Hand';
 import { mapLesson } from './mapLesson';
 
@@ -54,7 +51,9 @@ import { mapLesson } from './mapLesson';
 
 /** A lesson's fight: one or two heroes of yours against Lash, no scaling on
  *  the rival. The rival's patron is down to its last point, so the one kill
- *  each lesson builds to is the win (a wiped board alone is not). */
+ *  each lesson builds to is the win (a wiped board alone is not). Both decks
+ *  are empty and nobody draws an opening hand, so nothing comes to hand but
+ *  what the lesson deals. */
 function fight(over: Partial<StorySetup> = {}): StorySetup {
   return {
     playerHeroes: ['hero_kelvin'],
@@ -62,6 +61,9 @@ function fight(over: Partial<StorySetup> = {}): StorySetup {
     enemyBuff: { atk: 0, hp: 0 },
     patronHp: 4,
     enemyPatronHp: 1,
+    playerDeck: [],
+    enemyDeck: [],
+    openingHand: 0,
     ...over,
   };
 }
@@ -80,8 +82,6 @@ export interface CoachSeen {
   usedItem: boolean;
   castUlt: boolean;
   swapped: boolean;
-  /** You have closed the shop at least once. */
-  closedShop: boolean;
   /** How many attacks you have made. */
   attacks: number;
   /** How many of your turns you have ended. */
@@ -94,7 +94,6 @@ export const emptySeen: CoachSeen = {
   usedItem: false,
   castUlt: false,
   swapped: false,
-  closedShop: false,
   attacks: 0,
   turnsEnded: 0,
 };
@@ -116,7 +115,7 @@ export interface CoachView {
 /**
  * A gate spec names something on screen by its accessible name:
  *   `Kelvin —`                 first element whose aria-label starts with this
- *   `*Buy Grit`                every element whose aria-label starts with this
+ *   `*Grit, in`                every element whose aria-label starts with this
  *   `~Retreat`                 first button whose text contains this
  *   `Shop sheet >> Souls:`     the second, looked up inside the first
  */
@@ -198,23 +197,12 @@ export interface CoachStep {
   spot: (v: CoachView) => GateSpec[];
   /** What may be tapped. Defaults to `spot`. */
   allow?: (v: CoachView) => GateSpec[];
-  /** A step taken in the shop: while it is up, the coach does not ask for
-   *  Done first (`SHOP_PROMPT`). */
-  shop?: true;
 }
 
-export const RIVAL_TURN = "Rival's turn. Watch its beats pass on the dial: Income, Shop, Act — abilities, then the attack — and End.";
+export const RIVAL_TURN = "Rival's turn. Watch its beats pass on the dial: Income, Act — cards, abilities, then the attack — and End.";
 
 /** The turn button, by its name. */
 export const TURN_BUTTON: GateSpec = END_TURN;
-
-/** The shop sheet, and its Done button, by their names. */
-export const SHOP: GateSpec = SHOP_SHEET;
-export const SHOP_DONE_BUTTON: GateSpec = SHOP_DONE;
-
-/** What the coach says when your turn opens in the shop and the step up has
- *  nothing to buy: Done first, then the step. */
-export const SHOP_PROMPT = 'Your turn opened on its Income, and the shop is up. Nothing to buy now: tap Done to move on to the Act.';
 
 const mine = (v: CoachView) => activeOf(v.G, v.me);
 const theirs = (v: CoachView) => activeOf(v.G, RIVAL);
@@ -293,27 +281,8 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
   };
 }
 
-/** Buy `itemId` from the shop sheet: a tap on its tile (the build's, lit as
- *  the next item the hero can afford, or the catalogue's) and the card lands
- *  in your hand. */
-function buy(id: string, title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
-  const label = cardName(itemId);
-  return {
-    id,
-    title,
-    shop: true,
-    body: (v) => `${lead(v)} Tap its tile: the card lands in your hand.`,
-    task: (v) => !!inHand(v, itemId) || wears(mine(v), itemId),
-    // The engine's own question: the shop open, on sale, and the souls for it.
-    ready: (v) => v.G.step === 'shop' && buyBlocked(v.G, v.me, itemId) === null,
-    blocked: `${label} is out of reach this turn. End the turn — ${word(LANE_INCOME)} more souls arrive at the start of the next, on top of what you keep.`,
-    spot: () => [SHOP],
-    allow: () => [`*${buyLabel(itemId)}`],
-  };
-}
-
 /** Put the card `itemId` from your hand on your Active: a tap on the card,
- *  then a tap on the hero — free, and no ability of his. */
+ *  then a tap on the hero — it costs its price, and is no ability of his. */
 function play(id: string, title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
   const label = cardName(itemId);
   return {
@@ -328,22 +297,9 @@ function play(id: string, title: string, itemId: CardId, lead: (v: CoachView) =>
       const card = inHand(v, itemId), me = mine(v);
       return !!card && !!me && playBlocked(v.G, v.me, card.iid, me.iid) === null;
     },
-    blocked: `${label} cannot go on now. End the turn; it waits in your hand.`,
+    blocked: `${label} cannot go on now. End the turn; it waits in your hand, and ${word(LANE_INCOME)} more souls arrive.`,
     spot: (v) => (v.targeting ? [tile(mine(v))] : [inHandLabel(label)]),
     allow: (v) => (v.targeting ? [tile(mine(v))] : [inHandLabel(label)]),
-  };
-}
-
-/** Close the shop: the turn moves on to its Act. */
-function done(id: string, title: string, body: Text): CoachStep {
-  return {
-    id,
-    title,
-    shop: true,
-    body,
-    task: (v) => v.seen.closedShop,
-    spot: () => [SHOP],
-    allow: () => [SHOP_DONE_BUTTON],
   };
 }
 
@@ -374,15 +330,14 @@ export const LESSONS: Lesson[] = [
     id: 'skill',
     number: 1,
     title: 'The Skill',
-    blurb: "Income, Shop, Act, End. Kelvin's skill ends it.",
+    blurb: "Income, Act, End. Kelvin's skill ends it.",
     face: 'hero_kelvin',
-    outro: 'Every turn runs Income, Shop, Act, End — the dial lights each one. A skill costs nothing, and it comes back every turn.',
+    outro: 'Every turn runs Income, Act, End — the dial lights each one. A skill costs nothing, and it comes back every turn.',
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
     // is the whole fight.
     setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
-      done('shop', 'Your Turn', (v) => `Every turn runs four beats, lit on the dial: Income, Shop, Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}), and the shop is up. Nothing to buy in this lesson: tap Done to move on to the Act.`),
-      look('look', 'One on One', mine, (v) => `${nameOf(mine(v))} against ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Every hero carries a skill on his sheet. Tap ${nameOf(mine(v))} to open his sheet.`),
+      look('look', 'One on One', mine, (v) => `Every turn runs three beats, lit on the dial: Income (souls and a card), Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}). ${nameOf(mine(v))} faces ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Tap ${nameOf(mine(v))} to open his sheet.`),
       useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to their Active. Skills cost no souls.`),
     ],
   },
@@ -390,24 +345,22 @@ export const LESSONS: Lesson[] = [
   {
     id: 'souls',
     number: 2,
-    title: 'The Shop',
-    blurb: 'Four souls, one tile: buy it, put it on. Its swing is the kill.',
+    title: 'The Hand',
+    blurb: 'A card drawn, two souls: put it on. Its swing is the kill.',
     face: 'hero_yamato',
-    outro: 'Souls carry over: what you do not spend stays, and four more arrive every turn. A card bought waits in your hand until you put it on a hero; once on, it stays, through death too.',
-    // Yamato swings for 2 at a Lash on 3. Extended Magazine — his build's first
-    // item, a tier 1 for two of the turn's four souls — makes it 3 once it is
-    // on him, and the swing that ends the Act is the kill. Turn two, so there
-    // is an attack.
+    outro: `Every turn pays ${soulsText(LANE_INCOME)} and draws a card. Souls carry over: what you do not spend stays. An item waits in your hand until you pay to put it on a hero; once on, it stays, through death too. A hero you draw goes on the bench for free.`,
+    // Yamato swings for 2 at a Lash on 3. His deck is one card, Extended
+    // Magazine — his build's first item, a tier 1 for two of the turn's five
+    // souls — drawn as the turn opens; on him it makes his swing 3, and the
+    // swing that ends the Act is the kill. Turn two, so there is an attack.
     setup: () => fight({
       startTurn: 2,
       playerHeroes: ['hero_yamato'],
+      playerDeck: ['extended_magazine'],
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      buy('buy', 'Shop', 'extended_magazine',
-        (v) => `Income paid you ${soulsText(LANE_INCOME)}: you hold ${souls(v)}. The shop opens on ${nameOf(mine(v))}'s build, the next item he can afford lit in gold: Extended Magazine, tier 1 for ${soulsText(itemPrice('extended_magazine'))}, +1 Bullet Power. Hold a tile to read it.`),
-      done('done', 'Done', (v) => `Bought: the card flew to your hand, and the ${soulsText(souls(v))} you did not spend stay with you. Tap Done to close the shop.`),
-      play('play', 'Put It On', 'extended_magazine', () => 'A card in your hand goes onto a hero for nothing, in the Shop or the Act.'),
+      play('play', 'Put It On', 'extended_magazine', (v) => `Income paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}) and drew you a card: Extended Magazine, tier 1, +1 Bullet Power. Its price, ${soulsText(itemPrice('extended_magazine'))}, is on its coin.`),
       attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends the Act, and the turn's End follows on its own.`),
     ],
   },
@@ -429,8 +382,7 @@ export const LESSONS: Lesson[] = [
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      done('shop', 'The Shop', 'Cold Front waits in your hand, under the board — a gift, an active item; its tile bears a bolt. Nothing to buy this turn: tap Done.'),
-      play('play', 'Put It On', 'cold_front', () => 'An active item works from the hero who wears it.'),
+      play('play', 'Put It On', 'cold_front', () => `Cold Front waits in your hand, under the board — a gift, an active item; its card bears a bolt, and its price is ${soulsText(itemPrice('cold_front'))}. An active item works from the hero who wears it.`),
       useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns — its plate on ${nameOf(mine(v))}'s sheet shows the dial. Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage.`),
       attack((v) => `${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}. One ability each, then one attack — it ends the Act.`),
     ],
@@ -454,7 +406,6 @@ export const LESSONS: Lesson[] = [
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      done('shop', 'The Shop', 'Income paid, and the shop is up, as every turn. Keep your souls this time: tap Done.'),
       look('look', 'Spent', mine, (v) => `${nameOf(mine(v))} is at ${hpOf(mine(v))}: ${nameOf(theirs(v))}'s next attack finishes him, and his own swing of ${atkOf(mine(v))} cannot finish ${nameOf(theirs(v))}. ${nameOf(myBench(v))} waits fresh on your bench. Tap ${nameOf(mine(v))}.`),
       // Retreat is the Active's own move and lives on his sheet, which the
       // step before has just opened. Should it be closed, the step opens it
@@ -471,7 +422,7 @@ export const LESSONS: Lesson[] = [
         // The engine's own question: is a swap with the bench open to you now?
         ready: (v) => {
           const stepIns = stepInCandidates(v.G.players[v.me]);
-          return v.G.step === 'act' && stepIns.length > 0 && retreatBlock(v.G, v.me, stepIns) === null;
+          return stepIns.length > 0 && retreatBlock(v.G, v.me, stepIns) === null;
         },
         blocked: `Retreat costs ${soulsText(RETREAT_COST)}, one a turn, before the attack. End the turn, then come back to it.`,
         spot: (v) => (v.sheetOpen ? ['Hero sheet'] : [tile(mine(v))]),
@@ -482,7 +433,7 @@ export const LESSONS: Lesson[] = [
   },
 
   // 5 The Map — its own file (mapLesson.ts), made of the builders above.
-  mapLesson({ fight, done, useSkill, attack }),
+  mapLesson({ fight, look, useSkill, attack }),
 ];
 
 export function lessonById(id: string | undefined | null): Lesson | undefined {
