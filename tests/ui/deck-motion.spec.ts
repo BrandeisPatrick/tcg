@@ -19,7 +19,8 @@ import {
   DECK_MOTION as T, EMPTY_PLAN, admitBatch, arrivingIids, deckEvents, locate, planDeckMotion, rivalPlacedBy, PileTicker,
 } from '@/ui/motion';
 import { freshBatch } from '@/ui/effects/fx/fxTimeline';
-import { TEST_ROSTERS, freshReadyGame, giveCard, playNew, stackDeck, useItem } from '../engine/_helpers';
+import { TEST_ROSTERS, freshReadyGame, giveCard, makeHero, playNew, stackDeck, useItem } from '../engine/_helpers';
+import { tickRemMerges } from '@/engine/statusOps';
 import { playGame } from '../engine/fuzz/driver';
 
 const snapshot = (G: GameState): GameState => structuredClone(G);
@@ -187,6 +188,37 @@ describe('deck motion plan', () => {
     expect(plan.ticks).toEqual([{ pile: 'discard', pid: '0', at: 0, delta: 1 }]);
     // No game before the batch at all: the same.
     expect(planDeckMotion([ev], { me: '0', before: null, after: G }).flights).toEqual([]);
+  });
+
+  it('a ride: Rem flies from her slot onto the bearer as Tag Along is used, and off it back to her bench slot when the ride is over', () => {
+    const G = freshReadyGame();
+    const ps = G.players['0'];
+    const bearer = ps.active!;
+    const rem = ps.bench[1] = makeHero('hero_rem', '0', 'bench', 2);
+    ps.souls = 10;
+    const before = snapshot(G);
+    G.fx = [];
+    expect(perform(G, '0', { type: 'useSkill', heroIid: rem.iid, skillId: 'skill_rem', targetIid: bearer.iid })).not.toBe(INVALID);
+    const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
+    const [on] = ofKind(plan, 'rideOn');
+    expect(on).toMatchObject({ pid: '0', cardId: 'hero_rem', iid: rem.iid, at: 0, hold: 0, dur: T.flight, hide: rem.iid });
+    expect(on.from).toEqual({ kind: 'slot', iid: rem.iid });
+    expect(on.to).toEqual({ kind: 'worn', iid: rem.iid, bearerIid: bearer.iid });
+    expect(on.faces).toEqual({ start: 'face', end: 'face' });
+    expect(arrivingIids(plan, '0')).toEqual([]); // nothing lands in the hand
+    expect(rivalPlacedBy(plan, '0')).toBe(0);    // nor is it a placement the AI waits on
+
+    // The ride over, at her side's turn start: off the bearer, back to her slot.
+    rem.remMergeTurnsLeft = 1;
+    const riding = snapshot(G);
+    G.fx = [];
+    tickRemMerges(G, ps);
+    expect(ps.bench[1]).toBe(rem);
+    const [off] = ofKind(planDeckMotion(G.fx, { me: '0', before: riding, after: G }), 'rideOff');
+    expect(off.from).toEqual({ kind: 'worn', iid: rem.iid, bearerIid: bearer.iid });
+    expect(off.to).toEqual({ kind: 'slot', iid: rem.iid });
+    expect(off.hide).toBe(rem.iid);
+    expect(G.fx).toContainEqual(expect.objectContaining({ kind: 'deck', what: 'rideOff', slot: 2, bearerIid: bearer.iid }));
   });
 
   it('a fallen hero back in the hand flies from its slot to the hand', () => {

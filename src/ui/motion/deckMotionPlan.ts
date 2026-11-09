@@ -22,6 +22,11 @@
  *   upgrade   the upgrade card appears over the table, holds, and flies into
  *             the deck
  *   toHand    a fallen hero flies from its slot back to the hand
+ *   rideOn    a hero riding on an ally (Rem's Tag Along) flies from its slot
+ *             onto the bearer, shrinking into the chip it becomes among its
+ *             items; the chip stays out of sight until it lands
+ *   rideOff   the ride over, it flies off the bearer back to its bench slot,
+ *             the tile out of sight until it lands
  *
  * Each side has its own cursor, so both sides' openings play at once (the
  * Actives fly, the heroes go in, the decks riffle, the hands are dealt);
@@ -59,6 +64,10 @@ export type Anchor =
   | { kind: 'hand'; pid: PlayerID; iid?: string }
   /** A hero's slot on the board. */
   | { kind: 'slot'; iid: string }
+  /** A hero riding on an ally (`iid`): its chip among the items of the bearer
+   *  (`bearerIid`), or, when the chip is not on screen, where the chips sit
+   *  on the bearer's tile. */
+  | { kind: 'worn'; iid: string; bearerIid: string }
   /** The middle of a side's half of the table: card `i` of `n` across. */
   | { kind: 'stage'; pid: PlayerID; i: number; n: number };
 
@@ -279,6 +288,25 @@ export function planDeckMotion(batch: readonly FxEvent[], input: PlanInput): Dec
         });
         c.next = at + T.stagger;
         c.end = Math.max(c.end, at + T.flight);
+        break;
+      }
+      case 'rideOn':
+      case 'rideOff': {
+        // A ride, after whatever the side has in the air: from the slot onto
+        // the bearer, or back. The card is the hero's own face both ways.
+        if (!ev.iid || !ev.bearerIid) break;
+        const at = c.end;
+        const slot: Anchor = { kind: 'slot', iid: ev.iid };
+        const worn: Anchor = { kind: 'worn', iid: ev.iid, bearerIid: ev.bearerIid };
+        flights.push({
+          key: `${ev.seq}`, what: ev.what, pid, cardId: ev.cardId, iid: ev.iid,
+          at, hold: 0, dur: T.flight,
+          from: ev.what === 'rideOn' ? slot : worn, to: ev.what === 'rideOn' ? worn : slot,
+          faces: { start: 'face', end: 'face' },
+          hide: ev.iid,
+        });
+        c.end = at + T.flight;
+        c.next = c.end;
         break;
       }
       case 'place': {

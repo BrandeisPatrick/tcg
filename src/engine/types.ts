@@ -564,12 +564,17 @@ export interface BossFx extends FxBase {
 export interface DeckFx extends FxBase {
   kind: 'deck';
   /** `place`: a hero from the hand (or, the opening, the deck) put in a slot
-   *  of the board (`slot`: 0 the Active, 1-3 the bench). */
-  what: 'shuffle' | 'draw' | 'discard' | 'upgrade' | 'toHand' | 'place';
+   *  of the board (`slot`: 0 the Active, 1-3 the bench). `rideOn`: a hero
+   *  left its slot to ride on an ally as equipment (Rem's Tag Along;
+   *  `bearerIid` the ally). `rideOff`: the ride is over and it is back on the
+   *  bench (`slot`), off `bearerIid`. */
+  what: 'shuffle' | 'draw' | 'discard' | 'upgrade' | 'toHand' | 'place' | 'rideOn' | 'rideOff';
   pid: PlayerID;
   iid?: string;
   cardId?: CardId;
   slot?: 0 | 1 | 2 | 3;
+  /** `rideOn` / `rideOff`: the hero ridden on. */
+  bearerIid?: string;
 }
 
 export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx | PushFx | FallFx | BossFx | DeckFx;

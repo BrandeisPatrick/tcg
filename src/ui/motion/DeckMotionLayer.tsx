@@ -102,12 +102,15 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
   const ownerOf = (pid: PlayerID): Owner => (pid === me ? 'you' : 'rival');
 
   /** What a flight hides for `iid`: its hand card (yours by Board's
-   *  registry, the rival's back by its data attribute) and its slot tile (a
-   *  hero placed), whichever are on screen. */
+   *  registry, the rival's back by its data attribute), its slot tile (a
+   *  hero placed) and its chip on a hero it rides on, whichever are on
+   *  screen. */
   const hideTargets = (iid: string): HTMLElement[] => {
     const out: HTMLElement[] = [];
     const hand = handRefs.get(iid) ?? document.querySelector<HTMLElement>(`[data-hand-card="${iid}"]`);
     if (hand) out.push(hand);
+    const chip = document.querySelector<HTMLElement>(`[data-worn-iid="${iid}"]`);
+    if (chip) out.push(chip);
     // The tile itself carries a shared layoutId, and framer's projection
     // writes its own inline visibility each frame; its rest wrapper (a plain
     // div, the box the FX layer measures) holds what is set on it.
@@ -152,7 +155,19 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
       }
       case 'slot': {
         const el = slotRefs.get(a.iid);
-        return el ? restRect(el) : null;
+        return el && el.isConnected ? restRect(el) : null;
+      }
+      case 'worn': {
+        const chip = document.querySelector(`[data-worn-iid="${a.iid}"]`);
+        if (chip) return toRect(chip);
+        // The chip has gone (the ride is over): where the chips sit, at the
+        // foot of the bearer's tile, a chip's height.
+        const el = slotRefs.get(a.bearerIid);
+        if (!el || !el.isConnected) return null;
+        const r = restRect(el);
+        const h = Math.max(24, r.height * 0.18);
+        const w = (natural.w / natural.h) * h;
+        return boxAt(r.left + 4 + w / 2, r.top + r.height - 4 - h / 2, natural, h);
       }
       case 'stage': {
         const you = pileEl('deck', 'you');

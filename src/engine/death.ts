@@ -148,6 +148,7 @@ export function rideOn(G: GameState, ps: PlayerState, rider: CardInstance, beare
   rider.remMergeTurnsLeft = turns;
   (bearer.attached ??= []).push(rider);
   pushLog(G, `${cardName(rider.cardId)} rides on ${cardName(bearer.cardId)} for ${turns} turn${turns === 1 ? '' : 's'}.`);
+  pushFx(G, { kind: 'deck', what: 'rideOn', pid: ps.id, iid: rider.iid, cardId: rider.cardId, bearerIid: bearer.iid });
 }
 
 /**
@@ -189,6 +190,7 @@ export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInst
   rem.slot = (slotIdx + 1) as 1 | 2 | 3;
   ps.bench[slotIdx] = rem;
   pushLog(G, `${cardName(rem.cardId)} returns to the bench.`);
+  pushFx(G, { kind: 'deck', what: 'rideOff', pid: ps.id, iid: rem.iid, cardId: rem.cardId, slot: rem.slot, bearerIid: bearer.iid });
 }
 
 /**
