@@ -7,8 +7,8 @@ import { INVALID, perform } from '@/engine/engine';
 import { blocked } from '@/engine/legality';
 import { findWornItem, seatOf, structureHp } from '@/engine/query';
 import { newTrack } from '@/engine/map';
-import { addSignatures, openingMarket } from '@/engine/market';
 import { attachItem, makeInstance, syncVitalitySpike } from '@/engine/instances';
+import { playCost } from '@/engine/legality';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { HARD_CC_CHARGES } from '@/engine/constants';
 import { setMatchConfig } from '@/storage/matchConfig';
@@ -31,12 +31,8 @@ export const TEST_ROSTERS: Record<PlayerID, CardId[]> = {
   '1': ['hero_abrams', 'hero_dynamo', 'hero_kelvin', 'hero_seven'],
 };
 
-/** The seed the test games draw their market from: its random slice sells
- *  what the tests buy beside the rosters' signatures (Titanic Magazine,
- *  Improved Spirit, Heroic Aura, Alchemical Fire, Boundless Spirit) and Haze's
- *  build item Intensifying Magazine, so no build of the rosters asks for a
- *  stand-in. Seed 1 did until the catalogue grew to the full shop, and 120238
- *  until the slice drew a tier-5 item a tab (both 2026-11-05). */
+/** The seed the test games draw their shuffles from (the deck, the opening
+ *  hand's hero swap, where an upgrade goes in the deck). */
 export const TEST_SEED = 11395;
 
 /** The structure HP `pid` has standing (Guardian + Walker + Patron). */
@@ -51,19 +47,15 @@ export function setTrack(G: GameState, pid: PlayerID, hp: TrackHp) {
 }
 
 /**
- * Battle-ready GameState with both rosters already on the board (no draft),
- * in the act step of P0's first turn as the second mover (the pie rule: P1
- * took engine turn 1), so P0 may attack, use abilities and items, and retreat.
- * Nobody wears anything, both hands are empty and nobody has souls. The market
- * is TEST_SEED's with both rosters' signature items on sale — signatures only:
- * this is a hand-built state, so unlike a drafted or scripted match
- * (`addHero`, market.ts) the heroes' builds are not added, which leaves the
- * tests that need an item off sale plenty to pick from.
- * `setup()` itself returns empty players + a pending draft, so tests that read
- * `players['0'].active` must build a ready state via this helper instead. Pass
- * `{ step: 'shop' }` for the shop step.
+ * Battle-ready GameState with both rosters already on the board (no draft), on
+ * P0's first turn as the second mover (the pie rule: P1 took engine turn 1),
+ * so P0 may play cards, attack, use abilities and items, and retreat. Nobody
+ * wears anything, every deck, hand and discard pile is empty and nobody has
+ * souls. `setup()` itself returns empty players + a pending draft, so tests
+ * that read `players['0'].active` must build a ready state via this helper
+ * instead.
  */
-export function freshReadyGame(opts: { step?: GameState['step'] } = {}): GameState {
+export function freshReadyGame(): GameState {
   const counters = newCounters();
   const ids = allocatorFor(counters);
   const G: GameState = {
@@ -80,24 +72,21 @@ export function freshReadyGame(opts: { step?: GameState['step'] } = {}): GameSta
     draft: null,
     draftTurnsOffset: 0,
     seed: TEST_SEED,
-    market: openingMarket(TEST_SEED),
-    step: opts.step ?? 'act',
     attackUsed: false,
     retreatUsed: false,
     ...freshMap(),
     action: null,
     fx: [],
   };
-  for (const id of [...TEST_ROSTERS['0'], ...TEST_ROSTERS['1']]) addSignatures(G, id);
   return G;
 }
 
 /**
- * Put the item `itemId` on `hero` directly, as if bought earlier: its bonus on
+ * Put the item `itemId` on `hero` directly, as if played earlier: its bonus on
  * the hero, the Vitality spike synced, an active ready to use (no cooldown) —
  * or, with `cooldown`, cooling for that many own turns — and a hard crowd-control
- * active with its full charges. No souls, no market, no step: for tests that
- * need a hero wearing something. Returns the item instance.
+ * active with its full charges. No souls, no hand: for tests that need a hero
+ * wearing something. Returns the item instance.
  */
 export function giveItem(G: GameState, hero: CardInstance, itemId: CardId, opts: { cooldown?: number } = {}): CardInstance {
   const data = itemCard(itemId);
@@ -130,27 +119,12 @@ export function useItem(G: GameState, pid: PlayerID, itemId: CardId, targetIid?:
 }
 
 /**
- * Buy `itemId` as `pid` through the engine's front door (the shop step of
- * `pid`'s turn, souls enough): the price is paid and the card goes to the
- * hand. Throws, naming the reason, when the engine refuses. Returns the card,
- * now the last of `pid`'s hand.
- */
-export function buyToHand(G: GameState, pid: PlayerID, itemId: CardId): CardInstance {
-  const a = { type: 'buy' as const, itemId };
-  const why = blocked(G, pid, a);
-  if (perform(G, pid, a) === INVALID) throw new Error(`buying ${itemId} was refused: ${why}`);
-  const card = G.players[pid].hand.at(-1);
-  if (!card || card.cardId !== itemId) throw new Error(`${itemId} is not in the hand after the buy`);
-  return card;
-}
-
-/**
  * Play `card` from `pid`'s hand onto its hero `hero` through the engine's
- * front door (either step of `pid`'s turn). Throws, naming the reason, when
- * the engine refuses. Returns the card, which the hero now wears.
+ * front door (`pid`'s turn, souls enough for its price). Throws, naming the
+ * reason, when the engine refuses. Returns the card, which the hero now wears.
  */
-export function playItem(G: GameState, pid: PlayerID, card: CardInstance, hero: CardInstance): CardInstance {
-  const a = { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid };
+export function playItem(G: GameState, pid: PlayerID, card: CardInstance, hero: CardInstance, upgradeId?: CardId): CardInstance {
+  const a = upgradeId ? { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid, upgradeId } : { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid };
   const why = blocked(G, pid, a);
   if (perform(G, pid, a) === INVALID) throw new Error(`playing ${card.cardId} on ${hero.cardId} was refused: ${why}`);
   const worn = findWornItem(G, card.iid, pid);
@@ -159,38 +133,45 @@ export function playItem(G: GameState, pid: PlayerID, card: CardInstance, hero: 
 }
 
 /**
- * Buy `itemId` as `pid` and play it at once onto `hero` (`buyToHand`, then
- * `playItem`): what a purchase for one hero takes now that a card goes to the
- * hand first. Throws, naming the reason, when either is refused. Returns the
- * item the hero now wears.
+ * Deal `itemId` into `pid`'s hand and play it at once onto `hero` through the
+ * engine's front door, the souls its play costs (`playCost`) handed over first
+ * so the side's own souls come out where they were: an item put on a hero the
+ * way a player puts one on, for tests about what it does once worn. Throws,
+ * naming the reason, when the engine refuses. Returns the item the hero now
+ * wears.
  */
-export function buyItem(G: GameState, pid: PlayerID, itemId: CardId, hero: CardInstance): CardInstance {
-  return playItem(G, pid, buyToHand(G, pid, itemId), hero);
+export function playNew(G: GameState, pid: PlayerID, itemId: CardId, hero: CardInstance): CardInstance {
+  const card = giveCard(G, pid, itemId);
+  G.players[pid].souls += playCost(hero, itemId);
+  return playItem(G, pid, card, hero);
 }
 
 /**
- * Put a card of `itemId` straight into `pid`'s hand, as a Story reward is
- * given (no purchase recorded) — or, with `bought`, as if it had been bought on
- * that engine turn for that many souls. No souls, no market, no step. Returns
- * the card.
+ * Put a card of `itemId` (an item, or a hero) straight into `pid`'s hand, as
+ * a draw or a Story reward puts one there. No souls, no deck. Returns the card.
  */
-export function giveCard(G: GameState, pid: PlayerID, itemId: CardId, bought?: { turn: number; paid: number }): CardInstance {
-  if (!itemCard(itemId)) throw new Error(`not an item: ${itemId}`);
-  const card = makeInstance(allocatorOf(G), itemId, pid, 'hand');
-  if (bought) {
-    card.boughtOnTurn = bought.turn;
-    card.paid = bought.paid;
-  }
+export function giveCard(G: GameState, pid: PlayerID, cardId: CardId): CardInstance {
+  if (!CARDS_BY_ID[cardId]) throw new Error(`no such card: ${cardId}`);
+  const card = makeInstance(allocatorOf(G), cardId, pid, 'hand');
   G.players[pid].hand.push(card);
   return card;
+}
+
+/** Put fresh cards of `ids` on top of `pid`'s deck, the first on top: the
+ *  next draws, in order. Returns the cards. */
+export function stackDeck(G: GameState, pid: PlayerID, ids: CardId[]): CardInstance[] {
+  const made = ids.map((id) => makeInstance(allocatorOf(G), id, pid, 'deck'));
+  G.players[pid].deck.push(...[...made].reverse());
+  return made;
 }
 
 /**
  * Make the engine's `setup()` build a battle-ready match (no draft) so a
  * boardgame.io Client boots straight into turn 1 with both boards populated.
  * Uses the story branch (which bypasses the draft) with a zero stat buff so it
- * behaves like a normal match, and TEST_SEED for the market. The first turn
- * opens in its shop step. Call in beforeAll for Client-based specs.
+ * behaves like a normal match, TEST_SEED for its shuffles, and empty decks
+ * with no opening hand, so nothing is drawn that a test did not put there.
+ * Call in beforeAll for Client-based specs.
  */
 export function configureReadyMatch(): void {
   setMatchConfig({
@@ -200,6 +181,9 @@ export function configureReadyMatch(): void {
       playerHeroes: TEST_ROSTERS['0'],
       enemyHeroes: TEST_ROSTERS['1'],
       enemyBuff: { atk: 0, hp: 0 },
+      playerDeck: [],
+      enemyDeck: [],
+      openingHand: 0,
     },
   });
 }
@@ -207,21 +191,17 @@ export function configureReadyMatch(): void {
 /**
  * A boardgame.io Client of the ready match (`configureReadyMatch` must have
  * run), started — on seat 0's turn 1 (seat 0 moves first in a scripted match,
- * with its first income banked) — and, unless `shop` is asked for, past that
- * turn's shop step into its act step.
+ * with its first income banked).
  */
-export function readyClient(opts: { shop?: boolean } = {}) {
+export function readyClient() {
   const client = Client({ game: DeadlockGame, numPlayers: 2 });
   client.start();
-  if (!opts.shop) client.moves.closeShop();
   return client;
 }
 
-/** End the turn on `client` and close the next turn's shop: the next player
- *  stands in its act step. */
+/** End the turn on `client`: the next player's turn begins. */
 export function passTurn(client: ReturnType<typeof readyClient>): void {
   client.moves.endTurn();
-  client.moves.closeShop();
 }
 
 /**

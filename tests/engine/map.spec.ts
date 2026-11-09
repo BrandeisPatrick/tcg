@@ -20,9 +20,9 @@ import {
   checkWinner, findCardOnBoard, isRespawning, killPush, respawnTimer, slotCap, standingVerdict, structureHp, structureOf,
   targetsFor,
 } from '@/engine/query';
-import { MATCH_TURNS, respawnTurns, round } from '@/engine/rounds';
+import { MATCH_TURNS, round } from '@/engine/rounds';
 import {
-  BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, BOSS_SOULS, GUARDIAN_BOUNTY, MAX_ITEMS, REVIVE_CREDITS, ROUND_CAP,
+  BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, MAX_ITEMS, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP,
 } from '@/engine/constants';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { freshReadyGame, giveItem, makeHero, setTrack, structuresOf } from './_helpers';
@@ -55,12 +55,12 @@ describe('the structures: Guardian 4 → Walker 6 → Patron 8, pushed front fir
     }
   });
 
-  it('a push damages the front standing structure and carries the rest on; the felled Guardian pays its bounty', () => {
+  it('a push damages the front standing structure and carries the rest on; the felled Guardian pays no souls', () => {
     const G = freshReadyGame();
     const souls = G.players['0'].souls;
     expect(pushStructures(G, '1', 5, 'kill')).toBe(5);
     expect(G.players['1'].structures.map((s) => s.hp)).toEqual([0, 5, 8]);
-    expect(G.players['0'].souls).toBe(souls + GUARDIAN_BOUNTY);
+    expect(G.players['0'].souls).toBe(souls);
     const fx = G.fx.filter((e) => e.kind === 'push' || e.kind === 'fall');
     expect(fx.map((e) => `${e.kind}:${e.structure}`)).toEqual(['push:guardian', 'fall:guardian', 'push:walker']);
     expect(G.record['0']).toMatchObject({ pushes: 1, pushDamage: 5 });
@@ -82,7 +82,7 @@ describe('the structures: Guardian 4 → Walker 6 → Patron 8, pushed front fir
     expect(checkWinner(G)).toEqual({ winner: '0' });
   });
 
-  it("a scripted track of the Patron alone (a Story fight's, a lesson's) has no Guardian bounty and no flex slot", () => {
+  it("a scripted track of the Patron alone (a Story fight's, a lesson's) has no Guardian and no flex slot", () => {
     const G = freshReadyGame();
     setTrack(G, '1', { patron: 3 });
     const souls = G.players['0'].souls;
@@ -94,7 +94,7 @@ describe('the structures: Guardian 4 → Walker 6 → Patron 8, pushed front fir
 });
 
 describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pusher\'s bullet power', () => {
-  it('the kill pays its bounty and pushes the same level + 1 into the victim\'s side', () => {
+  it('the kill pays no souls and pushes level + 1 into the victim\'s side', () => {
     const G = freshReadyGame();
     const rival = G.players['1'].active!;
     rival.hp = 1;
@@ -102,7 +102,7 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
     const souls = G.players['0'].souls;
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
     expect(isRespawning(rival)).toBe(true);
-    expect(G.players['0'].souls).toBe(souls + 3);
+    expect(G.players['0'].souls).toBe(souls);
     expect(structuresOf(G, '1')).toBe(18 - 3);
     expect(G.record['0'].kills).toBe(1);
   });
@@ -134,20 +134,42 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
   });
 });
 
-describe('the respawn timer by the round', () => {
-  it('1 own turn in rounds 1–4, 2 in rounds 5–8, 3 from round 9', () => {
-    expect([1, 7, 8, 9, 16, 17, 30].map((t) => respawnTurns(at(t)))).toEqual([1, 1, 1, 2, 2, 3, 3]);
-  });
-
-  it('one more for the strictly richest hero on the board, and a fall arms it', () => {
+describe('the wait before a fallen hero goes back to the hand', () => {
+  it('RESPAWN_TURNS (2) own turns, in every round, whatever the hero wears', () => {
+    expect(RESPAWN_TURNS).toBe(2);
+    for (const t of [1, 7, 10, 18, 30]) expect(respawnTimer(at(t), at(t).players['1'].active!), `turn ${t}`).toBe(RESPAWN_TURNS);
     const G = at(10); // round 5
     const rival = G.players['1'].active!;
-    expect(respawnTimer(G, rival)).toBe(2);
     giveItem(G, rival, 'extra_spirit');
-    expect(respawnTimer(G, rival)).toBe(3);
+    expect(respawnTimer(G, rival)).toBe(RESPAWN_TURNS);
+  });
+
+  it('a fall arms it; when it runs out the hero is in its owner\'s hand at full HP, its level and items kept, its slot empty', () => {
+    const G = at(10);
+    const p1 = G.players['1'];
+    const rival = p1.active!;
+    rival.level = 3;
+    const worn = giveItem(G, rival, 'extra_spirit');
     rival.hp = 1;
     perform(G, '0', { type: 'attack' });
-    expect(rival.respawnTurnsLeft).toBe(3);
+    expect(rival.respawnTurnsLeft).toBe(RESPAWN_TURNS);
+    // The AI seat promoted a bench hero; the corpse waits on the bench.
+    expect(p1.active).not.toBe(rival);
+    const slot = p1.bench.indexOf(rival);
+    expect(slot).toBeGreaterThanOrEqual(0);
+    endTurnEffects(G, '0');
+    beginTurn(G, '1', 11);
+    expect(rival.respawnTurnsLeft).toBe(1);
+    endTurnEffects(G, '1');
+    beginTurn(G, '0', 12);
+    endTurnEffects(G, '0');
+    beginTurn(G, '1', 13);
+    expect(p1.bench[slot]).toBeNull();
+    expect(p1.hand).toContain(rival);
+    expect(rival).toMatchObject({ zone: 'hand', hp: rival.hpMax, level: 3 });
+    expect(rival.respawnTurnsLeft).toBeUndefined();
+    expect(rival.attached).toContain(worn);
+    expect(G.fx.some((e) => e.kind === 'deck' && e.what === 'toHand' && e.iid === rival.iid)).toBe(true);
   });
 });
 
@@ -236,14 +258,14 @@ describe('the Mid-Boss', () => {
     expect(G.record['1'].kills).toBe(0);
   });
 
-  it('falls to the side that dealt it more: 4 souls and the Rejuvenator, and rises again 4 rounds on', () => {
+  it('falls to the side that dealt it more: the Rejuvenator (no souls), and rises again 4 rounds on', () => {
     const { G, boss } = withBoss();
     G.bossDamage = { '0': 4, '1': 3 };
     boss.hp = 3; // P0's swing of 3 finishes it
     const souls = G.players['0'].souls;
     shootBoss(G, '0');
     expect(G.boss).toBeNull();
-    expect(G.players['0'].souls).toBe(souls + BOSS_SOULS);
+    expect(G.players['0'].souls).toBe(souls);
     expect(G.players['0']).toMatchObject({ reviveCredits: REVIVE_CREDITS, reviveUntilRound: 6 });
     expect(G.bossRespawnRound).toBe(8);
     expect(G.record['0'].bossKills).toBe(1);
@@ -305,7 +327,7 @@ describe('the Mid-Boss', () => {
 });
 
 describe('the Rejuvenator', () => {
-  it('a hero that falls with a credit live is paid for and pushed, then back in place at full HP, a credit spent', () => {
+  it('a hero that falls with a credit live is pushed, then back in place at full HP, a credit spent', () => {
     const G = at(10);
     const p1 = G.players['1'];
     p1.reviveCredits = 2;
@@ -318,7 +340,7 @@ describe('the Rejuvenator', () => {
     expect(rival.hp).toBe(rival.hpMax);
     expect(p1.active).toBe(rival);
     expect(p1.reviveCredits).toBe(1);
-    expect(G.players['0'].souls).toBe(souls + 2);
+    expect(G.players['0'].souls).toBe(souls);
     expect(structuresOf(G, '1')).toBe(16);
     expect(G.record['1'].revives).toBe(1);
     expect(G.fx.some((e) => e.kind === 'revive' && e.iid === rival.iid && e.credit)).toBe(true);

@@ -189,15 +189,17 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
 describe('A bounce that knocks a hero out', () => {
   // The bounce is dealt in the attacker's own attack frame, so the kill is the
   // attacker's by the path every kill takes: the exp in damageUnit (the frame's
-  // source), the KO bounty and the push into its side's structures when the attack resolves.
-  it("pays the KO bounty to the attacker's side and the exp to the attacker; the push is the hero's level + 1", () => {
+  // source), the kill on the record and the push into its side's structures
+  // when the attack resolves (a kill pays no souls).
+  it("gives the kill and the exp to the attacker, and no souls; the push is the hero's level + 1", () => {
     const { G, atk, bench } = lane('hero_dynamo', 'ricochet');
     bench[0].hp = 2;
     G.players['0'].souls = 0;
     const structures = structureHp(G.players['1']);
     makeAttack(G, '0');
     expect(bench[0].respawnTurnsLeft).toBeGreaterThan(0);
-    expect(G.players['0'].souls).toBe((bench[0].level ?? 1) + 1); // the bounty: its level + 1
+    expect(G.players['0'].souls).toBe(0);
+    expect(G.record['0'].kills).toBe(1);
     expect(atk.exp).toBe(EXP_ON_KILL);
     expect(structureHp(G.players['1'])).toBe(structures - ((bench[0].level ?? 1) + 1));
   });

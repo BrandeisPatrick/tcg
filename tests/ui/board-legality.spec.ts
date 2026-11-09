@@ -2,33 +2,34 @@ import { describe, it, expect } from 'vitest';
 import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { INVALID, perform, type Action } from '@/engine/engine';
 import {
-  activateBlocked, attackBlocked, buyBlocked, buyPrice, moveBlocked, playBlocked, playTargets, skillBlocked,
-  type ActivateBlock, type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type ShopBlock, type SkillBlock,
+  activateBlocked, attackBlocked, moveBlocked, playBlocked, playCost, playTargets, skillBlocked,
+  type ActivateBlock, type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
+  type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
 import { MAX_ITEMS, PRICE, RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { heroData, itemPrice, slotCap, wornItems } from '@/engine/query';
-import { onSale } from '@/engine/market';
 import { addStatus } from '@/engine/statusOps';
 import { STATUSES } from '@/statuses';
 import { CARDS_BY_ID, ITEMS } from '@/cards';
+import { deckProblem, isLegalDeck } from '@/cards/decks';
 import { isValidTarget } from '@/ui/board/targeting';
 import {
-  ACT_OVER, SHOP_OPEN, actionRefusal, activateBlockReason, attackBlockReason, moveBlockReason, playBlockReason,
-  promoteBlockReason, shopBlockReason, skillBlockReason,
+  ACT_OVER, DISCARD_FIRST, actionRefusal, activateBlockReason, attackBlockReason, chooseActiveBlockReason, discardBlockReason,
+  moveBlockReason, placeBlockReason, playBlockReason, promoteBlockReason, skillBlockReason,
 } from '@/ui/board/heroActions';
 import { statusClass } from '@/ui/card/StatusIcon';
 import type { PendingPlay } from '@/ui/helpers';
 import { freshReadyGame, giveCard, giveItem } from '../engine/_helpers';
 
 // The board lights the heroes an armed skill or active item may be aimed at
-// and the heroes a card from the hand may go on, the shop sheet greys what
-// cannot be bought, sold or moved, and both say why a move was refused, by
-// asking the engine (`skillBlocked` / `activateBlocked` / `buyBlocked` /
-// `playBlocked` / `blocked`) — never by their own copy of the rules. These pin
-// the UI to the engine over the boards a copy would get wrong: a corpse on the
-// rival's bench, a hero already wearing the item, a hero at the slot cap, an
-// item cooling down or spent, a copy claimed by an upgrade in the hand, a free
-// borrowed ultimate, a stunned hero, a move made in the wrong step of the turn.
+// and the heroes a card from the hand may go on, the hand dims what cannot be
+// played, and both say why a move was refused, by asking the engine
+// (`skillBlocked` / `activateBlocked` / `playBlocked` / `placeHeroBlocked` /
+// `blocked`) — never by their own copy of the rules. These pin the UI to the
+// engine over the boards a copy would get wrong: a corpse on the rival's
+// bench, a hero already wearing the item, a hero at the slot cap, an item
+// cooling down or spent, a play the souls do not cover, a free borrowed
+// ultimate, a stunned hero, a move made while a choice is owed.
 
 const ME: PlayerID = '0';
 
@@ -41,12 +42,6 @@ function board(): GameState {
   return G;
 }
 
-/** The same board in P0's shop step, with `souls` to spend. */
-function shopBoard(souls = 10): GameState {
-  const G = freshReadyGame({ step: 'shop' });
-  G.players[ME].souls = souls;
-  return G;
-}
 
 const heroesOf = (G: GameState): CardInstance[] =>
   (['0', '1'] as PlayerID[]).flatMap((pid) => [G.players[pid].active, ...G.players[pid].bench].filter((c): c is CardInstance => !!c));
@@ -190,7 +185,7 @@ describe('the glow on the tiles is the engine\'s answer', () => {
 });
 
 describe('a card from the hand goes on what the engine says', () => {
-  it('onto any hero of yours — a corpse too — and never onto a rival, in either step', () => {
+  it('onto any hero of yours — a corpse too — and never onto a rival', () => {
     const G = board();
     const card = giveCard(G, ME, 'extended_magazine');
     const corpse = G.players[ME].bench[0]!;
@@ -204,8 +199,8 @@ describe('a card from the hand goes on what the engine says', () => {
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players['1'].active!.iid })).toEqual({
       code: 'noHero', text: 'Play it onto one of your heroes',
     });
-    G.step = 'shop';
-    expectPlayMatchesEngine(G, card, 'the shop step');
+    G.players[ME].souls = 1;
+    expectPlayMatchesEngine(G, card, 'too few souls');
   });
 
   it('a hero already wearing the item does not light, and the refusal names them; another hero may have one', () => {
@@ -221,7 +216,7 @@ describe('a card from the hand goes on what the engine says', () => {
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].bench[0]!.iid })).toBeNull();
   });
 
-  it('a hero at the slot cap is refused — there is no discard: sell one first — unless the card upgrades one it wears', () => {
+  it('a hero at the slot cap is refused — there is no discard — unless the card upgrades one it wears', () => {
     const G = board();
     const haze = G.players[ME].active!;
     for (const id of ['extended_magazine', 'extra_health', 'extra_regen']) giveItem(G, haze, id);
@@ -229,7 +224,7 @@ describe('a card from the hand goes on what the engine says', () => {
     const spirit = giveCard(G, ME, 'extra_spirit');
     expectPlayMatchesEngine(G, spirit, 'a full hero');
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: spirit.iid, heroIid: haze.iid })).toEqual({
-      code: 'full', text: `Haze wears ${MAX_ITEMS} items — sell one first`,
+      code: 'full', text: `Haze wears ${MAX_ITEMS} items`,
     });
     // Titanic Magazine upgrades the Extended Magazine Haze wears: it takes its place.
     const titanic = giveCard(G, ME, 'titanic_magazine');
@@ -255,111 +250,84 @@ describe('a card from the hand goes on what the engine says', () => {
   });
 });
 
-describe('the shop sheet\'s buttons are the engine\'s answer', () => {
-  it('a buy names no hero: what is on sale and paid for goes to the hand', () => {
-    const G = shopBoard();
-    const buy: Action = { type: 'buy', itemId: 'extended_magazine' };
-    expect(actionRefusal(G, ME, buy)).toBeNull();
-    expect(taken(G, buy)).toBe(true);
-    expect(perform(G, ME, buy)).not.toBe(INVALID);
-    expect(G.players[ME].hand.map((c) => c.cardId)).toEqual(['extended_magazine']);
+describe('the hand\'s plays are the engine\'s answer', () => {
+  it('a hero from the hand goes to the bench for nothing; into the lane only while it is empty', () => {
+    const G = board();
+    G.players[ME].bench[2] = null;
+    const kelvin = giveCard(G, ME, 'hero_kelvin');
+    expect(actionRefusal(G, ME, { type: 'placeHero', cardIid: kelvin.iid })).toBeNull();
+    expect(actionRefusal(G, ME, { type: 'placeHero', cardIid: kelvin.iid, toActive: true })).toEqual({
+      code: 'occupied', text: 'Your Active slot is taken',
+    });
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: kelvin.iid, heroIid: G.players[ME].active!.iid })).toEqual({
+      code: 'hero', text: 'A hero goes on the bench — tap it in your hand',
+    });
+    expect(taken(G, { type: 'placeHero', cardIid: kelvin.iid })).toBe(true);
+    G.players[ME].bench[2] = giveCard(G, ME, 'hero_seven');
+    expect(actionRefusal(G, ME, { type: 'placeHero', cardIid: kelvin.iid })).toEqual({ code: 'benchFull', text: 'Your bench is full' });
   });
 
-  it('an item this match does not sell is named; one the souls do not cover says its price — an upgrade\'s is the difference', () => {
-    const G = shopBoard(1);
+  it('a play the souls do not cover says its price — an upgrade onto the hero wearing its part, the difference', () => {
+    const G = board();
+    G.players[ME].souls = 1;
     const haze = G.players[ME].active!;
-    const off = ITEMS.find((i) => !onSale(G, i.id))!;
-    expect(actionRefusal(G, ME, { type: 'buy', itemId: off.id })).toEqual({
-      code: 'notOnSale', text: `${off.name} is not on sale this match`,
-    });
-    expect(actionRefusal(G, ME, { type: 'buy', itemId: 'extended_magazine' })).toEqual({
+    const mag = giveCard(G, ME, 'extended_magazine');
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: mag.iid, heroIid: haze.iid })).toEqual({
       code: 'souls', text: 'Need 2 souls — you have 1',
     });
-    expect(actionRefusal(G, ME, { type: 'buy', itemId: 'titanic_magazine' })?.text).toBe('Need 4 souls — you have 1');
+    const titanic = giveCard(G, ME, 'titanic_magazine');
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: titanic.iid, heroIid: haze.iid })?.text).toBe('Need 4 souls — you have 1');
     giveItem(G, haze, 'extended_magazine');
-    expect(buyPrice(G, ME, 'titanic_magazine')).toBe(PRICE[2] - PRICE[1]);
-    expect(actionRefusal(G, ME, { type: 'buy', itemId: 'titanic_magazine' })).toEqual({
+    expect(playCost(haze, 'titanic_magazine')).toBe(PRICE[2] - PRICE[1]);
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: titanic.iid, heroIid: haze.iid })).toEqual({
       code: 'souls', text: 'Need 2 souls — you have 1',
     });
+    expect(itemPrice('titanic_magazine')).toBe(PRICE[2]);
   });
 
-  it('the shop is the player\'s own, in its own turn: the rival\'s shop moves and plays are refused', () => {
-    const G = shopBoard();
+  it('the hand is the player\'s own, in its own turn: the rival\'s plays are refused', () => {
+    const G = board();
     const theirs = G.players['1'];
     theirs.souls = 10;
-    const worn = giveItem(G, theirs.active!, 'extra_health');
+    theirs.bench[2] = null;
     const held = giveCard(G, '1', 'extra_spirit');
+    const hero = giveCard(G, '1', 'hero_kelvin');
     for (const a of [
-      { type: 'buy', itemId: 'extended_magazine' },
-      { type: 'sell', itemIid: worn.iid },
-      { type: 'sell', itemIid: held.iid },
-      { type: 'moveItem', itemIid: worn.iid, toHeroIid: theirs.bench[0]!.iid },
       { type: 'playCard', cardIid: held.iid, heroIid: theirs.active!.iid },
-      { type: 'closeShop' },
+      { type: 'placeHero', cardIid: hero.iid },
     ] as Action[]) {
       expect(actionRefusal(G, '1', a), a.type).toEqual({ code: 'notYourTurn', text: 'Not your turn' });
       expect(taken(G, a, '1'), a.type).toBe(false);
     }
   });
 
-  it('past the shop step the shop is shut until the next turn — a card in the hand still goes on', () => {
+  it('a draw card\'s discard and the opening\'s first Active say what they need', () => {
     const G = board();
-    const haze = G.players[ME].active!;
-    const worn = giveItem(G, haze, 'extra_health');
-    const held = giveCard(G, ME, 'extra_spirit');
-    for (const a of [
-      { type: 'buy', itemId: 'extended_magazine' },
-      { type: 'sell', itemIid: worn.iid },
-      { type: 'sell', itemIid: held.iid },
-      { type: 'moveItem', itemIid: worn.iid, toHeroIid: G.players[ME].bench[0]!.iid },
-      { type: 'closeShop' },
-    ] as Action[]) {
-      expect(actionRefusal(G, ME, a), a.type).toEqual({ code: 'notShop', text: 'The shop is closed until your next turn' });
-      expect(taken(G, a), a.type).toBe(false);
-    }
-    const play: Action = { type: 'playCard', cardIid: held.iid, heroIid: haze.iid };
-    expect(actionRefusal(G, ME, play)).toBeNull();
-    expect(taken(G, play)).toBe(true);
+    const card = giveCard(G, ME, 'grit');
+    expect(actionRefusal(G, ME, { type: 'discard', cardIids: [card.iid] })).toEqual({ code: 'notOwed', text: 'Nothing to discard' });
+    G.pendingDiscard = { pid: ME, count: 1, cardId: 'improved_cooldown' };
+    expect(actionRefusal(G, ME, { type: 'discard', cardIids: [] })).toEqual({ code: 'none', text: 'Choose the cards to discard' });
+    expect(actionRefusal(G, ME, { type: 'discard', cardIids: [card.iid] })).toBeNull();
+    G.pendingDiscard = undefined;
+    G.players[ME].active = null;
+    G.pendingActive = ME;
+    const rem = giveCard(G, ME, 'hero_rem');
+    const kelvin = giveCard(G, ME, 'hero_kelvin');
+    expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: rem.iid })).toEqual({ code: 'benchOnly', text: 'That hero can only fight from the bench' });
+    expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: card.iid })).toEqual({ code: 'notHero', text: 'Choose a hero' });
+    expect(actionRefusal(G, ME, { type: 'attack' })).toEqual({ code: 'activeOwed', text: 'Put your first Active in the lane' });
+    expect(actionRefusal(G, '1', { type: 'chooseActive', cardIid: kelvin.iid })).toBeNull(); // from either seat
   });
 
-  it('selling and moving: a card not yours, a copy an upgrade in the hand claims, the hero that wears it, a hero that wears one, a full hero, a rival', () => {
-    const G = shopBoard();
+  it('a hand move the engine takes is not refused', () => {
+    const G = board();
     const me = G.players[ME];
-    const [haze, vindicta, lash] = [me.active!, me.bench[0]!, me.bench[1]!];
-    const health = giveItem(G, haze, 'extra_health');
-    giveItem(G, vindicta, 'extra_health');
-    for (const id of ['extra_regen', 'sprint_boots', 'grit']) giveItem(G, lash, id);
-    const theirs = giveItem(G, G.players['1'].active!, 'extra_spirit');
+    me.bench[2] = null;
     const held = giveCard(G, ME, 'extra_spirit');
-    const move = (itemIid: string, toHeroIid: string) => actionRefusal(G, ME, { type: 'moveItem', itemIid, toHeroIid });
-    expect(actionRefusal(G, ME, { type: 'sell', itemIid: theirs.iid })).toEqual({ code: 'notOwned', text: 'Not one of your cards' });
-    expect(move(health.iid, haze.iid)).toEqual({ code: 'same', text: 'It is already on Haze' });
-    expect(move(health.iid, vindicta.iid)).toEqual({ code: 'duplicate', text: 'Vindicta already wears Extra Health' });
-    expect(move(health.iid, lash.iid)).toEqual({ code: 'full', text: `Lash wears ${MAX_ITEMS} items — sell one first` });
-    expect(move(health.iid, G.players['1'].bench[0]!.iid)).toEqual({ code: 'noHero', text: 'That is not one of your heroes' });
-    expect(move(held.iid, vindicta.iid)).toEqual({ code: 'notWorn', text: 'Not one of your worn items' });
-    // A copy an upgrade in the hand was bought against cannot be sold until that upgrade is.
-    me.souls = 10;
-    const mag = giveItem(G, vindicta, 'extended_magazine');
-    expect(perform(G, ME, { type: 'buy', itemId: 'titanic_magazine' })).not.toBe(INVALID);
-    expect(actionRefusal(G, ME, { type: 'sell', itemIid: mag.iid })).toEqual({
-      code: 'claimed', text: 'An upgrade in your hand was bought against Extended Magazine — play or sell that first',
-    });
-    expect(taken(G, { type: 'sell', itemIid: mag.iid })).toBe(false);
-  });
-
-  it('a shop move the engine takes is not refused', () => {
-    const G = shopBoard();
-    const me = G.players[ME];
-    const worn = giveItem(G, me.active!, 'extra_health');
-    const held = giveCard(G, ME, 'extra_spirit');
+    const hero = giveCard(G, ME, 'hero_kelvin');
     for (const a of [
-      { type: 'buy', itemId: 'extended_magazine' },
-      { type: 'sell', itemIid: worn.iid },
-      { type: 'sell', itemIid: held.iid },
-      { type: 'moveItem', itemIid: worn.iid, toHeroIid: me.bench[2]!.iid },
-      { type: 'playCard', cardIid: held.iid, heroIid: me.bench[2]!.iid },
-      { type: 'closeShop' },
+      { type: 'playCard', cardIid: held.iid, heroIid: me.bench[0]!.iid },
+      { type: 'placeHero', cardIid: hero.iid },
       { type: 'endTurn' },
     ] as Action[]) {
       expect(actionRefusal(G, ME, a), a.type).toBeNull();
@@ -392,13 +360,11 @@ describe('what an ability costs is the engine\'s answer: nothing', () => {
     expect(taken(G, use)).toBe(true);
   });
 
-  it('an ultimate is never bought, so never a card in a hand: it is a kit ability, no item', () => {
-    const G = shopBoard();
-    const buy: Action = { type: 'buy', itemId: 'ult_abrams' };
+  it('an ultimate is never dealt, so never a card in a hand or a deck: it is a kit ability, no item', () => {
+    const G = board();
     expect(itemPrice('ult_abrams')).toBe(0);
-    expect(buyBlocked(G, ME, 'ult_abrams')).toBe('noItem');
-    expect(actionRefusal(G, ME, buy)).toEqual({ code: 'noItem', text: 'No such item' });
-    expect(taken(G, buy)).toBe(false);
+    expect(isLegalDeck(Array(16).fill('ult_abrams'))).toBe(false);
+    expect(deckProblem(['ult_abrams'])).toBe('notItem');
     expect(G.players[ME].hand).toEqual([]);
   });
 });
@@ -453,33 +419,33 @@ describe('a refused move is said, with the engine\'s own code', () => {
     expect(actionRefusal(G, ME, { type: 'endTurn' })).toBeNull();
   });
 
-  it('while the shop is open, an act move says to close it first', () => {
-    const G = shopBoard();
+  it('while a draw card\'s discard is owed, everything else says to discard first', () => {
+    const G = board();
     const me = G.players[ME];
     const foe = G.players['1'].active!;
     const lash = me.bench[1]!;
     const front = giveItem(G, me.bench[0]!, 'cold_front');
+    const card = giveCard(G, ME, 'extended_magazine');
+    G.pendingDiscard = { pid: ME, count: 1, cardId: 'improved_cooldown' };
     const acts: Action[] = [
       { type: 'attack' },
       { type: 'useSkill', heroIid: lash.iid, targetIid: foe.iid },
       { type: 'activate', itemIid: front.iid, targetIid: foe.iid },
       { type: 'moveHero', fromSlot: 1, toSlot: 0 },
+      { type: 'playCard', cardIid: card.iid, heroIid: lash.iid },
+      { type: 'endTurn' },
     ];
-    expect(SHOP_OPEN).toBe('Close the shop first');
+    expect(DISCARD_FIRST).toBe('Discard first');
     for (const a of acts) {
-      expect(actionRefusal(G, ME, a), a.type).toEqual({ code: 'shopOpen', text: SHOP_OPEN });
+      expect(actionRefusal(G, ME, a), a.type).toEqual({ code: 'discardOwed', text: DISCARD_FIRST });
       expect(taken(G, a), a.type).toBe(false);
     }
-    expect(actionRefusal(G, ME, { type: 'endTurn' })).toBeNull();
-    // A card from the hand is no act move: it goes on while the shop is open.
-    const card = giveCard(G, ME, 'extended_magazine');
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: lash.iid })).toBeNull();
-    // Closed, the same moves are the act's to make.
-    expect(perform(G, ME, { type: 'closeShop' })).not.toBe(INVALID);
-    for (const a of acts) expect(actionRefusal(G, ME, a), a.type).toBeNull();
+    // Paid, the same moves are the turn's to make.
+    expect(perform(G, ME, { type: 'discard', cardIids: [card.iid] })).not.toBe(INVALID);
+    for (const a of acts.slice(0, 4)) expect(actionRefusal(G, ME, a), a.type).toBeNull();
   });
 
-  it('while a promotion is owed, everything else waits for it — in the shop step too', () => {
+  it('while a promotion is owed, everything else waits for it — a hero from the hand too', () => {
     const G = board();
     const rite = giveItem(G, G.players[ME].bench[1]!, 'healing_rite');
     const card = giveCard(G, ME, 'healing_rite');
@@ -491,10 +457,8 @@ describe('a refused move is said, with the engine\'s own code', () => {
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].bench[0]!.iid })).toEqual(wait);
     expect(actionRefusal(G, ME, { type: 'endTurn' })).toEqual(wait);
     expect(actionRefusal(G, ME, { type: 'promoteToActive', benchIid: G.players[ME].bench[0]!.iid })).toBeNull();
-    G.step = 'shop';
-    expect(actionRefusal(G, ME, { type: 'buy', itemId: 'extended_magazine' })).toEqual(wait);
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].bench[0]!.iid })).toEqual(wait);
-    expect(actionRefusal(G, ME, { type: 'promoteToActive', benchIid: G.players[ME].bench[0]!.iid })).toBeNull();
+    const hero = giveCard(G, ME, 'hero_kelvin');
+    expect(actionRefusal(G, ME, { type: 'placeHero', cardIid: hero.iid })).toEqual(wait);
   });
 
   it('a move the engine takes is not refused', () => {
@@ -516,11 +480,10 @@ describe('every block code has words', () => {
   const skill: Record<SkillBlock, true> = { noSkill: true, actOver: true, down: true, locked: true, used: true, status: true, cooldown: true, hp: true, target: true };
   const attack: Record<AttackBlock, true> = { turn1: true, used: true, noActive: true, cannot: true, noTarget: true, target: true };
   const activate: Record<ActivateBlock, true> = { noItem: true, passive: true, actOver: true, down: true, used: true, status: true, charges: true, cooldown: true, target: true };
-  const shop: Record<ShopBlock, true> = {
-    notYourTurn: true, notShop: true, noItem: true, notOnSale: true, souls: true, notOwned: true, claimed: true, notWorn: true,
-    noHero: true, same: true, duplicate: true, full: true,
-  };
-  const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, noHero: true, duplicate: true, full: true };
+  const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, souls: true, upgrade: true };
+  const place: Record<PlaceBlock, true> = { notYourTurn: true, notInHand: true, notHero: true, occupied: true, benchOnly: true, benchFull: true };
+  const choose: Record<ChooseActiveBlock, true> = { notOwed: true, notInHand: true, notHero: true, benchOnly: true };
+  const discard: Record<DiscardBlock, true> = { notOwed: true, none: true, tooMany: true, repeat: true, notInHand: true };
   const move: Record<MoveBlock, true> = { same: true, actOver: true, empty: true, benchOnly: true, down: true, rooted: true, retreated: true, souls: true, illegal: true };
   const promote: Record<PromoteBlock, true> = { notOnBench: true, notOwed: true, down: true, benchOnly: true };
 
@@ -545,25 +508,18 @@ describe('every block code has words', () => {
     }
   });
 
-  it('shop moves, with and without the item, the hero and the price named', () => {
-    for (const code of Object.keys(shop) as ShopBlock[]) {
-      expect(shopBlockReason(code).length, code).toBeGreaterThan(0);
-      expect(shopBlockReason(code, { item: 'Extended Magazine', hero: 'Haze', cost: 2, have: 1, slots: MAX_ITEMS }).length, code).toBeGreaterThan(0);
-    }
-    // The ones about a hero name the hero; the ones about an item name the item.
-    for (const code of ['duplicate', 'full', 'same'] as const) {
-      expect(shopBlockReason(code, { item: 'Extended Magazine', hero: 'Haze' }), code).toContain('Haze');
-    }
-    for (const code of ['duplicate', 'notOnSale', 'claimed'] as const) {
-      expect(shopBlockReason(code, { item: 'Extended Magazine', hero: 'Haze' }), code).toContain('Extended Magazine');
-    }
+  it('heroes from the hand, the first Active and the discard', () => {
+    for (const code of Object.keys(place) as PlaceBlock[]) expect(placeBlockReason(code).length, code).toBeGreaterThan(0);
+    for (const code of Object.keys(choose) as ChooseActiveBlock[]) expect(chooseActiveBlockReason(code).length, code).toBeGreaterThan(0);
+    for (const code of Object.keys(discard) as DiscardBlock[]) expect(discardBlockReason(code).length, code).toBeGreaterThan(0);
   });
 
   it('cards played from the hand, with and without the card and the hero named', () => {
     for (const code of Object.keys(play) as PlayBlock[]) {
       expect(playBlockReason(code).length, code).toBeGreaterThan(0);
-      expect(playBlockReason(code, { item: 'Extended Magazine', hero: 'Haze', slots: MAX_ITEMS }).length, code).toBeGreaterThan(0);
+      expect(playBlockReason(code, { item: 'Extended Magazine', hero: 'Haze', slots: MAX_ITEMS, cost: 2, have: 1 }).length, code).toBeGreaterThan(0);
     }
+    expect(playBlockReason('souls', { cost: 4, have: 1 })).toBe('Need 4 souls — you have 1');
     for (const code of ['duplicate', 'full'] as const) {
       expect(playBlockReason(code, { item: 'Extended Magazine', hero: 'Haze' }), code).toContain('Haze');
     }

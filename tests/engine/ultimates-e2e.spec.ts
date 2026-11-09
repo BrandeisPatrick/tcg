@@ -35,7 +35,6 @@ function freshG(casterHero: string, enemyHero = 'hero_abrams', level: 1 | 2 | 3 
   G.draft = null;
   G.turnNumber = 2;
   G.firstMover = '1';
-  G.step = 'act'; // past the turn's shop: abilities are act moves
   const p0 = G.players['0'], p1 = G.players['1'];
   p0.active = makeHero(casterHero, '0', 'active', 0, level);
   p0.bench = [makeHero('hero_kelvin', '0', 'bench', 1), null, null];

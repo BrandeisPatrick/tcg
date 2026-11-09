@@ -84,8 +84,8 @@ const useSkill = (G: GameState, twin: CardInstance, skillId?: string, targetIid?
   perform(G, '0', { type: 'useSkill', heroIid: twin.iid, skillId, targetIid });
 
 /** A boardgame.io match with the throwaway heroes on P0's board: the twin
- *  Active, the cool hero and the real Lash and Paige on the bench. It stands in
- *  the act step of P0's turn 1 (every turn opens in its shop step: closed here). */
+ *  Active, the cool hero and the real Lash and Paige on the bench, on P0's
+ *  turn 1 (empty decks: nothing is drawn). */
 function twinClient() {
   setMatchConfig({
     heroPreferences: [null, null, null, null],
@@ -94,14 +94,16 @@ function twinClient() {
       playerHeroes: [TWIN, COOL, 'hero_lash', 'hero_paige'],
       enemyHeroes: TEST_ROSTERS['1'],
       enemyBuff: { atk: 0, hp: 0 },
+      playerDeck: [],
+      enemyDeck: [],
+      openingHand: 0,
     },
   });
   const c = Client({ game: DeadlockGame, numPlayers: 2 });
   c.start();
-  c.moves.closeShop();
   const G = () => c.getState()!.G as GameState;
-  /** End `n` turns, then close the shop of the turn that opens. */
-  const endTurns = (n: number) => { for (let i = 0; i < n; i++) c.moves.endTurn?.(); c.moves.closeShop(); };
+  /** End `n` turns. */
+  const endTurns = (n: number) => { for (let i = 0; i < n; i++) c.moves.endTurn?.(); };
   return { c, G, endTurns, moves: c.moves as any };
 }
 

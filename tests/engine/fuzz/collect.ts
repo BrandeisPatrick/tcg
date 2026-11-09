@@ -8,8 +8,7 @@ import { collectInvariantViolations, collectTransitionViolations } from './invar
 import { moveTags, signatureOf, type Hit } from './hits';
 import { resolveSkill, isRespawning } from '@/engine/query';
 import {
-  PIDS, buyPriceOracle, handCardOf, heroesOfSide, itemData, itemPriceOracle, playConsumesOracle, restoredBySaleOracle,
-  slottedHeroOf, wornItemOf,
+  DRAW_CARDS, PIDS, handCardOf, handOf, heroesOfSide, slottedHeroOf, upgradeComponentOracle, upgradesOfOracle, wornItemOf,
 } from './oracle';
 
 interface Mix { label: string; policies: Record<'0' | '1', Policy>; prefer?: Partial<Record<'0' | '1', string[]>> }
@@ -20,7 +19,8 @@ export const MIXES: Mix[] = [
   { label: 'chaos-vs-randomLegal', policies: { '0': 'chaos', '1': 'randomLegal' } },
   // Spotlight mixes: the rosters are loaded with the heroes whose rules are most intricate
   // (Rem merges, Sinclair copies an ultimate, Mirage swaps, Wraith / Mirage riders, Lady Geist swaps HP)
-  // and whose builds hold active items (Sinclair's hexes, Mo & Krill's wards, Rem's Healing Nova).
+  // and whose builds hold active items (Sinclair's hexes, Mo & Krill's wards, Rem's Healing Nova) —
+  // and Dynamo and Seven, whose builds hold Compress Cooldown, the first draw card.
   {
     label: 'spotlight-heuristic',
     policies: { '0': 'heuristic', '1': 'heuristic' },
@@ -29,7 +29,7 @@ export const MIXES: Mix[] = [
   {
     label: 'spotlight-randomLegal',
     policies: { '0': 'randomLegal', '1': 'randomLegal' },
-    prefer: { '0': ['hero_rem', 'hero_sinclair', 'hero_viscous', 'hero_yamato'], '1': ['hero_rem', 'hero_mirage', 'hero_warden', 'hero_dynamo'] },
+    prefer: { '0': ['hero_rem', 'hero_sinclair', 'hero_viscous', 'hero_seven'], '1': ['hero_rem', 'hero_mirage', 'hero_warden', 'hero_dynamo'] },
   },
 ];
 
@@ -57,23 +57,23 @@ export interface Coverage {
   freeCopiesPlayed: number;
   attacks: number;
   kos: number;
-  buys: number;
-  /** Purchases priced at the difference (a free copy of the component on the side). */
-  discountBuys: number;
-  /** Cards played from the hand onto a hero. */
+  /** Items put on a hero from the hand. */
   plays: number;
-  /** Plays that consumed a component (an upgrade taking its place). */
-  upgrades: number;
-  /** Plays whose consumed copy from the hand settled a component of its own. */
-  settlements: number;
-  /** Plays of a card held from an earlier turn (or never bought: a reward). */
+  /** Plays of an upgrade onto the hero wearing its component (it evolves). */
+  evolves: number;
+  /** Plays that made an upgrade (shuffled into the deck), and of those the ones that named their pick of several. */
+  upgradesMade: number;
+  upgradePicks: number;
+  /** Plays of a card drawn on an earlier turn. */
   heldPlays: number;
-  sells: number;
-  /** Sales of a card in the hand. */
-  handSells: number;
-  /** Same-turn sales of a worn upgrade that put its component back (onto a hero or into the hand). */
-  restores: number;
-  moveItems: number;
+  /** Heroes put on the board from the hand (the bench, or an empty lane), and first Actives chosen. */
+  heroesPlaced: number;
+  firstActives: number;
+  /** Draw cards cast, and discards made. */
+  drawCards: number;
+  discards: number;
+  /** Fallen heroes back in a hand. */
+  backToHand: number;
   activates: number;
 }
 interface MixRun { hits: Hit[]; games: GameRecord[]; coverage: Coverage }
@@ -83,8 +83,8 @@ export function runInvariantMix(mixIndex: number, games: number): MixRun {
   const hits: Hit[] = [];
   const records: GameRecord[] = [];
   const coverage: Coverage = {
-    remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0, buys: 0, discountBuys: 0, plays: 0, upgrades: 0,
-    settlements: 0, heldPlays: 0, sells: 0, handSells: 0, restores: 0, moveItems: 0, activates: 0,
+    remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0, plays: 0, evolves: 0, upgradesMade: 0, upgradePicks: 0,
+    heldPlays: 0, heroesPlaced: 0, firstActives: 0, drawCards: 0, discards: 0, backToHand: 0, activates: 0,
   };
   for (let i = 0; i < games; i++) {
     const seed = seedFor(mixIndex, i);
@@ -138,27 +138,29 @@ function tally(c: Coverage, before: Snapshot, after: Snapshot, m: StepInfo) {
     if (kind === 'ult' || kind === 'borrowed') c.ultsPlayed++;
     if (kind === 'borrowed') c.freeCopiesPlayed++;
   }
-  if (m.name === 'buy') {
-    c.buys++;
-    if (itemData(m.args[0]) && buyPriceOracle(before.G, pid, m.args[0]) < itemPriceOracle(m.args[0])) c.discountBuys++;
-  }
   if (m.name === 'playCard') {
     c.plays++;
     const card = handCardOf(before.G, pid, m.args[0]);
     const hero = slottedHeroOf(before.G, pid, m.args[1]);
-    const taken = card && hero ? playConsumesOracle(before.G, pid, card, hero) : [];
-    if (taken.length) c.upgrades++;
-    if (taken.length > 1) c.settlements++;
-    if (card && card.boughtOnTurn !== before.G.turnNumber) c.heldPlays++;
+    if (card && hero && upgradeComponentOracle(hero, card.cardId)) c.evolves++;
+    if (card && upgradesOfOracle(card.cardId).length) c.upgradesMade++;
+    if (card && upgradesOfOracle(card.cardId).length > 1 && m.args[2] !== undefined) c.upgradePicks++;
+    // A card drawn on an earlier turn: this turn's draws are in the stream since the turn began.
+    if (card && !before.G.fx.some((e) => e.kind === 'deck' && e.what === 'draw' && e.iid === card.iid)) c.heldPlays++;
   }
-  if (m.name === 'sell') {
-    c.sells++;
-    if (handCardOf(before.G, pid, m.args[0])) c.handSells++;
-    const worn = wornItemOf(before.G, pid, m.args[0]);
-    if (worn && restoredBySaleOracle(before.G, pid, worn.item, worn.bearer).length) c.restores++;
+  if (m.name === 'placeHero') c.heroesPlaced++;
+  if (m.name === 'chooseActive') c.firstActives++;
+  if (m.name === 'discard') c.discards++;
+  if (m.name === 'activate') {
+    c.activates++;
+    const used = wornItemOf(before.G, pid, m.args[0]);
+    if (used && DRAW_CARDS[used.item.cardId]) c.drawCards++;
   }
-  if (m.name === 'moveItem') c.moveItems++;
-  if (m.name === 'activate') c.activates++;
+  // Fallen heroes whose wait ended: back in a hand.
+  for (const p of PIDS) {
+    const was = new Set(heroesOfSide(before.G.players[p]).map((h) => h.iid));
+    c.backToHand += handOf(after.G, p).filter((h) => was.has(h.iid)).length;
+  }
   // Heroes that fell during the move, on either side.
   for (const p of PIDS) {
     const alive = new Set(heroesOfSide(before.G.players[p]).filter((h) => !isRespawning(h)).map((h) => h.iid));

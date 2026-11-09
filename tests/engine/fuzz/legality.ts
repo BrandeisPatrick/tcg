@@ -3,18 +3,20 @@
  * direct move calls on clones) whether it agrees with the other sources of
  * "what may I do" — the AI's legal-move list, the UI's `skillBlocked`, the
  * engine's own `legalActions`, and an independent rules oracle (oracle.ts) for
- * targets, items, the shop, hero moves and who the attack may name.
+ * targets, items, the hand, the choices owed, hero moves and who the attack
+ * may name.
  *
  * A probe move the engine accepts is also held to the transition rules and the
- * state invariants (invariants.ts) — so a sale or a move of an item, or a card
- * played onto a hero the AI would not pick, which the AI's rule-based shop never
- * makes, is checked as closely as a live move.
+ * state invariants (invariants.ts) — so a card played onto a hero the AI would
+ * not pick, a soul short, or an upgrade named wrong, is checked as closely as a
+ * live move.
  */
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { Ctx } from 'boardgame.io';
 import { CARDS_BY_ID, ITEMS } from '@/cards';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { legalActions, skillBlocked } from '@/engine/legality';
+import type { Action } from '@/engine/engine';
 import { attackPower, checkWinner, isRespawning, liveBoardCards, otherPlayer } from '@/engine/query';
 import type { TargetFilter } from '@/abilities';
 import type { Snapshot, StepInfo } from './driver';
@@ -22,10 +24,10 @@ import { chaosMove } from './driver';
 import { moveTags, signatureOf, type Hit } from './hits';
 import { collectInvariantViolations, collectTransitionViolations } from './invariants';
 import {
-  activateBlockedOracle, activateTargetsOracle, attackOpenFor, attackTargetsOracle, boardOf, boardUnits, buyBlockedOracle,
-  buyPriceOracle, callMove, closeShopBlockedOracle, diffPaths, filterForItem, filterForSkill, firstSkillOf, handOf, isMergedRem,
-  itemData, moveItemBlockedOracle, playBlockedOracle, retreatCostOracle, seatOnTurn, sellBlockedOracle, skillCooling,
-  skillExcludesSelf, skillIdsOf, targetLegal, ultLocked, wornItemsOf,
+  activateBlockedOracle, attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, chooseActiveBlockedOracle, diffPaths,
+  discardBlockedOracle, discardList, filterForItem, filterForSkill, firstSkillOf, handOf, isHeroCard, isMergedRem, itemData, other,
+  placeHeroBlockedOracle, playBlockedOracle, playCostOracle, retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf,
+  targetLegal, ultLocked, upgradesOfOracle, wornItemsOf,
 } from './oracle';
 
 export interface ProbeOpts {
@@ -35,21 +37,17 @@ export interface ProbeOpts {
   targetCombos: number;
   /** Chance that a decision point also gets the full moveHero sweep. */
   moveHeroSweep: number;
-  /** Purchases tried per decision point of the shop step (sales and moves: a third as many). */
-  shopCombos: number;
-  /** (card x hero) plays tried per decision point, in either step. */
+  /** (card x hero) item plays tried per decision point. */
   playCombos: number;
+  /** Heroes from the hand placed (the lane or the bench) per decision point. */
+  placeCombos: number;
 }
 
-export const DEFAULT_PROBE: ProbeOpts = { chaosPerStep: 3, targetCombos: 8, moveHeroSweep: 0.2, shopCombos: 6, playCombos: 4 };
+export const DEFAULT_PROBE: ProbeOpts = { chaosPerStep: 3, targetCombos: 8, moveHeroSweep: 0.2, playCombos: 5, placeCombos: 2 };
 
 const pickOne = <T,>(arr: T[], r: () => number): T => arr[Math.floor(r() * arr.length)];
 const isBenchOnly = (c: CardInstance) => !!(CARDS_BY_ID[c.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly;
 const isRooted = (c: CardInstance) => c.statuses.some((s) => s.id === 'rooted');
-
-/** The shop's moves, and the act step's. (A card played from the hand is either step's.) */
-const SHOP_TYPES = new Set(['buy', 'sell', 'moveItem', 'closeShop']);
-const ACT_TYPES = new Set(['attack', 'useSkill', 'activate', 'moveHero']);
 
 type Ghost = 'ghost';
 
@@ -128,14 +126,13 @@ export function probeLegality(
     }
   }
 
-  // While a promotion is owed the engine refuses everything else (section F); the rest of
-  // the probes ask about moves in an ordinary position. The shop step takes the shop's moves
-  // only (section H); abilities, items, Retreats and the attack belong to the act step. Once
-  // the turn's attack is made the Act is over and only ending the turn is left: B and E check
-  // that refusal, D skips it.
+  // While a promotion is owed the engine refuses everything else (section F), and so it does
+  // while the opening's first Active (F2) or a draw card's discard (F3) is owed; the rest of
+  // the probes ask about moves in an ordinary position. Once the turn's attack is made the Act
+  // is over and only ending the turn is left: B and E check that refusal, D skips it.
   const owed = G.pendingPromotion !== undefined;
   const actOver = G.attackUsed;
-  const shop = G.step === 'shop';
+  const choice = G.pendingActive !== undefined || G.pendingDiscard !== undefined;
 
   // ---------------------------------------------------------------- B: skillBlocked <=> useSkill
   // Each kit ability of each hero on its own (its skills, its ultimate, a borrowed ultimate).
@@ -144,7 +141,7 @@ export function probeLegality(
   // it is asked in the act step.)
   const enemy = G.players[foe];
   const liveTargets = [...liveBoardCards(enemy), ...liveBoardCards(me)];
-  for (const hero of owed || shop ? [] : boardOf(me)) {
+  for (const hero of owed || choice ? [] : boardOf(me)) {
     const skillIds = skillIdsOf(hero);
     for (const skillId of skillIds) {
       const named = (args: unknown[]) => (skillId === firstSkillOf(hero) ? args : [args[0], args[1], skillId]);
@@ -214,7 +211,7 @@ export function probeLegality(
   }
   // The Mid-Boss is among the targets tried: no ability or item may ever be aimed at it.
   const targets: (CardInstance | Ghost | undefined)[] = [undefined, 'ghost', ...boardUnits(G), ...(G.boss ? [G.boss] : [])];
-  for (let n = 0; n < opts.targetCombos && sources.length && !owed && !actOver && !shop; n++) {
+  for (let n = 0; n < opts.targetCombos && sources.length && !owed && !actOver && !choice; n++) {
     const src = pickOne(sources, rnd);
     const tgt = pickOne(targets, rnd);
     const tCard = tgt === 'ghost' ? undefined : tgt;
@@ -263,7 +260,7 @@ export function probeLegality(
         let reason = 'valid';
         if (!ok(from) || !ok(to)) reason = 'bad-slot';
         else if (from === to) reason = 'same-slot';
-        else if (shop) reason = 'shop-step'; // heroes move in the act step
+        else if (choice) reason = 'choice-owed'; // the first Active, a discard: owed first
         else if (actOver) reason = 'act-over'; // nothing moves once the turn's attack is made
         else {
           const a = get(from), b = get(to);
@@ -295,19 +292,24 @@ export function probeLegality(
 
   // ---------------------------------------------------------------- F: an owed promotion
   if (owed) {
-    const probes: { name: string; args: unknown[] }[] = [{ name: 'endTurn', args: [] }, { name: 'attack', args: [] }, { name: 'closeShop', args: [] }];
+    const probes: { name: string; args: unknown[] }[] = [{ name: 'endTurn', args: [] }, { name: 'attack', args: [] }];
     const active = boardOf(me).flatMap((h) => wornItemsOf(h)).find((it) => itemData(it.cardId)?.type === 'spell');
     if (active) probes.push({ name: 'activate', args: [active.iid] });
     const hero = boardOf(me)[0];
-    const cheap = (G.market ?? []).find((id) => itemData(id)?.tier === 1);
-    if (cheap) probes.push({ name: 'buy', args: [cheap] });
-    const held = handOf(G, pid)[0];
+    const held = handOf(G, pid).find((c) => !!itemData(c.cardId));
     if (held && hero) probes.push({ name: 'playCard', args: [held.iid, hero.iid] });
+    const heroCard = handOf(G, pid).find(isHeroCard);
+    if (heroCard) probes.push({ name: 'placeHero', args: [heroCard.iid] });
+    if (handOf(G, pid)[0]) probes.push({ name: 'discard', args: [[handOf(G, pid)[0].iid]] });
     for (const p of probes) {
       const r = callMove(G, ctx, pid, p.name, p.args, (g) => { g.players[pid].souls = 40; });
       if (r.outcome === 'accepted') add('owed-promotion-skippable', p.name, p.args, `P${pid} owes a promotion (pendingPromotion) yet ${p.name} is accepted`);
     }
   }
+
+  // ---------------------------------------------------------------- F2 / F3: the other choices owed
+  if (!owed && G.pendingActive) probeOpening(G, ctx, pid, rnd, { add, checkAccepted, checkRefused });
+  if (!owed && G.pendingDiscard) probeDiscard(G, ctx, pid, rnd, { add, checkAccepted, checkRefused });
 
   // ---------------------------------------------------------------- G: who the attack may name
   // With the attack open, `attack(targetIid)` is accepted exactly for the units the rules oracle
@@ -346,10 +348,8 @@ export function probeLegality(
     }
   }
 
-  // ---------------------------------------------------------------- H: the shop and the step
-  if (!owed) probeShop(G, ctx, pid, rnd, opts, shop, { add, checkAccepted, checkRefused });
-  // ---------------------------------------------------------------- I: the hand, in either step
-  if (!owed) probePlays(G, ctx, pid, rnd, opts, { add, checkAccepted, checkRefused });
+  // ---------------------------------------------------------------- H: the hand
+  if (!owed && !G.pendingActive && !G.pendingDiscard) probeHand(G, ctx, pid, rnd, opts, { add, checkAccepted, checkRefused });
 }
 
 interface Report {
@@ -359,12 +359,12 @@ interface Report {
 }
 
 /** A legalActions entry as a comparable key. */
-function actionKey(a: { type: string } & Record<string, unknown>): string {
+function actionKey(a: Action): string {
   switch (a.type) {
-    case 'buy': return `buy ${a.itemId}`;
-    case 'sell': return `sell ${a.itemIid}`;
-    case 'playCard': return `playCard ${a.cardIid} -> ${a.heroIid}`;
-    case 'moveItem': return `moveItem ${a.itemIid} -> ${a.toHeroIid}`;
+    case 'playCard': return `playCard ${a.cardIid} -> ${a.heroIid}${a.upgradeId ? ` [${a.upgradeId}]` : ''}`;
+    case 'placeHero': return `placeHero ${a.cardIid} ${a.toActive ? 'lane' : 'bench'}`;
+    case 'discard': return `discard ${a.cardIids.join('+')}`;
+    case 'chooseActive': return `chooseActive ${a.cardIid}`;
     case 'activate': return `activate ${a.itemIid}${a.targetIid === undefined ? '' : ` -> ${a.targetIid}`}`;
     default: return a.type;
   }
@@ -379,229 +379,83 @@ function setDiff(engine: string[], oracle: string[]): string {
   return `${extra.length ? `listed but illegal [${extra.slice(0, 4).join(' | ')}${extra.length > 4 ? ` …+${extra.length - 4}` : ''}]` : ''}${extra.length && missing.length ? '; ' : ''}${missing.length ? `legal but not listed [${missing.slice(0, 4).join(' | ')}${missing.length > 4 ? ` …+${missing.length - 4}` : ''}]` : ''}`;
 }
 
-/**
- * H — the shop (rules.md §3–§4), at a decision point with no promotion owed:
- *  - `legalActions` lists exactly the shop moves the oracle allows in the shop step (a buy per
- *    item on sale the souls cover, a sale per hand card and per worn item no upgrade claims,
- *    the moves, the close), and no act move there; in the act step it lists no shop move, and
- *    exactly the item uses the oracle allows, one per target;
- *  - sampled purchases (market items, the upgrades of what is worn or held, others, junk; real
- *    souls or plenty), sales (hand cards, worn items, the rival's, heroes, junk), moves and the
- *    shop's close are accepted exactly when the oracle allows them — a purchase a soul short of
- *    its price never is;
- *  - an act move (an ability, an item, a Retreat, the attack) is refused in the shop step, a
- *    shop move in the act step, and the seat not on turn is refused every shop move and play;
- * each on a clone; what the engine accepts is held to the transition rules, what it refuses
- * must leave the state untouched.
- */
-function probeShop(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opts: ProbeOpts, shop: boolean, rep: Report) {
-  const { add, checkAccepted, checkRefused } = rep;
-  const foe = otherPlayer(pid);
-  const me = G.players[pid];
-  const mine = boardOf(me);
-  const myItems = mine.flatMap((h) => wornItemsOf(h));
-  const theirs = boardOf(G.players[foe]);
-  const theirItems = theirs.flatMap((h) => wornItemsOf(h));
-  const mergedRems = boardUnits(G).flatMap((h) => (h.attached ?? []).filter(isMergedRem));
-  const onTurn = seatOnTurn(G) === pid;
-  const listed = legalActions(G, pid);
-  const shopListed = listed.filter((a) => SHOP_TYPES.has(a.type));
-
-  /** Try `name(args)` as `seat` (souls topped up to `souls` when given) and compare with `legal`. */
-  const probe = (seat: PlayerID, name: string, args: unknown[], reason: string | null, check: string, souls?: number) => {
+/** Try `name(args)` as `seat` on a clone (souls set to `souls` when given) and compare with the
+ *  oracle's `reason` (null: legal); what is accepted is held to the transition rules, what is
+ *  refused must leave the state untouched. */
+function prober(G: GameState, ctx: Ctx, pid: PlayerID, rep: Report) {
+  return (seat: PlayerID, name: string, args: unknown[], reason: string | null, check: string, souls?: number) => {
     const before = souls === undefined ? G : withSouls(G, seat, souls);
     const r = callMove(G, ctx, seat, name, args, souls === undefined ? undefined : (g) => { g.players[seat].souls = souls; });
     const accepted = r.outcome === 'accepted';
-    if (r.outcome === 'threw') add('move-threw', name, args, `${name}(${JSON.stringify(args)}) threw: ${String(r.error).slice(0, 140)}`);
-    else if (accepted && reason !== null) add(`${check}-accepts-illegal:${reason}`, name, args, `${name}(${JSON.stringify(args)}) by P${seat} was accepted; the rules refuse it (${reason})`);
-    else if (!accepted && reason === null) add(`${check}-rejects-legal`, name, args, `${name}(${JSON.stringify(args)}) by P${seat} is legal by the rules but the engine rejected it`);
-    else if (accepted && seat === pid) checkAccepted(before, r.G, name, args);
-    else if (!accepted) checkRefused(before, r.G, name, args);
+    if (r.outcome === 'threw') rep.add('move-threw', name, args, `${name}(${JSON.stringify(args)}) threw: ${String(r.error).slice(0, 140)}`);
+    else if (accepted && reason !== null) rep.add(`${check}-accepts-illegal:${reason}`, name, args, `${name}(${JSON.stringify(args)}) by P${seat} was accepted; the rules refuse it (${reason})`);
+    else if (!accepted && reason === null) rep.add(`${check}-rejects-legal`, name, args, `${name}(${JSON.stringify(args)}) by P${seat} is legal by the rules but the engine rejected it`);
+    else if (accepted && seat === pid) rep.checkAccepted(before, r.G, name, args);
+    else if (!accepted) rep.checkRefused(before, r.G, name, args);
     return accepted;
   };
-
-  if (onTurn && shop) {
-    // What the engine lists, against the oracle.
-    const oracle: string[] = [];
-    for (const itemId of G.market ?? []) if (buyBlockedOracle(G, pid, itemId) === null) oracle.push(`buy ${itemId}`);
-    for (const c of handOf(G, pid)) if (sellBlockedOracle(G, pid, c.iid) === null) oracle.push(`sell ${c.iid}`);
-    for (const h of mine) {
-      for (const it of wornItemsOf(h)) {
-        if (sellBlockedOracle(G, pid, it.iid) === null) oracle.push(`sell ${it.iid}`);
-        for (const to of mine) if (moveItemBlockedOracle(G, pid, it.iid, to.iid) === null) oracle.push(`moveItem ${it.iid} -> ${to.iid}`);
-      }
-    }
-    if (closeShopBlockedOracle(G, pid) === null) oracle.push('closeShop');
-    const engine = shopListed.map((a) => actionKey(a as never));
-    if (JSON.stringify([...engine].sort()) !== JSON.stringify([...oracle].sort())) {
-      add('shop-offers', 'buy', [], `legalActions' shop moves differ from the rules: ${setDiff(engine, oracle)}`);
-    }
-    const act = listed.filter((a) => ACT_TYPES.has(a.type));
-    if (act.length) add('shop-offers-act-move', act[0].type, [], `legalActions offers ${act.map((a) => actionKey(a as never)).join(', ')} in the shop step`);
-
-    // Purchases: the market and beyond — an upgrade of something the player wears or holds now
-    // and then — with real souls or plenty.
-    const owned = [...myItems, ...handOf(G, pid)].map((c) => c.cardId);
-    for (let n = 0; n < opts.shopCombos; n++) {
-      const x = rnd();
-      let itemId: unknown;
-      if (x < 0.6 && G.market?.length) itemId = pickOne(G.market, rnd);
-      else if (x < 0.75 && owned.length) {
-        const ups = ITEMS.filter((i) => owned.includes(i.upgradesFrom ?? '')).map((i) => i.id);
-        itemId = ups.length ? pickOne(ups, rnd) : pickOne(owned, rnd);
-      } else if (x < 0.92) itemId = pickOne(ITEMS, rnd).id;
-      else itemId = pickOne(['hero_haze', 'ult_lash', 'nope', undefined], rnd);
-      const souls = rnd() < 0.5 ? undefined : Math.max(me.souls, 40);
-      const reason = buyBlockedOracle(G, pid, itemId, souls ?? me.souls);
-      const ok = probe(pid, 'buy', [itemId], reason, 'buy', souls);
-      // A soul short of the price is never enough.
-      if (ok && reason === null && rnd() < 0.5) {
-        const price = buyPriceOracle(G, pid, itemId);
-        if (price > 0) probe(pid, 'buy', [itemId], 'souls', 'buy', price - 1);
-      }
-    }
-    // Sales and moves: the player's own cards mostly (held or worn), an enemy's, a hero, junk.
-    const held = handOf(G, pid);
-    const itemPool = () => {
-      const x = rnd();
-      if (x < 0.5 && myItems.length) return pickOne(myItems, rnd).iid;
-      if (x < 0.75 && held.length) return pickOne(held, rnd).iid;
-      if (x < 0.85 && theirItems.length) return pickOne(theirItems, rnd).iid;
-      if (x < 0.95 && (mergedRems.length || mine.length)) return pickOne([...mergedRems, ...mine], rnd).iid;
-      return 'ghost-iid';
-    };
-    const heroPool = () => {
-      const x = rnd();
-      if (x < 0.75 && mine.length) return pickOne(mine, rnd).iid;
-      if (x < 0.85 && theirs.length) return pickOne(theirs, rnd).iid;
-      if (x < 0.9 && mergedRems.length) return pickOne(mergedRems, rnd).iid;
-      if (x < 0.95 && myItems.length) return pickOne(myItems, rnd).iid;
-      return rnd() < 0.5 ? 'ghost-iid' : undefined;
-    };
-    const few = Math.max(1, Math.round(opts.shopCombos / 3));
-    for (let n = 0; n < few; n++) {
-      const itemIid = itemPool();
-      probe(pid, 'sell', [itemIid], sellBlockedOracle(G, pid, itemIid), 'sell');
-      const toIid = heroPool();
-      const moveIid = itemPool();
-      probe(pid, 'moveItem', [moveIid, toIid], moveItemBlockedOracle(G, pid, moveIid, toIid), 'moveItem');
-    }
-    probe(pid, 'closeShop', [], closeShopBlockedOracle(G, pid), 'closeShop');
-
-    // The act step's moves are refused while the shop is open.
-    const acts: { name: string; args: unknown[] }[] = [{ name: 'attack', args: [] }, { name: 'moveHero', args: [1, 0] }];
-    for (const h of liveBoardCards(me)) {
-      for (const skillId of skillIdsOf(h)) {
-        if (skillBlocked(G, pid, h, undefined, skillId) !== null) continue;
-        const filter = filterForSkill(h, skillId);
-        const t = filter && filter !== 'noTarget' ? boardUnits(G).find((u) => targetLegal(filter, u, h, pid, G)) : undefined;
-        acts.push({ name: 'useSkill', args: [h.iid, t?.iid, skillId] });
-      }
-    }
-    for (const it of myItems) {
-      const bearer = mine.find((h) => wornItemsOf(h).includes(it))!;
-      const targets = activateTargetsOracle(G, pid, it, bearer);
-      acts.push({ name: 'activate', args: targets === 'none' ? [it.iid] : [it.iid, targets[0]?.iid] });
-    }
-    for (let n = 0; n < 2; n++) {
-      const a = pickOne(acts, rnd);
-      probe(pid, a.name, a.args, 'shop-step', 'act-move-in-shop-step', Math.max(me.souls, 40));
-    }
-  }
-
-  if (onTurn && !shop) {
-    const wrong = shopListed;
-    if (wrong.length) add('act-offers-shop-move', wrong[0].type, [], `legalActions offers ${wrong.map((a) => actionKey(a as never)).join(', ')} in the act step`);
-    // The item uses the engine lists, against the oracle (one per target; 'none' for an untargeted one).
-    const engine = listed.filter((a) => a.type === 'activate').map((a) => actionKey(a as never));
-    const oracle: string[] = [];
-    for (const h of liveBoardCards(me)) {
-      for (const it of wornItemsOf(h)) {
-        const gate = activateBlockedOracle(G, pid, it.iid);
-        if (gate !== null && gate !== 'missing-target') continue;
-        const targets = activateTargetsOracle(G, pid, it, h);
-        if (targets === 'none') oracle.push(`activate ${it.iid}`);
-        else for (const t of targets) oracle.push(`activate ${it.iid} -> ${t.iid}`);
-      }
-    }
-    if (JSON.stringify([...engine].sort()) !== JSON.stringify([...oracle].sort())) {
-      add('activate-offers', 'activate', [], `legalActions' item uses differ from the rules: ${setDiff(engine, oracle)}`);
-    }
-    // The shop's moves are refused in the act step (a card played is the act step's too).
-    const shopMoves = shopProbes(G, pid, false);
-    for (let n = 0; n < 2 && shopMoves.length; n++) {
-      const m = pickOne(shopMoves, rnd);
-      probe(pid, m.name, m.args, 'not-shop-step', 'shop-move-in-act-step', Math.max(me.souls, 40));
-    }
-  }
-
-  // The seat not on turn has no shop and plays nothing, in either step.
-  const offTurn = legalActions(G, foe).filter((a) => SHOP_TYPES.has(a.type) || a.type === 'playCard');
-  if (offTurn.length) add('off-turn-offers-shop-move', offTurn[0].type, [], `legalActions offers P${foe} (not on turn) ${offTurn.map((a) => actionKey(a as never)).join(', ')}`);
-  const theirMoves = shopProbes(G, foe, true);
-  if (theirMoves.length) {
-    const m = pickOne(theirMoves, rnd);
-    probe(foe, m.name, m.args, 'not-your-turn', 'shop-move-off-turn', Math.max(G.players[foe].souls, 40));
-  }
 }
 
-/** Shop moves for `seat` that would be legal were its shop open: the cheapest market item,
- *  a sale of a hand card and of a worn item, a move of a worn item, closing the shop — and,
- *  with `plays`, a hand card played onto a hero with room. */
-function shopProbes(G: GameState, seat: PlayerID, plays: boolean): { name: string; args: unknown[] }[] {
-  const heroes = boardOf(G.players[seat]);
-  const out: { name: string; args: unknown[] }[] = [{ name: 'closeShop', args: [] }];
-  const cheap = (G.market ?? []).find((id) => itemData(id)?.tier === 1);
-  if (cheap) out.push({ name: 'buy', args: [cheap] });
-  const held = handOf(G, seat)[0];
-  if (held) {
-    out.push({ name: 'sell', args: [held.iid] });
-    const room = heroes.find((h) => wornItemsOf(h).length < 3 && !wornItemsOf(h).some((a) => a.cardId === held.cardId));
-    if (plays && room) out.push({ name: 'playCard', args: [held.iid, room.iid] });
-  }
-  const worn = heroes.flatMap((h) => wornItemsOf(h).map((item) => ({ item, bearer: h })));
-  if (worn.length) {
-    const { item, bearer } = worn[0];
-    out.push({ name: 'sell', args: [item.iid] });
-    const to = heroes.find((h) => h !== bearer && !wornItemsOf(h).some((a) => a.cardId === item.cardId) && wornItemsOf(h).length < 3);
-    if (to) out.push({ name: 'moveItem', args: [item.iid, to.iid] });
+/** The plays from the hand the rules allow `pid` now, as `actionKey`s: each item onto each hero
+ *  of its side in a slot (one per upgrade the item could make, when it could make several), each
+ *  hero into an empty lane and onto the bench. */
+function handPlaysOracle(G: GameState, pid: PlayerID): string[] {
+  const out: string[] = [];
+  const heroes = boardOf(G.players[pid]);
+  for (const c of handOf(G, pid)) {
+    if (itemData(c.cardId)) {
+      const ups = upgradesOfOracle(c.cardId);
+      for (const h of heroes) {
+        if (ups.length > 1) { for (const u of ups) if (playBlockedOracle(G, pid, c.iid, h.iid, u) === null) out.push(`playCard ${c.iid} -> ${h.iid} [${u}]`); }
+        else if (playBlockedOracle(G, pid, c.iid, h.iid) === null) out.push(`playCard ${c.iid} -> ${h.iid}`);
+      }
+    } else {
+      if (placeHeroBlockedOracle(G, pid, c.iid, true) === null) out.push(`placeHero ${c.iid} lane`);
+      if (placeHeroBlockedOracle(G, pid, c.iid, false) === null) out.push(`placeHero ${c.iid} bench`);
+    }
   }
   return out;
 }
 
 /**
- * I — the hand, at a decision point with no promotion owed, in either step of the turn
- * (and after the attack, when nothing but ending the turn is left):
- *  - `legalActions` lists exactly the plays the oracle allows: each hand card onto each of
- *    the player's heroes in a slot it may go on (none after the attack, none for the seat
- *    not on turn);
- *  - sampled plays (the player's hand cards mostly — a rival's card, a worn item, a hero,
- *    junk now and then — onto its heroes, a rival's, a merged Rem, an item, junk) are
- *    accepted exactly when the oracle allows them;
+ * H — the hand, at a decision point with no choice owed (and after the attack, when nothing
+ * but ending the turn is left):
+ *  - `legalActions` lists exactly the plays the oracle allows (`handPlaysOracle`) — none after
+ *    the attack, none for the seat not on turn;
+ *  - sampled item plays (the player's hand mostly — a hero card, a rival's card, a worn item,
+ *    junk now and then — onto its heroes, a rival's, a merged Rem, an item, junk; an upgrade
+ *    named or not, a wrong one, junk; real souls, plenty, or a soul short of the cost) and
+ *    hero placements (its hero cards mostly; the lane or the bench) are accepted exactly when
+ *    the oracle allows them;
+ *  - a discard or a first Active nobody owes is refused;
  * each on a clone; what the engine accepts is held to the transition rules (the card leaves
- * the hand for the hero, its component consumed, its cooldown, charges, bonus and
- * experience; never over the slot cap), what it refuses must leave the state untouched.
+ * the hand for the hero, its price paid, the component it evolves to the discard pile, the
+ * upgrade it makes into the deck, its cooldown, charges, bonus and experience; never over the
+ * slot cap), what it refuses must leave the state untouched.
  */
-function probePlays(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opts: ProbeOpts, rep: Report) {
-  const { add, checkAccepted, checkRefused } = rep;
+function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opts: ProbeOpts, rep: Report) {
+  const { add } = rep;
+  const probe = prober(G, ctx, pid, rep);
   const foe = otherPlayer(pid);
   const me = G.players[pid];
   const mine = boardOf(me);
   const held = handOf(G, pid);
-
-  const oracle: string[] = [];
-  for (const c of held) for (const h of mine) if (playBlockedOracle(G, pid, c.iid, h.iid) === null) oracle.push(`playCard ${c.iid} -> ${h.iid}`);
-  const engine = legalActions(G, pid).filter((a) => a.type === 'playCard').map((a) => actionKey(a as never));
-  if (JSON.stringify([...engine].sort()) !== JSON.stringify([...oracle].sort())) {
-    add('play-offers', 'playCard', [], `legalActions' card plays differ from the rules (${G.step} step${G.attackUsed ? ', after the attack' : ''}): ${setDiff(engine, oracle)}`);
+  const listed = legalActions(G, pid).filter((a) => a.type === 'playCard' || a.type === 'placeHero').map(actionKey);
+  const oracle = handPlaysOracle(G, pid);
+  if (JSON.stringify([...listed].sort()) !== JSON.stringify([...oracle].sort())) {
+    add('hand-offers', 'playCard', [], `legalActions' plays from the hand differ from the rules${G.attackUsed ? ' (after the attack)' : ''}: ${setDiff(listed, oracle)}`);
   }
 
   const theirHand = handOf(G, foe);
   const theirs = boardOf(G.players[foe]);
   const myItems = mine.flatMap((h) => wornItemsOf(h));
   const mergedRems = boardUnits(G).flatMap((h) => (h.attached ?? []).filter(isMergedRem));
-  const cardPool = () => {
+  const items = held.filter((c) => !!itemData(c.cardId));
+  const heroCards = held.filter(isHeroCard);
+  const cardPool = (preferHeroes: boolean) => {
     const x = rnd();
+    const first = preferHeroes ? heroCards : items;
+    if (x < 0.7 && first.length) return pickOne(first, rnd).iid;
     if (x < 0.8 && held.length) return pickOne(held, rnd).iid;
     if (x < 0.86 && theirHand.length) return pickOne(theirHand, rnd).iid;
     if (x < 0.92 && myItems.length) return pickOne(myItems, rnd).iid;
@@ -619,14 +473,116 @@ function probePlays(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, op
   // With nothing in the hand there is little to learn: a probe or two of junk.
   const tries = held.length ? opts.playCombos : 1;
   for (let n = 0; n < tries; n++) {
-    const args = [cardPool(), heroPool()];
-    const reason = playBlockedOracle(G, pid, args[0], args[1]);
-    const r = callMove(G, ctx, pid, 'playCard', args);
-    const accepted = r.outcome === 'accepted';
-    if (r.outcome === 'threw') add('move-threw', 'playCard', args, `playCard(${JSON.stringify(args)}) threw: ${String(r.error).slice(0, 140)}`);
-    else if (accepted && reason !== null) add(`playCard-accepts-illegal:${reason}`, 'playCard', args, `playCard(${JSON.stringify(args)}) by P${pid} was accepted; the rules refuse it (${reason})`);
-    else if (!accepted && reason === null) add('playCard-rejects-legal', 'playCard', args, `playCard(${JSON.stringify(args)}) by P${pid} is legal by the rules but the engine rejected it`);
-    else if (accepted) checkAccepted(G, r.G, 'playCard', args);
-    else checkRefused(G, r.G, 'playCard', args);
+    const cardIid = cardPool(false);
+    const heroIid = heroPool();
+    const card = held.find((c) => c.iid === cardIid);
+    const args: unknown[] = [cardIid, heroIid];
+    const u = rnd();
+    if (u < 0.35 && card) {
+      const ups = upgradesOfOracle(card.cardId);
+      args.push(ups.length && rnd() < 0.7 ? pickOne(ups, rnd) : rnd() < 0.5 ? pickOne(ITEMS, rnd).id : pickOne(['nope', '', 7], rnd));
+    }
+    const x = rnd();
+    const hero = mine.find((h) => h.iid === heroIid);
+    const cost = card && hero && itemData(card.cardId) ? playCostOracle(hero, card.cardId) : 0;
+    const souls = x < 0.4 ? undefined : x < 0.8 ? Math.max(me.souls, 40) : Math.max(0, cost - 1);
+    probe(pid, 'playCard', args, playBlockedOracle(G, pid, args[0], args[1], args[2], souls ?? me.souls), 'playCard', souls);
+  }
+  for (let n = 0; n < Math.max(1, opts.placeCombos); n++) {
+    const cardIid = cardPool(true);
+    const toActive = rnd() < 0.5;
+    probe(pid, 'placeHero', toActive ? [cardIid, true] : [cardIid], placeHeroBlockedOracle(G, pid, cardIid, toActive), 'placeHero');
+  }
+  // Nobody owes a discard or a first Active here: both are refused.
+  if (held.length) probe(pid, 'discard', [[held[0].iid]], discardBlockedOracle(G, pid, [held[0].iid]), 'discard');
+  if (heroCards.length) probe(pid, 'chooseActive', [heroCards[0].iid], chooseActiveBlockedOracle(G, heroCards[0].iid), 'chooseActive');
+
+  // The seat not on turn plays nothing from its hand.
+  const offTurn = legalActions(G, foe).filter((a) => a.type === 'playCard' || a.type === 'placeHero');
+  if (offTurn.length) add('off-turn-offers-play', offTurn[0].type, [], `legalActions offers P${foe} (not on turn) ${offTurn.map(actionKey).join(', ')}`);
+  const theirCard = theirHand[0];
+  if (theirCard) {
+    if (itemData(theirCard.cardId) && theirs[0]) probe(foe, 'playCard', [theirCard.iid, theirs[0].iid], 'not-your-turn', 'play-off-turn', Math.max(G.players[foe].souls, 40));
+    else if (isHeroCard(theirCard)) probe(foe, 'placeHero', [theirCard.iid], 'not-your-turn', 'place-off-turn');
+  }
+}
+
+/**
+ * F2 — the opening owes a seat its first Active (`G.pendingActive`): `legalActions`, for either
+ * seat, lists exactly a `chooseActive` per hero of the owing hand that may stand in the lane;
+ * sampled choices (the owing seat's hand — heroes, a bench-only one, items —, the other seat's
+ * cards, junk) are accepted exactly when the oracle allows them, made from either seat; every
+ * other move is refused.
+ */
+function probeOpening(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, rep: Report) {
+  const { add } = rep;
+  const probe = prober(G, ctx, pid, rep);
+  const owing = G.pendingActive!;
+  const hand = handOf(G, owing);
+  const want = hand.filter((c) => chooseActiveBlockedOracle(G, c.iid) === null).map((c) => `chooseActive ${c.iid}`);
+  for (const seat of ['0', '1'] as PlayerID[]) {
+    const listed = legalActions(G, seat).map(actionKey);
+    if (JSON.stringify([...listed].sort()) !== JSON.stringify([...want].sort())) add('opening-offers', 'chooseActive', [], `legalActions(P${seat}) with P${owing}'s first Active owed: ${setDiff(listed, want)}`);
+  }
+  const pool = [...hand, ...handOf(G, other(owing)), ...boardUnits(G)].map((c) => c.iid);
+  for (let n = 0; n < 3; n++) {
+    const iid = pool.length && rnd() < 0.9 ? pickOne(pool, rnd) : 'ghost-iid';
+    const seat = rnd() < 0.5 ? pid : otherPlayer(pid);
+    probe(seat, 'chooseActive', [iid], chooseActiveBlockedOracle(G, iid), 'chooseActive');
+  }
+  const others: { name: string; args: unknown[] }[] = [{ name: 'endTurn', args: [] }, { name: 'attack', args: [] }];
+  const myHand = handOf(G, pid);
+  const heroCard = myHand.find(isHeroCard);
+  if (heroCard) others.push({ name: 'placeHero', args: [heroCard.iid, true] });
+  const item = myHand.find((c) => !!itemData(c.cardId));
+  const hero = boardOf(G.players[pid])[0];
+  if (item && hero) others.push({ name: 'playCard', args: [item.iid, hero.iid] });
+  for (const m of others) probe(pid, m.name, m.args, 'active-owed', 'opening-skippable', 40);
+}
+
+/**
+ * F3 — a draw card's discard is owed (`G.pendingDiscard`): `legalActions` lists exactly a
+ * one-card `discard` per card of the owing hand (for the owing seat; nothing for the other);
+ * sampled discards — the right number of hand cards, fewer, too many, a card twice, a rival's
+ * card, junk, a bare iid — are accepted exactly when the oracle allows them, and what is
+ * accepted pays that much of what is owed; every other move (the end of the turn included) is
+ * refused.
+ */
+function probeDiscard(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, rep: Report) {
+  const { add } = rep;
+  const probe = prober(G, ctx, pid, rep);
+  const owed = G.pendingDiscard!;
+  const hand = handOf(G, owed.pid).map((c) => c.iid);
+  for (const seat of ['0', '1'] as PlayerID[]) {
+    const want = seat === owed.pid ? hand.map((iid) => `discard ${iid}`) : [];
+    const listed = legalActions(G, seat).filter((a) => a.type !== 'promoteToActive').map(actionKey);
+    if (JSON.stringify([...listed].sort()) !== JSON.stringify([...want].sort())) add('discard-offers', 'discard', [], `legalActions(P${seat}) with P${owed.pid}'s discard of ${owed.count} owed: ${setDiff(listed, want)}`);
+  }
+  const shuffled = () => [...hand].sort(() => rnd() - 0.5);
+  const tries: unknown[] = [
+    shuffled().slice(0, owed.count),
+    shuffled().slice(0, Math.max(1, owed.count - 1)),
+    shuffled().slice(0, owed.count + 1),
+    hand.length ? [hand[0], hand[0]] : [],
+    [...shuffled().slice(0, 1), ...(handOf(G, other(owed.pid))[0] ? [handOf(G, other(owed.pid))[0].iid] : ['ghost-iid'])],
+    [],
+    hand[0] ?? 'ghost-iid',
+    'ghost-iid',
+  ];
+  for (let n = 0; n < 3; n++) {
+    const arg = pickOne(tries, rnd);
+    probe(pid, 'discard', [arg], discardBlockedOracle(G, pid, discardList(arg)), 'discard');
+  }
+  const others: { name: string; args: unknown[] }[] = [{ name: 'endTurn', args: [] }, { name: 'attack', args: [] }];
+  const myHand = handOf(G, pid);
+  const heroCard = myHand.find(isHeroCard);
+  if (heroCard) others.push({ name: 'placeHero', args: [heroCard.iid] });
+  const item = myHand.find((c) => !!itemData(c.cardId));
+  const hero = boardOf(G.players[pid])[0];
+  if (item && hero) others.push({ name: 'playCard', args: [item.iid, hero.iid] });
+  for (const h of liveBoardCards(G.players[pid])) for (const skillId of skillIdsOf(h)) others.push({ name: 'useSkill', args: [h.iid, undefined, skillId] });
+  for (let n = 0; n < 3 && others.length; n++) {
+    const m = pickOne(others, rnd);
+    probe(pid, m.name, m.args, 'discard-owed', 'discard-skippable', 40);
   }
 }

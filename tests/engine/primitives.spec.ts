@@ -897,16 +897,16 @@ describe('attackAll', () => {
     expect(snapshot(disarmed.G)).toBe(before);
   });
 
-  it('ends with the state-based pass: a hero it finishes falls, pushes its level + 1 into its structures and pays a bounty', () => {
+  it('ends with the state-based pass: a hero it finishes falls and pushes its level + 1 into its structures — and pays no souls', () => {
     const { G, me, atk, foes } = duel(TALLY);
     foes[2].hp = 3;
     me.souls = 4;
     const structures = structureHp(G.players['1']);
     attackAll(G, atk);
     expect(isRespawning(foes[2])).toBe(true);
-    expect(structureHp(G.players['1'])).toBe(structures - 2);
-    expect(me.souls).toBe(6); // its level (1) + 1
-    expect(G.log.some((l) => l.text === 'P0 +2 Souls (KO bounty).')).toBe(true);
+    expect(structureHp(G.players['1'])).toBe(structures - 2); // its level (1) + 1
+    expect(me.souls).toBe(4);
+    expect(G.log.some((l) => /KO bounty/.test(l.text))).toBe(false);
   });
 });
 
@@ -1166,15 +1166,15 @@ describe('awardSouls', () => {
     expect(G.log).toHaveLength(lines); // nothing gained, nothing said
   });
 
-  it('is what the KO bounty pays through, in the words it always used', () => {
+  it('is never called by a kill: a knockout pays no souls (the lane\'s income is all there is)', () => {
     const G = freshReadyGame();
     G.players['0'].souls = 2;
     const victim = G.players['1'].bench[1]!;
     damageUnit(G, victim, 99, 'pure');
     resolve(G);
     expect(isRespawning(victim)).toBe(true);
-    expect(G.players['0'].souls).toBe(4); // its level (1) + 1
-    expect(G.log.some((l) => l.text === 'P0 +2 Souls (KO bounty).')).toBe(true);
+    expect(G.players['0'].souls).toBe(2);
+    expect(G.log.some((l) => /Souls \(KO bounty/.test(l.text))).toBe(false);
   });
 });
 

@@ -4,8 +4,8 @@
  * One call plays one whole game through a real boardgame.io Client with
  * `DeadlockGame` (draft included), so turn flow, endIf, onBegin and onEnd all
  * run. The match seed (`marketSeedFor(seed)`, handed to the match config) draws
- * the market, so a seed is also a market. Three random streams keep a seed
- * reproducible and keep observers honest:
+ * every shuffle of the decks, so a seed is also a deal. Three random streams
+ * keep a seed reproducible and keep observers honest:
  *   - the ENGINE stream: `Math.random` is pinned to mulberry32(seed) for the
  *     length of the game (draft picks, the AI's tie-breaks) and restored
  *     afterwards, even if the game throws;
@@ -23,7 +23,7 @@ import { MATCH_TURNS } from '@/engine/rounds';
 import type { Action } from '@/engine/engine';
 import { ITEMS } from '@/cards';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { allIids, boardOf, handOf, itemData, skillIdsOf, wornItemsOf } from './oracle';
+import { allIids, boardOf, handOf, isHeroCard, itemData, skillIdsOf, upgradesOfOracle, wornItemsOf } from './oracle';
 
 export type Policy = 'heuristic' | 'randomLegal' | 'chaos';
 const CHAOS_RATE = 0.3;
@@ -136,26 +136,28 @@ function seededOrder(prefer: Partial<Record<PlayerID, string[]>>, r: () => numbe
   return out;
 }
 
-/** The match seed a game's market is drawn from: a fixed function of the game seed,
- *  so a seed replays its market whatever the engine stream has drawn first. */
+/** The match seed a game's shuffles are drawn from: a fixed function of the game seed,
+ *  so a seed replays its deal whatever the engine stream has drawn first. */
 export function marketSeedFor(seed: number): number {
   return (Math.imul(seed >>> 0, 0x9e3779b1) ^ 0x6a09e667) >>> 0;
 }
 
-const CHAOS_NAMES = ['buy', 'sell', 'moveItem', 'closeShop', 'playCard', 'activate', 'useSkill', 'moveHero', 'promoteToActive', 'attack', 'endTurn'] as const;
-/** Ids that name no item: a hero, an ultimate, nonsense. */
-const JUNK_ITEM_IDS = ['hero_haze', 'ult_lash', 'eff_cold_front', 'nope', ''];
+const CHAOS_NAMES = ['playCard', 'placeHero', 'discard', 'chooseActive', 'activate', 'useSkill', 'moveHero', 'promoteToActive', 'attack', 'endTurn'] as const;
+/** Ids that name no card of a hand: a hero not drafted, an ultimate, nonsense. */
+const JUNK_IDS = ['hero_haze', 'ult_lash', 'eff_cold_front', 'nope', ''];
 
 /** A random-but-plausible move: real iids from anywhere in G (the player's own
- *  heroes, worn items and hand cards most of the time), real item ids from the
- *  market (and now and then one off it, or one that names no item), slots 0..3
- *  (with an occasional out-of-range or missing one), or sometimes nonsense. */
+ *  heroes, worn items and hand cards most of the time, the rival's now and
+ *  then), an upgrade's id or junk for a play's third argument, slots 0..3 (with
+ *  an occasional out-of-range or missing one), discards of the right cards, too
+ *  many, repeated or junk, or sometimes nonsense. */
 export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name: string; args: unknown[] } {
   const iids = allIids(G);
   const mine = G.players[pid];
   const myBoard = boardOf(mine).map((c) => c.iid);
   const myItems = boardOf(mine).flatMap((c) => wornItemsOf(c));
   const myHand = handOf(G, pid);
+  const theirHand = handOf(G, pid === '0' ? '1' : '0');
   const anyIid = () => (r() < 0.06 ? `nope-${Math.floor(r() * 1000)}` : iids.length ? pick(iids, r) : 'x');
   const maybe = <T,>(v: T, pMissing = 0.12): T | undefined => (r() < pMissing ? undefined : v);
   const slot = () => {
@@ -173,13 +175,8 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
   const myCard = () => {
     const x = r();
     if (x < 0.7 && myHand.length) return pick(myHand, r).iid;
-    return x < 0.85 ? myItem() : anyIid();
-  };
-  const itemId = () => {
-    const x = r();
-    if (x < 0.75 && G.market?.length) return pick(G.market, r);
-    if (x < 0.9) return pick(ITEMS, r).id;
-    return pick(JUNK_ITEM_IDS, r);
+    if (x < 0.78 && theirHand.length) return pick(theirHand, r).iid;
+    return x < 0.88 ? myItem() : anyIid();
   };
   // The bookkeeping moves, now and then: they must be harmless outside their window.
   if (r() < 0.08) {
@@ -188,15 +185,40 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
   }
   const name = pick([...CHAOS_NAMES], r);
   switch (name) {
-    case 'buy':
-      // Now and then a stray second argument, as the old two-argument buy made: the move ignores it.
-      return { name, args: r() < 0.15 ? [maybe(itemId(), 0.04), myHero()] : [maybe(itemId(), 0.04)] };
-    case 'sell':
-      return { name, args: [maybe(myCard(), 0.05)] };
-    case 'moveItem':
-      return { name, args: [maybe(r() < 0.8 ? myItem() : myCard(), 0.05), maybe(myHero(), 0.06)] };
-    case 'playCard':
-      return { name, args: [maybe(myCard(), 0.05), maybe(myHero(), 0.06)] };
+    case 'playCard': {
+      const card = maybe(myCard(), 0.05);
+      const args: unknown[] = [card, maybe(myHero(), 0.06)];
+      // Now and then the upgrade it is to make: one of its own, another item's, or junk.
+      if (r() < 0.3) {
+        const held = myHand.find((c) => c.iid === card);
+        const ups = held ? upgradesOfOracle(held.cardId) : [];
+        args.push(ups.length && r() < 0.6 ? pick(ups, r) : r() < 0.5 ? pick(ITEMS, r).id : pick(JUNK_IDS, r));
+      }
+      return { name, args };
+    }
+    case 'placeHero': {
+      const heroes = myHand.filter(isHeroCard);
+      const card = heroes.length && r() < 0.7 ? pick(heroes, r).iid : myCard();
+      const x = r();
+      return { name, args: x < 0.4 ? [card] : x < 0.8 ? [card, true] : [card, pick([false, 1, 'yes', null], r)] };
+    }
+    case 'discard': {
+      const x = r();
+      const owed = G.pendingDiscard?.count ?? 1;
+      const hand = myHand.map((c) => c.iid);
+      if (x < 0.5 && hand.length) {
+        const n = 1 + Math.floor(r() * Math.min(hand.length, owed + 1));
+        const picked = [...hand].sort(() => r() - 0.5).slice(0, n);
+        return { name, args: [picked] };
+      }
+      if (x < 0.65 && hand.length) return { name, args: [[hand[0], hand[0]]] };
+      if (x < 0.8) return { name, args: [hand.length && r() < 0.5 ? hand[0] : anyIid()] };
+      return { name, args: [pick([[], undefined, [anyIid()], 'x'], r)] };
+    }
+    case 'chooseActive': {
+      const owing = G.pendingActive ? handOf(G, G.pendingActive) : myHand;
+      return { name, args: [owing.length && r() < 0.8 ? pick(owing, r).iid : anyIid()] };
+    }
     case 'activate': {
       const args: unknown[] = [maybe(myItem(true), 0.04)];
       if (r() < 0.75) args.push(maybe(anyIid(), 0.2));
@@ -265,7 +287,11 @@ export function playGame(opts: PlayOpts): GameRecord {
           const roll = pool[Math.floor(Math.random() * pool.length)];
           rec = { step, name: 'draftPick', args: [wanted ?? roll], player: pid, policy: 'draft', chaos: false };
         } else if (acceptedThisTurn >= movesPerTurnCap || attemptsThisTurn >= movesPerTurnCap * 5) {
-          rec = { step, name: 'endTurn', args: [], player: pid, policy: 'fallback', chaos: false };
+          // A choice owed comes before the end of the turn (which is refused until it is made).
+          const owed = owedAnswer(G, ctx);
+          rec = owed
+            ? { step, ...owed, player: pid, policy: 'fallback', chaos: false }
+            : { step, name: 'endTurn', args: [], player: pid, policy: 'fallback', chaos: false };
         } else {
           rec = chooseMove(G, ctx, pid, policy, policyRandom, chaosRate, step, policyThrew);
         }
@@ -290,8 +316,9 @@ export function playGame(opts: PlayOpts): GameRecord {
         opts.afterMove?.(before, { G: st.G, ctx: st.ctx }, info, accepted, error);
 
         // A legal-list move the engine refused: fall back to ending the turn so
-        // the game keeps moving (balance-sim does the same).
-        if (!accepted && !rec.chaos && rec.name !== 'endTurn' && !st.ctx.gameover) {
+        // the game keeps moving (balance-sim does the same). (A choice owed is
+        // answered first: the end of the turn waits on it.)
+        if (!accepted && !rec.chaos && rec.name !== 'endTurn' && !st.ctx.gameover && !owedAnswer(st.G, st.ctx)) {
           const fb: MoveRecord = { step, name: 'endTurn', args: [], player: pid, policy: 'fallback', chaos: false };
           moves.push(fb);
           const fbBefore: Snapshot = { G: st.G, ctx: st.ctx };
@@ -324,43 +351,49 @@ export function playGame(opts: PlayOpts): GameRecord {
   }));
 }
 
-/** The moves of the shop step a random seat makes there: the shop's, and a card played. */
-const SHOP_TYPES: ReadonlySet<Action['type']> = new Set(['buy', 'sell', 'moveItem', 'playCard', 'closeShop']);
-
-/** A shop-step move as a client call. */
-function shopCall(a: Action): { name: string; args: unknown[] } {
-  switch (a.type) {
-    case 'buy': return { name: 'buy', args: [a.itemId] };
-    case 'sell': return { name: 'sell', args: [a.itemIid] };
-    case 'moveItem': return { name: 'moveItem', args: [a.itemIid, a.toHeroIid] };
-    case 'playCard': return { name: 'playCard', args: [a.cardIid, a.heroIid] };
-    default: return { name: 'closeShop', args: [] };
+/** The AI's answer to a choice owed (the opening's first Active, a promotion, a
+ *  draw card's discard), as a client call; undefined when none is owed. */
+function owedAnswer(G: GameState, ctx: Ctx): { name: string; args: unknown[] } | undefined {
+  if (!G.pendingActive && !G.pendingPromotion && !G.pendingDiscard) return undefined;
+  try {
+    const o = enumerateAIMoves(G, ctx, false)[0];
+    return o ? { name: o.move, args: o.args } : undefined;
+  } catch {
+    return undefined;
   }
 }
 
+/** The plays from the hand the engine lists now: heroes onto the board, items onto heroes. */
+const HAND_TYPES: ReadonlySet<Action['type']> = new Set(['playCard', 'placeHero']);
+
+/** A hand play as a client call. */
+function handCall(a: Action): { name: string; args: unknown[] } {
+  if (a.type === 'playCard') return { name: 'playCard', args: a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid] };
+  if (a.type === 'placeHero') return { name: 'placeHero', args: a.toActive ? [a.cardIid, true] : [a.cardIid] };
+  return { name: 'endTurn', args: [] };
+}
+
 /**
- * A random legal shop-step move, for the randomLegal seats: the AI's own shop
- * step is one rule-based move (play the card it just bought, buy its build's
- * next item, or close the shop), so it never holds a card or sells or moves a
- * worn one. This picks a kind of move the engine lists now — buy, sell, move,
- * play or close — uniformly, then one of that kind, so the seat shops at random,
- * holds cards across turns, plays them onto any hero, sells and moves items, and
- * still closes the shop within a few moves. Undefined when the engine lists none.
+ * A random seat's own choices where the AI's list would narrow them: a draw card's discard
+ * is a random handful of the hand (one card up to what is owed), so partial payments and
+ * heroes discarded are played; and now and then (`HAND_RATE`) a hand play the engine lists
+ * — a kind (a hero placed, an item played) at random, then one of that kind — so cards are
+ * played onto heroes the AI would not pick and held into later turns. Undefined: leave it to
+ * the AI's list.
  */
-function randomShopMove(G: GameState, pid: PlayerID, r: () => number): { name: string; args: unknown[] } | undefined {
-  const shop = legalActions(G, pid).filter((a) => SHOP_TYPES.has(a.type));
-  if (!shop.length) return undefined;
-  const kinds = [...new Set(shop.map((a) => a.type))];
-  const kind = pick(kinds, r);
-  let options = shop.filter((a) => a.type === kind);
-  // Half the time a purchase is an upgrade of a card on the side, when one is on sale: the
-  // discounts, the claims and the settlement of one upgrade by another need them.
-  if (kind === 'buy' && r() < 0.5) {
-    const owned = new Set([...handOf(G, pid), ...boardOf(G.players[pid]).flatMap((h) => wornItemsOf(h))].map((c) => c.cardId));
-    const ups = options.filter((a) => a.type === 'buy' && owned.has(itemData(a.itemId)?.upgradesFrom ?? ''));
-    if (ups.length) options = ups;
+const HAND_RATE = 0.35;
+function randomHandMove(G: GameState, pid: PlayerID, r: () => number): { name: string; args: unknown[] } | undefined {
+  const owed = G.pendingDiscard;
+  if (owed && owed.pid === pid) {
+    const hand = handOf(G, pid).map((c) => c.iid);
+    const n = 1 + Math.floor(r() * Math.min(owed.count, hand.length));
+    return { name: 'discard', args: [[...hand].sort(() => r() - 0.5).slice(0, n)] };
   }
-  return shopCall(pick(options, r));
+  if (G.pendingActive || G.pendingPromotion || G.pendingDiscard || r() >= HAND_RATE) return undefined;
+  const plays = legalActions(G, pid).filter((a) => HAND_TYPES.has(a.type));
+  if (!plays.length) return undefined;
+  const kind = pick([...new Set(plays.map((a) => a.type))], r);
+  return handCall(pick(plays.filter((a) => a.type === kind), r));
 }
 
 function chooseMove(
@@ -383,12 +416,11 @@ function chooseMove(
       const best = enumerateAIMoves(G, ctx)[0];
       return best ? { ...base, name: best.move, args: best.args, chaos: false } : { ...base, name: 'endTurn', args: [], chaos: false };
     }
-    // randomLegal (and the chaos seat between its inventions): the shop at random, then the
-    // AI's list of act moves at random. An owed promotion comes first (the AI lists it alone).
-    if (G.step === 'shop' && G.pendingPromotion === undefined) {
-      const m = randomShopMove(G, pid, r);
-      if (m) return { ...base, ...m, chaos: false };
-    }
+    // randomLegal (and the chaos seat between its inventions): a random discard, a hand play
+    // at random now and then, else the AI's list of moves at random. An owed choice comes
+    // first (the AI lists it alone).
+    const m = randomHandMove(G, pid, r);
+    if (m) return { ...base, ...m, chaos: false };
     const opts = enumerateAIMoves(G, ctx, false);
     const o = opts.length ? pick(opts, r) : undefined;
     return o ? { ...base, name: o.move, args: o.args, chaos: false } : { ...base, name: 'endTurn', args: [], chaos: false };

@@ -6,12 +6,11 @@ import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
 import { CARDS_BY_ID } from '@/cards';
 import { LANE_INCOME, PRICE, RETREAT_COST } from '@/engine/constants';
-import { buyBlocked, buyPrice, playBlocked } from '@/engine/legality';
+import { playBlocked, playCost } from '@/engine/legality';
 import { itemPrice, netWorth } from '@/engine/query';
 import { freshReadyGame, configureReadyMatch, giveCard, giveItem, readyClient } from './_helpers';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
-// Every turn opens in its shop step: `readyClient()` stands past turn 1's.
 beforeAll(configureReadyMatch);
 
 function snap(c: ReturnType<typeof readyClient>) {
@@ -30,88 +29,99 @@ function freshG(): GameState {
 }
 
 describe('souls economy', () => {
-  it('the income: the player on turn 1 has LANE_INCOME souls; the other has none until its turn', () => {
-    const c = readyClient({ shop: true });
+  it('the income: the player on turn 1 has LANE_INCOME (5) souls; the other has none until its turn', () => {
+    const c = readyClient();
     const { G } = snap(c);
+    expect(LANE_INCOME).toBe(5);
     expect(G.players['0'].souls).toBe(LANE_INCOME);
     expect(G.players['1'].souls).toBe(0);
   });
 
-  it('buying an item deducts its price; one it cannot afford is refused and costs nothing', () => {
-    const G = freshReadyGame({ step: 'shop' }); // P0's turn, its shop open
+  it('putting an item on a hero costs its price; one it cannot afford is refused, costs nothing and stays in the hand', () => {
+    const G = freshReadyGame(); // P0's turn
     const me = G.players['0'];
     me.souls = 5;
     // Extended Magazine: a tier 1 passive item, +1 Bullet Power, at its tier's price.
     expect(itemPrice('extended_magazine')).toBe(PRICE[1]);
-    const r = runMove('buy', G, '0', 'extended_magazine');
-    expect(r).not.toBe('INVALID_MOVE');
+    const mag = giveCard(G, '0', 'extended_magazine');
+    expect(runMove('playCard', G, '0', mag.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(5 - PRICE[1]);
-    expect(me.hand.map((c) => c.cardId)).toEqual(['extended_magazine']);
-    // Sharpshooter (Vindicta's signature, so on sale) is tier 3 (8 souls): 3 left is not enough.
+    // Sharpshooter is tier 3 (8 souls): 3 left is not enough.
+    const sharp = giveCard(G, '0', 'sharpshooter');
     expect(itemPrice('sharpshooter')).toBe(PRICE[3]);
-    expect(runMove('buy', G, '0', 'sharpshooter')).toBe('INVALID_MOVE');
-    expect(buyBlocked(G, '0', 'sharpshooter')).toBe('souls');
+    expect(playBlocked(G, '0', sharp.iid, me.bench[0]!.iid)).toBe('souls');
+    expect(runMove('playCard', G, '0', sharp.iid, me.bench[0]!.iid)).toBe('INVALID_MOVE');
     expect(me.souls).toBe(5 - PRICE[1]);
-    expect(me.hand).toHaveLength(1);
+    expect(me.hand).toEqual([sharp]);
   });
 
-  it('souls are paid at the shop, not at play: a card played from the hand costs nothing, with no souls left too', () => {
-    const G = freshReadyGame({ step: 'shop' });
+  it('souls are paid at the play, not at the draw: a card in the hand costs nothing to hold; an upgrade onto the hero wearing its part costs the difference, onto another its price', () => {
+    const G = freshReadyGame();
     const me = G.players['0'];
-    me.souls = PRICE[1];
-    expect(runMove('buy', G, '0', 'extended_magazine')).not.toBe('INVALID_MOVE');
+    me.souls = 0;
+    const held = giveCard(G, '0', 'titanic_magazine');
     expect(me.souls).toBe(0);
-    const [card] = me.hand;
-    expect(playBlocked(G, '0', card.iid, me.active!.iid)).toBeNull();
-    expect(runMove('playCard', G, '0', card.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
+    expect(playBlocked(G, '0', held.iid, me.active!.iid)).toBe('souls');
+    // Haze wears Extended Magazine (tier 1): Titanic Magazine (tier 2) on him costs 4 - 2.
+    giveItem(G, me.active!, 'extended_magazine');
+    expect(playCost(me.active!, 'titanic_magazine')).toBe(PRICE[2] - PRICE[1]);
+    expect(playCost(me.bench[0]!, 'titanic_magazine')).toBe(PRICE[2]);
+    me.souls = PRICE[2] - PRICE[1];
+    expect(playBlocked(G, '0', held.iid, me.bench[0]!.iid)).toBe('souls');
+    expect(runMove('playCard', G, '0', held.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(0);
-    expect(me.active!.attached!.map((it) => it.cardId)).toEqual(['extended_magazine']);
-    // A free card (a Story reward) is played the same way, in the act step too.
-    G.step = 'act';
-    const reward = giveCard(G, '0', 'toxic_bullets');
-    expect(runMove('playCard', G, '0', reward.iid, me.bench[0]!.iid)).not.toBe('INVALID_MOVE');
+    expect(me.active!.attached!.map((it) => it.cardId)).toEqual(['titanic_magazine']);
+    // A hero card goes to the bench for nothing.
+    G.players['0'].bench[2] = null;
+    const hero = giveCard(G, '0', 'hero_kelvin');
+    expect(runMove('placeHero', G, '0', hero.iid)).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(0);
+    expect(me.bench[2]).toBe(hero);
   });
 
-  it('the AI never offers a buy it cannot afford: with nothing affordable it closes the shop', async () => {
+  it('the AI never offers a play it cannot afford', async () => {
     const { enumerateAIMoves } = await import('@/ai/heuristic');
-    const G = freshReadyGame({ step: 'shop' }); // P0's turn, its shop open
+    const G = freshReadyGame(); // P0's turn
     const ctx: any = { currentPlayer: '0', turn: 2, numPlayers: 2 };
+    for (const id of ['extended_magazine', 'titanic_magazine', 'toxic_bullets', 'glass_cannon']) giveCard(G, '0', id);
     for (const souls of [0, 1, 2, 3, 4, 7, 8, 12, 20]) {
       G.players['0'].souls = souls;
       for (const lookahead of [false, true]) {
-        const moves = enumerateAIMoves(G, ctx, lookahead);
-        expect(moves, `${souls} souls`).toHaveLength(1);
-        const [m] = moves;
-        if (m.move !== 'buy') {
-          expect(m.move, `${souls} souls`).toBe('closeShop');
-          continue;
+        const plays = enumerateAIMoves(G, ctx, lookahead).filter((m) => m.move === 'playCard');
+        for (const m of plays) {
+          const hero = [G.players['0'].active!, ...G.players['0'].bench].find((h) => h?.iid === m.args[1])!;
+          const card = G.players['0'].hand.find((c) => c.iid === m.args[0])!;
+          expect(playCost(hero, card.cardId), `${souls} souls`).toBeLessThanOrEqual(souls);
+          expect(playBlocked(G, '0', m.args[0], m.args[1]), `${souls} souls`).toBeNull();
         }
-        expect(m.args, `${souls} souls`).toHaveLength(1);
-        expect(buyPrice(G, '0', m.args[0]), `${souls} souls`).toBeLessThanOrEqual(souls);
-        expect(buyBlocked(G, '0', m.args[0]), `${souls} souls`).toBeNull();
+        if (souls < PRICE[1]) expect(plays, `${souls} souls`).toEqual([]);
       }
     }
-    G.players['0'].souls = 1; // nothing in the market costs less than PRICE[1]
-    expect(enumerateAIMoves(G, ctx)[0].move).toBe('closeShop');
   });
 
-  it('the AI with no souls still plays a card it holds — the play is free — before it closes the shop', async () => {
+  it('the AI with no souls still benches a hero from its hand — free — and plays no item', async () => {
     const { enumerateAIMoves } = await import('@/ai/heuristic');
-    const G = freshReadyGame({ step: 'shop' });
+    const G = freshReadyGame();
     const ctx: any = { currentPlayer: '0', turn: 2, numPlayers: 2 };
     G.players['0'].souls = 0;
-    const card = giveCard(G, '0', 'active_reload'); // Haze's first build item
-    const [m] = enumerateAIMoves(G, ctx);
-    expect(m).toMatchObject({ move: 'playCard', args: [card.iid, G.players['0'].active!.iid] });
-    expect(runMove(m.move, G, '0', ...m.args)).not.toBe('INVALID_MOVE');
+    G.players['0'].bench[2] = null;
+    const hero = giveCard(G, '0', 'hero_kelvin');
+    giveCard(G, '0', 'active_reload'); // Haze's first build item, unaffordable
+    // The AI's turn, move by move, up to its end.
+    for (let i = 0; i < 20; i++) {
+      const [m] = enumerateAIMoves(G, ctx);
+      expect(m.move).not.toBe('playCard');
+      if (m.move === 'endTurn' || m.move === 'attack') break;
+      expect(runMove(m.move, G, '0', ...m.args)).not.toBe('INVALID_MOVE');
+    }
+    expect(G.players['0'].bench[2]).toBe(hero);
     expect(G.players['0'].souls).toBe(0);
-    expect(enumerateAIMoves(G, ctx)[0].move).toBe('closeShop');
+    expect(G.players['0'].hand.map((c) => c.cardId)).toEqual(['active_reload']);
   });
 
   it('souls accumulate: what a turn does not spend carries over, and each own turn adds the income', () => {
     const c = readyClient();
-    // P0 T1: 4. Don't spend. End → P1 T2. End → P0 T3.
+    // P0 T1: 5. Don't spend. End → P1 T2. End → P0 T3.
     c.moves.endTurn?.();
     c.moves.endTurn?.();
     const { G } = snap(c);
@@ -128,26 +138,26 @@ describe('souls economy', () => {
     expect(G.players['0'].souls).toBeGreaterThan(10);
   });
 
-  it('the comeback: a side 8 behind on net worth gets 1 more with its income, 16 behind 2 more', () => {
-    for (const [ahead, bonus] of [[7, 0], [8, 1], [15, 1], [16, 2]] as const) {
+  it('no comeback: a side far behind on net worth gets the lane\'s income and nothing more', () => {
+    for (const ahead of [7, 8, 16, 40]) {
       const c = readyClient();
       c.moves.endTurn?.(); // → P1, turn 2
       const s = c.getState()!;
       const G = structuredClone(s.G) as GameState;
-      G.players['1'].souls = ahead; // P1 banks a lead; P0 holds 4 from its first turn
+      G.players['1'].souls = ahead; // P1 banks a lead
       G.players['0'].souls = 0;
       (c as any).store.dispatch({ type: 'SYNC', state: { ...s, G } });
       c.moves.endTurn?.(); // → P0, turn 3: P0 trails by `ahead`
-      expect(snap(c).G.players['0'].souls, `${ahead} behind`).toBe(LANE_INCOME + bonus);
+      expect(snap(c).G.players['0'].souls, `${ahead} behind`).toBe(LANE_INCOME);
     }
   });
 
-  it('net worth counts worn items at their price (PRICE by tier, actives and passives alike): a side whose heroes wear 8 souls of items is 8 ahead', () => {
+  it('net worth counts worn items at their price (PRICE by tier, actives and passives alike): a side whose heroes wear 8 souls of items is 8 ahead — and its rival\'s income stays the lane\'s', () => {
     const cases: [CardId[], number, number][] = [
-      [['toxic_bullets'], PRICE[3], 1],                                  // one tier 3 passive: 8
-      [['titanic_magazine', 'cold_front'], 2 * PRICE[2], 1],             // a tier 2 passive and a tier 2 active: 8
-      [['extended_magazine', 'grit', 'extra_health'], 3 * PRICE[1], 0], // three tier 1s: 6, not far enough behind
-      [['glass_cannon'], PRICE[4], 2],                                   // one tier 4: 16
+      [['toxic_bullets'], PRICE[3], 0],                                  // one tier 3 passive: 8
+      [['titanic_magazine', 'cold_front'], 2 * PRICE[2], 0],             // a tier 2 passive and a tier 2 active: 8
+      [['extended_magazine', 'grit', 'extra_health'], 3 * PRICE[1], 0], // three tier 1s: 6
+      [['glass_cannon'], PRICE[4], 0],                                   // one tier 4: 16
     ];
     for (const [items, worth, bonus] of cases) {
       const c = readyClient();
@@ -166,8 +176,8 @@ describe('souls economy', () => {
     }
   });
 
-  it('net worth counts the hand at list price too: a side holding 8 souls of cards is 8 ahead', () => {
-    for (const [cards, bonus] of [[['toxic_bullets'], 1], [['extended_magazine', 'extra_health'], 0], [['glass_cannon'], 2]] as [CardId[], number][]) {
+  it('net worth counts the hand\'s items at list price too (a hero card at nothing): a side holding 8 souls of cards is 8 ahead', () => {
+    for (const [cards, bonus] of [[['toxic_bullets'], 0], [['extended_magazine', 'extra_health', 'hero_kelvin'], 0], [['glass_cannon'], 0]] as [CardId[], number][]) {
       const c = readyClient();
       c.moves.endTurn?.(); // → P1
       const s = c.getState()!;
@@ -183,52 +193,35 @@ describe('souls economy', () => {
     }
   });
 
-  it('a kill pays the victim\'s level + 1 to its opponent', () => {
+  it('a kill pays no souls: knockouts push the map and give exp, nothing more', () => {
     const G = freshG();
     const victim = G.players['1'].active!;
     victim.level = 2;
-    const killerPid: PlayerID = '0';
-    const before = G.players[killerPid].souls;
+    const before = G.players['0'].souls;
     // Drop victim to 0 HP with pure damage then reap
     damageUnit(G, victim, victim.hp + 99, 'pure');
     reapDead(G, G.players['1']);
-    expect(G.players[killerPid].souls).toBe(before + 3);
+    expect(G.players['0'].souls).toBe(before);
   });
 
-  it('a kill of the strictly richest hero on the board pays 2 more; a tie for richest does not', () => {
-    const gear = (G: GameState, pid: PlayerID, hero: 'active' | 0, id: string) => {
-      giveItem(G, hero === 'active' ? G.players[pid].active! : G.players[pid].bench[hero]!, id);
-    };
-    const kill = (G: GameState) => {
-      const victim = G.players['1'].active!;
-      damageUnit(G, victim, victim.hp + 99, 'pure');
-      reapDead(G, G.players['1']);
-      return G.players['0'].souls;
-    };
-    const richest = freshG();
-    gear(richest, '1', 'active', 'extended_magazine'); // 2 souls of gear, nobody else wears any
-    giveCard(richest, '0', 'glass_cannon'); // a card in a hand is no hero's: it makes nobody richer
-    expect(kill(richest)).toBe(1 + 1 + 2);
-    const tied = freshG();
-    gear(tied, '1', 'active', 'extended_magazine');
-    gear(tied, '0', 0, 'extra_spirit'); // a hero on the other side wears as much
-    expect(kill(tied)).toBe(1 + 1);
-    const tiedByAnActive = freshG();
-    gear(tiedByAnActive, '1', 'active', 'extended_magazine');
-    gear(tiedByAnActive, '0', 0, 'healing_rite'); // an active item counts at its price too
-    expect(kill(tiedByAnActive)).toBe(1 + 1);
-  });
-
-  it('no bounty when an ally hero is reaped on the killer side (own-board death credits the opponent, not you)', () => {
+  it('a kill of the richest hero on the board pays no souls either', () => {
     const G = freshG();
-    // Killing OWN active credits opponent — verify it does not credit self.
+    giveItem(G, G.players['1'].active!, 'glass_cannon');
+    const victim = G.players['1'].active!;
+    damageUnit(G, victim, victim.hp + 99, 'pure');
+    reapDead(G, G.players['1']);
+    expect(G.players['0'].souls).toBe(0);
+  });
+
+  it('a hero reaped on either side pays nobody', () => {
+    const G = freshG();
     const victim = G.players['0'].active!;
     const selfBefore = G.players['0'].souls;
     const oppBefore = G.players['1'].souls;
     damageUnit(G, victim, victim.hp + 99, 'pure');
     reapDead(G, G.players['0']);
-    expect(G.players['0'].souls).toBe(selfBefore); // self unchanged
-    expect(G.players['1'].souls).toBe(oppBefore + 2); // opp gets bounty (level 1 + 1)
+    expect(G.players['0'].souls).toBe(selfBefore);
+    expect(G.players['1'].souls).toBe(oppBefore);
   });
 
   it('retreat (swap Active with bench hero) costs RETREAT_COST (1 soul), once a turn', () => {
@@ -269,7 +262,7 @@ describe('souls economy', () => {
   });
 
   it('bench-to-bench reorganization is free', () => {
-    const c = readyClient(); // past the shop: a swap is an act-step move
+    const c = readyClient();
     const before = snap(c).G.players['0'];
     const [first, second] = [before.bench[0]!.iid, before.bench[1]!.iid];
     (c.moves as any).moveHero(1, 2); // bench 1 <-> bench 2
@@ -285,7 +278,8 @@ describe('souls economy', () => {
     G.players['1'].souls = 3;
     G.players['1'].active!.hp = 1;     // critical
     G.players['1'].active!.hpMax = 10;
-    const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
+    G.turnNumber = 3; // P1's turn (it moves first)
+    const ctx: any = { currentPlayer: '1', turn: 3, numPlayers: 2 };
     const moves = enumerateAIMoves(G, ctx, false);
     // At least one moveHero option from bench (1|2|3) into slot 0 should appear.
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
@@ -302,7 +296,8 @@ describe('souls economy', () => {
     // Active is full HP, no debuffs, and nobody on the bench hits harder — no reason to
     // retreat. The engine allows it, so it is listed.
     for (const b of G.players['1'].bench) if (b) b.atkMod = (CARDS_BY_ID['hero_abrams'] as { atk: number }).atk - (CARDS_BY_ID[b.cardId] as { atk: number }).atk;
-    const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
+    G.turnNumber = 3; // P1's turn (it moves first)
+    const ctx: any = { currentPlayer: '1', turn: 3, numPlayers: 2 };
     for (const lookahead of [false, true]) {
       const moves = enumerateAIMoves(G, ctx, lookahead);
       const isRetreat = (m: { move: string; args: any[] }) => m.move === 'moveHero' && m.args[1] === 0;
@@ -321,7 +316,8 @@ describe('souls economy', () => {
     G.players['1'].souls = 3;
     // Stunned active — dead weight even if HP is fine.
     G.players['1'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 });
-    const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
+    G.turnNumber = 3; // P1's turn (it moves first)
+    const ctx: any = { currentPlayer: '1', turn: 3, numPlayers: 2 };
     const moves = enumerateAIMoves(G, ctx, false);
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.length).toBeGreaterThan(0);
@@ -332,7 +328,8 @@ describe('souls economy', () => {
     const G = freshG();
     G.players['1'].souls = 3;
     G.players['1'].active!.statuses.push({ id: 'sleep', value: 1, duration: 2 });
-    const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
+    G.turnNumber = 3; // P1's turn (it moves first)
+    const ctx: any = { currentPlayer: '1', turn: 3, numPlayers: 2 };
     const retreats = enumerateAIMoves(G, ctx, false).filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.length).toBeGreaterThan(0);
     expect(Math.max(...retreats.map((m) => m.score))).toBeGreaterThanOrEqual(28);
@@ -346,7 +343,8 @@ describe('souls economy', () => {
     G.players['1'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 }); // wants out
     G.players['1'].bench[0]!.respawnTurnsLeft = 2;                // slot 1: a corpse
     G.players['1'].bench[1] = makeHero('hero_rem', '1', 'bench', 2); // slot 2: bench-only
-    const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
+    G.turnNumber = 3; // P1's turn (it moves first)
+    const ctx: any = { currentPlayer: '1', turn: 3, numPlayers: 2 };
     const retreats = enumerateAIMoves(G, ctx, false).filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.map((m) => m.args[0])).toEqual([3]);
   });
@@ -357,7 +355,8 @@ describe('souls economy', () => {
     G.players['1'].souls = RETREAT_COST - 1; // below RETREAT_COST
     G.players['1'].active!.hp = 1;     // would want to retreat
     G.players['1'].active!.hpMax = 10;
-    const ctx: any = { currentPlayer: '1', turn: 2, numPlayers: 2 };
+    G.turnNumber = 3; // P1's turn (it moves first)
+    const ctx: any = { currentPlayer: '1', turn: 3, numPlayers: 2 };
     const moves = enumerateAIMoves(G, ctx, false);
     const retreats = moves.filter((m) => m.move === 'moveHero' && m.args[1] === 0);
     expect(retreats.length).toBe(0);

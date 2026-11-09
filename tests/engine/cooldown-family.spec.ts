@@ -1,19 +1,25 @@
 /**
- * The Cooldown family (canon Compress → Superior → Transcendent Cooldown): the
- * `cooldownCut` hook. The bearer's ultimate waits fewer own turns after use —
- * Compress and Superior 1 fewer, Transcendent 2 — and, from Superior up, so do
- * the active items it wears, 1 fewer; never under 1. A skill's cooldown is its
- * own. (Before the redesign these items drew cards on skill use: that rule is
- * gone with the hand.)
+ * The Cooldown family (canon Compress → Superior → Transcendent Cooldown) is
+ * the deck's draw engine now (docs/deck-plan.md): three active items, worn
+ * and cast like any item spell (the bearer's one ability of the turn, free to
+ * cast), each a draw and then a discard from anywhere in the hand — 2 and 1, 4
+ * and 2, 8 and 4 — and each waits 2 own turns after use at every tier. They no
+ * longer cut cooldowns: worn, they leave the bearer's ultimate, its skills and
+ * its other items on their own timers. Each step doubles the price and the
+ * cards kept, and each is built from the one before (an evolve costs the
+ * difference). (The draw and the discard in detail: hand.spec.)
  *
  * Board (freshReadyGame): P0's Active is made a Level 2 Viscous — The Cube is
  * a skill on a 2-turn cooldown, and her ultimate is unlocked.
  */
 import { describe, it, expect } from 'vitest';
+import { itemCard } from '@/cards';
+import { upgradesOf } from '@/cards/decks';
+import { getAbility } from '@/abilities';
 import { INVALID, perform } from '@/engine/engine';
-import { activeCooldown, cooldownCut, itemCooldown } from '@/engine/query';
-import { ULT_COOLDOWN } from '@/engine/constants';
-import { freshReadyGame, giveItem, makeHero, useItem } from './_helpers';
+import { activeCooldown, cooldownCut, itemCooldown, itemPrice } from '@/engine/query';
+import { PRICE, ULT_COOLDOWN } from '@/engine/constants';
+import { freshReadyGame, giveItem, makeHero, stackDeck, useItem } from './_helpers';
 
 /** P0's Active made a Level 2 Viscous wearing `gear`. */
 function viscous(...gear: string[]) {
@@ -28,49 +34,60 @@ function viscous(...gear: string[]) {
 const COMPRESS = 'improved_cooldown';
 const SUPERIOR = 'superior_cooldown';
 const TRANSCENDENT = 'transcendent_cooldown';
+const FAMILY = [[COMPRESS, 2, 2, 1], [SUPERIOR, 3, 4, 2], [TRANSCENDENT, 4, 8, 4]] as const;
 
-describe('The Cooldown family', () => {
-  it('reads as the cooldownCut hook: Compress ult −1, Superior ult and items −1, Transcendent ult −2 and items −1', () => {
-    const cuts = (gear: string[]) => {
-      const { hero } = viscous(...gear);
-      return [cooldownCut(hero, 'ult'), cooldownCut(hero, 'item')];
-    };
-    expect(cuts([])).toEqual([0, 0]);
-    expect(cuts([COMPRESS])).toEqual([1, 0]);
-    expect(cuts([SUPERIOR])).toEqual([1, 1]);
-    expect(cuts([TRANSCENDENT])).toEqual([2, 1]);
+describe('The Cooldown family is the draw engine', () => {
+  it('three Spirit actives, tiers 2, 3 and 4, each built from the one before, each waiting 2 turns', () => {
+    for (const [id, tier, draw, discard] of FAMILY) {
+      const card = itemCard(id)!;
+      expect(card, id).toMatchObject({ type: 'spell', slot: 'spirit', tier, cooldown: 2 });
+      expect(getAbility(card.type === 'spell' ? card.abilities[0] : '')?.draw, id).toEqual({ cards: draw, discard });
+      expect(card.text, id).toContain(`Draw ${draw} cards, then discard ${discard}`);
+    }
+    expect(itemCard(SUPERIOR)!.upgradesFrom).toBe(COMPRESS);
+    expect(itemCard(TRANSCENDENT)!.upgradesFrom).toBe(SUPERIOR);
+    expect(upgradesOf(COMPRESS)).toEqual([SUPERIOR]);
   });
 
-  it("cuts the bearer's ultimate cooldown: 3, then 2 with Compress or Superior, 1 with Transcendent", () => {
-    for (const [gear, want] of [[[], ULT_COOLDOWN], [[COMPRESS], 2], [[SUPERIOR], 2], [[TRANSCENDENT], 1]] as const) {
-      const { G, hero } = viscous(...gear);
-      expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, skillId: 'eff_ult_viscous' }), gear.join()).not.toBe(INVALID);
-      expect(hero.cooldowns?.eff_ult_viscous, gear.join() || 'none').toBe(want);
+  it('each step doubles the price and the cards kept: a soul buys the same at every tier', () => {
+    const kept = FAMILY.map(([, , draw, discard]) => draw - discard);
+    const price = FAMILY.map(([id]) => itemPrice(id));
+    expect(price).toEqual([PRICE[2], PRICE[3], PRICE[4]]);
+    expect(kept).toEqual([1, 2, 4]);
+    for (let i = 0; i < 3; i++) expect(price[i] / kept[i]).toBe(PRICE[2]);
+  });
+
+  it('cast from the bearer\'s sheet: free, the bearer\'s ability for the turn, then 2 own turns of cooldown', () => {
+    for (const [id, , draw, discard] of FAMILY) {
+      const { G, hero } = viscous();
+      stackDeck(G, '0', Array.from({ length: 8 }, () => 'grit'));
+      G.players['0'].souls = 0;
+      const item = useItem(G, '0', id, undefined, hero);
+      expect(hero.skillUsedThisTurn, id).toBe(true);
+      expect(itemCooldown(item), id).toBe(2);
+      expect(G.players['0'].souls, id).toBe(0);
+      expect(G.players['0'].hand, id).toHaveLength(draw);
+      expect(G.pendingDiscard, id).toMatchObject({ pid: '0', count: discard, cardId: id });
     }
   });
 
-  it("from Superior up, cuts the bearer's active items by 1: by tier, and the cooldown an item starts when used", () => {
-    const byTier = (gear: string[]) => {
-      const { hero } = viscous(...gear);
-      return ([1, 2, 3, 4] as const).map((tier) => activeCooldown(hero, tier));
-    };
-    expect(byTier([])).toEqual([2, 2, 3, 3]);
-    expect(byTier([COMPRESS])).toEqual([2, 2, 3, 3]);
-    expect(byTier([SUPERIOR])).toEqual([1, 1, 2, 2]);
-    expect(byTier([TRANSCENDENT])).toEqual([1, 1, 2, 2]);
-
+  it('no longer cuts a cooldown: worn, they leave the ultimate, the skills and the other items on their own timers', () => {
+    for (const gear of [[], [COMPRESS], [SUPERIOR], [TRANSCENDENT], [TRANSCENDENT, COMPRESS, SUPERIOR]]) {
+      const { G, hero } = viscous(...gear);
+      expect([cooldownCut(hero, 'ult'), cooldownCut(hero, 'item')], gear.join() || 'none').toEqual([0, 0]);
+      expect(([1, 2, 3, 4] as const).map((tier) => activeCooldown(hero, tier)), gear.join()).toEqual([2, 2, 3, 3]);
+      expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, skillId: 'eff_ult_viscous' }), gear.join()).not.toBe(INVALID);
+      expect(hero.cooldowns?.eff_ult_viscous, gear.join() || 'none').toBe(ULT_COOLDOWN);
+    }
     const { G, hero } = viscous(SUPERIOR);
     const decay = useItem(G, '0', 'decay', G.players['1'].active!.iid, hero); // tier 3
-    expect(itemCooldown(decay)).toBe(2);
+    expect(itemCooldown(decay)).toBe(3);
   });
 
-  it('never takes a cooldown under 1, however many are worn (moved in from teammates)', () => {
-    const { G, hero } = viscous(TRANSCENDENT, COMPRESS, SUPERIOR);
-    expect(cooldownCut(hero, 'ult')).toBe(4);
-    expect(activeCooldown(hero, 1)).toBe(1);
-    expect(activeCooldown(hero, 4)).toBe(1);
-    expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, skillId: 'eff_ult_viscous' })).not.toBe(INVALID);
-    expect(hero.cooldowns?.eff_ult_viscous).toBe(1);
+  it('a card\'s own cooldown is never taken under 1', () => {
+    const { hero } = viscous();
+    expect(activeCooldown(hero, 3, 2)).toBe(2);
+    expect(activeCooldown(hero, 4, 0)).toBe(1);
   });
 
   it("leaves a skill's cooldown alone: The Cube still waits 2", () => {

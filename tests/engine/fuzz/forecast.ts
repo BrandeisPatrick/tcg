@@ -147,7 +147,11 @@ export function probeForecast(snap: Snapshot, info: StepInfo, hits: Hit[], mix: 
     }
   }
   if (!lethal && top && top.score >= 1_000_000) {
-    hits.push({ ...base, signature: signatureOf('lethal-false-positive', 'attack', false), tags, message: 'enumerateAIMoves flags the attack as lethal but the clone does not end the game' });
+    // An attack the AI names at another hero (a hero with reach, or the Mid-Boss) may win
+    // where the bare one does not: it is judged on its own clone.
+    const own = top.move === 'attack' && top.args.length ? callMove(G, ctx, pid, 'attack', top.args) : undefined;
+    const ownWins = own?.outcome === 'accepted' && (DeadlockGame.endIf?.({ G: own.G } as never) as { winner?: PlayerID } | undefined)?.winner === pid;
+    if (!ownWins) hits.push({ ...base, signature: signatureOf('lethal-false-positive', 'attack', false), tags, message: `enumerateAIMoves flags ${top.move}(${JSON.stringify(top.args)}) as lethal but the clone does not end the game` });
   }
   return 1;
 }
