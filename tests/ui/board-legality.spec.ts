@@ -315,10 +315,14 @@ describe('the hand\'s plays are the engine\'s answer', () => {
     G.pendingDiscard = undefined;
     G.players[ME].active = null;
     G.pendingActive = ME;
-    const rem = giveCard(G, ME, 'hero_rem');
-    const kelvin = giveCard(G, ME, 'hero_kelvin');
+    // The opening's candidates are the drafted heroes still in the deck, not the hand.
+    const intoDeck = (c: CardInstance) => { G.players[ME].hand = G.players[ME].hand.filter((x) => x !== c); c.zone = 'deck'; G.players[ME].deck.push(c); return c; };
+    const rem = intoDeck(giveCard(G, ME, 'hero_rem'));
+    const kelvin = intoDeck(giveCard(G, ME, 'hero_kelvin'));
+    const grit = intoDeck(giveCard(G, ME, 'grit'));
     expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: rem.iid })).toEqual({ code: 'benchOnly', text: 'That hero can only fight from the bench' });
-    expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: card.iid })).toEqual({ code: 'notHero', text: 'Choose a hero' });
+    expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: grit.iid })).toEqual({ code: 'notHero', text: 'Choose a hero' });
+    expect(actionRefusal(G, ME, { type: 'chooseActive', cardIid: card.iid })).toEqual({ code: 'notInDeck', text: 'That hero is not one of yours' });
     expect(actionRefusal(G, ME, { type: 'attack' })).toEqual({ code: 'activeOwed', text: 'Put your first Active in the lane' });
     expect(actionRefusal(G, '1', { type: 'chooseActive', cardIid: kelvin.iid })).toBeNull(); // from either seat
   });
@@ -495,8 +499,8 @@ describe('every block code has words', () => {
   const attack: Record<AttackBlock, true> = { turn1: true, used: true, noActive: true, cannot: true, noTarget: true, target: true };
   const activate: Record<ActivateBlock, true> = { noItem: true, passive: true, actOver: true, down: true, used: true, status: true, charges: true, cooldown: true, target: true };
   const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, souls: true, upgrade: true };
-  const place: Record<PlaceBlock, true> = { notYourTurn: true, notInHand: true, notHero: true, occupied: true, benchOnly: true, benchFull: true };
-  const choose: Record<ChooseActiveBlock, true> = { notOwed: true, notInHand: true, notHero: true, benchOnly: true };
+  const place: Record<PlaceBlock, true> = { notYourTurn: true, notInHand: true, notHero: true, occupied: true, benchOnly: true, benchFull: true, badSlot: true, slotTaken: true };
+  const choose: Record<ChooseActiveBlock, true> = { notOwed: true, notInDeck: true, notHero: true, benchOnly: true };
   const discard: Record<DiscardBlock, true> = { notOwed: true, none: true, tooMany: true, repeat: true, notInHand: true };
   const move: Record<MoveBlock, true> = { same: true, actOver: true, empty: true, benchOnly: true, down: true, rooted: true, retreated: true, souls: true, illegal: true };
   const promote: Record<PromoteBlock, true> = { notOnBench: true, notOwed: true, down: true, benchOnly: true };

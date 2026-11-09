@@ -230,28 +230,47 @@ export function RowPlaque({ children }: { children: ReactNode }) {
  * An empty slot drawn as a dashed ink outline on the paper, with the dial
  * mark in the owner's colour. `accent` follows the owner (poster.rival for
  * the rival, poster.you for you); `label` prints under the mark (Active
- * row).
+ * row). `lit`, it is a spot a hero picked up from the hand may be put: the
+ * outline glows the targeting green and the well is a button (`onTap` places
+ * the hero there; `name` is its accessible name, "Bench slot 2").
  *
  * The ref lands on the outline itself. BenchRow and ActiveSlot render a well
  * as a direct child of `AnimatePresence mode="popLayout"`, which hands every
  * direct child a ref so it can measure an exiting one and lift it out of the
  * flow — keep it a direct child there, a plain wrapper would drop the ref.
  */
-export const SlotWell = forwardRef<HTMLDivElement, { accent: string; label?: string }>(function SlotWell({ accent, label }, ref) {
+export const SlotWell = forwardRef<HTMLDivElement, {
+  accent: string;
+  label?: string;
+  lit?: boolean;
+  name?: string;
+  onTap?: () => void;
+}>(function SlotWell({ accent, label, lit = false, name, onTap }, ref) {
   return (
-    <div ref={ref} style={{
-      position: 'relative',
-      width: '100%',
-      height: '100%',
-      borderRadius: 10,
-      border: `1.5px dashed ${poster.inkFaint}`,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      overflow: 'hidden',
-    }}>
+    <div
+      ref={ref}
+      role={lit ? 'button' : undefined}
+      tabIndex={lit ? 0 : undefined}
+      aria-label={lit ? name : undefined}
+      onClick={lit ? onTap : undefined}
+      onKeyDown={lit ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTap?.(); } } : undefined}
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        borderRadius: 10,
+        border: `1.5px dashed ${lit ? poster.target : poster.inkFaint}`,
+        boxShadow: lit ? `0 0 0 2px ${poster.target}, 0 0 18px 2px rgba(98, 196, 98, 0.45)` : undefined,
+        background: lit ? 'rgba(98, 196, 98, 0.12)' : undefined,
+        cursor: lit ? 'pointer' : undefined,
+        transition: 'border-color 160ms ease, box-shadow 160ms ease, background 160ms ease',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        overflow: 'hidden',
+      }}>
       {/* Dial mark — same mark as the card backs, in the owner's ink. */}
       <svg viewBox="0 0 40 40" width={40} height={40} fill="none" stroke={accent} strokeWidth="1.4" style={{ opacity: 0.35 }}>
         <circle cx="20" cy="20" r="15.5" />
@@ -277,8 +296,8 @@ export const SlotWell = forwardRef<HTMLDivElement, { accent: string; label?: str
           letterSpacing: '0.2em',
           textTransform: 'uppercase',
           lineHeight: 1.2,
-          color: accent,
-          opacity: 0.65,
+          color: lit ? poster.ink : accent,
+          opacity: lit ? 0.9 : 0.65,
         }}>
           {label}
         </span>

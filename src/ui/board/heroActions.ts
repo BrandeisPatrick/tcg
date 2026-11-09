@@ -164,6 +164,8 @@ export function placeBlockReason(block: PlaceBlock): string {
     case 'occupied': return 'Your Active slot is taken';
     case 'benchOnly': return 'That hero can only fight from the bench';
     case 'benchFull': return 'Your bench is full';
+    case 'badSlot': return 'That is no bench slot';
+    case 'slotTaken': return 'That slot is taken';
   }
 }
 
@@ -171,7 +173,7 @@ export function placeBlockReason(block: PlaceBlock): string {
 export function chooseActiveBlockReason(block: ChooseActiveBlock): string {
   switch (block) {
     case 'notOwed': return 'Your Active is already in the lane';
-    case 'notInHand': return 'That card is not in your hand';
+    case 'notInDeck': return 'That hero is not one of yours';
     case 'notHero': return 'Choose a hero';
     case 'benchOnly': return 'That hero can only fight from the bench';
   }

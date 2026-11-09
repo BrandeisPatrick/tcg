@@ -16,6 +16,10 @@ interface Props {
   /** Phones: the hand row a bottom-docked banner sits above. The phone hand
    *  is a full-size strip, taller than the fixed 220px dock allows for. */
   dockAbove?: RefObject<HTMLElement>;
+  /** The chip's words, when not the filter's ("Spot" for a hero picked up). */
+  chip?: string;
+  /** The trailing hint, when not "tap or drag onto a glowing target". */
+  hint?: string;
 }
 
 /** The System menu's gear: fixed top 12 / right 12, 40px across, drawn above
@@ -36,7 +40,7 @@ const TARGET_LABELS: Record<TargetFilter, string> = {
   anyBoard: 'Any Hero',
 };
 
-export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0, dockAbove }: Props) {
+export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0, dockAbove, chip, hint }: Props) {
   // Anchor the banner AWAY from the rows it asks the player to tap: ally
   // targeting docks under the rival's hand (your rows stay clear), enemy
   // targeting docks above your hand (the rival's rows stay clear).
@@ -109,7 +113,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
         whiteSpace: 'nowrap',
       }}>
         <span aria-hidden>◎</span>
-        <span>{TARGET_LABELS[filter]}</span>
+        <span>{chip ?? TARGET_LABELS[filter]}</span>
       </span>
 
       <span style={{
@@ -128,7 +132,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
           color: poster.cream,
         }}>{title}</span>
         {desc ? <> — {desc}</> : null}
-        <span style={{ color: poster.creamFaint }}> · tap or drag onto a glowing target</span>
+        <span style={{ color: poster.creamFaint }}> · {hint ?? 'tap or drag onto a glowing target'}</span>
       </span>
 
       {/* Cancel — the red sticker, stuck to the plate's right end. */}

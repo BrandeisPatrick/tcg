@@ -32,7 +32,10 @@ import { poster } from '../poster';
  * later in the match gets the plain quick fade, and nothing replays.
  *
  * Under calm motion nothing travels (the tiles fade up as they always have),
- * but the stickers still name the sides.
+ * but the stickers still name the sides. A drafted match has no deal-in at
+ * all (`enabled` false): its heroes reach the board by the deck motion — the
+ * Actives fly to the lane once chosen, the rest are drawn and placed — so
+ * nothing here may land a tile early.
  */
 
 /** Where a tile sits: its side's Active, or a bench slot left to right. */
@@ -66,12 +69,13 @@ interface Deal { me: PlayerID; calm: boolean; mobile: boolean; t0: number }
 
 const DealContext = createContext<Deal | null>(null);
 
-/** Mount around the board once it shows: the deal starts with the mount. */
-export function BoardIntro({ me, children }: { me: PlayerID; children: ReactNode }) {
+/** Mount around the board once it shows: the deal starts with the mount.
+ *  `enabled` false: no deal, no stickers (a drafted match). */
+export function BoardIntro({ me, enabled = true, children }: { me: PlayerID; enabled?: boolean; children: ReactNode }) {
   const calm = useFxCalm();
   const { isMobile } = useViewport();
   const [t0] = useState(() => performance.now());
-  const deal = useMemo(() => ({ me, calm, mobile: isMobile, t0 }), [me, calm, isMobile, t0]);
+  const deal = useMemo(() => (enabled ? { me, calm, mobile: isMobile, t0 } : null), [me, calm, isMobile, t0, enabled]);
   return <DealContext.Provider value={deal}>{children}</DealContext.Provider>;
 }
 

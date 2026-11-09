@@ -12,6 +12,7 @@ import { RESPAWN_TURNS } from '@/engine/constants';
 import { humanSeat } from './seat';
 import { Log } from './side-panel/Log';
 import { TargetingOverlay } from './overlays/TargetingOverlay';
+import { OpeningPicker } from './overlays/OpeningPicker';
 import { CardPreview } from './overlays/CardPreview';
 import { LiveScaleContext, boardLiveSpirit } from './card/liveScale';
 import { plainText } from './card/scaling';
@@ -41,7 +42,7 @@ import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attack
 import { DEFAULT_AI_STRENGTH, enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
 import {
-  activateBlocked, activateTargets, attackBlocked, placeHeroBlocked, playBlocked, playCost, playTargets, retreatCost, skillBlocked,
+  activateBlocked, activateTargets, attackBlocked, openingCandidates, placeHeroBlocked, playBlocked, playCost, playTargets, retreatCost, skillBlocked,
   skillTargets,
 } from '@/engine/legality';
 import type { Action } from '@/engine/engine';
@@ -56,6 +57,7 @@ import { FxTimingContext, type FxHoldResolver } from './effects/fx/FxTimingConte
 import { buildFxTimeline, freshBatch } from './effects/fx/fxTimeline';
 import { FxStageProvider } from './effects/fx/stage/FxStage';
 import { DeckMotionLayer, DeckMotionProvider, useDeckMotion } from './motion';
+import type { Rect } from './effects/fx/geometry';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
@@ -73,7 +75,7 @@ import { shake } from './shop/shake';
 import { useTurnBeat } from './board/turnBeat';
 import { IncomeTick } from './board/IncomeTick';
 import type { PendingPlay } from './helpers';
-import { getMatchConfig } from '@/storage/matchConfig';
+import { getMatchConfig, scriptedSetup } from '@/storage/matchConfig';
 import { markLessonDone } from '@/storage/playerData';
 import { LESSONS, lessonById, nextLesson } from '@/tutorial/lessons';
 import { finishStoryBattle } from '@/story/storyRun';
@@ -83,6 +85,9 @@ import { useMatchNav } from './hooks/matchNav';
 
 // Animation / pacing constants.
 const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
+/** The rival's placement is watched: its next move waits this long past the
+ *  hero's flight landing (nothing under reduced motion, where nothing flies). */
+const PLACE_SETTLE_MS = 500;
 /** The longest the board stays up after the match is decided, so the blow
  *  that decided it can be seen landing before the result sheet takes over. */
 const FINAL_BLOW_MAX_MS = 2800;
@@ -114,6 +119,10 @@ export function Board(props: BoardProps<GameState>) {
   // config is fixed for the life of the mount.
   const lesson = useMemo(() => lessonById(getMatchConfig().lesson), []);
   const isTutorial = !!lesson;
+  // A scripted match (a Story fight, a lesson) opens with its rosters dealt
+  // onto the board (BoardIntro); a drafted one has no deal-in — its Actives
+  // fly to the lane once chosen, the rest are drawn and placed.
+  const scripted = useMemo(() => !!scriptedSetup(), []);
   // Winning the lesson counts as having had it, even if the player dismissed
   // the coach on the first step. (The coach marks it too, when its script
   // runs out — whichever happens first.)
@@ -282,6 +291,10 @@ export function Board(props: BoardProps<GameState>) {
   }, [isMobile]);
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
+  /** Where a hero's card was as it was tapped to be placed (the hand card,
+   *  the opening picker's card), by iid: the motion layer flies it from
+   *  there once the card itself has gone. */
+  const placeOrigins = useRef<Map<string, Rect>>(new Map());
   // The hand row (strip + phone controls) — the targeting banner docks above
   // it on phones, and the sticker sits above it.
   const handRowRef = useRef<HTMLDivElement>(null);
@@ -498,6 +511,10 @@ export function Board(props: BoardProps<GameState>) {
     || (G.pendingDiscard?.pid === me && !autoPlay)
     || (prompt?.pid === me && !autoPlay);
 
+  // The rival's placement is watched: a hero it put on the board flies to
+  // its slot, and its next move waits for the flight to land and settle.
+  const aiWaitMs = AI_THINK_MS + Math.max(0, deckMotion.rivalPlaced + PLACE_SETTLE_MS - AI_THINK_MS);
+
   // AI loop: enumerate, play the best move, end the turn when that is best.
   useEffect(() => {
     if (aiHolds) return;
@@ -528,9 +545,9 @@ export function Board(props: BoardProps<GameState>) {
       } catch {
         endTurn();
       }
-    }, AI_THINK_MS);
+    }, aiWaitMs);
     return () => clearTimeout(t);
-  }, [aiHolds, ctx, G, me, moves, startAttack, endTurn]);
+  }, [aiHolds, aiWaitMs, ctx, G, me, moves, startAttack, endTurn]);
 
   // AI watchdog. The loop above re-arms on state changes — but a dispatched
   // move the engine rejects (INVALID_MOVE) leaves G untouched, so nothing
@@ -540,9 +557,9 @@ export function Board(props: BoardProps<GameState>) {
   // clock on every state change.)
   useEffect(() => {
     if (aiHolds) return;
-    const t = setTimeout(() => { endTurn(); }, AI_THINK_MS * 6);
+    const t = setTimeout(() => { endTurn(); }, aiWaitMs * 6);
     return () => clearTimeout(t);
-  }, [aiHolds, ctx, G, endTurn]);
+  }, [aiHolds, aiWaitMs, ctx, G, endTurn]);
 
   // Action reveal driver. When the engine sets G.action with state='begin'
   // (after playCard / useSkill), schedule completeAction so the animation
@@ -631,23 +648,60 @@ export function Board(props: BoardProps<GameState>) {
     }) : 'No hero can take it now';
   }
 
-  /** Put the hero `c` from the hand on the board: into the lane when it is
-   *  empty, else onto the bench. Free. */
-  function placeFromHand(c: CardInstance) {
-    const toActive = placeHeroBlocked(G, me, c.iid, true) === null;
-    const no = actionRefusal(G, me, { type: 'placeHero', cardIid: c.iid, toActive });
-    if (no) { showNotice(no.text, true); return; }
-    if (toActive) moves.placeHero(c.iid, true);
-    else moves.placeHero(c.iid);
+  /** The slots the hero picked up from the hand may be put in: 0 the empty
+   *  lane, 1-3 the free bench slots (the engine's answer). Empty while no
+   *  hero is picked up. */
+  const openSlots = useMemo(() => {
+    const out = new Set<number>();
+    if (pending?.kind !== 'placeHero') return out;
+    if (placeHeroBlocked(G, me, pending.iid, true) === null) out.add(0);
+    for (const slot of [1, 2, 3] as const) if (placeHeroBlocked(G, me, pending.iid, false, slot) === null) out.add(slot);
+    return out;
+  }, [G, me, pending]);
+
+  /** Pick the hero `c` up from the hand: it lifts, the spots it may go in
+   *  light, and a tap on one of them places it there. Tapped again it goes
+   *  back down. */
+  function pickUpHero(c: CardInstance) {
+    if (pending?.kind === 'placeHero' && pending.iid === c.iid) { setPending(null); return; }
+    if (placeHeroBlocked(G, me, c.iid) !== null && placeHeroBlocked(G, me, c.iid, true) !== null) { showNotice(stuckReason(c), true); return; }
+    const name = CARDS_BY_ID[c.cardId]?.name ?? 'Hero';
+    setPending({ kind: 'placeHero', iid: c.iid, title: name, desc: `Choose a spot for ${name}`, filter: 'allyBench' });
   }
 
-  /** A tap on a card in the hand. A hero goes on the board at once (the lane
-   *  when it is empty, else the bench). An item is armed: the heroes it may go
-   *  on glow, and the next tap on one of them puts it on for its price. */
+  /** The tap on a lit spot: the hero picked up goes there — the lane (0) or
+   *  the bench slot named — once the engine says it may. The tap is the
+   *  confirmation. The card's box is kept for its flight. */
+  function placeAt(slot: 0 | 1 | 2 | 3) {
+    if (pending?.kind !== 'placeHero' || !isMyTurn || actionLocked) return;
+    const iid = pending.iid;
+    const action = slot === 0 ? { type: 'placeHero' as const, cardIid: iid, toActive: true } : { type: 'placeHero' as const, cardIid: iid, slot };
+    const no = actionRefusal(G, me, action);
+    if (no) { showNotice(no.text, true); return; }
+    const el = handCardRefs.current.get(iid);
+    if (el) { const b = el.getBoundingClientRect(); placeOrigins.current.set(iid, { left: b.left, top: b.top, width: b.width, height: b.height }); }
+    setPending(null);
+    if (slot === 0) moves.placeHero(iid, true);
+    else moves.placeHero(iid, false, slot);
+  }
+
+  /** The opening's choice (OpeningPicker): the hero takes the lane, flying
+   *  from the picker's card. */
+  function chooseFirstActive(iid: string, from: Rect | null) {
+    const no = actionRefusal(G, me, { type: 'chooseActive', cardIid: iid });
+    if (no) { showNotice(no.text, true); return; }
+    if (from) placeOrigins.current.set(iid, from);
+    moves.chooseActive(iid);
+  }
+
+  /** A tap on a card in the hand. A hero is picked up: the free slots of
+   *  your board light, and the next tap on one of them places it there (free).
+   *  An item is armed: the heroes it may go on glow, and the next tap on one
+   *  of them puts it on for its price. */
   function onTapCardInHand(c: CardInstance) {
     if (!isMyTurn || actionLocked) return;
     const data = CARDS_BY_ID[c.cardId];
-    if (data?.type === 'hero') { setPreview(null); placeFromHand(c); return; }
+    if (data?.type === 'hero') { setPreview(null); pickUpHero(c); return; }
     if (playTargets(G, me, c.iid).length === 0) { showNotice(stuckReason(c), true); return; }
     setPreview(null);
     const price = itemPrice(c.cardId);
@@ -901,7 +955,7 @@ export function Board(props: BoardProps<GameState>) {
       <DeckMotionProvider ticker={deckMotion.ticker}>
       <LiveScaleContext.Provider value={liveSpirit}>
       {/* The deal-in: the heroes are dealt onto the board as it first shows. */}
-      <BoardIntro me={me}>
+      <BoardIntro me={me} enabled={scripted}>
       <FxStageProvider density={isMobile ? 0.6 : 1}>
       <PosterBackdrop />
 
@@ -1062,6 +1116,8 @@ export function Board(props: BoardProps<GameState>) {
                 isTargetable={isTargetable}
                 registerSlotRef={registerSlotRef}
                 readyIids={readyIids}
+                laneOpen={openSlots.has(0)}
+                onTapLane={() => placeAt(0)}
               />
             </div>
 
@@ -1078,6 +1134,8 @@ export function Board(props: BoardProps<GameState>) {
                 isTargetable={isTargetable}
                 registerSlotRef={registerSlotRef}
                 readyIids={readyIids}
+                openSlots={openSlots}
+                onTapSlot={placeAt}
               />
             </div>
 
@@ -1157,6 +1215,8 @@ export function Board(props: BoardProps<GameState>) {
               title={pending.title}
               desc={pending.desc}
               filter={pending.filter}
+              chip={pending.kind === 'placeHero' ? 'Spot' : undefined}
+              hint={pending.kind === 'placeHero' ? 'tap a lit slot, or the card again to put it back' : undefined}
               onCancel={() => setPending(null)}
               // Desktop panel is an in-flow column the fixed banner can't see —
               // inset its centring so it tracks the visible board, not the
@@ -1265,16 +1325,15 @@ export function Board(props: BoardProps<GameState>) {
           {incomeShown && <IncomeTick key={`income-${G.turnNumber}`} G={G} me={me} rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0} />}
         </AnimatePresence>
 
-        {/* The match's opening: the heroes in your opening hand, one of which
-            takes the lane. Blocks the board until it is chosen. */}
+        {/* The match's opening: your four drafted heroes, one of which takes
+            the lane (the carousel). Blocks the board until it is chosen; the
+            rival's own choice is made, unseen, as yours is confirmed. */}
         <AnimatePresence>
           {G.pendingActive === me && pendingActiveShown === me && !autoPlay && (
-            <PromotionOverlay
+            <OpeningPicker
               key="opening"
-              opening
-              candidates={G.players[me].hand.filter((c) => CARDS_BY_ID[c.cardId]?.type === 'hero' && !(CARDS_BY_ID[c.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly)}
-              leavingName=""
-              onPick={(iid) => moves.chooseActive(iid)}
+              candidates={openingCandidates(G, me)}
+              onPick={chooseFirstActive}
             />
           )}
         </AnimatePresence>
@@ -1388,7 +1447,7 @@ export function Board(props: BoardProps<GameState>) {
         <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} action={G.action} />
 
         {/* The deck's motion — cards between the deck, the hand and the discard pile. */}
-        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} ticker={deckMotion.ticker} />
+        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} origins={placeOrigins.current} ticker={deckMotion.ticker} />
 
         {/* Feedback sticker — one ink label above the controls (red when it is
             a warning). Explains silent no-ops and confirms fire-and-forget
@@ -1439,7 +1498,7 @@ export function Board(props: BoardProps<GameState>) {
           targeting={!!pending}
           attacking={isMyTurn && !!combatPlan}
           sheetHero={heroDetail?.cardId ?? null}
-          choosing={!!upgradePick || G.pendingDiscard?.pid === me || G.pendingActive === me || prompt?.pid === me}
+          choosing={!!upgradePick || G.pendingDiscard?.pid === me || G.pendingActive === me || prompt?.pid === me || pending?.kind === 'placeHero'}
           lesson={lesson}
           onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
           onLessons={matchNav ? matchNav.toLessons : undefined}

@@ -21,6 +21,8 @@ import type { PendingPlay } from '../helpers';
 export function isValidTarget(G: GameState, me: PlayerID, pending: PendingPlay | null, card: CardInstance): boolean {
   if (!pending) return false;
   if (pending.kind === 'playCard') return playBlocked(G, me, pending.iid, card.iid) === null;
+  // A hero picked up goes in an empty slot, never onto a hero: the wells light instead.
+  if (pending.kind === 'placeHero') return false;
   if (pending.kind === 'useSkill') {
     const hero = findCardOnBoard(G, pending.iid);
     return !!hero && hero.owner === me && skillBlocked(G, me, hero.card, card.iid, pending.skillId) === null;

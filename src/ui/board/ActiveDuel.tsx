@@ -23,13 +23,16 @@ interface Props {
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
   /** Your heroes that can still do something this turn (the ready glint). */
   readyIids?: ReadonlySet<string>;
+  /** Your empty lane may take the hero picked up from the hand (ActiveSlot). */
+  laneOpen?: boolean;
+  onTapLane?: () => void;
 }
 
 // The middle row of the 3-2-3 layout. Opp Active on the left, your Active on
 // the right, with a printed hairline down the centre carrying the turn compass.
 export function ActiveDuel({
   G, me, opp, isMyTurn, turn, phase,
-  pending, onTapHero, onLongPressHero, onEquipmentHover, isTargetable, registerSlotRef, readyIids,
+  pending, onTapHero, onLongPressHero, onEquipmentHover, isTargetable, registerSlotRef, readyIids, laneOpen, onTapLane,
 }: Props) {
   const { isMobile } = useViewport();
   return (
@@ -106,6 +109,8 @@ export function ActiveDuel({
         registerSlotRef={registerSlotRef}
         isCurrentTurn={isMyTurn}
         readyIids={readyIids}
+        laneOpen={laneOpen}
+        onTapSlot={onTapLane}
       />
     </div>
   );

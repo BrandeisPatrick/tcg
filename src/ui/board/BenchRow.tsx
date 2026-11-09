@@ -21,6 +21,10 @@ interface Props {
   registerSlotRef?: (iid: string, el: HTMLElement | null) => void;
   /** Heroes here that can still do something this turn (the ready glint). */
   readyIids?: ReadonlySet<string>;
+  /** The bench slots (1-3) a hero picked up from the hand may be put in:
+   *  their empty wells light and take the tap (`onTapSlot`). */
+  openSlots?: ReadonlySet<number>;
+  onTapSlot?: (slot: 1 | 2 | 3) => void;
 }
 
 // 3 small bench slots in a centered row. Used above the opponent active
@@ -28,7 +32,7 @@ interface Props {
 // (rival red / your gold) paints the empty wells' dashed outline and label.
 export function BenchRow({
   ps, owner, myId, isOpponent, pending, onTapHero, onLongPressHero, onEquipmentHover,
-  isTargetable, registerSlotRef, readyIids,
+  isTargetable, registerSlotRef, readyIids, openSlots, onTapSlot,
 }: Props) {
   const slots = ps.bench;
   const accent = isOpponent ? poster.rival : poster.you;
@@ -85,7 +89,13 @@ export function BenchRow({
               />
             </DealtTile>
           ) : (
-            <SlotWell key={`empty-bench-${i}`} accent={accent} />
+            <SlotWell
+              key={`empty-bench-${i}`}
+              accent={accent}
+              lit={openSlots?.has(i + 1) ?? false}
+              name={`Bench slot ${i + 1}`}
+              onTap={() => onTapSlot?.((i + 1) as 1 | 2 | 3)}
+            />
           ))}
         </AnimatePresence>
       </div>

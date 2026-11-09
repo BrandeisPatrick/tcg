@@ -20,6 +20,10 @@ interface Props {
   isCurrentTurn?: boolean;
   /** Heroes here that can still do something this turn (the ready glint). */
   readyIids?: ReadonlySet<string>;
+  /** The empty lane may take the hero picked up from the hand: its well
+   *  lights and takes the tap (`onTapSlot`). */
+  laneOpen?: boolean;
+  onTapSlot?: () => void;
 }
 
 // One prominent Active slot centered horizontally. Larger than bench slots.
@@ -27,7 +31,7 @@ interface Props {
 // tile itself carries its own frame states.
 export function ActiveSlot({
   ps, owner, myId, isOpponent, pending, onTapHero, onLongPressHero, onEquipmentHover,
-  isTargetable, registerSlotRef, isCurrentTurn, readyIids,
+  isTargetable, registerSlotRef, isCurrentTurn, readyIids, laneOpen = false, onTapSlot,
 }: Props) {
   const card = ps.active;
   const accent = isOpponent ? poster.rival : poster.you;
@@ -65,7 +69,7 @@ export function ActiveSlot({
               />
             </DealtTile>
           ) : (
-            <SlotWell accent={accent} label="Active K.O." />
+            <SlotWell accent={accent} label={laneOpen ? 'Lane' : 'Active K.O.'} lit={laneOpen} name="Active slot" onTap={onTapSlot} />
           )}
         </AnimatePresence>
       </div>
