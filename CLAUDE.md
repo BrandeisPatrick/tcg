@@ -6,6 +6,10 @@ Read [docs/card-design.md](docs/card-design.md) before adding, renaming or redes
 
 - A Deadlock **active** item is always a **spell**; a **passive** item is always **equipment**. No exceptions.
 - Keep the main game's flavor: canon item names, the item's real verb, its shop slot (Weapon / Spirit / Vitality) and its tier.
+- Card text always names the damage type: "deal N bullet damage" or "deal N spirit damage", never bare
+  "damage". Attacks are bullet; purple `{sp:N}` numbers are spirit.
+- Hero cards follow [docs/hero-design.md](docs/hero-design.md): role first, then the TCG; no Weakness;
+  an ultimate is one or two effects in 15 words or fewer.
 
 ## Design phase: numbers by reasoning, no testing unless asked
 

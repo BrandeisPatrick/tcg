@@ -1,5 +1,10 @@
 # Ultimate Design — Canon → TCG Translation
 
+> Status, 2026-11-09: this describes the ultimates as built today. The hero redesign proposal in
+> [hero-design.md](hero-design.md) replaces these rules when heroes are rebuilt: simple ultimates
+> (one or two effects, 15 words or fewer), no channels, soul costs of 4, 8 or 12, and charged
+> ultimates (Victor, Silver) that cost more but get cheaper as the hero takes or deals damage.
+
 Each ultimate is anchored to its **canonical Deadlock ability** (the in-game "4"),
 then translated to a TCG effect and costed. Source for canon: the official
 Deadlock wiki (https://deadlock.wiki).
