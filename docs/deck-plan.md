@@ -107,3 +107,10 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
 - Story fights keep their rosters on the board and deal from a deck of items
   (the saved deck, or the builds'). Lessons name their decks; most have none.
 - 45 upgrade links exist in the catalogue (the plan counted 46).
+- The animations live in `src/ui/motion/`, driven by the engine's `deck` FX
+  events (never state diffs): `planDeckMotion` turns a batch into flights,
+  pile ticks and riffles (pure, tested in `tests/ui/deck-motion.spec.ts`);
+  `DeckMotionLayer` flies the real card art over the table (your draws turn
+  face up, the rival's stay backs); `useTickedCount` makes the piles' counts
+  tick as cards leave and land. The first-Active prompt waits for the opening
+  to play. Under reduced motion nothing flies and everything just updates.
