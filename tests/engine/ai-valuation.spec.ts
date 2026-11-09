@@ -88,17 +88,17 @@ describe('AI valuation: a status is worth its magnitude and its turns', () => {
     }
   });
 
-  it('a Sleep that stores a wake-up burst (Naptime) is also worth that damage, halved', () => {
+  it('a Sleep is a Stun for its turns: its value stores no wake-up burst, so it adds nothing to the price', () => {
     const plain = freshReadyGame();
-    put(own(plain), 'sleep', 0, 2);
-    const burst = freshReadyGame();
-    put(burst.players['1'].active!, 'sleep', 6, 2);
-    expect(standing(plain) - standing(burst)).toBeCloseTo(6); // hvalue −2 × 6 × ½
+    put(own(plain), 'sleep', 1, 2);
+    const big = freshReadyGame();
+    put(own(big), 'sleep', 6, 2);
+    expect(standing(plain) - standing(big)).toBeCloseTo(0);
     const theirs = freshReadyGame();
     put(foe(theirs), 'sleep', 6, 2);
     const theirsPlain = freshReadyGame();
-    put(foe(theirsPlain), 'sleep', 0, 2);
-    expect(standing(theirs) - standing(theirsPlain)).toBeCloseTo(6);
+    put(foe(theirsPlain), 'sleep', 1, 2);
+    expect(standing(theirs) - standing(theirsPlain)).toBeCloseTo(0);
   });
 });
 

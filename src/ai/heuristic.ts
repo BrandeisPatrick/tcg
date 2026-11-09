@@ -119,7 +119,6 @@ interface Weight {
 const STATUS_WEIGHT: Record<string, Weight> = {
   // Hard crowd control: any status the engine flags `cc` (stun, silenced, disarm, sleep).
   cc:            { scale: 3,   turns: 2 },                // a denied turn is worth about a unit's threat; two turns at most
-  sleep_burst:   { scale: 0.5, turns: 1, byValue: true }, // a Sleep's stored wake-up burst (Naptime), halved: it can be cleansed first
   // Damage and crowd control still to come.
   bleed:         { scale: 2,   turns: 3, byValue: true }, // pure damage: `value` a turn for up to 3 turns, each point worth a point of HP
   charged:       { scale: 3,   turns: 1 },                // a Stun on its way: the price of one denied turn
@@ -290,8 +289,6 @@ function statusValue(c: CardInstance): number {
     if (!def) continue;
     const w = STATUS_WEIGHT[s.id] ?? (def.cc ? STATUS_WEIGHT.cc : undefined);
     if (w) v += price(def.hvalue, w, s);
-    // A Sleep that stores a wake-up burst (Naptime) is also that damage to come.
-    if (s.id === 'sleep' && s.value > 0) v += price(def.hvalue, STATUS_WEIGHT.sleep_burst, s);
   }
   return v;
 }

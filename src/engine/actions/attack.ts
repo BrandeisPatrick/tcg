@@ -5,7 +5,7 @@
  * nothing and it is one-way — the defender does not strike back. A player
  * makes one a turn (`G.attackUsed`), and it ends the turn's Act: after it
  * nothing is left but `endTurn` (and a promotion owed). Extra swings come only
- * from explicit grants (Haze's Fixation, Burst Fire, Fleetfoot, Fury Trance,
+ * from explicit grants (Burst Fire, Active Reload, Fleetfoot, Fury Trance,
  * Blood Tribute). `attackBlocked` (legality.ts) holds every condition, so this
  * assumes a living Active, a legal target and a swing that deals something.
  *
@@ -48,8 +48,8 @@ export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
   swing(G, atk, target, 0, attackPower(atk, target));
 
   // ---- Extra Attacks: additional full-power swings queued this turn (Active
-  // Reload, Burst Fire, Fixation — the value of the `extra_attack` status,
-  // read after the primary swing because Fixation grants one there). Each
+  // Reload, Burst Fire — the value of the `extra_attack` status, read after
+  // the primary swing, so a grant the swing makes counts too). Each
   // re-fires the attacker's onAttack procs (lifesteal, bleed, Djinn's Mark,
   // Tesla chain) and bounces again with Ricochet. Power is re-read every swing
   // so mid-attack threshold gear (Frenzy) stays honest. ----
@@ -95,7 +95,7 @@ export function attackAll(G: GameState, attacker: CardInstance) {
 /** One swing at `power`: the event, the damage, then the follow-through. The
  *  attacker's worn equipment reacts inside damageUnit (HP already off, and only
  *  when damage got through); its passives follow once the damage call has
- *  returned, with how much got through (Drifter's Bloodscent heals half of it).
+ *  returned, with how much got through (Haze's Fixation, Vindicta's Flight).
  *  Then, if the swing landed, it bounces (`bounces` off: the volley). */
 function swing(G: GameState, atk: CardInstance, target: CardInstance, index: number, power: AttackPower, bounces = true) {
   const extra = index > 0;
@@ -111,9 +111,8 @@ function swing(G: GameState, atk: CardInstance, target: CardInstance, index: num
   });
   // Bullets into the Mid-Boss are all a swing at it is: nothing reacts, nothing bounces.
   if (isBoss(target)) return;
-  // `primary: true` marks the hero's main swing of the turn — Haze's Fixation
-  // grants its extra attack only here, so the extra swings it spawns don't
-  // re-trigger it.
+  // `primary: true` marks the hero's main swing of the turn, for a passive
+  // that should fire once a turn rather than on every Extra Attack.
   fireTriggers(G, atk, 'onAttack', { only: 'passives', target, params: extra ? { dealt } : { primary: true, dealt } });
 
   // ---- Ricochet: a swing that got through bounces to every other living enemy

@@ -207,7 +207,7 @@ export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
 /**
  * Grant the hero `count` Extra Attacks this turn via the `extra_attack` status
  * (value = number of extra full-power basic swings). Stacks ADDITIVELY across
- * sources (Burst Fire + Active Reload + Fixation all add up), capped at
+ * sources (Burst Fire + Active Reload add up), capped at
  * MAX_EXTRA_ATTACKS. Manipulated directly (not via addStatus) to avoid a log
  * line every turn from the always-on sources. Consumed by the bearer's attack.
  * A corpse is granted nothing (it takes no status, like addStatus).

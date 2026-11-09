@@ -34,8 +34,8 @@ interface Firing {
   /** Damage dealt, for procs that scale off it (Mystic Reverb's echo). */
   amount?: number;
   /** Extra parameters for the abilities. A swing's passives get `primary`
-   *  (Haze's Fixation fires on the main swing only) and `dealt` (Bloodscent's
-   *  heal); a Ricochet bounce's get `bounce` instead of `primary`, and so does
+   *  (a passive that fires on the main swing only) and `dealt` (how much the
+   *  swing got through); a Ricochet bounce's get `bounce` instead of `primary`, and so does
    *  the gear that reacts to it (a heal or a chain sits a bounce out). Worn
    *  equipment also gets itself as `equip` and `amount`. */
   params?: Record<string, unknown>;

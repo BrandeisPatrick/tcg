@@ -2484,7 +2484,7 @@ const eff_ult_mirage: AbilityDef = {
   run: (G, ctx, { source, target }) => {
     const ps = G.players[ctx.movingPlayer];
     if (!source || !target || ps.active !== source) { pushLog(G, 'Traveler fizzled.'); return; }
-    swapIntoActive(G, ps, target, { quiet: true });
+    if (!swapIntoActive(G, ps, target, { quiet: true })) { pushLog(G, 'Traveler fizzled.'); return; }
     addStatus(G, source, 'shield', 2, 999);
     addStatus(G, target, 'shield', 2, 999);
     pushLog(G, `Traveler: ${cardName(source.cardId)} swaps with ${cardName(target.cardId)} (Shield 2 each).`);

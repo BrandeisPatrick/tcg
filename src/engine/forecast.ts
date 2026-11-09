@@ -53,7 +53,7 @@ export interface AttackStep {
   predictedHpAfter: number;
   /** True if the swing's own hit dropped the target to 0 — what the
    *  choreographer breaks the card on. A rider or detonation that finishes it
-   *  instead (Mixed Bullets, Djinn's Mark) is a tagged proc the FX layer plays
+   *  instead (Flight's spirit, Djinn's Mark) is a tagged proc the FX layer plays
    *  after the walk, KO and all, so it is not this swing's knockout; the
    *  plan's `defenderActiveKO` says the target fell either way. */
   predictedKO: boolean;
