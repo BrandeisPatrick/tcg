@@ -14,9 +14,9 @@
  * to the front (`pullToActive`) do not.
  */
 import type { CardInstance, GameState, PlayerID, PlayerState } from '../types';
-import { CARDS_BY_ID, cardName } from '@/cards';
+import { cardName } from '@/cards';
 import { pushLog } from '../log';
-import { resolve } from '../death';
+import { promoteFromBench, resolve } from '../death';
 import { retreatCost } from '../legality';
 import { stepInCandidates } from '../query';
 import { leaveActive } from '../lane';
@@ -61,10 +61,11 @@ export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot:
 }
 
 /**
- * Promote a bench hero to Active after the previous Active was KO'd.
- * Free (no Retreat cost) since it's a forced replacement, not a tactical
- * swap. The dying corpse takes the chosen bench hero's slot — that's
- * where it stays greyed-out until its respawn timer hits 0.
+ * Promote a bench hero to Active after the previous Active was KO'd (its slot
+ * holds the corpse, or — gone back to the hand — nothing). Free (no Retreat
+ * cost) since it's a forced replacement, not a tactical swap. A corpse takes
+ * the chosen bench hero's slot — that's where it stays greyed-out until it
+ * goes back to the hand.
  *
  * Callable on EITHER player's turn — your Active can die to the
  * opponent's attack or off a skill they cast, and the engine is
@@ -75,18 +76,8 @@ export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot:
 export function promoteToActive(G: GameState, benchHeroIid: string) {
   const pid = (['0', '1'] as PlayerID[]).find((p) => G.players[p].bench.some((b) => b != null && b.iid === benchHeroIid))!;
   const ps = G.players[pid];
-  const benchIdx = ps.bench.findIndex((b) => b != null && b.iid === benchHeroIid);
-  const benchHero = ps.bench[benchIdx]!;
-  // Swap: bench hero becomes Active, corpse takes the vacated bench slot.
-  const corpse = ps.active!;
-  leaveActive(G, corpse);
-  ps.active = benchHero;
-  benchHero.zone = 'active';
-  benchHero.slot = 0;
-  ps.bench[benchIdx] = corpse;
-  corpse.zone = 'bench';
-  corpse.slot = (benchIdx + 1) as 1 | 2 | 3;
-  pushLog(G, `P${pid} promoted ${CARDS_BY_ID[benchHero.cardId]?.name} to Active.`);
+  const benchHero = ps.bench.find((b) => b != null && b.iid === benchHeroIid)!;
+  promoteFromBench(G, ps, benchHero);
   // Re-run the state-based pass so the pendingPromotion flag clears (and any
   // further deaths/promotions settle) before the UI re-reads it.
   resolve(G);

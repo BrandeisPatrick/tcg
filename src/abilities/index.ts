@@ -14,6 +14,7 @@ import { getAbility, registerAbilities } from '@/engine/registry';
 import { fireTriggers } from '@/engine/triggers';
 import { withCast, currentCast } from '@/engine/castContext';
 import { pushFx } from '@/engine/fx';
+import { drawCards, oweDiscard } from '@/engine/deck';
 
 export type { TargetFilter };
 export { getAbility };
@@ -806,26 +807,30 @@ const eff_spirit_shield_proc: AbilityDef = {
   run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 2, 999); },
 };
 
-// Cooldown family (canon Compress → Superior → Transcendent Cooldown): the
-// bearer's ultimate, and from Superior up its active items, cool down faster
-// (the `cooldownCut` hook, read when the cooldown starts; never under 1).
+// The draw engine (canon Compress → Superior → Transcendent Cooldown, actives
+// here — docs/deck-plan.md): draw N cards, then the player discards M from
+// anywhere in the hand (`oweDiscard`; the `discard` move pays it). A draw into
+// a full hand is skipped; the discard is never more than the hand holds.
+function drawThenDiscard(draw: number, discard: number, cardId: string): AbilityDef['run'] {
+  return (G, ctx) => {
+    drawCards(G, ctx.movingPlayer, draw);
+    oweDiscard(G, ctx.movingPlayer, discard, cardId);
+  };
+}
 const eff_compress_cooldown: AbilityDef = {
-  id: 'eff_compress_cooldown', trigger: 'ongoing', target: 'self',
+  id: 'eff_compress_cooldown', trigger: 'onPlay', target: 'noTarget',
   base: 2,
-  cooldownCut: (_self, kind) => (kind === 'ult' ? 1 : 0),
-  run: () => {},
+  run: drawThenDiscard(2, 1, 'improved_cooldown'),
 };
 const eff_superior_cooldown: AbilityDef = {
-  id: 'eff_superior_cooldown', trigger: 'ongoing', target: 'self',
-  base: 3,
-  cooldownCut: () => 1,
-  run: () => {},
+  id: 'eff_superior_cooldown', trigger: 'onPlay', target: 'noTarget',
+  base: 4,
+  run: drawThenDiscard(4, 2, 'superior_cooldown'),
 };
 const eff_transcendent_cooldown: AbilityDef = {
-  id: 'eff_transcendent_cooldown', trigger: 'ongoing', target: 'self',
-  base: 5,
-  cooldownCut: (_self, kind) => (kind === 'ult' ? 2 : 1),
-  run: () => {},
+  id: 'eff_transcendent_cooldown', trigger: 'onPlay', target: 'noTarget',
+  base: 8,
+  run: drawThenDiscard(8, 4, 'transcendent_cooldown'),
 };
 
 // Mystic Burst family: each time the bearer uses a skill, hit the enemy active

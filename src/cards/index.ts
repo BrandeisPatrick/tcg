@@ -13,7 +13,7 @@ export const CARDS_BY_ID: Record<string, CardData> = {
   ...ULTIMATES_BY_ID,
 };
 
-/** Every item the shop can sell, actives (spells) then passives (equipment),
+/** Every item a deck can hold, actives (spells) then passives (equipment),
  *  in catalogue order. */
 export const ITEMS: ItemCard[] = [...SPELLS, ...EQUIPMENT];
 

@@ -50,24 +50,27 @@ export const DeadlockGame: Game<GameState> = {
       if (G.action) G.action.state = 'done';
     },
 
-    /** The shop step: buy an item on sale; the card goes to your hand. */
-    buy: ({ G, ctx, playerID }, itemId: string) => move(G, mover(ctx, playerID), { type: 'buy', itemId }),
+    /** Put an item from your hand on one of your heroes (bench and corpses
+     *  included), for its price — an upgrade onto the hero wearing its
+     *  component evolves it for the difference. `upgradeId` picks the upgrade
+     *  the play shuffles into the deck when it could make several. Not the
+     *  hero's ability for the turn. */
+    playCard: ({ G, ctx, playerID }, cardIid: string, heroIid: string, upgradeId?: string) =>
+      move(G, mover(ctx, playerID), upgradeId === undefined ? { type: 'playCard', cardIid, heroIid } : { type: 'playCard', cardIid, heroIid, upgradeId }),
 
-    /** The shop step: sell a card from your hand or a worn item (a full refund
-     *  on the turn it was bought, else half). */
-    sell: ({ G, ctx, playerID }, itemIid: string) => move(G, mover(ctx, playerID), { type: 'sell', itemIid }),
+    /** Put a hero from your hand on the bench — or, `toActive`, into your
+     *  empty Active slot. Free. */
+    placeHero: ({ G, ctx, playerID }, cardIid: string, toActive?: boolean) =>
+      move(G, mover(ctx, playerID), { type: 'placeHero', cardIid, toActive: toActive === true }),
 
-    /** Either step: play a card from your hand onto one of your heroes (bench
-     *  and corpses included). Free; not the hero's ability for the turn. */
-    playCard: ({ G, ctx, playerID }, cardIid: string, heroIid: string) =>
-      move(G, mover(ctx, playerID), { type: 'playCard', cardIid, heroIid }),
+    /** A draw card's discard: these cards from your hand to the discard pile. */
+    discard: ({ G, ctx, playerID }, cardIids: string[]) =>
+      move(G, mover(ctx, playerID), { type: 'discard', cardIids: Array.isArray(cardIids) ? cardIids : [cardIids as unknown as string] }),
 
-    /** The shop step: move a worn item to another of your heroes. */
-    moveItem: ({ G, ctx, playerID }, itemIid: string, toHeroIid: string) =>
-      move(G, mover(ctx, playerID), { type: 'moveItem', itemIid, toHeroIid }),
-
-    /** Close the shop: the turn moves on to its act step. */
-    closeShop: ({ G, ctx, playerID }) => move(G, mover(ctx, playerID), { type: 'closeShop' }),
+    /** The opening: the hero from the hand that takes the lane as its side's
+     *  first Active. Made from either seat (whose it is comes from the card). */
+    chooseActive: ({ G, ctx, playerID }, cardIid: string) =>
+      move(G, mover(ctx, playerID), { type: 'chooseActive', cardIid }),
 
     /** Use an active item a hero wears (that hero's one ability this turn). */
     activate: ({ G, ctx, playerID }, itemIid: string, targetIid?: string) =>

@@ -14,8 +14,8 @@ import type { ItemTier, StructureKind } from './types';
  *  before the turn's attack. */
 export const RETREAT_COST = 1;
 
-/** Items a hero can wear at once. A full hero buys nothing more (sell one
- *  first) except an upgrade of an item it wears, which takes that item's place. */
+/** Items a hero can wear at once. A full hero takes nothing more except an
+ *  upgrade of an item it wears, which takes that item's place. */
 export const MAX_ITEMS = 3;
 
 /** The extra slot every hero of a side has once that side's heroes have felled
@@ -32,51 +32,37 @@ export const SOULS_START = 0;
 
 /** Souls accumulate: nothing refills and nothing is lost at the end of a turn.
  *  At the start of each of a player's own turns (their first included) the
- *  lane pays this much. */
-export const LANE_INCOME = 4;
-
-/** The comeback at income time: a player whose net worth (souls on hand plus
- *  the list price of every item their heroes wear, `netWorth` in query.ts)
- *  trails the rival's by at least the first number gets the second on top of
- *  the lane income. The largest step that applies is paid. */
-export const COMEBACK_STEPS: readonly (readonly [behindBy: number, bonus: number])[] = [[8, 1], [16, 2]];
+ *  lane pays this much — the only souls there are (docs/deck-plan.md):
+ *  knockouts and objectives push the map and give exp, and pay nothing. */
+export const LANE_INCOME = 5;
 
 /** Extra souls on the second mover's first income (the pie rule's dial; the
  *  pricing pass may raise it). */
 export const SECOND_MOVER_FIRST_INCOME_BONUS = 0;
 
-/** A kill pays the victim's opponent the victim's level plus this — and
- *  pushes the same into the victim's side's front structure. */
+/** A kill pushes the victim's level plus this into the victim's side's front
+ *  structure (`killPush`). It pays no souls. */
 export const KILL_BOUNTY_BASE = 1;
 
-/** …and this much more when the victim was strictly the richest hero on the
- *  board (the highest list-price total of worn items among all eight; a tie
- *  pays nothing extra). */
-export const RICHEST_BOUNTY_BONUS = 2;
+// ---------- Items ----------
 
-// ---------- The shop ----------
-
-/** What an item costs, by its tier: Deadlock's 1 : 2 : 4 : 8 ladder (800 to
- *  6,400 souls there, 2 × cost ÷ 800 here), and its tier 5 at 9,999 there, 24
- *  here: 1.5 × tier 4 as 9,999 is 1.56 × 6,400, so an upgrade over a tier-4
- *  component stays a whole 8 and a half-price sale a whole 12. An upgrade
- *  bought over its component costs the difference. Net worth counts every worn
- *  item at this price. */
+/** What putting an item on a hero costs, by its tier: Deadlock's 1 : 2 : 4 : 8
+ *  ladder (800 to 6,400 souls there, 2 × cost ÷ 800 here), and its tier 5 at
+ *  9,999 there, 24 here: 1.5 × tier 4 as 9,999 is 1.56 × 6,400, so an upgrade
+ *  over a tier-4 component costs a whole 8. An upgrade played onto the hero
+ *  that wears its component costs the difference (it evolves). Net worth
+ *  counts every worn item and every item in hand at this price. */
 export const PRICE: Readonly<Record<ItemTier, number>> = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 24 };
 
-/** The shop's tiers, cheapest first: PRICE's keys (whole-number keys list in
- *  ascending order). The market, the shop's rows, the tier marks, the build
- *  editor and the gallery all walk this list, so a new tier is its `ItemTier`,
- *  its PRICE and its MARKET_SLICE entry, and nothing else. */
+/** The tiers, cheapest first: PRICE's keys (whole-number keys list in
+ *  ascending order). The deck builder's rows, the tier marks, the build
+ *  editor and the gallery all walk this list, so a new tier is its
+ *  `ItemTier` and its PRICE, and nothing else. */
 export const ITEM_TIERS: readonly ItemTier[] = Object.keys(PRICE).map(Number) as ItemTier[];
 
-/** The market's random slice, drawn from the match seed before the draft: per
- *  tab, this many items of each tier (tier 1 is always on sale in full, and the
- *  heroes' signature items join as they are drafted). Fewer when a tier runs short. */
-export const MARKET_SLICE: readonly (readonly [tier: ItemTier, count: number])[] = [[2, 2], [3, 2], [4, 1], [5, 1]];
-
-/** Own turns an active item waits after it is used, and when it is bought:
- *  `low` for tiers 1–2, `high` for tiers 3 and up. Hard crowd control uses
+/** Own turns an active item waits after it is used, and when it is put on:
+ *  `low` for tiers 1–2, `high` for tiers 3 and up — unless the card names its
+ *  own (`SpellCard.cooldown`: the draw cards' 2). Hard crowd control uses
  *  charges instead. */
 export const ACTIVE_COOLDOWN = { low: 2, high: 3 } as const;
 
@@ -86,6 +72,27 @@ export const HARD_CC_CHARGES = 2;
 /** A hero wearing this many items of one tab gets that tab's category spike:
  *  +1 Bullet Power (Weapon), +1 Spirit Power (Spirit) or +1 max HP (Vitality). */
 export const CATEGORY_SPIKE_ITEMS = 3;
+
+// ---------- The deck and the hand ----------
+
+/** Items a deck holds (the deck builder's size, and the one made from the
+ *  heroes' builds). The four drafted heroes are shuffled in on top of these. */
+export const DECK_SIZE = 16;
+
+/** The most copies of one item a deck may hold. */
+export const MAX_COPIES = 4;
+
+/** Cards each player draws before the first turn — at least one of them a
+ *  hero when the deck holds one (the Pocket rule: a hand with none swaps a
+ *  random card of it for a random hero of the deck). */
+export const OPENING_HAND = 5;
+
+/** Cards drawn at the start of each own turn (the first included). */
+export const DRAW_PER_TURN = 1;
+
+/** The most cards a hand holds: a draw into a full hand is skipped (the card
+ *  stays in the deck). */
+export const MAX_HAND = 10;
 
 // ---------- Abilities ----------
 
@@ -107,10 +114,6 @@ export const ULT_COOLDOWN = 3;
  *  Patron falling loses the match. */
 export const STRUCTURES: readonly (readonly [kind: StructureKind, hp: number])[] = [['guardian', 4], ['walker', 6], ['patron', 8]];
 
-/** Souls to the side whose push fells the rival's Guardian. (The Walker's
- *  fall gives that side the flex slot, FLEX_SLOT.) */
-export const GUARDIAN_BOUNTY = 2;
-
 /** From this round on a push — a kill's or an empty lane's — deals
  *  LATE_PUSH_MULTIPLIER times as much. */
 export const LATE_GAME_ROUND = 9;
@@ -131,21 +134,18 @@ export const BOSS_HP = 10;
 export const BOSS_RETALIATION = 2;
 /** Rounds after the round it died in that the Mid-Boss rises again. */
 export const BOSS_RESPAWN_ROUNDS = 4;
-/** Souls to the side that takes the Mid-Boss. */
-export const BOSS_SOULS = 4;
-/** The Rejuvenator the taker gets with them: this many revives, good through
- *  the end of round (the round it was taken + REVIVE_ROUNDS). */
+/** The Rejuvenator the taker of the Mid-Boss gets: this many revives, good
+ *  through the end of round (the round it was taken + REVIVE_ROUNDS). */
 export const REVIVE_CREDITS = 2;
 export const REVIVE_ROUNDS = 2;
 
 // ---------- Death ----------
 
-/** Own turns a fallen hero waits in its slot before it respawns, by the round
- *  it fell in: the first pair whose round it has reached (1 in rounds 1–4, 2
- *  in rounds 5–8, 3 from round 9). */
-export const RESPAWN_BY_ROUND: readonly (readonly [fromRound: number, turns: number])[] = [[1, 1], [5, 2], [9, 3]];
-/** …and this many more when the hero was strictly the richest on the board. */
-export const RICH_RESPAWN_PENALTY = 1;
+/** Own turns of its owner's a fallen hero waits in its slot (a corpse)
+ *  before it goes back to its owner's hand, at full HP with its level and its
+ *  items (Patrick, 2026-11-09). 0 sends it straight to the hand. (The
+ *  Mid-Boss keeps its own return, BOSS_RESPAWN_ROUNDS.) */
+export const RESPAWN_TURNS = 2;
 
 // ---------- Leveling ----------
 // Heroes start at Lv1, climb to Lv4 (cap). Step costs are 5 → 7 → 9 exp

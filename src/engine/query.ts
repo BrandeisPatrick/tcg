@@ -26,10 +26,9 @@ import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, COMEBACK_STEPS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE,
-  RICHEST_BOUNTY_BONUS, RICH_RESPAWN_PENALTY, START_LEVEL,
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, START_LEVEL,
 } from './constants';
-import { pushMultiplier, respawnTurns, round, secondMover } from './rounds';
+import { pushMultiplier, round, secondMover } from './rounds';
 
 // ---------- The board ----------
 
@@ -87,6 +86,14 @@ export function liveBoardCards(ps: PlayerState): CardInstance[] {
   if (ps.active && !isRespawning(ps.active)) out.push(ps.active);
   for (const b of ps.bench) if (b && !isRespawning(b)) out.push(b);
   return out;
+}
+
+/** True while `ps`'s Active slot needs filling: it is empty (a fallen Active
+ *  that went to the hand) or holds a corpse. A bench hero steps up to it
+ *  (`promoteToActive`), or — empty — a hero from the hand goes straight in
+ *  (`placeHero`). */
+export function laneOpen(ps: PlayerState): boolean {
+  return !ps.active || isRespawning(ps.active);
 }
 
 /** The bench heroes who can take the Active slot right now: alive, and not
@@ -170,11 +177,11 @@ export function killPush(G: GameState, hero: CardInstance): number {
   return ((hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE) * pushMultiplier(G);
 }
 
-/** Own turns a hero that falls now waits before it respawns: the round's
- *  band (`respawnTurns`), and RICH_RESPAWN_PENALTY more when it is strictly
- *  the richest hero on the board. */
-export function respawnTimer(G: GameState, hero: CardInstance): number {
-  return respawnTurns(G) + (isRichestHero(G, hero) ? RICH_RESPAWN_PENALTY : 0);
+/** Own turns a hero that falls now waits in its slot before it goes back to
+ *  its owner's hand: RESPAWN_TURNS, for every hero at every point of the
+ *  match (0: it goes straight to the hand). */
+export function respawnTimer(_G: GameState, _hero: CardInstance): number {
+  return RESPAWN_TURNS;
 }
 
 /** True while `pid`'s Rejuvenator can bring a hero back: a credit left, in a
@@ -201,8 +208,9 @@ export function bossTaker(G: GameState): { pid: PlayerID; by: 'damage' | 'netWor
 // ---------- Worth ----------
 
 /** What an item lists at: its tier's price (`PRICE`). Anything that is not
- *  an item lists at 0. The shop charges it, a sale refunds it (or half), and
- *  net worth counts every worn item at it. */
+ *  an item lists at 0. Putting it on a hero costs it (an evolving upgrade, the
+ *  difference: `playCost`), and net worth counts every worn item and every
+ *  item in hand at it. */
 export function itemPrice(cardId: CardId): number {
   const data = itemCard(cardId);
   return data ? PRICE[data.tier] : 0;
@@ -213,7 +221,7 @@ export function heroWorth(hero: CardInstance): number {
   return wornItems(hero).reduce((n, it) => n + itemPrice(it.cardId), 0);
 }
 
-/** The list price of the cards in a player's hand. */
+/** The list price of the items in a player's hand (a hero card lists at 0). */
 export function handWorth(ps: PlayerState): number {
   return ps.hand.reduce((n, c) => n + itemPrice(c.cardId), 0);
 }
@@ -223,23 +231,12 @@ export function handCard(G: GameState, pid: PlayerID, iid: string): CardInstance
   return G.players[pid].hand.find((c) => c.iid === iid);
 }
 
-/** True for a card bought for the difference: an upgrade priced against a
- *  component on its owner's side, which its play will consume. (A card that
- *  was not bought — a Story reward — never is.) */
-export function boughtAtDiscount(card: CardInstance): boolean {
-  return card.paid !== undefined && card.paid < itemPrice(card.cardId);
+/** True for a hero card (in a hand, the deck, the discard pile or on the board). */
+export function isHeroCard(card: CardInstance): boolean {
+  return CARDS_BY_ID[card.cardId]?.type === 'hero';
 }
 
-/** `pid`'s copies of the item `cardId`: those in its hand, then those its
- *  heroes wear (`heroesOf`: the slotted ones in board order, then a Rem merged
- *  into one of them). */
-export function copiesOnSide(G: GameState, pid: PlayerID, cardId: CardId): CardInstance[] {
-  const ps = G.players[pid];
-  const worn = heroesOf(ps).flatMap((h) => wornItems(h).filter((it) => it.cardId === cardId));
-  return [...ps.hand.filter((c) => c.cardId === cardId), ...worn];
-}
-
-/** Every hero a side has, wherever it stands: the Active, the bench (corpses
+/** Every hero a side has on the board: the Active, the bench (corpses
  *  included) and a Rem merged into an ally, who rides in its `attached` list. */
 export function heroesOf(ps: PlayerState): CardInstance[] {
   const slotted = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c && !!heroData(c));
@@ -247,36 +244,11 @@ export function heroesOf(ps: PlayerState): CardInstance[] {
 }
 
 /** A side's net worth: the souls it holds plus the list price of every item
- *  its heroes wear and every card in its hand. The comeback at income time
- *  reads it. */
+ *  its heroes on the board wear and every item in its hand. The round cap's
+ *  tie-break and the Mid-Boss's read it. */
 export function netWorth(G: GameState, pid: PlayerID): number {
   const ps = G.players[pid];
   return ps.souls + heroesOf(ps).reduce((n, h) => n + heroWorth(h), 0) + handWorth(ps);
-}
-
-/** True when `hero` wears strictly more (by list price) than every other hero
- *  on the board, both sides counted; a tie for the top makes nobody richest. */
-export function isRichestHero(G: GameState, hero: CardInstance): boolean {
-  const mine = heroWorth(hero);
-  if (mine <= 0) return false;
-  const others = (['0', '1'] as PlayerID[]).flatMap((pid) => heroesOf(G.players[pid])).filter((h) => h.iid !== hero.iid);
-  return others.every((h) => heroWorth(h) < mine);
-}
-
-/** Souls a kill pays the victim's opponent: the victim's level plus
- *  KILL_BOUNTY_BASE, and RICHEST_BOUNTY_BONUS more when it was strictly the
- *  richest hero on the board. (The push is the same level + 1, `killPush`.) */
-export function killBounty(G: GameState, hero: CardInstance): number {
-  return (hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE + (isRichestHero(G, hero) ? RICHEST_BOUNTY_BONUS : 0);
-}
-
-/** The comeback `pid` collects with its income: the largest COMEBACK_STEPS
- *  bonus whose deficit its net worth trails the rival's by. */
-export function comebackBonus(G: GameState, pid: PlayerID): number {
-  const behind = netWorth(G, otherPlayer(pid)) - netWorth(G, pid);
-  let bonus = 0;
-  for (const [by, add] of COMEBACK_STEPS) if (behind >= by) bonus = Math.max(bonus, add);
-  return bonus;
 }
 
 // ---------- Targets ----------
@@ -415,11 +387,12 @@ export function hasSpike(card: CardInstance, slot: ItemSlot): boolean {
   return tabCounts(card)[slot] >= CATEGORY_SPIKE_ITEMS;
 }
 
-/** Own turns an active item of `tier` waits after use (and when bought) on
- *  `bearer`: ACTIVE_COOLDOWN by tier, less the bearer's `cooldownCut` hooks
- *  (the Cooldown family), never under 1. */
-export function activeCooldown(bearer: CardInstance, tier: ItemTier): number {
-  const base = tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high;
+/** Own turns an active item of `tier` waits after use (and when put on) on
+ *  `bearer`: the card's own `cooldown` when it names one (`own`: the draw
+ *  cards' 2), else ACTIVE_COOLDOWN by tier — less the bearer's `cooldownCut`
+ *  hooks, never under 1. */
+export function activeCooldown(bearer: CardInstance, tier: ItemTier, own?: number): number {
+  const base = own ?? (tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
   return Math.max(1, base - cooldownCut(bearer, 'item'));
 }
 

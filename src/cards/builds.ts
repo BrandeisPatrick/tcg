@@ -11,9 +11,11 @@ import type { CardId } from '@/engine/types';
  * so it needs a slot of its own.
  *
  * Storage keeps the player's own builds, starting from these
- * (storage/playerData.ts); the AI shops from these (ai/heuristic.ts). An item
- * the match's market does not sell is swapped for the cheapest one it does of
- * the same tab and tier.
+ * (storage/playerData.ts). A side that brings no deck of its own — the rival
+ * AI always, the player until they save one — is dealt one made from its
+ * drafted heroes' builds (`deckFromBuilds`, cards/decks.ts: every hero's
+ * first items, round by round), and the AI puts an item on the hero whose
+ * build lists it (ai/heuristic.ts).
  */
 export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   // ----- Passive-only heroes -----
