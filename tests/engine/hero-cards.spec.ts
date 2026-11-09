@@ -1,11 +1,13 @@
 /**
- * The 19 heroes in the game are the cards of docs/hero-design.md §8, under the
+ * The 21 heroes in the game are the cards of docs/hero-design.md §8, under the
  * rules of §2–4: HP from the formula (4 + tank score, the curve's point),
  * Attack 1 or 2, growth by curve (even at Level 2), a printed Retreat of 0–2
  * souls, exactly one skill (1–3 souls, then a 1-turn wait) or one passive, and
  * an ultimate printed on the card as a button — from Level 2, 4, 8 or 12 souls
- * by size, then a 3-turn wait. No Weakness. Card text names its damage type,
- * and an ultimate is 15 words or fewer. Viscous's skill is The Cube.
+ * by size, then a 3-turn wait; Victor's and Silver's are charged (20 and 16,
+ * their own price; tests/engine/trigger-prompts.spec.ts plays them). No
+ * Weakness. Card text names its damage type, and an ultimate is 15 words or
+ * fewer. Viscous's skill is The Cube.
  *
  * The table below is the doc's, copied by hand: the data must match it, and
  * the engine must play it.
@@ -27,7 +29,7 @@ import { freshReadyGame } from './_helpers';
 /** Each hero as docs/hero-design.md §8 prints it: Attack / HP at Level 1,
  *  growth a level (Attack, HP, Spirit), Retreat, the skill's souls (null for a
  *  passive hero) and the ultimate's size. */
-const DOC: Record<string, { atk: number; hp: number; growth: [number, number, number]; retreat: number; skill: number | null; ult: UltSize }> = {
+const DOC: Record<string, { atk: number; hp: number; growth: [number, number, number]; retreat: number; skill: number | null; ult: UltSize; charged?: number }> = {
   hero_abrams:     { atk: 2, hp: 7, growth: [1, 2, 0], retreat: 2, skill: null, ult: 'medium' },
   hero_mo_krill:   { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 1, skill: 2,    ult: 'medium' },
   hero_viscous:    { atk: 1, hp: 6, growth: [0, 2, 1], retreat: 1, skill: 3,    ult: 'medium' },
@@ -47,6 +49,9 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   hero_paige:      { atk: 1, hp: 5, growth: [0, 0, 2], retreat: 1, skill: 2,    ult: 'medium' },
   hero_rem:        { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 0, skill: 2,    ult: 'small' },
   hero_sinclair:   { atk: 1, hp: 4, growth: [0, 1, 2], retreat: 1, skill: 3,    ult: 'medium' },
+  // The charged ultimates print their own price; their size is what the effect is worth (half).
+  hero_victor:     { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 2, skill: null, ult: 'medium', charged: 20 },
+  hero_silver:     { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: 2,    ult: 'medium', charged: 16 },
 };
 
 /** Growth points a level, by curve (§2). */
@@ -74,7 +79,7 @@ function act(G: GameState, pid: PlayerID, a: Action) {
   expect(perform(G, pid, a), JSON.stringify(a)).not.toBe(INVALID);
 }
 
-describe('the 19 heroes are the hero doc\'s cards', () => {
+describe('the 21 heroes are the hero doc\'s cards', () => {
   it('every hero in the game is in the doc\'s table, and the table is every hero', () => {
     expect(HEROES.map((h) => h.id).sort()).toEqual(Object.keys(DOC).sort());
   });
@@ -235,12 +240,13 @@ describe('a skill costs its souls, then waits 1 turn', () => {
 });
 
 describe('the ultimate is a button on the hero card: from Level 2, 4, 8 or 12 souls by size, then a 3-turn wait', () => {
-  it('each hero\'s ultimate costs its size\'s souls', () => {
+  it('each hero\'s ultimate costs its size\'s souls — a charged one its own price, before anything has charged it', () => {
     expect(ULT_COST).toEqual({ small: 4, medium: 8, large: 12 });
     const G = freshReadyGame();
     for (const h of HEROES) {
       const c = instance(G, h.id, '0', 'bench', 1);
-      expect(kitCost(c, h.ult), h.id).toBe(ULT_COST[DOC[h.id].ult]);
+      expect(kitCost(c, h.ult), h.id).toBe(DOC[h.id].charged ?? ULT_COST[DOC[h.id].ult]);
+      expect(ultimateCard(h.ult)?.charged?.cost, h.id).toBe(DOC[h.id].charged);
     }
   });
 

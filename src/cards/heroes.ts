@@ -1,7 +1,7 @@
 import type { HeroCard } from '@/engine/types';
 
 /**
- * The 19 heroes in the game, built to docs/hero-design.md (§1–4 the rules, §8
+ * The 21 heroes in the game, built to docs/hero-design.md (§1–4 the rules, §8
  * the cards). Each is designed from its Deadlock role first (`profile`: role,
  * mix, reach, curve), then fitted to the TCG:
  *  - HP is 4 + its tank score at Level 1, Attack 1 — or 2 for a hero whose
@@ -16,6 +16,9 @@ import type { HeroCard } from '@/engine/types';
  *  - The kit is exactly one skill (`skills`: 1–3 souls, then a 1-turn wait) or
  *    one passive (`passives`), plus an ultimate (`ult`): a button printed on
  *    the card, from Level 2, for 4, 8 or 12 souls by size, then a 3-turn wait.
+ *    Victor's and Silver's are charged (their card's `charged`: 20 and 16
+ *    souls, 1 less for each damage he takes or she deals), and Victor's is
+ *    an optional trigger, asked when he falls rather than pressed.
  *  - No Weakness.
  *
  * Signature items (`signature`): two items that fit the hero's kit, one of
@@ -165,6 +168,24 @@ export const HEROES: HeroCard[] = [
     profile: { role: 'Assassin', mix: { tank: 2, damage: 3, control: 1, support: 0 }, reach: 'one', curve: 'mid', gun: true },
     skills: [], passives: ['passive_drifter_bloodscent'], ult: 'eff_ult_drifter',
     signature: ['restorative_shot', 'frenzy'],
+  },
+  {
+    // The tank who won't die: his Aura burns him too, and every hit he soaks
+    // up makes his charged revive cheaper (asked when he falls).
+    id: 'hero_victor', name: 'Victor', type: 'hero', rarity: 3,
+    atk: 1, hp: 6, growth: { atk: 0, hp: 3, spirit: 1 }, retreat: 2,
+    profile: { role: 'Tank', mix: { tank: 3, damage: 2, control: 0, support: 0 }, reach: 'many', curve: 'late' },
+    skills: [], passives: ['passive_victor_aura'], ult: 'eff_ult_victor',
+    signature: ['extra_health', 'torment_pulse'],
+  },
+  {
+    // Kick-marks one target and shotguns it; the damage she deals charges her
+    // wolf form.
+    id: 'hero_silver', name: 'Silver', type: 'hero', rarity: 3,
+    atk: 2, hp: 6, growth: { atk: 2, hp: 1, spirit: 0 }, retreat: 1,
+    profile: { role: 'Bruiser', mix: { tank: 2, damage: 3, control: 1, support: 0 }, reach: 'one', curve: 'mid', gun: true },
+    skills: ['skill_silver'], ult: 'eff_ult_silver',
+    signature: ['monster_rounds', 'bullet_lifesteal'],
   },
 ];
 

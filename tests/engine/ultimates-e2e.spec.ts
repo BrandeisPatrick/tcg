@@ -13,7 +13,7 @@ import { HEROES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { tickCooldowns } from '@/engine/statusOps';
 import { skillBlocked, skillTargets } from '@/engine/legality';
-import { kitAbilityIds, kitCost, ultimateCard } from '@/engine/query';
+import { kitAbilityIds, kitCost, ultimateCard, ultPrice } from '@/engine/query';
 import { ULT_COOLDOWN, ULT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { makeAttack } from './_helpers';
@@ -78,13 +78,16 @@ function targetIid(G: GameState, hero: CardInstance, abilityId: string): string 
 }
 
 describe('ultimates resolve through the real useSkill flow, for their size in souls, as kit abilities', () => {
-  for (const hero of HEROES) {
-    it(`${hero.id}: ${hero.ult} at Level ${ULT_UNLOCK_LEVEL}, for its size's souls, then on cooldown`, () => {
+  // An ultimate that is an optional trigger (Victor's) has no button use: the
+  // trigger prompt asks it (tests/engine/trigger-prompts.spec.ts).
+  for (const hero of HEROES.filter((h) => !getAbility(h.ult!)?.optional)) {
+    it(`${hero.id}: ${hero.ult} at Level ${ULT_UNLOCK_LEVEL}, for its size's souls (a charged one its own), then on cooldown`, () => {
       const G = freshG(hero.id, 'hero_abrams');
       const caster = G.players['0'].active!;
       const ability = getAbility(hero.ult!)!;
       expect(ability, hero.id).toBeTruthy();
-      const price = ULT_COST[ultimateCard(hero.ult!)!.size];
+      const price = ultPrice(ultimateCard(hero.ult!)!);
+      expect(price, hero.id).toBe(ultimateCard(hero.ult!)!.charged?.cost ?? ULT_COST[ultimateCard(hero.ult!)!.size]);
 
       const res = use(G, caster, hero.ult!, targetIid(G, caster, hero.ult!));
 
@@ -98,6 +101,14 @@ describe('ultimates resolve through the real useSkill flow, for their size in so
       expect(ultCardsOnBoard(G, '0')).toEqual([]);              // …and no card of it anywhere
     });
   }
+
+  it('an optional-trigger ultimate is never used from its button (Victor\'s Shocking Reanimation)', () => {
+    const G = freshG('hero_victor', 'hero_abrams');
+    const victor = G.players['0'].active!;
+    expect(skillBlocked(G, '0', victor, undefined, 'eff_ult_victor')).toBe('trigger');
+    expect(use(G, victor, 'eff_ult_victor')).toBe(INVALID_MOVE);
+    expect(G.players['0'].souls).toBe(SOULS);
+  });
 
   it('is locked below Level 2', () => {
     const G = freshG('hero_paige', 'hero_abrams', 1);

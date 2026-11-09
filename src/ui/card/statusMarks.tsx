@@ -32,6 +32,7 @@
  *   last_stand  Last_Stand (Warden)  return_fire  Return_Fire_v1   ricochet  Ricochet_v1
  *   dome  Ethereal_Shift_v1   siphon_gain  Siphon_Bullets_v1, an arrow up
  *   casting / casting_light  Singularity: Dynamo's channelled ultimate, the game's glyph for a channel
+ *   wolf_form  Silver's Lycan Curse, the ultimate's own icon (public/ult/silver.webp)
  *
  * An id with no picture (a future id, a typo) gets the diamond tag instead,
  * so there is never a blank chip or sticker.
@@ -50,7 +51,7 @@ type MarkKind =
   // Buffs and the rest
   | 'bullet_resist' | 'spirit_resist' | 'shield' | 'weapon_power' | 'spirit_power' | 'unstoppable' | 'invulnerable'
   | 'healing_boost' | 'extra_attack' | 'casting' | 'return_fire' | 'siphon_gain' | 'dome' | 'last_stand'
-  | 'swift' | 'ricochet'
+  | 'swift' | 'ricochet' | 'wolf_form'
   // An id with no picture.
   | 'unknown';
 
@@ -63,7 +64,7 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
     'spirit_resist_down', 'healing_boost_down', 'fixation', 'rooted', 'rabbit',
     'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable', 'invulnerable',
     'healing_boost', 'extra_attack', 'casting', 'return_fire', 'siphon_gain', 'dome', 'last_stand',
-    'swift', 'ricochet',
+    'swift', 'ricochet', 'wolf_form',
   ] as const).map((id): [string, MarkKind] => [id, id]),
   ['casting_light', 'casting'],
 ]);
@@ -172,6 +173,9 @@ const SOURCE: Record<MarkKind, Source> = {
   last_stand: glyph('last_stand'),
   swift: glyph('swift'),
   ricochet: glyph('ricochet'),
+  // A status an ultimate grants wears that ultimate's icon, as an item's buff
+  // wears the item's: Lycan Curse's (white on transparency, like the HUD's).
+  wolf_form: { kind: 'glyph', file: 'ult/silver.webp', px: [137, 137], box: [2, 2, 134, 134] },
   unknown: drawn,
 };
 

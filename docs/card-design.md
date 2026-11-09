@@ -461,7 +461,9 @@ where Deadlock builds them so, or into a slot that opens.
 | Rem | Extra Spirit (passive, Spirit T1) | Healing Nova (active, Vitality T3) | Extra Spirit → Healing Nova → Improved Spirit → Healing Booster → Superior Duration → Boundless Spirit |
 | Seven | Spirit Sap (active, Spirit T2) | Surge of Power (passive, Spirit T3) | Spirit Sap → Surge of Power → Compress Cooldown → Improved Spirit → Superior Cooldown → Focus Lens |
 | Shiv | Slowing Bullets (passive, Weapon T2) | Berserker (passive, Weapon T3) | Slowing Bullets → Berserker → Active Reload → Titanic Magazine → Weighted Shots → Crippling Headshot |
+| Silver | Monster Rounds (passive, Weapon T1) | Bullet Lifesteal (passive, Vitality T2) | Monster Rounds → Bullet Lifesteal → Swift Striker → Kinetic Dash → Berserker → Frenzy |
 | Sinclair | Slowing Hex (active, Spirit T2) | Disarming Hex (active, Spirit T3) | Slowing Hex → Disarming Hex → Improved Spirit → Mystic Vulnerability → Silence Wave → Vortex Web |
+| Victor | Extra Health (passive, Vitality T1) | Torment Pulse (passive, Spirit T3) | Extra Health → Torment Pulse → Spirit Lifesteal → Spirit Shielding → Fortitude → Leech |
 | Vindicta | Long Range (passive, Weapon T2) | Sharpshooter (passive, Weapon T3) | Long Range → Sharpshooter → Titanic Magazine → Opening Rounds → Toxic Bullets → Crippling Headshot |
 | Viscous | Reactive Barrier (passive, Vitality T2) | Spirit Resilience (passive, Vitality T3) | Reactive Barrier → Spirit Resilience → Debuff Reducer → Improved Spirit → Fortitude → Indomitable |
 | Warden | Weapon Shielding (passive, Vitality T2) | Metal Skin (active, Vitality T3) | Weapon Shielding → Metal Skin → Bullet Lifesteal → Enduring Speed → Fortitude → Juggernaut |

@@ -2199,7 +2199,44 @@ const skill_sinclair: HeroAbilityDef = {
   },
 };
 
+// Silver — Boot Kick: a dash-kick that marks its target. Vulnerable is the
+// doc's "takes +1 damage" (Bullet Resist −1 and Spirit Resist −1, as Eternal
+// Night's), for 2 turns; the kick lands first, so the mark is for what follows.
+const skill_silver: HeroAbilityDef = {
+  id: 'skill_silver', trigger: 'activate', target: 'enemyActive', souls: 2,
+  name: 'Boot Kick',
+  text: 'Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns.',
+  base: 1,
+  run: (G, _ctx, { target }) => {
+    if (!target) return;
+    damageUnit(G, target, 1, 'attack', 'Boot Kick');
+    addStatus(G, target, 'bullet_resist_down', 1, 2);
+    addStatus(G, target, 'spirit_resist_down', 1, 2);
+  },
+};
+
 // ----- Hero passives (always on, no cast) -----
+
+// Victor — Aura of Suffering: while he stands in the Active slot, his own turn
+// opens with 1 spirit damage to every enemy and to Victor himself — and what
+// he takes charges his ultimate (it counts the damage he takes). In a proc
+// frame of his: a kill is his, and nothing he wears reacts to it.
+const passive_victor_aura: HeroAbilityDef = {
+  id: 'passive_victor_aura', trigger: 'startOfTurn', target: 'self',
+  name: 'Aura of Suffering',
+  text: 'While Victor is Active, at the start of your turn deal 1 spirit damage to every enemy and to Victor.',
+  run: (G, ctx, { source }) => {
+    if (!source || isRespawning(source) || source.hp <= 0) return;
+    const found = findCardOnBoard(G, source.iid);
+    if (!found || found.card !== source || source.zone !== 'active') return;
+    withCast(source, 'proc', () => {
+      for (const c of liveBoardCards(G.players[otherPlayer(ctx.movingPlayer)])) {
+        if (c.hp > 0) damageUnit(G, c, 1, 'spirit', 'Aura of Suffering', { source });
+      }
+      damageUnit(G, source, 1, 'spirit', 'Aura of Suffering', { source });
+    });
+  },
+};
 
 // Mirage — Djinn's Mark: each swing marks its target (a Ricochet bounce marks
 // the hero it reaches too), the timer starting over with each mark; the mark
@@ -2518,6 +2555,37 @@ const eff_ult_drifter: AbilityDef = {
   },
 };
 
+// Shocking Reanimation (Victor): a charged ultimate, and an optional trigger —
+// it has no button use. When Victor falls his player may use it (the trigger
+// prompt, engine/prompts.ts, asks), and he gets back up where he stands with
+// half his max HP, rounded up: the knockout never happens (no push, no kill on
+// the record, no wait, no kill exp), and his statuses stay as they were.
+const eff_ult_victor: AbilityDef = {
+  id: 'eff_ult_victor', trigger: 'onFall', optional: true, target: 'self',
+  base: 3,
+  run: (G, _ctx, { source }) => {
+    if (!source || isRespawning(source)) return;
+    source.hp = Math.ceil(source.hpMax / 2);
+    pushLog(G, `Shocking Reanimation: ${cardName(source.cardId)} revives with ${source.hp} HP.`);
+    pushFx(G, { kind: 'revive', iid: source.iid, cancelled: true });
+  },
+};
+// Lycan Curse (Silver): a charged ultimate. Wolf form for 2 of her turns (the
+// form, and its +3 Attack as Bullet Power, both tick at the start of her
+// turns), and a Shield of 6 — a Shield as the doc's words define it, there
+// until it has blocked 6.
+const eff_ult_silver: AbilityDef = {
+  id: 'eff_ult_silver', trigger: 'onPlay', target: 'self',
+  base: 3,
+  run: (G, _ctx, { source, target }) => {
+    const t = target ?? source;
+    if (!t) return;
+    addStatus(G, t, 'wolf_form', 1, 2);
+    addStatus(G, t, 'weapon_power', 3, 2);
+    addStatus(G, t, 'shield', 6, 999);
+  },
+};
+
 const ABILITIES_LIST: AbilityDef[] = [
   // ----- Active items (spells) -----
   eff_healing_rite, eff_rusted_barrel,
@@ -2568,15 +2636,15 @@ const ABILITIES_LIST: AbilityDef[] = [
   // ----- Hero skills -----
   skill_mo_krill, skill_viscous, skill_lady_geist, skill_shiv, skill_warden, skill_wraith,
   skill_seven, skill_lash, skill_yamato, skill_dynamo, skill_kelvin, skill_paige, skill_rem,
-  skill_sinclair,
+  skill_sinclair, skill_silver,
   // ----- Hero passives -----
   passive_abrams_heal, passive_haze_fixation, passive_vindicta_flight, passive_drifter_bloodscent,
-  passive_mirage_djinns_mark,
+  passive_mirage_djinns_mark, passive_victor_aura,
   // ----- Ultimates -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
   eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven,
   eff_ult_shiv, eff_ult_sinclair, eff_ult_vindicta, eff_ult_viscous, eff_ult_yamato,
-  eff_ult_wraith, eff_ult_warden, eff_ult_mirage, eff_ult_drifter,
+  eff_ult_wraith, eff_ult_warden, eff_ult_mirage, eff_ult_drifter, eff_ult_victor, eff_ult_silver,
 ];
 
 export const ABILITIES_BY_ID: Record<string, AbilityDef> = Object.fromEntries(

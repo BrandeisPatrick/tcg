@@ -28,6 +28,7 @@ export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   hero_wraith:     ['spirit_strike', 'spiritual_overflow', 'mystic_shot', 'spirit_lifesteal', 'spirit_snatch', 'haunting_shot'],
   hero_mirage:     ['fleetfoot', 'tesla_bullets', 'active_reload', 'spirit_shredder', 'toxic_bullets', 'ricochet'],
   hero_drifter:    ['restorative_shot', 'frenzy', 'bullet_lifesteal', 'stalker', 'berserker', 'leech'],
+  hero_victor:     ['extra_health', 'torment_pulse', 'spirit_lifesteal', 'spirit_shielding', 'fortitude', 'leech'],
 
   // ----- Skill heroes -----
   hero_dynamo:     ['improved_cooldown', 'rescue_beam', 'healing_booster', 'duration_extender', 'superior_cooldown', 'transcendent_cooldown'],
@@ -40,6 +41,7 @@ export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   hero_viscous:    ['reactive_barrier', 'spirit_resilience', 'debuff_reducer', 'improved_spirit', 'fortitude', 'indomitable'],
   hero_yamato:     ['extended_magazine', 'shadow_weave', 'titanic_magazine', 'kinetic_dash', 'heroic_aura', 'glass_cannon'],
   hero_warden:     ['weapon_shielding', 'metal_skin', 'bullet_lifesteal', 'enduring_speed', 'fortitude', 'juggernaut'],
+  hero_silver:     ['monster_rounds', 'bullet_lifesteal', 'swift_striker', 'kinetic_dash', 'berserker', 'frenzy'],
 };
 
 /** Items a build may hold. */

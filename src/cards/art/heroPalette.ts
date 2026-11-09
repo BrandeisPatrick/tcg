@@ -39,6 +39,8 @@ export const HERO_IDENTITY: Record<string, HeroIdentity> = {
   hero_warden:    { primary: '#7be0bf', accent: '#143a30', keywords: ['Initiator', 'Fearless', 'One Man Army'],  initial: 'W' },
   hero_mirage:    { primary: '#e6a861', accent: '#43230d', keywords: ['Bodyguard', 'Traveller', 'Focused'],      initial: 'M' },
   hero_drifter:   { primary: '#a5b4c8', accent: '#1b212d', keywords: ['Stalker', 'Bloodthirsty', 'Cruel'],       initial: 'D' },
+  hero_victor:    { primary: '#8fe3d0', accent: '#163a33', keywords: ['Undying', 'Aura', 'Reanimated'],         initial: 'V' },
+  hero_silver:    { primary: '#c9c3b8', accent: '#3a2f25', keywords: ['Bruiser', 'Shapeshifter', 'Bloodlust'],  initial: 'S' },
 };
 
 export function getHeroIdentity(cardId: string): HeroIdentity {

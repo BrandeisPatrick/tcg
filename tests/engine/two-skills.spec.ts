@@ -390,6 +390,8 @@ describe('what a hero card prints', () => {
     hero_warden: ['skill', "Willpower", "A barrier and a burst of speed: Shield 3 on Warden, and Swift (his next retreat is free)."],
     hero_mirage: ['passive', "Djinn's Mark", "Each attack adds a Djinn's Mark to the target (max 3). The third mark detonates them all: deal {sp:4} spirit damage."],
     hero_drifter: ['passive', "Bloodscent", "His attacks deal +1 bullet damage to a hero below half HP. Each knockout while he is Active gives him +1 Attack for the game (max +2)."],
+    hero_victor: ['passive', "Aura of Suffering", "While Victor is Active, at the start of your turn deal 1 spirit damage to every enemy and to Victor."],
+    hero_silver: ['skill', "Boot Kick", "Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns."],
   };
 
   it('heroAbilities lists skills, then passives, with names and texts, for every hero', () => {

@@ -3,7 +3,8 @@ import type { UltimateCard } from '@/engine/types';
 // Ultimates are buttons printed on the hero card (docs/hero-design.md §2): each
 // hero's `ult` names the ability id here (`abilities[0]`), usable from Level 2
 // (ULT_UNLOCK_LEVEL) for its size's souls (ULT_COST: small 4, medium 8, large
-// 12), then on ULT_COOLDOWN. These cards are the ultimate's face — its name,
+// 12) — a charged one for its own `charged.cost`, less its count — then on
+// ULT_COOLDOWN. These cards are the ultimate's face — its name,
 // text, size and icon (the hero's Deadlock ultimate icon, public/ult) — and are
 // never dealt or held. Each is one or two effects in 15 words or fewer, as
 // written in the hero doc (§8).
@@ -27,6 +28,18 @@ export const ULTIMATES: UltimateCard[] = [
   { id: 'ult_warden',     name: 'Last Stand',             type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_warden',     abilities: ['eff_ult_warden'],     text: 'Deal {sp:6} spirit damage to the enemy Active. Warden heals that much.' },
   { id: 'ult_mirage',     name: 'Traveler',               type: 'ultimate', rarity: 4, size: 'small',  linkedHero: 'hero_mirage',     abilities: ['eff_ult_mirage'],     text: 'Swap Mirage with a bench ally. Both get Shield 2.' },
   { id: 'ult_drifter',    name: 'Eternal Night',          type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_drifter',    abilities: ['eff_ult_drifter'],    text: 'Deal {sp:5} spirit damage to the enemy Active. It takes +1 damage for 3 turns.' },
+  // The charged ultimates (hero-design §2, §5): twice what the effect is worth
+  // (its size), 1 soul off for each damage the hero takes or deals, down to free.
+  {
+    id: 'ult_victor', name: 'Shocking Reanimation', type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_victor', abilities: ['eff_ult_victor'],
+    text: 'When Victor falls, you may use this: he revives where he is with half HP.',
+    charged: { cost: 20, by: 'taken', text: 'Costs 1 less for each damage Victor takes.' },
+  },
+  {
+    id: 'ult_silver', name: 'Lycan Curse', type: 'ultimate', rarity: 4, size: 'medium', linkedHero: 'hero_silver', abilities: ['eff_ult_silver'],
+    text: 'Silver turns into a wolf for 2 turns: +3 Attack and Shield 6.',
+    charged: { cost: 16, by: 'dealt', text: 'Costs 1 less for each damage Silver deals.' },
+  },
 ];
 
 export const ULTIMATES_BY_ID = Object.fromEntries(ULTIMATES.map((u) => [u.id, u])) as Record<string, UltimateCard>;

@@ -1,4 +1,4 @@
-import type { StatusId } from '@/engine/types';
+import type { CardId, StatusId } from '@/engine/types';
 import { BLEED_CAP, DJINN_CAP, FIXATION_CAP } from '@/engine/constants';
 
 /** What a status stops its bearer doing. The only place a lockout is written:
@@ -36,6 +36,12 @@ export interface StatusDef {
    *  values up to `cap`; `duration` says whether the timer keeps the longer of
    *  the two ('max') or starts over ('reset'). */
   stack?: { add: true; cap: number; duration: 'max' | 'reset' };
+  /** The bearer has taken another form while the status lasts (Silver's
+   *  wolf). The board shows it: the status's title as a badge on the card,
+   *  and — when the bearer is `hero` — that form's own art (`art`, under
+   *  public/heroes/) in place of the hero's portrait. When the status ends
+   *  the card shows the hero again. The engine reads nothing here. */
+  form?: { hero: CardId; art: string };
 }
 
 /**
@@ -71,6 +77,10 @@ export const STATUSES: StatusDef[] = [
   // the swing in actions/attack.ts; the Ricochet item adds its own through a
   // hook). Granted for this turn, so `clearTurnFlags` sweeps it with Swift.
   { id: 'ricochet',      title: 'Ricochet',      desc: "After the bearer's attack lands, every other enemy hero takes <value> bullet damage and the attack's on-hit debuffs.", hvalue: 1 },
+  // Wolf form (Silver's Lycan Curse): the form itself. The +3 Attack it comes
+  // with is a Bullet Power status beside it, for as long; its Shield is a
+  // Shield. Her card shows Deadlock's wolf-form art while it lasts.
+  { id: 'wolf_form',     title: 'Wolf form',     desc: 'Turned into a wolf (Lycan Curse): +3 Attack while it lasts; the card shows the wolf.', hvalue: 1, form: { hero: 'hero_silver', art: 'hero_silver_wolf_card.webp' } },
 
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across
