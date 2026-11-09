@@ -31,8 +31,13 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### The draft
 
-- 19 heroes from Deadlock's roster. Each has an ultimate, and either a skill
-  (eleven heroes) or a passive (eight).
+- 19 heroes from Deadlock's roster, each built from its Deadlock role
+  ([`docs/hero-design.md`](./docs/hero-design.md)): HP 4 + its tank score and
+  Attack 1 (2 for a gun or melee hero), moved a point by its curve (early,
+  mid, late); a Retreat price of 0–2 souls; either a skill (fourteen heroes)
+  or a passive (five: Abrams, Haze, Vindicta, Drifter, Mirage); and an
+  ultimate, a button printed on the card with the hero's own Deadlock
+  ultimate icon. No hero has a Weakness.
 - A snake draft, four heroes each. Your four are shuffled into your deck: 20
   cards.
 - The pie rule: you draft first, and the rival moves first. Its first turn has
@@ -96,20 +101,22 @@ You choose the discards from anywhere in your hand.
 **Act.**
 
 - Each hero, bench included, may use one ability a turn: its skill, an active
-  item it wears, or its ultimate. Abilities cost nothing and run on cooldowns
-  counted in your own turns.
-- A skill is ready every turn unless its hero says otherwise. The ultimate is
-  part of the kit: it unlocks at Level 2, then cools down 3 turns after each
-  use.
+  item it wears, or its ultimate. Skills and ultimates are paid in souls, out
+  of the same 5 a turn that buy items; cooldowns count your own turns.
+- A skill costs 1–3 souls (printed on its plate) and is ready again on your
+  next turn. The ultimate is a button on the hero card: from Level 2 it costs
+  4, 8 or 12 souls by its size (small, medium, large), then waits 3 turns.
 - An active item is used from its hero's sheet. It cools down 2 turns (tiers
   1–2) or 3 (tier 3 and up), and starts on cooldown when it is played. Hard
   crowd control (stun, silence, root, …) has 2 charges a match instead.
 - Your Active makes one basic attack a turn: at the rival's Active (any enemy
   hero, with reach), or at the Mid-Boss while it stands. The attack ends the
   Act, and the turn then ends on its own. Extra swings come only from cards
-  that grant Extra Attack and from Haze's passive at Level 3.
-- Retreat: 1 soul, once a turn, before the attack. A bench hero steps into the
-  Active slot and may make the attack.
+  that grant Extra Attack.
+- Retreat: the leaving hero's printed price (0 for the mobile, 1 for most, 2
+  for the slow and heavy; Sprint Boots and Swift lower it), once a turn,
+  before the attack. A bench hero steps into the Active slot and may make the
+  attack.
 
 **End.** Statuses tick. If the rival has no standing hero, your Active pushes
 into the empty lane for its bullet power (an empty lane is easy to come by
@@ -119,7 +126,10 @@ bench.
 
 **Levels.** Exp also comes the first time a hero wears an item (1) and from a
 kill (2). Level 2 takes 5 exp, level 3 7 more and level 4, the cap, 9 more.
-Each level gives +1 HP, +1 Bullet Power and +1 Spirit Power.
+Each level adds the hero's own growth: its curve's points (2 a level early, 3
+mid, 4 late) split between Bullet Power, HP and Spirit Power — guns into
+Attack, casters into Spirit, tanks into HP. All three curves are even at
+Level 2.
 
 ### The map
 
@@ -284,6 +294,7 @@ public/
 ├── heroes/      Hero portraits .webp (card, mini and small, plus a wide splash)
 ├── items/       Passive items' shop icons .webp
 ├── spells/      Active items' shop icons .webp
+├── ult/         Each hero's Deadlock ultimate icon .webp (the button on its card)
 ├── status/      The game's HUD icons for statuses, painted in code
 └── art/         Title posters, the backdrop, the wordmark, the map's icons; CREDITS.md
 scripts/
@@ -311,6 +322,19 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
   then lands every turn; AI-vs-AI games ended in rounds 3–9. The numbers are
   the hero rules' to set (docs/hero-design.md).
 
+- **The Cube every turn.** The Cube costs 3 souls and, like every skill, is
+  ready again on Viscous's next turn, so for 3 of the 5 souls a turn one hero
+  can take no damage on any rival turn. The hero doc prices it that way; play
+  will show whether it needs a longer wait (docs/hero-design.md, As built).
+- **Machinery no card uses.** Since the hero rebuild no hero opens a channel
+  (`casting` / `casting_light`, `tickCastingPulses`), puts on Charged, or
+  merges Rem into an ally (`remMergeTurnsLeft`, `tickRemMerges`,
+  `returnRemToBench`), and the FX layer's Naptime wake-up tag has no burst to
+  play. Each still works and is still tested with its state set by hand;
+  remove it, or give it to a card, in a cleanup pass.
+- **`scripts/qa/legality.mjs`** still checks Sinclair's borrowed ultimate, which
+  is gone (Audience Participation casts the copy at once). Not run during
+  design work; fix it with the scripts' port to the hand.
 - **The fuzz oracle.** `tests/engine/fuzz/invariants.spec.ts` allow-lists one
   violation as KNOWN (`revive-spend@endTurn`, seed 40155): an End step that
   ends the match revives a hero and then lets the Rejuvenator lapse, both

@@ -19,12 +19,12 @@ Rabbit) and how a second application **stacks**. Two clocks run on a unit's
 **own** turns only:
 
 - **Start of its owner's turn** (`tickStartOfTurn`, `src/engine/statusOps.ts`):
-  Bleed deals its damage; Charged, Djinn's Mark, Reverb and Last Stand go off
-  if they are about to expire; then every status that is **not** crowd control
+  Bleed deals its damage; Charged, Reverb and Last Stand go off if they are
+  about to expire (Djinn's Mark only goes off at its third mark, and fades); then every status that is **not** crowd control
   drops by 1, and any at 0 is removed.
-- **End of its owner's turn** (`tickEndOfTurnCC`): crowd control drops by 1
-  (Sleep's wake-up burst goes off as it expires). So CC is stripped only after
-  the unit has spent a turn under it.
+- **End of its owner's turn** (`tickEndOfTurnCC`): crowd control drops by 1.
+  So CC is stripped only after the unit has spent a turn under it. (A Sleep is
+  a Stun for its turns: damage does not wake it, and it has no burst.)
 
 A hero skill's **cooldown** (`AbilityDef.cooldown`, counted in
 `CardInstance.cooldowns`) runs on the first clock, at the start of its owner's
@@ -45,7 +45,7 @@ skill gate, the retreat gate, the channel pulse, the AI and the board all ask it
 | Rooted on an enemy hero | the enemy's turns | **N** turns it cannot retreat or be swapped into the lane (hard CC, so it ticks as that turn ends; it can still fight) |
 | A DoT on an enemy (bleed) | the enemy's turn starts | **N** ticks of damage |
 | A stat debuff on an enemy (*_power_down, *_resist_down) | the enemy's turns | **N − 1** enemy turns covered |
-| A defensive buff on your unit (unstoppable) | the opponent's turns | **N** turns covered |
+| A defensive buff on your unit (unstoppable: no crowd control; invulnerable: no damage — The Cube) | the opponent's turns | **N** turns covered: not CC, so it ticks at the start of your turn — put up for 1 on your turn it covers the rival's next turn |
 | A dome on your unit | the opponent's turns | **N** turns covered: no basic attack can be aimed at it. Not CC, so it ticks at the start of your turn — put up for 1 on your turn it is gone when your next one begins |
 | A stat buff on your unit (weapon_power, spirit_power) | your attacks and casts | until your **N**th turn start from now |
 

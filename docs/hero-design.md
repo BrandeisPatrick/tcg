@@ -1,8 +1,9 @@
 # Hero Design — requirements
 
-Status, 2026-11-09: **proposal, nothing built.** Heroes stay on hold until Patrick says to build
-them. The rules below are binding for every hero card; the proposed cards for all 44 Deadlock heroes
-are listed at the end. A visual version with portraits:
+Status, 2026-11-09: **the 19 heroes in the game are built to these cards** (branch
+`deck-and-heroes`; see "As built" at the end). The other 23 cards in section 8, Victor's and
+Silver's charged ultimates and the trigger prompts (section 6) are not built yet. The rules below are
+binding for every hero card; the proposed cards for all 44 Deadlock heroes are listed at the end. A visual version with portraits:
 [Hero Card Designs](https://claude.ai/artifact/JYPQPyeXj6u1PYiuhQDcGB). Role research behind
 it: [Deadlock Hero Roles](https://claude.ai/artifact/Jp27zXwR6dXjyr5q2QriyD).
 
@@ -480,3 +481,90 @@ HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
 - Skill, 3 souls — **Luggage Cart**: The cart runs over every enemy: deal 1✦ spirit damage, then swap the enemy Active with an enemy bench hero you pick.
 - Ultimate, medium, 8 souls — **Hotel Guest**: Deal 4✦ spirit damage to any enemy. Sleep it 2 turns.
 - Why: Doors make his retreat free, the cart reshuffles the enemy line, and Hotel Guest checks their carry out of the fight for two turns.
+
+## As built (2026-11-09)
+
+Built on `deck-and-heroes` for the 19 heroes in the game today. Every card plays as section 8
+writes it; where the doc is silent or two rules meet, the build reads it this way:
+
+**The rules**
+- **Waits.** "Then waits N turns" is the engine's cooldown N, the reading the draw cards' "waits
+  2 turns" already has: ready again on the hero's Nth own turn after the use, and the sheet says
+  "Ready in N turns". A skill (1) is ready on its hero's next turn, so its wait adds nothing to the
+  one-ability-a-turn rule; an ultimate (3) sits out its hero's next two turns and is ready on the
+  third. Unchanged constants: `SKILL_COOLDOWN` 1, `ULT_COOLDOWN` 3, `ULT_UNLOCK_LEVEL` 2.
+- **Prices.** A skill's souls are on its ability (`souls`); an ultimate's come from its card's size
+  (`ULT_COST`: 4, 8, 12). Both are paid from the same souls as items, before the effect runs.
+  Echo Shard's repeat of a skill is the item's own effect and pays nothing.
+- **Retreat.** `RETREAT_COST` is gone: a Retreat costs the leaving hero's printed `retreat`, less
+  Sprint Boots and the like, and nothing while it is Swift. Rem's 0 never applies: he still never
+  stands in the lane (bench-only, as before).
+- **Growth.** The flat +1/+1/+1 a level is gone: a level adds the card's `growth`. Rem keeps the
+  floors (Attack 1, HP 4) and so a point more at Level 2, as section 7 says.
+- **Stun at 3 points.** The clash with balance-model.md and CLAUDE.md (2.0) is left as it is: these
+  cards follow this doc's prices, and no number in the engine reads either figure (the AI's own
+  status weights are unchanged).
+- **Unstoppable** is this doc's word: no stun, sleep, root, silence or disarm (it still cleanses
+  them as it lands) — it no longer stops damage. Taking no damage is a status of its own,
+  **Invulnerable** (The Cube's). The two items that made a hero untouchable, Unstoppable and Prism
+  Blast, now give both, so they play exactly as before, and their text says so.
+- **Sleep** is a Stun for its turns: damage no longer wakes it, and there is no wake-up burst.
+- **"Takes +1 damage"** is Bullet Resist −1 and Spirit Resist −1 together. Statuses on an enemy
+  tick at the start of its turns, so "for 3 turns" (Eternal Night) covers the rest of the caster's
+  turn and its next two, and "for 1 turn" (Rabbit Hex) the rest of the turn it is cast.
+- **"The enemy Active"** in a skill or ultimate that also hits every enemy (Ground Strike, Kinetic
+  Pulse, Goo Ball, Frozen Shelter) is the hero standing there when it is used: a hero the damage
+  fells is not replaced by the one promoted into its slot.
+- **"Attack"** in card text (Full Auto, Plot Armor, Shadow Transformation, Bloodscent) is Bullet
+  Power: a `weapon_power` buff, or for Bloodscent's knockouts the hero's own modifier.
+- **No Weakness** anywhere: the cards have no such field.
+
+**The heroes**
+- **Viscous — The Cube.** Invulnerable for 1 turn on any hero of his side, himself included: it
+  covers the rival's turn and is gone when his side's next turn begins. With a 1-turn wait he can
+  cube the same hero every turn for 3 of the turn's 5 souls, so one hero never takes damage. That
+  is how the doc prices it; play will show whether it needs a longer wait (the engine used to give
+  The Cube 2 turns for this reason).
+- **Haze — Fixation.** A stack for each of her swings, Extra Attacks too, but not from a Ricochet
+  bounce (she is fixed on the hero she shoots); the stacks last until it leaves the Active slot.
+  Her Level 3 extra swing is gone. **Bullet Dance** deals her Attack as her card shows it (0 while
+  Disarmed) as bullet damage, but it is no swing: nothing rides on it and it does not ricochet.
+- **Vindicta — Flight.** 1✦ spirit damage rides on each of her swings, not on a bounce. The old
+  "takes 1 less bullet damage" is gone.
+- **Drifter — Bloodscent.** "Below half HP" is under half (as Frenzy reads it). A knockout counts
+  when an enemy hero falls to his side, by anything and on either turn, while he stands as its
+  Active (a Rejuvenator revive still counts; a fall to the Mid-Boss does not). The +1 Attack is his
+  for the game, through his falls, up to +2 (`tally`). His lifesteal is gone.
+- **Mirage — Djinn's Mark.** Each mark lasts 3 of the target's turns, the timer starting over with
+  each new mark; a bounce marks too, as before. Marks that run out fade: the doc names no expiry
+  detonation, so there is none. **Traveler** can only be used while Mirage is the Active (there is
+  nobody to swap with otherwise): the player picks the bench ally, who steps in as a free swap.
+- **Shiv — Killing Blow.** The hit first; a target it leaves below half HP is then knocked out
+  (pure damage, through a Shield; Invulnerable still stops it).
+- **Lady Geist — Soul Exchange.** It is Lady Geist's own HP that changes hands, wherever she
+  stands; each keeps no more than its own max; then the 3✦.
+- **Sinclair — Audience Participation.** Casts the enemy Active's ultimate at once, as his own: his
+  Spirit, his heals, aimed as that ultimate aims, for his own 8 souls. With no standing enemy
+  Active, or another Sinclair there, there is nothing to copy and it cannot be used. The old
+  borrowed copy (a free ultimate kept for later) is gone. **Rabbit Hex** uses the engine's rabbit
+  (no attack, skills, ultimates or active items).
+- **Rem — Tag Along** aims at another hero of his side. He no longer merges into it; the engine's
+  merge machinery stays, with no card using it.
+- **Warden — Willpower's Swift** is the engine's: a free Retreat this turn.
+- **Yamato — Shadow Transformation's** Unstoppable lasts two of her turns, as its +3 Attack does.
+- **Dynamo, Seven, Warden** no longer channel: their ultimates are one hit each. The channel
+  statuses and their end-of-turn pulse stay in the engine with no card using them, as does Charged
+  (Seven's old Static Charge).
+- **Trigger prompts.** None of the 19 kits has an optional "may" effect, so nothing is marked
+  `TODO(trigger-prompt)`.
+
+**Elsewhere**
+- The ultimate button shows each hero's Deadlock ultimate icon, copied into `public/ult/` (credited
+  in `public/art/CREDITS.md` and the in-game credits).
+- The tutorial teaches priced skills: Frost Grenade costs 3 of the 5 souls; Lesson 3 brings 2 souls
+  in to pay for Cold Front and Frost Grenade, against a Lash on 2 (Kelvin's swing is 1 now); the
+  map lesson's rival Patron is 1, for Kelvin's push of 1.
+- The AI plays the same legality: it uses skills and ultimates when it can pay and the lookahead
+  says they gain more than the souls they cost (a soul in hand is worth 0.3, so it spends freely).
+  It no longer prices a Sleep's value as a wake-up burst.
+

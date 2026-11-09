@@ -33,9 +33,9 @@ lock a skill. The engine fixes that by construction:
 
 | Module | Holds |
 |---|---|
-| `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss, the Rejuvenator, `RESPAWN_TURNS`, `ROUND_CAP`) |
+| `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, the ultimates' `ULT_COST` by size, levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss, the Rejuvenator, `RESPAWN_TURNS`, `ROUND_CAP`) |
 | `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn — and the map's clocks: `lateGame` / `pushMultiplier`, `bossReturnRound`, `reviveLastRound`, `endsRound` / `endsLastRound`, `MATCH_TURNS` |
-| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skills, its ultimate, a borrowed ultimate; which one an action names), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `isHeroCard`, `laneOpen`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
+| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skill, its ultimate; which one an action names), `kitCost` (what one costs in souls: a skill's `souls`, an ultimate's `ULT_COST` by its card's size), `abilityAim` (what one is aimed at: its `target`, or its `aim` read off the board), `heroRetreat` (a hero's printed Retreat), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `isHeroCard`, `laneOpen`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
 | `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the hand (`playBlocked`, `playCost`, `playTargets`, `upgradeComponent`, `placeHeroBlocked`, `freeBenchSlot`, `chooseActiveBlocked`, `discardBlocked`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (an owed choice — the first Active, a promotion, a discard — blocks everything else; after the turn's attack only `endTurn` is left), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `hand` (`playCard`: an item onto a hero, an evolve, the upgrade shuffled in; `placeHero`; `chooseActive`; `discard`), `activate` (an active item), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the decks and the opening) |
@@ -134,26 +134,39 @@ Every move of a card between the deck, the hand and the discard pile is a
 `deck` FX event (`shuffle`, `draw`, `discard`, `upgrade`, `toHand`), for the
 board's animation layer; the FX timeline ignores them.
 
-**Abilities.** Each hero uses one ability a turn — a skill, an active item it
-wears (`activate`, in a cast frame whose source is the bearer; it then cools
-down 2 own turns for tiers 1–2, 3 for tiers 3 and up, or spends one of a hard
-crowd-control item's charges), or its ultimate — and abilities cost nothing. A skill waits its `cooldown` in own turns after
-use (`SKILL_COOLDOWN` = 1, every turn, when its data names none). The ultimate
-is a kit ability, not a card: `HeroCard.ult` names its ability, it unlocks at
-`ULT_UNLOCK_LEVEL` (2) and waits `ULT_COOLDOWN` (3) own turns after each use.
-It runs through `useSkill` like a skill, in an `'ult'` cast frame, and sets off
-`onBearerUltCast`. Sinclair's ultimate borrows the rival Active's
-(`borrowedUlt`): a kit ability used once, free, with no level or cooldown.
-Echo Shard repeats a skill, never an ultimate.
+**The heroes.** Each hero card is built to [hero-design.md](hero-design.md):
+its Level 1 `atk` and `hp` (4 + its tank score, moved a point by its curve),
+the `growth` each level adds (`grantExp`: 2, 3 or 4 points by curve, split
+between Attack, HP and Spirit), its printed `retreat` (0–2 souls) and its
+`profile` (role, mix, reach, curve). Its kit is one skill or one passive, plus
+an ultimate.
+
+**Abilities.** Each hero uses one ability a turn — its skill, an active item it
+wears (`activate`, in a cast frame whose source is the bearer; free; it then
+cools down 2 own turns for tiers 1–2, 3 for tiers 3 and up, or spends one of a
+hard crowd-control item's charges), or its ultimate. A skill and an ultimate
+are paid in souls (`kitCost`): a skill its own `souls` (1–3), an ultimate
+`ULT_COST` by its card's size (small 4, medium 8, large 12). `skillBlocked`
+refuses one the player cannot pay for (`'souls'`), and `useSkill` charges it
+before the ability runs. A skill waits its `cooldown` in own turns after use
+(`SKILL_COOLDOWN` = 1: ready again on the hero's next turn, when its data names
+none). The ultimate is a button printed on the hero card, not a card:
+`HeroCard.ult` names its ability, it unlocks at `ULT_UNLOCK_LEVEL` (2) and
+waits `ULT_COOLDOWN` (3) own turns after each use. It runs through `useSkill`
+like a skill, in an `'ult'` cast frame, and sets off `onBearerUltCast`. An
+ability whose aim depends on the board says so with `aim` (Traveler needs
+Mirage in the lane; Sinclair's Audience Participation aims as the rival
+Active's ultimate it casts at once as his own). Echo Shard repeats a skill,
+never an ultimate, and pays no souls for it.
 
 **The Act.** One basic attack a turn per player (`G.attackUsed`), and it ends
 the Act: after it nothing is legal but `endTurn` and an owed promotion
 (`blocked` answers `'actOver'`). A hero that used its ability may still attack.
 A Retreat comes before the attack — the hero who steps in makes it — and one a
-turn (`G.retreatUsed`); it costs `retreatCost`: `RETREAT_COST`, less what the
-hero leaving carries (`retreatDiscount`), and nothing while it is Swift — the
-Retreat spends the Swift. Extra swings exist only as explicit `extra_attack`
-grants (Haze's Fixation from Level 3, Burst Fire, Express Shot, Spellslinger,
+turn (`G.retreatUsed`); it costs `retreatCost`: the leaving hero's printed
+`retreat`, less what it carries (`retreatDiscount`), and nothing while it is
+Swift — the Retreat spends the Swift. Extra swings exist only as explicit
+`extra_attack` grants (Burst Fire, Express Shot, Spellslinger,
 Infinite Rounds, Fleetfoot, Fury Trance, Blood Tribute, Vampiric Burst), all
 inside the one attack. Turn 1 has no attack, and a promotion off a fallen
 Active is free and brings in a hero who may make the attack if none has been
@@ -262,6 +275,15 @@ resolves, once, at its end.
   `legalActions` all read it — and the board: with more than one entry the
   Attack plate arms a targeting flow (`ui/board/attackAim.ts`) that lights
   exactly that list and dispatches `attack(targetIid)`, the first target bare.
+- **A skill's price** — `souls` on the skill (1–3); an ultimate's is its card's
+  `size`. `kitCost` reads both, and nothing else prices an ability.
+- **An ability aimed by the board** — `aim(G, pid, hero)` on it returns the
+  filter (or null: it cannot be aimed now); `abilityAim` reads it, so the
+  legality, `useSkill`, the board's targeting and the AI all agree.
+- **A passive that feeds on knockouts** — trigger `onRivalFall`: `killInPlace`
+  fires it on the other side's standing Active when a hero falls to the rival
+  (Drifter's Bloodscent). What it keeps for the game goes in the hero's
+  `tally`, by ability id.
 - **A skill that costs HP** — `hpCost` on the skill: it is blocked unless the
   caster has more HP than that, and `useSkill` takes the HP straight off before
   the skill runs (through no Shield, setting off no trigger, never a kill).
