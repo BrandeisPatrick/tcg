@@ -251,7 +251,7 @@ describe('status words in card text explain the status', () => {
   it('Fixation says what it does', () => {
     expect(STATUSES_BY_ID.fixation.title).toBe('Fixation');
     expect(statusContent('fixation', { value: 2, duration: 99 }).lines).toEqual([
-      'When Haze attacks this hero, it takes +2 damage. Up to 3; it falls off when the hero leaves the Active slot.',
+      'When Haze attacks this hero, she deals +2 bullet damage. Up to 2; it falls off when the hero leaves the Active slot.',
     ]);
   });
 
@@ -314,13 +314,13 @@ function abilitiesReadingSpirit(): Set<string> {
   return out;
 }
 
-/** The three channels read Spirit in their pulse, not in the effect that opens
- *  them: `tickCastingPulses` adds `effectiveSpirit` to `channel.value` every
- *  end of turn (Dynamo's and Seven's heavy channels, Warden's light one). */
-const CHANNEL_ULTS = ['eff_ult_dynamo', 'eff_ult_seven', 'eff_ult_warden'];
+/** The three ultimates that were channels (their Spirit read in the pulse,
+ *  `tickCastingPulses`) are one hit each since the hero rebuild: they read
+ *  Spirit in their own effect, like every other ultimate. */
+const ONCE_CHANNELS = ['eff_ult_dynamo', 'eff_ult_seven', 'eff_ult_warden'];
 
 /** Spirit scales these abilities through a skill's `scalesSpirit` flag too. */
-const READS_SPIRIT = new Set([...abilitiesReadingSpirit(), ...CHANNEL_ULTS]);
+const READS_SPIRIT = abilitiesReadingSpirit();
 
 /** Cards (or hero abilities) whose text may carry a Bullet Power mark. None
  *  does today: Split Shot carried one while its damage was the Active's swing
@@ -342,17 +342,28 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
   it('the source scan finds the abilities the skills, spells and ultimates are known to be', () => {
     const found = abilitiesReadingSpirit();
     for (const id of [
-      'skill_dynamo', 'skill_kelvin', 'skill_lady_geist', 'skill_lash', 'skill_paige', 'skill_rem',
-      'skill_seven_static', 'skill_sinclair', 'skill_yamato', 'passive_wraith_mixed',
+      'skill_mo_krill', 'skill_kelvin', 'skill_lady_geist', 'skill_lash', 'skill_paige', 'skill_rem',
+      'skill_seven', 'skill_shiv', 'skill_yamato', 'passive_vindicta_flight', 'passive_mirage_djinns_mark',
       'eff_cold_front', 'eff_silence_glyph',
-      'eff_ult_abrams', 'eff_ult_haze', 'eff_ult_lash', 'eff_ult_mo_krill', 'eff_ult_paige', 'eff_ult_rem',
-      'eff_ult_shiv', 'eff_ult_vindicta', 'eff_ult_viscous', 'eff_ult_wraith',
+      'eff_ult_abrams', 'eff_ult_dynamo', 'eff_ult_kelvin', 'eff_ult_lady_geist', 'eff_ult_lash', 'eff_ult_mo_krill',
+      'eff_ult_paige', 'eff_ult_seven', 'eff_ult_shiv', 'eff_ult_vindicta', 'eff_ult_viscous', 'eff_ult_wraith',
+      'eff_ult_warden', 'eff_ult_drifter',
     ]) expect(found.has(id), id).toBe(true);
+    // A flat number reads no Spirit: Kinetic Pulse's 1, The Cube, Full Auto, Rabbit Hex,
+    // Willpower, Naptime, Bullet Dance (Haze's Attack), Shadow Transformation, Traveler.
+    for (const id of [
+      'skill_dynamo', 'skill_viscous', 'skill_wraith', 'skill_sinclair', 'skill_warden',
+      'eff_ult_rem', 'eff_ult_haze', 'eff_ult_yamato', 'eff_ult_mirage',
+    ]) expect(found.has(id), id).toBe(false);
   });
 
-  it('the three channelled ultimates read Spirit where their pulse is dealt', () => {
+  it('the channel still reads Spirit where its pulse is dealt; the three ultimates that were channels read it in their own hit and open none', () => {
     expect(statusOpsSource).toMatch(/const perTick = channel\.value \+ effectiveSpirit\(c\)/);
-    for (const id of CHANNEL_ULTS) expect(abilitiesSource, id).toMatch(new RegExp(`id: '${id}'[\\s\\S]*?addStatus\\([^)]*'casting(_light)?'`));
+    for (const id of ONCE_CHANNELS) {
+      const block = new RegExp(`const ${id}: AbilityDef = \\{\\n([\\s\\S]*?)^\\};`, 'm').exec(abilitiesSource)?.[1] ?? '';
+      expect(block, id).toMatch(/ultSpi\(/);
+      expect(block, id).not.toMatch(/'casting(_light)?'/);
+    }
   });
 
   it('every ability with scalesSpirit: true is in that set', () => {
@@ -376,19 +387,20 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     }
   });
 
-  it('the first mark carries the ability\'s base number (Dynamo\'s and Paige\'s base is their flat heal / shield)', () => {
-    const FLAT_FIRST = new Set(['skill_dynamo', 'skill_paige']);
+  it('the first mark carries the ability\'s base number', () => {
     for (const id of READS_SPIRIT) {
       const base = (ABILITIES_BY_ID[id] as { base?: number }).base;
-      if (base === undefined || FLAT_FIRST.has(id)) continue;
+      if (base === undefined) continue;
       const first = parseMarkup(textOf(id)[0]).find((t) => t.type === 'num');
       expect(first && first.type === 'num' ? first.base : undefined, id).toBe(base);
     }
   });
 
-  it('half-scaling is written {sp:1/2} where the code adds floor(Spirit / 2)', () => {
-    for (const id of ['skill_dynamo', 'skill_paige']) expect(textOf(id)[0], id).toMatch(/\{sp:1\/2\}/);
-    expect(abilitiesSource).toMatch(/1 \+ Math\.floor\(spi\(source\) \/ 2\)/);
+  it('half-scaling is written {sp:N/2} exactly where the code adds floor(Spirit / 2) — nowhere since the hero rebuild', () => {
+    const halfMarked = [...READS_SPIRIT].filter((id) => textOf(id).some((t) => /\{sp:\d+\/2\}/.test(t)));
+    const halfCode = /Math\.floor\((?:spi|activeSpi|ultSpi|effectiveSpirit)\([^)]*\) \/ 2\)/.test(abilitiesSource);
+    expect(halfMarked).toEqual([]);
+    expect(halfCode).toBe(false);
   });
 
   it('gear that adds Spirit Power, and every flat number, stays plain ink', () => {
@@ -408,12 +420,13 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
 
   it('the spells and ultimates the marks were written for print them', () => {
     expect(SPELLS.find((s) => s.id === 'cold_front')!.text).toBe('Deal {sp:2} spirit damage to enemy Active.');
-    expect(ULTIMATES.find((u) => u.id === 'ult_seven')!.text).toContain('{sp:2} → {sp:3} → {sp:4}');
-    expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Deal {sp:5} spirit to any enemy; {sp:9} instead if it is below half HP.');
+    expect(ULTIMATES.find((u) => u.id === 'ult_seven')!.text).toBe('Deal {sp:5} spirit damage to every enemy.');
+    expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Deal {sp:8} spirit damage to any enemy.');
   });
 
-  it('Paige\'s Plot Armor says what the code grants: Bullet Resist', () => {
-    expect(ABILITIES_BY_ID.skill_paige.text).toBe('Shield 2 on an ally and grant +{sp:1/2} Bullet Resist for 2 turns.');
-    expect(abilitiesSource).toMatch(/addStatus\(G, target, 'bullet_resist', 1 \+ Math\.floor\(spi\(source\) \/ 2\), 2\)/);
+  it('Paige\'s Plot Armor says what the code grants: a Shield that grows with Spirit and +1 Attack', () => {
+    expect(ABILITIES_BY_ID.skill_paige.text).toBe('Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns.');
+    expect(abilitiesSource).toMatch(/addStatus\(G, target, 'shield', 2 \+ spi\(source\), 999\)/);
+    expect(abilitiesSource).toMatch(/addStatus\(G, target, 'weapon_power', 1, 2\)/);
   });
 });

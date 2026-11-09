@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
-import { activateBlocked, attackBlocked, playCost } from '@/engine/legality';
-import { ACTIVE_COOLDOWN, LANE_INCOME, RETREAT_COST } from '@/engine/constants';
+import { activateBlocked, attackBlocked, playCost, retreatCost, skillBlocked } from '@/engine/legality';
+import { ACTIVE_COOLDOWN, LANE_INCOME } from '@/engine/constants';
 import { forecastAttack } from '@/engine/forecast';
-import { attackPower, itemCooldown, wornActives, wornItems } from '@/engine/query';
+import { attackPower, heroRetreat, itemCooldown, kitCost, wornActives, wornItems } from '@/engine/query';
 import { itemCard } from '@/cards';
 import { setMatchConfig } from '@/storage/matchConfig';
 import type { CardInstance, GameState } from '@/engine/types';
@@ -37,7 +37,7 @@ const turn = (c: LessonClient) => [state(c).G.turnNumber, state(c).G.players['0'
 const NO_ATTACK_ON_TURN_1 = { code: 'turn1', text: 'No attacks on Turn 1' };
 
 describe('the tutorial is staged so the taught move wins', () => {
-  it('Lesson 1: Turn 1 has no attack, so Kelvin\'s skill is the kill of a Lash on 1', () => {
+  it('Lesson 1: Turn 1 has no attack, so Kelvin\'s skill — three of the turn\'s five souls — is the kill of a Lash on 1', () => {
     for (const taught of [false, true]) {
       const c = lesson('skill');
       expect(turn(c)).toEqual([1, []]);          // nothing in the hand: an empty deck
@@ -45,7 +45,11 @@ describe('the tutorial is staged so the taught move wins', () => {
       expect(lash.hp).toBe(1);
       // Kelvin moves first: the first mover forgoes first strike.
       expect(actionRefusal(state(c).G, '0', { type: 'attack' })).toEqual(NO_ATTACK_ON_TURN_1);
-      if (taught) moves(c).useSkill(kelvin.iid, lash.iid);
+      // Frost Grenade hits every enemy (no target) and costs three souls: the turn's five pay for it.
+      expect(kitCost(kelvin)).toBe(3);
+      expect(state(c).G.players['0'].souls).toBe(LANE_INCOME);
+      expect(skillBlocked(state(c).G, '0', kelvin)).toBeNull();
+      if (taught) moves(c).useSkill(kelvin.iid);
       else moves(c).endTurn();
       expect(winner(c), taught ? 'the skill' : 'no skill').toBe(taught ? '0' : undefined);
     }
@@ -76,25 +80,30 @@ describe('the tutorial is staged so the taught move wins', () => {
     }
   });
 
-  it('Lesson 3: Cold Front waits in the hand; put on Kelvin it starts on cooldown and cannot be the kill — Frost Grenade and the swing finish a Lash on 3, the swing alone does not', () => {
+  it('Lesson 3: Cold Front waits in the hand; put on Kelvin it starts on cooldown and cannot be the kill — Frost Grenade and the swing finish a Lash on 2, the swing alone does not', () => {
     for (const skill of [false, true]) {
       const c = lesson('level');
       expect(turn(c)).toEqual([2, ['cold_front']]); // Turn 2: there is an attack; the gift, in the hand
       const [kelvin, lash] = actives(c);
-      expect(playCost(kelvin, 'cold_front')).toBeLessThanOrEqual(state(c).G.players['0'].souls);
+      // Two souls brought in and the turn's five pay for both: Cold Front, then Frost Grenade.
+      expect(state(c).G.players['0'].souls).toBe(2 + LANE_INCOME);
+      expect(playCost(kelvin, 'cold_front') + kitCost(kelvin)).toBe(state(c).G.players['0'].souls);
       moves(c).playCard(state(c).G.players['0'].hand[0].iid, kelvin.iid);
       const front = wornActives(state(c).G.players['0'].active!).find((it) => it.cardId === 'cold_front')!;
       expect(itemCooldown(front)).toBe(ACTIVE_COOLDOWN.low);               // ready in two turns
       expect(activateBlocked(state(c).G, '0', front.iid, lash.iid)).toBe('cooldown');
-      expect(lash.hp).toBe(3);
-      expect(attackPower(kelvin, lash).total).toBe(2);
-      if (skill) moves(c).useSkill(kelvin.iid, lash.iid);                   // one spirit damage
+      expect(lash.hp).toBe(2);
+      expect(attackPower(kelvin, lash).total).toBe(1);
+      if (skill) {
+        moves(c).useSkill(kelvin.iid);                                      // one spirit damage to every enemy
+        expect(state(c).G.players['0'].souls).toBe(0);
+      }
       moves(c).attack();
       expect(winner(c), skill ? 'skill, then the swing' : 'the swing alone').toBe(skill ? '0' : undefined);
     }
   });
 
-  it('Lesson 4: Kelvin cannot finish Lash and would fall to its attack; Yamato, sent in for a soul, can', () => {
+  it('Lesson 4: Kelvin cannot finish Lash and would fall to its attack; Yamato, sent in for Kelvin\'s printed soul, can', () => {
     for (const retreat of [false, true]) {
       const c = lesson('bench');
       expect(turn(c)).toEqual([3, []]);
@@ -105,9 +114,12 @@ describe('the tutorial is staged so the taught move wins', () => {
       expect(forecastAttack(G, '0').defenderActiveKO).toBeNull();      // Kelvin's swing
       expect(forecastAttack(G, '1').defenderActiveKO).toBe(kelvin.iid); // Lash's, next turn
       if (retreat) {
+        // The Retreat costs the leaving hero's printed price: Kelvin's is one soul.
+        expect(heroRetreat(kelvin)).toBe(1);
+        expect(retreatCost(G, '0')).toBe(1);
         moves(c).moveHero(1, 0);                 // retreat: Yamato in, for a soul of the turn's income
         expect(state(c).G.players['0'].active!.cardId).toBe('hero_yamato');
-        expect(state(c).G.players['0'].souls).toBe(LANE_INCOME - RETREAT_COST);
+        expect(state(c).G.players['0'].souls).toBe(LANE_INCOME - heroRetreat(kelvin));
       }
       moves(c).attack();
       expect(winner(c), retreat ? 'Yamato' : 'Kelvin').toBe(retreat ? '0' : undefined);

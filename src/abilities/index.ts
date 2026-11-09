@@ -2370,7 +2370,7 @@ const eff_ult_mo_krill: AbilityDef = {
 };
 const eff_ult_paige: AbilityDef = {
   id: 'eff_ult_paige', trigger: 'onPlay', target: 'noTarget',
-  base: 2,
+  base: 3,
   run: (G, ctx) => {
     const s = ultSpi();
     for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, 3 + s, 'Rallying Charge');

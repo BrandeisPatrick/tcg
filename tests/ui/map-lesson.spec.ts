@@ -4,16 +4,16 @@ import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
 import { attackTargets } from '@/engine/legality';
 import { BOSS_HP } from '@/engine/constants';
-import { structureOf } from '@/engine/query';
+import { effectiveAtk, kitCost, structureOf } from '@/engine/query';
 import { setMatchConfig } from '@/storage/matchConfig';
 import type { GameState } from '@/engine/types';
 import { LESSONS, lessonById } from '@/tutorial/lessons';
 
 // Lesson 5, The Map, is staged to be won in one turn of round 4: Frost
-// Grenade on a Lash on one point (the kill's push fells the rival's Guardian
-// of 2), the attack — at the Mid-Boss, the only target left — and the End
-// that follows it on its own, whose push into the empty lane fells the
-// rival's Patron of 2.
+// Grenade (three of the turn's five souls) on a Lash on one point (the kill's
+// push fells the rival's Guardian of 2), the attack — at the Mid-Boss, the
+// only target left — and the End that follows it on its own, whose push into
+// the empty lane (Kelvin's bullet power, 1) fells the rival's Patron of 1.
 
 function lesson() {
   setMatchConfig({ heroPreferences: [null, null, null, null], tutorial: lessonById('map')!.setup(), lesson: 'map' });
@@ -31,11 +31,13 @@ describe('Lesson 5: the map', () => {
     expect(lessonById('map')!.number).toBe(5);
   });
 
-  it('opens in round 4 on your turn, the Mid-Boss in the pit and the rival on a Guardian of 2 and a Patron of 2', () => {
+  it('opens in round 4 on your turn, the Mid-Boss in the pit and the rival on a Guardian of 2 and a Patron of 1', () => {
     const { G } = state(lesson());
     expect([G.turnNumber, G.firstMover]).toEqual([7, '0']);
     expect(G.boss).toMatchObject({ hp: BOSS_HP });
-    expect(G.players['1'].structures.map((s) => [s.kind, s.hp])).toEqual([['guardian', 2], ['walker', 0], ['patron', 2]]);
+    expect(G.players['1'].structures.map((s) => [s.kind, s.hp])).toEqual([['guardian', 2], ['walker', 0], ['patron', 1]]);
+    // The End's push into the empty lane is Kelvin's bullet power: enough for that Patron.
+    expect(effectiveAtk(G.players['0'].active!)).toBe(1);
     expect(G.players['0'].structures.map((s) => s.hp)).toEqual([4, 6, 8]);
   });
 
@@ -44,10 +46,11 @@ describe('Lesson 5: the map', () => {
     const kelvin = state(c).G.players['0'].active!;
     const lash = state(c).G.players['1'].active!;
     const souls = state(c).G.players['0'].souls;
-    moves(c).useSkill(kelvin.iid, lash.iid);
+    expect(lash.hp).toBe(1);
+    moves(c).useSkill(kelvin.iid);
     let G = state(c).G;
     expect(structureOf(G.players['1'], 'guardian').hp).toBe(0);
-    expect(G.players['0'].souls).toBe(souls); // a kill and a fall pay no souls
+    expect(G.players['0'].souls).toBe(souls - kitCost(kelvin)); // the skill's price; a kill and a fall pay no souls
     expect(attackTargets(G, '0').map((t) => t.zone)).toEqual(['pit']);
     moves(c).attack();
     G = state(c).G;
@@ -62,6 +65,6 @@ describe('Lesson 5: the map', () => {
     const c = lesson();
     moves(c).endTurn();
     expect(state(c).ctx.gameover).toBeUndefined();
-    expect(structureOf(state(c).G.players['1'], 'patron').hp).toBe(2);
+    expect(structureOf(state(c).G.players['1'], 'patron').hp).toBe(1);
   });
 });

@@ -6,8 +6,8 @@ import {
   type ActivateBlock, type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
   type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
-import { MAX_ITEMS, PRICE, RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
-import { heroData, itemPrice, slotCap, wornItems } from '@/engine/query';
+import { MAX_ITEMS, PRICE, ULT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { heroData, heroRetreat, itemPrice, kitCost, slotCap, wornItems } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
 import { STATUSES } from '@/statuses';
 import { CARDS_BY_ID, ITEMS } from '@/cards';
@@ -28,8 +28,9 @@ import { freshReadyGame, giveCard, giveItem } from '../engine/_helpers';
 // `blocked`) — never by their own copy of the rules. These pin the UI to the
 // engine over the boards a copy would get wrong: a corpse on the rival's
 // bench, a hero already wearing the item, a hero at the slot cap, an item
-// cooling down or spent, a play the souls do not cover, a free borrowed
-// ultimate, a stunned hero, a move made while a choice is owed.
+// cooling down or spent, a play the souls do not cover, a skill or an
+// ultimate short of its souls, a stunned hero, a move made while a choice is
+// owed.
 
 const ME: PlayerID = '0';
 
@@ -148,17 +149,20 @@ describe('the glow on the tiles is the engine\'s answer', () => {
   });
 
   it('a ready skill glows exactly what the engine takes', () => {
+    // Paige's Plot Armor is aimed at one of her side's heroes; a corpse of hers is none.
     const G = board();
-    const lash = G.players[ME].bench[1]!;
-    const dynamoCorpse = G.players['1'].bench[0]!;
-    dynamoCorpse.hp = 0; dynamoCorpse.respawnTurnsLeft = 2;
+    const paige = G.players[ME].bench[2]!;
+    const vindictaCorpse = G.players[ME].bench[0]!;
+    vindictaCorpse.hp = 0; vindictaCorpse.respawnTurnsLeft = 2;
     for (const target of heroesOf(G)) {
-      const engine = taken(G, { type: 'useSkill', heroIid: lash.iid, targetIid: target.iid });
-      expect(isValidTarget(G, ME, armedSkill(lash), target), nameOf(target)).toBe(engine);
+      const engine = taken(G, { type: 'useSkill', heroIid: paige.iid, targetIid: target.iid });
+      expect(isValidTarget(G, ME, armedSkill(paige), target), nameOf(target)).toBe(engine);
     }
-    expect(isValidTarget(G, ME, armedSkill(lash), dynamoCorpse)).toBe(false);
-    expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: dynamoCorpse.iid })?.text)
-      .toBe("Not a valid target for Lash's skill");
+    expect(isValidTarget(G, ME, armedSkill(paige), G.players[ME].active!)).toBe(true);
+    expect(isValidTarget(G, ME, armedSkill(paige), G.players['1'].active!)).toBe(false);
+    expect(isValidTarget(G, ME, armedSkill(paige), vindictaCorpse)).toBe(false);
+    expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: paige.iid, targetIid: vindictaCorpse.iid })?.text)
+      .toBe("Not a valid target for Paige's skill");
   });
 
   it('nothing is a target while nothing is armed, or once the armed item is no longer worn', () => {
@@ -336,19 +340,22 @@ describe('the hand\'s plays are the engine\'s answer', () => {
   });
 });
 
-describe('what an ability costs is the engine\'s answer: nothing', () => {
-  it('a borrowed ultimate (Sinclair\'s copy) is free: usable with no souls', () => {
+describe('what an ability costs is the engine\'s answer: kitCost', () => {
+  it('a skill short of its souls is refused, and the line says what it costs', () => {
     const G = board();
-    G.players[ME].souls = 0;
-    const haze = G.players[ME].active!;
-    haze.borrowedUlt = 'eff_ult_abrams';
-    const use: Action = { type: 'useSkill', heroIid: haze.iid, skillId: 'eff_ult_abrams' };
-    expect(skillBlocked(G, ME, haze, undefined, 'eff_ult_abrams')).toBeNull();
+    const paige = G.players[ME].bench[2]!; // Plot Armor: 2 souls
+    const use: Action = { type: 'useSkill', heroIid: paige.iid, targetIid: paige.iid };
+    expect(kitCost(paige)).toBe(2);
+    G.players[ME].souls = 1;
+    expect(skillBlocked(G, ME, paige, paige.iid)).toBe('souls');
+    expect(actionRefusal(G, ME, use)).toEqual({ code: 'souls', text: 'Need 2 souls' });
+    expect(taken(G, use)).toBe(false);
+    G.players[ME].souls = 2;
     expect(actionRefusal(G, ME, use)).toBeNull();
     expect(taken(G, use)).toBe(true);
   });
 
-  it('a hero\'s own ultimate is locked below Level 2, and says so; at it, it is free', () => {
+  it('a hero\'s own ultimate is locked below Level 2, and says so; at it, it costs its size\'s souls', () => {
     const G = board();
     G.players[ME].souls = 0;
     const haze = G.players[ME].active!;
@@ -356,6 +363,11 @@ describe('what an ability costs is the engine\'s answer: nothing', () => {
     expect(actionRefusal(G, ME, use)).toEqual({ code: 'locked', text: `Unlocks at Level ${ULT_UNLOCK_LEVEL}` });
     expect(taken(G, use)).toBe(false);
     haze.level = ULT_UNLOCK_LEVEL;
+    // Bullet Dance is a large ultimate: 12 souls.
+    expect(kitCost(haze, 'eff_ult_haze')).toBe(ULT_COST.large);
+    expect(actionRefusal(G, ME, use)).toEqual({ code: 'souls', text: `Need ${ULT_COST.large} souls` });
+    expect(taken(G, use)).toBe(false);
+    G.players[ME].souls = ULT_COST.large;
     expect(actionRefusal(G, ME, use)).toBeNull();
     expect(taken(G, use)).toBe(true);
   });
@@ -388,12 +400,14 @@ describe('a refused move is said, with the engine\'s own code', () => {
     expect(actionRefusal(G, ME, { type: 'activate', itemIid: grit.iid })).toBeNull();
   });
 
-  it('a retreat without the souls says what it costs', () => {
+  it('a retreat without the souls says what it costs: the leaving hero\'s printed retreat', () => {
     const G = board();
-    G.players[ME].souls = RETREAT_COST - 1;
+    const price = heroRetreat(G.players[ME].active!); // Haze: 1
+    expect(price).toBe(1);
+    G.players[ME].souls = price - 1;
     expect(moveBlocked(G, ME, 1, 0)).toBe('souls');
     expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toEqual({
-      code: 'souls', text: `Need ${RETREAT_COST} soul${RETREAT_COST === 1 ? '' : 's'}`,
+      code: 'souls', text: `Need ${price} soul${price === 1 ? '' : 's'}`,
     });
   });
 
@@ -477,7 +491,7 @@ describe('a refused move is said, with the engine\'s own code', () => {
 // below is keyed by the engine's own union, so a code added there is a compile
 // error here until it is worded.
 describe('every block code has words', () => {
-  const skill: Record<SkillBlock, true> = { noSkill: true, actOver: true, down: true, locked: true, used: true, status: true, cooldown: true, hp: true, target: true };
+  const skill: Record<SkillBlock, true> = { noSkill: true, actOver: true, down: true, locked: true, used: true, status: true, cooldown: true, souls: true, hp: true, target: true };
   const attack: Record<AttackBlock, true> = { turn1: true, used: true, noActive: true, cannot: true, noTarget: true, target: true };
   const activate: Record<ActivateBlock, true> = { noItem: true, passive: true, actOver: true, down: true, used: true, status: true, charges: true, cooldown: true, target: true };
   const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, souls: true, upgrade: true };
@@ -533,6 +547,8 @@ describe('every block code has words', () => {
 
   it('a skill on cooldown says how many turns are left, and a skill held back by another ability says which', () => {
     const lash = board().players[ME].bench[1]!; // one skill: Ground Strike
+    expect(skillBlockReason('souls')).toBe('Not enough souls'); // no hero to ask: no number
+    expect(skillBlockReason('souls', lash)).toBe('Need 3 souls');
     const skillId = heroData(lash)!.skills[0];
     expect(skillBlockReason('cooldown')).toBe('On cooldown'); // no hero to ask: no number
     expect(skillBlockReason('cooldown', { ...lash, cooldowns: { [skillId]: 2 } })).toBe('Ready in 2 turns');
@@ -546,6 +562,8 @@ describe('every block code has words', () => {
     // No hero of the roster has two skills: a throwaway one carries Lash's and Kelvin's.
     const twin: HeroCard = {
       id: 'hero_ui_twin', name: 'Twin', type: 'hero', rarity: 3, atk: 2, hp: 8,
+      growth: { atk: 1, hp: 1, spirit: 1 }, retreat: 1,
+      profile: { role: 'Controller', mix: { tank: 1, damage: 1, control: 3, support: 0 }, reach: 'many', curve: 'mid' },
       skills: ['skill_lash', 'skill_kelvin'], signature: ['extra_spirit', 'mystic_burst'],
     };
     CARDS_BY_ID[twin.id] = twin;

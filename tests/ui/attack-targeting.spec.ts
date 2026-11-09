@@ -35,7 +35,9 @@ const longArm: HeroAbilityDef = {
   trigger: 'ongoing', target: 'self', reach: true, run: () => {},
 };
 const throwaway = (id: string, name: string): HeroCard => ({
-  id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, skills: [], passives: [longArm.id], signature: ['extra_spirit', 'mystic_burst'],
+  id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, growth: { atk: 1, hp: 1, spirit: 0 }, retreat: 1,
+  profile: { role: 'Marksman', mix: { tank: 1, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'mid', gun: true },
+  skills: [], passives: [longArm.id], signature: ['extra_spirit', 'mystic_burst'],
 });
 
 beforeAll(() => {

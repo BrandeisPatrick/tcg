@@ -195,6 +195,7 @@ export const GROUPS: Group[] = [
       { label: "Djinn's Mark ×3", events: [status('r0', 'djinns_mark', 3, 3, true)] },
       { label: 'Bleed 3', events: [status('r0', 'bleed', 3, 2, true)] },
       { label: 'Unstoppable', events: [status('y0', 'unstoppable', 1, 1, false)] },
+      { label: 'Invulnerable (The Cube)', events: [status('y0', 'invulnerable', 1, 1, false)] },
       { label: 'Channeling (Seven)', events: [status('r2', 'casting', 2, 3, false)] },
       { label: '+Heal 2', events: [status('y0', 'healing_boost', 2, 999, false)] },
       { label: 'Healing blocked', events: [status('r0', 'healing_boost_down', 1, 2, true)] },

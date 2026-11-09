@@ -191,7 +191,7 @@ const volleyEffect: AbilityDef = {
 
 beforeAll(() => {
   registerAbilities([volleyEffect]);
-  CARDS_BY_ID[VOLLEY_ULT] = { id: VOLLEY_ULT, name: 'Volley', type: 'ultimate', rarity: 4, linkedHero: VOLLEY_HERO, abilities: [volleyEffect.id] };
+  CARDS_BY_ID[VOLLEY_ULT] = { id: VOLLEY_ULT, name: 'Volley', type: 'ultimate', rarity: 4, size: 'medium', linkedHero: VOLLEY_HERO, abilities: [volleyEffect.id] };
   CARDS_BY_ID[VOLLEY_HERO] = { ...(CARDS_BY_ID.hero_lash as HeroCard), id: VOLLEY_HERO, ult: volleyEffect.id };
 });
 afterAll(() => { delete CARDS_BY_ID[VOLLEY_ULT]; delete CARDS_BY_ID[VOLLEY_HERO]; });
@@ -294,9 +294,9 @@ describe('a volley: a card swinging at every enemy hero inside its cast', () => 
     expect(tl.koCorpse[foes[0].iid]).toBeUndefined();
   });
 
-  it('an Unstoppable hero shrugs its swing at the swing\'s instant', () => {
+  it('an Invulnerable hero shrugs its swing at the swing\'s instant', () => {
     const { G, foes } = table();
-    addStatus(G, foes[3], 'unstoppable', 1, 2);
+    addStatus(G, foes[3], 'invulnerable', 1, 2);
     const { batch } = made(G, () => playVolley(G));
     expect(shape(batch).slice(-2)).toEqual(['swing', 'immune:attack']);
     const tl = buildFxTimeline(batch);
@@ -351,9 +351,9 @@ describe('the turn\'s attack is walked by the choreographer alone', () => {
     expect(buildFxTimeline(batch).items.some((i) => i.ev.kind === 'swing')).toBe(false);
   });
 
-  it('what the attack met that the walk has no beat for still plays: an Unstoppable hero\'s shrug', () => {
+  it('what the attack met that the walk has no beat for still plays: an Invulnerable hero\'s shrug', () => {
     const { G, foes } = table();
-    addStatus(G, foes[0], 'unstoppable', 1, 2);
+    addStatus(G, foes[0], 'invulnerable', 1, 2);
     const { batch, seen } = made(G, () => makeTurnAttack(G));
     expect(shape(batch)).toEqual(['swing', 'immune:attack']);
     const fresh = freshBatch(G.fx, seen);
