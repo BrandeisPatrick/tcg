@@ -51,7 +51,11 @@ export const STATUSES: StatusDef[] = [
   { id: 'shield',        title: 'Shield',        desc: 'Absorb <value> damage, then break.',                       hvalue:  1 },
   { id: 'weapon_power',  title: 'Bullet Power',  desc: '+<value> Bullet Power on basic attacks.',                  hvalue:  1 },
   { id: 'spirit_power',  title: 'Spirit Power',  desc: '+<value> to skill / ultimate scaling.',                    hvalue:  1 },
-  { id: 'unstoppable',   title: 'Unstoppable',   desc: 'Immune to all damage and crowd control. Cleanses CC on apply.', hvalue: 2 },
+  // Unstoppable is the hero doc's word (docs/hero-design.md §3): no crowd control.
+  // Taking no damage is Invulnerable, its own status (The Cube); the items that
+  // made a hero untouchable (Unstoppable, Prism Blast) give both.
+  { id: 'unstoppable',   title: 'Unstoppable',   desc: "Can't be stunned, put to sleep, rooted, silenced or disarmed. Cleanses them when it lands.", hvalue: 2 },
+  { id: 'invulnerable',  title: 'Invulnerable',  desc: 'Takes no damage.',                                         hvalue: 2 },
   { id: 'healing_boost', title: 'Healing Boost', desc: '+<value> to all healing received.',                           hvalue:  1 },
   // Not crowd control, so it ticks at the start of its owner's turn like any buff: put up
   // for 1 turn on your own turn it covers the rival's turn and is gone when yours begins.
@@ -87,7 +91,8 @@ export const STATUSES: StatusDef[] = [
   { id: 'stun',          title: 'Stun',          desc: 'Cannot act, attack, or use skills.',                       hvalue: -2, blocks: ['attack', 'skill', 'pulse'], cc: true },
   { id: 'silenced',      title: 'Silenced',      desc: 'Cannot use skills.',                                         hvalue: -1, blocks: ['skill'], cc: true },
   { id: 'disarm',        title: 'Disarm',        desc: 'Cannot make basic attacks.',                               hvalue: -2, blocks: ['attack'], cc: true },
-  { id: 'sleep',         title: 'Sleep',         desc: 'Cannot act, attack, or use skills. Any damage wakes it (triggering any wake-up effect).', hvalue: -2, blocks: ['attack', 'skill', 'pulse'], cc: true },
+  // Sleep is the same as Stun, for the turns it is put on for (docs/hero-design.md §3).
+  { id: 'sleep',         title: 'Sleep',         desc: 'Cannot act, attack, or use skills: a Stun for every turn it lasts.', hvalue: -2, blocks: ['attack', 'skill', 'pulse'], cc: true },
   { id: 'rooted',        title: 'Rooted',        desc: 'Cannot retreat or be swapped.',                            hvalue: -1, blocks: ['move'], cc: true },
   { id: 'rabbit',        title: 'Rabbit',        desc: 'Hexed into a rabbit: cannot attack or use skills.',        hvalue: -2, blocks: ['attack', 'skill', 'pulse'], cc: true },
 
@@ -95,10 +100,10 @@ export const STATUSES: StatusDef[] = [
   { id: 'bleed',         title: 'Bleed',         desc: 'Take <value> Pure dmg at start of turn (stacks, max 3).',  hvalue: -1, stack: { add: true, cap: BLEED_CAP, duration: 'max' } },
 
   // ----- Delayed CC -----
-  // Mirage's mark refreshes its full 3-turn timer on every new stack: the
-  // active rebuilds the timer (stack.duration 'reset').
+  // Mirage's mark refreshes its full 3-turn timer on every new stack (stack.duration
+  // 'reset'); the mark that makes DJINN_CAP detonates them all (his passive).
   { id: 'charged',       title: 'Charged',       desc: 'On expiry: Stun for 1 turn.',                              hvalue: -1 },
-  { id: 'djinns_mark',   title: "Djinn's Mark",  desc: 'Detonates at 4 stacks or on expiry for 3 spirit dmg per stack.', hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' } },
+  { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 4 spirit damage + Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' } },
   { id: 'reverb',        title: 'Reverb',        desc: 'Detonates at the start of your turn for <value> spirit damage.', hvalue: -1 },
   // Last Stand is a delayed strike: at the start of its bearer's owner's turn, when it is
   // about to expire, it deals <value> + the bearer's Spirit to every enemy hero, then the
@@ -115,7 +120,7 @@ export const STATUSES: StatusDef[] = [
   // `attackBonus(self, target)` hook. It lasts while the target stays in the lane
   // (it ends when the target leaves the Active slot), so it is applied with duration
   // 99, and every new stack starts the timer over.
-  { id: 'fixation',      title: 'Fixation',      desc: `When Haze attacks this hero, it takes +<value> damage. Up to ${FIXATION_CAP}; it falls off when the hero leaves the Active slot.`, hvalue: -1, stack: { add: true, cap: FIXATION_CAP, duration: 'reset' }, clearOnLeaveActive: true },
+  { id: 'fixation',      title: 'Fixation',      desc: `When Haze attacks this hero, she deals +<value> bullet damage. Up to ${FIXATION_CAP}; it falls off when the hero leaves the Active slot.`, hvalue: -1, stack: { add: true, cap: FIXATION_CAP, duration: 'reset' }, clearOnLeaveActive: true },
 
   // ----- Other debuff -----
   { id: 'weapon_power_down',   title: 'Bullet Power',  desc: 'Bullet Power −<value> on basic attacks.',                 hvalue: -1 },

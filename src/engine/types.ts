@@ -59,20 +59,52 @@ export interface BaseCard {
   text?: string;
 }
 
+/** A hero's role (docs/hero-design.md §1): how it plays in Deadlock. */
+export type HeroRole = 'Tank' | 'Bruiser' | 'Gun carry' | 'Marksman' | 'Spirit caster' | 'Assassin' | 'Support' | 'Controller';
+
+/** When a hero peaks (docs/hero-design.md §2). Early: +1 point at Level 1 and
+ *  2 growth points a level; mid: none and 3; late: −1 point (never below
+ *  Attack 1 or HP 4) and 4. All three are even at Level 2. */
+export type HeroCurve = 'early' | 'mid' | 'late';
+
+/** What a hero card is designed from (docs/hero-design.md §1–2): its role,
+ *  its mix of tank, damage, control and support (each 0–3), its reach and its
+ *  curve. HP is 4 + `mix.tank` at Level 1, adjusted by the curve; Attack is 1,
+ *  or 2 for a `gun` hero (its damage mainly bullet or melee) with damage 2 or
+ *  more. The data tests check the printed stats against these. */
+export interface HeroProfile {
+  role: HeroRole;
+  mix: { tank: number; damage: number; control: number; support: number };
+  reach: 'one' | 'many' | 'both';
+  curve: HeroCurve;
+  /** Its damage is mainly bullet or melee. */
+  gun?: true;
+}
+
 /** A hero prints no text of its own: its card text is its abilities' (`name`
  *  and `text` on each AbilityDef), read through `heroAbilities` (engine/query.ts). */
 export interface HeroCard extends Omit<BaseCard, 'text'> {
   type: 'hero';
+  /** Attack and HP at Level 1 (docs/hero-design.md §2). */
   atk: number;
   hp: number;
-  /** The skills the hero may use, in order: one or two, none for a passive-only
-   *  hero. A bare `useSkill` names `skills[0]`. A hero uses one ability a turn
-   *  (a skill or its ultimate). */
+  /** What each level gained adds: the curve's growth points split between
+   *  Attack, HP and Spirit (2 a level early, 3 mid, 4 late). */
+  growth: { atk: number; hp: number; spirit: number };
+  /** Souls a Retreat costs while this hero is the one leaving the Active slot:
+   *  0 for very mobile heroes, 1 for most, 2 for slow heavy ones
+   *  (`retreatCost`, legality.ts). */
+  retreat: number;
+  profile: HeroProfile;
+  /** The hero's skill, when it has one (a hero has one skill or one passive):
+   *  a bare `useSkill` names `skills[0]`. A hero uses one ability a turn (a
+   *  skill, an active item or its ultimate). */
   skills: AbilityId[];
   passives?: AbilityId[];
-  /** The ultimate's ability id: a kit ability like a skill, unlocked at
-   *  ULT_UNLOCK_LEVEL and on its own cooldown. Its card (`ULTIMATES`, the one
-   *  whose `abilities[0]` it is) only names and draws it. */
+  /** The ultimate's ability id: a button printed on the hero card, used like a
+   *  skill from ULT_UNLOCK_LEVEL for its size's souls (`ULT_COST`) and then on
+   *  ULT_COOLDOWN. Its card (`ULTIMATES`, the one whose `abilities[0]` it is)
+   *  names it, sizes it and shows its icon. */
   ult?: AbilityId;
   /** The hero's two signature items, chosen to fit its kit (one of tier 1 or
    *  2): both are on sale in any match the hero is drafted into. */
@@ -118,13 +150,19 @@ export interface EquipmentCard extends BaseCard, ItemFields {
 /** Any item the shop sells: an active (spell) or a passive (equipment). */
 export type ItemCard = SpellCard | EquipmentCard;
 
-/** An ultimate's face: its name, text and art. The ultimate itself is a kit
- *  ability of its hero (`HeroCard.ult`), used from the hero sheet and never
- *  dealt, held or paid for. */
+/** An ultimate's size (docs/hero-design.md §4): it sets the souls it costs
+ *  (`ULT_COST`: 4, 8 or 12). */
+export type UltSize = 'small' | 'medium' | 'large';
+
+/** An ultimate's face: its name, text, size and icon (the hero's Deadlock
+ *  ultimate icon, `public/ult/<hero>.webp`). The ultimate itself is a kit
+ *  ability of its hero (`HeroCard.ult`), a button on the hero card, never
+ *  dealt or held: it is paid for in souls when it is used. */
 export interface UltimateCard extends BaseCard {
   type: 'ultimate';
   linkedHero: CardId;
   abilities: AbilityId[];
+  size: UltSize;
 }
 
 export type CardData = HeroCard | SpellCard | EquipmentCard | UltimateCard;
@@ -169,10 +207,10 @@ export interface CardInstance {
    *  when it empties. Ticks at the start of the owner's turn (docs/stats-model.md
    *  §1), on a corpse too; a fall and a respawn leave it as it is. */
   cooldowns?: Partial<Record<AbilityId, number>>;
-  /** An ultimate this hero may use once, free, as a kit ability: Sinclair's
-   *  Audience Participation copies the enemy Active's. Gone once used; it
-   *  needs no level and has no cooldown, and it stays through a death. */
-  borrowedUlt?: AbilityId;
+  /** What a hero's passive counts for the game, by ability id: Drifter's
+   *  Bloodscent counts the knockouts that have grown his Attack. It stays
+   *  through a death, as the level does. */
+  tally?: Partial<Record<AbilityId, number>>;
   /** A hard crowd-control active's uses left this match (HARD_CC_CHARGES when
    *  bought; it travels with the item). At 0 the item stays worn but cannot be
    *  used. Undefined on every other card. An active's cooldown lives in this

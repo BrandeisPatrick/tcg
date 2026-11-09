@@ -45,7 +45,8 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   // 'attack'; a tagged effect riding on a swing is a proc.
   const fxCast: FxCastKind = castKind === 'attack' && fx?.tag ? 'proc' : castKind;
   const fxFrom = fxSource(fx?.source ?? cast?.source);
-  if (target.statuses.some((s) => s.id === 'unstoppable')) {
+  // Invulnerable takes no damage (The Cube; the Unstoppable item and Prism Blast).
+  if (target.statuses.some((s) => s.id === 'invulnerable')) {
     pushFx(G, { kind: 'immune', iid: target.iid, what: 'damage', cast: fxCast });
     return 0;
   }
@@ -172,16 +173,7 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     cast: fxCast, source: fxFrom, tag: fx?.tag, stacks: fx?.stacks,
   });
 
-  // Sleep wakes on any connecting damage (target still alive). Strip it first so
-  // the wake-up burst (Rem's Naptime) doesn't re-enter this hook, then deal it.
-  if (target.hp > 0) {
-    const sleeping = target.statuses.find((s) => s.id === 'sleep');
-    if (sleeping) {
-      target.statuses = target.statuses.filter((s) => s.id !== 'sleep');
-      pushLog(G, `${targetName} wakes.`);
-      if (sleeping.value > 0) damageUnit(G, target, sleeping.value, 'spirit', 'Naptime', { tag: 'naptime' });
-    }
-  }
+  // Sleep is a Stun for its turns (docs/hero-design.md §3): damage does not wake it.
 
   return dmg;
 }

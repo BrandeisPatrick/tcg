@@ -18,7 +18,8 @@
  * ultimates without hand-tuning each case, and what a line leaves on the board:
  * the statuses it lands, the channel it starts, the Rem it merges, the souls it
  * keeps, the cards it holds. A turn is the player's to spend on cards from the
- * hand, abilities (one per hero — skill, active item or ultimate, all free) and
+ * hand, abilities (one per hero — a skill or an ultimate for its souls, or a
+ * worn active item, free) and
  * one Retreat, and then one attack, which ends it: after the attack only
  * `endTurn` is left. Ending the turn never attacks, so the AI has to choose
  * `attack` itself. Every line before the attack is valued with the attack
@@ -270,10 +271,6 @@ const WORN_PRICE = 0.5;
  *  a point of HP, so the evaluation decides and this only orders its ties. */
 const BUILD_FIT = 0.6;
 
-/** What an unused borrowed ultimate (Sinclair's copy) is worth to its holder,
- *  as a share of the ultimate's `base`: it is that effect, banked for later. */
-const BORROWED_SHARE = 1.5;
-
 /** What a hero standing on the board is worth: its presence, its HP and its offense. */
 function presence(c: CardInstance): number {
   return 3 + c.hp * 2 + heroThreat(c) * 1.5;
@@ -324,12 +321,6 @@ function mergedRem(c: CardInstance): CardInstance[] {
   return (c.attached ?? []).filter((a) => a.remMergeTurnsLeft != null);
 }
 
-/** What an ultimate a hero has borrowed and not yet used is worth to it. */
-function borrowedValue(c: CardInstance): number {
-  if (!c.borrowedUlt) return 0;
-  return (getAbility(c.borrowedUlt)?.base ?? 3) * BORROWED_SHARE;
-}
-
 /** What a side's standing structures are worth (`STRUCTURE_WEIGHT`). */
 function structureValue(ps: PlayerState): number {
   return ps.structures.reduce((n, st) => n + Math.max(0, st.hp) * STRUCTURE_WEIGHT[st.kind], 0);
@@ -370,8 +361,8 @@ function bossBlow(g: GameState, pid: PlayerID): number {
  *  the structures each side has standing, the flex slot and a live
  *  Rejuvenator, the Mid-Boss's damage lead and the blow it still owes; each
  *  living hero's HP, offense (attack plus its best skill), shield and worn
- *  gear, plus the statuses it carries, the channel it is running, the merged
- *  Rem it wears and a borrowed ultimate it holds, each fallen hero as a lost
+ *  gear, plus the statuses it carries, the channel it is running and the merged
+ *  Rem it wears, each fallen hero as a lost
  *  presence, the souls each side keeps and the cards it holds. */
 function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
   // A match that is over is not "a good position": it is the one that must
@@ -397,7 +388,7 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
       // point of HP — weight it like HP (×2), not ×1 (which made the bot
       // under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
-      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies) + borrowedValue(c));
+      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies));
       // Merging Rem into an ally is not the loss of a hero.
       for (const rem of mergedRem(c)) s += sign * presence(rem);
     }
@@ -535,7 +526,7 @@ function scoreActivate(pid: PlayerID, target?: CardInstance): number {
   return s;
 }
 
-/** A crude ability's score; an ultimate (its own or a borrowed one) ranks above a skill. */
+/** A crude ability's score; an ultimate ranks above a skill. */
 function scoreSkill(pid: PlayerID, target?: CardInstance, ultimate = false): number {
   let s = ultimate ? 30 : 12;
   if (target && target.ownerId !== pid) {

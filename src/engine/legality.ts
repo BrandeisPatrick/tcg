@@ -18,10 +18,10 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import { upgradesOf } from '@/cards/decks';
 import type { Action } from './engine';
 import { getAbility } from './registry';
-import { RETREAT_COST, ULT_UNLOCK_LEVEL } from './constants';
+import { ULT_UNLOCK_LEVEL } from './constants';
 import {
-  attackPower, findCardOnBoard, findWornItem, handCard, hasReach, heroesOf, isBlocked, isRespawning,
-  isUntargetable, itemCooldown, itemPrice, kitAbilityIds, laneOpen, liveBoardCards, otherPlayer, resolveSkill, retreatDiscount,
+  abilityAim, attackPower, findCardOnBoard, findWornItem, handCard, hasReach, heroesOf, heroRetreat, isBlocked, isRespawning,
+  isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, laneOpen, liveBoardCards, otherPlayer, resolveSkill, retreatDiscount,
   slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, wornActives, wornItems,
 } from './query';
 import { seatToMove } from './rounds';
@@ -117,30 +117,32 @@ export function attackBlocked(G: GameState, pid: PlayerID, targetIid?: string): 
 
 // ---------- Hero abilities: skills and ultimates ----------
 
-export type SkillBlock = 'noSkill' | 'actOver' | 'down' | 'locked' | 'used' | 'status' | 'cooldown' | 'hp' | 'target';
+export type SkillBlock = 'noSkill' | 'actOver' | 'down' | 'locked' | 'used' | 'status' | 'cooldown' | 'souls' | 'hp' | 'target';
 
 /** What one of a hero's kit abilities may be aimed at (`skillId` names it —
- *  a skill, its ultimate or a borrowed ultimate; left out, the hero's first
- *  skill): the live board cards its filter allows (minus the caster, for an
- *  ability that says `excludeSelf`), or 'none' for one that takes no target.
- *  No such ability gives []. */
+ *  its skill or its ultimate; left out, the hero's first skill): the live
+ *  board cards its filter allows (`abilityAim`: its fixed filter, or the one
+ *  its `aim` reads off the board; minus the caster, for an ability that says
+ *  `excludeSelf`), or 'none' for one that takes no target. No such ability,
+ *  or one that cannot be aimed now, gives []. */
 export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, skillId?: AbilityId): CardInstance[] | 'none' {
   const skill = resolveSkill(hero, skillId);
   if (!skill) return [];
-  const { ability } = skill;
-  if (ability.target === 'noTarget') return 'none';
-  const targets = targetsFor(G, pid, ability.target, hero);
-  return ability.excludeSelf ? targets.filter((t) => t.iid !== hero.iid) : targets;
+  const aim = abilityAim(G, pid, hero, skill.ability);
+  if (!aim) return [];
+  if (aim.target === 'noTarget') return 'none';
+  const targets = targetsFor(G, pid, aim.target, hero);
+  return aim.excludeSelf ? targets.filter((t) => t.iid !== hero.iid) : targets;
 }
 
 /**
  * Why `hero` cannot use one of its kit abilities right now, or null when it
- * can: a hero with that ability (`skillId`: a skill, its ultimate or a borrowed
- * ultimate; left out, its first skill), in a turn whose attack has not ended
- * the Act, alive, its ultimate unlocked, that has not used an ability this turn
- * (one per hero per turn, skill and ultimate alike), free of the statuses that
- * lock it, with the ability off cooldown and a legal target. Abilities cost no
- * souls. Whose turn it is, is the caller's question. Checked in this order:
+ * can: a hero with that ability (`skillId`: its skill or its ultimate; left
+ * out, its first skill), in a turn whose attack has not ended the Act, alive,
+ * its ultimate unlocked, that has not used an ability this turn (one per hero
+ * per turn, skill and ultimate alike), free of the statuses that lock it, with
+ * the ability off cooldown, the souls it costs (`kitCost`) in hand and a legal
+ * target. Whose turn it is, is the caller's question. Checked in this order:
  *  - 'noSkill'  the hero has no such ability.
  *  - 'actOver'  the turn's attack has been made: it ends the Act.
  *  - 'down'     it is a corpse on the respawn timer.
@@ -148,6 +150,7 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
  *  - 'used'     it has used an ability this turn (any of its kit).
  *  - 'status'   a status locks its abilities (`isBlocked(hero, 'skill')`).
  *  - 'cooldown' this ability is still cooling down (`hero.cooldowns`).
+ *  - 'souls'    `pid` has fewer souls than it costs (`kitCost`).
  *  - 'hp'       the ability costs HP (`hpCost`) and the hero does not have more
  *               than that: it can pay what it has left, never its last.
  *  - 'target'   there is nothing legal to aim it at — or `targetIid` is not.
@@ -165,6 +168,7 @@ export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, ta
   if (hero.skillUsedThisTurn) return 'used';
   if (isBlocked(hero, 'skill')) return 'status';
   if ((hero.cooldowns?.[skill.id] ?? 0) > 0) return 'cooldown';
+  if (G.players[pid].souls < kitCost(hero, skill.id)) return 'souls';
   if (skill.ability.hpCost && hero.hp <= skill.ability.hpCost) return 'hp';
   const targets = skillTargets(G, pid, hero, skill.id);
   if (targets === 'none') return null;
@@ -371,18 +375,19 @@ export function discardBlocked(G: GameState, pid: PlayerID, cardIids: readonly s
 // ---------- Moving heroes ----------
 
 /**
- * Souls `pid`'s Retreat costs right now: RETREAT_COST, less the `retreatDiscount`
- * hooks of what the hero leaving the Active slot carries (Sprint Boots, Enduring
- * Speed), and nothing at all while that hero is Swift (Fleetfoot) — never below
- * 0. The one price: `moveBlocked` checks it, `moveHero` charges it, the board
- * prints it and the fuzz oracle checks it. A Retreat spends the Swift
- * (`moveHero`).
+ * Souls `pid`'s Retreat costs right now: the retreat printed on the hero
+ * leaving the Active slot (`heroRetreat`: 0, 1 or 2 by how mobile it is), less
+ * the `retreatDiscount` hooks of what it carries (Sprint Boots, Enduring
+ * Speed), and nothing at all while that hero is Swift (Fleetfoot, Willpower) —
+ * never below 0, and 0 with nobody in the slot. The one price: `moveBlocked`
+ * checks it, `moveHero` charges it, the board prints it and the fuzz oracle
+ * checks it. A Retreat spends the Swift (`moveHero`).
  */
 export function retreatCost(G: GameState, pid: PlayerID): number {
   const leaving = G.players[pid].active;
-  if (!leaving) return RETREAT_COST;
+  if (!leaving) return 0;
   if (leaving.statuses.some((s) => s.id === 'swift')) return 0;
-  return Math.max(0, RETREAT_COST - retreatDiscount(leaving));
+  return Math.max(0, heroRetreat(leaving) - retreatDiscount(leaving));
 }
 
 export type MoveBlock = 'same' | 'actOver' | 'empty' | 'benchOnly' | 'down' | 'rooted' | 'retreated' | 'souls' | 'illegal';
@@ -528,8 +533,8 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
  * hero it may swing at (`attackTargets`), the first as the bare action (a bare
  * `attack` swings at it) and any others naming theirs; each living hero's
  * active items, in board and worn order, each on each of its targets; each
- * living hero's kit abilities (`kitAbilityIds`: its skills, its ultimate, a
- * borrowed ultimate), in board order and the kit's own order, each on each of
+ * living hero's kit abilities (`kitAbilityIds`: its skill, its ultimate), in
+ * board order and the kit's own order, each on each of
  * its targets (every action names its `skillId`); retreats from the bench in
  * `stepInCandidates` order (before the attack: the hero who steps in may make
  * it); each item in its hand put on each hero it may go on (one action per

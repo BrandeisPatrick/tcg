@@ -4,15 +4,9 @@
  * nothing has to be kept in step by hand. (Card stats live on the cards; this
  * is only the table's own arithmetic.)
  */
-import type { ItemTier, StructureKind } from './types';
+import type { ItemTier, StructureKind, UltSize } from './types';
 
 // ---------- Costs and limits ----------
-
-/** Souls to swap the Active with a bench hero: the base price. What a Retreat
- *  costs right now is `retreatCost` (legality.ts) — Sprint Boots take a soul
- *  off, a Swift hero's is free. A player retreats at most once a turn, and only
- *  before the turn's attack. */
-export const RETREAT_COST = 1;
 
 /** Items a hero can wear at once. A full hero takes nothing more except an
  *  upgrade of an item it wears, which takes that item's place. */
@@ -96,16 +90,25 @@ export const MAX_HAND = 10;
 
 // ---------- Abilities ----------
 
-/** Own turns a hero skill waits after use when its data names no `cooldown`:
- *  1 is usable every turn, as a skill always was. Abilities cost nothing. */
+/** Own turns a hero skill waits after use when its data names no `cooldown`
+ *  (docs/hero-design.md §2: "then waits 1 turn"): ready again at the start of
+ *  the hero's next own turn. A skill costs its own souls (`AbilityDef.souls`,
+ *  1–3); a hero's Retreat is its card's `retreat`. */
 export const SKILL_COOLDOWN = 1;
 
-/** The level at which a hero's ultimate unlocks. It is a kit ability, not a
- *  card: free, used like a skill (it is the hero's one ability that turn). */
+/** The level at which a hero's ultimate unlocks. It is a button printed on the
+ *  hero card, not a card: used like a skill (it is the hero's one ability that
+ *  turn) for its size's souls (`ULT_COST`). */
 export const ULT_UNLOCK_LEVEL = 2;
 
-/** Own turns an ultimate waits after use. */
+/** Own turns an ultimate waits after use ("then waits 3 turns"): ready again on
+ *  the third of its hero's own turns after it. */
 export const ULT_COOLDOWN = 3;
+
+/** What an ultimate costs, by its size (docs/hero-design.md §2 and §4): a
+ *  small one is worth 4–6 points, a medium one 8–12, a large one 12–18, and a
+ *  soul buys about a point. */
+export const ULT_COST: Readonly<Record<UltSize, number>> = { small: 4, medium: 8, large: 12 };
 
 // ---------- The map: structures, pushes, the Mid-Boss, the round cap ----------
 
@@ -169,18 +172,16 @@ export const LEVEL_THRESHOLDS = [5, 7, 9] as const;
 export const START_LEVEL = 1 as const;
 export const MAX_LEVEL = 4 as const;
 
-export const LEVEL_ATK_BONUS = 1 as const;
-export const LEVEL_HP_BONUS = 1 as const;
-// Every hero gains Spirit per level (not just casters) so any hero's skill /
-// ultimate scales into the late game — Spirit is a real build axis, no role
-// caps. See docs/balance-model.md.
-export const LEVEL_SPIRIT_BONUS = 1 as const;
+// What a level adds is the hero's own: `HeroCard.growth`, its curve's growth
+// points (2 a level early, 3 mid, 4 late) split between Attack, HP and Spirit
+// (docs/hero-design.md §2).
 
 // ---------- Status stacking caps ----------
 
 /** Bleed stacks additively up to this value. */
 export const BLEED_CAP = 3;
-/** Djinn's Mark stacks additively up to this value (and detonates at it). */
-export const DJINN_CAP = 4;
-/** Fixation stacks additively up to this value (+1 to the fixed attacker's swing per stack). */
-export const FIXATION_CAP = 3;
+/** Djinn's Mark stacks additively up to this value, and the mark that reaches
+ *  it detonates them all (Mirage's passive). */
+export const DJINN_CAP = 3;
+/** Fixation stacks additively up to this value (+1 to Haze's swing per stack). */
+export const FIXATION_CAP = 2;

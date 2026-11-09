@@ -26,7 +26,7 @@ import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, START_LEVEL,
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, START_LEVEL, ULT_COST,
 } from './constants';
 import { pushMultiplier, round, secondMover } from './rounds';
 
@@ -403,9 +403,9 @@ export function itemCooldown(item: CardInstance): number {
 
 // ---------- A hero's kit ----------
 
-/** What kind of kit ability a hero uses: one of its skills, its own ultimate,
- *  or an ultimate it has borrowed (Sinclair's copy, `borrowedUlt`). */
-export type KitKind = 'skill' | 'ult' | 'borrowed';
+/** What kind of kit ability a hero uses: its skill, or its ultimate (the
+ *  button printed on its card). */
+export type KitKind = 'skill' | 'ult';
 
 /** One ability a hero can use: its id, the ability that does it, and its kind. */
 export interface KitAbility {
@@ -414,16 +414,15 @@ export interface KitAbility {
   kind: KitKind;
 }
 
-/** The abilities `card` may choose to use, in order: its skills, its
- *  ultimate, then an ultimate it has borrowed. Every one is used through
- *  `useSkill` naming its id; the legal-move list, the hero sheet and the
- *  board's ready glint all walk this list. */
+/** The abilities `card` may choose to use, in order: its skill, then its
+ *  ultimate. Every one is used through `useSkill` naming its id; the
+ *  legal-move list, the hero sheet and the board's ready glint all walk this
+ *  list. */
 export function kitAbilityIds(card: CardInstance): AbilityId[] {
   const data = heroData(card);
   if (!data) return [];
   const out = [...data.skills];
   if (data.ult) out.push(data.ult);
-  if (card.borrowedUlt && !out.includes(card.borrowedUlt)) out.push(card.borrowedUlt);
   return out;
 }
 
@@ -439,13 +438,40 @@ export function resolveSkill(card: CardInstance, skillId?: AbilityId): KitAbilit
   if (!data) return undefined;
   const id = skillId === undefined ? data.skills[0] : skillId;
   if (id === undefined) return undefined;
-  const kind: KitKind | undefined = data.skills.includes(id) ? 'skill'
-    : id === data.ult ? 'ult'
-    : id === card.borrowedUlt ? 'borrowed'
-    : undefined;
+  const kind: KitKind | undefined = data.skills.includes(id) ? 'skill' : id === data.ult ? 'ult' : undefined;
   if (!kind) return undefined;
   const ability = getAbility(id);
   return ability ? { id, ability, kind } : undefined;
+}
+
+/** The souls a hero's kit ability costs to use (docs/hero-design.md §2): a
+ *  skill its own `souls` (1–3), an ultimate its card's size (`ULT_COST`: 4, 8
+ *  or 12). 0 for an id the hero does not have. The one price: legality checks
+ *  it, `useSkill` charges it, the hero sheet prints it and the AI pays it. */
+export function kitCost(card: CardInstance, skillId?: AbilityId): number {
+  const skill = resolveSkill(card, skillId);
+  if (!skill) return 0;
+  if (skill.kind === 'ult') {
+    const face = ultimateCard(skill.id);
+    return face ? ULT_COST[face.size] : 0;
+  }
+  return skill.ability.souls ?? 0;
+}
+
+/** What `ability`, used by `hero` of `pid`, is aimed at now: its own `aim`
+ *  when it has one (Traveler, Audience Participation — null when it cannot be
+ *  aimed at all), else its fixed `target` filter and `excludeSelf`. The one
+ *  reading, for `skillTargets` (legality.ts), `useSkill` and the copy-cast. */
+export function abilityAim(G: GameState, pid: PlayerID, hero: CardInstance, ability: AbilityDef): { target: TargetFilter; excludeSelf?: boolean } | null {
+  return ability.aim ? ability.aim(G, pid, hero) : { target: ability.target, excludeSelf: ability.excludeSelf };
+}
+
+/** Souls a Retreat costs while `card` is the hero leaving the Active slot,
+ *  before what it carries takes any off: its card's `retreat` (0 for very
+ *  mobile heroes, 1 for most, 2 for slow heavy ones). `retreatCost`
+ *  (legality.ts) is the price with the discounts and Swift. */
+export function heroRetreat(card: CardInstance): number {
+  return heroData(card)?.retreat ?? 0;
 }
 
 /** The card that names and draws the ultimate `abilityId` (its first ability),

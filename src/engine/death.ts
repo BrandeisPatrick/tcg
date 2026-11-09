@@ -11,8 +11,9 @@ import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
 import {
-  killPush, laneOpen, otherPlayer, respawnTimer, reviveReady, stepInCandidates,
+  isRespawning, killPush, laneOpen, otherPlayer, respawnTimer, reviveReady, stepInCandidates,
 } from './query';
+import { fireTriggers } from './triggers';
 import { leaveActive } from './lane';
 import { awardSouls } from './souls';
 import { pushStructures, reapBoss } from './map';
@@ -42,6 +43,10 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, opts: { 
     // the victim's side's front structure. No souls: the lane's income is all.
     G.record[oppId].kills++;
     pushStructures(G, ps.id, killPush(G, hero), 'kill');
+    // A knockout while a hero stands in the other side's lane: its passive
+    // may feed on it (Drifter's Bloodscent).
+    const rival = G.players[oppId].active;
+    if (rival && !isRespawning(rival) && rival.hp > 0) fireTriggers(G, rival, 'onRivalFall', { only: 'passives', target: hero, movingPlayer: oppId });
   }
   const timer = respawnTimer(G, hero);
   // Rem rescue: a merged Rem detaches to safety (back to the bench) instead of

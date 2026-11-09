@@ -1,16 +1,16 @@
 /**
- * A hero uses one of its kit abilities: a skill, its ultimate, or an ultimate
- * it has borrowed (Sinclair's copy). Abilities cost no souls. A hero uses one
- * ability a turn, whichever it is, and may still make the turn's attack after
- * it from the Active slot. A skill goes on its cooldown (SKILL_COOLDOWN unless
- * its data names one), an ultimate on ULT_COOLDOWN, a borrowed ultimate is
- * spent, and one with an HP cost (`hpCost`) takes it off the hero before it
- * runs. `skillBlocked` (legality.ts) has already said it may be done and at
- * whom; this only does it.
+ * A hero uses one of its kit abilities: its skill, or its ultimate (the button
+ * printed on its card). A hero uses one ability a turn, whichever it is, and
+ * may still make the turn's attack after it from the Active slot. It is paid
+ * for in souls first (`kitCost`: a skill's 1–3, an ultimate's 4, 8 or 12 by
+ * size), one with an HP cost (`hpCost`) takes that off the hero too, and then
+ * it goes on its cooldown (SKILL_COOLDOWN unless its data names one; an
+ * ultimate ULT_COOLDOWN). `skillBlocked` (legality.ts) has already said it may
+ * be done and at whom; this only does it.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { cooldownCut, findCardOnBoard, resolveSkill, ultimateCard } from '../query';
+import { abilityAim, cooldownCut, findCardOnBoard, kitCost, resolveSkill, ultimateCard } from '../query';
 import { SKILL_COOLDOWN, ULT_COOLDOWN } from '../constants';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
@@ -26,22 +26,26 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   const skill = resolveSkill(hero, skillId);
   if (data?.type !== 'hero' || !skill) return;
   const { id: abilityId, ability, kind } = skill;
-  const ult = kind !== 'skill';
+  const ult = kind === 'ult';
   // An ultimate is named and drawn by its card; one no card carries goes by its hero.
   const faceId = ult ? ultimateCard(abilityId)?.id ?? hero.cardId : hero.cardId;
 
   // An ability that takes no target does not look at one.
   let target: CardInstance | undefined;
-  if (ability.target !== 'noTarget' && targetIid) target = findCardOnBoard(G, targetIid)?.card;
+  const aim = abilityAim(G, pid, hero, ability);
+  if (aim && aim.target !== 'noTarget' && targetIid) target = findCardOnBoard(G, targetIid)?.card;
+  const souls = kitCost(hero, abilityId);
 
   // Headline log BEFORE the ability runs — the ability itself will emit
   // damage/status lines under this header, and the player sees who cast what.
   const heroName = data.name;
   const targetName = target ? cardName(target.cardId) : null;
   const on = targetName ? ` on ${targetName}` : '';
+  const paid = souls > 0 ? ` (−${souls} soul${souls === 1 ? '' : 's'})` : '';
   pushLog(G, ult
-    ? `P${pid} used ultimate: ${cardName(faceId)} (${heroName})${on}.`
-    : `P${pid} used skill: ${heroName}${on}.`);
+    ? `P${pid} used ultimate: ${cardName(faceId)} (${heroName})${on}${paid}.`
+    : `P${pid} used skill: ${heroName}${on}${paid}.`);
+  G.players[pid].souls -= souls;
 
   // HP the ability costs comes straight off the caster: through no Shield or
   // resist, setting off no trigger, and `skillBlocked` has seen to it that the
@@ -53,12 +57,10 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
 
   // Spent for the turn before it runs: the hero's one ability, remembered for
   // Echo Shard and the hero sheet. A skill and an ultimate go on their
-  // cooldowns (an ultimate's cut by the Cooldown family, never under 1); a
-  // borrowed ultimate is used up.
+  // cooldowns (an ultimate's cut by what the hero wears, never under 1).
   hero.skillUsedThisTurn = true;
   hero.lastSkillUsed = abilityId;
-  if (kind === 'borrowed') hero.borrowedUlt = undefined;
-  else (hero.cooldowns ??= {})[abilityId] = kind === 'ult'
+  (hero.cooldowns ??= {})[abilityId] = ult
     ? Math.max(1, ULT_COOLDOWN - cooldownCut(hero, 'ult'))
     : ability.cooldown ?? SKILL_COOLDOWN;
 

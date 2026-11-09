@@ -154,14 +154,8 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
       addStatus(G, c, 'stun', 1, 1, { tag: 'discharge' });
       pushLog(G, `${cardName(c.cardId)} discharges: Stun for 1 turn.`);
     }
-    // Djinn's Mark: detonates on natural expiry (timer reaches 1 = about to
-    // tick to 0) for 3 spirit damage per stack. The mark itself is removed
-    // by the standard duration-decay path immediately after.
-    const mark = c.statuses.find((s) => s.id === 'djinns_mark');
-    if (mark && mark.duration === 1) {
-      pushLog(G, `${cardName(c.cardId)} — Djinn's Mark detonates.`);
-      damageUnit(G, c, 3 * mark.value, 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value });
-    }
+    // Djinn's Mark only goes off at DJINN_CAP marks (Mirage's passive): one
+    // that runs out of time fades with the decay path below.
     // Reverb (Mystic Reverb): delayed echo. Detonates on natural expiry for its
     // stored value as spirit damage, then the decay path removes it below.
     const reverb = c.statuses.find((s) => s.id === 'reverb');
@@ -204,15 +198,6 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
 // CC exclusion in tickStartOfTurn so duration N = N denied turns.
 export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
-    // Sleep about to expire naturally → fire its wake-up burst (Rem's Naptime)
-    // before it drops. Strip it first so the burst doesn't re-enter the
-    // damage-side wake hook. Plain sleep (value 0) just decays below.
-    const sleeping = c.statuses.find((s) => s.id === 'sleep');
-    if (sleeping && sleeping.duration === 1 && sleeping.value > 0) {
-      c.statuses = c.statuses.filter((s) => s !== sleeping);
-      pushLog(G, `${cardName(c.cardId)} wakes — Naptime detonates.`);
-      damageUnit(G, c, sleeping.value, 'spirit', 'Naptime', { tag: 'naptime' });
-    }
     c.statuses = c.statuses
       .map((s) => (CC_STATUSES.has(s.id) ? { ...s, duration: s.duration - 1 } : s))
       .filter((s) => s.duration > 0);
