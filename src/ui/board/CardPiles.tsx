@@ -19,6 +19,7 @@ import { HERO_IMG_BASE } from '@/art/assets';
 import { fonts, spring } from '../tokens';
 import { poster, shopInk } from '../poster';
 import { itemArtUrl } from '../card/ItemIcon';
+import { useTickedCount } from '../motion/DeckMotionContext';
 import { CardBack } from './OpponentHand';
 
 /** A pile's card size, px. */
@@ -65,8 +66,12 @@ export function DeckPile({ count, owner, size = 'full', accent }: {
   accent: string;
 }) {
   const { w, h, radius } = PILE[size];
-  const layers = Math.min(3, count);
-  const label = `${owner === 'you' ? 'Your' : "Rival's"} deck: ${count} card${count === 1 ? '' : 's'}`;
+  // The count as the motion shows it: a card in the air has left or not yet landed.
+  const shown = useTickedCount(`deck-${owner}`, count);
+  // The stack's thickness: a plain edge per card under the top back, up to five.
+  const layers = Math.min(5, shown);
+  const step = size === 'chip' ? 1 : 1.5;
+  const label = `${owner === 'you' ? 'Your' : "Rival's"} deck: ${shown} card${shown === 1 ? '' : 's'}`;
   return (
     <div
       role="img"
@@ -82,12 +87,18 @@ export function DeckPile({ count, owner, size = 'full', accent }: {
         }} />
       ) : (
         Array.from({ length: layers }, (_, i) => (
-          <div key={i} style={{ position: 'absolute', left: i * 2, top: 4 - i * 2, width: w, height: h }}>
-            <CardBack radius={radius} />
+          <div key={i} style={{ position: 'absolute', left: i * step, top: 4 - i * step, width: w, height: h }}>
+            {i === layers - 1 ? <CardBack radius={radius} /> : (
+              <div style={{
+                width: '100%', height: '100%', boxSizing: 'border-box', borderRadius: radius,
+                background: poster.panel, border: `2px solid ${poster.edge}`,
+                boxShadow: i === 0 ? '0 4px 12px rgba(0, 0, 0, 0.45)' : undefined,
+              }} />
+            )}
           </div>
         ))
       )}
-      <Count n={count} accent={accent} small={size === 'chip'} />
+      <Count n={shown} accent={accent} small={size === 'chip'} />
     </div>
   );
 }
@@ -122,8 +133,11 @@ export function DiscardPile({ cards, owner, size = 'full', accent }: {
   const { w, h, radius } = PILE[size];
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  const top = cards[cards.length - 1];
-  const label = `${owner === 'you' ? 'Your' : "Rival's"} discard pile: ${cards.length} card${cards.length === 1 ? '' : 's'}`;
+  // The count as the motion shows it: a card still in the air is not on the
+  // pile yet, so the top card is the one under it.
+  const shown = useTickedCount(`discard-${owner}`, cards.length);
+  const top = cards[Math.min(shown, cards.length) - 1];
+  const label = `${owner === 'you' ? 'Your' : "Rival's"} discard pile: ${shown} card${shown === 1 ? '' : 's'}`;
   useEffect(() => {
     if (!open) return;
     const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
@@ -152,7 +166,7 @@ export function DiscardPile({ cards, owner, size = 'full', accent }: {
           }} />
         )}
       </button>
-      <Count n={cards.length} accent={accent} small={size === 'chip'} />
+      <Count n={shown} accent={accent} small={size === 'chip'} />
       <AnimatePresence>
         {open && (
           <motion.ul

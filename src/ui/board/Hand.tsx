@@ -13,6 +13,10 @@ import { HandThumb, THUMB_H, THUMB_W } from './HandThumb';
  *  tutorial's gate and the QA scripts find a card in the hand by it. */
 export const inHandLabel = (name: string) => `${name}, in your hand`;
 
+/** Whether `iid` is among the cards arriving (`arriving`: one, or a list). */
+const isLanding = (arriving: string | readonly string[] | null | undefined, iid: string): boolean =>
+  typeof arriving === 'string' ? arriving === iid : !!arriving?.includes(iid);
+
 interface Props {
   /** The cards in your hand: heroes and items, drawn (or given) and not yet
    *  played. A hero goes on the bench for free; an item onto a hero for its
@@ -33,9 +37,9 @@ interface Props {
   /** Fired when the player taps a card no hero can take — lets the Board say
    *  why instead of a silent no-op. */
   onBlocked?: (c: CardInstance) => void;
-  /** A card arriving from elsewhere on the board: it fades in where it
-   *  lands, while the board flies it there. */
-  arriving?: string | null;
+  /** Cards arriving from elsewhere on the board (a draw, a hero back from
+   *  the lane): each fades in where it lands, while the board flies it there. */
+  arriving?: string | readonly string[] | null;
   /** Where each card is on screen, for the board's (and the animation
    *  layer's) flights to it. */
   registerCard?: (iid: string, el: HTMLElement | null) => void;
@@ -164,6 +168,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
         // start from the right place.
         layoutScroll
         className="hand-strip"
+        data-hand="you"
         style={{
           display: 'flex',
           gap: STRIP_GAP,
@@ -188,7 +193,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
               // once it overflows, so the first card can always be scrolled back to.
               first={i === 0}
               last={i === total - 1}
-              landing={arriving === c.iid}
+              landing={isLanding(arriving, c.iid)}
               onTap={onTap}
               onLongPress={onLongPress}
               onHover={onHover}
@@ -203,6 +208,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
 
   return (
     <div
+      data-hand="you"
       onMouseLeave={closePreview}
       onPointerLeave={closePreview}
       style={{
@@ -230,7 +236,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
           const y = selected ? -42 : fanY(i, total);
           // A card flown in fades in on its own spot as the board's flight
           // lands there; one drawn rises in from below.
-          const landing = arriving === c.iid;
+          const landing = isLanding(arriving, c.iid);
 
           const isHovered = hoveredIid === c.iid;
           const isNeighborOfHovered = hoveredIdx !== -1 && Math.abs(i - hoveredIdx) === 1;
@@ -254,7 +260,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
               initial={landing ? { opacity: 0 } : { opacity: 0, y: 120, scale: 0.5 }}
               animate={{ opacity, y, scale: selected ? 1.06 : 1, rotate: rot }}
               exit={{ opacity: 0, y: -60, scale: 0.5, transition: { duration: 0.25 } }}
-              transition={landing ? { ...spring.default, opacity: { delay: 0.32, duration: 0.2 } } : spring.default}
+              transition={landing ? { ...spring.default, opacity: { duration: 0.1 } } : spring.default}
               drag={!cardDisabled}
               dragSnapToOrigin
               dragElastic={0.18}
@@ -387,7 +393,7 @@ function StripCard({ card: c, selected, stuck, cardDisabled, opacity, label, una
       initial={landing ? { opacity: 0 } : { opacity: 0, y: 36, scale: 0.6 }}
       animate={{ opacity, y: selected ? -STRIP_LIFT : 0, scale: 1 }}
       exit={{ opacity: 0, y: -24, scale: 0.6, transition: { duration: 0.22 } }}
-      transition={landing ? { ...spring.default, opacity: { delay: 0.32, duration: 0.2 } } : spring.default}
+      transition={landing ? { ...spring.default, opacity: { duration: 0.1 } } : spring.default}
       whileTap={{ scale: 0.94 }}
       {...press}
       onPointerDown={(e) => { held.current = false; press.onPointerDown(e); }}
