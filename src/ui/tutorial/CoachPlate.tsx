@@ -41,7 +41,7 @@ import { useAmbientLoop } from '../hooks/useAmbientLoop';
 const TICK_MS = 900;
 const NONE: GateSpec[] = [];
 
-export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, lesson, onNextLesson, onLessons }: {
+export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, choosing = false, lesson, onNextLesson, onLessons }: {
   G: GameState;
   me: PlayerID;
   isMyTurn: boolean;
@@ -51,6 +51,9 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
   attacking: boolean;
   /** The hero whose detail sheet is open (where Skill and Retreat live), or null. */
   sheetHero: CardId | null;
+  /** One of the game's own choice sheets is up — the upgrade a play makes, a
+   *  draw card's discard, the first Active: the gate steps aside for it. */
+  choosing?: boolean;
   lesson: Lesson;
   /** Start the following lesson fresh; absent on the last one. */
   onNextLesson?: () => void;
@@ -144,9 +147,10 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, l
 
   // What the gate lights and lets through. Memoised on contents so the
   // gate's measuring effect is not restarted every frame by a fresh array.
-  // A promotion you owe is the game's own modal, and the rival waits on it:
-  // the gate steps aside so the choice can always be made.
-  const gated = !done && open && !!current.spot && G.pendingPromotion !== me;
+  // A promotion you owe is the game's own modal, and the rival waits on it —
+  // so are the upgrade a play makes, a draw card's discard and the first
+  // Active: the gate steps aside so the choice can always be made.
+  const gated = !done && open && !!current.spot && G.pendingPromotion !== me && !choosing;
   // Hold through a task's landing beat, the rival's turn, and any reveal or
   // attack still in flight — the next thing to tap lights up only once the
   // board can actually take the tap.

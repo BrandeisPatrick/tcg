@@ -360,7 +360,7 @@ export const LESSONS: Lesson[] = [
       enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      play('play', 'Put It On', 'extended_magazine', (v) => `Income paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}) and drew you a card: Extended Magazine, tier 1, +1 Bullet Power. Its price, ${soulsText(itemPrice('extended_magazine'))}, is on its coin.`),
+      play('play', 'Put It On', 'extended_magazine', (v) => `Income paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}) and drew you a card: Extended Magazine, tier 1, +1 Bullet Power. Its price, ${soulsText(itemPrice('extended_magazine'))}, is on its coin. Played, it also makes one of its upgrades for your deck: pick either.`),
       attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends the Act, and the turn's End follows on its own.`),
     ],
   },
