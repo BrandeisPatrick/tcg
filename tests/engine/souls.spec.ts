@@ -5,10 +5,10 @@ import type { Ctx } from 'boardgame.io';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
 import { CARDS_BY_ID } from '@/cards';
-import { LANE_INCOME, PRICE, RETREAT_COST } from '@/engine/constants';
-import { playBlocked, playCost } from '@/engine/legality';
-import { itemPrice, netWorth } from '@/engine/query';
-import { freshReadyGame, configureReadyMatch, giveCard, giveItem, readyClient } from './_helpers';
+import { LANE_INCOME, PRICE } from '@/engine/constants';
+import { playBlocked, playCost, retreatCost } from '@/engine/legality';
+import { heroRetreat, itemPrice, netWorth } from '@/engine/query';
+import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, readyClient } from './_helpers';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -224,15 +224,17 @@ describe('souls economy', () => {
     expect(G.players['1'].souls).toBe(oppBefore);
   });
 
-  it('retreat (swap Active with bench hero) costs RETREAT_COST (1 soul), once a turn', () => {
+  it("retreat (swap Active with bench hero) costs the leaving hero's printed retreat (Haze's), once a turn", () => {
     const G = freshG();
     G.players['0'].souls = 5;
     const before = G.players['0'].souls;
+    const price = heroRetreat(G.players['0'].active!);
+    expect(price).toBeGreaterThan(0);
     const r = runMove('moveHero', G, '0', 1, 0);
     expect(r).not.toBe('INVALID_MOVE');
-    expect(G.players['0'].souls).toBe(before - RETREAT_COST);
+    expect(G.players['0'].souls).toBe(before - price);
     expect(runMove('moveHero', G, '0', 2, 0)).toBe('INVALID_MOVE');
-    expect(G.players['0'].souls).toBe(before - RETREAT_COST);
+    expect(G.players['0'].souls).toBe(before - price);
   });
 
   it('retreat is rejected with no soul to pay', () => {
@@ -352,7 +354,7 @@ describe('souls economy', () => {
   it('AI cannot retreat when it lacks souls (cost-filtered out)', async () => {
     const { enumerateAIMoves } = await import('@/ai/heuristic');
     const G = freshG();
-    G.players['1'].souls = RETREAT_COST - 1; // below RETREAT_COST
+    G.players['1'].souls = retreatCost(G, '1') - 1; // a soul short of Abrams' retreat
     G.players['1'].active!.hp = 1;     // would want to retreat
     G.players['1'].active!.hpMax = 10;
     G.turnNumber = 3; // P1's turn (it moves first)
@@ -362,12 +364,12 @@ describe('souls economy', () => {
     expect(retreats.length).toBe(0);
   });
 
-  // ----- Spirit scaling on hero skills (use Lady Geist as representative — Life Drain, 3 spirit) -----
-  it('hero skill at 0 SPI deals base damage (Lady Geist: 3 + 0 = 3 spirit)', async () => {
+  // ----- Spirit scaling on hero skills (use Lady Geist as representative — Essence Bomb, {sp:1} spirit to every enemy) -----
+  it("hero skill at 0 SPI deals base damage (Lady Geist's Essence Bomb: 1 + 0 = 1 spirit to each enemy)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     expect(skill.scalesSpirit).toBe(true);
-    expect(skill.base).toBe(3);
+    expect(skill.base).toBe(1);
     const G = freshG();
     const caster = G.players['0'].active!;
     caster.spiritMod = 0;
@@ -375,10 +377,10 @@ describe('souls economy', () => {
     target.hpMax = 20; target.hp = 20;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(3);
+    expect(hpBefore - target.hp).toBe(1);
   });
 
-  it('hero skill at +3 SPI deals base + spirit (Lady Geist: 3 + 3 = 6 spirit)', async () => {
+  it("hero skill at +3 SPI deals base + spirit (Lady Geist's Essence Bomb: 1 + 3 = 4 spirit to each enemy)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -388,33 +390,39 @@ describe('souls economy', () => {
     target.hpMax = 20; target.hp = 20; // soak the full damage to measure it
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(6); // base 3 + 3 spirit
+    expect(hpBefore - target.hp).toBe(4); // base 1 + 3 spirit
   });
 
-  it('heal is flat — Spirit does NOT scale heals (Dynamo heal 2)', async () => {
+  it("a flat heal is flat — Spirit does NOT scale it (Rem's Tag Along: Rem heals 2; his target's {sp:4} does scale)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
-    const skill = ABILITIES_BY_ID['skill_dynamo'];
+    const skill = ABILITIES_BY_ID['skill_rem'];
     const G = freshG();
-    const healer = G.players['0'].active!;
-    healer.spiritMod = 2; // spirit should be ignored for heals
-    const ally = G.players['0'].bench[0]!;
+    const rem = makeHero('hero_rem', '0', 'bench', 1);
+    G.players['0'].bench[0] = rem;
+    rem.spiritMod = 2; // spirit is ignored for Rem's own 2
+    rem.hpMax = 20; rem.hp = 1;
+    const ally = G.players['0'].active!;
     ally.hpMax = 20;
     ally.hp = 1;
-    const hpBefore = ally.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: healer, target: ally });
-    expect(ally.hp - hpBefore).toBe(2); // flat 2, no spirit
+    skill.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    expect(rem.hp - 1).toBe(2); // flat 2, no spirit
+    expect(ally.hp - 1).toBe(4 + 2); // {sp:4}
   });
 
-  it('shield magnitude is flat — Spirit does NOT scale shields (Paige shield 2)', async () => {
+  it("a flat shield is flat — Spirit does NOT scale it (Warden's Willpower: Shield 3); Paige's Plot Armor prints {sp:2} and does", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
-    const skill = ABILITIES_BY_ID['skill_paige'];
     const G = freshG();
-    const paige = G.players['0'].active!;
-    paige.spiritMod = 4; // spirit should be ignored for shields
+    const warden = makeHero('hero_warden', '0', 'active', 0);
+    G.players['0'].active = warden;
+    warden.spiritMod = 4; // spirit is ignored for Willpower's shield
+    ABILITIES_BY_ID['skill_warden'].run(G, { movingPlayer: '0' }, { source: warden, target: warden });
+    expect(warden.statuses.find((s) => s.id === 'shield')?.value).toBe(3); // flat 3, no spirit
+    const paige = G.players['0'].bench[2]!;
+    expect(paige.cardId).toBe('hero_paige');
+    paige.spiritMod = 4;
     const ally = G.players['0'].bench[0]!;
-    skill.run(G, { movingPlayer: '0' }, { source: paige, target: ally });
-    const sh = ally.statuses.find((s) => s.id === 'shield');
-    expect(sh?.value).toBe(2); // flat 2, no spirit
+    ABILITIES_BY_ID['skill_paige'].run(G, { movingPlayer: '0' }, { source: paige, target: ally });
+    expect(ally.statuses.find((s) => s.id === 'shield')?.value).toBe(2 + 4);
   });
 
   it('no skill has bullet scaling — all damage scaling goes through Spirit', async () => {

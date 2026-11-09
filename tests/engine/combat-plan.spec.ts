@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { forecastAttack } from '@/engine/forecast';
 import { effectiveAtk } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
-import type { CardInstance, GameState, PlayerID } from '@/engine/types';
+import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
+import { CARDS_BY_ID } from '@/cards';
 import { freshReadyGame, makeAttack, makeHero, structuresOf } from './_helpers';
 import { INVALID, perform } from '@/engine/engine';
 
@@ -10,11 +11,18 @@ function freshG(): GameState {
   return freshReadyGame();
 }
 
-/** Swap P0's Active to a hero with no onAttack passive (Dynamo, ATK 3) so
- *  mitigation/invariant tests see exactly one swing — the default fixture
- *  Active is Haze, whose Fixation adds a follow-up swing. */
+/** Give `hero` the Attack `atk` by its Bullet Power modifier, whatever its
+ *  card prints at Level 1. */
+function swingsFor(hero: CardInstance, atk: number): CardInstance {
+  hero.atkMod = atk - (CARDS_BY_ID[hero.cardId] as HeroCard).atk;
+  return hero;
+}
+
+/** Swap P0's Active to a hero with no onAttack passive (Dynamo, its Attack
+ *  raised to 3) so mitigation/invariant tests see exactly the one plain swing —
+ *  the default fixture Active is Haze, whose Fixation stacks on her target. */
 function plainActive(G: GameState) {
-  G.players['0'].active = makeHero('hero_dynamo', '0', 'active', 0);
+  G.players['0'].active = swingsFor(makeHero('hero_dynamo', '0', 'active', 0), 3);
 }
 
 /** Clear the bench so a test reads cleanly as just the Active hero (bench
@@ -76,9 +84,9 @@ describe('combat plan invariant', () => {
     expect(before - G.players['1'].active!.hp).toBe(1);
   });
 
-  it('plan correctly predicts unstoppable (zero damage)', () => {
+  it('plan correctly predicts invulnerable (zero damage)', () => {
     const G = freshG();
-    addStatus(G, G.players['1'].active!, 'unstoppable', 1, 99);
+    addStatus(G, G.players['1'].active!, 'invulnerable', 1, 99);
     const plan = forecastAttack(G, '0');
     expect(plan.damageToActive).toBe(0);
     expect(plan.steps.every((s) => s.finalDamage === 0)).toBe(true);
@@ -239,32 +247,33 @@ describe('the attack is one-way', () => {
     expect(atk.hp).toBe(atkHpBefore);
   });
 
-  it("the defender's onAttack passive (Shiv's Bleed) does not fire", () => {
+  it("the defender's onAttack passive (Mirage's Djinn's Mark) does not fire", () => {
     const G = freshG();
     soloAttacker(G, '0');
-    // A Shiv defender: under a two-way trade her passive would Bleed the attacker.
-    (G.players['1'].active as any).cardId = 'hero_shiv';
+    // A Mirage defender: under a two-way trade his passive would mark the attacker.
+    (G.players['1'].active as any).cardId = 'hero_mirage';
+    G.players['1'].active!.hp = G.players['1'].active!.hpMax = 30;
     const atk = G.players['0'].active!;
     makeAttack(G, '0');
-    expect(atk.statuses.find((s) => s.id === 'bleed')).toBeUndefined();
+    expect(atk.statuses.find((s) => s.id === 'djinns_mark')).toBeUndefined();
   });
 
-  it("the attacker's own onAttack passive still fires (Shiv's Bleed on the defender)", () => {
+  it("the attacker's own onAttack passive still fires (Haze's Fixation on the defender)", () => {
     const G = freshG();
     soloAttacker(G, '0');
-    G.players['0'].active = makeHero('hero_shiv', '0', 'active', 0);
+    expect(G.players['0'].active!.cardId).toBe('hero_haze');
     const def = G.players['1'].active!;
     def.hp = def.hpMax = 30;
     makeAttack(G, '0');
-    expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBeGreaterThan(0);
+    expect(def.statuses.find((s) => s.id === 'fixation')?.value).toBe(1);
   });
 });
 
 // The attacker's own swings move its HP — Frenzy and lifesteal gear heal it,
-// Bloodscent heals it, Siphon Bullets raises its max — and Frenzy's +3 is
-// judged against that HP swing by swing. The plan has to carry the attacker's
-// HP along, or an Extra Attack is predicted with a bonus the engine no longer
-// gives. Every bearer here swings for 3, and for 6 while below half HP.
+// Siphon Bullets raises its max — and Frenzy's +3 is judged against that HP
+// swing by swing. The plan has to carry the attacker's HP along, or an Extra
+// Attack is predicted with a bonus the engine no longer gives. Every bearer
+// here swings for 3 (its Attack set to 3), and for 6 while below half HP.
 describe("Frenzy's bonus is planned swing by swing, as the resolver deals it", () => {
   interface Bearer {
     hero?: string;
@@ -292,8 +301,11 @@ describe("Frenzy's bonus is planned swing by swing, as the resolver deals it", (
       { hp: 1, gear: ['leech', 'frenzy'], swings: [6, 3] }],
     ['Siphon Bullets moves the bearer along with its max HP',
       { hp: 3, hpMax: 11, gear: ['frenzy', 'siphon_bullets'], swings: [6, 3] }],
-    ["Drifter's Bloodscent heals half of what the swing dealt",
-      { hero: 'hero_drifter', hp: 6, hpMax: 20, gear: ['frenzy'], swings: [6, 3] }],
+    // The other side of the trade: Drifter's Bloodscent reads the target's HP,
+    // swing by swing too. His first swing heals him over half (Frenzy's +3 is
+    // gone) and drops the rival Active below half (Bloodscent's +1 comes in).
+    ["Drifter's Bloodscent comes in on the swing after the one that drops the target below half",
+      { hero: 'hero_drifter', hp: 9, hpMax: 20, gear: ['frenzy'], doctor: (_G, _a, d) => { d.hp = 24; }, swings: [6, 4] }],
     ['Healing Boost adds to each heal',
       { hp: 2, gear: ['frenzy'], doctor: (G, a) => addStatus(G, a, 'healing_boost', 2, 999), swings: [6, 3] }],
     ['Healing Blocked stops the heal, so the +3 stays',
@@ -304,7 +316,7 @@ describe("Frenzy's bonus is planned swing by swing, as the resolver deals it", (
 
   it.each(cases)('%s', (_name, c) => {
     const G = freshG();
-    const attacker = G.players['0'].active = makeHero(c.hero ?? 'hero_dynamo', '0', 'active', 0);
+    const attacker = G.players['0'].active = swingsFor(makeHero(c.hero ?? 'hero_dynamo', '0', 'active', 0), 3);
     attacker.hpMax = c.hpMax ?? 10;
     attacker.hp = c.hp;
     for (const cardId of c.gear) wear(attacker, cardId);
@@ -312,11 +324,12 @@ describe("Frenzy's bonus is planned swing by swing, as the resolver deals it", (
     const defender = G.players['1'].active!;
     defender.hpMax = defender.hp = 40;
     c.doctor?.(G, attacker, defender);
+    const before = defender.hp;
 
     const plan = forecastAttack(G, '0');
     expect(plan.steps.map((s) => s.finalDamage)).toEqual(c.swings);
     makeAttack(G, '0');
-    const dealt = 40 - defender.hp;
+    const dealt = before - defender.hp;
     expect(dealt).toBe(c.swings.reduce((a, b) => a + b, 0));
     expect(plan.damageToActive).toBe(dealt);
   });

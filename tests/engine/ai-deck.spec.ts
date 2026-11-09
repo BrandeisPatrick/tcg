@@ -100,7 +100,10 @@ describe('the AI plays its hand', () => {
 
   it('evolves an upgrade onto the hero wearing its component, for the difference', () => {
     const G = turn(2);
-    const haze = G.players['0'].active!;
+    const me = G.players['0'];
+    // The souls are the upgrade's: no skill bids for them (Paige's Plot Armor would, at 2).
+    for (const h of [me.active, ...me.bench]) if (h) h.skillUsedThisTurn = true;
+    const haze = me.active!;
     giveItem(G, haze, 'extended_magazine');
     giveCard(G, '0', 'titanic_magazine');
     playOut(G);
@@ -165,7 +168,9 @@ describe('the AI and its draw cards', () => {
 
 describe('AI against AI through a boardgame.io Client', () => {
   it('a drafted match never stalls: every move the AI names is taken, heroes go to the bench, items are played, and the match ends', () => {
-    for (const seed of [11, 202, 3003]) {
+    // (Seed 11 stood here before the hero rebuild; it now ends on engine turn 7
+    // with P0 never drawing a hero, so nothing is benched: 12 takes its place.)
+    for (const seed of [12, 202, 3003]) {
       setMatchConfig({ heroPreferences: [null, null, null, null], seed, humanSeat: null });
       vi.spyOn(Math, 'random').mockImplementation(seededRandom(seed)); // the draft's jitter reads it
       const client = Client({ game: DeadlockGame, numPlayers: 2 });

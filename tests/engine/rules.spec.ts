@@ -3,7 +3,7 @@ import { DeadlockGame } from '@/engine/game';
 import { damageUnit } from '@/engine/damage';
 import { reapDead, resolve } from '@/engine/death';
 import { playBlocked } from '@/engine/legality';
-import { findCardOnBoard, findWornItem, heroData, heroesOf, itemPrice, kitAbilityIds, slotCap, structureHp, wornItems } from '@/engine/query';
+import { findCardOnBoard, findWornItem, heroData, heroesOf, itemPrice, kitAbilityIds, kitCost, slotCap, structureHp, wornItems } from '@/engine/query';
 import { MAX_ITEMS } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
@@ -33,6 +33,7 @@ describe('rule: each hero uses its skill once per turn', () => {
   it('rejects a second use by the same hero, but not a different hero', () => {
     const G = freshG();
     const me = G.players['0'];
+    me.souls = 10; // enough for Lash twice and Paige: the refusal is the once-a-turn rule
     const enemy = G.players['1'];
     // P0's roster (TEST_ROSTERS): [haze (passive), vindicta (passive), lash (skill), paige (skill)].
     // Pick the two skill heroes — Lash + Paige — for this per-turn-cap test.
@@ -62,19 +63,22 @@ describe('rule: each hero uses its skill once per turn', () => {
     c.moves.endTurn?.();
     g = c.getState()!.G as GameState;
     expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(false);
-    // P0's next turn: Lash casts again (its cooldown of 1 has run out at the turn start).
+    // P0's next turn: Lash casts again (its cooldown of 1 has run out at the turn start),
+    // paying its souls again.
     passTurn(c);
     g = c.getState()!.G as GameState;
     const soulsBefore = g.players['0'].souls;
+    const price = kitCost(g.players['0'].bench[1]!);
+    expect(soulsBefore).toBeGreaterThanOrEqual(price);
     (c.moves as any).useSkill(hero.iid, g.players['1'].active!.iid);
     g = c.getState()!.G as GameState;
     expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(true);
-    expect(g.players['0'].souls).toBe(soulsBefore);
+    expect(g.players['0'].souls).toBe(soulsBefore - price);
   });
 });
 
-describe('rule: abilities are free', () => {
-  it('useSkill spends no souls', () => {
+describe('rule: a skill costs its souls', () => {
+  it("useSkill spends the skill's souls (Lash's Ground Strike: 3)", () => {
     const G = freshG();
     const me = G.players['0'];
     me.souls = 3;
@@ -82,19 +86,19 @@ describe('rule: abilities are free', () => {
     const target = G.players['1'].active!;
     const r = runMove('useSkill', G, '0', hero.iid, target.iid);
     expect(r).not.toBe('INVALID_MOVE');
-    expect(me.souls).toBe(3);
+    expect(me.souls).toBe(0);
   });
 
-  it('useSkill needs no souls at all', () => {
+  it('useSkill a soul short is refused: nothing is spent and the hero has not used its skill', () => {
     const G = freshG();
     const me = G.players['0'];
-    me.souls = 0;
+    me.souls = 2;
     const hero = me.bench[1]!;  // Lash
     const target = G.players['1'].active!;
     const r = runMove('useSkill', G, '0', hero.iid, target.iid);
-    expect(r).not.toBe('INVALID_MOVE');
-    expect(hero.skillUsedThisTurn).toBe(true);
-    expect(me.souls).toBe(0);
+    expect(r).toBe('INVALID_MOVE');
+    expect(hero.skillUsedThisTurn).toBe(false);
+    expect(me.souls).toBe(2);
   });
 });
 
@@ -219,14 +223,15 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
     }
   });
 
-  it('every hero at Level 2 may use its ultimate, free, through useSkill', () => {
+  it("every hero at Level 2 may use its ultimate through useSkill, for its size's souls", () => {
     const G = freshG();
-    G.players['0'].souls = 0;
     for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
     // Nobody on the other side falls (a kill would pay a bounty).
     for (const h of [G.players['1'].active, ...G.players['1'].bench]) if (h) h.hp = h.hpMax = 50;
     // P0's roster: Haze, Vindicta, Lash, Paige → their ultimates (Vindicta's needs a target).
     const [haze, vindicta, lash, paige] = [G.players['0'].active!, ...G.players['0'].bench] as NonNullable<typeof G.players['0']['active']>[];
+    // Souls for the four, exactly.
+    G.players['0'].souls = [haze, vindicta, lash, paige].reduce((n, h) => n + kitCost(h, heroData(h)!.ult), 0);
     expect(runMove('useSkill', G, '0', haze.iid, undefined, 'eff_ult_haze')).not.toBe('INVALID_MOVE');
     expect(runMove('useSkill', G, '0', vindicta.iid, G.players['1'].active!.iid, 'eff_ult_vindicta')).not.toBe('INVALID_MOVE');
     expect(runMove('useSkill', G, '0', lash.iid, undefined, 'eff_ult_lash')).not.toBe('INVALID_MOVE');

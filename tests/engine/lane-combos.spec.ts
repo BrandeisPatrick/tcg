@@ -6,7 +6,7 @@
  * (the `retreatDiscount` hook, and Enduring Speed's `resists`), Fleetfoot's
  * Swift (a free Retreat), Kinetic Dash (the `onBearerStepIn` trigger) and
  * Majestic Leap (a free swap) — and the AI, which has to see when a swap
- * before the swing is worth its soul. Fleetfoot, Majestic Leap, Warp Stone,
+ * before the swing is worth its souls. Fleetfoot, Majestic Leap, Warp Stone,
  * Phantom Strike and Vortex Web are active items: a hero wears one and uses it
  * as its one ability of the turn (`useItem`, the Active the bearer unless a
  * test says otherwise); their texts' "your Active" is the player's Active.
@@ -14,17 +14,19 @@
  * Board (freshReadyGame): P0 Haze (active) · Vindicta / Lash / Paige;
  *                         P1 Abrams (active) · Dynamo / Kelvin / Seven.
  * Most tests use `built`, which swaps P0's Lash and Paige for Shiv and Drifter
- * (passive-only, so no bench skill competes with the swap) and deepens every HP.
+ * and deepens every HP. Drifter and Vindicta are passive-only; Shiv's Serrated
+ * Knives costs 2 souls, so the AI's tests mark it used: no bench skill competes
+ * with the swap.
  */
 import { describe, it, expect } from 'vitest';
-import type { CardInstance, GameState, PlayerID } from '@/engine/types';
+import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { ABILITIES_BY_ID } from '@/abilities';
-import { PRICE, RETREAT_COST } from '@/engine/constants';
+import { PRICE } from '@/engine/constants';
 import { resolve } from '@/engine/death';
 import { INVALID, perform, type Action } from '@/engine/engine';
 import { attackBlocked, blocked, legalActions, moveBlocked, retreatCost } from '@/engine/legality';
-import { attackPower, itemPrice } from '@/engine/query';
+import { attackPower, heroRetreat, itemPrice } from '@/engine/query';
 import { addStatus, clearTurnFlags } from '@/engine/statusOps';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { statusOfKeyword } from '@/ui/card/RuleText';
@@ -50,8 +52,8 @@ const retreat = (G: GameState, slot: 1 | 2 | 3) => perform(G, '0', { type: 'move
 const lastLog = (G: GameState) => G.log[G.log.length - 1]?.text;
 
 /** A board where the swap after the swing matters: deep HP everywhere, nobody
- *  wearing anything and a bench of passive-only heroes (Vindicta, Shiv,
- *  Drifter), so the attack and the Retreat are the only plays there are. */
+ *  wearing anything and a bench of Vindicta, Shiv and Drifter (Shiv's skill
+ *  aside, passive-only), so the attack and the Retreat are the plays there are. */
 function built(souls: number) {
   const G = freshReadyGame();
   const me = G.players['0'];
@@ -124,10 +126,15 @@ describe('One attack a turn, and the Retreat before it', () => {
 });
 
 describe('The Retreat\'s price', () => {
-  it('is RETREAT_COST with nothing worn', () => {
-    const { G, me } = built(10);
-    expect(retreatCost(G, '0')).toBe(RETREAT_COST);
-    expect(RETREAT_COST).toBe(1);
+  it("is the leaving hero's printed retreat with nothing worn", () => {
+    const { G, me, haze, abrams } = built(10);
+    expect(retreatCost(G, '0')).toBe((CARDS_BY_ID['hero_haze'] as HeroCard).retreat);
+    expect(retreatCost(G, '0')).toBe(heroRetreat(haze));
+    expect(heroRetreat(haze)).toBe(1);
+    // The other side's price is its own Active's: Abrams', heavier.
+    expect(retreatCost(G, '1')).toBe((CARDS_BY_ID['hero_abrams'] as HeroCard).retreat);
+    expect(retreatCost(G, '1')).toBe(heroRetreat(abrams));
+    expect(heroRetreat(abrams)).toBe(2);
     expect(retreat(G, 2)).not.toBe(INVALID);
     expect(me.souls).toBe(9);
     expect(lastLog(G)).toBe('P0 retreated (-1 soul).');
@@ -346,24 +353,30 @@ describe('The AI retreats before it attacks when the swap is worth it', () => {
       default: throw new Error(`unexpected move ${m.move}`);
     }
   };
-  /** Haze Weakened to 1 Bullet Power, with Shiv (2, and his Bleed) and Drifter (3) on the bench:
-   *  harder hitters to send in. */
+  /** Haze (her Attack raised to 3) Weakened to 1 Bullet Power, with Vindicta (2, and Flight's
+   *  spirit) and Drifter (2) on the bench: harder hitters to send in; Shiv (1) hits no harder.
+   *  Shiv's skill is spent, so only the swap and the attack are on offer. */
   const weakened = () => {
     const b = built(2);
+    b.haze.atkMod = 2;
+    b.shiv.skillUsedThisTurn = true;
     addStatus(b.G, b.haze, 'weapon_power_down', 2, 2);
     return b;
   };
 
   it('sends in a harder hitter ahead of the attack, with lookahead', () => {
-    const { G } = weakened();
+    const { G, me, haze, abrams } = weakened();
     const moves = enumerateAIMoves(G, ctx('0'));
     expect(moves[0].move).toBe('moveHero');
-    expect(moves[0].args[0]).not.toBe(1); // not Vindicta, who hits no harder
+    expect(moves[0].args[0]).not.toBe(2); // not Shiv, who hits no harder
+    const incoming = me.bench[moves[0].args[0] - 1]!;
+    expect(attackPower(incoming, abrams).total).toBeGreaterThan(attackPower(haze, abrams).total);
   });
 
   it('attacks without swapping when no bench hero hits harder: a Retreat for nothing is not worth its soul', () => {
-    const { G, me } = built(2);
-    me.bench = [me.bench[0], null, null]; // Vindicta alone behind Haze: 2 Bullet Power to Haze's 3
+    const { G, me, haze } = built(2);
+    haze.atkMod = 2; // Haze's Attack 1, raised to 3
+    me.bench = [null, null, me.bench[2]]; // Drifter alone behind Haze: 2 Bullet Power to Haze's 3
     expect(enumerateAIMoves(G, ctx('0'))[0].move).toBe('attack');
   });
 

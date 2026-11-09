@@ -36,8 +36,11 @@ function at(turn: number, G: GameState = freshReadyGame()): GameState {
   return G;
 }
 
-/** The Mid-Boss in the pit, as the engine raises it (round 4 on). */
+/** The Mid-Boss in the pit, as the engine raises it (round 4 on). P0's Haze
+ *  swings for 3 (her Attack 1, raised by 2): the boss's numbers below are
+ *  written against a swing of 3. */
 function withBoss(G: GameState = at(8)): { G: GameState; boss: CardInstance } {
+  G.players['0'].active!.atkMod = 2;
   riseBoss(G);
   return { G, boss: G.boss! };
 }
@@ -119,6 +122,7 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
   it('at the End, with every rival hero down, the standing Active pushes its bullet power (doubled from round 9)', () => {
     for (const [turn, mult] of [[2, 1], [18, 2]] as const) {
       const G = at(turn);
+      G.players['0'].active!.atkMod = 2; // Haze's Attack 1, raised to 3
       for (const c of [G.players['1'].active!, ...G.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 2; }
       endTurnEffects(G, '0');
       expect(structuresOf(G, '1'), `turn ${turn}`).toBe(18 - 3 * mult); // Haze's 3
@@ -409,6 +413,7 @@ describe('the AI and the Mid-Boss', () => {
     const G = at(7);
     riseBoss(G);
     const attacker = G.players['1'].active = makeHero('hero_dynamo', '1', 'active', 0);
+    attacker.atkMod = 2; // Dynamo's Attack 1, raised to 3
     attacker.hp = attacker.hpMax = 20;
     attacker.skillUsedThisTurn = true;
     for (const b of G.players['1'].bench) { b!.hp = 0; b!.respawnTurnsLeft = 2; }

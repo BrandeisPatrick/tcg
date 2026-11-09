@@ -3,7 +3,8 @@ import { forecastAttack, simulate, type AttackStep } from '@/engine/forecast';
 import { INVALID, perform } from '@/engine/engine';
 import { attackBlocked } from '@/engine/legality';
 import { addStatus } from '@/engine/statusOps';
-import type { CardInstance, GameState } from '@/engine/types';
+import type { CardInstance, GameState, HeroCard } from '@/engine/types';
+import { CARDS_BY_ID } from '@/cards';
 import { freshReadyGame, makeHero } from './_helpers';
 import { structureHp } from '@/engine/query';
 
@@ -25,10 +26,12 @@ function wear(bearer: CardInstance, cardId: string) {
 }
 const extraAttacks = (card: CardInstance, n: number) => card.statuses.push({ id: 'extra_attack', value: n, duration: 99 });
 
-/** P0's Active becomes `hero` (as the lone attacker); P1's is Abrams at 40 HP with nothing on the bench. */
+/** P0's Active becomes `hero` (as the lone attacker), its Attack 3 whatever its
+ *  card prints; P1's is Abrams at 40 HP with nothing on the bench. */
 function board(hero: string) {
   const G = freshReadyGame();
   const attacker = G.players['0'].active = makeHero(hero, '0', 'active', 0);
+  attacker.atkMod = 3 - (CARDS_BY_ID[hero] as HeroCard).atk;
   const defender = G.players['1'].active!;
   defender.hpMax = defender.hp = 40;
   G.players['1'].bench = [null, null, null];
@@ -65,22 +68,27 @@ const cases: Case[] = [
     damageToActive: 9, pushDamage: 0, ko: false,
   },
   {
-    name: 'Haze from Level 3: Fixation grants one follow-up swing after her primary',
-    build: () => { const { G, attacker } = board('hero_haze'); attacker.level = 3; return G; },
+    name: "Haze's Fixation: the target's stack adds to her swing, and the swing adds a stack the Extra Attack hits with",
+    build: () => {
+      const { G, attacker, defender } = board('hero_haze');
+      addStatus(G, defender, 'fixation', 1, 99); extraAttacks(attacker, 1);
+      return G;
+    },
     steps: [
-      { rawDamage: 3, finalDamage: 3, predictedHpAfter: 37, bonusLabel: undefined },
-      { rawDamage: 3, finalDamage: 3, predictedHpAfter: 34, bonusLabel: 'Extra Attack' },
+      { rawDamage: 4, finalDamage: 4, predictedHpAfter: 36, bonusLabel: 'Fixation +1' },
+      { rawDamage: 5, finalDamage: 5, predictedHpAfter: 31, bonusLabel: 'Extra Attack' },
     ],
-    damageToActive: 6, pushDamage: 0, ko: false,
+    damageToActive: 9, pushDamage: 0, ko: false,
   },
   {
-    name: 'Haze at the Extra Attack cap: Fixation cannot raise it, so she swings 7 times, not 8',
-    build: () => { const { G, attacker } = board('hero_haze'); attacker.level = 3; extraAttacks(attacker, 6); return G; },
-    steps: Array.from({ length: 7 }, (_, i) => ({
-      rawDamage: 3, finalDamage: 3, predictedHpAfter: 37 - 3 * i, bonusLabel: i === 0 ? undefined : 'Extra Attack',
+    name: "Haze's Fixation stops at 2 stacks: seven swings at the Extra Attack cap hit for 3, 4, then 5 each",
+    build: () => { const { G, attacker } = board('hero_haze'); extraAttacks(attacker, 6); return G; },
+    steps: [3, 4, 5, 5, 5, 5, 5].map((dmg, i, all) => ({
+      rawDamage: dmg, finalDamage: dmg,
+      predictedHpAfter: 40 - all.slice(0, i + 1).reduce((a, b) => a + b, 0),
+      bonusLabel: i === 0 ? undefined : 'Extra Attack',
     })),
-    damageToActive: 21, pushDamage: 0, ko: false,
-    oldPlanner: 'added Fixation\'s +1 on top of the cap: 8 swings, 24 damage',
+    damageToActive: 32, pushDamage: 0, ko: false,
   },
   {
     name: 'a Shield eats part of the first swing and is gone for the second',
@@ -96,10 +104,10 @@ const cases: Case[] = [
     damageToActive: 4, pushDamage: 0, ko: false,
   },
   {
-    name: 'an Unstoppable target shrugs off every swing',
+    name: 'an Invulnerable target shrugs off every swing',
     build: () => {
       const { G, attacker, defender } = board('hero_dynamo');
-      addStatus(G, defender, 'unstoppable', 1, 1); extraAttacks(attacker, 1);
+      addStatus(G, defender, 'invulnerable', 1, 1); extraAttacks(attacker, 1);
       return G;
     },
     steps: [
@@ -109,24 +117,28 @@ const cases: Case[] = [
     damageToActive: 0, pushDamage: 0, ko: false,
   },
   {
-    name: "Wraith's Mixed Bullets rider (her Spirit as a second hit) finishes the target after the bullet",
+    name: "Vindicta's Flight rider (1 + her Spirit as a spirit hit) finishes the target after the bullet",
     build: () => {
-      const { G, attacker, defender } = board('hero_wraith');
+      const { G, attacker, defender } = board('hero_vindicta');
       attacker.spiritMod = 3; defender.hpMax = defender.hp = 4;
       return G;
     },
-    // The bullet itself does not drop her (predictedKO false: the choreographer
+    // The bullet itself does not drop it (predictedKO false: the choreographer
     // does not break the card on it) — the rider does, and the FX layer plays
-    // that knockout. The plan still says she fell.
-    steps: [{ rawDamage: 2, finalDamage: 2, predictedHpAfter: 0, predictedKO: false }],
+    // that knockout. The plan still says it fell.
+    steps: [{ rawDamage: 3, finalDamage: 3, predictedHpAfter: 0, predictedKO: false }],
     damageToActive: 4, pushDamage: 2, ko: true,
-    oldPlanner: 'saw only the 2-damage bullet: 2 HP left, no patron life, 2 damage',
+    oldPlanner: 'saw only the 3-damage bullet: 1 HP left, no push, 3 damage',
   },
   {
-    name: "Mirage's Djinn's Mark detonates when the swing makes the 4th stack: the target takes 12 more",
-    build: () => { const { G, defender } = board('hero_mirage'); addStatus(G, defender, 'djinns_mark', 3, 3); return G; },
-    steps: [{ rawDamage: 3, finalDamage: 3, predictedHpAfter: 25, predictedKO: false }],
-    damageToActive: 15, pushDamage: 0, ko: false,
+    name: "Mirage's Djinn's Mark detonates when the swing makes the 3rd stack: the target takes 4 + his Spirit more",
+    build: () => {
+      const { G, attacker, defender } = board('hero_mirage');
+      attacker.spiritMod = 2; addStatus(G, defender, 'djinns_mark', 2, 3);
+      return G;
+    },
+    steps: [{ rawDamage: 3, finalDamage: 3, predictedHpAfter: 31, predictedKO: false }],
+    damageToActive: 9, pushDamage: 0, ko: false,
     oldPlanner: 'saw only the 3-damage bullet: 37 HP left, 3 damage',
   },
   {
@@ -154,15 +166,15 @@ const cases: Case[] = [
     oldPlanner: 'held the target\'s resist fixed across the swings: 6 damage',
   },
   {
-    name: "Vindicta's flight takes 1 off the bullet",
+    name: 'a Vindicta in the lane takes the whole bullet: her Flight no longer takes 1 off it',
     build: () => {
       const { G } = board('hero_dynamo');
       const vindicta = G.players['1'].active = makeHero('hero_vindicta', '1', 'active', 0);
       vindicta.hpMax = vindicta.hp = 40;
       return G;
     },
-    steps: [{ rawDamage: 3, finalDamage: 2, predictedHpAfter: 38 }],
-    damageToActive: 2, pushDamage: 0, ko: false,
+    steps: [{ rawDamage: 3, finalDamage: 3, predictedHpAfter: 37 }],
+    damageToActive: 3, pushDamage: 0, ko: false,
   },
 ];
 
