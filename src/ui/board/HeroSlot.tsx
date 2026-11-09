@@ -8,7 +8,8 @@ import { useDelayedValue } from '../hooks/useDelayedValue';
 import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 import { CARDS_BY_ID } from '@/cards';
 import { effectiveAtk, hasSpike, itemCooldown } from '@/engine/query';
-import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
+import { HeroPortrait, HeroBadge, heroForm } from '@/cards/art/heroArt';
+import { STATUSES_BY_ID } from '@/statuses';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { ItemIcon } from '../card/ItemIcon';
 import { StatusIcon } from '../card/StatusIcon';
@@ -107,6 +108,10 @@ export function HeroSlot({
   // Pulse the stat number on the card whenever its value changes.
   const hpTick = useStatTick(shownHp);
   const bpTick = useStatTick(atk);
+  // Another form while a status gives one (Silver's Wolf form): its art and
+  // a badge instead of a chip; when it ends the card shows the hero again.
+  const form = heroForm({ ...card, statuses: shownStatuses });
+  const chipStatuses = form ? shownStatuses.filter((s) => !STATUSES_BY_ID[s.id]?.form) : shownStatuses;
   const shieldValue = shownStatuses.find((s) => s.id === 'shield')?.value ?? 0;
   const shieldTick = useStatTick(shieldValue);
   const isActive = card.zone === 'active';
@@ -232,13 +237,17 @@ export function HeroSlot({
           filter: isCorpse ? 'grayscale(0.95) brightness(0.4) contrast(0.9)' : undefined,
           transition: 'filter 600ms ease',
         }}>
-          <HeroPortrait cardId={card.cardId} />
+          <HeroPortrait cardId={card.cardId} art={isCorpse ? undefined : form?.art} />
         </div>
         {/* Inner edge — the print sits slightly recessed in its frame. */}
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: PRINT_EDGE, pointerEvents: 'none' }} />
 
-        {!isCorpse && shownStatuses.length > 0 && (
-          <StatusRow statuses={shownStatuses} compact={!!compact} ringSize={ringSize} passTaps={!!pending} />
+        {!isCorpse && chipStatuses.length > 0 && (
+          <StatusRow statuses={chipStatuses} compact={!!compact} ringSize={ringSize} passTaps={!!pending} />
+        )}
+        {!isCorpse && form && (
+          <FormBadge label={form.label} turns={form.turns} compact={!!compact}
+            bottom={attached.length > 0 || flexSocket ? chipDim + 8 : 6} />
         )}
 
         {/* Worn chips — along the foot of the portrait, every item the hero
@@ -561,6 +570,33 @@ function StatusRow({ statuses, compact, ringSize, passTaps }: {
           />
         </Explain>
       ))}
+    </div>
+  );
+}
+
+/** The badge of a form the hero has taken ("Wolf form"), stamped across the
+ *  foot of its art with the turns it has left: the status's chip, made a
+ *  label on the card itself, since the art has changed with it. */
+function FormBadge({ label, turns, compact, bottom }: { label: string; turns: number; compact: boolean; bottom: number }) {
+  return (
+    <div
+      role="note"
+      aria-label={`${label}, ${turns} turn${turns === 1 ? '' : 's'} left`}
+      title={`${label}: ${turns} turn${turns === 1 ? '' : 's'} left`}
+      style={{
+        position: 'absolute', left: 6, bottom,
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: compact ? '2px 6px' : '3px 8px',
+        background: poster.ink, color: poster.cream,
+        border: `1.5px solid ${poster.status.buff}`,
+        borderRadius: 3,
+        fontFamily: fonts.display, fontSize: compact ? 9 : 11, letterSpacing: '0.14em', textTransform: 'uppercase', lineHeight: 1,
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
+        pointerEvents: 'none',
+      }}
+    >
+      <span>{label}</span>
+      <span style={{ color: poster.status.buff, fontVariantNumeric: 'tabular-nums' }}>{turns}t</span>
     </div>
   );
 }

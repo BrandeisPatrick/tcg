@@ -305,11 +305,12 @@ export function attackLine(plan: AttackPlan): string {
 /** Every hero of `pid`'s that can still do something this turn: use one of
  *  its kit abilities now (its skill or its ultimate, souls in hand) or an
  *  active item it wears, or — the Active — make the turn's attack while it is
- *  open. Nobody glints while a choice is owed (a discard, the first Active). */
+ *  open. Nobody glints while a choice is owed (a discard, the first Active, a
+ *  trigger prompt). */
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {
   const ps = G.players[pid];
   const ready = new Set<string>();
-  if (G.pendingDiscard || G.pendingActive) return ready;
+  if (G.pendingDiscard || G.pendingActive || G.triggers?.length) return ready;
   for (const hero of [ps.active, ...ps.bench]) {
     if (!hero) continue;
     const abilityOpen = kitAbilityIds(hero).some((id) => skillBlocked(G, pid, hero, undefined, id) === null)

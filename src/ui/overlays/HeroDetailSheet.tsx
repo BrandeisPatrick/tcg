@@ -5,10 +5,10 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import {
-  activeCooldown, cooldownCut, effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, itemCooldown, kitCost, ultimateCard, wornActives,
+  activeCooldown, cooldownCut, effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, itemCooldown, kitCost, ultimateCard, ultPrice, wornActives,
 } from '@/engine/query';
 import { HARD_CC_CHARGES, ULT_COOLDOWN, ULT_UNLOCK_LEVEL } from '@/engine/constants';
-import { HeroPortrait, HeroBadge } from '@/cards/art/heroArt';
+import { HeroPortrait, HeroBadge, heroForm } from '@/cards/art/heroArt';
 import { ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
 import { SpikeMark } from '../board/SpikeMark';
@@ -121,8 +121,14 @@ export function HeroDetailSheet({
   // engine's own price).
   const price = (abilityId: AbilityId) => {
     const n = kitCost(card, abilityId);
-    return n > 0 ? `${n} soul${n === 1 ? '' : 's'}` : undefined;
+    // A charged ultimate shows its printed price coming down: "20 → 7 souls".
+    const face = abilityId === data.ult ? ultimateCard(abilityId) : undefined;
+    if (face?.charged && n !== ultPrice(face)) return `${ultPrice(face)} → ${n} soul${n === 1 ? '' : 's'}`;
+    return n > 0 ? `${n} soul${n === 1 ? '' : 's'}` : face?.charged ? 'Free' : undefined;
   };
+  // Another form while a status gives one (Silver's Wolf form): its art, and
+  // its name on the card.
+  const form = heroForm(card);
   // The ultimate: a button printed on the card like a Pokémon attack, named
   // and worded by its card and showing the hero's own ultimate icon; locked
   // below Level 2, then on its cooldown — ULT_COOLDOWN (less what the hero
@@ -134,8 +140,10 @@ export function HeroDetailSheet({
     abilityId: data.ult,
     heroId: ultFace.linkedHero,
     name: ultFace.name,
-    size: ultFace.size,
+    // A charged ultimate is named so on its block: its price is its own, not its size's.
+    size: ultFace.charged ? 'charged' : ultFace.size,
     text: sentence(ultFace.text ?? ''),
+    note: ultFace.charged?.text,
     locked: level < ULT_UNLOCK_LEVEL,
     left: card.cooldowns?.[data.ult] ?? 0,
   } : undefined;
@@ -236,7 +244,15 @@ export function HeroDetailSheet({
           margin: '6px 6px 0', borderRadius: 6,
           background: '#0f1214',
         }}>
-          <HeroPortrait cardId={data.id} />
+          <HeroPortrait cardId={data.id} art={form?.art} />
+          {form && (
+            <span role="note" style={{
+              position: 'absolute', top: 10, left: 10, zIndex: 3,
+              padding: '4px 9px', background: poster.ink, color: poster.cream,
+              border: `1.5px solid ${poster.status.buff}`, borderRadius: 3,
+              ...eyebrow, fontSize: 11,
+            }}>{form.label} · {form.turns} turn{form.turns === 1 ? '' : 's'}</span>
+          )}
           {/* Inner edge — the print sits slightly recessed in its frame. */}
           <div aria-hidden style={{
             position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -344,6 +360,7 @@ export function HeroDetailSheet({
                   <SkillActionCard
                     name={ult.name}
                     description={ult.text}
+                    note={ult.note}
                     scale={scale}
                     mine={!!isMine}
                     used={used}
@@ -715,11 +732,14 @@ function UltArt({ heroId, locked }: { heroId: CardId; locked: boolean }) {
  * text.
  */
 function SkillActionCard({
-  name, description, scale, mine, used, canUse, blockedReason, onUse, chipLabel, ultimate = false,
+  name, description, note, scale, mine, used, canUse, blockedReason, onUse, chipLabel, ultimate = false,
   art, status, greyed = false, price,
 }: {
   name: string;
   description: string;
+  /** A rule on its own line under the effect: a charged ultimate's ("Costs 1
+   *  less for each damage Victor takes."). */
+  note?: string;
   scale: Scale;
   mine: boolean;
   used: boolean;
@@ -765,6 +785,11 @@ function SkillActionCard({
       {description && (
         <div style={{ ...text.body, color: fgDim }}>
           <RuleText text={description} keywordColor={interactive ? fg : undefined} scale={scale} />
+        </div>
+      )}
+      {note && (
+        <div style={{ ...text.body, color: fgDim, fontStyle: 'italic', marginTop: 4 }}>
+          <RuleText text={note} keywordColor={interactive ? fg : undefined} scale={scale} />
         </div>
       )}
 

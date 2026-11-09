@@ -1,9 +1,30 @@
+import type { CardInstance } from '@/engine/types';
+import { STATUSES_BY_ID } from '@/statuses';
 import { getHeroIdentity } from './heroPalette';
 import { poster } from '@/ui/poster';
 import { HERO_IMG_BASE } from '@/art/assets';
 
 interface PortraitProps {
   cardId: string;
+  /** Another form's art to print instead of the hero's own (`heroForm`):
+   *  a file under public/heroes/. */
+  art?: string;
+}
+
+/**
+ * The form a hero on the board has taken while a status gives it one
+ * (`StatusDef.form`: Silver's Wolf form): the status's title for its badge,
+ * the turns it has left, and — when the status belongs to this hero's own
+ * card — the form's art for its portrait. Undefined for a hero in its own
+ * form. When the status ends the card shows the hero again.
+ */
+export function heroForm(card: CardInstance): { label: string; turns: number; art?: string } | undefined {
+  for (const s of card.statuses) {
+    const def = STATUSES_BY_ID[s.id];
+    if (!def?.form) continue;
+    return { label: def.title, turns: s.duration, art: def.form.hero === card.cardId ? def.form.art : undefined };
+  }
+  return undefined;
 }
 
 // Real hero card art lives in public/heroes/<cardId>_<variant>.webp.
@@ -54,9 +75,9 @@ export function heroPortraitArt(cardId: string): { src: string; fallback: string
   };
 }
 
-export function HeroPortrait({ cardId }: PortraitProps) {
+export function HeroPortrait({ cardId, art }: PortraitProps) {
   const id = getHeroIdentity(cardId);
-  const url = imageUrl(cardId, 'card');
+  const url = art ? `${HERO_IMG_BASE}${art}` : imageUrl(cardId, 'card');
   return (
     <div
       style={{

@@ -11,8 +11,8 @@ import {
 } from './SpotVarnish';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
-import { heroAbilities, ultimateCard } from '@/engine/query';
-import { PRICE, ULT_COST } from '@/engine/constants';
+import { heroAbilities, ultimateCard, ultPrice } from '@/engine/query';
+import { PRICE } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
@@ -456,9 +456,13 @@ export function CardFrame({
                 tag: kind === 'skill' ? `Skill${ability.souls ? ` · ${ability.souls}` : ''}` : 'Passive',
                 body: ability.text,
               })),
-              ...(ult ? [{ key: ult.id, kind: 'ult' as const, tag: `Ult · ${ULT_COST[ult.size]}`, body: isHand ? ult.name : `${ult.name}: ${ult.text ?? ''}` }] : []),
+              // A charged ultimate prints its own price, and its rule on a line of its own under it.
+              ...(ult ? [{ key: ult.id, kind: 'ult' as const, tag: `Ult · ${ult.charged ? 'charged ' : ''}${ultPrice(ult)}`, body: isHand ? ult.name : `${ult.name}: ${ult.text ?? ''}` }] : []),
+              ...(ult?.charged && !isHand ? [{ key: `${ult.id}-charge`, kind: null, tag: null, body: ult.charged.text }] : []),
             ]
-            : data?.text ? [{ key: 'text', kind: null, tag: null, body: data.text }] : [];
+            : data?.type === 'ultimate' && data.charged
+              ? [{ key: 'text', kind: null, tag: null, body: data.text ?? '' }, { key: 'charge', kind: null, tag: null, body: data.charged.text }]
+              : data?.text ? [{ key: 'text', kind: null, tag: null, body: data.text }] : [];
           if (lines.length === 0) return null;
           // Hand-size cards are 134×188 — give the effect every pixel:
           // tighter line-height, smaller font, full ink for sharper reads.

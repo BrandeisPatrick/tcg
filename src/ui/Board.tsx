@@ -4,8 +4,8 @@ import type { BoardProps } from 'boardgame.io/react';
 import type { AbilityId, GameState, CardId, CardInstance, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import {
-  abilityAim, findCardOnBoard, findWornItem, handCard, isRespawning, itemPrice, kitAbilityIds, otherPlayer, resolveSkill, slotCap, stepInCandidates,
-  ultimateCard, wornActives,
+  abilityAim, findCardOnBoard, findWornItem, handCard, isRespawning, itemPrice, kitAbilityIds, otherPlayer, promptOwed, resolveSkill, slotCap,
+  stepInCandidates, ultimateCard, wornActives,
 } from '@/engine/query';
 import { upgradesOf } from '@/cards/decks';
 import { RESPAWN_TURNS } from '@/engine/constants';
@@ -18,6 +18,7 @@ import { plainText } from './card/scaling';
 import { HeroDetailSheet, type SkillOffer } from './overlays/HeroDetailSheet';
 import { DiscardOverlay } from './overlays/DiscardOverlay';
 import { UpgradePicker } from './overlays/UpgradePicker';
+import { TriggerPrompt } from './overlays/TriggerPrompt';
 import { DeckPile, DiscardPile, CardPiles } from './board/CardPiles';
 import { OpponentHand } from './board/OpponentHand';
 import { PosterBackdrop } from './PosterBackdrop';
@@ -166,6 +167,9 @@ export function Board(props: BoardProps<GameState>) {
   // the click, then fire once the reveal settles.
   const queuedEndRef = useRef(false);
   const mover = ctx.currentPlayer as PlayerID;
+  // A trigger prompt owed (engine/prompts.ts): the answer comes before
+  // anything else, from whichever seat it asks, on either player's turn.
+  const prompt = promptOwed(G);
   // A turn is the player's to spend on cards, abilities and a retreat, then
   // its one attack, which ends it. The dial marks the attack: 'battle' while
   // the choreographer walks it, 'regroup' once it is made, 'prepare' before.
@@ -174,7 +178,7 @@ export function Board(props: BoardProps<GameState>) {
   // hand-over plays its End and the next one's Income (turnBeat.ts).
   const spine = useTurnBeat({ turn: G.draft ? 0 : G.turnNumber, isMyTurn, attackMade: G.attackUsed && !combatPlan });
   /** The mover's attack can still be made, and it is not being made already. */
-  const attackOpen = !ctx.gameover && !combatPlan && !G.pendingDiscard && attackBlocked(G, mover) === null;
+  const attackOpen = !ctx.gameover && !combatPlan && !G.pendingDiscard && !prompt && attackBlocked(G, mover) === null;
   // The ready glint: your heroes that can still do something this turn —
   // none while an attack is being walked, when nothing can be done.
   const readyIids = useMemo(
@@ -231,6 +235,9 @@ export function Board(props: BoardProps<GameState>) {
   // The first-Active prompt waits for the opening's deal (the heroes into the
   // deck, the draw) to play.
   const pendingActiveShown = useDelayedValue(G.pendingActive, deckMotion.openingDelay);
+  // A trigger prompt waits for the knockout it asks about to play (the hero
+  // shattering before it may get back up).
+  const promptShown = useDelayedValue(prompt ? `${prompt.pid}|${prompt.subjectIid}` : null, prompt ? (fxTimeline.koSettle[prompt.subjectIid] ?? 0) : 0);
   // The final blow gets to land. When the move that ended the match came
   // with a cast or a kill, the board stays up until that batch has played —
   // the bolt, the card breaking, the K.O. sticker — and only then hands over
@@ -355,6 +362,8 @@ export function Board(props: BoardProps<GameState>) {
     // does not end with a corpse in the lane. So does a draw card's discard.
     if (mover === me && G.pendingPromotion === me) return;
     if (G.pendingDiscard) return;
+    // A trigger prompt is owed: the turn waits on its answer.
+    if (G.triggers?.length) return;
     // A card or skill reveal is in flight. Don't drop the click: remember
     // the player's intent and let the drain effect below fire it once the
     // reveal settles. (The AI re-fires via its own effect, so only queue for
@@ -366,7 +375,7 @@ export function Board(props: BoardProps<GameState>) {
     }
     queuedEndRef.current = false;
     moves.endTurn();
-  }, [G.action?.state, G.pendingPromotion, G.pendingDiscard, mover, combatPlan, moves, me]);
+  }, [G.action?.state, G.pendingPromotion, G.pendingDiscard, G.triggers, mover, combatPlan, moves, me]);
 
   // Drain a queued press once the reveal finishes. If the turn has already
   // flipped (or the game ended) we just clear the flag so a stale intent
@@ -387,11 +396,11 @@ export function Board(props: BoardProps<GameState>) {
   liveTurnRef.current = G.turnNumber;
   useEffect(() => {
     if (!isMyTurn || autoPlay || ctx.gameover || !G.attackUsed || combatPlan) return;
-    if (G.pendingPromotion === me || G.pendingDiscard || G.action?.state === 'begin') return;
+    if (G.pendingPromotion === me || G.pendingDiscard || G.triggers?.length || G.action?.state === 'begin') return;
     const turnAt = G.turnNumber;
     const t = setTimeout(() => { if (liveTurnRef.current === turnAt) endTurn(); }, AUTO_END_MS);
     return () => clearTimeout(t);
-  }, [isMyTurn, autoPlay, ctx.gameover, G.attackUsed, combatPlan, G.pendingPromotion, G.pendingDiscard, G.action?.state, G.turnNumber, me, endTurn]);
+  }, [isMyTurn, autoPlay, ctx.gameover, G.attackUsed, combatPlan, G.pendingPromotion, G.pendingDiscard, G.triggers, G.action?.state, G.turnNumber, me, endTurn]);
 
   // Targeting needs the board visible — close any hover/long-press preview the
   // moment a pending action arms, AND any that opens mid-targeting (a hover
@@ -477,13 +486,17 @@ export function Board(props: BoardProps<GameState>) {
   // turn must not play out against a lane we have not refilled. Under
   // auto-play nobody answers that prompt, so the loop makes the promotion
   // itself — the enumerator returns an owed promotion first, from either seat.
-  const aiControlled = ctx.currentPlayer !== me || autoPlay;
+  // A trigger prompt is answered by the seat it asks, whoever's turn it is: the
+  // rival's prompt on your turn is the AI's to answer (the enumerator answers
+  // for the seat asked), and yours on its turn holds the loop until you do.
+  const aiControlled = (prompt ? prompt.pid !== me : ctx.currentPlayer !== me) || autoPlay;
   // The opening's first Active and a draw card's discard are the player's own
   // to answer too, unless auto-play is driving their seat.
   const aiHolds = !!ctx.gameover || !aiControlled || !!combatPlan || G.action?.state === 'begin'
     || (G.pendingPromotion === me && !autoPlay)
     || (G.pendingActive === me && !autoPlay)
-    || (G.pendingDiscard?.pid === me && !autoPlay);
+    || (G.pendingDiscard?.pid === me && !autoPlay)
+    || (prompt?.pid === me && !autoPlay);
 
   // AI loop: enumerate, play the best move, end the turn when that is best.
   useEffect(() => {
@@ -567,7 +580,7 @@ export function Board(props: BoardProps<GameState>) {
    *  owed — who steps up for a fallen Active (its prompt may be waiting out the
    *  knockout), the first Active, a draw card's discard. */
   const actionLocked = G.action?.state === 'begin' || !!combatPlan || G.pendingPromotion === me
-    || !!G.pendingActive || !!G.pendingDiscard;
+    || !!G.pendingActive || !!G.pendingDiscard || !!prompt;
   /** The turn button shows as working: locked, or holding a queued press. */
   const turnBusy = isMyTurn && (actionLocked || queuedEndRef.current);
   const pressTurnButton = () => { setPending(null); endTurn(); };
@@ -1209,6 +1222,8 @@ export function Board(props: BoardProps<GameState>) {
             const offer = (block: string | null, why: () => string): SkillOffer => ({
               canUse: isMine && isMyTurn && !discardFirst && block === null,
               blockedReason: !isMine ? undefined
+                // An optional trigger is asked at its moment, whoever's turn it is.
+                : block === 'trigger' ? why()
                 : !isMyTurn ? 'Not your turn'
                 : discardFirst ? DISCARD_FIRST
                 : block ? why()
@@ -1273,6 +1288,22 @@ export function Board(props: BoardProps<GameState>) {
               count={G.pendingDiscard.count}
               drawCard={G.pendingDiscard.cardId}
               onDiscard={(iids) => moves.discard(iids)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* A trigger prompt of yours (Victor's fall): use it or pass. Waits
+            for the knockout and any reveal to play; blocks the board until
+            it is answered, on either player's turn. */}
+        <AnimatePresence>
+          {prompt && prompt.pid === me && !autoPlay && promptShown === `${prompt.pid}|${prompt.subjectIid}` && G.action?.state !== 'begin' && (
+            <TriggerPrompt
+              key={`trigger-${prompt.subjectIid}`}
+              G={G}
+              me={me}
+              prompt={prompt}
+              onUse={(o) => (moves as any).useTrigger(o.heroIid, o.abilityId)}
+              onPass={() => (moves as any).passTrigger()}
             />
           )}
         </AnimatePresence>
@@ -1408,7 +1439,7 @@ export function Board(props: BoardProps<GameState>) {
           targeting={!!pending}
           attacking={isMyTurn && !!combatPlan}
           sheetHero={heroDetail?.cardId ?? null}
-          choosing={!!upgradePick || G.pendingDiscard?.pid === me || G.pendingActive === me}
+          choosing={!!upgradePick || G.pendingDiscard?.pid === me || G.pendingActive === me || prompt?.pid === me}
           lesson={lesson}
           onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
           onLessons={matchNav ? matchNav.toLessons : undefined}
