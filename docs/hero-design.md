@@ -524,9 +524,11 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 **The heroes**
 - **Viscous — The Cube.** Invulnerable for 1 turn on any hero of his side, himself included: it
   covers the rival's turn and is gone when his side's next turn begins. With a 1-turn wait he can
-  cube the same hero every turn for 3 of the turn's 5 souls, so one hero never takes damage. That
-  is how the doc prices it; play will show whether it needs a longer wait (the engine used to give
-  The Cube 2 turns for this reason).
+  cube the same hero every turn for 3 of the turn's 5 souls, so one hero never takes damage.
+  **Decided, kept as is** (Patrick, 2026-11-09): cubing every turn is expensive enough to stop being
+  worth it, because the rival spends those souls on equipment and develops its heroes while
+  Viscous's side spends them cubing. The other options were a 2-turn wait (as the
+  old engine had), never the same hero twice in a row, and a cube that stops one hit.
 - **Haze — Fixation.** A stack for each of her swings, Extra Attacks too, but not from a Ricochet
   bounce (she is fixed on the hero she shoots); the stacks last until it leaves the Active slot.
   Her Level 3 extra swing is gone. **Bullet Dance** deals her Attack as her card shows it (0 while
