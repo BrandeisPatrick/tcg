@@ -380,7 +380,7 @@ const HAND_TYPES: ReadonlySet<Action['type']> = new Set(['playCard', 'placeHero'
 /** A hand play as a client call. */
 function handCall(a: Action): { name: string; args: unknown[] } {
   if (a.type === 'playCard') return { name: 'playCard', args: a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid] };
-  if (a.type === 'placeHero') return { name: 'placeHero', args: a.toActive ? [a.cardIid, true] : [a.cardIid] };
+  if (a.type === 'placeHero') return { name: 'placeHero', args: a.toActive ? [a.cardIid, true] : a.slot === undefined ? [a.cardIid] : [a.cardIid, false, a.slot] };
   return { name: 'endTurn', args: [] };
 }
 

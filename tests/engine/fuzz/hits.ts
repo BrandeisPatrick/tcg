@@ -10,7 +10,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { isRespawning } from '@/engine/query';
 import type { Snapshot } from './driver';
 import {
-  boardOf, boardUnits, handCardOf, handOf, isHeroCard, isMergedRem, itemData, slottedHeroOf, slotCapOracle, upgradeComponentOracle,
+  boardOf, boardUnits, deckOf, handCardOf, handOf, isHeroCard, isMergedRem, itemData, slottedHeroOf, slotCapOracle, upgradeComponentOracle,
   upgradesOfOracle, wornItemOf, wornItemsOf,
 } from './oracle';
 
@@ -102,8 +102,8 @@ export function moveTags(snap: Snapshot, name: string, args: unknown[]): string[
     }
   } else if (name === 'placeHero' || name === 'chooseActive') {
     const owner = name === 'chooseActive' ? G.pendingActive ?? pid : pid;
-    const card = handCardOf(G, owner, args[0]);
-    tags.push(card ? `card:${card.cardId}` : 'card:not-in-hand', args[1] === true ? 'place:lane' : 'place:bench');
+    const card = name === 'chooseActive' ? deckOf(G, owner).find((c) => c.iid === args[0]) : handCardOf(G, owner, args[0]);
+    tags.push(card ? `card:${card.cardId}` : name === 'chooseActive' ? 'card:not-in-deck' : 'card:not-in-hand', args[1] === true ? 'place:lane' : args[2] === undefined ? 'place:bench' : 'place:slot');
     if (!me.active) tags.push('active:empty');
   } else if (name === 'discard') {
     tags.push(`discard:owed-${G.pendingDiscard?.count ?? 0}`);

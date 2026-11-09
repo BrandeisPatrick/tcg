@@ -27,7 +27,7 @@ export const INVALID: unique symbol = Symbol('INVALID');
 export type Action =
   // The hand.
   | { type: 'playCard'; cardIid: string; heroIid: string; upgradeId?: CardId }   // an item from the hand onto one of your heroes, for its price
-  | { type: 'placeHero'; cardIid: string; toActive?: boolean }                     // a hero from the hand onto the bench (or into an empty Active slot), free
+  | { type: 'placeHero'; cardIid: string; toActive?: boolean; slot?: 1 | 2 | 3 }    // a hero from the hand onto the bench (`slot`, or its first free one; or into an empty Active slot), free
   | { type: 'discard'; cardIids: string[] }                                        // a draw card's discard, from anywhere in the hand
   // The board.
   | { type: 'attack'; targetIid?: string }               // no targetIid = the first of `attackTargets`
@@ -35,7 +35,7 @@ export type Action =
   | { type: 'activate'; itemIid: string; targetIid?: string }
   | { type: 'moveHero'; fromSlot: 0 | 1 | 2 | 3; toSlot: 0 | 1 | 2 | 3 }
   // Owed choices, made from either seat.
-  | { type: 'chooseActive'; cardIid: string }               // the opening: a hero from the hand into the lane
+  | { type: 'chooseActive'; cardIid: string }               // the opening: a drafted hero from the deck into the lane
   | { type: 'promoteToActive'; benchIid: string }
   | { type: 'useTrigger'; heroIid: string; abilityId: AbilityId }   // a trigger prompt's yes: this one of its offers
   | { type: 'passTrigger' }                                           // a trigger prompt's no
@@ -48,7 +48,7 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
   if (blocked(G, pid, a) !== null) return INVALID;
   switch (a.type) {
     case 'playCard': return playCard(G, pid, a.cardIid, a.heroIid, a.upgradeId);
-    case 'placeHero': return placeHero(G, pid, a.cardIid, a.toActive === true);
+    case 'placeHero': return placeHero(G, pid, a.cardIid, a.toActive === true, a.slot);
     case 'discard': return discard(G, pid, a.cardIids);
     case 'chooseActive': return chooseActive(G, a.cardIid);
     case 'attack': return attack(G, pid, a.targetIid);

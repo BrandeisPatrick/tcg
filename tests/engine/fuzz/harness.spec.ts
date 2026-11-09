@@ -80,17 +80,19 @@ function mergeRem(G: GameState, bearer: CardInstance): CardInstance {
   return rem;
 }
 /** The drafted match's opening, as the engine deals it: engine turn 1, the first mover (P1)
- *  on turn, P0's heroes all in its hand and its first Active owed. Read with `OPENING`. */
+ *  on turn, P0's heroes all back in its deck, its hand empty and its first Active owed. Read
+ *  with `OPENING`. */
 function opening(): GameState {
   const G = clean();
   const ps = G.players['0'];
   for (const h of [ps.active!, ...ps.bench.filter((b): b is CardInstance => !!b)]) {
-    h.zone = 'hand';
+    h.zone = 'deck';
     h.slot = undefined;
-    ps.hand.push(h);
+    ps.deck.push(h);
   }
   ps.active = null;
   ps.bench = [null, null, null];
+  ps.hand = [];
   G.turnNumber = 1;
   G.pendingActive = '0';
   return G;
@@ -638,9 +640,10 @@ describe('the transition rules fire', () => {
     expect(lane.after.G.players['0'].active?.cardId).toBe('hero_yamato');
     expect(lane.check()).toEqual([]);
     const O = opening();
-    const haze = O.players['0'].hand[0];
+    const haze = O.players['0'].deck.find((c) => c.cardId === 'hero_haze')!;
     const first = made(O, 'chooseActive', [haze.iid], OPENING, '1');
     expect(first.after.G.players['0'].active?.iid).toBe(haze.iid);
+    expect(first.after.G.players['0'].deck).not.toContain(haze);
     expect(first.check()).toEqual([]);
     expect(first.check((A) => { A.pendingActive = '0'; })).toContain('placed-hero');
   });
@@ -1129,14 +1132,17 @@ describe('the rules oracles', () => {
     mergeRem(R, p0(R).haze);
     expect(R.players['0'].bench[2]).toBeNull();
     expect(freeBenchSlotOracle(R, '0')).toBeUndefined();
-    // The first Active: owed, from the owing hand, a hero that may stand there; either seat makes it.
+    // The first Active: owed, from the owing deck (the drafted heroes), a hero that may stand
+    // there; either seat makes it. A card of the hand is no candidate.
     const O = opening();
-    const haze = O.players['0'].hand[0];
+    const haze = O.players['0'].deck.find((c) => c.cardId === 'hero_haze')!;
+    const intoDeck = (c: CardInstance) => { O.players['0'].hand = O.players['0'].hand.filter((x) => x !== c); c.zone = 'deck'; O.players['0'].deck.push(c); return c; };
     expect(chooseActiveBlockedOracle(O, haze.iid)).toBeNull();
     expect(chooseActiveBlockedOracle(clean(), haze.iid)).toBe('not-owed');
-    expect(chooseActiveBlockedOracle(O, 'ghost')).toBe('not-in-hand');
-    expect(chooseActiveBlockedOracle(O, giveCard(O, '0', 'grit').iid)).toBe('not-hero');
-    expect(chooseActiveBlockedOracle(O, giveCard(O, '0', 'hero_rem').iid)).toBe('bench-only');
+    expect(chooseActiveBlockedOracle(O, 'ghost')).toBe('not-in-deck');
+    expect(chooseActiveBlockedOracle(O, giveCard(O, '0', 'hero_abrams').iid)).toBe('not-in-deck');
+    expect(chooseActiveBlockedOracle(O, intoDeck(giveCard(O, '0', 'grit')).iid)).toBe('not-hero');
+    expect(chooseActiveBlockedOracle(O, intoDeck(giveCard(O, '0', 'hero_rem')).iid)).toBe('bench-only');
     expect(placeHeroBlockedOracle(O, '0', haze.iid, true)).toBe('active-owed');
     // A discard: owed, one card up to what is owed, none twice, each in the hand.
     const D = clean();

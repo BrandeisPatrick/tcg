@@ -27,7 +27,7 @@ export const RESPOND_STAGE = 'respond';
 interface MoveContext {
   G: GameState;
   ctx: Ctx;
-  events?: { setActivePlayers?: (arg: { value: Record<string, string> }) => void };
+  events?: { setActivePlayers?: (arg: { value: Record<string, string> }) => void; endTurn?: () => void };
 }
 
 /**
@@ -109,19 +109,27 @@ export const DeadlockGame: Game<GameState> = {
     playCard: ({ G, ctx, playerID, events }, cardIid: string, heroIid: string, upgradeId?: string) =>
       move({ G, ctx, events }, mover(ctx, playerID), upgradeId === undefined ? { type: 'playCard', cardIid, heroIid } : { type: 'playCard', cardIid, heroIid, upgradeId }),
 
-    /** Put a hero from your hand on the bench — or, `toActive`, into your
-     *  empty Active slot. Free. */
-    placeHero: ({ G, ctx, playerID, events }, cardIid: string, toActive?: boolean) =>
-      move({ G, ctx, events }, mover(ctx, playerID), { type: 'placeHero', cardIid, toActive: toActive === true }),
+    /** Put a hero from your hand on the bench — the slot `slot` (1-3), or
+     *  your first free one — or, `toActive`, into your empty Active slot. Free. */
+    placeHero: ({ G, ctx, playerID, events }, cardIid: string, toActive?: boolean, slot?: 1 | 2 | 3) =>
+      move({ G, ctx, events }, mover(ctx, playerID), slot === undefined
+        ? { type: 'placeHero', cardIid, toActive: toActive === true }
+        : { type: 'placeHero', cardIid, toActive: toActive === true, slot }),
 
     /** A draw card's discard: these cards from your hand to the discard pile. */
     discard: ({ G, ctx, playerID, events }, cardIids: string[]) =>
       move({ G, ctx, events }, mover(ctx, playerID), { type: 'discard', cardIids: Array.isArray(cardIids) ? cardIids : [cardIids as unknown as string] }),
 
-    /** The opening: the hero from the hand that takes the lane as its side's
-     *  first Active. Made from either seat (whose it is comes from the card). */
-    chooseActive: ({ G, ctx, playerID, events }, cardIid: string) =>
-      move({ G, ctx, events }, mover(ctx, playerID), { type: 'chooseActive', cardIid }),
+    /** The opening: the drafted hero from the deck that takes the lane as its
+     *  side's first Active. Made from either seat (whose it is comes from the
+     *  card). The draft's turn held for the choice (`draftPick`): it ends now,
+     *  and the match's first turn begins on a dealt board. */
+    chooseActive: ({ G, ctx, playerID, events }, cardIid: string) => {
+      const r = move({ G, ctx, events }, mover(ctx, playerID), { type: 'chooseActive', cardIid });
+      if (r === INVALID_MOVE) return r;
+      if (G.turnNumber < 1 && !G.pendingActive) events?.endTurn?.();
+      return undefined;
+    },
 
     /** Use an active item a hero wears (that hero's one ability this turn). */
     activate: ({ G, ctx, playerID, events }, itemIid: string, targetIid?: string) =>

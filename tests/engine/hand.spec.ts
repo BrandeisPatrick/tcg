@@ -390,6 +390,77 @@ describe('heroes from the hand', () => {
     expect(me.bench[0]).toBe(haze);
     expect(G.pendingPromotion).toBe('0');
   });
+
+  it('the player chooses the bench slot: a free one is taken, a taken one and one out of range are refused, none means the first free', () => {
+    const G = turn(0);
+    const me = G.players['0'];
+    me.bench[0] = null;
+    me.bench[2] = null;               // slots 1 and 3 free, 2 held
+    const taken = me.bench[1]!;
+    const kelvin = giveCard(G, '0', 'hero_kelvin');
+    expect(legalActions(G, '0').filter((a) => a.type === 'placeHero' && a.cardIid === kelvin.iid)).toEqual([
+      { type: 'placeHero', cardIid: kelvin.iid },
+      { type: 'placeHero', cardIid: kelvin.iid, slot: 1 },
+      { type: 'placeHero', cardIid: kelvin.iid, slot: 3 },
+    ]);
+    // A taken slot, and slots that are no bench slot.
+    refusedUntouched(G, '0', { type: 'placeHero', cardIid: kelvin.iid, slot: 2 }, 'slotTaken');
+    for (const slot of [0, 4, -1, 1.5, '2'] as unknown[]) {
+      expect(placeHeroBlocked(G, '0', kelvin.iid, false, slot), String(slot)).toBe('badSlot');
+      refusedUntouched(G, '0', { type: 'placeHero', cardIid: kelvin.iid, slot: slot as 1 }, 'badSlot');
+    }
+    // A free slot the player named: the hero lands there, not in the first free one.
+    expect(attempt(G, '0', { type: 'placeHero', cardIid: kelvin.iid, slot: 3 }).result).not.toBe(INVALID);
+    expect(me.bench[2]).toBe(kelvin);
+    expect(me.bench[0]).toBeNull();
+    expect(me.bench[1]).toBe(taken);
+    expect(kelvin).toMatchObject({ zone: 'bench', slot: 3 });
+    // None named: the first free slot, as before.
+    const seven = giveCard(G, '0', 'hero_seven');
+    expect(attempt(G, '0', { type: 'placeHero', cardIid: seven.iid }).result).not.toBe(INVALID);
+    expect(me.bench[0]).toBe(seven);
+    expect(seven.slot).toBe(1);
+    // The bench full, a named slot is taken and the bare move finds none.
+    const paige = giveCard(G, '0', 'hero_paige');
+    refusedUntouched(G, '0', { type: 'placeHero', cardIid: paige.iid, slot: 1 }, 'slotTaken');
+    refusedUntouched(G, '0', { type: 'placeHero', cardIid: paige.iid }, 'benchFull');
+  });
+
+  it('a named slot into the empty lane is the lane: `toActive` wins, and the slot is ignored', () => {
+    const G = turn(0);
+    const me = G.players['0'];
+    me.active = null;
+    me.bench = [null, null, null];
+    const kelvin = giveCard(G, '0', 'hero_kelvin');
+    expect(placeHeroBlocked(G, '0', kelvin.iid, true, 7)).toBeNull();
+    expect(attempt(G, '0', { type: 'placeHero', cardIid: kelvin.iid, toActive: true, slot: 2 }).result).not.toBe(INVALID);
+    expect(me.active).toBe(kelvin);
+    expect(me.bench).toEqual([null, null, null]);
+    // The lane filled, the next hero in the slot it names.
+    const seven = giveCard(G, '0', 'hero_seven');
+    expect(placeHeroBlocked(G, '0', seven.iid, true)).toBe('occupied');
+    expect(attempt(G, '0', { type: 'placeHero', cardIid: seven.iid, slot: 2 }).result).not.toBe(INVALID);
+    expect(me.bench[1]).toBe(seven);
+  });
+
+  it('every placement is reported to the board as a `place` event: the seat, the card and its slot', () => {
+    const G = turn(0);
+    const me = G.players['0'];
+    me.active = null;
+    me.bench = [null, null, null];
+    G.fx = [];
+    const kelvin = giveCard(G, '0', 'hero_kelvin');
+    perform(G, '0', { type: 'placeHero', cardIid: kelvin.iid, toActive: true });
+    const seven = giveCard(G, '0', 'hero_seven');
+    perform(G, '0', { type: 'placeHero', cardIid: seven.iid, slot: 3 });
+    const haze = giveCard(G, '0', 'hero_haze');
+    perform(G, '0', { type: 'placeHero', cardIid: haze.iid });
+    expect(G.fx.filter((e) => e.kind === 'deck')).toEqual([
+      expect.objectContaining({ kind: 'deck', what: 'place', pid: '0', iid: kelvin.iid, cardId: 'hero_kelvin', slot: 0 }),
+      expect.objectContaining({ kind: 'deck', what: 'place', pid: '0', iid: seven.iid, cardId: 'hero_seven', slot: 3 }),
+      expect.objectContaining({ kind: 'deck', what: 'place', pid: '0', iid: haze.iid, cardId: 'hero_haze', slot: 1 }),
+    ]);
+  });
 });
 
 describe('what a play sets going', () => {

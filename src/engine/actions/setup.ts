@@ -10,10 +10,11 @@ import { allocatorFor, allocatorOf, newCounters, type IidAllocator } from '../id
 import { makeInstance } from '../instances';
 import { pushLog } from '../log';
 import { otherPlayer } from '../query';
-import { dealOpeningHand, fillDeck, sideDeckIds } from '../deck';
+import { dealOpeningHand, drawCards, fillDeck, shuffleDeck, sideDeckIds, stockDeck } from '../deck';
 import { newRecord, newTrack } from '../map';
 import { newSeed } from '../rng';
-import { BOSS_SPAWN_ROUND, OPENING_HAND, SOULS_START } from '../constants';
+import { BOSS_SPAWN_ROUND, OPENING_DRAW, OPENING_HAND, SOULS_START } from '../constants';
+import { pushFx } from '../fx';
 
 /** Empty PlayerState used while the pre-match draft is running — no heroes
  *  yet. Replaced via `buildPlayer()` once the 8th draft pick lands. */
@@ -153,10 +154,10 @@ function playerDeck(seat: PlayerID | null): CardId[] | undefined {
   return [...deck];
 }
 
-/** The hero of `ps`'s hand an AI seat opens with in the lane: the one with the
- *  most HP, then the most attack (never a bench-only one). */
+/** The hero of `ps`'s deck an AI seat opens with in the lane: the one with
+ *  the most HP, then the most attack (never a bench-only one). */
 function openingPick(ps: PlayerState): CardInstance | undefined {
-  const heroes = ps.hand.filter((c) => {
+  const heroes = ps.deck.filter((c) => {
     const d = CARDS_BY_ID[c.cardId];
     return d?.type === 'hero' && !d.flags?.benchOnly;
   });
@@ -167,41 +168,57 @@ function openingPick(ps: PlayerState): CardInstance | undefined {
   return heroes.reduce<CardInstance | undefined>((best, c) => (!best || score(c) > score(best) ? c : best), undefined);
 }
 
-/** `pid`'s first Active, from its hand: an AI seat's is chosen at once
- *  (`openingPick`); the human seat is asked (`G.pendingActive`, answered by
- *  `chooseActive`). A hand with no hero that can stand there leaves the lane
- *  empty, to be filled from the hand later (`placeHero`). */
-function openingActive(G: GameState, pid: PlayerID) {
+/** The hero `card`, from `pid`'s deck, takes the lane as its side's first
+ *  Active. The board flies it there (`place`). */
+export function laneFromDeck(G: GameState, pid: PlayerID, card: CardInstance) {
   const ps = G.players[pid];
-  const pick = openingPick(ps);
-  if (!pick) return;
-  if (pid === G.humanSeat) {
-    G.pendingActive = pid;
-    return;
-  }
-  ps.hand = ps.hand.filter((c) => c !== pick);
-  ps.active = pick;
-  pick.zone = 'active';
-  pick.slot = 0;
-  pushLog(G, `P${pid} put ${CARDS_BY_ID[pick.cardId]?.name ?? pick.cardId} in the lane.`);
+  ps.deck = ps.deck.filter((c) => c !== card);
+  ps.active = card;
+  card.zone = 'active';
+  card.slot = 0;
+  pushLog(G, `P${pid} put ${CARDS_BY_ID[card.cardId]?.name ?? card.cardId} in the lane.`);
+  pushFx(G, { kind: 'deck', what: 'place', pid, iid: card.iid, cardId: card.cardId, slot: 0 });
 }
 
 /**
- * The drafted match's opening, as the last pick lands: each side's deck is its
- * items (`sideDeckIds`: the human seat's saved deck, else one made from its
- * heroes' builds) and its four drafted heroes, shuffled; each draws its
- * opening hand (at least one hero), and each puts one hero from it in the lane
- * — the AI at once, the human seat when asked. Nothing else is on the board.
+ * The rest of a drafted match's opening, once the human seat has chosen its
+ * first Active (`chooseActive`) — or at once, when no seat is human: every
+ * AI seat picks its own from its deck (`openingPick`), then each side's deck
+ * is shuffled, with the motion, and each draws OPENING_DRAW. The Pocket
+ * hero guarantee has nothing to do here: every side opens with a hero in the
+ * lane.
+ */
+export function finishOpening(G: GameState) {
+  const seats = ['0', '1'] as PlayerID[];
+  for (const pid of seats) {
+    if (G.players[pid].active) continue;
+    const pick = openingPick(G.players[pid]);
+    if (pick) laneFromDeck(G, pid, pick);
+  }
+  for (const pid of seats) {
+    shuffleDeck(G, pid);
+    drawCards(G, pid, OPENING_DRAW);
+  }
+}
+
+/**
+ * The drafted match's opening, as the last pick lands: each side's deck is
+ * stocked with its items (`sideDeckIds`: the human seat's saved deck, else
+ * one made from its heroes' builds) and its four drafted heroes, unshuffled
+ * and unseen. The human seat is asked for its first Active from among its
+ * drafted heroes (`G.pendingActive`, answered by `chooseActive`); with no
+ * human seat the AI's picks are made at once and the opening finishes here
+ * (`finishOpening`: the AI's pick, the shuffles, the deal of OPENING_DRAW).
+ * Nothing else is on the board.
  */
 export function openDraftedMatch(G: GameState, picks: Record<PlayerID, CardId[]>) {
   for (const pid of ['0', '1'] as PlayerID[]) {
     G.players[pid] = makeEmptyPlayer(pid);
-    fillDeck(G, pid, [...sideDeckIds(G, pid, picks[pid]), ...picks[pid]]);
-    dealOpeningHand(G, pid);
+    stockDeck(G, pid, [...sideDeckIds(G, pid, picks[pid]), ...picks[pid]]);
   }
-  // The human seat's choice is asked last, so an AI seat's is made first.
-  const seats = (['0', '1'] as PlayerID[]).sort((a, b) => Number(a === G.humanSeat) - Number(b === G.humanSeat));
-  for (const pid of seats) openingActive(G, pid);
+  const human = G.humanSeat;
+  if (human && openingPick(G.players[human])) G.pendingActive = human;
+  else finishOpening(G);
 }
 
 /** Overwrite a roster's printed numbers (Active first, then the bench).
@@ -338,11 +355,13 @@ export function draftPick(G: GameState, ctx: { currentPlayer: string; turn: numb
   if (draft.currentIndex >= draft.order.length) {
     openDraftedMatch(G, draft.picks);
     G.draft = null;
-    // The draft's turn ends now; the next boardgame.io turn is engine turn 1.
-    // Until it begins the match is still at turn 0 (no turn's end to run).
+    // The draft's turn ends now — or, the human seat's first Active still
+    // owed, once it is chosen (`chooseActive` ends it); the next boardgame.io
+    // turn is engine turn 1. Until it begins the match is still at turn 0
+    // (no turn's end to run).
     G.draftTurnsOffset = ctx.turn;
     pushLog(G, 'Match begins.');
-    return { endTurn: true };
+    return { endTurn: !G.pendingActive };
   }
 
   return { endTurn: draft.order[draft.currentIndex] !== ctx.currentPlayer };

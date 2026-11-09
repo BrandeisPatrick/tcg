@@ -566,12 +566,22 @@ export function freeBenchSlotOracle(G: GameState, pid: PlayerID): number | undef
   return i < 0 ? undefined : i + 1;
 }
 
-/** Why `pid` may not put the hero `cardIid` from its hand on the board — its
- *  first free bench slot, or (`toActive`) its empty Active slot: a choice owed
- *  first, or the attack made; not its turn; not in its hand; no hero; the Active
- *  slot holds a hero (standing or a corpse); a bench-only hero to the Active;
- *  no bench slot free. */
-export function placeHeroBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, toActive: boolean): string | null {
+/** The bench slots (1..3) a hero from `pid`'s hand may go into: the empty
+ *  ones no merged Rem will come back to. */
+export function freeBenchSlotsOracle(G: GameState, pid: PlayerID): number[] {
+  const ps = G.players[pid];
+  const reserved = new Set(boardOf(ps).flatMap((h) => (h.attached ?? []).filter(isMergedRem)).map((r) => r.slot));
+  return ps.bench.flatMap((b, k) => (b == null && !reserved.has((k + 1) as 1 | 2 | 3) ? [k + 1] : []));
+}
+
+/** Why `pid` may not put the hero `cardIid` from its hand on the board — the
+ *  bench slot `slot`, its first free bench slot when none is named, or
+ *  (`toActive`) its empty Active slot: a choice owed first, or the attack
+ *  made; not its turn; not in its hand; no hero; the Active slot holds a hero
+ *  (standing or a corpse); a bench-only hero to the Active; a slot that is no
+ *  bench slot; a slot taken (a hero, a corpse, or a merged Rem's); no bench
+ *  slot free. */
+export function placeHeroBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, toActive: boolean, slot?: unknown): string | null {
   const owed = owedOracle(G, 'placeHero');
   if (owed) return owed;
   if (seatOnTurn(G) !== pid) return 'not-your-turn';
@@ -583,17 +593,21 @@ export function placeHeroBlockedOracle(G: GameState, pid: PlayerID, cardIid: unk
     if ((CARDS_BY_ID[card.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly) return 'bench-only';
     return null;
   }
+  if (slot !== undefined) {
+    if (slot !== 1 && slot !== 2 && slot !== 3) return 'bad-slot';
+    return freeBenchSlotsOracle(G, pid).includes(slot) ? null : 'slot-taken';
+  }
   return freeBenchSlotOracle(G, pid) === undefined ? 'bench-full' : null;
 }
 
 /** Why the hero `cardIid` may not take the lane as its side's first Active:
- *  no first Active is owed; it is not in the owing seat's hand; it is no hero;
- *  it is bench-only. Either seat may make it. */
+ *  no first Active is owed; it is not in the owing seat's deck (its drafted
+ *  heroes); it is no hero; it is bench-only. Either seat may make it. */
 export function chooseActiveBlockedOracle(G: GameState, cardIid: unknown): string | null {
   const pid = G.pendingActive;
   if (pid === undefined) return 'not-owed';
-  const card = handCardOf(G, pid, cardIid);
-  if (!card) return 'not-in-hand';
+  const card = typeof cardIid === 'string' ? deckOf(G, pid).find((c) => c.iid === cardIid) : undefined;
+  if (!card) return 'not-in-deck';
   if (!isHeroCard(card)) return 'not-hero';
   if ((CARDS_BY_ID[card.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly) return 'bench-only';
   return null;

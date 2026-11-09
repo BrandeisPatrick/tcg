@@ -87,6 +87,21 @@ export function fillDeck(G: GameState, pid: PlayerID, ids: readonly CardId[], op
   pushFx(G, { kind: 'deck', what: 'shuffle', pid });
 }
 
+/** Put fresh cards of `ids` into `pid`'s deck as they are, unshuffled and
+ *  unannounced: a drafted match stocks its decks at the last pick and
+ *  shuffles them, with the motion, once the first Actives are chosen
+ *  (`shuffleDeck`). */
+export function stockDeck(G: GameState, pid: PlayerID, ids: readonly CardId[]) {
+  const ps = G.players[pid];
+  for (const id of ids) if (CARDS_BY_ID[id]) ps.deck.push(makeInstance(allocatorOf(G), id, pid, 'deck'));
+}
+
+/** Shuffle `pid`'s deck, and say so (the board riffles it). */
+export function shuffleDeck(G: GameState, pid: PlayerID) {
+  shuffle(G, G.players[pid].deck);
+  pushFx(G, { kind: 'deck', what: 'shuffle', pid });
+}
+
 // ---------- Drawing ----------
 
 /** True when `ps` may draw now: a card in the deck and room in the hand. */

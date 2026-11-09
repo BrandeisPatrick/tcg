@@ -11,8 +11,9 @@
  *    the hero earns EXP_ON_EQUIP the first time it wears that item. Playing an
  *    item Deadlock builds into a bigger one makes that upgrade and shuffles it
  *    into the deck (the player's pick, when there are several).
- *  - A hero goes on the bench for free (or straight into an empty Active slot).
- *  - The opening's first Active comes from the hand.
+ *  - A hero goes on the bench for free — the slot the player chose, or the
+ *    first free one — or straight into an empty Active slot.
+ *  - The opening's first Active comes from the deck: the drafted heroes.
  *  - A draw card's discard comes out of the hand.
  */
 import type { CardId, CardInstance, GameState, PlayerID } from '../types';
@@ -26,6 +27,7 @@ import { grantExp } from '../expSystem';
 import { resolve } from '../death';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
+import { finishOpening, laneFromDeck } from './setup';
 import { EXP_ON_EQUIP, HARD_CC_CHARGES } from '../constants';
 
 /** Put the item `cardIid` from `pid`'s hand on its hero `heroIid`, paying
@@ -67,11 +69,12 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: 
   if (ups.length > 0) shuffleIntoDeck(G, pid, upgradeId && ups.includes(upgradeId) ? upgradeId : ups[0]);
 }
 
-/** Put the hero `cardIid` from `pid`'s hand in its first free bench slot —
- *  or, `toActive`, in its empty Active slot. Free. The state-based pass
- *  follows: a hero benched while the lane is open is promoted to it (an AI
- *  seat's at once; the human seat is asked). */
-export function placeHero(G: GameState, pid: PlayerID, cardIid: string, toActive = false) {
+/** Put the hero `cardIid` from `pid`'s hand in a bench slot — `slot`, or
+ *  its first free one — or, `toActive`, in its empty Active slot. Free. The
+ *  board flies it there (`place`). The state-based pass follows: a hero
+ *  benched while the lane is open is promoted to it (an AI seat's at once;
+ *  the human seat is asked). */
+export function placeHero(G: GameState, pid: PlayerID, cardIid: string, toActive = false, slot?: 1 | 2 | 3) {
   const ps = G.players[pid];
   const card = handCard(G, pid, cardIid)!;
   ps.hand = ps.hand.filter((c) => c !== card);
@@ -80,28 +83,28 @@ export function placeHero(G: GameState, pid: PlayerID, cardIid: string, toActive
     card.zone = 'active';
     card.slot = 0;
     pushLog(G, `P${pid} put ${cardName(card.cardId)} in the lane.`);
+    pushFx(G, { kind: 'deck', what: 'place', pid, iid: card.iid, cardId: card.cardId, slot: 0 });
   } else {
-    const slot = freeBenchSlot(ps)!;
-    ps.bench[slot - 1] = card;
+    const at = slot ?? freeBenchSlot(ps)!;
+    ps.bench[at - 1] = card;
     card.zone = 'bench';
-    card.slot = slot;
+    card.slot = at;
     pushLog(G, `P${pid} benched ${cardName(card.cardId)}.`);
+    pushFx(G, { kind: 'deck', what: 'place', pid, iid: card.iid, cardId: card.cardId, slot: at });
   }
   resolve(G);
 }
 
-/** The opening: the hero `cardIid`, from the hand of the seat that owes its
- *  first Active, takes the lane. Whose it is comes from the card. */
+/** The opening: the hero `cardIid`, one of the drafted heroes in the deck
+ *  of the seat that owes its first Active, takes the lane — and the rest of
+ *  the opening follows (`finishOpening`: the AI's own pick, the shuffles,
+ *  the deal). Whose it is comes from the card. */
 export function chooseActive(G: GameState, cardIid: string) {
   const pid = G.pendingActive!;
-  const ps = G.players[pid];
-  const card = handCard(G, pid, cardIid)!;
-  ps.hand = ps.hand.filter((c) => c !== card);
-  ps.active = card;
-  card.zone = 'active';
-  card.slot = 0;
+  const card = G.players[pid].deck.find((c) => c.iid === cardIid)!;
   G.pendingActive = undefined;
-  pushLog(G, `P${pid} put ${cardName(card.cardId)} in the lane.`);
+  laneFromDeck(G, pid, card);
+  finishOpening(G);
 }
 
 /** A draw card's discard: the hand cards `cardIids` of `pid` go to its

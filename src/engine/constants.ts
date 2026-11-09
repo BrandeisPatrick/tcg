@@ -80,6 +80,10 @@ export const MAX_COPIES = 4;
  *  hero when the deck holds one (the Pocket rule: a hand with none swaps a
  *  random card of it for a random hero of the deck). */
 export const OPENING_HAND = 5;
+/** A drafted match's deal: each side chooses its first Active from its four
+ *  drafted heroes, then draws this many from the rest of its deck (the hero
+ *  and the draw come to OPENING_HAND). */
+export const OPENING_DRAW = OPENING_HAND - 1;
 
 /** Cards drawn at the start of each own turn (the first included). */
 export const DRAW_PER_TURN = 1;

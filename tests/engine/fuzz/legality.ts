@@ -26,7 +26,7 @@ import { collectInvariantViolations, collectTransitionViolations } from './invar
 import {
   activateBlockedOracle, attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, chooseActiveBlockedOracle, diffPaths,
   discardBlockedOracle, discardList, filterForItem, filterForSkill, firstSkillOf, handOf, isHeroCard, isMergedRem, itemData, other,
-  placeHeroBlockedOracle, playBlockedOracle, playCostOracle, retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf,
+  deckOf, freeBenchSlotsOracle, placeHeroBlockedOracle, playBlockedOracle, playCostOracle, retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf,
   targetLegal, ultLocked, upgradesOfOracle, wornItemsOf,
 } from './oracle';
 
@@ -386,7 +386,7 @@ interface Report {
 function actionKey(a: Action): string {
   switch (a.type) {
     case 'playCard': return `playCard ${a.cardIid} -> ${a.heroIid}${a.upgradeId ? ` [${a.upgradeId}]` : ''}`;
-    case 'placeHero': return `placeHero ${a.cardIid} ${a.toActive ? 'lane' : 'bench'}`;
+    case 'placeHero': return `placeHero ${a.cardIid} ${a.toActive ? 'lane' : a.slot === undefined ? 'bench' : `bench ${a.slot}`}`;
     case 'discard': return `discard ${a.cardIids.join('+')}`;
     case 'chooseActive': return `chooseActive ${a.cardIid}`;
     case 'activate': return `activate ${a.itemIid}${a.targetIid === undefined ? '' : ` -> ${a.targetIid}`}`;
@@ -422,7 +422,8 @@ function prober(G: GameState, ctx: Ctx, pid: PlayerID, rep: Report) {
 
 /** The plays from the hand the rules allow `pid` now, as `actionKey`s: each item onto each hero
  *  of its side in a slot (one per upgrade the item could make, when it could make several), each
- *  hero into an empty lane and onto the bench. */
+ *  hero into an empty lane, onto the bench (its first free slot) and into each free bench slot
+ *  by number. */
 function handPlaysOracle(G: GameState, pid: PlayerID): string[] {
   const out: string[] = [];
   const heroes = boardOf(G.players[pid]);
@@ -436,6 +437,7 @@ function handPlaysOracle(G: GameState, pid: PlayerID): string[] {
     } else {
       if (placeHeroBlockedOracle(G, pid, c.iid, true) === null) out.push(`placeHero ${c.iid} lane`);
       if (placeHeroBlockedOracle(G, pid, c.iid, false) === null) out.push(`placeHero ${c.iid} bench`);
+      for (const slot of freeBenchSlotsOracle(G, pid)) if (placeHeroBlockedOracle(G, pid, c.iid, false, slot) === null) out.push(`placeHero ${c.iid} bench ${slot}`);
     }
   }
   return out;
@@ -449,8 +451,8 @@ function handPlaysOracle(G: GameState, pid: PlayerID): string[] {
  *  - sampled item plays (the player's hand mostly — a hero card, a rival's card, a worn item,
  *    junk now and then — onto its heroes, a rival's, a merged Rem, an item, junk; an upgrade
  *    named or not, a wrong one, junk; real souls, plenty, or a soul short of the cost) and
- *    hero placements (its hero cards mostly; the lane or the bench) are accepted exactly when
- *    the oracle allows them;
+ *    hero placements (its hero cards mostly; the lane, the bench, or a bench slot by number —
+ *    a free one, a taken one, no slot at all) are accepted exactly when the oracle allows them;
  *  - a discard or a first Active nobody owes is refused;
  * each on a clone; what the engine accepts is held to the transition rules (the card leaves
  * the hand for the hero, its price paid, the component it evolves to the discard pile, the
@@ -514,8 +516,10 @@ function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
   }
   for (let n = 0; n < Math.max(1, opts.placeCombos); n++) {
     const cardIid = cardPool(true);
-    const toActive = rnd() < 0.5;
-    probe(pid, 'placeHero', toActive ? [cardIid, true] : [cardIid], placeHeroBlockedOracle(G, pid, cardIid, toActive), 'placeHero');
+    const x = rnd();
+    const toActive = x < 0.4;
+    const slot = x < 0.7 ? undefined : pickOne([1, 2, 3, 1, 2, 3, 0, 4, '2', 1.5], rnd);
+    probe(pid, 'placeHero', toActive ? [cardIid, true] : slot === undefined ? [cardIid] : [cardIid, false, slot], placeHeroBlockedOracle(G, pid, cardIid, toActive, slot), 'placeHero');
   }
   // Nobody owes a discard or a first Active here: both are refused.
   if (held.length) probe(pid, 'discard', [[held[0].iid]], discardBlockedOracle(G, pid, [held[0].iid]), 'discard');
@@ -533,16 +537,16 @@ function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
 
 /**
  * F2 — the opening owes a seat its first Active (`G.pendingActive`): `legalActions`, for either
- * seat, lists exactly a `chooseActive` per hero of the owing hand that may stand in the lane;
- * sampled choices (the owing seat's hand — heroes, a bench-only one, items —, the other seat's
- * cards, junk) are accepted exactly when the oracle allows them, made from either seat; every
- * other move is refused.
+ * seat, lists exactly a `chooseActive` per drafted hero in the owing deck that may stand in the
+ * lane; sampled choices (the owing seat's deck — heroes, a bench-only one, items —, the other
+ * seat's cards, junk) are accepted exactly when the oracle allows them, made from either seat;
+ * every other move is refused.
  */
 function probeOpening(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, rep: Report) {
   const { add } = rep;
   const probe = prober(G, ctx, pid, rep);
   const owing = G.pendingActive!;
-  const hand = handOf(G, owing);
+  const hand = deckOf(G, owing);
   const want = hand.filter((c) => chooseActiveBlockedOracle(G, c.iid) === null).map((c) => `chooseActive ${c.iid}`);
   for (const seat of ['0', '1'] as PlayerID[]) {
     const listed = legalActions(G, seat).map(actionKey);

@@ -352,22 +352,33 @@ export function freeBenchSlot(ps: PlayerState): 1 | 2 | 3 | undefined {
   return i < 0 ? undefined : ((i + 1) as 1 | 2 | 3);
 }
 
-export type PlaceBlock = 'notYourTurn' | 'notInHand' | 'notHero' | 'occupied' | 'benchOnly' | 'benchFull';
+export type PlaceBlock = 'notYourTurn' | 'notInHand' | 'notHero' | 'occupied' | 'benchOnly' | 'benchFull' | 'badSlot' | 'slotTaken';
+
+/** The bench slots a hero from `ps`'s hand may go into now: the empty ones
+ *  no merged Rem will come back to. */
+export function freeBenchSlots(ps: PlayerState): (1 | 2 | 3)[] {
+  const reserved = new Set(heroesOf(ps).filter((h) => h.remMergeTurnsLeft != null).map((h) => h.slot));
+  return ps.bench.flatMap((b, k) => (b == null && !reserved.has((k + 1) as 1 | 2 | 3) ? [(k + 1) as 1 | 2 | 3] : []));
+}
 
 /**
  * Why `pid` cannot put the hero `cardIid` from its hand on the board right
- * now, or null when it can: into its first free bench slot (`freeBenchSlot`),
- * or, `toActive`, straight into an EMPTY Active slot (the lane left open by a
- * fallen Active gone to the hand). Free. Checked in this order:
+ * now, or null when it can: into the bench slot `slot` (1-3), or its first
+ * free one (`freeBenchSlot`) when none is named, or, `toActive`, straight
+ * into an EMPTY Active slot (the lane left open by a fallen Active gone to
+ * the hand; `slot` is then ignored). Free. Checked in this order:
  *  - 'notYourTurn' it is not `pid`'s turn.
  *  - 'notInHand'   no card in `pid`'s hand has that iid.
  *  - 'notHero'     the card is an item: it goes on a hero (`playCard`).
  *  - 'occupied'    `toActive`, and the Active slot holds a hero (standing or
  *                  a corpse: a bench hero steps up to a corpse's slot).
  *  - 'benchOnly'   `toActive`, and the hero never takes the Active slot (Rem).
+ *  - 'badSlot'     `slot` is no bench slot (not 1, 2 or 3).
+ *  - 'slotTaken'   `slot` holds a hero (standing or a corpse), or a merged Rem
+ *                  will come back to it.
  *  - 'benchFull'   no bench slot is free (three heroes on the bench).
  */
-export function placeHeroBlocked(G: GameState, pid: PlayerID, cardIid: string, toActive = false): PlaceBlock | null {
+export function placeHeroBlocked(G: GameState, pid: PlayerID, cardIid: string, toActive = false, slot?: unknown): PlaceBlock | null {
   const shut = turnShut(G, pid);
   if (shut) return shut;
   const card = handCard(G, pid, cardIid);
@@ -380,21 +391,34 @@ export function placeHeroBlocked(G: GameState, pid: PlayerID, cardIid: string, t
     if (data.flags?.benchOnly) return 'benchOnly';
     return null;
   }
+  if (slot !== undefined) {
+    if (slot !== 1 && slot !== 2 && slot !== 3) return 'badSlot';
+    return freeBenchSlots(ps).includes(slot) ? null : 'slotTaken';
+  }
   return freeBenchSlot(ps) === undefined ? 'benchFull' : null;
 }
 
-export type ChooseActiveBlock = 'notOwed' | 'notInHand' | 'notHero' | 'benchOnly';
+export type ChooseActiveBlock = 'notOwed' | 'notInDeck' | 'notHero' | 'benchOnly';
+
+/** The heroes `pid` may open with: the drafted heroes in its deck that may
+ *  stand in the lane (not bench-only), in deck order. */
+export function openingCandidates(G: GameState, pid: PlayerID): CardInstance[] {
+  return G.players[pid].deck.filter((c) => {
+    const d = CARDS_BY_ID[c.cardId];
+    return d?.type === 'hero' && !d.flags?.benchOnly;
+  });
+}
 
 /** Why the hero `cardIid` cannot be put in the lane as its side's first
  *  Active now, or null when it can: the match's opening owes that side its
- *  Active (`G.pendingActive`), and the card is a hero in that side's hand
- *  that may stand there (not bench-only). Whose hand it is comes from the
- *  iid, so either seat may ask, like a promotion. */
+ *  Active (`G.pendingActive`), and the card is a hero in that side's deck
+ *  (its drafted four) that may stand there (not bench-only). Whose deck it
+ *  is comes from the iid, so either seat may ask, like a promotion. */
 export function chooseActiveBlocked(G: GameState, cardIid: string): ChooseActiveBlock | null {
   const pid = G.pendingActive;
   if (!pid) return 'notOwed';
-  const card = handCard(G, pid, cardIid);
-  if (!card) return 'notInHand';
+  const card = G.players[pid].deck.find((c) => c.iid === cardIid);
+  if (!card) return 'notInDeck';
   const data = CARDS_BY_ID[card.cardId];
   if (data?.type !== 'hero') return 'notHero';
   if (data.flags?.benchOnly) return 'benchOnly';
@@ -563,7 +587,7 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
     case 'playCard':
       return playBlocked(G, pid, a.cardIid, a.heroIid, a.upgradeId);
     case 'placeHero':
-      return placeHeroBlocked(G, pid, a.cardIid, a.toActive === true);
+      return placeHeroBlocked(G, pid, a.cardIid, a.toActive === true, a.slot);
     case 'discard':
       return discardBlocked(G, pid, a.cardIids);
     case 'endTurn':
@@ -575,8 +599,8 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
 
 /**
  * Every action `pid` could make right now. While a choice is owed, that
- * choice alone: the opening's first Active (each hero in the owing seat's
- * hand that may stand there), a trigger prompt (each offer, then the pass,
+ * choice alone: the opening's first Active (each drafted hero in the owing
+ * seat's deck that may stand there), a trigger prompt (each offer, then the pass,
  * from either seat), a promotion (either seat's: `pid` may promote
  * the seat that owes one), or a draw card's discard (each card of the hand,
  * one at a time — a `discard` move may name several at once, up to what is
@@ -590,8 +614,9 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
  * `stepInCandidates` order (before the attack: the hero who steps in may make
  * it); each item in its hand put on each hero it may go on (one action per
  * upgrade it could make, when it could make several); each hero in its hand
- * put on the bench, and straight into an empty Active slot (the hand's plays
- * only on `pid`'s own turn). Then promotions
+ * put straight into an empty Active slot, on the bench (its first free slot),
+ * and into each free bench slot by number (the hand's plays only on `pid`'s
+ * own turn). Then promotions
  * and ending the turn last. Everything listed passes `blocked`, so once the
  * attack is made only the end of the turn is left.
  */
@@ -601,7 +626,7 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
   const offer = (a: Action) => { if (blocked(G, pid, a) === null) out.push(a); };
 
   if (G.pendingActive) {
-    for (const c of G.players[G.pendingActive].hand) offer({ type: 'chooseActive', cardIid: c.iid });
+    for (const c of openingCandidates(G, G.pendingActive)) offer({ type: 'chooseActive', cardIid: c.iid });
     return out;
   }
   // A trigger prompt owed: its offers, then the pass — from either seat.
@@ -647,6 +672,7 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
       } else {
         offer({ type: 'placeHero', cardIid: card.iid, toActive: true });
         offer({ type: 'placeHero', cardIid: card.iid });
+        for (const slot of freeBenchSlots(ps)) offer({ type: 'placeHero', cardIid: card.iid, slot });
       }
     }
   }

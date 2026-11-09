@@ -358,15 +358,17 @@ describe('the charged lines print on their own, under the effect', () => {
 });
 
 describe('both heroes in a drafted match the AI plays to its end', () => {
-  // Seed 8 (a heuristic seat each, Victor P0's first pick, Silver P1's) plays both: the AI
-  // answers Victor's prompt and turns Silver into a wolf on the way to a result.
+  // Seed 7 (a heuristic seat each, Victor P0's first pick, Silver P1's) plays both: the AI
+  // answers Victor's prompt and turns Silver into a wolf on the way to a result. (Seed 8 did
+  // until the opening changed: each side now opens with a chosen hero and draws 4 from the
+  // rest, so a different deal reaches both heroes.)
   it('Victor and Silver are drafted, stand on the board, the AI answers his prompt and uses her Wolf form, and the match is decided', () => {
     const seen = new Set<string>();
     let asked = 0;
     let wolf = false;
     let picks: Record<PlayerID, string[]> | undefined;
     const game = playGame({
-      seed: 8,
+      seed: 7,
       policies: { '0': 'heuristic', '1': 'heuristic' },
       prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
       beforeMove: ({ G }, info) => {

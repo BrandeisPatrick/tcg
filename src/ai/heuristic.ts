@@ -478,7 +478,7 @@ interface MoveOption {
 }
 
 /** An engine action in the form the callers dispatch: the boardgame.io move and
- *  its arguments (playCard [card, hero, upgrade?], placeHero [card, toActive?],
+ *  its arguments (playCard [card, hero, upgrade?], placeHero [card, toActive?, slot?],
  *  discard [cards], chooseActive [card], activate [item, target?], useSkill
  *  [hero, target?, skill?], moveHero [from, to], promoteToActive [iid], attack
  *  [target?], endTurn []). */
@@ -486,7 +486,7 @@ function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
   const present = (...xs: (string | undefined)[]) => xs.filter((x): x is string => x !== undefined);
   switch (a.type) {
     case 'playCard': return { move: 'playCard', args: a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid] };
-    case 'placeHero': return { move: 'placeHero', args: a.toActive ? [a.cardIid, true] : [a.cardIid] };
+    case 'placeHero': return { move: 'placeHero', args: a.toActive ? [a.cardIid, true] : a.slot === undefined ? [a.cardIid] : [a.cardIid, false, a.slot] };
     case 'discard': return { move: 'discard', args: [[...a.cardIids]] };
     case 'chooseActive': return { move: 'chooseActive', args: [a.cardIid] };
     case 'activate': return { move: 'activate', args: present(a.itemIid, a.targetIid) };
@@ -626,13 +626,15 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
   switch (a.type) {
     case 'attack': return scoreAttack(G, pid, a.targetIid);
     // The hand, on the plain list: a hero onto the board first (into an empty
-    // lane above all), then an item.
-    case 'placeHero': return a.toActive ? 60 : 30;
+    // lane above all; the first free bench slot, a named one only with a
+    // reason of its own), then an item.
+    case 'placeHero': return a.toActive ? 60 : a.slot === undefined ? 30 : 29;
     case 'playCard': return 22 + buildFit(G, pid, a);
     case 'discard': return 50_000;
-    // The opening's first Active: the hero with the most HP, then attack.
+    // The opening's first Active, from the drafted heroes in the deck: the
+    // hero with the most HP, then attack.
     case 'chooseActive': {
-      const data = CARDS_BY_ID[G.players[G.pendingActive ?? pid].hand.find((c) => c.iid === a.cardIid)?.cardId ?? ''];
+      const data = CARDS_BY_ID[G.players[G.pendingActive ?? pid].deck.find((c) => c.iid === a.cardIid)?.cardId ?? ''];
       return 60_000 + (data?.type === 'hero' ? data.hp * 10 + data.atk : 0);
     }
     case 'activate': {

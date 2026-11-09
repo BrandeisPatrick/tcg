@@ -556,10 +556,13 @@ export interface BossFx extends FxBase {
  *  `cardId` name the card ('shuffle' names none). */
 export interface DeckFx extends FxBase {
   kind: 'deck';
-  what: 'shuffle' | 'draw' | 'discard' | 'upgrade' | 'toHand';
+  /** `place`: a hero from the hand (or, the opening, the deck) put in a slot
+   *  of the board (`slot`: 0 the Active, 1-3 the bench). */
+  what: 'shuffle' | 'draw' | 'discard' | 'upgrade' | 'toHand' | 'place';
   pid: PlayerID;
   iid?: string;
   cardId?: CardId;
+  slot?: 0 | 1 | 2 | 3;
 }
 
 export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx | PushFx | FallFx | BossFx | DeckFx;

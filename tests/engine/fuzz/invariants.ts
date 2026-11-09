@@ -36,7 +36,7 @@ import { STATUSES_BY_ID } from '@/statuses';
 import { getAbility } from '@/abilities';
 import {
   ACTIVE_COOLDOWN, BOSS_CARD_ID, BOSS_HP, BOSS_SPAWN_ROUND, DRAW_PER_TURN, EXP_ON_EQUIP, HARD_CC_CHARGES, LANE_INCOME,
-  LEVEL_THRESHOLDS, MAX_HAND, MAX_LEVEL, REVIVE_CREDITS, ROUND_CAP,
+  LEVEL_THRESHOLDS, MAX_HAND, MAX_LEVEL, OPENING_DRAW, REVIVE_CREDITS, ROUND_CAP,
   SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN,
 } from '@/engine/constants';
 import type { ItemCard } from '@/engine/types';
@@ -44,7 +44,7 @@ import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/
 import {
   DRAW_CARDS, MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, chooseActiveBlockedOracle, deckOf,
   describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
-  isMergedRem, itemData, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
+  freeBenchSlotOracle, isMergedRem, itemData, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
   playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
   slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
   upgradeComponentOracle, upgradeMadeOracle, wornItemOf, wornItemsOf,
@@ -163,13 +163,13 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
 
   // ---- the choices owed ----
   if (G.pendingActive !== undefined) {
-    // The opening: the human seat puts its first Active in the lane from the opening hand,
-    // before any turn is played out.
+    // The opening: the human seat puts its first Active in the lane from its drafted heroes,
+    // still in its deck, before any card is dealt or any turn is played out.
     const pid = G.pendingActive;
     const ps = G.players[pid];
-    const can = !!ps && handOf(G, pid).some((c) => isHeroCard(c) && !benchOnlyCard(c.cardId));
-    if (G.draft || !ps || ps.active || !can || G.turnNumber > 1 || pid !== humanOf(G)) {
-      add('pending-active', String(pid), `G.pendingActive is P${pid} (turn ${G.turnNumber}, human seat ${humanOf(G)}) but its Active is ${describeUnit(ps?.active)} and its hand ${can ? 'holds' : 'holds no'} hero that can stand there`);
+    const can = !!ps && deckOf(G, pid).some((c) => isHeroCard(c) && !benchOnlyCard(c.cardId));
+    if (G.draft || !ps || ps.active || !can || ps.hand.length > 0 || G.turnNumber > 1 || pid !== humanOf(G)) {
+      add('pending-active', String(pid), `G.pendingActive is P${pid} (turn ${G.turnNumber}, human seat ${humanOf(G)}) but its Active is ${describeUnit(ps?.active)}, its hand holds ${ps?.hand.length ?? 0} and its deck ${can ? 'holds' : 'holds no'} hero that can stand there`);
     }
   }
   if (G.pendingDiscard !== undefined) {
@@ -582,13 +582,15 @@ export function collectTransitionViolations(
   const mover = before.ctx.currentPlayer as PlayerID;
   const foe = other(mover);
   const switched = before.ctx.currentPlayer !== after.ctx.currentPlayer;
-  const newTurn = move.name === 'endTurn' && switched && !after.ctx.gameover;
+  // The opening's choice ends the draft's turn held for it (`draftPick`, `chooseActive`): the
+  // match's first turn begins on it, as a turn begins on endTurn.
+  const newTurn = (move.name === 'endTurn' || move.name === 'chooseActive') && switched && !after.ctx.gameover;
   const B = before.G;
 
   // ---- what the rules allow: an accepted card play, hand move, choice or item use the oracle refuses ----
   {
     const why = move.name === 'playCard' ? playBlockedOracle(B, mover, args[0], args[1], args[2])
-      : move.name === 'placeHero' ? placeHeroBlockedOracle(B, mover, args[0], args[1] === true)
+      : move.name === 'placeHero' ? placeHeroBlockedOracle(B, mover, args[0], args[1] === true, args[1] === true ? undefined : args[2])
       : move.name === 'chooseActive' ? chooseActiveBlockedOracle(B, args[0])
       : move.name === 'discard' ? discardBlockedOracle(B, mover, discardList(args[0]))
       : move.name === 'activate' ? activateBlockedOracle(B, mover, args[0], args[1])
@@ -701,10 +703,12 @@ export function collectTransitionViolations(
     }
   }
 
-  // Turn ownership: only endTurn (or the last draft pick) hands the turn over.
+  // Turn ownership: only endTurn (or the last draft pick, or the opening's choice that ends the
+  // draft's turn held for it: the match still at turn 0) hands the turn over.
   if (!after.ctx.gameover) {
     if (move.name === 'endTurn' && !switched) add('turn-owner', 'endTurn', `endTurn was accepted but P${after.ctx.currentPlayer} is still on turn`);
-    if (move.name !== 'endTurn' && switched) add('turn-owner', move.name, `${move.name} changed the player on turn from P${before.ctx.currentPlayer} to P${after.ctx.currentPlayer}`);
+    if (move.name === 'chooseActive' && switched && B.turnNumber >= 1) add('turn-owner', move.name, `chooseActive at turn ${B.turnNumber} changed the player on turn from P${before.ctx.currentPlayer} to P${after.ctx.currentPlayer}`);
+    if (move.name !== 'endTurn' && move.name !== 'chooseActive' && switched) add('turn-owner', move.name, `${move.name} changed the player on turn from P${before.ctx.currentPlayer} to P${after.ctx.currentPlayer}`);
   }
 
   // Hand-over: the hero flags of the player whose turn ended are cleared.
@@ -760,8 +764,9 @@ export function collectTransitionViolations(
   // the difference for an upgrade that evolves), a Retreat (the leaving hero's own price), a
   // skill or an ultimate (its souls, docs/hero-design.md §2) — and by what an item used pays
   // out as its text says (SOULS_ON_USE). Kills, the Guardian and the Mid-Boss pay nothing;
-  // placing a hero, the first Active, a discard and a promotion are free. No ceiling.
-  if (!duplicated && move.name !== 'endTurn') {
+  // placing a hero, the first Active, a discard and a promotion are free. No ceiling. (The
+  // first Active that begins the match's first turn pays its income: checked as a new turn.)
+  if (!duplicated && move.name !== 'endTurn' && !newTurn) {
     let cost = 0;
     let payout = 0;
     if (playedCard && playedOn) cost = playCostOracle(playedOn, playedCard.cardId);
@@ -868,20 +873,41 @@ export function collectTransitionViolations(
     }
   }
 
-  // A hero from the hand goes onto the board — into the empty Active slot when asked, else the
-  // first free bench slot — and the first Active of the opening into the lane.
+  // A hero from the hand goes onto the board — into the empty Active slot when asked, the bench
+  // slot named, else the first free bench slot — and the first Active of the opening from the
+  // deck into the lane (the opening then finishes: the rival's Active, the decks shuffled, the
+  // deal of OPENING_DRAW).
   if (!duplicated && (move.name === 'placeHero' || move.name === 'chooseActive')) {
     const owner = move.name === 'chooseActive' ? B.pendingActive : mover;
-    const card = owner ? handCardOf(B, owner, args[0]) : undefined;
+    const card = owner ? (move.name === 'chooseActive' ? deckOf(B, owner).find((c) => c.iid === args[0]) : handCardOf(B, owner, args[0])) : undefined;
     if (card && owner) {
       const ps1 = after.G.players[owner];
       const problems: string[] = [];
       if (handCardOf(after.G, owner, card.iid)) problems.push('it is still in the hand');
+      if (deckOf(after.G, owner).some((c) => c.iid === card.iid)) problems.push('it is still in the deck');
       const toLane = move.name === 'chooseActive' || args[1] === true;
       const onBoard = boardOf(ps1).find((c) => c.iid === card.iid);
+      // The bench slot it should be in: the one named, else the first free one before the move.
+      const named = move.name === 'placeHero' && !toLane ? (typeof args[2] === 'number' ? args[2] : freeBenchSlotOracle(B, owner)) : undefined;
       if (!onBoard) problems.push('it is not on the board');
-      else if (toLane && move.name === 'chooseActive' && ps1.active?.iid !== card.iid) problems.push(`it is in ${onBoard.zone}, not the Active slot`);
-      if (move.name === 'chooseActive' && after.G.pendingActive !== undefined) problems.push(`G.pendingActive is still ${after.G.pendingActive}`);
+      else if (toLane && ps1.active?.iid !== card.iid) problems.push(`it is in ${onBoard.zone}, not the Active slot`);
+      // Benched while the lane was open (empty, or a corpse), an AI seat's hero steps up at once.
+      else if (named !== undefined && ps1.bench[named - 1]?.iid !== card.iid && ps1.active?.iid !== card.iid) problems.push(`it is not in bench slot ${named}`);
+      if (move.name === 'chooseActive') {
+        if (after.G.pendingActive !== undefined) problems.push(`G.pendingActive is still ${after.G.pendingActive}`);
+        for (const seat of PIDS) {
+          const q = after.G.players[seat];
+          if (!q.active) problems.push(`P${seat} has no Active after the opening`);
+          // Each side is dealt OPENING_DRAW (its deck and the hand's room allowing; its lane
+          // pick came off the deck first); the seat whose turn then began drew its turn's card too.
+          const hand0 = B.players[seat].hand.length;
+          const deckLeft = deckOf(B, seat).length - (B.players[seat].active ? 0 : 1);
+          const dealt = Math.max(0, Math.min(OPENING_DRAW, deckLeft, MAX_HAND - hand0));
+          const turnDraw = newTurn && after.ctx.currentPlayer === seat ? Math.max(0, Math.min(DRAW_PER_TURN, deckLeft - dealt, MAX_HAND - hand0 - dealt)) : 0;
+          const want = hand0 + dealt + turnDraw;
+          if (q.hand.length !== want) problems.push(`P${seat}'s hand holds ${q.hand.length}, not ${want} (${hand0} + the opening's ${dealt}${turnDraw ? ` + its turn's ${turnDraw}` : ''})`);
+        }
+      }
       if (problems.length) add('placed-hero', card.iid, `${move.name}(${JSON.stringify(args)}) of ${card.cardId}#${card.iid}: ${problems.join('; ')}`);
     }
   }
@@ -1095,7 +1121,11 @@ export function collectTransitionViolations(
       const drawn = hand1.filter((c) => deckIids.has(c.iid)).length;
       const back = hand1.filter((c) => isHeroCard(c) && heroesByIid(B.players[cur]).has(c.iid)).length;
       const room = MAX_HAND - (handOf(B, cur).length + back);
-      const wantDrawn = Math.max(0, Math.min(DRAW_PER_TURN, deck0.length, room));
+      // The first turn begun by the opening's choice: the deal of OPENING_DRAW came first (after
+      // the seat's own lane pick left the deck), then the turn's draw.
+      const opening = move.name === 'chooseActive';
+      const avail = deck0.length - (opening && !B.players[cur].active ? 1 : 0);
+      const wantDrawn = Math.max(0, Math.min((opening ? OPENING_DRAW : 0) + DRAW_PER_TURN, avail, room));
       if (drawn !== wantDrawn) add('draw-per-turn', cur, `P${cur} drew ${drawn} at the start of turn ${after.G.turnNumber}; deck ${deck0.length}, hand ${handOf(B, cur).length} (+${back} back from a fall): the rules give ${wantDrawn}`);
       if (drawn > 0 && hand1.length > Math.max(MAX_HAND, handOf(B, cur).length + back)) add('hand-cap', `${cur}-draw`, `P${cur}'s hand holds ${hand1.length} after its draw (MAX_HAND ${MAX_HAND})`);
     }

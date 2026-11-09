@@ -13,7 +13,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client } from 'boardgame.io/client';
-import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
+import type { CardId, CardInstance, DeckFx, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, HEROES, ITEMS, itemCard } from '@/cards';
 import { defaultBuild } from '@/cards/builds';
 import { copyCounts, deckFromBuilds, deckProblem, isLegalDeck, upgradesOf, ITEM_SLOTS, catalogueByTab } from '@/cards/decks';
@@ -22,7 +22,7 @@ import { setupGame } from '@/engine/actions/setup';
 import { buildOf, nextRandom, shuffle, sideDeckIds } from '@/engine/deck';
 import { INVALID, perform } from '@/engine/engine';
 import { blocked, legalActions } from '@/engine/legality';
-import { DECK_SIZE, MAX_COPIES, OPENING_HAND } from '@/engine/constants';
+import { DECK_SIZE, MAX_COPIES, OPENING_DRAW, OPENING_HAND } from '@/engine/constants';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { TEST_ROSTERS } from './_helpers';
 
@@ -145,47 +145,122 @@ describe('the deck made from the heroes\' builds', () => {
 });
 
 describe('a drafted match deals the deck', () => {
-  it('each side: its DECK_SIZE items and its four heroes, an opening hand of OPENING_HAND from them, at least one a hero that can lead', () => {
+  /** The human seat's opening choice: its first drafted hero that can lead. */
+  const choose = (G: GameState) => {
+    const pick = G.players['0'].deck.find((c) => canLead(c.cardId))!;
+    expect(perform(G, '1', { type: 'chooseActive', cardIid: pick.iid })).not.toBe(INVALID); // from either seat
+    return pick;
+  };
+
+  it('each side: its DECK_SIZE items and its four heroes — the chosen one in the lane, OPENING_DRAW in the hand, the rest in the deck', () => {
     for (const seed of [1, 2, 3, 77, 4242]) {
       const { G, picks } = drafted(seed);
+      choose(G);
       for (const pid of ['0', '1'] as PlayerID[]) {
         const all = allCards(G, pid);
         expect(all, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + 4);
         expect(ids(all).filter(isHero).sort(), `seed ${seed}`).toEqual([...picks[pid]].sort());
         expect(isLegalDeck(ids(all).filter((id) => !isHero(id))), `seed ${seed}`).toBe(true);
         for (const c of G.players[pid].deck) expect(c.zone).toBe('deck');
+        const ps = G.players[pid];
+        expect(ps.active, `seed ${seed} P${pid}`).not.toBeNull();
+        expect(canLead(ps.active!.cardId)).toBe(true);
+        expect(ps.hand, `seed ${seed} P${pid}`).toHaveLength(OPENING_DRAW);
+        expect(ps.deck, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + 4 - 1 - OPENING_DRAW);
+        expect(ps.hand.length + 1).toBe(OPENING_HAND);
+        expect(ps.bench).toEqual([null, null, null]);
       }
-      // The first mover has drawn its turn's card on top of the opening hand.
-      const p0 = G.players['0'];
-      expect(p0.hand.length + (p0.active ? 1 : 0)).toBe(OPENING_HAND);
-      expect([...ids(p0.hand), ...(p0.active ? [p0.active.cardId] : [])].some(canLead), `seed ${seed}`).toBe(true);
+      // The Pocket hero guarantee has nothing to do: every side opens with a hero in the lane.
+      expect(G.log.some((l) => /went back for one/.test(l.text)), `seed ${seed}`).toBe(false);
     }
   });
 
-  it('the human seat chooses its first Active from the opening hand; an AI seat\'s is in the lane at once', () => {
-    const { G } = drafted(11);
+  it('the human seat chooses its first Active from its drafted heroes in the deck; until then nothing is dealt and the rival\'s choice is unseen', () => {
+    const { G, picks } = drafted(11);
+    expect(G.pendingActive).toBe('0');
+    expect(G.players['0'].active).toBeNull();
+    expect(G.players['1'].active).toBeNull();
+    for (const pid of ['0', '1'] as PlayerID[]) {
+      expect(G.players[pid].hand).toEqual([]);
+      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + 4);
+    }
+    expect(G.fx.filter((e) => e.kind === 'deck')).toEqual([]);
+    // Nothing else is legal until it is chosen — the end of the turn included.
+    expect(blocked(G, '1', { type: 'endTurn' })).toBe('activeOwed');
+    expect(blocked(G, '0', { type: 'endTurn' })).toBe('activeOwed');
+    for (const seat of ['0', '1'] as PlayerID[]) {
+      const options = legalActions(G, seat);
+      expect(options.every((a) => a.type === 'chooseActive')).toBe(true);
+      // Each drafted hero that can lead, from the deck; nothing from the hand.
+      const offered = options.map((a) => G.players['0'].deck.find((c) => c.iid === (a as { cardIid: string }).cardIid)!.cardId).sort();
+      expect(offered).toEqual(picks['0'].filter(canLead).sort());
+    }
+    // A hero the seat did not draft, or an item of its deck, is refused.
+    const item = G.players['0'].deck.find((c) => !isHero(c.cardId))!;
+    expect(blocked(G, '0', { type: 'chooseActive', cardIid: item.iid })).toBe('notHero');
+    const theirs = G.players['1'].deck.find((c) => isHero(c.cardId))!;
+    expect(blocked(G, '0', { type: 'chooseActive', cardIid: theirs.iid })).toBe('notInDeck');
+
+    const pick = choose(G);
+    // The chosen hero left the deck for the lane; the rival chose for itself.
+    expect(G.players['0'].active).toBe(pick);
+    expect(pick.zone).toBe('active');
+    expect(G.players['0'].deck).not.toContain(pick);
+    expect(G.players['0'].hand).not.toContain(pick);
+    expect(G.pendingActive).toBeUndefined();
     expect(G.players['1'].active).not.toBeNull();
     expect(G.players['1'].active!.zone).toBe('active');
-    expect(G.players['0'].active).toBeNull();
-    expect(G.pendingActive).toBe('0');
-    // Nothing else is legal until it is chosen — the first mover's turn included.
-    expect(blocked(G, '1', { type: 'endTurn' })).toBe('activeOwed');
-    const options = legalActions(G, '1');
-    expect(options.length).toBeGreaterThan(0);
-    expect(options.every((a) => a.type === 'chooseActive')).toBe(true);
-    const pick = G.players['0'].hand.find((c) => canLead(c.cardId))!;
-    expect(perform(G, '1', { type: 'chooseActive', cardIid: pick.iid })).not.toBe(INVALID); // from either seat
-    expect(G.players['0'].active).toBe(pick);
-    expect(G.pendingActive).toBeUndefined();
-    expect(G.players['0'].hand).not.toContain(pick);
+    expect(picks['1']).toContain(G.players['1'].active!.cardId);
+    // Each side: the chosen one in the lane, OPENING_DRAW dealt, the rest in the deck.
+    for (const pid of ['0', '1'] as PlayerID[]) {
+      expect(G.players[pid].hand).toHaveLength(OPENING_DRAW);
+      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + 4 - 1 - OPENING_DRAW);
+    }
+    // The board flies both Actives, then the decks shuffle and deal: in that order.
+    const deck = G.fx.filter((e): e is DeckFx => e.kind === 'deck').map((e) => e.what);
+    expect(deck.slice(0, 2)).toEqual(['place', 'place']);
+    expect(deck.filter((w) => w === 'shuffle')).toHaveLength(2);
+    expect(deck.filter((w) => w === 'draw')).toHaveLength(2 * OPENING_DRAW);
+    expect(deck.indexOf('shuffle')).toBeGreaterThan(deck.lastIndexOf('place'));
+    expect(deck.indexOf('draw')).toBeGreaterThan(deck.indexOf('shuffle'));
   });
 
-  it('with no human seat both Actives are chosen at once, and the board holds nothing else', () => {
+  it('the rival AI opens with the drafted hero it values most: the most HP, then the most attack', () => {
+    const { G, picks } = drafted(13);
+    choose(G);
+    const score = (id: CardId) => { const d = CARDS_BY_ID[id]; return d?.type === 'hero' ? d.hp * 10 + d.atk : -1; };
+    const best = [...picks['1']].filter(canLead).sort((a, b) => score(b) - score(a))[0];
+    expect(G.players['1'].active!.cardId).toBe(best);
+  });
+
+  it('through the client the choice ends the draft\'s turn: the first mover opens turn 1 on a dealt board', () => {
+    setMatchConfig({ heroPreferences: [null, null, null, null], seed: 21, humanSeat: '0' });
+    const client = Client({ game: DeadlockGame, numPlayers: 2 });
+    client.start();
+    for (const id of ['hero_haze', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_lash', 'hero_kelvin', 'hero_seven', 'hero_paige']) client.moves.draftPick(id);
+    let st = client.getState()!;
+    expect(st.G.pendingActive).toBe('0');
+    expect(st.G.turnNumber).toBe(0);
+    const pick = st.G.players['0'].deck.find((c) => canLead(c.cardId))!;
+    client.moves.chooseActive(pick.iid);
+    st = client.getState()!;
+    expect(st.G.pendingActive).toBeUndefined();
+    expect(st.G.turnNumber).toBe(1);
+    expect(st.ctx.currentPlayer).toBe('1');
+    // Seat 1 has its opening deal and its turn's draw; seat 0 its deal alone.
+    expect(st.G.players['1'].hand).toHaveLength(OPENING_DRAW + 1);
+    expect(st.G.players['0'].hand).toHaveLength(OPENING_DRAW);
+    expect(st.G.players['0'].active!.iid).toBe(pick.iid);
+    client.stop();
+  });
+
+  it('with no human seat both Actives are chosen at once, the decks are dealt, and the board holds nothing else', () => {
     const { G } = drafted(12, { human: null });
     expect(G.pendingActive).toBeUndefined();
     for (const pid of ['0', '1'] as PlayerID[]) {
       expect(G.players[pid].active).not.toBeNull();
       expect(G.players[pid].bench).toEqual([null, null, null]);
+      expect(G.players[pid].hand.length).toBeGreaterThanOrEqual(OPENING_DRAW);
     }
   });
 
@@ -197,7 +272,7 @@ describe('a drafted match deals the deck', () => {
     expect(ids(allCards(short.G, '0')).filter((id) => !isHero(id)).sort()).toEqual(deckFromBuilds(short.picks['0'].map(defaultBuild)).sort());
   });
 
-  it('the opening\'s Pocket rule: a hand with no hero that can lead swaps a non-hero for one from the deck', async () => {
+  it('the opening\'s Pocket rule (dealOpeningHand, which a drafted match no longer uses): a hand with no hero that can lead swaps a non-hero for one from the deck', async () => {
     const { dealOpeningHand } = await import('@/engine/deck');
     const { freshReadyGame, stackDeck } = await import('./_helpers');
     const G = freshReadyGame();
@@ -216,8 +291,10 @@ describe('the deal replays from G alone', () => {
   it('the same match seed deals the same decks and hands, whatever Math.random returns', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.999);
     const a = drafted(4242).G;
+    perform(a, '0', { type: 'chooseActive', cardIid: a.players['0'].deck.find((c) => canLead(c.cardId))!.iid });
     vi.spyOn(Math, 'random').mockReturnValue(0.001);
     const b = drafted(4242).G;
+    perform(b, '0', { type: 'chooseActive', cardIid: b.players['0'].deck.find((c) => canLead(c.cardId))!.iid });
     for (const pid of ['0', '1'] as PlayerID[]) {
       expect(ids(b.players[pid].deck)).toEqual(ids(a.players[pid].deck));
       expect(ids(b.players[pid].hand)).toEqual(ids(a.players[pid].hand));
