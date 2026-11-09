@@ -19,7 +19,7 @@ import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
 import {
   ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
-  MAX_ITEMS, PRICE, RESPAWN_TURNS, RETREAT_COST, ULT_COOLDOWN, ULT_UNLOCK_LEVEL,
+  MAX_ITEMS, PRICE, RESPAWN_TURNS, ULT_COOLDOWN, ULT_COST, ULT_UNLOCK_LEVEL,
 } from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
 
@@ -127,18 +127,31 @@ export function filterForItem(card: CardInstance): TargetFilter | 'passive' | nu
   return getAbility(d.abilities[0])?.target ?? 'noTarget';
 }
 
-/** The kit abilities a hero may use, in order: the skills its card lists (one
- *  or two, none for a passive-only hero), its ultimate, then an ultimate it has
- *  borrowed (Sinclair's copy). The first skill (`firstSkillOf`) is what a bare
- *  `useSkill` names; every other is named. Read off the card and the instance,
- *  not the engine. */
+/** The kit abilities a hero may use, in order: the skill its card lists (none
+ *  for a passive-only hero), then its ultimate. The first skill
+ *  (`firstSkillOf`) is what a bare `useSkill` names; every other is named.
+ *  Read off the card, not the engine. */
 export function skillIdsOf(hero: CardInstance): string[] {
   const d = CARDS_BY_ID[hero.cardId];
   if (d?.type !== 'hero') return [];
   const ids = [...d.skills];
   if (d.ult) ids.push(d.ult);
-  if (hero.borrowedUlt && !ids.includes(hero.borrowedUlt)) ids.push(hero.borrowedUlt);
   return ids;
+}
+
+/** What a kit ability costs, by docs/hero-design.md §2: a skill the souls its
+ *  card prints (1–3), an ultimate 4, 8 or 12 by its size (small, medium,
+ *  large). 0 for an id the hero does not have. */
+export function kitSoulsOracle(hero: CardInstance, skillId?: string): number {
+  const d = CARDS_BY_ID[hero.cardId];
+  if (d?.type !== 'hero') return 0;
+  const id = skillId ?? firstSkillOf(hero);
+  if (id === undefined || !skillIdsOf(hero).includes(id)) return 0;
+  if (id === d.ult) {
+    const face = Object.values(CARDS_BY_ID).find((c) => c.type === 'ultimate' && c.abilities[0] === id);
+    return face?.type === 'ultimate' ? ULT_COST[face.size] : 0;
+  }
+  return getAbility(id)?.souls ?? 0;
 }
 
 /** The skill a bare `useSkill` names: the first its card lists, if any. */
@@ -147,20 +160,30 @@ export function firstSkillOf(hero: CardInstance): string | undefined {
   return d?.type === 'hero' ? d.skills[0] : undefined;
 }
 
-/** The TargetFilter that governs one of a hero's kit abilities (`skillId`;
- *  left out, its first skill), or null when the hero has no such ability. */
-export function filterForSkill(hero: CardInstance, skillId?: string): TargetFilter | null {
+/** How one of a hero's kit abilities is aimed, read off its card: its fixed
+ *  filter, or — an ability that aims by the board (Traveler, Audience
+ *  Participation) — the reading its card gives for `G` and `pid`; null when
+ *  the hero has no such ability or it cannot be aimed now. */
+function aimOf(hero: CardInstance, skillId?: string, G?: GameState, pid?: PlayerID): { target: TargetFilter; excludeSelf?: boolean } | null {
   const ids = skillIdsOf(hero);
   const id = skillId ?? firstSkillOf(hero);
   if (id === undefined || !ids.includes(id)) return null;
-  return getAbility(id)?.target ?? null;
+  const ab = getAbility(id);
+  if (!ab) return null;
+  if (ab.aim && G && pid) return ab.aim(G, pid, hero);
+  return { target: ab.target, excludeSelf: ab.excludeSelf };
 }
 
-/** An ability that is never aimed at its own caster (Rem's merge), whatever its filter says. */
-export function skillExcludesSelf(hero: CardInstance, skillId?: string): boolean {
-  const ids = skillIdsOf(hero);
-  const id = skillId ?? firstSkillOf(hero);
-  return id !== undefined && ids.includes(id) && !!getAbility(id)?.excludeSelf;
+/** The TargetFilter that governs one of a hero's kit abilities (`skillId`;
+ *  left out, its first skill), or null when the hero has no such ability (or
+ *  one aimed by the board cannot be aimed now). */
+export function filterForSkill(hero: CardInstance, skillId?: string, G?: GameState, pid?: PlayerID): TargetFilter | null {
+  return aimOf(hero, skillId, G, pid)?.target ?? null;
+}
+
+/** An ability that is never aimed at its own caster (Rem's Tag Along), whatever its filter says. */
+export function skillExcludesSelf(hero: CardInstance, skillId?: string, G?: GameState, pid?: PlayerID): boolean {
+  return !!aimOf(hero, skillId, G, pid)?.excludeSelf;
 }
 
 /** An ability that is still cooling down: its entry in the owner's-turn timer
@@ -259,18 +282,21 @@ export function attackOpenFor(G: GameState, pid: PlayerID): boolean {
 
 // ---------------------------------------------------------------------------
 // Rules oracle: the Retreat's price. Written from the card text, not copied from
-// `retreatCost`: 1 soul, a soul off for each "Retreat costs 1 less" the hero
-// leaving the Active slot carries (Sprint Boots, Enduring Speed: their
-// `retreatDiscount` hooks), nothing while that hero is Swift; never below 0.
+// `retreatCost`: the retreat printed on the hero leaving the Active slot (0, 1
+// or 2, docs/hero-design.md §2), a soul off for each "Retreat costs 1 less" it
+// carries (Sprint Boots, Enduring Speed: their `retreatDiscount` hooks),
+// nothing while that hero is Swift; never below 0.
 // ---------------------------------------------------------------------------
 
 /** What `pid`'s Retreat costs, by the rules. */
 export function retreatCostOracle(G: GameState, pid: PlayerID): number {
   const leaving = G.players[pid].active;
-  if (!leaving) return RETREAT_COST;
+  if (!leaving) return 0;
   if (leaving.statuses.some((s) => s.id === 'swift')) return 0;
+  const d = CARDS_BY_ID[leaving.cardId];
+  const printed = d?.type === 'hero' ? d.retreat : 0;
   const off = carriedAbilityIds(leaving).reduce((n, id) => n + (getAbility(id)?.retreatDiscount?.(leaving) ?? 0), 0);
-  return Math.max(0, RETREAT_COST - off);
+  return Math.max(0, printed - off);
 }
 
 // ---------------------------------------------------------------------------

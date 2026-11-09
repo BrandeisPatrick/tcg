@@ -52,8 +52,10 @@ function makeHit(mix: string, before: Snapshot, m: StepInfo, check: string, mess
 
 /** What the accepted moves of a mix exercised, so a spec can insist the rare paths are really played. */
 export interface Coverage {
+  /** Rem's skill used (Tag Along; the count kept its old name). */
   remMerges: number;
   ultsPlayed: number;
+  /** Sinclair's Audience Participation cast (the rival's ultimate as his own). */
   freeCopiesPlayed: number;
   attacks: number;
   kos: number;
@@ -134,9 +136,9 @@ function tally(c: Coverage, before: Snapshot, after: Snapshot, m: StepInfo) {
     const hero = [me.active, ...me.bench].find((h) => h && h.iid === m.args[0]);
     const kind = hero && resolveSkill(hero, typeof m.args[2] === 'string' ? m.args[2] : undefined)?.kind;
     if (hero?.cardId === 'hero_rem' && kind === 'skill') c.remMerges++;
-    // An ultimate is a kit ability now: its own, or one borrowed from the rival (Sinclair's copy).
-    if (kind === 'ult' || kind === 'borrowed') c.ultsPlayed++;
-    if (kind === 'borrowed') c.freeCopiesPlayed++;
+    // An ultimate is the button on the hero card; Sinclair's casts the rival's as his own.
+    if (kind === 'ult') c.ultsPlayed++;
+    if (kind === 'ult' && hero?.cardId === 'hero_sinclair') c.freeCopiesPlayed++;
   }
   if (m.name === 'playCard') {
     c.plays++;

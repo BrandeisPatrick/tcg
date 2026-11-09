@@ -135,7 +135,7 @@ export function probeLegality(
   const choice = G.pendingActive !== undefined || G.pendingDiscard !== undefined;
 
   // ---------------------------------------------------------------- B: skillBlocked <=> useSkill
-  // Each kit ability of each hero on its own (its skills, its ultimate, a borrowed ultimate).
+  // Each kit ability of each hero on its own (its skill, its ultimate).
   // The move is useSkill(hero, target?, skill?): the hero's first skill is the default and
   // goes unnamed, any other ability is named. (skillBlocked leaves the step to its caller:
   // it is asked in the act step.)
@@ -146,11 +146,11 @@ export function probeLegality(
     for (const skillId of skillIds) {
       const named = (args: unknown[]) => (skillId === firstSkillOf(hero) ? args : [args[0], args[1], skillId]);
       const ui = skillBlocked(G, pid, hero, undefined, skillId) === null;
-      const filter = filterForSkill(hero, skillId);
+      const filter = filterForSkill(hero, skillId, G, pid);
       let candidates: unknown[][] = [];
       if (filter === 'noTarget') candidates = [[hero.iid]];
       else if (filter === 'self') candidates = [[hero.iid, hero.iid]];
-      else if (filter) candidates = liveTargets.filter((t) => targetLegal(filter, t, hero, pid, G) && !(skillExcludesSelf(hero, skillId) && t.iid === hero.iid)).map((t) => [hero.iid, t.iid]);
+      else if (filter) candidates = liveTargets.filter((t) => targetLegal(filter, t, hero, pid, G) && !(skillExcludesSelf(hero, skillId, G, pid) && t.iid === hero.iid)).map((t) => [hero.iid, t.iid]);
       let eng = false;
       for (const args of candidates) {
         if (callMove(G, ctx, pid, 'useSkill', named(args)).outcome === 'accepted') { eng = true; break; }
@@ -199,7 +199,7 @@ export function probeLegality(
   for (const h of boardOf(me)) {
     for (const skillId of skillIdsOf(h)) {
       const b = skillBlocked(G, pid, h, undefined, skillId);
-      if (filterForSkill(h, skillId) && b === null) sources.push({ kind: 'skill', card: h, skillId });
+      if (filterForSkill(h, skillId, G, pid) && b === null) sources.push({ kind: 'skill', card: h, skillId });
     }
   }
   for (const h of boardUnits(G)) {
@@ -217,9 +217,9 @@ export function probeLegality(
     const tCard = tgt === 'ghost' ? undefined : tgt;
     const tIid = tgt === 'ghost' ? 'ghost-iid' : tCard?.iid;
     if (src.kind === 'skill') {
-      const filter = filterForSkill(src.card, src.skillId)!;
+      const filter = filterForSkill(src.card, src.skillId, G, pid)!;
       if (filter === 'noTarget' && tgt !== undefined) continue; // an unused extra target is harmless
-      const legal = targetLegal(filter, tCard, src.card, pid, G) && !(skillExcludesSelf(src.card, src.skillId) && tCard?.iid === src.card.iid);
+      const legal = targetLegal(filter, tCard, src.card, pid, G) && !(skillExcludesSelf(src.card, src.skillId, G, pid) && tCard?.iid === src.card.iid);
       const args: unknown[] = [src.card.iid, tIid];
       // An ability other than the hero's first skill is named in the move's third argument.
       if (src.skillId !== firstSkillOf(src.card)) args.push(src.skillId);

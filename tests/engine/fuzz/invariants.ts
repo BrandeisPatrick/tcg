@@ -36,14 +36,14 @@ import { STATUSES_BY_ID } from '@/statuses';
 import { getAbility } from '@/abilities';
 import {
   ACTIVE_COOLDOWN, BOSS_CARD_ID, BOSS_HP, BOSS_SPAWN_ROUND, DRAW_PER_TURN, EXP_ON_EQUIP, HARD_CC_CHARGES, LANE_INCOME,
-  LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_HAND, MAX_LEVEL, REVIVE_CREDITS, ROUND_CAP,
+  LEVEL_THRESHOLDS, MAX_HAND, MAX_LEVEL, REVIVE_CREDITS, ROUND_CAP,
   SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN,
 } from '@/engine/constants';
 import type { ItemCard } from '@/engine/types';
 import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/query';
 import {
   DRAW_CARDS, MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, chooseActiveBlockedOracle, deckOf,
-  describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard,
+  describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
   isMergedRem, itemData, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
   playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
   slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
@@ -742,7 +742,8 @@ export function collectTransitionViolations(
 
   // ---- souls (docs/deck-plan.md): the lane's income is the only souls there are ----
   // Within a turn souls change only by what a move costs — an item put on a hero (its price,
-  // the difference for an upgrade that evolves), a Retreat — and by what an item used pays
+  // the difference for an upgrade that evolves), a Retreat (the leaving hero's own price), a
+  // skill or an ultimate (its souls, docs/hero-design.md §2) — and by what an item used pays
   // out as its text says (SOULS_ON_USE). Kills, the Guardian and the Mid-Boss pay nothing;
   // placing a hero, the first Active, a discard and a promotion are free. No ceiling.
   if (!duplicated && move.name !== 'endTurn') {
@@ -757,6 +758,9 @@ export function collectTransitionViolations(
       const ps = B.players[mover];
       const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
       if ((f === 0 || t === 0) && get(f) && get(t)) cost = retreatCostOracle(B, mover);
+    } else if (move.name === 'useSkill' && typeof args[0] === 'string') {
+      const hero = heroesByIid(B.players[mover]).get(args[0] as string);
+      if (hero) cost = kitSoulsOracle(hero, typeof args[2] === 'string' ? (args[2] as string) : undefined);
     }
     const wantMover = B.players[mover].souls - cost + payout;
     if (after.G.players[mover].souls !== wantMover) {
@@ -768,8 +772,8 @@ export function collectTransitionViolations(
   }
 
   // A kit ability, used: the hero is spent for the turn, and its cooldown is armed — a skill's
-  // own (SKILL_COOLDOWN unless its data names one), an ultimate's ULT_COOLDOWN — or a borrowed
-  // ultimate is gone. A locked ultimate (below the unlock level) is never used.
+  // own (SKILL_COOLDOWN unless its data names one), an ultimate's ULT_COOLDOWN. A locked
+  // ultimate (below the unlock level) is never used.
   if (!duplicated && move.name === 'useSkill' && typeof args[0] === 'string') {
     const hero0 = heroesByIid(B.players[mover]).get(args[0] as string);
     const hero1 = heroesByIid(after.G.players[mover]).get(args[0] as string);
@@ -777,13 +781,8 @@ export function collectTransitionViolations(
     if (hero0 && hero1 && d?.type === 'hero') {
       const id = typeof args[2] === 'string' ? (args[2] as string) : d.skills[0];
       if (ultLocked(hero0, id)) add('ult-locked', hero0.iid, `${describeUnit(hero0)} used its ultimate below the unlock level`);
-      const borrowed = hero0.borrowedUlt === id && d.ult !== id && !d.skills.includes(id);
-      if (borrowed) {
-        if (hero1.borrowedUlt === id) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used its borrowed ultimate and still holds it`);
-      } else {
-        const want = d.ult === id ? ultCooldownOracle(hero0) : getAbility(id)?.cooldown ?? SKILL_COOLDOWN;
-        if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
-      }
+      const want = d.ult === id ? ultCooldownOracle(hero0) : getAbility(id)?.cooldown ?? SKILL_COOLDOWN;
+      if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
     }
   }
 
@@ -929,17 +928,20 @@ export function collectTransitionViolations(
       const lv = (h1.level ?? 1) - (h0.level ?? 1);
       const spike = (hasSpikeOracle(h1, 'vitality') ? 1 : 0) - (hasSpikeOracle(h0, 'vitality') ? 1 : 0);
       const bonus = g?.bonus ?? { atk: 0, spirit: 0, hp: 0 };
+      // A level adds the hero's own growth (docs/hero-design.md §2).
+      const hd = CARDS_BY_ID[h1.cardId];
+      const growth = hd?.type === 'hero' ? hd.growth : { atk: 0, hp: 0, spirit: 0 };
       const want = {
-        atkMod: bonus.atk + lv * LEVEL_ATK_BONUS,
-        spiritMod: bonus.spirit + lv * LEVEL_SPIRIT_BONUS,
-        hpMax: bonus.hp + spike + lv * LEVEL_HP_BONUS,
+        atkMod: bonus.atk + lv * growth.atk,
+        spiritMod: bonus.spirit + lv * growth.spirit,
+        hpMax: bonus.hp + spike + lv * growth.hp,
       };
       for (const k of ['atkMod', 'hpMax', 'spiritMod'] as const) {
         if (h1[k] - h0[k] !== want[k]) add('equip-bonus', `${iid}-${k}`, `${h1.cardId}#${iid} ${k} ${h0[k]} -> ${h1[k]} after ${move.name}(${JSON.stringify(args)}); the items' bonuses${spike ? `, the Vitality spike` : ''} and ${lv} level-up(s) give ${want[k] >= 0 ? '+' : ''}${want[k]}`);
       }
       let hp: number | undefined;
       if (!g) hp = h0.hp; // untouched
-      else if (g.on && !g.off) hp = h0.hp <= 0 ? 0 : Math.max(1, h0.hp + bonus.hp) + Math.max(0, spike) + lv * LEVEL_HP_BONUS;
+      else if (g.on && !g.off) hp = h0.hp <= 0 ? 0 : Math.max(1, h0.hp + bonus.hp) + Math.max(0, spike) + lv * growth.hp;
       if (hp !== undefined && h1.hp !== hp) add('equip-bonus', `${iid}-hp`, `${h1.cardId}#${iid} hp ${h0.hp}/${h0.hpMax} -> ${h1.hp}/${h1.hpMax} after ${move.name}(${JSON.stringify(args)}); the rules give ${hp}`);
     }
   }
