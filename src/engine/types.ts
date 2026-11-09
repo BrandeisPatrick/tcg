@@ -249,12 +249,16 @@ export interface CardInstance {
   // re-fires onAttack procs (so Toxic Bullets / Djinn's Mark proc per swing)
   // and bounces again with Ricochet.
   /**
-   * Rem's "Lil Helpers" merge: when Rem casts her skill she leaves her bench
-   * slot and attaches to an ally as a temporary buff. These live on the Rem
-   * card while it sits in the bearer's `attached` list: `remMergeTurnsLeft`
-   * counts down at her owner's turn start, and `remMergeHpBuff` is the max-HP
-   * she granted (reverted when she detaches). On expiry / bearer death she
-   * returns to her bench slot. Undefined for everyone else.
+   * Rem's ride (Tag Along, `rideOn` in death.ts): she leaves her slot — the
+   * bench's or the lane — and rides on an ally as equipment. These live on the
+   * Rem card while it sits in the bearer's `attached` list:
+   * `remMergeTurnsLeft` is the ride's own turns left, counted down at her
+   * owner's turn start, and `remMergeHpBuff` the max HP a ride granted (Tag
+   * Along grants none; taken back when she gets off). When the ride is over,
+   * or the bearer falls, she returns to the bench (`returnRemToBench`). Her
+   * `slot` is the bench slot she rode out of, kept for her, or 0 when she rode
+   * from the lane. Undefined for everyone else. (The names are the old
+   * "Lil Helpers" merge's, whose machinery this is.)
    */
   remMergeTurnsLeft?: number;
   remMergeHpBuff?: number;

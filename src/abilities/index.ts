@@ -2,7 +2,7 @@ import type { GameState, CardInstance, DamageType, PlayerID, StatusId } from '@/
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from '@/engine/damage';
-import { awardSouls, resolve } from '@/engine/death';
+import { awardSouls, resolve, rideOn } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, heroData, isBoss, isRespawning, isUntargetable, itemCooldown, itemResist, liveBoardCards,
@@ -108,7 +108,7 @@ export interface AbilityDef {
    *  by souls.spec / mystic-burst.spec. Not rendered anywhere. */
   base?: number;
   /** The caster is not a target of its own skill, whatever the filter says.
-   *  (Rem's Lil Helpers merges her INTO an ally: aimed at herself it would do
+   *  (Rem's Tag Along puts her ON an ally: aimed at herself it would do
    *  nothing and still spend her ability for the turn.) */
   excludeSelf?: boolean;
   run: EffectFn;
@@ -2168,18 +2168,23 @@ const skill_paige: HeroAbilityDef = {
   },
 };
 
-// Rem — Tag Along: he naps on one of his heroes and both heal. (He no longer
-// merges into it: the merge's machinery in the engine has no card that uses it.)
+// Rem — Tag Along (Patrick, 2026-11-09): she rides on another standing hero of
+// her side, bench or Active, as equipment for 2 of her owner's turns, and it
+// heals 4✦; then she returns to her bench (the engine's ride, `rideOn` and
+// `returnRemToBench` in death.ts: her bench slot kept for her, the first free
+// one when she rode from the lane, the rescue when her bearer falls). Riding
+// off from the lane leaves it to be filled as when an Active falls.
+const TAG_ALONG_TURNS = 2;
 const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true, souls: 2,
   name: 'Tag Along',
-  text: 'Rem naps on one of your heroes: it heals {sp:4}, and Rem heals 2.',
+  text: 'Rem rides on another of your heroes as equipment for 2 turns: it heals {sp:4}. Then Rem returns to your bench.',
   base: 4,
   scalesSpirit: true,
-  run: (G, _ctx, { source, target }) => {
+  run: (G, ctx, { source, target }) => {
     if (!source || !target || target === source) return;
     healUnit(G, target, 4 + spi(source), 'Tag Along');
-    healUnit(G, source, 2, 'Tag Along');
+    rideOn(G, G.players[ctx.movingPlayer], source, target, TAG_ALONG_TURNS);
   },
 };
 

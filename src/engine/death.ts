@@ -52,11 +52,12 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, o
     if (rival && !isRespawning(rival) && rival.hp > 0) fireTriggers(G, rival, 'onRivalFall', { only: 'passives', target: hero, movingPlayer: oppId });
   }
   const timer = respawnTimer(G, hero);
-  // Rem rescue: a merged Rem detaches to safety (back to the bench) instead of
-  // dying with the body — and her granted max-HP is reverted here too. (A
-  // merged Rem is the only attached card that carries a merge timer.)
+  // The rescue: a riding Rem (Tag Along) jumps back to the bench instead of
+  // falling with her bearer — to the hand when the bench has no room — and any
+  // max HP a ride granted is taken back here too. (A riding hero is the only
+  // attached card that carries a ride timer.)
   const rem = hero.attached?.find((a) => a.remMergeTurnsLeft != null);
-  if (rem) returnRemToBench(G, ps, hero, rem);
+  if (rem) returnRemToBench(G, ps, hero, rem, { bearerFalls: true });
   // Revert any temporary Siphon Bullets max-HP swing before statuses are wiped,
   // so the hero comes back with its true max HP.
   const sDrain = hero.statuses.find((s) => s.id === 'siphon_drain');
@@ -120,23 +121,55 @@ export function fallToBoss(G: GameState, ps: PlayerState, hero: CardInstance) {
 }
 
 /**
- * Detach a merged Rem from `bearer` and return her to a real bench slot:
- * reverts the temporary max-HP she granted, pulls her out of `bearer.attached`,
- * and drops her back into the slot she left (or the first free one), with her
- * `slot` saying where she landed. Shared by the merge-countdown expiry
- * (tickRemMerges) and the bearer-death rescue.
- *
- * The slot she left is always free: she merged out of it, and nothing writes
- * into an empty bench slot (moveBlocked refuses a swap with a hole; the other
- * bench moves trade two occupied slots). If that ever stopped being true she
- * would have nowhere to go, and she is not dropped: she stays merged, with a
- * log line saying so, and tries again at her owner's next turn start.
+ * `rider`, a hero of `ps` standing in a slot, rides on `bearer`, another of
+ * `ps`'s standing heroes, as equipment for `turns` of her owner's turns (Rem's
+ * Tag Along): out of her slot and into the bearer's `attached` list. While she
+ * rides nothing can hit or aim at her and she uses nothing — the board's
+ * sweeps, `findCardOnBoard` and the targets read the slots only — and she
+ * takes no item slot (`wornItems`). From the bench, her slot is kept for her
+ * (`freeBenchSlots`: her `slot` still names it); from the lane, she leaves it
+ * empty (`slot` 0: she takes the first free bench slot when she comes back),
+ * and the state-based pass that follows the ability has her side fill it as
+ * when an Active falls — the human seat is asked (`pendingPromotion`), an AI
+ * seat promotes at once. `tickRemMerges` counts the ride down at her owner's
+ * turn start and `returnRemToBench` ends it.
  */
-export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInstance, rem: CardInstance) {
+export function rideOn(G: GameState, ps: PlayerState, rider: CardInstance, bearer: CardInstance, turns: number) {
+  if (ps.active === rider) {
+    leaveActive(G, rider);
+    ps.active = null;
+  } else {
+    const idx = ps.bench.indexOf(rider);
+    if (idx < 0) return;
+    ps.bench[idx] = null;
+  }
+  rider.zone = 'equipment';
+  rider.attachedTo = bearer.iid;
+  rider.remMergeTurnsLeft = turns;
+  (bearer.attached ??= []).push(rider);
+  pushLog(G, `${cardName(rider.cardId)} rides on ${cardName(bearer.cardId)} for ${turns} turn${turns === 1 ? '' : 's'}.`);
+}
+
+/**
+ * End a ride: detach the riding Rem from `bearer` and put her back in a real
+ * bench slot — the one she rode from the bench out of (kept for her: nothing
+ * writes into it while she rides), or, having ridden from the lane, the first
+ * free one — with her `slot` saying where she landed; any max HP a ride
+ * granted (`remMergeHpBuff`; Tag Along grants none) is taken back. Shared by
+ * the ride's countdown (`tickRemMerges`) and the bearer's fall
+ * (`killInPlace`).
+ *
+ * With no free slot (she rode from the lane and the bench has filled since)
+ * she is never dropped. At the countdown she rides on one more turn, with a
+ * log line saying so, and tries again at her owner's next turn start; when
+ * her bearer falls (`bearerFalls`) she cannot stay on a corpse, and goes back
+ * to the hand instead, as a fallen hero does (`heroToHand`).
+ */
+export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInstance, rem: CardInstance, opts: { bearerFalls?: boolean } = {}) {
   const own = (rem.slot ?? 1) - 1;
   const slotIdx = own >= 0 && own < ps.bench.length && ps.bench[own] == null ? own : ps.bench.findIndex((b) => b == null);
-  if (slotIdx < 0) {
-    pushLog(G, `Rem has no free bench slot and stays merged.`);
+  if (slotIdx < 0 && !opts.bearerFalls) {
+    pushLog(G, `${cardName(rem.cardId)} has no free bench slot and rides on one more turn.`);
     rem.remMergeTurnsLeft = 1;
     return;
   }
@@ -146,11 +179,16 @@ export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInst
   if (bearer.attached) bearer.attached = bearer.attached.filter((a) => a !== rem);
   rem.remMergeTurnsLeft = undefined;
   rem.remMergeHpBuff = undefined;
-  rem.zone = 'bench';
   rem.attachedTo = undefined;
+  if (slotIdx < 0) {
+    pushLog(G, `${cardName(rem.cardId)} has no free bench slot and jumps back to the hand.`);
+    heroToHand(G, ps, rem);
+    return;
+  }
+  rem.zone = 'bench';
   rem.slot = (slotIdx + 1) as 1 | 2 | 3;
   ps.bench[slotIdx] = rem;
-  pushLog(G, `Rem returns to the bench.`);
+  pushLog(G, `${cardName(rem.cardId)} returns to the bench.`);
 }
 
 /**

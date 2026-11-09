@@ -345,7 +345,7 @@ export function playTargets(G: GameState, pid: PlayerID, cardIid: string): CardI
 }
 
 /** The bench slot (1..3) a hero from `ps`'s hand goes into: the first empty
- *  one that no merged Rem will come back to; undefined when there is none. */
+ *  one that no riding Rem will come back to; undefined when there is none. */
 export function freeBenchSlot(ps: PlayerState): 1 | 2 | 3 | undefined {
   const reserved = new Set(heroesOf(ps).filter((h) => h.remMergeTurnsLeft != null).map((h) => h.slot));
   const i = ps.bench.findIndex((b, k) => b == null && !reserved.has((k + 1) as 1 | 2 | 3));
@@ -355,7 +355,7 @@ export function freeBenchSlot(ps: PlayerState): 1 | 2 | 3 | undefined {
 export type PlaceBlock = 'notYourTurn' | 'notInHand' | 'notHero' | 'occupied' | 'benchOnly' | 'benchFull' | 'badSlot' | 'slotTaken';
 
 /** The bench slots a hero from `ps`'s hand may go into now: the empty ones
- *  no merged Rem will come back to. */
+ *  no riding Rem will come back to. */
 export function freeBenchSlots(ps: PlayerState): (1 | 2 | 3)[] {
   const reserved = new Set(heroesOf(ps).filter((h) => h.remMergeTurnsLeft != null).map((h) => h.slot));
   return ps.bench.flatMap((b, k) => (b == null && !reserved.has((k + 1) as 1 | 2 | 3) ? [(k + 1) as 1 | 2 | 3] : []));
@@ -375,7 +375,7 @@ export function freeBenchSlots(ps: PlayerState): (1 | 2 | 3)[] {
  *  - 'benchOnly'   `toActive`, and the hero never takes the Active slot
  *                  (`flags.benchOnly`; no card sets it now).
  *  - 'badSlot'     `slot` is no bench slot (not 1, 2 or 3).
- *  - 'slotTaken'   `slot` holds a hero (standing or a corpse), or a merged Rem
+ *  - 'slotTaken'   `slot` holds a hero (standing or a corpse), or a riding Rem
  *                  will come back to it.
  *  - 'benchFull'   no bench slot is free (three heroes on the bench).
  */

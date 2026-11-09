@@ -291,7 +291,7 @@ describe('Channeled board-wipe archetype (the channel statuses, set directly: no
   });
 });
 
-describe('Support — Rem: Tag Along, and the merge machinery (a merged Rem set by hand)', () => {
+describe('Support — Rem: Tag Along, and the ride machinery (an old merge, with its max HP, set by hand)', () => {
   function setup() {
     const G = freshReadyGame();
     const ally = makeHero('hero_dynamo', '0', 'active', 0); // bearer
@@ -303,8 +303,9 @@ describe('Support — Rem: Tag Along, and the merge machinery (a merged Rem set 
 
   /** Merge `rem` into `ally` by hand, as the old Lil Helpers did: out of her
    *  bench slot, onto the bearer's `attached`, the max HP she grants on him,
-   *  for 3 of her owner's turns. No hero's skill does this now; the engine's
-   *  merge machinery (the countdown, the return, the death rescue) remains. */
+   *  for 3 of her owner's turns. Tag Along rides the same machinery (the
+   *  countdown, the return, the death rescue) for 2 turns and grants no max
+   *  HP; the max HP a ride may grant is still taken back. */
   function mergeByHand(G: GameState, rem: CardInstance, ally: CardInstance, hpBuff: number) {
     const ps = G.players[seatOf(rem)];
     const idx = ps.bench.findIndex((b) => b === rem);
@@ -318,17 +319,17 @@ describe('Support — Rem: Tag Along, and the merge machinery (a merged Rem set 
     (ally.attached ??= []).push(rem);
   }
 
-  it('Tag Along heals the ally {sp:4} and Rem 2; Rem stays on the bench (no merge)', () => {
+  it('Tag Along heals the ally {sp:4} and Rem rides on it for 2 turns (no max HP granted, Rem not healed)', () => {
     const { G, ally, rem } = setup();
     ally.hp = 1; ally.hpMax = 20;
     rem.hp = 1; rem.hpMax = 20;
     getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
     expect(ally.hp).toBe(1 + 4);
-    expect(rem.hp).toBe(1 + 2);
+    expect(rem.hp).toBe(1);
     expect(ally.hpMax).toBe(20); // no max HP granted
-    expect(ally.attached?.some((a) => a.cardId === 'hero_rem') ?? false).toBe(false);
-    expect(G.players['0'].bench[0]).toBe(rem);
-    expect(rem.remMergeTurnsLeft).toBeUndefined();
+    expect(ally.attached).toContain(rem);
+    expect(G.players['0'].bench[0]).toBeNull();
+    expect(rem).toMatchObject({ zone: 'equipment', attachedTo: ally.iid, remMergeTurnsLeft: 2, slot: 1 });
   });
 
   it("Tag Along's heal scales with Rem's Spirit", () => {

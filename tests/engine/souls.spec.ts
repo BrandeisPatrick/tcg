@@ -395,19 +395,20 @@ describe('souls economy', () => {
     expect(hpBefore - target.hp).toBe(4); // base 1 + 3 spirit
   });
 
-  it("a flat heal is flat — Spirit does NOT scale it (Rem's Tag Along: Rem heals 2; his target's {sp:4} does scale)", async () => {
+  it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 2); Rem's Tag Along prints {sp:4} and does", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
-    const skill = ABILITIES_BY_ID['skill_rem'];
     const G = freshG();
     const rem = makeHero('hero_rem', '0', 'bench', 1);
     G.players['0'].bench[0] = rem;
-    rem.spiritMod = 2; // spirit is ignored for Rem's own 2
-    rem.hpMax = 20; rem.hp = 1;
+    rem.spiritMod = 2;
     const ally = G.players['0'].active!;
     ally.hpMax = 20;
     ally.hp = 1;
-    skill.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    expect(rem.hp - 1).toBe(2); // flat 2, no spirit
+    // A flat heal: the caster's Spirit is ignored.
+    ABILITIES_BY_ID['eff_healing_rite'].run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    expect(ally.hp - 1).toBe(2);
+    ally.hp = 1;
+    ABILITIES_BY_ID['skill_rem'].run(G, { movingPlayer: '0' }, { source: rem, target: ally });
     expect(ally.hp - 1).toBe(4 + 2); // {sp:4}
   });
 

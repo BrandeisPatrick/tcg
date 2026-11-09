@@ -223,9 +223,9 @@ export function grantExtraAttacks(card: CardInstance, count: number) {
 }
 
 /**
- * Tick Rem's "Lil Helpers" merges at her owner's turn start: count down each
- * attached Rem and, when the timer expires, detach her back to the bench (which
- * also reverts the max-HP she granted the bearer).
+ * Tick the rides (Rem's Tag Along, `rideOn`) at her owner's turn start: count
+ * down each riding Rem and, when the ride is over, put her back on the bench
+ * (`returnRemToBench`, which also takes back any max HP a ride granted).
  */
 export function tickRemMerges(G: GameState, ps: PlayerState) {
   for (const bearer of liveBoardCards(ps)) {
@@ -242,8 +242,8 @@ export function tickRemMerges(G: GameState, ps: PlayerState) {
  * (docs/stats-model.md §1): an entry that reaches 0 is removed, and an empty
  * map is removed with it, so a hero or an item that is off cooldown is back to
  * having no field at all. It counts the owner's turns, so a hero on the
- * respawn timer, its items and a merged Rem (out of the board sweep, riding on
- * her bearer, her own items with her) tick like the rest — a fall and a
+ * respawn timer, its items and a riding Rem (out of the board sweep, on her
+ * bearer, her own items with her) tick like the rest — a fall and a
  * respawn leave a cooldown as it is.
  */
 export function tickCooldowns(ps: PlayerState) {
@@ -276,8 +276,8 @@ export function clearTurnFlags(ps: PlayerState) {
     // Ricochet granted for this turn (Split Shot), even one a buff-stretching
     // item made last longer.
     c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack' && s.id !== 'swift' && s.id !== 'ricochet');
-    // A merged Rem rides on her bearer, out of the board sweep above: clear
-    // her skill flag here too, or she would come back from the merge with
+    // A riding Rem is on her bearer, out of the board sweep above: clear
+    // her skill flag here too, or she would come back from the ride with
     // her skill already spent for that turn.
     for (const a of c.attached ?? []) {
       if (a.remMergeTurnsLeft == null) continue;

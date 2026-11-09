@@ -239,7 +239,7 @@ export function isHeroCard(card: CardInstance): boolean {
 }
 
 /** Every hero a side has on the board: the Active, the bench (corpses
- *  included) and a Rem merged into an ally, who rides in its `attached` list. */
+ *  included) and a Rem riding on an ally (Tag Along), in its `attached` list. */
 export function heroesOf(ps: PlayerState): CardInstance[] {
   const slotted = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c && !!heroData(c));
   return [...slotted, ...slotted.flatMap((c) => (c.attached ?? []).filter((a) => !!heroData(a)))];
@@ -318,7 +318,7 @@ interface AbilitySource {
  *  passives, then each worn piece of equipment's abilities in worn order. The
  *  one list behind the reactive triggers (engine/triggers.ts) and the pure
  *  hooks read below, so a card's behaviour is found in the same place by every
- *  rule. A merged Rem in `attached` is a hero, not equipment, and adds none. */
+ *  rule. A riding Rem in `attached` is a hero, not equipment, and adds none. */
 export function abilitySources(card: CardInstance): AbilitySource[] {
   const out: AbilitySource[] = [];
   for (const id of heroData(card)?.passives ?? []) {
@@ -342,7 +342,7 @@ export function wornEquipment(card: CardInstance): CardInstance[] {
 }
 
 /** Every item `card` wears, active or passive, in worn order: what fills its
- *  slots. A merged Rem rides in the same `attached` list but is a hero, not an
+ *  slots. A riding Rem is in the same `attached` list but is a hero, not an
  *  item: she takes no slot and cannot be sold or moved. */
 export function wornItems(card: CardInstance): CardInstance[] {
   return (card.attached ?? []).filter((a) => !!itemCard(a.cardId));
@@ -361,7 +361,7 @@ export function slotCap(G: GameState, pid: PlayerID): number {
 
 /** The worn item with this iid on one of `pid`'s heroes in a slot (Active or
  *  bench, standing or not) — or, without `pid`, on either side — and who wears
- *  it; null when there is none. A merged Rem's items are out of reach until she
+ *  it; null when there is none. A riding Rem's items are out of reach until she
  *  is back on the bench. */
 export function findWornItem(G: GameState, iid: string, pid?: PlayerID): { owner: PlayerID; bearer: CardInstance; item: CardInstance } | null {
   for (const owner of (pid ? [pid] : ['0', '1']) as PlayerID[]) {

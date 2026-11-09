@@ -64,7 +64,7 @@ function tickRespawn(G: GameState, pid: PlayerID) {
  *  boardgame.io's turn count, which includes the draft's turns; the engine
  *  turn is that minus the offset captured when the draft finished. In order:
  *  the turn's flags reset, the Mid-Boss rises if its round has come, the
- *  start-of-turn ticks, cooldowns (heroes' and items') and Rem's merge, the
+ *  start-of-turn ticks, cooldowns (heroes' and items') and Rem's ride, the
  *  income, fallen heroes whose wait is over going back to the hand, the draw
  *  (DRAW_PER_TURN; skipped into a full hand, nothing from an empty deck), the
  *  start-of-turn passives and gear, and the state-based pass. */
@@ -80,7 +80,7 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   tickStartOfTurn(G, ps);
   // Cooldowns count the owner's turns, so they come down here too (on a corpse as well).
   tickCooldowns(ps);
-  // Count down Rem's "Lil Helpers" merges; expired ones return her to bench.
+  // Count down a riding Rem (Tag Along); a ride that is over puts her back on the bench.
   tickRemMerges(G, ps);
   // Income: souls accumulate — nothing banked is lost, and the lane pays on
   // top of it every own turn, the first included.
