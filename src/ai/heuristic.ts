@@ -16,8 +16,8 @@
  * engine (`simulate`), and the resulting position is scored by `evalState`.
  * That captures target choice, lethal and the value of gear, skills and
  * ultimates without hand-tuning each case, and what a line leaves on the board:
- * the statuses it lands, the channel it starts, the Rem it merges, the souls it
- * keeps, the cards it holds. A turn is the player's to spend on cards from the
+ * the statuses it lands, the channel it starts, the Rem it sets riding, the
+ * souls it keeps, the cards it holds. A turn is the player's to spend on cards from the
  * hand, abilities (one per hero — a skill or an ultimate for its souls, or a
  * worn active item, free) and
  * one Retreat, and then one attack, which ends it: after the attack only
@@ -52,8 +52,8 @@ import type { CardId, GameState, PlayerID, PlayerState, CardInstance, StatusInst
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
-  checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroWorth, isBoss, isRespawning, itemCooldown,
-  itemPrice, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, wornItems,
+  attackPower, checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroesOf, heroWorth, isBoss, isRespawning,
+  itemCooldown, itemPrice, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
@@ -311,11 +311,37 @@ function channelValue(c: CardInstance, enemies: number): number {
   return v;
 }
 
-/** The Rem riding on `c`, if she has merged into it ("Lil Helpers"). A merged
- *  Rem is a hero still on the board, not gear: she is out of her bench slot but
- *  comes back to it, and the HP she granted is already on the bearer. */
+/** The Rem riding on `c` (Tag Along). A riding Rem is a hero still on the
+ *  board, not gear: she is out of her slot but comes back to the bench with
+ *  everything she wears, and what her ride gave the bearer is already on it. */
 function mergedRem(c: CardInstance): CardInstance[] {
   return (c.attached ?? []).filter((a) => a.remMergeTurnsLeft != null);
+}
+
+/** How much of a hero a line saves when it takes the hero out of a lane it is
+ *  losing and keeps it on the board, out of reach — Rem riding off on an ally
+ *  (Tag Along): a share of its presence, since the 1-ply evaluation cannot see
+ *  the rival's swing it dodges. */
+const RIDE_TO_SAFETY = 0.5;
+
+/** True when `hero`, `pid`'s Active, is losing its lane: it is about to die
+ *  (ABOUT_TO_DIE), or the rival's Active could fell it with one swing. */
+function losingLane(G: GameState, pid: PlayerID, hero: CardInstance): boolean {
+  if (hero.hp < hero.hpMax * ABOUT_TO_DIE) return true;
+  const rival = G.players[otherPlayer(pid)].active;
+  return !!rival && !isRespawning(rival) && rival.hp > 0 && attackPower(rival, hero).total >= hero.hp;
+}
+
+/** What the ability `a` gains by riding its caster out of a losing lane
+ *  (`RIDE_TO_SAFETY`), read off `after`, the position the line leaves: the
+ *  caster was `pid`'s Active, losing its lane, and rides on an ally there. 0
+ *  for anything else. */
+function rideToSafety(G: GameState, pid: PlayerID, a: Action, after: GameState): number {
+  if (a.type !== 'useSkill') return 0;
+  const hero = G.players[pid].active;
+  if (!hero || hero.iid !== a.heroIid || isRespawning(hero) || !losingLane(G, pid, hero)) return 0;
+  const rides = heroesOf(after.players[pid]).find((h) => h.iid === hero.iid && h.remMergeTurnsLeft != null);
+  return rides ? presence(rides) * RIDE_TO_SAFETY : 0;
 }
 
 /** What a side's standing structures are worth (`STRUCTURE_WEIGHT`). */
@@ -358,8 +384,8 @@ function bossBlow(g: GameState, pid: PlayerID): number {
  *  the structures each side has standing, the flex slot and a live
  *  Rejuvenator, the Mid-Boss's damage lead and the blow it still owes; each
  *  living hero's HP, offense (attack plus its best skill), shield and worn
- *  gear, plus the statuses it carries, the channel it is running and the merged
- *  Rem it wears, each fallen hero as a lost
+ *  gear, plus the statuses it carries, the channel it is running and the
+ *  riding Rem it wears (a hero, her own gear with her), each fallen hero as a lost
  *  presence, the souls each side keeps and the cards it holds. */
 function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
   // A match that is over is not "a good position": it is the one that must
@@ -386,8 +412,8 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
       // under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
       s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies));
-      // Merging Rem into an ally is not the loss of a hero.
-      for (const rem of mergedRem(c)) s += sign * presence(rem);
+      // Rem riding on an ally is not the loss of a hero, nor of what she wears.
+      for (const rem of mergedRem(c)) s += sign * (presence(rem) + equipValue(rem) * 2 + heroWorth(rem) * WORN_PRICE);
     }
     for (const c of [ps.active, ...ps.bench]) {
       if (c && isRespawning(c)) s -= sign * 5; // corpse = lost presence
@@ -541,7 +567,7 @@ function scoreSkill(pid: PlayerID, target?: CardInstance, ultimate = false): num
  *  its target, plus a premium for a KO. With lookahead a win is `evalState`'s
  *  verdict instead. Both are read off the engine's own run of the attack —
  *  "wins" means what the rules mean: the knockout's push into the last
- *  structure, a Ricochet bounce that drops a bench hero, a merged Rem who walks
+ *  structure, a Ricochet bounce that drops a bench hero, a riding Rem who jumps
  *  off the fallen bearer. An attack at the Mid-Boss is `scoreBossAttack`'s. */
 function scoreAttack(G: GameState, pid: PlayerID, targetIid?: string): number {
   const after = simulate(G, pid, { type: 'attack', targetIid }).G;
@@ -644,7 +670,8 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
     case 'useSkill': {
       const hero = findCardOnBoard(G, a.heroIid)?.card;
       const ultimate = !!hero && resolveSkill(hero, a.skillId)?.kind !== 'skill';
-      return scoreSkill(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined, ultimate);
+      const ride = G.players[pid].active?.iid === a.heroIid ? rideToSafety(G, pid, a, simulate(G, pid, a).G) : 0;
+      return scoreSkill(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined, ultimate) + ride;
     }
     case 'moveHero': {
       const { active, incoming } = retreatPair(G, pid, a);
@@ -736,12 +763,14 @@ function bestSwing(g: GameState, pid: PlayerID, d: Dial): GameState {
 
 /** The lookahead's score for `a`: the value of the position it leads to. A tiny
  *  bias toward acting (vs. passing) breaks ties so the AI takes value-neutral
- *  tempo plays instead of idling. A retreat with no rule-of-thumb reason
+ *  tempo plays instead of idling. A skill that rides its caster out of a lane
+ *  it is losing adds what that saves (`rideToSafety`). A retreat with no rule-of-thumb reason
  *  (`retreatPoints`) is marked down so it ranks behind real plays — unless its
  *  line beats `baseline`, the value of attacking as things stand, by
  *  RETREAT_MARGIN: then the swap is the better way to make the turn's attack. */
 function lookaheadScore(G: GameState, pid: PlayerID, a: Action, baseline: () => number, d: Dial = NORMAL): number {
-  let s = evalState(lineAfter(G, pid, a, d), pid, d) + (a.type === 'endTurn' ? 0 : 0.1) + buildFit(G, pid, a);
+  const line = lineAfter(G, pid, a, d);
+  let s = evalState(line, pid, d) + (a.type === 'endTurn' ? 0 : 0.1) + buildFit(G, pid, a) + rideToSafety(G, pid, a, line);
   if (a.type === 'moveHero') {
     // 'hard' takes no rule of thumb: a retreat must show its gain in the evaluation.
     const reason = d.strength !== 'hard' && retreatPoints(...pairOf(G, pid, a), attackBought(G, pid, a)) !== null;

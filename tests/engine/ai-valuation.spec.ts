@@ -7,7 +7,7 @@ import { freshReadyGame, giveItem, makeHero } from './_helpers';
 import { newTrack } from '@/engine/map';
 
 // What the AI makes of a position: `evalState` (src/ai/heuristic.ts) prices the
-// statuses a unit carries, the channel it is running and a Rem merged into it.
+// statuses a unit carries, the channel it is running and a Rem riding on it.
 // The AI knows no rules, so these tests read its judgement off the list it
 // returns — passing is scored as the position stands, a play as the position it
 // leaves — on boards staged by hand. P1 is the seat to move; P0 is the rival.
@@ -162,7 +162,7 @@ describe('AI valuation: a position is worth to one seat what it costs the other'
   });
 });
 
-describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
+describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Tag Along and the lane', () => {
   /** P1's board with Rem on slot 1 of the bench and nothing else there. */
   function remGame() {
     const G = freshReadyGame();
@@ -220,6 +220,69 @@ describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
     expect(best.move).toBe('useSkill');
     expect(best.args[0]).toBe(rem.iid);
     expect(best.args[1]).toBe(own(G).iid);
+  });
+
+  it('a ride (Tag Along, made through the engine) is not the loss of Rem, nor of what she wears', () => {
+    const G = remGame();
+    const ai = G.players['1'];
+    const rem = ai.bench[0]!;
+    giveItem(G, rem, 'extra_spirit');
+    ai.souls = kitCost(rem, 'skill_rem');
+    const ride = enumerateAIMoves(G, ctx('1'), true).find((m) => m.move === 'useSkill' && m.args[0] === rem.iid);
+    // Abrams at full HP: the ride heals nothing, so all it costs is the 2 souls it pays.
+    const pass = enumerateAIMoves(G, ctx('1'), true).find((m) => m.move === 'endTurn')!;
+    expect(ride).toBeDefined();
+    expect(pass.score - ride!.score).toBeLessThan(2 * 0.3 + 1); // its souls, give or take the swing
+    expect(enumerateAIMoves(G, ctx('1'))[0].args[0]).not.toBe(rem.iid); // and it is not worth making
+  });
+
+  it('uses Tag Along on a hurt bench ally too', () => {
+    const G = remGame();
+    const ai = G.players['1'];
+    const rem = ai.bench[0]!;
+    const kelvin = ai.bench[1] = makeHero('hero_kelvin', '1', 'bench', 2);
+    kelvin.hp = 1;
+    ai.souls = kitCost(rem, 'skill_rem');
+    const best = enumerateAIMoves(G, ctx('1'))[0];
+    expect([best.move, best.args[0], best.args[1]]).toEqual(['useSkill', rem.iid, kelvin.iid]);
+  });
+
+  it('pulls Rem out of a lane she is losing with Tag Along, though no ally needs the heal', () => {
+    const G = freshReadyGame();
+    const ai = G.players['1'];
+    const rem = makeHero('hero_rem', '1', 'active', 0);
+    ai.active = rem;
+    ai.souls = kitCost(rem, 'skill_rem');
+    foe(G).atkMod = 4; // the rival's Haze would fell her with one swing
+    for (const b of ai.bench) expect(b!.hp).toBe(b!.hpMax);
+    const best = enumerateAIMoves(G, ctx('1'))[0];
+    expect(best.move).toBe('useSkill');
+    expect(best.args[0]).toBe(rem.iid);
+    expect(best.args.length).toBe(2); // her first skill, Tag Along, on an ally (Naptime would be named)
+    expect(ai.bench.map((b) => b!.iid)).toContain(best.args[1]);
+    // In a lane she is not losing, with nobody hurt, she stays and fights.
+    const H = freshReadyGame();
+    const h = H.players['1'];
+    const calm = makeHero('hero_rem', '1', 'active', 0);
+    h.active = calm;
+    h.souls = kitCost(calm, 'skill_rem');
+    H.players['0'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 }); // the rival's Active cannot swing
+    expect(enumerateAIMoves(H, ctx('1'))[0].args[0]).not.toBe(calm.iid);
+  });
+
+  it('puts Rem straight into an empty lane from its hand', () => {
+    const G = freshReadyGame();
+    G.turnNumber = 3; // P1's turn: the hand's plays are its own turn's
+    const ai = G.players['1'];
+    ai.active = null;
+    ai.bench = [null, null, null];
+    const rem = makeHero('hero_rem', '1', 'hand', 0);
+    rem.slot = undefined;
+    ai.hand.push(rem);
+    const best = enumerateAIMoves(G, ctx('1'))[0];
+    expect(best.move).toBe('placeHero');
+    expect(best.args[0]).toBe(rem.iid);
+    expect(best.args[1]).toBe(true); // toActive
   });
 });
 
