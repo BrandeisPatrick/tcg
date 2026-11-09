@@ -163,6 +163,15 @@ export interface UltimateCard extends BaseCard {
   linkedHero: CardId;
   abilities: AbilityId[];
   size: UltSize;
+  /** A charged ultimate (docs/hero-design.md §2; Victor, Silver): it prints
+   *  `cost` souls instead of its size's, and each damage its hero takes
+   *  (`by: 'taken'`) or deals (`'dealt'`) makes it 1 soul cheaper, down to 0
+   *  (`kitCost`). The count is the hero's `tally` under the ultimate's ability
+   *  id, and starts over when the ultimate is used. `text` is the rule's own
+   *  line under the effect ("Costs 1 less for each damage Victor takes."),
+   *  outside the effect's 15 words. Its `size` is what the effect is worth,
+   *  half the price, and prices nothing. */
+  charged?: { cost: number; by: 'taken' | 'dealt'; text: string };
 }
 
 export type CardData = HeroCard | SpellCard | EquipmentCard | UltimateCard;
@@ -207,10 +216,17 @@ export interface CardInstance {
    *  when it empties. Ticks at the start of the owner's turn (docs/stats-model.md
    *  §1), on a corpse too; a fall and a respawn leave it as it is. */
   cooldowns?: Partial<Record<AbilityId, number>>;
-  /** What a hero's passive counts for the game, by ability id: Drifter's
-   *  Bloodscent counts the knockouts that have grown his Attack. It stays
-   *  through a death, as the level does. */
+  /** What a hero's kit counts, by ability id: Drifter's Bloodscent counts the
+   *  knockouts that have grown his Attack; a charged ultimate counts the damage
+   *  that has made it cheaper (Victor's taken, Silver's dealt), and starts over
+   *  when it is used. It stays through a death, as the level does. */
   tally?: Partial<Record<AbilityId, number>>;
+  /** The hero whose blow dropped this one to 0 HP, while the fall waits on a
+   *  trigger prompt (engine/prompts.ts): the blow's kill exp is paid when the
+   *  fall goes ahead and never if a trigger cancels it. Only a hero that can
+   *  cancel its own fall (it declares an optional trigger at 'onFall') holds
+   *  it; cleared once the fall is decided. */
+  downedBy?: string;
   /** A hard crowd-control active's uses left this match (HARD_CC_CHARGES when
    *  bought; it travels with the item). At 0 the item stays worn but cannot be
    *  used. Undefined on every other card. An active's cooldown lives in this
@@ -485,11 +501,14 @@ export interface CastFx extends FxBase {
 }
 
 /** A corpse came back at full HP — or, `credit`, a hero the Rejuvenator
- *  brought straight back where it fell. */
+ *  brought straight back where it fell (the knockout still pushed), or,
+ *  `cancelled`, a hero a trigger stood back up before its fall went ahead
+ *  (Shocking Reanimation: no knockout at all). */
 export interface ReviveFx extends FxBase {
   kind: 'revive';
   iid: string;
   credit?: true;
+  cancelled?: true;
 }
 
 /** A hero reached a new level. */
@@ -575,6 +594,35 @@ export interface Counters {
   rng?: number;
 }
 
+/** A moment the trigger prompt system asks a player's optional triggers at
+ *  (engine/prompts.ts). 'onFall': one of their heroes has dropped to 0 HP and
+ *  is about to fall — the moment Victor's Shocking Reanimation answers. */
+export type TriggerMoment = 'onFall';
+
+/** One optional trigger a prompt offers: the hero's ability that may be used. */
+export interface TriggerOffer {
+  heroIid: string;
+  abilityId: AbilityId;
+}
+
+/** A trigger prompt the game is waiting on ("Use Shocking Reanimation for 7
+ *  souls?"): an optional ("you may") effect that came at a moment, offered to
+ *  the player whose card it is — on either player's turn. Nothing else is
+ *  legal until it is answered: one of `offers` used, or passed. The moment's
+ *  own outcome (the fall) waits on the answer. */
+export interface PendingTrigger {
+  /** The seat asked. */
+  pid: PlayerID;
+  /** The moment it came at. */
+  moment: TriggerMoment;
+  /** The hero the moment is about: for 'onFall', the hero falling. */
+  subjectIid: string;
+  /** The usable triggers, in the order found (the player picks one, or passes). */
+  offers: TriggerOffer[];
+  /** 'onFall': the fall, if it goes ahead, pays nothing (the Mid-Boss's blow). */
+  unpaid?: true;
+}
+
 /** A draw card's discard, owed by the player who cast it: `count` cards from
  *  anywhere in the hand, chosen by that player. Nothing else is legal until it
  *  is paid (`discard`). */
@@ -625,6 +673,12 @@ export interface GameState {
   playerDeck?: CardId[];
   /** A draw card's discard still owed (see `PendingDiscard`). */
   pendingDiscard?: PendingDiscard;
+  /** The trigger prompts waiting on an answer, oldest first: the LAST is the
+   *  one asked (engine/prompts.ts). The first version opens one per moment and
+   *  answers it before play goes on, so it holds one at a time; it is a stack
+   *  so a chain (an answer to an answer, the newest resolving first) can push
+   *  onto it later. Absent when nothing is owed. */
+  triggers?: PendingTrigger[];
   /** The human seat has not yet put its first Active in the lane: the match's
    *  opening (after the opening hand is dealt). Only `chooseActive` is legal,
    *  for that seat, from either seat, until it does. AI seats choose at once. */

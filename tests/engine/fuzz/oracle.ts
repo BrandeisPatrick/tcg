@@ -149,7 +149,9 @@ export function kitSoulsOracle(hero: CardInstance, skillId?: string): number {
   if (id === undefined || !skillIdsOf(hero).includes(id)) return 0;
   if (id === d.ult) {
     const face = Object.values(CARDS_BY_ID).find((c) => c.type === 'ultimate' && c.abilities[0] === id);
-    return face?.type === 'ultimate' ? ULT_COST[face.size] : 0;
+    if (face?.type !== 'ultimate') return 0;
+    // A charged ultimate prints its own price, 1 off for each point its hero has counted.
+    return face.charged ? Math.max(0, face.charged.cost - (hero.tally?.[id] ?? 0)) : ULT_COST[face.size];
   }
   return getAbility(id)?.souls ?? 0;
 }

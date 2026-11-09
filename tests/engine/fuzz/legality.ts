@@ -132,7 +132,7 @@ export function probeLegality(
   // is over and only ending the turn is left: B and E check that refusal, D skips it.
   const owed = G.pendingPromotion !== undefined;
   const actOver = G.attackUsed;
-  const choice = G.pendingActive !== undefined || G.pendingDiscard !== undefined;
+  const choice = G.pendingActive !== undefined || G.pendingDiscard !== undefined || !!G.triggers?.length;
 
   // ---------------------------------------------------------------- B: skillBlocked <=> useSkill
   // Each kit ability of each hero on its own (its skill, its ultimate).
@@ -311,13 +311,37 @@ export function probeLegality(
   if (!owed && G.pendingActive) probeOpening(G, ctx, pid, rnd, { add, checkAccepted, checkRefused });
   if (!owed && G.pendingDiscard) probeDiscard(G, ctx, pid, rnd, { add, checkAccepted, checkRefused });
 
+  // ---------------------------------------------------------------- F4: a trigger prompt owed
+  // Its answers — each offer, and the pass — are accepted from either seat; nothing else is
+  // (engine/prompts.ts), the end of the turn included.
+  const prompt = G.triggers?.[G.triggers.length - 1];
+  if (prompt) {
+    const answers: { name: string; args: unknown[] }[] = [
+      ...prompt.offers.map((o) => ({ name: 'useTrigger', args: [o.heroIid, o.abilityId] })),
+      { name: 'passTrigger', args: [] },
+    ];
+    for (const seat of [pid, foe]) {
+      for (const a of answers) {
+        const r = callMove(G, ctx, seat, a.name, a.args);
+        if (r.outcome !== 'accepted') add('trigger-answer-refused', a.name, a.args, `P${prompt.pid} owes an answer to a trigger prompt, yet ${a.name}(${JSON.stringify(a.args)}) from P${seat} is ${r.outcome}`);
+        else checkAccepted(G, r.G, a.name, a.args);
+      }
+    }
+    for (const m of [{ name: 'endTurn', args: [] as unknown[] }, chaosMove(G, pid, rnd)]) {
+      if (m.name === 'useTrigger' || m.name === 'passTrigger' || m.name === 'completeAction') continue;
+      const r = callMove(G, ctx, pid, m.name, m.args);
+      if (r.outcome === 'accepted') add('trigger-prompt-skippable', m.name, m.args, `P${prompt.pid} owes an answer to a trigger prompt, yet ${m.name}(${JSON.stringify(m.args)}) is accepted`);
+      else if (r.outcome === 'rejected') checkRefused(G, r.G, m.name, m.args);
+    }
+  }
+
   // ---------------------------------------------------------------- G: who the attack may name
   // With the attack open, `attack(targetIid)` is accepted exactly for the units the rules oracle
   // lists — the enemy heroes it may reach, then the Mid-Boss while it stands (a bare `attack`
   // when it lists any) — a refusal leaves the state as it was, and `legalActions` offers one
   // attack per listed unit, the first of them as the bare action.
   const attacker = me.active;
-  if (!owed && attacker && attackOpenFor(G, pid)) {
+  if (!owed && !prompt && attacker && attackOpenFor(G, pid)) {
     const units = [...boardUnits(G), ...(G.boss ? [G.boss] : [])];
     const want = attackTargetsOracle(G, pid).filter((t) => attackPower(attacker, t).total > 0);
     const wantIids = want.map((t) => t.iid);
@@ -349,7 +373,7 @@ export function probeLegality(
   }
 
   // ---------------------------------------------------------------- H: the hand
-  if (!owed && !G.pendingActive && !G.pendingDiscard) probeHand(G, ctx, pid, rnd, opts, { add, checkAccepted, checkRefused });
+  if (!owed && !prompt && !G.pendingActive && !G.pendingDiscard) probeHand(G, ctx, pid, rnd, opts, { add, checkAccepted, checkRefused });
 }
 
 interface Report {

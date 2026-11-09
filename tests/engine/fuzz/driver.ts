@@ -142,7 +142,7 @@ export function marketSeedFor(seed: number): number {
   return (Math.imul(seed >>> 0, 0x9e3779b1) ^ 0x6a09e667) >>> 0;
 }
 
-const CHAOS_NAMES = ['playCard', 'placeHero', 'discard', 'chooseActive', 'activate', 'useSkill', 'moveHero', 'promoteToActive', 'attack', 'endTurn'] as const;
+const CHAOS_NAMES = ['playCard', 'placeHero', 'discard', 'chooseActive', 'activate', 'useSkill', 'moveHero', 'promoteToActive', 'useTrigger', 'passTrigger', 'attack', 'endTurn'] as const;
 /** Ids that name no card of a hand: a hero not drafted, an ultimate, nonsense. */
 const JUNK_IDS = ['hero_haze', 'ult_lash', 'eff_cold_front', 'nope', ''];
 
@@ -239,6 +239,16 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
       return { name, args: [slot(), slot()] };
     case 'promoteToActive':
       return { name, args: [maybe(anyIid(), 0.1)] };
+    case 'useTrigger': {
+      // A trigger prompt's yes: the offer owed now and then, else a hero and an ability of the
+      // player's own (a trigger that is not offered, a skill), or junk.
+      const offer = G.triggers?.[G.triggers.length - 1]?.offers[0];
+      if (offer && r() < 0.5) return { name, args: [offer.heroIid, offer.abilityId] };
+      const hero = myBoard.length && r() < 0.8 ? pick(myBoard, r) : anyIid();
+      const kit = boardOf(mine).find((c) => c.iid === hero);
+      const ids = kit ? skillIdsOf(kit) : [];
+      return { name, args: [maybe(hero, 0.05), ids.length && r() < 0.7 ? pick(ids, r) : pick(['eff_ult_victor', 'nope'], r)] };
+    }
     default:
       return { name, args: [] };
   }
@@ -351,10 +361,11 @@ export function playGame(opts: PlayOpts): GameRecord {
   }));
 }
 
-/** The AI's answer to a choice owed (the opening's first Active, a promotion, a
- *  draw card's discard), as a client call; undefined when none is owed. */
+/** The AI's answer to a choice owed (the opening's first Active, a trigger
+ *  prompt, a promotion, a draw card's discard), as a client call; undefined
+ *  when none is owed. */
 function owedAnswer(G: GameState, ctx: Ctx): { name: string; args: unknown[] } | undefined {
-  if (!G.pendingActive && !G.pendingPromotion && !G.pendingDiscard) return undefined;
+  if (!G.pendingActive && !G.pendingPromotion && !G.pendingDiscard && !G.triggers?.length) return undefined;
   try {
     const o = enumerateAIMoves(G, ctx, false)[0];
     return o ? { name: o.move, args: o.args } : undefined;
@@ -389,7 +400,7 @@ function randomHandMove(G: GameState, pid: PlayerID, r: () => number): { name: s
     const n = 1 + Math.floor(r() * Math.min(owed.count, hand.length));
     return { name: 'discard', args: [[...hand].sort(() => r() - 0.5).slice(0, n)] };
   }
-  if (G.pendingActive || G.pendingPromotion || G.pendingDiscard || r() >= HAND_RATE) return undefined;
+  if (G.pendingActive || G.pendingPromotion || G.pendingDiscard || G.triggers?.length || r() >= HAND_RATE) return undefined;
   const plays = legalActions(G, pid).filter((a) => HAND_TYPES.has(a.type));
   if (!plays.length) return undefined;
   const kind = pick([...new Set(plays.map((a) => a.type))], r);

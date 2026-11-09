@@ -15,6 +15,7 @@ import type {
   ItemSlot,
   ItemTier,
   Owner,
+  PendingTrigger,
   PlayerID,
   PlayerState,
   StatusId,
@@ -96,12 +97,13 @@ export function laneOpen(ps: PlayerState): boolean {
   return !ps.active || isRespawning(ps.active);
 }
 
-/** The bench heroes who can take the Active slot right now: alive, and not
+/** The bench heroes who can take the Active slot right now: alive (not a
+ *  corpse, nor a hero at 0 HP whose fall waits on a trigger prompt), and not
  *  bench-only (Rem). One list for the forced promotion off a fallen Active,
  *  the paid retreat, the AI and the board, so they cannot disagree. */
 export function stepInCandidates(ps: PlayerState): CardInstance[] {
   return ps.bench.filter((b): b is CardInstance => {
-    if (!b || isRespawning(b)) return false;
+    if (!b || isRespawning(b) || b.hp <= 0) return false;
     const d = CARDS_BY_ID[b.cardId];
     return d?.type === 'hero' && !d.flags?.benchOnly;
   });
@@ -453,9 +455,67 @@ export function kitCost(card: CardInstance, skillId?: AbilityId): number {
   if (!skill) return 0;
   if (skill.kind === 'ult') {
     const face = ultimateCard(skill.id);
-    return face ? ULT_COST[face.size] : 0;
+    if (!face) return 0;
+    // A charged ultimate: its printed price, less what its hero has counted.
+    return Math.max(0, ultPrice(face) - (face.charged ? card.tally?.[skill.id] ?? 0 : 0));
   }
   return skill.ability.souls ?? 0;
+}
+
+/** The price an ultimate's card prints: a charged one's own `cost`, else its
+ *  size's (`ULT_COST`: 4, 8 or 12). What a hero pays now is `kitCost`, which
+ *  takes a charged ultimate's count off it. */
+export function ultPrice(face: UltimateCard): number {
+  return face.charged ? face.charged.cost : ULT_COST[face.size];
+}
+
+/** The charged ultimate `card` carries (docs/hero-design.md §2), with how it
+ *  charges — damage the hero takes or deals — or undefined for any other
+ *  card. The damage kernel counts it (`damageUnit`). */
+export function chargedUlt(card: CardInstance): { id: AbilityId; by: 'taken' | 'dealt' } | undefined {
+  const id = heroData(card)?.ult;
+  const charged = ultimateCard(id)?.charged;
+  return id && charged ? { id, by: charged.by } : undefined;
+}
+
+// ---------- Optional triggers (the trigger prompt system, engine/prompts.ts) ----------
+
+/** The optional triggers ("you may") `card` declares — at `moment`, when one
+ *  is named: its kit abilities (skill, ultimate) and passives that are
+ *  `optional`, in that order. Declared is not usable: `triggerBlocked`
+ *  (legality.ts) says whether one can be used now. */
+export function optionalTriggers(card: CardInstance, moment?: AbilityDef['trigger']): AbilityDef[] {
+  const data = heroData(card);
+  if (!data) return [];
+  const ids = [...data.skills, ...(data.ult ? [data.ult] : []), ...(data.passives ?? [])];
+  const out: AbilityDef[] = [];
+  for (const id of ids) {
+    const a = getAbility(id);
+    if (a?.optional && (moment === undefined || a.trigger === moment)) out.push(a);
+  }
+  return out;
+}
+
+/** The souls an optional trigger costs `card` to use: a kit ability's
+ *  `kitCost` (a charged ultimate's count taken off), a passive's own
+ *  `souls` (none: 0). The one price the prompt prints, the legality checks
+ *  and the answer charges. */
+export function triggerPrice(card: CardInstance, abilityId: AbilityId): number {
+  return resolveSkill(card, abilityId) ? kitCost(card, abilityId) : getAbility(abilityId)?.souls ?? 0;
+}
+
+/** The trigger prompt the game is waiting on: the last of `G.triggers` (the
+ *  one asked), or undefined when none is owed. */
+export function promptOwed(G: GameState): PendingTrigger | undefined {
+  const stack = G.triggers;
+  return stack && stack.length > 0 ? stack[stack.length - 1] : undefined;
+}
+
+/** True while `hero` has dropped to 0 HP and its fall waits on a trigger
+ *  prompt: it is neither standing nor a corpse. Nothing reaps, damages,
+ *  heals or promotes it meanwhile. */
+export function fallPending(G: GameState, hero: CardInstance): boolean {
+  return !!G.triggers?.some((t) => t.moment === 'onFall' && t.subjectIid === hero.iid);
 }
 
 /** What `ability`, used by `hero` of `pid`, is aimed at now: its own `aim`

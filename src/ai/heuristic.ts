@@ -53,7 +53,7 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
   checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroWorth, isBoss, isRespawning, itemCooldown,
-  itemPrice, liveBoardCards, otherPlayer, resolveSkill, reviveReady, slottedHeroes, wornItems,
+  itemPrice, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
@@ -472,7 +472,7 @@ function buildFit(G: GameState, pid: PlayerID, a: Action): number {
 }
 
 interface MoveOption {
-  move: 'playCard' | 'placeHero' | 'discard' | 'chooseActive' | 'activate' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
+  move: 'playCard' | 'placeHero' | 'discard' | 'chooseActive' | 'activate' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'useTrigger' | 'passTrigger' | 'draftPick';
   args: any[];
   score: number;
 }
@@ -501,6 +501,8 @@ function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
     }
     case 'moveHero': return { move: 'moveHero', args: [a.fromSlot, a.toSlot] };
     case 'promoteToActive': return { move: 'promoteToActive', args: [a.benchIid] };
+    case 'useTrigger': return { move: 'useTrigger', args: [a.heroIid, a.abilityId] };
+    case 'passTrigger': return { move: 'passTrigger', args: [] };
     // The default target (the first the engine lists) is the move's default: no argument.
     case 'attack': return { move: 'attack', args: present(a.targetIid) };
     case 'endTurn': return { move: 'endTurn', args: [] };
@@ -648,8 +650,48 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
     }
     // A promotion owed comes before everything: the healthiest hero steps up.
     case 'promoteToActive': return 50_000 + findCardOnBoard(G, a.benchIid)!.card.hp;
+    // A trigger prompt's answer: the asked side's own valuation (`answerScore`).
+    case 'useTrigger':
+    case 'passTrigger': return answerScore(G, a);
     case 'endTurn': return 1;
   }
+}
+
+// ----- a trigger prompt's answer -----------------------------------------------
+// The engine asks the AI the same question it asks a person (engine/prompts.ts):
+// use one of the offers, or pass. The valuation is simple and is the lookahead's
+// own: each answer is made on a copy, and the asked side takes the position it
+// likes best — a revive keeps a hero and its push off the map for its souls.
+
+/** What answering the prompt owed with `a` is worth to the side asked: the
+ *  position it leaves, from that side's view (`evalState`). */
+function answerScore(G: GameState, a: Action): number {
+  const asked = promptOwed(G)?.pid;
+  if (!asked) return 0;
+  return evalState(simulate(G, asked, a).G, asked);
+}
+
+/** The answer the side asked gives to the prompt owed in `G`: its best by
+ *  `answerScore`, a pass on a tie. */
+function answerFor(G: GameState): Action {
+  const asked = promptOwed(G)!.pid;
+  let best: Action = { type: 'passTrigger' };
+  let value = answerScore(G, best);
+  for (const a of legalActions(G, asked)) {
+    if (a.type !== 'useTrigger') continue;
+    const v = answerScore(G, a);
+    if (v > value) { best = a; value = v; }
+  }
+  return best;
+}
+
+/** `g` with any trigger prompt it holds answered the way the side asked would
+ *  answer it (`answerFor`), so a line that fells a hero who may come back is
+ *  valued as it will play out. A chain is not possible yet, but the loop is
+ *  bounded all the same. */
+function answered(g: GameState): GameState {
+  for (let i = 0; i < 4 && promptOwed(g); i++) g = simulate(g, promptOwed(g)!.pid, answerFor(g)).G;
+  return g;
 }
 
 // ----- the lookahead ----------------------------------------------------------
@@ -664,13 +706,15 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
  *  forfeits the attack. */
 function lineAfter(G: GameState, pid: PlayerID, a: Action, d: Dial = NORMAL): GameState {
   if (a.type === 'endTurn') return G;
-  let { G: g } = simulate(G, pid, a);
+  // A prompt the move opens (a hero of the rival's that may come back) is
+  // answered as its side would answer it.
+  let g = answered(simulate(G, pid, a).G);
   // A draw card's discard is the AI's own to pay: the line pays it as it would.
   const owed = g.pendingDiscard;
   if (owed && owed.pid === pid) g = simulate(g, pid, { type: 'discard', cardIids: discardChoice(g, pid, owed.count) }).G;
   if (a.type === 'attack' || attackBlocked(g, pid) !== null) return g;
   if (d.strength === 'hard') return bestSwing(g, pid, d);
-  const swung = simulate(g, pid, { type: 'attack' }).G;
+  const swung = answered(simulate(g, pid, { type: 'attack' }).G);
   return evalState(swung, pid, d) >= evalState(g, pid, d) ? swung : g;
 }
 
@@ -681,7 +725,7 @@ function bestSwing(g: GameState, pid: PlayerID, d: Dial): GameState {
   let best = g;
   let value = evalState(g, pid, d);
   attackTargets(g, pid).forEach((t, i) => {
-    const swung = simulate(g, pid, i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }).G;
+    const swung = answered(simulate(g, pid, i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }).G);
     const v = evalState(swung, pid, d);
     if (v > value) { best = swung; value = v; }
   });
@@ -761,6 +805,16 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true, optio
   // card's discard.
   const actions = legalActions(G, pid).filter((a) => a.type !== 'playCard' || !d.banned.has(handCard(G, pid, a.cardIid)?.cardId ?? ''));
 
+  // A trigger prompt owed (engine/prompts.ts) is answered first, by the side
+  // asked — on either player's turn, so it is that side's valuation whoever is
+  // on turn: each offer and the pass, by the position each leaves it.
+  const prompt = promptOwed(G);
+  if (prompt) {
+    return legalActions(G, prompt.pid)
+      .map((a): MoveOption => ({ ...toMove(G, a), score: answerScore(G, a) }))
+      .sort((a, b) => b.score - a.score);
+  }
+
   // A choice owed needs no weighing: the strongest hero opens, the healthiest
   // steps up.
   if (G.pendingActive || G.pendingPromotion) {
@@ -782,7 +836,7 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true, optio
   let base: number | undefined;
   const baseline = () => (base ??= d.strength === 'hard'
     ? evalState(bestSwing(G, pid, d), pid, d)
-    : evalState(attackBlocked(G, pid) === null ? simulate(G, pid, { type: 'attack' }).G : G, pid, d));
+    : evalState(attackBlocked(G, pid) === null ? answered(simulate(G, pid, { type: 'attack' }).G) : G, pid, d));
   const scored = actions.map((a): MoveOption => ({
     ...toMove(G, a),
     score: lookahead ? lookaheadScore(G, pid, a, baseline, d) : crudeScore(G, pid, a),

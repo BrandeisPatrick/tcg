@@ -1,7 +1,7 @@
 import type { CardInstance, DamageType, FxCastKind, FxTag, GameState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
-import { incomingDamage, isBoss, isRespawning, itemHealingBoost, itemResist, seatOf } from './query';
+import { chargedUlt, fallPending, incomingDamage, isBoss, isRespawning, itemHealingBoost, itemResist, optionalTriggers, seatOf } from './query';
 import { currentCast, withCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
@@ -28,8 +28,9 @@ interface DamageFxOpts {
 // spell / ult damage gets "Caster → Target" attribution in the log automatically.
 export function damageUnit(G: GameState, target: CardInstance, amount: number, type: DamageType, sourceName?: string, fx?: DamageFxOpts): number {
   if (amount <= 0) return 0;
-  // Corpses can't take more damage — they're already KO'd waiting to respawn.
-  if (isRespawning(target)) return 0;
+  // Corpses can't take more damage — they're already KO'd waiting to respawn —
+  // and neither can a hero whose fall waits on a trigger prompt.
+  if (isRespawning(target) || fallPending(G, target)) return 0;
   const cast = currentCast();
   // The Mid-Boss in the pit takes the basic swing's own bullets and nothing
   // else: no ability, item, proc, rider, Ricochet bounce or tick reaches it.
@@ -89,6 +90,12 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
 
   const hpBefore = target.hp;
   target.hp -= dmg;
+  // Charged ultimates count it (docs/hero-design.md §2): one that charges on
+  // damage taken (Victor's), on its target; one that charges on damage dealt
+  // (Silver's), on whoever dealt it.
+  chargeUlt(target, 'taken', dmg);
+  const dealer = fx?.source ?? cast?.source;
+  if (dealer && dealer !== target) chargeUlt(dealer, 'dealt', dmg);
 
   const targetName = cardName(target.cardId);
   let effectiveSource = sourceName;
@@ -157,10 +164,14 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   // Kill blow → EXP_ON_KILL to the killer hero (only the hit that drops hp
   // to 0): the highest-value source of exp, so aggression outpaces standing
   // the turn.
+  // A hero that may cancel its own fall (an optional trigger at 'onFall':
+  // Victor's revive) holds the exp back until the fall is decided (`downedBy`,
+  // paid by killInPlace): a fall that never happens pays none.
   if (hpBefore > 0 && target.hp <= 0 && cast && cast.source) {
     const srcData = CARDS_BY_ID[cast.source.cardId];
     if (srcData?.type === 'hero') {
-      grantExp(G, cast.source, EXP_ON_KILL);
+      if (optionalTriggers(target, 'onFall').length > 0) target.downedBy = cast.source.iid;
+      else grantExp(G, cast.source, EXP_ON_KILL);
     }
   }
 
@@ -221,4 +232,13 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
     });
   }
   return healed;
+}
+
+/** Count `amount` damage toward `card`'s charged ultimate, when it charges on
+ *  damage `how` ('taken' or 'dealt'): its `tally`, under the ultimate's id,
+ *  which `kitCost` takes off the printed price. */
+function chargeUlt(card: CardInstance, how: 'taken' | 'dealt', amount: number) {
+  const charged = chargedUlt(card);
+  if (!charged || charged.by !== how || amount <= 0) return;
+  (card.tally ??= {})[charged.id] = (card.tally[charged.id] ?? 0) + amount;
 }

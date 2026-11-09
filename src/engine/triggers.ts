@@ -17,11 +17,17 @@
  *    The swing's equipment procs fire inside the damage (the HP is already
  *    off); its passives fire after the damage call returns, with how much got
  *    through. Each is a separate moment, so each asks for its own half.
+ *
+ * Optional triggers ("you may", `optional` on the ability) are found here too
+ * but never run here: they are handed to the trigger prompt system
+ * (prompts.ts), which asks their player whether to use them and pauses the
+ * moment until it is answered. `fireTriggers` says so by returning true.
  */
 import type { CardInstance, GameState, PlayerID } from './types';
 import type { AbilityDef } from '@/abilities';
 import { abilitySources } from './query';
 import { withCast } from './castContext';
+import { offerTriggers, type MomentDetails } from './prompts';
 
 export type Trigger = AbilityDef['trigger'];
 
@@ -43,23 +49,29 @@ interface Firing {
   reaction?: boolean;
   /** Ask only the hero's passives, or only its worn equipment. */
   only?: 'passives' | 'equipment';
+  /** What a prompt opened at this moment carries (a fall that pays nothing). */
+  prompt?: MomentDetails;
 }
 
-/** Run every ability on `bearer` that listens for `trigger`. The Mid-Boss
+/** Run every ability on `bearer` that listens for `trigger`, and ask its
+ *  player about the optional ones it can use (prompts.ts). Returns true when a
+ *  prompt is now owed: the moment's outcome waits on the answer. The Mid-Boss
  *  (owned by nobody) carries none. */
-export function fireTriggers(G: GameState, bearer: CardInstance, trigger: Trigger, firing: Firing = {}): void {
-  if (bearer.ownerId === 'none') return;
+export function fireTriggers(G: GameState, bearer: CardInstance, trigger: Trigger, firing: Firing = {}): boolean {
+  if (bearer.ownerId === 'none') return false;
   const { target, amount, params, reaction } = firing;
   const only = reaction ? 'equipment' : firing.only;
   const ctx = { movingPlayer: firing.movingPlayer ?? bearer.ownerId };
   // abilitySources builds a fresh list, so a proc that detaches its own item
   // (a spent cooldown→draw piece) cannot make this loop skip a sibling.
   for (const { ability, equip } of abilitySources(bearer)) {
-    if (ability.trigger !== trigger) continue;
+    if (ability.trigger !== trigger || ability.optional) continue;
     if (only === 'passives' && equip) continue;
     if (only === 'equipment' && !equip) continue;
     const run = () => ability.run(G, ctx, { source: bearer, target, params: { ...params, equip, amount } });
     if (reaction) withCast(bearer, 'proc', run);
     else run();
   }
+  // The "may"s are asked, not run — never as a reaction inside another effect.
+  return !reaction && only === undefined && offerTriggers(G, bearer, trigger, firing.prompt);
 }

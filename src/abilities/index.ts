@@ -53,7 +53,20 @@ export interface AbilityDef {
     | 'onBearerStepIn'
     // A hero's passive: an enemy hero was knocked out while the bearer stood in
     // its side's Active slot (Drifter's Bloodscent). `target` is the fallen hero.
-    | 'onRivalFall';
+    | 'onRivalFall'
+    // The bearer is falling: its HP has hit 0 and the knockout has not happened
+    // yet. Only an `optional` trigger listens for it (Victor's Shocking
+    // Reanimation): the prompt asks, and a yes may stand the hero back up.
+    | 'onFall';
+  /** A "may": an optional trigger. At its moment (`trigger`) the engine does
+   *  not run it but asks its player whether to (the trigger prompt system,
+   *  engine/prompts.ts), on either player's turn — and only when it can be
+   *  used then: its level, its wait and its souls. A kit ability (a skill or
+   *  an ultimate) costs its `kitCost` and waits its cooldown after, as from
+   *  its button; it cannot be used from the button at all. The card declares
+   *  this and its `run` (the effect, with `source` the hero and `target` the
+   *  hero the moment is about); the asking is the system's. */
+  optional?: true;
   target: TargetFilter;
   prompt?: string;
   /** A hero skill's or passive's display name ("Frost Grenade"), printed on
@@ -2406,12 +2419,14 @@ const eff_ult_shiv: AbilityDef = {
 };
 // Audience Participation: the enemy Active's ultimate, cast at once as
 // Sinclair's own — his souls, his Spirit, aimed as that ultimate aims (`aim`).
-// Nothing to copy (no enemy Active, one with no ultimate, or another Sinclair's)
-// and it cannot be used.
+// Nothing to copy (no enemy Active, one with no ultimate, another Sinclair's,
+// or an ultimate that is an optional trigger: Victor's) and it cannot be used.
 function copiedUlt(G: GameState, pid: PlayerID): AbilityDef | undefined {
   const front = standingActive(G, otherPlayer(pid));
   const id = front ? heroData(front)?.ult : undefined;
-  return id && id !== 'eff_ult_sinclair' ? getAbility(id) : undefined;
+  const copied = id && id !== 'eff_ult_sinclair' ? getAbility(id) : undefined;
+  // An optional trigger (Victor's revive) has no "at once": nothing to cast.
+  return copied?.optional ? undefined : copied;
 }
 const eff_ult_sinclair: AbilityDef = {
   id: 'eff_ult_sinclair', trigger: 'onPlay', target: 'noTarget',

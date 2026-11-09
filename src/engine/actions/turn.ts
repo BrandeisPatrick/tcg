@@ -11,7 +11,7 @@ import { cardName } from '@/cards';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges, tickCooldowns } from '../statusOps';
 import { fallToBoss, resolve } from '../death';
 import {
-  attackPower, findCardOnBoard, heroData, isRespawning, liveBoardCards, otherPlayer, standingBoss,
+  attackPower, fallPending, findCardOnBoard, heroData, isRespawning, liveBoardCards, otherPlayer, standingBoss,
   standingVerdict, structureHp,
 } from '../query';
 import { endsLastRound, ownTurn, pushMultiplier, round, secondMover } from '../rounds';
@@ -126,9 +126,11 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   bossStrikesBack(G, pid);
   // Hero leveling: the lane is where a hero grows. The Active earns more for
   // standing the turn than a bench hero does.
+  // (A hero whose fall waits on a trigger prompt — felled in this End step —
+  // stood no turn.)
   const ps = G.players[pid];
   for (const c of liveBoardCards(ps)) {
-    if (heroData(c)) grantExp(G, c, c === ps.active ? EXP_PER_TURN_ACTIVE : EXP_PER_TURN_BENCH);
+    if (heroData(c) && c.hp > 0) grantExp(G, c, c === ps.active ? EXP_PER_TURN_ACTIVE : EXP_PER_TURN_BENCH);
   }
   // Strip action-denying CC now that this player has spent their turn under
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
@@ -154,7 +156,8 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
 function pushIntoEmptyLane(G: GameState, pid: PlayerID) {
   const rival = otherPlayer(pid);
   const standing = (c: CardInstance) => !isRespawning(c) && c.hp > 0;
-  if (liveBoardCards(G.players[rival]).some(standing)) return;
+  // A rival hero whose fall waits on a trigger prompt has not fallen yet.
+  if (liveBoardCards(G.players[rival]).some((c) => standing(c) || fallPending(G, c))) return;
   const active = G.players[pid].active;
   if (!active || !standing(active)) return;
   const power = attackPower(active).total;

@@ -125,6 +125,7 @@ export function moveTags(snap: Snapshot, name: string, args: unknown[]): string[
   if (G.pendingActive) tags.push('owed:first-active');
   if (G.pendingDiscard) tags.push('owed:discard');
   if (G.pendingPromotion) tags.push('owed:promotion');
+  if (G.triggers?.length) tags.push('owed:trigger');
   if (handOf(G, pid).length) tags.push('hand:holding');
   if (handOf(G, pid).some(isHeroCard)) tags.push('hand:hero');
   if (boardOf(me).some(isMergedRem) || boardOf(me).some((c) => (c.attached ?? []).some(isMergedRem))) tags.push('rem:merged');

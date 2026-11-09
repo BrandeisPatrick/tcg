@@ -263,7 +263,8 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       add('active-not-bench-only', pid, `P${pid}'s living Active is the bench-only hero ${describeUnit(ps.active)}`);
     }
     const open = !ps.active || isRespawning(ps.active);
-    if (open && !over) {
+    // (A trigger prompt owed comes first: the promotion waits for its answer.)
+    if (open && !over && !G.triggers?.length) {
       const candidates = stepInCandidates(ps).length;
       if (candidates > 0) {
         const owes = G.pendingPromotion === pid;
@@ -369,7 +370,9 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       if (c.statuses.length > 0) add('corpse-state', `${c.iid}-status`, `corpse carries statuses: ${label}`);
     } else {
       if (c.respawnTurnsLeft != null && c.respawnTurnsLeft !== 0) add('corpse-state', `${c.iid}-timer`, `living hero has respawnTurnsLeft ${c.respawnTurnsLeft}: ${label}`);
-      if (c.hp <= 0 && !over) add('living-hero-zero-hp', c.iid, `living hero with hp ${c.hp} was not reaped: ${label}`);
+      // (A hero whose fall waits on a trigger prompt is at 0 HP until it is answered.)
+      const asked = !!G.triggers?.some((t) => t.moment === 'onFall' && t.subjectIid === c.iid);
+      if (c.hp <= 0 && !over && !asked) add('living-hero-zero-hp', c.iid, `living hero with hp ${c.hp} was not reaped: ${label}`);
     }
     const seenIds = new Set<string>();
     for (const s of c.statuses) {
@@ -490,8 +493,12 @@ function fallsDuring(before: GameState, after: GameState, pid: PlayerID, fresh: 
     for (const e of fresh) { const iid = pred(e); if (iid) m.set(iid, (m.get(iid) ?? 0) + 1); }
     return m;
   };
-  const revives = count((e) => (e.kind === 'revive' ? e.iid : undefined));
+  // (A trigger that cancels a fall — Shocking Reanimation — is no fall at all: `cancelled`.)
+  const revives = count((e) => (e.kind === 'revive' && !e.cancelled ? e.iid : undefined));
   const bossBlows = count((e) => (e.kind === 'hit' && e.ko && !!bossIid && e.source?.iid === bossIid ? e.iid : undefined));
+  // A fall that waited on a trigger prompt carries whether it pays (the Mid-Boss's blow came
+  // in an earlier move): passed, it goes ahead as it would have.
+  for (const t of before.triggers ?? []) if (t.unpaid) bossBlows.set(t.subjectIid, (bossBlows.get(t.subjectIid) ?? 0) + 1);
   const now = heroesByIid(after.players[pid]);
   const backInHand = new Map(handOf(after, pid).filter(isHeroCard).map((h) => [h.iid, h]));
   const out: Fall[] = [];
@@ -713,16 +720,24 @@ export function collectTransitionViolations(
   }
 
   // The Act: once the turn's attack is made, nothing but ending the turn (and an
-  // owed promotion, and the board's reveal bookkeeping) is accepted.
-  if (before.G.attackUsed && !['endTurn', 'promoteToActive', 'completeAction'].includes(move.name)) {
+  // owed promotion or trigger prompt, and the board's reveal bookkeeping) is accepted.
+  if (before.G.attackUsed && !['endTurn', 'promoteToActive', 'completeAction', 'useTrigger', 'passTrigger'].includes(move.name)) {
     add('act-over', move.name, `${move.name} was accepted after the turn's attack had ended the Act`);
   }
   // A choice owed comes first: while it is, nothing else is accepted.
   if (B.pendingActive !== undefined && !['chooseActive', 'completeAction'].includes(move.name)) {
     add('choice-owed', move.name, `${move.name} was accepted while P${B.pendingActive}'s first Active was owed`);
   }
-  if (B.pendingDiscard !== undefined && !['discard', 'promoteToActive', 'completeAction'].includes(move.name)) {
+  if (B.pendingDiscard !== undefined && !['discard', 'promoteToActive', 'completeAction', 'useTrigger', 'passTrigger'].includes(move.name)) {
     add('choice-owed', move.name, `${move.name} was accepted while P${B.pendingDiscard.pid} owed a discard`);
+  }
+  // A trigger prompt owed (engine/prompts.ts) is answered before anything else.
+  const asked = B.triggers?.[B.triggers.length - 1];
+  if (asked && !['useTrigger', 'passTrigger', 'completeAction'].includes(move.name)) {
+    add('choice-owed', move.name, `${move.name} was accepted while P${asked.pid} owed an answer to a trigger prompt`);
+  }
+  if (!asked && (move.name === 'useTrigger' || move.name === 'passTrigger')) {
+    add('choice-owed', move.name, `${move.name} was accepted with no trigger prompt owed`);
   }
   // One Retreat a turn.
   if (move.name === 'moveHero' && before.G.retreatUsed) {
@@ -762,12 +777,20 @@ export function collectTransitionViolations(
       const hero = heroesByIid(B.players[mover]).get(args[0] as string);
       if (hero) cost = kitSoulsOracle(hero, typeof args[2] === 'string' ? (args[2] as string) : undefined);
     }
+    // A trigger used is paid by the seat it was offered to, on either seat's turn: its kit price.
+    let foeCost = 0;
+    if (move.name === 'useTrigger' && asked && typeof args[0] === 'string') {
+      const hero = heroesByIid(B.players[asked.pid]).get(args[0] as string);
+      const price = hero ? kitSoulsOracle(hero, typeof args[1] === 'string' ? (args[1] as string) : undefined) : 0;
+      if (asked.pid === mover) cost = price;
+      else foeCost = price;
+    }
     const wantMover = B.players[mover].souls - cost + payout;
     if (after.G.players[mover].souls !== wantMover) {
       add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost} and payout ${payout} give ${wantMover}`);
     }
-    if (after.G.players[foe].souls !== B.players[foe].souls) {
-      add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; nothing pays the rival`);
+    if (after.G.players[foe].souls !== B.players[foe].souls - foeCost) {
+      add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; ${foeCost ? `its trigger costs ${foeCost}` : 'nothing pays the rival'}`);
     }
   }
 
@@ -1000,6 +1023,8 @@ export function collectTransitionViolations(
     const usedSkill = move.name === 'useSkill' && typeof args[0] === 'string'
       ? `${args[0]}|${typeof args[2] === 'string' ? args[2] : firstSkillId(heroes0.get(args[0] as string))}` : undefined;
     const usedItem = move.name === 'activate' ? wornItemOf(B, mover, args[0]) : undefined;
+    // A trigger used arms its own cooldown, as from its button.
+    const usedTrigger = move.name === 'useTrigger' && typeof args[0] === 'string' ? `${args[0]}|${args[1]}` : undefined;
     const refreshed = new Set<string>();
     if (usedItem?.item.cardId === 'refresher') {
       const active = B.players[mover].active;
@@ -1018,7 +1043,7 @@ export function collectTransitionViolations(
         const v1 = now.get(key);
         let want: number | undefined | 'any' = v0;
         if (started === pid) want = v0 === undefined || v0 - 1 <= 0 ? undefined : v0 - 1;
-        else if (key === usedSkill || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';
+        else if (key === usedSkill || key === usedTrigger || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';
         else if (refreshed.has(owner) && v1 === undefined) want = undefined;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);
       }

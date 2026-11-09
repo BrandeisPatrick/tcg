@@ -21,8 +21,8 @@ import { getAbility } from './registry';
 import { ULT_UNLOCK_LEVEL } from './constants';
 import {
   abilityAim, attackPower, findCardOnBoard, findWornItem, handCard, hasReach, heroesOf, heroRetreat, isBlocked, isRespawning,
-  isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, laneOpen, liveBoardCards, otherPlayer, resolveSkill, retreatDiscount,
-  slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, wornActives, wornItems,
+  isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, laneOpen, liveBoardCards, optionalTriggers, otherPlayer, promptOwed,
+  resolveSkill, retreatDiscount, slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, triggerPrice, wornActives, wornItems,
 } from './query';
 import { seatToMove } from './rounds';
 
@@ -117,7 +117,7 @@ export function attackBlocked(G: GameState, pid: PlayerID, targetIid?: string): 
 
 // ---------- Hero abilities: skills and ultimates ----------
 
-export type SkillBlock = 'noSkill' | 'actOver' | 'down' | 'locked' | 'used' | 'status' | 'cooldown' | 'souls' | 'hp' | 'target';
+export type SkillBlock = 'noSkill' | 'trigger' | 'actOver' | 'down' | 'locked' | 'used' | 'status' | 'cooldown' | 'souls' | 'hp' | 'target';
 
 /** What one of a hero's kit abilities may be aimed at (`skillId` names it —
  *  its skill or its ultimate; left out, the hero's first skill): the live
@@ -144,6 +144,9 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
  * the ability off cooldown, the souls it costs (`kitCost`) in hand and a legal
  * target. Whose turn it is, is the caller's question. Checked in this order:
  *  - 'noSkill'  the hero has no such ability.
+ *  - 'trigger'  it is an optional trigger ("When Victor falls, you may use
+ *               this"): it is used at its moment, through the trigger prompt
+ *               (`triggerBlocked`), never from its button.
  *  - 'actOver'  the turn's attack has been made: it ends the Act.
  *  - 'down'     it is a corpse on the respawn timer.
  *  - 'locked'   it is the hero's ultimate and the hero is below ULT_UNLOCK_LEVEL.
@@ -162,6 +165,7 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
 export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, targetIid?: string, skillId?: AbilityId): SkillBlock | null {
   const skill = resolveSkill(hero, skillId);
   if (!skill) return 'noSkill';
+  if (skill.ability.optional) return 'trigger';
   if (G.attackUsed) return 'actOver';
   if (isRespawning(hero)) return 'down';
   if (skill.kind === 'ult' && (hero.level ?? 1) < ULT_UNLOCK_LEVEL) return 'locked';
@@ -174,6 +178,47 @@ export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, ta
   if (targets === 'none') return null;
   if (targetIid === undefined) return targets.length > 0 ? null : 'target';
   return targets.some((t) => t.iid === targetIid) ? null : 'target';
+}
+
+// ---------- Optional triggers (the trigger prompt, engine/prompts.ts) ----------
+
+export type TriggerBlock = 'notOwed' | 'noOffer' | 'noHero' | 'noTrigger' | 'locked' | 'cooldown' | 'souls';
+
+/**
+ * Why `hero`'s optional trigger `abilityId` cannot be used now by `pid`, or
+ * null when it can — the tests of docs/hero-design.md §6, and only those: it
+ * is one of the hero's optional triggers, at the right level (an ultimate's
+ * ULT_UNLOCK_LEVEL), not waiting (its cooldown), and `pid` has the souls it
+ * costs (`triggerPrice`). A trigger is no turn's ability, so whose turn it is,
+ * the Act, the hero's one ability of the turn and its statuses do not enter
+ * into it. The prompt system asks this to decide whether to ask at all, and
+ * the answer is checked against it again. Checked in this order:
+ *  - 'noTrigger' the hero declares no optional trigger with that id.
+ *  - 'locked'    an ultimate, and the hero is below ULT_UNLOCK_LEVEL.
+ *  - 'cooldown'  it is still waiting (`hero.cooldowns`).
+ *  - 'souls'     `pid` has fewer souls than it costs.
+ */
+export function triggerBlocked(G: GameState, pid: PlayerID, hero: CardInstance, abilityId: AbilityId): TriggerBlock | null {
+  if (!optionalTriggers(hero).some((a) => a.id === abilityId)) return 'noTrigger';
+  if (resolveSkill(hero, abilityId)?.kind === 'ult' && (hero.level ?? 1) < ULT_UNLOCK_LEVEL) return 'locked';
+  if ((hero.cooldowns?.[abilityId] ?? 0) > 0) return 'cooldown';
+  if (G.players[pid].souls < triggerPrice(hero, abilityId)) return 'souls';
+  return null;
+}
+
+/** Why an answer to the trigger prompt cannot be given now, or null when it
+ *  can: a prompt is owed (`G.triggers`, the last asked); a pass is always an
+ *  answer; a use names one of its offers, which its player can still use
+ *  (`triggerBlocked`). Whose prompt it is comes from the prompt, so either
+ *  seat may give the answer, as with a promotion. */
+export function answerBlocked(G: GameState, a: { type: 'passTrigger' } | { type: 'useTrigger'; heroIid: string; abilityId: AbilityId }): TriggerBlock | null {
+  const owed = promptOwed(G);
+  if (!owed) return 'notOwed';
+  if (a.type === 'passTrigger') return null;
+  if (!owed.offers.some((o) => o.heroIid === a.heroIid && o.abilityId === a.abilityId)) return 'noOffer';
+  const hero = findCardOnBoard(G, a.heroIid)?.card;
+  if (!hero) return 'noHero';
+  return triggerBlocked(G, owed.pid, hero, a.abilityId);
 }
 
 // ---------- Active items ----------
@@ -471,7 +516,9 @@ export function draftPickBlocked(G: GameState, pid: PlayerID, heroId: string): D
  *
  * Owed choices come first, in this order, and while one is owed it is the only
  * legal action: the opening's first Active (`G.pendingActive`: `chooseActive`
- * for that seat's hand, made from either seat); a promotion (`G.pendingPromotion`:
+ * for that seat's hand, made from either seat); a trigger prompt (`G.triggers`:
+ * `useTrigger` one of its offers or `passTrigger`, made from either seat, on
+ * either player's turn); a promotion (`G.pendingPromotion`:
  * a seat's Active has fallen and a bench hero can step up — for that seat's
  * bench, made from either seat), so nothing, the end of the turn included,
  * happens around a corpse in the lane; a draw card's discard
@@ -483,6 +530,9 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   if (!G.players[pid]) return 'noPlayer';
   if (G.pendingActive) return a.type === 'chooseActive' ? chooseActiveBlocked(G, a.cardIid) : 'activeOwed';
   if (a.type === 'chooseActive') return chooseActiveBlocked(G, a.cardIid);
+  // A trigger prompt owed (prompts.ts) is answered before anything else, from either seat.
+  if (promptOwed(G)) return a.type === 'useTrigger' || a.type === 'passTrigger' ? answerBlocked(G, a) : 'triggerOwed';
+  if (a.type === 'useTrigger' || a.type === 'passTrigger') return 'notOwed';
   if (G.pendingPromotion) {
     if (a.type !== 'promoteToActive') return 'promotionOwed';
     const owed = G.players[G.pendingPromotion].bench.some((b) => b != null && b.iid === a.benchIid);
@@ -526,7 +576,8 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
 /**
  * Every action `pid` could make right now. While a choice is owed, that
  * choice alone: the opening's first Active (each hero in the owing seat's
- * hand that may stand there), a promotion (either seat's: `pid` may promote
+ * hand that may stand there), a trigger prompt (each offer, then the pass,
+ * from either seat), a promotion (either seat's: `pid` may promote
  * the seat that owes one), or a draw card's discard (each card of the hand,
  * one at a time — a `discard` move may name several at once, up to what is
  * owed). Otherwise: the Active's attack, if open — once per
@@ -551,6 +602,13 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
 
   if (G.pendingActive) {
     for (const c of G.players[G.pendingActive].hand) offer({ type: 'chooseActive', cardIid: c.iid });
+    return out;
+  }
+  // A trigger prompt owed: its offers, then the pass — from either seat.
+  const prompt = promptOwed(G);
+  if (prompt) {
+    for (const o of prompt.offers) offer({ type: 'useTrigger', heroIid: o.heroIid, abilityId: o.abilityId });
+    offer({ type: 'passTrigger' });
     return out;
   }
   if (G.pendingDiscard) {

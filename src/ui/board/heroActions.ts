@@ -25,6 +25,7 @@ import {
   resolveSkill, slotCap, wornActives,
 } from '@/engine/query';
 import type { Action } from '@/engine/engine';
+import type { AbilityDef } from '@/abilities';
 import type { AttackPlan } from '@/engine/forecast';
 
 /** "1 soul", "2 souls". */
@@ -52,6 +53,7 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       if (!lastKind) return `Used ${cardName(last)} this turn`;
       return skill.kind === 'skill' ? 'Used its other skill this turn' : 'Used its skill this turn';
     }
+    case 'trigger': return triggerMomentLine(hero, skill?.ability);
     case 'actOver': return ACT_OVER;
     case 'locked': return `Unlocks at Level ${ULT_UNLOCK_LEVEL}`;
     case 'status': return 'Cannot use abilities (status)';
@@ -67,6 +69,17 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
     case 'target': return 'No valid target';
     case 'down': return 'Down until it respawns';
     case 'noSkill': return '';
+  }
+}
+
+/** When an optional trigger is asked (engine/prompts.ts): the line its plate
+ *  prints in place of a button, since it is never used from one ("Asked when
+ *  Victor falls"). */
+export function triggerMomentLine(hero?: CardInstance, ability?: AbilityDef): string {
+  const name = hero ? nameOf(hero) : 'the hero';
+  switch (ability?.trigger) {
+    case 'onFall': return `Asked when ${name} falls`;
+    default: return 'Asked when it can be used';
   }
 }
 

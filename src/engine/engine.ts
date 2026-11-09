@@ -18,6 +18,7 @@ import { activate } from './actions/activate';
 import { useSkill } from './actions/useSkill';
 import { moveHero, promoteToActive } from './actions/board';
 import { chooseActive, discard, placeHero, playCard } from './actions/hand';
+import { answerTrigger } from './prompts';
 
 /** What `perform` returns for an action that is not allowed (the adapter maps
  *  it to boardgame.io's INVALID_MOVE). */
@@ -36,6 +37,8 @@ export type Action =
   // Owed choices, made from either seat.
   | { type: 'chooseActive'; cardIid: string }               // the opening: a hero from the hand into the lane
   | { type: 'promoteToActive'; benchIid: string }
+  | { type: 'useTrigger'; heroIid: string; abilityId: AbilityId }   // a trigger prompt's yes: this one of its offers
+  | { type: 'passTrigger' }                                           // a trigger prompt's no
   | { type: 'endTurn' };                         // validity only; the adapter calls events.endTurn()
 
 /** Make `a` as `pid`: INVALID if legality says no (and nothing is touched),
@@ -53,6 +56,8 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
     case 'activate': return activate(G, pid, a.itemIid, a.targetIid);
     case 'moveHero': return moveHero(G, pid, a.fromSlot, a.toSlot);
     case 'promoteToActive': return promoteToActive(G, a.benchIid);
+    case 'useTrigger': return answerTrigger(G, { heroIid: a.heroIid, abilityId: a.abilityId });
+    case 'passTrigger': return answerTrigger(G);
     case 'endTurn': return; // the adapter ends the turn
   }
 }

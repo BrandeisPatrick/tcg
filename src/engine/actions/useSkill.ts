@@ -10,7 +10,7 @@
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { abilityAim, cooldownCut, findCardOnBoard, kitCost, resolveSkill, ultimateCard } from '../query';
+import { abilityAim, chargedUlt, cooldownCut, findCardOnBoard, kitCost, resolveSkill, ultimateCard } from '../query';
 import { SKILL_COOLDOWN, ULT_COOLDOWN } from '../constants';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
@@ -45,7 +45,6 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   pushLog(G, ult
     ? `P${pid} used ultimate: ${cardName(faceId)} (${heroName})${on}${paid}.`
     : `P${pid} used skill: ${heroName}${on}${paid}.`);
-  G.players[pid].souls -= souls;
 
   // HP the ability costs comes straight off the caster: through no Shield or
   // resist, setting off no trigger, and `skillBlocked` has seen to it that the
@@ -56,13 +55,10 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   }
 
   // Spent for the turn before it runs: the hero's one ability, remembered for
-  // Echo Shard and the hero sheet. A skill and an ultimate go on their
-  // cooldowns (an ultimate's cut by what the hero wears, never under 1).
+  // Echo Shard and the hero sheet; paid for, and on its cooldown.
   hero.skillUsedThisTurn = true;
   hero.lastSkillUsed = abilityId;
-  (hero.cooldowns ??= {})[abilityId] = ult
-    ? Math.max(1, ULT_COOLDOWN - cooldownCut(hero, 'ult'))
-    : ability.cooldown ?? SKILL_COOLDOWN;
+  payKit(G, pid, hero, abilityId);
 
   // Cast context: equipment triggers (Mystic Burst, Mystic Vulnerability,
   // Suppressor, Mystic Reverb) read this to know "bearer's skill damaged X".
@@ -84,4 +80,23 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
     state: 'begin',
     abilityId,
   };
+}
+
+/**
+ * Pay for `hero`'s kit ability `abilityId` as it is used — from its button
+ * (`useSkill`) or as an optional trigger (engine/prompts.ts): its souls
+ * (`kitCost`) come off `pid`'s, it goes on its cooldown (a skill its own, or
+ * SKILL_COOLDOWN; an ultimate ULT_COOLDOWN less what the hero wears takes
+ * off, never under 1), and a charged ultimate's count starts over. Returns
+ * the souls paid. The one place a kit ability is paid for.
+ */
+export function payKit(G: GameState, pid: PlayerID, hero: CardInstance, abilityId: AbilityId): number {
+  const skill = resolveSkill(hero, abilityId);
+  const souls = kitCost(hero, abilityId);
+  G.players[pid].souls -= souls;
+  (hero.cooldowns ??= {})[abilityId] = skill?.kind === 'ult'
+    ? Math.max(1, ULT_COOLDOWN - cooldownCut(hero, 'ult'))
+    : skill?.ability.cooldown ?? SKILL_COOLDOWN;
+  if (chargedUlt(hero)?.id === abilityId && hero.tally?.[abilityId]) hero.tally[abilityId] = 0;
+  return souls;
 }

@@ -11,9 +11,11 @@ import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
 import {
-  isRespawning, killPush, laneOpen, otherPlayer, respawnTimer, reviveReady, stepInCandidates,
+  fallPending, findCardOnBoard, isRespawning, killPush, laneOpen, otherPlayer, promptOwed, respawnTimer, reviveReady, stepInCandidates,
 } from './query';
 import { fireTriggers } from './triggers';
+import { grantExp } from './expSystem';
+import { EXP_ON_KILL } from './constants';
 import { leaveActive } from './lane';
 import { awardSouls } from './souls';
 import { pushStructures, reapBoss } from './map';
@@ -35,8 +37,9 @@ export { awardSouls };
  * statuses, turn flags) resets. `tickRespawn` sends it to the hand when the
  * wait is over.
  */
-function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, opts: { unpaid?: boolean } = {}) {
+export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, opts: { unpaid?: boolean } = {}) {
   pushLog(G, `${cardName(hero.cardId)} fell.`);
+  payHeldExp(G, hero);
   const oppId: PlayerID = otherPlayer(ps.id);
   if (!opts.unpaid) {
     // The push: the victim's level plus one (doubled in the late game) into
@@ -87,12 +90,33 @@ function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, opts: { 
   pushLog(G, `${cardName(hero.cardId)} goes back to the hand in ${timer} turn${timer === 1 ? '' : 's'}.`);
 }
 
+/** The kill exp a hero that may cancel its own fall held back (`downedBy`,
+ *  damageUnit), paid now that the fall goes ahead: to the hero whose blow it
+ *  was, if it still stands. */
+function payHeldExp(G: GameState, hero: CardInstance) {
+  const killerIid = hero.downedBy;
+  if (killerIid === undefined) return;
+  hero.downedBy = undefined;
+  const killer = findCardOnBoard(G, killerIid)?.card;
+  if (killer && killer !== hero && killer.hp > 0 && !isRespawning(killer)) grantExp(G, killer, EXP_ON_KILL);
+}
+
+/** The moment `hero` of `ps` falls (its HP at 0). The optional triggers its
+ *  player can use at it are asked first (`fireTriggers` → prompts.ts): then
+ *  the fall waits on the answer, the hero at 0 HP where it stood, and the
+ *  answer settles it. With nothing to ask, it falls now (`killInPlace`). */
+function fall(G: GameState, ps: PlayerState, hero: CardInstance, opts: { unpaid?: boolean } = {}) {
+  if (fireTriggers(G, hero, 'onFall', { movingPlayer: ps.id, prompt: opts.unpaid ? { unpaid: true } : {} })) return;
+  killInPlace(G, ps, hero, opts);
+}
+
 /** `hero` of `ps` has fallen to the Mid-Boss's blow (`hp` 0, the End step):
- *  it falls as any hero does — the Rejuvenator still revives it — but the
- *  boss pays no bounty and pushes nothing. */
+ *  it falls as any hero does — a trigger may still answer its fall, the
+ *  Rejuvenator still revives it — but the boss pays no bounty and pushes
+ *  nothing. */
 export function fallToBoss(G: GameState, ps: PlayerState, hero: CardInstance) {
-  if (hero.hp > 0 || hero.respawnTurnsLeft != null) return;
-  killInPlace(G, ps, hero, { unpaid: true });
+  if (hero.hp > 0 || hero.respawnTurnsLeft != null || fallPending(G, hero)) return;
+  fall(G, ps, hero, { unpaid: true });
 }
 
 /**
@@ -135,12 +159,13 @@ export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInst
  * (`resolve` then promotes a bench hero into a fallen Active's slot.)
  */
 export function reapDead(G: GameState, ps: PlayerState) {
-  if (ps.active && ps.active.hp <= 0 && ps.active.respawnTurnsLeft == null) {
-    killInPlace(G, ps, ps.active);
+  // A hero whose fall waits on a trigger prompt is left where it is.
+  if (ps.active && ps.active.hp <= 0 && ps.active.respawnTurnsLeft == null && !fallPending(G, ps.active)) {
+    fall(G, ps, ps.active);
   }
   for (const b of ps.bench) {
-    if (b && b.hp <= 0 && b.respawnTurnsLeft == null) {
-      killInPlace(G, ps, b);
+    if (b && b.hp <= 0 && b.respawnTurnsLeft == null && !fallPending(G, b)) {
+      fall(G, ps, b);
     }
   }
 }
@@ -159,7 +184,9 @@ function needsPromotion(ps: PlayerState): boolean {
  * step or leave a half-resolved board:
  *
  *   1. Reap dead heroes (both players) — the bounty and the push, then a
- *      revive or the respawn timer — and a Mid-Boss at 0 HP (map.ts).
+ *      revive or the respawn timer — and a Mid-Boss at 0 HP (map.ts). A
+ *      hero's fall may first be asked about (a trigger prompt): then it
+ *      waits, and while a prompt is owed the pass stops here.
  *   2. Forced promotions — every seat the AI plays (all but `G.humanSeat`)
  *      auto-promotes its strongest bench hero immediately; the human seat is
  *      surfaced via `pendingPromotion` for the UI (human modal) or the
@@ -173,6 +200,9 @@ export function resolve(G: GameState) {
   reapDead(G, G.players['0']);
   reapDead(G, G.players['1']);
   reapBoss(G);
+  // A trigger prompt owed comes first: the promotions wait for its answer,
+  // which runs this pass again (prompts.ts).
+  if (promptOwed(G)) { G.pendingPromotion = undefined; return; }
   const human = G.humanSeat === undefined ? '0' : G.humanSeat;
   for (const pid of ['0', '1'] as PlayerID[]) if (pid !== human) autoPromoteAi(G, G.players[pid]);
   G.pendingPromotion = human !== null && needsPromotion(G.players[human]) ? human : undefined;
