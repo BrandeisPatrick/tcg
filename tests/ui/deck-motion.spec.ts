@@ -8,16 +8,18 @@
  * until the card leaves or lands.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DeckFx, FxEvent, GameState } from '@/engine/types';
+import type { DeckFx, FxEvent, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { upgradesOf } from '@/cards/decks';
 import { openDraftedMatch } from '@/engine/actions/setup';
 import { discardFromHand, heroToHand } from '@/engine/deck';
 import { OPENING_HAND } from '@/engine/constants';
 import {
-  DECK_MOTION as T, EMPTY_PLAN, arrivingIids, deckEvents, locate, planDeckMotion, PileTicker,
+  DECK_MOTION as T, EMPTY_PLAN, admitBatch, arrivingIids, deckEvents, locate, planDeckMotion, PileTicker,
 } from '@/ui/motion';
+import { freshBatch } from '@/ui/effects/fx/fxTimeline';
 import { TEST_ROSTERS, freshReadyGame, playNew, stackDeck, useItem } from '../engine/_helpers';
+import { playGame } from '../engine/fuzz/driver';
 
 const snapshot = (G: GameState): GameState => structuredClone(G);
 const ofKind = (plan: ReturnType<typeof planDeckMotion>, what: DeckFx['what']) => plan.flights.filter((f) => f.what === what);
@@ -281,5 +283,85 @@ describe('pile ticker', () => {
     off();
     vi.advanceTimersByTime(20);
     expect(n).toBe(1);
+  });
+});
+
+describe('the layer puts each batch up once', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+  const ownerOf = (pid: PlayerID): 'you' | 'rival' => (pid === '0' ? 'you' : 'rival');
+
+  // The board shows only the draft until the last pick, so the layer mounts on
+  // the render the opening's batch arrives, and React's StrictMode runs a
+  // mount's effects twice in development. Put up twice, the opening's flights
+  // and riffles were in the air twice under one key ("Encountered two children
+  // with the same key") and each deck held every card dealt twice.
+  it('the opening, put up again for the same batch (StrictMode replaying the mount), flies once and ticks each deck once', () => {
+    const G = freshReadyGame();
+    const before = snapshot(G);
+    before.draft = { pool: [], order: [], currentIndex: 8, picks: { '0': [], '1': [] } };
+    G.fx = [];
+    openDraftedMatch(G, { '0': TEST_ROSTERS['0'].slice(0, 4), '1': TEST_ROSTERS['1'].slice(0, 4) });
+    const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
+    const planKey = Math.max(...G.fx.map((e) => e.seq));
+    const ticker = new PileTicker();
+    const last = { current: 0 };
+    const up: string[] = [];
+    for (let run = 0; run < 2; run++) {
+      if (admitBatch(last, planKey, plan, ticker, ownerOf)) up.push(...plan.flights.map((f) => f.key));
+    }
+    expect(up).toEqual(plan.flights.map((f) => f.key));
+    for (const pid of ['0', '1'] as const) {
+      const dealt = ofKind(plan, 'draw').filter((f) => f.pid === pid).length;
+      expect(dealt).toBeGreaterThan(0);
+      // The deck reads one more for each card still to leave it, once.
+      expect(ticker.pendingFor(`deck-${ownerOf(pid)}`)).toBe(-dealt);
+    }
+    vi.runAllTimers();
+    expect(ticker.pendingFor('deck-you')).toBe(0);
+    expect(ticker.pendingFor('deck-rival')).toBe(0);
+  });
+
+  it('the next batch goes up; no batch (key 0) and an empty plan never do', () => {
+    const G = freshReadyGame();
+    const draw = (seq: number): FxEvent[] => [{ kind: 'deck', seq, what: 'draw', pid: '0', iid: `c${seq}`, cardId: 'headshot_booster' }];
+    const ticker = new PileTicker();
+    const last = { current: 0 };
+    const first = planDeckMotion(draw(1), { me: '0', before: G, after: G });
+    expect(admitBatch(last, 0, first, ticker, ownerOf)).toBe(false);
+    expect(admitBatch(last, 1, EMPTY_PLAN, ticker, ownerOf)).toBe(false);
+    expect(admitBatch(last, 1, first, ticker, ownerOf)).toBe(true);
+    expect(admitBatch(last, 1, first, ticker, ownerOf)).toBe(false);
+    expect(admitBatch(last, 2, planDeckMotion(draw(2), { me: '0', before: G, after: G }), ticker, ownerOf)).toBe(true);
+    expect(ticker.pendingFor('deck-you')).toBe(-2);
+  });
+
+  // A flight's key is its event's seq: Board's batches never share an event,
+  // through a drafted match with Victor's trigger prompt (answered from the
+  // respond stage) and Silver's Wolf form.
+  it('across a drafted match the AI plays to its end, with Victor and Silver, no card is planned to fly twice', () => {
+    let seen = 0;
+    let openings = 0;
+    let asked = 0;
+    const keys: string[] = [];
+    playGame({
+      seed: 8,
+      policies: { '0': 'heuristic', '1': 'heuristic' },
+      prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
+      afterMove: (before, after, move, accepted) => {
+        if (accepted && (move.name === 'useTrigger' || move.name === 'passTrigger')) asked++;
+        const fx = after.G.fx ?? [];
+        const fresh = freshBatch(fx, seen);
+        seen = Math.max(seen, ...fx.map((e) => e.seq));
+        if (fresh.length === 0) return;
+        const plan = planDeckMotion(fresh, { me: '0', before: before.G, after: after.G });
+        if (plan.opening) openings++;
+        keys.push(...plan.flights.map((f) => f.key));
+      },
+    });
+    expect(asked).toBeGreaterThan(0);
+    expect(openings).toBe(1);
+    expect(keys.length).toBeGreaterThan(20);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

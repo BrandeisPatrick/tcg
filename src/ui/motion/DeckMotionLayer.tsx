@@ -25,6 +25,7 @@ import { restRect, type Rect } from '../effects/fx/geometry';
 import { useViewport } from '../hooks/useViewport';
 import type { Anchor, DeckMotionPlan, Face, Flight, Riffle } from './deckMotionPlan';
 import type { PileTicker } from './pileTicker';
+import { admitBatch } from './admitBatch';
 
 const Z = 90;
 /** An upgrade or a drafted hero shown over the table: the hand card's size, times this. */
@@ -89,6 +90,8 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, ticker 
   const plates = useRef(new Map<string, HTMLDivElement>());
   /** The real cards kept out of sight, by the flight hiding them. */
   const hidden = useRef(new Map<string, HTMLElement>());
+  /** The batch last put up (admitBatch). */
+  const admitted = useRef(0);
   const ownerOf = (pid: PlayerID): Owner => (pid === me ? 'you' : 'rival');
 
   /** The hand card a flight hides: yours by Board's registry, the rival's
@@ -147,13 +150,12 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, ticker 
     }
   };
 
-  // A new batch: schedule the piles' ticks, measure where every flight
-  // starts (now, while a card leaving the hand is still in it), hide the real
-  // cards the flights stand in for, and put the ghosts up.
+  // A new batch, once (admitBatch, which schedules the piles' ticks): measure
+  // where every flight starts (now, while a card leaving the hand is still in
+  // it), hide the real cards the flights stand in for, and put the ghosts up.
   useLayoutEffect(() => {
-    if (planKey === 0 || (plan.flights.length === 0 && plan.riffles.length === 0 && plan.ticks.length === 0)) return;
+    if (!admitBatch(admitted, planKey, plan, ticker, ownerOf)) return;
     const t0 = performance.now();
-    ticker.schedule(plan.ticks, ownerOf);
     const fresh: Live[] = [];
     for (const f of plan.flights) {
       const thumb = isMobile && f.pid === me && (f.to.kind === 'hand' || f.from.kind === 'hand');
@@ -185,9 +187,12 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, ticker 
         const box = boxes.current.get(lf.f.key);
         const plate = plates.current.get(lf.f.key);
         const t = now - lf.t0 - lf.f.at;
+        // The real card stays out of sight from the batch's arrival until the
+        // flight lands: hidden again here if it showed up late, or was shown
+        // (StrictMode's development remount runs the leaving cleanup below).
+        if (lf.f.hide) hide(lf.f.key, lf.f.hide);
         if (!box || !plate) continue;
         if (t < 0) { box.style.visibility = 'hidden'; continue; }
-        if (lf.f.hide) hide(lf.f.key, lf.f.hide);
         box.style.visibility = 'visible';
         let rect: Rect;
         let angle = faceAngle(lf.f.faces.start);

@@ -111,6 +111,8 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
   events (never state diffs): `planDeckMotion` turns a batch into flights,
   pile ticks and riffles (pure, tested in `tests/ui/deck-motion.spec.ts`);
   `DeckMotionLayer` flies the real card art over the table (your draws turn
-  face up, the rival's stay backs); `useTickedCount` makes the piles' counts
+  face up, the rival's stay backs), each batch once (`admitBatch`: the layer
+  mounts on the opening's batch, and StrictMode replays a mount's effects in
+  development); `useTickedCount` makes the piles' counts
   tick as cards leave and land. The first-Active prompt waits for the opening
   to play. Under reduced motion nothing flies and everything just updates.
