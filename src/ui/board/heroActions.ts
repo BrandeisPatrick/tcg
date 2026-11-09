@@ -22,7 +22,7 @@ import {
 } from '@/engine/legality';
 import {
   findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, otherPlayer,
-  resolveSkill, slotCap, wornActives,
+  resolveSkill, slotCap, slottedHeroes, wornActives,
 } from '@/engine/query';
 import type { Action } from '@/engine/engine';
 import type { AbilityDef } from '@/abilities';
@@ -205,6 +205,21 @@ export function moveBlockReason(block: MoveBlock, cost?: number): string {
     case 'souls': return cost === undefined ? 'Not enough souls' : `Need ${souls(cost)}`;
     case 'illegal': return 'Not a place on the board';
   }
+}
+
+/** The ride that has just left `pid`'s lane empty, or undefined: a hero riding
+ *  on an ally that rode out of the lane (`slot` 0 — Rem's Tag Along from the
+ *  Active slot), by the skill its side has just used (`G.action`). The
+ *  promotion it owes is the one a fallen Active owes; the sheet says it as a
+ *  ride. */
+export function laneRide(G: GameState, pid: PlayerID): { rider: CardInstance; bearer: CardInstance } | undefined {
+  const act = G.action;
+  if (!act || act.kind !== 'skill' || act.by !== pid || G.players[pid].active) return undefined;
+  for (const bearer of slottedHeroes(G.players[pid])) {
+    const rider = (bearer.attached ?? []).find((a) => a.remMergeTurnsLeft != null && a.slot === 0 && a.cardId === act.cardId);
+    if (rider) return { rider, bearer };
+  }
+  return undefined;
 }
 
 /** The line printed on a promotion the engine will not make. */

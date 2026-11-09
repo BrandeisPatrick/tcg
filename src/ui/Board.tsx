@@ -34,7 +34,7 @@ import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
 import type { TurnPhase } from './board/TurnCompass';
 import {
-  DISCARD_FIRST, actionRefusal, activateBlockReason, moveBlockReason, placeBlockReason, playBlockReason, readyHeroes, retreatBlock,
+  DISCARD_FIRST, actionRefusal, activateBlockReason, laneRide, moveBlockReason, placeBlockReason, playBlockReason, readyHeroes, retreatBlock,
   skillBlockReason,
 } from './board/heroActions';
 import { isValidTarget } from './board/targeting';
@@ -106,6 +106,7 @@ const rivalBand = (mobile: boolean, lesson: boolean) => (mobile ? (lesson ? RIVA
 const AUTO_END_MS = 500;
 /** What a click must land on to NOT cancel an armed card or skill. */
 const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="tab"]';
+
 
 export function Board(props: BoardProps<GameState>) {
   const { G, ctx, moves } = props;
@@ -1392,12 +1393,17 @@ export function Board(props: BoardProps<GameState>) {
             if (pendingPromotionShown !== me || G.pendingPromotion !== me) return null;
             const candidates = stepInCandidates(ps);
             if (candidates.length === 0) return null;
+            // The lane left empty by a ride (Rem's Tag Along from the lane): the
+            // same choice, said as what it is.
+            const ride = ps.active ? undefined : laneRide(G, me);
             return (
               <PromotionOverlay
                 key="promotion"
                 candidates={candidates}
-                leavingName={ps.active ? CARDS_BY_ID[ps.active.cardId]?.name ?? 'Your Active' : 'Your Active'}
+                leavingName={ride ? CARDS_BY_ID[ride.rider.cardId]?.name ?? 'Your Active'
+                  : ps.active ? CARDS_BY_ID[ps.active.cardId]?.name ?? 'Your Active' : 'Your Active'}
                 backIn={ps.active ? RESPAWN_TURNS : 0}
+                ride={ride ? { bearerName: CARDS_BY_ID[ride.bearer.cardId]?.name ?? 'an ally' } : undefined}
                 onPick={(iid) => (moves as any).promoteToActive(iid)}
               />
             );

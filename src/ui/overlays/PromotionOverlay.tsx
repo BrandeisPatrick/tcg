@@ -21,19 +21,24 @@ interface Props {
   /** The fallen hero's wait before it goes back to the hand, own turns
    *  (RESPAWN_TURNS), for the promotion's footnote. */
   backIn?: number;
+  /** Set when the lane was left empty by a ride rather than a fall (Rem's Tag
+   *  Along from the Active slot): `leavingName` rides on `bearerName`, and the
+   *  sheet says so. */
+  ride?: { bearerName: string };
   onPick: (heroIid: string) => void;
 }
 
 /**
  * The "choose your new Active" modal. It opens when the local player's
- * Active has been KO'd and a bench hero must step up — then it blocks other
+ * Active has been KO'd (or has ridden off on an ally: Rem's Tag Along) and a
+ * bench hero must step up — then it blocks other
  * interactions until a choice is made (no backdrop dismiss) — and when the
  * player retreats with more than one hero able to go in, where the backdrop
  * and a Cancel button back out. A cream sheet on the dark scrim; each
  * candidate is a tappable charcoal-framed portrait card. Board wraps this in
  * its own AnimatePresence, which drives the exit fade.
  */
-export function PromotionOverlay({ candidates, leavingName, retreat, opening, backIn, onPick }: Props) {
+export function PromotionOverlay({ candidates, leavingName, retreat, opening, backIn, ride, onPick }: Props) {
   const { isMobile } = useViewport();
   return (
     <motion.div
@@ -72,8 +77,8 @@ export function PromotionOverlay({ candidates, leavingName, retreat, opening, ba
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
             lineHeight: 1,
-            color: retreat || opening ? poster.ink : poster.red,
-          }}>{opening ? 'Your Opening Hand' : `${leavingName} ${retreat ? 'Retreats' : 'Fell'}`}</span>
+            color: retreat || opening || ride ? poster.ink : poster.red,
+          }}>{opening ? 'Your Opening Hand' : `${leavingName} ${retreat ? 'Retreats' : ride ? 'Rides Off' : 'Fell'}`}</span>
           <span style={{
             fontFamily: fonts.display,
             fontSize: 13,
@@ -111,6 +116,8 @@ export function PromotionOverlay({ candidates, leavingName, retreat, opening, ba
             ? 'The hero you pick takes the lane. The rest stay in your hand: put them on the bench on your turn, for free.'
             : retreat
             ? `${leavingName} takes their bench slot. ${retreat.cost > 0 ? `Retreat costs ${retreat.cost} soul${retreat.cost === 1 ? '' : 's'}.` : 'This Retreat is free.'}`
+            : ride
+            ? `${leavingName} rides on ${ride.bearerName} and comes back to your bench when the ride is over.`
             : backIn
             ? `The fallen hero takes their bench slot, and goes back to your hand in ${backIn} turn${backIn === 1 ? '' : 's'}.`
             : 'The fallen hero has gone back to your hand.'}

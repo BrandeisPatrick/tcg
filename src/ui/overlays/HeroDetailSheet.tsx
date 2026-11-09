@@ -567,7 +567,7 @@ export function HeroDetailSheet({
                         )}
                         {merged && eq.remMergeTurnsLeft != null && (
                           <div style={{ ...text.body, fontSize: 12, color: poster.status.buff }}>
-                            merged · {eq.remMergeTurnsLeft}t left
+                            riding · back to the bench in {eq.remMergeTurnsLeft} turn{eq.remMergeTurnsLeft === 1 ? '' : 's'}
                           </div>
                         )}
                         {!merged && eq.charges != null && (

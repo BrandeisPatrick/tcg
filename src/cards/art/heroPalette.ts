@@ -28,7 +28,7 @@ export const HERO_IDENTITY: Record<string, HeroIdentity> = {
   hero_lash:      { primary: '#ff6b6b', accent: '#4a1313', keywords: ['Initiator', 'High Flying', 'Arrogant'],   initial: 'L' },
   hero_mo_krill:  { primary: '#e0a96d', accent: '#3a230c', keywords: ['Tag-Team', 'Initiator', 'Burrower'],      initial: 'M' },
   hero_paige:     { primary: '#ffe6a0', accent: '#5a4416', keywords: ['Helpful', 'Protector', 'Booksmart'],      initial: 'P' },
-  hero_rem:       { primary: '#a0e6ff', accent: '#1f3d4d', keywords: ['Caretaker', 'Bench Healer', 'Lullaby'],   initial: 'R' },
+  hero_rem:       { primary: '#a0e6ff', accent: '#1f3d4d', keywords: ['Caretaker', 'Ride-Along', 'Lullaby'],     initial: 'R' },
   hero_seven:     { primary: '#9bb0ff', accent: '#1a224a', keywords: ['High Voltage', 'Merciless', 'Area Denial'], initial: 'S' },
   hero_shiv:      { primary: '#ff7a3d', accent: '#4a1f0f', keywords: ['Rage', 'Bleed', 'Repeat'],                initial: 'S' },
   hero_sinclair:  { primary: '#d96fa3', accent: '#4a1d36', keywords: ['Trickster', 'Copycat', 'Versatile'],      initial: 'S' },

@@ -22,6 +22,7 @@ import { damageUnit } from '@/engine/damage';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
 import { findCardOnBoard, heroesOf, kitCost, liveBoardCards, stepInCandidates, targetsFor } from '@/engine/query';
 import { isValidTarget } from '@/ui/board/targeting';
+import { laneRide } from '@/ui/board/heroActions';
 import { getAbility } from '@/abilities';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { freshReadyGame, giveCard, makeHero } from './_helpers';
@@ -368,5 +369,27 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
       expect(blocked(G, '0', { type: 'useSkill', heroIid: rem.iid, skillId, targetIid: G.players['1'].active!.iid })).toBe('noHero');
       expect(perform(G, '0', { type: 'useSkill', heroIid: rem.iid, skillId, targetIid: G.players['1'].active!.iid })).toBe(INVALID);
     }
+  });
+});
+
+describe('the board reads a ride off the lane', () => {
+  it('the promotion a ride from the lane owes is said as a ride (laneRide): who rides, on whom', () => {
+    const { G, me, rem } = withRem(0);
+    const lash = me.bench[1]!;
+    tagAlong(G, rem, lash);
+    expect(laneRide(G, '0')).toEqual({ rider: rem, bearer: lash });
+    expect(laneRide(G, '1')).toBeUndefined();
+    act(G, '0', { type: 'promoteToActive', benchIid: lash.iid });
+    expect(laneRide(G, '0')).toBeUndefined(); // the lane is filled
+  });
+
+  it('a ride from the bench, or a fallen Active, is no lane ride', () => {
+    const { G, me, rem } = withRem(2);
+    tagAlong(G, rem, me.active!);
+    expect(laneRide(G, '0')).toBeUndefined();
+    damageUnit(G, me.active!, 999, 'pure');
+    resolve(G);
+    expect(G.pendingPromotion).toBe('0');
+    expect(laneRide(G, '0')).toBeUndefined();
   });
 });

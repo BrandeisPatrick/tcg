@@ -220,9 +220,9 @@ function TriggerPromptDemo() {
 
 const CHOOSER_BENCH = ['hero_yamato', 'hero_abrams', 'hero_haze'];
 
-/** The "choose your new Active" sheet, in the two ways it is reached. */
+/** The "choose your new Active" sheet, in the three ways it is reached. */
 function NewActiveDemo() {
-  const [mode, setMode] = useState<'fell' | 'retreat' | null>(null);
+  const [mode, setMode] = useState<'fell' | 'retreat' | 'ride' | null>(null);
   const candidates = CHOOSER_BENCH
     .map((id) => HEROES.find((h) => h.id === id))
     .filter((h): h is NonNullable<typeof h> => !!h)
@@ -243,14 +243,19 @@ function NewActiveDemo() {
           <b>Retreat, three on the bench</b>
           <span>Opened from the Active’s sheet when more than one hero can go in.</span>
         </button>
+        <button type="button" className="gal-pick__item" onClick={() => setMode('ride')}>
+          <b>Rem rides off</b>
+          <span>Tag Along from the lane left it empty: owed, like a knockout.</span>
+        </button>
       </div>
       <AnimatePresence>
         {mode && (
           <PromotionOverlay
             key={mode}
             candidates={candidates}
-            leavingName="Kelvin"
+            leavingName={mode === 'ride' ? 'Rem' : 'Kelvin'}
             retreat={mode === 'retreat' ? { cost: KELVIN_RETREAT, onCancel: () => setMode(null) } : undefined}
+            ride={mode === 'ride' ? { bearerName: 'Yamato' } : undefined}
             onPick={() => setMode(null)}
           />
         )}

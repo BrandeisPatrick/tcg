@@ -77,7 +77,7 @@ export function CombatTab() {
       <FxShowroom extra={extra} />
 
       <div className="gal-cols2">
-        <Section title="Rem merge" aside="Lil Helpers">
+        <Section title="Rem riding" aside="Tag Along">
           <RemMergeDemo />
         </Section>
         <Section title="HP / BP tick">
@@ -185,14 +185,11 @@ function RemMergeDemo() {
     ...mockHeroInstance(rem),
     zone: 'equipment',
     attachedTo: 'preview-bearer',
-    remMergeTurnsLeft: 3,
-    remMergeHpBuff: 2,
+    remMergeTurnsLeft: 2,
   };
   const bearerCard: CardInstance = {
     ...baseBearer,
     iid: 'preview-bearer',
-    hpMax: baseBearer.hpMax + 2,
-    hp: baseBearer.hpMax + 2,
     attached: [remMerged],
   };
   const remBench: CardInstance = { ...mockHeroInstance(rem), iid: 'preview-rem-bench', zone: 'bench', slot: 1 };
@@ -208,12 +205,13 @@ function RemMergeDemo() {
       </div>
       <div style={{ flex: '1 1 220px', minWidth: 0, alignSelf: 'flex-start' }}>
         <Caption>
-          Rem&rsquo;s skill merges her into an ally as a temporary buff.
+          Rem&rsquo;s Tag Along rides her on an ally as equipment for 2 turns: it heals 4✦, then she
+          returns to the bench.
         </Caption>
         <Caption>
-          <strong>Left</strong>, the carry: her portrait badge with a countdown of 3, a green buff border, and
-          +2 max HP. <strong>Right</strong>, Rem on the bench with the ready glint: her skill can still be
-          used this turn, and she casts it from the bench.
+          <strong>Left</strong>, the bearer: her portrait chip among its items, on a green border, with the
+          2 turns her ride has left. <strong>Right</strong>, Rem on the bench with the ready glint: her
+          skill can still be used this turn, from the bench or the lane.
         </Caption>
       </div>
     </div>

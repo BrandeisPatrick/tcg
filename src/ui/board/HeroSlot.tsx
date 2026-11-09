@@ -124,7 +124,7 @@ export function HeroSlot({
   // Worn items stay on through a death: a corpse shows its gear too, greyed.
   const attached = card.attached ?? [];
   // The flex slot's empty fourth socket: the side has it and the hero wears
-  // fewer than four items (a merged Rem is no item).
+  // fewer than four items (a riding Rem is no item).
   const flexSocket = !!flexSlot && attached.filter((a) => CARDS_BY_ID[a.cardId]?.type !== 'hero').length < 4;
   // A chip's size: a size down when four squares (the socket counted) share the row.
   const chipDim = compact || attached.length + (flexSocket ? 1 : 0) > 3 ? 22 : 26;
@@ -254,8 +254,8 @@ export function HeroSlot({
             wears (a fourth in the flex slot too): its icon on a keyline of
             its category's colour, the turns its cooldown has left over a
             dimmed face, or a hard crowd-control item's charges as pips. A
-            merged hero (Rem · Lil Helpers) shows her portrait + turn
-            countdown. Once the side has the flex slot (it felled the enemy
+            riding hero (Rem · Tag Along) shows her portrait and the turns
+            her ride has left. Once the side has the flex slot (it felled the enemy
             Walker) an empty fourth socket waits beside them, a chip's size.
             22px chips fit four abreast on a bench tile 111px wide (a 360px
             phone); a row as wide as a desktop tile's prints them a size up
@@ -273,12 +273,13 @@ export function HeroSlot({
             <style>{'@container worn (min-width: 150px) { [data-worn] { zoom: 1.3; } }'}</style>
             {attached.map((eq) => {
               const eqData = CARDS_BY_ID[eq.cardId];
-              const isMerged = eqData?.type === 'hero'; // Rem merged in
+              const isMerged = eqData?.type === 'hero'; // Rem riding (Tag Along)
               const dim = chipDim;
               const cooldown = isMerged ? 0 : itemCooldown(eq);
               return (
                 <div key={eq.iid}
                   data-worn
+                  data-worn-iid={eq.iid}
                   onMouseEnter={(e) => { e.stopPropagation(); onEquipmentHover?.(eq); }}
                   onMouseLeave={(e) => { e.stopPropagation(); onEquipmentHover?.(null); }}
                   onPointerDown={(e) => e.stopPropagation()}
@@ -302,7 +303,7 @@ export function HeroSlot({
                     } : {}),
                   }}
                   title={isMerged
-                    ? `${eqData?.name} merged — ${eq.remMergeTurnsLeft ?? 0} turn(s) left`
+                    ? `${eqData?.name} rides — back to the bench in ${eq.remMergeTurnsLeft ?? 0} turn${eq.remMergeTurnsLeft === 1 ? '' : 's'}`
                     : eq.charges != null ? `${eqData?.name} — ${eq.charges} charge${eq.charges === 1 ? '' : 's'} left`
                     : cooldown > 0 ? `${eqData?.name} — ready in ${cooldown} turn${cooldown === 1 ? '' : 's'}`
                     : eqData?.name}>
@@ -316,7 +317,7 @@ export function HeroSlot({
                       marks={{ cooldown: cooldown > 0 ? cooldown : undefined, charges: eq.charges ?? undefined }}
                     />
                   )}
-                  {/* Merge countdown (Rem) — green sticker in the corner. */}
+                  {/* The ride's turns left (Rem) — green sticker in the corner. */}
                   {isMerged && eq.remMergeTurnsLeft != null && (
                     <span aria-label={`${eq.remMergeTurnsLeft} turns left`} style={{
                       ...chipPill(compact),
