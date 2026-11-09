@@ -15,7 +15,7 @@ import { DeadlockGame } from '@/engine/game';
 import * as query from '@/engine/query';
 import { ITEMS } from '@/cards';
 import {
-  BOSS_CARD_ID, BOSS_HP, HARD_CC_CHARGES, LANE_INCOME, MAX_HAND, PRICE, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP, ULT_COOLDOWN,
+  BOSS_CARD_ID, BOSS_HP, HARD_CC_CHARGES, LANE_INCOME, MAX_HAND, PRICE, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP, ULT_COOLDOWN, ULT_COST,
 } from '@/engine/constants';
 import { freshReadyGame, giveCard, giveItem, makeHero, nextTestIid, setTrack, stackDeck } from '../_helpers';
 import { SOULS_ON_USE, checkInvariants, checkTransition, collectInvariantViolations, collectTransitionViolations } from './invariants';
@@ -62,16 +62,22 @@ const raiseBoss = (G: GameState, hp = BOSS_HP): CardInstance => {
 };
 /** P0's heroes on the clean board: Haze (Active), Vindicta, Lash, Paige. */
 const p0 = (G: GameState) => ({ haze: G.players['0'].active!, vindicta: G.players['0'].bench[0]!, lash: G.players['0'].bench[1]!, paige: G.players['0'].bench[2]! });
-/** A merged Rem: she sits on P0's bench slot 3 in place of Paige, then merges into `bearer`. */
+/** A merged Rem, built by hand: she sits on P0's bench slot 3 in place of Paige, then merges
+ *  into `bearer` as the old Lil Helpers did — out of her slot (left empty), into the bearer's
+ *  `attached`, the max HP she grants on it, for 3 of her owner's turns. No card merges Rem since
+ *  the hero rebuild (her skill is Tag Along, a heal); the engine's merge machinery remains, and
+ *  the oracles and invariants still read a merged Rem. */
 function mergeRem(G: GameState, bearer: CardInstance): CardInstance {
   const rem = makeHero('hero_rem', '0', 'bench', 3);
-  G.players['0'].bench[2] = rem;
-  const r = callMove(G, ctx(), '0', 'useSkill', [rem.iid, bearer.iid]);
-  expect(r.outcome).toBe('accepted');
-  Object.assign(G, r.G);
-  return G.players['0'].active!.iid === bearer.iid
-    ? G.players['0'].active!.attached!.find((a) => a.cardId === 'hero_rem')!
-    : [...G.players['0'].bench].find((b) => b?.iid === bearer.iid)!.attached!.find((a) => a.cardId === 'hero_rem')!;
+  G.players['0'].bench[2] = null;
+  rem.zone = 'equipment';
+  rem.attachedTo = bearer.iid;
+  rem.remMergeTurnsLeft = 3;
+  rem.remMergeHpBuff = 1;
+  bearer.hpMax += 1;
+  bearer.hp += 1;
+  (bearer.attached ??= []).push(rem);
+  return rem;
 }
 /** The drafted match's opening, as the engine deals it: engine turn 1, the first mover (P1)
  *  on turn, P0's heroes all in its hand and its first Active owed. Read with `OPENING`. */
@@ -453,9 +459,19 @@ describe('the transition rules fire', () => {
     expect(ids2(pair((G) => { G.players['0'].hand[0].level = 1; }, H))).toContain('level-monotonic');
   });
 
-  it('souls: an ability charges nothing, and nothing pays the rival', () => {
+  it('souls: an ability charges its kit price — a skill its souls, an ultimate its size\'s —, a passive-only hero nothing, and nothing pays the rival', () => {
+    const base = clean();
+    base.players['0'].souls = 20;
+    const lash = p0(base).lash.iid; // Ground Strike: 3 souls; Death Slam, large: 12
+    const paid = (n: number) => pair((G) => { G.players['0'].souls -= n; }, base);
+    expect(moveIds(paid(3), 'useSkill', [lash])).not.toContain('souls-delta');
+    expect(moveIds(paid(0), 'useSkill', [lash])).toContain('souls-delta'); // used for free
+    expect(moveIds(paid(2), 'useSkill', [lash])).toContain('souls-delta'); // short-charged
+    expect(moveIds(paid(ULT_COST.large), 'useSkill', [lash, undefined, 'eff_ult_lash'])).not.toContain('souls-delta');
+    expect(moveIds(paid(3), 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('souls-delta'); // the skill's price
+    // Haze has no skill (Fixation is a passive): a bare useSkill of hers charges nothing.
     const p = pair((G) => { G.players['0'].souls -= 1; });
-    expect(moveIds(p, 'useSkill', [heroIid(p)])).toContain('souls-delta'); // abilities are free
+    expect(moveIds(p, 'useSkill', [heroIid(p)])).toContain('souls-delta');
     const q = pair((G) => { G.players['1'].souls += 2; });
     expect(moveIds(q, 'useSkill', [heroIid(q)])).toContain('souls-delta'); // nothing pays the rival
     const r = pair(() => undefined);
@@ -494,7 +510,7 @@ describe('the transition rules fire', () => {
     expect(disc.check()).toEqual([]);
     expect(disc.check((A) => { A.players['0'].souls = 1; })).toContain('souls-delta');
   });
-  it('souls: an item used pays what its text says (Golden Goose Egg: 2), a Retreat costs 1', () => {
+  it('souls: an item used pays what its text says (Golden Goose Egg: 2), a Retreat costs the leaving hero\'s printed retreat (Haze 1, Lady Geist 2)', () => {
     const G = clean();
     const egg = giveItem(G, p0(G).vindicta, 'golden_goose_egg');
     const use = made(G, 'activate', [egg.iid]);
@@ -504,8 +520,16 @@ describe('the transition rules fire', () => {
     const H = clean();
     H.players['0'].souls = 3;
     const retreat = made(H, 'moveHero', [1, 0]);
+    expect(retreat.after.G.players['0'].souls).toBe(2);
     expect(retreat.check()).toEqual([]);
     expect(retreat.check((A) => { A.players['0'].souls = 3; })).toContain('souls-delta');
+    const W = clean();
+    W.players['0'].souls = 3;
+    W.players['0'].active = makeHero('hero_lady_geist', '0', 'active', 0);
+    const heavy = made(W, 'moveHero', [1, 0]);
+    expect(heavy.after.G.players['0'].souls).toBe(1);
+    expect(heavy.check()).toEqual([]);
+    expect(heavy.check((A) => { A.players['0'].souls = 2; })).toContain('souls-delta'); // the old flat 1
   });
   it('the Act: after the attack only endTurn and a promotion are accepted — no card played either; one Retreat a turn; nothing around a choice owed', () => {
     const p = pair(() => undefined);
@@ -544,11 +568,14 @@ describe('the transition rules fire', () => {
     ult.before.G.players['0'].bench[1]!.level = 2;
     expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).not.toContain('ult-locked');
     // A real ultimate: ULT_COOLDOWN, the Cooldown items no longer cutting it (they draw cards now).
+    // Death Slam is a large ultimate: 12 souls.
     const G = clean();
+    G.players['0'].souls = ULT_COST.large;
     p0(G).lash.level = 2;
     giveItem(G, p0(G).lash, 'improved_cooldown');
     const used = made(G, 'useSkill', [p0(G).lash.iid, undefined, 'eff_ult_lash']);
     expect(used.after.G.players['0'].bench[1]!.cooldowns?.eff_ult_lash).toBe(ULT_COOLDOWN);
+    expect(used.after.G.players['0'].souls).toBe(0);
     expect(used.check()).toEqual([]);
     expect(used.check((A) => { A.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_COOLDOWN - 1 }; })).toContain('ability-cooldown');
   });
@@ -683,19 +710,22 @@ describe('the transition rules fire', () => {
     expect(play.check()).toEqual([]);
     expect(play.check((A) => { A.players['0'].active!.atkMod += 1; })).toContain('equip-bonus');
     expect(play.check((A) => { A.players['0'].bench[0]!.hp -= 1; })).toContain('equip-bonus');
-    // Extra Health's +2 HP: current HP rises with it.
+    // Extra Health's +2 HP: current HP rises with it (Haze at full HP, her card's 4).
     const eh = giveCard(G, '0', 'extra_health');
+    const hazeHp = p0(G).haze.hpMax;
+    expect(p0(G).haze.hp).toBe(hazeHp);
     const hp = made(G, 'playCard', [eh.iid, p0(G).haze.iid]);
-    expect([hp.after.G.players['0'].active!.hp, hp.after.G.players['0'].active!.hpMax]).toEqual([7, 7]);
-    expect(hp.check((A) => { A.players['0'].active!.hp = 5; })).toContain('equip-bonus');
+    expect([hp.after.G.players['0'].active!.hp, hp.after.G.players['0'].active!.hpMax]).toEqual([hazeHp + 2, hazeHp + 2]);
+    expect(hp.check((A) => { A.players['0'].active!.hp -= 1; })).toContain('equip-bonus');
     // the Vitality spike: a third Vitality item played adds 1 more max HP
     const V = clean();
     V.players['0'].souls = 10;
+    const vBase = p0(V).haze.hpMax;
     giveItem(V, p0(V).haze, 'extra_regen');
     giveItem(V, p0(V).haze, 'sprint_boots');
     const third = giveCard(V, '0', 'extra_health');
     const spike = made(V, 'playCard', [third.iid, p0(V).haze.iid]);
-    expect(spike.after.G.players['0'].active!.hpMax).toBe(5 + 2 + 1);
+    expect(spike.after.G.players['0'].active!.hpMax).toBe(vBase + 2 + 1);
     expect(spike.check()).toEqual([]);
     expect(spike.check((A) => { A.players['0'].active!.hpMax -= 1; A.players['0'].active!.hp -= 1; })).toContain('equip-bonus');
     // an evolution: Titanic's +2 on, Extended's +1 off — +1 in all
@@ -887,7 +917,9 @@ describe('the transition rules fire', () => {
     const before = clean();
     for (const c of [before.players['1'].active!, ...before.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 3; }
     const after = structuredClone(before) as GameState;
-    pushOff(after, '1', 3); // Haze's 3 Bullet Power
+    const bullet = query.effectiveAtk(p0(before).haze); // Haze's Bullet Power: her card's 1 Attack at Level 1
+    expect(bullet).toBe(1);
+    pushOff(after, '1', bullet);
     const end = (a: GameState, name: string) => collectTransitionViolations({ G: before, ctx: ctx() }, { G: a, ctx: ctx({ currentPlayer: '1', turn: 3 }) }, { name, args: [] }, true).map((v) => v.id);
     expect(end(after, 'endTurn')).not.toContain('structure-delta');
     expect(end(after, 'useSkill')).toContain('structure-delta');
