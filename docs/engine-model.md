@@ -35,8 +35,8 @@ lock a skill. The engine fixes that by construction:
 |---|---|
 | `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, the ultimates' `ULT_COST` by size, levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss, the Rejuvenator, `RESPAWN_TURNS`, `ROUND_CAP`) |
 | `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn — and the map's clocks: `lateGame` / `pushMultiplier`, `bossReturnRound`, `reviveLastRound`, `endsRound` / `endsLastRound`, `MATCH_TURNS` |
-| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skill, its ultimate; which one an action names), `kitCost` (what one costs in souls: a skill's `souls`, an ultimate's `ULT_COST` by its card's size), `abilityAim` (what one is aimed at: its `target`, or its `aim` read off the board), `heroRetreat` (a hero's printed Retreat), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `isHeroCard`, `laneOpen`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
-| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the hand (`playBlocked`, `playCost`, `playTargets`, `upgradeComponent`, `placeHeroBlocked`, `freeBenchSlot`, `chooseActiveBlocked`, `discardBlocked`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (an owed choice — the first Active, a promotion, a discard — blocks everything else; after the turn's attack only `endTurn` is left), `legalActions` |
+| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skill, its ultimate; which one an action names), `kitCost` (what one costs in souls: a skill's `souls`, an ultimate's `ULT_COST` by its card's size — a charged one its own price less the hero's count, `ultPrice` / `chargedUlt`), the optional triggers (`optionalTriggers`, `triggerPrice`, `promptOwed`, `fallPending`), `abilityAim` (what one is aimed at: its `target`, or its `aim` read off the board), `heroRetreat` (a hero's printed Retreat), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `isHeroCard`, `laneOpen`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
+| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the hand (`playBlocked`, `playCost`, `playTargets`, `upgradeComponent`, `placeHeroBlocked`, `freeBenchSlot`, `chooseActiveBlocked`, `discardBlocked`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (an owed choice — the first Active, a promotion, a discard — blocks everything else; after the turn's attack only `endTurn` is left), `legalActions`, and the trigger prompt's (`triggerBlocked`: level, wait, souls; `answerBlocked`) |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `hand` (`playCard`: an item onto a hero, an evolve, the upgrade shuffled in; `placeHero`; `chooseActive`; `discard`), `activate` (an active item), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the decks and the opening) |
 | `deck.ts` | the deck, the hand and the discard pile: the match's seeded stream (`nextRandom`, `shuffle`), what a side brings (`buildOf`, `sideDeckIds`, `fillDeck`), `drawCards`, `dealOpeningHand` (the hero guarantee), `toDiscard`, `oweDiscard` / `discardFromHand`, `shuffleIntoDeck` (an upgrade made), `heroToHand` (a fallen hero back) |
@@ -45,10 +45,11 @@ lock a skill. The engine fixes that by construction:
 | `instances.ts` | card instances and items going on and off heroes: `makeInstance`, `attachItem` / `detachItem` (a passive's bonus on and off), `syncVitalitySpike` |
 | `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp |
 | `lane.ts` | `leaveActive`: what ends when a hero leaves the Active slot (a leaf, so death, statuses and the board moves all call it) |
-| `triggers.ts`, `registry.ts` | the one dispatcher for hero passives and worn equipment; abilities register themselves at load |
+| `triggers.ts`, `registry.ts` | the one dispatcher for hero passives and worn equipment (and the hand-off of optional triggers to `prompts.ts`); abilities register themselves at load |
+| `prompts.ts` | the trigger prompt system: `offerTriggers` (ask at a moment, only what can be used), `answerTrigger` (use or pass, then the moment goes on), `triggerName` — see "Trigger prompts" below |
 | `forecast.ts` | `simulate(G, pid, action)` and `forecastAttack(G, pid, targetIid?)` |
 | `ids.ts`, `fx.ts`, `log.ts`, `castContext.ts` | counters in `G`, the event stream, the match log, the cast frame |
-| `game.ts` | the boardgame.io adapter only: setup, turn hooks, moves → `perform`, `endIf` |
+| `game.ts` | the boardgame.io adapter only: setup, turn hooks, moves → `perform`, `endIf`, and the 'respond' stage a trigger prompt holds the asked seat in |
 
 Card behaviour is `src/abilities/index.ts` (one `AbilityDef` per effect);
 status semantics are `src/statuses/index.ts`. The AI is `src/ai/heuristic.ts`:
@@ -146,9 +147,15 @@ wears (`activate`, in a cast frame whose source is the bearer; free; it then
 cools down 2 own turns for tiers 1–2, 3 for tiers 3 and up, or spends one of a
 hard crowd-control item's charges), or its ultimate. A skill and an ultimate
 are paid in souls (`kitCost`): a skill its own `souls` (1–3), an ultimate
-`ULT_COST` by its card's size (small 4, medium 8, large 12). `skillBlocked`
+`ULT_COST` by its card's size (small 4, medium 8, large 12), or a charged
+ultimate's own price (`UltimateCard.charged`: Victor 20, Silver 16) less the
+hero's count of the damage it takes or deals (its `tally`, counted by
+`damageUnit`, never below 0). `skillBlocked`
 refuses one the player cannot pay for (`'souls'`), and `useSkill` charges it
-before the ability runs. A skill waits its `cooldown` in own turns after use
+before the ability runs (`payKit`: the souls, the cooldown, a charged
+ultimate's count started over — the trigger prompt pays a trigger the same way).
+An ability that is an optional trigger (`optional`) is never used from its
+button (`'trigger'`): the trigger prompt asks it at its moment. A skill waits its `cooldown` in own turns after use
 (`SKILL_COOLDOWN` = 1: ready again on the hero's next turn, when its data names
 none). The ultimate is a button printed on the hero card, not a card:
 `HeroCard.ult` names its ability, it unlocks at `ULT_UNLOCK_LEVEL` (2) and
@@ -182,6 +189,70 @@ goes straight there. An empty or fallen Active slot is filled from the bench
 every hero down is no loss by itself: at the End, if the rival has no standing
 hero, the ending player's standing Active pushes its bullet power into the
 rival's structures. How a match ends is the map's (below).
+
+## Trigger prompts
+
+Some effects are optional and come at a moment, often on the other player's
+turn: "When Victor falls, you may use this" (docs/hero-design.md §6). They go
+through one system, `prompts.ts`, and a card only declares one:
+
+- **The declaration** is on the ability: its moment (`trigger`, e.g.
+  `'onFall'`), that it is a "may" (`optional: true`), its cost (a kit
+  ability's `kitCost`, a passive's `souls`), its wait (its cooldown, as from a
+  button) and its effect (`run`, with `source` the hero and `target` the hero
+  the moment is about). A new card adds a trigger, not prompt code.
+- **The moment** is asked through `fireTriggers`, which runs the automatic
+  reactions and hands the optional ones to `offerTriggers`. It keeps the ones
+  `triggerBlocked` lets through (the level, the wait, the souls). None: it
+  returns false and the moment goes on. Otherwise it pushes a
+  `PendingTrigger` onto `G.triggers` and returns true, and the moment's own
+  outcome waits. The first moment is a hero's fall: `reapDead` and
+  `fallToBoss` ask through `fall` before `killInPlace`.
+- **The pause.** While a prompt is owed (`promptOwed`, the last of the stack)
+  `blocked` allows only its answers — `useTrigger` one of its offers, or
+  `passTrigger` — from either seat, and `legalActions` lists only those. The
+  falling hero stays at 0 HP in its slot (`fallPending`): `damageUnit` leaves
+  it alone, `resolve` does not reap it and holds the promotions until the
+  answer, the End step neither levels it nor counts it fallen for the
+  empty-lane push. The adapter (`syncPrompt`, game.ts) puts the asked seat —
+  and the seat on turn, whose seat the local client sends every move as — in
+  the `respond` stage, and lets it go once nothing is owed. A prompt opened in
+  the End step is held into the next turn, whose `onBegin` opens the stage.
+- **The answer.** `answerTrigger` pops the prompt. A use pays (`payKit`), is
+  reported as the ability's cast (and an ultimate's reveal in `G.action`),
+  runs the effect and fires the worn reactions to an ultimate; it is no turn's
+  ability (`skillUsedThisTurn` is untouched). A pass logs. Then `settle` lets
+  the moment go on — for a fall, `killInPlace` unless the answer stood the
+  hero back up — and `resolve` runs again (which may ask the next prompt).
+  The exp of the blow that dropped a hero who may cancel its fall is held on
+  it (`downedBy`) and paid by `killInPlace`.
+- **The AI** answers the same prompt: `enumerateAIMoves` returns the answers
+  for the seat asked, whoever is on turn, each scored by the position it
+  leaves (`answerScore`), and the lookahead's lines answer a prompt they open
+  as the rival would (`answered`). The board's AI loop runs for the seat
+  asked; the board shows `TriggerPrompt` for the human seat's own.
+
+**Adding chains later.** The stack is there for it. A chain is an answer to
+an answer, the newest resolving first:
+1. Give `PendingTrigger` a `chosen?: TriggerOffer` and a moment for
+   "a trigger was used" (`'onTriggerUsed'`, its subject the hero that used it).
+2. In `answerTrigger`, a use no longer resolves at once: it pays, sets the
+   entry's `chosen` and leaves the entry on the stack, then fires the new
+   moment for the other side's heroes (`fireTriggers` → `offerTriggers` pushes
+   their prompt on top, if any of theirs can be used).
+3. When the top prompt is passed (or a use opens no answer), resolve the
+   stack from the top down: pop each entry, run its `chosen` effect if it has
+   one, `settle` its moment, and stop at the first entry still unanswered.
+4. `promptOwed` already reads the top; `blocked`, `legalActions`, the stage
+   and the AI need no change, since they ask only "what is owed now".
+
+**Adding an auto / on / off setting later** (Master Duel's): a per-seat mode
+in `G` (say `G.triggerMode: Record<PlayerID, 'ask' | 'auto' | 'off'>`, copied
+in at setup from the player's settings like `playerBuilds` — the engine never
+reads storage), read in `offerTriggers`: `'off'` returns false (nothing asked,
+the moment goes on, as with nothing usable); `'auto'` answers at once with
+the AI's choice for that seat (or always uses) instead of pushing a prompt;
+`'ask'` is today's.
 
 ## The map
 
@@ -284,6 +355,15 @@ resolves, once, at its end.
   fires it on the other side's standing Active when a hero falls to the rival
   (Drifter's Bloodscent). What it keeps for the game goes in the hero's
   `tally`, by ability id.
+- **A "may"** — `optional: true` and its moment as the `trigger` (`'onFall'`:
+  Victor's Shocking Reanimation): the trigger prompt asks it (above); nothing
+  else is needed.
+- **A charged ultimate** — `charged: { cost, by: 'taken' | 'dealt', text }` on
+  its card: `damageUnit` counts the damage into the hero's `tally`, `kitCost`
+  takes it off, `payKit` starts it over.
+- **A form** — a status with `form: { hero, art }` (Silver's Wolf form): the
+  board shows the status's title as a badge, and that hero's form art while it
+  lasts (`heroForm`, cards/art/heroArt.tsx). The engine reads nothing there.
 - **A skill that costs HP** — `hpCost` on the skill: it is blocked unless the
   caster has more HP than that, and `useSkill` takes the HP straight off before
   the skill runs (through no Shield, setting off no trigger, never a kill).

@@ -31,13 +31,20 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### The draft
 
-- 19 heroes from Deadlock's roster, each built from its Deadlock role
+- 21 heroes from Deadlock's roster, each built from its Deadlock role
   ([`docs/hero-design.md`](./docs/hero-design.md)): HP 4 + its tank score and
   Attack 1 (2 for a gun or melee hero), moved a point by its curve (early,
-  mid, late); a Retreat price of 0–2 souls; either a skill (fourteen heroes)
-  or a passive (five: Abrams, Haze, Vindicta, Drifter, Mirage); and an
+  mid, late); a Retreat price of 0–2 souls; either a skill (fifteen heroes)
+  or a passive (six: Abrams, Haze, Vindicta, Drifter, Mirage, Victor); and an
   ultimate, a button printed on the card with the hero's own Deadlock
   ultimate icon. No hero has a Weakness.
+- Two ultimates are **charged**: Victor's Shocking Reanimation (20 souls) and
+  Silver's Lycan Curse (16) cost 1 less for each damage he takes or she deals,
+  down to free, and the count starts over when one is used. The button shows
+  the price coming down ("20 → 7 souls"). Victor's Aura of Suffering hurts
+  every enemy and Victor himself at the start of your turn, which charges it.
+  Silver's turns her into a wolf for 2 turns (+3 Attack, Shield 6), and her
+  card shows Deadlock's wolf-form art while it lasts.
 - A snake draft, four heroes each. Your four are shuffled into your deck: 20
   cards.
 - The pie rule: you draft first, and the rival moves first. Its first turn has
@@ -117,6 +124,16 @@ You choose the discards from anywhere in your hand.
   for the slow and heavy; Sprint Boots and Swift lower it), once a turn,
   before the attack. A bench hero steps into the Active slot and may make the
   attack.
+
+**Trigger prompts.** Some cards say you *may* use them when something happens
+— "When Victor falls, you may use this" — and that moment often comes on the
+rival's turn. When it does, and you can use the card (the right level, not
+waiting, souls enough), the game pauses and asks: the card, the moment and the
+price ("Use Shocking Reanimation for 7 souls?"), Use or Pass. Nothing else
+happens until you answer. If you could not use it, nothing is asked. The rival
+AI is asked the same way and answers on its own. Used, Victor gets back up
+where he fell with half his HP: no knockout, no push, no wait. Passed, he falls
+as any hero does.
 
 **End.** Statuses tick. If the rival has no standing hero, your Active pushes
 into the empty lane for its bullet power (an empty lane is easy to come by
@@ -217,7 +234,12 @@ says where the sim gates stand.
   the structures, the Mid-Boss and the Rejuvenator. `public/art/CREDITS.md`
   says where each piece came from; SVG fallback glyphs cover a card that has
   none.
-- **About 1,400 tests** (vitest), including a seeded fuzz suite that plays
+- **Trigger prompts.** Optional "may" effects are declared on the card and
+  asked by one system (`src/engine/prompts.ts`), which pauses the game in a
+  boardgame.io respond stage until the seat asked answers; built so chains and
+  an auto/on/off setting can come later (docs/engine-model.md, "Trigger
+  prompts").
+- **About 1,450 tests** (vitest), including a seeded fuzz suite that plays
   hundreds of games (the real AI, random legal play and malformed moves) and
   checks the state after every move.
 
@@ -284,7 +306,8 @@ src/
 ├── art/         asset URL bases and the credits table the Gallery renders
 ├── qa/          the virtual clock the QA films run on (?vtclock=1)
 ├── ui/          React components: the board and its map strip, the hand and the card piles
-│                (board/CardPiles.tsx), the discard, upgrade and opening sheets (overlays/),
+│                (board/CardPiles.tsx), the discard, upgrade, opening and trigger-prompt
+│                sheets (overlays/),
 │                the deck builder and build editor (collection/), item tiles and tooltips
 │                (shop/), the draft and hero sheets, the story map, …
 │   └── effects/fx/  the board-FX player (timeline scheduler, animation families,
@@ -322,6 +345,14 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
   then lands every turn; AI-vs-AI games ended in rounds 3–9. The numbers are
   the hero rules' to set (docs/hero-design.md).
 
+- **Trigger prompts, first version.** One answer per moment: no chains (the
+  rival cannot answer back) and no auto/on/off setting yet; how to add both is
+  in docs/engine-model.md. A hero felled in the End step (Torment Pulse, the
+  Mid-Boss's blow) is asked as the next turn opens, after its start (income,
+  draw), because boardgame.io cannot hold a turn open in its end hook.
+- **The scripts and the respond moves.** `scripts/balance-sim.ts`,
+  `scripts/replay-trace.ts`, `scripts/eval/*` and `scripts/qa/*` know nothing of
+  `useTrigger` / `passTrigger`; port them with the hand's moves.
 - **The Cube every turn.** The Cube costs 3 souls and, like every skill, is
   ready again on Viscous's next turn, so for 3 of the 5 souls a turn one hero
   can take no damage on any rival turn. The hero doc prices it that way; play

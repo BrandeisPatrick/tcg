@@ -3,9 +3,10 @@
  * printed on its card). A hero uses one ability a turn, whichever it is, and
  * may still make the turn's attack after it from the Active slot. It is paid
  * for in souls first (`kitCost`: a skill's 1–3, an ultimate's 4, 8 or 12 by
- * size), one with an HP cost (`hpCost`) takes that off the hero too, and then
- * it goes on its cooldown (SKILL_COOLDOWN unless its data names one; an
- * ultimate ULT_COOLDOWN). `skillBlocked` (legality.ts) has already said it may
+ * size, a charged one its own price less its count), one with an HP cost
+ * (`hpCost`) takes that off the hero too, and then it goes on its cooldown
+ * (SKILL_COOLDOWN unless its data names one; an ultimate ULT_COOLDOWN) —
+ * `payKit`, which the trigger prompt pays a trigger with too. `skillBlocked` (legality.ts) has already said it may
  * be done and at whom; this only does it.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';

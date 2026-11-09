@@ -1,8 +1,10 @@
 # Hero Design — requirements
 
-Status, 2026-11-09: **the 19 heroes in the game are built to these cards** (branch
-`deck-and-heroes`; see "As built" at the end). The other 23 cards in section 8, Victor's and
-Silver's charged ultimates and the trigger prompts (section 6) are not built yet. The rules below are
+Status, 2026-11-09: **21 heroes are built to these cards** (branch `deck-and-heroes`; see "As
+built" at the end): the 19 of step 2, and in step 3 Victor and Silver with their charged ultimates,
+on the trigger prompt system of section 6 (`src/engine/prompts.ts`). The other 23 cards in section 8
+are not built yet; nor are the later parts of section 6 (chains, and an auto/on/off setting — how to
+add them is in [engine-model.md](engine-model.md), "Trigger prompts"). The rules below are
 binding for every hero card; the proposed cards for all 44 Deadlock heroes are listed at the end. A visual version with portraits:
 [Hero Card Designs](https://claude.ai/artifact/JYPQPyeXj6u1PYiuhQDcGB). Role research behind
 it: [Deadlock Hero Roles](https://claude.ai/artifact/Jp27zXwR6dXjyr5q2QriyD).
@@ -556,7 +558,7 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
   statuses and their end-of-turn pulse stay in the engine with no card using them, as does Charged
   (Seven's old Static Charge).
 - **Trigger prompts.** None of the 19 kits has an optional "may" effect, so nothing is marked
-  `TODO(trigger-prompt)`.
+  `TODO(trigger-prompt)`. (Step 3 built the prompts for Victor; see below.)
 
 **Elsewhere**
 - The ultimate button shows each hero's Deadlock ultimate icon, copied into `public/ult/` (credited
@@ -567,4 +569,84 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 - The AI plays the same legality: it uses skills and ultimates when it can pay and the lookahead
   says they gain more than the souls they cost (a soul in hand is worth 0.3, so it spends freely).
   It no longer prices a Sleep's value as a wake-up burst.
+
+### Step 3 (2026-11-09): trigger prompts, charged ultimates, Victor and Silver
+
+Built on `deck-and-heroes`. Where the doc is silent, the build reads it this way:
+
+**Trigger prompts (section 6)**
+- **Usable** means the doc's three tests and nothing else: the right level (an ultimate's Level 2),
+  not waiting (its cooldown), and the souls (its `kitCost`). Whose turn it is, the Act, and the
+  hero's statuses (a Stun, a Silence) do not stop a trigger. With nothing usable nobody is asked and
+  the moment goes on (Victor simply falls).
+- **A trigger is no turn's ability.** Used, it is paid as from its button — its souls, then its wait
+  (an ultimate's 3, less what the hero wears), a charged ultimate's count started over — but it does
+  not spend the hero's one ability of the turn.
+- **Who answers.** The prompt names the seat asked; the answer (`useTrigger` / `passTrigger`) may be
+  sent from either seat, as a promotion may. The boardgame.io adapter puts the asked seat in a
+  'respond' stage, and the seat on turn with it, because the game's local client sends every move as
+  the player whose turn it is; the stage allows nothing but the two answers (and the board's reveal
+  bookkeeping).
+- **While a prompt is owed nothing else happens:** no move but its answer, the turn cannot end, and
+  an owed promotion waits until it is answered. The hero it is about waits at 0 HP where it stood:
+  nothing damages, heals, levels, reaps or promotes it, and for the End step's push into an empty
+  lane it has not fallen yet.
+- **A fall in the End step** (Torment Pulse at the end of the rival's turn, the Mid-Boss's blow at
+  the end of his own) is asked as the next turn opens: boardgame.io cannot hold a turn open inside
+  its end hook, so the next turn's start (income, draw, cooldowns) runs first. Usability is judged at
+  the moment of the fall; what the start adds (souls, a cooldown ticked) only ever makes it easier.
+- **The kill's exp waits too.** The hit that drops a hero who can cancel its own fall holds its
+  killer's exp (`downedBy`) until the fall is decided: paid if it goes ahead, never if it is cancelled.
+- **The AI** answers through the same moves, choosing the answer whose position it values most
+  (`evalState`), and its lookahead answers a prompt its own line opens the way the rival would.
+- **First version:** one prompt per moment, answered before play goes on; no chains, no setting.
+
+**Charged ultimates**
+- **What counts.** Every point of damage that reaches the hero's HP — after resists and Shield (what a
+  Shield absorbs is not taken), the whole hit even past 0 HP, as the log prints it. Victor's own Aura
+  counts. Silver's count is every hit the engine attributes to her (the hit's source): her swings,
+  Boot Kick, her gear's procs, a swing at the Mid-Boss too.
+- **The count** is the hero's `tally` under the ultimate's id. Like the level it stays through a fall
+  and back in the hand; it starts over when the ultimate is used (paid). The price is the printed
+  cost less the count, never below 0 — with nothing counted it is the full printed price.
+- **Size.** Both cards keep a size for what the effect is worth (medium: half of 20 and of 16), which
+  prices nothing; the card and the button print the charged price ("Ult · charged 20", "20 → 7
+  souls") and the rule on a line of its own.
+
+**Victor**
+- **Aura of Suffering** fires at the start of his own turn while he is the Active, after the income
+  and the draw: a flat 1 spirit damage (no ✦) to each enemy hero, the bench included, then 1 to
+  Victor. It is dealt in a proc frame of his, so a kill is his (its exp) and nothing he wears reacts.
+  His own Shield and Spirit Resist cut his hit (and so charge less). It can fell him: then his prompt
+  is asked as his turn opens.
+- **Shocking Reanimation** is an optional trigger at 'onFall' and has no button use: its plate reads
+  "Asked when Victor falls". Used, he stands where he fell with half his max HP, rounded up, his
+  items and statuses as they were. The knockout never happens: no push, no kill on the rival's
+  record, no Bloodscent knockout for a Drifter, no `RESPAWN_TURNS` wait, no kill exp. It shows as a
+  cast of his ultimate and a revive (`revive` with `cancelled`). Sinclair's Audience Participation
+  cannot copy it (an optional trigger has nothing to cast at once).
+
+**Silver**
+- **Boot Kick**: the kick's 1 bullet damage is flat (no Attack added) and lands first; Vulnerable is
+  "takes +1 damage" as step 2 reads it (Bullet Resist −1 and Spirit Resist −1), for 2 turns that
+  tick on the target's turns, as Eternal Night's do.
+- **Lycan Curse**: "for 2 turns" is the wolf — the Wolf form status and its +3 Attack (Bullet Power)
+  for two of her turns, the one she uses it and her next, as Yamato's Shadow Transformation. Shield 6
+  is a Shield as section 3 defines it, there until it has blocked 6; it does not end with the form.
+- **Wolf form** is a status that tells the board to show the form (`StatusDef.form`): her card and
+  sheet show Deadlock's wolf card art and a "Wolf form" badge with its turns, and her own art again
+  when it ends. Its chip mark is the Lycan Curse icon. Sinclair copying Lycan Curse gets the stats
+  and the badge but keeps his own art.
+
+**Data**
+- Victor: Tank, tank 3, damage 2, many targets, late, not a gun hero (HP 6, Attack 1, +3 HP +1 Spirit,
+  Retreat 2). Silver: Bruiser, tank 2, damage 3, control 1, one target, mid, a gun hero (HP 6, Attack
+  2, +2 Attack +1 HP, Retreat 1). Both fit the formulas of section 2.
+- Builds (card-design.md §4): Victor Extra Health, Torment Pulse, Spirit Lifesteal, Spirit Shielding,
+  Fortitude, Leech; Silver Monster Rounds, Bullet Lifesteal, Swift Striker, Kinetic Dash, Berserker,
+  Frenzy. Their three-word keywords on the draft card (Undying · Aura · Reanimated; Bruiser ·
+  Shapeshifter · Bloodlust) are this game's, not Valve's.
+- Art: their portraits are the deadlock-api's (`frank`, `werewolf`; no hero-select crop exists for
+  them, as for Rem), their ultimate icons are the `signature4` icons, and the wolf is Deadlock's
+  `werewolf_wolf_card`.
 
