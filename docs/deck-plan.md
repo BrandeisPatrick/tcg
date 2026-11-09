@@ -89,3 +89,21 @@ A fallen hero goes to your hand after 2 of your turns and keeps its level (Patri
 The map (Guardian → Walker → Patron), rounds, exp and levels, the 140 items and their effects, item
 spells on cooldowns, the draft, story mode and the tutorial. Story and tutorial must keep working;
 where a lesson teaches the shop, change it to teach the deck.
+
+## As built (2026-11-09)
+
+Built on `deck-and-heroes`. Where the build reads the plan one way of several:
+
+- A fallen hero waits as a corpse in its slot for `RESPAWN_TURNS`, then goes to
+  the hand with its level and its items still on it. Benched again, it brings them.
+- A returning hero goes to the hand even when it is full (the cap of 10 limits draws).
+- An empty lane (a fallen Active gone to the hand) can take a hero straight from
+  the hand. A hero benched while the lane is open steps up, as a promotion.
+- The hero guarantee asks for a hero that can stand in the lane (Rem cannot).
+- The Cooldown items are actives now (they were passives in Deadlock and here),
+  so they leave the cooldown-cut rule behind. Their icons moved to `public/spells`.
+- A draw card owes no more discards than the hand holds.
+- Golden Goose Egg still pays its 2 souls: it is an item's own effect.
+- Story fights keep their rosters on the board and deal from a deck of items
+  (the saved deck, or the builds'). Lessons name their decks; most have none.
+- 45 upgrade links exist in the catalogue (the plan counted 46).

@@ -33,14 +33,15 @@ lock a skill. The engine fixes that by construction:
 
 | Module | Holds |
 |---|---|
-| `constants.ts` | every rule number (costs, caps, income and comeback, bounty, cooldowns, levels; the map's: `STRUCTURES`, the Guardian's bounty, the late game, the Mid-Boss, the Rejuvenator, the respawn bands, `ROUND_CAP`) |
-| `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn — and the map's clocks: `lateGame` / `pushMultiplier`, `respawnTurns`, `bossReturnRound`, `reviveLastRound`, `endsRound` / `endsLastRound`, `MATCH_TURNS` |
-| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skills, its ultimate, a borrowed ultimate; which one an action names), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `copiesOnSide`, `boughtAtDiscount`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`, `isRichestHero`, `killBounty`, `comebackBonus`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
-| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the shop (`buyBlocked`, `buyPrice`, `freeComponents`, `sellBlocked`, `sellRefund`, `moveItemBlocked`, `closeShopBlocked`), the hand (`playBlocked`, `playTargets`, `playComponent`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (a promotion owed blocks everything else; the step splits the rest; after the turn's attack only `endTurn` is left), `legalActions` |
+| `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss, the Rejuvenator, `RESPAWN_TURNS`, `ROUND_CAP`) |
+| `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn — and the map's clocks: `lateGame` / `pushMultiplier`, `bossReturnRound`, `reviveLastRound`, `endsRound` / `endsLastRound`, `MATCH_TURNS` |
+| `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skills, its ultimate, a borrowed ultimate; which one an action names), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `isHeroCard`, `laneOpen`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
+| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the hand (`playBlocked`, `playCost`, `playTargets`, `upgradeComponent`, `placeHeroBlocked`, `freeBenchSlot`, `chooseActiveBlocked`, `discardBlocked`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (an owed choice — the first Active, a promotion, a discard — blocks everything else; after the turn's attack only `endTurn` is left), `legalActions` |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
-| `actions/` | what each action does once it is legal: `shop` (`buy`, `sell`, `moveItem`, `closeShop`), `playCard` (a card from the hand onto a hero), `activate` (an active item), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the market) |
-| `map.ts`, `souls.ts` | the map: `newTrack`, `pushStructures` (front first, the Guardian's bounty, the Walker's flex slot), the Mid-Boss (`riseBoss`, `tallyBossHit`, `reapBoss`), the Rejuvenator lapsing (`lapseRevives`); `awardSouls`, the one way souls are paid |
-| `market.ts`, `rng.ts` | the match's market, drawn from `G.seed` (`openingMarket`, `addHero` / `buildOf`, `marketItems`, `onSale`, `marketByTab`, `marketStandIn`) and the seeded generator it draws with |
+| `actions/` | what each action does once it is legal: `hand` (`playCard`: an item onto a hero, an evolve, the upgrade shuffled in; `placeHero`; `chooseActive`; `discard`), `activate` (an active item), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the decks and the opening) |
+| `deck.ts` | the deck, the hand and the discard pile: the match's seeded stream (`nextRandom`, `shuffle`), what a side brings (`buildOf`, `sideDeckIds`, `fillDeck`), `drawCards`, `dealOpeningHand` (the hero guarantee), `toDiscard`, `oweDiscard` / `discardFromHand`, `shuffleIntoDeck` (an upgrade made), `heroToHand` (a fallen hero back) |
+| `map.ts`, `souls.ts` | the map: `newTrack`, `pushStructures` (front first, the Walker's flex slot), the Mid-Boss (`riseBoss`, `tallyBossHit`, `reapBoss`), the Rejuvenator lapsing (`lapseRevives`); `awardSouls`, the one way souls are paid outside the income (Golden Goose Egg) |
+| `rng.ts` | the seeded generator the match's stream draws with (`seededRandom`) |
 | `instances.ts` | card instances and items going on and off heroes: `makeInstance`, `attachItem` / `detachItem` (a passive's bonus on and off), `syncVitalitySpike` |
 | `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp |
 | `lane.ts` | `leaveActive`: what ends when a hero leaves the Active slot (a leaf, so death, statuses and the board moves all call it) |
@@ -68,61 +69,70 @@ seat 0's by default any more except `G.humanSeat` (seat 0, or null in a sim):
 a fallen Active is promoted on the spot for every other seat, and the human
 seat is asked (`pendingPromotion`).
 
-**Income.** Souls accumulate: nothing refills and nothing is lost at the end of
-a turn. At the start of every own turn (the first included) the lane pays
-`LANE_INCOME`, plus a comeback for a side that trails on net worth — souls
-plus the list price of every item its heroes wear and every card in its hand
-(`netWorth`): +1 at 8 behind, +2 at 16 (`COMEBACK_STEPS`) — and
-`SECOND_MOVER_FIRST_INCOME_BONUS` on the second mover's first. Cooldowns (the
-heroes' and the worn items') and respawn timers tick, on corpses too. There is
-no deck and nothing is drawn. The turn then opens on its shop step
-(`G.step = 'shop'`).
+**The deck.** A side's cards that are not on the board are in its deck (face
+down, drawn from the top: the end of `PlayerState.deck`), its hand or its
+discard pile. A drafted match builds each deck as the last pick lands
+(`openDraftedMatch`): the side's items — the human seat's saved deck
+(`G.playerDeck`, DECK_SIZE items, at most MAX_COPIES of one) when it is a
+legal one, else the deck its heroes' builds make (`deckFromBuilds`,
+cards/decks.ts: the builds read across, round by round) — and its four drafted
+heroes, shuffled from the match seed (`nextRandom`, counted in
+`G.counters.rng`, so a game replays from G alone). Each side draws OPENING_HAND
+with at least one hero that can stand in the lane (`dealOpeningHand`: a hand
+with none swaps a random item for a random such hero of the deck) and puts one
+hero from it in the lane as its first Active: an AI seat at once, the human
+seat when asked (`G.pendingActive`: only `chooseActive` is legal, for that
+seat's hand, from either seat). A scripted match (a Story fight, a lesson)
+keeps its rosters on the board and deals from a deck of items (`StorySetup`
+may name the decks, top first, and the opening hand's size).
 
-**The shop and the hand.** A turn has two steps. In the shop step only the
-shop's moves are legal for the player whose turn it is — `buy`, `sell`,
-`moveItem`, `closeShop` — plus `playCard`, `endTurn` and an owed promotion;
-`closeShop` moves the turn to its act step, where everything else is legal and
-the shop is shut (`blocked` answers `'shopOpen'` / `'notShop'`).
-- `buy(itemId)` pays `buyPrice`: `PRICE[tier]` (2 / 4 / 8 / 16 / 24), less the
-  component's price when a free copy of the item's `upgradesFrom` is on the
-  buyer's side — in its hand, or worn by one of its heroes (`freeComponents`:
-  the copies less the upgrades of that component already in the hand bought
-  for the difference, each of which will consume one). The new card goes to
-  `PlayerState.hand` (zone `'hand'`) with `boughtOnTurn` and `paid`. No hero is
-  chosen at the shop; the hand has no cap. A Story reward is a free card in the
-  hand at the start of the fight (no purchase record).
-- `playCard(cardIid, heroIid)` puts a card from the hand on one of the
-  player's heroes in a slot — the bench and corpses included — in either step,
-  never after the turn's attack. It is free, is not shopping and is not the
-  hero's ability for the turn. The hero needs a free slot (`slotCap`: 3, 4 with
-  the flex slot) unless it wears the card's component, and may not wear a copy
-  already (`playBlocked`). An active starts on its full cooldown
-  (`activeCooldown`) or, hard crowd control, with `HARD_CC_CHARGES`; a passive's
-  `bonus` goes on; the hero earns `EXP_ON_EQUIP` the first time it wears that
-  item. An upgrade consumes its component (`playComponent`): the copy the hero
-  wears, whose place it takes; else a copy in the hand; else — bought for the
-  difference — the copy another of the player's heroes wears; with none it goes
-  on as a plain item. A component from the hand that was itself bought for the
-  difference settles its own component the same way.
-- `sell(iid)` takes back a card from the hand or an item a hero wears: what
-  was paid on the turn it was bought, else half its price. A worn upgrade sold
-  on its buy turn gives back what its play consumed (`replaced`,
-  `replacedFrom`): onto the hero that wore it, room permitting, else into the
-  hand. The last free copy of a component an upgrade in the hand was bought
-  against cannot be sold (`'claimed'`). `moveItem` moves a worn item to
-  another hero; its cooldown and charges travel with it.
-- Items stay on through death. A hero wearing three items of one tab has that
-  tab's category spike (+1 Bullet Power, Spirit Power or max HP), read off what
-  it wears.
+**Income and the draw.** Souls accumulate: nothing refills and nothing is lost
+at the end of a turn. At the start of every own turn (the first included) the
+lane pays `LANE_INCOME` (5) — the only souls there are: kills, the Guardian and
+the Mid-Boss pay none, and there is no comeback (`SECOND_MOVER_FIRST_INCOME_BONUS`,
+the pie rule's dial, is 0). Cooldowns (the heroes' and the worn items', on
+corpses and on heroes waiting in the hand too) and the fallen heroes' waits
+tick; a hero whose wait is over goes back to the hand (`heroToHand`); then the
+side draws DRAW_PER_TURN (`drawCards`: a draw into a hand of MAX_HAND is
+skipped, an empty deck draws nothing and nothing else happens). A turn has no
+steps: the player plays from the hand, uses abilities and retreats until the
+turn's attack, which ends it.
 
-**The market.** `G.market` is fixed before the first pick from `G.seed`: every
-tier 1 item and a seeded slice (2 T2 + 2 T3 + 1 T4 + 1 T5 per tab, signatures
-excluded). As each hero is drafted its two signature items and every item of
-its build join (`addHero`): the human seat's saved build (`G.playerBuilds`,
-from the match config), every other seat's default (`cards/builds.ts`), so a
-build set up before the match can always be bought. A scripted match adds both
-rosters. The AI buys its build's next item and plays it at once onto the hero
-it bought it for, so it never holds a card.
+**The hand.** It holds heroes and items (zone `'hand'`); every move from it
+is `pid`'s own turn's, before the attack.
+- `placeHero(cardIid, toActive?)` puts a hero on the first free bench slot
+  (`freeBenchSlot`: not one a merged Rem will come back to) or, `toActive`,
+  into an EMPTY Active slot. Free. The state-based pass follows, so a hero
+  benched while the lane is open steps up (an AI seat's at once, the human
+  seat is asked).
+- `playCard(cardIid, heroIid, upgradeId?)` puts an item on one of the
+  player's heroes in a slot — the bench and corpses included — for `playCost`:
+  `PRICE[tier]` (2 / 4 / 8 / 16 / 24), or, an upgrade onto the hero that wears
+  its component (`upgradeComponent`), the difference: it evolves, taking the
+  component's place (on a full hero too), and the component goes to the
+  discard pile. On any other hero an upgrade costs its full price and evolves
+  nothing. The hero needs a free slot (`slotCap`: 3, 4 with the flex slot)
+  unless it evolves, and may not wear a copy already (`playBlocked`). An
+  active starts on its full cooldown (`activeCooldown`: the card's own
+  `cooldown` when it names one, else by tier) or, hard crowd control, with
+  `HARD_CC_CHARGES`; a passive's `bonus` goes on; the hero earns `EXP_ON_EQUIP`
+  the first time it wears that item. An item Deadlock builds into a bigger one
+  (`upgradesOf`, the cards' `upgradesFrom` read backwards) makes that upgrade
+  and shuffles it into the deck (`shuffleIntoDeck`, a `deck` event): the
+  player's pick (`upgradeId`) when there are several — `legalActions` lists
+  one play per upgrade then — the first otherwise.
+- The draw cards (the Cooldown family, actives declaring `draw` on their
+  ability) draw and then owe a discard (`oweDiscard`: never more than the hand
+  holds): `G.pendingDiscard` makes `discard(cardIids)` — any cards of the
+  hand, up to what is owed — the only legal move until it is paid.
+- Items stay on through death, and a fallen hero carries them back to the
+  hand. A hero wearing three items of one tab has that tab's category spike
+  (+1 Bullet Power, Spirit Power or max HP), read off what it wears. Hand
+  items count in net worth at list price (a hero card at 0).
+
+Every move of a card between the deck, the hand and the discard pile is a
+`deck` FX event (`shuffle`, `draw`, `discard`, `upgrade`, `toHand`), for the
+board's animation layer; the FX timeline ignores them.
 
 **Abilities.** Each hero uses one ability a turn — a skill, an active item it
 wears (`activate`, in a cast frame whose source is the bearer; it then cools
@@ -149,10 +159,13 @@ inside the one attack. Turn 1 has no attack, and a promotion off a fallen
 Active is free and brings in a hero who may make the attack if none has been
 made.
 
-**Kills and the end.** A kill pays the victim's opponent its level + 1, and 2
-more if it was strictly the richest hero on the board (`killBounty`), and pushes
-the same level + 1 into the victim's side's structures (`killPush`); the hero
-respawns with its items and level after `respawnTimer` own turns. A board with
+**Kills and the end.** A kill pays no souls; it pushes the victim's level + 1
+into the victim's side's structures (`killPush`) and goes on the record. The
+fallen hero waits `RESPAWN_TURNS` (2) of its owner's turns in its slot as a
+corpse (`respawnTimer`), then goes back to its owner's hand at full HP with its
+level and items (`heroToHand`), its slot left empty; with `RESPAWN_TURNS` 0 it
+goes straight there. An empty or fallen Active slot is filled from the bench
+(`laneOpen`: the promotion), or, empty, from the hand (`placeHero`). A board with
 every hero down is no loss by itself: at the End, if the rival has no standing
 hero, the ending player's standing Active pushes its bullet power into the
 rival's structures. How a match ends is the map's (below).
@@ -163,9 +176,8 @@ rival's structures. How a match ends is the map's (below).
 (`PlayerState.structures`; a Story fight or a lesson may give a shorter one,
 `StorySetup.patronHp` / `structures`). `pushStructures` damages the front
 standing structure and carries the rest on; what is left past the Patron is
-lost. A felled Guardian pays the pushing side `GUARDIAN_BOUNTY` souls, a felled
-Walker gives every hero of that side the flex slot (`slotCap`), a felled Patron
-loses the match. Pushes come from kills and from an empty lane, both doubled
+lost. No fall pays souls: a felled Walker gives every hero of the pushing side
+the flex slot (`slotCap`), a felled Patron loses the match. Pushes come from kills and from an empty lane, both doubled
 from round `LATE_GAME_ROUND` (`pushMultiplier`). Every structure hit is a
 `push` event and every fall a `fall` event.
 
@@ -178,20 +190,19 @@ swing's own hit through (no ability, proc, rider, bounce or tick), nothing the
 attacker carries reacts, it does not ricochet, `addStatus` refuses it and
 `targetsFor` never lists it. Each side's damage is tallied (`G.bossDamage`); at
 0 HP the state-based pass gives it to the side with more (`bossTaker`: then the
-side behind on net worth, then the last hit), with `BOSS_SOULS` souls and the
-Rejuvenator. At the End of a turn in which a hero attacked it, it hits that
+side behind on net worth, then the last hit), with the Rejuvenator (no souls). At the End of a turn in which a hero attacked it, it hits that
 hero for `BOSS_RETALIATION` pure damage; a death from it pays no bounty and
 pushes nothing (`fallToBoss`).
 
 **The Rejuvenator.** `reviveCredits` revives, good through round
 `reviveUntilRound` (`reviveLastRound`): a hero of the side that falls while one
-is live is paid for and pushed as usual, then comes straight back in place at
+is live is pushed as usual, then comes straight back in place at
 full HP with its items and level (a `revive` event with `credit`), a credit
 spent. Credits lapse as their last round ends (`lapseRevives`).
 
-**Respawn by round.** A fallen hero waits `respawnTurns` own turns — 1 in
-rounds 1–4, 2 in rounds 5–8, 3 from round 9 — and one more when it was
-strictly the richest hero on the board (`respawnTimer`).
+**The wait.** A fallen hero waits `RESPAWN_TURNS` own turns in every round,
+whatever it wears (`respawnTimer`), and then goes back to the hand. The
+Mid-Boss keeps its own return (`BOSS_RESPAWN_ROUNDS`).
 
 **The end.** `checkWinner` (boardgame.io's `endIf`): a side whose Patron has
 fallen loses; both at once, and round `ROUND_CAP` ending (`G.capped`, set as
@@ -216,7 +227,7 @@ Siphon's steal); what it does for the attacker stays with the swing — every
 self-heal, Tesla's chain, Mixed Bullets' spirit half, Fixation's extra swing —
 each of those procs returns on `bounce`. A bounce meets the hero's own Bullet
 Resist, Shield and Return Fire, and a kill by it is the attacker's: the exp
-through the frame's source, the KO bounty and the push when the attack
+through the frame's source, the kill and the push when the attack
 resolves, once, at its end.
 
 ## Adding or changing a card

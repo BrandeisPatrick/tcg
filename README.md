@@ -1,8 +1,9 @@
 # Deadlock TCG
 
-A fan-made, turn-based card game set in **Valve's Deadlock**: draft four
-heroes, earn souls, buy Deadlock's items, fight in one lane and push down the
-rival's Patron. One player against an AI, as a single-page React app.
+A fan-made, turn-based card game set in **Valve's Deadlock**: build a deck of
+Deadlock's items, draft four heroes into it, draw, pay souls to put items on
+your heroes, fight in one lane and push down the rival's Patron. One player
+against an AI, as a single-page React app.
 
 **Live demo:** https://brandeispatrick.github.io/tcg/ (GitHub Pages, deployed
 from `main` on every push by `.github/workflows/deploy.yml`)
@@ -15,57 +16,82 @@ from `main` on every push by `.github/workflows/deploy.yml`)
 ## How a match plays
 
 The title screen offers Quick Match, the Tutorial (five lessons), Story (a
-roguelike run over a map of New York), Loadout (your builds) and the Gallery.
-A Quick Match goes like this.
+roguelike run over a map of New York), Loadout (your squad, your deck and your
+builds) and the Gallery. A Quick Match goes like this.
+
+### Your deck
+
+- Built on the Loadout screen, which looks like Deadlock's shop: Weapon,
+  Vitality and Spirit tabs, rows by tier, the item icons. Tap an item to add a
+  copy; tap one in the deck to take a copy out.
+- A deck is 16 items, any tier, at most 4 copies of one.
+- No saved deck (or one short of 16)? You are dealt one made from your drafted
+  heroes' builds: every hero's first build item, then every hero's second, and
+  so on until 16. The rival's deck is always made this way.
 
 ### The draft
 
 - 19 heroes from Deadlock's roster. Each has an ultimate, and either a skill
   (eleven heroes) or a passive (eight).
-- A snake draft, four heroes each: one Active in the lane, three on the bench.
+- A snake draft, four heroes each. Your four are shuffled into your deck: 20
+  cards.
 - The pie rule: you draft first, and the rival moves first. Its first turn has
   no attack.
+
+### The opening
+
+- Each side draws 5 cards, at least one of them a hero that can stand in the
+  lane (the Pokémon TCG Pocket rule: a hand with none swaps a random item for a
+  random hero from the deck).
+- You choose one hero from your hand as your Active. It is your only hero on
+  the board; the others come as you draw them.
 
 ### Souls
 
 - Souls accumulate. Nothing refills, and nothing is lost at the end of a turn.
-- Each of your turns opens with 4 souls of income.
-- The comeback: if your net worth (souls, plus the list price of every item
-  your heroes wear and every card in your hand) trails the rival's by 8 or
-  more, income pays 1 more; by 16 or more, 2 more.
-- A kill pays the killer's side the victim's level + 1, and 2 more if it was
-  the richest hero on the board. A felled Guardian pays 2, the Mid-Boss 4.
+- Each of your turns opens with 5 souls of income. That is the only way to get
+  souls: kills, the Guardian and the Mid-Boss push the map and give exp, and
+  pay none, so the side ahead cannot snowball. (One item, Golden Goose Egg,
+  still pays 2.)
 
-### The turn: Income, Shop, Act, End
+### The turn: Income, Act, End
 
-The dial under the turn number lights each step. Income is automatic: souls
-arrive, and every cooldown and respawn timer ticks down one.
+The dial under the turn number lights each step. Income is automatic: 5 souls
+arrive, you draw a card, every cooldown ticks down one, and a fallen hero whose
+wait is over goes back to your hand.
 
-**Shop.** The turn opens on the shop sheet: Weapon, Vitality and Spirit tabs,
-tier rows priced 2 / 4 / 8 / 16 / 24 souls.
+**The hand.** It holds heroes and items, up to 10 cards; a draw into a full
+hand is skipped, and an empty deck simply draws nothing.
 
-- Buying puts the card in your hand. No hero is chosen at the shop.
-- Play a card from the hand onto any of your heroes, bench and fallen heroes
-  included. Playing is free, and works in the shop and in the act until the
-  turn's attack.
+- Tap a hero to put it on the bench (up to 3), for free, or into the lane when
+  it is empty.
+- Tap an item, then a hero, to put it on that hero for its price: 2 / 4 / 8 /
+  16 / 24 souls by tier. Any hero of yours takes it, bench and fallen heroes
+  included, until the turn's attack.
 - A hero wears 3 items, or 4 once your side has felled the rival's Walker.
   Items stay on through death.
-- Upgrades: buy an item while its component is on your side (worn, or in the
-  hand) and you pay the difference. Playing it consumes the component.
-- Sell from the hand or off a hero: all you paid on the turn you bought it,
-  half its price (rounded down) after.
-- Move a worn item to another of your heroes. Its cooldown or charges move with
-  it.
+- Upgrades evolve: an item played onto the hero wearing the item it is built
+  from takes that item's place and costs the difference (Superior Cooldown over
+  Compress Cooldown costs 4, not 8). The old item goes to the discard pile. On
+  any other hero, an upgrade costs its full price.
+- Playing an item that Deadlock builds into a bigger one makes that upgrade and
+  shuffles it into your deck. Where there are several (Extra Health → Fortitude
+  or Colossus), you pick. Each copy played makes one.
 - Three items from one tab on one hero give that tab's category spike: +1
   Bullet Power (Weapon), +1 Spirit Power (Spirit) or +1 max HP (Vitality).
-- The market is fixed for the match: every tier-1 item; a slice drawn from the
-  match seed before the draft (per tab, two each of tiers 2 and 3 and one each
-  of tiers 4 and 5); and, as each hero is drafted on either side, its two
-  signature items and every item of its build.
-- The sheet shows your heroes' builds with the next affordable item lit. A
-  build is six items per hero, in order, set on the Loadout screen.
+- Your deck and your discard pile sit at the ends of your hand with their
+  counts (the rival's beside its hand). Tap the discard pile to list it.
 
-Buying, selling and moving are shop-only. Close the shop to move on to the Act.
+**The draw cards.** Deadlock's three Cooldown items are the draw engine:
+actives worn on a hero and cast from its sheet (free), then they wait 2 turns.
+
+| Card | Tier | Price | Cast | Cards kept |
+|---|---|---|---|---|
+| Compress Cooldown | 2 | 4 | draw 2, discard 1 | +1 |
+| Superior Cooldown | 3 | 8 | draw 4, discard 2 | +2 |
+| Transcendent Cooldown | 4 | 16 | draw 8, discard 4 | +4 |
+
+You choose the discards from anywhere in your hand.
 
 **Act.**
 
@@ -86,7 +112,8 @@ Buying, selling and moving are shop-only. Close the shop to move on to the Act.
   Active slot and may make the attack.
 
 **End.** Statuses tick. If the rival has no standing hero, your Active pushes
-into the empty lane for its bullet power. The Mid-Boss hits the hero that
+into the empty lane for its bullet power (an empty lane is easy to come by
+early, when a side has one hero on the board). The Mid-Boss hits the hero that
 attacked it for 2. Heroes earn exp for the turn: 2 for the Active, 1 for the
 bench.
 
@@ -101,33 +128,33 @@ Each level gives +1 HP, +1 Bullet Power and +1 Spirit Power.
 - Every kill of an enemy hero, Active or bench, pushes the victim's level + 1.
   An empty lane pushes the Active's bullet power. From round 9 (both players'
   ninth turns) pushes deal double.
-- A fallen Guardian pays 2 souls. A fallen Walker gives every hero of the side
-  that felled it a fourth item slot. A fallen Patron loses the match.
+- A fallen Walker gives every hero of the side that felled it a fourth item
+  slot. A fallen Patron loses the match. No fall pays souls.
 - The Mid-Boss rises in the pit at the start of round 4. It has 10 HP, and only
   basic attacks hurt it. When it falls, the side that dealt it more damage
   takes it (a tie goes to the side behind on net worth, then to the last hit):
-  4 souls and the Rejuvenator. It rises again 4 rounds after the round it fell
-  in.
+  the Rejuvenator. It rises again 4 rounds after the round it fell in.
 - The Rejuvenator holds 2 revives, good through the end of the second round
-  after the one it was taken in. A credited hero that falls still pays and
-  pushes, then revives in place at full HP.
-- Respawn: a fallen hero waits 1 of its side's turns in rounds 1–4, 2 in rounds
-  5–8 and 3 from round 9, plus 1 if it was the richest hero on the board. It
-  comes back with its items and level.
+  after the one it was taken in. A credited hero that falls still pushes, then
+  revives in place at full HP.
+- A fallen hero waits in its slot for 2 of its side's turns (`RESPAWN_TURNS`
+  in `src/engine/constants.ts`; 0 sends it straight to the hand), then goes
+  back to your hand at full HP with its level and items, to be benched again.
 - The round cap: after round 12, the side with more structure HP wins, then
   the side with more net worth, then the second mover.
 
 ### The rival AI
 
-The rival picks only from the engine's legal moves. It shops its build by rule
-and weighs everything else by playing it on a copy of the game. Every match
-plays Normal for now; the engine keeps three strengths for the sims, and no
-screen sets them:
+The rival picks only from the engine's legal moves and plays your rules: its
+deck is made from its heroes' builds, it benches the heroes it draws, puts
+items on the heroes whose builds list them, evolves upgrades, casts its draw
+cards (discarding what it wants least) and picks the upgrade its builds name.
+It weighs each move by playing it on a copy of the game. Every match plays
+Normal for now; the engine keeps three strengths for the sims, and no screen
+sets them:
 
-- **Easy:** Normal with seeded noise in its choices; it buys the first
-  affordable build item and never saves.
-- **Normal:** the default. It saves when its Active's next build item is a turn
-  or two of income away.
+- **Easy:** Normal with seeded noise in its choices.
+- **Normal:** the default.
 - **Hard:** plays every line out to the turn's attack at each target it could
   aim at, and retreats only when that shows a gain.
 
@@ -136,14 +163,16 @@ screen sets them:
 
 140 item cards, each a current Deadlock shop item under its own name, tab and
 tier. An active item is always a spell and a passive item always equipment
-([`docs/card-design.md`](./docs/card-design.md) §1). Cells read passives ·
+([`docs/card-design.md`](./docs/card-design.md) §1), with one exception: the
+Cooldown family, passives in Deadlock, are the deck's draw cards here, so they
+are actives ([`docs/deck-plan.md`](./docs/deck-plan.md)). Cells read passives ·
 actives; the column heads give the price.
 
 | Tab | T1 · 2 | T2 · 4 | T3 · 8 | T4 · 16 | T5 · 24 | All |
 |---|---|---|---|---|---|---|
 | Weapon | 4 · 0 | 12 · 2 | 13 · 4 | 8 · 1 | 2 · 0 | 46 |
 | Vitality | 3 · 2 | 11 · 3 | 4 · 7 | 10 · 6 | 0 · 1 | 47 |
-| Spirit | 4 · 2 | 9 · 3 | 7 · 4 | 7 · 8 | 1 · 2 | 47 |
+| Spirit | 4 · 2 | 8 · 4 | 6 · 5 | 6 · 9 | 1 · 2 | 47 |
 | All | 15 | 40 | 39 | 40 | 6 | 140 |
 
 The prices follow Deadlock's 1 : 2 : 4 : 8 ladder (800 to 6,400 souls there),
@@ -235,17 +264,19 @@ workflow, the WebP encoder and the gotchas.
 
 ```
 src/
-├── engine/      boardgame.io game state and every rule: the turn, the shop, the map, combat
-├── cards/       heroes, items (spells.ts, equipment.ts), ultimates, default builds, hero art
+├── engine/      boardgame.io game state and every rule: the turn, the deck and the hand, the map, combat
+├── cards/       heroes, items (spells.ts, equipment.ts), ultimates, default builds, deck rules (decks.ts), hero art
 ├── abilities/   every effect as an AbilityDef (skills, passives, ultimates, items)
 ├── ai/          the heuristic AI and its difficulty dial
 ├── story/       the campaign: the route, its stops and their fights
 ├── tutorial/    the lessons the coach walks
-├── storage/     what persists between matches (builds, the AI dial, match config)
+├── storage/     what persists between matches (the deck, builds, the AI dial, match config)
 ├── art/         asset URL bases and the credits table the Gallery renders
 ├── qa/          the virtual clock the QA films run on (?vtclock=1)
-├── ui/          React components: the board and its map strip, the shop sheet (shop/),
-│                the build editor (collection/), the draft and hero sheets, the story map, …
+├── ui/          React components: the board and its map strip, the hand and the card piles
+│                (board/CardPiles.tsx), the discard, upgrade and opening sheets (overlays/),
+│                the deck builder and build editor (collection/), item tiles and tooltips
+│                (shop/), the draft and hero sheets, the story map, …
 │   └── effects/fx/  the board-FX player (timeline scheduler, animation families,
 │                    and stage/ — the canvas particle world with height)
 └── statuses/    Status taxonomy + display metadata
@@ -268,6 +299,17 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
 ```
 
 ## Known follow-ups
+
+- **The deck game's scripts.** `scripts/balance-sim.ts`, `scripts/replay-trace.ts`,
+  `scripts/eval/*` and `scripts/qa/legality.mjs` still drive the shop's moves
+  (buy, closeShop, the market). They are outside `tsc`'s include and are not
+  run during design work; port them to the hand's moves before the next
+  testing round.
+- **Early empty lanes.** A side opens with one hero on the board, and a hero
+  that falls is out for two turns and then back in the hand. Until more heroes
+  are drawn, one kill can empty a lane, and the End's push into an empty lane
+  then lands every turn; AI-vs-AI games ended in rounds 3–9. The numbers are
+  the hero rules' to set (docs/hero-design.md).
 
 - **The fuzz oracle.** `tests/engine/fuzz/invariants.spec.ts` allow-lists one
   violation as KNOWN (`revive-spend@endTurn`, seed 40155): an End step that
