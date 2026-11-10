@@ -16,7 +16,7 @@ import { Client } from 'boardgame.io/client';
 import type { CardId, CardInstance, DeckFx, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, HEROES, ITEMS, itemCard } from '@/cards';
 import { defaultBuild } from '@/cards/builds';
-import { copyCounts, deckFromBuilds, deckProblem, isLegalDeck, upgradesOf, ITEM_SLOTS, catalogueByTab } from '@/cards/decks';
+import { baseItem, buildsAcross, copyCounts, deckFromBuilds, deckProblem, isBaseItem, isLegalDeck, rebaseDeck, upgradesOf, ITEM_SLOTS, catalogueByTab } from '@/cards/decks';
 import { DeadlockGame } from '@/engine/game';
 import { setupGame } from '@/engine/actions/setup';
 import { buildOf, nextRandom, shuffle, sideDeckIds } from '@/engine/deck';
@@ -73,6 +73,10 @@ describe('what makes a deck', () => {
     expect(deckProblem([...legal.slice(1), 'grit'])).toBe('copies');
     expect(deckProblem([...legal.slice(1), 'hero_haze'])).toBe('notItem');
     expect(isLegalDeck(undefined)).toBe(false);
+    // An upgrade never starts in a deck: playing its component shuffles it in.
+    expect(deckProblem([...legal.slice(1), 'improved_spirit'])).toBe('upgrade');
+    expect(isLegalDeck([...legal.slice(1), 'titanic_magazine'])).toBe(false);
+    expect(isLegalDeck([...legal.slice(1), 'extended_magazine'])).toBe(true);
     expect(copyCounts(['grit', 'grit', 'cold_front'])).toEqual({ grit: 2, cold_front: 1 });
   });
 
@@ -104,15 +108,54 @@ describe('what makes a deck', () => {
   });
 });
 
+describe('an upgrade and its base item', () => {
+  it('a base item has no upgradesFrom; an upgrade walks down to the one that has none', () => {
+    expect(isBaseItem('extra_spirit')).toBe(true);
+    expect(isBaseItem('improved_spirit')).toBe(false);
+    expect(isBaseItem('hero_haze')).toBe(false);
+    expect(baseItem('extra_spirit')).toBe('extra_spirit');
+    expect(baseItem('boundless_spirit')).toBe('extra_spirit');
+    expect(baseItem('transcendent_cooldown')).toBe('improved_cooldown');
+    expect(baseItem('hero_haze')).toBeUndefined();
+    for (const item of ITEMS) expect(isBaseItem(baseItem(item.id)!), item.id).toBe(true);
+  });
+
+  it('rebaseDeck makes every upgrade its base item and makes up what the cap turns away from the fill', () => {
+    expect(rebaseDeck(['improved_spirit', 'grit', 'nope', 'hero_haze'])).toEqual(['extra_spirit', 'grit']);
+    const five = ['extra_spirit', 'extra_spirit', 'improved_spirit', 'boundless_spirit', 'improved_spirit'];
+    expect(rebaseDeck(five)).toEqual(Array(MAX_COPIES).fill('extra_spirit'));
+    expect(rebaseDeck(five, ['surge_of_power', 'grit', 'cold_front'])).toEqual([...Array(MAX_COPIES).fill('extra_spirit'), 'grit']);
+  });
+});
+
 describe('the deck made from the heroes\' builds', () => {
-  it('reads the builds across — every hero\'s first item, then every hero\'s second… — until it holds DECK_SIZE', () => {
+  it('reads the builds across — every hero\'s first item, then every hero\'s second… — each upgrade as its base item, until it holds DECK_SIZE', () => {
     const heroes = TEST_ROSTERS['0'];
     const deck = deckFromBuilds(heroes.map(defaultBuild));
     expect(deck).toHaveLength(DECK_SIZE);
     expect(isLegalDeck(deck)).toBe(true);
     const across: CardId[] = [];
-    for (let i = 0; i < 6; i++) for (const h of heroes) across.push(defaultBuild(h)[i]);
-    expect(deck).toEqual(across.slice(0, DECK_SIZE));
+    for (let i = 0; i < 6; i++) for (const h of heroes) across.push(baseItem(defaultBuild(h)[i])!);
+    expect(buildsAcross(heroes.map(defaultBuild))).toEqual(across);
+    // Taken in that order while each has room under the cap.
+    const want: CardId[] = [];
+    for (const id of across) if (want.length < DECK_SIZE && want.filter((x) => x === id).length < MAX_COPIES) want.push(id);
+    expect(deck).toEqual(want);
+  });
+
+  it('holds no upgrade: Rem\'s Improved and Boundless Spirit come as Extra Spirit, her Healing Nova as Healing Rite', () => {
+    const rem = deckFromBuilds([defaultBuild('hero_rem')]);
+    expect(rem.every(isBaseItem)).toBe(true);
+    expect(rem).not.toContain('improved_spirit');
+    expect(copyCounts(rem).extra_spirit).toBe(MAX_COPIES);
+    expect(rem).toContain('healing_rite');
+    // Every hero with any three others: base items only.
+    const all = HEROES.map((h) => h.id);
+    for (let i = 0; i < all.length; i++) {
+      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length], all[(i + 3) % all.length]];
+      const deck = deckFromBuilds(four.map(defaultBuild));
+      expect(deck.filter((id) => !isBaseItem(id)), four.join(',')).toEqual([]);
+    }
   });
 
   it('caps an item at MAX_COPIES and goes round again when the builds are short', () => {

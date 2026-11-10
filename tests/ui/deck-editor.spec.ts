@@ -6,7 +6,7 @@ import { ACTIVE_COOLDOWN, DECK_SIZE, HARD_CC_CHARGES, LANE_INCOME, MAX_COPIES } 
 import { buildsFrom, buildsInto, effectText, statLines, useFacts } from '@/ui/shop/itemFacts';
 import { nextTip, type TipRequest } from '@/ui/shop/tips';
 import { turnIncome } from '@/ui/board/IncomeTick';
-import { DECK_EDITOR, DeckEditor, addLabel } from '@/ui/collection/DeckEditor';
+import { DECK_EDITOR, DeckEditor, addLabel, upgradeSource } from '@/ui/collection/DeckEditor';
 import { freshReadyGame } from '../engine/_helpers';
 
 // The deck builder (the shop's replacement before the match) prints no item
@@ -99,5 +99,14 @@ describe('the deck builder prints no item text', () => {
     expect(addLabel('grit', 2, 5)).toBe('Add Grit to the deck (2 in it)');
     expect(addLabel('grit', MAX_COPIES, 5)).toContain(`${MAX_COPIES} in the deck`);
     expect(addLabel('grit', 1, DECK_SIZE)).toBe('Grit: the deck is full');
+  });
+
+  it('an upgrade is shown greyed, never added: its name says the card that makes it', () => {
+    expect(upgradeSource('grit')).toBeNull();
+    expect(upgradeSource('improved_spirit')).toBe('Comes from playing Extra Spirit');
+    expect(upgradeSource('transcendent_cooldown')).toBe('Comes from playing Superior Cooldown');
+    expect(addLabel('improved_spirit', 0, 0)).toBe('Improved Spirit: an upgrade, not in a deck. Comes from playing Extra Spirit');
+    const html = renderToStaticMarkup(createElement(DeckEditor, { squad: ['hero_haze'] }));
+    expect(html).toContain('aria-label="Titanic Magazine: an upgrade, not in a deck. Comes from playing Extended Magazine" aria-disabled="true"');
   });
 });

@@ -9,7 +9,9 @@
  *   catalogue  every item by tab, in the shop's tier rows. Tap a tile to put a
  *              copy in (MAX_COPIES of one at most, DECK_SIZE in all); a tap
  *              that cannot add one shakes the tile and says why. A tile the
- *              deck holds carries its count
+ *              deck holds carries its count. An upgrade is greyed: it never
+ *              starts in a deck, it comes from playing its component (its
+ *              name and tooltip say which)
  *
  * A long-press (a right-click, a mouse rest) on any tile opens its tooltip; a
  * second tap opens the full card. Every change is saved at once. A deck short
@@ -21,7 +23,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import type { CardId, ItemSlot } from '@/engine/types';
 import { ITEMS, cardName, itemCard } from '@/cards';
-import { catalogueByTab, copyCounts, deckFromBuilds } from '@/cards/decks';
+import { catalogueByTab, copyCounts, deckFromBuilds, isBaseItem } from '@/cards/decks';
 import { DECK_SIZE, MAX_COPIES } from '@/engine/constants';
 import { getBuild, getDeck, saveDeck } from '@/storage/playerData';
 import { ShopTile } from '../shop/ShopTile';
@@ -43,16 +45,28 @@ const ORDER: Record<CardId, number> = Object.fromEntries(ITEMS.map((i, k) => [i.
 /** The deck builder's sheet name, by which the tutorial and the QA scripts find it. */
 export const DECK_EDITOR = 'Deck builder';
 
+/** Where an upgrade comes from: "Comes from playing Extra Spirit" (its
+ *  component, `upgradesFrom`), or null for a base item, which a deck may hold. */
+export function upgradeSource(id: CardId): string | null {
+  if (isBaseItem(id)) return null;
+  const from = itemCard(id)?.upgradesFrom;
+  return from ? `Comes from playing ${cardName(from)}` : null;
+}
+
 /** A catalogue tile's accessible name: what a tap on it does. */
 export function addLabel(id: CardId, copies: number, size: number): string {
   const name = cardName(id);
+  const source = upgradeSource(id);
+  if (source) return `${name}: an upgrade, not in a deck. ${source}`;
   if (copies >= MAX_COPIES) return `${name}: ${MAX_COPIES} in the deck, the most it may hold`;
   if (size >= DECK_SIZE) return `${name}: the deck is full`;
   return `Add ${name} to the deck${copies > 0 ? ` (${copies} in it)` : ''}`;
 }
 
 /** Why a copy of `id` cannot go in, or null when it can. */
-function addRefusal(copies: number, size: number): string | null {
+function addRefusal(id: CardId, copies: number, size: number): string | null {
+  const source = upgradeSource(id);
+  if (source) return source;
   if (copies >= MAX_COPIES) return `At most ${MAX_COPIES} copies of one item`;
   if (size >= DECK_SIZE) return `A deck holds ${DECK_SIZE} items`;
   return null;
@@ -90,7 +104,7 @@ export function DeckEditor({ squad }: {
 
   /** A catalogue tap: one more copy in, or false (the tile shakes). */
   const add = (id: CardId): boolean => {
-    const no = addRefusal(counts[id] ?? 0, deck.length);
+    const no = addRefusal(id, counts[id] ?? 0, deck.length);
     if (no) { say(no); return false; }
     commit([...deck, id]);
     return true;
@@ -310,7 +324,7 @@ export function DeckEditor({ squad }: {
             itemId={tip.itemId}
             anchor={tip.anchor}
             passive={tip.passive}
-            note={`${counts[tip.itemId] ?? 0} of ${MAX_COPIES} in the deck`}
+            note={upgradeSource(tip.itemId) ?? `${counts[tip.itemId] ?? 0} of ${MAX_COPIES} in the deck`}
             onClose={() => setTip(null)}
             onOpenCard={() => { setCard(tip.itemId); setTip(null); }}
           />
@@ -373,7 +387,7 @@ const CatalogueTile = memo(function CatalogueTile({ itemId, size, copies, label,
         itemId={itemId}
         size={size}
         label={label}
-        grey={copies >= MAX_COPIES}
+        grey={copies >= MAX_COPIES || !isBaseItem(itemId)}
         marks={copies > 0 ? { copies } : undefined}
         onTap={() => {
           if (!itemCard(itemId)) return;
