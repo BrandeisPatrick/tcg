@@ -26,17 +26,19 @@ export const scale = {
   display: 24,
 } as const;
 
-type SoulsTone = 'mint' | 'short' | 'paper';
+type SoulsTone = 'mint' | 'short' | 'paper' | 'paperShort';
 const SOULS_INK: Record<SoulsTone, string> = {
   mint: poster.soul,
   short: poster.soulShort,
   paper: poster.soulInk,
+  paperShort: poster.redDeep,
 };
 
 /**
  * A souls amount, the one way the game prints it: Deadlock's soul wisp and
  * the number beside it — mint on a dark ground, `tone` 'paper' (ink green) on
- * a cream sheet, 'short' for a price you cannot pay yet. `plate` sets it on a
+ * a cream sheet, 'short' for a price you cannot pay yet ('paperShort' for
+ * one printed on paper). `plate` sets it on a
  * small paper tag with an ink keyline — a price that reads on any ground.
  */
 export function Souls({ n, size = scale.number, tone = 'mint', plate = false, style }: {
@@ -47,7 +49,7 @@ export function Souls({ n, size = scale.number, tone = 'mint', plate = false, st
   style?: CSSProperties;
 }) {
   // On the paper tag the number is ink green, or the red of a short price.
-  const ink = plate ? (tone === 'short' ? poster.redDeep : poster.soulInk) : SOULS_INK[tone];
+  const ink = plate ? (tone === 'short' || tone === 'paperShort' ? poster.redDeep : poster.soulInk) : SOULS_INK[tone];
   return (
     <span data-souls style={{
       display: 'inline-flex', alignItems: 'center', gap: Math.max(2, Math.round(size * 0.2)),

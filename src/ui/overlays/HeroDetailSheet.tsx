@@ -1,7 +1,7 @@
 /**
- * The hero sheet — Pokémon TCG Pocket's action view, worn in Deadlock's own
- * interface (its dark teal-black panel, framed in the side's colour: amber
- * for yours, sapphire for the rival's). It answers one question — what can I
+ * The hero sheet — Pokémon TCG Pocket's action view, printed on the match's
+ * own cream paper with flat ink (the health bar says whose hero it is: green
+ * for yours, red for the rival's). It answers one question — what can I
  * do with this hero right now? — so it says each fact once:
  *
  *   header     the portrait, the name, the level ring, the health bar and
@@ -54,14 +54,14 @@ import { useFxCalm } from '../effects/fx/FxMotionContext';
 // ---- The sheet's three text styles: a name, a caption, a number. ----
 const NAME: CSSProperties = {
   fontFamily: fonts.display, fontSize: T.number, letterSpacing: '0.05em',
-  textTransform: 'uppercase', lineHeight: 1.1, color: poster.cream,
+  textTransform: 'uppercase', lineHeight: 1.1, color: poster.ink,
 };
 const CAPTION: CSSProperties = {
-  fontFamily: fonts.ui, fontSize: T.label, fontWeight: 500, lineHeight: 1.3, color: poster.creamDim,
+  fontFamily: fonts.ui, fontSize: T.label, fontWeight: 500, lineHeight: 1.3, color: poster.inkDim,
 };
 const NUMBER = (size: number): CSSProperties => ({
   fontFamily: fonts.ui, fontWeight: 800, fontSize: size, lineHeight: 1,
-  fontVariantNumeric: 'tabular-nums', color: poster.cream,
+  fontVariantNumeric: 'tabular-nums', color: poster.ink,
 });
 /** A caption cut to its one line. */
 const ONE_LINE: CSSProperties = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 };
@@ -79,10 +79,10 @@ const eyebrow = {
 const PAD = 8;
 /** The header's height: the portrait's, at the card art's 280×380. */
 const HEAD = 118;
-/** A hairline on the dark panel. */
-const RULE_DARK = 'rgba(232, 224, 204, 0.16)';
-/** The marks (dials, pips) on the dark panel. */
-const MARKS_DARK = { ink: poster.cream, track: 'rgba(232, 224, 204, 0.28)', faint: poster.creamFaint };
+/** A hairline on the paper. */
+const RULE = poster.inkRule;
+/** The marks (dials, pips) on the paper. */
+const MARKS = { ink: poster.ink, track: poster.inkRule, faint: poster.inkFaint };
 /** A strip tile's side and the gap between tiles. */
 const TILE = 30;
 const TILE_GAP = 5;
@@ -216,7 +216,7 @@ export function HeroDetailSheet({
 }: Props) {
   const { isMobile, width: vw } = useViewport();
   // The match's reduced-motion choice (the Board fills this context from
-  // useCalmMotion): no entrance spring, no pulsing glow.
+  // useCalmMotion): no entrance spring.
   const calm = useFxCalm();
   const [infoOpen, setInfoOpen] = useState(false);
   const [openChip, setOpenChip] = useState<string | null>(null);
@@ -227,7 +227,6 @@ export function HeroDetailSheet({
   if (!data || data.type !== 'hero') return null;
 
   const mine = !!isMine;
-  const side = mine ? poster.you : poster.rival;
   const kit = heroAbilities(data);
   const skillAbilities = kit.filter((x) => x.kind === 'skill').map((x) => x.ability);
   const passiveAbilities = kit.filter((x) => x.kind === 'passive').map((x) => x.ability);
@@ -246,7 +245,7 @@ export function HeroDetailSheet({
     if (n <= 0 && !face?.charged) return undefined;
     return (
       <span role="img" aria-label={label} style={{ display: 'inline-flex' }}>
-        <Souls n={n} size={T.number} tone={short ? 'short' : 'mint'} />
+        <Souls n={n} size={T.number} tone={short ? 'paperShort' : 'paper'} />
       </span>
     );
   };
@@ -365,7 +364,7 @@ export function HeroDetailSheet({
           style={{
             position: 'relative', width: TILE, height: TILE, padding: 0, flexShrink: 0,
             border: 'none', background: 'transparent', lineHeight: 0, borderRadius: 6,
-            boxShadow: open ? `0 0 0 2px ${poster.cream}` : undefined,
+            boxShadow: open ? `0 0 0 2px ${poster.ink}` : undefined,
             cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
           }}
         >
@@ -444,7 +443,7 @@ export function HeroDetailSheet({
         transition={calm ? { duration: 0 } : spring.snappy}
         style={{ flexShrink: 0, width: cardW, maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}
       >
-        {/* THE CARD — Deadlock's dark panel, framed in the side's colour. */}
+        {/* THE CARD — one paper sheet with an ink keyline. */}
         <div
           data-hero-card
           onClick={closePops}
@@ -454,7 +453,6 @@ export function HeroDetailSheet({
             width: cardW, boxSizing: 'border-box',
             display: 'flex', flexDirection: 'column', gap: 8,
             padding: PAD, borderRadius: 12,
-            border: `1px solid ${side}`,
           }}
         >
           {/* HEADER — portrait, name, level, health; the "i". */}
@@ -462,15 +460,15 @@ export function HeroDetailSheet({
             <div style={{
               position: 'relative', width: portraitW, height: HEAD, flexShrink: 0,
               borderRadius: 7, overflow: 'hidden', background: poster.ground,
-              boxShadow: `0 0 0 1px ${side}`,
+              boxShadow: `0 0 0 1.5px ${poster.ink}`,
             }}>
               <HeroPortrait cardId={data.id} art={form?.art} />
               <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: printEdge }} />
               {form && (
                 <span role="note" style={{
                   ...CAPTION, ...ONE_LINE, position: 'absolute', left: 0, right: 0, bottom: 0,
-                  padding: '3px 4px', textAlign: 'center', color: poster.cream,
-                  background: 'rgba(8, 20, 19, 0.85)', borderTop: `1px solid ${poster.status.buff}`,
+                  padding: '3px 4px', textAlign: 'center', color: poster.paper,
+                  background: poster.ink, borderTop: `1.5px solid ${poster.status.buff}`,
                 }}>{`${form.label} · ${form.turns}`}</span>
               )}
             </div>
@@ -487,9 +485,9 @@ export function HeroDetailSheet({
                     position: 'relative', zIndex: 9, flexShrink: 0,
                     width: 30, height: 30, padding: 0, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: infoOpen ? poster.cream : 'transparent',
-                    color: infoOpen ? poster.ink : poster.cream,
-                    border: `1.5px solid ${poster.creamDim}`,
+                    background: infoOpen ? poster.ink : 'transparent',
+                    color: infoOpen ? poster.paper : poster.ink,
+                    border: `1.5px solid ${poster.ink}`,
                     fontFamily: 'Georgia, "Times New Roman", serif', fontStyle: 'italic', fontWeight: 700, fontSize: T.number, lineHeight: 1,
                     cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
                   }}
@@ -501,7 +499,7 @@ export function HeroDetailSheet({
                   <span style={hpNumberStyle(T.display)}>{card.hp}</span>
                   <span style={{ ...CAPTION }}>{`/ ${card.hpMax}`}</span>
                 </span>
-                <HpSegments hp={card.hp} max={card.hpMax} shield={shield} width="calc(100% - 4px)" height={10} style={{ marginLeft: 2 }} />
+                <HpSegments hp={card.hp} max={card.hpMax} shield={shield} side={mine ? 'you' : 'rival'} width="calc(100% - 4px)" height={10} style={{ marginLeft: 2 }} />
               </div>
             </div>
           </div>
@@ -524,7 +522,7 @@ export function HeroDetailSheet({
                       ...plateStyle, ...NUMBER(T.body),
                       width: TILE, height: TILE, padding: 0, flexShrink: 0, boxSizing: 'border-box',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      borderStyle: 'dashed', borderColor: poster.creamDim,
+                      borderStyle: 'dashed', borderColor: poster.inkDim,
                       cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
                     }}
                   >{`+${hidden.length}`}</button>
@@ -534,7 +532,8 @@ export function HeroDetailSheet({
                 <div onClick={(e) => e.stopPropagation()} style={{
                   ...plateStyle, position: 'absolute', zIndex: 10, top: TILE + 6, left: 0, right: 0,
                   padding: 8, display: 'flex', flexWrap: 'wrap', gap: TILE_GAP,
-                  boxShadow: '0 10px 24px rgba(0, 0, 0, 0.55)',
+                  background: poster.paper, borderColor: poster.ink,
+                  boxShadow: '0 3px 0 rgba(0, 0, 0, 0.3)',
                 }}>
                   {hidden.map((t) => t.node)}
                 </div>
@@ -577,8 +576,8 @@ export function HeroDetailSheet({
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span aria-hidden style={{ width: 6, height: 6, transform: 'rotate(45deg)', background: poster.creamDim, flexShrink: 0 }} />
-                  <span style={{ ...NAME, fontSize: T.body, color: poster.creamDim, flex: 1 }}>{ability.name}</span>
+                  <span aria-hidden style={{ width: 6, height: 6, transform: 'rotate(45deg)', background: poster.inkDim, flexShrink: 0 }} />
+                  <span style={{ ...NAME, fontSize: T.body, color: poster.inkSoft, flex: 1 }}>{ability.name}</span>
                   <span aria-hidden style={{ ...CAPTION, fontSize: T.body }}>{open ? '−' : '+'}</span>
                 </span>
                 {open && <span style={{ ...CAPTION, paddingLeft: 14 }}>{sentence(plainRule(ability.text, scale))}</span>}
@@ -609,7 +608,7 @@ export function HeroDetailSheet({
                 <>
                   <span>Retreat</span>
                   {retreat.cost > 0
-                    ? <Souls n={retreat.cost} size={T.body} tone={shortOfSouls(retreat.blockedReason) ? 'short' : 'mint'} />
+                    ? <Souls n={retreat.cost} size={T.body} tone={retreat.blockedReason ? (shortOfSouls(retreat.blockedReason) ? 'short' : 'mint') : 'paper'} />
                     : <span style={{ fontSize: T.label, opacity: 0.8 }}>Free</span>}
                 </>
               )}
@@ -637,7 +636,7 @@ function plainRule(rule: string, scale: Scale): string {
  * one number at the right.
  *
  *   ready    the row is the button, edged in its colour; a usable ultimate
- *            glows (`chargedGlow`) and wears the ultimate mark
+ *            wears a double keyline (`chargedGlow`) and the ultimate mark
  *   used /   dimmed; the one reason ("Used", "Level 2", "Need 8 souls")
  *   blocked  stands in the number's place (the attack's under its name),
  *            and the line goes
@@ -687,7 +686,7 @@ function ActionRow({
           <span role="img" aria-label={ultLabel} style={{
             position: 'absolute', right: -4, top: -4, width: 16, height: 16, borderRadius: '50%',
             display: glow ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center',
-            background: ink, boxShadow: `0 0 0 1.5px ${poster.slate}`,
+            background: ink, boxShadow: `0 0 0 1.5px ${poster.ink}`,
           }}>
             <span aria-hidden style={ultimateGlyph(12, poster.ink)} />
           </span>
@@ -695,11 +694,11 @@ function ActionRow({
       </span>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ ...NAME, ...ONE_LINE, opacity: dim ? 0.5 : 1 }}>{name}</span>
-        {caption && <span style={{ ...CAPTION, ...ONE_LINE, color: dim ? poster.cream : poster.creamDim }}>{caption}</span>}
+        {caption && <span style={{ ...CAPTION, ...ONE_LINE, color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
       </span>
       <span style={{ flexShrink: 0, maxWidth: '42%', display: 'flex', justifyContent: 'flex-end' }}>
         {dim && !reasonBelow && said
-          ? <span title={reason} style={{ ...CAPTION, ...ONE_LINE, color: poster.cream, textAlign: 'right' }}>{said}</span>
+          ? <span title={reason} style={{ ...CAPTION, ...ONE_LINE, color: poster.inkSoft, textAlign: 'right' }}>{said}</span>
           : <span style={{ opacity: dim ? 0.45 : 1, display: 'inline-flex' }}>{right}</span>}
       </span>
     </>
@@ -709,9 +708,9 @@ function ActionRow({
     ...plateStyle,
     display: 'flex', alignItems: 'center', gap: 10,
     minHeight: 60, padding: '7px 12px 7px 8px', boxSizing: 'border-box',
-    background: dim ? 'rgba(8, 20, 19, 0.55)' : plateStyle.background,
-    borderColor: ready ? ink : 'rgba(232, 224, 204, 0.12)',
-    boxShadow: glow ? chargedGlow(ink) : ready ? `0 0 0 1px ${ink}` : 'none',
+    background: dim ? 'transparent' : ready ? poster.paper : plateStyle.background,
+    borderColor: ready ? poster.ink : poster.inkRule,
+    boxShadow: glow ? chargedGlow(ink) : ready ? `0 2px 0 ${poster.ink}` : 'none',
   };
 
   if (!ready) return <div style={row}>{inner}</div>;
@@ -721,9 +720,7 @@ function ActionRow({
       role="button"
       tabIndex={0}
       aria-label={ariaLabel}
-      whileTap={calm ? undefined : { scale: 0.98, filter: 'brightness(1.15)' }}
-      animate={glow && !calm ? { boxShadow: [chargedGlow(ink), `0 0 0 1.5px ${ink}, 0 0 20px 3px color-mix(in srgb, ${ink} 75%, transparent), inset 0 0 14px color-mix(in srgb, ${ink} 30%, transparent)`, chargedGlow(ink)] } : undefined}
-      transition={glow && !calm ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut' } : undefined}
+      whileTap={calm ? undefined : { scale: 0.98 }}
       onClick={go}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } }}
       style={{ ...row, cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
@@ -757,12 +754,12 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
         <span style={{ ...NAME, fontSize: T.body }}>{name}</span>
         <span style={{ ...CAPTION, flexShrink: 0 }}>{tag}</span>
       </div>
-      <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.creamDim }}>
-        <RuleText text={sentence(rule)} keywordColor={poster.cream} scale={scale} />
+      <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.inkSoft }}>
+        <RuleText text={sentence(rule)} keywordColor={poster.ink} scale={scale} />
       </div>
       {note && (
         <div style={{ ...CAPTION, fontStyle: 'italic' }}>
-          <RuleText text={note} keywordColor={poster.cream} scale={scale} />
+          <RuleText text={note} keywordColor={poster.ink} scale={scale} />
         </div>
       )}
     </div>
@@ -803,7 +800,9 @@ function ItemPopover({
     ...style,
     boxSizing: 'border-box',
     overflow: 'hidden',
-    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.5)',
+    background: poster.paper,
+    borderColor: poster.ink,
+    boxShadow: '0 3px 0 rgba(0, 0, 0, 0.3)',
   };
   const bandRow = (ink: string, name: string, tag?: string) => (
     <div style={{
@@ -825,7 +824,7 @@ function ItemPopover({
         {turns != null && (
           <div style={{ ...bodyStyle, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <HeroBadge cardId={item.cardId} size={30} />
-            <span style={{ ...text.body, fontSize: T.body, lineHeight: 1.35, color: poster.cream }}>
+            <span style={{ ...text.body, fontSize: T.body, lineHeight: 1.35, color: poster.inkSoft }}>
               {`Back to the bench in ${turns} turn${turns === 1 ? '' : 's'}.`}
             </span>
           </div>
@@ -841,27 +840,27 @@ function ItemPopover({
   const charges = hardCC ? item.charges ?? 0 : item.charges ?? undefined;
   const used = usedId === item.cardId;
   const usable = mine && active && !!onUse && !!offer?.canUse && !used;
-  const ink = face ? shopInk(face.slot).ink : poster.cream;
+  const ink = face ? shopInk(face.slot).ink : poster.paperBand;
 
   return (
     <div role="group" aria-label={data?.name ?? item.cardId} onClick={(e) => e.stopPropagation()} style={shell}>
       {bandRow(ink, data?.name ?? item.cardId, face ? `${CATEGORY_WORD[face.slot]} · T${face.tier}${active ? ' · Active' : ''}` : undefined)}
       <div style={bodyStyle}>
         {face?.text && (
-          <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.cream }}>
-            <RuleText text={sentence(face.text)} keywordColor={poster.cream} scale={scale} />
+          <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.inkSoft }}>
+            <RuleText text={sentence(face.text)} keywordColor={poster.ink} scale={scale} />
           </div>
         )}
         {(charges !== undefined || left > 0) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...text.body, fontSize: T.label, color: poster.creamDim }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...text.body, fontSize: T.label, color: poster.inkDim }}>
             {charges !== undefined ? (
               <>
-                <ChargePips left={charges} total={hardCC ? HARD_CC_CHARGES : Math.max(charges, 1)} ink={MARKS_DARK.ink} faint={MARKS_DARK.faint} label={`${charges} charge${charges === 1 ? '' : 's'} left`} />
+                <ChargePips left={charges} total={hardCC ? HARD_CC_CHARGES : Math.max(charges, 1)} ink={MARKS.ink} faint={MARKS.faint} label={`${charges} charge${charges === 1 ? '' : 's'} left`} />
                 <span>{`${charges} charge${charges === 1 ? '' : 's'} left`}</span>
               </>
             ) : (
               <>
-                <CooldownDial left={left} full={full} size={22} ink={MARKS_DARK.ink} track={MARKS_DARK.track} label={readyIn(left, full)} />
+                <CooldownDial left={left} full={full} size={22} ink={MARKS.ink} track={MARKS.track} label={readyIn(left, full)} />
                 <span>{`Ready in ${left} turn${left === 1 ? '' : 's'}`}</span>
               </>
             )}
@@ -877,14 +876,14 @@ function ItemPopover({
               style={{
                 ...bandStyle(ink),
                 alignSelf: 'stretch', marginTop: 2, minHeight: 36, borderRadius: 5, border: 'none',
-                boxShadow: `${bandStyle(ink).boxShadow}, 0 0 0 1px ${ink}, 0 0 10px color-mix(in srgb, ${ink} 50%, transparent)`,
+                boxShadow: `inset 0 0 0 1.5px ${poster.ink}, 0 2px 0 ${poster.ink}`,
                 cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
               }}
             >Use</motion.button>
           ) : (used || offer?.blockedReason) ? (
             <div style={{
-              paddingTop: 7, borderTop: `1px solid ${RULE_DARK}`,
-              ...text.body, fontSize: T.label, lineHeight: 1.3, color: poster.cream, textAlign: 'center',
+              paddingTop: 7, borderTop: `1px solid ${RULE}`,
+              ...text.body, fontSize: T.label, lineHeight: 1.3, color: poster.inkDim, textAlign: 'center',
             }}>{used ? 'Used this turn' : offer?.blockedReason}</div>
           ) : null
         )}
@@ -898,16 +897,16 @@ function ItemPopover({
 /**
  * Behind the "i": the level, the live stats (BP / HP / SPI and the category
  * spikes), what the card is built from, and the effects on it now — one
- * column on the dark panel, each part under its eyebrow, hairlines between.
+ * column on a paper panel, each part under its eyebrow, hairlines between.
  */
 function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: HeroCard; level: number; onClose: () => void }) {
   const spike = (slot: ItemSlot) => (hasSpike(card, slot) ? <SpikeMark slot={slot} size={12} style={{ marginTop: 1 }} /> : undefined);
   const atMax = level >= MAX_LEVEL;
   const need = LEVEL_THRESHOLDS[Math.max(0, Math.min(LEVEL_THRESHOLDS.length - 1, level - 1))];
   const section = (label: string) => (
-    <div style={{ ...eyebrow, fontSize: T.floor, color: poster.creamDim }}>{label}</div>
+    <div style={{ ...eyebrow, fontSize: T.floor, color: poster.inkDim }}>{label}</div>
   );
-  const rule = <div aria-hidden style={{ height: 1, background: RULE_DARK }} />;
+  const rule = <div aria-hidden style={{ height: 1, background: RULE }} />;
   return (
     <div
       role="region"
@@ -917,37 +916,37 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
         position: 'absolute', top: PAD, left: PAD, right: PAD, zIndex: 8,
         maxHeight: `calc(100% - ${PAD * 2}px)`, overflowY: 'auto', boxSizing: 'border-box',
         padding: '10px 14px 14px',
-        background: poster.slate, color: poster.cream,
-        border: `1px solid ${RULE_DARK}`,
+        background: poster.paper, color: poster.ink,
+        border: `1.5px solid ${poster.ink}`,
         borderRadius: 7,
-        boxShadow: '0 10px 26px rgba(0, 0, 0, 0.45)',
+        boxShadow: '0 3px 0 rgba(0, 0, 0, 0.3)',
         display: 'flex', flexDirection: 'column', gap: 10,
         cursor: 'default',
       }}
     >
       {/* Header, clear of the "i" at the top right. */}
       <div style={{ minHeight: 28, display: 'flex', alignItems: 'center', margin: '-1px 40px 0 0' }}>
-        <span style={{ ...eyebrow, color: poster.cream }}>
+        <span style={{ ...eyebrow, color: poster.ink }}>
           {atMax ? `Level ${level} · max` : `Level ${level} · ${card.exp ?? 0}/${need} exp`}
         </span>
       </div>
       {rule}
       {section('Stats')}
       <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
-        <InfoStat label="BP" value={effectiveAtk(card)} color={shopInk('weapon').ink} mark={spike('weapon')} />
-        <InfoStat label="HP" value={`${card.hp}/${card.hpMax}`} color="#ffffff" mark={spike('vitality')} />
-        <InfoStat label="SPI" value={effectiveSpirit(card)} color={shopInk('spirit').ink} mark={spike('spirit')} />
+        <InfoStat label="BP" value={effectiveAtk(card)} color={poster.stat.atk} mark={spike('weapon')} />
+        <InfoStat label="HP" value={`${card.hp}/${card.hpMax}`} color={poster.stat.hp} mark={spike('vitality')} />
+        <InfoStat label="SPI" value={effectiveSpirit(card)} color={poster.stat.spirit} mark={spike('spirit')} />
       </div>
       {rule}
       {section('Abilities')}
       <HeroRules card={card} data={data} />
       {rule}
       {section('Profile')}
-      <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.creamDim }}>
+      <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.inkSoft }}>
         {`${data.profile.role} · peaks ${data.profile.curve} · each level ${growthLine(data.growth)} · Retreat `}
         {data.retreat === 0
           ? 'free'
-          : <span role="img" aria-label={souls(data.retreat)} style={{ display: 'inline-flex', verticalAlign: 'middle' }}><Souls n={data.retreat} size={T.body} /></span>}
+          : <span role="img" aria-label={souls(data.retreat)} style={{ display: 'inline-flex', verticalAlign: 'middle' }}><Souls n={data.retreat} size={T.body} tone="paper" /></span>}
       </div>
       {card.statuses.length > 0 && (
         <>
@@ -963,10 +962,10 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
                   {/* The turns left are said in words below, so the chip
                       carries the mark and the value only. */}
                   <StatusIcon id={s.id} value={s.value} />
-                  <span style={{ ...text.label, fontSize: T.label, color: poster.cream, minWidth: 0 }}>{def?.title ?? s.id}</span>
+                  <span style={{ ...text.label, fontSize: T.label, color: poster.ink, minWidth: 0 }}>{def?.title ?? s.id}</span>
                 </div>
                 {def?.desc && (
-                  <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.35, color: poster.creamDim }}>
+                  <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.35, color: poster.inkSoft }}>
                     {`${def.desc.replace('<value>', String(s.value))}${turns}`}
                   </div>
                 )}
@@ -987,14 +986,14 @@ function InfoStat({ label, value, color, mark }: { label: string; value: number 
         <span style={{ ...text.numeric, fontSize: T.title, color }}>{value}</span>
         {mark}
       </span>
-      <span style={{ ...eyebrow, fontSize: T.floor, color: poster.creamDim }}>{label}</span>
+      <span style={{ ...eyebrow, fontSize: T.floor, color: poster.inkDim }}>{label}</span>
     </div>
   );
 }
 
 // ----- Under the card -----
 
-/** Pocket's pill: Retreat (a dark plate edged in your amber, its price on it;
+/** Pocket's pill: Retreat (a paper pill with an ink keyline, its price on it;
  *  the one reason under it when it is blocked) and Close (an outline on the scrim). A
  *  real <button>, so a blocked one is `disabled`. */
 function Pill({
@@ -1022,10 +1021,10 @@ function Pill({
         padding: caption ? '7px 18px 8px' : '0 22px',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
         borderRadius: 999,
-        background: flat ? 'transparent' : plateStyle.background,
-        color: flat ? (disabled ? poster.creamDim : poster.cream) : poster.cream,
-        border: `1.5px solid ${flat ? (ghost && !disabled ? poster.creamDim : poster.creamFaint) : poster.you}`,
-        boxShadow: flat ? 'none' : `0 6px 16px rgba(0, 0, 0, 0.35), inset 0 0 10px color-mix(in srgb, ${poster.you} 18%, transparent)`,
+        background: flat ? 'transparent' : poster.paper,
+        color: flat ? (disabled ? poster.creamDim : poster.cream) : poster.ink,
+        border: `1.5px solid ${flat ? (ghost && !disabled ? poster.creamDim : poster.creamFaint) : poster.ink}`,
+        boxShadow: flat ? 'none' : '0 3px 0 rgba(0, 0, 0, 0.35)',
         cursor: disabled ? 'default' : 'pointer',
         WebkitTapHighlightColor: 'transparent',
       }}
