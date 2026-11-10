@@ -2,9 +2,10 @@
  * The match's opening: choose your first Active from your four drafted
  * heroes (docs/deck-plan.md, "Start of the match"). A carousel, so it fits a
  * phone: the hero in the middle is its real card, large (stats, skill and
- * ultimate, the face the hero wears everywhere), its neighbours peek in
- * smaller at the sides, and the heroes rotate round — a swipe left or right,
- * the arrows, the keyboard's arrows, or a tap on a neighbour. One button
+ * ultimate, the face the hero wears everywhere), its neighbours peek in at
+ * the sides as art alone — a dimmed portrait tile, about half its size — and
+ * the heroes rotate round — a swipe left or right, the arrows, the
+ * keyboard's arrows, or a tap on a neighbour. One button
  * confirms: "Start with Warden". The sheet blocks the board until it is
  * pressed (no backdrop dismiss; the rival's own choice stays unseen until
  * then). Under reduced motion the rotation snaps instead of animating.
@@ -16,12 +17,13 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { motion } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
+import { HeroPortrait } from '@/cards/art/heroArt';
 import { CardFrame, SIZES } from '../card/CardFrame';
 import { useCalmMotion } from '../effects/fx/FxMotionContext';
 import type { Rect } from '../effects/fx/geometry';
 import { useViewport } from '../hooks/useViewport';
-import { fonts, spring, text } from '../tokens';
-import { poster, sheetStyle, scrimStyle } from '../poster';
+import { fonts, spring } from '../tokens';
+import { poster, sheetStyle, scrimStyle, printEdge } from '../poster';
 import { PosterButton } from '../chrome';
 
 interface Props {
@@ -92,13 +94,15 @@ export function OpeningPicker({ candidates, onPick }: Props) {
     else if (d === -1) prev();
   };
 
-  // The stage: the middle card at `scale`, the neighbours smaller, a step
-  // apart, within what the screen allows (a 375px phone shows the middle
-  // card whole with the neighbours' edges in).
+  // The stage: the middle card at `scale`, the neighbours' tiles a little
+  // over half its size, tucked behind its edges with most of their art out,
+  // within what the screen allows (a 375px phone shows the middle card whole
+  // and the stage clips the tiles' outer edges).
   const scale = isMobile ? Math.min(0.6, (vw - 48) / CARD.w * 0.62) : 0.78;
-  const side = scale * 0.7;
-  const step = CARD.w * scale * 0.74;
-  const stageW = Math.min(vw - 32, CARD.w * scale + 2 * step * 0.55 + 24);
+  const side = scale * 0.55;
+  const peek = CARD.w * side * 0.7;
+  const step = CARD.w * scale / 2 + peek - CARD.w * side / 2;
+  const stageW = Math.min(vw - 32, CARD.w * scale + 2 * peek + 16);
   const stageH = CARD.h * scale + 16;
   const transition = calm ? { duration: 0 } : spring.default;
 
@@ -115,7 +119,7 @@ export function OpeningPicker({ candidates, onPick }: Props) {
         animate={{ y: 0, scale: 1 }}
         transition={calm ? { duration: 0 } : spring.snappy}
         role="dialog"
-        aria-label="Choose your first Active"
+        aria-label="Choose your Active"
         style={{
           ...sheetStyle,
           display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -128,10 +132,7 @@ export function OpeningPicker({ candidates, onPick }: Props) {
         }}
       >
         <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 17 : 22, letterSpacing: '0.12em', textTransform: 'uppercase', lineHeight: 1 }}>
-          Choose your first Active
-        </span>
-        <span style={{ ...text.body, color: poster.inkDim, textAlign: 'center', maxWidth: 460 }}>
-          {isMobile ? 'Swipe to look through your heroes.' : 'Use the arrows, or ← and →, to look through your heroes.'} The one you start with takes the lane; the rest go into your deck.
+          Choose your Active
         </span>
 
         {/* The stage, with the arrows at its sides. */}
@@ -163,8 +164,8 @@ export function OpeningPicker({ candidates, onPick }: Props) {
                   animate={{
                     x: d * step,
                     scale: s,
-                    opacity: shown ? (d === 0 ? 1 : 0.72) : 0,
-                    filter: d === 0 ? 'none' : 'saturate(0.7) brightness(0.85)',
+                    opacity: shown ? (d === 0 ? 1 : 0.62) : 0,
+                    filter: d === 0 ? 'none' : 'saturate(0.6) brightness(0.72)',
                   }}
                   transition={transition}
                   style={{
@@ -180,7 +181,9 @@ export function OpeningPicker({ candidates, onPick }: Props) {
                     boxShadow: d === 0 ? '0 18px 36px rgba(0, 0, 0, 0.45)' : '0 8px 18px rgba(0, 0, 0, 0.3)',
                   }}
                 >
-                  <CardFrame cardId={c.cardId} size="full" physical={false} tapExplains={false} selected={d === 0} glow={d === 0 ? 'accent' : null} />
+                  {d === 0
+                    ? <CardFrame cardId={c.cardId} size="full" physical={false} tapExplains={false} selected glow="accent" />
+                    : <PortraitTile cardId={c.cardId} />}
                 </motion.div>
               );
             })}
@@ -230,5 +233,24 @@ function Arrow({ dir, onTap, compact }: { dir: 'left' | 'right'; onTap: () => vo
     >
       <span aria-hidden style={{ transform: 'translateY(-1px)' }}>{dir === 'left' ? '‹' : '›'}</span>
     </motion.button>
+  );
+}
+
+/** A neighbour at the stage's side: the hero's art alone, in the card's
+ *  charcoal frame — no rules and no name (the tile mostly hides behind the
+ *  middle card, which would cut a name in half), so the middle card is the
+ *  only one with words. Drawn at the card's full size; the stage scales it. */
+function PortraitTile({ cardId }: { cardId: string }) {
+  return (
+    <div style={{
+      position: 'relative', width: '100%', height: '100%', boxSizing: 'border-box',
+      padding: 10, borderRadius: 14,
+      background: poster.frame, border: `3px solid ${poster.edge}`,
+    }}>
+      <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 8, overflow: 'hidden', background: poster.ground }}>
+        <HeroPortrait cardId={cardId} />
+        <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: printEdge, pointerEvents: 'none' }} />
+      </div>
+    </div>
   );
 }
