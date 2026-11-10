@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { animate, motion } from 'framer-motion';
 import type { GameState, PlayerID } from '@/engine/types';
-import { LANE_INCOME } from '@/engine/constants';
-import { fonts, spring, text } from '../tokens';
-import { chamfer, clipBoth, poster, soulCoin } from '../poster';
+import { spring, text } from '../tokens';
+import { poster } from '../poster';
+import { Souls, scale } from '../hud';
+import { useLaneBox } from './TurnBanner';
 
 /** What `pid` collected at the start of the turn in play — the engine's own
  *  income line in the log ("P0 +5 Souls (income)."): the total and its
@@ -32,17 +33,14 @@ export function turnIncome(G: GameState, pid: PlayerID): { total: number; seat: 
 }
 
 /**
- * The Income beat of your turn: the souls the lane paid count up on the souls
- * plaque, and the card drawn is named, so the turn's money and its card are
- * seen arriving before they are spent.
+ * The Income beat of your turn: your souls count up on a small paper tag at
+ * the foot of the lane's middle column (under the turn stamp, over the dial:
+ * no card, number or control is under it), with what the turn paid and the
+ * cards it drew on one line beneath.
  */
-export function IncomeTick({ G, me, rightInset = 0 }: {
-  G: GameState;
-  me: PlayerID;
-  /** Px at the right the desktop side panel takes, so the plate centres on the board. */
-  rightInset?: number;
-}) {
+export function IncomeTick({ G, me }: { G: GameState; me: PlayerID }) {
   const paid = turnIncome(G, me);
+  const lane = useLaneBox();
   const end = G.players[me].souls;
   const start = Math.max(0, end - (paid?.total ?? 0));
   const [shown, setShown] = useState(start);
@@ -51,47 +49,32 @@ export function IncomeTick({ G, me, rightInset = 0 }: {
     return () => run.stop();
   }, [start, end]);
   if (!paid) return null;
+  const cards = paid.drew > 0 ? `${paid.drew} card${paid.drew === 1 ? '' : 's'}` : '';
   return (
-    <div style={{ position: 'fixed', top: 0, bottom: 0, left: 0, right: rightInset, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 87, pointerEvents: 'none' }}>
+    <div style={{
+      position: 'fixed', left: lane.left, width: lane.width, top: lane.top, height: lane.height,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      paddingBottom: 2, boxSizing: 'border-box', zIndex: 87, pointerEvents: 'none',
+    }}>
       <motion.div
         role="status"
-        aria-label={`Income: +${paid.total} souls${paid.drew ? `, ${paid.drew} card${paid.drew === 1 ? '' : 's'} drawn` : ''}`}
-        initial={{ opacity: 0, y: 14, scale: 0.94 }}
+        aria-label={`Income: +${paid.total} souls${cards ? `, ${cards} drawn` : ''}`}
+        initial={{ opacity: 0, y: 8, scale: 0.94 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -10, transition: { duration: 0.18 } }}
+        exit={{ opacity: 0, y: -6, transition: { duration: 0.18 } }}
         transition={spring.snappy}
         style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-          padding: '12px 18px 13px',
-          background: poster.frame, border: `1.5px solid ${poster.edge}`, borderRadius: 10,
-          boxShadow: '0 22px 50px rgba(0, 0, 0, 0.55)',
-          color: poster.cream,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+          maxWidth: '100%', boxSizing: 'border-box', padding: '5px 9px 6px',
+          background: poster.paper, color: poster.ink, borderRadius: 6,
+          boxShadow: `inset 0 0 0 1.5px ${poster.ink}, 0 2px 0 rgba(0, 0, 0, 0.3)`,
         }}
       >
-        <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.3em', color: poster.creamDim }}>Income</span>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 9,
-          padding: '6px 14px 6px 10px', background: poster.paperBand, color: poster.ink,
-          ...clipBoth(chamfer(7)),
-        }}>
-          <span style={soulCoin(20)} />
-          <span style={{ fontFamily: fonts.display, fontSize: 30, lineHeight: 1, fontVariantNumeric: 'tabular-nums', minWidth: 34, textAlign: 'center' }}>{shown}</span>
-        </span>
-        <span style={{ display: 'flex', gap: 6 }}>
-          <Part>+{paid.total - paid.seat || LANE_INCOME} lane</Part>
-          {paid.seat > 0 && <Part>+{paid.seat} second mover</Part>}
-          {paid.drew > 0 && <Part ink={poster.green}>+{paid.drew} card{paid.drew === 1 ? '' : 's'}</Part>}
+        <Souls n={shown} size={scale.title} tone="paper" />
+        <span style={{ ...text.label, fontSize: scale.floor, letterSpacing: '0.06em', lineHeight: 1, color: poster.inkDim, whiteSpace: 'nowrap' }}>
+          {`+${paid.total}${cards ? ` · +${cards}` : ''}`}
         </span>
       </motion.div>
     </div>
-  );
-}
-
-function Part({ children, ink = poster.creamDim }: { children: React.ReactNode; ink?: string }) {
-  return (
-    <span style={{
-      ...text.label, fontSize: 10, letterSpacing: '0.1em', padding: '3px 7px', borderRadius: 999,
-      border: `1.5px solid ${ink}`, color: ink, whiteSpace: 'nowrap',
-    }}>{children}</span>
   );
 }

@@ -29,9 +29,9 @@ import { admitBatch } from './admitBatch';
 
 const Z = 90;
 /** An upgrade or a drafted hero shown over the table: the deck's height on
- *  screen, times this (the stage is scaled to the screen, so the deck's box
+ *  screen, times this (the deck's pile is sized with the board, so its box
  *  says how big the table is). */
-const STAGE_SCALE = 2;
+const STAGE_SCALE = 2.6;
 /** The pop as an upgrade appears, ms. */
 const APPEAR_POP_MS = 180;
 
@@ -50,7 +50,7 @@ interface Props {
    *  by iid): a placement starts there when the card is no longer on screen. */
   origins?: Map<string, Rect>;
   ticker: PileTicker;
-  /** The table plane's tilt, degrees (BoardTable's TABLE_TILT): a ghost
+  /** A tilted table plane's angle, degrees (the board is flat now): a ghost
    *  turns to it as it lands on a slot or a pile, and from it as it leaves
    *  one, so a flat card never lands on a tilted one. 0 for a flat table. */
   tilt?: number;
@@ -165,13 +165,15 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
         const chip = document.querySelector(`[data-worn-iid="${a.iid}"]`);
         if (chip) return toRect(chip);
         // The chip has gone (the ride is over): where the chips sit, at the
-        // foot of the bearer's tile, a chip's height.
+        // foot of the bearer's art (HeroSlot's `data-face`), a chip's height.
         const el = slotRefs.get(a.bearerIid);
         if (!el || !el.isConnected) return null;
         const r = restRect(el);
-        const h = Math.max(24, r.height * 0.18);
+        const face = el.querySelector('[data-face]');
+        const art = face ? toRect(face) : r;
+        const h = Math.max(18, r.height * 0.12);
         const w = (natural.w / natural.h) * h;
-        return boxAt(r.left + 4 + w / 2, r.top + r.height - 4 - h / 2, natural, h);
+        return boxAt(art.left + 4 + w / 2, art.top + art.height - 4 - h / 2, natural, h);
       }
       case 'stage': {
         const you = pileEl('deck', 'you');

@@ -194,16 +194,15 @@ function CandidateCard({ card, onPick, isMobile }: { card: CardInstance; onPick:
           const baseAtk: number = heroData.atk ?? 0;
           const atk = effectiveAtk(card);
           const shield = card.statuses?.find((st) => st.id === 'shield')?.value ?? 0;
-          // Health the Deadlock way, the same on every candidate: the
-          // segmented bar and the plain number on the HUD's dark green plate.
-          // Bullet Power stays an ink number with its icon.
+          // Health the same on every candidate: the plain ink number and the
+          // segmented bar, straight on the label. Bullet Power is an ink
+          // number with its icon.
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', boxSizing: 'border-box' }}>
               <span role="img" aria-label={`${card.hp} of ${card.hpMax} HP`} style={{
                 flex: 1, minWidth: 0,
                 display: 'flex', alignItems: 'center', gap: 6,
-                padding: '4px 7px', borderRadius: 4,
-                background: poster.plate, boxShadow: `inset 0 0 0 1px ${poster.plateEdge}`,
+                padding: '4px 0',
               }}>
                 <span style={hpNumberStyle(scale.number)}>{card.hp}</span>
                 <HpSegments hp={card.hp} max={card.hpMax} shield={shield} width="100%" height={8} />

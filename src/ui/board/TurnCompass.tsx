@@ -159,37 +159,20 @@ export function TurnCompass({ isMyTurn: moverIsMe, turn: engineTurn, phase, beat
 
         {combat ? <CombatRing combat={combat} /> : <IdleSweepRing />}
 
-        {/* Centred readout — a micro "TURN" caption over the turn numeral.
-            Static, so it is always readable in a single beat (also during
-            combat — beat progress lives in the ring). */}
+        {/* Centred readout — the turn numeral alone (the dial says it is the
+            turn's; a caption under 10px is not printed). Static, so it is
+            always readable in a single beat (also during combat — beat
+            progress lives in the ring). */}
         <span style={{
           position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 1,
           zIndex: 1,
+          fontFamily: fonts.display,
+          fontSize: 22,
+          lineHeight: 1,
+          color: poster.ink,
+          fontVariantNumeric: 'tabular-nums',
         }}>
-          <span style={{
-            fontFamily: fonts.display,
-            fontSize: 7,
-            letterSpacing: '0.34em',
-            paddingLeft: '0.34em', // optically recenters tracked-out caps
-            textTransform: 'uppercase',
-            color: poster.inkDim,
-            lineHeight: 1,
-          }}>
-            Turn
-          </span>
-          <span style={{
-            fontFamily: fonts.display,
-            fontSize: 19,
-            lineHeight: 1,
-            color: poster.ink,
-            fontVariantNumeric: 'tabular-nums',
-          }}>
-            {turn}
-          </span>
+          {turn}
         </span>
       </div>
 
@@ -277,7 +260,7 @@ function BeatStrip({ beat, hue, words }: { beat: TurnBeat; hue: string; words: b
   const at = TURN_BEATS.indexOf(beat);
   const word = (b: TurnBeat, on: boolean) => ({
     fontFamily: fonts.display,
-    fontSize: words ? (on ? 12 : 10) : 9.5,
+    fontSize: words ? (on ? 12 : 10) : 10,
     letterSpacing: words ? '0.14em' : '0.2em',
     paddingLeft: words ? '0.14em' : '0.2em',
     textTransform: 'uppercase' as const,

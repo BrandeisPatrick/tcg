@@ -1,12 +1,12 @@
 import { Fragment, type ReactNode } from 'react';
 import { SwordIcon, SpiritIcon, HeartIcon } from '../card/Icons';
-import { poster } from '../poster';
+import { levelGreen, poster } from '../poster';
 import { LOG_SPIRIT_PLUM } from '../helpers';
 
 /** Swap "bullet dmg" / "spirit dmg" / "pure dmg" / "healed" for inline glyphs. */
 const PATTERN = /(\bbullet dmg\b|\bspirit dmg\b|\bpure dmg\b|healed)/g;
 
-// Glyph inks for the dark log: cream sword, plum spirit, red pure-damage
+// Glyph inks for the paper log: ink sword, plum spirit, red pure-damage
 // heart, green heal heart — the same hues logEntryColor gives their lines.
 const GLYPH = { display: 'inline-flex', alignItems: 'center', gap: 3, verticalAlign: 'middle' } as const;
 
@@ -14,7 +14,7 @@ function glyph(kind: string): ReactNode {
   if (kind === 'bullet dmg') {
     return (
       <span key={`g-bullet`} style={GLYPH}>
-        <SwordIcon size={11} color={poster.cream} />
+        <SwordIcon size={11} color={poster.ink} />
         <span>bullet dmg</span>
       </span>
     );
@@ -30,7 +30,7 @@ function glyph(kind: string): ReactNode {
   if (kind === 'pure dmg') {
     return (
       <span key={`g-pure`} style={GLYPH}>
-        <HeartIcon size={11} color={poster.red} />
+        <HeartIcon size={11} color={poster.redDeep} />
         <span>pure dmg</span>
       </span>
     );
@@ -38,7 +38,7 @@ function glyph(kind: string): ReactNode {
   if (kind === 'healed') {
     return (
       <span key={`g-heal`} style={GLYPH}>
-        <HeartIcon size={11} color={poster.green} />
+        <HeartIcon size={11} color={levelGreen(4)} />
         <span>healed</span>
       </span>
     );

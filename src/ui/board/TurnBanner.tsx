@@ -1,11 +1,9 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
-import { PatronSigil, scale } from '../hud';
+import { scale } from '../hud';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
-import { useSettings } from '@/storage/settings';
-import { STAGE, boardRows, boardStack, tablePlane } from './BoardTable';
 
 /** How long the banner stays up, ms. */
 const SHOW_MS = 1300;
@@ -13,58 +11,69 @@ const SHOW_MS = 1300;
  *  by then the reveal's own caption has said whose turn it is. */
 const WAIT_MS = 2600;
 
-/** The lane between the two Actives, in viewport px: where the seam lands on
- *  screen under the current camera (tilted or flat), its height, and the
- *  stage's left edge and width. The turn banner and the targeting strip both
- *  sit in it — the one stretch of the table that is never a card. */
+/** The lane's middle column, between the two Actives, in viewport px (the
+ *  sheet's `data-lane-mid` cell, where the turn dial sits). The turn banner,
+ *  the targeting tag and the feedback sticker all sit in it — the one box on
+ *  the sheet that is never a card, a number or a control. */
 export interface LaneBox { top: number; height: number; left: number; width: number }
 
+const sameBox = (a: LaneBox, b: LaneBox) =>
+  Math.abs(a.top - b.top) + Math.abs(a.height - b.height) + Math.abs(a.left - b.left) + Math.abs(a.width - b.width) <= 0.5;
+
+function readLaneBox(): LaneBox {
+  const el = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('[data-lane-mid]') : null;
+  const r = el?.getBoundingClientRect();
+  if (r && r.width > 0 && r.height > 0) return { top: r.top, height: r.height, left: r.left, width: r.width };
+  // No sheet on screen (a gallery, a test): a column in the window's middle.
+  const W = typeof window !== 'undefined' ? window.innerWidth : 390;
+  const H = typeof window !== 'undefined' ? window.innerHeight : 844;
+  const width = Math.min(160, W / 3);
+  return { top: H / 2 - 80, height: 160, left: (W - width) / 2, width };
+}
+
 export function useLaneBox(): LaneBox {
-  const { tiltedTable } = useSettings();
-  const read = (): LaneBox => {
-    const plane = tablePlane(tiltedTable);
-    const s = boardStack();
-    const y0 = plane.y(s.mid - boardRows.lane / 2);
-    const y1 = plane.y(s.mid + boardRows.lane / 2);
-    const el = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('[data-stage]') : null;
-    const r = el?.getBoundingClientRect();
-    const W = typeof window !== 'undefined' ? window.innerWidth : STAGE.w;
-    const H = typeof window !== 'undefined' ? window.innerHeight : STAGE.h;
-    // No stage on screen (a gallery, a test): the stage fitted to the window.
-    const k = r && r.height > 0 ? r.height / STAGE.h : Math.min(W / STAGE.w, H / STAGE.h);
-    const top0 = r && r.height > 0 ? r.top : (H - STAGE.h * k) / 2;
-    const left0 = r && r.width > 0 ? r.left : (W - STAGE.w * k) / 2;
-    return { top: top0 + y0 * k, height: (y1 - y0) * k, left: left0, width: STAGE.w * k };
-  };
-  const [box, setBox] = useState<LaneBox>(read);
+  const [box, setBox] = useState<LaneBox>(readLaneBox);
+  // The box last read and handed to React. A new one is set only when a read
+  // differs from it, and it is set as a plain value: a read that finds
+  // nothing moved schedules nothing, so a render can never ask for another
+  // (a resize's update still waiting behind a tap's render included).
+  const last = useRef(box);
+  const measure = useCallback(() => {
+    const n = readLaneBox();
+    if (sameBox(n, last.current)) return;
+    last.current = n;
+    setBox(n);
+  }, []);
+  // Read again after every render of whoever shows something in it (the
+  // sheet is laid out for the screen, so the column moves with it), and a
+  // frame after a resize or a rotation, once the sheet has settled.
+  useLayoutEffect(measure);
   useLayoutEffect(() => {
-    const measure = () => setBox((b) => {
-      const n = read();
-      return Math.abs(n.top - b.top) + Math.abs(n.height - b.height) + Math.abs(n.left - b.left) + Math.abs(n.width - b.width) > 0.5 ? n : b;
-    });
-    measure();
-    // The stage re-fits a frame after a resize (useStageScale): look twice.
-    const onResize = () => { measure(); requestAnimationFrame(measure); };
+    let raf = 0;
+    const onResize = () => { measure(); cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
+    window.visualViewport?.addEventListener('resize', onResize);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tiltedTable]);
+  }, [measure]);
   return box;
 }
 
 /**
- * "Your turn" / "Rival's turn" — a short strip across the lane between the
- * two Actives as a turn begins, Deadlock's scoreboard style: the patron's
- * sigil and colour first (amber for you, sapphire for the rival), the words
- * second. Keyed by the turn number, so each turn shows it once.
+ * "Your turn" / "Rival's turn" — an ink stamp on the lane's middle column as
+ * a turn begins, two short lines edged in the side's colour (gold for you,
+ * red for the rival). It stands where the turn dial is and nowhere else: no
+ * card, no number and no control is under it. Keyed by the turn number, so
+ * each turn shows it once.
  *
  * It never shares the screen with a card reveal (`hold`: an action is being
  * shown mid-screen): a turn that opens on a reveal waits it out, and a reveal
- * that starts while the strip is up sends it away at once. Under calm motion
+ * that starts while the stamp is up sends it away at once. Under calm motion
  * it just appears and goes.
  */
 export function TurnBanner({ turn, isMyTurn, enabled, hold = false }: {
@@ -97,10 +106,9 @@ export function TurnBanner({ turn, isMyTurn, enabled, hold = false }: {
   }, [shown]);
   const accent = isMyTurn ? poster.you : poster.rival;
   const side = isMyTurn ? 'you' : 'rival';
-  const h = Math.max(34, Math.min(46, lane.height - 6));
-  const fade = `linear-gradient(90deg, transparent 0%, ${accent} 22%, ${accent} 78%, transparent 100%)`;
+  const big = lane.width >= 132;
   return (
-    // A reveal sends the strip away at once (no fade under the card).
+    // A reveal sends the stamp away at once (no fade under the card).
     <AnimatePresence custom={hold}>
       {shown !== null && shown === turn && (
         <motion.div
@@ -108,40 +116,40 @@ export function TurnBanner({ turn, isMyTurn, enabled, hold = false }: {
           role="status"
           aria-label={isMyTurn ? 'Your turn' : "Rival's turn"}
           data-turn-banner={side}
-          initial={calm ? { opacity: 1 } : { opacity: 0, scaleX: 0.3 }}
-          animate={{ opacity: 1, scaleX: 1 }}
+          initial={calm ? { opacity: 1 } : { opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
           custom={hold}
           variants={{
             gone: (held: boolean) => (calm || held
               ? { opacity: 0, transition: { duration: 0 } }
-              : { opacity: 0, scaleX: 0.6, transition: { duration: 0.18 } }),
+              : { opacity: 0, scale: 0.85, transition: { duration: 0.18 } }),
           }}
           exit="gone"
           transition={spring.snappy}
           style={{
             position: 'fixed',
             left: lane.left, width: lane.width,
-            top: lane.top + lane.height / 2 - h / 2, height: h,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            background: `linear-gradient(90deg, transparent 0%, rgba(11, 23, 22, 0.94) 16%, rgba(23, 48, 45, 0.97) 50%, rgba(11, 23, 22, 0.94) 84%, transparent 100%)`,
+            top: lane.top, height: lane.height,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             pointerEvents: 'none', zIndex: 88,
           }}
         >
-          {/* The patron's colour runs along both edges, fading at the ends. */}
-          <span aria-hidden style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 2, background: fade }} />
-          <span aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, background: fade }} />
-          <PatronSigil side={side} size={Math.round(h * 0.62)} />
           <span style={{
+            maxWidth: '100%', boxSizing: 'border-box',
+            padding: big ? '10px 14px' : '8px 9px',
+            background: poster.ink,
+            // The side's colour as a flat rule along the top and the foot.
+            boxShadow: `inset 0 3px 0 ${accent}, inset 0 -3px 0 ${accent}`,
             fontFamily: fonts.display,
-            fontSize: scale.title,
-            letterSpacing: '0.2em',
+            fontSize: big ? scale.title : scale.body,
+            letterSpacing: '0.16em',
             textTransform: 'uppercase',
-            lineHeight: 1,
+            lineHeight: 1.2,
+            textAlign: 'center',
             whiteSpace: 'nowrap',
-            color: accent,
-            textShadow: '0 1px 0 rgba(0, 0, 0, 0.6)',
+            color: poster.paper,
           }}>
-            {isMyTurn ? 'Your turn' : "Rival's turn"}
+            {isMyTurn ? 'Your' : "Rival's"}<br />turn
           </span>
         </motion.div>
       )}

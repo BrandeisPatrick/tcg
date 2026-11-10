@@ -82,7 +82,7 @@ export function SoulsRail({ rivalSouls, yourSouls }: Props) {
 
       {/* The lane (both Actives and the line) — an empty spacer so the
           bottom rack lands inside the your-bench row, not the lane. */}
-      <div style={{ flex: `0 0 ${boardRows.active * 2 + boardRows.lane}px` }} />
+      <div style={{ flex: `0 0 ${boardRows.lane}px` }} />
 
       {/* Your rack — centred within the your-bench row. */}
       <div style={{

@@ -1,9 +1,9 @@
+import { useLayoutEffect, useState } from 'react';
 import { motion, AnimatePresence, useIsPresent } from 'framer-motion';
 import type { GameState } from '@/engine/types';
 import { CardFrame } from '../card/CardFrame';
 import { fonts } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
-import { useViewport } from '../hooks/useViewport';
 import { PatronSigil, scale } from '../hud';
 
 /** Reveal hold in ms — Board's completeAction timer must match. */
@@ -45,35 +45,56 @@ export function CardPlayFlash({ G, onSkip }: Props) {
   );
 }
 
-/** Dark Deadlock tag — the caption and hint plates above and below the print. */
+/** Paper tag — the caption and the hint above and below the print. */
 const tagStyle = {
-  display: 'inline-block',
-  background: `linear-gradient(180deg, ${poster.slateLit} 0%, ${poster.slate} 100%)`,
-  color: poster.cream,
+  display: 'inline-flex',
+  alignItems: 'center',
+  background: poster.paper,
+  color: poster.ink,
+  boxShadow: `inset 0 0 0 1.5px ${poster.ink}`,
   ...clipBoth(chamfer(4)),
   fontFamily: fonts.display,
-  letterSpacing: '0.2em',
+  letterSpacing: '0.16em',
   textTransform: 'uppercase',
   lineHeight: 1,
   whiteSpace: 'nowrap',
 } as const;
 
+/** The full card's printed size, px. */
+const FULL = { w: 300, h: 420 } as const;
+/** The caption's and the hint's row, and the gap between the rows, px. */
+const TAG_H = 26;
+const GAP = 8;
+
+interface Box { left: number; top: number; width: number; height: number }
+
+/** The sheet's box on screen (`data-sheet`): the reveal is laid out inside
+ *  it, so the caption, the card and the hint never reach the hand or the
+ *  controls under the sheet. Without a sheet (a gallery, a test) it is the
+ *  window. */
+function sheetBox(): Box {
+  const r = typeof document !== 'undefined' ? document.querySelector('[data-sheet]')?.getBoundingClientRect() : undefined;
+  if (r && r.width > 0 && r.height > 0) return { left: r.left, top: r.top, width: r.width, height: r.height };
+  const W = typeof window !== 'undefined' ? window.innerWidth : 390;
+  const H = typeof window !== 'undefined' ? window.innerHeight : 844;
+  return { left: 0, top: 0, width: W, height: H };
+}
+
 export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
   cardId: string; caster: 'P0' | 'P1'; kind?: 'item' | 'skill'; onSkip?: () => void;
 }) {
   const isOwn = caster === 'P0';
-  // Owner accent on the caption: gold for you, sapphire for the rival.
-  const accent = isOwn ? poster.you : poster.rival;
   const verb = 'used';
-  const { isMobile } = useViewport();
   const dur = CARD_REVEAL_MS / 1000;
   // Once the action has resolved the overlay is only fading out; it must not
   // keep swallowing taps meant for the board underneath.
   const present = useIsPresent();
-  // Desktop: anchor the reveal to the left margin so the board — where the
-  // item's effect is about to land — stays readable behind it. Phones center it
-  // (no side margin to borrow).
-  const anchorLeft = isMobile ? '50%' : 'clamp(170px, 20vw, 330px)';
+  const [box, setBox] = useState<Box>(sheetBox);
+  useLayoutEffect(() => { setBox(sheetBox()); }, []);
+  // The card as large as the sheet has room for, under its caption and over
+  // the hint: one centred column, nothing outside the sheet.
+  const fit = Math.max(0.4, Math.min(0.92, (box.height - 16 - (TAG_H + GAP) * 2) / FULL.h, (box.width - 16) / FULL.w));
+  const fade = { duration: dur, times: [0, 0.12, 0.82, 1] };
   return (
     <>
       {/* Scrim over the scene so the print pops off the sheet behind it.
@@ -83,7 +104,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.22, 0.22, 0] }}
         exit={{ opacity: 0, transition: { duration: 0.2 } }}
-        transition={{ duration: dur, times: [0, 0.12, 0.82, 1] }}
+        transition={fade}
         onClick={onSkip}
         style={{
           position: 'fixed', inset: 0,
@@ -93,88 +114,76 @@ export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
           zIndex: 70,
         }}
       />
-      {/* The card itself, side-anchored, with a brief pop-in / hold / fade-out.
-          A static outer wrapper handles centering so framer-motion's
-          `transform: scale(...) translateY(...)` doesn't clobber the
-          `translate(-50%, -50%)` we'd need on the same element. */}
-      <div style={{
-        position: 'fixed',
-        left: anchorLeft, top: '50%',
-        transform: 'translate(-50%, -50%)',
-        pointerEvents: 'none',
-        zIndex: 72,
+      {/* One column on the sheet: who used it, the card, the skip hint. */}
+      <div data-card-reveal style={{
+        position: 'fixed', left: box.left, top: box.top, width: box.width, height: box.height,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: GAP,
+        pointerEvents: 'none', zIndex: 72,
       }}>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.45, y: 20, rotateY: 38 }}
-          animate={{
-            opacity: [0, 1, 1, 0],
-            scale: [0.45, 0.92, 0.86, 0.82],
-            y: [20, 0, 0, -10],
-            // Flips face-up toward the viewer as it lands — "dealt onto the
-            // sheet" rather than just fading in.
-            rotateY: [38, -4, 0, 0],
-            // Scripted cast sheen: `--cast` sweeps CardShine's light bar
-            // across the print once it has landed (the only card CSS
-            // variable still read now that the glare layers are gone).
-            ['--cast' as string]: [0, 0, 1, 1],
-          }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ duration: dur, times: [0, 0.12, 0.82, 1], ease: [0.22, 1, 0.36, 1] }}
-          style={{
-            transformPerspective: 1100,
-            filter: 'drop-shadow(0 16px 36px rgba(0,0,0,0.55))',
-          }}
-        >
-          <CardFrame cardId={cardId} size="full" physical={false} castSheen hideStats={kind === 'skill'} />
-        </motion.div>
-      </div>
-      {/* Caption above the card — a dark tag keyed in the caster's colour,
-          with the patron's sigil. A static wrapper centres it: framer's `y`
-          would overwrite a translateX on the animated element itself. */}
-      <div style={{
-        position: 'fixed', left: anchorLeft, top: 'calc(50% - 218px)',
-        transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 73,
-      }}>
+        {/* Caption — a paper tag with the caster's patron sigil. */}
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: [0, 1, 1, 0], y: [-8, 0, 0, -8] }}
           exit={{ opacity: 0, transition: { duration: 0.15 } }}
-          transition={{ duration: dur, times: [0, 0.12, 0.82, 1] }}
+          transition={fade}
+          style={{ flex: `0 0 ${TAG_H}px`, display: 'flex', alignItems: 'center' }}
         >
-          <span style={{
-            ...tagStyle,
-            display: 'inline-flex', alignItems: 'center', gap: 7,
-            padding: '6px 12px 6px 9px',
-            boxShadow: `inset 0 0 0 1.5px ${accent}`,
-            fontSize: scale.label,
-            color: accent,
-          }}>
-            <PatronSigil side={isOwn ? 'you' : 'rival'} size={14} />
+          <span style={{ ...tagStyle, gap: 7, height: TAG_H, padding: '0 12px 0 9px', fontSize: scale.label }}>
+            <PatronSigil side={isOwn ? 'you' : 'rival'} size={14} color={isOwn ? poster.ink : poster.red} />
             {isOwn ? `You ${verb}` : `Rival ${verb}`}
           </span>
         </motion.div>
-      </div>
-      {/* Skip hint — fades in after the card lands so it never competes with
-          the reveal pop itself. It leaves with the scrim: an exit that kept
-          the entry's 0.6s delay left the hint alone on screen for a second
-          after the card had gone — over the hand strip, on a phone. */}
-      {onSkip && (
-        <div style={{
-          position: 'fixed', left: anchorLeft, top: 'calc(50% + 200px)',
-          transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 73,
-        }}>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.8 }}
-            exit={{ opacity: 0, transition: { duration: 0.2 } }}
-            transition={{ delay: 0.6, duration: 0.35 }}
-          >
-            <span style={{ ...tagStyle, padding: '6px 12px', fontSize: scale.floor, color: poster.creamDim }}>
-              Tap to skip
-            </span>
-          </motion.div>
+        {/* The card, with a brief pop-in / hold / fade-out. A static box
+            holds its place at the fitted size; framer animates inside it. */}
+        <div style={{ position: 'relative', flex: '0 0 auto', width: FULL.w * fit, height: FULL.h * fit }}>
+          <div style={{
+            position: 'absolute', left: '50%', top: '50%', width: FULL.w, height: FULL.h,
+            margin: `${-FULL.h / 2}px 0 0 ${-FULL.w / 2}px`,
+            transform: `scale(${fit})`,
+          }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.5, y: 20, rotateY: 38 }}
+              animate={{
+                opacity: [0, 1, 1, 0],
+                scale: [0.5, 1, 0.94, 0.9],
+                y: [20, 0, 0, -10],
+                // Flips face-up toward the viewer as it lands — "dealt onto the
+                // sheet" rather than just fading in.
+                rotateY: [38, -4, 0, 0],
+                // Scripted cast sheen: `--cast` sweeps CardShine's light bar
+                // across the print once it has landed (the only card CSS
+                // variable still read now that the glare layers are gone).
+                ['--cast' as string]: [0, 0, 1, 1],
+              }}
+              exit={{ opacity: 0, scale: 0.88 }}
+              transition={{ ...fade, ease: [0.22, 1, 0.36, 1] }}
+              style={{
+                transformPerspective: 1100,
+                filter: 'drop-shadow(0 10px 0 rgba(0, 0, 0, 0.25))',
+              }}
+            >
+              <CardFrame cardId={cardId} size="full" physical={false} castSheen hideStats={kind === 'skill'} />
+            </motion.div>
+          </div>
         </div>
-      )}
+        {/* Skip hint — fades in after the card lands so it never competes with
+            the reveal pop itself, and leaves with the scrim. Its row is held
+            whether or not it shows, so the card does not move. */}
+        <div style={{ flex: `0 0 ${TAG_H}px`, display: 'flex', alignItems: 'center' }}>
+          {onSkip && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.2 } }}
+              transition={{ delay: 0.6, duration: 0.35 }}
+            >
+              <span style={{ ...tagStyle, height: 22, padding: '0 10px', fontSize: scale.floor, color: poster.inkSoft }}>
+                Tap to skip
+              </span>
+            </motion.div>
+          )}
+        </div>
+      </div>
     </>
   );
 }

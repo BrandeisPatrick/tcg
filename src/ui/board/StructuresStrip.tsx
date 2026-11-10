@@ -103,7 +103,7 @@ function Segment({ s, pushed, accent, isMobile }: { s: Structure; pushed: number
       {!isMobile && (
         <span style={{
           ...text.label,
-          fontSize: 9.5,
+          fontSize: 10,
           letterSpacing: '0.14em',
           color: down ? poster.inkFaint : accent,
           whiteSpace: 'nowrap',

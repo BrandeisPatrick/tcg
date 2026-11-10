@@ -38,10 +38,10 @@ export const poster = {
 
   // Semantics — who owns what on the board, and what a number means.
   // Each side wears its PATRON's colour (board/patrons.ts): you are the
-  // Amber Hand, the rival the Sapphire Flame. Red is damage and danger only.
+  // Amber Hand's gold, the rival the one red, as the paper board prints them.
   you: '#d9b64a',        // your frames, keylines, turn marker (amber gold)
-  rival: '#4a8fe0',      // the rival's (sapphire)
-  rivalInk: '#2a5fae',   // the rival's sapphire, deep enough to print on paper
+  rival: '#d4392c',      // the rival's (the one red)
+  rivalInk: '#a9281f',   // the rival's red, deep enough to print on paper
   target: '#62c462',     // a legal target / ready state (green)
   scrim: 'rgba(6, 24, 20, 0.78)',   // modal backdrop over the scene
 

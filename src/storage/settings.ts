@@ -14,14 +14,13 @@ export interface AppSettings {
   /** Side panel when a match starts: 'auto' opens it only on wide
    *  viewports (≥1100px), the explicit values always win. */
   panelDefault: 'auto' | 'open' | 'closed';
-  /** The match table's camera: off, the table is seen from straight above;
-   *  on, it leans away a little (the "Tilted table" switch). */
+  /** The old "Tilted table" switch. The match is one flat sheet now and
+   *  nothing reads this; it is kept so settings saved with it still load. */
   tiltedTable: boolean;
 }
 
-/** THE DEFAULT CAMERA — the one line to change: `false` is the table seen
- *  from straight above, `true` the gentle tilt. A phone that has never
- *  touched the "Tilted table" switch follows it. */
+/** What `tiltedTable` loads as when nothing was saved (unused: see the
+ *  field). */
 export const DEFAULT_TILTED_TABLE = false;
 
 const KEY = 'deadlock-tcg-settings';

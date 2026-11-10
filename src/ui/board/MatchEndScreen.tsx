@@ -7,8 +7,8 @@ import { ROUND_CAP } from '@/engine/constants';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { fonts, spring } from '../tokens';
-import { poster, sheetStyle } from '../poster';
-import { DecoRule, PatronSigil, bandStyle, plateStyle, scale } from '../hud';
+import { chamfer, clipBoth, poster, sheetStyle } from '../poster';
+import { DecoRule, PatronSigil, bandStyle, scale } from '../hud';
 import { PosterButton } from '../chrome';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { useViewport } from '../hooks/useViewport';
@@ -192,9 +192,10 @@ export function MatchEndScreen({
         >
           {stats.map((s) => (
             <div key={s.label} style={{
-              ...plateStyle,
               display: 'flex', flexDirection: 'column', gap: 5, minWidth: 64,
               padding: '8px 12px 9px',
+              background: poster.ink, color: poster.paper,
+              ...clipBoth(chamfer(4)),
             }}>
               <span style={{
                 fontFamily: fonts.ui, fontWeight: 700, fontSize: scale.label,
@@ -205,7 +206,7 @@ export function MatchEndScreen({
                 {s.icons && <span style={{ display: 'inline-flex', gap: 3 }}>{s.icons}</span>}
                 <span style={{
                   fontFamily: fonts.display, fontSize: scale.title, lineHeight: 1,
-                  fontVariantNumeric: 'tabular-nums', color: poster.cream,
+                  fontVariantNumeric: 'tabular-nums', color: poster.paper,
                 }}>{s.value}</span>
               </span>
             </div>
