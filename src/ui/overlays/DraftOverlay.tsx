@@ -30,6 +30,8 @@ import { poster, chamfer, clipBoth } from '../poster';
 import { getMatchConfig } from '@/storage/matchConfig';
 import { useViewport } from '../hooks/useViewport';
 import { plainText } from '../card/scaling';
+import { HpSegments, hpNumberStyle, scale } from '../hud';
+import { SwordIcon } from '../card/Icons';
 
 interface Props {
   draft: DraftState;
@@ -174,7 +176,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
           <span
             style={{
               fontFamily: fonts.display,
-              fontSize: isMobile ? 20 : 26,
+              fontSize: isMobile ? 18 : 24,
               letterSpacing: '0.08em',
               textTransform: 'uppercase',
               color: lobby.cream,
@@ -531,7 +533,7 @@ function CardBack({ w, h, live, tone, numeral }: {
         style={{ position: 'absolute', inset: -2, border: `2px solid ${lobby.cream}`, opacity: 0, pointerEvents: 'none' }}
       />
       {numeral && (
-        <span style={{ position: 'absolute', top: 8, left: 0, right: 0, textAlign: 'center', fontFamily: fonts.display, fontSize: 14, color: lobby.dim, letterSpacing: '0.1em' }}>
+        <span style={{ position: 'absolute', top: 8, left: 0, right: 0, textAlign: 'center', fontFamily: fonts.display, fontSize: 15, color: lobby.dim, letterSpacing: '0.1em' }}>
           {numeral}
         </span>
       )}
@@ -634,7 +636,7 @@ function RosterGrid({
 function PreferredCluster({ ids, pool }: { ids: string[]; pool: string[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-      <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.22em', color: lobby.gold }}>Preferred</span>
+      <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.22em', color: lobby.gold }}>Preferred</span>
       {ids.map((id) => (
         <img
           key={id}
@@ -668,7 +670,7 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
     // Nothing chosen yet: on the player's pick, say what to do in the dossier's place.
     return (
       <div style={{ minHeight: compact ? 40 : 48, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-        {hint && <span style={{ ...text.label, fontSize: compact ? 10.5 : 12, letterSpacing: '0.2em', color: lobby.dim }}>{hint}</span>}
+        {hint && <span style={{ ...text.label, fontSize: compact ? 11 : 13, letterSpacing: '0.2em', color: lobby.dim }}>{hint}</span>}
       </div>
     );
   }
@@ -696,36 +698,38 @@ function Dossier({ heroId, compact, hint }: { heroId: string | null; compact: bo
         ...clipBoth(chamfer(6)),
       }}
     >
-      <span style={{ fontFamily: fonts.display, fontSize: compact ? 18 : 22, letterSpacing: '0.04em', textTransform: 'uppercase', color: lobby.cream, lineHeight: 1 }}>
+      <span style={{ fontFamily: fonts.display, fontSize: compact ? 18 : 24, letterSpacing: '0.04em', textTransform: 'uppercase', color: lobby.cream, lineHeight: 1 }}>
         {data.name}
       </span>
       <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {identity.keywords.map((kw) => (
-          <span key={kw} style={{ padding: '3px 8px', background: identity.primary, color: identity.accent, ...text.label, fontSize: 9.5, letterSpacing: '0.18em' }}>
+          <span key={kw} style={{ padding: '3px 8px', background: identity.primary, color: identity.accent, ...text.label, fontSize: 10, letterSpacing: '0.18em' }}>
             {kw}
           </span>
         ))}
       </span>
-      <span style={{ display: 'flex', gap: 14 }}>
-        <Stat label="ATK" value={data.atk} />
-        <Stat label="HP" value={data.hp} />
+      {/* Health the Deadlock way (the plain number and its segmented bar on
+          the dark green plate), Bullet Power as its icon and number. */}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span role="img" aria-label={`${data.hp} HP`} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 7px', borderRadius: 4,
+          background: poster.plate, boxShadow: `inset 0 0 0 1px ${poster.plateEdge}`,
+        }}>
+          <span style={hpNumberStyle(scale.number)}>{data.hp}</span>
+          <HpSegments hp={data.hp} max={data.hp} width={Math.min(96, data.hp * 9)} height={8} />
+        </span>
+        <span role="img" aria-label={`${data.atk} Bullet Power`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <SwordIcon size={13} color={lobby.cream} />
+          <span style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: scale.number, lineHeight: 1, color: lobby.cream }}>{data.atk}</span>
+        </span>
       </span>
       {heroAbilities(data).map(({ ability }) => (
-        <span key={ability.id} style={{ ...text.body, fontSize: compact ? 12 : 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
+        <span key={ability.id} style={{ ...text.body, fontSize: 13, color: lobby.dim, flex: '1 1 260px', minWidth: 0 }}>
           <span style={{ color: lobby.cream, fontWeight: 700 }}>{ability.name}</span>
           {ability.text ? ` — ${plainText(ability.text)}` : ''}
         </span>
       ))}
     </motion.div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
-      <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.22em', color: lobby.dim }}>{label}</span>
-      <span style={{ fontFamily: fonts.display, fontSize: 20, lineHeight: 1, color: lobby.cream }}>{value}</span>
-    </span>
   );
 }
 
@@ -862,13 +866,13 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
           background: 'linear-gradient(to bottom, rgba(12, 15, 17, 0.85), transparent)',
         }}
       >
-        <span style={{ fontFamily: fonts.display, fontSize: 14, color, letterSpacing: '0.1em', flexShrink: 0 }}>{numeral}</span>
+        <span style={{ fontFamily: fonts.display, fontSize: 15, color, letterSpacing: '0.1em', flexShrink: 0 }}>{numeral}</span>
         <motion.span
           animate={preview ? { opacity: [0.6, 1, 0.6] } : { opacity: 1 }}
           transition={preview ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : undefined}
           style={{
             ...text.label,
-            fontSize: 9,
+            fontSize: 10,
             letterSpacing: '0.2em',
             color,
             // On a phone-width card the tag used to wrap onto the numeral.
@@ -952,7 +956,7 @@ function LockButton({ enabled, state, onClick, compact }: {
           color: enabled ? '#171410' : lobby.dim,
           ...clipBoth(chamfer(9)),
           fontFamily: fonts.display,
-          fontSize: compact ? 15 : 20,
+          fontSize: compact ? 15 : 18,
           letterSpacing: '0.24em',
           textTransform: 'uppercase',
           lineHeight: 1,

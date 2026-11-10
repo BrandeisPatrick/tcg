@@ -159,7 +159,7 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
               }}>
                 <span style={{
                   fontFamily: fonts.display,
-                  fontSize: 26,
+                  fontSize: 24,
                   letterSpacing: '0.06em',
                   textTransform: 'uppercase',
                   color: poster.ink,
