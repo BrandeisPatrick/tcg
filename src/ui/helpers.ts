@@ -45,6 +45,7 @@ export const LOG_SPIRIT_PLUM = '#b48cc4';
  *   healed / respawned / refresh              → green
  *   gained <status> / cleansed / discharges   → spirit plum
  *   used skill / ultimate / played / promoted → your gold
+ *   +N Souls                                  → the souls mint
  *   Mulligan / Turn marker                    → dim cream
  *   everything else                           → cream
  */
@@ -52,7 +53,8 @@ export function logEntryColor(s: string): string {
   if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.red;
   if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return poster.green;
   if (/gained |cleansed|discharges|resisted/i.test(s)) return LOG_SPIRIT_PLUM;
-  if (/used (skill|ultimate):|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return poster.you;
+  if (/used (skill|ultimate):|played |promoted |retreated|swapped|unlocked/i.test(s)) return poster.you;
+  if (/\+\d+ souls?/i.test(s)) return poster.soul;
   if (/Mulligan|---/i.test(s)) return poster.creamDim;
   return poster.cream;
 }
