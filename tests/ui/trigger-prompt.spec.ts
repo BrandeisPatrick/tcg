@@ -48,8 +48,12 @@ describe('the trigger prompt names the moment, the card and the price', () => {
     expect(out).toContain(`aria-label="${TRIGGER_SHEET}"`);
     expect(out).toContain('Victor falls');
     expect(out).toContain('Use Shocking Reanimation for 19 souls?');
-    expect(out).toContain('20 → 19 souls');
-    expect(out).toContain('you have 20');
+    // The price tag: the printed 20 struck through, then the soul wisp and 19;
+    // then your purse beside its wisp.
+    const words = out.replace(/<[^>]+>/g, '');
+    expect(out).toContain('<s');
+    expect(words).toContain('20→19');
+    expect(words).toContain('you have 20');
     expect(out).toContain('Pass');
     expect(out).toContain('Costs 1 less for each damage Victor takes.');
     expect(victor.hp).toBe(0);

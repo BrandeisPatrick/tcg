@@ -19,6 +19,7 @@ import { CardFrame } from '../card/CardFrame';
 import { PosterButton } from '../chrome';
 import { fonts, spring } from '../tokens';
 import { poster, scrimStyle, sheetStyle } from '../poster';
+import { PatronSigil, Souls, bandStyle, scale as type } from '../hud';
 import { useViewport } from '../hooks/useViewport';
 
 /** The sheet's accessible name, by which the tutorial and the QA scripts find it. */
@@ -61,9 +62,12 @@ export function TriggerPrompt({ G, me, prompt, onUse, onPass }: {
   onPass: () => void;
 }) {
   const { isMobile } = useViewport();
-  const scale = isMobile ? 0.6 : 0.78;
   const lines = prompt.offers.map((o) => ({ offer: o, ...offerLine(G, o) }));
   const one = lines.length === 1 ? lines[0] : undefined;
+  const { width: vw } = useViewport();
+  // One offer: its card at its own size, so its rule reads at the type
+  // scale (a phone shrank it to about 7px). Several: smaller, side by side.
+  const scale = one ? Math.min(isMobile ? 1 : 0.86, (vw - 52) / 300) : isMobile ? 0.6 : 0.78;
   const have = G.players[me].souls;
   const card = (l: (typeof lines)[number]) => (
     <div style={{ width: 300 * scale, height: 420 * scale }}>
@@ -72,9 +76,17 @@ export function TriggerPrompt({ G, me, prompt, onUse, onPass }: {
       </div>
     </div>
   );
+  // The price on paper: the soul wisp and its number in the paper green (a
+  // charged ultimate's printed price struck through before it), then your
+  // purse.
   const priceTag = (l: (typeof lines)[number]) => (
-    <span style={{ fontFamily: fonts.display, fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: poster.inkDim }}>
-      {l.printed !== undefined ? `${l.printed} → ${souls(l.price)}` : l.price > 0 ? souls(l.price) : 'Free'} · you have {have}
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: fonts.ui, fontWeight: 700, fontSize: type.body, color: poster.inkDim }}>
+      {l.printed !== undefined && (
+        <><s style={{ color: poster.inkDim, fontSize: type.number }}>{l.printed}</s><span aria-hidden>→</span></>
+      )}
+      {l.price > 0 ? <Souls n={l.price} tone="paper" /> : <span style={{ color: poster.ink, fontSize: type.number }}>Free</span>}
+      <span style={{ color: poster.inkFaint }}>·</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>you have <Souls n={have} size={type.body} tone={have >= l.price ? 'paper' : 'short'} /></span>
     </span>
   );
   return (
@@ -94,27 +106,36 @@ export function TriggerPrompt({ G, me, prompt, onUse, onPass }: {
         style={{
           ...sheetStyle,
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 14 : 18,
-          padding: isMobile ? '18px 14px' : '26px 30px',
-          borderRadius: isMobile ? 16 : 18,
+          padding: isMobile ? '0 0 18px' : '0 0 26px',
+          borderRadius: 12,
+          overflow: 'hidden',
           maxWidth: 760,
           color: poster.ink,
         }}
       >
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: fonts.display, fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1, color: poster.red }}>
+        {/* The header band, in your patron's amber: the moment, then the
+            question. */}
+        <div style={{
+          ...bandStyle(poster.you),
+          alignSelf: 'stretch',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+          padding: '11px 16px 10px', textAlign: 'center',
+        }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: fonts.ui, fontWeight: 700, fontSize: type.label, letterSpacing: '0.12em' }}>
+            <PatronSigil side="you" size={14} color={poster.ink} />
             {momentLine(G, prompt)}
           </span>
-          <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 19 : 22, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.15 }}>
+          <span style={{ fontSize: isMobile ? type.title : type.display, letterSpacing: '0.05em', lineHeight: 1.15 }}>
             {one ? one.question : 'Use one of them, or pass?'}
           </span>
         </div>
         {one ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '0 14px' }}>
             {card(one)}
             {priceTag(one)}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 10 : 18 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 10 : 18, padding: '0 14px' }}>
             {lines.map((l) => (
               <motion.button
                 key={`${l.offer.heroIid}|${l.offer.abilityId}`}
@@ -135,7 +156,7 @@ export function TriggerPrompt({ G, me, prompt, onUse, onPass }: {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
           {one && (
             <PosterButton variant="red" onClick={() => onUse(one.offer)} ariaLabel={one.question.replace(/\?$/, '')}>
-              Use{one.price > 0 ? ` · ${souls(one.price)}` : ''}
+              Use
             </PosterButton>
           )}
           <PosterButton variant="paper" onClick={onPass}>Pass</PosterButton>
