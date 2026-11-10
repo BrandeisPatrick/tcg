@@ -1,6 +1,6 @@
 import type { TargetFilter } from '@/abilities';
 import type { AbilityId } from '@/engine/types';
-import { poster } from './poster';
+import { levelGreen, poster } from './poster';
 
 /** A card from the hand, a skill, an active item or the attack the player has
  *  armed but not yet aimed/committed. */
@@ -27,34 +27,32 @@ export interface PendingPlay {
 export type ArmedPlay = Pick<PendingPlay, 'iid' | 'kind' | 'filter'>;
 
 /**
- * Spirit-damage plum for the dark log — lighter than poster.stat.spirit
- * (which is pitched for paper) so it reads on poster.panel / poster.ground.
- * Shared by logEntryColor and LogLine's spirit glyph so line and glyph agree.
+ * Spirit-damage plum for the log: the paper's own spirit ink. Shared by
+ * logEntryColor and LogLine's spirit glyph so line and glyph agree.
  */
-export const LOG_SPIRIT_PLUM = '#b48cc4';
+export const LOG_SPIRIT_PLUM = poster.stat.spirit;
 
 /**
- * Categorize a log line by its leading verb / keyword so the side panel and
- * the full log can tint it semantically. Pure substring matching — fast and
- * stable since all log strings are constructed in the engine via `pushLog`.
+ * Categorize a log line by its leading verb / keyword so the log can tint it
+ * semantically. Pure substring matching — fast and stable since all log
+ * strings are constructed in the engine via `pushLog`.
  *
- * Every colour is a dark-chrome ink: the log only ever sits on poster.panel
- * or poster.ground, never on paper.
+ * Every colour is an ink for cream paper (the log is a paper sheet):
  *
- *   attack arrow / KO / fell / overflow       → damage red
- *   healed / respawned / refresh              → green
+ *   attack arrow / KO / fell / overflow       → deep red
+ *   healed / respawned / refresh              → deep green
  *   gained <status> / cleansed / discharges   → spirit plum
- *   used skill / ultimate / played / promoted → your gold
- *   +N Souls                                  → the souls mint
- *   Mulligan / Turn marker                    → dim cream
- *   everything else                           → cream
+ *   used skill / ultimate / played / promoted → full ink
+ *   +N Souls                                  → the souls ink green
+ *   Mulligan / Turn marker                    → dim ink
+ *   everything else                           → soft ink
  */
 export function logEntryColor(s: string): string {
-  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.red;
-  if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return poster.green;
+  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.redDeep;
+  if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return levelGreen(4);
   if (/gained |cleansed|discharges|resisted/i.test(s)) return LOG_SPIRIT_PLUM;
-  if (/used (skill|ultimate):|played |promoted |retreated|swapped|unlocked/i.test(s)) return poster.you;
-  if (/\+\d+ souls?/i.test(s)) return poster.soul;
-  if (/Mulligan|---/i.test(s)) return poster.creamDim;
-  return poster.cream;
+  if (/used (skill|ultimate):|played |promoted |retreated|swapped|unlocked/i.test(s)) return poster.ink;
+  if (/\+\d+ souls?/i.test(s)) return poster.soulInk;
+  if (/Mulligan|---/i.test(s)) return poster.inkDim;
+  return poster.inkSoft;
 }
