@@ -143,3 +143,64 @@ export function PatronSigil({ side, size, color, style }: {
 
 /** Deadlock's ultimate mark (the eye in a disc). */
 export const ultimateGlyph = (size: number, color: string = poster.cream) => hudGlyph('ultimate.svg', size, size, color);
+
+/**
+ * Deadlock's dark panel — the ground of its tooltips, shop and scoreboard:
+ * teal-black with a thin lit edge and cream type. The match screen's HUD
+ * plates, ability tiles and info sheets stand on it; cream paper is kept for
+ * cards and for a notice that asks you to choose.
+ */
+export const panelStyle: CSSProperties = {
+  background: `linear-gradient(180deg, ${poster.slateLit} 0%, ${poster.slate} 100%)`,
+  border: '1px solid rgba(232, 224, 204, 0.18)',
+  borderRadius: 10,
+  color: poster.cream,
+  boxShadow: '0 24px 60px rgba(0, 0, 0, 0.6), 0 6px 18px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+};
+
+/** A smaller plate of the same ground: a HUD pill, a chip, a tile's body. */
+export const plateStyle: CSSProperties = {
+  background: 'rgba(8, 20, 19, 0.92)',
+  border: '1px solid rgba(232, 224, 204, 0.16)',
+  borderRadius: 6,
+  color: poster.cream,
+};
+
+/**
+ * A panel's header band — Deadlock's tooltip header: a flat run of one
+ * colour (an item's category, a patron, an ability's kind) with dark stamped
+ * type on it. Pass the colour; the band sets its own type.
+ */
+export const bandStyle = (ink: string): CSSProperties => ({
+  background: `linear-gradient(180deg, color-mix(in srgb, ${ink} 86%, #ffffff) 0%, ${ink} 55%, color-mix(in srgb, ${ink} 82%, #000000) 100%)`,
+  color: poster.ink,
+  fontFamily: fonts.display,
+  fontSize: scale.body,
+  lineHeight: 1,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.35)',
+});
+
+/** The glow of a charged ultimate: a ring of the ability's colour, lit. */
+export const chargedGlow = (ink: string): string =>
+  `0 0 0 1.5px ${ink}, 0 0 14px 1px color-mix(in srgb, ${ink} 70%, transparent), inset 0 0 12px color-mix(in srgb, ${ink} 28%, transparent)`;
+
+/**
+ * An art-deco rule: two hairlines meeting a small diamond — the one line
+ * ornament the match screen uses (a sheet's title, a section break).
+ */
+export function DecoRule({ color = poster.creamFaint, width = '100%', style }: {
+  color?: string;
+  width?: number | string;
+  style?: CSSProperties;
+}) {
+  const line: CSSProperties = { flex: 1, height: 1, background: color };
+  return (
+    <span aria-hidden style={{ display: 'flex', alignItems: 'center', gap: 6, width, ...style }}>
+      <span style={line} />
+      <span style={{ width: 5, height: 5, transform: 'rotate(45deg)', background: color, flexShrink: 0 }} />
+      <span style={line} />
+    </span>
+  );
+}
