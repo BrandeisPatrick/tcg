@@ -1,63 +1,91 @@
-import { forwardRef, type ReactNode } from 'react';
+import { forwardRef, type CSSProperties, type ReactNode } from 'react';
 import { fonts } from '../tokens';
 import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 
 /**
- * Shared row metrics — single source of truth for the three board rows.
- * Board.tsx sizes the live rows from these and BoardTable draws its row
- * wells from the same numbers, so the printed sheet and the interactive
- * grid can never drift apart.
+ * The board's geometry — single source of truth for the 3-1-1-3 stack
+ * (Pokémon TCG Pocket's table): the rival's bench of three, the rival's
+ * Active, your Active, your bench of three, one above the other down the
+ * middle of the sheet, a vitals rule capping each end. The two Actives face
+ * each other across the middle line: that is the lane. Board.tsx lays the
+ * live rows out from these numbers and BoardTable draws the wells from the
+ * same ones, so the printed sheet and the interactive grid never drift.
  */
 export const boardRows = {
-  bench: (mobile: boolean) => (mobile ? 150 : 180),
-  lane: (mobile: boolean) => (mobile ? 206 : 290),
-  gap: (mobile: boolean) => (mobile ? 20 : 40),
+  bench: (mobile: boolean) => (mobile ? 118 : 150),
+  active: (mobile: boolean) => (mobile ? 184 : 236),
+  /** A bench row to its side's Active row. */
+  gap: (mobile: boolean) => (mobile ? 10 : 20),
+  /** Between the two Actives: the middle line. */
+  lane: (mobile: boolean) => (mobile ? 16 : 26),
   /** The patron vitals rule that caps each end of the stack. */
   vitals: (mobile: boolean) => (mobile ? 22 : 26),
+  /** A vitals rule hugs its bench row by this much. */
+  hug: (mobile: boolean) => (mobile ? 6 : 10),
 } as const;
 
-/**
- * The vitals rules cap the stack, but a full row gap around a 26px rule
- * wastes height the fit-scale then has to shrink away — so each one hugs
- * the bench row it belongs to. Board.tsx and the sheet's own spacers pull
- * by the same amount, or the wells stop lining up with the live rows.
- */
-export const vitalsPull = (mobile: boolean) => boardRows.gap(mobile) - (mobile ? 6 : 10);
+/** The tiles' widths: a bench tile, the gap between bench tiles, and the
+ *  Active tile (wider — the duel is the focus). A phone's bench is narrow
+ *  enough to leave the rails beside the Actives room for the piles and the
+ *  dial on a 360px screen. */
+export const boardCols = {
+  benchTile: (mobile: boolean) => (mobile ? 88 : 150),
+  benchGap: (mobile: boolean) => (mobile ? 8 : 20),
+  active: (mobile: boolean) => (mobile ? 140 : 190),
+  /** Desktop: the sheet's side rails, where the piles, the dial and the turn
+   *  dock sit. A phone's rails are whatever width the screen leaves. */
+  rail: (mobile: boolean) => (mobile ? 0 : 128),
+} as const;
 
-/**
- * The plane's side rails: a left gutter for the row plaques and a wider
- * right one for the turn dock. Board.tsx pads the live rows by these, so
- * the duel's centre sits (right - left) / 2 left of the sheet's own centre
- * — the dial mark below has to shift by the same amount to stay under the
- * compass. Exported so the two can never drift.
- */
-export const boardGutter = (mobile: boolean) => (mobile
-  ? { left: 0, right: 0 }
-  : { left: 76, right: 150 });
+/** The bench's width: three tiles and their gaps. */
+export const benchWidth = (mobile: boolean) => boardCols.benchTile(mobile) * 3 + boardCols.benchGap(mobile) * 2;
+
+/** The stage's width on desktop (the rows' box). Phones are fluid. */
+export const stageWidth = (mobile: boolean) => benchWidth(mobile) + boardCols.rail(mobile) * 2;
+
+/** Where each row starts, px down the rows' box, and the box's height. */
+export function boardStack(mobile: boolean) {
+  const r = boardRows;
+  const vitalsR = 0;
+  const benchR = vitalsR + r.vitals(mobile) + r.hug(mobile);
+  const activeR = benchR + r.bench(mobile) + r.gap(mobile);
+  const activeY = activeR + r.active(mobile) + r.lane(mobile);
+  const benchY = activeY + r.active(mobile) + r.gap(mobile);
+  const vitalsY = benchY + r.bench(mobile) + r.hug(mobile);
+  const height = vitalsY + r.vitals(mobile);
+  /** The middle line, between the two Actives. */
+  const mid = activeR + r.active(mobile) + r.lane(mobile) / 2;
+  return { vitalsR, benchR, activeR, activeY, benchY, vitalsY, height, mid };
+}
 
 /** How far the cream sheet extends beyond the rows' bounding box — the
  *  paper margin. Exported so Board can tuck the rival's hand under the
  *  same top edge the sheet actually occupies. */
 export const tablePad = (mobile: boolean) => ({
-  x: mobile ? 8 : 34,
-  top: mobile ? 12 : 24,
-  bottom: mobile ? 12 : 26,
+  x: mobile ? 8 : 30,
+  top: mobile ? 12 : 22,
+  bottom: mobile ? 12 : 24,
 });
+
+/** A live row's box: absolute in the rows' box, at its top, its height,
+ *  across the whole width (the row centres its own tiles). */
+export function rowBox(top: number, height: number): CSSProperties {
+  return { position: 'absolute', left: 0, right: 0, top, height, zIndex: 1 };
+}
 
 /**
  * The board: one cream sheet — a screen print floating on the blurred
- * scene — with the three rows (rival bench / lane / your bench) drawn on
- * it as ink hairline wells. The lane well carries red corner ticks and a
- * faint dial mark behind the duel. Rendered as a decorative layer behind
- * the live rows; Board.tsx keeps the plane flat.
+ * scene — with the 3-1-1-3 stack drawn on it as ink hairline wells: a well
+ * round each bench, and the lane well round both Actives with the middle
+ * line ruled across it and red corner ticks marking the contested zone.
+ * Rendered as a decorative layer behind the live rows; Board.tsx keeps the
+ * plane flat.
  */
 export function BoardTable({ isMobile }: { isMobile: boolean }) {
   const pad = tablePad(isMobile);
-  // The duel sits in the rows' content box, inset by the plane's gutters;
-  // the wells span the whole sheet. Half the difference is how far the
-  // lane's dial mark must slide to stay under the compass.
-  const g = boardGutter(isMobile);
-  const dialShift = (g.left - g.right) / 2;
+  const s = boardStack(isMobile);
+  const w = benchWidth(isMobile);
+  const breathe = isMobile ? 5 : 8;
   return (
     <div
       aria-hidden
@@ -80,43 +108,39 @@ export function BoardTable({ isMobile }: { isMobile: boolean }) {
         ...sheetStyle,
       }} />
 
-      {/* Row wells — exact overlay of the live rows (same heights + gap). */}
-      <div style={{
-        position: 'absolute',
-        top: pad.top,
-        bottom: pad.bottom,
-        left: pad.x,
-        right: pad.x,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: boardRows.gap(isMobile),
-        padding: `0 ${isMobile ? 4 : 10}px`,
-      }}>
-        {/* Spacers for the two vitals rules — they draw their own hairline,
-            so the sheet leaves them plain and only the card rows get wells. */}
-        <div style={{ flex: `0 0 ${boardRows.vitals(isMobile)}px`, marginBottom: -vitalsPull(isMobile) }} />
-        <RowWell h={boardRows.bench(isMobile)} />
-        <RowWell h={boardRows.lane(isMobile)} lane dialShift={dialShift} />
-        <RowWell h={boardRows.bench(isMobile)} />
-        <div style={{ flex: `0 0 ${boardRows.vitals(isMobile)}px`, marginTop: -vitalsPull(isMobile) }} />
+      {/* Row wells — exact overlay of the live rows. */}
+      <div style={{ position: 'absolute', top: pad.top, bottom: pad.bottom, left: pad.x, right: pad.x }}>
+        <Well top={s.benchR - breathe} height={boardRows.bench(isMobile) + breathe * 2} width={w + breathe * 2} />
+        <Well
+          top={s.activeR - breathe}
+          height={boardRows.active(isMobile) * 2 + boardRows.lane(isMobile) + breathe * 2}
+          width={w + breathe * 2}
+          lane
+          mid={s.mid - (s.activeR - breathe)}
+        />
+        <Well top={s.benchY - breathe} height={boardRows.bench(isMobile) + breathe * 2} width={w + breathe * 2} />
       </div>
     </div>
   );
 }
 
-/** One ink hairline well on the paper, sized to its live row. The lane is
- *  the contested zone: a whisper of deeper paper, red corner ticks and the
- *  dial mark behind the duel. */
-function RowWell({ h, lane, dialShift = 0 }: { h: number; lane?: boolean; dialShift?: number }) {
+/** One ink hairline well on the paper, centred, sized to its live row(s).
+ *  The lane is the contested zone: a whisper of deeper paper, the middle
+ *  line ruled across it where the two Actives meet, and red corner ticks. */
+function Well({ top, height, width, lane, mid = 0 }: { top: number; height: number; width: number; lane?: boolean; mid?: number }) {
   const radius = 12;
   const rule = 1.5;
   return (
     <div style={{
-      position: 'relative',
-      flex: `0 0 ${h}px`,
-      height: h,
+      position: 'absolute',
+      top,
+      height,
+      left: '50%',
+      width,
+      marginLeft: -width / 2,
       borderRadius: radius,
       border: `${rule}px solid ${poster.inkRule}`,
+      boxSizing: 'border-box',
     }}>
       {lane && (
         <>
@@ -130,42 +154,15 @@ function RowWell({ h, lane, dialShift = 0 }: { h: number; lane?: boolean; dialSh
             background: poster.paperDeep,
             opacity: 0.5,
           }} />
-          {/* Dial mark — the printer's mark faintly behind the TurnCompass;
-              the inner ring lands on the compass's own edge. */}
-          <svg
-            viewBox="0 0 40 40"
-            width={170}
-            height={170}
-            fill="none"
-            stroke={poster.ink}
-            strokeWidth="0.5"
-            style={{
-              position: 'absolute',
-              // The wells span the whole sheet, but the duel is centred in
-              // the rows' content box — shift by the gutter asymmetry so the
-              // mark stays concentric with the compass.
-              left: `calc(50% + ${dialShift}px)`,
-              top: '50%',
-              transform: 'translate(-50%, -50%)',
-              opacity: 0.06,
-            }}
-          >
-            <circle cx="20" cy="20" r="15.5" />
-            <circle cx="20" cy="20" r="6.5" />
-            {Array.from({ length: 8 }).map((_, i) => {
-              const a = (i * Math.PI) / 4;
-              return (
-                <line
-                  key={i}
-                  x1={20 + Math.cos(a) * 6.5}
-                  y1={20 + Math.sin(a) * 6.5}
-                  x2={20 + Math.cos(a) * 15.5}
-                  y2={20 + Math.sin(a) * 15.5}
-                />
-              );
-            })}
-          </svg>
-          {/* Red corner ticks — mark the duel row as the contested zone. */}
+          {/* The middle line — where the Actives face each other. */}
+          <div style={{
+            position: 'absolute',
+            left: 10, right: 10,
+            top: mid - rule,
+            height: 1,
+            background: `linear-gradient(90deg, transparent 0%, ${poster.inkFaint} 12%, ${poster.inkFaint} 88%, transparent 100%)`,
+          }} />
+          {/* Red corner ticks — mark the duel rows as the contested zone. */}
           {([
             { top: 6, left: 6, borderTop: true, borderLeft: true },
             { top: 6, right: 6, borderTop: true, borderRight: true },
@@ -193,11 +190,43 @@ function RowWell({ h, lane, dialShift = 0 }: { h: number; lane?: boolean; dialSh
 }
 
 /**
- * Ink tag for the row labels ("Rival · Bench", "Lane", …) — a flat black
- * chamfered label printed in the sheet's left margin (the plane's
- * paddingLeft), beside the cards. Multi-word labels pass "\n" to stack
- * ("Rival\nBench"), keeping the tag narrow enough for the margin at any
- * fit-scale.
+ * A seat in one of the sheet's side rails: the strip of paper beside the
+ * Active column, left or right, centred on `y` (px down the rows' box). The
+ * piles, the turn dial and the turn dock sit in these — the rail is as wide
+ * as the Active column leaves it (capped on desktop, so the seat stays near
+ * the sheet's edge rather than drifting to the middle of a wide rail).
+ */
+export function RailSeat({ side, y, isMobile, children, zIndex = 2 }: {
+  side: 'left' | 'right';
+  y: number;
+  isMobile: boolean;
+  children: ReactNode;
+  zIndex?: number;
+}) {
+  const inset = boardCols.active(isMobile) / 2 + (isMobile ? 4 : 10);
+  const width = isMobile ? `calc(50% - ${inset}px)` : `min(calc(50% - ${inset}px), ${boardCols.rail(isMobile) + 10}px)`;
+  return (
+    <div style={{
+      position: 'absolute',
+      top: y,
+      [side]: 0,
+      width,
+      transform: 'translateY(-50%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex,
+      pointerEvents: 'none',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Ink tag for a row label — a flat black chamfered label. Multi-word labels
+ * pass "\n" to stack ("Rival\nBench"). The 3-1-1-3 board prints none (the
+ * stack reads itself); kept for the gallery and anything that wants one.
  */
 export function RowPlaque({ children }: { children: ReactNode }) {
   return (
@@ -270,6 +299,7 @@ export const SlotWell = forwardRef<HTMLDivElement, {
         justifyContent: 'center',
         gap: 8,
         overflow: 'hidden',
+        boxSizing: 'border-box',
       }}>
       {/* Dial mark — same mark as the card backs, in the owner's ink. */}
       <svg viewBox="0 0 40 40" width={40} height={40} fill="none" stroke={accent} strokeWidth="1.4" style={{ opacity: 0.35 }}>

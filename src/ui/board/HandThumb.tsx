@@ -5,7 +5,7 @@ import { HERO_IMG_BASE } from '@/art/assets';
 import { PRICE } from '@/engine/constants';
 import { fonts } from '../tokens';
 import { TierDiamonds, itemArtUrl } from '../card/ItemIcon';
-import { poster, shopInk } from '../poster';
+import { levelGreen, poster, shopInk } from '../poster';
 
 /** The phone hand's card, px: six sit across a 390-px screen with a sliver of
  *  the seventh at the edge, which is what says the strip scrolls. */
@@ -29,10 +29,14 @@ const BOLT = 15;
  * shop's bolt. `armed` rings it in the green the heroes it may go on glow in
  * (the strip lifts it).
  */
-export function HandThumb({ cardId, armed = false, unaffordable = false }: { cardId: CardId; armed?: boolean; unaffordable?: boolean }) {
+export function HandThumb({ cardId, armed = false, unaffordable = false, level }: {
+  cardId: CardId; armed?: boolean; unaffordable?: boolean;
+  /** A hero's level (back from the lane with it): its frame in its level green. */
+  level?: number;
+}) {
   const data = itemCard(cardId);
   const [failed, setFailed] = useState(false);
-  const ink = data ? shopInk(data.slot).ink : poster.edge;
+  const ink = data ? shopInk(data.slot).ink : level !== undefined ? levelGreen(level) : poster.edge;
   const url = data ? itemArtUrl(cardId) : `${HERO_IMG_BASE}${cardId}_sm.webp`;
   return (
     <span style={{ position: 'relative', display: 'block', width: THUMB_W, height: THUMB_H }}>

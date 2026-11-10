@@ -342,6 +342,8 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                   glow={selected ? 'accent' : null}
                   // A tap on a card in the fan arms it, wherever it lands.
                   tapExplains={false}
+                  // A hero back from the lane keeps its level: its frame says so.
+                  level={CARDS_BY_ID[c.cardId]?.type === 'hero' ? c.level : undefined}
                 />
               </div>
             </motion.div>
@@ -422,7 +424,7 @@ function StripCard({ card: c, selected, stuck, cardDisabled, opacity, label, una
       {/* The card's box, registered for the board's flight to it —
           on an inner node: AnimatePresence's own child takes no ref. */}
       <div ref={(el) => registerCard?.(c.iid, el)}>
-        <HandThumb cardId={c.cardId} armed={selected} unaffordable={unaffordable} />
+        <HandThumb cardId={c.cardId} armed={selected} unaffordable={unaffordable} level={CARDS_BY_ID[c.cardId]?.type === 'hero' ? c.level : undefined} />
       </div>
     </motion.div>
   );

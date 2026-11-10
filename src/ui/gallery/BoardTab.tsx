@@ -179,7 +179,7 @@ function SoulsRailDemo() {
   // board's width, so the stage need be no wider than it takes to show that.
   const { isMobile } = useViewport();
   const bench = boardRows.bench(isMobile);
-  const lane = boardRows.lane(isMobile);
+  const lane = boardRows.active(isMobile) * 2 + boardRows.lane(isMobile);
   const gap = boardRows.gap(isMobile);
   const [rival, setRival] = useState(2);
   const [you, setYou] = useState(3);

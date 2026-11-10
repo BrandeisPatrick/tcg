@@ -1,9 +1,6 @@
 import { ActiveSlot } from './ActiveSlot';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { poster } from '../poster';
-import { RowPlaque } from './BoardTable';
-import { TurnCompass, type TurnPhase } from './TurnCompass';
-import { BossPit } from './BossPit';
+import { boardRows } from './BoardTable';
 import { useViewport } from '../hooks/useViewport';
 import type { ArmedPlay } from '../helpers';
 
@@ -12,9 +9,6 @@ interface Props {
   me: PlayerID;
   opp: PlayerID;
   isMyTurn: boolean;
-  turn: number;
-  /** Where the turn stands — printed by the compass. */
-  phase: TurnPhase;
   pending: ArmedPlay | null;
   onTapHero: (c: CardInstance, owner: PlayerID) => void;
   onLongPressHero?: (c: CardInstance) => void;
@@ -28,90 +22,62 @@ interface Props {
   onTapLane?: () => void;
 }
 
-// The middle row of the 3-2-3 layout. Opp Active on the left, your Active on
-// the right, with a printed hairline down the centre carrying the turn compass.
+/**
+ * The lane of the 3-1-1-3 board: the rival's Active above, yours below,
+ * facing each other across the middle line (boardRows.lane). Mounted in a
+ * box two Active rows and the line tall; the turn dial and the dock sit in
+ * the sheet's rails beside it (Board.tsx), not between the tiles. The
+ * Mid-Boss pit that stood between the Actives is off for now (BossPit stays
+ * in the code, unused).
+ */
 export function ActiveDuel({
-  G, me, opp, isMyTurn, turn, phase,
+  G, me, opp, isMyTurn,
   pending, onTapHero, onLongPressHero, onEquipmentHover, isTargetable, registerSlotRef, readyIids, laneOpen, onTapLane,
 }: Props) {
   const { isMobile } = useViewport();
+  const h = boardRows.active(isMobile);
   return (
     <div style={{
       position: 'relative',
-      display: 'grid',
-      // Same 3-column track as BenchRow so the three rows (Rival Bench →
-      // Lane → Your Bench) column-align across the board. Col 2 hosts the
-      // turn-indicator divider; col 1 and col 3 host the active heroes.
-      // Phones swap the fixed 180px track for a width-capped 1fr track.
-      gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 180px)',
-      gap: isMobile ? 8 : 28,
-      width: isMobile ? '100%' : undefined,
-      maxWidth: isMobile ? 420 : undefined,
-      margin: isMobile ? '0 auto' : undefined,
-      justifyContent: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: boardRows.lane(isMobile),
       height: '100%',
-      // The one row is the lane's height, whatever the tiles would rather
-      // be: an auto row grows to a tile's own height (the portrait's at the
-      // column's width, plus the label band — 228px on a 121px phone column,
-      // the lane being 206) and the row below then paints over the tile's
-      // bottom. The cells shrink instead (ActiveSlot's minHeight: 0).
-      gridTemplateRows: 'minmax(0, 1fr)',
-      alignItems: 'stretch',
     }}>
-      {/* Lane label — sits at the left edge of the row, matching the Bench
-          labels' position so the three section labels stack down the left
-          side of the board. One shared label since both sides share the lane. */}
-      {!isMobile && <RowPlaque>Lane</RowPlaque>}
-      {/* Opp Active (left) */}
-      <ActiveSlot
-        ps={G.players[opp]}
-        owner={opp} myId={me}
-        isOpponent
-        pending={pending}
-        onTapHero={onTapHero}
-        onLongPressHero={onLongPressHero}
-        onEquipmentHover={onEquipmentHover}
-        isTargetable={isTargetable}
-        registerSlotRef={registerSlotRef}
-        isCurrentTurn={!isMyTurn}
-      />
-
-      {/* Vertical divider with turn indicator */}
-      <div style={{
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        {/* Ink hairline — a flat printed rule; the compass carries whose turn it is. */}
-        <div aria-hidden style={{
-          position: 'absolute', top: 0, bottom: 0, left: '50%',
-          width: 1, transform: 'translateX(-50%)',
-          background: `linear-gradient(180deg, transparent 0%, ${poster.inkFaint} 18%, ${poster.inkFaint} 82%, transparent 100%)`,
-          pointerEvents: 'none',
-        }} />
-        <TurnCompass isMyTurn={isMyTurn} turn={turn} phase={phase} beats={!G.draft} />
-        {/* The pit: the Mid-Boss between the two Actives, from round 4. */}
-        <BossPit G={G} me={me} pending={pending} onTapHero={onTapHero} isTargetable={isTargetable} registerSlotRef={registerSlotRef} isMobile={isMobile} />
+      {/* Rival Active (above the line) */}
+      <div style={{ flex: `0 0 ${h}px`, height: h, minHeight: 0 }}>
+        <ActiveSlot
+          ps={G.players[opp]}
+          owner={opp} myId={me}
+          isOpponent
+          pending={pending}
+          onTapHero={onTapHero}
+          onLongPressHero={onLongPressHero}
+          onEquipmentHover={onEquipmentHover}
+          isTargetable={isTargetable}
+          registerSlotRef={registerSlotRef}
+          isCurrentTurn={!isMyTurn}
+        />
       </div>
 
-      {/* My Active (right) */}
-      <ActiveSlot
-        ps={G.players[me]}
-        owner={me} myId={me}
-        isOpponent={false}
-        pending={pending}
-        onTapHero={onTapHero}
-        onLongPressHero={onLongPressHero}
-        onEquipmentHover={onEquipmentHover}
-        isTargetable={isTargetable}
-        registerSlotRef={registerSlotRef}
-        isCurrentTurn={isMyTurn}
-        readyIids={readyIids}
-        laneOpen={laneOpen}
-        onTapSlot={onTapLane}
-      />
+      {/* My Active (below the line) */}
+      <div style={{ flex: `0 0 ${h}px`, height: h, minHeight: 0 }}>
+        <ActiveSlot
+          ps={G.players[me]}
+          owner={me} myId={me}
+          isOpponent={false}
+          pending={pending}
+          onTapHero={onTapHero}
+          onLongPressHero={onLongPressHero}
+          onEquipmentHover={onEquipmentHover}
+          isTargetable={isTargetable}
+          registerSlotRef={registerSlotRef}
+          isCurrentTurn={isMyTurn}
+          readyIids={readyIids}
+          laneOpen={laneOpen}
+          onTapSlot={onTapLane}
+        />
+      </div>
     </div>
   );
 }
