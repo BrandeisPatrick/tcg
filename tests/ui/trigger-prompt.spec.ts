@@ -9,14 +9,15 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { CardInstance, GameState, PlayerID } from '@/engine/types';
+import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
+import { CARDS_BY_ID } from '@/cards';
 import { perform } from '@/engine/engine';
 import { promptOwed } from '@/engine/query';
 import { allocatorOf } from '@/engine/ids';
 import { makeInstance } from '@/engine/instances';
 import { addStatus } from '@/engine/statusOps';
 import { TRIGGER_SHEET, TriggerPrompt, momentLine, offerLine } from '@/ui/overlays/TriggerPrompt';
-import { HeroDetailSheet } from '@/ui/overlays/HeroDetailSheet';
+import { HeroDetailSheet, HeroRules } from '@/ui/overlays/HeroDetailSheet';
 import { HeroSlot } from '@/ui/board/HeroSlot';
 import { skillBlockReason } from '@/ui/board/heroActions';
 import { freshReadyGame } from '../engine/_helpers';
@@ -69,7 +70,10 @@ describe('the hero sheet: a charged ultimate\'s live price, its rule, and when a
     const out = html(createElement(HeroDetailSheet, { card: silver, isMine: true, onClose: () => {} }));
     expect(out).toContain('16 → 7 souls');
     expect(out).toContain('Ultimate · charged');
-    expect(out).toContain('Costs 1 less for each damage Silver deals.');
+    // The sheet keeps one line per action; the charged rule is read whole
+    // behind the "i" (HeroRules, the details view's Abilities).
+    const rules = html(createElement(HeroRules, { card: silver, data: CARDS_BY_ID.hero_silver as HeroCard }));
+    expect(rules).toContain('Costs 1 less for each damage Silver deals.');
   });
 
   it('Victor\'s plate says it is asked when he falls', () => {
