@@ -150,6 +150,7 @@ export function playBlockReason(block: PlayBlock, s: HandSubject = {}): string {
     case 'noHero': return 'Play it onto one of your heroes';
     case 'duplicate': return `${s.hero ?? 'That hero'} already wears ${s.item ?? 'one'}`;
     case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items`;
+    case 'replace': return `Choose one of the items ${s.hero ?? 'that hero'} wears to discard`;
     case 'souls': return s.cost === undefined ? 'Not enough souls' : `Need ${souls(s.cost)}${s.have === undefined ? '' : ` — you have ${s.have}`}`;
     case 'upgrade': return 'Not an upgrade of that card';
   }

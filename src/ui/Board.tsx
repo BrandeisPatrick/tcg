@@ -19,6 +19,7 @@ import { plainText } from './card/scaling';
 import { HeroDetailSheet, type SkillOffer } from './overlays/HeroDetailSheet';
 import { DiscardOverlay } from './overlays/DiscardOverlay';
 import { UpgradePicker } from './overlays/UpgradePicker';
+import { useReplacePick } from './overlays/ReplacePicker';
 import { TriggerPrompt } from './overlays/TriggerPrompt';
 import { DeckPile, DiscardPile, CardPiles } from './board/CardPiles';
 import { OpponentHand } from './board/OpponentHand';
@@ -42,7 +43,7 @@ import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attack
 import { DEFAULT_AI_STRENGTH, enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
 import {
-  activateBlocked, activateTargets, attackBlocked, openingCandidates, placeHeroBlocked, playBlocked, playCost, playTargets, retreatCost, skillBlocked,
+  activateBlocked, activateTargets, attackBlocked, openingCandidates, placeHeroBlocked, playBlockedAny, playCost, playTargets, retreatCost, skillBlocked,
   skillTargets,
 } from '@/engine/legality';
 import type { Action } from '@/engine/engine';
@@ -614,6 +615,8 @@ export function Board(props: BoardProps<GameState>) {
   function playCardOn(cardIid: string, heroIid: string) {
     if (!isMyTurn || actionLocked) return;
     const no = actionRefusal(G, me, { type: 'playCard', cardIid, heroIid });
+    // A full hero: the sheet asks which worn item the card replaces.
+    if (no?.code === 'full' && replacePick.open(cardIid, heroIid)) return;
     if (no) { showNotice(no.text, true); shake(slotRefs.current.get(heroIid)); return; }
     const card = handCard(G, me, cardIid);
     const options = card ? upgradesOf(card.cardId) : [];
@@ -631,6 +634,15 @@ export function Board(props: BoardProps<GameState>) {
     moves.playCard(pick.cardIid, pick.heroIid, upgradeId);
   }
 
+  /** A card played onto a full hero waits on the sheet that asks which worn
+   *  item it replaces (ReplacePicker), then is made like any play. */
+  const replacePick = useReplacePick(G, me, (a) => {
+    if (!isMyTurn || actionLocked) return;
+    const no = actionRefusal(G, me, a);
+    if (no) { showNotice(no.text, true); return; }
+    moves.playCard(a.cardIid, a.heroIid, a.upgradeId, a.replaceIid);
+  });
+
   /** Why the card `c` cannot be played right now, in the engine's words: a
    *  hero with no room on the board, an item no hero can take (the first
    *  hero's refusal: full, wearing it, too dear). */
@@ -642,7 +654,7 @@ export function Board(props: BoardProps<GameState>) {
     const heroes = [G.players[me].active, ...G.players[me].bench].filter((h): h is CardInstance => !!h);
     const first = heroes[0];
     if (!first) return 'Put a hero on the board first';
-    const why = playBlocked(G, me, c.iid, first.iid);
+    const why = playBlockedAny(G, me, c.iid, first.iid);
     return why ? playBlockReason(why, {
       item: CARDS_BY_ID[c.cardId]?.name, hero: CARDS_BY_ID[first.cardId]?.name, slots: slotCap(G, me),
       cost: playCost(first, c.cardId), have: G.players[me].souls,
@@ -1380,6 +1392,8 @@ export function Board(props: BoardProps<GameState>) {
             />
           )}
         </AnimatePresence>
+        {/* A card onto a full hero: which worn item it replaces. */}
+        {replacePick.element}
 
         {/* Promotion prompt: opens when our Active is a corpse and we have at
             least one alive bench hero who can step up. Blocks board input

@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { REPLACE_SHEET, ReplacePicker } from '@/ui/overlays/ReplacePicker';
 import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { INVALID, perform, type Action } from '@/engine/engine';
 import {
-  activateBlocked, attackBlocked, moveBlocked, playBlocked, playCost, playTargets, skillBlocked,
+  activateBlocked, attackBlocked, moveBlocked, playBlocked, playCost, playTargets, replaceNeeded, skillBlocked,
   type ActivateBlock, type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
   type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
@@ -70,7 +73,9 @@ function expectGlowMatchesEngine(G: GameState, item: CardInstance, label: string
 function expectPlayMatchesEngine(G: GameState, card: CardInstance, label: string) {
   const lit = playTargets(G, ME, card.iid).map((h) => h.iid);
   for (const hero of heroesOf(G)) {
-    const a: Action = { type: 'playCard', cardIid: card.iid, heroIid: hero.iid };
+    // A full hero takes the card in place of an item it wears (the sheet asks which): any one will do.
+    const swap = replaceNeeded(G, ME, hero, card.cardId) ? { replaceIid: wornItems(hero)[0]?.iid ?? 'none' } : {};
+    const a: Action = { type: 'playCard', cardIid: card.iid, heroIid: hero.iid, ...swap };
     const engine = taken(G, a);
     expect(actionRefusal(G, ME, a) === null, `${label}: ${nameOf(card)} on ${nameOf(hero)}`).toBe(engine);
     expect(lit.includes(hero.iid), `${label}: ${nameOf(card)} lights ${nameOf(hero)}`).toBe(engine);
@@ -220,16 +225,21 @@ describe('a card from the hand goes on what the engine says', () => {
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].bench[0]!.iid })).toBeNull();
   });
 
-  it('a hero at the slot cap is refused — there is no discard — unless the card upgrades one it wears', () => {
+  it('a hero at the slot cap lights and takes the card in place of an item it names — bare, it is full — unless the card upgrades one it wears', () => {
     const G = board();
     const haze = G.players[ME].active!;
     for (const id of ['extended_magazine', 'extra_health', 'extra_regen']) giveItem(G, haze, id);
     expect(wornItems(haze)).toHaveLength(slotCap(G, ME));
     const spirit = giveCard(G, ME, 'extra_spirit');
     expectPlayMatchesEngine(G, spirit, 'a full hero');
+    expect(isValidTarget(G, ME, { kind: 'playCard', iid: spirit.iid, title: '', desc: '', filter: 'allyHero' }, haze)).toBe(true);
+    // The bare play is full (the board opens the sheet that asks which item goes)…
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: spirit.iid, heroIid: haze.iid })).toEqual({
       code: 'full', text: `Haze wears ${MAX_ITEMS} items`,
     });
+    // …and naming one it wears, it is taken; naming none of hers, it is refused.
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: spirit.iid, heroIid: haze.iid, replaceIid: wornItems(haze)[1].iid })).toBeNull();
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: spirit.iid, heroIid: haze.iid, replaceIid: 'nope' })?.code).toBe('replace');
     // Titanic Magazine upgrades the Extended Magazine Haze wears: it takes its place.
     const titanic = giveCard(G, ME, 'titanic_magazine');
     expectPlayMatchesEngine(G, titanic, 'an upgrade on a full hero');
@@ -500,7 +510,7 @@ describe('every block code has words', () => {
   const skill: Record<SkillBlock, true> = { noSkill: true, trigger: true, actOver: true, down: true, locked: true, used: true, status: true, cooldown: true, souls: true, hp: true, target: true };
   const attack: Record<AttackBlock, true> = { turn1: true, used: true, noActive: true, cannot: true, noTarget: true, target: true };
   const activate: Record<ActivateBlock, true> = { noItem: true, passive: true, actOver: true, down: true, used: true, status: true, charges: true, cooldown: true, target: true };
-  const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, souls: true, upgrade: true };
+  const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, replace: true, souls: true, upgrade: true };
   const place: Record<PlaceBlock, true> = { notYourTurn: true, notInHand: true, notHero: true, occupied: true, benchOnly: true, benchFull: true, badSlot: true, slotTaken: true };
   const choose: Record<ChooseActiveBlock, true> = { notOwed: true, notInDeck: true, notHero: true, benchOnly: true };
   const discard: Record<DiscardBlock, true> = { notOwed: true, none: true, tooMany: true, repeat: true, notInHand: true };
@@ -605,5 +615,26 @@ describe('a status chip wears the colour its definition says', () => {
     expect(statusClass('reverb')).toBe('debuff');
     expect(statusClass('shield')).toBe('buff');
     expect(statusClass('siphon_drain')).toBe('utility');
+  });
+});
+
+describe('the sheet a full hero asks from', () => {
+  it('lists what the hero wears — its cards, art and text — beside the new card; a riding Rem is not among them', () => {
+    const G = board();
+    const haze = G.players[ME].active!;
+    const worn = ['extended_magazine', 'extra_health', 'extra_regen'].map((id) => giveItem(G, haze, id));
+    const rem = G.players[ME].bench[2]!;
+    rem.attachedTo = haze.iid;
+    haze.attached = [...(haze.attached ?? []), rem];
+    const html = renderToStaticMarkup(createElement(ReplacePicker, {
+      hero: haze, itemId: 'extra_spirit', worn: wornItems(haze), onPick: () => {}, onCancel: () => {},
+    }));
+    expect(html).toContain(`aria-label="${REPLACE_SHEET}"`);
+    expect(html).toContain('Haze wears 3 items');
+    expect(html).toContain('aria-label="New: Extra Spirit"');
+    for (const it of worn) expect(html).toContain(`aria-label="${nameOf(it)}"`);
+    expect(html).not.toContain(`aria-label="${nameOf(rem)}"`);
+    expect(html).toContain('Cancel');
+    expect(html).toContain('Mark one to discard');
   });
 });
