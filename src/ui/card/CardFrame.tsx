@@ -490,14 +490,15 @@ export function CardFrame({
         )}
 
         {/* Stat chips (top-right) for heroes — ink chips with cream numerals;
-            the icon colour carries the stat hue (neutral bullet, red heart). */}
+            the icon colour carries the stat hue (neutral bullet, the health
+            green every HP bar wears; red is damage only). */}
         {showStats && !hideStats && (
           <div style={{
             position: 'absolute', top: 4, right: 4,
             display: 'flex', gap: 3,
           }}>
             <StatPill icon={<SwordIcon size={11} color={poster.cream} />} value={(data as any).atk} />
-            <StatPill icon={<HeartIcon size={11} color={poster.stat.hp} />} value={(data as any).hp} />
+            <StatPill icon={<HeartIcon size={11} color={hpBarInk(1, 1)} />} value={(data as any).hp} />
           </div>
         )}
 
