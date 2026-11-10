@@ -1,173 +1,111 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
-import { fonts, spring } from '../tokens';
+import { spring } from '../tokens';
 import { poster } from '../poster';
+import { scale } from '../hud';
 
-interface Props {
-  cards: CardInstance[];
-  /** Where the fan's centre is, px across the stage. */
-  centre: number;
-  /** Where the backs' top edge hangs, px down the stage (negative: above
-   *  it, so only the lower part peeks in). */
-  top: number;
-}
-
-/** A back's size, the widest step from one back to the next and the fan's
- *  widest span (the gap the top strip leaves between the rival's name and
- *  its map track), stage px. */
-const BACK = { w: 30, h: 46, step: 15, span: 62, chip: 16 } as const;
-/** At most this many backs are drawn: the chip says how many there are. */
-const MAX_BACKS = 5;
-
-// The rival's hand, face down: the heroes and items it has drawn and not yet
-// played — a back rises in at the top edge as it draws and sinks away as the
-// card goes onto the board. Seen across the table the fan opens downward
-// from a top anchor: the outer backs tilt out at their feet and ride up a
-// little.
-function fanRotation(i: number, total: number): number {
-  if (total <= 2) return 0;
-  const offset = i - (total - 1) / 2;
-  return -offset * Math.min(5, 15 / total);
-}
-function fanY(i: number, total: number): number {
-  if (total <= 2) return 0;
-  const offset = Math.abs(i - (total - 1) / 2);
-  return -Math.min(offset * offset * 1.6, 8);
-}
+/** The mini back on the scoreboard, px; at most this many cards are drawn
+ *  stacked on it (the number beside it says how many there are). */
+const MINI = { w: 13, h: 18, step: 1.5 } as const;
+const MAX_STACK = 3;
 
 /**
- * The rival's card backs, peeking in at the top edge's CENTRE as Pokémon TCG
- * Pocket's do: hung above the table with only their lower part showing,
- * between the two pills of the rival's name bar, so they cover nothing and
- * nothing covers them. The backs close up as the hand grows, so the fan
- * never outgrows its gap; a chip on its foot says how many cards the rival
- * holds.
+ * The rival's hand on the scoreboard: one small card back with the count
+ * beside it. Every card the rival holds is its own element stacked on the
+ * mini back (`data-hand-card`), so the motion layer can fly a draw to it and
+ * hide it while the card is in the air; the root (`data-hand="rival"`) is
+ * where a card with no element of its own flies from or to.
  */
-export function OpponentHand({ cards, centre, top }: Props) {
+export function RivalHandChip({ cards }: { cards: CardInstance[] }) {
   const total = cards.length;
-  const { w, h, chip } = BACK;
-  const shown = cards.slice(0, MAX_BACKS);
-  const step = shown.length > 1 ? Math.min(BACK.step, (BACK.span - w) / (shown.length - 1)) : 0;
-  const overlap = step - w;
-  const fanW = w + Math.max(0, shown.length - 1) * step;
   return (
-    <div
-      role={total > 0 ? 'img' : undefined}
-      aria-label={total > 0 ? `Rival's hand: ${total} card${total === 1 ? '' : 's'}` : undefined}
+    <span
+      role="img"
+      aria-label={`Rival's hand: ${total} card${total === 1 ? '' : 's'}`}
       data-hand="rival"
-      style={{
-        position: 'absolute',
-        left: centre - fanW / 2,
-        top,
-        width: fanW,
-        height: h,
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'flex-start',
-        // Purely decorative — never intercept clicks meant for the board.
-        pointerEvents: 'none',
-        zIndex: 4,
-      }}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
     >
-      <AnimatePresence>
-        {shown.map((c, i) => (
-          <motion.div
-            key={c.iid}
-            // The motion layer finds the back a draw flies to by it.
-            data-hand-card={c.iid}
-            // Rises in from above the edge; sinks back up as it is played.
-            initial={{ opacity: 0, y: -h * 0.6 }}
-            animate={{ opacity: 1, y: fanY(i, shown.length), rotate: fanRotation(i, shown.length) }}
-            exit={{ opacity: 0, y: -h * 0.6, transition: { duration: 0.25 } }}
-            transition={spring.default}
-            style={{
-              flex: '0 0 auto',
-              marginLeft: i === 0 ? 0 : overlap,
-              transformOrigin: 'top center',
-              zIndex: i,
-              width: w,
-              height: h,
-            }}
-          >
-            <CardBack radius={5} />
-          </motion.div>
-        ))}
-      </AnimatePresence>
-      <AnimatePresence>
-        {total > 0 && (
-          <motion.span
-            key="count"
-            aria-hidden
-            initial={{ opacity: 0, scale: 0.6 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.6, transition: { duration: 0.2 } }}
-            transition={spring.default}
-            style={{
-              position: 'absolute',
-              // On the fan's foot, at its right corner.
-              left: fanW - chip / 2 - 2,
-              top: h - chip + 3,
-              zIndex: 9,
-              minWidth: chip,
-              height: chip,
-              padding: '0 5px',
-              boxSizing: 'border-box',
-              borderRadius: chip / 2,
-              background: poster.ink,
-              border: `1.5px solid ${poster.rival}`,
-              color: poster.cream,
-              fontFamily: fonts.display,
-              fontSize: 11,
-              lineHeight: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontVariantNumeric: 'tabular-nums',
-              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.45)',
-            }}
-          >
-            {total}
-          </motion.span>
+      <span style={{ position: 'relative', width: MINI.w + MINI.step * (MAX_STACK - 1), height: MINI.h, flexShrink: 0 }}>
+        {total === 0 && (
+          <span style={{
+            position: 'absolute', left: 0, top: 0, width: MINI.w, height: MINI.h, boxSizing: 'border-box',
+            borderRadius: 2, border: `1px dashed ${EMPTY_DASH}`,
+          }} />
         )}
-      </AnimatePresence>
-    </div>
+        <AnimatePresence>
+          {cards.map((c, i) => {
+            // The top few sit offset into a little stack; the rest lie under them.
+            const depth = Math.min(MAX_STACK - 1, total - 1 - i);
+            return (
+              <motion.span
+                key={c.iid}
+                data-hand-card={c.iid}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6, transition: { duration: 0.2 } }}
+                transition={spring.default}
+                style={{
+                  position: 'absolute', top: 0,
+                  left: (MAX_STACK - 1 - depth) * MINI.step,
+                  width: MINI.w, height: MINI.h, zIndex: i,
+                  display: 'block',
+                }}
+              >
+                <CardBack radius={2} mini />
+              </motion.span>
+            );
+          })}
+        </AnimatePresence>
+      </span>
+      <span aria-hidden style={{
+        fontWeight: 800, fontSize: scale.body, lineHeight: 1, color: poster.cream,
+        fontVariantNumeric: 'tabular-nums',
+      }}>{total}</span>
+    </span>
   );
 }
 
-/** Face-down card — the lobby's ink plate: charcoal panel, thin edge and
- *  the printer's dial mark in faint cream, set low enough on the plate to
- *  show where only its foot peeks in. Static by design: the border pulse is
- *  the draft's "live pick" signal, not the rival's hand. */
-export function CardBack({ radius }: { radius: number }) {
+/** An empty pile's dashed outline: light enough to show on the teal-black. */
+export const EMPTY_DASH = 'rgba(232, 224, 204, 0.34)';
+
+/** Face-down card — Deadlock's teal-black with a thin light keyline that
+ *  stands it off the table, a darker inner edge, and the printer's dial mark
+ *  in faint cream (dropped on a `mini` back, too small to read). Static by
+ *  design: the border pulse is the draft's "live pick" signal. */
+export function CardBack({ radius, mini = false }: { radius: number; mini?: boolean }) {
   return (
     <div style={{
       width: '100%', height: '100%',
       boxSizing: 'border-box',
       borderRadius: radius,
-      background: poster.panel,
-      border: `2px solid ${poster.edge}`,
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.45)',
+      background: `linear-gradient(160deg, ${poster.slateLit} 0%, ${poster.slate} 70%)`,
+      border: `${mini ? 1 : 1.5}px solid rgba(232, 224, 204, 0.42)`,
+      boxShadow: mini
+        ? '0 1px 2px rgba(0, 0, 0, 0.5)'
+        : 'inset 0 0 0 2px rgba(4, 10, 10, 0.75), inset 0 0 0 3px rgba(232, 224, 204, 0.08), 0 4px 12px rgba(0, 0, 0, 0.45)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <svg viewBox="0 0 40 40" width="62%" fill="none" stroke={poster.creamFaint} strokeWidth="1.6" aria-hidden>
-        <circle cx="20" cy="20" r="15.5" />
-        <circle cx="20" cy="20" r="6.5" />
-        {Array.from({ length: 8 }).map((_, i) => {
-          const a = (i * Math.PI) / 4;
-          return (
-            <line
-              key={i}
-              x1={20 + Math.cos(a) * 6.5}
-              y1={20 + Math.sin(a) * 6.5}
-              x2={20 + Math.cos(a) * 15.5}
-              y2={20 + Math.sin(a) * 15.5}
-            />
-          );
-        })}
-        <circle cx="20" cy="20" r="2" fill={poster.creamFaint} stroke="none" />
-      </svg>
+      {!mini && (
+        <svg viewBox="0 0 40 40" width="58%" fill="none" stroke={poster.creamFaint} strokeWidth="1.6" aria-hidden>
+          <circle cx="20" cy="20" r="15.5" />
+          <circle cx="20" cy="20" r="6.5" />
+          {Array.from({ length: 8 }).map((_, i) => {
+            const a = (i * Math.PI) / 4;
+            return (
+              <line
+                key={i}
+                x1={20 + Math.cos(a) * 6.5}
+                y1={20 + Math.sin(a) * 6.5}
+                x2={20 + Math.cos(a) * 15.5}
+                y2={20 + Math.sin(a) * 15.5}
+              />
+            );
+          })}
+          <circle cx="20" cy="20" r="2" fill={poster.creamFaint} stroke="none" />
+        </svg>
+      )}
     </div>
   );
 }
