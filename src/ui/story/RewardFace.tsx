@@ -103,7 +103,7 @@ export function SoulsFace({ souls, size = 'hand', glow = null }: {
           fontFamily: fonts.display,
           fontSize: hand ? 30 : 64,
           lineHeight: 1,
-          color: poster.gold,
+          color: poster.soul,
           fontVariantNumeric: 'tabular-nums',
         }}>
           +{souls}

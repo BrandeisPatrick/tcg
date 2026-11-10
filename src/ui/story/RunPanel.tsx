@@ -25,7 +25,8 @@ import { HeroBadge } from '@/cards/art/heroArt';
 import { CardFrame, SIZES } from '../card/CardFrame';
 import { CardPreview } from '../overlays/CardPreview';
 import { fonts, spring, text } from '../tokens';
-import { poster, scrimStyle, sheetStyle, soulCoin, tileShadow } from '../poster';
+import { poster, scrimStyle, sheetStyle, tileShadow } from '../poster';
+import { Souls } from '../hud';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 import { KIND_LABEL, StopGlyph, FramedPortrait, eyebrow } from './StopGlyph';
@@ -556,17 +557,14 @@ function CompactBar({ run, onOpen }: { run: StoryRun; onOpen: () => void }) {
 function SuppliesStat({ reward }: { reward: FightReward }) {
   const n = reward.items.length;
   const s = reward.souls;
-  if (n === 0 && s > 0) return <BarStat label="Souls" value={`+${s}`} />;
+  if (n === 0 && s > 0) return <BarStat label="Souls" value={<Souls n={`+${s}`} size={15} />} />;
   return (
     <BarStat
       label="Items"
       value={s > 0 ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           {n}
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-            <span style={soulCoin(9)} />
-            {s}
-          </span>
+          <Souls n={s} size={15} />
         </span>
       ) : String(n)}
     />

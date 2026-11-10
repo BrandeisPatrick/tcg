@@ -17,7 +17,8 @@ import { motion } from 'framer-motion';
 import type { CardId } from '@/engine/types';
 import { cardName, itemCard } from '@/cards';
 import { fonts, spring, text } from '../tokens';
-import { poster, shopInk, soulCoin } from '../poster';
+import { poster, shopInk } from '../poster';
+import { Souls } from '../hud';
 import { RuleText } from '../card/RuleText';
 import { ItemIcon, TierDiamonds } from '../card/ItemIcon';
 import { useViewport } from '../hooks/useViewport';
@@ -167,8 +168,7 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, live, note, pa
             aria-label={`Costs ${soulsWord(cost)}${price !== undefined && price < list ? ` (an upgrade, at the difference: ${list} list)` : ''}`}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start', padding: '3px 7px', borderRadius: 4, background: poster.ink }}
           >
-            <span aria-hidden style={soulCoin(11)} />
-            <span style={{ fontFamily: fonts.display, fontSize: 15, lineHeight: 1, color: short ? poster.red : poster.cream }}>{cost}</span>
+            <Souls n={cost} size={15} tone={short ? 'short' : 'mint'} />
             {price !== undefined && price < list && (
               <span style={{ fontFamily: fonts.display, fontSize: 11, lineHeight: 1, color: poster.creamFaint, textDecoration: 'line-through' }}>{list}</span>
             )}
@@ -232,8 +232,7 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, live, note, pa
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderTop: `1px solid ${poster.edge}` }}>
             <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.16em', color: poster.creamDim }}>Sell</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span aria-hidden style={soulCoin(10)} />
-              <span style={{ fontFamily: fonts.display, fontSize: 14, lineHeight: 1 }}>+{sale.refund}</span>
+              <Souls n={`+${sale.refund}`} size={14} />
             </span>
             <span style={{ fontSize: 11, color: poster.creamDim, flex: 1, minWidth: 0 }}>
               {sale.blockedReason ?? (sale.full ? 'all it cost — bought this turn' : 'half — bought before this turn')}
