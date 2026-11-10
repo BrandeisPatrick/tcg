@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import type { TargetFilter } from '@/abilities';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
+import { useGearFolded } from '../system/systemMenuBus';
 
 interface Props {
   title: string;
@@ -24,7 +25,9 @@ interface Props {
 
 /** The System menu's gear: fixed top 12 / right 12, 40px across, drawn above
  *  everything. A top-docked banner stops short of it with 8px to spare, or
- *  on a phone its Cancel sits under the gear and a tap opens the menu. */
+ *  on a phone its Cancel sits under the gear and a tap opens the menu. The
+ *  match table folds the gear into its own menu (`useFoldGear`), and then the
+ *  banner has the whole width. */
 const GEAR_CLEAR = 12 + 40 + 8;
 
 const TARGET_LABELS: Record<TargetFilter, string> = {
@@ -45,6 +48,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
   // targeting docks under the rival's hand (your rows stay clear), enemy
   // targeting docks above your hand (the rival's rows stay clear).
   const anchorTop = filter === 'allyAny' || filter === 'allyHero' || filter === 'allyBench' || filter === 'self';
+  const gearClear = useGearFolded() ? 0 : GEAR_CLEAR;
   // How far up the hand row reaches, measured before paint, so the bottom
   // dock clears it whatever the strip's height on this phone.
   const [handTop, setHandTop] = useState<number | null>(null);
@@ -66,7 +70,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
     <div style={{
       position: 'fixed',
       left: 16,
-      right: anchorTop ? Math.max(16 + rightInset, GEAR_CLEAR) : 16 + rightInset,
+      right: anchorTop ? Math.max(16 + rightInset, gearClear) : 16 + rightInset,
       ...(anchorTop
         ? { top: 14 }
         : { bottom: handTop != null ? handTop + 6 : 'calc(220px + env(safe-area-inset-bottom))' }),

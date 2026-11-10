@@ -307,7 +307,7 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
           >
             <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
               {lf.f.cardId && (lf.f.faces.start === 'face' || lf.f.faces.end === 'face') && (
-                <CardFrame cardId={lf.f.cardId} size="hand" physical={false} tapExplains={false} />
+                <CardFrame cardId={lf.f.cardId} size="hand" clean physical={false} tapExplains={false} />
               )}
             </div>
             <div style={{
