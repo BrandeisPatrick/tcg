@@ -78,39 +78,48 @@ own look: one portrait stage (`src/ui/board/BoardTable.tsx`, 390 × 844) scaled
 to whatever the screen is, so a phone fills it edge to edge and a desktop shows
 it centred at full height with the scene either side.
 
-- **The table** is a drawn street map lying in a tilted plane (Settings has a
-  "Flat table" switch): avenues converge away from you, city blocks sit between
-  them, and each half is tinted in its side's patron colour — the rival's
-  Sapphire Flame blue on the far half, dimmer and hazier with distance, your
-  Amber Hand gold on the near half — meeting at the small centre emblem. You
-  are always the Amber Hand; red is kept for damage and danger. Empty spots
-  are quiet dashed outlines in their half's tint that light up only when a
-  card can go there.
+- **The table** is a drawn city plan seen from straight above: a faint street
+  grid, each half tinted in its side's patron
+  colour (the rival's Sapphire Flame blue above, your Amber Hand gold below,
+  at equal weight) and marked with that patron's sigil, meeting at the small
+  centre emblem. You are always the Amber Hand; red is kept for damage and
+  danger. Empty spots are quiet dashed outlines that light up only when a card
+  can go there. Settings has a "Tilted table" switch, off by default, that
+  leans the table away by 10 degrees; nothing is cropped and a far-bench card
+  stays over 90% as wide as a near one. Which view is the default is one line:
+  `DEFAULT_TILTED_TABLE` in `src/storage/settings.ts`.
 - **Heroes** run down the middle: the rival's bench, the rival's Active, your
-  Active, your bench. A hero on the board is a clean miniature of its card: the
-  art, the name, the level seal and the attack number, with nothing cut off.
-  Its HP floats above the top-right corner as a bold number over a bar that
-  turns from green to amber to red as it drops, with Shield printed beside it.
-  Statuses hang on the card's left edge and worn items along its foot as small
-  tokens, with a "+n" token when there are more than fit. Rules text, Retreat
-  cost and everything else live in the action view (tap the hero), whose header
-  shows the hero's portrait, current HP and bar, Shield, attack and statuses.
-- **Decks** are card-back stacks half off the edges (the rival's upper left,
-  yours right middle), each discard pile beside its deck.
-- **Top strip**: the rival's name bar at the left, the rival's hand as backs
-  peeking from the top edge in the centre, and the rival's map track
-  (Guardian, Walker, Patron with their HP) and souls at the right.
-- **Turn row and hand**: under your bench, your name bar (map track, turn
-  number) sits at the left and End Turn at the right, under the right thumb.
-  Below that the hand owns the full width: a centred fan of clean card faces
-  (art, name, cost, type) that overlaps as it grows, lifts a card when tapped,
-  and breathes gold on a card you can play.
-- **Side buttons**: the round menu button (match log and Settings; the
-  settings gear folds into it during a match) with a small Auto switch under
-  it on the left, and your souls as the round counter on the right. With the
-  table tilted they stand above the bench corners beside your Active, because
-  a full bench runs edge to edge; on the flat table they stand beside the
-  bench.
+  Active, your bench, the same card sizes on both sides. A hero on the board
+  is its art and three things: a health strip across the top (level ring,
+  one green segment per HP, Shield as its own pale segments, the number), the
+  attack number under it, and worn items as small category-tinted tiles in the
+  card's foot, with a "+n" tile when there are more than fit. Statuses hang in
+  the gutter at the card's left edge. A knocked-out hero waiting to come back
+  keeps its art, greyed, under a "Back in N" or "Next turn" tag. Names, rules
+  text and Retreat live in the action view (tap the hero): a short header
+  (portrait, name, level, HP), then one row per action with a single number at
+  its right: the souls price, the attack's damage, or the one reason it cannot
+  be used. The "i" opens the full card.
+- **Decks** lie beside the Actives (the rival's at the left, yours at the
+  right) as whole card-back stacks, each with its count chip and its discard
+  pile next to it. Tap a discard pile to list it.
+- **Top strip** is a scoreboard: your side at the left (the Amber crown, your
+  three structures, the front one's HP), the turn number in the centre, and
+  the rival's souls, hand count and structures at the right beside the
+  Sapphire hand. Tap it for both sides' Guardian, Walker and Patron HP, souls,
+  hand and deck.
+- **The lane** between the two Actives is where the game speaks: whose turn it
+  is, what a picked-up card needs as its target, why a tap did nothing.
+- **Turn row and hand**: under your bench, the menu button (match log and
+  Settings) and the Auto switch sit at the left, your souls and End Turn at
+  the right, under the right thumb. Below that the hand owns the full width: a
+  centred fan of card faces, each with its cost on a seal in the top-left
+  corner (souls for an item, HP for a hero). Up to five cards all show their
+  names; from six the fan overlaps and only the front card does. A card you
+  cannot pay for goes grey and prints its price in red.
+- **Souls** are Deadlock's soul mark and a mint number everywhere; health is
+  the segmented green bar everywhere; item tiles are tinted by category
+  (Weapon orange, Vitality green, Spirit purple).
 
 ### The turn: Income, Act, End
 
