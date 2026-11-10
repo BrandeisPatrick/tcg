@@ -43,7 +43,7 @@ export function StructuresStrip({ ps, label, accent, projected = 0, isMobile }: 
   ps: PlayerState;
   /** The side's name, for the accessible label. */
   label: string;
-  /** The owner's ink (your gold, the rival's red). */
+  /** The owner's ink (your gold, the rival's sapphire). */
   accent: string;
   /** Structure HP the other side's open attack would push off. */
   projected?: number;

@@ -45,7 +45,7 @@ export function UltMomentFlash({ G }: Props) {
 const PLATE_LANDS = 250;
 
 export function UltFlashOverlay({ name, caster }: { name: string; caster: string }) {
-  // Owner accent: gold for you, red for the rival.
+  // Owner accent: gold for you, sapphire for the rival.
   const isOwn = caster === 'P0';
   const accent = isOwn ? poster.you : poster.rival;
   const calm = useFxCalm();

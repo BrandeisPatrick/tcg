@@ -61,7 +61,7 @@ export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
   cardId: string; caster: 'P0' | 'P1'; kind?: 'item' | 'skill'; onSkip?: () => void;
 }) {
   const isOwn = caster === 'P0';
-  // Owner accent on the caption: gold for you, red for the rival.
+  // Owner accent on the caption: gold for you, sapphire for the rival.
   const accent = isOwn ? poster.you : poster.rival;
   const verb = 'used';
   const { isMobile } = useViewport();

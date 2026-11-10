@@ -34,7 +34,7 @@ import { useStageEngine } from './fx/stage/FxStage';
 interface Props {
   plan: AttackPlan;
   /** The local player. The attack is printed in its attacker's colour —
-   *  your gold when the plan's attacker is you, the rival's red otherwise. */
+   *  your gold when the plan's attacker is you, the rival's sapphire otherwise. */
   me: PlayerID;
   /** Map of slot iid → DOM element for measuring positions. */
   slotRefs: Map<string, HTMLElement>;

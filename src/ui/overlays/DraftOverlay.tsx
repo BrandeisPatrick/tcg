@@ -2,7 +2,7 @@
 //
 //   ▸ a dark dial-and-halftone ground, the focused hero's splash bleeding
 //     through it out of focus
-//   ▸ the rival's picks along a red bar across the top (card backs for the
+//   ▸ the rival's picks along a sapphire bar across the top (card backs for the
 //     picks still to come; the next one pulses while the AI thinks)
 //   ▸ the full hero roster as a fixed grid of portrait tiles — taken heroes
 //     stay in place, greyed out (whose pick it was is the strips' job), so
@@ -40,7 +40,7 @@ interface Props {
 
 // Lobby palette — ink ground, cream type, and the three state colours the
 // mockup uses on card frames: gold for locked, green for the live pick,
-// red for the rival.
+// and the rival's sapphire (side colours follow the patron).
 const lobby = {
   ground: poster.ground,
   panel: poster.panel,
@@ -50,7 +50,7 @@ const lobby = {
   faint: poster.creamFaint,
   gold: poster.gold,
   green: poster.green,
-  red: poster.red,
+  rival: poster.rival,
 } as const;
 
 const NUMERALS = ['I', 'II', 'III', 'IV'];
@@ -384,7 +384,7 @@ function PickStrips({ mine, rival, myTurn, aiTurn, compact, centre }: {
     >
       <PickSide picks={mine} side="left" tone="gold" live={myTurn} compact={compact} />
       {centre}
-      <PickSide picks={rival} side="right" tone="red" live={aiTurn} compact={compact} />
+      <PickSide picks={rival} side="right" tone="rival" live={aiTurn} compact={compact} />
     </div>
   );
 }
@@ -392,15 +392,15 @@ function PickStrips({ mine, rival, myTurn, aiTurn, compact, centre }: {
 function PickSide({ picks, side, tone, live, compact }: {
   picks: string[];
   side: 'left' | 'right';
-  tone: 'gold' | 'red';
+  tone: 'gold' | 'rival';
   live: boolean;
   compact: boolean;
 }) {
   const w = compact ? 30 : 52;
   const h = compact ? 40 : 70;
   const next = picks.length;
-  const colour = tone === 'gold' ? lobby.gold : lobby.red;
-  const deep = tone === 'gold' ? '#8a6d1f' : '#7f1e1c';
+  const colour = tone === 'gold' ? lobby.gold : lobby.rival;
+  const deep = tone === 'gold' ? '#8a6d1f' : '#1f4a86';
   // Each banner runs from its own corner toward the middle, cut off at the
   // inner end so the two point at each other across the roster.
   const clip = side === 'left'
@@ -494,10 +494,10 @@ function CardBack({ w, h, live, tone, numeral }: {
   w: number | string;
   h: number | string;
   live?: boolean;
-  tone: 'red' | 'green' | 'gold' | 'dim';
+  tone: 'rival' | 'green' | 'gold' | 'dim';
   numeral?: string;
 }) {
-  const color = tone === 'red' ? lobby.red
+  const color = tone === 'rival' ? lobby.rival
     : tone === 'green' ? lobby.green
     : tone === 'gold' ? lobby.gold
     : lobby.edge;
@@ -775,7 +775,7 @@ function TeamCards({
         if (s === live && aiTurn) {
           return (
             <div key="wait" style={{ width: w, aspectRatio: '5 / 7', display: 'flex' }}>
-              <CardBack w="100%" h="100%" live tone="red" numeral={NUMERALS[s]} />
+              <CardBack w="100%" h="100%" live tone="rival" numeral={NUMERALS[s]} />
             </div>
           );
         }
@@ -918,7 +918,7 @@ function TeamCard({ w, numeral, heroId, tone, role, preview }: {
 const LOCK_PLATE_W = 168;
 
 /** The LOCK plate, with the lobby's status lamp in it: green when the pick
- *  is yours, pulsing red while the rival chooses, dim once the draft is done.
+ *  is yours, pulsing sapphire while the rival chooses, dim once the draft is done.
  *  A fixed width, so the line it sits on never shifts as the label changes.
  *  Compact (phone) drops the brackets and tightens the type. */
 function LockButton({ enabled, state, onClick, compact }: {
@@ -928,7 +928,7 @@ function LockButton({ enabled, state, onClick, compact }: {
   compact: boolean;
 }) {
   const label = state === 'done' ? 'Locked' : state === 'waiting' ? 'Rival…' : 'Lock';
-  const lamp = state === 'ready' ? lobby.green : state === 'waiting' ? lobby.red : lobby.dim;
+  const lamp = state === 'ready' ? lobby.green : state === 'waiting' ? lobby.rival : lobby.dim;
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: compact ? 12 : 8, flexShrink: 0 }}>
       {!compact && <Bracket side="left" dim={!enabled} />}

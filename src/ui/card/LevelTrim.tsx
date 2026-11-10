@@ -5,7 +5,7 @@ import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 
 /**
  * The level bezel — a hero's level printed into its frame. The tile's 2px
- * outer border is the STATE channel (gold yours, red the rival's, green a
+ * outer border is the STATE channel (gold yours, sapphire the rival's, green a
  * legal target, red armed), so the level never takes a border colour: it is
  * a solid band hugging the inside of the frame, with a 1px dark line along
  * its inner edge so it reads over the portrait and the cream label band

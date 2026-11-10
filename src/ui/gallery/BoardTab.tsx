@@ -107,7 +107,7 @@ function LevelEdgeDemo() {
     <>
       <Caption>
         A hero&rsquo;s level, printed into its frame. The border is already the state channel (gold yours,
-        red the rival&rsquo;s, green a legal target), so the level is a band inside it, with a dark line
+        sapphire the rival&rsquo;s, green a legal target), so the level is a band inside it, with a dark line
         along its inner edge so it reads over the portrait and the cream band alike.
       </Caption>
       <Caption>

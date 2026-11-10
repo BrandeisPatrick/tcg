@@ -87,7 +87,7 @@ export function FxLayer({ batch, batchKey, slotRefs, action = null }: FxLayerPro
   return <>{live.map((b) => <FxBatch key={b.key} live={b} />)}</>;
 }
 
-/** A shot's ink by whose it is: yours gold, the rival's red, the Mid-Boss's
+/** A shot's ink by whose it is: yours gold, the rival's sapphire, the Mid-Boss's
  *  (owned by nobody) the pure-damage ink of its blow. */
 const ownerInk = (owner: Owner | undefined) => (owner === '1' ? poster.rival : owner === 'none' ? FX_INK.pure : poster.you);
 

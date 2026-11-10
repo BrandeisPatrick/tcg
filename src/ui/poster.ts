@@ -39,6 +39,7 @@ export const poster = {
   // Amber Hand, the rival the Sapphire Flame. Red is damage and danger only.
   you: '#d9b64a',        // your frames, keylines, turn marker (amber gold)
   rival: '#4a8fe0',      // the rival's (sapphire)
+  rivalInk: '#2a5fae',   // the rival's sapphire, deep enough to print on paper
   target: '#62c462',     // a legal target / ready state (green)
   scrim: 'rgba(6, 24, 20, 0.78)',   // modal backdrop over the scene
 
