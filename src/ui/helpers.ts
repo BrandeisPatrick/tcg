@@ -41,7 +41,7 @@ export const LOG_SPIRIT_PLUM = '#b48cc4';
  * Every colour is a dark-chrome ink: the log only ever sits on poster.panel
  * or poster.ground, never on paper.
  *
- *   attack arrow / KO / fell / overflow       → rival red
+ *   attack arrow / KO / fell / overflow       → damage red
  *   healed / respawned / refresh              → green
  *   gained <status> / cleansed / discharges   → spirit plum
  *   used skill / ultimate / played / promoted → your gold
@@ -49,7 +49,7 @@ export const LOG_SPIRIT_PLUM = '#b48cc4';
  *   everything else                           → cream
  */
 export function logEntryColor(s: string): string {
-  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.rival;
+  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.red;
   if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return poster.green;
   if (/gained |cleansed|discharges|resisted/i.test(s)) return LOG_SPIRIT_PLUM;
   if (/used (skill|ultimate):|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return poster.you;
