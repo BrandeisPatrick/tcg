@@ -5,6 +5,8 @@
  * (whose parchment/brass ramp still serves the collection screens);
  * anything drawn in the poster idiom imports from here.
  */
+import { BASE } from '@/art/assets';
+
 export const poster = {
   // Paper — the cream sheet and its bands.
   paper: '#f2e6cb',
@@ -65,6 +67,18 @@ export const poster = {
     debuff: '#d4392c',
     utility: 'rgba(23, 20, 16, 0.64)',
   },
+
+  // Deadlock's own HUD colours (its souls counter, its health frame, its
+  // scoreboard): souls are a mint number beside the soul wisp, on a plate of
+  // the HUD's dark green; the table under the cards is its teal-black.
+  soul: '#60f8b3',        // the souls mint, on a dark ground
+  soulInk: '#12714c',     // the same green pressed dark enough for cream paper
+  soulShort: '#ff8a76',   // a price you cannot pay yet
+  plate: '#0d2418',       // the HUD's dark green plate (health, souls)
+  plateEdge: '#2a6a45',   // its lit edge
+  shield: '#d9e3ee',      // a barrier's pale steel on the health bar
+  slate: '#0b1716',       // the table's teal-black
+  slateLit: '#17302d',
 } as const;
 
 /** The level greens: a hero card's frame from Level 1 (the lightest) to the
@@ -110,16 +124,35 @@ export const atkInk = (atk: number, base: number): string =>
 export const hpInk = (hp: number, hpMax: number, base: number): string =>
   hp < hpMax ? poster.stat.hpDim : hpMax > base ? poster.stat.hpBright : poster.stat.hp;
 
-/** Flat soul coin — gold with an ink rim; `empty` is an ink outline. */
-export const soulCoin = (size: number, empty = false) => ({
-  width: size,
-  height: size,
-  borderRadius: '50%',
-  flexShrink: 0,
-  background: empty ? 'transparent' : poster.gold,
-  border: `1.5px solid ${empty ? poster.inkFaint : poster.ink}`,
-  boxSizing: 'border-box' as const,
-});
+/** Deadlock's HUD glyphs (public/hud): the game's own white marks, painted
+ *  in any colour through a mask. `soul.svg` is the soul wisp, `team_amber` /
+ *  `team_sapphire` the two patrons' sigils, `ultimate.svg` the ultimate eye. */
+export const HUD_IMG_BASE = `${BASE}hud/`;
+export const hudGlyph = (file: string, width: number, height: number, color: string) => {
+  const url = `url("${HUD_IMG_BASE}${file}")`;
+  return {
+    display: 'inline-block' as const,
+    flexShrink: 0,
+    width,
+    height,
+    backgroundColor: color,
+    WebkitMaskImage: url,
+    maskImage: url,
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    WebkitMaskPosition: 'center',
+    maskPosition: 'center',
+    WebkitMaskSize: 'contain',
+    maskSize: 'contain',
+  };
+};
+
+/** The soul wisp beside a souls number — Deadlock's souls icon, `size` px
+ *  tall, in the souls mint (`ink` for another ground: `poster.soulInk` on
+ *  paper). `empty` is a soul not yet earned: the wisp, faint. The name is
+ *  from when this was a gold coin; every souls number in the game calls it. */
+export const soulCoin = (size: number, empty = false, ink: string = poster.soul) =>
+  hudGlyph('soul.svg', Math.round(size * 0.56), Math.round(size * 1.08), empty ? 'rgba(96, 248, 179, 0.3)' : ink);
 
 /** Button skins for PosterButton (chrome.tsx). */
 export const posterButtonSkins = {
