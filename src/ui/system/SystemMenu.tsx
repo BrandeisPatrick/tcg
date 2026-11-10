@@ -195,6 +195,12 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
                   on={settings.reducedMotion}
                   onClick={() => updateSettings({ reducedMotion: !settings.reducedMotion })}
                 />
+                <ToggleRow
+                  label="Flat table"
+                  hint="Sees the match table from straight above instead of at an angle."
+                  on={settings.flatTable}
+                  onClick={() => updateSettings({ flatTable: !settings.flatTable })}
+                />
               </Section>
 
               {/* Actions */}

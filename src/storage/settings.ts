@@ -14,10 +14,13 @@ export interface AppSettings {
   /** Side panel when a match starts: 'auto' opens it only on wide
    *  viewports (≥1100px), the explicit values always win. */
   panelDefault: 'auto' | 'open' | 'closed';
+  /** The match table seen flat from above rather than at Pocket's tilted
+   *  angle (the rival's half receding). Off by default: the tilt is on. */
+  flatTable: boolean;
 }
 
 const KEY = 'deadlock-tcg-settings';
-const DEFAULTS: AppSettings = { combatSpeed: 1, reducedMotion: false, panelDefault: 'auto' };
+const DEFAULTS: AppSettings = { combatSpeed: 1, reducedMotion: false, panelDefault: 'auto', flatTable: false };
 
 let cache: AppSettings | null = null;
 const listeners = new Set<() => void>();
@@ -36,6 +39,7 @@ export function getSettings(): AppSettings {
     const speed = Number(loaded.combatSpeed);
     loaded.combatSpeed = (speed === 1 || speed === 1.5 || speed === 2 ? speed : DEFAULTS.combatSpeed) as AppSettings['combatSpeed'];
     loaded.reducedMotion = loaded.reducedMotion === true;
+    loaded.flatTable = loaded.flatTable === true;
     loaded.panelDefault = (['auto', 'open', 'closed'] as const).includes(loaded.panelDefault)
       ? loaded.panelDefault : DEFAULTS.panelDefault;
     cache = loaded;

@@ -30,7 +30,7 @@ import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
-import { BoardTable, RoundPlate, STAGE, boardStack, hudSeats } from './board/BoardTable';
+import { BoardTable, RoundPlate, STAGE, TABLE_TILT, boardStack, hudSeats, tableTiltStyle } from './board/BoardTable';
 import { NameBar } from './board/NameBar';
 import { SoulsCounter } from './board/SoulsCounter';
 import { TurnBanner } from './board/TurnBanner';
@@ -120,8 +120,9 @@ export function Board(props: BoardProps<GameState>) {
     if (lesson && ctx.gameover?.winner === me) markLessonDone(lesson.id, LESSONS.length);
   }, [lesson, ctx.gameover, me]);
   const following = lesson ? nextLesson(lesson.id) : undefined;
-  // Combat tempo honours the system-menu speed setting live.
-  const { combatSpeed } = useSettings();
+  // Combat tempo honours the system-menu speed setting live; so does the
+  // table's tilt (the "Flat table" setting turns it off).
+  const { combatSpeed, flatTable } = useSettings();
   const [pending, setPending] = useState<PendingPlay | null>(null);
   // Auto-play: when on, the same AI that runs the opponent also drives the
   // local player's turns, so the match plays itself hands-free. Toggle in the
@@ -893,7 +894,7 @@ export function Board(props: BoardProps<GameState>) {
   // scaled to the screen — a phone fills it edge to edge, a desktop shows it
   // centred at full height with the scene either side.
   const stack = boardStack();
-  const hud = hudSeats();
+  const hud = hudSeats(!flatTable);
   const youPs = G.players[me];
   const oppPs = G.players[opp];
 
@@ -940,21 +941,13 @@ export function Board(props: BoardProps<GameState>) {
               overflow: 'clip',
             }}
           >
+            {/* THE TABLE PLANE — tilted away like Pocket's camera (tableTiltStyle):
+                the halves, the ring, every slot and card, the HP floats, the
+                chips and the piles turn with it. Taps land through the
+                transform, and the flights and FX measure the projected boxes. */}
+            <div data-table-plane style={{ position: 'absolute', inset: 0, zIndex: 1, ...tableTiltStyle(flatTable) }}>
             {/* THE TABLE — the two halves and the centre ring, behind everything. */}
             <BoardTable />
-
-            {/* The rival's hand: backs peeking in at the top edge. */}
-            <OpponentHand cards={oppPs.hand} centre={hud.rivalHand.centre} top={hud.rivalHand.top} />
-
-            {/* The rival's name bar: its patron, its map track, its souls. */}
-            <NameBar
-              style={{ position: 'absolute', ...hud.rivalBar, zIndex: 5 }}
-              label={PATRON_NAMES.rival}
-              ps={oppPs}
-              hostile
-              souls={oppPs.souls}
-              myTurn={!isMyTurn}
-            />
 
             {/* THE 3-1-1-3 STACK — the rival's bench, the rival's Active,
                 your Active, your bench, down the middle (boardStack). */}
@@ -1018,6 +1011,21 @@ export function Board(props: BoardProps<GameState>) {
             <div style={{ position: 'absolute', ...hud.yourDiscard, zIndex: 3 }}>
               <DiscardPile cards={youPs.discard} owner="you" size="small" accent={poster.you} />
             </div>
+            </div>
+
+            {/* The rival's hand: backs peeking in at the top edge. */}
+            <OpponentHand cards={oppPs.hand} centre={hud.rivalHand.centre} top={hud.rivalHand.top} />
+
+            {/* The rival's name bar: its patron, its map track, its souls. */}
+            <NameBar
+              style={{ position: 'absolute', ...hud.rivalBar, zIndex: 5 }}
+              label={PATRON_NAMES.rival}
+              ps={oppPs}
+              hostile
+              souls={oppPs.souls}
+              myTurn={!isMyTurn}
+            />
+
 
             {/* The menu — a round button at the lower left, where Pocket's
                 "≡" sits: the match log behind it. */}
@@ -1333,7 +1341,7 @@ export function Board(props: BoardProps<GameState>) {
         <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} action={G.action} />
 
         {/* The deck's motion — cards between the deck, the hand and the discard pile. */}
-        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} origins={placeOrigins.current} ticker={deckMotion.ticker} />
+        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} origins={placeOrigins.current} ticker={deckMotion.ticker} tilt={flatTable ? 0 : TABLE_TILT.angle} />
 
         {/* Feedback sticker — one ink label above the controls (red when it is
             a warning). Explains silent no-ops and confirms fire-and-forget

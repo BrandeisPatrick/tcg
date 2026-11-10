@@ -50,6 +50,10 @@ interface Props {
    *  by iid): a placement starts there when the card is no longer on screen. */
   origins?: Map<string, Rect>;
   ticker: PileTicker;
+  /** The table plane's tilt, degrees (BoardTable's TABLE_TILT): a ghost
+   *  turns to it as it lands on a slot or a pile, and from it as it leaves
+   *  one, so a flat card never lands on a tilted one. 0 for a flat table. */
+  tilt?: number;
 }
 
 interface Live {
@@ -86,7 +90,10 @@ function pileEl(pile: 'deck' | 'discard', owner: Owner): Element | null {
   return box ? (box.firstElementChild ?? box) : null;
 }
 
-export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins, ticker }: Props) {
+export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins, ticker, tilt = 0 }: Props) {
+  /** How far into the table's plane an anchor lies: the hands are flat, the
+   *  slots and piles are on it, an upgrade shown over the table halfway. */
+  const inPlane = (a: Anchor): number => (a.kind === 'hand' ? 0 : a.kind === 'stage' ? 0.5 : 1);
   const [live, setLive] = useState<Live[]>([]);
   const [riffles, setRiffles] = useState<LiveRiffle[]>([]);
   const boxes = useRef(new Map<string, HTMLDivElement>());
@@ -230,6 +237,7 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
         let angle = faceAngle(lf.f.faces.start);
         let rot = 0;
         let alpha = 1;
+        let lean = tilt * inPlane(lf.f.from);
         if (t < lf.f.hold) {
           // Shown where it appears: a pop as it comes.
           const pop = easeOut(clamp01(t / APPEAR_POP_MS));
@@ -256,12 +264,13 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
           };
           angle = lerp(faceAngle(lf.f.faces.start), faceAngle(lf.f.faces.end), clamp01((p - 0.2) / 0.6));
           rot = 5 * Math.sin(Math.PI * p) * (dx < 0 ? -1 : 1);
+          lean = tilt * lerp(inPlane(lf.f.from), inPlane(lf.f.to), e);
           if (p >= 1) { lf.done = true; finished = true; unhide(lf.f.key); }
         }
         const s = rect.width / lf.natural.w;
         box.style.opacity = String(alpha);
         box.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0) scale(${s}) rotate(${rot}deg)`;
-        plate.style.transform = `rotateY(${angle}deg)`;
+        plate.style.transform = `rotateX(${lean}deg) rotateY(${angle}deg)`;
       }
       if (finished) setLive((l) => l.filter((x) => !x.done));
       raf = requestAnimationFrame(frame);

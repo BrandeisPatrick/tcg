@@ -80,25 +80,62 @@ export function slotBox(row: number, kind: 'active' | 'bench', i = 0): CSSProper
  */
 export const DECK = { w: 64, h: 90 } as const;
 export const DISCARD = { w: 40, h: 56 } as const;
-export function hudSeats() {
+export function hudSeats(tilted = false) {
   const s = boardStack();
+  // The near seats sit on the plane: placed inward by the tilt's growth so
+  // they project where the flat ones sit.
+  const nearX = (x: number) => (tilted ? STAGE.w / 2 + (x - STAGE.w / 2) / TABLE_TILT.nearX : x);
   const activeCentre = (row: number) => row + HP_ROOM + cardHeight(boardCols.active) / 2;
   const benchCentre = s.benchY + HP_ROOM + cardHeight(boardCols.bench) / 2;
   const off = Math.round(DECK.w * 0.47);
   return {
     rivalBar: { left: 8, top: 10 },
-    rivalHand: { centre: 300, top: -24 },
+    rivalHand: { centre: 300, top: tilted ? 38 : -24 },
     rivalDeck: { left: -off, top: activeCentre(s.activeR) - DECK.h / 2 },
     rivalDiscard: { left: DECK.w - off + 8, top: activeCentre(s.activeR) - DISCARD.h / 2 },
     ring: { centre: s.mid, size: 60 },
-    yourDeck: { left: STAGE.w - DECK.w + off, top: activeCentre(s.activeY) - DECK.h / 2 },
-    yourDiscard: { left: STAGE.w - DECK.w + off - 8 - DISCARD.w, top: activeCentre(s.activeY) - DISCARD.h / 2 },
-    menu: { left: 13, top: benchCentre - 20, size: 40 },
-    souls: { left: STAGE.w - 13 - 44, top: benchCentre - 22, size: 44 },
+    yourDeck: { left: nearX(STAGE.w - DECK.w + off), top: activeCentre(s.activeY) - DECK.h / 2 },
+    yourDiscard: { left: nearX(STAGE.w - DECK.w + off - 8 - DISCARD.w), top: activeCentre(s.activeY) - DISCARD.h / 2 },
+    menu: { left: tilted ? 4 : 13, top: benchCentre - 20, size: 40 },
+    souls: { left: STAGE.w - (tilted ? 4 : 13) - 44, top: benchCentre - 22, size: 44 },
     hand: { left: 0, top: s.bottom + 10, width: 300 },
     endTurn: { left: 304, top: s.bottom + 18, width: 80, height: 40 },
     auto: { left: 304, top: s.bottom + 66, width: 80, height: 22 },
     yourBar: { left: 8, top: STAGE.h - 30 },
+  };
+}
+
+/**
+ * The table's TILT — Pokémon TCG Pocket's camera: the table plane turned
+ * away from the viewer about a line near its foot, so your half stays close
+ * to flat and full size and the rival's half recedes, narrower and smaller
+ * (its bench about three quarters of yours). Everything on the table — the
+ * halves, the ring, the slots and their cards, the HP floats, the chips, the
+ * decks and the discard piles — turns with it; the HUD, the hands, the
+ * banner and every sheet stay flat over it. The plane is then scaled up
+ * about the same line, so the receding far row still fills the stage's top
+ * and the near row grows toward the hand. `angle` 0 is the flat table (the
+ * "Flat table" setting).
+ */
+export const TABLE_TILT = {
+  angle: 20,
+  perspective: 800,
+  /** The line the plane turns about: your bench's foot, which stays put. */
+  originY: boardStack().bottom / STAGE.h,
+  scale: 1.2,
+  shiftY: 0,
+  /** How much wider the plane's near edge projects (its scale times the
+   *  perspective at your Active): the near seats are placed inward by it. */
+  nearX: 1.1,
+} as const;
+
+/** The style of the table's plane: the tilt, or none. */
+export function tableTiltStyle(flat: boolean): CSSProperties {
+  if (flat) return {};
+  const t = TABLE_TILT;
+  return {
+    transform: `translateY(${t.shiftY}px) perspective(${t.perspective}px) rotateX(${t.angle}deg) scale(${t.scale})`,
+    transformOrigin: `50% ${t.originY * 100}%`,
   };
 }
 
@@ -120,10 +157,12 @@ export function BoardTable() {
   const { ring } = hudSeats();
   const seam = 7;
   return (
-    <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+    // Not clipped here: the stage clips at its own edges, and the tilted
+    // plane needs the far paper to reach past the stage's top.
+    <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
       {/* The rival's half. */}
       <div style={{
-        position: 'absolute', left: -20, right: -20, top: -40, height: ring.centre - seam + 40,
+        position: 'absolute', left: -20, right: -20, top: -200, height: ring.centre - seam + 200,
         borderRadius: '0 0 22px 22px',
         ...paper,
         boxShadow: `inset 0 0 0 1.5px ${poster.inkRule}, 0 10px 24px rgba(0, 0, 0, 0.45)`,
