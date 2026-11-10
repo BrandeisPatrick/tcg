@@ -77,7 +77,8 @@ export function MatchEndScreen({
     { label: 'Turns', value: String(G.turnNumber) },
     { label: 'Your structures', value: `${structureHp(myPs)}/${trackOf(myPs)}`, icons: trackIcons(myPs, poster.you) },
     { label: 'Rival structures', value: `${structureHp(opPs)}/${trackOf(opPs)}`, icons: trackIcons(opPs, poster.rival) },
-    { label: 'Mid-Boss', value: `${G.record[me].bossKills}–${G.record[opp].bossKills}`, icons: <MapIcon kind="mid_boss" size={16} zoom={1.2} /> },
+    // The Mid-Boss row only in a match that has one (MID_BOSS_ENABLED / the setup's midBoss).
+    ...(G.midBoss ? [{ label: 'Mid-Boss', value: `${G.record[me].bossKills}–${G.record[opp].bossKills}`, icons: <MapIcon kind="mid_boss" size={16} zoom={1.2} /> }] : []),
     { label: 'Heroes lost', value: `${myTeam.filter(fallen).length}–${opTeam.filter(fallen).length}` },
   ];
 
