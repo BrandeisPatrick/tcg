@@ -204,3 +204,23 @@ export function DecoRule({ color = poster.creamFaint, width = '100%', style }: {
     </span>
   );
 }
+
+/**
+ * A count chip — how many cards a pile or a hand holds: a small dark plate
+ * edged in its side's colour (your amber, the rival's sapphire), a cream
+ * number. Pinned to a pile's corner, or set beside a card back.
+ */
+export const countChipStyle = (accent: string, size: number = scale.label): CSSProperties => ({
+  minWidth: Math.round(size * 1.7),
+  height: Math.round(size * 1.6),
+  padding: `0 ${Math.round(size * 0.4)}px`,
+  boxSizing: 'border-box',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  background: 'rgba(8, 20, 19, 0.96)',
+  border: `1.5px solid ${accent}`,
+  borderRadius: 4,
+  color: poster.cream,
+  fontFamily: fonts.ui, fontWeight: 800, fontSize: size, lineHeight: 1,
+  fontVariantNumeric: 'tabular-nums',
+  boxShadow: '0 2px 5px rgba(0, 0, 0, 0.5)',
+});
