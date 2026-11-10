@@ -148,11 +148,11 @@ export function hudSeats(tilted = false) {
   const rowTop = TABLE_FOOT + 6;
   return {
     scoreboard: { left: 6, right: 6, top: 6, height: 30 },
-    rivalDeck: pile(s.activeR, DECK, 42),
-    rivalDiscard: pile(s.activeR, DISCARD, 104),
+    rivalDeck: pile(s.activeR, DECK, 38),
+    rivalDiscard: pile(s.activeR, DISCARD, 96),
     ring: { centre: s.mid, size: 34 },
-    yourDeck: pile(s.activeY, DECK, STAGE.w - 42),
-    yourDiscard: pile(s.activeY, DISCARD, STAGE.w - 104),
+    yourDeck: pile(s.activeY, DECK, STAGE.w - 38),
+    yourDiscard: pile(s.activeY, DISCARD, STAGE.w - 96),
     menu: { left: 8, top: rowTop, size: TURN_ROW_H },
     auto: { left: 8 + TURN_ROW_H + 8, top: rowTop + 5, width: 48, height: 24 },
     souls: { right: 8 + END_TURN_W + 8, top: rowTop, height: TURN_ROW_H },
@@ -167,15 +167,15 @@ export function hudSeats(tilted = false) {
  *  an empty slot's outline and fill. The two halves carry the same weight. */
 export const HALF = {
   you: {
-    wash: 'rgba(214, 128, 40, 0.27)',
-    pool: 'rgba(255, 190, 96, 0.30)',
+    wash: 'rgba(224, 130, 32, 0.30)',
+    pool: 'rgba(255, 186, 84, 0.30)',
     line: 'rgba(255, 206, 128, 1)',
     well: 'rgba(255, 206, 128, 0.42)',
     fill: 'rgba(0, 0, 0, 0.22)',
   },
   rival: {
-    wash: 'rgba(58, 124, 210, 0.25)',
-    pool: 'rgba(120, 176, 255, 0.28)',
+    wash: 'rgba(58, 124, 210, 0.23)',
+    pool: 'rgba(120, 176, 255, 0.26)',
     line: 'rgba(160, 200, 255, 1)',
     well: 'rgba(160, 200, 255, 0.42)',
     fill: 'rgba(0, 0, 0, 0.22)',
@@ -257,16 +257,6 @@ export function BoardTable() {
                   <line x1={i % 2 ? outer.r : outer.r + 22} y1={sideY(side, d)} x2={x1} y2={sideY(side, d)} />
                 </g>
               ))}
-              {/* A hatched block or two in the outer gutters. */}
-              {[0, 2].map((i) => {
-                const a = sideY(side, SIDE_STREETS[i]), b = sideY(side, SIDE_STREETS[i + 1]);
-                const top = Math.min(a, b) + 5, h = Math.abs(a - b) - 10;
-                const x = side === 'rival' ? (i ? x0 + 66 : outer.r + 8) : (i ? outer.r + 8 : x0 + 66);
-                return (
-                  <rect key={i} x={x} y={top} width={outer.l - 8 - (x0 + 66)} height={h} rx={1.5}
-                    fill={line(side)} fillOpacity={0.05} strokeOpacity={0.18} strokeWidth={0.9} />
-                );
-              })}
             </g>
           );
         })}
