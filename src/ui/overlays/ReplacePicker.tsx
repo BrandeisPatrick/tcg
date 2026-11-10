@@ -29,6 +29,7 @@ import { fonts, spring } from '../tokens';
 import { poster, scrimStyle, sheetStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { UpgradePicker } from './UpgradePicker';
+import { scale as T, bandStyle } from '../hud';
 
 /** The sheet's accessible name, by which the tutorial and the QA scripts find it. */
 export const REPLACE_SHEET = 'Choose the item to discard';
@@ -66,29 +67,36 @@ export function ReplacePicker({ hero, itemId, worn, onPick, onCancel }: {
         style={{
           ...sheetStyle,
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 12 : 18,
-          padding: isMobile ? '16px 12px' : '24px 28px',
-          borderRadius: isMobile ? 16 : 18,
+          padding: isMobile ? '0 12px 16px' : '0 28px 24px',
+          borderRadius: isMobile ? 14 : 16,
+          overflow: 'hidden',
           width: 'min(100%, 460px)',
           boxSizing: 'border-box',
           color: poster.ink,
         }}
       >
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 18 : 22, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1 }}>
+        {/* The header band in your amber: whose items, and the one ask. */}
+        <div style={{
+          ...bandStyle(poster.you),
+          alignSelf: 'stretch', margin: isMobile ? '0 -12px' : '0 -28px',
+          padding: isMobile ? '14px 12px 12px' : '18px 28px 14px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textAlign: 'center',
+        }}>
+          <span style={{ fontSize: T.title, letterSpacing: '0.06em', lineHeight: 1 }}>
             {heroName} wears {worn.length} items
           </span>
-          <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 11.5 : 13, letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1.2 }}>
+          <span style={{ fontSize: isMobile ? T.label : T.body, letterSpacing: '0.14em', lineHeight: 1.2, opacity: 0.85 }}>
             Discard one to put on {cardName(itemId)}
           </span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 10, width: '100%' }}>
           {/* The new card, then what it takes the place of. */}
           <div role="group" aria-label={`New: ${cardName(itemId)}`} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.inkDim, textAlign: 'center' }}>New</span>
+            <span style={{ fontFamily: fonts.display, fontSize: T.label, letterSpacing: '0.16em', textTransform: 'uppercase', color: poster.inkDim, textAlign: 'center' }}>New</span>
             <ItemLine cardId={itemId} tone="new" />
           </div>
           <div role="group" aria-label={`What ${heroName} wears`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.inkDim, textAlign: 'center', marginTop: 4 }}>Worn — tap the one to discard</span>
+            <span style={{ fontFamily: fonts.display, fontSize: T.label, letterSpacing: '0.16em', textTransform: 'uppercase', color: poster.inkDim, textAlign: 'center', marginTop: 4 }}>Worn — tap the one to discard</span>
             {worn.map((it) => {
               const on = it.iid === marked;
               return (
@@ -107,7 +115,7 @@ export function ReplacePicker({ hero, itemId, worn, onPick, onCancel }: {
                   {on && (
                     <span aria-hidden style={{
                       position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%',
-                      background: poster.red, color: poster.paper, fontSize: 12, lineHeight: '20px', textAlign: 'center',
+                      background: poster.red, color: poster.paper, fontSize: T.label, lineHeight: '20px', textAlign: 'center',
                       fontFamily: fonts.display, boxShadow: `0 0 0 2px ${poster.paper}`,
                     }}>✕</span>
                   )}

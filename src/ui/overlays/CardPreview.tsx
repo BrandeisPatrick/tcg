@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 import { CardFrame } from '../card/CardFrame';
-import { PosterButton } from '../chrome';
 import { fonts, spring } from '../tokens';
 import { poster, scrimStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
+import { scale as T, plateStyle } from '../hud';
 
 /** The full card's size (CardFrame SIZES.full) and the phone's share of it:
  *  the whole card filled a phone's width edge to edge. Fixed, not fluid — the
@@ -99,17 +99,29 @@ export function CardPreview({ cardId, cost, hideCost, onClose, hover = false, ac
           // The card's one move, under it. Its own tap does not close the
           // preview through the scrim: the move closes it when it is made.
           <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-            <PosterButton
-              variant={action.blockedReason ? 'paper' : 'red'}
-              size="sm"
+            {/* A pill on Deadlock's dark plate, edged in your amber; flat and
+                faint while it cannot be done. */}
+            <motion.button
+              type="button"
               disabled={!!action.blockedReason}
               onClick={action.onPress}
-              ariaLabel={action.ariaLabel}
+              aria-label={action.ariaLabel}
+              whileTap={action.blockedReason ? undefined : { scale: 0.97 }}
+              style={{
+                ...plateStyle,
+                minHeight: 44, minWidth: 140, padding: '0 22px', borderRadius: 999,
+                border: `1.5px solid ${action.blockedReason ? poster.creamFaint : poster.you}`,
+                background: action.blockedReason ? 'transparent' : plateStyle.background,
+                color: action.blockedReason ? poster.creamDim : poster.cream,
+                boxShadow: action.blockedReason ? 'none' : '0 6px 16px rgba(0, 0, 0, 0.35)',
+                fontFamily: fonts.display, fontSize: T.body, letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1,
+                cursor: action.blockedReason ? 'default' : 'pointer', WebkitTapHighlightColor: 'transparent',
+              }}
             >
               {action.label}
-            </PosterButton>
+            </motion.button>
             {action.blockedReason && (
-              <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase', color: poster.cream, textAlign: 'center', maxWidth: FULL_W * scale }}>
+              <span style={{ fontFamily: fonts.display, fontSize: T.label, letterSpacing: '0.14em', textTransform: 'uppercase', color: poster.cream, textAlign: 'center', maxWidth: FULL_W * scale }}>
                 {action.blockedReason}
               </span>
             )}
