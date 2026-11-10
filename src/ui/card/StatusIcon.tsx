@@ -88,6 +88,10 @@ interface Props {
    *  a tile too narrow to hold the whole chip beside its level ring. The mark
    *  still says which status it is, and the Explain around it names it. */
   terse?: boolean;
+  /** Print as a TOKEN of this height instead of a chip: a round mark in the
+   *  class colour with only the value beside it — what hangs off a card's
+   *  edge on the table (HeroSlot). The Explain around it names it. */
+  token?: number;
 }
 
 /**
@@ -96,11 +100,38 @@ interface Props {
  * inside compact bench tiles (HeroSlot caps its rows at 36 / 54px).
  * `terse` drops the word where even that is too wide (HeroSlot decides).
  */
-export function StatusIcon({ id, value, duration, size = 'normal', titled = true, terse = false }: Props) {
+export function StatusIcon({ id, value, duration, size = 'normal', titled = true, terse = false, token }: Props) {
   const color = colorFor(id);
   const label = statusLabel(id);
   const showValue = typeof value === 'number' && (VALUE_STATUSES.has(id) || value > 1);
   const showDuration = typeof duration === 'number' && duration > 0 && duration < 99;
+
+  if (token) {
+    return (
+      <span
+        data-status={id}
+        title={titled ? `${label}${showValue ? ` ${value}` : ''}${showDuration ? ` (${duration} turns)` : ''}` : undefined}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 1,
+          minWidth: token, height: token, padding: showValue ? '0 4px 0 3px' : 0, boxSizing: 'border-box',
+          background: color,
+          color: poster.cream,
+          border: `1px solid ${poster.paper}`,
+          borderRadius: token / 2,
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.6)',
+          fontFamily: fonts.ui,
+          fontSize: Math.round(token * 0.62),
+          fontWeight: 800,
+          whiteSpace: 'nowrap',
+          lineHeight: 1,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        <StatusMark id={id} color={poster.cream} size={Math.round(token * 0.6)} />
+        {showValue && <span>{value}</span>}
+      </span>
+    );
+  }
 
   const padV = size === 'compact' ? 2 : size === 'large' ? 6 : 3;
   // A terse chip trims its sides and gaps too: on a 360px phone the Active

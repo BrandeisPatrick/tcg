@@ -177,3 +177,10 @@ export const sheetStyle = {
     'inset 0 1px 0 rgba(255, 255, 255, 0.5)',
   ].join(', '),
 } as const;
+
+/** The HP bar's ink on its dark track: green while the hero has over half
+ *  its HP, amber down to a quarter, red under it. */
+export function hpBarInk(hp: number, hpMax: number): string {
+  const frac = hpMax > 0 ? hp / hpMax : 0;
+  return frac > 0.5 ? '#5fd35f' : frac > 0.25 ? '#f0b83a' : '#e8492f';
+}
