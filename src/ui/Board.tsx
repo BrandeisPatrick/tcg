@@ -33,7 +33,7 @@ import { BoardTable, RoundPlate, STAGE, TABLE_TILT, boardStack, hudSeats, tableT
 import { Scoreboard } from './board/NameBar';
 import { panelStyle, scale } from './hud';
 import { SoulsCounter } from './board/SoulsCounter';
-import { TurnBanner } from './board/TurnBanner';
+import { TurnBanner, useLaneBox } from './board/TurnBanner';
 import { BoardControls } from './board/BoardControls';
 import {
   DISCARD_FIRST, actionRefusal, activateBlockReason, laneRide, moveBlockReason, placeBlockReason, playBlockReason, readyHeroes, retreatBlock,
@@ -270,22 +270,10 @@ export function Board(props: BoardProps<GameState>) {
    *  the opening picker's card), by iid: the motion layer flies it from
    *  there once the card itself has gone. */
   const placeOrigins = useRef<Map<string, Rect>>(new Map());
-  // The hand's band at the stage's foot — the targeting banner docks above
-  // it, and the sticker sits above it.
+  // The hand's band at the stage's foot.
   const handRowRef = useRef<HTMLDivElement>(null);
-  // How much of the screen's bottom the hand takes.
-  const [handInset, setHandInset] = useState(0);
-  useEffect(() => {
-    const el = handRowRef.current;
-    if (!el) return;
-    const measure = () => setHandInset(Math.max(0, Math.round(window.innerHeight - el.getBoundingClientRect().top)));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    window.addEventListener('resize', measure);
-    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
-    // The band mounts once the draft is over.
-  }, [!!G.draft, !!ctx.gameover]);
+  // The lane between the two Actives: where the feedback sticker shows.
+  const lane = useLaneBox();
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
     if (el) {
       slotRefs.current.set(iid, el);
@@ -1381,8 +1369,9 @@ export function Board(props: BoardProps<GameState>) {
         {/* The deck's motion — cards between the deck, the hand and the discard pile. */}
         <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} origins={placeOrigins.current} ticker={deckMotion.ticker} tilt={tiltedTable ? TABLE_TILT.angle : 0} />
 
-        {/* Feedback sticker — one ink label above the controls (red when it is
-            a warning). Explains silent no-ops and confirms fire-and-forget
+        {/* Feedback sticker — one ink label in the lane between the two
+            Actives (red when it is a warning), where it covers no card and no
+            control. Explains silent no-ops and confirms fire-and-forget
             actions. */}
         <AnimatePresence>
           {notice && (
@@ -1394,10 +1383,10 @@ export function Board(props: BoardProps<GameState>) {
               transition={spring.default}
               style={{
                 position: 'fixed',
-                left: 0, right: 0,
-                // Just above the hand's fan.
-                bottom: handInset + 12,
+                left: lane.left, width: lane.width,
+                top: lane.top, height: lane.height,
                 display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'center',
                 pointerEvents: 'none',
                 zIndex: 95,
@@ -1409,10 +1398,12 @@ export function Board(props: BoardProps<GameState>) {
                 color: poster.paper,
                 borderRadius: 3,
                 fontFamily: fonts.display,
-                fontSize: 11,
-                letterSpacing: '0.2em',
+                fontSize: 12,
+                letterSpacing: '0.14em',
                 textTransform: 'uppercase',
                 lineHeight: 1.2,
+                textAlign: 'center',
+                maxWidth: '88%',
                 boxShadow: '0 6px 16px rgba(0, 0, 0, 0.45)',
               }}>
                 {notice.msg}
