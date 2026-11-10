@@ -10,7 +10,9 @@
  * price (an upgrade onto the hero wearing its component evolves it for the
  * difference), casts its draw cards and pays their discards (`discardChoice`:
  * the cards worth least to it), and, when a play could make one of several
- * upgrades, picks the one its heroes' builds name.
+ * upgrades, picks the one its heroes' builds name. A full hero takes a card
+ * only in place of its least valuable worn item, and only a card clearly
+ * worth more (`replaceWorthIt`: a tier up at the least).
  *
  * With lookahead (the default) every candidate is made on a copy through the
  * engine (`simulate`), and the resulting position is scored by `evalState`.
@@ -270,6 +272,11 @@ const WORN_PRICE = 0.5;
  *  a point of HP, so the evaluation decides and this only orders its ties. */
 const BUILD_FIT = 0.6;
 
+/** How much more a card must be worth than the worn item it replaces on a
+ *  full hero for the AI to trade them (`replaceWorthIt`): this many times its
+ *  list price, at the least — a tier up on the price ladder (2 → 4 → 8 → 16). */
+const REPLACE_RATIO = 2;
+
 /** What a hero standing on the board is worth: its presence, its HP and its offense. */
 function presence(c: CardInstance): number {
   return 3 + c.hp * 2 + heroThreat(c) * 1.5;
@@ -485,6 +492,27 @@ export function discardChoice(G: GameState, pid: PlayerID, n: number): string[] 
     .map((x) => x.c.iid);
 }
 
+/** The worn item a full `hero` lets go first: the one worth least to keep —
+ *  the cheapest (its list price), then one its build does not name, then the
+ *  earliest worn. A riding Rem is no item (`wornItems`). */
+function leastWorn(G: GameState, pid: PlayerID, hero: CardInstance): CardInstance | undefined {
+  const keep = (it: CardInstance) => itemPrice(it.cardId) + (buildWants(G, pid, hero, it.cardId) ? 0.5 : 0);
+  return wornItems(hero).reduce<CardInstance | undefined>((least, it) => (!least || keep(it) < keep(least) ? it : least), undefined);
+}
+
+/** True for a play the AI may make: any play that discards nothing, and, onto
+ *  a full hero, only the one that replaces its least valuable worn item
+ *  (`leastWorn`) with a card worth REPLACE_RATIO times its price or more. The
+ *  lookahead then weighs it like any play. */
+function replaceWorthIt(G: GameState, pid: PlayerID, a: Action): boolean {
+  if (a.type !== 'playCard' || a.replaceIid === undefined) return true;
+  const card = handCard(G, pid, a.cardIid);
+  const hero = findCardOnBoard(G, a.heroIid)?.card;
+  const least = hero && leastWorn(G, pid, hero);
+  if (!card || !least || least.iid !== a.replaceIid) return false;
+  return itemPrice(card.cardId) >= REPLACE_RATIO * itemPrice(least.cardId);
+}
+
 /** The tie-break a hand play earns (`BUILD_FIT`): an item onto a hero whose
  *  build wants it, and the upgrade its heroes' builds name. */
 function buildFit(G: GameState, pid: PlayerID, a: Action): number {
@@ -504,14 +532,17 @@ interface MoveOption {
 }
 
 /** An engine action in the form the callers dispatch: the boardgame.io move and
- *  its arguments (playCard [card, hero, upgrade?], placeHero [card, toActive?, slot?],
+ *  its arguments (playCard [card, hero, upgrade?, replace?], placeHero [card, toActive?, slot?],
  *  discard [cards], chooseActive [card], activate [item, target?], useSkill
  *  [hero, target?, skill?], moveHero [from, to], promoteToActive [iid], attack
  *  [target?], endTurn []). */
 function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
   const present = (...xs: (string | undefined)[]) => xs.filter((x): x is string => x !== undefined);
   switch (a.type) {
-    case 'playCard': return { move: 'playCard', args: a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid] };
+    case 'playCard': return {
+      move: 'playCard',
+      args: a.replaceIid !== undefined ? [a.cardIid, a.heroIid, a.upgradeId, a.replaceIid] : a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid],
+    };
     case 'placeHero': return { move: 'placeHero', args: a.toActive ? [a.cardIid, true] : a.slot === undefined ? [a.cardIid] : [a.cardIid, false, a.slot] };
     case 'discard': return { move: 'discard', args: [[...a.cardIids]] };
     case 'chooseActive': return { move: 'chooseActive', args: [a.cardIid] };
@@ -655,7 +686,8 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
     // lane above all; the first free bench slot, a named one only with a
     // reason of its own), then an item.
     case 'placeHero': return a.toActive ? 60 : a.slot === undefined ? 30 : 29;
-    case 'playCard': return 22 + buildFit(G, pid, a);
+    // A play onto a full hero (one it discards an item for) after one onto a free slot.
+    case 'playCard': return 22 + buildFit(G, pid, a) - (a.replaceIid !== undefined ? 2 : 0);
     case 'discard': return 50_000;
     // The opening's first Active, from the drafted heroes in the deck: the
     // hero with the most HP, then attack.
@@ -834,7 +866,8 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true, optio
   // board the local player answers the prompt themselves and the AI loop
   // waits rather than ask, unless auto-play is driving their seat), or a draw
   // card's discard.
-  const actions = legalActions(G, pid).filter((a) => a.type !== 'playCard' || !d.banned.has(handCard(G, pid, a.cardIid)?.cardId ?? ''));
+  // A play onto a full hero only in place of its least valuable item, for a card clearly worth more.
+  const actions = legalActions(G, pid).filter((a) => a.type !== 'playCard' || (!d.banned.has(handCard(G, pid, a.cardIid)?.cardId ?? '') && replaceWorthIt(G, pid, a)));
 
   // A trigger prompt owed (engine/prompts.ts) is answered first, by the side
   // asked — on either player's turn, so it is that side's valuation whoever is

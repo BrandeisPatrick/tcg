@@ -14,7 +14,7 @@ import { Client } from 'boardgame.io/client';
 import type { GameState, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { INVALID, perform, type Action } from '@/engine/engine';
-import { blocked } from '@/engine/legality';
+import { blocked, legalActions } from '@/engine/legality';
 import { wornItems } from '@/engine/query';
 import { seededRandom } from '@/engine/rng';
 import { discardChoice, enumerateAIMoves } from '@/ai/heuristic';
@@ -34,7 +34,11 @@ function turn(souls: number): GameState {
 function best(G: GameState, pid: PlayerID = '0'): Action {
   const [m] = enumerateAIMoves(G, ctxFor(pid));
   switch (m.move) {
-    case 'playCard': return m.args[2] ? { type: 'playCard', cardIid: m.args[0], heroIid: m.args[1], upgradeId: m.args[2] } : { type: 'playCard', cardIid: m.args[0], heroIid: m.args[1] };
+    case 'playCard': return {
+      type: 'playCard', cardIid: m.args[0], heroIid: m.args[1],
+      ...(m.args[2] ? { upgradeId: m.args[2] } : {}),
+      ...(m.args[3] !== undefined ? { replaceIid: m.args[3] } : {}),
+    };
     case 'placeHero': return { type: 'placeHero', cardIid: m.args[0], toActive: m.args[1] === true };
     case 'discard': return { type: 'discard', cardIids: m.args[0] };
     case 'activate': return { type: 'activate', itemIid: m.args[0], targetIid: m.args[1] };
@@ -129,6 +133,42 @@ describe('the AI plays its hand', () => {
     expect(play).toBeDefined();
     expect(play!.upgradeId).toBe('fortitude');
     expect(G.players['1'].deck.map((c) => c.cardId)).toEqual(['fortitude']);
+  });
+});
+
+describe('the AI and a full hero (Patrick, 2026-11-09: a full hero swaps an item)', () => {
+  /** P0's turn, every hero full: Haze wears Extended Magazine (tier 1) and two tier-2
+   *  items, the bench three tier-3 items each, so only Haze could take a card in place
+   *  of a cheap one. Abilities spent, so the souls are the hand's. */
+  function fullBoard(souls: number) {
+    const G = turn(souls);
+    const me = G.players['0'];
+    for (const h of [me.active, ...me.bench]) if (h) h.skillUsedThisTurn = true;
+    const haze = me.active!;
+    const worn = ['extended_magazine', 'titanic_magazine', 'active_reload'].map((id) => giveItem(G, haze, id));
+    for (const h of me.bench) if (h) ['fortitude', 'healing_nova', 'sharpshooter'].forEach((id) => giveItem(G, h, id));
+    return { G, me, haze, worn };
+  }
+  const swaps = (G: GameState) => enumerateAIMoves(G, ctxFor('0'), false).filter((m) => m.move === 'playCard' && m.args[3] !== undefined);
+
+  it('replaces only the hero\'s least valuable item, and only with a card worth twice its price or more', () => {
+    const { G, haze, worn } = fullBoard(20);
+    const tier3 = giveCard(G, '0', 'weighted_shots');                       // 8 souls: 4 x the magazine
+    expect(legalActions(G, '0').filter((a) => a.type === 'playCard' && a.cardIid === tier3.iid && a.heroIid === haze.iid)).toHaveLength(3);
+    const offered = swaps(G).filter((m) => m.args[0] === tier3.iid && m.args[1] === haze.iid);
+    expect(offered.map((m) => m.args[3])).toEqual([worn[0].iid]);         // Extended Magazine, tier 1
+    // The lookahead takes it: Weighted Shots goes on Haze, the magazine to the discard pile.
+    playOut(G);
+    expect(wornItems(haze).map((it) => it.cardId)).toEqual(['titanic_magazine', 'active_reload', 'weighted_shots']);
+    expect(G.players['0'].discard.map((c) => c.cardId)).toEqual(['extended_magazine']);
+  });
+
+  it('never trades a worn item for a card of its own tier', () => {
+    const { G } = fullBoard(20);
+    giveCard(G, '0', 'extra_regen');                                         // tier 1, as the magazine
+    expect(swaps(G)).toEqual([]);
+    const made = playOut(G);
+    expect(made.some((a) => a.type === 'playCard')).toBe(false);
   });
 });
 
