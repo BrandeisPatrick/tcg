@@ -1153,7 +1153,7 @@ export function Board(props: BoardProps<GameState>) {
         </div>
 
         {/* "Your turn" / "Rival's turn", as a turn begins. */}
-        <TurnBanner turn={G.turnNumber} isMyTurn={isMyTurn} enabled={!G.draft && !ctx.gameover && !G.pendingActive} />
+        <TurnBanner turn={G.turnNumber} isMyTurn={isMyTurn} enabled={!G.draft && !ctx.gameover && !G.pendingActive} hold={G.action?.state === 'begin'} />
 
         <AnimatePresence>
           {pending && (
