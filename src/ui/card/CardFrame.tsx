@@ -99,7 +99,8 @@ interface Props {
  *  `floor` and `base`) at which that line fits. */
 export function fitNameLines(name: string, room: number, base: number, floor: number): { lines: string[]; size: number } {
   let lines = [name];
-  if (measureName(name, base) > room) {
+  // Split where the name will be set: a floor above the base sets it bigger.
+  if (measureName(name, Math.max(base, floor)) > room) {
     const words = name.split(' ');
     let best = measureName(name, base);
     for (let i = 1; i < words.length; i++) {
@@ -401,7 +402,7 @@ export function CardFrame({
     // The category's ink along the foot band's top edge (an item's shop
     // tab; a hero's level green, or the plain edge).
     const rule = item ? shopInk(item.slot).ink
-      : isHero && level !== undefined ? levelGreen(level) : poster.creamFaint;
+      : isHero && level !== undefined ? levelGreen(level) : poster.ink;
     const ghost: CSSProperties | undefined = dimmed ? { filter: 'grayscale(0.9) brightness(0.55)' } : undefined;
     return (
       <div
@@ -419,22 +420,22 @@ export function CardFrame({
         </div>
 
         {/* The seal, top-left (the edge a fan leaves showing), the card's
-            dominant mark: an item's price as the HUD prints souls (the wisp
-            and a mint number on the dark green plate, salmon when it cannot
-            be paid now); a hero's health in the same seat, a green heart and
-            its HP. Kept in colour on a dimmed card: it says why. */}
+            dominant mark: an item's price (the soul wisp and the number in
+            the souls green on a paper tag, red when it cannot be paid now);
+            a hero's health in the same seat, the red heart and its HP in
+            ink. Kept in colour on a dimmed card: it says why. */}
         {showCost && (
-          <Seal data-card-cost ink={unaffordable ? poster.soulShort : poster.soul} edge={unaffordable ? poster.soulShort : poster.plateEdge}
-            mark={<span aria-hidden style={soulCoin(SEAL * 0.62, false, unaffordable ? poster.soulShort : poster.soul)} />}
+          <Seal data-card-cost ink={unaffordable ? poster.redDeep : poster.soulInk}
+            mark={<span aria-hidden style={soulCoin(SEAL * 0.62, false, unaffordable ? poster.redDeep : poster.soulInk)} />}
             n={cost} />
         )}
         {showStats && !hideStats && (
-          <Seal data-card-hp ink="#ffffff" edge={poster.plateEdge}
-            mark={<HeartIcon size={Math.round(SEAL * 0.62)} color={hpBarInk(1, 1)} />}
+          <Seal data-card-hp ink={poster.ink}
+            mark={<HeartIcon size={Math.round(SEAL * 0.62)} color={poster.stat.hp} />}
             n={(data as any).hp} />
         )}
 
-        {/* The foot: the name, cream on the dark band, its category's rule
+        {/* The foot: the name in ink on the paper band, its category's rule
             along the top. One height on every card. */}
         <div data-card-name style={{
           flexShrink: 0,
@@ -443,8 +444,8 @@ export function CardFrame({
           boxSizing: 'border-box',
           display: 'flex', flexDirection: 'column', justifyContent: 'center',
           padding: '0 6px',
-          background: poster.ink,
-          color: dimmed ? poster.creamDim : poster.cream,
+          background: poster.paperBand,
+          color: dimmed ? poster.inkDim : poster.ink,
           borderTop: `3px solid ${rule}`,
           fontFamily: fonts.display,
           fontSize: name.size,
@@ -678,10 +679,10 @@ export function CardFrame({
   );
 }
 
-/** The clean face's seal, top-left: a tall tag on the HUD's dark green
- *  plate, its mark (the soul wisp, a hero's heart) over its number — narrow
- *  enough to show in the strip a ten-card fan leaves each card. */
-function Seal({ mark, n, ink, edge, ...rest }: { mark: ReactNode; n: number; ink: string; edge: string; 'data-card-cost'?: boolean; 'data-card-hp'?: boolean }) {
+/** The clean face's seal, top-left: a tall paper tag with an ink keyline,
+ *  its mark (the soul wisp, a hero's heart) over its number — narrow enough
+ *  to show in the strip a ten-card fan leaves each card. */
+function Seal({ mark, n, ink, ...rest }: { mark: ReactNode; n: number; ink: string; 'data-card-cost'?: boolean; 'data-card-hp'?: boolean }) {
   return (
     <div {...rest} style={{
       position: 'absolute', top: 4, left: 4, zIndex: 5,
@@ -689,8 +690,8 @@ function Seal({ mark, n, ink, edge, ...rest }: { mark: ReactNode; n: number; ink
       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
       padding: '5px 4px 4px',
       borderRadius: 6,
-      background: poster.plate,
-      boxShadow: `inset 0 0 0 1.5px ${edge}, 0 2px 6px rgba(0, 0, 0, 0.6)`,
+      background: poster.paper,
+      boxShadow: `inset 0 0 0 2px ${poster.ink}, 0 2px 0 rgba(0, 0, 0, 0.3)`,
       color: ink, fontFamily: fonts.ui, fontWeight: 800, fontSize: SEAL, lineHeight: 0.9,
       fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em',
     }}>
