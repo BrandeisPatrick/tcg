@@ -100,7 +100,8 @@ export function TurnBanner({ turn, isMyTurn, enabled, hold = false }: {
   const h = Math.max(34, Math.min(46, lane.height - 6));
   const fade = `linear-gradient(90deg, transparent 0%, ${accent} 22%, ${accent} 78%, transparent 100%)`;
   return (
-    <AnimatePresence>
+    // A reveal sends the strip away at once (no fade under the card).
+    <AnimatePresence custom={hold}>
       {shown !== null && shown === turn && (
         <motion.div
           key={`turn-${turn}`}
@@ -109,7 +110,13 @@ export function TurnBanner({ turn, isMyTurn, enabled, hold = false }: {
           data-turn-banner={side}
           initial={calm ? { opacity: 1 } : { opacity: 0, scaleX: 0.3 }}
           animate={{ opacity: 1, scaleX: 1 }}
-          exit={calm ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, scaleX: 0.6, transition: { duration: 0.18 } }}
+          custom={hold}
+          variants={{
+            gone: (held: boolean) => (calm || held
+              ? { opacity: 0, transition: { duration: 0 } }
+              : { opacity: 0, scaleX: 0.6, transition: { duration: 0.18 } }),
+          }}
+          exit="gone"
           transition={spring.snappy}
           style={{
             position: 'fixed',
