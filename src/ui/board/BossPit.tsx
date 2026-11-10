@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, animate, motion, type AnimationPlaybackControls } from 'framer-motion';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { BOSS_RESPAWN_ROUNDS, BOSS_RETALIATION, REVIVE_CREDITS, REVIVE_ROUNDS } from '@/engine/constants';
-import { standingBoss } from '@/engine/query';
+import { bossDue, standingBoss } from '@/engine/query';
 import { fromHere, kickFor, useFxImpulse } from '../effects/fx/FxImpulse';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { Explain } from '../explain/Explain';
@@ -25,7 +25,8 @@ import type { ArmedPlay } from '../helpers';
  * iid (`registerSlotRef`), so a swing at it is walked like any other, and its
  * blow back at the End step leaves from it. With no boss up the pit is an
  * empty slot on the paper, the Mid-Boss greyed in it, naming the round it
- * rises in (or returns in, once one has been taken).
+ * rises in (or returns in, once one has been taken). A match with no Mid-Boss
+ * (`bossDue` null: MID_BOSS_ENABLED is off) shows no pit at all.
  */
 export function BossPit({ G, me, pending, onTapHero, isTargetable, registerSlotRef, isMobile }: {
   G: GameState;
@@ -37,6 +38,7 @@ export function BossPit({ G, me, pending, onTapHero, isTargetable, registerSlotR
   isMobile: boolean;
 }) {
   const boss = G.draft ? null : standingBoss(G);
+  const due = bossDue(G);
   const width = isMobile ? 112 : 166;
   return (
     <div style={{
@@ -60,7 +62,7 @@ export function BossPit({ G, me, pending, onTapHero, isTargetable, registerSlotR
               targetable={isTargetable(boss)} registerSlotRef={registerSlotRef} isMobile={isMobile}
             />
           </motion.div>
-        ) : !G.draft ? (
+        ) : !G.draft && due !== null ? (
           <motion.div
             key="empty"
             initial={{ opacity: 0 }}
@@ -68,7 +70,7 @@ export function BossPit({ G, me, pending, onTapHero, isTargetable, registerSlotR
             exit={{ opacity: 0 }}
             style={{ width: '100%', maxWidth: width }}
           >
-            <EmptyPit round={G.bossRespawnRound} taken={G.record['0'].bossKills + G.record['1'].bossKills > 0} isMobile={isMobile} />
+            <EmptyPit round={due} taken={G.record['0'].bossKills + G.record['1'].bossKills > 0} isMobile={isMobile} />
           </motion.div>
         ) : null}
       </AnimatePresence>

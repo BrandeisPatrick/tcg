@@ -705,6 +705,11 @@ export interface GameState {
   attackUsed: boolean;
   /** The turn's Retreat has been made (one a turn). Reset at each turn start. */
   retreatUsed: boolean;
+  /** This match has a Mid-Boss: MID_BOSS_ENABLED (off since 2026-11-09), or
+   *  what the setup names (`StorySetup.midBoss`, `MatchConfig.midBoss`; the
+   *  tests that cover it turn it on). Off, the boss never rises and nothing
+   *  counts down to it (`bossDue` is null), so the board hides its pit. */
+  midBoss: boolean;
   /** The Mid-Boss standing in the pit between the lanes (zone 'pit', owned by
    *  nobody, `boss_midboss`), or null while it is not up — before round
    *  BOSS_SPAWN_ROUND, and from its death until it returns. Only basic attacks

@@ -21,15 +21,15 @@
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
  *   5  The Map          Round 4: Frost Grenade's kill pushes the rival's
- *                       Guardian down, the attack goes into the Mid-Boss, and
- *                       the End that follows pushes the empty lane into the
- *                       Patron (mapLesson.ts).
+ *                       Guardian down; no rival stands and there is nothing
+ *                       to attack, so the turn is ended and its End pushes
+ *                       the empty lane into the Patron (mapLesson.ts; its
+ *                       Mid-Boss part is off with the Mid-Boss).
  *
  * In lessons 1–4 the rival's patron has one point left, so the kill is the
  * win (lesson 5 sets both tracks itself). Nothing is read and dismissed:
- * every step is a tap on the real thing (lesson 5's last is the End that
- * follows the attack on its own, watched), and every lesson ends on the
- * victory screen. Each step names exactly the control that performs it (the
+ * every step is a tap on the real thing (lesson 5's last is the turn button,
+ * its End's push watched), and every lesson ends on the victory screen. Each step names exactly the control that performs it (the
  * gate lets nothing else through), waits out the rival's turn, and — should
  * the move be out of reach — points at the turn button instead of asking for
  * a move that cannot be made.
@@ -43,7 +43,7 @@ import { ACTIVE_COOLDOWN, LANE_INCOME } from '@/engine/constants';
 import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
 import { inHandLabel } from '@/ui/board/Hand';
-import { mapLesson } from './mapLesson';
+import { mapLesson, type LessonKit } from './mapLesson';
 
 /* ------------------------------------------------------------------ */
 /* The matches                                                         */
@@ -334,6 +334,9 @@ export interface Lesson {
   steps: CoachStep[];
 }
 
+/** The step builders a lesson in its own file is made of (mapLesson.ts). */
+export const LESSON_KIT: LessonKit = { fight, look, useSkill, attack };
+
 export const LESSONS: Lesson[] = [
   {
     id: 'skill',
@@ -447,7 +450,7 @@ export const LESSONS: Lesson[] = [
   },
 
   // 5 The Map — its own file (mapLesson.ts), made of the builders above.
-  mapLesson({ fight, look, useSkill, attack }),
+  mapLesson(LESSON_KIT),
 ];
 
 export function lessonById(id: string | undefined | null): Lesson | undefined {

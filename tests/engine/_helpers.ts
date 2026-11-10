@@ -82,6 +82,16 @@ export function freshReadyGame(): GameState {
 }
 
 /**
+ * Turn the Mid-Boss on for this game (`G.midBoss`): MID_BOSS_ENABLED is off
+ * for now, and the tests that cover the boss bring it back for themselves.
+ * Returns `G`.
+ */
+export function midBossOn(G: GameState): GameState {
+  G.midBoss = true;
+  return G;
+}
+
+/**
  * Put the item `itemId` on `hero` directly, as if played earlier: its bonus on
  * the hero, the Vitality spike synced, an active ready to use (no cooldown) —
  * or, with `cooldown`, cooling for that many own turns — and a hard crowd-control

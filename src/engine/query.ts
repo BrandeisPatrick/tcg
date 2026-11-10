@@ -69,6 +69,13 @@ export function standingBoss(G: GameState): CardInstance | null {
   return G.boss && G.boss.hp > 0 ? G.boss : null;
 }
 
+/** The round the Mid-Boss rises (or returns) in while the pit is empty — what
+ *  the board counts down to — or null when nothing is coming: the match has no
+ *  Mid-Boss (`G.midBoss`, off with MID_BOSS_ENABLED), or one stands now. */
+export function bossDue(G: Pick<GameState, 'midBoss' | 'boss' | 'bossRespawnRound'>): number | null {
+  return G.midBoss && !G.boss ? G.bossRespawnRound : null;
+}
+
 /** True when a hero is currently a corpse waiting to respawn (greyed in UI,
  *  can't act / be targeted / take damage / receive statuses). */
 export function isRespawning(card: CardInstance): boolean {

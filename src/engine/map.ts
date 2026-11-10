@@ -10,7 +10,8 @@
  *    victim's level + 1, killInPlace) and from an Active pushing into a lane its
  *    rival left empty (its bullet power, at the End step); both double in the
  *    late game (`pushMultiplier`, rounds.ts).
- *  - The Mid-Boss rises at the start of round BOSS_SPAWN_ROUND, and again
+ *  - The Mid-Boss (only in a match that has one, `G.midBoss`: MID_BOSS_ENABLED
+ *    is off for now) rises at the start of round BOSS_SPAWN_ROUND, and again
  *    BOSS_RESPAWN_ROUNDS after the round it died in. Only basic attacks hurt
  *    it (damageUnit), each side's damage is tallied, and when it falls the
  *    side with more takes it (`bossTaker`, query.ts): the Rejuvenator — REVIVE_CREDITS revives, good through REVIVE_ROUNDS more
@@ -97,9 +98,11 @@ function fall(G: GameState, ps: PlayerState, by: PlayerID, kind: StructureKind) 
 
 /** The Mid-Boss rises in the pit when the round it is due in begins: called at
  *  every turn's start, it acts on the first turn of a round at or past
- *  `G.bossRespawnRound` with no boss up. Its damage tallies start over. */
+ *  `G.bossRespawnRound` with no boss up — in a match that has a Mid-Boss
+ *  (`G.midBoss`); in one that has none it never rises. Its damage tallies
+ *  start over. */
 export function riseBoss(G: GameState) {
-  if (G.boss || round(G) < G.bossRespawnRound) return;
+  if (!G.midBoss || G.boss || round(G) < G.bossRespawnRound) return;
   const boss: CardInstance = {
     iid: allocatorOf(G)('b'),
     cardId: BOSS_CARD_ID,

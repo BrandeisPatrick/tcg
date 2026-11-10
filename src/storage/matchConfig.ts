@@ -57,6 +57,9 @@ export interface StorySetup {
    *  who falls to precisely the taught move. */
   playerHeroStats?: (HeroStatOverride | undefined)[];
   enemyHeroStats?: (HeroStatOverride | undefined)[];
+  /** The match has a Mid-Boss (`GameState.midBoss`); left out, the match
+   *  config's `midBoss`, else MID_BOSS_ENABLED (off for now). */
+  midBoss?: boolean;
 }
 
 interface MatchConfig {
@@ -88,6 +91,9 @@ interface MatchConfig {
   /** The seat a person plays (seat 0 when left out); null when the AI plays
    *  both seats, as in the balance sim: then both seats promote on the spot. */
   humanSeat?: PlayerID | null;
+  /** The match has a Mid-Boss (`GameState.midBoss`); left out,
+   *  MID_BOSS_ENABLED (off for now). A scripted setup's own `midBoss` wins. */
+  midBoss?: boolean;
 }
 
 let current: MatchConfig = {

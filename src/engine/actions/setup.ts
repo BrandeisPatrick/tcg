@@ -13,7 +13,7 @@ import { otherPlayer } from '../query';
 import { dealOpeningHand, drawCards, fillDeck, shuffleDeck, sideDeckIds, stockDeck } from '../deck';
 import { newRecord, newTrack } from '../map';
 import { newSeed } from '../rng';
-import { BOSS_SPAWN_ROUND, OPENING_DRAW, OPENING_HAND, SOULS_START } from '../constants';
+import { BOSS_SPAWN_ROUND, MID_BOSS_ENABLED, OPENING_DRAW, OPENING_HAND, SOULS_START } from '../constants';
 import { pushFx } from '../fx';
 
 /** Empty PlayerState used while the pre-match draft is running — no heroes
@@ -34,10 +34,12 @@ function makeEmptyPlayer(pid: PlayerID): PlayerState {
   };
 }
 
-/** The map's part of a fresh game: no Mid-Boss until round BOSS_SPAWN_ROUND,
+/** The map's part of a fresh game: a Mid-Boss in the match or not (`midBoss`:
+ *  MID_BOSS_ENABLED unless the setup says), none until round BOSS_SPAWN_ROUND,
  *  no cap reached, nothing on the record. (Hand-built test states use it too.) */
-export function freshMap(): Pick<GameState, 'boss' | 'bossDamage' | 'bossLastHit' | 'bossRespawnRound' | 'bossAttacker' | 'capped' | 'record'> {
+export function freshMap(midBoss: boolean = MID_BOSS_ENABLED): Pick<GameState, 'midBoss' | 'boss' | 'bossDamage' | 'bossLastHit' | 'bossRespawnRound' | 'bossAttacker' | 'capped' | 'record'> {
   return {
+    midBoss,
     boss: null,
     bossDamage: { '0': 0, '1': 0 },
     bossLastHit: null,
@@ -280,7 +282,7 @@ export function setupGame(): GameState {
       playerDeck: playerDeck(human),
       attackUsed: false,
       retreatUsed: false,
-      ...freshMap(),
+      ...freshMap(story.midBoss ?? getMatchConfig().midBoss ?? MID_BOSS_ENABLED),
       action: null,
       fx: [],
     };
@@ -325,7 +327,7 @@ export function setupGame(): GameState {
     playerDeck: playerDeck(human),
     attackUsed: false,
     retreatUsed: false,
-    ...freshMap(),
+    ...freshMap(getMatchConfig().midBoss ?? MID_BOSS_ENABLED),
     action: null,
     fx: [],
   };

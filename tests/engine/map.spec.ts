@@ -5,8 +5,14 @@
  * board (`freshReadyGame`: P0's act step on engine turn 2, P1 moved first) and
  * driven through the engine's front door (`perform`) and its turn edges
  * (`beginTurn`, `endTurnEffects`).
+ *
+ * The Mid-Boss is off for now (MID_BOSS_ENABLED, Patrick 2026-11-09): the
+ * boards built by `at` turn it on for themselves (`midBossOn`), so its rules
+ * keep their tests; the last block holds it off — nothing rises and nothing
+ * counts down to it, through a long AI match too.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Client } from 'boardgame.io/client';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { INVALID, perform } from '@/engine/engine';
 import { attackBlocked, attackTargets, blocked, legalActions, skillTargets } from '@/engine/legality';
@@ -17,21 +23,24 @@ import { resolve } from '@/engine/death';
 import { addStatus } from '@/engine/statusOps';
 import { pushStructures, riseBoss } from '@/engine/map';
 import {
-  checkWinner, findCardOnBoard, isRespawning, killPush, respawnTimer, slotCap, standingVerdict, structureHp, structureOf,
+  bossDue, checkWinner, findCardOnBoard, isRespawning, killPush, respawnTimer, slotCap, standingVerdict, structureHp, structureOf,
   targetsFor,
 } from '@/engine/query';
 import { MATCH_TURNS, round } from '@/engine/rounds';
 import {
-  BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, MAX_ITEMS, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP,
+  BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, BOSS_SPAWN_ROUND, MAX_ITEMS, MID_BOSS_ENABLED, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP,
 } from '@/engine/constants';
+import { DeadlockGame } from '@/engine/game';
+import { seededRandom } from '@/engine/rng';
+import { setMatchConfig } from '@/storage/matchConfig';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { freshReadyGame, giveItem, makeHero, setTrack, structuresOf } from './_helpers';
+import { freshReadyGame, giveItem, makeHero, midBossOn, setTrack, structuresOf } from './_helpers';
 
 const ctx = (pid: PlayerID) => ({ currentPlayer: pid, turn: 1, numPlayers: 2 }) as never;
 
 /** The board at engine turn `turn`, its mover's act step: P1 moves first, so
- *  odd turns are P1's and even ones P0's. */
-function at(turn: number, G: GameState = freshReadyGame()): GameState {
+ *  odd turns are P1's and even ones P0's. The Mid-Boss is on (`midBossOn`). */
+function at(turn: number, G: GameState = midBossOn(freshReadyGame())): GameState {
   G.turnNumber = turn;
   return G;
 }
@@ -469,5 +478,69 @@ describe('the board finds the boss', () => {
     resolve(G);
     expect(G.boss).toBeNull();
     expect(G.players['0'].reviveCredits).toBe(REVIVE_CREDITS);
+  });
+});
+
+describe('the Mid-Boss is off for now (MID_BOSS_ENABLED)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a fresh game has none: it never rises, and nothing counts down to it', () => {
+    expect(MID_BOSS_ENABLED).toBe(false);
+    const G = freshReadyGame();
+    expect(G.midBoss).toBe(false);
+    expect(bossDue(G)).toBeNull();
+    G.turnNumber = 6;
+    beginTurn(G, '1', 7);                      // round 4 opens: the round it used to rise in
+    expect(round(G)).toBe(BOSS_SPAWN_ROUND);
+    expect(G.boss).toBeNull();
+    riseBoss(G);
+    expect(G.boss).toBeNull();
+    expect(G.fx.some((e) => e.kind === 'boss')).toBe(false);
+    expect(attackTargets(G, '1').every((t) => t.zone !== 'pit')).toBe(true);
+    // On, the same board counts down to round 4 and the boss rises there.
+    const on = midBossOn(freshReadyGame());
+    expect(bossDue(on)).toBe(BOSS_SPAWN_ROUND);
+    on.turnNumber = 6;
+    beginTurn(on, '1', 7);
+    expect(on.boss).toMatchObject({ cardId: BOSS_CARD_ID });
+    expect(bossDue(on)).toBeNull();            // up: nothing to count down to
+  });
+
+  /** An AI-vs-AI drafted match through a boardgame.io Client, seeded; calls
+   *  `each` on every state. Returns the last. */
+  function aiMatch(seed: number, midBoss: boolean | undefined, each: (G: GameState) => void): GameState {
+    setMatchConfig({ heroPreferences: [null, null, null, null], seed, humanSeat: null, ...(midBoss === undefined ? {} : { midBoss }) });
+    vi.spyOn(Math, 'random').mockImplementation(seededRandom(seed)); // the draft's jitter reads it
+    const client = Client({ game: DeadlockGame, numPlayers: 2 });
+    client.start();
+    let st = client.getState()!;
+    for (let moves = 0; !st.ctx.gameover && moves < 3000; moves++) {
+      each(st.G as GameState);
+      const choice = enumerateAIMoves(st.G as GameState, st.ctx)[0];
+      (client.moves as Record<string, (...args: unknown[]) => void>)[choice.move](...choice.args);
+      st = client.getState()!;
+    }
+    each(st.G as GameState);
+    client.stop();
+    return st.G as GameState;
+  }
+
+  it('a long AI match (seed 12 runs to the round cap): no boss rises, no boss event or log line, nobody holds a Rejuvenator — and with it on, it rises', () => {
+    let rounds = 0;
+    const end = aiMatch(12, undefined, (G) => {
+      expect(G.midBoss).toBe(false);
+      expect(G.boss).toBeNull();
+      expect(bossDue(G)).toBeNull();
+      expect(G.players['0'].reviveCredits + G.players['1'].reviveCredits).toBe(0);
+      rounds = Math.max(rounds, round(G));
+    });
+    expect(rounds, 'the match runs to the round cap, well past the rounds a boss would rise in').toBe(ROUND_CAP);
+    expect(end.fx.some((e) => e.kind === 'boss')).toBe(false);
+    expect(end.log.some((l) => /Mid-Boss|Rejuvenator/.test(l.text))).toBe(false);
+    expect(end.record['0'].bossKills + end.record['1'].bossKills).toBe(0);
+    // The same seed with the Mid-Boss turned on: it rises in round 4.
+    let rose = false;
+    aiMatch(12, true, (G) => { if (G.boss) rose = true; });
+    expect(rose).toBe(true);
   });
 });

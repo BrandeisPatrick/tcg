@@ -55,6 +55,7 @@ const raiseBoss = (G: GameState, hp = BOSS_HP): CardInstance => {
     iid: 'boss1', cardId: BOSS_CARD_ID, ownerId: 'none', zone: 'pit', attached: [], hp, hpMax: BOSS_HP,
     atkMod: 0, spiritMod: 0, statuses: [], exhausted: false, skillUsedThisTurn: false,
   };
+  G.midBoss = true; // MID_BOSS_ENABLED is off for now: a boss board turns it on for itself
   G.boss = boss;
   G.bossDamage = { '0': BOSS_HP - hp, '1': 0 };
   G.bossRespawnRound = 4;
@@ -148,6 +149,8 @@ describe('the invariants fire on states built to break them', () => {
     ['boss-tally', (G) => { raiseBoss(G); G.bossDamage = { '0': -1, '1': 1 }; }],
     // round 4 has begun and no boss is up
     ['boss-due', (G) => { raiseBoss(G); G.boss = null; }],
+    // a boss up in a match that has none (MID_BOSS_ENABLED off)
+    ['boss-off', (G) => { raiseBoss(G); G.midBoss = false; }],
     ['round-cap', (G) => { G.capped = true; }],
     ['round-cap', (G) => { G.turnNumber = 2 * ROUND_CAP + 2; }],
     // An empty Active slot with a hero on the bench to step up: an AI seat is promoted at once…

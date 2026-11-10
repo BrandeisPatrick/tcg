@@ -23,7 +23,8 @@
  * map's (rules.md §6): each side's track and its order (`structures-*`), what a
  * push takes (`structure-delta`: a kill's level + 1, an empty lane's bullet
  * power, doubled from round 9), the flex slot (`flex-slot-walker`), the
- * Mid-Boss (`boss-*`), the Rejuvenator (`revive-*`), the wait of a fallen hero
+ * Mid-Boss (`boss-*`: in a match without one, `G.midBoss` off as
+ * MID_BOSS_ENABLED is now, none ever stands — `boss-off`), the Rejuvenator (`revive-*`), the wait of a fallen hero
  * (`respawn-timer-start`, `respawn-timer`) and the round cap (`round-cap`,
  * `game-over-winner`).
  *
@@ -305,6 +306,8 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
   if (!G.draft && G.turnNumber >= 1) {
     const boss = G.boss;
     const r = roundOracle(G);
+    // A match with no Mid-Boss (MID_BOSS_ENABLED off, the setup's say) never has one up.
+    if (boss && !G.midBoss) add('boss-off', boss.iid, `the Mid-Boss stands in round ${r} in a match that has none`);
     if (boss) {
       const wrong: string[] = [];
       if (boss.zone !== 'pit') wrong.push(`zone '${boss.zone}'`);
@@ -319,7 +322,7 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       // Only swings hurt it, and each swing's HP is tallied for its side: the tallies are what it lost.
       const lost = boss.hpMax - boss.hp;
       if (G.bossDamage['0'] + G.bossDamage['1'] !== lost) add('boss-tally', 'sum', `the Mid-Boss has lost ${lost} HP but the tallies read ${G.bossDamage['0']}–${G.bossDamage['1']}`);
-    } else if (!over && r >= G.bossRespawnRound) {
+    } else if (!over && G.midBoss && r >= G.bossRespawnRound) {
       add('boss-due', 'pit', `round ${r} has begun but the Mid-Boss, due in round ${G.bossRespawnRound}, is not up`);
     }
     for (const pid of PIDS) {

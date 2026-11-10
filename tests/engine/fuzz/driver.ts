@@ -12,6 +12,10 @@
  *   - the POLICY stream: random-legal / chaos choices;
  *   - the HOOK stream: handed to hooks that want randomness of their own, so
  *     an observer calling the engine on clones can never perturb the game.
+ *
+ * The Mid-Boss is off for now (MID_BOSS_ENABLED); the harness still plays it:
+ * an odd seed's match turns it on (`midBoss`), an even seed's plays the game
+ * as it stands, without one.
  */
 import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
@@ -93,6 +97,10 @@ interface PlayOpts {
    *  list is taken in an order the seed draws, so the line-up (who stands Active,
    *  who gets a hero both seats want) varies from seed to seed. */
   prefer?: Partial<Record<PlayerID, string[]>>;
+  /** The match has a Mid-Boss (`MatchConfig.midBoss`). Left out: an odd seed's
+   *  does, an even seed's does not (MID_BOSS_ENABLED is off), so both games are
+   *  played. */
+  midBoss?: boolean;
   /** Before every attempt, with the state the move will be made from. May
    *  return nothing; throw to abort the game. `hookRandom` is a private stream. */
   beforeMove?: (snap: Snapshot, info: StepInfo, hookRandom: () => number) => void;
@@ -265,7 +273,7 @@ export function playGame(opts: PlayOpts): GameRecord {
 
   return withQuietBgio(() => withPinnedRandom(opts.seed, () => {
     // No scripted setup: the real draft path, on a market the seed draws.
-    setMatchConfig({ heroPreferences: [null, null, null, null], seed: marketSeedFor(opts.seed) });
+    setMatchConfig({ heroPreferences: [null, null, null, null], seed: marketSeedFor(opts.seed), midBoss: opts.midBoss ?? (opts.seed % 2 === 1) });
     try {
       const client = Client({ game: { ...DeadlockGame, seed: `fuzz-${opts.seed}` } as any, numPlayers: 2 });
       client.start();

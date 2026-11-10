@@ -130,6 +130,13 @@ export const LATE_PUSH_MULTIPLIER = 2;
  *  with more structure HP wins (then the richer side, then the second mover). */
 export const ROUND_CAP = 12;
 
+/** Whether a match has the Mid-Boss at all. Off for now (Patrick,
+ *  2026-11-09: "remove the mid boss mechanics for now"): no boss rises,
+ *  nothing counts down to it, and no reward or event names it. Every line of
+ *  it is kept — turning this on brings it back, and a match (or a test) may
+ *  turn it on for itself (`GameState.midBoss`, `StorySetup.midBoss`,
+ *  `MatchConfig.midBoss`). */
+export const MID_BOSS_ENABLED = false;
 /** The Mid-Boss's card id: no card in the catalogue, a unit of the pit. */
 export const BOSS_CARD_ID = 'boss_midboss';
 /** The round at whose start the Mid-Boss first rises in the pit. */
