@@ -1,6 +1,7 @@
 import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
 import { fonts, text } from '../tokens';
-import { levelFrame, levelFrameKeylines, poster } from '../poster';
+import { hpBarInk, levelFrame, levelFrameKeylines, levelGreen, poster, shopInk, soulCoin } from '../poster';
+import { Souls } from '../hud';
 import { RuleText } from './RuleText';
 import { LiveScaleContext, faceScale } from './liveScale';
 import { CardShine, rarityInk } from './RarityFX';
@@ -9,7 +10,7 @@ import {
   hasStamp, hasGloss, useFoilPointer,
   FoilEdge, GlossPanel, HoloLayer, foilTextClass, TILT_TRANSFORM,
 } from './SpotVarnish';
-import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
+import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL, itemCard } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { heroAbilities, ultimateCard, ultPrice } from '@/engine/query';
 import { PRICE } from '@/engine/constants';
@@ -84,38 +85,66 @@ interface Props {
    *  card's own size — less than the card's when the next card in a fan
    *  overlaps it, so the name still reads whole. Omitted: the card's width. */
   nameRoom?: number;
+  /** The clean face only: the smallest the name may be set, px at the
+   *  card's own size (the hand passes what reads as 11px once scaled down).
+   *  A name that cannot fit its room at this size is dropped. */
+  nameMin?: number;
+  /** The clean face only: the card cannot be played now — its art and name
+   *  dim and grey; the seal keeps its colour. */
+  dimmed?: boolean;
 }
 
-/** A name set on at most two lines of a stencilled band `room` px wide: the
- *  split that keeps the longer line shortest, and the largest type size
- *  (between `floor` and `base`) at which that line fits. */
+/** A name set on at most two lines of a band `room` px wide: the split that
+ *  keeps the longer line shortest, and the largest type size (between
+ *  `floor` and `base`) at which that line fits. */
 export function fitNameLines(name: string, room: number, base: number, floor: number): { lines: string[]; size: number } {
   let lines = [name];
-  if (name.length * base * NAME_EM > room) {
+  if (measureName(name, base) > room) {
     const words = name.split(' ');
-    let best = name.length;
+    let best = measureName(name, base);
     for (let i = 1; i < words.length; i++) {
       const two = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
-      const longer = Math.max(two[0].length, two[1].length);
+      const longer = Math.max(measureName(two[0], base), measureName(two[1], base));
       if (longer < best) { best = longer; lines = two; }
     }
   }
-  const longest = Math.max(...lines.map((l) => l.length));
-  return { lines, size: Math.max(floor, Math.min(base, room / (longest * NAME_EM))) };
+  const widest = Math.max(...lines.map((l) => measureName(l, base)));
+  return { lines, size: Math.max(floor, Math.min(base, (base * room) / widest)) };
 }
-/** A stencilled capital's advance, in ems, tracking included. */
-const NAME_EM = 0.72;
-
-/** The clean face's line of type: what kind of card, in a word. */
-function shortType(data: CardData | undefined): string {
-  if (!data) return '';
-  switch (data.type) {
-    case 'hero': return 'Hero';
-    case 'spell': return `Active · T${data.tier}`;
-    case 'equipment': return `Item · T${data.tier}`;
-    case 'ultimate': return 'Ultimate';
+/** A stencilled letter's average advance, in ems, where no canvas can
+ *  measure one (tests). */
+const NAME_EM = 0.6;
+let nameCtx: CanvasRenderingContext2D | null | undefined;
+const nameWidths = new Map<string, number>();
+/** How wide `text` sets in the name's face at `size` px: measured once per
+ *  string on a canvas (at 100px, scaled), estimated without one. */
+export function measureName(text: string, size: number): number {
+  let w = nameWidths.get(text);
+  if (w === undefined) {
+    if (nameCtx === undefined) {
+      try {
+        nameCtx = typeof document !== 'undefined' && !/jsdom/i.test(navigator.userAgent)
+          ? document.createElement('canvas').getContext('2d') : null;
+      } catch { nameCtx = null; }
+    }
+    if (nameCtx) {
+      nameCtx.font = `100px ${fonts.display}`;
+      w = nameCtx.measureText(text).width / 100 + text.length * 0.01;
+      // Measured before the face has loaded, the fallback's width would stick.
+      if (typeof document !== 'undefined' && document.fonts?.check?.(`100px "Saira Stencil One"`)) nameWidths.set(text, w);
+    } else {
+      w = text.length * NAME_EM;
+      nameWidths.set(text, w);
+    }
   }
+  return w * size;
 }
+/** The clean face's name: its largest and smallest size, and the foot band
+ *  that holds two lines of it; the seal's type size. Card px. */
+const NAME_BASE = 19;
+const NAME_FLOOR = 11;
+const NAME_BAND = 50;
+const SEAL = 22;
 
 /** The two sizes a card is printed at, in px. */
 export const SIZES: Record<Size, { w: number; h: number }> = {
@@ -290,7 +319,7 @@ export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
   cost: costInPlay, unaffordable = false, hideCost = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
-  holoPalette = 'amber', tilt = false, tapExplains = true, level, art, clean = false, nameRoom,
+  holoPalette = 'amber', tilt = false, tapExplains = true, level, art, clean = false, nameRoom, nameMin, dimmed = false,
 }: Props) {
   const [hover, setHover] = useState(false);
   // Premium-plate flags, read once so the markup below stays declarative.
@@ -362,7 +391,18 @@ export function CardFrame({
   const showStats = isHero;
 
   if (clean) {
-    const name = fitNameLines((data?.name ?? cardId).toUpperCase(), (nameRoom ?? sz.w) - 14, 15.5, 11);
+    // The name sits on the foot band, in the card's own case, on up to two
+    // lines; under `nameMin` (a covered card's strip too narrow for its
+    // longest word) it is dropped and the card shows its art and seal.
+    const room = (nameRoom ?? sz.w) - 12;
+    const name = fitNameLines(data?.name ?? cardId, room, NAME_BASE, nameMin ?? NAME_FLOOR);
+    const nameFits = name.size >= (nameMin ?? NAME_FLOOR) && name.lines.every((l) => measureName(l, name.size) <= room + 0.5);
+    const item = itemCard(cardId);
+    // The category's ink along the foot band's top edge (an item's shop
+    // tab; a hero's level green, or the plain edge).
+    const rule = item ? shopInk(item.slot).ink
+      : isHero && level !== undefined ? levelGreen(level) : poster.creamFaint;
+    const ghost: CSSProperties | undefined = dimmed ? { filter: 'grayscale(0.9) brightness(0.55)' } : undefined;
     return (
       <div
         ref={foilRef}
@@ -372,75 +412,47 @@ export function CardFrame({
         onMouseLeave={() => { setHover(false); onPointerLeave(); }}
         onPointerMove={onPointerMove}
       >
-        {/* The name — cream stencil on an ink band, whole on one or two lines. */}
-        <div data-card-name style={{
-          flexShrink: 0,
-          padding: '6px 6px 5px',
-          background: poster.ink,
-          color: poster.cream,
-          borderBottom: `1px solid ${poster.creamFaint}`,
-          fontFamily: fonts.display,
-          fontSize: name.size,
-          letterSpacing: '0.03em',
-          lineHeight: 1.08,
-          textAlign: 'left',
-        }}>
-          {name.lines.map((l, i) => <div key={i} style={{ whiteSpace: 'nowrap' }}>{l}</div>)}
-        </div>
-
-        {/* The art, filling the card. */}
-        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, overflow: 'hidden', background: poster.ground }}>
+        {/* The art, filling the card above the foot. */}
+        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, overflow: 'hidden', background: poster.ground, transition: 'filter 200ms ease', ...ghost }}>
           <ArtWindow data={data} art={art} />
           <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
-          {/* The cost coin, top-left (the edge a fan leaves showing): red
-              when the player cannot pay it. */}
-          {showCost && (
-            <div data-card-cost style={{
-              position: 'absolute', top: 5, left: 5,
-              width: 32, height: 32,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: unaffordable ? poster.red : poster.ink,
-              border: `1.5px solid ${poster.cream}`,
-              borderRadius: '50%',
-              boxShadow: '0 2px 5px rgba(0, 0, 0, 0.55)',
-              color: poster.cream,
-              fontFamily: fonts.display, fontSize: 18, lineHeight: 1,
-              fontVariantNumeric: 'tabular-nums',
-              zIndex: 5,
-            }}>{cost}</div>
-          )}
-          {/* A hero's attack and HP, where an item's coin is. */}
-          {showStats && !hideStats && (
-            <div style={{ position: 'absolute', top: 5, left: 5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
-              <StatPill big icon={<SwordIcon size={13} color={poster.cream} />} value={(data as any).atk} />
-              <StatPill big icon={<HeartIcon size={13} color={poster.stat.hp} />} value={(data as any).hp} />
-            </div>
-          )}
         </div>
 
-        {/* One line of type along the foot: the kind of card, and its
-            rarity's dot. */}
-        <div style={{
+        {/* The seal, top-left (the edge a fan leaves showing), the card's
+            dominant mark: an item's price as the HUD prints souls (the wisp
+            and a mint number on the dark green plate, salmon when it cannot
+            be paid now); a hero's health in the same seat, a green heart and
+            its HP. Kept in colour on a dimmed card: it says why. */}
+        {showCost && (
+          <Seal data-card-cost ink={unaffordable ? poster.soulShort : poster.soul} edge={unaffordable ? poster.soulShort : poster.plateEdge}
+            mark={<span aria-hidden style={soulCoin(SEAL * 0.62, false, unaffordable ? poster.soulShort : poster.soul)} />}
+            n={cost} />
+        )}
+        {showStats && !hideStats && (
+          <Seal data-card-hp ink="#ffffff" edge={poster.plateEdge}
+            mark={<HeartIcon size={Math.round(SEAL * 0.62)} color={hpBarInk(1, 1)} />}
+            n={(data as any).hp} />
+        )}
+
+        {/* The foot: the name, cream on the dark band, its category's rule
+            along the top. One height on every card. */}
+        <div data-card-name style={{
           flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
-          padding: '4px 6px',
+          // A dropped name leaves the band a thin foot under the art.
+          height: nameFits ? NAME_BAND : 12,
+          boxSizing: 'border-box',
+          display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          padding: '0 6px',
           background: poster.ink,
-          color: poster.creamDim,
+          color: dimmed ? poster.creamDim : poster.cream,
+          borderTop: `3px solid ${rule}`,
           fontFamily: fonts.display,
-          fontSize: 12,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          lineHeight: 1.1,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
+          fontSize: name.size,
+          letterSpacing: '0.01em',
+          lineHeight: 1.04,
+          textAlign: 'left',
         }}>
-          <span>{shortType(data)}</span>
-          {!isHero && (
-            <span aria-hidden style={{
-              flexShrink: 0, width: 9, height: 9, borderRadius: '50%',
-              background: rarityInk(rarity), border: `1px solid ${poster.creamFaint}`, boxSizing: 'border-box',
-            }} />
-          )}
+          {nameFits && name.lines.map((l, i) => <div key={i} style={{ whiteSpace: 'nowrap' }}>{l}</div>)}
         </div>
         <CardShine cast={castSheen} />
       </div>
@@ -468,22 +480,13 @@ export function CardFrame({
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
         {holo && holoScope === 'art' && <HoloLayer variant={holo} strength={holoStrength} markScale={holoMarkScale} palette={holoPalette} />}
 
-        {/* Cost coin (top-left) — an ink disc with a cream numeral; flips to
-            the poster red when the player can't afford it so the dimmed card
-            explains itself. */}
+        {/* The price (top-left), as the HUD prints souls: the soul wisp and
+            a mint number on the dark green plate, salmon when the player
+            cannot pay it yet. */}
         {showCost && (
-          <div style={{
-            position: 'absolute', top: 4, left: 4,
-            width: 24, height: 24,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: unaffordable ? poster.red : poster.ink,
-            border: `1px solid ${poster.creamDim}`,
-            borderRadius: '50%',
-            color: poster.cream,
-            fontFamily: fonts.display, fontSize: 12, lineHeight: 1,
-            fontVariantNumeric: 'tabular-nums',
-            zIndex: 5,
-          }}>{cost}</div>
+          <div style={{ position: 'absolute', top: 4, left: 4, zIndex: 5, lineHeight: 0 }}>
+            <Souls n={cost} size={13} tone={unaffordable ? 'short' : 'mint'} plate />
+          </div>
         )}
 
         {/* Stat chips (top-right) for heroes — ink chips with cream numerals;
@@ -670,6 +673,28 @@ export function CardFrame({
 
       {/* Premium plates, outermost so the keyline rides the card's own edge */}
       {stamped && <FoilEdge />}
+    </div>
+  );
+}
+
+/** The clean face's seal, top-left: a tall tag on the HUD's dark green
+ *  plate, its mark (the soul wisp, a hero's heart) over its number — narrow
+ *  enough to show in the strip a ten-card fan leaves each card. */
+function Seal({ mark, n, ink, edge, ...rest }: { mark: ReactNode; n: number; ink: string; edge: string; 'data-card-cost'?: boolean; 'data-card-hp'?: boolean }) {
+  return (
+    <div {...rest} style={{
+      position: 'absolute', top: 4, left: 4, zIndex: 5,
+      minWidth: 30, boxSizing: 'border-box',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+      padding: '5px 4px 4px',
+      borderRadius: 6,
+      background: poster.plate,
+      boxShadow: `inset 0 0 0 1.5px ${edge}, 0 2px 6px rgba(0, 0, 0, 0.6)`,
+      color: ink, fontFamily: fonts.ui, fontWeight: 800, fontSize: SEAL, lineHeight: 0.9,
+      fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em',
+    }}>
+      {mark}
+      <span>{n}</span>
     </div>
   );
 }
