@@ -4,17 +4,17 @@
  *
  *  - Structures. A side's track is Guardian → Walker → Patron (`STRUCTURES`).
  *    A push damages the front standing structure and carries what is left
- *    over on to the next. A felled Guardian pays the pushing side
- *    GUARDIAN_BOUNTY souls; a felled Walker gives it the flex slot; a felled
- *    Patron loses the match (`checkWinner`). Pushes come from kills (the
+ *    over on to the next. A felled Walker gives the pushing side the flex
+ *    slot; a felled Patron loses the match (`checkWinner`). No fall pays
+ *    souls: the lane's income is the only souls there are. Pushes come from kills (the
  *    victim's level + 1, killInPlace) and from an Active pushing into a lane its
  *    rival left empty (its bullet power, at the End step); both double in the
  *    late game (`pushMultiplier`, rounds.ts).
- *  - The Mid-Boss rises at the start of round BOSS_SPAWN_ROUND, and again
+ *  - The Mid-Boss (only in a match that has one, `G.midBoss`: MID_BOSS_ENABLED
+ *    is off for now) rises at the start of round BOSS_SPAWN_ROUND, and again
  *    BOSS_RESPAWN_ROUNDS after the round it died in. Only basic attacks hurt
  *    it (damageUnit), each side's damage is tallied, and when it falls the
- *    side with more takes it (`bossTaker`, query.ts): BOSS_SOULS souls and the
- *    Rejuvenator — REVIVE_CREDITS revives, good through REVIVE_ROUNDS more
+ *    side with more takes it (`bossTaker`, query.ts): the Rejuvenator — REVIVE_CREDITS revives, good through REVIVE_ROUNDS more
  *    rounds (spent in killInPlace). It hits back at the hero that attacked it
  *    at that player's End step (turn.ts).
  *
@@ -23,11 +23,10 @@
  */
 import type { CardInstance, GameState, MapRecord, PlayerID, PlayerState, PushCause, Structure, StructureKind, TrackHp } from './types';
 import {
-  BOSS_CARD_ID, BOSS_HP, BOSS_SOULS, GUARDIAN_BOUNTY, REVIVE_CREDITS, STRUCTURES,
+  BOSS_CARD_ID, BOSS_HP, REVIVE_CREDITS, STRUCTURES,
 } from './constants';
 import { bossReturnRound, endsRound, reviveLastRound, round } from './rounds';
 import { bossTaker, netWorth, otherPlayer } from './query';
-import { awardSouls } from './souls';
 import { allocatorOf } from './ids';
 import { pushLog } from './log';
 import { pushFx } from './fx';
@@ -60,8 +59,7 @@ export function newRecord(): MapRecord {
  * what it cannot absorb carries on to the next, until the push is spent or the
  * Patron has fallen (what is left past it is lost). Each structure hit is
  * logged and is a `push` event; each that falls, a `fall` event — and the side
- * pushing (the other) collects what that fall gives: the Guardian's bounty,
- * the Walker's flex slot. Returns the structure HP taken.
+ * pushing (the other) collects what that fall gives: the Walker's flex slot. Returns the structure HP taken.
  */
 export function pushStructures(G: GameState, pid: PlayerID, amount: number, cause: PushCause): number {
   const by = otherPlayer(pid);
@@ -90,7 +88,6 @@ export function pushStructures(G: GameState, pid: PlayerID, amount: number, caus
 function fall(G: GameState, ps: PlayerState, by: PlayerID, kind: StructureKind) {
   pushLog(G, `P${ps.id}'s ${structureName(kind)} falls.`);
   pushFx(G, { kind: 'fall', side: ps.id, structure: kind });
-  if (kind === 'guardian') awardSouls(G, by, GUARDIAN_BOUNTY, 'Guardian felled');
   if (kind === 'walker' && !G.players[by].flexSlot) {
     G.players[by].flexSlot = true;
     pushLog(G, `P${by}'s heroes gain the flex slot.`);
@@ -101,9 +98,11 @@ function fall(G: GameState, ps: PlayerState, by: PlayerID, kind: StructureKind) 
 
 /** The Mid-Boss rises in the pit when the round it is due in begins: called at
  *  every turn's start, it acts on the first turn of a round at or past
- *  `G.bossRespawnRound` with no boss up. Its damage tallies start over. */
+ *  `G.bossRespawnRound` with no boss up — in a match that has a Mid-Boss
+ *  (`G.midBoss`); in one that has none it never rises. Its damage tallies
+ *  start over. */
 export function riseBoss(G: GameState) {
-  if (G.boss || round(G) < G.bossRespawnRound) return;
+  if (!G.midBoss || G.boss || round(G) < G.bossRespawnRound) return;
   const boss: CardInstance = {
     iid: allocatorOf(G)('b'),
     cardId: BOSS_CARD_ID,
@@ -134,8 +133,8 @@ export function tallyBossHit(G: GameState, pid: PlayerID, removed: number) {
   G.bossLastHit = pid;
 }
 
-/** The boss at 0 HP falls: the side `bossTaker` names takes it — BOSS_SOULS
- *  souls and the Rejuvenator (REVIVE_CREDITS revives through round
+/** The boss at 0 HP falls: the side `bossTaker` names takes it — the
+ *  Rejuvenator (REVIVE_CREDITS revives through round
  *  `reviveLastRound`) — and it rises again in round `bossReturnRound`. Part of
  *  the state-based pass (`resolve`). */
 export function reapBoss(G: GameState) {
@@ -152,7 +151,6 @@ export function reapBoss(G: GameState) {
   const why = by === 'damage' ? `damage ${tally}` : by === 'netWorth' ? `damage tied ${tally}, behind on net worth` : `tied, last hit`;
   pushLog(G, `The Mid-Boss falls: P${pid} takes it (${why}). It returns in round ${G.bossRespawnRound}.`);
   pushFx(G, { kind: 'boss', what: 'death', iid: boss.iid, pid, by });
-  awardSouls(G, pid, BOSS_SOULS, 'Mid-Boss');
   const ps = G.players[pid];
   ps.reviveCredits = REVIVE_CREDITS;
   ps.reviveUntilRound = reviveLastRound(G);

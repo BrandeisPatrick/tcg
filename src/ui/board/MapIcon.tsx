@@ -26,7 +26,7 @@ export const GREYED: CSSProperties = { filter: 'grayscale(1) brightness(0.82) co
 export function MapIcon({ kind, size, ink = poster.edge, grey = false, ground = poster.frame, round = false, zoom = 1, style }: {
   kind: MapIconKind;
   size: number;
-  /** The keyline: the owner's ink (your gold, the rival's red), or the plate's edge. */
+  /** The keyline: the owner's ink (your gold, the rival's sapphire), or the plate's edge. */
   ink?: string;
   grey?: boolean;
   /** What shows through the art's transparent ground. */

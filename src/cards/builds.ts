@@ -11,9 +11,11 @@ import type { CardId } from '@/engine/types';
  * so it needs a slot of its own.
  *
  * Storage keeps the player's own builds, starting from these
- * (storage/playerData.ts); the AI shops from these (ai/heuristic.ts). An item
- * the match's market does not sell is swapped for the cheapest one it does of
- * the same tab and tier.
+ * (storage/playerData.ts). A side that brings no deck of its own — the rival
+ * AI always, the player until they save one — is dealt one made from its
+ * drafted heroes' builds (`deckFromBuilds`, cards/decks.ts: every hero's
+ * first items, round by round), and the AI puts an item on the hero whose
+ * build lists it (ai/heuristic.ts).
  */
 export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   // ----- Passive-only heroes -----
@@ -26,6 +28,7 @@ export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   hero_wraith:     ['spirit_strike', 'spiritual_overflow', 'mystic_shot', 'spirit_lifesteal', 'spirit_snatch', 'haunting_shot'],
   hero_mirage:     ['fleetfoot', 'tesla_bullets', 'active_reload', 'spirit_shredder', 'toxic_bullets', 'ricochet'],
   hero_drifter:    ['restorative_shot', 'frenzy', 'bullet_lifesteal', 'stalker', 'berserker', 'leech'],
+  hero_victor:     ['extra_health', 'torment_pulse', 'spirit_lifesteal', 'spirit_shielding', 'fortitude', 'leech'],
 
   // ----- Skill heroes -----
   hero_dynamo:     ['improved_cooldown', 'rescue_beam', 'healing_booster', 'duration_extender', 'superior_cooldown', 'transcendent_cooldown'],
@@ -38,6 +41,7 @@ export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   hero_viscous:    ['reactive_barrier', 'spirit_resilience', 'debuff_reducer', 'improved_spirit', 'fortitude', 'indomitable'],
   hero_yamato:     ['extended_magazine', 'shadow_weave', 'titanic_magazine', 'kinetic_dash', 'heroic_aura', 'glass_cannon'],
   hero_warden:     ['weapon_shielding', 'metal_skin', 'bullet_lifesteal', 'enduring_speed', 'fortitude', 'juggernaut'],
+  hero_silver:     ['monster_rounds', 'bullet_lifesteal', 'swift_striker', 'kinetic_dash', 'berserker', 'frenzy'],
 };
 
 /** Items a build may hold. */

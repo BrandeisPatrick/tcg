@@ -47,8 +47,9 @@ export function MatchEndScreen({
 }) {
   const { isMobile } = useViewport();
   const opp: PlayerID = otherPlayer(me);
-  // Verdict ink: victory prints in ink, defeat in the poster's one red. The
-  // winning side's roster label takes the same tone.
+  // Verdict ink: victory prints in ink, defeat in the poster's one red. Your
+  // winning roster's label takes the ink; the rival's takes its own sapphire
+  // (red is the verdict, never the rival's colour).
   const tone = won ? poster.ink : poster.red;
   const headline = won ? 'Victory' : 'Defeat';
   // The round cap decided it: nobody's Patron fell, and what stood won.
@@ -77,7 +78,8 @@ export function MatchEndScreen({
     { label: 'Turns', value: String(G.turnNumber) },
     { label: 'Your structures', value: `${structureHp(myPs)}/${trackOf(myPs)}`, icons: trackIcons(myPs, poster.you) },
     { label: 'Rival structures', value: `${structureHp(opPs)}/${trackOf(opPs)}`, icons: trackIcons(opPs, poster.rival) },
-    { label: 'Mid-Boss', value: `${G.record[me].bossKills}–${G.record[opp].bossKills}`, icons: <MapIcon kind="mid_boss" size={16} zoom={1.2} /> },
+    // The Mid-Boss row only in a match that has one (MID_BOSS_ENABLED / the setup's midBoss).
+    ...(G.midBoss ? [{ label: 'Mid-Boss', value: `${G.record[me].bossKills}–${G.record[opp].bossKills}`, icons: <MapIcon kind="mid_boss" size={16} zoom={1.2} /> }] : []),
     { label: 'Heroes lost', value: `${myTeam.filter(fallen).length}–${opTeam.filter(fallen).length}` },
   ];
 
@@ -175,7 +177,7 @@ export function MatchEndScreen({
           <div aria-hidden style={{
             fontFamily: fonts.display, fontSize: 15, color: poster.inkFaint, letterSpacing: '0.2em',
           }}>VS</div>
-          <RosterStrip label="Rival team" team={opTeam} fallen={fallen} accent={!won ? tone : poster.inkDim} />
+          <RosterStrip label="Rival team" team={opTeam} fallen={fallen} accent={!won ? poster.rivalInk : poster.inkDim} />
         </motion.div>
 
         {/* Stat strip — one ink tag per number. */}

@@ -10,7 +10,6 @@ import type { PlayerID } from '@/engine/types';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { LIFT_VAR } from '../effects/fx/FxImpulse';
 import { EASE_OUT, sec } from '../effects/fx/primitives';
-import { useViewport } from '../hooks/useViewport';
 import { fonts } from '../tokens';
 import { poster } from '../poster';
 
@@ -32,7 +31,10 @@ import { poster } from '../poster';
  * later in the match gets the plain quick fade, and nothing replays.
  *
  * Under calm motion nothing travels (the tiles fade up as they always have),
- * but the stickers still name the sides.
+ * but the stickers still name the sides. A drafted match has no deal-in at
+ * all (`enabled` false): its heroes reach the board by the deck motion — the
+ * Actives fly to the lane once chosen, the rest are drawn and placed — so
+ * nothing here may land a tile early.
  */
 
 /** Where a tile sits: its side's Active, or a bench slot left to right. */
@@ -52,26 +54,24 @@ const sideStart = (rival: boolean) =>
 /** The last card down: ~1.7 s. */
 const DEAL_END_MS = sideStart(false) + (PER_SIDE - 1) * STAGGER_MS + LAND_MS;
 
-// How far a card travels, in the board's own px. It leaves its owner's hand
-// (off the top or bottom edge of the sheet) — the lane sits a row further in
-// than the bench — and starts toward the middle, where the hand is held.
-const REACH = {
-  desk:  { bench: 150, lane: 300, col: 104 },
-  phone: { bench: 105, lane: 215, col: 60 },
-} as const;
+// How far a card travels, in the stage's own px (the stage is one portrait
+// layout, scaled to the screen). It leaves its owner's hand (off the top or
+// bottom edge of the table) — the Active sits a row further in than the
+// bench — and starts toward the middle, where the hand is held.
+const REACH = { bench: 105, lane: 230, col: 60 } as const;
 /** Each column's tilt in flight (degrees), mirrored for your side. */
 const TILT = [6, -3, -6] as const;
 
-interface Deal { me: PlayerID; calm: boolean; mobile: boolean; t0: number }
+interface Deal { me: PlayerID; calm: boolean; t0: number }
 
 const DealContext = createContext<Deal | null>(null);
 
-/** Mount around the board once it shows: the deal starts with the mount. */
-export function BoardIntro({ me, children }: { me: PlayerID; children: ReactNode }) {
+/** Mount around the board once it shows: the deal starts with the mount.
+ *  `enabled` false: no deal, no stickers (a drafted match). */
+export function BoardIntro({ me, enabled = true, children }: { me: PlayerID; enabled?: boolean; children: ReactNode }) {
   const calm = useFxCalm();
-  const { isMobile } = useViewport();
   const [t0] = useState(() => performance.now());
-  const deal = useMemo(() => ({ me, calm, mobile: isMobile, t0 }), [me, calm, isMobile, t0]);
+  const deal = useMemo(() => (enabled ? { me, calm, t0 } : null), [me, calm, t0, enabled]);
   return <DealContext.Provider value={deal}>{children}</DealContext.Provider>;
 }
 
@@ -85,9 +85,9 @@ function entranceFor(deal: Deal, owner: PlayerID, slot: DealSlot): Entrance | nu
   const order = slot === 'active' ? 0 : slot + 1;
   const delay = sideStart(rival) + order * STAGGER_MS - (performance.now() - deal.t0);
   if (delay < 0) return null;
-  const reach = deal.mobile ? REACH.phone : REACH.desk;
-  // The rival's Active holds the lane's left column, yours its right.
-  const col = slot === 'active' ? (rival ? 0 : 2) : slot;
+  const reach = REACH;
+  // Both Actives stand in the middle column, facing each other across the line.
+  const col = slot === 'active' ? 1 : slot;
   const y = (rival ? -1 : 1) * (slot === 'active' ? reach.lane : reach.bench);
   const x = (1 - col) * reach.col;
   const tilt = TILT[col] * (rival ? 1 : -1);
@@ -180,7 +180,7 @@ export function DealSticker({ rival }: { rival: boolean }) {
   if (!deal || !plan || done) return null;
   const t = (ms: number) => ms / plan.dur;
   const landed = '0 3px 8px rgba(0, 0, 0, 0.35)';
-  const fontSize = deal.mobile ? 12 : 16;
+  const fontSize = 12;
   return (
     <div aria-hidden style={{
       position: 'absolute', left: '50%', top: '34%', transform: 'translate(-50%, -50%)',

@@ -62,13 +62,22 @@ HERO_MAP = {
     'hero_viscous':     'viscous',
     'hero_yamato':      'yamato',
     'hero_wraith':      'wraith',
+    # Added 2026-11-09 (api.deadlock-api.com/v1/assets/heroes: Victor id 66,
+    # Silver id 80). Silver's wolf form is `werewolf_wolf_card.webp`, kept as
+    # public/heroes/hero_silver_wolf_card.webp.
+    'hero_victor':      'frank',
+    'hero_silver':      'werewolf',
 }
 # Each hero has 3 sizes: _card (portrait), _mm (minimap), _sm (small icon)
 # Source: https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/{slug}_{kind}.webp
 ```
 
 Hero portraits are already pulled and live in `public/heroes/`. No re-run needed
-unless a new hero is added.
+unless a new hero is added. The bucket still serves them: Victor's and Silver's
+(2026-11-09) were fetched from it with the project's User-Agent
+(`deadlock-tcg/0.0.1 (fan project card game; https://github.com/BrandeisPatrick/tcg)`),
+their URLs read off the API's hero list (`images.icon_hero_card_webp`,
+`minimap_image_webp`, `icon_image_small_webp`).
 
 ## The map's icons
 

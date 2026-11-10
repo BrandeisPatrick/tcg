@@ -6,6 +6,7 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { withCast } from '@/engine/castContext';
 import { getAbility } from '@/abilities';
+import { DJINN_CAP } from '@/engine/constants';
 import type { CardInstance, GameState, HitFx, ShieldFx, StatusFx, HealFx, CastFx, SwingFx } from '@/engine/types';
 
 /**
@@ -36,10 +37,11 @@ describe('board FX stream — hits', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const abrams = G.players['1'].active!;
+    const before = abrams.hp;
     withCast(haze, 'attack', () => damageUnit(G, abrams, 2, 'attack', 'Haze'));
     expect(hits(G)).toHaveLength(1);
     expect(hits(G)[0]).toMatchObject({ iid: abrams.iid, amount: 2, type: 'attack', cast: 'attack', source: { iid: haze.iid } });
-    expect(abrams.hp).toBe(3);
+    expect(abrams.hp).toBe(before - 2);
   });
 
   it('a tagged proc riding on a swing is kept and filed as a proc (Tesla)', () => {
@@ -69,18 +71,19 @@ describe('board FX stream — hits', () => {
 });
 
 describe("board FX stream — Djinn's Mark", () => {
-  it('each stack stamps the mark and the 4th detonates with tag, stacks and Mirage as source', () => {
+  it('each stack stamps the mark and the 3rd detonates with tag, stacks and Mirage as source: 4 + his Spirit', () => {
     const G = freshReadyGame();
     const mirage = makeHero('hero_mirage', '0');
+    mirage.spiritMod = 2;
     const target = G.players['1'].active!;
     target.hp = 30; target.hpMax = 30;
     const passive = getAbility('passive_mirage_djinns_mark')!;
-    for (let i = 0; i < 4; i++) passive.run(G, { movingPlayer: '0' }, { source: mirage, target });
+    for (let i = 0; i < DJINN_CAP; i++) passive.run(G, { movingPlayer: '0' }, { source: mirage, target });
     const marks = G.fx.filter((e): e is StatusFx => e.kind === 'status' && e.statusId === 'djinns_mark');
-    expect(marks.map((m) => m.value)).toEqual([1, 2, 3, 4]);
-    const det = hits(G).find((h) => h.tag === 'djinns_mark');
-    expect(det).toBeDefined();
-    expect(det).toMatchObject({ stacks: 4, amount: 12, type: 'spirit', cast: 'proc', source: { iid: mirage.iid } });
+    expect(marks.map((m) => m.value)).toEqual([1, 2, 3]);
+    const det = hits(G).filter((h) => h.tag === 'djinns_mark');
+    expect(det).toHaveLength(1);
+    expect(det[0]).toMatchObject({ stacks: 3, amount: 4 + 2, type: 'spirit', cast: 'proc', source: { iid: mirage.iid } });
     expect(target.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
   });
 
@@ -91,7 +94,8 @@ describe("board FX stream — Djinn's Mark", () => {
     const target = G.players['1'].active!;
     target.hp = 30; target.hpMax = 30;
     const passive = getAbility('passive_mirage_djinns_mark')!;
-    for (let i = 0; i < 3; i++) passive.run(G, { movingPlayer: '0' }, { source: mirage, target });
+    // One mark short of the detonation.
+    for (let i = 0; i < DJINN_CAP - 1; i++) passive.run(G, { movingPlayer: '0' }, { source: mirage, target });
     // The swing is lethal; the kill is reaped when the attack resolves, after
     // the passive has had its turn.
     target.hp = 1;
@@ -116,14 +120,17 @@ describe("board FX stream — Djinn's Mark", () => {
     expect(G.fx).toHaveLength(0);
   });
 
-  it('the expiry detonation is a tagged tick too', () => {
+  it('a mark that runs out of time fades: no expiry detonation, no tick, no hit', () => {
     const G = freshReadyGame();
     const target = G.players['1'].active!;
     target.hp = 30; target.hpMax = 30;
     addStatus(G, target, 'djinns_mark', 2, 1);
     G.fx = [];
     tickStartOfTurn(G, G.players['1']);
-    expect(hits(G)[0]).toMatchObject({ tag: 'djinns_mark', stacks: 2, amount: 6, cast: 'tick' });
+    expect(hits(G).some((h) => h.tag === 'djinns_mark')).toBe(false);
+    expect(target.hp).toBe(30);
+    expect(target.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
+    expect(G.log.some((l) => /Djinn's Mark detonates/.test(l.text))).toBe(false);
   });
 });
 
@@ -155,9 +162,11 @@ describe('board FX stream — mitigation, heals, statuses', () => {
     expect(abrams.statuses.find((s) => s.id === 'shield')!.value).toBeLessThan(9); // it did absorb
   });
 
-  it('Unstoppable shrugging off damage or CC is surfaced as immune', () => {
+  it('Invulnerable shrugging off damage and Unstoppable shrugging off CC are surfaced as immune', () => {
     const G = freshReadyGame();
     const abrams = G.players['1'].active!;
+    const before = abrams.hp;
+    addStatus(G, abrams, 'invulnerable', 1, 1);
     addStatus(G, abrams, 'unstoppable', 1, 1);
     G.fx = [];
     damageUnit(G, abrams, 5, 'spirit');
@@ -166,19 +175,31 @@ describe('board FX stream — mitigation, heals, statuses', () => {
       { kind: 'immune', what: 'damage' },
       { kind: 'immune', what: 'stun' },
     ]);
-    expect(abrams.hp).toBe(5);
+    expect(abrams.hp).toBe(before);
+  });
+
+  it('Unstoppable alone takes the damage: it is crowd-control immunity, not Invulnerable', () => {
+    const G = freshReadyGame();
+    const abrams = G.players['1'].active!;
+    const before = abrams.hp;
+    addStatus(G, abrams, 'unstoppable', 1, 1);
+    G.fx = [];
+    damageUnit(G, abrams, 2, 'spirit');
+    expect(G.fx.map((e) => e.kind)).toEqual(['hit']);
+    expect(abrams.hp).toBe(before - 2);
   });
 
   it('a heal is emitted with its amount; lifesteal points back at the victim', () => {
     const G = freshReadyGame();
-    const geist = makeHero('hero_lady_geist', '0');
-    geist.hp = 1;
+    // Mo & Krill's Combo: 4 spirit damage to the enemy Active, healing that much.
+    const mk = makeHero('hero_mo_krill', '0');
+    mk.hp = 1;
     const target = G.players['1'].active!;
-    withCast(geist, 'skill', () => getAbility('skill_lady_geist')!.run(G, { movingPlayer: '0' }, { source: geist, target }));
+    withCast(mk, 'ult', () => getAbility('eff_ult_mo_krill')!.run(G, { movingPlayer: '0' }, { source: mk, target }));
     const hit = hits(G)[0];
-    expect(hit).toMatchObject({ tag: 'life_drain', amount: 3 });
+    expect(hit).toMatchObject({ tag: 'combo', amount: 4, cast: 'ult' });
     const heal = G.fx.find((e): e is HealFx => e.kind === 'heal')!;
-    expect(heal).toMatchObject({ iid: geist.iid, amount: 1, tag: 'lifesteal', from: { iid: target.iid } });
+    expect(heal).toMatchObject({ iid: mk.iid, amount: 4, tag: 'lifesteal', from: { iid: target.iid } });
     // A full-HP unit heals for 0 — nothing to animate.
     const fresh = G.players['1'].bench[0]!;
     G.fx = [];
@@ -210,10 +231,12 @@ describe('board FX stream — mitigation, heals, statuses', () => {
 });
 
 describe('board FX stream — the turn\'s attack', () => {
-  /** P0's Active is a plain Dynamo (no onAttack passive, so one swing) against Abrams. */
+  /** P0's Active is a plain Dynamo (no onAttack passive, so one swing; its
+   *  Attack raised from 1 to 3) against Abrams. */
   function plainAttack(extra?: (G: GameState, attacker: CardInstance, defender: CardInstance) => void) {
     const G = freshReadyGame();
     const attacker = G.players['0'].active = makeHero('hero_dynamo', '0', 'active', 0);
+    attacker.atkMod = 2;
     const defender = G.players['1'].active!;
     defender.hpMax = defender.hp = 40;
     extra?.(G, attacker, defender);
@@ -259,8 +282,8 @@ describe('board FX stream — the turn\'s attack', () => {
     expect(G.fx[2]).toMatchObject({ amount: 1, cast: 'attack' });
   });
 
-  it('a swing at an Unstoppable target is the swing and the shrug, filed "attack"', () => {
-    const { G, defender } = plainAttack((G0, _a, def) => addStatus(G0, def, 'unstoppable', 1, 1));
+  it('a swing at an Invulnerable target is the swing and the shrug, filed "attack"', () => {
+    const { G, defender } = plainAttack((G0, _a, def) => addStatus(G0, def, 'invulnerable', 1, 1));
     expect(kinds(G)).toEqual(['swing', 'immune']);
     expect(G.fx[1]).toMatchObject({ iid: defender.iid, what: 'damage', cast: 'attack' });
   });
@@ -287,27 +310,28 @@ describe('board FX stream — casts and the turn flush', () => {
     // Seat 0's turn 1, past its shop step: abilities are made in the act step.
     const client = readyClient();
     // Give P0 a caster in the Active slot: Haze has no skill, so Lash (her
-    // skill aims at any enemy) steps up from the bench by a Retreat, which
-    // costs a soul: fund it.
+    // Ground Strike hits every enemy and Roots the enemy Active) steps up from
+    // the bench by a Retreat, which costs Haze's retreat: fund it and the skill.
     let s = client.getState()!;
     let G = s.G as GameState;
     const lash = G.players['0'].bench.find((b) => b?.cardId === 'hero_lash')!;
-    // Fund the retreat (the skill is free).
+    // Fund the retreat (1) and Ground Strike (3).
     (client as any).store.dispatch({ type: 'UPDATE', state: { ...s, G: { ...G, players: { ...G.players, '0': { ...G.players['0'], souls: 5 } } } } });
     client.moves.moveHero!(lash.slot, 0);
     s = client.getState()!; G = s.G as GameState;
     expect(G.players['0'].active?.cardId).toBe('hero_lash');
     const enemy = G.players['1'].active!;
     const before = G.fx.length;
-    client.moves.useSkill!(G.players['0'].active!.iid, enemy.iid);
+    client.moves.useSkill!(G.players['0'].active!.iid);
     s = client.getState()!; G = s.G as GameState;
     const fresh = G.fx.slice(before);
     expect(fresh[0].kind).toBe('cast');
-    expect(fresh[0] as CastFx).toMatchObject({ castKind: 'skill', by: '0', cardId: 'hero_lash', targetIid: enemy.iid });
+    expect(fresh[0] as CastFx).toMatchObject({ castKind: 'skill', by: '0', cardId: 'hero_lash', targetIid: undefined });
     expect((fresh[0] as CastFx).iid).toBe(G.players['0'].active!.iid);
     const kinds = fresh.map((e) => e.kind);
-    expect(kinds).toContain('hit');
-    expect(kinds.filter((k) => k === 'status')).toHaveLength(2);  // Vulnerable: bullet + spirit resist down
+    expect(kinds.filter((k) => k === 'hit')).toHaveLength(4);  // every enemy hero
+    const statuses = fresh.filter((e): e is StatusFx => e.kind === 'status');
+    expect(statuses.map((e) => [e.statusId, e.iid])).toEqual([['rooted', enemy.iid]]);  // the enemy Active, Rooted
     // seq strictly increases in push order
     for (let i = 1; i < fresh.length; i++) expect(fresh[i].seq).toBeGreaterThan(fresh[i - 1].seq);
 

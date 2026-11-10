@@ -5,10 +5,11 @@ import { poster } from './poster';
 /** A card from the hand, a skill, an active item or the attack the player has
  *  armed but not yet aimed/committed. */
 export interface PendingPlay {
-  /** What is armed: a card in the hand (to be put on one of your heroes), a
+  /** What is armed: an item in the hand (to be put on one of your heroes), a
+   *  hero in the hand picked up (to be put in a free slot of your board), a
    *  hero's skill (or ultimate), an active item a hero wears, or the Active's
    *  basic attack (when it may name who it shoots: the hero has reach). */
-  kind: 'playCard' | 'useSkill' | 'activate' | 'attack';
+  kind: 'playCard' | 'placeHero' | 'useSkill' | 'activate' | 'attack';
   /** For a card, the card in the hand; for a skill, the hero using it; for an
    *  item, the item; for the attack, the Active making it. */
   iid: string;
@@ -40,7 +41,7 @@ export const LOG_SPIRIT_PLUM = '#b48cc4';
  * Every colour is a dark-chrome ink: the log only ever sits on poster.panel
  * or poster.ground, never on paper.
  *
- *   attack arrow / KO / fell / overflow       → rival red
+ *   attack arrow / KO / fell / overflow       → damage red
  *   healed / respawned / refresh              → green
  *   gained <status> / cleansed / discharges   → spirit plum
  *   used skill / ultimate / played / promoted → your gold
@@ -48,7 +49,7 @@ export const LOG_SPIRIT_PLUM = '#b48cc4';
  *   everything else                           → cream
  */
 export function logEntryColor(s: string): string {
-  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.rival;
+  if (/→.* dmg|overflow|fatigue|fell\.|KO bounty|spills|patron|took \d+/i.test(s)) return poster.red;
   if (/healed |respawned|refresh|reshuffled|woke/i.test(s)) return poster.green;
   if (/gained |cleansed|discharges|resisted/i.test(s)) return LOG_SPIRIT_PLUM;
   if (/used (skill|ultimate):|played |promoted |retreated|swapped|unlocked|\+\d+ souls?|\+\d+ Souls?/i.test(s)) return poster.you;

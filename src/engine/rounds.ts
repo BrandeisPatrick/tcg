@@ -6,12 +6,12 @@
  * rule that counts own turns or rounds reads them here, never off the engine
  * turn by hand: who moved first is a fact of the match (`G.firstMover`, the
  * pie rule's seat 1 in a drafted match), not always seat 0. The map's clocks
- * live here too: the late game, the respawn bands, the Mid-Boss's return, the
- * Rejuvenator's window and the round cap.
+ * live here too: the late game, the Mid-Boss's return, the Rejuvenator's
+ * window and the round cap.
  */
 import type { GameState, PlayerID } from './types';
 import {
-  BOSS_RESPAWN_ROUNDS, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, RESPAWN_BY_ROUND, REVIVE_ROUNDS, ROUND_CAP,
+  BOSS_RESPAWN_ROUNDS, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, REVIVE_ROUNDS, ROUND_CAP,
 } from './constants';
 
 /** The seat that took the first turn. */
@@ -64,15 +64,6 @@ export function lateGame(G: Clock): boolean {
  *  game, else 1. */
 export function pushMultiplier(G: Clock): number {
   return lateGame(G) ? LATE_PUSH_MULTIPLIER : 1;
-}
-
-/** Own turns a hero that falls now waits in its slot before it respawns, by
- *  the round in play (RESPAWN_BY_ROUND) — before the richest hero's penalty. */
-export function respawnTurns(G: Clock): number {
-  const r = round(G);
-  let turns = RESPAWN_BY_ROUND[0][1];
-  for (const [from, n] of RESPAWN_BY_ROUND) if (r >= from) turns = n;
-  return turns;
 }
 
 /** The round at whose start the Mid-Boss rises again when it dies now. */

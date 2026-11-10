@@ -1,5 +1,5 @@
 /**
- * The item data the shop and the builds stand on (src/cards): every item has a
+ * The item data the deck and the builds stand on (src/cards): every item has a
  * tab, a tier and the tier's price, every upgrade names a real component, every
  * hero has two signature items and a default build in the agreed shape — and
  * the save keeps a build per hero (storage/playerData.ts), migrating retired
@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CARDS_BY_ID, HEROES, ITEMS, itemCard, migrateCardIds, RETIRED_CARDS } from '@/cards';
 import { BUILD_SIZE, DEFAULT_BUILDS, defaultBuild } from '@/cards/builds';
-import { ITEM_SLOTS } from '@/engine/market';
+import { ITEM_SLOTS } from '@/cards/decks';
 import { itemPrice } from '@/engine/query';
 import { PRICE } from '@/engine/constants';
 import { getBuild, saveBuild } from '@/storage/playerData';

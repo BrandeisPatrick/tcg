@@ -47,9 +47,11 @@ function glyph(kind: string): ReactNode {
 }
 
 /** The engine logs seats as "P0"/"P1" — render them as words. Mid-sentence
- *  occurrences read fine too ("…damage to Rival."). */
+ *  occurrences read fine too ("…damage to Rival."); the possessive is "your",
+ *  never "You's". */
 function humanize(t: string): string {
   return t
+    .replace(/\bP0's/g, (_m, at: number) => (at === 0 ? 'Your' : 'your'))
     .replace(/\bP0\b/g, 'You')
     .replace(/\bP1\b/g, 'Rival')
     .replace(/\bplayer 0\b/g, 'You')

@@ -42,7 +42,9 @@ function useSlotCount(souls: number): number {
  * the next socket, spending one leaves the socket as an empty ink outline.
  * The stencilled numeral at the rack's anchor end is the at-a-glance count —
  * the whole bank, which carries from turn to turn and has no cap.
- * Rival's rack anchors at the TOP row, yours at the BOTTOM.
+ * Rival's rack anchors at the TOP row, yours at the BOTTOM. The 3-1-1-3
+ * board no longer mounts it (the vitals rules carry the souls); the gallery
+ * still shows it.
  */
 export function SoulsRail({ rivalSouls, yourSouls }: Props) {
   // Slot count rebases on refill but stays put on spend, so a spent
@@ -66,25 +68,25 @@ export function SoulsRail({ rivalSouls, yourSouls }: Props) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: boardRows.gap(isMobile),
+        gap: boardRows.gap,
         pointerEvents: 'none',
       }}
     >
       {/* Rival's rack — centred within the rival-bench row. */}
       <div style={{
-        flex: `0 0 ${boardRows.bench(isMobile)}px`,
+        flex: `0 0 ${boardRows.bench}px`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <Rack filled={rivalSouls} slots={rivalSlots} side="rival" mobile={isMobile} />
       </div>
 
-      {/* Lane row — empty spacer so the bottom rack lands inside the
-          your-bench row, not the lane. */}
-      <div style={{ flex: `0 0 ${boardRows.lane(isMobile)}px` }} />
+      {/* The lane (both Actives and the line) — an empty spacer so the
+          bottom rack lands inside the your-bench row, not the lane. */}
+      <div style={{ flex: `0 0 ${boardRows.active * 2 + boardRows.lane}px` }} />
 
       {/* Your rack — centred within the your-bench row. */}
       <div style={{
-        flex: `0 0 ${boardRows.bench(isMobile)}px`,
+        flex: `0 0 ${boardRows.bench}px`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <Rack filled={yourSouls} slots={yourSlots} side="you" mobile={isMobile} />

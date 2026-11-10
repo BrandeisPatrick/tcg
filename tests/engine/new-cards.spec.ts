@@ -143,12 +143,12 @@ describe('New active items', () => {
   });
 
   /** P0 with Lash stepped up to the Active slot (a Retreat): an Active with a
-   *  skill and an ultimate. */
+   *  skill and an ultimate, and the souls left for her skill. */
   function lashAtTheFront() {
     const G = freshReadyGame();
     const ps = G.players['0'];
     const lash = ps.bench[1]!;
-    ps.souls = 1;
+    ps.souls = 1 + 3; // Haze's retreat, then Ground Strike's price
     expect(perform(G, '0', { type: 'moveHero', fromSlot: 2, toSlot: 0 })).not.toBe(INVALID);
     expect(ps.active).toBe(lash);
     return { G, lash };

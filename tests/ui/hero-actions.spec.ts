@@ -4,6 +4,8 @@ import { attackBlocked, skillBlocked } from '@/engine/legality';
 import { forecastAttack } from '@/engine/forecast';
 import { addStatus } from '@/engine/statusOps';
 import type { GameState, PlayerID } from '@/engine/types';
+import { grantExtraAttacks } from '@/engine/statusOps';
+import { kitCost } from '@/engine/query';
 import { attackBlockReason, attackLine, readyHeroes } from '@/ui/board/heroActions';
 import { freshReadyGame } from '../engine/_helpers';
 
@@ -32,7 +34,8 @@ describe('skillBlocked mirrors the engine', () => {
     ['asleep', (G) => { addStatus(G, LASH(G), 'sleep', 6, 2); }],
     ['channelling heavy', (G) => { addStatus(G, LASH(G), 'casting', 3, 3); }],
     ['channelling light', (G) => { addStatus(G, LASH(G), 'casting_light', 3, 3); }],
-    ['with no souls (abilities are free)', (G) => { G.players['0'].souls = 0; }],
+    ['with no souls (Ground Strike costs 3)', (G) => { G.players['0'].souls = 0; }],
+    ['a soul short of its price', (G) => { G.players['0'].souls = kitCost(LASH(G)) - 1; }],
     ['down', (G) => { LASH(G).hp = 0; LASH(G).respawnTurnsLeft = 2; }],
   ];
   for (const [label, doctor] of cases) {
@@ -58,8 +61,8 @@ describe('skillBlocked mirrors the engine', () => {
 
 describe('the attack, as the sheet words it', () => {
   it('says what the swing does, Extra Attacks included', () => {
-    const G = freshReadyGame(); // Haze swings, and from Level 3 Fixation adds a second swing
-    G.players['0'].active!.level = 3;
+    const G = freshReadyGame(); // Haze swings, and an Extra Attack (Burst Fire's, say) adds a second swing
+    grantExtraAttacks(G.players['0'].active!, 1);
     const abrams = G.players['1'].active!;
     abrams.hp = abrams.hpMax = 30; // stands through both
     const plan = forecastAttack(G, '0');
@@ -89,11 +92,17 @@ describe('the attack, as the sheet words it', () => {
 });
 
 describe('the ready glint', () => {
-  it('marks the Active while its attack is open, and every hero with an ability it can use now', () => {
+  it('marks the Active while its attack is open, and every hero with an ability it can use now — souls in hand', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    me.souls = 0; // abilities are free: the bench's skills are up with no souls
-    const ready = readyHeroes(G, '0', false);
+    me.souls = 0; // a skill costs souls: with none, nobody's is up
+    expect(readyHeroes(G, '0', false).size).toBe(0);
+    me.souls = 2; // Paige's Plot Armor (2) is up; Lash's Ground Strike (3) is not
+    let ready = readyHeroes(G, '0', false);
+    expect(ready.has(me.bench[2]!.iid)).toBe(true); // Paige
+    expect(ready.has(LASH(G).iid)).toBe(false);
+    me.souls = 10;
+    ready = readyHeroes(G, '0', false);
     expect(ready.has(LASH(G).iid)).toBe(true);
     expect(ready.has(me.bench[2]!.iid)).toBe(true); // Paige
     expect(ready.has(me.active!.iid)).toBe(false);  // Haze is passive only, her ultimate locked at Level 1
@@ -102,7 +111,9 @@ describe('the ready glint', () => {
     expect([...readyHeroes(G, '0', true)]).toEqual([me.active!.iid]);
     expect(readyHeroes(G, '0', false).size).toBe(0);
 
-    me.active!.level = 2; // Haze's ultimate unlocks: she has an ability to use too
+    me.active!.level = 2; // Haze's ultimate unlocks: Bullet Dance is large, 12 souls
+    expect(readyHeroes(G, '0', false).has(me.active!.iid)).toBe(false);
+    me.souls = 12; // …and with them she has an ability to use too
     expect(readyHeroes(G, '0', false).has(me.active!.iid)).toBe(true);
   });
 });

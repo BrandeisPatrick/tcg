@@ -38,6 +38,8 @@ export interface ItemIconMarks {
   cooldown?: number;
   /** A worn hard crowd-control active's charges left this match. */
   charges?: number;
+  /** Copies of it in the deck being built ("×2" on the tile's foot). */
+  copies?: number;
 }
 
 /** Where an item's shop icon lives. */
@@ -167,6 +169,16 @@ export function ItemIcon({ itemId, size = 44, grey = false, lit = false, selecte
           </svg>
           {marks.discount}
         </span>
+      )}
+      {/* Copies in the deck being built: "×N" on a gold tag along the foot. */}
+      {!chip && (marks.copies ?? 0) > 0 && (
+        <span aria-hidden style={{
+          position: 'absolute', left: '50%', bottom: -6, transform: 'translateX(-50%)',
+          padding: '1px 5px', borderRadius: 999,
+          background: poster.gold, color: poster.ink, boxShadow: `0 0 0 1.5px ${poster.frame}`,
+          fontFamily: fonts.display, fontSize: Math.max(9, Math.round(size * 0.24)), lineHeight: 1.05,
+          whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 1,
+        }}>×{marks.copies}</span>
       )}
       {!chip && marks.standIn && (
         <span aria-hidden style={{ position: 'absolute', right: -3, bottom: -3, pointerEvents: 'none', zIndex: 1, lineHeight: 0, borderRadius: Math.round(size * 0.1), boxShadow: `0 0 0 1.5px ${poster.frame}` }}>

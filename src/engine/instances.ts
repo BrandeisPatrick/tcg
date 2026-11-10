@@ -1,7 +1,7 @@
 /**
  * Card instances, and items going on and off heroes. Shared by the opening
- * (actions/setup.ts) and the shop (actions/shop.ts), and kept in a leaf of its
- * own so neither imports the other.
+ * (actions/setup.ts), the deck (deck.ts) and the hand (actions/hand.ts), and
+ * kept in a leaf of its own so none of them imports another.
  */
 import type { CardInstance, PlayerID } from './types';
 import { getCard, itemCard } from '@/cards';

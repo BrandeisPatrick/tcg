@@ -1,7 +1,9 @@
 /**
  * Loadout — the one screen you set yourself up on: the squad you want the
- * draft to hand you, and what each hero buys in the shop (its build, edited
- * in BuildEditor and read by every match).
+ * draft to hand you, your deck (DeckEditor: the items you draw from, which
+ * every match deals with your four drafted heroes shuffled in), and each
+ * hero's build (BuildEditor: what a deck made from your heroes is built from
+ * when you have saved none).
  *
  * Printed in the poster idiom — cream sheet on the blurred night scene, flat
  * ink, one red — so the menu reads as the same object as the title screen and
@@ -19,6 +21,7 @@ import { loadPlayerData, savePreferredHeroes, MAX_PREFERRED_HEROES } from '@/sto
 import type { CardId } from '@/engine/types';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { BuildEditor } from './BuildEditor';
+import { DeckEditor } from './DeckEditor';
 
 interface Props {
   onBack: () => void;
@@ -137,10 +140,16 @@ export function LoadoutScreen({ onBack }: Props) {
             compact={isMobile}
             split={split}
           />
-          <section aria-label="Builds">
-            <SectionHead title="Builds" />
-            <BuildEditor squad={squad} />
-          </section>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: split ? 'clamp(24px, 3vw, 36px)' : 26, minWidth: 0 }}>
+            <section aria-label="Deck">
+              <SectionHead title="Deck" note="16 items, up to 4 of each" />
+              <DeckEditor squad={squad} />
+            </section>
+            <section aria-label="Builds">
+              <SectionHead title="Builds" note="Make the deck when none is saved" />
+              <BuildEditor squad={squad} />
+            </section>
+          </div>
         </div>
       </motion.section>
     </div>

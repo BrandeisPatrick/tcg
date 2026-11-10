@@ -2,18 +2,17 @@
  * Hero leveling. Heroes start at Lv1 and climb to the cap (the numbers are in
  * constants.ts). Exp comes from the lane: the Active earns more at the end of
  * its owner's turn than a bench hero does, and attaching equipment and landing
- * a kill blow earn more still. It persists across respawn. A hero that reaches
- * ULT_UNLOCK_LEVEL has unlocked its ultimate, a kit ability it uses from its
- * sheet (legality's `skillBlocked` reads the level); the log says so.
+ * a kill blow earn more still. It persists across respawn. Each level adds the
+ * hero's own `growth` (docs/hero-design.md §2). A hero that reaches
+ * ULT_UNLOCK_LEVEL has unlocked its ultimate, the button on its card
+ * (legality's `skillBlocked` reads the level); the log says so.
  */
 import type { CardInstance, GameState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
 import { isRespawning, ultimateCard } from './query';
-import {
-  LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL, ULT_UNLOCK_LEVEL,
-} from './constants';
+import { LEVEL_THRESHOLDS, MAX_LEVEL, START_LEVEL, ULT_UNLOCK_LEVEL } from './constants';
 
 /** Returns the number of levels gained (0 if no level-up). */
 export function grantExp(G: GameState, card: CardInstance, amount: number): number {
@@ -38,14 +37,19 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
   card.level = level;
   const gained = level - startLevel;
   if (gained > 0) {
-    const atkGain = gained * LEVEL_ATK_BONUS;
-    const hpGain = gained * LEVEL_HP_BONUS;
-    const spiritGain = gained * LEVEL_SPIRIT_BONUS;
+    // Each level adds the hero's own growth: its curve's points split between
+    // Attack, HP and Spirit (docs/hero-design.md §2).
+    const atkGain = gained * data.growth.atk;
+    const hpGain = gained * data.growth.hp;
+    const spiritGain = gained * data.growth.spirit;
     card.atkMod += atkGain;
     card.hpMax += hpGain;
     card.hp += hpGain;
     card.spiritMod += spiritGain;
-    pushLog(G, `${data.name} reached Level ${level} (+${atkGain} Bullet Power, +${hpGain} HP, +${spiritGain} Spirit Power).`);
+    const gains = [
+      atkGain ? `+${atkGain} Bullet Power` : '', hpGain ? `+${hpGain} HP` : '', spiritGain ? `+${spiritGain} Spirit Power` : '',
+    ].filter(Boolean).join(', ');
+    pushLog(G, `${data.name} reached Level ${level}${gains ? ` (${gains})` : ''}.`);
     pushFx(G, { kind: 'levelup', iid: card.iid, level });
     if (data.ult && startLevel < ULT_UNLOCK_LEVEL && level >= ULT_UNLOCK_LEVEL) {
       pushLog(G, `${data.name} unlocked ${cardName(ultimateCard(data.ult)?.id ?? data.ult)}.`);

@@ -17,17 +17,16 @@ import { damageUnit } from '@/engine/damage';
 import { resolve } from '@/engine/death';
 import { addStatus } from '@/engine/statusOps';
 import { ACTIVE_COOLDOWN, EXP_ON_KILL, HARD_CC_CHARGES } from '@/engine/constants';
-import { buyItem, freshReadyGame, giveItem, makeAttack, useItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeAttack, playNew, useItem } from './_helpers';
 
-/** End `pid`'s turn, pass the rival's whole turn, begin `pid`'s next own turn
- *  and close its shop: `pid` stands in the act step of its next own turn. */
+/** End `pid`'s turn, pass the rival's whole turn and begin `pid`'s next own
+ *  turn. */
 function nextOwnTurn(G: GameState, pid: PlayerID) {
   const rival = otherPlayer(pid);
   endTurnEffects(G, pid);
   beginTurn(G, rival, G.turnNumber + 1);
   endTurnEffects(G, rival);
   beginTurn(G, pid, G.turnNumber + 1);
-  G.step = 'act';
 }
 
 const activate = (G: GameState, pid: PlayerID, itemIid: string, targetIid?: string) =>
@@ -37,6 +36,7 @@ describe('an active item is its bearer\'s one ability of the turn', () => {
   it('after the item, the bearer\'s skill and ultimate are spent — after a skill, its items — and the other heroes are free', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
+    me.souls = 20; // a skill and an ultimate cost souls: enough for any of them
     const foe = G.players['1'].active!;
     const [lash, paige] = [me.bench[1]!, me.bench[2]!];
     lash.level = 2; // its ultimate unlocked
@@ -122,17 +122,14 @@ describe('an active item is its bearer\'s one ability of the turn', () => {
 });
 
 describe('cooldowns and charges', () => {
-  it('bought, an active starts on its full cooldown: usable after 2 own turns at tiers 1–2, after 3 at tiers 3–4', () => {
-    const G = freshReadyGame({ step: 'shop' });
-    G.players['0'].souls = 40;
-    G.market.push('refresher'); // tier 4, put on sale for the test
+  it('put on, an active starts on its full cooldown: usable after 2 own turns at tiers 1–2, after 3 at tiers 3–4', () => {
+    const G = freshReadyGame();
     const me = G.players['0'];
-    const t2 = buyItem(G, '0', 'cold_front', me.bench[0]!);   // tier 2
-    const t3 = buyItem(G, '0', 'heroic_aura', me.bench[1]!);  // tier 3
-    const t4 = buyItem(G, '0', 'refresher', me.bench[2]!);    // tier 4
+    const t2 = playNew(G, '0', 'cold_front', me.bench[0]!);   // tier 2
+    const t3 = playNew(G, '0', 'heroic_aura', me.bench[1]!);  // tier 3
+    const t4 = playNew(G, '0', 'refresher', me.bench[2]!);    // tier 4
     expect([itemCooldown(t2), itemCooldown(t3), itemCooldown(t4)]).toEqual([ACTIVE_COOLDOWN.low, ACTIVE_COOLDOWN.high, ACTIVE_COOLDOWN.high]);
     expect([ACTIVE_COOLDOWN.low, ACTIVE_COOLDOWN.high]).toEqual([2, 3]);
-    G.step = 'act';
     const foe = () => G.players['1'].active!.iid;
     const ready = () => [activateBlocked(G, '0', t2.iid, foe()), activateBlocked(G, '0', t3.iid), activateBlocked(G, '0', t4.iid)];
     expect(ready()).toEqual(['cooldown', 'cooldown', 'cooldown']);
@@ -162,19 +159,19 @@ describe('cooldowns and charges', () => {
     nextOwnTurn(G, '0');
     expect(itemCooldown(front)).toBe(0);
     expect(front.cooldowns).toBeUndefined();
-    expect(findWornItem(G, front.iid)?.bearer).toBe(vindicta);     // still worn: items stay through death
+    // Its wait over, Vindicta is back in the hand — still wearing it: items stay through death.
+    expect(G.players['0'].hand).toContain(vindicta);
+    expect(vindicta.attached).toContain(front);
   });
 
   it('hard crowd control: 2 charges a match and no cooldown — spent, it stays worn but cannot be used', () => {
-    const G = freshReadyGame({ step: 'shop' });
-    G.players['0'].souls = 20;
+    const G = freshReadyGame();
     const vindicta = G.players['0'].bench[0]!;
-    const knock = buyItem(G, '0', 'knockdown', vindicta);       // Stun the enemy Active for 1 turn
+    const knock = playNew(G, '0', 'knockdown', vindicta);       // Stun the enemy Active for 1 turn
     expect(knock.charges).toBe(HARD_CC_CHARGES);
     expect(knock.cooldowns).toBeUndefined();
-    G.step = 'act';
     const foe = G.players['1'].active!;
-    expect(activate(G, '0', knock.iid, foe.iid)).not.toBe(INVALID); // usable the turn it is bought
+    expect(activate(G, '0', knock.iid, foe.iid)).not.toBe(INVALID); // usable the turn it is put on
     expect(foe.statuses.some((s) => s.id === 'stun')).toBe(true);
     expect([knock.charges, knock.cooldowns]).toEqual([1, undefined]);
     nextOwnTurn(G, '0');
@@ -188,7 +185,7 @@ describe('cooldowns and charges', () => {
 });
 
 describe('the legal-action list', () => {
-  it('lists one activate per worn, ready active per legal target, in board and worn order — none for passives, cooling items, or in the shop', () => {
+  it('lists one activate per worn, ready active per legal target, in board and worn order — none for passives, cooling items, or while a discard is owed', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     const [haze, vindicta, lash] = [me.active!, me.bench[0]!, me.bench[1]!];
@@ -205,7 +202,8 @@ describe('the legal-action list', () => {
       { type: 'activate', itemIid: grit.iid },
     ]);
     for (const a of listed) expect(blocked(G, '0', a)).toBeNull();
-    G.step = 'shop';
+    giveCard(G, '0', 'grit');
+    G.pendingDiscard = { pid: '0', count: 1, cardId: 'improved_cooldown' };
     expect(legalActions(G, '0').some((a) => a.type === 'activate')).toBe(false);
   });
 });

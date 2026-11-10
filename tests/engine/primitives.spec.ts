@@ -6,7 +6,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { FIXATION_CAP, RETREAT_COST } from '@/engine/constants';
+import { FIXATION_CAP } from '@/engine/constants';
 import { attackAll } from '@/engine/actions/attack';
 import { promoteToActive, pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
@@ -17,8 +17,8 @@ import { INVALID, perform } from '@/engine/engine';
 import { forecastAttack } from '@/engine/forecast';
 import { DeadlockGame } from '@/engine/game';
 import {
-  activateBlocked, activateTargets, attackBlocked, attackTargets, blocked, legalActions, moveBlocked, promoteBlocked, skillBlocked,
-  skillTargets,
+  activateBlocked, activateTargets, attackBlocked, attackTargets, blocked, legalActions, moveBlocked, promoteBlocked, retreatCost,
+  skillBlocked, skillTargets,
 } from '@/engine/legality';
 import { pushLog } from '@/engine/log';
 import {
@@ -28,7 +28,7 @@ import { registerAbilities } from '@/engine/registry';
 import { addStatus, leaveActive, tickCastingPulses, tickEndOfTurnCC, tickStartOfTurn } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID, SwingFx } from '@/engine/types';
 import { actionRefusal, attackBlockReason, moveBlockReason, skillBlockReason } from '@/ui/board/heroActions';
-import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveItem, makeHero, passTurn, readyClient } from './_helpers';
+import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveItem, makeHero, passTurn, readyClient, withBenchOnly } from './_helpers';
 
 // The primitives the new hero kits are built from — an attack that names its
 // target, Fixation, Dome, Rooted, Rabbit, Last Stand, a pull, a swap-in, HP as a
@@ -78,9 +78,14 @@ const calm: HeroAbilityDef = {
 };
 
 // Every hero names two signature items; these are tier 1, always on sale, so a
-// match with a throwaway hero in it sells what it would have sold anyway.
-const throwaway = (id: string, name: string, over: Partial<HeroCard> = {}): HeroCard =>
-  ({ id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, skills: [], signature: ['extended_magazine', 'extra_spirit'], ...over });
+// match with a throwaway hero in it sells what it would have sold anyway. A
+// level adds +1 to each stat and a Retreat costs 1, as every hero's once did.
+const throwaway = (id: string, name: string, over: Partial<HeroCard> = {}): HeroCard => ({
+  id, name, type: 'hero', rarity: 3, atk: 3, hp: 12,
+  growth: { atk: 1, hp: 1, spirit: 1 }, retreat: 1,
+  profile: { role: 'Bruiser', mix: { tank: 2, damage: 2, control: 0, support: 0 }, reach: 'one', curve: 'mid' },
+  skills: [], signature: ['extended_magazine', 'extra_spirit'], ...over,
+});
 
 beforeAll(() => {
   registerAbilities([longArm, fixedEye, tally, bloodPrice, gearReach, calm]);
@@ -127,10 +132,10 @@ const snapshot = (G: GameState) => JSON.stringify(G);
 describe('the new statuses', () => {
   it('are defined as the rules word them', () => {
     expect(STATUSES_BY_ID.fixation).toMatchObject({
-      title: 'Fixation', desc: 'When Haze attacks this hero, it takes +<value> damage. Up to 3; it falls off when the hero leaves the Active slot.', hvalue: -1,
-      stack: { add: true, cap: 3, duration: 'reset' }, clearOnLeaveActive: true,
+      title: 'Fixation', desc: 'When Haze attacks this hero, she deals +<value> bullet damage. Up to 2; it falls off when the hero leaves the Active slot.', hvalue: -1,
+      stack: { add: true, cap: 2, duration: 'reset' }, clearOnLeaveActive: true,
     });
-    expect(FIXATION_CAP).toBe(3);
+    expect(FIXATION_CAP).toBe(2);
     expect(STATUSES_BY_ID.dome).toMatchObject({ title: 'Dome', desc: 'Cannot be the target of an attack.', hvalue: 2, untargetable: ['attack'] });
     expect(STATUSES_BY_ID.rooted).toMatchObject({ title: 'Rooted', desc: 'Cannot retreat or be swapped.', hvalue: -1, blocks: ['move'], cc: true });
     expect(STATUSES_BY_ID.rabbit).toMatchObject({
@@ -172,16 +177,15 @@ describe('the new statuses', () => {
 // ---------------------------------------------------------------------------
 
 describe('Fixation', () => {
-  it('stacks up to 3 and starts its timer over with every stack', () => {
+  it('stacks up to 2 and starts its timer over with every stack', () => {
     const G = freshReadyGame();
     const foe = G.players['1'].active!;
     addStatus(G, foe, 'fixation', 1, 99);
     expect(status(foe, 'fixation')).toMatchObject({ value: 1, duration: 99 });
     expect(G.log.at(-1)!.text).toBe('Abrams suffered Fixation 1.');
     addStatus(G, foe, 'fixation', 1, 99);
-    addStatus(G, foe, 'fixation', 1, 99);
-    expect(status(foe, 'fixation')!.value).toBe(3);
-    addStatus(G, foe, 'fixation', 1, 99); // a fourth stack goes over the cap…
+    expect(status(foe, 'fixation')!.value).toBe(2);
+    addStatus(G, foe, 'fixation', 1, 99); // a third stack goes over the cap…
     addStatus(G, foe, 'fixation', 5, 99); // …and so does a big one
     expect(status(foe, 'fixation')!.value).toBe(FIXATION_CAP);
     expect(foe.statuses.filter((s) => s.id === 'fixation')).toHaveLength(1);
@@ -193,7 +197,7 @@ describe('Fixation', () => {
   it('ends when its bearer leaves the Active slot — a retreat, a swap-in, a pull, a promotion — and takes nothing else with it', () => {
     const ways: [string, (G: GameState) => void][] = [
       ['a retreat', (G) => {
-        G.players['1'].souls = RETREAT_COST;
+        G.players['1'].souls = retreatCost(G, '1');
         expect(perform(G, '1', { type: 'moveHero', fromSlot: 0, toSlot: 2 })).not.toBe(INVALID);
       }],
       ['a swap-in', (G) => { expect(swapIntoActive(G, G.players['1'], G.players['1'].bench[1]!)).toBe(true); }],
@@ -229,7 +233,7 @@ describe('Fixation', () => {
     addStatus(G, foe.bench[1]!, 'fixation', 1, 99);
     expect(perform(G, '1', { type: 'moveHero', fromSlot: 1, toSlot: 3 })).not.toBe(INVALID); // bench ↔ bench
     expect(has(foe.bench[2]!, 'fixation')).toBe(true);
-    foe.souls = RETREAT_COST;
+    foe.souls = retreatCost(G, '1');
     const incoming = foe.bench[1]!;
     expect(perform(G, '1', { type: 'moveHero', fromSlot: 0, toSlot: 2 })).not.toBe(INVALID); // a retreat
     expect(foe.active).toBe(incoming);
@@ -316,10 +320,10 @@ describe('Dome', () => {
     expect(attackBlocked(G, '0')).toBeNull();
     // "Cannot be the target of an attack": a skill or an active item can still be aimed at the domed Active.
     addStatus(G, rival, 'dome', 1, 1);
-    const lash = G.players['0'].bench[1]!;
-    expect(CARDS_BY_ID[lash.cardId]).toMatchObject({ id: 'hero_lash' });
-    expect(skillTargets(G, '0', lash)).toContain(rival);
-    expect(skillBlocked(G, '0', lash, rival.iid)).toBeNull();
+    // Shiv's Serrated Knives aims at the enemy Active.
+    const shiv = G.players['0'].bench[1] = makeHero('hero_shiv', '0', 'bench', 2);
+    expect(skillTargets(G, '0', shiv)).toContain(rival);
+    expect(skillBlocked(G, '0', shiv, rival.iid)).toBeNull();
     const coldFront = giveItem(G, atk, 'cold_front'); // ready: spirit damage to the enemy Active
     expect(activateTargets(G, '0', coldFront, atk)).toContain(rival);
     expect(activateBlocked(G, '0', coldFront.iid, rival.iid)).toBeNull();
@@ -897,16 +901,16 @@ describe('attackAll', () => {
     expect(snapshot(disarmed.G)).toBe(before);
   });
 
-  it('ends with the state-based pass: a hero it finishes falls, pushes its level + 1 into its structures and pays a bounty', () => {
+  it('ends with the state-based pass: a hero it finishes falls and pushes its level + 1 into its structures — and pays no souls', () => {
     const { G, me, atk, foes } = duel(TALLY);
     foes[2].hp = 3;
     me.souls = 4;
     const structures = structureHp(G.players['1']);
     attackAll(G, atk);
     expect(isRespawning(foes[2])).toBe(true);
-    expect(structureHp(G.players['1'])).toBe(structures - 2);
-    expect(me.souls).toBe(6); // its level (1) + 1
-    expect(G.log.some((l) => l.text === 'P0 +2 Souls (KO bounty).')).toBe(true);
+    expect(structureHp(G.players['1'])).toBe(structures - 2); // its level (1) + 1
+    expect(me.souls).toBe(4);
+    expect(G.log.some((l) => /KO bounty/.test(l.text))).toBe(false);
   });
 });
 
@@ -970,7 +974,7 @@ describe('swapIntoActive and pullToActive', () => {
     expect(me.active!.statuses.map((s) => s.id)).toEqual(['fixation']); // the new one keeps its own
   });
 
-  it('refuse what they should: a fallen hero, a bench-only hero, a hero who is not on that bench, a board with no Active', () => {
+  it('refuse what they should: a fallen hero, a bench-only hero (no card is one now: Rem flagged by hand), a hero who is not on that bench, a board with no Active', () => withBenchOnly('hero_rem', () => {
     const cases: [string, (G: GameState) => { ps: GameState['players']['0']; hero: CardInstance }][] = [
       ['a corpse', (G) => { const h = G.players['0'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = 2; return { ps: G.players['0'], hero: h }; }],
       ['a bench-only hero', (G) => { const h = makeHero('hero_rem', '0', 'bench', 3); G.players['0'].bench[2] = h; return { ps: G.players['0'], hero: h }; }],
@@ -987,62 +991,72 @@ describe('swapIntoActive and pullToActive', () => {
       expect(pullToActive(G, ps, hero), label).toBe(false);
       expect(snapshot(G), label).toBe(before);
     }
-  });
+  }));
 
-  it('Mirage\'s Traveler uses the swap and does exactly what it did: the same state, the same lines', () => {
-    // The Traveler of before, as it was written inline.
-    const legacy = (G: GameState, movingPlayer: PlayerID) => {
-      const ps = G.players[movingPlayer];
-      const mirage = [ps.active, ...ps.bench].find((c) => c && c.cardId === 'hero_mirage' && (c.respawnTurnsLeft ?? 0) === 0);
-      if (!mirage) { pushLog(G, 'Traveler fizzled.'); return; }
-      if (ps.active === mirage) {
-        const benchAlly = ps.bench.find((b) => {
-          if (!b || (b.respawnTurnsLeft ?? 0) > 0) return false;
-          const d = CARDS_BY_ID[b.cardId];
-          return d?.type === 'hero' && !d.flags?.benchOnly;
-        });
-        if (benchAlly) {
-          const bSlot = benchAlly.slot ?? 1;
-          ps.active = benchAlly; benchAlly.zone = 'active'; benchAlly.slot = 0;
-          ps.bench[bSlot - 1] = mirage; mirage.zone = 'bench'; mirage.slot = bSlot;
-        }
-      }
-      addStatus(G, mirage, 'shield', 3, 999);
-      pushLog(G, 'Traveler: Mirage slips to safety (Shield 3).');
+  it("Mirage's Traveler uses the swap: the ally named steps in and both get Shield 2, as the swap and two Shields by hand do; it names only an ally who could step in", () => {
+    // The Traveler as its card reads, written out by hand: Mirage swaps with the
+    // bench ally, quietly (the card's own line tells it), and both get Shield 2.
+    const byHand = (G: GameState, ally: CardInstance) => {
+      const ps = G.players['0'];
+      const mirage = ps.active!;
+      expect(swapIntoActive(G, ps, ally, { quiet: true })).toBe(true);
+      addStatus(G, mirage, 'shield', 2, 999);
+      addStatus(G, ally, 'shield', 2, 999);
+      pushLog(G, `Traveler: Mirage swaps with ${CARDS_BY_ID[ally.cardId].name} (Shield 2 each).`);
     };
     const mirageActive = (G: GameState) => { G.players['0'].active = makeHero('hero_mirage', '0', 'active', 0); };
-    const cases: [string, (G: GameState) => void][] = [
-      ['Mirage fronts with allies behind her', mirageActive],
-      ['the first ally has fallen', (G) => { mirageActive(G); const b = G.players['0'].bench[0]!; b.hp = 0; b.respawnTurnsLeft = 2; }],
+    for (const slot of [0, 2]) {
+      const base = freshReadyGame();
+      mirageActive(base);
+      const was = structuredClone(base) as GameState;
+      const now = structuredClone(base) as GameState;
+      byHand(was, was.players['0'].bench[slot]!);
+      ABILITIES_BY_ID.eff_ult_mirage.run(now, { movingPlayer: '0' }, { source: now.players['0'].active!, target: now.players['0'].bench[slot]! });
+      expect(snapshot(now), `bench ${slot + 1}`).toBe(snapshot(was));
+      expect(now.log.some((l) => l.text.includes('steps in for')), `bench ${slot + 1}`).toBe(false);
+    }
+
+    // Whom it may name: a living bench ally who could step in, never a fallen or a bench-only one
+    // (no card is bench-only now: Rem is flagged by hand for that case).
+    const cases: [string, (G: GameState) => void, string[]][] = [
+      ['Mirage fronts with allies behind her', mirageActive, ['hero_vindicta', 'hero_lash', 'hero_paige']],
+      ['the first ally has fallen', (G) => { mirageActive(G); const b = G.players['0'].bench[0]!; b.hp = 0; b.respawnTurnsLeft = 2; }, ['hero_lash', 'hero_paige']],
       ['only a bench-only ally is left', (G) => {
         mirageActive(G);
         const bench = G.players['0'].bench;
         bench[0]!.hp = 0; bench[0]!.respawnTurnsLeft = 2;
         bench[1] = makeHero('hero_rem', '0', 'bench', 2);
         bench[2]!.hp = 0; bench[2]!.respawnTurnsLeft = 2;
-      }],
-      ['a hole where the first ally stood', (G) => { mirageActive(G); G.players['0'].bench[0] = null; }],
-      ['Mirage is on the bench', (G) => { G.players['0'].bench[1] = makeHero('hero_mirage', '0', 'bench', 2); }],
-      ['Mirage has fallen', (G) => { mirageActive(G); const m = G.players['0'].active!; m.hp = 0; m.respawnTurnsLeft = 2; }],
-      ['there is no Mirage', () => {}],
+      }, []],
+      ['a hole where the first ally stood', (G) => { mirageActive(G); G.players['0'].bench[0] = null; }, ['hero_lash', 'hero_paige']],
     ];
-    for (const [label, stage] of cases) {
-      const base = freshReadyGame();
-      stage(base);
-      const was = structuredClone(base) as GameState;
-      const now = structuredClone(base) as GameState;
-      legacy(was, '0');
-      ABILITIES_BY_ID.eff_ult_mirage.run(now, { movingPlayer: '0' }, {});
-      expect(snapshot(now), label).toBe(snapshot(was));
-      expect(now.log.some((l) => l.text.includes('steps in for')), label).toBe(false);
+    for (const [label, stage, named] of cases) {
+      withBenchOnly('hero_rem', () => {
+        const G = freshReadyGame();
+        stage(G);
+        const aimed = skillTargets(G, '0', G.players['0'].active!, 'eff_ult_mirage');
+        expect(aimed === 'none' ? aimed : aimed.map((c) => c.cardId), label).toEqual(named);
+      });
     }
+
+    // Away from the Active slot it names nobody, and run anyway it fizzles: only the log moves.
+    const H = freshReadyGame();
+    const benched = H.players['0'].bench[1] = makeHero('hero_mirage', '0', 'bench', 2);
+    expect(skillTargets(H, '0', benched, 'eff_ult_mirage')).toEqual([]);
+    const players = JSON.stringify(H.players);
+    ABILITIES_BY_ID.eff_ult_mirage.run(H, { movingPlayer: '0' }, { source: benched, target: H.players['0'].bench[0]! });
+    expect(JSON.stringify(H.players)).toBe(players);
+    expect(H.log.at(-1)!.text).toBe('Traveler fizzled.');
+
     // And in the first case the swap really happened.
     const G = freshReadyGame();
     mirageActive(G);
-    ABILITIES_BY_ID.eff_ult_mirage.run(G, { movingPlayer: '0' }, {});
+    const mirage = G.players['0'].active!;
+    ABILITIES_BY_ID.eff_ult_mirage.run(G, { movingPlayer: '0' }, { source: mirage, target: G.players['0'].bench[0]! });
     expect(G.players['0'].active!.cardId).toBe('hero_vindicta');
     expect(G.players['0'].bench[0]!.cardId).toBe('hero_mirage');
-    expect(status(G.players['0'].bench[0]!, 'shield')).toMatchObject({ value: 3 });
+    expect(status(G.players['0'].bench[0]!, 'shield')).toMatchObject({ value: 2 });
+    expect(status(G.players['0'].active!, 'shield')).toMatchObject({ value: 2 });
   });
 });
 
@@ -1166,15 +1180,15 @@ describe('awardSouls', () => {
     expect(G.log).toHaveLength(lines); // nothing gained, nothing said
   });
 
-  it('is what the KO bounty pays through, in the words it always used', () => {
+  it('is never called by a kill: a knockout pays no souls (the lane\'s income is all there is)', () => {
     const G = freshReadyGame();
     G.players['0'].souls = 2;
     const victim = G.players['1'].bench[1]!;
     damageUnit(G, victim, 99, 'pure');
     resolve(G);
     expect(isRespawning(victim)).toBe(true);
-    expect(G.players['0'].souls).toBe(4); // its level (1) + 1
-    expect(G.log.some((l) => l.text === 'P0 +2 Souls (KO bounty).')).toBe(true);
+    expect(G.players['0'].souls).toBe(2);
+    expect(G.log.some((l) => /Souls \(KO bounty/.test(l.text))).toBe(false);
   });
 });
 

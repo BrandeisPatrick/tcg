@@ -1,6 +1,7 @@
 import type { CardId } from '@/engine/types';
 import { itemCard, migrateCardIds } from '@/cards';
 import { BUILD_SIZE, DEFAULT_BUILDS, defaultBuild } from '@/cards/builds';
+import { buildsAcross, rebaseDeck } from '@/cards/decks';
 import { AI_STRENGTHS, DEFAULT_AI_STRENGTH, type AiStrength } from '@/ai/heuristic';
 
 export const MAX_PREFERRED_HEROES = 4;
@@ -9,11 +10,20 @@ export const MAX_PREFERRED_HEROES = 4;
  * The save's schema. Version 1 had no version field and kept up to five
  * 15-card decks; version 2 keeps a build per hero instead (the decks are
  * dropped on load: the shop replaced the deck); version 3 adds the rival AI's
- * strength (a save from before it plays 'normal').
+ * strength (a save from before it plays 'normal'); version 4 brings a deck
+ * back — one deck of items (DECK_SIZE, at most MAX_COPIES of one), the deck
+ * builder's — beside the builds, which make the deck of a player who saved
+ * none (a save from before it has none); version 5 keeps upgrades out of the
+ * deck (Patrick, 2026-11-09: an upgrade comes only from playing its
+ * component): a saved deck's upgrades become their base items, and a copy
+ * the MAX_COPIES cap then turns away is made up from the squad's builds
+ * (`rebaseDeck`, cards/decks.ts).
  */
-const PLAYER_DATA_VERSION = 3;
+const PLAYER_DATA_VERSION = 5;
 /** The first version that keeps builds: an older save's are not carried over. */
 const BUILDS_SINCE = 2;
+/** The first version that keeps the deck builder's deck. */
+const DECK_SINCE = 4;
 
 interface PlayerData {
   version: number;
@@ -28,6 +38,10 @@ interface PlayerData {
   tutorialDone: boolean;
   /** How hard the rival AI plays a Quick Match, as last set on the draft. */
   aiStrength: AiStrength;
+  /** The deck builder's deck: base item ids (no upgrade), at most DECK_SIZE,
+   *  at most MAX_COPIES of one. A match uses it once it holds DECK_SIZE; until then (and with
+   *  none) the deck is made from the drafted heroes' builds. */
+  deck: CardId[];
 }
 
 const STORAGE_KEY = 'deadlock-tcg-player';
@@ -40,7 +54,26 @@ function defaultPlayerData(): PlayerData {
     lessonsDone: [],
     tutorialDone: false,
     aiStrength: DEFAULT_AI_STRENGTH,
+    deck: [],
   };
+}
+
+/** A saved deck brought up to date: retired items swapped for their
+ *  replacements, unknown ids and anything that is no item dropped, each
+ *  upgrade turned into its base item, at most MAX_COPIES of one item, at most
+ *  DECK_SIZE in all; a copy the cap turns away is made up from `fill` (the
+ *  squad's builds read across), when it has room (`rebaseDeck`). */
+function migrateDeck(ids: unknown, fill: readonly CardId[] = []): CardId[] {
+  if (!Array.isArray(ids)) return [];
+  return rebaseDeck(migrateCardIds(ids.filter((x): x is string => typeof x === 'string')), fill);
+}
+
+/** The squad's builds read across (`buildsAcross`), its heroes in pick order:
+ *  what tops a migrated deck up. Each hero's saved build, else its default. */
+function squadFill(preferred: unknown, builds: Record<CardId, CardId[]>): CardId[] {
+  if (!Array.isArray(preferred)) return [];
+  const squad = preferred.slice(0, MAX_PREFERRED_HEROES).filter((h): h is CardId => typeof h === 'string' && h in DEFAULT_BUILDS);
+  return buildsAcross(squad.map((h) => builds[h] ?? defaultBuild(h)));
 }
 
 /** A saved build brought up to date: retired items swapped for their
@@ -79,17 +112,22 @@ export function loadPlayerData(): PlayerData {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultPlayerData();
     const parsed = JSON.parse(raw);
+    // A version-1 save's `decks` are not carried over: builds start from the
+    // defaults. Versions 2 on keep theirs.
+    const builds = typeof parsed.version === 'number' && parsed.version >= BUILDS_SINCE ? migrateBuilds(parsed.builds) : {};
     return {
       version: PLAYER_DATA_VERSION,
       preferredHeroes: Array.isArray(parsed.preferredHeroes)
         ? parsed.preferredHeroes.slice(0, MAX_PREFERRED_HEROES)
         : [null, null, null, null],
-      // A version-1 save's `decks` are not carried over: builds start from the
-      // defaults. Versions 2 and 3 keep theirs.
-      builds: typeof parsed.version === 'number' && parsed.version >= BUILDS_SINCE ? migrateBuilds(parsed.builds) : {},
+      builds,
       lessonsDone: Array.isArray(parsed.lessonsDone) ? parsed.lessonsDone.filter((x: unknown) => typeof x === 'string') : [],
       tutorialDone: parsed.tutorialDone === true,
       aiStrength: migrateStrength(parsed.aiStrength),
+      // A deck saved by version 1 was the old deck game's (heroes and 15 cards):
+      // not carried over. Version 4 on keeps its own — a version-4 deck's
+      // upgrades made their base items, the cap made up from the squad's builds.
+      deck: typeof parsed.version === 'number' && parsed.version >= DECK_SINCE ? migrateDeck(parsed.deck, squadFill(parsed.preferredHeroes, builds)) : [],
     };
   } catch {
     return defaultPlayerData();
@@ -121,6 +159,19 @@ export function saveBuild(heroId: CardId, items: CardId[]): void {
   const build = migrateBuild(items);
   if (build.length > 0) data.builds[heroId] = build;
   else delete data.builds[heroId];
+  savePlayerData(data);
+}
+
+/** The deck builder's deck (may be short of DECK_SIZE, or empty: none saved). */
+export function getDeck(): CardId[] {
+  return loadPlayerData().deck;
+}
+
+/** Save the deck builder's deck (an empty one clears it: the builds make the
+ *  deck again). */
+export function saveDeck(ids: CardId[]): void {
+  const data = loadPlayerData();
+  data.deck = migrateDeck(ids);
   savePlayerData(data);
 }
 

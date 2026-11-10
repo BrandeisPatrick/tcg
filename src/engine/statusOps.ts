@@ -154,14 +154,8 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
       addStatus(G, c, 'stun', 1, 1, { tag: 'discharge' });
       pushLog(G, `${cardName(c.cardId)} discharges: Stun for 1 turn.`);
     }
-    // Djinn's Mark: detonates on natural expiry (timer reaches 1 = about to
-    // tick to 0) for 3 spirit damage per stack. The mark itself is removed
-    // by the standard duration-decay path immediately after.
-    const mark = c.statuses.find((s) => s.id === 'djinns_mark');
-    if (mark && mark.duration === 1) {
-      pushLog(G, `${cardName(c.cardId)} — Djinn's Mark detonates.`);
-      damageUnit(G, c, 3 * mark.value, 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value });
-    }
+    // Djinn's Mark only goes off at DJINN_CAP marks (Mirage's passive): one
+    // that runs out of time fades with the decay path below.
     // Reverb (Mystic Reverb): delayed echo. Detonates on natural expiry for its
     // stored value as spirit damage, then the decay path removes it below.
     const reverb = c.statuses.find((s) => s.id === 'reverb');
@@ -204,15 +198,6 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
 // CC exclusion in tickStartOfTurn so duration N = N denied turns.
 export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
-    // Sleep about to expire naturally → fire its wake-up burst (Rem's Naptime)
-    // before it drops. Strip it first so the burst doesn't re-enter the
-    // damage-side wake hook. Plain sleep (value 0) just decays below.
-    const sleeping = c.statuses.find((s) => s.id === 'sleep');
-    if (sleeping && sleeping.duration === 1 && sleeping.value > 0) {
-      c.statuses = c.statuses.filter((s) => s !== sleeping);
-      pushLog(G, `${cardName(c.cardId)} wakes — Naptime detonates.`);
-      damageUnit(G, c, sleeping.value, 'spirit', 'Naptime', { tag: 'naptime' });
-    }
     c.statuses = c.statuses
       .map((s) => (CC_STATUSES.has(s.id) ? { ...s, duration: s.duration - 1 } : s))
       .filter((s) => s.duration > 0);
@@ -222,7 +207,7 @@ export function tickEndOfTurnCC(G: GameState, ps: PlayerState) {
 /**
  * Grant the hero `count` Extra Attacks this turn via the `extra_attack` status
  * (value = number of extra full-power basic swings). Stacks ADDITIVELY across
- * sources (Burst Fire + Active Reload + Fixation all add up), capped at
+ * sources (Burst Fire + Active Reload add up), capped at
  * MAX_EXTRA_ATTACKS. Manipulated directly (not via addStatus) to avoid a log
  * line every turn from the always-on sources. Consumed by the bearer's attack.
  * A corpse is granted nothing (it takes no status, like addStatus).
@@ -238,9 +223,9 @@ export function grantExtraAttacks(card: CardInstance, count: number) {
 }
 
 /**
- * Tick Rem's "Lil Helpers" merges at her owner's turn start: count down each
- * attached Rem and, when the timer expires, detach her back to the bench (which
- * also reverts the max-HP she granted the bearer).
+ * Tick the rides (Rem's Tag Along, `rideOn`) at her owner's turn start: count
+ * down each riding Rem and, when the ride is over, put her back on the bench
+ * (`returnRemToBench`, which also takes back any max HP a ride granted).
  */
 export function tickRemMerges(G: GameState, ps: PlayerState) {
   for (const bearer of liveBoardCards(ps)) {
@@ -257,8 +242,8 @@ export function tickRemMerges(G: GameState, ps: PlayerState) {
  * (docs/stats-model.md §1): an entry that reaches 0 is removed, and an empty
  * map is removed with it, so a hero or an item that is off cooldown is back to
  * having no field at all. It counts the owner's turns, so a hero on the
- * respawn timer, its items and a merged Rem (out of the board sweep, riding on
- * her bearer, her own items with her) tick like the rest — a fall and a
+ * respawn timer, its items and a riding Rem (out of the board sweep, on her
+ * bearer, her own items with her) tick like the rest — a fall and a
  * respawn leave a cooldown as it is.
  */
 export function tickCooldowns(ps: PlayerState) {
@@ -276,7 +261,8 @@ export function tickCooldowns(ps: PlayerState) {
     tick(c);
     for (const a of c.attached ?? []) walk(a);
   };
-  for (const c of [ps.active, ...ps.bench]) if (c) walk(c);
+  // A hero waiting in the hand counts its owner's turns too (as a corpse does).
+  for (const c of [ps.active, ...ps.bench, ...ps.hand]) if (c) walk(c);
 }
 
 export function clearTurnFlags(ps: PlayerState) {
@@ -290,8 +276,8 @@ export function clearTurnFlags(ps: PlayerState) {
     // Ricochet granted for this turn (Split Shot), even one a buff-stretching
     // item made last longer.
     c.statuses = c.statuses.filter((s) => s.id !== 'extra_attack' && s.id !== 'swift' && s.id !== 'ricochet');
-    // A merged Rem rides on her bearer, out of the board sweep above: clear
-    // her skill flag here too, or she would come back from the merge with
+    // A riding Rem is on her bearer, out of the board sweep above: clear
+    // her skill flag here too, or she would come back from the ride with
     // her skill already spent for that turn.
     for (const a of c.attached ?? []) {
       if (a.remMergeTurnsLeft == null) continue;

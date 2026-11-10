@@ -13,7 +13,7 @@ import { addStatus } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from '@/ui/board/attackAim';
-import { SHOP_OPEN, actionRefusal, attackLine } from '@/ui/board/heroActions';
+import { DISCARD_FIRST, actionRefusal, attackLine } from '@/ui/board/heroActions';
 import { isValidTarget } from '@/ui/board/targeting';
 import { HeroDetailSheet } from '@/ui/overlays/HeroDetailSheet';
 import type { PendingPlay } from '@/ui/helpers';
@@ -35,7 +35,9 @@ const longArm: HeroAbilityDef = {
   trigger: 'ongoing', target: 'self', reach: true, run: () => {},
 };
 const throwaway = (id: string, name: string): HeroCard => ({
-  id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, skills: [], passives: [longArm.id], signature: ['extra_spirit', 'mystic_burst'],
+  id, name, type: 'hero', rarity: 3, atk: 3, hp: 12, growth: { atk: 1, hp: 1, spirit: 0 }, retreat: 1,
+  profile: { role: 'Marksman', mix: { tank: 1, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'mid', gun: true },
+  skills: [], passives: [longArm.id], signature: ['extra_spirit', 'mystic_burst'],
 });
 
 beforeAll(() => {
@@ -194,11 +196,14 @@ describe('a tap while the attack is armed', () => {
         const c = Client({ game: DeadlockGame, numPlayers: 2 });
         c.start();
         const moves = c.moves as any;
-        moves.endTurn(); // Turn 1 has no attack (a turn may end from its shop); P1 passes too…
-        moves.endTurn(); // …and P0's second turn opens the attack, once its shop is closed
+        moves.endTurn(); // Turn 1 has no attack; P1 passes too…
+        moves.endTurn(); // …and P0's second turn opens the attack
         const G = () => c.getState()!.G as GameState;
-        expect(tapAttackPlate(G(), ME)).toEqual({ do: 'refuse', refusal: { code: 'shopOpen', text: SHOP_OPEN } });
-        moves.closeShop();
+        // A draw card's discard owed comes before the attack.
+        const owed = structuredClone(G());
+        owed.players['0'].hand.push({ ...owed.players['0'].active!, iid: 'owed-card', cardId: 'grit', zone: 'hand', attached: [] });
+        owed.pendingDiscard = { pid: ME, count: 1, cardId: 'improved_cooldown' };
+        expect(tapAttackPlate(owed, ME)).toEqual({ do: 'refuse', refusal: { code: 'discardOwed', text: DISCARD_FIRST } });
         const foes = [G().players['1'].active!, ...G().players['1'].bench] as CardInstance[];
         return { moves, G, foes, hp: foes.map((f) => f.hp), now: () => foes.map((f) => findCardOnBoard(G(), f.iid)!.card.hp) };
       };

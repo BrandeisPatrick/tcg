@@ -12,10 +12,11 @@ export interface HeroStatOverride {
 
 /**
  * Direct match setup for Story mode — bypasses the pre-match hero draft and
- * builds both players from explicit rosters, with a flat stat buff on every
- * enemy hero (opponents scale up as the campaign progresses) and an optional
- * shorter structure track (quick early fights, epic late ones). The market is
- * the match seed's, with both rosters' signature items on sale.
+ * builds both players from explicit rosters, on the board from the start, with
+ * a flat stat buff on every enemy hero (opponents scale up as the campaign
+ * progresses) and an optional shorter structure track (quick early fights,
+ * epic late ones). Each side draws from a deck of items: the player's saved
+ * deck or the one its heroes' builds make, unless the setup names one.
  */
 export interface StorySetup {
   playerHeroes: CardId[];   // 1..4
@@ -32,9 +33,17 @@ export interface StorySetup {
   structures?: TrackHp;
   /** The rival's track, when it differs from `structures`. */
   enemyStructures?: TrackHp;
-  /** Cards the player starts the fight holding, free (a Story reward): in the
-   *  hand at the first turn, to be played onto a hero like any bought card. */
+  /** Cards the player starts the fight holding (a Story reward): in the hand
+   *  on top of the opening hand, to be played onto a hero like any card. */
   playerItems?: CardId[];
+  /** The decks, when the setup names them (a lesson's script): item ids, the
+   *  first on top, NOT shuffled. Left out, a side draws from its own deck
+   *  (the player's saved deck, else its heroes' builds), shuffled. */
+  playerDeck?: CardId[];
+  enemyDeck?: CardId[];
+  /** Cards each side draws before the first turn (OPENING_HAND when left out;
+   *  a lesson may draw none). */
+  openingHand?: number;
   /** Souls each side holds before its first income (a Story reward, a deeper
    *  opponent's war chest, a lesson's budget). */
   playerSouls?: number;
@@ -48,16 +57,22 @@ export interface StorySetup {
    *  who falls to precisely the taught move. */
   playerHeroStats?: (HeroStatOverride | undefined)[];
   enemyHeroStats?: (HeroStatOverride | undefined)[];
+  /** The match has a Mid-Boss (`GameState.midBoss`); left out, the match
+   *  config's `midBoss`, else MID_BOSS_ENABLED (off for now). */
+  midBoss?: boolean;
 }
 
 interface MatchConfig {
   heroPreferences: (CardId | null)[];
-  /** The match seed (the market is drawn from it); a fresh one when left out. */
+  /** The match seed (every shuffle is drawn from it); a fresh one when left out. */
   seed?: number;
-  /** The human seat's builds — the player's saved builds, by hero. Each
-   *  drafted hero's build goes on sale with it; a hero not named here (and
-   *  every hero of an AI seat) follows its default build. */
+  /** The human seat's builds — the player's saved builds, by hero. With no
+   *  saved deck, the deck is made from the drafted heroes' builds; a hero not
+   *  named here (and every hero of an AI seat) follows its default build. */
   builds?: Record<CardId, CardId[]>;
+  /** The human seat's saved deck (DECK_SIZE items); left out or not a legal
+   *  deck, the deck is made from its heroes' builds. */
+  deck?: CardId[];
   /** The hero the title's Quick Match card featured — the recommended first
    *  pick: the draft opens focused on it for the first choice only. Unset for
    *  a deep-linked match or a rematch, where nothing is pre-selected. */
@@ -76,6 +91,9 @@ interface MatchConfig {
   /** The seat a person plays (seat 0 when left out); null when the AI plays
    *  both seats, as in the balance sim: then both seats promote on the spot. */
   humanSeat?: PlayerID | null;
+  /** The match has a Mid-Boss (`GameState.midBoss`); left out,
+   *  MID_BOSS_ENABLED (off for now). A scripted setup's own `midBoss` wins. */
+  midBoss?: boolean;
 }
 
 let current: MatchConfig = {

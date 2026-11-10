@@ -1,7 +1,7 @@
 /**
  * Determinism: a seed is a whole game, and a game leaves nothing behind.
  *   1  the same seed played twice gives the same moves, winner and final G — byte for byte, fx
- *      seqs, action ids (they count in `G.counters`, per game) and the market included;
+ *      seqs, action ids and random draws (they count in `G.counters`, per game) and the decks included;
  *   2  seed A, then B, then A again: the second A is the first A (no state leaks between games);
  *   3  playing a game restores what it borrowed (Math.random, console, the match config, the
  *      cast-context stack).
@@ -78,10 +78,10 @@ describe('seeded games are deterministic', () => {
     expect(diffPaths(clean, after, 5)).toEqual([]);
   });
 
-  it('different seeds are different games, on different markets', () => {
+  it('different seeds are different games, on different deals', () => {
     const a = view(playGame({ seed: SEEDS[0], policies: POLICIES[0] }));
     const b = view(playGame({ seed: SEEDS[2], policies: POLICIES[0] }));
     expect(b.moves).not.toEqual(a.moves);
-    expect(b.G.market).not.toEqual(a.G.market);
+    expect(b.G.seed).not.toEqual(a.G.seed);
   });
 });

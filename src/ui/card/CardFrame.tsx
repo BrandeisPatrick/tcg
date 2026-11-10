@@ -1,6 +1,6 @@
 import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
 import { fonts, text } from '../tokens';
-import { poster } from '../poster';
+import { levelFrame, levelFrameKeylines, poster } from '../poster';
 import { RuleText } from './RuleText';
 import { LiveScaleContext, faceScale } from './liveScale';
 import { CardShine, rarityInk } from './RarityFX';
@@ -11,7 +11,7 @@ import {
 } from './SpotVarnish';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL } from '@/cards';
 import type { CardData } from '@/engine/types';
-import { heroAbilities } from '@/engine/query';
+import { heroAbilities, ultimateCard, ultPrice } from '@/engine/query';
 import { PRICE } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
@@ -30,8 +30,8 @@ interface Props {
    *  where the stat badge is noise — the reveal is about the skill). */
   hideStats?: boolean;
   /** The soul cost to print on the coin, for a card that is an instance in
-   *  hand: the engine's `cardCost`, which honours an override (Sinclair's copied
-   *  ultimate is free). Omitted, the card's printed cost — right for the deck
+   *  hand: what playing it costs now (an evolving upgrade costs the
+   *  difference). Omitted, the card's printed cost — right for the deck
    *  editor, the collection and the gallery, where no instance exists. */
   cost?: number;
   /** Player can't pay this card's soul cost right now — the cost coin flips
@@ -67,6 +67,54 @@ interface Props {
   /** Turn the card to follow the pointer. Shares --px/--py with the foil, so
    *  the metal catches light because the card moved, which is the point. */
   tilt?: boolean;
+  /** A hero instance's level (a hero in the hand, back from the lane with
+   *  its level): the frame prints in its level green, as the tile's does.
+   *  Omitted, the plain charcoal-edge frame of a card with no level yet. */
+  level?: number;
+  /** Another form's art for a hero's window (`heroForm`: Silver's Wolf
+   *  form), a file under public/heroes/. The board's miniature passes it. */
+  art?: string;
+  /** The CLEAN FACE — what a card in the hand prints: the name on an ink
+   *  band across the top, sized so it is never cut, the art filling the
+   *  card, the cost on its coin (a hero: its attack and HP), and one line of
+   *  type along the foot. No rules text: that is the full card's (a hold),
+   *  and nothing here is clipped mid-sentence. */
+  clean?: boolean;
+  /** The clean face only: the width its name has to itself, px at the
+   *  card's own size — less than the card's when the next card in a fan
+   *  overlaps it, so the name still reads whole. Omitted: the card's width. */
+  nameRoom?: number;
+}
+
+/** A name set on at most two lines of a stencilled band `room` px wide: the
+ *  split that keeps the longer line shortest, and the largest type size
+ *  (between `floor` and `base`) at which that line fits. */
+export function fitNameLines(name: string, room: number, base: number, floor: number): { lines: string[]; size: number } {
+  let lines = [name];
+  if (name.length * base * NAME_EM > room) {
+    const words = name.split(' ');
+    let best = name.length;
+    for (let i = 1; i < words.length; i++) {
+      const two = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
+      const longer = Math.max(two[0].length, two[1].length);
+      if (longer < best) { best = longer; lines = two; }
+    }
+  }
+  const longest = Math.max(...lines.map((l) => l.length));
+  return { lines, size: Math.max(floor, Math.min(base, room / (longest * NAME_EM))) };
+}
+/** A stencilled capital's advance, in ems, tracking included. */
+const NAME_EM = 0.72;
+
+/** The clean face's line of type: what kind of card, in a word. */
+function shortType(data: CardData | undefined): string {
+  if (!data) return '';
+  switch (data.type) {
+    case 'hero': return 'Hero';
+    case 'spell': return `Active · T${data.tier}`;
+    case 'equipment': return `Item · T${data.tier}`;
+    case 'ultimate': return 'Ultimate';
+  }
 }
 
 /** The two sizes a card is printed at, in px. */
@@ -204,9 +252,9 @@ function ArtImg({ src, cardId }: { src: string; cardId: string }) {
   );
 }
 
-function ArtWindow({ data }: { data: CardData | undefined }) {
+function ArtWindow({ data, art }: { data: CardData | undefined; art?: string }) {
   if (!data) return null;
-  if (data.type === 'hero') return <HeroPortrait cardId={data.id} />;
+  if (data.type === 'hero') return <HeroPortrait cardId={data.id} art={art} />;
   if (data.type === 'ultimate') {
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%', background: poster.ground }}>
@@ -242,7 +290,7 @@ export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
   cost: costInPlay, unaffordable = false, hideCost = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
-  holoPalette = 'amber', tilt = false, tapExplains = true,
+  holoPalette = 'amber', tilt = false, tapExplains = true, level, art, clean = false, nameRoom,
 }: Props) {
   const [hover, setHover] = useState(false);
   // Premium-plate flags, read once so the markup below stays declarative.
@@ -272,13 +320,20 @@ export function CardFrame({
 
   // Charcoal frame: art window on top (~55% of the height), an ink type band,
   // then the cream label band with the rules.
+  // A hero with a level wears its level green as its frame (the tile's rule);
+  // a state colour still takes the frame over, as it does on every card.
+  const leveled = isHero && level !== undefined && !stateColor;
   const containerStyle: CSSProperties = {
     width: sz.w,
     height: sz.h,
     borderRadius: 10,
     background: poster.frame,
-    border: `2px solid ${stateColor ?? (lit ? poster.frameLit : poster.edge)}`,
-    boxShadow: stateColor ? `inset 0 0 0 2px ${stateColor}, ${CARD_SHADOW}` : CARD_SHADOW,
+    ...(leveled
+      ? { ...levelFrame(level, 2), boxShadow: `${levelFrameKeylines}, ${CARD_SHADOW}` }
+      : {
+          border: `2px solid ${stateColor ?? (lit ? poster.frameLit : poster.edge)}`,
+          boxShadow: stateColor ? `inset 0 0 0 2px ${stateColor}, ${CARD_SHADOW}` : CARD_SHADOW,
+        }),
     position: 'relative',
     overflow: 'hidden',
     color: poster.ink,
@@ -306,6 +361,92 @@ export function CardFrame({
   const showCost = !isHero && !hideCost && (cost > 0 || cost !== printedCost);
   const showStats = isHero;
 
+  if (clean) {
+    const name = fitNameLines((data?.name ?? cardId).toUpperCase(), (nameRoom ?? sz.w) - 14, 15.5, 11);
+    return (
+      <div
+        ref={foilRef}
+        data-card-face="clean"
+        style={containerStyle}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => { setHover(false); onPointerLeave(); }}
+        onPointerMove={onPointerMove}
+      >
+        {/* The name — cream stencil on an ink band, whole on one or two lines. */}
+        <div data-card-name style={{
+          flexShrink: 0,
+          padding: '6px 6px 5px',
+          background: poster.ink,
+          color: poster.cream,
+          borderBottom: `1px solid ${poster.creamFaint}`,
+          fontFamily: fonts.display,
+          fontSize: name.size,
+          letterSpacing: '0.03em',
+          lineHeight: 1.08,
+          textAlign: 'left',
+        }}>
+          {name.lines.map((l, i) => <div key={i} style={{ whiteSpace: 'nowrap' }}>{l}</div>)}
+        </div>
+
+        {/* The art, filling the card. */}
+        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, overflow: 'hidden', background: poster.ground }}>
+          <ArtWindow data={data} art={art} />
+          <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
+          {/* The cost coin, top-left (the edge a fan leaves showing): red
+              when the player cannot pay it. */}
+          {showCost && (
+            <div data-card-cost style={{
+              position: 'absolute', top: 5, left: 5,
+              width: 32, height: 32,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: unaffordable ? poster.red : poster.ink,
+              border: `1.5px solid ${poster.cream}`,
+              borderRadius: '50%',
+              boxShadow: '0 2px 5px rgba(0, 0, 0, 0.55)',
+              color: poster.cream,
+              fontFamily: fonts.display, fontSize: 18, lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums',
+              zIndex: 5,
+            }}>{cost}</div>
+          )}
+          {/* A hero's attack and HP, where an item's coin is. */}
+          {showStats && !hideStats && (
+            <div style={{ position: 'absolute', top: 5, left: 5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+              <StatPill big icon={<SwordIcon size={13} color={poster.cream} />} value={(data as any).atk} />
+              <StatPill big icon={<HeartIcon size={13} color={poster.stat.hp} />} value={(data as any).hp} />
+            </div>
+          )}
+        </div>
+
+        {/* One line of type along the foot: the kind of card, and its
+            rarity's dot. */}
+        <div style={{
+          flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
+          padding: '4px 6px',
+          background: poster.ink,
+          color: poster.creamDim,
+          fontFamily: fonts.display,
+          fontSize: 12,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          lineHeight: 1.1,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+        }}>
+          <span>{shortType(data)}</span>
+          {!isHero && (
+            <span aria-hidden style={{
+              flexShrink: 0, width: 9, height: 9, borderRadius: '50%',
+              background: rarityInk(rarity), border: `1px solid ${poster.creamFaint}`, boxSizing: 'border-box',
+            }} />
+          )}
+        </div>
+        <CardShine cast={castSheen} />
+      </div>
+    );
+  }
+
   return (
     <div
       ref={foilRef}
@@ -323,7 +464,7 @@ export function CardFrame({
         overflow: 'hidden',
         background: poster.ground,
       }}>
-        <ArtWindow data={data} />
+        <ArtWindow data={data} art={art} />
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
         {holo && holoScope === 'art' && <HoloLayer variant={holo} strength={holoStrength} markScale={holoMarkScale} palette={holoPalette} />}
 
@@ -440,26 +581,40 @@ export function CardFrame({
           {data?.name ?? cardId}
         </div>
 
-        {/* Body text (effect) — Skill / Passive label is inlined as a bold
-            prefix on the same row as the effect description. A hero prints
-            its abilities, skills first, one line each; any other card prints
-            its own text. */}
+        {/* Body text (effect) — the Skill / Passive / Ult label is inlined as
+            a bold prefix on the same row as the effect description, a skill's
+            and the ultimate's with their price in souls. A hero prints its
+            skill or passive, then its ultimate (the button printed on the
+            card: its name, and on a full-size card its text); any other card
+            prints its own text. */}
         {(() => {
-          const lines: { key: string; tag: 'Skill' | 'Passive' | null; body: string }[] = data?.type === 'hero'
-            ? heroAbilities(data).map(({ kind, ability }) => ({ key: ability.id, tag: kind === 'skill' ? 'Skill' : 'Passive', body: ability.text }))
-            : data?.text ? [{ key: 'text', tag: null, body: data.text }] : [];
+          const ult = data?.type === 'hero' ? ultimateCard(data.ult) : undefined;
+          const isHand = size === 'hand';
+          const lines: { key: string; kind: 'skill' | 'passive' | 'ult' | null; tag: string | null; body: string }[] = data?.type === 'hero'
+            ? [
+              ...heroAbilities(data).map(({ kind, ability }) => ({
+                key: ability.id, kind,
+                tag: kind === 'skill' ? `Skill${ability.souls ? ` · ${ability.souls}` : ''}` : 'Passive',
+                body: ability.text,
+              })),
+              // A charged ultimate prints its own price, and its rule on a line of its own under it.
+              ...(ult ? [{ key: ult.id, kind: 'ult' as const, tag: `Ult · ${ult.charged ? 'charged ' : ''}${ultPrice(ult)}`, body: isHand ? ult.name : `${ult.name}: ${ult.text ?? ''}` }] : []),
+              ...(ult?.charged && !isHand ? [{ key: `${ult.id}-charge`, kind: null, tag: null, body: ult.charged.text }] : []),
+            ]
+            : data?.type === 'ultimate' && data.charged
+              ? [{ key: 'text', kind: null, tag: null, body: data.text ?? '' }, { key: 'charge', kind: null, tag: null, body: data.charged.text }]
+              : data?.text ? [{ key: 'text', kind: null, tag: null, body: data.text }] : [];
           if (lines.length === 0) return null;
           // Hand-size cards are 134×188 — give the effect every pixel:
           // tighter line-height, smaller font, full ink for sharper reads.
-          const isHand = size === 'hand';
           const line = (l: (typeof lines)[number]) => (
             <>
               {l.tag && (
                 <span style={{
                   fontWeight: 700,
-                  // Skill in the poster red, Passive in dim ink — both read as
-                  // bold labels and stay clearly distinct at a glance.
-                  color: l.tag === 'Skill' ? poster.red : poster.inkDim,
+                  // Skill in the poster red, Passive in dim ink, Ult in full
+                  // ink — bold labels, clearly distinct at a glance.
+                  color: l.kind === 'skill' ? poster.red : l.kind === 'ult' ? poster.ink : poster.inkDim,
                   marginRight: 5,
                 }}>{l.tag}</span>
               )}
@@ -520,7 +675,7 @@ export function CardFrame({
 }
 
 /** Flat stat chip — ink ground, cream numeral, the icon carries the hue. */
-function StatPill({ icon, value }: { icon: ReactNode; value: number }) {
+function StatPill({ icon, value, big }: { icon: ReactNode; value: number; big?: boolean }) {
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 2,
@@ -528,8 +683,9 @@ function StatPill({ icon, value }: { icon: ReactNode; value: number }) {
       background: poster.ink,
       color: poster.cream,
       borderRadius: 3,
-      fontWeight: 700,
-      fontSize: 12,
+      ...(big ? { border: `1px solid ${poster.creamFaint}`, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)' } : null),
+      fontWeight: big ? 800 : 700,
+      fontSize: big ? 15 : 12,
       lineHeight: 1.2,
       fontVariantNumeric: 'tabular-nums',
     }}>

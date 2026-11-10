@@ -23,21 +23,7 @@ function snap(client: ReturnType<typeof newClient>) {
   return { G: s.G as GameState, ctx: s.ctx as Ctx };
 }
 
-/** Shop by the AI's rule until the shop is closed: every turn opens in its
- *  shop step, where only the shop's moves (and ending the turn) are legal. */
-function shopAsAI(client: ReturnType<typeof newClient>, maxMoves = 12) {
-  for (let i = 0; i < maxMoves; i++) {
-    const { G, ctx } = snap(client);
-    if (ctx.gameover || G.step !== 'shop') return;
-    const best = enumerateAIMoves(G, ctx)[0];
-    if (!best || best.move === 'endTurn') break;
-    (client.moves as any)[best.move](...best.args);
-  }
-  if (!snap(client).ctx.gameover && snap(client).G.step === 'shop') client.moves.closeShop();
-}
-
 function runAITurn(client: ReturnType<typeof newClient>, maxMoves = 12) {
-  shopAsAI(client);
   for (let i = 0; i < maxMoves; i++) {
     const { G, ctx } = snap(client);
     if (ctx.gameover) return;
@@ -63,7 +49,7 @@ function runAITurn(client: ReturnType<typeof newClient>, maxMoves = 12) {
 }
 
 describe('Deadlock TCG engine smoke', () => {
-  it('initializes a match with two full boards and empty hands, turn 1 opening on its shop with the income banked', () => {
+  it('initializes a match with two full boards and, with the tests\' empty decks, empty hands — turn 1 opening with the income banked', () => {
     const c = newClient();
     const { G, ctx } = snap(c);
     // Both sides' tracks stand whole: Guardian, Walker, Patron.
@@ -75,11 +61,11 @@ describe('Deadlock TCG engine smoke', () => {
     expect(G.players['1'].active).not.toBeNull();
     expect(G.players['0'].bench.filter(Boolean).length).toBe(3);
     expect(G.players['1'].bench.filter(Boolean).length).toBe(3);
-    // No deck and no draw: a card enters the hand only by a buy.
+    // Empty decks (configureReadyMatch) draw nothing: no opening hand, no turn draw.
     expect(G.players['0'].hand).toEqual([]);
     expect(G.players['1'].hand).toEqual([]);
-    // After T1 begin, P0 has its first income and stands in the shop step.
-    expect(G.step).toBe('shop');
+    expect(G.players['0'].deck).toEqual([]);
+    // After T1 begin, P0 has its first income.
     expect(G.players['0'].souls).toBe(LANE_INCOME);
     expect(G.players['1'].souls).toBe(0);
     expect(ctx.currentPlayer).toBe('0');
@@ -101,7 +87,7 @@ describe('Deadlock TCG engine smoke', () => {
 
   it('AI heuristic plays at least one move that is not endTurn', () => {
     const c = newClient();
-    passTurn(c); // pass to AI, its shop closed: the act step
+    passTurn(c); // pass to the AI
     const { G, ctx } = snap(c);
     expect(ctx.currentPlayer).toBe('1');
     const moves = enumerateAIMoves(G, ctx);
@@ -115,8 +101,7 @@ describe('Deadlock TCG engine smoke', () => {
       const { ctx } = snap(c);
       if (ctx.gameover) break;
       if (ctx.currentPlayer === '0') {
-        // Player shops as the AI would, then plays the first available high-value option
-        shopAsAI(c);
+        // The player plays the first available high-value option, as the AI would.
         const { G } = snap(c);
         const opts = enumerateAIMoves(G, ctx);
         const best = opts[0];
@@ -132,7 +117,7 @@ describe('Deadlock TCG engine smoke', () => {
     // The structures took real damage (both tracks start whole: a sum under twice a track is a kill's push or a lane's).
     const track = STRUCTURES.reduce((n, [, hp]) => n + hp, 0);
     expect(structureHp(G.players['0']) + structureHp(G.players['1'])).toBeLessThan(2 * track);
-    // The AI never holds a card: whatever it bought, it played.
+    // Nothing came from an empty deck: the hands stay empty.
     expect(G.players['1'].hand).toEqual([]);
   });
 

@@ -17,27 +17,28 @@ import { attack } from './actions/attack';
 import { activate } from './actions/activate';
 import { useSkill } from './actions/useSkill';
 import { moveHero, promoteToActive } from './actions/board';
-import { buy, closeShop, moveItem, sell } from './actions/shop';
-import { playCard } from './actions/playCard';
+import { chooseActive, discard, placeHero, playCard } from './actions/hand';
+import { answerTrigger } from './prompts';
 
 /** What `perform` returns for an action that is not allowed (the adapter maps
  *  it to boardgame.io's INVALID_MOVE). */
 export const INVALID: unique symbol = Symbol('INVALID');
 
 export type Action =
-  // The shop step.
-  | { type: 'buy'; itemId: CardId }
-  | { type: 'sell'; itemIid: string }
-  | { type: 'moveItem'; itemIid: string; toHeroIid: string }
-  | { type: 'closeShop' }
-  // The act step.
+  // The hand.
+  | { type: 'playCard'; cardIid: string; heroIid: string; upgradeId?: CardId; replaceIid?: string }   // an item from the hand onto one of your heroes, for its price (a full hero: the worn item it replaces)
+  | { type: 'placeHero'; cardIid: string; toActive?: boolean; slot?: 1 | 2 | 3 }    // a hero from the hand onto the bench (`slot`, or its first free one; or into an empty Active slot), free
+  | { type: 'discard'; cardIids: string[] }                                        // a draw card's discard, from anywhere in the hand
+  // The board.
   | { type: 'attack'; targetIid?: string }               // no targetIid = the first of `attackTargets`
   | { type: 'useSkill'; heroIid: string; skillId?: AbilityId; targetIid?: string }   // no skillId = the hero's first skill
   | { type: 'activate'; itemIid: string; targetIid?: string }
   | { type: 'moveHero'; fromSlot: 0 | 1 | 2 | 3; toSlot: 0 | 1 | 2 | 3 }
-  // Either step.
-  | { type: 'playCard'; cardIid: string; heroIid: string }   // a card from the hand onto one of your heroes
+  // Owed choices, made from either seat.
+  | { type: 'chooseActive'; cardIid: string }               // the opening: a drafted hero from the deck into the lane
   | { type: 'promoteToActive'; benchIid: string }
+  | { type: 'useTrigger'; heroIid: string; abilityId: AbilityId }   // a trigger prompt's yes: this one of its offers
+  | { type: 'passTrigger' }                                           // a trigger prompt's no
   | { type: 'endTurn' };                         // validity only; the adapter calls events.endTurn()
 
 /** Make `a` as `pid`: INVALID if legality says no (and nothing is touched),
@@ -46,16 +47,17 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
   assertNoCast();
   if (blocked(G, pid, a) !== null) return INVALID;
   switch (a.type) {
-    case 'buy': return buy(G, pid, a.itemId);
-    case 'playCard': return playCard(G, pid, a.cardIid, a.heroIid);
-    case 'sell': return sell(G, pid, a.itemIid);
-    case 'moveItem': return moveItem(G, pid, a.itemIid, a.toHeroIid);
-    case 'closeShop': return closeShop(G);
+    case 'playCard': return playCard(G, pid, a.cardIid, a.heroIid, a.upgradeId, a.replaceIid);
+    case 'placeHero': return placeHero(G, pid, a.cardIid, a.toActive === true, a.slot);
+    case 'discard': return discard(G, pid, a.cardIids);
+    case 'chooseActive': return chooseActive(G, a.cardIid);
     case 'attack': return attack(G, pid, a.targetIid);
     case 'useSkill': return useSkill(G, pid, a.heroIid, a.targetIid, a.skillId);
     case 'activate': return activate(G, pid, a.itemIid, a.targetIid);
     case 'moveHero': return moveHero(G, pid, a.fromSlot, a.toSlot);
     case 'promoteToActive': return promoteToActive(G, a.benchIid);
+    case 'useTrigger': return answerTrigger(G, { heroIid: a.heroIid, abilityId: a.abilityId });
+    case 'passTrigger': return answerTrigger(G);
     case 'endTurn': return; // the adapter ends the turn
   }
 }

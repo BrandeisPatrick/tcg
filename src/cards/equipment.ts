@@ -41,14 +41,8 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'bullet_resist_shredder', name: 'Bullet Resist Shredder', type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_bullet_resist_shredder_proc'], text: "Bearer's attacks apply Bullet Resist −1 for 2 turns." },
 
 
-  // ----- Cooldown family (Compress → Superior → Transcendent Cooldown) -----
-  // Canon cooldown reduction: the bearer's ultimate (and, from Superior up,
-  // its active items) waits fewer own turns after use, never under 1 (the
-  // `cooldownCut` hook). Skills already come back every turn or two. The T4
-  // piece lives in the premium block below. improved_cooldown keeps the item's
-  // old id so saved builds still load; the item is Compress Cooldown now.
-  { id: 'improved_cooldown', name: 'Compress Cooldown', type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_compress_cooldown'], text: "The bearer's ultimate cools down 1 turn faster." },
-  { id: 'superior_cooldown', name: 'Superior Cooldown', type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'improved_cooldown', abilities: ['eff_superior_cooldown'], text: "The bearer's ultimate and active items cool down 1 turn faster." },
+  // The Cooldown family (Compress → Superior → Transcendent Cooldown) is the
+  // deck's draw engine now: three active items in spells.ts.
 
   // ----- Spirit burst line (canon Mystic Burst T1 → Tankbuster T3) -----
   // Mystic Burst (T1 block above) pings the enemy active on every skill. Tankbuster
@@ -93,7 +87,6 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'superior_duration',  name: 'Superior Duration',  type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'duration_extender', abilities: ['eff_superior_duration'],   text: "The bearer's own buffs last 2 turns longer." },
 
   // ----- T4 — premium items (canon T4) -----
-  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'equipment', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'superior_cooldown', abilities: ['eff_transcendent_cooldown'], text: "The bearer's ultimate cools down 2 turns faster, and its active items 1 turn faster." },
   // Crippling Headshot (canon T4 Weapon, built from Weakening Headshot): +2
   // Bullet Power so it reaches its tier (docs/card-design.md, 2026-11-05).
   { id: 'crippling_headshot', name: 'Crippling Headshot', type: 'equipment', rarity: 4, slot: 'weapon', tier: 4, upgradesFrom: 'weakening_headshot', bonus: { atk: 2 }, abilities: ['eff_crippling_headshot'], text: "+2 Bullet Power. Bearer's attacks apply Bullet Resist −2 and Spirit Resist −2 for 2 turns." },

@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { INVALID, perform } from '@/engine/engine';
-import { effectiveAtk, liveBoardCards } from '@/engine/query';
-import type { CardInstance, GameState, PlayerID, StatusInstance } from '@/engine/types';
+import { effectiveAtk, kitCost, liveBoardCards, seatOf } from '@/engine/query';
+import { CARDS_BY_ID } from '@/cards';
+import type { CardInstance, GameState, HeroCard, PlayerID, StatusInstance } from '@/engine/types';
 import { freshReadyGame, giveItem, makeHero } from './_helpers';
 import { newTrack } from '@/engine/map';
 
 // What the AI makes of a position: `evalState` (src/ai/heuristic.ts) prices the
-// statuses a unit carries, the channel it is running and a Rem merged into it.
+// statuses a unit carries, the channel it is running and a Rem riding on it.
 // The AI knows no rules, so these tests read its judgement off the list it
 // returns — passing is scored as the position stands, a play as the position it
 // leaves — on boards staged by hand. P1 is the seat to move; P0 is the rival.
@@ -21,7 +21,7 @@ function standing(G: GameState): number {
   return enumerateAIMoves(G, ctx('1')).find((m) => m.move === 'endTurn')!.score;
 }
 
-const own = (G: GameState) => G.players['1'].active!;   // Abrams: a passive, no skill, 1 attack
+const own = (G: GameState) => G.players['1'].active!;   // Abrams: a passive, no skill, 2 attack
 const foe = (G: GameState) => G.players['0'].active!;    // Haze
 const put = (c: CardInstance, id: string, value: number, duration: number, ramp?: number) => {
   const s: StatusInstance = { id, value, duration };
@@ -88,17 +88,17 @@ describe('AI valuation: a status is worth its magnitude and its turns', () => {
     }
   });
 
-  it('a Sleep that stores a wake-up burst (Naptime) is also worth that damage, halved', () => {
+  it('a Sleep is a Stun for its turns: its value stores no wake-up burst, so it adds nothing to the price', () => {
     const plain = freshReadyGame();
-    put(own(plain), 'sleep', 0, 2);
-    const burst = freshReadyGame();
-    put(burst.players['1'].active!, 'sleep', 6, 2);
-    expect(standing(plain) - standing(burst)).toBeCloseTo(6); // hvalue −2 × 6 × ½
+    put(own(plain), 'sleep', 1, 2);
+    const big = freshReadyGame();
+    put(own(big), 'sleep', 6, 2);
+    expect(standing(plain) - standing(big)).toBeCloseTo(0);
     const theirs = freshReadyGame();
     put(foe(theirs), 'sleep', 6, 2);
     const theirsPlain = freshReadyGame();
-    put(foe(theirsPlain), 'sleep', 0, 2);
-    expect(standing(theirs) - standing(theirsPlain)).toBeCloseTo(6);
+    put(foe(theirsPlain), 'sleep', 1, 2);
+    expect(standing(theirs) - standing(theirsPlain)).toBeCloseTo(0);
   });
 });
 
@@ -162,7 +162,7 @@ describe('AI valuation: a position is worth to one seat what it costs the other'
   });
 });
 
-describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
+describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Tag Along and the lane', () => {
   /** P1's board with Rem on slot 1 of the bench and nothing else there. */
   function remGame() {
     const G = freshReadyGame();
@@ -171,41 +171,122 @@ describe('AI valuation: a merged Rem is a hero on the board, not gear', () => {
     return G;
   }
 
-  it('merging into a healthy ally is not the loss of a hero', () => {
+  /** Merge `rem` into `bearer` by hand, as the old Lil Helpers did (no hero's
+   *  skill merges now; the engine's merge machinery and the AI's reading of it
+   *  remain): out of her bench slot, onto the bearer's `attached`, the max HP
+   *  she grants (and the HP that fills it) on him. */
+  function mergeByHand(G: GameState, rem: CardInstance, bearer: CardInstance, hpBuff: number) {
+    const ps = G.players[seatOf(rem)];
+    const idx = ps.bench.findIndex((b) => b === rem);
+    if (idx >= 0) ps.bench[idx] = null;
+    bearer.hpMax += hpBuff;
+    bearer.hp += hpBuff;
+    rem.zone = 'equipment';
+    rem.attachedTo = bearer.iid;
+    rem.remMergeTurnsLeft = 3;
+    rem.remMergeHpBuff = hpBuff;
+    (bearer.attached ??= []).push(rem);
+  }
+
+  it('merging into a healthy ally (set by hand) is not the loss of a hero', () => {
     const G = remGame();
     const before = standing(G);
     const rem = G.players['1'].bench[0]!;
-    G.players['1'].souls = 1;
-    expect(perform(G, '1', { type: 'useSkill', heroIid: rem.iid, targetIid: own(G).iid })).not.toBe(INVALID);
+    mergeByHand(G, rem, own(G), 1);
     expect(liveBoardCards(G.players['1']).includes(rem)).toBe(false); // she left the bench…
     // …and the position gained what the merge gave the bearer (+1 max HP, 2 a point), not lost her.
     expect(standing(G) - before).toBeCloseTo(2);
   });
 
-  it("the rival's merged Rem is still one of its heroes", () => {
+  it("the rival's merged Rem (set by hand) is still one of its heroes", () => {
     const G = freshReadyGame();
     const theirs = G.players['0'];
     const rem = makeHero('hero_rem', '0', 'bench', 3);
     theirs.bench[2] = rem;
     const before = standing(G);
-    expect(perform(G, '0', { type: 'useSkill', heroIid: rem.iid, targetIid: foe(G).iid })).not.toBe(INVALID);
+    mergeByHand(G, rem, foe(G), 1);
     expect(liveBoardCards(theirs).includes(rem)).toBe(false);
     // The rival gained the HP she granted (+1 max HP, 2 a point, so −2 here), not lost a hero.
     expect(standing(G) - before).toBeCloseTo(-2);
   });
 
-  it('merges Rem into a hurt Active rather than passing it by', () => {
+  it('uses Rem\'s Tag Along on a hurt Active, when it can pay for it, rather than passing it by', () => {
     const G = remGame();
     const ai = G.players['1'];
-    ai.souls = 1;
+    const rem = ai.bench[0]!;
+    ai.souls = kitCost(rem, 'skill_rem');
     own(G).hp = 2;
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect(best.move).toBe('useSkill');
-    expect(best.args[0]).toBe(ai.bench[0]!.iid);
+    expect(best.args[0]).toBe(rem.iid);
+    expect(best.args[1]).toBe(own(G).iid);
+  });
+
+  it('a ride (Tag Along, made through the engine) is not the loss of Rem, nor of what she wears', () => {
+    const G = remGame();
+    const ai = G.players['1'];
+    const rem = ai.bench[0]!;
+    giveItem(G, rem, 'extra_spirit');
+    ai.souls = kitCost(rem, 'skill_rem');
+    const ride = enumerateAIMoves(G, ctx('1'), true).find((m) => m.move === 'useSkill' && m.args[0] === rem.iid);
+    // Abrams at full HP: the ride heals nothing, so all it costs is the 2 souls it pays.
+    const pass = enumerateAIMoves(G, ctx('1'), true).find((m) => m.move === 'endTurn')!;
+    expect(ride).toBeDefined();
+    expect(pass.score - ride!.score).toBeLessThan(2 * 0.3 + 1); // its souls, give or take the swing
+    expect(enumerateAIMoves(G, ctx('1'))[0].args[0]).not.toBe(rem.iid); // and it is not worth making
+  });
+
+  it('uses Tag Along on a hurt bench ally too', () => {
+    const G = remGame();
+    const ai = G.players['1'];
+    const rem = ai.bench[0]!;
+    const kelvin = ai.bench[1] = makeHero('hero_kelvin', '1', 'bench', 2);
+    kelvin.hp = 1;
+    ai.souls = kitCost(rem, 'skill_rem');
+    const best = enumerateAIMoves(G, ctx('1'))[0];
+    expect([best.move, best.args[0], best.args[1]]).toEqual(['useSkill', rem.iid, kelvin.iid]);
+  });
+
+  it('pulls Rem out of a lane she is losing with Tag Along, though no ally needs the heal', () => {
+    const G = freshReadyGame();
+    const ai = G.players['1'];
+    const rem = makeHero('hero_rem', '1', 'active', 0);
+    ai.active = rem;
+    ai.souls = kitCost(rem, 'skill_rem');
+    foe(G).atkMod = 4; // the rival's Haze would fell her with one swing
+    for (const b of ai.bench) expect(b!.hp).toBe(b!.hpMax);
+    const best = enumerateAIMoves(G, ctx('1'))[0];
+    expect(best.move).toBe('useSkill');
+    expect(best.args[0]).toBe(rem.iid);
+    expect(best.args.length).toBe(2); // her first skill, Tag Along, on an ally (Naptime would be named)
+    expect(ai.bench.map((b) => b!.iid)).toContain(best.args[1]);
+    // In a lane she is not losing, with nobody hurt, she stays and fights.
+    const H = freshReadyGame();
+    const h = H.players['1'];
+    const calm = makeHero('hero_rem', '1', 'active', 0);
+    h.active = calm;
+    h.souls = kitCost(calm, 'skill_rem');
+    H.players['0'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 }); // the rival's Active cannot swing
+    expect(enumerateAIMoves(H, ctx('1'))[0].args[0]).not.toBe(calm.iid);
+  });
+
+  it('puts Rem straight into an empty lane from its hand', () => {
+    const G = freshReadyGame();
+    G.turnNumber = 3; // P1's turn: the hand's plays are its own turn's
+    const ai = G.players['1'];
+    ai.active = null;
+    ai.bench = [null, null, null];
+    const rem = makeHero('hero_rem', '1', 'hand', 0);
+    rem.slot = undefined;
+    ai.hand.push(rem);
+    const best = enumerateAIMoves(G, ctx('1'))[0];
+    expect(best.move).toBe('placeHero');
+    expect(best.args[0]).toBe(rem.iid);
+    expect(best.args[1]).toBe(true); // toActive
   });
 });
 
-describe('AI valuation: control items and channel ultimates get used', () => {
+describe('AI valuation: control items and ultimates get used', () => {
   /** P1 whose Active wears the active item `cardId` alone, ready to use, and
    *  nobody on the bench to use anything else. */
   function wearing(cardId: string) {
@@ -235,15 +316,17 @@ describe('AI valuation: control items and channel ultimates get used', () => {
     });
   }
 
-  /** P1 whose `hero` (Level 2: its ultimate unlocked) stands in `slot`, wearing nothing, and nobody else on the bench. */
+  /** P1 whose `hero` (Level 2: its ultimate unlocked) stands in `slot`, wearing
+   *  nothing, and nobody else on the bench, with the souls its ultimate costs
+   *  (`kitCost`: its size's) and no more. */
   function unlocked(hero: string, slot: 'active' | 'bench' = 'active') {
     const G = freshReadyGame();
     const ai = G.players['1'];
     ai.bench = [null, null, null];
-    ai.souls = 0; // ultimates cost nothing
     const h = makeHero(hero, '1', slot, slot === 'active' ? 0 : 1);
     h.level = 2;
     if (slot === 'active') ai.active = h; else ai.bench[0] = h;
+    ai.souls = kitCost(h, (CARDS_BY_ID[hero] as HeroCard).ult);
     return { G, h };
   }
   const usesUlt = (G: GameState, h: CardInstance, ult: string) => {
@@ -253,7 +336,7 @@ describe('AI valuation: control items and channel ultimates get used', () => {
     expect(best.args[2], ult).toBe(ult);
   };
 
-  it('casts Singularity, a channel, once Dynamo has unlocked it', () => {
+  it('casts Singularity once Dynamo has unlocked it and can pay for it', () => {
     const { G, h } = unlocked('hero_dynamo');
     usesUlt(G, h, 'eff_ult_dynamo');
   });
@@ -265,19 +348,18 @@ describe('AI valuation: control items and channel ultimates get used', () => {
     }
   });
 
-  it('casts Naptime (a Sleep with a wake-up burst, from the bench) and Eternal Night (two Silences)', () => {
+  it('casts Naptime (a Sleep, from the bench) and Eternal Night (damage, and +1 damage taken)', () => {
     const rem = unlocked('hero_rem', 'bench');
     usesUlt(rem.G, rem.h, 'eff_ult_rem');
     const drifter = unlocked('hero_drifter');
     usesUlt(drifter.G, drifter.h, 'eff_ult_drifter');
   });
 
-  it('uses an ultimate it has borrowed (Sinclair\'s copy), free', () => {
+  it('casts Audience Participation, Sinclair\'s copy of the rival Active\'s ultimate, when he can pay for it', () => {
     const { G, h } = unlocked('hero_sinclair');
-    h.skillUsedThisTurn = false;
-    h.cooldowns = { skill_sinclair: 1, eff_ult_sinclair: 2 }; // nothing else of its own to use
-    h.borrowedUlt = 'eff_ult_lash';
-    usesUlt(G, h, 'eff_ult_lash');
+    h.cooldowns = { skill_sinclair: 1 }; // nothing else of its own to use
+    G.players['0'].active = makeHero('hero_lash', '0', 'active', 0); // Death Slam to copy
+    usesUlt(G, h, 'eff_ult_sinclair');
   });
 
   it('still sees lethal first, whatever a status is worth', () => {

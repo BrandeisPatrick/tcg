@@ -1,5 +1,15 @@
 # Ultimate Design — Canon → TCG Translation
 
+> **Superseded, 2026-11-09:** the 19 heroes are rebuilt to [hero-design.md](hero-design.md) on
+> `deck-and-heroes` — the ultimate is a button on the hero card, costs 4, 8 or 12 souls by size and
+> waits 3 turns, and every ultimate below is replaced by the one in its section 8. What follows is
+> the history of the ultimates before that rebuild.
+>
+> Earlier status, 2026-11-09: this describes the ultimates as built today. The hero redesign proposal in
+> [hero-design.md](hero-design.md) replaces these rules when heroes are rebuilt: simple ultimates
+> (one or two effects, 15 words or fewer), no channels, soul costs of 4, 8 or 12, and charged
+> ultimates (Victor, Silver) that cost more but get cheaper as the hero takes or deals damage.
+
 Each ultimate is anchored to its **canonical Deadlock ability** (the in-game "4"),
 then translated to a TCG effect and costed. Source for canon: the official
 Deadlock wiki (https://deadlock.wiki).

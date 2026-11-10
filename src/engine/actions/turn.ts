@@ -11,8 +11,8 @@ import { cardName } from '@/cards';
 import { tickStartOfTurn, tickEndOfTurnCC, clearTurnFlags, tickCastingPulses, tickRemMerges, tickCooldowns } from '../statusOps';
 import { fallToBoss, resolve } from '../death';
 import {
-  attackPower, comebackBonus, findCardOnBoard, heroData, heroesOf, isRespawning, liveBoardCards, otherPlayer, standingBoss,
-  standingVerdict, structureHp, wornItems,
+  attackPower, fallPending, findCardOnBoard, heroData, isRespawning, liveBoardCards, otherPlayer, standingBoss,
+  standingVerdict, structureHp,
 } from '../query';
 import { endsLastRound, ownTurn, pushMultiplier, round, secondMover } from '../rounds';
 import { pushLog } from '../log';
@@ -21,8 +21,9 @@ import { fireTriggers, type Trigger } from '../triggers';
 import { grantExp } from '../expSystem';
 import { damageUnit } from '../damage';
 import { lapseRevives, pushStructures, riseBoss } from '../map';
+import { drawCards, heroToHand } from '../deck';
 import {
-  BOSS_RETALIATION, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, LANE_INCOME, ROUND_CAP, SECOND_MOVER_FIRST_INCOME_BONUS,
+  BOSS_RETALIATION, DRAW_PER_TURN, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, LANE_INCOME, ROUND_CAP, SECOND_MOVER_FIRST_INCOME_BONUS,
 } from '../constants';
 
 /** Fire a turn-edge trigger for every living hero of `pid`: the hero's own
@@ -34,20 +35,18 @@ function fireBoardTriggers(G: GameState, pid: PlayerID, trigger: Trigger) {
   }
 }
 
-/** Souls `pid` collects at the start of its own turn: the lane's income, the
- *  comeback a trailing side is owed (`comebackBonus`, read before the income
- *  lands), and the second mover's bonus on its first turn. */
-function income(G: GameState, pid: PlayerID): { total: number; comeback: number; seat: number } {
-  const comeback = comebackBonus(G, pid);
+/** Souls `pid` collects at the start of its own turn: the lane's income (the
+ *  only souls there are) and the second mover's bonus on its first turn. */
+function income(G: GameState, pid: PlayerID): { total: number; seat: number } {
   const seat = pid === secondMover(G) && ownTurn(G, pid) === 1 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
-  return { total: LANE_INCOME + comeback + seat, comeback, seat };
+  return { total: LANE_INCOME + seat, seat };
 }
 
 /**
- * Tick down respawn timers on heroes that are currently corpses in their slots.
- * On reaching 0 the hero returns to full HP in the same slot, its level and
- * its items intact (what an item gives is read off it, or sits on the hero's
- * modifiers: nothing to put back).
+ * Tick down the wait of `pid`'s heroes that are corpses in their slots. On
+ * reaching 0 the hero leaves the board for the hand, at full HP, its level and
+ * its items intact (`heroToHand`), and its slot is left empty — the state-based
+ * pass then fills an empty Active slot from the bench.
  */
 function tickRespawn(G: GameState, pid: PlayerID) {
   const ps = G.players[pid];
@@ -57,29 +56,23 @@ function tickRespawn(G: GameState, pid: PlayerID) {
 
   for (const hero of corpses) {
     hero.respawnTurnsLeft = (hero.respawnTurnsLeft ?? 0) - 1;
-    if (hero.respawnTurnsLeft <= 0) {
-      hero.respawnTurnsLeft = undefined;
-      hero.hp = hero.hpMax;
-      hero.exhausted = false;
-      pushLog(G, `${cardName(hero.cardId)} respawned.`);
-      pushFx(G, { kind: 'revive', iid: hero.iid });
-    }
+    if (hero.respawnTurnsLeft <= 0) heroToHand(G, ps, hero);
   }
 }
 
-/** The start of `pid`'s turn — its Income, before the shop opens. `ctxTurn` is
- *  boardgame.io's turn count, which includes the draft's turns; the engine turn
- *  is that minus the offset captured when the draft finished. In order: the
- *  turn's flags reset and the step is the shop, the Mid-Boss rises if its
- *  round has come, the start-of-turn ticks, cooldowns (heroes' and items') and
- *  Rem's merge, the income, respawns, the start-of-turn passives and gear, and
- *  the state-based pass. */
+/** The start of `pid`'s turn — its Income and its draw. `ctxTurn` is
+ *  boardgame.io's turn count, which includes the draft's turns; the engine
+ *  turn is that minus the offset captured when the draft finished. In order:
+ *  the turn's flags reset, the Mid-Boss rises if its round has come, the
+ *  start-of-turn ticks, cooldowns (heroes' and items') and Rem's ride, the
+ *  income, fallen heroes whose wait is over going back to the hand, the draw
+ *  (DRAW_PER_TURN; skipped into a full hand, nothing from an empty deck), the
+ *  start-of-turn passives and gear, and the state-based pass. */
 export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   if (G.draft) return;
   const ps = G.players[pid];
   const realTurn = ctxTurn - G.draftTurnsOffset;
   G.turnNumber = realTurn;
-  G.step = 'shop';
   G.attackUsed = false;
   G.retreatUsed = false;
   G.bossAttacker = null;
@@ -87,18 +80,18 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   tickStartOfTurn(G, ps);
   // Cooldowns count the owner's turns, so they come down here too (on a corpse as well).
   tickCooldowns(ps);
-  // Count down Rem's "Lil Helpers" merges; expired ones return her to bench.
+  // Count down a riding Rem (Tag Along); a ride that is over puts her back on the bench.
   tickRemMerges(G, ps);
   // Income: souls accumulate — nothing banked is lost, and the lane pays on
   // top of it every own turn, the first included.
   const paid = income(G, pid);
   ps.souls += paid.total;
-  const extras = [paid.comeback ? `+${paid.comeback} comeback` : '', paid.seat ? `+${paid.seat} second mover` : ''].filter(Boolean);
-  pushLog(G, `P${pid} +${paid.total} Souls (income${extras.length ? `, ${extras.join(', ')}` : ''}).`);
-  // Respawn ticks ONLY for the player whose turn is starting, so a corpse
-  // decrements once per round (on its owner's turn): a timer of N is N of the
-  // owner's turns of downtime (`respawnTimer`, by the round it fell in).
+  pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}).`);
+  // The wait ticks ONLY for the player whose turn is starting, so a corpse
+  // counts down once per round (on its owner's turn): a timer of N is N of the
+  // owner's turns of downtime (RESPAWN_TURNS).
   tickRespawn(G, pid);
+  drawCards(G, pid, DRAW_PER_TURN);
   fireBoardTriggers(G, pid, 'startOfTurn');
   resolve(G);
   pushLog(G, `--- Turn ${realTurn}, player ${pid} ---`);
@@ -133,21 +126,16 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   bossStrikesBack(G, pid);
   // Hero leveling: the lane is where a hero grows. The Active earns more for
   // standing the turn than a bench hero does.
+  // (A hero whose fall waits on a trigger prompt — felled in this End step —
+  // stood no turn.)
   const ps = G.players[pid];
   for (const c of liveBoardCards(ps)) {
-    if (heroData(c)) grantExp(G, c, c === ps.active ? EXP_PER_TURN_ACTIVE : EXP_PER_TURN_BENCH);
+    if (heroData(c) && c.hp > 0) grantExp(G, c, c === ps.active ? EXP_PER_TURN_ACTIVE : EXP_PER_TURN_BENCH);
   }
   // Strip action-denying CC now that this player has spent their turn under
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
   tickEndOfTurnCC(G, G.players[pid]);
   clearTurnFlags(G.players[pid]);
-  // An upgrade bought this turn can no longer be sold back for its component.
-  for (const hero of heroesOf(ps)) {
-    for (const it of wornItems(hero)) {
-      if (it.replaced) it.replaced = undefined;
-      if (it.replacedFrom) it.replacedFrom = undefined;
-    }
-  }
   // What the End step felled (a Naptime wake-up burst) pays and pushes now.
   resolve(G);
   lapseRevives(G, pid);
@@ -168,7 +156,8 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
 function pushIntoEmptyLane(G: GameState, pid: PlayerID) {
   const rival = otherPlayer(pid);
   const standing = (c: CardInstance) => !isRespawning(c) && c.hp > 0;
-  if (liveBoardCards(G.players[rival]).some(standing)) return;
+  // A rival hero whose fall waits on a trigger prompt has not fallen yet.
+  if (liveBoardCards(G.players[rival]).some((c) => standing(c) || fallPending(G, c))) return;
   const active = G.players[pid].active;
   if (!active || !standing(active)) return;
   const power = attackPower(active).total;

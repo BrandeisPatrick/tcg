@@ -6,7 +6,8 @@ import { addStatus, tickStartOfTurn, cleanseDebuffs } from '@/engine/statusOps';
 import { effectiveAtk } from '@/engine/query';
 import { STATUSES_BY_ID } from '@/statuses';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame } from './_helpers';
+import { DJINN_CAP } from '@/engine/constants';
+import { freshReadyGame, makeHero } from './_helpers';
 
 function freshG(): GameState {
   return freshReadyGame();
@@ -142,25 +143,36 @@ describe('status: unstoppable', () => {
     expect(t.statuses.some((s) => s.id === 'bullet_resist_down')).toBe(true);
   });
 
-  it('blocks all damage (attack / spirit / pure) while up', () => {
+  it('no longer blocks damage (attack / spirit / pure): that is Invulnerable, which takes none and shows the immune fx', () => {
     const G = freshG();
     const t = G.players['1'].active!;
+    t.hp = t.hpMax = 30;
     addStatus(G, t, 'unstoppable', 1, 99);
-    const hpBefore = t.hp;
     damageUnit(G, t, 5, 'attack');
     damageUnit(G, t, 5, 'spirit');
     damageUnit(G, t, 5, 'pure');
-    expect(t.hp).toBe(hpBefore);
+    expect(t.hp).toBe(30 - 15);
+    const u = G.players['1'].bench[0]!;
+    u.hp = u.hpMax = 30;
+    addStatus(G, u, 'invulnerable', 1, 99);
+    damageUnit(G, u, 5, 'attack');
+    damageUnit(G, u, 5, 'spirit');
+    damageUnit(G, u, 5, 'pure');
+    expect(u.hp).toBe(30);
+    expect(G.fx.some((e) => e.kind === 'immune' && e.iid === u.iid)).toBe(true);
   });
 
-  it('blocks bleed ticks at start of turn', () => {
+  it('does not block bleed ticks at start of turn; Invulnerable does', () => {
     const G = freshG();
     const t = G.players['0'].active!;
+    t.hp = t.hpMax = 30;
     addStatus(G, t, 'bleed', 2, 3);
     addStatus(G, t, 'unstoppable', 1, 99);
-    const hpBefore = t.hp;
     tickStartOfTurn(G, G.players['0']);
-    expect(t.hp).toBe(hpBefore);
+    expect(t.hp).toBe(30 - 2);
+    addStatus(G, t, 'invulnerable', 1, 99);
+    tickStartOfTurn(G, G.players['0']);
+    expect(t.hp).toBe(30 - 2);
   });
 });
 
@@ -184,7 +196,7 @@ describe('status: weapon_power', () => {
 });
 
 describe('status: spirit_power', () => {
-  it('adds to skill scaling (Lady Geist skill: 3 + SPI total)', async () => {
+  it("adds to skill scaling (Lady Geist's Essence Bomb: 1 + SPI total)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -197,8 +209,8 @@ describe('status: spirit_power', () => {
     target.hpMax = 20; target.hp = 20;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    // base 3 + (spiritMod 1 + spirit_power 3) = 7
-    expect(hpBefore - target.hp).toBe(7);
+    // base 1 + (spiritMod 1 + spirit_power 3) = 5
+    expect(hpBefore - target.hp).toBe(5);
   });
 });
 
@@ -352,26 +364,35 @@ describe('combined interactions', () => {
     expect(t.statuses.find((s) => s.id === 'bullet_resist')?.value).toBe(2);
   });
 
-  it('vulnerable + unstoppable: unstoppable wins (damage = 0)', () => {
+  it('vulnerable + invulnerable: invulnerable wins (damage = 0); with unstoppable the vulnerable hit lands', () => {
     const G = freshG();
     const t = G.players['1'].active!;
     addStatus(G, t, 'bullet_resist_down', 1, 99);
-    addStatus(G, t, 'unstoppable', 1, 99);
+    addStatus(G, t, 'invulnerable', 1, 99);
     const hpBefore = t.hp;
-    damageUnit(G, t, 4, 'attack'); // would be 6 with vulnerable, but unstoppable blocks
+    damageUnit(G, t, 4, 'attack'); // would be 5 with vulnerable, but invulnerable blocks
     expect(t.hp).toBe(hpBefore);
+    const u = G.players['1'].bench[0]!;
+    u.hp = u.hpMax = 30;
+    addStatus(G, u, 'bullet_resist_down', 1, 99);
+    addStatus(G, u, 'unstoppable', 1, 99);
+    damageUnit(G, u, 4, 'attack');
+    expect(u.hp).toBe(30 - 5);
   });
 
-  it('unstoppable blocks new CC and zeroes pre-existing damage debuffs', () => {
+  it('unstoppable blocks new CC, but a pre-existing bleed still ticks; invulnerable zeroes it', () => {
     const G = freshG();
     const t = G.players['0'].active!;
+    t.hp = t.hpMax = 30;
     addStatus(G, t, 'bleed', 2, 3); // applied before Unstoppable
     addStatus(G, t, 'unstoppable', 1, 99);
     addStatus(G, t, 'stun', 1, 2); // blocked outright
     expect(t.statuses.some((s) => s.id === 'stun')).toBe(false);
-    const hpBefore = t.hp;
     tickStartOfTurn(G, G.players['0']);
-    expect(t.hp).toBe(hpBefore); // bleed still in status list, but damage = 0
+    expect(t.hp).toBe(30 - 2); // Unstoppable is crowd control alone
+    addStatus(G, t, 'invulnerable', 1, 99);
+    tickStartOfTurn(G, G.players['0']);
+    expect(t.hp).toBe(30 - 2); // bleed still in status list, but damage = 0
     expect(t.statuses.some((s) => s.id === 'bleed')).toBe(true);
   });
 });
@@ -399,13 +420,23 @@ describe('status texts match the rules', () => {
     expect(G.fx.some((e) => e.kind === 'status')).toBe(false);
   });
 
-  it("Djinn's Mark detonates for 3 spirit damage per stack", () => {
+  it(`Djinn's Mark detonates at ${DJINN_CAP} marks, for 4 + Mirage's Spirit, and fades on expiry without going off`, async () => {
     const G = freshG();
     const t = G.players['1'].active!;
     t.hp = t.hpMax = 30;
     addStatus(G, t, 'djinns_mark', 2, 1);
     tickStartOfTurn(G, G.players['1']);
-    expect(30 - t.hp).toBe(6); // 2 stacks x 3
-    expect(desc('djinns_mark')).toContain('3 spirit dmg per stack');
+    expect(t.hp).toBe(30); // no detonation on expiry
+    expect(t.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
+    expect(desc('djinns_mark')).toContain(`At ${DJINN_CAP} marks they detonate: 4 spirit damage + Mirage's Spirit Power.`);
+    // Mirage's swings put the marks on; the one that makes DJINN_CAP sets them all off.
+    const { ABILITIES_BY_ID } = await import('@/abilities');
+    const mirage = makeHero('hero_mirage', '0', 'active', 0);
+    mirage.spiritMod = 1;
+    for (let i = 1; i < DJINN_CAP; i++) ABILITIES_BY_ID.passive_mirage_djinns_mark.run(G, { movingPlayer: '0' }, { source: mirage, target: t });
+    expect(t.hp).toBe(30);
+    ABILITIES_BY_ID.passive_mirage_djinns_mark.run(G, { movingPlayer: '0' }, { source: mirage, target: t });
+    expect(t.hp).toBe(30 - (4 + 1));
+    expect(t.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
   });
 });

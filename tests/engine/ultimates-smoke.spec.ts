@@ -3,7 +3,7 @@ import { DeadlockGame } from '@/engine/game';
 import { ULTIMATES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { addStatus, tickCastingPulses } from '@/engine/statusOps';
-import { effectiveAtk, kitAbilityIds } from '@/engine/query';
+import { abilityAim, effectiveAtk, isBlocked, kitAbilityIds } from '@/engine/query';
 import { damageUnit } from '@/engine/damage';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 
@@ -73,61 +73,77 @@ describe('ultimate-specific behaviour', () => {
     expect(enemy.hp).toBeLessThanOrEqual(0);
   });
 
-  it('Vindicta deals 5 to a healthy target, 9 below half', () => {
+  it('Vindicta\'s Assassinate deals {sp:8} to any enemy, bench too', () => {
     const G = freshG('hero_vindicta');
-    const enemy = G.players['1'].active!;
-    const full = enemy.hpMax;
+    const enemy = G.players['1'].bench[0]!;
+    enemy.hpMax = 20; enemy.hp = 20;
     getAbility('eff_ult_vindicta')!.run(G, { movingPlayer: '0' }, { target: enemy });
-    expect(full - enemy.hp).toBe(5);
+    expect(20 - enemy.hp).toBe(8); // run bare: no caster's Spirit on it
   });
 
-  it('Rem applies Sleep (2t) carrying a 6 wake-up burst', () => {
+  it('Rem\'s Naptime applies Sleep for 2 turns: a Stun, with no wake-up burst', () => {
     const G = freshG('hero_rem');
     const enemy = G.players['1'].active!;
     getAbility('eff_ult_rem')!.run(G, { movingPlayer: '0' }, { target: enemy });
     const sleep = enemy.statuses.find((s) => s.id === 'sleep');
-    expect(sleep?.value).toBe(6);
+    expect(sleep?.value).toBe(1);
     expect(sleep?.duration).toBe(2);
+    expect(isBlocked(enemy, 'attack')).toBe(true);
+    expect(isBlocked(enemy, 'skill')).toBe(true);
   });
 
-  it('Sleep wakes and deals its burst when damaged', () => {
+  it('Sleep holds through damage: the sleeper takes only the hit and stays asleep', () => {
     const G = freshG();
     const enemy = G.players['1'].active!;
     enemy.hpMax = 50; enemy.hp = 50;
-    addStatus(G, enemy, 'sleep', 6, 2);
-    damageUnit(G, enemy, 1, 'spirit'); // 1 + 6 burst = 7
-    expect(enemy.statuses.find((s) => s.id === 'sleep')).toBeUndefined();
-    expect(50 - enemy.hp).toBe(7);
+    addStatus(G, enemy, 'sleep', 1, 2);
+    damageUnit(G, enemy, 1, 'spirit');
+    expect(enemy.statuses.find((s) => s.id === 'sleep')?.duration).toBe(2);
+    expect(50 - enemy.hp).toBe(1);
   });
 
-  it('Sinclair borrows the enemy Active\'s ultimate as a one-shot kit ability (no card of it appears anywhere)', () => {
+  it('Sinclair casts the enemy Active\'s ultimate at once and keeps no copy (no card of it appears anywhere)', () => {
     const G = freshG('hero_sinclair', 'hero_dynamo');
     const sinclair = G.players['0'].active!;
+    const enemies = [G.players['1'].active, ...G.players['1'].bench].filter(Boolean) as CardInstance[];
     getAbility('eff_ult_sinclair')!.run(G, { movingPlayer: '0' }, { source: sinclair });
-    expect(sinclair.borrowedUlt).toBe('eff_ult_dynamo');
-    expect(kitAbilityIds(sinclair)).toContain('eff_ult_dynamo');
+    // Singularity, now: every enemy stunned.
+    for (const e of enemies) expect(e.statuses.some((s) => s.id === 'stun'), e.cardId).toBe(true);
+    expect(kitAbilityIds(sinclair)).not.toContain('eff_ult_dynamo');
     expect(ultCardsOnBoard(G, '0')).toEqual([]);
   });
 
-  it('Sinclair cannot borrow his own ultimate', () => {
+  it('Sinclair cannot copy another Sinclair\'s ultimate: it has no target and does nothing', () => {
     const G = freshG('hero_sinclair', 'hero_sinclair');
     const sinclair = G.players['0'].active!;
-    getAbility('eff_ult_sinclair')!.run(G, { movingPlayer: '0' }, { source: sinclair });
-    expect(sinclair.borrowedUlt).toBeUndefined();
+    const ult = getAbility('eff_ult_sinclair')!;
+    expect(abilityAim(G, '0', sinclair, ult)).toBeNull();
+    const enemies = [G.players['1'].active, ...G.players['1'].bench].filter(Boolean) as CardInstance[];
+    const before = enemies.map((e) => ({ hp: e.hp, statuses: e.statuses.length }));
+    ult.run(G, { movingPlayer: '0' }, { source: sinclair });
+    expect(enemies.map((e) => ({ hp: e.hp, statuses: e.statuses.length }))).toEqual(before);
+    expect(sinclair.statuses).toEqual([]);
   });
 
-  it('Mirage repositions off Active and gains Shield 3', () => {
+  it('Mirage\'s Traveler swaps him with the bench ally picked, and both gain Shield 2', () => {
     const G = freshG('hero_mirage');
-    getAbility('eff_ult_mirage')!.run(G, { movingPlayer: '0' }, {});
-    const mirage = [G.players['0'].active, ...G.players['0'].bench].find((c) => c?.cardId === 'hero_mirage')!;
-    expect(mirage.statuses.find((s) => s.id === 'shield')?.value).toBe(3);
-    expect(G.players['0'].active?.cardId).not.toBe('hero_mirage');
+    const mirage = G.players['0'].active!;
+    const ally = G.players['0'].bench[0]!;
+    getAbility('eff_ult_mirage')!.run(G, { movingPlayer: '0' }, { source: mirage, target: ally });
+    expect(G.players['0'].active).toBe(ally);
+    expect(G.players['0'].bench).toContain(mirage);
+    expect(mirage.statuses.find((s) => s.id === 'shield')?.value).toBe(2);
+    expect(ally.statuses.find((s) => s.id === 'shield')?.value).toBe(2);
   });
 
-  it('Dynamo begins channeling Singularity (heavy casting lockout)', () => {
+  it('Dynamo\'s Singularity is instant, no channel; a heavy channel (set directly) still locks out attacks', () => {
     const G = freshG('hero_dynamo');
     getAbility('eff_ult_dynamo')!.run(G, { movingPlayer: '0' }, {});
     const dynamo = [G.players['0'].active, ...G.players['0'].bench].find((c) => c?.cardId === 'hero_dynamo')!;
+    expect(dynamo.statuses.find((s) => s.id === 'casting')).toBeUndefined();
+    expect(G.players['1'].active!.statuses.some((s) => s.id === 'stun')).toBe(true);
+    // The channel mechanic stays in the engine, unused by heroes.
+    addStatus(G, dynamo, 'casting', 3, 3);
     const casting = dynamo.statuses.find((s) => s.id === 'casting');
     expect(casting?.value).toBe(3);
     expect(casting?.duration).toBe(3);
@@ -135,12 +151,13 @@ describe('ultimate-specific behaviour', () => {
     expect(effectiveAtk(dynamo)).toBe(0);
   });
 
-  it('a casting pulse hits the whole enemy board at end of turn', () => {
+  it('a casting pulse (a channel set directly) hits the whole enemy board at end of turn', () => {
     const G = freshG('hero_dynamo');
-    getAbility('eff_ult_dynamo')!.run(G, { movingPlayer: '0' }, {});
+    const dynamo = G.players['0'].active!;
+    addStatus(G, dynamo, 'casting', 3, 3);
     const enemies = [G.players['1'].active, ...G.players['1'].bench].filter(Boolean) as CardInstance[];
-    const before = enemies.map((e) => e.hp);
+    for (const e of enemies) { e.hpMax = 50; e.hp = 50; }
     tickCastingPulses(G, G.players['0']);
-    enemies.forEach((e, i) => expect(e.hp).toBeLessThan(before[i]));
+    enemies.forEach((e) => expect(e.hp).toBe(50 - 3));
   });
 });

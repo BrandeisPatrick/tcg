@@ -15,6 +15,7 @@ import type {
   ItemSlot,
   ItemTier,
   Owner,
+  PendingTrigger,
   PlayerID,
   PlayerState,
   StatusId,
@@ -26,10 +27,9 @@ import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, COMEBACK_STEPS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE,
-  RICHEST_BOUNTY_BONUS, RICH_RESPAWN_PENALTY, START_LEVEL,
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, START_LEVEL, ULT_COST,
 } from './constants';
-import { pushMultiplier, respawnTurns, round, secondMover } from './rounds';
+import { pushMultiplier, round, secondMover } from './rounds';
 
 // ---------- The board ----------
 
@@ -69,6 +69,13 @@ export function standingBoss(G: GameState): CardInstance | null {
   return G.boss && G.boss.hp > 0 ? G.boss : null;
 }
 
+/** The round the Mid-Boss rises (or returns) in while the pit is empty — what
+ *  the board counts down to — or null when nothing is coming: the match has no
+ *  Mid-Boss (`G.midBoss`, off with MID_BOSS_ENABLED), or one stands now. */
+export function bossDue(G: Pick<GameState, 'midBoss' | 'boss' | 'bossRespawnRound'>): number | null {
+  return G.midBoss && !G.boss ? G.bossRespawnRound : null;
+}
+
 /** True when a hero is currently a corpse waiting to respawn (greyed in UI,
  *  can't act / be targeted / take damage / receive statuses). */
 export function isRespawning(card: CardInstance): boolean {
@@ -89,12 +96,21 @@ export function liveBoardCards(ps: PlayerState): CardInstance[] {
   return out;
 }
 
-/** The bench heroes who can take the Active slot right now: alive, and not
- *  bench-only (Rem). One list for the forced promotion off a fallen Active,
+/** True while `ps`'s Active slot needs filling: it is empty (a fallen Active
+ *  that went to the hand) or holds a corpse. A bench hero steps up to it
+ *  (`promoteToActive`), or — empty — a hero from the hand goes straight in
+ *  (`placeHero`). */
+export function laneOpen(ps: PlayerState): boolean {
+  return !ps.active || isRespawning(ps.active);
+}
+
+/** The bench heroes who can take the Active slot right now: alive (not a
+ *  corpse, nor a hero at 0 HP whose fall waits on a trigger prompt), and not
+ *  bench-only (`flags.benchOnly`, which no card sets now). One list for the forced promotion off a fallen Active,
  *  the paid retreat, the AI and the board, so they cannot disagree. */
 export function stepInCandidates(ps: PlayerState): CardInstance[] {
   return ps.bench.filter((b): b is CardInstance => {
-    if (!b || isRespawning(b)) return false;
+    if (!b || isRespawning(b) || b.hp <= 0) return false;
     const d = CARDS_BY_ID[b.cardId];
     return d?.type === 'hero' && !d.flags?.benchOnly;
   });
@@ -170,11 +186,11 @@ export function killPush(G: GameState, hero: CardInstance): number {
   return ((hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE) * pushMultiplier(G);
 }
 
-/** Own turns a hero that falls now waits before it respawns: the round's
- *  band (`respawnTurns`), and RICH_RESPAWN_PENALTY more when it is strictly
- *  the richest hero on the board. */
-export function respawnTimer(G: GameState, hero: CardInstance): number {
-  return respawnTurns(G) + (isRichestHero(G, hero) ? RICH_RESPAWN_PENALTY : 0);
+/** Own turns a hero that falls now waits in its slot before it goes back to
+ *  its owner's hand: RESPAWN_TURNS, for every hero at every point of the
+ *  match (0: it goes straight to the hand). */
+export function respawnTimer(_G: GameState, _hero: CardInstance): number {
+  return RESPAWN_TURNS;
 }
 
 /** True while `pid`'s Rejuvenator can bring a hero back: a credit left, in a
@@ -201,8 +217,9 @@ export function bossTaker(G: GameState): { pid: PlayerID; by: 'damage' | 'netWor
 // ---------- Worth ----------
 
 /** What an item lists at: its tier's price (`PRICE`). Anything that is not
- *  an item lists at 0. The shop charges it, a sale refunds it (or half), and
- *  net worth counts every worn item at it. */
+ *  an item lists at 0. Putting it on a hero costs it (an evolving upgrade, the
+ *  difference: `playCost`), and net worth counts every worn item and every
+ *  item in hand at it. */
 export function itemPrice(cardId: CardId): number {
   const data = itemCard(cardId);
   return data ? PRICE[data.tier] : 0;
@@ -213,7 +230,7 @@ export function heroWorth(hero: CardInstance): number {
   return wornItems(hero).reduce((n, it) => n + itemPrice(it.cardId), 0);
 }
 
-/** The list price of the cards in a player's hand. */
+/** The list price of the items in a player's hand (a hero card lists at 0). */
 export function handWorth(ps: PlayerState): number {
   return ps.hand.reduce((n, c) => n + itemPrice(c.cardId), 0);
 }
@@ -223,60 +240,24 @@ export function handCard(G: GameState, pid: PlayerID, iid: string): CardInstance
   return G.players[pid].hand.find((c) => c.iid === iid);
 }
 
-/** True for a card bought for the difference: an upgrade priced against a
- *  component on its owner's side, which its play will consume. (A card that
- *  was not bought — a Story reward — never is.) */
-export function boughtAtDiscount(card: CardInstance): boolean {
-  return card.paid !== undefined && card.paid < itemPrice(card.cardId);
+/** True for a hero card (in a hand, the deck, the discard pile or on the board). */
+export function isHeroCard(card: CardInstance): boolean {
+  return CARDS_BY_ID[card.cardId]?.type === 'hero';
 }
 
-/** `pid`'s copies of the item `cardId`: those in its hand, then those its
- *  heroes wear (`heroesOf`: the slotted ones in board order, then a Rem merged
- *  into one of them). */
-export function copiesOnSide(G: GameState, pid: PlayerID, cardId: CardId): CardInstance[] {
-  const ps = G.players[pid];
-  const worn = heroesOf(ps).flatMap((h) => wornItems(h).filter((it) => it.cardId === cardId));
-  return [...ps.hand.filter((c) => c.cardId === cardId), ...worn];
-}
-
-/** Every hero a side has, wherever it stands: the Active, the bench (corpses
- *  included) and a Rem merged into an ally, who rides in its `attached` list. */
+/** Every hero a side has on the board: the Active, the bench (corpses
+ *  included) and a Rem riding on an ally (Tag Along), in its `attached` list. */
 export function heroesOf(ps: PlayerState): CardInstance[] {
   const slotted = [ps.active, ...ps.bench].filter((c): c is CardInstance => !!c && !!heroData(c));
   return [...slotted, ...slotted.flatMap((c) => (c.attached ?? []).filter((a) => !!heroData(a)))];
 }
 
 /** A side's net worth: the souls it holds plus the list price of every item
- *  its heroes wear and every card in its hand. The comeback at income time
- *  reads it. */
+ *  its heroes on the board wear and every item in its hand. The round cap's
+ *  tie-break and the Mid-Boss's read it. */
 export function netWorth(G: GameState, pid: PlayerID): number {
   const ps = G.players[pid];
   return ps.souls + heroesOf(ps).reduce((n, h) => n + heroWorth(h), 0) + handWorth(ps);
-}
-
-/** True when `hero` wears strictly more (by list price) than every other hero
- *  on the board, both sides counted; a tie for the top makes nobody richest. */
-export function isRichestHero(G: GameState, hero: CardInstance): boolean {
-  const mine = heroWorth(hero);
-  if (mine <= 0) return false;
-  const others = (['0', '1'] as PlayerID[]).flatMap((pid) => heroesOf(G.players[pid])).filter((h) => h.iid !== hero.iid);
-  return others.every((h) => heroWorth(h) < mine);
-}
-
-/** Souls a kill pays the victim's opponent: the victim's level plus
- *  KILL_BOUNTY_BASE, and RICHEST_BOUNTY_BONUS more when it was strictly the
- *  richest hero on the board. (The push is the same level + 1, `killPush`.) */
-export function killBounty(G: GameState, hero: CardInstance): number {
-  return (hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE + (isRichestHero(G, hero) ? RICHEST_BOUNTY_BONUS : 0);
-}
-
-/** The comeback `pid` collects with its income: the largest COMEBACK_STEPS
- *  bonus whose deficit its net worth trails the rival's by. */
-export function comebackBonus(G: GameState, pid: PlayerID): number {
-  const behind = netWorth(G, otherPlayer(pid)) - netWorth(G, pid);
-  let bonus = 0;
-  for (const [by, add] of COMEBACK_STEPS) if (behind >= by) bonus = Math.max(bonus, add);
-  return bonus;
 }
 
 // ---------- Targets ----------
@@ -344,7 +325,7 @@ interface AbilitySource {
  *  passives, then each worn piece of equipment's abilities in worn order. The
  *  one list behind the reactive triggers (engine/triggers.ts) and the pure
  *  hooks read below, so a card's behaviour is found in the same place by every
- *  rule. A merged Rem in `attached` is a hero, not equipment, and adds none. */
+ *  rule. A riding Rem in `attached` is a hero, not equipment, and adds none. */
 export function abilitySources(card: CardInstance): AbilitySource[] {
   const out: AbilitySource[] = [];
   for (const id of heroData(card)?.passives ?? []) {
@@ -368,7 +349,7 @@ export function wornEquipment(card: CardInstance): CardInstance[] {
 }
 
 /** Every item `card` wears, active or passive, in worn order: what fills its
- *  slots. A merged Rem rides in the same `attached` list but is a hero, not an
+ *  slots. A riding Rem is in the same `attached` list but is a hero, not an
  *  item: she takes no slot and cannot be sold or moved. */
 export function wornItems(card: CardInstance): CardInstance[] {
   return (card.attached ?? []).filter((a) => !!itemCard(a.cardId));
@@ -387,7 +368,7 @@ export function slotCap(G: GameState, pid: PlayerID): number {
 
 /** The worn item with this iid on one of `pid`'s heroes in a slot (Active or
  *  bench, standing or not) — or, without `pid`, on either side — and who wears
- *  it; null when there is none. A merged Rem's items are out of reach until she
+ *  it; null when there is none. A riding Rem's items are out of reach until she
  *  is back on the bench. */
 export function findWornItem(G: GameState, iid: string, pid?: PlayerID): { owner: PlayerID; bearer: CardInstance; item: CardInstance } | null {
   for (const owner of (pid ? [pid] : ['0', '1']) as PlayerID[]) {
@@ -415,11 +396,12 @@ export function hasSpike(card: CardInstance, slot: ItemSlot): boolean {
   return tabCounts(card)[slot] >= CATEGORY_SPIKE_ITEMS;
 }
 
-/** Own turns an active item of `tier` waits after use (and when bought) on
- *  `bearer`: ACTIVE_COOLDOWN by tier, less the bearer's `cooldownCut` hooks
- *  (the Cooldown family), never under 1. */
-export function activeCooldown(bearer: CardInstance, tier: ItemTier): number {
-  const base = tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high;
+/** Own turns an active item of `tier` waits after use (and when put on) on
+ *  `bearer`: the card's own `cooldown` when it names one (`own`: the draw
+ *  cards' 2), else ACTIVE_COOLDOWN by tier — less the bearer's `cooldownCut`
+ *  hooks, never under 1. */
+export function activeCooldown(bearer: CardInstance, tier: ItemTier, own?: number): number {
+  const base = own ?? (tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
   return Math.max(1, base - cooldownCut(bearer, 'item'));
 }
 
@@ -430,9 +412,9 @@ export function itemCooldown(item: CardInstance): number {
 
 // ---------- A hero's kit ----------
 
-/** What kind of kit ability a hero uses: one of its skills, its own ultimate,
- *  or an ultimate it has borrowed (Sinclair's copy, `borrowedUlt`). */
-export type KitKind = 'skill' | 'ult' | 'borrowed';
+/** What kind of kit ability a hero uses: its skill, or its ultimate (the
+ *  button printed on its card). */
+export type KitKind = 'skill' | 'ult';
 
 /** One ability a hero can use: its id, the ability that does it, and its kind. */
 export interface KitAbility {
@@ -441,16 +423,15 @@ export interface KitAbility {
   kind: KitKind;
 }
 
-/** The abilities `card` may choose to use, in order: its skills, its
- *  ultimate, then an ultimate it has borrowed. Every one is used through
- *  `useSkill` naming its id; the legal-move list, the hero sheet and the
- *  board's ready glint all walk this list. */
+/** The abilities `card` may choose to use, in order: its skill, then its
+ *  ultimate. Every one is used through `useSkill` naming its id; the
+ *  legal-move list, the hero sheet and the board's ready glint all walk this
+ *  list. */
 export function kitAbilityIds(card: CardInstance): AbilityId[] {
   const data = heroData(card);
   if (!data) return [];
   const out = [...data.skills];
   if (data.ult) out.push(data.ult);
-  if (card.borrowedUlt && !out.includes(card.borrowedUlt)) out.push(card.borrowedUlt);
   return out;
 }
 
@@ -466,13 +447,98 @@ export function resolveSkill(card: CardInstance, skillId?: AbilityId): KitAbilit
   if (!data) return undefined;
   const id = skillId === undefined ? data.skills[0] : skillId;
   if (id === undefined) return undefined;
-  const kind: KitKind | undefined = data.skills.includes(id) ? 'skill'
-    : id === data.ult ? 'ult'
-    : id === card.borrowedUlt ? 'borrowed'
-    : undefined;
+  const kind: KitKind | undefined = data.skills.includes(id) ? 'skill' : id === data.ult ? 'ult' : undefined;
   if (!kind) return undefined;
   const ability = getAbility(id);
   return ability ? { id, ability, kind } : undefined;
+}
+
+/** The souls a hero's kit ability costs to use (docs/hero-design.md §2): a
+ *  skill its own `souls` (1–3), an ultimate its card's size (`ULT_COST`: 4, 8
+ *  or 12). 0 for an id the hero does not have. The one price: legality checks
+ *  it, `useSkill` charges it, the hero sheet prints it and the AI pays it. */
+export function kitCost(card: CardInstance, skillId?: AbilityId): number {
+  const skill = resolveSkill(card, skillId);
+  if (!skill) return 0;
+  if (skill.kind === 'ult') {
+    const face = ultimateCard(skill.id);
+    if (!face) return 0;
+    // A charged ultimate: its printed price, less what its hero has counted.
+    return Math.max(0, ultPrice(face) - (face.charged ? card.tally?.[skill.id] ?? 0 : 0));
+  }
+  return skill.ability.souls ?? 0;
+}
+
+/** The price an ultimate's card prints: a charged one's own `cost`, else its
+ *  size's (`ULT_COST`: 4, 8 or 12). What a hero pays now is `kitCost`, which
+ *  takes a charged ultimate's count off it. */
+export function ultPrice(face: UltimateCard): number {
+  return face.charged ? face.charged.cost : ULT_COST[face.size];
+}
+
+/** The charged ultimate `card` carries (docs/hero-design.md §2), with how it
+ *  charges — damage the hero takes or deals — or undefined for any other
+ *  card. The damage kernel counts it (`damageUnit`). */
+export function chargedUlt(card: CardInstance): { id: AbilityId; by: 'taken' | 'dealt' } | undefined {
+  const id = heroData(card)?.ult;
+  const charged = ultimateCard(id)?.charged;
+  return id && charged ? { id, by: charged.by } : undefined;
+}
+
+// ---------- Optional triggers (the trigger prompt system, engine/prompts.ts) ----------
+
+/** The optional triggers ("you may") `card` declares — at `moment`, when one
+ *  is named: its kit abilities (skill, ultimate) and passives that are
+ *  `optional`, in that order. Declared is not usable: `triggerBlocked`
+ *  (legality.ts) says whether one can be used now. */
+export function optionalTriggers(card: CardInstance, moment?: AbilityDef['trigger']): AbilityDef[] {
+  const data = heroData(card);
+  if (!data) return [];
+  const ids = [...data.skills, ...(data.ult ? [data.ult] : []), ...(data.passives ?? [])];
+  const out: AbilityDef[] = [];
+  for (const id of ids) {
+    const a = getAbility(id);
+    if (a?.optional && (moment === undefined || a.trigger === moment)) out.push(a);
+  }
+  return out;
+}
+
+/** The souls an optional trigger costs `card` to use: a kit ability's
+ *  `kitCost` (a charged ultimate's count taken off), a passive's own
+ *  `souls` (none: 0). The one price the prompt prints, the legality checks
+ *  and the answer charges. */
+export function triggerPrice(card: CardInstance, abilityId: AbilityId): number {
+  return resolveSkill(card, abilityId) ? kitCost(card, abilityId) : getAbility(abilityId)?.souls ?? 0;
+}
+
+/** The trigger prompt the game is waiting on: the last of `G.triggers` (the
+ *  one asked), or undefined when none is owed. */
+export function promptOwed(G: GameState): PendingTrigger | undefined {
+  const stack = G.triggers;
+  return stack && stack.length > 0 ? stack[stack.length - 1] : undefined;
+}
+
+/** True while `hero` has dropped to 0 HP and its fall waits on a trigger
+ *  prompt: it is neither standing nor a corpse. Nothing reaps, damages,
+ *  heals or promotes it meanwhile. */
+export function fallPending(G: GameState, hero: CardInstance): boolean {
+  return !!G.triggers?.some((t) => t.moment === 'onFall' && t.subjectIid === hero.iid);
+}
+
+/** What `ability`, used by `hero` of `pid`, is aimed at now: its own `aim`
+ *  when it has one (Traveler, Audience Participation — null when it cannot be
+ *  aimed at all), else its fixed `target` filter and `excludeSelf`. The one
+ *  reading, for `skillTargets` (legality.ts), `useSkill` and the copy-cast. */
+export function abilityAim(G: GameState, pid: PlayerID, hero: CardInstance, ability: AbilityDef): { target: TargetFilter; excludeSelf?: boolean } | null {
+  return ability.aim ? ability.aim(G, pid, hero) : { target: ability.target, excludeSelf: ability.excludeSelf };
+}
+
+/** Souls a Retreat costs while `card` is the hero leaving the Active slot,
+ *  before what it carries takes any off: its card's `retreat` (0 for very
+ *  mobile heroes, 1 for most, 2 for slow heavy ones). `retreatCost`
+ *  (legality.ts) is the price with the discounts and Swift. */
+export function heroRetreat(card: CardInstance): number {
+  return heroData(card)?.retreat ?? 0;
 }
 
 /** The card that names and draws the ultimate `abilityId` (its first ability),

@@ -223,6 +223,7 @@ describe('New active items', () => {
     // worn on the bench, so Lash's own ability of the turn is still unspent.
     const [vindicta, lash, paige] = G.players['0'].bench as CardInstance[];
     const abrams = G.players['1'].active!;
+    G.players['0'].souls = 3; // Ground Strike's price: only the silence stands in her way
     useItem(G, '0', 'warp_stone', lash.iid, vindicta);
     const skill = { type: 'useSkill' as const, heroIid: lash.iid, targetIid: abrams.iid };
     expect(blocked(G, '0', skill)).toBeNull();

@@ -3,9 +3,9 @@ import type { SpellCard } from '@/engine/types';
 /**
  * Spells = ACTIVE items. Every spell is a canon Deadlock active item, and
  * every active item that becomes a card is a spell — see docs/card-design.md.
- * A hero buys one in the shop and wears it like any item; it is used from the
- * bearer's sheet as that hero's one ability of the turn, then cools down (2 own
- * turns for tiers 1–2, 3 for tiers 3 and up). Hard crowd control (`hardCC`: a stun,
+ * A hero is dealt one from the deck and wears it like any item; it is used from
+ * the bearer's sheet as that hero's one ability of the turn, then cools down (2
+ * own turns for tiers 1–2, 3 for tiers 3 and up, unless the card names its own). Hard crowd control (`hardCC`: a stun,
  * a silence, a disarm, a root, a curse on an enemy) has 2 uses a match instead.
  *
  * Slot (shop tab) and tier are Deadlock's, read off the shop list of the
@@ -45,6 +45,13 @@ export const SPELLS: SpellCard[] = [
   { id: 'fleetfoot',      name: 'Fleetfoot',      type: 'spell', rarity: 2, slot: 'weapon',   tier: 2, abilities: ['eff_fleetfoot'],      text: 'Your Active gains Extra Attack 1 this turn, and its Retreat this turn is free.' },
   { id: 'split_shot',     name: 'Split Shot',     type: 'spell', rarity: 2, slot: 'weapon',   tier: 2, abilities: ['eff_split_shot'],     text: 'Your Active gains Ricochet 1 this turn.' },
   { id: 'restorative_locket', name: 'Restorative Locket', type: 'spell', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_restorative_locket'], text: 'Heal an ally 1, plus 1 per enemy hero with an ability on cooldown. Its Retreat this turn is free.' },
+  // The draw engine (docs/deck-plan.md): Deadlock's three Cooldown items — a
+  // passive there — are actives here by Patrick's call, each a draw and a
+  // discard from anywhere in the hand. Each step doubles the price and the
+  // cards kept (+1, +2, +4), so a soul buys the same at every tier. Each waits
+  // 2 own turns after use at every tier. improved_cooldown keeps the item's old
+  // id so saved builds and decks still load: it is Compress Cooldown.
+  { id: 'improved_cooldown', name: 'Compress Cooldown', type: 'spell', rarity: 2, slot: 'spirit', tier: 2, cooldown: 2, abilities: ['eff_compress_cooldown'], text: 'Draw 2 cards, then discard 1 card from your hand.' },
 
   // ----- Tier 3 -----
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
@@ -66,10 +73,11 @@ export const SPELLS: SpellCard[] = [
   { id: 'heroic_aura',     name: 'Heroic Aura',     type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_heroic_aura'],     text: 'All allies gain +2 Bullet Power and Bullet Resist 1 for 2 turns.' },
   { id: 'shadow_weave',    name: 'Shadow Weave',    type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, upgradesFrom: 'sprint_boots', abilities: ['eff_shadow_weave'], text: 'Your Active gains Dome for 1 turn and +2 Bullet Power for 2 turns.' },
   { id: 'majestic_leap',   name: 'Majestic Leap',   type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_majestic_leap'],   text: 'Your Active retreats free; the bench ally you pick steps in.' },
+  { id: 'superior_cooldown', name: 'Superior Cooldown', type: 'spell', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'improved_cooldown', cooldown: 2, abilities: ['eff_superior_cooldown'], text: 'Draw 4 cards, then discard 2 cards from your hand.' },
 
   // ----- Tier 4 -----
   { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
-  { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable for 1 turn.' },
+  { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable and Invulnerable for 1 turn.' },
   { id: 'curse',          name: 'Cursed Relic',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, hardCC: true, abilities: ['eff_curse'], text: 'Silence and Disarm one enemy hero for 3 turns: no skill, no attack.' },
   { id: 'divine_barrier', name: 'Divine Barrier', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'guardian_ward', abilities: ['eff_divine_barrier'], text: "Cleanse an ally's debuffs except Stun and grant it Shield 4." },
   { id: 'ethereal_shift', name: 'Ethereal Shift', type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_ethereal_shift'],   text: 'An ally gains Dome for 1 turn and +1 Spirit Power for 2 turns.' },
@@ -83,6 +91,7 @@ export const SPELLS: SpellCard[] = [
   { id: 'capacitor',      name: 'Capacitor',      type: 'spell', rarity: 3, slot: 'weapon',   tier: 4, upgradesFrom: 'tesla_bullets', hardCC: true, abilities: ['eff_capacitor'], text: 'Deal {sp:2} spirit damage to the enemy Active and 2 to each enemy bench hero. Root them all for 1 turn.' },
   { id: 'vampiric_burst', name: 'Vampiric Burst', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'bullet_lifesteal', abilities: ['eff_vampiric_burst'], text: 'Your Active heals 4, gains Extra Attack 2 this turn and +3 Bullet Power for 2 turns.' },
   { id: 'focus_lens',     name: 'Focus Lens',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, upgradesFrom: 'spirit_sap', hardCC: true, abilities: ['eff_focus_lens'], text: 'Silence any enemy for 2 turns. It gets Spirit Resist −2 for 2 turns and a Reverb of 2.' },
+  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'spell', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'superior_cooldown', cooldown: 2, abilities: ['eff_transcendent_cooldown'], text: 'Draw 8 cards, then discard 4 cards from your hand.' },
   { id: 'scourge',        name: 'Scourge',        type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_scourge'], text: 'An ally is cleansed of its debuffs and gains Spirit Resist 3 for 2 turns. Every enemy takes {sp:2} spirit damage.' },
 
   // ----- Tier 5 (added 2026-11-05: Deadlock's 9,999-soul items, docs/card-design.md) -----
@@ -90,7 +99,7 @@ export const SPELLS: SpellCard[] = [
   // hard crowd control, two charges a match. Prism Blast cools down 3 own turns.
   { id: 'nullification_burst', name: 'Nullification Burst', type: 'spell', rarity: 4, slot: 'vitality', tier: 5, hardCC: true, abilities: ['eff_nullification_burst'], text: 'Every enemy hero loses its buffs and takes {sp:1} spirit damage. They cannot be healed and are Rooted for 2 turns.' },
   { id: 'mystical_piano',      name: 'Mystical Piano',      type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, hardCC: true, abilities: ['eff_mystical_piano'], text: 'Stun every enemy hero for 2 turns and Root them for 2 turns.' },
-  { id: 'prism_blast',         name: 'Prism Blast',         type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, abilities: ['eff_prism_blast'], text: 'Your Active gains Unstoppable for 1 turn. Every enemy takes {sp:7} spirit damage.' },
+  { id: 'prism_blast',         name: 'Prism Blast',         type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, abilities: ['eff_prism_blast'], text: 'Your Active gains Unstoppable and Invulnerable for 1 turn. Every enemy takes {sp:7} spirit damage.' },
 ];
 
 export const SPELLS_BY_ID = Object.fromEntries(SPELLS.map((s) => [s.id, s])) as Record<string, SpellCard>;

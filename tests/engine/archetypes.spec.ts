@@ -1,13 +1,14 @@
 import { CARDS_BY_ID } from '@/cards';
 import { describe, it, expect } from 'vitest';
-import { freshReadyGame, makeAttack, makeHero } from './_helpers';
+import { freshReadyGame, makeAttack, makeHero, withBenchOnly } from './_helpers';
 import { INVALID, perform } from '@/engine/engine';
 import { tickCastingPulses, addStatus, tickRemMerges } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
-import { effectiveAtk } from '@/engine/query';
+import { effectiveAtk, isBlocked, seatOf } from '@/engine/query';
+import { skillBlocked } from '@/engine/legality';
 import { grantExtraAttacks } from '@/engine/statusOps';
-import { MAX_EXTRA_ATTACKS } from '@/engine/constants';
+import { FIXATION_CAP, MAX_EXTRA_ATTACKS } from '@/engine/constants';
 import { getAbility } from '@/abilities';
 import { buildPlayer } from '@/engine/actions/setup';
 import { allocatorFor, newCounters } from '@/engine/ids';
@@ -42,7 +43,7 @@ describe('Multi-attack: Extra Attack (N)', () => {
     const atk = makeHero('hero_haze', '0');
     grantExtraAttacks(atk, 1); // Burst Fire
     grantExtraAttacks(atk, 1); // Active Reload
-    grantExtraAttacks(atk, 1); // Fixation
+    grantExtraAttacks(atk, 1); // a third source
     expect(extraOf(atk)).toBe(3);
   });
 
@@ -79,31 +80,36 @@ describe('Multi-attack: Extra Attack (N)', () => {
     expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBe(3);
   });
 
-  it('Burst Fire (equipment) and Fixation stack Extra Attack', () => {
+  it('Burst Fire (equipment) grants Extra Attack; Fixation adds a stack to the target, not an Extra Attack', () => {
     const G = freshReadyGame();
     const dyn = makeHero('hero_dynamo', '0', 'active', 0); // plain active
-    dyn.level = 3; // Fixation works from Level 3
     G.players['0'].active = dyn;
-    getAbility('eff_burst_fire')!.run(G, { movingPlayer: '0' }, { source: dyn });                       // +1 (each turn)
-    getAbility('passive_haze_fixation')!.run(G, { movingPlayer: '0' }, { source: dyn, params: { primary: true } }); // +1 (on the swing)
-    expect(extraOf(dyn)).toBe(2);
+    const def = G.players['1'].active!;
+    getAbility('eff_burst_fire')!.run(G, { movingPlayer: '0' }, { source: dyn });                                     // +1 (each turn)
+    getAbility('passive_haze_fixation')!.run(G, { movingPlayer: '0' }, { source: dyn, target: def, params: { primary: true } }); // a stack on the target
+    expect(extraOf(dyn)).toBe(1);
+    expect(def.statuses.find((s) => s.id === 'fixation')?.value).toBe(1);
   });
 
-  it('Fixation grants Extra Attack only on the primary swing (no endless chain)', () => {
+  it('Fixation stacks on a swing, never on a Ricochet bounce, up to FIXATION_CAP (no extra swings)', () => {
+    const G = freshReadyGame();
     const haze = makeHero('hero_haze', '0');
-    haze.level = 3;
-    // Primary swing → grants 1.
-    getAbility('passive_haze_fixation')!.run({} as GameState, { movingPlayer: '0' }, { source: haze, params: { primary: true } });
-    expect(extraOf(haze)).toBe(1);
-    // A follow-up / extra swing (primary:false) does NOT re-grant.
-    getAbility('passive_haze_fixation')!.run({} as GameState, { movingPlayer: '0' }, { source: haze, params: { primary: false } });
-    expect(extraOf(haze)).toBe(1);
+    const def = G.players['1'].active!;
+    const fixation = getAbility('passive_haze_fixation')!;
+    const stacks = () => def.statuses.find((s) => s.id === 'fixation')?.value ?? 0;
+    // A bounce adds none.
+    fixation.run(G, { movingPlayer: '0' }, { source: haze, target: def, params: { dealt: 2, bounce: true } });
+    expect(stacks()).toBe(0);
+    // Each swing adds one, up to the cap.
+    for (let i = 0; i < FIXATION_CAP + 2; i++) fixation.run(G, { movingPlayer: '0' }, { source: haze, target: def, params: { primary: true } });
+    expect(stacks()).toBe(FIXATION_CAP);
+    expect(extraOf(haze)).toBe(0);
   });
 });
 
 describe('Haze Fixation — reactive follow-up swing', () => {
-  it('below Level 3 Fixation is idle: Haze swings once', () => {
-    for (const level of [1, 2] as const) {
+  it('at any level Haze swings once: no Extra Attack from Fixation', () => {
+    for (const level of [1, 2, 3, 4] as const) {
       const G = freshReadyGame();
       const haze = makeHero('hero_haze', '0', 'active', 0);
       haze.level = level;
@@ -112,25 +118,27 @@ describe('Haze Fixation — reactive follow-up swing', () => {
       const def = G.players['1'].active!;
       def.hp = def.hpMax = 99;
       makeAttack(G, '0');
-      expect(def.hp, `level ${level}`).toBe(99 - effectiveAtk(haze));
+      expect(def.hp, `level ${level}`).toBe(99 - effectiveAtk(haze)); // the first swing: no stack yet
+      expect(extraOf(haze), `level ${level}`).toBe(0);
     }
   });
 
-  it('from Level 3 Haze attacks twice (primary + Fixation extra) through the attack phase', () => {
+  it('each swing through the attack phase adds a stack, and the next swing deals +stacks (capped at 2)', () => {
     const G = freshReadyGame();
     const haze = makeHero('hero_haze', '0', 'active', 0);
-    haze.level = 3;
     G.players['0'].active = haze;
     soloAttacker(G, '0');
     const def = G.players['1'].active!;
     def.hp = def.hpMax = 99;
     const dmg = effectiveAtk(haze);
-    makeAttack(G, '0'); // no start-of-turn grant; Fixation fires on her swing
-    expect(def.hp).toBe(99 - dmg * 2); // primary + one Fixation Extra Attack
+    grantExtraAttacks(haze, 3); // four swings: +0, +1, +2, +2
+    makeAttack(G, '0');
+    expect(def.hp).toBe(99 - (dmg * 4 + 0 + 1 + 2 + 2));
+    expect(def.statuses.find((s) => s.id === 'fixation')?.value).toBe(FIXATION_CAP);
     expect(extraOf(haze)).toBe(0); // consumed + cleared
   });
 
-  it('a disarmed Haze gets no Fixation extra (she never attacked)', () => {
+  it('a disarmed Haze puts no Fixation stack on (she never attacked)', () => {
     const G = freshReadyGame();
     const haze = makeHero('hero_haze', '0', 'active', 0);
     G.players['0'].active = haze;
@@ -140,7 +148,8 @@ describe('Haze Fixation — reactive follow-up swing', () => {
     const hp0 = def.hp;
     expect(perform(G, '0', { type: 'attack' })).toBe(INVALID); // the gate refuses it
     expect(def.hp).toBe(hp0); // no damage
-    expect(extraOf(haze)).toBe(0); // Fixation never fired
+    expect(extraOf(haze)).toBe(0);
+    expect(def.statuses.some((s) => s.id === 'fixation')).toBe(false); // Fixation never fired
   });
 });
 
@@ -156,39 +165,43 @@ describe('Active Reload — passive equipment (docs/card-design.md)', () => {
   });
 });
 
-describe('Lifesteal — heal half the damage dealt', () => {
-  it('Drifter Bloodscent heals floor(damage/2) per attack', () => {
+describe('Lifesteal is gone from Drifter and Lady Geist: Bloodscent and Essence Bomb as printed', () => {
+  it('Drifter\'s Bloodscent grows his Attack +1 for each knockout while he is Active, up to 2, and heals nothing', () => {
     const G = freshReadyGame();
     const drifter = makeHero('hero_drifter', '0', 'active', 0);
     drifter.hp = 1; drifter.hpMax = 20;
-    // Bloodscent reads the dealt amount plumbed in via params.dealt.
-    getAbility('passive_drifter_bloodscent')!.run(G, { movingPlayer: '0' }, { source: drifter, params: { dealt: 4 } });
-    expect(drifter.hp).toBe(1 + 2); // floor(4/2) = 2
+    const bloodscent = getAbility('passive_drifter_bloodscent')!;
+    for (let i = 0; i < 3; i++) bloodscent.run(G, { movingPlayer: '0' }, { source: drifter, params: { dealt: 4 } });
+    expect(drifter.atkMod).toBe(2); // capped at +2
+    expect(drifter.tally?.passive_drifter_bloodscent).toBe(2);
+    expect(drifter.hp).toBe(1);     // no lifesteal
   });
 
-  it('Drifter heals through a real attack phase (half his dealt damage)', () => {
+  it('Drifter\'s swing through a real attack phase heals him nothing, and hits a hero below half HP for +1', () => {
     const G = freshReadyGame();
-    const drifter = makeHero('hero_drifter', '0', 'active', 0); // atk 3
+    const drifter = makeHero('hero_drifter', '0', 'active', 0);
     drifter.hp = 1; drifter.hpMax = 20;
     G.players['0'].active = drifter;
     soloAttacker(G, '0');
     const def = G.players['1'].active!;
-    def.hp = def.hpMax = 99; // survives the swing
+    def.hp = 40; def.hpMax = 99; // below half: survives the swing
+    const dmg = effectiveAtk(drifter);
     makeAttack(G, '0');
-    // Drifter dealt 3 → heals floor(3/2)=1; the defender does not strike back.
-    expect(drifter.hp).toBe(1 + 1);
+    expect(def.hp).toBe(40 - (dmg + 1)); // Bloodscent +1
+    expect(drifter.hp).toBe(1);          // no heal; the defender does not strike back
   });
 
-  it('Lady Geist Life Drain heals for half the spirit damage dealt', () => {
+  it('Lady Geist\'s Essence Bomb costs her 1 HP and drains nothing: {sp:1} spirit damage to every enemy', () => {
     const G = freshReadyGame();
     const geist = makeHero('hero_lady_geist', '0', 'active', 0);
-    geist.hp = 1; geist.hpMax = 10;
+    geist.hp = 5; geist.hpMax = 10;
     G.players['0'].active = geist;
-    const enemy = G.players['1'].active!;
-    enemy.hp = enemy.hpMax = 20;
-    getAbility('skill_lady_geist')!.run(G, { movingPlayer: '0' }, { source: geist, target: enemy });
-    expect(enemy.hp).toBe(20 - 3);          // dealt 3 spirit
-    expect(geist.hp).toBe(1 + Math.floor(3 / 2)); // healed half = 1
+    G.players['0'].souls = 20;
+    const enemies = [G.players['1'].active, ...G.players['1'].bench].filter(Boolean) as CardInstance[];
+    for (const e of enemies) e.hp = e.hpMax = 20;
+    expect(perform(G, '0', { type: 'useSkill', heroIid: geist.iid, skillId: 'skill_lady_geist' })).not.toBe(INVALID);
+    for (const e of enemies) expect(e.hp, e.cardId).toBe(20 - 1);  // dealt 1 spirit each (Spirit 0)
+    expect(geist.hp).toBe(5 - 1);                                    // paid 1 HP, healed nothing
   });
 });
 
@@ -210,7 +223,7 @@ describe('Ricochet — canon AoE on attack (ricochet.spec has the keyword)', () 
   });
 });
 
-describe('Channeled board-wipe archetype', () => {
+describe('Channeled board-wipe archetype (the channel statuses, set directly: no hero channels now)', () => {
   function channelGame(caster: string): { G: GameState; self: CardInstance; enemies: CardInstance[] } {
     const G = freshReadyGame();
     const self = makeHero(caster, '0', 'active', 0);
@@ -225,27 +238,29 @@ describe('Channeled board-wipe archetype', () => {
     return { G, self, enemies: [e0, e1] };
   }
 
-  it('Dynamo: heavy channel locks out attacks AND skills', () => {
+  it('a heavy channel (casting, set directly) locks out attacks AND skills', () => {
     const { G, self } = channelGame('hero_dynamo');
-    getAbility('eff_ult_dynamo')!.run(G, { movingPlayer: '0' }, {});
+    addStatus(G, self, 'casting', 3, 3);
     expect(self.statuses.find((s) => s.id === 'casting')?.duration).toBe(3);
     expect(effectiveAtk(self)).toBe(0); // attack gate
-    expect(self.statuses.some((s) => s.id === 'casting')).toBe(true); // skill gate keys off this
+    expect(isBlocked(self, 'skill')).toBe(true); // skill gate
+    G.players['0'].souls = 20;
+    expect(skillBlocked(G, '0', self)).toBe('status');
   });
 
-  it('Dynamo: pulses clear the enemy board over the channel duration', () => {
+  it('heavy pulses (casting 3, set directly) clear the enemy board over the channel duration', () => {
     const { G, self, enemies } = channelGame('hero_dynamo');
     enemies.forEach((e) => { e.hp = e.hpMax = 9; }); // 3/turn × 3 turns = 9 → dead by pulse 3
-    getAbility('eff_ult_dynamo')!.run(G, { movingPlayer: '0' }, {});
+    addStatus(G, self, 'casting', 3, 3);
     // Simulate three end-of-turn pulses (channel value stays flat at 3).
     for (let i = 0; i < 3; i++) tickCastingPulses(G, G.players['0']);
     expect(self.statuses.find((s) => s.id === 'casting')?.value).toBe(3); // no escalation
     expect(enemies.every((e) => e.hp <= 0)).toBe(true);
   });
 
-  it('Seven: channel escalates 2 → 3 → 4 each pulse', () => {
+  it('an escalating channel (ramp 1, set directly) climbs 2 → 3 → 4 each pulse', () => {
     const { G, self } = channelGame('hero_seven');
-    getAbility('eff_ult_seven')!.run(G, { movingPlayer: '0' }, {});
+    addStatus(G, self, 'casting', 2, 3, { ramp: 1 });
     const casting = () => self.statuses.find((s) => s.id === 'casting')!;
     expect(casting().value).toBe(2);
     tickCastingPulses(G, G.players['0']);
@@ -254,11 +269,10 @@ describe('Channeled board-wipe archetype', () => {
     expect(casting().value).toBe(4);
   });
 
-  it('Warden: light channel keeps him attacking and heals him from the drain', () => {
+  it('a light channel (casting_light, set directly) keeps its hero attacking and heals it from the drain', () => {
     const { G, self, enemies } = channelGame('hero_warden');
     self.hp = 1; // hurt so the drain heal is visible
-    getAbility('eff_ult_warden')!.run(G, { movingPlayer: '0' }, {});
-    expect(self.statuses.some((s) => s.id === 'casting_light')).toBe(true);
+    addStatus(G, self, 'casting_light', 2, 3);
     expect(self.statuses.some((s) => s.id === 'casting')).toBe(false);
     expect(effectiveAtk(self)).toBeGreaterThan(0); // NOT locked out
     const before = self.hp;
@@ -269,7 +283,7 @@ describe('Channeled board-wipe archetype', () => {
 
   it('Stun interrupts a channel pulse (no damage that turn)', () => {
     const { G, self, enemies } = channelGame('hero_dynamo');
-    getAbility('eff_ult_dynamo')!.run(G, { movingPlayer: '0' }, {});
+    addStatus(G, self, 'casting', 3, 3);
     addStatus(G, self, 'stun', 1, 2);
     const before = enemies.map((e) => e.hp);
     tickCastingPulses(G, G.players['0']);
@@ -277,43 +291,59 @@ describe('Channeled board-wipe archetype', () => {
   });
 });
 
-describe('Support — Rem Lil Helpers (merge)', () => {
+describe('Support — Rem: Tag Along, and the ride machinery (an old merge, with its max HP, set by hand)', () => {
   function setup() {
     const G = freshReadyGame();
-    const ally = makeHero('hero_dynamo', '0', 'active', 0); // bearer, hp 6
+    const ally = makeHero('hero_dynamo', '0', 'active', 0); // bearer
     const rem = makeHero('hero_rem', '0', 'bench', 1);      // slot 1 → bench[0]
     G.players['0'].active = ally;
     G.players['0'].bench = [rem, null, null];
     return { G, ally, rem };
   }
 
-  it('merges into an ally: heals, grants max HP, attaches, leaves the bench', () => {
+  /** Merge `rem` into `ally` by hand, as the old Lil Helpers did: out of her
+   *  bench slot, onto the bearer's `attached`, the max HP she grants on him,
+   *  for 3 of her owner's turns. Tag Along rides the same machinery (the
+   *  countdown, the return, the death rescue) for 2 turns and grants no max
+   *  HP; the max HP a ride may grant is still taken back. */
+  function mergeByHand(G: GameState, rem: CardInstance, ally: CardInstance, hpBuff: number) {
+    const ps = G.players[seatOf(rem)];
+    const idx = ps.bench.findIndex((b) => b === rem);
+    if (idx >= 0) ps.bench[idx] = null;
+    ally.hpMax += hpBuff;
+    ally.hp += hpBuff;
+    rem.zone = 'equipment';
+    rem.attachedTo = ally.iid;
+    rem.remMergeTurnsLeft = 3;
+    rem.remMergeHpBuff = hpBuff;
+    (ally.attached ??= []).push(rem);
+  }
+
+  it('Tag Along heals the ally {sp:4} and Rem rides on it for 2 turns (no max HP granted, Rem not healed)', () => {
     const { G, ally, rem } = setup();
-    ally.hp = 3;
+    ally.hp = 1; ally.hpMax = 20;
+    rem.hp = 1; rem.hpMax = 20;
     getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    // Rem Spirit 0 → hpBuff 1, heal 3.
-    expect(ally.hpMax).toBe(6 + 1);
-    expect(ally.hp).toBe(3 + 1 + 3); // +1 fills new max, then heal 3 (capped at 7)
-    expect(ally.attached?.some((a) => a.cardId === 'hero_rem')).toBe(true);
+    expect(ally.hp).toBe(1 + 4);
+    expect(rem.hp).toBe(1);
+    expect(ally.hpMax).toBe(20); // no max HP granted
+    expect(ally.attached).toContain(rem);
     expect(G.players['0'].bench[0]).toBeNull();
-    expect(rem.remMergeTurnsLeft).toBe(3);
+    expect(rem).toMatchObject({ zone: 'equipment', attachedTo: ally.iid, remMergeTurnsLeft: 2, slot: 1 });
   });
 
-  it("scales with Rem's Spirit", () => {
+  it("Tag Along's heal scales with Rem's Spirit", () => {
     const { G, ally, rem } = setup();
     rem.spiritMod = 2;
     ally.hp = 1; ally.hpMax = 20;
     getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    // s=2 → hpBuff 3, heal 5.
-    expect(ally.hpMax).toBe(23);
-    expect(ally.hp).toBe(1 + 3 + 5);
-    expect(rem.remMergeHpBuff).toBe(3);
+    expect(ally.hp).toBe(1 + 4 + 2);
   });
 
-  it('after 3 ticks Rem returns to bench and the max-HP reverts', () => {
+  it('after 3 ticks a merged Rem returns to the bench and the max-HP reverts', () => {
     const { G, ally, rem } = setup();
     const baseMax = ally.hpMax;
-    getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    mergeByHand(G, rem, ally, 1);
     expect(ally.hpMax).toBe(baseMax + 1);
     tickRemMerges(G, G.players['0']); // 3→2
     tickRemMerges(G, G.players['0']); // 2→1
@@ -325,9 +355,10 @@ describe('Support — Rem Lil Helpers (merge)', () => {
     expect(ally.attached?.some((a) => a.cardId === 'hero_rem')).toBe(false);
   });
 
-  it('returns Rem to bench if the bearer dies while merged', () => {
+  it('returns a merged Rem to the bench if the bearer dies while merged', () => {
     const { G, ally, rem } = setup();
-    getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
+    mergeByHand(G, rem, ally, 1);
+    expect(G.players['0'].bench[0]).toBeNull();
     damageUnit(G, ally, 999, 'pure'); // lethal
     reapDead(G, G.players['0']);
     expect(G.players['0'].bench[0]).toBe(rem); // rescued, not lost with the body
@@ -335,10 +366,13 @@ describe('Support — Rem Lil Helpers (merge)', () => {
     expect(rem.remMergeTurnsLeft).toBeUndefined();
   });
 
-  it('drafted first, bench-only Rem still starts on the bench (not Active)', () => {
-    const ps = buildPlayer(allocatorFor(newCounters()), '0', ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist']);
-    expect(ps.active?.cardId).toBe('hero_warden');       // first non-bench-only
-    expect(ps.active?.cardId).not.toBe('hero_rem');
-    expect(ps.bench.some((b) => b?.cardId === 'hero_rem')).toBe(true);
+  it('named first in a roster, Rem is its Active; a bench-only hero (none now: Rem flagged by hand) starts on the bench', () => {
+    const roster = ['hero_rem', 'hero_warden', 'hero_mo_krill', 'hero_lady_geist'];
+    const ps = buildPlayer(allocatorFor(newCounters()), '0', roster);
+    expect(ps.active?.cardId).toBe('hero_rem');
+    expect(ps.bench.map((b) => b?.cardId)).toEqual(['hero_warden', 'hero_mo_krill', 'hero_lady_geist']);
+    const flagged = withBenchOnly('hero_rem', () => buildPlayer(allocatorFor(newCounters()), '0', roster));
+    expect(flagged.active?.cardId).toBe('hero_warden');       // first non-bench-only
+    expect(flagged.bench.some((b) => b?.cardId === 'hero_rem')).toBe(true);
   });
 });

@@ -6,20 +6,26 @@
  * (id + the thing it is about) so a driver can report a violation once, when it
  * first appears, instead of on every later step of a corrupted game.
  *
- * The rules they hold the engine to are rules.md §2–§5 (souls, the turn's shop
- * and act steps, items, abilities) and the hand's (a card bought goes to the
- * hand and is played from it onto a hero), read through the oracles in
- * oracle.ts — written from the rules and the card texts, never from the
- * engine's own functions. The four the user named: `hand-owner` (a card in a
- * hand is its player's), `hand-bought-turn` (a hand card's `boughtOnTurn` is a
- * turn already played), `net-worth-hand` (net worth — the engine's, and the
- * one the income's comeback reads — counts the hand at list price) and
- * `play-slot-cap` (a card played never leaves a hero over its slot cap). The
+ * The rules they hold the engine to are docs/deck-plan.md's (the deck, the
+ * draw, the hand: heroes onto the bench for free, items onto a hero for their
+ * price — the difference for an evolving upgrade —, the upgrade an item makes
+ * shuffled into the deck, the draw cards' discard, souls only from the
+ * income, a fallen hero back in the hand after RESPAWN_TURNS) and rules.md
+ * §2–§5 (abilities, items), read through the oracles in oracle.ts — written
+ * from the rules and the card texts, never from the engine's own functions.
+ * The deck's: every card in exactly one place (`iid-unique`, `card-vanished`,
+ * `card-appeared`), the piles' card states (`deck-card-state`,
+ * `hand-card-state`, `discard-card-state`), the hand's cap on draws
+ * (`hand-cap`, `draw-per-turn`), the owed choices (`pending-active`,
+ * `pending-discard`), a play (`played-card-state`, `play-slot-cap`), a draw
+ * card (`draw-card`), a discard (`discard-move`), a hero from the hand
+ * (`placed-hero`), and net worth counting the hand (`net-worth-hand`). The
  * map's (rules.md §6): each side's track and its order (`structures-*`), what a
  * push takes (`structure-delta`: a kill's level + 1, an empty lane's bullet
  * power, doubled from round 9), the flex slot (`flex-slot-walker`), the
- * Mid-Boss (`boss-*`), the Rejuvenator (`revive-*`), the respawn timer by the
- * round (`respawn-timer-start`) and the round cap (`round-cap`,
+ * Mid-Boss (`boss-*`: in a match without one, `G.midBoss` off as
+ * MID_BOSS_ENABLED is now, none ever stands — `boss-off`), the Rejuvenator (`revive-*`), the wait of a fallen hero
+ * (`respawn-timer-start`, `respawn-timer`) and the round cap (`round-cap`,
  * `game-over-winner`).
  *
  * Nothing here mutates G (it is frozen by immer in a live client).
@@ -30,18 +36,19 @@ import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID } from '@/statuses';
 import { getAbility } from '@/abilities';
 import {
-  ACTIVE_COOLDOWN, BOSS_CARD_ID, BOSS_HP, BOSS_SOULS, BOSS_SPAWN_ROUND, COMEBACK_STEPS, EXP_ON_EQUIP, GUARDIAN_BOUNTY,
-  HARD_CC_CHARGES, LANE_INCOME, LEVEL_ATK_BONUS, LEVEL_HP_BONUS, LEVEL_SPIRIT_BONUS, LEVEL_THRESHOLDS, MAX_LEVEL, PRICE,
-  REVIVE_CREDITS, ROUND_CAP, SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN,
+  ACTIVE_COOLDOWN, BOSS_CARD_ID, BOSS_HP, BOSS_SPAWN_ROUND, DRAW_PER_TURN, EXP_ON_EQUIP, HARD_CC_CHARGES, LANE_INCOME,
+  LEVEL_THRESHOLDS, MAX_HAND, MAX_LEVEL, OPENING_DRAW, REVIVE_CREDITS, ROUND_CAP,
+  SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN,
 } from '@/engine/constants';
+import type { ItemCard } from '@/engine/types';
 import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/query';
 import {
-  MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, bountyOracle, buyBlockedOracle, buyPriceOracle,
-  closeShopBlockedOracle, describeUnit, everyCard, handCardOf, handOf, hasSpikeOracle, heroesOfSide, isHeroCard, isMergedRem, itemData,
-  killPushOracle, moveItemBlockedOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, playBlockedOracle,
-  playConsumesOracle, pushMultiplierOracle, respawnTimerOracle, restoredBySaleOracle, retreatCostOracle, roundOracle,
-  sellBlockedOracle, sellRefundOracle, slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp,
-  ultCooldownOracle, ultLocked, wornItemOf, wornItemsOf, type ConsumedOracle, type RestoredOracle,
+  DRAW_CARDS, MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, chooseActiveBlockedOracle, deckOf,
+  describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
+  freeBenchSlotOracle, isMergedRem, itemData, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
+  playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
+  slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
+  upgradeComponentOracle, upgradeMadeOracle, wornItemOf, wornItemsOf,
 } from './oracle';
 
 interface Violation {
@@ -66,17 +73,14 @@ const firstOf = (G: GameState): PlayerID => G.firstMover ?? '0';
  *  Goose Egg: "Gain 2 souls"). Written from the cards, not read off the engine. */
 export const SOULS_ON_USE: Readonly<Record<string, number>> = { golden_goose_egg: 2 };
 
-/** The moves of the shop step (rules.md §3). */
-const SHOP_MOVES = ['buy', 'sell', 'moveItem', 'closeShop'];
-/** Everything the shop step accepts: its own moves, a card played from the hand
- *  (legal in either step), ending the turn, an owed promotion and the board's
- *  reveal bookkeeping. */
-const SHOP_STEP_MOVES = [...SHOP_MOVES, 'playCard', 'endTurn', 'promoteToActive', 'completeAction'];
-/** The moves that put items on and take them off heroes: the shop's and a card played. */
-const ITEM_MOVES = [...SHOP_MOVES, 'playCard'];
+/** The move that puts items on (and, an evolving upgrade, one off) heroes. */
+const ITEM_MOVES = ['playCard'];
 
-/** The full cooldown an active item of `tier` starts on (before any Cooldown item). */
-const fullItemCooldown = (tier: number) => (tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
+/** The full cooldown an active item starts on: its own (the draw cards' 2), else its tier's. */
+const fullItemCooldown = (d: ItemCard) => (d.type === 'spell' && d.cooldown !== undefined ? d.cooldown : d.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
+
+/** A bench-only hero (`flags.benchOnly`; no card is one since Rem stands in the lane) never stands in the Active slot. */
+const benchOnlyCard = (cardId: string) => !!(CARDS_BY_ID[cardId] as { flags?: { benchOnly?: boolean } } | undefined)?.flags?.benchOnly;
 
 /** Invariants of a single state. */
 export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] {
@@ -86,46 +90,95 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
   const over = !!ctx.gameover;
   const current = ctx.currentPlayer as PlayerID;
 
-  // ---- uniqueness + ownership over every card anywhere (the hands included) ----
+  // ---- uniqueness + ownership over every card anywhere (the decks, hands and discard piles included) ----
   const seen = new Map<string, string>();
   for (const { card, place, pid } of everyCard(G)) {
     const prev = seen.get(card.iid);
     if (prev) add('iid-unique', card.iid, `iid ${card.iid} (${card.cardId}) is in both ${prev} and ${place} (P${pid})`);
     else seen.set(card.iid, place);
-    // A card in a hand is its player's (`hand-owner`); one on the board, its side's.
+    // A card in a hand is its player's (`hand-owner`); one in a deck or a discard pile, or on the board, its side's.
     if (card.ownerId !== pid) add(place === 'hand' ? 'hand-owner' : 'owner-matches', card.iid, `${card.cardId}#${card.iid} sits in P${pid}'s ${place} but ownerId is ${card.ownerId}`);
   }
 
-  // ---- the hands: items bought (or given) and not yet played ----
+  // ---- the deck, the hand and the discard pile ----
   for (const pid of PIDS) {
-    for (const c of handOf(G, pid)) {
-      const d = itemData(c.cardId);
-      const label = `${c.cardId}#${c.iid} in P${pid}'s hand`;
-      // An item, in zone 'hand', worn by nobody, carrying nothing, set going by nothing yet:
-      // its cooldown starts when it is played; no component is held for it. Only a hard
-      // crowd-control item put back by a same-turn sale carries charges: the ones it had left.
+    // The deck: face-down cards, set going by nothing — items, and heroes as they were drafted.
+    for (const c of deckOf(G, pid)) {
       const wrong: string[] = [];
-      if (!d) wrong.push('no item');
-      if (c.zone !== 'hand') wrong.push(`zone '${c.zone}'`);
+      if (c.zone !== 'deck') wrong.push(`zone '${c.zone}'`);
       if (c.attachedTo !== undefined) wrong.push(`attachedTo ${c.attachedTo}`);
       if ((c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
       if (Object.keys(c.cooldowns ?? {}).length) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
-      const hardCC = d?.type === 'spell' && !!d.hardCC;
-      if (c.charges !== undefined && (!hardCC || !Number.isInteger(c.charges) || c.charges < 0 || c.charges > HARD_CC_CHARGES)) wrong.push(`charges ${c.charges}`);
-      if (c.replaced || c.replacedFrom !== undefined) wrong.push(`holds the ${c.replaced?.cardId ?? '?'} it replaced`);
-      if (wrong.length) add('hand-card-state', c.iid, `${label}: ${wrong.join('; ')}`);
-      // What a purchase records: an engine turn already played, and a price the tier allows.
-      if (c.boughtOnTurn !== undefined && (!Number.isInteger(c.boughtOnTurn) || c.boughtOnTurn < 1 || c.boughtOnTurn > G.turnNumber)) {
-        add('hand-bought-turn', c.iid, `${label} was bought on turn ${c.boughtOnTurn} (it is turn ${G.turnNumber})`);
-      }
-      if (d && c.paid !== undefined && (!Number.isInteger(c.paid) || c.paid < 0 || c.paid > PRICE[d.tier])) {
-        add('hand-purchase-record', c.iid, `${label} records ${c.paid} souls paid (tier ${d.tier} lists at ${PRICE[d.tier]})`);
-      }
+      if (c.charges !== undefined) wrong.push(`charges ${c.charges}`);
+      if (isHeroCard(c)) {
+        if (c.hp !== c.hpMax || c.statuses.length || c.respawnTurnsLeft !== undefined) wrong.push(`a hero at ${c.hp}/${c.hpMax} with ${c.statuses.length} status(es), timer ${c.respawnTurnsLeft}`);
+      } else if (!itemData(c.cardId)) wrong.push('neither an item nor a hero');
+      if (wrong.length) add('deck-card-state', c.iid, `${c.cardId}#${c.iid} in P${pid}'s deck: ${wrong.join('; ')}`);
     }
-    // Net worth counts the hand: the engine's reading is the rules' — souls, worn items and
-    // hand cards at list price.
+    // The hand: items drawn (or given), set going by nothing yet — their cooldown starts when they
+    // are played; and heroes, drawn or back from a fall: clean, at full HP, out of any slot, carrying
+    // the items they wore when they fell.
+    let items = 0;
+    for (const c of handOf(G, pid)) {
+      const d = itemData(c.cardId);
+      const label = `${c.cardId}#${c.iid} in P${pid}'s hand`;
+      const wrong: string[] = [];
+      if (c.zone !== 'hand') wrong.push(`zone '${c.zone}'`);
+      if (c.attachedTo !== undefined) wrong.push(`attachedTo ${c.attachedTo}`);
+      if (d) {
+        items++;
+        if ((c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
+        if (Object.keys(c.cooldowns ?? {}).length) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
+        if (c.charges !== undefined) wrong.push(`charges ${c.charges}`);
+      } else if (isHeroCard(c)) {
+        if (c.slot !== undefined) wrong.push(`slot ${c.slot}`);
+        if (c.hp !== c.hpMax || c.hpMax < 1) wrong.push(`hp ${c.hp}/${c.hpMax}`);
+        if (c.statuses.length) wrong.push(`statuses ${c.statuses.map((x) => x.id).join('+')}`);
+        if (c.respawnTurnsLeft !== undefined) wrong.push(`respawn timer ${c.respawnTurnsLeft}`);
+        if (c.skillUsedThisTurn) wrong.push('its ability spent');
+        if ((c.attached ?? []).some((a) => !itemData(a.cardId))) wrong.push('carries a hero');
+        checkWearer(c, pid, false);
+      } else wrong.push('neither an item nor a hero');
+      if (wrong.length) add('hand-card-state', c.iid, `${label}: ${wrong.join('; ')}`);
+    }
+    // A draw into a full hand is skipped: the items in a hand never pass MAX_HAND (a fallen
+    // hero coming back is no draw, and may take the hand past it).
+    if (items > MAX_HAND) add('hand-cap', pid, `P${pid} holds ${items} items in hand (MAX_HAND ${MAX_HAND})`);
+    // The discard pile: cards out of play — what a draw card's discard sent there (a hero among
+    // them, with what it wore), and the item an evolving upgrade replaced. Nothing cools down there.
+    for (const c of discardOf(G, pid)) {
+      const wrong: string[] = [];
+      if (c.zone !== 'discard') wrong.push(`zone '${c.zone}'`);
+      if (c.attachedTo !== undefined) wrong.push(`attachedTo ${c.attachedTo}`);
+      if (Object.keys(c.cooldowns ?? {}).length) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
+      if (itemData(c.cardId) && (c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
+      if (!itemData(c.cardId) && !isHeroCard(c)) wrong.push('neither an item nor a hero');
+      if (wrong.length) add('discard-card-state', c.iid, `${c.cardId}#${c.iid} in P${pid}'s discard pile: ${wrong.join('; ')}`);
+    }
+    // Net worth counts the hand: the engine's reading is the rules' — souls, worn items and the
+    // items in the hand at list price.
     if (!G.draft && netWorth(G, pid) !== netWorthOracle(G, pid)) {
       add('net-worth-hand', pid, `P${pid}'s net worth reads ${netWorth(G, pid)}; souls, worn items and the hand at list price make ${netWorthOracle(G, pid)} (${netWorthOracleWithoutHand(G, pid)} without the hand)`);
+    }
+  }
+
+  // ---- the choices owed ----
+  if (G.pendingActive !== undefined) {
+    // The opening: the human seat puts its first Active in the lane from its drafted heroes,
+    // still in its deck, before any card is dealt or any turn is played out.
+    const pid = G.pendingActive;
+    const ps = G.players[pid];
+    const can = !!ps && deckOf(G, pid).some((c) => isHeroCard(c) && !benchOnlyCard(c.cardId));
+    if (G.draft || !ps || ps.active || !can || ps.hand.length > 0 || G.turnNumber > 1 || pid !== humanOf(G)) {
+      add('pending-active', String(pid), `G.pendingActive is P${pid} (turn ${G.turnNumber}, human seat ${humanOf(G)}) but its Active is ${describeUnit(ps?.active)}, its hand holds ${ps?.hand.length ?? 0} and its deck ${can ? 'holds' : 'holds no'} hero that can stand there`);
+    }
+  }
+  if (G.pendingDiscard !== undefined) {
+    // A draw card's discard: owed by the player on turn, at least one card, no more than the hand holds.
+    const d = G.pendingDiscard;
+    const hand = G.players[d.pid] ? handOf(G, d.pid).length : -1;
+    if (d.pid !== current || !Number.isInteger(d.count) || d.count < 1 || d.count > hand || !(d.cardId in DRAW_CARDS)) {
+      add('pending-discard', String(d.pid), `G.pendingDiscard is ${JSON.stringify(d)} with P${current} on turn and ${hand} card(s) in P${d.pid}'s hand`);
     }
   }
 
@@ -146,23 +199,12 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     }
   }
   if (!G.draft) {
-    // A drafted match has eight different heroes on the two boards (the driver only plays
-    // drafted matches; the hand-built test boards hold two different rosters too).
-    const roster = PIDS.flatMap((p) => boardOf(G.players[p]).flatMap((c) => [c, ...(c.attached ?? []).filter(isMergedRem)])).map((c) => c.cardId);
+    // A drafted match has eight different heroes, wherever they are — on a board, merged into an
+    // ally, in a deck, a hand or a discard pile (the hand-built test boards hold two different
+    // rosters too).
+    const roster = everyCard(G).filter((x) => isHeroCard(x.card)).map((x) => x.card.cardId);
     const dupHero = roster.find((x, i) => roster.indexOf(x) !== i);
-    if (dupHero) add('roster-duplicate', dupHero, `${dupHero} appears twice across the two rosters`);
-  }
-
-  // ---- the turn's step (rules.md §3) ----
-  if (G.step !== 'shop' && G.step !== 'act') add('step-value', 'step', `G.step is ${JSON.stringify(G.step)}, neither 'shop' nor 'act'`);
-  if (!G.draft && !over && G.step === 'shop') {
-    // The shop step comes before everything the act step does: no attack, no Retreat, no
-    // ability has been used yet this turn.
-    if (G.attackUsed) add('shop-step-flags', 'attackUsed', 'the turn is in its shop step but G.attackUsed is set');
-    if (G.retreatUsed) add('shop-step-flags', 'retreatUsed', 'the turn is in its shop step but G.retreatUsed is set');
-    for (const c of boardOf(G.players[current]).flatMap((h) => [h, ...(h.attached ?? []).filter(isMergedRem)])) {
-      if (c.skillUsedThisTurn) add('shop-step-flags', c.iid, `P${current}'s ${describeUnit(c)} has used its ability in the shop step`);
-    }
+    if (dupHero) add('roster-duplicate', dupHero, `${dupHero} appears twice across the two sides`);
   }
 
   for (const pid of PIDS) {
@@ -214,25 +256,25 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       if (b === undefined) add('bench-length', `${pid}-undef${i}`, `P${pid} bench[${i}] is undefined (not null)`);
     });
 
-    // ---- active ----
-    if (!ps.active) {
-      if (!over) add('active-present', pid, `P${pid} has no Active (a fallen Active stays in its slot as a corpse)`);
-    } else {
-      if (!isRespawning(ps.active) && isBenchOnly(ps.active)) {
-        add('active-not-bench-only', pid, `P${pid}'s living Active is the bench-only hero ${describeUnit(ps.active)}`);
-      }
-      if (isRespawning(ps.active) && !over) {
-        const candidates = stepInCandidates(ps).length;
-        if (candidates > 0) {
-          // Every seat the AI plays is promoted on the spot; the human seat is asked.
-          const owes = G.pendingPromotion === pid;
-          if (pid !== humanOf(G)) add('active-corpse-unresolved', pid, `P${pid} (an AI seat) has a corpse Active with ${candidates} step-in candidate(s); resolve() should have auto-promoted`);
-          else if (!owes) add('active-corpse-unresolved', pid, `P${pid} (the human seat) has a corpse Active with ${candidates} step-in candidate(s) but G.pendingPromotion is ${G.pendingPromotion}`);
-        }
+    // ---- the Active slot ----
+    // It may be empty (a fallen Active gone back to the hand, the opening before the first
+    // Active is put in) or a corpse; either way a bench hero who can step up does: an AI seat's
+    // at once, the human seat's when it is asked (`pendingPromotion`).
+    if (ps.active && !isRespawning(ps.active) && isBenchOnly(ps.active)) {
+      add('active-not-bench-only', pid, `P${pid}'s living Active is the bench-only hero ${describeUnit(ps.active)}`);
+    }
+    const open = !ps.active || isRespawning(ps.active);
+    // (A trigger prompt owed comes first: the promotion waits for its answer.)
+    if (open && !over && !G.triggers?.length) {
+      const candidates = stepInCandidates(ps).length;
+      if (candidates > 0) {
+        const owes = G.pendingPromotion === pid;
+        if (pid !== humanOf(G)) add('active-corpse-unresolved', pid, `P${pid} (an AI seat) has ${ps.active ? 'a corpse' : 'no'} Active with ${candidates} step-in candidate(s); resolve() should have auto-promoted`);
+        else if (!owes) add('active-corpse-unresolved', pid, `P${pid} (the human seat) has ${ps.active ? 'a corpse' : 'no'} Active with ${candidates} step-in candidate(s) but G.pendingPromotion is ${G.pendingPromotion}`);
       }
     }
     if (G.pendingPromotion === pid) {
-      const needs = !!ps.active && isRespawning(ps.active) && stepInCandidates(ps).length > 0;
+      const needs = open && stepInCandidates(ps).length > 0;
       if (!needs) add('pending-promotion-stale', pid, `G.pendingPromotion is P${pid} but nothing is owed (active ${describeUnit(ps.active)})`);
     }
 
@@ -264,6 +306,8 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
   if (!G.draft && G.turnNumber >= 1) {
     const boss = G.boss;
     const r = roundOracle(G);
+    // A match with no Mid-Boss (MID_BOSS_ENABLED off, the setup's say) never has one up.
+    if (boss && !G.midBoss) add('boss-off', boss.iid, `the Mid-Boss stands in round ${r} in a match that has none`);
     if (boss) {
       const wrong: string[] = [];
       if (boss.zone !== 'pit') wrong.push(`zone '${boss.zone}'`);
@@ -278,7 +322,7 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       // Only swings hurt it, and each swing's HP is tallied for its side: the tallies are what it lost.
       const lost = boss.hpMax - boss.hp;
       if (G.bossDamage['0'] + G.bossDamage['1'] !== lost) add('boss-tally', 'sum', `the Mid-Boss has lost ${lost} HP but the tallies read ${G.bossDamage['0']}–${G.bossDamage['1']}`);
-    } else if (!over && r >= G.bossRespawnRound) {
+    } else if (!over && G.midBoss && r >= G.bossRespawnRound) {
       add('boss-due', 'pit', `round ${r} has begun but the Mid-Boss, due in round ${G.bossRespawnRound}, is not up`);
     }
     for (const pid of PIDS) {
@@ -329,7 +373,9 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       if (c.statuses.length > 0) add('corpse-state', `${c.iid}-status`, `corpse carries statuses: ${label}`);
     } else {
       if (c.respawnTurnsLeft != null && c.respawnTurnsLeft !== 0) add('corpse-state', `${c.iid}-timer`, `living hero has respawnTurnsLeft ${c.respawnTurnsLeft}: ${label}`);
-      if (c.hp <= 0 && !over) add('living-hero-zero-hp', c.iid, `living hero with hp ${c.hp} was not reaped: ${label}`);
+      // (A hero whose fall waits on a trigger prompt is at 0 HP until it is answered.)
+      const asked = !!G.triggers?.some((t) => t.moment === 'onFall' && t.subjectIid === c.iid);
+      if (c.hp <= 0 && !over && !asked) add('living-hero-zero-hp', c.iid, `living hero with hp ${c.hp} was not reaped: ${label}`);
     }
     const seenIds = new Set<string>();
     for (const s of c.statuses) {
@@ -384,35 +430,19 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     }
   }
 
-  /** One worn item: its charges, its cooldown and its purchase record. */
-  function checkItem(a: CardInstance, pid: PlayerID) {
+  /** One worn item: its charges and its cooldown. */
+  function checkItem(a: CardInstance, _pid: PlayerID) {
     const d = itemData(a.cardId)!;
     const hardCC = d.type === 'spell' && !!d.hardCC;
     // Hard crowd control: HARD_CC_CHARGES uses a match and no cooldown; nothing else has charges.
     if (hardCC) {
       if (!Number.isInteger(a.charges) || a.charges! < 0 || a.charges! > HARD_CC_CHARGES) add('item-charges', a.iid, `hard crowd control ${a.cardId}#${a.iid} has charges ${a.charges} (0..${HARD_CC_CHARGES})`);
     } else if (a.charges !== undefined) add('item-charges', a.iid, `${a.cardId}#${a.iid} is no hard crowd control but has charges ${a.charges}`);
-    // An active's cooldown is its own (keyed by its id), from 0 to its tier's full
-    // cooldown; a passive and a hard crowd-control item have none.
+    // An active's cooldown is its own (keyed by its id), from 0 to its full cooldown (its own,
+    // else its tier's); a passive and a hard crowd-control item have none.
     for (const [k, v] of Object.entries(a.cooldowns ?? {})) {
       if (d.type !== 'spell' || hardCC || k !== a.cardId) add('item-cooldown-key', `${a.iid}-${k}`, `${d.type === 'spell' ? (hardCC ? 'hard crowd control' : 'active') : 'passive'} ${a.cardId}#${a.iid} has a cooldown entry ${k}=${v}`);
-      if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > fullItemCooldown(d.tier)) add('cooldown-range', `${a.iid}-${k}`, `${a.cardId}#${a.iid} cooldown ${v} (tier ${d.tier}: 0..${fullItemCooldown(d.tier)})`);
-    }
-    // What a purchase records: an engine turn already played, a price the tier allows, and
-    // the component an upgrade replaced — only on the turn it was bought, its owner's.
-    if (a.boughtOnTurn !== undefined && (!Number.isInteger(a.boughtOnTurn) || a.boughtOnTurn < 1 || a.boughtOnTurn > G.turnNumber)) {
-      add('item-purchase-record', `${a.iid}-turn`, `${a.cardId}#${a.iid} was bought on turn ${a.boughtOnTurn} (it is turn ${G.turnNumber})`);
-    }
-    if (a.paid !== undefined && (!Number.isInteger(a.paid) || a.paid < 0 || a.paid > PRICE[d.tier])) {
-      add('item-purchase-record', `${a.iid}-paid`, `${a.cardId}#${a.iid} records ${a.paid} souls paid (tier ${d.tier} lists at ${PRICE[d.tier]})`);
-    }
-    if (a.replaced && (a.boughtOnTurn !== G.turnNumber || pid !== current || a.replaced.cardId !== d.upgradesFrom)) {
-      add('item-purchase-record', `${a.iid}-replaced`, `${a.cardId}#${a.iid} (bought on turn ${a.boughtOnTurn}, P${pid}) still holds the ${a.replaced.cardId} it replaced on turn ${G.turnNumber} (P${current} on turn; it upgrades ${d.upgradesFrom})`);
-    }
-    // The hero a held component came from rides with it, and is one of the side's own (a Rem
-    // who has merged since included: the component then goes back to the hand).
-    if (a.replacedFrom !== undefined && (!a.replaced || !heroesOfSide(G.players[pid]).some((h) => h.iid === a.replacedFrom))) {
-      add('item-purchase-record', `${a.iid}-replacedFrom`, `${a.cardId}#${a.iid} names ${a.replacedFrom} as where its component came from, ${a.replaced ? 'no hero of its side' : 'but holds no component'}`);
+      if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > fullItemCooldown(d)) add('cooldown-range', `${a.iid}-${k}`, `${a.cardId}#${a.iid} cooldown ${v} (0..${fullItemCooldown(d)})`);
     }
   }
 }
@@ -447,16 +477,17 @@ function freshEvents(before: GameState, after: GameState, handOver: boolean): Fx
   return (after.fx ?? []).filter((e) => e.seq > seen);
 }
 
-/** One fall of a hero during a move: the hero (as the move left it), the levels it may
- *  have fallen at (the one it had before the move, or a level gained in it — a kill's exp
- *  on a hero that fell to Return Fire), and whether it paid — a fall to the Mid-Boss's
- *  blow pays no bounty and pushes nothing. */
+/** One fall of a hero during a move: the hero (as the move left it — on the board, or back
+ *  in the hand when it waits no turns), the levels it may have fallen at (the one it had
+ *  before the move, or a level gained in it — a kill's exp on a hero that fell to Return
+ *  Fire), and whether it paid — a fall to the Mid-Boss's blow pushes nothing. */
 interface Fall { hero: CardInstance; levels: number[]; paid: boolean }
 
 /** The falls of `pid`'s heroes during a move: every hero standing before it that ends it a
- *  corpse, and every 'revive' the move pushed for a hero standing before it (the
- *  Rejuvenator's revive in place, or a fall and a respawn inside one hand-over) — each
- *  revive is a fall that came back. A boss's knockout hit marks one of them unpaid. */
+ *  corpse — or off the board and in the hand (a fall with no wait, RESPAWN_TURNS 0) — and
+ *  every 'revive' the move pushed for a hero standing before it (the Rejuvenator's revive
+ *  in place) — each revive is a fall that came back. A boss's knockout hit marks one of
+ *  them unpaid. */
 function fallsDuring(before: GameState, after: GameState, pid: PlayerID, fresh: FxEvent[]): Fall[] {
   const was = heroesByIid(before.players[pid]);
   const bossIid = before.boss?.iid;
@@ -465,37 +496,25 @@ function fallsDuring(before: GameState, after: GameState, pid: PlayerID, fresh: 
     for (const e of fresh) { const iid = pred(e); if (iid) m.set(iid, (m.get(iid) ?? 0) + 1); }
     return m;
   };
-  const revives = count((e) => (e.kind === 'revive' ? e.iid : undefined));
+  // (A trigger that cancels a fall — Shocking Reanimation — is no fall at all: `cancelled`.)
+  const revives = count((e) => (e.kind === 'revive' && !e.cancelled ? e.iid : undefined));
   const bossBlows = count((e) => (e.kind === 'hit' && e.ko && !!bossIid && e.source?.iid === bossIid ? e.iid : undefined));
+  // A fall that waited on a trigger prompt carries whether it pays (the Mid-Boss's blow came
+  // in an earlier move): passed, it goes ahead as it would have.
+  for (const t of before.triggers ?? []) if (t.unpaid) bossBlows.set(t.subjectIid, (bossBlows.get(t.subjectIid) ?? 0) + 1);
+  const now = heroesByIid(after.players[pid]);
+  const backInHand = new Map(handOf(after, pid).filter(isHeroCard).map((h) => [h.iid, h]));
   const out: Fall[] = [];
-  for (const [iid, h] of heroesByIid(after.players[pid])) {
-    const prev = was.get(iid);
-    if (!prev || isRespawning(prev)) continue; // a corpse that respawns is no fall
-    const n = (revives.get(iid) ?? 0) + (isRespawning(h) ? 1 : 0);
+  for (const [iid, prev] of was) {
+    if (isRespawning(prev)) continue; // a corpse that goes back to the hand is no fall
+    const h = now.get(iid) ?? backInHand.get(iid);
+    if (!h) continue;
+    const n = (revives.get(iid) ?? 0) + (isRespawning(h) || (!now.has(iid) && backInHand.has(iid)) ? 1 : 0);
     let unpaid = bossBlows.get(iid) ?? 0;
     const levels = [...new Set([prev.level ?? 1, h.level ?? 1])];
     for (let k = 0; k < n; k++) out.push({ hero: h, levels, paid: unpaid-- <= 0 });
   }
   return out;
-}
-
-/** True when `pid`'s Guardian stood before the move and has fallen after it. */
-function guardianFell(before: GameState, after: GameState, pid: PlayerID): boolean {
-  const g0 = before.players[pid].structures.find((s) => s.kind === 'guardian');
-  const g1 = after.players[pid].structures.find((s) => s.kind === 'guardian');
-  return !!g0 && !!g1 && g0.hp > 0 && g1.hp <= 0;
-}
-
-/** Who may have taken a Mid-Boss that fell during the move, by the rules: the side
- *  that dealt it more damage (its tallies stay until the next one rises); on a tie, the
- *  side behind on net worth as it fell (before its reward), then the last hit's — both
- *  sides are returned when the tie leaves it open to this oracle. Empty: none fell. */
-function bossTakersOracle(before: GameState, after: GameState): PlayerID[] {
-  if (!before.boss || after.boss) return [];
-  const d0 = after.bossDamage['0'];
-  const d1 = after.bossDamage['1'];
-  if (d0 !== d1) return [d0 > d1 ? '0' : '1'];
-  return ['0', '1'];
 }
 
 function hasDuplicateIids(G: GameState): boolean {
@@ -507,8 +526,9 @@ function hasDuplicateIids(G: GameState): boolean {
   return false;
 }
 
-/** Every cooldown entry on a side — its heroes' (merged Rem included) and their worn
- *  items' — keyed `owner iid|ability or item id`. */
+/** Every cooldown entry on a side's board — its heroes' (merged Rem included) and their worn
+ *  items' — keyed `owner iid|ability or item id`. (A hero in the hand, and what it wears,
+ *  is off the board: its cooldowns wait there.) */
 function cooldownEntries(G: GameState, pid: PlayerID): Map<string, number> {
   const m = new Map<string, number>();
   for (const h of heroesByIid(G.players[pid]).values()) {
@@ -519,11 +539,26 @@ function cooldownEntries(G: GameState, pid: PlayerID): Map<string, number> {
   return m;
 }
 
+/** The iids of every card on a side's board: its heroes (merged Rem included) and what they wear. */
+function boardIids(G: GameState, pid: PlayerID): Set<string> {
+  const out = new Set<string>();
+  for (const h of heroesByIid(G.players[pid]).values()) {
+    out.add(h.iid);
+    for (const a of wornItemsOf(h)) out.add(a.iid);
+  }
+  return out;
+}
+
 /** A card's printed stat bonus (passive items only carry one). */
 function bonusOf(cardId: string | undefined): { atk: number; spirit: number; hp: number } {
   const d = itemData(cardId);
   const b = d?.type === 'equipment' ? d.bonus : undefined;
   return { atk: b?.atk ?? 0, spirit: b?.spirit ?? 0, hp: b?.hp ?? 0 };
+}
+
+/** Where a card is in G (its place label and its side), by iid. */
+function placeOf(G: GameState, iid: string): { card: CardInstance; place: string; pid: string } | undefined {
+  return everyCard(G).find((x) => x.card.iid === iid);
 }
 
 interface MoveInfo { name: string; args: unknown[] }
@@ -550,32 +585,17 @@ export function collectTransitionViolations(
   const mover = before.ctx.currentPlayer as PlayerID;
   const foe = other(mover);
   const switched = before.ctx.currentPlayer !== after.ctx.currentPlayer;
-  const newTurn = move.name === 'endTurn' && switched && !after.ctx.gameover;
+  // The opening's choice ends the draft's turn held for it (`draftPick`, `chooseActive`): the
+  // match's first turn begins on it, as a turn begins on endTurn.
+  const newTurn = (move.name === 'endTurn' || move.name === 'chooseActive') && switched && !after.ctx.gameover;
+  const B = before.G;
 
-  // ---- the turn's two steps (rules.md §3) ----
-  // Every turn opens on the shop; closing it is the one way into the act step, and
-  // nothing goes back. The shop step takes the shop's moves (plus ending the turn, an owed
-  // promotion and the board's bookkeeping); the act step never takes a shop move.
-  if (before.G.step === 'shop' && !SHOP_STEP_MOVES.includes(move.name)) {
-    add('step-shop-moves', move.name, `${move.name} was accepted in the shop step`);
-  }
-  if (before.G.step === 'act' && SHOP_MOVES.includes(move.name)) {
-    add('step-act-moves', move.name, `${move.name} was accepted in the act step`);
-  }
-  if (move.name === 'closeShop' && after.G.step !== 'act') add('step-close-shop', 'closeShop', `closeShop was accepted but the step is ${after.G.step}`);
-  if (newTurn && after.G.step !== 'shop') add('step-new-turn', 'endTurn', `P${after.ctx.currentPlayer}'s turn ${after.G.turnNumber} opens on the ${after.G.step} step, not the shop`);
-  if (!(move.name === 'endTurn' && switched) && before.G.step !== after.G.step && !(move.name === 'closeShop' && before.G.step === 'shop')) {
-    add('step-change', move.name, `${move.name} moved the step from ${before.G.step} to ${after.G.step} within the turn`);
-  }
-
-  // ---- what the rules allow: an accepted shop move, card play or item use the oracle refuses ----
+  // ---- what the rules allow: an accepted card play, hand move, choice or item use the oracle refuses ----
   {
-    const B = before.G;
-    const why = move.name === 'buy' ? buyBlockedOracle(B, mover, args[0])
-      : move.name === 'sell' ? sellBlockedOracle(B, mover, args[0])
-      : move.name === 'moveItem' ? moveItemBlockedOracle(B, mover, args[0], args[1])
-      : move.name === 'playCard' ? playBlockedOracle(B, mover, args[0], args[1])
-      : move.name === 'closeShop' ? closeShopBlockedOracle(B, mover)
+    const why = move.name === 'playCard' ? playBlockedOracle(B, mover, args[0], args[1], args[2], undefined, args[3])
+      : move.name === 'placeHero' ? placeHeroBlockedOracle(B, mover, args[0], args[1] === true, args[1] === true ? undefined : args[2])
+      : move.name === 'chooseActive' ? chooseActiveBlockedOracle(B, args[0])
+      : move.name === 'discard' ? discardBlockedOracle(B, mover, discardList(args[0]))
       : move.name === 'activate' ? activateBlockedOracle(B, mover, args[0], args[1])
       : null;
     if (why) add('accepted-illegal', move.name, `${move.name}(${JSON.stringify(args)}) by P${mover} was accepted but the rules refuse it: ${why}`);
@@ -627,11 +647,11 @@ export function collectTransitionViolations(
     if (r1.kills - r0.kills !== paidKills) add('record-kills', pid, `P${pid}'s kills went ${r0.kills} -> ${r1.kills} after ${move.name}; ${paidKills} enemy heroes fell to it`);
   }
 
-  // A fallen hero waits by the round it fell in (rules.md §6): 1 own turn in rounds 1–4, 2 in
-  // 5–8, 3 from 9, one more for the strictly richest hero. A side with a live Rejuvenator
-  // spends a credit instead and the hero is back in place at full HP; a side whose credits
-  // outlast the move had none of its heroes end the move as a corpse. (An end of turn is
-  // left out: the next turn's start ticks its own timers.)
+  // A fallen hero waits RESPAWN_TURNS of its owner's turns in its slot (docs/deck-plan.md),
+  // whatever the round. A side with a live Rejuvenator spends a credit instead and the hero
+  // is back in place at full HP; a side whose credits outlast the move had none of its heroes
+  // end the move as a corpse. (An end of turn is left out: the next turn's start ticks its
+  // own timers.)
   if (!duplicated && !handOver) {
     for (const pid of PIDS) {
       const ps0 = before.G.players[pid];
@@ -644,58 +664,56 @@ export function collectTransitionViolations(
       const want = took ? REVIVE_CREDITS : ps0.reviveCredits - credited;
       if (ps1.reviveCredits !== want) add('revive-spend', `${pid}-count`, `P${pid}'s revive credits ${ps0.reviveCredits} -> ${ps1.reviveCredits} after ${credited} revive(s)${took ? ' and the Mid-Boss taken' : ''}; the rules give ${want}`);
       for (const f of fallen) {
-        if (!isRespawning(f.hero)) continue;
+        const onBoard = heroesByIid(ps1).has(f.hero.iid);
+        if (onBoard && !isRespawning(f.hero)) continue; // revived in place
         const timer = respawnTimerOracle(after.G, f.hero, roundOracle(before.G));
-        if (f.hero.respawnTurnsLeft !== timer) add('respawn-timer-start', f.hero.iid, `${describeUnit(f.hero)} fell in round ${roundOracle(before.G)} with a timer of ${f.hero.respawnTurnsLeft}; the rules give ${timer}`);
+        if (onBoard ? f.hero.respawnTurnsLeft !== timer : timer !== 0) add('respawn-timer-start', f.hero.iid, `${describeUnit(f.hero)} fell in round ${roundOracle(before.G)} and ${onBoard ? `waits ${f.hero.respawnTurnsLeft}` : 'went straight to the hand'}; the rules give a wait of ${timer}`);
         if (live && ps0.reviveCredits - credited > 0) add('revive-owed', f.hero.iid, `${describeUnit(f.hero)} fell while P${pid} held ${ps0.reviveCredits - credited} live revive credit(s) after the others, and stayed down`);
       }
     }
   }
 
-  // ---- what an item move does to the cards (worked out on the board before it) ----
-  const B = before.G;
-  /** A purchase: the item bought — a card for the hand, no hero named. */
-  const boughtId = move.name === 'buy' && itemData(args[0]) ? String(args[0]) : undefined;
-  /** A play: the card from the hand, the hero it goes on, and what it consumes. */
+  // ---- what a hand move does to the cards (worked out on the board before it) ----
+  /** A play: the card from the hand, the hero it goes on, the component it evolves (off that
+   *  same hero), and the upgrade it makes. */
   const playedCard = move.name === 'playCard' ? handCardOf(B, mover, args[0]) : undefined;
   const playedOn = playedCard ? slottedHeroOf(B, mover, args[1]) : undefined;
-  const consumed: ConsumedOracle[] = playedCard && playedOn ? playConsumesOracle(B, mover, playedCard, playedOn) : [];
-  /** A sale: a card from the hand, or a worn item and its bearer — and what a same-turn
-   *  upgrade's sale puts back, and where. */
-  const soldHand = move.name === 'sell' ? handCardOf(B, mover, args[0]) : undefined;
-  const sold = move.name === 'sell' && !soldHand ? wornItemOf(B, mover, args[0]) : undefined;
-  const restored: RestoredOracle[] = sold ? restoredBySaleOracle(B, mover, sold.item, sold.bearer) : [];
-  const moved = move.name === 'moveItem' ? wornItemOf(B, mover, args[0]) : undefined;
-  const movedTo = moved ? slottedHeroOf(B, mover, args[1]) : undefined;
+  const evolved = playedCard && playedOn ? upgradeComponentOracle(playedOn, playedCard.cardId) : undefined;
+  /** The worn item a play onto a full hero takes the place of (off that same hero). */
+  const replaced = playedCard && playedOn && args[3] !== undefined ? wornItemsOf(playedOn).find((a) => a.iid === args[3]) : undefined;
+  const upgradeMade = playedCard ? upgradeMadeOracle(playedCard.cardId, args[2]) : undefined;
 
-  // Cards do not vanish: every card anywhere before (the hands included) is still somewhere
-  // after — but for the card a sale takes, the components a play consumes and a Mid-Boss
-  // that falls. And none appears from nowhere: a purchase brings its one card into the
-  // buyer's hand, a same-turn upgrade's sale the components it puts back, a round's start
+  // Cards do not vanish and none appears from nowhere: every card anywhere before (decks, hands
+  // and discard piles included) is somewhere after — but for a Mid-Boss that falls; and the
+  // only new cards are the upgrade a play makes (in the player's deck) and, at a round's start,
   // the Mid-Boss.
   {
     const beforeIids = new Map(everyCard(before.G).map((x) => [x.card.iid, x]));
     const afterCards = everyCard(after.G);
     const afterIids = new Set(afterCards.map((x) => x.card.iid));
     const fellBoss = before.G.boss && !after.G.boss ? before.G.boss.iid : undefined;
-    const mayGo = new Set([...consumed.map((c) => c.item.iid), sold?.item.iid, soldHand?.iid, fellBoss].filter((x): x is string => !!x));
     for (const [iid, x] of beforeIids) {
-      if (!afterIids.has(iid) && !mayGo.has(iid)) add('card-vanished', iid, `${x.card.cardId}#${iid} (${x.place}) of P${x.pid} is nowhere after ${move.name}`);
+      if (!afterIids.has(iid) && iid !== fellBoss) add('card-vanished', iid, `${x.card.cardId}#${iid} (${x.place}) of P${x.pid} is nowhere after ${move.name}`);
     }
-    const fresh = afterCards.filter((x) => !beforeIids.has(x.card.iid));
-    const purchase = boughtId ? fresh.find((x) => x.card.cardId === boughtId && x.place === 'hand' && x.pid === mover) : undefined;
-    const back = new Set(restored.map((r) => r.item.iid));
-    for (const x of fresh) {
-      if (x === purchase || back.has(x.card.iid)) continue;
+    const appeared = afterCards.filter((x) => !beforeIids.has(x.card.iid));
+    let upgrades = 0;
+    for (const x of appeared) {
       if (x.place === 'pit' && handOver) continue;
+      if (upgradeMade && x.place === 'deck' && x.pid === mover && x.card.cardId === upgradeMade && upgrades === 0) { upgrades++; continue; }
       add('card-appeared', x.card.iid, `${x.card.cardId}#${x.card.iid} (${x.place}) of P${x.pid} appeared after ${move.name}(${JSON.stringify(args)})`);
+    }
+    // Each copy played makes one upgrade, shuffled into the deck.
+    if (!duplicated && playedCard && playedOn && upgradeMade && upgrades !== 1) {
+      add('played-card-state', `${playedCard.iid}-upgrade`, `${playedCard.cardId} was played but no ${upgradeMade} was shuffled into P${mover}'s deck`);
     }
   }
 
-  // Turn ownership: only endTurn (or the last draft pick) hands the turn over.
+  // Turn ownership: only endTurn (or the last draft pick, or the opening's choice that ends the
+  // draft's turn held for it: the match still at turn 0) hands the turn over.
   if (!after.ctx.gameover) {
     if (move.name === 'endTurn' && !switched) add('turn-owner', 'endTurn', `endTurn was accepted but P${after.ctx.currentPlayer} is still on turn`);
-    if (move.name !== 'endTurn' && switched) add('turn-owner', move.name, `${move.name} changed the player on turn from P${before.ctx.currentPlayer} to P${after.ctx.currentPlayer}`);
+    if (move.name === 'chooseActive' && switched && B.turnNumber >= 1) add('turn-owner', move.name, `chooseActive at turn ${B.turnNumber} changed the player on turn from P${before.ctx.currentPlayer} to P${after.ctx.currentPlayer}`);
+    if (move.name !== 'endTurn' && move.name !== 'chooseActive' && switched) add('turn-owner', move.name, `${move.name} changed the player on turn from P${before.ctx.currentPlayer} to P${after.ctx.currentPlayer}`);
   }
 
   // Hand-over: the hero flags of the player whose turn ended are cleared.
@@ -711,9 +729,24 @@ export function collectTransitionViolations(
   }
 
   // The Act: once the turn's attack is made, nothing but ending the turn (and an
-  // owed promotion, and the board's reveal bookkeeping) is accepted.
-  if (before.G.attackUsed && !['endTurn', 'promoteToActive', 'completeAction'].includes(move.name)) {
+  // owed promotion or trigger prompt, and the board's reveal bookkeeping) is accepted.
+  if (before.G.attackUsed && !['endTurn', 'promoteToActive', 'completeAction', 'useTrigger', 'passTrigger'].includes(move.name)) {
     add('act-over', move.name, `${move.name} was accepted after the turn's attack had ended the Act`);
+  }
+  // A choice owed comes first: while it is, nothing else is accepted.
+  if (B.pendingActive !== undefined && !['chooseActive', 'completeAction'].includes(move.name)) {
+    add('choice-owed', move.name, `${move.name} was accepted while P${B.pendingActive}'s first Active was owed`);
+  }
+  if (B.pendingDiscard !== undefined && !['discard', 'promoteToActive', 'completeAction', 'useTrigger', 'passTrigger'].includes(move.name)) {
+    add('choice-owed', move.name, `${move.name} was accepted while P${B.pendingDiscard.pid} owed a discard`);
+  }
+  // A trigger prompt owed (engine/prompts.ts) is answered before anything else.
+  const asked = B.triggers?.[B.triggers.length - 1];
+  if (asked && !['useTrigger', 'passTrigger', 'completeAction'].includes(move.name)) {
+    add('choice-owed', move.name, `${move.name} was accepted while P${asked.pid} owed an answer to a trigger prompt`);
+  }
+  if (!asked && (move.name === 'useTrigger' || move.name === 'passTrigger')) {
+    add('choice-owed', move.name, `${move.name} was accepted with no trigger prompt owed`);
   }
   // One Retreat a turn.
   if (move.name === 'moveHero' && before.G.retreatUsed) {
@@ -721,36 +754,27 @@ export function collectTransitionViolations(
     if (f === 0 || t === 0) add('retreat-once', 'moveHero', `a second Retreat was accepted in one turn`);
   }
 
-  // A hero's level only goes up (it persists through death and respawn).
-  for (const pid of duplicated ? [] : PIDS) {
-    const now = heroesByIid(after.G.players[pid]);
-    for (const [iid, h0] of heroesByIid(before.G.players[pid])) {
+  // A hero's level only goes up, wherever it is (it persists through a fall and back in the hand).
+  if (!duplicated) {
+    const heroes = (G: GameState) => new Map(everyCard(G).filter((x) => isHeroCard(x.card)).map((x) => [x.card.iid, x.card]));
+    const now = heroes(after.G);
+    for (const [iid, h0] of heroes(before.G)) {
       const h1 = now.get(iid);
       if (h1 && (h1.level ?? 1) < (h0.level ?? 1)) add('level-monotonic', iid, `${h1.cardId}#${iid} level ${h0.level} -> ${h1.level}`);
     }
   }
 
-  // ---- bookkeeping of what a move costs and gives ----
-  /** What the falls of `pid`'s heroes during the move pay their opponent: each paid fall's
-   *  bounty (`bountyOracle`), and the Guardian's bounty should the pushes fell `pid`'s. */
-  const bountyOf = (pid: PlayerID) =>
-    falls(pid).filter((f) => f.paid).reduce((n, f) => n + bountyOracle(after.G, f.hero), 0)
-    + (guardianFell(before.G, after.G, pid) ? GUARDIAN_BOUNTY : 0);
-  const takers = bossTakersOracle(before.G, after.G);
-
-  if (!duplicated && move.name !== 'endTurn' && takers.length < 2) {
-    // Souls: only the move's price (an item's — the difference for an upgrade whose
-    // component has a free copy on the side —, a Retreat's; abilities are free), what a sale
-    // refunds, what an item used pays out (SOULS_ON_USE), the bounty of each enemy hero
-    // that fell (its level + 1, + 2 for the richest hero on the board), the Guardian's
-    // bounty when a push fells the rival's, and the Mid-Boss's souls to the side that takes
-    // it. Playing a card, moving an item and closing the shop are free. No ceiling. (A
-    // Mid-Boss whose tallies tie is settled by net worth as it falls: left out.)
-    const boss = (pid: PlayerID) => (takers[0] === pid ? BOSS_SOULS : 0);
+  // ---- souls (docs/deck-plan.md): the lane's income is the only souls there are ----
+  // Within a turn souls change only by what a move costs — an item put on a hero (its price,
+  // the difference for an upgrade that evolves), a Retreat (the leaving hero's own price), a
+  // skill or an ultimate (its souls, docs/hero-design.md §2) — and by what an item used pays
+  // out as its text says (SOULS_ON_USE). Kills, the Guardian and the Mid-Boss pay nothing;
+  // placing a hero, the first Active, a discard and a promotion are free. No ceiling. (The
+  // first Active that begins the match's first turn pays its income: checked as a new turn.)
+  if (!duplicated && move.name !== 'endTurn' && !newTurn) {
     let cost = 0;
     let payout = 0;
-    if (move.name === 'buy' && boughtId) cost = buyPriceOracle(B, mover, boughtId);
-    else if (move.name === 'sell' && (soldHand || sold)) payout = sellRefundOracle(B, soldHand ?? sold!.item);
+    if (playedCard && playedOn) cost = playCostOracle(playedOn, playedCard.cardId);
     else if (move.name === 'activate') {
       const used = wornItemOf(B, mover, args[0]);
       payout = used ? SOULS_ON_USE[used.item.cardId] ?? 0 : 0;
@@ -759,20 +783,29 @@ export function collectTransitionViolations(
       const ps = B.players[mover];
       const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
       if ((f === 0 || t === 0) && get(f) && get(t)) cost = retreatCostOracle(B, mover);
+    } else if (move.name === 'useSkill' && typeof args[0] === 'string') {
+      const hero = heroesByIid(B.players[mover]).get(args[0] as string);
+      if (hero) cost = kitSoulsOracle(hero, typeof args[2] === 'string' ? (args[2] as string) : undefined);
     }
-    const wantMover = B.players[mover].souls - cost + payout + bountyOf(foe) + boss(mover);
+    // A trigger used is paid by the seat it was offered to, on either seat's turn: its kit price.
+    let foeCost = 0;
+    if (move.name === 'useTrigger' && asked && typeof args[0] === 'string') {
+      const hero = heroesByIid(B.players[asked.pid]).get(args[0] as string);
+      const price = hero ? kitSoulsOracle(hero, typeof args[1] === 'string' ? (args[1] as string) : undefined) : 0;
+      if (asked.pid === mover) cost = price;
+      else foeCost = price;
+    }
+    const wantMover = B.players[mover].souls - cost + payout;
     if (after.G.players[mover].souls !== wantMover) {
-      add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost}, payout ${payout}, ${bountyOf(foe)} in bounties and ${boss(mover)} for the Mid-Boss give ${wantMover}`);
+      add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost} and payout ${payout} give ${wantMover}`);
     }
-    const wantFoe = B.players[foe].souls + bountyOf(mover) + boss(foe);
-    if (after.G.players[foe].souls !== wantFoe) {
-      add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; expected ${wantFoe}`);
+    if (after.G.players[foe].souls !== B.players[foe].souls - foeCost) {
+      add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; ${foeCost ? `its trigger costs ${foeCost}` : 'nothing pays the rival'}`);
     }
   }
 
   // A kit ability, used: the hero is spent for the turn, and its cooldown is armed — a skill's
-  // own (SKILL_COOLDOWN unless its data names one), an ultimate's ULT_COOLDOWN less the
-  // Cooldown family it wears (never under 1) — or a borrowed ultimate is gone. A locked
+  // own (SKILL_COOLDOWN unless its data names one), an ultimate's ULT_COOLDOWN. A locked
   // ultimate (below the unlock level) is never used.
   if (!duplicated && move.name === 'useSkill' && typeof args[0] === 'string') {
     const hero0 = heroesByIid(B.players[mover]).get(args[0] as string);
@@ -781,13 +814,8 @@ export function collectTransitionViolations(
     if (hero0 && hero1 && d?.type === 'hero') {
       const id = typeof args[2] === 'string' ? (args[2] as string) : d.skills[0];
       if (ultLocked(hero0, id)) add('ult-locked', hero0.iid, `${describeUnit(hero0)} used its ultimate below the unlock level`);
-      const borrowed = hero0.borrowedUlt === id && d.ult !== id && !d.skills.includes(id);
-      if (borrowed) {
-        if (hero1.borrowedUlt === id) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used its borrowed ultimate and still holds it`);
-      } else {
-        const want = d.ult === id ? ultCooldownOracle(hero0) : getAbility(id)?.cooldown ?? SKILL_COOLDOWN;
-        if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
-      }
+      const want = d.ult === id ? ultCooldownOracle(hero0) : getAbility(id)?.cooldown ?? SKILL_COOLDOWN;
+      if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
     }
   }
 
@@ -802,7 +830,7 @@ export function collectTransitionViolations(
     }
   }
 
-  // ---- the shop's items (rules.md §4) ----
+  // ---- the items (rules.md §4, docs/deck-plan.md) ----
   const heroes0 = allHeroes(B);
   const heroes1 = allHeroes(after.G);
   /** The item with this iid wherever it is worn after the move, and its bearer. */
@@ -814,33 +842,11 @@ export function collectTransitionViolations(
     return undefined;
   };
 
-  // A purchase: exactly one card joins the buyer's hand, at its end — the item bought, its
-  // owner's, recording the engine turn and what was paid (the oracle's price). The rest of
-  // the hand is as it was, and no hero is touched (the `equip-bonus` rule sees to that).
-  if (!duplicated && boughtId) {
-    const hand0 = handOf(B, mover);
-    const hand1 = handOf(after.G, mover);
-    const fresh = hand1.slice(hand0.length);
-    const problems: string[] = [];
-    if (hand1.slice(0, hand0.length).map((c) => c.iid).join() !== hand0.map((c) => c.iid).join() || fresh.length !== 1) {
-      problems.push(`the hand went [${hand0.map((c) => c.cardId).join(', ')}] -> [${hand1.map((c) => c.cardId).join(', ')}]`);
-    } else {
-      const card = fresh[0];
-      const price = buyPriceOracle(B, mover, boughtId);
-      if (card.cardId !== boughtId) problems.push(`the new card is ${card.cardId}`);
-      if (card.ownerId !== mover) problems.push(`owned by P${card.ownerId}`);
-      if (card.boughtOnTurn !== B.turnNumber) problems.push(`boughtOnTurn ${card.boughtOnTurn} (turn ${B.turnNumber})`);
-      if (card.paid !== price) problems.push(`paid ${card.paid} (price ${price})`);
-    }
-    if (problems.length) add('bought-card-state', `${mover}-${boughtId}`, `buy(${JSON.stringify(args)}) by P${mover}: ${problems.join('; ')}`);
-  }
-
-  // A play: the card leaves the hand and is worn by the hero named, its purchase record with
-  // it; an active starts on its full cooldown (its bearer's Cooldown family taken off, never
-  // under 1, read once the component has left) or, hard crowd control, with HARD_CC_CHARGES
-  // charges (or those it carried back into the hand); a passive has neither. What it consumes (the oracle's) is out of play — in no
-  // hand, on no hero — and, the card bought this turn, held on it for a same-turn sale, each
-  // settled component on the copy that settled it. A play never leaves a hero over its cap.
+  // A play: the card leaves the hand and is worn by the hero named; an active starts on its
+  // full cooldown (its own, else its tier's) or, hard crowd control, with HARD_CC_CHARGES; a
+  // passive has neither. The component it evolves — or, onto a full hero, the worn item it
+  // replaces — leaves that hero for the player's discard pile. A play never leaves a hero
+  // over its cap.
   if (!duplicated && playedCard && playedOn) {
     const hero1 = heroes1.get(playedOn.iid);
     const now = wornAfter(playedCard.iid);
@@ -857,29 +863,26 @@ export function collectTransitionViolations(
         const want = playedCard.charges ?? HARD_CC_CHARGES;
         if (it.charges !== want || keys.length) problems.push(`hard crowd control with charges ${it.charges} and cooldowns ${JSON.stringify(it.cooldowns)} (${want} charges, no cooldown)`);
       } else if (d.type === 'spell') {
-        const want = activeCooldownOracle(hero1, d.tier);
-        if (cd !== want || keys.length !== 1 || it.charges !== undefined) problems.push(`an active on cooldowns ${JSON.stringify(it.cooldowns)}${it.charges !== undefined ? ` with charges ${it.charges}` : ''} (its full cooldown here is ${want})`);
+        const want = activeCooldownOracle(hero1, d);
+        if (cd !== want || keys.length !== 1 || it.charges !== undefined) problems.push(`an active on cooldowns ${JSON.stringify(it.cooldowns)}${it.charges !== undefined ? ` with charges ${it.charges}` : ''} (its full cooldown is ${want})`);
       } else if (keys.length || it.charges !== undefined) {
         problems.push(`a passive with cooldowns ${JSON.stringify(it.cooldowns)} / charges ${it.charges}`);
       }
-      if (it.boughtOnTurn !== playedCard.boughtOnTurn || it.paid !== playedCard.paid) problems.push(`purchase record ${playedCard.boughtOnTurn}/${playedCard.paid} -> ${it.boughtOnTurn}/${it.paid}`);
-      const held = playedCard.boughtOnTurn === B.turnNumber ? consumed[0] : undefined;
-      if (held ? it.replaced?.iid !== held.item.iid || it.replacedFrom !== held.from?.iid : it.replaced !== undefined || it.replacedFrom !== undefined) {
-        problems.push(`holds ${it.replaced ? `${it.replaced.cardId}#${it.replaced.iid} from ${it.replacedFrom ?? 'the hand'}` : 'nothing'} (the rules: ${held ? `${held.item.cardId}#${held.item.iid} from ${held.from ? `${held.from.cardId}#${held.from.iid}` : 'the hand'}` : 'nothing'})`);
-      } else if (held) {
-        let link = it.replaced;
-        for (const next of consumed.slice(1)) {
-          if (!link || link.replaced?.iid !== next.item.iid || link.replacedFrom !== next.from?.iid) {
-            problems.push(`the ${link?.cardId ?? '?'} it consumed does not hold the ${next.item.cardId}#${next.item.iid} it settled`);
-            break;
-          }
-          link = link.replaced;
-        }
-      }
     }
-    for (const c of consumed) {
-      const still = everyCard(after.G).find((x) => x.card.iid === c.item.iid);
-      if (still) problems.push(`the consumed ${c.item.cardId}#${c.item.iid} is still in ${still.place}`);
+    if (evolved) {
+      const where = placeOf(after.G, evolved.iid);
+      if (where?.place !== 'discard' || where.pid !== mover) problems.push(`the ${evolved.cardId}#${evolved.iid} it evolves is ${where ? `in ${where.place} of P${where.pid}` : 'nowhere'}, not in P${mover}'s discard pile`);
+    }
+    if (replaced) {
+      const where = placeOf(after.G, replaced.iid);
+      if (where?.place !== 'discard' || where.pid !== mover) problems.push(`the ${replaced.cardId}#${replaced.iid} it replaces is ${where ? `in ${where.place} of P${where.pid}` : 'nowhere'}, not in P${mover}'s discard pile`);
+    }
+    // Everything else the hero wore stays on it (and a merged Rem rides on).
+    if (hero1) {
+      const kept = (playedOn.attached ?? []).filter((a) => a.iid !== evolved?.iid && a.iid !== replaced?.iid).map((a) => a.iid);
+      const now1 = new Set((hero1.attached ?? []).map((a) => a.iid));
+      const lost = kept.filter((iid) => !now1.has(iid));
+      if (lost.length) problems.push(`it took ${lost.join(', ')} off the hero, which the play did not name`);
     }
     if (problems.length) add('played-card-state', playedCard.iid, `${playedCard.cardId}#${playedCard.iid} played on ${playedOn.cardId}#${playedOn.iid}: ${problems.join('; ')}`);
     if (hero1 && wornItemsOf(hero1).length > slotCapOracle(after.G, mover)) {
@@ -887,50 +890,89 @@ export function collectTransitionViolations(
     }
   }
 
-  // A move: the item goes to the hero named, its cooldown, charges and purchase record with
-  // it; a moved upgrade no longer undoes (the component it replaced is let go).
-  if (!duplicated && moved && movedTo) {
-    const now = wornAfter(moved.item.iid);
-    if (!now || now.bearer.iid !== movedTo.iid) {
-      add('moved-item-state', moved.item.iid, `${moved.item.cardId}#${moved.item.iid} was moved to ${movedTo.cardId}#${movedTo.iid} but is ${now ? `on ${now.bearer.cardId}#${now.bearer.iid}` : 'worn by nobody'}`);
-    } else {
-      const was = moved.item;
-      const it = now.item;
+  // A hero from the hand goes onto the board — into the empty Active slot when asked, the bench
+  // slot named, else the first free bench slot — and the first Active of the opening from the
+  // deck into the lane (the opening then finishes: the rival's Active, the decks shuffled, the
+  // deal of OPENING_DRAW).
+  if (!duplicated && (move.name === 'placeHero' || move.name === 'chooseActive')) {
+    const owner = move.name === 'chooseActive' ? B.pendingActive : mover;
+    const card = owner ? (move.name === 'chooseActive' ? deckOf(B, owner).find((c) => c.iid === args[0]) : handCardOf(B, owner, args[0])) : undefined;
+    if (card && owner) {
+      const ps1 = after.G.players[owner];
       const problems: string[] = [];
-      if (JSON.stringify(it.cooldowns ?? {}) !== JSON.stringify(was.cooldowns ?? {})) problems.push(`cooldowns ${JSON.stringify(was.cooldowns ?? {})} -> ${JSON.stringify(it.cooldowns ?? {})}`);
-      if (it.charges !== was.charges) problems.push(`charges ${was.charges} -> ${it.charges}`);
-      if (it.boughtOnTurn !== was.boughtOnTurn || it.paid !== was.paid) problems.push(`purchase record ${was.boughtOnTurn}/${was.paid} -> ${it.boughtOnTurn}/${it.paid}`);
-      if (it.replaced || it.replacedFrom !== undefined) problems.push(`still holds the ${it.replaced?.cardId ?? '?'} it replaced`);
-      if (problems.length) add('moved-item-state', it.iid, `${it.cardId}#${it.iid} moved ${moved.bearer.cardId} -> ${movedTo.cardId}: ${problems.join('; ')}`);
+      if (handCardOf(after.G, owner, card.iid)) problems.push('it is still in the hand');
+      if (deckOf(after.G, owner).some((c) => c.iid === card.iid)) problems.push('it is still in the deck');
+      const toLane = move.name === 'chooseActive' || args[1] === true;
+      const onBoard = boardOf(ps1).find((c) => c.iid === card.iid);
+      // The bench slot it should be in: the one named, else the first free one before the move.
+      const named = move.name === 'placeHero' && !toLane ? (typeof args[2] === 'number' ? args[2] : freeBenchSlotOracle(B, owner)) : undefined;
+      if (!onBoard) problems.push('it is not on the board');
+      else if (toLane && ps1.active?.iid !== card.iid) problems.push(`it is in ${onBoard.zone}, not the Active slot`);
+      // Benched while the lane was open (empty, or a corpse), an AI seat's hero steps up at once.
+      else if (named !== undefined && ps1.bench[named - 1]?.iid !== card.iid && ps1.active?.iid !== card.iid) problems.push(`it is not in bench slot ${named}`);
+      if (move.name === 'chooseActive') {
+        if (after.G.pendingActive !== undefined) problems.push(`G.pendingActive is still ${after.G.pendingActive}`);
+        for (const seat of PIDS) {
+          const q = after.G.players[seat];
+          if (!q.active) problems.push(`P${seat} has no Active after the opening`);
+          // Each side is dealt OPENING_DRAW (its deck and the hand's room allowing; its lane
+          // pick came off the deck first); the seat whose turn then began drew its turn's card too.
+          const hand0 = B.players[seat].hand.length;
+          const deckLeft = deckOf(B, seat).length - (B.players[seat].active ? 0 : 1);
+          const dealt = Math.max(0, Math.min(OPENING_DRAW, deckLeft, MAX_HAND - hand0));
+          const turnDraw = newTurn && after.ctx.currentPlayer === seat ? Math.max(0, Math.min(DRAW_PER_TURN, deckLeft - dealt, MAX_HAND - hand0 - dealt)) : 0;
+          const want = hand0 + dealt + turnDraw;
+          if (q.hand.length !== want) problems.push(`P${seat}'s hand holds ${q.hand.length}, not ${want} (${hand0} + the opening's ${dealt}${turnDraw ? ` + its turn's ${turnDraw}` : ''})`);
+        }
+      }
+      if (problems.length) add('placed-hero', card.iid, `${move.name}(${JSON.stringify(args)}) of ${card.cardId}#${card.iid}: ${problems.join('; ')}`);
     }
   }
 
-  // A sale: the card is gone — out of the hand, off the board — and a same-turn upgrade's
-  // components are back where the rules put them: each on the hero it came from while that
-  // hero has room and wears no copy, else in the hand; none still holds a component.
-  if (!duplicated && (soldHand || sold)) {
-    const card = soldHand ?? sold!.item;
-    const after1 = everyCard(after.G);
-    const still = after1.find((x) => x.card.iid === card.iid);
-    if (still) add('sold-item-gone', card.iid, `${card.cardId}#${card.iid} was sold but is still in ${still.place}`);
-    for (const r of restored) {
-      const where = after1.find((x) => x.card.iid === r.item.iid);
-      const want = r.to === 'hand' ? 'hand' : `attached:${r.to.iid}`;
-      if (where?.place !== want) {
-        add('sold-item-gone', `${card.iid}-${r.item.iid}`, `${card.cardId} was sold on the turn it was bought but the ${r.item.cardId} it consumed is ${where ? `in ${where.place}` : 'nowhere'}, not ${r.to === 'hand' ? 'back in the hand' : `back on ${r.to.cardId}#${r.to.iid}`}`);
-      } else if (where.card.replaced || where.card.replacedFrom !== undefined) {
-        add('sold-item-gone', `${card.iid}-${r.item.iid}-held`, `the ${r.item.cardId} put back by ${card.cardId}'s sale still holds the ${where.card.replaced?.cardId ?? '?'} it consumed`);
-      }
+  // A discard: the named cards go from the hand to the player's discard pile, and that much of
+  // the discard owed is paid (what is left, never more than the hand holds; none: paid).
+  if (!duplicated && move.name === 'discard' && B.pendingDiscard) {
+    const named = discardList(args[0]).filter((x): x is string => typeof x === 'string');
+    const problems: string[] = [];
+    for (const iid of named) {
+      const where = placeOf(after.G, iid);
+      if (where?.place !== 'discard' || where.pid !== mover) problems.push(`${iid} is ${where ? `in ${where.place}` : 'nowhere'}`);
+    }
+    const left = Math.min(B.pendingDiscard.count - named.length, handOf(after.G, mover).length);
+    const want = left > 0 ? left : undefined;
+    if (after.G.pendingDiscard?.count !== want) problems.push(`the discard owed went ${B.pendingDiscard.count} -> ${after.G.pendingDiscard?.count ?? 'none'} (the rules: ${want ?? 'none'})`);
+    if (problems.length) add('discard-move', mover, `discard(${JSON.stringify(args)}) by P${mover}: ${problems.join('; ')}`);
+  }
+
+  // A draw card used: N cards from the top of the deck to the hand (fewer when the deck runs
+  // out or the hand fills to MAX_HAND), then M owed to the discard (no more than the hand
+  // holds; none when it is empty).
+  if (!duplicated && move.name === 'activate') {
+    const used = wornItemOf(B, mover, args[0]);
+    const draw = used ? DRAW_CARDS[used.item.cardId] : undefined;
+    if (draw) {
+      const deck0 = deckOf(B, mover);
+      const hand0 = handOf(B, mover).length;
+      const n = Math.max(0, Math.min(draw.draw, deck0.length, MAX_HAND - hand0));
+      const top = deck0.slice(deck0.length - n).map((c) => c.iid).reverse();
+      const hand1 = handOf(after.G, mover);
+      const drawn = hand1.slice(hand0).map((c) => c.iid);
+      const owed = Math.min(draw.discard, hand1.length);
+      const problems: string[] = [];
+      if (JSON.stringify(drawn) !== JSON.stringify(top)) problems.push(`drew [${drawn.join(', ')}], the top of the deck is [${top.join(', ')}]`);
+      if (deckOf(after.G, mover).length !== deck0.length - n) problems.push(`the deck went ${deck0.length} -> ${deckOf(after.G, mover).length}`);
+      const pd = after.G.pendingDiscard;
+      if (owed > 0 ? pd?.pid !== mover || pd.count !== owed : pd !== undefined) problems.push(`the discard owed is ${JSON.stringify(pd)} (the rules: ${owed} by P${mover})`);
+      if (problems.length) add('draw-card', used!.item.iid, `${used!.item.cardId} (draw ${draw.draw}, discard ${draw.discard}) by P${mover} with ${hand0} in hand: ${problems.join('; ')}`);
     }
   }
 
   // What items give (rules.md §4): a passive's printed bonus sits on its bearer while it is
-  // worn — on with a play (and off the hero each component it consumes came from), off with a
-  // sale (each component back on its hero, for a same-turn upgrade), across with a move —
-  // and the Vitality spike's +1 max HP while the hero wears 3+ Vitality items; a level the
-  // play's exp earns adds its own. Current HP moves with the max on the way on (never below
-  // 1, and a corpse stays at 0) and is clamped to the new max on the way off. A purchase
-  // touches no hero (the card goes to the hand), and no item move touches any other hero.
+  // worn — on with a play, and off with the component an evolving upgrade replaces or the worn
+  // item a play onto a full hero discards — and the
+  // Vitality spike's +1 max HP while the hero wears 3+ Vitality items; a level the play's exp
+  // earns adds its own. Current HP moves with the max on the way on (never below 1, and a
+  // corpse stays at 0). A play touches no other hero.
   if (!duplicated && ITEM_MOVES.includes(move.name)) {
     type Bonus = { atk: number; spirit: number; hp: number };
     const gains = new Map<string, { bonus: Bonus; on: boolean; off: boolean }>();
@@ -944,13 +986,9 @@ export function collectTransitionViolations(
     };
     if (playedCard && playedOn) {
       change(playedOn.iid, playedCard.cardId, 1);
-      for (const c of consumed) if (c.from) change(c.from.iid, c.item.cardId, -1);
+      if (evolved) change(playedOn.iid, evolved.cardId, -1);
+      if (replaced) change(playedOn.iid, replaced.cardId, -1);
     }
-    if (sold) {
-      change(sold.bearer.iid, sold.item.cardId, -1);
-      for (const r of restored) if (r.to !== 'hand') change(r.to.iid, r.item.cardId, 1);
-    }
-    if (moved && movedTo) { change(moved.bearer.iid, moved.item.cardId, -1); change(movedTo.iid, moved.item.cardId, 1); }
     for (const [iid, h0] of heroes0) {
       const h1 = heroes1.get(iid);
       if (!h1) continue;
@@ -958,25 +996,27 @@ export function collectTransitionViolations(
       const lv = (h1.level ?? 1) - (h0.level ?? 1);
       const spike = (hasSpikeOracle(h1, 'vitality') ? 1 : 0) - (hasSpikeOracle(h0, 'vitality') ? 1 : 0);
       const bonus = g?.bonus ?? { atk: 0, spirit: 0, hp: 0 };
+      // A level adds the hero's own growth (docs/hero-design.md §2).
+      const hd = CARDS_BY_ID[h1.cardId];
+      const growth = hd?.type === 'hero' ? hd.growth : { atk: 0, hp: 0, spirit: 0 };
       const want = {
-        atkMod: bonus.atk + lv * LEVEL_ATK_BONUS,
-        spiritMod: bonus.spirit + lv * LEVEL_SPIRIT_BONUS,
-        hpMax: bonus.hp + spike + lv * LEVEL_HP_BONUS,
+        atkMod: bonus.atk + lv * growth.atk,
+        spiritMod: bonus.spirit + lv * growth.spirit,
+        hpMax: bonus.hp + spike + lv * growth.hp,
       };
       for (const k of ['atkMod', 'hpMax', 'spiritMod'] as const) {
         if (h1[k] - h0[k] !== want[k]) add('equip-bonus', `${iid}-${k}`, `${h1.cardId}#${iid} ${k} ${h0[k]} -> ${h1[k]} after ${move.name}(${JSON.stringify(args)}); the items' bonuses${spike ? `, the Vitality spike` : ''} and ${lv} level-up(s) give ${want[k] >= 0 ? '+' : ''}${want[k]}`);
       }
       let hp: number | undefined;
       if (!g) hp = h0.hp; // untouched
-      else if (g.off && !g.on) hp = Math.min(h0.hp, h1.hpMax); // only lost an item: clamped, never healed
-      else if (g.on && !g.off) hp = h0.hp <= 0 ? 0 : Math.max(1, h0.hp + bonus.hp) + Math.max(0, spike) + lv * LEVEL_HP_BONUS;
+      else if (g.on && !g.off) hp = h0.hp <= 0 ? 0 : Math.max(1, h0.hp + bonus.hp) + Math.max(0, spike) + lv * growth.hp;
       if (hp !== undefined && h1.hp !== hp) add('equip-bonus', `${iid}-hp`, `${h1.cardId}#${iid} hp ${h0.hp}/${h0.hpMax} -> ${h1.hp}/${h1.hpMax} after ${move.name}(${JSON.stringify(args)}); the rules give ${hp}`);
     }
   }
 
   // Exp for wearing (rules.md §4): EXP_ON_EQUIP the first time a hero wears an item played
-  // onto it — never for a corpse, a re-play (`equippedIds` remembers what it has worn) or a
-  // move; a purchase, a sale and the close earn none. A hero never forgets what it has worn.
+  // onto it — never for a corpse or a re-play (`equippedIds` remembers what it has worn).
+  // A hero never forgets what it has worn.
   if (!duplicated && ITEM_MOVES.includes(move.name)) {
     for (const [iid, h0] of heroes0) {
       const h1 = heroes1.get(iid);
@@ -996,8 +1036,7 @@ export function collectTransitionViolations(
   }
 
   // An active item used (rules.md §5): its bearer has used its one ability this turn, and the
-  // item cools down for its tier (less the bearer's Cooldown family, never under 1) — or,
-  // hard crowd control, spends one charge.
+  // item cools down (its own cooldown, else its tier's) — or, hard crowd control, spends one charge.
   if (!duplicated && move.name === 'activate') {
     const used = wornItemOf(B, mover, args[0]);
     const d = used && itemData(used.item.cardId);
@@ -1009,18 +1048,19 @@ export function collectTransitionViolations(
       else if (d.hardCC) {
         if (now.item.charges !== (used.item.charges ?? 0) - 1) add('activate-spends', used.item.iid, `hard crowd control ${d.id} had ${used.item.charges} charges and has ${now.item.charges} after its use`);
       } else {
-        const want = activeCooldownOracle(now.bearer, d.tier);
+        const want = activeCooldownOracle(now.bearer, d);
         if (now.item.cooldowns?.[d.id] !== want) add('activate-spends', used.item.iid, `${d.id} cools down ${now.item.cooldowns?.[d.id]} after its use; the rules say ${want}`);
       }
     }
   }
 
   // Cooldowns count their owner's turns (rules.md §5): at the start of a player's turn each of
-  // its heroes' and items' cooldowns comes down by one (gone at 0), on a corpse and a merged
-  // Rem too; nothing else moves a cooldown but the ability or item that starts it — a skill
-  // or ultimate used (the `ability-cooldown` rule), an item played or used (the
+  // its heroes' and items' cooldowns on the board comes down by one (gone at 0), on a corpse
+  // and a merged Rem too; nothing else moves a cooldown but the ability or item that starts it
+  // — a skill or ultimate used (the `ability-cooldown` rule), an item played or used (the
   // `played-card-state` / `activate-spends` rules), and Refresher, which takes the player's
-  // Active and the items it wears off cooldown. A card that comes or goes is left out.
+  // Active and the items it wears off cooldown. A card that comes onto the board or leaves it
+  // (a hero to or from the hand, a component evolved away) is left out.
   if (!duplicated) {
     // (A turn handed over has begun even when its start ends the match — a Bleed tick that
     // fells a hero and the patron with it: its ticks have run.)
@@ -1028,14 +1068,16 @@ export function collectTransitionViolations(
     const usedSkill = move.name === 'useSkill' && typeof args[0] === 'string'
       ? `${args[0]}|${typeof args[2] === 'string' ? args[2] : firstSkillId(heroes0.get(args[0] as string))}` : undefined;
     const usedItem = move.name === 'activate' ? wornItemOf(B, mover, args[0]) : undefined;
+    // A trigger used arms its own cooldown, as from its button.
+    const usedTrigger = move.name === 'useTrigger' && typeof args[0] === 'string' ? `${args[0]}|${args[1]}` : undefined;
     const refreshed = new Set<string>();
     if (usedItem?.item.cardId === 'refresher') {
       const active = B.players[mover].active;
       if (active) for (const c of [active, ...wornItemsOf(active)]) refreshed.add(c.iid);
     }
-    const present0 = new Set(everyCard(B).map((x) => x.card.iid));
-    const present1 = new Set(everyCard(after.G).map((x) => x.card.iid));
     for (const pid of PIDS) {
+      const present0 = boardIids(B, pid);
+      const present1 = boardIids(after.G, pid);
       const was = cooldownEntries(B, pid);
       const now = cooldownEntries(after.G, pid);
       const keys = new Set([...was.keys(), ...now.keys()]);
@@ -1046,58 +1088,65 @@ export function collectTransitionViolations(
         const v1 = now.get(key);
         let want: number | undefined | 'any' = v0;
         if (started === pid) want = v0 === undefined || v0 - 1 <= 0 ? undefined : v0 - 1;
-        else if (key === usedSkill || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';
+        else if (key === usedSkill || key === usedTrigger || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';
         else if (refreshed.has(owner) && v1 === undefined) want = undefined;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);
       }
     }
   }
 
-  // Respawn timers: -1 on their owner's turn start, untouched otherwise; back at full HP on 0.
+  // The wait of a fallen hero: -1 on its owner's turn start, untouched otherwise; at 0 it
+  // leaves its slot for the hand, at full HP, clean.
   if (!duplicated && !after.ctx.gameover) {
     const started = newTurn ? (after.ctx.currentPlayer as PlayerID) : undefined;
     for (const pid of PIDS) {
       const now = heroesByIid(after.G.players[pid]);
       for (const [iid, h0] of heroesByIid(B.players[pid])) {
         if (!isRespawning(h0)) continue;
-        const h1 = now.get(iid);
-        if (!h1) continue;
         const want = started === pid ? (h0.respawnTurnsLeft ?? 0) - 1 : h0.respawnTurnsLeft ?? 0;
+        const h1 = now.get(iid);
         if (want > 0) {
-          if (h1.respawnTurnsLeft !== want) add('respawn-timer', iid, `${h1.cardId}#${iid} respawn ${h0.respawnTurnsLeft} -> ${h1.respawnTurnsLeft} after ${move.name}; expected ${want}`);
-        } else if (isRespawning(h1) || h1.hp !== h1.hpMax) {
-          add('respawn-timer', iid, `${h1.cardId}#${iid} should be back at full HP (hp ${h1.hp}/${h1.hpMax}, respawn ${h1.respawnTurnsLeft})`);
+          if (!h1 || h1.respawnTurnsLeft !== want) add('respawn-timer', iid, `${h0.cardId}#${iid} wait ${h0.respawnTurnsLeft} -> ${h1 ? h1.respawnTurnsLeft : 'off the board'} after ${move.name}; expected ${want}`);
+        } else {
+          const inHand = handOf(after.G, pid).find((c) => c.iid === iid);
+          if (h1 || !inHand || inHand.hp !== inHand.hpMax || inHand.respawnTurnsLeft !== undefined) {
+            add('respawn-timer', iid, `${h0.cardId}#${iid} should be back in P${pid}'s hand at full HP (${h1 ? `still on the board, wait ${h1.respawnTurnsLeft}` : inHand ? `hp ${inHand.hp}/${inHand.hpMax}` : 'nowhere in the hand'})`);
+          }
         }
       }
     }
   }
 
-  // A new turn: the turn counter steps by one, and the income lands on top of what was banked
-  // (LANE_INCOME, the comeback a side trailing on net worth — souls plus the list price of
-  // every worn item and every card in the hand — is owed, and the second mover's bonus on
-  // its first turn). An income that only adds up with the hands left out of net worth is
-  // `net-worth-hand`'s.
+  // A new turn: the turn counter steps by one, the income lands on top of what was kept
+  // (LANE_INCOME, and the second mover's bonus on its first turn — nothing else, ever), the
+  // side whose turn ended keeps its souls, and the new player draws DRAW_PER_TURN — unless the
+  // deck is empty or the hand already holds MAX_HAND (a fallen hero back in the hand first
+  // counts).
   if (newTurn) {
     const cur = after.ctx.currentPlayer as PlayerID;
     const ended = other(cur);
     if (after.G.turnNumber !== B.turnNumber + 1) add('turn-number-step', 'turn', `turnNumber ${B.turnNumber} -> ${after.G.turnNumber} after endTurn`);
-    // A hero of the side that ended its turn that falls in the hand-over (a Naptime burst at
-    // the end of its turn) pays the new player its bounty too, and so does its Guardian should
-    // the push fell it.
-    const bounty = bountyOf(ended);
-    // The comeback reads the net worths at the income: what the End step paid either side
-    // (bounties, a felled Guardian's bounty) is paid before it, what the new turn's start ticks
-    // fell after it — so any of those readings is the rule's.
-    const comeback = (gap: number) => COMEBACK_STEPS.reduce((n, [by, bonus]) => (gap >= by ? Math.max(n, bonus) : n), 0);
     const seat = cur !== firstOf(after.G) && after.G.turnNumber === 2 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
-    const shifts = [0, bountyOf(cur)].flatMap((up) => [0, bountyOf(ended)].map((down) => up - down));
-    const incomes = (gap: number) => [...new Set(shifts.map((d) => B.players[cur].souls + LANE_INCOME + comeback(gap + d) + seat + bounty))];
-    const choices = incomes(netWorthOracle(B, ended) - netWorthOracle(B, cur));
+    const want = B.players[cur].souls + LANE_INCOME + seat;
     const got = after.G.players[cur].souls;
-    if (!choices.includes(got)) {
-      const handless = incomes(netWorthOracleWithoutHand(B, ended) - netWorthOracleWithoutHand(B, cur));
-      if (handless.includes(got)) add('net-worth-hand', `${cur}-income`, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls: the comeback left the hands out of net worth (counted, the income says ${choices.join(' or ')})`);
-      else add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls; banked ${B.players[cur].souls}, the income (+${bounty} in bounties) says ${choices.join(' or ')}`);
+    if (got !== want) {
+      add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls; kept ${B.players[cur].souls}, the income says ${want}`);
+    }
+    if (after.G.players[ended].souls !== B.players[ended].souls) add('souls-income', `${ended}-ended`, `P${ended}'s souls went ${B.players[ended].souls} -> ${after.G.players[ended].souls} as its turn ended`);
+    if (!duplicated) {
+      const deck0 = deckOf(B, cur);
+      const deckIids = new Set(deck0.map((c) => c.iid));
+      const hand1 = handOf(after.G, cur);
+      const drawn = hand1.filter((c) => deckIids.has(c.iid)).length;
+      const back = hand1.filter((c) => isHeroCard(c) && heroesByIid(B.players[cur]).has(c.iid)).length;
+      const room = MAX_HAND - (handOf(B, cur).length + back);
+      // The first turn begun by the opening's choice: the deal of OPENING_DRAW came first (after
+      // the seat's own lane pick left the deck), then the turn's draw.
+      const opening = move.name === 'chooseActive';
+      const avail = deck0.length - (opening && !B.players[cur].active ? 1 : 0);
+      const wantDrawn = Math.max(0, Math.min((opening ? OPENING_DRAW : 0) + DRAW_PER_TURN, avail, room));
+      if (drawn !== wantDrawn) add('draw-per-turn', cur, `P${cur} drew ${drawn} at the start of turn ${after.G.turnNumber}; deck ${deck0.length}, hand ${handOf(B, cur).length} (+${back} back from a fall): the rules give ${wantDrawn}`);
+      if (drawn > 0 && hand1.length > Math.max(MAX_HAND, handOf(B, cur).length + back)) add('hand-cap', `${cur}-draw`, `P${cur}'s hand holds ${hand1.length} after its draw (MAX_HAND ${MAX_HAND})`);
     }
   }
   return out;

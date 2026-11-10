@@ -107,7 +107,7 @@ function LevelEdgeDemo() {
     <>
       <Caption>
         A hero&rsquo;s level, printed into its frame. The border is already the state channel (gold yours,
-        red the rival&rsquo;s, green a legal target), so the level is a band inside it, with a dark line
+        sapphire the rival&rsquo;s, green a legal target), so the level is a band inside it, with a dark line
         along its inner edge so it reads over the portrait and the cream band alike.
       </Caption>
       <Caption>
@@ -178,9 +178,9 @@ function SoulsRailDemo() {
   // width is the Gallery's own: the rail hugs the right edge whatever the
   // board's width, so the stage need be no wider than it takes to show that.
   const { isMobile } = useViewport();
-  const bench = boardRows.bench(isMobile);
-  const lane = boardRows.lane(isMobile);
-  const gap = boardRows.gap(isMobile);
+  const bench = boardRows.bench;
+  const lane = boardRows.active * 2 + boardRows.lane;
+  const gap = boardRows.gap;
   const [rival, setRival] = useState(2);
   const [you, setYou] = useState(3);
   const standIn = { border: `1px dashed ${poster.inkFaint}`, borderRadius: radius.sm, opacity: 0.6 };

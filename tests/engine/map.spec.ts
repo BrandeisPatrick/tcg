@@ -5,8 +5,14 @@
  * board (`freshReadyGame`: P0's act step on engine turn 2, P1 moved first) and
  * driven through the engine's front door (`perform`) and its turn edges
  * (`beginTurn`, `endTurnEffects`).
+ *
+ * The Mid-Boss is off for now (MID_BOSS_ENABLED, Patrick 2026-11-09): the
+ * boards built by `at` turn it on for themselves (`midBossOn`), so its rules
+ * keep their tests; the last block holds it off — nothing rises and nothing
+ * counts down to it, through a long AI match too.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Client } from 'boardgame.io/client';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { INVALID, perform } from '@/engine/engine';
 import { attackBlocked, attackTargets, blocked, legalActions, skillTargets } from '@/engine/legality';
@@ -17,27 +23,33 @@ import { resolve } from '@/engine/death';
 import { addStatus } from '@/engine/statusOps';
 import { pushStructures, riseBoss } from '@/engine/map';
 import {
-  checkWinner, findCardOnBoard, isRespawning, killPush, respawnTimer, slotCap, standingVerdict, structureHp, structureOf,
+  bossDue, checkWinner, findCardOnBoard, isRespawning, killPush, respawnTimer, slotCap, standingVerdict, structureHp, structureOf,
   targetsFor,
 } from '@/engine/query';
-import { MATCH_TURNS, respawnTurns, round } from '@/engine/rounds';
+import { MATCH_TURNS, round } from '@/engine/rounds';
 import {
-  BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, BOSS_SOULS, GUARDIAN_BOUNTY, MAX_ITEMS, REVIVE_CREDITS, ROUND_CAP,
+  BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, BOSS_SPAWN_ROUND, MAX_ITEMS, MID_BOSS_ENABLED, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP,
 } from '@/engine/constants';
+import { DeadlockGame } from '@/engine/game';
+import { seededRandom } from '@/engine/rng';
+import { setMatchConfig } from '@/storage/matchConfig';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { freshReadyGame, giveItem, makeHero, setTrack, structuresOf } from './_helpers';
+import { freshReadyGame, giveItem, makeHero, midBossOn, setTrack, structuresOf } from './_helpers';
 
 const ctx = (pid: PlayerID) => ({ currentPlayer: pid, turn: 1, numPlayers: 2 }) as never;
 
 /** The board at engine turn `turn`, its mover's act step: P1 moves first, so
- *  odd turns are P1's and even ones P0's. */
-function at(turn: number, G: GameState = freshReadyGame()): GameState {
+ *  odd turns are P1's and even ones P0's. The Mid-Boss is on (`midBossOn`). */
+function at(turn: number, G: GameState = midBossOn(freshReadyGame())): GameState {
   G.turnNumber = turn;
   return G;
 }
 
-/** The Mid-Boss in the pit, as the engine raises it (round 4 on). */
+/** The Mid-Boss in the pit, as the engine raises it (round 4 on). P0's Haze
+ *  swings for 3 (her Attack 1, raised by 2): the boss's numbers below are
+ *  written against a swing of 3. */
 function withBoss(G: GameState = at(8)): { G: GameState; boss: CardInstance } {
+  G.players['0'].active!.atkMod = 2;
   riseBoss(G);
   return { G, boss: G.boss! };
 }
@@ -55,12 +67,12 @@ describe('the structures: Guardian 4 → Walker 6 → Patron 8, pushed front fir
     }
   });
 
-  it('a push damages the front standing structure and carries the rest on; the felled Guardian pays its bounty', () => {
+  it('a push damages the front standing structure and carries the rest on; the felled Guardian pays no souls', () => {
     const G = freshReadyGame();
     const souls = G.players['0'].souls;
     expect(pushStructures(G, '1', 5, 'kill')).toBe(5);
     expect(G.players['1'].structures.map((s) => s.hp)).toEqual([0, 5, 8]);
-    expect(G.players['0'].souls).toBe(souls + GUARDIAN_BOUNTY);
+    expect(G.players['0'].souls).toBe(souls);
     const fx = G.fx.filter((e) => e.kind === 'push' || e.kind === 'fall');
     expect(fx.map((e) => `${e.kind}:${e.structure}`)).toEqual(['push:guardian', 'fall:guardian', 'push:walker']);
     expect(G.record['0']).toMatchObject({ pushes: 1, pushDamage: 5 });
@@ -82,7 +94,7 @@ describe('the structures: Guardian 4 → Walker 6 → Patron 8, pushed front fir
     expect(checkWinner(G)).toEqual({ winner: '0' });
   });
 
-  it("a scripted track of the Patron alone (a Story fight's, a lesson's) has no Guardian bounty and no flex slot", () => {
+  it("a scripted track of the Patron alone (a Story fight's, a lesson's) has no Guardian and no flex slot", () => {
     const G = freshReadyGame();
     setTrack(G, '1', { patron: 3 });
     const souls = G.players['0'].souls;
@@ -94,7 +106,7 @@ describe('the structures: Guardian 4 → Walker 6 → Patron 8, pushed front fir
 });
 
 describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pusher\'s bullet power', () => {
-  it('the kill pays its bounty and pushes the same level + 1 into the victim\'s side', () => {
+  it('the kill pays no souls and pushes level + 1 into the victim\'s side', () => {
     const G = freshReadyGame();
     const rival = G.players['1'].active!;
     rival.hp = 1;
@@ -102,7 +114,7 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
     const souls = G.players['0'].souls;
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
     expect(isRespawning(rival)).toBe(true);
-    expect(G.players['0'].souls).toBe(souls + 3);
+    expect(G.players['0'].souls).toBe(souls);
     expect(structuresOf(G, '1')).toBe(18 - 3);
     expect(G.record['0'].kills).toBe(1);
   });
@@ -119,6 +131,7 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
   it('at the End, with every rival hero down, the standing Active pushes its bullet power (doubled from round 9)', () => {
     for (const [turn, mult] of [[2, 1], [18, 2]] as const) {
       const G = at(turn);
+      G.players['0'].active!.atkMod = 2; // Haze's Attack 1, raised to 3
       for (const c of [G.players['1'].active!, ...G.players['1'].bench]) { c!.hp = 0; c!.respawnTurnsLeft = 2; }
       endTurnEffects(G, '0');
       expect(structuresOf(G, '1'), `turn ${turn}`).toBe(18 - 3 * mult); // Haze's 3
@@ -134,20 +147,42 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
   });
 });
 
-describe('the respawn timer by the round', () => {
-  it('1 own turn in rounds 1–4, 2 in rounds 5–8, 3 from round 9', () => {
-    expect([1, 7, 8, 9, 16, 17, 30].map((t) => respawnTurns(at(t)))).toEqual([1, 1, 1, 2, 2, 3, 3]);
-  });
-
-  it('one more for the strictly richest hero on the board, and a fall arms it', () => {
+describe('the wait before a fallen hero goes back to the hand', () => {
+  it('RESPAWN_TURNS (2) own turns, in every round, whatever the hero wears', () => {
+    expect(RESPAWN_TURNS).toBe(2);
+    for (const t of [1, 7, 10, 18, 30]) expect(respawnTimer(at(t), at(t).players['1'].active!), `turn ${t}`).toBe(RESPAWN_TURNS);
     const G = at(10); // round 5
     const rival = G.players['1'].active!;
-    expect(respawnTimer(G, rival)).toBe(2);
     giveItem(G, rival, 'extra_spirit');
-    expect(respawnTimer(G, rival)).toBe(3);
+    expect(respawnTimer(G, rival)).toBe(RESPAWN_TURNS);
+  });
+
+  it('a fall arms it; when it runs out the hero is in its owner\'s hand at full HP, its level and items kept, its slot empty', () => {
+    const G = at(10);
+    const p1 = G.players['1'];
+    const rival = p1.active!;
+    rival.level = 3;
+    const worn = giveItem(G, rival, 'extra_spirit');
     rival.hp = 1;
     perform(G, '0', { type: 'attack' });
-    expect(rival.respawnTurnsLeft).toBe(3);
+    expect(rival.respawnTurnsLeft).toBe(RESPAWN_TURNS);
+    // The AI seat promoted a bench hero; the corpse waits on the bench.
+    expect(p1.active).not.toBe(rival);
+    const slot = p1.bench.indexOf(rival);
+    expect(slot).toBeGreaterThanOrEqual(0);
+    endTurnEffects(G, '0');
+    beginTurn(G, '1', 11);
+    expect(rival.respawnTurnsLeft).toBe(1);
+    endTurnEffects(G, '1');
+    beginTurn(G, '0', 12);
+    endTurnEffects(G, '0');
+    beginTurn(G, '1', 13);
+    expect(p1.bench[slot]).toBeNull();
+    expect(p1.hand).toContain(rival);
+    expect(rival).toMatchObject({ zone: 'hand', hp: rival.hpMax, level: 3 });
+    expect(rival.respawnTurnsLeft).toBeUndefined();
+    expect(rival.attached).toContain(worn);
+    expect(G.fx.some((e) => e.kind === 'deck' && e.what === 'toHand' && e.iid === rival.iid)).toBe(true);
   });
 });
 
@@ -236,14 +271,14 @@ describe('the Mid-Boss', () => {
     expect(G.record['1'].kills).toBe(0);
   });
 
-  it('falls to the side that dealt it more: 4 souls and the Rejuvenator, and rises again 4 rounds on', () => {
+  it('falls to the side that dealt it more: the Rejuvenator (no souls), and rises again 4 rounds on', () => {
     const { G, boss } = withBoss();
     G.bossDamage = { '0': 4, '1': 3 };
     boss.hp = 3; // P0's swing of 3 finishes it
     const souls = G.players['0'].souls;
     shootBoss(G, '0');
     expect(G.boss).toBeNull();
-    expect(G.players['0'].souls).toBe(souls + BOSS_SOULS);
+    expect(G.players['0'].souls).toBe(souls);
     expect(G.players['0']).toMatchObject({ reviveCredits: REVIVE_CREDITS, reviveUntilRound: 6 });
     expect(G.bossRespawnRound).toBe(8);
     expect(G.record['0'].bossKills).toBe(1);
@@ -305,7 +340,7 @@ describe('the Mid-Boss', () => {
 });
 
 describe('the Rejuvenator', () => {
-  it('a hero that falls with a credit live is paid for and pushed, then back in place at full HP, a credit spent', () => {
+  it('a hero that falls with a credit live is pushed, then back in place at full HP, a credit spent', () => {
     const G = at(10);
     const p1 = G.players['1'];
     p1.reviveCredits = 2;
@@ -318,7 +353,7 @@ describe('the Rejuvenator', () => {
     expect(rival.hp).toBe(rival.hpMax);
     expect(p1.active).toBe(rival);
     expect(p1.reviveCredits).toBe(1);
-    expect(G.players['0'].souls).toBe(souls + 2);
+    expect(G.players['0'].souls).toBe(souls);
     expect(structuresOf(G, '1')).toBe(16);
     expect(G.record['1'].revives).toBe(1);
     expect(G.fx.some((e) => e.kind === 'revive' && e.iid === rival.iid && e.credit)).toBe(true);
@@ -387,6 +422,7 @@ describe('the AI and the Mid-Boss', () => {
     const G = at(7);
     riseBoss(G);
     const attacker = G.players['1'].active = makeHero('hero_dynamo', '1', 'active', 0);
+    attacker.atkMod = 2; // Dynamo's Attack 1, raised to 3
     attacker.hp = attacker.hpMax = 20;
     attacker.skillUsedThisTurn = true;
     for (const b of G.players['1'].bench) { b!.hp = 0; b!.respawnTurnsLeft = 2; }
@@ -442,5 +478,69 @@ describe('the board finds the boss', () => {
     resolve(G);
     expect(G.boss).toBeNull();
     expect(G.players['0'].reviveCredits).toBe(REVIVE_CREDITS);
+  });
+});
+
+describe('the Mid-Boss is off for now (MID_BOSS_ENABLED)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a fresh game has none: it never rises, and nothing counts down to it', () => {
+    expect(MID_BOSS_ENABLED).toBe(false);
+    const G = freshReadyGame();
+    expect(G.midBoss).toBe(false);
+    expect(bossDue(G)).toBeNull();
+    G.turnNumber = 6;
+    beginTurn(G, '1', 7);                      // round 4 opens: the round it used to rise in
+    expect(round(G)).toBe(BOSS_SPAWN_ROUND);
+    expect(G.boss).toBeNull();
+    riseBoss(G);
+    expect(G.boss).toBeNull();
+    expect(G.fx.some((e) => e.kind === 'boss')).toBe(false);
+    expect(attackTargets(G, '1').every((t) => t.zone !== 'pit')).toBe(true);
+    // On, the same board counts down to round 4 and the boss rises there.
+    const on = midBossOn(freshReadyGame());
+    expect(bossDue(on)).toBe(BOSS_SPAWN_ROUND);
+    on.turnNumber = 6;
+    beginTurn(on, '1', 7);
+    expect(on.boss).toMatchObject({ cardId: BOSS_CARD_ID });
+    expect(bossDue(on)).toBeNull();            // up: nothing to count down to
+  });
+
+  /** An AI-vs-AI drafted match through a boardgame.io Client, seeded; calls
+   *  `each` on every state. Returns the last. */
+  function aiMatch(seed: number, midBoss: boolean | undefined, each: (G: GameState) => void): GameState {
+    setMatchConfig({ heroPreferences: [null, null, null, null], seed, humanSeat: null, ...(midBoss === undefined ? {} : { midBoss }) });
+    vi.spyOn(Math, 'random').mockImplementation(seededRandom(seed)); // the draft's jitter reads it
+    const client = Client({ game: DeadlockGame, numPlayers: 2 });
+    client.start();
+    let st = client.getState()!;
+    for (let moves = 0; !st.ctx.gameover && moves < 3000; moves++) {
+      each(st.G as GameState);
+      const choice = enumerateAIMoves(st.G as GameState, st.ctx)[0];
+      (client.moves as Record<string, (...args: unknown[]) => void>)[choice.move](...choice.args);
+      st = client.getState()!;
+    }
+    each(st.G as GameState);
+    client.stop();
+    return st.G as GameState;
+  }
+
+  it('a long AI match (seed 12 runs to the round cap): no boss rises, no boss event or log line, nobody holds a Rejuvenator — and with it on, it rises', () => {
+    let rounds = 0;
+    const end = aiMatch(12, undefined, (G) => {
+      expect(G.midBoss).toBe(false);
+      expect(G.boss).toBeNull();
+      expect(bossDue(G)).toBeNull();
+      expect(G.players['0'].reviveCredits + G.players['1'].reviveCredits).toBe(0);
+      rounds = Math.max(rounds, round(G));
+    });
+    expect(rounds, 'the match runs to the round cap, well past the rounds a boss would rise in').toBe(ROUND_CAP);
+    expect(end.fx.some((e) => e.kind === 'boss')).toBe(false);
+    expect(end.log.some((l) => /Mid-Boss|Rejuvenator/.test(l.text))).toBe(false);
+    expect(end.record['0'].bossKills + end.record['1'].bossKills).toBe(0);
+    // The same seed with the Mid-Boss turned on: it rises in round 4.
+    let rose = false;
+    aiMatch(12, true, (G) => { if (G.boss) rose = true; });
+    expect(rose).toBe(true);
   });
 });

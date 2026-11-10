@@ -27,6 +27,7 @@ import type { CardId } from '@/engine/types';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { ART_BASE, BASE, HERO_IMG_BASE } from '@/art/assets';
 import { LESSONS } from '@/tutorial/lessons';
+import { DECK_SIZE } from '@/engine/constants';
 
 // Print palette — the sheet's own inks, deliberately flatter and blacker
 // than the parlor tokens so the poster reads as printed, not upholstered.
@@ -84,11 +85,11 @@ function useTitleStatus() {
           ? 'Run lost · start again'
           : `Run · ${run.clearedNodeIds.length}/${run.nodes.length} blocks · ${run.heroes.length} ${run.heroes.length === 1 ? 'hero' : 'heroes'}`;
     return {
-      quick: 'Draft · shop · fight',
+      quick: 'Draft · draw · fight',
       story,
       storyActive: active,
-      // One line for the sheet: who you asked the draft for, and their builds.
-      loadout: `${picks}/${MAX_PREFERRED_HEROES} squad · builds`,
+      // One line for the sheet: who you asked the draft for, and the deck.
+      loadout: `${picks}/${MAX_PREFERRED_HEROES} squad · ${data.deck.length >= DECK_SIZE ? 'deck' : 'deck from builds'}`,
       tutorial: data.tutorialDone
         ? `${LESSONS.length}/${LESSONS.length} lessons · play any again`
         : data.lessonsDone.length
@@ -262,7 +263,7 @@ export function StartScreen({ onPlay, onStory, onTutorial, onLoadout }: StartScr
             status={status.loadout}
             art={{ src: `${ART_BASE}bill_decks.webp`, objectPosition: '50% 34%' }}
             onClick={onLoadout}
-            ariaLabel="Set your squad and builds"
+            ariaLabel="Set your squad, your deck and your builds"
             compact={isMobile}
           />
           <ModeCard

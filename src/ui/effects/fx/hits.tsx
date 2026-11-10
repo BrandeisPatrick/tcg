@@ -59,7 +59,7 @@ export function HitImpact({ ev, rect, sourceRect, tile, at, hold, ownerInk = FX_
   /** ms into the batch when the impact lands. */
   at: number;
   hold: number;
-  /** The source's owner ink (your gold / the rival's red) for tracers. */
+  /** The source's owner ink (your gold / the rival's sapphire) for tracers. */
   ownerInk?: string;
   /** Which hit on this card within the batch — fans the numerals apart. */
   index?: number;

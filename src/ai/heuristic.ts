@@ -4,26 +4,31 @@
  * has already said yes to, and it never has to be taught a new rule. What is
  * left here is judgement — how good a move, or the position it leaves, is.
  *
- * In the shop step it shops by rule, not by lookahead: each hero follows its
- * build (`buildOf`: the default build for an AI seat) — the Active first, then
- * the bench — buying the next build item it can afford (or the market's
- * stand-in for one off sale), saving when the Active's next item is one or two
- * turns of income away, never selling; each card it buys it plays at once onto
- * the hero it bought it for, so it never holds one; then it closes the shop.
+ * It plays the deck game by the same rules as a person (docs/deck-plan.md):
+ * its deck is made from its heroes' builds at the match's start, it draws,
+ * benches the heroes it draws, puts items from its hand on heroes for their
+ * price (an upgrade onto the hero wearing its component evolves it for the
+ * difference), casts its draw cards and pays their discards (`discardChoice`:
+ * the cards worth least to it), and, when a play could make one of several
+ * upgrades, picks the one its heroes' builds name. A full hero takes a card
+ * only in place of its least valuable worn item, and only a card clearly
+ * worth more (`replaceWorthIt`: a tier up at the least).
  *
  * With lookahead (the default) every candidate is made on a copy through the
  * engine (`simulate`), and the resulting position is scored by `evalState`.
  * That captures target choice, lethal and the value of gear, skills and
  * ultimates without hand-tuning each case, and what a line leaves on the board:
- * the statuses it lands, the channel it starts, the Rem it merges, the souls it
- * banks. A turn's act is the player's to spend on abilities (one per hero —
- * skill, active item or ultimate, all free) and one Retreat, and then one
- * attack, which ends
- * it: after the attack only `endTurn` is left. Ending the turn never attacks,
- * so the AI has to choose `attack` itself. Every line before the attack is
- * valued with the attack still to come (if making it helps), so a buff, a
- * bench skill, an item or a Retreat is weighed by the swing it sets up, and attacking
- * early — which forfeits everything else — only wins when nothing else adds.
+ * the statuses it lands, the channel it starts, the Rem it sets riding, the
+ * souls it keeps, the cards it holds. A turn is the player's to spend on cards from the
+ * hand, abilities (one per hero — a skill or an ultimate for its souls, or a
+ * worn active item, free) and
+ * one Retreat, and then one attack, which ends it: after the attack only
+ * `endTurn` is left. Ending the turn never attacks, so the AI has to choose
+ * `attack` itself. Every line before the attack is valued with the attack
+ * still to come (if making it helps), so a card, a buff, a bench skill, an item
+ * or a Retreat is weighed by the swing it sets up, and attacking early — which
+ * forfeits everything else — only wins when nothing else adds. Among plays the
+ * evaluation cannot tell apart, an item goes to the hero whose build lists it.
  *
  * Without lookahead (the eval framework's random agent, the MCTS bot's rollouts)
  * the moves are only listed, ranked by cheap per-move scores.
@@ -40,26 +45,22 @@
  * The difficulty dial (`AiStrength`, read off the options a caller passes):
  * 'normal' is everything above. 'hard' plays every line it enumerates out to
  * the turn's attack at each target it may then make (the forecast of each),
- * not only at the default one, keeps the best, shops its build with saving,
- * and retreats only when that evaluation names a gain (no rule of thumb).
- * 'easy' is 'normal' with a seeded noise term of about ±15% of the spread of
- * its options' scores and greedy shopping: the first build item it can
- * afford, never saving.
+ * not only at the default one, keeps the best, and retreats only when that
+ * evaluation names a gain (no rule of thumb). 'easy' is 'normal' with a seeded
+ * noise term of about ±15% of the spread of its options' scores.
  */
 import type { Ctx } from 'boardgame.io';
 import type { CardId, GameState, PlayerID, PlayerState, CardInstance, StatusInstance, StructureKind } from '@/engine/types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
-  checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, isBoss, isRespawning, itemCooldown, liveBoardCards,
-  otherPlayer, resolveSkill, reviveReady, slotCap, slottedHeroes, wornItems,
+  attackPower, checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroesOf, heroWorth, isBoss, isRespawning,
+  itemCooldown, itemPrice, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
-import {
-  attackBlocked, attackTargets, buyBlocked, buyPrice, legalActions, playTargets, sellBlocked, upgradeComponent,
-} from '@/engine/legality';
-import { buildOf, marketStandIn } from '@/engine/market';
+import { attackBlocked, attackTargets, legalActions, playBlocked, upgradeComponent } from '@/engine/legality';
+import { buildOf } from '@/engine/deck';
 import { seededRandom } from '@/engine/rng';
 import { forecastAttack, simulate } from '@/engine/forecast';
 import { BOSS_RETALIATION, LANE_INCOME } from '@/engine/constants';
@@ -75,7 +76,7 @@ export const DEFAULT_AI_STRENGTH: AiStrength = 'normal';
 export interface AiOptions {
   /** How hard it plays (default 'normal'). */
   strength?: AiStrength;
-  /** Items it may not buy: restricted play (scripts/eval/restricted.ts)
+  /** Items it may not play: restricted play (scripts/eval/restricted.ts)
    *  bars one side from an item to measure what the item is worth. */
   banned?: ReadonlySet<CardId>;
 }
@@ -120,7 +121,6 @@ interface Weight {
 const STATUS_WEIGHT: Record<string, Weight> = {
   // Hard crowd control: any status the engine flags `cc` (stun, silenced, disarm, sleep).
   cc:            { scale: 3,   turns: 2 },                // a denied turn is worth about a unit's threat; two turns at most
-  sleep_burst:   { scale: 0.5, turns: 1, byValue: true }, // a Sleep's stored wake-up burst (Naptime), halved: it can be cleansed first
   // Damage and crowd control still to come.
   bleed:         { scale: 2,   turns: 3, byValue: true }, // pure damage: `value` a turn for up to 3 turns, each point worth a point of HP
   charged:       { scale: 3,   turns: 1 },                // a Stun on its way: the price of one denied turn
@@ -184,6 +184,12 @@ function heroThreat(c: CardInstance): number {
  *  (a turn or two away from use again): the lookahead sees the use cost it. */
 const COOLING_SHARE = 0.5;
 
+/** What a worn draw card is worth for each card it nets (draws less
+ *  discards), ready or cooling alike: what a cast gains shows in the hand it
+ *  leaves (`handValue`), so a cast is weighed by the cards it brings and the
+ *  hero's ability it spends, not by the card going on cooldown. */
+const DRAW_NET_CARD = 2;
+
 // Value of what a hero wears beyond its stat bonuses (+atk/+spirit/+hp, which
 // heroThreat and hp already show): a passive item's ability procs and hooks
 // (lifesteal, burst, resist…), and an active item's effect, ready to use. The
@@ -198,7 +204,9 @@ function equipValue(c: CardInstance): number {
       for (const aid of data.abilities ?? []) v += getAbility(aid)?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
       continue;
     }
-    const worth = getAbility(data.abilities[0])?.base ?? 3;
+    const first = getAbility(data.abilities[0]);
+    if (first?.draw) { v += (first.draw.cards - first.draw.discard) * DRAW_NET_CARD; continue; }
+    const worth = first?.base ?? 3;
     if (data.hardCC) v += worth * Math.min(it.charges ?? 0, 1) + (it.charges ?? 0);
     else v += itemCooldown(it) > 0 ? worth * COOLING_SHARE : worth;
   }
@@ -236,22 +244,38 @@ const BOSS_LEAD = 2.5;
  *  the pit, so a swing that takes it gains, and one that hands it over loses. */
 const BOSS_STAKE_CAP = 8;
 
-/** What a soul in hand is worth: souls carry over now, so a line that banks
- *  them (or wins a bounty) is a little better than one that does not — small
- *  beside a point of HP (2), so it tips ties rather than steering play. */
+/** What a soul in hand is worth: souls carry over, so a line that keeps them
+ *  is a little better than one that does not — small beside a point of HP
+ *  (2), so it tips ties rather than steering play. */
 const SOUL = 0.3;
 
-/** Own turns of income the AI saves for its Active's next build item rather
- *  than spend on the bench (and values its souls more while it does). */
-const SAVE_TURNS = 2;
+/** What a hero card in the hand is worth: a hero to come — well under one
+ *  standing on the board (`presence`), so it is benched as soon as it can be. */
+const HAND_HERO = 6;
 
-/** What a soul is worth on top of SOUL while it counts toward the Active's next
- *  build item, that item one or two turns of income away. */
-const SAVE_SOUL = 0.2;
+/** What an item card in the hand is worth: a base, plus this share of its
+ *  price — well under what it is worth worn (`WORN_PRICE` of its price, and its
+ *  stats and effects), so it is played once it can be paid for. Drawing is
+ *  worth about this a card. */
+const HAND_ITEM = { base: 0.5, perSoul: 0.1 } as const;
 
-/** What an unused borrowed ultimate (Sinclair's copy) is worth to its holder,
- *  as a share of the ultimate's `base`: it is that effect, banked for later. */
-const BORROWED_SHARE = 1.5;
+/** What a worn item is worth for each soul of its list price, on top of what
+ *  the position reads off it (its stats in `presence`, its effects in
+ *  `equipValue`): a card's price is its designed worth (docs/card-design.md
+ *  §3), most of which the one-ply evaluation cannot see — a proc to come, a
+ *  resist against the next hit. Above a soul's own worth (SOUL), so paying for
+ *  an item and putting it on is worth it, and an evolve gains the difference. */
+const WORN_PRICE = 0.5;
+
+/** The tie-break for putting an item on the hero whose build lists it (or an
+ *  item it builds into), and for picking the upgrade a build names: well under
+ *  a point of HP, so the evaluation decides and this only orders its ties. */
+const BUILD_FIT = 0.6;
+
+/** How much more a card must be worth than the worn item it replaces on a
+ *  full hero for the AI to trade them (`replaceWorthIt`): this many times its
+ *  list price, at the least — a tier up on the price ladder (2 → 4 → 8 → 16). */
+const REPLACE_RATIO = 2;
 
 /** What a hero standing on the board is worth: its presence, its HP and its offense. */
 function presence(c: CardInstance): number {
@@ -272,8 +296,6 @@ function statusValue(c: CardInstance): number {
     if (!def) continue;
     const w = STATUS_WEIGHT[s.id] ?? (def.cc ? STATUS_WEIGHT.cc : undefined);
     if (w) v += price(def.hvalue, w, s);
-    // A Sleep that stores a wake-up burst (Naptime) is also that damage to come.
-    if (s.id === 'sleep' && s.value > 0) v += price(def.hvalue, STATUS_WEIGHT.sleep_burst, s);
   }
   return v;
 }
@@ -296,17 +318,37 @@ function channelValue(c: CardInstance, enemies: number): number {
   return v;
 }
 
-/** The Rem riding on `c`, if she has merged into it ("Lil Helpers"). A merged
- *  Rem is a hero still on the board, not gear: she is out of her bench slot but
- *  comes back to it, and the HP she granted is already on the bearer. */
+/** The Rem riding on `c` (Tag Along). A riding Rem is a hero still on the
+ *  board, not gear: she is out of her slot but comes back to the bench with
+ *  everything she wears, and what her ride gave the bearer is already on it. */
 function mergedRem(c: CardInstance): CardInstance[] {
   return (c.attached ?? []).filter((a) => a.remMergeTurnsLeft != null);
 }
 
-/** What an ultimate a hero has borrowed and not yet used is worth to it. */
-function borrowedValue(c: CardInstance): number {
-  if (!c.borrowedUlt) return 0;
-  return (getAbility(c.borrowedUlt)?.base ?? 3) * BORROWED_SHARE;
+/** How much of a hero a line saves when it takes the hero out of a lane it is
+ *  losing and keeps it on the board, out of reach — Rem riding off on an ally
+ *  (Tag Along): a share of its presence, since the 1-ply evaluation cannot see
+ *  the rival's swing it dodges. */
+const RIDE_TO_SAFETY = 0.5;
+
+/** True when `hero`, `pid`'s Active, is losing its lane: it is about to die
+ *  (ABOUT_TO_DIE), or the rival's Active could fell it with one swing. */
+function losingLane(G: GameState, pid: PlayerID, hero: CardInstance): boolean {
+  if (hero.hp < hero.hpMax * ABOUT_TO_DIE) return true;
+  const rival = G.players[otherPlayer(pid)].active;
+  return !!rival && !isRespawning(rival) && rival.hp > 0 && attackPower(rival, hero).total >= hero.hp;
+}
+
+/** What the ability `a` gains by riding its caster out of a losing lane
+ *  (`RIDE_TO_SAFETY`), read off `after`, the position the line leaves: the
+ *  caster was `pid`'s Active, losing its lane, and rides on an ally there. 0
+ *  for anything else. */
+function rideToSafety(G: GameState, pid: PlayerID, a: Action, after: GameState): number {
+  if (a.type !== 'useSkill') return 0;
+  const hero = G.players[pid].active;
+  if (!hero || hero.iid !== a.heroIid || isRespawning(hero) || !losingLane(G, pid, hero)) return 0;
+  const rides = heroesOf(after.players[pid]).find((h) => h.iid === hero.iid && h.remMergeTurnsLeft != null);
+  return rides ? presence(rides) * RIDE_TO_SAFETY : 0;
 }
 
 /** What a side's standing structures are worth (`STRUCTURE_WEIGHT`). */
@@ -349,9 +391,9 @@ function bossBlow(g: GameState, pid: PlayerID): number {
  *  the structures each side has standing, the flex slot and a live
  *  Rejuvenator, the Mid-Boss's damage lead and the blow it still owes; each
  *  living hero's HP, offense (attack plus its best skill), shield and worn
- *  gear, plus the statuses it carries, the channel it is running, the merged
- *  Rem it wears and a borrowed ultimate it holds, each fallen hero as a lost
- *  presence, and the souls each side banks. */
+ *  gear, plus the statuses it carries, the channel it is running and the
+ *  riding Rem it wears (a hero, her own gear with her), each fallen hero as a lost
+ *  presence, the souls each side keeps and the cards it holds. */
 function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
   // A match that is over is not "a good position": it is the one that must
   // rank first (or, lost, last). The engine's own win check says which.
@@ -365,9 +407,10 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
   s += mapPrizes(g, pid) - mapPrizes(g, en);
   s += bossStake(g, pid);
   s -= bossBlow(g, pid) - bossBlow(g, en);
-  // Souls carry over from turn to turn: a little for each one banked, a little
-  // more while they count toward the next build item.
-  s += (me.souls - foe.souls) * SOUL + saveValue(g, pid, d) - saveValue(g, en, d);
+  // Souls carry over from turn to turn: a little for each one kept. The hand is
+  // cards to come (a draw card's discard still owed takes its worst away).
+  s += (me.souls - foe.souls) * SOUL;
+  s += handValue(g, pid) - handValue(g, en);
   const tally = (ps: PlayerState, rivals: PlayerState, sign: number) => {
     const enemies = liveBoardCards(rivals).length;
     for (const c of liveBoardCards(ps)) {
@@ -375,9 +418,9 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
       // point of HP — weight it like HP (×2), not ×1 (which made the bot
       // under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
-      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + statusValue(c) + channelValue(c, enemies) + borrowedValue(c));
-      // Merging Rem into an ally is not the loss of a hero.
-      for (const rem of mergedRem(c)) s += sign * presence(rem);
+      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies));
+      // Rem riding on an ally is not the loss of a hero, nor of what she wears.
+      for (const rem of mergedRem(c)) s += sign * (presence(rem) + equipValue(rem) * 2 + heroWorth(rem) * WORN_PRICE);
     }
     for (const c of [ps.active, ...ps.bench]) {
       if (c && isRespawning(c)) s -= sign * 5; // corpse = lost presence
@@ -388,149 +431,121 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
   return s;
 }
 
-// ----- shopping by the build ---------------------------------------------------
+// ----- the hand -------------------------------------------------------------------
 
-/** A purchase a hero's build asks for: the item (the build's, or the market's
- *  stand-in for it), for whom, and what it would cost. */
-interface BuildBuy {
-  itemId: CardId;
-  heroIid: string;
-  cost: number;
-}
-
-/** True when `hero` wears `itemId` or an item built from it (Improved Spirit
- *  covers the Extra Spirit a build lists first). */
-function hasOrPast(hero: CardInstance, itemId: CardId): boolean {
-  return wornItems(hero).some((it) => {
-    for (let id: CardId | undefined = it.cardId; id; id = itemCard(id)?.upgradesFrom) if (id === itemId) return true;
-    return false;
-  });
-}
-
-/**
- * What `hero`'s build (`buildOf`) still has to buy in this market, in build
- * order: each item it neither wears nor has built past — the item itself, or
- * the cheapest on-sale item of its tab and tier when the market lacks it —
- * that it could wear: into a free slot, or as an upgrade of an item it wears.
- * Souls and the step are not asked; the caller does that.
- */
-function buildBuys(G: GameState, pid: PlayerID, hero: CardInstance, banned: ReadonlySet<CardId> = NONE): BuildBuy[] {
-  const out: BuildBuy[] = [];
-  const taken = wornItems(hero).map((it) => it.cardId);
+/** True when `hero`'s build (`buildOf`) lists `itemId`, or an item `itemId`
+ *  builds into (a build that names Superior Cooldown wants Compress Cooldown
+ *  on the way). */
+function buildWants(G: GameState, pid: PlayerID, hero: CardInstance, itemId: CardId): boolean {
   for (const id of buildOf(G, pid, hero.cardId)) {
-    if (hasOrPast(hero, id)) continue;
-    const itemId = marketStandIn(G, id, taken);
-    if (!itemId || taken.includes(itemId) || banned.has(itemId)) continue;
-    if (!upgradeComponent(hero, itemId) && wornItems(hero).length >= slotCap(G, pid)) continue;
-    out.push({ itemId, heroIid: hero.iid, cost: buyPrice(G, pid, itemId) });
-    taken.push(itemId);
+    for (let x: CardId | undefined = id; x; x = itemCard(x)?.upgradesFrom) if (x === itemId) return true;
   }
-  return out;
+  return false;
 }
 
-/** What `hero` does in the shop with `souls`: buys its next build item when it
- *  can; saves when that item is SAVE_TURNS of income away or less; otherwise
- *  buys the first later build item it can afford, if any. 'easy' never saves:
- *  it buys the first build item it can afford. */
-function heroShopping(G: GameState, pid: PlayerID, hero: CardInstance, souls: number, d: Dial = NORMAL): { buy?: BuildBuy; save: boolean } {
-  const buys = buildBuys(G, pid, hero, d.banned);
-  const next = buys[0];
-  if (!next) return { save: false };
-  if (d.strength === 'easy') {
-    const first = buys.find((b) => b.cost <= souls);
-    return first ? { buy: first, save: false } : { save: false };
-  }
-  if (next.cost <= souls) return { buy: next, save: false };
-  if (next.cost - souls <= SAVE_TURNS * LANE_INCOME) return { save: true };
-  const later = buys.find((b) => b.cost <= souls);
-  return later ? { buy: later, save: false } : { save: false };
+/** What one card in `pid`'s hand is worth to it as it stands (`HAND_HERO`,
+ *  `HAND_ITEM`). */
+function cardValue(card: CardInstance): number {
+  if (CARDS_BY_ID[card.cardId]?.type === 'hero') return HAND_HERO;
+  return HAND_ITEM.base + itemPrice(card.cardId) * HAND_ITEM.perSoul;
 }
 
-/** The purchase the AI makes next, and for whom: the Active's build first,
- *  then each bench hero's; a saving Active spends nothing on the bench.
- *  Undefined when there is nothing to buy. Every buy it names is one the
- *  engine allows. */
-function planPurchase(G: GameState, pid: PlayerID, d: Dial = NORMAL): BuildBuy | undefined {
+/** What `pid`'s hand is worth to it: every card's `cardValue`, less the cards
+ *  a draw card's discard still owed will take (the least worth). */
+function handValue(g: GameState, pid: PlayerID): number {
+  const values = g.players[pid].hand.map(cardValue).sort((a, b) => a - b);
+  const owed = g.pendingDiscard?.pid === pid ? g.pendingDiscard.count : 0;
+  return values.slice(owed).reduce((n, v) => n + v, 0);
+}
+
+/** What a card in hand is worth keeping, for the discard: a hero most (a hero
+ *  to come), then an item one of its heroes could take that its builds name,
+ *  then one some hero could take, cheaper to pay first; an item no hero of its
+ *  could ever take now (every one wears it or is full) least. */
+function keepValue(G: GameState, pid: PlayerID, card: CardInstance): number {
+  if (CARDS_BY_ID[card.cardId]?.type === 'hero') return 100;
   const ps = G.players[pid];
-  for (const [i, hero] of slottedHeroes(ps).entries()) {
-    const plan = heroShopping(G, pid, hero, ps.souls, d);
-    if (plan.buy && buyBlocked(G, pid, plan.buy.itemId) === null) return plan.buy;
-    if (plan.save && i === 0) break;
-  }
-  return undefined;
+  const heroes = slottedHeroes(ps);
+  // Who could take it were the souls there: the engine's own gate, souls aside.
+  const fits = heroes.filter((h) => {
+    const why = playBlocked(G, pid, card.iid, h.iid);
+    return why === null || why === 'souls' || why === 'notYourTurn';
+  });
+  const price = itemPrice(card.cardId);
+  let v = 10 + Math.min(price, 16) * 0.5;
+  if (fits.length === 0) v -= 12;
+  if (fits.some((h) => buildWants(G, pid, h, card.cardId) || upgradeComponent(h, card.cardId))) v += 6;
+  // An item several turns of income away is worth less in a hand that must shrink.
+  if (price > ps.souls + 2 * LANE_INCOME) v -= 4;
+  return v;
 }
 
-/**
- * The hero the AI puts `card` (in its hand) on: the one it bought it for —
- * the plan made just before the purchase, read again on the same position with
- * the card unbought and its price back, names it — else, for a card it did not
- * buy this turn (a Story reward, a card bought by hand before auto-play took
- * over), the first hero whose build still asks for it, else one wearing its
- * component, else the first it may go on. Undefined when no hero can take it.
- */
-function playTargetFor(G: GameState, pid: PlayerID, card: CardInstance, d: Dial = NORMAL): CardInstance | undefined {
-  const legal = playTargets(G, pid, card.iid);
-  if (legal.length === 0) return undefined;
-  if (card.boughtOnTurn === G.turnNumber) {
-    const ps = G.players[pid];
-    const unbought: GameState = {
-      ...G,
-      players: { ...G.players, [pid]: { ...ps, hand: ps.hand.filter((c) => c !== card), souls: ps.souls + (card.paid ?? 0) } },
-    };
-    const plan = planPurchase(unbought, pid, d);
-    const meant = plan?.itemId === card.cardId ? legal.find((h) => h.iid === plan.heroIid) : undefined;
-    if (meant) return meant;
-  }
-  return legal.find((h) => buildBuys(G, pid, h, d.banned).some((b) => b.itemId === card.cardId))
-    ?? legal.find((h) => upgradeComponent(h, card.cardId))
-    ?? legal[0];
+/** The cards `pid` discards to pay a draw card's discard of `n`: the `n` of
+ *  its hand worth least to keep (`keepValue`), the earliest drawn first on a
+ *  tie. */
+export function discardChoice(G: GameState, pid: PlayerID, n: number): string[] {
+  const hand = G.players[pid].hand;
+  return hand
+    .map((c, i) => ({ c, i, v: keepValue(G, pid, c) }))
+    .sort((a, b) => a.v - b.v || a.i - b.i)
+    .slice(0, Math.max(0, Math.min(n, hand.length)))
+    .map((x) => x.c.iid);
 }
 
-/** The AI's shop move. A card in its hand goes on at once (it never holds
- *  one), or — no hero can take it — is sold back; then the next purchase its
- *  builds ask for; then it closes the shop. */
-function shopMove(G: GameState, pid: PlayerID, d: Dial = NORMAL): Action {
-  for (const card of G.players[pid].hand) {
-    const hero = playTargetFor(G, pid, card, d);
-    if (hero) return { type: 'playCard', cardIid: card.iid, heroIid: hero.iid };
-    if (sellBlocked(G, pid, card.iid) === null) return { type: 'sell', itemIid: card.iid };
-  }
-  const next = planPurchase(G, pid, d);
-  return next ? { type: 'buy', itemId: next.itemId } : { type: 'closeShop' };
+/** The worn item a full `hero` lets go first: the one worth least to keep —
+ *  the cheapest (its list price), then one its build does not name, then the
+ *  earliest worn. A riding Rem is no item (`wornItems`). */
+function leastWorn(G: GameState, pid: PlayerID, hero: CardInstance): CardInstance | undefined {
+  const keep = (it: CardInstance) => itemPrice(it.cardId) + (buildWants(G, pid, hero, it.cardId) ? 0.5 : 0);
+  return wornItems(hero).reduce<CardInstance | undefined>((least, it) => (!least || keep(it) < keep(least) ? it : least), undefined);
 }
 
-/** The extra worth of `pid`'s souls while they count toward its Active's next
- *  build item, that item SAVE_TURNS of income away or less. An AI that never
- *  saves ('easy') sees none. */
-function saveValue(G: GameState, pid: PlayerID, d: Dial = NORMAL): number {
-  if (d.strength === 'easy') return 0;
-  const active = G.players[pid].active;
-  const next = active ? buildBuys(G, pid, active, d.banned)[0] : undefined;
-  if (!next) return 0;
-  const souls = G.players[pid].souls;
-  if (next.cost - souls > SAVE_TURNS * LANE_INCOME) return 0;
-  return Math.min(souls, next.cost) * SAVE_SOUL;
+/** True for a play the AI may make: any play that discards nothing, and, onto
+ *  a full hero, only the one that replaces its least valuable worn item
+ *  (`leastWorn`) with a card worth REPLACE_RATIO times its price or more. The
+ *  lookahead then weighs it like any play. */
+function replaceWorthIt(G: GameState, pid: PlayerID, a: Action): boolean {
+  if (a.type !== 'playCard' || a.replaceIid === undefined) return true;
+  const card = handCard(G, pid, a.cardIid);
+  const hero = findCardOnBoard(G, a.heroIid)?.card;
+  const least = hero && leastWorn(G, pid, hero);
+  if (!card || !least || least.iid !== a.replaceIid) return false;
+  return itemPrice(card.cardId) >= REPLACE_RATIO * itemPrice(least.cardId);
+}
+
+/** The tie-break a hand play earns (`BUILD_FIT`): an item onto a hero whose
+ *  build wants it, and the upgrade its heroes' builds name. */
+function buildFit(G: GameState, pid: PlayerID, a: Action): number {
+  if (a.type !== 'playCard') return 0;
+  const card = handCard(G, pid, a.cardIid);
+  const hero = findCardOnBoard(G, a.heroIid)?.card;
+  if (!card || !hero) return 0;
+  let v = buildWants(G, pid, hero, card.cardId) ? BUILD_FIT : 0;
+  if (a.upgradeId && slottedHeroes(G.players[pid]).some((h) => buildWants(G, pid, h, a.upgradeId!))) v += BUILD_FIT / 2;
+  return v;
 }
 
 interface MoveOption {
-  move: 'buy' | 'sell' | 'moveItem' | 'closeShop' | 'playCard' | 'activate' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'draftPick';
+  move: 'playCard' | 'placeHero' | 'discard' | 'chooseActive' | 'activate' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'useTrigger' | 'passTrigger' | 'draftPick';
   args: any[];
   score: number;
 }
 
 /** An engine action in the form the callers dispatch: the boardgame.io move and
- *  its arguments (buy [item], sell [card], moveItem [item, hero], closeShop [],
- *  playCard [card, hero], activate [item, target?], useSkill [hero, target?,
- *  skill?], moveHero [from, to], promoteToActive [iid], attack [target?],
- *  endTurn []). */
+ *  its arguments (playCard [card, hero, upgrade?, replace?], placeHero [card, toActive?, slot?],
+ *  discard [cards], chooseActive [card], activate [item, target?], useSkill
+ *  [hero, target?, skill?], moveHero [from, to], promoteToActive [iid], attack
+ *  [target?], endTurn []). */
 function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
   const present = (...xs: (string | undefined)[]) => xs.filter((x): x is string => x !== undefined);
   switch (a.type) {
-    case 'buy': return { move: 'buy', args: [a.itemId] };
-    case 'playCard': return { move: 'playCard', args: [a.cardIid, a.heroIid] };
-    case 'sell': return { move: 'sell', args: [a.itemIid] };
-    case 'moveItem': return { move: 'moveItem', args: [a.itemIid, a.toHeroIid] };
-    case 'closeShop': return { move: 'closeShop', args: [] };
+    case 'playCard': return {
+      move: 'playCard',
+      args: a.replaceIid !== undefined ? [a.cardIid, a.heroIid, a.upgradeId, a.replaceIid] : a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid],
+    };
+    case 'placeHero': return { move: 'placeHero', args: a.toActive ? [a.cardIid, true] : a.slot === undefined ? [a.cardIid] : [a.cardIid, false, a.slot] };
+    case 'discard': return { move: 'discard', args: [[...a.cardIids]] };
+    case 'chooseActive': return { move: 'chooseActive', args: [a.cardIid] };
     case 'activate': return { move: 'activate', args: present(a.itemIid, a.targetIid) };
     case 'useSkill': {
       // The skill is named only when it is not the hero's first (the move's default),
@@ -543,6 +558,8 @@ function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
     }
     case 'moveHero': return { move: 'moveHero', args: [a.fromSlot, a.toSlot] };
     case 'promoteToActive': return { move: 'promoteToActive', args: [a.benchIid] };
+    case 'useTrigger': return { move: 'useTrigger', args: [a.heroIid, a.abilityId] };
+    case 'passTrigger': return { move: 'passTrigger', args: [] };
     // The default target (the first the engine lists) is the move's default: no argument.
     case 'attack': return { move: 'attack', args: present(a.targetIid) };
     case 'endTurn': return { move: 'endTurn', args: [] };
@@ -565,7 +582,7 @@ function scoreActivate(pid: PlayerID, target?: CardInstance): number {
   return s;
 }
 
-/** A crude ability's score; an ultimate (its own or a borrowed one) ranks above a skill. */
+/** A crude ability's score; an ultimate ranks above a skill. */
 function scoreSkill(pid: PlayerID, target?: CardInstance, ultimate = false): number {
   let s = ultimate ? 30 : 12;
   if (target && target.ownerId !== pid) {
@@ -581,7 +598,7 @@ function scoreSkill(pid: PlayerID, target?: CardInstance, ultimate = false): num
  *  its target, plus a premium for a KO. With lookahead a win is `evalState`'s
  *  verdict instead. Both are read off the engine's own run of the attack —
  *  "wins" means what the rules mean: the knockout's push into the last
- *  structure, a Ricochet bounce that drops a bench hero, a merged Rem who walks
+ *  structure, a Ricochet bounce that drops a bench hero, a riding Rem who jumps
  *  off the fallen bearer. An attack at the Mid-Boss is `scoreBossAttack`'s. */
 function scoreAttack(G: GameState, pid: PlayerID, targetIid?: string): number {
   const after = simulate(G, pid, { type: 'attack', targetIid }).G;
@@ -665,12 +682,19 @@ function retreatPair(G: GameState, pid: PlayerID, a: Extract<Action, { type: 'mo
 function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
   switch (a.type) {
     case 'attack': return scoreAttack(G, pid, a.targetIid);
-    // The shop is shopped by rule (`shopMove`); these rank the plain list only.
-    case 'buy': return 20;
-    case 'playCard': return 22;
-    case 'sell': return -50;
-    case 'moveItem': return -40;
-    case 'closeShop': return 1;
+    // The hand, on the plain list: a hero onto the board first (into an empty
+    // lane above all; the first free bench slot, a named one only with a
+    // reason of its own), then an item.
+    case 'placeHero': return a.toActive ? 60 : a.slot === undefined ? 30 : 29;
+    // A play onto a full hero (one it discards an item for) after one onto a free slot.
+    case 'playCard': return 22 + buildFit(G, pid, a) - (a.replaceIid !== undefined ? 2 : 0);
+    case 'discard': return 50_000;
+    // The opening's first Active, from the drafted heroes in the deck: the
+    // hero with the most HP, then attack.
+    case 'chooseActive': {
+      const data = CARDS_BY_ID[G.players[G.pendingActive ?? pid].deck.find((c) => c.iid === a.cardIid)?.cardId ?? ''];
+      return 60_000 + (data?.type === 'hero' ? data.hp * 10 + data.atk : 0);
+    }
     case 'activate': {
       const found = findWornItem(G, a.itemIid, pid);
       return found ? scoreActivate(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined) : 0;
@@ -678,7 +702,8 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
     case 'useSkill': {
       const hero = findCardOnBoard(G, a.heroIid)?.card;
       const ultimate = !!hero && resolveSkill(hero, a.skillId)?.kind !== 'skill';
-      return scoreSkill(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined, ultimate);
+      const ride = G.players[pid].active?.iid === a.heroIid ? rideToSafety(G, pid, a, simulate(G, pid, a).G) : 0;
+      return scoreSkill(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined, ultimate) + ride;
     }
     case 'moveHero': {
       const { active, incoming } = retreatPair(G, pid, a);
@@ -686,8 +711,48 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
     }
     // A promotion owed comes before everything: the healthiest hero steps up.
     case 'promoteToActive': return 50_000 + findCardOnBoard(G, a.benchIid)!.card.hp;
+    // A trigger prompt's answer: the asked side's own valuation (`answerScore`).
+    case 'useTrigger':
+    case 'passTrigger': return answerScore(G, a);
     case 'endTurn': return 1;
   }
+}
+
+// ----- a trigger prompt's answer -----------------------------------------------
+// The engine asks the AI the same question it asks a person (engine/prompts.ts):
+// use one of the offers, or pass. The valuation is simple and is the lookahead's
+// own: each answer is made on a copy, and the asked side takes the position it
+// likes best — a revive keeps a hero and its push off the map for its souls.
+
+/** What answering the prompt owed with `a` is worth to the side asked: the
+ *  position it leaves, from that side's view (`evalState`). */
+function answerScore(G: GameState, a: Action): number {
+  const asked = promptOwed(G)?.pid;
+  if (!asked) return 0;
+  return evalState(simulate(G, asked, a).G, asked);
+}
+
+/** The answer the side asked gives to the prompt owed in `G`: its best by
+ *  `answerScore`, a pass on a tie. */
+function answerFor(G: GameState): Action {
+  const asked = promptOwed(G)!.pid;
+  let best: Action = { type: 'passTrigger' };
+  let value = answerScore(G, best);
+  for (const a of legalActions(G, asked)) {
+    if (a.type !== 'useTrigger') continue;
+    const v = answerScore(G, a);
+    if (v > value) { best = a; value = v; }
+  }
+  return best;
+}
+
+/** `g` with any trigger prompt it holds answered the way the side asked would
+ *  answer it (`answerFor`), so a line that fells a hero who may come back is
+ *  valued as it will play out. A chain is not possible yet, but the loop is
+ *  bounded all the same. */
+function answered(g: GameState): GameState {
+  for (let i = 0; i < 4 && promptOwed(g); i++) g = simulate(g, promptOwed(g)!.pid, answerFor(g)).G;
+  return g;
 }
 
 // ----- the lookahead ----------------------------------------------------------
@@ -702,10 +767,15 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
  *  forfeits the attack. */
 function lineAfter(G: GameState, pid: PlayerID, a: Action, d: Dial = NORMAL): GameState {
   if (a.type === 'endTurn') return G;
-  const { G: g } = simulate(G, pid, a);
+  // A prompt the move opens (a hero of the rival's that may come back) is
+  // answered as its side would answer it.
+  let g = answered(simulate(G, pid, a).G);
+  // A draw card's discard is the AI's own to pay: the line pays it as it would.
+  const owed = g.pendingDiscard;
+  if (owed && owed.pid === pid) g = simulate(g, pid, { type: 'discard', cardIids: discardChoice(g, pid, owed.count) }).G;
   if (a.type === 'attack' || attackBlocked(g, pid) !== null) return g;
   if (d.strength === 'hard') return bestSwing(g, pid, d);
-  const swung = simulate(g, pid, { type: 'attack' }).G;
+  const swung = answered(simulate(g, pid, { type: 'attack' }).G);
   return evalState(swung, pid, d) >= evalState(g, pid, d) ? swung : g;
 }
 
@@ -716,7 +786,7 @@ function bestSwing(g: GameState, pid: PlayerID, d: Dial): GameState {
   let best = g;
   let value = evalState(g, pid, d);
   attackTargets(g, pid).forEach((t, i) => {
-    const swung = simulate(g, pid, i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }).G;
+    const swung = answered(simulate(g, pid, i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }).G);
     const v = evalState(swung, pid, d);
     if (v > value) { best = swung; value = v; }
   });
@@ -725,12 +795,14 @@ function bestSwing(g: GameState, pid: PlayerID, d: Dial): GameState {
 
 /** The lookahead's score for `a`: the value of the position it leads to. A tiny
  *  bias toward acting (vs. passing) breaks ties so the AI takes value-neutral
- *  tempo plays instead of idling. A retreat with no rule-of-thumb reason
+ *  tempo plays instead of idling. A skill that rides its caster out of a lane
+ *  it is losing adds what that saves (`rideToSafety`). A retreat with no rule-of-thumb reason
  *  (`retreatPoints`) is marked down so it ranks behind real plays — unless its
  *  line beats `baseline`, the value of attacking as things stand, by
  *  RETREAT_MARGIN: then the swap is the better way to make the turn's attack. */
 function lookaheadScore(G: GameState, pid: PlayerID, a: Action, baseline: () => number, d: Dial = NORMAL): number {
-  let s = evalState(lineAfter(G, pid, a, d), pid, d) + (a.type === 'endTurn' ? 0 : 0.1);
+  const line = lineAfter(G, pid, a, d);
+  let s = evalState(line, pid, d) + (a.type === 'endTurn' ? 0 : 0.1) + buildFit(G, pid, a) + rideToSafety(G, pid, a, line);
   if (a.type === 'moveHero') {
     // 'hard' takes no rule of thumb: a retreat must show its gain in the evaluation.
     const reason = d.strength !== 'hard' && retreatPoints(...pairOf(G, pid, a), attackBought(G, pid, a)) !== null;
@@ -787,25 +859,39 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true, optio
     return opts.sort((a, b) => b.score - a.score).slice(0, 8);
   }
 
-  // Everything the engine allows, in its order: in the shop step the shop's
-  // moves, in the act step the attack, items, skills and retreats; then
-  // promotions, and ending the turn last. While a promotion is owed that is the
-  // promotion alone — for whichever seat owes it, made from either (on the
-  // board the local player answers the prompt themselves and the AI loop waits
-  // rather than ask, unless auto-play is driving their seat).
-  const actions = legalActions(G, pid);
+  // Everything the engine allows, in its order: the attack, items, skills,
+  // retreats and the hand's plays; then promotions, and ending the turn last.
+  // While a choice is owed that is the choice alone — the opening's first
+  // Active, a promotion (for whichever seat owes it, made from either: on the
+  // board the local player answers the prompt themselves and the AI loop
+  // waits rather than ask, unless auto-play is driving their seat), or a draw
+  // card's discard.
+  // A play onto a full hero only in place of its least valuable item, for a card clearly worth more.
+  const actions = legalActions(G, pid).filter((a) => a.type !== 'playCard' || (!d.banned.has(handCard(G, pid, a.cardIid)?.cardId ?? '') && replaceWorthIt(G, pid, a)));
 
-  // A promotion needs no weighing: the healthiest hero steps up.
-  if (G.pendingPromotion) {
+  // A trigger prompt owed (engine/prompts.ts) is answered first, by the side
+  // asked — on either player's turn, so it is that side's valuation whoever is
+  // on turn: each offer and the pass, by the position each leaves it.
+  const prompt = promptOwed(G);
+  if (prompt) {
+    return legalActions(G, prompt.pid)
+      .map((a): MoveOption => ({ ...toMove(G, a), score: answerScore(G, a) }))
+      .sort((a, b) => b.score - a.score);
+  }
+
+  // A choice owed needs no weighing: the strongest hero opens, the healthiest
+  // steps up.
+  if (G.pendingActive || G.pendingPromotion) {
     return actions
       .map((a): MoveOption => ({ ...toMove(G, a), score: crudeScore(G, pid, a) }))
       .sort((a, b) => b.score - a.score);
   }
 
-  // The shop step is shopped by the build, one purchase at a time — each card
-  // played as soon as it is bought — and closed.
-  if (G.step === 'shop') {
-    return [{ ...toMove(G, shopMove(G, pid, d)), score: 1 }];
+  // A draw card's discard: the cards worth least, all at once.
+  if (G.pendingDiscard) {
+    if (G.pendingDiscard.pid !== pid) return [];
+    const cardIids = discardChoice(G, pid, G.pendingDiscard.count);
+    return [{ ...toMove(G, { type: 'discard', cardIids }), score: 1 }];
   }
 
   // What attacking as things stand is worth (the position as it is when there
@@ -814,7 +900,7 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true, optio
   let base: number | undefined;
   const baseline = () => (base ??= d.strength === 'hard'
     ? evalState(bestSwing(G, pid, d), pid, d)
-    : evalState(attackBlocked(G, pid) === null ? simulate(G, pid, { type: 'attack' }).G : G, pid, d));
+    : evalState(attackBlocked(G, pid) === null ? answered(simulate(G, pid, { type: 'attack' }).G) : G, pid, d));
   const scored = actions.map((a): MoveOption => ({
     ...toMove(G, a),
     score: lookahead ? lookaheadScore(G, pid, a, baseline, d) : crudeScore(G, pid, a),

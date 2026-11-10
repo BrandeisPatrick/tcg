@@ -87,7 +87,7 @@ export function FxLayer({ batch, batchKey, slotRefs, action = null }: FxLayerPro
   return <>{live.map((b) => <FxBatch key={b.key} live={b} />)}</>;
 }
 
-/** A shot's ink by whose it is: yours gold, the rival's red, the Mid-Boss's
+/** A shot's ink by whose it is: yours gold, the rival's sapphire, the Mid-Boss's
  *  (owned by nobody) the pure-damage ink of its blow. */
 const ownerInk = (owner: Owner | undefined) => (owner === '1' ? poster.rival : owner === 'none' ? FX_INK.pure : poster.you);
 
@@ -140,7 +140,7 @@ function castTargets(cast: CastFx, timeline: FxTimeline, rects: Map<string, Rect
   const targets: Pt[] = [];
   for (const it of timeline.items) {
     const e = it.ev;
-    if (e.kind === 'cast' || !('iid' in e) || e.iid === cast.iid || seen.has(e.iid)) continue;
+    if (e.kind === 'cast' || e.kind === 'deck' || !('iid' in e) || e.iid === cast.iid || seen.has(e.iid)) continue;
     if (e.kind === 'heal' && e.tag === 'lifesteal') continue;   // drawn back, not cast out
     seen.add(e.iid);
     const r = rects.get(e.iid);

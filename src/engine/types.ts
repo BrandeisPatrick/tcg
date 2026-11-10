@@ -9,11 +9,12 @@ export type PlayerID = '0' | '1';
  *  pit (`GameState.boss`). Read a seat-owned card's seat through `seatOf`
  *  (query.ts). */
 export type Owner = PlayerID | 'none';
-/** Where a card instance is: an item in its owner's hand (bought, not yet
- *  played onto a hero), a hero in the Active slot or on the bench, an item
- *  worn by a hero (in its `attached` list), or the Mid-Boss in the pit
- *  between the two lanes. */
-export type Zone = 'hand' | 'active' | 'bench' | 'equipment' | 'pit';
+/** Where a card instance is: in its owner's deck (face down, drawn from the
+ *  top), in its owner's hand (a hero or an item, drawn and not yet played), in
+ *  its owner's discard pile, a hero in the Active slot or on the bench, an item
+ *  worn by a hero (in its `attached` list), or the Mid-Boss in the pit between
+ *  the two lanes. */
+export type Zone = 'deck' | 'hand' | 'discard' | 'active' | 'bench' | 'equipment' | 'pit';
 
 /** The three structures of a side's track, front to back: damage goes to the
  *  front standing one, and what is left over carries on to the next. */
@@ -58,24 +59,59 @@ export interface BaseCard {
   text?: string;
 }
 
+/** A hero's role (docs/hero-design.md §1): how it plays in Deadlock. */
+export type HeroRole = 'Tank' | 'Bruiser' | 'Gun carry' | 'Marksman' | 'Spirit caster' | 'Assassin' | 'Support' | 'Controller';
+
+/** When a hero peaks (docs/hero-design.md §2). Early: +1 point at Level 1 and
+ *  2 growth points a level; mid: none and 3; late: −1 point (never below
+ *  Attack 1 or HP 4) and 4. All three are even at Level 2. */
+export type HeroCurve = 'early' | 'mid' | 'late';
+
+/** What a hero card is designed from (docs/hero-design.md §1–2): its role,
+ *  its mix of tank, damage, control and support (each 0–3), its reach and its
+ *  curve. HP is 4 + `mix.tank` at Level 1, adjusted by the curve; Attack is 1,
+ *  or 2 for a `gun` hero (its damage mainly bullet or melee) with damage 2 or
+ *  more. The data tests check the printed stats against these. */
+export interface HeroProfile {
+  role: HeroRole;
+  mix: { tank: number; damage: number; control: number; support: number };
+  reach: 'one' | 'many' | 'both';
+  curve: HeroCurve;
+  /** Its damage is mainly bullet or melee. */
+  gun?: true;
+}
+
 /** A hero prints no text of its own: its card text is its abilities' (`name`
  *  and `text` on each AbilityDef), read through `heroAbilities` (engine/query.ts). */
 export interface HeroCard extends Omit<BaseCard, 'text'> {
   type: 'hero';
+  /** Attack and HP at Level 1 (docs/hero-design.md §2). */
   atk: number;
   hp: number;
-  /** The skills the hero may use, in order: one or two, none for a passive-only
-   *  hero. A bare `useSkill` names `skills[0]`. A hero uses one ability a turn
-   *  (a skill or its ultimate). */
+  /** What each level gained adds: the curve's growth points split between
+   *  Attack, HP and Spirit (2 a level early, 3 mid, 4 late). */
+  growth: { atk: number; hp: number; spirit: number };
+  /** Souls a Retreat costs while this hero is the one leaving the Active slot:
+   *  0 for very mobile heroes, 1 for most, 2 for slow heavy ones
+   *  (`retreatCost`, legality.ts). */
+  retreat: number;
+  profile: HeroProfile;
+  /** The hero's skill, when it has one (a hero has one skill or one passive):
+   *  a bare `useSkill` names `skills[0]`. A hero uses one ability a turn (a
+   *  skill, an active item or its ultimate). */
   skills: AbilityId[];
   passives?: AbilityId[];
-  /** The ultimate's ability id: a kit ability like a skill, unlocked at
-   *  ULT_UNLOCK_LEVEL and on its own cooldown. Its card (`ULTIMATES`, the one
-   *  whose `abilities[0]` it is) only names and draws it. */
+  /** The ultimate's ability id: a button printed on the hero card, used like a
+   *  skill from ULT_UNLOCK_LEVEL for its size's souls (`ULT_COST`) and then on
+   *  ULT_COOLDOWN. Its card (`ULTIMATES`, the one whose `abilities[0]` it is)
+   *  names it, sizes it and shows its icon. */
   ult?: AbilityId;
   /** The hero's two signature items, chosen to fit its kit (one of tier 1 or
    *  2): both are on sale in any match the hero is drafted into. */
   signature: [CardId, CardId];
+  /** `benchOnly`: the hero never takes the Active slot. No card sets it since
+   *  Rem stands in the lane (2026-11-09); the engine keeps the rule for one
+   *  that may. */
   flags?: { benchOnly?: boolean };
 }
 
@@ -100,6 +136,10 @@ export interface SpellCard extends BaseCard, ItemFields {
   /** Hard crowd control (its effect stuns, silences, disarms, roots, sleeps or
    *  curses an enemy): HARD_CC_CHARGES uses a match and no cooldown. */
   hardCC?: true;
+  /** Own turns it waits after use (and when put on), when the card names its
+   *  own rather than its tier's ACTIVE_COOLDOWN: the draw cards wait 2 at
+   *  every tier. */
+  cooldown?: number;
 }
 
 /** A PASSIVE item: always on while worn — its stat `bonus` and its abilities'
@@ -113,13 +153,28 @@ export interface EquipmentCard extends BaseCard, ItemFields {
 /** Any item the shop sells: an active (spell) or a passive (equipment). */
 export type ItemCard = SpellCard | EquipmentCard;
 
-/** An ultimate's face: its name, text and art. The ultimate itself is a kit
- *  ability of its hero (`HeroCard.ult`), used from the hero sheet and never
- *  dealt, held or paid for. */
+/** An ultimate's size (docs/hero-design.md §4): it sets the souls it costs
+ *  (`ULT_COST`: 4, 8 or 12). */
+export type UltSize = 'small' | 'medium' | 'large';
+
+/** An ultimate's face: its name, text, size and icon (the hero's Deadlock
+ *  ultimate icon, `public/ult/<hero>.webp`). The ultimate itself is a kit
+ *  ability of its hero (`HeroCard.ult`), a button on the hero card, never
+ *  dealt or held: it is paid for in souls when it is used. */
 export interface UltimateCard extends BaseCard {
   type: 'ultimate';
   linkedHero: CardId;
   abilities: AbilityId[];
+  size: UltSize;
+  /** A charged ultimate (docs/hero-design.md §2; Victor, Silver): it prints
+   *  `cost` souls instead of its size's, and each damage its hero takes
+   *  (`by: 'taken'`) or deals (`'dealt'`) makes it 1 soul cheaper, down to 0
+   *  (`kitCost`). The count is the hero's `tally` under the ultimate's ability
+   *  id, and starts over when the ultimate is used. `text` is the rule's own
+   *  line under the effect ("Costs 1 less for each damage Victor takes."),
+   *  outside the effect's 15 words. Its `size` is what the effect is worth,
+   *  half the price, and prices nothing. */
+  charged?: { cost: number; by: 'taken' | 'dealt'; text: string };
 }
 
 export type CardData = HeroCard | SpellCard | EquipmentCard | UltimateCard;
@@ -164,31 +219,24 @@ export interface CardInstance {
    *  when it empties. Ticks at the start of the owner's turn (docs/stats-model.md
    *  §1), on a corpse too; a fall and a respawn leave it as it is. */
   cooldowns?: Partial<Record<AbilityId, number>>;
-  /** An ultimate this hero may use once, free, as a kit ability: Sinclair's
-   *  Audience Participation copies the enemy Active's. Gone once used; it
-   *  needs no level and has no cooldown, and it stays through a death. */
-  borrowedUlt?: AbilityId;
+  /** What a hero's kit counts, by ability id: Drifter's Bloodscent counts the
+   *  knockouts that have grown his Attack; a charged ultimate counts the damage
+   *  that has made it cheaper (Victor's taken, Silver's dealt), and starts over
+   *  when it is used. It stays through a death, as the level does. */
+  tally?: Partial<Record<AbilityId, number>>;
+  /** The hero whose blow dropped this one to 0 HP, while the fall waits on a
+   *  trigger prompt (engine/prompts.ts): the blow's kill exp is paid when the
+   *  fall goes ahead and never if a trigger cancels it. Only a hero that can
+   *  cancel its own fall (it declares an optional trigger at 'onFall') holds
+   *  it; cleared once the fall is decided. */
+  downedBy?: string;
   /** A hard crowd-control active's uses left this match (HARD_CC_CHARGES when
    *  bought; it travels with the item). At 0 the item stays worn but cannot be
    *  used. Undefined on every other card. An active's cooldown lives in this
    *  instance's own `cooldowns`, keyed by its card id, and travels with it too. */
   charges?: number;
-  /** An item: the engine turn it was bought on — sold back on that turn it
-   *  refunds what was paid. Absent on a card that was not bought (a Story
-   *  reward). */
-  boughtOnTurn?: number;
-  /** An item: the souls paid for it (its price, or the difference for an
-   *  upgrade bought while its component was on its owner's side). */
-  paid?: number;
-  /** An upgrade bought and played this turn: the component its play consumed,
-   *  given back should the upgrade be sold on the same turn — to the hero that
-   *  wore it (`replacedFrom`), or to the hand it came from. Dropped when the
-   *  turn ends. */
-  replaced?: CardInstance;
-  /** The hero `replaced` was worn by; absent when it came from the hand. */
-  replacedFrom?: string;
-  /** A hero: the items whose first equip has paid it EXP_ON_EQUIP, so buying
-   *  one back (or moving it in) pays nothing more. */
+  /** A hero: the items whose first equip has paid it EXP_ON_EQUIP, so a
+   *  second copy of one pays nothing more. */
   equippedIds?: CardId[];
   /** A hero: the Vitality category spike's +1 max HP is on its `hpMax` (it
    *  wears 3+ Vitality items). Kept so the point comes off when the spike is
@@ -201,20 +249,25 @@ export interface CardInstance {
   // re-fires onAttack procs (so Toxic Bullets / Djinn's Mark proc per swing)
   // and bounces again with Ricochet.
   /**
-   * Rem's "Lil Helpers" merge: when Rem casts her skill she leaves her bench
-   * slot and attaches to an ally as a temporary buff. These live on the Rem
-   * card while it sits in the bearer's `attached` list: `remMergeTurnsLeft`
-   * counts down at her owner's turn start, and `remMergeHpBuff` is the max-HP
-   * she granted (reverted when she detaches). On expiry / bearer death she
-   * returns to her bench slot. Undefined for everyone else.
+   * Rem's ride (Tag Along, `rideOn` in death.ts): she leaves her slot — the
+   * bench's or the lane — and rides on an ally as equipment. These live on the
+   * Rem card while it sits in the bearer's `attached` list:
+   * `remMergeTurnsLeft` is the ride's own turns left, counted down at her
+   * owner's turn start, and `remMergeHpBuff` the max HP a ride granted (Tag
+   * Along grants none; taken back when she gets off). When the ride is over,
+   * or the bearer falls, she returns to the bench (`returnRemToBench`). Her
+   * `slot` is the bench slot she rode out of, kept for her, or 0 when she rode
+   * from the lane. Undefined for everyone else. (The names are the old
+   * "Lil Helpers" merge's, whose machinery this is.)
    */
   remMergeTurnsLeft?: number;
   remMergeHpBuff?: number;
   /**
-   * Turns remaining until the hero respawns. `> 0` means the hero is currently
-   * KO'd and occupying its slot as a corpse (greyed in UI, can't act / be
-   * targeted). On reaching 0 the hero returns to life at full HP in the same
-   * slot. `undefined` / `0` means alive.
+   * Own turns left before a fallen hero goes back to its owner's hand. `> 0`
+   * means the hero is KO'd and occupying its slot as a corpse (greyed in UI,
+   * can't act / be targeted). On reaching 0 it leaves the board for the hand,
+   * at full HP with its level and its items (`RESPAWN_TURNS`). `undefined` /
+   * `0` means alive.
    */
   respawnTurnsLeft?: number;
   /**
@@ -237,11 +290,20 @@ export interface PlayerState {
    *  falling loses the match. */
   structures: Structure[];
   souls: number;
-  /** The items bought and not yet played onto a hero, in the order they came
-   *  (zone 'hand'). A card enters the hand only by `buy` (and a Story reward);
-   *  there is no deck, no draw and no cap. They count in net worth at list
-   *  price. */
+  /** The deck, face down (zone 'deck'): the side's items and its drafted
+   *  heroes, shuffled. The top card is the LAST of the list (`drawCards`
+   *  takes from the end). An upgrade made by playing its component is
+   *  shuffled in. Empty: nothing more is drawn, and nothing else happens. */
+  deck: CardInstance[];
+  /** The cards in hand, in the order they came (zone 'hand'): heroes and
+   *  items, drawn (or given: a Story reward) and not yet played. A hero goes
+   *  to the bench for free; an item onto a hero for its price. A draw past
+   *  MAX_HAND is skipped (a fallen hero coming back is not a draw). Items in
+   *  hand count in net worth at list price. */
   hand: CardInstance[];
+  /** The discard pile (zone 'discard'), newest last: the cards a draw card
+   *  made its player discard, and the item an evolved upgrade replaced. */
+  discard: CardInstance[];
   active: CardInstance | null;
   bench: (CardInstance | null)[]; // length 3
   /** The side's heroes have felled the enemy Walker: every hero has the flex
@@ -446,11 +508,14 @@ export interface CastFx extends FxBase {
 }
 
 /** A corpse came back at full HP — or, `credit`, a hero the Rejuvenator
- *  brought straight back where it fell. */
+ *  brought straight back where it fell (the knockout still pushed), or,
+ *  `cancelled`, a hero a trigger stood back up before its fall went ahead
+ *  (Shocking Reanimation: no knockout at all). */
 export interface ReviveFx extends FxBase {
   kind: 'revive';
   iid: string;
   credit?: true;
+  cancelled?: true;
 }
 
 /** A hero reached a new level. */
@@ -490,16 +555,37 @@ export interface BossFx extends FxBase {
   by?: 'damage' | 'netWorth' | 'lastHit';
 }
 
-export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx | PushFx | FallFx | BossFx;
+/** A card moved between a side's deck, hand and discard pile — what the
+ *  deck, the discard pile and the hand animate: 'shuffle' (the deck was
+ *  shuffled: the opening, the drafted heroes going in), 'draw' (deck → hand),
+ *  'discard' (hand → discard pile), 'upgrade' (an upgrade card made and
+ *  shuffled into the deck), 'toHand' (a fallen hero back in the hand). `iid` /
+ *  `cardId` name the card ('shuffle' names none). */
+export interface DeckFx extends FxBase {
+  kind: 'deck';
+  /** `place`: a hero from the hand (or, the opening, the deck) put in a slot
+   *  of the board (`slot`: 0 the Active, 1-3 the bench). `rideOn`: a hero
+   *  left its slot to ride on an ally as equipment (Rem's Tag Along;
+   *  `bearerIid` the ally). `rideOff`: the ride is over and it is back on the
+   *  bench (`slot`), off `bearerIid`. */
+  what: 'shuffle' | 'draw' | 'discard' | 'upgrade' | 'toHand' | 'place' | 'rideOn' | 'rideOff';
+  pid: PlayerID;
+  iid?: string;
+  cardId?: CardId;
+  slot?: 0 | 1 | 2 | 3;
+  /** `rideOn` / `rideOff`: the hero ridden on. */
+  bearerIid?: string;
+}
+
+export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx | PushFx | FallFx | BossFx | DeckFx;
 
 /**
  * Pre-match hero draft. Both players take turns picking 4 heroes each from
  * the full pool in snake order (seat 0 first). While `draft != null` the
- * regular match gates are inactive and the DraftOverlay is displayed, the
- * market beside it (each pick puts the hero's signature items on sale). On
- * the 8th pick the move builds both PlayerStates from the drafted heroes,
- * clears `draft` and ends the draft's turn: the first mover (seat 1, the pie
- * rule) opens engine turn 1.
+ * regular match gates are inactive and the DraftOverlay is displayed. On the
+ * 8th pick the move builds both decks (each side's items and its four
+ * heroes, shuffled), deals the opening hands, clears `draft` and ends the
+ * draft's turn: the first mover (seat 1, the pie rule) opens engine turn 1.
  */
 export interface DraftState {
   pool: CardId[];                                 // remaining hero ids
@@ -517,11 +603,50 @@ export interface Counters {
   fx: number;
   /** Last `G.action` id handed out. */
   action: number;
+  /** Random numbers drawn from the match seed so far (a shuffle, the opening
+   *  hand's hero swap, where an upgrade goes in the deck): each draw is
+   *  `seed` and this count mixed (deck.ts), so a game replays from G alone. */
+  rng?: number;
 }
 
-/** The two steps of a turn a player acts in (rules: Income → Shop → Act → End;
- *  Income and End run on their own). */
-export type TurnStep = 'shop' | 'act';
+/** A moment the trigger prompt system asks a player's optional triggers at
+ *  (engine/prompts.ts). 'onFall': one of their heroes has dropped to 0 HP and
+ *  is about to fall — the moment Victor's Shocking Reanimation answers. */
+export type TriggerMoment = 'onFall';
+
+/** One optional trigger a prompt offers: the hero's ability that may be used. */
+export interface TriggerOffer {
+  heroIid: string;
+  abilityId: AbilityId;
+}
+
+/** A trigger prompt the game is waiting on ("Use Shocking Reanimation for 7
+ *  souls?"): an optional ("you may") effect that came at a moment, offered to
+ *  the player whose card it is — on either player's turn. Nothing else is
+ *  legal until it is answered: one of `offers` used, or passed. The moment's
+ *  own outcome (the fall) waits on the answer. */
+export interface PendingTrigger {
+  /** The seat asked. */
+  pid: PlayerID;
+  /** The moment it came at. */
+  moment: TriggerMoment;
+  /** The hero the moment is about: for 'onFall', the hero falling. */
+  subjectIid: string;
+  /** The usable triggers, in the order found (the player picks one, or passes). */
+  offers: TriggerOffer[];
+  /** 'onFall': the fall, if it goes ahead, pays nothing (the Mid-Boss's blow). */
+  unpaid?: true;
+}
+
+/** A draw card's discard, owed by the player who cast it: `count` cards from
+ *  anywhere in the hand, chosen by that player. Nothing else is legal until it
+ *  is paid (`discard`). */
+export interface PendingDiscard {
+  pid: PlayerID;
+  count: number;
+  /** The draw card that asked for it (for the prompt's words). */
+  cardId: CardId;
+}
 
 export interface GameState {
   /** Id / FX-seq / action-id counters — see ids.ts. */
@@ -549,23 +674,30 @@ export interface GameState {
    * draftTurnsOffset`. Set when the last pick ends the draft's turn.
    */
   draftTurnsOffset: number;
-  /** The match seed. The market is drawn from it (market.ts, through rng.ts),
-   *  so a match's market replays from G alone. */
+  /** The match seed. Every shuffle and random pick of the match is drawn from
+   *  it (deck.ts, through rng.ts), so a match replays from G alone. */
   seed: number;
-  /** What the shop sells this match, in the order it was put on sale: every
-   *  tier 1 item, the random slice drawn from `seed` before the draft, then the
-   *  signature items and the build of each hero as it was drafted. Fixed once
-   *  the draft ends. */
-  market: CardId[];
   /** The builds the human seat brought: the player's saved builds, by hero,
    *  from the match config at setup. A hero they do not name, and every hero
    *  of an AI seat, follows its default build (cards/builds.ts). Read through
-   *  `buildOf` (market.ts). */
+   *  `buildOf` (deck.ts): a side with no saved deck has one made from them. */
   playerBuilds?: Record<CardId, CardId[]>;
-  /** The step of the turn in play: 'shop' (buy, sell, move items, then close
-   *  the shop) until `closeShop`, then 'act' (abilities, a Retreat, the
-   *  attack). Every turn opens on 'shop'; `endTurn` is legal in either. */
-  step: TurnStep;
+  /** The deck the human seat brought: the player's saved deck (DECK_SIZE
+   *  items), from the match config at setup. Absent or not a legal deck: the
+   *  deck is made from its heroes' builds (`deckFromBuilds`). */
+  playerDeck?: CardId[];
+  /** A draw card's discard still owed (see `PendingDiscard`). */
+  pendingDiscard?: PendingDiscard;
+  /** The trigger prompts waiting on an answer, oldest first: the LAST is the
+   *  one asked (engine/prompts.ts). The first version opens one per moment and
+   *  answers it before play goes on, so it holds one at a time; it is a stack
+   *  so a chain (an answer to an answer, the newest resolving first) can push
+   *  onto it later. Absent when nothing is owed. */
+  triggers?: PendingTrigger[];
+  /** The human seat has not yet put its first Active in the lane: the match's
+   *  opening (after the opening hand is dealt). Only `chooseActive` is legal,
+   *  for that seat, from either seat, until it does. AI seats choose at once. */
+  pendingActive?: PlayerID;
   /** The turn's attack has been made. One basic attack a turn per player: this
    *  is its gate, and the attack ends the Act — after it nothing is legal but
    *  `endTurn` (and an owed promotion). Ending the turn never attacks. Reset at
@@ -573,6 +705,11 @@ export interface GameState {
   attackUsed: boolean;
   /** The turn's Retreat has been made (one a turn). Reset at each turn start. */
   retreatUsed: boolean;
+  /** This match has a Mid-Boss: MID_BOSS_ENABLED (off since 2026-11-09), or
+   *  what the setup names (`StorySetup.midBoss`, `MatchConfig.midBoss`; the
+   *  tests that cover it turn it on). Off, the boss never rises and nothing
+   *  counts down to it (`bossDue` is null), so the board hides its pit. */
+  midBoss: boolean;
   /** The Mid-Boss standing in the pit between the lanes (zone 'pit', owned by
    *  nobody, `boss_midboss`), or null while it is not up — before round
    *  BOSS_SPAWN_ROUND, and from its death until it returns. Only basic attacks

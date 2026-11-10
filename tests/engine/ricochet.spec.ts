@@ -6,13 +6,13 @@
  * comes from the Ricochet item (Ricochet 2 while worn: the `ricochet` hook) and
  * from Split Shot (the `ricochet` status, for the turn).
  *
- * Board (freshReadyGame): P0's Active is made Dynamo (3 Bullet Power, no
- * passive, one swing) unless a test needs a passive of its own;
+ * Board (freshReadyGame): P0's Active is made Dynamo (no passive, one swing)
+ * unless a test needs a passive of its own, its Attack set to 3 whoever it is;
  *                         P1 Abrams (active) · Dynamo / Kelvin / Seven, all at 20 HP.
  */
 import { describe, it, expect } from 'vitest';
 import type { Ctx } from 'boardgame.io';
-import type { CardInstance, GameState, HitFx, PlayerID } from '@/engine/types';
+import type { CardInstance, GameState, HeroCard, HitFx, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID } from '@/statuses';
 import { EXP_ON_KILL } from '@/engine/constants';
@@ -31,10 +31,12 @@ const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === 
 const hps = (cs: CardInstance[]) => cs.map((c) => c.hp);
 const ctx = (pid: PlayerID) => ({ currentPlayer: pid, turn: 2, numPlayers: 2 }) as unknown as Ctx;
 
-/** P0's Active becomes `hero` wearing `gear`; every P1 hero stands at 20 HP. */
+/** P0's Active becomes `hero` wearing `gear`, its Attack 3 (its Bullet Power
+ *  modifier makes up what its card prints); every P1 hero stands at 20 HP. */
 function lane(hero = 'hero_dynamo', ...gear: string[]) {
   const G = freshReadyGame();
   const atk = G.players['0'].active = makeHero(hero, '0', 'active', 0);
+  atk.atkMod = 3 - (CARDS_BY_ID[hero] as HeroCard).atk;
   for (const id of gear) giveItem(G, atk, id);
   const foe = G.players['1'];
   const bench = foe.bench.filter((b): b is CardInstance => !!b);
@@ -104,12 +106,22 @@ describe('Ricochet: a swing that lands bounces to every other enemy hero', () =>
     expect(hitsSince(G, fx, 'ricochet')).toHaveLength(6);
   });
 
-  it("Haze's Bullet Dance volley (attackAll) does not ricochet: each hero takes its own swing and no more", () => {
+  it("a volley (attackAll) does not ricochet: each hero takes its own swing and no more; nor does Haze's Bullet Dance", () => {
     const { G, atk, enemies } = lane('hero_dynamo', 'ricochet');
     const fx = G.fx.length;
     attackAll(G, atk);
     expect(hps(enemies)).toEqual([17, 17, 17, 17]);
     expect(hitsSince(G, fx, 'ricochet')).toEqual([]);
+
+    // Bullet Dance is her Attack as bullet damage to every enemy, no swing at all.
+    const haze = lane('hero_haze', 'ricochet');
+    haze.atk.level = 2;
+    haze.G.players['0'].souls = 12;
+    const from = haze.G.fx.length;
+    expect(perform(haze.G, '0', { type: 'useSkill', heroIid: haze.atk.iid, skillId: 'eff_ult_haze' })).not.toBe(INVALID);
+    expect(hps(haze.enemies)).toEqual([17, 17, 17, 17]);
+    expect(swingsSince(haze.G, from)).toEqual([]);
+    expect(hitsSince(haze.G, from, 'ricochet')).toEqual([]);
   });
 });
 
@@ -123,13 +135,14 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     }
   });
 
-  it("the passives' debuffs spread too: Shiv's Serrated Knives Bleed, Mirage's Djinn's Mark", () => {
-    const shiv = lane('hero_shiv', 'ricochet');
-    makeAttack(shiv.G, '0');
-    for (const c of shiv.enemies) expect(status(c, 'bleed'), c.cardId).toMatchObject({ value: 2 });
+  it("a passive's debuff spreads too (Mirage's Djinn's Mark); Haze's Fixation stays on the hero she shoots", () => {
     const mirage = lane('hero_mirage', 'ricochet');
     makeAttack(mirage.G, '0');
     for (const c of mirage.enemies) expect(status(c, 'djinns_mark'), c.cardId).toMatchObject({ value: 1 });
+    const haze = lane('hero_haze', 'ricochet');
+    makeAttack(haze.G, '0');
+    expect(status(haze.abrams, 'fixation')).toMatchObject({ value: 1 });
+    for (const c of haze.bench) expect(status(c, 'fixation'), c.cardId).toBeUndefined();
   });
 
   it('Bullet Lifesteal, and Leech, heal once a swing, not once a bounce', () => {
@@ -160,44 +173,52 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     expect(hps(bench)).toEqual([16, 18, 18]);
   });
 
-  it("Haze's Fixation (from Level 3) grants its one extra swing, not one a bounce", () => {
-    const { G, atk, bench } = lane('hero_haze', 'ricochet');
-    atk.level = 3;
+  it("Haze's Fixation stacks once a swing, not once a bounce, and its bonus rides the swing alone", () => {
+    const { G, atk, abrams, bench } = lane('hero_haze', 'ricochet');
+    grantExtraAttacks(atk, 1);
     const fx = G.fx.length;
     makeAttack(G, '0');
     expect(swingsSince(G, fx)).toHaveLength(2);
-    expect(status(atk, 'extra_attack')).toBeUndefined();
+    // Swing 1: 3 (no stack yet). Swing 2: 3 + Fixation 1. Each bounce is Ricochet's 2.
+    expect(abrams.hp).toBe(20 - 3 - 4);
+    expect(status(abrams, 'fixation')).toMatchObject({ value: 2 });
     expect(hps(bench)).toEqual([16, 16, 16]);
+    for (const c of bench) expect(status(c, 'fixation'), c.cardId).toBeUndefined();
   });
 
-  it("Wraith's spirit half and Drifter's Bloodscent stay with the swing", () => {
-    const wraith = lane('hero_wraith', 'ricochet');
-    wraith.atk.spiritMod = 2;
-    const fx = wraith.G.fx.length;
-    makeAttack(wraith.G, '0');
-    expect(wraith.abrams.hp).toBe(16); // 2 bullet + 2 spirit
-    expect(hps(wraith.bench)).toEqual([18, 18, 18]);
-    expect(hitsSince(wraith.G, fx, 'mixed_bullets')).toHaveLength(1);
+  it("Vindicta's Flight and Drifter's Bloodscent stay with the swing", () => {
+    const vindicta = lane('hero_vindicta', 'ricochet');
+    vindicta.atk.spiritMod = 2;
+    const fx = vindicta.G.fx.length;
+    makeAttack(vindicta.G, '0');
+    expect(vindicta.abrams.hp).toBe(14); // 3 bullet + Flight's 1 + 2 Spirit
+    expect(hps(vindicta.bench)).toEqual([18, 18, 18]);
+    const spirit = hitsSince(vindicta.G, fx).filter((e) => e.type === 'spirit');
+    expect(spirit.map((e) => e.iid)).toEqual([vindicta.abrams.iid]);
 
+    // Every enemy below half: the swing gets Bloodscent's +1, each bounce is Ricochet's 2.
     const drifter = lane('hero_drifter', 'ricochet');
-    drifter.atk.hpMax = 20; drifter.atk.hp = 10;
+    for (const c of drifter.enemies) c.hp = 9;
     makeAttack(drifter.G, '0');
-    expect(drifter.atk.hp).toBe(11); // half of the swing's 3; nothing off the bounces
+    expect(drifter.abrams.hp).toBe(9 - 4);
+    expect(hps(drifter.bench)).toEqual([7, 7, 7]);
   });
 });
 
 describe('A bounce that knocks a hero out', () => {
   // The bounce is dealt in the attacker's own attack frame, so the kill is the
   // attacker's by the path every kill takes: the exp in damageUnit (the frame's
-  // source), the KO bounty and the push into its side's structures when the attack resolves.
-  it("pays the KO bounty to the attacker's side and the exp to the attacker; the push is the hero's level + 1", () => {
+  // source), the kill on the record and the push into its side's structures
+  // when the attack resolves (a kill pays no souls).
+  it("gives the kill and the exp to the attacker, and no souls; the push is the hero's level + 1", () => {
     const { G, atk, bench } = lane('hero_dynamo', 'ricochet');
     bench[0].hp = 2;
     G.players['0'].souls = 0;
     const structures = structureHp(G.players['1']);
     makeAttack(G, '0');
     expect(bench[0].respawnTurnsLeft).toBeGreaterThan(0);
-    expect(G.players['0'].souls).toBe((bench[0].level ?? 1) + 1); // the bounty: its level + 1
+    expect(G.players['0'].souls).toBe(0);
+    expect(G.record['0'].kills).toBe(1);
     expect(atk.exp).toBe(EXP_ON_KILL);
     expect(structureHp(G.players['1'])).toBe(structures - ((bench[0].level ?? 1) + 1));
   });
@@ -221,14 +242,13 @@ describe('Split Shot: your Active gains Ricochet 1 this turn', () => {
   it('its swing bounces, and the end of the turn takes the Ricochet away', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
-    haze.level = 3; // her Fixation swings
     const bench = G.players['1'].bench.filter((b): b is CardInstance => !!b);
     for (const b of bench) { b.hpMax = 20; b.hp = 20; }
     useItem(G, '0', 'split_shot'); // Haze's ability of the turn; she may still attack
     expect(status(haze, 'ricochet')).toMatchObject({ value: 1, duration: 1 });
     expect(hps(bench)).toEqual([20, 20, 20]); // the item itself shoots nothing
     makeAttack(G, '0');
-    expect(hps(bench)).toEqual([18, 18, 18]); // Haze swings twice (Fixation)
+    expect(hps(bench)).toEqual([19, 19, 19]); // Haze's one swing, one bounce of 1 each
     endTurnEffects(G, '0');
     expect(status(haze, 'ricochet')).toBeUndefined();
   });

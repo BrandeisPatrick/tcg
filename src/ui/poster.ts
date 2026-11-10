@@ -35,8 +35,11 @@ export const poster = {
   green: '#62c462',
 
   // Semantics — who owns what on the board, and what a number means.
-  you: '#d9b64a',        // your frames, keylines, turn marker (gold)
-  rival: '#d4392c',      // the rival's (red)
+  // Each side wears its PATRON's colour (board/patrons.ts): you are the
+  // Amber Hand, the rival the Sapphire Flame. Red is damage and danger only.
+  you: '#d9b64a',        // your frames, keylines, turn marker (amber gold)
+  rival: '#4a8fe0',      // the rival's (sapphire)
+  rivalInk: '#2a5fae',   // the rival's sapphire, deep enough to print on paper
   target: '#62c462',     // a legal target / ready state (green)
   scrim: 'rgba(6, 24, 20, 0.78)',   // modal backdrop over the scene
 
@@ -63,6 +66,25 @@ export const poster = {
     utility: 'rgba(23, 20, 16, 0.64)',
   },
 } as const;
+
+/** The level greens: a hero card's frame from Level 1 (the lightest) to the
+ *  cap (the darkest; MAX_LEVEL is 4 — engine/constants.ts). Chosen to read on
+ *  the cream sheet and on the dark scene alike: each step is a clear jump,
+ *  and the frame carries its own keylines (`levelFrame`) so the lightest
+ *  holds on paper and the darkest on charcoal. */
+export const levelGreens = ['#a9de8e', '#6ec75a', '#35973f', '#176130'] as const;
+export const levelGreen = (level: number): string =>
+  levelGreens[Math.max(0, Math.min(levelGreens.length - 1, Math.round(level) - 1))];
+/** The frame of a hero card at `level`: a solid green border `width` px
+ *  wide. Spread onto the card's style with `levelFrameKeylines` in its
+ *  box-shadow — the ink hairline outside and the dark line inside keep the
+ *  green apart from the paper and from the portrait's charcoal frame. */
+export const levelFrame = (level: number, width = 3) => ({
+  borderWidth: width,
+  borderStyle: 'solid' as const,
+  borderColor: levelGreen(level),
+});
+export const levelFrameKeylines = 'inset 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(23, 20, 16, 0.4)';
 
 /** A shop category's inks, read off its token (styles.css: `--shop-weapon`,
  *  `--shop-vitality`, `--shop-spirit` — Deadlock's own amber, green and
@@ -156,3 +178,10 @@ export const sheetStyle = {
     'inset 0 1px 0 rgba(255, 255, 255, 0.5)',
   ].join(', '),
 } as const;
+
+/** The HP bar's ink on its dark track: green while the hero has over half
+ *  its HP, amber down to a quarter, red under it. */
+export function hpBarInk(hp: number, hpMax: number): string {
+  const frac = hpMax > 0 ? hp / hpMax : 0;
+  return frac > 0.5 ? '#5fd35f' : frac > 0.25 ? '#f0b83a' : '#e8492f';
+}

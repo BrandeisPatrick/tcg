@@ -1,14 +1,16 @@
 /**
- * Overlays — the hero detail sheet, opened in each state it can be in, and
- * the sheet that asks for a new Active.
+ * Overlays — the hero detail sheet, opened in each state it can be in, the
+ * sheet that asks for a new Active, and the trigger prompt.
  */
 import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import type { CardInstance } from '@/engine/types';
+import type { CardInstance, GameState, PendingTrigger } from '@/engine/types';
 import { HEROES } from '@/cards';
-import { RETREAT_COST } from '@/engine/constants';
+import { allocatorFor, newCounters } from '@/engine/ids';
+import { buildPlayer, freshMap } from '@/engine/actions/setup';
 import { HeroDetailSheet, type SkillOffer } from '../overlays/HeroDetailSheet';
 import { PromotionOverlay } from '../overlays/PromotionOverlay';
+import { TriggerPrompt } from '../overlays/TriggerPrompt';
 import { poster } from '../poster';
 import { mockHeroInstance, mockEquipInstance } from './mock';
 import { Section, Caption } from './primitives';
@@ -25,11 +27,15 @@ const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
   { id: 'enemy',    label: 'Rival hero',              hint: 'Read-only. No action.' },
   { id: 'loaded',   label: 'Statuses, equipment, retreat', hint: 'Active Effects, Equipment and Retreat all shown. Retreat is on the Active’s sheet only.' },
   { id: 'broke',    label: 'Retreat, short of souls', hint: 'The button stays on the sheet, inert, and says what is missing.' },
+  { id: 'charged',  label: 'Charged, in Wolf form',   hint: 'Nine damage counted: a charged ultimate (Victor, Silver) prints its price coming down. Silver wears her wolf while the form lasts.' },
 ];
 
 /** The passive-only hero the "Passive-only Active" state falls back to when
  *  the picked hero has a skill. */
 const PASSIVE_STAND_IN = 'hero_abrams';
+
+/** What the promotion sheet's Retreat costs: Kelvin is the one leaving. */
+const KELVIN_RETREAT = HEROES.find((h) => h.id === 'hero_kelvin')?.retreat ?? 1;
 
 export function OverlaysTab() {
   const [heroId, setHeroId] = useState('hero_kelvin');
@@ -88,11 +94,19 @@ export function OverlaysTab() {
         ],
         attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('improved_cooldown', 2)],
       };
-      props.retreat = { cost: RETREAT_COST, incomingName: 'Yamato' };
+      props.retreat = { cost: shown.retreat, incomingName: 'Yamato' };
       props.onRetreat = () => setToast('Retreated');
     }
+    if (s === 'charged' && shown.ult) {
+      card = {
+        ...card,
+        tally: { [shown.ult]: 9 },
+        statuses: [{ id: 'wolf_form', value: 1, duration: 2 }, { id: 'weapon_power', value: 3, duration: 2 }, { id: 'shield', value: 6, duration: 999 }],
+      };
+    }
     if (s === 'broke') {
-      props.retreat = { cost: RETREAT_COST, blockedReason: `Need ${RETREAT_COST} soul${RETREAT_COST === 1 ? '' : 's'}` };
+      const cost = Math.max(1, shown.retreat);
+      props.retreat = { cost, blockedReason: `Need ${cost} soul${cost === 1 ? '' : 's'}` };
       props.onRetreat = () => {};
     }
     props.card = card;
@@ -116,9 +130,9 @@ export function OverlaysTab() {
     >
       <Caption>
         The sheet that rises when a hero is tapped. Its plates <strong>are</strong> the actions: tap the
-        skill card to use the skill, or from Level 2 the Ultimate (any of your heroes, one ability a turn,
-        free), and on your Active tap Attack to swing at their Active — free, one-way, and the end of the
-        turn. A hero with a passive shows a Passive block that cannot be pressed. Pick a hero, then a state.
+        skill card to use the skill, or from Level 2 the Ultimate button printed on the card (any of your
+        heroes, one ability a turn, for the souls on its plate), and on your Active tap Attack to swing at
+        their Active — free, one-way, and the end of the turn. A hero with a passive shows a Passive block that cannot be pressed. Pick a hero, then a state.
       </Caption>
 
       <div className="gal-pick">
@@ -142,15 +156,73 @@ export function OverlaysTab() {
     </Section>
 
     <NewActiveDemo />
+    <TriggerPromptDemo />
     </>
+  );
+}
+
+/** A board where your Victor (Level 2, 13 damage counted, 9 souls in hand)
+ *  has just fallen, and the prompt asks about Shocking Reanimation. */
+function fallenVictor(): { G: GameState; prompt: PendingTrigger } {
+  const counters = newCounters();
+  const ids = allocatorFor(counters);
+  const G: GameState = {
+    counters,
+    players: { '0': buildPlayer(ids, '0', ['hero_victor', 'hero_haze']), '1': buildPlayer(ids, '1', ['hero_silver']) },
+    turnNumber: 4, firstMover: '1', humanSeat: '0', log: [], draft: null, draftTurnsOffset: 0, seed: 1,
+    attackUsed: true, retreatUsed: false, ...freshMap(), action: null, fx: [],
+  };
+  const victor = G.players['0'].active!;
+  victor.level = 2;
+  victor.hp = 0;
+  victor.tally = { eff_ult_victor: 13 };
+  G.players['0'].souls = 9;
+  const prompt: PendingTrigger = { pid: '0', moment: 'onFall', subjectIid: victor.iid, offers: [{ heroIid: victor.iid, abilityId: 'eff_ult_victor' }] };
+  G.triggers = [prompt];
+  return { G, prompt };
+}
+
+/** The trigger prompt (engine/prompts.ts): a "may" whose moment has come. */
+function TriggerPromptDemo() {
+  const [open, setOpen] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  const board = fallenVictor();
+  return (
+    <Section title="Trigger prompt">
+      <Caption>
+        A card that says you <strong>may</strong> use it when something happens asks at that moment, on
+        either player's turn, and only when it can be used: the right level, not waiting, souls enough. The
+        game waits for the answer. Here Silver has just felled your Victor, whose revive has come down from
+        20 to 7 souls.
+      </Caption>
+      <div className="gal-pick">
+        <button type="button" className="gal-pick__item" onClick={() => { setSaid(null); setOpen(true); }}>
+          <b>Victor falls</b>
+          <span>Use Shocking Reanimation, or pass and let the knockout happen.</span>
+        </button>
+      </div>
+      {said && <p className="gal-cap" style={{ marginTop: 12, color: poster.stat.atkBright, fontWeight: 700 }}>{said}</p>}
+      <AnimatePresence>
+        {open && (
+          <TriggerPrompt
+            key="victor"
+            G={board.G}
+            me="0"
+            prompt={board.prompt}
+            onUse={() => { setOpen(false); setSaid('Used: Victor gets back up with half his HP.'); }}
+            onPass={() => { setOpen(false); setSaid('Passed: Victor falls.'); }}
+          />
+        )}
+      </AnimatePresence>
+    </Section>
   );
 }
 
 const CHOOSER_BENCH = ['hero_yamato', 'hero_abrams', 'hero_haze'];
 
-/** The "choose your new Active" sheet, in the two ways it is reached. */
+/** The "choose your new Active" sheet, in the three ways it is reached. */
 function NewActiveDemo() {
-  const [mode, setMode] = useState<'fell' | 'retreat' | null>(null);
+  const [mode, setMode] = useState<'fell' | 'retreat' | 'ride' | null>(null);
   const candidates = CHOOSER_BENCH
     .map((id) => HEROES.find((h) => h.id === id))
     .filter((h): h is NonNullable<typeof h> => !!h)
@@ -171,14 +243,19 @@ function NewActiveDemo() {
           <b>Retreat, three on the bench</b>
           <span>Opened from the Active’s sheet when more than one hero can go in.</span>
         </button>
+        <button type="button" className="gal-pick__item" onClick={() => setMode('ride')}>
+          <b>Rem rides off</b>
+          <span>Tag Along from the lane left it empty: owed, like a knockout.</span>
+        </button>
       </div>
       <AnimatePresence>
         {mode && (
           <PromotionOverlay
             key={mode}
             candidates={candidates}
-            leavingName="Kelvin"
-            retreat={mode === 'retreat' ? { cost: RETREAT_COST, onCancel: () => setMode(null) } : undefined}
+            leavingName={mode === 'ride' ? 'Rem' : 'Kelvin'}
+            retreat={mode === 'retreat' ? { cost: KELVIN_RETREAT, onCancel: () => setMode(null) } : undefined}
+            ride={mode === 'ride' ? { bearerName: 'Yamato' } : undefined}
             onPick={() => setMode(null)}
           />
         )}

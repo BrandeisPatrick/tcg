@@ -8,13 +8,15 @@ import { RejuvenatorMark } from '@/ui/board/RejuvenatorMark';
 import { BossPit } from '@/ui/board/BossPit';
 import { mapIconUrl, type MapIconKind } from '@/ui/board/MapIcon';
 import { ART_CREDITS } from '@/art/credits';
-import { freshReadyGame, setTrack } from '../engine/_helpers';
+import { freshReadyGame, midBossOn, setTrack } from '../engine/_helpers';
 
 // The map's board pieces wear the game's own icons (public/art/map_*.png,
 // fetched from the Deadlock wiki, never drawn here): each side's structures on
 // its rule, struck when they fall; the Mid-Boss's pit, naming the round it
-// rises or returns in while it is not up; the Rejuvenator's tag. These pin the
-// files, their credit, and what the pieces print.
+// rises or returns in while it is not up (in a match that has one: the
+// Mid-Boss is off for now, MID_BOSS_ENABLED, and then there is no pit); the
+// Rejuvenator's tag. These pin the files, their credit, and what the pieces
+// print.
 
 const KINDS: MapIconKind[] = ['guardian', 'walker', 'patron', 'mid_boss', 'rejuvenator'];
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -74,8 +76,16 @@ describe('the Mid-Boss pit and the Rejuvenator', () => {
     G, me: '0', pending: null, onTapHero: () => {}, isTargetable: () => false, isMobile: true,
   }));
 
-  it('with no boss up, the pit names the round it rises in, then the round it returns in', () => {
+  it('with the Mid-Boss off (MID_BOSS_ENABLED) there is no pit: nothing counts down', () => {
     const G = freshReadyGame();
+    expect(G.midBoss).toBe(false);
+    const html = pit(G);
+    expect(html).not.toContain('Mid-Boss');
+    expect(html).not.toContain('Round');
+  });
+
+  it('with no boss up, the pit names the round it rises in, then the round it returns in', () => {
+    const G = midBossOn(freshReadyGame());
     G.boss = null;
     G.bossRespawnRound = 4;
     expect(pit(G)).toContain('Mid-Boss — rises in round 4');

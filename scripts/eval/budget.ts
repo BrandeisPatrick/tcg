@@ -69,7 +69,11 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CardId, ItemCard, ItemTier } from '@/engine/types';
 import { ITEMS, itemCard } from '@/cards';
-import { ACTIVE_COOLDOWN, HARD_CC_CHARGES, ITEM_TIERS, PRICE, RETREAT_COST } from '@/engine/constants';
+import { ACTIVE_COOLDOWN, HARD_CC_CHARGES, ITEM_TIERS, PRICE } from '@/engine/constants';
+
+/** What a Retreat the swap items save costs: each hero prints its own (0–2,
+ *  docs/hero-design.md §2); most print 1. */
+const RETREAT_COST = 1;
 import { ITEM_SLOTS } from '@/engine/market';
 
 // ---------------------------------------------------------------- components and pace

@@ -29,10 +29,22 @@ from their "Deadlock Graphical Library" collection.
   compilation of all the updated hero select screens"). The source frames are
   kept in `scripts/art/hero_sources/`; `scripts/crop_heroes.py` cuts the
   portraits from them. Rem has no updated select screen, so her portrait comes
-  from the asset mirror below.
+  from the asset mirror below; so do Victor's and Silver's (`hero_victor_*`,
+  `hero_silver_*`: the API's `frank_*` and `werewolf_*` card, minimap and small
+  icons, fetched from https://api.deadlock-api.com/v1/assets/heroes, ids 66 and
+  80), and Silver's wolf-form card (`hero_silver_wolf_card.webp`, Deadlock's
+  `images/heroes/werewolf_wolf_card.webp`), the art her card shows while Lycan
+  Curse lasts.
 - The small hero icons (`_mm.webp`, `_sm.webp`) are the game's own icons,
   pulled from the community asset bucket at https://deadlock-api.com/
   (https://assets.deadlock-api.com/).
+- The ultimate icons in `public/ult/` (`<hero>.webp`, the hero id without its
+  `hero_` prefix) are the game's own icon of each hero's ultimate, the
+  deadlock-api's `signature4` ability image (field `image_webp`), from the same
+  API. White glyphs, shown on the ink ground of the ultimate button printed on
+  each hero card. Victor's (`victor.webp`, Shocking Reanimation) and Silver's
+  (`silver.webp`, Lycan Curse, `werewolf_lycancurse`) came the same way; Lycan
+  Curse's is also the mark on Silver's Wolf form status chip.
 - Everything in `public/spells/` and `public/items/` is the game's own shop art
   for each item, one icon per card: the wiki's 200×200 shop icon from the
   Deadlock wiki's asset mirror (`https://cdn.deadlock.wiki/<Item_Name>.png`),

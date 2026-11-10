@@ -195,6 +195,7 @@ export const GROUPS: Group[] = [
       { label: "Djinn's Mark ×3", events: [status('r0', 'djinns_mark', 3, 3, true)] },
       { label: 'Bleed 3', events: [status('r0', 'bleed', 3, 2, true)] },
       { label: 'Unstoppable', events: [status('y0', 'unstoppable', 1, 1, false)] },
+      { label: 'Invulnerable (The Cube)', events: [status('y0', 'invulnerable', 1, 1, false)] },
       { label: 'Channeling (Seven)', events: [status('r2', 'casting', 2, 3, false)] },
       { label: '+Heal 2', events: [status('y0', 'healing_boost', 2, 999, false)] },
       { label: 'Healing blocked', events: [status('r0', 'healing_boost_down', 1, 2, true)] },
@@ -204,6 +205,7 @@ export const GROUPS: Group[] = [
       { label: 'Rooted', events: [status('r0', 'rooted', 1, 2, true)] },
       { label: 'Rabbit', events: [status('r0', 'rabbit', 1, 1, true)] },
       { label: 'Last Stand 5', events: [status('y0', 'last_stand', 5, 1, false)] },
+      { label: 'Wolf form (Lycan Curse)', events: [status('y0', 'wolf_form', 1, 2, false), status('y0', 'weapon_power', 3, 2, false), status('y0', 'shield', 6, 999, false)] },
       { label: 'Three at once (Stun + Bleed + −BP)', events: [status('r0', 'stun', 1, 1, true), status('r0', 'bleed', 2, 2, true), status('r0', 'weapon_power_down', 1, 2, true)] },
       // The rest of the marks, one per card, so every drawing can be seen landing.
       { label: 'Six more marks · Spirit Res, +SPI, Extra Atk, Return Fire, Swift, Channel', events: [

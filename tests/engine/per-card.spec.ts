@@ -9,7 +9,7 @@ import { resolve } from '@/engine/death';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { withCast } from '@/engine/castContext';
-import { buyItem, buyToHand, freshReadyGame, giveItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, playNew } from './_helpers';
 
 /**
  * Per-card test scenarios for the V1 minimal item set: active items (spells)
@@ -266,22 +266,25 @@ describe('Spell scaling treats corpse Active as 0 Spirit', () => {
 // ============================================================================
 
 describe('item slots (3 per hero)', () => {
-  it('a play onto a full hero is refused — there is no discard; selling one frees the slot', () => {
-    const G = freshReadyGame({ step: 'shop' });
+  it('a play onto a full hero is refused unless it names the worn item it replaces; an upgrade of an item it wears goes on in its place', () => {
+    const G = freshReadyGame();
     G.players['0'].souls = 99;
     const hero = G.players['0'].active!;
-    const worn = ['extra_spirit', 'extra_health', 'restorative_shot'].map((id) => buyItem(G, '0', id, hero));
+    ['extra_spirit', 'extra_health', 'restorative_shot'].forEach((id) => playNew(G, '0', id, hero));
     expect(wornItems(hero)).toHaveLength(slotCap(G, '0'));
-    const card = buyToHand(G, '0', 'extended_magazine');           // the buy itself names no hero
+    const card = giveCard(G, '0', 'extended_magazine');
     const fourth = { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid };
     expect(playBlocked(G, '0', card.iid, hero.iid)).toBe('full');
     expect(perform(G, '0', fourth)).toBe(INVALID);
     expect(wornItems(hero)).toHaveLength(3);
     expect(G.players['0'].hand).toEqual([card]);
-    // No discarding at the cap: a sale makes the room.
-    expect(perform(G, '0', { type: 'sell', itemIid: worn[0].iid })).not.toBe(INVALID);
-    expect(perform(G, '0', fourth)).not.toBe(INVALID);
-    expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'extended_magazine']);
+    // Naming one it wears, the card takes its place (hand.spec has the swap in full).
+    expect(playBlocked(G, '0', card.iid, hero.iid, undefined, wornItems(hero)[1].iid)).toBeNull();
+    // An upgrade of a worn item evolves it: Improved Spirit takes Extra Spirit's place.
+    const up = giveCard(G, '0', 'improved_spirit');
+    expect(playBlocked(G, '0', up.iid, hero.iid)).toBeNull();
+    expect(perform(G, '0', { type: 'playCard', cardIid: up.iid, heroIid: hero.iid, upgradeId: undefined })).not.toBe(INVALID);
+    expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'improved_spirit']);
   });
 });
 

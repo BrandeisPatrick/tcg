@@ -5,27 +5,25 @@ import { poster } from '../poster';
 
 interface Props {
   cards: CardInstance[];
-  /** Where the sheet's top edge is, px down from the top of the box the
-   *  backs hang in (Board's band above the sheet). */
-  edge: number;
-  /** Phone-size backs. */
-  compact?: boolean;
+  /** Where the fan's centre is, px across the stage. */
+  centre: number;
+  /** Where the backs' top edge hangs, px down the stage (negative: above
+   *  it, so only the lower part peeks in). */
+  top: number;
 }
 
-/** A back's size and how much of it shows over the paper's top edge, in
- *  stage px: enough for the printer's dial mark to read. */
-const BACK = {
-  phone: { w: 40, h: 56, peek: 36, overlap: -14, chip: 18 },
-  desktop: { w: 56, h: 80, peek: 46, overlap: -18, chip: 22 },
-} as const;
+/** A back's size, the widest step from one back to the next and the fan's
+ *  widest span (the gap the top strip leaves between the rival's name and
+ *  its map track), stage px. */
+const BACK = { w: 30, h: 46, step: 15, span: 62, chip: 16 } as const;
 /** At most this many backs are drawn: the chip says how many there are. */
-const MAX_BACKS = 4;
+const MAX_BACKS = 5;
 
-// The rival's hand, face down: what it has bought and not yet put on a hero —
-// the AI plays each card as soon as it buys it, so a back shows for a beat,
-// rising from behind the paper and sinking back as it goes onto a hero. Seen
-// across the table the fan opens downward from a top anchor: the outer backs
-// tilt out at their feet and ride up a little.
+// The rival's hand, face down: the heroes and items it has drawn and not yet
+// played — a back rises in at the top edge as it draws and sinks away as the
+// card goes onto the board. Seen across the table the fan opens downward
+// from a top anchor: the outer backs tilt out at their feet and ride up a
+// little.
 function fanRotation(i: number, total: number): number {
   if (total <= 2) return 0;
   const offset = i - (total - 1) / 2;
@@ -38,57 +36,49 @@ function fanY(i: number, total: number): number {
 }
 
 /**
- * The rival's card backs, hung absolutely at the top edge of the board: they
- * peek over the paper and the rest is tucked behind it (Board stacks the sheet
- * above this box), so they never take room of their own — an empty hand holds
- * no row open and a card held for a beat moves nothing. A chip beside them
- * says how many cards the rival holds.
+ * The rival's card backs, peeking in at the top edge's CENTRE as Pokémon TCG
+ * Pocket's do: hung above the table with only their lower part showing,
+ * between the two pills of the rival's name bar, so they cover nothing and
+ * nothing covers them. The backs close up as the hand grows, so the fan
+ * never outgrows its gap; a chip on its foot says how many cards the rival
+ * holds.
  */
-export function OpponentHand({ cards, edge, compact = false }: Props) {
+export function OpponentHand({ cards, centre, top }: Props) {
   const total = cards.length;
-  const { w, h, peek, overlap, chip } = compact ? BACK.phone : BACK.desktop;
+  const { w, h, chip } = BACK;
   const shown = cards.slice(0, MAX_BACKS);
-  const fanW = shown.length * w + Math.max(0, shown.length - 1) * overlap;
+  const step = shown.length > 1 ? Math.min(BACK.step, (BACK.span - w) / (shown.length - 1)) : 0;
+  const overlap = step - w;
+  const fanW = w + Math.max(0, shown.length - 1) * step;
   return (
     <div
       role={total > 0 ? 'img' : undefined}
       aria-label={total > 0 ? `Rival's hand: ${total} card${total === 1 ? '' : 's'}` : undefined}
+      data-hand="rival"
       style={{
         position: 'absolute',
-        left: 0,
-        right: 0,
-        top: edge - peek,
+        left: centre - fanW / 2,
+        top,
+        width: fanW,
         height: h,
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'flex-start',
         // Purely decorative — never intercept clicks meant for the board.
         pointerEvents: 'none',
+        zIndex: 4,
       }}
     >
-      {/* Ambient shade where the backs meet the paper's edge — a flat pool of
-          neutral black, so the ink plates read as resting there instead of
-          pasted on the scene. Painted first: the backs stack above it. */}
-      {total > 0 && (
-        <div aria-hidden style={{
-          position: 'absolute',
-          left: '50%',
-          top: peek - 30,
-          width: fanW + 90,
-          height: 34,
-          transform: 'translateX(-50%)',
-          background: 'radial-gradient(ellipse 50% 100% at 50% 100%, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.14) 55%, transparent 78%)',
-          filter: 'blur(2px)',
-        }} />
-      )}
       <AnimatePresence>
         {shown.map((c, i) => (
           <motion.div
             key={c.iid}
-            // Rises from behind the paper; sinks back behind it as it is played.
-            initial={{ opacity: 0, y: peek }}
+            // The motion layer finds the back a draw flies to by it.
+            data-hand-card={c.iid}
+            // Rises in from above the edge; sinks back up as it is played.
+            initial={{ opacity: 0, y: -h * 0.6 }}
             animate={{ opacity: 1, y: fanY(i, shown.length), rotate: fanRotation(i, shown.length) }}
-            exit={{ opacity: 0, y: peek + 12, transition: { duration: 0.25 } }}
+            exit={{ opacity: 0, y: -h * 0.6, transition: { duration: 0.25 } }}
             transition={spring.default}
             style={{
               flex: '0 0 auto',
@@ -99,7 +89,7 @@ export function OpponentHand({ cards, edge, compact = false }: Props) {
               height: h,
             }}
           >
-            <CardBack radius={compact ? 7 : 9} />
+            <CardBack radius={5} />
           </motion.div>
         ))}
       </AnimatePresence>
@@ -114,9 +104,10 @@ export function OpponentHand({ cards, edge, compact = false }: Props) {
             transition={spring.default}
             style={{
               position: 'absolute',
-              // Beside the fan, centred in the strip of it that shows.
-              left: `calc(50% + ${fanW / 2 + 6}px)`,
-              top: (peek - chip) / 2,
+              // On the fan's foot, at its right corner.
+              left: fanW - chip / 2 - 2,
+              top: h - chip + 3,
+              zIndex: 9,
               minWidth: chip,
               height: chip,
               padding: '0 5px',
@@ -126,7 +117,7 @@ export function OpponentHand({ cards, edge, compact = false }: Props) {
               border: `1.5px solid ${poster.rival}`,
               color: poster.cream,
               fontFamily: fonts.display,
-              fontSize: compact ? 11 : 13,
+              fontSize: 11,
               lineHeight: 1,
               display: 'flex',
               alignItems: 'center',
@@ -144,10 +135,10 @@ export function OpponentHand({ cards, edge, compact = false }: Props) {
 }
 
 /** Face-down card — the lobby's ink plate: charcoal panel, thin edge and
- *  the printer's dial mark in faint cream, high enough on the plate to show
- *  over the paper's edge. Static by design: the border pulse is the draft's
- *  "live pick" signal, not the rival's hand. */
-function CardBack({ radius }: { radius: number }) {
+ *  the printer's dial mark in faint cream, set low enough on the plate to
+ *  show where only its foot peeks in. Static by design: the border pulse is
+ *  the draft's "live pick" signal, not the rival's hand. */
+export function CardBack({ radius }: { radius: number }) {
   return (
     <div style={{
       width: '100%', height: '100%',
@@ -157,9 +148,8 @@ function CardBack({ radius }: { radius: number }) {
       border: `2px solid ${poster.edge}`,
       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.45)',
       display: 'flex',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       justifyContent: 'center',
-      paddingTop: '12%',
     }}>
       <svg viewBox="0 0 40 40" width="62%" fill="none" stroke={poster.creamFaint} strokeWidth="1.6" aria-hidden>
         <circle cx="20" cy="20" r="15.5" />

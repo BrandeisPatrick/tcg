@@ -6,18 +6,19 @@
  * Weapon +1 Bullet Power, Spirit +1 Spirit Power, Vitality +1 max HP (current
  * HP rises with it, and is clamped when it goes). The Weapon and Spirit points
  * are read off what the hero wears, never stored on its modifiers. Net worth is
- * souls plus the list price (PRICE by tier) of every worn item.
+ * souls plus the list price (PRICE by tier) of every worn item and every item
+ * in the hand.
  */
 import { describe, expect, it } from 'vitest';
 import type { CardInstance, GameState } from '@/engine/types';
 import { perform } from '@/engine/engine';
 import {
-  attackPower, comebackBonus, effectiveSpirit, hasSpike, heroWorth, isRichestHero, killBounty, netWorth, tabCounts,
+  attackPower, effectiveSpirit, hasSpike, heroWorth, netWorth, standingVerdict, tabCounts,
 } from '@/engine/query';
 import { detachItem, syncVitalitySpike } from '@/engine/instances';
 import { beginTurn } from '@/engine/actions/turn';
 import { CATEGORY_SPIKE_ITEMS, PRICE } from '@/engine/constants';
-import { buyItem, freshReadyGame, giveItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, playNew } from './_helpers';
 
 // Items of each tab with no printed stat bonus, so the spike is all that moves.
 const WEAPON = ['restorative_shot', 'long_range', 'kinetic_dash'];
@@ -86,7 +87,7 @@ describe('the category spike', () => {
     expect([haze.hpMax, haze.hp]).toEqual([max, 2]);
   });
 
-  it('a corpse keeps 0 HP as the spike comes and goes, and respawns at the new max', () => {
+  it('a corpse keeps 0 HP as the spike comes and goes, and goes back to the hand at the new max', () => {
     const G = freshReadyGame();
     const vindicta = G.players['0'].bench[0]!;
     vindicta.hp = 0;
@@ -95,24 +96,23 @@ describe('the category spike', () => {
     wear(G, vindicta, VITALITY);
     expect([vindicta.hpMax, vindicta.hp]).toEqual([max + 1, 0]);
     beginTurn(G, '0', G.turnNumber + 2);                          // its owner's next turn: the timer runs out
-    expect([vindicta.respawnTurnsLeft, vindicta.hp]).toEqual([undefined, max + 1]);
+    expect([vindicta.respawnTurnsLeft, vindicta.hp, vindicta.zone]).toEqual([undefined, max + 1, 'hand']);
   });
 
-  it('the spike follows the shop: buying the third item brings it, selling one or moving it away takes it, and the receiver may gain it', () => {
-    const G = freshReadyGame({ step: 'shop' });
-    G.players['0'].souls = 20;
+  it('the spike follows the hand: playing the third item brings it, and an evolve that keeps the tab keeps it', () => {
+    const G = freshReadyGame();
     const me = G.players['0'];
     const [haze, vindicta] = [me.active!, me.bench[0]!];
     const [hazeMax, vinMax] = [haze.hpMax, vindicta.hpMax];
     wear(G, haze, ['extra_regen', 'sprint_boots']);
     wear(G, vindicta, ['extra_regen', 'sprint_boots']);
-    const grit = buyItem(G, '0', 'grit', haze);                   // a Vitality active, the third
+    playNew(G, '0', 'grit', haze);                                // a Vitality active, the third
     expect([haze.hpMax, haze.hp]).toEqual([hazeMax + 1, hazeMax + 1]);
-    perform(G, '0', { type: 'moveItem', itemIid: grit.iid, toHeroIid: vindicta.iid });
-    expect([haze.hpMax, haze.hp]).toEqual([hazeMax, hazeMax]);
-    expect([vindicta.hpMax, vindicta.hp]).toEqual([vinMax + 1, vinMax + 1]);
-    perform(G, '0', { type: 'sell', itemIid: grit.iid });
-    expect([vindicta.hpMax, vindicta.hp, vindicta.vitalitySpike]).toEqual([vinMax, vinMax, undefined]);
+    expect([vindicta.hpMax, vindicta.hp]).toEqual([vinMax, vinMax]);
+    // Grit evolves into Guardian Ward (Vitality too): the spike stays.
+    playNew(G, '0', 'guardian_ward', haze);
+    expect(haze.attached!.map((it) => it.cardId)).toEqual(['extra_regen', 'sprint_boots', 'guardian_ward']);
+    expect([haze.hpMax, haze.vitalitySpike]).toEqual([hazeMax + 1, true]);
   });
 });
 
@@ -130,11 +130,11 @@ describe('what items are worth', () => {
     expect([heroWorth(haze), heroWorth(vindicta), heroWorth(lash), heroWorth(me.bench[2]!)]).toEqual([PRICE[1], PRICE[2], PRICE[3], 0]);
     expect(netWorth(G, '0')).toBe(3 + PRICE[1] + PRICE[2] + PRICE[3]);
     expect(netWorth(G, '1')).toBe(0);
-    // What reads it: the comeback for the side behind, and the bounty on the richest hero.
-    expect(comebackBonus(G, '1')).toBe(2);
-    expect(comebackBonus(G, '0')).toBe(0);
-    expect(isRichestHero(G, lash)).toBe(true);
-    expect(killBounty(G, haze)).toBe((haze.level ?? 1) + 1);
-    expect(killBounty(G, lash)).toBe((lash.level ?? 1) + 1 + 2);
+    // An item in the hand counts at its price; a hero card at nothing.
+    giveCard(G, '1', 'glass_cannon');
+    giveCard(G, '1', 'hero_kelvin');
+    expect(netWorth(G, '1')).toBe(PRICE[4]);
+    // What reads it: the round cap's tie-break when the structures are level.
+    expect(standingVerdict(G)).toEqual({ winner: '0', by: 'netWorth' }); // 17 to 16
   });
 });

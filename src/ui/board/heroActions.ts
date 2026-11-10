@@ -1,29 +1,31 @@
 /**
  * What a hero can still do this turn, read the way the engine reads it. A
- * turn opens on its shop step (buy — the card goes to the hand —, sell and
- * move items, then close the shop), then its act: every hero may use one
- * ability a turn (a skill, an active item it wears or, from Level 2, its
- * ultimate — all free), one Retreat, and the Active makes the turn's attack,
- * which ends the turn's Act. A card in the hand is played onto a hero in
- * either step, free. The board's glint, the hero sheet's plates, the shop
- * sheet, the refusal stickers and the tutorial all ask the engine's own
- * `skillBlocked` / `activateBlocked` / `attackBlocked` / `buyBlocked` /
- * `playBlocked` / `moveBlocked` (legality.ts) and `blocked`, which knows the
- * step, so none of them offers a move the engine would refuse; this file only
- * words the answers.
+ * turn opens with its income and its draw; then the player puts heroes from
+ * the hand on the bench (free) and items from the hand on heroes (their
+ * price), every hero may use one ability a turn (its skill or, from Level 2,
+ * its ultimate, each for its souls; or an active item it wears, free), one
+ * Retreat (the leaving hero's own price), and the Active makes the turn's
+ * attack, which ends the turn. The board's glint, the
+ * hero sheet's plates, the hand, the refusal stickers and the tutorial all ask
+ * the engine's own `skillBlocked` / `activateBlocked` / `attackBlocked` /
+ * `playBlocked` / `placeHeroBlocked` / `moveBlocked` (legality.ts) and
+ * `blocked`, so none of them offers a move the engine would refuse; this file
+ * only words the answers.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { RETREAT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import {
-  activateBlocked, blocked, buyPrice, moveBlocked, retreatCost, skillBlocked,
-  type ActivateBlock, type AttackBlock, type MoveBlock, type PlayBlock, type PromoteBlock, type ShopBlock, type SkillBlock,
+  activateBlocked, blocked, moveBlocked, playCost, retreatCost, skillBlocked,
+  type ActivateBlock, type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
+  type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
 import {
-  findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, kitAbilityIds, otherPlayer,
-  resolveSkill, slotCap, wornActives,
+  findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, otherPlayer,
+  resolveSkill, slotCap, slottedHeroes, wornActives,
 } from '@/engine/query';
 import type { Action } from '@/engine/engine';
+import type { AbilityDef } from '@/abilities';
 import type { AttackPlan } from '@/engine/forecast';
 
 /** "1 soul", "2 souls". */
@@ -33,8 +35,8 @@ const nameOf = (card: CardInstance | null | undefined) => (card ? CARDS_BY_ID[ca
 /** The line printed when the turn's attack has ended its Act. */
 export const ACT_OVER = 'The attack ended your turn';
 
-/** The line printed on an act move made while the shop is still open. */
-export const SHOP_OPEN = 'Close the shop first';
+/** The line printed on a move made while a draw card's discard is owed. */
+export const DISCARD_FIRST = 'Discard first';
 
 /** The line the hero sheet prints on an ability (a skill, or the ultimate)
  *  that cannot be used. Name the hero and the ability (left out: its first
@@ -47,10 +49,11 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       const last = hero?.lastSkillUsed;
       if (!hero || !last || !skill || last === skill.id) return 'Already used';
       const lastKind = resolveSkill(hero, last)?.kind;
-      if (lastKind === 'ult' || lastKind === 'borrowed') return 'Used its ultimate this turn';
+      if (lastKind === 'ult') return 'Used its ultimate this turn';
       if (!lastKind) return `Used ${cardName(last)} this turn`;
       return skill.kind === 'skill' ? 'Used its other skill this turn' : 'Used its skill this turn';
     }
+    case 'trigger': return triggerMomentLine(hero, skill?.ability);
     case 'actOver': return ACT_OVER;
     case 'locked': return `Unlocks at Level ${ULT_UNLOCK_LEVEL}`;
     case 'status': return 'Cannot use abilities (status)';
@@ -58,10 +61,25 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       const left = (skill && hero?.cooldowns?.[skill.id]) || 0;
       return left > 0 ? `Ready in ${left} turn${left === 1 ? '' : 's'}` : 'On cooldown';
     }
+    case 'souls': {
+      const cost = hero && skill ? kitCost(hero, skill.id) : 0;
+      return cost > 0 ? `Need ${souls(cost)}` : 'Not enough souls';
+    }
     case 'hp': return skill?.ability.hpCost ? `Needs more than ${skill.ability.hpCost} HP` : 'Not enough HP';
     case 'target': return 'No valid target';
     case 'down': return 'Down until it respawns';
     case 'noSkill': return '';
+  }
+}
+
+/** When an optional trigger is asked (engine/prompts.ts): the line its plate
+ *  prints in place of a button, since it is never used from one ("Asked when
+ *  Victor falls"). */
+export function triggerMomentLine(hero?: CardInstance, ability?: AbilityDef): string {
+  const name = hero ? nameOf(hero) : 'the hero';
+  switch (ability?.trigger) {
+    case 'onFall': return `Asked when ${name} falls`;
+    default: return 'Asked when it can be used';
   }
 }
 
@@ -96,7 +114,7 @@ export function activateBlockReason(block: ActivateBlock, item?: CardInstance, b
       const last = bearer?.lastSkillUsed;
       if (!last || last === item?.cardId) return 'Already used';
       const kind = bearer && resolveSkill(bearer, last)?.kind;
-      return kind === 'ult' || kind === 'borrowed' ? 'Used its ultimate this turn' : kind ? 'Used its skill this turn' : `Used ${cardName(last)} this turn`;
+      return kind === 'ult' ? 'Used its ultimate this turn' : kind ? 'Used its skill this turn' : `Used ${cardName(last)} this turn`;
     }
     case 'status': return 'Cannot use abilities (status)';
     case 'charges': return 'No charges left';
@@ -108,13 +126,13 @@ export function activateBlockReason(block: ActivateBlock, item?: CardInstance, b
   }
 }
 
-/** Who and what a shop refusal is about, so its line can name them. */
-interface ShopSubject {
-  /** The item ("Extended Magazine"). */
+/** Who and what a hand refusal is about, so its line can name them. */
+interface HandSubject {
+  /** The card ("Extended Magazine"). */
   item?: string;
   /** The hero it was to go on, when one was named. */
   hero?: string;
-  /** What it would cost (`buyPrice`). */
+  /** What it would cost (`playCost`). */
   cost?: number;
   /** The souls the player has. */
   have?: number;
@@ -122,41 +140,61 @@ interface ShopSubject {
   slots?: number;
 }
 
-/** The line the shop sheet and the sticker print on a shop move the engine
- *  will not make. */
-export function shopBlockReason(block: ShopBlock, s: ShopSubject = {}): string {
-  switch (block) {
-    case 'notYourTurn': return 'Not your turn';
-    case 'notShop': return 'The shop is closed until your next turn';
-    case 'noItem': return 'No such item';
-    case 'notOnSale': return `${s.item ?? 'That item'} is not on sale this match`;
-    case 'noHero': return 'That is not one of your heroes';
-    case 'duplicate': return `${s.hero ?? 'That hero'} already wears ${s.item ?? 'one'}`;
-    case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items — sell one first`;
-    case 'souls': return s.cost === undefined ? 'Not enough souls' : `Need ${souls(s.cost)}${s.have === undefined ? '' : ` — you have ${s.have}`}`;
-    case 'notOwned': return 'Not one of your cards';
-    case 'claimed': return `An upgrade in your hand was bought against ${s.item ?? 'it'} — play or sell that first`;
-    case 'notWorn': return 'Not one of your worn items';
-    case 'same': return `It is already on ${s.hero ?? 'that hero'}`;
-  }
-}
-
 /** The line the sticker prints on a card from the hand that cannot go onto
  *  the hero it was played on. */
-export function playBlockReason(block: PlayBlock, s: ShopSubject = {}): string {
+export function playBlockReason(block: PlayBlock, s: HandSubject = {}): string {
   switch (block) {
     case 'notYourTurn': return 'Not your turn';
     case 'notInHand': return 'That card is not in your hand';
+    case 'hero': return 'A hero goes on the bench — tap it in your hand';
     case 'noHero': return 'Play it onto one of your heroes';
     case 'duplicate': return `${s.hero ?? 'That hero'} already wears ${s.item ?? 'one'}`;
-    case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items — sell one first`;
+    case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items`;
+    case 'replace': return `Choose one of the items ${s.hero ?? 'that hero'} wears to discard`;
+    case 'souls': return s.cost === undefined ? 'Not enough souls' : `Need ${souls(s.cost)}${s.have === undefined ? '' : ` — you have ${s.have}`}`;
+    case 'upgrade': return 'Not an upgrade of that card';
+  }
+}
+
+/** The line printed on a hero from the hand that cannot go on the board. */
+export function placeBlockReason(block: PlaceBlock): string {
+  switch (block) {
+    case 'notYourTurn': return 'Not your turn';
+    case 'notInHand': return 'That card is not in your hand';
+    case 'notHero': return 'An item goes on a hero';
+    case 'occupied': return 'Your Active slot is taken';
+    case 'benchOnly': return 'That hero can only fight from the bench';
+    case 'benchFull': return 'Your bench is full';
+    case 'badSlot': return 'That is no bench slot';
+    case 'slotTaken': return 'That slot is taken';
+  }
+}
+
+/** The line printed on a first Active the engine will not take. */
+export function chooseActiveBlockReason(block: ChooseActiveBlock): string {
+  switch (block) {
+    case 'notOwed': return 'Your Active is already in the lane';
+    case 'notInDeck': return 'That hero is not one of yours';
+    case 'notHero': return 'Choose a hero';
+    case 'benchOnly': return 'That hero can only fight from the bench';
+  }
+}
+
+/** The line printed on a discard the engine will not take. */
+export function discardBlockReason(block: DiscardBlock): string {
+  switch (block) {
+    case 'notOwed': return 'Nothing to discard';
+    case 'none': return 'Choose the cards to discard';
+    case 'tooMany': return 'Too many cards';
+    case 'repeat': return 'A card was chosen twice';
+    case 'notInHand': return 'That card is not in your hand';
   }
 }
 
 /** The line the board's sticker prints on a swap that cannot be made. `cost` is
- *  what the Retreat costs right now (`retreatCost`, legality.ts); left out, the
- *  base price. */
-export function moveBlockReason(block: MoveBlock, cost = RETREAT_COST): string {
+ *  what the Retreat costs right now (`retreatCost`, legality.ts): the leaving
+ *  hero's own price. Left out, the line names no number. */
+export function moveBlockReason(block: MoveBlock, cost?: number): string {
   switch (block) {
     case 'same': return 'That hero is already there';
     case 'actOver': return ACT_OVER;
@@ -165,9 +203,24 @@ export function moveBlockReason(block: MoveBlock, cost = RETREAT_COST): string {
     case 'benchOnly': return 'That hero can only fight from the bench';
     case 'down': return 'Down until it respawns';
     case 'rooted': return 'Rooted: cannot retreat or be swapped';
-    case 'souls': return `Need ${souls(cost)}`;
+    case 'souls': return cost === undefined ? 'Not enough souls' : `Need ${souls(cost)}`;
     case 'illegal': return 'Not a place on the board';
   }
+}
+
+/** The ride that has just left `pid`'s lane empty, or undefined: a hero riding
+ *  on an ally that rode out of the lane (`slot` 0 — Rem's Tag Along from the
+ *  Active slot), by the skill its side has just used (`G.action`). The
+ *  promotion it owes is the one a fallen Active owes; the sheet says it as a
+ *  ride. */
+export function laneRide(G: GameState, pid: PlayerID): { rider: CardInstance; bearer: CardInstance } | undefined {
+  const act = G.action;
+  if (!act || act.kind !== 'skill' || act.by !== pid || G.players[pid].active) return undefined;
+  for (const bearer of slottedHeroes(G.players[pid])) {
+    const rider = (bearer.attached ?? []).find((a) => a.remMergeTurnsLeft != null && a.slot === 0 && a.cardId === act.cardId);
+    if (rider) return { rider, bearer };
+  }
+  return undefined;
 }
 
 /** The line printed on a promotion the engine will not make. */
@@ -212,8 +265,9 @@ export function actionRefusal(G: GameState, pid: PlayerID, a: Action): Refusal |
 function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): string {
   // Owed by either seat, a promotion comes before anything else at the table.
   if (code === 'promotionOwed') return 'Choose who steps up first';
+  if (code === 'activeOwed') return 'Put your first Active in the lane';
+  if (code === 'discardOwed') return DISCARD_FIRST;
   if (code === 'actOver') return ACT_OVER;
-  if (code === 'shopOpen') return SHOP_OPEN;
   switch (a.type) {
     case 'attack':
       if (code === 'draft') return 'Pick your heroes first';
@@ -234,25 +288,17 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
       if (code === 'target' && a.targetIid !== undefined) return `Not a valid target for ${nameOf(worn?.item) || 'that item'}`;
       return activateBlockReason(code as ActivateBlock, worn?.item, worn?.bearer);
     }
-    case 'buy':
-      return shopBlockReason(code as ShopBlock, { item: cardName(a.itemId), cost: buyPrice(G, pid, a.itemId), have: G.players[pid].souls });
-    case 'sell': {
-      const card = handCard(G, pid, a.itemIid) ?? findWornItem(G, a.itemIid, pid)?.item;
-      return shopBlockReason(code as ShopBlock, { item: nameOf(card) || undefined });
-    }
     case 'playCard': {
       const card = handCard(G, pid, a.cardIid);
+      const hero = findCardOnBoard(G, a.heroIid)?.card;
       return playBlockReason(code as PlayBlock, {
-        item: nameOf(card) || undefined, hero: nameOf(findCardOnBoard(G, a.heroIid)?.card) || undefined, slots: slotCap(G, pid),
+        item: nameOf(card) || undefined, hero: nameOf(hero) || undefined, slots: slotCap(G, pid),
+        cost: card ? (hero ? playCost(hero, card.cardId) : itemPrice(card.cardId)) : undefined, have: G.players[pid].souls,
       });
     }
-    case 'moveItem': {
-      const worn = findWornItem(G, a.itemIid, pid);
-      return shopBlockReason(code as ShopBlock, {
-        item: nameOf(worn?.item) || undefined, hero: nameOf(findCardOnBoard(G, a.toHeroIid)?.card) || undefined, slots: slotCap(G, pid),
-      });
-    }
-    case 'closeShop': return shopBlockReason(code as ShopBlock);
+    case 'placeHero': return placeBlockReason(code as PlaceBlock);
+    case 'chooseActive': return chooseActiveBlockReason(code as ChooseActiveBlock);
+    case 'discard': return discardBlockReason(code as DiscardBlock);
     case 'moveHero': return moveBlockReason(code as MoveBlock, retreatCost(G, pid));
     case 'promoteToActive': return promoteBlockReason(code as PromoteBlock);
     case 'endTurn': return '';
@@ -275,14 +321,14 @@ export function attackLine(plan: AttackPlan): string {
 }
 
 /** Every hero of `pid`'s that can still do something this turn: use one of
- *  its kit abilities now (a skill, its ultimate, a borrowed ultimate) or an
+ *  its kit abilities now (its skill or its ultimate, souls in hand) or an
  *  active item it wears, or — the Active — make the turn's attack while it is
- *  open. Nobody glints while the shop is open: nothing on the board can act
- *  until it closes. */
+ *  open. Nobody glints while a choice is owed (a discard, the first Active, a
+ *  trigger prompt). */
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {
   const ps = G.players[pid];
   const ready = new Set<string>();
-  if (G.step === 'shop') return ready;
+  if (G.pendingDiscard || G.pendingActive || G.triggers?.length) return ready;
   for (const hero of [ps.active, ...ps.bench]) {
     if (!hero) continue;
     const abilityOpen = kitAbilityIds(hero).some((id) => skillBlocked(G, pid, hero, undefined, id) === null)
