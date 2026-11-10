@@ -24,6 +24,7 @@ import type { Rect } from '../effects/fx/geometry';
 import { useViewport } from '../hooks/useViewport';
 import { fonts, spring } from '../tokens';
 import { poster, sheetStyle, scrimStyle, printEdge } from '../poster';
+import { PatronSigil, bandStyle, scale as type } from '../hud';
 import { PosterButton } from '../chrome';
 
 interface Props {
@@ -98,11 +99,14 @@ export function OpeningPicker({ candidates, onPick }: Props) {
   // over half its size, tucked behind its edges with most of their art out,
   // within what the screen allows (a 375px phone shows the middle card whole
   // and the stage clips the tiles' outer edges).
-  const scale = isMobile ? Math.min(0.6, (vw - 48) / CARD.w * 0.62) : 0.78;
+  // The middle card is shown at its own size, so its smallest print stays at
+  // the type scale's floor (a scaled-down card read at about 8px); the
+  // neighbours only peek in at the stage's edges.
+  const scale = Math.min(1, (vw - 40) / CARD.w);
   const side = scale * 0.55;
   const peek = CARD.w * side * 0.7;
   const step = CARD.w * scale / 2 + peek - CARD.w * side / 2;
-  const stageW = Math.min(vw - 32, CARD.w * scale + 2 * peek + 16);
+  const stageW = Math.min(vw - 24, CARD.w * scale + 2 * peek + 16);
   const stageH = CARD.h * scale + 16;
   const transition = calm ? { duration: 0 } : spring.default;
 
@@ -123,21 +127,29 @@ export function OpeningPicker({ candidates, onPick }: Props) {
         style={{
           ...sheetStyle,
           display: 'flex', flexDirection: 'column', alignItems: 'center',
-          gap: isMobile ? 10 : 14,
-          padding: isMobile ? '14px 8px 14px' : '22px 28px 24px',
+          gap: 12,
+          padding: isMobile ? '0 0 16px' : '0 0 22px',
           borderRadius: 12,
+          overflow: 'hidden',
           width: isMobile ? 'min(100%, 420px)' : 'min(100%, 640px)',
           boxSizing: 'border-box',
           color: poster.ink,
         }}
       >
-        <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 17 : 22, letterSpacing: '0.12em', textTransform: 'uppercase', lineHeight: 1 }}>
+        {/* The header band, in your patron's amber. */}
+        <div style={{
+          ...bandStyle(poster.you),
+          alignSelf: 'stretch',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '11px 16px 10px',
+          fontSize: type.title,
+        }}>
+          <PatronSigil side="you" size={18} color={poster.ink} />
           Choose your Active
-        </span>
+        </div>
 
-        {/* The stage, with the arrows at its sides. */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: isMobile ? 2 : 8, width: '100%' }}>
-          <Arrow dir="left" onTap={prev} compact={isMobile} />
+        {/* The stage. */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
           <div
             onPointerDown={onPointerDown}
             onPointerUp={onPointerUp}
@@ -188,19 +200,22 @@ export function OpeningPicker({ candidates, onPick }: Props) {
               );
             })}
           </div>
-          <Arrow dir="right" onTap={next} compact={isMobile} />
         </div>
 
-        {/* Which of the four is in the middle. */}
-        <div aria-hidden style={{ display: 'flex', gap: 6 }}>
-          {candidates.map((c, i) => (
-            <span key={c.iid} style={{
-              width: 7, height: 7, borderRadius: '50%',
-              background: i === index ? poster.ink : 'transparent',
-              border: `1.5px solid ${poster.ink}`,
-              opacity: i === index ? 1 : 0.45,
-            }} />
-          ))}
+        {/* The arrows, either side of which of the four is in the middle. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <Arrow dir="left" onTap={prev} compact />
+          <div aria-hidden style={{ display: 'flex', gap: 7 }}>
+            {candidates.map((c, i) => (
+              <span key={c.iid} style={{
+                width: 8, height: 8, transform: 'rotate(45deg)',
+                background: i === index ? poster.ink : 'transparent',
+                border: `1.5px solid ${poster.ink}`,
+                opacity: i === index ? 1 : 0.45,
+              }} />
+            ))}
+          </div>
+          <Arrow dir="right" onTap={next} compact />
         </div>
 
         <PosterButton variant="ink" onClick={confirm} ariaLabel={`Start with ${name}`}>
@@ -226,7 +241,7 @@ function Arrow({ dir, onTap, compact }: { dir: 'left' | 'right'; onTap: () => vo
         width: size, height: size, borderRadius: '50%',
         background: poster.ink, color: poster.paper,
         border: `2px solid ${poster.ink}`,
-        fontFamily: fonts.display, fontSize: compact ? 18 : 22, lineHeight: 1,
+        fontFamily: fonts.display, fontSize: compact ? type.title : type.display, lineHeight: 1,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: 'pointer', padding: 0,
       }}
