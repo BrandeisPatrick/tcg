@@ -101,7 +101,7 @@ export function ReplacePicker({ hero, itemId, worn, onPick, onCancel }: {
             <Card cardId={itemId} scale={scale} glow="accent" />
           </div>
           <span aria-hidden style={{ fontFamily: fonts.display, fontSize: isMobile ? 18 : 26, color: poster.inkDim, transform: isMobile ? 'rotate(90deg)' : undefined }}>⇄</span>
-          <div role="group" aria-label={`What ${heroName} wears`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <div role="group" aria-label={`What ${heroName} wears`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
             <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.inkDim }}>Worn — tap the one to discard</span>
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 6 : 12 }}>
               {worn.map((it) => {
