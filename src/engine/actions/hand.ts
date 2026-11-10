@@ -6,7 +6,8 @@
  *  - An item goes on one of the player's heroes (the bench and corpses
  *    included) for its price — or, an upgrade onto the hero that wears its
  *    component, for the difference: it evolves, and the component goes to the
- *    discard pile. An active starts on its full cooldown (`activeCooldown`)
+ *    discard pile. On a full hero it takes the place of the worn item the
+ *    player chose (`replaceIid`), which goes to the discard pile. An active starts on its full cooldown (`activeCooldown`)
  *    or, hard crowd control, with HARD_CC_CHARGES; a passive's `bonus` goes on;
  *    the hero earns EXP_ON_EQUIP the first time it wears that item. Playing an
  *    item Deadlock builds into a bigger one makes that upgrade and shuffles it
@@ -19,7 +20,7 @@
 import type { CardId, CardInstance, GameState, PlayerID } from '../types';
 import { cardName, itemCard } from '@/cards';
 import { upgradesOf } from '@/cards/decks';
-import { activeCooldown, findCardOnBoard, handCard, isRespawning } from '../query';
+import { activeCooldown, findCardOnBoard, handCard, isRespawning, wornItems } from '../query';
 import { freeBenchSlot, playCost, upgradeComponent } from '../legality';
 import { attachItem, detachItem, syncVitalitySpike } from '../instances';
 import { discardFromHand, shuffleIntoDeck, toDiscard } from '../deck';
@@ -32,13 +33,15 @@ import { EXP_ON_EQUIP, HARD_CC_CHARGES } from '../constants';
 
 /** Put the item `cardIid` from `pid`'s hand on its hero `heroIid`, paying
  *  `playCost`; `upgradeId` picks the upgrade it makes when it makes one of
- *  several (left out: the first). */
-export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: string, upgradeId?: CardId) {
+ *  several (left out: the first); `replaceIid`, on a full hero, the worn item
+ *  it replaces, which goes to `pid`'s discard pile (the board flies it there). */
+export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: string, upgradeId?: CardId, replaceIid?: string) {
   const ps = G.players[pid];
   const card = handCard(G, pid, cardIid)!;
   const hero: CardInstance = findCardOnBoard(G, heroIid)!.card;
   const data = itemCard(card.cardId)!;
   const comp = upgradeComponent(hero, card.cardId);
+  const replaced = replaceIid === undefined ? undefined : wornItems(hero).find((it) => it.iid === replaceIid);
   const cost = playCost(hero, card.cardId);
 
   ps.souls -= cost;
@@ -49,6 +52,11 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: 
     detachItem(hero, comp);
     toDiscard(G, pid, comp);
   }
+  // A full hero: the item the player chose to discard makes room.
+  if (replaced) {
+    detachItem(hero, replaced);
+    toDiscard(G, pid, replaced);
+  }
   if (data.type === 'spell') {
     if (data.hardCC) card.charges ??= HARD_CC_CHARGES;
     else card.cooldowns = { [card.cardId]: activeCooldown(hero, data.tier, data.cooldown) };
@@ -56,7 +64,7 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: 
   attachItem(hero, card);
   syncVitalitySpike(hero);
 
-  const evolved = comp ? ` (it evolves ${cardName(comp.cardId)})` : '';
+  const evolved = comp ? ` (it evolves ${cardName(comp.cardId)})` : replaced ? ` (${cardName(replaced.cardId)} discarded for it)` : '';
   pushLog(G, `P${pid} played ${data.name} on ${cardName(hero.cardId)}${evolved} (-${cost} soul${cost === 1 ? '' : 's'}).`);
   pushFx(G, { kind: 'cast', castKind: 'equip', by: pid, cardId: card.cardId, iid: hero.iid, targetIid: hero.iid });
   if (!isRespawning(hero) && !(hero.equippedIds ?? []).includes(card.cardId)) {

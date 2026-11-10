@@ -266,7 +266,7 @@ describe('Spell scaling treats corpse Active as 0 Spirit', () => {
 // ============================================================================
 
 describe('item slots (3 per hero)', () => {
-  it('a play onto a full hero is refused — there is no discard; only an upgrade of an item it wears goes on, in its place', () => {
+  it('a play onto a full hero is refused unless it names the worn item it replaces; an upgrade of an item it wears goes on in its place', () => {
     const G = freshReadyGame();
     G.players['0'].souls = 99;
     const hero = G.players['0'].active!;
@@ -278,6 +278,8 @@ describe('item slots (3 per hero)', () => {
     expect(perform(G, '0', fourth)).toBe(INVALID);
     expect(wornItems(hero)).toHaveLength(3);
     expect(G.players['0'].hand).toEqual([card]);
+    // Naming one it wears, the card takes its place (hand.spec has the swap in full).
+    expect(playBlocked(G, '0', card.iid, hero.iid, undefined, wornItems(hero)[1].iid)).toBeNull();
     // An upgrade of a worn item evolves it: Improved Spirit takes Extra Spirit's place.
     const up = giveCard(G, '0', 'improved_spirit');
     expect(playBlocked(G, '0', up.iid, hero.iid)).toBeNull();

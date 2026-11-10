@@ -19,7 +19,7 @@ import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { upgradesOf } from '@/cards/decks';
 import { INVALID, perform, type Action } from '@/engine/engine';
 import {
-  blocked, discardBlocked, freeBenchSlot, legalActions, placeHeroBlocked, playBlocked, playCost, playTargets,
+  blocked, discardBlocked, freeBenchSlot, legalActions, placeHeroBlocked, playBlocked, playBlockedAny, playCost, playTargets, replaceNeeded,
 } from '@/engine/legality';
 import { activeCooldown, itemCooldown, itemPrice, netWorth, otherPlayer, slotCap, wornItems } from '@/engine/query';
 import { setupGame } from '@/engine/actions/setup';
@@ -30,6 +30,8 @@ import {
   DRAW_PER_TURN, EXP_ON_EQUIP, HARD_CC_CHARGES, LANE_INCOME, MAX_HAND, MAX_ITEMS, PRICE,
 } from '@/engine/constants';
 import { setMatchConfig } from '@/storage/matchConfig';
+import { DeadlockGame } from '@/engine/game';
+import { INVALID_MOVE } from 'boardgame.io/core';
 import {
   configureReadyMatch, freshReadyGame, giveCard, giveItem, makeAttack, makeHero, playItem, playNew, readyClient, stackDeck, withBenchOnly,
 } from './_helpers';
@@ -203,7 +205,7 @@ describe('playing an item: its price, from the hand onto a hero', () => {
     expect(attempt(G, '0', play(card, me.bench[0]!, 'titanic_magazine')).result).not.toBe(INVALID);
   });
 
-  it('the cap and the flex slot: a full hero takes no fourth card — unless it evolves one it wears — and with the flex slot it does', () => {
+  it('the cap and the flex slot: a full hero takes a fourth card only in place of one it wears — unless it evolves one — and with the flex slot it takes it outright', () => {
     const G = turn(40);
     const haze = G.players['0'].active!;
     for (const id of ['extended_magazine', 'extra_regen', 'sprint_boots']) giveItem(G, haze, id);
@@ -211,7 +213,11 @@ describe('playing an item: its price, from the hand onto a hero', () => {
     const spirit = giveCard(G, '0', 'extra_spirit');
     const titanic = giveCard(G, '0', 'titanic_magazine');
     expect(playBlocked(G, '0', spirit.iid, haze.iid)).toBe('full');
-    expect(playTargets(G, '0', spirit.iid).map((h) => h.iid)).not.toContain(haze.iid);
+    expect(replaceNeeded(G, '0', haze, 'extra_spirit')).toBe(true);
+    expect(replaceNeeded(G, '0', haze, 'titanic_magazine')).toBe(false);        // it evolves the magazine
+    // The board lights her all the same: the card goes on in place of an item she wears.
+    expect(playBlockedAny(G, '0', spirit.iid, haze.iid)).toBeNull();
+    expect(playTargets(G, '0', spirit.iid).map((h) => h.iid)).toContain(haze.iid);
     expect(playTargets(G, '0', titanic.iid).map((h) => h.iid)).toContain(haze.iid);
     playItem(G, '0', titanic, haze);                                            // takes the magazine's place
     expect(wornItems(haze)).toHaveLength(MAX_ITEMS);
@@ -223,7 +229,7 @@ describe('playing an item: its price, from the hand onto a hero', () => {
     expect(playBlocked(G, '0', burst.iid, haze.iid)).toBe('full');
   });
 
-  it('playTargets: the heroes an item may go on, in board order — the Active, then the bench, corpses included — souls permitting', () => {
+  it('playTargets: the heroes an item may go on, in board order — the Active, then the bench, corpses included, a full hero in place of an item — souls permitting', () => {
     const G = turn(20);
     const me = G.players['0'];
     const [haze, vindicta, lash, paige] = [me.active!, ...me.bench] as CardInstance[];
@@ -233,7 +239,8 @@ describe('playing an item: its price, from the hand onto a hero', () => {
     expect(playTargets(G, '0', card.iid)).toEqual([haze, vindicta, lash, paige]);
     giveItem(G, vindicta, 'extra_health');
     for (const id of ['extra_spirit', 'extra_regen', 'sprint_boots']) giveItem(G, lash, id);
-    expect(playTargets(G, '0', card.iid)).toEqual([haze, paige]);
+    // Vindicta wears one already; Lash is full, and takes it in place of one of hers.
+    expect(playTargets(G, '0', card.iid)).toEqual([haze, lash, paige]);
     expect(playTargets(G, '0', 'no-such-iid')).toEqual([]);
     expect(playTargets(G, '1', card.iid)).toEqual([]);
     me.souls = PRICE[1] - 1;
@@ -254,6 +261,110 @@ describe('playing an item: its price, from the hand onto a hero', () => {
     const hero = giveCard(G, '0', 'hero_kelvin');
     expect(freeBenchSlot(me)).toBeUndefined();
     expect(placeHeroBlocked(G, '0', hero.iid)).toBe('benchFull');
+  });
+});
+
+describe('a full hero: the card goes on in place of a worn item the player names (Patrick, 2026-11-09)', () => {
+  /** P0's Haze wearing three items, with 40 souls; a card for her in the hand. */
+  const full = () => {
+    const G = turn(40);
+    const haze = G.players['0'].active!;
+    const worn = ['extra_health', 'extended_magazine', 'restorative_shot'].map((id) => giveItem(G, haze, id));
+    return { G, haze, worn };
+  };
+  const swap = (card: CardInstance, hero: CardInstance, replaceIid: unknown, upgradeId?: string): Action =>
+    ({ type: 'playCard', cardIid: card.iid, heroIid: hero.iid, ...(upgradeId ? { upgradeId } : {}), replaceIid } as Action);
+
+  it('without a replaceIid it is refused as full; naming a worn item, it goes on, that item to the discard pile, the price paid in full', () => {
+    const { G, haze, worn } = full();
+    const [health, mag, shot] = worn;
+    const card = giveCard(G, '0', 'extra_spirit');
+    refusedUntouched(G, '0', play(card, haze), 'full');
+    const hpMax = haze.hpMax;
+    const fx = G.fx.length;
+    expect(attempt(G, '0', swap(card, haze, health.iid)).result).not.toBe(INVALID);
+    expect(wornItems(haze).map((it) => it.iid)).toEqual([mag.iid, shot.iid, card.iid]);
+    expect(G.players['0'].discard).toEqual([health]);
+    expect(health.zone).toBe('discard');
+    expect(haze.hpMax).toBe(hpMax - 2);                                   // Extra Health's +2 went with it
+    expect(G.players['0'].souls).toBe(40 - PRICE[1]);                     // nothing back for the item let go
+    expect(G.players['0'].hand).toEqual([]);
+    // It goes through the discard path: the board flies it from Haze to the pile.
+    expect(G.fx.slice(fx).some((e) => e.kind === 'deck' && e.what === 'discard' && e.iid === health.iid && e.pid === '0')).toBe(true);
+    expect(G.log.some((l) => l.text.includes('Extra Health discarded for it'))).toBe(true);
+  });
+
+  it('legalActions offers one play per worn item it could replace — and none onto a hero with room', () => {
+    const { G, haze, worn } = full();
+    const card = giveCard(G, '0', 'extra_regen');                         // it makes no upgrade: one play a hero
+    expect(upgradesOf('extra_regen')).toEqual([]);
+    const onHaze = legalActions(G, '0').filter((a) => a.type === 'playCard' && a.cardIid === card.iid && a.heroIid === haze.iid);
+    expect(onHaze).toEqual(worn.map((it) => swap(card, haze, it.iid)));
+    const vindicta = G.players['0'].bench[0]!;
+    const onVindicta = legalActions(G, '0').filter((a) => a.type === 'playCard' && a.cardIid === card.iid && a.heroIid === vindicta.iid);
+    expect(onVindicta).toEqual([play(card, vindicta)]);
+  });
+
+  it('a wrong replaceIid is refused and changes nothing: another hero\'s item, the card itself, junk, or a hero with room', () => {
+    const { G, haze } = full();
+    const card = giveCard(G, '0', 'extra_spirit');
+    const vindicta = G.players['0'].bench[0]!;
+    const theirs = giveItem(G, vindicta, 'grit');
+    for (const bad of [theirs.iid, card.iid, 'nope', '', null, 7]) refusedUntouched(G, '0', swap(card, haze, bad), 'replace');
+    refusedUntouched(G, '0', swap(card, vindicta, theirs.iid), 'replace'); // Vindicta has room: nothing to replace
+    G.players['0'].souls = 0;
+    refusedUntouched(G, '0', swap(card, haze, wornItems(haze)[0].iid), 'souls');
+  });
+
+  it('evolving onto a full hero needs no discard: the upgrade takes its component\'s place, and a replaceIid is refused', () => {
+    const { G, haze, worn } = full();
+    const [, mag] = worn;
+    const titanic = giveCard(G, '0', 'titanic_magazine');
+    expect(playBlocked(G, '0', titanic.iid, haze.iid)).toBeNull();
+    refusedUntouched(G, '0', swap(titanic, haze, worn[0].iid), 'replace');
+    expect(legalActions(G, '0').filter((a) => a.type === 'playCard' && a.cardIid === titanic.iid && a.heroIid === haze.iid))
+      .toEqual([play(titanic, haze)]);
+    playItem(G, '0', titanic, haze);
+    expect(wornItems(haze)).toHaveLength(MAX_ITEMS);
+    expect(G.players['0'].discard).toEqual([mag]);
+  });
+
+  it('a riding Rem is no item: she takes no slot, and she cannot be the one replaced', () => {
+    const { G, haze, worn } = full();
+    const rem = makeHero('hero_rem', '0', 'equipment', 3);
+    rem.attachedTo = haze.iid;
+    rem.remMergeTurnsLeft = 2;
+    haze.attached = [...(haze.attached ?? []), rem];
+    G.players['0'].bench[2] = null;
+    const card = giveCard(G, '0', 'extra_spirit');
+    refusedUntouched(G, '0', swap(card, haze, rem.iid), 'replace');
+    expect(legalActions(G, '0').some((a) => a.type === 'playCard' && a.replaceIid === rem.iid)).toBe(false);
+    expect(attempt(G, '0', swap(card, haze, worn[2].iid)).result).not.toBe(INVALID);
+    expect(haze.attached).toContain(rem);
+    expect(rem.remMergeTurnsLeft).toBe(2);
+    // Two items and Rem leave room: the next card needs no discard, and a replaceIid is refused.
+    const G2 = turn(40);
+    const paige = G2.players['0'].bench[2]!;
+    ['extra_health', 'extended_magazine'].forEach((id) => giveItem(G2, paige, id));
+    const rem2 = makeHero('hero_rem', '0', 'equipment', 1);
+    rem2.attachedTo = paige.iid;
+    rem2.remMergeTurnsLeft = 2;
+    paige.attached = [...(paige.attached ?? []), rem2];
+    G2.players['0'].bench[0] = null;
+    const next = giveCard(G2, '0', 'extra_spirit');
+    expect(replaceNeeded(G2, '0', paige, 'extra_spirit')).toBe(false);
+    refusedUntouched(G2, '0', swap(next, paige, wornItems(paige)[0].iid), 'replace');
+    expect(playBlocked(G2, '0', next.iid, paige.iid)).toBeNull();
+  });
+
+  it('through the boardgame.io move: playCard(card, hero, upgrade?, replace)', () => {
+    const { G, haze, worn } = full();
+    const card = giveCard(G, '0', 'extra_spirit');
+    const ctx = { currentPlayer: '0', turn: 2, numPlayers: 2 } as never;
+    const move = DeadlockGame.moves!.playCard as unknown as (mc: unknown, ...args: unknown[]) => unknown;
+    expect(move({ G, ctx, playerID: '0', events: {} }, card.iid, haze.iid)).toBe(INVALID_MOVE);
+    expect(move({ G, ctx, playerID: '0', events: {} }, card.iid, haze.iid, undefined, worn[1].iid)).toBeUndefined();
+    expect(wornItems(haze).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'extra_spirit']);
   });
 });
 

@@ -63,6 +63,8 @@ export interface Coverage {
   plays: number;
   /** Plays of an upgrade onto the hero wearing its component (it evolves). */
   evolves: number;
+  /** Plays onto a full hero in place of a worn item it discards. */
+  replaces: number;
   /** Plays that made an upgrade (shuffled into the deck), and of those the ones that named their pick of several. */
   upgradesMade: number;
   upgradePicks: number;
@@ -85,7 +87,7 @@ export function runInvariantMix(mixIndex: number, games: number): MixRun {
   const hits: Hit[] = [];
   const records: GameRecord[] = [];
   const coverage: Coverage = {
-    remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0, plays: 0, evolves: 0, upgradesMade: 0, upgradePicks: 0,
+    remMerges: 0, ultsPlayed: 0, freeCopiesPlayed: 0, attacks: 0, kos: 0, plays: 0, evolves: 0, replaces: 0, upgradesMade: 0, upgradePicks: 0,
     heldPlays: 0, heroesPlaced: 0, firstActives: 0, drawCards: 0, discards: 0, backToHand: 0, activates: 0,
   };
   for (let i = 0; i < games; i++) {
@@ -145,6 +147,7 @@ function tally(c: Coverage, before: Snapshot, after: Snapshot, m: StepInfo) {
     const card = handCardOf(before.G, pid, m.args[0]);
     const hero = slottedHeroOf(before.G, pid, m.args[1]);
     if (card && hero && upgradeComponentOracle(hero, card.cardId)) c.evolves++;
+    if (card && hero && m.args[3] !== undefined) c.replaces++;
     if (card && upgradesOfOracle(card.cardId).length) c.upgradesMade++;
     if (card && upgradesOfOracle(card.cardId).length > 1 && m.args[2] !== undefined) c.upgradePicks++;
     // A card drawn on an earlier turn: this turn's draws are in the stream since the turn began.

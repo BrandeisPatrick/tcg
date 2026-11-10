@@ -88,6 +88,7 @@ export function moveTags(snap: Snapshot, name: string, args: unknown[]): string[
     if (card && upgradesOfOracle(card.cardId).length > 1) tags.push('play:upgrade-choice');
     if (card && upgradesOfOracle(card.cardId).length === 1) tags.push('play:makes-upgrade');
     if (args[2] !== undefined) tags.push('play:names-upgrade');
+    if (args[3] !== undefined) tags.push('play:names-replace');
     const hero = slottedHeroOf(G, pid, args[1]);
     if (!hero) tags.push('hero:unknown');
     else {

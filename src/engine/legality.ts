@@ -290,6 +290,14 @@ export function upgradeComponent(hero: CardInstance, itemId: CardId): CardInstan
   return from ? wornItems(hero).find((it) => it.cardId === from) : undefined;
 }
 
+/** True when putting the item `itemId` on `hero` must discard one of the
+ *  items it wears: the hero is full (`slotCap`) and the item evolves none of
+ *  them (an upgrade onto its component takes that item's place, so the count
+ *  stays). A riding Rem is no item: she takes no slot (`wornItems`). */
+export function replaceNeeded(G: GameState, pid: PlayerID, hero: CardInstance, itemId: CardId): boolean {
+  return !upgradeComponent(hero, itemId) && wornItems(hero).length >= slotCap(G, pid);
+}
+
 /** Souls putting the item `itemId` on `hero` costs: its price (`PRICE` by
  *  tier) — or, an upgrade onto the hero wearing its component (it evolves,
  *  taking that item's place), the difference, as in Deadlock. */
@@ -304,7 +312,7 @@ function turnShut(G: GameState, pid: PlayerID): 'notYourTurn' | null {
   return G.draft || seatToMove(G) !== pid ? 'notYourTurn' : null;
 }
 
-export type PlayBlock = 'notYourTurn' | 'notInHand' | 'hero' | 'noHero' | 'duplicate' | 'full' | 'souls' | 'upgrade';
+export type PlayBlock = 'notYourTurn' | 'notInHand' | 'hero' | 'noHero' | 'duplicate' | 'full' | 'replace' | 'souls' | 'upgrade';
 
 /**
  * Why `pid` cannot put the item `cardIid` from its hand on its hero `heroIid`
@@ -312,18 +320,25 @@ export type PlayBlock = 'notYourTurn' | 'notInHand' | 'hero' | 'noHero' | 'dupli
  * the hero wearing its component evolves it for the difference) and is not the
  * hero's ability for the turn. `upgradeId`, when given, is the upgrade the play
  * makes (`upgradesOf`: the player picks one when there are several); it must be
- * one of them. Checked in this order:
+ * one of them. A hero whose slots are full takes the card only in place of an
+ * item it wears (`replaceNeeded`; Patrick, 2026-11-09): `replaceIid` names
+ * that item, which goes to the discard pile; the card still costs its price.
+ * Checked in this order:
  *  - 'notYourTurn' it is not `pid`'s turn (the draft included).
  *  - 'notInHand'   no card in `pid`'s hand has that iid.
  *  - 'hero'        the card is a hero: it goes on the bench (`placeHero`).
  *  - 'noHero'      no hero of `pid` in a slot has that iid (bench and corpses count).
  *  - 'duplicate'   the hero already wears one.
- *  - 'full'        the hero's slots are full (`slotCap`) and the card is no
- *                  upgrade of an item the hero wears (which takes its place).
+ *  - 'full'        the hero's slots are full (`slotCap`), the card is no
+ *                  upgrade of an item the hero wears (which takes its place),
+ *                  and no `replaceIid` names the item it replaces.
+ *  - 'replace'     a `replaceIid` the play cannot use: the hero has room, or
+ *                  the card evolves an item it wears, or the hero wears no
+ *                  item of that iid (a riding Rem is no item).
  *  - 'souls'       `pid` has fewer souls than it costs.
  *  - 'upgrade'     `upgradeId` names no upgrade of the card.
  */
-export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIid: string, upgradeId?: CardId): PlayBlock | null {
+export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIid: string, upgradeId?: CardId, replaceIid?: string): PlayBlock | null {
   const shut = turnShut(G, pid);
   if (shut) return shut;
   const card = handCard(G, pid, cardIid);
@@ -332,16 +347,32 @@ export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIi
   const hero = slottedHero(G, pid, heroIid);
   if (!hero) return 'noHero';
   if (wornItems(hero).some((it) => it.cardId === card.cardId)) return 'duplicate';
-  if (!upgradeComponent(hero, card.cardId) && wornItems(hero).length >= slotCap(G, pid)) return 'full';
+  const full = replaceNeeded(G, pid, hero, card.cardId);
+  if (replaceIid === undefined) {
+    if (full) return 'full';
+  } else if (!full || !wornItems(hero).some((it) => it.iid === replaceIid)) return 'replace';
   if (G.players[pid].souls < playCost(hero, card.cardId)) return 'souls';
   if (upgradeId !== undefined && !upgradesOf(card.cardId).includes(upgradeId)) return 'upgrade';
   return null;
 }
 
+/** Why `pid` cannot put the item `cardIid` on its hero `heroIid` even by
+ *  discarding one of the items a full hero wears (the player chooses which:
+ *  any one will do, so the first stands for them all), or null when it can —
+ *  directly or in place of a worn item. What the board lights and asks of a
+ *  tap on a hero, before the discard is chosen. */
+export function playBlockedAny(G: GameState, pid: PlayerID, cardIid: string, heroIid: string, upgradeId?: CardId): PlayBlock | null {
+  const hero = slottedHero(G, pid, heroIid);
+  const card = handCard(G, pid, cardIid);
+  const swap = hero && card && itemCard(card.cardId) && replaceNeeded(G, pid, hero, card.cardId) ? wornItems(hero)[0]?.iid : undefined;
+  return playBlocked(G, pid, cardIid, heroIid, upgradeId, swap);
+}
+
 /** The heroes `pid` could put its card `cardIid` on right now, in board order
- *  (the Active, then the bench): those `playBlocked` lets it go on. */
+ *  (the Active, then the bench): those `playBlockedAny` lets it go on — a full
+ *  hero among them, in place of one of its items. */
 export function playTargets(G: GameState, pid: PlayerID, cardIid: string): CardInstance[] {
-  return slottedHeroes(G.players[pid]).filter((h) => playBlocked(G, pid, cardIid, h.iid) === null);
+  return slottedHeroes(G.players[pid]).filter((h) => playBlockedAny(G, pid, cardIid, h.iid) === null);
 }
 
 /** The bench slot (1..3) a hero from `ps`'s hand goes into: the first empty
@@ -586,7 +617,7 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
     case 'promoteToActive':
       return promoteBlocked(G, a.benchIid);
     case 'playCard':
-      return playBlocked(G, pid, a.cardIid, a.heroIid, a.upgradeId);
+      return playBlocked(G, pid, a.cardIid, a.heroIid, a.upgradeId, a.replaceIid);
     case 'placeHero':
       return placeHeroBlocked(G, pid, a.cardIid, a.toActive === true, a.slot);
     case 'discard':
@@ -614,7 +645,8 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
  * its targets (every action names its `skillId`); retreats from the bench in
  * `stepInCandidates` order (before the attack: the hero who steps in may make
  * it); each item in its hand put on each hero it may go on (one action per
- * upgrade it could make, when it could make several); each hero in its hand
+ * upgrade it could make, when it could make several; on a full hero, one per
+ * worn item it could replace); each hero in its hand
  * put straight into an empty Active slot, on the bench (its first free slot),
  * and into each free bench slot by number (the hand's plays only on `pid`'s
  * own turn). Then promotions
@@ -667,8 +699,13 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
       if (itemCard(card.cardId)) {
         const ups = upgradesOf(card.cardId);
         for (const h of heroes) {
-          if (ups.length > 1) for (const u of ups) offer({ type: 'playCard', cardIid: card.iid, heroIid: h.iid, upgradeId: u });
-          else offer({ type: 'playCard', cardIid: card.iid, heroIid: h.iid });
+          // A full hero takes it in place of one of its items: one play per item it could replace.
+          const swaps = replaceNeeded(G, pid, h, card.cardId) ? wornItems(h).map((it) => it.iid) : [undefined];
+          for (const replaceIid of swaps) {
+            const swap = replaceIid === undefined ? {} : { replaceIid };
+            if (ups.length > 1) for (const u of ups) offer({ type: 'playCard', cardIid: card.iid, heroIid: h.iid, upgradeId: u, ...swap });
+            else offer({ type: 'playCard', cardIid: card.iid, heroIid: h.iid, ...swap });
+          }
         }
       } else {
         offer({ type: 'placeHero', cardIid: card.iid, toActive: true });

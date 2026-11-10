@@ -26,7 +26,7 @@ export const INVALID: unique symbol = Symbol('INVALID');
 
 export type Action =
   // The hand.
-  | { type: 'playCard'; cardIid: string; heroIid: string; upgradeId?: CardId }   // an item from the hand onto one of your heroes, for its price
+  | { type: 'playCard'; cardIid: string; heroIid: string; upgradeId?: CardId; replaceIid?: string }   // an item from the hand onto one of your heroes, for its price (a full hero: the worn item it replaces)
   | { type: 'placeHero'; cardIid: string; toActive?: boolean; slot?: 1 | 2 | 3 }    // a hero from the hand onto the bench (`slot`, or its first free one; or into an empty Active slot), free
   | { type: 'discard'; cardIids: string[] }                                        // a draw card's discard, from anywhere in the hand
   // The board.
@@ -47,7 +47,7 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
   assertNoCast();
   if (blocked(G, pid, a) !== null) return INVALID;
   switch (a.type) {
-    case 'playCard': return playCard(G, pid, a.cardIid, a.heroIid, a.upgradeId);
+    case 'playCard': return playCard(G, pid, a.cardIid, a.heroIid, a.upgradeId, a.replaceIid);
     case 'placeHero': return placeHero(G, pid, a.cardIid, a.toActive === true, a.slot);
     case 'discard': return discard(G, pid, a.cardIids);
     case 'chooseActive': return chooseActive(G, a.cardIid);

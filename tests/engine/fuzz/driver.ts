@@ -202,6 +202,14 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
         const ups = held ? upgradesOfOracle(held.cardId) : [];
         args.push(ups.length && r() < 0.6 ? pick(ups, r) : r() < 0.5 ? pick(ITEMS, r).id : pick(JUNK_IDS, r));
       }
+      // Now and then the worn item it is to replace: one the hero wears, another hero's, Rem, junk.
+      if (r() < 0.25) {
+        if (args.length < 3) args.push(undefined);
+        const hero = boardOf(mine).find((c) => c.iid === args[1]);
+        const worn = hero ? wornItemsOf(hero) : [];
+        const x = r();
+        args.push(worn.length && x < 0.6 ? pick(worn, r).iid : x < 0.75 && myItems.length ? pick(myItems, r).iid : x < 0.85 ? anyIid() : pick([null, 7, ''] as unknown[], r));
+      }
       return { name, args };
     }
     case 'placeHero': {
@@ -387,7 +395,10 @@ const HAND_TYPES: ReadonlySet<Action['type']> = new Set(['playCard', 'placeHero'
 
 /** A hand play as a client call. */
 function handCall(a: Action): { name: string; args: unknown[] } {
-  if (a.type === 'playCard') return { name: 'playCard', args: a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid] };
+  if (a.type === 'playCard') {
+    if (a.replaceIid !== undefined) return { name: 'playCard', args: [a.cardIid, a.heroIid, a.upgradeId, a.replaceIid] };
+    return { name: 'playCard', args: a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid] };
+  }
   if (a.type === 'placeHero') return { name: 'placeHero', args: a.toActive ? [a.cardIid, true] : a.slot === undefined ? [a.cardIid] : [a.cardIid, false, a.slot] };
   return { name: 'endTurn', args: [] };
 }

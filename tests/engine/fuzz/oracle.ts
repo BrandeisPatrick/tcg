@@ -537,10 +537,13 @@ export function wornItemOf(G: GameState, pid: PlayerID, iid: unknown): { item: C
  *  first, or the attack made; it is not `pid`'s turn (the draft included); no
  *  such card is in its hand; the card is a hero (it goes on the bench); no hero
  *  of its in a slot has that iid (bench and corpses count, a merged Rem does
- *  not); the hero wears one already; its slots are full and the card evolves
- *  nothing it wears; `souls` (the player's, unless given) fall short of the
- *  cost; or `upgradeId` names none of the card's upgrades. */
-export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, heroIid: unknown, upgradeId?: unknown, souls = G.players[pid].souls): string | null {
+ *  not); the hero wears one already; its slots are full, the card evolves
+ *  nothing it wears and no `replaceIid` names the worn item it takes the place
+ *  of; a `replaceIid` with nothing to replace (room on the hero, or the card
+ *  evolves an item it wears) or naming no item the hero wears (a merged Rem is
+ *  none); `souls` (the player's, unless given) fall short of the cost; or
+ *  `upgradeId` names none of the card's upgrades. */
+export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, heroIid: unknown, upgradeId?: unknown, souls = G.players[pid].souls, replaceIid?: unknown): string | null {
   const owed = owedOracle(G, 'playCard');
   if (owed) return owed;
   if (seatOnTurn(G) !== pid) return 'not-your-turn';
@@ -551,7 +554,11 @@ export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown,
   if (!hero) return 'no-hero';
   const worn = wornItemsOf(hero);
   if (worn.some((a) => a.cardId === card.cardId)) return 'duplicate';
-  if (!upgradeComponentOracle(hero, card.cardId) && worn.length >= slotCapOracle(G, pid)) return 'full';
+  const full = !upgradeComponentOracle(hero, card.cardId) && worn.length >= slotCapOracle(G, pid);
+  if (replaceIid === undefined) {
+    if (full) return 'full';
+  } else if (!full) return 'replace-not-full';
+  else if (!worn.some((a) => a.iid === replaceIid)) return 'replace-not-worn';
   if (souls < playCostOracle(hero, card.cardId)) return 'souls';
   if (upgradeId !== undefined && !upgradesOfOracle(card.cardId).includes(upgradeId as string)) return 'not-an-upgrade';
   return null;

@@ -104,10 +104,15 @@ export const DeadlockGame: Game<GameState> = {
     /** Put an item from your hand on one of your heroes (bench and corpses
      *  included), for its price — an upgrade onto the hero wearing its
      *  component evolves it for the difference. `upgradeId` picks the upgrade
-     *  the play shuffles into the deck when it could make several. Not the
-     *  hero's ability for the turn. */
-    playCard: ({ G, ctx, playerID, events }, cardIid: string, heroIid: string, upgradeId?: string) =>
-      move({ G, ctx, events }, mover(ctx, playerID), upgradeId === undefined ? { type: 'playCard', cardIid, heroIid } : { type: 'playCard', cardIid, heroIid, upgradeId }),
+     *  the play shuffles into the deck when it could make several;
+     *  `replaceIid`, onto a full hero, the worn item it replaces (to the
+     *  discard pile). Not the hero's ability for the turn. */
+    playCard: ({ G, ctx, playerID, events }, cardIid: string, heroIid: string, upgradeId?: string, replaceIid?: string) =>
+      move({ G, ctx, events }, mover(ctx, playerID), {
+        type: 'playCard', cardIid, heroIid,
+        ...(upgradeId === undefined ? {} : { upgradeId }),
+        ...(replaceIid === undefined ? {} : { replaceIid }),
+      }),
 
     /** Put a hero from your hand on the bench — the slot `slot` (1-3), or
      *  your first free one — or, `toActive`, into your empty Active slot. Free. */

@@ -241,10 +241,11 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
 });
 
 // ============================================================================
-// Item cap = MAX_ITEMS (3) per hero: a card played onto a full hero is refused
-// (there is no discard); only an upgrade of an item it wears goes on, in its place
+// Item cap = MAX_ITEMS (3) per hero: a card played onto a full hero goes on only in
+// place of a worn item the play names (`replaceIid`, to the discard pile; Patrick,
+// 2026-11-09) — bare, it is refused; an upgrade of an item it wears goes on in its place
 // ============================================================================
-describe('rule: a full hero takes no card from the hand but an upgrade of what it wears', () => {
+describe('rule: a full hero takes a card from the hand only in place of what it wears', () => {
   /** P0's Active, with souls to spare, wearing three items, and a fourth card in the hand. */
   function full() {
     const G = freshReadyGame();
@@ -255,7 +256,7 @@ describe('rule: a full hero takes no card from the hand but an upgrade of what i
     return { G, hero, card };
   }
 
-  it('a 4th card played onto a hero at the cap is INVALID_MOVE ("full"), and stays in the hand', () => {
+  it('a 4th card played bare onto a hero at the cap is INVALID_MOVE ("full"), and stays in the hand', () => {
     const { G, hero, card } = full();
     expect(slotCap(G, '0')).toBe(MAX_ITEMS);
     expect(wornItems(hero).length).toBe(3);
@@ -265,6 +266,14 @@ describe('rule: a full hero takes no card from the hand but an upgrade of what i
     expect(G.players['0'].hand).toEqual([card]);
     // Another hero with room takes it.
     expect(runMove('playCard', G, '0', card.iid, G.players['0'].bench[0]!.iid)).not.toBe('INVALID_MOVE');
+  });
+
+  it('naming a worn item it replaces, the 4th card goes on and that item goes to the discard pile', () => {
+    const { G, hero, card } = full();
+    const out = wornItems(hero)[0];
+    expect(runMove('playCard', G, '0', card.iid, hero.iid, undefined, out.iid)).not.toBe('INVALID_MOVE');
+    expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'extended_magazine']);
+    expect(G.players['0'].discard).toEqual([out]);
   });
 
   it('an upgrade of a worn item evolves it on a full hero: it takes the slot, for the difference, and its part goes to the discard pile', () => {

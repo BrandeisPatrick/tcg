@@ -58,6 +58,8 @@ describe('invariants hold in every state of seeded games', () => {
       expect(coverage.backToHand, 'no fallen hero ever came back to the hand').toBeGreaterThan(0);
       if (Object.values(mix.policies).some((p) => p !== 'heuristic')) {
         expect(coverage.heldPlays, 'no card held from an earlier turn was ever played').toBeGreaterThan(0);
+        // A random seat plays onto full heroes, each time in place of a worn item it names.
+        expect(coverage.replaces, 'no card ever replaced a worn item on a full hero').toBeGreaterThan(0);
       }
       // The harness has to actually play: a game that never leaves the draft checks nothing.
       expect(games.every((g) => g.steps > 20)).toBe(true);

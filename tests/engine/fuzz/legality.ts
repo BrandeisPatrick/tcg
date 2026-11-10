@@ -27,7 +27,7 @@ import {
   activateBlockedOracle, attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, chooseActiveBlockedOracle, diffPaths,
   discardBlockedOracle, discardList, filterForItem, filterForSkill, firstSkillOf, handOf, isHeroCard, isMergedRem, itemData, other,
   deckOf, freeBenchSlotsOracle, placeHeroBlockedOracle, playBlockedOracle, playCostOracle, retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf,
-  targetLegal, ultLocked, upgradesOfOracle, wornItemsOf,
+  slotCapOracle, targetLegal, ultLocked, upgradesOfOracle, wornItemsOf,
 } from './oracle';
 
 export interface ProbeOpts {
@@ -385,7 +385,7 @@ interface Report {
 /** A legalActions entry as a comparable key. */
 function actionKey(a: Action): string {
   switch (a.type) {
-    case 'playCard': return `playCard ${a.cardIid} -> ${a.heroIid}${a.upgradeId ? ` [${a.upgradeId}]` : ''}`;
+    case 'playCard': return `playCard ${a.cardIid} -> ${a.heroIid}${a.upgradeId ? ` [${a.upgradeId}]` : ''}${a.replaceIid !== undefined ? ` for ${a.replaceIid}` : ''}`;
     case 'placeHero': return `placeHero ${a.cardIid} ${a.toActive ? 'lane' : a.slot === undefined ? 'bench' : `bench ${a.slot}`}`;
     case 'discard': return `discard ${a.cardIids.join('+')}`;
     case 'chooseActive': return `chooseActive ${a.cardIid}`;
@@ -421,9 +421,9 @@ function prober(G: GameState, ctx: Ctx, pid: PlayerID, rep: Report) {
 }
 
 /** The plays from the hand the rules allow `pid` now, as `actionKey`s: each item onto each hero
- *  of its side in a slot (one per upgrade the item could make, when it could make several), each
- *  hero into an empty lane, onto the bench (its first free slot) and into each free bench slot
- *  by number. */
+ *  of its side in a slot (one per upgrade the item could make, when it could make several; onto
+ *  a full hero, one per worn item it could take the place of), each hero into an empty lane,
+ *  onto the bench (its first free slot) and into each free bench slot by number. */
 function handPlaysOracle(G: GameState, pid: PlayerID): string[] {
   const out: string[] = [];
   const heroes = boardOf(G.players[pid]);
@@ -431,8 +431,11 @@ function handPlaysOracle(G: GameState, pid: PlayerID): string[] {
     if (itemData(c.cardId)) {
       const ups = upgradesOfOracle(c.cardId);
       for (const h of heroes) {
-        if (ups.length > 1) { for (const u of ups) if (playBlockedOracle(G, pid, c.iid, h.iid, u) === null) out.push(`playCard ${c.iid} -> ${h.iid} [${u}]`); }
-        else if (playBlockedOracle(G, pid, c.iid, h.iid) === null) out.push(`playCard ${c.iid} -> ${h.iid}`);
+        for (const r of [undefined, ...wornItemsOf(h).map((it) => it.iid)]) {
+          const swap = r === undefined ? '' : ` for ${r}`;
+          if (ups.length > 1) { for (const u of ups) if (playBlockedOracle(G, pid, c.iid, h.iid, u, undefined, r) === null) out.push(`playCard ${c.iid} -> ${h.iid} [${u}]${swap}`); }
+          else if (playBlockedOracle(G, pid, c.iid, h.iid, undefined, undefined, r) === null) out.push(`playCard ${c.iid} -> ${h.iid}${swap}`);
+        }
       }
     } else {
       if (placeHeroBlockedOracle(G, pid, c.iid, true) === null) out.push(`placeHero ${c.iid} lane`);
@@ -508,11 +511,24 @@ function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
       const ups = upgradesOfOracle(card.cardId);
       args.push(ups.length && rnd() < 0.7 ? pickOne(ups, rnd) : rnd() < 0.5 ? pickOne(ITEMS, rnd).id : pickOne(['nope', '', 7], rnd));
     }
+    // The worn item it replaces: one the hero wears (most of the time when it is full), another
+    // hero's, a merged Rem, junk — or none.
+    const onHero = mine.find((h) => h.iid === heroIid);
+    const worn = onHero ? wornItemsOf(onHero) : [];
+    const full = !!onHero && !!card && worn.length >= slotCapOracle(G, pid);
+    if (rnd() < (full ? 0.75 : 0.15)) {
+      if (args.length < 3) args.push(undefined);
+      const y = rnd();
+      args.push(worn.length && y < 0.7 ? pickOne(worn, rnd).iid
+        : y < 0.8 && myItems.length ? pickOne(myItems, rnd).iid
+        : y < 0.88 && mergedRems.length ? pickOne(mergedRems, rnd).iid
+        : pickOne(['ghost-iid', null, 7] as unknown[], rnd));
+    }
     const x = rnd();
     const hero = mine.find((h) => h.iid === heroIid);
     const cost = card && hero && itemData(card.cardId) ? playCostOracle(hero, card.cardId) : 0;
     const souls = x < 0.4 ? undefined : x < 0.8 ? Math.max(me.souls, 40) : Math.max(0, cost - 1);
-    probe(pid, 'playCard', args, playBlockedOracle(G, pid, args[0], args[1], args[2], souls ?? me.souls), 'playCard', souls);
+    probe(pid, 'playCard', args, playBlockedOracle(G, pid, args[0], args[1], args[2], souls ?? me.souls, args[3]), 'playCard', souls);
   }
   for (let n = 0; n < Math.max(1, opts.placeCombos); n++) {
     const cardIid = cardPool(true);

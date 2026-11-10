@@ -592,7 +592,7 @@ export function collectTransitionViolations(
 
   // ---- what the rules allow: an accepted card play, hand move, choice or item use the oracle refuses ----
   {
-    const why = move.name === 'playCard' ? playBlockedOracle(B, mover, args[0], args[1], args[2])
+    const why = move.name === 'playCard' ? playBlockedOracle(B, mover, args[0], args[1], args[2], undefined, args[3])
       : move.name === 'placeHero' ? placeHeroBlockedOracle(B, mover, args[0], args[1] === true, args[1] === true ? undefined : args[2])
       : move.name === 'chooseActive' ? chooseActiveBlockedOracle(B, args[0])
       : move.name === 'discard' ? discardBlockedOracle(B, mover, discardList(args[0]))
@@ -679,6 +679,8 @@ export function collectTransitionViolations(
   const playedCard = move.name === 'playCard' ? handCardOf(B, mover, args[0]) : undefined;
   const playedOn = playedCard ? slottedHeroOf(B, mover, args[1]) : undefined;
   const evolved = playedCard && playedOn ? upgradeComponentOracle(playedOn, playedCard.cardId) : undefined;
+  /** The worn item a play onto a full hero takes the place of (off that same hero). */
+  const replaced = playedCard && playedOn && args[3] !== undefined ? wornItemsOf(playedOn).find((a) => a.iid === args[3]) : undefined;
   const upgradeMade = playedCard ? upgradeMadeOracle(playedCard.cardId, args[2]) : undefined;
 
   // Cards do not vanish and none appears from nowhere: every card anywhere before (decks, hands
@@ -842,8 +844,9 @@ export function collectTransitionViolations(
 
   // A play: the card leaves the hand and is worn by the hero named; an active starts on its
   // full cooldown (its own, else its tier's) or, hard crowd control, with HARD_CC_CHARGES; a
-  // passive has neither. The component it evolves leaves that hero for the player's discard
-  // pile. A play never leaves a hero over its cap.
+  // passive has neither. The component it evolves — or, onto a full hero, the worn item it
+  // replaces — leaves that hero for the player's discard pile. A play never leaves a hero
+  // over its cap.
   if (!duplicated && playedCard && playedOn) {
     const hero1 = heroes1.get(playedOn.iid);
     const now = wornAfter(playedCard.iid);
@@ -869,6 +872,17 @@ export function collectTransitionViolations(
     if (evolved) {
       const where = placeOf(after.G, evolved.iid);
       if (where?.place !== 'discard' || where.pid !== mover) problems.push(`the ${evolved.cardId}#${evolved.iid} it evolves is ${where ? `in ${where.place} of P${where.pid}` : 'nowhere'}, not in P${mover}'s discard pile`);
+    }
+    if (replaced) {
+      const where = placeOf(after.G, replaced.iid);
+      if (where?.place !== 'discard' || where.pid !== mover) problems.push(`the ${replaced.cardId}#${replaced.iid} it replaces is ${where ? `in ${where.place} of P${where.pid}` : 'nowhere'}, not in P${mover}'s discard pile`);
+    }
+    // Everything else the hero wore stays on it (and a merged Rem rides on).
+    if (hero1) {
+      const kept = (playedOn.attached ?? []).filter((a) => a.iid !== evolved?.iid && a.iid !== replaced?.iid).map((a) => a.iid);
+      const now1 = new Set((hero1.attached ?? []).map((a) => a.iid));
+      const lost = kept.filter((iid) => !now1.has(iid));
+      if (lost.length) problems.push(`it took ${lost.join(', ')} off the hero, which the play did not name`);
     }
     if (problems.length) add('played-card-state', playedCard.iid, `${playedCard.cardId}#${playedCard.iid} played on ${playedOn.cardId}#${playedOn.iid}: ${problems.join('; ')}`);
     if (hero1 && wornItemsOf(hero1).length > slotCapOracle(after.G, mover)) {
@@ -954,7 +968,8 @@ export function collectTransitionViolations(
   }
 
   // What items give (rules.md §4): a passive's printed bonus sits on its bearer while it is
-  // worn — on with a play, and off with the component an evolving upgrade replaces — and the
+  // worn — on with a play, and off with the component an evolving upgrade replaces or the worn
+  // item a play onto a full hero discards — and the
   // Vitality spike's +1 max HP while the hero wears 3+ Vitality items; a level the play's exp
   // earns adds its own. Current HP moves with the max on the way on (never below 1, and a
   // corpse stays at 0). A play touches no other hero.
@@ -972,6 +987,7 @@ export function collectTransitionViolations(
     if (playedCard && playedOn) {
       change(playedOn.iid, playedCard.cardId, 1);
       if (evolved) change(playedOn.iid, evolved.cardId, -1);
+      if (replaced) change(playedOn.iid, replaced.cardId, -1);
     }
     for (const [iid, h0] of heroes0) {
       const h1 = heroes1.get(iid);
