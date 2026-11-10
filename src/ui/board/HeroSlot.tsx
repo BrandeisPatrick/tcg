@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { animate, motion, type AnimationPlaybackControls } from 'framer-motion';
-import type { CardInstance, PlayerID, StatusInstance } from '@/engine/types';
+import type { CardInstance, PlayerID } from '@/engine/types';
 import { useFxHold } from '../effects/fx/FxTimingContext';
 import { LIFT_VAR, TILT_PERSPECTIVE, fromHere, kickFor, useFxImpulse } from '../effects/fx/FxImpulse';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
@@ -14,54 +14,48 @@ import { ItemIcon } from '../card/ItemIcon';
 import { StatusIcon, statusChipText } from '../card/StatusIcon';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
-import { SwordIcon, ShieldIcon } from '../card/Icons';
+import { SwordIcon } from '../card/Icons';
 import { fonts, spring, text } from '../tokens';
-import { atkInk, levelFrame, levelFrameKeylines, poster, hpBarInk } from '../poster';
+import { atkInk, levelFrame, poster } from '../poster';
+import { HpSegments, hpNumberStyle, scale } from '../hud';
 import { LevelRing } from '../card/LevelRing';
 import { useStatTick } from './useStatTick';
 import { SpikeMark } from './SpikeMark';
 import { FlexSocket } from './FlexSocket';
-import { HP_ROOM, boardCols } from './BoardTable';
 import type { ArmedPlay } from '../helpers';
 
 /**
- * A hero on the table — a CLEAN CARD FACE drawn at the slot's own size, so
- * nothing on it is ever cut: an ink name band across the top, the hero's art
- * filling the rest, in a frame of its LEVEL GREEN (poster.ts `levelFrame`:
- * the lightest at Level 1, darker each level to the cap). No rules text —
- * that is the action view's (a tap) and the details'. The few numbers that
- * matter ride it: the level ring on the top-left corner, the live Bullet
- * Power as a pill at the art's top-right, and the HP standing above the
- * top-right corner, the strongest number on the table — bold, over a bar
- * that goes green → amber → red as the hero is hurt, its Shield beside it.
+ * A hero on the table — ONE CARD, the same on the Active and the bench
+ * (`compact`), on your side and the rival's: straight edges, the art clear.
  *
- * Statuses and worn items are TOKENS ON THE CARD'S EDGES, off the hero's
- * face (as Pocket hangs energy and tools off a card): the statuses a column
- * of small round marks hanging off the left edge, the worn items a row of
- * chips hanging off the foot; each caps and says "+n" for the rest. One
- * component renders both the Active and the `compact` bench card.
+ *   top strip   Deadlock's health: the level ring, the green bar cut into one
+ *               segment per HP point (a Shield as steel segments after it)
+ *               and the plain number, on the HUD's dark green plate.
+ *   art         the hero, nothing over the face but the live Bullet Power in
+ *               the top-right corner. No name: the art names the hero, a tap
+ *               opens its sheet.
+ *   foot strip  the items it wears as inventory tiles in their category's
+ *               colour, inside the card, capped with "+n". Only when it
+ *               wears something.
+ *   left edge   status tokens, hanging mostly outside the card in the gutter
+ *               beside it, capped with "+n".
  *
- * The frame is the level's alone. Every state is a HALO outside it (`Halo`):
- * a pulsing green one while the card is a legal target, a pulsing red one
- * while its own skill or attack is armed, and a soft pulsing gold one while
- * the hero can still do something this turn (`ready`) — what can be acted on
- * pulses, and nothing else shouts.
+ * The frame is the level's green (poster.ts `levelFrame`). Every state is a
+ * HALO outside it (`Halo`): a pulsing green one while the card is a legal
+ * target, a pulsing red one while its own skill or attack is armed, and a
+ * soft gold one while the hero can still do something this turn (`ready`).
  *
- * The slot box the row gives it includes HP_ROOM above the card; the card
- * itself (the FX layer's rest box, `data-fx-rest`) fills the rest.
+ * A hero that is DOWN and waiting to respawn keeps its art, dimmed and
+ * greyed, and its top strip turns into one small tag: "Back in 2", then
+ * "Next turn".
  */
 
-// A CONTACT shadow under every card: a tight dark line where it meets the
-// table and a short soft drop — the card lies on the surface. The drop reads
+// A thin rim of light round the card and a CONTACT shadow under it: a tight
+// dark line where it meets the table and a short soft drop. The drop reads
 // the lift variable a kick animates (FxImpulse): as a card comes up off the
 // table its shadow falls further away and softens.
-const TILE_SHADOW = `0 calc(5px + var(${LIFT_VAR}, 0) * 22px) calc(9px + var(${LIFT_VAR}, 0) * 30px) rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.55)`;
-
-/** The largest type size (≤ base) at which a stencilled name fits `room`
- *  px on one line: the band never cuts a name. */
-function fitName(name: string, room: number, base: number): number {
-  return Math.max(6, Math.min(base, room / (name.length * 0.72)));
-}
+const CARD_RIM = 'inset 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(232, 224, 204, 0.22)';
+const TILE_SHADOW = `0 calc(4px + var(${LIFT_VAR}, 0) * 22px) calc(8px + var(${LIFT_VAR}, 0) * 30px) rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.6)`;
 
 /** At most `cap` tokens: the list whole if it fits, else `cap − 1` of it and
  *  how many are left for the "+n". */
@@ -96,7 +90,7 @@ export function HeroSlot({
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let pressFired = false;
   const data = CARDS_BY_ID[card.cardId];
-  const frameW = compact ? 2 : 3;
+  const frameW = 2;
   const tileRef = useRef<HTMLElement | null>(null);
   const isAlly = owner === myId;
   // Board-FX hold: while a skill's bolt is still on its way to this card the
@@ -150,20 +144,20 @@ export function HeroSlot({
   // fewer than four items (a riding Rem is no item).
   const flexSocket = !!flexSlot && attached.filter((a) => CARDS_BY_ID[a.cardId]?.type !== 'hero').length < 4;
   const level = card.level ?? 1;
-  // The face's measures, at the slot's own size (nothing is scaled, so the
-  // type stays crisp): the name band, the ring on its corner, the edge
-  // tokens and how far they hang off the card.
-  const band = compact ? 14 : 17;
-  const ringSize = compact ? 18 : 22;
-  const ringOut = 5;
-  const faceW = (compact ? boardCols.bench : boardCols.active) - frameW * 2;
-  const nameLeft = ringSize - ringOut + 2;
-  const nameSize = fitName(data.name, faceW - nameLeft - 4, compact ? 8.5 : 10.5);
-  const tokenDim = compact ? 15 : 18;
-  const tokenOut = compact ? 4 : 6;
-  const chipDim = compact ? 16 : 20;
-  const chipOut = compact ? 6 : 8;
-  // Worn chips: four fit along the foot; the empty flex socket takes a seat.
+  // The card's measures, at the slot's own size (nothing is scaled, so the
+  // type stays crisp): the health strip, the ring in it, the tokens off the
+  // left edge and the inventory strip along the foot.
+  const radius = 8 - frameW;
+  const band = compact ? 18 : 22;
+  const ringSize = compact ? 16 : 18;
+  const tokenDim = 16;
+  // How far a token laps onto the face; the rest hangs in the gutter.
+  const tokenIn = compact ? 5 : 4;
+  const chipDim = compact ? 15 : 20;
+  const footPad = compact ? 2 : 3;
+  const hasFoot = attached.length > 0 || flexSocket;
+  const foot = hasFoot ? chipDim + footPad * 2 : 0;
+  // Worn tiles: four fit along the foot; the empty flex socket takes a seat.
   const worn = capTokens(attached, flexSocket ? 3 : 4);
   const tokens = capTokens(chipStatuses, compact ? 4 : 5);
   const spiritSpike = hasSpike(card, 'spirit');
@@ -186,7 +180,7 @@ export function HeroSlot({
     {/* The perspective a kick tips the card in sits on this wrapper, so the
         card's own transform stays `none` at rest — and the wrapper, which
         never moves, is the box the FX layer measures (geometry's restRect). */}
-    <div data-fx-rest style={{ position: 'absolute', left: 0, right: 0, top: HP_ROOM, bottom: 0, perspective: TILT_PERSPECTIVE }}>
+    <div data-fx-rest style={{ position: 'absolute', inset: 0, perspective: TILT_PERSPECTIVE }}>
     {halo && <Halo color={halo.color} pulse={halo.pulse && !calm} soft={halo.soft} />}
     <motion.button
       layoutId={`hero-${card.iid}`}
@@ -214,11 +208,13 @@ export function HeroSlot({
         // combat choreographer clips its overlays to it.
         borderRadius: 8,
         ...levelFrame(level, frameW),
+        // A hero that is down loses its level green: the frame goes grey.
+        ...(isCorpse ? { borderColor: '#5c625f' } : {}),
         background: poster.frame,   // charcoal frame, peeks at the edges
-        boxShadow: `${levelFrameKeylines}, ${TILE_SHADOW}`,
+        boxShadow: `${CARD_RIM}, ${TILE_SHADOW}`,
         padding: 0,
-        // Not clipped: the edge tokens hang off the card. The face inside
-        // clips its own art.
+        // Not clipped: the status tokens hang off the left edge. The face
+        // inside clips its own art.
         overflow: 'visible',
         cursor: 'pointer',
         color: poster.cream,
@@ -231,44 +227,26 @@ export function HeroSlot({
           the board's FxLayer (effects/fx), anchored to this slot's rect; the
           card itself only recoils (FxImpulse). */}
 
-      {/* THE FACE — the name band and the art, clipped to the frame's inner
-          corners. A corpse's art is greyed and dimmed. */}
+      {/* THE FACE — the art, clipped to the frame's inner corners, under the
+          top strip. A hero that is down keeps its art, greyed and dimmed. */}
       <div data-face style={{
         position: 'absolute', inset: 0,
-        borderRadius: 8 - frameW,
+        borderRadius: radius,
         overflow: 'hidden',
         background: poster.frame,
         pointerEvents: 'none',
       }}>
         <div style={{
           position: 'absolute', left: 0, right: 0, top: band, bottom: 0,
-          filter: isCorpse ? 'grayscale(0.95) brightness(0.4) contrast(0.9)' : undefined,
+          filter: isCorpse ? 'grayscale(0.9) brightness(0.62) contrast(0.9)' : undefined,
           transition: 'filter 600ms ease',
         }}>
           <HeroPortrait cardId={card.cardId} art={isCorpse ? undefined : form?.art} />
         </div>
-        <div style={{
-          position: 'absolute', left: 0, right: 0, top: 0, height: band,
-          display: 'flex', alignItems: 'center',
-          paddingLeft: nameLeft, paddingRight: 4, boxSizing: 'border-box',
-          background: poster.ink,
-          borderBottom: `1px solid ${poster.creamFaint}`,
-        }}>
-          <span data-hero-name style={{
-            fontFamily: fonts.display, fontSize: nameSize, letterSpacing: '0.03em',
-            textTransform: 'uppercase', lineHeight: 1, whiteSpace: 'nowrap',
-            color: isCorpse ? poster.creamDim : poster.cream,
-          }}>{data.name}</span>
-        </div>
 
         {!isCorpse && form && (
-          <FormBadge label={form.label} turns={form.turns} compact={!!compact}
-            bottom={attached.length > 0 || flexSocket ? chipDim - chipOut + 4 : 5} />
-        )}
-
-        {/* Respawn overlay — corpse: clock ring + countdown, hero stays in slot but greyed */}
-        {isCorpse && (
-          <RespawnOverlay turnsLeft={respawnLeft} compact={!!compact} />
+          <FormBadge label={compact ? form.label.split(' ')[0] : form.label} full={form.label} turns={form.turns}
+            bottom={foot + 4} />
         )}
 
         {/* Ready glint — this hero still has a move this turn; sweeps across
@@ -308,10 +286,24 @@ export function HeroSlot({
         )}
       </div>
 
-      {/* The live Bullet Power — an ink pill at the art's top-right, under
-          the HP: the number pulses and colour-flashes on change; the icon
-          stays. A Spirit spike, which no number on the card shows, is
-          marked under it. */}
+      {/* THE TOP STRIP — health, Deadlock's way: the level ring, the
+          segmented bar, the plain number. A hero that is down wears one
+          small tag there instead. */}
+      {isCorpse ? (
+        <RespawnTag turnsLeft={respawnLeft} height={band} radius={radius} compact={!!compact} />
+      ) : (
+        <HpBand
+          hp={shownHp} hpMax={card.hpMax} shield={shieldValue}
+          level={level} exp={card.exp ?? 0}
+          height={band} ring={ringSize} radius={radius} compact={!!compact}
+          vitalitySpike={hasSpike(card, 'vitality')}
+        />
+      )}
+
+      {/* The live Bullet Power — an ink pill at the art's top-right corner:
+          the number pulses and colour-flashes on change; the icon stays. A
+          Spirit spike, which no number on the card shows, is marked under
+          it. */}
       {!isCorpse && (
         <span aria-hidden style={{
           position: 'absolute', right: 3, top: band + 3,
@@ -321,18 +313,18 @@ export function HeroSlot({
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 2,
             padding: compact ? '1px 4px' : '2px 5px',
-            background: poster.ink, color: poster.cream,
+            background: 'rgba(8, 20, 19, 0.9)', color: poster.cream,
             border: `1px solid ${poster.creamFaint}`,
             borderRadius: 4,
-            fontWeight: 800, fontSize: compact ? 11 : 13.5, lineHeight: 1.1,
+            fontWeight: 800, fontSize: compact ? scale.body : scale.number, lineHeight: 1.1,
             fontVariantNumeric: 'tabular-nums',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)',
           }}>
-            <SwordIcon size={compact ? 9 : 11} color={poster.cream} />
+            <SwordIcon size={compact ? 10 : 12} color={poster.cream} />
             <motion.span
-              style={{ color: atkColor === poster.stat.atk ? poster.cream : atkColor, display: 'inline-block' }}
+              style={{ color: atkColor === poster.stat.atk ? poster.cream : atkColor === poster.stat.atkBright ? poster.target : poster.creamDim, display: 'inline-block' }}
               animate={bpTick
-                ? { scale: [1, 1.35, 1], color: [poster.cream, bpTick === 'up' ? poster.stat.atkBright : poster.stat.atkDim, poster.cream] }
+                ? { scale: [1, 1.35, 1] }
                 : { scale: 1 }}
               transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
             >{atk}</motion.span>
@@ -344,25 +336,15 @@ export function HeroSlot({
         </span>
       )}
 
-      {/* The level ring, on the card's top-left corner. */}
-      {!isCorpse && (
-        <div style={{ position: 'absolute', top: -ringOut, left: -ringOut, lineHeight: 0, borderRadius: '50%', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.55)' }}>
-          <LevelRing
-            level={level}
-            exp={card.exp ?? 0}
-            size={ringSize}
-          />
-        </div>
-      )}
-
-      {/* STATUS TOKENS — hanging off the left edge under the ring, off the
-          hero's face: each a round mark in its class colour with its value;
-          a tap says what it is (Explain) — except while something is armed,
-          when a tap on a token is a tap on the card and picks the target. */}
+      {/* STATUS TOKENS — hanging off the left edge, in the gutter beside the
+          card and off the hero's face: each a round mark in its class colour
+          (the Active's with its value); a tap says what it is (Explain) —
+          except while something is armed, when a tap on a token is a tap on
+          the card and picks the target. */}
       {!isCorpse && chipStatuses.length > 0 && (
         <div data-status-tokens style={{
-          position: 'absolute', left: -tokenOut, top: ringSize - ringOut + 3,
-          display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+          position: 'absolute', right: `calc(100% - ${tokenIn}px)`, top: band + 4,
+          display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2,
           pointerEvents: 'none',
         }}>
           {tokens.shown.map((st, i) => (
@@ -372,7 +354,7 @@ export function HeroSlot({
               passTaps={!!pending}
               style={{ display: 'inline-flex', pointerEvents: 'auto' }}
             >
-              <StatusIcon id={st.id} value={st.value} duration={st.duration} titled={false} token={tokenDim} />
+              <StatusIcon id={st.id} value={compact ? undefined : st.value} duration={st.duration} titled={false} token={tokenDim} />
             </Explain>
           ))}
           {tokens.more > 0 && (
@@ -382,20 +364,23 @@ export function HeroSlot({
         </div>
       )}
 
-      {/* WORN TOKENS — hanging off the foot of the card, every item the
-          hero wears (a fourth in the flex slot too): its icon on a keyline
+      {/* THE FOOT STRIP — every item the hero wears (a fourth in the flex
+          slot too), as inventory tiles inside the card: its icon in a frame
           of its category's colour, the turns its cooldown has left over a
           dimmed face, or a hard crowd-control item's charges as pips. A
           riding hero (Rem · Tag Along) shows her portrait and the turns her
           ride has left. Once the side has the flex slot (it felled the
-          enemy Walker) an empty fourth socket waits beside them, a chip's
-          size. */}
-      {(attached.length > 0 || flexSocket) && (
+          enemy Walker) an empty fourth socket waits beside them. */}
+      {hasFoot && (
         <div data-worn-row style={{
-          position: 'absolute', left: 3, right: 3, bottom: -chipOut,
-          display: 'flex', alignItems: 'center', gap: 2,
+          position: 'absolute', left: 0, right: 0, bottom: 0, height: foot,
+          display: 'flex', alignItems: 'center', gap: compact ? 2 : 3,
+          padding: `0 ${footPad}px`, boxSizing: 'border-box',
+          background: 'rgba(8, 20, 19, 0.9)',
+          borderTop: '1px solid rgba(232, 224, 204, 0.18)',
+          borderRadius: `0 0 ${radius}px ${radius}px`,
           pointerEvents: 'none',
-          ...(isCorpse ? { filter: 'grayscale(1) brightness(0.7)', opacity: 0.8 } : {}),
+          ...(isCorpse ? { filter: 'grayscale(1) brightness(0.7)' } : {}),
         }}>
           {worn.shown.map((eq) => {
             const eqData = CARDS_BY_ID[eq.cardId];
@@ -420,12 +405,10 @@ export function HeroSlot({
                   borderRadius: Math.max(3, Math.round(dim * 0.18)),
                   cursor: 'help',
                   pointerEvents: 'auto',
-                  // A paper keyline and a dark drop lift the token off the
-                  // card and the table behind it.
-                  boxShadow: `0 0 0 1px ${poster.paper}, 0 2px 4px rgba(0, 0, 0, 0.6)`,
                   ...(isMerged ? {
                     background: poster.frame,
                     border: `1.5px solid ${poster.green}`,
+                    boxSizing: 'border-box',
                     overflow: 'hidden',
                   } : {}),
                 }}
@@ -447,7 +430,7 @@ export function HeroSlot({
                 {/* The ride's turns left (Rem) — green sticker in the corner. */}
                 {isMerged && eq.remMergeTurnsLeft != null && (
                   <span aria-label={`${eq.remMergeTurnsLeft} turns left`} style={{
-                    ...chipPill(compact),
+                    ...chipPill,
                     background: poster.green,
                   }}>{eq.remMergeTurnsLeft}</span>
                 )}
@@ -463,82 +446,76 @@ export function HeroSlot({
       )}
     </motion.button>
     </div>
-
-    {/* HP — floats above the card's top-right corner: the number, the thin
-        green bar under it, and the Shield beside it. Not on a corpse. */}
-    {!isCorpse && (
-      <HpFloat hp={shownHp} hpMax={card.hpMax} shield={shieldValue} compact={!!compact} vitalitySpike={hasSpike(card, 'vitality')} />
-    )}
     </div>
   );
 }
 
-/** The HP over the card's top-right corner, Pocket-strong: a bold ink number
- *  outlined in paper so it reads on either half and on the far row, standing
- *  on a thick keylined bar that drains and goes green → amber → red as the
- *  hero is hurt; the Shield beside the number. It stands in the slot's HP
- *  room, its bar just above the card's top edge. */
-function HpFloat({ hp, hpMax, shield, compact, vitalitySpike }: {
-  hp: number; hpMax: number; shield: number; compact: boolean; vitalitySpike: boolean;
+/**
+ * A hero's health, as the card's top strip: Deadlock's bar — green, cut into
+ * a segment per HP point, a Shield as steel segments after it — between the
+ * level ring and the plain white number, on the HUD's dark green plate. The
+ * number pulses and flashes green or red as it changes; the bar jumps when a
+ * Shield comes or goes.
+ */
+function HpBand({ hp, hpMax, shield, level, exp, height, ring, radius, compact, vitalitySpike }: {
+  hp: number; hpMax: number; shield: number; level: number; exp: number;
+  height: number; ring: number; radius: number; compact: boolean; vitalitySpike: boolean;
 }) {
   const hpTick = useStatTick(hp);
   const shieldTick = useStatTick(shield);
-  const frac = hpMax > 0 ? Math.max(0, Math.min(1, hp / hpMax)) : 0;
-  const barInk = hpBarInk(hp, hpMax);
-  const size = compact ? 18 : 23;
-  const barW = compact ? 48 : 64;
-  const barH = compact ? 7 : 8;
-  // A paper stroke behind the glyphs (painted under the fill), so the
-  // number keeps its weight.
-  const outline: CSSProperties = { WebkitTextStroke: `3px ${poster.paper}`, paintOrder: 'stroke fill' };
   return (
     <div
       data-hp
       aria-label={`${hp} of ${hpMax} HP${shield > 0 ? `, Shield ${shield}` : ''}`}
       style={{
-        position: 'absolute', right: -2, bottom: `calc(100% - ${HP_ROOM - 2}px)`,
-        display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1,
-        pointerEvents: 'none', zIndex: 3,
+        position: 'absolute', left: 0, right: 0, top: 0, height,
+        display: 'flex', alignItems: 'center', gap: compact ? 3 : 4,
+        padding: compact ? '0 4px 0 1px' : '0 5px 0 2px', boxSizing: 'border-box',
+        background: `linear-gradient(180deg, #143524 0%, ${poster.plate} 100%)`,
+        borderBottom: `1px solid ${poster.plateEdge}`,
+        borderRadius: `${radius}px ${radius}px 0 0`,
+        pointerEvents: 'none',
       }}
     >
-      <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: compact ? 4 : 5, paddingRight: 1 }}>
-        {shield > 0 && (
-          <motion.span
-            aria-hidden
-            animate={shieldTick ? { scale: [1, 1.4, 1] } : { scale: 1 }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 1,
-              fontFamily: fonts.ui, fontWeight: 800, fontSize: Math.round(size * 0.72), lineHeight: 0.9,
-              color: poster.stat.shield, ...outline, fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            <ShieldIcon size={Math.round(size * 0.62)} color={poster.stat.shield} />
-            {shield}
-          </motion.span>
-        )}
-        <motion.span
-          aria-hidden
-          animate={hpTick ? { scale: [1, 1.3, 1], color: [poster.ink, hpTick === 'up' ? poster.green : poster.red, poster.ink] } : { scale: 1, color: poster.ink }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          style={{
-            display: 'inline-block',
-            fontFamily: fonts.ui, fontWeight: 800, fontSize: size, lineHeight: 0.9, letterSpacing: '-0.02em',
-            color: poster.ink, ...outline, fontVariantNumeric: 'tabular-nums',
-            transformOrigin: 'bottom right',
-          }}
-        >{hp}</motion.span>
-        {vitalitySpike && <SpikeMark slot="vitality" size={compact ? 9 : 11} style={{ alignSelf: 'flex-start' }} />}
-      </span>
-      <span aria-hidden data-hp-bar style={{
-        width: barW, height: barH, borderRadius: barH / 2, boxSizing: 'border-box',
-        background: 'rgba(23, 20, 16, 0.78)',
-        border: `1px solid ${poster.ink}`,
-        boxShadow: `0 0 0 1px ${poster.paper}, 0 1px 3px rgba(0, 0, 0, 0.4)`,
-        overflow: 'hidden',
-      }}>
-        <span style={{ display: 'block', height: '100%', width: `${frac * 100}%`, background: barInk, borderRadius: barH / 2, transition: 'width 320ms ease, background 320ms ease' }} />
-      </span>
+      <LevelRing level={level} exp={exp} size={ring} bold />
+      <motion.span
+        aria-hidden
+        animate={shieldTick ? { scaleY: [1, 1.6, 1] } : { scaleY: 1 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        style={{ flex: 1, minWidth: 0, display: 'flex', padding: '0 2px' }}
+      >
+        <HpSegments hp={hp} max={hpMax} shield={shield} width="100%" height={compact ? 8 : 9} />
+      </motion.span>
+      {vitalitySpike && <SpikeMark slot="vitality" size={compact ? 8 : 10} />}
+      <motion.span
+        aria-hidden
+        animate={hpTick
+          ? { scale: [1, 1.3, 1], color: ['#ffffff', hpTick === 'up' ? poster.green : '#ff6a55', '#ffffff'] }
+          : { scale: 1, color: '#ffffff' }}
+        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        style={{ ...hpNumberStyle(compact ? scale.body : scale.number), display: 'inline-block', transformOrigin: 'center right' }}
+      >{hp}</motion.span>
+    </div>
+  );
+}
+
+/** The one tag on a hero that is down, in the top strip's seat: how long
+ *  until it is back. Quiet cream while it waits, green on its last turn. */
+function RespawnTag({ turnsLeft, height, radius, compact }: { turnsLeft: number; height: number; radius: number; compact: boolean }) {
+  const isLast = turnsLeft <= 1;
+  return (
+    <div aria-hidden data-respawn style={{
+      position: 'absolute', left: 0, right: 0, top: 0, height,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(8, 20, 19, 0.96)',
+      borderBottom: `1px solid ${isLast ? poster.plateEdge : 'rgba(232, 224, 204, 0.18)'}`,
+      borderRadius: `${radius}px ${radius}px 0 0`,
+      fontFamily: fonts.display, fontSize: compact ? scale.floor : scale.label, lineHeight: 1,
+      letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+      color: isLast ? poster.target : poster.creamDim,
+      pointerEvents: 'none',
+    }}>
+      {isLast ? 'Next turn' : `Back in ${turnsLeft}`}
     </div>
   );
 }
@@ -548,12 +525,11 @@ function MoreToken({ n, dim, square, title }: { n: number; dim: number; square?:
   return (
     <span data-more title={title} aria-label={`${n} more: ${title}`} style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      minWidth: dim, height: dim, padding: '0 2px', boxSizing: 'border-box', flexShrink: 0,
+      minWidth: dim, height: dim, padding: '0 1px', boxSizing: 'border-box', flexShrink: 0,
       borderRadius: square ? Math.max(3, Math.round(dim * 0.18)) : dim / 2,
-      background: poster.ink, color: poster.cream,
-      border: `1px solid ${poster.paper}`,
-      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.6)',
-      fontFamily: fonts.ui, fontWeight: 800, fontSize: Math.round(dim * 0.56), lineHeight: 1,
+      background: poster.slate, color: poster.cream,
+      border: '1px solid rgba(232, 224, 204, 0.5)',
+      fontFamily: fonts.ui, fontWeight: 800, fontSize: scale.floor, lineHeight: 1, letterSpacing: '-0.02em',
       fontVariantNumeric: 'tabular-nums',
     }}>+{n}</span>
   );
@@ -589,27 +565,28 @@ function Halo({ color, pulse, soft }: { color: string; pulse: boolean; soft: boo
 
 /** The badge of a form the hero has taken ("Wolf form"), stamped across the
  *  foot of its art with the turns it has left: the status's chip, made a
- *  label on the card itself, since the art has changed with it. */
-function FormBadge({ label, turns, compact, bottom }: { label: string; turns: number; compact: boolean; bottom: number }) {
+ *  label on the card itself, since the art has changed with it. `label` is
+ *  what the card has room to print; `full` is the form's whole name. */
+function FormBadge({ label, full, turns, bottom }: { label: string; full: string; turns: number; bottom: number }) {
   return (
     <div
       role="note"
-      aria-label={`${label}, ${turns} turn${turns === 1 ? '' : 's'} left`}
-      title={`${label}: ${turns} turn${turns === 1 ? '' : 's'} left`}
+      aria-label={`${full}, ${turns} turn${turns === 1 ? '' : 's'} left`}
+      title={`${full}: ${turns} turn${turns === 1 ? '' : 's'} left`}
       style={{
-        position: 'absolute', left: 4, bottom,
+        position: 'absolute', left: 3, bottom,
         display: 'inline-flex', alignItems: 'center', gap: 4,
-        padding: compact ? '2px 5px' : '3px 7px',
-        background: poster.ink, color: poster.cream,
-        border: `1.5px solid ${poster.status.buff}`,
+        padding: '3px 5px',
+        background: 'rgba(8, 20, 19, 0.92)', color: poster.cream,
+        border: `1px solid ${poster.target}`,
         borderRadius: 3,
-        fontFamily: fonts.display, fontSize: compact ? 8 : 10, letterSpacing: '0.14em', textTransform: 'uppercase', lineHeight: 1,
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
+        fontFamily: fonts.display, fontSize: scale.floor, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1,
+        whiteSpace: 'nowrap',
         pointerEvents: 'none',
       }}
     >
       <span>{label}</span>
-      <span style={{ color: poster.status.buff, fontVariantNumeric: 'tabular-nums' }}>{turns}t</span>
+      <span style={{ color: poster.target, fontVariantNumeric: 'tabular-nums' }}>{turns}t</span>
     </div>
   );
 }
@@ -643,120 +620,17 @@ function ReadyGlint() {
   );
 }
 
-/** Corner numeral on an equipment chip — a tiny flat sticker. */
-function chipPill(compact: boolean | undefined): CSSProperties {
-  return {
-    position: 'absolute', right: 0, bottom: 0,
-    minWidth: compact ? 9 : 11,
-    padding: '0 1px',
-    ...text.label,
-    fontSize: compact ? 8 : 9,
-    letterSpacing: 0,
-    lineHeight: compact ? '9px' : '11px',
-    textAlign: 'center',
-    color: poster.paper,
-    borderTopLeftRadius: 3,
-    pointerEvents: 'none',
-  };
-}
-
-/**
- * Renders the in-slot respawn state over the greyed card: a dim wash, a
- * slow rotating cream clock ring, an hourglass glyph and a red countdown
- * sticker. On the last turn (1T) the wash turns green and pulses faster to
- * signal "about to revive", and the sticker says the hero is back next turn.
- */
-function RespawnOverlay({ turnsLeft, compact }: { turnsLeft: number; compact: boolean }) {
-  const isLast = turnsLeft === 1;
-  const wash = isLast ? poster.green : poster.red;
-  const ringSize = compact ? 48 : 72;
-  // The clock keeps the pace it started at, as it always has: a hero who
-  // falls with one turn left spins fast from the start.
-  const clock = useAmbientLoop<HTMLDivElement>({
-    keyframes: [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
-    duration: isLast ? 6000 : 14000,
-    easing: 'linear',
-  });
-  return (
-    <div aria-hidden style={{
-      position: 'absolute', inset: 0,
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      pointerEvents: 'none',
-      gap: compact ? 6 : 10,
-    }}>
-      {/* Dim wash — red while waiting, green on the last turn */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: isLast ? [0.30, 0.55, 0.30] : [0.18, 0.32, 0.18] }}
-        transition={{ duration: isLast ? 0.9 : 2.2, repeat: Infinity, ease: 'easeInOut' }}
-        style={{
-          position: 'absolute', inset: 0,
-          background: `radial-gradient(ellipse at center, ${wash}cc, ${wash}55 55%, transparent 85%)`,
-        }}
-      />
-      {/* Slow rotating cream ring with tick marks (Deadlock "respawn clock" feel) */}
-      <div ref={clock} style={{ position: 'relative', width: ringSize, height: ringSize }}>
-        <svg viewBox="0 0 100 100" width="100%" height="100%">
-          <circle cx="50" cy="50" r="44" fill="none" stroke={poster.cream} strokeWidth="2" opacity="0.85" />
-          <circle cx="50" cy="50" r="48" fill="none" stroke={poster.cream} strokeWidth="0.7" opacity="0.5" />
-          {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg, i) => {
-            const rad = (deg * Math.PI) / 180;
-            const x1 = 50 + Math.cos(rad) * 44;
-            const y1 = 50 + Math.sin(rad) * 44;
-            const x2 = 50 + Math.cos(rad) * 48;
-            const y2 = 50 + Math.sin(rad) * 48;
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={poster.cream} strokeWidth={deg % 90 === 0 ? 1.8 : 1} opacity="0.8" />;
-          })}
-        </svg>
-      </div>
-      {/* Hourglass glyph in the center of the ring — "respawning" timer */}
-      <div style={{
-        position: 'absolute',
-        width: ringSize * 0.5, height: ringSize * 0.5,
-        opacity: 0.92,
-      }}>
-        <svg viewBox="0 0 100 100" width="100%" height="100%">
-          <rect x="18" y="14" width="64" height="6" rx="1.5"
-            fill={poster.cream} stroke={poster.ink} strokeWidth="2.5" strokeLinejoin="round" />
-          <path
-            d="M24 20 L76 20 L54 50 L76 80 L24 80 L46 50 Z"
-            fill={poster.cream} stroke={poster.ink} strokeWidth="2.5" strokeLinejoin="round" />
-          <path
-            d="M34 78 L66 78 L58 70 L42 70 Z"
-            fill={poster.ink} opacity="0.55" />
-          <line x1="50" y1="46" x2="50" y2="60"
-            stroke={poster.ink} strokeWidth="2" strokeLinecap="round" />
-          <rect x="18" y="80" width="64" height="6" rx="1.5"
-            fill={poster.cream} stroke={poster.ink} strokeWidth="2.5" strokeLinejoin="round" />
-        </svg>
-      </div>
-      {/* Countdown sticker — RESPAWN (3), the poster's red action sticker;
-          on the last turn it turns the wash's green with ink type, and says
-          the hero is back next turn. */}
-      <div style={{
-        position: 'absolute',
-        bottom: compact ? 8 : 14,
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: compact ? '3px 6px' : '4px 9px',
-        background: isLast ? poster.green : poster.red,
-        color: isLast ? poster.ink : poster.paper,
-        borderRadius: 3,
-        boxShadow: '0 3px 8px rgba(0, 0, 0, 0.35)',
-        fontFamily: fonts.display,
-        fontSize: compact ? 8 : 10,
-        letterSpacing: '0.18em',
-        textTransform: 'uppercase',
-        lineHeight: 1,
-        whiteSpace: 'nowrap',
-      }}>
-        {isLast ? <span>{compact ? 'Next turn' : 'Back next turn'}</span> : (
-          <>
-            <span>Respawn</span>
-            <span style={{ fontVariantNumeric: 'tabular-nums' }}>({turnsLeft})</span>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
+/** Corner numeral on a worn tile — a tiny flat sticker. */
+const chipPill: CSSProperties = {
+  position: 'absolute', right: 0, bottom: 0,
+  minWidth: 10,
+  padding: '0 1px',
+  ...text.label,
+  fontSize: scale.floor,
+  letterSpacing: 0,
+  lineHeight: '11px',
+  textAlign: 'center',
+  color: poster.ink,
+  borderTopLeftRadius: 3,
+  pointerEvents: 'none',
+};

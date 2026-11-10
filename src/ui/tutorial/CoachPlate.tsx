@@ -276,7 +276,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
             <span
               style={{
                 ...text.label,
-                fontSize: 9.5,
+                fontSize: 10,
                 letterSpacing: '0.2em',
                 color: poster.inkDim,
                 fontVariantNumeric: 'tabular-nums',
@@ -327,7 +327,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
               <div
                 style={{
                   fontFamily: fonts.display,
-                  fontSize: isMobile ? 14 : 19,
+                  fontSize: isMobile ? 13 : 18,
                   letterSpacing: '0.02em',
                   textTransform: 'uppercase',
                   lineHeight: 1.1,
@@ -336,7 +336,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
               >
                 {done ? `${lesson.title} · done` : current.title}
               </div>
-              <div style={{ ...text.body, fontSize: isMobile ? 11 : 12.5, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
+              <div style={{ ...text.body, fontSize: isMobile ? 11 : 13, lineHeight: isMobile ? 1.3 : 1.45, color: poster.inkDim }}>
                 {bodyText}
                 {done && (
                   <span style={{ display: 'block', marginTop: isMobile ? 2 : 4, color: poster.inkFaint }}>× keeps this match going.</span>
@@ -350,7 +350,7 @@ export function CoachPlate({ G, me, isMyTurn, targeting, attacking, sheetHero, c
               {!done ? (
                 <>
                   <TaskDot ticked={ticked} waiting={!!waitText} />
-                  <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.2em', color: ticked ? poster.ink : poster.inkDim }}>
+                  <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.2em', color: ticked ? poster.ink : poster.inkDim }}>
                     {status}
                   </span>
                 </>

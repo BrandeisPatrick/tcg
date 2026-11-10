@@ -14,22 +14,34 @@ export interface AppSettings {
   /** Side panel when a match starts: 'auto' opens it only on wide
    *  viewports (≥1100px), the explicit values always win. */
   panelDefault: 'auto' | 'open' | 'closed';
-  /** The match table seen flat from above rather than at Pocket's tilted
-   *  angle (the rival's half receding). Off by default: the tilt is on. */
-  flatTable: boolean;
+  /** The match table's camera: off, the table is seen from straight above;
+   *  on, it leans away a little (the "Tilted table" switch). */
+  tiltedTable: boolean;
 }
 
+/** THE DEFAULT CAMERA — the one line to change: `false` is the table seen
+ *  from straight above, `true` the gentle tilt. A phone that has never
+ *  touched the "Tilted table" switch follows it. */
+export const DEFAULT_TILTED_TABLE = false;
+
 const KEY = 'deadlock-tcg-settings';
-const DEFAULTS: AppSettings = { combatSpeed: 1, reducedMotion: false, panelDefault: 'auto', flatTable: false };
+const DEFAULTS: AppSettings = { combatSpeed: 1, reducedMotion: false, panelDefault: 'auto', tiltedTable: DEFAULT_TILTED_TABLE };
 
 let cache: AppSettings | null = null;
+/** Whether the player has set the camera themselves. Until then it is not
+ *  saved, so the default above reaches every phone that has not chosen. */
+let tiltChosen = false;
 const listeners = new Set<() => void>();
 
 export function getSettings(): AppSettings {
   if (!cache) {
     let loaded: AppSettings;
     try {
-      loaded = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
+      // `flatTable` was the old camera switch (the steep tilt was the
+      // default then): dropped, so every phone starts from today's default.
+      const { flatTable: _old, ...saved } = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+      loaded = { ...DEFAULTS, ...saved };
+      tiltChosen = typeof saved.tiltedTable === 'boolean';
     } catch {
       loaded = { ...DEFAULTS };
     }
@@ -39,7 +51,7 @@ export function getSettings(): AppSettings {
     const speed = Number(loaded.combatSpeed);
     loaded.combatSpeed = (speed === 1 || speed === 1.5 || speed === 2 ? speed : DEFAULTS.combatSpeed) as AppSettings['combatSpeed'];
     loaded.reducedMotion = loaded.reducedMotion === true;
-    loaded.flatTable = loaded.flatTable === true;
+    loaded.tiltedTable = tiltChosen ? loaded.tiltedTable === true : DEFAULT_TILTED_TABLE;
     loaded.panelDefault = (['auto', 'open', 'closed'] as const).includes(loaded.panelDefault)
       ? loaded.panelDefault : DEFAULTS.panelDefault;
     cache = loaded;
@@ -49,8 +61,10 @@ export function getSettings(): AppSettings {
 
 export function updateSettings(patch: Partial<AppSettings>): void {
   cache = { ...getSettings(), ...patch };
+  if (typeof patch.tiltedTable === 'boolean') tiltChosen = true;
   try {
-    localStorage.setItem(KEY, JSON.stringify(cache));
+    const { tiltedTable, ...rest } = cache;
+    localStorage.setItem(KEY, JSON.stringify(tiltChosen ? { ...rest, tiltedTable } : rest));
   } catch {
     // Private browsing / quota — the in-memory value still applies.
   }

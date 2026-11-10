@@ -10,9 +10,10 @@ import { cardName } from '@/cards';
 import { CardFrame } from '../card/CardFrame';
 import { ItemLine } from './ItemLine';
 import { PosterButton } from '../chrome';
-import { fonts, spring } from '../tokens';
+import { spring } from '../tokens';
 import { poster, scrimStyle, sheetStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
+import { scale as T, bandStyle } from '../hud';
 
 /** The sheet's accessible name. */
 export const UPGRADE_SHEET = 'Choose the upgrade';
@@ -45,18 +46,25 @@ export function UpgradePicker({ itemId, options, onPick, onCancel }: {
         style={{
           ...sheetStyle,
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 14 : 20,
-          padding: isMobile ? '18px 14px' : '26px 30px',
-          borderRadius: isMobile ? 16 : 18,
+          padding: isMobile ? '0 14px 18px' : '0 30px 26px',
+          borderRadius: isMobile ? 14 : 16,
+          overflow: 'hidden',
           maxWidth: 760,
           ...(isMobile ? { width: 'min(100%, 460px)', boxSizing: 'border-box' as const } : null),
           color: poster.ink,
         }}
       >
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: fonts.display, fontSize: 22, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1 }}>
+        {/* The header band in your amber: the item, and the one ask. */}
+        <div style={{
+          ...bandStyle(poster.you),
+          alignSelf: 'stretch', margin: isMobile ? '0 -14px' : '0 -30px',
+          padding: isMobile ? '14px 14px 12px' : '18px 30px 14px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textAlign: 'center',
+        }}>
+          <span style={{ fontSize: T.title, letterSpacing: '0.06em', lineHeight: 1 }}>
             {cardName(itemId)}
           </span>
-          <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 11.5 : 13, letterSpacing: isMobile ? '0.16em' : '0.18em', textTransform: 'uppercase', lineHeight: 1.2 }}>
+          <span style={{ fontSize: isMobile ? T.label : T.body, letterSpacing: '0.14em', lineHeight: 1.2, opacity: 0.85 }}>
             Choose the upgrade to shuffle into your deck
           </span>
         </div>

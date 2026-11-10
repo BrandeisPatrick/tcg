@@ -14,6 +14,11 @@
  */
 import type { CSSProperties } from 'react';
 import { fonts } from '../tokens';
+import { scale } from '../hud';
+
+/** The dial's number: the type scale's step nearest its share of the ring. */
+const dialFont = (size: number) =>
+  [scale.floor, scale.label, scale.body, scale.number, scale.title].reduce((a, b) => (Math.abs(b - size * 0.46) < Math.abs(a - size * 0.46) ? b : a));
 
 export function CooldownDial({ left, full, size = 28, ink, track, label, style }: {
   /** Own turns left. */
@@ -52,7 +57,7 @@ export function CooldownDial({ left, full, size = 28, ink, track, label, style }
         <span aria-hidden style={{
           position: 'absolute', inset: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: fonts.display, fontSize: Math.round(size * 0.46), lineHeight: 1,
+          fontFamily: fonts.display, fontSize: dialFont(size), lineHeight: 1,
           color: ink, fontVariantNumeric: 'tabular-nums',
         }}>{left}</span>
       )}

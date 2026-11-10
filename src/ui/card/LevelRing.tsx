@@ -13,10 +13,13 @@ export function LevelRing({
   level,
   exp,
   size = 26,
+  bold = false,
 }: {
   level: number;
   exp: number;
   size?: number;
+  /** A small ring on a board card: the numeral keeps the type floor. */
+  bold?: boolean;
 }) {
   const clampedLevel = Math.max(START_LEVEL, Math.min(MAX_LEVEL, level)) as 1 | 2 | 3 | 4;
   const atMax = clampedLevel >= MAX_LEVEL;
@@ -85,7 +88,7 @@ export function LevelRing({
         justifyContent: 'center',
         color: poster.cream,
         fontFamily: fonts.display,
-        fontSize: Math.min(22, Math.round(size * 0.46)),
+        fontSize: bold ? Math.max(10, Math.round(size * 0.56)) : Math.min(22, Math.round(size * 0.46)),
         lineHeight: 1,
         fontVariantNumeric: 'tabular-nums',
         pointerEvents: 'none',

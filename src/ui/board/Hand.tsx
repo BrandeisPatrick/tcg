@@ -19,9 +19,9 @@ const isLanding = (arriving: string | readonly string[] | null | undefined, iid:
 interface Props {
   /** The cards in your hand: heroes and items, drawn (or given) and not yet
    *  played. A hero goes on the bench for free; an item onto a hero for its
-   *  price, printed on its coin. */
+   *  price, printed on its seal. */
   cards: CardInstance[];
-  /** Your souls: an item whose price is more prints its coin red. */
+  /** Your souls: an item whose price is more prints its seal salmon. */
   souls: number;
   disabled: boolean;
   pending: { iid: string } | null;
@@ -64,6 +64,10 @@ const CARD_W = SIZES.hand.w;
  *  bigger), the gap between cards that do not overlap, the margin kept at
  *  each side of the band, how far the fan rests under the turn row and how
  *  far a tapped card lifts out of it (to the row, never over it). */
+/** The smallest a name may show in the fan, rendered px. */
+const NAME_MIN = 11;
+/** The most cards whose covered strips still carry their names. */
+const NAMED_MAX = 5;
 const FAN = { wide: 108, narrow: 96, gap: 4, side: 6, rest: 24, lift: 22, hover: 10 } as const;
 
 /**
@@ -82,9 +86,11 @@ export function handFan(total: number, avail: number): { scale: number; width: n
 /**
  * Your hand — a centred fan along the bottom of the stage, the band's whole
  * width its own. Each card prints the CLEAN FACE (CardFrame `clean`): its
- * name across the top, its art, its cost, its type — nothing cut; the full
+ * art, its seal (an item's price, a hero's HP) and its name along the foot
+ * — nothing cut; the full
  * card is a hold away. Cards overlap only when the width makes them, and a
- * covered card sets its name in the strip it still shows. A tapped card
+ * covered card sets its name in the strip it still shows (or, when that
+ * strip is too narrow to read, shows art and seal only). A tapped card
  * lifts out of the fan, and a card that can be played right now breathes
  * with a gold light. Drag a card onto a hero (a pointer) or tap it and then
  * the hero.
@@ -161,7 +167,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
           // Dim must live in the `animate` target, not `style` — framer's
           // animate={{ opacity: 1 }} overrides a style-prop opacity, which
           // silently disabled the stuck/disabled fade entirely.
-          const opacity = cardDisabled && !selected ? (stuck ? 0.55 : 0.6) : 1;
+          const opacity = cardDisabled && !selected ? (stuck ? 0.9 : 0.62) : 1;
           const price = itemPrice(c.cardId);
           const unaffordable = price > souls;
           const isHero = CARDS_BY_ID[c.cardId]?.type === 'hero';
@@ -190,7 +196,9 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
           // card and one lifted or under the pointer, else the strip the
           // next card leaves.
           const covered = i < total - 1 && !selected && !isHovered && overlap < 0;
-          const nameRoom = covered ? fan.step / fan.scale : undefined;
+          // Six or more: the covered cards drop their names all alike (a
+          // strip that narrow reads as art and seal); the front one keeps it.
+          const nameRoom = covered ? (total > NAMED_MAX ? 0 : fan.step / fan.scale) : undefined;
           let zIndex = i;
           if (selected) zIndex = 100;
           if (isHovered) zIndex = 200;
@@ -269,8 +277,6 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                 zIndex,
                 // The fan keeps every gesture for framer's drag.
                 touchAction: 'none',
-                // A card no hero can take prints greyer.
-                filter: stuck ? 'saturate(0.55)' : undefined,
                 pointerEvents: 'auto', // opt back in under the fan's pointerEvents:none
               }}
             >
@@ -298,6 +304,11 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                   size="hand"
                   clean
                   nameRoom={nameRoom}
+                  // Never set under 11px as it shows: a covered card whose
+                  // strip is too narrow for its name shows art and seal only.
+                  nameMin={NAME_MIN / fan.scale}
+                  // One that cannot be played now greys; its seal keeps its colour.
+                  dimmed={stuck}
                   // The price an item costs to put on a hero (red: not enough souls).
                   unaffordable={unaffordable}
                   selected={selected}

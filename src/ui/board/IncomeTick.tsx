@@ -90,7 +90,7 @@ export function IncomeTick({ G, me, rightInset = 0 }: {
 function Part({ children, ink = poster.creamDim }: { children: React.ReactNode; ink?: string }) {
   return (
     <span style={{
-      ...text.label, fontSize: 9.5, letterSpacing: '0.12em', padding: '3px 7px', borderRadius: 999,
+      ...text.label, fontSize: 10, letterSpacing: '0.1em', padding: '3px 7px', borderRadius: 999,
       border: `1.5px solid ${ink}`, color: ink, whiteSpace: 'nowrap',
     }}>{children}</span>
   );

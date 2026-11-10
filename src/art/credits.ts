@@ -6,7 +6,7 @@
  * repository's long-form companion is public/art/CREDITS.md.
  *
  * Keep the two in step: anything added to public/art, public/heroes,
- * public/spells or public/items belongs here too.
+ * public/spells, public/items or public/hud belongs here too.
  */
 import { fonts } from '@/ui/tokens';
 import { poster } from '@/ui/poster';
@@ -126,6 +126,15 @@ export const ART_CREDITS: CreditGroup[] = [
         ],
         terms: `${VALVE} Downscaled to 128 px for the web.`,
         thumb: { kind: 'image', src: `${BASE}art/map_walker.png`, fit: 'contain', ground: '#2a2a2a' },
+      },
+      {
+        id: 'hud-icons',
+        title: 'HUD glyphs',
+        by: 'The game\'s own HUD marks, through the community-run Deadlock Assets API: the soul wisp of its souls counter, the two patrons\' team sigils and the ultimate eye.',
+        where: 'The match screen: the wisp beside every souls number and price, the sigils on the scoreboard strip and the table\'s halves, the eye on an ultimate.',
+        links: [DL_API, DL_BUCKET],
+        terms: `${VALVE} White glyphs, painted in the HUD\'s colours through a mask.`,
+        thumb: { kind: 'image', src: `${BASE}hud/team_sapphire.svg`, fit: 'contain', ground: '#2a2a2a' },
       },
       {
         id: 'hero-icons',

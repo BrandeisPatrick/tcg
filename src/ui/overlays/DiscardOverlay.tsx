@@ -13,6 +13,7 @@ import { CardFrame } from '../card/CardFrame';
 import { PosterButton } from '../chrome';
 import { fonts, spring } from '../tokens';
 import { poster, scrimStyle, sheetStyle } from '../poster';
+import { PatronSigil, bandStyle, scale as type } from '../hud';
 import { useViewport } from '../hooks/useViewport';
 import { HandThumb } from '../board/HandThumb';
 
@@ -49,21 +50,30 @@ export function DiscardOverlay({ hand, count, drawCard, onDiscard }: {
         style={{
           ...sheetStyle,
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 14 : 20,
-          padding: isMobile ? '18px 14px' : '26px 30px',
-          borderRadius: isMobile ? 16 : 18,
+          padding: isMobile ? '0 0 18px' : '0 0 26px',
+          borderRadius: 12,
+          overflow: 'hidden',
           maxWidth: 860,
           color: poster.ink,
         }}
       >
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: fonts.display, fontSize: 22, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1 }}>
+        {/* The header band, in your patron's amber: the card that asked, and
+            how many to let go. */}
+        <div style={{
+          ...bandStyle(poster.you),
+          alignSelf: 'stretch',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+          padding: '11px 16px 10px', textAlign: 'center',
+        }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: type.title }}>
+            <PatronSigil side="you" size={18} color={poster.ink} />
+            Discard {count}
+          </span>
+          <span style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: type.label, letterSpacing: '0.12em' }}>
             {cardName(drawCard)}
           </span>
-          <span style={{ fontFamily: fonts.display, fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1 }}>
-            Discard {count} card{count === 1 ? '' : 's'} from your hand
-          </span>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 8 : 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 8 : 12, padding: isMobile ? '10px 12px 0' : '10px 26px 0' }}>
           {hand.map((c) => {
             const on = marked.includes(c.iid);
             return (
@@ -90,7 +100,7 @@ export function DiscardOverlay({ hand, count, drawCard, onDiscard }: {
                 {on && (
                   <span aria-hidden style={{
                     position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%',
-                    background: poster.red, color: poster.paper, fontSize: 12, lineHeight: '20px', textAlign: 'center',
+                    background: poster.red, color: poster.paper, fontSize: type.label, lineHeight: '20px', textAlign: 'center',
                     fontFamily: fonts.display, boxShadow: `0 0 0 2px ${poster.paper}`,
                   }}>✕</span>
                 )}
@@ -99,7 +109,7 @@ export function DiscardOverlay({ hand, count, drawCard, onDiscard }: {
           })}
         </div>
         <PosterButton variant="ink" size="sm" disabled={!ready} onClick={() => ready && onDiscard(marked)}>
-          {ready ? `Discard ${count}` : `Mark ${count - marked.length} more`}
+          {ready ? 'Discard' : `Pick ${count - marked.length}`}
         </PosterButton>
       </motion.div>
     </motion.div>

@@ -73,6 +73,17 @@ from their "Deadlock Graphical Library" collection.
   `scripts/art/fetch_map_icons.py` fetches them again (see
   `public/ART_PIPELINE.md`).
 
+- The HUD glyphs in `public/hud/` are the game's own interface marks, fetched
+  from the Deadlock Assets API's icon index
+  (https://api.deadlock-api.com/v1/assets/icons, files under
+  `https://assets-bucket.deadlock-api.com/assets-api-res/icons/`) and used as
+  they are, white glyphs painted in the HUD's colours through a CSS mask:
+  `soul.svg` (`hud/icons/icon_soul.svg`, the soul wisp beside every souls
+  number), `team_amber.svg` and `team_sapphire.svg` (`hud/core/team1_icon.svg`,
+  `hud/core/team2_icon.svg`, the two patrons' team sigils on the scoreboard
+  strip and the table) and `ultimate.svg` (`hud/icons/icon_ultimate.svg`, the
+  eye on an ultimate).
+
 ## Menu card bills
 
 The painted posters on the title-screen cards were supplied by the project

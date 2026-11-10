@@ -3,7 +3,7 @@ import type { CardId } from '@/engine/types';
 import { itemCard } from '@/cards';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { PRICE } from '@/engine/constants';
-import { fonts } from '../tokens';
+import { Souls, scale } from '../hud';
 import { TierDiamonds, itemArtUrl } from '../card/ItemIcon';
 import { levelGreen, poster, shopInk } from '../poster';
 
@@ -22,8 +22,8 @@ const BOLT = 15;
  * A card in the phone's hand, compact: card-shaped, the item's own shop art
  * (never redrawn) framed in its category's colour — Weapon amber, Vitality
  * green, Spirit purple — over a foot in that colour with the tier's diamonds,
- * and its price on a coin at the top left (red when it cannot be paid for
- * now, `unaffordable`). A hero card is its portrait in a charcoal frame, its
+ * and its price at the top left as the HUD prints souls (salmon when it
+ * cannot be paid for now, `unaffordable`). A hero card is its portrait in a charcoal frame, its
  * foot blank: it goes on the bench for free. No name: it is the accessible
  * label, and a long press opens the full card. An active item carries the
  * shop's bolt. `armed` rings it in the green the heroes it may go on glow in
@@ -75,14 +75,11 @@ export function HandThumb({ cardId, armed = false, unaffordable = false, level }
           </span>
         )}
       </span>
-      {/* The price, half over the top-left corner. */}
+      {/* The price, half over the top-left corner: the soul wisp and a mint
+          number on the HUD's dark green plate (salmon: not enough souls). */}
       {data && (
-        <span aria-hidden style={{
-          position: 'absolute', top: -4, left: -4, minWidth: BOLT, height: BOLT, padding: '0 3px', boxSizing: 'border-box',
-          borderRadius: BOLT / 2, background: unaffordable ? poster.red : poster.gold, color: poster.ink,
-          boxShadow: `0 0 0 1.5px ${poster.frame}`, fontFamily: fonts.display, fontSize: 9.5, lineHeight: 1,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-        }}>{PRICE[data.tier]}</span>
+        <Souls n={PRICE[data.tier]} size={scale.label} tone={unaffordable ? 'short' : 'mint'} plate
+          style={{ position: 'absolute', top: -5, left: -5, pointerEvents: 'none' }} />
       )}
       {/* An active item: the shop's bolt, half over the top-right corner. */}
       {data?.type === 'spell' && (
@@ -92,7 +89,7 @@ export function HandThumb({ cardId, armed = false, unaffordable = false, level }
           display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
         }}>
           <svg viewBox="0 0 10 14" width={BOLT * 0.5} height={BOLT * 0.66} aria-hidden>
-            <path d="M6.2 0 L0.6 8 H4.4 L3.4 14 L9.4 5.4 H5.6 Z" fill={poster.gold} />
+            <path d="M6.2 0 L0.6 8 H4.4 L3.4 14 L9.4 5.4 H5.6 Z" fill={poster.cream} />
           </svg>
         </span>
       )}

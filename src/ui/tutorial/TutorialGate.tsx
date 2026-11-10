@@ -34,6 +34,11 @@ const QUIET_FRAMES = 20;
 /** How often a sleeping gate looks anyway, for a move nothing announced. */
 const POLL_MS = 1000;
 /** What wakes a sleeping gate, besides a write to the DOM. */
+/** Always open through both sheets, never ringed: the match's menu button,
+ *  its popup and the match log it opens, so Settings (the System menu, drawn
+ *  above the gate) and the log stay one tap away in every sealed step. Taps
+ *  anywhere else are still sealed. */
+const ESCAPE: GateSpec[] = ['*Menu', 'Match log'];
 const WAKE_ON = ['transitionrun', 'transitionend', 'animationstart', 'animationend', 'scroll', 'resize', 'load'] as const;
 
 /** Decorative copies are never a task's target — the FX layer clones a hero
@@ -72,16 +77,26 @@ function resolve(specs: GateSpec[]): HTMLElement[] {
   return out;
 }
 
-interface Box { x: number; y: number; w: number; h: number }
+/** True when nothing but the gate itself lies over the middle of `el`: an
+ *  escape opens only onto itself, never onto a sheet drawn over it. */
+function onTop(el: HTMLElement): boolean {
+  const q = el.getBoundingClientRect();
+  if (!document.elementsFromPoint) return true;
+  const top = document.elementsFromPoint(q.left + q.width / 2, q.top + q.height / 2)
+    .find((e) => !e.closest('[data-tutorial-gate]'));
+  return !!top && (el === top || el.contains(top));
+}
 
-function boxes(els: HTMLElement[]): Box[] {
+interface Box { x: number; y: number; w: number; h: number; square?: true }
+
+function boxes(els: HTMLElement[], pad = PAD): Box[] {
   const out: Box[] = [];
   for (const el of els) {
     const q = el.getBoundingClientRect();
     if (q.width === 0 && q.height === 0) continue;
     out.push({
-      x: Math.round(q.left - PAD), y: Math.round(q.top - PAD),
-      w: Math.round(q.width + PAD * 2), h: Math.round(q.height + PAD * 2),
+      x: Math.round(q.left - pad), y: Math.round(q.top - pad),
+      w: Math.round(q.width + pad * 2), h: Math.round(q.height + pad * 2),
     });
   }
   return out;
@@ -109,11 +124,33 @@ function merge(boxes: Box[]): Box[] {
   return out;
 }
 
+/** What is left of `a` once `b` is cut out of it: up to four square boxes. */
+function cut(a: Box, b: Box): Box[] {
+  const ax1 = a.x + a.w, ay1 = a.y + a.h, bx1 = b.x + b.w, by1 = b.y + b.h;
+  if (b.x >= ax1 || bx1 <= a.x || b.y >= ay1 || by1 <= a.y) return [a];
+  const out: Box[] = [];
+  const top = Math.max(a.y, b.y), bottom = Math.min(ay1, by1);
+  if (b.y > a.y) out.push({ x: a.x, y: a.y, w: a.w, h: b.y - a.y, square: true });
+  if (by1 < ay1) out.push({ x: a.x, y: by1, w: a.w, h: ay1 - by1, square: true });
+  if (b.x > a.x) out.push({ x: a.x, y: top, w: b.x - a.x, h: bottom - top, square: true });
+  if (bx1 < ax1) out.push({ x: bx1, y: top, w: ax1 - bx1, h: bottom - top, square: true });
+  return out.filter((o) => o.w > 0 && o.h > 0);
+}
+
+/** The escape holes with every step hole cut out of them, so the two sets
+ *  never overlap: an even-odd sheet would fill an overlap back in, and
+ *  merging them would open the whole box around both. */
+function beside(escape: Box[], holes: Box[]): Box[] {
+  let pieces = escape;
+  for (const h of holes) pieces = pieces.flatMap((p) => cut(p, h));
+  return pieces;
+}
+
 /** A full-viewport sheet with rounded holes, as one even-odd path. */
 function sheetPath(W: number, H: number, holes: Box[]): string {
   let d = `M0 0H${W}V${H}H0Z`;
   for (const b of holes) {
-    const r = Math.min(RADIUS, b.w / 2, b.h / 2);
+    const r = b.square ? 0 : Math.min(RADIUS, b.w / 2, b.h / 2);
     d += ` M${b.x + r} ${b.y}H${b.x + b.w - r}A${r} ${r} 0 0 1 ${b.x + b.w} ${b.y + r}`
       + `V${b.y + b.h - r}A${r} ${r} 0 0 1 ${b.x + b.w - r} ${b.y + b.h}`
       + `H${b.x + r}A${r} ${r} 0 0 1 ${b.x} ${b.y + b.h - r}`
@@ -122,7 +159,7 @@ function sheetPath(W: number, H: number, holes: Box[]): string {
   return d;
 }
 
-interface Layout { W: number; H: number; spot: Box[]; allow: Box[] }
+interface Layout { W: number; H: number; spot: Box[]; allow: Box[]; escape: Box[] }
 
 export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
   /** Lit through the scrim. Empty = the whole screen is sealed. */
@@ -158,6 +195,9 @@ export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
       // Everything tappable is also lit, whether or not the step said so.
       const s = merge([...boxes(resolve(spot)), ...a]);
       const missing = allow.length > 0 && a.length === 0;
+      // Cut flush (no pad), and each cut clear of the ones before it, so the
+      // menu and its popup open exactly themselves and nothing beside them.
+      const esc = boxes(resolve(ESCAPE).filter(onTop), 0).reduce<Box[]>((acc, b) => [...acc, ...beside([b], acc)], []);
       const now = performance.now();
       let grace = false;
       if (missing) {
@@ -168,7 +208,7 @@ export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
         missingSince.current = null;
         setOpen(false);
       }
-      const next: Layout = { W: window.innerWidth, H: window.innerHeight, spot: s, allow: a };
+      const next: Layout = { W: window.innerWidth, H: window.innerHeight, spot: s, allow: a, escape: esc };
       const key = JSON.stringify(next);
       if (key === lastKey.current) return grace;
       lastKey.current = key;
@@ -212,6 +252,7 @@ export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
   // First frame (nothing measured yet): sealed, no holes.
   const spotHoles = layout?.spot ?? [];
   const allowHoles = layout?.allow ?? [];
+  const escapeHoles = layout?.escape ?? [];
 
   const eat = {
     onPointerDown: (e: React.PointerEvent) => { e.preventDefault(); e.stopPropagation(); onBlocked?.(); },
@@ -225,9 +266,9 @@ export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
   return (
     <>
       {/* Blocker — invisible, under the scrim, holed only where taps may land. */}
-      <svg style={{ ...sheet, zIndex: Z - 1 }} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+      <svg data-tutorial-gate style={{ ...sheet, zIndex: Z - 1 }} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
         <path
-          d={sheetPath(W, H, allowHoles)}
+          d={sheetPath(W, H, [...allowHoles, ...beside(escapeHoles, allowHoles)])}
           fill="rgba(0,0,0,0.001)"
           fillRule="evenodd"
           style={{ pointerEvents: 'fill' }}
@@ -235,9 +276,9 @@ export function TutorialGate({ spot, allow, dim = 0.62, onBlocked }: {
         />
       </svg>
       {/* Scrim — holed where the step points. */}
-      <svg style={{ ...sheet, zIndex: Z }} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+      <svg data-tutorial-gate style={{ ...sheet, zIndex: Z }} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
         <path
-          d={sheetPath(W, H, spotHoles)}
+          d={sheetPath(W, H, [...spotHoles, ...beside(escapeHoles, spotHoles)])}
           fill="rgb(6, 12, 14)"
           fillOpacity={dim}
           fillRule="evenodd"

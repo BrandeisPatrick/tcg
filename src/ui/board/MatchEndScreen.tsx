@@ -7,7 +7,8 @@ import { ROUND_CAP } from '@/engine/constants';
 import { heroArtFocus } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { fonts, spring } from '../tokens';
-import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
+import { poster, sheetStyle } from '../poster';
+import { DecoRule, PatronSigil, bandStyle, plateStyle, scale } from '../hud';
 import { PosterButton } from '../chrome';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { useViewport } from '../hooks/useViewport';
@@ -15,10 +16,11 @@ import { MapIcon } from './MapIcon';
 
 /**
  * Full-screen match epilogue, printed as one cream sheet floating on the
- * blurred scene. A brush-script lead-in carries the patron flavor line into
- * an unambiguous VICTORY / DEFEAT headline, both teams' final rosters
- * sit beneath as small charcoal-framed portraits (fallen heroes greyed under
- * a red K.O. sticker), a strip of ink tags holds the numbers, and the exits
+ * blurred scene. A header band in the winner's patron colour (amber for
+ * you, sapphire for the rival) with its sigil, then an unambiguous VICTORY /
+ * DEFEAT headline, both teams' final rosters as small charcoal-framed
+ * portraits (fallen heroes greyed under a red K.O. sticker), a strip of
+ * Deadlock's dark plates for the numbers, and the exits
  * are poster buttons: Rematch + Main Menu (or Return to Map for story
  * battles). Board early-returns into this screen, so it mounts its own
  * PosterBackdrop.
@@ -47,21 +49,16 @@ export function MatchEndScreen({
 }) {
   const { isMobile } = useViewport();
   const opp: PlayerID = otherPlayer(me);
-  // Verdict ink: victory prints in ink, defeat in the poster's one red. Your
-  // winning roster's label takes the ink; the rival's takes its own sapphire
-  // (red is the verdict, never the rival's colour).
-  const tone = won ? poster.ink : poster.red;
+  // Verdict ink: victory prints in ink, defeat in the winner's sapphire
+  // (pressed for paper). The band over the sheet is the winner's patron.
+  const tone = won ? poster.ink : poster.rivalInk;
+  const winner = won ? 'you' : 'rival';
   const headline = won ? 'Victory' : 'Defeat';
   // The round cap decided it: nobody's Patron fell, and what stood won.
   const cap = G.capped ? standingVerdict(G) : null;
   const capLine = cap ? `Round ${ROUND_CAP} over · ${cap.by === 'structures' ? 'more structure HP' : cap.by === 'netWorth' ? 'structures tied, more net worth' : 'all tied, the second mover'}` : null;
-  const flavor = isTutorial
-    ? (won ? (lessonOutro ?? 'Lesson over. The real tables are downstairs.') : 'No matter — you know the moves now.')
-    : isStory
-      ? (won ? 'The block is yours — press on uptown.' : 'Your run ends in the old city.')
-      : cap
-        ? (won ? 'The clock runs out with your line standing.' : 'The clock runs out on your line.')
-        : (won ? 'The rival patron falls.' : 'Your patron is outflanked.');
+  // A lesson keeps its own closing line; a match lets the headline speak.
+  const flavor = isTutorial && won ? lessonOutro : undefined;
 
   const myPs = G.players[me];
   const opPs = G.players[opp];
@@ -75,7 +72,6 @@ export function MatchEndScreen({
     <MapIcon key={s.kind} kind={s.kind} size={16} ink={s.hp > 0 ? ink : poster.creamFaint} grey={s.hp <= 0} />
   ));
   const stats: Array<{ label: string; value: string; icons?: ReactNode }> = [
-    { label: 'Turns', value: String(G.turnNumber) },
     { label: 'Your structures', value: `${structureHp(myPs)}/${trackOf(myPs)}`, icons: trackIcons(myPs, poster.you) },
     { label: 'Rival structures', value: `${structureHp(opPs)}/${trackOf(opPs)}`, icons: trackIcons(opPs, poster.rival) },
     // The Mid-Boss row only in a match that has one (MID_BOSS_ENABLED / the setup's midBoss).
@@ -106,42 +102,45 @@ export function MatchEndScreen({
           zIndex: 1,
           width: '100%',
           maxWidth: 900,
-          borderRadius: isMobile ? 16 : 22,
-          padding: isMobile ? '34px 18px 30px' : 'clamp(40px, 6vh, 60px) clamp(28px, 5vw, 64px) clamp(36px, 5vh, 52px)',
+          borderRadius: 12,
+          padding: isMobile ? '0 0 26px' : '0 0 clamp(32px, 5vh, 48px)',
+          overflow: 'hidden',
           margin: isMobile ? '20px 0' : '30px 0',
           display: 'flex', flexDirection: 'column', alignItems: 'center',
           gap: isMobile ? 18 : 24,
         }}
       >
+        {/* The header band, in the winner's patron colour. */}
+        <div style={{
+          ...bandStyle(won ? poster.you : poster.rival),
+          alignSelf: 'stretch',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '11px 16px 10px',
+          fontSize: scale.body,
+        }}>
+          <PatronSigil side={winner} size={16} color={poster.ink} />
+          {isTutorial ? `Lesson ${lessonNumber ?? ''}`.trim() : isStory ? 'Story battle' : 'Quick match'} · Turn {G.turnNumber}
+        </div>
+
         {/* Verdict */}
         <motion.div
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={spring.bouncy}
-          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: isMobile ? '6px 18px 0' : '10px 32px 0' }}
         >
-          <div style={{
-            fontFamily: fonts.display,
-            fontSize: 11,
-            letterSpacing: '0.28em',
-            textTransform: 'uppercase',
-            color: poster.inkDim,
-            paddingLeft: '0.28em', // optically recenters tracked-out caps
-          }}>
-            {isTutorial ? `Lesson ${lessonNumber ?? ''}`.trim() : isStory ? 'Story battle' : 'Quick match'} · Turn {G.turnNumber}
-          </div>
-          {/* Brush-script lead-in, tipped up like a hand-lettered overprint. */}
-          <div style={{
-            fontFamily: fonts.script,
-            fontSize: isMobile ? 24 : 30,
-            lineHeight: 1.1,
-            color: poster.ink,
-            transform: 'rotate(-2.5deg)',
-            transformOrigin: 'center bottom',
-            marginTop: 4,
-          }}>
-            {flavor}
-          </div>
+          {flavor && (
+            <div style={{
+              fontFamily: fonts.script,
+              fontSize: scale.display,
+              lineHeight: 1.1,
+              color: poster.ink,
+              transform: 'rotate(-2.5deg)',
+              transformOrigin: 'center bottom',
+            }}>
+              {flavor}
+            </div>
+          )}
           <h1 style={{
             fontFamily: fonts.display,
             fontSize: isMobile ? 56 : 84,
@@ -150,12 +149,11 @@ export function MatchEndScreen({
             color: tone,
             margin: 0,
           }}>{headline}</h1>
-          {/* Red register rule — the poster's one accent, under the headline. */}
-          <div aria-hidden style={{ width: 56, height: 3, background: poster.red, marginTop: 6 }} />
+          <DecoRule color={poster.inkFaint} width={150} style={{ marginTop: 4 }} />
           {/* The round cap's verdict, when it decided the match. */}
           {capLine && (
             <div style={{
-              fontFamily: fonts.display, fontSize: 11, letterSpacing: '0.22em', textTransform: 'uppercase',
+              fontFamily: fonts.display, fontSize: scale.label, letterSpacing: '0.16em', textTransform: 'uppercase',
               color: poster.inkDim, marginTop: 4,
             }}>{capLine}</div>
           )}
@@ -173,11 +171,13 @@ export function MatchEndScreen({
             alignItems: 'center',
           }}
         >
-          <RosterStrip label="Your team" team={myTeam} fallen={fallen} accent={won ? tone : poster.inkDim} />
-          <div aria-hidden style={{
-            fontFamily: fonts.display, fontSize: 15, color: poster.inkFaint, letterSpacing: '0.2em',
-          }}>VS</div>
-          <RosterStrip label="Rival team" team={opTeam} fallen={fallen} accent={!won ? poster.rivalInk : poster.inkDim} />
+          {myTeam.length > 0 && <RosterStrip side="you" team={myTeam} fallen={fallen} />}
+          {myTeam.length > 0 && opTeam.length > 0 && (
+            <div aria-hidden style={{
+              fontFamily: fonts.display, fontSize: scale.number, color: poster.inkFaint, letterSpacing: '0.2em',
+            }}>VS</div>
+          )}
+          {opTeam.length > 0 && <RosterStrip side="rival" team={opTeam} fallen={fallen} />}
         </motion.div>
 
         {/* Stat strip — one ink tag per number. */}
@@ -187,26 +187,25 @@ export function MatchEndScreen({
           transition={{ ...spring.default, delay: 0.3 }}
           style={{
             display: 'flex', gap: isMobile ? 8 : 12, flexWrap: 'wrap', justifyContent: 'center',
+            padding: isMobile ? '0 14px' : '0 28px',
           }}
         >
           {stats.map((s) => (
             <div key={s.label} style={{
-              display: 'flex', flexDirection: 'column', gap: 4, minWidth: 64,
-              padding: '8px 14px 9px',
-              background: poster.ink,
-              color: poster.paper,
-              ...clipBoth(chamfer(4)),
+              ...plateStyle,
+              display: 'flex', flexDirection: 'column', gap: 5, minWidth: 64,
+              padding: '8px 12px 9px',
             }}>
               <span style={{
-                fontFamily: fonts.display, fontSize: 10,
-                letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.creamDim,
+                fontFamily: fonts.ui, fontWeight: 700, fontSize: scale.label,
+                letterSpacing: '0.1em', textTransform: 'uppercase', color: poster.creamDim,
                 lineHeight: 1,
               }}>{s.label}</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {s.icons && <span style={{ display: 'inline-flex', gap: 3 }}>{s.icons}</span>}
                 <span style={{
-                  fontFamily: fonts.display, fontSize: 18, lineHeight: 1,
-                  fontVariantNumeric: 'tabular-nums', color: poster.paper,
+                  fontFamily: fonts.display, fontSize: scale.title, lineHeight: 1,
+                  fontVariantNumeric: 'tabular-nums', color: poster.cream,
                 }}>{s.value}</span>
               </span>
             </div>
@@ -253,18 +252,23 @@ export function MatchEndScreen({
   );
 }
 
-function RosterStrip({ label, team, fallen, accent }: {
-  label: string;
+function RosterStrip({ side, team, fallen }: {
+  side: 'you' | 'rival';
   team: CardInstance[];
   fallen: (c: CardInstance | null) => boolean;
-  accent: string;
 }) {
+  // The side's patron colour, pressed dark enough for paper.
+  const ink = side === 'you' ? '#8a6a12' : poster.rivalInk;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
       <div style={{
-        fontFamily: fonts.display, fontSize: 10,
-        letterSpacing: '0.32em', textTransform: 'uppercase', color: accent,
-      }}>{label}</div>
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        fontFamily: fonts.display, fontSize: scale.label,
+        letterSpacing: '0.2em', textTransform: 'uppercase', color: ink,
+      }}>
+        <PatronSigil side={side} size={14} color={ink} />
+        {side === 'you' ? 'You' : 'Rival'}
+      </div>
       <div style={{ display: 'flex', gap: 8 }}>
         {team.map((c, i) => {
           const dead = fallen(c);
@@ -323,7 +327,7 @@ function RosterStrip({ label, team, fallen, accent }: {
                       borderRadius: 3,
                       background: poster.red,
                       color: poster.paper,
-                      fontFamily: fonts.display, fontSize: 10,
+                      fontFamily: fonts.display, fontSize: scale.floor,
                       letterSpacing: '0.24em', textTransform: 'uppercase', lineHeight: 1,
                       transform: 'rotate(-8deg)',
                       boxShadow: '0 3px 8px rgba(0,0,0,0.35)',

@@ -2,8 +2,9 @@ import type { ReactNode } from 'react';
 import type { CardId, ItemSlot, ItemTier } from '@/engine/types';
 import { PRICE } from '@/engine/constants';
 import { TierDiamonds } from '../card/ItemIcon';
-import { fonts, text } from '../tokens';
-import { poster, shopInk, soulCoin } from '../poster';
+import { text } from '../tokens';
+import { poster, shopInk } from '../poster';
+import { Souls } from '../hud';
 import { CATEGORY_WORD, TIERS, soulsWord } from './itemFacts';
 
 /**
@@ -38,7 +39,7 @@ export function TierRows({ slot, byTier, renderTile, short, gap = 6, empty }: {
   );
 }
 
-/** "◆◇◇◇ T1 · ● 2 souls" and a hairline — the price in the warning ink while
+/** "◆◇◇◇ T1 · (wisp) 2" and a hairline — the price in the warning ink while
  *  you cannot pay it. */
 export function TierHeader({ slot, tier, short = false }: { slot: ItemSlot; tier: ItemTier; short?: boolean }) {
   const { ink } = shopInk(slot);
@@ -47,12 +48,7 @@ export function TierHeader({ slot, tier, short = false }: { slot: ItemSlot; tier
       <TierDiamonds tier={tier} size={7} ink={ink} />
       <span style={{ ...text.label, fontSize: 10, letterSpacing: '0.16em', color: poster.creamDim }}>T{tier}</span>
       <span aria-hidden style={{ color: poster.creamFaint, fontSize: 10 }}>·</span>
-      <span aria-hidden style={soulCoin(10)} />
-      <span style={{
-        fontFamily: fonts.display, fontSize: 13, lineHeight: 1,
-        color: short ? poster.red : poster.cream,
-      }}>{PRICE[tier]}</span>
-      <span style={{ ...text.label, fontSize: 9, letterSpacing: '0.14em', color: short ? poster.red : poster.creamDim }}>souls</span>
+      <Souls n={PRICE[tier]} size={13} tone={short ? 'short' : 'mint'} />
       <span aria-hidden style={{ flex: 1, height: 1, background: poster.edge }} />
     </div>
   );

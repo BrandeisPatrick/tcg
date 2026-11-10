@@ -4,6 +4,7 @@ import { CardFrame } from '../card/CardFrame';
 import { fonts } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { useViewport } from '../hooks/useViewport';
+import { PatronSigil, scale } from '../hud';
 
 /** Reveal hold in ms — Board's completeAction timer must match. */
 export const CARD_REVEAL_MS = 1350;
@@ -44,10 +45,10 @@ export function CardPlayFlash({ G, onSkip }: Props) {
   );
 }
 
-/** Ink tag — the caption and hint plates above and below the print. */
+/** Dark Deadlock tag — the caption and hint plates above and below the print. */
 const tagStyle = {
   display: 'inline-block',
-  background: poster.ink,
+  background: `linear-gradient(180deg, ${poster.slateLit} 0%, ${poster.slate} 100%)`,
   color: poster.cream,
   ...clipBoth(chamfer(4)),
   fontFamily: fonts.display,
@@ -127,58 +128,52 @@ export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
           <CardFrame cardId={cardId} size="full" physical={false} castSheen hideStats={kind === 'skill'} />
         </motion.div>
       </div>
-      {/* Caption above the card — an ink tag keyed in the caster's colour. */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: [0, 1, 1, 0], y: [-8, 0, 0, -8] }}
-        transition={{ duration: dur, times: [0, 0.12, 0.82, 1] }}
-        style={{
-          position: 'fixed',
-          left: anchorLeft,
-          transform: 'translateX(-50%)',
-          top: 'calc(50% - 218px)',
-          textAlign: 'center',
-          pointerEvents: 'none',
-          zIndex: 73,
-        }}
-      >
-        <span style={{
-          ...tagStyle,
-          padding: '7px 14px 8px',
-          border: `1.5px solid ${accent}`,
-          fontSize: 10.5,
-        }}>
-          <span aria-hidden style={{
-            display: 'inline-block', width: 7, height: 7, marginRight: 9,
-            background: accent, verticalAlign: '0.05em',
-          }} />
-          {isOwn ? `You ${verb}` : `Rival ${verb}`}
-        </span>
-      </motion.div>
+      {/* Caption above the card — a dark tag keyed in the caster's colour,
+          with the patron's sigil. A static wrapper centres it: framer's `y`
+          would overwrite a translateX on the animated element itself. */}
+      <div style={{
+        position: 'fixed', left: anchorLeft, top: 'calc(50% - 218px)',
+        transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 73,
+      }}>
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: [0, 1, 1, 0], y: [-8, 0, 0, -8] }}
+          exit={{ opacity: 0, transition: { duration: 0.15 } }}
+          transition={{ duration: dur, times: [0, 0.12, 0.82, 1] }}
+        >
+          <span style={{
+            ...tagStyle,
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            padding: '6px 12px 6px 9px',
+            boxShadow: `inset 0 0 0 1.5px ${accent}`,
+            fontSize: scale.label,
+            color: accent,
+          }}>
+            <PatronSigil side={isOwn ? 'you' : 'rival'} size={14} />
+            {isOwn ? `You ${verb}` : `Rival ${verb}`}
+          </span>
+        </motion.div>
+      </div>
       {/* Skip hint — fades in after the card lands so it never competes with
           the reveal pop itself. It leaves with the scrim: an exit that kept
           the entry's 0.6s delay left the hint alone on screen for a second
           after the card had gone — over the hand strip, on a phone. */}
       {onSkip && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.7 }}
-          exit={{ opacity: 0, transition: { duration: 0.2 } }}
-          transition={{ delay: 0.6, duration: 0.35 }}
-          style={{
-            position: 'fixed',
-            left: anchorLeft,
-            transform: 'translateX(-50%)',
-            top: 'calc(50% + 200px)',
-            textAlign: 'center',
-            pointerEvents: 'none',
-            zIndex: 73,
-          }}
-        >
-          <span style={{ ...tagStyle, padding: '6px 12px 7px', fontSize: 10, color: poster.creamDim }}>
-            Tap anywhere to continue
-          </span>
-        </motion.div>
+        <div style={{
+          position: 'fixed', left: anchorLeft, top: 'calc(50% + 200px)',
+          transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 73,
+        }}>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.8 }}
+            exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            transition={{ delay: 0.6, duration: 0.35 }}
+          >
+            <span style={{ ...tagStyle, padding: '6px 12px', fontSize: scale.floor, color: poster.creamDim }}>
+              Tap to skip
+            </span>
+          </motion.div>
+        </div>
       )}
     </>
   );
