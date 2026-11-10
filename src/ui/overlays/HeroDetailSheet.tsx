@@ -3,9 +3,13 @@
  * idiom. Tapping a hero lifts its card, enlarged, low and centred over the
  * dimmed board, and the card's lower half IS the turn's menu:
  *
- *   art board      the portrait, its name band, the level ring (top right)
- *                  and an "i" (top left) that opens the hero's paperwork —
- *                  stats, profile, active effects — over the card
+ *   art board      the hero's portrait, whole (face and shoulders), at the
+ *                  right under the level ring; beside it the hero's state
+ *                  right now — its name, its HP as a big number over the
+ *                  bar the board draws, its Shield, its attack, and every
+ *                  status on it as a chip; an "i" (top left) opens the
+ *                  hero's paperwork — stats, profile, active effects — over
+ *                  the card
  *   equipment      the worn items as small gold-framed icons riding the
  *                  card's left edge; a tap explains one, and an active item
  *                  is cast from there
@@ -35,7 +39,10 @@ import { ChargePips, CooldownDial, LockGlyph } from './AbilityDial';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { spring, text, fonts } from '../tokens';
-import { poster, chamfer, clipBoth, scrimStyle, levelFrame, levelFrameKeylines, printEdge, soulCoin } from '../poster';
+import { poster, chamfer, clipBoth, scrimStyle, levelFrame, levelFrameKeylines, printEdge, soulCoin, hpBarInk } from '../poster';
+import { SwordIcon, ShieldIcon } from '../card/Icons';
+import { Explain } from '../explain/Explain';
+import { statusContent } from '../explain/content';
 import { PosterButton } from '../chrome';
 import { RuleText, type Scale } from '../card/RuleText';
 import { useViewport } from '../hooks/useViewport';
@@ -172,7 +179,12 @@ export function HeroDetailSheet({
   // ---- Geometry: the trading-card ratio, as wide as the screen allows. ----
   const cardW = isMobile ? Math.min(vw - 32, 360) : 360;
   const cardH = Math.round(cardW * 7 / 5);
-  const artH = Math.round(cardH * (isMobile ? 0.36 : 0.38));
+  const artH = Math.round(cardH * 0.42);
+  // The portrait keeps the card art's own shape (280×380), so the hero is
+  // shown whole — never a strip across the eyes.
+  const portraitW = Math.round(artH * 280 / 380);
+  const shield = card.statuses.find((st) => st.id === 'shield')?.value ?? 0;
+  const shownStatuses = card.statuses.filter((st) => st.id !== 'shield');
 
   // ---- The actions, in Pocket's order: skill(s), ultimate, attack. ----
   const rows: { key: string; quiet: boolean; node: ReactNode }[] = [];
@@ -330,7 +342,14 @@ export function HeroDetailSheet({
             position: 'relative', height: artH, flexShrink: 0, overflow: 'hidden',
             borderRadius: 8, background: poster.ground,
           }}>
-            <HeroPortrait cardId={data.id} art={form?.art} />
+            {/* The portrait, whole, at the right. */}
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: portraitW }}>
+              <HeroPortrait cardId={data.id} art={form?.art} />
+              <div aria-hidden style={{
+                position: 'absolute', inset: 0, pointerEvents: 'none',
+                background: `linear-gradient(90deg, ${poster.ground} 0%, transparent 22%)`,
+              }} />
+            </div>
             <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: printEdge, zIndex: 2 }} />
             {form && (
               <span role="note" style={{
@@ -340,16 +359,63 @@ export function HeroDetailSheet({
                 ...eyebrow, fontSize: 11,
               }}>{`${form.label} · ${form.turns} turn${form.turns === 1 ? '' : 's'}`}</span>
             )}
-            <div style={{
-              position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3,
-              padding: `8px 12px 9px ${attached.length > 0 ? 28 : 12}px`,
-              background: poster.paperBand,
+            {/* The hero right now: name, HP over its bar, Shield, attack,
+                statuses — beside the portrait, under the "i". */}
+            <div data-hero-readout style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0, right: portraitW - 14, zIndex: 3,
+              display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 7,
+              padding: `44px 4px 12px ${attached.length > 0 ? 26 : 12}px`, boxSizing: 'border-box',
             }}>
               <span style={{
-                fontFamily: fonts.display, fontSize: 19, color: poster.ink,
-                letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1,
-                display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                fontFamily: fonts.display, fontSize: Math.min(21, (cardW - portraitW - 24) / (data.name.length * 0.74)), color: poster.cream,
+                letterSpacing: '0.05em', textTransform: 'uppercase', lineHeight: 1, whiteSpace: 'nowrap',
               }}>{data.name}</span>
+              <div role="img" aria-label={`${card.hp} of ${card.hpMax} HP${shield > 0 ? `, Shield ${shield}` : ''}`}
+                style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span aria-hidden style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                  <span style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: 34, lineHeight: 0.9, letterSpacing: '-0.02em', color: poster.cream, fontVariantNumeric: 'tabular-nums' }}>{card.hp}</span>
+                  <span style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: 15, lineHeight: 1, color: poster.creamDim, fontVariantNumeric: 'tabular-nums' }}>{`/ ${card.hpMax}`}</span>
+                  <span style={{ ...eyebrow, fontSize: 10, color: poster.creamDim, marginLeft: 1 }}>HP</span>
+                  {shield > 0 && (
+                    <span style={{
+                      marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 3, alignSelf: 'center',
+                      padding: '3px 7px', borderRadius: 4, background: poster.stat.shield, color: poster.cream,
+                      fontFamily: fonts.ui, fontWeight: 800, fontSize: 14, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+                    }}>
+                      <ShieldIcon size={12} color={poster.cream} />{shield}
+                    </span>
+                  )}
+                </span>
+                <span aria-hidden style={{
+                  display: 'block', height: 8, borderRadius: 4, overflow: 'hidden', boxSizing: 'border-box',
+                  background: 'rgba(0, 0, 0, 0.55)', border: `1px solid ${RULE_DARK}`,
+                }}>
+                  <span style={{
+                    display: 'block', height: '100%', borderRadius: 4,
+                    width: `${card.hpMax > 0 ? Math.max(0, Math.min(1, card.hp / card.hpMax)) * 100 : 0}%`,
+                    background: hpBarInk(card.hp, card.hpMax),
+                  }} />
+                </span>
+              </div>
+              <span role="img" aria-label={`${scale.bullet} attack`} style={{
+                alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '4px 8px', borderRadius: 4,
+                background: poster.ink, border: `1px solid ${poster.creamFaint}`, color: poster.cream,
+              }}>
+                <SwordIcon size={13} color={poster.cream} />
+                <span style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: 16, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{scale.bullet}</span>
+                <span style={{ ...eyebrow, fontSize: 9.5, color: poster.creamDim }}>Attack</span>
+                {hasSpike(card, 'weapon') && <SpikeMark slot="weapon" size={11} />}
+              </span>
+              {shownStatuses.length > 0 && (
+                <div data-hero-statuses style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {shownStatuses.map((st, i) => (
+                    <Explain key={i} content={statusContent(st.id, { value: st.value, duration: st.duration })} style={{ display: 'inline-flex' }}>
+                      <StatusIcon id={st.id} value={st.value} duration={st.duration} titled={false} size="compact" />
+                    </Explain>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               type="button"
