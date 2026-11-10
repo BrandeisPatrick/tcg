@@ -25,9 +25,14 @@ builds) and the Gallery. A Quick Match goes like this.
   Vitality and Spirit tabs, rows by tier, the item icons. Tap an item to add a
   copy; tap one in the deck to take a copy out.
 - A deck is 16 items, any tier, at most 4 copies of one.
+- A deck holds base items only. An upgrade (Improved Spirit, Superior and
+  Transcendent Cooldown, Fortitude…) never starts in a deck: it comes only
+  from playing the item it is built from. The deck builder shows upgrades
+  greyed, with "Comes from playing Extra Spirit" on the tile.
 - No saved deck (or one short of 16)? You are dealt one made from your drafted
   heroes' builds: every hero's first build item, then every hero's second, and
-  so on until 16. The rival's deck is always made this way.
+  so on until 16, each upgrade a build names counted as its base item (Improved
+  Spirit brings Extra Spirit). The rival's deck is always made this way.
 
 ### The draft
 
@@ -62,8 +67,8 @@ builds) and the Gallery. A Quick Match goes like this.
 
 - Souls accumulate. Nothing refills, and nothing is lost at the end of a turn.
 - Each of your turns opens with 5 souls of income. That is the only way to get
-  souls: kills, the Guardian and the Mid-Boss push the map and give exp, and
-  pay none, so the side ahead cannot snowball. (One item, Golden Goose Egg,
+  souls: kills and the Guardian push the map and give exp, and pay none, so
+  the side ahead cannot snowball. (One item, Golden Goose Egg,
   still pays 2.)
 
 ### The turn: Income, Act, End
@@ -81,7 +86,10 @@ hand is skipped, and an empty deck simply draws nothing.
   16 / 24 souls by tier. Any hero of yours takes it, bench and fallen heroes
   included, until the turn's attack.
 - A hero wears 3 items, or 4 once your side has felled the rival's Walker.
-  Items stay on through death.
+  Items stay on through death. Tap an item onto a full hero and a sheet asks
+  which of the items it wears to discard: that one goes to your discard pile,
+  the new one goes on for its price. Cancel backs out with nothing paid. A
+  riding Rem is no item: she takes no slot and is never offered.
 - Upgrades evolve: an item played onto the hero wearing the item it is built
   from takes that item's place and costs the difference (Superior Cooldown over
   Compress Cooldown costs 4, not 8). The old item goes to the discard pile. On
@@ -117,7 +125,7 @@ You choose the discards from anywhere in your hand.
   1–2) or 3 (tier 3 and up), and starts on cooldown when it is played. Hard
   crowd control (stun, silence, root, …) has 2 charges a match instead.
 - Your Active makes one basic attack a turn: at the rival's Active (any enemy
-  hero, with reach), or at the Mid-Boss while it stands. The attack ends the
+  hero, with reach). The attack ends the
   Act, and the turn then ends on its own. Extra swings come only from cards
   that grant Extra Attack.
 - Retreat: the leaving hero's printed price (0 for the mobile, 1 for most, 2
@@ -137,9 +145,8 @@ as any hero does.
 
 **End.** Statuses tick. If the rival has no standing hero, your Active pushes
 into the empty lane for its bullet power (an empty lane is easy to come by
-early, when a side has one hero on the board). The Mid-Boss hits the hero that
-attacked it for 2. Heroes earn exp for the turn: 2 for the Active, 1 for the
-bench.
+early, when a side has one hero on the board). Heroes earn exp for the turn: 2
+for the Active, 1 for the bench.
 
 **Levels.** Exp also comes the first time a hero wears an item (1) and from a
 kill (2). Level 2 takes 5 exp, level 3 7 more and level 4, the cap, 9 more.
@@ -157,13 +164,14 @@ Level 2.
   ninth turns) pushes deal double.
 - A fallen Walker gives every hero of the side that felled it a fourth item
   slot. A fallen Patron loses the match. No fall pays souls.
-- The Mid-Boss rises in the pit at the start of round 4. It has 10 HP, and only
-  basic attacks hurt it. When it falls, the side that dealt it more damage
-  takes it (a tie goes to the side behind on net worth, then to the last hit):
-  the Rejuvenator. It rises again 4 rounds after the round it fell in.
-- The Rejuvenator holds 2 revives, good through the end of the second round
-  after the one it was taken in. A credited hero that falls still pushes, then
-  revives in place at full HP.
+- The Mid-Boss is off for now (`MID_BOSS_ENABLED` in
+  `src/engine/constants.ts`, Patrick 2026-11-09): nothing rises in the pit and
+  nothing counts down to it. All its code is kept; turned on, it works as
+  before: it rises in the pit at the start of round 4 with 10 HP, only basic
+  attacks hurt it, and when it falls the side that dealt it more damage takes
+  it (a tie goes to the side behind on net worth, then to the last hit): the
+  Rejuvenator, 2 revives good through the end of the second round after. It
+  rises again 4 rounds after the round it fell in.
 - A fallen hero waits in its slot for 2 of its side's turns (`RESPAWN_TURNS`
   in `src/engine/constants.ts`; 0 sends it straight to the hand), then goes
   back to your hand at full HP with its level and items, to be benched again.
@@ -176,6 +184,8 @@ The rival picks only from the engine's legal moves and plays your rules: its
 deck is made from its heroes' builds, it benches the heroes it draws, puts
 items on the heroes whose builds list them, evolves upgrades, casts its draw
 cards (discarding what it wants least) and picks the upgrade its builds name.
+On a full hero it lets go only the hero's least valuable item, and only for a
+card a tier up or more.
 It weighs each move by playing it on a copy of the game. Every match plays
 Normal for now; the engine keeps three strengths for the sims, and no screen
 sets them:

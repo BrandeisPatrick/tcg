@@ -20,7 +20,8 @@ with less to rebuild.
 
 - You build your deck on a screen that looks like today's shop: Weapon, Vitality and Spirit tabs, rows by tier, and the item icons. Tap an item to add a copy.
 - A deck has 16 items, with at most 4 copies of any one item. Any tier can go in.
-- A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today).
+- A deck holds base items only (Patrick, 2026-11-09: "this card is a upgrade, should not appear in the starting deck"). An upgrade, an item whose card has `upgradesFrom`, reaches a deck only when its component is played (see Upgrades).
+- A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), each upgrade a build names counted as its base item.
 - You draft 4 heroes as now. They are shuffled into your deck, with an animation, so the deck has 20 cards.
 
 ## Start of the match
@@ -47,8 +48,10 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 - Draw 1 card and gain 5 souls. Souls pile up from turn to turn.
   - Souls come only from these 5 a turn.
   - Knockouts and objectives still push the map and give exp, but pay no souls, so the side ahead can't snowball.
+- The Mid-Boss is off for now (Patrick, 2026-11-09: "remove the mid boss mechanics for now").
 - Put heroes from your hand on the bench (up to 3). It's free.
 - Put an item from your hand on a hero by paying its price: 2, 4, 8, 16 or 24 souls by tier, as today.
+- A hero wears 3 items. Played onto a full hero, a card goes on in place of one it wears: a sheet asks which goes to the discard pile (Patrick, 2026-11-09: "when I click equip it should ask me which equipment to discard"). Cancel backs out with nothing paid.
 - Retreat, skills, ultimates and the attack work as today until the hero rules land. After that, skills and ultimates cost souls (see [hero-design.md](hero-design.md)).
 - Your hand holds up to 10 cards. When it is full, further draws are skipped.
 - The shop phase is gone: no buying, no selling, no market.
@@ -152,3 +155,47 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
   the slot, the real tile hidden until it lands; the AI's next move waits for
   the rival's flight plus `PLACE_SETTLE_MS` (500), not at all under reduced
   motion. The coach's gate steps aside while a hero is picked up.
+- Upgrades never start in a deck (2026-11-09). A legal deck holds base items
+  only (`deckProblem`'s `'upgrade'`, cards/decks.ts; `isBaseItem`,
+  `baseItem` walks `upgradesFrom` down). The deck made from builds — the
+  player's From builds and every AI deck — reads the builds across as before,
+  each upgrade standing for its base item (`buildsAcross`): Rem's Improved and
+  Boundless Spirit bring Extra Spirit, which the 4-copy cap then holds to 4,
+  the next base items of the builds taking the places it turns away. The deck
+  builder shows the upgrades greyed: a tile's name and tooltip say "Comes from
+  playing X" (its `upgradesFrom`), and a tap is refused with it. The save is
+  at version 5: a saved deck's upgrades become their base items, and each
+  copy the cap then turns away is made up from the squad's builds read across
+  (the preferred heroes' saved builds, else their defaults; `rebaseDeck`); no
+  squad, and the deck stays short until it is filled again. The story's and
+  the lessons' decks hold none (a lesson names its own; the story deals from
+  the saved deck or the builds). A Story supply reward may still be an
+  upgrade: it is dealt to the hand by the story's own script, never to a deck.
+- A full hero swaps (2026-11-09). `playCard` takes an optional `replaceIid`:
+  the worn item a card played onto a full hero takes the place of. Legality
+  refuses a full hero without one (`'full'`) and a `replaceIid` it cannot use
+  (`'replace'`: the hero has room, the card evolves an item it wears, or the
+  hero wears no item of that iid — a riding Rem is no item, takes no slot and
+  is never offered). The named item goes to the discard pile through
+  `toDiscard`, so the motion layer flies it from the hero to the pile; the card
+  costs its full price. Evolving an upgrade onto its component on a full hero
+  needs no discard. The board lights a full hero as a target
+  (`playBlockedAny`); a tap on it opens the sheet (`ReplacePicker`, through
+  Board's one hook `useReplacePick`): the worn items with their art and text
+  beside the new card, tap one to mark it, the red button discards it; when
+  the card makes several upgrades the upgrade picker follows. The AI lets go
+  only a full hero's least valuable item (the cheapest, then one its build
+  does not name) and only for a card at least twice its price (a tier up);
+  the lookahead then weighs the swap like any play.
+- The Mid-Boss is off (2026-11-09): `MID_BOSS_ENABLED = false`
+  (engine/constants.ts) sets `GameState.midBoss`, which `riseBoss` reads, so
+  no boss rises, no swing is offered at the pit, and no boss event, log line
+  or Rejuvenator follows. Every line of it is kept: the constant on (or a
+  setup's `midBoss`, a match config's `midBoss`) brings it back, and its tests
+  turn it on for themselves (`midBossOn`). The board's countdown reads
+  `bossDue`, null with no Mid-Boss, and the pit hides. Lesson 5 (The Map)
+  dropped its Mid-Boss part: after the kill no rival stands and there is
+  nothing to attack, so the player ends the turn and the End's empty-lane
+  push fells the Patron; its boss steps stay behind `mapLesson`'s `midBoss`
+  switch. Monster Rounds still prints "+1 to the Mid-Boss": that half of the
+  card does nothing while the boss is off.
