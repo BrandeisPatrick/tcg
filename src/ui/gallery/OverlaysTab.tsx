@@ -16,17 +16,17 @@ import { mockHeroInstance, mockEquipInstance } from './mock';
 import { Section, Caption } from './primitives';
 
 const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
-  { id: 'ready',    label: 'Your Active, all ready',  hint: 'Skill, Ultimate and Attack: each plate is its button, and the “then” before the Attack says abilities come first.' },
-  { id: 'skilled',  label: 'Skill used',              hint: 'The skill reads USED and the Ultimate waits for the next turn; the Attack is still there.' },
-  { id: 'attacked', label: 'Attacked',                hint: 'The Attack reads USED; every ability goes flat with “The attack ended your turn”.' },
-  { id: 'turn1',    label: 'Turn 1',                  hint: 'The skill is there; the Attack is flat with “No attacks on Turn 1”.' },
-  { id: 'locked',   label: 'Ultimate locked',         hint: 'Below Level 2 the Ultimate plate is flat, chipped “Lv 2”: “Unlocks at Level 2”.' },
-  { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the Passive panel, and the Attack under it.' },
+  { id: 'ready',    label: 'Your Active, all ready',  hint: 'Skill, Ultimate and Attack: one row each, the row is the button, its price or damage at the right.' },
+  { id: 'skilled',  label: 'Skill used',              hint: 'Both ability rows go dim and read “Used”; the Attack is still there.' },
+  { id: 'attacked', label: 'Attacked',                hint: 'Every row goes dim: the Attack reads “Used”, the abilities “Turn over”.' },
+  { id: 'turn1',    label: 'Turn 1',                  hint: 'The skill is there; the Attack row is dim with “No attacks on Turn 1”.' },
+  { id: 'locked',   label: 'Ultimate locked',         hint: 'Below Level 2 the Ultimate row is dim and reads “Level 2” where its price would be.' },
+  { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the Ultimate, the Attack, and the passive as one quiet line (tap it for its rule).' },
   { id: 'bench',    label: 'A bench hero',            hint: 'Its skill can be used from the bench. No Attack — only the Active swings.' },
-  { id: 'blocked',  label: 'Not your turn',           hint: 'Both plates flat, with the reason.' },
-  { id: 'enemy',    label: 'Rival hero',              hint: 'Read-only. No action.' },
-  { id: 'loaded',   label: 'Statuses, equipment, retreat', hint: 'Active Effects, Equipment and Retreat all shown. Retreat is on the Active’s sheet only.' },
-  { id: 'broke',    label: 'Retreat, short of souls', hint: 'The button stays on the sheet, inert, and says what is missing.' },
+  { id: 'blocked',  label: 'Not your turn',           hint: 'Every row dim, each with the one reason in place of its price.' },
+  { id: 'enemy',    label: 'Rival hero',              hint: 'Read-only: the same rows, none a button, and Close.' },
+  { id: 'loaded',   label: 'Statuses, equipment, retreat', hint: 'Worn items and statuses as one strip of small tiles under the header. Retreat is in the foot of the Active’s sheet only.' },
+  { id: 'broke',    label: 'Retreat, short of souls', hint: 'Retreat stays in the foot, inert, and says what is missing.' },
   { id: 'charged',  label: 'Charged, in Wolf form',   hint: 'Nine damage counted: a charged ultimate (Victor, Silver) prints its price coming down. Silver wears her wolf while the form lasts.' },
 ];
 
@@ -129,10 +129,10 @@ export function OverlaysTab() {
       )}
     >
       <Caption>
-        The sheet that rises when a hero is tapped. Its plates <strong>are</strong> the actions: tap the
-        skill card to use the skill, or from Level 2 the Ultimate button printed on the card (any of your
-        heroes, one ability a turn, for the souls on its plate), and on your Active tap Attack to swing at
-        their Active — free, one-way, and the end of the turn. A hero with a passive shows a Passive block that cannot be pressed. Pick a hero, then a state.
+        The sheet that rises when a hero is tapped: a short header (portrait, name, level, HP), then one
+        row per action. A row <strong>is</strong> its button, with one number at its right: the souls
+        price, the attack's damage, or the reason it cannot be used. Full rules are behind the “i”.
+        Pick a hero, then a state.
       </Caption>
 
       <div className="gal-pick">
