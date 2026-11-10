@@ -76,19 +76,41 @@ builds) and the Gallery. A Quick Match goes like this.
 The match screen is laid out like Pokémon TCG Pocket's battle screen, in our
 own look: one portrait stage (`src/ui/board/BoardTable.tsx`, 390 × 844) scaled
 to whatever the screen is, so a phone fills it edge to edge and a desktop shows
-it centred at full height with the scene either side. The table is two paper
-halves, the rival's tinted red and yours gold, meeting at the centre ring; down
-the middle run the rival's bench, the rival's Active, your Active and your bench,
-each hero a miniature of its real card in its level frame with its HP floating
-above the top-right corner. The decks are card-back stacks half off the edges
-(the rival's upper left, yours right middle), each discard pile beside its deck.
-A thin name bar at the top (the rival's) and the bottom (yours) carries the
-side's map track — Guardian, Walker, Patron with their HP — the rival's souls
-and the turn number; your souls are the round counter at the lower right, the
-match log is behind the round menu button at the lower left, End Turn and Auto
-sit low on the right. The rival's hand peeks in as backs at the top edge; yours
-is a fan along the bottom edge that lifts a card when tapped, and a card you can
-play breathes gold.
+it centred at full height with the scene either side.
+
+- **The table** is a drawn street map lying in a tilted plane (Settings has a
+  "Flat table" switch): avenues converge away from you, city blocks sit between
+  them, and each half is tinted in its side's patron colour — the rival's
+  Sapphire Flame blue on the far half, dimmer and hazier with distance, your
+  Amber Hand gold on the near half — meeting at the small centre emblem. You
+  are always the Amber Hand; red is kept for damage and danger. Empty spots
+  are quiet dashed outlines in their half's tint that light up only when a
+  card can go there.
+- **Heroes** run down the middle: the rival's bench, the rival's Active, your
+  Active, your bench. A hero on the board is a clean miniature of its card: the
+  art, the name, the level seal and the attack number, with nothing cut off.
+  Its HP floats above the top-right corner as a bold number over a bar that
+  turns from green to amber to red as it drops, with Shield printed beside it.
+  Statuses hang on the card's left edge and worn items along its foot as small
+  tokens, with a "+n" token when there are more than fit. Rules text, Retreat
+  cost and everything else live in the action view (tap the hero), whose header
+  shows the hero's portrait, current HP and bar, Shield, attack and statuses.
+- **Decks** are card-back stacks half off the edges (the rival's upper left,
+  yours right middle), each discard pile beside its deck.
+- **Top strip**: the rival's name bar at the left, the rival's hand as backs
+  peeking from the top edge in the centre, and the rival's map track
+  (Guardian, Walker, Patron with their HP) and souls at the right.
+- **Turn row and hand**: under your bench, your name bar (map track, turn
+  number) sits at the left and End Turn at the right, under the right thumb.
+  Below that the hand owns the full width: a centred fan of clean card faces
+  (art, name, cost, type) that overlaps as it grows, lifts a card when tapped,
+  and breathes gold on a card you can play.
+- **Side buttons**: the round menu button (match log and Settings; the
+  settings gear folds into it during a match) with a small Auto switch under
+  it on the left, and your souls as the round counter on the right. With the
+  table tilted they stand above the bench corners beside your Active, because
+  a full bench runs edge to edge; on the flat table they stand beside the
+  bench.
 
 ### The turn: Income, Act, End
 
