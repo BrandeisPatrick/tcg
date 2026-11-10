@@ -46,57 +46,48 @@ interface Props {
   avail: number;
 }
 
-// The fan's arc: the outer cards turn out and sit lower.
+// The fan's arc: the outer cards turn out a little and sit a little lower.
 function fanRotation(i: number, total: number): number {
   if (total <= 2) return 0;
-  const center = (total - 1) / 2;
-  const offset = i - center;
-  const max = Math.min(7, 22 / total);
-  return offset * max;
+  const offset = i - (total - 1) / 2;
+  return offset * Math.min(2.2, 9 / total);
 }
 function fanY(i: number, total: number): number {
   if (total <= 2) return 0;
-  const center = (total - 1) / 2;
-  const offset = Math.abs(i - center);
-  return Math.min(offset * offset * 2.5, 32);
+  const offset = Math.abs(i - (total - 1) / 2);
+  return Math.min(offset * offset * 1.4, 12);
 }
 /** Hand card width (CardFrame SIZES.hand) — the fan's own geometry. */
 const CARD_W = SIZES.hand.w;
 
-function cardOverlap(total: number): number {
-  if (total <= 2) return 20;
-  if (total <= 3) return 12;
-  if (total <= 4) return 0;
-  if (total <= 5) return -34;
-  if (total <= 6) return -64;
-  if (total <= 7) return -84;
-  // Floor: keep ≥40px of every card visible (name plate + cost stay
-  // readable). -108 left 26px slivers that were unidentifiable.
-  return -94;
-}
-
-/** How far a tapped card lifts out of the fan, px. */
-const SELECTED_LIFT = 96;
+/** The hand's measures, stage px: a card's width (a small hand prints
+ *  bigger), the gap between cards that do not overlap, the margin kept at
+ *  each side of the band, how far the fan rests under the turn row and how
+ *  far a tapped card lifts out of it (to the row, never over it). */
+const FAN = { wide: 108, narrow: 96, gap: 4, side: 6, rest: 24, lift: 22, hover: 10 } as const;
 
 /**
- * The overlap table above is tuned for a wide strip, so on a narrow band
- * even a small hand is wider than the room and the outermost cards would
- * run off it. Rather than crushing the spacing (which collides the name
- * plates), shrink the whole fan to fit: the cards keep their proportions
- * and stay legible, just smaller.
+ * Where the fan puts `total` cards across `avail` stage px. The hand owns
+ * the band's whole width, centred: cards keep one size (they never shrink
+ * to slivers of themselves) and overlap only as far as the width makes them
+ * — `step` is what each card shows before the next covers it, so ten cards
+ * still leave every one a strip to tap.
  */
-function fanScale(total: number, avail: number): number {
-  if (total < 1) return 1;
-  const natural = CARD_W * total + cardOverlap(total) * (total - 1);
-  return Math.min(1, (avail - 16) / natural);
+export function handFan(total: number, avail: number): { scale: number; width: number; step: number } {
+  const width = total <= 3 ? FAN.wide : FAN.narrow;
+  const step = total > 1 ? Math.min(width + FAN.gap, (avail - FAN.side * 2 - width) / (total - 1)) : width;
+  return { scale: width / CARD_W, width, step };
 }
 
 /**
- * Your hand — a fan along the very bottom edge of the stage, overlapping
- * and partly off the screen as Pokémon TCG Pocket's is: the cards' top
- * halves show, a tapped card lifts out of the fan to be read, and a card
- * that can be played right now breathes with a gold light. Drag a card onto
- * a hero (a pointer) or tap it and then the hero.
+ * Your hand — a centred fan along the bottom of the stage, the band's whole
+ * width its own. Each card prints the CLEAN FACE (CardFrame `clean`): its
+ * name across the top, its art, its cost, its type — nothing cut; the full
+ * card is a hold away. Cards overlap only when the width makes them, and a
+ * covered card sets its name in the strip it still shows. A tapped card
+ * lifts out of the fan, and a card that can be played right now breathes
+ * with a gold light. Drag a card onto a hero (a pointer) or tap it and then
+ * the hero.
  */
 export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongPress, onHover, onDragEndOver, onBlocked, arriving, registerCard, avail }: Props) {
   const total = cards.length;
@@ -121,6 +112,11 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
   if (total === 0 && !leaving) return null;
 
   const hoveredIdx = hoveredIid ? cards.findIndex((c) => c.iid === hoveredIid) : -1;
+  const fan = handFan(total, avail);
+  // The fan is laid out at the card's own size and scaled as one, so the
+  // overlap and the lifts are given in the card's px.
+  const overlap = (fan.step - fan.width) / fan.scale;
+  const lift = FAN.lift / fan.scale;
   const clearHover = (iid: string) => {
     const t = hoverTimers.current.get(iid);
     if (t) { clearTimeout(t); hoverTimers.current.delete(iid); }
@@ -145,13 +141,12 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
       style={{
         display: 'flex',
         gap: 0,
-        padding: '14px 0 0',
+        padding: `${FAN.rest / fan.scale}px 0 0`,
         overflow: 'visible',
         justifyContent: 'center',
         alignItems: 'flex-start',
         width: avail,
-        // Shrink-to-fit so no card is clipped by the band's edge (see fanScale).
-        transform: `scale(${fanScale(total, avail)})`,
+        transform: `scale(${fan.scale})`,
         transformOrigin: 'top center',
         // The fan spans the whole band; without this it eats clicks meant
         // for anything it overlaps. Cards re-enable pointer events below.
@@ -176,21 +171,26 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
           // nothing is armed.
           const usable = !cardDisabled && !pending;
           const rot = selected ? 0 : fanRotation(i, total);
-          const y = selected ? -SELECTED_LIFT : fanY(i, total);
+          const y = selected ? -lift : fanY(i, total);
           // A card flown in fades in on its own spot as the board's flight
           // lands there; one drawn rises in from below.
           const landing = isLanding(arriving, c.iid);
 
           const isHovered = hoveredIid === c.iid;
           const isNeighborOfHovered = hoveredIdx !== -1 && Math.abs(i - hoveredIdx) === 1;
-          const baseOverlap = i === 0 ? 0 : cardOverlap(total);
+          const baseOverlap = i === 0 ? 0 : overlap;
           const NEIGHBOR_RELIEF = 14;
           let marginLeft = baseOverlap;
           if (isHovered) {
-            marginLeft = Math.max(baseOverlap, -8);
+            marginLeft = Math.max(baseOverlap, Math.min(overlap, -8));
           } else if (isNeighborOfHovered && i > hoveredIdx) {
-            marginLeft = baseOverlap + NEIGHBOR_RELIEF;
+            marginLeft = Math.min(baseOverlap + NEIGHBOR_RELIEF, FAN.gap / fan.scale);
           }
+          // What the card shows of its name band: all of it for the last
+          // card and one lifted or under the pointer, else the strip the
+          // next card leaves.
+          const covered = i < total - 1 && !selected && !isHovered && overlap < 0;
+          const nameRoom = covered ? fan.step / fan.scale : undefined;
           let zIndex = i;
           if (selected) zIndex = 100;
           if (isHovered) zIndex = 200;
@@ -201,7 +201,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
               layoutId={`card-${c.iid}`}
               layout
               initial={landing ? { opacity: 0 } : { opacity: 0, y: 120, scale: 0.5 }}
-              animate={{ opacity, y: isHovered && !selected ? y - 28 : y, scale: selected ? 1.06 : 1, rotate: rot }}
+              animate={{ opacity, y: isHovered && !selected ? y - FAN.hover / fan.scale : y, scale: selected ? 1.04 : 1, rotate: rot }}
               exit={{ opacity: 0, y: -60, scale: 0.5, transition: { duration: 0.25 } }}
               transition={landing ? { ...spring.default, opacity: { duration: 0.1 } } : spring.default}
               drag={!cardDisabled}
@@ -211,7 +211,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
               onDragEnd={(_, info) => {
                 if (onDragEndOver) onDragEndOver(c, info.point.x, info.point.y);
               }}
-              whileTap={{ scale: selected ? 1.06 : 0.98 }}
+              whileTap={{ scale: selected ? 1.04 : 0.98 }}
               // No whileHover lift — caused mouseenter/leave oscillation that
               // trapped the preview open. Layout-driven margin/zIndex via React
               // state below instead.
@@ -296,6 +296,8 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                 <CardFrame
                   cardId={c.cardId}
                   size="hand"
+                  clean
+                  nameRoom={nameRoom}
                   // The price an item costs to put on a hero (red: not enough souls).
                   unaffordable={unaffordable}
                   selected={selected}

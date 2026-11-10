@@ -74,6 +74,47 @@ interface Props {
   /** Another form's art for a hero's window (`heroForm`: Silver's Wolf
    *  form), a file under public/heroes/. The board's miniature passes it. */
   art?: string;
+  /** The CLEAN FACE — what a card in the hand prints: the name on an ink
+   *  band across the top, sized so it is never cut, the art filling the
+   *  card, the cost on its coin (a hero: its attack and HP), and one line of
+   *  type along the foot. No rules text: that is the full card's (a hold),
+   *  and nothing here is clipped mid-sentence. */
+  clean?: boolean;
+  /** The clean face only: the width its name has to itself, px at the
+   *  card's own size — less than the card's when the next card in a fan
+   *  overlaps it, so the name still reads whole. Omitted: the card's width. */
+  nameRoom?: number;
+}
+
+/** A name set on at most two lines of a stencilled band `room` px wide: the
+ *  split that keeps the longer line shortest, and the largest type size
+ *  (between `floor` and `base`) at which that line fits. */
+export function fitNameLines(name: string, room: number, base: number, floor: number): { lines: string[]; size: number } {
+  let lines = [name];
+  if (name.length * base * NAME_EM > room) {
+    const words = name.split(' ');
+    let best = name.length;
+    for (let i = 1; i < words.length; i++) {
+      const two = [words.slice(0, i).join(' '), words.slice(i).join(' ')];
+      const longer = Math.max(two[0].length, two[1].length);
+      if (longer < best) { best = longer; lines = two; }
+    }
+  }
+  const longest = Math.max(...lines.map((l) => l.length));
+  return { lines, size: Math.max(floor, Math.min(base, room / (longest * NAME_EM))) };
+}
+/** A stencilled capital's advance, in ems, tracking included. */
+const NAME_EM = 0.72;
+
+/** The clean face's line of type: what kind of card, in a word. */
+function shortType(data: CardData | undefined): string {
+  if (!data) return '';
+  switch (data.type) {
+    case 'hero': return 'Hero';
+    case 'spell': return `Active · T${data.tier}`;
+    case 'equipment': return `Item · T${data.tier}`;
+    case 'ultimate': return 'Ultimate';
+  }
 }
 
 /** The two sizes a card is printed at, in px. */
@@ -249,7 +290,7 @@ export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
   cost: costInPlay, unaffordable = false, hideCost = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
-  holoPalette = 'amber', tilt = false, tapExplains = true, level, art,
+  holoPalette = 'amber', tilt = false, tapExplains = true, level, art, clean = false, nameRoom,
 }: Props) {
   const [hover, setHover] = useState(false);
   // Premium-plate flags, read once so the markup below stays declarative.
@@ -319,6 +360,92 @@ export function CardFrame({
   // copy made free prints a 0, so it does not look like a card with no cost.
   const showCost = !isHero && !hideCost && (cost > 0 || cost !== printedCost);
   const showStats = isHero;
+
+  if (clean) {
+    const name = fitNameLines((data?.name ?? cardId).toUpperCase(), (nameRoom ?? sz.w) - 14, 15.5, 11);
+    return (
+      <div
+        ref={foilRef}
+        data-card-face="clean"
+        style={containerStyle}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => { setHover(false); onPointerLeave(); }}
+        onPointerMove={onPointerMove}
+      >
+        {/* The name — cream stencil on an ink band, whole on one or two lines. */}
+        <div data-card-name style={{
+          flexShrink: 0,
+          padding: '6px 6px 5px',
+          background: poster.ink,
+          color: poster.cream,
+          borderBottom: `1px solid ${poster.creamFaint}`,
+          fontFamily: fonts.display,
+          fontSize: name.size,
+          letterSpacing: '0.03em',
+          lineHeight: 1.08,
+          textAlign: 'left',
+        }}>
+          {name.lines.map((l, i) => <div key={i} style={{ whiteSpace: 'nowrap' }}>{l}</div>)}
+        </div>
+
+        {/* The art, filling the card. */}
+        <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, overflow: 'hidden', background: poster.ground }}>
+          <ArtWindow data={data} art={art} />
+          <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
+          {/* The cost coin, top-left (the edge a fan leaves showing): red
+              when the player cannot pay it. */}
+          {showCost && (
+            <div data-card-cost style={{
+              position: 'absolute', top: 5, left: 5,
+              width: 32, height: 32,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: unaffordable ? poster.red : poster.ink,
+              border: `1.5px solid ${poster.cream}`,
+              borderRadius: '50%',
+              boxShadow: '0 2px 5px rgba(0, 0, 0, 0.55)',
+              color: poster.cream,
+              fontFamily: fonts.display, fontSize: 18, lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums',
+              zIndex: 5,
+            }}>{cost}</div>
+          )}
+          {/* A hero's attack and HP, where an item's coin is. */}
+          {showStats && !hideStats && (
+            <div style={{ position: 'absolute', top: 5, left: 5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3 }}>
+              <StatPill big icon={<SwordIcon size={13} color={poster.cream} />} value={(data as any).atk} />
+              <StatPill big icon={<HeartIcon size={13} color={poster.stat.hp} />} value={(data as any).hp} />
+            </div>
+          )}
+        </div>
+
+        {/* One line of type along the foot: the kind of card, and its
+            rarity's dot. */}
+        <div style={{
+          flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
+          padding: '4px 6px',
+          background: poster.ink,
+          color: poster.creamDim,
+          fontFamily: fonts.display,
+          fontSize: 12,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          lineHeight: 1.1,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+        }}>
+          <span>{shortType(data)}</span>
+          {!isHero && (
+            <span aria-hidden style={{
+              flexShrink: 0, width: 9, height: 9, borderRadius: '50%',
+              background: rarityInk(rarity), border: `1px solid ${poster.creamFaint}`, boxSizing: 'border-box',
+            }} />
+          )}
+        </div>
+        <CardShine cast={castSheen} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -548,7 +675,7 @@ export function CardFrame({
 }
 
 /** Flat stat chip — ink ground, cream numeral, the icon carries the hue. */
-function StatPill({ icon, value }: { icon: ReactNode; value: number }) {
+function StatPill({ icon, value, big }: { icon: ReactNode; value: number; big?: boolean }) {
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center', gap: 2,
@@ -556,8 +683,9 @@ function StatPill({ icon, value }: { icon: ReactNode; value: number }) {
       background: poster.ink,
       color: poster.cream,
       borderRadius: 3,
-      fontWeight: 700,
-      fontSize: 12,
+      ...(big ? { border: `1px solid ${poster.creamFaint}`, boxShadow: '0 1px 3px rgba(0, 0, 0, 0.5)' } : null),
+      fontWeight: big ? 800 : 700,
+      fontSize: big ? 15 : 12,
       lineHeight: 1.2,
       fontVariantNumeric: 'tabular-nums',
     }}>
