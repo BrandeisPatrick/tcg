@@ -1,7 +1,8 @@
 /**
  * A card played onto a full hero (Patrick, 2026-11-09: "when I click equip it
  * should ask me which equipment to discard"). The play goes ahead: this sheet
- * lists the items the hero wears — its art and its text — beside the new one,
+ * lists the items the hero wears — art, name and the whole rule, a line each
+ * (a miniature card cut the rule off mid-sentence) — under the new one,
  * and asks which goes to the discard pile. Tap one to mark it (again to
  * unmark); the button discards it and puts the new card on, for the card's
  * price (`playCard` with `replaceIid`). Cancel backs out with nothing paid:
@@ -17,14 +18,15 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
-import { cardName } from '@/cards';
+import { cardName, itemCard } from '@/cards';
 import { upgradesOf } from '@/cards/decks';
 import { findCardOnBoard, handCard, wornItems } from '@/engine/query';
 import { playBlockedAny, replaceNeeded } from '@/engine/legality';
 import type { Action } from '@/engine/engine';
-import { CardFrame } from '../card/CardFrame';
+import { RuleText } from '../card/RuleText';
+import { HandThumb } from '../board/HandThumb';
 import { PosterButton } from '../chrome';
-import { fonts, spring } from '../tokens';
+import { fonts, spring, text } from '../tokens';
 import { poster, scrimStyle, sheetStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { UpgradePicker } from './UpgradePicker';
@@ -32,17 +34,42 @@ import { UpgradePicker } from './UpgradePicker';
 /** The sheet's accessible name, by which the tutorial and the QA scripts find it. */
 export const REPLACE_SHEET = 'Choose the item to discard';
 
-/** The hand card's natural size (CardFrame 'hand'). */
-const CARD_W = 134;
-const CARD_H = 188;
-
-function Card({ cardId, scale, glow }: { cardId: CardId; scale: number; glow?: 'danger' | 'accent' | null }) {
+/**
+ * One item on the sheet: its shop art (the hand's thumb, price and all) and
+ * its name, kind and WHOLE rule beside it. A miniature card cut the rule off
+ * mid-sentence, and this is the one place the player has to weigh two rules
+ * against each other. `tone` rings it: the new card green, the marked one red.
+ */
+function ItemLine({ cardId, tone }: { cardId: CardId; tone?: 'new' | 'going' | null }) {
+  const data = itemCard(cardId);
+  const ring = tone === 'new' ? poster.target : tone === 'going' ? poster.red : 'rgba(23, 20, 16, 0.28)';
   return (
-    <div style={{ width: CARD_W * scale, height: CARD_H * scale }}>
-      <div style={{ width: CARD_W, height: CARD_H, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-        <CardFrame cardId={cardId} size="hand" glow={glow ?? null} tapExplains={false} />
-      </div>
-    </div>
+    <span style={{
+      display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+      width: '100%', boxSizing: 'border-box',
+      padding: '10px 12px 10px 14px',
+      borderRadius: 10,
+      background: 'rgba(23, 20, 16, 0.05)',
+      boxShadow: `inset 0 0 0 ${tone ? 2 : 1}px ${ring}`,
+      lineHeight: 1.3,
+    }}>
+      <span style={{ flexShrink: 0, paddingTop: 4 }}><HandThumb cardId={cardId} /></span>
+      <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <span style={{ fontFamily: fonts.display, fontSize: 13.5, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: poster.ink }}>
+          {cardName(cardId)}
+        </span>
+        {data && (
+          <span style={{ fontFamily: fonts.display, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', lineHeight: 1, color: poster.inkDim }}>
+            {data.type === 'spell' ? 'Active' : 'Item'} · Tier {data.tier}
+          </span>
+        )}
+        {data?.text && (
+          <span style={{ ...text.body, fontSize: 12.5, lineHeight: 1.35, color: poster.ink }}>
+            <RuleText text={data.text} passTaps />
+          </span>
+        )}
+      </span>
+    </span>
   );
 }
 
@@ -58,7 +85,6 @@ export function ReplacePicker({ hero, itemId, worn, onPick, onCancel }: {
 }) {
   const { isMobile } = useViewport();
   const [marked, setMarked] = useState<string | null>(null);
-  const scale = isMobile ? 0.7 : 0.9;
   const heroName = cardName(hero.cardId);
   const going = worn.find((it) => it.iid === marked);
   return (
@@ -82,7 +108,8 @@ export function ReplacePicker({ hero, itemId, worn, onPick, onCancel }: {
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMobile ? 12 : 18,
           padding: isMobile ? '16px 12px' : '24px 28px',
           borderRadius: isMobile ? 16 : 18,
-          maxWidth: 860,
+          width: 'min(100%, 460px)',
+          boxSizing: 'border-box',
           color: poster.ink,
         }}
       >
@@ -94,42 +121,39 @@ export function ReplacePicker({ hero, itemId, worn, onPick, onCancel }: {
             Discard one to put on {cardName(itemId)}
           </span>
         </div>
-        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: 'center', gap: isMobile ? 10 : 18 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 10, width: '100%' }}>
           {/* The new card, then what it takes the place of. */}
-          <div role="group" aria-label={`New: ${cardName(itemId)}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.inkDim }}>New</span>
-            <Card cardId={itemId} scale={scale} glow="accent" />
+          <div role="group" aria-label={`New: ${cardName(itemId)}`} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.inkDim, textAlign: 'center' }}>New</span>
+            <ItemLine cardId={itemId} tone="new" />
           </div>
-          <span aria-hidden style={{ fontFamily: fonts.display, fontSize: isMobile ? 18 : 26, color: poster.inkDim, transform: isMobile ? 'rotate(90deg)' : undefined }}>⇄</span>
-          <div role="group" aria-label={`What ${heroName} wears`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-            <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.inkDim }}>Worn — tap the one to discard</span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 6 : 12 }}>
-              {worn.map((it) => {
-                const on = it.iid === marked;
-                return (
-                  <motion.button
-                    key={it.iid}
-                    type="button"
-                    aria-label={`${cardName(it.cardId)}${on ? ', marked to discard' : ''}`}
-                    aria-pressed={on}
-                    onClick={() => setMarked(on ? null : it.iid)}
-                    whileTap={{ scale: 0.96 }}
-                    animate={{ y: on ? -8 : 0, opacity: on ? 0.8 : 1 }}
-                    transition={spring.snappy}
-                    style={{ position: 'relative', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
-                  >
-                    <Card cardId={it.cardId} scale={scale} glow={on ? 'danger' : null} />
-                    {on && (
-                      <span aria-hidden style={{
-                        position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%',
-                        background: poster.red, color: poster.paper, fontSize: 12, lineHeight: '20px', textAlign: 'center',
-                        fontFamily: fonts.display, boxShadow: `0 0 0 2px ${poster.paper}`,
-                      }}>✕</span>
-                    )}
-                  </motion.button>
-                );
-              })}
-            </div>
+          <div role="group" aria-label={`What ${heroName} wears`} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontFamily: fonts.display, fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase', color: poster.inkDim, textAlign: 'center', marginTop: 4 }}>Worn — tap the one to discard</span>
+            {worn.map((it) => {
+              const on = it.iid === marked;
+              return (
+                <motion.button
+                  key={it.iid}
+                  type="button"
+                  aria-label={`${cardName(it.cardId)}${on ? ', marked to discard' : ''}`}
+                  aria-pressed={on}
+                  onClick={() => setMarked(on ? null : it.iid)}
+                  whileTap={{ scale: 0.98 }}
+                  animate={{ opacity: on ? 0.82 : 1 }}
+                  transition={spring.snappy}
+                  style={{ position: 'relative', display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', color: 'inherit', font: 'inherit' }}
+                >
+                  <ItemLine cardId={it.cardId} tone={on ? 'going' : null} />
+                  {on && (
+                    <span aria-hidden style={{
+                      position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%',
+                      background: poster.red, color: poster.paper, fontSize: 12, lineHeight: '20px', textAlign: 'center',
+                      fontFamily: fonts.display, boxShadow: `0 0 0 2px ${poster.paper}`,
+                    }}>✕</span>
+                  )}
+                </motion.button>
+              );
+            })}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
