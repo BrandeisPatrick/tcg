@@ -186,7 +186,9 @@ export function DiscardPile({ cards, owner, size = 'full', accent }: {
             style={{
               position: 'absolute',
               [owner === 'you' ? 'bottom' : 'top']: h + 12,
-              right: 0,
+              // Opens toward the table's middle: the rival's pile sits at
+              // the left edge, yours at the right.
+              [owner === 'you' ? 'right' : 'left']: 0,
               zIndex: 60,
               margin: 0,
               padding: '8px 10px',

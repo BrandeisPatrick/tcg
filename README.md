@@ -71,6 +71,25 @@ builds) and the Gallery. A Quick Match goes like this.
   the side ahead cannot snowball. (One item, Golden Goose Egg,
   still pays 2.)
 
+### The scene
+
+The match screen is laid out like Pokémon TCG Pocket's battle screen, in our
+own look: one portrait stage (`src/ui/board/BoardTable.tsx`, 390 × 844) scaled
+to whatever the screen is, so a phone fills it edge to edge and a desktop shows
+it centred at full height with the scene either side. The table is two paper
+halves, the rival's tinted red and yours gold, meeting at the centre ring; down
+the middle run the rival's bench, the rival's Active, your Active and your bench,
+each hero a miniature of its real card in its level frame with its HP floating
+above the top-right corner. The decks are card-back stacks half off the edges
+(the rival's upper left, yours right middle), each discard pile beside its deck.
+A thin name bar at the top (the rival's) and the bottom (yours) carries the
+side's map track — Guardian, Walker, Patron with their HP — the rival's souls
+and the turn number; your souls are the round counter at the lower right, the
+match log is behind the round menu button at the lower left, End Turn and Auto
+sit low on the right. The rival's hand peeks in as backs at the top edge; yours
+is a fan along the bottom edge that lifts a card when tapped, and a card you can
+play breathes gold.
+
 ### The turn: Income, Act, End
 
 A banner says whose turn it is as each one begins. Income is automatic: 5 souls
