@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import type { CardId } from '@/engine/types';
 import { cardName } from '@/cards';
 import { CardFrame } from '../card/CardFrame';
+import { ItemLine } from './ItemLine';
 import { PosterButton } from '../chrome';
 import { fonts, spring } from '../tokens';
 import { poster, scrimStyle, sheetStyle } from '../poster';
@@ -47,6 +48,7 @@ export function UpgradePicker({ itemId, options, onPick, onCancel }: {
           padding: isMobile ? '18px 14px' : '26px 30px',
           borderRadius: isMobile ? 16 : 18,
           maxWidth: 760,
+          ...(isMobile ? { width: 'min(100%, 460px)', boxSizing: 'border-box' as const } : null),
           color: poster.ink,
         }}
       >
@@ -54,27 +56,36 @@ export function UpgradePicker({ itemId, options, onPick, onCancel }: {
           <span style={{ fontFamily: fonts.display, fontSize: 22, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1 }}>
             {cardName(itemId)}
           </span>
-          <span style={{ fontFamily: fonts.display, fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', lineHeight: 1 }}>
+          <span style={{ fontFamily: fonts.display, fontSize: isMobile ? 11.5 : 13, letterSpacing: isMobile ? '0.16em' : '0.18em', textTransform: 'uppercase', lineHeight: 1.2 }}>
             Choose the upgrade to shuffle into your deck
           </span>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: isMobile ? 10 : 18 }}>
+        {/* A phone has no room for two or three whole cards at a size their
+            rules can be read at: there each upgrade is a line with its art,
+            name and whole rule. A wide screen keeps the cards. */}
+        <div style={isMobile
+          ? { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, width: '100%' }
+          : { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18 }}>
           {options.map((id) => (
             <motion.button
               key={id}
               type="button"
               aria-label={`Make ${cardName(id)}`}
               onClick={() => onPick(id)}
-              whileHover={{ y: -6 }}
+              whileHover={isMobile ? undefined : { y: -6 }}
               whileTap={{ scale: 0.97 }}
               transition={spring.snappy}
-              style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
+              style={isMobile
+                ? { display: 'block', width: '100%', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', color: 'inherit', font: 'inherit' }
+                : { padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', lineHeight: 0 }}
             >
-              <div style={{ width: 300 * scale * 0.75, height: 420 * scale * 0.75 }}>
-                <div style={{ width: 300, height: 420, transform: `scale(${scale * 0.75})`, transformOrigin: 'top left' }}>
-                  <CardFrame cardId={id} size="full" tapExplains={false} />
+              {isMobile ? <ItemLine cardId={id} /> : (
+                <div style={{ width: 300 * scale * 0.75, height: 420 * scale * 0.75 }}>
+                  <div style={{ width: 300, height: 420, transform: `scale(${scale * 0.75})`, transformOrigin: 'top left' }}>
+                    <CardFrame cardId={id} size="full" tapExplains={false} />
+                  </div>
                 </div>
-              </div>
+              )}
             </motion.button>
           ))}
         </div>

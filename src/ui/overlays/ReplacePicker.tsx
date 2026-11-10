@@ -18,60 +18,20 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
-import { cardName, itemCard } from '@/cards';
+import { cardName } from '@/cards';
 import { upgradesOf } from '@/cards/decks';
 import { findCardOnBoard, handCard, wornItems } from '@/engine/query';
 import { playBlockedAny, replaceNeeded } from '@/engine/legality';
 import type { Action } from '@/engine/engine';
-import { RuleText } from '../card/RuleText';
-import { HandThumb } from '../board/HandThumb';
+import { ItemLine } from './ItemLine';
 import { PosterButton } from '../chrome';
-import { fonts, spring, text } from '../tokens';
+import { fonts, spring } from '../tokens';
 import { poster, scrimStyle, sheetStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import { UpgradePicker } from './UpgradePicker';
 
 /** The sheet's accessible name, by which the tutorial and the QA scripts find it. */
 export const REPLACE_SHEET = 'Choose the item to discard';
-
-/**
- * One item on the sheet: its shop art (the hand's thumb, price and all) and
- * its name, kind and WHOLE rule beside it. A miniature card cut the rule off
- * mid-sentence, and this is the one place the player has to weigh two rules
- * against each other. `tone` rings it: the new card green, the marked one red.
- */
-function ItemLine({ cardId, tone }: { cardId: CardId; tone?: 'new' | 'going' | null }) {
-  const data = itemCard(cardId);
-  const ring = tone === 'new' ? poster.target : tone === 'going' ? poster.red : 'rgba(23, 20, 16, 0.28)';
-  return (
-    <span style={{
-      display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
-      width: '100%', boxSizing: 'border-box',
-      padding: '10px 12px 10px 14px',
-      borderRadius: 10,
-      background: 'rgba(23, 20, 16, 0.05)',
-      boxShadow: `inset 0 0 0 ${tone ? 2 : 1}px ${ring}`,
-      lineHeight: 1.3,
-    }}>
-      <span style={{ flexShrink: 0, paddingTop: 4 }}><HandThumb cardId={cardId} /></span>
-      <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontFamily: fonts.display, fontSize: 13.5, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: poster.ink }}>
-          {cardName(cardId)}
-        </span>
-        {data && (
-          <span style={{ fontFamily: fonts.display, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', lineHeight: 1, color: poster.inkDim }}>
-            {data.type === 'spell' ? 'Active' : 'Item'} · Tier {data.tier}
-          </span>
-        )}
-        {data?.text && (
-          <span style={{ ...text.body, fontSize: 12.5, lineHeight: 1.35, color: poster.ink }}>
-            <RuleText text={data.text} passTaps />
-          </span>
-        )}
-      </span>
-    </span>
-  );
-}
 
 export function ReplacePicker({ hero, itemId, worn, onPick, onCancel }: {
   /** The full hero the card goes on. */
