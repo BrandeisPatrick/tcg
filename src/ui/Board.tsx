@@ -29,10 +29,12 @@ import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
-import { BoardTable, RoundPlate, STAGE, TABLE_TILT, boardStack, hudSeats, tableTiltStyle } from './board/BoardTable';
-import { Scoreboard } from './board/NameBar';
+import { BoardSheet, RoundPlate } from './board/BoardTable';
+import { BoardLayoutContext, boardLayout, useBoardBox } from './board/layout';
+import { PatronLine } from './board/PatronLine';
+import { OpponentHand } from './board/OpponentHand';
+import type { TurnPhase } from './board/TurnCompass';
 import { panelStyle, scale } from './hud';
-import { SoulsCounter } from './board/SoulsCounter';
 import { TurnBanner, useLaneBox } from './board/TurnBanner';
 import { BoardControls } from './board/BoardControls';
 import {
@@ -64,7 +66,6 @@ import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { useSettings } from '@/storage/settings';
-import { useStageScale } from './hooks/useStageScale';
 import { useViewport } from './hooks/useViewport';
 import { fonts, spring } from './tokens';
 import { openSystemMenu, useFoldGear } from './system/systemMenuBus';
@@ -121,9 +122,8 @@ export function Board(props: BoardProps<GameState>) {
     if (lesson && ctx.gameover?.winner === me) markLessonDone(lesson.id, LESSONS.length);
   }, [lesson, ctx.gameover, me]);
   const following = lesson ? nextLesson(lesson.id) : undefined;
-  // Combat tempo honours the system-menu speed setting live; so does the
-  // table's camera (top-down, or leaning with the "Tilted table" setting).
-  const { combatSpeed, tiltedTable } = useSettings();
+  // Combat tempo honours the system-menu speed setting live.
+  const { combatSpeed } = useSettings();
   const [pending, setPending] = useState<PendingPlay | null>(null);
   // Auto-play: when on, the same AI that runs the opponent also drives the
   // local player's turns, so the match plays itself hands-free. Toggle in the
@@ -258,9 +258,10 @@ export function Board(props: BoardProps<GameState>) {
   }, []);
   useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
 
-  // The stage's scale: the one portrait layout fitted to the screen, re-fitted
-  // on resize and rotation (useStageScale measures the host).
-  const { hostRef: stageHostRef, scale: stageScale } = useStageScale(STAGE.w, STAGE.h);
+  // The board's box, measured: the layout is worked out from its width and
+  // its height (layout.ts), again on every resize and rotation.
+  const box = useBoardBox();
+  const L = useMemo(() => boardLayout(box.w, box.h), [box.w, box.h]);
   // A phone has no pointer: a worn item's tap opens the held preview, and the
   // FX stage thins its debris.
   const { isMobile } = useViewport();
@@ -270,7 +271,7 @@ export function Board(props: BoardProps<GameState>) {
    *  the opening picker's card), by iid: the motion layer flies it from
    *  there once the card itself has gone. */
   const placeOrigins = useRef<Map<string, Rect>>(new Map());
-  // The hand's band at the stage's foot.
+  // The hand's band under the sheet.
   const handRowRef = useRef<HTMLDivElement>(null);
   // The lane between the two Actives: where the feedback sticker shows.
   const lane = useLaneBox();
@@ -884,13 +885,83 @@ export function Board(props: BoardProps<GameState>) {
 
   const incomeShown = !G.draft && !ctx.gameover && isMyTurn && spine.edge && spine.beat === 'income' && spine.mine;
 
-  // The stage: one portrait layout (BoardTable's STAGE, a phone's 390 × 844)
-  // scaled to the screen — a phone fills it edge to edge, a desktop shows it
-  // centred at full height with the scene either side.
-  const stack = boardStack();
-  const hud = hudSeats(tiltedTable);
   const youPs = G.players[me];
   const oppPs = G.players[opp];
+  // The dial's beat word: Battle while an attack is walked, Prepare otherwise.
+  const turnPhase: TurnPhase = combatPlan ? 'battle' : G.attackUsed ? 'regroup' : 'prepare';
+
+  // The menu — a round ink button beside Auto: the match log and the settings
+  // (the System menu) behind it. Its list opens above it.
+  const menuButton = (
+    <div style={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
+      <button
+        type="button"
+        aria-label="Menu"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((v) => !v)}
+        style={{ display: 'flex', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+      >
+        <RoundPlate size={L.wide ? 30 : 38}>
+          <svg viewBox="0 0 20 20" width={L.wide ? 15 : 18} height={L.wide ? 15 : 18} fill="none" stroke={poster.paper} strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <line x1="3" y1="5" x2="17" y2="5" /><line x1="3" y1="10" x2="17" y2="10" /><line x1="3" y1="15" x2="17" y2="15" />
+          </svg>
+        </RoundPlate>
+      </button>
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            role="menu"
+            aria-label="Menu"
+            initial={{ opacity: 0, y: 8, scale: 0.94 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.94, transition: { duration: 0.12 } }}
+            transition={spring.snappy}
+            style={{
+              ...panelStyle,
+              position: 'absolute', bottom: 'calc(100% + 6px)', zIndex: 12,
+              ...(L.wide ? { right: 0, transformOrigin: 'right bottom' } : { left: 0, transformOrigin: 'left bottom' }),
+              display: 'flex', flexDirection: 'column', gap: 3, padding: 4,
+            }}
+          >
+            {([
+              ['Match log', () => setLogOpen(true)],
+              ['Settings', () => openSystemMenu()],
+            ] as const).map(([name, run]) => (
+              <button
+                key={name}
+                type="button"
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); run(); }}
+                style={{
+                  minWidth: 132, height: 38, padding: '0 14px', textAlign: 'left',
+                  background: 'transparent', color: poster.ink, border: 'none', borderRadius: 7,
+                  fontFamily: fonts.display, fontSize: scale.body, letterSpacing: '0.12em', textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                }}
+              >{name}</button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
+  const controls = (
+    <BoardControls
+      variant={L.wide ? 'dock' : 'row'}
+      isMyTurn={isMyTurn}
+      busy={turnBusy}
+      hasPending={!!pending}
+      autoPlay={autoPlay}
+      souls={youPs.souls}
+      menu={menuButton}
+      onEndTurn={pressTurnButton}
+      onCancel={() => setPending(null)}
+      onToggleAuto={() => setAutoPlay((v) => !v)}
+    />
+  );
 
   return (
     <LayoutGroup>
@@ -900,227 +971,187 @@ export function Board(props: BoardProps<GameState>) {
       <FxCalmContext.Provider value={calmMotion}>
       <DeckMotionProvider ticker={deckMotion.ticker}>
       <LiveScaleContext.Provider value={liveSpirit}>
+      <BoardLayoutContext.Provider value={L}>
       {/* The deal-in: the heroes are dealt onto the board as it first shows. */}
       <BoardIntro me={me} enabled={scripted}>
       <FxStageProvider density={isMobile ? 0.6 : 1}>
       <PosterBackdrop />
 
       <div style={{ fontFamily: fonts.ui, color: poster.ink }}>
-        {/* THE STAGE HOST — the whole screen. The stage sits centred in it at
-            the scale that fits both axes (useStageScale: re-measured on
-            resize and rotation), the scene's backdrop filling whatever is
-            left either side on a wide screen. Everything fixed over the
-            board (sheets, prompts, the banner) is mounted outside it, so no
-            transform catches it. */}
+        {/* THE SCREEN — the whole visible screen (100dvh: a phone browser's
+            box under its toolbars), inside the safe areas. The board is laid
+            out for the box measured here, from its width and its height
+            (layout.ts); nothing is a fixed stage shrunk to fit. Everything
+            fixed over the board (sheets, prompts, the banner) is mounted
+            outside it. */}
         <div
-          ref={stageHostRef}
           data-stage-host
           style={{
-            position: 'fixed', inset: 0, height: '100dvh',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            position: 'fixed', left: 0, right: 0, top: 0, height: '100dvh',
+            boxSizing: 'border-box',
+            padding: 'env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)',
             // clip, not hidden: a hidden overflow is still a scroll box, and
-            // focusing a hand card whose foot hangs past the screen's edge
-            // would scroll the whole table to show it.
+            // focusing a card near the screen's edge would scroll the table.
             overflow: 'clip', zIndex: 1,
           }}
         >
           <div
+            ref={box.ref}
+            style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+          <div
             data-stage
             style={{
               position: 'relative', flex: '0 0 auto',
-              width: STAGE.w, height: STAGE.h,
-              transform: `scale(${stageScale})`, transformOrigin: 'center center',
-              // The stage's edges are the screen's: the decks half off them
-              // and the hands peeking in are cut there on every screen.
-              overflow: 'clip',
+              width: L.w, height: L.h,
+              // Only a box smaller than any phone's is scaled (layout.ts FLOOR).
+              ...(L.k < 1 ? { transform: `scale(${L.k})`, transformOrigin: 'center center' } : {}),
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
             }}
           >
-            {/* THE TABLE PLANE — tilted away like Pocket's camera (tableTiltStyle):
-                the halves, the ring, every slot and card, the HP floats, the
-                chips and the piles turn with it. Taps land through the
-                transform, and the flights and FX measure the projected boxes. */}
-            <div data-table-plane style={{ position: 'absolute', inset: 0, zIndex: 1, ...tableTiltStyle(tiltedTable) }}>
-            {/* THE TABLE — the two halves and the centre ring, behind everything. */}
-            <BoardTable />
-
-            {/* THE 3-1-1-3 STACK — the rival's bench, the rival's Active,
-                your Active, your bench, down the middle (boardStack). */}
-            <BenchRow
-              top={stack.benchR}
-              ps={oppPs}
-              owner={opp} myId={me}
-              isOpponent
-              pending={pending}
-              onTapHero={onTapHero}
-              onLongPressHero={(c) => setHeroDetail(c)}
-              onEquipmentHover={previewEquipment}
-              isTargetable={isTargetable}
-              registerSlotRef={registerSlotRef}
-            />
-            <ActiveDuel
-              G={G}
-              me={me}
-              opp={opp}
-              isMyTurn={isMyTurn}
-              pending={pending}
-              onTapHero={onTapHero}
-              onLongPressHero={(c) => setHeroDetail(c)}
-              onEquipmentHover={previewEquipment}
-              isTargetable={isTargetable}
-              registerSlotRef={registerSlotRef}
-              readyIids={readyIids}
-              laneOpen={openSlots.has(0)}
-              onTapLane={() => placeAt(0)}
-            />
-            <BenchRow
-              top={stack.benchY}
-              ps={youPs}
-              owner={me} myId={me}
-              isOpponent={false}
-              pending={pending}
-              onTapHero={onTapHero}
-              onLongPressHero={(c) => setHeroDetail(c)}
-              onEquipmentHover={previewEquipment}
-              isTargetable={isTargetable}
-              registerSlotRef={registerSlotRef}
-              readyIids={readyIids}
-              openSlots={openSlots}
-              onTapSlot={placeAt}
-            />
-
-            {/* THE PILES — whole on the table beside each Active: the
-                rival's deck and discard pile at its left, yours at your
-                right. The motion layer flies cards from and to these
-                (data-pile). */}
-            <div style={{ position: 'absolute', ...hud.rivalDeck, zIndex: 3 }}>
-              <DeckPile count={oppPs.deck.length} owner="rival" size="big" accent={poster.rival} />
-            </div>
-            <div style={{ position: 'absolute', ...hud.rivalDiscard, zIndex: 3 }}>
-              <DiscardPile cards={oppPs.discard} owner="rival" size="small" accent={poster.rival} />
-            </div>
-            <div style={{ position: 'absolute', ...hud.yourDeck, zIndex: 3 }}>
-              <DeckPile count={youPs.deck.length} owner="you" size="big" accent={poster.you} />
-            </div>
-            <div style={{ position: 'absolute', ...hud.yourDiscard, zIndex: 3 }}>
-              <DiscardPile cards={youPs.discard} owner="you" size="small" accent={poster.you} />
-            </div>
+            {/* THE RIVAL'S STRIP — its deck and discard pile at the left, its
+                hand face down in the middle, all small. The motion layer
+                flies cards from and to these (data-pile, data-hand). */}
+            <div style={{
+              position: 'relative', flex: `0 0 ${L.strip}px`, width: L.sheetW, marginTop: L.gapTop,
+              display: 'flex', alignItems: 'center', gap: 8, zIndex: 3,
+            }}>
+              <DeckPile count={oppPs.deck.length} owner="rival" size={L.rivalPile} accent={poster.rival} />
+              <DiscardPile cards={oppPs.discard} owner="rival" size={L.rivalPile} accent={poster.rival} />
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <OpponentHand cards={oppPs.hand} height={L.strip - 4} maxWidth={L.wide ? 220 : 124} />
+              </div>
+              {/* Where a combat walk's Skip waits: the strip's free right end
+                  (CombatChoreographer reads this seat), clear of every card
+                  and control. */}
+              <div aria-hidden data-skip-seat style={{ position: 'absolute', right: 98, top: Math.round((L.strip - 30) / 2), width: 0, height: 0 }} />
             </div>
 
-            {/* The scoreboard across the top: your patron's side, the turn,
-                the rival's side with its souls and its hand. */}
-            <Scoreboard
-              style={{ position: 'absolute', ...hud.scoreboard, zIndex: 5 }}
-              you={youPs}
-              rival={oppPs}
-              turn={G.turnNumber}
-              myTurn={isMyTurn}
-            />
-            {/* Where a combat walk's Skip waits: the free table left of your
-                Active (CombatChoreographer reads this seat). */}
-            <div aria-hidden data-skip-seat style={{ position: 'absolute', left: hud.skip.left, top: hud.skip.top, width: 0, height: 0 }} />
-
-
-            {/* The menu — a round button at the left of the turn row: the
-                match log and the settings (the System menu) behind it. */}
-            <button
-              type="button"
-              aria-label="Menu"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((v) => !v)}
-              style={{ position: 'absolute', left: hud.menu.left, top: hud.menu.top, padding: 0, border: 'none', background: 'transparent', zIndex: 6, cursor: 'pointer' }}
-            >
-              <RoundPlate size={hud.menu.size}>
-                <svg viewBox="0 0 20 20" width={18} height={18} fill="none" stroke={poster.cream} strokeWidth="2" strokeLinecap="round" aria-hidden>
-                  <line x1="3" y1="5" x2="17" y2="5" /><line x1="3" y1="10" x2="17" y2="10" /><line x1="3" y1="15" x2="17" y2="15" />
-                </svg>
-              </RoundPlate>
-            </button>
-            <AnimatePresence>
-              {menuOpen && (
-                <>
-                  {/* A tap anywhere else closes it. */}
-                  <div aria-hidden onClick={() => setMenuOpen(false)} style={{ position: 'absolute', inset: 0, zIndex: 11 }} />
-                  <motion.div
-                    role="menu"
-                    aria-label="Menu"
-                    initial={{ opacity: 0, y: 8, scale: 0.94 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.94, transition: { duration: 0.12 } }}
-                    transition={spring.snappy}
-                    style={{
-                      ...panelStyle,
-                      position: 'absolute', left: hud.menu.left, bottom: STAGE.h - hud.menu.top + 6, zIndex: 12,
-                      transformOrigin: 'left bottom',
-                      display: 'flex', flexDirection: 'column', gap: 3, padding: 4,
-                    }}
-                  >
-                    {([
-                      ['Match log', () => setLogOpen(true)],
-                      ['Settings', () => openSystemMenu()],
-                    ] as const).map(([name, run]) => (
-                      <button
-                        key={name}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => { setMenuOpen(false); run(); }}
-                        style={{
-                          minWidth: 132, height: 38, padding: '0 14px', textAlign: 'left',
-                          background: 'transparent', color: poster.cream, border: 'none', borderRadius: 7,
-                          fontFamily: fonts.display, fontSize: scale.body, letterSpacing: '0.12em', textTransform: 'uppercase',
-                          cursor: 'pointer',
-                        }}
-                      >{name}</button>
-                    ))}
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-
-            {/* Your souls — the plate in the turn row, beside End Turn. */}
-            <div style={{ position: 'absolute', right: hud.souls.right, top: hud.souls.top, zIndex: 6 }}>
-              <SoulsCounter souls={youPs.souls} size={hud.souls.height} />
-            </div>
-
-            {/* YOUR HAND — a fan along the bottom edge, partly off the screen.
-                The band is what the targeting banner and the sticker sit above. */}
-            <div
-              ref={handRowRef}
-              style={{ position: 'absolute', left: hud.hand.left, top: hud.hand.top, width: hud.hand.width, zIndex: 5, pointerEvents: 'none' }}
-            >
-              <Hand
-                cards={youPs.hand}
-                souls={youPs.souls}
-                disabled={!isMyTurn || actionLocked}
-                pending={pending}
-                playable={(c) => (CARDS_BY_ID[c.cardId]?.type === 'hero'
-                  ? placeHeroBlocked(G, me, c.iid) === null || placeHeroBlocked(G, me, c.iid, true) === null
-                  : playTargets(G, me, c.iid).length > 0)}
-                onTap={onTapCardInHand}
-                onLongPress={holdHandCard}
-                onHover={(c) => setPreview(c ? { cardId: c.cardId, iid: c.iid, hover: true, inHand: true } : null)}
-                onDragEndOver={onHandDragEnd}
-                onBlocked={(c) => showNotice(stuckReason(c), true)}
-                registerCard={registerHandCard}
-                arriving={deckMotion.arriving}
-                avail={hud.hand.width}
+            {/* THE SHEET — the rival's line, its bench, the lane (its Active
+                on the left, the turn dial, yours on the right), your bench,
+                your line. */}
+            <div style={{ position: 'relative', flex: '0 0 auto', marginTop: L.gapStrip, zIndex: menuOpen && L.wide ? 12 : undefined }}>
+            <BoardSheet L={L}>
+              <PatronLine
+                label={PATRON_NAMES.rival}
+                ps={oppPs}
+                hostile
+                attackOpen={!isMyTurn && attackOpen}
+                projectedDamage={ctx.currentPlayer === me ? projectedPatronDamage : 0}
+                wide={L.wide}
+                height={L.line}
+                souls
               />
+              <BenchRow
+                ps={oppPs}
+                owner={opp} myId={me}
+                isOpponent
+                pending={pending}
+                onTapHero={onTapHero}
+                onLongPressHero={(c) => setHeroDetail(c)}
+                onEquipmentHover={previewEquipment}
+                isTargetable={isTargetable}
+                registerSlotRef={registerSlotRef}
+              />
+              <ActiveDuel
+                G={G}
+                me={me}
+                opp={opp}
+                isMyTurn={isMyTurn}
+                turn={G.turnNumber}
+                phase={turnPhase}
+                pending={pending}
+                onTapHero={onTapHero}
+                onLongPressHero={(c) => setHeroDetail(c)}
+                onEquipmentHover={previewEquipment}
+                isTargetable={isTargetable}
+                registerSlotRef={registerSlotRef}
+                readyIids={readyIids}
+                laneOpen={openSlots.has(0)}
+                onTapLane={() => placeAt(0)}
+              />
+              <BenchRow
+                ps={youPs}
+                owner={me} myId={me}
+                isOpponent={false}
+                pending={pending}
+                onTapHero={onTapHero}
+                onLongPressHero={(c) => setHeroDetail(c)}
+                onEquipmentHover={previewEquipment}
+                isTargetable={isTargetable}
+                registerSlotRef={registerSlotRef}
+                readyIids={readyIids}
+                openSlots={openSlots}
+                onTapSlot={placeAt}
+              />
+              <PatronLine
+                label={PATRON_NAMES.you}
+                ps={youPs}
+                attackOpen={isMyTurn && attackOpen}
+                projectedDamage={ctx.currentPlayer !== me ? projectedPatronDamage : 0}
+                wide={L.wide}
+                height={L.line}
+              />
+
+              {/* The wide sheet's turn dock — in its right margin, centred on
+                  the lane: your souls, End Turn (Cancel above it while
+                  something is armed), the menu and Auto. */}
+              {L.wide && (
+                <div style={{
+                  position: 'absolute', right: L.padX, width: L.gutterR,
+                  top: L.padY + L.line + L.rowGap * 2 + L.bench, height: L.lane,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  zIndex: 2,
+                }}>
+                  {controls}
+                </div>
+              )}
+            </BoardSheet>
             </div>
 
-            {/* The turn controls — End Turn (Cancel while something is
-                armed) at the right of the turn row, above the hand at the
-                thumb; Auto beside the menu button. */}
-            <BoardControls
-              seat={hud}
-              isMyTurn={isMyTurn}
-              busy={turnBusy}
-              hasPending={!!pending}
-              autoPlay={autoPlay}
-              onEndTurn={pressTurnButton}
-              onCancel={() => setPending(null)}
-              onToggleAuto={() => setAutoPlay((v) => !v)}
-            />
+            {/* YOUR HAND — a fan under the sheet, your deck at its left and
+                your discard pile at its right. The band is what the motion
+                layer and the targeting arrow measure. */}
+            <div style={{
+              position: 'relative', flex: '0 0 auto', width: L.sheetW, height: L.handH + L.handLift, marginTop: L.gapHand,
+              display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', zIndex: 5,
+            }}>
+              <DeckPile count={youPs.deck.length} owner="you" size={L.pile} accent={poster.you} />
+              <div ref={handRowRef} style={{ position: 'relative', flex: '0 0 auto', width: L.handAvail, height: '100%', pointerEvents: 'none' }}>
+                <Hand
+                  cards={youPs.hand}
+                  souls={youPs.souls}
+                  disabled={!isMyTurn || actionLocked}
+                  pending={pending}
+                  playable={(c) => (CARDS_BY_ID[c.cardId]?.type === 'hero'
+                    ? placeHeroBlocked(G, me, c.iid) === null || placeHeroBlocked(G, me, c.iid, true) === null
+                    : playTargets(G, me, c.iid).length > 0)}
+                  onTap={onTapCardInHand}
+                  onLongPress={holdHandCard}
+                  onHover={(c) => setPreview(c ? { cardId: c.cardId, iid: c.iid, hover: true, inHand: true } : null)}
+                  onDragEndOver={onHandDragEnd}
+                  onBlocked={(c) => showNotice(stuckReason(c), true)}
+                  registerCard={registerHandCard}
+                  arriving={deckMotion.arriving}
+                  avail={L.handAvail}
+                  maxHeight={L.handH}
+                />
+              </div>
+              <DiscardPile cards={youPs.discard} owner="you" size={L.pile} accent={poster.you} />
+            </div>
 
+            {/* A phone's one control row, under the hand: the menu, Auto,
+                your souls, and End Turn (Cancel while something is armed)
+                under the right thumb. */}
+            {!L.wide && (
+              <div style={{ position: 'relative', flex: `0 0 ${L.controls}px`, width: L.sheetW, marginTop: L.gapControls, zIndex: menuOpen ? 12 : 6 }}>
+                {controls}
+              </div>
+            )}
+
+            {/* A tap anywhere else closes the menu. */}
+            {menuOpen && <div aria-hidden onClick={() => setMenuOpen(false)} style={{ position: 'absolute', inset: 0, zIndex: 11 }} />}
+          </div>
           </div>
         </div>
 
@@ -1367,7 +1398,7 @@ export function Board(props: BoardProps<GameState>) {
         <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} action={G.action} />
 
         {/* The deck's motion — cards between the deck, the hand and the discard pile. */}
-        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} origins={placeOrigins.current} ticker={deckMotion.ticker} tilt={tiltedTable ? TABLE_TILT.angle : 0} />
+        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} origins={placeOrigins.current} ticker={deckMotion.ticker} />
 
         {/* Feedback sticker — one ink label in the lane between the two
             Actives (red when it is a warning), where it covers no card and no
@@ -1393,18 +1424,19 @@ export function Board(props: BoardProps<GameState>) {
               }}
             >
               <span style={{
-                padding: '8px 16px',
+                padding: '6px 8px',
+                boxSizing: 'border-box',
                 background: notice.warn ? poster.red : poster.ink,
                 color: poster.paper,
                 borderRadius: 3,
                 fontFamily: fonts.display,
-                fontSize: 12,
-                letterSpacing: '0.14em',
+                fontSize: scale.label,
+                letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                lineHeight: 1.2,
+                lineHeight: 1.25,
                 textAlign: 'center',
-                maxWidth: '88%',
-                boxShadow: '0 6px 16px rgba(0, 0, 0, 0.45)',
+                maxWidth: '100%',
+                boxShadow: '0 3px 0 rgba(0, 0, 0, 0.25)',
               }}>
                 {notice.msg}
               </span>
@@ -1428,6 +1460,7 @@ export function Board(props: BoardProps<GameState>) {
       )}
       </FxStageProvider>
       </BoardIntro>
+      </BoardLayoutContext.Provider>
       </LiveScaleContext.Provider>
       </DeckMotionProvider>
       </FxCalmContext.Provider>

@@ -25,17 +25,17 @@ import { countChipStyle, panelStyle, scale } from '../hud';
 
 /** A pile's card size, px. */
 const PILE = {
-  /** The deck on the table beside its side's Active (BoardTable's DECK). */
-  big: { w: 52, h: 73, radius: 7 },
+  /** Beside the hand on a wide screen. */
   full: { w: 46, h: 64, radius: 7 },
-  /** The discard pile beside it (BoardTable's DISCARD). */
+  /** Beside the hand on a phone. */
   small: { w: 40, h: 56, radius: 6 },
+  /** The rival's, in the strip above the sheet. */
   chip: { w: 26, h: 36, radius: 4 },
 } as const;
 type PileSize = keyof typeof PILE;
 
 /** The count chip on a pile, attached to its bottom corner (the right one,
- *  or the left for a pile whose right edge is off the screen): a dark plate
+ *  or the left for a pile whose right edge is off the screen): an ink badge
  *  edged in the side's colour. */
 function Count({ n, accent, small, at = 'right' }: { n: number; accent: string; small: boolean; at?: 'left' | 'right' }) {
   return (
@@ -56,19 +56,18 @@ function EmptyWell({ w, h, radius, top = 0 }: { w: number; h: number; radius: nu
       position: 'absolute', left: 0, top, width: w, height: h,
       borderRadius: radius, boxSizing: 'border-box',
       border: `1.5px dashed ${EMPTY_DASH}`,
-      background: 'rgba(0, 0, 0, 0.22)',
-      boxShadow: 'inset 0 2px 6px rgba(0, 0, 0, 0.35)',
+      background: 'rgba(0, 0, 0, 0.28)',
     }} />
   );
 }
 
-/** One card's edge under a pile's top card: a sliver of back with the
- *  light keyline, so the stack reads as cards lying on cards. */
+/** One card's edge under a pile's top card: a sliver of the charcoal back
+ *  with a light keyline, so the stack reads as cards lying on cards. */
 const pileEdge = (radius: number, first: boolean): CSSProperties => ({
   width: '100%', height: '100%', boxSizing: 'border-box', borderRadius: radius,
-  background: poster.slate,
+  background: poster.panel,
   border: '1px solid rgba(232, 224, 204, 0.3)',
-  boxShadow: first ? '0 4px 12px rgba(0, 0, 0, 0.5)' : '0 1px 2px rgba(0, 0, 0, 0.4)',
+  boxShadow: first ? '0 3px 8px rgba(0, 0, 0, 0.45)' : 'none',
 });
 
 /** The deck, face down: up to three backs offset into a stack (none when it
@@ -87,7 +86,7 @@ export function DeckPile({ count, owner, size = 'full', accent, countAt = 'right
   const shown = useTickedCount(`deck-${owner}`, count);
   // The stack's thickness: a plain edge per card under the top back, up to five.
   const layers = Math.min(5, shown);
-  const step = size === 'chip' ? 1 : size === 'big' ? 2 : 1.5;
+  const step = size === 'chip' ? 1 : 1.5;
   const label = `${owner === 'you' ? 'Your' : "Rival's"} deck: ${shown} card${shown === 1 ? '' : 's'}`;
   return (
     <div
@@ -100,11 +99,11 @@ export function DeckPile({ count, owner, size = 'full', accent, countAt = 'right
       {layers === 0 ? <EmptyWell w={w} h={h} radius={radius} top={4} /> : (
         Array.from({ length: layers }, (_, i) => (
           <div key={i} style={{ position: 'absolute', left: i * step, top: 4 - i * step, width: w, height: h }}>
-            {i === layers - 1 ? <CardBack radius={radius} /> : <div style={pileEdge(radius, i === 0)} />}
+            {i === layers - 1 ? <CardBack radius={radius} small={size === 'chip'} /> : <div style={pileEdge(radius, i === 0)} />}
           </div>
         ))
       )}
-      <Count n={shown} accent={accent} small={size !== 'full' && size !== 'big'} at={countAt} />
+      <Count n={shown} accent={accent} small={size !== 'full'} at={countAt} />
     </div>
   );
 }
@@ -119,7 +118,7 @@ function PileFace({ card, w, h, radius }: { card: CardInstance; w: number; h: nu
     <div style={{
       width: w, height: h, borderRadius: radius, overflow: 'hidden', boxSizing: 'border-box',
       background: poster.ground, border: `2px solid ${ink}`,
-      boxShadow: '0 0 0 1px rgba(232, 224, 204, 0.35), 0 4px 10px rgba(0, 0, 0, 0.45)',
+      boxShadow: '0 0 0 1px rgba(232, 224, 204, 0.35), 0 3px 8px rgba(0, 0, 0, 0.4)',
     }}>
       {url && (
         <img src={url} alt="" draggable={false} decoding="async"
@@ -182,7 +181,7 @@ export function DiscardPile({ cards, owner, size = 'full', accent }: {
           </>
         ) : <EmptyWell w={w} h={h} radius={radius} />}
       </button>
-      <Count n={shown} accent={accent} small={size !== 'full' && size !== 'big'} />
+      <Count n={shown} accent={accent} small={size !== 'full'} />
       <AnimatePresence>
         {open && (
           <motion.ul
@@ -195,7 +194,7 @@ export function DiscardPile({ cards, owner, size = 'full', accent }: {
               position: 'absolute',
               [owner === 'you' ? 'bottom' : 'top']: h + 12,
               // Opens toward the table's middle: the rival's pile sits at
-              // the left edge, yours at the right.
+              // the strip's left end, yours at the hand's right.
               [owner === 'you' ? 'right' : 'left']: 0,
               zIndex: 60,
               ...panelStyle,
@@ -210,12 +209,13 @@ export function DiscardPile({ cards, owner, size = 'full', accent }: {
               fontSize: scale.body,
               fontWeight: 600,
               lineHeight: 1.6,
+              color: poster.ink,
             }}
           >
             {[...cards].reverse().map((c) => (
               <li key={c.iid} style={{ whiteSpace: 'nowrap' }}>
                 {cardName(c.cardId)}
-                {CARDS_BY_ID[c.cardId]?.type === 'hero' && <span style={{ color: poster.creamDim, fontSize: scale.label, fontWeight: 500 }}> · hero</span>}
+                {CARDS_BY_ID[c.cardId]?.type === 'hero' && <span style={{ color: poster.inkDim, fontSize: scale.label, fontWeight: 500 }}> · hero</span>}
               </li>
             ))}
           </motion.ul>

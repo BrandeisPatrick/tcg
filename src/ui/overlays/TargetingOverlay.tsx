@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import { motion } from 'framer-motion';
 import type { TargetFilter } from '@/abilities';
 import { fonts, spring } from '../tokens';
-import { poster, chamfer, clipBoth } from '../poster';
+import { poster } from '../poster';
 import { scale } from '../hud';
 import { useLaneBox } from '../board/TurnBanner';
 
@@ -15,7 +15,7 @@ interface Props {
   onCancel: () => void;
   /** Extra right-edge inset (px) — the open side panel's width on desktop. */
   rightInset?: number;
-  /** Kept for callers; the strip sits in the lane, clear of the hand. */
+  /** Kept for callers; the tag sits on the lane, clear of the hand. */
   dockAbove?: RefObject<HTMLElement>;
   /** The chip's words, when not the filter's ("Spot" for a hero picked up). */
   chip?: string;
@@ -47,74 +47,67 @@ function Crosshair({ size, color }: { size: number; color: string }) {
 }
 
 /**
- * The armed card's prompt: a short dark strip in the lane between the two
- * Actives — the seam is never a card and never a target, so the strip covers
- * neither Active, no bench, no hand and not the turn row (your name, souls,
- * End Turn) under your bench. What to hit (the green chip) and the card's
- * name; the lit targets say the rest, and the turn row's End Turn turns into
- * the red Cancel meanwhile. The strip takes no taps.
+ * The armed card's prompt: a small paper tag on the lane's middle column,
+ * where the turn dial is — never a card and never a target, so it covers
+ * neither Active, no bench, no hand and no control. What to hit (the green
+ * band) over the card's name; the lit targets say the rest, and End Turn
+ * turns into the red Cancel meanwhile. The tag takes no taps.
  */
-export function TargetingOverlay({ title, filter, rightInset = 0, chip }: Props) {
+export function TargetingOverlay({ title, filter, chip }: Props) {
   const lane = useLaneBox();
-  const h = Math.max(30, Math.min(36, lane.height - 8));
-  const width = Math.max(0, Math.min(lane.width, window.innerWidth - rightInset) - 16);
   return (
     <div style={{
       position: 'fixed',
-      left: lane.left + 8, width,
-      top: lane.top + lane.height / 2 - h / 2, height: h,
-      display: 'flex', justifyContent: 'center',
+      left: lane.left, width: lane.width,
+      top: lane.top, height: lane.height,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
       pointerEvents: 'none',
       zIndex: 50,
-      // The plate is chamfer-clipped, which would clip its own box-shadow,
-      // so the drop lives on this pointer-transparent strip instead.
-      filter: 'drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45))',
     }}>
       <motion.div
         data-targeting-strip
-        initial={{ opacity: 0, scaleX: 0.85 }}
-        animate={{ opacity: 1, scaleX: 1 }}
-        exit={{ opacity: 0, scaleX: 0.9, transition: { duration: 0.12 } }}
+        initial={{ opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.12 } }}
         transition={spring.snappy}
         style={{
-          maxWidth: '100%', height: '100%', boxSizing: 'border-box',
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '0 12px 0 0',
-          background: `linear-gradient(180deg, ${poster.slateLit} 0%, ${poster.slate} 100%)`,
-          boxShadow: `inset 0 0 0 1px rgba(98, 196, 98, 0.55)`,
-          ...clipBoth(chamfer(6)),
+          maxWidth: '100%', boxSizing: 'border-box',
+          display: 'flex', flexDirection: 'column', alignItems: 'stretch',
+          background: poster.paper,
+          border: `1.5px solid ${poster.ink}`,
+          borderRadius: 4,
+          overflow: 'hidden',
           pointerEvents: 'none',
         }}
       >
-        {/* What to hit — the targeting green as the strip's header band. */}
+        {/* What to hit — the targeting green as the tag's header band. */}
         <span style={{
-          flexShrink: 0, alignSelf: 'stretch',
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          padding: '0 9px 0 8px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          padding: '5px 6px',
           background: poster.target,
           color: poster.ink,
           fontFamily: fonts.display,
-          fontSize: scale.label,
-          letterSpacing: '0.1em',
+          fontSize: scale.floor,
+          letterSpacing: '0.08em',
           textTransform: 'uppercase',
-          lineHeight: 1,
-          whiteSpace: 'nowrap',
+          lineHeight: 1.1,
+          textAlign: 'center',
         }}>
-          <Crosshair size={12} color={poster.ink} />
+          <Crosshair size={11} color={poster.ink} />
           <span>{chip ?? TARGET_LABELS[filter]}</span>
         </span>
 
         <span style={{
-          minWidth: 0, flex: '0 1 auto',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          padding: '5px 7px',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           fontFamily: fonts.display,
-          fontSize: scale.body,
-          letterSpacing: '0.06em',
+          fontSize: scale.label,
+          letterSpacing: '0.05em',
           textTransform: 'uppercase',
-          lineHeight: 1,
-          color: poster.cream,
+          lineHeight: 1.15,
+          textAlign: 'center',
+          color: poster.ink,
         }}>{title}</span>
-
       </motion.div>
     </div>
   );

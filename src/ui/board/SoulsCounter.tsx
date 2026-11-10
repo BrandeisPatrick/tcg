@@ -4,9 +4,9 @@ import { Souls, scale } from '../hud';
 import { useStatTick } from './useStatTick';
 
 /**
- * Your souls — Deadlock's souls counter in the turn row beside End Turn: the
- * HUD's dark green plate with the soul wisp and a mint number, `size` px
- * tall. It pulses as the count changes.
+ * Your souls, beside End Turn: Deadlock's soul wisp and the number in ink on
+ * a paper tag with an ink keyline, `size` px tall. It pulses as the count
+ * changes.
  */
 export function SoulsCounter({ souls, size }: { souls: number; size: number }) {
   const tick = useStatTick(souls);
@@ -22,14 +22,15 @@ export function SoulsCounter({ souls, size }: { souls: number; size: number }) {
         height: size,
         minWidth: size + 18,
         boxSizing: 'border-box',
-        padding: '0 11px 0 9px',
+        flexShrink: 0,
+        padding: '0 10px 0 8px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: poster.plate,
+        background: poster.paper,
         borderRadius: 6,
-        boxShadow: `inset 0 0 0 1.5px ${poster.plateEdge}, inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 3px 8px rgba(0, 0, 0, 0.45)`,
+        boxShadow: `inset 0 0 0 1.5px ${poster.ink}`,
       }}
     >
-      <Souls n={souls} size={scale.title} />
+      <Souls n={souls} size={scale.title} tone="paper" />
     </motion.div>
   );
 }

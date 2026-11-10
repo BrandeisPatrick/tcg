@@ -42,8 +42,10 @@ interface Props {
   /** Where each card is on screen, for the board's (and the animation
    *  layer's) flights to it. */
   registerCard?: (iid: string, el: HTMLElement | null) => void;
-  /** The width the fan may take, stage px: a fan wider than it shrinks to fit. */
+  /** The width the fan may take, px: a fan wider than it closes up to fit. */
   avail: number;
+  /** The tallest a card may print, px (the hand row's height). */
+  maxHeight: number;
 }
 
 // The fan's arc: the outer cards turn out a little and sit a little lower.
@@ -52,50 +54,56 @@ function fanRotation(i: number, total: number): number {
   const offset = i - (total - 1) / 2;
   return offset * Math.min(2.2, 9 / total);
 }
+/** How far a card rides above the fan's foot: the outer cards stand on it
+ *  and the middle ones rise, so nothing hangs under the hand's row. */
 function fanY(i: number, total: number): number {
   if (total <= 2) return 0;
-  const offset = Math.abs(i - (total - 1) / 2);
-  return Math.min(offset * offset * 1.4, 12);
+  const drop = (at: number) => Math.min(Math.abs(at - (total - 1) / 2) ** 2 * 1.4, 12);
+  return drop(i) - drop(0);
 }
-/** Hand card width (CardFrame SIZES.hand) — the fan's own geometry. */
+/** Hand card size (CardFrame SIZES.hand) — the fan's own geometry. */
 const CARD_W = SIZES.hand.w;
+const CARD_H = SIZES.hand.h;
 
-/** The hand's measures, stage px: a card's width (a small hand prints
- *  bigger), the gap between cards that do not overlap, the margin kept at
- *  each side of the band, how far the fan rests under the turn row and how
- *  far a tapped card lifts out of it (to the row, never over it). */
 /** The smallest a name may show in the fan, rendered px. */
 const NAME_MIN = 11;
 /** The most cards whose covered strips still carry their names. */
 const NAMED_MAX = 5;
-const FAN = { wide: 108, narrow: 96, gap: 4, side: 6, rest: 24, lift: 22, hover: 10 } as const;
+/** The hand's measures, px: a card's widest (a small hand prints bigger) and
+ *  narrowest, the gap between cards that do not overlap, the margin kept at
+ *  each side, how much of a covered card a full hand tries to keep showing,
+ *  and how far a tapped card and one under the pointer lift out of the fan. */
+const FAN = { wide: 108, narrow: 96, least: 68, gap: 4, side: 6, show: 0.55, lift: 12, hover: 6 } as const;
 
 /**
- * Where the fan puts `total` cards across `avail` stage px. The hand owns
- * the band's whole width, centred: cards keep one size (they never shrink
- * to slivers of themselves) and overlap only as far as the width makes them
- * — `step` is what each card shows before the next covers it, so ten cards
- * still leave every one a strip to tap.
+ * Where the fan puts `total` cards across `avail` px, none taller than
+ * `maxHeight`. The hand is centred between its two piles: a card is as big
+ * as the row lets it be, a growing hand prints its cards a little smaller
+ * (never under FAN.least) so each still shows about half of itself, and past
+ * that the cards close up — `step` is what each shows before the next covers
+ * it, so ten cards still leave every one a strip to tap.
  */
-export function handFan(total: number, avail: number): { scale: number; width: number; step: number } {
-  const width = total <= 3 ? FAN.wide : FAN.narrow;
-  const step = total > 1 ? Math.min(width + FAN.gap, (avail - FAN.side * 2 - width) / (total - 1)) : width;
+export function handFan(total: number, avail: number, maxHeight: number = CARD_H): { scale: number; width: number; step: number } {
+  const room = avail - FAN.side * 2;
+  const spread = total > 1 ? room / (1 + FAN.show * (total - 1)) : room;
+  const width = Math.min(total <= 3 ? FAN.wide : FAN.narrow, maxHeight * (CARD_W / CARD_H), Math.max(FAN.least, spread));
+  const step = total > 1 ? Math.min(width + FAN.gap, (room - width) / (total - 1)) : width;
   return { scale: width / CARD_W, width, step };
 }
 
 /**
- * Your hand — a centred fan along the bottom of the stage, the band's whole
- * width its own. Each card prints the CLEAN FACE (CardFrame `clean`): its
+ * Your hand — a centred fan standing on the foot of its row (Board's box
+ * between your two piles). Each card prints the CLEAN FACE (CardFrame `clean`): its
  * art, its seal (an item's price, a hero's HP) and its name along the foot
  * — nothing cut; the full
  * card is a hold away. Cards overlap only when the width makes them, and a
  * covered card sets its name in the strip it still shows (or, when that
  * strip is too narrow to read, shows art and seal only). A tapped card
- * lifts out of the fan, and a card that can be played right now breathes
- * with a gold light. Drag a card onto a hero (a pointer) or tap it and then
+ * lifts out of the fan, and a card that can be played right now wears a
+ * gold keyline that breathes. Drag a card onto a hero (a pointer) or tap it and then
  * the hero.
  */
-export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongPress, onHover, onDragEndOver, onBlocked, arriving, registerCard, avail }: Props) {
+export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongPress, onHover, onDragEndOver, onBlocked, arriving, registerCard, avail, maxHeight }: Props) {
   const total = cards.length;
   const calm = useFxCalm();
   // Per-card timers held in refs so they survive re-renders. Without this,
@@ -118,7 +126,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
   if (total === 0 && !leaving) return null;
 
   const hoveredIdx = hoveredIid ? cards.findIndex((c) => c.iid === hoveredIid) : -1;
-  const fan = handFan(total, avail);
+  const fan = handFan(total, avail, maxHeight);
   // The fan is laid out at the card's own size and scaled as one, so the
   // overlap and the lifts are given in the card's px.
   const overlap = (fan.step - fan.width) / fan.scale;
@@ -145,15 +153,20 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
       onMouseLeave={closePreview}
       onPointerLeave={closePreview}
       style={{
+        // Stood on the foot of the row's box and scaled about that foot, so
+        // the fan keeps its place whatever size its cards print.
+        position: 'absolute',
+        left: '50%',
+        bottom: 0,
+        marginLeft: -avail / 2,
         display: 'flex',
         gap: 0,
-        padding: `${FAN.rest / fan.scale}px 0 0`,
         overflow: 'visible',
         justifyContent: 'center',
-        alignItems: 'flex-start',
+        alignItems: 'flex-end',
         width: avail,
         transform: `scale(${fan.scale})`,
-        transformOrigin: 'top center',
+        transformOrigin: 'bottom center',
         // The fan spans the whole band; without this it eats clicks meant
         // for anything it overlaps. Cards re-enable pointer events below.
         pointerEvents: 'none',
@@ -280,8 +293,8 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                 pointerEvents: 'auto', // opt back in under the fan's pointerEvents:none
               }}
             >
-              {/* The usable light: a gold halo that breathes round a card that
-                  can be played now (steady under calm motion). */}
+              {/* The usable cue: a flat gold keyline that breathes round a card
+                  that can be played now (steady under calm motion). */}
               {usable && (
                 <motion.div
                   aria-hidden
@@ -291,7 +304,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                   transition={calm ? { duration: 0.2 } : { duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
                   style={{
                     position: 'absolute', inset: 0, borderRadius: 10,
-                    boxShadow: `0 0 0 2px ${poster.you}, 0 0 16px 4px ${poster.you}99`,
+                    boxShadow: `0 0 0 3px ${poster.you}`,
                     pointerEvents: 'none',
                   }}
                 />

@@ -54,11 +54,10 @@ const sideStart = (rival: boolean) =>
 /** The last card down: ~1.7 s. */
 const DEAL_END_MS = sideStart(false) + (PER_SIDE - 1) * STAGGER_MS + LAND_MS;
 
-// How far a card travels, in the stage's own px (the stage is one portrait
-// layout, scaled to the screen). It leaves its owner's hand (off the top or
-// bottom edge of the table) — the Active sits a row further in than the
+// How far a card travels, px. It leaves its owner's hand (off the top or
+// bottom edge of the sheet) — the lane sits a row further in than the
 // bench — and starts toward the middle, where the hand is held.
-const REACH = { bench: 105, lane: 230, col: 60 } as const;
+const REACH = { bench: 105, lane: 215, col: 60 } as const;
 /** Each column's tilt in flight (degrees), mirrored for your side. */
 const TILT = [6, -3, -6] as const;
 
@@ -86,8 +85,8 @@ function entranceFor(deal: Deal, owner: PlayerID, slot: DealSlot): Entrance | nu
   const delay = sideStart(rival) + order * STAGGER_MS - (performance.now() - deal.t0);
   if (delay < 0) return null;
   const reach = REACH;
-  // Both Actives stand in the middle column, facing each other across the line.
-  const col = slot === 'active' ? 1 : slot;
+  // The rival's Active holds the lane's left column, yours its right.
+  const col = slot === 'active' ? (rival ? 0 : 2) : slot;
   const y = (rival ? -1 : 1) * (slot === 'active' ? reach.lane : reach.bench);
   const x = (1 - col) * reach.col;
   const tilt = TILT[col] * (rival ? 1 : -1);
