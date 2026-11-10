@@ -1,21 +1,24 @@
 /**
- * The hero sheet — Pokémon TCG Pocket's action view, printed in the poster
- * idiom. Tapping a hero lifts its card, enlarged, low and centred over the
- * dimmed board, and the card's lower half IS the turn's menu:
+ * The hero sheet — Pokémon TCG Pocket's action view, worn in Deadlock's own
+ * interface: the dark teal-black panel of its tooltips, framed in the side's
+ * colour (amber for yours, sapphire for the rival's). Tapping a hero lifts
+ * its card, enlarged, low and centred over the dimmed board:
  *
  *   art board      the hero's portrait, whole (face and shoulders), at the
  *                  right under the level ring; beside it the hero's state
- *                  right now — its name, its HP as a big number over the
- *                  bar the board draws, its Shield, its attack, and every
- *                  status on it as a chip; an "i" (top left) opens the
- *                  hero's paperwork — stats, profile, active effects — over
- *                  the card
- *   equipment      the worn items as small gold-framed icons riding the
- *                  card's left edge; a tap explains one, and an active item
- *                  is cast from there
- *   actions        a passive as a quiet row, then the skill(s), the ultimate
- *                  and the attack as big plates: a usable one is lit and
- *                  glows, a blocked one dims and says why, a used one says USED
+ *                  right now — its name, its health as Deadlock's segmented
+ *                  bar with the plain number (a Shield as pale steel
+ *                  segments), its attack, and every status on it as a chip;
+ *                  an "i" (top left) opens the hero's paperwork
+ *   inventory      the worn items as a row of Deadlock's shop tiles under
+ *                  the art; a tap explains one (and casts an active one), and
+ *                  a "+n" tile opens the rest when they do not all fit
+ *   abilities      one Deadlock ability tile each — a coloured header band
+ *                  with the name and the price, the rules in cream under it:
+ *                  a passive (cream band), the skill(s), the ultimate and the
+ *                  attack. A usable one is ringed in its colour (a charged
+ *                  ultimate glows and wears the ultimate mark); a held one
+ *                  is flat and dimmed with its one reason; a used one says USED
  *
  * Under the card, Retreat (with its price) and Close are pills. A rival's
  * hero, or one with nothing to offer, prints the same card read-only.
@@ -39,37 +42,40 @@ import { ChargePips, CooldownDial, LockGlyph } from './AbilityDial';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { spring, text, fonts } from '../tokens';
-import { poster, chamfer, clipBoth, scrimStyle, levelFrame, levelFrameKeylines, printEdge, soulCoin, hpBarInk } from '../poster';
-import { SwordIcon, ShieldIcon } from '../card/Icons';
+import { poster, scrimStyle, printEdge, shopInk } from '../poster';
+import {
+  scale as T, Souls, HpSegments, hpNumberStyle, ultimateGlyph, panelStyle, plateStyle, bandStyle, chargedGlow, DecoRule,
+} from '../hud';
+import { SwordIcon } from '../card/Icons';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
-import { PosterButton } from '../chrome';
 import { RuleText, type Scale } from '../card/RuleText';
 import { useViewport } from '../hooks/useViewport';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
 
-/** Stencil eyebrow — plate subtitles, section labels, chips. */
+/** Stencil eyebrow — section labels, chips. */
 const eyebrow = {
   fontFamily: fonts.display,
-  fontSize: 10.5,
-  letterSpacing: '0.2em',
+  fontSize: T.label,
+  letterSpacing: '0.16em',
   textTransform: 'uppercase' as const,
   lineHeight: 1,
 } as const;
 
-/** The card's green frame and the charcoal margin inside it, in px. */
-const FRAME = 4;
-const PAD = 5;
-/** A hairline on the card's charcoal, and on the paper panels. */
+/** The panel's margin round the art board, in px. */
+const PAD = 6;
+/** A hairline on the dark panel. */
 const RULE_DARK = 'rgba(232, 224, 204, 0.16)';
-/** The marks (dials, pips, locks) on the card's charcoal and its plates. */
+/** The marks (dials, pips, locks) on the dark panel. */
 const MARKS_DARK = { ink: poster.cream, track: 'rgba(232, 224, 204, 0.28)', faint: poster.creamFaint };
-const MARKS_PAPER = { ink: poster.ink, track: poster.inkRule, faint: poster.inkFaint };
+/** An inventory tile's side and the gap between tiles. */
+const TILE = 40;
+const TILE_GAP = 6;
 
 /** Your Active's attack, offered on its sheet: a swing at the rival Active for
  *  its bullet damage. Free and one-way, one a turn — and it ends the turn's
  *  Act, so abilities and a Retreat come before it (a hero may use its ability
- *  and then attack). A hero with reach may name any living rival: the plate
+ *  and then attack). A hero with reach may name any living rival: the tile
  *  then still speaks for the default target (the first the engine lists), and
  *  tapping it closes the sheet and asks who (`onAttack`; the board arms the
  *  targeting, see board/attackAim.ts). */
@@ -89,7 +95,7 @@ export interface AttackOffer {
  *  item it wears, as the sheet offers it: every gate for using it is open (its
  *  turn, the hero's one ability of the turn, the unlock level, statuses,
  *  cooldown or charges, the souls it costs, a target), or the short reason it
- *  can't be used, shown inside its plate. */
+ *  can't be used, shown inside its tile. */
 export interface SkillOffer {
   canUse: boolean;
   blockedReason?: string;
@@ -102,13 +108,13 @@ interface Props {
   /** Each kit ability's offer, by ability id: the skill and the ultimate. One
    *  with none is not usable. */
   skills?: Record<AbilityId, SkillOffer>;
-  /** The player tapped this ability's plate. */
+  /** The player tapped this ability's tile. */
   onUseSkill?: (skillId: AbilityId) => void;
   /** Each worn active item's offer, by item iid. */
   items?: Record<string, SkillOffer>;
   /** The player tapped this active item's Use. */
   onUseItem?: (itemIid: string) => void;
-  /** The Attack plate — on the local player's Active only. */
+  /** The Attack tile — on the local player's Active only. */
   attack?: AttackOffer;
   /** Retreat lives on your Active's sheet: he goes to the bench and a bench
    *  hero takes the fight. Absent when nobody on the bench can step in. */
@@ -131,6 +137,20 @@ type PlateMode = 'ready' | 'used' | 'blocked' | 'quiet';
 
 const souls = (n: number) => `${n} soul${n === 1 ? '' : 's'}`;
 const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+/** A reason that says the souls are short ("Need 2 souls", "Not enough souls"). */
+const shortOfSouls = (reason?: string) => !!reason && /soul/i.test(reason) && /^(need|not enough)/i.test(reason);
+
+/** An ability's band colour, read off its own rule: Deadlock's weapon orange
+ *  for bullet damage, its spirit purple for spirit damage, vitality green for
+ *  a heal or a Shield with no damage in it; `fallback` when the rule says
+ *  none of these. */
+function abilityInk(rule: string, fallback: string): string {
+  const t = rule.toLowerCase();
+  if (/bullet damage/.test(t)) return shopInk('weapon').ink;
+  if (/spirit damage/.test(t)) return shopInk('spirit').ink;
+  if (!/damage/.test(t) && /\b(heal|heals|shield|restore|restores)\b/.test(t)) return shopInk('vitality').ink;
+  return fallback;
+}
 
 export function HeroDetailSheet({
   card, isMine, skills: skillOffers, onUseSkill, items: itemOffers, onUseItem, attack,
@@ -142,11 +162,13 @@ export function HeroDetailSheet({
   const calm = useFxCalm();
   const [infoOpen, setInfoOpen] = useState(false);
   const [openChip, setOpenChip] = useState<string | null>(null);
+  const [allItems, setAllItems] = useState(false);
 
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') return null;
 
   const mine = !!isMine;
+  const side = mine ? poster.you : poster.rival;
   const kit = heroAbilities(data);
   const skillAbilities = kit.filter((x) => x.kind === 'skill').map((x) => x.ability);
   const passiveAbilities = kit.filter((x) => x.kind === 'passive').map((x) => x.ability);
@@ -156,15 +178,25 @@ export function HeroDetailSheet({
   // against this hero's live Spirit (Bullet) Power.
   const describe = (a: HeroAbilityDef) => sentence(a.text);
   const scale: Scale = { spirit: effectiveSpirit(card), bullet: effectiveAtk(card), who: data.name };
-  // Which ability the hero has used this turn, so only that plate reads USED.
+  // Which ability the hero has used this turn, so only that tile reads USED.
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
-  // What a kit ability costs (`kitCost`, the engine's own price). A charged
-  // ultimate shows its printed price coming down: "16 → 7 souls".
-  const price = (abilityId: AbilityId) => {
+  // What a kit ability costs (`kitCost`, the engine's own price), as the soul
+  // wisp and its number. A charged ultimate shows its printed price coming
+  // down: "16 → 7" (named "16 → 7 souls").
+  const price = (abilityId: AbilityId, short: boolean): ReactNode => {
     const n = kitCost(card, abilityId);
     const face = abilityId === data.ult ? ultimateCard(abilityId) : undefined;
-    if (face?.charged && n !== ultPrice(face)) return `${ultPrice(face)} → ${souls(n)}`;
-    return n > 0 ? souls(n) : face?.charged ? 'Free' : undefined;
+    const tone = short ? 'short' : 'mint';
+    if (face?.charged && n !== ultPrice(face)) {
+      return (
+        <span role="img" aria-label={`${ultPrice(face)} → ${souls(n)}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          <span aria-hidden style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: T.label, lineHeight: 1, textDecoration: 'line-through', opacity: 0.7 }}>{ultPrice(face)}</span>
+          <Souls n={n} size={T.body} tone={tone} plate />
+        </span>
+      );
+    }
+    if (n > 0) return <span role="img" aria-label={souls(n)} style={{ display: 'inline-flex' }}><Souls n={n} size={T.body} tone={tone} plate /></span>;
+    return face?.charged ? 'Free' : undefined;
   };
   // How an action prints: a rival's always reads quietly; yours is lit while
   // every gate is open, USED the turn it went, and dimmed with its reason.
@@ -176,23 +208,28 @@ export function HeroDetailSheet({
   const ultFull = Math.max(1, ULT_COOLDOWN - cooldownCut(card, 'ult'));
   const ultFace = ultimateCard(data.ult);
 
-  // ---- Geometry: the trading-card ratio, as wide as the screen allows. ----
+  // ---- Geometry: the trading-card width, as wide as the screen allows; the
+  //      height is the content's own. ----
   const cardW = isMobile ? Math.min(vw - 32, 360) : 360;
-  const cardH = Math.round(cardW * 7 / 5);
-  const artH = Math.round(cardH * 0.42);
+  const artH = Math.round(cardW * 7 / 5 * 0.42);
   // The portrait keeps the card art's own shape (280×380), so the hero is
   // shown whole — never a strip across the eyes.
   const portraitW = Math.round(artH * 280 / 380);
   const shield = card.statuses.find((st) => st.id === 'shield')?.value ?? 0;
   const shownStatuses = card.statuses.filter((st) => st.id !== 'shield');
+  // The readout's width beside the portrait, and the name's step to fit it.
+  const readoutW = cardW - 2 * PAD - 2 - portraitW - 16;
+  const nameSize = [T.title, T.number, T.body].find((sz) => data.name.length * sz * 0.74 <= readoutW) ?? T.body;
 
-  // ---- The actions, in Pocket's order: skill(s), ultimate, attack. ----
-  const rows: { key: string; quiet: boolean; node: ReactNode }[] = [];
+  // ---- The actions, in Pocket's order: passive, skill(s), ultimate, attack. ----
+  const rows: { key: string; node: ReactNode }[] = [];
+  const spiritInk = shopInk('spirit').ink;
+  const weaponInk = shopInk('weapon').ink;
 
   for (const ability of passiveAbilities) {
     rows.push({
-      key: ability.id, quiet: true,
-      node: <PassiveRow name={ability.name} trigger={ability.trigger} description={describe(ability)} scale={scale} />,
+      key: ability.id,
+      node: <PassiveTile name={ability.name} trigger={ability.trigger} description={describe(ability)} scale={scale} />,
     });
   }
 
@@ -203,17 +240,18 @@ export function HeroDetailSheet({
     const mode = modeOf(usable, used, offer?.blockedReason);
     const left = card.cooldowns?.[ability.id] ?? 0;
     const full = Math.max(left, ability.cooldown ?? 1);
+    const reason = mode === 'blocked' ? offer?.blockedReason : undefined;
     rows.push({
-      key: ability.id, quiet: mode === 'quiet',
+      key: ability.id,
       node: (
-        <ActionPlate
-          kind="skill" mode={mode} calm={calm} scale={scale}
+        <AbilityTile
+          kind="skill" ink={abilityInk(ability.text, spiritInk)} mode={mode} calm={calm} scale={scale}
           name={ability.name}
           body={describe(ability)}
-          cost={price(ability.id)}
+          cost={price(ability.id, shortOfSouls(reason))}
           used={used}
-          status={left > 0 ? <CooldownDial left={left} full={full} ink={MARKS_DARK.ink} track={MARKS_DARK.track} label={readyIn(left, full)} /> : undefined}
-          reason={mode === 'blocked' ? offer?.blockedReason : undefined}
+          status={left > 0 ? <CooldownDial left={left} full={full} size={26} ink={MARKS_DARK.ink} track={MARKS_DARK.track} label={readyIn(left, full)} /> : undefined}
+          reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
         />
       ),
@@ -228,30 +266,24 @@ export function HeroDetailSheet({
     const mode = modeOf(usable, used, offer?.blockedReason);
     const locked = level < ULT_UNLOCK_LEVEL;
     const left = card.cooldowns?.[abilityId] ?? 0;
-    // Locked: a lock and "Lv 2" beside the price. On its cooldown: the dial.
-    const status = locked ? (
-      <span role="img" aria-label={`Unlocks at Level ${ULT_UNLOCK_LEVEL}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-        <LockGlyph size={12} color={MARKS_DARK.ink} />
-        <span style={{ ...eyebrow, fontSize: 10, color: MARKS_DARK.ink }}>{`Lv ${ULT_UNLOCK_LEVEL}`}</span>
-      </span>
-    ) : left > 0 ? (
-      <CooldownDial left={left} full={ultFull} ink={MARKS_DARK.ink} track={MARKS_DARK.track} label={readyIn(left, ultFull)} />
-    ) : undefined;
+    const reason = mode === 'blocked' ? offer?.blockedReason : undefined;
     rows.push({
-      key: abilityId, quiet: mode === 'quiet',
+      key: abilityId,
       node: (
-        <ActionPlate
-          kind="ult" mode={mode} calm={calm} scale={scale}
+        <AbilityTile
+          kind="ult" ink={abilityInk(ultFace.text ?? '', spiritInk)} mode={mode} calm={calm} scale={scale}
           name={ultFace.name}
           // A charged ultimate is named so: its price is its own, not its size's.
-          subtitle={`Ultimate · ${ultFace.charged ? 'charged' : ultFace.size}`}
+          ultLabel={`Ultimate · ${ultFace.charged ? 'charged' : ultFace.size}`}
           body={sentence(ultFace.text ?? '')}
           note={ultFace.charged?.text}
-          cost={price(abilityId)}
+          cost={price(abilityId, shortOfSouls(reason))}
           used={used}
-          status={status}
-          art={<UltArt heroId={ultFace.linkedHero} locked={locked} />}
-          reason={mode === 'blocked' ? offer?.blockedReason : undefined}
+          status={!locked && left > 0
+            ? <CooldownDial left={left} full={ultFull} size={26} ink={MARKS_DARK.ink} track={MARKS_DARK.track} label={readyIn(left, ultFull)} />
+            : undefined}
+          art={<UltArt heroId={ultFace.linkedHero} locked={locked} ink={abilityInk(ultFace.text ?? '', spiritInk)} />}
+          reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(abilityId); onClose(); } : undefined}
         />
       ),
@@ -260,14 +292,14 @@ export function HeroDetailSheet({
 
   if (attack) {
     // The attack ends the turn's Act: the abilities come first.
-    if (skillAbilities.length > 0 || !!ultFace) rows.push({ key: 'then', quiet: false, node: <ThenRule /> });
+    if (skillAbilities.length > 0 || !!ultFace) rows.push({ key: 'then', node: <ThenRule /> });
     const usable = mine && !attack.blockedReason && !attack.made;
     const mode: PlateMode = !mine ? 'quiet' : attack.made ? 'used' : usable ? 'ready' : 'blocked';
     rows.push({
-      key: 'attack', quiet: mode === 'quiet',
+      key: 'attack',
       node: (
-        <ActionPlate
-          kind="attack" mode={mode} calm={calm} scale={scale}
+        <AbilityTile
+          kind="attack" ink={weaponInk} mode={mode} calm={calm} scale={scale}
           name="Attack"
           body={usable ? attack.line : undefined}
           cost="Free"
@@ -280,13 +312,12 @@ export function HeroDetailSheet({
     });
   }
 
-  // ---- Equipment: the worn items, on the card's left edge. ----
-  const chipPitch = Math.min(42, Math.floor((artH - 12) / Math.max(1, attached.length)));
-  const chipBox = chipPitch - 6;
-  const chipLeft = -FRAME - 14;
-  /** The top of chip `i` (attached[0] topmost), in the card's padding box:
-   *  the stack ends 6px above the art board's foot, over the name band. */
-  const chipTop = (i: number) => PAD + artH - (attached.length - i) * chipPitch;
+  // ---- Inventory: as many tiles as the row holds; past that, a "+n" tile
+  //      opens the rest. ----
+  const rowW = cardW - 2 * PAD - 2 - 8;
+  const fit = Math.max(1, Math.floor((rowW + TILE_GAP) / (TILE + TILE_GAP)));
+  const overflow = attached.length > fit && !allItems;
+  const shownItems = overflow ? attached.slice(0, fit - 1) : attached;
   const opened = attached.findIndex((eq) => eq.iid === openChip);
 
   const closeTo = (fn: () => void) => () => { fn(); onClose(); };
@@ -310,7 +341,7 @@ export function HeroDetailSheet({
         padding: '0 16px',
       }}
     >
-      <div aria-hidden style={{ flex: `${isMobile ? 3 : 2} 1 0px`, minHeight: isMobile ? 56 : 24, width: '100%' }} />
+      <div aria-hidden style={{ flex: `${isMobile ? 3 : 2} 1 0px`, minHeight: isMobile ? 48 : 24, width: '100%' }} />
       <motion.div
         role="dialog"
         aria-label="Hero sheet"
@@ -321,90 +352,72 @@ export function HeroDetailSheet({
         transition={calm ? { duration: 0 } : spring.snappy}
         style={{ flexShrink: 0, width: cardW, maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 12 }}
       >
-        {/* THE CARD — green level frame, charcoal inside. Not clipped: the
-            equipment rides over its left edge. */}
+        {/* THE CARD — Deadlock's dark panel, framed in the side's colour. */}
         <div
+          data-hero-card
           onClick={() => setOpenChip(null)}
           style={{
+            ...panelStyle,
             position: 'relative',
-            width: cardW, minHeight: cardH, boxSizing: 'border-box',
+            width: cardW, boxSizing: 'border-box',
             display: 'flex', flexDirection: 'column',
-            padding: PAD, borderRadius: 14,
-            background: poster.frame,
-            ...levelFrame(level, FRAME),
-            boxShadow: `${levelFrameKeylines}, 0 22px 44px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.35)`,
-            color: poster.cream,
+            padding: PAD, borderRadius: 12,
+            border: `1px solid ${side}`,
+            boxShadow: `${panelStyle.boxShadow}, inset 0 0 0 1px rgba(0, 0, 0, 0.5)`,
           }}
         >
-          {/* ART BOARD — portrait, form badge, name band; the "i" and the
-              level ring in its top corners. */}
+          {/* ART BOARD — portrait, form badge, the hero's readout; the "i" and
+              the level ring in its top corners. */}
           <div style={{
             position: 'relative', height: artH, flexShrink: 0, overflow: 'hidden',
-            borderRadius: 8, background: poster.ground,
+            borderRadius: 7, background: poster.ground,
           }}>
             {/* The portrait, whole, at the right. */}
             <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: portraitW }}>
               <HeroPortrait cardId={data.id} art={form?.art} />
               <div aria-hidden style={{
                 position: 'absolute', inset: 0, pointerEvents: 'none',
-                background: `linear-gradient(90deg, ${poster.ground} 0%, transparent 22%)`,
+                background: `linear-gradient(90deg, ${poster.ground} 0%, transparent 18%)`,
               }} />
             </div>
             <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: printEdge, zIndex: 2 }} />
             {form && (
               <span role="note" style={{
                 position: 'absolute', top: 10, left: 44, zIndex: 3,
-                padding: '5px 9px', background: poster.ink, color: poster.cream,
+                padding: '4px 8px', background: poster.ink, color: poster.cream,
                 border: `1.5px solid ${poster.status.buff}`, borderRadius: 3,
-                ...eyebrow, fontSize: 11,
+                ...eyebrow, letterSpacing: '0.12em',
               }}>{`${form.label} · ${form.turns} turn${form.turns === 1 ? '' : 's'}`}</span>
             )}
-            {/* The hero right now: name, HP over its bar, Shield, attack,
-                statuses — beside the portrait, under the "i". */}
+            {/* The hero right now: name, health, attack, statuses — beside the
+                portrait (never over it), under the "i". */}
             <div data-hero-readout style={{
-              position: 'absolute', left: 0, top: 0, bottom: 0, right: portraitW - 14, zIndex: 3,
+              position: 'absolute', left: 0, top: 0, bottom: 0, width: readoutW + 12, zIndex: 3,
               display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 7,
-              padding: `44px 4px 12px ${attached.length > 0 ? 26 : 12}px`, boxSizing: 'border-box',
+              padding: '42px 0 10px 10px', boxSizing: 'border-box',
             }}>
               <span style={{
-                fontFamily: fonts.display, fontSize: Math.min(21, (cardW - portraitW - 24) / (data.name.length * 0.74)), color: poster.cream,
+                fontFamily: fonts.display, fontSize: nameSize, color: poster.cream,
                 letterSpacing: '0.05em', textTransform: 'uppercase', lineHeight: 1, whiteSpace: 'nowrap',
               }}>{data.name}</span>
               <div role="img" aria-label={`${card.hp} of ${card.hpMax} HP${shield > 0 ? `, Shield ${shield}` : ''}`}
-                style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span aria-hidden style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                  <span style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: 34, lineHeight: 0.9, letterSpacing: '-0.02em', color: poster.cream, fontVariantNumeric: 'tabular-nums' }}>{card.hp}</span>
-                  <span style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: 15, lineHeight: 1, color: poster.creamDim, fontVariantNumeric: 'tabular-nums' }}>{`/ ${card.hpMax}`}</span>
-                  <span style={{ ...eyebrow, fontSize: 10, color: poster.creamDim, marginLeft: 1 }}>HP</span>
+                style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span aria-hidden style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span style={hpNumberStyle(T.display)}>{card.hp}</span>
+                  <span style={{ ...hpNumberStyle(T.body), color: poster.creamDim }}>{`/ ${card.hpMax}`}</span>
                   {shield > 0 && (
-                    <span style={{
-                      marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 3, alignSelf: 'center',
-                      padding: '3px 7px', borderRadius: 4, background: poster.stat.shield, color: poster.cream,
-                      fontFamily: fonts.ui, fontWeight: 800, fontSize: 14, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
-                    }}>
-                      <ShieldIcon size={12} color={poster.cream} />{shield}
-                    </span>
+                    <span style={{ ...hpNumberStyle(T.body), color: poster.shield, marginLeft: 4 }}>{`+${shield}`}</span>
                   )}
                 </span>
-                <span aria-hidden style={{
-                  display: 'block', height: 8, borderRadius: 4, overflow: 'hidden', boxSizing: 'border-box',
-                  background: 'rgba(0, 0, 0, 0.55)', border: `1px solid ${RULE_DARK}`,
-                }}>
-                  <span style={{
-                    display: 'block', height: '100%', borderRadius: 4,
-                    width: `${card.hpMax > 0 ? Math.max(0, Math.min(1, card.hp / card.hpMax)) * 100 : 0}%`,
-                    background: hpBarInk(card.hp, card.hpMax),
-                  }} />
-                </span>
+                <HpSegments hp={card.hp} max={card.hpMax} shield={shield} width="calc(100% - 4px)" height={9} style={{ marginLeft: 2 }} />
               </div>
               <span role="img" aria-label={`${scale.bullet} attack`} style={{
+                ...plateStyle,
                 alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '4px 8px', borderRadius: 4,
-                background: poster.ink, border: `1px solid ${poster.creamFaint}`, color: poster.cream,
+                padding: '4px 8px',
               }}>
                 <SwordIcon size={13} color={poster.cream} />
-                <span style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: 16, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{scale.bullet}</span>
-                <span style={{ ...eyebrow, fontSize: 9.5, color: poster.creamDim }}>Attack</span>
+                <span style={{ fontFamily: fonts.ui, fontWeight: 800, fontSize: T.number, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{scale.bullet}</span>
                 {hasSpike(card, 'weapon') && <SpikeMark slot="weapon" size={11} />}
               </span>
               {shownStatuses.length > 0 && (
@@ -426,11 +439,11 @@ export function HeroDetailSheet({
                 position: 'absolute', top: 8, left: 8, zIndex: 9,
                 width: 28, height: 28, padding: 0, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: infoOpen ? poster.cream : 'rgba(23, 20, 16, 0.8)',
+                background: infoOpen ? poster.cream : 'rgba(8, 20, 19, 0.85)',
                 color: infoOpen ? poster.ink : poster.cream,
                 border: `1.5px solid ${poster.cream}`,
                 boxShadow: '0 1px 4px rgba(0, 0, 0, 0.5)',
-                fontFamily: 'Georgia, "Times New Roman", serif', fontStyle: 'italic', fontWeight: 700, fontSize: 16, lineHeight: 1,
+                fontFamily: 'Georgia, "Times New Roman", serif', fontStyle: 'italic', fontWeight: 700, fontSize: T.number, lineHeight: 1,
                 cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
               }}
             >i</button>
@@ -439,53 +452,59 @@ export function HeroDetailSheet({
             </div>
           </div>
 
-          {/* ACTIONS — the lower half of the card: a passive reads quietly,
-              then the skill(s), the ultimate and the attack as plates. */}
-          <div style={{
-            flex: '1 1 auto',
-            display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8,
-            padding: '10px 5px 6px',
-          }}>
-            {rows.map((r, i) => (
-              <div key={r.key} style={r.quiet && i > 0 && rows[i - 1].quiet ? { borderTop: `1px solid ${RULE_DARK}`, paddingTop: 8 } : undefined}>
-                {r.node}
-              </div>
-            ))}
-          </div>
-
-          {/* EQUIPMENT — gold-framed chips over the card's left edge; a tap
-              explains one beside it. */}
-          {attached.map((eq, i) => {
-            const eqData = CARDS_BY_ID[eq.cardId];
-            const rider = eqData?.type === 'hero';
-            const open = openChip === eq.iid;
-            const left = itemCooldown(eq);
-            return (
-              <button
-                key={eq.iid}
-                type="button"
-                aria-label={eqData?.name ?? eq.cardId}
-                aria-expanded={open}
-                onClick={(e) => { e.stopPropagation(); setInfoOpen(false); setOpenChip(open ? null : eq.iid); }}
-                style={{
-                  position: 'absolute', left: chipLeft, top: chipTop(i), zIndex: 7,
-                  width: chipBox, height: chipBox, padding: 2, boxSizing: 'border-box',
-                  borderRadius: 8, border: 'none', lineHeight: 0,
-                  background: poster.gold,
-                  boxShadow: open
-                    ? `0 0 0 2px ${poster.cream}, 0 0 12px 2px rgba(217, 182, 74, 0.7)`
-                    : `0 0 0 1.5px ${poster.ink}, 0 3px 8px rgba(0, 0, 0, 0.5)`,
-                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                }}
-              >
-                {rider ? (
-                  <HeroBadge cardId={eq.cardId} size={chipBox - 4} />
-                ) : (
-                  <ItemIcon itemId={eq.cardId} size={chipBox - 4} marks={{ cooldown: left || undefined, charges: eq.charges ?? undefined }} />
-                )}
-              </button>
-            );
-          })}
+          {/* INVENTORY — the worn items as Deadlock's shop tiles, in a row;
+              a tap explains one under the row. */}
+          {attached.length > 0 && (
+            <div data-hero-items role="group" aria-label="Worn items" style={{
+              display: 'flex', flexWrap: 'wrap', gap: TILE_GAP, padding: '8px 4px 2px',
+            }}>
+              {shownItems.map((eq) => {
+                const eqData = CARDS_BY_ID[eq.cardId];
+                const rider = eqData?.type === 'hero';
+                const open = openChip === eq.iid;
+                const left = itemCooldown(eq);
+                return (
+                  <button
+                    key={eq.iid}
+                    type="button"
+                    aria-label={eqData?.name ?? eq.cardId}
+                    aria-expanded={open}
+                    onClick={(e) => { e.stopPropagation(); setInfoOpen(false); setOpenChip(open ? null : eq.iid); }}
+                    style={{
+                      position: 'relative', width: TILE, height: TILE, padding: 0, flexShrink: 0,
+                      border: 'none', background: 'transparent', lineHeight: 0, borderRadius: 7,
+                      boxShadow: open ? `0 0 0 2px ${poster.cream}, 0 0 10px 1px rgba(232, 224, 204, 0.45)` : undefined,
+                      cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    {rider ? (
+                      <span style={{ ...plateStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', width: TILE, height: TILE, boxSizing: 'border-box', borderColor: poster.status.buff }}>
+                        <HeroBadge cardId={eq.cardId} size={TILE - 8} />
+                      </span>
+                    ) : (
+                      <ItemIcon itemId={eq.cardId} size={TILE} marks={{ cooldown: left || undefined, charges: eq.charges ?? undefined }} />
+                    )}
+                  </button>
+                );
+              })}
+              {(overflow || allItems) && attached.length > fit && (
+                <button
+                  type="button"
+                  aria-label={allItems ? 'Show fewer items' : `${attached.length - shownItems.length} more items`}
+                  aria-expanded={allItems}
+                  onClick={(e) => { e.stopPropagation(); setAllItems((v) => !v); }}
+                  style={{
+                    ...plateStyle,
+                    width: TILE, height: TILE, padding: 0, flexShrink: 0, boxSizing: 'border-box',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderStyle: 'dashed', borderColor: poster.creamDim,
+                    fontFamily: fonts.ui, fontWeight: 800, fontSize: T.number, lineHeight: 1,
+                    cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                  }}
+                >{allItems ? '−' : `+${attached.length - shownItems.length}`}</button>
+              )}
+            </div>
+          )}
           {opened >= 0 && (
             <ItemPopover
               item={attached[opened]}
@@ -495,13 +514,16 @@ export function HeroDetailSheet({
               usedId={usedSkill}
               offer={itemOffers?.[attached[opened].iid]}
               onUse={onUseItem ? closeTo(() => onUseItem(attached[opened].iid)) : undefined}
-              style={{
-                position: 'absolute', zIndex: 10,
-                left: chipLeft + chipBox + 8, top: chipTop(opened),
-                width: Math.min(260, cardW - 56),
-              }}
+              style={{ margin: '8px 2px 0' }}
             />
           )}
+
+          <DecoRule color={`color-mix(in srgb, ${side} 55%, transparent)`} style={{ margin: '10px 0 2px' }} />
+
+          {/* ABILITIES — one Deadlock ability tile each. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0 0' }}>
+            {rows.map((r) => <div key={r.key}>{r.node}</div>)}
+          </div>
 
           {/* The hero's paperwork, over the card while the "i" is on. */}
           {infoOpen && (
@@ -522,7 +544,14 @@ export function HeroDetailSheet({
               disabled={!!retreat.blockedReason}
               onClick={closeTo(onRetreat)}
               ariaLabel={`Retreat ${data.name} to the bench — ${retreat.cost > 0 ? `costs ${souls(retreat.cost)}` : 'free'}`}
-              label={`Retreat · ${retreat.cost > 0 ? souls(retreat.cost) : 'free'}`}
+              label={(
+                <>
+                  <span>Retreat</span>
+                  {retreat.cost > 0
+                    ? <Souls n={retreat.cost} size={T.body} tone={shortOfSouls(retreat.blockedReason) ? 'short' : 'mint'} plate />
+                    : <span style={{ fontSize: T.label, opacity: 0.8 }}>Free</span>}
+                </>
+              )}
               caption={retreat.blockedReason ?? (retreat.incomingName ? `${retreat.incomingName} goes in` : 'You pick who goes in')}
             />
           )}
@@ -537,34 +566,37 @@ export function HeroDetailSheet({
 // ----- The actions -----
 
 /**
- * One action on the card's lower half — a skill, the ultimate or the attack.
+ * One ability as Deadlock's tooltip draws it — a skill, the ultimate or the
+ * attack: a header band in the ability's colour (its name at the left, its
+ * price at the right), the rules in cream on the dark panel under it.
  *
- *   ready    a bright plate (red; gold-edged for the ultimate; ink for the
- *            attack) with a soft glow behind it, and the whole plate is the
- *            button
- *   used     the outlined plate, dimmed, chipped USED
- *   blocked  the outlined plate, dimmed, with the reason in a small line
- *   quiet    no plate: the name, cost and rules as a row (a rival's hero)
+ *   ready    the tile is the button: ringed in its colour, lit; a charged
+ *            ultimate glows (`chargedGlow`) and wears the ultimate mark
+ *   used     flat and dimmed, the band says USED
+ *   blocked  flat and dimmed, the one reason at full strength under it
+ *   quiet    the tile as it reads (a rival's hero): no ring, not a button
  *
- * The name stays the plate's first words — the plate is found by its text.
+ * The name stays the tile's first words — the tile is found by its text.
  */
-function ActionPlate({
-  kind, mode, name, subtitle, body, note, cost, used, status, art, reason, scale, onUse, ariaLabel, calm,
+function AbilityTile({
+  kind, ink, mode, name, ultLabel, body, note, cost, used, status, art, reason, scale, onUse, ariaLabel, calm,
 }: {
   kind: 'skill' | 'ult' | 'attack';
+  /** The band's colour. */
+  ink: string;
   mode: PlateMode;
   name: string;
-  /** Under the name: "Ultimate · charged". */
-  subtitle?: string;
+  /** The ultimate's name for its mark: "Ultimate · charged". */
+  ultLabel?: string;
   body?: string;
   /** A rule on its own line under the effect (a charged ultimate's). */
   note?: string;
-  /** "2 souls", "16 → 7 souls", "Free". */
-  cost?: string;
+  /** The price: a Souls tag, "Free". */
+  cost?: ReactNode;
   used?: boolean;
-  /** What holds it, drawn: a cooldown dial, the ultimate's lock. */
+  /** What holds it, drawn: a cooldown dial. */
   status?: ReactNode;
-  /** The plate's picture, at its left: the ultimate's icon. */
+  /** The tile's picture, at its left: the ultimate's icon. */
   art?: ReactNode;
   reason?: string;
   scale: Scale;
@@ -573,65 +605,72 @@ function ActionPlate({
   calm: boolean;
 }) {
   const ready = mode === 'ready' && !!onUse;
+  const flat = mode === 'used' || mode === 'blocked';
   const go = (e: SyntheticEvent) => { e.stopPropagation(); onUse?.(); };
-  const fg = ready ? poster.paper : poster.cream;
-  const fgBody = ready ? (kind === 'attack' ? poster.cream : 'rgba(242, 230, 203, 0.94)') : poster.creamDim;
-  const glow = kind === 'ult' ? poster.gold : kind === 'skill' ? poster.red : poster.cream;
+  const glow = kind === 'ult' && ready;
 
-  const content = (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
-      {art && <span aria-hidden style={{ flexShrink: 0, lineHeight: 0, paddingTop: 1 }}>{art}</span>}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 20 }}>
-          <span style={{
-            fontFamily: fonts.display, fontSize: 16, letterSpacing: '0.06em', textTransform: 'uppercase',
-            lineHeight: 1.1, color: fg, minWidth: 0,
-          }}>{name}</span>
-          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            {used
-              ? <span style={{ ...eyebrow, fontSize: 10.5, color: poster.cream }}>USED</span>
-              : cost && <Cost label={cost} ink={fg} />}
-            {status}
-          </span>
-        </div>
-        {subtitle && (
-          <div style={{ ...eyebrow, fontSize: 9.5, marginTop: 3, color: ready ? 'rgba(242, 230, 203, 0.82)' : poster.gold }}>{subtitle}</div>
-        )}
-        {body && (
-          <div style={{ ...text.body, fontSize: 13, lineHeight: 1.4, marginTop: 5, color: fgBody }}>
-            {/* On a plate (and on the charcoal) a scaling number prints on its
-                colour as a ground, so it reads on red and dark alike. The
-                attack's line is the board's own sentence, printed as it is. */}
-            {kind === 'attack' ? body : <RuleText text={body} keywordColor={fg} scale={scale} />}
-          </div>
-        )}
-        {note && (
-          <div style={{ ...text.body, fontSize: 12, lineHeight: 1.35, marginTop: 4, fontStyle: 'italic', color: fgBody }}>
-            <RuleText text={note} keywordColor={fg} scale={scale} />
-          </div>
-        )}
-      </div>
+  const band = (
+    <div style={{
+      ...bandStyle(ink),
+      display: 'flex', alignItems: 'center', gap: 6,
+      minHeight: 28, padding: '4px 6px 4px 9px', boxSizing: 'border-box',
+    }}>
+      <span style={{ flex: 1, minWidth: 0, lineHeight: 1.1 }}>{name}</span>
+      {/* After the name in reading order (the tile is found by its name),
+          before it on screen. */}
+      {kind === 'ult' && ultLabel && (
+        <span role="img" aria-label={ultLabel} style={{ ...ultimateGlyph(15, poster.ink), order: -1, opacity: glow ? 1 : 0.55 }} />
+      )}
+      <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: T.label, letterSpacing: '0.12em' }}>
+        {used ? 'USED' : cost}
+      </span>
     </div>
   );
 
-  if (mode === 'quiet') {
-    return <div style={{ padding: '2px 2px 0' }}>{content}</div>;
-  }
+  const content = (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px 9px' }}>
+      {art && <span style={{ flexShrink: 0, lineHeight: 0, paddingTop: 1 }}>{art}</span>}
+      {(body || note) && (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {body && (
+            <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.cream }}>
+              {/* The attack's line is the board's own sentence, printed as it
+                  is; an ability's rule scales against the hero's live powers. */}
+              {kind === 'attack' ? body : <RuleText text={body} keywordColor={poster.cream} scale={scale} />}
+            </div>
+          )}
+          {note && (
+            <div style={{ ...text.body, fontSize: T.label, lineHeight: 1.35, marginTop: 4, fontStyle: 'italic', color: poster.creamDim }}>
+              <RuleText text={note} keywordColor={poster.cream} scale={scale} />
+            </div>
+          )}
+        </div>
+      )}
+      {!body && !note && <div style={{ flex: 1 }} />}
+      {status && <span style={{ flexShrink: 0, lineHeight: 0 }}>{status}</span>}
+    </div>
+  );
+  const hasBody = !!(body || note || art || status);
+
+  const shell: CSSProperties = {
+    ...plateStyle,
+    position: 'relative',
+    overflow: 'hidden',
+    borderColor: ready ? ink : 'rgba(232, 224, 204, 0.16)',
+    boxShadow: glow ? chargedGlow(ink) : ready ? `0 0 0 1px ${ink}, 0 4px 12px rgba(0, 0, 0, 0.45)` : 'none',
+  };
 
   if (!ready) {
-    // Held back: the outlined plate, its words stepped back, the reason at
-    // full strength under them.
     return (
-      <div style={{
-        padding: '10px 12px 10px',
-        border: `1px solid ${kind === 'ult' ? 'rgba(217, 182, 74, 0.55)' : 'rgba(232, 224, 204, 0.26)'}`,
-        borderRadius: 7,
-      }}>
-        <div style={{ opacity: 0.6 }}>{content}</div>
+      <div style={{ ...shell, background: flat ? 'rgba(8, 20, 19, 0.6)' : shell.background }}>
+        <div style={flat ? { opacity: 0.5, filter: 'saturate(0.55)' } : undefined}>
+          {band}
+          {hasBody && content}
+        </div>
         {reason && (
           <div style={{
-            marginTop: 8, paddingTop: 7, borderTop: `1px solid ${RULE_DARK}`,
-            ...text.body, fontSize: 12, lineHeight: 1.3, color: poster.cream, textAlign: 'center',
+            padding: '6px 10px 7px', borderTop: `1px solid ${RULE_DARK}`,
+            ...text.body, fontSize: T.label, lineHeight: 1.3, color: poster.cream, textAlign: 'center',
           }}>{reason}</div>
         )}
       </div>
@@ -639,52 +678,20 @@ function ActionPlate({
   }
 
   return (
-    <div style={{ position: 'relative' }}>
-      {/* The glow — a soft halo of the plate's colour behind it, breathing
-          slowly unless motion is calm. */}
-      <motion.span
-        aria-hidden
-        initial={false}
-        animate={calm ? { opacity: 0.8 } : { opacity: [0.55, 1, 0.55] }}
-        transition={calm ? { duration: 0 } : { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
-        style={{
-          position: 'absolute', inset: -3, borderRadius: 10,
-          background: glow, filter: 'blur(8px)', pointerEvents: 'none',
-        }}
-      />
-      <motion.div
-        role="button"
-        tabIndex={0}
-        aria-label={ariaLabel}
-        whileTap={calm ? undefined : { scale: 0.985 }}
-        onClick={go}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } }}
-        style={{
-          position: 'relative',
-          padding: '11px 13px 11px',
-          background: kind === 'attack' ? poster.ink : poster.red,
-          border: `2px solid ${kind === 'ult' ? poster.gold : kind === 'attack' ? poster.creamDim : poster.red}`,
-          ...clipBoth(chamfer(8)),
-          color: fg,
-          cursor: 'pointer',
-          WebkitTapHighlightColor: 'transparent',
-        }}
-      >
-        {content}
-      </motion.div>
-    </div>
-  );
-}
-
-/** A plate's price: a soul coin and its words ("2 souls", "16 → 7 souls"),
- *  or just "Free". */
-function Cost({ label, ink }: { label: string; ink: string }) {
-  const free = label === 'Free';
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-      {!free && <span aria-hidden style={soulCoin(10)} />}
-      <span style={{ ...eyebrow, fontSize: 10.5, letterSpacing: '0.12em', color: ink, whiteSpace: 'nowrap' }}>{label}</span>
-    </span>
+    <motion.div
+      role="button"
+      tabIndex={0}
+      aria-label={ariaLabel}
+      whileTap={calm ? undefined : { scale: 0.975, filter: 'brightness(1.15)' }}
+      animate={glow && !calm ? { boxShadow: [chargedGlow(ink), `0 0 0 1.5px ${ink}, 0 0 22px 3px color-mix(in srgb, ${ink} 80%, transparent), inset 0 0 14px color-mix(in srgb, ${ink} 34%, transparent)`, chargedGlow(ink)] } : undefined}
+      transition={glow && !calm ? { duration: 2.6, repeat: Infinity, ease: 'easeInOut' } : undefined}
+      onClick={go}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } }}
+      style={{ ...shell, cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
+    >
+      {band}
+      {hasBody && content}
+    </motion.div>
   );
 }
 
@@ -698,17 +705,21 @@ const TRIGGER_LABELS: Record<string, string> = {
   activate:    'Activate',
 };
 
-/** A passive: it fires on its own, so it is a quiet row above the plates —
- *  its name, when it fires, and its rules. */
-function PassiveRow({ name, trigger, description, scale }: { name: string; trigger: string; description: string; scale: Scale }) {
+/** A passive: it fires on its own, so its tile is never a button — a cream
+ *  band with its name and when it fires, its rules under it. */
+function PassiveTile({ name, trigger, description, scale }: { name: string; trigger: string; description: string; scale: Scale }) {
   return (
-    <div style={{ padding: '2px 2px 0' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-        <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1, color: poster.cream }}>{name}</span>
-        <span style={{ flexShrink: 0, ...eyebrow, fontSize: 9.5, color: poster.green }}>{`Passive · ${TRIGGER_LABELS[trigger] ?? trigger}`}</span>
+    <div style={{ ...plateStyle, overflow: 'hidden' }}>
+      <div style={{
+        ...bandStyle(poster.cream),
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        minHeight: 28, padding: '4px 9px', boxSizing: 'border-box',
+      }}>
+        <span style={{ minWidth: 0, lineHeight: 1.1 }}>{name}</span>
+        <span style={{ flexShrink: 0, fontSize: T.floor, letterSpacing: '0.12em', opacity: 0.75 }}>{`Passive · ${TRIGGER_LABELS[trigger] ?? trigger}`}</span>
       </div>
       {description && (
-        <div style={{ ...text.body, fontSize: 13, lineHeight: 1.4, marginTop: 5, color: poster.creamDim }}>
+        <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, padding: '8px 10px 9px', color: poster.cream }}>
           <RuleText text={description} keywordColor={poster.cream} scale={scale} />
         </div>
       )}
@@ -719,26 +730,32 @@ function PassiveRow({ name, trigger, description, scale }: { name: string; trigg
 /** Between your Active's abilities and its attack: the abilities come first,
  *  and the attack ends the turn's Act. */
 function ThenRule() {
+  const line: CSSProperties = { flex: 1, height: 1, background: RULE_DARK };
   return (
-    <div role="separator" aria-label="then — the attack ends the turn" style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '1px 0' }}>
-      <span aria-hidden style={{ flex: 1, height: 1, background: RULE_DARK }} />
-      <span aria-hidden style={{ ...eyebrow, fontSize: 9, color: poster.creamFaint }}>then · the attack ends the turn</span>
-      <span aria-hidden style={{ flex: 1, height: 1, background: RULE_DARK }} />
+    <div role="separator" aria-label="then — the attack ends the turn" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '1px 0' }}>
+      <span aria-hidden style={line} />
+      <span aria-hidden style={{ ...eyebrow, fontSize: T.floor, letterSpacing: '0.14em', color: poster.creamDim }}>then · the attack ends the turn</span>
+      <span aria-hidden style={line} />
     </div>
   );
 }
 
-/** The ultimate's face on its plate: the hero's own Deadlock ultimate icon
- *  (a white glyph, `public/ult`) on ink, keyed in gold; below Level 2,
- *  dimmed under a lock. */
-function UltArt({ heroId, locked }: { heroId: CardId; locked: boolean }) {
+/** The ultimate's face on its tile: the hero's own Deadlock ultimate icon
+ *  (a white glyph, `public/ult`) on ink, keyed in the ability's colour;
+ *  below Level 2, dimmed under a lock. */
+function UltArt({ heroId, locked, ink }: { heroId: CardId; locked: boolean; ink: string }) {
   return (
-    <span style={{
-      position: 'relative', display: 'inline-block', width: 40, height: 40,
-      borderRadius: 7, overflow: 'hidden', lineHeight: 0,
-      background: poster.ink,
-      boxShadow: `0 0 0 1.5px ${poster.gold}, 0 2px 4px rgba(0, 0, 0, 0.35)`,
-    }}>
+    <span
+      role={locked ? 'img' : undefined}
+      aria-label={locked ? `Unlocks at Level ${ULT_UNLOCK_LEVEL}` : undefined}
+      aria-hidden={locked ? undefined : true}
+      style={{
+        position: 'relative', display: 'inline-block', width: 40, height: 40,
+        borderRadius: 7, overflow: 'hidden', lineHeight: 0,
+        background: poster.ink,
+        boxShadow: `0 0 0 1.5px ${ink}, 0 2px 4px rgba(0, 0, 0, 0.35)`,
+      }}
+    >
       <img
         src={ultIconSrc(heroId)} alt="" draggable={false}
         style={{ display: 'block', width: 40, height: 40, padding: 5, boxSizing: 'border-box', objectFit: 'contain', opacity: locked ? 0.35 : 1 }}
@@ -755,7 +772,8 @@ function UltArt({ heroId, locked }: { heroId: CardId; locked: boolean }) {
 // ----- Equipment -----
 
 /**
- * What a worn item does, beside its chip: its name, tab and tier, its rules,
+ * What a worn item does, under the inventory row, as Deadlock's item tooltip:
+ * a band in its category's colour with its name and tier, its rules in cream,
  * how long it waits (or the charges it has left) — and for an active item of
  * yours, its Use (or why not). A riding Rem says when she rides back.
  */
@@ -774,33 +792,35 @@ function ItemPopover({
   const data = CARDS_BY_ID[item.cardId];
   const face = itemCard(item.cardId);
   const shell: CSSProperties = {
+    ...plateStyle,
     ...style,
     boxSizing: 'border-box',
-    padding: '11px 13px 12px',
-    background: poster.paper,
-    color: poster.ink,
-    borderRadius: 8,
-    boxShadow: `0 0 0 1.5px ${poster.ink}, 0 14px 30px rgba(0, 0, 0, 0.5)`,
-    display: 'flex', flexDirection: 'column', gap: 7,
+    overflow: 'hidden',
+    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.5)',
   };
-  const title = (name: string) => (
-    <span style={{ fontFamily: fonts.display, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1.1 }}>{name}</span>
+  const bandRow = (ink: string, name: string, tag?: string) => (
+    <div style={{
+      ...bandStyle(ink),
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+      minHeight: 28, padding: '4px 9px', boxSizing: 'border-box',
+    }}>
+      <span style={{ minWidth: 0, lineHeight: 1.1 }}>{name}</span>
+      {tag && <span style={{ flexShrink: 0, fontSize: T.floor, letterSpacing: '0.12em', opacity: 0.8 }}>{tag}</span>}
+    </div>
   );
+  const bodyStyle: CSSProperties = { padding: '8px 10px 10px', display: 'flex', flexDirection: 'column', gap: 7 };
 
   if (data?.type === 'hero') {
     const turns = item.remMergeTurnsLeft;
     return (
       <div role="group" aria-label={`${data.name}, riding`} onClick={(e) => e.stopPropagation()} style={shell}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <HeroBadge cardId={item.cardId} size={34} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-            {title(data.name)}
-            <span style={{ ...eyebrow, fontSize: 9.5, color: poster.status.buff }}>Riding</span>
-          </div>
-        </div>
+        {bandRow(poster.status.buff, data.name, 'Riding')}
         {turns != null && (
-          <div style={{ ...text.body, fontSize: 12.5, lineHeight: 1.35, color: poster.inkSoft }}>
-            {`Back to the bench in ${turns} turn${turns === 1 ? '' : 's'}.`}
+          <div style={{ ...bodyStyle, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <HeroBadge cardId={item.cardId} size={30} />
+            <span style={{ ...text.body, fontSize: T.body, lineHeight: 1.35, color: poster.cream }}>
+              {`Back to the bench in ${turns} turn${turns === 1 ? '' : 's'}.`}
+            </span>
           </div>
         )}
       </div>
@@ -814,49 +834,54 @@ function ItemPopover({
   const charges = hardCC ? item.charges ?? 0 : item.charges ?? undefined;
   const used = usedId === item.cardId;
   const usable = mine && active && !!onUse && !!offer?.canUse && !used;
+  const ink = face ? shopInk(face.slot).ink : poster.cream;
 
   return (
     <div role="group" aria-label={data?.name ?? item.cardId} onClick={(e) => e.stopPropagation()} style={shell}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {title(data?.name ?? item.cardId)}
-        {face && (
-          <span style={{ ...eyebrow, fontSize: 9.5, color: poster.inkDim }}>
-            {`${CATEGORY_WORD[face.slot]} · Tier ${face.tier}${active ? ' · Active' : ''}`}
-          </span>
+      {bandRow(ink, data?.name ?? item.cardId, face ? `${CATEGORY_WORD[face.slot]} · T${face.tier}${active ? ' · Active' : ''}` : undefined)}
+      <div style={bodyStyle}>
+        {face?.text && (
+          <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.cream }}>
+            <RuleText text={sentence(face.text)} keywordColor={poster.cream} scale={scale} />
+          </div>
+        )}
+        {(charges !== undefined || left > 0) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...text.body, fontSize: T.label, color: poster.creamDim }}>
+            {charges !== undefined ? (
+              <>
+                <ChargePips left={charges} total={hardCC ? HARD_CC_CHARGES : Math.max(charges, 1)} ink={MARKS_DARK.ink} faint={MARKS_DARK.faint} label={`${charges} charge${charges === 1 ? '' : 's'} left`} />
+                <span>{`${charges} charge${charges === 1 ? '' : 's'} left`}</span>
+              </>
+            ) : (
+              <>
+                <CooldownDial left={left} full={full} size={22} ink={MARKS_DARK.ink} track={MARKS_DARK.track} label={readyIn(left, full)} />
+                <span>{`Ready in ${left} turn${left === 1 ? '' : 's'}`}</span>
+              </>
+            )}
+          </div>
+        )}
+        {mine && active && onUse && (
+          usable ? (
+            <motion.button
+              type="button"
+              aria-label={`Use ${data?.name ?? item.cardId}`}
+              whileTap={{ scale: 0.97 }}
+              onClick={(e) => { e.stopPropagation(); onUse(); }}
+              style={{
+                ...bandStyle(ink),
+                alignSelf: 'stretch', marginTop: 2, minHeight: 36, borderRadius: 5, border: 'none',
+                boxShadow: `${bandStyle(ink).boxShadow}, 0 0 0 1px ${ink}, 0 0 10px color-mix(in srgb, ${ink} 50%, transparent)`,
+                cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              }}
+            >Use</motion.button>
+          ) : (used || offer?.blockedReason) ? (
+            <div style={{
+              paddingTop: 7, borderTop: `1px solid ${RULE_DARK}`,
+              ...text.body, fontSize: T.label, lineHeight: 1.3, color: poster.cream, textAlign: 'center',
+            }}>{used ? 'Used this turn' : offer?.blockedReason}</div>
+          ) : null
         )}
       </div>
-      {face?.text && (
-        <div style={{ ...text.body, fontSize: 12.5, lineHeight: 1.4, color: poster.inkSoft }}>
-          <RuleText text={sentence(face.text)} scale={scale} />
-        </div>
-      )}
-      {(charges !== undefined || left > 0) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...text.body, fontSize: 12, color: poster.inkDim }}>
-          {charges !== undefined ? (
-            <>
-              <ChargePips left={charges} total={hardCC ? HARD_CC_CHARGES : Math.max(charges, 1)} ink={MARKS_PAPER.ink} faint={MARKS_PAPER.faint} label={`${charges} charge${charges === 1 ? '' : 's'} left`} />
-              <span>{`${charges} charge${charges === 1 ? '' : 's'} left`}</span>
-            </>
-          ) : (
-            <>
-              <CooldownDial left={left} full={full} size={22} ink={MARKS_PAPER.ink} track={MARKS_PAPER.track} label={readyIn(left, full)} />
-              <span>{`Ready in ${left} turn${left === 1 ? '' : 's'}`}</span>
-            </>
-          )}
-        </div>
-      )}
-      {mine && active && onUse && (
-        usable ? (
-          <PosterButton variant="red" size="sm" onClick={onUse} ariaLabel={`Use ${data?.name ?? item.cardId}`} style={{ alignSelf: 'stretch', marginTop: 2 }}>
-            Use
-          </PosterButton>
-        ) : (used || offer?.blockedReason) ? (
-          <div style={{
-            paddingTop: 7, borderTop: `1px solid ${poster.inkRule}`,
-            ...text.body, fontSize: 12, lineHeight: 1.3, color: poster.inkDim, textAlign: 'center',
-          }}>{used ? 'Used this turn' : offer?.blockedReason}</div>
-        ) : null
-      )}
     </div>
   );
 }
@@ -866,16 +891,16 @@ function ItemPopover({
 /**
  * Behind the "i": the level, the live stats (BP / HP / SPI and the category
  * spikes), what the card is built from, and the effects on it now — one
- * column on the card's paper, each part under its eyebrow, hairlines between.
+ * column on the dark panel, each part under its eyebrow, hairlines between.
  */
 function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: HeroCard; level: number; onClose: () => void }) {
   const spike = (slot: ItemSlot) => (hasSpike(card, slot) ? <SpikeMark slot={slot} size={12} style={{ marginTop: 1 }} /> : undefined);
   const atMax = level >= MAX_LEVEL;
   const need = LEVEL_THRESHOLDS[Math.max(0, Math.min(LEVEL_THRESHOLDS.length - 1, level - 1))];
   const section = (label: string) => (
-    <div style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>{label}</div>
+    <div style={{ ...eyebrow, fontSize: T.floor, color: poster.creamDim }}>{label}</div>
   );
-  const rule = <div aria-hidden style={{ height: 1, background: poster.inkRule }} />;
+  const rule = <div aria-hidden style={{ height: 1, background: RULE_DARK }} />;
   return (
     <div
       role="region"
@@ -885,8 +910,9 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
         position: 'absolute', top: PAD, left: PAD, right: PAD, zIndex: 8,
         maxHeight: `calc(100% - ${PAD * 2}px)`, overflowY: 'auto', boxSizing: 'border-box',
         padding: '10px 14px 14px',
-        background: poster.paper, color: poster.ink,
-        borderRadius: 8,
+        background: poster.slate, color: poster.cream,
+        border: `1px solid ${RULE_DARK}`,
+        borderRadius: 7,
         boxShadow: '0 10px 26px rgba(0, 0, 0, 0.45)',
         display: 'flex', flexDirection: 'column', gap: 10,
         cursor: 'default',
@@ -894,21 +920,24 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
     >
       {/* Header beside the "i" and under the level ring. */}
       <div style={{ minHeight: 28, display: 'flex', alignItems: 'center', margin: '-1px 40px 0 34px' }}>
-        <span style={{ ...eyebrow, fontSize: 12, letterSpacing: '0.16em', color: poster.ink }}>
+        <span style={{ ...eyebrow, color: poster.cream }}>
           {atMax ? `Level ${level} · max` : `Level ${level} · ${card.exp ?? 0}/${need} exp`}
         </span>
       </div>
       {rule}
       {section('Stats')}
       <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
-        <InfoStat label="BP" value={effectiveAtk(card)} color={poster.stat.atk} mark={spike('weapon')} />
-        <InfoStat label="HP" value={`${card.hp}/${card.hpMax}`} color={poster.stat.hp} mark={spike('vitality')} />
-        <InfoStat label="SPI" value={effectiveSpirit(card)} color={poster.stat.spirit} mark={spike('spirit')} />
+        <InfoStat label="BP" value={effectiveAtk(card)} color={shopInk('weapon').ink} mark={spike('weapon')} />
+        <InfoStat label="HP" value={`${card.hp}/${card.hpMax}`} color="#ffffff" mark={spike('vitality')} />
+        <InfoStat label="SPI" value={effectiveSpirit(card)} color={shopInk('spirit').ink} mark={spike('spirit')} />
       </div>
       {rule}
       {section('Profile')}
-      <div style={{ ...text.body, fontSize: 12.5, lineHeight: 1.4, color: poster.inkSoft }}>
-        {`${data.profile.role} · peaks ${data.profile.curve} · each level ${growthLine(data.growth)} · Retreat ${data.retreat === 0 ? 'free' : souls(data.retreat)}`}
+      <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.creamDim }}>
+        {`${data.profile.role} · peaks ${data.profile.curve} · each level ${growthLine(data.growth)} · Retreat `}
+        {data.retreat === 0
+          ? 'free'
+          : <span role="img" aria-label={souls(data.retreat)} style={{ display: 'inline-flex', verticalAlign: 'middle' }}><Souls n={data.retreat} size={T.body} /></span>}
       </div>
       {card.statuses.length > 0 && (
         <>
@@ -924,10 +953,10 @@ function InfoPanel({ card, data, level, onClose }: { card: CardInstance; data: H
                   {/* The turns left are said in words below, so the chip
                       carries the mark and the value only. */}
                   <StatusIcon id={s.id} value={s.value} />
-                  <span style={{ ...text.label, fontSize: 12, color: poster.ink, minWidth: 0 }}>{def?.title ?? s.id}</span>
+                  <span style={{ ...text.label, fontSize: T.label, color: poster.cream, minWidth: 0 }}>{def?.title ?? s.id}</span>
                 </div>
                 {def?.desc && (
-                  <div style={{ ...text.body, fontSize: 12.5, lineHeight: 1.35, color: poster.inkSoft }}>
+                  <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.35, color: poster.creamDim }}>
                     {`${def.desc.replace('<value>', String(s.value))}${turns}`}
                   </div>
                 )}
@@ -945,23 +974,23 @@ function InfoStat({ label, value, color, mark }: { label: string; value: number 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flex: 1, minWidth: 0 }}>
       <span style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 3 }}>
-        <span style={{ ...text.numeric, fontSize: 20, color }}>{value}</span>
+        <span style={{ ...text.numeric, fontSize: T.title, color }}>{value}</span>
         {mark}
       </span>
-      <span style={{ ...eyebrow, fontSize: 10, color: poster.inkDim }}>{label}</span>
+      <span style={{ ...eyebrow, fontSize: T.floor, color: poster.creamDim }}>{label}</span>
     </div>
   );
 }
 
 // ----- Under the card -----
 
-/** Pocket's pill: Retreat (paper, its price on it, the reason or who goes
- *  in under it) and Close (an outline on the scrim). A real <button>, so a
- *  blocked one is `disabled`. */
+/** Pocket's pill: Retreat (a dark plate edged in your amber, its price on it,
+ *  the reason or who goes in under it) and Close (an outline on the scrim). A
+ *  real <button>, so a blocked one is `disabled`. */
 function Pill({
   label, caption, onClick, disabled = false, ghost = false, grow = false, ariaLabel,
 }: {
-  label: string;
+  label: ReactNode;
   caption?: string;
   onClick: () => void;
   disabled?: boolean;
@@ -980,20 +1009,20 @@ function Pill({
       style={{
         flex: grow ? '1 1 auto' : '0 0 auto',
         minWidth: ghost ? 108 : 0, minHeight: 46,
-        padding: caption ? '8px 20px 9px' : '0 22px',
+        padding: caption ? '7px 18px 8px' : '0 22px',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
         borderRadius: 999,
-        background: flat ? 'transparent' : poster.paper,
-        color: flat ? (disabled ? poster.creamDim : poster.cream) : poster.ink,
-        border: `2px solid ${flat ? (ghost && !disabled ? poster.creamDim : poster.creamFaint) : poster.ink}`,
-        boxShadow: flat ? 'none' : '0 6px 16px rgba(0, 0, 0, 0.35)',
+        background: flat ? 'transparent' : plateStyle.background,
+        color: flat ? (disabled ? poster.creamDim : poster.cream) : poster.cream,
+        border: `1.5px solid ${flat ? (ghost && !disabled ? poster.creamDim : poster.creamFaint) : poster.you}`,
+        boxShadow: flat ? 'none' : `0 6px 16px rgba(0, 0, 0, 0.35), inset 0 0 10px color-mix(in srgb, ${poster.you} 18%, transparent)`,
         cursor: disabled ? 'default' : 'pointer',
         WebkitTapHighlightColor: 'transparent',
       }}
     >
-      <span style={{ fontFamily: fonts.display, fontSize: 14, letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1 }}>{label}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: fonts.display, fontSize: T.body, letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1 }}>{label}</span>
       {caption && (
-        <span style={{ fontFamily: fonts.ui, fontSize: 11.5, fontWeight: 500, lineHeight: 1.2, opacity: disabled ? 1 : 0.7 }}>{caption}</span>
+        <span style={{ fontFamily: fonts.ui, fontSize: T.label, fontWeight: 500, lineHeight: 1.2, opacity: disabled ? 1 : 0.7 }}>{caption}</span>
       )}
     </motion.button>
   );
