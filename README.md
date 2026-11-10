@@ -73,7 +73,7 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### The turn: Income, Act, End
 
-The dial under the turn number lights each step. Income is automatic: 5 souls
+A banner says whose turn it is as each one begins. Income is automatic: 5 souls
 arrive, you draw a card, every cooldown ticks down one, and a fallen hero whose
 wait is over goes back to your hand.
 

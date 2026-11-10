@@ -68,13 +68,13 @@ export function SoulsRail({ rivalSouls, yourSouls }: Props) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: boardRows.gap(isMobile),
+        gap: boardRows.gap,
         pointerEvents: 'none',
       }}
     >
       {/* Rival's rack — centred within the rival-bench row. */}
       <div style={{
-        flex: `0 0 ${boardRows.bench(isMobile)}px`,
+        flex: `0 0 ${boardRows.bench}px`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <Rack filled={rivalSouls} slots={rivalSlots} side="rival" mobile={isMobile} />
@@ -82,11 +82,11 @@ export function SoulsRail({ rivalSouls, yourSouls }: Props) {
 
       {/* The lane (both Actives and the line) — an empty spacer so the
           bottom rack lands inside the your-bench row, not the lane. */}
-      <div style={{ flex: `0 0 ${boardRows.active(isMobile) * 2 + boardRows.lane(isMobile)}px` }} />
+      <div style={{ flex: `0 0 ${boardRows.active * 2 + boardRows.lane}px` }} />
 
       {/* Your rack — centred within the your-bench row. */}
       <div style={{
-        flex: `0 0 ${boardRows.bench(isMobile)}px`,
+        flex: `0 0 ${boardRows.bench}px`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <Rack filled={yourSouls} slots={yourSlots} side="you" mobile={isMobile} />

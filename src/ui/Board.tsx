@@ -30,10 +30,11 @@ import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
-import { BoardTable, RailSeat, boardRows, boardStack, rowBox, stageWidth, tablePad } from './board/BoardTable';
-import { PatronPlaque } from './board/PatronPlaque';
+import { BoardTable, RoundPlate, STAGE, boardStack, hudSeats } from './board/BoardTable';
+import { NameBar } from './board/NameBar';
+import { SoulsCounter } from './board/SoulsCounter';
+import { TurnBanner } from './board/TurnBanner';
 import { BoardControls } from './board/BoardControls';
-import { TurnCompass, type TurnPhase } from './board/TurnCompass';
 import {
   DISCARD_FIRST, actionRefusal, activateBlockReason, laneRide, moveBlockReason, placeBlockReason, playBlockReason, readyHeroes, retreatBlock,
   skillBlockReason,
@@ -62,15 +63,13 @@ import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
 import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
-import { useSettings, getSettings } from '@/storage/settings';
-import { useFitScale } from './hooks/useFitScale';
+import { useSettings } from '@/storage/settings';
+import { useStageScale } from './hooks/useStageScale';
 import { useViewport } from './hooks/useViewport';
 import { fonts, spring } from './tokens';
 import { poster } from './poster';
-import { SidePanel } from './side-panel/SidePanel';
-import { PanelDrawer, PANEL_WIDTH } from './side-panel/PanelDrawer';
 import { PATRON_NAMES } from './board/patrons';
-import { HandTray } from './board/HandTray';
+import { Hand } from './board/Hand';
 import { shake } from './shop/shake';
 import { useTurnBeat } from './board/turnBeat';
 import { IncomeTick } from './board/IncomeTick';
@@ -91,18 +90,6 @@ const PLACE_SETTLE_MS = 500;
 /** The longest the board stays up after the match is decided, so the blow
  *  that decided it can be seen landing before the result sheet takes over. */
 const FINAL_BLOW_MAX_MS = 2800;
-/** The band above the sheet, in stage px, where the rival's card backs hang:
- *  absolutely, peeking over the paper's top edge with the rest tucked behind
- *  it (OpponentHand), so they never take room of their own — an empty hand
- *  holds no row open, and a card the AI holds for a beat moves nothing.
- *  Phones: at a tall phone's fit scale (~0.84) the paper's top edge clears the
- *  System menu's gear (top 12 + 40px); on a shorter phone the sheet is scaled
- *  narrow enough to pass left of it instead. In a lesson the phone's coach
- *  plate sits there, above the board. Desktop: the backs' peek. */
-const RIVAL_BAND = { phone: 44, lesson: 96, desktop: 40 } as const;
-const rivalBand = (mobile: boolean, lesson: boolean) => (mobile ? (lesson ? RIVAL_BAND.lesson : RIVAL_BAND.phone) : RIVAL_BAND.desktop);
-/** The gap between the band, the sheet and (desktop) the hand, stage px. */
-const stageGap = (mobile: boolean) => (mobile ? 16 : 36);
 /** How long your turn holds on its End beat after the attack has been made,
  *  before it ends on its own, ms. */
 const AUTO_END_MS = 500;
@@ -140,16 +127,8 @@ export function Board(props: BoardProps<GameState>) {
   // local player's turns, so the match plays itself hands-free. Toggle in the
   // top-right; flip off any time to take control back.
   const [autoPlay, setAutoPlay] = useState(false);
+  // The match log, behind the menu button at the stage's lower left.
   const [logOpen, setLogOpen] = useState(false);
-  // Panel default: the patron plaques carry the vitals on-board, so the
-  // panel is optional depth (log + detail). The player's setting wins;
-  // 'auto' opens it only where its 320px cost is negligible (wide screens).
-  const [panelOpen, setPanelOpen] = useState(() => {
-    const pref = getSettings().panelDefault;
-    if (pref === 'open') return true;
-    if (pref === 'closed') return false;
-    return window.innerWidth >= 1100;
-  });
   // The card shown at full size: a card in the hand or a worn item's chip (by
   // its instance, so a hover peek closes if it goes).
   const [preview, setPreview] = useState<{ cardId: CardId; iid?: string; hover: boolean; cost?: number; inHand?: boolean } | null>(null);
@@ -182,12 +161,9 @@ export function Board(props: BoardProps<GameState>) {
   // A trigger prompt owed (engine/prompts.ts): the answer comes before
   // anything else, from whichever seat it asks, on either player's turn.
   const prompt = promptOwed(G);
-  // A turn is the player's to spend on cards, abilities and a retreat, then
-  // its one attack, which ends it. The dial marks the attack: 'battle' while
-  // the choreographer walks it, 'regroup' once it is made, 'prepare' before.
-  const turnPhase: TurnPhase = combatPlan ? 'battle' : G.attackUsed ? 'regroup' : 'prepare';
-  // The turn's beat (Income · Act · End) as the dial shows it: a turn's
-  // hand-over plays its End and the next one's Income (turnBeat.ts).
+  // The turn's beat (Income · Act · End): a turn's hand-over plays its End
+  // and the next one's Income (turnBeat.ts); the Income beat shows the souls
+  // and the card arriving.
   const spine = useTurnBeat({ turn: G.draft ? 0 : G.turnNumber, isMyTurn, attackMade: G.attackUsed && !combatPlan });
   /** The mover's attack can still be made, and it is not being made already. */
   const attackOpen = !ctx.gameover && !combatPlan && !G.pendingDiscard && !prompt && attackBlocked(G, mover) === null;
@@ -197,9 +173,9 @@ export function Board(props: BoardProps<GameState>) {
     () => (isMyTurn && !combatPlan ? readyHeroes(G, me, attackOpen) : new Set<string>()),
     [G, me, isMyTurn, combatPlan, attackOpen],
   );
-  // Mirror of the choreographer's beat index so the TurnCompass (via
-  // CombatProgressContext) can paint its combat-mode ring without the
-  // choreographer needing to own any UI other than the action visuals.
+  // Mirror of the choreographer's beat index (CombatProgressContext), so a
+  // reader of the attack's progress needs nothing of the choreographer but
+  // its beats.
   const [combatBeat, setCombatBeat] = useState(0);
   // Snap back to 0 whenever a new plan mounts or combat ends so the
   // compass doesn't carry stale beat state into the next combat.
@@ -258,8 +234,8 @@ export function Board(props: BoardProps<GameState>) {
   const finalBlow = !!ctx.gameover && freshFx.some((e) => e.kind === 'cast' || (e.kind === 'hit' && e.ko));
   const gameover = useDelayedValue(ctx.gameover, finalBlow ? Math.min(fxTimeline.total, FINAL_BLOW_MAX_MS) : 0);
 
-  // Memoized — a fresh object identity every Board render used to re-render
-  // every CombatProgressContext consumer (TurnCompass) even between beats.
+  // Memoized — a fresh object identity every Board render would re-render
+  // every CombatProgressContext consumer even between beats.
   const combatProgress: CombatProgress = useMemo(() => combatPlan
     ? { total: combatPlan.steps.length, currentBeat: combatBeat, attackerIsMe: combatPlan.attackerId === me }
     : null, [combatPlan, combatBeat, me]);
@@ -275,33 +251,22 @@ export function Board(props: BoardProps<GameState>) {
   }, []);
   useEffect(() => () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); }, []);
 
-  // Scale the battle stage to fit shorter viewports so the controls row never
-  // gets clipped off the bottom of the screen.
-  const { containerRef: fitContainerRef, contentRef: fitContentRef, scale: fitScale } = useFitScale();
-  // Phone widths reflow the board to a narrower, shorter-row layout (cards
-  // shrink to ~⅓ of the viewport width) instead of overflowing off the side.
+  // The stage's scale: the one portrait layout fitted to the screen, re-fitted
+  // on resize and rotation (useStageScale measures the host).
+  const { hostRef: stageHostRef, scale: stageScale } = useStageScale(STAGE.w, STAGE.h);
+  // A phone has no pointer: a worn item's tap opens the held preview, and the
+  // FX stage thins its debris.
   const { isMobile } = useViewport();
-
-  // panelOpen's initializer only runs once — when the window is resized across
-  // the phone breakpoint mid-match, sync the drawer (phones: the 320px overlay
-  // would bury the whole board; desktop: restore the default-open panel).
-  const wasMobileRef = useRef(isMobile);
-  useEffect(() => {
-    if (isMobile !== wasMobileRef.current) {
-      wasMobileRef.current = isMobile;
-      setPanelOpen(!isMobile);
-    }
-  }, [isMobile]);
 
   const slotRefs = useRef<Map<string, HTMLElement>>(new Map());
   /** Where a hero's card was as it was tapped to be placed (the hand card,
    *  the opening picker's card), by iid: the motion layer flies it from
    *  there once the card itself has gone. */
   const placeOrigins = useRef<Map<string, Rect>>(new Map());
-  // The hand row (strip + phone controls) — the targeting banner docks above
-  // it on phones, and the sticker sits above it.
+  // The hand's band at the stage's foot — the targeting banner docks above
+  // it, and the sticker sits above it.
   const handRowRef = useRef<HTMLDivElement>(null);
-  // How much of the screen's bottom the hand row takes.
+  // How much of the screen's bottom the hand takes.
   const [handInset, setHandInset] = useState(0);
   useEffect(() => {
     const el = handRowRef.current;
@@ -312,8 +277,8 @@ export function Board(props: BoardProps<GameState>) {
     ro.observe(el);
     window.addEventListener('resize', measure);
     return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
-    // The row mounts once the draft is over, and moves when the layout flips.
-  }, [isMobile, !!G.draft, !!ctx.gameover]);
+    // The band mounts once the draft is over.
+  }, [!!G.draft, !!ctx.gameover]);
   const registerSlotRef = useCallback((iid: string, el: HTMLElement | null) => {
     if (el) {
       slotRefs.current.set(iid, el);
@@ -924,43 +889,13 @@ export function Board(props: BoardProps<GameState>) {
 
   const incomeShown = !G.draft && !ctx.gameover && isMyTurn && spine.edge && spine.beat === 'income' && spine.mine;
 
-  // The hand and, on phones, the turn controls under it. Desktop mounts it as
-  // the last row of the fitted stage; phones mount it below the stage, at
-  // full size (see the fit box in the column below).
-  // zIndex 2 keeps the hand row above the board plane (zIndex 1), so cards
-  // rising on select/hover/drag pass OVER the sheet's bottom edge instead of
-  // sliding beneath it.
-  const handRow = (
-    <div ref={handRowRef} style={{ flex: '0 0 auto', position: 'relative', zIndex: 2, alignSelf: isMobile ? 'stretch' : undefined }}>
-      <HandTray
-        cards={G.players[me].hand}
-        souls={G.players[me].souls}
-        disabled={!isMyTurn || actionLocked}
-        pending={pending}
-        isMyTurn={isMyTurn}
-        busy={turnBusy}
-        hasPending={!!pending}
-        playable={(c) => (CARDS_BY_ID[c.cardId]?.type === 'hero'
-          ? placeHeroBlocked(G, me, c.iid) === null || placeHeroBlocked(G, me, c.iid, true) === null
-          : playTargets(G, me, c.iid).length > 0)}
-        onTap={onTapCardInHand}
-        onLongPress={holdHandCard}
-        onHover={(c) => setPreview(c ? { cardId: c.cardId, iid: c.iid, hover: true, inHand: true } : null)}
-        onDragEndOver={onHandDragEnd}
-        onBlocked={(c) => showNotice(stuckReason(c), true)}
-        onEndTurn={pressTurnButton}
-        onCancel={() => setPending(null)}
-        autoPlay={autoPlay}
-        onToggleAuto={() => setAutoPlay((v) => !v)}
-        registerCard={registerHandCard}
-        arriving={deckMotion.arriving}
-      />
-    </div>
-  );
-
-  // The 3-1-1-3 stack's geometry (BoardTable): where each row starts.
-  const stack = boardStack(isMobile);
-  const pileSize = isMobile ? 'chip' : 'full';
+  // The stage: one portrait layout (BoardTable's STAGE, a phone's 390 × 844)
+  // scaled to the screen — a phone fills it edge to edge, a desktop shows it
+  // centred at full height with the scene either side.
+  const stack = boardStack();
+  const hud = hudSeats();
+  const youPs = G.players[me];
+  const oppPs = G.players[opp];
 
   return (
     <LayoutGroup>
@@ -975,244 +910,188 @@ export function Board(props: BoardProps<GameState>) {
       <FxStageProvider density={isMobile ? 0.6 : 1}>
       <PosterBackdrop />
 
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        justifyContent: 'center',
-        margin: '0 auto',
-        padding: isMobile ? '6px 6px 0' : '12px 16px 0',
-        fontFamily: fonts.ui, color: poster.ink,
-        position: 'relative',
-      }}>
-        {/* MAIN COLUMN — battle stage centered, side panel lives in a
-            drawer slid in from the right (toggled by the chevron tab). */}
+      <div style={{ fontFamily: fonts.ui, color: poster.ink }}>
+        {/* THE STAGE HOST — the whole screen. The stage sits centred in it at
+            the scale that fits both axes (useStageScale: re-measured on
+            resize and rotation), the scene's backdrop filling whatever is
+            left either side on a wide screen. Everything fixed over the
+            board (sheets, prompts, the banner) is mounted outside it, so no
+            transform catches it. */}
         <div
-          ref={isMobile ? undefined : fitContainerRef}
+          ref={stageHostRef}
+          data-stage-host
           style={{
-            flex: '1 1 auto',
-            maxWidth: 1100,
-            width: '100%',
-            // Flexbox min-width:auto would stop this column shrinking below
-            // the stage's intrinsic width, shoving the open panel off-screen
-            // on tablet-width windows. Allowing shrink lets useFitScale see
-            // the true leftover width and scale the stage down instead.
-            minWidth: 0,
-            position: 'relative', // anchors the corner-pinned turn controls
-            display: 'flex',
-            flexDirection: 'column',
-            // Center the stage vertically so unused space spreads to top/bottom
-            // rather than ballooning the active row. When the stage is taller
-            // than the viewport, useFitScale shrinks it (transform below) so the
-            // controls stay on-screen instead of overflowing off the bottom.
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: 0,
-            // Phones: the visible height (dvh — 100vh runs under a mobile
-            // browser's toolbar) less the 6px top padding, a matching 6px
-            // under the controls and the home-indicator inset (the page is
-            // viewport-fit=cover). The flat 32px it replaced was height the
-            // fit-scale took from the board.
-            height: isMobile ? 'calc(100dvh - 12px - env(safe-area-inset-bottom, 0px))' : 'calc(100vh - 32px)',
-          }}>
-        {/* Phones fit the stage into what the controls row leaves (the row
-            stays out of the scale, below); elsewhere this box is not drawn and
-            the column fits the whole stage. */}
-        <div
-          ref={isMobile ? fitContainerRef : undefined}
-          style={isMobile ? {
-            flex: '1 1 0', minHeight: 0, width: '100%',
-            display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
-          } : { display: 'contents' }}>
-        <div
-          ref={fitContentRef}
-          style={{
-            // Desktop: size to the stage's intrinsic width (the rows grid /
-            // cream sheet) so useFitScale can fit BOTH axes — a 100%-wide
-            // box always "fits" horizontally and the sheet clipped instead
-            // of scaling on narrow windows.
-            width: isMobile ? '100%' : 'fit-content',
-            alignSelf: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            // The band, the sheet and (desktop) the hand, a breath apart.
-            gap: stageGap(isMobile),
-            transform: `scale(${fitScale})`,
-            transformOrigin: 'center center',
-          }}>
-          {/* The band above the sheet (see RIVAL_BAND): the rival's backs hang
-              in it at the paper's top edge, peeking over it and tucked behind
-              it (the sheet stacks above via zIndex), so the face-down hand
-              rests AT the board and never moves it. */}
-          <div style={{ flex: '0 0 auto', position: 'relative', zIndex: 0, height: rivalBand(isMobile, isTutorial) }}>
-            <OpponentHand
-              cards={G.players[opp].hand}
-              edge={rivalBand(isMobile, isTutorial) + stageGap(isMobile) - tablePad(isMobile).top}
-              compact={isMobile}
+            position: 'fixed', inset: 0, height: '100dvh',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            // clip, not hidden: a hidden overflow is still a scroll box, and
+            // focusing a hand card whose foot hangs past the screen's edge
+            // would scroll the whole table to show it.
+            overflow: 'clip', zIndex: 1,
+          }}
+        >
+          <div
+            data-stage
+            style={{
+              position: 'relative', flex: '0 0 auto',
+              width: STAGE.w, height: STAGE.h,
+              transform: `scale(${stageScale})`, transformOrigin: 'center center',
+              // The stage's edges are the screen's: the decks half off them
+              // and the hands peeking in are cut there on every screen.
+              overflow: 'clip',
+            }}
+          >
+            {/* THE TABLE — the two halves and the centre ring, behind everything. */}
+            <BoardTable />
+
+            {/* The rival's hand: backs peeking in at the top edge. */}
+            <OpponentHand cards={oppPs.hand} centre={hud.rivalHand.centre} top={hud.rivalHand.top} />
+
+            {/* The rival's name bar: its patron, its map track, its souls. */}
+            <NameBar
+              style={{ position: 'absolute', ...hud.rivalBar, zIndex: 5 }}
+              label={PATRON_NAMES.rival}
+              ps={oppPs}
+              hostile
+              souls={oppPs.souls}
+              myTurn={!isMyTurn}
+            />
+
+            {/* THE 3-1-1-3 STACK — the rival's bench, the rival's Active,
+                your Active, your bench, down the middle (boardStack). */}
+            <BenchRow
+              top={stack.benchR}
+              ps={oppPs}
+              owner={opp} myId={me}
+              isOpponent
+              pending={pending}
+              onTapHero={onTapHero}
+              onLongPressHero={(c) => setHeroDetail(c)}
+              onEquipmentHover={previewEquipment}
+              isTargetable={isTargetable}
+              registerSlotRef={registerSlotRef}
+            />
+            <ActiveDuel
+              G={G}
+              me={me}
+              opp={opp}
+              isMyTurn={isMyTurn}
+              pending={pending}
+              onTapHero={onTapHero}
+              onLongPressHero={(c) => setHeroDetail(c)}
+              onEquipmentHover={previewEquipment}
+              isTargetable={isTargetable}
+              registerSlotRef={registerSlotRef}
+              readyIids={readyIids}
+              laneOpen={openSlots.has(0)}
+              onTapLane={() => placeAt(0)}
+            />
+            <BenchRow
+              top={stack.benchY}
+              ps={youPs}
+              owner={me} myId={me}
+              isOpponent={false}
+              pending={pending}
+              onTapHero={onTapHero}
+              onLongPressHero={(c) => setHeroDetail(c)}
+              onEquipmentHover={previewEquipment}
+              isTargetable={isTargetable}
+              registerSlotRef={registerSlotRef}
+              readyIids={readyIids}
+              openSlots={openSlots}
+              onTapSlot={placeAt}
+            />
+
+            {/* THE DECKS — big card-back stacks at the stage's edges, half
+                off the screen: the rival's at the upper left beside its
+                Active, yours at the right beside yours; each discard pile
+                just inside its deck. The motion layer flies cards from and
+                to these (data-pile). */}
+            <div style={{ position: 'absolute', ...hud.rivalDeck, zIndex: 3 }}>
+              <DeckPile count={oppPs.deck.length} owner="rival" size="big" accent={poster.rival} />
+            </div>
+            <div style={{ position: 'absolute', ...hud.rivalDiscard, zIndex: 3 }}>
+              <DiscardPile cards={oppPs.discard} owner="rival" size="small" accent={poster.rival} />
+            </div>
+            <div style={{ position: 'absolute', ...hud.yourDeck, zIndex: 3 }}>
+              <DeckPile count={youPs.deck.length} owner="you" size="big" accent={poster.you} countAt="left" />
+            </div>
+            <div style={{ position: 'absolute', ...hud.yourDiscard, zIndex: 3 }}>
+              <DiscardPile cards={youPs.discard} owner="you" size="small" accent={poster.you} />
+            </div>
+
+            {/* The menu — a round button at the lower left, where Pocket's
+                "≡" sits: the match log behind it. */}
+            <button
+              type="button"
+              aria-label={logOpen ? 'Close the match log' : 'Match log'}
+              aria-expanded={logOpen}
+              onClick={() => setLogOpen((v) => !v)}
+              style={{ position: 'absolute', left: hud.menu.left, top: hud.menu.top, padding: 0, border: 'none', background: 'transparent', zIndex: 6, cursor: 'pointer' }}
+            >
+              <RoundPlate size={hud.menu.size}>
+                <svg viewBox="0 0 20 20" width={18} height={18} fill="none" stroke={poster.cream} strokeWidth="2" strokeLinecap="round" aria-hidden>
+                  <line x1="3" y1="5" x2="17" y2="5" /><line x1="3" y1="10" x2="17" y2="10" /><line x1="3" y1="15" x2="17" y2="15" />
+                </svg>
+              </RoundPlate>
+            </button>
+
+            {/* Your souls — the round counter at the lower right. */}
+            <div style={{ position: 'absolute', left: hud.souls.left, top: hud.souls.top, zIndex: 6 }}>
+              <SoulsCounter souls={youPs.souls} size={hud.souls.size} />
+            </div>
+
+            {/* YOUR HAND — a fan along the bottom edge, partly off the screen.
+                The band is what the targeting banner and the sticker sit above. */}
+            <div
+              ref={handRowRef}
+              style={{ position: 'absolute', left: hud.hand.left, top: hud.hand.top, width: hud.hand.width, zIndex: 5, pointerEvents: 'none' }}
+            >
+              <Hand
+                cards={youPs.hand}
+                souls={youPs.souls}
+                disabled={!isMyTurn || actionLocked}
+                pending={pending}
+                playable={(c) => (CARDS_BY_ID[c.cardId]?.type === 'hero'
+                  ? placeHeroBlocked(G, me, c.iid) === null || placeHeroBlocked(G, me, c.iid, true) === null
+                  : playTargets(G, me, c.iid).length > 0)}
+                onTap={onTapCardInHand}
+                onLongPress={holdHandCard}
+                onHover={(c) => setPreview(c ? { cardId: c.cardId, iid: c.iid, hover: true, inHand: true } : null)}
+                onDragEndOver={onHandDragEnd}
+                onBlocked={(c) => showNotice(stuckReason(c), true)}
+                registerCard={registerHandCard}
+                arriving={deckMotion.arriving}
+                avail={hud.hand.width}
+              />
+            </div>
+
+            {/* The turn dock — End Turn (Cancel while something is armed)
+                and Auto, low on the right at the thumb. */}
+            <BoardControls
+              seat={hud}
+              isMyTurn={isMyTurn}
+              busy={turnBusy}
+              hasPending={!!pending}
+              autoPlay={autoPlay}
+              onEndTurn={pressTurnButton}
+              onCancel={() => setPending(null)}
+              onToggleAuto={() => setAutoPlay((v) => !v)}
+            />
+
+            {/* Your name bar along the bottom: your patron, your map track,
+                the turn number. Above the hand's feet. */}
+            <NameBar
+              style={{ position: 'absolute', ...hud.yourBar, zIndex: 7 }}
+              label={PATRON_NAMES.you}
+              ps={youPs}
+              turn={G.turnNumber}
+              myTurn={isMyTurn}
             />
           </div>
-
-          {/* THE 3-1-1-3 STACK — Pocket's table: the rival's bench, the
-              rival's Active, your Active, your bench, one above the other
-              down the middle of one flat cream sheet (BoardTable), a vitals
-              rule capping each end. The piles, the turn dial and the turn
-              dock sit in the sheet's rails beside the Actives. Every row is
-              placed from the shared geometry (boardStack). */}
-          <div style={{
-            // Stacks the sheet above the rival's fan so the paper's top edge
-            // overlaps the tucked card bottoms (see OpponentHand wrapper).
-            position: 'relative',
-            zIndex: 1,
-            width: isMobile ? '100%' : stageWidth(isMobile),
-            height: stack.height,
-            // translateZ(0) keeps a stacking context so the sheet layer can
-            // never paint over the rows on either branch.
-            transform: 'translateZ(0)',
-          }}>
-            {/* The cream sheet — decorative layer behind the rows. */}
-            <BoardTable isMobile={isMobile} />
-
-            {/* RIVAL VITALS — a narrow rule capping the top of the stack:
-                structures, souls, the attack lamp. */}
-            <div style={rowBox(stack.vitalsR, boardRows.vitals(isMobile))}>
-              <PatronPlaque
-                label={PATRON_NAMES.rival}
-                ps={G.players[opp]}
-                hostile
-                attackOpen={!isMyTurn && attackOpen}
-                projectedDamage={ctx.currentPlayer === me ? projectedPatronDamage : 0}
-                isMobile={isMobile}
-                myTurn={!isMyTurn}
-              />
-            </div>
-
-            {/* RIVAL BENCH (3) */}
-            <div style={rowBox(stack.benchR, boardRows.bench(isMobile))}>
-              <BenchRow
-                ps={G.players[opp]}
-                owner={opp} myId={me}
-                isOpponent
-                pending={pending}
-                onTapHero={onTapHero}
-                onLongPressHero={(c) => setHeroDetail(c)}
-                onEquipmentHover={previewEquipment}
-                isTargetable={isTargetable}
-                registerSlotRef={registerSlotRef}
-              />
-            </div>
-
-            {/* THE LANE — the rival's Active over yours, facing each other
-                across the middle line. */}
-            <div style={rowBox(stack.activeR, boardRows.active(isMobile) * 2 + boardRows.lane(isMobile))}>
-              <ActiveDuel
-                G={G}
-                me={me}
-                opp={opp}
-                isMyTurn={isMyTurn}
-                pending={pending}
-                onTapHero={onTapHero}
-                onLongPressHero={(c) => setHeroDetail(c)}
-                onEquipmentHover={previewEquipment}
-                isTargetable={isTargetable}
-                registerSlotRef={registerSlotRef}
-                readyIids={readyIids}
-                laneOpen={openSlots.has(0)}
-                onTapLane={() => placeAt(0)}
-              />
-            </div>
-
-            {/* MY BENCH (3) */}
-            <div style={rowBox(stack.benchY, boardRows.bench(isMobile))}>
-              <BenchRow
-                ps={G.players[me]}
-                owner={me} myId={me}
-                isOpponent={false}
-                pending={pending}
-                onTapHero={onTapHero}
-                onLongPressHero={(c) => setHeroDetail(c)}
-                onEquipmentHover={previewEquipment}
-                isTargetable={isTargetable}
-                registerSlotRef={registerSlotRef}
-                readyIids={readyIids}
-                openSlots={openSlots}
-                onTapSlot={placeAt}
-              />
-            </div>
-
-            {/* YOUR VITALS — the same rule closing the bottom of the stack. */}
-            <div style={rowBox(stack.vitalsY, boardRows.vitals(isMobile))}>
-              <PatronPlaque
-                label={PATRON_NAMES.you}
-                ps={G.players[me]}
-                attackOpen={isMyTurn && attackOpen}
-                projectedDamage={ctx.currentPlayer !== me ? projectedPatronDamage : 0}
-                isMobile={isMobile}
-                myTurn={isMyTurn}
-              />
-            </div>
-
-            {/* THE RAILS — the paper beside the Actives, as Pocket puts its
-                decks at the table's edges. Across the table from you: the
-                rival's deck at its Active's left, its discard pile at the
-                right; your discard pile at your Active's left, your deck at
-                the right. On the middle line, the turn dial (left) and, on
-                desktop, the turn dock (right); phones keep End Turn and Auto
-                in the hand tray, under the thumb. */}
-            <RailSeat side="left" y={stack.activeR + boardRows.active(isMobile) / 2} isMobile={isMobile}>
-              <span style={{ pointerEvents: 'auto' }}>
-                <DeckPile count={G.players[opp].deck.length} owner="rival" size={pileSize} accent={poster.rival} />
-              </span>
-            </RailSeat>
-            <RailSeat side="right" y={stack.activeR + boardRows.active(isMobile) / 2} isMobile={isMobile}>
-              <span style={{ pointerEvents: 'auto' }}>
-                <DiscardPile cards={G.players[opp].discard} owner="rival" size={pileSize} accent={poster.rival} />
-              </span>
-            </RailSeat>
-            <RailSeat side="left" y={stack.mid} isMobile={isMobile}>
-              <TurnCompass isMyTurn={isMyTurn} turn={G.turnNumber} phase={turnPhase} beats={!G.draft} />
-            </RailSeat>
-            {!isMobile && (
-              <RailSeat side="right" y={stack.mid} isMobile={isMobile}>
-                <BoardControls
-                  variant="dock"
-                  isMyTurn={isMyTurn}
-                  busy={turnBusy}
-                  hasPending={!!pending}
-                  autoPlay={autoPlay}
-                  onEndTurn={pressTurnButton}
-                  onCancel={() => setPending(null)}
-                  onToggleAuto={() => setAutoPlay((v) => !v)}
-                />
-              </RailSeat>
-            )}
-            <RailSeat side="left" y={stack.activeY + boardRows.active(isMobile) / 2} isMobile={isMobile}>
-              <span style={{ pointerEvents: 'auto' }}>
-                <DiscardPile cards={G.players[me].discard} owner="you" size={pileSize} accent={poster.you} />
-              </span>
-            </RailSeat>
-            <RailSeat side="right" y={stack.activeY + boardRows.active(isMobile) / 2} isMobile={isMobile}>
-              <span style={{ pointerEvents: 'auto' }}>
-                <DeckPile count={G.players[me].deck.length} owner="you" size={pileSize} accent={poster.you} />
-              </span>
-            </RailSeat>
-          </div>
-          {!isMobile && handRow}
-        </div>
         </div>
 
-        {/* Phones: the hand sits under the fitted stage at its own full
-            size — scaled with the board it was too small to read. */}
-        {isMobile && handRow}
-        </div>
-
-        {/* PANEL DRAWER — slides in from the right edge, toggled by a thin
-            chevron tab always visible at the right edge of the viewport. */}
-        <PanelDrawer open={panelOpen} onToggle={() => setPanelOpen((v) => !v)}>
-          <SidePanel
-            G={G}
-            turn={G.turnNumber}
-            onLogToggle={() => setLogOpen((v) => !v)}
-          />
-        </PanelDrawer>
+        {/* "Your turn" / "Rival's turn", as a turn begins. */}
+        <TurnBanner turn={G.turnNumber} isMyTurn={isMyTurn} enabled={!G.draft && !ctx.gameover && !G.pendingActive} />
 
         <AnimatePresence>
           {pending && (
@@ -1223,13 +1102,8 @@ export function Board(props: BoardProps<GameState>) {
               chip={pending.kind === 'placeHero' ? 'Spot' : undefined}
               hint={pending.kind === 'placeHero' ? 'tap a lit slot, or the card again to put it back' : undefined}
               onCancel={() => setPending(null)}
-              // Desktop panel is an in-flow column the fixed banner can't see —
-              // inset its centring so it tracks the visible board, not the
-              // full viewport (its right end used to slide under the sheet).
-              rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0}
-              // Phones: the full-size hand strip reaches well above the
-              // desktop dock height — sit above it, not on its cards.
-              dockAbove={isMobile ? handRowRef : undefined}
+              // Sit above the hand's fan, not on its cards.
+              dockAbove={handRowRef}
             />
           )}
         </AnimatePresence>
@@ -1327,7 +1201,7 @@ export function Board(props: BoardProps<GameState>) {
 
         {/* Your turn's Income beat: the souls count up as the card is drawn. */}
         <AnimatePresence>
-          {incomeShown && <IncomeTick key={`income-${G.turnNumber}`} G={G} me={me} rightInset={!isMobile && panelOpen ? PANEL_WIDTH : 0} />}
+          {incomeShown && <IncomeTick key={`income-${G.turnNumber}`} G={G} me={me} />}
         </AnimatePresence>
 
         {/* The match's opening: your four drafted heroes, one of which takes
@@ -1475,9 +1349,8 @@ export function Board(props: BoardProps<GameState>) {
               style={{
                 position: 'fixed',
                 left: 0, right: 0,
-                // Above the hand row: on a phone just over it, on a desktop
-                // no lower than the old dock height.
-                bottom: isMobile ? handInset + 12 : Math.max(196, handInset + 12),
+                // Just above the hand's fan.
+                bottom: handInset + 12,
                 display: 'flex',
                 justifyContent: 'center',
                 pointerEvents: 'none',

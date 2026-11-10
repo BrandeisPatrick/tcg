@@ -184,17 +184,6 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
                     onSelect={(speed) => updateSettings({ combatSpeed: speed })}
                   />
                 </Field>
-                <Field label="Side panel on match start" hint="Auto opens it only on wide screens.">
-                  <Segmented
-                    options={([
-                      { value: 'auto', label: 'Auto' },
-                      { value: 'open', label: 'Open' },
-                      { value: 'closed', label: 'Closed' },
-                    ] as const).map((o) => o)}
-                    value={settings.panelDefault}
-                    onSelect={(panelDefault) => updateSettings({ panelDefault })}
-                  />
-                </Field>
               </Section>
 
               {/* Display */}

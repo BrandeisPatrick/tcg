@@ -1,13 +1,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRef, useState, type CSSProperties, type TouchEvent } from 'react';
+import { useRef, useState } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { itemPrice } from '@/engine/query';
 import { CardFrame, SIZES } from '../card/CardFrame';
 import { spring } from '../tokens';
-import { useViewport } from '../hooks/useViewport';
-import { usePress } from '../shop/usePress';
-import { HandThumb, THUMB_H, THUMB_W } from './HandThumb';
+import { poster } from '../poster';
+import { useFxCalm } from '../effects/fx/FxMotionContext';
 
 /** The name a hand card announces itself by: "Cold Front, in your hand". The
  *  tutorial's gate and the QA scripts find a card in the hand by it. */
@@ -28,7 +27,7 @@ interface Props {
   pending: { iid: string } | null;
   /** True while the card can be played right now: a hero onto the board, an
    *  item onto some hero of yours (the engine's `playTargets`, souls
-   *  included). One that cannot prints dimmed. */
+   *  included). One that cannot prints dimmed; one that can pulses. */
   playable: (c: CardInstance) => boolean;
   onTap: (c: CardInstance) => void;
   onLongPress?: (c: CardInstance) => void;
@@ -43,9 +42,11 @@ interface Props {
   /** Where each card is on screen, for the board's (and the animation
    *  layer's) flights to it. */
   registerCard?: (iid: string, el: HTMLElement | null) => void;
+  /** The width the fan may take, stage px: a fan wider than it shrinks to fit. */
+  avail: number;
 }
 
-// Desktop fanning — wider arc, more rotation since cards are bigger.
+// The fan's arc: the outer cards turn out and sit lower.
 function fanRotation(i: number, total: number): number {
   if (total <= 2) return 0;
   const center = (total - 1) / 2;
@@ -74,39 +75,32 @@ function cardOverlap(total: number): number {
   return -94;
 }
 
-/**
- * Phones get no fan: a flat strip of compact cards (HandThumb — the item's art
- * over a foot in its category's colour) side by side, that scrolls sideways
- * when it overflows. Whole cards, even at four fifths of the fan's size, left
- * room for three across a 390px screen and took a fifth of its height from
- * the board; a held card (long press) opens the full card to read.
- */
-const STRIP_GAP = 6;
-const STRIP_SIDE = 12;
-/** The armed card's lift on the strip. */
-const STRIP_LIFT = 6;
-/** Room above the cards for that lift, an active's bolt and the armed ring: a
- *  scroller clips what rises out of it. */
-const STRIP_TOP = 14;
-const STRIP_BOTTOM = 6;
+/** How far a tapped card lifts out of the fan, px. */
+const SELECTED_LIFT = 96;
 
 /**
- * The overlap table above is tuned for a desktop-width strip, so on a narrow
- * window even a small hand is wider than the screen and the outermost cards get
- * clipped by the viewport edge. Rather than crushing the spacing (which
- * collides the name plates), shrink the whole fan to fit: the cards keep
- * their proportions and stay legible, just smaller.
+ * The overlap table above is tuned for a wide strip, so on a narrow band
+ * even a small hand is wider than the room and the outermost cards would
+ * run off it. Rather than crushing the spacing (which collides the name
+ * plates), shrink the whole fan to fit: the cards keep their proportions
+ * and stay legible, just smaller.
  */
-function fanScale(total: number, viewportW: number): number {
+function fanScale(total: number, avail: number): number {
   if (total < 1) return 1;
   const natural = CARD_W * total + cardOverlap(total) * (total - 1);
-  const avail = viewportW - 24;                       // strip side margins
-  return Math.min(1, avail / natural);
+  return Math.min(1, (avail - 16) / natural);
 }
 
-export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongPress, onHover, onDragEndOver, onBlocked, arriving, registerCard }: Props) {
+/**
+ * Your hand — a fan along the very bottom edge of the stage, overlapping
+ * and partly off the screen as Pokémon TCG Pocket's is: the cards' top
+ * halves show, a tapped card lifts out of the fan to be read, and a card
+ * that can be played right now breathes with a gold light. Drag a card onto
+ * a hero (a pointer) or tap it and then the hero.
+ */
+export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongPress, onHover, onDragEndOver, onBlocked, arriving, registerCard, avail }: Props) {
   const total = cards.length;
-  const { width: viewportW, isMobile } = useViewport();
+  const calm = useFxCalm();
   // Per-card timers held in refs so they survive re-renders. Without this,
   // the closure variables get re-created each render, leaving stale timers
   // dangling and the preview "stuck" open.
@@ -141,70 +135,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
       if (onHover) onHover(null);
     }
   };
-  /** What each card is now: armed, one no hero can take, or not to be touched. */
-  const stateOf = (c: CardInstance) => {
-    const selected = pending?.iid === c.iid;
-    // A card no hero can take right now (every one full, or wearing it).
-    const stuck = !disabled && !playable(c);
-    const cardDisabled = disabled || stuck;
-    // Dim must live in the `animate` target, not `style` — framer's
-    // animate={{ opacity: 1 }} overrides a style-prop opacity, which
-    // silently disabled the stuck/disabled fade entirely.
-    const opacity = cardDisabled && !selected ? (stuck ? 0.55 : 0.6) : 1;
-    const price = itemPrice(c.cardId);
-    const unaffordable = price > souls;
-    const isHero = CARDS_BY_ID[c.cardId]?.type === 'hero';
-    const why = !stuck ? '' : isHero ? ' — no room on the board now' : unaffordable ? ` — costs ${price} souls` : ' — no hero can take it now';
-    const label = `${inHandLabel(CARDS_BY_ID[c.cardId]?.name ?? c.cardId)}${why}`;
-    return { selected, stuck, cardDisabled, opacity, label, unaffordable };
-  };
   const done = () => setLeaving(false);
-
-  if (isMobile) {
-    return (
-      <motion.div
-        // The strip scrolls; framer has to measure that offset for the cards'
-        // layout animations (a card arriving, played, the rest closing up) to
-        // start from the right place.
-        layoutScroll
-        className="hand-strip"
-        data-hand="you"
-        style={{
-          display: 'flex',
-          gap: STRIP_GAP,
-          alignItems: 'flex-end',
-          padding: `${STRIP_TOP}px ${STRIP_SIDE}px ${STRIP_BOTTOM}px`,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          scrollSnapType: 'x proximity',
-          scrollPaddingInline: STRIP_SIDE,
-          overscrollBehaviorX: 'contain',
-          // Nothing overlaps the strip on a phone (the controls row is in flow
-          // below it), so it takes its own touches — the thumb scrolls it.
-          pointerEvents: 'auto',
-        }}>
-        <AnimatePresence onExitComplete={done}>
-          {cards.map((c, i) => (
-            <StripCard
-              key={c.iid}
-              card={c}
-              {...stateOf(c)}
-              // Auto margins on the ends centre a short hand and fall to 0
-              // once it overflows, so the first card can always be scrolled back to.
-              first={i === 0}
-              last={i === total - 1}
-              landing={isLanding(arriving, c.iid)}
-              onTap={onTap}
-              onLongPress={onLongPress}
-              onHover={onHover}
-              onBlocked={onBlocked}
-              registerCard={registerCard}
-            />
-          ))}
-        </AnimatePresence>
-      </motion.div>
-    );
-  }
 
   return (
     <div
@@ -214,26 +145,38 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
       style={{
         display: 'flex',
         gap: 0,
-        // The tray's own foot is in the bottom padding: an empty hand takes
-        // none of it.
-        padding: '14px 0 20px',
+        padding: '14px 0 0',
         overflow: 'visible',
         justifyContent: 'center',
-        alignItems: 'flex-end',
-        // Shrink-to-fit on narrow screens so no card is clipped by the
-        // viewport edge (see fanScale). 1 on any normal desktop width.
-        transform: `scale(${fanScale(total, viewportW)})`,
-        transformOrigin: 'bottom center',
-        // The fan strip spans the full row width; without this it eats clicks
-        // meant for anything it overlaps (the End Turn shelf sat unreachable
-        // under it). Cards re-enable pointer events individually below.
+        alignItems: 'flex-start',
+        width: avail,
+        // Shrink-to-fit so no card is clipped by the band's edge (see fanScale).
+        transform: `scale(${fanScale(total, avail)})`,
+        transformOrigin: 'top center',
+        // The fan spans the whole band; without this it eats clicks meant
+        // for anything it overlaps. Cards re-enable pointer events below.
         pointerEvents: 'none',
       }}>
       <AnimatePresence onExitComplete={done}>
         {cards.map((c, i) => {
-          const { selected, stuck, cardDisabled, opacity, label, unaffordable } = stateOf(c);
+          const selected = pending?.iid === c.iid;
+          // A card no hero can take right now (every one full, or wearing it).
+          const stuck = !disabled && !playable(c);
+          const cardDisabled = disabled || stuck;
+          // Dim must live in the `animate` target, not `style` — framer's
+          // animate={{ opacity: 1 }} overrides a style-prop opacity, which
+          // silently disabled the stuck/disabled fade entirely.
+          const opacity = cardDisabled && !selected ? (stuck ? 0.55 : 0.6) : 1;
+          const price = itemPrice(c.cardId);
+          const unaffordable = price > souls;
+          const isHero = CARDS_BY_ID[c.cardId]?.type === 'hero';
+          const why = !stuck ? '' : isHero ? ' — no room on the board now' : unaffordable ? ` — costs ${price} souls` : ' — no hero can take it now';
+          const label = `${inHandLabel(CARDS_BY_ID[c.cardId]?.name ?? c.cardId)}${why}`;
+          // What can be acted on pulses: a card that can be played, while
+          // nothing is armed.
+          const usable = !cardDisabled && !pending;
           const rot = selected ? 0 : fanRotation(i, total);
-          const y = selected ? -42 : fanY(i, total);
+          const y = selected ? -SELECTED_LIFT : fanY(i, total);
           // A card flown in fades in on its own spot as the board's flight
           // lands there; one drawn rises in from below.
           const landing = isLanding(arriving, c.iid);
@@ -258,7 +201,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
               layoutId={`card-${c.iid}`}
               layout
               initial={landing ? { opacity: 0 } : { opacity: 0, y: 120, scale: 0.5 }}
-              animate={{ opacity, y, scale: selected ? 1.06 : 1, rotate: rot }}
+              animate={{ opacity, y: isHovered && !selected ? y - 28 : y, scale: selected ? 1.06 : 1, rotate: rot }}
               exit={{ opacity: 0, y: -60, scale: 0.5, transition: { duration: 0.25 } }}
               transition={landing ? { ...spring.default, opacity: { duration: 0.1 } } : spring.default}
               drag={!cardDisabled}
@@ -320,6 +263,7 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                 // double-animate against the layout spring and made hand
                 // reflow (hover relief, card played/drawn) visibly chop.
                 marginLeft,
+                position: 'relative',
                 cursor: cardDisabled ? 'default' : 'pointer',
                 transformOrigin: 'bottom center',
                 zIndex,
@@ -330,6 +274,22 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
                 pointerEvents: 'auto', // opt back in under the fan's pointerEvents:none
               }}
             >
+              {/* The usable light: a gold halo that breathes round a card that
+                  can be played now (steady under calm motion). */}
+              {usable && (
+                <motion.div
+                  aria-hidden
+                  data-usable
+                  initial={{ opacity: 0.35 }}
+                  animate={calm ? { opacity: 0.7 } : { opacity: [0.35, 0.9, 0.35] }}
+                  transition={calm ? { duration: 0.2 } : { duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{
+                    position: 'absolute', inset: 0, borderRadius: 10,
+                    boxShadow: `0 0 0 2px ${poster.you}, 0 0 16px 4px ${poster.you}99`,
+                    pointerEvents: 'none',
+                  }}
+                />
+              )}
               {/* The card's box, registered for the board's flight to it —
                   on an inner node: AnimatePresence's own child takes no ref. */}
               <div ref={(el) => registerCard?.(c.iid, el)}>
@@ -351,81 +311,5 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
         })}
       </AnimatePresence>
     </div>
-  );
-}
-
-/**
- * One card on the phone's strip. A tap arms it (a card no hero can take says
- * why instead); a press held opens the full card, and the tap that ends it is
- * swallowed — the browser's own click too, which would land on the preview
- * that has just opened under the finger and close it; a thumb that scrolls the
- * strip from it hands the gesture to the browser (pan-x) and fires neither. No
- * hover peek under a finger.
- */
-function StripCard({ card: c, selected, stuck, cardDisabled, opacity, label, unaffordable, first, last, landing, onTap, onLongPress, onHover, onBlocked, registerCard }: {
-  card: CardInstance;
-  selected: boolean;
-  stuck: boolean;
-  cardDisabled: boolean;
-  opacity: number;
-  label: string;
-  unaffordable: boolean;
-  first: boolean;
-  last: boolean;
-  landing: boolean;
-} & Pick<Props, 'onTap' | 'onLongPress' | 'onHover' | 'onBlocked' | 'registerCard'>) {
-  // Set when a held press has opened the full card, until the finger lifts.
-  const held = useRef(false);
-  const press = usePress(
-    () => {
-      if (!cardDisabled) onTap(c);
-      // Tapping a card no hero can take on your own turn gets explicit
-      // feedback instead of a silent no-op.
-      else if (stuck) onBlocked?.(c);
-    },
-    () => { held.current = true; onLongPress?.(c); },
-    onHover ? (on) => onHover(on ? c : null) : undefined,
-  );
-  return (
-    <motion.div
-      layoutId={`card-${c.iid}`}
-      layout
-      // A card flown in fades in on its own spot as the board's flight lands
-      // there; one drawn rises into the strip.
-      initial={landing ? { opacity: 0 } : { opacity: 0, y: 36, scale: 0.6 }}
-      animate={{ opacity, y: selected ? -STRIP_LIFT : 0, scale: 1 }}
-      exit={{ opacity: 0, y: -24, scale: 0.6, transition: { duration: 0.22 } }}
-      transition={landing ? { ...spring.default, opacity: { duration: 0.1 } } : spring.default}
-      whileTap={{ scale: 0.94 }}
-      {...press}
-      onPointerDown={(e) => { held.current = false; press.onPointerDown(e); }}
-      // A finger lifted after a held press: no click is made of it.
-      onTouchEnd={(e: TouchEvent) => { if (held.current) { held.current = false; e.preventDefault(); } }}
-      role="button"
-      aria-label={label}
-      aria-pressed={selected}
-      style={{
-        marginLeft: first ? 'auto' : 0,
-        marginRight: last ? 'auto' : 0,
-        flex: '0 0 auto',
-        width: THUMB_W,
-        height: THUMB_H,
-        scrollSnapAlign: 'start',
-        cursor: cardDisabled ? 'default' : 'pointer',
-        // The strip pans sideways under the thumb.
-        touchAction: 'pan-x',
-        // A card no hero can take prints greyer.
-        filter: stuck ? 'saturate(0.55)' : undefined,
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        WebkitTouchCallout: 'none',
-      } as CSSProperties}
-    >
-      {/* The card's box, registered for the board's flight to it —
-          on an inner node: AnimatePresence's own child takes no ref. */}
-      <div ref={(el) => registerCard?.(c.iid, el)}>
-        <HandThumb cardId={c.cardId} armed={selected} unaffordable={unaffordable} level={CARDS_BY_ID[c.cardId]?.type === 'hero' ? c.level : undefined} />
-      </div>
-    </motion.div>
   );
 }

@@ -24,18 +24,23 @@ import { CardBack } from './OpponentHand';
 
 /** A pile's card size, px. */
 const PILE = {
+  /** The deck at the stage's edge, half off the screen (BoardTable's DECK). */
+  big: { w: 64, h: 90, radius: 8 },
   full: { w: 46, h: 64, radius: 7 },
+  /** The discard pile beside it (BoardTable's DISCARD). */
+  small: { w: 40, h: 56, radius: 6 },
   chip: { w: 26, h: 36, radius: 4 },
 } as const;
 type PileSize = keyof typeof PILE;
 
-/** The count badge on a pile. */
-function Count({ n, accent, small }: { n: number; accent: string; small: boolean }) {
+/** The count badge on a pile, at its bottom corner: the right one, or the
+ *  left for a pile whose right edge is off the screen (your deck). */
+function Count({ n, accent, small, at = 'right' }: { n: number; accent: string; small: boolean; at?: 'left' | 'right' }) {
   const d = small ? 16 : 20;
   return (
     <span aria-hidden style={{
       position: 'absolute',
-      right: small ? -7 : -8,
+      [at]: small ? -7 : -8,
       bottom: small ? -6 : -7,
       minWidth: d,
       height: d,
@@ -59,18 +64,21 @@ function Count({ n, accent, small }: { n: number; accent: string; small: boolean
 
 /** The deck, face down: up to three backs offset into a stack (none when it
  *  is empty: a dashed outline holds its place), and the count. */
-export function DeckPile({ count, owner, size = 'full', accent }: {
+export function DeckPile({ count, owner, size = 'full', accent, countAt = 'right' }: {
   count: number;
   owner: 'you' | 'rival';
   size?: PileSize;
   accent: string;
+  /** Which bottom corner the count sits at (the left for a deck whose right
+   *  edge is off the screen). */
+  countAt?: 'left' | 'right';
 }) {
   const { w, h, radius } = PILE[size];
   // The count as the motion shows it: a card in the air has left or not yet landed.
   const shown = useTickedCount(`deck-${owner}`, count);
   // The stack's thickness: a plain edge per card under the top back, up to five.
   const layers = Math.min(5, shown);
-  const step = size === 'chip' ? 1 : 1.5;
+  const step = size === 'chip' ? 1 : size === 'big' ? 2 : 1.5;
   const label = `${owner === 'you' ? 'Your' : "Rival's"} deck: ${shown} card${shown === 1 ? '' : 's'}`;
   return (
     <div
@@ -83,7 +91,7 @@ export function DeckPile({ count, owner, size = 'full', accent }: {
       {layers === 0 ? (
         <div style={{
           position: 'absolute', left: 0, top: 4, width: w, height: h,
-          borderRadius: radius, border: `1.5px dashed ${poster.creamFaint}`, boxSizing: 'border-box',
+          borderRadius: radius, border: `1.5px dashed ${poster.inkFaint}`, boxSizing: 'border-box',
         }} />
       ) : (
         Array.from({ length: layers }, (_, i) => (
@@ -98,7 +106,7 @@ export function DeckPile({ count, owner, size = 'full', accent }: {
           </div>
         ))
       )}
-      <Count n={shown} accent={accent} small={size === 'chip'} />
+      <Count n={shown} accent={accent} small={size !== 'full' && size !== 'big'} at={countAt} />
     </div>
   );
 }
@@ -162,11 +170,11 @@ export function DiscardPile({ cards, owner, size = 'full', accent }: {
         {top ? <PileFace card={top} w={w} h={h} radius={radius} /> : (
           <div style={{
             width: w, height: h, borderRadius: radius, boxSizing: 'border-box',
-            border: `1.5px dashed ${poster.creamFaint}`,
+            border: `1.5px dashed ${poster.inkFaint}`,
           }} />
         )}
       </button>
-      <Count n={shown} accent={accent} small={size === 'chip'} />
+      <Count n={shown} accent={accent} small={size !== 'full' && size !== 'big'} />
       <AnimatePresence>
         {open && (
           <motion.ul

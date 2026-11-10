@@ -10,7 +10,6 @@ import type { PlayerID } from '@/engine/types';
 import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { LIFT_VAR } from '../effects/fx/FxImpulse';
 import { EASE_OUT, sec } from '../effects/fx/primitives';
-import { useViewport } from '../hooks/useViewport';
 import { fonts } from '../tokens';
 import { poster } from '../poster';
 
@@ -55,17 +54,15 @@ const sideStart = (rival: boolean) =>
 /** The last card down: ~1.7 s. */
 const DEAL_END_MS = sideStart(false) + (PER_SIDE - 1) * STAGGER_MS + LAND_MS;
 
-// How far a card travels, in the board's own px. It leaves its owner's hand
-// (off the top or bottom edge of the sheet) — the Active sits a row further
-// in than the bench — and starts toward the middle, where the hand is held.
-const REACH = {
-  desk:  { bench: 150, lane: 330, col: 104 },
-  phone: { bench: 105, lane: 230, col: 60 },
-} as const;
+// How far a card travels, in the stage's own px (the stage is one portrait
+// layout, scaled to the screen). It leaves its owner's hand (off the top or
+// bottom edge of the table) — the Active sits a row further in than the
+// bench — and starts toward the middle, where the hand is held.
+const REACH = { bench: 105, lane: 230, col: 60 } as const;
 /** Each column's tilt in flight (degrees), mirrored for your side. */
 const TILT = [6, -3, -6] as const;
 
-interface Deal { me: PlayerID; calm: boolean; mobile: boolean; t0: number }
+interface Deal { me: PlayerID; calm: boolean; t0: number }
 
 const DealContext = createContext<Deal | null>(null);
 
@@ -73,9 +70,8 @@ const DealContext = createContext<Deal | null>(null);
  *  `enabled` false: no deal, no stickers (a drafted match). */
 export function BoardIntro({ me, enabled = true, children }: { me: PlayerID; enabled?: boolean; children: ReactNode }) {
   const calm = useFxCalm();
-  const { isMobile } = useViewport();
   const [t0] = useState(() => performance.now());
-  const deal = useMemo(() => (enabled ? { me, calm, mobile: isMobile, t0 } : null), [me, calm, isMobile, t0, enabled]);
+  const deal = useMemo(() => (enabled ? { me, calm, t0 } : null), [me, calm, t0, enabled]);
   return <DealContext.Provider value={deal}>{children}</DealContext.Provider>;
 }
 
@@ -89,7 +85,7 @@ function entranceFor(deal: Deal, owner: PlayerID, slot: DealSlot): Entrance | nu
   const order = slot === 'active' ? 0 : slot + 1;
   const delay = sideStart(rival) + order * STAGGER_MS - (performance.now() - deal.t0);
   if (delay < 0) return null;
-  const reach = deal.mobile ? REACH.phone : REACH.desk;
+  const reach = REACH;
   // Both Actives stand in the middle column, facing each other across the line.
   const col = slot === 'active' ? 1 : slot;
   const y = (rival ? -1 : 1) * (slot === 'active' ? reach.lane : reach.bench);
@@ -184,7 +180,7 @@ export function DealSticker({ rival }: { rival: boolean }) {
   if (!deal || !plan || done) return null;
   const t = (ms: number) => ms / plan.dur;
   const landed = '0 3px 8px rgba(0, 0, 0, 0.35)';
-  const fontSize = deal.mobile ? 12 : 16;
+  const fontSize = 12;
   return (
     <div aria-hidden style={{
       position: 'absolute', left: '50%', top: '34%', transform: 'translate(-50%, -50%)',

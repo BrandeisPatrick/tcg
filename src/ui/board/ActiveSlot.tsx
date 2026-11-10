@@ -2,9 +2,7 @@ import { AnimatePresence } from 'framer-motion';
 import type { CardInstance, PlayerID, PlayerState } from '@/engine/types';
 import { HeroSlot } from './HeroSlot';
 import { DealSticker, DealtTile } from './BoardIntro';
-import { SlotWell, boardCols } from './BoardTable';
-import { poster } from '../poster';
-import { useViewport } from '../hooks/useViewport';
+import { SlotWell, slotBox } from './BoardTable';
 import type { ArmedPlay } from '../helpers';
 
 interface Props {
@@ -25,59 +23,51 @@ interface Props {
    *  lights and takes the tap (`onTapSlot`). */
   laneOpen?: boolean;
   onTapSlot?: () => void;
+  /** Where the row starts, px down the stage (boardStack). */
+  top: number;
 }
 
-// One prominent Active slot centered horizontally. Larger than bench slots.
-// The owner colour (rival red / your gold) only paints the empty well; the
-// tile itself carries its own frame states.
+/**
+ * One Active slot in the stage's centre column, a card's width wider than a
+ * bench slot (the duel is the focus): the card miniature, or a plain empty
+ * outline. The rival's sits above the centre ring, yours below.
+ */
 export function ActiveSlot({
   ps, owner, myId, isOpponent, pending, onTapHero, onLongPressHero, onEquipmentHover,
-  isTargetable, registerSlotRef, isCurrentTurn, readyIids, laneOpen = false, onTapSlot,
+  isTargetable, registerSlotRef, isCurrentTurn, readyIids, laneOpen = false, onTapSlot, top,
 }: Props) {
   const card = ps.active;
-  const accent = isOpponent ? poster.rival : poster.you;
-  const { isMobile } = useViewport();
-
+  const box = slotBox(top, 'active');
   return (
-    <div style={{
-      position: 'relative',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      height: '100%',
-      // The row is as tall as the geometry says, not as its content (ActiveDuel).
-      minHeight: 0,
-    }}>
-      {/* The Active tile, centred at the column's width (boardCols.active):
-          the row's height is its height. */}
-      <div style={{ width: boardCols.active(isMobile), height: '100%' }}>
-        <AnimatePresence mode="popLayout">
-          {card ? (
-            // Opacity-only presence — the HeroSlot's shared layoutId animates
-            // the actual bench↔active travel (see DealtTile for the rationale).
-            <DealtTile key={card.iid} owner={owner} slot="active" style={{ height: '100%' }}>
-              <HeroSlot
-                card={card}
-                owner={owner}
-                myId={myId}
-                pending={pending}
-                isTargetable={isTargetable(card)}
-                isCurrentTurn={isCurrentTurn}
-                onTap={onTapHero}
-                onLongPress={onLongPressHero}
-                onEquipmentHover={onEquipmentHover}
-                registerSlotRef={registerSlotRef}
-                ready={readyIids?.has(card.iid)}
-                flexSlot={ps.flexSlot}
-              />
-            </DealtTile>
-          ) : (
-            <SlotWell accent={accent} label={laneOpen ? 'Lane' : 'Active K.O.'} lit={laneOpen} name="Active slot" onTap={onTapSlot} />
-          )}
-        </AnimatePresence>
-      </div>
+    <>
+      <AnimatePresence mode="popLayout">
+        {card ? (
+          // Opacity-only presence — the HeroSlot's shared layoutId animates
+          // the actual bench↔active travel (see DealtTile for the rationale).
+          <DealtTile key={card.iid} owner={owner} slot="active" style={box}>
+            <HeroSlot
+              card={card}
+              owner={owner}
+              myId={myId}
+              pending={pending}
+              isTargetable={isTargetable(card)}
+              isCurrentTurn={isCurrentTurn}
+              onTap={onTapHero}
+              onLongPress={onLongPressHero}
+              onEquipmentHover={onEquipmentHover}
+              registerSlotRef={registerSlotRef}
+              ready={readyIids?.has(card.iid)}
+              flexSlot={ps.flexSlot}
+            />
+          </DealtTile>
+        ) : (
+          <SlotWell key="empty-active" style={box} lit={laneOpen} name="Active slot" onTap={onTapSlot} />
+        )}
+      </AnimatePresence>
       {/* At the match's start, "Rival" / "You" names whose Active this is. */}
-      <DealSticker rival={isOpponent} />
-    </div>
+      <div style={{ ...box, pointerEvents: 'none' }}>
+        <DealSticker rival={isOpponent} />
+      </div>
+    </>
   );
 }

@@ -4,7 +4,7 @@
  * rosters on the board, no draft, a deck the lesson names (most of them none:
  * nothing is drawn but what the lesson deals), and custom numbers on every
  * hero so the move being taught is exactly the move that wins. Every turn runs
- * Income → Act → End, the beats the dial under the turn number lights: the
+ * Income → Act → End ("Your turn" opens it on a banner): the
  * souls arrive and count up and a card is drawn, then the player plays from
  * the hand (a hero onto the bench for free, an item onto a hero for its price:
  * a tap on it and a tap on the hero) and the heroes act (abilities, a Retreat,
@@ -199,7 +199,7 @@ export interface CoachStep {
   allow?: (v: CoachView) => GateSpec[];
 }
 
-export const RIVAL_TURN = "Rival's turn. Watch its beats pass on the dial: Income, Act — cards, abilities, then the attack — and End.";
+export const RIVAL_TURN = "Rival's turn. Watch its beats pass: Income, Act — cards, abilities, then the attack — and End.";
 
 /** The turn button, by its name. */
 export const TURN_BUTTON: GateSpec = END_TURN;
@@ -344,13 +344,13 @@ export const LESSONS: Lesson[] = [
     title: 'The Skill',
     blurb: "Income, Act, End. Kelvin's skill ends it.",
     face: 'hero_kelvin',
-    outro: "Every turn runs Income, Act, End — the dial lights each one. A skill costs souls, printed on its plate, and it is ready again on your next turn. The ultimate is the other button on the card: from Level 2, for more souls.",
+    outro: "Every turn runs Income, Act, End — a banner opens each turn. A skill costs souls, printed on its plate, and it is ready again on your next turn. The ultimate is the other button on the card: from Level 2, for more souls.",
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
     // (to every enemy, and he is the only one) is the whole fight. It costs
     // three of the turn's five souls.
     setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
-      look('look', 'One on One', mine, (v) => `Every turn runs three beats, lit on the dial: Income (souls and a card), Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}). ${nameOf(mine(v))} faces ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Tap ${nameOf(mine(v))} to open his sheet.`),
+      look('look', 'One on One', mine, (v) => `Every turn runs three beats: Income (souls and a card), Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}). ${nameOf(mine(v))} faces ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Tap ${nameOf(mine(v))} to open his sheet.`),
       useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to every enemy, for ${soulsText(mine(v) ? kitCost(mine(v)!) : 0)} — a skill's price is on its plate.`),
     ],
   },

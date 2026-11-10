@@ -4,9 +4,8 @@
  * the viewport, under the sheets and prompts (zIndex 90 < 100), taking no
  * pointer events — nothing here blocks input or touches the game.
  *
- * A ghost is the real card (CardFrame, or the phone hand's HandThumb when it
- * is to or from your hand there) on a two-sided plate that can turn over in
- * flight: your draws leave the deck as a back and land face up, the rival's
+ * A ghost is the real card (CardFrame) on a two-sided plate that can turn
+ * over in flight: your draws leave the deck as a back and land face up, the rival's
  * stay backs, a discard lands face up on the pile. Each frame of a flight
  * the ghost chases its destination's live box (the hand closes up, a strip
  * scrolls), so it lands on the card it becomes; the real card is kept out of
@@ -22,17 +21,17 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { PlayerID } from '@/engine/types';
 import { CardFrame, SIZES } from '../card/CardFrame';
-import { HandThumb, THUMB_H, THUMB_W } from '../board/HandThumb';
 import { CardBack } from '../board/OpponentHand';
 import { restRect, type Rect } from '../effects/fx/geometry';
-import { useViewport } from '../hooks/useViewport';
 import type { Anchor, DeckMotionPlan, Face, Flight, Riffle } from './deckMotionPlan';
 import type { PileTicker } from './pileTicker';
 import { admitBatch } from './admitBatch';
 
 const Z = 90;
-/** An upgrade or a drafted hero shown over the table: the hand card's size, times this. */
-const STAGE_SCALE = { desk: 1.2, phone: 0.8 } as const;
+/** An upgrade or a drafted hero shown over the table: the deck's height on
+ *  screen, times this (the stage is scaled to the screen, so the deck's box
+ *  says how big the table is). */
+const STAGE_SCALE = 2;
 /** The pop as an upgrade appears, ms. */
 const APPEAR_POP_MS = 180;
 
@@ -61,7 +60,6 @@ interface Live {
   lastTo: Rect | null;
   /** Rendered at this natural size and scaled to its box each frame. */
   natural: { w: number; h: number };
-  thumb: boolean;
   done: boolean;
 }
 
@@ -89,7 +87,6 @@ function pileEl(pile: 'deck' | 'discard', owner: Owner): Element | null {
 }
 
 export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins, ticker }: Props) {
-  const { isMobile } = useViewport();
   const [live, setLive] = useState<Live[]>([]);
   const [riffles, setRiffles] = useState<LiveRiffle[]>([]);
   const boxes = useRef(new Map<string, HTMLDivElement>());
@@ -177,9 +174,9 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
         const yRival = rival ? toRect(rival).top + toRect(rival).height / 2 : vh * 0.16;
         const mine = a.pid === me;
         const cy = lerp(yRival, yYou, mine ? 0.66 : 0.34);
-        const scale = isMobile ? STAGE_SCALE.phone : STAGE_SCALE.desk;
-        const h = natural.h * scale;
-        const w = natural.w * scale;
+        const deckH = you ? toRect(you).height : rival ? toRect(rival).height : natural.h / 2;
+        const h = deckH * STAGE_SCALE;
+        const w = (natural.w / natural.h) * h;
         const cx = window.innerWidth / 2 + (a.i - (a.n - 1) / 2) * w * 0.82;
         return boxAt(cx, cy, natural, h);
       }
@@ -194,14 +191,11 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
     const t0 = performance.now();
     const fresh: Live[] = [];
     for (const f of plan.flights) {
-      // The phone hand's thumb, to or from it; a hero placed flies as the
-      // full card, to grow into its tile.
-      const thumb = isMobile && f.pid === me && f.what !== 'place' && (f.to.kind === 'hand' || f.from.kind === 'hand');
-      const natural = thumb ? { w: THUMB_W, h: THUMB_H } : SIZES.hand;
+      const natural = SIZES.hand;
       const from = measure(f.from, natural) ?? measure(f.to, natural);
       if (!from) continue;
       if (f.hide) hide(f.key, f.hide);
-      fresh.push({ f, t0, from, lastTo: null, natural, thumb, done: false });
+      fresh.push({ f, t0, from, lastTo: null, natural, done: false });
     }
     const freshRiffles: LiveRiffle[] = [];
     for (const r of plan.riffles) {
@@ -304,16 +298,14 @@ export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins
           >
             <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
               {lf.f.cardId && (lf.f.faces.start === 'face' || lf.f.faces.end === 'face') && (
-                lf.thumb
-                  ? <HandThumb cardId={lf.f.cardId} />
-                  : <CardFrame cardId={lf.f.cardId} size="hand" physical={false} tapExplains={false} />
+                <CardFrame cardId={lf.f.cardId} size="hand" physical={false} tapExplains={false} />
               )}
             </div>
             <div style={{
               position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
             }}>
-              <CardBack radius={lf.thumb ? 6 : 10} />
+              <CardBack radius={10} />
             </div>
           </div>
         </div>

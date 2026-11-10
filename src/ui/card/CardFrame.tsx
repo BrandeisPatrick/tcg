@@ -71,6 +71,9 @@ interface Props {
    *  its level): the frame prints in its level green, as the tile's does.
    *  Omitted, the plain charcoal-edge frame of a card with no level yet. */
   level?: number;
+  /** Another form's art for a hero's window (`heroForm`: Silver's Wolf
+   *  form), a file under public/heroes/. The board's miniature passes it. */
+  art?: string;
 }
 
 /** The two sizes a card is printed at, in px. */
@@ -208,9 +211,9 @@ function ArtImg({ src, cardId }: { src: string; cardId: string }) {
   );
 }
 
-function ArtWindow({ data }: { data: CardData | undefined }) {
+function ArtWindow({ data, art }: { data: CardData | undefined; art?: string }) {
   if (!data) return null;
-  if (data.type === 'hero') return <HeroPortrait cardId={data.id} />;
+  if (data.type === 'hero') return <HeroPortrait cardId={data.id} art={art} />;
   if (data.type === 'ultimate') {
     return (
       <div style={{ position: 'relative', width: '100%', height: '100%', background: poster.ground }}>
@@ -246,7 +249,7 @@ export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
   cost: costInPlay, unaffordable = false, hideCost = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
-  holoPalette = 'amber', tilt = false, tapExplains = true, level,
+  holoPalette = 'amber', tilt = false, tapExplains = true, level, art,
 }: Props) {
   const [hover, setHover] = useState(false);
   // Premium-plate flags, read once so the markup below stays declarative.
@@ -334,7 +337,7 @@ export function CardFrame({
         overflow: 'hidden',
         background: poster.ground,
       }}>
-        <ArtWindow data={data} />
+        <ArtWindow data={data} art={art} />
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: ART_INNER_EDGE, pointerEvents: 'none' }} />
         {holo && holoScope === 'art' && <HoloLayer variant={holo} strength={holoStrength} markScale={holoMarkScale} palette={holoPalette} />}
 
