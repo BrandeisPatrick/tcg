@@ -21,7 +21,8 @@ import { LevelRing } from '../card/LevelRing';
 import { useStatTick } from './useStatTick';
 import { SpikeMark } from './SpikeMark';
 import { FlexSocket } from './FlexSocket';
-import { HP_ROOM, boardCols } from './BoardTable';
+import { boardCols } from './BoardTable';
+const HP_ROOM = 0;
 import type { ArmedPlay } from '../helpers';
 
 /**

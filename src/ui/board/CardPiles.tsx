@@ -24,8 +24,8 @@ import { CardBack } from './OpponentHand';
 
 /** A pile's card size, px. */
 const PILE = {
-  /** The deck at the stage's edge, half off the screen (BoardTable's DECK). */
-  big: { w: 64, h: 90, radius: 8 },
+  /** The deck on the table beside its side's Active (BoardTable's DECK). */
+  big: { w: 52, h: 73, radius: 7 },
   full: { w: 46, h: 64, radius: 7 },
   /** The discard pile beside it (BoardTable's DISCARD). */
   small: { w: 40, h: 56, radius: 6 },

@@ -20,9 +20,9 @@ const WAIT_MS = 2600;
 export interface LaneBox { top: number; height: number; left: number; width: number }
 
 export function useLaneBox(): LaneBox {
-  const { flatTable } = useSettings();
+  const { tiltedTable } = useSettings();
   const read = (): LaneBox => {
-    const plane = tablePlane(!flatTable);
+    const plane = tablePlane(tiltedTable);
     const s = boardStack();
     const y0 = plane.y(s.mid - boardRows.lane / 2);
     const y1 = plane.y(s.mid + boardRows.lane / 2);
@@ -52,7 +52,7 @@ export function useLaneBox(): LaneBox {
       window.removeEventListener('orientationchange', onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flatTable]);
+  }, [tiltedTable]);
   return box;
 }
 

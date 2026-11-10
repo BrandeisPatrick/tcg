@@ -6,6 +6,10 @@ import { poster, soulCoin } from '../poster';
 import { MapIcon } from './MapIcon';
 import { RejuvenatorMark } from './RejuvenatorMark';
 import { useStatTick } from './useStatTick';
+import { OpponentHand } from './OpponentHand';
+import { PATRON_NAMES } from './patrons';
+import { STAGE } from './BoardTable';
+import type { CSSProperties } from 'react';
 
 const NAME: Record<StructureKind, string> = { guardian: 'Guardian', walker: 'Walker', patron: 'Patron' };
 
@@ -139,5 +143,26 @@ function Mark({ s, accent }: { s: Structure; accent: string }) {
         }} />
       )}
     </span>
+  );
+}
+
+/**
+ * The scoreboard across the top of the match: your patron's side at the
+ * left, the turn in the centre, the rival's side at the right with its
+ * souls and its hand. (Placeholder layout: the two name bars side by side.)
+ */
+export function Scoreboard({ you, rival, turn, myTurn, style }: {
+  you: PlayerState;
+  rival: PlayerState;
+  turn: number;
+  myTurn: boolean;
+  style?: CSSProperties;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, ...style }}>
+      <NameBar label={PATRON_NAMES.you} ps={you} turn={turn} myTurn={myTurn} />
+      <NameBar label={PATRON_NAMES.rival} ps={rival} hostile souls={rival.souls} myTurn={!myTurn} />
+      <OpponentHand cards={rival.hand} centre={STAGE.w / 2 - 6} top={-22} />
+    </div>
   );
 }

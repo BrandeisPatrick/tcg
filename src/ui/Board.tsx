@@ -22,7 +22,6 @@ import { UpgradePicker } from './overlays/UpgradePicker';
 import { useReplacePick } from './overlays/ReplacePicker';
 import { TriggerPrompt } from './overlays/TriggerPrompt';
 import { DeckPile, DiscardPile } from './board/CardPiles';
-import { OpponentHand } from './board/OpponentHand';
 import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
 import { DraftOverlay } from './overlays/DraftOverlay';
@@ -31,7 +30,8 @@ import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
 import { BoardTable, RoundPlate, STAGE, TABLE_TILT, boardStack, hudSeats, tableTiltStyle } from './board/BoardTable';
-import { NameBar } from './board/NameBar';
+import { Scoreboard } from './board/NameBar';
+import { panelStyle, scale } from './hud';
 import { SoulsCounter } from './board/SoulsCounter';
 import { TurnBanner } from './board/TurnBanner';
 import { BoardControls } from './board/BoardControls';
@@ -122,8 +122,8 @@ export function Board(props: BoardProps<GameState>) {
   }, [lesson, ctx.gameover, me]);
   const following = lesson ? nextLesson(lesson.id) : undefined;
   // Combat tempo honours the system-menu speed setting live; so does the
-  // table's tilt (the "Flat table" setting turns it off).
-  const { combatSpeed, flatTable } = useSettings();
+  // table's camera (top-down, or leaning with the "Tilted table" setting).
+  const { combatSpeed, tiltedTable } = useSettings();
   const [pending, setPending] = useState<PendingPlay | null>(null);
   // Auto-play: when on, the same AI that runs the opponent also drives the
   // local player's turns, so the match plays itself hands-free. Toggle in the
@@ -900,7 +900,7 @@ export function Board(props: BoardProps<GameState>) {
   // scaled to the screen — a phone fills it edge to edge, a desktop shows it
   // centred at full height with the scene either side.
   const stack = boardStack();
-  const hud = hudSeats(!flatTable);
+  const hud = hudSeats(tiltedTable);
   const youPs = G.players[me];
   const oppPs = G.players[opp];
 
@@ -951,7 +951,7 @@ export function Board(props: BoardProps<GameState>) {
                 the halves, the ring, every slot and card, the HP floats, the
                 chips and the piles turn with it. Taps land through the
                 transform, and the flights and FX measure the projected boxes. */}
-            <div data-table-plane style={{ position: 'absolute', inset: 0, zIndex: 1, ...tableTiltStyle(flatTable) }}>
+            <div data-table-plane style={{ position: 'absolute', inset: 0, zIndex: 1, ...tableTiltStyle(tiltedTable) }}>
             {/* THE TABLE — the two halves and the centre ring, behind everything. */}
             <BoardTable />
 
@@ -1000,11 +1000,10 @@ export function Board(props: BoardProps<GameState>) {
               onTapSlot={placeAt}
             />
 
-            {/* THE DECKS — big card-back stacks at the stage's edges, half
-                off the screen: the rival's at the upper left beside its
-                Active, yours at the right beside yours; each discard pile
-                just inside its deck. The motion layer flies cards from and
-                to these (data-pile). */}
+            {/* THE PILES — whole on the table beside each Active: the
+                rival's deck and discard pile at its left, yours at your
+                right. The motion layer flies cards from and to these
+                (data-pile). */}
             <div style={{ position: 'absolute', ...hud.rivalDeck, zIndex: 3 }}>
               <DeckPile count={oppPs.deck.length} owner="rival" size="big" accent={poster.rival} />
             </div>
@@ -1012,34 +1011,29 @@ export function Board(props: BoardProps<GameState>) {
               <DiscardPile cards={oppPs.discard} owner="rival" size="small" accent={poster.rival} />
             </div>
             <div style={{ position: 'absolute', ...hud.yourDeck, zIndex: 3 }}>
-              <DeckPile count={youPs.deck.length} owner="you" size="big" accent={poster.you} countAt="left" />
+              <DeckPile count={youPs.deck.length} owner="you" size="big" accent={poster.you} />
             </div>
             <div style={{ position: 'absolute', ...hud.yourDiscard, zIndex: 3 }}>
               <DiscardPile cards={youPs.discard} owner="you" size="small" accent={poster.you} />
             </div>
             </div>
 
-            {/* The rival's hand: backs peeking in at the top edge. */}
-            <OpponentHand cards={oppPs.hand} centre={hud.rivalHand.centre} top={hud.rivalHand.top} />
-
-            {/* The rival's name bar: its patron, its map track, its souls. */}
-            <NameBar
-              style={{ position: 'absolute', ...hud.rivalBar, zIndex: 5 }}
-              label={PATRON_NAMES.rival}
-              ps={oppPs}
-              hostile
-              split
-              souls={oppPs.souls}
-              myTurn={!isMyTurn}
+            {/* The scoreboard across the top: your patron's side, the turn,
+                the rival's side with its souls and its hand. */}
+            <Scoreboard
+              style={{ position: 'absolute', ...hud.scoreboard, zIndex: 5 }}
+              you={youPs}
+              rival={oppPs}
+              turn={G.turnNumber}
+              myTurn={isMyTurn}
             />
-            {/* Where a combat walk's Skip waits: the free paper left of your
+            {/* Where a combat walk's Skip waits: the free table left of your
                 Active (CombatChoreographer reads this seat). */}
             <div aria-hidden data-skip-seat style={{ position: 'absolute', left: hud.skip.left, top: hud.skip.top, width: 0, height: 0 }} />
 
 
-            {/* The menu — a round button at the lower left, where Pocket's
-                "≡" sits: the match log and the settings (the System menu,
-                whose gear has no free corner on the table) behind it. */}
+            {/* The menu — a round button at the left of the turn row: the
+                match log and the settings (the System menu) behind it. */}
             <button
               type="button"
               aria-label="Menu"
@@ -1062,16 +1056,15 @@ export function Board(props: BoardProps<GameState>) {
                   <motion.div
                     role="menu"
                     aria-label="Menu"
-                    initial={{ opacity: 0, x: -8, scale: 0.94 }}
-                    animate={{ opacity: 1, x: 0, scale: 1 }}
-                    exit={{ opacity: 0, x: -8, scale: 0.94, transition: { duration: 0.12 } }}
+                    initial={{ opacity: 0, y: 8, scale: 0.94 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.94, transition: { duration: 0.12 } }}
                     transition={spring.snappy}
                     style={{
-                      position: 'absolute', left: hud.menu.left + hud.menu.size + 6, top: hud.menu.top - 22, zIndex: 12,
-                      transformOrigin: 'left center',
+                      ...panelStyle,
+                      position: 'absolute', left: hud.menu.left, bottom: STAGE.h - hud.menu.top + 6, zIndex: 12,
+                      transformOrigin: 'left bottom',
                       display: 'flex', flexDirection: 'column', gap: 3, padding: 4,
-                      background: poster.ink, borderRadius: 10,
-                      boxShadow: `0 0 0 1.5px ${poster.paper}, 0 8px 22px rgba(0, 0, 0, 0.55)`,
                     }}
                   >
                     {([
@@ -1086,7 +1079,7 @@ export function Board(props: BoardProps<GameState>) {
                         style={{
                           minWidth: 132, height: 38, padding: '0 14px', textAlign: 'left',
                           background: 'transparent', color: poster.cream, border: 'none', borderRadius: 7,
-                          fontFamily: fonts.display, fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase',
+                          fontFamily: fonts.display, fontSize: scale.body, letterSpacing: '0.12em', textTransform: 'uppercase',
                           cursor: 'pointer',
                         }}
                       >{name}</button>
@@ -1096,9 +1089,9 @@ export function Board(props: BoardProps<GameState>) {
               )}
             </AnimatePresence>
 
-            {/* Your souls — the round counter at the lower right. */}
-            <div style={{ position: 'absolute', left: hud.souls.left, top: hud.souls.top, zIndex: 6 }}>
-              <SoulsCounter souls={youPs.souls} size={hud.souls.size} />
+            {/* Your souls — the plate in the turn row, beside End Turn. */}
+            <div style={{ position: 'absolute', right: hud.souls.right, top: hud.souls.top, zIndex: 6 }}>
+              <SoulsCounter souls={youPs.souls} size={hud.souls.height} />
             </div>
 
             {/* YOUR HAND — a fan along the bottom edge, partly off the screen.
@@ -1128,7 +1121,7 @@ export function Board(props: BoardProps<GameState>) {
 
             {/* The turn controls — End Turn (Cancel while something is
                 armed) at the right of the turn row, above the hand at the
-                thumb; Auto under the menu button. */}
+                thumb; Auto beside the menu button. */}
             <BoardControls
               seat={hud}
               isMyTurn={isMyTurn}
@@ -1140,15 +1133,6 @@ export function Board(props: BoardProps<GameState>) {
               onToggleAuto={() => setAutoPlay((v) => !v)}
             />
 
-            {/* Your name bar at the left of the turn row: your patron, your
-                map track, the turn number. Above the hand, covering none of it. */}
-            <NameBar
-              style={{ position: 'absolute', ...hud.yourBar, zIndex: 7 }}
-              label={PATRON_NAMES.you}
-              ps={youPs}
-              turn={G.turnNumber}
-              myTurn={isMyTurn}
-            />
           </div>
         </div>
 
@@ -1395,7 +1379,7 @@ export function Board(props: BoardProps<GameState>) {
         <FxLayer batch={freshFx} batchKey={freshFxKey} slotRefs={slotRefs.current} action={G.action} />
 
         {/* The deck's motion — cards between the deck, the hand and the discard pile. */}
-        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} origins={placeOrigins.current} ticker={deckMotion.ticker} tilt={flatTable ? 0 : TABLE_TILT.angle} />
+        <DeckMotionLayer plan={deckMotion.plan} planKey={freshFxKey} me={me} handRefs={handCardRefs.current} slotRefs={slotRefs.current} origins={placeOrigins.current} ticker={deckMotion.ticker} tilt={tiltedTable ? TABLE_TILT.angle : 0} />
 
         {/* Feedback sticker — one ink label above the controls (red when it is
             a warning). Explains silent no-ops and confirms fire-and-forget
