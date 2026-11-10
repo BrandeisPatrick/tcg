@@ -4,7 +4,9 @@ import { CARDS_BY_ID } from '@/cards';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { effectiveAtk } from '@/engine/query';
 import { fonts, spring, text } from '../tokens';
-import { atkInk, hpInk, poster, sheetStyle, scrimStyle } from '../poster';
+import { atkInk, poster, sheetStyle, scrimStyle } from '../poster';
+import { HpSegments, PatronSigil, Souls, bandStyle, hpNumberStyle, scale } from '../hud';
+import { SwordIcon } from '../card/Icons';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 
@@ -63,30 +65,30 @@ export function PromotionOverlay({ candidates, leavingName, retreat, opening, ba
         style={{
           ...sheetStyle,
           display: 'flex', flexDirection: 'column',
-          alignItems: 'center', gap: isMobile ? 18 : 24,
-          padding: isMobile ? '22px 18px' : '28px 32px',
-          borderRadius: isMobile ? 16 : 18,
+          alignItems: 'center', gap: isMobile ? 16 : 20,
+          padding: isMobile ? '0 0 18px' : '0 0 24px',
+          borderRadius: 12,
+          overflow: 'hidden',
           maxWidth: 720,
           color: poster.ink,
         }}
       >
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <span style={{
-            fontFamily: fonts.display,
-            fontSize: 22,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            lineHeight: 1,
-            color: retreat || opening || ride ? poster.ink : poster.red,
-          }}>{opening ? 'Your Opening Hand' : `${leavingName} ${retreat ? 'Retreats' : ride ? 'Rides Off' : 'Fell'}`}</span>
-          <span style={{
-            fontFamily: fonts.display,
-            fontSize: 13,
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            lineHeight: 1,
-            color: poster.ink,
-          }}>{opening ? 'Choose your first Active' : 'Choose your new Active'}</span>
+        {/* The header band, in your patron's amber: who left the lane, then
+            the ask. */}
+        <div style={{
+          ...bandStyle(poster.you),
+          alignSelf: 'stretch',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+          padding: '11px 16px 10px',
+          textAlign: 'center',
+        }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: scale.title }}>
+            <PatronSigil side="you" size={18} color={poster.ink} />
+            {opening ? 'Your opening hand' : `${leavingName} ${retreat ? 'retreats' : ride ? 'rides off' : 'fell'}`}
+          </span>
+          <span style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: scale.label, letterSpacing: '0.12em' }}>
+            {opening ? 'Choose your first Active' : 'Choose your new Active'}
+          </span>
         </div>
 
         <div style={{
@@ -111,16 +113,19 @@ export function PromotionOverlay({ candidates, leavingName, retreat, opening, ba
           ))}
         </div>
 
-        <span style={{ ...text.body, color: poster.inkDim, textAlign: 'center' }}>
+        {/* One short line: what happens to the hero leaving the lane. */}
+        <span style={{ ...text.body, fontSize: scale.body, color: poster.inkSoft, textAlign: 'center', padding: '0 18px', display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
           {opening
-            ? 'The hero you pick takes the lane. The rest stay in your hand: put them on the bench on your turn, for free.'
+            ? 'The rest stay in your hand.'
             : retreat
-            ? `${leavingName} takes their bench slot. ${retreat.cost > 0 ? `Retreat costs ${retreat.cost} soul${retreat.cost === 1 ? '' : 's'}.` : 'This Retreat is free.'}`
+            ? (retreat.cost > 0
+              ? <>{leavingName} goes to the bench for <Souls n={retreat.cost} size={scale.body} tone="paper" /></>
+              : `${leavingName} goes to the bench, free.`)
             : ride
-            ? `${leavingName} rides on ${ride.bearerName} and comes back to your bench when the ride is over.`
+            ? `Back on your bench when the ride ends.`
             : backIn
-            ? `The fallen hero takes their bench slot, and goes back to your hand in ${backIn} turn${backIn === 1 ? '' : 's'}.`
-            : 'The fallen hero has gone back to your hand.'}
+            ? `Back in your hand in ${backIn} turn${backIn === 1 ? '' : 's'}.`
+            : 'Back in your hand.'}
         </span>
         {retreat && (
           <PosterButton variant="ink" size="sm" onClick={retreat.onCancel}>Cancel</PosterButton>
@@ -167,14 +172,14 @@ function CandidateCard({ card, onPick, isMobile }: { card: CardInstance; onPick:
         }} />
       </div>
       <div style={{
-        padding: '8px 10px',
+        padding: '7px 8px 8px',
         background: poster.paperBand,
         borderTop: `1px solid ${poster.inkRule}`,
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
       }}>
         <span style={{
           fontFamily: fonts.display,
-          fontSize: 13,
+          fontSize: scale.body,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
           lineHeight: 1.1,
@@ -187,18 +192,26 @@ function CandidateCard({ card, onPick, isMobile }: { card: CardInstance; onPick:
         {(() => {
           const heroData: any = data;
           const baseAtk: number = heroData.atk ?? 0;
-          const baseHp: number = heroData.hp ?? 0;
           const atk = effectiveAtk(card);
-          // Same ink rule as HeroSlot: each stat keeps its hue (ink for BP,
-          // red for HP) and only shifts bright/dim to show drift from the
-          // printed base.
-          const atkColor = atkInk(atk, baseAtk);
-          const hpColor = hpInk(card.hp, card.hpMax, baseHp);
+          const shield = card.statuses?.find((st) => st.id === 'shield')?.value ?? 0;
+          // Health the Deadlock way, the same on every candidate: the
+          // segmented bar and the plain number on the HUD's dark green plate.
+          // Bullet Power stays an ink number with its icon.
           return (
-            <div style={{ display: 'inline-flex', gap: 12, alignItems: 'baseline' }}>
-              <span style={{ ...text.numeric, color: atkColor }}>{atk}</span>
-              <span style={{ ...text.body, color: poster.inkFaint }}>·</span>
-              <span style={{ ...text.numeric, color: hpColor }}>{card.hp}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', boxSizing: 'border-box' }}>
+              <span role="img" aria-label={`${card.hp} of ${card.hpMax} HP`} style={{
+                flex: 1, minWidth: 0,
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '4px 7px', borderRadius: 4,
+                background: poster.plate, boxShadow: `inset 0 0 0 1px ${poster.plateEdge}`,
+              }}>
+                <span style={hpNumberStyle(scale.number)}>{card.hp}</span>
+                <HpSegments hp={card.hp} max={card.hpMax} shield={shield} width="100%" height={8} />
+              </span>
+              <span role="img" aria-label={`${atk} Bullet Power`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                <SwordIcon size={12} color={atkInk(atk, baseAtk)} />
+                <span style={{ ...text.numeric, fontSize: scale.number, color: atkInk(atk, baseAtk) }}>{atk}</span>
+              </span>
             </div>
           );
         })()}
