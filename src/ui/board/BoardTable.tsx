@@ -138,8 +138,9 @@ export function tableTiltStyle(flat: boolean): CSSProperties {
  * (`planeX`). Everything else is FLAT, in stage px: the top strip (the
  * rival's name at the left, its card backs peeking from the top edge at the
  * centre, its map track and souls at the right); the menu button with the
- * small Auto toggle under it at your bench's left and the souls coin at its
- * right; the turn row under your bench's foot (your name bar at the left,
+ * small Auto toggle under it and the souls coin, left and right of your
+ * side (above the bench's corners when the table is tilted, beside the
+ * bench when it lies flat); the turn row under your bench's foot (your name bar at the left,
  * End Turn at the right, under the right thumb); and the hand, which owns
  * the whole width below it. `skip` is the
  * free paper left of your Active, where a combat walk's Skip waits.
@@ -158,6 +159,11 @@ export function hudSeats(tilted = false) {
     return { left: plane.planeX(stageCentreX, cy) - box.w / 2, top: cy - box.h / 2 };
   };
   const rowTop = TABLE_FOOT + 6;
+  // Tilted, a full near bench runs almost edge to edge, so the side buttons
+  // stand above its corners, on the free paper beside your Active; flat, the
+  // bench is narrow and they stand beside it.
+  const benchTop = plane.y(s.benchY + HP_ROOM);
+  const benchMid = plane.y(benchCentre);
   return {
     rivalBar: { left: 8, right: 8, top: 8 },
     rivalHand: { centre: STAGE.w / 2, top: -16 },
@@ -166,9 +172,11 @@ export function hudSeats(tilted = false) {
     ring: { centre: s.mid, size: 44 },
     yourDeck: pile(s.activeY, DECK, STAGE.w - 4),
     yourDiscard: pile(s.activeY, DISCARD, STAGE.w - 68),
-    menu: { left: 4, top: plane.y(benchCentre) - 30, size: 40 },
-    auto: { left: 4, top: plane.y(benchCentre) + 16, width: 40, height: 22 },
-    souls: { left: STAGE.w - 4 - 44, top: plane.y(benchCentre) - 22, size: 44 },
+    menu: { left: 4, top: tilted ? benchTop - 66 : benchMid - 30, size: 40 },
+    auto: { left: 4, top: tilted ? benchTop - 22 : benchMid + 16, width: 40, height: 22 },
+    souls: tilted
+      ? { left: STAGE.w - 2 - 40, top: benchTop - 48, size: 40 }
+      : { left: STAGE.w - 4 - 44, top: benchMid - 22, size: 44 },
     skip: { left: 8, top: plane.y(activeCentre(s.activeY)) + 14 },
     yourBar: { left: 8, top: rowTop + 4, maxWidth: STAGE.w - 8 - END_TURN_W - 8 - 8 },
     endTurn: { left: STAGE.w - 8 - END_TURN_W, top: rowTop, width: END_TURN_W, height: 34 },
@@ -204,7 +212,7 @@ const BLOCK = (boardCols.bench + boardCols.benchGap) / 2;
  * tilt: the Cursed Apple's street map engraved on paper. Three lanes run
  * away from you down the three columns of the stack and converge toward the
  * rival's end, kerbed by the avenues in the gaps; the blocks either side are
- * a grid of streets, some hatched; a diagonal avenue cuts across. The far
+ * a grid of streets, some hatched. The far
  * half is washed the rival's sapphire, dimmer and hazier with distance, the
  * near half your amber; the seam between them is an ink rule with our small
  * emblem (the printer's dial mark from our card backs) on it; a soft
@@ -281,9 +289,6 @@ export function BoardTable() {
           <rect key={i} x={b.x + 5} y={b.y + 5} width={2 * BLOCK - 10} height={BLOCK - 10} rx={2}
             fill={ink(b.y + 1)} fillOpacity={0.12} stroke={ink(b.y + 1)} strokeOpacity={0.3} strokeWidth={0.9} />
         ))}
-        {/* The diagonal avenue that cuts across the grid. */}
-        <line x1={x0} y1={s.bottom + 40} x2={x1} y2={y0 + 300} stroke={HALF.you.line} strokeOpacity={0.2} strokeWidth={5.5} />
-        <line x1={x0} y1={s.bottom + 40} x2={x1} y2={y0 + 300} stroke="rgba(255, 250, 235, 0.42)" strokeWidth={2.6} />
       </svg>
       {/* Distance: the far half dims a little, and hazes toward its far end. */}
       <div style={{ position: 'absolute', left: x0, width: x1 - x0, top: y0, height: -140 - y0, background: 'rgba(196, 212, 230, 0.62)' }} />

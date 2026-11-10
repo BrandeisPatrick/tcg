@@ -138,7 +138,8 @@ export function HeroSlot({
   // Another form while a status gives one (Silver's Wolf form): its art and
   // a badge instead of a chip; when it ends the card shows the hero again.
   const form = heroForm({ ...card, statuses: shownStatuses });
-  const chipStatuses = form ? shownStatuses.filter((s) => !STATUSES_BY_ID[s.id]?.form) : shownStatuses;
+  // Shield is printed beside the HP number, so it takes no token of its own.
+  const chipStatuses = shownStatuses.filter((s) => s.id !== 'shield' && !(form && STATUSES_BY_ID[s.id]?.form));
   const shieldValue = shownStatuses.find((s) => s.id === 'shield')?.value ?? 0;
   const isCorpse = respawnLeft > 0;
   // The hero whose skill, or whose attack, is armed and waiting for a target.
@@ -485,8 +486,8 @@ function HpFloat({ hp, hpMax, shield, compact, vitalitySpike }: {
   const frac = hpMax > 0 ? Math.max(0, Math.min(1, hp / hpMax)) : 0;
   const barInk = hpBarInk(hp, hpMax);
   const size = compact ? 18 : 23;
-  const barW = compact ? 44 : 60;
-  const barH = compact ? 5 : 6;
+  const barW = compact ? 48 : 64;
+  const barH = compact ? 7 : 8;
   // A paper stroke behind the glyphs (painted under the fill), so the
   // number keeps its weight.
   const outline: CSSProperties = { WebkitTextStroke: `3px ${poster.paper}`, paintOrder: 'stroke fill' };
