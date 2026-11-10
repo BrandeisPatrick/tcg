@@ -201,12 +201,6 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
                   on={settings.reducedMotion}
                   onClick={() => updateSettings({ reducedMotion: !settings.reducedMotion })}
                 />
-                <ToggleRow
-                  label="Tilted table"
-                  hint="Leans the match table away a little instead of showing it from straight above."
-                  on={settings.tiltedTable}
-                  onClick={() => updateSettings({ tiltedTable: !settings.tiltedTable })}
-                />
               </Section>
 
               {/* Actions */}
