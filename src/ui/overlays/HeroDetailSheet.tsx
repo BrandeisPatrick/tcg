@@ -167,6 +167,25 @@ function firstSentence(rule: string, scale: Scale): string {
   return sentence((m ? m[0] : plain).trim());
 }
 
+/** A row's one line: the rule's first sentence in its fewest words. No
+ *  bracketed reminder, no scene-setting before a colon when the effect
+ *  follows it, no "to the enemy Active" (an attack's usual target); and one
+ *  longer than the `max` letters the row holds ends at a clause, never
+ *  mid-word. The whole rule is on the "i" card. */
+function shortLine(rule: string, scale: Scale, max: number): string {
+  let s = firstSentence(rule, scale).replace(/\s*\([^)]*\)/g, '');
+  const lead = s.match(/^[^:]+:\s+((?:deal|shield|heal|stun)\b.*)$/i);
+  if (lead) s = lead[1];
+  s = s.replace(' to the enemy Active', '');
+  if (s.length > max) {
+    const head = s.slice(0, max + 1);
+    const clause = Math.max(head.lastIndexOf(': '), head.lastIndexOf(', '), head.lastIndexOf(' and '));
+    const at = clause > 16 ? clause : head.lastIndexOf(' ');
+    s = `${s.slice(0, at).replace(/[,;:]$/, '')}\u2026`;
+  }
+  return sentence(s);
+}
+
 type Kind = 'weapon' | 'spirit' | 'vitality';
 /** An ability's kind, read off its own rule: bullet damage is Deadlock's
  *  weapon orange, spirit damage its spirit purple, a heal or a Shield with no
@@ -234,6 +253,9 @@ export function HeroDetailSheet({
   const ultFace = ultimateCard(data.ult);
 
   const cardW = isMobile ? Math.min(vw - 32, 360) : 360;
+  // The letters an action row's line holds: its width less the tile and the
+  // number, at the caption's size.
+  const lineMax = Math.floor((cardW - 124) / 5.2);
   const portraitW = Math.round(HEAD * 280 / 380);
   const shield = card.statuses.find((st) => st.id === 'shield')?.value ?? 0;
   const shownStatuses = card.statuses.filter((st) => st.id !== 'shield');
@@ -255,7 +277,7 @@ export function HeroDetailSheet({
           ink={shopInk(kind).ink} mode={mode} calm={calm}
           name={ability.name}
           art={KIND_ICON[kind](20, poster.cream)}
-          line={firstSentence(ability.text, scale)}
+          line={shortLine(ability.text, scale, lineMax)}
           right={price(ability.id, shortOfSouls(reason))}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
@@ -283,7 +305,7 @@ export function HeroDetailSheet({
           // A charged ultimate is named so: its price is its own, not its size's.
           ultLabel={`Ultimate · ${ultFace.charged ? 'charged' : ultFace.size}`}
           art={<img src={ultIconSrc(ultFace.linkedHero)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
-          line={firstSentence(ultFace.text ?? '', scale)}
+          line={shortLine(ultFace.text ?? '', scale, lineMax)}
           right={price(abilityId, shortOfSouls(reason))}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(abilityId); onClose(); } : undefined}
@@ -575,7 +597,7 @@ export function HeroDetailSheet({
               grow
               disabled={!!retreat.blockedReason}
               onClick={closeTo(onRetreat)}
-              ariaLabel={`Retreat ${data.name} to the bench — ${retreat.cost > 0 ? `costs ${souls(retreat.cost)}` : 'free'}`}
+              ariaLabel={`Retreat ${data.name} to the bench — ${retreat.cost > 0 ? `costs ${souls(retreat.cost)}` : 'free'}${retreat.incomingName ? `; ${retreat.incomingName} goes in` : ''}`}
               label={(
                 <>
                   <span>Retreat</span>
@@ -584,7 +606,7 @@ export function HeroDetailSheet({
                     : <span style={{ fontSize: T.label, opacity: 0.8 }}>Free</span>}
                 </>
               )}
-              caption={retreat.blockedReason ?? (retreat.incomingName ? `${retreat.incomingName} goes in` : 'You pick who goes in')}
+              caption={retreat.blockedReason ?? undefined}
             />
           )}
           <Pill ghost onClick={onClose} label="Close" />
@@ -965,8 +987,8 @@ function InfoStat({ label, value, color, mark }: { label: string; value: number 
 
 // ----- Under the card -----
 
-/** Pocket's pill: Retreat (a dark plate edged in your amber, its price on it,
- *  the reason or who goes in under it) and Close (an outline on the scrim). A
+/** Pocket's pill: Retreat (a dark plate edged in your amber, its price on it;
+ *  the one reason under it when it is blocked) and Close (an outline on the scrim). A
  *  real <button>, so a blocked one is `disabled`. */
 function Pill({
   label, caption, onClick, disabled = false, ghost = false, grow = false, ariaLabel,
