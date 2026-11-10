@@ -7,6 +7,7 @@ import { useSettings, updateSettings, APP_STORAGE_KEYS, type AppSettings } from 
 import { useViewport } from '../hooks/useViewport';
 import { ArtCredits } from './ArtCredits';
 import { BASE } from '@/art/assets';
+import { onOpenSystemMenu, useGearFolded } from './systemMenuBus';
 
 /**
  * Persistent system layer — the one piece of chrome that exists on every
@@ -27,6 +28,10 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
 }) {
   const [open, setOpen] = useState(false);
   const settings = useSettings();
+  // A screen with no free corner for the gear folds it into its own menu
+  // button and opens the menu through the bus (the match table).
+  const gearFolded = useGearFolded();
+  useEffect(() => onOpenSystemMenu(() => setOpen(true)), []);
   const [armReset, setArmReset] = useState(false);
   // The sheet's second page: the art credits. Always reopens on settings.
   const [page, setPage] = useState<'settings' | 'credits'>('settings');
@@ -78,8 +83,9 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
 
   return (
     <>
-      {/* Gear — always visible, always in the same corner. */}
-      <motion.button
+      {/* Gear — always in the same corner, unless the screen folded it
+          into its own menu button (useFoldGear). */}
+      {!gearFolded && <motion.button
         aria-label="System menu"
         title="Menu (Esc)"
         onClick={() => setOpen((v) => !v)}
@@ -107,7 +113,7 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
         }}
       >
         <GearIcon />
-      </motion.button>
+      </motion.button>}
 
       <AnimatePresence>
         {open && (

@@ -67,6 +67,7 @@ import { useSettings } from '@/storage/settings';
 import { useStageScale } from './hooks/useStageScale';
 import { useViewport } from './hooks/useViewport';
 import { fonts, spring } from './tokens';
+import { openSystemMenu, useFoldGear } from './system/systemMenuBus';
 import { poster } from './poster';
 import { PATRON_NAMES } from './board/patrons';
 import { Hand } from './board/Hand';
@@ -130,6 +131,11 @@ export function Board(props: BoardProps<GameState>) {
   const [autoPlay, setAutoPlay] = useState(false);
   // The match log, behind the menu button at the stage's lower left.
   const [logOpen, setLogOpen] = useState(false);
+  // The table's menu button (≡): the match log and the System menu behind it.
+  const [menuOpen, setMenuOpen] = useState(false);
+  // The match table has no free corner for the System gear: it folds into
+  // the ≡ menu while the table shows.
+  useFoldGear(!G.draft && !ctx.gameover);
   // The card shown at full size: a card in the hand or a worn item's chip (by
   // its instance, so a hover peek closes if it goes).
   const [preview, setPreview] = useState<{ cardId: CardId; iid?: string; hover: boolean; cost?: number; inHand?: boolean } | null>(null);
@@ -1022,18 +1028,24 @@ export function Board(props: BoardProps<GameState>) {
               label={PATRON_NAMES.rival}
               ps={oppPs}
               hostile
+              split
               souls={oppPs.souls}
               myTurn={!isMyTurn}
             />
+            {/* Where a combat walk's Skip waits: the free paper left of your
+                Active (CombatChoreographer reads this seat). */}
+            <div aria-hidden data-skip-seat style={{ position: 'absolute', left: hud.skip.left, top: hud.skip.top, width: 0, height: 0 }} />
 
 
             {/* The menu — a round button at the lower left, where Pocket's
-                "≡" sits: the match log behind it. */}
+                "≡" sits: the match log and the settings (the System menu,
+                whose gear has no free corner on the table) behind it. */}
             <button
               type="button"
-              aria-label={logOpen ? 'Close the match log' : 'Match log'}
-              aria-expanded={logOpen}
-              onClick={() => setLogOpen((v) => !v)}
+              aria-label="Menu"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
               style={{ position: 'absolute', left: hud.menu.left, top: hud.menu.top, padding: 0, border: 'none', background: 'transparent', zIndex: 6, cursor: 'pointer' }}
             >
               <RoundPlate size={hud.menu.size}>
@@ -1042,6 +1054,47 @@ export function Board(props: BoardProps<GameState>) {
                 </svg>
               </RoundPlate>
             </button>
+            <AnimatePresence>
+              {menuOpen && (
+                <>
+                  {/* A tap anywhere else closes it. */}
+                  <div aria-hidden onClick={() => setMenuOpen(false)} style={{ position: 'absolute', inset: 0, zIndex: 11 }} />
+                  <motion.div
+                    role="menu"
+                    aria-label="Menu"
+                    initial={{ opacity: 0, x: -8, scale: 0.94 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -8, scale: 0.94, transition: { duration: 0.12 } }}
+                    transition={spring.snappy}
+                    style={{
+                      position: 'absolute', left: hud.menu.left + hud.menu.size + 6, top: hud.menu.top - 22, zIndex: 12,
+                      transformOrigin: 'left center',
+                      display: 'flex', flexDirection: 'column', gap: 3, padding: 4,
+                      background: poster.ink, borderRadius: 10,
+                      boxShadow: `0 0 0 1.5px ${poster.paper}, 0 8px 22px rgba(0, 0, 0, 0.55)`,
+                    }}
+                  >
+                    {([
+                      ['Match log', () => setLogOpen(true)],
+                      ['Settings', () => openSystemMenu()],
+                    ] as const).map(([name, run]) => (
+                      <button
+                        key={name}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { setMenuOpen(false); run(); }}
+                        style={{
+                          minWidth: 132, height: 38, padding: '0 14px', textAlign: 'left',
+                          background: 'transparent', color: poster.cream, border: 'none', borderRadius: 7,
+                          fontFamily: fonts.display, fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase',
+                          cursor: 'pointer',
+                        }}
+                      >{name}</button>
+                    ))}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
 
             {/* Your souls — the round counter at the lower right. */}
             <div style={{ position: 'absolute', left: hud.souls.left, top: hud.souls.top, zIndex: 6 }}>
@@ -1073,8 +1126,9 @@ export function Board(props: BoardProps<GameState>) {
               />
             </div>
 
-            {/* The turn dock — End Turn (Cancel while something is armed)
-                and Auto, low on the right at the thumb. */}
+            {/* The turn controls — End Turn (Cancel while something is
+                armed) at the right of the turn row, above the hand at the
+                thumb; Auto under the menu button. */}
             <BoardControls
               seat={hud}
               isMyTurn={isMyTurn}
@@ -1086,8 +1140,8 @@ export function Board(props: BoardProps<GameState>) {
               onToggleAuto={() => setAutoPlay((v) => !v)}
             />
 
-            {/* Your name bar along the bottom: your patron, your map track,
-                the turn number. Above the hand's feet. */}
+            {/* Your name bar at the left of the turn row: your patron, your
+                map track, the turn number. Above the hand, covering none of it. */}
             <NameBar
               style={{ position: 'absolute', ...hud.yourBar, zIndex: 7 }}
               label={PATRON_NAMES.you}

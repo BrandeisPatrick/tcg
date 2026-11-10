@@ -72,6 +72,15 @@ const beatTiming = (stepDuration: number) => {
   return { projectileDelay, impactDelay, roundGap, roundMs, damagePersist: stepDuration - impactDelay };
 };
 
+/** Where Skip waits: the table's seat for it (Board's `data-skip-seat`, the
+ *  free paper left of your Active), or a top corner where no table shows. */
+function skipSeat(): { left: number; top: number } | { right: number; top: number } {
+  const seat = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('[data-skip-seat]') : null;
+  if (!seat) return { top: 16, right: 62 };
+  const r = seat.getBoundingClientRect();
+  return { left: Math.round(r.left), top: Math.round(r.top) };
+}
+
 export function CombatChoreographer({ plan, me, slotRefs, onComplete, stepDuration = 1100, onBeatIndexChange }: Props) {
   const [beatIndex, setBeatIndex] = useState(0);
   const [done, setDone] = useState(false);
@@ -159,16 +168,16 @@ export function CombatChoreographer({ plan, me, slotRefs, onComplete, stepDurati
 
           <AttackBeat key={beatIndex} beat={beat} mine={plan.attackerId === me} stepDuration={stepDuration} />
 
-          {/* Skip button — a chamfered paper plate in the corner, visible during
-              combat. */}
+          {/* Skip button — a chamfered paper plate on the free paper beside
+              your Active (the table's skip seat), visible during combat: it
+              covers no name bar and no card. */}
           <motion.button
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={skip}
             style={{
               position: 'fixed',
-              // right offset clears the persistent system gear in the corner.
-              top: 16, right: 62,
+              ...skipSeat(),
               zIndex: 90,
               padding: '8px 16px',
               background: poster.paper,

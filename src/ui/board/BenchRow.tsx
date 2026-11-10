@@ -63,6 +63,7 @@ export function BenchRow({
           key={`empty-bench-${i}`}
           style={slotBox(top, 'bench', i)}
           lit={openSlots?.has(i + 1) ?? false}
+          side={owner === myId ? 'you' : 'rival'}
           name={`Bench slot ${i + 1}`}
           onTap={() => onTapSlot?.((i + 1) as 1 | 2 | 3)}
         />

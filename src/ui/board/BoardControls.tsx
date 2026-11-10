@@ -16,15 +16,16 @@ interface Props {
   onEndTurn: () => void;
   onCancel: () => void;
   onToggleAuto: () => void;
-  /** The dock's box on the stage: the turn button's, and the Auto toggle's
-   *  under it (BoardTable's hudSeats). */
+  /** The turn button's box in the turn row, and the Auto toggle's beside
+   *  your bench (BoardTable's hudSeats). */
   seat: { endTurn: { left: number; top: number; width: number; height: number }; auto: { left: number; top: number; width: number; height: number } };
 }
 
 /**
- * The turn dock, low on the right of the stage at the thumb: one clear End
- * Turn button (red Cancel in its place while a card, a skill or an item is
- * armed) and a small Auto toggle under it. A button's label is always the
+ * The turn controls: one clear End Turn button at the right of the turn row,
+ * under the right thumb and above the hand (red Cancel in its place while a
+ * card, a skill or an item is armed), and a small Auto toggle under the menu
+ * button at your bench's left. A button's label is always the
  * action a press performs — the turn button only ever ends the turn (the
  * attack is made from the Active's sheet). It stays enabled while busy so
  * Board can queue the press.
@@ -34,14 +35,14 @@ export function BoardControls({ isMyTurn, busy, hasPending, autoPlay, onEndTurn,
   const turnCursor = isMyTurn ? (busy ? 'progress' : 'pointer') : 'default';
   return (
     <>
-      <div style={{ position: 'absolute', ...seat.endTurn, display: 'flex', zIndex: 6 }}>
+      <div style={{ position: 'absolute', ...seat.endTurn, display: 'flex', zIndex: 8 }}>
         {hasPending ? (
           <motion.div key="cancel" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={spring.default} style={{ display: 'flex', width: '100%' }}>
             <PosterButton
               variant="red"
               size="sm"
               onClick={onCancel}
-              style={{ width: '100%', padding: '12px 0', fontSize: 11, letterSpacing: '0.18em', textAlign: 'center' }}
+              style={{ width: '100%', height: '100%', padding: 0, fontSize: 11.5, letterSpacing: '0.16em', textAlign: 'center' }}
             >Cancel</PosterButton>
           </motion.div>
         ) : (
@@ -74,7 +75,7 @@ export function BoardControls({ isMyTurn, busy, hasPending, autoPlay, onEndTurn,
               onClick={onEndTurn}
               ariaLabel={END_TURN}
               style={{
-                width: '100%', padding: '12px 0', fontSize: 11, letterSpacing: '0.16em', textAlign: 'center',
+                width: '100%', height: '100%', padding: 0, fontSize: 11.5, letterSpacing: '0.14em', textAlign: 'center',
                 cursor: turnCursor,
                 ...(busy && isMyTurn ? { color: poster.inkDim } : {}),
               }}
@@ -90,13 +91,13 @@ export function BoardControls({ isMyTurn, busy, hasPending, autoPlay, onEndTurn,
         title={autoPlay ? 'Auto-play on — tap to take control' : 'Auto-play off — tap to let the AI play'}
         style={{
           position: 'absolute', ...seat.auto, zIndex: 6,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 3,
           background: poster.ink,
           border: `1.5px solid ${autoPlay ? poster.gold : poster.inkFaint}`,
           ...clipBoth(chamfer(4)),
           fontFamily: fonts.display,
-          fontSize: 9.5,
-          letterSpacing: '0.2em',
+          fontSize: 8.5,
+          letterSpacing: '0.08em',
           textTransform: 'uppercase',
           lineHeight: 1,
           color: autoPlay ? poster.gold : poster.cream,
@@ -104,7 +105,7 @@ export function BoardControls({ isMyTurn, busy, hasPending, autoPlay, onEndTurn,
           cursor: 'pointer',
         }}
       >
-        <span aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: autoPlay ? poster.gold : poster.creamFaint }} />
+        <span aria-hidden style={{ width: 5, height: 5, flexShrink: 0, borderRadius: '50%', background: autoPlay ? poster.gold : poster.creamFaint }} />
         Auto
       </motion.button>
     </>

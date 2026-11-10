@@ -12,10 +12,12 @@ interface Props {
   top: number;
 }
 
-/** A back's size and the overlap between backs, stage px. */
-const BACK = { w: 40, h: 56, overlap: -14, chip: 18 } as const;
+/** A back's size, the widest step from one back to the next and the fan's
+ *  widest span (the gap the top strip leaves between the rival's name and
+ *  its map track), stage px. */
+const BACK = { w: 30, h: 46, step: 15, span: 62, chip: 16 } as const;
 /** At most this many backs are drawn: the chip says how many there are. */
-const MAX_BACKS = 4;
+const MAX_BACKS = 5;
 
 // The rival's hand, face down: the heroes and items it has drawn and not yet
 // played — a back rises in at the top edge as it draws and sinks away as the
@@ -34,16 +36,20 @@ function fanY(i: number, total: number): number {
 }
 
 /**
- * The rival's card backs, peeking in at the very top edge of the stage as
- * Pokémon TCG Pocket's do: hung above the table with only their lower part
- * showing, so they take no room of the table's own. A chip beside them says
- * how many cards the rival holds.
+ * The rival's card backs, peeking in at the top edge's CENTRE as Pokémon TCG
+ * Pocket's do: hung above the table with only their lower part showing,
+ * between the two pills of the rival's name bar, so they cover nothing and
+ * nothing covers them. The backs close up as the hand grows, so the fan
+ * never outgrows its gap; a chip on its foot says how many cards the rival
+ * holds.
  */
 export function OpponentHand({ cards, centre, top }: Props) {
   const total = cards.length;
-  const { w, h, overlap, chip } = BACK;
+  const { w, h, chip } = BACK;
   const shown = cards.slice(0, MAX_BACKS);
-  const fanW = shown.length * w + Math.max(0, shown.length - 1) * overlap;
+  const step = shown.length > 1 ? Math.min(BACK.step, (BACK.span - w) / (shown.length - 1)) : 0;
+  const overlap = step - w;
+  const fanW = w + Math.max(0, shown.length - 1) * step;
   return (
     <div
       role={total > 0 ? 'img' : undefined}
@@ -83,7 +89,7 @@ export function OpponentHand({ cards, centre, top }: Props) {
               height: h,
             }}
           >
-            <CardBack radius={7} />
+            <CardBack radius={5} />
           </motion.div>
         ))}
       </AnimatePresence>
@@ -98,9 +104,10 @@ export function OpponentHand({ cards, centre, top }: Props) {
             transition={spring.default}
             style={{
               position: 'absolute',
-              // Beside the fan, in the strip of it that shows.
-              left: fanW + 6,
-              top: h - top - chip - 4,
+              // On the fan's foot, at its right corner.
+              left: fanW - chip / 2 - 2,
+              top: h - chip + 3,
+              zIndex: 9,
               minWidth: chip,
               height: chip,
               padding: '0 5px',

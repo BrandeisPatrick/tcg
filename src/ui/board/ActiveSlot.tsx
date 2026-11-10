@@ -61,7 +61,7 @@ export function ActiveSlot({
             />
           </DealtTile>
         ) : (
-          <SlotWell key="empty-active" style={box} lit={laneOpen} name="Active slot" onTap={onTapSlot} />
+          <SlotWell key="empty-active" style={box} lit={laneOpen} side={owner === myId ? 'you' : 'rival'} name="Active slot" onTap={onTapSlot} />
         )}
       </AnimatePresence>
       {/* At the match's start, "Rival" / "You" names whose Active this is. */}
