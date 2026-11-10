@@ -47,8 +47,8 @@ export function HandThumb({ cardId, armed = false, unaffordable = false, level }
         background: ink,
         overflow: 'hidden',
         boxShadow: armed
-          ? `0 0 0 2px ${poster.target}, 0 0 8px 1px rgba(98, 196, 98, 0.6), 0 6px 10px rgba(0, 0, 0, 0.5)`
-          : '0 3px 7px rgba(0, 0, 0, 0.5)',
+          ? `0 0 0 2px ${poster.target}, 0 0 0 3.5px ${poster.ink}`
+          : '0 2px 0 rgba(0, 0, 0, 0.4)',
         transition: 'box-shadow 160ms ease',
       }}>
         <span style={{
@@ -75,8 +75,8 @@ export function HandThumb({ cardId, armed = false, unaffordable = false, level }
           </span>
         )}
       </span>
-      {/* The price, half over the top-left corner: the soul wisp and a mint
-          number on the HUD's dark green plate (salmon: not enough souls). */}
+      {/* The price, half over the top-left corner: the soul wisp and the
+          number in ink green on a paper tag (red: not enough souls). */}
       {data && (
         <Souls n={PRICE[data.tier]} size={scale.label} tone={unaffordable ? 'short' : 'mint'} plate
           style={{ position: 'absolute', top: -5, left: -5, pointerEvents: 'none' }} />
