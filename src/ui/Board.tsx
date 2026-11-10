@@ -514,14 +514,9 @@ export function Board(props: BoardProps<GameState>) {
     if (aiHolds) return;
     const t = setTimeout(() => {
       try {
-        // The rival plays at the match's strength (a Quick Match's is the
-        // player's choice; Story and the lessons set none: 'normal'), your
-        // own seat under auto-play at 'normal'. Read as each move is chosen,
-        // not at mount: the draft's Rival AI control sets it while this
-        // board is up.
-        const strength = ctx.currentPlayer !== me
-          ? getMatchConfig().aiStrength ?? DEFAULT_AI_STRENGTH
-          : DEFAULT_AI_STRENGTH;
+        // Every match plays the default strength for now (the dial in
+        // src/ai/heuristic.ts stays for the sims; no screen sets it).
+        const strength = DEFAULT_AI_STRENGTH;
         // enumerate inside the try — if the heuristic ever throws, falling
         // through to ending the turn keeps the match moving instead of
         // freezing the AI's turn forever (nothing else would re-arm this
@@ -842,7 +837,6 @@ export function Board(props: BoardProps<GameState>) {
     return (
       <DraftOverlay
         draft={G.draft}
-        market={G.market}
         currentPlayer={ctx.currentPlayer as PlayerID}
         me={me}
         onPick={(heroId) => (moves as any).draftPick(heroId)}

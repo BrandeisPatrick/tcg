@@ -11,20 +11,12 @@
 //   ▸ YOUR team as four numbered tarot-style cards; the slot being drafted
 //     previews the focused hero in green, locked picks turn gold
 //   ▸ a chamfered LOCK button (Enter works too) — the one true "draft" trigger
-//   ▸ the market — what the shop sells this match, fixed before the first
-//     pick — in the shop's own tiles by category and tier, each drafted
-//     hero's signature items and build joining it as the hero is picked
-//     (DraftMarket)
-//   ▸ one line under the title: who drafts first, and so moves second
-//   ▸ the Rival AI control — Easy · Normal · Hard — at the header's far end
-//     (a row of its own on a phone): how hard the rival plays this match,
-//     saved for the next
 //
 // Snake order is driven by the engine; this overlay only dispatches
 // draftPick when it's the local player's turn.
 
 import {
-  useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
+  useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react';
 import { motion, AnimatePresence, easeInOut } from 'framer-motion';
 import type { CardId, DraftState, PlayerID } from '@/engine/types';
@@ -35,17 +27,12 @@ import { heroPortraitArt } from '@/cards/art/heroArt';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
-import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { saveAiStrength } from '@/storage/playerData';
-import { AI_STRENGTHS, DEFAULT_AI_STRENGTH, type AiStrength } from '@/ai/heuristic';
+import { getMatchConfig } from '@/storage/matchConfig';
 import { useViewport } from '../hooks/useViewport';
 import { plainText } from '../card/scaling';
-import { DraftMarket } from './DraftMarket';
 
 interface Props {
   draft: DraftState;
-  /** What the shop sells this match (`G.market`). */
-  market: CardId[];
   currentPlayer: PlayerID;
   me: PlayerID;
   onPick: (heroId: string) => void;
@@ -70,14 +57,11 @@ const NUMERALS = ['I', 'II', 'III', 'IV'];
 
 /** The overlay's side padding on a wide screen. */
 const WIDE_PAD_X = 'clamp(18px, 3vw, 44px)';
-/** What the header leaves at its far end for the system gear (fixed 12px in
- *  from the corner, 40px across), 12px to spare, less the overlay's padding. */
-const GEAR_CLEARANCE = `calc(64px - ${WIDE_PAD_X})`;
 
 /** The hero the lobby focuses when nothing still available holds it: the
  *  title's featured hero while it is in the pool, otherwise any free hero at
  *  random rather than always the first tile of the grid. */
-export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props) {
+export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   // The roster grid + four cards need real width; below this everything
   // stacks tighter and the page may scroll.
   const { width } = useViewport();
@@ -147,19 +131,6 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
     [],
   );
 
-  // The pie rule: the seat that drafts first moves second.
-  const seating = draft.order[0] === me
-    ? 'You draft first; the rival moves first.'
-    : 'The rival drafts first; you move first.';
-
-  // How hard the rival plays: the match's (a Quick Match starts from the
-  // saved choice). The control changes it for this match and the next.
-  const [strength, setStrength] = useState<AiStrength>(() => getMatchConfig().aiStrength ?? DEFAULT_AI_STRENGTH);
-  const pickStrength = (next: AiStrength) => {
-    setStrength(next);
-    chooseRivalStrength(next);
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -186,10 +157,7 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
       {/* Header row — the pick counter, and on a phone the LOCK plate
           centred beside it (the pick strips are too tight there to hold
           it). Equal outer columns keep the plate on the centre line; the
-          empty right column leaves the system gear's corner alone. On a
-          wide screen the Rival AI control sits at the row's far end, short of
-          the gear, over the rival's strip; where the title leaves it no
-          room, it drops under the title, still at the far end. */}
+          empty right column leaves the system gear's corner alone. */}
       <div
         style={{
           position: 'relative',
@@ -218,9 +186,8 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
           <span style={{ ...text.label, fontSize: isMobile ? 10 : 11, letterSpacing: isMobile ? '0.18em' : '0.3em', color: lobby.dim, whiteSpace: 'nowrap' }}>
             {complete ? 'Complete' : `${draft.currentIndex + 1}/${draft.order.length}`}
           </span>
-          {!isMobile && <Seating line={seating} compact={false} />}
         </div>
-        {isMobile ? (
+        {isMobile && (
           <>
             <LockButton
               enabled={myTurn && !!focused && !autoName}
@@ -230,12 +197,8 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
             />
             <span aria-hidden />
           </>
-        ) : (
-          <RivalAiControl value={strength} onChange={pickStrength} compact={false} style={{ marginLeft: 'auto', marginRight: GEAR_CLEARANCE }} />
         )}
       </div>
-      {isMobile && <Seating line={seating} compact />}
-      {isMobile && <RivalAiControl value={strength} onChange={pickStrength} compact style={{ position: 'relative', zIndex: 1 }} />}
 
       {/* The pick strips, with the LOCK plate in the middle of the line
           where the two banners meet — level with the crews' cards, on the
@@ -305,135 +268,7 @@ export function DraftOverlay({ draft, market, currentPlayer, me, onPick }: Props
         />
       </div>
 
-      <DraftMarket market={market} draft={draft} me={me} compact={isMobile} />
     </motion.div>
-  );
-}
-
-// =============================================================================
-// SEATING
-// =============================================================================
-
-/** Who drafts first and so moves second, in one line: under the title on a
- *  phone, beside it on a wide screen. */
-function Seating({ line, compact }: { line: string; compact: boolean }) {
-  return (
-    <span style={{
-      position: 'relative', zIndex: 1,
-      ...text.label, fontSize: compact ? 10 : 10.5, letterSpacing: compact ? '0.14em' : '0.2em',
-      color: lobby.dim, whiteSpace: 'nowrap',
-      ...(compact ? { display: 'block', textAlign: 'center', marginTop: -4 } : { marginLeft: 6 }),
-    }}>
-      {line}
-    </span>
-  );
-}
-
-// =============================================================================
-// RIVAL AI
-// =============================================================================
-
-/** The control's words, easiest first. */
-const STRENGTH_WORD: Record<AiStrength, string> = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
-/** The faint film of the rival's red under the lit word, as shopInk lays a
- *  category's under its lit tab. */
-const RIVAL_WASH = `color-mix(in srgb, ${lobby.red} 16%, transparent)`;
-
-/** Set how hard the rival plays: in this match's config, which the board's
- *  AI loop reads as it chooses each move, and in the save, which the next
- *  Quick Match starts from. */
-export function chooseRivalStrength(strength: AiStrength): void {
-  setMatchConfig({ ...getMatchConfig(), aiStrength: strength });
-  saveAiStrength(strength);
-}
-
-/**
- * How hard the rival plays — Easy · Normal · Hard — drawn as the shop's
- * category tabs are: the lit word underlined, here in the rival's red, over a
- * faint film of it. A radio group: a tap chooses, and from the keyboard the
- * arrow keys move the choice. Enter on it does not reach the lobby's
- * Enter-to-lock.
- */
-export function RivalAiControl({ value, onChange, compact, style }: {
-  value: AiStrength;
-  onChange: (strength: AiStrength) => void;
-  compact: boolean;
-  style?: CSSProperties;
-}) {
-  const labelId = useId();
-  const options = useRef<(HTMLButtonElement | null)[]>([]);
-  const onKey = (e: ReactKeyboardEvent<HTMLButtonElement>, at: number) => {
-    if (e.key === 'Enter') { e.stopPropagation(); return; }
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1
-      : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1
-      : 0;
-    if (!step) return;
-    e.preventDefault();
-    const next = (at + step + AI_STRENGTHS.length) % AI_STRENGTHS.length;
-    onChange(AI_STRENGTHS[next]);
-    options.current[next]?.focus();
-  };
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexWrap: 'wrap',
-        gap: compact ? '6px 10px' : 12,
-        ...style,
-      }}
-    >
-      <span
-        id={labelId}
-        style={{ ...text.label, fontSize: compact ? 10 : 10.5, letterSpacing: compact ? '0.18em' : '0.22em', color: lobby.dim, whiteSpace: 'nowrap' }}
-      >
-        Rival AI
-      </span>
-      <div
-        role="radiogroup"
-        aria-labelledby={labelId}
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${AI_STRENGTHS.length}, 1fr)`,
-          borderBottom: `1px solid ${lobby.edge}`,
-        }}
-      >
-        {AI_STRENGTHS.map((s, i) => {
-          const on = s === value;
-          return (
-            <button
-              key={s}
-              ref={(el) => { options.current[i] = el; }}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              tabIndex={on ? 0 : -1}
-              onClick={() => onChange(s)}
-              onKeyDown={(e) => onKey(e, i)}
-              style={{
-                padding: compact ? '12px 12px 10px' : '9px 12px 7px',
-                border: 'none',
-                borderBottom: `3px solid ${on ? lobby.red : 'transparent'}`,
-                marginBottom: -1,
-                background: on ? RIVAL_WASH : 'transparent',
-                color: on ? lobby.cream : lobby.dim,
-                fontFamily: fonts.display,
-                fontSize: 12,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                lineHeight: 1,
-                whiteSpace: 'nowrap',
-                cursor: 'pointer',
-                transition: 'color 140ms ease, background 140ms ease, border-color 140ms ease',
-              }}
-            >
-              {STRENGTH_WORD[s]}
-            </button>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
