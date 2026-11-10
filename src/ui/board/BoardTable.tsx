@@ -186,8 +186,8 @@ const paper: CSSProperties = {
 /** Each half's inks, from its side's patron colour: the wash over the
  *  paper, the engraving's line, an empty slot's outline and fill. */
 export const HALF = {
-  you: { wash: 'rgba(217, 160, 50, 0.32)', line: 'rgba(112, 74, 10, 1)', well: 'rgba(132, 88, 12, 0.5)', fill: 'rgba(217, 160, 50, 0.10)' },
-  rival: { wash: 'rgba(74, 143, 224, 0.40)', line: 'rgba(22, 58, 112, 1)', well: 'rgba(30, 72, 138, 0.5)', fill: 'rgba(74, 143, 224, 0.10)' },
+  you: { wash: 'rgba(217, 160, 50, 0.42)', line: 'rgba(112, 74, 10, 1)', well: 'rgba(132, 88, 12, 0.5)', fill: 'rgba(217, 160, 50, 0.10)' },
+  rival: { wash: 'rgba(74, 143, 224, 0.50)', line: 'rgba(22, 58, 112, 1)', well: 'rgba(30, 72, 138, 0.5)', fill: 'rgba(74, 143, 224, 0.10)' },
 } as const;
 export type Side = keyof typeof HALF;
 
@@ -258,38 +258,38 @@ export function BoardTable() {
             zipline — a centre line with pylon ticks. */}
         {lanes.map((x) => (
           <g key={x}>
-            <rect x={x - laneW / 2} y={y0} width={laneW} height={y1 - y0} fill="rgba(255, 250, 235, 0.16)" />
-            <line x1={x} y1={y0} x2={x} y2={s.mid} stroke={HALF.rival.line} strokeOpacity={0.22} strokeWidth={1.5} strokeDasharray="14 8" />
-            <line x1={x} y1={s.mid} x2={x} y2={y1} stroke={HALF.you.line} strokeOpacity={0.22} strokeWidth={1.5} strokeDasharray="14 8" />
+            <rect x={x - laneW / 2} y={y0} width={laneW} height={y1 - y0} fill="rgba(255, 250, 235, 0.24)" />
+            <line x1={x} y1={y0} x2={x} y2={s.mid} stroke={HALF.rival.line} strokeOpacity={0.42} strokeWidth={1.6} strokeDasharray="14 8" />
+            <line x1={x} y1={s.mid} x2={x} y2={y1} stroke={HALF.you.line} strokeOpacity={0.42} strokeWidth={1.6} strokeDasharray="14 8" />
           </g>
         ))}
         {/* Cross streets, each half in its own ink. */}
         {streets.map((y) => (
-          <line key={y} x1={x0} y1={y} x2={x1} y2={y} stroke={ink(y)} strokeOpacity={0.13} strokeWidth={1} />
+          <line key={y} x1={x0} y1={y} x2={x1} y2={y} stroke={ink(y)} strokeOpacity={0.24} strokeWidth={1} />
         ))}
         {/* Avenues — double rules running away from you. */}
         {avenues.map((x) => (
-          <g key={x} strokeWidth={1.2}>
-            <line x1={x - 1.8} y1={y0} x2={x - 1.8} y2={s.mid} stroke={HALF.rival.line} strokeOpacity={0.3} />
-            <line x1={x + 1.8} y1={y0} x2={x + 1.8} y2={s.mid} stroke={HALF.rival.line} strokeOpacity={0.3} />
-            <line x1={x - 1.8} y1={s.mid} x2={x - 1.8} y2={y1} stroke={HALF.you.line} strokeOpacity={0.3} />
-            <line x1={x + 1.8} y1={s.mid} x2={x + 1.8} y2={y1} stroke={HALF.you.line} strokeOpacity={0.3} />
+          <g key={x} strokeWidth={1.4}>
+            <line x1={x - 1.8} y1={y0} x2={x - 1.8} y2={s.mid} stroke={HALF.rival.line} strokeOpacity={0.5} />
+            <line x1={x + 1.8} y1={y0} x2={x + 1.8} y2={s.mid} stroke={HALF.rival.line} strokeOpacity={0.5} />
+            <line x1={x - 1.8} y1={s.mid} x2={x - 1.8} y2={y1} stroke={HALF.you.line} strokeOpacity={0.5} />
+            <line x1={x + 1.8} y1={s.mid} x2={x + 1.8} y2={y1} stroke={HALF.you.line} strokeOpacity={0.5} />
           </g>
         ))}
         {/* The hatched blocks either side of the lanes. */}
         {blocks.map((b, i) => (
           <rect key={i} x={b.x + 5} y={b.y + 5} width={2 * BLOCK - 10} height={BLOCK - 10} rx={2}
-            fill={ink(b.y + 1)} fillOpacity={0.07} stroke={ink(b.y + 1)} strokeOpacity={0.16} strokeWidth={0.8} />
+            fill={ink(b.y + 1)} fillOpacity={0.12} stroke={ink(b.y + 1)} strokeOpacity={0.3} strokeWidth={0.9} />
         ))}
         {/* The diagonal avenue that cuts across the grid. */}
-        <line x1={x0} y1={s.bottom + 40} x2={x1} y2={y0 + 300} stroke={HALF.you.line} strokeOpacity={0.12} strokeWidth={5} />
-        <line x1={x0} y1={s.bottom + 40} x2={x1} y2={y0 + 300} stroke="rgba(255, 250, 235, 0.3)" strokeWidth={2.4} />
+        <line x1={x0} y1={s.bottom + 40} x2={x1} y2={y0 + 300} stroke={HALF.you.line} strokeOpacity={0.2} strokeWidth={5.5} />
+        <line x1={x0} y1={s.bottom + 40} x2={x1} y2={y0 + 300} stroke="rgba(255, 250, 235, 0.42)" strokeWidth={2.6} />
       </svg>
       {/* Distance: the far half dims a little, and hazes toward its far end. */}
-      <div style={{ position: 'absolute', left: x0, width: x1 - x0, top: y0, height: -140 - y0, background: 'rgba(196, 212, 230, 0.72)' }} />
+      <div style={{ position: 'absolute', left: x0, width: x1 - x0, top: y0, height: -140 - y0, background: 'rgba(196, 212, 230, 0.62)' }} />
       <div style={{
         position: 'absolute', left: x0, width: x1 - x0, top: -140, height: s.mid + 140,
-        background: 'linear-gradient(180deg, rgba(196, 212, 230, 0.72) 0%, rgba(196, 212, 230, 0.34) 38%, rgba(24, 40, 64, 0.06) 70%, rgba(24, 40, 64, 0.13) 100%)',
+        background: 'linear-gradient(180deg, rgba(196, 212, 230, 0.62) 0%, rgba(196, 212, 230, 0.26) 38%, rgba(24, 40, 64, 0.05) 70%, rgba(24, 40, 64, 0.13) 100%)',
       }} />
       {/* The vignette: the corners fall away into the scene. */}
       <div style={{
