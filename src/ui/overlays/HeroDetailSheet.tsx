@@ -156,9 +156,16 @@ const souls = (n: number) => `${n} soul${n === 1 ? '' : 's'}`;
 const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 /** A reason that says the souls are short ("Need 2 souls", "Not enough souls"). */
 const shortOfSouls = (reason?: string) => !!reason && /soul/i.test(reason) && /^(need|not enough)/i.test(reason);
-/** A reason in the fewest of its own words: "Used", "Level 2". */
+/** A reason in the fewest of its own words, so it fits the number's place:
+ *  "Used", "Level 2", "Turn over". The whole reason stays the row's title. */
 const shortReason = (reason: string) =>
-  /^(already used|used\b)/i.test(reason) ? 'Used' : reason.replace(/^Unlocks at (Level \d+)$/, '$1');
+  /^(already used|used\b)/i.test(reason) ? 'Used'
+    : /^The attack ended/i.test(reason) ? 'Turn over'
+    : /^Down until/i.test(reason) ? 'Down'
+    : /^Cannot use abilities/i.test(reason) ? 'Blocked'
+    : /^Asked when .* falls$/i.test(reason) ? 'When it falls'
+    : /^Asked when/i.test(reason) ? 'When asked'
+    : reason.replace(/^Unlocks at (Level \d+)$/, '$1');
 
 /** A rule's first sentence as plain words, its scaling numbers read live. */
 function firstSentence(rule: string, scale: Scale): string {
