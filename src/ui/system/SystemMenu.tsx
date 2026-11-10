@@ -152,7 +152,7 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
               {/* Header — title + the key that closes it. */}
               <div style={{
                 display: 'flex',
-                alignItems: 'baseline',
+                alignItems: 'center',
                 justifyContent: 'space-between',
                 paddingBottom: 12,
                 borderBottom: `1.5px solid ${poster.ink}`,
@@ -167,7 +167,7 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
                 }}>
                   {page === 'credits' ? 'Credits' : 'System'}
                 </span>
-                <InkTag>Esc · Close</InkTag>
+                <CloseTag onClose={() => setOpen(false)} />
               </div>
 
               {page === 'credits' ? (
@@ -274,21 +274,38 @@ export function SystemLayer({ screen, onExitToMenu, exitLabel }: {
 }
 
 /** Small ink tag — the sheet's eyebrow / key hint. */
-function InkTag({ children }: { children: React.ReactNode }) {
+/** The sheet's close plate: a real button, so a phone (which has no Esc key)
+ *  can shut the menu by tapping it. */
+function CloseTag({ onClose }: { onClose: () => void }) {
   return (
-    <span style={{
-      padding: '4px 9px',
-      background: poster.ink,
-      color: poster.paper,
-      fontFamily: fonts.display,
-      fontSize: 10,
-      letterSpacing: '0.2em',
-      textTransform: 'uppercase',
-      lineHeight: 1,
-      ...clipBoth(chamfer(4)),
-    }}>
-      {children}
-    </span>
+    <button
+      type="button"
+      aria-label="Close"
+      onClick={onClose}
+      style={{
+        // A full-size tap target around the small plate.
+        margin: '-10px -8px -10px 0',
+        padding: '10px 8px',
+        border: 'none',
+        background: 'transparent',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{
+        display: 'block',
+        padding: '6px 12px',
+        background: poster.ink,
+        color: poster.paper,
+        fontFamily: fonts.display,
+        fontSize: 12,
+        letterSpacing: '0.16em',
+        textTransform: 'uppercase',
+        lineHeight: 1,
+        ...clipBoth(chamfer(4)),
+      }}>
+        Close
+      </span>
+    </button>
   );
 }
 
