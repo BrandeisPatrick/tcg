@@ -3,7 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import type { CardInstance, PlayerID, PlayerState } from '@/engine/types';
 import { HeroSlot } from './HeroSlot';
 import { DealtTile } from './BoardIntro';
-import { RowPlaque, SlotWell } from './BoardTable';
+import { SlotWell, boardCols, benchWidth } from './BoardTable';
 import { poster } from '../poster';
 import { useViewport } from '../hooks/useViewport';
 import type { ArmedPlay } from '../helpers';
@@ -43,25 +43,16 @@ export function BenchRow({
       position: 'relative',
       display: 'flex',
       justifyContent: 'center',
-      gap: 12,
-      padding: isMobile ? 0 : '0 12px',
       height: '100%',
       minHeight: 0,
     }}>
-      {/* Side label crowds the cards on a phone — desktop only. Stacked
-          two-line form fits the left gutter rail. */}
-      {!isMobile && (
-        <RowPlaque>Bench</RowPlaque>
-      )}
       <div style={{
         display: 'grid',
-        // Matches ActiveDuel grid so all three rows column-align across
-        // the board (Rival Bench → Lane → Your Bench). On phones the fixed
-        // 180px track is replaced by a width-capped 1fr track so 3 cards fit.
-        gridTemplateColumns: isMobile ? 'repeat(3, 1fr)' : 'repeat(3, 180px)',
-        gap: isMobile ? 8 : 28,
-        width: isMobile ? '100%' : undefined,
-        maxWidth: isMobile ? 420 : undefined,
+        // Three bench tiles at the board's bench width (boardCols), centred
+        // under / over the single Active of the 3-1-1-3 stack.
+        gridTemplateColumns: `repeat(3, ${boardCols.benchTile(isMobile)}px)`,
+        gap: boardCols.benchGap(isMobile),
+        width: benchWidth(isMobile),
         height: '100%',
         // The row is the bench's height; a tile never grows it (ActiveDuel
         // says why).

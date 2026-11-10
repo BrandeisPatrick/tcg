@@ -17,19 +17,26 @@ import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
 import { SwordIcon, HeartIcon, ShieldIcon } from '../card/Icons';
 import { fonts, spring, text, statRow } from '../tokens';
-import { atkInk, hpInk, poster } from '../poster';
+import { atkInk, hpInk, levelFrame, levelFrameKeylines, poster } from '../poster';
 import { LevelRing } from '../card/LevelRing';
-import { LevelTrim, trimInset } from '../card/LevelTrim';
 import { useStatTick } from './useStatTick';
 import { SpikeMark } from './SpikeMark';
 import { FlexSocket } from './FlexSocket';
 import type { ArmedPlay } from '../helpers';
 
 /**
- * The in-match hero tile, printed flat in the poster idiom: a charcoal frame
- * around an edge-to-edge portrait, an ink role band and a cream label band
- * carrying the name and the BP / Shield / HP row. One component renders both
- * the large Active tile and the `compact` Bench tile.
+ * The in-match hero tile, printed flat in the poster idiom: a frame in the
+ * hero's LEVEL GREEN (poster.ts `levelFrame`: the lightest at Level 1,
+ * darker each level to the cap) around an edge-to-edge portrait, an ink role
+ * band and a cream label band carrying the name and the BP / Shield / HP
+ * row. The level number stays on the ring. One component renders both the
+ * large Active tile and the `compact` Bench tile.
+ *
+ * The frame is the level's alone. Every other signal is a HALO outside it
+ * (`Halo`): a pulsing green one while the tile is a legal target, a pulsing
+ * red one while its own skill or attack is armed, and a steady one in the
+ * owner's colour (gold yours, red the rival's) on the Active whose turn it
+ * is. The board reads at a glance: green frames are levels, halos are states.
  */
 
 // One dark drop under every tile — the print floats a hair off the sheet.
@@ -132,37 +139,20 @@ export function HeroSlot({
   // identity colour keys the role band's left edge, as the draft dossier does.
   const identity = getHeroIdentity(card.cardId);
   const role = identity.keywords[0] ?? 'Hero';
-  // The level bezel inside the frame (LevelTrim); none on a corpse. The role
-  // band steps in by its width so the identity key stays in sight.
   const level = card.level ?? 1;
-  const trimIn = isCorpse ? 0 : trimInset(level, !!compact);
 
-  // Frame states, in priority order. The poster is flat print: a state is a
-  // border colour plus an inset ring, never an outer glow. The owner colour
-  // keys the lane — gold for you, red for the rival; bench tiles rest on
-  // charcoal.
+  // The frame is the level's (its green); the states go outside it, in
+  // priority order: a legal target, the armed source, the Active on turn.
   const isFocus = isActive && !!isCurrentTurn;
   const ownerColor = isAlly ? poster.you : poster.rival;
-  let borderColor: string;
-  let boxShadow: string;
-  if (isTargetable) {
-    borderColor = poster.target;
-    boxShadow = `inset 0 0 0 2px ${poster.target}, ${TILE_SHADOW}`;
-  } else if (isArmedSource) {
-    borderColor = poster.red;
-    boxShadow = `inset 0 0 0 2px ${poster.red}, ${TILE_SHADOW}`;
-  } else if (isFocus) {
-    borderColor = ownerColor;
-    boxShadow = `inset 0 0 0 2px ${ownerColor}, ${TILE_SHADOW}`;
-  } else if (isActive) {
-    borderColor = ownerColor;
-    boxShadow = TILE_SHADOW;
-  } else {
-    borderColor = poster.edge;
-    boxShadow = TILE_SHADOW;
-  }
-  // A resting frame lightens on hover; a state-coloured frame keeps its signal.
-  const restingFrame = borderColor === poster.edge;
+  const halo: { color: string; pulse: boolean } | null = isTargetable
+    ? { color: poster.target, pulse: true }
+    : isArmedSource
+      ? { color: poster.red, pulse: true }
+      : isFocus
+        ? { color: ownerColor, pulse: false }
+        : null;
+  const boxShadow = `${levelFrameKeylines}, ${TILE_SHADOW}`;
   // Soft pulse behind the portrait: green while this tile is a legal target,
   // red while its own skill or attack is armed and waiting for one.
   const pulse = isTargetable ? poster.target : isArmedSource ? poster.red : null;
@@ -177,7 +167,8 @@ export function HeroSlot({
     // The perspective a kick tips the tile in sits on this wrapper, so the
     // tile's own transform stays `none` at rest — and the wrapper, which
     // never moves, is the box the FX layer measures (geometry's restRect).
-    <div data-fx-rest style={{ width: '100%', height: '100%', perspective: TILT_PERSPECTIVE }}>
+    <div data-fx-rest style={{ position: 'relative', width: '100%', height: '100%', perspective: TILT_PERSPECTIVE }}>
+    {halo && <Halo color={halo.color} pulse={halo.pulse && !calm} />}
     <motion.button
       layoutId={`hero-${card.iid}`}
       ref={(el) => { tileRef.current = el; registerSlotRef?.(card.iid, el); }}
@@ -193,9 +184,7 @@ export function HeroSlot({
       }}
       onPointerUp={() => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; } }}
       onPointerLeave={() => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = undefined; } }}
-      whileHover={isAlly && !isCorpse
-        ? { y: -4, scale: 1.015, ...(restingFrame ? { borderColor: poster.frameLit } : {}) }
-        : undefined}
+      whileHover={isAlly && !isCorpse ? { y: -4, scale: 1.015 } : undefined}
       transition={spring.snappy}
       whileTap={isCorpse ? undefined : { scale: 0.97 }}
       style={{
@@ -205,9 +194,7 @@ export function HeroSlot({
         // Rounded, not chamfered: the FX layer's clipped washes use this radius and the
         // combat choreographer clips its overlays to it.
         borderRadius: 10,
-        borderWidth: 2,
-        borderStyle: 'solid',
-        borderColor,
+        ...levelFrame(level, compact ? 2 : 3),
         background: poster.frame,   // charcoal frame, peeks at the edges
         boxShadow,
         padding: 0,
@@ -390,7 +377,6 @@ export function HeroSlot({
           edge by the hero's identity colour (as the draft dossier does). */}
       <div style={{
         flexShrink: 0,
-        marginLeft: trimIn,
         padding: compact ? '3px 8px' : '4px 9px',
         background: poster.ink,
         color: poster.cream,
@@ -491,12 +477,35 @@ export function HeroSlot({
         </div>
         )}
       </div>
-
-      {/* The level bezel — inside the state border, never in place of it.
-          The frame's inner corner is its 10px radius less the 2px border. */}
-      {!isCorpse && <LevelTrim level={level} radius={8} compact={compact} />}
     </motion.button>
     </div>
+  );
+}
+
+/**
+ * A state's halo round the tile, outside the level frame: a cream hairline
+ * against the frame, then a ring and a soft glow in the state's colour. A
+ * target's and an armed source's breathe (`pulse`; steady under calm
+ * motion); the Active on turn wears a quieter, steady one.
+ */
+function Halo({ color, pulse }: { color: string; pulse: boolean }) {
+  const ring = pulse
+    ? `0 0 0 2px #fff4d8, 0 0 0 5px ${color}, 0 0 18px 6px ${color}`
+    : `0 0 0 2px ${color}, 0 0 14px 3px ${color}99`;
+  return (
+    <motion.div
+      aria-hidden
+      data-halo
+      initial={{ opacity: pulse ? 0.55 : 0.9 }}
+      animate={pulse ? { opacity: [0.55, 1, 0.55] } : { opacity: 0.9 }}
+      transition={pulse ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.2 }}
+      style={{
+        position: 'absolute', inset: 0,
+        borderRadius: 10,
+        boxShadow: ring,
+        pointerEvents: 'none',
+      }}
+    />
   );
 }
 

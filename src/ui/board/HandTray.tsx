@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { Hand } from './Hand';
 import { BoardControls } from './BoardControls';
@@ -7,26 +6,20 @@ import { useViewport } from '../hooks/useViewport';
 
 /**
  * Bottom row: the hand fan, floating under the cream sheet on the dark
- * scene, between your deck (left) and your discard pile (right) — `piles`,
- * the two of them (CardPiles), which the tray splits to either end. On
- * desktop the turn controls live on the sheet's right rail (Board mounts the
- * BoardControls dock there), so the fan takes the middle of the row; phones
- * keep the controls here as a row under the hand, the turn button at the
- * thumb edge, and the piles as small chips in a slim row above the strip.
- * The phone hand is a flat strip of compact cards (see Hand) in flow above
- * the controls, so no card ever sits under it.
+ * scene. The deck and the discard pile sit on the sheet's rails beside your
+ * Active (Board.tsx), not here. On desktop the turn controls live on the
+ * sheet's right rail too (the BoardControls dock), so the fan takes the
+ * whole row; phones keep the controls here as a row under the hand, the
+ * turn button at the thumb edge. The phone hand is a flat strip of compact
+ * cards (see Hand) in flow above the controls, so no card ever sits under it.
  */
 export function HandTray({
   cards, souls, disabled, pending, isMyTurn, busy, hasPending, playable,
   onTap, onLongPress, onHover, onDragEndOver, onBlocked, onEndTurn, onCancel,
-  autoPlay, onToggleAuto, arriving, registerCard, deckPile, discardPile,
+  autoPlay, onToggleAuto, arriving, registerCard,
 }: {
   cards: CardInstance[];
   souls: number;
-  /** Your deck and your discard pile (DeckPile, DiscardPile), drawn at the
-   *  row's two ends. */
-  deckPile?: ReactNode;
-  discardPile?: ReactNode;
   disabled: boolean;
   pending: PendingPlay | null;
   isMyTurn: boolean;
@@ -73,19 +66,7 @@ export function HandTray({
       )}
       {/* Phones: the strip runs past the board's 6px side padding to the
           screen edges, so a card scrolls off the glass, not off a margin. */}
-      {isMobile && (deckPile || discardPile) && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '2px 10px 0', pointerEvents: 'auto' }}>
-          {deckPile}
-          {discardPile}
-        </div>
-      )}
-      {!isMobile && deckPile && (
-        <div style={{ position: 'absolute', left: 0, bottom: 22, pointerEvents: 'auto', zIndex: 1 }}>{deckPile}</div>
-      )}
-      {!isMobile && discardPile && (
-        <div style={{ position: 'absolute', right: 0, bottom: 22, pointerEvents: 'auto', zIndex: 1 }}>{discardPile}</div>
-      )}
-      <div style={{ minWidth: 0, margin: isMobile ? '0 -6px' : '0 76px' }}>
+      <div style={{ minWidth: 0, margin: isMobile ? '0 -6px' : '0 40px' }}>
         <Hand
           cards={cards}
           souls={souls}

@@ -21,7 +21,7 @@ import { DiscardOverlay } from './overlays/DiscardOverlay';
 import { UpgradePicker } from './overlays/UpgradePicker';
 import { useReplacePick } from './overlays/ReplacePicker';
 import { TriggerPrompt } from './overlays/TriggerPrompt';
-import { DeckPile, DiscardPile, CardPiles } from './board/CardPiles';
+import { DeckPile, DiscardPile } from './board/CardPiles';
 import { OpponentHand } from './board/OpponentHand';
 import { PosterBackdrop } from './PosterBackdrop';
 import { DragArrow } from './effects/DragArrow';
@@ -30,10 +30,10 @@ import { PromotionOverlay } from './overlays/PromotionOverlay';
 import { BenchRow } from './board/BenchRow';
 import { ActiveDuel } from './board/ActiveDuel';
 import { BoardIntro } from './board/BoardIntro';
-import { BoardTable, boardRows, boardGutter, vitalsPull, tablePad } from './board/BoardTable';
+import { BoardTable, RailSeat, boardRows, boardStack, rowBox, stageWidth, tablePad } from './board/BoardTable';
 import { PatronPlaque } from './board/PatronPlaque';
 import { BoardControls } from './board/BoardControls';
-import type { TurnPhase } from './board/TurnCompass';
+import { TurnCompass, type TurnPhase } from './board/TurnCompass';
 import {
   DISCARD_FIRST, actionRefusal, activateBlockReason, laneRide, moveBlockReason, placeBlockReason, playBlockReason, readyHeroes, retreatBlock,
   skillBlockReason,
@@ -49,7 +49,6 @@ import {
 import type { Action } from '@/engine/engine';
 import { forecastAttack, type AttackPlan } from '@/engine/forecast';
 import { CombatChoreographer } from './effects/CombatChoreographer';
-import { SoulsRail } from './board/SoulsRail';
 import { CombatProgressContext, type CombatProgress } from './effects/CombatProgressContext';
 import { FxLayer } from './effects/fx/FxLayer';
 import { FxImpulseBus, FxImpulseContext } from './effects/fx/FxImpulse';
@@ -100,8 +99,10 @@ const FINAL_BLOW_MAX_MS = 2800;
  *  System menu's gear (top 12 + 40px); on a shorter phone the sheet is scaled
  *  narrow enough to pass left of it instead. In a lesson the phone's coach
  *  plate sits there, above the board. Desktop: the backs' peek. */
-const RIVAL_BAND = { phone: 52, lesson: 96, desktop: 40 } as const;
+const RIVAL_BAND = { phone: 44, lesson: 96, desktop: 40 } as const;
 const rivalBand = (mobile: boolean, lesson: boolean) => (mobile ? (lesson ? RIVAL_BAND.lesson : RIVAL_BAND.phone) : RIVAL_BAND.desktop);
+/** The gap between the band, the sheet and (desktop) the hand, stage px. */
+const stageGap = (mobile: boolean) => (mobile ? 16 : 36);
 /** How long your turn holds on its End beat after the attack has been made,
  *  before it ends on its own, ms. */
 const AUTO_END_MS = 500;
@@ -953,11 +954,13 @@ export function Board(props: BoardProps<GameState>) {
         onToggleAuto={() => setAutoPlay((v) => !v)}
         registerCard={registerHandCard}
         arriving={deckMotion.arriving}
-        deckPile={<DeckPile count={G.players[me].deck.length} owner="you" size={isMobile ? 'chip' : 'full'} accent={poster.you} />}
-        discardPile={<DiscardPile cards={G.players[me].discard} owner="you" size={isMobile ? 'chip' : 'full'} accent={poster.you} />}
       />
     </div>
   );
+
+  // The 3-1-1-3 stack's geometry (BoardTable): where each row starts.
+  const stack = boardStack(isMobile);
+  const pileSize = isMobile ? 'chip' : 'full';
 
   return (
     <LayoutGroup>
@@ -1031,9 +1034,8 @@ export function Board(props: BoardProps<GameState>) {
             alignSelf: 'center',
             display: 'flex',
             flexDirection: 'column',
-            // Generous fibonacci gap gives the rows visible breathing room
-            // rather than packing them.
-            gap: isMobile ? 20 : 40,
+            // The band, the sheet and (desktop) the hand, a breath apart.
+            gap: stageGap(isMobile),
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
           }}>
@@ -1044,34 +1046,24 @@ export function Board(props: BoardProps<GameState>) {
           <div style={{ flex: '0 0 auto', position: 'relative', zIndex: 0, height: rivalBand(isMobile, isTutorial) }}>
             <OpponentHand
               cards={G.players[opp].hand}
-              edge={rivalBand(isMobile, isTutorial) + boardRows.gap(isMobile) - tablePad(isMobile).top}
+              edge={rivalBand(isMobile, isTutorial) + stageGap(isMobile) - tablePad(isMobile).top}
               compact={isMobile}
             />
-            {/* The rival's deck and discard pile, at the band's left. */}
-            <div style={{ position: 'absolute', left: isMobile ? 4 : 0, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}>
-              <CardPiles ps={G.players[opp]} owner="rival" compact />
-            </div>
           </div>
 
-          {/* 3×3 BOARD GRID — the three rows (opp bench, lane, my bench)
-              sit on one flat cream sheet (BoardTable), a print floating on
-              the blurred scene. Same flat plane on desktop and mobile. */}
+          {/* THE 3-1-1-3 STACK — Pocket's table: the rival's bench, the
+              rival's Active, your Active, your bench, one above the other
+              down the middle of one flat cream sheet (BoardTable), a vitals
+              rule capping each end. The piles, the turn dial and the turn
+              dock sit in the sheet's rails beside the Actives. Every row is
+              placed from the shared geometry (boardStack). */}
           <div style={{
             // Stacks the sheet above the rival's fan so the paper's top edge
             // overlaps the tucked card bottoms (see OpponentHand wrapper).
             position: 'relative',
             zIndex: 1,
-          }}>
-          <div style={{
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: boardRows.gap(isMobile),
-            // Gutter margins: row tags live in the left margin; the turn
-            // control dock sits in the right margin. Without them the
-            // fit-content stage hugs the card grid and both sat on cards.
-            paddingLeft: boardGutter(isMobile).left,
-            paddingRight: boardGutter(isMobile).right,
+            width: isMobile ? '100%' : stageWidth(isMobile),
+            height: stack.height,
             // translateZ(0) keeps a stacking context so the sheet layer can
             // never paint over the rows on either branch.
             transform: 'translateZ(0)',
@@ -1079,12 +1071,9 @@ export function Board(props: BoardProps<GameState>) {
             {/* The cream sheet — decorative layer behind the rows. */}
             <BoardTable isMobile={isMobile} />
 
-            {/* RIVAL VITALS — a narrow rule capping the top of the stack.
-                Patron HP, souls, the turn's step and the attack lamp live
-                here on the board rather than only in the panel, and being a
-                real row it can't overlap the sheet's edge the way the old
-                corner plate did. */}
-            <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.vitals(isMobile)}px`, height: boardRows.vitals(isMobile), marginBottom: -vitalsPull(isMobile) }}>
+            {/* RIVAL VITALS — a narrow rule capping the top of the stack:
+                structures, souls, the attack lamp. */}
+            <div style={rowBox(stack.vitalsR, boardRows.vitals(isMobile))}>
               <PatronPlaque
                 label={PATRON_NAMES.rival}
                 ps={G.players[opp]}
@@ -1096,8 +1085,8 @@ export function Board(props: BoardProps<GameState>) {
               />
             </div>
 
-            {/* OPP BENCH (3 cards) */}
-            <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.bench(isMobile)}px`, height: boardRows.bench(isMobile) }}>
+            {/* RIVAL BENCH (3) */}
+            <div style={rowBox(stack.benchR, boardRows.bench(isMobile))}>
               <BenchRow
                 ps={G.players[opp]}
                 owner={opp} myId={me}
@@ -1111,17 +1100,14 @@ export function Board(props: BoardProps<GameState>) {
               />
             </div>
 
-            {/* THE DUEL — opp active and my active side by side. Active row
-                is bench × golden ratio (180 × 1.618 ≈ 291) so the duel still
-                reads as the focus while bench tiles show full portraits. */}
-            <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.lane(isMobile)}px`, height: boardRows.lane(isMobile) }}>
+            {/* THE LANE — the rival's Active over yours, facing each other
+                across the middle line. */}
+            <div style={rowBox(stack.activeR, boardRows.active(isMobile) * 2 + boardRows.lane(isMobile))}>
               <ActiveDuel
                 G={G}
                 me={me}
                 opp={opp}
                 isMyTurn={isMyTurn}
-                turn={G.turnNumber}
-                phase={turnPhase}
                 pending={pending}
                 onTapHero={onTapHero}
                 onLongPressHero={(c) => setHeroDetail(c)}
@@ -1134,8 +1120,8 @@ export function Board(props: BoardProps<GameState>) {
               />
             </div>
 
-            {/* MY BENCH (3 cards) */}
-            <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.bench(isMobile)}px`, height: boardRows.bench(isMobile) }}>
+            {/* MY BENCH (3) */}
+            <div style={rowBox(stack.benchY, boardRows.bench(isMobile))}>
               <BenchRow
                 ps={G.players[me]}
                 owner={me} myId={me}
@@ -1153,7 +1139,7 @@ export function Board(props: BoardProps<GameState>) {
             </div>
 
             {/* YOUR VITALS — the same rule closing the bottom of the stack. */}
-            <div style={{ position: 'relative', zIndex: 1, flex: `0 0 ${boardRows.vitals(isMobile)}px`, height: boardRows.vitals(isMobile), marginTop: -vitalsPull(isMobile) }}>
+            <div style={rowBox(stack.vitalsY, boardRows.vitals(isMobile))}>
               <PatronPlaque
                 label={PATRON_NAMES.you}
                 ps={G.players[me]}
@@ -1164,30 +1150,28 @@ export function Board(props: BoardProps<GameState>) {
               />
             </div>
 
-            {/* Souls rail — vertical coin stack parallel to the 3×3 grid;
-                top = rival, bottom = you, positions encode ownership. */}
-            <SoulsRail
-              rivalSouls={G.players[opp].souls}
-              yourSouls={G.players[me].souls}
-            />
-
-            {/* Turn control dock — printed in the sheet's right margin,
-                centred on the lane. Lives inside the plane so it reads as
-                part of the board. Phones keep the controls in a row under the
-                stage instead. */}
+            {/* THE RAILS — the paper beside the Actives, as Pocket puts its
+                decks at the table's edges. Across the table from you: the
+                rival's deck at its Active's left, its discard pile at the
+                right; your discard pile at your Active's left, your deck at
+                the right. On the middle line, the turn dial (left) and, on
+                desktop, the turn dock (right); phones keep End Turn and Auto
+                in the hand tray, under the thumb. */}
+            <RailSeat side="left" y={stack.activeR + boardRows.active(isMobile) / 2} isMobile={isMobile}>
+              <span style={{ pointerEvents: 'auto' }}>
+                <DeckPile count={G.players[opp].deck.length} owner="rival" size={pileSize} accent={poster.rival} />
+              </span>
+            </RailSeat>
+            <RailSeat side="right" y={stack.activeR + boardRows.active(isMobile) / 2} isMobile={isMobile}>
+              <span style={{ pointerEvents: 'auto' }}>
+                <DiscardPile cards={G.players[opp].discard} owner="rival" size={pileSize} accent={poster.rival} />
+              </span>
+            </RailSeat>
+            <RailSeat side="left" y={stack.mid} isMobile={isMobile}>
+              <TurnCompass isMyTurn={isMyTurn} turn={G.turnNumber} phase={turnPhase} beats={!G.draft} />
+            </RailSeat>
             {!isMobile && (
-              <div style={{
-                position: 'absolute',
-                right: 0,
-                top: 0,
-                bottom: 0,
-                width: 150,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2,
-                pointerEvents: 'none',
-              }}>
+              <RailSeat side="right" y={stack.mid} isMobile={isMobile}>
                 <BoardControls
                   variant="dock"
                   isMyTurn={isMyTurn}
@@ -1198,11 +1182,19 @@ export function Board(props: BoardProps<GameState>) {
                   onCancel={() => setPending(null)}
                   onToggleAuto={() => setAutoPlay((v) => !v)}
                 />
-              </div>
+              </RailSeat>
             )}
+            <RailSeat side="left" y={stack.activeY + boardRows.active(isMobile) / 2} isMobile={isMobile}>
+              <span style={{ pointerEvents: 'auto' }}>
+                <DiscardPile cards={G.players[me].discard} owner="you" size={pileSize} accent={poster.you} />
+              </span>
+            </RailSeat>
+            <RailSeat side="right" y={stack.activeY + boardRows.active(isMobile) / 2} isMobile={isMobile}>
+              <span style={{ pointerEvents: 'auto' }}>
+                <DeckPile count={G.players[me].deck.length} owner="you" size={pileSize} accent={poster.you} />
+              </span>
+            </RailSeat>
           </div>
-          </div>
-
           {!isMobile && handRow}
         </div>
         </div>

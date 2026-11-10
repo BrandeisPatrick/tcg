@@ -64,6 +64,25 @@ export const poster = {
   },
 } as const;
 
+/** The level greens: a hero card's frame from Level 1 (the lightest) to the
+ *  cap (the darkest; MAX_LEVEL is 4 — engine/constants.ts). Chosen to read on
+ *  the cream sheet and on the dark scene alike: each step is a clear jump,
+ *  and the frame carries its own keylines (`levelFrame`) so the lightest
+ *  holds on paper and the darkest on charcoal. */
+export const levelGreens = ['#a9de8e', '#6ec75a', '#35973f', '#176130'] as const;
+export const levelGreen = (level: number): string =>
+  levelGreens[Math.max(0, Math.min(levelGreens.length - 1, Math.round(level) - 1))];
+/** The frame of a hero card at `level`: a solid green border `width` px
+ *  wide. Spread onto the card's style with `levelFrameKeylines` in its
+ *  box-shadow — the ink hairline outside and the dark line inside keep the
+ *  green apart from the paper and from the portrait's charcoal frame. */
+export const levelFrame = (level: number, width = 3) => ({
+  borderWidth: width,
+  borderStyle: 'solid' as const,
+  borderColor: levelGreen(level),
+});
+export const levelFrameKeylines = 'inset 0 0 0 1px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(23, 20, 16, 0.4)';
+
 /** A shop category's inks, read off its token (styles.css: `--shop-weapon`,
  *  `--shop-vitality`, `--shop-spirit` — Deadlock's own amber, green and
  *  purple): the ink itself (a tile's frame, a lit tab's rule), `deep` — the

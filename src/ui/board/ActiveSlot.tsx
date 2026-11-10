@@ -2,8 +2,9 @@ import { AnimatePresence } from 'framer-motion';
 import type { CardInstance, PlayerID, PlayerState } from '@/engine/types';
 import { HeroSlot } from './HeroSlot';
 import { DealSticker, DealtTile } from './BoardIntro';
-import { SlotWell } from './BoardTable';
+import { SlotWell, boardCols } from './BoardTable';
 import { poster } from '../poster';
+import { useViewport } from '../hooks/useViewport';
 import type { ArmedPlay } from '../helpers';
 
 interface Props {
@@ -35,6 +36,7 @@ export function ActiveSlot({
 }: Props) {
   const card = ps.active;
   const accent = isOpponent ? poster.rival : poster.you;
+  const { isMobile } = useViewport();
 
   return (
     <div style={{
@@ -43,11 +45,12 @@ export function ActiveSlot({
       justifyContent: 'center',
       alignItems: 'center',
       height: '100%',
-      // A grid cell is as tall as its row, not its content (ActiveDuel).
+      // The row is as tall as the geometry says, not as its content (ActiveDuel).
       minHeight: 0,
     }}>
-      {/* The 'Lane' plaque lives in ActiveDuel, in the sheet's left gutter. */}
-      <div style={{ width: '100%', height: '100%', maxHeight: 280 }}>
+      {/* The Active tile, centred at the column's width (boardCols.active):
+          the row's height is its height. */}
+      <div style={{ width: boardCols.active(isMobile), height: '100%' }}>
         <AnimatePresence mode="popLayout">
           {card ? (
             // Opacity-only presence — the HeroSlot's shared layoutId animates

@@ -1,6 +1,6 @@
 import { useContext, useState, type CSSProperties, type ReactNode } from 'react';
 import { fonts, text } from '../tokens';
-import { poster } from '../poster';
+import { levelFrame, levelFrameKeylines, poster } from '../poster';
 import { RuleText } from './RuleText';
 import { LiveScaleContext, faceScale } from './liveScale';
 import { CardShine, rarityInk } from './RarityFX';
@@ -67,6 +67,10 @@ interface Props {
   /** Turn the card to follow the pointer. Shares --px/--py with the foil, so
    *  the metal catches light because the card moved, which is the point. */
   tilt?: boolean;
+  /** A hero instance's level (a hero in the hand, back from the lane with
+   *  its level): the frame prints in its level green, as the tile's does.
+   *  Omitted, the plain charcoal-edge frame of a card with no level yet. */
+  level?: number;
 }
 
 /** The two sizes a card is printed at, in px. */
@@ -242,7 +246,7 @@ export function CardFrame({
   cardId, size = 'hand', selected = false, glow = null, style, hideStats = false,
   cost: costInPlay, unaffordable = false, hideCost = false, physical, castSheen = false, foil = null,
   holo = null, holoScope = 'art', holoStrength = 'medium', holoMarkScale = 1,
-  holoPalette = 'amber', tilt = false, tapExplains = true,
+  holoPalette = 'amber', tilt = false, tapExplains = true, level,
 }: Props) {
   const [hover, setHover] = useState(false);
   // Premium-plate flags, read once so the markup below stays declarative.
@@ -272,13 +276,20 @@ export function CardFrame({
 
   // Charcoal frame: art window on top (~55% of the height), an ink type band,
   // then the cream label band with the rules.
+  // A hero with a level wears its level green as its frame (the tile's rule);
+  // a state colour still takes the frame over, as it does on every card.
+  const leveled = isHero && level !== undefined && !stateColor;
   const containerStyle: CSSProperties = {
     width: sz.w,
     height: sz.h,
     borderRadius: 10,
     background: poster.frame,
-    border: `2px solid ${stateColor ?? (lit ? poster.frameLit : poster.edge)}`,
-    boxShadow: stateColor ? `inset 0 0 0 2px ${stateColor}, ${CARD_SHADOW}` : CARD_SHADOW,
+    ...(leveled
+      ? { ...levelFrame(level, 2), boxShadow: `${levelFrameKeylines}, ${CARD_SHADOW}` }
+      : {
+          border: `2px solid ${stateColor ?? (lit ? poster.frameLit : poster.edge)}`,
+          boxShadow: stateColor ? `inset 0 0 0 2px ${stateColor}, ${CARD_SHADOW}` : CARD_SHADOW,
+        }),
     position: 'relative',
     overflow: 'hidden',
     color: poster.ink,
