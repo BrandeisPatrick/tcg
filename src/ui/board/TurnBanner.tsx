@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { fonts, spring } from '../tokens';
 import { poster } from '../poster';
@@ -33,24 +33,34 @@ function readLaneBox(): LaneBox {
 
 export function useLaneBox(): LaneBox {
   const [box, setBox] = useState<LaneBox>(readLaneBox);
+  // The box last read and handed to React. A new one is set only when a read
+  // differs from it, and it is set as a plain value: a read that finds
+  // nothing moved schedules nothing, so a render can never ask for another
+  // (a resize's update still waiting behind a tap's render included).
+  const last = useRef(box);
+  const measure = useCallback(() => {
+    const n = readLaneBox();
+    if (sameBox(n, last.current)) return;
+    last.current = n;
+    setBox(n);
+  }, []);
   // Read again after every render of whoever shows something in it (the
   // sheet is laid out for the screen, so the column moves with it), and a
   // frame after a resize or a rotation, once the sheet has settled.
+  useLayoutEffect(measure);
   useLayoutEffect(() => {
-    setBox((b) => { const n = readLaneBox(); return sameBox(n, b) ? b : n; });
-  });
-  useLayoutEffect(() => {
-    const measure = () => setBox((b) => { const n = readLaneBox(); return sameBox(n, b) ? b : n; });
-    const onResize = () => { measure(); requestAnimationFrame(measure); };
+    let raf = 0;
+    const onResize = () => { measure(); cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
     window.visualViewport?.addEventListener('resize', onResize);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('orientationchange', onResize);
       window.visualViewport?.removeEventListener('resize', onResize);
     };
-  }, []);
+  }, [measure]);
   return box;
 }
 
