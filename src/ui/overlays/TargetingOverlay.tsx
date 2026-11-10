@@ -4,6 +4,7 @@ import type { TargetFilter } from '@/abilities';
 import { fonts, spring, text } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { useGearFolded } from '../system/systemMenuBus';
+import { useViewport } from '../hooks/useViewport';
 
 interface Props {
   title: string;
@@ -49,6 +50,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
   // targeting docks above your hand (the rival's rows stay clear).
   const anchorTop = filter === 'allyAny' || filter === 'allyHero' || filter === 'allyBench' || filter === 'self';
   const gearClear = useGearFolded() ? 0 : GEAR_CLEAR;
+  const { isMobile } = useViewport();
   // How far up the hand row reaches, measured before paint, so the bottom
   // dock clears it whatever the strip's height on this phone.
   const [handTop, setHandTop] = useState<number | null>(null);
@@ -93,7 +95,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
         maxWidth: 'min(680px, 100%)',
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
+        gap: isMobile ? 8 : 12,
         pointerEvents: 'auto',
         background: poster.panel,
         border: `1px solid ${poster.edge}`,
@@ -104,14 +106,14 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
       {/* Filter chip — the targeting green, printed flat on the plate. */}
       <span style={{
         flexShrink: 0,
-        display: 'inline-flex', alignItems: 'center', gap: 7,
-        padding: '5px 10px',
+        display: 'inline-flex', alignItems: 'center', gap: isMobile ? 4 : 7,
+        padding: isMobile ? '5px 7px' : '5px 10px',
         background: poster.target,
         color: poster.ink,
         ...clipBoth(chamfer(4)),
         fontFamily: fonts.display,
-        fontSize: 10.5,
-        letterSpacing: '0.2em',
+        fontSize: isMobile ? 10 : 10.5,
+        letterSpacing: isMobile ? '0.1em' : '0.2em',
         textTransform: 'uppercase',
         lineHeight: 1,
         whiteSpace: 'nowrap',
@@ -120,23 +122,27 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
         <span>{chip ?? TARGET_LABELS[filter]}</span>
       </span>
 
+      {/* On a phone the plate has room for the name alone: it wraps to a
+          second line rather than cut, and the chip and the lit targets say
+          the rest. A wide screen keeps the one line with its hint. */}
       <span style={{
         minWidth: 0,
         overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
+        ...(isMobile
+          ? { whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.2 }
+          : { textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
         ...text.body,
         color: poster.creamDim,
       }}>
         <span style={{
           fontFamily: fonts.display,
           fontSize: 12,
-          letterSpacing: '0.1em',
+          letterSpacing: isMobile ? '0.06em' : '0.1em',
           textTransform: 'uppercase',
           color: poster.cream,
         }}>{title}</span>
-        {desc ? <> — {desc}</> : null}
-        <span style={{ color: poster.creamFaint }}> · {hint ?? 'tap or drag onto a glowing target'}</span>
+        {!isMobile && desc ? <> — {desc}</> : null}
+        {!isMobile && <span style={{ color: poster.creamFaint }}> · {hint ?? 'tap or drag onto a glowing target'}</span>}
       </span>
 
       {/* Cancel — the red sticker, stuck to the plate's right end. */}
@@ -157,7 +163,7 @@ export function TargetingOverlay({ title, desc, filter, onCancel, rightInset = 0
           cursor: 'pointer',
           fontFamily: fonts.display,
           fontSize: 10,
-          letterSpacing: '0.24em',
+          letterSpacing: isMobile ? '0.12em' : '0.24em',
           textTransform: 'uppercase',
           lineHeight: 1,
           whiteSpace: 'nowrap',

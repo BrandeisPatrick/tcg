@@ -177,7 +177,8 @@ export function hudSeats(tilted = false) {
     souls: tilted
       ? { left: STAGE.w - 2 - 40, top: benchTop - 48, size: 40 }
       : { left: STAGE.w - 4 - 44, top: benchMid - 22, size: 44 },
-    skip: { left: 8, top: plane.y(activeCentre(s.activeY)) + 14 },
+    // Skip stands on the free paper left of your Active, clear above the menu.
+    skip: { left: 8, top: tilted ? benchTop - 66 - 40 : plane.y(activeCentre(s.activeY)) + 14 },
     yourBar: { left: 8, top: rowTop + 4, maxWidth: STAGE.w - 8 - END_TURN_W - 8 - 8 },
     endTurn: { left: STAGE.w - 8 - END_TURN_W, top: rowTop, width: END_TURN_W, height: 34 },
     hand: { left: 0, top: rowTop + 34 + 4, width: STAGE.w },
