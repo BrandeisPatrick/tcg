@@ -190,7 +190,7 @@ function ExplainCard({ id, content, mode, anchor }: {
       ))}
       {mode === 'touch' && (
         <div style={{
-          marginTop: 7, fontFamily: fonts.display, fontSize: 9.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: poster.inkDim,
+          marginTop: 7, fontFamily: fonts.display, fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: poster.inkDim,
         }}>Tap anywhere to close</div>
       )}
     </div>
