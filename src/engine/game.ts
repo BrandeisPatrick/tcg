@@ -141,7 +141,7 @@ export const DeadlockGame: Game<GameState> = {
       move({ G, ctx, events }, mover(ctx, playerID), { type: 'activate', itemIid, targetIid }),
 
     /** A kit ability: the hero's skill or its ultimate, named by `skillId`
-     *  (left off for the hero's first skill), paid for in souls. */
+     *  (left off for the hero's first skill). It costs no souls: it waits. */
     useSkill: ({ G, ctx, playerID, events }, heroIid: string, targetIid?: string, skillId?: string) =>
       move({ G, ctx, events }, mover(ctx, playerID), { type: 'useSkill', heroIid, targetIid, skillId }),
 

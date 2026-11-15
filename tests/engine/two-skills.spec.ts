@@ -15,6 +15,7 @@ import { clearTurnFlags, tickCooldowns } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { setMatchConfig } from '@/storage/matchConfig';
 import { freshReadyGame, makeHero, TEST_ROSTERS, TEST_SEED, useItem } from './_helpers';
+import { SKILL_COOLDOWN } from '@/engine/constants';
 
 // A hero may carry one or two skills, each with its own cooldown (one own turn
 // when its data names none), and uses one ability a turn. No hero of the real
@@ -139,7 +140,7 @@ describe('two skills on one hero', () => {
     expect(blocked(G, '0', { type: 'attack' })).toBeNull();
   });
 
-  it('on the owner\'s next turn both skills are available again', () => {
+  it('on the owner\'s next turn the skill it used still waits (SKILL_COOLDOWN); its other one is ready', () => {
     const { c, G, endTurns, moves } = twinClient();
     const twin = G().players['0'].active!;
     const rival = G().players['1'].active!;
@@ -156,7 +157,8 @@ describe('two skills on one hero', () => {
     const back = G().players['0'].active!;
     expect(back.skillUsedThisTurn).toBe(false);
     expect(back.lastSkillUsed).toBeUndefined();
-    expect(skillBlocked(G(), '0', back, undefined, BOLT)).toBeNull();
+    expect(back.cooldowns?.[BOLT]).toBe(SKILL_COOLDOWN - 1);            // used last turn: it waits
+    expect(skillBlocked(G(), '0', back, undefined, BOLT)).toBe('cooldown');
     expect(skillBlocked(G(), '0', back, undefined, SURGE)).toBeNull();
     moves.useSkill(twin.iid, undefined, SURGE);                         // now the second
     expect(G().players['0'].active!.lastSkillUsed).toBe(SURGE);
@@ -185,14 +187,14 @@ describe('a skill\'s cooldown', () => {
     const stuck = JSON.stringify(G());
     moves.useSkill(cool.iid, rival.iid);
     expect(JSON.stringify(G())).toBe(stuck);                            // refused, untouched
-    // Lash's skill (cooldown 1) is back every turn: it sets its field, which is gone again by her next turn.
+    // Lash's skill names a wait of 4: it sets its field, which counts down on her turns.
     moves.useSkill(lash.iid, G().players['1'].active!.iid);
-    expect(G().players['0'].bench[1]!.cooldowns).toEqual({ skill_lash: 1 });
+    expect(G().players['0'].bench[1]!.cooldowns?.skill_lash).toBe(4);
 
     endTurns(2);                                                        // turn 3: the clock reached 0
     const warm = G().players['0'].bench[0]!;
     expect('cooldowns' in warm).toBe(false);
-    expect('cooldowns' in G().players['0'].bench[1]!).toBe(false);
+    expect(G().players['0'].bench[1]!.cooldowns?.skill_lash).toBe(3);
     expect(skillBlocked(G(), '0', warm, rival.iid)).toBeNull();
     moves.useSkill(cool.iid, G().players['1'].active!.iid);
     expect(G().players['0'].bench[0]!.cooldowns).toEqual({ [CHILL]: 2 });
@@ -258,10 +260,11 @@ describe('a bare useSkill', () => {
     expect(four.G.action).toMatchObject({ kind: 'skill', abilityId: SURGE });
   });
 
-  it('puts a skill whose data names no cooldown on the default one (SKILL_COOLDOWN, one own turn)', () => {
+  it('puts a skill whose data names no cooldown on the default one (SKILL_COOLDOWN, three own turns)', () => {
     const { G, twin, rival } = twinGame();
     useSkill(G, twin, BOLT, rival.iid);
-    expect(twin.cooldowns).toEqual({ [BOLT]: 1 });
+    expect(SKILL_COOLDOWN).toBe(3);
+    expect(twin.cooldowns).toEqual({ [BOLT]: SKILL_COOLDOWN });
   });
 
   it('forgets the skill with the turn\'s other flags, and when the hero falls', () => {

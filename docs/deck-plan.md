@@ -100,7 +100,7 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 - Put heroes from your hand on the bench (up to 3). It's free.
 - Put an item from your hand on a hero by paying its price: 2, 4, 8, 16 or 24 souls by tier, as today.
 - A hero wears 3 items. Played onto a full hero, a card goes on in place of one it wears: a sheet asks which goes to the discard pile (Patrick, 2026-11-09: "when I click equip it should ask me which equipment to discard"). Cancel backs out with nothing paid.
-- Retreat, skills, ultimates and the attack work as today until the hero rules land. After that, skills and ultimates cost souls (see [hero-design.md](hero-design.md)).
+- Retreat, skills, ultimates and the attack work as today until the hero rules land. After that, skills and ultimates cost souls (see [hero-design.md](hero-design.md)); since 2026-11-15 they cost none and wait instead ([balance-model.md](balance-model.md) §8).
 - Your hand holds up to 10 cards. When it is full, further draws are skipped.
 - The shop phase is gone: no buying, no selling, no market.
 - When your deck is empty you stop drawing. Nothing else happens.

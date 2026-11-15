@@ -102,8 +102,8 @@ export interface HeroCard extends Omit<BaseCard, 'text'> {
   skills: AbilityId[];
   passives?: AbilityId[];
   /** The ultimate's ability id: a button printed on the hero card, used like a
-   *  skill from ULT_UNLOCK_LEVEL for its size's souls (`ULT_COST`) and then on
-   *  ULT_COOLDOWN. Its card (`ULTIMATES`, the one whose `abilities[0]` it is)
+   *  skill from ULT_UNLOCK_LEVEL, for no souls, one a turn for its side, and
+   *  then on its size's wait (`ULT_WAIT`). Its card (`ULTIMATES`, the one whose `abilities[0]` it is)
    *  names it, sizes it and shows its icon. */
   ult?: AbilityId;
   /** The hero's two signature items, chosen to fit its kit (one of tier 1 or
@@ -153,28 +153,28 @@ export interface EquipmentCard extends BaseCard, ItemFields {
 /** Any item the shop sells: an active (spell) or a passive (equipment). */
 export type ItemCard = SpellCard | EquipmentCard;
 
-/** An ultimate's size (docs/hero-design.md §4): it sets the souls it costs
- *  (`ULT_COST`: 4, 8 or 12). */
+/** An ultimate's size (docs/hero-design.md §4): it sets the turns it waits
+ *  (`ULT_WAIT`: 4, 6 or 8). */
 export type UltSize = 'small' | 'medium' | 'large';
 
 /** An ultimate's face: its name, text, size and icon (the hero's Deadlock
  *  ultimate icon, `public/ult/<hero>.webp`). The ultimate itself is a kit
  *  ability of its hero (`HeroCard.ult`), a button on the hero card, never
- *  dealt or held: it is paid for in souls when it is used. */
+ *  dealt or held, and it costs no souls. */
 export interface UltimateCard extends BaseCard {
   type: 'ultimate';
   linkedHero: CardId;
   abilities: AbilityId[];
   size: UltSize;
-  /** A charged ultimate (docs/hero-design.md §2; Victor, Silver): it prints
-   *  `cost` souls instead of its size's, and each damage its hero takes
-   *  (`by: 'taken'`) or deals (`'dealt'`) makes it 1 soul cheaper, down to 0
-   *  (`kitCost`). The count is the hero's `tally` under the ultimate's ability
-   *  id, and starts over when the ultimate is used. `text` is the rule's own
-   *  line under the effect ("Costs 1 less for each damage Victor takes."),
-   *  outside the effect's 15 words. Its `size` is what the effect is worth,
-   *  half the price, and prices nothing. */
-  charged?: { cost: number; by: 'taken' | 'dealt'; text: string };
+  /** A charged ultimate (docs/hero-design.md §2; Victor, Silver): it opens
+   *  the match waiting on damage, not on turns. It is ready once its hero has
+   *  taken (`by: 'taken'`) or dealt (`'dealt'`) `need` damage since it was
+   *  last used (`ultCharge`, query.ts). The count is the hero's `tally` under
+   *  the ultimate's ability id, and starts over when the ultimate is used;
+   *  after a use it also waits its `size`'s turns, as every ultimate does.
+   *  `text` is the rule's own line under the effect ("Ready once Victor has
+   *  taken 10 damage."), outside the effect's 15 words. */
+  charged?: { need: number; by: 'taken' | 'dealt'; text: string };
 }
 
 export type CardData = HeroCard | SpellCard | EquipmentCard | UltimateCard;
@@ -215,13 +215,20 @@ export interface CardInstance {
   lastSkillUsed?: AbilityId;
   /** Own turns left before each kit ability may be used again: a skill's
    *  `cooldown` (SKILL_COOLDOWN when its data names none), an ultimate's
-   *  ULT_COOLDOWN. Present only once an ability has set one: the map is dropped
-   *  when it empties. Ticks at the start of the owner's turn (docs/stats-model.md
-   *  §1), on a corpse too; a fall and a respawn leave it as it is. */
+   *  wait (`ULT_WAIT` by size, which it also starts the match on). For a
+   *  charged skill it is the turns until its next charge comes back. Present
+   *  only once an ability has set one: the map is dropped when it empties.
+   *  Ticks at the start of the owner's turn (docs/stats-model.md §1), on a
+   *  corpse and in the hand and the deck too; a fall and a respawn leave it
+   *  as it is. */
   cooldowns?: Partial<Record<AbilityId, number>>;
+  /** A hero: the charges each charged skill has left (`AbilityDef.charges`),
+   *  by ability id. Absent for a skill at its full charges. A use spends one;
+   *  the skill's wait brings one back at a time (`tickCooldowns`). */
+  skillCharges?: Partial<Record<AbilityId, number>>;
   /** What a hero's kit counts, by ability id: Drifter's Bloodscent counts the
    *  knockouts that have grown his Attack; a charged ultimate counts the damage
-   *  that has made it cheaper (Victor's taken, Silver's dealt), and starts over
+   *  that readies it (Victor's taken, Silver's dealt), and starts over
    *  when it is used. It stays through a death, as the level does. */
   tally?: Partial<Record<AbilityId, number>>;
   /** The hero whose blow dropped this one to 0 HP, while the fall waits on a
@@ -622,8 +629,8 @@ export interface TriggerOffer {
   abilityId: AbilityId;
 }
 
-/** A trigger prompt the game is waiting on ("Use Shocking Reanimation for 7
- *  souls?"): an optional ("you may") effect that came at a moment, offered to
+/** A trigger prompt the game is waiting on ("Use Shocking Reanimation?"): an
+ *  optional ("you may") effect that came at a moment, offered to
  *  the player whose card it is — on either player's turn. Nothing else is
  *  legal until it is answered: one of `offers` used, or passed. The moment's
  *  own outcome (the fall) waits on the answer. */
@@ -707,6 +714,10 @@ export interface GameState {
   attackUsed: boolean;
   /** The turn's Retreat has been made (one a turn). Reset at each turn start. */
   retreatUsed: boolean;
+  /** The sides that have used an ultimate this turn: one a turn for a side
+   *  (Patrick, 2026-11-15), from the button or as a trigger. Reset at each
+   *  turn start. */
+  ultUsed?: Partial<Record<PlayerID, boolean>>;
   /** This match has a Mid-Boss: MID_BOSS_ENABLED (off since 2026-11-09), or
    *  what the setup names (`StorySetup.midBoss`, `MatchConfig.midBoss`; the
    *  tests that cover it turn it on). Off, the boss never rises and nothing

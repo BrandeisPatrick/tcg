@@ -5,7 +5,7 @@ import { DeadlockGame } from '@/engine/game';
 import { activateBlocked, attackBlocked, playCost, retreatCost, skillBlocked } from '@/engine/legality';
 import { ACTIVE_COOLDOWN, LANE_INCOME } from '@/engine/constants';
 import { forecastAttack } from '@/engine/forecast';
-import { attackPower, heroRetreat, itemCooldown, kitCost, wornActives, wornItems } from '@/engine/query';
+import { attackPower, heroRetreat, itemCooldown, kitCharges, kitCost, wornActives, wornItems } from '@/engine/query';
 import { itemCard } from '@/cards';
 import { setMatchConfig } from '@/storage/matchConfig';
 import type { CardInstance, GameState } from '@/engine/types';
@@ -37,7 +37,7 @@ const turn = (c: LessonClient) => [state(c).G.turnNumber, state(c).G.players['0'
 const NO_ATTACK_ON_TURN_1 = { code: 'turn1', text: 'No attacks on Turn 1' };
 
 describe('the tutorial is staged so the taught move wins', () => {
-  it('Lesson 1: Turn 1 has no attack, so Kelvin\'s skill — three souls, one kept and the turn\'s two — is the kill of a Lash on 1', () => {
+  it('Lesson 1: Turn 1 has no attack, so Kelvin\'s skill — no souls, the first of its two charges — is the kill of a Lash on 1', () => {
     for (const taught of [false, true]) {
       const c = lesson('skill');
       expect(turn(c)).toEqual([1, []]);          // nothing in the hand: an empty deck
@@ -45,10 +45,10 @@ describe('the tutorial is staged so the taught move wins', () => {
       expect(lash.hp).toBe(1);
       // Kelvin moves first: the first mover forgoes first strike.
       expect(actionRefusal(state(c).G, '0', { type: 'attack' })).toEqual(NO_ATTACK_ON_TURN_1);
-      // Frost Grenade hits every enemy (no target) and costs three souls: one kept and the turn's two pay for it.
-      expect(kitCost(kelvin)).toBe(3);
-      expect(state(c).G.players['0'].souls).toBe(1 + LANE_INCOME);
-      expect(state(c).G.players['0'].souls).toBe(kitCost(kelvin));
+      // Frost Grenade hits every enemy (no target) and costs no souls: the turn's two stay banked. It holds two charges.
+      expect(kitCost(kelvin)).toBe(0);
+      expect(state(c).G.players['0'].souls).toBe(LANE_INCOME);
+      expect(kitCharges(kelvin, 'skill_kelvin')).toEqual({ max: 2, left: 2 });
       expect(skillBlocked(state(c).G, '0', kelvin)).toBeNull();
       if (taught) moves(c).useSkill(kelvin.iid);
       else moves(c).endTurn();
@@ -86,18 +86,22 @@ describe('the tutorial is staged so the taught move wins', () => {
       const c = lesson('level');
       expect(turn(c)).toEqual([2, ['cold_front']]); // Turn 2: there is an attack; the gift, in the hand
       const [kelvin, lash] = actives(c);
-      // Five souls brought in and the turn's two pay for both: Cold Front, then Frost Grenade.
-      expect(state(c).G.players['0'].souls).toBe(5 + LANE_INCOME);
-      expect(playCost(kelvin, 'cold_front') + kitCost(kelvin)).toBe(state(c).G.players['0'].souls);
+      // Two souls brought in and the turn's two pay for Cold Front; Frost Grenade costs none.
+      expect(state(c).G.players['0'].souls).toBe(2 + LANE_INCOME);
+      expect(kitCost(kelvin)).toBe(0);
+      expect(playCost(kelvin, 'cold_front')).toBe(state(c).G.players['0'].souls);
       moves(c).playCard(state(c).G.players['0'].hand[0].iid, kelvin.iid);
+      expect(state(c).G.players['0'].souls).toBe(0);                       // every soul went on the item
       const front = wornActives(state(c).G.players['0'].active!).find((it) => it.cardId === 'cold_front')!;
       expect(itemCooldown(front)).toBe(ACTIVE_COOLDOWN.low);               // ready in two turns
       expect(activateBlocked(state(c).G, '0', front.iid, lash.iid)).toBe('cooldown');
       expect(lash.hp).toBe(2);
       expect(attackPower(kelvin, lash).total).toBe(1);
       if (skill) {
+        expect(skillBlocked(state(c).G, '0', state(c).G.players['0'].active!)).toBeNull(); // with no souls left, the skill is still up
         moves(c).useSkill(kelvin.iid);                                      // one spirit damage to every enemy
         expect(state(c).G.players['0'].souls).toBe(0);
+        expect(kitCharges(state(c).G.players['0'].active!, 'skill_kelvin')).toEqual({ max: 2, left: 1 });
       }
       moves(c).attack();
       expect(winner(c), skill ? 'skill, then the swing' : 'the swing alone').toBe(skill ? '0' : undefined);

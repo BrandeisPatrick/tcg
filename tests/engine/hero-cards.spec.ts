@@ -18,40 +18,40 @@ import { HEROES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { INVALID, perform, type Action } from '@/engine/engine';
 import { retreatCost, skillBlocked } from '@/engine/legality';
-import { heroAbilities, heroRetreat, kitCost, ultimateCard } from '@/engine/query';
+import { heroAbilities, heroRetreat, kitCharges, kitCost, skillWait, ultimateCard } from '@/engine/query';
 import { grantExp } from '@/engine/expSystem';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
 import { allocatorOf } from '@/engine/ids';
 import { makeInstance } from '@/engine/instances';
-import { LANE_INCOME, LEVEL_THRESHOLDS, SKILL_COOLDOWN, ULT_COOLDOWN, ULT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { LANE_INCOME, LEVEL_THRESHOLDS, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame } from './_helpers';
 
 /** Each hero as docs/hero-design.md §8 prints it: Attack / HP at Level 1,
- *  growth a level (Attack, HP, Spirit), Retreat, the skill's souls (null for a
- *  passive hero) and the ultimate's size. */
-const DOC: Record<string, { atk: number; hp: number; growth: [number, number, number]; retreat: number; skill: number | null; ult: UltSize; charged?: number }> = {
+ *  growth a level (Attack, HP, Spirit), Retreat, the skill's wait in turns and
+ *  its charges (null for a passive hero) and the ultimate's size. */
+const DOC: Record<string, { atk: number; hp: number; growth: [number, number, number]; retreat: number; skill: [wait: number, charges: number] | null; ult: UltSize; charged?: number }> = {
   hero_abrams:     { atk: 2, hp: 7, growth: [1, 2, 0], retreat: 2, skill: null, ult: 'medium' },
-  hero_mo_krill:   { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 1, skill: 2,    ult: 'medium' },
-  hero_viscous:    { atk: 1, hp: 6, growth: [0, 2, 1], retreat: 1, skill: 3,    ult: 'medium' },
-  hero_lady_geist: { atk: 1, hp: 7, growth: [0, 0, 2], retreat: 2, skill: 2,    ult: 'medium' },
-  hero_shiv:       { atk: 1, hp: 6, growth: [2, 1, 1], retreat: 1, skill: 2,    ult: 'medium' },
-  hero_warden:     { atk: 2, hp: 7, growth: [1, 1, 0], retreat: 1, skill: 2,    ult: 'medium' },
+  hero_mo_krill:   { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 1, skill: [3, 1], ult: 'medium' },
+  hero_viscous:    { atk: 1, hp: 6, growth: [0, 2, 1], retreat: 1, skill: [4, 1], ult: 'medium' },
+  hero_lady_geist: { atk: 1, hp: 7, growth: [0, 0, 2], retreat: 2, skill: [3, 1], ult: 'medium' },
+  hero_shiv:       { atk: 1, hp: 6, growth: [2, 1, 1], retreat: 1, skill: [3, 2], ult: 'medium' },
+  hero_warden:     { atk: 2, hp: 7, growth: [1, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium' },
   hero_haze:       { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 1, skill: null, ult: 'large' },
-  hero_wraith:     { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 0, skill: 2,    ult: 'medium' },
+  hero_wraith:     { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 0, skill: [3, 1], ult: 'medium' },
   hero_vindicta:   { atk: 2, hp: 5, growth: [2, 0, 0], retreat: 0, skill: null, ult: 'medium' },
-  hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: 2,    ult: 'large' },
+  hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: [3, 2], ult: 'large' },
   hero_drifter:    { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: null, ult: 'medium' },
-  hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: 3,    ult: 'large' },
+  hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: [4, 1], ult: 'large' },
   hero_mirage:     { atk: 1, hp: 4, growth: [1, 1, 2], retreat: 0, skill: null, ult: 'small' },
-  hero_yamato:     { atk: 2, hp: 5, growth: [1, 1, 1], retreat: 0, skill: 2,    ult: 'medium' },
-  hero_dynamo:     { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: 3,    ult: 'large' },
-  hero_kelvin:     { atk: 1, hp: 6, growth: [0, 1, 2], retreat: 1, skill: 3,    ult: 'medium' },
-  hero_paige:      { atk: 1, hp: 5, growth: [0, 0, 2], retreat: 1, skill: 2,    ult: 'medium' },
-  hero_rem:        { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 0, skill: 2,    ult: 'small' },
-  hero_sinclair:   { atk: 1, hp: 4, growth: [0, 1, 2], retreat: 1, skill: 3,    ult: 'medium' },
-  // The charged ultimates print their own price; their size is what the effect is worth (half).
-  hero_victor:     { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 2, skill: null, ult: 'medium', charged: 20 },
-  hero_silver:     { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: 2,    ult: 'medium', charged: 16 },
+  hero_yamato:     { atk: 2, hp: 5, growth: [1, 1, 1], retreat: 0, skill: [3, 1], ult: 'medium' },
+  hero_dynamo:     { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: [4, 2], ult: 'large' },
+  hero_kelvin:     { atk: 1, hp: 6, growth: [0, 1, 2], retreat: 1, skill: [4, 2], ult: 'medium' },
+  hero_paige:      { atk: 1, hp: 5, growth: [0, 0, 2], retreat: 1, skill: [3, 1], ult: 'medium' },
+  hero_rem:        { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 0, skill: [3, 1], ult: 'small' },
+  hero_sinclair:   { atk: 1, hp: 4, growth: [0, 1, 2], retreat: 1, skill: [4, 1], ult: 'medium' },
+  // The charged ultimates wait on damage (`charged`: what they need); their size is what the effect is worth.
+  hero_victor:     { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 2, skill: null, ult: 'medium', charged: 10 },
+  hero_silver:     { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium', charged: 8 },
 };
 
 /** Growth points a level, by curve (§2). */
@@ -84,14 +84,16 @@ describe('the 21 heroes are the hero doc\'s cards', () => {
     expect(HEROES.map((h) => h.id).sort()).toEqual(Object.keys(DOC).sort());
   });
 
-  it('Attack and HP at Level 1, the growth, the Retreat, the skill\'s souls and the ultimate\'s size are the doc\'s', () => {
+  it('Attack and HP at Level 1, the growth, the Retreat, the skill\'s wait and charges and the ultimate\'s size are the doc\'s', () => {
     for (const [id, d] of Object.entries(DOC)) {
       const h = hero(id);
       expect([h.atk, h.hp], id).toEqual([d.atk, d.hp]);
       expect([h.growth.atk, h.growth.hp, h.growth.spirit], id).toEqual(d.growth);
       expect(h.retreat, id).toBe(d.retreat);
       const skill = h.skills[0];
-      expect(skill === undefined ? null : getAbility(skill)?.souls, id).toBe(d.skill);
+      const ability = skill === undefined ? undefined : getAbility(skill);
+      expect(ability ? [skillWait(ability), ability.charges ?? 1] : null, id).toEqual(d.skill);
+      expect(ability?.souls, id).toBeUndefined();                    // no skill costs souls
       expect(ultimateCard(h.ult)?.size, id).toBe(d.ult);
     }
   });
@@ -193,8 +195,9 @@ describe('the Retreat costs the leaving hero\'s printed souls', () => {
     me.souls = 1;
     expect(perform(G, '0', { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toBe(INVALID); // Abrams: 2
     me.active!.cardId = 'hero_warden';
-    me.souls = 2;
-    act(G, '0', { type: 'useSkill', heroIid: me.active!.iid, targetIid: me.active!.iid }); // Willpower: 2 souls
+    me.souls = 0;
+    expect(retreatCost(G, '0')).toBe(1);                                                   // Warden: 1
+    act(G, '0', { type: 'useSkill', heroIid: me.active!.iid, targetIid: me.active!.iid }); // Willpower: no souls
     expect(me.souls).toBe(0);
     expect(retreatCost(G, '0')).toBe(0);
     act(G, '0', { type: 'moveHero', fromSlot: 1, toSlot: 0 });
@@ -202,85 +205,122 @@ describe('the Retreat costs the leaving hero\'s printed souls', () => {
   });
 });
 
-describe('a skill costs its souls, then waits 1 turn', () => {
-  it('each hero\'s skill costs the doc\'s souls (kitCost)', () => {
+describe('a skill costs no souls: it waits, and a charged one holds two uses (Patrick, 2026-11-15)', () => {
+  it('no hero\'s skill costs souls (kitCost), and each waits what the doc says', () => {
     const G = freshReadyGame();
+    expect(SKILL_COOLDOWN).toBe(3);
     for (const h of HEROES) {
       const c = instance(G, h.id, '0', 'bench', 1);
-      if (DOC[h.id].skill === null) expect(h.skills, h.id).toEqual([]);
-      else expect(kitCost(c), h.id).toBe(DOC[h.id].skill);
+      const d = DOC[h.id].skill;
+      if (d === null) { expect(h.skills, h.id).toEqual([]); continue; }
+      expect(kitCost(c), h.id).toBe(0);
+      expect(skillWait(getAbility(h.skills[0])!), h.id).toBe(d[0]);
+      expect(kitCharges(c)?.max ?? 1, h.id).toBe(d[1]);
     }
   });
 
-  it('it is paid when used, refused a soul short, and ready again on the hero\'s next own turn — SKILL_COOLDOWN, ready in 1 turn', () => {
+  it('the four charged skills are the ones Deadlock gives charges: Serrated Knives, Frost Grenade, Lightning Ball and Kinetic Pulse', () => {
+    const charged = HEROES.filter((h) => (getAbility(h.skills[0] ?? '')?.charges ?? 1) > 1).map((h) => h.id).sort();
+    expect(charged).toEqual(['hero_dynamo', 'hero_kelvin', 'hero_seven', 'hero_shiv']);
+  });
+
+  it('it is used with no souls, and ready again on the hero\'s third own turn after — SKILL_COOLDOWN', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    const paige = me.bench[2]!; // Plot Armor: 2 souls
+    const paige = me.bench[2]!; // Plot Armor
     const use: Action = { type: 'useSkill', heroIid: paige.iid, targetIid: me.active!.iid };
-    me.souls = 1;
-    expect(skillBlocked(G, '0', paige, me.active!.iid)).toBe('souls');
-    expect(perform(G, '0', use)).toBe(INVALID);
-    expect(me.souls).toBe(1);
-    me.souls = 2;
-    act(G, '0', use);
-    expect(me.souls).toBe(0);
-    expect(SKILL_COOLDOWN).toBe(1);
-    expect(paige.cooldowns?.skill_paige).toBe(SKILL_COOLDOWN);
-    expect(skillBlocked(G, '0', paige)).toBe('used');
-    // The rival's turn, then Paige's own: the wait has run out, and the income pays for it again.
-    let pid = nextTurn(G, '0');
-    pid = nextTurn(G, pid);
-    expect(pid).toBe('0');
-    expect(paige.cooldowns?.skill_paige).toBeUndefined();
-    expect(me.souls).toBe(LANE_INCOME);
+    me.souls = 0;
     expect(skillBlocked(G, '0', paige, me.active!.iid)).toBeNull();
     act(G, '0', use);
-    expect(me.souls).toBe(LANE_INCOME - 2);
-  });
-});
-
-describe('the ultimate is a button on the hero card: from Level 2, 4, 8 or 12 souls by size, then a 3-turn wait', () => {
-  it('each hero\'s ultimate costs its size\'s souls — a charged one its own price, before anything has charged it', () => {
-    expect(ULT_COST).toEqual({ small: 4, medium: 8, large: 12 });
-    const G = freshReadyGame();
-    for (const h of HEROES) {
-      const c = instance(G, h.id, '0', 'bench', 1);
-      expect(kitCost(c, h.ult), h.id).toBe(DOC[h.id].charged ?? ULT_COST[DOC[h.id].ult]);
-      expect(ultimateCard(h.ult)?.charged?.cost, h.id).toBe(DOC[h.id].charged);
-    }
-  });
-
-  it('it is locked below Level 2, refused a soul short of its price, paid when used, and waits 3 of its hero\'s turns', () => {
-    const G = freshReadyGame();
-    const me = G.players['0'];
-    const haze = me.active!; // Bullet Dance: large, 12 souls
-    const use: Action = { type: 'useSkill', heroIid: haze.iid, skillId: 'eff_ult_haze' };
-    me.souls = 40;
-    expect(skillBlocked(G, '0', haze, undefined, 'eff_ult_haze')).toBe('locked');
-    expect(perform(G, '0', use)).toBe(INVALID);
-    haze.level = ULT_UNLOCK_LEVEL;
-    me.souls = ULT_COST.large - 1;
-    expect(skillBlocked(G, '0', haze, undefined, 'eff_ult_haze')).toBe('souls');
-    expect(perform(G, '0', use)).toBe(INVALID);
-    me.souls = ULT_COST.large;
-    act(G, '0', use);
     expect(me.souls).toBe(0);
-    expect(haze.cooldowns?.eff_ult_haze).toBe(ULT_COOLDOWN);
-    expect(ULT_COOLDOWN).toBe(3);
-    // Haze's next two turns it waits, with the souls in hand; on the third it is ready again.
+    expect(paige.cooldowns?.skill_paige).toBe(SKILL_COOLDOWN);
+    expect(skillBlocked(G, '0', paige)).toBe('used');
+    // Her next two own turns it waits; on the third it is ready again.
     let pid: PlayerID = '0';
     for (const left of [2, 1]) {
       pid = nextTurn(G, nextTurn(G, pid));
       expect(pid).toBe('0');
-      me.souls = 40;
+      expect(paige.cooldowns?.skill_paige).toBe(left);
+      expect(skillBlocked(G, '0', paige, me.active!.iid)).toBe('cooldown');
+      expect(perform(G, '0', use)).toBe(INVALID);
+    }
+    pid = nextTurn(G, nextTurn(G, pid));
+    expect(paige.cooldowns?.skill_paige).toBeUndefined();
+    expect(skillBlocked(G, '0', paige, me.active!.iid)).toBeNull();
+    act(G, '0', use);
+    expect(me.souls).toBe(3 * LANE_INCOME);                          // the lane's income, untouched by her skill
+  });
+
+  it('a charged skill holds two uses: two turns running, then one back every wait (Kelvin\'s Frost Grenade: 2 charges, 4 turns each)', () => {
+    const G = freshReadyGame();
+    const me = G.players['0'];
+    const kelvin = instance(G, 'hero_kelvin', '0', 'bench', 1);
+    me.bench[0] = kelvin;
+    const use: Action = { type: 'useSkill', heroIid: kelvin.iid };
+    const turn = () => { let pid: PlayerID = nextTurn(G, '0'); pid = nextTurn(G, pid); expect(pid).toBe('0'); };
+    expect(kitCharges(kelvin)).toEqual({ max: 2, left: 2 });
+    act(G, '0', use);                                                // the first charge
+    expect(kitCharges(kelvin)).toEqual({ max: 2, left: 1 });
+    expect(kelvin.cooldowns?.skill_kelvin).toBe(4);                  // the wait for it to come back starts
+    expect(skillBlocked(G, '0', kelvin)).toBe('used');               // one ability a turn all the same
+    turn();
+    expect(kelvin.cooldowns?.skill_kelvin).toBe(3);
+    expect(skillBlocked(G, '0', kelvin)).toBeNull();                 // a charge left: ready, whatever the wait reads
+    act(G, '0', use);                                                // the second
+    expect(kitCharges(kelvin)).toEqual({ max: 2, left: 0 });
+    expect(kelvin.cooldowns?.skill_kelvin).toBe(3);                  // the running wait is not restarted
+    for (const left of [2, 1]) {
+      turn();
+      expect(kelvin.cooldowns?.skill_kelvin).toBe(left);
+      expect(skillBlocked(G, '0', kelvin)).toBe('cooldown');
+      expect(perform(G, '0', use)).toBe(INVALID);
+    }
+    turn();                                                          // the first charge is back; the second's wait starts
+    expect(kitCharges(kelvin)).toEqual({ max: 2, left: 1 });
+    expect(kelvin.cooldowns?.skill_kelvin).toBe(4);
+    expect(skillBlocked(G, '0', kelvin)).toBeNull();
+    for (let i = 0; i < 4; i++) turn();                              // …and four turns on, he holds both again
+    expect(kitCharges(kelvin)).toEqual({ max: 2, left: 2 });
+    expect(kelvin.cooldowns?.skill_kelvin).toBeUndefined();
+    expect(kelvin.skillCharges).toBeUndefined();
+  });
+});
+
+describe('the ultimate is a button on the hero card: from Level 2, for no souls, one a turn, then its size\'s wait', () => {
+  it('no ultimate costs souls; a charged one names the damage it needs', () => {
+    expect(ULT_WAIT).toEqual({ small: 4, medium: 6, large: 8 });
+    const G = freshReadyGame();
+    for (const h of HEROES) {
+      const c = instance(G, h.id, '0', 'bench', 1);
+      expect(kitCost(c, h.ult), h.id).toBe(0);
+      expect(ultimateCard(h.ult)?.charged?.need, h.id).toBe(DOC[h.id].charged);
+    }
+  });
+
+  it('it is locked below Level 2, used for no souls, and waits its size\'s turns (Bullet Dance, large: 8)', () => {
+    const G = freshReadyGame();
+    const me = G.players['0'];
+    const haze = me.active!; // Bullet Dance: large
+    const use: Action = { type: 'useSkill', heroIid: haze.iid, skillId: 'eff_ult_haze' };
+    me.souls = 0;
+    expect(skillBlocked(G, '0', haze, undefined, 'eff_ult_haze')).toBe('locked');
+    expect(perform(G, '0', use)).toBe(INVALID);
+    haze.level = ULT_UNLOCK_LEVEL;
+    expect(skillBlocked(G, '0', haze, undefined, 'eff_ult_haze')).toBeNull();
+    act(G, '0', use);
+    expect(me.souls).toBe(0);
+    expect(haze.cooldowns?.eff_ult_haze).toBe(ULT_WAIT.large);
+    expect(ULT_WAIT.large).toBe(8);
+    // Haze's next seven turns it waits; on the eighth it is ready again.
+    let pid: PlayerID = '0';
+    for (const left of [7, 6, 5, 4, 3, 2, 1]) {
+      pid = nextTurn(G, nextTurn(G, pid));
+      expect(pid).toBe('0');
       expect(haze.cooldowns?.eff_ult_haze).toBe(left);
       expect(skillBlocked(G, '0', haze, undefined, 'eff_ult_haze')).toBe('cooldown');
     }
     pid = nextTurn(G, nextTurn(G, pid));
-    me.souls = 40;
     expect(skillBlocked(G, '0', haze, undefined, 'eff_ult_haze')).toBeNull();
-    act(G, '0', use);
-    expect(me.souls).toBe(40 - ULT_COST.large);
   });
 
   it('the skill and the ultimate share the hero\'s one ability a turn', () => {
@@ -289,8 +329,8 @@ describe('the ultimate is a button on the hero card: from Level 2, 4, 8 or 12 so
     const lash = me.bench[1]!;
     lash.level = ULT_UNLOCK_LEVEL;
     me.souls = 40;
-    act(G, '0', { type: 'useSkill', heroIid: lash.iid }); // Ground Strike: 3
-    expect(me.souls).toBe(37);
+    act(G, '0', { type: 'useSkill', heroIid: lash.iid }); // Ground Strike
+    expect(me.souls).toBe(40);
     expect(skillBlocked(G, '0', lash, undefined, 'eff_ult_lash')).toBe('used');
   });
 });
@@ -305,14 +345,15 @@ describe('Viscous\'s skill is The Cube: one of his heroes takes no damage until 
     return { G, me, viscous, haze: me.active! };
   }
 
-  it('costs 3 souls, aims at any hero of his side — himself too — and never at an enemy', () => {
+  it('costs no souls, waits 4 turns, aims at any hero of his side — himself too — and never at an enemy', () => {
     const { G, me, viscous, haze } = withViscous();
-    expect(kitCost(viscous)).toBe(3);
-    me.souls = 3;
+    expect(kitCost(viscous)).toBe(0);
+    me.souls = 0;
     expect(skillBlocked(G, '0', viscous, G.players['1'].active!.iid)).toBe('target');
     expect(skillBlocked(G, '0', viscous, viscous.iid)).toBeNull();
     act(G, '0', { type: 'useSkill', heroIid: viscous.iid, targetIid: haze.iid });
     expect(me.souls).toBe(0);
+    expect(viscous.cooldowns?.skill_viscous).toBe(4);
     expect(haze.statuses.find((s) => s.id === 'invulnerable')).toMatchObject({ duration: 1 });
   });
 

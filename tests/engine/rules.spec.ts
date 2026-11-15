@@ -7,7 +7,7 @@ import { findCardOnBoard, findWornItem, heroData, heroesOf, itemPrice, kitAbilit
 import { MAX_ITEMS } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { bankSouls, freshReadyGame, configureReadyMatch, giveCard, makeAttack, readyClient, passTurn, playNew } from './_helpers';
+import { freshReadyGame, configureReadyMatch, giveCard, makeAttack, readyClient, passTurn, playNew } from './_helpers';
 
 // Client-based tests boot straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -49,9 +49,8 @@ describe('rule: each hero uses its skill once per turn', () => {
     expect(hero2.skillUsedThisTurn).toBe(true);
   });
 
-  it('the hero\'s flag clears when its turn ends, so it casts again next turn', () => {
+  it('the hero\'s flag clears when its turn ends; the skill then waits its turns, and is used again once they have run', () => {
     const c = readyClient(); // turn 1, its shop closed: the act step
-    bankSouls(c, '0', 6); // Ground Strike costs 3, twice here; a turn's income is 2
     let g = c.getState()!.G as GameState;
     // Use a skill — Lash on bench (active Haze is passive-only).
     const hero = g.players['0'].bench[1]!;  // Lash
@@ -64,22 +63,31 @@ describe('rule: each hero uses its skill once per turn', () => {
     c.moves.endTurn?.();
     g = c.getState()!.G as GameState;
     expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(false);
-    // P0's next turn: Lash casts again (its cooldown of 1 has run out at the turn start),
-    // paying its souls again.
+    // P0's next three turns Ground Strike waits (4 turns): the flag is clear,
+    // and the move is refused all the same.
     passTurn(c);
+    for (const left of [3, 2, 1]) {
+      g = c.getState()!.G as GameState;
+      expect(g.players['0'].bench[1]!.cooldowns?.skill_lash).toBe(left);
+      (c.moves as any).useSkill(hero.iid, g.players['1'].active!.iid);
+      g = c.getState()!.G as GameState;
+      expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(false);
+      c.moves.endTurn?.();
+      passTurn(c);
+    }
+    // The fourth: it is ready, and costs no souls.
     g = c.getState()!.G as GameState;
     const soulsBefore = g.players['0'].souls;
-    const price = kitCost(g.players['0'].bench[1]!);
-    expect(soulsBefore).toBeGreaterThanOrEqual(price);
+    expect(kitCost(g.players['0'].bench[1]!)).toBe(0);
     (c.moves as any).useSkill(hero.iid, g.players['1'].active!.iid);
     g = c.getState()!.G as GameState;
     expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(true);
-    expect(g.players['0'].souls).toBe(soulsBefore - price);
+    expect(g.players['0'].souls).toBe(soulsBefore);
   });
 });
 
-describe('rule: a skill costs its souls', () => {
-  it("useSkill spends the skill's souls (Lash's Ground Strike: 3)", () => {
+describe('rule: a skill costs no souls; it waits', () => {
+  it("useSkill spends no souls (Lash's Ground Strike), and puts the skill on its wait", () => {
     const G = freshG();
     const me = G.players['0'];
     me.souls = 3;
@@ -87,18 +95,22 @@ describe('rule: a skill costs its souls', () => {
     const target = G.players['1'].active!;
     const r = runMove('useSkill', G, '0', hero.iid, target.iid);
     expect(r).not.toBe('INVALID_MOVE');
-    expect(me.souls).toBe(0);
+    expect(me.souls).toBe(3);
+    expect(hero.cooldowns?.skill_lash).toBe(4);
   });
 
-  it('useSkill a soul short is refused: nothing is spent and the hero has not used its skill', () => {
+  it('useSkill while the skill waits is refused: nothing happens and the hero has not used its skill', () => {
     const G = freshG();
     const me = G.players['0'];
     me.souls = 2;
     const hero = me.bench[1]!;  // Lash
+    hero.cooldowns = { skill_lash: 2 };
     const target = G.players['1'].active!;
+    const hp = target.hp;
     const r = runMove('useSkill', G, '0', hero.iid, target.iid);
     expect(r).toBe('INVALID_MOVE');
     expect(hero.skillUsedThisTurn).toBe(false);
+    expect(target.hp).toBe(hp);
     expect(me.souls).toBe(2);
   });
 });
@@ -224,18 +236,24 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
     }
   });
 
-  it("every hero at Level 2 may use its ultimate through useSkill, for its size's souls", () => {
+  it('every hero at Level 2 may use its ultimate through useSkill, for no souls — one a turn for its side', () => {
     const G = freshG();
     for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
     // Nobody on the other side falls (a kill would pay a bounty).
     for (const h of [G.players['1'].active, ...G.players['1'].bench]) if (h) h.hp = h.hpMax = 50;
     // P0's roster: Haze, Vindicta, Lash, Paige → their ultimates (Vindicta's needs a target).
     const [haze, vindicta, lash, paige] = [G.players['0'].active!, ...G.players['0'].bench] as NonNullable<typeof G.players['0']['active']>[];
-    // Souls for the four, exactly.
-    G.players['0'].souls = [haze, vindicta, lash, paige].reduce((n, h) => n + kitCost(h, heroData(h)!.ult), 0);
+    // No ultimate costs souls.
+    expect([haze, vindicta, lash, paige].map((h) => kitCost(h, heroData(h)!.ult))).toEqual([0, 0, 0, 0]);
+    G.players['0'].souls = 0;
     expect(runMove('useSkill', G, '0', haze.iid, undefined, 'eff_ult_haze')).not.toBe('INVALID_MOVE');
+    // One ultimate a turn for a side: the next hero's waits for the next turn.
+    expect(runMove('useSkill', G, '0', vindicta.iid, G.players['1'].active!.iid, 'eff_ult_vindicta')).toBe('INVALID_MOVE');
+    G.ultUsed = undefined; // a new turn
     expect(runMove('useSkill', G, '0', vindicta.iid, G.players['1'].active!.iid, 'eff_ult_vindicta')).not.toBe('INVALID_MOVE');
+    G.ultUsed = undefined;
     expect(runMove('useSkill', G, '0', lash.iid, undefined, 'eff_ult_lash')).not.toBe('INVALID_MOVE');
+    G.ultUsed = undefined;
     expect(runMove('useSkill', G, '0', paige.iid, undefined, 'eff_ult_paige')).not.toBe('INVALID_MOVE');
     expect(G.players['0'].souls).toBe(0);
   });

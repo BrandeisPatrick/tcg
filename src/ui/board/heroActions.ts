@@ -12,7 +12,7 @@
  * `blocked`, so none of them offers a move the engine would refuse; this file
  * only words the answers.
  */
-import type { AbilityId, CardInstance, GameState, PlayerID } from '@/engine/types';
+import type { AbilityId, CardInstance, GameState, PlayerID, UltimateCard } from '@/engine/types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import {
@@ -21,8 +21,8 @@ import {
   type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
 import {
-  findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, otherPlayer,
-  resolveSkill, slotCap, slottedHeroes, wornActives,
+  findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCharges, kitCost, otherPlayer,
+  resolveSkill, skillWait, slotCap, slottedHeroes, ultCharge, ultimateCard, ultWait, wornActives,
 } from '@/engine/query';
 import type { Action } from '@/engine/engine';
 import type { AbilityDef } from '@/abilities';
@@ -32,8 +32,44 @@ import type { AttackPlan } from '@/engine/forecast';
 const souls = (n: number) => `${n} soul${n === 1 ? '' : 's'}`;
 const nameOf = (card: CardInstance | null | undefined) => (card ? CARDS_BY_ID[card.cardId]?.name ?? '' : '');
 
+/** A skill's pace as its card says it: "waits 3 turns", or for a charged
+ *  skill "2 charges, 4 turns each". A skill costs no souls. */
+export function skillPace(ability: AbilityDef): string {
+  const wait = skillWait(ability);
+  const turns = `${wait} turn${wait === 1 ? '' : 's'}`;
+  return (ability.charges ?? 1) > 1 ? `${ability.charges} charges, ${turns} each` : `waits ${turns}`;
+}
+
+/** An ultimate's pace as its card says it: "waits 6 turns", or "charged" for
+ *  one that waits on damage (its own line says how much). */
+export function ultPace(face: UltimateCard): string {
+  if (face.charged) return 'charged';
+  const wait = ultWait(face);
+  return `waits ${wait} turn${wait === 1 ? '' : 's'}`;
+}
+
+/** What a kit ability's row shows at its right on the hero sheet, where a
+ *  price once stood: a charged skill's charges left ("2 charges"), a charged
+ *  ultimate's count ("7 / 10"), else its wait ("Waits 3"). */
+export function kitTag(hero: CardInstance, skillId: AbilityId): string {
+  const skill = resolveSkill(hero, skillId);
+  if (!skill) return '';
+  if (skill.kind === 'ult') {
+    const charge = ultCharge(hero);
+    if (charge) return `${charge.have} / ${charge.need}`;
+    const face = ultimateCard(skill.id);
+    return face ? `Waits ${ultWait(face)}` : '';
+  }
+  const charges = kitCharges(hero, skill.id);
+  if (charges) return `${charges.left} charge${charges.left === 1 ? '' : 's'}`;
+  return `Waits ${skillWait(skill.ability)}`;
+}
+
 /** The line printed when the turn's attack has ended its Act. */
 export const ACT_OVER = 'The attack ended your turn';
+
+/** The line printed on a second ultimate in a turn: a side uses one a turn. */
+export const ONE_ULT_A_TURN = 'One ultimate a turn';
 
 /** The line printed on a move made while a draw card's discard is owed. */
 export const DISCARD_FIRST = 'Discard first';
@@ -57,9 +93,18 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
     case 'actOver': return ACT_OVER;
     case 'locked': return `Unlocks at Level ${ULT_UNLOCK_LEVEL}`;
     case 'status': return 'Cannot use abilities (status)';
+    case 'ultUsed': return ONE_ULT_A_TURN;
     case 'cooldown': {
       const left = (skill && hero?.cooldowns?.[skill.id]) || 0;
-      return left > 0 ? `Ready in ${left} turn${left === 1 ? '' : 's'}` : 'On cooldown';
+      // A charged skill with none left: its wait is the next charge's.
+      const charged = !!(hero && skill && kitCharges(hero, skill.id));
+      if (left <= 0) return 'On cooldown';
+      return charged ? `Next charge in ${left} turn${left === 1 ? '' : 's'}` : `Ready in ${left} turn${left === 1 ? '' : 's'}`;
+    }
+    case 'charge': {
+      const charge = hero && ultCharge(hero);
+      const short = charge ? charge.need - charge.have : 0;
+      return short > 0 ? `Needs ${short} more damage` : 'Not charged';
     }
     case 'souls': {
       const cost = hero && skill ? kitCost(hero, skill.id) : 0;
@@ -321,7 +366,7 @@ export function attackLine(plan: AttackPlan): string {
 }
 
 /** Every hero of `pid`'s that can still do something this turn: use one of
- *  its kit abilities now (its skill or its ultimate, souls in hand) or an
+ *  its kit abilities now (its skill or its ultimate, its wait over) or an
  *  active item it wears, or — the Active — make the turn's attack while it is
  *  open. Nobody glints while a choice is owed (a discard, the first Active, a
  *  trigger prompt). */

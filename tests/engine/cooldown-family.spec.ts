@@ -19,7 +19,7 @@ import { upgradesOf } from '@/cards/decks';
 import { getAbility } from '@/abilities';
 import { INVALID, perform } from '@/engine/engine';
 import { activeCooldown, cooldownCut, itemCooldown, itemPrice } from '@/engine/query';
-import { PRICE, SKILL_COOLDOWN, ULT_COOLDOWN } from '@/engine/constants';
+import { PRICE, SKILL_COOLDOWN, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame, giveItem, makeHero, stackDeck, useItem } from './_helpers';
 
 /** P0's Active made a Level 2 Viscous wearing `gear`, with souls to pay for
@@ -80,7 +80,7 @@ describe('The Cooldown family is the draw engine', () => {
       expect([cooldownCut(hero, 'ult'), cooldownCut(hero, 'item')], gear.join() || 'none').toEqual([0, 0]);
       expect(([1, 2, 3, 4] as const).map((tier) => activeCooldown(hero, tier)), gear.join()).toEqual([2, 2, 3, 3]);
       expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, skillId: 'eff_ult_viscous' }), gear.join()).not.toBe(INVALID);
-      expect(hero.cooldowns?.eff_ult_viscous, gear.join() || 'none').toBe(ULT_COOLDOWN);
+      expect(hero.cooldowns?.eff_ult_viscous, gear.join() || 'none').toBe(ULT_WAIT.medium);
     }
     const { G, hero } = viscous(SUPERIOR);
     const decay = useItem(G, '0', 'decay', G.players['1'].active!.iid, hero); // tier 3
@@ -93,9 +93,10 @@ describe('The Cooldown family is the draw engine', () => {
     expect(activeCooldown(hero, 4, 0)).toBe(1);
   });
 
-  it("leaves a skill's cooldown alone: The Cube still waits SKILL_COOLDOWN", () => {
+  it("leaves a skill's cooldown alone: The Cube still waits its 4 turns", () => {
     const { G, hero } = viscous(TRANSCENDENT);
     expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, targetIid: hero.iid })).not.toBe(INVALID);
-    expect(hero.cooldowns?.skill_viscous).toBe(SKILL_COOLDOWN);
+    expect(hero.cooldowns?.skill_viscous).toBe(4);
+    expect(SKILL_COOLDOWN).toBe(3); // the default; The Cube names its own
   });
 });

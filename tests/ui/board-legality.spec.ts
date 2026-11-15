@@ -9,7 +9,7 @@ import {
   type ActivateBlock, type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
   type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
-import { MAX_ITEMS, PRICE, ULT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { MAX_ITEMS, PRICE, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT } from '@/engine/constants';
 import { heroData, heroRetreat, itemPrice, kitCost, slotCap, wornItems } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
 import { STATUSES } from '@/statuses';
@@ -17,7 +17,7 @@ import { CARDS_BY_ID, ITEMS } from '@/cards';
 import { deckProblem, isLegalDeck } from '@/cards/decks';
 import { isValidTarget } from '@/ui/board/targeting';
 import {
-  ACT_OVER, DISCARD_FIRST, actionRefusal, activateBlockReason, attackBlockReason, chooseActiveBlockReason, discardBlockReason,
+  ACT_OVER, DISCARD_FIRST, ONE_ULT_A_TURN, actionRefusal, activateBlockReason, attackBlockReason, chooseActiveBlockReason, discardBlockReason,
   moveBlockReason, placeBlockReason, playBlockReason, promoteBlockReason, skillBlockReason,
 } from '@/ui/board/heroActions';
 import { statusClass } from '@/ui/card/StatusIcon';
@@ -356,22 +356,28 @@ describe('the hand\'s plays are the engine\'s answer', () => {
   });
 });
 
-describe('what an ability costs is the engine\'s answer: kitCost', () => {
-  it('a skill short of its souls is refused, and the line says what it costs', () => {
+describe('what an ability takes is the engine\'s answer: no souls, a wait', () => {
+  it('a skill takes no souls: with none banked it is used, and while it waits the line says how long', () => {
     const G = board();
-    const paige = G.players[ME].bench[2]!; // Plot Armor: 2 souls
+    const paige = G.players[ME].bench[2]!; // Plot Armor: no souls, a wait of SKILL_COOLDOWN
+    const skillId = heroData(paige)!.skills[0];
     const use: Action = { type: 'useSkill', heroIid: paige.iid, targetIid: paige.iid };
-    expect(kitCost(paige)).toBe(2);
-    G.players[ME].souls = 1;
-    expect(skillBlocked(G, ME, paige, paige.iid)).toBe('souls');
-    expect(actionRefusal(G, ME, use)).toEqual({ code: 'souls', text: 'Need 2 souls' });
-    expect(taken(G, use)).toBe(false);
-    G.players[ME].souls = 2;
+    expect(kitCost(paige)).toBe(0);
+    G.players[ME].souls = 0;
+    expect(skillBlocked(G, ME, paige, paige.iid)).toBeNull();
     expect(actionRefusal(G, ME, use)).toBeNull();
-    expect(taken(G, use)).toBe(true);
+    const after = structuredClone(G);
+    expect(perform(after, ME, use)).not.toBe(INVALID);
+    expect(after.players[ME].souls).toBe(0);
+    expect(after.players[ME].bench[2]!.cooldowns?.[skillId]).toBe(SKILL_COOLDOWN);
+    // Still waiting, on a later turn: refused, and the line counts the turns.
+    paige.cooldowns = { [skillId]: 2 };
+    expect(skillBlocked(G, ME, paige, paige.iid)).toBe('cooldown');
+    expect(actionRefusal(G, ME, use)).toEqual({ code: 'cooldown', text: 'Ready in 2 turns' });
+    expect(taken(G, use)).toBe(false);
   });
 
-  it('a hero\'s own ultimate is locked below Level 2, and says so; at it, it costs its size\'s souls', () => {
+  it('a hero\'s own ultimate is locked below Level 2, and says so; at it, it takes no souls, waits its size\'s turns, and is its side\'s one ultimate of the turn', () => {
     const G = board();
     G.players[ME].souls = 0;
     const haze = G.players[ME].active!;
@@ -379,13 +385,24 @@ describe('what an ability costs is the engine\'s answer: kitCost', () => {
     expect(actionRefusal(G, ME, use)).toEqual({ code: 'locked', text: `Unlocks at Level ${ULT_UNLOCK_LEVEL}` });
     expect(taken(G, use)).toBe(false);
     haze.level = ULT_UNLOCK_LEVEL;
-    // Bullet Dance is a large ultimate: 12 souls.
-    expect(kitCost(haze, 'eff_ult_haze')).toBe(ULT_COST.large);
-    expect(actionRefusal(G, ME, use)).toEqual({ code: 'souls', text: `Need ${ULT_COST.large} souls` });
+    expect(kitCost(haze, 'eff_ult_haze')).toBe(0);
+    // Still on its wait: refused, and the line counts the turns.
+    haze.cooldowns = { eff_ult_haze: 3 };
+    expect(actionRefusal(G, ME, use)).toEqual({ code: 'cooldown', text: 'Ready in 3 turns' });
     expect(taken(G, use)).toBe(false);
-    G.players[ME].souls = ULT_COST.large;
+    haze.cooldowns = {};
+    // Another hero of the side has used its ultimate this turn: one a turn.
+    G.ultUsed = { [ME]: true };
+    expect(actionRefusal(G, ME, use)).toEqual({ code: 'ultUsed', text: ONE_ULT_A_TURN });
+    expect(taken(G, use)).toBe(false);
+    G.ultUsed = undefined;
+    // Ready: used with no souls banked. Bullet Dance is a large ultimate, and waits as one.
     expect(actionRefusal(G, ME, use)).toBeNull();
-    expect(taken(G, use)).toBe(true);
+    const after = structuredClone(G);
+    expect(perform(after, ME, use)).not.toBe(INVALID);
+    expect(after.players[ME].souls).toBe(0);
+    expect(after.ultUsed?.[ME]).toBe(true);
+    expect(after.players[ME].active!.cooldowns?.eff_ult_haze).toBe(ULT_WAIT.large);
   });
 
   it('an ultimate is never dealt, so never a card in a hand or a deck: it is a kit ability, no item', () => {
@@ -507,7 +524,7 @@ describe('a refused move is said, with the engine\'s own code', () => {
 // below is keyed by the engine's own union, so a code added there is a compile
 // error here until it is worded.
 describe('every block code has words', () => {
-  const skill: Record<SkillBlock, true> = { noSkill: true, trigger: true, actOver: true, down: true, locked: true, used: true, status: true, cooldown: true, souls: true, hp: true, target: true };
+  const skill: Record<SkillBlock, true> = { noSkill: true, trigger: true, actOver: true, down: true, locked: true, used: true, status: true, ultUsed: true, cooldown: true, charge: true, souls: true, hp: true, target: true };
   const attack: Record<AttackBlock, true> = { turn1: true, used: true, noActive: true, cannot: true, noTarget: true, target: true };
   const activate: Record<ActivateBlock, true> = { noItem: true, passive: true, actOver: true, down: true, used: true, status: true, charges: true, cooldown: true, target: true };
   const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, replace: true, souls: true, upgrade: true };
@@ -564,11 +581,19 @@ describe('every block code has words', () => {
   it('a skill on cooldown says how many turns are left, and a skill held back by another ability says which', () => {
     const lash = board().players[ME].bench[1]!; // one skill: Ground Strike
     expect(skillBlockReason('souls')).toBe('Not enough souls'); // no hero to ask: no number
-    expect(skillBlockReason('souls', lash)).toBe('Need 3 souls');
+    expect(skillBlockReason('souls', lash)).toBe('Not enough souls'); // no skill of the roster takes souls
+    expect(skillBlockReason('ultUsed', lash, 'eff_ult_lash')).toBe(ONE_ULT_A_TURN);
     const skillId = heroData(lash)!.skills[0];
     expect(skillBlockReason('cooldown')).toBe('On cooldown'); // no hero to ask: no number
     expect(skillBlockReason('cooldown', { ...lash, cooldowns: { [skillId]: 2 } })).toBe('Ready in 2 turns');
     expect(skillBlockReason('cooldown', { ...lash, cooldowns: { [skillId]: 1 } }, skillId)).toBe('Ready in 1 turn');
+    // A charged skill with no charge left waits for its next one.
+    const kelvin = board().players['1'].bench[1]!; // Frost Grenade: 2 charges
+    expect(nameOf(kelvin)).toBe('Kelvin');
+    expect(skillBlockReason('cooldown', { ...kelvin, skillCharges: { skill_kelvin: 0 }, cooldowns: { skill_kelvin: 2 } })).toBe('Next charge in 2 turns');
+    // A damage-charged ultimate short of its damage says how much is missing.
+    expect(skillBlockReason('charge')).toBe('Not charged'); // no hero to ask: no number
+    expect(skillBlockReason('charge', { ...lash, cardId: 'hero_silver', tally: { eff_ult_silver: 5 } }, 'eff_ult_silver')).toBe('Needs 3 more damage');
     expect(skillBlockReason('used', lash)).toBe('Already used');
     expect(skillBlockReason('used', { ...lash, lastSkillUsed: skillId }, skillId)).toBe('Already used');
     // Skill, ultimate and active items share the one ability a turn, and the line says which was used.

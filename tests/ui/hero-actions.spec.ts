@@ -92,28 +92,31 @@ describe('the attack, as the sheet words it', () => {
 });
 
 describe('the ready glint', () => {
-  it('marks the Active while its attack is open, and every hero with an ability it can use now — souls in hand', () => {
+  it('marks the Active while its attack is open, and every hero with an ability it can use now — no souls needed, only its wait over', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    me.souls = 0; // a skill costs souls: with none, nobody's is up
-    expect(readyHeroes(G, '0', false).size).toBe(0);
-    me.souls = 2; // Paige's Plot Armor (2) is up; Lash's Ground Strike (3) is not
+    me.souls = 0; // a skill takes no souls: with none banked, Paige's Plot Armor and Lash's Ground Strike are both up
     let ready = readyHeroes(G, '0', false);
     expect(ready.has(me.bench[2]!.iid)).toBe(true); // Paige
-    expect(ready.has(LASH(G).iid)).toBe(false);
-    me.souls = 10;
-    ready = readyHeroes(G, '0', false);
     expect(ready.has(LASH(G).iid)).toBe(true);
-    expect(ready.has(me.bench[2]!.iid)).toBe(true); // Paige
     expect(ready.has(me.active!.iid)).toBe(false);  // Haze is passive only, her ultimate locked at Level 1
+    LASH(G).cooldowns = { skill_lash: 2 }; // a skill still waiting is not up
+    ready = readyHeroes(G, '0', false);
+    expect(ready.has(LASH(G).iid)).toBe(false);
+    expect(ready.has(me.bench[2]!.iid)).toBe(true); // Paige
+    LASH(G).cooldowns = {};
+    expect(readyHeroes(G, '0', false).has(LASH(G).iid)).toBe(true);
 
     for (const b of me.bench) if (b) b.skillUsedThisTurn = true; // the bench has used its skills: only the attack is left
     expect([...readyHeroes(G, '0', true)]).toEqual([me.active!.iid]);
     expect(readyHeroes(G, '0', false).size).toBe(0);
 
-    me.active!.level = 2; // Haze's ultimate unlocks: Bullet Dance is large, 12 souls
-    expect(readyHeroes(G, '0', false).has(me.active!.iid)).toBe(false);
-    me.souls = 12; // …and with them she has an ability to use too
+    me.active!.level = 2; // Haze's ultimate unlocks: Bullet Dance takes no souls, so she has an ability to use too
     expect(readyHeroes(G, '0', false).has(me.active!.iid)).toBe(true);
+    me.active!.cooldowns = { eff_ult_haze: 3 }; // …but not while it waits
+    expect(readyHeroes(G, '0', false).has(me.active!.iid)).toBe(false);
+    me.active!.cooldowns = {};
+    G.ultUsed = { '0': true }; // …nor once her side has used its one ultimate of the turn
+    expect(readyHeroes(G, '0', false).has(me.active!.iid)).toBe(false);
   });
 });

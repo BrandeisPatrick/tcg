@@ -27,7 +27,7 @@ import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, START_LEVEL, ULT_COST,
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, SKILL_COOLDOWN, START_LEVEL, ULT_WAIT,
 } from './constants';
 import { pushMultiplier, round, secondMover } from './rounds';
 
@@ -453,36 +453,64 @@ export function resolveSkill(card: CardInstance, skillId?: AbilityId): KitAbilit
   return ability ? { id, ability, kind } : undefined;
 }
 
-/** The souls a hero's kit ability costs to use (docs/hero-design.md §2): a
- *  skill its own `souls` (1–3), an ultimate its card's size (`ULT_COST`: 4, 8
- *  or 12). 0 for an id the hero does not have. The one price: legality checks
- *  it, `useSkill` charges it, the hero sheet prints it and the AI pays it. */
+/** The souls a hero's kit ability costs to use: none since 2026-11-15
+ *  (skills and ultimates cost no souls; an ability's own `souls`, should a
+ *  card ever name one). 0 for an id the hero does not have. The one price:
+ *  legality checks it, `useSkill` charges it and the hero sheet prints it. */
 export function kitCost(card: CardInstance, skillId?: AbilityId): number {
-  const skill = resolveSkill(card, skillId);
-  if (!skill) return 0;
-  if (skill.kind === 'ult') {
-    const face = ultimateCard(skill.id);
-    if (!face) return 0;
-    // A charged ultimate: its printed price, less what its hero has counted.
-    return Math.max(0, ultPrice(face) - (face.charged ? card.tally?.[skill.id] ?? 0 : 0));
-  }
-  return skill.ability.souls ?? 0;
+  return resolveSkill(card, skillId)?.ability.souls ?? 0;
 }
 
-/** The price an ultimate's card prints: a charged one's own `cost`, else its
- *  size's (`ULT_COST`: 4, 8 or 12). What a hero pays now is `kitCost`, which
- *  takes a charged ultimate's count off it. */
-export function ultPrice(face: UltimateCard): number {
-  return face.charged ? face.charged.cost : ULT_COST[face.size];
+/** Own turns a skill waits after a use: its own `cooldown`, else
+ *  SKILL_COOLDOWN. For a charged skill, the turns one charge takes to come
+ *  back. */
+export function skillWait(ability: AbilityDef): number {
+  return ability.cooldown ?? SKILL_COOLDOWN;
+}
+
+/** Own turns an ultimate waits, after a use and from the match's start: its
+ *  size's (`ULT_WAIT`). A charged ultimate waits on damage instead
+ *  (`ultCharge`). */
+export function ultWait(face: UltimateCard): number {
+  return ULT_WAIT[face.size];
+}
+
+/** A charged skill's charges on `card` — the most it holds and what it has
+ *  left — or undefined for an ability that is not a charged skill of its. */
+export function kitCharges(card: CardInstance, skillId?: AbilityId): { max: number; left: number } | undefined {
+  const skill = resolveSkill(card, skillId);
+  const max = skill?.kind === 'skill' ? skill.ability.charges ?? 1 : 1;
+  if (!skill || max <= 1) return undefined;
+  return { max, left: Math.max(0, Math.min(max, card.skillCharges?.[skill.id] ?? max)) };
+}
+
+/** Own turns until `card` may use its kit ability again by the clock: 0 when
+ *  it is ready. A charged skill with a charge left is ready whatever its
+ *  wait reads (that wait is its next charge's). */
+export function kitWaiting(card: CardInstance, skillId?: AbilityId): number {
+  const skill = resolveSkill(card, skillId);
+  if (!skill) return 0;
+  const charges = kitCharges(card, skill.id);
+  if (charges && charges.left > 0) return 0;
+  return card.cooldowns?.[skill.id] ?? 0;
 }
 
 /** The charged ultimate `card` carries (docs/hero-design.md §2), with how it
- *  charges — damage the hero takes or deals — or undefined for any other
- *  card. The damage kernel counts it (`damageUnit`). */
-export function chargedUlt(card: CardInstance): { id: AbilityId; by: 'taken' | 'dealt' } | undefined {
+ *  charges — damage the hero takes or deals — and the damage it needs, or
+ *  undefined for any other card. The damage kernel counts it (`damageUnit`). */
+export function chargedUlt(card: CardInstance): { id: AbilityId; by: 'taken' | 'dealt'; need: number } | undefined {
   const id = heroData(card)?.ult;
   const charged = ultimateCard(id)?.charged;
-  return id && charged ? { id, by: charged.by } : undefined;
+  return id && charged ? { id, by: charged.by, need: charged.need } : undefined;
+}
+
+/** A charged ultimate's charge on `card`: the damage counted since its last
+ *  use (never shown past what it needs) and the damage it needs. Ready when
+ *  the two are equal. Undefined for a hero whose ultimate waits on turns. */
+export function ultCharge(card: CardInstance): { have: number; need: number } | undefined {
+  const charged = chargedUlt(card);
+  if (!charged) return undefined;
+  return { have: Math.min(charged.need, card.tally?.[charged.id] ?? 0), need: charged.need };
 }
 
 // ---------- Optional triggers (the trigger prompt system, engine/prompts.ts) ----------
@@ -504,9 +532,8 @@ export function optionalTriggers(card: CardInstance, moment?: AbilityDef['trigge
 }
 
 /** The souls an optional trigger costs `card` to use: a kit ability's
- *  `kitCost` (a charged ultimate's count taken off), a passive's own
- *  `souls` (none: 0). The one price the prompt prints, the legality checks
- *  and the answer charges. */
+ *  `kitCost`, a passive's own `souls` (none of either today: 0). The one
+ *  price the legality checks and the answer charges. */
 export function triggerPrice(card: CardInstance, abilityId: AbilityId): number {
   return resolveSkill(card, abilityId) ? kitCost(card, abilityId) : getAbility(abilityId)?.souls ?? 0;
 }

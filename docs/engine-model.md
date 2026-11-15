@@ -33,7 +33,7 @@ lock a skill. The engine fixes that by construction:
 
 | Module | Holds |
 |---|---|
-| `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, the ultimates' `ULT_COST` by size, levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss (`MID_BOSS_ENABLED`, off for now), the Rejuvenator, `RESPAWN_TURNS`, `ROUND_CAP`) |
+| `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, the kit's waits (`SKILL_COOLDOWN`, the ultimates' `ULT_WAIT` by size), levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss (`MID_BOSS_ENABLED`, off for now), the Rejuvenator, `RESPAWN_TURNS`, `ROUND_CAP`) |
 | `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn — and the map's clocks: `lateGame` / `pushMultiplier`, `bossReturnRound`, `reviveLastRound`, `endsRound` / `endsLastRound`, `MATCH_TURNS` |
 | `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skill, its ultimate; which one an action names), `kitCost` (what one costs in souls: a skill's `souls`, an ultimate's `ULT_COST` by its card's size — a charged one its own price less the hero's count, `ultPrice` / `chargedUlt`), the optional triggers (`optionalTriggers`, `triggerPrice`, `promptOwed`, `fallPending`), `abilityAim` (what one is aimed at: its `target`, or its `aim` read off the board), `heroRetreat` (a hero's printed Retreat), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `isHeroCard`, `laneOpen`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `bossDue` (the round the board counts down to; null with no Mid-Boss), `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
 | `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the hand (`playBlocked`, `replaceNeeded`, `playBlockedAny`, `playCost`, `playTargets`, `upgradeComponent`, `placeHeroBlocked`, `freeBenchSlot`, `chooseActiveBlocked`, `discardBlocked`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (an owed choice — the first Active, a promotion, a discard — blocks everything else; after the turn's attack only `endTurn` is left), `legalActions`, and the trigger prompt's (`triggerBlocked`: level, wait, souls; `answerBlocked`) |
@@ -161,25 +161,33 @@ an ultimate.
 wears (`activate`, in a cast frame whose source is the bearer; free; it then
 cools down 2 own turns for tiers 1–2, 3 for tiers 3 and up, or spends one of a
 hard crowd-control item's charges), or its ultimate. A skill and an ultimate
-are paid in souls (`kitCost`): a skill its own `souls` (1–3), an ultimate
-`ULT_COST` by its card's size (small 4, medium 8, large 12), or a charged
-ultimate's own price (`UltimateCard.charged`: Victor 20, Silver 16) less the
-hero's count of the damage it takes or deals (its `tally`, counted by
-`damageUnit`, never below 0). `skillBlocked`
-refuses one the player cannot pay for (`'souls'`), and `useSkill` charges it
-before the ability runs (`payKit`: the souls, the cooldown, a charged
-ultimate's count started over — the trigger prompt pays a trigger the same way).
+cost no souls (`kitCost` is 0 unless an ability names `souls`, and none does;
+docs/balance-model.md §8): they are paid for in own turns. A skill waits its
+`cooldown` after use (`SKILL_COOLDOWN` = 3 when its data names none; five name
+4). A charged skill (`charges: 2`) keeps its uses left on the hero
+(`skillCharges`, absent when full): a use spends one and starts the wait if
+none is running, and `tickCooldowns` brings one back each time the wait runs
+out, starting it again while the skill is still short. `skillBlocked` answers
+`'cooldown'` only with no use left (`kitWaiting`). An ultimate waits `ULT_WAIT`
+by its card's size (small 4, medium 6, large 8), after each use and from the
+match's first turn (`armUltWaits`, setup.ts; a hero in the hand or the deck
+counts its side's turns too). A side uses one ultimate a turn (`G.ultUsed`,
+cleared as a turn begins; refused as `'ultUsed'`). A charged ultimate
+(`UltimateCard.charged`: Victor 10 taken, Silver 8 dealt) has no opening
+wait: it is refused as `'charge'` until the hero's count of that damage (its
+`tally`, counted by `damageUnit`; `ultCharge`) reaches what it needs. `useSkill`
+settles all of it before the ability runs (`payKit`: the charge or the wait,
+the side's ultimate of the turn, a charged ultimate's count started over — the
+trigger prompt pays a trigger the same way).
 An ability that is an optional trigger (`optional`) is never used from its
-button (`'trigger'`): the trigger prompt asks it at its moment. A skill waits its `cooldown` in own turns after use
-(`SKILL_COOLDOWN` = 1: ready again on the hero's next turn, when its data names
-none). The ultimate is a button printed on the hero card, not a card:
-`HeroCard.ult` names its ability, it unlocks at `ULT_UNLOCK_LEVEL` (2) and
-waits `ULT_COOLDOWN` (3) own turns after each use. It runs through `useSkill`
+button (`'trigger'`): the trigger prompt asks it at its moment. The ultimate
+is a button printed on the hero card, not a card: `HeroCard.ult` names its
+ability and it unlocks at `ULT_UNLOCK_LEVEL` (2). It runs through `useSkill`
 like a skill, in an `'ult'` cast frame, and sets off `onBearerUltCast`. An
 ability whose aim depends on the board says so with `aim` (Traveler needs
 Mirage in the lane; Sinclair's Audience Participation aims as the rival
 Active's ultimate it casts at once as his own). Echo Shard repeats a skill,
-never an ultimate, and pays no souls for it.
+never an ultimate; the repeat spends no charge and starts no wait.
 
 **The Act.** One basic attack a turn per player (`G.attackUsed`), and it ends
 the Act: after it nothing is legal but `endTurn` and an owed promotion
@@ -370,8 +378,11 @@ resolves, once, at its end.
   `legalActions` all read it — and the board: with more than one entry the
   Attack plate arms a targeting flow (`ui/board/attackAim.ts`) that lights
   exactly that list and dispatches `attack(targetIid)`, the first target bare.
-- **A skill's price** — `souls` on the skill (1–3); an ultimate's is its card's
-  `size`. `kitCost` reads both, and nothing else prices an ability.
+- **A skill's pace** — `cooldown` on the skill (its wait; `SKILL_COOLDOWN`
+  when absent) and `charges` (the uses it holds; 1 when absent); an
+  ultimate's wait is its card's `size`. `skillWait`, `ultWait` and
+  `kitCharges` (query.ts) read them, and nothing else paces an ability. A
+  kit ability that should cost souls again names `souls`; `kitCost` reads it.
 - **An ability aimed by the board** — `aim(G, pid, hero)` on it returns the
   filter (or null: it cannot be aimed now); `abilityAim` reads it, so the
   legality, `useSkill`, the board's targeting and the AI all agree.

@@ -70,11 +70,10 @@ export function mapLesson(kit: LessonKit, midBoss: boolean = MID_BOSS_ENABLED): 
     // in, when there is one. Lash stands on one point, alone; the rival's
     // track is a Guardian of 2 and a Patron of 1 — the kill's push of 2 fells
     // the Guardian, and Kelvin's push of his bullet power, 1, into the empty
-    // lane at the End fells the Patron. Frost Grenade costs three souls: one
-    // kept from before and the turn's two. The kill pays round 4's bounty, 2.
+    // lane at the End fells the Patron. Frost Grenade costs no souls. The
+    // kill pays round 4's bounty, 2.
     setup: () => kit.fight({
       startTurn: 7,
-      playerSouls: 1,
       enemyHeroStats: [{ hp: 1, hpMax: 3 }],
       structures: { guardian: 4, walker: 6, patron: 8 },
       enemyStructures: { guardian: 2, patron: 1 },

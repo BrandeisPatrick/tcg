@@ -69,6 +69,7 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   G.turnNumber = realTurn;
   G.attackUsed = false;
   G.retreatUsed = false;
+  G.ultUsed = undefined;
   G.bossAttacker = null;
   riseBoss(G);
   tickStartOfTurn(G, ps);

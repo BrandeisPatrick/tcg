@@ -8,7 +8,8 @@ import { cardName } from '@/cards';
 import { fireTriggers } from './triggers';
 import { currentCast } from './castContext';
 import { pushFx, fxSource } from './fx';
-import { MAX_EXTRA_ATTACKS } from './constants';
+import { MAX_EXTRA_ATTACKS, SKILL_COOLDOWN } from './constants';
+import { getAbility } from './registry';
 
 // Statuses whose value is a magnitude that's worth printing in the log
 // (Bleed 3, Bullet Resist 4, Shield 5, etc.). Stun/Silence/Disarm/Sleep are
@@ -252,8 +253,21 @@ export function tickCooldowns(ps: PlayerState) {
     if (!cooldowns) return;
     for (const id of Object.keys(cooldowns)) {
       const left = (cooldowns[id] ?? 0) - 1;
-      if (left > 0) cooldowns[id] = left;
-      else delete cooldowns[id];
+      if (left > 0) { cooldowns[id] = left; continue; }
+      delete cooldowns[id];
+      // A charged skill: the wait that has run out brings one charge back,
+      // and starts over while another is still spent.
+      const have = c.skillCharges?.[id];
+      if (have === undefined) continue;
+      const ability = getAbility(id);
+      const max = ability?.charges ?? 1;
+      if (have + 1 >= max) {
+        delete c.skillCharges![id];
+        if (Object.keys(c.skillCharges!).length === 0) delete c.skillCharges;
+      } else {
+        c.skillCharges![id] = have + 1;
+        cooldowns[id] = ability?.cooldown ?? SKILL_COOLDOWN;
+      }
     }
     if (Object.keys(cooldowns).length === 0) delete c.cooldowns;
   };
@@ -261,8 +275,10 @@ export function tickCooldowns(ps: PlayerState) {
     tick(c);
     for (const a of c.attached ?? []) walk(a);
   };
-  // A hero waiting in the hand counts its owner's turns too (as a corpse does).
-  for (const c of [ps.active, ...ps.bench, ...ps.hand]) if (c) walk(c);
+  // A hero waiting in the hand counts its owner's turns too (as a corpse
+  // does), and so does one still in the deck: an ultimate's opening wait runs
+  // from the match's first turn wherever its hero is.
+  for (const c of [ps.active, ...ps.bench, ...ps.hand, ...ps.deck]) if (c) walk(c);
 }
 
 export function clearTurnFlags(ps: PlayerState) {

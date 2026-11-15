@@ -101,26 +101,34 @@ export const DRAW_PER_TURN = 1;
 export const MAX_HAND = 10;
 
 // ---------- Abilities ----------
+// A kit ability costs no souls (Patrick, 2026-11-15): souls buy the deck's
+// cards, spells and equipment alike. A skill is paid for in turns (its wait,
+// some with charges), an ultimate in turns too, one a turn for a side.
+// The reasoning is in docs/balance-model.md §8.
 
-/** Own turns a hero skill waits after use when its data names no `cooldown`
- *  (docs/hero-design.md §2: "then waits 1 turn"): ready again at the start of
- *  the hero's next own turn. A skill costs its own souls (`AbilityDef.souls`,
- *  1–3); a hero's Retreat is its card's `retreat`. */
-export const SKILL_COOLDOWN = 1;
+/** Own turns a hero skill waits after use when its data names no `cooldown`:
+ *  used on one turn, it is ready again on the hero's third own turn after.
+ *  With three skills on a side that is about one a turn. The heavier skills
+ *  (the five that cost 3 souls before: area damage with a rider, or a turn
+ *  denied) name 4 (`AbilityDef.cooldown`). A charged skill
+ *  (`AbilityDef.charges`) holds that many uses, and its wait brings them back
+ *  one at a time. A hero's Retreat is its card's `retreat`, in souls. */
+export const SKILL_COOLDOWN = 3;
 
 /** The level at which a hero's ultimate unlocks. It is a button printed on the
  *  hero card, not a card: used like a skill (it is the hero's one ability that
- *  turn) for its size's souls (`ULT_COST`). */
+ *  turn), for no souls, one ultimate a turn for its side. */
 export const ULT_UNLOCK_LEVEL = 2;
 
-/** Own turns an ultimate waits after use ("then waits 3 turns"): ready again on
- *  the third of its hero's own turns after it. */
-export const ULT_COOLDOWN = 3;
-
-/** What an ultimate costs, by its size (docs/hero-design.md §2 and §4): a
- *  small one is worth 4–6 points, a medium one 8–12, a large one 12–18, and a
- *  soul buys about a point. */
-export const ULT_COST: Readonly<Record<UltSize, number>> = { small: 4, medium: 8, large: 12 };
+/** Own turns an ultimate waits, by its size (docs/hero-design.md §2 and §4: a
+ *  small one is worth 4–6 points, a medium one 8–12, a large one 12–18): after
+ *  each use, and from the match's first turn — an ultimate starts the match
+ *  on its wait, as an active item starts on its cooldown. So a small one is
+ *  first ready on its side's turn 4, a medium one on turn 6, a large one on
+ *  turn 8, each with its hero at ULT_UNLOCK_LEVEL. A charged ultimate
+ *  (`UltimateCard.charged`) has no opening wait — the damage it needs is
+ *  that — and waits its size's turns after a use like the rest. */
+export const ULT_WAIT: Readonly<Record<UltSize, number>> = { small: 4, medium: 6, large: 8 };
 
 // ---------- The map: structures, pushes, the Mid-Boss, the round cap ----------
 

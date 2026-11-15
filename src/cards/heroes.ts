@@ -13,12 +13,13 @@ import type { HeroCard } from '@/engine/types';
  *    curves are even at Level 2.
  *  - `retreat` is what swapping it out of the Active slot costs: 0 for very
  *    mobile heroes, 1 for most, 2 for slow heavy ones.
- *  - The kit is exactly one skill (`skills`: 1–3 souls, then a 1-turn wait) or
- *    one passive (`passives`), plus an ultimate (`ult`): a button printed on
- *    the card, from Level 2, for 4, 8 or 12 souls by size, then a 3-turn wait.
- *    Victor's and Silver's are charged (their card's `charged`: 20 and 16
- *    souls, 1 less for each damage he takes or she deals), and Victor's is
- *    an optional trigger, asked when he falls rather than pressed.
+ *  - The kit is exactly one skill (`skills`: no souls, a wait of 3 or 4
+ *    turns, four of them with 2 charges) or one passive (`passives`), plus an
+ *    ultimate (`ult`): a button printed on the card, from Level 2, for no
+ *    souls, one a turn for a side, waiting 4, 6 or 8 turns by size.
+ *    Victor's and Silver's are charged (their card's `charged`: ready once
+ *    he has taken 10 damage or she has dealt 8), and Victor's is an optional
+ *    trigger, asked when he falls rather than pressed.
  *  - No Weakness.
  *
  * Signature items (`signature`): two items that fit the hero's kit, one of

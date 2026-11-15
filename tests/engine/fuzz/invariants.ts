@@ -45,6 +45,7 @@ import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/
 import {
   DRAW_CARDS, MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, chooseActiveBlockedOracle, deckOf,
   describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
+  skillChargesOracle, skillWaitOracle, ultFaceOracle, ultUncharged,
   freeBenchSlotOracle, isMergedRem, itemData, killBountyOracle, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
   playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
   slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
@@ -108,7 +109,10 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       if (c.zone !== 'deck') wrong.push(`zone '${c.zone}'`);
       if (c.attachedTo !== undefined) wrong.push(`attachedTo ${c.attachedTo}`);
       if ((c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
-      if (Object.keys(c.cooldowns ?? {}).length) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
+      // An item in the deck has no cooldown; a hero there carries only its ultimate's opening
+      // wait, which runs from the match's first turn wherever the hero is.
+      const ultId = (CARDS_BY_ID[c.cardId] as { ult?: string } | undefined)?.ult;
+      if (Object.keys(c.cooldowns ?? {}).some((k) => !isHeroCard(c) || k !== ultId)) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
       if (c.charges !== undefined) wrong.push(`charges ${c.charges}`);
       if (isHeroCard(c)) {
         if (c.hp !== c.hpMax || c.statuses.length || c.respawnTurnsLeft !== undefined) wrong.push(`a hero at ${c.hp}/${c.hpMax} with ${c.statuses.length} status(es), timer ${c.respawnTurnsLeft}`);
@@ -394,6 +398,13 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     // A cooldown counts the owner's turns: a whole number of 0 or more.
     for (const [k, v] of Object.entries(c.cooldowns ?? {})) {
       if (!Number.isInteger(v) || (v as number) < 0) add('cooldown-range', `${c.iid}-${k}`, `${k} cooldown ${v} on ${label}`);
+    }
+    // A charged skill's charges left: recorded only while short of full (0 up to one under
+    // what it holds), and then its wait is running.
+    for (const [k, v] of Object.entries(c.skillCharges ?? {})) {
+      const max = skillChargesOracle(k);
+      if (!Number.isInteger(v) || (v as number) < 0 || (v as number) >= max) add('skill-charges', `${c.iid}-${k}`, `${k} has ${v} charges left on ${label} (0..${max - 1} while short of ${max})`);
+      else if (!((c.cooldowns?.[k] ?? 0) > 0)) add('skill-charges', `${c.iid}-${k}`, `${k} is short of its charges (${v} of ${max}) on ${label} with no wait running`);
     }
   }
 
@@ -818,9 +829,12 @@ export function collectTransitionViolations(
     }
   }
 
-  // A kit ability, used: the hero is spent for the turn, and its cooldown is armed — a skill's
-  // own (SKILL_COOLDOWN unless its data names one), an ultimate's ULT_COOLDOWN. A locked
-  // ultimate (below the unlock level) is never used.
+  // A kit ability, used: the hero is spent for the turn, and its wait is armed (docs/hero-design.md
+  // §2, 2026-11-15). A skill: its own cooldown (SKILL_COOLDOWN unless its data names one) — a
+  // charged one spends a charge instead, and its wait starts only if none was running. An
+  // ultimate: its size's wait, its side's one ultimate of the turn — a charged one starts its
+  // count over as well. A locked ultimate (below the unlock level), a second ultimate in a
+  // turn and a charged one short of its damage are never used.
   if (!duplicated && move.name === 'useSkill' && typeof args[0] === 'string') {
     const hero0 = heroesByIid(B.players[mover]).get(args[0] as string);
     const hero1 = heroesByIid(after.G.players[mover]).get(args[0] as string);
@@ -828,8 +842,27 @@ export function collectTransitionViolations(
     if (hero0 && hero1 && d?.type === 'hero') {
       const id = typeof args[2] === 'string' ? (args[2] as string) : d.skills[0];
       if (ultLocked(hero0, id)) add('ult-locked', hero0.iid, `${describeUnit(hero0)} used its ultimate below the unlock level`);
-      const want = d.ult === id ? ultCooldownOracle(hero0) : getAbility(id)?.cooldown ?? SKILL_COOLDOWN;
-      if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
+      if (d.ult === id) {
+        if (B.ultUsed?.[mover]) add('ult-per-turn', hero0.iid, `${describeUnit(hero0)} used its ultimate after P${mover} had used one this turn`);
+        if (ultUncharged(hero0, id)) add('ult-uncharged', hero0.iid, `${describeUnit(hero0)} used its charged ultimate ${hero0.tally?.[id] ?? 0} damage into the ${ultFaceOracle(id)?.charged?.need} it needs`);
+        if (!after.G.ultUsed?.[mover]) add('ult-per-turn', `${hero0.iid}-flag`, `${describeUnit(hero0)} used its ultimate and P${mover}'s one-a-turn mark is not set`);
+        const want = ultCooldownOracle(hero0);
+        if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
+        if (ultFaceOracle(id)?.charged && (hero1.tally?.[id] ?? 0) !== 0) add('ability-cooldown', `${hero1.iid}-count`, `${describeUnit(hero1)} used its charged ultimate and its count reads ${hero1.tally?.[id]}`);
+      } else {
+        const max = skillChargesOracle(id);
+        const wait = skillWaitOracle(id);
+        if (max > 1) {
+          const left0 = hero0.skillCharges?.[id] ?? max;
+          const left1 = hero1.skillCharges?.[id] ?? max;
+          if (left1 !== left0 - 1) add('ability-cooldown', `${hero1.iid}-charges`, `${describeUnit(hero1)} used ${id} with ${left0} charges; it has ${left1} left`);
+          const running = hero0.cooldowns?.[id] ?? 0;
+          const want = running > 0 ? running : wait;
+          if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used a charge of ${id}; its wait is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
+        } else if ((hero1.cooldowns?.[id] ?? 0) !== wait) {
+          add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${wait}`);
+        }
+      }
     }
   }
 
@@ -1101,7 +1134,20 @@ export function collectTransitionViolations(
         const v0 = was.get(key);
         const v1 = now.get(key);
         let want: number | undefined | 'any' = v0;
-        if (started === pid) want = v0 === undefined || v0 - 1 <= 0 ? undefined : v0 - 1;
+        if (started === pid) {
+          want = v0 === undefined || v0 - 1 <= 0 ? undefined : v0 - 1;
+          // A charged skill's wait that runs out brings a charge back, and starts over while
+          // another is still spent.
+          const [, ability] = key.split('|');
+          const h0 = heroes0.get(owner);
+          const max = skillChargesOracle(ability);
+          if (want === undefined && v0 !== undefined && h0 && max > 1 && isHeroCard(h0) && h0.skillCharges?.[ability] !== undefined) {
+            const back = h0.skillCharges[ability]! + 1;
+            if (back < max) want = skillWaitOracle(ability);
+            const now1 = heroesByIid(after.G.players[pid]).get(owner)?.skillCharges?.[ability];
+            if ((now1 ?? max) !== Math.min(max, back)) add('cooldown-bookkeeping', `${key}-charges`, `${ability} on ${owner} had ${h0.skillCharges[ability]} charges as its wait ran out; it has ${now1 ?? max}, the rules give ${Math.min(max, back)}`);
+          }
+        }
         else if (key === usedSkill || key === usedTrigger || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';
         else if (refreshed.has(owner) && v1 === undefined) want = undefined;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);

@@ -137,11 +137,12 @@ describe('the AI plays its hand', () => {
 });
 
 describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not save… this needs to be solved")', () => {
-  // P0: Haze (Active, no skill), Vindicta, Lash (Ground Strike, 3 souls) and
-  // Paige (Plot Armor, 2 souls). Toxic Bullets is tier 3: 8 souls.
-  const spends = (made: Action[]) => made.filter((a) => a.type === 'playCard' || a.type === 'useSkill' || a.type === 'moveHero');
+  // P0: Haze (Active, no skill), Vindicta, Lash and Paige. Skills cost no
+  // souls, so what spends them is a card played or a Retreat. Toxic Bullets is
+  // tier 3: 8 souls.
+  const spends = (made: Action[]) => made.filter((a) => a.type === 'playCard' || a.type === 'moveHero');
 
-  it('keeps its souls for a tier-3 card it can pay for next turn: no cheap card, no skill', () => {
+  it('keeps its souls for a tier-3 card it can pay for next turn: no cheap card first', () => {
     const G = turn(6);
     giveCard(G, '0', 'toxic_bullets');
     giveCard(G, '0', 'extended_magazine'); // tier 1: it could pay for this now
@@ -167,7 +168,8 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
     expect(saving.players['0'].souls).toBe(2);
     const paid = turn(4);
     const reload = giveCard(paid, '0', 'active_reload');
-    expect(playOut(paid)[0]).toMatchObject({ type: 'playCard', cardIid: reload.iid });
+    expect(playOut(paid).some((a) => a.type === 'playCard' && a.cardIid === reload.iid)).toBe(true);
+    expect(paid.players['0'].souls).toBe(0);
   });
 
   it('the higher tier is the goal: with a tier-2 it could pay for now and a tier-3 two turns off, it holds for the tier-3', () => {
@@ -202,22 +204,34 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
       return { G, vindicta, sharp };
     };
     const saving = stage(2);
-    expect(spends(playOut(saving.G))).toEqual([]);  // Paige's Plot Armor (2) would take them
+    expect(spends(playOut(saving.G))).toEqual([]);
     expect(saving.G.players['0'].souls).toBe(2);
     const paid = stage(4);
     const made = playOut(paid.G);
-    expect(made[0]).toMatchObject({ type: 'playCard', cardIid: paid.sharp.iid, heroIid: paid.vindicta.iid });
+    expect(made.find((a) => a.type === 'playCard')).toMatchObject({ type: 'playCard', cardIid: paid.sharp.iid, heroIid: paid.vindicta.iid });
     expect(wornItems(paid.vindicta).map((it) => it.cardId)).toEqual(['sharpshooter']);
   });
 
-  it('a kill is still worth the souls: Ground Strike finishes a bench hero on 1 though it delays the card', () => {
+  it('its skills cost no souls, so it still uses them while it saves', () => {
     const G = turn(6);
     giveCard(G, '0', 'toxic_bullets');
-    const victim = G.players['1'].bench[1]!;
-    victim.hp = 1;
     const made = playOut(G);
     expect(made.some((a) => a.type === 'useSkill')).toBe(true);
+    expect(spends(made)).toEqual([]);
+    expect(G.players['0'].souls).toBe(6);
+  });
+
+  it('a kill is still worth the souls: it pays Haze\'s Retreat to bring in the hero whose swing finishes the rival Active, though it delays the card', () => {
+    const G = turn(6);
+    giveCard(G, '0', 'toxic_bullets');
+    const rival = G.players['1'].active!;
+    rival.hp = 2;                                   // Haze swings for 1; Vindicta, behind her, for 2
+    // No skill of the bench's takes the kill first.
+    for (const h of G.players['0'].bench) if (h) h.skillUsedThisTurn = true;
+    const made = playOut(G);
+    expect(made.some((a) => a.type === 'moveHero')).toBe(true);
     expect(G.record['0'].kills).toBe(1);
+    expect(G.players['0'].souls).toBeLessThan(6 + 1); // the Retreat's soul gone, the kill's bounty in
   });
 });
 

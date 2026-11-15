@@ -32,8 +32,8 @@
  * ultimates without hand-tuning each case, and what a line leaves on the board:
  * the statuses it lands, the channel it starts, the Rem it sets riding, the
  * souls it keeps, the cards it holds. A turn is the player's to spend on cards from the
- * hand, abilities (one per hero — a skill or an ultimate for its souls, or a
- * worn active item, free) and
+ * hand, abilities (one per hero — a skill, an ultimate or a worn active item,
+ * none of which costs souls; one ultimate a turn for the side) and
  * one Retreat, and then one attack, which ends it: after the attack only
  * `endTurn` is left. Ending the turn never attacks, so the AI has to choose
  * `attack` itself. Every line before the attack is valued with the attack
@@ -67,7 +67,7 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
   attackPower, checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroesOf, heroWorth, isBoss, isRespawning,
-  itemCooldown, itemPrice, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, wornItems,
+  itemCooldown, itemPrice, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, ultCharge, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
@@ -311,6 +311,20 @@ const BUILD_FIT = 0.6;
  *  list price, at the least — a tier up on the price ladder (2 → 4 → 8 → 16). */
 const REPLACE_RATIO = 2;
 
+/** What a charged ultimate at full charge is worth to its side (Victor's
+ *  revive in hand, Silver's Wolf form ready), counted in proportion as the
+ *  charge builds: about a medium ultimate's worth at the low end. Without it
+ *  the look could not tell that making Victor spend his revive costs him
+ *  anything, now that it costs no souls. */
+const CHARGE_READY = 8;
+
+/** What the charge on `c`'s charged ultimate is worth to its side: its share
+ *  of CHARGE_READY (0 for a hero whose ultimate waits on turns). */
+function chargeValue(c: CardInstance): number {
+  const charge = ultCharge(c);
+  return charge ? CHARGE_READY * (charge.have / charge.need) : 0;
+}
+
 /** What a hero standing on the board is worth: its presence, its HP and its offense. */
 function presence(c: CardInstance): number {
   return 3 + c.hp * 2 + heroThreat(c) * 1.5;
@@ -452,7 +466,7 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
       // point of HP — weight it like HP (×2), not ×1 (which made the bot
       // under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
-      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies));
+      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies) + chargeValue(c));
       // Rem riding on an ally is not the loss of a hero, nor of what she wears.
       for (const rem of mergedRem(c)) s += sign * (presence(rem) + equipValue(rem) * 2 + heroWorth(rem) * WORN_PRICE);
     }
@@ -802,7 +816,7 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
 // The engine asks the AI the same question it asks a person (engine/prompts.ts):
 // use one of the offers, or pass. The valuation is simple and is the lookahead's
 // own: each answer is made on a copy, and the asked side takes the position it
-// likes best — a revive keeps a hero and its push off the map for its souls.
+// likes best — a revive keeps a hero and its push off the map, for no souls.
 
 /** What answering the prompt owed with `a` is worth to the side asked: the
  *  position it leaves, from that side's view (`evalState`). */

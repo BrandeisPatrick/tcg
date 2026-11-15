@@ -37,7 +37,7 @@
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { effectiveAtk, heroAbilities, isRespawning, itemPrice, kitCost, stepInCandidates, wornItems } from '@/engine/query';
+import { effectiveAtk, heroAbilities, isRespawning, itemPrice, skillWait, stepInCandidates, wornItems } from '@/engine/query';
 import { attackBlocked, playBlocked, retreatCost, skillBlocked, skillTargets } from '@/engine/legality';
 import { ACTIVE_COOLDOWN, LANE_INCOME } from '@/engine/constants';
 import { retreatBlock } from '@/ui/board/heroActions';
@@ -146,6 +146,19 @@ function skillNameOf(c: CardInstance | null): string {
   const data = CARDS_BY_ID[c.cardId];
   if (data?.type !== 'hero') return 'the skill';
   return heroAbilities(data).find((x) => x.kind === 'skill')?.ability.name || 'the skill';
+}
+
+/** How the hero's first skill is paced, in the coach's voice: "It holds two
+ *  charges, and one comes back every four turns." / "After a use it waits
+ *  three turns." */
+function paceOf(c: CardInstance | null): string {
+  const data = c ? CARDS_BY_ID[c.cardId] : undefined;
+  const ability = data?.type === 'hero' ? heroAbilities(data).find((x) => x.kind === 'skill')?.ability : undefined;
+  if (!ability) return '';
+  const wait = skillWait(ability);
+  return (ability.charges ?? 1) > 1
+    ? `It holds ${word(ability.charges!)} charges, and one comes back every ${word(wait)} turns.`
+    : `After a use it waits ${word(wait)} turns.`;
 }
 
 /** A number in the coach's voice: "two". */
@@ -276,7 +289,7 @@ function useSkill(title: string, lead: (v: CoachView) => string): CoachStep {
       const me = mine(v);
       const why = me ? skillBlocked(v.G, v.me, me) : null;
       return why === 'status' ? `${nameOf(me)} is locked down and cannot act. End the turn.`
-        : why === 'souls' ? `${skillNameOf(me)} costs ${soulsText(kitCost(me!))}. End the turn; ${word(LANE_INCOME)} more arrive.`
+        : why === 'cooldown' ? `${skillNameOf(me)} is waiting. End the turn; it comes back.`
         : 'That skill needs a fresh turn. End the turn; it comes back.';
     },
     spot: (v) =>
@@ -344,14 +357,14 @@ export const LESSONS: Lesson[] = [
     title: 'The Skill',
     blurb: "Income, Act, End. Kelvin's skill ends it.",
     face: 'hero_kelvin',
-    outro: "Every turn runs Income, Act, End — a banner opens each turn. A skill costs souls, printed on its plate, and it is ready again on your next turn. The ultimate is the other button on the card: from Level 2, for more souls.",
+    outro: "Every turn runs Income, Act, End — a banner opens each turn. A skill costs no souls: after a use it waits a few turns, and some hold two charges. The ultimate is the other button on the card: from Level 2, no souls either, one ultimate a turn.",
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
-    // (to every enemy, and he is the only one) is the whole fight. It costs
-    // three souls: one kept from before and the turn's two pay for it.
-    setup: () => fight({ playerSouls: 1, enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
+    // (to every enemy, and he is the only one) is the whole fight. A skill
+    // costs no souls; Frost Grenade holds two charges.
+    setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
       look('look', 'One on One', mine, (v) => `Every turn runs three beats: Income (souls and a card), Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}). ${nameOf(mine(v))} faces ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Tap ${nameOf(mine(v))} to open his sheet.`),
-      useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to every enemy, for ${soulsText(mine(v) ? kitCost(mine(v)!) : 0)} — a skill's price is on its plate.`),
+      useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to every enemy. A skill costs no souls; what it costs is time. ${paceOf(mine(v))}`),
     ],
   },
 
@@ -388,18 +401,18 @@ export const LESSONS: Lesson[] = [
     // Kelvin holds Cold Front, a gift: put on, it starts on its cooldown, so it
     // cannot be the kill today. Lash stands at two: Frost Grenade's one
     // spirit damage, then Kelvin's swing of one, finish him — an ability, then
-    // the attack that ends the Act. Turn two, so there is an attack. Five
-    // souls kept from before and the turn's two pay for both: Cold Front
-    // four, Frost Grenade three.
+    // the attack that ends the Act. Turn two, so there is an attack. Two
+    // souls kept from before and the turn's two pay for Cold Front's four;
+    // Frost Grenade costs none.
     setup: () => fight({
       startTurn: 2,
       playerItems: ['cold_front'],
-      playerSouls: 5,
+      playerSouls: 2,
       enemyHeroStats: [{ hp: 2 }],
     }),
     steps: [
       play('play', 'Put It On', 'cold_front', () => `Cold Front waits in your hand, under the board — a gift, an active item; its card bears a bolt, and its price is ${soulsText(itemPrice('cold_front'))}. An active item works from the hero who wears it.`),
-      useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns — its plate on ${nameOf(mine(v))}'s sheet shows the dial. Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage, for ${soulsText(mine(v) ? kitCost(mine(v)!) : 0)}.`),
+      useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns — its plate on ${nameOf(mine(v))}'s sheet shows the dial. Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage, for no souls.`),
       attack((v) => `${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}. One ability each, then one attack — it ends the Act.`),
     ],
   },

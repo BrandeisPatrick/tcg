@@ -19,7 +19,7 @@ import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
 import {
   ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
-  MAX_ITEMS, PRICE, RESPAWN_TURNS, ULT_COOLDOWN, ULT_COST, ULT_UNLOCK_LEVEL,
+  MAX_ITEMS, PRICE, RESPAWN_TURNS, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT,
 } from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
 
@@ -139,21 +139,47 @@ export function skillIdsOf(hero: CardInstance): string[] {
   return ids;
 }
 
-/** What a kit ability costs, by docs/hero-design.md §2: a skill the souls its
- *  card prints (1–3), an ultimate 4, 8 or 12 by its size (small, medium,
- *  large). 0 for an id the hero does not have. */
+/** What a kit ability costs, by docs/hero-design.md §2 (Patrick, 2026-11-15):
+ *  no souls — a skill and an ultimate alike. (An ability that prints souls of
+ *  its own would cost them; none does.) 0 for an id the hero does not have. */
 export function kitSoulsOracle(hero: CardInstance, skillId?: string): number {
   const d = CARDS_BY_ID[hero.cardId];
   if (d?.type !== 'hero') return 0;
   const id = skillId ?? firstSkillOf(hero);
   if (id === undefined || !skillIdsOf(hero).includes(id)) return 0;
-  if (id === d.ult) {
-    const face = Object.values(CARDS_BY_ID).find((c) => c.type === 'ultimate' && c.abilities[0] === id);
-    if (face?.type !== 'ultimate') return 0;
-    // A charged ultimate prints its own price, 1 off for each point its hero has counted.
-    return face.charged ? Math.max(0, face.charged.cost - (hero.tally?.[id] ?? 0)) : ULT_COST[face.size];
-  }
+  if (id === d.ult) return 0;
   return getAbility(id)?.souls ?? 0;
+}
+
+/** The card that is an ultimate's face (its size, its charge), by the ability it names. */
+export function ultFaceOracle(skillId: string) {
+  const face = Object.values(CARDS_BY_ID).find((c) => c.type === 'ultimate' && c.abilities[0] === skillId);
+  return face?.type === 'ultimate' ? face : undefined;
+}
+
+/** The uses a skill holds, off its card: 2 for the four charged skills, else 1. */
+export function skillChargesOracle(skillId: string): number {
+  return getAbility(skillId)?.charges ?? 1;
+}
+
+/** Own turns a skill waits after a use (a charged one: for a charge to come
+ *  back): its card's own, else SKILL_COOLDOWN. */
+export function skillWaitOracle(skillId: string): number {
+  return getAbility(skillId)?.cooldown ?? SKILL_COOLDOWN;
+}
+
+/** A charged ultimate that has not counted the damage it needs: not usable. */
+export function ultUncharged(hero: CardInstance, skillId: string): boolean {
+  const d = CARDS_BY_ID[hero.cardId];
+  if (d?.type !== 'hero' || d.ult !== skillId) return false;
+  const charged = ultFaceOracle(skillId)?.charged;
+  return !!charged && (hero.tally?.[skillId] ?? 0) < charged.need;
+}
+
+/** True for the hero's own ultimate. */
+export function isUltOf(hero: CardInstance, skillId: string): boolean {
+  const d = CARDS_BY_ID[hero.cardId];
+  return d?.type === 'hero' && d.ult === skillId;
 }
 
 /** The skill a bare `useSkill` names: the first its card lists, if any. */
@@ -188,10 +214,14 @@ export function skillExcludesSelf(hero: CardInstance, skillId?: string, G?: Game
   return !!aimOf(hero, skillId, G, pid)?.excludeSelf;
 }
 
-/** An ability that is still cooling down: its entry in the owner's-turn timer
- *  (`cooldowns`, docs/stats-model.md §1) is above 0. Written from that rule, not
- *  from `skillBlocked`, so the probes can tell the gate it is wrong. */
+/** An ability that is still waiting: its entry in the owner's-turn timer
+ *  (`cooldowns`, docs/stats-model.md §1) is above 0 — or, for a charged skill,
+ *  it has no charge left (with one left it is ready, whatever the timer, which
+ *  then counts toward the next charge). Written from that rule, not from
+ *  `skillBlocked`, so the probes can tell the gate it is wrong. */
 export function skillCooling(hero: CardInstance, skillId: string): boolean {
+  const max = isUltOf(hero, skillId) ? 1 : skillChargesOracle(skillId);
+  if (max > 1) return (hero.skillCharges?.[skillId] ?? max) <= 0;
   return (hero.cooldowns?.[skillId] ?? 0) > 0;
 }
 
@@ -383,9 +413,14 @@ export function activeCooldownOracle(_bearer: CardInstance, item: ItemCard | Ite
   return own ?? (item.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
 }
 
-/** The cooldown an ultimate starts: ULT_COOLDOWN. */
-export function ultCooldownOracle(_hero: CardInstance): number {
-  return ULT_COOLDOWN;
+/** The cooldown an ultimate starts when it is used: its size's wait (4, 6 or
+ *  8 own turns: small, medium, large). A charged ultimate starts it too, and
+ *  counts its damage from nothing again. */
+export function ultCooldownOracle(hero: CardInstance): number {
+  const d = CARDS_BY_ID[hero.cardId];
+  const face = d?.type === 'hero' && d.ult ? ultFaceOracle(d.ult) : undefined;
+  if (!face) return 0;
+  return ULT_WAIT[face.size];
 }
 
 /** A hero's experience as one number: the thresholds of every level it has

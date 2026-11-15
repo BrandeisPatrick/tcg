@@ -83,7 +83,7 @@ export function offerTriggers(G: GameState, bearer: CardInstance, moment: string
   const what = offers.map((o) => {
     const hero = findCardOnBoard(G, o.heroIid)!.card;
     const n = triggerPrice(hero, o.abilityId);
-    return `${triggerName(hero, o.abilityId)} (${n} soul${n === 1 ? '' : 's'})`;
+    return n > 0 ? `${triggerName(hero, o.abilityId)} (${n} soul${n === 1 ? '' : 's'})` : triggerName(hero, o.abilityId);
   }).join(' or ');
   pushLog(G, `${cardName(bearer.cardId)} falls — P${pid} may use ${what}.`);
   return true;
@@ -96,7 +96,7 @@ export function offerTriggers(G: GameState, bearer: CardInstance, moment: string
  * on (`settle`), and the state-based pass runs — which may ask the next.
  *
  * A trigger used is the card's own ability, paid as from its button
- * (`payKit`: its souls, its cooldown, a charged ultimate's count started over)
+ * (`payKit`: its wait, a charged ultimate's count started over, its side's one ultimate of the turn)
  * and shown as its cast, but it is no turn's ability: it does not spend the
  * hero's one ability of the turn.
  */

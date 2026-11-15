@@ -49,10 +49,10 @@ builds) and the Gallery. A Quick Match goes like this.
   or a passive (six: Abrams, Haze, Vindicta, Drifter, Mirage, Victor); and an
   ultimate, a button printed on the card with the hero's own Deadlock
   ultimate icon. No hero has a Weakness.
-- Two ultimates are **charged**: Victor's Shocking Reanimation (20 souls) and
-  Silver's Lycan Curse (16) cost 1 less for each damage he takes or she deals,
-  down to free, and the count starts over when one is used. The button shows
-  the price coming down ("20 → 7 souls"). Victor's Aura of Suffering hurts
+- Two ultimates are **charged**: Victor's Shocking Reanimation is ready once
+  he has taken 10 damage, Silver's Lycan Curse once she has dealt 8. The
+  count starts over when one is used, and the button shows it ("7 / 10").
+  Victor's Aura of Suffering hurts
   every enemy and Victor himself at the start of your turn, which charges it.
   Silver's turns her into a wolf for 2 turns (+3 Attack, Shield 6), and her
   card shows Deadlock's wolf-form art while it lasts.
@@ -178,11 +178,15 @@ You choose the discards from anywhere in your hand.
 **Act.**
 
 - Each hero, bench included, may use one ability a turn: its skill, an active
-  item it wears, or its ultimate. Skills and ultimates are paid in souls, out
-  of the same 5 a turn that buy items; cooldowns count your own turns.
-- A skill costs 1–3 souls (printed on its plate) and is ready again on your
-  next turn. The ultimate is a button on the hero card: from Level 2 it costs
-  4, 8 or 12 souls by its size (small, medium, large), then waits 3 turns.
+  item it wears, or its ultimate. None of them costs souls: souls buy the
+  cards in your hand and a Retreat. Waits count your own turns.
+- A skill waits 3 turns after a use (4 for the heavier ones). Four skills are
+  charged, as in Deadlock: Serrated Knives, Frost Grenade, Lightning Ball and
+  Kinetic Pulse hold 2 uses, and the wait brings them back one at a time.
+- The ultimate is a button on the hero card, from Level 2. Your side uses
+  one ultimate a turn. It waits 4, 6 or 8 turns by its size (small, medium,
+  large), after each use and from the match's first turn: a large one is
+  first ready on your turn 8.
 - An active item is used from its hero's sheet. It cools down 2 turns (tiers
   1–2) or 3 (tier 3 and up), and starts on cooldown when it is played. Hard
   crowd control (stun, silence, root, …) has 2 charges a match instead.
@@ -425,10 +429,11 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
 - **The scripts and the respond moves.** `scripts/balance-sim.ts`,
   `scripts/replay-trace.ts`, `scripts/eval/*` and `scripts/qa/*` know nothing of
   `useTrigger` / `passTrigger`; port them with the hand's moves.
-- **The Cube every turn.** The Cube costs 3 souls and, like every skill, is
-  ready again on Viscous's next turn. The lane pays 2 a turn, so cubing every
-  turn takes banked souls or kill bounties; play will show whether it needs a
-  longer wait (docs/hero-design.md, As built).
+- **Free kits are reasoned, not played.** Skills and ultimates cost no souls
+  since 2026-11-15; their waits, the four charged skills and the charged
+  ultimates' 10 and 8 damage are set by reasoning
+  (docs/balance-model.md §8). Play will show match length and whether four
+  skills held for one turn is too much.
 - **Machinery no card uses.** Since the hero rebuild no hero opens a channel
   (`casting` / `casting_light`, `tickCastingPulses`) or puts on Charged, the
   FX layer's Naptime wake-up tag has no burst to play, and since Rem stands in

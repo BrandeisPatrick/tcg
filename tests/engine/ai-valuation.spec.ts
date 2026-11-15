@@ -229,7 +229,7 @@ describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Ta
     giveItem(G, rem, 'extra_spirit');
     ai.souls = kitCost(rem, 'skill_rem');
     const ride = enumerateAIMoves(G, ctx('1'), true).find((m) => m.move === 'useSkill' && m.args[0] === rem.iid);
-    // Abrams at full HP: the ride heals nothing, so all it costs is the 2 souls it pays.
+    // Abrams at full HP: the ride heals nothing and costs no souls.
     const pass = enumerateAIMoves(G, ctx('1'), true).find((m) => m.move === 'endTurn')!;
     expect(ride).toBeDefined();
     expect(pass.score - ride!.score).toBeLessThan(2 * 0.3 + 1); // its souls, give or take the swing
@@ -242,6 +242,7 @@ describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Ta
     const rem = ai.bench[0]!;
     const kelvin = ai.bench[1] = makeHero('hero_kelvin', '1', 'bench', 2);
     kelvin.hp = 1;
+    kelvin.skillUsedThisTurn = true; // his own skill is free too: the question here is Rem's
     ai.souls = kitCost(rem, 'skill_rem');
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect([best.move, best.args[0], best.args[1]]).toEqual(['useSkill', rem.iid, kelvin.iid]);
@@ -255,6 +256,8 @@ describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Ta
     ai.souls = kitCost(rem, 'skill_rem');
     foe(G).atkMod = 4; // the rival's Haze would fell her with one swing
     for (const b of ai.bench) expect(b!.hp).toBe(b!.hpMax);
+    // The bench's skills cost no souls either: spent, so the question is Rem's.
+    for (const b of ai.bench) b!.skillUsedThisTurn = true;
     const best = enumerateAIMoves(G, ctx('1'))[0];
     expect(best.move).toBe('useSkill');
     expect(best.args[0]).toBe(rem.iid);
@@ -266,6 +269,7 @@ describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Ta
     const calm = makeHero('hero_rem', '1', 'active', 0);
     h.active = calm;
     h.souls = kitCost(calm, 'skill_rem');
+    for (const b of h.bench) b!.skillUsedThisTurn = true;
     H.players['0'].active!.statuses.push({ id: 'stun', value: 1, duration: 2 }); // the rival's Active cannot swing
     expect(enumerateAIMoves(H, ctx('1'))[0].args[0]).not.toBe(calm.iid);
   });

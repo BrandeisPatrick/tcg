@@ -1,18 +1,17 @@
 /**
  * A hero uses one of its kit abilities: its skill, or its ultimate (the button
  * printed on its card). A hero uses one ability a turn, whichever it is, and
- * may still make the turn's attack after it from the Active slot. It is paid
- * for in souls first (`kitCost`: a skill's 1–3, an ultimate's 4, 8 or 12 by
- * size, a charged one its own price less its count), one with an HP cost
- * (`hpCost`) takes that off the hero too, and then it goes on its cooldown
- * (SKILL_COOLDOWN unless its data names one; an ultimate ULT_COOLDOWN) —
- * `payKit`, which the trigger prompt pays a trigger with too. `skillBlocked` (legality.ts) has already said it may
- * be done and at whom; this only does it.
+ * may still make the turn's attack after it from the Active slot. A kit
+ * ability costs no souls (`kitCost` reads 0). One with an HP cost (`hpCost`)
+ * takes that off the hero, and then it waits (`payKit`, which the trigger
+ * prompt pays a trigger with too): a skill its cooldown, a charged skill a
+ * charge, an ultimate its size's wait — and an ultimate is its side's one for
+ * the turn. `skillBlocked` (legality.ts) has already said it may be done and
+ * at whom; this only does it.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { abilityAim, chargedUlt, cooldownCut, findCardOnBoard, kitCost, resolveSkill, ultimateCard } from '../query';
-import { SKILL_COOLDOWN, ULT_COOLDOWN } from '../constants';
+import { abilityAim, cooldownCut, findCardOnBoard, kitCost, resolveSkill, skillWait, ultimateCard, ultWait } from '../query';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { nextActionId } from '../ids';
@@ -85,19 +84,38 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
 
 /**
  * Pay for `hero`'s kit ability `abilityId` as it is used — from its button
- * (`useSkill`) or as an optional trigger (engine/prompts.ts): its souls
- * (`kitCost`) come off `pid`'s, it goes on its cooldown (a skill its own, or
- * SKILL_COOLDOWN; an ultimate ULT_COOLDOWN less what the hero wears takes
- * off, never under 1), and a charged ultimate's count starts over. Returns
- * the souls paid. The one place a kit ability is paid for.
+ * (`useSkill`) or as an optional trigger (engine/prompts.ts). No souls come
+ * off (`kitCost` is 0 for every kit ability). What is paid is the wait:
+ *  - a skill goes on its cooldown (`skillWait`); a charged skill spends a
+ *    charge instead, and its cooldown — the wait for the next charge to come
+ *    back — starts if it is not already running;
+ *  - an ultimate is its side's one for the turn (`G.ultUsed`) and goes on its
+ *    size's wait (`ultWait`), less what the hero wears takes off, never under
+ *    1 — a charged ultimate's count starts over instead.
+ * Returns the souls paid. The one place a kit ability is paid for.
  */
 export function payKit(G: GameState, pid: PlayerID, hero: CardInstance, abilityId: AbilityId): number {
   const skill = resolveSkill(hero, abilityId);
   const souls = kitCost(hero, abilityId);
   G.players[pid].souls -= souls;
-  (hero.cooldowns ??= {})[abilityId] = skill?.kind === 'ult'
-    ? Math.max(1, ULT_COOLDOWN - cooldownCut(hero, 'ult'))
-    : skill?.ability.cooldown ?? SKILL_COOLDOWN;
-  if (chargedUlt(hero)?.id === abilityId && hero.tally?.[abilityId]) hero.tally[abilityId] = 0;
+  if (!skill) return souls;
+  if (skill.kind === 'ult') {
+    (G.ultUsed ??= {})[pid] = true;
+    const face = ultimateCard(abilityId);
+    // Every ultimate waits its size's turns after a use. A charged one counts
+    // its damage from nothing again as well; the wait is what keeps the damage
+    // its own effect deals (Silver's wolf) from readying it as the effect ends.
+    (hero.cooldowns ??= {})[abilityId] = Math.max(1, (face ? ultWait(face) : 1) - cooldownCut(hero, 'ult'));
+    if (face?.charged && hero.tally?.[abilityId]) hero.tally[abilityId] = 0;
+    return souls;
+  }
+  const wait = skillWait(skill.ability);
+  const max = skill.ability.charges ?? 1;
+  if (max > 1) {
+    (hero.skillCharges ??= {})[abilityId] = Math.max(0, (hero.skillCharges?.[abilityId] ?? max) - 1);
+    if (!hero.cooldowns?.[abilityId]) (hero.cooldowns ??= {})[abilityId] = wait;
+  } else {
+    (hero.cooldowns ??= {})[abilityId] = wait;
+  }
   return souls;
 }
