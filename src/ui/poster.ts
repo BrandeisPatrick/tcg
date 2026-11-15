@@ -126,6 +126,22 @@ export const atkInk = (atk: number, base: number): string =>
 export const hpInk = (hp: number, hpMax: number, base: number): string =>
   hp < hpMax ? poster.stat.hpDim : hpMax > base ? poster.stat.hpBright : poster.stat.hp;
 
+/** How a hero tile prints its HP number at its foot (HeroSlot), so a glance
+ *  tells a hurt hero from a whole one and a raised one from a plain one:
+ *   - hurt: the number in the damage red, its max after a slash ("1/3");
+ *   - whole, with its max raised above the printed base (a level, an item):
+ *     the green a raised Bullet Power prints in (`stat.atkBright`);
+ *   - whole at its printed base: plain ink.
+ *  A raised max keeps its green after the slash while the hero is hurt. */
+export const hpPrint = (hp: number, hpMax: number, base: number): { ink: string; max: { value: number; ink: string } | null } => {
+  const hurt = hp < hpMax;
+  const raised = hpMax > base;
+  return {
+    ink: hurt ? poster.redDeep : raised ? poster.stat.atkBright : poster.ink,
+    max: hurt ? { value: hpMax, ink: raised ? poster.stat.atkBright : poster.inkDim } : null,
+  };
+};
+
 /** Deadlock's HUD glyphs (public/hud): the game's own white marks, painted
  *  in any colour through a mask. `soul.svg` is the soul wisp, `team_amber` /
  *  `team_sapphire` the two patrons' sigils, `ultimate.svg` the ultimate eye. */
