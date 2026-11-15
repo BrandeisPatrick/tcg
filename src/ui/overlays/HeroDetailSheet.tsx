@@ -27,13 +27,14 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import {
-  activeCooldown, effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, itemCooldown, kitCost, ultimateCard, ultPrice,
+  activeCooldown, effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, itemCooldown, ultimateCard,
 } from '@/engine/query';
 import { HARD_CC_CHARGES, LEVEL_THRESHOLDS, MAX_LEVEL, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge, heroForm } from '@/cards/art/heroArt';
 import { ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
 import { SpikeMark } from '../board/SpikeMark';
+import { kitTag, skillPace, ultPace } from '../board/heroActions';
 import { CATEGORY_WORD } from '../shop/itemFacts';
 import { ChargePips, CooldownDial } from './AbilityDial';
 import { StatusIcon } from '../card/StatusIcon';
@@ -235,17 +236,15 @@ export function HeroDetailSheet({
   const scale: Scale = { spirit: effectiveSpirit(card), bullet: effectiveAtk(card), who: data.name };
   // Which ability the hero has used this turn, so only that row reads Used.
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
-  // What a kit ability costs (`kitCost`, the engine's own price): ONE number,
-  // the soul wisp and what it costs now. A charged ultimate's coming down is
-  // named for a screen reader ("16 → 7 souls").
-  const price = (abilityId: AbilityId, short: boolean): ReactNode => {
-    const n = kitCost(card, abilityId);
-    const face = abilityId === data.ult ? ultimateCard(abilityId) : undefined;
-    const label = face?.charged && n !== ultPrice(face) ? `${ultPrice(face)} → ${souls(n)}` : souls(n);
-    if (n <= 0 && !face?.charged) return undefined;
+  // What a kit ability's row says at its right, where its price once stood
+  // (a skill and an ultimate cost no souls): a charged skill's charges left,
+  // a charged ultimate's count, else its wait (`kitTag`).
+  const pace = (abilityId: AbilityId): ReactNode => {
+    const tag = kitTag(card, abilityId);
+    if (!tag) return undefined;
     return (
-      <span role="img" aria-label={label} style={{ display: 'inline-flex' }}>
-        <Souls n={n} size={T.number} tone={short ? 'paperShort' : 'paper'} />
+      <span data-kit-tag style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: T.label, letterSpacing: '0.04em', color: poster.inkDim, whiteSpace: 'nowrap' }}>
+        {tag}
       </span>
     );
   };
@@ -284,7 +283,7 @@ export function HeroDetailSheet({
           name={ability.name}
           art={KIND_ICON[kind](20, poster.cream)}
           line={shortLine(ability.text, scale, lineMax)}
-          right={price(ability.id, shortOfSouls(reason))}
+          right={pace(ability.id)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
         />
@@ -308,11 +307,11 @@ export function HeroDetailSheet({
         <ActionRow
           ult ink={ink} mode={mode} calm={calm}
           name={ultFace.name}
-          // A charged ultimate is named so: its price is its own, not its size's.
+          // A charged ultimate is named so: it waits on damage, not on turns.
           ultLabel={`Ultimate · ${ultFace.charged ? 'charged' : ultFace.size}`}
           art={<img src={ultIconSrc(ultFace.linkedHero)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={shortLine(ultFace.text ?? '', scale, lineMax)}
-          right={price(abilityId, shortOfSouls(reason))}
+          right={pace(abilityId)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(abilityId); onClose(); } : undefined}
         />
@@ -767,8 +766,8 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
   return (
     <>
       {heroAbilities(data).map(({ kind, ability }: { kind: 'skill' | 'passive'; ability: HeroAbilityDef }) =>
-        entry(ability.id, ability.name, kind === 'passive' ? `Passive · ${TRIGGER_LABELS[ability.trigger] ?? ability.trigger}` : 'Skill', ability.text))}
-      {ult && entry(ult.id, ult.name, `Ultimate · ${ult.charged ? 'charged' : ult.size} · Level ${ULT_UNLOCK_LEVEL}`, ult.text ?? '', ult.charged?.text)}
+        entry(ability.id, ability.name, kind === 'passive' ? `Passive · ${TRIGGER_LABELS[ability.trigger] ?? ability.trigger}` : `Skill · ${skillPace(ability)}`, ability.text))}
+      {ult && entry(ult.id, ult.name, `Ultimate · ${ult.charged ? 'charged' : ult.size} · Level ${ULT_UNLOCK_LEVEL} · ${ult.charged ? 'one a turn' : `${ultPace(ult)}, one a turn`}`, ult.text ?? '', ult.charged?.text)}
     </>
   );
 }

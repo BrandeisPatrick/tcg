@@ -1,6 +1,7 @@
 /**
- * Loadout — the one screen you set yourself up on: the squad you want the
- * draft to hand you, your deck (DeckEditor: the items you draw from, which
+ * Loadout — the one screen you set yourself up on: a ready deck to take as it
+ * is (ReadyDecks: a squad and its 16 items in one press), or your own — the
+ * squad you want the draft to hand you, your deck (DeckEditor: the items you draw from, which
  * every match deals with your four drafted heroes shuffled in), and each
  * hero's build (BuildEditor: what a deck made from your heroes is built from
  * when you have saved none).
@@ -17,11 +18,13 @@ import { poster, chamfer, sheetStyle, clipBoth } from '../poster';
 import { PosterBackdrop } from '../PosterBackdrop';
 import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
-import { loadPlayerData, savePreferredHeroes, MAX_PREFERRED_HEROES } from '@/storage/playerData';
+import { loadPlayerData, saveDeck, savePreferredHeroes, MAX_PREFERRED_HEROES } from '@/storage/playerData';
+import { readyDeckInUse, type ReadyDeck } from '@/cards/readyDecks';
 import type { CardId } from '@/engine/types';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { BuildEditor } from './BuildEditor';
 import { DeckEditor } from './DeckEditor';
+import { ReadyDecks } from './ReadyDecks';
 
 interface Props {
   onBack: () => void;
@@ -43,6 +46,17 @@ export function LoadoutScreen({ onBack }: Props) {
   function writeSlots(next: (CardId | null)[]) {
     savePreferredHeroes(next);
     setData(loadPlayerData());
+  }
+
+  // A ready deck taken: its squad and its items are saved together, and the
+  // deck builder (which keeps its own copy of the deck) is opened afresh on it.
+  const [deckEpoch, setDeckEpoch] = useState(0);
+  const inUse = readyDeckInUse(slots, data.deck);
+  function takeReadyDeck(deck: ReadyDeck) {
+    savePreferredHeroes([...deck.heroes]);
+    saveDeck([...deck.items]);
+    setData(loadPlayerData());
+    setDeckEpoch((n) => n + 1);
   }
 
   function addHero(heroId: CardId) {
@@ -125,6 +139,18 @@ export function LoadoutScreen({ onBack }: Props) {
           </h1>
         </header>
 
+        <section aria-label="Ready decks" style={{ marginBottom: split ? 'clamp(22px, 3vh, 32px)' : 22 }}>
+          <SectionHead title="Ready decks" note="A squad and its 16 items" />
+          <ReadyDecks
+            inUse={inUse}
+            // Something of the player's own would go: picks, or a deck. (One
+            // ready deck for another loses nothing.)
+            guarded={!inUse && (slots.some(Boolean) || data.deck.length > 0)}
+            onUse={takeReadyDeck}
+            compact={isMobile}
+          />
+        </section>
+
         <div
           style={{
             display: 'grid',
@@ -143,7 +169,7 @@ export function LoadoutScreen({ onBack }: Props) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: split ? 'clamp(24px, 3vw, 36px)' : 26, minWidth: 0 }}>
             <section aria-label="Deck">
               <SectionHead title="Deck" note="16 items, up to 4 of each" />
-              <DeckEditor squad={squad} />
+              <DeckEditor key={deckEpoch} squad={squad} onChange={() => setData(loadPlayerData())} />
             </section>
             <section aria-label="Builds">
               <SectionHead title="Builds" note="Make the deck when none is saved" />

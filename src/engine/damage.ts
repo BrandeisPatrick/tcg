@@ -236,7 +236,7 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
 
 /** Count `amount` damage toward `card`'s charged ultimate, when it charges on
  *  damage `how` ('taken' or 'dealt'): its `tally`, under the ultimate's id,
- *  which `kitCost` takes off the printed price. */
+ *  which readies it once it reaches what the ultimate needs (`ultCharge`). */
 function chargeUlt(card: CardInstance, how: 'taken' | 'dealt', amount: number) {
   const charged = chargedUlt(card);
   if (!charged || charged.by !== how || amount <= 0) return;

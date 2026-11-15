@@ -5,8 +5,8 @@
  *  - Structures. A side's track is Guardian → Walker → Patron (`STRUCTURES`).
  *    A push damages the front standing structure and carries what is left
  *    over on to the next. A felled Walker gives the pushing side the flex
- *    slot; a felled Patron loses the match (`checkWinner`). No fall pays
- *    souls: the lane's income is the only souls there are. Pushes come from kills (the
+ *    slot; a felled Patron loses the match (`checkWinner`). No structure's
+ *    fall pays souls: they come from the lane and from kills (bank.ts). Pushes come from kills (the
  *    victim's level + 1, killInPlace) and from an Active pushing into a lane its
  *    rival left empty (its bullet power, at the End step); both double in the
  *    late game (`pushMultiplier`, rounds.ts).
@@ -51,7 +51,7 @@ export function newTrack(hp?: TrackHp): Structure[] {
 
 /** A side's record before the match. */
 export function newRecord(): MapRecord {
-  return { kills: 0, pushes: 0, pushDamage: 0, bossKills: 0, bossKillsBehind: 0, revives: 0 };
+  return { kills: 0, pushes: 0, pushDamage: 0, bossKills: 0, bossKillsBehind: 0, revives: 0, bounty: 0 };
 }
 
 /**

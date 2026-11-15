@@ -1,10 +1,12 @@
 /**
  * Ultimates are kit abilities: each hero's `ult` names an ability it uses from
- * its sheet through `useSkill` once it has reached ULT_UNLOCK_LEVEL, for its
- * card's size in souls (`kitCost`: ULT_COST small 4, medium 8, large 12), and
- * then not again for ULT_COOLDOWN of its owner's turns. It is the hero's one
- * ability that turn (skill or ultimate), and the Active may still attack after
- * it. Sinclair's ultimate casts the rival Active's at once, as his own.
+ * its sheet through `useSkill` once it has reached ULT_UNLOCK_LEVEL, for no
+ * souls (Patrick, 2026-11-15), one ultimate a turn for its side, and then not
+ * again for its size's wait (`ULT_WAIT`: small 4, medium 6, large 8 of its
+ * owner's turns) — a charged one once its damage is counted again. It is the
+ * hero's one ability that turn (skill or ultimate), and the Active may still
+ * attack after it. Sinclair's ultimate casts the rival Active's at once, as
+ * his own.
  */
 import { describe, it, expect } from 'vitest';
 import { INVALID_MOVE } from 'boardgame.io/core';
@@ -12,9 +14,10 @@ import { DeadlockGame } from '@/engine/game';
 import { HEROES, CARDS_BY_ID } from '@/cards';
 import { getAbility } from '@/abilities';
 import { tickCooldowns } from '@/engine/statusOps';
+import { beginTurn } from '@/engine/actions/turn';
 import { skillBlocked, skillTargets } from '@/engine/legality';
-import { kitAbilityIds, kitCost, ultimateCard, ultPrice } from '@/engine/query';
-import { ULT_COOLDOWN, ULT_COST, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { kitAbilityIds, kitCost, ultimateCard, ultWait } from '@/engine/query';
+import { ULT_UNLOCK_LEVEL, ULT_WAIT } from '@/engine/constants';
 import type { GameState, CardInstance, PlayerID } from '@/engine/types';
 import { makeAttack } from './_helpers';
 
@@ -44,7 +47,7 @@ function freshG(casterHero: string, enemyHero = 'hero_abrams', level: 1 | 2 | 3 
   p1.bench = [makeHero('hero_lash', '1', 'bench', 1), makeHero('hero_seven', '1', 'bench', 2), null];
   // Enemy HP high so no ultimate lands a kill (a KO would push the map and skew the board checks).
   for (const e of [p1.active, ...p1.bench]) if (e) { e.hp = 99; e.hpMax = 99; }
-  // Souls enough for any ultimate (a large one is 12); the checks read what was paid.
+  // Souls in the bank: the checks read that an ultimate takes none.
   p0.souls = SOULS; p1.souls = 0;
   return G;
 }
@@ -77,30 +80,55 @@ function targetIid(G: GameState, hero: CardInstance, abilityId: string): string 
   return targets === 'none' ? undefined : targets[0]?.iid;
 }
 
-describe('ultimates resolve through the real useSkill flow, for their size in souls, as kit abilities', () => {
+describe('ultimates resolve through the real useSkill flow, for no souls, as kit abilities', () => {
   // An ultimate that is an optional trigger (Victor's) has no button use: the
   // trigger prompt asks it (tests/engine/trigger-prompts.spec.ts).
   for (const hero of HEROES.filter((h) => !getAbility(h.ult!)?.optional)) {
-    it(`${hero.id}: ${hero.ult} at Level ${ULT_UNLOCK_LEVEL}, for its size's souls (a charged one its own), then on cooldown`, () => {
+    it(`${hero.id}: ${hero.ult} at Level ${ULT_UNLOCK_LEVEL}, for no souls, then on its size's wait (a charged one starts its count over)`, () => {
       const G = freshG(hero.id, 'hero_abrams');
       const caster = G.players['0'].active!;
       const ability = getAbility(hero.ult!)!;
       expect(ability, hero.id).toBeTruthy();
-      const price = ultPrice(ultimateCard(hero.ult!)!);
-      expect(price, hero.id).toBe(ultimateCard(hero.ult!)!.charged?.cost ?? ULT_COST[ultimateCard(hero.ult!)!.size]);
+      const face = ultimateCard(hero.ult!)!;
+      expect(ultWait(face), hero.id).toBe(ULT_WAIT[face.size]);
+      // A charged ultimate waits on damage: short of it, it cannot be used; counted, it can.
+      if (face.charged) {
+        caster.tally = { [hero.ult!]: face.charged.need - 1 };
+        expect(skillBlocked(G, '0', caster, undefined, hero.ult!), hero.id).toBe('charge');
+        caster.tally = { [hero.ult!]: face.charged.need };
+      }
 
       const res = use(G, caster, hero.ult!, targetIid(G, caster, hero.ult!));
 
       expect(res).not.toBe(INVALID_MOVE);
-      expect(kitCost(caster, hero.ult!)).toBe(price);
-      expect(G.players['0'].souls).toBe(SOULS - price);         // its size's price, paid
-      expect(caster.cooldowns?.[hero.ult!]).toBe(ULT_COOLDOWN); // on its cooldown
+      expect(kitCost(caster, hero.ult!)).toBe(0);
+      expect(G.players['0'].souls).toBe(SOULS);                 // an ultimate costs no souls
+      if (face.charged) expect(caster.tally?.[hero.ult!]).toBe(0); // a charged one: its count starts over
+      expect(caster.cooldowns?.[hero.ult!]).toBe(ULT_WAIT[face.size]); // on its size's wait
+      expect(G.ultUsed?.['0']).toBe(true);                      // its side's one ultimate of the turn
       expect(caster.skillUsedThisTurn).toBe(true);              // the hero's one ability this turn
       expect(G.action?.kind).toBe('ult');
       expect(kitAbilityIds(caster)).toContain(hero.ult!);       // a kit ability…
       expect(ultCardsOnBoard(G, '0')).toEqual([]);              // …and no card of it anywhere
     });
   }
+
+  it('one ultimate a turn for a side: a second hero\'s ultimate waits for the next turn', () => {
+    const G = freshG('hero_paige');
+    const paige = G.players['0'].active!;
+    const kelvin = G.players['0'].bench[0]!;
+    expect(skillBlocked(G, '0', kelvin, undefined, 'eff_ult_kelvin')).toBeNull();
+    expect(use(G, paige, 'eff_ult_paige')).not.toBe(INVALID_MOVE);
+    expect(skillBlocked(G, '0', kelvin, undefined, 'eff_ult_kelvin')).toBe('ultUsed');
+    expect(use(G, kelvin, 'eff_ult_kelvin')).toBe(INVALID_MOVE);
+    // Kelvin's skill is no ultimate: it is still his to use this turn.
+    expect(skillBlocked(G, '0', kelvin, undefined, 'skill_kelvin')).toBeNull();
+    // The rival's turn, then this side's next: the flag is the turn's.
+    beginTurn(G, '1', 3 + G.draftTurnsOffset);
+    expect(G.ultUsed).toBeUndefined();
+    beginTurn(G, '0', 4 + G.draftTurnsOffset);
+    expect(skillBlocked(G, '0', kelvin, undefined, 'eff_ult_kelvin')).toBeNull();
+  });
 
   it('an optional-trigger ultimate is never used from its button (Victor\'s Shocking Reanimation)', () => {
     const G = freshG('hero_victor', 'hero_abrams');
@@ -117,12 +145,13 @@ describe('ultimates resolve through the real useSkill flow, for their size in so
     expect(use(G, paige, 'eff_ult_paige')).toBe(INVALID_MOVE);
   });
 
-  it('waits out ULT_COOLDOWN of its owner\'s turns before it may be used again', () => {
+  it('waits out its size\'s wait of its owner\'s turns before it may be used again', () => {
     const G = freshG('hero_paige');
     const paige = G.players['0'].active!;
     expect(use(G, paige, 'eff_ult_paige')).not.toBe(INVALID_MOVE);
     paige.skillUsedThisTurn = false; // the turn ends
-    for (let turn = 1; turn < ULT_COOLDOWN; turn++) {
+    G.ultUsed = undefined;
+    for (let turn = 1; turn < ULT_WAIT.medium; turn++) {
       tickCooldowns(G.players['0']);
       expect(skillBlocked(G, '0', paige, undefined, 'eff_ult_paige'), `own turn ${turn} after`).toBe('cooldown');
     }
@@ -150,10 +179,10 @@ describe('ultimates resolve through the real useSkill flow, for their size in so
       expect(f.hp, f.cardId).toBe(before[i] - 3);
       expect(f.statuses.some((s) => s.id === 'stun'), f.cardId).toBe(true);
     });
-    // Paid as Audience Participation (medium), on its cooldown; Death Slam is
-    // no ability of his, now or later — no copy is kept.
-    expect(G.players['0'].souls).toBe(SOULS - ULT_COST.medium);
-    expect(sinclair.cooldowns?.eff_ult_sinclair).toBe(ULT_COOLDOWN);
+    // Used as Audience Participation (medium): no souls, on its own wait;
+    // Death Slam is no ability of his, now or later — no copy is kept.
+    expect(G.players['0'].souls).toBe(SOULS);
+    expect(sinclair.cooldowns?.eff_ult_sinclair).toBe(ULT_WAIT.medium);
     expect(sinclair.cooldowns?.eff_ult_lash).toBeUndefined();
     expect((sinclair as unknown as Record<string, unknown>).borrowedUlt).toBeUndefined();
     sinclair.skillUsedThisTurn = false;

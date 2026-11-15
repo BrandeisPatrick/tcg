@@ -153,15 +153,16 @@ function tagAlong(G: GameState, rem: CardInstance, target: CardInstance) {
 }
 
 describe('Tag Along: Rem rides on an ally as equipment', () => {
-  it('the card text, exactly, and its price: 2 souls, then the 1-turn wait', () => {
+  it('the card text, exactly; it costs no souls, then waits 3 turns', () => {
     const skill = getAbility('skill_rem')!;
     expect(skill.name).toBe('Tag Along');
     expect(skill.text).toBe('Rem rides on another of your heroes as equipment for 2 turns: it heals {sp:4}. Then Rem returns to your bench.');
     const { G, me, rem } = withRem(2);
-    expect(kitCost(rem, 'skill_rem')).toBe(2);
+    expect(kitCost(rem, 'skill_rem')).toBe(0);
+    const souls = me.souls;
     tagAlong(G, rem, me.active!);
-    expect(me.souls).toBe(10 - 2);
-    expect(rem.cooldowns).toEqual({ skill_rem: 1 });
+    expect(me.souls).toBe(souls);
+    expect(rem.cooldowns).toEqual({ skill_rem: 3 });
   });
 
   it('aims at another standing hero of her side, bench or Active — not herself, a corpse or an enemy — and the board lights exactly those', () => {
@@ -261,7 +262,11 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
     expect(haze.attached ?? []).not.toContain(rem);
     expect(me.bench[2]).toBe(rem);
     expect(rem).toMatchObject({ zone: 'bench', slot: 3, remMergeTurnsLeft: undefined, attachedTo: undefined });
-    // Back with Tag Along ready (its 1-turn wait has long run out).
+    // Back, with Tag Along still waiting: its 3 turns run one past the ride's 2,
+    // so she cannot ride again the turn she steps off.
+    expect(skillBlocked(G, '0', rem, haze.iid, 'skill_rem')).toBe('cooldown');
+    nextTurn(G, '0');
+    nextTurn(G, '1');
     expect(skillBlocked(G, '0', rem, haze.iid, 'skill_rem')).toBeNull();
   });
 

@@ -2,13 +2,14 @@ import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState, Fx
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from './damage';
 import { resolve, returnRemToBench } from './death';
-import { liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isBoss, isRespawning, resistedBy, seatOf, statusDuration } from './query';
+import { kitCharges, liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isBoss, isRespawning, resistedBy, seatOf, skillWait, statusDuration } from './query';
 import { pushLog } from './log';
 import { cardName } from '@/cards';
 import { fireTriggers } from './triggers';
 import { currentCast } from './castContext';
 import { pushFx, fxSource } from './fx';
 import { MAX_EXTRA_ATTACKS } from './constants';
+import { getAbility } from './registry';
 
 // Statuses whose value is a magnitude that's worth printing in the log
 // (Bleed 3, Bullet Resist 4, Shield 5, etc.). Stun/Silence/Disarm/Sleep are
@@ -252,8 +253,22 @@ export function tickCooldowns(ps: PlayerState) {
     if (!cooldowns) return;
     for (const id of Object.keys(cooldowns)) {
       const left = (cooldowns[id] ?? 0) - 1;
-      if (left > 0) cooldowns[id] = left;
-      else delete cooldowns[id];
+      if (left > 0) { cooldowns[id] = left; continue; }
+      delete cooldowns[id];
+      // A charged skill: the wait that has run out brings one charge back,
+      // and starts over while another is still spent. (No more can be spent
+      // than it holds now: a charge item taken off took its charges with it.)
+      const spent = c.chargesSpent?.[id];
+      if (spent === undefined) continue;
+      const ability = getAbility(id);
+      const still = Math.min(spent, kitCharges(c, id)?.max ?? 1) - 1;
+      if (still <= 0 || !ability) {
+        delete c.chargesSpent![id];
+        if (Object.keys(c.chargesSpent!).length === 0) delete c.chargesSpent;
+      } else {
+        c.chargesSpent![id] = still;
+        cooldowns[id] = skillWait(ability, c);
+      }
     }
     if (Object.keys(cooldowns).length === 0) delete c.cooldowns;
   };
@@ -261,8 +276,10 @@ export function tickCooldowns(ps: PlayerState) {
     tick(c);
     for (const a of c.attached ?? []) walk(a);
   };
-  // A hero waiting in the hand counts its owner's turns too (as a corpse does).
-  for (const c of [ps.active, ...ps.bench, ...ps.hand]) if (c) walk(c);
+  // A hero waiting in the hand counts its owner's turns too (as a corpse
+  // does), and so does one still in the deck: an ultimate's opening wait runs
+  // from the match's first turn wherever its hero is.
+  for (const c of [ps.active, ...ps.bench, ...ps.hand, ...ps.deck]) if (c) walk(c);
 }
 
 export function clearTurnFlags(ps: PlayerState) {

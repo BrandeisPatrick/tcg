@@ -82,11 +82,13 @@ export const poster = {
 } as const;
 
 /** The level greens: a hero card's frame from Level 1 (the lightest) to the
- *  cap (the darkest; MAX_LEVEL is 4 — engine/constants.ts). Chosen to read on
- *  the cream sheet and on the dark scene alike: each step is a clear jump,
- *  and the frame carries its own keylines (`levelFrame`) so the lightest
- *  holds on paper and the darkest on charcoal. */
-export const levelGreens = ['#a9de8e', '#6ec75a', '#35973f', '#176130'] as const;
+ *  cap (the darkest; MAX_LEVEL is 4 — engine/constants.ts). Level 1 is every
+ *  hero's frame as a match opens, so it is the quietest: a soft sage, not a
+ *  bright mint (Patrick, 2026-11-15: "Lv 1 green is too bright"). Each step
+ *  down is a clear jump in lightness (about L* 71, 60, 48, 36), and the frame
+ *  carries its own keylines (`levelFrame`) so the lightest holds on paper and
+ *  the darkest on charcoal. */
+export const levelGreens = ['#93b983', '#58a04d', '#2f8239', '#176130'] as const;
 export const levelGreen = (level: number): string =>
   levelGreens[Math.max(0, Math.min(levelGreens.length - 1, Math.round(level) - 1))];
 /** The frame of a hero card at `level`: a solid green border `width` px
@@ -123,6 +125,27 @@ export const atkInk = (atk: number, base: number): string =>
  *  HP is raised above the printed base, else the stat ink. */
 export const hpInk = (hp: number, hpMax: number, base: number): string =>
   hp < hpMax ? poster.stat.hpDim : hpMax > base ? poster.stat.hpBright : poster.stat.hp;
+
+/** What a hero's health is, for the tile's foot (HeroSlot): `hurt` below its
+ *  max; `raised` when whole with its max above the printed base (a level, an
+ *  item); else `whole`. */
+export const hpState = (hp: number, hpMax: number, base: number): 'whole' | 'hurt' | 'raised' =>
+  hp < hpMax ? 'hurt' : hpMax > base ? 'raised' : 'whole';
+
+/** How a hero tile prints its HP at its foot, so a glance tells a hurt hero
+ *  from a whole one and a raised one from a plain one: the heart's shape
+ *  (`state`: a broken heart when hurt, a heart with a plus when raised), the
+ *  heart's ink and the number's ink — hurt, the damage red; raised, the green
+ *  a raised Bullet Power prints in (`stat.atkBright`); whole, the red heart
+ *  and a plain ink number. The number stands alone: no max after it (Patrick,
+ *  2026-11-15: "I don't like 1/6"); the health strip at the tile's head shows
+ *  the max. */
+export const hpPrint = (hp: number, hpMax: number, base: number): { state: 'whole' | 'hurt' | 'raised'; heart: string; number: string } => {
+  const state = hpState(hp, hpMax, base);
+  return state === 'hurt' ? { state, heart: poster.stat.hp, number: poster.redDeep }
+    : state === 'raised' ? { state, heart: poster.stat.atkBright, number: poster.stat.atkBright }
+    : { state, heart: poster.stat.hp, number: poster.ink };
+};
 
 /** Deadlock's HUD glyphs (public/hud): the game's own white marks, painted
  *  in any colour through a mask. `soul.svg` is the soul wisp, `team_amber` /

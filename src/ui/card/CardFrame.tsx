@@ -12,7 +12,7 @@ import {
 } from './SpotVarnish';
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL, itemCard } from '@/cards';
 import type { CardData } from '@/engine/types';
-import { heroAbilities, ultimateCard, ultPrice } from '@/engine/query';
+import { heroAbilities, skillWait, ultimateCard, ultWait } from '@/engine/query';
 import { PRICE } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
@@ -599,11 +599,12 @@ export function CardFrame({
             ? [
               ...heroAbilities(data).map(({ kind, ability }) => ({
                 key: ability.id, kind,
-                tag: kind === 'skill' ? `Skill${ability.souls ? ` · ${ability.souls}` : ''}` : 'Passive',
+                // A skill's pace where its price once stood: its charges, else its wait in turns.
+                tag: kind === 'skill' ? `Skill · ${(ability.charges ?? 1) > 1 ? `${ability.charges} charges` : `wait ${skillWait(ability)}`}` : 'Passive',
                 body: ability.text,
               })),
-              // A charged ultimate prints its own price, and its rule on a line of its own under it.
-              ...(ult ? [{ key: ult.id, kind: 'ult' as const, tag: `Ult · ${ult.charged ? 'charged ' : ''}${ultPrice(ult)}`, body: isHand ? ult.name : `${ult.name}: ${ult.text ?? ''}` }] : []),
+              // An ultimate prints its wait in turns; a charged one says so, and its rule goes on a line of its own under it.
+              ...(ult ? [{ key: ult.id, kind: 'ult' as const, tag: `Ult · ${ult.charged ? 'charged' : `wait ${ultWait(ult)}`}`, body: isHand ? ult.name : `${ult.name}: ${ult.text ?? ''}` }] : []),
               ...(ult?.charged && !isHand ? [{ key: `${ult.id}-charge`, kind: null, tag: null, body: ult.charged.text }] : []),
             ]
             : data?.type === 'ultimate' && data.charged

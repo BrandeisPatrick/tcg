@@ -61,9 +61,9 @@ export interface AbilityDef {
   /** A "may": an optional trigger. At its moment (`trigger`) the engine does
    *  not run it but asks its player whether to (the trigger prompt system,
    *  engine/prompts.ts), on either player's turn — and only when it can be
-   *  used then: its level, its wait and its souls. A kit ability (a skill or
-   *  an ultimate) costs its `kitCost` and waits its cooldown after, as from
-   *  its button; it cannot be used from the button at all. The card declares
+   *  used then: its level and its wait (or its charge). A kit ability (a
+   *  skill or an ultimate) waits after, as from its button; it cannot be
+   *  used from the button at all. The card declares
    *  this and its `run` (the effect, with `source` the hero and `target` the
    *  hero the moment is about); the asking is the system's. */
   optional?: true;
@@ -77,13 +77,20 @@ export interface AbilityDef {
    *  card prints for it. Spells, gear and ultimates print their own card text. */
   text?: string;
   /** A hero skill only: own turns before it may be used again — 1 is every
-   *  turn; absent reads as SKILL_COOLDOWN (1). Counted in
+   *  turn; absent reads as SKILL_COOLDOWN (3). Counted in
    *  `CardInstance.cooldowns`, ticked at the start of the owner's turn
-   *  (docs/stats-model.md §1). An ultimate's is ULT_COOLDOWN. */
+   *  (docs/stats-model.md §1). An ultimate's is its size's (`ULT_WAIT`). */
   cooldown?: number;
-  /** A hero skill only: the souls it costs to use (1–3, docs/hero-design.md
-   *  §2). An ultimate's cost is its card's size (`ULT_COST`); `kitCost`
-   *  (engine/query.ts) reads both. */
+  /** A hero skill only: the uses it holds (a charged skill; absent, one). A
+   *  use spends a charge, and the skill's wait brings them back one at a
+   *  time, so two charges are two turns running and then the usual pace. The
+   *  four that have them are the four Deadlock gives charges: Serrated Knives
+   *  and Frost Grenade hold two there from the start, Lightning Ball and
+   *  Kinetic Pulse from their first upgrade (deadlock-api, 2026-11-15). */
+  charges?: number;
+  /** The souls an optional trigger costs to use. No kit ability has a price
+   *  since 2026-11-15 (skills and ultimates cost no souls); the field stays
+   *  for a card that might. `kitCost` (engine/query.ts) reads it. */
   souls?: number;
   /** What the ability is aimed at when that depends on the board rather than
    *  being fixed (`target`): the filter (and whether the caster is left out)
@@ -151,6 +158,14 @@ export interface AbilityDef {
    *  its active items' ('item') — the Cooldown family. Summed by `cooldownCut`;
    *  a cooldown never goes under 1. */
   cooldownCut?: (self: CardInstance, kind: 'ult' | 'item') => number;
+  /** The charge items (Extra Charge, Rapid Recharge), the only cards that
+   *  touch a charged skill's charges (Patrick, 2026-11-15): the extra charges
+   *  the bearer's charged skill holds while it wears this (`chargeBonus`), and
+   *  the own turns sooner each of its charges comes back (`chargeHaste`).
+   *  Neither does anything for a skill with no charges, an ultimate or an
+   *  active item. Of several worn, the largest applies (query.ts). */
+  chargeBonus?: (self: CardInstance) => number;
+  chargeHaste?: (self: CardInstance) => number;
   /** Resist the bearer has to a damage type while it wears this (Bullet and
    *  Spirit Resilience). `damageUnit` takes the larger of it and a resist status. */
   resist?: (self: CardInstance, type: DamageType) => number;
@@ -500,6 +515,7 @@ const eff_refresher: AbilityDef = {
     const mine = standingActive(G, ctx.movingPlayer);
     if (!mine) return;
     delete mine.cooldowns;
+    delete mine.chargesSpent; // a charged skill is back at its full charges
     for (const it of wornItems(mine)) delete it.cooldowns;
     pushLog(G, `${cardName(mine.cardId)}'s cooldowns are reset (Refresher).`);
   },
@@ -775,6 +791,26 @@ const eff_healing_booster: AbilityDef = {
   id: 'eff_healing_booster', trigger: 'ongoing', target: 'self',
   base: 2,
   healingBoost: () => 2,
+  run: () => {},
+};
+// ----- The charge items (Extra Charge → Rapid Recharge) -----
+// The only cards that touch a charged skill's charges (Patrick, 2026-11-15:
+// "only these kind of items can allow charged skills to get faster"). Pure
+// hooks, read by `kitCharges` and `skillWait` (engine/query.ts); they do
+// nothing on a hero whose skill holds no charges. docs/card-design.md.
+// `base` is the AI's worth of the card on a hero with a charged skill (their
+// budget, 3.0 and 6.5); on any other hero the AI counts nothing for them.
+const eff_extra_charge: AbilityDef = {
+  id: 'eff_extra_charge', trigger: 'ongoing', target: 'self',
+  base: 3,
+  chargeBonus: () => 1,
+  run: () => {},
+};
+const eff_rapid_recharge: AbilityDef = {
+  id: 'eff_rapid_recharge', trigger: 'ongoing', target: 'self',
+  base: 6,
+  chargeBonus: () => 2,
+  chargeHaste: () => 1,
   run: () => {},
 };
 const eff_healing_tempo: AbilityDef = {
@@ -1990,8 +2026,9 @@ const eff_prism_blast: AbilityDef = {
 };
 
 // ----- Hero skills (docs/hero-design.md §8) -----
-// A hero has one skill or one passive. A skill costs its `souls` (1–3) and then
-// waits SKILL_COOLDOWN; the hero uses one ability a turn. A number marked
+// A hero has one skill or one passive. A skill costs no souls: it waits
+// SKILL_COOLDOWN after a use (4 for the ones that hit every enemy or deny a
+// turn), and a charged one holds two uses; the hero uses one ability a turn. A number marked
 // {sp:N} adds the hero's Spirit: spi(source) here, the hero using it.
 
 // The enemy Active, if it stands, read BEFORE a skill's damage: what the text
@@ -2003,7 +2040,7 @@ function enemyActiveOf(G: GameState, pid: PlayerID): CardInstance | undefined {
 
 // Mo & Krill — Sand Blast: blind the enemy carry so it can't shoot.
 const skill_mo_krill: HeroAbilityDef = {
-  id: 'skill_mo_krill', trigger: 'activate', target: 'enemyActive', souls: 2,
+  id: 'skill_mo_krill', trigger: 'activate', target: 'enemyActive',
   name: 'Sand Blast',
   text: "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn (it can't attack).",
   base: 1,
@@ -2020,7 +2057,7 @@ const skill_mo_krill: HeroAbilityDef = {
 // control, so it ticks at the start of its owner's turn: put on for 1 turn on
 // his turn, it covers the rival's turn and is gone when his next one begins.
 const skill_viscous: HeroAbilityDef = {
-  id: 'skill_viscous', trigger: 'activate', target: 'allyHero', souls: 3,
+  id: 'skill_viscous', trigger: 'activate', target: 'allyHero', cooldown: 4,
   name: 'The Cube',
   text: 'Cube one of your heroes: it takes no damage until your next turn.',
   base: 3,
@@ -2031,7 +2068,7 @@ const skill_viscous: HeroAbilityDef = {
 
 // Lady Geist — Essence Bomb: she bleeds herself to bomb the whole enemy side.
 const skill_lady_geist: HeroAbilityDef = {
-  id: 'skill_lady_geist', trigger: 'activate', target: 'noTarget', souls: 2, hpCost: 1,
+  id: 'skill_lady_geist', trigger: 'activate', target: 'noTarget', hpCost: 1,
   name: 'Essence Bomb',
   text: 'Lady Geist pays 1 HP: deal {sp:1} spirit damage to every enemy.',
   base: 1,
@@ -2045,7 +2082,7 @@ const skill_lady_geist: HeroAbilityDef = {
 // Shiv — Serrated Knives: the bleed that was his free on-hit passive, now a
 // thrown knife he pays for.
 const skill_shiv: HeroAbilityDef = {
-  id: 'skill_shiv', trigger: 'activate', target: 'enemyActive', souls: 2,
+  id: 'skill_shiv', trigger: 'activate', target: 'enemyActive', charges: 2,
   name: 'Serrated Knives',
   text: 'Throw a knife: deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns.',
   base: 1,
@@ -2060,7 +2097,7 @@ const skill_shiv: HeroAbilityDef = {
 // Warden — Willpower: a barrier and a burst of speed. Swift is this turn's: a
 // Retreat after it is free, and what is left is swept when the turn ends.
 const skill_warden: HeroAbilityDef = {
-  id: 'skill_warden', trigger: 'activate', target: 'self', souls: 2,
+  id: 'skill_warden', trigger: 'activate', target: 'self',
   name: 'Willpower',
   text: 'A barrier and a burst of speed: Shield 3 on Warden, and Swift (his next retreat is free).',
   base: 3,
@@ -2074,7 +2111,7 @@ const skill_warden: HeroAbilityDef = {
 
 // Wraith — Full Auto: she spins up her gun. +2 Bullet Power for 2 of her turns.
 const skill_wraith: HeroAbilityDef = {
-  id: 'skill_wraith', trigger: 'activate', target: 'self', souls: 2,
+  id: 'skill_wraith', trigger: 'activate', target: 'self',
   name: 'Full Auto',
   text: 'Wraith gets +2 Attack for 2 turns.',
   base: 2,
@@ -2086,7 +2123,7 @@ const skill_wraith: HeroAbilityDef = {
 
 // Seven — Lightning Ball: zaps the whole enemy team.
 const skill_seven: HeroAbilityDef = {
-  id: 'skill_seven', trigger: 'activate', target: 'noTarget', souls: 2,
+  id: 'skill_seven', trigger: 'activate', target: 'noTarget', charges: 2,
   name: 'Lightning Ball',
   text: 'Roll a ball of lightning through the enemy team: deal {sp:1} spirit damage to every enemy.',
   base: 1,
@@ -2100,7 +2137,7 @@ const skill_seven: HeroAbilityDef = {
 // Lash — Ground Strike: control 3 needs hard control in the skill, so the slam
 // pins the enemy Active (Rooted: it cannot retreat or be swapped).
 const skill_lash: HeroAbilityDef = {
-  id: 'skill_lash', trigger: 'activate', target: 'noTarget', souls: 3,
+  id: 'skill_lash', trigger: 'activate', target: 'noTarget', cooldown: 4,
   name: 'Ground Strike',
   text: "Slam down: deal {sp:1} spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat).",
   base: 1,
@@ -2115,7 +2152,7 @@ const skill_lash: HeroAbilityDef = {
 
 // Yamato — Flying Slash: she grapples onto any enemy, bench too.
 const skill_yamato: HeroAbilityDef = {
-  id: 'skill_yamato', trigger: 'activate', target: 'enemyHero', souls: 2,
+  id: 'skill_yamato', trigger: 'activate', target: 'enemyHero',
   name: 'Flying Slash',
   text: 'Grapple onto any enemy, bench too, and slash it: deal {sp:2} spirit damage.',
   base: 2,
@@ -2128,7 +2165,7 @@ const skill_yamato: HeroAbilityDef = {
 // Dynamo — Kinetic Pulse: knocks the enemy team into the air. A flat 1: the
 // card prints no Spirit on it.
 const skill_dynamo: HeroAbilityDef = {
-  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget', souls: 3,
+  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget', cooldown: 4, charges: 2,
   name: 'Kinetic Pulse',
   text: 'Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air).',
   base: 1,
@@ -2142,7 +2179,7 @@ const skill_dynamo: HeroAbilityDef = {
 // Kelvin — Frost Grenade: chills every enemy and heals his whole team; the
 // heal grows with his Spirit (support 3).
 const skill_kelvin: HeroAbilityDef = {
-  id: 'skill_kelvin', trigger: 'activate', target: 'noTarget', souls: 3,
+  id: 'skill_kelvin', trigger: 'activate', target: 'noTarget', cooldown: 4, charges: 2,
   name: 'Frost Grenade',
   text: 'Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each.',
   base: 1,
@@ -2156,7 +2193,7 @@ const skill_kelvin: HeroAbilityDef = {
 
 // Paige — Plot Armor: shields her carry and boosts its gun.
 const skill_paige: HeroAbilityDef = {
-  id: 'skill_paige', trigger: 'activate', target: 'allyHero', souls: 2,
+  id: 'skill_paige', trigger: 'activate', target: 'allyHero',
   name: 'Plot Armor',
   text: 'Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns.',
   base: 2,
@@ -2176,7 +2213,7 @@ const skill_paige: HeroAbilityDef = {
 // off from the lane leaves it to be filled as when an Active falls.
 const TAG_ALONG_TURNS = 2;
 const skill_rem: HeroAbilityDef = {
-  id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true, souls: 2,
+  id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   name: 'Tag Along',
   text: 'Rem rides on another of your heroes as equipment for 2 turns: it heals {sp:4}. Then Rem returns to your bench.',
   base: 4,
@@ -2192,7 +2229,7 @@ const skill_rem: HeroAbilityDef = {
 // rival's next turn, and it takes +1 damage (both resists down) for the rest
 // of this one.
 const skill_sinclair: HeroAbilityDef = {
-  id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive', souls: 3,
+  id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Rabbit Hex',
   text: "Hex the enemy Active into a Rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage.",
   base: 3,
@@ -2208,7 +2245,7 @@ const skill_sinclair: HeroAbilityDef = {
 // doc's "takes +1 damage" (Bullet Resist −1 and Spirit Resist −1, as Eternal
 // Night's), for 2 turns; the kick lands first, so the mark is for what follows.
 const skill_silver: HeroAbilityDef = {
-  id: 'skill_silver', trigger: 'activate', target: 'enemyActive', souls: 2,
+  id: 'skill_silver', trigger: 'activate', target: 'enemyActive',
   name: 'Boot Kick',
   text: 'Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns.',
   base: 1,
@@ -2606,6 +2643,8 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_majestic_leap,
   // ----- Passive items: resists and healing boost while worn -----
   eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
+  // ----- Passive items: the charge items -----
+  eff_extra_charge, eff_rapid_recharge,
   // ----- Passive items: procs and hooks -----
   eff_bullet_resist_shredder_proc,
   eff_restorative_shot_proc, eff_extra_regen_proc, eff_mystic_regeneration_proc,

@@ -209,6 +209,15 @@ export function readyClient() {
   return client;
 }
 
+/** Put `n` souls in `pid`'s bank on `client`: for a test whose turn pays for
+ *  more than the lane's income covers (a 3-soul skill on a first turn). */
+export function bankSouls(client: ReturnType<typeof readyClient>, pid: PlayerID, n: number): void {
+  const s = client.getState()!;
+  const G = structuredClone(s.G) as GameState;
+  G.players[pid].souls = n;
+  (client as unknown as { store: { dispatch: (a: unknown) => void } }).store.dispatch({ type: 'SYNC', state: { ...s, G } });
+}
+
 /** End the turn on `client`: the next player's turn begins. */
 export function passTurn(client: ReturnType<typeof readyClient>): void {
   client.moves.endTurn();

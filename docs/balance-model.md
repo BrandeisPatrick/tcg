@@ -5,8 +5,12 @@ reasoning on 2026-11-05, from the item budget in
 [card-design.md](./card-design.md) §3; no sim ran. The sim gates
 (`scripts/balance-sim.ts`: seat 50 ± 3, every hero 45–55, a mean of 8–10 own
 turns, no item in over 40% of builds, the Mid-Boss contested) have not been run
-against this 140-card catalogue. The testing round runs on request
+against this 142-card catalogue. The testing round runs on request
 ([CLAUDE.md](../CLAUDE.md)).
+
+**2026-11-15.** The lane's income went from 5 souls a turn to 2, and a kill
+pays a bounty that grows with the rounds (§7). Both were set by reasoning; no
+sim ran.
 
 The north star for hero/card balance. Read this before tuning stats. Companion
 docs: [stats-model.md](./stats-model.md) (status/duration mechanics),
@@ -44,8 +48,9 @@ squishies die faster — that's positioning, not a stat problem.
 
 **How the curve is produced (not by special-casing turns):**
 - **Low Lv1 offense.** Base BP is 1–2 and base skill damage 1–2 (a Lv1 caster
-  can't one-shot a fresh hero). Souls come 4 a turn, so the first items are
-  small: a tier 3 is two turns' income, a tier 4 four.
+  can't one-shot a fresh hero). Souls come 2 a turn (§7), so the first items
+  are small: a tier 1 is a turn's income, a tier 2 two turns', a tier 3 four
+  and a tier 4 eight, less what kills pay.
 - **Scaling outpaces HP late.** +1 BP / +1 Spirit per level plus Spirit/Weapon
   items push damage past the +1 HP/level growth, so TTK falls to ~1 and a leveled
   hero's attack **and** skill can kill two targets.
@@ -63,8 +68,8 @@ squishies die faster — that's positioning, not a stat problem.
 ## 4. Lanes — front tank / back caster (emergent, not enforced)
 
 Only the **Active** hero attacks and soaks damage for the team (a fallen hero pays
-the killer its level + 1 and pushes the same into its side's structures; damage
-past 0 HP is not spilled).
+the killer's side the round's bounty and pushes its level + 1 into its side's
+structures; damage past 0 HP is not spilled).
 So a natural strategy is: park a **Vitality build** (high HP + regen, e.g. Abrams,
 Mo & Krill) Active to absorb, while **Spirit builds** sit on the bench and cast.
 This is strategy enabled by the rules, **not** a hard class — any hero can be put
@@ -72,9 +77,10 @@ in any seat.
 
 ## 5. Current stat anchors (V1)
 - Each side's track: Guardian **4** → Walker **6** → Patron **8**; the Patron
-  falling loses. A death pays the killer's side the victim's **level + 1** (+2
-  for the richest hero on the board) and pushes the same into the victim's
-  track; respawn takes 1 / 2 / 3 own turns by round.
+  falling loses. A death pays the killer's side the round's bounty, **1 to 6**
+  souls (§7), and pushes the victim's **level + 1** into the victim's track
+  (doubled from round 9); the fallen hero goes back to the hand after **2** own
+  turns.
 - **Earn it in the lane:** the Active earns 2 exp at the end of its turn, a
   bench hero 1; +1 on equip, +2 on a kill blow (5 / 7 / 9 to level). A hero's
   ultimate unlocks at Level 2 — the front-liner earns it first, a bench caster
@@ -91,6 +97,223 @@ item 8 / 6 / 4 / 3 own turns at tiers 1–4. A tier-5 item (24 souls) is worn fo
 about 2 own turns, so a permanent +1 stat is worth 1.4 there; a tier-5 card has
 to earn its 24 with an effect that decides a late match (a second attack, a
 revive, a wipe of statuses, a structure push), not with stats.
+
+## 7. The bank (2026-11-15)
+
+Patrick, 2026-11-14 and 15: each turn pays one unit, as Pokémon TCG Pocket
+gives one Energy a turn; souls are a bank ("you can choose to spend it or not
+spend it"); a kill is "not worth much at the very beginning and worth a lot at
+the very later"; "keep it simple using simple numbers". No sim ran.
+
+**The lane pays 2 souls a turn** (`LANE_INCOME`; it was 5): the price of one
+tier-1 item. Every printed price stays: items 2 / 4 / 8 / 16 / 24, skills 2 or
+3, ultimates 4 / 8 / 12, Retreat 0–2. A side may still play as many cards in a
+turn as its souls pay for.
+
+- **The bank asks a question now.** The decks dealt from builds for five
+  sample squads cost 50–76 souls for their 16 items. By own turn 9 a side has
+  drawn 13 of the 19 cards behind its first Active, about 11 items and about
+  41 souls of them. At 5 a turn the lane had paid 45 by then, so nearly every
+  item drawn was bought. At 2 a turn it pays 18, and four kills (rounds 3, 5,
+  6 and 8) about 12 more: about 30 against the same 41, with skills and
+  ultimates on top.
+- **Items land when the item budget assumes.** The budget wears an item
+  8 / 6 / 4 / 3 / 2 own turns at tiers 1–5 ([card-design.md](./card-design.md)
+  §3), which in a 9–10-turn match is a purchase around turn 1–2, 3–4, 5–6, 6–7
+  and 8. The first turn a side that saves everything can pay for one item:
+
+  | Tier | Price | At 5 a turn | At 2, lane only | At 2, with kills |
+  |---|---|---|---|---|
+  | 1 | 2 | 1 | 1 | 1 |
+  | 2 | 4 | 1 | 2 | 2 |
+  | 3 | 8 | 2 | 4 | 3–4 |
+  | 4 | 16 | 4 | 8 | 6–7 |
+  | 5 | 24 | 5 | 12 | 9–10 |
+
+  At 5 a turn a tier-4 item could land on turn 4 and be worn twice the three
+  turns it is priced for.
+- **What souls buy.** The deck's cards and a Retreat, nothing else: since §8
+  (the same day) a skill and an ultimate cost no souls. Before §8 a skill's 2
+  or 3 souls were a whole turn of the lane or more and an ultimate's 4 / 8 /
+  12 were two, four or six turns of it; §8's waits start from those figures.
+
+**A kill pays a bounty** (`KILL_BOUNTY_STEP_ROUNDS`; `bountyAtRound`,
+rounds.ts): 1 soul, and 1 more every two rounds.
+
+| Round | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A kill pays | 1 | 1 | 2 | 2 | 3 | 3 | 4 | 4 | 5 | 5 | 6 | 6 |
+
+- **The shape is Deadlock's.** Its bounty is 200 souls plus 50 a minute, to
+  2,200 at 40 minutes ([mechanics-survey.md](./mechanics-survey.md) §3): a
+  quarter of a tier-1 item at the start, 2¾ at the cap. Here it is half a
+  tier-1 item in rounds 1–2 and three in rounds 11–12. It equals a turn of
+  the lane in rounds 3–4 and passes it from round 5.
+- **It is the round's, not the victim's.** One number, printed on the bank
+  sheet. There is no bonus for the richest hero. It goes to the side the hero
+  fell to, whatever dealt the blow; a kill the Rejuvenator undoes still pays;
+  a fall to the Mid-Boss pays nothing.
+- **It reverses 2026-11-08's "kills pay none, so the side ahead cannot
+  snowball".** The early bounty is small on purpose. The late one is the
+  phase curve's snowball (§2), on top of the pushes that double from round 9.
+- **Expected souls by own turn 9**, the lane's 18 included: a side with kills
+  in rounds 3, 5, 6, 8 and 9 has earned 35; a side with kills in rounds 4, 7
+  and 9 has earned 29. Each had 45 before.
+
+**The bank sheet** (`bankForecast`, bank.ts; `SoulsCounter`): a tap on your
+souls, or a mouse over them, shows what the next turn pays, what you will hold
+then with nothing spent, and what a kill pays now.
+
+**Story.** The opponent's war chest is 1 soul a depth, +2 for an elite and +3
+for a boss (it was 2 a depth, +4, +8): the same share of a fight's lane
+income, ×2⁄5 rounded to whole souls. Supply purses stay 4 / 8 / 12; each is
+priced as the item tier it stands in for.
+
+**The AI saves** (`savingGoal`, `savingCost`, src/ai/heuristic.ts; Patrick,
+2026-11-15: "the AI does not save… this needs to be solved"). At 2 souls a
+turn a one-ply look always finds something small to spend them on, so a
+dearer card was never reached, nor the upgrades its play makes.
+- **The goal** is the card of the highest tier in its hand, tier 2 or more,
+  that a hero of its can take and that it can pay for within 3 turns of
+  income (an upgrade onto the hero wearing its component counts at the
+  difference). The higher tier comes first because the item budget gives it
+  more for each soul and turn worn: 2 points over 8 turns at tier 1, 4 over 6
+  at tier 2, 8 over 4 at tier 3, 16 over 3 at tier 4.
+- **A spend that pushes the goal's turn back is marked down by 12** in the
+  AI's evaluation, once, however many turns it costs. That is above an
+  ordinary spend (a tier-1 card is worth 2 to 6 there) and below a decisive
+  one (a kill is 25 or more). So it holds its souls against cheap cards and
+  Retreats, and still pays for a Retreat that wins a kill. Skills and
+  ultimates cost no souls (§8), so saving never holds them back.
+- **Tier 1 is not saved for**: it is one turn's income. With no tier-2 or
+  dearer card in reach the AI spends as the look says.
+
+**Left for a testing round.**
+- How the saving AI plays over many matches: how often it reaches tier 3 and
+  4.
+- Everything in §8: the waits, the charges and the charged ultimates' 10 and
+  8 are reasoned, not played.
+- Golden Goose Egg's 2 souls a use is now a whole turn of the lane every
+  other turn. Its budget in points is unchanged (16.4, already listed as over
+  in card-design.md §3).
+- Match length. The one seeded AI match the tests replay (seed 12) ended in
+  round 7 where it ran to the round cap before. That is one match, not a
+  measurement.
+- Deck copies stay at 4. Pocket's rule is 2; it is Patrick's call.
+
+## 8. Kits cost no souls: waits, charges, one ultimate a turn (2026-11-15)
+
+Patrick, 2026-11-15: "Spell and equipment both have cost. Ultimate does not
+have cost, and only one ultimate can be played per turn. Skills have CD. Some
+skills can be charged: they have CD, but multiple charges."
+
+So souls buy the deck's cards and a Retreat, and a hero's kit is paid for in
+turns. Every number below is set by reasoning from what the kit cost in souls
+the same morning (§7). None has been played or simulated.
+
+| | Before (§7) | Now |
+|---|---|---|
+| Skill | 2 or 3 souls, ready next turn | no souls; waits 3 or 4 turns |
+| Charged skill | none | 2 uses; the wait returns one at a time |
+| Ultimate | 4 / 8 / 12 souls, waits 3 | no souls; waits 4 / 6 / 8, from turn 1 too; one a turn for a side |
+| Charged ultimate | 20 or 16 souls, 1 less a damage | no souls; ready at 10 taken (Victor) or 8 dealt (Silver), then waits 6 |
+
+**Skills** (`SKILL_COOLDOWN` 3; `cooldown: 4` on five).
+- **The wait is the old price plus 1.** The ten skills that cost 2 souls wait
+  3 turns. The five that cost 3 (The Cube, Ground Strike, Kinetic Pulse, Frost
+  Grenade, Rabbit Hex: area damage with a rider, or a turn denied) wait 4.
+- **Why that holds the rate.** At 2 souls a turn a 2-soul skill took a whole
+  turn of the lane, so a side that bought nothing cast one skill a turn at
+  the most. A squad has about three skill heroes (15 of the 21 heroes have a
+  skill). Three skills on a wait of 3 are three casts in three turns: the same
+  one a turn. The one turn over the price in turns of income is for the items
+  the casts no longer compete with.
+- **What it adds.** A hero casts on its turns 1, 4, 7 and 10 (wait 3) or 1, 5
+  and 9 (wait 4). A skill is worth 2 to 4.5 points
+  ([hero-design.md](./hero-design.md) §4), so 3 to 4 casts are 6 to 13 points
+  a match for no souls, about a tier-3 item on every skill hero. Both sides
+  get it, so it shortens matches; it does not favour a seat by itself.
+- **The burst.** A wait limits a hero, not a side: four heroes whose skills
+  are all ready may cast four in a turn. Heroes come out of the deck over the
+  first turns, so their waits start apart, and a side has to hold skills back
+  to line them up, as it had to bank souls before.
+
+**Charged skills** (`AbilityDef.charges`; `CardInstance.chargesSpent`). A
+charged skill holds 2 uses. Each use spends one, and the wait brings them
+back one at a time, the next wait starting when the last ends. The hero still
+uses one ability a turn, so two charges are two turns running, not two casts
+in a turn.
+- **Which.** The four skills of this roster that hold charges in Deadlock
+  (deadlock-api `v1/assets/items/by-type/ability`, read 2026-11-15):
+
+  | Skill | Hero | In Deadlock | Here |
+  |---|---|---|---|
+  | Serrated Knives | Shiv | 2 charges from the first point | 2 charges, 3 turns each |
+  | Frost Grenade | Kelvin | 2 charges from the first point | 2 charges, 4 turns each |
+  | Lightning Ball | Seven | +1 charge at its first upgrade | 2 charges, 3 turns each |
+  | Kinetic Pulse | Dynamo | +1 charge at its first upgrade | 2 charges, 4 turns each |
+
+  Yamato's Flying Slash gains a charge only at its third upgrade, so it is
+  not charged here. Vindicta's Assassinate has 2 charges and is an ultimate:
+  one ultimate a turn already paces it.
+- **What a charge is worth.** Over a match the rate is the same one cast a
+  wait. The second charge is one extra cast, early, and the choice of when:
+  the skill's own 2 to 4.5 points once. These four skills keep their text and
+  numbers; the extra cast is the charge's whole price.
+
+**The charge items** (Patrick, 2026-11-15: "only these kind of items can
+allow charged skills to get faster"). Extra Charge (Spirit T1) gives the
+bearer's charged skill 1 more charge. Rapid Recharge (Spirit T3, built from
+it) gives 2 more and brings each back 1 turn sooner. Nothing else adds a
+charge or shortens a skill's wait. The cards and their budget are in
+[card-design.md](./card-design.md) ("Added 2026-11-15: the charge items").
+
+**Ultimates** (`ULT_WAIT`: small 4, medium 6, large 8; `G.ultUsed`).
+- **The wait is the old price in turns of the lane, plus 2.** 4 / 8 / 12
+  souls were 2 / 4 / 6 turns of income with nothing else bought. Two more
+  turns stand for the items the same souls had to buy: a side that kept
+  buying could not reach a large ultimate before turn 8 or so.
+- **It opens the match on its wait**, as an active item starts on its
+  cooldown. A small ultimate is first ready on its side's turn 4, a medium one
+  on turn 6 and a large one on turn 8, with its hero at Level 2
+  (`ULT_UNLOCK_LEVEL`). Without the opening wait Seven's Storm Cloud (5 spirit
+  damage to every enemy) would be free on the turn Seven reached Level 2.
+  Large ultimates arrive with the late game's doubled pushes (round 9, §2).
+- **Uses in a 9–10-turn match:** small twice (turns 4 and 8), medium once
+  (turn 6; again on 12, past the cap), large once (turn 8). At their §4 worth
+  (small 4–6, medium 8–12, large 12–18) that is 8–12, 8–12 and 12–18 points a
+  match: the sizes stay in order.
+- **One ultimate a turn for a side** is Patrick's rule. Four heroes at Level
+  2 on turn 6 would otherwise fire four medium ultimates at once, which souls
+  used to forbid. With it they come one a turn, turns 6 to 9.
+
+**Charged ultimates** (`UltimateCard.charged`).
+- **The damage needed is half the old soul price:** Victor 10 taken (was 20
+  souls), Silver 8 dealt (was 16). The old price fell 1 a damage and the
+  budget priced these at twice their worth, so half the price was the point
+  where the damage had paid for it.
+- Victor has 9 HP at Level 2 and his Aura of Suffering deals him 1 a turn: 10
+  taken is his first life and a turn of the Aura. He rises on half HP, which
+  is under 10, so a second rising needs healing in between.
+- Silver hits for 2 at Level 1 and 4 at Level 2: 8 dealt is her turn 3 or 4,
+  where a small or medium ultimate first comes.
+- **No opening wait; after a use, the size's wait.** Both are medium (6
+  turns). The wolf hits for 7, so her two wolf turns deal the next 8 by
+  themselves; without the wait she would never leave the form.
+
+**Unchanged.** A hero uses one ability a turn (skill, ultimate or active
+item). Retreat costs the hero's printed souls. No card shortens a wait: the
+Cooldown family are this game's draw cards, and only the charge items touch a
+charged skill's charges. Echo Shard's repeat of a skill spends no charge and
+starts no wait. Refresher resets waits and sets a charged skill back to full.
+
+**Left for testing** (only when asked by name):
+- Match length with free kits.
+- Whether four skills held for one turn is a burst the game wants.
+- Whether a wait of 3 leaves The Cube, Rabbit Hex and the other denials at 4
+  far enough apart.
+- Victor's 10 and Silver's 8.
+- Rapid Recharge on a charged skill: a cast every turn while it is worn.
 
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).

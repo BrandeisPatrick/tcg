@@ -72,9 +72,12 @@ function addRefusal(id: CardId, copies: number, size: number): string | null {
   return null;
 }
 
-export function DeckEditor({ squad }: {
+export function DeckEditor({ squad, onChange }: {
   /** The squad's heroes in pick order: "From builds" reads their builds. */
   squad: CardId[];
+  /** Told after every change to the saved deck (the Loadout's ready decks
+   *  row reads it to say which, if any, is in use). */
+  onChange?: () => void;
 }) {
   const { isMobile, width } = useViewport();
   const [deck, setDeck] = useState<CardId[]>(() => getDeck());
@@ -100,6 +103,7 @@ export function DeckEditor({ squad }: {
     saveDeck(next);
     setDeck(getDeck());
     setTip((t) => (t?.passive ? null : t));
+    onChange?.();
   };
 
   /** A catalogue tap: one more copy in, or false (the tile shakes). */

@@ -45,7 +45,8 @@ import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/
 import {
   DRAW_CARDS, MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, chooseActiveBlockedOracle, deckOf,
   describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
-  freeBenchSlotOracle, isMergedRem, itemData, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
+  skillChargesLeftOracle, skillChargesOracle, skillWaitOracle, ultFaceOracle, ultUncharged,
+  freeBenchSlotOracle, isMergedRem, itemData, killBountyOracle, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
   playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
   slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
   upgradeComponentOracle, upgradeMadeOracle, wornItemOf, wornItemsOf,
@@ -108,7 +109,10 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       if (c.zone !== 'deck') wrong.push(`zone '${c.zone}'`);
       if (c.attachedTo !== undefined) wrong.push(`attachedTo ${c.attachedTo}`);
       if ((c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
-      if (Object.keys(c.cooldowns ?? {}).length) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
+      // An item in the deck has no cooldown; a hero there carries only its ultimate's opening
+      // wait, which runs from the match's first turn wherever the hero is.
+      const ultId = (CARDS_BY_ID[c.cardId] as { ult?: string } | undefined)?.ult;
+      if (Object.keys(c.cooldowns ?? {}).some((k) => !isHeroCard(c) || k !== ultId)) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
       if (c.charges !== undefined) wrong.push(`charges ${c.charges}`);
       if (isHeroCard(c)) {
         if (c.hp !== c.hpMax || c.statuses.length || c.respawnTurnsLeft !== undefined) wrong.push(`a hero at ${c.hp}/${c.hpMax} with ${c.statuses.length} status(es), timer ${c.respawnTurnsLeft}`);
@@ -395,6 +399,15 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     for (const [k, v] of Object.entries(c.cooldowns ?? {})) {
       if (!Number.isInteger(v) || (v as number) < 0) add('cooldown-range', `${c.iid}-${k}`, `${k} cooldown ${v} on ${label}`);
     }
+    // A charged skill's spent charges: recorded only while some are spent (1 up to the most a
+    // charged skill can hold: its own and Rapid Recharge's 2 — a charge item taken off leaves
+    // the count where it was until the wait next runs out), and then its wait is running.
+    for (const [k, v] of Object.entries(c.chargesSpent ?? {})) {
+      const most = skillChargesOracle(k) + 2;
+      if (skillChargesOracle(k) <= 1) add('skill-charges', `${c.iid}-${k}`, `${k} holds no charges, and ${v} are recorded as spent on ${label}`);
+      else if (!Number.isInteger(v) || (v as number) < 1 || (v as number) > most) add('skill-charges', `${c.iid}-${k}`, `${k} has ${v} charges spent on ${label} (1..${most} while any is spent)`);
+      else if (!((c.cooldowns?.[k] ?? 0) > 0)) add('skill-charges', `${c.iid}-${k}`, `${k} has ${v} charges spent on ${label} with no wait running`);
+    }
   }
 
   /** What a hero carries: its items (a slot each, MAX_ITEMS — FLEX_SLOT more with the flex
@@ -636,6 +649,18 @@ export function collectTransitionViolations(
     }
   }
 
+  // What `pid`'s kills in this move can have paid it: the round's bounty for each enemy hero
+  // that fell to it (a move that crosses into a new round may pay either round's).
+  const bountySums = (pid: PlayerID): number[] => {
+    let sums = new Set([0]);
+    for (const _f of falls(other(pid)).filter((f) => f.paid)) {
+      const next = new Set<number>();
+      for (const s of sums) for (const r of rounds) next.add(s + killBountyOracle(r));
+      sums = next;
+    }
+    return [...sums];
+  };
+
   // The record counts up only, and in a move the kills it counts are the falls that paid.
   for (const pid of duplicated ? [] : PIDS) {
     const r0 = before.G.record[pid];
@@ -764,11 +789,12 @@ export function collectTransitionViolations(
     }
   }
 
-  // ---- souls (docs/deck-plan.md): the lane's income is the only souls there are ----
+  // ---- souls (docs/balance-model.md §7): the lane's income and the kill bounty ----
   // Within a turn souls change only by what a move costs — an item put on a hero (its price,
   // the difference for an upgrade that evolves), a Retreat (the leaving hero's own price), a
-  // skill or an ultimate (its souls, docs/hero-design.md §2) — and by what an item used pays
-  // out as its text says (SOULS_ON_USE). Kills, the Guardian and the Mid-Boss pay nothing;
+  // skill or an ultimate (its souls, docs/hero-design.md §2) — by what an item used pays
+  // out as its text says (SOULS_ON_USE), and by the round's bounty for each enemy hero that
+  // fell to the side (`bountySums`). The Guardian and the Mid-Boss pay nothing;
   // placing a hero, the first Active, a discard and a promotion are free. No ceiling. (The
   // first Active that begins the match's first turn pays its income: checked as a new turn.)
   if (!duplicated && move.name !== 'endTurn' && !newTurn) {
@@ -795,18 +821,22 @@ export function collectTransitionViolations(
       if (asked.pid === mover) cost = price;
       else foeCost = price;
     }
-    const wantMover = B.players[mover].souls - cost + payout;
-    if (after.G.players[mover].souls !== wantMover) {
-      add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost} and payout ${payout} give ${wantMover}`);
+    const wantMover = bountySums(mover).map((b) => B.players[mover].souls - cost + payout + b);
+    if (!wantMover.includes(after.G.players[mover].souls)) {
+      add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost}, payout ${payout} and its kills' bounty give ${wantMover.join(' or ')}`);
     }
-    if (after.G.players[foe].souls !== B.players[foe].souls - foeCost) {
-      add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; ${foeCost ? `its trigger costs ${foeCost}` : 'nothing pays the rival'}`);
+    const wantFoe = bountySums(foe).map((b) => B.players[foe].souls - foeCost + b);
+    if (!wantFoe.includes(after.G.players[foe].souls)) {
+      add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; ${foeCost ? `its trigger costs ${foeCost}` : 'no price'} and its kills' bounty give ${wantFoe.join(' or ')}`);
     }
   }
 
-  // A kit ability, used: the hero is spent for the turn, and its cooldown is armed — a skill's
-  // own (SKILL_COOLDOWN unless its data names one), an ultimate's ULT_COOLDOWN. A locked
-  // ultimate (below the unlock level) is never used.
+  // A kit ability, used: the hero is spent for the turn, and its wait is armed (docs/hero-design.md
+  // §2, 2026-11-15). A skill: its own cooldown (SKILL_COOLDOWN unless its data names one) — a
+  // charged one spends a charge instead, and its wait starts only if none was running. An
+  // ultimate: its size's wait, its side's one ultimate of the turn — a charged one starts its
+  // count over as well. A locked ultimate (below the unlock level), a second ultimate in a
+  // turn and a charged one short of its damage are never used.
   if (!duplicated && move.name === 'useSkill' && typeof args[0] === 'string') {
     const hero0 = heroesByIid(B.players[mover]).get(args[0] as string);
     const hero1 = heroesByIid(after.G.players[mover]).get(args[0] as string);
@@ -814,8 +844,27 @@ export function collectTransitionViolations(
     if (hero0 && hero1 && d?.type === 'hero') {
       const id = typeof args[2] === 'string' ? (args[2] as string) : d.skills[0];
       if (ultLocked(hero0, id)) add('ult-locked', hero0.iid, `${describeUnit(hero0)} used its ultimate below the unlock level`);
-      const want = d.ult === id ? ultCooldownOracle(hero0) : getAbility(id)?.cooldown ?? SKILL_COOLDOWN;
-      if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
+      if (d.ult === id) {
+        if (B.ultUsed?.[mover]) add('ult-per-turn', hero0.iid, `${describeUnit(hero0)} used its ultimate after P${mover} had used one this turn`);
+        if (ultUncharged(hero0, id)) add('ult-uncharged', hero0.iid, `${describeUnit(hero0)} used its charged ultimate ${hero0.tally?.[id] ?? 0} damage into the ${ultFaceOracle(id)?.charged?.need} it needs`);
+        if (!after.G.ultUsed?.[mover]) add('ult-per-turn', `${hero0.iid}-flag`, `${describeUnit(hero0)} used its ultimate and P${mover}'s one-a-turn mark is not set`);
+        const want = ultCooldownOracle(hero0);
+        if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
+        if (ultFaceOracle(id)?.charged && (hero1.tally?.[id] ?? 0) !== 0) add('ability-cooldown', `${hero1.iid}-count`, `${describeUnit(hero1)} used its charged ultimate and its count reads ${hero1.tally?.[id]}`);
+      } else {
+        const max = skillChargesOracle(id, hero0);
+        const wait = skillWaitOracle(id, hero0);
+        if (max > 1) {
+          const left0 = skillChargesLeftOracle(hero0, id);
+          const left1 = skillChargesLeftOracle(hero1, id);
+          if (left1 !== left0 - 1) add('ability-cooldown', `${hero1.iid}-charges`, `${describeUnit(hero1)} used ${id} with ${left0} charges; it has ${left1} left`);
+          const running = hero0.cooldowns?.[id] ?? 0;
+          const want = running > 0 ? running : wait;
+          if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used a charge of ${id}; its wait is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
+        } else if ((hero1.cooldowns?.[id] ?? 0) !== wait) {
+          add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${wait}`);
+        }
+      }
     }
   }
 
@@ -1087,7 +1136,21 @@ export function collectTransitionViolations(
         const v0 = was.get(key);
         const v1 = now.get(key);
         let want: number | undefined | 'any' = v0;
-        if (started === pid) want = v0 === undefined || v0 - 1 <= 0 ? undefined : v0 - 1;
+        if (started === pid) {
+          want = v0 === undefined || v0 - 1 <= 0 ? undefined : v0 - 1;
+          // A charged skill's wait that runs out brings a charge back, and starts over while
+          // another is still spent.
+          const [, ability] = key.split('|');
+          const h0 = heroes0.get(owner);
+          const max = skillChargesOracle(ability, h0);
+          if (want === undefined && v0 !== undefined && h0 && max > 1 && isHeroCard(h0) && h0.chargesSpent?.[ability] !== undefined) {
+            // No more can be spent than it holds now; one of those comes back.
+            const still = Math.min(max, h0.chargesSpent[ability]!) - 1;
+            if (still > 0) want = skillWaitOracle(ability, h0);
+            const now1 = heroesByIid(after.G.players[pid]).get(owner)?.chargesSpent?.[ability] ?? 0;
+            if (now1 !== Math.max(0, still)) add('cooldown-bookkeeping', `${key}-charges`, `${ability} on ${owner} had ${h0.chargesSpent[ability]} charges spent as its wait ran out; it has ${now1} spent, the rules give ${Math.max(0, still)}`);
+          }
+        }
         else if (key === usedSkill || key === usedTrigger || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';
         else if (refreshed.has(owner) && v1 === undefined) want = undefined;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);
@@ -1118,8 +1181,9 @@ export function collectTransitionViolations(
   }
 
   // A new turn: the turn counter steps by one, the income lands on top of what was kept
-  // (LANE_INCOME, and the second mover's bonus on its first turn — nothing else, ever), the
-  // side whose turn ended keeps its souls, and the new player draws DRAW_PER_TURN — unless the
+  // (LANE_INCOME, and the second mover's bonus on its first turn), each side is paid the
+  // bounty of what fell to it as the turn changed hands (an End step's pulse, a start-of-turn
+  // tick) and nothing else, and the new player draws DRAW_PER_TURN — unless the
   // deck is empty or the hand already holds MAX_HAND (a fallen hero back in the hand first
   // counts).
   if (newTurn) {
@@ -1127,12 +1191,13 @@ export function collectTransitionViolations(
     const ended = other(cur);
     if (after.G.turnNumber !== B.turnNumber + 1) add('turn-number-step', 'turn', `turnNumber ${B.turnNumber} -> ${after.G.turnNumber} after endTurn`);
     const seat = cur !== firstOf(after.G) && after.G.turnNumber === 2 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
-    const want = B.players[cur].souls + LANE_INCOME + seat;
+    const want = bountySums(cur).map((b) => B.players[cur].souls + LANE_INCOME + seat + b);
     const got = after.G.players[cur].souls;
-    if (got !== want) {
-      add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls; kept ${B.players[cur].souls}, the income says ${want}`);
+    if (!want.includes(got)) {
+      add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls; kept ${B.players[cur].souls}, the income and its kills' bounty say ${want.join(' or ')}`);
     }
-    if (after.G.players[ended].souls !== B.players[ended].souls) add('souls-income', `${ended}-ended`, `P${ended}'s souls went ${B.players[ended].souls} -> ${after.G.players[ended].souls} as its turn ended`);
+    const wantEnded = bountySums(ended).map((b) => B.players[ended].souls + b);
+    if (!wantEnded.includes(after.G.players[ended].souls)) add('souls-income', `${ended}-ended`, `P${ended}'s souls went ${B.players[ended].souls} -> ${after.G.players[ended].souls} as its turn ended; its kills' bounty says ${wantEnded.join(' or ')}`);
     if (!duplicated) {
       const deck0 = deckOf(B, cur);
       const deckIids = new Set(deck0.map((c) => c.iid));

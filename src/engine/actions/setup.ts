@@ -9,7 +9,8 @@ import { getMatchConfig, scriptedSetup, type HeroStatOverride, type StorySetup }
 import { allocatorFor, allocatorOf, newCounters, type IidAllocator } from '../ids';
 import { makeInstance } from '../instances';
 import { pushLog } from '../log';
-import { otherPlayer } from '../query';
+import { otherPlayer, ultimateCard, ultWait } from '../query';
+import { ownTurn } from '../rounds';
 import { dealOpeningHand, drawCards, fillDeck, shuffleDeck, sideDeckIds, stockDeck } from '../deck';
 import { newRecord, newTrack } from '../map';
 import { newSeed } from '../rng';
@@ -204,6 +205,31 @@ export function finishOpening(G: GameState) {
 }
 
 /**
+ * Start every ultimate on its wait (`ULT_WAIT` by size): an ultimate is first
+ * ready on its side's own turn of that number, wherever its hero is until
+ * then (the board, the hand, the deck: `tickCooldowns` counts them all).
+ * `firstTurn` is the engine turn the match opens on — 1 for a drafted match,
+ * a scripted one's `startTurn` — and the own turns a side has "had" before it
+ * are taken off, so a lesson that opens mid-match finds the ultimates where a
+ * match that had run that long would. A charged ultimate opens waiting on
+ * its damage and gets no opening clock.
+ */
+export function armUltWaits(G: GameState, firstTurn: number) {
+  for (const pid of ['0', '1'] as PlayerID[]) {
+    const ps = G.players[pid];
+    const begun = ownTurn({ turnNumber: Math.max(0, firstTurn - 1), firstMover: G.firstMover }, pid);
+    for (const c of [ps.active, ...ps.bench, ...ps.hand, ...ps.deck]) {
+      const data = c ? CARDS_BY_ID[c.cardId] : undefined;
+      if (!c || data?.type !== 'hero' || !data.ult) continue;
+      const face = ultimateCard(data.ult);
+      if (!face || face.charged) continue;
+      const wait = ultWait(face) - begun;
+      if (wait > 0) (c.cooldowns ??= {})[data.ult] = wait;
+    }
+  }
+}
+
+/**
  * The drafted match's opening, as the last pick lands: each side's deck is
  * stocked with its items (`sideDeckIds`: the human seat's saved deck, else
  * one made from its heroes' builds) and its four drafted heroes, unshuffled
@@ -218,6 +244,7 @@ export function openDraftedMatch(G: GameState, picks: Record<PlayerID, CardId[]>
     G.players[pid] = makeEmptyPlayer(pid);
     stockDeck(G, pid, [...sideDeckIds(G, pid, picks[pid]), ...picks[pid]]);
   }
+  armUltWaits(G, 1);
   const human = G.humanSeat;
   if (human && openingPick(G.players[human])) G.pendingActive = human;
   else finishOpening(G);
@@ -301,6 +328,7 @@ export function setupGame(): GameState {
       dealOpeningHand(G, pid, story.openingHand ?? OPENING_HAND);
     }
     giveCards(G, '0', story.playerItems ?? []);
+    armUltWaits(G, startTurn);
     return G;
   }
 

@@ -18,8 +18,8 @@ import { STATUSES_BY_ID } from '@/statuses';
 import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
-  MAX_ITEMS, PRICE, RESPAWN_TURNS, ULT_COOLDOWN, ULT_COST, ULT_UNLOCK_LEVEL,
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
+  MAX_ITEMS, PRICE, RESPAWN_TURNS, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT,
 } from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
 
@@ -139,21 +139,80 @@ export function skillIdsOf(hero: CardInstance): string[] {
   return ids;
 }
 
-/** What a kit ability costs, by docs/hero-design.md §2: a skill the souls its
- *  card prints (1–3), an ultimate 4, 8 or 12 by its size (small, medium,
- *  large). 0 for an id the hero does not have. */
+/** What a kit ability costs, by docs/hero-design.md §2 (Patrick, 2026-11-15):
+ *  no souls — a skill and an ultimate alike. (An ability that prints souls of
+ *  its own would cost them; none does.) 0 for an id the hero does not have. */
 export function kitSoulsOracle(hero: CardInstance, skillId?: string): number {
   const d = CARDS_BY_ID[hero.cardId];
   if (d?.type !== 'hero') return 0;
   const id = skillId ?? firstSkillOf(hero);
   if (id === undefined || !skillIdsOf(hero).includes(id)) return 0;
-  if (id === d.ult) {
-    const face = Object.values(CARDS_BY_ID).find((c) => c.type === 'ultimate' && c.abilities[0] === id);
-    if (face?.type !== 'ultimate') return 0;
-    // A charged ultimate prints its own price, 1 off for each point its hero has counted.
-    return face.charged ? Math.max(0, face.charged.cost - (hero.tally?.[id] ?? 0)) : ULT_COST[face.size];
-  }
+  if (id === d.ult) return 0;
   return getAbility(id)?.souls ?? 0;
+}
+
+/** The card that is an ultimate's face (its size, its charge), by the ability it names. */
+export function ultFaceOracle(skillId: string) {
+  const face = Object.values(CARDS_BY_ID).find((c) => c.type === 'ultimate' && c.abilities[0] === skillId);
+  return face?.type === 'ultimate' ? face : undefined;
+}
+
+/** What the charge items print (docs/card-design.md, 2026-11-15), by card id:
+ *  the charges a charged skill gains and the turns sooner each comes back.
+ *  Written from the cards' text, not from their hooks. */
+const CHARGE_ITEMS: Record<string, { charges: number; sooner: number }> = {
+  extra_charge: { charges: 1, sooner: 0 },
+  rapid_recharge: { charges: 2, sooner: 1 },
+};
+
+/** What the charge items `hero` wears give its charged skill: the largest of
+ *  each, since two of them do not add up. */
+function chargeItemsOracle(hero?: CardInstance): { charges: number; sooner: number } {
+  let charges = 0;
+  let sooner = 0;
+  for (const it of hero?.attached ?? []) {
+    const item = CHARGE_ITEMS[it.cardId];
+    if (!item) continue;
+    charges = Math.max(charges, item.charges);
+    sooner = Math.max(sooner, item.sooner);
+  }
+  return { charges, sooner };
+}
+
+/** The uses a skill holds: 1, or for the four charged skills their 2 and
+ *  what a charge item `hero` wears adds. */
+export function skillChargesOracle(skillId: string, hero?: CardInstance): number {
+  const own = getAbility(skillId)?.charges ?? 1;
+  return own > 1 ? own + chargeItemsOracle(hero).charges : own;
+}
+
+/** Own turns a skill waits after a use (a charged one: for a charge to come
+ *  back): its card's own, else SKILL_COOLDOWN — a charged one's less what a
+ *  charge item `hero` wears takes off, never under 1. */
+export function skillWaitOracle(skillId: string, hero?: CardInstance): number {
+  const ability = getAbility(skillId);
+  const base = ability?.cooldown ?? SKILL_COOLDOWN;
+  return (ability?.charges ?? 1) > 1 ? Math.max(1, base - chargeItemsOracle(hero).sooner) : base;
+}
+
+/** The charges a charged skill has left on `hero`: what it holds less those
+ *  spent and not back yet. */
+export function skillChargesLeftOracle(hero: CardInstance, skillId: string): number {
+  return Math.max(0, skillChargesOracle(skillId, hero) - (hero.chargesSpent?.[skillId] ?? 0));
+}
+
+/** A charged ultimate that has not counted the damage it needs: not usable. */
+export function ultUncharged(hero: CardInstance, skillId: string): boolean {
+  const d = CARDS_BY_ID[hero.cardId];
+  if (d?.type !== 'hero' || d.ult !== skillId) return false;
+  const charged = ultFaceOracle(skillId)?.charged;
+  return !!charged && (hero.tally?.[skillId] ?? 0) < charged.need;
+}
+
+/** True for the hero's own ultimate. */
+export function isUltOf(hero: CardInstance, skillId: string): boolean {
+  const d = CARDS_BY_ID[hero.cardId];
+  return d?.type === 'hero' && d.ult === skillId;
 }
 
 /** The skill a bare `useSkill` names: the first its card lists, if any. */
@@ -188,10 +247,14 @@ export function skillExcludesSelf(hero: CardInstance, skillId?: string, G?: Game
   return !!aimOf(hero, skillId, G, pid)?.excludeSelf;
 }
 
-/** An ability that is still cooling down: its entry in the owner's-turn timer
- *  (`cooldowns`, docs/stats-model.md §1) is above 0. Written from that rule, not
- *  from `skillBlocked`, so the probes can tell the gate it is wrong. */
+/** An ability that is still waiting: its entry in the owner's-turn timer
+ *  (`cooldowns`, docs/stats-model.md §1) is above 0 — or, for a charged skill,
+ *  it has no charge left (with one left it is ready, whatever the timer, which
+ *  then counts toward the next charge). Written from that rule, not from
+ *  `skillBlocked`, so the probes can tell the gate it is wrong. */
 export function skillCooling(hero: CardInstance, skillId: string): boolean {
+  const max = isUltOf(hero, skillId) ? 1 : skillChargesOracle(skillId, hero);
+  if (max > 1) return skillChargesLeftOracle(hero, skillId) <= 0;
   return (hero.cooldowns?.[skillId] ?? 0) > 0;
 }
 
@@ -383,9 +446,14 @@ export function activeCooldownOracle(_bearer: CardInstance, item: ItemCard | Ite
   return own ?? (item.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
 }
 
-/** The cooldown an ultimate starts: ULT_COOLDOWN. */
-export function ultCooldownOracle(_hero: CardInstance): number {
-  return ULT_COOLDOWN;
+/** The cooldown an ultimate starts when it is used: its size's wait (4, 6 or
+ *  8 own turns: small, medium, large). A charged ultimate starts it too, and
+ *  counts its damage from nothing again. */
+export function ultCooldownOracle(hero: CardInstance): number {
+  const d = CARDS_BY_ID[hero.cardId];
+  const face = d?.type === 'hero' && d.ult ? ultFaceOracle(d.ult) : undefined;
+  if (!face) return 0;
+  return ULT_WAIT[face.size];
 }
 
 /** A hero's experience as one number: the thresholds of every level it has
@@ -414,7 +482,8 @@ export function wornWorth(hero: CardInstance): number {
 // map.ts / rounds.ts: round r is both players' r-th own turns, engine turns
 // 2r − 1 and 2r; a kill pushes the victim's level + 1 into its side's front
 // structure, an empty lane its pusher's bullet power, both doubled from round
-// 9 — and pays no souls (docs/deck-plan.md); a fallen hero waits RESPAWN_TURNS
+// 9 — and pays the killer's side the round's bounty, 1 soul and 1 more every
+// two rounds (docs/balance-model.md §7); a fallen hero waits RESPAWN_TURNS
 // of its owner's turns in its slot, then goes back to the hand; what stands
 // decides on more structure HP, then more net worth, then the second mover.
 // ---------------------------------------------------------------------------
@@ -429,9 +498,15 @@ export function pushMultiplierOracle(r: number): number {
   return r >= LATE_GAME_ROUND ? LATE_PUSH_MULTIPLIER : 1;
 }
 
+/** What a kill made in round `r` pays the killer's side: 1 soul in rounds 1–2,
+ *  and 1 more every two rounds (6 in rounds 11–12). */
+export function killBountyOracle(r: number): number {
+  return Math.ceil(Math.max(1, r) / 2);
+}
+
 /** What the fall of a hero of `level` pushes in round `r`. */
 export function killPushOracle(level: number, r: number): number {
-  return (level + KILL_BOUNTY_BASE) * pushMultiplierOracle(r);
+  return (level + KILL_PUSH_BASE) * pushMultiplierOracle(r);
 }
 
 /** The wait of a hero that falls, own turns of its owner's, whatever the round

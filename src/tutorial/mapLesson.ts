@@ -27,6 +27,7 @@ import type { CardInstance, PlayerID } from '@/engine/types';
 import { cardName } from '@/cards';
 import { effectiveAtk, isRespawning, structureOf } from '@/engine/query';
 import { BOSS_RETALIATION, MID_BOSS_ENABLED, REVIVE_CREDITS } from '@/engine/constants';
+import { killBounty } from '@/engine/rounds';
 import type { CoachStep, CoachView, Lesson } from './lessons';
 import { PATRON_NAMES } from '@/ui/board/patrons';
 import { END_TURN } from '@/ui/board/BoardControls';
@@ -64,13 +65,13 @@ export function mapLesson(kit: LessonKit, midBoss: boolean = MID_BOSS_ENABLED): 
     face: 'hero_kelvin',
     outro: midBoss
       ? `A kill pushes the fallen hero's level + 1 into its side's structures, front first; fell the Patron to win. Take the Mid-Boss for the Rejuvenator — ${REVIVE_CREDITS} revives.`
-      : "A kill pushes the fallen hero's level + 1 into its side's structures, front first, and an Active facing an empty lane pushes its bullet power at your End. Fell the Patron to win.",
+      : "A kill pays your bank a bounty that grows with the rounds, and pushes the fallen hero's level + 1 into its side's structures, front first. An Active facing an empty lane pushes its bullet power at your End. Fell the Patron to win.",
     // Round 4, your turn first (engine turn 7) — the round the Mid-Boss rises
     // in, when there is one. Lash stands on one point, alone; the rival's
     // track is a Guardian of 2 and a Patron of 1 — the kill's push of 2 fells
     // the Guardian, and Kelvin's push of his bullet power, 1, into the empty
-    // lane at the End fells the Patron. Frost Grenade costs three of the
-    // turn's five souls.
+    // lane at the End fells the Patron. Frost Grenade costs no souls. The
+    // kill pays round 4's bounty, 2.
     setup: () => kit.fight({
       startTurn: 7,
       enemyHeroStats: [{ hp: 1, hpMax: 3 }],
@@ -80,7 +81,7 @@ export function mapLesson(kit: LessonKit, midBoss: boolean = MID_BOSS_ENABLED): 
     }),
     steps: [
       kit.look('look', 'The Map', mine, (v) => `Each side has a track of structures on its rule — Guardian, Walker, Patron; the rival's is short today: ${rivalTrack(v)}. Fell its Patron to win.${midBoss ? ' It is round 4: the Mid-Boss has risen in the pit between the Actives.' : ''} Tap ${name(mine(v))} to open his sheet.`),
-      kit.useSkill('A Kill Pushes', () => `A kill pushes the fallen hero's level + 1 into his side's front structure. Lash is on one point: Frost Grenade fells him and pushes 2 into the Guardian, which falls.`),
+      kit.useSkill('A Kill Pushes', (v) => `A kill pays a bounty, ${killBounty(v.G)} souls this round, and pushes the fallen hero's level + 1 into his side's front structure. Lash is on one point: Frost Grenade fells him and pushes 2 into the Guardian, which falls.`),
       ...(midBoss ? bossEnd(kit) : [emptyLane()]),
     ],
   };

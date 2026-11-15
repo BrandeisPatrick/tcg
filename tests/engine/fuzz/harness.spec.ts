@@ -15,7 +15,7 @@ import { DeadlockGame } from '@/engine/game';
 import * as query from '@/engine/query';
 import { ITEMS } from '@/cards';
 import {
-  BOSS_CARD_ID, BOSS_HP, HARD_CC_CHARGES, LANE_INCOME, MAX_HAND, PRICE, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP, ULT_COOLDOWN, ULT_COST,
+  BOSS_CARD_ID, BOSS_HP, HARD_CC_CHARGES, LANE_INCOME, MAX_HAND, PRICE, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP, ULT_WAIT,
 } from '@/engine/constants';
 import { flagBenchOnly, freshReadyGame, giveCard, giveItem, makeHero, nextTestIid, setTrack, stackDeck, withBenchOnly } from '../_helpers';
 import { SOULS_ON_USE, checkInvariants, checkTransition, collectInvariantViolations, collectTransitionViolations } from './invariants';
@@ -27,6 +27,7 @@ import {
   upgradeComponentOracle, upgradeMadeOracle, upgradesOfOracle, wornWorth,
 } from './oracle';
 import { splitKnown, type Hit } from './hits';
+import { killBounty } from '@/engine/rounds';
 
 const ctx = (over: Partial<Ctx> = {}): Ctx => ({ currentPlayer: '0', turn: 2, numPlayers: 2, ...over }) as unknown as Ctx;
 const clean = (): GameState => freshReadyGame();
@@ -465,16 +466,15 @@ describe('the transition rules fire', () => {
     expect(ids2(pair((G) => { G.players['0'].hand[0].level = 1; }, H))).toContain('level-monotonic');
   });
 
-  it('souls: an ability charges its kit price — a skill its souls, an ultimate its size\'s —, a passive-only hero nothing, and nothing pays the rival', () => {
+  it('souls: a kit ability costs none — a skill and an ultimate alike —, a passive-only hero\'s bare useSkill nothing, and nothing pays the rival', () => {
     const base = clean();
     base.players['0'].souls = 20;
-    const lash = p0(base).lash.iid; // Ground Strike: 3 souls; Death Slam, large: 12
+    const lash = p0(base).lash.iid; // Ground Strike; Death Slam, a large ultimate
     const paid = (n: number) => pair((G) => { G.players['0'].souls -= n; }, base);
-    expect(moveIds(paid(3), 'useSkill', [lash])).not.toContain('souls-delta');
-    expect(moveIds(paid(0), 'useSkill', [lash])).toContain('souls-delta'); // used for free
-    expect(moveIds(paid(2), 'useSkill', [lash])).toContain('souls-delta'); // short-charged
-    expect(moveIds(paid(ULT_COST.large), 'useSkill', [lash, undefined, 'eff_ult_lash'])).not.toContain('souls-delta');
-    expect(moveIds(paid(3), 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('souls-delta'); // the skill's price
+    expect(moveIds(paid(0), 'useSkill', [lash])).not.toContain('souls-delta');
+    expect(moveIds(paid(3), 'useSkill', [lash])).toContain('souls-delta'); // its old price, charged
+    expect(moveIds(paid(0), 'useSkill', [lash, undefined, 'eff_ult_lash'])).not.toContain('souls-delta');
+    expect(moveIds(paid(12), 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('souls-delta'); // its old price, charged
     // Haze has no skill (Fixation is a passive): a bare useSkill of hers charges nothing.
     const p = pair((G) => { G.players['0'].souls -= 1; });
     expect(moveIds(p, 'useSkill', [heroIid(p)])).toContain('souls-delta');
@@ -483,10 +483,14 @@ describe('the transition rules fire', () => {
     const r = pair(() => undefined);
     expect(moveIds(r, 'useSkill', [heroIid(r)])).not.toContain('souls-delta');
   });
-  it('a kill pays no souls (the lane\'s income is the only souls there are): the old bounty is reported', () => {
+  it('a kill pays the round\'s bounty and nothing more: a fall left unpaid, or overpaid, is reported', () => {
     const fall = (G: GameState) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; pushOff(G, '1', 2); };
-    expect(moveIds(pair((G) => { fall(G); }), 'attack', [])).not.toContain('souls-delta');
-    expect(moveIds(pair((G) => { fall(G); G.players['0'].souls += 2; }), 'attack', [])).toContain('souls-delta');
+    const bounty = killBounty(clean());
+    expect(moveIds(pair((G) => { fall(G); G.players['0'].souls += bounty; }), 'attack', [])).not.toContain('souls-delta');
+    expect(moveIds(pair((G) => { fall(G); }), 'attack', [])).toContain('souls-delta');
+    expect(moveIds(pair((G) => { fall(G); G.players['0'].souls += bounty + 2; }), 'attack', [])).toContain('souls-delta');
+    // …and it pays the side the hero fell to, not its own.
+    expect(moveIds(pair((G) => { fall(G); G.players['1'].souls += bounty; }), 'attack', [])).toContain('souls-delta');
   });
   it('souls: a play costs the item\'s price — the difference for an evolving upgrade —; a hero placed, a discard and a promotion are free', () => {
     const G = clean();
@@ -563,29 +567,40 @@ describe('the transition rules fire', () => {
     expect(retreat.check()).toEqual([]);
     expect(retreat.check((A) => { A.players['0'].bench[0]!.statuses.push({ id: 'swift', value: 1, duration: 1 }); })).toContain('swift-spent');
   });
-  it('an ability arms its cooldown: a skill its own, an ultimate ULT_COOLDOWN; a locked ultimate is never used', () => {
-    const skill = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 1 }; });
+  it('an ability arms its wait: a skill its own, an ultimate its size\'s, one ultimate a turn; a locked ultimate is never used', () => {
+    const skill = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 4 }; }); // Ground Strike names 4
     const lash = skill.before.G.players['0'].bench[1]!.iid;
     expect(moveIds(skill, 'useSkill', [lash])).not.toContain('ability-cooldown');
     const unarmed = pair(() => undefined);
     expect(moveIds(unarmed, 'useSkill', [lash])).toContain('ability-cooldown');
-    const ult = pair((G) => { G.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_COOLDOWN }; });
+    const oldWait = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 1 }; });
+    expect(moveIds(oldWait, 'useSkill', [lash])).toContain('ability-cooldown'); // the wait it had when it cost souls
+    const ult = pair((G) => { G.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_WAIT.large }; G.ultUsed = { '0': true }; });
     expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-locked'); // Lash is level 1
     ult.before.G.players['0'].bench[1]!.level = 2;
-    expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).not.toContain('ult-locked');
-    // A real ultimate: ULT_COOLDOWN, the Cooldown items no longer cutting it (they draw cards now).
-    // Death Slam is a large ultimate: 12 souls.
+    const ok = moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash']);
+    expect(ok).not.toContain('ult-locked');
+    expect(ok).not.toContain('ability-cooldown');
+    expect(ok).not.toContain('ult-per-turn');
+    // The mark left unset, or an ultimate used when the side had used one this turn, is reported.
+    const unmarked = pair((G) => { G.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_WAIT.large }; });
+    unmarked.before.G.players['0'].bench[1]!.level = 2;
+    expect(moveIds(unmarked, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-per-turn');
+    ult.before.G.ultUsed = { '0': true };
+    expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-per-turn');
+    // A real ultimate: its size's wait (Death Slam, large: 8), no souls, the Cooldown items not
+    // cutting it (they draw cards now).
     const G = clean();
-    G.players['0'].souls = ULT_COST.large;
+    G.players['0'].souls = 5;
     p0(G).lash.level = 2;
     giveItem(G, p0(G).lash, 'improved_cooldown');
     const used = made(G, 'useSkill', [p0(G).lash.iid, undefined, 'eff_ult_lash']);
-    expect(used.after.G.players['0'].bench[1]!.cooldowns?.eff_ult_lash).toBe(ULT_COOLDOWN);
-    expect(used.after.G.players['0'].souls).toBe(0);
+    expect(used.after.G.players['0'].bench[1]!.cooldowns?.eff_ult_lash).toBe(ULT_WAIT.large);
+    expect(used.after.G.players['0'].souls).toBe(5);
+    expect(used.after.G.ultUsed).toEqual({ '0': true });
     expect(used.check()).toEqual([]);
-    expect(used.check((A) => { A.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_COOLDOWN - 1 }; })).toContain('ability-cooldown');
+    expect(used.check((A) => { A.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_WAIT.large - 1 }; })).toContain('ability-cooldown');
   });
-
   it('a draw card draws from the top of the deck and owes its discard — fewer into a nearly full hand or from a short deck, none owed from an empty hand', () => {
     const G = clean();
     giveCard(G, '0', 'grit');

@@ -9,7 +9,7 @@ import { resolve } from '@/engine/death';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { PRICE } from '@/engine/constants';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, passTurn, readyClient, setTrack } from './_helpers';
+import { bankSouls, freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, passTurn, readyClient, setTrack } from './_helpers';
 
 // A turn opens in its shop step (buy, sell and move items, then close the
 // shop); its act step is the player's to spend on abilities (each hero one a
@@ -192,7 +192,7 @@ describe('turn actions: abilities, then the attack', () => {
     const hp = rival.hp;
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     expect(rival.hp).toBeLessThan(hp);
-    expect(me.souls).toBe(5 - 2); // Essence Bomb's 2 souls; the attack is free
+    expect(me.souls).toBe(5); // Essence Bomb costs no souls; the attack is free
   });
 
   it('the Active that attacked cannot use its skill afterwards, and neither can a bench hero', () => {
@@ -207,37 +207,38 @@ describe('turn actions: abilities, then the attack', () => {
     expect(me.souls).toBe(5);
   });
 
-  it('two different heroes each use their skill in one turn, each for its souls; the same hero cannot twice', () => {
+  it('two different heroes each use their skill in one turn, for no souls; the same hero cannot twice', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 8;
     const lash = me.bench[1]!;
     const paige = me.bench[2]!;
     const rival = sturdyRival(G);
-    expect(runMove('useSkill', G, '0', lash.iid)).not.toBe('INVALID_MOVE'); // Ground Strike: 3
-    expect(runMove('useSkill', G, '0', paige.iid, me.active!.iid)).not.toBe('INVALID_MOVE'); // Plot Armor: 2
-    expect(me.souls).toBe(8 - 3 - 2);
-    // Souls enough for another Ground Strike, but Lash has used hers.
+    expect(runMove('useSkill', G, '0', lash.iid)).not.toBe('INVALID_MOVE'); // Ground Strike
+    expect(runMove('useSkill', G, '0', paige.iid, me.active!.iid)).not.toBe('INVALID_MOVE'); // Plot Armor
+    expect(me.souls).toBe(8);
+    // Lash has used hers this turn.
     expect(skillBlocked(G, '0', lash)).toBe('used');
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).toBe('INVALID_MOVE');
     // Bench skills leave the Active's attack where it was.
     expect(attackBlocked(G, '0')).toBeNull();
   });
 
-  it('skills cost souls: with none at all, neither hero uses its skill; with their prices, both do', () => {
+  it('skills cost no souls: with none at all, both heroes use theirs — and each then waits its turns', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 0;
     sturdyRival(G);
     const [lash, paige] = [me.bench[1]!, me.bench[2]!];
-    expect(skillBlocked(G, '0', lash)).toBe('souls');
-    expect(runMove('useSkill', G, '0', lash.iid)).toBe('INVALID_MOVE');
-    expect(runMove('useSkill', G, '0', paige.iid, me.active!.iid)).toBe('INVALID_MOVE');
-    expect(me.souls).toBe(0);
-    me.souls = 3 + 2;
+    expect(skillBlocked(G, '0', lash)).toBeNull();
     expect(runMove('useSkill', G, '0', lash.iid)).not.toBe('INVALID_MOVE');
     expect(runMove('useSkill', G, '0', paige.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(0);
+    expect([lash.cooldowns?.skill_lash, paige.cooldowns?.skill_paige]).toEqual([4, 3]);
+    // A new turn's flags, with the waits still running: neither is ready.
+    lash.skillUsedThisTurn = false;
+    paige.skillUsedThisTurn = false;
+    expect([skillBlocked(G, '0', lash), skillBlocked(G, '0', paige, me.active!.iid)]).toEqual(['cooldown', 'cooldown']);
   });
 
   it('a retreat before the attack lets the hero who steps in make it; after the attack nothing moves', () => {
@@ -303,6 +304,7 @@ describe('turn actions: abilities, then the attack', () => {
   it('the flags reset when the next turn begins', () => {
     const c = readyClient();
     passTurn(c); // → P1, turn 2, past its shop
+    bankSouls(c, '1', 5); // Frost Grenade's 3 and Abrams's Retreat of 2
     let G = snap(c).G;
     // Kelvin's Frost Grenade (3 souls) puts no crowd control on P0's Active, so
     // nothing but the flags stands between P0 and its attack next turn.

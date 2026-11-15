@@ -51,7 +51,9 @@ from their "Deadlock Graphical Library" collection.
   encoded to WebP by `scripts/fetch_item_art.py`. The first set came through the
   asset bucket above; the 41 items added on 2026-11-05 (Monster Rounds through
   Spirit Burn, docs/card-design.md) and the six tier-5 items after them
-  (Haunting Shot through Prism Blast) came from the wiki. See
+  (Haunting Shot through Prism Blast) came from the wiki. Extra Charge and
+  Rapid Recharge (2026-11-15) are the same shop icons from the deadlock-api's
+  shop list (`shop_image_webp`, 200×200 WebP, used as served). See
   `public/ART_PIPELINE.md`.
 - The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,
   Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, Fixation, the armours

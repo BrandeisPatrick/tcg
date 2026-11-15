@@ -14,14 +14,26 @@
  * only in place of its least valuable worn item, and only a card clearly
  * worth more (`replaceWorthIt`: a tier up at the least).
  *
+ * It saves. The lane pays 2 souls a turn, and a one-ply look always finds
+ * something small to spend them on (a skill, a tier-1 card), so a dearer card
+ * would never be reached, and nor would the upgrades its play makes. So the AI
+ * names a goal (`savingGoal`): the card of the highest tier in its hand, tier
+ * 2 or more, that a hero of its can take and that it can pay for within
+ * SAVE_HORIZON turns of income (an upgrade onto the hero wearing its
+ * component counts at the difference). A spend that pushes the goal's turn
+ * back is marked down by SAVE_RESOLVE (`savingCost`): more than a skill's or
+ * a cheap card's ordinary gain, less than a kill, an ultimate or a hero
+ * saved. Playing the goal itself, and anything that does not delay it, is
+ * weighed as always. With no such card in hand it spends as the look says.
+ *
  * With lookahead (the default) every candidate is made on a copy through the
  * engine (`simulate`), and the resulting position is scored by `evalState`.
  * That captures target choice, lethal and the value of gear, skills and
  * ultimates without hand-tuning each case, and what a line leaves on the board:
  * the statuses it lands, the channel it starts, the Rem it sets riding, the
  * souls it keeps, the cards it holds. A turn is the player's to spend on cards from the
- * hand, abilities (one per hero — a skill or an ultimate for its souls, or a
- * worn active item, free) and
+ * hand, abilities (one per hero — a skill, an ultimate or a worn active item,
+ * none of which costs souls; one ultimate a turn for the side) and
  * one Retreat, and then one attack, which ends it: after the attack only
  * `endTurn` is left. Ending the turn never attacks, so the AI has to choose
  * `attack` itself. Every line before the attack is valued with the attack
@@ -55,11 +67,11 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
   attackPower, checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroesOf, heroWorth, isBoss, isRespawning,
-  itemCooldown, itemPrice, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, wornItems,
+  itemCooldown, itemPrice, kitCharges, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, ultCharge, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
-import { attackBlocked, attackTargets, legalActions, playBlocked, upgradeComponent } from '@/engine/legality';
+import { attackBlocked, attackTargets, legalActions, playBlocked, playCost, upgradeComponent } from '@/engine/legality';
 import { buildOf } from '@/engine/deck';
 import { seededRandom } from '@/engine/rng';
 import { forecastAttack, simulate } from '@/engine/forecast';
@@ -201,7 +213,13 @@ function equipValue(c: CardInstance): number {
   for (const it of wornItems(c)) {
     const data = itemCard(it.cardId)!;
     if (data.type === 'equipment') {
-      for (const aid of data.abilities ?? []) v += getAbility(aid)?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
+      for (const aid of data.abilities ?? []) {
+        const ab = getAbility(aid);
+        // A charge item (Extra Charge, Rapid Recharge) is worth its charges
+        // only on a hero whose skill holds charges; on any other it does nothing.
+        if ((ab?.chargeBonus || ab?.chargeHaste) && !kitCharges(c)) continue;
+        v += ab?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
+      }
       continue;
     }
     const first = getAbility(data.abilities[0]);
@@ -267,6 +285,28 @@ const HAND_ITEM = { base: 0.5, perSoul: 0.1 } as const;
  *  an item and putting it on is worth it, and an evolve gains the difference. */
 const WORN_PRICE = 0.5;
 
+/** The lowest tier the AI saves for (`savingGoal`): tier 2, the first whose
+ *  price (4) is more than a turn of the lane (2). A tier-1 card is one turn's
+ *  income and needs no saving: it is weighed against a skill as it always
+ *  was. The dearer tier comes first because the item budget gives it more for
+ *  each soul and turn worn (docs/card-design.md §3: 2 points over 8 turns at
+ *  tier 1, 4 over 6, 8 over 4, 16 over 3). */
+const SAVE_TIER = 2;
+
+/** How far ahead the AI saves: a card it can pay for within this many of its
+ *  own turns of income, souls in hand counted. Three turns is a third of a
+ *  match's length; a card further off is not a plan yet. */
+const SAVE_HORIZON = 3;
+
+/** What a spend that pushes the saving goal's turn back is marked down by
+ *  (`savingCost`), in the units of `evalState`. Between the two kinds of
+ *  spend: above an ordinary one (a skill's point of damage on every enemy is
+ *  worth 8, a tier-1 or tier-2 card about 2 to 6) and below a decisive one (a
+ *  kill is a hero's presence and its push, 25 or more; an ultimate 15 or
+ *  more). One delay is counted however many turns it costs, so a big spend
+ *  for a big effect is weighed once, and small spends are what it stops. */
+const SAVE_RESOLVE = 12;
+
 /** The tie-break for putting an item on the hero whose build lists it (or an
  *  item it builds into), and for picking the upgrade a build names: well under
  *  a point of HP, so the evaluation decides and this only orders its ties. */
@@ -276,6 +316,20 @@ const BUILD_FIT = 0.6;
  *  full hero for the AI to trade them (`replaceWorthIt`): this many times its
  *  list price, at the least — a tier up on the price ladder (2 → 4 → 8 → 16). */
 const REPLACE_RATIO = 2;
+
+/** What a charged ultimate at full charge is worth to its side (Victor's
+ *  revive in hand, Silver's Wolf form ready), counted in proportion as the
+ *  charge builds: about a medium ultimate's worth at the low end. Without it
+ *  the look could not tell that making Victor spend his revive costs him
+ *  anything, now that it costs no souls. */
+const CHARGE_READY = 8;
+
+/** What the charge on `c`'s charged ultimate is worth to its side: its share
+ *  of CHARGE_READY (0 for a hero whose ultimate waits on turns). */
+function chargeValue(c: CardInstance): number {
+  const charge = ultCharge(c);
+  return charge ? CHARGE_READY * (charge.have / charge.need) : 0;
+}
 
 /** What a hero standing on the board is worth: its presence, its HP and its offense. */
 function presence(c: CardInstance): number {
@@ -418,7 +472,7 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
       // point of HP — weight it like HP (×2), not ×1 (which made the bot
       // under-value/under-cast shielders like Warden).
       const shield = c.statuses.find((x) => x.id === 'shield')?.value ?? 0;
-      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies));
+      s += sign * (presence(c) + shield * 2 + equipValue(c) * 2 + heroWorth(c) * WORN_PRICE + statusValue(c) + channelValue(c, enemies) + chargeValue(c));
       // Rem riding on an ally is not the loss of a hero, nor of what she wears.
       for (const rem of mergedRem(c)) s += sign * (presence(rem) + equipValue(rem) * 2 + heroWorth(rem) * WORN_PRICE);
     }
@@ -475,8 +529,9 @@ function keepValue(G: GameState, pid: PlayerID, card: CardInstance): number {
   let v = 10 + Math.min(price, 16) * 0.5;
   if (fits.length === 0) v -= 12;
   if (fits.some((h) => buildWants(G, pid, h, card.cardId) || upgradeComponent(h, card.cardId))) v += 6;
-  // An item several turns of income away is worth less in a hand that must shrink.
-  if (price > ps.souls + 2 * LANE_INCOME) v -= 4;
+  // An item further off than the AI saves for (SAVE_HORIZON turns of income)
+  // is worth less in a hand that must shrink.
+  if (price > ps.souls + SAVE_HORIZON * LANE_INCOME) v -= 4;
   return v;
 }
 
@@ -511,6 +566,51 @@ function replaceWorthIt(G: GameState, pid: PlayerID, a: Action): boolean {
   const least = hero && leastWorn(G, pid, hero);
   if (!card || !least || least.iid !== a.replaceIid) return false;
   return itemPrice(card.cardId) >= REPLACE_RATIO * itemPrice(least.cardId);
+}
+
+/** Own turns of income until `souls` covers `cost` (0: it does now). */
+function turnsAway(cost: number, souls: number): number {
+  return Math.ceil(Math.max(0, cost - souls) / LANE_INCOME);
+}
+
+/** The card `pid` is saving for: of the items of tier SAVE_TIER or more in
+ *  its hand that one of its heroes can take (the engine's own gate, souls
+ *  aside) and that it can pay for within SAVE_HORIZON turns of income, the
+ *  one of the highest tier — the soonest paid for on a tie, then the dearer.
+ *  Its cost is the least any of those heroes would pay (an upgrade onto the
+ *  hero wearing its component: the difference). A card it can pay for now is
+ *  a goal too: the souls for it are not to be spent on something else first.
+ *  Null when it holds no such card. */
+function savingGoal(G: GameState, pid: PlayerID): { cardIid: string; cost: number } | null {
+  const ps = G.players[pid];
+  const heroes = slottedHeroes(ps);
+  let goal: { cardIid: string; cost: number; turns: number; tier: number } | null = null;
+  for (const card of ps.hand) {
+    const data = itemCard(card.cardId);
+    if (!data || data.tier < SAVE_TIER) continue;
+    let cost = Infinity;
+    for (const h of heroes) {
+      const why = playBlocked(G, pid, card.iid, h.iid);
+      if (why === null || why === 'souls') cost = Math.min(cost, playCost(h, card.cardId));
+    }
+    if (!Number.isFinite(cost)) continue;
+    const turns = turnsAway(cost, ps.souls);
+    if (turns > SAVE_HORIZON) continue;
+    const better = !goal || data.tier > goal.tier
+      || (data.tier === goal.tier && (turns < goal.turns || (turns === goal.turns && cost > goal.cost)));
+    if (better) goal = { cardIid: card.iid, cost, turns, tier: data.tier };
+  }
+  return goal;
+}
+
+/** What `a` is marked down for pushing the saving goal's turn back: SAVE_RESOLVE
+ *  when the souls its line leaves (what it paid, less any bounty it won) reach
+ *  the goal later than the souls held now would, else 0. Playing the goal
+ *  itself is never marked down. */
+function savingCost(G: GameState, pid: PlayerID, a: Action, line: GameState, goal: { cardIid: string; cost: number } | null): number {
+  if (!goal || a.type === 'endTurn') return 0;
+  if (a.type === 'playCard' && a.cardIid === goal.cardIid) return 0;
+  return turnsAway(goal.cost, line.players[pid].souls) > turnsAway(goal.cost, G.players[pid].souls) ? SAVE_RESOLVE : 0;
 }
 
 /** The tie-break a hand play earns (`BUILD_FIT`): an item onto a hero whose
@@ -722,7 +822,7 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
 // The engine asks the AI the same question it asks a person (engine/prompts.ts):
 // use one of the offers, or pass. The valuation is simple and is the lookahead's
 // own: each answer is made on a copy, and the asked side takes the position it
-// likes best — a revive keeps a hero and its push off the map for its souls.
+// likes best — a revive keeps a hero and its push off the map, for no souls.
 
 /** What answering the prompt owed with `a` is worth to the side asked: the
  *  position it leaves, from that side's view (`evalState`). */
@@ -796,13 +896,14 @@ function bestSwing(g: GameState, pid: PlayerID, d: Dial): GameState {
 /** The lookahead's score for `a`: the value of the position it leads to. A tiny
  *  bias toward acting (vs. passing) breaks ties so the AI takes value-neutral
  *  tempo plays instead of idling. A skill that rides its caster out of a lane
- *  it is losing adds what that saves (`rideToSafety`). A retreat with no rule-of-thumb reason
+ *  it is losing adds what that saves (`rideToSafety`). A spend that pushes the
+ *  card the AI is saving for (`goal`) further off is marked down (`savingCost`). A retreat with no rule-of-thumb reason
  *  (`retreatPoints`) is marked down so it ranks behind real plays — unless its
  *  line beats `baseline`, the value of attacking as things stand, by
  *  RETREAT_MARGIN: then the swap is the better way to make the turn's attack. */
-function lookaheadScore(G: GameState, pid: PlayerID, a: Action, baseline: () => number, d: Dial = NORMAL): number {
+function lookaheadScore(G: GameState, pid: PlayerID, a: Action, baseline: () => number, d: Dial = NORMAL, goal: { cardIid: string; cost: number } | null = null): number {
   const line = lineAfter(G, pid, a, d);
-  let s = evalState(line, pid, d) + (a.type === 'endTurn' ? 0 : 0.1) + buildFit(G, pid, a) + rideToSafety(G, pid, a, line);
+  let s = evalState(line, pid, d) + (a.type === 'endTurn' ? 0 : 0.1) + buildFit(G, pid, a) + rideToSafety(G, pid, a, line) - savingCost(G, pid, a, line, goal);
   if (a.type === 'moveHero') {
     // 'hard' takes no rule of thumb: a retreat must show its gain in the evaluation.
     const reason = d.strength !== 'hard' && retreatPoints(...pairOf(G, pid, a), attackBought(G, pid, a)) !== null;
@@ -901,9 +1002,11 @@ export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true, optio
   const baseline = () => (base ??= d.strength === 'hard'
     ? evalState(bestSwing(G, pid, d), pid, d)
     : evalState(attackBlocked(G, pid) === null ? answered(simulate(G, pid, { type: 'attack' }).G) : G, pid, d));
+  // The card this seat is saving for, if any: named once, for every option.
+  const goal = lookahead ? savingGoal(G, pid) : null;
   const scored = actions.map((a): MoveOption => ({
     ...toMove(G, a),
-    score: lookahead ? lookaheadScore(G, pid, a, baseline, d) : crudeScore(G, pid, a),
+    score: lookahead ? lookaheadScore(G, pid, a, baseline, d, goal) : crudeScore(G, pid, a),
   }));
   if (d.strength === 'easy') addNoise(G, pid, scored);
   return scored.sort((a, b) => b.score - a.score).slice(0, 12);

@@ -13,7 +13,7 @@
 import { motion } from 'framer-motion';
 import type { GameState, PendingTrigger, PlayerID, TriggerOffer } from '@/engine/types';
 import { cardName } from '@/cards';
-import { findCardOnBoard, resolveSkill, triggerPrice, ultimateCard, ultPrice } from '@/engine/query';
+import { findCardOnBoard, resolveSkill, triggerPrice, ultCharge, ultimateCard } from '@/engine/query';
 import { triggerName } from '@/engine/prompts';
 import { CardFrame } from '../card/CardFrame';
 import { PosterButton } from '../chrome';
@@ -37,20 +37,20 @@ export function momentLine(G: GameState, prompt: PendingTrigger): string {
   }
 }
 
-/** One offer as the sheet prints it: its card, its name, what it costs now
- *  (and what its card prints, for a charged ultimate) and the question. */
-export function offerLine(G: GameState, offer: TriggerOffer): { cardId: string; name: string; price: number; printed?: number; question: string } {
+/** One offer as the sheet prints it: its card, its name, what it costs (no
+ *  kit ability costs souls today: 0), the damage a charged ultimate has
+ *  counted, and the question. */
+export function offerLine(G: GameState, offer: TriggerOffer): { cardId: string; name: string; price: number; charge?: { have: number; need: number }; question: string } {
   const hero = findCardOnBoard(G, offer.heroIid)!.card;
   const name = triggerName(hero, offer.abilityId);
   const price = triggerPrice(hero, offer.abilityId);
   const face = resolveSkill(hero, offer.abilityId)?.kind === 'ult' ? ultimateCard(offer.abilityId) : undefined;
-  const printed = face?.charged ? ultPrice(face) : undefined;
   return {
     cardId: face?.id ?? hero.cardId,
     name,
     price,
-    printed: printed !== undefined && printed !== price ? printed : undefined,
-    question: price > 0 ? `Use ${name} for ${souls(price)}?` : `Use ${name} for free?`,
+    charge: face?.charged ? ultCharge(hero) : undefined,
+    question: price > 0 ? `Use ${name} for ${souls(price)}?` : `Use ${name}?`,
   };
 }
 
@@ -76,17 +76,21 @@ export function TriggerPrompt({ G, me, prompt, onUse, onPass }: {
       </div>
     </div>
   );
-  // The price on paper: the soul wisp and its number in the paper green (a
-  // charged ultimate's printed price struck through before it), then your
-  // purse.
+  // Under the card: what it costs. A kit ability costs no souls, so this is
+  // one plain line — a charged ultimate's count, and that it is the side's
+  // one ultimate of the turn. (A price, should a trigger ever have one, is
+  // the soul wisp and its number, then your purse.)
   const priceTag = (l: (typeof lines)[number]) => (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontFamily: fonts.ui, fontWeight: 700, fontSize: type.body, color: poster.inkDim }}>
-      {l.printed !== undefined && (
-        <><s style={{ color: poster.inkDim, fontSize: type.number }}>{l.printed}</s><span aria-hidden>→</span></>
+      {l.price > 0 ? (
+        <>
+          <Souls n={l.price} tone="paper" />
+          <span style={{ color: poster.inkFaint }}>·</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>you have <Souls n={have} size={type.body} tone={have >= l.price ? 'paper' : 'short'} /></span>
+        </>
+      ) : (
+        <span>{l.charge ? `Charged: ${l.charge.have} of ${l.charge.need} damage. ` : ''}No souls. One ultimate a turn.</span>
       )}
-      {l.price > 0 ? <Souls n={l.price} tone="paper" /> : <span style={{ color: poster.ink, fontSize: type.number }}>Free</span>}
-      <span style={{ color: poster.inkFaint }}>·</span>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>you have <Souls n={have} size={type.body} tone={have >= l.price ? 'paper' : 'short'} /></span>
     </span>
   );
   return (

@@ -11,8 +11,9 @@ binding for every hero card; the proposed cards for all 44 Deadlock heroes are l
 it: [Deadlock Hero Roles](https://claude.ai/artifact/Jp27zXwR6dXjyr5q2QriyD).
 
 These cards assume the deck plan
-([Deck and Draw Plan](https://claude.ai/artifact/WDLNDpGunGhw5rSLz8Wopp)): 5 souls a turn that pile
-up, heroes drawn from the deck, and skills and ultimates paid in souls. A fallen hero goes to your hand
+([Deck and Draw Plan](https://claude.ai/artifact/WDLNDpGunGhw5rSLz8Wopp)): souls that pile up (5 a
+turn when these cards were written; 2 a turn and a kill bounty since 2026-11-15,
+[balance-model.md](balance-model.md) §7), heroes drawn from the deck, and skills and ultimates paid in souls (until 2026-11-15: since then a kit costs no souls and waits instead, [balance-model.md](balance-model.md) §8). A fallen hero goes to your hand
 after 2 turns, keeping its level (section 7).
 
 ## 1. Role first, then the TCG
@@ -40,9 +41,9 @@ after 2 turns, keeping its level (section 7).
 | Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. |
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
-| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs 1–3 souls and then waits 1 turn. A passive is always on. Use the hero's real Deadlock ability names. |
-| Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 2. Costs 4 (small), 8 (medium) or 12 (large) souls by size, then waits 3 turns. |
-| Charged ultimate | For heroes like Victor and Silver (Patrick, 2026-11-09). It costs a lot (twice its worth), but each damage the hero takes (Victor) or deals (Silver) makes it 1 soul cheaper, down to free. You can always pay the full cost. The count starts over after use. |
+| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Four skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, Lightning Ball, Kinetic Pulse): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
+| Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 2. Costs no souls (Patrick, 2026-11-15), and a side uses **one ultimate a turn**. It waits 4 (small), 6 (medium) or 8 (large) turns by size: after each use, and from the match's first turn, so a large one is first ready on its side's turn 8. |
+| Charged ultimate | For heroes like Victor and Silver (Patrick, 2026-11-09). It has no opening wait: it is ready once the hero has taken (Victor, 10) or dealt (Silver, 8) enough damage. The count starts over after use, and it then waits its size's turns like any ultimate. (Until 2026-11-15 it had a soul price, 20 and 16, that each damage brought down by 1.) |
 
 ## 3. Writing card text
 
@@ -57,7 +58,7 @@ after 2 turns, keeping its level (section 7).
   - Two exceptions:
     - Shiv's Killing Blow keeps its condition: it knocks out a hero below half HP.
     - Victor's ultimate is used on the enemy's turn, at the moment he falls.
-  - A charged ultimate's cost-cutting rule goes on its own line under the effect, so it doesn't count toward the 15 words.
+  - A charged ultimate's charge rule ("Ready once Victor has taken 10 damage.") goes on its own line under the effect, so it doesn't count toward the 15 words.
 - When an effect refers to the hero itself, the text names the hero ("Warden heals that much").
 - The meaning of each card word:
   - **Stun**: skips its next turn.
@@ -73,7 +74,7 @@ after 2 turns, keeping its level (section 7).
 
 ## 4. Budget
 
-One soul buys about one point of effect, the same rate items are priced at.
+One soul buys about one point of effect, the same rate items are priced at. Since 2026-11-15 a kit costs no souls: its points are paid for in turns of waiting ([balance-model.md](balance-model.md) §8), and the point values below are unchanged.
 
 | Effect | Points |
 |---|---|
@@ -91,7 +92,7 @@ One soul buys about one point of effect, the same rate items are priced at.
 | Knock out below half HP | +3 on top of the damage |
 | Hitting a bench hero | +0.5 on top |
 
-- A **skill** is worth 1–1.5 times its cost, and most skills cost 2.
+- A **skill** is worth 2–3 points if it waits 3 turns and 3–4.5 if it waits 4 (they were priced at 2 and 3 souls, 1–1.5 times their cost). Most skills wait 3.
 - A **passive** is worth about 1–2 points per own turn.
 - **Ultimates:**
   - a small one is worth 4–6;
@@ -106,13 +107,13 @@ One soul buys about one point of effect, the same rate items are priced at.
 
 ## 5. Patrick's calls on single heroes
 
-- **Viscous:** his skill is **The Cube**, his signature, for 3 souls: "Cube one of your heroes: it takes no damage until your next turn."
+- **Viscous:** his skill is **The Cube**, his signature, waiting 4 turns (3 souls until 2026-11-15): "Cube one of your heroes: it takes no damage until your next turn."
   - The signature wins over the control-3 rule, so his stun lives only in Goo Ball.
 - **Victor:** his ultimate, Shocking Reanimation, is a charged revive.
-  - It costs 20 souls, and 1 less for each damage he takes: "When Victor falls, you may use this: he revives where he is with half HP."
-  - Once he has soaked up enough hits, it is free. His Aura of Suffering now deals 1 spirit damage to Victor too, so it charges the ultimate.
-  - Patrick first wanted it passive and free. He changed his mind: it should cost a lot and get cheaper as Victor takes damage.
-- **Silver:** her ultimate, Lycan Curse, is charged. It costs 16 souls, and 1 less for each damage she deals: "Silver turns into a wolf for 2 turns: +3 Attack and Shield 6."
+  - It is ready once he has taken 10 damage: "When Victor falls, you may use this: he revives where he is with half HP."
+  - His Aura of Suffering deals 1 spirit damage to Victor too, so it charges the ultimate.
+  - Patrick first wanted it passive and free. He changed his mind: it should cost a lot (20 souls) and get cheaper as Victor takes damage. On 2026-11-15 ultimates stopped costing souls, so the damage alone charges it: 10, half the old price.
+- **Silver:** her ultimate, Lycan Curse, is charged. It is ready once she has dealt 8 damage (until 2026-11-15: 16 souls, 1 less for each damage she dealt): "Silver turns into a wolf for 2 turns: +3 Attack and Shield 6."
   - While she is a wolf, her card shows her wolf-form art. That is Deadlock's own wolf-form hero card, from the deadlock-api (`images/heroes/werewolf_wolf_card.webp`), not new art.
   - The Lycan Curse icon (`werewolf_lycancurse.webp`) is her ultimate icon, not her wolf art.
   - In Deadlock, dealing damage builds her bloodlust toward the transformation, so this matches the real game.
@@ -132,8 +133,8 @@ Patrick, 2026-11-09: Victor's revive should come from a separate system that oth
 - Some effects are optional, and they happen at a moment, often on the other player's turn. Example: "When Victor falls, you may use this." These are **trigger effects**.
 - When the moment comes, the game:
   - finds every trigger effect that player has for that moment;
-  - keeps only the ones the player can use right now (the right level, not waiting, enough souls).
-- If any are left, the game pauses and asks that player. The prompt shows the card, the moment and the price, for example "Use Shocking Reanimation for 7 souls? Yes / No".
+  - keeps only the ones the player can use right now (the right level, not waiting, charged; and for an ultimate, the side has not used one this turn).
+- If any are left, the game pauses and asks that player. The prompt shows the card and the moment, for example "Use Shocking Reanimation? Yes / No" (until 2026-11-15 it named a soul price too).
   - With several triggers, the player picks one or passes.
   - Nothing usable means no prompt, so the game never asks a pointless question.
 - The computer player answers the same prompt through the same code.
@@ -188,40 +189,40 @@ Numbers marked ✦ add the hero's Spirit, so "4✦" is 4 plus Spirit.
 **Abrams** · in the game today — peaks mid, one target; mix tank 3 · damage 2 · control 1 · support 0  
 HP 7 · Attack 2 · Retreat 2 · per level +1 Attack +2 HP
 - Passive — **Infernal Resilience**: At the start of your turn, if Abrams is Active, he heals 2.
-- Ultimate, medium, 8 souls — **Seismic Impact**: Deal 6✦ spirit damage to the enemy Active. Stun it 1 turn.
+- Ultimate, medium, waits 6 — **Seismic Impact**: Deal 6✦ spirit damage to the enemy Active. Stun it 1 turn.
 - Why: Abrams is the slow frontliner who heals back what he takes and crashes onto one target to pin it and punch it out.
 - Changed from today: Attack 1 to 2 and HP 5 to 7 by the formulas (mostly melee, damage 2, tank 3); passive heal 1 to 2 to reach the passive budget. Seismic Impact drops the hit on every enemy for a bigger hit on the Active alone (reach one), so it becomes medium.
 
 **Mo & Krill** · in the game today — peaks late, one target; mix tank 3 · damage 1 · control 3 · support 0  
 HP 6 · Attack 1 · Retreat 1 · per level +3 HP +1 Spirit
-- Skill, 2 souls — **Sand Blast**: Deal 1✦ spirit damage to the enemy Active and Disarm it 1 turn (it can't attack).
-- Ultimate, medium, 8 souls — **Combo**: Deal 4✦ spirit damage to the enemy Active, healing that much. Stun it 1 turn.
+- Skill, waits 3 — **Sand Blast**: Deal 1✦ spirit damage to the enemy Active and Disarm it 1 turn (it can't attack).
+- Ultimate, medium, waits 6 — **Combo**: Deal 4✦ spirit damage to the enemy Active, healing that much. Stun it 1 turn.
 - Why: Mo & Krill pop up under the enemy carry, blind it so it can't shoot, then stun it and drain it dry.
 - Changed from today: HP 7 to 6 (late -1); the cleanse passive becomes Sand Blast because control 3 needs control in the skill. Combo drain 6✦ to 4✦ to fit medium.
 
 **Viscous** · in the game today — peaks mid, many targets; mix tank 2 · damage 1 · control 3 · support 2  
 HP 6 · Attack 1 · Retreat 1 · per level +2 HP +1 Spirit
-- Skill, 3 souls — **The Cube**: Cube one of your heroes: it takes no damage until your next turn.
-- Ultimate, medium, 8 souls — **Goo Ball**: Deal 2✦ spirit damage to every enemy. Stun the enemy Active 1 turn.
+- Skill, waits 4 — **The Cube**: Cube one of your heroes: it takes no damage until your next turn.
+- Ultimate, medium, waits 6 — **Goo Ball**: Deal 2✦ spirit damage to every enemy. Stun the enemy Active 1 turn.
 - Why: Viscous saves his carry inside The Cube and bowls the enemy team over with Goo Ball, but deals little damage himself.
 - Changed from today: HP 4 to 6 and Attack 2 to 1 to match tank 2, damage 1. His skill becomes The Cube, his signature, so his hard control lives only in Goo Ball (an exception to the control-3 rule). Goo Ball drops its Unstoppable and its damage goes 3 to 2.
 
 **Billy** — peaks mid, many targets; mix tank 2 · damage 2 · control 3 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +1 Attack +1 HP +1 Spirit
-- Skill, 3 souls — **Bashdown**: Slam the bat down: deal 1✦ spirit damage to every enemy, and the enemy Active is pulled down: Rooted 1 turn.
-- Ultimate, large, 12 souls — **Chain Gang**: Root every enemy 2 turns. Deal 3✦ spirit damage to each.
+- Skill, waits 4 — **Bashdown**: Slam the bat down: deal 1✦ spirit damage to every enemy, and the enemy Active is pulled down: Rooted 1 turn.
+- Ultimate, large, waits 8 — **Chain Gang**: Root every enemy 2 turns. Deal 3✦ spirit damage to each.
 - Why: The punk goat rams in, slams everyone, and chains the whole enemy team to himself so nobody escapes the beating.
 
 **Rat King** — peaks early, many targets; mix tank 3 · damage 2 · control 1 · support 2  
 HP 8 · Attack 2 · Retreat 2 · per level +1 Attack +1 HP
-- Skill, 3 souls — **Rat Swarm**: Rats leap on every enemy: Bleed 1 for 1 turn. The enemy Active also loses 1 Bullet Resist for 2 turns.
-- Ultimate, medium, 8 souls — **Rule, Ratannia!**: Deal 2✦ spirit damage to every enemy. Shield 2 on your heroes.
+- Skill, waits 4 — **Rat Swarm**: Rats leap on every enemy: Bleed 1 for 1 turn. The enemy Active also loses 1 Bullet Resist for 2 turns.
+- Ultimate, medium, waits 6 — **Rule, Ratannia!**: Deal 2✦ spirit damage to every enemy. Shield 2 on your heroes.
 - Why: The tanky early-game brawler: rats strip bullet resist for his shotgun and the banner wins the teamfight, but his small growth falls off late.
 
 **Victor** — peaks late, many targets; mix tank 3 · damage 2 · control 0 · support 0  
 HP 6 · Attack 1 · Retreat 2 · per level +3 HP +1 Spirit
 - Passive — **Aura of Suffering**: While Victor is Active, at the start of your turn deal 1 spirit damage to every enemy and to Victor.
-- Charged ultimate, 20 souls — **Shocking Reanimation**: When Victor falls, you may use this: he revives where he is with half HP. *Costs 1 less for each damage Victor takes.*
+- Charged ultimate, medium, 10 damage taken — **Shocking Reanimation**: When Victor falls, you may use this: he revives where he is with half HP. *Ready once Victor has taken 10 damage.*
 - Why: The tank who won't die: his aura burns everyone, himself included, and every hit he soaks up brings his revive closer.
 
 
@@ -229,41 +230,41 @@ HP 6 · Attack 1 · Retreat 2 · per level +3 HP +1 Spirit
 
 **Lady Geist** · in the game today — peaks early, one or many; mix tank 2 · damage 3 · control 0 · support 0  
 HP 7 · Attack 1 · Retreat 2 · per level +2 Spirit
-- Skill, 2 souls — **Essence Bomb**: Lady Geist pays 1 HP: deal 1✦ spirit damage to every enemy.
-- Ultimate, medium, 8 souls — **Soul Exchange**: Swap HP with the enemy Active. Deal 3✦ spirit damage to it.
+- Skill, waits 3 — **Essence Bomb**: Lady Geist pays 1 HP: deal 1✦ spirit damage to every enemy.
+- Ultimate, medium, waits 6 — **Soul Exchange**: Swap HP with the enemy Active. Deal 3✦ spirit damage to it.
 - Why: Lady Geist bleeds herself to bomb the whole enemy side, and the lower she drops, the harder Soul Exchange flips the duel.
 - Changed from today: HP 4 to 7 (tank 2, early +1 on HP since she is a spirit hero); the single-target drain becomes Essence Bomb so her reach is both. Soul Exchange adds 3✦ so it always does something and can finish a kill.
 
 **Shiv** · in the game today — peaks late, one target; mix tank 2 · damage 3 · control 0 · support 0  
 HP 6 · Attack 1 · Retreat 1 · per level +2 Attack +1 HP +1 Spirit
-- Skill, 2 souls — **Serrated Knives**: Throw a knife: deal 1✦ spirit damage to the enemy Active and Bleed 1 for 2 turns.
-- Ultimate, medium, 8 souls — **Killing Blow**: Deal 5✦ spirit damage to the enemy Active. Knock it out if below half HP.
+- Skill, 2 charges, 3 turns each — **Serrated Knives**: Throw a knife: deal 1✦ spirit damage to the enemy Active and Bleed 1 for 2 turns.
+- Ultimate, medium, waits 6 — **Killing Blow**: Deal 5✦ spirit damage to the enemy Active. Knock it out if below half HP.
 - Why: Shiv bleeds one target down with knives, then leaps in to execute it once it drops below half.
 - Changed from today: Attack 2 to 1 and HP 5 to 6: a damage tank who starts slow and grows +2 Attack a level. Today's free Bleed 2 on every attack was over budget, so the bleed moves to the Serrated Knives skill.
 
 **Warden** · in the game today — peaks early, one target; mix tank 2 · damage 2 · control 1 · support 0  
 HP 7 · Attack 2 · Retreat 1 · per level +1 Attack +1 HP
-- Skill, 2 souls — **Willpower**: A barrier and a burst of speed: Shield 3 on Warden, and Swift (his next retreat is free).
-- Ultimate, medium, 8 souls — **Last Stand**: Deal 6✦ spirit damage to the enemy Active. Warden heals that much.
+- Skill, waits 3 — **Willpower**: A barrier and a burst of speed: Shield 3 on Warden, and Swift (his next retreat is free).
+- Ultimate, medium, waits 6 — **Last Stand**: Deal 6✦ spirit damage to the enemy Active. Warden heals that much.
 - Why: Warden is half tank, half gun: he shields up, outshoots the enemy front and drains it to heal through a long duel.
 - Changed from today: HP 5 to 7 (tank 2, and the early +1 goes on HP since Attack caps at 2). Willpower gains Swift for its speed burst. Last Stand is one drain of 6✦ from the enemy Active instead of a 3-turn channel on everyone.
 
 **Baba** — peaks mid, one or many; mix tank 2 · damage 2 · control 2 · support 0  
 HP 6 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 2 souls — **Threadsap**: A yarn thread steals Spirit: the enemy Active gets -1 Spirit and Baba +1 Spirit, both for 2 turns.
-- Ultimate, medium, 8 souls — **Feed The Birds**: Deal 2✦ spirit damage to every enemy. Silence the enemy Active 2 turns.
+- Skill, waits 3 — **Threadsap**: A yarn thread steals Spirit: the enemy Active gets -1 Spirit and Baba +1 Spirit, both for 2 turns.
+- Ultimate, medium, waits 6 — **Feed The Birds**: Deal 2✦ spirit damage to every enemy. Silence the enemy Active 2 turns.
 - Why: The front-line hexer saps enemy Spirit to fuel her own, then pigeon-bombs the whole team and hexes their Active silent.
 
 **Infernus** — peaks mid, many targets; mix tank 1 · damage 3 · control 1 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +1 Spirit
 - Passive — **Afterburn**: His attacks set the target burning: Bleed 2 for 1 turn.
-- Ultimate, medium, 8 souls — **Concussive Combustion**: Deal 3✦ spirit damage to every enemy. Stun the enemy Active 1 turn.
+- Ultimate, medium, waits 6 — **Concussive Combustion**: Deal 3✦ spirit damage to every enemy. Stun the enemy Active 1 turn.
 - Why: The fire guy: his gun keeps you burning, Flame Dash makes his retreat free, and Concussive Combustion blows up mid-team with a stun.
 
 **Silver** — peaks mid, one target; mix tank 2 · damage 3 · control 1 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
-- Skill, 2 souls — **Boot Kick**: Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns.
-- Charged ultimate, 16 souls — **Lycan Curse** (Wolf form, with her wolf-form art): Silver turns into a wolf for 2 turns: +3 Attack and Shield 6. *Costs 1 less for each damage Silver deals.*
+- Skill, waits 3 — **Boot Kick**: Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns.
+- Charged ultimate, medium, 8 damage dealt — **Lycan Curse** (Wolf form, with her wolf-form art): Silver turns into a wolf for 2 turns: +3 Attack and Shield 6. *Ready once Silver has dealt 8 damage.*
 - Why: She kick-marks one target and shotguns it; the more she hurts the enemy, the sooner she turns wolf for a shielded melee burst.
 
 
@@ -272,21 +273,21 @@ HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 **Haze** · in the game today — peaks late, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +3 Attack +1 HP
 - Passive — **Fixation**: Each attack adds a Fixation stack to the target (max 2). Haze deals +1 bullet damage per stack to it until it leaves the Active slot.
-- Ultimate, large, 12 souls — **Bullet Dance**: Deal Haze's Attack as bullet damage to every enemy.
+- Ultimate, large, waits 8 — **Bullet Dance**: Deal Haze's Attack as bullet damage to every enemy.
 - Why: Haze is the late carry: weak at Level 1, then Fixation ramps on one target, and a late Bullet Dance shreds the whole enemy team.
 - Changed from today: Attack 3 to 1 and HP 5 to 4: she starts weak and grows +3 Attack a level. The Level 3 extra attack becomes Fixation, her real passive. Bullet Dance now uses her Attack, so it grows as she does.
 
 **Wraith** · in the game today — peaks late, one target; mix tank 0 · damage 3 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 0 · per level +3 Attack +1 HP
-- Skill, 2 souls — **Full Auto**: Wraith gets +2 Attack for 2 turns.
-- Ultimate, medium, 8 souls — **Telekinesis**: Deal 5✦ spirit damage to the enemy Active. Stun it 1 turn.
+- Skill, waits 3 — **Full Auto**: Wraith gets +2 Attack for 2 turns.
+- Ultimate, medium, waits 6 — **Telekinesis**: Deal 5✦ spirit damage to the enemy Active. Stun it 1 turn.
 - Why: Wraith starts as the weakest gun on the board, then grows the most Attack, spins up Full Auto and wins any one-on-one, lifting her target out of the fight.
 - Changed from today: Attack 2 to 1 and HP 6 to 4 (tank 0, late -1 off Attack); the spirit-on-hit passive becomes Full Auto. Telekinesis hits a little harder, 4✦ to 5✦.
 
 **Vyper** — peaks late, one target; mix tank 1 · damage 3 · control 1 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +3 Attack +1 HP
-- Skill, 2 souls — **Lethal Venom**: Poison any enemy hero: deal 1✦ spirit damage, or 2✦ if it is below half HP.
-- Ultimate, small, 4 souls — **Petrifying Bola**: Deal 2✦ spirit damage to the enemy Active. Stun it 1 turn.
+- Skill, waits 3 — **Lethal Venom**: Poison any enemy hero: deal 1✦ spirit damage, or 2✦ if it is below half HP.
+- Ultimate, small, waits 4 — **Petrifying Bola**: Deal 2✦ spirit damage to the enemy Active. Stun it 1 turn.
 - Why: A weak-lane gunner who grows into a big late-game gun, slides out for free, and poisons runners even after they flee to the bench.
 
 
@@ -295,26 +296,26 @@ HP 5 · Attack 1 · Retreat 0 · per level +3 Attack +1 HP
 **Vindicta** · in the game today — peaks early, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +2 Attack
 - Passive — **Flight**: Vindicta flies: her attacks also deal 1✦ spirit damage.
-- Ultimate, medium, 8 souls — **Assassinate**: Deal 8✦ spirit damage to any enemy.
+- Ultimate, medium, waits 6 — **Assassinate**: Deal 8✦ spirit damage to any enemy.
 - Why: Vindicta floats out of reach adding spirit damage to her rifle, then snipes any wounded hero on the board, bench included.
 - Changed from today: Stats stay 2/5 (Attack capped at 2, so the early +1 goes on HP). The bullet-resist passive becomes Flight's real effect, bonus spirit damage on her shots; Assassinate becomes a flat 8✦ on any enemy.
 
 **Grey Talon** — peaks late, one target; mix tank 1 · damage 3 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +1 HP +3 Spirit
-- Skill, 2 souls — **Charged Shot**: A long-range charged arrow: deal 3✦ spirit damage to the enemy Active.
-- Ultimate, medium, 8 souls — **Guided Owl**: Deal 5✦ spirit damage to any enemy. Stun it 1 turn.
+- Skill, waits 3 — **Charged Shot**: A long-range charged arrow: deal 3✦ spirit damage to the enemy Active.
+- Ultimate, medium, waits 6 — **Guided Owl**: Deal 5✦ spirit damage to any enemy. Stun it 1 turn.
 - Why: The archer pokes the front line from range and sends his owl across the map to stun and finish whoever is hurt.
 
 **Holliday** — peaks early, one or many; mix tank 1 · damage 3 · control 1 · support 0  
 HP 6 · Attack 2 · Retreat 0 · per level +1 Attack +1 Spirit
-- Skill, 3 souls — **Powder Keg**: Throw an explosive barrel: deal 1✦ spirit damage to every enemy, and the enemy Active burns: Bleed 1 for 2 turns.
-- Ultimate, small, 4 souls — **Spirit Lasso**: Pull an enemy bench hero into Active. Deal 3✦ spirit damage to it.
+- Skill, waits 4 — **Powder Keg**: Throw an explosive barrel: deal 1✦ spirit damage to every enemy, and the enemy Active burns: Bleed 1 for 2 turns.
+- Ultimate, small, waits 4 — **Spirit Lasso**: Pull an enemy bench hero into Active. Deal 3✦ spirit damage to it.
 - Why: The trick-shooting cowgirl bullies the lane with headshots and barrels, then lassos a hiding carry into the open for her team to gun down.
 
 **Venator** — peaks mid, one target; mix tank 1 · damage 3 · control 1 · support 0  
 HP 5 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
-- Skill, 2 souls — **Hex-Lined Snap Trap**: Kick a trap under the enemy Active: Root it 1 turn and reveal it: Vulnerable 1 turn.
-- Ultimate, medium, 8 souls — **Ira Domini**: Venator attacks the enemy Active 2 more times.
+- Skill, waits 3 — **Hex-Lined Snap Trap**: Kick a trap under the enemy Active: Root it 1 turn and reveal it: Vulnerable 1 turn.
+- Ultimate, medium, waits 6 — **Ira Domini**: Venator attacks the enemy Active 2 more times.
 - Why: The monster hunter snap-traps one target, then fires two more holy stakes into it.
 
 
@@ -322,27 +323,27 @@ HP 5 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 
 **Seven** · in the game today — peaks late, many targets; mix tank 1 · damage 3 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +1 HP +3 Spirit
-- Skill, 2 souls — **Lightning Ball**: Roll a ball of lightning through the enemy team: deal 1✦ spirit damage to every enemy.
-- Ultimate, large, 12 souls — **Storm Cloud**: Deal 5✦ spirit damage to every enemy.
+- Skill, 2 charges, 3 turns each — **Lightning Ball**: Roll a ball of lightning through the enemy team: deal 1✦ spirit damage to every enemy.
+- Ultimate, large, waits 8 — **Storm Cloud**: Deal 5✦ spirit damage to every enemy.
 - Why: Seven is the easy spirit carry who zaps grouped enemies all game and wins late teamfights with a storm that hits the whole team.
 - Changed from today: Attack 2 to 1 (spirit hero; HP stays 4 after the late -1). Static Charge's delayed stun gave way to Lightning Ball because control 1 allows little control; Storm Cloud is one hit on every enemy instead of a 3-turn channel.
 
 **Celeste** — peaks early, many targets; mix tank 0 · damage 3 · control 0 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +2 Spirit
-- Skill, 3 souls — **Radiant Daggers**: Beams of light crash down on the enemy team: deal 1✦ spirit damage to every enemy, and Celeste gets +1 Spirit for 2 turns.
-- Ultimate, medium, 8 souls — **Shining Wonder**: Deal 4✦ spirit damage to every enemy.
+- Skill, waits 4 — **Radiant Daggers**: Beams of light crash down on the enemy team: deal 1✦ spirit damage to every enemy, and Celeste gets +1 Spirit for 2 turns.
+- Ultimate, medium, waits 6 — **Shining Wonder**: Deal 4✦ spirit damage to every enemy.
 - Why: The floaty carnival caster is hard to catch, stacks power with every hero she hits, and her bouncing orb shreds a bunched-up team; her early +1 goes on HP for the barrier she lives on.
 
 **Graves** — peaks mid, many targets; mix tank 1 · damage 2 · control 2 · support 0  
 HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Essence Theft**: Her beam drains every enemy: Spirit Resist -1 for 2 turns. Graves gets +1 Spirit for 2 turns.
-- Ultimate, medium, 8 souls — **Borrowed Decree**: Deal 3✦ spirit damage to every enemy. Root the enemy Active 1 turn.
+- Skill, waits 4 — **Essence Theft**: Her beam drains every enemy: Spirit Resist -1 for 2 turns. Graves gets +1 Spirit for 2 turns.
+- Ultimate, medium, waits 6 — **Borrowed Decree**: Deal 3✦ spirit damage to every enemy. Root the enemy Active 1 turn.
 - Why: The necromancer steals her enemies' defenses and raises Ghouls that hit the whole team and pin their front line.
 
 **Mina** — peaks late, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
-- Skill, 2 souls — **Rake**: Umbrella slash: deal 2✦ spirit damage to the enemy Active, or 3✦ if it is below half HP.
-- Ultimate, medium, 8 souls — **Nox Nostra**: Deal 7✦ spirit damage to the enemy Active. Silence it 1 turn.
+- Skill, waits 3 — **Rake**: Umbrella slash: deal 2✦ spirit damage to the enemy Active, or 3✦ if it is below half HP.
+- Ultimate, medium, waits 6 — **Nox Nostra**: Deal 7✦ spirit damage to the enemy Active. Silence it 1 turn.
 - Why: The most fragile hero in the game pokes from the bench with Rake, bats away for free, and scales late into a burst that silences casters.
 
 
@@ -351,53 +352,53 @@ HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
 **Drifter** · in the game today — peaks mid, one target; mix tank 2 · damage 3 · control 1 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 - Passive — **Bloodscent**: His attacks deal +1 bullet damage to a hero below half HP. Each knockout while he is Active gives him +1 Attack for the game (max +2).
-- Ultimate, medium, 8 souls — **Eternal Night**: Deal 5✦ spirit damage to the enemy Active. It takes +1 damage for 3 turns.
+- Ultimate, medium, waits 6 — **Eternal Night**: Deal 5✦ spirit damage to the enemy Active. It takes +1 damage for 3 turns.
 - Why: Drifter is the stalker who smells blood: he hits wounded heroes harder, traps one target alone in the dark, and grows stronger with each kill.
 - Changed from today: Attack 3 to 2 (the Level 1 cap) and HP 5 to 6 (tank 2); lifesteal becomes his real Bloodscent passive. Eternal Night now hits one target and leaves it taking +1 damage, instead of silencing two heroes.
 
 **Lash** · in the game today — peaks mid, many targets; mix tank 1 · damage 2 · control 3 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Ground Strike**: Slam down: deal 1✦ spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat).
-- Ultimate, large, 12 souls — **Death Slam**: Deal 3✦ spirit damage to every enemy. Stun each 1 turn.
+- Skill, waits 4 — **Ground Strike**: Slam down: deal 1✦ spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat).
+- Ultimate, large, waits 8 — **Death Slam**: Deal 3✦ spirit damage to every enemy. Stun each 1 turn.
 - Why: Lash drops from the sky onto the whole enemy line, pins the Active so it can't escape his chase, then lifts and slams their entire team.
 - Changed from today: HP 4 to 5 (tank 1); the Vulnerable skill becomes Ground Strike with a root because control 3 needs hard control in the skill. Death Slam now stuns every enemy instead of only the Active, trading some damage for it.
 
 **Mirage** · in the game today — peaks late, one target; mix tank 1 · damage 2 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +2 Spirit
 - Passive — **Djinn's Mark**: Each attack adds a Djinn's Mark to the target (max 3). The third mark detonates them all: deal 4✦ spirit damage.
-- Ultimate, small, 4 souls — **Traveler**: Swap Mirage with a bench ally. Both get Shield 2.
+- Ultimate, small, waits 4 — **Traveler**: Swap Mirage with a bench ally. Both get Shield 2.
 - Why: Mirage stacks marks on one target with his shots and pops them for spirit damage, and Traveler whisks him out while shielding whoever steps in.
 - Changed from today: Attack 3 to 1 and HP 6 to 4 (spirit-leaning hybrid, tank 1, late -1); Djinn's Mark paid 3 per stack, over budget, so it now pops at 3 marks for 4✦. Traveler now shields both heroes in the swap.
 
 **Yamato** · in the game today — peaks mid, one target; mix tank 1 · damage 3 · control 0 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +1 Attack +1 HP +1 Spirit
-- Skill, 2 souls — **Flying Slash**: Grapple onto any enemy, bench too, and slash it: deal 2✦ spirit damage.
-- Ultimate, medium, 8 souls — **Shadow Transformation**: For 2 turns: +3 Attack and Unstoppable.
+- Skill, waits 3 — **Flying Slash**: Grapple onto any enemy, bench too, and slash it: deal 2✦ spirit damage.
+- Ultimate, medium, waits 6 — **Shadow Transformation**: For 2 turns: +3 Attack and Unstoppable.
 - Why: Yamato grapples onto whoever retreats to the back and is nearly impossible to kill or lock down while transformed.
 - Changed from today: HP 6 to 5 (tank 1). Her skill becomes Flying Slash at 2✦ melee for 2 souls (was 1✦). Shadow Transformation drops the heal 5 and gives 2 turns of +3 Attack and Unstoppable.
 
 **Apollo** — peaks early, one target; mix tank 1 · damage 3 · control 1 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +1 Attack +1 Spirit
 - Passive — **Riposte**: Apollo takes 1 less bullet damage. When the enemy Active attacks him, he deals 1 bullet damage back.
-- Ultimate, medium, 8 souls — **Itani Lo Sahn**: Deal 8✦ spirit damage to the enemy Active.
+- Ultimate, medium, waits 6 — **Itani Lo Sahn**: Deal 8✦ spirit damage to the enemy Active.
 - Why: The fencer who ruled early games parries and punishes every swing (so his early +1 goes on Attack), then cuts one target down in a single slow-motion slash.
 
 **Calico** — peaks mid, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
-- Skill, 2 souls — **Ava**: Use from the bench: Calico rides Ava into the Active slot, swapping with your Active, and deals 1✦ spirit damage to the enemy Active.
-- Ultimate, medium, 8 souls — **Return to Shadows**: Deal 4✦ spirit damage to any two enemies.
+- Skill, waits 3 — **Ava**: Use from the bench: Calico rides Ava into the Active slot, swapping with your Active, and deals 1✦ spirit damage to the enemy Active.
+- Ultimate, medium, waits 6 — **Return to Shadows**: Deal 4✦ spirit damage to any two enemies.
 - Why: Calico slips in from the shadows on her cat and bursts the two squishiest heroes, bench included.
 
 **Deadman Danny** — peaks mid, many targets; mix tank 1 · damage 3 · control 1 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +1 Attack +2 Spirit
-- Skill, 2 souls — **Chimera Mk1**: Jetpack dive-bomb: Danny loses 1 HP, then deals 1✦ spirit damage to every enemy, and the enemy Active is Vulnerable 1 turn.
-- Ultimate, medium, 8 souls — **Close The Deal**: Deal 6✦ spirit damage to the enemy Active and 1✦ to the rest.
+- Skill, waits 3 — **Chimera Mk1**: Jetpack dive-bomb: Danny loses 1 HP, then deals 1✦ spirit damage to every enemy, and the enemy Active is Vulnerable 1 turn.
+- Ultimate, medium, waits 6 — **Close The Deal**: Deal 6✦ spirit damage to the enemy Active and 1✦ to the rest.
 - Why: The jetpack bomber piledrives one target and splashes the rest of the team; Attack 2 because he fights with the rocket launcher first and grows into spirit.
 
 **Pocket** — peaks mid, many targets; mix tank 1 · damage 3 · control 0 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
-- Skill, 2 souls — **Barrage**: Rain spirit shots: deal 1✦ spirit damage to every enemy.
-- Ultimate, medium, 8 souls — **Affliction**: Every enemy bleeds 2 a turn for 2 turns.
+- Skill, waits 3 — **Barrage**: Rain spirit shots: deal 1✦ spirit damage to every enemy.
+- Ultimate, medium, waits 6 — **Affliction**: Every enemy bleeds 2 a turn for 2 turns.
 - Why: Dives in, blows up the whole group with Barrage, curses everyone with a bleeding Affliction, and slips away for free.
 
 
@@ -405,48 +406,48 @@ HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
 
 **Dynamo** · in the game today — peaks mid, many targets; mix tank 1 · damage 1 · control 3 · support 2  
 HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Kinetic Pulse**: Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air).
-- Ultimate, large, 12 souls — **Singularity**: Stun every enemy 1 turn. Deal 2✦ spirit damage to each.
+- Skill, 2 charges, 4 turns each — **Kinetic Pulse**: Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air).
+- Ultimate, large, waits 8 — **Singularity**: Stun every enemy 1 turn. Deal 2✦ spirit damage to each.
 - Why: Dynamo locks down the whole enemy team: Kinetic Pulse knocks them up, and one Singularity stuns everyone.
 - Changed from today: Attack 3 to 1 and HP 6 to 5 (spirit hero, tank 1); the heal-and-buff skill becomes Kinetic Pulse because control 3 needs control in the skill. Singularity is one turn that stuns every enemy instead of a 3-turn channel.
 
 **Kelvin** · in the game today — peaks mid, many targets; mix tank 2 · damage 1 · control 2 · support 3  
 HP 6 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Frost Grenade**: Deal 1 spirit damage to every enemy. Your heroes heal 1✦ each.
-- Ultimate, medium, 8 souls — **Frozen Shelter**: Heal your heroes 4✦. Root the enemy Active 2 turns.
+- Skill, 2 charges, 4 turns each — **Frost Grenade**: Deal 1 spirit damage to every enemy. Your heroes heal 1✦ each.
+- Ultimate, medium, waits 6 — **Frozen Shelter**: Heal your heroes 4✦. Root the enemy Active 2 turns.
 - Why: Kelvin heals his whole team and chills every enemy with each grenade, and his dome both saves his side and traps their Active.
 - Changed from today: Attack 2 to 1 (spirit, damage 1), HP stays 6; Frost Grenade now hits every enemy and heals the whole team (reach many). Frozen Shelter's flat heal 7 becomes 4✦ plus a root, which gives control 2 its control in the ultimate.
 
 **Paige** · in the game today — peaks early, many targets; mix tank 0 · damage 1 · control 1 · support 3  
 HP 5 · Attack 1 · Retreat 1 · per level +2 Spirit
-- Skill, 2 souls — **Plot Armor**: Give one of your heroes Shield 2✦ and +1 Attack for 2 turns.
-- Ultimate, medium, 8 souls — **Rallying Charge**: Heal your heroes 3✦. Deal 2✦ spirit damage to every enemy.
+- Skill, waits 3 — **Plot Armor**: Give one of your heroes Shield 2✦ and +1 Attack for 2 turns.
+- Ultimate, medium, waits 6 — **Rallying Charge**: Heal your heroes 3✦. Deal 2✦ spirit damage to every enemy.
 - Why: Paige is the safe backline support who shields her carry and boosts its gun, and her knights heal the team and hit every enemy from anywhere.
 - Changed from today: Attack 2 to 1 and HP 4 to 5 (spirit support, early +1 on HP); Plot Armor's real gun boost replaces bullet resist. Rallying Charge trimmed from heal 4 and 4✦ to 3✦ and 2✦, so it fits medium for a damage-1 hero.
 
 **Rem** · in the game today — peaks late, one target; mix tank 0 · damage 0 · control 1 · support 3  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
-- Skill, 2 souls — **Tag Along**: Rem rides on another of your heroes as equipment for 2 turns: it heals 4✦. Then Rem returns to your bench.
-- Ultimate, small, 4 souls — **Naptime**: Sleep the enemy Active 2 turns.
+- Skill, waits 3 — **Tag Along**: Rem rides on another of your heroes as equipment for 2 turns: it heals 4✦. Then Rem returns to your bench.
+- Ultimate, small, waits 4 — **Naptime**: Sleep the enemy Active 2 turns.
 - Why: Rem is the tiny support who rides on her allies to heal them and sends the enemy Active to sleep, and her Spirit growth makes both strong late. She stands in the lane like any hero, and riding off is her way out of a lane she is losing.
 - Changed from today: Stats stay 1/4: the late -1 cannot be paid because HP 4 and Attack 1 are both at the floor. Rem is no longer bench-only (Patrick, 2026-11-09). Tag Along keeps the ride (the old merge) but drops its max-HP buff for a plain heal on the bearer, lasts 2 turns and works from the lane too; Naptime becomes small, just the 2-turn sleep, since her damage score is 0.
 
 **Ivy** — peaks mid, one target; mix tank 0 · damage 1 · control 1 · support 3  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
-- Skill, 2 souls — **Kudzu Connection**: Tether to an ally: it heals 2✦ and gets +1 Attack for 2 turns.
-- Ultimate, medium, 8 souls — **Air Drop**: Swap in a bench ally. Deal 6✦ spirit damage to the enemy Active.
+- Skill, waits 3 — **Kudzu Connection**: Tether to an ally: it heals 2✦ and gets +1 Attack for 2 turns.
+- Ultimate, medium, waits 6 — **Air Drop**: Swap in a bench ally. Deal 6✦ spirit damage to the enemy Active.
 - Why: Ivy's whole job is one carry: she tethers and heals it, then flies it into the fight with a bomb.
 
 **Nurse Harrow** — peaks mid, many targets; mix tank 1 · damage 1 · control 2 · support 3  
 HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 2 souls — **Healing Needles**: Heal your Active 2✦ and each bench ally 1.
-- Ultimate, medium, 8 souls — **Lurking Terrors**: Deal 2✦ spirit damage to every enemy. Silence each 1 turn.
+- Skill, waits 3 — **Healing Needles**: Heal your Active 2✦ and each bench ally 1.
+- Ultimate, medium, waits 6 — **Lurking Terrors**: Deal 2✦ spirit damage to every enemy. Silence each 1 turn.
 - Why: She keeps the whole team topped up with Healing Needles and breaks a fight by terrifying every enemy into silence.
 
 **Violet** — peaks mid, one or many; mix tank 0 · damage 1 · control 2 · support 3  
 HP 4 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 2 souls — **Living Ink**: Paint an ink wall before an ally: Shield 2✦, and its bullets are empowered: +1 Attack for 2 turns.
-- Ultimate, medium, 8 souls — **Abstract Landscape**: For 2 turns: root the enemy Active; every enemy takes +1 damage.
+- Skill, waits 3 — **Living Ink**: Paint an ink wall before an ally: Shield 2✦, and its bullets are empowered: +1 Attack for 2 turns.
+- Ultimate, medium, waits 6 — **Abstract Landscape**: For 2 turns: root the enemy Active; every enemy takes +1 damage.
 - Why: The nimble painter guards and empowers one ally with Living Ink, then paints a circle that lifts her team's Spirit and traps the enemy inside.
 
 
@@ -454,39 +455,39 @@ HP 4 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
 
 **Sinclair** · in the game today — peaks mid, one target; mix tank 0 · damage 1 · control 3 · support 1  
 HP 4 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Rabbit Hex**: Hex the enemy Active into a rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage.
-- Ultimate, medium, 8 souls — **Audience Participation**: Cast the enemy Active's ultimate as Sinclair's own.
+- Skill, waits 4 — **Rabbit Hex**: Hex the enemy Active into a rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage.
+- Ultimate, medium, waits 6 — **Audience Participation**: Cast the enemy Active's ultimate as Sinclair's own.
 - Why: The magician turns the enemy front-liner into a bunny and steals the enemy's best ultimate: tricky and swingy, with little damage of their own.
 - Changed from today: The 2✦ poke (Vexing Bolt) is replaced by Rabbit Hex, the engine's rabbit, because control 3 needs hard control in the skill; Audience Participation casts the copied ultimate right away instead of saving it.
 
 **Bebop** — peaks mid, one target; mix tank 2 · damage 2 · control 3 · support 0  
 HP 6 · Attack 1 · Retreat 2 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Grapple Arm**: Hook an enemy bench hero into the Active slot; it's Rooted 1 turn. Or hook an ally: swap your Active with a bench ally.
-- Ultimate, medium, 8 souls — **Hyper Beam**: Deal 5✦ spirit damage to the enemy Active. Root it 2 turns.
+- Skill, waits 4 — **Grapple Arm**: Hook an enemy bench hero into the Active slot; it's Rooted 1 turn. Or hook an ally: swap your Active with a bench ally.
+- Ultimate, medium, waits 6 — **Hyper Beam**: Deal 5✦ spirit damage to the enemy Active. Root it 2 turns.
 - Why: Land the hook and the enemy's hidden carry is dragged to the front and pinned under the beam; the same hook can yank an ally out of trouble.
 
 **McGinnis** — peaks mid, many targets; mix tank 1 · damage 2 · control 3 · support 1  
 HP 5 · Attack 1 · Retreat 2 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Mini Turret**: Drop a turret on the enemy Active: deal 1✦ spirit damage now, Bleed 1 for 1 turn, and Root it 1 turn so it can't retreat.
-- Ultimate, large, 12 souls — **Heavy Barrage**: Deal 4✦ spirit damage to every enemy. Root the enemy Active 2 turns.
+- Skill, waits 4 — **Mini Turret**: Drop a turret on the enemy Active: deal 1✦ spirit damage now, Bleed 1 for 1 turn, and Root it 1 turn so it can't retreat.
+- Ultimate, large, waits 8 — **Heavy Barrage**: Deal 4✦ spirit damage to every enemy. Root the enemy Active 2 turns.
 - Why: Turret lady holds a kill zone: the turret pins the enemy Active in place under fire, and Heavy Barrage pounds the whole team.
 
 **Paradox** — peaks late, one target; mix tank 1 · damage 2 · control 3 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +1 Attack +1 HP +2 Spirit
-- Skill, 3 souls — **Kinetic Carbine**: Charged shot: deal 1✦ spirit damage to the enemy Active and Stun it 1 turn, frozen in time.
-- Ultimate, medium, 8 souls — **Paradoxical Swap**: Pull an enemy bench hero into Active. Deal 6✦ spirit damage to it.
+- Skill, waits 4 — **Kinetic Carbine**: Charged shot: deal 1✦ spirit damage to the enemy Active and Stun it 1 turn, frozen in time.
+- Ultimate, medium, waits 6 — **Paradoxical Swap**: Pull an enemy bench hero into Active. Deal 6✦ spirit damage to it.
 - Why: She freezes one enemy with Kinetic Carbine and swaps the enemy carry out of the backline into her team; weak early, scary late.
 
 **Solomon** — peaks mid, many targets; mix tank 1 · damage 2 · control 3 · support 1  
 HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Rook Battery**: Two rooks roll out: deal 1✦ spirit damage to every enemy, and the enemy Active is Rooted 1 turn.
-- Ultimate, medium, 8 souls — **Develop Queen**: Root every enemy 1 turn. Deal 2✦ spirit damage to each.
+- Skill, waits 4 — **Rook Battery**: Two rooks roll out: deal 1✦ spirit damage to every enemy, and the enemy Active is Rooted 1 turn.
+- Ultimate, medium, waits 6 — **Develop Queen**: Root every enemy 1 turn. Deal 2✦ spirit damage to each.
 - Why: The chess master lays out the board: rooks pin the enemy Active, then the queen pins their whole team and hits every piece.
 
 **The Doorman** — peaks mid, one or many; mix tank 1 · damage 1 · control 3 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
-- Skill, 3 souls — **Luggage Cart**: The cart runs over every enemy: deal 1✦ spirit damage, then swap the enemy Active with an enemy bench hero you pick.
-- Ultimate, medium, 8 souls — **Hotel Guest**: Deal 4✦ spirit damage to any enemy. Sleep it 2 turns.
+- Skill, waits 4 — **Luggage Cart**: The cart runs over every enemy: deal 1✦ spirit damage, then swap the enemy Active with an enemy bench hero you pick.
+- Ultimate, medium, waits 6 — **Hotel Guest**: Deal 4✦ spirit damage to any enemy. Sleep it 2 turns.
 - Why: Doors make his retreat free, the cart reshuffles the enemy line, and Hotel Guest checks their carry out of the fight for two turns.
 
 ## As built (2026-11-09)
@@ -497,12 +498,17 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 **The rules**
 - **Waits.** "Then waits N turns" is the engine's cooldown N, the reading the draw cards' "waits
   2 turns" already has: ready again on the hero's Nth own turn after the use, and the sheet says
-  "Ready in N turns". A skill (1) is ready on its hero's next turn, so its wait adds nothing to the
-  one-ability-a-turn rule; an ultimate (3) sits out its hero's next two turns and is ready on the
-  third. Unchanged constants: `SKILL_COOLDOWN` 1, `ULT_COOLDOWN` 3, `ULT_UNLOCK_LEVEL` 2.
-- **Prices.** A skill's souls are on its ability (`souls`); an ultimate's come from its card's size
-  (`ULT_COST`: 4, 8, 12). Both are paid from the same souls as items, before the effect runs.
-  Echo Shard's repeat of a skill is the item's own effect and pays nothing.
+  "Ready in N turns". Since 2026-11-15 the waits are a kit's whole price: a skill waits
+  `SKILL_COOLDOWN` 3 (4 where its data says so), an ultimate `ULT_WAIT` 4 / 6 / 8 by its card's
+  size, after each use and from the match's first turn (`armUltWaits`). `ULT_UNLOCK_LEVEL` 2 is
+  unchanged. (As built on 2026-11-09: `SKILL_COOLDOWN` 1, `ULT_COOLDOWN` 3.)
+- **Prices.** None since 2026-11-15: `kitCost` is 0 for every skill and ultimate, and `ULT_COST`
+  is gone. A side uses one ultimate a turn (`G.ultUsed`, refused as `'ultUsed'`). A charged skill
+  (`AbilityDef.charges`) records its spent charges on the hero (`chargesSpent`); its wait brings
+  them back one at a time, and only the charge items (Extra Charge, Rapid Recharge) add a charge
+  or shorten that wait. Echo Shard's repeat of a skill is the item's own effect: it spends no charge
+  and starts no wait. (As built on 2026-11-09: a skill's `souls`, an ultimate's `ULT_COST` 4, 8,
+  12, both paid from the same souls as items.)
 - **Retreat.** `RETREAT_COST` is gone: a Retreat costs the leaving hero's printed `retreat`, less
   Sprint Boots and the like, and nothing while it is Swift. Rem's 0 applies since she stands in the
   lane (2026-11-09; she was bench-only until then).
@@ -530,6 +536,8 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 - **Viscous — The Cube.** Invulnerable for 1 turn on any hero of his side, himself included: it
   covers the rival's turn and is gone when his side's next turn begins. With a 1-turn wait he can
   cube the same hero every turn for 3 of the turn's 5 souls, so one hero never takes damage.
+  (Since 2026-11-15 a skill costs no souls and The Cube waits 4 turns, so it comes every fourth
+  turn at the most and the question below is closed: [balance-model.md](balance-model.md) §8.)
   **Decided, kept as is** (Patrick, 2026-11-09): cubing every turn is expensive enough to stop being
   worth it, because the rival spends those souls on equipment and develops its heroes while
   Viscous's side spends them cubing. The other options were a 2-turn wait (as the
@@ -553,7 +561,7 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 - **Lady Geist — Soul Exchange.** It is Lady Geist's own HP that changes hands, wherever she
   stands; each keeps no more than its own max; then the 3✦.
 - **Sinclair — Audience Participation.** Casts the enemy Active's ultimate at once, as his own: his
-  Spirit, his heals, aimed as that ultimate aims, for his own 8 souls. With no standing enemy
+  Spirit, his heals, aimed as that ultimate aims, on his own wait (medium, 6 turns) and as his side's one ultimate of the turn. With no standing enemy
   Active, or another Sinclair there, there is nothing to copy and it cannot be used. The old
   borrowed copy (a free ultimate kept for later) is gone. **Rabbit Hex** uses the engine's rabbit
   (no attack, skills, ultimates or active items).
@@ -570,11 +578,16 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 **Elsewhere**
 - The ultimate button shows each hero's Deadlock ultimate icon, copied into `public/ult/` (credited
   in `public/art/CREDITS.md` and the in-game credits).
-- The tutorial teaches priced skills: Frost Grenade costs 3 of the 5 souls; Lesson 3 brings 2 souls
-  in to pay for Cold Front and Frost Grenade, against a Lash on 2 (Kelvin's swing is 1 now); the
-  map lesson's rival Patron is 1, for Kelvin's push of 1.
-- The AI plays the same legality: it uses skills and ultimates when it can pay and the lookahead
-  says they gain more than the souls they cost (a soul in hand is worth 0.3, so it spends freely).
+- The tutorial teaches free skills (since 2026-11-15): Frost Grenade costs no souls and holds two
+  charges (the map lesson the same); Lesson 3 brings 2 souls in, which with the turn's 2 pay for
+  Cold Front, against a Lash on 2 (Kelvin's swing is 1 now); the map lesson's rival Patron is 1,
+  for Kelvin's push of 1.
+- The AI plays the same legality: it uses skills and ultimates when they are ready and the
+  lookahead says the position is better for it; they cost no souls. It counts a charged ultimate
+  that is ready as worth something to its hero, so it does not swing into a Victor who will get
+  back up as if he would not. Since 2026-11-15 it saves for the dearest card it can reach in three
+  turns and holds its souls against cheaper cards and Retreats until that card is played, a kill
+  aside ([balance-model.md](balance-model.md) §7).
   It no longer prices a Sleep's value as a wake-up burst.
 
 ### Rem in the lane, and Tag Along as a ride (2026-11-09)
@@ -619,13 +632,15 @@ it this way:
 Built on `deck-and-heroes`. Where the doc is silent, the build reads it this way:
 
 **Trigger prompts (section 6)**
-- **Usable** means the doc's three tests and nothing else: the right level (an ultimate's Level 2),
-  not waiting (its cooldown), and the souls (its `kitCost`). Whose turn it is, the Act, and the
+- **Usable** means the doc's tests and nothing else: the right level (an ultimate's Level 2), not
+  waiting (its cooldown), charged (a charged ultimate's damage), and, for an ultimate, its side's
+  one of the turn not yet used (since 2026-11-15; before it, the souls of its `kitCost`). Whose turn it is, the Act, and the
   hero's statuses (a Stun, a Silence) do not stop a trigger. With nothing usable nobody is asked and
   the moment goes on (Victor simply falls).
-- **A trigger is no turn's ability.** Used, it is paid as from its button — its souls, then its wait
-  (an ultimate's 3, less what the hero wears), a charged ultimate's count started over — but it does
-  not spend the hero's one ability of the turn.
+- **A trigger is no turn's ability.** Used, it is paid as from its button — its wait (an
+  ultimate's size's turns, less what the hero wears), a charged ultimate's count started over, and
+  it is its side's one ultimate of that turn — but it does not spend the hero's one ability of the
+  turn.
 - **Who answers.** The prompt names the seat asked; the answer (`useTrigger` / `passTrigger`) may be
   sent from either seat, as a promotion may. The boardgame.io adapter puts the asked seat in a
   'respond' stage, and the seat on turn with it, because the game's local client sends every move as
@@ -638,7 +653,7 @@ Built on `deck-and-heroes`. Where the doc is silent, the build reads it this way
 - **A fall in the End step** (Torment Pulse at the end of the rival's turn, the Mid-Boss's blow at
   the end of his own) is asked as the next turn opens: boardgame.io cannot hold a turn open inside
   its end hook, so the next turn's start (income, draw, cooldowns) runs first. Usability is judged at
-  the moment of the fall; what the start adds (souls, a cooldown ticked) only ever makes it easier.
+  the moment of the fall; what the start adds (a cooldown ticked, a new turn's ultimate) only ever makes it easier.
 - **The kill's exp waits too.** The hit that drops a hero who can cancel its own fall holds its
   killer's exp (`downedBy`) until the fall is decided: paid if it goes ahead, never if it is cancelled.
 - **The AI** answers through the same moves, choosing the answer whose position it values most
@@ -651,11 +666,11 @@ Built on `deck-and-heroes`. Where the doc is silent, the build reads it this way
   counts. Silver's count is every hit the engine attributes to her (the hit's source): her swings,
   Boot Kick, her gear's procs, a swing at the Mid-Boss too.
 - **The count** is the hero's `tally` under the ultimate's id. Like the level it stays through a fall
-  and back in the hand; it starts over when the ultimate is used (paid). The price is the printed
-  cost less the count, never below 0 — with nothing counted it is the full printed price.
-- **Size.** Both cards keep a size for what the effect is worth (medium: half of 20 and of 16), which
-  prices nothing; the card and the button print the charged price ("Ult · charged 20", "20 → 7
-  souls") and the rule on a line of its own.
+  and back in the hand; it starts over when the ultimate is used. Since 2026-11-15 the ultimate is
+  ready when the count reaches what its card needs (Victor 10, Silver 8) and costs no souls; before
+  it, the price was the printed cost (20, 16) less the count.
+- **Size.** Both cards are medium, which sets the turns they wait after a use (6). The card prints
+  "Ult · charged", the button the count ("7 / 10"), and the rule stands on a line of its own.
 
 **Victor**
 - **Aura of Suffering** fires at the start of his own turn while he is the Active, after the income

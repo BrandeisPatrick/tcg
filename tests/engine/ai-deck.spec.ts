@@ -15,7 +15,9 @@ import type { GameState, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { INVALID, perform, type Action } from '@/engine/engine';
 import { blocked, legalActions } from '@/engine/legality';
-import { wornItems } from '@/engine/query';
+import { kitCharges, wornItems } from '@/engine/query';
+import { allocatorOf } from '@/engine/ids';
+import { makeInstance } from '@/engine/instances';
 import { seededRandom } from '@/engine/rng';
 import { discardChoice, enumerateAIMoves } from '@/ai/heuristic';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
@@ -102,6 +104,27 @@ describe('the AI plays its hand', () => {
     expect(me.hand).not.toContain(card);
   });
 
+  it('puts a charge item only on a hero whose skill holds charges', () => {
+    // Nobody on this side has a charged skill: Extra Charge would do nothing, so it stays in the hand.
+    const none = turn(10);
+    const kept = giveCard(none, '0', 'extra_charge');
+    playOut(none);
+    expect(none.players['0'].hand).toContain(kept);
+    for (const h of [none.players['0'].active, ...none.players['0'].bench]) {
+      if (h) expect(wornItems(h).map((it) => it.cardId)).not.toContain('extra_charge');
+    }
+    // Kelvin's Frost Grenade holds 2 charges: with him on the bench the card goes on him.
+    const G = turn(10);
+    const me = G.players['0'];
+    const kelvin = makeInstance(allocatorOf(G), 'hero_kelvin', '0', 'bench', 1);
+    me.bench[0] = kelvin;
+    const card = giveCard(G, '0', 'extra_charge');
+    playOut(G);
+    expect(wornItems(kelvin).map((it) => it.cardId)).toContain('extra_charge');
+    expect(me.hand).not.toContain(card);
+    expect(kitCharges(kelvin)?.max).toBe(3);
+  });
+
   it('evolves an upgrade onto the hero wearing its component, for the difference', () => {
     const G = turn(2);
     const me = G.players['0'];
@@ -133,6 +156,105 @@ describe('the AI plays its hand', () => {
     expect(play).toBeDefined();
     expect(play!.upgradeId).toBe('fortitude');
     expect(G.players['1'].deck.map((c) => c.cardId)).toEqual(['fortitude']);
+  });
+});
+
+describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not save… this needs to be solved")', () => {
+  // P0: Haze (Active, no skill), Vindicta, Lash and Paige. Skills cost no
+  // souls, so what spends them is a card played or a Retreat. Toxic Bullets is
+  // tier 3: 8 souls.
+  const spends = (made: Action[]) => made.filter((a) => a.type === 'playCard' || a.type === 'moveHero');
+
+  it('keeps its souls for a tier-3 card it can pay for next turn: no cheap card first', () => {
+    const G = turn(6);
+    giveCard(G, '0', 'toxic_bullets');
+    giveCard(G, '0', 'extended_magazine'); // tier 1: it could pay for this now
+    expect(spends(playOut(G))).toEqual([]);
+    expect(G.players['0'].souls).toBe(6);
+  });
+
+  it('with the souls for it, plays the tier-3 card first: nothing cheaper takes its souls', () => {
+    const G = turn(8);
+    const me = G.players['0'];
+    const toxic = giveCard(G, '0', 'toxic_bullets');
+    const mag = giveCard(G, '0', 'extended_magazine');
+    const made = playOut(G);
+    expect(made[0]).toMatchObject({ type: 'playCard', cardIid: toxic.iid });
+    expect(me.souls).toBe(0);
+    expect(me.hand).toEqual([mag]);
+  });
+
+  it('saves a turn for a tier-2 card too, then plays it', () => {
+    const saving = turn(2);
+    giveCard(saving, '0', 'active_reload'); // tier 2: 4 souls
+    expect(spends(playOut(saving))).toEqual([]);
+    expect(saving.players['0'].souls).toBe(2);
+    const paid = turn(4);
+    const reload = giveCard(paid, '0', 'active_reload');
+    expect(playOut(paid).some((a) => a.type === 'playCard' && a.cardIid === reload.iid)).toBe(true);
+    expect(paid.players['0'].souls).toBe(0);
+  });
+
+  it('the higher tier is the goal: with a tier-2 it could pay for now and a tier-3 two turns off, it holds for the tier-3', () => {
+    const G = turn(4);
+    giveCard(G, '0', 'active_reload');
+    giveCard(G, '0', 'toxic_bullets');
+    expect(spends(playOut(G))).toEqual([]);
+    expect(G.players['0'].souls).toBe(4);
+  });
+
+  it('with only tier-1 cards in hand there is nothing to save for: it spends as the look says', () => {
+    const G = turn(6);
+    giveCard(G, '0', 'extended_magazine');
+    expect(spends(playOut(G)).length).toBeGreaterThan(0);
+    expect(G.players['0'].souls).toBeLessThan(6);
+  });
+
+  it('a card further off than three turns of income is no goal yet: it spends', () => {
+    const G = turn(2);
+    giveCard(G, '0', 'glass_cannon'); // tier 4, 16 souls: seven turns of income away
+    giveCard(G, '0', 'extended_magazine');
+    expect(spends(playOut(G)).length).toBeGreaterThan(0);
+    expect(G.players['0'].souls).toBeLessThan(2);
+  });
+
+  it('an upgrade onto the hero wearing its component counts at the difference: it saves 2 toward Sharpshooter\'s 4, then evolves it', () => {
+    const stage = (souls: number) => {
+      const G = turn(souls);
+      const vindicta = G.players['0'].bench.find((h) => h?.cardId === 'hero_vindicta')!;
+      giveItem(G, vindicta, 'long_range');
+      const sharp = giveCard(G, '0', 'sharpshooter'); // tier 3; 8 − Long Range's 4 on Vindicta
+      return { G, vindicta, sharp };
+    };
+    const saving = stage(2);
+    expect(spends(playOut(saving.G))).toEqual([]);
+    expect(saving.G.players['0'].souls).toBe(2);
+    const paid = stage(4);
+    const made = playOut(paid.G);
+    expect(made.find((a) => a.type === 'playCard')).toMatchObject({ type: 'playCard', cardIid: paid.sharp.iid, heroIid: paid.vindicta.iid });
+    expect(wornItems(paid.vindicta).map((it) => it.cardId)).toEqual(['sharpshooter']);
+  });
+
+  it('its skills cost no souls, so it still uses them while it saves', () => {
+    const G = turn(6);
+    giveCard(G, '0', 'toxic_bullets');
+    const made = playOut(G);
+    expect(made.some((a) => a.type === 'useSkill')).toBe(true);
+    expect(spends(made)).toEqual([]);
+    expect(G.players['0'].souls).toBe(6);
+  });
+
+  it('a kill is still worth the souls: it pays Haze\'s Retreat to bring in the hero whose swing finishes the rival Active, though it delays the card', () => {
+    const G = turn(6);
+    giveCard(G, '0', 'toxic_bullets');
+    const rival = G.players['1'].active!;
+    rival.hp = 2;                                   // Haze swings for 1; Vindicta, behind her, for 2
+    // No skill of the bench's takes the kill first.
+    for (const h of G.players['0'].bench) if (h) h.skillUsedThisTurn = true;
+    const made = playOut(G);
+    expect(made.some((a) => a.type === 'moveHero')).toBe(true);
+    expect(G.record['0'].kills).toBe(1);
+    expect(G.players['0'].souls).toBeLessThan(6 + 1); // the Retreat's soul gone, the kill's bounty in
   });
 });
 

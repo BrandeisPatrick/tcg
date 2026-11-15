@@ -6,12 +6,12 @@
  * rule that counts own turns or rounds reads them here, never off the engine
  * turn by hand: who moved first is a fact of the match (`G.firstMover`, the
  * pie rule's seat 1 in a drafted match), not always seat 0. The map's clocks
- * live here too: the late game, the Mid-Boss's return, the Rejuvenator's
- * window and the round cap.
+ * live here too: the kill bounty, the late game, the Mid-Boss's return, the
+ * Rejuvenator's window and the round cap.
  */
 import type { GameState, PlayerID } from './types';
 import {
-  BOSS_RESPAWN_ROUNDS, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, REVIVE_ROUNDS, ROUND_CAP,
+  BOSS_RESPAWN_ROUNDS, KILL_BOUNTY_STEP_ROUNDS, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, REVIVE_ROUNDS, ROUND_CAP,
 } from './constants';
 
 /** The seat that took the first turn. */
@@ -54,6 +54,17 @@ type Clock = Pick<GameState, 'turnNumber'>;
  *  round up to ROUND_CAP (the round cap decides it as the last one ends).
  *  The drivers' guard against a runaway match, which no match reaches. */
 export const MATCH_TURNS = 2 * ROUND_CAP;
+
+/** What a kill made in round `r` pays the killer's side: 1 soul, and 1 more
+ *  for every KILL_BOUNTY_STEP_ROUNDS rounds run (round 1 at the least). */
+export function bountyAtRound(r: number): number {
+  return Math.ceil(Math.max(1, r) / KILL_BOUNTY_STEP_ROUNDS);
+}
+
+/** What a kill made now pays the killer's side (the round in play's bounty). */
+export function killBounty(G: Clock): number {
+  return bountyAtRound(round(G));
+}
 
 /** True from round LATE_GAME_ROUND on: the late game, when pushes double. */
 export function lateGame(G: Clock): boolean {

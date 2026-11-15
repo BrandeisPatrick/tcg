@@ -24,6 +24,47 @@ with less to rebuild.
 - A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), each upgrade a build names counted as its base item.
 - You draft 4 heroes as now. They are shuffled into your deck, with an animation, so the deck has 20 cards.
 
+## Ready decks (2026-11-15)
+
+Patrick, 2026-11-15: "we need to have decks ready." Five decks head the Loadout, each a squad of
+four heroes and its 16 items (`src/cards/readyDecks.ts`). "Use deck" saves the squad and the deck
+together. When that would replace picks or a deck of the player's own, the button asks once more.
+
+The recipe, the same for all five. No sim ran.
+
+- **Base items only, at most 2 copies of one.** Pocket's rule, inside this game's cap of 4, so a
+  ready deck holds at least 8 different items.
+- **8 tier-1, 6 tier-2, 2 tier-3: 56 souls.** The lane pays 2 a turn
+  ([balance-model.md](balance-model.md) §7): by own turn 9 a side has earned about 30 souls and
+  drawn about 11 items. At 3.5 souls an item, those 11 cost about 38, so most of what is drawn can
+  be played and a skill or two paid for. A deck dealt from builds costs 50 to 76.
+- **No tier-4 base item.** The dear tiers arrive as upgrades: playing a base item shuffles what it
+  builds into the deck, and the upgrade evolves for the difference.
+- **Two Compress Cooldown in every deck.** The draw card (draw 2, discard 1), as every Pocket deck
+  carries its two Professor's Research.
+- **The rest from the squad's own builds**, read as base items, so each hero finds its items.
+- **A squad has a front, a carry and a helper.** No hero is in two decks; Shiv is in none.
+
+| Deck | Squad | Tier 1 (two of each) | Tier 2 | Tier 3 |
+|---|---|---|---|---|
+| Gunline | Warden, Vindicta, Haze, Paige | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Compress Cooldown, 2 Active Reload, Long Range, Opening Rounds | Burst Fire, Toxic Bullets |
+| Spirit Storm | Lady Geist, Seven, Lash, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Compress Cooldown, 2 Cold Front, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
+| Bulwark | Abrams, Viscous, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Compress Cooldown, 2 Bullet Lifesteal, Healing Booster, Battle Vest | Bullet Resilience, Torment Pulse |
+| Ambush | Silver, Yamato, Mirage, Drifter | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Compress Cooldown, 2 Kinetic Dash, Fleetfoot, Swift Striker | Tesla Bullets, Berserker |
+| Lockdown | Mo & Krill, Sinclair, Dynamo, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Compress Cooldown, 2 Slowing Hex, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
+
+How each wins:
+
+- **Gunline** out-guns the lane: Warden holds it, Vindicta and Haze shoot, Paige shields.
+- **Spirit Storm** casts skills that hit every enemy, with items that trigger on a skill's hit.
+  Cold Front gives spirit damage that costs no souls to use.
+- **Bulwark** outlasts: heals, shields and lifesteal, with Victor's aura and Torment Pulse for
+  damage.
+- **Ambush** swaps: cheap Retreats, Kinetic Dash for the hero that steps in, Fleetfoot for the
+  second swing.
+- **Lockdown** denies: Slowing Hex, Rusted Barrel, Knockdown and Silence Wave are free to use once
+  worn, so its souls go to items and Wraith's gun finishes.
+
 ## Start of the match
 
 Patrick, 2026-11-09: "the player at beginning of the game, player should decide which hero to draw
@@ -45,14 +86,21 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 
 ## Each turn
 
-- Draw 1 card and gain 5 souls. Souls pile up from turn to turn.
-  - Souls come only from these 5 a turn.
-  - Knockouts and objectives still push the map and give exp, but pay no souls, so the side ahead can't snowball.
+- Draw 1 card and gain 2 souls, the price of a tier-1 item. Souls pile up from turn to turn.
+  - Changed 2026-11-15 (Patrick: the lane pays one unit a turn, as Pocket gives one Energy; "keep
+    it simple using simple numbers"). It was 5 a turn. The reasoning is in
+    [balance-model.md](balance-model.md) §7.
+  - A kill pays a bounty: 1 soul in rounds 1–2, 1 more every two rounds, 6 in rounds 11–12
+    (Patrick: "not worth much at the very beginning and worth a lot at the very later"). Until
+    2026-11-15 kills paid nothing.
+  - Objectives still push the map and give exp, and pay no souls.
+  - Your souls are a button on the board: the bank sheet shows what the next turn pays, what you
+    will hold then, and what a kill pays now.
 - The Mid-Boss is off for now (Patrick, 2026-11-09: "remove the mid boss mechanics for now").
 - Put heroes from your hand on the bench (up to 3). It's free.
 - Put an item from your hand on a hero by paying its price: 2, 4, 8, 16 or 24 souls by tier, as today.
 - A hero wears 3 items. Played onto a full hero, a card goes on in place of one it wears: a sheet asks which goes to the discard pile (Patrick, 2026-11-09: "when I click equip it should ask me which equipment to discard"). Cancel backs out with nothing paid.
-- Retreat, skills, ultimates and the attack work as today until the hero rules land. After that, skills and ultimates cost souls (see [hero-design.md](hero-design.md)).
+- Retreat, skills, ultimates and the attack work as today until the hero rules land. After that, skills and ultimates cost souls (see [hero-design.md](hero-design.md)); since 2026-11-15 they cost none and wait instead ([balance-model.md](balance-model.md) §8).
 - Your hand holds up to 10 cards. When it is full, further draws are skipped.
 - The shop phase is gone: no buying, no selling, no market.
 - When your deck is empty you stop drawing. Nothing else happens.

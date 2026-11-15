@@ -124,7 +124,8 @@ describe('Ultimates are kit abilities, never cards', () => {
     const G = client.getState()!.G as GameState;
     for (const pid of ['0', '1'] as PlayerID[]) {
       expect(boardCards(G, pid).filter((c) => CARDS_BY_ID[c.cardId]?.type === 'ultimate'), pid).toEqual([]);
-      expect(G.players[pid].hand.filter((c) => CARDS_BY_ID[c.cardId]?.type !== 'spell' && CARDS_BY_ID[c.cardId]?.type !== 'equipment'), pid).toEqual([]);
+      // A hand holds items and heroes (a fallen hero comes back to it), never an ultimate.
+      expect(G.players[pid].hand.filter((c) => !['spell', 'equipment', 'hero'].includes(CARDS_BY_ID[c.cardId]?.type ?? '')), pid).toEqual([]);
       for (const h of heroesOf(G.players[pid])) expect(kitAbilityIds(h), h.cardId).toContain(heroData(h)!.ult);
     }
   });

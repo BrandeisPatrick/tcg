@@ -21,8 +21,8 @@ import { getAbility } from './registry';
 import { ULT_UNLOCK_LEVEL } from './constants';
 import {
   abilityAim, attackPower, findCardOnBoard, findWornItem, handCard, hasReach, heroesOf, heroRetreat, isBlocked, isRespawning,
-  isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, laneOpen, liveBoardCards, optionalTriggers, otherPlayer, promptOwed,
-  resolveSkill, retreatDiscount, slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, triggerPrice, wornActives, wornItems,
+  isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, kitWaiting, laneOpen, liveBoardCards, optionalTriggers, otherPlayer, promptOwed,
+  resolveSkill, retreatDiscount, slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, triggerPrice, ultCharge, wornActives, wornItems,
 } from './query';
 import { seatToMove } from './rounds';
 
@@ -117,7 +117,14 @@ export function attackBlocked(G: GameState, pid: PlayerID, targetIid?: string): 
 
 // ---------- Hero abilities: skills and ultimates ----------
 
-export type SkillBlock = 'noSkill' | 'trigger' | 'actOver' | 'down' | 'locked' | 'used' | 'status' | 'cooldown' | 'souls' | 'hp' | 'target';
+/** True unless `hero`'s ultimate is a charged one still short of the damage
+ *  it needs (`ultCharge`). */
+function ultCharged(hero: CardInstance): boolean {
+  const charge = ultCharge(hero);
+  return !charge || charge.have >= charge.need;
+}
+
+export type SkillBlock = 'noSkill' | 'trigger' | 'actOver' | 'down' | 'locked' | 'used' | 'status' | 'ultUsed' | 'cooldown' | 'charge' | 'souls' | 'hp' | 'target';
 
 /** What one of a hero's kit abilities may be aimed at (`skillId` names it —
  *  its skill or its ultimate; left out, the hero's first skill): the live
@@ -140,9 +147,10 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
  * can: a hero with that ability (`skillId`: its skill or its ultimate; left
  * out, its first skill), in a turn whose attack has not ended the Act, alive,
  * its ultimate unlocked, that has not used an ability this turn (one per hero
- * per turn, skill and ultimate alike), free of the statuses that lock it, with
- * the ability off cooldown, the souls it costs (`kitCost`) in hand and a legal
- * target. Whose turn it is, is the caller's question. Checked in this order:
+ * per turn, skill and ultimate alike), free of the statuses that lock it, no
+ * ultimate used by its side this turn if it is one, the ability off its wait
+ * (a charged skill: a charge left; a charged ultimate: its damage counted)
+ * and a legal target. Whose turn it is, is the caller's question. Checked in this order:
  *  - 'noSkill'  the hero has no such ability.
  *  - 'trigger'  it is an optional trigger ("When Victor falls, you may use
  *               this"): it is used at its moment, through the trigger prompt
@@ -152,8 +160,14 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
  *  - 'locked'   it is the hero's ultimate and the hero is below ULT_UNLOCK_LEVEL.
  *  - 'used'     it has used an ability this turn (any of its kit).
  *  - 'status'   a status locks its abilities (`isBlocked(hero, 'skill')`).
- *  - 'cooldown' this ability is still cooling down (`hero.cooldowns`).
- *  - 'souls'    `pid` has fewer souls than it costs (`kitCost`).
+ *  - 'ultUsed'  it is an ultimate, and its side has used one this turn (one
+ *               ultimate a turn for a side).
+ *  - 'cooldown' this ability is still waiting (`kitWaiting`: its cooldown;
+ *               a charged skill, no charge left).
+ *  - 'charge'   it is a charged ultimate that has not counted the damage it
+ *               needs (`ultCharge`).
+ *  - 'souls'    `pid` has fewer souls than it costs (`kitCost`: nothing
+ *               today).
  *  - 'hp'       the ability costs HP (`hpCost`) and the hero does not have more
  *               than that: it can pay what it has left, never its last.
  *  - 'target'   there is nothing legal to aim it at — or `targetIid` is not.
@@ -171,7 +185,9 @@ export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, ta
   if (skill.kind === 'ult' && (hero.level ?? 1) < ULT_UNLOCK_LEVEL) return 'locked';
   if (hero.skillUsedThisTurn) return 'used';
   if (isBlocked(hero, 'skill')) return 'status';
-  if ((hero.cooldowns?.[skill.id] ?? 0) > 0) return 'cooldown';
+  if (skill.kind === 'ult' && G.ultUsed?.[pid]) return 'ultUsed';
+  if (kitWaiting(hero, skill.id) > 0) return 'cooldown';
+  if (skill.kind === 'ult' && !ultCharged(hero)) return 'charge';
   if (G.players[pid].souls < kitCost(hero, skill.id)) return 'souls';
   if (skill.ability.hpCost && hero.hp <= skill.ability.hpCost) return 'hp';
   const targets = skillTargets(G, pid, hero, skill.id);
@@ -182,26 +198,32 @@ export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, ta
 
 // ---------- Optional triggers (the trigger prompt, engine/prompts.ts) ----------
 
-export type TriggerBlock = 'notOwed' | 'noOffer' | 'noHero' | 'noTrigger' | 'locked' | 'cooldown' | 'souls';
+export type TriggerBlock = 'notOwed' | 'noOffer' | 'noHero' | 'noTrigger' | 'locked' | 'ultUsed' | 'cooldown' | 'charge' | 'souls';
 
 /**
  * Why `hero`'s optional trigger `abilityId` cannot be used now by `pid`, or
  * null when it can — the tests of docs/hero-design.md §6, and only those: it
  * is one of the hero's optional triggers, at the right level (an ultimate's
- * ULT_UNLOCK_LEVEL), not waiting (its cooldown), and `pid` has the souls it
- * costs (`triggerPrice`). A trigger is no turn's ability, so whose turn it is,
+ * ULT_UNLOCK_LEVEL), its side has used no ultimate this turn if it is one, it
+ * is not waiting (its cooldown; a charged ultimate, the damage it needs), and
+ * `pid` has the souls it costs (`triggerPrice`: nothing today). A trigger is no turn's ability, so whose turn it is,
  * the Act, the hero's one ability of the turn and its statuses do not enter
  * into it. The prompt system asks this to decide whether to ask at all, and
  * the answer is checked against it again. Checked in this order:
  *  - 'noTrigger' the hero declares no optional trigger with that id.
  *  - 'locked'    an ultimate, and the hero is below ULT_UNLOCK_LEVEL.
+ *  - 'ultUsed'   an ultimate, and its side has used one this turn.
  *  - 'cooldown'  it is still waiting (`hero.cooldowns`).
+ *  - 'charge'    a charged ultimate that has not counted the damage it needs.
  *  - 'souls'     `pid` has fewer souls than it costs.
  */
 export function triggerBlocked(G: GameState, pid: PlayerID, hero: CardInstance, abilityId: AbilityId): TriggerBlock | null {
   if (!optionalTriggers(hero).some((a) => a.id === abilityId)) return 'noTrigger';
-  if (resolveSkill(hero, abilityId)?.kind === 'ult' && (hero.level ?? 1) < ULT_UNLOCK_LEVEL) return 'locked';
+  const ult = resolveSkill(hero, abilityId)?.kind === 'ult';
+  if (ult && (hero.level ?? 1) < ULT_UNLOCK_LEVEL) return 'locked';
+  if (ult && G.ultUsed?.[pid]) return 'ultUsed';
   if ((hero.cooldowns?.[abilityId] ?? 0) > 0) return 'cooldown';
+  if (ult && !ultCharged(hero)) return 'charge';
   if (G.players[pid].souls < triggerPrice(hero, abilityId)) return 'souls';
   return null;
 }

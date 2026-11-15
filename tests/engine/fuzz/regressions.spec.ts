@@ -27,7 +27,6 @@ import { resolve } from '@/engine/death';
 import { addStatus, grantExtraAttacks, tickRemMerges } from '@/engine/statusOps';
 import { blocked, legalActions, playBlocked, playTargets, skillBlocked } from '@/engine/legality';
 import { kitCost, seatOf, wornItems } from '@/engine/query';
-import { ULT_COST } from '@/engine/constants';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { configureReadyMatch, flagBenchOnly, freshReadyGame, giveCard, giveItem, makeHero, playNew } from '../_helpers';
@@ -836,8 +835,9 @@ describe('M2 the attack forecast matches what the attack does', () => {
 // ===========================================================================
 describe('M3 the AI sees every legal play', () => {
   /** Sinclair at Level 2, alone on P0's side (a short list: the AI keeps only its top 12 moves)
-   *  with `souls`, facing P1's Abrams — whose Seismic Impact (the enemy Active) is there to copy. */
-  const sinclairGame = (souls: number) => {
+   *  with `souls` (an ultimate takes none), facing P1's Abrams — whose Seismic Impact (the enemy
+   *  Active) is there to copy. */
+  const sinclairGame = (souls = 0) => {
     const G = game();
     const sinclair = makeHero('hero_sinclair', '0', 'active', 0);
     sinclair.level = 2;
@@ -852,33 +852,39 @@ describe('M3 the AI sees every legal play', () => {
     ai: enumerateAIMoves(G, ctxFor('0'), false).filter((m) => m.move === 'useSkill' && m.args[0] === sinclair.iid && m.args[2] === 'eff_ult_sinclair').map((m) => m.args[1]),
   });
 
-  it('precondition: the engine takes Audience Participation for its 8 souls and casts the copied ultimate at once, keeping no copy', () => {
-    const { G, sinclair, foe } = sinclairGame(ULT_COST.medium);
+  it('precondition: the engine takes Audience Participation for no souls and casts the copied ultimate at once, keeping no copy', () => {
+    const { G, sinclair, foe } = sinclairGame(3);
     expect(foe.cardId).toBe('hero_abrams');
-    expect(kitCost(sinclair, 'eff_ult_sinclair')).toBe(ULT_COST.medium);
+    expect(kitCost(sinclair, 'eff_ult_sinclair')).toBe(0);
     const hp = foe.hp;
     expect(runMove('useSkill', G, '0', sinclair.iid, foe.iid, 'eff_ult_sinclair')).not.toBe(INVALID_MOVE);
     // Seismic Impact, cast now by Sinclair: {sp:6} (his Spirit is 0) and a Stun.
     expect(foe.hp).toBe(hp - 6);
     expect(foe.statuses.some((s) => s.id === 'stun')).toBe(true);
-    expect(G.players['0'].souls).toBe(0);
+    expect(G.players['0'].souls).toBe(3);
     // nothing is left to use later: Seismic Impact is no ability of his
     sinclair.skillUsedThisTurn = false;
     expect(skillBlocked(G, '0', sinclair, foe.iid, 'eff_ult_abrams')).toBe('noSkill');
     expect((sinclair as unknown as Record<string, unknown>).borrowedUlt).toBeUndefined();
   });
 
-  it('M3a Audience Participation is offered — by legalActions and the AI — exactly when it can be paid for and there is an ultimate to copy', () => {
-    // paid for, Seismic Impact to copy: offered, aimed as Seismic Impact aims (the enemy Active)
-    const paid = sinclairGame(ULT_COST.medium);
+  it('M3a Audience Participation is offered — by legalActions and the AI — exactly when it is ready and there is an ultimate to copy', () => {
+    // ready, Seismic Impact to copy: offered, aimed as Seismic Impact aims (the enemy Active), with no souls at all
+    const paid = sinclairGame(0);
     expect(skillBlocked(paid.G, '0', paid.sinclair, undefined, 'eff_ult_sinclair')).toBeNull();
     expect(offers(paid.G, paid.sinclair)).toEqual({ legal: [paid.foe.iid], ai: [paid.foe.iid] });
-    // a soul short: neither offers it
-    const short = sinclairGame(ULT_COST.medium - 1);
-    expect(skillBlocked(short.G, '0', short.sinclair, undefined, 'eff_ult_sinclair')).toBe('souls');
+    // his side has used its ultimate of the turn: neither offers it
+    const short = sinclairGame(0);
+    short.G.ultUsed = { '0': true };
+    expect(skillBlocked(short.G, '0', short.sinclair, undefined, 'eff_ult_sinclair')).toBe('ultUsed');
     expect(offers(short.G, short.sinclair)).toEqual({ legal: [], ai: [] });
+    // still waiting: neither
+    const waiting = sinclairGame(0);
+    waiting.sinclair.cooldowns = { eff_ult_sinclair: 2 };
+    expect(skillBlocked(waiting.G, '0', waiting.sinclair, undefined, 'eff_ult_sinclair')).toBe('cooldown');
+    expect(offers(waiting.G, waiting.sinclair)).toEqual({ legal: [], ai: [] });
     // nothing to copy — the rival Active is a Sinclair, and a copy is no ultimate to copy: neither
-    const mirror = sinclairGame(ULT_COST.medium);
+    const mirror = sinclairGame(0);
     mirror.G.players['1'].active = makeHero('hero_sinclair', '1', 'active', 0);
     expect(skillBlocked(mirror.G, '0', mirror.sinclair, undefined, 'eff_ult_sinclair')).toBe('target');
     expect(offers(mirror.G, mirror.sinclair)).toEqual({ legal: [], ai: [] });

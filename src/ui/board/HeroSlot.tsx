@@ -16,7 +16,7 @@ import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
 import { HeartIcon, ShieldIcon, SwordIcon } from '../card/Icons';
 import { fonts, spring, statRow, text } from '../tokens';
-import { atkInk, levelFrame, poster } from '../poster';
+import { atkInk, hpPrint, levelFrame, poster } from '../poster';
 import { HpSegments, scale } from '../hud';
 import { LevelRing } from '../card/LevelRing';
 import { useStatTick } from './useStatTick';
@@ -136,6 +136,11 @@ export function HeroSlot({
   }
   const baseAtk = data.atk;
   const atkColor = atkInk(atk, baseAtk);
+  // The HP says its state at rest, not only as it changes: a broken heart
+  // and a red number when hurt, a heart with a plus and a green number when
+  // its max is raised (poster.ts `hpPrint`).
+  const hpShown = hpPrint(shownHp, card.hpMax, data.hp);
+  const hpColor = hpShown.number;
   // Another form while a status gives one (Silver's Wolf form): its art and
   // a badge instead of a chip; when it ends the card shows the hero again.
   const form = heroForm({ ...card, statuses: shownStatuses });
@@ -489,13 +494,13 @@ export function HeroSlot({
               </span>
             )}
             <span style={{ ...statRow.pair(statSize) }}>
-              <HeartIcon size={iconSize} color={poster.stat.hp} />
+              <HeartIcon size={iconSize} color={hpShown.heart} state={hpShown.state} />
               <motion.span
-                style={{ color: poster.ink, display: 'inline-block' }}
+                style={{ color: hpColor, display: 'inline-block' }}
                 animate={hpTick
                   ? { scale: [1, 1.35, 1],
-                      color: [poster.ink, hpTick === 'up' ? poster.stat.atkBright : poster.red, poster.ink] }
-                  : { scale: 1, color: poster.ink }}
+                      color: [hpColor, hpTick === 'up' ? poster.stat.atkBright : poster.red, hpColor] }
+                  : { scale: 1, color: hpColor }}
                 transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
               >{shownHp}</motion.span>
               {hasSpike(card, 'vitality') && <SpikeMark slot="vitality" size={compact ? 10 : 12} style={{ alignSelf: 'flex-start', marginLeft: -1 }} />}

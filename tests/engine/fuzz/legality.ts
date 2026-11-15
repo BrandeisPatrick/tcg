@@ -27,7 +27,7 @@ import {
   activateBlockedOracle, attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, chooseActiveBlockedOracle, diffPaths,
   discardBlockedOracle, discardList, filterForItem, filterForSkill, firstSkillOf, handOf, isHeroCard, isMergedRem, itemData, other,
   deckOf, freeBenchSlotsOracle, placeHeroBlockedOracle, playBlockedOracle, playCostOracle, retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf,
-  slotCapOracle, targetLegal, ultLocked, upgradesOfOracle, wornItemsOf,
+  slotCapOracle, targetLegal, isUltOf, ultLocked, ultUncharged, upgradesOfOracle, wornItemsOf,
 } from './oracle';
 
 export interface ProbeOpts {
@@ -169,6 +169,12 @@ export function probeLegality(
       // this holds even if the gate and the engine both forgot it.
       if (eng && skillCooling(hero, skillId)) {
         add('skill-cooldown', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid} has ${skillId} cooling down (${hero.cooldowns?.[skillId]}) but useSkill succeeds`);
+      }
+      if (eng && isUltOf(hero, skillId) && G.ultUsed?.[pid]) {
+        add('ult-per-turn', 'useSkill', named([hero.iid]), `P${pid} has used an ultimate this turn but ${hero.cardId}#${hero.iid}'s ${skillId} is accepted`);
+      }
+      if (eng && ultUncharged(hero, skillId)) {
+        add('ult-uncharged', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid}'s charged ultimate ${skillId} is accepted short of the damage it needs`);
       }
       if (eng && ultLocked(hero, skillId)) {
         add('ult-locked', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid} is level ${hero.level ?? 1} but its ultimate ${skillId} is accepted`);

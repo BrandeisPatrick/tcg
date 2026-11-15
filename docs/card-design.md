@@ -330,7 +330,9 @@ item has, brings it back within a step.
   Fists, Melee Lifesteal, Lifestrike.
 - **Parry** (test 1): Rebuttal, Counterspell.
 - **Ability charges** (test 1; only hard crowd control has charges, two a match):
-  Extra Charge, Rapid Recharge, Recharging Rush.
+  Extra Charge, Rapid Recharge, Recharging Rush. (Since 2026-11-15 four skills
+  hold charges: Extra Charge and Rapid Recharge are cards, and Recharging Rush
+  is still out. See "Added 2026-11-15: the charge items".)
 - **Range and radius** (test 1; targets here are slots): Mystic Expansion,
   Greater Expansion.
 - **Cultist Sacrifice** (test 1): it consumes an NPC for souls.
@@ -412,7 +414,8 @@ leaves the piercing to that card, so a swing pierces once.
 - **Test 1** (expressible):
   - Runed Gauntlets: a heavy melee, and its cooldown cut is the Cooldown family's.
   - Shadow Strike: its payoff is a melee attack from stealth.
-  - Omnicharge Signet: ability charges.
+  - Omnicharge Signet: ability charges. (Since 2026-11-15 charges are a rule,
+    and it fails test 3 instead: see "Added 2026-11-15: the charge items".)
   - Eternal Gift: random stats need dice, and its respawn cut is the rules'.
   - Unstable Concoction: a death that cuts its own respawn; without the cut,
     the death hands the rival a kill and a push.
@@ -432,6 +435,73 @@ leaves the piercing to that card, so a swing pierces once.
 **Builds.** Haze takes Infinite Rounds and Wraith Haunting Shot as the sixth
 item, in place of Ricochet. The casters keep the tier-4 upgrade of their
 signature as theirs: an upgrade takes no new slot, and a tier-5 card needs one.
+
+### Added 2026-11-15: the charge items
+
+Patrick, 2026-11-15: "Only these kind of items can allow charged skills to get
+faster." Four skills hold 2 charges since that day
+([balance-model.md](./balance-model.md) §8), so "a charge" is a board verb now
+and the charge items pass test 1. The fuzz oracle mirrors them from their
+printed text.
+
+**The rule.** Only the charge items add a charge to a skill or bring one back
+sooner. No other card shortens a skill's wait: the Cooldown family are this
+game's draw cards. Refresher, whose verb is the reset, still sets a charged
+skill back to full with the cooldowns it clears.
+
+Source: the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
+2026-11-15). Both are passive Spirit items, so both are equipment.
+
+| In Deadlock | Extra Charge | Rapid Recharge |
+|---|---|---|
+| Tab · tier · cost | Spirit T1, 800 | Spirit T3, 3,200, built from Extra Charge |
+| Bonus ability charges | +1 | +2 |
+| Faster time between charges | none | 30% |
+| Cooldown reduction for charged abilities | none | 14% |
+| Spirit Power for charged abilities | +7 | +14 |
+
+| Card | Tab · tier | Price | Effect | Budget (souls) |
+|---|---|---|---|---|
+| Extra Charge | Spirit T1 | 2 | The bearer's charged skill holds 1 more charge | one more cast, once: the four charged skills are worth 2.5 / 3.2 / 4.0 / 4.2, mean 3.5 × 0.85 (some turns the hero's one ability is its ultimate or an item) → **3.0** |
+| Rapid Recharge | Spirit T3 | 8 | 2 more charges, and each comes back 1 turn sooner | over its 4 turns worn the hero can cast every turn (2 ready charges, what it held, and one back every 2 or 3 turns) against about 1.8 casts without it (1.3 from the wait, 0.5 held): 2.2 casts × 3.5 × 0.85 → **6.5** |
+
+- **The four skills' worth**, by the rates above: Serrated Knives 1 + Bleed 1 ×
+  2 turns × 0.75 = 2.5; Lightning Ball 1 × 3.2 enemies = 3.2; Frost Grenade
+  3.2 + a team heal of 1 × 4 heroes × 0.5 × 0.4 = 4.0; Kinetic Pulse 3.2 + a
+  Disarm 1.0 = 4.2.
+- **Bands.** Tier 1 is 1.5–3 and Extra Charge sits at its top; tier 3 is 6–12
+  and Rapid Recharge sits at its bottom. Both are worth nothing on a hero
+  whose skill holds no charges, as in Deadlock, so neither is given more.
+- **"1 turn sooner"** is Deadlock's 30% off a wait of 3 or 4 turns: 3 → 2
+  (Serrated Knives, Lightning Ball), 4 → 3 (Frost Grenade, Kinetic Pulse). A
+  wait never goes under 1.
+- **A charge an item adds comes ready**, and goes when the item goes. The
+  hero records the charges it has spent, so what is left is always what it
+  holds less those.
+- **Two on one hero do not add up**: the larger applies. Played onto the hero
+  wearing Extra Charge, Rapid Recharge costs the difference (6) and takes its
+  place.
+- **One ability a turn still holds**, so more charges are more turns running,
+  never two casts in a turn.
+- **The AI** counts a charge item at its budget (3 and 6) on a hero whose
+  skill holds charges and at nothing on any other, so it does not put one
+  where it does nothing.
+- **Left out:** the Spirit Power for charged abilities. A +1 Spirit Power is
+  worth 5.6 at tier 1, which would put Extra Charge at three times its price.
+
+**Still skipped.**
+- **Recharging Rush** (Weapon T2; "dealing significant weapon damage
+  replenishes a charge for each of your charged abilities", on a 25-second
+  cooldown). Test 1 now passes: a swing brings a charge back. At one charge a
+  swing it gives the Active about 0.5 more casts a turn: 0.5 × 3.5 × 0.85 × 6
+  turns worn = 9, over twice its price of 4. Holding it to every other swing
+  needs a cooldown on a passive item, which no passive has. It would also be a
+  third card that brings charges back. Patrick's call.
+- **Omnicharge Signet** (Spirit T5; charges for skills that have none, and 70%
+  faster). Test 3 at tier 5: worn 2 turns with one ability a turn, its charges
+  are one more cast, about 3.5 against a band of 18–36.
+
+140 cards became 142 (97 passives, 45 actives).
 
 ## 4. Signature items and default builds
 

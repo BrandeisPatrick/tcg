@@ -86,7 +86,7 @@ describe('the opponent', () => {
     const run = newRun('hero_kelvin');
     expect(buildStoryMatch(run, node(run, 'battery')).enemySouls).toBe(0);
     expect(buildStoryMatch(run, node(run, 'cityhall')).enemySouls).toBe(enemySouls(2, 'battle'));
-    expect(enemySouls(2, 'battle')).toBe(4);
+    expect(enemySouls(2, 'battle')).toBe(2);
     expect(enemySouls(5, 'elite')).toBeGreaterThan(enemySouls(5, 'battle'));
     expect(buildStoryMatch(run, node(run, 'yankee')).enemySouls).toBe(enemySouls(7, 'boss'));
     expect(enemySouls(7, 'boss')).toBeGreaterThan(enemySouls(7, 'battle'));

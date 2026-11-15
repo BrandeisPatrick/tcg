@@ -21,9 +21,15 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### Your deck
 
-- Built on the Loadout screen, which looks like Deadlock's shop: Weapon,
-  Vitality and Spirit tabs, rows by tier, the item icons. Tap an item to add a
-  copy; tap one in the deck to take a copy out.
+- Five **ready decks** head the Loadout screen: Gunline, Spirit Storm,
+  Bulwark, Ambush and Lockdown. Each is a squad of four heroes and its 16
+  items; "Use deck" saves both, and the match is ready to play. Each holds 8
+  tier-1, 6 tier-2 and 2 tier-3 items (56 souls), at most 2 copies of one, two
+  of them Compress Cooldown, the draw card
+  ([`docs/deck-plan.md`](./docs/deck-plan.md), "Ready decks").
+- Or build your own below them, on a deck builder that looks like Deadlock's
+  shop: Weapon, Vitality and Spirit tabs, rows by tier, the item icons. Tap an
+  item to add a copy; tap one in the deck to take a copy out.
 - A deck is 16 items, any tier, at most 4 copies of one.
 - A deck holds base items only. An upgrade (Improved Spirit, Superior and
   Transcendent Cooldown, Fortitude…) never starts in a deck: it comes only
@@ -43,10 +49,10 @@ builds) and the Gallery. A Quick Match goes like this.
   or a passive (six: Abrams, Haze, Vindicta, Drifter, Mirage, Victor); and an
   ultimate, a button printed on the card with the hero's own Deadlock
   ultimate icon. No hero has a Weakness.
-- Two ultimates are **charged**: Victor's Shocking Reanimation (20 souls) and
-  Silver's Lycan Curse (16) cost 1 less for each damage he takes or she deals,
-  down to free, and the count starts over when one is used. The button shows
-  the price coming down ("20 → 7 souls"). Victor's Aura of Suffering hurts
+- Two ultimates are **charged**: Victor's Shocking Reanimation is ready once
+  he has taken 10 damage, Silver's Lycan Curse once she has dealt 8. The
+  count starts over when one is used, and the button shows it ("7 / 10").
+  Victor's Aura of Suffering hurts
   every enemy and Victor himself at the start of your turn, which charges it.
   Silver's turns her into a wolf for 2 turns (+3 Attack, Shield 6), and her
   card shows Deadlock's wolf-form art while it lasts.
@@ -65,11 +71,16 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### Souls
 
-- Souls accumulate. Nothing refills, and nothing is lost at the end of a turn.
-- Each of your turns opens with 5 souls of income. That is the only way to get
-  souls: kills and the Guardian push the map and give exp, and pay none, so
-  the side ahead cannot snowball. (One item, Golden Goose Egg,
-  still pays 2.)
+- Souls are a bank. Nothing refills, and nothing is lost at the end of a turn:
+  what you do not spend stays.
+- Each of your turns opens with 2 souls of income, the price of one tier-1
+  item (Pokémon TCG Pocket's one Energy a turn).
+- A kill pays your side a bounty: 1 soul in rounds 1–2, and 1 more every two
+  rounds, up to 6 in rounds 11–12. Little early, a lot late. A structure's
+  fall pays nothing. (One item, Golden Goose Egg, pays 2 a use.)
+- Tap your souls (or hover them with a mouse) for the bank sheet: what the
+  next turn pays, what you will hold then, and what a kill pays now.
+- You may play as many cards in a turn as your souls pay for.
 
 ### The scene
 
@@ -112,7 +123,8 @@ it centred at full height with the scene either side.
   is, what a picked-up card needs as its target, why a tap did nothing.
 - **Turn row and hand**: under your bench, the menu button (match log and
   Settings) and the Auto switch sit at the left, your souls and End Turn at
-  the right, under the right thumb. Below that the hand owns the full width: a
+  the right, under the right thumb. Your souls are a button: it opens the
+  bank sheet above it. Below that the hand owns the full width: a
   centred fan of card faces, each with its cost on a seal in the top-left
   corner (souls for an item, HP for a hero). Up to five cards all show their
   names; from six the fan overlaps and only the front card does. A card you
@@ -123,7 +135,7 @@ it centred at full height with the scene either side.
 
 ### The turn: Income, Act, End
 
-A banner says whose turn it is as each one begins. Income is automatic: 5 souls
+A banner says whose turn it is as each one begins. Income is automatic: 2 souls
 arrive, you draw a card, every cooldown ticks down one, and a fallen hero whose
 wait is over goes back to your hand.
 
@@ -166,11 +178,17 @@ You choose the discards from anywhere in your hand.
 **Act.**
 
 - Each hero, bench included, may use one ability a turn: its skill, an active
-  item it wears, or its ultimate. Skills and ultimates are paid in souls, out
-  of the same 5 a turn that buy items; cooldowns count your own turns.
-- A skill costs 1–3 souls (printed on its plate) and is ready again on your
-  next turn. The ultimate is a button on the hero card: from Level 2 it costs
-  4, 8 or 12 souls by its size (small, medium, large), then waits 3 turns.
+  item it wears, or its ultimate. None of them costs souls: souls buy the
+  cards in your hand and a Retreat. Waits count your own turns.
+- A skill waits 3 turns after a use (4 for the heavier ones). Four skills are
+  charged, as in Deadlock: Serrated Knives, Frost Grenade, Lightning Ball and
+  Kinetic Pulse hold 2 uses, and the wait brings them back one at a time.
+  Only the charge items change that: Extra Charge adds a charge, and Rapid
+  Recharge adds 2 and brings each back a turn sooner.
+- The ultimate is a button on the hero card, from Level 2. Your side uses
+  one ultimate a turn. It waits 4, 6 or 8 turns by its size (small, medium,
+  large), after each use and from the match's first turn: a large one is
+  first ready on your turn 8.
 - An active item is used from its hero's sheet. It cools down 2 turns (tiers
   1–2) or 3 (tier 3 and up), and starts on cooldown when it is played. Hard
   crowd control (stun, silence, root, …) has 2 charges a match instead.
@@ -248,7 +266,7 @@ sets them:
 
 ## The items
 
-140 item cards, each a current Deadlock shop item under its own name, tab and
+142 item cards, each a current Deadlock shop item under its own name, tab and
 tier. An active item is always a spell and a passive item always equipment
 ([`docs/card-design.md`](./docs/card-design.md) §1), with one exception: the
 Cooldown family, passives in Deadlock, are the deck's draw cards here, so they
@@ -259,8 +277,8 @@ actives; the column heads give the price.
 |---|---|---|---|---|---|---|
 | Weapon | 4 · 0 | 12 · 2 | 13 · 4 | 8 · 1 | 2 · 0 | 46 |
 | Vitality | 3 · 2 | 11 · 3 | 4 · 7 | 10 · 6 | 0 · 1 | 47 |
-| Spirit | 4 · 2 | 8 · 4 | 6 · 5 | 6 · 9 | 1 · 2 | 47 |
-| All | 15 | 40 | 39 | 40 | 6 | 140 |
+| Spirit | 5 · 2 | 8 · 4 | 7 · 5 | 6 · 9 | 1 · 2 | 49 |
+| All | 16 | 40 | 40 | 40 | 6 | 142 |
 
 The prices follow Deadlock's 1 : 2 : 4 : 8 ladder (800 to 6,400 souls there),
 with 24 for tier 5 (9,999 there). An item became a card only if it passed
@@ -413,10 +431,11 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
 - **The scripts and the respond moves.** `scripts/balance-sim.ts`,
   `scripts/replay-trace.ts`, `scripts/eval/*` and `scripts/qa/*` know nothing of
   `useTrigger` / `passTrigger`; port them with the hand's moves.
-- **The Cube every turn.** The Cube costs 3 souls and, like every skill, is
-  ready again on Viscous's next turn, so for 3 of the 5 souls a turn one hero
-  can take no damage on any rival turn. The hero doc prices it that way; play
-  will show whether it needs a longer wait (docs/hero-design.md, As built).
+- **Free kits are reasoned, not played.** Skills and ultimates cost no souls
+  since 2026-11-15; their waits, the four charged skills and the charged
+  ultimates' 10 and 8 damage are set by reasoning
+  (docs/balance-model.md §8). Play will show match length and whether four
+  skills held for one turn is too much.
 - **Machinery no card uses.** Since the hero rebuild no hero opens a channel
   (`casting` / `casting_light`, `tickCastingPulses`) or puts on Charged, the
   FX layer's Naptime wake-up tag has no burst to play, and since Rem stands in
