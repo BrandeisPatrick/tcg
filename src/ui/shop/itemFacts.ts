@@ -9,7 +9,8 @@
 import type { CardId, ItemSlot, ItemTier } from '@/engine/types';
 import { ITEMS, itemCard } from '@/cards';
 import { evolvesFrom, upgradesOf } from '@/cards/decks';
-import { ITEM_TIERS, PRICE } from '@/engine/constants';
+import { ITEM_TIERS } from '@/engine/constants';
+import { itemPrice } from '@/engine/query';
 
 /** Deadlock's tab order: Weapon · Vitality · Spirit. */
 export const SHOP_TABS: readonly ItemSlot[] = ['weapon', 'vitality', 'spirit'];
@@ -78,8 +79,7 @@ export function buildsInto(itemId: CardId): CardId[] {
   return [...upgradesOf(itemId)];
 }
 
-/** The item's list price: its tier's. */
+/** The item's list price: its tier's, or the one the card names for itself. */
 export function listPrice(itemId: CardId): number {
-  const data = itemCard(itemId);
-  return data ? PRICE[data.tier] : 0;
+  return itemPrice(itemId);
 }

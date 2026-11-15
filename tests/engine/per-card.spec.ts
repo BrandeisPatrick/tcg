@@ -38,12 +38,12 @@ describe('Active items — tier 1', () => {
     expect(target.hp - before).toBe(5);
   });
 
-  it('Rusted Barrel applies Weaken 2 for 2 turns', () => {
+  it('Rusted Barrel applies Bullet Power −1 for 2 turns', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     ABILITIES_BY_ID['eff_rusted_barrel'].run(G, { movingPlayer: '0' }, { target });
     const w = target.statuses.find((s) => s.id === 'weapon_power_down');
-    expect(w?.value).toBe(2);
+    expect(w?.value).toBe(1);
     expect(w?.duration).toBe(2);
   });
 });

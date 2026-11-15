@@ -384,7 +384,7 @@ export function CardFrame({
   };
 
   const artH = size === 'full' ? '58%' : '55%';
-  const printedCost = data && (data.type === 'spell' || data.type === 'equipment') ? PRICE[data.tier] : 0;
+  const printedCost = data && (data.type === 'spell' || data.type === 'equipment') ? data.price ?? PRICE[data.tier] : 0;
   const cost = costInPlay ?? printedCost;
   // A card with no price prints no coin (a hero, an ultimate's face) — but a
   // copy made free prints a 0, so it does not look like a card with no cost.

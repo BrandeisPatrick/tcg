@@ -3,7 +3,7 @@ import { READY_DECKS, readyDeckInUse } from '@/cards/readyDecks';
 import { copyCounts, deckProblem, evolvesFrom } from '@/cards/decks';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { itemPrice } from '@/engine/query';
-import { DECK_SIZE } from '@/engine/constants';
+import { DECK_SIZE, PRICE } from '@/engine/constants';
 
 // The ready decks (docs/deck-plan.md, "Ready decks"): each is a squad of four
 // and a legal 16-item deck built to one recipe.
@@ -31,7 +31,9 @@ describe('ready decks', () => {
     expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(2);
     const tiers = [1, 2, 3, 4, 5].map((t) => d.items.filter((id) => itemCard(id)!.tier === t).length);
     expect(tiers).toEqual([8, 6, 2, 0, 0]);
-    expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBe(56);
+    // 56 souls at the tiers' prices; a card with a price of its own (Rusted Barrel, 1) lists under its tier's.
+    expect(d.items.reduce((n, id) => n + PRICE[itemCard(id)!.tier], 0)).toBe(56);
+    expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBe(56 - d.items.filter((id) => id === 'rusted_barrel').length);
     // A counter in every deck; the draw cards are out (at 2 souls a turn a hand is short of
     // souls, not cards); and a deck leans on equipment, which stays, over spells, which do not.
     expect(d.items.some((id) => ['counterspell', 'debuff_reducer', 'debuff_remover', 'knockdown'].includes(id))).toBe(true);

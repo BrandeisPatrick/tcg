@@ -35,7 +35,7 @@ import type { SpellCard } from '@/engine/types';
 export const SPELLS: SpellCard[] = [
   // ----- Tier 1 -----
   { id: 'healing_rite',     name: 'Healing Rite',     type: 'spell', rarity: 1, slot: 'vitality', tier: 1, abilities: ['eff_healing_rite'],     text: 'Heal an ally for 5.' },
-  { id: 'rusted_barrel',    name: 'Rusted Barrel',    type: 'spell', rarity: 1, slot: 'spirit',   tier: 1, abilities: ['eff_rusted_barrel'],    text: 'Apply Bullet Power −2 on enemy Active for 2 turns.' },
+  { id: 'rusted_barrel',    name: 'Rusted Barrel',    type: 'spell', rarity: 1, slot: 'spirit',   tier: 1, price: 1, abilities: ['eff_rusted_barrel'],    text: 'Apply Bullet Power −1 on enemy Active for 2 turns.' },
   { id: 'golden_goose_egg', name: 'Golden Goose Egg', type: 'spell', rarity: 1, slot: 'spirit',   tier: 1, abilities: ['eff_golden_goose_egg'], text: 'Gain 2 souls. Your Active gains +1 max HP.' },
   { id: 'grit',             name: 'Grit',             type: 'spell', rarity: 1, slot: 'vitality', tier: 1, abilities: ['eff_grit'],             text: 'Your Active gains Shield 4.' },
 

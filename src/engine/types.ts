@@ -123,6 +123,10 @@ interface ItemFields {
   slot: ItemSlot;
   tier: ItemTier;
   upgradesFrom?: CardId;
+  /** A price of its own, in souls, where a card is set under its tier's
+   *  (Patrick's call, card by card: Rusted Barrel is 1). Read through
+   *  `itemPrice` (query.ts), never `PRICE[tier]` directly. */
+  price?: number;
 }
 
 /** An ACTIVE item (Deadlock's `is_active_item`): a spell. It is played from

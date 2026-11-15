@@ -40,11 +40,11 @@ describe('Card types follow the active / passive rule', () => {
     expect(CARDS_BY_ID['improved_burst'].name).toBe('Tankbuster');
   });
 
-  it('every item sits on a shop tab at a tier and is priced by it, and no two items share an id', () => {
+  it('every item sits on a shop tab at a tier and is priced by it (or by the price printed on it), and no two items share an id', () => {
     for (const item of [...SPELLS, ...EQUIPMENT]) {
       expect(['weapon', 'spirit', 'vitality'], item.id).toContain(item.slot);
       expect([1, 2, 3, 4, 5], item.id).toContain(item.tier);
-      expect(itemPrice(item.id), item.id).toBe(PRICE[item.tier]);
+      expect(itemPrice(item.id), item.id).toBe(item.price ?? PRICE[item.tier]);
     }
     const all = [...SPELLS, ...EQUIPMENT].map((c) => c.id);
     expect(new Set(all).size).toBe(all.length);

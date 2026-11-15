@@ -248,11 +248,13 @@ const eff_healing_rite: AbilityDef = {
 };
 
 // Canon Rusted Barrel reduces enemy fire rate → mapped to Weaken (-N Bullet Power).
+// Patrick, 2026-11-15: the cheap one — 1 soul (its own price, under tier 1's 2)
+// for Bullet Power −1.
 const eff_rusted_barrel: AbilityDef = {
   id: 'eff_rusted_barrel', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Rusted Barrel — Weaken 2 on enemy Active for 2 turns.',
+  prompt: 'Rusted Barrel — Bullet Power −1 on enemy Active for 2 turns.',
   run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'weapon_power_down', 2, 2);
+    if (target) addStatus(G, target, 'weapon_power_down', 1, 2);
   },
 };
 

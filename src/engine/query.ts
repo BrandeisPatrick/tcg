@@ -216,13 +216,14 @@ export function bossTaker(G: GameState): { pid: PlayerID; by: 'damage' | 'netWor
 
 // ---------- Worth ----------
 
-/** What an item lists at: its tier's price (`PRICE`). Anything that is not
+/** What an item lists at: its tier's price (`PRICE`), or the price the card
+ *  names for itself (`price`: Rusted Barrel's 1). Anything that is not
  *  an item lists at 0. Putting it on a hero costs it (an evolving upgrade, the
  *  difference: `playCost`), and net worth counts every worn item and every
  *  item in hand at it. */
 export function itemPrice(cardId: CardId): number {
   const data = itemCard(cardId);
-  return data ? PRICE[data.tier] : 0;
+  return data ? data.price ?? PRICE[data.tier] : 0;
 }
 
 /** The list price of everything `hero` wears. */

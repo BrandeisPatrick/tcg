@@ -378,10 +378,11 @@ export function retreatCostOracle(G: GameState, pid: PlayerID): number {
 // deck.
 // ---------------------------------------------------------------------------
 
-/** What an item lists at: its tier's price. Anything that is no item lists at 0. */
+/** What an item lists at: its tier's price, or the price printed on the card
+ *  itself (Rusted Barrel: 1). Anything that is no item lists at 0. */
 export function itemPriceOracle(cardId: unknown): number {
   const d = itemData(cardId);
-  return d ? PRICE[d.tier] : 0;
+  return d ? d.price ?? PRICE[d.tier] : 0;
 }
 
 /** The items a hero wears, actives and passives, in worn order (a merged Rem is not one). */
