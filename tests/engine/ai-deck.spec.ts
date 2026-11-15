@@ -136,6 +136,91 @@ describe('the AI plays its hand', () => {
   });
 });
 
+describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not save… this needs to be solved")', () => {
+  // P0: Haze (Active, no skill), Vindicta, Lash (Ground Strike, 3 souls) and
+  // Paige (Plot Armor, 2 souls). Toxic Bullets is tier 3: 8 souls.
+  const spends = (made: Action[]) => made.filter((a) => a.type === 'playCard' || a.type === 'useSkill' || a.type === 'moveHero');
+
+  it('keeps its souls for a tier-3 card it can pay for next turn: no cheap card, no skill', () => {
+    const G = turn(6);
+    giveCard(G, '0', 'toxic_bullets');
+    giveCard(G, '0', 'extended_magazine'); // tier 1: it could pay for this now
+    expect(spends(playOut(G))).toEqual([]);
+    expect(G.players['0'].souls).toBe(6);
+  });
+
+  it('with the souls for it, plays the tier-3 card first: nothing cheaper takes its souls', () => {
+    const G = turn(8);
+    const me = G.players['0'];
+    const toxic = giveCard(G, '0', 'toxic_bullets');
+    const mag = giveCard(G, '0', 'extended_magazine');
+    const made = playOut(G);
+    expect(made[0]).toMatchObject({ type: 'playCard', cardIid: toxic.iid });
+    expect(me.souls).toBe(0);
+    expect(me.hand).toEqual([mag]);
+  });
+
+  it('saves a turn for a tier-2 card too, then plays it', () => {
+    const saving = turn(2);
+    giveCard(saving, '0', 'active_reload'); // tier 2: 4 souls
+    expect(spends(playOut(saving))).toEqual([]);
+    expect(saving.players['0'].souls).toBe(2);
+    const paid = turn(4);
+    const reload = giveCard(paid, '0', 'active_reload');
+    expect(playOut(paid)[0]).toMatchObject({ type: 'playCard', cardIid: reload.iid });
+  });
+
+  it('the higher tier is the goal: with a tier-2 it could pay for now and a tier-3 two turns off, it holds for the tier-3', () => {
+    const G = turn(4);
+    giveCard(G, '0', 'active_reload');
+    giveCard(G, '0', 'toxic_bullets');
+    expect(spends(playOut(G))).toEqual([]);
+    expect(G.players['0'].souls).toBe(4);
+  });
+
+  it('with only tier-1 cards in hand there is nothing to save for: it spends as the look says', () => {
+    const G = turn(6);
+    giveCard(G, '0', 'extended_magazine');
+    expect(spends(playOut(G)).length).toBeGreaterThan(0);
+    expect(G.players['0'].souls).toBeLessThan(6);
+  });
+
+  it('a card further off than three turns of income is no goal yet: it spends', () => {
+    const G = turn(2);
+    giveCard(G, '0', 'glass_cannon'); // tier 4, 16 souls: seven turns of income away
+    giveCard(G, '0', 'extended_magazine');
+    expect(spends(playOut(G)).length).toBeGreaterThan(0);
+    expect(G.players['0'].souls).toBeLessThan(2);
+  });
+
+  it('an upgrade onto the hero wearing its component counts at the difference: it saves 2 toward Sharpshooter\'s 4, then evolves it', () => {
+    const stage = (souls: number) => {
+      const G = turn(souls);
+      const vindicta = G.players['0'].bench.find((h) => h?.cardId === 'hero_vindicta')!;
+      giveItem(G, vindicta, 'long_range');
+      const sharp = giveCard(G, '0', 'sharpshooter'); // tier 3; 8 − Long Range's 4 on Vindicta
+      return { G, vindicta, sharp };
+    };
+    const saving = stage(2);
+    expect(spends(playOut(saving.G))).toEqual([]);  // Paige's Plot Armor (2) would take them
+    expect(saving.G.players['0'].souls).toBe(2);
+    const paid = stage(4);
+    const made = playOut(paid.G);
+    expect(made[0]).toMatchObject({ type: 'playCard', cardIid: paid.sharp.iid, heroIid: paid.vindicta.iid });
+    expect(wornItems(paid.vindicta).map((it) => it.cardId)).toEqual(['sharpshooter']);
+  });
+
+  it('a kill is still worth the souls: Ground Strike finishes a bench hero on 1 though it delays the card', () => {
+    const G = turn(6);
+    giveCard(G, '0', 'toxic_bullets');
+    const victim = G.players['1'].bench[1]!;
+    victim.hp = 1;
+    const made = playOut(G);
+    expect(made.some((a) => a.type === 'useSkill')).toBe(true);
+    expect(G.record['0'].kills).toBe(1);
+  });
+});
+
 describe('the AI and a full hero (Patrick, 2026-11-09: a full hero swaps an item)', () => {
   /** P0's turn, every hero full: Haze wears Extended Magazine (tier 1) and two tier-2
    *  items, the bench three tier-3 items each, so only Haze could take a card in place

@@ -577,6 +577,9 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
   map lesson's rival Patron is 1, for Kelvin's push of 1.
 - The AI plays the same legality: it uses skills and ultimates when it can pay and the lookahead
   says they gain more than the souls they cost (a soul in hand is worth 0.3, so it spends freely).
+  Since 2026-11-15 it saves for the dearest card it can reach in three turns and holds its souls
+  against skills until that card is played, a kill or an ultimate aside
+  ([balance-model.md](balance-model.md) §7).
   It no longer prices a Sleep's value as a wake-up burst.
 
 ### Rem in the lane, and Tag Along as a ride (2026-11-09)

@@ -451,14 +451,15 @@ describe('the layer puts each batch up once', () => {
 
   // A flight's key is its event's seq: Board's batches never share an event,
   // through a drafted match with Victor's trigger prompt (answered from the
-  // respond stage) and Silver's Wolf form.
+  // respond stage). Seed 9: seed 8's match no longer reaches the prompt (with
+  // the lane at 2 souls a turn his side cannot pay for it there).
   it('across a drafted match the AI plays to its end, with Victor and Silver, no card is planned to fly twice', () => {
     let seen = 0;
     let openings = 0;
     let asked = 0;
     const keys: string[] = [];
     playGame({
-      seed: 8,
+      seed: 9,
       policies: { '0': 'heuristic', '1': 'heuristic' },
       prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
       afterMove: (before, after, move, accepted) => {

@@ -169,9 +169,33 @@ for a boss (it was 2 a depth, +4, +8): the same share of a fight's lane
 income, ×2⁄5 rounded to whole souls. Supply purses stay 4 / 8 / 12; each is
 priced as the item tier it stands in for.
 
+**The AI saves** (`savingGoal`, `savingCost`, src/ai/heuristic.ts; Patrick,
+2026-11-15: "the AI does not save… this needs to be solved"). At 2 souls a
+turn a one-ply look always finds something small to spend them on, so a
+dearer card was never reached, nor the upgrades its play makes.
+- **The goal** is the card of the highest tier in its hand, tier 2 or more,
+  that a hero of its can take and that it can pay for within 3 turns of
+  income (an upgrade onto the hero wearing its component counts at the
+  difference). The higher tier comes first because the item budget gives it
+  more for each soul and turn worn: 2 points over 8 turns at tier 1, 4 over 6
+  at tier 2, 8 over 4 at tier 3, 16 over 3 at tier 4.
+- **A spend that pushes the goal's turn back is marked down by 12** in the
+  AI's evaluation, once, however many turns it costs. That is above an
+  ordinary spend (a skill's point of damage on every enemy is worth 8 there,
+  a tier-1 card 2 to 6) and below a decisive one (a kill is 25 or more, an
+  ultimate 15 or more). So it holds its souls against skills and cheap cards,
+  and still takes a kill or an ultimate.
+- **Tier 1 is not saved for**: it is one turn's income, weighed against a
+  skill as before. With no tier-2 or dearer card in reach the AI spends as
+  the look says.
+
 **Left for a testing round.**
-- The AI values a point of souls in hand at 0.3, so it spends as soon as a
-  play gains anything and does not save for a higher tier.
+- How the saving AI plays over many matches: how often it reaches tier 3 and
+  4, and how often it still casts skills.
+- The charged ultimates. Victor's 20 and Silver's 16 were priced at 5 souls a
+  turn. In the one seeded AI match the tests replay with both (seed 9),
+  Silver's Lycan Curse stood at 9 to 14 against a bank of 6 at the most, and
+  she never used it.
 - Golden Goose Egg's 2 souls a use is now a whole turn of the lane every
   other turn. Its budget in points is unchanged (16.4, already listed as over
   in card-design.md §3).

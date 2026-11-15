@@ -358,15 +358,16 @@ describe('the charged lines print on their own, under the effect', () => {
 });
 
 describe('both heroes in a drafted match the AI plays to its end', () => {
-  // Seed 9 (a heuristic seat each, Victor P0's first pick, Silver P1's) plays both: the AI
-  // answers Victor's prompt and turns Silver into a wolf on the way to a result. (Seed 8 did
-  // until the opening changed: each side now opens with a chosen hero and draws 4 from the
-  // rest, so a different deal reaches both heroes; seed 7 did until Rem could stand in the
-  // lane, which changed how its match plays out.)
-  it('Victor and Silver are drafted, stand on the board, the AI answers his prompt and uses her Wolf form, and the match is decided', () => {
+  // Seed 9 (a heuristic seat each, Victor P0's first pick, Silver P1's): the AI answers
+  // Victor's prompt on the way to a result. (Seed 8 did until the opening changed: each side
+  // now opens with a chosen hero and draws 4 from the rest, so a different deal reaches both
+  // heroes; seed 7 did until Rem could stand in the lane, which changed how its match plays
+  // out.) Until 2026-11-15 this match also showed Silver's Wolf form: with the lane at 2
+  // souls a turn her side never holds Lycan Curse's price in it (9 to 14 against a bank of 6
+  // at the most), so the AI's use of the form is staged below instead.
+  it('Victor and Silver are drafted, stand on the board, the AI answers his prompt, and the match is decided', () => {
     const seen = new Set<string>();
     let asked = 0;
-    let wolf = false;
     let picks: Record<PlayerID, string[]> | undefined;
     const game = playGame({
       seed: 9,
@@ -376,9 +377,7 @@ describe('both heroes in a drafted match the AI plays to its end', () => {
         if (G.draft) picks = G.draft.picks;
         for (const pid of ['0', '1'] as PlayerID[]) {
           for (const c of [G.players[pid].active, ...G.players[pid].bench]) {
-            if (!c) continue;
-            seen.add(c.cardId);
-            if (c.statuses.some((s) => s.id === 'wolf_form')) wolf = true;
+            if (c) seen.add(c.cardId);
           }
         }
         if (info.name === 'useTrigger' || info.name === 'passTrigger') asked++;
@@ -391,8 +390,24 @@ describe('both heroes in a drafted match the AI plays to its end', () => {
     expect(seen.has('hero_victor')).toBe(true);
     expect(seen.has('hero_silver')).toBe(true);
     expect(asked).toBeGreaterThan(0);
-    expect(wolf).toBe(true);
     expect(game.stalemate).toBe(false);
     expect(game.winner).toBeDefined();
+  });
+
+  it('the AI turns Silver into a wolf once her count has brought Lycan Curse down to what it holds', () => {
+    const G = freshReadyGame();
+    const silver = standIn(G, '0', 'hero_silver');
+    silver.tally = { [SILVER_ULT]: 10 };          // 16 − 10 dealt: 6 souls
+    G.players['0'].souls = 6;
+    // Her side's other abilities are spent, so the souls are the form's or nobody's.
+    for (const h of G.players['0'].bench) if (h) h.skillUsedThisTurn = true;
+    const top = enumerateAIMoves(G, ctx('0'));
+    const form = top.find((o) => o.move === 'useSkill' && o.args[0] === silver.iid && o.args[2] === SILVER_ULT);
+    expect(form).toBeDefined();
+    expect(form!.score).toBeGreaterThan(top.find((o) => o.move === 'endTurn')!.score);
+    expect(top[0]).toBe(form);
+    // A soul short, it is not offered.
+    G.players['0'].souls = 5;
+    expect(enumerateAIMoves(G, ctx('0')).some((o) => o.move === 'useSkill' && o.args[2] === SILVER_ULT)).toBe(false);
   });
 });
