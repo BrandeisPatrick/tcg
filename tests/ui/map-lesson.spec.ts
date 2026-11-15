@@ -4,6 +4,7 @@ import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
 import { attackTargets } from '@/engine/legality';
 import { BOSS_HP } from '@/engine/constants';
+import { killBounty } from '@/engine/rounds';
 import { effectiveAtk, kitCost, structureOf } from '@/engine/query';
 import { setMatchConfig, type StorySetup } from '@/storage/matchConfig';
 import type { GameState } from '@/engine/types';
@@ -70,7 +71,9 @@ describe('Lesson 5: the map', () => {
     moves(c).useSkill(kelvin.iid);
     const G = state(c).G;
     expect(structureOf(G.players['1'], 'guardian').hp).toBe(0);
-    expect(G.players['0'].souls).toBe(souls - kitCost(kelvin)); // the skill's price; a kill and a fall pay no souls
+    expect(souls).toBe(kitCost(kelvin));                         // one soul kept and the turn's two: the skill's three
+    expect(killBounty(G)).toBe(2);                               // round 4
+    expect(G.players['0'].souls).toBe(souls - kitCost(kelvin) + killBounty(G)); // the skill's price, then the kill's bounty; a structure's fall pays nothing
     expect(attackTargets(G, '0')).toEqual([]);
     expect(state(c).ctx.gameover).toBeUndefined();
     moves(c).endTurn();

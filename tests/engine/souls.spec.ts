@@ -5,7 +5,9 @@ import type { Ctx } from 'boardgame.io';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
 import { CARDS_BY_ID } from '@/cards';
-import { LANE_INCOME, PRICE } from '@/engine/constants';
+import { KILL_BOUNTY_STEP_ROUNDS, LANE_INCOME, PRICE, ROUND_CAP } from '@/engine/constants';
+import { bankForecast } from '@/engine/bank';
+import { bountyAtRound, killBounty } from '@/engine/rounds';
 import { playBlocked, playCost, retreatCost } from '@/engine/legality';
 import { heroRetreat, itemPrice, netWorth } from '@/engine/query';
 import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, readyClient } from './_helpers';
@@ -29,10 +31,11 @@ function freshG(): GameState {
 }
 
 describe('souls economy', () => {
-  it('the income: the player on turn 1 has LANE_INCOME (5) souls; the other has none until its turn', () => {
+  it('the income: the player on turn 1 has LANE_INCOME (2, a tier-1 item) souls; the other has none until its turn', () => {
     const c = readyClient();
     const { G } = snap(c);
-    expect(LANE_INCOME).toBe(5);
+    expect(LANE_INCOME).toBe(2);
+    expect(LANE_INCOME).toBe(PRICE[1]);
     expect(G.players['0'].souls).toBe(LANE_INCOME);
     expect(G.players['1'].souls).toBe(0);
   });
@@ -121,7 +124,7 @@ describe('souls economy', () => {
 
   it('souls accumulate: what a turn does not spend carries over, and each own turn adds the income', () => {
     const c = readyClient();
-    // P0 T1: 5. Don't spend. End → P1 T2. End → P0 T3.
+    // P0 T1: the income. Don't spend. End → P1 T2. End → P0 T3.
     c.moves.endTurn?.();
     c.moves.endTurn?.();
     const { G } = snap(c);
@@ -131,10 +134,10 @@ describe('souls economy', () => {
   it('souls have no ceiling', () => {
     const c = readyClient();
     // Nobody acts, so nobody falls: each own turn banks the income on top.
-    for (let i = 0; i < 6; i++) c.moves.endTurn?.();
+    for (let i = 0; i < 12; i++) c.moves.endTurn?.();
     const { G } = snap(c);
     expect(snap(c).ctx.gameover).toBeUndefined();
-    expect(G.players['0'].souls).toBe(4 * LANE_INCOME);
+    expect(G.players['0'].souls).toBe(7 * LANE_INCOME);
     expect(G.players['0'].souls).toBeGreaterThan(10);
   });
 
@@ -193,27 +196,37 @@ describe('souls economy', () => {
     }
   });
 
-  it('a kill pays no souls: knockouts push the map and give exp, nothing more', () => {
-    const G = freshG();
-    const victim = G.players['1'].active!;
-    victim.level = 2;
-    const before = G.players['0'].souls;
-    // Drop victim to 0 HP with pure damage then reap
-    damageUnit(G, victim, victim.hp + 99, 'pure');
-    reapDead(G, G.players['1']);
-    expect(G.players['0'].souls).toBe(before);
+  it('a kill pays the round\'s bounty to the killer\'s side: 1 soul in rounds 1–2, 1 more every two rounds, 6 in the last two', () => {
+    expect(KILL_BOUNTY_STEP_ROUNDS).toBe(2);
+    expect(Array.from({ length: ROUND_CAP }, (_, i) => bountyAtRound(i + 1))).toEqual([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]);
+    // Whoever's turn it is: round r holds engine turns 2r − 1 and 2r.
+    for (const [turn, bounty] of [[1, 1], [2, 1], [5, 2], [6, 2], [9, 3], [17, 5], [24, 6]] as const) {
+      const G = freshG();
+      G.turnNumber = turn;
+      expect(killBounty(G), `engine turn ${turn}`).toBe(bounty);
+      const victim = G.players['1'].active!;
+      victim.level = 2;
+      const before = G.players['0'].souls;
+      // Drop victim to 0 HP with pure damage then reap
+      damageUnit(G, victim, victim.hp + 99, 'pure');
+      reapDead(G, G.players['1']);
+      expect(G.players['0'].souls - before, `engine turn ${turn}`).toBe(bounty);
+      expect(G.record['0'].bounty).toBe(bounty);
+      expect(G.log.some((e) => e.text === `P0 +${bounty} Souls (kill bounty).`)).toBe(true);
+    }
   });
 
-  it('a kill of the richest hero on the board pays no souls either', () => {
+  it('the bounty is the round\'s whoever falls: the richest hero on the board pays no more', () => {
     const G = freshG();
     giveItem(G, G.players['1'].active!, 'glass_cannon');
     const victim = G.players['1'].active!;
+    const before = G.players['0'].souls;
     damageUnit(G, victim, victim.hp + 99, 'pure');
     reapDead(G, G.players['1']);
-    expect(G.players['0'].souls).toBe(0);
+    expect(G.players['0'].souls - before).toBe(killBounty(G));
   });
 
-  it('a hero reaped on either side pays nobody', () => {
+  it('a fall pays the other side, never its own', () => {
     const G = freshG();
     const victim = G.players['0'].active!;
     const selfBefore = G.players['0'].souls;
@@ -221,7 +234,24 @@ describe('souls economy', () => {
     damageUnit(G, victim, victim.hp + 99, 'pure');
     reapDead(G, G.players['0']);
     expect(G.players['0'].souls).toBe(selfBefore);
-    expect(G.players['1'].souls).toBe(oppBefore);
+    expect(G.players['1'].souls).toBe(oppBefore + killBounty(G));
+    expect(G.record['0'].bounty).toBe(0);
+  });
+
+  it('the bank\'s forecast: what the lane pays next, what that makes, and what a kill pays now and next round', () => {
+    const G = freshG(); // round 1, P0's own turn 1 (P0 moves second: engine turn 2)
+    G.players['0'].souls = 3;
+    expect(bankForecast(G, '0')).toEqual({ held: 3, income: LANE_INCOME, next: 3 + LANE_INCOME, bounty: 1, bountyNext: 1, last: false });
+    G.turnNumber = 4; // round 2: the next round's kill pays 2
+    expect(bankForecast(G, '0')).toMatchObject({ bounty: 1, bountyNext: 2, last: false });
+    // The last round, the first mover's turn: it has no own turn left, so the
+    // lane pays it nothing more; the second mover's last turn is still to come.
+    G.turnNumber = 2 * ROUND_CAP - 1;
+    G.players['1'].souls = 4;
+    expect(bankForecast(G, '1')).toEqual({ held: 4, income: 0, next: 4, bounty: 6, bountyNext: 6, last: true });
+    expect(bankForecast(G, '0')).toMatchObject({ income: LANE_INCOME, last: false });
+    G.turnNumber = 2 * ROUND_CAP;
+    expect(bankForecast(G, '0')).toEqual({ held: 3, income: 0, next: 3, bounty: 6, bountyNext: 6, last: true });
   });
 
   it("retreat (swap Active with bench hero) costs the leaving hero's printed retreat (Haze's), once a turn", () => {

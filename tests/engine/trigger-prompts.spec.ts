@@ -209,7 +209,7 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
     const G = freshReadyGame();
     const victor = standIn(G, '0', 'hero_victor');
     victor.hp = 1;
-    G.players['0'].souls = 15;                                        // + the turn's 5 = 20 ≥ 20 − 1
+    G.players['0'].souls = 18;                                        // + the turn's 2 = 20 ≥ 20 − 1
     G.draftTurnsOffset = -1;
     const client = Client({ game: { ...DeadlockGame, setup: () => G }, numPlayers: 2 });
     client.start();

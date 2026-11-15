@@ -9,7 +9,7 @@ import { resolve } from '@/engine/death';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { PRICE } from '@/engine/constants';
 import type { GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, passTurn, readyClient, setTrack } from './_helpers';
+import { bankSouls, freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, passTurn, readyClient, setTrack } from './_helpers';
 
 // A turn opens in its shop step (buy, sell and move items, then close the
 // shop); its act step is the player's to spend on abilities (each hero one a
@@ -303,6 +303,7 @@ describe('turn actions: abilities, then the attack', () => {
   it('the flags reset when the next turn begins', () => {
     const c = readyClient();
     passTurn(c); // → P1, turn 2, past its shop
+    bankSouls(c, '1', 5); // Frost Grenade's 3 and Abrams's Retreat of 2
     let G = snap(c).G;
     // Kelvin's Frost Grenade (3 souls) puts no crowd control on P0's Active, so
     // nothing but the flags stands between P0 and its attack next turn.

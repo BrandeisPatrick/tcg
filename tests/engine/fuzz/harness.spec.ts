@@ -27,6 +27,7 @@ import {
   upgradeComponentOracle, upgradeMadeOracle, upgradesOfOracle, wornWorth,
 } from './oracle';
 import { splitKnown, type Hit } from './hits';
+import { killBounty } from '@/engine/rounds';
 
 const ctx = (over: Partial<Ctx> = {}): Ctx => ({ currentPlayer: '0', turn: 2, numPlayers: 2, ...over }) as unknown as Ctx;
 const clean = (): GameState => freshReadyGame();
@@ -483,10 +484,14 @@ describe('the transition rules fire', () => {
     const r = pair(() => undefined);
     expect(moveIds(r, 'useSkill', [heroIid(r)])).not.toContain('souls-delta');
   });
-  it('a kill pays no souls (the lane\'s income is the only souls there are): the old bounty is reported', () => {
+  it('a kill pays the round\'s bounty and nothing more: a fall left unpaid, or overpaid, is reported', () => {
     const fall = (G: GameState) => { const h = G.players['1'].bench[0]!; h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; pushOff(G, '1', 2); };
-    expect(moveIds(pair((G) => { fall(G); }), 'attack', [])).not.toContain('souls-delta');
-    expect(moveIds(pair((G) => { fall(G); G.players['0'].souls += 2; }), 'attack', [])).toContain('souls-delta');
+    const bounty = killBounty(clean());
+    expect(moveIds(pair((G) => { fall(G); G.players['0'].souls += bounty; }), 'attack', [])).not.toContain('souls-delta');
+    expect(moveIds(pair((G) => { fall(G); }), 'attack', [])).toContain('souls-delta');
+    expect(moveIds(pair((G) => { fall(G); G.players['0'].souls += bounty + 2; }), 'attack', [])).toContain('souls-delta');
+    // …and it pays the side the hero fell to, not its own.
+    expect(moveIds(pair((G) => { fall(G); G.players['1'].souls += bounty; }), 'attack', [])).toContain('souls-delta');
   });
   it('souls: a play costs the item\'s price — the difference for an evolving upgrade —; a hero placed, a discard and a promotion are free', () => {
     const G = clean();

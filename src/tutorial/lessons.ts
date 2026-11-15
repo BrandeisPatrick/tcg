@@ -347,8 +347,8 @@ export const LESSONS: Lesson[] = [
     outro: "Every turn runs Income, Act, End — a banner opens each turn. A skill costs souls, printed on its plate, and it is ready again on your next turn. The ultimate is the other button on the card: from Level 2, for more souls.",
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
     // (to every enemy, and he is the only one) is the whole fight. It costs
-    // three of the turn's five souls.
-    setup: () => fight({ enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
+    // three souls: one kept from before and the turn's two pay for it.
+    setup: () => fight({ playerSouls: 1, enemyHeroStats: [{ hp: 1, hpMax: 3 }] }),
     steps: [
       look('look', 'One on One', mine, (v) => `Every turn runs three beats: Income (souls and a card), Act, End. Income just paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}). ${nameOf(mine(v))} faces ${nameOf(theirs(v))}, who is already hurt: ${hpOf(theirs(v))}. Tap ${nameOf(mine(v))} to open his sheet.`),
       useSkill('Use the Skill', (v) => `${skillNameOf(mine(v))}: one spirit damage to every enemy, for ${soulsText(mine(v) ? kitCost(mine(v)!) : 0)} — a skill's price is on its plate.`),
@@ -361,9 +361,9 @@ export const LESSONS: Lesson[] = [
     title: 'The Hand',
     blurb: 'A card drawn, two souls: put it on. Its swing is the kill.',
     face: 'hero_yamato',
-    outro: `Every turn pays ${soulsText(LANE_INCOME)} and draws a card. Souls carry over: what you do not spend stays. An item waits in your hand until you pay to put it on a hero; once on, it stays, through death too. A hero you draw goes on the bench for free.`,
+    outro: `Every turn pays ${soulsText(LANE_INCOME)} and draws a card. Souls carry over: what you do not spend stays in your bank. Tap your souls to see what the next turn pays and what a kill is worth. An item waits in your hand until you pay to put it on a hero; once on, it stays, through death too. A hero you draw goes on the bench for free.`,
     // Yamato swings for 2 at a Lash on 3. His deck is one card, Extended
-    // Magazine — his build's first item, a tier 1 for two of the turn's five
+    // Magazine — his build's first item, a tier 1 for the turn's two
     // souls — drawn as the turn opens; on him it makes his swing 3, and the
     // swing that ends the Act is the kill. Turn two, so there is an attack.
     setup: () => fight({
@@ -388,13 +388,13 @@ export const LESSONS: Lesson[] = [
     // Kelvin holds Cold Front, a gift: put on, it starts on its cooldown, so it
     // cannot be the kill today. Lash stands at two: Frost Grenade's one
     // spirit damage, then Kelvin's swing of one, finish him — an ability, then
-    // the attack that ends the Act. Turn two, so there is an attack. Two
-    // souls kept from before and the turn's five pay for both: Cold Front
+    // the attack that ends the Act. Turn two, so there is an attack. Five
+    // souls kept from before and the turn's two pay for both: Cold Front
     // four, Frost Grenade three.
     setup: () => fight({
       startTurn: 2,
       playerItems: ['cold_front'],
-      playerSouls: 2,
+      playerSouls: 5,
       enemyHeroStats: [{ hp: 2 }],
     }),
     steps: [

@@ -26,7 +26,7 @@ import {
   bossDue, checkWinner, findCardOnBoard, isRespawning, killPush, respawnTimer, slotCap, standingVerdict, structureHp, structureOf,
   targetsFor,
 } from '@/engine/query';
-import { MATCH_TURNS, round } from '@/engine/rounds';
+import { MATCH_TURNS, killBounty, round } from '@/engine/rounds';
 import {
   BOSS_CARD_ID, BOSS_HP, BOSS_RETALIATION, BOSS_SPAWN_ROUND, MAX_ITEMS, MID_BOSS_ENABLED, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP,
 } from '@/engine/constants';
@@ -106,7 +106,7 @@ describe('the structures: Guardian 4 → Walker 6 → Patron 8, pushed front fir
 });
 
 describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pusher\'s bullet power', () => {
-  it('the kill pays no souls and pushes level + 1 into the victim\'s side', () => {
+  it('the kill pays the round\'s bounty and pushes level + 1 into the victim\'s side', () => {
     const G = freshReadyGame();
     const rival = G.players['1'].active!;
     rival.hp = 1;
@@ -114,7 +114,7 @@ describe('pushes: a kill pushes the victim\'s level + 1, an empty lane its pushe
     const souls = G.players['0'].souls;
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
     expect(isRespawning(rival)).toBe(true);
-    expect(G.players['0'].souls).toBe(souls);
+    expect(G.players['0'].souls).toBe(souls + killBounty(G));
     expect(structuresOf(G, '1')).toBe(18 - 3);
     expect(G.record['0'].kills).toBe(1);
   });
@@ -353,7 +353,7 @@ describe('the Rejuvenator', () => {
     expect(rival.hp).toBe(rival.hpMax);
     expect(p1.active).toBe(rival);
     expect(p1.reviveCredits).toBe(1);
-    expect(G.players['0'].souls).toBe(souls);
+    expect(G.players['0'].souls).toBe(souls + killBounty(G)); // a kill the Rejuvenator undoes still pays
     expect(structuresOf(G, '1')).toBe(16);
     expect(G.record['1'].revives).toBe(1);
     expect(G.fx.some((e) => e.kind === 'revive' && e.iid === rival.iid && e.credit)).toBe(true);
@@ -525,7 +525,7 @@ describe('the Mid-Boss is off for now (MID_BOSS_ENABLED)', () => {
     return st.G as GameState;
   }
 
-  it('a long AI match (seed 12 runs to the round cap): no boss rises, no boss event or log line, nobody holds a Rejuvenator — and with it on, it rises', () => {
+  it('a long AI match (seed 12 runs well past round 4): no boss rises, no boss event or log line, nobody holds a Rejuvenator — and with it on, it rises', () => {
     let rounds = 0;
     const end = aiMatch(12, undefined, (G) => {
       expect(G.midBoss).toBe(false);
@@ -534,7 +534,7 @@ describe('the Mid-Boss is off for now (MID_BOSS_ENABLED)', () => {
       expect(G.players['0'].reviveCredits + G.players['1'].reviveCredits).toBe(0);
       rounds = Math.max(rounds, round(G));
     });
-    expect(rounds, 'the match runs to the round cap, well past the rounds a boss would rise in').toBe(ROUND_CAP);
+    expect(rounds, 'the match runs well past the round a boss would rise in').toBeGreaterThan(BOSS_SPAWN_ROUND + 1);
     expect(end.fx.some((e) => e.kind === 'boss')).toBe(false);
     expect(end.log.some((l) => /Mid-Boss|Rejuvenator/.test(l.text))).toBe(false);
     expect(end.record['0'].bossKills + end.record['1'].bossKills).toBe(0);

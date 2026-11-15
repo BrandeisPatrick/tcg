@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { fonts, spring } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { PosterButton } from '../chrome';
+import type { BankForecast } from '@/engine/bank';
 import { SoulsCounter } from './SoulsCounter';
 
 /** The turn button's name — its label and its accessible name, by which the
@@ -19,6 +20,10 @@ interface Props {
   hasPending: boolean;
   autoPlay: boolean;
   souls: number;
+  /** Your bank's forecast: the souls tag opens its sheet (SoulsCounter). */
+  bank?: BankForecast;
+  /** Told as the bank sheet opens and closes. */
+  onBankOpenChange?: (open: boolean) => void;
   /** The menu button (Board owns it and its popup). */
   menu: ReactNode;
   /** The turn button was pressed. */
@@ -33,7 +38,7 @@ interface Props {
  * Active's sheet), and red Cancel takes its place while a card, a skill or an
  * item is armed. It stays enabled while busy so Board can queue the press.
  */
-export function BoardControls({ variant, isMyTurn, busy, hasPending, autoPlay, souls, menu, onEndTurn, onCancel, onToggleAuto }: Props) {
+export function BoardControls({ variant, isMyTurn, busy, hasPending, autoPlay, souls, bank, onBankOpenChange, menu, onEndTurn, onCancel, onToggleAuto }: Props) {
   const dock = variant === 'dock';
   const turnHot = isMyTurn && !busy && !autoPlay;
   const turnCursor = isMyTurn ? (busy ? 'progress' : 'pointer') : 'default';
@@ -124,7 +129,7 @@ export function BoardControls({ variant, isMyTurn, busy, hasPending, autoPlay, s
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
         <div style={{ height: 30, display: 'flex', alignItems: 'center' }}>{hasPending && cancel}</div>
-        <SoulsCounter souls={souls} size={30} />
+        <SoulsCounter souls={souls} size={30} bank={bank} onOpenChange={onBankOpenChange} />
         {turn}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>{menu}{auto}</div>
       </div>
@@ -135,7 +140,7 @@ export function BoardControls({ variant, isMyTurn, busy, hasPending, autoPlay, s
       {menu}
       {auto}
       <span style={{ flex: 1 }} />
-      <SoulsCounter souls={souls} size={34} />
+      <SoulsCounter souls={souls} size={34} bank={bank} onOpenChange={onBankOpenChange} />
       {hasPending ? cancel : turn}
     </div>
   );

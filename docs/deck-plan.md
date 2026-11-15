@@ -45,9 +45,16 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 
 ## Each turn
 
-- Draw 1 card and gain 5 souls. Souls pile up from turn to turn.
-  - Souls come only from these 5 a turn.
-  - Knockouts and objectives still push the map and give exp, but pay no souls, so the side ahead can't snowball.
+- Draw 1 card and gain 2 souls, the price of a tier-1 item. Souls pile up from turn to turn.
+  - Changed 2026-11-15 (Patrick: the lane pays one unit a turn, as Pocket gives one Energy; "keep
+    it simple using simple numbers"). It was 5 a turn. The reasoning is in
+    [balance-model.md](balance-model.md) §7.
+  - A kill pays a bounty: 1 soul in rounds 1–2, 1 more every two rounds, 6 in rounds 11–12
+    (Patrick: "not worth much at the very beginning and worth a lot at the very later"). Until
+    2026-11-15 kills paid nothing.
+  - Objectives still push the map and give exp, and pay no souls.
+  - Your souls are a button on the board: the bank sheet shows what the next turn pays, what you
+    will hold then, and what a kill pays now.
 - The Mid-Boss is off for now (Patrick, 2026-11-09: "remove the mid boss mechanics for now").
 - Put heroes from your hand on the bench (up to 3). It's free.
 - Put an item from your hand on a hero by paying its price: 2, 4, 8, 16 or 24 souls by tier, as today.

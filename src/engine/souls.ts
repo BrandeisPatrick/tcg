@@ -1,7 +1,7 @@
 /**
  * Paying souls — the one way a side gains them outside its income: a kill's
- * bounty, a felled Guardian, the Mid-Boss, Golden Goose Egg. A leaf, so the
- * map (map.ts) and death (death.ts) can both pay without importing each other.
+ * bounty (death.ts) and Golden Goose Egg. A leaf, so the map (map.ts) and
+ * death (death.ts) can both pay without importing each other.
  */
 import type { GameState, PlayerID } from './types';
 import { pushLog } from './log';

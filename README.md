@@ -65,11 +65,16 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### Souls
 
-- Souls accumulate. Nothing refills, and nothing is lost at the end of a turn.
-- Each of your turns opens with 5 souls of income. That is the only way to get
-  souls: kills and the Guardian push the map and give exp, and pay none, so
-  the side ahead cannot snowball. (One item, Golden Goose Egg,
-  still pays 2.)
+- Souls are a bank. Nothing refills, and nothing is lost at the end of a turn:
+  what you do not spend stays.
+- Each of your turns opens with 2 souls of income, the price of one tier-1
+  item (Pokémon TCG Pocket's one Energy a turn).
+- A kill pays your side a bounty: 1 soul in rounds 1–2, and 1 more every two
+  rounds, up to 6 in rounds 11–12. Little early, a lot late. A structure's
+  fall pays nothing. (One item, Golden Goose Egg, pays 2 a use.)
+- Tap your souls (or hover them with a mouse) for the bank sheet: what the
+  next turn pays, what you will hold then, and what a kill pays now.
+- You may play as many cards in a turn as your souls pay for.
 
 ### The scene
 
@@ -112,7 +117,8 @@ it centred at full height with the scene either side.
   is, what a picked-up card needs as its target, why a tap did nothing.
 - **Turn row and hand**: under your bench, the menu button (match log and
   Settings) and the Auto switch sit at the left, your souls and End Turn at
-  the right, under the right thumb. Below that the hand owns the full width: a
+  the right, under the right thumb. Your souls are a button: it opens the
+  bank sheet above it. Below that the hand owns the full width: a
   centred fan of card faces, each with its cost on a seal in the top-left
   corner (souls for an item, HP for a hero). Up to five cards all show their
   names; from six the fan overlaps and only the front card does. A card you
@@ -123,7 +129,7 @@ it centred at full height with the scene either side.
 
 ### The turn: Income, Act, End
 
-A banner says whose turn it is as each one begins. Income is automatic: 5 souls
+A banner says whose turn it is as each one begins. Income is automatic: 2 souls
 arrive, you draw a card, every cooldown ticks down one, and a fallen hero whose
 wait is over goes back to your hand.
 
@@ -414,9 +420,9 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
   `scripts/replay-trace.ts`, `scripts/eval/*` and `scripts/qa/*` know nothing of
   `useTrigger` / `passTrigger`; port them with the hand's moves.
 - **The Cube every turn.** The Cube costs 3 souls and, like every skill, is
-  ready again on Viscous's next turn, so for 3 of the 5 souls a turn one hero
-  can take no damage on any rival turn. The hero doc prices it that way; play
-  will show whether it needs a longer wait (docs/hero-design.md, As built).
+  ready again on Viscous's next turn. The lane pays 2 a turn, so cubing every
+  turn takes banked souls or kill bounties; play will show whether it needs a
+  longer wait (docs/hero-design.md, As built).
 - **Machinery no card uses.** Since the hero rebuild no hero opens a channel
   (`casting` / `casting_light`, `tickCastingPulses`) or puts on Charged, the
   FX layer's Naptime wake-up tag has no burst to play, and since Rem stands in

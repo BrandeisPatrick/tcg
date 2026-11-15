@@ -29,6 +29,7 @@ import { addStatus, leaveActive, tickCastingPulses, tickEndOfTurnCC, tickStartOf
 import type { CardInstance, GameState, HeroCard, PlayerID, SwingFx } from '@/engine/types';
 import { actionRefusal, attackBlockReason, moveBlockReason, skillBlockReason } from '@/ui/board/heroActions';
 import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveItem, makeHero, passTurn, readyClient, withBenchOnly } from './_helpers';
+import { killBounty } from '@/engine/rounds';
 
 // The primitives the new hero kits are built from — an attack that names its
 // target, Fixation, Dome, Rooted, Rabbit, Last Stand, a pull, a swap-in, HP as a
@@ -901,7 +902,7 @@ describe('attackAll', () => {
     expect(snapshot(disarmed.G)).toBe(before);
   });
 
-  it('ends with the state-based pass: a hero it finishes falls and pushes its level + 1 into its structures — and pays no souls', () => {
+  it('ends with the state-based pass: a hero it finishes falls, pays the round\'s bounty and pushes its level + 1 into its structures', () => {
     const { G, me, atk, foes } = duel(TALLY);
     foes[2].hp = 3;
     me.souls = 4;
@@ -909,8 +910,8 @@ describe('attackAll', () => {
     attackAll(G, atk);
     expect(isRespawning(foes[2])).toBe(true);
     expect(structureHp(G.players['1'])).toBe(structures - 2); // its level (1) + 1
-    expect(me.souls).toBe(4);
-    expect(G.log.some((l) => /KO bounty/.test(l.text))).toBe(false);
+    expect(me.souls).toBe(4 + killBounty(G));
+    expect(G.log.filter((l) => /Souls \(kill bounty\)/.test(l.text))).toHaveLength(1);
   });
 });
 
@@ -1180,15 +1181,15 @@ describe('awardSouls', () => {
     expect(G.log).toHaveLength(lines); // nothing gained, nothing said
   });
 
-  it('is never called by a kill: a knockout pays no souls (the lane\'s income is all there is)', () => {
+  it('is how a kill pays: a knockout gives the other side the round\'s bounty, and the log says so', () => {
     const G = freshReadyGame();
     G.players['0'].souls = 2;
     const victim = G.players['1'].bench[1]!;
     damageUnit(G, victim, 99, 'pure');
     resolve(G);
     expect(isRespawning(victim)).toBe(true);
-    expect(G.players['0'].souls).toBe(2);
-    expect(G.log.some((l) => /Souls \(KO bounty/.test(l.text))).toBe(false);
+    expect(G.players['0'].souls).toBe(2 + killBounty(G));
+    expect(G.log.some((l) => l.text === `P0 +${killBounty(G)} Souls (kill bounty).`)).toBe(true);
   });
 });
 

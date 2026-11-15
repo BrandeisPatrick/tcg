@@ -7,6 +7,7 @@ import {
   abilityAim, findCardOnBoard, findWornItem, handCard, isRespawning, itemPrice, kitAbilityIds, otherPlayer, promptOwed, resolveSkill, slotCap,
   stepInCandidates, ultimateCard, wornActives,
 } from '@/engine/query';
+import { bankForecast } from '@/engine/bank';
 import { upgradesOf } from '@/cards/decks';
 import { RESPAWN_TURNS } from '@/engine/constants';
 import { humanSeat } from './seat';
@@ -133,6 +134,8 @@ export function Board(props: BoardProps<GameState>) {
   const [logOpen, setLogOpen] = useState(false);
   // The table's menu button (≡): the match log and the System menu behind it.
   const [menuOpen, setMenuOpen] = useState(false);
+  // The bank sheet over your souls is open: its row is lifted over its neighbours.
+  const [bankOpen, setBankOpen] = useState(false);
   // The match table has no free corner for the System gear: it folds into
   // the ≡ menu while the table shows.
   useFoldGear(!G.draft && !ctx.gameover);
@@ -956,6 +959,8 @@ export function Board(props: BoardProps<GameState>) {
       hasPending={!!pending}
       autoPlay={autoPlay}
       souls={youPs.souls}
+      bank={G.draft ? undefined : bankForecast(G, me)}
+      onBankOpenChange={setBankOpen}
       menu={menuButton}
       onEndTurn={pressTurnButton}
       onCancel={() => setPending(null)}
@@ -1030,7 +1035,7 @@ export function Board(props: BoardProps<GameState>) {
             {/* THE SHEET — the rival's line, its bench, the lane (its Active
                 on the left, the turn dial, yours on the right), your bench,
                 your line. */}
-            <div style={{ position: 'relative', flex: '0 0 auto', marginTop: L.gapStrip, zIndex: menuOpen && L.wide ? 12 : undefined }}>
+            <div style={{ position: 'relative', flex: '0 0 auto', marginTop: L.gapStrip, zIndex: (menuOpen || bankOpen) && L.wide ? 12 : undefined }}>
             <BoardSheet L={L}>
               <PatronLine
                 label={PATRON_NAMES.rival}
@@ -1101,7 +1106,7 @@ export function Board(props: BoardProps<GameState>) {
                   position: 'absolute', right: L.padX, width: L.gutterR,
                   top: L.padY + L.line + L.rowGap * 2 + L.bench, height: L.lane,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  zIndex: 2,
+                  zIndex: bankOpen ? 20 : 2,
                 }}>
                   {controls}
                 </div>
@@ -1144,7 +1149,7 @@ export function Board(props: BoardProps<GameState>) {
                 your souls, and End Turn (Cancel while something is armed)
                 under the right thumb. */}
             {!L.wide && (
-              <div style={{ position: 'relative', flex: `0 0 ${L.controls}px`, width: L.sheetW, marginTop: L.gapControls, zIndex: menuOpen ? 12 : 6 }}>
+              <div style={{ position: 'relative', flex: `0 0 ${L.controls}px`, width: L.sheetW, marginTop: L.gapControls, zIndex: menuOpen || bankOpen ? 12 : 6 }}>
                 {controls}
               </div>
             )}

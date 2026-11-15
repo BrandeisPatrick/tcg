@@ -24,19 +24,27 @@ export const MAX_EXTRA_ATTACKS = 6;
 /** Souls a player holds before their first turn's income. */
 export const SOULS_START = 0;
 
-/** Souls accumulate: nothing refills and nothing is lost at the end of a turn.
- *  At the start of each of a player's own turns (their first included) the
- *  lane pays this much — the only souls there are (docs/deck-plan.md):
- *  knockouts and objectives push the map and give exp, and pay nothing. */
-export const LANE_INCOME = 5;
+/** The bank: souls accumulate. Nothing refills and nothing is lost at the end
+ *  of a turn. At the start of each of a player's own turns (their first
+ *  included) the lane pays this much: the price of one tier-1 item, as
+ *  Pokémon TCG Pocket's Energy Zone gives one Energy a turn. The rest comes
+ *  from kills (`killBounty`, rounds.ts). The reasoning is in
+ *  docs/balance-model.md §7. */
+export const LANE_INCOME = 2;
 
 /** Extra souls on the second mover's first income (the pie rule's dial; the
  *  pricing pass may raise it). */
 export const SECOND_MOVER_FIRST_INCOME_BONUS = 0;
 
+/** A kill pays the killer's side 1 soul, and 1 more for every this many
+ *  rounds the match has run (`bountyAtRound`, rounds.ts): 1 in rounds 1–2, 6
+ *  in rounds 11–12. Little early, a lot late, as Deadlock's own bounty grows
+ *  with the clock (docs/balance-model.md §7). */
+export const KILL_BOUNTY_STEP_ROUNDS = 2;
+
 /** A kill pushes the victim's level plus this into the victim's side's front
- *  structure (`killPush`). It pays no souls. */
-export const KILL_BOUNTY_BASE = 1;
+ *  structure (`killPush`). */
+export const KILL_PUSH_BASE = 1;
 
 // ---------- Items ----------
 

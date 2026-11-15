@@ -60,12 +60,14 @@ export function enemyBuff(depth: number, kind: NodeKind): { atk: number; hp: num
 }
 
 /** The souls the opponent holds before its first income at a node — its war
- *  chest, so a deeper opponent opens the fight with more of the market
- *  bought. None at the Battery; elites and bosses bring extra. */
+ *  chest, so a deeper opponent opens the fight with more of its hand paid
+ *  for. None at the Battery; elites and bosses bring extra. A soul a depth:
+ *  half a turn of the lane (LANE_INCOME is 2), the share of a fight's income
+ *  the chest has always been (docs/balance-model.md §7). */
 export function enemySouls(depth: number, kind: NodeKind): number {
-  let n = 2 * depth;
-  if (kind === 'elite') n += 4;
-  if (kind === 'boss') n += 8;
+  let n = depth;
+  if (kind === 'elite') n += 2;
+  if (kind === 'boss') n += 3;
   return n;
 }
 /** Battle patron HP scales with depth: quick early skirmishes (a 1v1 opener

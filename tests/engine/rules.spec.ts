@@ -7,7 +7,7 @@ import { findCardOnBoard, findWornItem, heroData, heroesOf, itemPrice, kitAbilit
 import { MAX_ITEMS } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
-import { freshReadyGame, configureReadyMatch, giveCard, makeAttack, readyClient, passTurn, playNew } from './_helpers';
+import { bankSouls, freshReadyGame, configureReadyMatch, giveCard, makeAttack, readyClient, passTurn, playNew } from './_helpers';
 
 // Client-based tests boot straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -51,6 +51,7 @@ describe('rule: each hero uses its skill once per turn', () => {
 
   it('the hero\'s flag clears when its turn ends, so it casts again next turn', () => {
     const c = readyClient(); // turn 1, its shop closed: the act step
+    bankSouls(c, '0', 6); // Ground Strike costs 3, twice here; a turn's income is 2
     let g = c.getState()!.G as GameState;
     // Use a skill — Lash on bench (active Haze is passive-only).
     const hero = g.players['0'].bench[1]!;  // Lash

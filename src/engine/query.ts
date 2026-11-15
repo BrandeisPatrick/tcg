@@ -27,7 +27,7 @@ import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, START_LEVEL, ULT_COST,
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, START_LEVEL, ULT_COST,
 } from './constants';
 import { pushMultiplier, round, secondMover } from './rounds';
 
@@ -180,10 +180,10 @@ export function checkWinner(G: GameState): { winner?: PlayerID } | undefined {
 }
 
 /** The structure HP a hero's fall pushes into its side's front structure:
- *  its level plus KILL_BOUNTY_BASE (the kill bounty's own number, without
- *  the richest hero's bonus), doubled in the late game. */
+ *  its level plus KILL_PUSH_BASE, doubled in the late game. (The souls a kill
+ *  pays are `killBounty`, rounds.ts.) */
 export function killPush(G: GameState, hero: CardInstance): number {
-  return ((hero.level ?? START_LEVEL) + KILL_BOUNTY_BASE) * pushMultiplier(G);
+  return ((hero.level ?? START_LEVEL) + KILL_PUSH_BASE) * pushMultiplier(G);
 }
 
 /** Own turns a hero that falls now waits in its slot before it goes back to

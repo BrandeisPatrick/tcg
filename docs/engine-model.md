@@ -40,7 +40,7 @@ lock a skill. The engine fixes that by construction:
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `hand` (`playCard`: an item onto a hero, an evolve, the upgrade shuffled in; `placeHero`; `chooseActive`; `discard`), `activate` (an active item), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the decks and the opening) |
 | `deck.ts` | the deck, the hand and the discard pile: the match's seeded stream (`nextRandom`, `shuffle`), what a side brings (`buildOf`, `sideDeckIds`, `fillDeck`), `drawCards`, `dealOpeningHand` (the hero guarantee), `toDiscard`, `oweDiscard` / `discardFromHand`, `shuffleIntoDeck` (an upgrade made), `heroToHand` (a fallen hero back) |
-| `map.ts`, `souls.ts` | the map: `newTrack`, `pushStructures` (front first, the Walker's flex slot), the Mid-Boss (`riseBoss`, `tallyBossHit`, `reapBoss`), the Rejuvenator lapsing (`lapseRevives`); `awardSouls`, the one way souls are paid outside the income (Golden Goose Egg) |
+| `map.ts`, `souls.ts`, `bank.ts` | the map: `newTrack`, `pushStructures` (front first, the Walker's flex slot), the Mid-Boss (`riseBoss`, `tallyBossHit`, `reapBoss`), the Rejuvenator lapsing (`lapseRevives`); `awardSouls`, the one way souls are paid outside the income (a kill's bounty, Golden Goose Egg); the bank: `laneIncome` (what a turn's Income pays) and `bankForecast` (what the board's bank sheet shows: the next income, what that makes, the kill bounty now and next round) |
 | `rng.ts` | the seeded generator the match's stream draws with (`seededRandom`) |
 | `instances.ts` | card instances and items going on and off heroes: `makeInstance`, `attachItem` / `detachItem` (a passive's bonus on and off), `syncVitalitySpike` |
 | `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp |
@@ -94,9 +94,10 @@ hand's size).
 
 **Income and the draw.** Souls accumulate: nothing refills and nothing is lost
 at the end of a turn. At the start of every own turn (the first included) the
-lane pays `LANE_INCOME` (5) — the only souls there are: kills, the Guardian and
-the Mid-Boss pay none, and there is no comeback (`SECOND_MOVER_FIRST_INCOME_BONUS`,
-the pie rule's dial, is 0). Cooldowns (the heroes' and the worn items', on
+lane pays `LANE_INCOME` (2, a tier-1 item's price; `laneIncome`, bank.ts). The
+other souls are the kill bounty (below); the Guardian and the Mid-Boss pay
+none, and there is no comeback (`SECOND_MOVER_FIRST_INCOME_BONUS`, the pie
+rule's dial, is 0). Cooldowns (the heroes' and the worn items', on
 corpses and on heroes waiting in the hand too) and the fallen heroes' waits
 tick; a hero whose wait is over goes back to the hand (`heroToHand`); then the
 side draws DRAW_PER_TURN (`drawCards`: a draw into a hand of MAX_HAND is
@@ -193,8 +194,12 @@ inside the one attack. Turn 1 has no attack, and a promotion off a fallen
 Active is free and brings in a hero who may make the attack if none has been
 made.
 
-**Kills and the end.** A kill pays no souls; it pushes the victim's level + 1
-into the victim's side's structures (`killPush`) and goes on the record. The
+**Kills and the end.** A kill pays the side the hero fell to the round's bounty
+(`killBounty`, rounds.ts: 1 soul, and 1 more every `KILL_BOUNTY_STEP_ROUNDS`
+rounds, so 1 in rounds 1–2 and 6 in rounds 11–12; whoever fell, whatever dealt
+the blow, a kill the Rejuvenator undoes included; a fall to the Mid-Boss pays
+nothing). It pushes the victim's level + 1 into the victim's side's structures
+(`killPush`) and goes on the record (`MapRecord.kills`, `.bounty`). The
 fallen hero waits `RESPAWN_TURNS` (2) of its owner's turns in its slot as a
 corpse (`respawnTimer`), then goes back to its owner's hand at full HP with its
 level and items (`heroToHand`), its slot left empty; with `RESPAWN_TURNS` 0 it

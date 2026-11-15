@@ -18,7 +18,7 @@ import { STATUSES_BY_ID } from '@/statuses';
 import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_BOUNTY_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
+  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
   MAX_ITEMS, PRICE, RESPAWN_TURNS, ULT_COOLDOWN, ULT_COST, ULT_UNLOCK_LEVEL,
 } from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
@@ -414,7 +414,8 @@ export function wornWorth(hero: CardInstance): number {
 // map.ts / rounds.ts: round r is both players' r-th own turns, engine turns
 // 2r − 1 and 2r; a kill pushes the victim's level + 1 into its side's front
 // structure, an empty lane its pusher's bullet power, both doubled from round
-// 9 — and pays no souls (docs/deck-plan.md); a fallen hero waits RESPAWN_TURNS
+// 9 — and pays the killer's side the round's bounty, 1 soul and 1 more every
+// two rounds (docs/balance-model.md §7); a fallen hero waits RESPAWN_TURNS
 // of its owner's turns in its slot, then goes back to the hand; what stands
 // decides on more structure HP, then more net worth, then the second mover.
 // ---------------------------------------------------------------------------
@@ -429,9 +430,15 @@ export function pushMultiplierOracle(r: number): number {
   return r >= LATE_GAME_ROUND ? LATE_PUSH_MULTIPLIER : 1;
 }
 
+/** What a kill made in round `r` pays the killer's side: 1 soul in rounds 1–2,
+ *  and 1 more every two rounds (6 in rounds 11–12). */
+export function killBountyOracle(r: number): number {
+  return Math.ceil(Math.max(1, r) / 2);
+}
+
 /** What the fall of a hero of `level` pushes in round `r`. */
 export function killPushOracle(level: number, r: number): number {
-  return (level + KILL_BOUNTY_BASE) * pushMultiplierOracle(r);
+  return (level + KILL_PUSH_BASE) * pushMultiplierOracle(r);
 }
 
 /** The wait of a hero that falls, own turns of its owner's, whatever the round

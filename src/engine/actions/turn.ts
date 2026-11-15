@@ -14,7 +14,8 @@ import {
   attackPower, fallPending, findCardOnBoard, heroData, isRespawning, liveBoardCards, otherPlayer, standingBoss,
   standingVerdict, structureHp,
 } from '../query';
-import { endsLastRound, ownTurn, pushMultiplier, round, secondMover } from '../rounds';
+import { endsLastRound, ownTurn, pushMultiplier, round } from '../rounds';
+import { laneIncome } from '../bank';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { fireTriggers, type Trigger } from '../triggers';
@@ -23,7 +24,7 @@ import { damageUnit } from '../damage';
 import { lapseRevives, pushStructures, riseBoss } from '../map';
 import { drawCards, heroToHand } from '../deck';
 import {
-  BOSS_RETALIATION, DRAW_PER_TURN, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, LANE_INCOME, ROUND_CAP, SECOND_MOVER_FIRST_INCOME_BONUS,
+  BOSS_RETALIATION, DRAW_PER_TURN, EXP_PER_TURN_ACTIVE, EXP_PER_TURN_BENCH, ROUND_CAP,
 } from '../constants';
 
 /** Fire a turn-edge trigger for every living hero of `pid`: the hero's own
@@ -33,13 +34,6 @@ function fireBoardTriggers(G: GameState, pid: PlayerID, trigger: Trigger) {
     if (!heroData(c)) continue;
     fireTriggers(G, c, trigger, { movingPlayer: pid });
   }
-}
-
-/** Souls `pid` collects at the start of its own turn: the lane's income (the
- *  only souls there are) and the second mover's bonus on its first turn. */
-function income(G: GameState, pid: PlayerID): { total: number; seat: number } {
-  const seat = pid === secondMover(G) && ownTurn(G, pid) === 1 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
-  return { total: LANE_INCOME + seat, seat };
 }
 
 /**
@@ -83,8 +77,8 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   // Count down a riding Rem (Tag Along); a ride that is over puts her back on the bench.
   tickRemMerges(G, ps);
   // Income: souls accumulate — nothing banked is lost, and the lane pays on
-  // top of it every own turn, the first included.
-  const paid = income(G, pid);
+  // top of it every own turn, the first included (bank.ts).
+  const paid = laneIncome(G, pid, ownTurn(G, pid));
   ps.souls += paid.total;
   pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}).`);
   // The wait ticks ONLY for the player whose turn is starting, so a corpse

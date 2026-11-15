@@ -11,8 +11,9 @@ binding for every hero card; the proposed cards for all 44 Deadlock heroes are l
 it: [Deadlock Hero Roles](https://claude.ai/artifact/Jp27zXwR6dXjyr5q2QriyD).
 
 These cards assume the deck plan
-([Deck and Draw Plan](https://claude.ai/artifact/WDLNDpGunGhw5rSLz8Wopp)): 5 souls a turn that pile
-up, heroes drawn from the deck, and skills and ultimates paid in souls. A fallen hero goes to your hand
+([Deck and Draw Plan](https://claude.ai/artifact/WDLNDpGunGhw5rSLz8Wopp)): souls that pile up (5 a
+turn when these cards were written; 2 a turn and a kill bounty since 2026-11-15,
+[balance-model.md](balance-model.md) §7), heroes drawn from the deck, and skills and ultimates paid in souls. A fallen hero goes to your hand
 after 2 turns, keeping its level (section 7).
 
 ## 1. Role first, then the TCG
@@ -530,6 +531,7 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 - **Viscous — The Cube.** Invulnerable for 1 turn on any hero of his side, himself included: it
   covers the rival's turn and is gone when his side's next turn begins. With a 1-turn wait he can
   cube the same hero every turn for 3 of the turn's 5 souls, so one hero never takes damage.
+  (Since 2026-11-15 the lane pays 2 a turn: a Cube every turn takes banked souls or bounties.)
   **Decided, kept as is** (Patrick, 2026-11-09): cubing every turn is expensive enough to stop being
   worth it, because the rival spends those souls on equipment and develops its heroes while
   Viscous's side spends them cubing. The other options were a 2-turn wait (as the
@@ -570,8 +572,8 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 **Elsewhere**
 - The ultimate button shows each hero's Deadlock ultimate icon, copied into `public/ult/` (credited
   in `public/art/CREDITS.md` and the in-game credits).
-- The tutorial teaches priced skills: Frost Grenade costs 3 of the 5 souls; Lesson 3 brings 2 souls
-  in to pay for Cold Front and Frost Grenade, against a Lash on 2 (Kelvin's swing is 1 now); the
+- The tutorial teaches priced skills: Frost Grenade costs 3 souls, one brought in and the turn's 2
+  (the map lesson the same); Lesson 3 brings 5 souls in to pay for Cold Front and Frost Grenade, against a Lash on 2 (Kelvin's swing is 1 now); the
   map lesson's rival Patron is 1, for Kelvin's push of 1.
 - The AI plays the same legality: it uses skills and ultimates when it can pay and the lookahead
   says they gain more than the souls they cost (a soul in hand is worth 0.3, so it spends freely).

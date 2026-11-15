@@ -37,7 +37,7 @@ const turn = (c: LessonClient) => [state(c).G.turnNumber, state(c).G.players['0'
 const NO_ATTACK_ON_TURN_1 = { code: 'turn1', text: 'No attacks on Turn 1' };
 
 describe('the tutorial is staged so the taught move wins', () => {
-  it('Lesson 1: Turn 1 has no attack, so Kelvin\'s skill — three of the turn\'s five souls — is the kill of a Lash on 1', () => {
+  it('Lesson 1: Turn 1 has no attack, so Kelvin\'s skill — three souls, one kept and the turn\'s two — is the kill of a Lash on 1', () => {
     for (const taught of [false, true]) {
       const c = lesson('skill');
       expect(turn(c)).toEqual([1, []]);          // nothing in the hand: an empty deck
@@ -45,9 +45,10 @@ describe('the tutorial is staged so the taught move wins', () => {
       expect(lash.hp).toBe(1);
       // Kelvin moves first: the first mover forgoes first strike.
       expect(actionRefusal(state(c).G, '0', { type: 'attack' })).toEqual(NO_ATTACK_ON_TURN_1);
-      // Frost Grenade hits every enemy (no target) and costs three souls: the turn's five pay for it.
+      // Frost Grenade hits every enemy (no target) and costs three souls: one kept and the turn's two pay for it.
       expect(kitCost(kelvin)).toBe(3);
-      expect(state(c).G.players['0'].souls).toBe(LANE_INCOME);
+      expect(state(c).G.players['0'].souls).toBe(1 + LANE_INCOME);
+      expect(state(c).G.players['0'].souls).toBe(kitCost(kelvin));
       expect(skillBlocked(state(c).G, '0', kelvin)).toBeNull();
       if (taught) moves(c).useSkill(kelvin.iid);
       else moves(c).endTurn();
@@ -55,15 +56,15 @@ describe('the tutorial is staged so the taught move wins', () => {
     }
   });
 
-  it('Lesson 2: Extended Magazine is drawn as the turn opens, tier 1 for two of the turn\'s five souls; only once it is on Yamato is his swing at a Lash on 3 the kill', () => {
+  it('Lesson 2: Extended Magazine is drawn as the turn opens, tier 1 for the turn\'s two souls; only once it is on Yamato is his swing at a Lash on 3 the kill', () => {
     for (const line of ['skip', 'play'] as const) {
       const c = lesson('souls');
       expect(turn(c)).toEqual([2, ['extended_magazine']]); // Turn 2: there is an attack; the one card drawn
       const [yamato, lash] = actives(c);
-      expect(state(c).G.players['0'].souls).toBe(LANE_INCOME);              // five souls…
+      expect(state(c).G.players['0'].souls).toBe(LANE_INCOME);              // two souls…
       expect(state(c).G.players['0'].deck).toEqual([]);
       expect(itemCard('extended_magazine')!.tier).toBe(1);
-      expect(playCost(yamato, 'extended_magazine')).toBe(2);                // …and the item costs two of them
+      expect(playCost(yamato, 'extended_magazine')).toBe(LANE_INCOME);      // …and the item costs both
       expect(lash.hp).toBe(3);
       expect(attackPower(yamato, lash).total).toBe(2);
       if (line === 'play') {
@@ -71,7 +72,7 @@ describe('the tutorial is staged so the taught move wins', () => {
         moves(c).playCard(card.iid, yamato.iid);
         const me = state(c).G.players['0'];
         expect(wornItems(me.active!).map((it) => it.cardId)).toEqual(['extended_magazine']);
-        expect([me.hand, me.souls]).toEqual([[], LANE_INCOME - 2]);         // the three not spent stay
+        expect([me.hand, me.souls]).toEqual([[], 0]);                       // the turn's income, spent
         expect(attackPower(me.active!, lash).total).toBe(3);
       }
       expect(attackBlocked(state(c).G, '0')).toBeNull();
@@ -85,8 +86,8 @@ describe('the tutorial is staged so the taught move wins', () => {
       const c = lesson('level');
       expect(turn(c)).toEqual([2, ['cold_front']]); // Turn 2: there is an attack; the gift, in the hand
       const [kelvin, lash] = actives(c);
-      // Two souls brought in and the turn's five pay for both: Cold Front, then Frost Grenade.
-      expect(state(c).G.players['0'].souls).toBe(2 + LANE_INCOME);
+      // Five souls brought in and the turn's two pay for both: Cold Front, then Frost Grenade.
+      expect(state(c).G.players['0'].souls).toBe(5 + LANE_INCOME);
       expect(playCost(kelvin, 'cold_front') + kitCost(kelvin)).toBe(state(c).G.players['0'].souls);
       moves(c).playCard(state(c).G.players['0'].hand[0].iid, kelvin.iid);
       const front = wornActives(state(c).G.players['0'].active!).find((it) => it.cardId === 'cold_front')!;

@@ -334,6 +334,8 @@ export interface MapRecord {
   bossKillsBehind: number;
   /** Heroes of this side the Rejuvenator brought straight back. */
   revives: number;
+  /** Souls this side's kills have paid it (`killBounty`). */
+  bounty: number;
 }
 
 export interface LogEntry {

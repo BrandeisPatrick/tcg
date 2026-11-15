@@ -18,16 +18,18 @@ import { grantExp } from './expSystem';
 import { EXP_ON_KILL } from './constants';
 import { leaveActive } from './lane';
 import { awardSouls } from './souls';
+import { killBounty } from './rounds';
 import { pushStructures, reapBoss } from './map';
 import { heroToHand } from './deck';
 
 export { awardSouls };
 
 /**
- * Process a hero's death in place: the push into its side's structures and
- * the kill on the record (to and for the victim's opponent, whatever dealt
- * the blow: a status tick's source is theirs, Return Fire is theirs — and
- * neither for a fall to the Mid-Boss's blow, `unpaid`). A kill pays no souls.
+ * Process a hero's death in place: the bounty, the push into its side's
+ * structures and the kill on the record (to and for the victim's opponent,
+ * whatever dealt the blow: a status tick's source is theirs, Return Fire is
+ * theirs — and none of them for a fall to the Mid-Boss's blow, `unpaid`). The
+ * bounty is the round's (`killBounty`): little early, a lot late.
  * Then the statuses are wiped, and either the hero is revived on the spot
  * (its side's Rejuvenator, a credit spent) or it waits RESPAWN_TURNS of its
  * owner's turns in its slot as a corpse (`respawnTimer`) before it goes back
@@ -42,9 +44,11 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, o
   payHeldExp(G, hero);
   const oppId: PlayerID = otherPlayer(ps.id);
   if (!opts.unpaid) {
-    // The push: the victim's level plus one (doubled in the late game) into
-    // the victim's side's front structure. No souls: the lane's income is all.
+    // The bounty: the round's souls to the killer's side, whoever fell.
     G.record[oppId].kills++;
+    G.record[oppId].bounty += awardSouls(G, oppId, killBounty(G), 'kill bounty');
+    // The push: the victim's level plus one (doubled in the late game) into
+    // the victim's side's front structure.
     pushStructures(G, ps.id, killPush(G, hero), 'kill');
     // A knockout while a hero stands in the other side's lane: its passive
     // may feed on it (Drifter's Bloodscent).

@@ -45,7 +45,7 @@ import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/
 import {
   DRAW_CARDS, MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, chooseActiveBlockedOracle, deckOf,
   describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
-  freeBenchSlotOracle, isMergedRem, itemData, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
+  freeBenchSlotOracle, isMergedRem, itemData, killBountyOracle, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
   playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
   slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
   upgradeComponentOracle, upgradeMadeOracle, wornItemOf, wornItemsOf,
@@ -636,6 +636,18 @@ export function collectTransitionViolations(
     }
   }
 
+  // What `pid`'s kills in this move can have paid it: the round's bounty for each enemy hero
+  // that fell to it (a move that crosses into a new round may pay either round's).
+  const bountySums = (pid: PlayerID): number[] => {
+    let sums = new Set([0]);
+    for (const _f of falls(other(pid)).filter((f) => f.paid)) {
+      const next = new Set<number>();
+      for (const s of sums) for (const r of rounds) next.add(s + killBountyOracle(r));
+      sums = next;
+    }
+    return [...sums];
+  };
+
   // The record counts up only, and in a move the kills it counts are the falls that paid.
   for (const pid of duplicated ? [] : PIDS) {
     const r0 = before.G.record[pid];
@@ -764,11 +776,12 @@ export function collectTransitionViolations(
     }
   }
 
-  // ---- souls (docs/deck-plan.md): the lane's income is the only souls there are ----
+  // ---- souls (docs/balance-model.md §7): the lane's income and the kill bounty ----
   // Within a turn souls change only by what a move costs — an item put on a hero (its price,
   // the difference for an upgrade that evolves), a Retreat (the leaving hero's own price), a
-  // skill or an ultimate (its souls, docs/hero-design.md §2) — and by what an item used pays
-  // out as its text says (SOULS_ON_USE). Kills, the Guardian and the Mid-Boss pay nothing;
+  // skill or an ultimate (its souls, docs/hero-design.md §2) — by what an item used pays
+  // out as its text says (SOULS_ON_USE), and by the round's bounty for each enemy hero that
+  // fell to the side (`bountySums`). The Guardian and the Mid-Boss pay nothing;
   // placing a hero, the first Active, a discard and a promotion are free. No ceiling. (The
   // first Active that begins the match's first turn pays its income: checked as a new turn.)
   if (!duplicated && move.name !== 'endTurn' && !newTurn) {
@@ -795,12 +808,13 @@ export function collectTransitionViolations(
       if (asked.pid === mover) cost = price;
       else foeCost = price;
     }
-    const wantMover = B.players[mover].souls - cost + payout;
-    if (after.G.players[mover].souls !== wantMover) {
-      add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost} and payout ${payout} give ${wantMover}`);
+    const wantMover = bountySums(mover).map((b) => B.players[mover].souls - cost + payout + b);
+    if (!wantMover.includes(after.G.players[mover].souls)) {
+      add('souls-delta', mover, `P${mover} souls ${B.players[mover].souls} -> ${after.G.players[mover].souls} after ${move.name}(${JSON.stringify(args)}); price ${cost}, payout ${payout} and its kills' bounty give ${wantMover.join(' or ')}`);
     }
-    if (after.G.players[foe].souls !== B.players[foe].souls - foeCost) {
-      add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; ${foeCost ? `its trigger costs ${foeCost}` : 'nothing pays the rival'}`);
+    const wantFoe = bountySums(foe).map((b) => B.players[foe].souls - foeCost + b);
+    if (!wantFoe.includes(after.G.players[foe].souls)) {
+      add('souls-delta', foe, `P${foe} souls ${B.players[foe].souls} -> ${after.G.players[foe].souls} after P${mover}'s ${move.name}; ${foeCost ? `its trigger costs ${foeCost}` : 'no price'} and its kills' bounty give ${wantFoe.join(' or ')}`);
     }
   }
 
@@ -1118,8 +1132,9 @@ export function collectTransitionViolations(
   }
 
   // A new turn: the turn counter steps by one, the income lands on top of what was kept
-  // (LANE_INCOME, and the second mover's bonus on its first turn — nothing else, ever), the
-  // side whose turn ended keeps its souls, and the new player draws DRAW_PER_TURN — unless the
+  // (LANE_INCOME, and the second mover's bonus on its first turn), each side is paid the
+  // bounty of what fell to it as the turn changed hands (an End step's pulse, a start-of-turn
+  // tick) and nothing else, and the new player draws DRAW_PER_TURN — unless the
   // deck is empty or the hand already holds MAX_HAND (a fallen hero back in the hand first
   // counts).
   if (newTurn) {
@@ -1127,12 +1142,13 @@ export function collectTransitionViolations(
     const ended = other(cur);
     if (after.G.turnNumber !== B.turnNumber + 1) add('turn-number-step', 'turn', `turnNumber ${B.turnNumber} -> ${after.G.turnNumber} after endTurn`);
     const seat = cur !== firstOf(after.G) && after.G.turnNumber === 2 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
-    const want = B.players[cur].souls + LANE_INCOME + seat;
+    const want = bountySums(cur).map((b) => B.players[cur].souls + LANE_INCOME + seat + b);
     const got = after.G.players[cur].souls;
-    if (got !== want) {
-      add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls; kept ${B.players[cur].souls}, the income says ${want}`);
+    if (!want.includes(got)) {
+      add('souls-income', cur, `P${cur} starts turn ${after.G.turnNumber} with ${got} souls; kept ${B.players[cur].souls}, the income and its kills' bounty say ${want.join(' or ')}`);
     }
-    if (after.G.players[ended].souls !== B.players[ended].souls) add('souls-income', `${ended}-ended`, `P${ended}'s souls went ${B.players[ended].souls} -> ${after.G.players[ended].souls} as its turn ended`);
+    const wantEnded = bountySums(ended).map((b) => B.players[ended].souls + b);
+    if (!wantEnded.includes(after.G.players[ended].souls)) add('souls-income', `${ended}-ended`, `P${ended}'s souls went ${B.players[ended].souls} -> ${after.G.players[ended].souls} as its turn ended; its kills' bounty says ${wantEnded.join(' or ')}`);
     if (!duplicated) {
       const deck0 = deckOf(B, cur);
       const deckIids = new Set(deck0.map((c) => c.iid));
