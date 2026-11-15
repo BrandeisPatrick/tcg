@@ -11,8 +11,13 @@ comes from the main game:
 
 | In Deadlock | In the TCG |
 |---|---|
-| **Active** item (you press a key to use it) | **Spell** (an active item): bought into the hand, played onto a hero, then used from that hero's sheet as its ability of the turn, on a cooldown (hard crowd control: two charges a match) |
-| **Passive** item (always on once bought) | **Equipment** (a passive item): bought into the hand, played onto a hero, always on while worn |
+| **Active** item (you press a key to use it) | **Spell**: a card of the deck, played from the hand for its price on the target its text names (or on nothing). It resolves at once, what it leaves behind lasts a turn or two, and the card goes to the discard pile. It is never worn and takes no slot. |
+| **Passive** item (always on once bought) | **Equipment**: a card of the deck, played from the hand onto one of your heroes, always on while worn |
+
+Until 2026-11-15 an active was worn like equipment and used again on a cooldown.
+Patrick that day: "Active cards are spells. They have a cost, they play, and
+they are active for 1 or 2 turns." What that changed is in "Changed 2026-11-15"
+below.
 
 The source of truth is the item's `is_active_item` flag in the
 [deadlock-api.com](https://deadlock-api.com/) shop list
@@ -39,8 +44,10 @@ A Deadlock player should recognise every card on sight.
   **Vitality** items through HP, healing, shields and resists.
 - **Canon tier.** A card's tier follows the item's shop tier (800 / 1600 /
   3200 / 6400 / 9999 souls → T1 / T2 / T3 / T4 / T5), and its price is the
-  tier's: `PRICE` = 2 / 4 / 8 / 16 / 24 souls (an upgrade bought while its
-  component is on your side costs the difference). Tiers 1–4 are 2 × cost ÷
+  tier's: `PRICE` = 2 / 4 / 8 / 16 / 24 souls. Equipment played onto the hero
+  wearing the equipment it is built from costs the difference; a spell always
+  costs its price. A card may print a price of its own under its tier's where
+  Patrick sets one: Rusted Barrel costs 1 (2026-11-15). Tiers 1–4 are 2 × cost ÷
   800; tier 5 is 24 rather than 25, 1.5 × tier 4 as 9,999 is 1.56 × 6,400, so
   an upgrade over a tier-4 component costs a whole 8 and a half-price sale
   refunds a whole 12. An early, cheap card comes from a cheap item.
@@ -439,14 +446,16 @@ signature as theirs: an upgrade takes no new slot, and a tier-5 card needs one.
 ### Added 2026-11-15: the charge items
 
 Patrick, 2026-11-15: "Only these kind of items can allow charged skills to get
-faster." Four skills hold 2 charges since that day
+faster." Four skills held 2 charges that day, three since the counters change
+later the same day (Seven's skill is Static Charge, which has no charges in
+Deadlock; the budgets below still stand, the three left average 3.6). Skills hold charges since then
 ([balance-model.md](./balance-model.md) §8), so "a charge" is a board verb now
 and the charge items pass test 1. The fuzz oracle mirrors them from their
 printed text.
 
 **The rule.** Only the charge items add a charge to a skill or bring one back
 sooner. No other card shortens a skill's wait: the Cooldown family are this
-game's draw cards. Refresher, whose verb is the reset, still sets a charged
+game's draw cards (an open question since 2026-11-15, below). Refresher, whose verb is the reset, still sets a charged
 skill back to full with the cooldowns it clears.
 
 Source: the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
@@ -503,6 +512,127 @@ Source: the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
 
 140 cards became 142 (97 passives, 45 actives).
 
+### Changed 2026-11-15: one-play spells, upgrades in the deck, counters
+
+Patrick's review of the whole card list. Four changes, in the order they were
+made. Every number was set by reasoning from the budget above; nothing was run
+through the sim.
+
+**1. A spell is played once.** An active item is a deck card: played from the
+hand for its price, it resolves at once and goes to the discard pile.
+- The side's standing Active casts it (its gear reacts to the spell's damage);
+  with no Active standing, the first standing bench hero does; with no hero
+  standing, no spell can be played.
+- It spends no hero's ability, so a hero may still use its skill that turn, and
+  a Stun or Silence on the caster does not stop a spell.
+- No cooldown, no charges, no slot. The `activate` move is gone: a spell is
+  `playCard`.
+
+**2. An upgrade is a deck card like any other.** Playing a card no longer makes
+another card and shuffles it into the deck.
+- Any item may be in a deck, upgrades too.
+- Equipment played onto the hero wearing the **equipment** it is built from
+  costs the difference and takes that item's place. Anywhere else it costs its
+  price.
+- The rule does not reach actives (Patrick): a spell costs its price, and
+  equipment built from a spell evolves nothing (Colossus beside Extra Health
+  costs 16; Weapon Shielding, built from Grit, costs 4).
+
+**3. Counters.** Patrick: "We want a lot of effects or stuns that resolve after
+a turn, so there is room for cards like Counterspell and Debuff Remover."
+The principle: a big effect leaves the other side one turn in which to answer
+it. Three kinds of effect do, and each has its answer.
+
+| What waits | Example | Answered by |
+|---|---|---|
+| A delayed debuff: put on now, it goes off after the bearer's next turn | Charged (Seven's Static Charge): Stun 1 turn | Dispel Magic takes it off; Debuff Reducer may; the hero can retreat, and takes the Stun on the bench |
+| A channel: an ultimate that pulses over several of its caster's turns | Storm Cloud: 2 turns | A Stun, a Sleep or a hex on the caster ends it at once: Knockdown |
+| A card aimed at a hero | any spell, skill or ultimate | Counterspell on that hero: the card does nothing |
+
+| Card | Tab · tier | Price | Effect | Budget (souls) |
+|---|---|---|---|---|
+| Counterspell *new* | Vitality T3 · passive | 8 | The bearer has Counterspell: the next enemy spell, skill or ultimate that would hit it does nothing to it, and it heals 2. Back 2 turns after it is used | worn 4 turns it stops 1.5 cards. The rival sees the status and spends its cheapest card on it, a skill (about 3) more often than a spell, so 3.5 a card → 5.25; heal 2 × 0.5 × 1.5 = 1.5; a turn of the rival aiming elsewhere 1.0 → **7.5** |
+| Debuff Reducer *changed* | Vitality T2 · passive | 4 | At the start of your turn: remove 1 random debuff from the bearer | worn 6 turns, a debuff is on the bearer at 0.45 of its turn starts (hard crowd control 0.2, the rest Bleed and resist drops) and the one it removes is worth about 1.5 (a Stun 2.0, a Bleed tick or a resist drop about 1) → 0.45 × 1.5 × 6 → **4.0** |
+| Dispel Magic *text* | Vitality T3 · active | 8 | Remove every debuff from one of your heroes, delayed ones too; Shield 4; heal 4 if any was removed | one play: debuffs removed about 2.5 (a Stun 2.0, or a Charge before it goes off, or Bleed 3 for a turn); Shield 4 × 0.5 × 0.9 = 1.8; heal 4 × 0.5 × 0.8 = 1.6 → **6.0** |
+| Knockdown *text* | Spirit T3 · active | 8 | Stun enemy Active for 1 turn. A Stun ends a channel | one play: Stun 2.0; against a channel it also takes the rest of the ultimate (Storm Cloud's second pulse is about 11), at 0.2 of plays → 2.2 → **4.0**. Under the band on purpose, see below |
+
+- **Counterspell is a passive item in Deadlock** (Vitality T3: "your next parry
+  protects you from the damage and effects of enemy abilities and items", with
+  a heal on a parried spell; deadlock-api, read 2026-11-15), so by §1 it is
+  equipment, not a spell held in the hand. The bearer carries the status; a
+  card aimed at it is paid for and wasted, and a card that hits every enemy
+  does nothing to the bearer and lands on the rest. A swing, a proc and a
+  status ticking are not cards and pass. Its own side's cards pass.
+- **Debuff Reducer** shortened debuffs as they landed until this day. Patrick:
+  "just remove one of the debuffs randomly." The pick is from the match's own
+  random stream, so a game replays. Spellbreaker carries the same line.
+- **A channel ends on a Stun**, not only skips a pulse: the rest of the
+  ultimate is lost and its wait has started. Silence, Disarm and Root do not
+  end one.
+- **Seven** is the first hero built to this ([hero-design.md](./hero-design.md)
+  §3, §8): Static Charge and a channelled Storm Cloud.
+- **Next candidates**, not built: Dynamo's Singularity and Warden's Last Stand
+  as channels again; Lash's Death Slam and the Stun spells as delayed Stuns.
+  Patrick's call which.
+
+**4. The budget for one play.** Tier-1 and tier-2 actives were priced for 4 and
+3 uses, tier-3 for 1.33, and hard crowd control for 2 charges. As one play
+they fell under their price, so their numbers went up. Only numbers changed:
+no card gained an effect. A card is retuned when one play is worth less than
+half its price; the target is the band (¾ to 1½ × price).
+
+| Card | Tab · tier | Price | Was → now | One play (souls) |
+|---|---|---|---|---|
+| Rusted Barrel | Spirit T1 | **1** | Bullet Power −2 → −1, 2 turns; price 2 → 1 (Patrick) | 1 × 0.5 × (0.85 + 0.85 × 0.5 swings) = 0.64 → **0.5**, half its price: the cheap answer |
+| Healing Rite | Vitality T1 | 2 | Heal 2 → 5 | 5 × 0.5 × 0.8 → **2.0** |
+| Grit | Vitality T1 | 2 | Shield 2 → 4 | 4 × 0.5 × 0.9 → **2.0** |
+| Guardian Ward | Vitality T2 | 4 | Shield 3 → 7 | 7 × 0.5 × 0.9 = 3.15 → **3.0** |
+| Split Shot | Weapon T2 | 4 | Ricochet 1 → 2 | 2 × 2.2 bench × 0.85 → **3.5** |
+| Slowing Hex | Spirit T2 | 4 | Silence 1 → 2 turns | 1.0 a turn × 2 → **2.0**, half price; 3 turns would shut a hero's whole kit for 4 souls |
+| Restorative Locket | Vitality T2 | 4 | Heal 1 + 1 → 2 + 2 a waiting enemy skill | about 2.5 skills wait: 7 × 0.5 × 0.8 = 2.8; free Retreat 0.3 → **3.0** |
+| Metal Skin | Vitality T3 | 8 | Bullet Resist 5, 2 turns → 6, 3 turns | a late swing of 5.5 stopped whole: 5.5 × 0.5 × 0.85 × 3 → **7.0** |
+| Warp Stone | Vitality T3 | 8 | Bullet Resist 3, 2 turns → 4, 3 turns | swap 1.5; 3.5 off a swing × 0.5 × 0.85 × 3 = 4.5 → **6.0** |
+| Blood Tribute | Weapon T3 | 8 | +1 → +3 Bullet Power this turn | Extra Attack 5 × 0.65 × 0.85 = 2.8; +3 on two swings 3 × (0.85 + 0.55) = 4.2; 3 HP paid −1.5 → **5.5** |
+| Rescue Beam | Vitality T3 | 8 | The rescued hero heals 4 → 10 | swap 1.5; 10 × 0.5 × 0.8 = 4.0 → **5.5** |
+| Fury Trance | Vitality T3 | 8 | Extra Attack 1 → 2; Silenced 2 → 1 turn | 5 × (0.65 + 0.45) × 0.85 = 4.7; Spirit Resist 3 for 2 turns 1.3; its own skill lost a turn −0.6 → **5.5** |
+| Colossus | Vitality T4 | 16 | Resists 4 / 4, 2 turns → 5 / 5, 3 turns | (a swing 3.5 × 0.5 × 0.85 + a spirit hit 4 × 0.5 × 0.5) × 3 = 7.5; Root 0.4; was 2 charges → **8.0**, half price |
+| Phantom Strike | Vitality T4 | 16 | {sp:2} → {sp:5} | pull 2.0; 5 + 1.5 = 6.5; Disarm 1.0 → **9.5** |
+| Focus Lens | Spirit T4 | 16 | Spirit Resist −2 → −3; Reverb 2 → 5 | Silence 2 turns 1.7; −3 on 0.7 spirit hits a turn × 2 × 0.75 = 3.2; Reverb 5 × 0.9 = 4.5 → **9.5** |
+
+- **Left as they are, in the band as one play:** Cold Front 3.5 (it was kept
+  above the band at 3 uses), Spirit Sap 2.1, Return Fire 2.5, Fleetfoot 3.5,
+  Decay 4.5, Silence Wave 5.0, Dispel Magic 6.0, Healing Nova 4.0, Alchemical
+  Fire 10.5, Heroic Aura 4.3, Shadow Weave 4.9, and every tier-4 and tier-5
+  active budgeted above for one use (Vampiric Burst, Scourge, Arctic Blast,
+  Vortex Web, Capacitor 8.5, Refresher, Prism Blast, Nullification Burst).
+- **Golden Goose Egg** is unchanged: 2 souls back for its 2, and +1 max HP for
+  good. It is a free stat that costs a card.
+- **Under half their price, and a number alone does not fix them** (Patrick's
+  call: a new rider, or leave hard control dear on purpose):
+  Knockdown 4.0 of 8, Disarming Hex 2.5 of 8, Majestic Leap 1.5 of 8, Cursed
+  Relic 6 of 16, Mystical Piano 9.6 of 24, and the ones that were under before
+  this change too: Echo Shard, Ethereal Shift, Divine Barrier, Infuser,
+  Unstoppable.
+
+**Removed.** Active Reload (Patrick: "Active Reload may not make too much
+sense right now"). Its reload has no board verb; its card was +1 Bullet Power
+and a heal of 1 after an attack, which Restorative Shot already is. Haze, Shiv
+and Mirage's builds take Swift Striker, Stalker and Mystic Shot in its place,
+and Swift Striker is Haze's first signature.
+
+**Open: the Cooldown family.** Compress, Superior and Transcendent Cooldown are
+passive items in Deadlock and spells here, the one break of §1 (they became
+the draw cards with the deck plan, when a lane paid 5 souls a turn). As one
+play each draws for its tier's price: 4 souls for one net card. At 2 souls a
+turn a hand is short of souls, not of cards, so they are under their price at
+every tier and the ready decks no longer carry them. Two ways out, Patrick's
+call: (a) make them equipment that takes a turn off the bearer's waits, as in
+Deadlock, now that skills and ultimates wait; (b) keep one cheap draw spell
+and drop the other two. They are unchanged until then.
+
+142 cards stay 142: Counterspell in, Active Reload out (97 passives, 45
+actives).
+
 ## 4. Signature items and default builds
 
 Every hero has two **signature items** (`HeroCard.signature`), chosen to fit its
@@ -521,16 +651,16 @@ where Deadlock builds them so, or into a slot that opens.
 | Abrams | Healing Booster (passive, Vitality T2) | Fortitude (passive, Vitality T3) | Healing Booster → Fortitude → Bullet Lifesteal → Spirit Shielding → Bullet Resilience → Cheat Death |
 | Drifter | Restorative Shot (passive, Weapon T1) | Frenzy (passive, Weapon T4) | Restorative Shot → Frenzy → Bullet Lifesteal → Stalker → Berserker → Leech |
 | Dynamo | Compress Cooldown (passive, Spirit T2) | Rescue Beam (active, Vitality T3) | Compress Cooldown → Rescue Beam → Healing Booster → Duration Extender → Superior Cooldown → Transcendent Cooldown |
-| Haze | Active Reload (passive, Weapon T2) | Burst Fire (passive, Weapon T3) | Active Reload → Burst Fire → Titanic Magazine → Intensifying Magazine → Toxic Bullets → Infinite Rounds |
+| Haze | Swift Striker (passive, Weapon T2) | Burst Fire (passive, Weapon T3) | Swift Striker → Burst Fire → Titanic Magazine → Intensifying Magazine → Toxic Bullets → Infinite Rounds |
 | Kelvin | Cold Front (active, Spirit T2) | Knockdown (active, Spirit T3) | Cold Front → Knockdown → Improved Spirit → Spirit Shielding → Silence Wave → Arctic Blast |
 | Lady Geist | Mystic Vulnerability (passive, Spirit T2) | Spirit Snatch (passive, Spirit T3) | Mystic Vulnerability → Spirit Snatch → Improved Spirit → Spirit Lifesteal → Decay → Escalating Exposure |
 | Lash | Mystic Slow (passive, Spirit T2) | Tankbuster (passive, Spirit T3) | Mystic Slow → Tankbuster → Improved Spirit → Suppressor → Decay → Lightning Scroll |
-| Mirage | Fleetfoot (active, Weapon T2) | Tesla Bullets (passive, Weapon T3) | Fleetfoot → Tesla Bullets → Active Reload → Spirit Shredder → Toxic Bullets → Ricochet |
+| Mirage | Fleetfoot (active, Weapon T2) | Tesla Bullets (passive, Weapon T3) | Fleetfoot → Tesla Bullets → Mystic Shot → Spirit Shredder → Toxic Bullets → Ricochet |
 | Mo & Krill | Spirit Lifesteal (passive, Vitality T2) | Bullet Resilience (passive, Vitality T3) | Spirit Lifesteal → Bullet Resilience → Guardian Ward → Weapon Shielding → Metal Skin → Plated Armor |
 | Paige | Guardian Ward (active, Vitality T2) | Dispel Magic (active, Vitality T3) | Guardian Ward → Dispel Magic → Healing Booster → Restorative Locket → Healing Nova → Divine Barrier |
 | Rem | Extra Spirit (passive, Spirit T1) | Healing Nova (active, Vitality T3) | Extra Spirit → Healing Nova → Improved Spirit → Healing Booster → Superior Duration → Boundless Spirit |
 | Seven | Spirit Sap (active, Spirit T2) | Surge of Power (passive, Spirit T3) | Spirit Sap → Surge of Power → Compress Cooldown → Improved Spirit → Superior Cooldown → Focus Lens |
-| Shiv | Slowing Bullets (passive, Weapon T2) | Berserker (passive, Weapon T3) | Slowing Bullets → Berserker → Active Reload → Titanic Magazine → Weighted Shots → Crippling Headshot |
+| Shiv | Slowing Bullets (passive, Weapon T2) | Berserker (passive, Weapon T3) | Slowing Bullets → Berserker → Stalker → Titanic Magazine → Weighted Shots → Crippling Headshot |
 | Silver | Monster Rounds (passive, Weapon T1) | Bullet Lifesteal (passive, Vitality T2) | Monster Rounds → Bullet Lifesteal → Swift Striker → Kinetic Dash → Berserker → Frenzy |
 | Sinclair | Slowing Hex (active, Spirit T2) | Disarming Hex (active, Spirit T3) | Slowing Hex → Disarming Hex → Improved Spirit → Mystic Vulnerability → Silence Wave → Vortex Web |
 | Victor | Extra Health (passive, Vitality T1) | Torment Pulse (passive, Spirit T3) | Extra Health → Torment Pulse → Spirit Lifesteal → Spirit Shielding → Fortitude → Leech |

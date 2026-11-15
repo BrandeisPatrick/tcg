@@ -41,7 +41,7 @@ after 2 turns, keeping its level (section 7).
 | Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. |
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
-| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Four skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, Lightning Ball, Kinetic Pulse): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
+| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Three skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, Kinetic Pulse; Lightning Ball was the fourth until Seven's skill became Static Charge, 2026-11-15): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
 | Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 2. Costs no souls (Patrick, 2026-11-15), and a side uses **one ultimate a turn**. It waits 4 (small), 6 (medium) or 8 (large) turns by size: after each use, and from the match's first turn, so a large one is first ready on its side's turn 8. |
 | Charged ultimate | For heroes like Victor and Silver (Patrick, 2026-11-09). It has no opening wait: it is ready once the hero has taken (Victor, 10) or dealt (Silver, 8) enough damage. The count starts over after use, and it then waits its size's turns like any ultimate. (Until 2026-11-15 it had a soul price, 20 and 16, that each damage brought down by 1.) |
 
@@ -54,7 +54,9 @@ after 2 turns, keeping its level (section 7).
 - **Ultimates stay simple** (Patrick: "keep word and effect simple").
   - One or two effects in 15 words or fewer, with no story words.
   - Allowed effects: damage, heal, shield, one status, a pull or swap, or a stat boost.
-  - Not allowed: effects over several turns (channels), knockout rewards, costs paid in the hero's own HP, "then" steps, or conditions.
+  - Not allowed: knockout rewards, costs paid in the hero's own HP, "then" steps, or conditions.
+  - **A channel is allowed** (Patrick, 2026-11-15; until then it was not): an ultimate may run over 2 or 3 of its caster's turns, pulsing as each ends, when a Stun on the caster ends it. The card says "Channel N turns", and the caster can't attack or use its skill while it runs.
+  - **Effects that resolve after a turn** (Patrick, 2026-11-15): where a hero's control is a Stun, prefer one that goes off after the enemy's next turn, so the enemy has that turn to answer it ([card-design.md](card-design.md), "Counters"). Seven is the first; the other Stuns are still immediate.
   - Two exceptions:
     - Shiv's Killing Blow keeps its condition: it knocks out a hero below half HP.
     - Victor's ultimate is used on the enemy's turn, at the moment he falls.
@@ -323,10 +325,14 @@ HP 5 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 
 **Seven** · in the game today — peaks late, many targets; mix tank 1 · damage 3 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +1 HP +3 Spirit
-- Skill, 2 charges, 3 turns each — **Lightning Ball**: Roll a ball of lightning through the enemy team: deal 1✦ spirit damage to every enemy.
-- Ultimate, large, waits 8 — **Storm Cloud**: Deal 5✦ spirit damage to every enemy.
+- Skill, waits 4 — **Static Charge**: Deal 1✦ spirit damage to the enemy Active and Charge it: after its next turn, it is Stunned 1 turn.
+- Ultimate, large, waits 8 — **Storm Cloud**: Channel 2 turns: at each turn's end, deal 2✦ spirit damage to every enemy.
 - Why: Seven is the easy spirit carry who zaps grouped enemies all game and wins late teamfights with a storm that hits the whole team.
 - Changed from today: Attack 2 to 1 (spirit hero; HP stays 4 after the late -1). Static Charge's delayed stun gave way to Lightning Ball because control 1 allows little control; Storm Cloud is one hit on every enemy instead of a 3-turn channel.
+- **Changed 2026-11-15 (Patrick: "Seven's stun… I can play Debuff Remover to counter it"; "Seven will be channelling for 2 or 3 turns… I can use Knockdown to counter it"):** both came back, as effects the enemy can answer.
+  - Static Charge: 1✦ now (1 point, growing with Spirit) and a Stun that lands after the enemy's next turn. A Stun is 3 points; delayed and answerable (Dispel Magic, Debuff Reducer, a Retreat) it counts half, 1.5. 2.5 points at Level 1: a turn denied, so it waits 4. It holds no charges, as in Deadlock.
+  - Storm Cloud: 2 pulses of 2✦. Base 4 on every enemy is 10 points against the single hit's 12.5, but Spirit counts twice: at Level 2 (Spirit 3) 5 + 5 against 8, at Level 4 (Spirit 9) 11 + 11 against 14. The first pulse lands as the turn he starts it ends; the second only if the enemy has not stunned him in between, about 0.6 of the time, so it is worth 5 + 3 = 8 at Level 2 and 11 + 6.6 = 17.6 at Level 4: the single hit's value when answered as often as that, more when ignored, and Seven is locked for both turns.
+  - His control stays 1: the Stun is his only control and the enemy can take it off.
 
 **Celeste** — peaks early, many targets; mix tank 0 · damage 3 · control 0 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +2 Spirit
@@ -571,7 +577,8 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 - **Yamato — Shadow Transformation's** Unstoppable lasts two of her turns, as its +3 Attack does.
 - **Dynamo, Seven, Warden** no longer channel: their ultimates are one hit each. The channel
   statuses and their end-of-turn pulse stay in the engine with no card using them, as does Charged
-  (Seven's old Static Charge).
+  (Seven's old Static Charge). (Since 2026-11-15 Seven uses both again: Static Charge is his skill
+  and Storm Cloud a 2-turn channel; section 3 and his card in section 8.)
 - **Trigger prompts.** None of the 19 kits has an optional "may" effect, so nothing is marked
   `TODO(trigger-prompt)`. (Step 3 built the prompts for Victor; see below.)
 

@@ -243,14 +243,16 @@ charged skill holds 2 uses. Each use spends one, and the wait brings them
 back one at a time, the next wait starting when the last ends. The hero still
 uses one ability a turn, so two charges are two turns running, not two casts
 in a turn.
-- **Which.** The four skills of this roster that hold charges in Deadlock
-  (deadlock-api `v1/assets/items/by-type/ability`, read 2026-11-15):
+- **Which.** The skills of this roster that hold charges in Deadlock
+  (deadlock-api `v1/assets/items/by-type/ability`, read 2026-11-15). Three
+  since the counters change of the same day: Seven's skill became Static
+  Charge, which holds none, so Lightning Ball's row is history:
 
   | Skill | Hero | In Deadlock | Here |
   |---|---|---|---|
   | Serrated Knives | Shiv | 2 charges from the first point | 2 charges, 3 turns each |
   | Frost Grenade | Kelvin | 2 charges from the first point | 2 charges, 4 turns each |
-  | Lightning Ball | Seven | +1 charge at its first upgrade | 2 charges, 3 turns each |
+  | Lightning Ball | Seven | +1 charge at its first upgrade | (2 charges, 3 turns each, until Static Charge replaced it) |
   | Kinetic Pulse | Dynamo | +1 charge at its first upgrade | 2 charges, 4 turns each |
 
   Yamato's Flying Slash gains a charge only at its third upgrade, so it is
@@ -258,7 +260,7 @@ in a turn.
   one ultimate a turn already paces it.
 - **What a charge is worth.** Over a match the rate is the same one cast a
   wait. The second charge is one extra cast, early, and the choice of when:
-  the skill's own 2 to 4.5 points once. These four skills keep their text and
+  the skill's own 2 to 4.5 points once. These skills keep their text and
   numbers; the extra cast is the charge's whole price.
 
 **The charge items** (Patrick, 2026-11-15: "only these kind of items can

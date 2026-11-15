@@ -20,8 +20,8 @@ with less to rebuild.
 
 - You build your deck on a screen that looks like today's shop: Weapon, Vitality and Spirit tabs, rows by tier, and the item icons. Tap an item to add a copy.
 - A deck has 16 items, with at most 4 copies of any one item. Any tier can go in.
-- A deck holds base items only (Patrick, 2026-11-09: "this card is a upgrade, should not appear in the starting deck"). An upgrade, an item whose card has `upgradesFrom`, reaches a deck only when its component is played (see Upgrades).
-- A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), each upgrade a build names counted as its base item.
+- A deck may hold any item, upgrades too (Patrick, 2026-11-15: upgrades are played "regularly" from the hand for less; see Upgrades). From 2026-11-09 until then a deck held base items only and an upgrade reached it when its component was played.
+- A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), read across as they are, upgrades included.
 - You draft 4 heroes as now. They are shuffled into your deck, with an animation, so the deck has 20 cards.
 
 ## Ready decks (2026-11-15)
@@ -30,28 +30,35 @@ Patrick, 2026-11-15: "we need to have decks ready." Five decks head the Loadout,
 four heroes and its 16 items (`src/cards/readyDecks.ts`). "Use deck" saves the squad and the deck
 together. When that would replace picks or a deck of the player's own, the button asks once more.
 
-The recipe, the same for all five. No sim ran.
+The recipe, the same for all five. No sim ran. Rebuilt on 2026-11-15 for the one-play spells, the
+upgrades in the deck and the counters ([card-design.md](card-design.md), "Changed 2026-11-15").
 
-- **Base items only, at most 2 copies of one.** Pocket's rule, inside this game's cap of 4, so a
-  ready deck holds at least 8 different items.
+- **At most 2 copies of one.** Pocket's rule, inside this game's cap of 4, so a ready deck holds at
+  least 8 different items.
 - **8 tier-1, 6 tier-2, 2 tier-3: 56 souls.** The lane pays 2 a turn
   ([balance-model.md](balance-model.md) §7): by own turn 9 a side has earned about 30 souls and
   drawn about 11 items. At 3.5 souls an item, those 11 cost about 38, so most of what is drawn can
   be played and a skill or two paid for. A deck dealt from builds costs 50 to 76.
-- **No tier-4 base item.** The dear tiers arrive as upgrades: playing a base item shuffles what it
-  builds into the deck, and the upgrade evolves for the difference.
-- **Two Compress Cooldown in every deck.** The draw card (draw 2, discard 1), as every Pocket deck
-  carries its two Professor's Research.
-- **The rest from the squad's own builds**, read as base items, so each hero finds its items.
+- **An upgrade beside the item it is built from.** An upgrade is a deck card like any other now:
+  played onto the hero wearing its component it costs the difference (Titanic Magazine over
+  Extended Magazine costs 2, Fortitude over Extra Health 6). Each deck carries one such line, and
+  never an upgrade without its component.
+- **A counter in every deck:** Counterspell, Debuff Reducer, Dispel Magic or Knockdown.
+- **Mostly equipment.** A spell is one play; equipment stays. A deck carries a few spells for the
+  turn that needs one, at most half the deck.
+- **No draw card.** Two Compress Cooldown were in every deck until 2026-11-15. At 2 souls a turn a
+  hand is short of souls, not of cards, and 4 souls for one net card is under its price
+  ([card-design.md](card-design.md), "Open: the Cooldown family").
+- **The rest from the squad's own builds**, so each hero finds its items.
 - **A squad has a front, a carry and a helper.** No hero is in two decks; Shiv is in none.
 
 | Deck | Squad | Tier 1 (two of each) | Tier 2 | Tier 3 |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze, Paige | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Compress Cooldown, 2 Active Reload, Long Range, Opening Rounds | Burst Fire, Toxic Bullets |
-| Spirit Storm | Lady Geist, Seven, Lash, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Compress Cooldown, 2 Cold Front, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
-| Bulwark | Abrams, Viscous, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Compress Cooldown, 2 Bullet Lifesteal, Healing Booster, Battle Vest | Bullet Resilience, Torment Pulse |
-| Ambush | Silver, Yamato, Mirage, Drifter | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Compress Cooldown, 2 Kinetic Dash, Fleetfoot, Swift Striker | Tesla Bullets, Berserker |
-| Lockdown | Mo & Krill, Sinclair, Dynamo, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Compress Cooldown, 2 Slowing Hex, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
+| Gunline | Warden, Vindicta, Haze, Paige | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Titanic Magazine (the upgrade), Long Range, Opening Rounds, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
+| Spirit Storm | Lady Geist, Seven, Lash, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Improved Spirit (the upgrade), 2 Cold Front, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
+| Bulwark | Abrams, Viscous, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Bullet Lifesteal, Healing Booster, Battle Vest, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
+| Ambush | Silver, Yamato, Mirage, Drifter | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Split Shot | Tesla Bullets, Dispel Magic |
+| Lockdown | Mo & Krill, Sinclair, Dynamo, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Spirit Sap, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
 
 How each wins:
 
@@ -107,8 +114,10 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 
 ## The draw cards
 
-Deadlock's three cooldown items become the draw engine. A hero wears one, casts it like any item
-spell, and then it waits 2 turns. Casting is free; you pay only to put the item on.
+Deadlock's three cooldown items are the draw cards. Since 2026-11-15 each is a spell played once
+from the hand for its price (until then a hero wore one and cast it every 2 turns for free). At
+that price they are under budget and no ready deck carries them; what becomes of them is open
+([card-design.md](card-design.md), "Open: the Cooldown family").
 
 | Card | Tier | Price | Spell | Net cards |
 |---|---|---|---|---|
@@ -121,14 +130,19 @@ spell, and then it waits 2 turns. Casting is free; you pay only to put the item 
 
 ## Upgrades
 
-- When you play an item that Deadlock upgrades into a bigger one (cards carry `upgradesFrom`), the bigger card is made and shuffled into your deck. You see it appear and fly into the deck.
-  - Examples: Compress Cooldown → Superior Cooldown → Transcendent Cooldown; Extended Magazine → Titanic Magazine; Extra Health → Fortitude or Colossus.
-  - 46 such links exist between cards we have.
-- Where Deadlock has more than one upgrade, you pick which one is made.
-- Each copy you play makes one upgrade.
-- **Upgrades evolve:** play an upgrade on the hero who wears its lower item and it replaces that item, like evolving a Pokémon.
-  - You pay only the difference, as in Deadlock: Superior Cooldown over Compress Cooldown costs 4, not 8.
+Changed 2026-11-15 (Patrick: "instead of spawning another card when you play one, you just play
+them regularly; an upgrade costs much less").
+
+- An upgrade is a deck card like any other. Nothing is made or shuffled into the deck when a card is
+  played, and any item may be in a deck (the deck builder says "Evolves Extended Magazine for the
+  difference" on an upgrade's tile).
+- **Upgrades evolve:** play an upgrade on the hero who wears the item it is built from and it
+  replaces that item, like evolving a Pokémon.
+  - You pay only the difference, as in Deadlock: Titanic Magazine over Extended Magazine costs 2,
+    not 4. The old item goes to the discard pile.
   - On any other hero, the upgrade costs its normal price.
+- The rule is for equipment built from equipment. A spell (an active item) always costs its price,
+  and equipment built from a spell evolves nothing.
 
 ## A fallen hero
 
@@ -203,7 +217,10 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
   the slot, the real tile hidden until it lands; the AI's next move waits for
   the rival's flight plus `PLACE_SETTLE_MS` (500), not at all under reduced
   motion. The coach's gate steps aside while a hero is picked up.
-- Upgrades never start in a deck (2026-11-09). A legal deck holds base items
+- (History, 2026-11-09 to 2026-11-15; an upgrade is a deck card since —
+  `deckProblem` has no `'upgrade'` answer, `evolvesFrom` names the equipment
+  an upgrade evolves, and builds are read across as they are.) Upgrades never
+  start in a deck. A legal deck holds base items
   only (`deckProblem`'s `'upgrade'`, cards/decks.ts; `isBaseItem`,
   `baseItem` walks `upgradesFrom` down). The deck made from builds — the
   player's From builds and every AI deck — reads the builds across as before,

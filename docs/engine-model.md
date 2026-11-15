@@ -36,10 +36,10 @@ lock a skill. The engine fixes that by construction:
 | `constants.ts` | every rule number (costs, caps, the income, prices, cooldowns, the kit's waits (`SKILL_COOLDOWN`, the ultimates' `ULT_WAIT` by size), levels; the deck's: `DECK_SIZE`, `MAX_COPIES`, `OPENING_HAND`, `DRAW_PER_TURN`, `MAX_HAND`; the map's: `STRUCTURES`, the late game, the Mid-Boss (`MID_BOSS_ENABLED`, off for now), the Rejuvenator, `RESPAWN_TURNS`, `ROUND_CAP`) |
 | `rounds.ts` | counting turns: `firstMover`, `ownTurn(G, pid)`, `round(G)` — the one conversion from the engine turn — and the map's clocks: `lateGame` / `pushMultiplier`, `bossReturnRound`, `reviveLastRound`, `endsRound` / `endsLastRound`, `MATCH_TURNS` |
 | `query.ts` | pure reads: the board (`slottedHeroes`, `liveBoardCards`, `heroesOf`), `targetsFor`, `abilitySources`, `heroAbilities` (what a hero card prints: its skills, then passives), `kitAbilityIds` / `resolveSkill` (what a hero may use: its skill, its ultimate; which one an action names), `kitCost` (what one costs in souls: a skill's `souls`, an ultimate's `ULT_COST` by its card's size — a charged one its own price less the hero's count, `ultPrice` / `chargedUlt`), the optional triggers (`optionalTriggers`, `triggerPrice`, `promptOwed`, `fallPending`), `abilityAim` (what one is aimed at: its `target`, or its `aim` read off the board), `heroRetreat` (a hero's printed Retreat), `ultimateCard`, `isBlocked` / `isUntargetable`, `hasReach`, `ricochetPower`, `attackPower` / `effectiveAtk`, `effectiveSpirit`, items (`wornItems`, `wornActives`, `wornEquipment`, `findWornItem`, `slotCap`, `hasSpike`, `activeCooldown`, `itemCooldown`), the hand (`handCard`, `isHeroCard`, `laneOpen`), worth (`itemPrice`, `heroWorth`, `handWorth`, `netWorth`), the map (`structureHp`, `structureOf`, `frontStructure`, `patronFallen`, `killPush`, `respawnTimer`, `reviveReady`, `standingBoss`, `bossDue` (the round the board counts down to; null with no Mid-Boss), `isBoss`, `bossTaker`, `seatOf`), `standingVerdict`, `checkWinner` |
-| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), `activateBlocked` / `activateTargets` (active items), the hand (`playBlocked`, `replaceNeeded`, `playBlockedAny`, `playCost`, `playTargets`, `upgradeComponent`, `placeHeroBlocked`, `freeBenchSlot`, `chooseActiveBlocked`, `discardBlocked`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (an owed choice — the first Active, a promotion, a discard — blocks everything else; after the turn's attack only `endTurn` is left), `legalActions`, and the trigger prompt's (`triggerBlocked`: level, wait, souls; `answerBlocked`) |
+| `legality.ts` | the only place a move's legality is written: `attackBlocked` / `attackTargets` (who the attack may name), `skillBlocked` / `skillTargets` (skills and ultimates), the hand (`playBlocked`, `replaceNeeded`, `playBlockedAny`, `playCost`, `playTargets`, `playNeedsTarget`, `spellCaster` / `spellTargets` (who casts a spell and on whom), `upgradeComponent`, `placeHeroBlocked`, `freeBenchSlot`, `chooseActiveBlocked`, `discardBlocked`), `retreatCost`, `moveBlocked`, `promoteBlocked`, `blocked(G, pid, action)` (an owed choice — the first Active, a promotion, a discard — blocks everything else; after the turn's attack only `endTurn` is left), `legalActions`, and the trigger prompt's (`triggerBlocked`: level, wait, souls; `answerBlocked`) |
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
-| `actions/` | what each action does once it is legal: `hand` (`playCard`: an item onto a hero, an evolve, the upgrade shuffled in; `placeHero`; `chooseActive`; `discard`), `activate` (an active item), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the decks and the opening) |
-| `deck.ts` | the deck, the hand and the discard pile: the match's seeded stream (`nextRandom`, `shuffle`), what a side brings (`buildOf`, `sideDeckIds`, `fillDeck`), `drawCards`, `dealOpeningHand` (the hero guarantee), `toDiscard`, `oweDiscard` / `discardFromHand`, `shuffleIntoDeck` (an upgrade made), `heroToHand` (a fallen hero back) |
+| `actions/` | what each action does once it is legal: `hand` (`playCard`: equipment onto a hero, an evolve, or a spell cast and discarded; `placeHero`; `chooseActive`; `discard`), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the decks and the opening) |
+| `deck.ts` | the deck, the hand and the discard pile: the match's seeded stream (`nextRandom`, `shuffle`), what a side brings (`buildOf`, `sideDeckIds`, `fillDeck`), `drawCards`, `dealOpeningHand` (the hero guarantee), `toDiscard`, `oweDiscard` / `discardFromHand`, `heroToHand` (a fallen hero back) |
 | `map.ts`, `souls.ts`, `bank.ts` | the map: `newTrack`, `pushStructures` (front first, the Walker's flex slot), the Mid-Boss (`riseBoss`, `tallyBossHit`, `reapBoss`), the Rejuvenator lapsing (`lapseRevives`); `awardSouls`, the one way souls are paid outside the income (a kill's bounty, Golden Goose Egg); the bank: `laneIncome` (what a turn's Income pays) and `bankForecast` (what the board's bank sheet shows: the next income, what that makes, the kill bounty now and next round) |
 | `rng.ts` | the seeded generator the match's stream draws with (`seededRandom`) |
 | `instances.ts` | card instances and items going on and off heroes: `makeInstance`, `attachItem` / `detachItem` (a passive's bonus on and off), `syncVitalitySpike` |
@@ -74,10 +74,10 @@ seat is asked (`pendingPromotion`).
 down, drawn from the top: the end of `PlayerState.deck`), its hand or its
 discard pile. A drafted match builds each deck as the last pick lands
 (`openDraftedMatch`): the side's items — the human seat's saved deck
-(`G.playerDeck`, DECK_SIZE base items — no upgrade, which only playing its
-component makes — at most MAX_COPIES of one) when it is a legal one, else the
+(`G.playerDeck`, DECK_SIZE items, upgrades allowed since 2026-11-15, at most
+MAX_COPIES of one) when it is a legal one, else the
 deck its heroes' builds make (`deckFromBuilds`, cards/decks.ts: the builds
-read across, round by round, each upgrade as its base item) — and its four drafted
+read across, round by round, as they are) — and its four drafted
 heroes, shuffled from the match seed (`nextRandom`, counted in
 `G.counters.rng`, so a game replays from G alone). At the last pick the decks
 are stocked unseen (`stockDeck`) and each side chooses its first Active from
@@ -113,30 +113,31 @@ is `pid`'s own turn's, before the attack.
   Active slot. Free. Every placement is a `place` deck FX event. The state-based pass follows, so a hero
   benched while the lane is open steps up (an AI seat's at once, the human
   seat is asked).
-- `playCard(cardIid, heroIid, upgradeId?, replaceIid?)` puts an item on one of the
-  player's heroes in a slot — the bench and corpses included — for `playCost`:
-  `PRICE[tier]` (2 / 4 / 8 / 16 / 24), or, an upgrade onto the hero that wears
-  its component (`upgradeComponent`), the difference: it evolves, taking the
-  component's place (on a full hero too), and the component goes to the
-  discard pile. On any other hero an upgrade costs its full price and evolves
-  nothing. The hero needs a free slot (`slotCap`: 3, 4 with the flex slot)
-  unless it evolves, and may not wear a copy already (`playBlocked`). A full
-  hero takes the card only in place of a worn item the play names
-  (`replaceNeeded`; `replaceIid`, refused as `'replace'` when the hero has
-  room, the card evolves, or it wears no item of that iid — a riding Rem is no
-  item): that item goes to the discard pile (`toDiscard`, a `deck` event), the
-  card still costs its price; `legalActions` lists one play per worn item it
-  could replace, and the board lights a full hero (`playBlockedAny`) and asks
-  which (`ReplacePicker`). An
-  active starts on its full cooldown (`activeCooldown`: the card's own
-  `cooldown` when it names one, else by tier) or, hard crowd control, with
-  `HARD_CC_CHARGES`; a passive's `bonus` goes on; the hero earns `EXP_ON_EQUIP`
-  the first time it wears that item. An item Deadlock builds into a bigger one
-  (`upgradesOf`, the cards' `upgradesFrom` read backwards) makes that upgrade
-  and shuffles it into the deck (`shuffleIntoDeck`, a `deck` event): the
-  player's pick (`upgradeId`) when there are several — `legalActions` lists
-  one play per upgrade then — the first otherwise.
-- The draw cards (the Cooldown family, actives declaring `draw` on their
+- `playCard(cardIid, heroIid?, replaceIid?)` plays an item from the hand
+  (docs/card-design.md, "Changed 2026-11-15").
+  - **Equipment** goes on one of the player's heroes in a slot — the bench and
+    corpses included — for `playCost`: `itemPrice` (`PRICE[tier]`, 2 / 4 / 8 /
+    16 / 24, or the price a card prints for itself: Rusted Barrel 1), or, onto
+    the hero that wears the equipment it is built from (`upgradeComponent`,
+    `evolvesFrom`), the difference: it evolves, taking the component's place
+    (on a full hero too), and the component goes to the discard pile. The hero
+    needs a free slot (`slotCap`: 3, 4 with the flex slot) unless it evolves,
+    and may not wear a copy already. A full hero takes the card only in place
+    of a worn item the play names (`replaceIid`; `ReplacePicker` asks which).
+    The item's `bonus` goes on, what it puts on its bearer as it goes on does
+    too (`onWorn`: Counterspell's status; `onTakenOff` takes it away again),
+    and the hero earns `EXP_ON_EQUIP` the first time it wears that item.
+  - **A spell** (an active item) is cast (`castSpell`): it costs its price,
+    resolves at once on `heroIid` — a target its first ability's filter allows,
+    a hero of either side — or on nothing when it takes none, and goes to the
+    discard pile. Its frame's source is the side's caster (`spellCaster`: the
+    standing Active, else the first standing bench hero; none, no spell). It
+    spends no hero's ability, is never worn and has no cooldown.
+  - Nothing is made or shuffled into the deck by a play: an upgrade is a deck
+    card of its own.
+  - Either kind opens the reveal (`G.action`, kind `'item'`): the card is shown
+    mid-screen before its effect resolves on the board.
+- The draw cards (the Cooldown family, spells declaring `draw` on their
   ability) draw and then owe a discard (`oweDiscard`: never more than the hand
   holds): `G.pendingDiscard` makes `discard(cardIids)` — any cards of the
   hand, up to what is owed — the only legal move until it is paid.
@@ -146,7 +147,7 @@ is `pid`'s own turn's, before the attack.
   items count in net worth at list price (a hero card at 0).
 
 Every move of a card between the deck, the hand and the discard pile is a
-`deck` FX event (`shuffle`, `draw`, `discard`, `upgrade`, `toHand`), and so
+`deck` FX event (`shuffle`, `draw`, `discard`, `toHand`), and so
 are a placement (`place`) and a hero's ride on an ally (`rideOn`, `rideOff`),
 for the board's animation layer; the FX timeline ignores them.
 
@@ -157,10 +158,8 @@ between Attack, HP and Spirit), its printed `retreat` (0–2 souls) and its
 `profile` (role, mix, reach, curve). Its kit is one skill or one passive, plus
 an ultimate.
 
-**Abilities.** Each hero uses one ability a turn — its skill, an active item it
-wears (`activate`, in a cast frame whose source is the bearer; free; it then
-cools down 2 own turns for tiers 1–2, 3 for tiers 3 and up, or spends one of a
-hard crowd-control item's charges), or its ultimate. A skill and an ultimate
+**Abilities.** Each hero uses one ability a turn — its skill or its ultimate.
+(A spell is the player's card, not a hero's ability: playing one spends none.) A skill and an ultimate
 cost no souls (`kitCost` is 0 unless an ability names `souls`, and none does;
 docs/balance-model.md §8): they are paid for in own turns. A skill waits its
 `cooldown` after use (`SKILL_COOLDOWN` = 3 when its data names none; five name
@@ -464,3 +463,34 @@ resolves, once, at its end.
   board's refusals on staged boards (a Dome, a Rooted hero, an attack that
   names its target) and for a number's colour and what hovering or tapping it
   (or a status) says, `fx-gallery.mjs` / `fx-match.mjs` to film the effects.
+
+## Counters, and how a move is shown (2026-11-15)
+
+**Counterspell** (`damage.ts`). A status on a hero. `counterspellNegates` is
+asked by `useSkill`, `castSpell` and a trigger's answer before the card's
+effect runs: aimed at an enemy hero carrying the status, the card is paid for
+and does nothing. `counterspellStops` is asked by `damageUnit` and `addStatus`
+for what a card reaches without aiming (every enemy, "the enemy Active"): the
+bearer takes nothing from it, and the cast frame remembers the hero so the
+rest of the same card is stopped too. Spent, the status leaves
+`counterspell_spent` for `COUNTERSPELL_RECHARGE` of its owner's turns; the
+Counterspell item gives it back at a turn start once that has run out.
+
+**A channel ends on a Stun** (`addStatus`): a status that blocks `'pulse'`
+(Stun, Sleep, the rabbit hex) takes `casting` / `casting_light` off its target
+at once. **Charged** (Seven's Static Charge) is put on for 2 turns and turns
+into a 1-turn Stun as it runs out (`tickStartOfTurn`): the bearer's side has
+one whole turn in between.
+
+**Two phases** (`ui/effects/fx/fxTimeline.ts`, `ui/board/pacing.ts`). Every
+move plays its activation, then its effect resolving on the board:
+
+| Move | Activation | The timeline's lead | Holds the table (yours / the rival's) |
+|---|---|---|---|
+| A card from the hand | the card mid-screen (`CardPlayFlash`) | `cardLead` 640 ms | 780 / 1230 ms |
+| A skill | its hero's tile lifts and flares under the skill's name (the cast flare) | none | 350 / 650 ms |
+| An ultimate | its name plate (`UltMomentFlash`, 1150 ms) | `ultLead` 900 ms | 1600 ms |
+
+`buildFxTimeline` holds every effect of the batch back by the lead, so nothing
+lands under the card or the plate. `actionHoldMs` is when `completeAction`
+unlocks the next move, and the rival pauses `AI_THINK_MS` (450) between moves.
