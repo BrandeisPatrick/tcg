@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { READY_DECKS, readyDeckInUse } from '@/cards/readyDecks';
-import { copyCounts, deckProblem, isBaseItem } from '@/cards/decks';
+import { copyCounts, deckProblem, evolvesFrom } from '@/cards/decks';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { itemPrice } from '@/engine/query';
 import { DECK_SIZE } from '@/engine/constants';
@@ -14,21 +14,31 @@ describe('ready decks', () => {
     expect(new Set(READY_DECKS.map((d) => d.name)).size).toBe(5);
   });
 
-  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: four different heroes and a legal deck of base items', (_name, d) => {
+  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: four different heroes and a legal deck; an upgrade is in it beside the item it is built from', (_name, d) => {
     expect(new Set(d.heroes).size).toBe(4);
     for (const h of d.heroes) expect(CARDS_BY_ID[h]?.type, h).toBe('hero');
     expect(d.items).toHaveLength(DECK_SIZE);
     expect(deckProblem(d.items)).toBeNull();
-    for (const id of d.items) expect(isBaseItem(id), id).toBe(true);
+    // Upgrades are deck cards now (2026-11-15): each deck carries at least one, and never
+    // one whose component it does not carry — the discount has to be reachable.
+    const upgrades = d.items.filter((id) => evolvesFrom(id));
+    expect(upgrades.length, 'no upgrade').toBeGreaterThan(0);
+    for (const id of upgrades) expect(d.items, id).toContain(evolvesFrom(id));
   });
 
-  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 2 copies, 8 / 6 / 2 by tier (56 souls), two Compress Cooldown', (_name, d) => {
+  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 2 copies, 8 / 6 / 2 by tier (56 souls), a counter, no draw card, mostly equipment', (_name, d) => {
     const counts = copyCounts(d.items);
     expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(2);
     const tiers = [1, 2, 3, 4, 5].map((t) => d.items.filter((id) => itemCard(id)!.tier === t).length);
     expect(tiers).toEqual([8, 6, 2, 0, 0]);
     expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBe(56);
-    expect(counts.improved_cooldown).toBe(2);
+    // A counter in every deck; the draw cards are out (at 2 souls a turn a hand is short of
+    // souls, not cards); and a deck leans on equipment, which stays, over spells, which do not.
+    expect(d.items.some((id) => ['counterspell', 'debuff_reducer', 'debuff_remover', 'knockdown'].includes(id))).toBe(true);
+    expect(d.items.filter((id) => /_cooldown$/.test(id))).toEqual([]);
+    const spells = d.items.filter((id) => itemCard(id)!.type === 'spell').length;
+    expect(spells).toBeGreaterThan(0);
+    expect(spells).toBeLessThanOrEqual(DECK_SIZE / 2);
     // Listed cheapest tier first, as the Loadout prints it.
     const listed = d.items.map((id) => itemCard(id)!.tier);
     expect(listed).toEqual([...listed].sort((a, b) => a - b));

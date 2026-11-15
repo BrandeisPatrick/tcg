@@ -240,10 +240,10 @@ function eachBoard(G: GameState, pid: PlayerID, fn: (c: CardInstance) => void) {
 // Tier 1. Heals are flat (Spirit Power scales spirit damage only).
 const eff_healing_rite: AbilityDef = {
   id: 'eff_healing_rite', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Healing Rite — heal an ally for 2.',
-  base: 2,
+  prompt: 'Healing Rite — heal an ally for 5.',
+  base: 5,
   run: (G, _ctx, { target }) => {
-    if (target) healUnit(G, target, 2);
+    if (target) healUnit(G, target, 5);
   },
 };
 
@@ -270,9 +270,9 @@ const eff_cold_front: AbilityDef = {
 // Canon Slowing Hex: slows + silences movement. TCG: Silence 1 turn.
 const eff_slowing_hex: AbilityDef = {
   id: 'eff_slowing_hex', trigger: 'onPlay', target: 'enemyAny',
-  prompt: 'Slowing Hex — Silence any enemy for 1 turn.',
+  prompt: 'Slowing Hex — Silence any enemy for 2 turns.',
   run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'silenced', 1, 1);
+    if (target) addStatus(G, target, 'silenced', 1, 2);
   },
 };
 
@@ -420,10 +420,10 @@ const eff_echo_shard: AbilityDef = {
 // Bullet Resist is flat — Spirit Power scales spirit damage only.
 const eff_cast_metal_skin: AbilityDef = {
   id: 'eff_cast_metal_skin', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Metal Skin — Bullet Resist 5 for 2 turns.',
-  base: 5,
+  prompt: 'Metal Skin — Bullet Resist 6 for 3 turns.',
+  base: 6,
   run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'bullet_resist', 5, 2);
+    if (target) addStatus(G, target, 'bullet_resist', 6, 3);
   },
 };
 
@@ -432,10 +432,10 @@ const eff_cast_metal_skin: AbilityDef = {
 // Guardian Ward (canon T2 vitality active): a barrier on an ally.
 const eff_guardian_ward: AbilityDef = {
   id: 'eff_guardian_ward', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Guardian Ward — Shield 3 on an ally.',
-  base: 3,
+  prompt: 'Guardian Ward — Shield 7 on an ally.',
+  base: 7,
   run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'shield', 3, 999);
+    if (target) addStatus(G, target, 'shield', 7, 999);
   },
 };
 
@@ -445,10 +445,10 @@ const eff_guardian_ward: AbilityDef = {
 const eff_warp_stone: AbilityDef = {
   id: 'eff_warp_stone', trigger: 'onPlay', target: 'allyBench',
   prompt: 'Warp Stone — swap a bench ally into the Active slot.',
-  base: 3,
+  base: 4,
   run: (G, ctx, { target }) => {
     if (!target) return;
-    if (swapIntoActive(G, G.players[ctx.movingPlayer], target)) addStatus(G, target, 'bullet_resist', 3, 2);
+    if (swapIntoActive(G, G.players[ctx.movingPlayer], target)) addStatus(G, target, 'bullet_resist', 4, 3);
   },
 };
 
@@ -485,12 +485,12 @@ const eff_ethereal_shift: AbilityDef = {
 const eff_phantom_strike: AbilityDef = {
   id: 'eff_phantom_strike', trigger: 'onPlay', target: 'enemyBench',
   prompt: 'Phantom Strike — drag an enemy bench hero to the front.',
-  scalesSpirit: true, base: 2,
+  scalesSpirit: true, base: 5,
   run: (G, ctx, { target }) => {
     if (!target) return;
     const enemy = G.players[otherPlayer(ctx.movingPlayer)];
     if (!pullToActive(G, enemy, target)) return;
-    damageUnit(G, target, 2 + activeSpi(G, ctx.movingPlayer), 'spirit', 'Phantom Strike');
+    damageUnit(G, target, 5 + activeSpi(G, ctx.movingPlayer), 'spirit', 'Phantom Strike');
     if (!isRespawning(target)) addStatus(G, target, 'disarm', 1, 1);
     resolve(G);
   },
@@ -533,13 +533,13 @@ const eff_refresher: AbilityDef = {
 // turns, and the enemy Active is Rooted 1 turn.
 const eff_colossus_cast: AbilityDef = {
   id: 'eff_colossus_cast', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Colossus — your Active gains Bullet and Spirit Resist 4.',
-  base: 4,
+  prompt: 'Colossus — your Active gains Bullet and Spirit Resist 5.',
+  base: 5,
   run: (G, ctx) => {
     const mine = G.players[ctx.movingPlayer].active;
     if (mine && !isRespawning(mine)) {
-      addStatus(G, mine, 'bullet_resist', 4, 2);
-      addStatus(G, mine, 'spirit_resist', 4, 2);
+      addStatus(G, mine, 'bullet_resist', 5, 3);
+      addStatus(G, mine, 'spirit_resist', 5, 3);
     }
     const theirs = G.players[otherPlayer(ctx.movingPlayer)].active;
     if (theirs && !isRespawning(theirs)) addStatus(G, theirs, 'rooted', 1, 1);
@@ -567,11 +567,11 @@ const eff_golden_goose_egg: AbilityDef = {
 // Grit (canon T1 vitality active): a quick barrier. TCG: your Active gains Shield 2.
 const eff_grit: AbilityDef = {
   id: 'eff_grit', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Grit — your Active gains Shield 2.',
-  base: 2,
+  prompt: 'Grit — your Active gains Shield 4.',
+  base: 4,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
-    if (mine) addStatus(G, mine, 'shield', 2, 999);
+    if (mine) addStatus(G, mine, 'shield', 4, 999);
   },
 };
 
@@ -610,11 +610,11 @@ const eff_fleetfoot: AbilityDef = {
 // Like Swift, `clearTurnFlags` sweeps it when the turn ends.
 const eff_split_shot: AbilityDef = {
   id: 'eff_split_shot', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Split Shot — your Active gains Ricochet 1 this turn.',
-  base: 1,
+  prompt: 'Split Shot — your Active gains Ricochet 2 this turn.',
+  base: 2,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
-    if (mine) addStatus(G, mine, 'ricochet', 1, 1);
+    if (mine) addStatus(G, mine, 'ricochet', 2, 1);
   },
 };
 
@@ -624,8 +624,8 @@ const eff_split_shot: AbilityDef = {
 // Bullet Power this turn.
 const eff_blood_tribute: AbilityDef = {
   id: 'eff_blood_tribute', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Blood Tribute — your Active pays 3 HP for Extra Attack 1 and +1 Bullet Power.',
-  base: 1,
+  prompt: 'Blood Tribute — your Active pays 3 HP for Extra Attack 1 and +3 Bullet Power.',
+  base: 3,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
     if (!mine) return;
@@ -635,7 +635,7 @@ const eff_blood_tribute: AbilityDef = {
       pushLog(G, `${cardName(mine.cardId)} pays ${paid} HP (Blood Tribute).`);
     }
     grantExtraAttacks(mine, 1);
-    addStatus(G, mine, 'weapon_power', 1, 1);
+    addStatus(G, mine, 'weapon_power', 3, 1);
   },
 };
 
@@ -655,13 +655,13 @@ const eff_healing_nova: AbilityDef = {
 // slot, and the Active it rescues heals 4 on the bench.
 const eff_rescue_beam: AbilityDef = {
   id: 'eff_rescue_beam', trigger: 'onPlay', target: 'allyBench',
-  prompt: 'Rescue Beam — swap a bench ally in; the hero it rescues heals 4.',
-  base: 4,
+  prompt: 'Rescue Beam — swap a bench ally in; the hero it rescues heals 10.',
+  base: 10,
   run: (G, ctx, { target }) => {
     if (!target) return;
     const ps = G.players[ctx.movingPlayer];
     const rescued = ps.active;
-    if (rescued && swapIntoActive(G, ps, target)) healUnit(G, rescued, 4, 'Rescue Beam');
+    if (rescued && swapIntoActive(G, ps, target)) healUnit(G, rescued, 10, 'Rescue Beam');
   },
 };
 
@@ -670,14 +670,14 @@ const eff_rescue_beam: AbilityDef = {
 // turn and Spirit Resist 3 for 2 turns, and is Silenced for 2 turns.
 const eff_fury_trance: AbilityDef = {
   id: 'eff_fury_trance', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Fury Trance — Extra Attack 1 and Spirit Resist 3, but Silenced.',
+  prompt: 'Fury Trance — Extra Attack 2 and Spirit Resist 3, but Silenced.',
   base: 3,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
     if (!mine) return;
-    grantExtraAttacks(mine, 1);
+    grantExtraAttacks(mine, 2);
     addStatus(G, mine, 'spirit_resist', 3, 2);
-    addStatus(G, mine, 'silenced', 1, 2);
+    addStatus(G, mine, 'silenced', 1, 1);
   },
 };
 
@@ -980,7 +980,7 @@ const eff_ricochet: AbilityDef = {
 };
 
 // Burst Fire (canon T3 Weapon): a burst of extra shots — grants Extra Attack 1
-// each turn. Stacks additively with Active Reload / Fixation.
+// each turn. Stacks additively with Fleetfoot / Fixation.
 const eff_burst_fire: AbilityDef = {
   id: 'eff_burst_fire', trigger: 'startOfTurn', target: 'self',
   run: (_G, _ctx, { source }) => { if (source) grantExtraAttacks(source, 1); },
@@ -1093,18 +1093,6 @@ const eff_healbane: AbilityDef = {
   id: 'eff_healbane', trigger: 'onBearerSkillDamage', target: 'enemyActive',
   base: 1,
   run: (G, _ctx, { target }) => { if (target && !isRespawning(target)) addStatus(G, target, 'healing_boost_down', 1, 2); },
-};
-
-// Active Reload (canon T2 weapon PASSIVE): a well-timed reload grants fire
-// rate and bullet lifesteal. TCG: +1 Bullet Power (on the card) and heal 1
-// after each attack.
-const eff_active_reload: AbilityDef = {
-  id: 'eff_active_reload', trigger: 'onAttack', target: 'self',
-  base: 1,
-  run: (G, _ctx, { source, target, params }) => {
-    if (params?.bounce) return; // a self-heal: once a swing, not once a Ricochet bounce
-    if (source) healUnit(G, source, 1, 'Active Reload', { tag: 'lifesteal', from: target });
-  },
 };
 
 // Long Range (canon T2 weapon): bonus damage at range. TCG: the bearer's
@@ -1673,13 +1661,13 @@ const eff_enchanters_emblem: AbilityDef = {
 // on one. The stamina is a free Retreat this turn (Swift).
 const eff_restorative_locket: AbilityDef = {
   id: 'eff_restorative_locket', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Restorative Locket — heal an ally 1, plus 1 per enemy hero whose skill is waiting.',
-  base: 1,
+  prompt: 'Restorative Locket — heal an ally 2, plus 2 per enemy hero whose skill is waiting.',
+  base: 2,
   run: (G, ctx, { target }) => {
     if (!target) return;
     const stacks = slottedHeroes(G.players[otherPlayer(ctx.movingPlayer)])
       .filter((h) => (heroData(h)?.skills ?? []).some((id) => (h.cooldowns?.[id] ?? 0) > 0)).length;
-    healUnit(G, target, 1 + stacks, 'Restorative Locket');
+    healUnit(G, target, 2 + 2 * stacks, 'Restorative Locket');
     addStatus(G, target, 'swift', 1, 1);
   },
 };
@@ -1856,12 +1844,12 @@ const eff_torment_pulse: AbilityDef = {
 const eff_focus_lens: AbilityDef = {
   id: 'eff_focus_lens', trigger: 'onPlay', target: 'enemyAny',
   prompt: 'Focus Lens — Silence any enemy for 2 turns and leave it a Reverb.',
-  base: 2,
+  base: 5,
   run: (G, _ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'silenced', 1, 2);
-    addStatus(G, target, 'spirit_resist_down', 2, 2);
-    addStatus(G, target, 'reverb', 2, 1);
+    addStatus(G, target, 'spirit_resist_down', 3, 2);
+    addStatus(G, target, 'reverb', 5, 1);
   },
 };
 
@@ -2703,7 +2691,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_ricochet, eff_burst_fire,
   eff_toxic_bullets, eff_tesla_bullets, eff_suppressor, eff_reactive_barrier,
   eff_escalating_exposure, eff_inhibitor, eff_crippling_headshot, eff_berserker,
-  eff_healbane, eff_active_reload, eff_long_range, eff_fortitude,
+  eff_healbane, eff_long_range, eff_fortitude,
   eff_frenzy, eff_siphon_bullets, eff_superior_duration,
   eff_headshot_booster, eff_spirit_strike, eff_mystic_vulnerability, eff_mystic_slow,
   eff_slowing_bullets, eff_debuff_reducer, eff_counterspell, eff_spirit_snatch, eff_spiritual_overflow,

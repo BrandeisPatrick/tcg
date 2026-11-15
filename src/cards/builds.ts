@@ -20,13 +20,13 @@ import type { CardId } from '@/engine/types';
 export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   // ----- Passive-only heroes -----
   hero_abrams:     ['healing_booster', 'fortitude', 'bullet_lifesteal', 'spirit_shielding', 'bullet_resilience', 'cheat_death'],
-  hero_haze:       ['active_reload', 'burst_fire', 'titanic_magazine', 'intensifying_magazine', 'toxic_bullets', 'infinite_rounds'],
+  hero_haze:       ['swift_striker', 'burst_fire', 'titanic_magazine', 'intensifying_magazine', 'toxic_bullets', 'infinite_rounds'],
   hero_mo_krill:   ['spirit_lifesteal', 'bullet_resilience', 'guardian_ward', 'weapon_shielding', 'metal_skin', 'plated_armor'],
   hero_rem:        ['extra_spirit', 'healing_nova', 'improved_spirit', 'healing_booster', 'superior_duration', 'boundless_spirit'],
-  hero_shiv:       ['slowing_bullets', 'berserker', 'active_reload', 'titanic_magazine', 'weighted_shots', 'crippling_headshot'],
+  hero_shiv:       ['slowing_bullets', 'berserker', 'stalker', 'titanic_magazine', 'weighted_shots', 'crippling_headshot'],
   hero_vindicta:   ['long_range', 'sharpshooter', 'titanic_magazine', 'opening_rounds', 'toxic_bullets', 'crippling_headshot'],
   hero_wraith:     ['spirit_strike', 'spiritual_overflow', 'mystic_shot', 'spirit_lifesteal', 'spirit_snatch', 'haunting_shot'],
-  hero_mirage:     ['fleetfoot', 'tesla_bullets', 'active_reload', 'spirit_shredder', 'toxic_bullets', 'ricochet'],
+  hero_mirage:     ['fleetfoot', 'tesla_bullets', 'mystic_shot', 'spirit_shredder', 'toxic_bullets', 'ricochet'],
   hero_drifter:    ['restorative_shot', 'frenzy', 'bullet_lifesteal', 'stalker', 'berserker', 'leech'],
   hero_victor:     ['extra_health', 'torment_pulse', 'spirit_lifesteal', 'spirit_shielding', 'fortitude', 'leech'],
 

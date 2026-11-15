@@ -93,7 +93,7 @@ export const STATUSES: StatusDef[] = [
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across
   // sources). Each extra swing rides on the turn's attack and re-fires onAttack
-  // procs. Granted at turn start (Burst Fire), by a spell (Active Reload) or by
+  // procs. Granted at turn start (Burst Fire), by a spell (Fleetfoot) or by
   // Haze's own swing (Fixation); consumed by the attack.
   { id: 'extra_attack',  title: 'Extra Attack',  desc: 'Makes <value> extra basic attack(s) this turn.',             hvalue:  1 },
 

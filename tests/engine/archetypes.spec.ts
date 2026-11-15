@@ -42,7 +42,7 @@ describe('Multi-attack: Extra Attack (N)', () => {
   it('Extra Attack sources STACK additively', () => {
     const atk = makeHero('hero_haze', '0');
     grantExtraAttacks(atk, 1); // Burst Fire
-    grantExtraAttacks(atk, 1); // Active Reload
+    grantExtraAttacks(atk, 1); // Fleetfoot
     grantExtraAttacks(atk, 1); // a third source
     expect(extraOf(atk)).toBe(3);
   });
@@ -153,14 +153,17 @@ describe('Haze Fixation — reactive follow-up swing', () => {
   });
 });
 
-describe('Active Reload — passive equipment (docs/card-design.md)', () => {
-  it('is equipment with +1 Bullet Power, and heals its bearer 1 after an attack', () => {
-    expect(CARDS_BY_ID['active_reload']).toMatchObject({ type: 'equipment', bonus: { atk: 1 } });
+describe('Active Reload is no card any more (removed 2026-11-15, docs/card-design.md)', () => {
+  it('neither the card nor its effect is in the catalogue; Restorative Shot is the heal-on-attack card', () => {
+    expect(CARDS_BY_ID['active_reload']).toBeUndefined();
+    expect(getAbility('eff_active_reload')).toBeUndefined();
+    // What it did — heal the bearer 1 after an attack — Restorative Shot still does.
+    expect(CARDS_BY_ID['restorative_shot']).toMatchObject({ type: 'equipment', slot: 'weapon', tier: 1 });
     const G = freshReadyGame();
     const dyn = makeHero('hero_dynamo', '0', 'active', 0);
     G.players['0'].active = dyn;
     dyn.hp = 2;
-    getAbility('eff_active_reload')!.run(G, { movingPlayer: '0' }, { source: dyn });
+    getAbility('eff_restorative_shot_proc')!.run(G, { movingPlayer: '0' }, { source: dyn });
     expect(dyn.hp).toBe(3);
   });
 });

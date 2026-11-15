@@ -72,7 +72,6 @@ export const EQUIPMENT: EquipmentCard[] = [
 
   // ----- Passive items that were spells, and new passives (docs/card-design.md) -----
   { id: 'healbane',      name: 'Healbane',      type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_healbane'], text: "When the bearer's skill / spell / ult damages an enemy, it cannot be healed for 2 turns." },
-  { id: 'active_reload', name: 'Active Reload', type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, bonus: { atk: 1 }, abilities: ['eff_active_reload'], text: '+1 Bullet Power. After bearer attacks: heal 1.' },
   { id: 'long_range',    name: 'Long Range',    type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, abilities: ['eff_long_range'], text: "The bearer's attacks can target any enemy hero." },
   // Counterspell (canon T3 Vitality passive, so equipment): the bearer carries
   // the Counterspell status (docs/card-design.md, "Counters").

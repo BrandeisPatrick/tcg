@@ -103,7 +103,7 @@ describe('combat plan invariant', () => {
     addStatus(G, G.players['1'].active!, 'shield', 50, 999);
     const attacker = G.players['0'].active!;
     const dmg = effectiveAtk(attacker);
-    // Queue one Extra Attack (Active Reload / Burst Fire / Fixation).
+    // Queue one Extra Attack (Fleetfoot / Burst Fire / Fixation).
     attacker.statuses.push({ id: 'extra_attack', value: 1, duration: 1 });
     const plan = forecastAttack(G, '0');
     const mine = plan.steps.filter((s) => s.attackerIid === attacker.iid);

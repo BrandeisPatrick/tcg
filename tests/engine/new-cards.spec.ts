@@ -27,7 +27,7 @@ describe('Card types follow the active / passive rule', () => {
     for (const id of ['colossus', 'guardian_ward', 'warp_stone', 'divine_barrier', 'ethereal_shift', 'phantom_strike', 'vortex_web', 'refresher']) {
       expect(CARDS_BY_ID[id]?.type, id).toBe('spell');
     }
-    for (const id of ['healbane', 'active_reload', 'long_range', 'fortitude']) {
+    for (const id of ['healbane', 'swift_striker', 'long_range', 'fortitude']) {
       expect(CARDS_BY_ID[id]?.type, id).toBe('equipment');
     }
   });
@@ -72,21 +72,21 @@ describe('Bench target filters', () => {
 });
 
 describe('New active items', () => {
-  it('Guardian Ward shields an ally 3', () => {
+  it('Guardian Ward shields an ally 7', () => {
     const G = freshReadyGame();
     const paige = G.players['0'].bench[2]!;
     useItem(G, '0', 'guardian_ward', paige.iid);
-    expect(status(paige, 'shield')?.value).toBe(3);
+    expect(status(paige, 'shield')?.value).toBe(7);
   });
 
-  it('Warp Stone swaps a bench ally in with Bullet Resist 3 for 2 turns', () => {
+  it('Warp Stone swaps a bench ally in with Bullet Resist 4 for 3 turns', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const lash = G.players['0'].bench[1]!;
     useItem(G, '0', 'warp_stone', lash.iid);
     expect(G.players['0'].active!.iid).toBe(lash.iid);
     expect(G.players['0'].bench[1]!.iid).toBe(haze.iid);
-    expect(status(lash, 'bullet_resist')).toMatchObject({ value: 3, duration: 2 });
+    expect(status(lash, 'bullet_resist')).toMatchObject({ value: 4, duration: 3 });
   });
 
   it('Warp Stone cannot be aimed at the Active or an enemy', () => {

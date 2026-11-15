@@ -143,11 +143,11 @@ describe('New active items', () => {
     expect(haze.hp).toBe(hp + 1);
   });
 
-  it('Grit shields your Active 2, whoever wears it', () => {
+  it('Grit shields your Active 4, and nobody else', () => {
     const G = freshReadyGame();
     const vindicta = G.players['0'].bench[0]!;
     useItem(G, '0', 'grit');
-    expect(status(G.players['0'].active!, 'shield')?.value).toBe(2);
+    expect(status(G.players['0'].active!, 'shield')?.value).toBe(4);
     expect(status(vindicta, 'shield')).toBeUndefined();
   });
 
@@ -161,23 +161,23 @@ describe('New active items', () => {
     expect(status(haze, 'rooted')).toBeDefined(); // the un-Root went in the 2026-11-03 rework
   });
 
-  it('Split Shot gives your Active Ricochet 1 this turn and shoots nothing itself (ricochet.spec has the bounce)', () => {
+  it('Split Shot gives your Active Ricochet 2 this turn and shoots nothing itself (ricochet.spec has the bounce)', () => {
     const G = freshReadyGame();
     hpPool(G, '1');
     const haze = G.players['0'].active!;
     useItem(G, '0', 'split_shot');
-    expect(status(haze, 'ricochet')).toMatchObject({ value: 1, duration: 1 });
+    expect(status(haze, 'ricochet')).toMatchObject({ value: 2, duration: 1 });
     for (const c of board(G, '1')) expect(c.hp, c.cardId).toBe(20);
   });
 
-  it('Blood Tribute pays 3 HP (never below 1) for Extra Attack 1 and +1 Bullet Power this turn', () => {
+  it('Blood Tribute pays 3 HP (never below 1) for Extra Attack 1 and +3 Bullet Power this turn', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     haze.hpMax = 10; haze.hp = 10;
     useItem(G, '0', 'blood_tribute');
     expect(haze.hp).toBe(7);
     expect(status(haze, 'extra_attack')?.value).toBe(1);
-    expect(status(haze, 'weapon_power')).toMatchObject({ value: 1, duration: 1 });
+    expect(status(haze, 'weapon_power')).toMatchObject({ value: 3, duration: 1 });
     // One use a hero a turn: the next two are worn on the bench, and the price
     // is still your Active's.
     haze.hp = 2;
@@ -197,7 +197,7 @@ describe('New active items', () => {
     for (const c of board(G, '1')) expect(c.hp, c.cardId).toBe(15);
   });
 
-  it('Rescue Beam swaps a bench ally in and heals the hero it rescues 4', () => {
+  it('Rescue Beam swaps a bench ally in and heals the hero it rescues 10', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const lash = G.players['0'].bench[1]!;
@@ -205,7 +205,7 @@ describe('New active items', () => {
     useItem(G, '0', 'rescue_beam', lash.iid);
     expect(G.players['0'].active!.iid).toBe(lash.iid);
     expect(G.players['0'].bench[1]!.iid).toBe(haze.iid);
-    expect(haze.hp).toBe(14);
+    expect(haze.hp).toBe(20);
   });
 
   it('Rescue Beam needs a bench ally to aim at', () => {
@@ -218,7 +218,7 @@ describe('New active items', () => {
     expect(perform(G, '0', a)).toBe(INVALID);
   });
 
-  it('Fury Trance grants Extra Attack 1 and Spirit Resist 3, and silences its own hero', () => {
+  it('Fury Trance grants Extra Attack 2 and Spirit Resist 3, and silences its own hero for a turn', () => {
     const G = freshReadyGame();
     // Lash has a skill to lose (Haze's kit is a passive). The two items are
     // worn on the bench, so Lash's own ability of the turn is still unspent.
@@ -229,9 +229,9 @@ describe('New active items', () => {
     const skill = { type: 'useSkill' as const, heroIid: lash.iid, targetIid: abrams.iid };
     expect(blocked(G, '0', skill)).toBeNull();
     useItem(G, '0', 'fury_trance');
-    expect(status(lash, 'extra_attack')?.value).toBe(1);
+    expect(status(lash, 'extra_attack')?.value).toBe(2);
     expect(status(lash, 'spirit_resist')).toMatchObject({ value: 3, duration: 2 });
-    expect(status(lash, 'silenced')).toMatchObject({ duration: 2 });
+    expect(status(lash, 'silenced')).toMatchObject({ duration: 1 });
     expect(blocked(G, '0', skill)).toBe('status');
   });
 

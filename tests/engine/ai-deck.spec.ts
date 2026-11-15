@@ -185,18 +185,18 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
 
   it('saves a turn for a tier-2 card too, then plays it', () => {
     const saving = turn(2);
-    giveCard(saving, '0', 'active_reload'); // tier 2: 4 souls
+    giveCard(saving, '0', 'swift_striker'); // tier 2: 4 souls
     expect(spends(playOut(saving))).toEqual([]);
     expect(saving.players['0'].souls).toBe(2);
     const paid = turn(4);
-    const reload = giveCard(paid, '0', 'active_reload');
-    expect(playOut(paid).some((a) => a.type === 'playCard' && a.cardIid === reload.iid)).toBe(true);
+    const striker = giveCard(paid, '0', 'swift_striker');
+    expect(playOut(paid).some((a) => a.type === 'playCard' && a.cardIid === striker.iid)).toBe(true);
     expect(paid.players['0'].souls).toBe(0);
   });
 
   it('the higher tier is the goal: with a tier-2 it could pay for now and a tier-3 two turns off, it holds for the tier-3', () => {
     const G = turn(4);
-    giveCard(G, '0', 'active_reload');
+    giveCard(G, '0', 'swift_striker');
     giveCard(G, '0', 'toxic_bullets');
     expect(spends(playOut(G))).toEqual([]);
     expect(G.players['0'].souls).toBe(4);
@@ -266,7 +266,7 @@ describe('the AI and a full hero (Patrick, 2026-11-09: a full hero swaps an item
     const me = G.players['0'];
     for (const h of [me.active, ...me.bench]) if (h) h.skillUsedThisTurn = true;
     const haze = me.active!;
-    const worn = ['extended_magazine', 'titanic_magazine', 'active_reload'].map((id) => giveItem(G, haze, id));
+    const worn = ['extended_magazine', 'titanic_magazine', 'swift_striker'].map((id) => giveItem(G, haze, id));
     for (const h of me.bench) if (h) ['fortitude', 'toxic_bullets', 'sharpshooter'].forEach((id) => giveItem(G, h, id));
     return { G, me, haze, worn };
   }
@@ -280,7 +280,7 @@ describe('the AI and a full hero (Patrick, 2026-11-09: a full hero swaps an item
     expect(offered.map((m) => m.args[2])).toEqual([worn[0].iid]);         // Extended Magazine, tier 1
     // The lookahead takes it: Weighted Shots goes on Haze, the magazine to the discard pile.
     playOut(G);
-    expect(wornItems(haze).map((it) => it.cardId)).toEqual(['titanic_magazine', 'active_reload', 'weighted_shots']);
+    expect(wornItems(haze).map((it) => it.cardId)).toEqual(['titanic_magazine', 'swift_striker', 'weighted_shots']);
     expect(G.players['0'].discard.map((c) => c.cardId)).toEqual(['extended_magazine']);
   });
 

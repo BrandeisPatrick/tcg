@@ -6,15 +6,22 @@ import type { CardId } from '@/engine/types';
  * a legal deck (`deckProblem`, decks.ts) built to one recipe, written down in
  * docs/deck-plan.md ("Ready decks"):
  *
- *  - Base items only, at most 2 copies of one (Pokémon TCG Pocket's rule,
- *    inside this game's cap of MAX_COPIES).
+ *  - At most 2 copies of one card (Pokémon TCG Pocket's rule, inside this
+ *    game's cap of MAX_COPIES).
  *  - The curve of a lane that pays 2 souls a turn: 8 tier-1, 6 tier-2 and 2
- *    tier-3 items, 56 souls in all. The dearer tiers arrive as upgrades:
- *    playing a base item shuffles what it builds into the deck.
- *  - Two Compress Cooldown (`improved_cooldown`) in every deck: the draw
- *    engine, as every Pocket deck carries its two Professor's Research.
- *  - The rest comes from the squad's own builds (their base items), so each
- *    hero finds something made for it.
+ *    tier-3 items, 56 souls in all.
+ *  - Upgrades are deck cards like any other (2026-11-15), and each deck
+ *    carries one line of them beside the item they are built from: played
+ *    onto the hero wearing that item, the upgrade costs only the difference.
+ *    No ready deck carries an upgrade without its component.
+ *  - A counter in every deck (docs/card-design.md, "Counters"): Counterspell,
+ *    Debuff Reducer, Dispel Magic or Knockdown.
+ *  - Spells are played once and discarded, so a deck leans on equipment and
+ *    carries a few spells for the turn that needs one. The draw cards
+ *    (Compress Cooldown) are out: at 2 souls a turn a hand is short of souls,
+ *    not of cards.
+ *  - The rest comes from the squad's own builds, so each hero finds something
+ *    made for it.
  */
 export interface ReadyDeck {
   id: string;
@@ -38,7 +45,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_warden', 'hero_vindicta', 'hero_haze', 'hero_paige'],
     items: [
       ...x2('extended_magazine'), ...x2('headshot_booster'), ...x2('restorative_shot'), ...x2('grit'),
-      ...x2('improved_cooldown'), ...x2('active_reload'), 'long_range', 'opening_rounds',
+      ...x2('titanic_magazine'), 'long_range', 'opening_rounds', 'fleetfoot', 'debuff_reducer',
       'burst_fire', 'toxic_bullets',
     ],
   },
@@ -49,7 +56,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_lady_geist', 'hero_seven', 'hero_lash', 'hero_kelvin'],
     items: [
       ...x2('extra_spirit'), ...x2('mystic_burst'), ...x2('mystic_regeneration'), ...x2('spirit_strike'),
-      ...x2('improved_cooldown'), ...x2('cold_front'), 'mystic_vulnerability', 'spirit_lifesteal',
+      ...x2('improved_spirit'), ...x2('cold_front'), 'mystic_vulnerability', 'spirit_lifesteal',
       'knockdown', 'torment_pulse',
     ],
   },
@@ -60,8 +67,8 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_abrams', 'hero_viscous', 'hero_victor', 'hero_rem'],
     items: [
       ...x2('extra_health'), ...x2('extra_regen'), ...x2('grit'), ...x2('healing_rite'),
-      ...x2('improved_cooldown'), ...x2('bullet_lifesteal'), 'healing_booster', 'battle_vest',
-      'bullet_resilience', 'torment_pulse',
+      ...x2('bullet_lifesteal'), 'healing_booster', 'battle_vest', 'debuff_reducer', 'guardian_ward',
+      'fortitude', 'counterspell',
     ],
   },
   {
@@ -71,8 +78,8 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_silver', 'hero_yamato', 'hero_mirage', 'hero_drifter'],
     items: [
       ...x2('sprint_boots'), ...x2('extended_magazine'), ...x2('restorative_shot'), ...x2('headshot_booster'),
-      ...x2('improved_cooldown'), ...x2('kinetic_dash'), 'fleetfoot', 'swift_striker',
-      'tesla_bullets', 'berserker',
+      ...x2('kinetic_dash'), 'titanic_magazine', 'fleetfoot', 'swift_striker', 'split_shot',
+      'tesla_bullets', 'debuff_remover',
     ],
   },
   {
@@ -82,7 +89,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_dynamo', 'hero_wraith'],
     items: [
       ...x2('rusted_barrel'), ...x2('spirit_strike'), ...x2('extra_spirit'), 'healing_rite', 'extra_health',
-      ...x2('improved_cooldown'), ...x2('slowing_hex'), 'mystic_shot', 'spirit_lifesteal',
+      ...x2('slowing_hex'), 'improved_spirit', 'spirit_sap', 'mystic_shot', 'spirit_lifesteal',
       'knockdown', 'silence_glyph',
     ],
   },

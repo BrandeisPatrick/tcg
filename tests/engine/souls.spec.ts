@@ -109,7 +109,7 @@ describe('souls economy', () => {
     G.players['0'].souls = 0;
     G.players['0'].bench[2] = null;
     const hero = giveCard(G, '0', 'hero_kelvin');
-    giveCard(G, '0', 'active_reload'); // Haze's first build item, unaffordable
+    giveCard(G, '0', 'swift_striker'); // Haze's first build item, unaffordable
     // The AI's turn, move by move, up to its end.
     for (let i = 0; i < 20; i++) {
       const [m] = enumerateAIMoves(G, ctx);
@@ -119,7 +119,7 @@ describe('souls economy', () => {
     }
     expect(G.players['0'].bench[2]).toBe(hero);
     expect(G.players['0'].souls).toBe(0);
-    expect(G.players['0'].hand.map((c) => c.cardId)).toEqual(['active_reload']);
+    expect(G.players['0'].hand.map((c) => c.cardId)).toEqual(['swift_striker']);
   });
 
   it('souls accumulate: what a turn does not spend carries over, and each own turn adds the income', () => {
@@ -425,7 +425,7 @@ describe('souls economy', () => {
     expect(hpBefore - target.hp).toBe(4); // base 1 + 3 spirit
   });
 
-  it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 2); Rem's Tag Along prints {sp:4} and does", async () => {
+  it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 5); Rem's Tag Along prints {sp:4} and does", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const G = freshG();
     const rem = makeHero('hero_rem', '0', 'bench', 1);
@@ -436,7 +436,7 @@ describe('souls economy', () => {
     ally.hp = 1;
     // A flat heal: the caster's Spirit is ignored.
     ABILITIES_BY_ID['eff_healing_rite'].run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    expect(ally.hp - 1).toBe(2);
+    expect(ally.hp - 1).toBe(5);
     ally.hp = 1;
     ABILITIES_BY_ID['skill_rem'].run(G, { movingPlayer: '0' }, { source: rem, target: ally });
     expect(ally.hp - 1).toBe(4 + 2); // {sp:4}

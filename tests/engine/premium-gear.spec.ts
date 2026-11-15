@@ -71,14 +71,14 @@ describe('Berserker', () => {
 });
 
 describe('Colossus (an active item, so a spell)', () => {
-  it('gives your Active Bullet + Spirit Resist 4 for 2 turns and roots the enemy Active 1 turn', () => {
+  it('gives your Active Bullet + Spirit Resist 5 for 3 turns and roots the enemy Active 1 turn', () => {
     expect(CARDS_BY_ID['colossus'].type).toBe('spell');
     const G = freshReadyGame();
     const hero = G.players['0'].active!;
     const enemy = G.players['1'].active!;
     ABILITIES_BY_ID['eff_colossus_cast'].run(G, { movingPlayer: '0' }, {});
-    expect(hero.statuses.find((s) => s.id === 'bullet_resist')).toMatchObject({ value: 4, duration: 2 });
-    expect(hero.statuses.find((s) => s.id === 'spirit_resist')).toMatchObject({ value: 4, duration: 2 });
+    expect(hero.statuses.find((s) => s.id === 'bullet_resist')).toMatchObject({ value: 5, duration: 3 });
+    expect(hero.statuses.find((s) => s.id === 'spirit_resist')).toMatchObject({ value: 5, duration: 3 });
     expect(enemy.statuses.find((s) => s.id === 'rooted')).toMatchObject({ duration: 1 });
   });
 });

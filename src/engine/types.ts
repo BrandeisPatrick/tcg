@@ -243,7 +243,7 @@ export interface CardInstance {
   vitalitySpike?: true;
   // Multi-attack is modeled via the `extra_attack` STATUS (value = N extra
   // full-power swings queued for this turn). It stacks additively across
-  // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed by the
+  // sources (Fleetfoot, Burst Fire, Haze's Fixation) and is consumed by the
   // bearer's attack — see grantExtraAttacks / actions/attack.ts. Each bonus swing
   // re-fires onAttack procs (so Toxic Bullets / Djinn's Mark proc per swing)
   // and bounces again with Ricochet.

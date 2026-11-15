@@ -47,7 +47,7 @@ export const HEROES: HeroCard[] = [
     atk: 1, hp: 4, growth: { atk: 3, hp: 1, spirit: 0 }, retreat: 1,
     profile: { role: 'Gun carry', mix: { tank: 0, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'late', gun: true },
     skills: [], passives: ['passive_haze_fixation'], ult: 'eff_ult_haze',
-    signature: ['active_reload', 'burst_fire'],
+    signature: ['swift_striker', 'burst_fire'],
   },
   {
     id: 'hero_mo_krill', name: 'Mo & Krill', type: 'hero', rarity: 3,
