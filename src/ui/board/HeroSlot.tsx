@@ -136,9 +136,9 @@ export function HeroSlot({
   }
   const baseAtk = data.atk;
   const atkColor = atkInk(atk, baseAtk);
-  // The HP number says its state at rest, not only as it changes: red with
-  // its max when hurt, green when its max is raised (poster.ts `hpPrint`).
-  const hpShown = hpPrint(shownHp, card.hpMax, data.hp);
+  // The HP number says its state at rest, not only as it changes: red when
+  // hurt, green when its max is raised (poster.ts `hpPrint`).
+  const hpColor = hpPrint(shownHp, card.hpMax, data.hp);
   // Another form while a status gives one (Silver's Wolf form): its art and
   // a badge instead of a chip; when it ends the card shows the hero again.
   const form = heroForm({ ...card, statuses: shownStatuses });
@@ -494,18 +494,13 @@ export function HeroSlot({
             <span style={{ ...statRow.pair(statSize) }}>
               <HeartIcon size={iconSize} color={poster.stat.hp} />
               <motion.span
-                style={{ color: hpShown.ink, display: 'inline-block' }}
+                style={{ color: hpColor, display: 'inline-block' }}
                 animate={hpTick
                   ? { scale: [1, 1.35, 1],
-                      color: [hpShown.ink, hpTick === 'up' ? poster.stat.atkBright : poster.red, hpShown.ink] }
-                  : { scale: 1, color: hpShown.ink }}
+                      color: [hpColor, hpTick === 'up' ? poster.stat.atkBright : poster.red, hpColor] }
+                  : { scale: 1, color: hpColor }}
                 transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
               >{shownHp}</motion.span>
-              {hpShown.max && (
-                <span data-hp-max style={{ marginLeft: -2, fontSize: Math.max(scale.floor, Math.round(statSize * 0.75)), color: hpShown.max.ink }}>
-                  /{hpShown.max.value}
-                </span>
-              )}
               {hasSpike(card, 'vitality') && <SpikeMark slot="vitality" size={compact ? 10 : 12} style={{ alignSelf: 'flex-start', marginLeft: -1 }} />}
             </span>
           </div>
