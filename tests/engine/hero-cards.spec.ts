@@ -282,7 +282,7 @@ describe('a skill costs no souls: it waits, and a charged one holds two uses (Pa
     for (let i = 0; i < 4; i++) turn();                              // …and four turns on, he holds both again
     expect(kitCharges(kelvin)).toEqual({ max: 2, left: 2 });
     expect(kelvin.cooldowns?.skill_kelvin).toBeUndefined();
-    expect(kelvin.skillCharges).toBeUndefined();
+    expect(kelvin.chargesSpent).toBeUndefined();
   });
 });
 

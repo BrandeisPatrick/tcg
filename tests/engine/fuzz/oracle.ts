@@ -157,15 +157,48 @@ export function ultFaceOracle(skillId: string) {
   return face?.type === 'ultimate' ? face : undefined;
 }
 
-/** The uses a skill holds, off its card: 2 for the four charged skills, else 1. */
-export function skillChargesOracle(skillId: string): number {
-  return getAbility(skillId)?.charges ?? 1;
+/** What the charge items print (docs/card-design.md, 2026-11-15), by card id:
+ *  the charges a charged skill gains and the turns sooner each comes back.
+ *  Written from the cards' text, not from their hooks. */
+const CHARGE_ITEMS: Record<string, { charges: number; sooner: number }> = {
+  extra_charge: { charges: 1, sooner: 0 },
+  rapid_recharge: { charges: 2, sooner: 1 },
+};
+
+/** What the charge items `hero` wears give its charged skill: the largest of
+ *  each, since two of them do not add up. */
+function chargeItemsOracle(hero?: CardInstance): { charges: number; sooner: number } {
+  let charges = 0;
+  let sooner = 0;
+  for (const it of hero?.attached ?? []) {
+    const item = CHARGE_ITEMS[it.cardId];
+    if (!item) continue;
+    charges = Math.max(charges, item.charges);
+    sooner = Math.max(sooner, item.sooner);
+  }
+  return { charges, sooner };
+}
+
+/** The uses a skill holds: 1, or for the four charged skills their 2 and
+ *  what a charge item `hero` wears adds. */
+export function skillChargesOracle(skillId: string, hero?: CardInstance): number {
+  const own = getAbility(skillId)?.charges ?? 1;
+  return own > 1 ? own + chargeItemsOracle(hero).charges : own;
 }
 
 /** Own turns a skill waits after a use (a charged one: for a charge to come
- *  back): its card's own, else SKILL_COOLDOWN. */
-export function skillWaitOracle(skillId: string): number {
-  return getAbility(skillId)?.cooldown ?? SKILL_COOLDOWN;
+ *  back): its card's own, else SKILL_COOLDOWN — a charged one's less what a
+ *  charge item `hero` wears takes off, never under 1. */
+export function skillWaitOracle(skillId: string, hero?: CardInstance): number {
+  const ability = getAbility(skillId);
+  const base = ability?.cooldown ?? SKILL_COOLDOWN;
+  return (ability?.charges ?? 1) > 1 ? Math.max(1, base - chargeItemsOracle(hero).sooner) : base;
+}
+
+/** The charges a charged skill has left on `hero`: what it holds less those
+ *  spent and not back yet. */
+export function skillChargesLeftOracle(hero: CardInstance, skillId: string): number {
+  return Math.max(0, skillChargesOracle(skillId, hero) - (hero.chargesSpent?.[skillId] ?? 0));
 }
 
 /** A charged ultimate that has not counted the damage it needs: not usable. */
@@ -220,8 +253,8 @@ export function skillExcludesSelf(hero: CardInstance, skillId?: string, G?: Game
  *  then counts toward the next charge). Written from that rule, not from
  *  `skillBlocked`, so the probes can tell the gate it is wrong. */
 export function skillCooling(hero: CardInstance, skillId: string): boolean {
-  const max = isUltOf(hero, skillId) ? 1 : skillChargesOracle(skillId);
-  if (max > 1) return (hero.skillCharges?.[skillId] ?? max) <= 0;
+  const max = isUltOf(hero, skillId) ? 1 : skillChargesOracle(skillId, hero);
+  if (max > 1) return skillChargesLeftOracle(hero, skillId) <= 0;
   return (hero.cooldowns?.[skillId] ?? 0) > 0;
 }
 

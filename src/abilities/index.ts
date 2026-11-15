@@ -158,6 +158,14 @@ export interface AbilityDef {
    *  its active items' ('item') — the Cooldown family. Summed by `cooldownCut`;
    *  a cooldown never goes under 1. */
   cooldownCut?: (self: CardInstance, kind: 'ult' | 'item') => number;
+  /** The charge items (Extra Charge, Rapid Recharge), the only cards that
+   *  touch a charged skill's charges (Patrick, 2026-11-15): the extra charges
+   *  the bearer's charged skill holds while it wears this (`chargeBonus`), and
+   *  the own turns sooner each of its charges comes back (`chargeHaste`).
+   *  Neither does anything for a skill with no charges, an ultimate or an
+   *  active item. Of several worn, the largest applies (query.ts). */
+  chargeBonus?: (self: CardInstance) => number;
+  chargeHaste?: (self: CardInstance) => number;
   /** Resist the bearer has to a damage type while it wears this (Bullet and
    *  Spirit Resilience). `damageUnit` takes the larger of it and a resist status. */
   resist?: (self: CardInstance, type: DamageType) => number;
@@ -507,7 +515,7 @@ const eff_refresher: AbilityDef = {
     const mine = standingActive(G, ctx.movingPlayer);
     if (!mine) return;
     delete mine.cooldowns;
-    delete mine.skillCharges; // a charged skill is back at its full charges
+    delete mine.chargesSpent; // a charged skill is back at its full charges
     for (const it of wornItems(mine)) delete it.cooldowns;
     pushLog(G, `${cardName(mine.cardId)}'s cooldowns are reset (Refresher).`);
   },
@@ -783,6 +791,26 @@ const eff_healing_booster: AbilityDef = {
   id: 'eff_healing_booster', trigger: 'ongoing', target: 'self',
   base: 2,
   healingBoost: () => 2,
+  run: () => {},
+};
+// ----- The charge items (Extra Charge → Rapid Recharge) -----
+// The only cards that touch a charged skill's charges (Patrick, 2026-11-15:
+// "only these kind of items can allow charged skills to get faster"). Pure
+// hooks, read by `kitCharges` and `skillWait` (engine/query.ts); they do
+// nothing on a hero whose skill holds no charges. docs/card-design.md.
+// `base` is the AI's worth of the card on a hero with a charged skill (their
+// budget, 3.0 and 6.5); on any other hero the AI counts nothing for them.
+const eff_extra_charge: AbilityDef = {
+  id: 'eff_extra_charge', trigger: 'ongoing', target: 'self',
+  base: 3,
+  chargeBonus: () => 1,
+  run: () => {},
+};
+const eff_rapid_recharge: AbilityDef = {
+  id: 'eff_rapid_recharge', trigger: 'ongoing', target: 'self',
+  base: 6,
+  chargeBonus: () => 2,
+  chargeHaste: () => 1,
   run: () => {},
 };
 const eff_healing_tempo: AbilityDef = {
@@ -2615,6 +2643,8 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_majestic_leap,
   // ----- Passive items: resists and healing boost while worn -----
   eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
+  // ----- Passive items: the charge items -----
+  eff_extra_charge, eff_rapid_recharge,
   // ----- Passive items: procs and hooks -----
   eff_bullet_resist_shredder_proc,
   eff_restorative_shot_proc, eff_extra_regen_proc, eff_mystic_regeneration_proc,

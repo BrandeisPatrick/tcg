@@ -67,7 +67,7 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
   attackPower, checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroesOf, heroWorth, isBoss, isRespawning,
-  itemCooldown, itemPrice, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, ultCharge, wornItems,
+  itemCooldown, itemPrice, kitCharges, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, ultCharge, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
@@ -213,7 +213,13 @@ function equipValue(c: CardInstance): number {
   for (const it of wornItems(c)) {
     const data = itemCard(it.cardId)!;
     if (data.type === 'equipment') {
-      for (const aid of data.abilities ?? []) v += getAbility(aid)?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
+      for (const aid of data.abilities ?? []) {
+        const ab = getAbility(aid);
+        // A charge item (Extra Charge, Rapid Recharge) is worth its charges
+        // only on a hero whose skill holds charges; on any other it does nothing.
+        if ((ab?.chargeBonus || ab?.chargeHaste) && !kitCharges(c)) continue;
+        v += ab?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
+      }
       continue;
     }
     const first = getAbility(data.abilities[0]);

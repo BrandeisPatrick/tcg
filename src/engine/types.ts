@@ -222,10 +222,13 @@ export interface CardInstance {
    *  corpse and in the hand and the deck too; a fall and a respawn leave it
    *  as it is. */
   cooldowns?: Partial<Record<AbilityId, number>>;
-  /** A hero: the charges each charged skill has left (`AbilityDef.charges`),
-   *  by ability id. Absent for a skill at its full charges. A use spends one;
-   *  the skill's wait brings one back at a time (`tickCooldowns`). */
-  skillCharges?: Partial<Record<AbilityId, number>>;
+  /** A hero: the charges of each charged skill (`AbilityDef.charges`) that
+   *  are spent and not back yet, by ability id. Absent for a skill at its full
+   *  charges. A use spends one; the skill's wait brings one back at a time
+   *  (`tickCooldowns`). What is left is the most it holds less these
+   *  (`kitCharges`), so a charge item put on (Extra Charge, Rapid Recharge)
+   *  brings its charges ready, and one taken off takes them with it. */
+  chargesSpent?: Partial<Record<AbilityId, number>>;
   /** What a hero's kit counts, by ability id: Drifter's Bloodscent counts the
    *  knockouts that have grown his Attack; a charged ultimate counts the damage
    *  that readies it (Victor's taken, Silver's dealt), and starts over

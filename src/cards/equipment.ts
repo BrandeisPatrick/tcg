@@ -25,6 +25,8 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'restorative_shot',     name: 'Restorative Shot',     type: 'equipment', rarity: 1, slot: 'weapon', tier: 1, abilities: ['eff_restorative_shot_proc'],     text: 'After bearer attacks: heal 1.' },
   { id: 'mystic_regeneration',  name: 'Mystic Regeneration',  type: 'equipment', rarity: 1, slot: 'spirit', tier: 1, abilities: ['eff_mystic_regeneration_proc'], text: "After bearer's skill / spell / ult damages an enemy: heal 1." },
   { id: 'mystic_burst',         name: 'Mystic Burst',         type: 'equipment', rarity: 1, slot: 'spirit', tier: 1, abilities: ['eff_mystic_burst_proc'],        text: 'When the bearer uses a skill, deal 1 spirit damage to the enemy active.' },
+  // The charge items (2026-11-15): the only cards that touch a charged skill's charges.
+  { id: 'extra_charge',         name: 'Extra Charge',         type: 'equipment', rarity: 1, slot: 'spirit', tier: 1, abilities: ['eff_extra_charge'],             text: "The bearer's charged skill holds 1 more charge." },
 
   // ----- T2 — stat upgrades (canon T2 Weapon / Spirit) -----
   { id: 'titanic_magazine',  name: 'Titanic Magazine',  type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, upgradesFrom: 'extended_magazine', bonus: { atk: 2 },    text: '+2 Bullet Power.' },
@@ -58,6 +60,7 @@ export const EQUIPMENT: EquipmentCard[] = [
 
   // ----- Cast-payoff items (functionality tied to skill / ult activation) -----
   // Surge of Power: after a skill, +2 Bullet Power through the bearer's next turn.
+  { id: 'rapid_recharge', name: 'Rapid Recharge', type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'extra_charge', abilities: ['eff_rapid_recharge'], text: "The bearer's charged skill holds 2 more charges, and each comes back 1 turn sooner." },
   { id: 'surge_of_power', name: 'Surge of Power', type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'extra_spirit', abilities: ['eff_surge_of_power'], text: 'After the bearer uses a skill: +2 Bullet Power until the end of your next turn.' },
   // Burst Fire (canon T3 Weapon): fires a burst of extra shots — grants Extra
   // Attack 1 each turn (stacks with other Extra Attack sources).

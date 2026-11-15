@@ -504,8 +504,9 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
   unchanged. (As built on 2026-11-09: `SKILL_COOLDOWN` 1, `ULT_COOLDOWN` 3.)
 - **Prices.** None since 2026-11-15: `kitCost` is 0 for every skill and ultimate, and `ULT_COST`
   is gone. A side uses one ultimate a turn (`G.ultUsed`, refused as `'ultUsed'`). A charged skill
-  (`AbilityDef.charges`) keeps its uses left on the hero (`skillCharges`); its wait brings them
-  back one at a time. Echo Shard's repeat of a skill is the item's own effect: it spends no charge
+  (`AbilityDef.charges`) records its spent charges on the hero (`chargesSpent`); its wait brings
+  them back one at a time, and only the charge items (Extra Charge, Rapid Recharge) add a charge
+  or shorten that wait. Echo Shard's repeat of a skill is the item's own effect: it spends no charge
   and starts no wait. (As built on 2026-11-09: a skill's `souls`, an ultimate's `ULT_COST` 4, 8,
   12, both paid from the same souls as items.)
 - **Retreat.** `RETREAT_COST` is gone: a Retreat costs the leaving hero's printed `retreat`, less

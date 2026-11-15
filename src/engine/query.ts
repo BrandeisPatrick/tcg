@@ -461,11 +461,31 @@ export function kitCost(card: CardInstance, skillId?: AbilityId): number {
   return resolveSkill(card, skillId)?.ability.souls ?? 0;
 }
 
+/** The extra charges `card`'s charged skill holds from what it wears (Extra
+ *  Charge 1, Rapid Recharge 2): the largest of the `chargeBonus` hooks, so
+ *  two charge items on one hero do not add up. */
+export function chargeBonus(card: CardInstance): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n = Math.max(n, ability.chargeBonus?.(card) ?? 0);
+  return n;
+}
+
+/** Own turns sooner each charge of `card`'s charged skill comes back (Rapid
+ *  Recharge 1): the largest of the `chargeHaste` hooks. Only the charge
+ *  items have one; nothing else shortens a skill's wait. */
+export function chargeHaste(card: CardInstance): number {
+  let n = 0;
+  for (const { ability } of abilitySources(card)) n = Math.max(n, ability.chargeHaste?.(card) ?? 0);
+  return n;
+}
+
 /** Own turns a skill waits after a use: its own `cooldown`, else
  *  SKILL_COOLDOWN. For a charged skill, the turns one charge takes to come
- *  back. */
-export function skillWait(ability: AbilityDef): number {
-  return ability.cooldown ?? SKILL_COOLDOWN;
+ *  back — on `hero`, when one is named, less what its charge items take off
+ *  (`chargeHaste`), never under 1. Without a hero it is what the card prints. */
+export function skillWait(ability: AbilityDef, hero?: CardInstance): number {
+  const base = ability.cooldown ?? SKILL_COOLDOWN;
+  return hero && (ability.charges ?? 1) > 1 ? Math.max(1, base - chargeHaste(hero)) : base;
 }
 
 /** Own turns an ultimate waits, after a use and from the match's start: its
@@ -475,13 +495,16 @@ export function ultWait(face: UltimateCard): number {
   return ULT_WAIT[face.size];
 }
 
-/** A charged skill's charges on `card` — the most it holds and what it has
- *  left — or undefined for an ability that is not a charged skill of its. */
+/** A charged skill's charges on `card` — the most it holds (its own, and
+ *  what a charge item it wears adds: `chargeBonus`) and what it has left (the
+ *  most less those spent and not back yet) — or undefined for an ability that
+ *  is not a charged skill of its. */
 export function kitCharges(card: CardInstance, skillId?: AbilityId): { max: number; left: number } | undefined {
   const skill = resolveSkill(card, skillId);
-  const max = skill?.kind === 'skill' ? skill.ability.charges ?? 1 : 1;
-  if (!skill || max <= 1) return undefined;
-  return { max, left: Math.max(0, Math.min(max, card.skillCharges?.[skill.id] ?? max)) };
+  const own = skill?.kind === 'skill' ? skill.ability.charges ?? 1 : 1;
+  if (!skill || own <= 1) return undefined;
+  const max = own + chargeBonus(card);
+  return { max, left: Math.max(0, max - (card.chargesSpent?.[skill.id] ?? 0)) };
 }
 
 /** Own turns until `card` may use its kit ability again by the clock: 0 when

@@ -11,7 +11,7 @@
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { abilityAim, cooldownCut, findCardOnBoard, kitCost, resolveSkill, skillWait, ultimateCard, ultWait } from '../query';
+import { abilityAim, cooldownCut, findCardOnBoard, kitCharges, kitCost, resolveSkill, skillWait, ultimateCard, ultWait } from '../query';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { nextActionId } from '../ids';
@@ -109,10 +109,11 @@ export function payKit(G: GameState, pid: PlayerID, hero: CardInstance, abilityI
     if (face?.charged && hero.tally?.[abilityId]) hero.tally[abilityId] = 0;
     return souls;
   }
-  const wait = skillWait(skill.ability);
-  const max = skill.ability.charges ?? 1;
-  if (max > 1) {
-    (hero.skillCharges ??= {})[abilityId] = Math.max(0, (hero.skillCharges?.[abilityId] ?? max) - 1);
+  const wait = skillWait(skill.ability, hero);
+  const charges = kitCharges(hero, abilityId);
+  if (charges) {
+    // A charged skill: one more charge is spent, and its wait starts unless one is running.
+    (hero.chargesSpent ??= {})[abilityId] = Math.min(charges.max, (hero.chargesSpent?.[abilityId] ?? 0) + 1);
     if (!hero.cooldowns?.[abilityId]) (hero.cooldowns ??= {})[abilityId] = wait;
   } else {
     (hero.cooldowns ??= {})[abilityId] = wait;

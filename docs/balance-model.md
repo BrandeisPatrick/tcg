@@ -5,7 +5,7 @@ reasoning on 2026-11-05, from the item budget in
 [card-design.md](./card-design.md) §3; no sim ran. The sim gates
 (`scripts/balance-sim.ts`: seat 50 ± 3, every hero 45–55, a mean of 8–10 own
 turns, no item in over 40% of builds, the Mid-Boss contested) have not been run
-against this 140-card catalogue. The testing round runs on request
+against this 142-card catalogue. The testing round runs on request
 ([CLAUDE.md](../CLAUDE.md)).
 
 **2026-11-15.** The lane's income went from 5 souls a turn to 2, and a kill
@@ -238,7 +238,7 @@ the same morning (§7). None has been played or simulated.
   first turns, so their waits start apart, and a side has to hold skills back
   to line them up, as it had to bank souls before.
 
-**Charged skills** (`AbilityDef.charges`; `CardInstance.skillCharges`). A
+**Charged skills** (`AbilityDef.charges`; `CardInstance.chargesSpent`). A
 charged skill holds 2 uses. Each use spends one, and the wait brings them
 back one at a time, the next wait starting when the last ends. The hero still
 uses one ability a turn, so two charges are two turns running, not two casts
@@ -260,6 +260,13 @@ in a turn.
   wait. The second charge is one extra cast, early, and the choice of when:
   the skill's own 2 to 4.5 points once. These four skills keep their text and
   numbers; the extra cast is the charge's whole price.
+
+**The charge items** (Patrick, 2026-11-15: "only these kind of items can
+allow charged skills to get faster"). Extra Charge (Spirit T1) gives the
+bearer's charged skill 1 more charge. Rapid Recharge (Spirit T3, built from
+it) gives 2 more and brings each back 1 turn sooner. Nothing else adds a
+charge or shortens a skill's wait. The cards and their budget are in
+[card-design.md](./card-design.md) ("Added 2026-11-15: the charge items").
 
 **Ultimates** (`ULT_WAIT`: small 4, medium 6, large 8; `G.ultUsed`).
 - **The wait is the old price in turns of the lane, plus 2.** 4 / 8 / 12
@@ -295,9 +302,10 @@ in a turn.
   themselves; without the wait she would never leave the form.
 
 **Unchanged.** A hero uses one ability a turn (skill, ultimate or active
-item). Retreat costs the hero's printed souls. Compress Cooldown and its line
-shorten these waits as they shortened the old ones. Echo Shard's repeat of a
-skill spends no charge and starts no wait.
+item). Retreat costs the hero's printed souls. No card shortens a wait: the
+Cooldown family are this game's draw cards, and only the charge items touch a
+charged skill's charges. Echo Shard's repeat of a skill spends no charge and
+starts no wait. Refresher resets waits and sets a charged skill back to full.
 
 **Left for testing** (only when asked by name):
 - Match length with free kits.
@@ -305,6 +313,7 @@ skill spends no charge and starts no wait.
 - Whether a wait of 3 leaves The Cube, Rabbit Hex and the other denials at 4
   far enough apart.
 - Victor's 10 and Silver's 8.
+- Rapid Recharge on a charged skill: a cast every turn while it is worn.
 
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).

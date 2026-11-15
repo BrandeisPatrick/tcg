@@ -45,7 +45,7 @@ import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/
 import {
   DRAW_CARDS, MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, chooseActiveBlockedOracle, deckOf,
   describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
-  skillChargesOracle, skillWaitOracle, ultFaceOracle, ultUncharged,
+  skillChargesLeftOracle, skillChargesOracle, skillWaitOracle, ultFaceOracle, ultUncharged,
   freeBenchSlotOracle, isMergedRem, itemData, killBountyOracle, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
   playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
   slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
@@ -399,12 +399,14 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     for (const [k, v] of Object.entries(c.cooldowns ?? {})) {
       if (!Number.isInteger(v) || (v as number) < 0) add('cooldown-range', `${c.iid}-${k}`, `${k} cooldown ${v} on ${label}`);
     }
-    // A charged skill's charges left: recorded only while short of full (0 up to one under
-    // what it holds), and then its wait is running.
-    for (const [k, v] of Object.entries(c.skillCharges ?? {})) {
-      const max = skillChargesOracle(k);
-      if (!Number.isInteger(v) || (v as number) < 0 || (v as number) >= max) add('skill-charges', `${c.iid}-${k}`, `${k} has ${v} charges left on ${label} (0..${max - 1} while short of ${max})`);
-      else if (!((c.cooldowns?.[k] ?? 0) > 0)) add('skill-charges', `${c.iid}-${k}`, `${k} is short of its charges (${v} of ${max}) on ${label} with no wait running`);
+    // A charged skill's spent charges: recorded only while some are spent (1 up to the most a
+    // charged skill can hold: its own and Rapid Recharge's 2 — a charge item taken off leaves
+    // the count where it was until the wait next runs out), and then its wait is running.
+    for (const [k, v] of Object.entries(c.chargesSpent ?? {})) {
+      const most = skillChargesOracle(k) + 2;
+      if (skillChargesOracle(k) <= 1) add('skill-charges', `${c.iid}-${k}`, `${k} holds no charges, and ${v} are recorded as spent on ${label}`);
+      else if (!Number.isInteger(v) || (v as number) < 1 || (v as number) > most) add('skill-charges', `${c.iid}-${k}`, `${k} has ${v} charges spent on ${label} (1..${most} while any is spent)`);
+      else if (!((c.cooldowns?.[k] ?? 0) > 0)) add('skill-charges', `${c.iid}-${k}`, `${k} has ${v} charges spent on ${label} with no wait running`);
     }
   }
 
@@ -850,11 +852,11 @@ export function collectTransitionViolations(
         if ((hero1.cooldowns?.[id] ?? 0) !== want) add('ability-cooldown', hero1.iid, `${describeUnit(hero1)} used ${id}; its cooldown is ${hero1.cooldowns?.[id]}, the rules say ${want}`);
         if (ultFaceOracle(id)?.charged && (hero1.tally?.[id] ?? 0) !== 0) add('ability-cooldown', `${hero1.iid}-count`, `${describeUnit(hero1)} used its charged ultimate and its count reads ${hero1.tally?.[id]}`);
       } else {
-        const max = skillChargesOracle(id);
-        const wait = skillWaitOracle(id);
+        const max = skillChargesOracle(id, hero0);
+        const wait = skillWaitOracle(id, hero0);
         if (max > 1) {
-          const left0 = hero0.skillCharges?.[id] ?? max;
-          const left1 = hero1.skillCharges?.[id] ?? max;
+          const left0 = skillChargesLeftOracle(hero0, id);
+          const left1 = skillChargesLeftOracle(hero1, id);
           if (left1 !== left0 - 1) add('ability-cooldown', `${hero1.iid}-charges`, `${describeUnit(hero1)} used ${id} with ${left0} charges; it has ${left1} left`);
           const running = hero0.cooldowns?.[id] ?? 0;
           const want = running > 0 ? running : wait;
@@ -1140,12 +1142,13 @@ export function collectTransitionViolations(
           // another is still spent.
           const [, ability] = key.split('|');
           const h0 = heroes0.get(owner);
-          const max = skillChargesOracle(ability);
-          if (want === undefined && v0 !== undefined && h0 && max > 1 && isHeroCard(h0) && h0.skillCharges?.[ability] !== undefined) {
-            const back = h0.skillCharges[ability]! + 1;
-            if (back < max) want = skillWaitOracle(ability);
-            const now1 = heroesByIid(after.G.players[pid]).get(owner)?.skillCharges?.[ability];
-            if ((now1 ?? max) !== Math.min(max, back)) add('cooldown-bookkeeping', `${key}-charges`, `${ability} on ${owner} had ${h0.skillCharges[ability]} charges as its wait ran out; it has ${now1 ?? max}, the rules give ${Math.min(max, back)}`);
+          const max = skillChargesOracle(ability, h0);
+          if (want === undefined && v0 !== undefined && h0 && max > 1 && isHeroCard(h0) && h0.chargesSpent?.[ability] !== undefined) {
+            // No more can be spent than it holds now; one of those comes back.
+            const still = Math.min(max, h0.chargesSpent[ability]!) - 1;
+            if (still > 0) want = skillWaitOracle(ability, h0);
+            const now1 = heroesByIid(after.G.players[pid]).get(owner)?.chargesSpent?.[ability] ?? 0;
+            if (now1 !== Math.max(0, still)) add('cooldown-bookkeeping', `${key}-charges`, `${ability} on ${owner} had ${h0.chargesSpent[ability]} charges spent as its wait ran out; it has ${now1} spent, the rules give ${Math.max(0, still)}`);
           }
         }
         else if (key === usedSkill || key === usedTrigger || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';

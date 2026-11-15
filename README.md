@@ -183,6 +183,8 @@ You choose the discards from anywhere in your hand.
 - A skill waits 3 turns after a use (4 for the heavier ones). Four skills are
   charged, as in Deadlock: Serrated Knives, Frost Grenade, Lightning Ball and
   Kinetic Pulse hold 2 uses, and the wait brings them back one at a time.
+  Only the charge items change that: Extra Charge adds a charge, and Rapid
+  Recharge adds 2 and brings each back a turn sooner.
 - The ultimate is a button on the hero card, from Level 2. Your side uses
   one ultimate a turn. It waits 4, 6 or 8 turns by its size (small, medium,
   large), after each use and from the match's first turn: a large one is
@@ -264,7 +266,7 @@ sets them:
 
 ## The items
 
-140 item cards, each a current Deadlock shop item under its own name, tab and
+142 item cards, each a current Deadlock shop item under its own name, tab and
 tier. An active item is always a spell and a passive item always equipment
 ([`docs/card-design.md`](./docs/card-design.md) §1), with one exception: the
 Cooldown family, passives in Deadlock, are the deck's draw cards here, so they
@@ -275,8 +277,8 @@ actives; the column heads give the price.
 |---|---|---|---|---|---|---|
 | Weapon | 4 · 0 | 12 · 2 | 13 · 4 | 8 · 1 | 2 · 0 | 46 |
 | Vitality | 3 · 2 | 11 · 3 | 4 · 7 | 10 · 6 | 0 · 1 | 47 |
-| Spirit | 4 · 2 | 8 · 4 | 6 · 5 | 6 · 9 | 1 · 2 | 47 |
-| All | 15 | 40 | 39 | 40 | 6 | 140 |
+| Spirit | 5 · 2 | 8 · 4 | 7 · 5 | 6 · 9 | 1 · 2 | 49 |
+| All | 16 | 40 | 40 | 40 | 6 | 142 |
 
 The prices follow Deadlock's 1 : 2 : 4 : 8 ladder (800 to 6,400 souls there),
 with 24 for tier 5 (9,999 there). An item became a card only if it passed

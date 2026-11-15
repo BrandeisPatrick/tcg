@@ -15,7 +15,9 @@ import type { GameState, PlayerID } from '@/engine/types';
 import { DeadlockGame } from '@/engine/game';
 import { INVALID, perform, type Action } from '@/engine/engine';
 import { blocked, legalActions } from '@/engine/legality';
-import { wornItems } from '@/engine/query';
+import { kitCharges, wornItems } from '@/engine/query';
+import { allocatorOf } from '@/engine/ids';
+import { makeInstance } from '@/engine/instances';
 import { seededRandom } from '@/engine/rng';
 import { discardChoice, enumerateAIMoves } from '@/ai/heuristic';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
@@ -100,6 +102,27 @@ describe('the AI plays its hand', () => {
     const lash = me.bench.find((h) => h?.cardId === 'hero_lash')!;
     expect(wornItems(lash).map((it) => it.cardId)).toContain('mystic_slow');
     expect(me.hand).not.toContain(card);
+  });
+
+  it('puts a charge item only on a hero whose skill holds charges', () => {
+    // Nobody on this side has a charged skill: Extra Charge would do nothing, so it stays in the hand.
+    const none = turn(10);
+    const kept = giveCard(none, '0', 'extra_charge');
+    playOut(none);
+    expect(none.players['0'].hand).toContain(kept);
+    for (const h of [none.players['0'].active, ...none.players['0'].bench]) {
+      if (h) expect(wornItems(h).map((it) => it.cardId)).not.toContain('extra_charge');
+    }
+    // Kelvin's Frost Grenade holds 2 charges: with him on the bench the card goes on him.
+    const G = turn(10);
+    const me = G.players['0'];
+    const kelvin = makeInstance(allocatorOf(G), 'hero_kelvin', '0', 'bench', 1);
+    me.bench[0] = kelvin;
+    const card = giveCard(G, '0', 'extra_charge');
+    playOut(G);
+    expect(wornItems(kelvin).map((it) => it.cardId)).toContain('extra_charge');
+    expect(me.hand).not.toContain(card);
+    expect(kitCharges(kelvin)?.max).toBe(3);
   });
 
   it('evolves an upgrade onto the hero wearing its component, for the difference', () => {

@@ -164,10 +164,14 @@ hard crowd-control item's charges), or its ultimate. A skill and an ultimate
 cost no souls (`kitCost` is 0 unless an ability names `souls`, and none does;
 docs/balance-model.md §8): they are paid for in own turns. A skill waits its
 `cooldown` after use (`SKILL_COOLDOWN` = 3 when its data names none; five name
-4). A charged skill (`charges: 2`) keeps its uses left on the hero
-(`skillCharges`, absent when full): a use spends one and starts the wait if
-none is running, and `tickCooldowns` brings one back each time the wait runs
-out, starting it again while the skill is still short. `skillBlocked` answers
+4). A charged skill (`charges: 2`) records the charges it has spent on the
+hero (`chargesSpent`, absent when full): a use spends one and starts the wait
+if none is running, and `tickCooldowns` brings one back each time the wait
+runs out, starting it again while the skill is still short. What it holds is
+its own charges plus a charge item's (`chargeBonus`: Extra Charge 1, Rapid
+Recharge 2, the larger of several), and its wait is less a charge item's
+`chargeHaste` (Rapid Recharge 1); `kitCharges` and `skillWait(ability, hero)`
+read both, and no other card has either hook. `skillBlocked` answers
 `'cooldown'` only with no use left (`kitWaiting`). An ultimate waits `ULT_WAIT`
 by its card's size (small 4, medium 6, large 8), after each use and from the
 match's first turn (`armUltWaits`, setup.ts; a hero in the hand or the deck

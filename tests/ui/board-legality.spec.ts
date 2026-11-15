@@ -590,7 +590,7 @@ describe('every block code has words', () => {
     // A charged skill with no charge left waits for its next one.
     const kelvin = board().players['1'].bench[1]!; // Frost Grenade: 2 charges
     expect(nameOf(kelvin)).toBe('Kelvin');
-    expect(skillBlockReason('cooldown', { ...kelvin, skillCharges: { skill_kelvin: 0 }, cooldowns: { skill_kelvin: 2 } })).toBe('Next charge in 2 turns');
+    expect(skillBlockReason('cooldown', { ...kelvin, chargesSpent: { skill_kelvin: 2 }, cooldowns: { skill_kelvin: 2 } })).toBe('Next charge in 2 turns');
     // A damage-charged ultimate short of its damage says how much is missing.
     expect(skillBlockReason('charge')).toBe('Not charged'); // no hero to ask: no number
     expect(skillBlockReason('charge', { ...lash, cardId: 'hero_silver', tally: { eff_ult_silver: 5 } }, 'eff_ult_silver')).toBe('Needs 3 more damage');
