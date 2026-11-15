@@ -201,6 +201,7 @@ export const GROUPS: Group[] = [
       { label: 'Healing blocked', events: [status('r0', 'healing_boost_down', 1, 2, true)] },
       { label: 'Charged', events: [status('r0', 'charged', 1, 2, true)] },
       { label: 'Dome', events: [status('y0', 'dome', 1, 1, false)] },
+      { label: 'Counterspell, then spent', events: [status('y0', 'counterspell', 1, 99, false), status('y1', 'counterspell_spent', 1, 2, false)] },
       { label: 'Fixation ×2', events: [status('r0', 'fixation', 2, 99, true)] },
       { label: 'Rooted', events: [status('r0', 'rooted', 1, 2, true)] },
       { label: 'Rabbit', events: [status('r0', 'rabbit', 1, 1, true)] },

@@ -35,6 +35,7 @@ import { EXP_ON_EQUIP } from '../constants';
 import { getAbility } from '../registry';
 import { nextActionId } from '../ids';
 import { withCast } from '../castContext';
+import { counterspellNegates } from '../damage';
 
 /** Play the item `cardIid` from `pid`'s hand. Equipment goes on its hero
  *  `heroIid`, paying `playCost`; `replaceIid`, on a full hero, is the worn
@@ -56,16 +57,18 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid?:
   // An upgrade evolves the component the hero wears: it takes its place, and
   // the component goes to the discard pile.
   if (comp) {
-    detachItem(hero, comp);
+    takeOff(G, hero, comp);
     toDiscard(G, pid, comp);
   }
   // A full hero: the item the player chose to discard makes room.
   if (replaced) {
-    detachItem(hero, replaced);
+    takeOff(G, hero, replaced);
     toDiscard(G, pid, replaced);
   }
   attachItem(hero, card);
   syncVitalitySpike(hero);
+  // What the item puts on its bearer as it goes on (Counterspell's status).
+  for (const id of data.abilities ?? []) getAbility(id)?.onWorn?.(G, hero);
 
   const evolved = comp ? ` (it evolves ${cardName(comp.cardId)})` : replaced ? ` (${cardName(replaced.cardId)} discarded for it)` : '';
   pushLog(G, `P${pid} played ${data.name} on ${cardName(hero.cardId)}${evolved} (-${cost} soul${cost === 1 ? '' : 's'}).`);
@@ -76,11 +79,20 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid?:
   }
 }
 
+/** Take the worn `item` off `hero`: its bonus leaves with it (`detachItem`),
+ *  and so does what it had put on its bearer (`onTakenOff`). */
+function takeOff(G: GameState, hero: CardInstance, item: CardInstance) {
+  detachItem(hero, item);
+  for (const id of itemCard(item.cardId)?.abilities ?? []) getAbility(id)?.onTakenOff?.(G, hero);
+}
+
 /** Cast the spell `card` from `pid`'s hand for its price: it leaves the hand,
  *  its onPlay abilities run in a cast frame whose source is the side's caster
  *  (`spellCaster` — its gear reacts to the damage, and the FX leave from it),
  *  aimed at `targetIid` when the spell takes a target, and the card goes to
- *  the discard pile. The reveal it starts is an item's (`G.action`). */
+ *  the discard pile. Aimed at an enemy hero carrying Counterspell it does
+ *  nothing (`counterspellNegates`): its price is paid and the card is gone.
+ *  The reveal it starts is an item's (`G.action`). */
 function castSpell(G: GameState, pid: PlayerID, card: CardInstance, data: SpellCard, targetIid?: string) {
   const ps = G.players[pid];
   const caster = spellCaster(G, pid)!;
@@ -94,12 +106,14 @@ function castSpell(G: GameState, pid: PlayerID, card: CardInstance, data: SpellC
   // The cast event goes out first, so the effects that follow read as this
   // spell's: the bolt leaves the caster, then the hits land.
   pushFx(G, { kind: 'cast', castKind: 'spell', by: pid, cardId: card.cardId, iid: caster.iid, targetIid: target?.iid });
-  withCast(caster, 'spell', () => {
-    for (const id of data.abilities) {
-      const ability = getAbility(id);
-      if (ability?.trigger === 'onPlay') ability.run(G, { movingPlayer: pid }, { source: card, target });
-    }
-  });
+  if (!counterspellNegates(G, pid, target, data.name)) {
+    withCast(caster, 'spell', () => {
+      for (const id of data.abilities) {
+        const ability = getAbility(id);
+        if (ability?.trigger === 'onPlay') ability.run(G, { movingPlayer: pid }, { source: card, target });
+      }
+    });
+  }
   toDiscard(G, pid, card);
 
   resolve(G);

@@ -386,7 +386,7 @@ describe('what a hero card prints', () => {
     hero_lady_geist: ['skill', "Essence Bomb", "Lady Geist pays 1 HP: deal {sp:1} spirit damage to every enemy."],
     hero_lash: ['skill', "Ground Strike", "Slam down: deal {sp:1} spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat)."],
     hero_paige: ['skill', "Plot Armor", "Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns."],
-    hero_seven: ['skill', "Lightning Ball", "Roll a ball of lightning through the enemy team: deal {sp:1} spirit damage to every enemy."],
+    hero_seven: ['skill', "Static Charge", "Deal {sp:1} spirit damage to the enemy Active and Charge it: after its next turn, it is Stunned 1 turn."],
     hero_sinclair: ['skill', "Rabbit Hex", "Hex the enemy Active into a Rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage."],
     hero_viscous: ['skill', "The Cube", "Cube one of your heroes: it takes no damage until your next turn."],
     hero_yamato: ['skill', "Flying Slash", "Grapple onto any enemy, bench too, and slash it: deal {sp:2} spirit damage."],

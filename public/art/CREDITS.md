@@ -51,9 +51,9 @@ from their "Deadlock Graphical Library" collection.
   encoded to WebP by `scripts/fetch_item_art.py`. The first set came through the
   asset bucket above; the 41 items added on 2026-11-05 (Monster Rounds through
   Spirit Burn, docs/card-design.md) and the six tier-5 items after them
-  (Haunting Shot through Prism Blast) came from the wiki. Extra Charge and
-  Rapid Recharge (2026-11-15) are the same shop icons from the deadlock-api's
-  shop list (`shop_image_webp`, 200×200 WebP, used as served). See
+  (Haunting Shot through Prism Blast) came from the wiki. Extra Charge,
+  Rapid Recharge and Counterspell (2026-11-15) are the same shop icons from the
+  deadlock-api's shop list (`shop_image_webp`, 200×200 WebP, used as served). See
   `public/ART_PIPELINE.md`.
 - The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,
   Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, Fixation, the armours
@@ -64,6 +64,9 @@ from their "Deadlock Graphical Library" collection.
   game's own HUD icons, fetched from the Deadlock wiki's asset mirror
   (`https://cdn.deadlock.wiki/<File_Name>.png`) and used as they are: white
   glyphs on transparency, painted in the chip's colour through an SVG filter.
+  The Counterspell status (2026-11-15) wears the item's own HUD glyph, the
+  parry (`icons/hud/modifiers/icon_parry.svg` from the deadlock-api's asset
+  bucket, the item's `image`), drawn white at 128×128 as `counterspell.png`.
 - The map icons (`map_guardian.png`, `map_walker.png`, `map_patron.png`,
   `map_mid_boss.png`, `map_rejuvenator.png` in this folder) are the game's own
   pictures from the same mirror: the wiki's `Guardian.png` (the Lane Guardian;

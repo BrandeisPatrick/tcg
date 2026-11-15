@@ -58,11 +58,11 @@ export const SPELLS: SpellCard[] = [
   // ----- Tier 3 -----
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
   { id: 'disarming_hex',   name: 'Disarming Hex',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, upgradesFrom: 'rusted_barrel', abilities: ['eff_disarming_hex'], text: 'Disarm any enemy for 2 turns.' },
-  { id: 'knockdown',       name: 'Knockdown',       type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_knockdown'], text: 'Stun enemy Active for 1 turn.' },
+  { id: 'knockdown',       name: 'Knockdown',       type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_knockdown'], text: 'Stun enemy Active for 1 turn. A Stun ends a channel.' },
   { id: 'metal_skin',      name: 'Metal Skin',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_cast_metal_skin'], text: 'Grant ally Bullet Resist 5 for 2 turns.' },
   // Three ids keep an item's old name so saved builds still load: debuff_remover
   // is Dispel Magic, silence_glyph is Silence Wave, curse is Cursed Relic.
-  { id: 'debuff_remover',  name: 'Dispel Magic',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_debuff_remover'],  text: "Cleanse an ally's debuffs and grant Shield 4. If any were removed, heal it 4." },
+  { id: 'debuff_remover',  name: 'Dispel Magic',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_debuff_remover'],  text: 'Remove every debuff from one of your heroes, delayed ones too, and it gains Shield 4. If any was removed, heal it 4.' },
   { id: 'silence_glyph',   name: 'Silence Wave',    type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_silence_glyph'], text: 'Deal {sp:2} spirit damage to enemy Active and Silence it for 2 turns.' },
   { id: 'warp_stone',      name: 'Warp Stone',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_warp_stone'],      text: 'A bench ally swaps into your Active slot and gains Bullet Resist 3 for 2 turns.' },
   // Blood Tribute's price is paid in blood as well: 3 HP off your Active.

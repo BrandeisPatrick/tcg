@@ -516,7 +516,7 @@ describe('Rabbit', () => {
     return G;
   };
 
-  it('blocks the attack and every skill, and the channel\'s pulse, but not a retreat', () => {
+  it('blocks the attack and every skill, and ends a channel, but not a retreat', () => {
     const G = game();
     const me = G.players['0'];
     const haze = me.active!;
@@ -538,10 +538,12 @@ describe('Rabbit', () => {
     const caster = channel.players['0'].active!;
     addStatus(channel, caster, 'casting', 3, 3);
     addStatus(channel, caster, 'rabbit', 1, 1);
+    // The hex ends the channel at once (a Stun or a Sleep does too): no pulse is left.
+    expect(caster.statuses.some((s) => s.id === 'casting')).toBe(false);
+    expect(channel.log.some((l) => l.text.includes('channel is broken'))).toBe(true);
     const hp = channel.players['1'].active!.hp;
     tickCastingPulses(channel, channel.players['0']);
     expect(channel.players['1'].active!.hp).toBe(hp);
-    expect(channel.log.some((l) => l.text.includes('channel is interrupted'))).toBe(true);
   });
 
   it('is crowd control: Unstoppable blocks it and cleanses it; it goes as the afflicted turn ends', () => {

@@ -334,22 +334,18 @@ describe('New equipment', () => {
     expect(status(G.players['1'].active!, 'rooted')).toMatchObject({ duration: 1 });
   });
 
-  it('Debuff Reducer: a debuff lands 1 turn shorter, never under 1; buffs and permanent marks are untouched', () => {
+  // Debuff Reducer's own tests are in counters.spec.ts (one random debuff off at the start of
+  // the turn). It no longer shortens anything as it lands.
+  it('Debuff Reducer: a debuff lands for its whole length on the bearer; buffs too', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     giveItem(G, haze, 'debuff_reducer');
     addStatus(G, haze, 'bleed', 1, 3);
     addStatus(G, haze, 'silenced', 1, 2);
-    addStatus(G, haze, 'stun', 1, 1);
     addStatus(G, haze, 'bullet_resist', 2, 2);
-    addStatus(G, haze, 'fixation', 1, 99);
-    addStatus(G, haze, 'charged', 1, 2); // a shorter fuse would only stun sooner
-    expect(status(haze, 'bleed')?.duration).toBe(2);
-    expect(status(haze, 'silenced')?.duration).toBe(1);
-    expect(status(haze, 'stun')?.duration).toBe(1);
+    expect(status(haze, 'bleed')?.duration).toBe(3);
+    expect(status(haze, 'silenced')?.duration).toBe(2);
     expect(status(haze, 'bullet_resist')?.duration).toBe(2);
-    expect(status(haze, 'fixation')?.duration).toBe(99);
-    expect(status(haze, 'charged')?.duration).toBe(2);
   });
 
   it('Spirit Snatch: the bearer\'s item damage moves 1 Spirit Power from the enemy to the bearer for 2 turns', () => {

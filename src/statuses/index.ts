@@ -82,6 +82,14 @@ export const STATUSES: StatusDef[] = [
   // Shield. Her card shows Deadlock's wolf-form art while it lasts.
   { id: 'wolf_form',     title: 'Wolf form',     desc: 'Turned into a wolf (Lycan Curse): +3 Attack while it lasts; the card shows the wolf.', hvalue: 1, form: { hero: 'hero_silver', art: 'hero_silver_wolf_card.webp' } },
 
+  // Counterspell (docs/card-design.md, "Counters"): the next enemy card played
+  // on the bearer — a spell, a skill or an ultimate — does nothing to it
+  // (damage.ts). It stays until it is used (duration 99); used, it leaves
+  // "Counterspell spent" behind for the turns the item takes to bring it back.
+  // Spent is neither buff nor debuff (hvalue 0): nothing cleanses it.
+  { id: 'counterspell',       title: 'Counterspell',       desc: 'The next enemy spell, skill or ultimate that would hit this hero does nothing to it, and it heals 2.', hvalue: 2 },
+  { id: 'counterspell_spent', title: 'Counterspell spent', desc: 'Counterspell comes back when this runs out.', hvalue: 0 },
+
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across
   // sources). Each extra swing rides on the turn's attack and re-fires onAttack
@@ -93,8 +101,8 @@ export const STATUSES: StatusDef[] = [
   // Heavy channel: the caster is locked out of attacking and skills, but deals
   // <value> spirit AoE to all enemies at the end of each of their turns until
   // it expires. Mobile variant (casting_light) keeps the AoE drain but lets the
-  // caster keep acting. Stun / Sleep interrupts a pulse.
-  { id: 'casting',       title: 'Channeling',    desc: 'Locked in an ultimate: cannot attack or use skills. Deals <value> spirit to all enemies at end of turn.', hvalue: 1, blocks: ['attack', 'skill'] },
+  // caster keep acting. A Stun, a Sleep or a hex ends the channel at once.
+  { id: 'casting',       title: 'Channeling',    desc: 'Channelling an ultimate: cannot attack or use skills. Deals <value> spirit damage to every enemy at the end of its turn. A Stun ends it.', hvalue: 1, blocks: ['attack', 'skill'] },
   { id: 'casting_light', title: 'Channeling',    desc: 'Deals <value> spirit to all enemies at end of turn and drains HP. Can still act.',                         hvalue: 1 },
 
   // ----- Hard CC -----
@@ -112,7 +120,7 @@ export const STATUSES: StatusDef[] = [
   // ----- Delayed CC -----
   // Mirage's mark refreshes its full 3-turn timer on every new stack (stack.duration
   // 'reset'); the mark that makes DJINN_CAP detonates them all (his passive).
-  { id: 'charged',       title: 'Charged',       desc: 'On expiry: Stun for 1 turn.',                              hvalue: -1 },
+  { id: 'charged',       title: 'Charged',       desc: 'When this runs out: Stun for 1 turn. Taking it off first stops the Stun.', hvalue: -1 },
   { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 4 spirit damage + Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' } },
   { id: 'reverb',        title: 'Reverb',        desc: 'Detonates at the start of your turn for <value> spirit damage.', hvalue: -1 },
   // Last Stand is a delayed strike: at the start of its bearer's owner's turn, when it is

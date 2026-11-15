@@ -15,7 +15,7 @@ import { getAbility, registerAbilities } from '@/engine/registry';
 import { fireTriggers } from '@/engine/triggers';
 import { withCast, currentCast } from '@/engine/castContext';
 import { pushFx } from '@/engine/fx';
-import { drawCards, oweDiscard } from '@/engine/deck';
+import { drawCards, nextRandom, oweDiscard } from '@/engine/deck';
 
 export type { TargetFilter };
 export { getAbility };
@@ -119,6 +119,12 @@ export interface AbilityDef {
    *  nothing and still spend her ability for the turn.) */
   excludeSelf?: boolean;
   run: EffectFn;
+  /** Equipment only: what happens as the item is played onto its hero
+   *  (`playCard`, engine/actions/hand.ts), and as it is taken off again — an
+   *  upgrade evolving it, or another card replacing it. For an item whose
+   *  effect is a status its bearer carries (Counterspell). */
+  onWorn?: (G: GameState, bearer: CardInstance) => void;
+  onTakenOff?: (G: GameState, bearer: CardInstance) => void;
 
   // ----- Pure hooks -----
   // Optional readings the engine takes of a card that carries this ability
@@ -299,9 +305,11 @@ const eff_disarming_hex: AbilityDef = {
 };
 
 // Short, sharp hard CC: a clean 1-turn stun (Cursed Relic is the long sister).
+// The immediate counter to a channel (Patrick, 2026-11-15): a Stun ends one at
+// once (addStatus), so Knockdown on a channelling Seven costs him the rest.
 const eff_knockdown: AbilityDef = {
   id: 'eff_knockdown', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Knockdown — Stun the enemy Active for 1 turn.',
+  prompt: 'Knockdown — Stun the enemy Active for 1 turn. A Stun ends a channel.',
   run: (G, _ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'stun', 1, 1);
@@ -340,8 +348,10 @@ const eff_curse: AbilityDef = {
 };
 
 // Dispel Magic (canon T3 vitality active, once named Debuff Remover — the id
-// keeps the old name): purge an ally's debuffs and grant Shield 4; if it purged
-// anything, the ally also heals 4 (canon: a heal when a debuff is removed).
+// keeps the old name): take every debuff off an ally — one on it now (a Stun,
+// a Bleed) and one still waiting to go off (Charged, Reverb) alike (Patrick,
+// 2026-11-15) — and grant Shield 4; if it took anything off, the ally also
+// heals 4 (canon: a heal when a debuff is removed).
 const eff_debuff_remover: AbilityDef = {
   id: 'eff_debuff_remover', trigger: 'onPlay', target: 'allyHero',
   prompt: 'Dispel Magic — cleanse an ally and shield it.',
@@ -1209,19 +1219,46 @@ const eff_slowing_bullets: AbilityDef = {
   run: (G, _ctx, { target }) => { if (target && !isRespawning(target)) addStatus(G, target, 'rooted', 1, 1); },
 };
 
-// Debuff Reducer (canon T2 vitality): shortens every negative effect on you.
-// TCG: a debuff on the bearer lands 1 turn shorter, never under 1 (the
-// debuffDuration hook). Permanent marks (99+) are left alone, and so are the
-// debuffs whose expiry is the payload — a shorter Charged or Reverb would only
-// go off sooner.
-const GOES_OFF_ON_EXPIRY: ReadonlySet<StatusId> = new Set(['charged', 'reverb']);
+// Debuff Reducer (canon T2 vitality passive: debuffs on you end sooner). TCG
+// (Patrick, 2026-11-15: "just remove one of the debuffs randomly"): at the
+// start of its owner's turn one debuff on the bearer, picked at random from
+// the match's own stream, is taken off — a Stun that would have cost the turn,
+// a Bleed, or a delayed one (Charged) before it goes off. With two debuffs on
+// the bearer it is a coin toss which goes.
 const eff_debuff_reducer: AbilityDef = {
-  id: 'eff_debuff_reducer', trigger: 'ongoing', target: 'self',
+  id: 'eff_debuff_reducer', trigger: 'startOfTurn', target: 'self',
   base: 1,
-  debuffDuration: (_self, statusId, duration) =>
-    duration < 99 && !GOES_OFF_ON_EXPIRY.has(statusId) ? Math.max(1, duration - 1) : duration,
-  run: () => {},
+  run: (G, _ctx, { source }) => {
+    if (!source) return;
+    const debuffs = source.statuses.filter((st) => DEBUFF_IDS.has(st.id));
+    if (debuffs.length === 0) return;
+    const gone = debuffs[Math.floor(nextRandom(G) * debuffs.length)];
+    source.statuses = source.statuses.filter((st) => st !== gone);
+    pushLog(G, `${cardName(source.cardId)} shakes off ${STATUSES_BY_ID[gone.id]?.title ?? gone.id} (Debuff Reducer).`);
+    pushFx(G, { kind: 'immune', iid: source.iid, what: gone.id });
+  },
 };
+
+// Counterspell (canon T3 vitality passive: your next parry protects you from
+// the damage and effects of enemy abilities and items, and a parried spell
+// heals you). TCG: the bearer carries the Counterspell status (statuses/,
+// damage.ts) — it comes with the item as it is played, and after it has
+// stopped a card the item brings it back at the start of its owner's turn once
+// "Counterspell spent" has run out.
+const eff_counterspell: AbilityDef = {
+  id: 'eff_counterspell', trigger: 'startOfTurn', target: 'self',
+  base: 3,
+  run: (G, _ctx, { source }) => { if (source) readyCounterspell(G, source); },
+  onWorn: (G, bearer) => readyCounterspell(G, bearer),
+  onTakenOff: (_G, bearer) => {
+    bearer.statuses = bearer.statuses.filter((st) => st.id !== 'counterspell' && st.id !== 'counterspell_spent');
+  },
+};
+/** Give `hero` Counterspell unless it has it, or has spent it and is waiting. */
+function readyCounterspell(G: GameState, hero: CardInstance) {
+  if (hero.statuses.some((st) => st.id === 'counterspell' || st.id === 'counterspell_spent')) return;
+  addStatus(G, hero, 'counterspell', 1, 99);
+}
 
 // Spirit Snatch (canon T3 spirit): steals spirit power from the hero you hit.
 // TCG: when the bearer's skill / spell / ult damages an enemy, it gets Spirit
@@ -2119,16 +2156,22 @@ const skill_wraith: HeroAbilityDef = {
   },
 };
 
-// Seven — Lightning Ball: zaps the whole enemy team.
+// Seven — Static Charge (Patrick, 2026-11-15: stuns that resolve after a
+// turn, so the other side can answer them). The hit lands now; the Stun is a
+// Charge that goes off after the enemy's next turn (statuses/ `charged`, put on
+// for 2 turns: tickStartOfTurn). In that turn the charged side may take it off
+// (Dispel Magic, Debuff Reducer) or walk the hero out of the lane, where the
+// Stun costs it little. A turn denied, so it waits 4.
 const skill_seven: HeroAbilityDef = {
-  id: 'skill_seven', trigger: 'activate', target: 'noTarget', charges: 2,
-  name: 'Lightning Ball',
-  text: 'Roll a ball of lightning through the enemy team: deal {sp:1} spirit damage to every enemy.',
+  id: 'skill_seven', trigger: 'activate', target: 'enemyActive', cooldown: 4,
+  name: 'Static Charge',
+  text: 'Deal {sp:1} spirit damage to the enemy Active and Charge it: after its next turn, it is Stunned 1 turn.',
   base: 1,
   scalesSpirit: true,
-  run: (G, ctx, { source }) => {
-    const dmg = 1 + spi(source);
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit'); });
+  run: (G, _ctx, { source, target }) => {
+    if (!target) return;
+    damageUnit(G, target, 1 + spi(source), 'spirit', 'Static Charge');
+    addStatus(G, target, 'charged', 1, 2);
   },
 };
 
@@ -2473,12 +2516,18 @@ const eff_ult_rem: AbilityDef = {
   base: 4,
   run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'sleep', 1, 2); },
 };
+// Storm Cloud is a channel (Patrick, 2026-11-15): Seven is locked in it for 2
+// turns, and at the end of each of them it deals 2 + his Spirit to every enemy
+// (`casting`, tickCastingPulses) — the first as the turn he starts it ends,
+// the second after the enemy's turn, in which a Stun on him ends the channel
+// (addStatus). Sinclair's copy channels on Sinclair.
+const STORM_CLOUD = { pulse: 2, turns: 2 } as const;
 const eff_ult_seven: AbilityDef = {
   id: 'eff_ult_seven', trigger: 'onPlay', target: 'noTarget',
-  base: 5,
-  run: (G, ctx) => {
-    const dmg = 5 + ultSpi();
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit', 'Storm Cloud'); });
+  base: STORM_CLOUD.pulse,
+  run: (G, ctx, { source }) => {
+    const seven = ultCaster(G, ctx.movingPlayer, source, 'hero_seven');
+    if (seven) addStatus(G, seven, 'casting', STORM_CLOUD.pulse, STORM_CLOUD.turns);
   },
 };
 // Killing Blow keeps its condition (hero-design §3): the hit, then a target it
@@ -2657,7 +2706,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_healbane, eff_active_reload, eff_long_range, eff_fortitude,
   eff_frenzy, eff_siphon_bullets, eff_superior_duration,
   eff_headshot_booster, eff_spirit_strike, eff_mystic_vulnerability, eff_mystic_slow,
-  eff_slowing_bullets, eff_debuff_reducer, eff_spirit_snatch, eff_spiritual_overflow,
+  eff_slowing_bullets, eff_debuff_reducer, eff_counterspell, eff_spirit_snatch, eff_spiritual_overflow,
   eff_sprint_boots, eff_enduring_speed, eff_kinetic_dash,
   // ----- Added 2026-11-05: the full shop -----
   eff_monster_rounds, eff_intensifying_magazine, eff_mystic_shot, eff_opening_rounds,

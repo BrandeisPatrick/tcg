@@ -1,6 +1,6 @@
 import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState, FxTag } from './types';
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
-import { damageUnit, healUnit } from './damage';
+import { counterspellStops, damageUnit, healUnit } from './damage';
 import { resolve, returnRemToBench } from './death';
 import { kitCharges, liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isBoss, isRespawning, resistedBy, seatOf, skillWait, statusDuration } from './query';
 import { pushLog } from './log';
@@ -51,6 +51,14 @@ const NEGATIVE_MAGNITUDE_STATUSES: Set<StatusId> = new Set([
  * status (no ability or item can aim at it, and nothing riding on a swing at
  * it fires).
  *
+ * Counterspell on the target stops what an enemy card would put on it
+ * (`counterspellStops`, damage.ts).
+ *
+ * A status that stops a channel's pulse (Stun, Sleep, the rabbit hex) ENDS a
+ * channel its target is in, at once (Patrick, 2026-11-15: a Knockdown is the
+ * immediate counter to a channelled ultimate): the rest of its pulses are
+ * lost and the ultimate has been spent.
+ *
  * `opts.ramp` marks a channel that escalates: its value climbs by `ramp`
  * after each pulse (see tickCastingPulses). `opts.heal` is the HP the bearer
  * recovers when the status goes off (Last Stand, in tickStartOfTurn).
@@ -61,6 +69,9 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
   // passives have run — a mark on the fallen would only be wiped with them).
   if (isRespawning(target) || target.hp <= 0 || isBoss(target)) return;
   const name = cardName(target.cardId);
+
+  // Counterspell: an enemy card puts nothing on its bearer.
+  if (counterspellStops(G, target)) return;
 
   // What the bearer carries may refuse the status outright.
   const resisted = resistedBy(target, id);
@@ -125,12 +136,22 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
     debuff: DEBUFF_IDS.has(id), tag: opts?.tag, source: fxSource(currentCast()?.source),
   });
 
+  // A channel ends the moment its caster is stunned, slept or hexed.
+  if (STATUSES_BY_ID[id]?.blocks?.includes('pulse') && target.statuses.some((s) => CHANNELS.has(s.id))) {
+    target.statuses = target.statuses.filter((s) => !CHANNELS.has(s.id));
+    pushLog(G, `${name}'s channel is broken.`);
+    pushFx(G, { kind: 'immune', iid: target.iid, what: 'channel' });
+  }
+
   // Equipment reactive: Reactive Barrier shields the bearer when they suffer
   // hard CC. Fire here so any attached equipment with onBearerCCSuffered runs.
   if (CC_STATUSES.has(id)) {
     fireTriggers(G, target, 'onBearerCCSuffered', { reaction: true });
   }
 }
+
+/** The channel statuses: a channelled ultimate in progress on its caster. */
+const CHANNELS: ReadonlySet<StatusId> = new Set(['casting', 'casting_light']);
 
 export function cleanseDebuffs(target: CardInstance) {
   target.statuses = target.statuses.filter((s) => !DEBUFF_IDS.has(s.id));
@@ -146,10 +167,11 @@ export function tickStartOfTurn(G: GameState, ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {
     const bleed = c.statuses.find((s) => s.id === 'bleed');
     if (bleed) damageUnit(G, c, bleed.value, 'pure', 'Bleed', { tag: 'bleed' });
-    // Charged: delayed-stun. Detected BEFORE the tick so we know it's about
-    // to expire, then converts into a 1-turn Stun on the same target. Powers
-    // Seven's Static Charge — long fuse + small payoff (down from 2t stun
-    // after the balance pass).
+    // Charged: a delayed Stun (Seven's Static Charge). Detected BEFORE the
+    // tick so we know it is about to expire, then it turns into a 1-turn Stun
+    // on the same hero. Put on for 2 turns, it sits through one whole turn of
+    // its bearer's side first — the turn in which that side may take it off
+    // (Dispel Magic, Debuff Reducer) or move the hero out of the lane.
     const charged = c.statuses.find((s) => s.id === 'charged');
     if (charged && charged.duration === 1) {
       addStatus(G, c, 'stun', 1, 1, { tag: 'discharge' });
@@ -312,14 +334,13 @@ export function clearTurnFlags(ps: PlayerState) {
  * effective Spirit is added live each pulse. Called from turn.onEnd, so the
  * pulse comes after everything the player did in the turn, the attack included.
  *
- *  - Interrupt: if the channeler is Stunned / Slept this turn, the pulse is
- *    skipped (canon: channels are interruptible) — the channel still counts
- *    down at the next start of turn.
+ *  - Interrupt: a Stun, a Sleep or a hex landing on the channeler ends the
+ *    channel outright (`addStatus`). The `isBlocked` check below is the
+ *    belt to that: a channeler pinned some other way pulses nothing.
  *  - Warden's light variant heals him for the total damage dealt (Last Stand
  *    drain) and does NOT lock him out of attacking / skills.
- *  - Seven's channel escalates: its status carries `ramp: 1`, so its per-tick
- *    value climbs by 1 each pulse (Storm Cloud ramps) and a duration-3 cast
- *    deals 2 → 3 → 4 (+Spirit).
+ *  - A channel may escalate: a status carrying `ramp` climbs by that much
+ *    each pulse. (Seven's Storm Cloud does not: 2 + Spirit, twice.)
  */
 export function tickCastingPulses(G: GameState, ps: PlayerState) {
   for (const c of liveBoardCards(ps)) {

@@ -39,7 +39,7 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   hero_haze:       { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 1, skill: null, ult: 'large' },
   hero_wraith:     { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 0, skill: [3, 1], ult: 'medium' },
   hero_vindicta:   { atk: 2, hp: 5, growth: [2, 0, 0], retreat: 0, skill: null, ult: 'medium' },
-  hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: [3, 2], ult: 'large' },
+  hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: [4, 1], ult: 'large' },
   hero_drifter:    { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: null, ult: 'medium' },
   hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: [4, 1], ult: 'large' },
   hero_mirage:     { atk: 1, hp: 4, growth: [1, 1, 2], retreat: 0, skill: null, ult: 'small' },
@@ -219,9 +219,9 @@ describe('a skill costs no souls: it waits, and a charged one holds two uses (Pa
     }
   });
 
-  it('the four charged skills are the ones Deadlock gives charges: Serrated Knives, Frost Grenade, Lightning Ball and Kinetic Pulse', () => {
+  it('the three charged skills are ones Deadlock gives charges: Serrated Knives, Frost Grenade and Kinetic Pulse (Seven\'s is Static Charge now, which has none)', () => {
     const charged = HEROES.filter((h) => (getAbility(h.skills[0] ?? '')?.charges ?? 1) > 1).map((h) => h.id).sort();
-    expect(charged).toEqual(['hero_dynamo', 'hero_kelvin', 'hero_seven', 'hero_shiv']);
+    expect(charged).toEqual(['hero_dynamo', 'hero_kelvin', 'hero_shiv']);
   });
 
   it('it is used with no souls, and ready again on the hero\'s third own turn after — SKILL_COOLDOWN', () => {
@@ -365,12 +365,10 @@ describe('Viscous\'s skill is The Cube: one of his heroes takes no damage until 
     expect(pid).toBe('1');
     const rival = G.players['1'];
     const hp = haze.hp;
-    // Seven's Lightning Ball hits every enemy: all but the cube.
+    // Seven's Static Charge on the cubed Active: its spirit hit deals nothing.
     const seven = rival.bench[2]!;
-    const viscousHp = viscous.hp;
-    act(G, '1', { type: 'useSkill', heroIid: seven.iid }); // 2 of the turn's 5 souls
+    act(G, '1', { type: 'useSkill', heroIid: seven.iid, targetIid: haze.iid });
     expect(haze.hp).toBe(hp);
-    expect(viscous.hp).toBe(viscousHp - 1);
     act(G, '1', { type: 'attack' }); // Abrams swings at the cubed Haze
     expect(haze.hp).toBe(hp);
     expect(G.fx.some((e) => e.kind === 'immune' && e.iid === haze.iid && e.what === 'damage')).toBe(true);
