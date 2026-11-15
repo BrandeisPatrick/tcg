@@ -613,16 +613,16 @@ describe('the transition rules fire', () => {
     const G = clean();
     G.players['0'].souls = 30;
     giveCard(G, '0', 'grit');
-    stackDeck(G, '0', ['cold_front', 'extra_spirit', 'knockdown']);
+    stackDeck(G, '0', ['cold_front', 'extra_spirit', 'knockdown', 'extra_health']);
     const compress = giveCard(G, '0', 'improved_cooldown');
     const use = made(G, 'playCard', [compress.iid]);
     expect(at(use.after.G, compress.iid).place).toBe('discard'); // played once, then discarded
-    expect(use.after.G.players['0'].hand.map((c) => c.cardId)).toEqual(['grit', 'cold_front', 'extra_spirit']);
+    expect(use.after.G.players['0'].hand.map((c) => c.cardId)).toEqual(['grit', 'cold_front', 'extra_spirit', 'knockdown']);
     expect(use.after.G.pendingDiscard).toEqual({ pid: '0', count: 1, cardId: 'improved_cooldown' });
     expect(use.check()).toEqual([]);
     expect(use.check((A) => { A.pendingDiscard = undefined; })).toContain('draw-card');
     expect(use.check((A) => { A.pendingDiscard!.count = 2; })).toContain('draw-card');
-    expect(use.check((A) => { const ps = A.players['0']; const c = ps.hand.pop()!; c.zone = 'deck'; ps.deck.unshift(c); })).toContain('draw-card'); // one drawn, not two
+    expect(use.check((A) => { const ps = A.players['0']; const c = ps.hand.pop()!; c.zone = 'deck'; ps.deck.unshift(c); })).toContain('draw-card'); // two drawn, not three
     expect(use.check((A) => { const ps = A.players['0']; [ps.hand[1], ps.deck[0]] = [{ ...ps.deck[0], zone: 'hand' }, { ...ps.hand[1], zone: 'deck' }]; })).toContain('draw-card'); // not the top card
     // Into a hand one short of MAX_HAND once the draw card has left it: one card drawn, one owed.
     const F = clean();

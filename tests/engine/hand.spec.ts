@@ -661,12 +661,12 @@ describe('the draw cards: draw, then discard from anywhere in the hand', () => {
   }
   const cast = (item: CardInstance): Action => ({ type: 'playCard', cardIid: item.iid });
 
-  it('Compress Cooldown: draw 2, owe 1; it costs its price, is played once and goes to the discard pile', () => {
+  it('Compress Cooldown: draw 3, owe 1; it costs its price, is played once and goes to the discard pile', () => {
     const { G, item, stacked } = ready('improved_cooldown', ['grit', 'cold_front', 'extra_health']);
     const keep = giveCard(G, '0', 'toxic_bullets');
     expect(attempt(G, '0', cast(item)).result).not.toBe(INVALID);
     expect(G.players['0'].souls).toBe(0);
-    expect(G.players['0'].hand).toEqual([keep, stacked[0], stacked[1]]);
+    expect(G.players['0'].hand).toEqual([keep, stacked[0], stacked[1], stacked[2]]);
     expect(G.pendingDiscard).toEqual({ pid: '0', count: 1, cardId: 'improved_cooldown' });
     expect([item.zone, item.cooldowns]).toEqual(['discard', undefined]);
     expect(G.players['0'].discard).toEqual([item]);
@@ -674,11 +674,11 @@ describe('the draw cards: draw, then discard from anywhere in the hand', () => {
     expect(attempt(G, '0', { type: 'discard', cardIids: [keep.iid] }).result).not.toBe(INVALID);
     expect(G.pendingDiscard).toBeUndefined();
     expect(G.players['0'].discard).toEqual([item, keep]);
-    expect(G.players['0'].hand).toEqual([stacked[0], stacked[1]]);
+    expect(G.players['0'].hand).toEqual([stacked[0], stacked[1], stacked[2]]);
   });
 
-  it('Superior Cooldown draws 4 and owes 2; Transcendent draws 8 and owes 4', () => {
-    for (const [id, draw, owe] of [['superior_cooldown', 4, 2], ['transcendent_cooldown', 8, 4]] as const) {
+  it('Superior Cooldown draws 5 and owes 1; Transcendent draws 8 and owes 2', () => {
+    for (const [id, draw, owe] of [['superior_cooldown', 5, 1], ['transcendent_cooldown', 8, 2]] as const) {
       const { G, item } = ready(id, Array.from({ length: 9 }, () => 'grit'));
       perform(G, '0', cast(item));
       expect(G.players['0'].hand, id).toHaveLength(draw);
@@ -688,7 +688,7 @@ describe('the draw cards: draw, then discard from anywhere in the hand', () => {
   });
 
   it('while the discard is owed nothing else is legal; it may be paid a card at a time', () => {
-    const { G, item } = ready('superior_cooldown', ['grit', 'grit', 'grit', 'grit']);
+    const { G, item } = ready('transcendent_cooldown', ['grit', 'grit', 'grit', 'grit']); // a short deck: 4 drawn, 2 owed
     perform(G, '0', cast(item));
     const hand = G.players['0'].hand;
     refusedUntouched(G, '0', { type: 'attack' }, 'discardOwed');

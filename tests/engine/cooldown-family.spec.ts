@@ -17,7 +17,7 @@ import { ABILITIES_BY_ID, getAbility } from '@/abilities';
 import { INVALID, perform } from '@/engine/engine';
 import { cooldownCut, itemPrice, skillWait } from '@/engine/query';
 import { playCost } from '@/engine/legality';
-import { PRICE, SKILL_COOLDOWN, ULT_WAIT } from '@/engine/constants';
+import { MAX_HAND, PRICE, SKILL_COOLDOWN, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame, giveItem, makeHero, stackDeck, useItem } from './_helpers';
 
 /** P0's Active made a Level 2 Viscous, with souls to pay for
@@ -34,7 +34,7 @@ function viscous() {
 const COMPRESS = 'improved_cooldown';
 const SUPERIOR = 'superior_cooldown';
 const TRANSCENDENT = 'transcendent_cooldown';
-const FAMILY = [[COMPRESS, 2, 2, 1], [SUPERIOR, 3, 4, 2], [TRANSCENDENT, 4, 8, 4]] as const;
+const FAMILY = [[COMPRESS, 2, 3, 1], [SUPERIOR, 3, 5, 1], [TRANSCENDENT, 4, 8, 2]] as const;
 
 describe('The Cooldown family is the draw engine', () => {
   it('three Spirit spells, tiers 2, 3 and 4, Deadlock\'s line from one to the next; as actives none evolves another', () => {
@@ -56,8 +56,11 @@ describe('The Cooldown family is the draw engine', () => {
     const kept = FAMILY.map(([, , draw, discard]) => draw - discard);
     const price = FAMILY.map(([id]) => itemPrice(id));
     expect(price).toEqual([PRICE[2], PRICE[3], PRICE[4]]);
-    expect(kept).toEqual([1, 2, 4]);
-    for (let i = 0; i < 3; i++) expect(price[i] / kept[i]).toBe(PRICE[2]);
+    // Draw x, discard y (Patrick, 2026-11-15), set for one play: Compress and Superior keep a
+    // card for every 2 souls; Transcendent, held by the hand's cap of 10, keeps 6 for its 16.
+    expect(kept).toEqual([2, 4, 6]);
+    expect([price[0] / kept[0], price[1] / kept[1]]).toEqual([2, 2]);
+    expect(FAMILY[2][2]).toBeLessThan(MAX_HAND);
   });
 
   it('played from the hand for its price: no hero\'s ability is spent, the cards are drawn, the discard is owed, and the card is on the discard pile', () => {

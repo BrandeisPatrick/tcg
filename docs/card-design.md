@@ -27,8 +27,8 @@ that are `disabled` or not `shopable`), or the item's page on the
 the game moves an item between active and passive, the card changes type with it.
 
 Two cards are Patrick's own exceptions, both passives in Deadlock and spells
-here: the Cooldown family (the draw cards; open, see "Changed 2026-11-15") and
-Counterspell (2026-11-15). Nothing else is.
+here: the Cooldown family (the draw cards: draw x, discard y; see "Changed
+2026-11-15") and Counterspell (2026-11-15). Nothing else is.
 
 A good effect never justifies breaking this. If a passive item has an effect
 that only works as a one-shot, pick a different item, or translate the passive
@@ -459,7 +459,7 @@ printed text.
 
 **The rule.** Only the charge items add a charge to a skill or bring one back
 sooner. No other card shortens a skill's wait: the Cooldown family are this
-game's draw cards (an open question since 2026-11-15, below). Refresher, whose verb is the reset, still sets a charged
+game's draw cards (draw x, discard y; confirmed 2026-11-15, below). Refresher, whose verb is the reset, still sets a charged
 skill back to full with the cooldowns it clears.
 
 Source: the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
@@ -634,15 +634,35 @@ and a heal of 1 after an attack, which Restorative Shot already is. Haze, Shiv
 and Mirage's builds take Swift Striker, Stalker and Mystic Shot in its place,
 and Swift Striker is Haze's first signature.
 
-**Open: the Cooldown family.** Compress, Superior and Transcendent Cooldown are
-passive items in Deadlock and spells here, the one break of §1 (they became
-the draw cards with the deck plan, when a lane paid 5 souls a turn). As one
-play each draws for its tier's price: 4 souls for one net card. At 2 souls a
-turn a hand is short of souls, not of cards, so they are under their price at
-every tier and the ready decks no longer carry them. Two ways out, Patrick's
-call: (a) make them equipment that takes a turn off the bearer's waits, as in
-Deadlock, now that skills and ultimates wait; (b) keep one cheap draw spell
-and drop the other two. They are unchanged until then.
+**The Cooldown family: draw x, discard y** (Patrick, 2026-11-15: "Cooldown
+cards are all draw x discard y effect"). Compress, Superior and Transcendent
+Cooldown are passive items in Deadlock and spells here, Patrick's exception to
+§1: they are the deck's draw cards. Played once now, their old numbers (2 / 1,
+4 / 2, 8 / 4, set for a card worn and cast every 2 turns) were under their
+price, so x and y are set for one play.
+
+- **What a card is worth: 1.4.** Cards are priced at their value, so a card
+  drawn is not worth its price; it is worth what having it changes. Three
+  parts: the average card returns about 1.1 × its 3.5 souls, a surplus of 0.4;
+  a larger hand lets the souls go to the card that fits the turn, 0.5; and 4
+  of a deck's 20 cards are heroes, which cost nothing and are worth far more
+  than an item, found a turn or two sooner, 0.5.
+- **What a discard costs: 0.3.** The card let go is the worst of the hand, one
+  the side would not have had the souls for.
+
+| Card | Tab · tier | Price | Was → now | One play (souls) |
+|---|---|---|---|---|
+| Compress Cooldown | Spirit T2 | 4 | Draw 2, discard 1 → draw 3, discard 1 | 3 × 1.4 − 0.3 → **4.0** |
+| Superior Cooldown | Spirit T3 | 8 | Draw 4, discard 2 → draw 5, discard 1 | 5 × 1.4 − 0.3 = 6.7 → **6.5** |
+| Transcendent Cooldown | Spirit T4 | 16 | Draw 8, discard 4 → draw 8, discard 2 | 8 × 1.4 − 0.6 = 10.6 → **10.5**, under its band (12–24) |
+
+- Compress and Superior keep a card for every 2 souls (2 for 4, 4 for 8).
+  Transcendent cannot follow: a hand holds 10, so a draw of more than 8 is
+  mostly lost, and it keeps 6 for 16. It is the family's top end and stays
+  dear for what it does.
+- The ready decks still carry none: at 2 souls a turn their 16 slots do more
+  as cards that are played than as cards that find cards. A deck built for a
+  long game, or one that needs its heroes early, wants a Compress or two.
 
 142 cards stay 142: Counterspell in, Active Reload out (96 passives, 46
 actives, counting Counterspell with the actives it plays as).

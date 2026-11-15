@@ -57,27 +57,29 @@ describe('deck motion plan', () => {
   it('a draw card: each card flies deck → hand, one stagger apart, and the deck ticks as each leaves', () => {
     const G = freshReadyGame();
     const stacked = stackDeck(G, '0', ['headshot_booster', 'extra_health', 'extra_spirit']);
-    const spell = giveCard(G, '0', 'improved_cooldown'); // Compress Cooldown: draw 2, discard 1
+    const spell = giveCard(G, '0', 'improved_cooldown'); // Compress Cooldown: draw 3, discard 1
     G.players['0'].souls = 4;
     const before = snapshot(G);
     G.fx = [];
     expect(perform(G, '0', { type: 'playCard', cardIid: spell.iid })).not.toBe(INVALID);
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
     const draws = ofKind(plan, 'draw');
-    expect(draws).toHaveLength(2);
-    expect(draws.map((f) => f.iid)).toEqual([stacked[0].iid, stacked[1].iid]);
-    expect(draws.map((f) => f.at)).toEqual([0, T.stagger]);
+    expect(draws).toHaveLength(3);
+    expect(draws.map((f) => f.iid)).toEqual([stacked[0].iid, stacked[1].iid, stacked[2].iid]);
+    expect(draws.map((f) => f.at)).toEqual([0, T.stagger, 2 * T.stagger]);
     expect(draws.every((f) => f.dur === T.flight && f.hold === 0)).toBe(true);
     expect(draws.every((f) => f.from.kind === 'pile' && f.from.pile === 'deck')).toBe(true);
     expect(draws.map((f) => f.to)).toEqual([
       { kind: 'hand', pid: '0', iid: stacked[0].iid },
       { kind: 'hand', pid: '0', iid: stacked[1].iid },
+      { kind: 'hand', pid: '0', iid: stacked[2].iid },
     ]);
     // Yours land face up, out of a face-down deck; the real card stays hidden until then.
     expect(draws.every((f) => f.faces.start === 'back' && f.faces.end === 'face' && f.hide === f.iid)).toBe(true);
     expect(plan.ticks.filter((t) => t.pile === 'deck')).toEqual([
       { pile: 'deck', pid: '0', at: 0, delta: -1 },
       { pile: 'deck', pid: '0', at: T.stagger, delta: -1 },
+      { pile: 'deck', pid: '0', at: 2 * T.stagger, delta: -1 },
     ]);
     // The spell itself, played: from the hand to the discard pile, face up, and the pile ticks as it lands.
     const [played] = ofKind(plan, 'discard');
@@ -88,7 +90,7 @@ describe('deck motion plan', () => {
     expect(plan.ticks.filter((t) => t.pile === 'discard')).toEqual([{ pile: 'discard', pid: '0', at: played.at + T.flight, delta: 1 }]);
     expect(plan.total).toBeGreaterThanOrEqual(T.stagger + T.flight);
     expect(plan.opening).toBe(false);
-    expect(arrivingIids(plan, '0')).toEqual([stacked[0].iid, stacked[1].iid]);
+    expect(arrivingIids(plan, '0')).toEqual([stacked[0].iid, stacked[1].iid, stacked[2].iid]);
     expect(arrivingIids(plan, '1')).toEqual([]);
   });
 

@@ -278,9 +278,9 @@ tier. An active item is always a spell and a passive item always equipment
 ([`docs/card-design.md`](./docs/card-design.md) §1), with two exceptions, both
 Patrick's calls: Counterspell, a passive in Deadlock, is a spell here, and the
 Cooldown family, passives in Deadlock, are the deck's draw cards here, so they
-are actives ([`docs/deck-plan.md`](./docs/deck-plan.md)); what becomes of them
-is open ([`docs/card-design.md`](./docs/card-design.md), "Open: the Cooldown
-family"). One card prints a price of its own: Rusted Barrel, 1 soul. Cells read
+are actives ([`docs/deck-plan.md`](./docs/deck-plan.md)): draw 3, discard 1 /
+draw 5, discard 1 / draw 8, discard 2 ([`docs/card-design.md`](./docs/card-design.md),
+"The Cooldown family"). One card prints a price of its own: Rusted Barrel, 1 soul. Cells read
 passives · actives; the column heads give the tier's price.
 
 | Tab | T1 · 2 | T2 · 4 | T3 · 8 | T4 · 16 | T5 · 24 | All |
@@ -448,7 +448,7 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
 - **One-play spells, counters and the ready decks are reasoned, not played**
   (2026-11-15; docs/card-design.md, "Changed 2026-11-15"). No sim or play
   test has run on them. Ten spells sit under half their price as one play and
-  wait on a decision, and so do the three draw cards.
+  wait on a decision.
 - **Machinery no card uses.** Since the hero rebuild no hero opens a channel
   (`casting` / `casting_light`, `tickCastingPulses`) or puts on Charged, the
   FX layer's Naptime wake-up tag has no burst to play, and since Rem stands in

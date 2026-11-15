@@ -47,8 +47,9 @@ upgrades in the deck and the counters ([card-design.md](card-design.md), "Change
 - **Mostly equipment.** A spell is one play; equipment stays. A deck carries a few spells for the
   turn that needs one, at most half the deck.
 - **No draw card.** Two Compress Cooldown were in every deck until 2026-11-15. At 2 souls a turn a
-  hand is short of souls, not of cards, and 4 souls for one net card is under its price
-  ([card-design.md](card-design.md), "Open: the Cooldown family").
+  hand is short of souls more than of cards, so the 16 slots go to cards that are played. Compress
+  Cooldown is worth its price now (draw 3, discard 1) for a deck that wants one
+  ([card-design.md](card-design.md), "The Cooldown family").
 - **The rest from the squad's own builds**, so each hero finds its items.
 - **A squad has a front, a carry and a helper.** No hero is in two decks; Shiv is in none.
 
@@ -114,19 +115,19 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 
 ## The draw cards
 
-Deadlock's three cooldown items are the draw cards. Since 2026-11-15 each is a spell played once
-from the hand for its price (until then a hero wore one and cast it every 2 turns for free). At
-that price they are under budget and no ready deck carries them; what becomes of them is open
-([card-design.md](card-design.md), "Open: the Cooldown family").
+Deadlock's three cooldown items are the draw cards: draw x, discard y (Patrick confirmed it on
+2026-11-15). Since that day each is a spell played once from the hand for its price (until then a
+hero wore one and cast it every 2 turns for free), and x and y were raised to suit one play.
 
 | Card | Tier | Price | Spell | Net cards |
 |---|---|---|---|---|
-| Compress Cooldown (`improved_cooldown`) | 2 | 4 souls | Draw 2, discard 1 | +1 |
-| Superior Cooldown | 3 | 8 souls | Draw 4, discard 2 | +2 |
-| Transcendent Cooldown | 4 | 16 souls | Draw 8, discard 4 | +4 |
+| Compress Cooldown (`improved_cooldown`) | 2 | 4 souls | Draw 3, discard 1 | +2 |
+| Superior Cooldown | 3 | 8 souls | Draw 5, discard 1 | +4 |
+| Transcendent Cooldown | 4 | 16 souls | Draw 8, discard 2 | +6 |
 
 - You can discard any cards in your hand, not only the new ones.
-- Each step doubles both the price and the cards you keep, so a soul buys the same at every tier.
+- Compress and Superior keep a card for every 2 souls. Transcendent keeps 6 for 16: a hand holds 10, so it cannot draw more.
+- The numbers were 2 / 1, 4 / 2 and 8 / 4 until 2026-11-15, when each became one play ([card-design.md](card-design.md), "The Cooldown family").
 
 ## Upgrades
 

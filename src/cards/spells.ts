@@ -53,7 +53,7 @@ export const SPELLS: SpellCard[] = [
   // discard from anywhere in the hand, played once like any spell.
   // improved_cooldown keeps the item's old id so saved builds and decks still
   // load: it is Compress Cooldown.
-  { id: 'improved_cooldown', name: 'Compress Cooldown', type: 'spell', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_compress_cooldown'], text: 'Draw 2 cards, then discard 1 card from your hand.' },
+  { id: 'improved_cooldown', name: 'Compress Cooldown', type: 'spell', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_compress_cooldown'], text: 'Draw 3 cards, then discard 1 card from your hand.' },
 
   // ----- Tier 3 -----
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
@@ -79,7 +79,7 @@ export const SPELLS: SpellCard[] = [
   { id: 'heroic_aura',     name: 'Heroic Aura',     type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_heroic_aura'],     text: 'All allies gain +2 Bullet Power and Bullet Resist 1 for 2 turns.' },
   { id: 'shadow_weave',    name: 'Shadow Weave',    type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, upgradesFrom: 'sprint_boots', abilities: ['eff_shadow_weave'], text: 'Your Active gains Dome for 1 turn and +2 Bullet Power for 2 turns.' },
   { id: 'majestic_leap',   name: 'Majestic Leap',   type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_majestic_leap'],   text: 'Your Active retreats free; the bench ally you pick steps in.' },
-  { id: 'superior_cooldown', name: 'Superior Cooldown', type: 'spell', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'improved_cooldown', abilities: ['eff_superior_cooldown'], text: 'Draw 4 cards, then discard 2 cards from your hand.' },
+  { id: 'superior_cooldown', name: 'Superior Cooldown', type: 'spell', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'improved_cooldown', abilities: ['eff_superior_cooldown'], text: 'Draw 5 cards, then discard 1 card from your hand.' },
 
   // ----- Tier 4 -----
   { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
@@ -97,7 +97,7 @@ export const SPELLS: SpellCard[] = [
   { id: 'capacitor',      name: 'Capacitor',      type: 'spell', rarity: 3, slot: 'weapon',   tier: 4, upgradesFrom: 'tesla_bullets', abilities: ['eff_capacitor'], text: 'Deal {sp:2} spirit damage to the enemy Active and 2 to each enemy bench hero. Root them all for 1 turn.' },
   { id: 'vampiric_burst', name: 'Vampiric Burst', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'bullet_lifesteal', abilities: ['eff_vampiric_burst'], text: 'Your Active heals 4, gains Extra Attack 2 this turn and +3 Bullet Power for 2 turns.' },
   { id: 'focus_lens',     name: 'Focus Lens',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, upgradesFrom: 'spirit_sap', abilities: ['eff_focus_lens'], text: 'Silence any enemy for 2 turns. It gets Spirit Resist −3 for 2 turns and a Reverb of 5.' },
-  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'spell', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'superior_cooldown', abilities: ['eff_transcendent_cooldown'], text: 'Draw 8 cards, then discard 4 cards from your hand.' },
+  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'spell', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'superior_cooldown', abilities: ['eff_transcendent_cooldown'], text: 'Draw 8 cards, then discard 2 cards from your hand.' },
   { id: 'scourge',        name: 'Scourge',        type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_scourge'], text: 'An ally is cleansed of its debuffs and gains Spirit Resist 3 for 2 turns. Every enemy takes {sp:2} spirit damage.' },
 
   // ----- Tier 5 (added 2026-11-05: Deadlock's 9,999-soul items, docs/card-design.md) -----

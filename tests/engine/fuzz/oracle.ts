@@ -429,9 +429,9 @@ export function upgradesOfOracle(itemId: unknown): string[] {
  *  your hand"): what each casts — N drawn, then M discarded from anywhere in
  *  the hand. Pinned against the card texts by harness.spec. */
 export const DRAW_CARDS: Readonly<Record<CardId, { draw: number; discard: number }>> = {
-  improved_cooldown: { draw: 2, discard: 1 },
-  superior_cooldown: { draw: 4, discard: 2 },
-  transcendent_cooldown: { draw: 8, discard: 4 },
+  improved_cooldown: { draw: 3, discard: 1 },
+  superior_cooldown: { draw: 5, discard: 1 },
+  transcendent_cooldown: { draw: 8, discard: 2 },
 };
 
 /** True while `hero` wears CATEGORY_SPIKE_ITEMS or more items of the tab `slot`

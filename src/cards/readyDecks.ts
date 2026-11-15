@@ -19,8 +19,8 @@ import type { CardId } from '@/engine/types';
  *    (Counterspell is a spell: Patrick's call.)
  *  - Spells are played once and discarded, so a deck leans on equipment and
  *    carries a few spells for the turn that needs one. The draw cards
- *    (Compress Cooldown) are out: at 2 souls a turn a hand is short of souls,
- *    not of cards.
+ *    (Compress Cooldown) are out of these decks: at 2 souls a turn a hand is
+ *    short of souls more than of cards.
  *  - The rest comes from the squad's own builds, so each hero finds something
  *    made for it.
  */

@@ -882,8 +882,9 @@ const eff_spirit_shield_proc: AbilityDef = {
   run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 2, 999); },
 };
 
-// The draw engine (canon Compress → Superior → Transcendent Cooldown, actives
-// here — docs/deck-plan.md): draw N cards, then the player discards M from
+// The draw cards (canon Compress → Superior → Transcendent Cooldown, spells
+// here: "draw x, discard y", Patrick 2026-11-15; the numbers' reasoning is in
+// docs/card-design.md, "The Cooldown family"): draw N cards, then the player discards M from
 // anywhere in the hand (`oweDiscard`; the `discard` move pays it). A draw into
 // a full hand is skipped; the discard is never more than the hand holds.
 function drawThenDiscard(draw: number, discard: number, cardId: string): AbilityDef['run'] {
@@ -894,18 +895,18 @@ function drawThenDiscard(draw: number, discard: number, cardId: string): Ability
 }
 const eff_compress_cooldown: AbilityDef = {
   id: 'eff_compress_cooldown', trigger: 'onPlay', target: 'noTarget',
-  draw: { cards: 2, discard: 1 },
-  run: drawThenDiscard(2, 1, 'improved_cooldown'),
+  draw: { cards: 3, discard: 1 },
+  run: drawThenDiscard(3, 1, 'improved_cooldown'),
 };
 const eff_superior_cooldown: AbilityDef = {
   id: 'eff_superior_cooldown', trigger: 'onPlay', target: 'noTarget',
-  draw: { cards: 4, discard: 2 },
-  run: drawThenDiscard(4, 2, 'superior_cooldown'),
+  draw: { cards: 5, discard: 1 },
+  run: drawThenDiscard(5, 1, 'superior_cooldown'),
 };
 const eff_transcendent_cooldown: AbilityDef = {
   id: 'eff_transcendent_cooldown', trigger: 'onPlay', target: 'noTarget',
-  draw: { cards: 8, discard: 4 },
-  run: drawThenDiscard(8, 4, 'transcendent_cooldown'),
+  draw: { cards: 8, discard: 2 },
+  run: drawThenDiscard(8, 2, 'transcendent_cooldown'),
 };
 
 // Mystic Burst family: each time the bearer uses a skill, hit the enemy active
