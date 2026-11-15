@@ -136,9 +136,11 @@ export function HeroSlot({
   }
   const baseAtk = data.atk;
   const atkColor = atkInk(atk, baseAtk);
-  // The HP number says its state at rest, not only as it changes: red when
-  // hurt, green when its max is raised (poster.ts `hpPrint`).
-  const hpColor = hpPrint(shownHp, card.hpMax, data.hp);
+  // The HP says its state at rest, not only as it changes: a broken heart
+  // and a red number when hurt, a heart with a plus and a green number when
+  // its max is raised (poster.ts `hpPrint`).
+  const hpShown = hpPrint(shownHp, card.hpMax, data.hp);
+  const hpColor = hpShown.number;
   // Another form while a status gives one (Silver's Wolf form): its art and
   // a badge instead of a chip; when it ends the card shows the hero again.
   const form = heroForm({ ...card, statuses: shownStatuses });
@@ -492,7 +494,7 @@ export function HeroSlot({
               </span>
             )}
             <span style={{ ...statRow.pair(statSize) }}>
-              <HeartIcon size={iconSize} color={poster.stat.hp} />
+              <HeartIcon size={iconSize} color={hpShown.heart} state={hpShown.state} />
               <motion.span
                 style={{ color: hpColor, display: 'inline-block' }}
                 animate={hpTick

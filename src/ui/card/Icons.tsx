@@ -32,14 +32,33 @@ export function SwordIcon({ size = 14, color = poster.stat.atk, style }: IconPro
   );
 }
 
-/** Heart — the HP mark. A single flat fill in the stat's red. */
-export function HeartIcon({ size = 14, color = poster.stat.hp, style }: IconProps) {
+/** The heart's outline, and its two halves along a jagged break. */
+const HEART = 'M8 14 C 4 11, 1 9, 1 5.5 C 1 3, 3 1, 5 1 C 6.5 1, 7.5 2, 8 3 C 8.5 2, 9.5 1, 11 1 C 13 1, 15 3, 15 5.5 C 15 9, 12 11, 8 14 Z';
+const HEART_LEFT = 'M8 14 C 4 11, 1 9, 1 5.5 C 1 3, 3 1, 5 1 C 6.5 1, 7.5 2, 8 3 L 9.3 5.6 L 6.7 8.1 L 9 10.4 Z';
+const HEART_RIGHT = 'M8 3 C 8.5 2, 9.5 1, 11 1 C 13 1, 15 3, 15 5.5 C 15 9, 12 11, 8 14 L 9 10.4 L 6.7 8.1 L 9.3 5.6 Z';
+/** A plus, cut out of the heart (even-odd) for a raised max. */
+const HEART_PLUS = 'M7.1 3.6 H8.9 V5.7 H11 V7.5 H8.9 V9.6 H7.1 V7.5 H5 V5.7 H7.1 Z';
+
+/** What a hero's health is, as its heart shows it (`hpState`, poster.ts). */
+export type HeartState = 'whole' | 'hurt' | 'raised';
+
+/** Heart — the HP mark, a flat fill in `color`. Its shape says the state
+ *  (Patrick, 2026-11-15): whole, the plain heart; `hurt`, a broken heart, its
+ *  halves parted along a jagged break; `raised` (max HP above the printed
+ *  base), a heart with a plus cut out of it. */
+export function HeartIcon({ size = 14, color = poster.stat.hp, style, state = 'whole' }: IconProps & { state?: HeartState }) {
   return (
-    <svg viewBox="0 0 16 16" style={wrap(size, style)}>
-      <path
-        d="M8 14 C 4 11, 1 9, 1 5.5 C 1 3, 3 1, 5 1 C 6.5 1, 7.5 2, 8 3 C 8.5 2, 9.5 1, 11 1 C 13 1, 15 3, 15 5.5 C 15 9, 12 11, 8 14 Z"
-        fill={color}
-      />
+    <svg viewBox="0 0 16 16" data-heart={state} style={{ ...wrap(size, style), overflow: 'visible' }}>
+      {state === 'hurt' ? (
+        <>
+          <path d={HEART_LEFT} fill={color} transform="translate(-0.9 0) rotate(-6 8 14)" />
+          <path d={HEART_RIGHT} fill={color} transform="translate(0.9 0) rotate(6 8 14)" />
+        </>
+      ) : state === 'raised' ? (
+        <path d={`${HEART} ${HEART_PLUS}`} fill={color} fillRule="evenodd" />
+      ) : (
+        <path d={HEART} fill={color} />
+      )}
     </svg>
   );
 }
