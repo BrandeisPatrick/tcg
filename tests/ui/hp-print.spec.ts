@@ -26,15 +26,29 @@ describe('how a hero tile prints its HP', () => {
 
 describe('the heart icon has a shape for each state', () => {
   const svg = (state?: 'whole' | 'hurt' | 'raised') => renderToStaticMarkup(createElement(HeartIcon, { size: 13, state }));
-  it('whole: one path; hurt: two halves, parted; raised: a plus cut out', () => {
+  it('whole: one path; hurt: two halves either side of a break; raised: a plus cut out', () => {
     expect(svg()).toContain('data-heart="whole"');
     expect((svg('whole').match(/<path/g) ?? []).length).toBe(1);
     expect(svg('hurt')).toContain('data-heart="hurt"');
     expect((svg('hurt').match(/<path/g) ?? []).length).toBe(2);
-    expect(svg('hurt')).toContain('rotate(-6 8 14)');
     expect(svg('raised')).toContain('data-heart="raised"');
     expect(svg('raised')).toContain('fill-rule="evenodd"');
   });
+  it('all three are as wide as each other: no half is moved, and every x stays within the plain heart\'s 1 to 15', () => {
+    for (const state of ['whole', 'hurt', 'raised'] as const) {
+      const markup = svg(state);
+      expect(markup, state).not.toContain('transform');
+      const xs = [...markup.matchAll(/ d="([^"]+)"/g)].flatMap((m) => {
+        // The x of every coordinate pair, and of each horizontal move (H).
+        const pairs = [...m[1].matchAll(/(-?\d+(?:\.\d+)?)[ ,]+(-?\d+(?:\.\d+)?)/g)].map((p) => Number(p[1]));
+        const hs = [...m[1].matchAll(/H(-?\d+(?:\.\d+)?)/g)].map((p) => Number(p[1]));
+        return [...pairs, ...hs];
+      });
+      expect(Math.min(...xs), state).toBe(1);
+      expect(Math.max(...xs), state).toBe(15);
+    }
+  });
+
   it('the three are different marks', () => {
     expect(new Set([svg('whole'), svg('hurt'), svg('raised')]).size).toBe(3);
   });
