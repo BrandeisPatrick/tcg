@@ -279,11 +279,11 @@ describe('item slots (3 per hero)', () => {
     expect(wornItems(hero)).toHaveLength(3);
     expect(G.players['0'].hand).toEqual([card]);
     // Naming one it wears, the card takes its place (hand.spec has the swap in full).
-    expect(playBlocked(G, '0', card.iid, hero.iid, undefined, wornItems(hero)[1].iid)).toBeNull();
+    expect(playBlocked(G, '0', card.iid, hero.iid, wornItems(hero)[1].iid)).toBeNull();
     // An upgrade of a worn item evolves it: Improved Spirit takes Extra Spirit's place.
     const up = giveCard(G, '0', 'improved_spirit');
     expect(playBlocked(G, '0', up.iid, hero.iid)).toBeNull();
-    expect(perform(G, '0', { type: 'playCard', cardIid: up.iid, heroIid: hero.iid, upgradeId: undefined })).not.toBe(INVALID);
+    expect(perform(G, '0', { type: 'playCard', cardIid: up.iid, heroIid: hero.iid })).not.toBe(INVALID);
     expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'improved_spirit']);
   });
 });

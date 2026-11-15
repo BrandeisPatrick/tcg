@@ -30,12 +30,12 @@ import { attackPower, heroRetreat, itemPrice } from '@/engine/query';
 import { addStatus, clearTurnFlags } from '@/engine/statusOps';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { statusOfKeyword } from '@/ui/card/RuleText';
-import { freshReadyGame, giveItem, makeAttack, makeHero, useItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeAttack, makeHero, useItem } from './_helpers';
 
-/** P0 uses its worn active item `item` (aimed at `targetIid`): why the engine
+/** P0 plays the spell `card` from its hand (on `targetIid`): why the engine
  *  refuses it, or null when it took it. */
-function refusal(G: GameState, item: CardInstance, targetIid?: string): string | null {
-  const a: Action = { type: 'activate', itemIid: item.iid, targetIid };
+function refusal(G: GameState, card: CardInstance, targetIid?: string): string | null {
+  const a: Action = targetIid === undefined ? { type: 'playCard', cardIid: card.iid } : { type: 'playCard', cardIid: card.iid, heroIid: targetIid };
   const why = blocked(G, '0', a);
   return perform(G, '0', a) === INVALID ? why : null;
 }
@@ -283,16 +283,17 @@ describe('Majestic Leap', () => {
     expect(attackBlocked(G, '0')).toBeNull();
   });
 
-  it('is an ability, so the attack ends its window too', () => {
-    const { G, haze, shiv } = built(10);
-    const leap = giveItem(G, haze, 'majestic_leap');
+  it('is played in the Act, so the attack ends its window too', () => {
+    const { G, shiv } = built(10);
+    const leap = giveCard(G, '0', 'majestic_leap');
     makeAttack(G, '0');
     expect(refusal(G, leap, shiv.iid)).toBe('actOver');
   });
 
   it('needs a bench ally to aim at, and a Root on either side holds it', () => {
     const { G, haze, shiv } = built(10);
-    const leap = giveItem(G, haze, 'majestic_leap');
+    G.players['0'].souls = 20;
+    const leap = giveCard(G, '0', 'majestic_leap');
     expect(refusal(G, leap, haze.iid)).toBe('target');
     addStatus(G, haze, 'rooted', 1, 1);
     expect(refusal(G, leap, shiv.iid)).toBe('target');

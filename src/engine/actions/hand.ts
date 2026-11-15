@@ -3,43 +3,50 @@
  * `chooseActiveBlocked` and `discardBlocked` (legality.ts) have said each may
  * be done; these only do it.
  *
- *  - An item goes on one of the player's heroes (the bench and corpses
- *    included) for its price — or, an upgrade onto the hero that wears its
- *    component, for the difference: it evolves, and the component goes to the
- *    discard pile. On a full hero it takes the place of the worn item the
- *    player chose (`replaceIid`), which goes to the discard pile. An active starts on its full cooldown (`activeCooldown`)
- *    or, hard crowd control, with HARD_CC_CHARGES; a passive's `bonus` goes on;
- *    the hero earns EXP_ON_EQUIP the first time it wears that item. Playing an
- *    item Deadlock builds into a bigger one makes that upgrade and shuffles it
- *    into the deck (the player's pick, when there are several).
+ *  - Equipment (a passive item) goes on one of the player's heroes (the bench
+ *    and corpses included) for its price — or, an upgrade onto the hero that
+ *    wears its component, for the difference: it evolves, and the component
+ *    goes to the discard pile. On a full hero it takes the place of the worn
+ *    item the player chose (`replaceIid`), which goes to the discard pile. Its
+ *    `bonus` goes on; the hero earns EXP_ON_EQUIP the first time it wears
+ *    that item. An upgrade is a card like any other: nothing is made or
+ *    shuffled in when its component is played (Patrick, 2026-11-15).
+ *  - A spell (an active item) is cast for its price on the target its card
+ *    allows, or on nothing: its effect runs in a cast frame whose source is
+ *    the side's caster (`spellCaster`: the standing Active), and the card
+ *    goes to the discard pile. It is never worn (Patrick, 2026-11-15).
  *  - A hero goes on the bench for free — the slot the player chose, or the
  *    first free one — or straight into an empty Active slot.
  *  - The opening's first Active comes from the deck: the drafted heroes.
  *  - A draw card's discard comes out of the hand.
  */
-import type { CardId, CardInstance, GameState, PlayerID } from '../types';
+import type { CardInstance, GameState, PlayerID, SpellCard } from '../types';
 import { cardName, itemCard } from '@/cards';
-import { upgradesOf } from '@/cards/decks';
-import { activeCooldown, findCardOnBoard, handCard, isRespawning, wornItems } from '../query';
-import { freeBenchSlot, playCost, upgradeComponent } from '../legality';
+import { findCardOnBoard, handCard, isRespawning, itemPrice, wornItems } from '../query';
+import { freeBenchSlot, playCost, spellCaster, upgradeComponent } from '../legality';
 import { attachItem, detachItem, syncVitalitySpike } from '../instances';
-import { discardFromHand, shuffleIntoDeck, toDiscard } from '../deck';
+import { discardFromHand, toDiscard } from '../deck';
 import { grantExp } from '../expSystem';
 import { resolve } from '../death';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { finishOpening, laneFromDeck } from './setup';
-import { EXP_ON_EQUIP, HARD_CC_CHARGES } from '../constants';
+import { EXP_ON_EQUIP } from '../constants';
+import { getAbility } from '../registry';
+import { nextActionId } from '../ids';
+import { withCast } from '../castContext';
 
-/** Put the item `cardIid` from `pid`'s hand on its hero `heroIid`, paying
- *  `playCost`; `upgradeId` picks the upgrade it makes when it makes one of
- *  several (left out: the first); `replaceIid`, on a full hero, the worn item
- *  it replaces, which goes to `pid`'s discard pile (the board flies it there). */
-export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: string, upgradeId?: CardId, replaceIid?: string) {
+/** Play the item `cardIid` from `pid`'s hand. Equipment goes on its hero
+ *  `heroIid`, paying `playCost`; `replaceIid`, on a full hero, is the worn
+ *  item it replaces, which goes to `pid`'s discard pile (the board flies it
+ *  there). A spell is cast on `heroIid` — its target, a hero of either side —
+ *  or on nothing when it takes none (`castSpell`). */
+export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid?: string, replaceIid?: string) {
   const ps = G.players[pid];
   const card = handCard(G, pid, cardIid)!;
-  const hero: CardInstance = findCardOnBoard(G, heroIid)!.card;
   const data = itemCard(card.cardId)!;
+  if (data.type === 'spell') return castSpell(G, pid, card, data, heroIid);
+  const hero: CardInstance = findCardOnBoard(G, heroIid!)!.card;
   const comp = upgradeComponent(hero, card.cardId);
   const replaced = replaceIid === undefined ? undefined : wornItems(hero).find((it) => it.iid === replaceIid);
   const cost = playCost(hero, card.cardId);
@@ -57,10 +64,6 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: 
     detachItem(hero, replaced);
     toDiscard(G, pid, replaced);
   }
-  if (data.type === 'spell') {
-    if (data.hardCC) card.charges ??= HARD_CC_CHARGES;
-    else card.cooldowns = { [card.cardId]: activeCooldown(hero, data.tier, data.cooldown) };
-  }
   attachItem(hero, card);
   syncVitalitySpike(hero);
 
@@ -71,10 +74,36 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid: 
     (hero.equippedIds ??= []).push(card.cardId);
     grantExp(G, hero, EXP_ON_EQUIP);
   }
+}
 
-  // Each copy played makes one upgrade, shuffled into the deck.
-  const ups = upgradesOf(card.cardId);
-  if (ups.length > 0) shuffleIntoDeck(G, pid, upgradeId && ups.includes(upgradeId) ? upgradeId : ups[0]);
+/** Cast the spell `card` from `pid`'s hand for its price: it leaves the hand,
+ *  its onPlay abilities run in a cast frame whose source is the side's caster
+ *  (`spellCaster` — its gear reacts to the damage, and the FX leave from it),
+ *  aimed at `targetIid` when the spell takes a target, and the card goes to
+ *  the discard pile. The reveal it starts is an item's (`G.action`). */
+function castSpell(G: GameState, pid: PlayerID, card: CardInstance, data: SpellCard, targetIid?: string) {
+  const ps = G.players[pid];
+  const caster = spellCaster(G, pid)!;
+  const cost = itemPrice(card.cardId);
+  const filter = getAbility(data.abilities[0])?.target ?? 'noTarget';
+  const target = filter !== 'noTarget' && targetIid ? findCardOnBoard(G, targetIid)?.card : undefined;
+
+  ps.souls -= cost;
+  ps.hand = ps.hand.filter((c) => c !== card);
+  pushLog(G, `P${pid} played ${data.name}${target ? ` on ${cardName(target.cardId)}` : ''} (-${cost} soul${cost === 1 ? '' : 's'}).`);
+  // The cast event goes out first, so the effects that follow read as this
+  // spell's: the bolt leaves the caster, then the hits land.
+  pushFx(G, { kind: 'cast', castKind: 'spell', by: pid, cardId: card.cardId, iid: caster.iid, targetIid: target?.iid });
+  withCast(caster, 'spell', () => {
+    for (const id of data.abilities) {
+      const ability = getAbility(id);
+      if (ability?.trigger === 'onPlay') ability.run(G, { movingPlayer: pid }, { source: card, target });
+    }
+  });
+  toDiscard(G, pid, card);
+
+  resolve(G);
+  G.action = { id: nextActionId(G), kind: 'item', by: pid, cardId: card.cardId, state: 'begin' };
 }
 
 /** Put the hero `cardIid` from `pid`'s hand in a bench slot — `slot`, or

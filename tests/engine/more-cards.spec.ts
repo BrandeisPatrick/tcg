@@ -19,7 +19,7 @@ import { attackPower, effectiveSpirit, itemPrice } from '@/engine/query';
 import { fireTriggers } from '@/engine/triggers';
 import { PRICE } from '@/engine/constants';
 import { statusOfKeyword } from '@/ui/card/RuleText';
-import { freshReadyGame, giveItem, makeAttack, useItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeAttack, useItem } from './_helpers';
 
 const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === id);
 const board = (G: GameState, pid: PlayerID) =>
@@ -146,7 +146,7 @@ describe('New active items', () => {
   it('Grit shields your Active 2, whoever wears it', () => {
     const G = freshReadyGame();
     const vindicta = G.players['0'].bench[0]!;
-    useItem(G, '0', 'grit', undefined, vindicta);
+    useItem(G, '0', 'grit');
     expect(status(G.players['0'].active!, 'shield')?.value).toBe(2);
     expect(status(vindicta, 'shield')).toBeUndefined();
   });
@@ -181,9 +181,9 @@ describe('New active items', () => {
     // One use a hero a turn: the next two are worn on the bench, and the price
     // is still your Active's.
     haze.hp = 2;
-    useItem(G, '0', 'blood_tribute', undefined, G.players['0'].bench[0]!);
+    useItem(G, '0', 'blood_tribute');
     expect(haze.hp).toBe(1);
-    useItem(G, '0', 'blood_tribute', undefined, G.players['0'].bench[1]!);
+    useItem(G, '0', 'blood_tribute');
     expect(haze.hp).toBe(1);
   });
 
@@ -211,8 +211,9 @@ describe('New active items', () => {
   it('Rescue Beam needs a bench ally to aim at', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
-    const item = giveItem(G, haze, 'rescue_beam');
-    const a = { type: 'activate' as const, itemIid: item.iid, targetIid: haze.iid };
+    G.players['0'].souls = 20;
+    const card = giveCard(G, '0', 'rescue_beam');
+    const a = { type: 'playCard' as const, cardIid: card.iid, heroIid: haze.iid };
     expect(blocked(G, '0', a)).toBe('target');
     expect(perform(G, '0', a)).toBe(INVALID);
   });
@@ -224,10 +225,10 @@ describe('New active items', () => {
     const [vindicta, lash, paige] = G.players['0'].bench as CardInstance[];
     const abrams = G.players['1'].active!;
     G.players['0'].souls = 3; // Ground Strike's price: only the silence stands in her way
-    useItem(G, '0', 'warp_stone', lash.iid, vindicta);
+    useItem(G, '0', 'warp_stone', lash.iid);
     const skill = { type: 'useSkill' as const, heroIid: lash.iid, targetIid: abrams.iid };
     expect(blocked(G, '0', skill)).toBeNull();
-    useItem(G, '0', 'fury_trance', undefined, paige);
+    useItem(G, '0', 'fury_trance');
     expect(status(lash, 'extra_attack')?.value).toBe(1);
     expect(status(lash, 'spirit_resist')).toMatchObject({ value: 3, duration: 2 });
     expect(status(lash, 'silenced')).toMatchObject({ duration: 2 });

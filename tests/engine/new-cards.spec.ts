@@ -13,11 +13,11 @@ import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID, SPELLS, EQUIPMENT } from '@/cards';
 import { addStatus } from '@/engine/statusOps';
 import { INVALID, perform } from '@/engine/engine';
-import { activateBlocked, attackTargets, blocked } from '@/engine/legality';
-import { activeCooldown, itemCooldown, itemPrice, targetsFor } from '@/engine/query';
+import { attackTargets, blocked, playBlocked } from '@/engine/legality';
+import { itemPrice, kitCharges, targetsFor } from '@/engine/query';
 import { fireTriggers } from '@/engine/triggers';
 import { PRICE } from '@/engine/constants';
-import { freshReadyGame, giveItem, useItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeHero, useItem } from './_helpers';
 
 const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === id);
 const ids = (cards: CardInstance[]) => cards.map((c) => c.cardId);
@@ -91,9 +91,10 @@ describe('New active items', () => {
 
   it('Warp Stone cannot be aimed at the Active or an enemy', () => {
     const G = freshReadyGame();
-    const item = giveItem(G, G.players['0'].active!, 'warp_stone');
-    expect(activateBlocked(G, '0', item.iid, G.players['0'].active!.iid)).toBe('target');
-    expect(activateBlocked(G, '0', item.iid, G.players['1'].bench[0]!.iid)).toBe('target');
+    const card = giveCard(G, '0', 'warp_stone');
+    G.players['0'].souls = 20;
+    expect(playBlocked(G, '0', card.iid, G.players['0'].active!.iid)).toBe('target');
+    expect(playBlocked(G, '0', card.iid, G.players['1'].bench[0]!.iid)).toBe('target');
   });
 
   it('Divine Barrier cleanses every debuff but Stun and shields 4', () => {
@@ -103,7 +104,7 @@ describe('New active items', () => {
     addStatus(G, haze, 'silenced', 1, 2);
     addStatus(G, haze, 'stun', 1, 1);
     // A Stunned hero uses nothing: a bench ally wears it.
-    useItem(G, '0', 'divine_barrier', haze.iid, G.players['0'].bench[0]!);
+    useItem(G, '0', 'divine_barrier', haze.iid);
     expect(status(haze, 'bleed')).toBeUndefined();
     expect(status(haze, 'silenced')).toBeUndefined();
     expect(status(haze, 'stun')).toBeDefined();
@@ -154,29 +155,33 @@ describe('New active items', () => {
     return { G, lash };
   }
 
-  it("Refresher takes your Active's skill, ultimate and active items off cooldown — not a hard-CC item's charges, nor its own", () => {
+  it("Refresher ends your Active's skill and ultimate waits and brings a charged skill's charges back — a bench hero's stay, and the card is spent", () => {
     const { G, lash } = lashAtTheFront();
     lash.cooldowns = { skill_lash: 1, eff_ult_lash: 3 };
-    const coldFront = giveItem(G, lash, 'cold_front', { cooldown: 2 });
-    const knockdown = giveItem(G, lash, 'knockdown');
-    knockdown.charges = 1;
     const paige = G.players['0'].bench[2]!;
     paige.cooldowns = { skill_paige: 1 }; // a bench hero's are its own
-    const refresher = useItem(G, '0', 'refresher', undefined, lash);
+    const refresher = useItem(G, '0', 'refresher');
     expect(lash.cooldowns?.skill_lash ?? 0).toBe(0);
     expect(lash.cooldowns?.eff_ult_lash ?? 0).toBe(0);
-    expect(itemCooldown(coldFront)).toBe(0);
-    expect(knockdown.charges).toBe(1);
-    expect(itemCooldown(refresher)).toBe(activeCooldown(lash, 4)); // its own starts after it runs
+    expect(G.players['0'].discard).toContain(refresher); // a spell: one play, then the discard pile
+    expect(refresher.cooldowns).toBeUndefined();
     expect(paige.cooldowns).toEqual({ skill_paige: 1 });
+    // A charged skill short of its charges is back at full.
+    const kelvin = makeHero('hero_kelvin', '0', 'active', 0);
+    kelvin.chargesSpent = { skill_kelvin: 2 };
+    kelvin.cooldowns = { skill_kelvin: 3 };
+    G.players['0'].active = kelvin;
+    useItem(G, '0', 'refresher');
+    expect(kelvin.chargesSpent).toBeUndefined();
+    expect(kitCharges(kelvin)).toEqual({ max: 2, left: 2 });
   });
 
-  it('Refresher worn on the bench readies your Active for this very turn', () => {
+  it('Refresher readies your Active for this very turn', () => {
     const { G, lash } = lashAtTheFront();
     lash.cooldowns = { skill_lash: 1 };
     const skill = { type: 'useSkill' as const, heroIid: lash.iid, targetIid: G.players['1'].active!.iid };
     expect(blocked(G, '0', skill)).toBe('cooldown');
-    useItem(G, '0', 'refresher', undefined, G.players['0'].bench[2]!);
+    useItem(G, '0', 'refresher');
     expect(blocked(G, '0', skill)).toBeNull();
   });
 
@@ -188,7 +193,7 @@ describe('New active items', () => {
     expect(haze.hp).toBe(5);
     addStatus(G, haze, 'bleed', 1, 2);
     // Haze has used its ability this turn: a bench ally wears the second.
-    useItem(G, '0', 'debuff_remover', haze.iid, G.players['0'].bench[0]!);
+    useItem(G, '0', 'debuff_remover', haze.iid);
     expect(status(haze, 'bleed')).toBeUndefined();
     expect(haze.hp).toBe(9);
   });

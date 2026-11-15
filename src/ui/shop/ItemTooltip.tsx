@@ -22,7 +22,7 @@ import { Souls } from '../hud';
 import { RuleText } from '../card/RuleText';
 import { ItemIcon, TierDiamonds } from '../card/ItemIcon';
 import { useViewport } from '../hooks/useViewport';
-import { CATEGORY_WORD, buildsFrom, buildsInto, effectText, listPrice, soulsWord, statLines, useFacts } from './itemFacts';
+import { CATEGORY_WORD, SPELL_USE, buildsFrom, buildsInto, effectText, listPrice, soulsWord, statLines, useFacts } from './itemFacts';
 
 /** The tooltip's accessible name: "Extended Magazine — item details". */
 export const tooltipLabel = (itemId: CardId) => `${cardName(itemId)} — item details`;
@@ -48,8 +48,6 @@ interface Props {
   souls?: number;
   /** A copy you own: its sale. */
   sale?: TooltipSale;
-  /** A worn active's live state: its cooldown left, or its charges. */
-  live?: { cooldown?: number; charges?: number };
   /** One more line under the rest ("Tap a hero to put it on"). */
   note?: string;
   /** A hover peek: no taps, no catcher. */
@@ -63,7 +61,7 @@ const WIDTH = 296;
 const GAP = 8;
 const MARGIN = 10;
 
-export function ItemTooltip({ itemId, anchor, price, souls, sale, live, note, passive = false, onOpenCard, onClose }: Props) {
+export function ItemTooltip({ itemId, anchor, price, souls, sale, note, passive = false, onOpenCard, onClose }: Props) {
   const { width: vw, height: vh } = useViewport();
   const panel = useRef<HTMLDivElement>(null);
   const pressed = useRef(false);
@@ -187,7 +185,7 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, live, note, pa
           </Rows>
         )}
 
-        {/* What it does — ACTIVE with its cooldown or charges, or PASSIVE — on the game's paper. */}
+        {/* What it does — ACTIVE (a spell: played once) or PASSIVE — on the game's paper. */}
         {(effect || use.kind === 'active') && (
           <div style={{ padding: '8px 10px 2px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -200,10 +198,7 @@ export function ItemTooltip({ itemId, anchor, price, souls, sale, live, note, pa
               }}>{use.kind === 'active' ? 'Active' : 'Passive'}</span>
               {use.kind === 'active' && (
                 <span style={{ ...text.label, fontSize: 9.5, letterSpacing: '0.14em', color: poster.creamDim }}>
-                  {'charges' in use
-                    ? `${live?.charges ?? use.charges} of ${use.charges} charges a match`
-                    : live?.cooldown ? `Ready in ${live.cooldown} turn${live.cooldown === 1 ? '' : 's'} · cooldown ${use.cooldown}`
-                    : `Cooldown ${use.cooldown} turns · starts cooling`}
+                  {SPELL_USE}
                 </span>
               )}
             </div>

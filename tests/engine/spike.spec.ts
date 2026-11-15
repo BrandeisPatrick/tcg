@@ -47,13 +47,13 @@ describe('the category spike', () => {
     expect(attackPower(haze).total).toBe(base);
   });
 
-  it('Spirit: a third Spirit item gives +1 Spirit Power — an active counts like a passive; the spirit modifier is untouched', () => {
+  it('Spirit: a third Spirit item gives +1 Spirit Power; the spirit modifier is untouched', () => {
     const G = freshReadyGame();
     const lash = G.players['0'].bench[1]!;
     const base = effectiveSpirit(lash);
     wear(G, lash, ['mystic_burst', 'mystic_regeneration']);
     expect(effectiveSpirit(lash)).toBe(base);
-    giveItem(G, lash, 'rusted_barrel');                           // a Spirit active
+    giveItem(G, lash, 'bullet_resist_shredder');                  // a third Spirit item, with no Spirit Power of its own
     expect(hasSpike(lash, 'spirit')).toBe(true);
     expect(effectiveSpirit(lash)).toBe(base + 1);
     expect(lash.spiritMod).toBe(0);
@@ -106,25 +106,25 @@ describe('the category spike', () => {
     const [hazeMax, vinMax] = [haze.hpMax, vindicta.hpMax];
     wear(G, haze, ['extra_regen', 'sprint_boots']);
     wear(G, vindicta, ['extra_regen', 'sprint_boots']);
-    playNew(G, '0', 'grit', haze);                                // a Vitality active, the third
+    playNew(G, '0', 'healing_booster', haze);                     // a third Vitality item, with no HP of its own
     expect([haze.hpMax, haze.hp]).toEqual([hazeMax + 1, hazeMax + 1]);
     expect([vindicta.hpMax, vindicta.hp]).toEqual([vinMax, vinMax]);
-    // Grit evolves into Guardian Ward (Vitality too): the spike stays.
-    playNew(G, '0', 'guardian_ward', haze);
-    expect(haze.attached!.map((it) => it.cardId)).toEqual(['extra_regen', 'sprint_boots', 'guardian_ward']);
+    // Sprint Boots evolve into Enduring Speed (Vitality too): the spike stays.
+    playNew(G, '0', 'enduring_speed', haze);
+    expect(haze.attached!.map((it) => it.cardId)).toEqual(['extra_regen', 'healing_booster', 'enduring_speed']);
     expect([haze.hpMax, haze.vitalitySpike]).toEqual([hazeMax + 1, true]);
   });
 });
 
 describe('what items are worth', () => {
-  it('net worth is souls plus the list price of every worn item — actives and passives, on the bench and on corpses', () => {
+  it('net worth is souls plus the list price of every worn item, on the bench and on corpses', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     const [haze, vindicta, lash] = [me.active!, me.bench[0]!, me.bench[1]!];
     me.souls = 3;
     giveItem(G, haze, 'extended_magazine');                      // tier 1 passive
-    giveItem(G, vindicta, 'cold_front');                         // tier 2 active
-    giveItem(G, lash, 'knockdown');                              // tier 3 active (hard CC)
+    giveItem(G, vindicta, 'titanic_magazine');                   // tier 2 passive
+    giveItem(G, lash, 'toxic_bullets');                          // tier 3 passive
     lash.hp = 0;
     lash.respawnTurnsLeft = 2;
     expect([heroWorth(haze), heroWorth(vindicta), heroWorth(lash), heroWorth(me.bench[2]!)]).toEqual([PRICE[1], PRICE[2], PRICE[3], 0]);

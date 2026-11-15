@@ -14,7 +14,6 @@ import type { AbilityId, CardId, GameState, PlayerID } from './types';
 import { blocked } from './legality';
 import { assertNoCast } from './castContext';
 import { attack } from './actions/attack';
-import { activate } from './actions/activate';
 import { useSkill } from './actions/useSkill';
 import { moveHero, promoteToActive } from './actions/board';
 import { chooseActive, discard, placeHero, playCard } from './actions/hand';
@@ -26,13 +25,12 @@ export const INVALID: unique symbol = Symbol('INVALID');
 
 export type Action =
   // The hand.
-  | { type: 'playCard'; cardIid: string; heroIid: string; upgradeId?: CardId; replaceIid?: string }   // an item from the hand onto one of your heroes, for its price (a full hero: the worn item it replaces)
+  | { type: 'playCard'; cardIid: string; heroIid?: string; replaceIid?: string }                     // an item from the hand, for its price: equipment onto one of your heroes (a full hero: the worn item it replaces), a spell on its target (a hero of either side) or on nothing
   | { type: 'placeHero'; cardIid: string; toActive?: boolean; slot?: 1 | 2 | 3 }    // a hero from the hand onto the bench (`slot`, or its first free one; or into an empty Active slot), free
   | { type: 'discard'; cardIids: string[] }                                        // a draw card's discard, from anywhere in the hand
   // The board.
   | { type: 'attack'; targetIid?: string }               // no targetIid = the first of `attackTargets`
   | { type: 'useSkill'; heroIid: string; skillId?: AbilityId; targetIid?: string }   // no skillId = the hero's first skill
-  | { type: 'activate'; itemIid: string; targetIid?: string }
   | { type: 'moveHero'; fromSlot: 0 | 1 | 2 | 3; toSlot: 0 | 1 | 2 | 3 }
   // Owed choices, made from either seat.
   | { type: 'chooseActive'; cardIid: string }               // the opening: a drafted hero from the deck into the lane
@@ -47,13 +45,12 @@ export function perform(G: GameState, pid: PlayerID, a: Action): typeof INVALID 
   assertNoCast();
   if (blocked(G, pid, a) !== null) return INVALID;
   switch (a.type) {
-    case 'playCard': return playCard(G, pid, a.cardIid, a.heroIid, a.upgradeId, a.replaceIid);
+    case 'playCard': return playCard(G, pid, a.cardIid, a.heroIid, a.replaceIid);
     case 'placeHero': return placeHero(G, pid, a.cardIid, a.toActive === true, a.slot);
     case 'discard': return discard(G, pid, a.cardIids);
     case 'chooseActive': return chooseActive(G, a.cardIid);
     case 'attack': return attack(G, pid, a.targetIid);
     case 'useSkill': return useSkill(G, pid, a.heroIid, a.targetIid, a.skillId);
-    case 'activate': return activate(G, pid, a.itemIid, a.targetIid);
     case 'moveHero': return moveHero(G, pid, a.fromSlot, a.toSlot);
     case 'promoteToActive': return promoteToActive(G, a.benchIid);
     case 'useTrigger': return answerTrigger(G, { heroIid: a.heroIid, abilityId: a.abilityId });

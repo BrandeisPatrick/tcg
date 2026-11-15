@@ -3,7 +3,7 @@ import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
 import { attackBlocked, attackTurn, blocked, skillBlocked, type AttackBlock } from '@/engine/legality';
 import { forecastAttack, simulate } from '@/engine/forecast';
-import { effectiveAtk, findCardOnBoard, liveBoardCards, structureHp, structureOf, wornItems } from '@/engine/query';
+import { effectiveAtk, findCardOnBoard, itemPrice, liveBoardCards, structureHp, structureOf, wornItems } from '@/engine/query';
 import { addStatus, clearTurnFlags, tickCooldowns, tickRemMerges } from '@/engine/statusOps';
 import { resolve } from '@/engine/death';
 import { enumerateAIMoves } from '@/ai/heuristic';
@@ -115,26 +115,25 @@ describe('turn actions: the attack is a move', () => {
     expect(haze.statuses.some((s) => s.id === 'bleed')).toBe(false);
   });
 
-  it('the attack ends the Act: after it a bench skill, an active item, a card from the hand and a retreat are refused; endTurn is not', () => {
+  it('the attack ends the Act: after it a bench skill, a spell, an item from the hand and a retreat are refused; endTurn is not', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 5;
     const rival = sturdyRival(G);
-    const grit = giveItem(G, me.bench[0]!, 'grit'); // Vindicta wears a ready Grit
+    const grit = giveCard(G, '0', 'grit'); // a spell in the hand
     const card = giveCard(G, '0', 'extended_magazine');
-    expect(blocked(G, '0', { type: 'activate', itemIid: grit.iid })).toBeNull();
+    expect(blocked(G, '0', { type: 'playCard', cardIid: grit.iid })).toBeNull();
     expect(blocked(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: me.active!.iid })).toBeNull();
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
     const lash = me.bench[1]!; // Lash carries a skill; the Active (Haze) is passive-only
     const hpBefore = rival.hp;
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).toBe('INVALID_MOVE');
     expect(rival.hp).toBe(hpBefore);
-    expect(runMove('activate', G, '0', grit.iid)).toBe('INVALID_MOVE');
-    expect(blocked(G, '0', { type: 'activate', itemIid: grit.iid })).toBe('actOver');
-    expect(grit.cooldowns).toBeUndefined(); // not used: still ready
+    expect(runMove('playCard', G, '0', grit.iid)).toBe('INVALID_MOVE');
+    expect(blocked(G, '0', { type: 'playCard', cardIid: grit.iid })).toBe('actOver');
     expect(runMove('playCard', G, '0', card.iid, me.active!.iid)).toBe('INVALID_MOVE');
     expect(blocked(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: me.active!.iid })).toBe('actOver');
-    expect(me.hand).toEqual([card]);
+    expect(me.hand).toEqual([grit, card]); // neither was played
     expect(runMove('moveHero', G, '0', 1, 0)).toBe('INVALID_MOVE');
     expect(me.souls).toBe(5);
     expect(blocked(G, '0', { type: 'endTurn' })).toBeNull();
@@ -481,16 +480,16 @@ describe('AI: the attack is a choice', () => {
     const G = p1Turn();
     const ai = G.players['1'];
     ai.souls = 9;
-    // An item the Active wears that is still cooling down, and a bench hero
-    // locked in a heavy channel: no skill from him, and no use of his item.
-    const cooling = giveItem(G, ai.active!, 'cold_front', { cooldown: 1 });
+    // A spell in the hand it cannot pay for (Knockdown: 8 souls against 9 less
+    // a soul), and a bench hero locked in a heavy channel: no skill from him.
+    ai.souls = 7;
+    const dear = giveCard(G, '1', 'knockdown');
     const dynamo = ai.bench.find((b) => b?.cardId === 'hero_dynamo')!;
-    const grit = giveItem(G, dynamo, 'grit');
     addStatus(G, dynamo, 'casting', 3, 3);
 
     for (const lookahead of [false, true]) {
       const moves = enumerateAIMoves(G, ctx('1'), lookahead);
-      expect(moves.some((m) => m.move === 'activate' && [cooling.iid, grit.iid].includes(m.args[0]))).toBe(false);
+      expect(moves.some((m) => m.move === 'playCard' && m.args[0] === dear.iid)).toBe(false);
       expect(moves.some((m) => m.move === 'useSkill' && m.args[0] === dynamo.iid)).toBe(false);
       // …and everything it does offer, the engine takes.
       for (const m of moves) {
@@ -579,24 +578,25 @@ describe('AI: the attack is a choice', () => {
     expect(G.pendingPromotion).toBeUndefined();
   });
 
-  it('buffs before it attacks: an active item that adds attack is used ahead of the attack', () => {
+  it('buffs before it attacks: a spell that adds attack is played ahead of the attack', () => {
     const G = p1Turn();
     const ai = G.players['1'];
-    // Shadow Weave, worn and ready on the Active: +2 Bullet Power (and a Dome).
-    const weave = giveItem(G, ai.active!, 'shadow_weave');
-    const used = simulate(G, '1', { type: 'activate', itemIid: weave.iid });
+    // Shadow Weave in the hand, and the souls for it: +2 Bullet Power (and a Dome) on the Active.
+    const weave = giveCard(G, '1', 'shadow_weave');
+    ai.souls = itemPrice('shadow_weave');
+    const used = simulate(G, '1', { type: 'playCard', cardIid: weave.iid });
     expect(used.invalid).toBeFalsy();
     expect(forecastAttack(used.G, '1').damageToActive).toBeGreaterThan(forecastAttack(G, '1').damageToActive);
-    // With the bench's skills on offer too, the item still comes before the attack…
+    // With the bench's skills on offer too, the spell still comes before the attack…
     const all = enumerateAIMoves(G, ctx('1'));
-    const weaveAt = all.findIndex((m) => m.move === 'activate' && m.args[0] === weave.iid);
+    const weaveAt = all.findIndex((m) => m.move === 'playCard' && m.args[0] === weave.iid);
     expect(weaveAt).toBeGreaterThanOrEqual(0);
     expect(weaveAt).toBeLessThan(all.findIndex((m) => m.move === 'attack'));
-    // …and with only the item and the attack to weigh (the bench has used its
-    // skills; with no souls there is no Retreat) it is the first choice.
+    // …and with only the spell and the attack to weigh (the bench has used its
+    // skills) it is the first choice.
     for (const b of ai.bench) if (b) b.skillUsedThisTurn = true;
     const best = enumerateAIMoves(G, ctx('1'))[0];
-    expect(best.move).toBe('activate');
+    expect(best.move).toBe('playCard');
     expect(best.args[0]).toBe(weave.iid);
   });
 

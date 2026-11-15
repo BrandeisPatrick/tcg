@@ -8,7 +8,8 @@
  */
 import type { CardId, ItemSlot, ItemTier } from '@/engine/types';
 import { ITEMS, itemCard } from '@/cards';
-import { ACTIVE_COOLDOWN, HARD_CC_CHARGES, ITEM_TIERS, PRICE } from '@/engine/constants';
+import { evolvesFrom, upgradesOf } from '@/cards/decks';
+import { ITEM_TIERS, PRICE } from '@/engine/constants';
 
 /** Deadlock's tab order: Weapon · Vitality · Spirit. */
 export const SHOP_TABS: readonly ItemSlot[] = ['weapon', 'vitality', 'spirit'];
@@ -55,29 +56,26 @@ export function effectText(itemId: CardId): string {
   return sentences.map((s) => s.trim()).filter((s) => s && !STAT_SENTENCE.test(s)).join(' ');
 }
 
-/** How an item is used: an active (fired from its bearer's sheet, then a
- *  cooldown of so many own turns, or for hard crowd control a number of
- *  charges a match) or a passive (always on). */
-export type UseFacts =
-  | { kind: 'passive' }
-  | { kind: 'active'; cooldown: number }
-  | { kind: 'active'; charges: number };
+/** How an item is used: a spell (an active item: played from the hand once,
+ *  then discarded) or a passive (equipment: worn, always on). */
+export type UseFacts = { kind: 'passive' } | { kind: 'active' };
+
+/** The line under a spell's ACTIVE tag: how it is played. */
+export const SPELL_USE = 'Played once, then discarded';
 
 export function useFacts(itemId: CardId): UseFacts {
-  const data = itemCard(itemId);
-  if (!data || data.type !== 'spell') return { kind: 'passive' };
-  if (data.hardCC) return { kind: 'active', charges: HARD_CC_CHARGES };
-  return { kind: 'active', cooldown: data.cooldown ?? (data.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high) };
+  return itemCard(itemId)?.type === 'spell' ? { kind: 'active' } : { kind: 'passive' };
 }
 
-/** The component this item is built from, when it has one in the catalogue. */
+/** The component this item evolves, for the difference in price, on the hero
+ *  wearing it (`evolvesFrom`): equipment only. */
 export function buildsFrom(itemId: CardId): CardId | undefined {
-  return itemCard(itemId)?.upgradesFrom;
+  return evolvesFrom(itemId);
 }
 
-/** The items built from this one, in catalogue order. */
+/** The upgrades that evolve this one, in catalogue order. */
 export function buildsInto(itemId: CardId): CardId[] {
-  return ITEMS.filter((i) => i.upgradesFrom === itemId).map((i) => i.id);
+  return [...upgradesOf(itemId)];
 }
 
 /** The item's list price: its tier's. */

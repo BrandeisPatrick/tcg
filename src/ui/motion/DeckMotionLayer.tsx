@@ -28,11 +28,11 @@ import type { PileTicker } from './pileTicker';
 import { admitBatch } from './admitBatch';
 
 const Z = 90;
-/** An upgrade or a drafted hero shown over the table: the deck's height on
+/** A drafted hero shown over the table: the deck's height on
  *  screen, times this (the deck's pile is sized with the board, so its box
  *  says how big the table is). */
 const STAGE_SCALE = 2.6;
-/** The pop as an upgrade appears, ms. */
+/** The pop as a shown card appears, ms. */
 const APPEAR_POP_MS = 180;
 
 type Owner = 'you' | 'rival';
@@ -92,7 +92,7 @@ function pileEl(pile: 'deck' | 'discard', owner: Owner): Element | null {
 
 export function DeckMotionLayer({ plan, planKey, me, handRefs, slotRefs, origins, ticker, tilt = 0 }: Props) {
   /** How far into the table's plane an anchor lies: the hands are flat, the
-   *  slots and piles are on it, an upgrade shown over the table halfway. */
+   *  slots and piles are on it, a card shown over the table halfway. */
   const inPlane = (a: Anchor): number => (a.kind === 'hand' ? 0 : a.kind === 'stage' ? 0.5 : 1);
   const [live, setLive] = useState<Live[]>([]);
   const [riffles, setRiffles] = useState<LiveRiffle[]>([]);

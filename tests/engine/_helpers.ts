@@ -10,7 +10,6 @@ import { newTrack } from '@/engine/map';
 import { attachItem, makeInstance, syncVitalitySpike } from '@/engine/instances';
 import { playCost } from '@/engine/legality';
 import { CARDS_BY_ID, itemCard } from '@/cards';
-import { HARD_CC_CHARGES } from '@/engine/constants';
 import { setMatchConfig } from '@/storage/matchConfig';
 
 let testIids = 1;
@@ -32,7 +31,7 @@ export const TEST_ROSTERS: Record<PlayerID, CardId[]> = {
 };
 
 /** The seed the test games draw their shuffles from (the deck, the opening
- *  hand's hero swap, where an upgrade goes in the deck). */
+ *  hand's hero swap). */
 export const TEST_SEED = 11395;
 
 /** The structure HP `pid` has standing (Guardian + Walker + Patron). */
@@ -92,40 +91,37 @@ export function midBossOn(G: GameState): GameState {
 }
 
 /**
- * Put the item `itemId` on `hero` directly, as if played earlier: its bonus on
- * the hero, the Vitality spike synced, an active ready to use (no cooldown) —
- * or, with `cooldown`, cooling for that many own turns — and a hard crowd-control
- * active with its full charges. No souls, no hand: for tests that need a hero
- * wearing something. Returns the item instance.
+ * Put a real piece of equipment straight onto `hero`, as worn: its bonus on
+ * the hero, the Vitality spike synced. No souls, no hand, no first-equip exp:
+ * for tests that start from a hero already wearing something. A spell is
+ * never worn (it is played from the hand: `useItem`), so naming one throws.
+ * Returns the item instance.
  */
-export function giveItem(G: GameState, hero: CardInstance, itemId: CardId, opts: { cooldown?: number } = {}): CardInstance {
+export function giveItem(G: GameState, hero: CardInstance, itemId: CardId): CardInstance {
   const data = itemCard(itemId);
   if (!data) throw new Error(`not an item: ${itemId}`);
+  if (data.type === 'spell') throw new Error(`${itemId} is a spell: it is played from the hand (useItem), never worn`);
   const item = makeInstance(allocatorOf(G), itemId, seatOf(hero), 'equipment');
-  if (data.type === 'spell') {
-    if (data.hardCC) item.charges = HARD_CC_CHARGES;
-    else if (opts.cooldown) item.cooldowns = { [itemId]: opts.cooldown };
-  }
   attachItem(hero, item);
   syncVitalitySpike(hero);
   return item;
 }
 
 /**
- * Give `bearer` (left out: `pid`'s Active) the active item `itemId`, ready
- * (`giveItem`), and use it as `pid` — aimed at `targetIid` when it takes a
- * target — through the engine's front door: the bearer's one ability of the
- * turn, in the act step. Throws, naming the reason, when the engine refuses.
- * Returns the item instance (now cooling down, or a charge spent).
+ * Deal the spell `itemId` into `pid`'s hand, hand over its price so the
+ * side's own souls come out where they were, and play it at once through the
+ * engine's front door — on `targetIid` when it takes a target. The caster is
+ * the side's own (`spellCaster`: its standing Active). Throws, naming the
+ * reason, when the engine refuses. Returns the card (now on the discard pile).
  */
-export function useItem(G: GameState, pid: PlayerID, itemId: CardId, targetIid?: string, bearer?: CardInstance): CardInstance {
-  const hero = bearer ?? G.players[pid].active;
-  if (!hero) throw new Error(`P${pid} has no Active to wear ${itemId}`);
-  const item = giveItem(G, hero, itemId);
-  const a = { type: 'activate' as const, itemIid: item.iid, targetIid };
+export function useItem(G: GameState, pid: PlayerID, itemId: CardId, targetIid?: string): CardInstance {
+  if (itemCard(itemId)?.type !== 'spell') throw new Error(`${itemId} is no spell`);
+  const card = giveCard(G, pid, itemId);
+  G.players[pid].souls += playCost(undefined, itemId);
+  const a = targetIid === undefined ? { type: 'playCard' as const, cardIid: card.iid } : { type: 'playCard' as const, cardIid: card.iid, heroIid: targetIid };
   const why = blocked(G, pid, a);
   if (perform(G, pid, a) === INVALID) throw new Error(`${itemId} was refused: ${why}`);
-  return item;
+  return card;
 }
 
 /**
@@ -133,8 +129,8 @@ export function useItem(G: GameState, pid: PlayerID, itemId: CardId, targetIid?:
  * front door (`pid`'s turn, souls enough for its price). Throws, naming the
  * reason, when the engine refuses. Returns the card, which the hero now wears.
  */
-export function playItem(G: GameState, pid: PlayerID, card: CardInstance, hero: CardInstance, upgradeId?: CardId): CardInstance {
-  const a = upgradeId ? { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid, upgradeId } : { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid };
+export function playItem(G: GameState, pid: PlayerID, card: CardInstance, hero: CardInstance): CardInstance {
+  const a = { type: 'playCard' as const, cardIid: card.iid, heroIid: hero.iid };
   const why = blocked(G, pid, a);
   if (perform(G, pid, a) === INVALID) throw new Error(`playing ${card.cardId} on ${hero.cardId} was refused: ${why}`);
   const worn = findWornItem(G, card.iid, pid);

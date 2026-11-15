@@ -24,10 +24,10 @@ import { chaosMove } from './driver';
 import { moveTags, signatureOf, type Hit } from './hits';
 import { collectInvariantViolations, collectTransitionViolations } from './invariants';
 import {
-  activateBlockedOracle, attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, chooseActiveBlockedOracle, diffPaths,
+  attackOpenFor, attackTargetsOracle, boardOf, boardUnits, callMove, chooseActiveBlockedOracle, diffPaths,
   discardBlockedOracle, discardList, filterForItem, filterForSkill, firstSkillOf, handOf, isHeroCard, isMergedRem, itemData, other,
   deckOf, freeBenchSlotsOracle, placeHeroBlockedOracle, playBlockedOracle, playCostOracle, retreatCostOracle, skillCooling, skillExcludesSelf, skillIdsOf,
-  slotCapOracle, targetLegal, isUltOf, ultLocked, ultUncharged, upgradesOfOracle, wornItemsOf,
+  slotCapOracle, spellTargetsOracle, targetLegal, isUltOf, ultLocked, ultUncharged, wornItemsOf,
 } from './oracle';
 
 export interface ProbeOpts {
@@ -195,24 +195,16 @@ export function probeLegality(
     }
   }
 
-  // ---------------------------------------------------------------- D: targets and item use
+  // ---------------------------------------------------------------- D: skill targets
   // A skill (one skillBlocked lets through) aimed at a sampled target: accepted exactly when
-  // its TargetFilter allows it. An item worn on either side — active or passive, ready or
-  // not, its bearer spent or not — used on a sampled target: accepted exactly when the item
-  // oracle (activateBlockedOracle) allows it; the ready ones are sampled twice as often.
-  type Src = { kind: 'skill'; card: CardInstance; skillId: string } | { kind: 'item'; item: CardInstance };
+  // its TargetFilter allows it. (A spell is a card played from the hand on its target: the
+  // hand's probes, H, try each on every kind of hero. Nothing worn is ever used.)
+  type Src = { kind: 'skill'; card: CardInstance; skillId: string };
   const sources: Src[] = [];
   for (const h of boardOf(me)) {
     for (const skillId of skillIdsOf(h)) {
       const b = skillBlocked(G, pid, h, undefined, skillId);
       if (filterForSkill(h, skillId, G, pid) && b === null) sources.push({ kind: 'skill', card: h, skillId });
-    }
-  }
-  for (const h of boardUnits(G)) {
-    for (const item of wornItemsOf(h)) {
-      sources.push({ kind: 'item', item });
-      const gate = activateBlockedOracle(G, pid, item.iid);
-      if (gate === null || gate === 'missing-target') sources.push({ kind: 'item', item });
     }
   }
   // The Mid-Boss is among the targets tried: no ability or item may ever be aimed at it.
@@ -222,7 +214,7 @@ export function probeLegality(
     const tgt = pickOne(targets, rnd);
     const tCard = tgt === 'ghost' ? undefined : tgt;
     const tIid = tgt === 'ghost' ? 'ghost-iid' : tCard?.iid;
-    if (src.kind === 'skill') {
+    {
       const filter = filterForSkill(src.card, src.skillId, G, pid)!;
       if (filter === 'noTarget' && tgt !== undefined) continue; // an unused extra target is harmless
       const legal = targetLegal(filter, tCard, src.card, pid, G) && !(skillExcludesSelf(src.card, src.skillId, G, pid) && tCard?.iid === src.card.iid);
@@ -236,21 +228,6 @@ export function probeLegality(
       } else if (!accepted && legal) {
         add(`rejects-legal-target:${filter}`, 'useSkill', args, `useSkill ${src.card.cardId}#${src.card.iid} -> ${tCard?.cardId}#${tCard?.iid} is legal for filter ${filter} but the engine ${r.outcome} it`);
       }
-    } else {
-      const filter = filterForItem(src.item);
-      const reason = activateBlockedOracle(G, pid, src.item.iid, tIid);
-      const args: unknown[] = tgt === undefined ? [src.item.iid] : [src.item.iid, tIid];
-      const r = callMove(G, ctx, pid, 'activate', args);
-      const accepted = r.outcome === 'accepted';
-      const label = `activate ${src.item.cardId}#${src.item.iid} (${filter}) -> ${tgt === 'ghost' ? 'unknown iid' : tCard ? `${tCard.cardId}#${tCard.iid}${isRespawning(tCard) ? ' (corpse)' : ''}` : 'no target'}`;
-      if (r.outcome === 'threw') add('move-threw', 'activate', args, `${label} threw: ${String(r.error).slice(0, 140)}`);
-      else if (accepted && reason !== null) {
-        const cause = reason === 'bad-target' && filter !== 'passive' && filter !== null ? `bad-target:${filter}:${why(filter, tgt, pid)}` : reason;
-        add(`activate-accepts-illegal:${cause}`, 'activate', args, `${label} was accepted; the rules refuse it (${reason})`);
-      } else if (!accepted && reason === null) {
-        add(`activate-rejects-legal:${filter}`, 'activate', args, `${label} is legal by the rules but the engine rejected it`);
-      } else if (accepted) checkAccepted(G, r.G, 'activate', args);
-      else checkRefused(G, r.G, 'activate', args);
     }
   }
 
@@ -391,11 +368,10 @@ interface Report {
 /** A legalActions entry as a comparable key. */
 function actionKey(a: Action): string {
   switch (a.type) {
-    case 'playCard': return `playCard ${a.cardIid} -> ${a.heroIid}${a.upgradeId ? ` [${a.upgradeId}]` : ''}${a.replaceIid !== undefined ? ` for ${a.replaceIid}` : ''}`;
+    case 'playCard': return `playCard ${a.cardIid}${a.heroIid === undefined ? '' : ` -> ${a.heroIid}`}${a.replaceIid !== undefined ? ` for ${a.replaceIid}` : ''}`;
     case 'placeHero': return `placeHero ${a.cardIid} ${a.toActive ? 'lane' : a.slot === undefined ? 'bench' : `bench ${a.slot}`}`;
     case 'discard': return `discard ${a.cardIids.join('+')}`;
     case 'chooseActive': return `chooseActive ${a.cardIid}`;
-    case 'activate': return `activate ${a.itemIid}${a.targetIid === undefined ? '' : ` -> ${a.targetIid}`}`;
     default: return a.type;
   }
 }
@@ -426,21 +402,24 @@ function prober(G: GameState, ctx: Ctx, pid: PlayerID, rep: Report) {
   };
 }
 
-/** The plays from the hand the rules allow `pid` now, as `actionKey`s: each item onto each hero
- *  of its side in a slot (one per upgrade the item could make, when it could make several; onto
- *  a full hero, one per worn item it could take the place of), each hero into an empty lane,
- *  onto the bench (its first free slot) and into each free bench slot by number. */
+/** The plays from the hand the rules allow `pid` now, as `actionKey`s: each piece of equipment
+ *  onto each hero of its side in a slot (onto a full hero, one per worn item it could take the
+ *  place of), each spell on each target its card allows (on nothing, for one that takes none),
+ *  each hero into an empty lane, onto the bench (its first free slot) and into each free bench
+ *  slot by number. */
 function handPlaysOracle(G: GameState, pid: PlayerID): string[] {
   const out: string[] = [];
   const heroes = boardOf(G.players[pid]);
   for (const c of handOf(G, pid)) {
-    if (itemData(c.cardId)) {
-      const ups = upgradesOfOracle(c.cardId);
+    if (itemData(c.cardId)?.type === 'spell') {
+      const targets = spellTargetsOracle(G, pid, c.cardId);
+      if (targets === 'none') { if (playBlockedOracle(G, pid, c.iid, undefined) === null) out.push(`playCard ${c.iid}`); }
+      else for (const t of targets) if (playBlockedOracle(G, pid, c.iid, t.iid) === null) out.push(`playCard ${c.iid} -> ${t.iid}`);
+    } else if (itemData(c.cardId)) {
       for (const h of heroes) {
         for (const r of [undefined, ...wornItemsOf(h).map((it) => it.iid)]) {
           const swap = r === undefined ? '' : ` for ${r}`;
-          if (ups.length > 1) { for (const u of ups) if (playBlockedOracle(G, pid, c.iid, h.iid, u, undefined, r) === null) out.push(`playCard ${c.iid} -> ${h.iid} [${u}]${swap}`); }
-          else if (playBlockedOracle(G, pid, c.iid, h.iid, undefined, undefined, r) === null) out.push(`playCard ${c.iid} -> ${h.iid}${swap}`);
+          if (playBlockedOracle(G, pid, c.iid, h.iid, undefined, r) === null) out.push(`playCard ${c.iid} -> ${h.iid}${swap}`);
         }
       }
     } else {
@@ -458,15 +437,16 @@ function handPlaysOracle(G: GameState, pid: PlayerID): string[] {
  *  - `legalActions` lists exactly the plays the oracle allows (`handPlaysOracle`) — none after
  *    the attack, none for the seat not on turn;
  *  - sampled item plays (the player's hand mostly — a hero card, a rival's card, a worn item,
- *    junk now and then — onto its heroes, a rival's, a merged Rem, an item, junk; an upgrade
- *    named or not, a wrong one, junk; real souls, plenty, or a soul short of the cost) and
+ *    junk now and then — onto its heroes, a rival's, a merged Rem, an item, junk, or nothing: a
+ *    spell is tried on every kind of hero and on none; real souls, plenty, or a soul short of
+ *    the cost) and
  *    hero placements (its hero cards mostly; the lane, the bench, or a bench slot by number —
  *    a free one, a taken one, no slot at all) are accepted exactly when the oracle allows them;
  *  - a discard or a first Active nobody owes is refused;
- * each on a clone; what the engine accepts is held to the transition rules (the card leaves
- * the hand for the hero, its price paid, the component it evolves to the discard pile, the
- * upgrade it makes into the deck, its cooldown, charges, bonus and experience; never over the
- * slot cap), what it refuses must leave the state untouched.
+ * each on a clone; what the engine accepts is held to the transition rules (equipment leaves
+ * the hand for the hero, its price paid, the component it evolves to the discard pile, its
+ * bonus and experience, never over the slot cap; a spell leaves the hand for the discard pile,
+ * its price paid; nothing is made for the deck), what it refuses must leave the state untouched.
  */
 function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opts: ProbeOpts, rep: Report) {
   const { add } = rep;
@@ -497,8 +477,14 @@ function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
     if (x < 0.96 && mine.length) return pickOne(mine, rnd).iid;
     return rnd() < 0.5 ? 'ghost-iid' : undefined;
   };
-  const heroPool = () => {
+  const heroPool = (spell: boolean) => {
     const x = rnd();
+    // A spell is played on a hero of either side, or on nothing: all three are tried as often.
+    if (spell) {
+      if (x < 0.4 && mine.length) return pickOne(mine, rnd).iid;
+      if (x < 0.8 && theirs.length) return pickOne(theirs, rnd).iid;
+      if (x < 0.9) return undefined;
+    }
     if (x < 0.8 && mine.length) return pickOne(mine, rnd).iid;
     if (x < 0.88 && theirs.length) return pickOne(theirs, rnd).iid;
     if (x < 0.92 && mergedRems.length) return pickOne(mergedRems, rnd).iid;
@@ -509,21 +495,16 @@ function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
   const tries = held.length ? opts.playCombos : 1;
   for (let n = 0; n < tries; n++) {
     const cardIid = cardPool(false);
-    const heroIid = heroPool();
     const card = held.find((c) => c.iid === cardIid);
+    const spell = !!card && itemData(card.cardId)?.type === 'spell';
+    const heroIid = heroPool(spell);
     const args: unknown[] = [cardIid, heroIid];
-    const u = rnd();
-    if (u < 0.35 && card) {
-      const ups = upgradesOfOracle(card.cardId);
-      args.push(ups.length && rnd() < 0.7 ? pickOne(ups, rnd) : rnd() < 0.5 ? pickOne(ITEMS, rnd).id : pickOne(['nope', '', 7], rnd));
-    }
     // The worn item it replaces: one the hero wears (most of the time when it is full), another
     // hero's, a merged Rem, junk — or none.
     const onHero = mine.find((h) => h.iid === heroIid);
     const worn = onHero ? wornItemsOf(onHero) : [];
     const full = !!onHero && !!card && worn.length >= slotCapOracle(G, pid);
     if (rnd() < (full ? 0.75 : 0.15)) {
-      if (args.length < 3) args.push(undefined);
       const y = rnd();
       args.push(worn.length && y < 0.7 ? pickOne(worn, rnd).iid
         : y < 0.8 && myItems.length ? pickOne(myItems, rnd).iid
@@ -532,9 +513,9 @@ function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
     }
     const x = rnd();
     const hero = mine.find((h) => h.iid === heroIid);
-    const cost = card && hero && itemData(card.cardId) ? playCostOracle(hero, card.cardId) : 0;
+    const cost = card && itemData(card.cardId) ? playCostOracle(spell ? undefined : hero, card.cardId) : 0;
     const souls = x < 0.4 ? undefined : x < 0.8 ? Math.max(me.souls, 40) : Math.max(0, cost - 1);
-    probe(pid, 'playCard', args, playBlockedOracle(G, pid, args[0], args[1], args[2], souls ?? me.souls, args[3]), 'playCard', souls);
+    probe(pid, 'playCard', args, playBlockedOracle(G, pid, args[0], args[1], souls ?? me.souls, args[2]), 'playCard', souls);
   }
   for (let n = 0; n < Math.max(1, opts.placeCombos); n++) {
     const cardIid = cardPool(true);

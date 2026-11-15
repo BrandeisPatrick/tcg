@@ -457,12 +457,12 @@ describe('E5 moveHero', () => {
 //     the hand is an active item now, used by the hero wearing it.
 // ===========================================================================
 describe('E6 targets are validated against the ability\'s TargetFilter', () => {
-  it('precondition: the AI aims Cold Front at the enemy Active and the engine takes it', () => {
+  it('precondition: the AI plays Cold Front on the enemy Active and the engine takes it', () => {
     const G = game();
-    const c = giveItem(G, G.players['0'].active!, 'cold_front');
+    const c = giveCard(G, '0', 'cold_front');
     const foe = G.players['1'].active!.iid;
-    expect(enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'activate' && m.args[0] === c.iid && m.args[1] === foe)).toBe(true);
-    expect(runMove('activate', G, '0', c.iid, foe)).not.toBe(INVALID_MOVE);
+    expect(enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'playCard' && m.args[0] === c.iid && m.args[1] === foe)).toBe(true);
+    expect(runMove('playCard', G, '0', c.iid, foe)).not.toBe(INVALID_MOVE);
   });
 
   it('E6a a "self" skill (Wraith\'s Full Auto; it was Viscous\'s, an ally skill now) cannot be aimed at an enemy', () => {
@@ -477,32 +477,32 @@ describe('E6 targets are validated against the ability\'s TargetFilter', () => {
     expect(G.players['0'].souls).toBe(10);
   });
 
-  it('E6b an enemy-Active item cannot be aimed at your own hero', () => {
+  it('E6b an enemy-Active spell cannot be played on your own hero', () => {
     const G = game();
-    const c = giveItem(G, G.players['0'].active!, 'cold_front');
+    const c = giveCard(G, '0', 'cold_front');
     const own = G.players['0'].bench[0]!;
-    expect(runMove('activate', G, '0', c.iid, own.iid)).toBe(INVALID_MOVE);
+    expect(runMove('playCard', G, '0', c.iid, own.iid)).toBe(INVALID_MOVE);
   });
 
-  it('E6c an enemy-Active item cannot be aimed at an enemy bench hero', () => {
+  it('E6c an enemy-Active spell cannot be played on an enemy bench hero', () => {
     const G = game();
-    const c = giveItem(G, G.players['0'].active!, 'cold_front');
-    expect(runMove('activate', G, '0', c.iid, G.players['1'].bench[0]!.iid)).toBe(INVALID_MOVE);
+    const c = giveCard(G, '0', 'cold_front');
+    expect(runMove('playCard', G, '0', c.iid, G.players['1'].bench[0]!.iid)).toBe(INVALID_MOVE);
   });
 
-  it('E6d a targeted item needs a target (no ability and no cooldown spent for nothing)', () => {
+  it('E6d a targeted spell needs a target (no souls and no card spent for nothing)', () => {
     const G = game();
     const haze = G.players['0'].active!;
-    const c = giveItem(G, haze, 'cold_front');
+    const c = giveCard(G, '0', 'cold_front');
     const souls = G.players['0'].souls;
-    expect(runMove('activate', G, '0', c.iid)).toBe(INVALID_MOVE);
-    expect([G.players['0'].souls, haze.skillUsedThisTurn, c.cooldowns]).toEqual([souls, false, undefined]);
+    expect(runMove('playCard', G, '0', c.iid)).toBe(INVALID_MOVE);
+    expect([G.players['0'].souls, haze.skillUsedThisTurn, G.players['0'].hand.includes(c)]).toEqual([souls, false, true]);
   });
 
   it('E6e an unknown iid is not a target', () => {
     const G = game();
-    const c = giveItem(G, G.players['0'].active!, 'cold_front');
-    expect(runMove('activate', G, '0', c.iid, 'no-such-iid')).toBe(INVALID_MOVE);
+    const c = giveCard(G, '0', 'cold_front');
+    expect(runMove('playCard', G, '0', c.iid, 'no-such-iid')).toBe(INVALID_MOVE);
   });
 
   it('E6f a skill cannot target a corpse (and a corpse takes no damage or status)', () => {
@@ -596,15 +596,27 @@ describe('E7 junk arguments of every kind are INVALID, never a throw', () => {
   const withHole = () => {
     const G = game();
     G.players['0'].bench[0] = null; // the hole a merged Rem leaves
-    giveItem(G, G.players['0'].active!, 'cold_front'); // something worn, for the item moves to miss
+    giveItem(G, G.players['0'].active!, 'extended_magazine'); // something worn, for the moves to miss
     return G;
   };
 
-  it.each(['useSkill', 'activate', 'promoteToActive'])('%s with junk ids', (move) => {
+  it.each(['useSkill', 'promoteToActive'])('%s with junk ids', (move) => {
     for (const a of junk) for (const b of junk) {
       const G = withHole();
       const before = JSON.stringify(G);
       expect(runMove(move, G, '0', a, b, a), `${move}(${String(a)}, ${String(b)})`).toBe(INVALID_MOVE);
+      expect(JSON.stringify(G)).toBe(before);
+    }
+  });
+
+  // (This was "activate with junk ids": an active item is a spell played from the hand now,
+  // so the junk goes where its target is named.)
+  it('a spell played with junk targets', () => {
+    for (const a of junk) for (const b of junk) {
+      const G = withHole();
+      const spell = giveCard(G, '0', 'cold_front'); // it takes a target: the enemy Active
+      const before = JSON.stringify(G);
+      expect(runMove('playCard', G, '0', spell.iid, a, b), `playCard(spell, ${String(a)}, ${String(b)})`).toBe(INVALID_MOVE);
       expect(JSON.stringify(G)).toBe(before);
     }
   });
@@ -618,7 +630,7 @@ describe('E7 junk arguments of every kind are INVALID, never a throw', () => {
     }
   });
 
-  it('playCard with a real card and a junk hero or a junk upgrade, or a junk card and a real hero; a discard nobody owes', () => {
+  it('playCard with a real card and a junk hero or a junk replacement, or a junk card and a real hero; a discard nobody owes', () => {
     for (const j of junk) {
       const G = withHole();
       const card = giveCard(G, '0', 'extended_magazine');
@@ -653,14 +665,24 @@ describe('E7 junk arguments of every kind are INVALID, never a throw', () => {
 //     and moves went with the shop: their reproductions stay skipped.
 // ===========================================================================
 describe('E8 an item that comes off takes its bonus with it', () => {
-  it('E8a Extra Health evolved into Colossus (no HP of its own) takes its +2 HP away, and goes to the discard pile', () => {
+  /** Play `itemId` onto the full `hero` in place of the worn item `out`. */
+  const replaceWith = (G: GameState, hero: CardInstance, itemId: string, out: CardInstance) => {
+    const card = giveCard(G, '0', itemId);
+    G.players['0'].souls = 20;
+    expect(runMove('playCard', G, '0', card.iid, hero.iid, out.iid)).not.toBe(INVALID_MOVE);
+  };
+
+  // (Colossus evolved Extra Health here until 2026-11-15; an active evolves nothing now, so
+  // the item comes off the other way an item does: replaced on a full hero.)
+  it('E8a Extra Health replaced on a full hero by an item with no HP of its own takes its +2 HP away, and goes to the discard pile', () => {
     const G = game();
     const hero = G.players['0'].active!;
     const base = hero.hpMax;
     const hp = playNew(G, '0', 'extra_health', hero);
     expect([hero.hpMax, hero.hp]).toEqual([base + 2, base + 2]);
-    G.players['0'].souls = 20;
-    playNew(G, '0', 'colossus', hero);
+    giveItem(G, hero, 'extended_magazine');
+    giveItem(G, hero, 'extra_spirit');
+    replaceWith(G, hero, 'restorative_shot', hp);
     expect(hero.attached!.some((a) => a.iid === hp.iid)).toBe(false);
     expect(G.players['0'].discard.map((c) => c.iid)).toEqual([hp.iid]);
     expect([hero.hpMax, hero.hp]).toEqual([base, base]);
@@ -687,25 +709,29 @@ describe('E8 an item that comes off takes its bonus with it', () => {
     expect(wornItems(bearer).map((it) => it.cardId)).toEqual(['boundless_spirit']);
   });
 
-  it('E8c an evolution off an HP item: HP already lost stays lost, a full hero is clamped to its new max', () => {
+  it('E8c an HP item replaced: HP already lost stays lost, a hero at full HP is clamped to its new max', () => {
     const G = game();
-    G.players['0'].souls = 40;
     const hero = G.players['0'].active!;
     const base = hero.hpMax;
-    giveItem(G, hero, 'extra_health');
+    const worn = giveItem(G, hero, 'extra_health');
+    giveItem(G, hero, 'extended_magazine');
+    giveItem(G, hero, 'extra_spirit');
     hero.hp = 3;
-    playNew(G, '0', 'colossus', hero);
+    replaceWith(G, hero, 'restorative_shot', worn);
     expect([hero.hpMax, hero.hp]).toEqual([base, 3]); // the lost HP is not refunded or double-counted
     const V = game();
     const full = V.players['0'].active!;
-    giveItem(V, full, 'extra_health');
+    const worn2 = giveItem(V, full, 'extra_health');
+    giveItem(V, full, 'extended_magazine');
+    giveItem(V, full, 'extra_spirit');
     expect(full.hp).toBe(base + 2);
-    playNew(V, '0', 'colossus', full);
+    replaceWith(V, full, 'restorative_shot', worn2);
     expect([full.hpMax, full.hp]).toEqual([base, base]); // no room for the 2 it gave
   });
 
   // Items no longer move between heroes, and nothing is sold: these went with the shop and
-  // have no deck equivalent (an item comes off a hero only when an upgrade evolves it, E8a–c).
+  // have no deck equivalent (an item comes off a hero only when an upgrade evolves it or a
+  // card played onto a full hero replaces it, E8a–c).
   it.skip('E8d moving an item takes its bonus from one hero to the other', () => {});
   it.skip('E8e an upgrade sold on the turn it was bought gives its component back, bonus and all', () => {});
 });
@@ -914,15 +940,16 @@ describe('M3 the AI sees every legal play', () => {
     expect(selfCast).toBe(false);
   });
 
-  it('M3e an active item worn on the bench is offered as its bearer\'s ability, on each of its targets', () => {
+  it('M3e a spell in the hand is offered as a play on each of its targets, and spends no hero\'s ability', () => {
     const G = game();
     const paige = G.players['0'].bench[2]!;
-    const ward = giveItem(G, paige, 'guardian_ward'); // "Grant an ally Shield 3."
-    const offered = legalActions(G, '0').filter((a) => a.type === 'activate' && a.itemIid === ward.iid).map((a) => (a as { targetIid?: string }).targetIid);
+    const ward = giveCard(G, '0', 'guardian_ward'); // "Grant an ally Shield 3."
+    const offered = legalActions(G, '0').filter((a) => a.type === 'playCard' && a.cardIid === ward.iid).map((a) => (a as { heroIid?: string }).heroIid);
     const allies = [G.players['0'].active!, ...G.players['0'].bench].map((c) => c!.iid);
     expect(offered).toEqual(allies);
-    expect(runMove('activate', G, '0', ward.iid, allies[0])).not.toBe(INVALID_MOVE);
-    expect(paige.skillUsedThisTurn).toBe(true);
+    expect(enumerateAIMoves(G, ctxFor('0'), false).filter((m) => m.move === 'playCard' && m.args[0] === ward.iid).map((m) => m.args[1]).sort()).toEqual([...allies].sort());
+    expect(runMove('playCard', G, '0', ward.iid, allies[0])).not.toBe(INVALID_MOVE);
+    expect(paige.skillUsedThisTurn ?? false).toBe(false);
   });
 });
 
@@ -950,17 +977,18 @@ describe('M4 a promotion owed is the only legal move', () => {
     expect(runMove('endTurn', owed(), '0')).toBe(INVALID_MOVE);
   });
 
-  it('M4b an active item, a card from the hand and a hero from the hand are refused while the seat owes a promotion', () => {
+  it('M4b a spell, equipment from the hand and a hero from the hand are refused while the seat owes a promotion', () => {
     const G = owed();
-    const heal = giveItem(G, G.players['0'].bench[1]!, 'healing_rite');
+    const item = giveCard(G, '0', 'extended_magazine');
     const card = giveCard(G, '0', 'healing_rite');
     const hero = giveCard(G, '0', 'hero_yamato');
-    expect(runMove('activate', G, '0', heal.iid, G.players['0'].bench[1]!.iid)).toBe(INVALID_MOVE);
+    expect(blocked(G, '0', { type: 'playCard', cardIid: item.iid, heroIid: G.players['0'].bench[1]!.iid })).toBe('promotionOwed');
+    expect(runMove('playCard', G, '0', item.iid, G.players['0'].bench[1]!.iid)).toBe(INVALID_MOVE);
     expect(blocked(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: G.players['0'].bench[0]!.iid })).toBe('promotionOwed');
     expect(runMove('playCard', G, '0', card.iid, G.players['0'].bench[0]!.iid)).toBe(INVALID_MOVE);
     expect(blocked(G, '0', { type: 'placeHero', cardIid: hero.iid })).toBe('promotionOwed');
     expect(runMove('placeHero', G, '0', hero.iid)).toBe(INVALID_MOVE);
-    expect(G.players['0'].hand).toEqual([card, hero]);
+    expect(G.players['0'].hand).toEqual([item, card, hero]);
   });
 
   it('M4c the only legal action is a promotion for the owed seat\'s bench — made from either seat', () => {

@@ -249,7 +249,7 @@ describe('simulate', () => {
     expect(ran.G.attackUsed).toBe(true);
     expect(G).toEqual(snapshot);
 
-    const refused = simulate(G, '0', { type: 'activate', itemIid: 'not-an-item' });
+    const refused = simulate(G, '0', { type: 'playCard', cardIid: 'not-a-card' });
     expect(refused.invalid).toBe(true);
     expect(refused.events).toEqual([]);
     expect(refused.G).toEqual({ ...G, log: [] }); // the copy, left as it was

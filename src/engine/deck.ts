@@ -13,8 +13,6 @@
  *    skipped and an empty deck draws nothing.
  *  - A draw card draws, then owes a discard from anywhere in the hand
  *    (`oweDiscard`, paid by the `discard` move).
- *  - Playing an item Deadlock builds into a bigger one makes that upgrade and
- *    shuffles it into the deck (`shuffleIntoDeck`).
  *
  * Every random pick is drawn from the match seed (`nextRandom`, counted in
  * `G.counters.rng`), so a game replays from G alone, and a simulation on a
@@ -205,21 +203,6 @@ export function discardFromHand(G: GameState, pid: PlayerID, iids: readonly stri
     const left = Math.min(owed.count - iids.length, ps.hand.length);
     G.pendingDiscard = left > 0 ? { ...owed, count: left } : undefined;
   }
-}
-
-// ---------- Upgrades ----------
-
-/** Make a fresh card of the item `itemId` for `pid` and shuffle it into its
- *  deck, at a random place: what playing its component makes. */
-export function shuffleIntoDeck(G: GameState, pid: PlayerID, itemId: CardId): CardInstance | undefined {
-  if (!itemCard(itemId)) return undefined;
-  const ps = G.players[pid];
-  const card = makeInstance(allocatorOf(G), itemId, pid, 'deck');
-  const at = Math.floor(nextRandom(G) * (ps.deck.length + 1));
-  ps.deck.splice(at, 0, card);
-  pushLog(G, `${cardName(itemId)} is shuffled into P${pid}'s deck.`);
-  pushFx(G, { kind: 'deck', what: 'upgrade', pid, iid: card.iid, cardId: itemId });
-  return card;
 }
 
 // ---------- A fallen hero comes back ----------

@@ -17,18 +17,18 @@ import { INVALID, perform } from '@/engine/engine';
 import { forecastAttack } from '@/engine/forecast';
 import { DeadlockGame } from '@/engine/game';
 import {
-  activateBlocked, activateTargets, attackBlocked, attackTargets, blocked, legalActions, moveBlocked, promoteBlocked, retreatCost,
-  skillBlocked, skillTargets,
+  attackBlocked, attackTargets, blocked, legalActions, moveBlocked, playBlocked, promoteBlocked, retreatCost,
+  skillBlocked, skillTargets, spellTargets,
 } from '@/engine/legality';
 import { pushLog } from '@/engine/log';
 import {
-  attackPower, effectiveAtk, findCardOnBoard, hasReach, isBlocked, isRespawning, isUntargetable, structureHp, targetsFor,
+  attackPower, effectiveAtk, findCardOnBoard, hasReach, isBlocked, isRespawning, isUntargetable, itemPrice, structureHp, targetsFor,
 } from '@/engine/query';
 import { registerAbilities } from '@/engine/registry';
 import { addStatus, leaveActive, tickCastingPulses, tickEndOfTurnCC, tickStartOfTurn } from '@/engine/statusOps';
 import type { CardInstance, GameState, HeroCard, PlayerID, SwingFx } from '@/engine/types';
 import { actionRefusal, attackBlockReason, moveBlockReason, skillBlockReason } from '@/ui/board/heroActions';
-import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveItem, makeHero, passTurn, readyClient, withBenchOnly } from './_helpers';
+import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveCard, giveItem, makeHero, passTurn, readyClient, withBenchOnly } from './_helpers';
 import { killBounty } from '@/engine/rounds';
 
 // The primitives the new hero kits are built from — an attack that names its
@@ -314,21 +314,22 @@ describe('Dome', () => {
     expect(snapshot(G)).toBe(before);
   });
 
-  it('a Dome on a bench hero changes nothing for the attack on the Active, and the Active\'s Dome stops only the attack, not a skill or an active item', () => {
+  it('a Dome on a bench hero changes nothing for the attack on the Active, and the Active\'s Dome stops only the attack, not a skill or a spell', () => {
     const { G, atk, rival, foes } = duel(TALLY);
     addStatus(G, foes[2], 'dome', 1, 1);
     expect(attackTargets(G, '0')).toEqual([rival]);
     expect(attackBlocked(G, '0')).toBeNull();
-    // "Cannot be the target of an attack": a skill or an active item can still be aimed at the domed Active.
+    // "Cannot be the target of an attack": a skill or a spell can still be aimed at the domed Active.
     addStatus(G, rival, 'dome', 1, 1);
     // Shiv's Serrated Knives aims at the enemy Active.
     const shiv = G.players['0'].bench[1] = makeHero('hero_shiv', '0', 'bench', 2);
     expect(skillTargets(G, '0', shiv)).toContain(rival);
     expect(skillBlocked(G, '0', shiv, rival.iid)).toBeNull();
-    const coldFront = giveItem(G, atk, 'cold_front'); // ready: spirit damage to the enemy Active
-    expect(activateTargets(G, '0', coldFront, atk)).toContain(rival);
-    expect(activateBlocked(G, '0', coldFront.iid, rival.iid)).toBeNull();
-    expect(blocked(G, '0', { type: 'activate', itemIid: coldFront.iid, targetIid: rival.iid })).toBeNull();
+    const coldFront = giveCard(G, '0', 'cold_front'); // a spell: spirit damage to the enemy Active
+    G.players['0'].souls = itemPrice('cold_front');
+    expect(spellTargets(G, '0', 'cold_front')).toContain(rival);
+    expect(playBlocked(G, '0', coldFront.iid, rival.iid)).toBeNull();
+    expect(blocked(G, '0', { type: 'playCard', cardIid: coldFront.iid, heroIid: rival.iid })).toBeNull();
     expect(attackBlocked(G, '0')).toBe('noTarget'); // while the swing at the same hero is not
   });
 

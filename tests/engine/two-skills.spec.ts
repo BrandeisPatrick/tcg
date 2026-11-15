@@ -312,7 +312,7 @@ describe('Echo Shard', () => {
   /** Echo Shard, worn and used by a bench hero (Vindicta): the item is ITS one
    *  ability this turn, so the Active's skill before it stands in no way, and
    *  "your Active" is the player's Active, the twin. */
-  const play = (G: GameState) => { useItem(G, '0', 'echo_shard', undefined, G.players['0'].bench[0]!); };
+  const play = (G: GameState) => { useItem(G, '0', 'echo_shard'); };
 
   it('repeats the skill the hero used this turn — the second one, when that was used', () => {
     const { G, twin, rival, benched } = twinGame();

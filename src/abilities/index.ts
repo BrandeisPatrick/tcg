@@ -5,8 +5,8 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { awardSouls, resolve, rideOn } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
-  abilityAim, attackPower, effectiveAtk, findCardOnBoard, heroData, isBoss, isRespawning, isUntargetable, itemCooldown, itemResist, liveBoardCards,
-  otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornActives, wornItems, type TargetFilter,
+  abilityAim, attackPower, effectiveAtk, findCardOnBoard, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
+  otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
 import { DJINN_CAP } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
@@ -503,10 +503,8 @@ const eff_vortex_web: AbilityDef = {
 };
 
 // Refresher (canon T4 spirit active): resets every cooldown. TCG: your
-// Active's skills, its ultimate and the active items it wears come off
-// cooldown (hard crowd control keeps its spent charges). Worn on the bench it
-// readies the Active for this very turn; Refresher's own cooldown starts after
-// it runs, so it never resets itself.
+// Active's skill and its ultimate are ready again — their waits end, and a
+// charged skill is back at its full charges.
 const eff_refresher: AbilityDef = {
   id: 'eff_refresher', trigger: 'onPlay', target: 'noTarget',
   prompt: "Refresher — your Active's cooldowns are reset.",
@@ -516,7 +514,6 @@ const eff_refresher: AbilityDef = {
     if (!mine) return;
     delete mine.cooldowns;
     delete mine.chargesSpent; // a charged skill is back at its full charges
-    for (const it of wornItems(mine)) delete it.cooldowns;
     pushLog(G, `${cardName(mine.cardId)}'s cooldowns are reset (Refresher).`);
   },
 };
@@ -1633,17 +1630,18 @@ const eff_enchanters_emblem: AbilityDef = {
 
 // Restorative Locket (canon T2 vitality active): every ability an enemy uses
 // nearby stores a stack, and the locket spends them on a heal and stamina.
-// TCG: an enemy hero with an ability cooling down is a stack it stored, so the
-// locket heals an ally 1, plus 1 for each. The stamina is a free Retreat this
-// turn (Swift).
+// TCG: an enemy hero whose skill is waiting (it was cast, or a charged one is
+// short of a charge) is a stack it stored, so the locket heals an ally 1, plus
+// 1 for each. An ultimate's wait is no stack: every ultimate opens the match
+// on one. The stamina is a free Retreat this turn (Swift).
 const eff_restorative_locket: AbilityDef = {
   id: 'eff_restorative_locket', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Restorative Locket — heal an ally 1, plus 1 per enemy hero with an ability on cooldown.',
+  prompt: 'Restorative Locket — heal an ally 1, plus 1 per enemy hero whose skill is waiting.',
   base: 1,
   run: (G, ctx, { target }) => {
     if (!target) return;
-    const stacks = slottedHeroes(G.players[otherPlayer(ctx.movingPlayer)]).filter((h) => !!heroData(h)
-      && (Object.keys(h.cooldowns ?? {}).length > 0 || wornActives(h).some((it) => itemCooldown(it) > 0))).length;
+    const stacks = slottedHeroes(G.players[otherPlayer(ctx.movingPlayer)])
+      .filter((h) => (heroData(h)?.skills ?? []).some((id) => (h.cooldowns?.[id] ?? 0) > 0)).length;
     healUnit(G, target, 1 + stacks, 'Restorative Locket');
     addStatus(G, target, 'swift', 1, 1);
   },

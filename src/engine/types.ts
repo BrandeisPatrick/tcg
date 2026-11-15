@@ -125,21 +125,15 @@ interface ItemFields {
   upgradesFrom?: CardId;
 }
 
-/** An ACTIVE item (Deadlock's `is_active_item`): worn like any item, and used
- *  from its bearer's sheet as that hero's one ability of the turn. Its first
- *  ability's target filter says what it is aimed at; every onPlay ability runs
- *  when it is used. It then cools down (ACTIVE_COOLDOWN by tier), or, for hard
- *  crowd control, spends one of its HARD_CC_CHARGES. */
+/** An ACTIVE item (Deadlock's `is_active_item`): a spell. It is played from
+ *  the hand for its price, on the target its first ability's filter allows
+ *  (or on nothing, for one that takes none); every onPlay ability runs, what
+ *  it leaves behind lasts a turn or two, and the card goes to the discard
+ *  pile. It is never worn, takes no slot and has no cooldown (Patrick,
+ *  2026-11-15; until then an active was worn and used again on a cooldown). */
 export interface SpellCard extends BaseCard, ItemFields {
   type: 'spell';
   abilities: AbilityId[];
-  /** Hard crowd control (its effect stuns, silences, disarms, roots, sleeps or
-   *  curses an enemy): HARD_CC_CHARGES uses a match and no cooldown. */
-  hardCC?: true;
-  /** Own turns it waits after use (and when put on), when the card names its
-   *  own rather than its tier's ACTIVE_COOLDOWN: the draw cards wait 2 at
-   *  every tier. */
-  cooldown?: number;
 }
 
 /** A PASSIVE item: always on while worn — its stat `bonus` and its abilities'
@@ -240,11 +234,6 @@ export interface CardInstance {
    *  cancel its own fall (it declares an optional trigger at 'onFall') holds
    *  it; cleared once the fall is decided. */
   downedBy?: string;
-  /** A hard crowd-control active's uses left this match (HARD_CC_CHARGES when
-   *  bought; it travels with the item). At 0 the item stays worn but cannot be
-   *  used. Undefined on every other card. An active's cooldown lives in this
-   *  instance's own `cooldowns`, keyed by its card id, and travels with it too. */
-  charges?: number;
   /** A hero: the items whose first equip has paid it EXP_ON_EQUIP, so a
    *  second copy of one pays nothing more. */
   equippedIds?: CardId[];
@@ -570,8 +559,7 @@ export interface BossFx extends FxBase {
 /** A card moved between a side's deck, hand and discard pile — what the
  *  deck, the discard pile and the hand animate: 'shuffle' (the deck was
  *  shuffled: the opening, the drafted heroes going in), 'draw' (deck → hand),
- *  'discard' (hand → discard pile), 'upgrade' (an upgrade card made and
- *  shuffled into the deck), 'toHand' (a fallen hero back in the hand). `iid` /
+ *  'discard' (hand → discard pile), 'toHand' (a fallen hero back in the hand). `iid` /
  *  `cardId` name the card ('shuffle' names none). */
 export interface DeckFx extends FxBase {
   kind: 'deck';
@@ -580,7 +568,7 @@ export interface DeckFx extends FxBase {
    *  left its slot to ride on an ally as equipment (Rem's Tag Along;
    *  `bearerIid` the ally). `rideOff`: the ride is over and it is back on the
    *  bench (`slot`), off `bearerIid`. */
-  what: 'shuffle' | 'draw' | 'discard' | 'upgrade' | 'toHand' | 'place' | 'rideOn' | 'rideOff';
+  what: 'shuffle' | 'draw' | 'discard' | 'toHand' | 'place' | 'rideOn' | 'rideOff';
   pid: PlayerID;
   iid?: string;
   cardId?: CardId;

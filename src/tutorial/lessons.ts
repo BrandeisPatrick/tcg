@@ -14,10 +14,9 @@
  *   2  The Hand         Yamato draws Extended Magazine (a tier 1 item, two of
  *                       the turn's five souls); he puts it on, and the swing
  *                       it adds is the kill — the attack ends the Act.
- *   3  Active Items     Kelvin holds Cold Front, a gift. Put on, it starts on
- *                       cooldown — ready in two turns — so today Frost
- *                       Grenade and the attack finish Lash: an ability, then
- *                       the one attack that ends the Act.
+ *   3  Spells           Kelvin holds Cold Front, a gift: a spell. Played on
+ *                       Lash for its souls it hits him and is discarded; the
+ *                       one attack that ends the Act finishes him.
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
  *   5  The Map          Round 4: Frost Grenade's kill pushes the rival's
@@ -39,7 +38,7 @@ import type { StorySetup } from '@/storage/matchConfig';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { effectiveAtk, heroAbilities, isRespawning, itemPrice, skillWait, stepInCandidates, wornItems } from '@/engine/query';
 import { attackBlocked, playBlocked, retreatCost, skillBlocked, skillTargets } from '@/engine/legality';
-import { ACTIVE_COOLDOWN, LANE_INCOME } from '@/engine/constants';
+import { LANE_INCOME } from '@/engine/constants';
 import { retreatBlock } from '@/ui/board/heroActions';
 import { END_TURN } from '@/ui/board/BoardControls';
 import { inHandLabel } from '@/ui/board/Hand';
@@ -325,6 +324,30 @@ function play(id: string, title: string, itemId: CardId, lead: (v: CoachView) =>
   };
 }
 
+/** Play the spell `itemId` from your hand on the rival's Active: a tap on the
+ *  card, then a tap on him — it costs its price, does its work at once and
+ *  goes to the discard pile. No hero's ability is spent. */
+function cast(id: string, title: string, itemId: CardId, lead: (v: CoachView) => string): CoachStep {
+  const label = cardName(itemId);
+  return {
+    id,
+    title,
+    body: (v) => (v.targeting
+      ? `${lead(v)} Now tap ${nameOf(theirs(v)) || 'the rival Active'}.`
+      : `${lead(v)} Tap ${label} in your hand, under the board, then tap ${nameOf(theirs(v)) || 'the rival Active'}.`),
+    // Played: it is out of the hand and on the discard pile.
+    task: (v) => !inHand(v, itemId) && v.G.players[v.me].discard.some((c) => c.cardId === itemId),
+    // The engine's own question: the card in the hand, the souls, a target.
+    ready: (v) => {
+      const card = inHand(v, itemId), foe = theirs(v);
+      return !!card && !!foe && playBlocked(v.G, v.me, card.iid, foe.iid) === null;
+    },
+    blocked: `${label} cannot be played now. End the turn; it waits in your hand, and ${word(LANE_INCOME)} more souls arrive.`,
+    spot: (v) => (v.targeting ? [tile(theirs(v))] : [inHandLabel(label)]),
+    allow: (v) => (v.targeting ? [tile(theirs(v))] : [inHandLabel(label)]),
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* The lessons                                                         */
 /* ------------------------------------------------------------------ */
@@ -394,26 +417,24 @@ export const LESSONS: Lesson[] = [
   {
     id: 'level',
     number: 3,
-    title: 'Active Items',
-    blurb: 'Kelvin holds Cold Front. Put it on; it needs time.',
+    title: 'Spells',
+    blurb: 'Kelvin holds Cold Front. Play it, then finish it.',
     face: 'hero_kelvin',
-    outro: `An active item is the hero's one ability that turn, like a skill. It goes on cooling down — ready in ${word(ACTIVE_COOLDOWN.low)} turns — and cools down again after each use; hard crowd control has charges instead.`,
-    // Kelvin holds Cold Front, a gift: put on, it starts on its cooldown, so it
-    // cannot be the kill today. Lash stands at two: Frost Grenade's one
-    // spirit damage, then Kelvin's swing of one, finish him — an ability, then
-    // the attack that ends the Act. Turn two, so there is an attack. Two
-    // souls kept from before and the turn's two pay for Cold Front's four;
-    // Frost Grenade costs none.
+    outro: 'A spell is an active item: you pay its souls, it does its work at once, and it goes to the discard pile. It spends no hero\'s ability, and you may play as many as your souls pay for. Equipment, a passive item, stays on the hero who wears it.',
+    // Kelvin holds Cold Front, a gift: a spell. Lash stands at three: Cold
+    // Front's two spirit damage, then Kelvin's swing of one, finish him — a
+    // spell, then the attack that ends the Act. Turn two, so there is an
+    // attack. Two souls kept from before and the turn's two pay for Cold
+    // Front's four.
     setup: () => fight({
       startTurn: 2,
       playerItems: ['cold_front'],
       playerSouls: 2,
-      enemyHeroStats: [{ hp: 2 }],
+      enemyHeroStats: [{ hp: 3 }],
     }),
     steps: [
-      play('play', 'Put It On', 'cold_front', () => `Cold Front waits in your hand, under the board — a gift, an active item; its card bears a bolt, and its price is ${soulsText(itemPrice('cold_front'))}. An active item works from the hero who wears it.`),
-      useSkill('Cooling Down', (v) => `Cold Front is on, and like every active item it starts on cooldown: ready in ${word(ACTIVE_COOLDOWN.low)} turns — its plate on ${nameOf(mine(v))}'s sheet shows the dial. Today his skill does it: ${skillNameOf(mine(v))}, one spirit damage, for no souls.`),
-      attack((v) => `${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}. One ability each, then one attack — it ends the Act.`),
+      cast('play', 'Play the Spell', 'cold_front', (v) => `Cold Front waits in your hand, under the board — a gift, and a spell: its card bears a bolt, and its price is ${soulsText(itemPrice('cold_front'))}. ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}; Cold Front hits him for two.`),
+      attack((v) => `Cold Front is spent: it is on your discard pile. ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}. The attack ends the Act.`),
     ],
   },
 

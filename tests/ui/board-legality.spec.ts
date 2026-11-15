@@ -5,8 +5,8 @@ import { REPLACE_SHEET, ReplacePicker } from '@/ui/overlays/ReplacePicker';
 import type { CardInstance, GameState, HeroCard, PlayerID } from '@/engine/types';
 import { INVALID, perform, type Action } from '@/engine/engine';
 import {
-  activateBlocked, attackBlocked, moveBlocked, playBlocked, playCost, playTargets, replaceNeeded, skillBlocked,
-  type ActivateBlock, type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
+  attackBlocked, moveBlocked, playBlocked, playCost, playTargets, replaceNeeded, skillBlocked,
+  type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
   type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
 import { MAX_ITEMS, PRICE, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT } from '@/engine/constants';
@@ -17,7 +17,7 @@ import { CARDS_BY_ID, ITEMS } from '@/cards';
 import { deckProblem, isLegalDeck } from '@/cards/decks';
 import { isValidTarget } from '@/ui/board/targeting';
 import {
-  ACT_OVER, DISCARD_FIRST, ONE_ULT_A_TURN, actionRefusal, activateBlockReason, attackBlockReason, chooseActiveBlockReason, discardBlockReason,
+  ACT_OVER, DISCARD_FIRST, ONE_ULT_A_TURN, actionRefusal, attackBlockReason, chooseActiveBlockReason, discardBlockReason,
   moveBlockReason, placeBlockReason, playBlockReason, promoteBlockReason, skillBlockReason,
 } from '@/ui/board/heroActions';
 import { statusClass } from '@/ui/card/StatusIcon';
@@ -50,7 +50,7 @@ function board(): GameState {
 const heroesOf = (G: GameState): CardInstance[] =>
   (['0', '1'] as PlayerID[]).flatMap((pid) => [G.players[pid].active, ...G.players[pid].bench].filter((c): c is CardInstance => !!c));
 const nameOf = (c: CardInstance) => CARDS_BY_ID[c.cardId]?.name ?? c.cardId;
-const armedItem = (item: CardInstance): PendingPlay => ({ kind: 'activate', iid: item.iid, title: nameOf(item), desc: '', filter: 'anyBoard' });
+const armedItem = (item: CardInstance): PendingPlay => ({ kind: 'playCard', iid: item.iid, title: nameOf(item), desc: '', filter: 'anyBoard' });
 const armedSkill = (hero: CardInstance): PendingPlay => ({ kind: 'useSkill', iid: hero.iid, title: nameOf(hero), desc: '', filter: 'anyBoard' });
 
 /** Would the engine's front door take `a` from `pid` as it stands? (A copy, so nothing is spent.) */
@@ -58,12 +58,12 @@ function taken(G: GameState, a: Action, pid: PlayerID = ME): boolean {
   return perform(structuredClone(G), pid, a) !== INVALID;
 }
 
-/** The UI glows `target` for the armed item exactly when the engine would use
- *  the item on it. */
-function expectGlowMatchesEngine(G: GameState, item: CardInstance, label: string) {
+/** The UI glows `target` for the armed spell (a card in the hand) exactly
+ *  when the engine would play the spell on it. */
+function expectGlowMatchesEngine(G: GameState, spell: CardInstance, label: string) {
   for (const target of heroesOf(G)) {
-    const engine = taken(G, { type: 'activate', itemIid: item.iid, targetIid: target.iid });
-    expect(isValidTarget(G, ME, armedItem(item), target), `${label}: ${nameOf(item)} on ${nameOf(target)}`).toBe(engine);
+    const engine = taken(G, { type: 'playCard', cardIid: spell.iid, heroIid: target.iid });
+    expect(isValidTarget(G, ME, armedItem(spell), target), `${label}: ${nameOf(spell)} on ${nameOf(target)}`).toBe(engine);
   }
 }
 
@@ -83,9 +83,9 @@ function expectPlayMatchesEngine(G: GameState, card: CardInstance, label: string
 }
 
 describe('the glow on the tiles is the engine\'s answer', () => {
-  it('an item for rivals: never a corpse, never an ally', () => {
+  it('a spell for rivals: never a corpse, never an ally', () => {
     const G = board();
-    const hex = giveItem(G, G.players[ME].active!, 'slowing_hex'); // any rival
+    const hex = giveCard(G, ME, 'slowing_hex'); // any rival
     const corpse = G.players['1'].bench[0]!;
     corpse.hp = 0; corpse.respawnTurnsLeft = 2;
     expectGlowMatchesEngine(G, hex, 'a corpse on the rival bench');
@@ -94,60 +94,56 @@ describe('the glow on the tiles is the engine\'s answer', () => {
     expect(isValidTarget(G, ME, armedItem(hex), G.players[ME].active!)).toBe(false);
   });
 
-  it('an item for allies skips your own corpse too — worn on the bench, it reaches the Active', () => {
+  it('a spell for allies skips your own corpse too, and reaches the Active and the bench alike', () => {
     const G = board();
-    const rite = giveItem(G, G.players[ME].bench[0]!, 'healing_rite'); // ally hero
+    const rite = giveCard(G, ME, 'healing_rite'); // ally hero
     const down = G.players[ME].bench[2]!;
     down.hp = 0; down.respawnTurnsLeft = 1;
     expectGlowMatchesEngine(G, rite, 'a corpse on your own bench');
     expect(isValidTarget(G, ME, armedItem(rite), down)).toBe(false);
     expect(isValidTarget(G, ME, armedItem(rite), G.players[ME].active!)).toBe(true);
+    expect(isValidTarget(G, ME, armedItem(rite), G.players[ME].bench[0]!)).toBe(true);
   });
 
-  it('an Active-only item reaches the rival Active and nothing else', () => {
+  it('an Active-only spell reaches the rival Active and nothing else', () => {
     const G = board();
-    const barrel = giveItem(G, G.players[ME].active!, 'rusted_barrel');
+    const barrel = giveCard(G, ME, 'rusted_barrel');
     expectGlowMatchesEngine(G, barrel, 'enemy Active');
     expect(heroesOf(G).filter((h) => isValidTarget(G, ME, armedItem(barrel), h)).map((h) => h.iid)).toEqual([G.players['1'].active!.iid]);
   });
 
-  it('an item the engine will not use glows nothing, and the refusal says why: passive, cooling down, out of charges, its bearer\'s ability spent', () => {
+  it('a spell the engine will not play glows nothing, and the refusal says why: too dear, or nobody standing to cast it', () => {
     const G = board();
     const me = G.players[ME];
     const foe = G.players['1'].active!;
-    const magazine = giveItem(G, me.active!, 'extended_magazine');
-    const cooling = giveItem(G, me.active!, 'cold_front', { cooldown: 1 });
-    const spent = giveItem(G, me.bench[0]!, 'knockdown');
-    spent.charges = 0;
-    const lash = me.bench[1]!;
-    const barrel = giveItem(G, lash, 'rusted_barrel');
-    expect(perform(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: foe.iid })).not.toBe(INVALID); // Lash's one ability of the turn
-    for (const [item, code, text] of [
-      [magazine, 'passive', 'A passive item: always on'],
-      [cooling, 'cooldown', 'Ready in 1 turn'],
-      [spent, 'charges', 'No charges left'],
-      [barrel, 'used', 'Used its skill this turn'],
-    ] as const) {
-      expectGlowMatchesEngine(G, item, code);
-      expect(heroesOf(G).some((h) => isValidTarget(G, ME, armedItem(item), h)), code).toBe(false);
-      expect(actionRefusal(G, ME, { type: 'activate', itemIid: item.iid, targetIid: foe.iid })).toEqual({ code, text });
-    }
+    const knock = giveCard(G, ME, 'knockdown'); // tier 3: 8 souls
+    me.souls = 1;
+    expectGlowMatchesEngine(G, knock, 'souls');
+    expect(heroesOf(G).some((h) => isValidTarget(G, ME, armedItem(knock), h))).toBe(false);
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: knock.iid, heroIid: foe.iid })).toEqual({ code: 'souls', text: 'Need 8 souls — you have 1' });
+    // With the souls it glows the rival Active; with nobody of yours standing, nothing.
+    me.souls = 10;
+    expect(isValidTarget(G, ME, armedItem(knock), foe)).toBe(true);
+    for (const h of [me.active!, ...me.bench]) { h!.hp = 0; h!.respawnTurnsLeft = 2; }
+    expectGlowMatchesEngine(G, knock, 'noCaster');
+    expect(heroesOf(G).some((h) => isValidTarget(G, ME, armedItem(knock), h))).toBe(false);
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: knock.iid, heroIid: foe.iid })).toEqual({ code: 'noCaster', text: 'No hero of yours stands to cast it' });
   });
 
-  it('a stunned hero can use neither its skill nor an item it wears, but can still be kitted out from the hand', () => {
+  it('a stunned hero cannot use its skill, but can still be kitted out from the hand — and a spell is the player\'s, so it is still played, on that hero too', () => {
     const G = board();
     const lash = G.players[ME].bench[1]!; // skill: any rival
-    const hex = giveItem(G, lash, 'slowing_hex');
+    const hex = giveCard(G, ME, 'slowing_hex');
+    const rite = giveCard(G, ME, 'healing_rite');
     addStatus(G, lash, 'stun', 1, 1);
+    addStatus(G, G.players[ME].active!, 'stun', 1, 1); // the caster is stunned too: a spell needs no hero's ability
     expect(skillBlocked(G, ME, lash)).toBe('status');
-    expect(activateBlocked(G, ME, hex.iid)).toBe('status');
-    for (const target of heroesOf(G)) {
-      expect(isValidTarget(G, ME, armedSkill(lash), target), nameOf(target)).toBe(false);
-      expect(isValidTarget(G, ME, armedItem(hex), target), nameOf(target)).toBe(false);
-    }
+    for (const target of heroesOf(G)) expect(isValidTarget(G, ME, armedSkill(lash), target), nameOf(target)).toBe(false);
     const stunned = { code: 'status', text: 'Cannot use abilities (status)' };
     expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid })).toEqual(stunned);
-    expect(actionRefusal(G, ME, { type: 'activate', itemIid: hex.iid, targetIid: G.players['1'].active!.iid })).toEqual(stunned);
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: hex.iid, heroIid: G.players['1'].active!.iid })).toBeNull();
+    expect(isValidTarget(G, ME, armedItem(rite), lash)).toBe(true);
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: rite.iid, heroIid: lash.iid })).toBeNull();
     const card = giveCard(G, ME, 'extended_magazine');
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: lash.iid })).toBeNull();
     expect(playTargets(G, ME, card.iid)).toContain(lash);
@@ -170,13 +166,12 @@ describe('the glow on the tiles is the engine\'s answer', () => {
       .toBe("Not a valid target for Paige's skill");
   });
 
-  it('nothing is a target while nothing is armed, or once the armed item is no longer worn', () => {
+  it('nothing is a target while nothing is armed, or once the armed spell has been played', () => {
     const G = board();
-    const haze = G.players[ME].active!;
-    const hex = giveItem(G, haze, 'slowing_hex');
+    const hex = giveCard(G, ME, 'slowing_hex');
     expect(isValidTarget(G, ME, null, G.players['1'].active!)).toBe(false);
     expect(isValidTarget(G, ME, armedItem(hex), G.players['1'].active!)).toBe(true);
-    haze.attached = (haze.attached ?? []).filter((it) => it.iid !== hex.iid);
+    expect(perform(G, ME, { type: 'playCard', cardIid: hex.iid, heroIid: G.players['1'].active!.iid })).not.toBe(INVALID);
     expect(isValidTarget(G, ME, armedItem(hex), G.players['1'].active!)).toBe(false);
   });
 
@@ -254,13 +249,18 @@ describe('a card from the hand goes on what the engine says', () => {
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: haze.iid })?.code).toBe('duplicate');
   });
 
-  it('a card played with no hero named is refused for its hero', () => {
+  it('a card played with no hero named is refused: equipment for its hero, a spell that takes a target for its target', () => {
     const G = board();
-    const card = giveCard(G, ME, 'slowing_hex');
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid } as unknown as Action)).toEqual({
+    const item = giveCard(G, ME, 'extended_magazine');
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: item.iid })).toEqual({
       code: 'noHero', text: 'Play it onto one of your heroes',
     });
-    expect(taken(G, { type: 'playCard', cardIid: card.iid } as unknown as Action)).toBe(false);
+    expect(taken(G, { type: 'playCard', cardIid: item.iid })).toBe(false);
+    const spell = giveCard(G, ME, 'slowing_hex');
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: spell.iid })).toEqual({
+      code: 'target', text: 'Slowing Hex needs a target',
+    });
+    expect(taken(G, { type: 'playCard', cardIid: spell.iid })).toBe(false);
   });
 });
 
@@ -415,22 +415,22 @@ describe('what an ability takes is the engine\'s answer: no souls, a wait', () =
 });
 
 describe('a refused move is said, with the engine\'s own code', () => {
-  it('an item aimed at a corpse is refused for its target', () => {
+  it('a spell played on a corpse is refused for its target', () => {
     const G = board();
-    const hex = giveItem(G, G.players[ME].active!, 'slowing_hex');
+    const hex = giveCard(G, ME, 'slowing_hex');
     const corpse = G.players['1'].bench[0]!;
     corpse.hp = 0; corpse.respawnTurnsLeft = 2;
-    expect(actionRefusal(G, ME, { type: 'activate', itemIid: hex.iid, targetIid: corpse.iid })).toEqual({
-      code: 'target', text: 'Not a valid target for Slowing Hex',
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: hex.iid, heroIid: corpse.iid })).toEqual({
+      code: 'target', text: `Slowing Hex cannot be played on ${nameOf(corpse)}`,
     });
   });
 
-  it('an item that needs a target, used with none named, is refused for its target; one that takes none goes without', () => {
+  it('a spell that needs a target, played with none named, is refused for its target; one that takes none goes without', () => {
     const G = board();
-    const hex = giveItem(G, G.players[ME].active!, 'slowing_hex');
-    expect(actionRefusal(G, ME, { type: 'activate', itemIid: hex.iid })?.code).toBe('target');
-    const grit = giveItem(G, G.players[ME].bench[0]!, 'grit');
-    expect(actionRefusal(G, ME, { type: 'activate', itemIid: grit.iid })).toBeNull();
+    const hex = giveCard(G, ME, 'slowing_hex');
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: hex.iid })?.code).toBe('target');
+    const grit = giveCard(G, ME, 'grit');
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: grit.iid })).toBeNull();
   });
 
   it('a retreat without the souls says what it costs: the leaving hero\'s printed retreat', () => {
@@ -454,12 +454,12 @@ describe('a refused move is said, with the engine\'s own code', () => {
     const G = board();
     G.attackUsed = true;
     const lash = G.players[ME].bench[1]!;
-    const rite = giveItem(G, G.players[ME].bench[0]!, 'healing_rite');
+    const rite = giveCard(G, ME, 'healing_rite');
     const card = giveCard(G, ME, 'extended_magazine');
     const over = { code: 'actOver', text: 'The attack ended your turn' };
     expect(ACT_OVER).toBe(over.text);
     expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid })).toEqual(over);
-    expect(actionRefusal(G, ME, { type: 'activate', itemIid: rite.iid, targetIid: G.players[ME].active!.iid })).toEqual(over);
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: rite.iid, heroIid: G.players[ME].active!.iid })).toEqual(over);
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].active!.iid })).toEqual(over);
     expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toEqual(over);
     expect(actionRefusal(G, ME, { type: 'attack' })?.code).toBe('used');
@@ -471,13 +471,13 @@ describe('a refused move is said, with the engine\'s own code', () => {
     const me = G.players[ME];
     const foe = G.players['1'].active!;
     const lash = me.bench[1]!;
-    const front = giveItem(G, me.bench[0]!, 'cold_front');
+    const front = giveCard(G, ME, 'cold_front');
     const card = giveCard(G, ME, 'extended_magazine');
     G.pendingDiscard = { pid: ME, count: 1, cardId: 'improved_cooldown' };
     const acts: Action[] = [
       { type: 'attack' },
       { type: 'useSkill', heroIid: lash.iid, targetIid: foe.iid },
-      { type: 'activate', itemIid: front.iid, targetIid: foe.iid },
+      { type: 'playCard', cardIid: front.iid, heroIid: foe.iid },
       { type: 'moveHero', fromSlot: 1, toSlot: 0 },
       { type: 'playCard', cardIid: card.iid, heroIid: lash.iid },
       { type: 'endTurn' },
@@ -494,13 +494,13 @@ describe('a refused move is said, with the engine\'s own code', () => {
 
   it('while a promotion is owed, everything else waits for it — a hero from the hand too', () => {
     const G = board();
-    const rite = giveItem(G, G.players[ME].bench[1]!, 'healing_rite');
+    const item = giveCard(G, ME, 'extended_magazine');
     const card = giveCard(G, ME, 'healing_rite');
     const active = G.players[ME].active!;
     active.hp = 0; active.respawnTurnsLeft = 3; active.statuses = [];
     G.pendingPromotion = ME;
     const wait = { code: 'promotionOwed', text: 'Choose who steps up first' };
-    expect(actionRefusal(G, ME, { type: 'activate', itemIid: rite.iid, targetIid: G.players[ME].bench[0]!.iid })).toEqual(wait);
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: item.iid, heroIid: G.players[ME].bench[0]!.iid })).toEqual(wait);
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].bench[0]!.iid })).toEqual(wait);
     expect(actionRefusal(G, ME, { type: 'endTurn' })).toEqual(wait);
     expect(actionRefusal(G, ME, { type: 'promoteToActive', benchIid: G.players[ME].bench[0]!.iid })).toBeNull();
@@ -510,9 +510,9 @@ describe('a refused move is said, with the engine\'s own code', () => {
 
   it('a move the engine takes is not refused', () => {
     const G = board();
-    const rite = giveItem(G, G.players[ME].bench[0]!, 'healing_rite');
+    const item = giveCard(G, ME, 'extended_magazine');
     const card = giveCard(G, ME, 'healing_rite');
-    expect(actionRefusal(G, ME, { type: 'activate', itemIid: rite.iid, targetIid: G.players[ME].active!.iid })).toBeNull();
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: item.iid, heroIid: G.players[ME].bench[0]!.iid })).toBeNull();
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].active!.iid })).toBeNull();
     expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toBeNull();
     expect(attackBlocked(G, ME)).toBeNull();
@@ -526,8 +526,7 @@ describe('a refused move is said, with the engine\'s own code', () => {
 describe('every block code has words', () => {
   const skill: Record<SkillBlock, true> = { noSkill: true, trigger: true, actOver: true, down: true, locked: true, used: true, status: true, ultUsed: true, cooldown: true, charge: true, souls: true, hp: true, target: true };
   const attack: Record<AttackBlock, true> = { turn1: true, used: true, noActive: true, cannot: true, noTarget: true, target: true };
-  const activate: Record<ActivateBlock, true> = { noItem: true, passive: true, actOver: true, down: true, used: true, status: true, charges: true, cooldown: true, target: true };
-  const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, replace: true, souls: true, upgrade: true };
+  const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, replace: true, souls: true, noCaster: true, target: true };
   const place: Record<PlaceBlock, true> = { notYourTurn: true, notInHand: true, notHero: true, occupied: true, benchOnly: true, benchFull: true, badSlot: true, slotTaken: true };
   const choose: Record<ChooseActiveBlock, true> = { notOwed: true, notInDeck: true, notHero: true, benchOnly: true };
   const discard: Record<DiscardBlock, true> = { notOwed: true, none: true, tooMany: true, repeat: true, notInHand: true };
@@ -545,14 +544,14 @@ describe('every block code has words', () => {
     for (const code of Object.keys(attack) as AttackBlock[]) expect(attackBlockReason(code, null).length, code).toBeGreaterThan(0);
   });
 
-  it('active items, with and without the item and its bearer named', () => {
-    const G = board();
-    const haze = G.players[ME].active!;
-    const front = giveItem(G, haze, 'cold_front', { cooldown: 2 });
-    for (const code of Object.keys(activate) as ActivateBlock[]) {
-      expect(activateBlockReason(code).length, code).toBeGreaterThan(0);
-      expect(activateBlockReason(code, front, haze).length, code).toBeGreaterThan(0);
+  it('spells: the codes of a spell play have words, with and without the spell and its target named', () => {
+    for (const code of ['noCaster', 'target', 'souls'] as const) {
+      expect(playBlockReason(code).length, code).toBeGreaterThan(0);
+      expect(playBlockReason(code, { item: 'Cold Front', hero: 'Abrams', spell: true, cost: 4, have: 1 }).length, code).toBeGreaterThan(0);
     }
+    expect(playBlockReason('target', { item: 'Cold Front' })).toBe('Cold Front needs a target');
+    expect(playBlockReason('target', { item: 'Cold Front', hero: 'Kelvin' })).toBe('Cold Front cannot be played on Kelvin');
+    expect(playBlockReason('noCaster')).toBe('No hero of yours stands to cast it');
   });
 
   it('heroes from the hand, the first Active and the discard', () => {
@@ -596,10 +595,11 @@ describe('every block code has words', () => {
     expect(skillBlockReason('charge', { ...lash, cardId: 'hero_silver', tally: { eff_ult_silver: 5 } }, 'eff_ult_silver')).toBe('Needs 3 more damage');
     expect(skillBlockReason('used', lash)).toBe('Already used');
     expect(skillBlockReason('used', { ...lash, lastSkillUsed: skillId }, skillId)).toBe('Already used');
-    // Skill, ultimate and active items share the one ability a turn, and the line says which was used.
+    // Skill and ultimate share the one ability a turn, and the line says which was used.
     expect(skillBlockReason('used', { ...lash, lastSkillUsed: 'eff_ult_lash' }, skillId)).toBe('Used its ultimate this turn');
     expect(skillBlockReason('used', { ...lash, lastSkillUsed: skillId }, 'eff_ult_lash')).toBe('Used its skill this turn');
-    expect(skillBlockReason('used', { ...lash, lastSkillUsed: 'cold_front' }, skillId)).toBe('Used Cold Front this turn');
+    // A spell is no hero's ability, so nothing else can have been "used": an id that is no ability of the hero's reads plainly.
+    expect(skillBlockReason('used', { ...lash, lastSkillUsed: 'cold_front' }, skillId)).toBe('Already used');
     // No hero of the roster has two skills: a throwaway one carries Lash's and Kelvin's.
     const twin: HeroCard = {
       id: 'hero_ui_twin', name: 'Twin', type: 'hero', rarity: 3, atk: 2, hp: 8,
@@ -616,18 +616,18 @@ describe('every block code has words', () => {
     }
   });
 
-  it('an item on cooldown says how many turns are left, and an item held back by its bearer\'s other ability says which', () => {
+  it('a spell that cannot be played says what it lacks: the souls it costs, or a hero it may be played on', () => {
     const G = board();
-    const lash = G.players[ME].bench[1]!;
-    const front = giveItem(G, lash, 'cold_front', { cooldown: 2 });
-    expect(activateBlockReason('cooldown')).toBe('On cooldown'); // no item to ask: no number
-    expect(activateBlockReason('cooldown', front)).toBe('Ready in 2 turns');
-    expect(activateBlockReason('cooldown', { ...front, cooldowns: { cold_front: 1 } })).toBe('Ready in 1 turn');
-    expect(activateBlockReason('used', front, lash)).toBe('Already used');
-    expect(activateBlockReason('used', front, { ...lash, lastSkillUsed: 'cold_front' })).toBe('Already used');
-    expect(activateBlockReason('used', front, { ...lash, lastSkillUsed: 'skill_lash' })).toBe('Used its skill this turn');
-    expect(activateBlockReason('used', front, { ...lash, lastSkillUsed: 'eff_ult_lash' })).toBe('Used its ultimate this turn');
-    expect(activateBlockReason('used', front, { ...lash, lastSkillUsed: 'grit' })).toBe('Used Grit this turn');
+    const me = G.players[ME];
+    const foe = G.players['1'].active!;
+    const front = giveCard(G, ME, 'cold_front');
+    me.souls = 3;
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: front.iid, heroIid: foe.iid })).toEqual({ code: 'souls', text: 'Need 4 souls — you have 3' });
+    me.souls = 4;
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: front.iid, heroIid: me.bench[0]!.iid })).toEqual({
+      code: 'target', text: `Cold Front cannot be played on ${nameOf(me.bench[0]!)}`,
+    });
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: front.iid, heroIid: foe.iid })).toBeNull();
   });
 });
 

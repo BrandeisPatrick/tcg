@@ -62,15 +62,6 @@ export const PRICE: Readonly<Record<ItemTier, number>> = { 1: 2, 2: 4, 3: 8, 4: 
  *  `ItemTier` and its PRICE, and nothing else. */
 export const ITEM_TIERS: readonly ItemTier[] = Object.keys(PRICE).map(Number) as ItemTier[];
 
-/** Own turns an active item waits after it is used, and when it is put on:
- *  `low` for tiers 1–2, `high` for tiers 3 and up — unless the card names its
- *  own (`SpellCard.cooldown`: the draw cards' 2). Hard crowd control uses
- *  charges instead. */
-export const ACTIVE_COOLDOWN = { low: 2, high: 3 } as const;
-
-/** Uses a hard crowd-control active has per match (no cooldown). */
-export const HARD_CC_CHARGES = 2;
-
 /** A hero wearing this many items of one tab gets that tab's category spike:
  *  +1 Bullet Power (Weapon), +1 Spirit Power (Spirit) or +1 max HP (Vitality). */
 export const CATEGORY_SPIKE_ITEMS = 3;

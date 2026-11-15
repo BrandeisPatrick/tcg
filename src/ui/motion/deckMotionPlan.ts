@@ -19,8 +19,6 @@
  *             the rival's stays face down); the deck's count ticks as it leaves
  *   discard   a card flies from the hand (or off the hero that wore it) to
  *             the discard pile, face up; the pile's count ticks as it lands
- *   upgrade   the upgrade card appears over the table, holds, and flies into
- *             the deck
  *   toHand    a fallen hero flies from its slot back to the hand
  *   rideOn    a hero riding on an ally (Rem's Tag Along) flies from its slot
  *             onto the bearer, shrinking into the chip it becomes among its
@@ -31,7 +29,7 @@
  * Each side has its own cursor, so both sides' openings play at once (the
  * Actives fly, the heroes go in, the decks riffle, the hands are dealt);
  * within a side a run of cards is staggered (a draw of 8 lands in ~1.2 s), and
- * a placement, a riffle or an upgrade waits for the run before it. Nothing here blocks input or
+ * a placement or a riffle waits for the run before it. Nothing here blocks input or
  * reads back into the game: the plan is presentation only.
  */
 import type { CardId, DeckFx, FxEvent, GameState, PlayerID } from '@/engine/types';
@@ -45,7 +43,7 @@ export const DECK_MOTION = {
   stagger: 110,
   /** The deck riffling after a shuffle. */
   riffle: 420,
-  /** An upgrade card shown over the table before it flies into the deck. */
+  /** A drafted hero shown over the table before it flies into the deck. */
   appear: 560,
   /** The opening: the board settles before the heroes leave. */
   lead: 220,
@@ -81,7 +79,7 @@ export interface Flight {
   iid?: string;
   /** ms after the batch arrives that the card leaves `from`. */
   at: number;
-  /** ms held at `from`, shown, before it leaves (an upgrade appears first). */
+  /** ms held at `from`, shown, before it leaves (a drafted hero appears first). */
   hold: number;
   /** ms the flight takes once it leaves. */
   dur: number;
@@ -262,19 +260,6 @@ export function planDeckMotion(batch: readonly FxEvent[], input: PlanInput): Dec
         ticks.push({ pile: 'discard', pid, at: at + T.flight, delta: 1 });
         c.next = at + T.stagger;
         c.end = Math.max(c.end, at + T.flight);
-        break;
-      }
-      case 'upgrade': {
-        const at = c.end;
-        flights.push({
-          key: `${ev.seq}`, what: 'upgrade', pid, cardId: ev.cardId, iid: ev.iid,
-          at, hold: T.appear, dur: T.flight,
-          from: { kind: 'stage', pid, i: 0, n: 1 }, to: deck,
-          faces: { start: 'face', end: 'face' },
-        });
-        ticks.push({ pile: 'deck', pid, at: at + T.appear + T.flight, delta: 1 });
-        c.end = at + T.appear + T.flight;
-        c.next = c.end;
         break;
       }
       case 'toHand': {

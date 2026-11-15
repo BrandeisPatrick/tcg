@@ -1,9 +1,9 @@
 /**
  * The save (storage/playerData.ts) at version 5: it keeps the deck builder's
- * deck (DECK_SIZE base items at most, MAX_COPIES of one, no upgrade) beside
+ * deck (DECK_SIZE items at most, MAX_COPIES of one, upgrades too) beside
  * the builds, and how hard the rival AI plays a Quick Match, 'normal' unless
- * the player chose otherwise. A version-4 save's deck has its upgrades made
- * their base items, a copy the cap turns away made up from the squad's
+ * the player chose otherwise. A version-4 save's deck keeps its items,
+ * upgrades too, a copy the cap turns away made up from the squad's
  * builds; a version-2 or -3 save keeps everything it had, with no deck, and
  * plays 'normal'; a version-1 save (the old deck game's) still starts its
  * builds from the defaults and brings no deck; a value the game does not know
@@ -86,15 +86,15 @@ describe('the save keeps the rival AI\'s strength', () => {
     expect(getBuild('hero_kelvin')).toEqual(['grit', 'cold_front']);
   });
 
-  it('a deck saved with an upgrade in it keeps the upgrade\'s base item in its place', () => {
+  it('a deck saved with an upgrade in it keeps the upgrade: a deck holds any item', () => {
     saveDeck(['improved_spirit', 'grit', 'transcendent_cooldown']);
-    expect(getDeck()).toEqual(['extra_spirit', 'grit', 'improved_cooldown']);
+    expect(getDeck()).toEqual(['improved_spirit', 'grit', 'transcendent_cooldown']);
   });
 
-  it('a version-4 deck: each upgrade becomes its base item, and a copy the cap turns away is made up from the squad\'s builds', () => {
-    // Rem's build names Extra Spirit, Improved Spirit and Boundless Spirit: all three are Extra Spirit.
+  it('a version-4 deck: its upgrades stay as they are, and a copy the cap turns away is made up from the squad\'s builds', () => {
+    // Six Extra Spirits is two over the cap; the rest of the deck is as the player made it, upgrades and all.
     const v4 = [
-      'extra_spirit', 'extra_spirit', 'improved_spirit', 'improved_spirit', 'boundless_spirit', 'boundless_spirit',
+      'extra_spirit', 'extra_spirit', 'extra_spirit', 'extra_spirit', 'extra_spirit', 'extra_spirit',
       'titanic_magazine', 'extended_magazine', 'grit', 'grit', 'cold_front', 'cold_front',
       'healing_rite', 'healing_nova', 'glass_cannon', 'toxic_bullets',
     ];
@@ -105,17 +105,22 @@ describe('the save keeps the rival AI\'s strength', () => {
     const deck = loadPlayerData().deck;
     expect(deck).toHaveLength(DECK_SIZE);
     expect(isLegalDeck(deck)).toBe(true);
-    expect(deck.every(isBaseItem)).toBe(true);
-    // Six spirits make four Extra Spirits; Titanic Magazine is Extended Magazine, Healing Nova Healing Rite.
-    expect(deck.slice(0, 13)).toEqual([
-      'extra_spirit', 'extra_spirit', 'extra_spirit', 'extra_spirit', 'extended_magazine', 'extended_magazine',
-      'grit', 'grit', 'cold_front', 'cold_front', 'healing_rite', 'healing_rite', 'glass_cannon',
+    // Four Extra Spirits are kept; Titanic Magazine and Healing Nova stay themselves.
+    expect(deck.slice(0, 14)).toEqual([
+      'extra_spirit', 'extra_spirit', 'extra_spirit', 'extra_spirit',
+      'titanic_magazine', 'extended_magazine', 'grit', 'grit', 'cold_front', 'cold_front',
+      'healing_rite', 'healing_nova', 'glass_cannon', 'toxic_bullets',
     ]);
-    expect(deck[13]).toBe('toxic_bullets');
-    // The two turned away: the next base items of Haze's and Kelvin's builds that still have room.
+    expect(deck.some((id) => !isBaseItem(id))).toBe(true);
+    // The two turned away: the next items of Haze's and Kelvin's builds that still have room.
     const fill = buildsAcross([defaultBuild('hero_haze'), defaultBuild('hero_kelvin')]);
-    const room = fill.filter((id) => id !== 'extra_spirit');
-    expect(deck.slice(14)).toEqual(room.slice(0, 2));
+    const count = (id: string) => deck.slice(0, 14).filter((x) => x === id).length;
+    const made: string[] = [];
+    for (const id of fill) {
+      if (made.length === 2) break;
+      if (count(id) + made.filter((x) => x === id).length < MAX_COPIES) made.push(id);
+    }
+    expect(deck.slice(14)).toEqual(made);
     // The next save writes it back at version 5, the deck as it was read.
     saveAiStrength('hard');
     expect(saved()).toMatchObject({ version: 5, deck });
@@ -123,10 +128,10 @@ describe('the save keeps the rival AI\'s strength', () => {
 
   it('a version-4 deck short of the cap\'s room keeps its size; with no squad a turned-away copy is not made up', () => {
     store.set(KEY, JSON.stringify({ version: 4, preferredHeroes: [null, null, null, null], deck: ['grit', 'improved_spirit', 'extra_spirit'] }));
-    expect(loadPlayerData().deck).toEqual(['grit', 'extra_spirit', 'extra_spirit']);
+    expect(loadPlayerData().deck).toEqual(['grit', 'improved_spirit', 'extra_spirit']);
     const five = Array(MAX_COPIES + 1).fill('extra_spirit');
     store.set(KEY, JSON.stringify({ version: 4, preferredHeroes: [null, null, null, null], deck: ['improved_spirit', ...five] }));
-    expect(loadPlayerData().deck).toEqual(Array(MAX_COPIES).fill('extra_spirit'));
+    expect(loadPlayerData().deck).toEqual(['improved_spirit', ...Array(MAX_COPIES).fill('extra_spirit')]);
   });
 
   it('a version-1 save (no version, decks) still starts its builds from the defaults, keeps the rest, and plays normal', () => {

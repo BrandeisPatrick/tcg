@@ -18,7 +18,7 @@ import { STATUSES_BY_ID } from '@/statuses';
 import { DeadlockGame } from '@/engine/game';
 import { getAbility, type TargetFilter } from '@/abilities';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
+  CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, LATE_GAME_ROUND, LATE_PUSH_MULTIPLIER, LEVEL_THRESHOLDS,
   MAX_ITEMS, PRICE, RESPAWN_TURNS, SKILL_COOLDOWN, ULT_UNLOCK_LEVEL, ULT_WAIT,
 } from '@/engine/constants';
 import { isRespawning } from '@/engine/query';
@@ -105,7 +105,7 @@ export function describeUnit(c: CardInstance | null | undefined): string {
   if (!c) return 'none';
   const eq = (c.attached ?? []).map((a) => {
     const cd = a.cooldowns?.[a.cardId];
-    return `${a.cardId}${cd ? `(cd${cd})` : ''}${a.charges !== undefined ? `(x${a.charges})` : ''}`;
+    return `${a.cardId}${cd ? `(cd${cd})` : ''}`;
   }).join('+') || '-';
   const st = c.statuses.map((s) => `${s.id}:${s.value}/${s.duration}`).join(',') || '-';
   const dead = isRespawning(c) ? ` CORPSE(${c.respawnTurnsLeft})` : '';
@@ -117,9 +117,10 @@ export function describeUnit(c: CardInstance | null | undefined): string {
 // TargetFilter doc in abilities/index.ts, NOT copied from the engine or the AI.
 // ---------------------------------------------------------------------------
 
-/** The TargetFilter that governs a worn item: an ACTIVE item is aimed by its
- *  first ability's filter (as the spell it was always read from); a PASSIVE
- *  item is never used ('passive'); anything that is no item has none. */
+/** The TargetFilter that governs an item card: a spell (an ACTIVE item) is
+ *  played on what its first ability's filter allows; equipment (a PASSIVE
+ *  item) is worn and never aimed ('passive'); anything that is no item has
+ *  none. */
 export function filterForItem(card: CardInstance): TargetFilter | 'passive' | null {
   const d = itemData(card.cardId);
   if (!d) return null;
@@ -393,32 +394,34 @@ export function slotCapOracle(G: GameState, pid: PlayerID): number {
   return MAX_ITEMS + (G.players[pid].flexSlot ? FLEX_SLOT : 0);
 }
 
+/** The component the upgrade `itemId` evolves, off the cards: what its data
+ *  says it is built from, when both are equipment. An active item neither
+ *  evolves anything nor is evolved (docs/card-design.md, 2026-11-15). */
+export function evolvesFromOracle(itemId: unknown): string | undefined {
+  const d = itemData(itemId);
+  const from = d?.type === 'equipment' ? d.upgradesFrom : undefined;
+  return from && itemData(from)?.type === 'equipment' ? from : undefined;
+}
+
 /** The worn item an upgrade `itemId` played onto `hero` evolves: the component
- *  the item's data says it is built from, when the hero wears it. */
+ *  it evolves (`evolvesFromOracle`), when the hero wears it. */
 export function upgradeComponentOracle(hero: CardInstance, itemId: unknown): CardInstance | undefined {
-  const from = itemData(itemId)?.upgradesFrom;
+  const from = evolvesFromOracle(itemId);
   return from ? wornItemsOf(hero).find((a) => a.cardId === from) : undefined;
 }
 
-/** What putting `itemId` on `hero` costs: its price, less its component's when
- *  the hero wears the component (it evolves). Never below 0. */
-export function playCostOracle(hero: CardInstance, itemId: unknown): number {
-  const comp = upgradeComponentOracle(hero, itemId);
+/** What playing `itemId` costs: its price, less its component's when it is
+ *  equipment going onto the hero `hero` that wears the component (it
+ *  evolves). Never below 0. A spell costs its price wherever it is played. */
+export function playCostOracle(hero: CardInstance | undefined, itemId: unknown): number {
+  const comp = hero ? upgradeComponentOracle(hero, itemId) : undefined;
   return Math.max(0, itemPriceOracle(itemId) - (comp ? itemPriceOracle(comp.cardId) : 0));
 }
 
-/** The items built from `itemId` (whose `upgradesFrom` names it), in catalogue order. */
+/** The upgrades that evolve `itemId` (`evolvesFromOracle`), in catalogue order.
+ *  A play makes none of them: an upgrade is a card of its own. */
 export function upgradesOfOracle(itemId: unknown): string[] {
-  return typeof itemId === 'string' ? ITEMS.filter((i) => i.upgradesFrom === itemId).map((i) => i.id) : [];
-}
-
-/** The upgrade a play of `itemId` naming `upgradeId` makes: the one named when
- *  it is one of them, else the first; undefined when the item builds into
- *  nothing. */
-export function upgradeMadeOracle(itemId: unknown, upgradeId: unknown): string | undefined {
-  const ups = upgradesOfOracle(itemId);
-  if (!ups.length) return undefined;
-  return typeof upgradeId === 'string' && ups.includes(upgradeId) ? upgradeId : ups[0];
+  return typeof itemId === 'string' ? ITEMS.filter((i) => evolvesFromOracle(i.id) === itemId).map((i) => i.id) : [];
 }
 
 /** The draw cards, from their texts ("Draw N cards, then discard M cards from
@@ -434,16 +437,6 @@ export const DRAW_CARDS: Readonly<Record<CardId, { draw: number; discard: number
  *  (the category spike: +1 on that tab's line). */
 export function hasSpikeOracle(hero: CardInstance, slot: ItemSlot): boolean {
   return wornItemsOf(hero).filter((a) => itemData(a.cardId)!.slot === slot).length >= CATEGORY_SPIKE_ITEMS;
-}
-
-/** The cooldown an active item starts on its bearer (put on, or used): the
- *  card's own when it names one (the draw cards: 2), else 2 own turns for
- *  tiers 1–2 and 3 for tiers 3 and up. (Nothing in the catalogue shortens an
- *  item's cooldown since the Cooldown family became the draw cards.) */
-export function activeCooldownOracle(_bearer: CardInstance, item: ItemCard | ItemTier): number {
-  if (typeof item === 'number') return item <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high;
-  const own = item.type === 'spell' ? item.cooldown : undefined;
-  return own ?? (item.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
 }
 
 /** The cooldown an ultimate starts when it is used: its size's wait (4, 6 or
@@ -607,24 +600,58 @@ export function wornItemOf(G: GameState, pid: PlayerID, iid: unknown): { item: C
   return undefined;
 }
 
-/** Why `pid` may not put the card `cardIid` from its hand on its hero `heroIid`
- *  (naming `upgradeId` as the upgrade it makes, when given): a choice owed
- *  first, or the attack made; it is not `pid`'s turn (the draft included); no
- *  such card is in its hand; the card is a hero (it goes on the bench); no hero
- *  of its in a slot has that iid (bench and corpses count, a merged Rem does
- *  not); the hero wears one already; its slots are full, the card evolves
- *  nothing it wears and no `replaceIid` names the worn item it takes the place
- *  of; a `replaceIid` with nothing to replace (room on the hero, or the card
- *  evolves an item it wears) or naming no item the hero wears (a merged Rem is
- *  none); `souls` (the player's, unless given) fall short of the cost; or
- *  `upgradeId` names none of the card's upgrades. */
-export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, heroIid: unknown, upgradeId?: unknown, souls = G.players[pid].souls, replaceIid?: unknown): string | null {
+/** The hero that casts `pid`'s spells: its standing Active, else its first
+ *  standing bench hero; undefined when none of its heroes stands. */
+export function spellCasterOracle(G: GameState, pid: PlayerID): CardInstance | undefined {
+  const ps = G.players[pid];
+  return [ps.active, ...ps.bench].find((c): c is CardInstance => !!c && isHeroCard(c) && !isRespawning(c));
+}
+
+/** Who `pid` may play the spell `cardId` on: the board cards its first
+ *  ability's TargetFilter allows with the side's caster as the source, or
+ *  'none' for a spell that takes no target. Equipment, or no item, has []. */
+export function spellTargetsOracle(G: GameState, pid: PlayerID, cardId: unknown): CardInstance[] | 'none' {
+  const d = itemData(cardId);
+  if (d?.type !== 'spell') return [];
+  const filter = getAbility(d.abilities[0])?.target ?? 'noTarget';
+  if (filter === 'noTarget') return 'none';
+  const caster = spellCasterOracle(G, pid);
+  if (!caster) return [];
+  return boardUnits(G).filter((t) => targetLegal(filter, t, caster, pid, G));
+}
+
+/** Why `pid` may not play the card `cardIid` from its hand on `heroIid`: a
+ *  choice owed first, or the attack made; it is not `pid`'s turn (the draft
+ *  included); no such card is in its hand; the card is a hero (it goes on the
+ *  bench).
+ *
+ *  A spell (docs/card-design.md §1, 2026-11-15): no hero of the side stands to
+ *  cast it; `heroIid` is no target its card allows (a spell that takes none
+ *  ignores it); a `replaceIid` (a spell replaces nothing); `souls` fall short
+ *  of its price.
+ *
+ *  Equipment: no hero of its in a slot has that iid (bench and corpses count,
+ *  a merged Rem does not); the hero wears one already; its slots are full, the
+ *  card evolves nothing it wears and no `replaceIid` names the worn item it
+ *  takes the place of; a `replaceIid` with nothing to replace (room on the
+ *  hero, or the card evolves an item it wears) or naming no item the hero
+ *  wears (a merged Rem is none); `souls` (the player's, unless given) fall
+ *  short of the cost. */
+export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, heroIid: unknown, souls = G.players[pid].souls, replaceIid?: unknown): string | null {
   const owed = owedOracle(G, 'playCard');
   if (owed) return owed;
   if (seatOnTurn(G) !== pid) return 'not-your-turn';
   const card = handCardOf(G, pid, cardIid);
   if (!card) return 'not-in-hand';
-  if (!itemData(card.cardId)) return 'hero-card';
+  const data = itemData(card.cardId);
+  if (!data) return 'hero-card';
+  if (data.type === 'spell') {
+    if (!spellCasterOracle(G, pid)) return 'no-caster';
+    const targets = spellTargetsOracle(G, pid, card.cardId);
+    if (targets !== 'none' && !targets.some((t) => t.iid === heroIid)) return heroIid === undefined ? 'missing-target' : 'bad-target';
+    if (replaceIid !== undefined) return 'replace-spell';
+    return souls < itemPriceOracle(card.cardId) ? 'souls' : null;
+  }
   const hero = slottedHeroOf(G, pid, heroIid);
   if (!hero) return 'no-hero';
   const worn = wornItemsOf(hero);
@@ -635,7 +662,6 @@ export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown,
   } else if (!full) return 'replace-not-full';
   else if (!worn.some((a) => a.iid === replaceIid)) return 'replace-not-worn';
   if (souls < playCostOracle(hero, card.cardId)) return 'souls';
-  if (upgradeId !== undefined && !upgradesOfOracle(card.cardId).includes(upgradeId as string)) return 'not-an-upgrade';
   return null;
 }
 
@@ -714,47 +740,6 @@ export function discardBlockedOracle(G: GameState, pid: PlayerID, cardIids: unkn
   if (new Set(cardIids).size !== cardIids.length) return 'repeat';
   if (!cardIids.every((iid) => handCardOf(G, pid, iid))) return 'not-in-hand';
   return null;
-}
-
-/** Who an active item may be aimed at, by its bearer: the board cards its first
- *  ability's TargetFilter allows with the bearer as the source, or 'none' for an
- *  item that takes no target. A passive item, or no item, has []. */
-export function activateTargetsOracle(G: GameState, pid: PlayerID, item: CardInstance, bearer: CardInstance): CardInstance[] | 'none' {
-  const filter = filterForItem(item);
-  if (filter === null || filter === 'passive') return [];
-  if (filter === 'noTarget') return 'none';
-  return boardUnits(G).filter((t) => targetLegal(filter, t, bearer, pid, G));
-}
-
-/**
- * Why `pid` may not use the item `itemIid` aimed at `targetIid` (rules.md §5):
- * a choice owed comes first, and nothing follows the attack; the item is worn
- * by one of `pid`'s heroes in a slot (bench included) and is an ACTIVE one; its
- * bearer stands, has not used its one ability this turn (skill, item and
- * ultimate share it) and no status locks its abilities; a hard crowd-control
- * item has a charge left (it has no cooldown), any other is off cooldown; and
- * the target is one its filter allows — named when the item takes one. Whose
- * turn it is, boardgame.io sees to.
- */
-export function activateBlockedOracle(G: GameState, pid: PlayerID, itemIid: unknown, targetIid?: unknown): string | null {
-  if (G.draft) return 'draft';
-  const owed = owedOracle(G, 'activate');
-  if (owed) return owed;
-  const worn = wornItemOf(G, pid, itemIid);
-  if (!worn) return 'not-worn';
-  const { item, bearer } = worn;
-  const data = itemData(item.cardId)!;
-  if (data.type !== 'spell') return 'passive';
-  if (isRespawning(bearer)) return 'bearer-down';
-  if (bearer.skillUsedThisTurn) return 'bearer-used';
-  if (abilitiesLocked(bearer)) return 'bearer-locked';
-  if (data.hardCC) {
-    if (!((item.charges ?? 0) > 0)) return 'no-charges';
-  } else if ((item.cooldowns?.[item.cardId] ?? 0) > 0) return 'cooling';
-  const targets = activateTargetsOracle(G, pid, item, bearer);
-  if (targets === 'none') return null;
-  if (targetIid === undefined) return 'missing-target';
-  return targets.some((t) => t.iid === targetIid) ? null : 'bad-target';
 }
 
 // ---------------------------------------------------------------------------

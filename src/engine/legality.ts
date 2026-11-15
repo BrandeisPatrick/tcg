@@ -15,14 +15,14 @@
 import '@/abilities';
 import type { AbilityId, CardId, CardInstance, GameState, PlayerID, PlayerState } from './types';
 import { CARDS_BY_ID, itemCard } from '@/cards';
-import { upgradesOf } from '@/cards/decks';
+import { evolvesFrom } from '@/cards/decks';
 import type { Action } from './engine';
 import { getAbility } from './registry';
 import { ULT_UNLOCK_LEVEL } from './constants';
 import {
-  abilityAim, attackPower, findCardOnBoard, findWornItem, handCard, hasReach, heroesOf, heroRetreat, isBlocked, isRespawning,
-  isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCost, kitWaiting, laneOpen, liveBoardCards, optionalTriggers, otherPlayer, promptOwed,
-  resolveSkill, retreatDiscount, slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, triggerPrice, ultCharge, wornActives, wornItems,
+  abilityAim, attackPower, findCardOnBoard, handCard, hasReach, heroesOf, heroRetreat, isBlocked, isRespawning,
+  isUntargetable, itemPrice, kitAbilityIds, kitCost, kitWaiting, laneOpen, liveBoardCards, optionalTriggers, otherPlayer, promptOwed,
+  resolveSkill, retreatDiscount, slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, triggerPrice, ultCharge, wornItems,
 } from './query';
 import { seatToMove } from './rounds';
 
@@ -243,59 +243,27 @@ export function answerBlocked(G: GameState, a: { type: 'passTrigger' } | { type:
   return triggerBlocked(G, owed.pid, hero, a.abilityId);
 }
 
-// ---------- Active items ----------
+// ---------- The hand ----------
 
-export type ActivateBlock = 'noItem' | 'passive' | 'actOver' | 'down' | 'used' | 'status' | 'charges' | 'cooldown' | 'target';
+/** The hero that casts `pid`'s spells: its standing Active or, with none
+ *  standing in the lane, its first standing bench hero. A spell's purple
+ *  numbers add its Spirit Power, and its gear reacts to what the spell does.
+ *  Undefined when no hero of `pid`'s stands: it can play no spell then. */
+export function spellCaster(G: GameState, pid: PlayerID): CardInstance | undefined {
+  const ps = G.players[pid];
+  return [ps.active, ...ps.bench].find((c): c is CardInstance => !!c && !isRespawning(c) && CARDS_BY_ID[c.cardId]?.type === 'hero');
+}
 
-/** What the active item `item`, worn by `bearer`, may be aimed at: the live
- *  board cards its first ability's filter allows (as the card it was always
- *  read from), or 'none' for one that takes no target. A passive item has []. */
-export function activateTargets(G: GameState, pid: PlayerID, item: CardInstance, bearer: CardInstance): CardInstance[] | 'none' {
-  const data = itemCard(item.cardId);
+/** What `pid` may play the spell `cardId` on: the live board cards its first
+ *  ability's filter allows (heroes of either side, as the card says), or
+ *  'none' for a spell that takes no target. [] for a card that is no spell. */
+export function spellTargets(G: GameState, pid: PlayerID, cardId: CardId): CardInstance[] | 'none' {
+  const data = itemCard(cardId);
   if (data?.type !== 'spell') return [];
   const filter = getAbility(data.abilities[0])?.target ?? 'noTarget';
   if (filter === 'noTarget') return 'none';
-  return targetsFor(G, pid, filter, bearer);
+  return targetsFor(G, pid, filter, spellCaster(G, pid));
 }
-
-/**
- * Why `pid` cannot use the active item `itemIid` right now, or null when it
- * can: an item one of its heroes in a slot wears, an active one, in a turn
- * whose attack has not ended the Act, its bearer standing, not yet having used
- * its one ability this turn (skill, item and ultimate share it), free of the
- * statuses that lock abilities, the item ready — off cooldown, or for hard
- * crowd control with a charge left — and a legal target. Whose turn it is, and
- * the step, are the caller's question (`blocked`). Checked in this order:
- *  - 'noItem'   no hero of `pid` in a slot wears it.
- *  - 'passive'  it is a passive item: nothing to use.
- *  - 'actOver'  the turn's attack has been made: it ends the Act.
- *  - 'down'     its bearer is a corpse on the respawn timer.
- *  - 'used'     its bearer has used an ability this turn.
- *  - 'status'   a status locks its bearer's abilities (`isBlocked(…, 'skill')`).
- *  - 'charges'  hard crowd control with no charge left this match.
- *  - 'cooldown' it is still cooling down.
- *  - 'target'   nothing legal to aim it at — or `targetIid` is not.
- */
-export function activateBlocked(G: GameState, pid: PlayerID, itemIid: string, targetIid?: string): ActivateBlock | null {
-  const worn = findWornItem(G, itemIid, pid);
-  if (!worn) return 'noItem';
-  const { bearer, item } = worn;
-  const data = itemCard(item.cardId);
-  if (data?.type !== 'spell') return 'passive';
-  if (G.attackUsed) return 'actOver';
-  if (isRespawning(bearer)) return 'down';
-  if (bearer.skillUsedThisTurn) return 'used';
-  if (isBlocked(bearer, 'skill')) return 'status';
-  if (data.hardCC) {
-    if ((item.charges ?? 0) <= 0) return 'charges';
-  } else if (itemCooldown(item) > 0) return 'cooldown';
-  const targets = activateTargets(G, pid, item, bearer);
-  if (targets === 'none') return null;
-  if (targetIid === undefined) return targets.length > 0 ? null : 'target';
-  return targets.some((t) => t.iid === targetIid) ? null : 'target';
-}
-
-// ---------- The hand ----------
 
 /** `pid`'s hero in a slot (the Active or a bench hero, standing or on the
  *  respawn timer) with this iid. */
@@ -306,9 +274,11 @@ function slottedHero(G: GameState, pid: PlayerID, heroIid: string): CardInstance
 
 /** The worn item an upgrade played onto `hero` evolves: the component it
  *  upgrades from (`upgradesFrom`), when the hero wears it. It takes that
- *  item's place, and costs the difference. */
+ *  item's place, and costs the difference. Equipment only, both the upgrade
+ *  and its component: an active item neither evolves anything nor is evolved
+ *  (Patrick, 2026-11-15: "the rule does not apply for any actives"). */
 export function upgradeComponent(hero: CardInstance, itemId: CardId): CardInstance | undefined {
-  const from = itemCard(itemId)?.upgradesFrom;
+  const from = evolvesFrom(itemId);
   return from ? wornItems(hero).find((it) => it.cardId === from) : undefined;
 }
 
@@ -320,11 +290,12 @@ export function replaceNeeded(G: GameState, pid: PlayerID, hero: CardInstance, i
   return !upgradeComponent(hero, itemId) && wornItems(hero).length >= slotCap(G, pid);
 }
 
-/** Souls putting the item `itemId` on `hero` costs: its price (`PRICE` by
- *  tier) — or, an upgrade onto the hero wearing its component (it evolves,
- *  taking that item's place), the difference, as in Deadlock. */
-export function playCost(hero: CardInstance, itemId: CardId): number {
-  const comp = upgradeComponent(hero, itemId);
+/** Souls playing the item `itemId` costs: its price (`PRICE` by tier) — or,
+ *  an equipment upgrade onto the hero `hero` wearing its component (it
+ *  evolves, taking that item's place), the difference, as in Deadlock. A
+ *  spell always costs its price, whatever it is played on. */
+export function playCost(hero: CardInstance | undefined, itemId: CardId): number {
+  const comp = hero ? upgradeComponent(hero, itemId) : undefined;
   return Math.max(0, itemPrice(itemId) - (comp ? itemPrice(comp.cardId) : 0));
 }
 
@@ -334,15 +305,13 @@ function turnShut(G: GameState, pid: PlayerID): 'notYourTurn' | null {
   return G.draft || seatToMove(G) !== pid ? 'notYourTurn' : null;
 }
 
-export type PlayBlock = 'notYourTurn' | 'notInHand' | 'hero' | 'noHero' | 'duplicate' | 'full' | 'replace' | 'souls' | 'upgrade';
+export type PlayBlock = 'notYourTurn' | 'notInHand' | 'hero' | 'noHero' | 'duplicate' | 'full' | 'replace' | 'souls' | 'noCaster' | 'target';
 
 /**
  * Why `pid` cannot put the item `cardIid` from its hand on its hero `heroIid`
  * right now, or null when it can. It costs `playCost` souls (an upgrade onto
  * the hero wearing its component evolves it for the difference) and is not the
- * hero's ability for the turn. `upgradeId`, when given, is the upgrade the play
- * makes (`upgradesOf`: the player picks one when there are several); it must be
- * one of them. A hero whose slots are full takes the card only in place of an
+ * hero's ability for the turn. A hero whose slots are full takes the card only in place of an
  * item it wears (`replaceNeeded`; Patrick, 2026-11-09): `replaceIid` names
  * that item, which goes to the discard pile; the card still costs its price.
  * Checked in this order:
@@ -360,13 +329,24 @@ export type PlayBlock = 'notYourTurn' | 'notInHand' | 'hero' | 'noHero' | 'dupli
  *  - 'souls'       `pid` has fewer souls than it costs.
  *  - 'upgrade'     `upgradeId` names no upgrade of the card.
  */
-export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIid: string, upgradeId?: CardId, replaceIid?: string): PlayBlock | null {
+export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIid?: string, replaceIid?: string): PlayBlock | null {
   const shut = turnShut(G, pid);
   if (shut) return shut;
   const card = handCard(G, pid, cardIid);
   if (!card) return 'notInHand';
-  if (!itemCard(card.cardId)) return 'hero';
-  const hero = slottedHero(G, pid, heroIid);
+  const data = itemCard(card.cardId);
+  if (!data) return 'hero';
+  // A spell: cast by a standing hero of the side, on a target its card allows
+  // (`heroIid`, a hero of either side) or on nothing, for its price. It is
+  // never worn, so no slot, duplicate or replacement comes into it.
+  if (data.type === 'spell') {
+    if (!spellCaster(G, pid)) return 'noCaster';
+    const targets = spellTargets(G, pid, card.cardId);
+    if (targets !== 'none' && !targets.some((t) => t.iid === heroIid)) return 'target';
+    if (replaceIid !== undefined) return 'replace';
+    return G.players[pid].souls < itemPrice(card.cardId) ? 'souls' : null;
+  }
+  const hero = heroIid === undefined ? undefined : slottedHero(G, pid, heroIid);
   if (!hero) return 'noHero';
   if (wornItems(hero).some((it) => it.cardId === card.cardId)) return 'duplicate';
   const full = replaceNeeded(G, pid, hero, card.cardId);
@@ -374,7 +354,6 @@ export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIi
     if (full) return 'full';
   } else if (!full || !wornItems(hero).some((it) => it.iid === replaceIid)) return 'replace';
   if (G.players[pid].souls < playCost(hero, card.cardId)) return 'souls';
-  if (upgradeId !== undefined && !upgradesOf(card.cardId).includes(upgradeId)) return 'upgrade';
   return null;
 }
 
@@ -383,18 +362,30 @@ export function playBlocked(G: GameState, pid: PlayerID, cardIid: string, heroIi
  *  any one will do, so the first stands for them all), or null when it can —
  *  directly or in place of a worn item. What the board lights and asks of a
  *  tap on a hero, before the discard is chosen. */
-export function playBlockedAny(G: GameState, pid: PlayerID, cardIid: string, heroIid: string, upgradeId?: CardId): PlayBlock | null {
-  const hero = slottedHero(G, pid, heroIid);
+export function playBlockedAny(G: GameState, pid: PlayerID, cardIid: string, heroIid?: string): PlayBlock | null {
+  const hero = heroIid === undefined ? undefined : slottedHero(G, pid, heroIid);
   const card = handCard(G, pid, cardIid);
-  const swap = hero && card && itemCard(card.cardId) && replaceNeeded(G, pid, hero, card.cardId) ? wornItems(hero)[0]?.iid : undefined;
-  return playBlocked(G, pid, cardIid, heroIid, upgradeId, swap);
+  const swap = hero && card && itemCard(card.cardId)?.type === 'equipment' && replaceNeeded(G, pid, hero, card.cardId) ? wornItems(hero)[0]?.iid : undefined;
+  return playBlocked(G, pid, cardIid, heroIid, swap);
 }
 
-/** The heroes `pid` could put its card `cardIid` on right now, in board order
- *  (the Active, then the bench): those `playBlockedAny` lets it go on — a full
- *  hero among them, in place of one of its items. */
+/** The heroes `pid` could play its card `cardIid` on right now, in board
+ *  order (its own side — the Active, then the bench — then the rival's):
+ *  those `playBlockedAny` lets it go on. For equipment, its own heroes (a
+ *  full one among them, in place of one of its items); for a spell, the
+ *  targets its card allows on either side — none for a spell that takes no
+ *  target (`playNeedsTarget` tells the two apart). */
 export function playTargets(G: GameState, pid: PlayerID, cardIid: string): CardInstance[] {
-  return slottedHeroes(G.players[pid]).filter((h) => playBlockedAny(G, pid, cardIid, h.iid) === null);
+  const both = [...slottedHeroes(G.players[pid]), ...slottedHeroes(G.players[otherPlayer(pid)])];
+  return both.filter((h) => playBlockedAny(G, pid, cardIid, h.iid) === null);
+}
+
+/** True when the hand card `cardIid` is played on a hero: equipment always,
+ *  a spell unless it takes no target (it is then played on nothing). */
+export function playNeedsTarget(G: GameState, pid: PlayerID, cardIid: string): boolean {
+  const card = handCard(G, pid, cardIid);
+  const data = card && itemCard(card.cardId);
+  return !!data && (data.type !== 'spell' || spellTargets(G, pid, data.id) !== 'none');
 }
 
 /** The bench slot (1..3) a hero from `ps`'s hand goes into: the first empty
@@ -628,18 +619,12 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
       if (why) return why;
       return a.targetIid === undefined && skillTargets(G, pid, found.card, a.skillId) !== 'none' ? 'target' : null;
     }
-    case 'activate': {
-      const why = activateBlocked(G, pid, a.itemIid, a.targetIid);
-      if (why) return why;
-      const { item, bearer } = findWornItem(G, a.itemIid, pid)!;
-      return a.targetIid === undefined && activateTargets(G, pid, item, bearer) !== 'none' ? 'target' : null;
-    }
     case 'moveHero':
       return moveBlocked(G, pid, a.fromSlot, a.toSlot);
     case 'promoteToActive':
       return promoteBlocked(G, a.benchIid);
     case 'playCard':
-      return playBlocked(G, pid, a.cardIid, a.heroIid, a.upgradeId, a.replaceIid);
+      return playBlocked(G, pid, a.cardIid, a.heroIid, a.replaceIid);
     case 'placeHero':
       return placeHeroBlocked(G, pid, a.cardIid, a.toActive === true, a.slot);
     case 'discard':
@@ -699,14 +684,6 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
     attackTargets(G, pid).forEach((t, i) => offer(i === 0 ? { type: 'attack' } : { type: 'attack', targetIid: t.iid }));
 
     for (const hero of liveBoardCards(ps)) {
-      for (const item of wornActives(hero)) {
-        const targets = activateTargets(G, pid, item, hero);
-        if (targets === 'none') { offer({ type: 'activate', itemIid: item.iid }); continue; }
-        for (const t of targets) offer({ type: 'activate', itemIid: item.iid, targetIid: t.iid });
-      }
-    }
-
-    for (const hero of liveBoardCards(ps)) {
       for (const skillId of kitAbilityIds(hero)) {
         const targets = skillTargets(G, pid, hero, skillId);
         if (targets === 'none') { offer({ type: 'useSkill', heroIid: hero.iid, skillId }); continue; }
@@ -718,15 +695,17 @@ export function legalActions(G: GameState, pid: PlayerID): Action[] {
 
     const heroes = slottedHeroes(ps);
     for (const card of ps.hand) {
-      if (itemCard(card.cardId)) {
-        const ups = upgradesOf(card.cardId);
+      if (itemCard(card.cardId)?.type === 'spell') {
+        // A spell: on each target its card allows, or on nothing.
+        const targets = spellTargets(G, pid, card.cardId);
+        if (targets === 'none') offer({ type: 'playCard', cardIid: card.iid });
+        else for (const t of targets) offer({ type: 'playCard', cardIid: card.iid, heroIid: t.iid });
+      } else if (itemCard(card.cardId)) {
         for (const h of heroes) {
           // A full hero takes it in place of one of its items: one play per item it could replace.
           const swaps = replaceNeeded(G, pid, h, card.cardId) ? wornItems(h).map((it) => it.iid) : [undefined];
           for (const replaceIid of swaps) {
-            const swap = replaceIid === undefined ? {} : { replaceIid };
-            if (ups.length > 1) for (const u of ups) offer({ type: 'playCard', cardIid: card.iid, heroIid: h.iid, upgradeId: u, ...swap });
-            else offer({ type: 'playCard', cardIid: card.iid, heroIid: h.iid, ...swap });
+            offer({ type: 'playCard', cardIid: card.iid, heroIid: h.iid, ...(replaceIid === undefined ? {} : { replaceIid }) });
           }
         }
       } else {

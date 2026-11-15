@@ -27,7 +27,7 @@ import { STATUSES_BY_ID, type Blockable, type Untargetable } from '@/statuses';
 import type { AbilityDef, HeroAbilityDef } from '@/abilities';
 import { getAbility } from './registry';
 import {
-  ACTIVE_COOLDOWN, CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, SKILL_COOLDOWN, START_LEVEL, ULT_WAIT,
+  CATEGORY_SPIKE_ITEMS, FLEX_SLOT, KILL_PUSH_BASE, MAX_ITEMS, PRICE, RESPAWN_TURNS, SKILL_COOLDOWN, START_LEVEL, ULT_WAIT,
 } from './constants';
 import { pushMultiplier, round, secondMover } from './rounds';
 
@@ -348,16 +348,11 @@ export function wornEquipment(card: CardInstance): CardInstance[] {
   return (card.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'equipment');
 }
 
-/** Every item `card` wears, active or passive, in worn order: what fills its
- *  slots. A riding Rem is in the same `attached` list but is a hero, not an
- *  item: she takes no slot and cannot be sold or moved. */
+/** Every item `card` wears, in worn order: what fills its slots. Only
+ *  equipment is worn (a spell is played and discarded). A riding Rem is in
+ *  the same `attached` list but is a hero, not an item: she takes no slot. */
 export function wornItems(card: CardInstance): CardInstance[] {
   return (card.attached ?? []).filter((a) => !!itemCard(a.cardId));
-}
-
-/** The active items `card` wears, in worn order: the ones it can use. */
-export function wornActives(card: CardInstance): CardInstance[] {
-  return (card.attached ?? []).filter((a) => CARDS_BY_ID[a.cardId]?.type === 'spell');
 }
 
 /** How many items a hero of `pid` may wear: MAX_ITEMS, and FLEX_SLOT more once
@@ -394,20 +389,6 @@ export function tabCounts(card: CardInstance): Record<ItemSlot, number> {
  *  it wears, never stored on its modifiers. */
 export function hasSpike(card: CardInstance, slot: ItemSlot): boolean {
   return tabCounts(card)[slot] >= CATEGORY_SPIKE_ITEMS;
-}
-
-/** Own turns an active item of `tier` waits after use (and when put on) on
- *  `bearer`: the card's own `cooldown` when it names one (`own`: the draw
- *  cards' 2), else ACTIVE_COOLDOWN by tier — less the bearer's `cooldownCut`
- *  hooks, never under 1. */
-export function activeCooldown(bearer: CardInstance, tier: ItemTier, own?: number): number {
-  const base = own ?? (tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
-  return Math.max(1, base - cooldownCut(bearer, 'item'));
-}
-
-/** Own turns the active item `item` has left to cool down (0: ready). */
-export function itemCooldown(item: CardInstance): number {
-  return item.cooldowns?.[item.cardId] ?? 0;
 }
 
 // ---------- A hero's kit ----------
@@ -651,10 +632,9 @@ export function retreatDiscount(card: CardInstance): number {
   return n;
 }
 
-/** Own turns off the cooldowns `card` starts — its ultimate's ('ult') or its
- *  active items' ('item') — summed over the `cooldownCut` hooks of what it
- *  carries (Compress, Superior and Transcendent Cooldown). The callers keep the
- *  result at 1 or more. */
+/** Own turns off the wait `card`'s ultimate starts ('ult'), summed over the
+ *  `cooldownCut` hooks of what it carries. No card has the hook today. The
+ *  callers keep the result at 1 or more. */
 export function cooldownCut(card: CardInstance, kind: 'ult' | 'item'): number {
   let n = 0;
   for (const { ability } of abilitySources(card)) n += ability.cooldownCut?.(card, kind) ?? 0;

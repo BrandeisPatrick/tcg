@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { effectiveAtk, kitCost, liveBoardCards, seatOf } from '@/engine/query';
+import { effectiveAtk, itemPrice, kitCost, liveBoardCards, seatOf } from '@/engine/query';
 import { CARDS_BY_ID } from '@/cards';
 import type { CardInstance, GameState, HeroCard, PlayerID, StatusInstance } from '@/engine/types';
-import { freshReadyGame, giveItem, makeHero } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeHero } from './_helpers';
 import { newTrack } from '@/engine/map';
 
 // What the AI makes of a position: `evalState` (src/ai/heuristic.ts) prices the
@@ -293,17 +293,20 @@ describe('AI valuation: Rem — riding, she is a hero on the board, not gear; Ta
 describe('AI valuation: control items and ultimates get used', () => {
   /** P1 whose Active wears the active item `cardId` alone, ready to use, and
    *  nobody on the bench to use anything else. */
-  function wearing(cardId: string) {
+  /** P1's turn, its Active alone, holding the spell `cardId` and the souls it costs. */
+  function holding(cardId: string) {
     const G = freshReadyGame();
+    G.turnNumber = 3; // P1's turn: the hand's plays are its own turn's
     const ai = G.players['1'];
     ai.bench = [null, null, null];
-    const item = giveItem(G, ai.active!, cardId);
+    const item = giveCard(G, '1', cardId);
+    ai.souls = itemPrice(cardId);
     return { G, item };
   }
 
-  // Each of these is an item whose whole worth is a status; with the attack
-  // available too, using it comes first — the line is "this, then the attack" —
-  // though using it puts it on cooldown or spends one of its charges.
+  // Each of these is a spell whose whole worth is a status; with the attack
+  // available too, playing it comes first — the line is "this, then the
+  // attack" — though it costs its souls and the card.
   for (const [cardId, why] of [
     ['knockdown', 'a Stun on the Active'],
     ['decay', 'Bleed 3 for 2 turns'],
@@ -312,10 +315,10 @@ describe('AI valuation: control items and ultimates get used', () => {
     ['slowing_hex', 'a Silence'],
     ['metal_skin', 'Bullet Resist 5 for 2 turns'],
   ] as const) {
-    it(`uses ${cardId.replace('_', ' ')} (${why}) ahead of the attack alone`, () => {
-      const { G, item } = wearing(cardId);
+    it(`plays ${cardId.replace('_', ' ')} (${why}) ahead of the attack alone`, () => {
+      const { G, item } = holding(cardId);
       const best = enumerateAIMoves(G, ctx('1'))[0];
-      expect(best.move).toBe('activate');
+      expect(best.move).toBe('playCard');
       expect(best.args[0]).toBe(item.iid);
     });
   }
@@ -367,7 +370,7 @@ describe('AI valuation: control items and ultimates get used', () => {
   });
 
   it('still sees lethal first, whatever a status is worth', () => {
-    const { G } = wearing('knockdown');
+    const { G } = holding('knockdown');
     G.players['0'].active!.hp = 1;
     G.players['0'].structures = newTrack({ patron: 1 }); // the kill's push fells the Patron
     const top = enumerateAIMoves(G, ctx('1'))[0];

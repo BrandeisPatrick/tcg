@@ -7,7 +7,7 @@
  * unmark); the button discards it and puts the new card on, for the card's
  * price (`playCard` with `replaceIid`). Cancel backs out with nothing paid:
  * the card stays in the hand. A riding Rem is no item, so she is not offered
- * (`wornItems`). In the style of DiscardOverlay and UpgradePicker.
+ * (`wornItems`). In the style of DiscardOverlay.
  *
  * `useReplacePick` is the board's one hook into it: `open` is asked on a tap
  * that the engine refuses as `full` and opens the sheet when a swap would be
@@ -19,7 +19,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CardId, CardInstance, GameState, PlayerID } from '@/engine/types';
 import { cardName } from '@/cards';
-import { upgradesOf } from '@/cards/decks';
 import { findCardOnBoard, handCard, wornItems } from '@/engine/query';
 import { playBlockedAny, replaceNeeded } from '@/engine/legality';
 import type { Action } from '@/engine/engine';
@@ -28,7 +27,6 @@ import { PosterButton } from '../chrome';
 import { fonts, spring } from '../tokens';
 import { poster, scrimStyle, sheetStyle } from '../poster';
 import { useViewport } from '../hooks/useViewport';
-import { UpgradePicker } from './UpgradePicker';
 import { scale as T, bandStyle } from '../hud';
 
 /** The sheet's accessible name, by which the tutorial and the QA scripts find it. */
@@ -172,11 +170,10 @@ export function useReplacePick(G: GameState, me: PlayerID, play: (a: Extract<Act
     return true;
   }, []);
 
-  const finish = (p: Pending, upgradeId?: CardId) => {
+  const finish = (p: Pending) => {
     setPending(null);
     latest.current.play({
       type: 'playCard', cardIid: p.cardIid, heroIid: p.heroIid,
-      ...(upgradeId === undefined ? {} : { upgradeId }),
       ...(p.replaceIid === undefined ? {} : { replaceIid: p.replaceIid }),
     });
   };
@@ -203,7 +200,6 @@ export function useReplacePick(G: GameState, me: PlayerID, play: (a: Extract<Act
     return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, [pending]);
 
-  const options = card ? upgradesOf(card.cardId) : [];
   const element = (
     <AnimatePresence>
       {live && pending && card && hero && pending.replaceIid === undefined && (
@@ -212,20 +208,7 @@ export function useReplacePick(G: GameState, me: PlayerID, play: (a: Extract<Act
           hero={hero}
           itemId={card.cardId}
           worn={wornItems(hero)}
-          onPick={(replaceIid) => {
-            const next = { ...pending, replaceIid };
-            if (options.length > 1) setPending(next);
-            else finish(next);
-          }}
-          onCancel={() => setPending(null)}
-        />
-      )}
-      {live && pending && card && pending.replaceIid !== undefined && (
-        <UpgradePicker
-          key="replace-upgrade"
-          itemId={card.cardId}
-          options={options}
-          onPick={(upgradeId) => finish(pending, upgradeId)}
+          onPick={(replaceIid) => finish({ ...pending, replaceIid })}
           onCancel={() => setPending(null)}
         />
       )}

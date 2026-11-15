@@ -13,16 +13,16 @@
  * only words the answers.
  */
 import type { AbilityId, CardInstance, GameState, PlayerID, UltimateCard } from '@/engine/types';
-import { CARDS_BY_ID, cardName } from '@/cards';
+import { CARDS_BY_ID, cardName, itemCard } from '@/cards';
 import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import {
-  activateBlocked, blocked, moveBlocked, playCost, retreatCost, skillBlocked,
-  type ActivateBlock, type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
+  blocked, moveBlocked, playCost, retreatCost, skillBlocked,
+  type AttackBlock, type ChooseActiveBlock, type DiscardBlock, type MoveBlock, type PlaceBlock, type PlayBlock,
   type PromoteBlock, type SkillBlock,
 } from '@/engine/legality';
 import {
-  findCardOnBoard, findWornItem, handCard, isRespawning, isUntargetable, itemCooldown, itemPrice, kitAbilityIds, kitCharges, kitCost, otherPlayer,
-  resolveSkill, skillWait, slotCap, slottedHeroes, ultCharge, ultimateCard, ultWait, wornActives,
+  findCardOnBoard, handCard, isRespawning, isUntargetable, itemPrice, kitAbilityIds, kitCharges, kitCost, otherPlayer,
+  resolveSkill, skillWait, slotCap, slottedHeroes, ultCharge, ultimateCard, ultWait,
 } from '@/engine/query';
 import type { Action } from '@/engine/engine';
 import type { AbilityDef } from '@/abilities';
@@ -86,7 +86,7 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       if (!hero || !last || !skill || last === skill.id) return 'Already used';
       const lastKind = resolveSkill(hero, last)?.kind;
       if (lastKind === 'ult') return 'Used its ultimate this turn';
-      if (!lastKind) return `Used ${cardName(last)} this turn`;
+      if (!lastKind) return 'Already used';
       return skill.kind === 'skill' ? 'Used its other skill this turn' : 'Used its skill this turn';
     }
     case 'trigger': return triggerMomentLine(hero, skill?.ability);
@@ -146,37 +146,14 @@ export function attackBlockReason(block: AttackBlock, rival?: CardInstance | nul
   }
 }
 
-/** The line the hero sheet prints on an active item that cannot be used.
- *  Name the item to get how long its cooldown has to run, and its bearer to
- *  get which ability it used instead. */
-export function activateBlockReason(block: ActivateBlock, item?: CardInstance, bearer?: CardInstance): string {
-  switch (block) {
-    case 'noItem': return 'Not one of your items';
-    case 'passive': return 'A passive item: always on';
-    case 'actOver': return ACT_OVER;
-    case 'down': return 'Down until it respawns';
-    case 'used': {
-      const last = bearer?.lastSkillUsed;
-      if (!last || last === item?.cardId) return 'Already used';
-      const kind = bearer && resolveSkill(bearer, last)?.kind;
-      return kind === 'ult' ? 'Used its ultimate this turn' : kind ? 'Used its skill this turn' : `Used ${cardName(last)} this turn`;
-    }
-    case 'status': return 'Cannot use abilities (status)';
-    case 'charges': return 'No charges left';
-    case 'cooldown': {
-      const left = item ? itemCooldown(item) : 0;
-      return left > 0 ? `Ready in ${left} turn${left === 1 ? '' : 's'}` : 'On cooldown';
-    }
-    case 'target': return 'No valid target';
-  }
-}
-
 /** Who and what a hand refusal is about, so its line can name them. */
 interface HandSubject {
   /** The card ("Extended Magazine"). */
   item?: string;
   /** The hero it was to go on, when one was named. */
   hero?: string;
+  /** True for a spell (it is played on a target, not worn). */
+  spell?: boolean;
   /** What it would cost (`playCost`). */
   cost?: number;
   /** The souls the player has. */
@@ -185,19 +162,20 @@ interface HandSubject {
   slots?: number;
 }
 
-/** The line the sticker prints on a card from the hand that cannot go onto
- *  the hero it was played on. */
+/** The line the sticker prints on a card from the hand that cannot be played
+ *  where it was played. */
 export function playBlockReason(block: PlayBlock, s: HandSubject = {}): string {
   switch (block) {
     case 'notYourTurn': return 'Not your turn';
     case 'notInHand': return 'That card is not in your hand';
     case 'hero': return 'A hero goes on the bench — tap it in your hand';
     case 'noHero': return 'Play it onto one of your heroes';
+    case 'noCaster': return 'No hero of yours stands to cast it';
+    case 'target': return s.hero ? `${s.item ?? 'That spell'} cannot be played on ${s.hero}` : `${s.item ?? 'That spell'} needs a target`;
     case 'duplicate': return `${s.hero ?? 'That hero'} already wears ${s.item ?? 'one'}`;
     case 'full': return `${s.hero ?? 'That hero'} wears ${s.slots ?? 3} items`;
     case 'replace': return `Choose one of the items ${s.hero ?? 'that hero'} wears to discard`;
     case 'souls': return s.cost === undefined ? 'Not enough souls' : `Need ${souls(s.cost)}${s.have === undefined ? '' : ` — you have ${s.have}`}`;
-    case 'upgrade': return 'Not an upgrade of that card';
   }
 }
 
@@ -328,17 +306,13 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
       }
       return skillBlockReason(code as SkillBlock, card, a.skillId);
     }
-    case 'activate': {
-      const worn = findWornItem(G, a.itemIid, pid);
-      if (code === 'target' && a.targetIid !== undefined) return `Not a valid target for ${nameOf(worn?.item) || 'that item'}`;
-      return activateBlockReason(code as ActivateBlock, worn?.item, worn?.bearer);
-    }
     case 'playCard': {
       const card = handCard(G, pid, a.cardIid);
-      const hero = findCardOnBoard(G, a.heroIid)?.card;
+      const hero = a.heroIid === undefined ? undefined : findCardOnBoard(G, a.heroIid)?.card;
+      const spell = !!card && itemCard(card.cardId)?.type === 'spell';
       return playBlockReason(code as PlayBlock, {
-        item: nameOf(card) || undefined, hero: nameOf(hero) || undefined, slots: slotCap(G, pid),
-        cost: card ? (hero ? playCost(hero, card.cardId) : itemPrice(card.cardId)) : undefined, have: G.players[pid].souls,
+        item: nameOf(card) || undefined, hero: nameOf(hero) || undefined, slots: slotCap(G, pid), spell,
+        cost: card ? (hero && !spell ? playCost(hero, card.cardId) : itemPrice(card.cardId)) : undefined, have: G.players[pid].souls,
       });
     }
     case 'placeHero': return placeBlockReason(code as PlaceBlock);
@@ -366,9 +340,8 @@ export function attackLine(plan: AttackPlan): string {
 }
 
 /** Every hero of `pid`'s that can still do something this turn: use one of
- *  its kit abilities now (its skill or its ultimate, its wait over) or an
- *  active item it wears, or — the Active — make the turn's attack while it is
- *  open. Nobody glints while a choice is owed (a discard, the first Active, a
+ *  its kit abilities now (its skill or its ultimate, its wait over), or — the
+ *  Active — make the turn's attack while it is open. Nobody glints while a choice is owed (a discard, the first Active, a
  *  trigger prompt). */
 export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): Set<string> {
   const ps = G.players[pid];
@@ -376,8 +349,7 @@ export function readyHeroes(G: GameState, pid: PlayerID, attackOpen: boolean): S
   if (G.pendingDiscard || G.pendingActive || G.triggers?.length) return ready;
   for (const hero of [ps.active, ...ps.bench]) {
     if (!hero) continue;
-    const abilityOpen = kitAbilityIds(hero).some((id) => skillBlocked(G, pid, hero, undefined, id) === null)
-      || wornActives(hero).some((it) => activateBlocked(G, pid, it.iid) === null);
+    const abilityOpen = kitAbilityIds(hero).some((id) => skillBlocked(G, pid, hero, undefined, id) === null);
     if (abilityOpen || (hero === ps.active && attackOpen)) ready.add(hero.iid);
   }
   return ready;

@@ -290,7 +290,7 @@ describe('rule: a full hero takes a card from the hand only in place of what it 
   it('naming a worn item it replaces, the 4th card goes on and that item goes to the discard pile', () => {
     const { G, hero, card } = full();
     const out = wornItems(hero)[0];
-    expect(runMove('playCard', G, '0', card.iid, hero.iid, undefined, out.iid)).not.toBe('INVALID_MOVE');
+    expect(runMove('playCard', G, '0', card.iid, hero.iid, out.iid)).not.toBe('INVALID_MOVE');
     expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'extended_magazine']);
     expect(G.players['0'].discard).toEqual([out]);
   });

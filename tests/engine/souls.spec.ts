@@ -155,11 +155,11 @@ describe('souls economy', () => {
     }
   });
 
-  it('net worth counts worn items at their price (PRICE by tier, actives and passives alike): a side whose heroes wear 8 souls of items is 8 ahead — and its rival\'s income stays the lane\'s', () => {
+  it('net worth counts worn items at their price (PRICE by tier): a side whose heroes wear 8 souls of items is 8 ahead — and its rival\'s income stays the lane\'s', () => {
     const cases: [CardId[], number, number][] = [
       [['toxic_bullets'], PRICE[3], 0],                                  // one tier 3 passive: 8
-      [['titanic_magazine', 'cold_front'], 2 * PRICE[2], 0],             // a tier 2 passive and a tier 2 active: 8
-      [['extended_magazine', 'grit', 'extra_health'], 3 * PRICE[1], 0], // three tier 1s: 6
+      [['titanic_magazine', 'improved_spirit'], 2 * PRICE[2], 0],        // two tier 2s: 8
+      [['extended_magazine', 'extra_spirit', 'extra_health'], 3 * PRICE[1], 0], // three tier 1s: 6
       [['glass_cannon'], PRICE[4], 0],                                   // one tier 4: 16
     ];
     for (const [items, worth, bonus] of cases) {

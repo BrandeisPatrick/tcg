@@ -6,7 +6,7 @@ import { LIFT_VAR, TILT_PERSPECTIVE, fromHere, kickFor, useFxImpulse } from '../
 import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
 import { CARDS_BY_ID } from '@/cards';
-import { effectiveAtk, hasSpike, itemCooldown } from '@/engine/query';
+import { effectiveAtk, hasSpike } from '@/engine/query';
 import { HeroBadge, HeroPortrait, heroForm } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { STATUSES_BY_ID } from '@/statuses';
@@ -338,9 +338,7 @@ export function HeroSlot({
 
         {/* WORN ITEMS — one row along the foot of the art: every item the
             hero wears (a fourth in the flex slot too) as an inventory tile,
-            its icon in a frame of its category's colour, the turns its
-            cooldown has left over a dimmed face, or a hard crowd-control
-            item's charges as pips. A riding hero (Rem · Tag Along) shows her
+            its icon in a frame of its category's colour. A riding hero (Rem · Tag Along) shows her
             portrait and the turns her ride has left. Once the side has the
             flex slot (it felled the enemy Walker) an empty fourth socket
             waits beside them. */}
@@ -355,7 +353,6 @@ export function HeroSlot({
               const eqData = CARDS_BY_ID[eq.cardId];
               const isMerged = eqData?.type === 'hero'; // Rem riding (Tag Along)
               const dim = chipDim;
-              const cooldown = isMerged ? 0 : itemCooldown(eq);
               return (
                 <div key={eq.iid}
                   data-worn
@@ -384,18 +381,11 @@ export function HeroSlot({
                   }}
                   title={isMerged
                     ? `${eqData?.name} rides — back to the bench in ${eq.remMergeTurnsLeft ?? 0} turn${eq.remMergeTurnsLeft === 1 ? '' : 's'}`
-                    : eq.charges != null ? `${eqData?.name} — ${eq.charges} charge${eq.charges === 1 ? '' : 's'} left`
-                    : cooldown > 0 ? `${eqData?.name} — ready in ${cooldown} turn${cooldown === 1 ? '' : 's'}`
                     : eqData?.name}>
                   {isMerged ? (
                     <HeroBadge cardId={eq.cardId} size={dim - 3} />
                   ) : (
-                    <ItemIcon
-                      itemId={eq.cardId}
-                      size={dim}
-                      chip
-                      marks={{ cooldown: cooldown > 0 ? cooldown : undefined, charges: eq.charges ?? undefined }}
-                    />
+                    <ItemIcon itemId={eq.cardId} size={dim} chip />
                   )}
                   {/* The ride's turns left (Rem) — green sticker in the corner. */}
                   {isMerged && eq.remMergeTurnsLeft != null && (
