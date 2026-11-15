@@ -82,11 +82,13 @@ export const poster = {
 } as const;
 
 /** The level greens: a hero card's frame from Level 1 (the lightest) to the
- *  cap (the darkest; MAX_LEVEL is 4 — engine/constants.ts). Chosen to read on
- *  the cream sheet and on the dark scene alike: each step is a clear jump,
- *  and the frame carries its own keylines (`levelFrame`) so the lightest
- *  holds on paper and the darkest on charcoal. */
-export const levelGreens = ['#a9de8e', '#6ec75a', '#35973f', '#176130'] as const;
+ *  cap (the darkest; MAX_LEVEL is 4 — engine/constants.ts). Level 1 is every
+ *  hero's frame as a match opens, so it is the quietest: a soft sage, not a
+ *  bright mint (Patrick, 2026-11-15: "Lv 1 green is too bright"). Each step
+ *  down is a clear jump in lightness (about L* 71, 60, 48, 36), and the frame
+ *  carries its own keylines (`levelFrame`) so the lightest holds on paper and
+ *  the darkest on charcoal. */
+export const levelGreens = ['#93b983', '#58a04d', '#2f8239', '#176130'] as const;
 export const levelGreen = (level: number): string =>
   levelGreens[Math.max(0, Math.min(levelGreens.length - 1, Math.round(level) - 1))];
 /** The frame of a hero card at `level`: a solid green border `width` px

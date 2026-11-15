@@ -21,9 +21,15 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### Your deck
 
-- Built on the Loadout screen, which looks like Deadlock's shop: Weapon,
-  Vitality and Spirit tabs, rows by tier, the item icons. Tap an item to add a
-  copy; tap one in the deck to take a copy out.
+- Five **ready decks** head the Loadout screen: Gunline, Spirit Storm,
+  Bulwark, Ambush and Lockdown. Each is a squad of four heroes and its 16
+  items; "Use deck" saves both, and the match is ready to play. Each holds 8
+  tier-1, 6 tier-2 and 2 tier-3 items (56 souls), at most 2 copies of one, two
+  of them Compress Cooldown, the draw card
+  ([`docs/deck-plan.md`](./docs/deck-plan.md), "Ready decks").
+- Or build your own below them, on a deck builder that looks like Deadlock's
+  shop: Weapon, Vitality and Spirit tabs, rows by tier, the item icons. Tap an
+  item to add a copy; tap one in the deck to take a copy out.
 - A deck is 16 items, any tier, at most 4 copies of one.
 - A deck holds base items only. An upgrade (Improved Spirit, Superior and
   Transcendent Cooldown, Fortitude…) never starts in a deck: it comes only
