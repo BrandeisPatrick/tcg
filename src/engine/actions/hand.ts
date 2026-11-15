@@ -77,6 +77,9 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid?:
     (hero.equippedIds ??= []).push(card.cardId);
     grantExp(G, hero, EXP_ON_EQUIP);
   }
+  // A card from the hand is shown as it is played, equipment like a spell
+  // (the board's reveal: both players see what went on which hero).
+  G.action = { id: nextActionId(G), kind: 'item', by: pid, cardId: card.cardId, state: 'begin' };
 }
 
 /** Take the worn `item` off `hero`: its bonus leaves with it (`detachItem`),

@@ -9,7 +9,7 @@ import { AnimatePresence } from 'framer-motion';
 import type { CardInstance } from '@/engine/types';
 import { HEROES } from '@/cards';
 import { HeroSlot } from '../board/HeroSlot';
-import { CardPlayOverlay } from '../effects/CardPlayFlash';
+import { CardPlayOverlay, CARD_REVEAL_MS } from '../effects/CardPlayFlash';
 import { UltFlashOverlay } from '../effects/UltMomentFlash';
 import { FxShowroom, type ExtraGroup } from './FxShowroom';
 import { mockHeroInstance } from './mock';
@@ -20,15 +20,13 @@ export function CombatTab() {
     {
       id: 'flash', short: 'Card flash',
       title: 'Card-play flash',
-      blurb: 'Full screen. A spell or equipment played from hand, or a hero using a skill: the card sits on screen for about 1.7 s with a caption.',
+      blurb: 'Full screen, under a second. A spell or equipment played from the hand is shown mid-screen (its activation); its effect resolves on the board after. A skill has no card flash: its hero\'s own tile flares.',
       body: (
         <>
           <CardPlayTrigger label="You — Active item" cardId="cold_front" caster="P0" />
           <CardPlayTrigger label="You — Equipment" cardId="restorative_shot" caster="P0" />
-          <CardPlayTrigger label="You — Skill" cardId="hero_paige" caster="P0" kind="skill" />
           <CardPlayTrigger label="Rival — Active item" cardId="disarming_hex" caster="P1" />
           <CardPlayTrigger label="Rival — Equipment" cardId="weapon_shielding" caster="P1" />
-          <CardPlayTrigger label="Rival — Skill" cardId="hero_kelvin" caster="P1" kind="skill" />
         </>
       ),
     },
@@ -97,8 +95,8 @@ function AutoExit({ ms, onDone, children }: { ms: number; onDone: () => void; ch
   return <>{children}</>;
 }
 
-function CardPlayTrigger({ label, cardId, caster, kind = 'item' }: {
-  label: string; cardId: string; caster: 'P0' | 'P1'; kind?: 'item' | 'skill';
+function CardPlayTrigger({ label, cardId, caster }: {
+  label: string; cardId: string; caster: 'P0' | 'P1';
 }) {
   const [active, setActive] = useState(false);
   return (
@@ -106,8 +104,8 @@ function CardPlayTrigger({ label, cardId, caster, kind = 'item' }: {
       <Chip onClick={() => setActive(true)} disabled={active} on={active}>{label}</Chip>
       <AnimatePresence>
         {active && (
-          <AutoExit ms={1700} onDone={() => setActive(false)}>
-            <CardPlayOverlay cardId={cardId} caster={caster} kind={kind} />
+          <AutoExit ms={CARD_REVEAL_MS} onDone={() => setActive(false)}>
+            <CardPlayOverlay cardId={cardId} caster={caster} />
           </AutoExit>
         )}
       </AnimatePresence>

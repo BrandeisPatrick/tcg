@@ -62,7 +62,8 @@ import { DeckMotionLayer, DeckMotionProvider, useDeckMotion } from './motion';
 import type { Rect } from './effects/fx/geometry';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
-import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
+import { CardPlayFlash } from './effects/CardPlayFlash';
+import { AI_THINK_MS, actionHoldMs } from './board/pacing';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { useSettings } from '@/storage/settings';
 import { useViewport } from './hooks/useViewport';
@@ -84,7 +85,7 @@ import { CoachPlate } from './tutorial/CoachPlate';
 import { useMatchNav } from './hooks/matchNav';
 
 // Animation / pacing constants.
-const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
+// (The pause between the rival's moves, `AI_THINK_MS`, and each move's hold are in board/pacing.ts.)
 /** The rival's placement is watched: its next move waits this long past the
  *  hero's flight landing (nothing under reduced motion, where nothing flies). */
 const PLACE_SETTLE_MS = 500;
@@ -529,15 +530,15 @@ export function Board(props: BoardProps<GameState>) {
   useEffect(() => {
     // A move that ends the match leaves its reveal open: nothing to complete.
     if (ctx.gameover || G.action?.state !== 'begin') return;
-    // Play / skill reveals are a quick "you played X" beat; the ultimate is a
-    // dramatic screen-fill that needs longer to land. Keep each in sync with
-    // its overlay's animation length (CardPlayFlash / UltMomentFlash 2.3s).
-    const HOLD_MS = G.action.kind === 'ult' ? 2400 : CARD_REVEAL_MS;
+    // Each move holds the table for its activation — the card shown
+    // mid-screen, the hero's flare, the ultimate's plate — and the rival's for
+    // a beat of its resolve too (board/pacing.ts).
+    const HOLD_MS = actionHoldMs(G.action.kind, G.action.by === me);
     const t = setTimeout(() => {
       try { (moves as any).completeAction(); } catch {}
     }, HOLD_MS);
     return () => clearTimeout(t);
-  }, [G.action?.id, G.action?.state, G.action?.kind, moves, ctx.gameover]);
+  }, [G.action?.id, G.action?.state, G.action?.kind, G.action?.by, me, moves, ctx.gameover]);
 
   /** The glow on the tiles: is this hero a legal target for what is armed?
    *  The engine answers (`isValidTarget` asks `skillBlocked` /

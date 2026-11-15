@@ -8,6 +8,7 @@ import { FxImpulseContext } from './fx/FxImpulse';
 import { useFxCalm } from './fx/FxMotionContext';
 import { useStage } from './fx/stage/FxStage';
 import { chads, ring, sparks } from './fx/stage/emitters';
+import { FX_TIMING } from './fx/fxCatalog';
 
 /**
  * Surfaces the dramatic screen-fill + nameplate when an ultimate is cast.
@@ -42,7 +43,12 @@ export function UltMomentFlash({ G }: Props) {
 }
 
 /** ms into the overlay when the plate hits the table. */
-const PLATE_LANDS = 250;
+const PLATE_LANDS = 180;
+/** The whole plate, ms: it is lifting as the timeline's `ultLead` runs out, so
+ *  the strike that follows lands on a board in plain view (it used to hold
+ *  2.3 s, with the strike landing underneath it). */
+export const ULT_PLATE_MS = FX_TIMING.ultLead + 250;
+const PLATE_S = ULT_PLATE_MS / 1000;
 
 export function UltFlashOverlay({ name, caster }: { name: string; caster: string }) {
   // Owner accent: gold for you, sapphire for the rival.
@@ -73,7 +79,7 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 0.55, 0.4, 0] }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 2.2, times: [0, 0.10, 0.65, 1] }}
+        transition={{ duration: PLATE_S, times: [0, 0.14, 0.62, 1] }}
         style={{
           position: 'fixed', inset: 0,
           background: `${accent}5c`,
@@ -85,7 +91,7 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: [0, 1, 0.8, 0] }}
-        transition={{ duration: 2.2, times: [0, 0.12, 0.7, 1] }}
+        transition={{ duration: PLATE_S, times: [0, 0.16, 0.66, 1] }}
         style={{
           position: 'fixed', inset: 0,
           background: 'radial-gradient(ellipse at 50% 42%, transparent 30%, rgba(0, 0, 0, 0.55) 100%)',
@@ -98,7 +104,7 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
         <motion.div
           initial={{ opacity: 0, scale: 0.6, rotate: 0 }}
           animate={{ opacity: [0, 0.5, 0.24, 0], scale: [0.6, 1.2, 1.45, 1.6], rotate: [0, 5, 9, 12] }}
-          transition={{ duration: 1.5, delay: PLATE_LANDS / 1000 - 0.04, times: [0, 0.14, 0.6, 1], ease: 'easeOut' }}
+          transition={{ duration: 0.9, delay: PLATE_LANDS / 1000 - 0.04, times: [0, 0.14, 0.6, 1], ease: 'easeOut' }}
           style={{
             position: 'fixed', left: '50%', top: '42%',
             width: '150vmax', height: '150vmax', marginLeft: '-75vmax', marginTop: '-75vmax',
@@ -116,7 +122,7 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
       <motion.div
         initial={{ x: '-110%', opacity: 0 }}
         animate={{ x: '120%', opacity: [0, 0.85, 0.5, 0] }}
-        transition={{ duration: 0.9, ease: [0.2, 0.7, 0.5, 1] }}
+        transition={{ duration: 0.6, ease: [0.2, 0.7, 0.5, 1] }}
         style={{
           position: 'fixed', top: 0, bottom: 0, left: 0, right: 0,
           background: `linear-gradient(115deg, transparent 44%, ${accent} 44%, ${accent} 56%, transparent 56%)`,
@@ -128,7 +134,7 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
         <motion.div
           initial={{ x: '110%', opacity: 0 }}
           animate={{ x: '-120%', opacity: [0, 0.7, 0.4, 0] }}
-          transition={{ duration: 0.8, delay: 0.12, ease: [0.2, 0.7, 0.5, 1] }}
+          transition={{ duration: 0.55, delay: 0.08, ease: [0.2, 0.7, 0.5, 1] }}
           style={{
             position: 'fixed', top: 0, bottom: 0, left: 0, right: 0,
             background: `linear-gradient(65deg, transparent 47%, ${poster.cream} 47%, ${poster.cream} 51%, transparent 51%)`,
@@ -156,7 +162,7 @@ export function UltFlashOverlay({ name, caster }: { name: string; caster: string
               'drop-shadow(0px 14px 26px rgba(0,0,0,0.45))', 'drop-shadow(0px 14px 26px rgba(0,0,0,0.45))', 'drop-shadow(0px 30px 30px rgba(0,0,0,0.2))',
             ],
           }}
-        transition={{ duration: 2.3, times: calm ? [0, 0.12, 0.85, 1] : [0, PLATE_LANDS / 2300, 0.17, 0.85, 1] }}
+        transition={{ duration: PLATE_S, times: calm ? [0, 0.14, 0.8, 1] : [0, PLATE_LANDS / ULT_PLATE_MS, 0.27, 0.8, 1] }}
         style={{
           position: 'fixed',
           left: 0, right: 0,

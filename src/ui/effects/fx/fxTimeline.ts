@@ -4,6 +4,14 @@
  * numbers against. Pure: no DOM, no positions, so Board can run it on the
  * same render the state changes and the Gallery can exercise it directly.
  *
+ * Every move plays in two phases (Patrick, 2026-11-15): its ACTIVATION, then
+ * its effect RESOLVING on the board.
+ *   - A card from the hand is shown mid-screen (`cardLead`: CardPlayFlash).
+ *   - An ultimate drops its name plate over the table (`ultLead`).
+ *   - A skill is activated on its hero's own tile: the card lifts and gathers
+ *     power under the skill's name (the cast flare below) — no screen-fill.
+ * Nothing of the effect starts before the activation is over.
+ *
  * The shape of a beat:
  *   cast (flare on the caster)  →  bolt travels  →  impact on the target
  *   →  status stamps on that card queue behind the hit  →  lifesteal motes
@@ -126,7 +134,10 @@ export interface FxTimeline {
 export function buildFxTimeline(batch: FxEvent[]): FxTimeline {
   const cast = (batch.find((e): e is CastFx => e.kind === 'cast')) ?? null;
   const casterIid = cast?.iid;
-  const lead = cast?.castKind === 'ult' ? T.ultLead : 0;
+  // The activation: the board waits for the name plate (an ultimate) or the
+  // card shown mid-screen (a spell or equipment from the hand). A skill's is
+  // the flare itself, on the hero's own tile.
+  const lead = !cast ? 0 : cast.castKind === 'ult' ? T.ultLead : cast.castKind === 'spell' || cast.castKind === 'equip' ? T.cardLead : 0;
   // A cast pushes every effect on OTHER cards out to the bolt's arrival;
   // effects the caster puts on itself land during the flare.
   const baseFor = (iid: string) => (cast ? lead + (iid === casterIid ? T.selfLead : T.castLead) : 0);
