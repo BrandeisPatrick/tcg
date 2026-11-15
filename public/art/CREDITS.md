@@ -52,7 +52,8 @@ from their "Deadlock Graphical Library" collection.
   asset bucket above; the 41 items added on 2026-11-05 (Monster Rounds through
   Spirit Burn, docs/card-design.md) and the six tier-5 items after them
   (Haunting Shot through Prism Blast) came from the wiki. Extra Charge,
-  Rapid Recharge and Counterspell (2026-11-15) are the same shop icons from the
+  Rapid Recharge and Counterspell (2026-11-15; Counterspell's is in
+  `public/spells/`, as it is a spell here) are the same shop icons from the
   deadlock-api's shop list (`shop_image_webp`, 200×200 WebP, used as served). See
   `public/ART_PIPELINE.md`.
 - The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,

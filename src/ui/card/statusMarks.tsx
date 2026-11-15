@@ -34,7 +34,7 @@
  *   casting / casting_light  Singularity: Dynamo's channelled ultimate, the game's glyph for a channel
  *   wolf_form  Silver's Lycan Curse, the ultimate's own icon (public/ult/silver.webp)
  *   counterspell  the Counterspell item's HUD glyph (the parry: deadlock-api `icon_parry.svg`,
- *     drawn white at 128×128)   counterspell_spent  the same, an arrow down
+ *     drawn white at 128×128)
  *
  * An id with no picture (a future id, a typo) gets the diamond tag instead,
  * so there is never a blank chip or sticker.
@@ -53,7 +53,7 @@ type MarkKind =
   // Buffs and the rest
   | 'bullet_resist' | 'spirit_resist' | 'shield' | 'weapon_power' | 'spirit_power' | 'unstoppable' | 'invulnerable'
   | 'healing_boost' | 'extra_attack' | 'casting' | 'return_fire' | 'siphon_gain' | 'dome' | 'last_stand'
-  | 'swift' | 'ricochet' | 'wolf_form' | 'counterspell' | 'counterspell_spent'
+  | 'swift' | 'ricochet' | 'wolf_form' | 'counterspell'
   // An id with no picture.
   | 'unknown';
 
@@ -66,7 +66,7 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
     'spirit_resist_down', 'healing_boost_down', 'fixation', 'rooted', 'rabbit',
     'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable', 'invulnerable',
     'healing_boost', 'extra_attack', 'casting', 'return_fire', 'siphon_gain', 'dome', 'last_stand',
-    'swift', 'ricochet', 'wolf_form', 'counterspell', 'counterspell_spent',
+    'swift', 'ricochet', 'wolf_form', 'counterspell',
   ] as const).map((id): [string, MarkKind] => [id, id]),
   ['casting_light', 'casting'],
 ]);
@@ -179,9 +179,8 @@ const SOURCE: Record<MarkKind, Source> = {
   // A status an ultimate grants wears that ultimate's icon, as an item's buff
   // wears the item's: Lycan Curse's (white on transparency, like the HUD's).
   wolf_form: { kind: 'glyph', file: 'ult/silver.webp', px: [137, 137], box: [2, 2, 134, 134] },
-  // The item's status wears the item's glyph; spent, the same with an arrow down.
+  // The item's status wears the item's glyph.
   counterspell: glyph('counterspell'),
-  counterspell_spent: glyph('counterspell', 'down'),
   unknown: drawn,
 };
 

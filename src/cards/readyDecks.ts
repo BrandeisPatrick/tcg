@@ -16,6 +16,7 @@ import type { CardId } from '@/engine/types';
  *    No ready deck carries an upgrade without its component.
  *  - A counter in every deck (docs/card-design.md, "Counters"): Counterspell,
  *    Debuff Reducer, Dispel Magic or Knockdown.
+ *    (Counterspell is a spell: Patrick's call.)
  *  - Spells are played once and discarded, so a deck leans on equipment and
  *    carries a few spells for the turn that needs one. The draw cards
  *    (Compress Cooldown) are out: at 2 souls a turn a hand is short of souls,

@@ -62,6 +62,10 @@ export const SPELLS: SpellCard[] = [
   { id: 'metal_skin',      name: 'Metal Skin',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_cast_metal_skin'], text: 'Grant ally Bullet Resist 6 for 3 turns.' },
   // Three ids keep an item's old name so saved builds still load: debuff_remover
   // is Dispel Magic, silence_glyph is Silence Wave, curse is Cursed Relic.
+  // Counterspell is a PASSIVE in Deadlock (Vitality T3), and a spell here by
+  // Patrick's own call (2026-11-15), the second exception to the active /
+  // passive rule beside the Cooldown family (docs/card-design.md, "Counters").
+  { id: 'counterspell',    name: 'Counterspell',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_counterspell'],    text: 'One of your heroes gains Counterspell for 2 turns: the next enemy spell, skill or ultimate that would hit it does nothing to it, and it heals 4. It triggers once.' },
   { id: 'debuff_remover',  name: 'Dispel Magic',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_debuff_remover'],  text: 'Remove every debuff from one of your heroes, delayed ones too, and it gains Shield 4. If any was removed, heal it 4.' },
   { id: 'silence_glyph',   name: 'Silence Wave',    type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_silence_glyph'], text: 'Deal {sp:2} spirit damage to enemy Active and Silence it for 2 turns.' },
   { id: 'warp_stone',      name: 'Warp Stone',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_warp_stone'],      text: 'A bench ally swaps into your Active slot and gains Bullet Resist 4 for 3 turns.' },

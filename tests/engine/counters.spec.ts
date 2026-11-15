@@ -8,8 +8,8 @@
  *  - Knockdown: the immediate counter to a channel.
  *  - Dispel Magic: takes every debuff off, a delayed one too.
  *  - Debuff Reducer: one random debuff off at the start of its owner's turn.
- *  - Counterspell: a status; the next enemy card played on its bearer does
- *    nothing. The item brings it back 2 turns after it is used.
+ *  - Counterspell: a spell. It shields one of your heroes for 2 turns: the
+ *    next enemy card played on it does nothing. It triggers once.
  */
 import { describe, it, expect } from 'vitest';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
@@ -23,8 +23,8 @@ import { heroesOf, isBlocked, wornItems } from '@/engine/query';
 import { skillBlocked } from '@/engine/legality';
 import { allocatorOf } from '@/engine/ids';
 import { makeInstance } from '@/engine/instances';
-import { COUNTERSPELL_HEAL, COUNTERSPELL_RECHARGE, PRICE, ULT_WAIT } from '@/engine/constants';
-import { freshReadyGame, giveCard, giveItem, playNew, useItem } from './_helpers';
+import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, PRICE, ULT_WAIT } from '@/engine/constants';
+import { freshReadyGame, giveCard, giveItem, useItem } from './_helpers';
 
 /** End the turn of `pid` and begin the other seat's, as the game's turn hooks do. */
 function nextTurn(G: GameState, pid: PlayerID): PlayerID {
@@ -235,27 +235,40 @@ describe('Debuff Reducer: one random debuff off at the start of its owner\'s tur
   });
 });
 
-describe('Counterspell: the next enemy card played on its bearer does nothing', () => {
-  /** P0's Active wears Counterspell, played from the hand. */
-  function countered(): { G: GameState; haze: CardInstance; item: CardInstance } {
+describe('Counterspell: a spell that shields one of your heroes from the next enemy card, once', () => {
+  /** P0 has cast Counterspell on its Active (HP 20 of 30). */
+  function countered(): { G: GameState; haze: CardInstance } {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     haze.hpMax = 30; haze.hp = 20;
-    const item = playNew(G, '0', 'counterspell', haze);
-    return { G, haze, item };
+    useItem(G, '0', 'counterspell', haze.iid);
+    return { G, haze };
   }
 
-  it('is Deadlock\'s passive Vitality tier 3 item, so equipment, at its tier\'s price', () => {
-    expect(itemCard('counterspell')).toMatchObject({ name: 'Counterspell', type: 'equipment', slot: 'vitality', tier: 3 });
-    expect([COUNTERSPELL_HEAL, COUNTERSPELL_RECHARGE]).toEqual([2, 2]);
+  it('is a spell at Vitality tier 3 (Patrick\'s call: a passive in Deadlock), cast on one of your own heroes for 8 souls', () => {
+    expect(itemCard('counterspell')).toMatchObject({ name: 'Counterspell', type: 'spell', slot: 'vitality', tier: 3 });
+    expect(itemCard('counterspell')!.text).toMatch(/for 2 turns.*heals 4.*triggers once/i);
+    expect([COUNTERSPELL_TURNS, COUNTERSPELL_HEAL]).toEqual([2, 4]);
+    const a = ABILITIES_BY_ID.eff_counterspell;
+    expect([a.trigger, a.target]).toEqual(['onPlay', 'allyHero']);
+    // Played, the card is on the discard pile and the shield is on the hero: nothing is worn.
+    const G = freshReadyGame();
+    const me = G.players['0'];
+    me.souls = PRICE[3];
+    const lash = me.bench[1]!;
+    const card = giveCard(G, '0', 'counterspell');
+    act(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: lash.iid }); // a bench hero may be shielded too
+    expect(me.souls).toBe(0);
+    expect(me.discard).toContain(card);
+    expect(has(lash, 'counterspell')).toBe(true);
+    expect(wornItems(lash)).toEqual([]);
+    // Not on an enemy.
+    const again = giveCard(G, '0', 'counterspell');
+    me.souls = PRICE[3];
+    expect(perform(G, '0', { type: 'playCard', cardIid: again.iid, heroIid: G.players['1'].active!.iid })).toBe(INVALID);
   });
 
-  it('comes ready with the item: the status is on the bearer as the card is played', () => {
-    const { haze } = countered();
-    expect(has(haze, 'counterspell')).toBe(true);
-  });
-
-  it('a spell aimed at the bearer is paid for, discarded and does nothing; the bearer heals 2 and the status is spent', () => {
+  it('a spell aimed at the shielded hero is paid for, discarded and does nothing; the hero heals 4 and the shield is gone', () => {
     const { G, haze } = countered();
     nextTurn(G, '0');
     const rival = G.players['1'];
@@ -266,38 +279,61 @@ describe('Counterspell: the next enemy card played on its bearer does nothing', 
     expect(rival.souls).toBe(0);
     expect(rival.discard).toContain(cold);
     expect(has(haze, 'counterspell')).toBe(false);
-    expect(has(haze, 'counterspell_spent')).toBe(true);
-    // The next one lands.
+  });
+
+  it('it triggers once: the next card lands, and nothing brings the shield back', () => {
+    const { G, haze } = countered();
+    nextTurn(G, '0');
     useItem(G, '1', 'cold_front', haze.iid);
-    expect(haze.hp).toBeLessThan(20 + COUNTERSPELL_HEAL);
+    const hp = haze.hp;
+    useItem(G, '1', 'cold_front', haze.iid);
+    expect(haze.hp).toBeLessThan(hp);
+    for (let i = 0; i < 6; i++) nextTurn(G, i % 2 === 0 ? '1' : '0');
+    expect(has(haze, 'counterspell')).toBe(false);
   });
 
-  it('a skill and an ultimate aimed at the bearer are stopped the same way, and their wait is paid', () => {
-    for (const skillId of [undefined, 'eff_ult_seven'] as const) {
-      const { G, haze } = countered();
-      nextTurn(G, '0');
-      const seven: CardInstance = heroesOf(G.players['1']).find((h) => h.cardId === 'hero_seven')!;
-      seven.level = 2;
-      seven.cooldowns = undefined;
-      if (skillId === undefined) {
-        act(G, '1', { type: 'useSkill', heroIid: seven.iid, targetIid: haze.iid });
-        expect(has(haze, 'charged')).toBe(false);
-        expect(haze.hp).toBe(20 + COUNTERSPELL_HEAL);
-        expect((seven.cooldowns as Record<string, number> | undefined)?.skill_seven).toBe(4);
-        expect(has(haze, 'counterspell')).toBe(false);
-      } else {
-        // Storm Cloud is aimed at nobody: the channel opens, and its pulse is no card played.
-        act(G, '1', { type: 'useSkill', heroIid: seven.iid, skillId });
-        expect(has(seven, 'casting')).toBe(true);
-        expect(has(haze, 'counterspell')).toBe(true);
-        nextTurn(G, '1');
-        expect(haze.hp).toBeLessThan(20);
-        expect(has(haze, 'counterspell')).toBe(true);
-      }
-    }
+  it('unused, it lasts 2 turns: up through the rival\'s next two turns, gone as your second turn after begins', () => {
+    const { G, haze } = countered();
+    nextTurn(G, '0');                                  // the rival's first turn
+    expect(has(haze, 'counterspell')).toBe(true);
+    nextTurn(G, '1');                                  // your next turn: one left
+    expect(has(haze, 'counterspell')).toBe(true);
+    nextTurn(G, '0');                                  // the rival's second turn: still up
+    expect(has(haze, 'counterspell')).toBe(true);
+    useItem(G, '1', 'cold_front', haze.iid);
+    expect(haze.hp).toBe(20 + COUNTERSPELL_HEAL);      // and it still stops a card there
+    // Left alone instead, it runs out as the second turn after begins.
+    const other = countered();
+    nextTurn(other.G, '0'); nextTurn(other.G, '1'); nextTurn(other.G, '0'); nextTurn(other.G, '1');
+    expect(has(other.haze, 'counterspell')).toBe(false);
   });
 
-  it('a card that hits every enemy does nothing to the bearer and lands on the rest', () => {
+  it('a skill aimed at the shielded hero is stopped the same way, and its wait is paid', () => {
+    const { G, haze } = countered();
+    nextTurn(G, '0');
+    const seven: CardInstance = heroesOf(G.players['1']).find((h) => h.cardId === 'hero_seven')!;
+    seven.cooldowns = undefined;
+    act(G, '1', { type: 'useSkill', heroIid: seven.iid, targetIid: haze.iid });
+    expect(has(haze, 'charged')).toBe(false);
+    expect(haze.hp).toBe(20 + COUNTERSPELL_HEAL);
+    expect((seven.cooldowns as Record<string, number> | undefined)?.skill_seven).toBe(4);
+    expect(has(haze, 'counterspell')).toBe(false);
+  });
+
+  it('a channel opened at nobody is no card played on the hero: its pulse lands and the shield stays', () => {
+    const { G, haze } = countered();
+    nextTurn(G, '0');
+    const seven: CardInstance = heroesOf(G.players['1']).find((h) => h.cardId === 'hero_seven')!;
+    seven.level = 2;
+    seven.cooldowns = undefined;
+    act(G, '1', { type: 'useSkill', heroIid: seven.iid, skillId: 'eff_ult_seven' });
+    expect(has(seven, 'casting')).toBe(true);
+    endOf(G, '1');
+    expect(haze.hp).toBeLessThan(20);
+    expect(has(haze, 'counterspell')).toBe(true);
+  });
+
+  it('a card that hits every enemy does nothing to the shielded hero and lands on the rest', () => {
     const { G, haze } = countered();
     const mates = heroesOf(G.players['0']).filter((h) => h !== haze);
     for (const h of mates) { h.hpMax = 30; h.hp = 20; }
@@ -311,7 +347,7 @@ describe('Counterspell: the next enemy card played on its bearer does nothing', 
     expect(has(haze, 'counterspell')).toBe(false);
   });
 
-  it('a swing is no card: the attack lands and the status stays', () => {
+  it('a swing is no card: the attack lands and the shield stays', () => {
     const { G, haze } = countered();
     nextTurn(G, '0');
     act(G, '1', { type: 'attack' });
@@ -319,7 +355,7 @@ describe('Counterspell: the next enemy card played on its bearer does nothing', 
     expect(has(haze, 'counterspell')).toBe(true);
   });
 
-  it('its own side\'s cards pass: Dispel Magic on the bearer works and spends nothing', () => {
+  it('its own side\'s cards pass: Dispel Magic on the shielded hero works and spends nothing', () => {
     const { G, haze } = countered();
     addStatus(G, haze, 'bleed', 1, 2);
     useItem(G, '0', 'debuff_remover', haze.iid);
@@ -327,26 +363,18 @@ describe('Counterspell: the next enemy card played on its bearer does nothing', 
     expect(has(haze, 'counterspell')).toBe(true);
   });
 
-  it('used, it comes back at the start of its owner\'s turn 2 turns later — and not while the item is off', () => {
-    const { G, haze } = countered();
+  it('the rival\'s Counterspell stops yours: Knockdown at a shielded channeller is wasted and the channel goes on', () => {
+    const { G, seven } = withSeven(2);
+    const me = G.players['0'];
+    [me.active, me.bench[0]] = [seven, me.active];
+    seven.zone = 'active'; seven.slot = undefined;
+    me.bench[0]!.zone = 'bench'; me.bench[0]!.slot = 1;
+    useItem(G, '0', 'counterspell', seven.iid);
+    act(G, '0', { type: 'useSkill', heroIid: seven.iid, skillId: 'eff_ult_seven' });
     nextTurn(G, '0');
-    useItem(G, '1', 'cold_front', haze.iid);          // spent in the rival's turn
-    nextTurn(G, '1');                                 // own turn 1: still spent
-    expect([has(haze, 'counterspell'), has(haze, 'counterspell_spent')]).toEqual([false, true]);
-    nextTurn(G, '0'); nextTurn(G, '1');               // own turn 2: back
-    expect([has(haze, 'counterspell'), has(haze, 'counterspell_spent')]).toEqual([true, false]);
-  });
-
-  it('replaced by another card, the status goes with the item', () => {
-    const G = freshReadyGame();
-    const haze = G.players['0'].active!;
-    const item = playNew(G, '0', 'counterspell', haze);
-    giveItem(G, haze, 'extra_health');
-    giveItem(G, haze, 'extra_regen');
-    const card = giveCard(G, '0', 'extra_spirit');
-    G.players['0'].souls = PRICE[1];
-    act(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: haze.iid, replaceIid: item.iid });
-    expect(wornItems(haze).map((it) => it.cardId)).not.toContain('counterspell');
-    expect(has(haze, 'counterspell')).toBe(false);
+    useItem(G, '1', 'knockdown', seven.iid);
+    expect(has(seven, 'stun')).toBe(false);
+    expect(has(seven, 'casting')).toBe(true);
+    expect(has(seven, 'counterspell')).toBe(false);
   });
 });

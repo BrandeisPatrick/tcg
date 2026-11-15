@@ -8,7 +8,7 @@ import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
-import { DJINN_CAP } from '@/engine/constants';
+import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -119,12 +119,6 @@ export interface AbilityDef {
    *  nothing and still spend her ability for the turn.) */
   excludeSelf?: boolean;
   run: EffectFn;
-  /** Equipment only: what happens as the item is played onto its hero
-   *  (`playCard`, engine/actions/hand.ts), and as it is taken off again — an
-   *  upgrade evolving it, or another card replacing it. For an item whose
-   *  effect is a status its bearer carries (Counterspell). */
-  onWorn?: (G: GameState, bearer: CardInstance) => void;
-  onTakenOff?: (G: GameState, bearer: CardInstance) => void;
 
   // ----- Pure hooks -----
   // Optional readings the engine takes of a card that carries this ability
@@ -1231,24 +1225,16 @@ const eff_debuff_reducer: AbilityDef = {
 
 // Counterspell (canon T3 vitality passive: your next parry protects you from
 // the damage and effects of enemy abilities and items, and a parried spell
-// heals you). TCG: the bearer carries the Counterspell status (statuses/,
-// damage.ts) — it comes with the item as it is played, and after it has
-// stopped a card the item brings it back at the start of its owner's turn once
-// "Counterspell spent" has run out.
+// heals you). TCG, Patrick's call (2026-11-15): a spell. Cast on one of your
+// heroes it puts up the Counterspell status (statuses/, damage.ts) for
+// COUNTERSPELL_TURNS turns: the next enemy card that would hit the hero does
+// nothing to it. It triggers once, and is gone when its turns run out unused.
 const eff_counterspell: AbilityDef = {
-  id: 'eff_counterspell', trigger: 'startOfTurn', target: 'self',
-  base: 3,
-  run: (G, _ctx, { source }) => { if (source) readyCounterspell(G, source); },
-  onWorn: (G, bearer) => readyCounterspell(G, bearer),
-  onTakenOff: (_G, bearer) => {
-    bearer.statuses = bearer.statuses.filter((st) => st.id !== 'counterspell' && st.id !== 'counterspell_spent');
-  },
+  id: 'eff_counterspell', trigger: 'onPlay', target: 'allyHero',
+  prompt: 'Counterspell — one of your heroes stops the next enemy card played on it.',
+  base: COUNTERSPELL_HEAL,
+  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'counterspell', 1, COUNTERSPELL_TURNS); },
 };
-/** Give `hero` Counterspell unless it has it, or has spent it and is waiting. */
-function readyCounterspell(G: GameState, hero: CardInstance) {
-  if (hero.statuses.some((st) => st.id === 'counterspell' || st.id === 'counterspell_spent')) return;
-  addStatus(G, hero, 'counterspell', 1, 99);
-}
 
 // Spirit Snatch (canon T3 spirit): steals spirit power from the hero you hit.
 // TCG: when the bearer's skill / spell / ult damages an enemy, it gets Spirit

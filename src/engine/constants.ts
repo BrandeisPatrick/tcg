@@ -91,11 +91,11 @@ export const DRAW_PER_TURN = 1;
  *  stays in the deck). */
 export const MAX_HAND = 10;
 
-/** Counterspell (docs/card-design.md, "Counters"): the HP its bearer heals when
- *  it stops a card, and the turns of its owner it is spent for before the item
- *  brings it back. */
-export const COUNTERSPELL_HEAL = 2;
-export const COUNTERSPELL_RECHARGE = 2;
+/** Counterspell (docs/card-design.md, "Counters"): the turns of its owner the
+ *  shield stays up for unless it is triggered first, and the HP its hero heals
+ *  when it stops a card. */
+export const COUNTERSPELL_TURNS = 2;
+export const COUNTERSPELL_HEAL = 4;
 
 // ---------- Abilities ----------
 // A kit ability costs no souls (Patrick, 2026-11-15): souls buy the deck's

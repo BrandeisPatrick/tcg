@@ -124,9 +124,8 @@ is `pid`'s own turn's, before the attack.
     needs a free slot (`slotCap`: 3, 4 with the flex slot) unless it evolves,
     and may not wear a copy already. A full hero takes the card only in place
     of a worn item the play names (`replaceIid`; `ReplacePicker` asks which).
-    The item's `bonus` goes on, what it puts on its bearer as it goes on does
-    too (`onWorn`: Counterspell's status; `onTakenOff` takes it away again),
-    and the hero earns `EXP_ON_EQUIP` the first time it wears that item.
+    The item's `bonus` goes on, and the hero earns `EXP_ON_EQUIP` the first
+    time it wears that item.
   - **A spell** (an active item) is cast (`castSpell`): it costs its price,
     resolves at once on `heroIid` — a target its first ability's filter allows,
     a hero of either side — or on nothing when it takes none, and goes to the
@@ -466,15 +465,15 @@ resolves, once, at its end.
 
 ## Counters, and how a move is shown (2026-11-15)
 
-**Counterspell** (`damage.ts`). A status on a hero. `counterspellNegates` is
+**Counterspell** (`damage.ts`). A status on a hero, put up by the Counterspell
+spell for `COUNTERSPELL_TURNS` (2) of its owner's turns; it triggers once. `counterspellNegates` is
 asked by `useSkill`, `castSpell` and a trigger's answer before the card's
 effect runs: aimed at an enemy hero carrying the status, the card is paid for
 and does nothing. `counterspellStops` is asked by `damageUnit` and `addStatus`
 for what a card reaches without aiming (every enemy, "the enemy Active"): the
 bearer takes nothing from it, and the cast frame remembers the hero so the
-rest of the same card is stopped too. Spent, the status leaves
-`counterspell_spent` for `COUNTERSPELL_RECHARGE` of its owner's turns; the
-Counterspell item gives it back at a turn start once that has run out.
+rest of the same card is stopped too. Spent, the status is gone and the hero
+heals `COUNTERSPELL_HEAL` (4); nothing brings it back.
 
 **A channel ends on a Stun** (`addStatus`): a status that blocks `'pulse'`
 (Stun, Sleep, the rabbit hex) takes `casting` / `casting_light` off its target

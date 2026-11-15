@@ -73,9 +73,6 @@ export const EQUIPMENT: EquipmentCard[] = [
   // ----- Passive items that were spells, and new passives (docs/card-design.md) -----
   { id: 'healbane',      name: 'Healbane',      type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_healbane'], text: "When the bearer's skill / spell / ult damages an enemy, it cannot be healed for 2 turns." },
   { id: 'long_range',    name: 'Long Range',    type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, abilities: ['eff_long_range'], text: "The bearer's attacks can target any enemy hero." },
-  // Counterspell (canon T3 Vitality passive, so equipment): the bearer carries
-  // the Counterspell status (docs/card-design.md, "Counters").
-  { id: 'counterspell',  name: 'Counterspell',  type: 'equipment', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_counterspell'], text: 'The bearer has Counterspell: the next enemy spell, skill or ultimate that would hit it does nothing to it, and it heals 2. Counterspell comes back 2 turns after it is used.' },
   { id: 'fortitude',     name: 'Fortitude',     type: 'equipment', rarity: 3, slot: 'vitality', tier: 3, upgradesFrom: 'extra_health', bonus: { hp: 2 }, abilities: ['eff_fortitude'], text: '+2 HP. At the start of your turn: heal 2.' },
 
   // ----- T3 weapon offense (canon Toxic / Tesla Bullets, both T3 Weapon) -----

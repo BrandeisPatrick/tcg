@@ -192,8 +192,9 @@ You choose the discards from anywhere in your hand.
 - Big effects leave a turn to answer them. A Charged hero (Seven's Static
   Charge) is Stunned only after its next turn: Dispel Magic or Debuff Reducer
   takes the Charge off first. A channel (Seven's Storm Cloud, 2 turns) ends
-  the moment its caster is Stunned: Knockdown. A hero with Counterspell takes
-  nothing from the next enemy spell, skill or ultimate that would hit it.
+  the moment its caster is Stunned: Knockdown. Counterspell is a spell you
+  cast on one of your heroes: for 2 turns the next enemy spell, skill or
+  ultimate that would hit it does nothing, once.
 - Every move is shown in two phases: its activation, then its effect on the
   board. A card from the hand, yours or the rival's, is shown mid-screen for
   about 0.6 s first; a skill lifts and flares its hero's own tile; an ultimate
@@ -274,7 +275,8 @@ sets them:
 
 142 item cards, each a current Deadlock shop item under its own name, tab and
 tier. An active item is always a spell and a passive item always equipment
-([`docs/card-design.md`](./docs/card-design.md) §1), with one exception: the
+([`docs/card-design.md`](./docs/card-design.md) §1), with two exceptions, both
+Patrick's calls: Counterspell, a passive in Deadlock, is a spell here, and the
 Cooldown family, passives in Deadlock, are the deck's draw cards here, so they
 are actives ([`docs/deck-plan.md`](./docs/deck-plan.md)); what becomes of them
 is open ([`docs/card-design.md`](./docs/card-design.md), "Open: the Cooldown
@@ -284,7 +286,7 @@ passives · actives; the column heads give the tier's price.
 | Tab | T1 · 2 | T2 · 4 | T3 · 8 | T4 · 16 | T5 · 24 | All |
 |---|---|---|---|---|---|---|
 | Weapon | 4 · 0 | 11 · 2 | 13 · 4 | 8 · 1 | 2 · 0 | 45 |
-| Vitality | 3 · 2 | 11 · 3 | 5 · 7 | 10 · 6 | 0 · 1 | 48 |
+| Vitality | 3 · 2 | 11 · 3 | 4 · 8 | 10 · 6 | 0 · 1 | 48 |
 | Spirit | 5 · 2 | 8 · 4 | 7 · 5 | 6 · 9 | 1 · 2 | 49 |
 | All | 16 | 40 | 40 | 40 | 6 | 142 |
 

@@ -26,6 +26,10 @@ that are `disabled` or not `shopable`), or the item's page on the
 [Deadlock wiki](https://deadlock.wiki/Items) when the API is unreachable. If
 the game moves an item between active and passive, the card changes type with it.
 
+Two cards are Patrick's own exceptions, both passives in Deadlock and spells
+here: the Cooldown family (the draw cards; open, see "Changed 2026-11-15") and
+Counterspell (2026-11-15). Nothing else is.
+
 A good effect never justifies breaking this. If a passive item has an effect
 that only works as a one-shot, pick a different item, or translate the passive
 into something that stays on.
@@ -551,18 +555,28 @@ it. Three kinds of effect do, and each has its answer.
 
 | Card | Tab · tier | Price | Effect | Budget (souls) |
 |---|---|---|---|---|
-| Counterspell *new* | Vitality T3 · passive | 8 | The bearer has Counterspell: the next enemy spell, skill or ultimate that would hit it does nothing to it, and it heals 2. Back 2 turns after it is used | worn 4 turns it stops 1.5 cards. The rival sees the status and spends its cheapest card on it, a skill (about 3) more often than a spell, so 3.5 a card → 5.25; heal 2 × 0.5 × 1.5 = 1.5; a turn of the rival aiming elsewhere 1.0 → **7.5** |
+| Counterspell *new* | Vitality T3 · spell (Patrick's call) | 8 | One of your heroes gains Counterspell for 2 turns: the next enemy spell, skill or ultimate that would hit it does nothing to it, and it heals 4. It triggers once | one play. The rival sees the shield and spends its cheapest card on it, a skill (about 3) more often than a spell: 3.5, at 0.9 (it is up for two of the rival's turns); heal 4 × 0.5 × 0.9 = 1.8; the turns the rival aims elsewhere instead 0.5 → 5.5, rounded to the band's floor → **6.0** |
 | Debuff Reducer *changed* | Vitality T2 · passive | 4 | At the start of your turn: remove 1 random debuff from the bearer | worn 6 turns, a debuff is on the bearer at 0.45 of its turn starts (hard crowd control 0.2, the rest Bleed and resist drops) and the one it removes is worth about 1.5 (a Stun 2.0, a Bleed tick or a resist drop about 1) → 0.45 × 1.5 × 6 → **4.0** |
 | Dispel Magic *text* | Vitality T3 · active | 8 | Remove every debuff from one of your heroes, delayed ones too; Shield 4; heal 4 if any was removed | one play: debuffs removed about 2.5 (a Stun 2.0, or a Charge before it goes off, or Bleed 3 for a turn); Shield 4 × 0.5 × 0.9 = 1.8; heal 4 × 0.5 × 0.8 = 1.6 → **6.0** |
 | Knockdown *text* | Spirit T3 · active | 8 | Stun enemy Active for 1 turn. A Stun ends a channel | one play: Stun 2.0; against a channel it also takes the rest of the ultimate (Storm Cloud's second pulse is about 11), at 0.2 of plays → 2.2 → **4.0**. Under the band on purpose, see below |
 
-- **Counterspell is a passive item in Deadlock** (Vitality T3: "your next parry
-  protects you from the damage and effects of enemy abilities and items", with
-  a heal on a parried spell; deadlock-api, read 2026-11-15), so by §1 it is
-  equipment, not a spell held in the hand. The bearer carries the status; a
-  card aimed at it is paid for and wasted, and a card that hits every enemy
-  does nothing to the bearer and lands on the rest. A swing, a proc and a
-  status ticking are not cards and pass. Its own side's cards pass.
+- **Counterspell is a spell by Patrick's call** (2026-11-15: "Counterspell is a
+  spell; cast, it applies a magic shield that counters, lasts x turns, and can
+  only be triggered once"). It is a passive item in Deadlock (Vitality T3:
+  "your next parry protects you from the damage and effects of enemy abilities
+  and items", with a heal on a parried spell; deadlock-api, read 2026-11-15),
+  so it is the second exception to §1 beside the Cooldown family. It was built
+  as equipment first, the same day, and flipped.
+  - x is 2: put up on your turn, the shield covers the rival's next two turns
+    and is gone as your second turn after begins. One turn would let the rival
+    simply wait it out; three adds little, since a rival that can pop it does
+    so on the first.
+  - The heal is 4 (it was 2 on the equipment, which came back): the heal is
+    what lifts a single play to the band.
+  - A card aimed at the shielded hero is paid for and wasted, and a card that
+    hits every enemy does nothing to that hero and lands on the rest. A swing,
+    a proc, a status ticking and a channel's pulse are not cards and pass. Its
+    own side's cards pass.
 - **Debuff Reducer** shortened debuffs as they landed until this day. Patrick:
   "just remove one of the debuffs randomly." The pick is from the match's own
   random stream, so a game replays. Spellbreaker carries the same line.
@@ -630,8 +644,8 @@ call: (a) make them equipment that takes a turn off the bearer's waits, as in
 Deadlock, now that skills and ultimates wait; (b) keep one cheap draw spell
 and drop the other two. They are unchanged until then.
 
-142 cards stay 142: Counterspell in, Active Reload out (97 passives, 45
-actives).
+142 cards stay 142: Counterspell in, Active Reload out (96 passives, 46
+actives, counting Counterspell with the actives it plays as).
 
 ## 4. Signature items and default builds
 

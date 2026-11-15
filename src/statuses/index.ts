@@ -82,13 +82,11 @@ export const STATUSES: StatusDef[] = [
   // Shield. Her card shows Deadlock's wolf-form art while it lasts.
   { id: 'wolf_form',     title: 'Wolf form',     desc: 'Turned into a wolf (Lycan Curse): +3 Attack while it lasts; the card shows the wolf.', hvalue: 1, form: { hero: 'hero_silver', art: 'hero_silver_wolf_card.webp' } },
 
-  // Counterspell (docs/card-design.md, "Counters"): the next enemy card played
-  // on the bearer — a spell, a skill or an ultimate — does nothing to it
-  // (damage.ts). It stays until it is used (duration 99); used, it leaves
-  // "Counterspell spent" behind for the turns the item takes to bring it back.
-  // Spent is neither buff nor debuff (hvalue 0): nothing cleanses it.
-  { id: 'counterspell',       title: 'Counterspell',       desc: 'The next enemy spell, skill or ultimate that would hit this hero does nothing to it, and it heals 2.', hvalue: 2 },
-  { id: 'counterspell_spent', title: 'Counterspell spent', desc: 'Counterspell comes back when this runs out.', hvalue: 0 },
+  // Counterspell (docs/card-design.md, "Counters"): a magic shield the
+  // Counterspell spell puts on a hero. The next enemy card played on the
+  // bearer — a spell, a skill or an ultimate — does nothing to it (damage.ts).
+  // It triggers once, and is gone when its turns run out.
+  { id: 'counterspell',  title: 'Counterspell',  desc: 'The next enemy spell, skill or ultimate that would hit this hero does nothing to it, and it heals 4. Triggers once.', hvalue: 2 },
 
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across

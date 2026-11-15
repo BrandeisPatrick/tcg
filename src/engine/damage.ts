@@ -7,7 +7,7 @@ import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { pushFx, fxSource } from './fx';
 import { tallyBossHit } from './map';
-import { COUNTERSPELL_HEAL, COUNTERSPELL_RECHARGE, EXP_ON_KILL } from './constants';
+import { COUNTERSPELL_HEAL, EXP_ON_KILL } from './constants';
 
 /** Presentation hints for the FX layer, passed by call sites whose damage is
  *  one of a kind (a Djinn's Mark detonation, a Killing Blow execute, a Tesla
@@ -24,15 +24,13 @@ interface DamageFxOpts {
 }
 
 /**
- * Counterspell (docs/card-design.md, "Counters"): a status on a hero that
- * stops the next enemy card played on it — a spell, a skill or an ultimate.
- * Spending it takes the status off, heals the hero COUNTERSPELL_HEAL and
- * leaves it spent for COUNTERSPELL_RECHARGE of its owner's turns (the
- * Counterspell item brings it back when that runs out).
+ * Counterspell (docs/card-design.md, "Counters"): a status on a hero, put up
+ * by the Counterspell spell, that stops the next enemy card played on it — a
+ * spell, a skill or an ultimate. It triggers once: spending it takes the
+ * status off and heals the hero COUNTERSPELL_HEAL.
  */
 function spendCounterspell(G: GameState, hero: CardInstance, what: string): void {
   hero.statuses = hero.statuses.filter((s) => s.id !== 'counterspell');
-  hero.statuses.push({ id: 'counterspell_spent', value: 1, duration: COUNTERSPELL_RECHARGE });
   pushLog(G, `${cardName(hero.cardId)}'s Counterspell stops ${what}.`);
   pushFx(G, { kind: 'immune', iid: hero.iid, what: 'counterspell' });
   // The heal is the hero's own, not the stopped card's: outside its frame.

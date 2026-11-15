@@ -57,18 +57,16 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid?:
   // An upgrade evolves the component the hero wears: it takes its place, and
   // the component goes to the discard pile.
   if (comp) {
-    takeOff(G, hero, comp);
+    detachItem(hero, comp);
     toDiscard(G, pid, comp);
   }
   // A full hero: the item the player chose to discard makes room.
   if (replaced) {
-    takeOff(G, hero, replaced);
+    detachItem(hero, replaced);
     toDiscard(G, pid, replaced);
   }
   attachItem(hero, card);
   syncVitalitySpike(hero);
-  // What the item puts on its bearer as it goes on (Counterspell's status).
-  for (const id of data.abilities ?? []) getAbility(id)?.onWorn?.(G, hero);
 
   const evolved = comp ? ` (it evolves ${cardName(comp.cardId)})` : replaced ? ` (${cardName(replaced.cardId)} discarded for it)` : '';
   pushLog(G, `P${pid} played ${data.name} on ${cardName(hero.cardId)}${evolved} (-${cost} soul${cost === 1 ? '' : 's'}).`);
@@ -80,13 +78,6 @@ export function playCard(G: GameState, pid: PlayerID, cardIid: string, heroIid?:
   // A card from the hand is shown as it is played, equipment like a spell
   // (the board's reveal: both players see what went on which hero).
   G.action = { id: nextActionId(G), kind: 'item', by: pid, cardId: card.cardId, state: 'begin' };
-}
-
-/** Take the worn `item` off `hero`: its bonus leaves with it (`detachItem`),
- *  and so does what it had put on its bearer (`onTakenOff`). */
-function takeOff(G: GameState, hero: CardInstance, item: CardInstance) {
-  detachItem(hero, item);
-  for (const id of itemCard(item.cardId)?.abilities ?? []) getAbility(id)?.onTakenOff?.(G, hero);
 }
 
 /** Cast the spell `card` from `pid`'s hand for its price: it leaves the hand,
