@@ -460,10 +460,10 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
   (docs/balance-model.md §8). Play will show match length.
 - **One-play spells, counters and the ready decks are reasoned, not played**
   (2026-11-15 and 2026-11-16; docs/card-design.md, "Changed 2026-11-15" and
-  "Changed 2026-11-16: the one-play riders"). No sim or play test has run on
-  them. The ten spells that sat under half their price each gained a rider;
-  Divine Barrier (10 of 16) and Unstoppable (8 of 16) still sit under their
-  band, as answers.
+  "Changed 2026-11-16: spells priced for one play"). No sim or play test has
+  run on them. The eleven spells one play could not pay for print a price of
+  their own, near what that play is worth (Knockdown 4, Echo Shard 3, Mystical
+  Piano 10, …).
 - **Machinery no card uses.** Since the hero rebuild no hero opens a channel
   (`casting` / `casting_light`, `tickCastingPulses`) or puts on Charged, the
   FX layer's Naptime wake-up tag has no burst to play, and since Rem stands in

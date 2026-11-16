@@ -116,11 +116,11 @@ describe('the glow on the tiles is the engine\'s answer', () => {
     const G = board();
     const me = G.players[ME];
     const foe = G.players['1'].active!;
-    const knock = giveCard(G, ME, 'knockdown'); // tier 3: 8 souls
+    const knock = giveCard(G, ME, 'knockdown'); // tier 3, but it prints its own price: 4 souls
     me.souls = 1;
     expectGlowMatchesEngine(G, knock, 'souls');
     expect(heroesOf(G).some((h) => isValidTarget(G, ME, armedItem(knock), h))).toBe(false);
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: knock.iid, heroIid: foe.iid })).toEqual({ code: 'souls', text: 'Need 8 souls — you have 1' });
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: knock.iid, heroIid: foe.iid })).toEqual({ code: 'souls', text: 'Need 4 souls — you have 1' });
     // With the souls it glows the rival Active; with nobody of yours standing, nothing.
     me.souls = 10;
     expect(isValidTarget(G, ME, armedItem(knock), foe)).toBe(true);

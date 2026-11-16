@@ -347,9 +347,6 @@ export function targetsFor(G: GameState, pid: PlayerID, filter: TargetFilter, so
 interface AbilitySource {
   ability: AbilityDef;
   equip?: CardInstance;
-  /** A status's ability that is asked with the worn gear's reactions, not
-   *  with the hero's passives (`StatusDef.reacts`: Spirit Lifesteal). */
-  reacts?: boolean;
 }
 
 /** The abilities a board hero carries, in the order they are asked: its own
@@ -373,9 +370,9 @@ export function abilitySources(card: CardInstance): AbilitySource[] {
   }
   // What a status on it carries (Flying's proc: `StatusDef.ability`).
   for (const s of card.statuses) {
-    const def = STATUSES_BY_ID[s.id];
-    const ability = def?.ability ? getAbility(def.ability) : undefined;
-    if (ability) out.push(def?.reacts ? { ability, reacts: true } : { ability });
+    const id = STATUSES_BY_ID[s.id]?.ability;
+    const ability = id ? getAbility(id) : undefined;
+    if (ability) out.push({ ability });
   }
   return out;
 }

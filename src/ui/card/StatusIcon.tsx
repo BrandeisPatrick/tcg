@@ -34,7 +34,6 @@ const STATUS_LABELS: Record<string, string> = {
   casting:       'Channel',
   casting_light: 'Channel',
   counterspell:  'Counter',
-  spirit_lifesteal: 'Lifesteal',
   // Debuffs
   stun:          'Stun',
   silenced:      'Silence',
