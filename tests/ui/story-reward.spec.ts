@@ -39,7 +39,7 @@ describe('the next fight\'s supplies', () => {
 
   it('are spent by the fight, and only by a fight', () => {
     let run = clearAll(newRun('hero_kelvin'), ['battery']);
-    run = { ...run, heroes: ['hero_kelvin', 'hero_haze', 'hero_abrams', 'hero_yamato'] };
+    run = { ...run, heroes: ['hero_kelvin', 'hero_haze', 'hero_abrams'] };
     // A full roster turns Wall Street into supplies: taking one and clearing
     // the stop keeps it waiting.
     run = takeReward(clearNode(run, 'wallst'), { item: 'extra_health' });

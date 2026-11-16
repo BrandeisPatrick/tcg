@@ -26,11 +26,11 @@ with less to rebuild.
 
 ## Ready decks (2026-11-15)
 
-Patrick, 2026-11-15: "we need to have decks ready." Five decks head the Loadout, each a squad of
-three heroes and its 16 items (`src/cards/readyDecks.ts`; squads were four until 2026-11-16, and each deck kept its items and let one hero go). "Use deck" saves the squad and the deck
+Patrick, 2026-11-15: "we need to have decks ready." Six decks head the Loadout (five until
+2026-11-16, when Graveyard joined for Graves), each a squad of three heroes and its 16 items (`src/cards/readyDecks.ts`; squads were four until 2026-11-16, and each deck kept its items and let one hero go). "Use deck" saves the squad and the deck
 together. When that would replace picks or a deck of the player's own, the button asks once more.
 
-The recipe, the same for all five. No sim ran. Rebuilt on 2026-11-15 for the one-play spells, the
+The recipe, the same for all six. No sim ran. Rebuilt on 2026-11-15 for the one-play spells, the
 upgrades in the deck and the counters ([card-design.md](card-design.md), "Changed 2026-11-15").
 
 - **At most 2 copies of one.** Pocket's rule, inside this game's cap of 4, so a ready deck holds at
@@ -46,20 +46,26 @@ upgrades in the deck and the counters ([card-design.md](card-design.md), "Change
 - **A counter in every deck:** Counterspell, Debuff Reducer, Dispel Magic or Knockdown.
 - **Mostly equipment.** A spell is one play; equipment stays. A deck carries a few spells for the
   turn that needs one, at most half the deck.
-- **No draw card.** Two Compress Cooldown were in every deck until 2026-11-15. At 2 souls a turn a
-  hand is short of souls more than of cards, so the 16 slots go to cards that are played. Compress
-  Cooldown is worth its price now (draw 3, discard 1) for a deck that wants one
-  ([card-design.md](card-design.md), "The Cooldown family").
+- **One draw card.** Two Compress Cooldown were in every deck until 2026-11-15, and none for a day
+  after. Since 2026-11-16 each deck carries one, in place of a tier-2 card: it is worth its price
+  as one play (draw 3, discard 1; [card-design.md](card-design.md), "The Cooldown family"), and a
+  deck holds its three heroes, so a draw finds one a turn or two sooner. Graveyard carries two,
+  since Graves shuffles Ghouls into the deck as well.
 - **The rest from the squad's own builds**, so each hero finds its items.
-- **A squad has a front, a carry and a helper.** No hero is in two decks. Seven heroes are in none: Shiv, Paige, Lady Geist, Viscous, Drifter, Dynamo and Graves.
+- **A squad has a front, a carry and a helper.** No hero is in two decks. Four heroes are in none: Shiv, Paige, Drifter and Dynamo.
 
 | Deck | Squad | Tier 1 (two of each) | Tier 2 | Tier 3 |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Titanic Magazine (the upgrade), Long Range, Opening Rounds, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
-| Spirit Storm | Lash, Seven, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Improved Spirit (the upgrade), 2 Cold Front, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
-| Bulwark | Abrams, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Bullet Lifesteal, Healing Booster, Battle Vest, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
-| Ambush | Silver, Yamato, Mirage | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Split Shot | Tesla Bullets, Dispel Magic |
-| Lockdown | Mo & Krill, Sinclair, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Spirit Sap, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
+| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Titanic Magazine (the upgrade), Long Range, Compress Cooldown, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
+| Spirit Storm | Lash, Seven, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Improved Spirit (the upgrade), Cold Front, Compress Cooldown, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
+| Bulwark | Abrams, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Bullet Lifesteal, Healing Booster, Compress Cooldown, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
+| Ambush | Silver, Yamato, Mirage | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Compress Cooldown | Tesla Bullets, Dispel Magic |
+| Lockdown | Mo & Krill, Sinclair, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Compress Cooldown, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
+| Graveyard | Viscous, Graves, Lady Geist | Extra Spirit, Spirit Strike, Extra Health, Healing Rite | 2 Compress Cooldown, Improved Spirit (the upgrade), Mystic Slow, Reactive Barrier, Debuff Reducer | Torment Pulse, Decay |
+
+The draw card took one tier-2 slot in each of the five older decks (2026-11-16): Opening Rounds
+(Gunline), the second Cold Front (Spirit Storm), Battle Vest (Bulwark), Split Shot (Ambush) and
+Spirit Sap (Lockdown, which keeps its spells at half the deck).
 
 How each wins:
 
@@ -72,6 +78,9 @@ How each wins:
   second swing.
 - **Lockdown** denies: Slowing Hex, Rusted Barrel, Knockdown and Silence Wave are free to use once
   worn, so its souls go to items and Wraith's gun finishes.
+- **Graveyard** grinds the rival's deck: Grasping Hands shuffles two Ghouls into Graves's deck, each
+  1 soul to play, and every Ghoul that falls discards the top of the rival's deck. Viscous holds
+  the lane, Lady Geist's spirit damage finishes, and the two Compress Cooldown find the Ghouls.
 
 ## Start of the match
 

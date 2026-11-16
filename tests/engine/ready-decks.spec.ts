@@ -5,13 +5,14 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import { itemPrice } from '@/engine/query';
 import { DECK_SIZE, PRICE, SQUAD_SIZE } from '@/engine/constants';
 
-// The ready decks (docs/deck-plan.md, "Ready decks"): each is a squad of four
+// The ready decks (docs/deck-plan.md, "Ready decks"): each is a squad of three
 // and a legal 16-item deck built to one recipe.
 describe('ready decks', () => {
-  it('there are five, each with its own name and id', () => {
-    expect(READY_DECKS).toHaveLength(5);
-    expect(new Set(READY_DECKS.map((d) => d.id)).size).toBe(5);
-    expect(new Set(READY_DECKS.map((d) => d.name)).size).toBe(5);
+  it('there are six, each with its own name and id; Graveyard is Graves\'s (2026-11-16)', () => {
+    expect(READY_DECKS).toHaveLength(6);
+    expect(new Set(READY_DECKS.map((d) => d.id)).size).toBe(6);
+    expect(new Set(READY_DECKS.map((d) => d.name)).size).toBe(6);
+    expect(READY_DECKS.find((d) => d.id === 'graveyard')?.heroes).toContain('hero_graves');
   });
 
   it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: three different heroes (SQUAD_SIZE) and a legal deck; an upgrade is in it beside the item it is built from', (_name, d) => {
@@ -27,7 +28,7 @@ describe('ready decks', () => {
     for (const id of upgrades) expect(d.items, id).toContain(evolvesFrom(id));
   });
 
-  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 2 copies, 8 / 6 / 2 by tier (56 souls), a counter, no draw card, mostly equipment', (_name, d) => {
+  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 2 copies, 8 / 6 / 2 by tier (56 souls), a counter, a draw card, mostly equipment', (_name, d) => {
     const counts = copyCounts(d.items);
     expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(2);
     const tiers = [1, 2, 3, 4, 5].map((t) => d.items.filter((id) => itemCard(id)!.tier === t).length);
@@ -35,10 +36,13 @@ describe('ready decks', () => {
     // 56 souls at the tiers' prices; a card with a price of its own (Rusted Barrel, 1) lists under its tier's.
     expect(d.items.reduce((n, id) => n + PRICE[itemCard(id)!.tier], 0)).toBe(56);
     expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBe(56 - d.items.filter((id) => id === 'rusted_barrel').length);
-    // A counter in every deck; the draw cards are out (at 2 souls a turn a hand is short of
-    // souls, not cards); and a deck leans on equipment, which stays, over spells, which do not.
+    // A counter in every deck; a draw card in every one since 2026-11-16 (Compress Cooldown: one,
+    // two in Graveyard, which also digs for its Ghouls); and a deck leans on equipment, which
+    // stays, over spells, which do not.
     expect(d.items.some((id) => ['counterspell', 'debuff_reducer', 'debuff_remover', 'knockdown'].includes(id))).toBe(true);
-    expect(d.items.filter((id) => /_cooldown$/.test(id))).toEqual([]);
+    const draws = d.items.filter((id) => /_cooldown$/.test(id));
+    expect(new Set(draws)).toEqual(new Set(['improved_cooldown']));
+    expect(draws).toHaveLength(d.id === 'graveyard' ? 2 : 1);
     const spells = d.items.filter((id) => itemCard(id)!.type === 'spell').length;
     expect(spells).toBeGreaterThan(0);
     expect(spells).toBeLessThanOrEqual(DECK_SIZE / 2);

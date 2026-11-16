@@ -18,9 +18,10 @@ import type { CardId } from '@/engine/types';
  *    Debuff Reducer, Dispel Magic or Knockdown.
  *    (Counterspell is a spell: Patrick's call.)
  *  - Spells are played once and discarded, so a deck leans on equipment and
- *    carries a few spells for the turn that needs one. The draw cards
- *    (Compress Cooldown) are out of these decks: at 2 souls a turn a hand is
- *    short of souls more than of cards.
+ *    carries a few spells for the turn that needs one.
+ *  - A draw card in every deck (2026-11-16): one Compress Cooldown (draw 3,
+ *    discard 1), so the three heroes in the deck come out sooner; Graveyard
+ *    carries two, to find its Ghouls too.
  *  - The rest comes from the squad's own builds, so each hero finds something
  *    made for it.
  */
@@ -46,7 +47,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_warden', 'hero_vindicta', 'hero_haze'],
     items: [
       ...x2('extended_magazine'), ...x2('headshot_booster'), ...x2('restorative_shot'), ...x2('grit'),
-      ...x2('titanic_magazine'), 'long_range', 'opening_rounds', 'fleetfoot', 'debuff_reducer',
+      ...x2('titanic_magazine'), 'long_range', 'improved_cooldown', 'fleetfoot', 'debuff_reducer',
       'burst_fire', 'toxic_bullets',
     ],
   },
@@ -57,7 +58,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_lash', 'hero_seven', 'hero_kelvin'],
     items: [
       ...x2('extra_spirit'), ...x2('mystic_burst'), ...x2('mystic_regeneration'), ...x2('spirit_strike'),
-      ...x2('improved_spirit'), ...x2('cold_front'), 'mystic_vulnerability', 'spirit_lifesteal',
+      ...x2('improved_spirit'), 'cold_front', 'improved_cooldown', 'mystic_vulnerability', 'spirit_lifesteal',
       'knockdown', 'torment_pulse',
     ],
   },
@@ -68,7 +69,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_abrams', 'hero_victor', 'hero_rem'],
     items: [
       ...x2('extra_health'), ...x2('extra_regen'), ...x2('grit'), ...x2('healing_rite'),
-      ...x2('bullet_lifesteal'), 'healing_booster', 'battle_vest', 'debuff_reducer', 'guardian_ward',
+      ...x2('bullet_lifesteal'), 'healing_booster', 'improved_cooldown', 'debuff_reducer', 'guardian_ward',
       'fortitude', 'counterspell',
     ],
   },
@@ -79,7 +80,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_silver', 'hero_yamato', 'hero_mirage'],
     items: [
       ...x2('sprint_boots'), ...x2('extended_magazine'), ...x2('restorative_shot'), ...x2('headshot_booster'),
-      ...x2('kinetic_dash'), 'titanic_magazine', 'fleetfoot', 'swift_striker', 'split_shot',
+      ...x2('kinetic_dash'), 'titanic_magazine', 'fleetfoot', 'swift_striker', 'improved_cooldown',
       'tesla_bullets', 'debuff_remover',
     ],
   },
@@ -90,8 +91,19 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_wraith'],
     items: [
       ...x2('rusted_barrel'), ...x2('spirit_strike'), ...x2('extra_spirit'), 'healing_rite', 'extra_health',
-      ...x2('slowing_hex'), 'improved_spirit', 'spirit_sap', 'mystic_shot', 'spirit_lifesteal',
+      ...x2('slowing_hex'), 'improved_spirit', 'improved_cooldown', 'mystic_shot', 'spirit_lifesteal',
       'knockdown', 'silence_glyph',
+    ],
+  },
+  {
+    id: 'graveyard',
+    name: 'Graveyard',
+    blurb: 'Graves fills your deck with Ghouls; every Ghoul that falls costs them a card.',
+    heroes: ['hero_viscous', 'hero_graves', 'hero_lady_geist'],
+    items: [
+      ...x2('extra_spirit'), ...x2('spirit_strike'), ...x2('extra_health'), ...x2('healing_rite'),
+      ...x2('improved_cooldown'), 'improved_spirit', 'mystic_slow', 'reactive_barrier', 'debuff_reducer',
+      'torment_pulse', 'decay',
     ],
   },
 ];

@@ -3,7 +3,7 @@ import type { CardId } from '@/engine/types';
 /**
  * Story (campaign) mode. A roguelike run over a vintage New York City map:
  * the player starts with a single hero, fights along a branching node path,
- * recruits up to 4 heroes and gathers supplies for the next fight via 1-of-3
+ * recruits up to 3 heroes (SQUAD_SIZE) and gathers supplies for the next fight via 1-of-3
  * choices, while the opponents scale up the deeper they go.
  */
 export type NodeKind = 'battle' | 'elite' | 'recruit' | 'supply' | 'boss';
@@ -42,7 +42,7 @@ export interface StoryRun {
    *  nodes are reachable). */
   currentNodeId: string | null;
   clearedNodeIds: string[];
-  heroes: CardId[];     // recruited roster, 1..4
+  heroes: CardId[];     // recruited roster, 1..SQUAD_SIZE (3)
   /** The supplies waiting for the next fight; that fight spends them. */
   nextFight: FightReward;
   status: 'active' | 'won' | 'lost';

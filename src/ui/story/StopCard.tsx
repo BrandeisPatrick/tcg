@@ -17,6 +17,7 @@ import { fonts, text } from '../tokens';
 import { poster, sheetStyle } from '../poster';
 import { PosterButton } from '../chrome';
 import { KIND_INK, KIND_LABEL, StopGlyph, Sticker, FramedPortrait, eyebrow } from './StopGlyph';
+import { SQUAD_SIZE } from '@/engine/constants';
 
 /** The sticker each kind wears: fights in their red, the rest in ink. */
 const STICKER_INK = {
@@ -275,7 +276,7 @@ function RosterStrip({ run }: { run: StoryRun }) {
         paddingTop: 10,
         borderTop: `1px solid ${poster.inkRule}`,
       }}
-      aria-label={`Roster ${run.heroes.length} of 4`}
+      aria-label={`Roster ${run.heroes.length} of ${SQUAD_SIZE}`}
     >
       <span style={{ ...eyebrow, fontSize: 9.5, color: poster.inkDim, marginRight: 4 }}>Roster</span>
       {slots.map((i) => {
@@ -293,7 +294,7 @@ function RosterStrip({ run }: { run: StoryRun }) {
         );
       })}
       <span style={{ ...text.label, fontSize: 12, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
-        {run.heroes.length}/4
+        {run.heroes.length}/{SQUAD_SIZE}
       </span>
     </div>
   );

@@ -733,7 +733,8 @@ Hands** (a line of hands that damages and immobilizes, "summoning a Ghoul"), the
 
 **Squads of three.** A side drafts 3 heroes, not 4 (`SQUAD_SIZE`). The board keeps its four
 spots, the Active and three on the bench, so a full squad leaves one free. Seat 0 drafts first and
-last, seat 1 the two picks after the first. Story mode still recruits up to four.
+last, seat 1 the two picks after the first. Story mode recruits up to three as well since
+2026-11-16 (a full roster turns a recruit stop into supplies), and its rivals field three at most.
 
 **Units.** A unit is a board card that is no hero. It takes a spot, has Attack and HP, and is
 damaged, targeted and given statuses like a hero. It differs in five ways:

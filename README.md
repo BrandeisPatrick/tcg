@@ -21,12 +21,13 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### Your deck
 
-- Five **ready decks** head the Loadout screen: Gunline, Spirit Storm,
-  Bulwark, Ambush and Lockdown. Each is a squad of three heroes and its 16
-  items; "Use deck" saves both, and the match is ready to play. Each holds 8
-  tier-1, 6 tier-2 and 2 tier-3 items (56 souls), at most 2 copies of one, with
-  an upgrade beside the item it is built from and a counter (Counterspell,
-  Debuff Reducer, Dispel Magic or Knockdown)
+- Six **ready decks** head the Loadout screen: Gunline, Spirit Storm,
+  Bulwark, Ambush, Lockdown and Graveyard (Graves's). Each is a squad of three
+  heroes and its 16 items; "Use deck" saves both, and the match is ready to
+  play. Each holds 8 tier-1, 6 tier-2 and 2 tier-3 items (56 souls), at most 2
+  copies of one, with an upgrade beside the item it is built from, a counter
+  (Counterspell, Debuff Reducer, Dispel Magic or Knockdown) and a draw card
+  (Compress Cooldown; two in Graveyard)
   ([`docs/deck-plan.md`](./docs/deck-plan.md), "Ready decks").
 - Or build your own below them, on a deck builder that looks like Deadlock's
   shop: Weapon, Vitality and Spirit tabs, rows by tier, the item icons. Tap an
@@ -413,7 +414,8 @@ src/
 │                    and stage/ — the canvas particle world with height)
 └── statuses/    Status taxonomy + display metadata
 public/
-├── heroes/      Hero portraits .webp (card, mini and small, plus a wide splash)
+├── heroes/      Hero portraits .webp (card, mini and small, a wide splash, and the
+│                Level-4 "gloat" card the board shows at a hero's final level)
 ├── items/       Passive items' shop icons .webp
 ├── spells/      Active items' shop icons .webp
 ├── ult/         Each hero's Deadlock ultimate icon .webp (the button on its card)
@@ -457,9 +459,11 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
   ultimates' 10 and 8 damage are set by reasoning
   (docs/balance-model.md §8). Play will show match length.
 - **One-play spells, counters and the ready decks are reasoned, not played**
-  (2026-11-15; docs/card-design.md, "Changed 2026-11-15"). No sim or play
-  test has run on them. Ten spells sit under half their price as one play and
-  wait on a decision.
+  (2026-11-15 and 2026-11-16; docs/card-design.md, "Changed 2026-11-15" and
+  "Changed 2026-11-16: the one-play riders"). No sim or play test has run on
+  them. The ten spells that sat under half their price each gained a rider;
+  Divine Barrier (10 of 16) and Unstoppable (8 of 16) still sit under their
+  band, as answers.
 - **Machinery no card uses.** Since the hero rebuild no hero opens a channel
   (`casting` / `casting_light`, `tickCastingPulses`) or puts on Charged, the
   FX layer's Naptime wake-up tag has no burst to play, and since Rem stands in

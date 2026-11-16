@@ -3,6 +3,7 @@ import type { StoryRun, StoryNode, NodeKind } from './types';
 import { REGIONS } from './campaign';
 import { enemyRosterSize, enemyBuff, enemySouls, patronHpForDepth, nodeLabel, supplyOffer } from './content';
 import { isFight, isReachable } from './storyRun';
+import { SQUAD_SIZE } from '@/engine/constants';
 
 /**
  * What a stop on the story map IS, in words a panel can print: its route and
@@ -15,11 +16,12 @@ import { isFight, isReachable } from './storyRun';
 const START_REGION = 'start';
 const START_ROUTE_NAME = 'The Battery';
 
-/** A recruit stop with a full roster pays out supplies instead (an item or
+/** A recruit stop with a full roster (SQUAD_SIZE: three heroes since
+ *  2026-11-16, as a drafted squad) pays out supplies instead (an item or
  *  souls for the next fight), so it reads as a supply stop everywhere the
  *  player looks. */
 export function effectiveKind(run: StoryRun, node: StoryNode): NodeKind {
-  return node.kind === 'recruit' && run.heroes.length >= 4 ? 'supply' : node.kind;
+  return node.kind === 'recruit' && run.heroes.length >= SQUAD_SIZE ? 'supply' : node.kind;
 }
 
 export type StopState = 'cleared' | 'open' | 'locked';
