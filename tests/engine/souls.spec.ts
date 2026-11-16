@@ -31,11 +31,11 @@ function freshG(): GameState {
 }
 
 describe('souls economy', () => {
-  it('the income: the player on turn 1 has LANE_INCOME (2, a tier-1 item) souls; the other has none until its turn', () => {
+  it('the income: the player on turn 1 has LANE_INCOME (2, a tier-2 item since prices halved) souls; the other has none until its turn', () => {
     const c = readyClient();
     const { G } = snap(c);
     expect(LANE_INCOME).toBe(2);
-    expect(LANE_INCOME).toBe(PRICE[1]);
+    expect(LANE_INCOME).toBe(PRICE[2]); // a tier-1 item's price until prices halved (2026-11-16)
     expect(G.players['0'].souls).toBe(LANE_INCOME);
     expect(G.players['1'].souls).toBe(0);
   });
@@ -43,18 +43,18 @@ describe('souls economy', () => {
   it('putting an item on a hero costs its price; one it cannot afford is refused, costs nothing and stays in the hand', () => {
     const G = freshReadyGame(); // P0's turn
     const me = G.players['0'];
-    me.souls = 5;
+    me.souls = 4;
     // Extended Magazine: a tier 1 passive item, +1 Bullet Power, at its tier's price.
     expect(itemPrice('extended_magazine')).toBe(PRICE[1]);
     const mag = giveCard(G, '0', 'extended_magazine');
     expect(runMove('playCard', G, '0', mag.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
-    expect(me.souls).toBe(5 - PRICE[1]);
-    // Sharpshooter is tier 3 (8 souls): 3 left is not enough.
+    expect(me.souls).toBe(4 - PRICE[1]);
+    // Sharpshooter is tier 3 (4 souls since prices halved): 3 left is not enough.
     const sharp = giveCard(G, '0', 'sharpshooter');
     expect(itemPrice('sharpshooter')).toBe(PRICE[3]);
     expect(playBlocked(G, '0', sharp.iid, me.bench[0]!.iid)).toBe('souls');
     expect(runMove('playCard', G, '0', sharp.iid, me.bench[0]!.iid)).toBe('INVALID_MOVE');
-    expect(me.souls).toBe(5 - PRICE[1]);
+    expect(me.souls).toBe(4 - PRICE[1]);
     expect(me.hand).toEqual([sharp]);
   });
 

@@ -116,11 +116,11 @@ describe('the glow on the tiles is the engine\'s answer', () => {
     const G = board();
     const me = G.players[ME];
     const foe = G.players['1'].active!;
-    const knock = giveCard(G, ME, 'knockdown'); // tier 3, but it prints its own price: 4 souls
+    const knock = giveCard(G, ME, 'knockdown'); // tier 3, but it prints its own price: 2 souls (4 before prices halved)
     me.souls = 1;
     expectGlowMatchesEngine(G, knock, 'souls');
     expect(heroesOf(G).some((h) => isValidTarget(G, ME, armedItem(knock), h))).toBe(false);
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: knock.iid, heroIid: foe.iid })).toEqual({ code: 'souls', text: 'Need 4 souls — you have 1' });
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: knock.iid, heroIid: foe.iid })).toEqual({ code: 'souls', text: 'Need 2 souls — you have 1' });
     // With the souls it glows the rival Active; with nobody of yours standing, nothing.
     me.souls = 10;
     expect(isValidTarget(G, ME, armedItem(knock), foe)).toBe(true);
@@ -283,18 +283,18 @@ describe('the hand\'s plays are the engine\'s answer', () => {
 
   it('a play the souls do not cover says its price — an upgrade onto the hero wearing its part, the difference', () => {
     const G = board();
-    G.players[ME].souls = 1;
+    G.players[ME].souls = 0; // prices halved (2026-11-16): a tier-1 card is 1 soul
     const haze = G.players[ME].active!;
     const mag = giveCard(G, ME, 'extended_magazine');
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: mag.iid, heroIid: haze.iid })).toEqual({
-      code: 'souls', text: 'Need 2 souls — you have 1',
+      code: 'souls', text: 'Need 1 soul — you have 0',
     });
     const titanic = giveCard(G, ME, 'titanic_magazine');
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: titanic.iid, heroIid: haze.iid })?.text).toBe('Need 4 souls — you have 1');
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: titanic.iid, heroIid: haze.iid })?.text).toBe('Need 2 souls — you have 0');
     giveItem(G, haze, 'extended_magazine');
     expect(playCost(haze, 'titanic_magazine')).toBe(PRICE[2] - PRICE[1]);
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: titanic.iid, heroIid: haze.iid })).toEqual({
-      code: 'souls', text: 'Need 2 souls — you have 1',
+      code: 'souls', text: 'Need 1 soul — you have 0',
     });
     expect(itemPrice('titanic_magazine')).toBe(PRICE[2]);
   });
@@ -620,10 +620,10 @@ describe('every block code has words', () => {
     const G = board();
     const me = G.players[ME];
     const foe = G.players['1'].active!;
-    const front = giveCard(G, ME, 'cold_front');
-    me.souls = 3;
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: front.iid, heroIid: foe.iid })).toEqual({ code: 'souls', text: 'Need 4 souls — you have 3' });
-    me.souls = 4;
+    const front = giveCard(G, ME, 'cold_front'); // tier 2: 2 souls since prices halved (2026-11-16)
+    me.souls = 1;
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: front.iid, heroIid: foe.iid })).toEqual({ code: 'souls', text: 'Need 2 souls — you have 1' });
+    me.souls = 2;
     expect(actionRefusal(G, ME, { type: 'playCard', cardIid: front.iid, heroIid: me.bench[0]!.iid })).toEqual({
       code: 'target', text: `Cold Front cannot be played on ${nameOf(me.bench[0]!)}`,
     });

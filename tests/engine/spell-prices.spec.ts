@@ -4,6 +4,9 @@
  * play is worth under half its tier's price prints a price of its own, near
  * what that play is worth, instead of gaining effects; its tier stays the
  * item's (docs/card-design.md, "Changed 2026-11-16: spells priced for one play").
+ * Prices halved the same day (PRICE 1 / 2 / 4 / 8 / 12, a soul buys 2 points):
+ * a printed price is the play's value ÷ 2, to the whole soul, a line still
+ * costing more than the spell it is built from.
  */
 import { describe, it, expect } from 'vitest';
 import { CARDS_BY_ID, ITEMS } from '@/cards';
@@ -11,8 +14,11 @@ import { itemPrice } from '@/engine/query';
 import { PRICE } from '@/engine/constants';
 
 const PRINTED: Record<string, number> = {
-  knockdown: 4, disarming_hex: 3, majestic_leap: 2, curse: 6, mystical_piano: 10,
-  echo_shard: 3, ethereal_shift: 3, divine_barrier: 5, infuser: 5, unstoppable: 3,
+  knockdown: 2, disarming_hex: 2, majestic_leap: 1, curse: 3, mystical_piano: 5,
+  echo_shard: 1, ethereal_shift: 2, divine_barrier: 3, infuser: 3, unstoppable: 2,
+  // Before prices halved: knockdown 4, disarming_hex 3, majestic_leap 2, curse 6, mystical_piano 10,
+  // echo_shard 3, ethereal_shift 3, divine_barrier 5, infuser 5, unstoppable 3. Rusted Barrel's
+  // own 1 is its tier's price now, so it prints none.
   // transcendent_cooldown printed 11 until it went back to equipment (2026-11-16): priced by its tier now.
 };
 

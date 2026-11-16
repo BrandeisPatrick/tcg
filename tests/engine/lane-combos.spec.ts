@@ -339,8 +339,8 @@ describe('The new cards', () => {
     expect(CARDS_BY_ID['enduring_speed']).toMatchObject({ type: 'equipment', slot: 'vitality', tier: 2, name: 'Enduring Speed' });
     expect(CARDS_BY_ID['kinetic_dash']).toMatchObject({ type: 'equipment', slot: 'weapon', tier: 2, name: 'Kinetic Dash' });
     for (const id of [...NEW_ITEMS, 'majestic_leap', 'fleetfoot']) {
-      // Majestic Leap prints its own: 2 (a spell priced for one play, 2026-11-16).
-      expect(itemPrice(id), id).toBe(id === 'majestic_leap' ? 2 : PRICE[itemCard(id)!.tier]);
+      // Majestic Leap prints its own: 1 (a spell priced for one play, 2026-11-16; 2 before prices halved).
+      expect(itemPrice(id), id).toBe(id === 'majestic_leap' ? 1 : PRICE[itemCard(id)!.tier]);
       expect((CARDS_BY_ID[id] as { abilities?: string[] }).abilities, id).toEqual([`eff_${id}`]);
       expect(ABILITIES_BY_ID[`eff_${id}`], id).toBeDefined();
     }

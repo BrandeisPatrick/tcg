@@ -541,14 +541,14 @@ describe('the transition rules fire', () => {
     G.players['0'].souls = 10;
     const mag = giveCard(G, '0', 'extended_magazine');
     const play = made(G, 'playCard', [mag.iid, p0(G).haze.iid]);
-    expect(play.after.G.players['0'].souls).toBe(8);
+    expect(play.after.G.players['0'].souls).toBe(10 - PRICE[1]);
     expect(play.check()).toEqual([]);
     expect(play.check((A) => { A.players['0'].souls += 1; })).toContain('souls-delta');
     const titanic = giveCard(play.after.G, '0', 'titanic_magazine');
-    const up = made(play.after.G, 'playCard', [titanic.iid, p0(G).haze.iid]); // 4 - 2 over the worn magazine
-    expect(up.after.G.players['0'].souls).toBe(6);
+    const up = made(play.after.G, 'playCard', [titanic.iid, p0(G).haze.iid]); // 2 - 1 over the worn magazine
+    expect(up.after.G.players['0'].souls).toBe(10 - PRICE[2]);
     expect(up.check()).toEqual([]);
-    expect(up.check((A) => { A.players['0'].souls -= 2; })).toContain('souls-delta'); // the full price
+    expect(up.check((A) => { A.players['0'].souls -= PRICE[1]; })).toContain('souls-delta'); // the full price
     // A hero onto the bench: free.
     const H = clean();
     H.players['0'].bench[2] = null;
@@ -979,8 +979,8 @@ describe('the transition rules fire', () => {
     P.attackers = [P.players['0'].active!.iid];
     expect(moveIds(pair(() => undefined, P), 'playCard', [card.iid, P.players['0'].active!.iid])).not.toContain('accepted-illegal');
     const S = clean();
-    S.players['0'].souls = 1;
-    const dear = giveCard(S, '0', 'extra_spirit');
+    S.players['0'].souls = PRICE[2] - 1;
+    const dear = giveCard(S, '0', 'improved_spirit'); // tier 2: a soul short (Extra Spirit is 1 since prices halved)
     expect(moveIds(pair(() => undefined, S), 'playCard', [dear.iid, S.players['0'].active!.iid])).toContain('accepted-illegal');
     // a hero into an occupied lane
     const H = clean();
@@ -1171,21 +1171,23 @@ describe('the rules oracles', () => {
 
   it('prices: PRICE by tier; equipment onto the hero wearing its equipment component costs the difference, onto another the full price; a spell never less than its price', () => {
     const G = clean();
-    expect(['extended_magazine', 'titanic_magazine', 'decay', 'arctic_blast', 'hero_haze'].map(itemPriceOracle)).toEqual([2, 4, 8, 16, 0]);
-    // A price printed on the card (a spell priced for one play) is the price: Cursed Relic, 6.
-    expect(['rusted_barrel', 'curse'].map(itemPriceOracle)).toEqual([1, 6]);
+    // Half of 2 / 4 / 8 / 16 since 2026-11-16.
+    expect(['extended_magazine', 'titanic_magazine', 'decay', 'arctic_blast', 'hero_haze'].map(itemPriceOracle)).toEqual([1, 2, 4, 8, 0]);
+    // A price printed on the card (a spell priced for one play) is the price: Cursed Relic, 3. Rusted
+    // Barrel's 1 is its tier's now.
+    expect(['rusted_barrel', 'curse'].map(itemPriceOracle)).toEqual([1, 3]);
     const { haze, vindicta } = p0(G);
-    expect(playCostOracle(haze, 'titanic_magazine')).toBe(4);
+    expect(playCostOracle(haze, 'titanic_magazine')).toBe(PRICE[2]);
     const mag = giveItem(G, haze, 'extended_magazine');
     expect(upgradeComponentOracle(haze, 'titanic_magazine')).toBe(mag);
-    expect(playCostOracle(haze, 'titanic_magazine')).toBe(2);
-    expect(playCostOracle(vindicta, 'titanic_magazine')).toBe(4); // Haze's magazine is not Vindicta's
-    expect(playCostOracle(haze, 'boundless_spirit')).toBe(16); // its component is Improved Spirit, not worn
+    expect(playCostOracle(haze, 'titanic_magazine')).toBe(PRICE[2] - PRICE[1]);
+    expect(playCostOracle(vindicta, 'titanic_magazine')).toBe(PRICE[2]); // Haze's magazine is not Vindicta's
+    expect(playCostOracle(haze, 'boundless_spirit')).toBe(PRICE[4]); // its component is Improved Spirit, not worn
     // A corpse wearing the component: the upgrade evolves it for the difference too.
     const corpse = p0(G).lash;
     corpse.hp = 0; corpse.respawnTurnsLeft = 2;
     giveItem(G, corpse, 'extended_magazine');
-    expect(playCostOracle(corpse, 'titanic_magazine')).toBe(2);
+    expect(playCostOracle(corpse, 'titanic_magazine')).toBe(PRICE[2] - PRICE[1]);
     // What evolves what: equipment from equipment only. Colossus (a spell) is built from Extra
     // Health in Deadlock's shop, and costs its whole price beside it; Weapon Shielding
     // (equipment) is built from Grit (a spell), which is never worn, so it evolves nothing.
@@ -1194,18 +1196,18 @@ describe('the rules oracles', () => {
     expect(evolvesFromOracle('colossus')).toBeUndefined();
     expect(evolvesFromOracle('weapon_shielding')).toBeUndefined();
     giveItem(G, vindicta, 'extra_health');
-    expect(playCostOracle(vindicta, 'fortitude')).toBe(8 - 2);
-    expect(playCostOracle(vindicta, 'colossus')).toBe(16);
-    expect(playCostOracle(undefined, 'colossus')).toBe(16);
+    expect(playCostOracle(vindicta, 'fortitude')).toBe(PRICE[3] - PRICE[1]);
+    expect(playCostOracle(vindicta, 'colossus')).toBe(PRICE[4]);
+    expect(playCostOracle(undefined, 'colossus')).toBe(PRICE[4]);
     // The Cooldown family is equipment again (2026-11-16): a line, each evolving the one before,
     // priced by its tier; onto the hero wearing the one below, the difference.
     expect(upgradesOfOracle('improved_cooldown')).toEqual(['superior_cooldown']);
     expect(upgradesOfOracle('superior_cooldown')).toEqual(['transcendent_cooldown']);
-    expect(['improved_cooldown', 'superior_cooldown', 'transcendent_cooldown'].map((id) => playCostOracle(undefined, id))).toEqual([4, 8, 16]);
+    expect(['improved_cooldown', 'superior_cooldown', 'transcendent_cooldown'].map((id) => playCostOracle(undefined, id))).toEqual([PRICE[2], PRICE[3], PRICE[4]]);
     giveItem(G, vindicta, 'improved_cooldown');
-    expect(playCostOracle(vindicta, 'superior_cooldown')).toBe(8 - 4);
+    expect(playCostOracle(vindicta, 'superior_cooldown')).toBe(PRICE[3] - PRICE[2]);
     // The draw card is a spell for its tier's price.
-    expect(playCostOracle(undefined, 'golden_goose_egg')).toBe(2);
+    expect(playCostOracle(undefined, 'golden_goose_egg')).toBe(PRICE[1]);
   });
   it('slots and worth: three items (four with the flex slot); every worn item and every item in the hand counts, a hero card nothing; a merged Rem is a hero, not an item', () => {
     const G = clean();
@@ -1216,18 +1218,19 @@ describe('the rules oracles', () => {
     giveItem(G, vind, 'extra_regen');
     giveItem(G, vind, 'extra_health');
     const rem = mergeRem(G, G.players['0'].bench[0]!);
-    expect(wornWorth(G.players['0'].bench[0]!)).toBe(4); // two tier 1 items, Rem not among them
+    expect(wornWorth(G.players['0'].bench[0]!)).toBe(2 * PRICE[1]); // two tier 1 items, Rem not among them
     giveItem(G, rem, 'healing_booster');
     expect(heroesOfSide(G.players['0']).map((h) => h.cardId)).toContain('hero_rem');
-    expect(netWorthOracle(G, '0')).toBe(4 + 4);
+    const board = 2 * PRICE[1] + PRICE[2];
+    expect(netWorthOracle(G, '0')).toBe(board);
     // The hand counts at list price — in net worth, not in a hero's worth; a hero card at 0.
     giveCard(G, '0', 'glass_cannon');
     giveCard(G, '0', 'hero_yamato');
-    expect(netWorthOracle(G, '0')).toBe(4 + 4 + 16);
-    expect(netWorthOracleWithoutHand(G, '0')).toBe(4 + 4);
+    expect(netWorthOracle(G, '0')).toBe(board + PRICE[4]);
+    expect(netWorthOracleWithoutHand(G, '0')).toBe(board);
     // A spell in the hand counts at its price too; played, it is on the discard pile and counts nothing.
     giveCard(G, '0', 'cold_front');
-    expect(netWorthOracle(G, '0')).toBe(4 + 4 + 16 + 4);
+    expect(netWorthOracle(G, '0')).toBe(board + PRICE[4] + PRICE[2]);
   });
   it('the hand oracles: a hero onto the bench (its first free slot, not a merged Rem\'s) or into an empty lane; the first Active; a discard', () => {
     const G = clean();
@@ -1303,11 +1306,11 @@ describe('the rules oracles', () => {
     expect(playBlockedOracle(G, '0', card.iid, p0(G).lash.iid, undefined, worn[2].iid)).toBe('replace-not-full'); // Lash has room
     const titanic = giveCard(G, '0', 'titanic_magazine');
     expect(playBlockedOracle(G, '0', titanic.iid, haze.iid)).toBeNull(); // takes the magazine's place
-    expect(playBlockedOracle(G, '0', titanic.iid, haze.iid, 1)).toBe('souls'); // 2, the difference
+    expect(playBlockedOracle(G, '0', titanic.iid, haze.iid, PRICE[2] - PRICE[1] - 1)).toBe('souls'); // 1, the difference
     expect(playBlockedOracle(G, '0', titanic.iid, haze.iid, undefined, worn[1].iid)).toBe('replace-not-full'); // it evolves: nothing to replace
     // An upgrade is a card like any other: onto a hero without its component, for its whole price.
-    expect(playBlockedOracle(G, '0', titanic.iid, p0(G).lash.iid, 3)).toBe('souls');
-    expect(playBlockedOracle(G, '0', titanic.iid, p0(G).lash.iid, 4)).toBeNull();
+    expect(playBlockedOracle(G, '0', titanic.iid, p0(G).lash.iid, PRICE[2] - 1)).toBe('souls');
+    expect(playBlockedOracle(G, '0', titanic.iid, p0(G).lash.iid, PRICE[2])).toBeNull();
     G.attackUsed = true; // an attack ends nothing: the turn goes on
     expect(playBlockedOracle(G, '0', card.iid, p0(G).lash.iid)).toBeNull();
     G.attackUsed = false;
@@ -1339,7 +1342,7 @@ describe('the rules oracles', () => {
     expect(playBlockedOracle(G, '0', cold.iid, haze.iid)).toBe('bad-target');
     expect(playBlockedOracle(G, '1', cold.iid, foeActive)).toBe('not-your-turn');
     expect(playBlockedOracle(G, '0', cold.iid, foeActive, undefined, 'ghost')).toBe('replace-spell');
-    expect(playBlockedOracle(G, '0', cold.iid, foeActive, 3)).toBe('souls'); // tier 2: 4
+    expect(playBlockedOracle(G, '0', cold.iid, foeActive, PRICE[2] - 1)).toBe('souls'); // tier 2: 2
     // A spell that takes no target ignores a hero named; equipment has no spell targets.
     const grit = giveCard(G, '0', 'grit');
     expect(spellTargetsOracle(G, '0', 'grit')).toBe('none');

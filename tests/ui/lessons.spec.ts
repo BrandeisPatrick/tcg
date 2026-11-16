@@ -3,7 +3,7 @@ import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
 import { attackBlocked, playBlocked, playCost, retreatCost, skillBlocked } from '@/engine/legality';
-import { LANE_INCOME } from '@/engine/constants';
+import { LANE_INCOME, PRICE } from '@/engine/constants';
 import { forecastAttack } from '@/engine/forecast';
 import { attackPower, heroRetreat, kitCharges, kitCost, wornItems } from '@/engine/query';
 import { itemCard } from '@/cards';
@@ -56,7 +56,7 @@ describe('the tutorial is staged so the taught move wins', () => {
     }
   });
 
-  it('Lesson 2: Extended Magazine is drawn as the turn opens, tier 1 for the turn\'s two souls; only once it is on Yamato is his swing at a Lash on 3 the kill', () => {
+  it('Lesson 2: Extended Magazine is drawn as the turn opens, tier 1 for one of the turn\'s two souls; only once it is on Yamato is his swing at a Lash on 3 the kill', () => {
     for (const line of ['skip', 'play'] as const) {
       const c = lesson('souls');
       expect(turn(c)).toEqual([2, ['extended_magazine']]); // Turn 2: there is an attack; the one card drawn
@@ -64,7 +64,7 @@ describe('the tutorial is staged so the taught move wins', () => {
       expect(state(c).G.players['0'].souls).toBe(LANE_INCOME);              // two souls…
       expect(state(c).G.players['0'].deck).toEqual([]);
       expect(itemCard('extended_magazine')!.tier).toBe(1);
-      expect(playCost(yamato, 'extended_magazine')).toBe(LANE_INCOME);      // …and the item costs both
+      expect(playCost(yamato, 'extended_magazine')).toBe(PRICE[1]);         // …and the item costs one (prices halved, 2026-11-16)
       expect(lash.hp).toBe(3);
       expect(attackPower(yamato, lash).total).toBe(2);
       if (line === 'play') {
@@ -72,7 +72,7 @@ describe('the tutorial is staged so the taught move wins', () => {
         moves(c).playCard(card.iid, yamato.iid);
         const me = state(c).G.players['0'];
         expect(wornItems(me.active!).map((it) => it.cardId)).toEqual(['extended_magazine']);
-        expect([me.hand, me.souls]).toEqual([[], 0]);                       // the turn's income, spent
+        expect([me.hand, me.souls]).toEqual([[], LANE_INCOME - PRICE[1]]);  // a soul of the turn's income left
         expect(attackPower(me.active!, lash).total).toBe(3);
       }
       expect(attackBlocked(state(c).G, '0')).toBeNull();
@@ -86,9 +86,9 @@ describe('the tutorial is staged so the taught move wins', () => {
       const c = lesson('level');
       expect(turn(c)).toEqual([2, ['cold_front']]); // Turn 2: there is an attack; the gift, in the hand
       const [kelvin, lash] = actives(c);
-      // Two souls brought in and the turn's two pay for Cold Front.
+      // Two souls brought in and the turn's two; Cold Front costs two since prices halved.
       expect(state(c).G.players['0'].souls).toBe(2 + LANE_INCOME);
-      expect(playCost(undefined, 'cold_front')).toBe(state(c).G.players['0'].souls);
+      expect(playCost(undefined, 'cold_front')).toBe(PRICE[2]);
       expect(lash.hp).toBe(3);
       expect(attackPower(kelvin, lash).total).toBe(1);
       if (spell) {
@@ -96,7 +96,7 @@ describe('the tutorial is staged so the taught move wins', () => {
         expect(playBlocked(state(c).G, '0', card.iid, lash.iid)).toBeNull();
         moves(c).playCard(card.iid, lash.iid);                              // two spirit damage to the rival Active
         const me = state(c).G.players['0'];
-        expect(me.souls).toBe(0);                                           // every soul went on the spell
+        expect(me.souls).toBe(2 + LANE_INCOME - PRICE[2]);                  // the spell's price went; the rest stays
         expect(me.hand).toEqual([]);
         expect(me.discard.map((x) => x.cardId)).toEqual(['cold_front']);    // played once, then discarded
         expect(wornItems(me.active!)).toEqual([]);                          // never worn

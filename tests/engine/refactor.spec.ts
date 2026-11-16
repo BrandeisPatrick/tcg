@@ -38,12 +38,14 @@ describe('Rusted Barrel applies Weaken (reduces enemy ATK)', () => {
     expect(w?.duration).toBe(2);
   });
 
-  it('costs 1 soul, a price of its own under tier 1\'s 2 — in the hand, on the card and in net worth', async () => {
+  it('costs 1 soul, its tier\'s price since prices halved (it printed its own 1 under tier 1\'s 2 before) — in the hand, on the card and in net worth', async () => {
     const { itemPrice } = await import('@/engine/query');
     const { playCost } = await import('@/engine/legality');
     const { PRICE } = await import('@/engine/constants');
     const { itemCard } = await import('@/cards');
-    expect(itemCard('rusted_barrel')).toMatchObject({ tier: 1, price: 1, text: 'Apply Bullet Power −1 on enemy Active for 2 turns.' });
+    expect(itemCard('rusted_barrel')).toMatchObject({ tier: 1, text: 'Apply Bullet Power −1 on enemy Active for 2 turns.' });
+    expect(itemCard('rusted_barrel')!.price).toBeUndefined();
+    expect(PRICE[1]).toBe(1);
     expect(itemPrice('rusted_barrel')).toBe(1);
     expect(playCost(undefined, 'rusted_barrel')).toBe(1);
     // Every other tier-1 card still lists at the tier's price.
