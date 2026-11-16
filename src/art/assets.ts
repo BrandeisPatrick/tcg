@@ -17,6 +17,18 @@ export const SPELL_IMG_BASE = `${BASE}spells/`;
  *  without its `hero_` prefix (`hero_mo_krill` → `mo_krill.webp`). */
 export const ULT_IMG_BASE = `${BASE}ult/`;
 
+/** The heroes' skill icons (public/skill): the game's own icon of the Deadlock
+ *  ability each hero's one skill or passive is named for (Willpower, Fixation,
+ *  Grasping Hands…), the deadlock-api's ability image, named as the ultimates'
+ *  are (`hero_mo_krill` → `mo_krill.webp`). */
+export const SKILL_IMG_BASE = `${BASE}skill/`;
+
+/** The icon of the hero `heroId`'s own skill or passive (Patrick, 2026-11-16:
+ *  the in-game icon, not a generic sword, flame or shield). */
+export function skillIconSrc(heroId: string): string {
+  return `${SKILL_IMG_BASE}${heroId.replace(/^hero_/, '')}.webp`;
+}
+
 /** The ultimate icon of the hero `heroId` (the button printed on its card). */
 export function ultIconSrc(heroId: string): string {
   return `${ULT_IMG_BASE}${heroId.replace(/^hero_/, '')}.webp`;

@@ -31,7 +31,7 @@ import {
 } from '@/engine/query';
 import { LEVEL_THRESHOLDS, MAX_LEVEL, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
-import { ultIconSrc } from '@/art/assets';
+import { skillIconSrc, ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
 import { SpikeMark } from '../board/SpikeMark';
 import { kitTag, skillPace, ultPace } from '../board/heroActions';
@@ -43,7 +43,7 @@ import { poster, scrimStyle, printEdge, shopInk } from '../poster';
 import {
   scale as T, Souls, HpSegments, hpNumberStyle, ultimateGlyph, panelStyle, plateStyle, bandStyle, chargedGlow,
 } from '../hud';
-import { SwordIcon, SpiritIcon, ShieldIcon } from '../card/Icons';
+import { SwordIcon } from '../card/Icons';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
 import { RuleText, type Scale } from '../card/RuleText';
@@ -88,6 +88,8 @@ const TILE = 30;
 const TILE_GAP = 5;
 /** An action row's picture tile. */
 const ART = 44;
+/** A passive line's icon tile. */
+const PASSIVE_ART = 26;
 
 /** Your Active's attack, offered on its sheet: a swing at the rival Active for
  *  its bullet damage. Free and one-way, one a turn — and it ends the turn's
@@ -200,11 +202,6 @@ function abilityKind(rule: string): Kind {
   if (!/damage/.test(t) && /\b(heal|heals|shield|restore|restores)\b/.test(t)) return 'vitality';
   return 'spirit';
 }
-const KIND_ICON: Record<Kind, (size: number, color: string) => ReactNode> = {
-  weapon: (size, color) => <SwordIcon size={size} color={color} />,
-  spirit: (size, color) => <SpiritIcon size={size} color={color} />,
-  vitality: (size, color) => <ShieldIcon size={size} color={color} />,
-};
 
 export function HeroDetailSheet({
   card, isMine, skills: skillOffers, onUseSkill, attack,
@@ -276,7 +273,8 @@ export function HeroDetailSheet({
         <ActionRow
           ink={shopInk(kind).ink} mode={mode} calm={calm}
           name={ability.name}
-          art={KIND_ICON[kind](20, poster.cream)}
+          // The skill's own Deadlock icon; its ring keeps the kind's colour.
+          art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={shortLine(ability.text, scale, lineMax)}
           right={pace(ability.id)}
           reason={reason}
@@ -564,11 +562,17 @@ export function HeroDetailSheet({
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span aria-hidden style={{ width: 6, height: 6, transform: 'rotate(45deg)', background: poster.inkDim, flexShrink: 0 }} />
+                  {/* The passive's own Deadlock icon, on the ink of the action rows' tiles. */}
+                  <span aria-hidden style={{
+                    width: PASSIVE_ART, height: PASSIVE_ART, borderRadius: 5, background: poster.ink, flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: PASSIVE_ART - 6, height: PASSIVE_ART - 6, objectFit: 'contain' }} />
+                  </span>
                   <span style={{ ...NAME, fontSize: T.body, color: poster.inkSoft, flex: 1 }}>{ability.name}</span>
                   <span aria-hidden style={{ ...CAPTION, fontSize: T.body }}>{open ? '−' : '+'}</span>
                 </span>
-                {open && <span style={{ ...CAPTION, paddingLeft: 14 }}>{sentence(plainRule(ability.text, scale))}</span>}
+                {open && <span style={{ ...CAPTION, paddingLeft: PASSIVE_ART + 8 }}>{sentence(plainRule(ability.text, scale))}</span>}
               </button>
             );
           })}
