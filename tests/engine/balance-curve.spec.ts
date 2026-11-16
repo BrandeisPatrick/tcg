@@ -48,17 +48,17 @@ describe('skills scale with Spirit into the late game', () => {
     const skill = getAbility('skill_lady_geist')!;
 
     const before1 = dummy.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: caster });
-    const lv1Dmg = before1 - dummy.hp; // {sp:1}, Spirit 0
+    skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
+    const lv1Dmg = before1 - dummy.hp; // {sp:3}, Spirit 0
 
     grantExp(G, caster, 21); // → Lv4, +6 Spirit (5 + 7 + 9)
     const before4 = dummy.hp;
-    skill.run(G, { movingPlayer: '0' }, { source: caster });
-    const lv4Dmg = before4 - dummy.hp; // 1 + 6
+    skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
+    const lv4Dmg = before4 - dummy.hp; // 3 + 2 × 6: a skill counts Spirit twice
 
-    expect(lv1Dmg).toBe(1);
+    expect(lv1Dmg).toBe(3);
     expect(lv4Dmg).toBeGreaterThan(lv1Dmg);
-    expect(lv4Dmg).toBe(7);
+    expect(lv4Dmg).toBe(15);
   });
 });
 

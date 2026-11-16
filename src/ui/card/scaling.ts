@@ -43,6 +43,10 @@ export interface Scale {
    *  an ultimate, a hero card nobody has put in play. Absent, a known figure
    *  is added in and the live total is what prints. */
   printed?: boolean;
+  /** How many times the number counts the Spirit Power: 2 in a hero's own
+   *  skill or passive (SKILL_SPIRIT_RATE, 2026-11-16), 1 (the default)
+   *  everywhere else. Bullet Power always counts once. */
+  rate?: number;
 }
 
 /** The numbers a mark can name and how each is drawn. */
@@ -90,11 +94,16 @@ function statOf(n: NumberSpec, scale?: Scale): number | undefined {
   return n.kind === 'sp' ? scale?.spirit : scale?.bullet;
 }
 
-/** The live total — base plus the stat (halved, rounded down, for `/2`) — when
- *  the stat is known; otherwise undefined. */
+/** How many times this number counts its stat: a skill's Spirit twice. */
+function rateOf(n: NumberSpec, scale?: Scale): number {
+  return n.kind === 'sp' ? scale?.rate ?? 1 : 1;
+}
+
+/** The live total — base plus the stat (counted `rate` times; halved, rounded
+ *  down, for `/2`) — when the stat is known; otherwise undefined. */
 export function liveTotal(n: NumberSpec, scale?: Scale): number | undefined {
   const stat = statOf(n, scale);
-  return stat === undefined ? undefined : n.base + Math.floor(Math.max(0, stat) / n.per);
+  return stat === undefined ? undefined : n.base + Math.floor(Math.max(0, stat) * rateOf(n, scale) / n.per);
 }
 
 /** What the number prints as: the live total, or the card's own base number
@@ -134,9 +143,11 @@ export function explainNumber(n: NumberSpec, scale?: Scale): NumberExplanation {
   const { name, ink, blurb } = KINDS[n.kind];
   const stat = statOf(n, scale);
   const owner = scale?.who ? `${possessive(scale.who)} ` : '';
-  const power = n.per === 1 ? `${owner}${name}`
-    : n.per === 2 ? `half of ${owner}${name}`
-    : `${owner}${name} divided by ${n.per}`;
+  const rate = rateOf(n, scale);
+  const times = rate === 1 ? '' : rate === 2 ? 'twice ' : `${rate} × `;
+  const power = n.per === 1 ? `${times}${owner}${name}`
+    : n.per === 2 ? `half of ${times}${owner}${name}`
+    : `${times}${owner}${name} divided by ${n.per}`;
   const rounding = n.per === 1 ? '' : ', rounded down';
   let lead: string;
   if (scale?.printed || stat === undefined) {
@@ -146,9 +157,10 @@ export function explainNumber(n: NumberSpec, scale?: Scale): NumberExplanation {
     const total = liveTotal(n, scale)!;
     lead = isBareStat(n)
       ? `${owner}${name} ${stat}`
-      : n.per === 1
+      : n.per === 1 && rate === 1
         ? `${n.base} + ${owner}${name} ${stat} = ${total}`
         : `${n.base} + ${power} ${stat}${rounding} = ${total}`;
   }
-  return { title: name, accent: ink, lead, lines: [blurb] };
+  const lines = rate === 2 ? [blurb, 'A skill or passive counts Spirit Power twice.'] : [blurb];
+  return { title: name, accent: ink, lead, lines };
 }

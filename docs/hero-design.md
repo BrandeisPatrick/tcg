@@ -38,7 +38,7 @@ after 2 turns, keeping its level (section 7).
 | HP | 4 + tank score at Level 1, adjusted by the curve. |
 | Attack | 1 at Level 1. It is 2 when the hero's damage is mainly bullet or melee and its damage score is 2 or more. Never above 2 at Level 1. |
 | Curve | **Early:** +1 point at Level 1 (on HP or Attack) and 2 growth points a level. **Mid:** no extra point and 3 growth points a level. **Late:** −1 point at Level 1 (never below Attack 1 or HP 4) and 4 growth points a level. All three are even at Level 2. |
-| Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. |
+| Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. Since 2026-11-16 a hero's own skill or passive counts its Spirit twice (`{sp:N}` there is N + 2 × Spirit), so a point put into Spirit pays about what a point put into Attack does ([balance-model.md](balance-model.md) §10). |
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
 | Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Three skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, and since 2026-11-16 Vindicta's Assassinate, which waits 5; Lightning Ball was one until Seven's skill became Static Charge, 2026-11-15, and Kinetic Pulse until Dynamo's became Rejuvenating Aurora, 2026-11-16): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
@@ -230,12 +230,13 @@ HP 6 · Attack 1 · Retreat 2 · per level +3 HP +1 Spirit
 
 ### Bruiser (6)
 
-**Lady Geist** · in the game today — peaks early, one or many; mix tank 2 · damage 3 · control 0 · support 0  
+**Lady Geist** · in the game today — peaks early, one target; mix tank 2 · damage 3 · control 0 · support 0  
 HP 7 · Attack 1 · Retreat 2 · per level +2 Spirit
-- Skill, waits 3 — **Essence Bomb**: Lady Geist pays 1 HP: deal 1✦ spirit damage to every enemy.
+- Skill, waits 3 — **Essence Bomb**: Lady Geist pays 1 HP: deal 3✦ spirit damage to the enemy Active.
 - Ultimate, medium, waits 6 — **Soul Exchange**: Swap HP with the enemy Active. Deal 3✦ spirit damage to it.
 - Why: Lady Geist bleeds herself to bomb the whole enemy side, and the lower she drops, the harder Soul Exchange flips the duel.
 - Changed from today: HP 4 to 7 (tank 2, early +1 on HP since she is a spirit hero); the single-target drain becomes Essence Bomb so her reach is both. Soul Exchange adds 3✦ so it always does something and can finish a kill.
+- **Changed 2026-11-16 (Patrick): "Lady Geist's bomb should just be a single target: she just bombed the Active."** Deadlock's Essence Bomb is a one-target nuke she pays health for. 3✦ less the 1 HP (0.5 at the heal rate) is 2.5, the middle of a wait-3 skill's 2–3; the area bomb it replaces was 1✦ on every enemy, 2.5 − 0.5 = 2.0. Her reach becomes one. With a skill's Spirit counted twice (balance-model.md §10) it is 7 at Level 2 and 11 at Level 3.
 
 **Shiv** · in the game today — peaks late, one target; mix tank 2 · damage 3 · control 0 · support 0  
 HP 6 · Attack 1 · Retreat 1 · per level +2 Attack +1 HP +1 Spirit
@@ -246,10 +247,11 @@ HP 6 · Attack 1 · Retreat 1 · per level +2 Attack +1 HP +1 Spirit
 
 **Warden** · in the game today — peaks early, one target; mix tank 2 · damage 2 · control 1 · support 0  
 HP 7 · Attack 2 · Retreat 1 · per level +1 Attack +1 HP
-- Skill, waits 3 — **Willpower**: Shield 3 on Warden, and Swift.
+- Skill, waits 3 — **Willpower**: Shield 2 on Warden, and Swift.
 - Ultimate, medium, waits 6 — **Last Stand**: Deal 6✦ spirit damage to the enemy Active. Warden heals that much.
 - Why: Warden is half tank, half gun: he shields up, outshoots the enemy front and drains it to heal through a long duel.
 - Changed from today: HP 5 to 7 (tank 2, and the early +1 goes on HP since Attack caps at 2). Willpower gains Swift for its speed burst. Last Stand is one drain of 6✦ from the enemy Active instead of a 3-turn channel on everyone.
+- **Changed 2026-11-16 (Patrick): "Warden is pretty strong."** Willpower's Shield goes from 3 to 2. Since the second swing (balance-model.md §9) Swift is a free Retreat, worth its soul and its swap (1.5), so Shield 3 (0.6 × 3 = 1.8) put the skill at 3.3, over a wait-3 skill's 2–3; Shield 2 (1.2) brings it to 2.7. HP 7 and Attack 2 stay: the rules set them (tank 2, early +1 on HP since Attack caps at 2).
 
 **Baba** — peaks mid, one or many; mix tank 2 · damage 2 · control 2 · support 0  
 HP 6 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit

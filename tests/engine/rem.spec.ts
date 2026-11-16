@@ -182,14 +182,14 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
     expect(lit).toEqual([me.active!, vindicta!]);
   });
 
-  it('heals its bearer 4 + Spirit (no higher than its max HP)', () => {
+  it('heals its bearer 4 + twice her Spirit (no higher than its max HP)', () => {
     const { G, me, rem } = withRem(1);
     rem.spiritMod = 3;
     const haze = me.active!;
     haze.hpMax = 20;
     haze.hp = 5;
     tagAlong(G, rem, haze);
-    expect(haze.hp).toBe(5 + 4 + 3);
+    expect(haze.hp).toBe(5 + 4 + 2 * 3); // a skill counts Spirit twice
     expect(haze.hpMax).toBe(20);
     // On a hero 2 short of its max it heals those 2.
     const H = withRem(1);

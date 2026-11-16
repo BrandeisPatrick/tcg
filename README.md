@@ -236,7 +236,8 @@ kill (2). Level 2 takes 5 exp, level 3 7 more and level 4, the cap, 9 more.
 Each level adds the hero's own growth: its curve's points (2 a level early, 3
 mid, 4 late) split between Bullet Power, HP and Spirit Power — guns into
 Attack, casters into Spirit, tanks into HP. All three curves are even at
-Level 2.
+Level 2. A hero's own skill or passive counts its Spirit Power twice (a
+purple 1 is 1 + 2 × Spirit there); an ultimate or a spell counts it once.
 
 ### The map
 

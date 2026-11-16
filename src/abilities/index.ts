@@ -8,7 +8,7 @@ import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
-import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP, FLIGHT_TURNS } from '@/engine/constants';
+import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -110,7 +110,8 @@ export interface AbilityDef {
    *  payment comes straight off its HP before the skill runs — through no Shield
    *  or resist, setting off no trigger, and never enough to kill. */
   hpCost?: number;
-  /** If true, hero's spiritMod adds to the skill's damage/heal/effect magnitude as spirit-type damage. */
+  /** If true, the hero's Spirit adds to the skill's damage/heal/effect magnitude,
+   *  counted SKILL_SPIRIT_RATE times (`spi`). */
   scalesSpirit?: boolean;
   /** A draw card's draw: the cards it draws and the cards it then makes its
    *  player discard from the hand (the Cooldown family). Its `run` does it;
@@ -187,10 +188,12 @@ export interface AbilityDef {
 export type HeroAbilityDef = AbilityDef & { name: string; text: string };
 
 
-// Helper: total spirit-stat bonus from the source (equipment + Spirit Power buff).
-// Used by HERO skills where the source IS the casting hero.
-function spi(source?: CardInstance): number {
-  return source ? effectiveSpirit(source) : 0;
+// Helper: what a HERO's own skill or passive adds for Spirit, where the source
+// IS the hero: its Spirit Power (levels, items, Spirit Power buffs) counted
+// SKILL_SPIRIT_RATE times (2026-11-16, docs/balance-model.md §10). Ultimates
+// (ultSpi) and spells (activeSpi) count it once.
+export function spi(source?: CardInstance): number {
+  return source ? SKILL_SPIRIT_RATE * effectiveSpirit(source) : 0;
 }
 
 // Helper: spirit scaling sourced from the player's ACTIVE hero. Used by active
@@ -2063,7 +2066,7 @@ const eff_prism_blast: AbilityDef = {
 // A hero has one skill or one passive. A skill costs no souls: it waits
 // SKILL_COOLDOWN after a use (4 for the ones that hit every enemy or deny a
 // turn), and a charged one holds two uses; the hero uses one ability a turn. A number marked
-// {sp:N} adds the hero's Spirit: spi(source) here, the hero using it.
+// {sp:N} adds the hero's Spirit twice (2026-11-16): spi(source) here, the hero using it.
 
 // The enemy Active, if it stands, read BEFORE a skill's damage: what the text
 // puts on "the enemy Active" goes on the hero that was there, not on one an AI
@@ -2100,16 +2103,18 @@ const skill_viscous: HeroAbilityDef = {
   },
 };
 
-// Lady Geist — Essence Bomb: she bleeds herself to bomb the whole enemy side.
+// Lady Geist — Essence Bomb: she bleeds herself to bomb the enemy Active
+// (Patrick, 2026-11-16: "she just bombed the active"), Deadlock's one-target
+// nuke. 3 spirit damage less the 1 HP (0.5) is 2.5, the middle of a wait-3
+// skill's 2–3 (hero-design.md §4).
 const skill_lady_geist: HeroAbilityDef = {
-  id: 'skill_lady_geist', trigger: 'activate', target: 'noTarget', hpCost: 1,
+  id: 'skill_lady_geist', trigger: 'activate', target: 'enemyActive', hpCost: 1,
   name: 'Essence Bomb',
-  text: 'Lady Geist pays 1 HP: deal {sp:1} spirit damage to every enemy.',
-  base: 1,
+  text: 'Lady Geist pays 1 HP: deal {sp:3} spirit damage to the enemy Active.',
+  base: 3,
   scalesSpirit: true,
-  run: (G, ctx, { source }) => {
-    const dmg = 1 + spi(source);
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit'); });
+  run: (G, _ctx, { source, target }) => {
+    if (target) damageUnit(G, target, 3 + spi(source), 'spirit', 'Essence Bomb');
   },
 };
 
@@ -2130,15 +2135,19 @@ const skill_shiv: HeroAbilityDef = {
 
 // Warden — Willpower: a barrier and a burst of speed. Swift is this turn's: a
 // Retreat after it is free, and what is left is swept when the turn ends.
+// Shield 2 since 2026-11-16 (Patrick: "Warden is pretty strong"): since the
+// second swing, Swift is a free Retreat, worth its soul and its swap (1.5), so
+// Shield 3 (1.8) put Willpower at 3.3, over a wait-3 skill's 2–3; Shield 2
+// (1.2) brings it to 2.7.
 const skill_warden: HeroAbilityDef = {
   id: 'skill_warden', trigger: 'activate', target: 'self',
   name: 'Willpower',
-  text: 'Shield 3 on Warden, and Swift.',
-  base: 3,
+  text: 'Shield 2 on Warden, and Swift.',
+  base: 2,
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
     if (!t) return;
-    addStatus(G, t, 'shield', 3, 999);
+    addStatus(G, t, 'shield', 2, 999);
     addStatus(G, t, 'swift', 1, 1);
   },
 };
@@ -2393,7 +2402,7 @@ const passive_mirage_djinns_mark: HeroAbilityDef = {
     if (mark && mark.value >= DJINN_CAP) {
       target.statuses = target.statuses.filter((s) => s !== mark);
       pushLog(G, `${cardName(target.cardId)} — Djinn's Mark detonates.`);
-      damageUnit(G, target, 4 + effectiveSpirit(source), 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value, source, cast: 'proc' });
+      damageUnit(G, target, 4 + spi(source), 'spirit', "Djinn's Mark", { tag: 'djinns_mark', stacks: mark.value, source, cast: 'proc' });
     }
   },
 };

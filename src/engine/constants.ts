@@ -122,6 +122,15 @@ export const COUNTERSPELL_HEAL = 4;
  *  one at a time. A hero's Retreat is its card's `retreat`, in souls. */
 export const SKILL_COOLDOWN = 3;
 
+/** How many times a hero's own skill or passive counts its Spirit Power
+ *  (docs/balance-model.md §10, 2026-11-16). A point of Attack pays on every
+ *  swing; a point of Spirit pays only when the skill goes off, every 3 or 4
+ *  turns since skills wait (§8). Counted twice there, a level's Spirit is
+ *  worth about what a level's Attack is. Ultimates and spells count it once:
+ *  their pace did not change. A `{sp:N}` in a skill or passive prints
+ *  N + 2 × Spirit. */
+export const SKILL_SPIRIT_RATE = 2;
+
 /** The level at which a hero's ultimate unlocks. It is a button printed on the
  *  hero card, not a card: used like a skill (it is the hero's one ability that
  *  turn), for no souls, one ultimate a turn for its side. */

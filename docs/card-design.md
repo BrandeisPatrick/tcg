@@ -838,6 +838,17 @@ engine's discard step stays for a card that may want it.
 slot, and keep Compress Cooldown where at least two of the squad's skills are
 shortened by it (docs/deck-plan.md).
 
+### Changed 2026-11-16: a skill counts Spirit twice
+
+The rates above count a Spirit item's bearer landing 0.7 spirit hits a turn,
+from when a skill cost souls and could go off every turn or two. Since skills
+wait 3 or 4 turns a hero's skill lands about 0.3, so a +1 Spirit Power paid
+half what a +1 Bullet Power did. A hero's own skill or passive now counts its
+Spirit twice ([balance-model.md](./balance-model.md) §10), which puts a point
+of Spirit back near the 0.7 the stat items are priced at. No item's price or
+text changes; ultimates and spells (`{sp:}` on a spell adds your Active's
+Spirit) count it once.
+
 ## 4. Signature items and default builds
 
 Every hero has two **signature items** (`HeroCard.signature`), chosen to fit its
