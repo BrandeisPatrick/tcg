@@ -15,7 +15,7 @@ import type { HeroCard } from '@/engine/types';
  *    mobile heroes, 1 for most, 2 for slow heavy ones.
  *  - The kit is exactly one skill (`skills`: no souls, a wait of 3 or 4
  *    turns, four of them with 2 charges) or one passive (`passives`), plus an
- *    ultimate (`ult`): a button printed on the card, from Level 2, for no
+ *    ultimate (`ult`): a button printed on the card, from Level 3, for no
  *    souls, one a turn for a side, waiting 4, 6 or 8 turns by size.
  *    Victor's and Silver's are charged (their card's `charged`: ready once
  *    he has taken 10 damage or she has dealt 8), and Victor's is an optional

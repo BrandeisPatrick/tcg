@@ -131,10 +131,11 @@ export const SKILL_COOLDOWN = 3;
  *  N + 2 × Spirit. */
 export const SKILL_SPIRIT_RATE = 2;
 
-/** The level at which a hero's ultimate unlocks. It is a button printed on the
- *  hero card, not a card: used like a skill (it is the hero's one ability that
- *  turn), for no souls, one ultimate a turn for its side. */
-export const ULT_UNLOCK_LEVEL = 2;
+/** The level at which a hero's ultimate unlocks: 3 since 2026-11-16 (Patrick:
+ *  "ultimate should be level 3 unlock"; it was 2). It is a button printed on
+ *  the hero card, not a card: used like a skill (it is the hero's one ability
+ *  that turn), for no souls, one ultimate a turn for its side. */
+export const ULT_UNLOCK_LEVEL = 3;
 
 /** Own turns an ultimate waits, by its size (docs/hero-design.md §2 and §4: a
  *  small one is worth 4–6 points, a medium one 8–12, a large one 12–18): after

@@ -13,6 +13,7 @@ import { skillBlockReason } from '../board/heroActions';
 import { AbilityTile } from '../overlays/AbilityDial';
 import { dialLabel, type DialModel } from '../overlays/abilityDialModel';
 import { allocatorFor, newCounters } from '@/engine/ids';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { buildPlayer, freshMap } from '@/engine/actions/setup';
 import { HeroDetailSheet, type SkillOffer } from '../overlays/HeroDetailSheet';
 import { PromotionOverlay } from '../overlays/PromotionOverlay';
@@ -26,7 +27,7 @@ const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
   { id: 'skilled',  label: 'Skill used',              hint: 'Both ability rows go dim and read “Used”; the Attack is still there.' },
   { id: 'attacked', label: 'Attacked',                hint: 'The Attack reads “Used”; the turn goes on, so the abilities stay lit.' },
   { id: 'turn1',    label: 'Turn 1',                  hint: 'The skill is there; the Attack row is dim with “No attacks on Turn 1”.' },
-  { id: 'locked',   label: 'Ultimate locked',         hint: 'Below Level 2 the Ultimate row is dim and reads “Level 2” where its price would be.' },
+  { id: 'locked',   label: 'Ultimate locked',         hint: 'Below Level 3 the Ultimate row is dim and reads “Level 3” where its price would be.' },
   { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the passive is printed as a skill is — its icon, its rule — but is no button and has no wait.' },
   { id: 'bench',    label: 'A bench hero',            hint: 'Its skill can be used from the bench. No Attack — only the Active swings.' },
   { id: 'blocked',  label: 'Not your turn',           hint: 'Every row dim, each with the one reason in place of its price.' },
@@ -85,8 +86,8 @@ export function OverlaysTab() {
     const eachSkill = (offer: SkillOffer) => {
       props.skills = Object.fromEntries([...shown.skills, ...(shown.ult ? [shown.ult] : [])].map((id) => [id, offer]));
     };
-    // The ultimate is unlocked (Level 2) unless the state says otherwise.
-    card = { ...card, level: 2 };
+    // The ultimate is unlocked (Level 3) unless the state says otherwise.
+    card = { ...card, level: ULT_UNLOCK_LEVEL };
     eachSkill({ canUse: true });
     if (s === 'skilled') {
       card = { ...card, skillUsedThisTurn: true, lastSkillUsed: shown.skills[0] ?? shown.ult };
@@ -97,7 +98,7 @@ export function OverlaysTab() {
     }
     if (s === 'locked') {
       card = { ...card, level: 1 };
-      if (shown.ult) props.skills = { ...props.skills, [shown.ult]: { canUse: false, blockedReason: 'Unlocks at Level 2' } };
+      if (shown.ult) props.skills = { ...props.skills, [shown.ult]: { canUse: false, blockedReason: `Unlocks at Level ${ULT_UNLOCK_LEVEL}` } };
     }
     if (s === 'turn1') attackBlocked('No attacks on Turn 1');
     if (s === 'bench') { card = { ...card, zone: 'bench', slot: 1 }; props.attack = undefined; }

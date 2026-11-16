@@ -8,6 +8,7 @@ import { MAX_ITEMS } from '@/engine/constants';
 import { CARDS_BY_ID } from '@/cards';
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { freshReadyGame, configureReadyMatch, giveCard, makeAttack, readyClient, passTurn, playNew } from './_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 // Client-based tests boot straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -215,9 +216,9 @@ describe('rule: hero respawn after KO', () => {
 });
 
 // ============================================================================
-// The ultimate: a kit ability, unlocked at Level 2
+// The ultimate: a kit ability, unlocked at Level 3 (2 until 2026-11-16)
 // ============================================================================
-describe('rule: a hero unlocks its ultimate at Level 2', () => {
+describe('rule: a hero unlocks its ultimate at Level 3', () => {
   // Drive the engine's turn.onBegin directly: it's the same handler the
   // client invokes.
   function runOnBegin(G: GameState, turn: number, pid: PlayerID) {
@@ -227,7 +228,7 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
 
   it('no ultimate is ever a card: it is a kit ability, and no card of one is in the hand or on the board, however late the turn or high the level', () => {
     const G = freshG();
-    for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
+    for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = ULT_UNLOCK_LEVEL;
     for (let t = 2; t < 12; t += 2) {
       runOnBegin(G, t, '0');
       for (const h of heroesOf(G.players['0'])) expect(kitAbilityIds(h), h.cardId).toContain(heroData(h)!.ult);
@@ -236,9 +237,9 @@ describe('rule: a hero unlocks its ultimate at Level 2', () => {
     }
   });
 
-  it('every hero at Level 2 may use its ultimate through useSkill, for no souls — one a turn for its side', () => {
+  it('every hero at Level 3 may use its ultimate through useSkill, for no souls — one a turn for its side', () => {
     const G = freshG();
-    for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = 2;
+    for (const h of [G.players['0'].active, ...G.players['0'].bench]) if (h) h.level = ULT_UNLOCK_LEVEL;
     // Nobody on the other side falls (a kill would pay a bounty).
     for (const h of [G.players['1'].active, ...G.players['1'].bench]) if (h) h.hp = h.hpMax = 50;
     // P0's roster: Haze, Vindicta, Lash, Paige → their ultimates (Vindicta's needs a target).

@@ -9,7 +9,7 @@
  * under 1; two Cooldown items worn do not add up. Each evolves the
  * one before, as in Deadlock. (The draw card is Golden Goose Egg now: hand.spec.)
  *
- * Board (freshReadyGame): P0's Active is made a Level 2 Viscous — The Cube is
+ * Board (freshReadyGame): P0's Active is made a Level 3 Viscous (his ultimate unlocked) — The Cube is
  * a skill that waits 4 turns, and his ultimate (Goo Ball, medium) waits 6.
  */
 import { describe, it, expect } from 'vitest';
@@ -22,13 +22,14 @@ import { cooldownCut, itemPrice, skillWait, ultWait } from '@/engine/query';
 import { playCost } from '@/engine/legality';
 import { PRICE, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame, giveItem, makeHero } from './_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
-/** P0's Active made a Level 2 Viscous. */
+/** P0's Active made a Level 3 Viscous. */
 function viscous() {
   const G = freshReadyGame();
   G.players['0'].souls = 20;
   const hero = G.players['0'].active = makeHero('hero_viscous', '0', 'active', 0);
-  hero.level = 2;
+  hero.level = ULT_UNLOCK_LEVEL;
   return { G, hero };
 }
 

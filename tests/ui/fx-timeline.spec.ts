@@ -10,6 +10,7 @@ import { registerAbilities } from '@/engine/registry';
 import { addStatus, tickStartOfTurn } from '@/engine/statusOps';
 import type { CardInstance, FxEvent, GameState, HeroCard, HitFx, ShieldFx, SwingFx } from '@/engine/types';
 import { freshReadyGame, makeHero } from '../engine/_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 /** The FX scheduler is pure — pin the beat structure HeroSlot and FxLayer
  *  build on: a cast pushes impacts out to the bolt's arrival, stamps queue
@@ -206,7 +207,7 @@ const isAttackEvent = (e: FxEvent) => e.kind === 'swing' || ((e.kind === 'hit' |
 function table() {
   const G = freshReadyGame();
   const lash = makeHero(VOLLEY_HERO, '0', 'active', 0);
-  lash.level = 2;
+  lash.level = ULT_UNLOCK_LEVEL;
   G.players['0'].active = lash;
   const foe = G.players['1'];
   const foes = [foe.active!, ...foe.bench] as CardInstance[];

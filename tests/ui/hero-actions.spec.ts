@@ -8,6 +8,7 @@ import { grantExtraAttacks } from '@/engine/statusOps';
 import { kitCost } from '@/engine/query';
 import { attackBlockReason, attackLine, readyHeroes } from '@/ui/board/heroActions';
 import { freshReadyGame } from '../engine/_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 // The board, the hero sheet and the tutorial read what a hero can still do
 // this turn from `heroActions`, never from their own copy of the rules. These
@@ -27,7 +28,7 @@ describe('skillBlocked mirrors the engine', () => {
     ['ready', () => {}],
     ['used its skill', (G) => { LASH(G).skillUsedThisTurn = true; }],
     ['the turn\'s attack made', (G) => { G.attackUsed = true; }],
-    ['her ultimate used', (G) => { LASH(G).level = 2; LASH(G).skillUsedThisTurn = true; LASH(G).lastSkillUsed = 'eff_ult_lash'; }],
+    ['her ultimate used', (G) => { LASH(G).level = ULT_UNLOCK_LEVEL; LASH(G).skillUsedThisTurn = true; LASH(G).lastSkillUsed = 'eff_ult_lash'; }],
     ['on cooldown', (G) => { LASH(G).cooldowns = { skill_lash: 1 }; }],
     ['stunned', (G) => { addStatus(G, LASH(G), 'stun', 1, 1); }],
     ['silenced', (G) => { addStatus(G, LASH(G), 'silenced', 1, 2); }],
@@ -111,7 +112,7 @@ describe('the ready glint', () => {
     expect([...readyHeroes(G, '0', true)]).toEqual([me.active!.iid]);
     expect(readyHeroes(G, '0', false).size).toBe(0);
 
-    me.active!.level = 2; // Haze's ultimate unlocks: Bullet Dance takes no souls, so she has an ability to use too
+    me.active!.level = ULT_UNLOCK_LEVEL; // Haze's ultimate unlocks: Bullet Dance takes no souls, so she has an ability to use too
     expect(readyHeroes(G, '0', false).has(me.active!.iid)).toBe(true);
     me.active!.cooldowns = { eff_ult_haze: 3 }; // …but not while it waits
     expect(readyHeroes(G, '0', false).has(me.active!.iid)).toBe(false);

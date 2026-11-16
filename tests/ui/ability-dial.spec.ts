@@ -9,13 +9,14 @@ import {
 } from '@/ui/overlays/abilityDialModel';
 import { skillBlockReason } from '@/ui/board/heroActions';
 import { mockHeroInstance } from '@/ui/gallery/mock';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 // The hero sheet's ability dial (AbilityDial.tsx) draws what this model says.
 // These pin the model to the engine's own reading of a wait, a charge and a
 // charged ultimate, and the arithmetic of its marks.
 
 const hero = (id: string, over: Partial<CardInstance> = {}): CardInstance =>
-  ({ ...mockHeroInstance(HEROES.find((h) => h.id === id)!), level: 2, ...over });
+  ({ ...mockHeroInstance(HEROES.find((h) => h.id === id)!), level: ULT_UNLOCK_LEVEL, ...over });
 
 describe('abilityDial reads the hero as the engine does', () => {
   it('a skill: the turns left of its full wait, nothing when ready', () => {

@@ -30,6 +30,7 @@ import {
 } from './oracle';
 import { splitKnown, type Hit } from './hits';
 import { killBounty } from '@/engine/rounds';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 const ctx = (over: Partial<Ctx> = {}): Ctx => ({ currentPlayer: '0', turn: 2, numPlayers: 2, ...over }) as unknown as Ctx;
 const clean = (): GameState => freshReadyGame();
@@ -266,7 +267,7 @@ describe('the invariants fire on states built to break them', () => {
     giveCard(K, '0', 'titanic_magazine');
     giveCard(K, '1', 'cold_front');
     const back = giveCard(K, '0', 'hero_yamato');
-    back.level = 2;
+    back.level = ULT_UNLOCK_LEVEL;
     giveItem(K, back, 'extra_health');
     stackDeck(K, '0', ['grit', 'hero_mirage', 'cold_front']);
     stackDeck(K, '1', ['knockdown']);
@@ -624,14 +625,14 @@ describe('the transition rules fire', () => {
     expect(moveIds(oldWait, 'useSkill', [lash])).toContain('ability-cooldown'); // the wait it had when it cost souls
     const ult = pair((G) => { G.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_WAIT.large }; G.ultUsed = { '0': true }; });
     expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-locked'); // Lash is level 1
-    ult.before.G.players['0'].bench[1]!.level = 2;
+    ult.before.G.players['0'].bench[1]!.level = ULT_UNLOCK_LEVEL;
     const ok = moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash']);
     expect(ok).not.toContain('ult-locked');
     expect(ok).not.toContain('ability-cooldown');
     expect(ok).not.toContain('ult-per-turn');
     // The mark left unset, or an ultimate used when the side had used one this turn, is reported.
     const unmarked = pair((G) => { G.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_WAIT.large }; });
-    unmarked.before.G.players['0'].bench[1]!.level = 2;
+    unmarked.before.G.players['0'].bench[1]!.level = ULT_UNLOCK_LEVEL;
     expect(moveIds(unmarked, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-per-turn');
     ult.before.G.ultUsed = { '0': true };
     expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-per-turn');
@@ -639,7 +640,7 @@ describe('the transition rules fire', () => {
     // cuts it (the Cooldown items are draw spells, and no equipment has the hook).
     const G = clean();
     G.players['0'].souls = 5;
-    p0(G).lash.level = 2;
+    p0(G).lash.level = ULT_UNLOCK_LEVEL;
     giveItem(G, p0(G).lash, 'extra_health');
     const used = made(G, 'useSkill', [p0(G).lash.iid, undefined, 'eff_ult_lash']);
     expect(used.after.G.players['0'].bench[1]!.cooldowns?.eff_ult_lash).toBe(ULT_WAIT.large);

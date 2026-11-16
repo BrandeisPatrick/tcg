@@ -5,7 +5,7 @@
 > - **Souls & shop:** built as the market fixed before turn one, changed: each drafted hero's build goes on sale beside its signatures, a tier 5 at 24 souls joins the ladder and the slice, and the catalogue grew to 140 items ([card-design.md](./card-design.md) §3).
 > - **The turn:** built (free abilities, one attack a hero and the turn goes on after it (2026-11-16), Retreat 1, the pie rule, no first-turn attack, actives start on cooldown); cards are played from the hand in the shop or the Act, and the second mover's income bonus stays at 0.
 > - **The map:** built (Guardian · Walker · Patron, the Mid-Boss from round 4, the Rejuvenator, respawn by round), changed: every kill pushes, bench included, and a boss still tied on net worth goes to the last hit. Revive credits cannot be stolen.
-> - **Heroes:** in part. Free kits on cooldowns, the ultimate at level 2 and Haze's second swing at level 3 are built; the level-up choice, second skills and Lash's rewrite are deferred.
+> - **Heroes:** in part. Free kits on cooldowns, the ultimate at level 3 (level 2 until 2026-11-16) and Haze's second swing at level 3 are built; the level-up choice, second skills and Lash's rewrite are deferred.
 > - **Proof & order:** the 2,500-game seat-mirrored sim, both AI strengths, restricted play, the budget script and the difficulty dial are built. The pricing pass stopped early and its numbers were reverted, so numbers are set by reasoning and the gates wait for a testing round ([balance-model.md](./balance-model.md)).
 
 Written 2026-11-03 after a phone playtest. Companion to
@@ -26,7 +26,7 @@ against about forty games and corrects it in places; read its §3 before buildin
 - The Active duels; the bench casts. Each hero: one skill a turn for a soul, or
   the Active attacks. Retreat costs 2. Three items a hero.
 - Levels from standing in the lane (2 exp Active, 1 bench), +1 on equip, +2 on
-  a kill; each level +1 HP / BP / Spirit; the ultimate comes at level 2.
+  a kill; each level +1 HP / BP / Spirit; the ultimate comes at level 3 (level 2 until 2026-11-16).
 - A hero that dies **loses its items** to the discard and respawns in 3 turns.
   The patron (10) loses the dead hero's level. Patron at 0, or every hero down,
   is the loss.

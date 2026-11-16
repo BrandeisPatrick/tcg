@@ -152,7 +152,7 @@ const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
 /** A reason that says the souls are short ("Need 2 souls", "Not enough souls"). */
 const shortOfSouls = (reason?: string) => !!reason && /soul/i.test(reason) && /^(need|not enough)/i.test(reason);
 /** A reason in the fewest of its own words, so it fits the number's place:
- *  "Used", "Level 2", "Turn over". The whole reason stays the row's title. */
+ *  "Used", "Level 3", "Turn over". The whole reason stays the row's title. */
 const shortReason = (reason: string) =>
   /^(already used|used\b)/i.test(reason) ? 'Used'
     : /^The attack ended/i.test(reason) ? 'Turn over'
@@ -322,7 +322,7 @@ export function HeroDetailSheet({
     const mode = !mine && locked ? 'blocked' : modeOf(usable, used, offer?.blockedReason);
     const reason = mode === 'used' ? 'Used' : mine && mode === 'blocked' ? offer?.blockedReason : undefined;
     const ink = shopInk(abilityKind(ultFace.text ?? '')).ink;
-    // No dial while it is locked: the row says "Level 2", and that is the gate.
+    // No dial while it is locked: the row says "Level 3", and that is the gate.
     const dial = abilityDial(card, abilityId);
     rows.push({
       key: abilityId,
@@ -624,7 +624,7 @@ export function HeroDetailSheet({
  *
  *   ready    the row is the button, edged in its colour; a usable ultimate
  *            wears a double keyline (`chargedGlow`) and the ultimate mark
- *   used /   dimmed; the one reason ("Used", "Level 2", "Need 8 souls")
+ *   used /   dimmed; the one reason ("Used", "Level 3", "Need 8 souls")
  *   blocked  stands in the number's place (the attack's under its name),
  *            and the line goes
  *   quiet    the row as it reads (a rival's hero): not a button

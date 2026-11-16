@@ -83,8 +83,8 @@ in any seat.
   turns.
 - **Earn it in the lane:** the Active earns 2 exp at the end of its turn, a
   bench hero 1; +1 on equip, +2 on a kill blow (5 / 7 / 9 to level). A hero's
-  ultimate unlocks at Level 2 — the front-liner earns it first, a bench caster
-  late — so ults arrive one at a time.
+  ultimate unlocks at Level 3 (Level 2 until 2026-11-16, §11) — the
+  front-liner earns it first, a bench caster late — so ults arrive one at a time.
 - Base HP: squishy **4**, bruiser **6**, anchor tank **7**. Base BP: caster/support
   **1**, attacker/bruiser **2**, tank **1**.
 - Base skill damage **1–2**; heals/shields flat (Spirit scales **damage** only).
@@ -404,6 +404,41 @@ is a check on him too: every spirit skill aimed at him hits harder.
 - Supports' heals at Level 3 (Rejuvenating Aurora 13 each).
 - Whether Warden at Shield 2 still holds the lane too long early; if so, the
   next lever is his HP (tank 1: HP 6).
+
+## 11. The ultimate unlocks at Level 3 (2026-11-16)
+
+Patrick: "I think ultimate should be Level 3 unlock." It was Level 2
+(`ULT_UNLOCK_LEVEL`). Level 3 takes 12 exp (5 + 7); nothing else changed.
+
+**When a hero gets there.** The Active earns 2 exp a turn, a bench hero 1,
+and a hero 1 the first time it wears an item and 2 for a kill blow.
+
+| Hero | Level 2 (before) | Level 3 (now) |
+|---|---|---|
+| Lane hero, Active every turn | end of own turn 3 | end of own turn 6; turn 5 with two items worn |
+| Bench hero, never Active | turn 5 | turn 12, past a 9–10-turn match; turn 9–10 with two or three items |
+
+**What it does to the ultimates.** The opening wait (small 4, medium 6, large
+8, §8) was what held the lane hero back before; now the level holds it as long
+or longer:
+- **Small** (Naptime, Flight, Traveler, Borrowed Decree): first ready on turn
+  6 or 7, not 4; once or twice a match, not twice.
+- **Medium** (most): turn 6 or 7, as before for the lane hero.
+- **Large** (Bullet Dance, Death Slam, Storm Cloud, Singularity): turn 8, as
+  before.
+- **Charged** (Victor's revive, Silver's wolf) have no opening wait, so the
+  level is now their gate: Silver's 8 dealt comes by turn 3 or 4 and her wolf
+  waits for Level 3; Victor revives only from Level 3 (12 HP there).
+- **A bench hero's ultimate** mostly does not come unless the hero spends
+  turns in the lane or wears items: the second swing (§9) puts bench heroes in
+  the lane more often, and each turn ended there earns 2.
+
+So an ultimate is a late, earned moment for the hero that holds the lane, and
+the lane is where the exp is.
+
+**Left for testing** (only when Patrick asks by name): whether bench casters'
+ultimates come often enough (the knob is the bench's 1 exp a turn); whether
+small ultimates still need their opening wait of 4 now that Level 3 gates them.
 
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).

@@ -27,6 +27,7 @@ import { allocatorOf } from '@/engine/ids';
 import { makeInstance } from '@/engine/instances';
 import { SQUAD_SIZE, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame, giveCard, stackDeck } from './_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 function nextTurn(G: GameState, pid: PlayerID): PlayerID {
   const next: PlayerID = pid === '0' ? '1' : '0';
@@ -38,7 +39,7 @@ const act = (G: GameState, pid: PlayerID, a: Action) => expect(perform(G, pid, a
 const ids = (cards: readonly CardInstance[]) => cards.map((c) => c.cardId);
 
 /** P0's turn with Graves on its bench (slot 1, in Vindicta's place), slot 3 empty, every hero tough. */
-function withGraves(level: 1 | 2 = 1): { G: GameState; graves: CardInstance; foe: CardInstance } {
+function withGraves(level: 1 | 3 = 1): { G: GameState; graves: CardInstance; foe: CardInstance } {
   const G = freshReadyGame();
   const graves = makeInstance(allocatorOf(G), 'hero_graves', '0', 'bench', 1);
   graves.level = level;
@@ -274,7 +275,7 @@ describe('Graves', () => {
   });
 
   it('Borrowed Decree needs a free spot: with her bench full it cannot be used', () => {
-    const { G, graves } = withGraves(2);
+    const { G, graves } = withGraves(ULT_UNLOCK_LEVEL);
     const use: Action = { type: 'useSkill', heroIid: graves.iid, skillId: 'eff_ult_graves' };
     expect(skillBlocked(G, '0', graves, undefined, 'eff_ult_graves')).toBeNull();
     G.players['0'].bench[2] = makeInstance(allocatorOf(G), 'hero_yamato', '0', 'bench', 3);
@@ -283,7 +284,7 @@ describe('Graves', () => {
   });
 
   it('it raises a Gravestone on her bench: a Ghoul into her deck at the start of each of her turns, and its wait is a small ultimate\'s', () => {
-    const { G, graves } = withGraves(2);
+    const { G, graves } = withGraves(ULT_UNLOCK_LEVEL);
     act(G, '0', { type: 'useSkill', heroIid: graves.iid, skillId: 'eff_ult_graves' });
     const stone = G.players['0'].bench[2]!;
     expect([stone.cardId, stone.hp, stone.zone, stone.slot]).toEqual([GRAVESTONE, 1, 'bench', 3]);
@@ -299,7 +300,7 @@ describe('Graves', () => {
   });
 
   it('any damage destroys the Gravestone, and the Ghouls stop', () => {
-    const { G, graves } = withGraves(2);
+    const { G, graves } = withGraves(ULT_UNLOCK_LEVEL);
     act(G, '0', { type: 'useSkill', heroIid: graves.iid, skillId: 'eff_ult_graves' });
     const stone = G.players['0'].bench[2]!;
     nextTurn(G, '0');

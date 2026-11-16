@@ -14,6 +14,7 @@ import { INVALID, perform } from '@/engine/engine';
 import { SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { liveTotal, explainNumber, parseMarkup, type NumberSpec } from '@/ui/card/scaling';
 import { freshReadyGame, giveCard, makeHero } from './_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 describe('a skill counts Spirit twice, an ultimate and a spell once', () => {
   it('the rate is 2', () => {
@@ -33,7 +34,7 @@ describe('a skill counts Spirit twice, an ultimate and a spell once', () => {
   it("an ultimate: Shiv's Killing Blow at Spirit 3 deals 5 + 3", () => {
     const G = freshReadyGame();
     const shiv = G.players['0'].active = makeHero('hero_shiv', '0', 'active', 0);
-    shiv.level = 2;
+    shiv.level = ULT_UNLOCK_LEVEL;
     shiv.spiritMod = 3;
     shiv.cooldowns = {};
     const rival = G.players['1'].active!;
