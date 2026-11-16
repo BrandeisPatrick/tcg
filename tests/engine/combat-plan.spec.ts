@@ -303,9 +303,9 @@ describe("Frenzy's bonus is planned swing by swing, as the resolver deals it", (
       { hp: 3, hpMax: 11, gear: ['frenzy', 'siphon_bullets'], swings: [6, 3] }],
     // The other side of the trade: Drifter's Bloodscent reads the target's HP,
     // swing by swing too. His first swing heals him over half (Frenzy's +3 is
-    // gone) and drops the rival Active below half (Bloodscent's +1 comes in).
+    // gone) and drops the rival Active below half (Bloodscent's +2 comes in).
     ["Drifter's Bloodscent comes in on the swing after the one that drops the target below half",
-      { hero: 'hero_drifter', hp: 9, hpMax: 20, gear: ['frenzy'], doctor: (_G, _a, d) => { d.hp = 24; }, swings: [6, 4] }],
+      { hero: 'hero_drifter', hp: 9, hpMax: 20, gear: ['frenzy'], doctor: (_G, _a, d) => { d.hp = 24; }, swings: [6, 5] }],
     ['Healing Boost adds to each heal',
       { hp: 2, gear: ['frenzy'], doctor: (G, a) => addStatus(G, a, 'healing_boost', 2, 999), swings: [6, 3] }],
     ['Healing Blocked stops the heal, so the +3 stays',

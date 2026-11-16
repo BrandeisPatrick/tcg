@@ -174,7 +174,7 @@ Patrick, 2026-11-09: Victor's revive should come from a separate system that oth
   - Victor's ultimate is used on the enemy's turn, when he falls, through the trigger prompts in section 6.
   - Root on a bench hero (Billy, Solomon): it can't be swapped into the Active slot.
   - Mirage's Djinn's Mark sets itself off at 3 marks.
-  - Drifter gains +1 Attack for the game on a knockout, up to +2.
+  - Drifter gains +1 Attack for the game on a knockout, up to +2 (until 2026-11-16: Bloodscent is one rule now).
 - **Possible balance problems:**
   - Rem and Mina are late heroes already at the lowest stats, so they keep 1 point more than the curve gives.
   - Seven's Storm Cloud hits every enemy for 8 at Level 2 and 14 at Level 4. That may be too strong.
@@ -197,7 +197,7 @@ HP 7 · Attack 2 · Retreat 2 · per level +1 Attack +2 HP
 
 **Mo & Krill** · in the game today — peaks late, one target; mix tank 3 · damage 1 · control 3 · support 0  
 HP 6 · Attack 1 · Retreat 1 · per level +3 HP +1 Spirit
-- Skill, waits 3 — **Sand Blast**: Deal 1✦ spirit damage to the enemy Active and Disarm it 1 turn (it can't attack).
+- Skill, waits 3 — **Sand Blast**: Deal 1✦ spirit damage to the enemy Active and Disarm it 1 turn.
 - Ultimate, medium, waits 6 — **Combo**: Deal 4✦ spirit damage to the enemy Active, healing that much. Stun it 1 turn.
 - Why: Mo & Krill pop up under the enemy carry, blind it so it can't shoot, then stun it and drain it dry.
 - Changed from today: HP 7 to 6 (late -1); the cleanse passive becomes Sand Blast because control 3 needs control in the skill. Combo drain 6✦ to 4✦ to fit medium.
@@ -239,14 +239,14 @@ HP 7 · Attack 1 · Retreat 2 · per level +2 Spirit
 
 **Shiv** · in the game today — peaks late, one target; mix tank 2 · damage 3 · control 0 · support 0  
 HP 6 · Attack 1 · Retreat 1 · per level +2 Attack +1 HP +1 Spirit
-- Skill, 2 charges, 3 turns each — **Serrated Knives**: Throw a knife: deal 1✦ spirit damage to the enemy Active and Bleed 1 for 2 turns.
+- Skill, 2 charges, 3 turns each — **Serrated Knives**: Deal 1✦ spirit damage to the enemy Active and Bleed 1 for 2 turns.
 - Ultimate, medium, waits 6 — **Killing Blow**: Deal 5✦ spirit damage to the enemy Active. Knock it out if below half HP.
 - Why: Shiv bleeds one target down with knives, then leaps in to execute it once it drops below half.
 - Changed from today: Attack 2 to 1 and HP 5 to 6: a damage tank who starts slow and grows +2 Attack a level. Today's free Bleed 2 on every attack was over budget, so the bleed moves to the Serrated Knives skill.
 
 **Warden** · in the game today — peaks early, one target; mix tank 2 · damage 2 · control 1 · support 0  
 HP 7 · Attack 2 · Retreat 1 · per level +1 Attack +1 HP
-- Skill, waits 3 — **Willpower**: A barrier and a burst of speed: Shield 3 on Warden, and Swift (his next retreat is free).
+- Skill, waits 3 — **Willpower**: Shield 3 on Warden, and Swift.
 - Ultimate, medium, waits 6 — **Last Stand**: Deal 6✦ spirit damage to the enemy Active. Warden heals that much.
 - Why: Warden is half tank, half gun: he shields up, outshoots the enemy front and drains it to heal through a long duel.
 - Changed from today: HP 5 to 7 (tank 2, and the early +1 goes on HP since Attack caps at 2). Willpower gains Swift for its speed burst. Last Stand is one drain of 6✦ from the enemy Active instead of a 3-turn channel on everyone.
@@ -265,7 +265,7 @@ HP 5 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +1 Spirit
 
 **Silver** — peaks mid, one target; mix tank 2 · damage 3 · control 1 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
-- Skill, waits 3 — **Boot Kick**: Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns.
+- Skill, waits 3 — **Boot Kick**: Deal 1 bullet damage to the enemy Active. It is Vulnerable 2 turns.
 - Charged ultimate, medium, 8 damage dealt — **Lycan Curse** (Wolf form, with her wolf-form art): Silver turns into a wolf for 2 turns: +3 Attack and Shield 6. *Ready once Silver has dealt 8 damage.*
 - Why: She kick-marks one target and shotguns it; the more she hurts the enemy, the sooner she turns wolf for a shielded melee burst.
 
@@ -327,7 +327,7 @@ HP 5 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 
 **Seven** · in the game today — peaks late, many targets; mix tank 1 · damage 3 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +1 HP +3 Spirit
-- Skill, waits 4 — **Static Charge**: Deal 1✦ spirit damage to the enemy Active and Charge it: after its next turn, it is Stunned 1 turn.
+- Skill, waits 4 — **Static Charge**: Deal 1✦ spirit damage to the enemy Active. After its next turn, it is Stunned 1 turn.
 - Ultimate, large, waits 8 — **Storm Cloud**: Channel 2 turns: at each turn's end, deal 2✦ spirit damage to every enemy.
 - Why: Seven is the easy spirit carry who zaps grouped enemies all game and wins late teamfights with a storm that hits the whole team.
 - Changed from today: Attack 2 to 1 (spirit hero; HP stays 4 after the late -1). Static Charge's delayed stun gave way to Lightning Ball because control 1 allows little control; Storm Cloud is one hit on every enemy instead of a 3-turn channel.
@@ -360,14 +360,15 @@ HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
 
 **Drifter** · in the game today — peaks mid, one target; mix tank 2 · damage 3 · control 1 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
-- Passive — **Bloodscent**: His attacks deal +1 bullet damage to a hero below half HP. Each knockout while he is Active gives him +1 Attack for the game (max +2).
+- Passive — **Bloodscent**: His attacks deal +2 bullet damage to a hero below half HP.
 - Ultimate, medium, waits 6 — **Eternal Night**: Deal 5✦ spirit damage to the enemy Active. It takes +1 damage for 3 turns.
-- Why: Drifter is the stalker who smells blood: he hits wounded heroes harder, traps one target alone in the dark, and grows stronger with each kill.
+- Why: Drifter is the stalker who smells blood: he hits wounded heroes harder and traps one target alone in the dark.
 - Changed from today: Attack 3 to 2 (the Level 1 cap) and HP 5 to 6 (tank 2); lifesteal becomes his real Bloodscent passive. Eternal Night now hits one target and leaves it taking +1 damage, instead of silencing two heroes.
+- **Changed 2026-11-16 (Patrick: long passives and skills say one rule; Mirage's Djinn's Mark is kept as it is, its own mechanic).** Bloodscent was +1 to a hero below half HP and +1 Attack for the game for each knockout while he was Active (max +2). It is now one rule, +2 to a hero below half HP. The knockouts came in the second half of a match, so the Attack they gave was worth about one more point on the swings that finish a hero, which is where the second point now goes. A passive is worth 1–2 points an own turn; at about half his swings below half, +2 is about 1.
 
 **Lash** · in the game today — peaks mid, many targets; mix tank 1 · damage 2 · control 3 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
-- Skill, waits 4 — **Ground Strike**: Slam down: deal 1✦ spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat).
+- Skill, waits 4 — **Ground Strike**: Deal 1✦ spirit damage to every enemy. Root the enemy Active 1 turn.
 - Ultimate, large, waits 8 — **Death Slam**: Deal 3✦ spirit damage to every enemy. Stun each 1 turn.
 - Why: Lash drops from the sky onto the whole enemy line, pins the Active so it can't escape his chase, then lifts and slams their entire team.
 - Changed from today: HP 4 to 5 (tank 1); the Vulnerable skill becomes Ground Strike with a root because control 3 needs hard control in the skill. Death Slam now stuns every enemy instead of only the Active, trading some damage for it.
@@ -381,7 +382,7 @@ HP 4 · Attack 1 · Retreat 0 · per level +1 Attack +1 HP +2 Spirit
 
 **Yamato** · in the game today — peaks mid, one target; mix tank 1 · damage 3 · control 0 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +1 Attack +1 HP +1 Spirit
-- Skill, waits 3 — **Flying Slash**: Grapple onto any enemy, bench too, and slash it: deal 2✦ spirit damage.
+- Skill, waits 3 — **Flying Slash**: Deal 2✦ spirit damage to any enemy, bench too.
 - Ultimate, medium, waits 6 — **Shadow Transformation**: For 2 turns: +3 Attack and Unstoppable.
 - Why: Yamato grapples onto whoever retreats to the back and is nearly impossible to kill or lock down while transformed.
 - Changed from today: HP 6 to 5 (tank 1). Her skill becomes Flying Slash at 2✦ melee for 2 souls (was 1✦). Shadow Transformation drops the heal 5 and gives 2 turns of +3 Attack and Unstoppable.
@@ -440,7 +441,7 @@ HP 5 · Attack 1 · Retreat 1 · per level +2 Spirit
 
 **Rem** · in the game today — peaks late, one target; mix tank 0 · damage 0 · control 1 · support 3  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
-- Skill, waits 3 — **Tag Along**: Rem rides on another of your heroes as equipment for 2 turns: it heals 4✦. Then Rem returns to your bench.
+- Skill, waits 3 — **Tag Along**: Rem rides on one of your heroes for 2 turns, healing it 4✦, then returns to your bench.
 - Ultimate, small, waits 4 — **Naptime**: Sleep the enemy Active 2 turns.
 - Why: Rem is the tiny support who rides on her allies to heal them and sends the enemy Active to sleep, and her Spirit growth makes both strong late. She stands in the lane like any hero, and riding off is her way out of a lane she is losing.
 - Changed from today: Stats stay 1/4: the late -1 cannot be paid because HP 4 and Attack 1 are both at the floor. Rem is no longer bench-only (Patrick, 2026-11-09). Tag Along keeps the ride (the old merge) but drops its max-HP buff for a plain heal on the bearer, lasts 2 turns and works from the lane too; Naptime becomes small, just the 2-turn sleep, since her damage score is 0.
@@ -468,7 +469,8 @@ HP 4 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
 
 **Sinclair** · in the game today — peaks mid, one target; mix tank 0 · damage 1 · control 3 · support 1  
 HP 4 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, waits 4 — **Rabbit Hex**: Hex the enemy Active into a rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage.
+- Skill, waits 4 — **Rabbit Hex**: Turn the enemy Active into a Rabbit for 1 turn.
+- **Changed 2026-11-16 (Patrick: one rule).** The "+1 damage" rider is gone: the Rabbit is the turn denied (no attack, no abilities), 3 points by itself, which is the 3–4.5 of a skill that waits 4.
 - Ultimate, medium, waits 6 — **Audience Participation**: Cast the enemy Active's ultimate as Sinclair's own.
 - Why: The magician turns the enemy front-liner into a bunny and steals the enemy's best ultimate: tricky and swingy, with little damage of their own.
 - Changed from today: The 2✦ poke (Vexing Bolt) is replaced by Rabbit Hex, the engine's rabbit, because control 3 needs hard control in the skill; Audience Participation casts the copied ultimate right away instead of saving it.
@@ -578,7 +580,7 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
   Spirit, his heals, aimed as that ultimate aims, on his own wait (medium, 6 turns) and as his side's one ultimate of the turn. With no standing enemy
   Active, or another Sinclair there, there is nothing to copy and it cannot be used. The old
   borrowed copy (a free ultimate kept for later) is gone. **Rabbit Hex** uses the engine's rabbit
-  (no attack, skills, ultimates or active items).
+  (no attack, skills, ultimates or active items), with no damage rider since 2026-11-16.
 - **Rem — Tag Along** aims at another standing hero of her side and rides on it for 2 turns (see
   "Rem in the lane" below; until 2026-11-09 it was a plain heal and Rem was bench-only).
 - **Warden — Willpower's Swift** is the engine's: a free Retreat this turn.

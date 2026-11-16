@@ -156,7 +156,7 @@ describe('Tag Along: Rem rides on an ally as equipment', () => {
   it('the card text, exactly; it costs no souls, then waits 3 turns', () => {
     const skill = getAbility('skill_rem')!;
     expect(skill.name).toBe('Tag Along');
-    expect(skill.text).toBe('Rem rides on another of your heroes as equipment for 2 turns: it heals {sp:4}. Then Rem returns to your bench.');
+    expect(skill.text).toBe('Rem rides on one of your heroes for 2 turns, healing it {sp:4}, then returns to your bench.');
     const { G, me, rem } = withRem(2);
     expect(kitCost(rem, 'skill_rem')).toBe(0);
     const souls = me.souls;

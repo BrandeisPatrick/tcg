@@ -196,11 +196,11 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     const spirit = hitsSince(vindicta.G, fx).filter((e) => e.type === 'spirit');
     expect(spirit.map((e) => e.iid)).toEqual([vindicta.abrams.iid]);
 
-    // Every enemy below half: the swing gets Bloodscent's +1, each bounce is Ricochet's 2.
+    // Every enemy below half: the swing gets Bloodscent's +2, each bounce is Ricochet's 2.
     const drifter = lane('hero_drifter', 'ricochet');
     for (const c of drifter.enemies) c.hp = 9;
     makeAttack(drifter.G, '0');
-    expect(drifter.abrams.hp).toBe(9 - 4);
+    expect(drifter.abrams.hp).toBe(9 - 5);
     expect(hps(drifter.bench)).toEqual([7, 7, 7]);
   });
 });

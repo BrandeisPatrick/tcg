@@ -2077,7 +2077,7 @@ function enemyActiveOf(G: GameState, pid: PlayerID): CardInstance | undefined {
 const skill_mo_krill: HeroAbilityDef = {
   id: 'skill_mo_krill', trigger: 'activate', target: 'enemyActive',
   name: 'Sand Blast',
-  text: "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn (it can't attack).",
+  text: 'Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn.',
   base: 1,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2119,7 +2119,7 @@ const skill_lady_geist: HeroAbilityDef = {
 const skill_shiv: HeroAbilityDef = {
   id: 'skill_shiv', trigger: 'activate', target: 'enemyActive', charges: 2,
   name: 'Serrated Knives',
-  text: 'Throw a knife: deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns.',
+  text: 'Deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns.',
   base: 1,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2134,7 +2134,7 @@ const skill_shiv: HeroAbilityDef = {
 const skill_warden: HeroAbilityDef = {
   id: 'skill_warden', trigger: 'activate', target: 'self',
   name: 'Willpower',
-  text: 'A barrier and a burst of speed: Shield 3 on Warden, and Swift (his next retreat is free).',
+  text: 'Shield 3 on Warden, and Swift.',
   base: 3,
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
@@ -2165,7 +2165,7 @@ const skill_wraith: HeroAbilityDef = {
 const skill_seven: HeroAbilityDef = {
   id: 'skill_seven', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Static Charge',
-  text: 'Deal {sp:1} spirit damage to the enemy Active and Charge it: after its next turn, it is Stunned 1 turn.',
+  text: 'Deal {sp:1} spirit damage to the enemy Active. After its next turn, it is Stunned 1 turn.',
   base: 1,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2231,7 +2231,7 @@ const passive_gravestone: HeroAbilityDef = {
 const skill_lash: HeroAbilityDef = {
   id: 'skill_lash', trigger: 'activate', target: 'noTarget', cooldown: 4,
   name: 'Ground Strike',
-  text: "Slam down: deal {sp:1} spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat).",
+  text: 'Deal {sp:1} spirit damage to every enemy. Root the enemy Active 1 turn.',
   base: 1,
   scalesSpirit: true,
   run: (G, ctx, { source }) => {
@@ -2246,7 +2246,7 @@ const skill_lash: HeroAbilityDef = {
 const skill_yamato: HeroAbilityDef = {
   id: 'skill_yamato', trigger: 'activate', target: 'enemyHero',
   name: 'Flying Slash',
-  text: 'Grapple onto any enemy, bench too, and slash it: deal {sp:2} spirit damage.',
+  text: 'Deal {sp:2} spirit damage to any enemy, bench too.',
   base: 2,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
@@ -2314,7 +2314,7 @@ const TAG_ALONG_TURNS = 2;
 const skill_rem: HeroAbilityDef = {
   id: 'skill_rem', trigger: 'activate', target: 'allyHero', excludeSelf: true,
   name: 'Tag Along',
-  text: 'Rem rides on another of your heroes as equipment for 2 turns: it heals {sp:4}. Then Rem returns to your bench.',
+  text: 'Rem rides on one of your heroes for 2 turns, healing it {sp:4}, then returns to your bench.',
   base: 4,
   scalesSpirit: true,
   run: (G, ctx, { source, target }) => {
@@ -2325,18 +2325,16 @@ const skill_rem: HeroAbilityDef = {
 };
 
 // Sinclair — Rabbit Hex: the engine's rabbit (no attack, no abilities) for the
-// rival's next turn, and it takes +1 damage (both resists down) for the rest
-// of this one.
+// rival's next turn. Its +1 damage rider went on 2026-11-16 (Patrick: one
+// rule); a turn denied is the 3 points of a skill that waits 4 by itself.
 const skill_sinclair: HeroAbilityDef = {
   id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Rabbit Hex',
-  text: "Hex the enemy Active into a Rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage.",
+  text: 'Turn the enemy Active into a Rabbit for 1 turn.',
   base: 3,
   run: (G, _ctx, { target }) => {
     if (!target) return;
     addStatus(G, target, 'rabbit', 1, 1);
-    addStatus(G, target, 'bullet_resist_down', 1, 1);
-    addStatus(G, target, 'spirit_resist_down', 1, 1);
   },
 };
 
@@ -2346,7 +2344,7 @@ const skill_sinclair: HeroAbilityDef = {
 const skill_silver: HeroAbilityDef = {
   id: 'skill_silver', trigger: 'activate', target: 'enemyActive',
   name: 'Boot Kick',
-  text: 'Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns.',
+  text: 'Deal 1 bullet damage to the enemy Active. It is Vulnerable 2 turns.',
   base: 1,
   run: (G, _ctx, { target }) => {
     if (!target) return;
@@ -2458,24 +2456,17 @@ const status_flying: AbilityDef = {
   },
 };
 
-// Drifter — Bloodscent: his swing hits a hero below half HP for 1 more, and
-// every enemy hero knocked out while he stands in the lane grows his Attack for
-// the game, up to BLOODSCENT_MAX (counted in his `tally`, which a fall keeps).
-const BLOODSCENT_MAX = 2;
+// Drifter — Bloodscent (Patrick, 2026-11-16: one rule, not two): his swing
+// hits a hero below half HP for 2 more. It was +1 there and +1 Attack for the
+// game for each knockout made while he was Active (max +2); the knockouts came
+// late, so their Attack was worth about what the second point is now.
+// docs/hero-design.md, Drifter.
 const passive_drifter_bloodscent: HeroAbilityDef = {
-  id: 'passive_drifter_bloodscent', trigger: 'onRivalFall', target: 'self',
+  id: 'passive_drifter_bloodscent', trigger: 'ongoing', target: 'self',
   name: 'Bloodscent',
-  text: 'His attacks deal +1 bullet damage to a hero below half HP. Each knockout while he is Active gives him +1 Attack for the game (max +2).',
-  attackBonus: (_self, target) => (target && heroData(target) && belowHalf(target) ? { amount: 1, label: 'Bloodscent +1' } : null),
-  run: (G, _ctx, { source }) => {
-    if (!source) return;
-    const id = 'passive_drifter_bloodscent';
-    const kills = source.tally?.[id] ?? 0;
-    if (kills >= BLOODSCENT_MAX) return;
-    (source.tally ??= {})[id] = kills + 1;
-    source.atkMod += 1;
-    pushLog(G, `Bloodscent: ${cardName(source.cardId)} gains +1 Attack for the game (${kills + 1} of ${BLOODSCENT_MAX}).`);
-  },
+  text: 'His attacks deal +2 bullet damage to a hero below half HP.',
+  attackBonus: (_self, target) => (target && heroData(target) && belowHalf(target) ? { amount: 2, label: 'Bloodscent +2' } : null),
+  run: () => {},
 };
 
 // ----- Ultimates -----
