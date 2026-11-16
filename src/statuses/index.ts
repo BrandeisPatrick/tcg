@@ -128,7 +128,7 @@ export const STATUSES: StatusDef[] = [
   // Mirage's mark refreshes its full 3-turn timer on every new stack (stack.duration
   // 'reset'); the mark that makes DJINN_CAP detonates them all (his passive).
   { id: 'charged',       title: 'Charged',       desc: 'When this runs out: Stun for 1 turn. Taking it off first stops the Stun.', hvalue: -1 },
-  { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 4 spirit damage + Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' } },
+  { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 4 spirit damage + twice Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' } },
   { id: 'reverb',        title: 'Reverb',        desc: 'Detonates at the start of your turn for <value> spirit damage.', hvalue: -1 },
   // Last Stand is a delayed strike: at the start of its bearer's owner's turn, when it is
   // about to expire, it deals <value> + the bearer's Spirit to every enemy hero, then the

@@ -157,8 +157,8 @@ nothing, Silver for 0 with Swift Striker.
 **Graveyard** (Viscous, Graves, Lady Geist). Grasping Hands shuffles two Ghouls into Graves's deck;
 every Ghoul that falls discards the top of the rival's.
 - 2 Compress Cooldown: Grasping Hands and The Cube 4 → 3, Essence Bomb 3 → 2.
-- Mystic Slow: what a skill hits is Rooted 1 turn. Essence Bomb hits every enemy, so the rival
-  cannot Retreat for its second swing.
+- Mystic Slow: what a skill hits is Rooted 1 turn. Essence Bomb hits the enemy Active (one
+  target since 2026-11-16), so it cannot Retreat for the rival's second swing.
 - 2 Golden Goose Egg (find the Ghouls and the heroes); Improved Spirit over 2 Extra Spirit; Mystic
   Burst; Spirit Lifesteal, Mystic Regeneration, Healing Rite and Extra Health for Lady Geist, who
   pays HP for her bomb.

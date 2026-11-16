@@ -332,11 +332,80 @@ been simulated; the knobs it touches (the Retreat prices, Swift, the 0-Retreat
 heroes) are in [card-design.md](./card-design.md), "Changed 2026-11-16: the
 turn goes on after an attack".
 
+## 10. A skill counts Spirit twice (2026-11-16)
+
+Patrick: "I do feel like Warden is pretty strong, and spirits are pretty weak
+for some reason … and Lady Geist's bomb should just be a single target: she
+just bombed the Active."
+
+**Why Spirit fell behind.** Two rules of the last two days, neither aimed at it:
+- Skills wait 3 or 4 turns (§8). Before, a skill cost 2–3 souls and could go
+  off every turn or two, and the item budget counts a Spirit item's bearer
+  landing 0.7 spirit hits a turn ([card-design.md](./card-design.md), rates).
+  Now a skill goes off once in 3 or 4 turns.
+- The second swing (§9). A bench gun hero retreats in and swings too; a
+  spirit hero's swing is 1 (Attack 1, no Attack growth), so the second swing
+  is worth nothing to it.
+
+A level's point put into Attack adds 1 to every swing: 0.7 a turn or more. Put
+into Spirit, it added 1 to each cast: 0.25–0.33 a turn on one target. The
+growth rule ([hero-design.md](./hero-design.md) §2) makes the two equal ("all
+three curves are even at Level 2"); on the board Spirit was worth a third to a
+half of Attack.
+
+**The rule.** A hero's own skill or passive counts its Spirit Power twice
+(`SKILL_SPIRIT_RATE`): a `{sp:N}` there is N + 2 × Spirit, and the purple
+number on the hero's sheet prints that total. A point of Spirit then pays
+0.67 a turn in a skill that waits 3 and 0.5 in one that waits 4, on one
+target: back at the 0.7 Spirit Power was priced at, and close to a point of
+Attack. Heals and Shields in a skill count it twice too (Rejuvenating Aurora,
+Tag Along, Plot Armor, Frost Grenade's heal): a support's levels go into Spirit
+and pay only when its skill goes off, as a caster's do.
+
+**What counts it once.** An ultimate (`ultSpi`) and a spell (`activeSpi`):
+their pace did not change (an ultimate waited 3 and cost 4–12 souls; it waits
+4–8 for nothing now; a spell is bought each time). Item procs with flat
+numbers (Mystic Burst) are as they were.
+
+**What it does, at Level 2** (all curves even), damage a turn while Active,
+skills spread over their wait, riders left out:
+
+| Hero | Before | Now |
+|---|---|---|
+| Haze (gun): Attack 4, Fixation +1 | 5 | 5 |
+| Seven: Static Charge, Spirit 3, waits 4 | 1 + 4 ÷ 4 = 2.0 | 1 + 7 ÷ 4 = 2.75 |
+| Lady Geist: Essence Bomb, Spirit 2, waits 3 | 1 + 3 on every enemy (7.5) ÷ 3 = 3.5 | 1 + 7 ÷ 3 = 3.3, on the Active |
+| Lash: Ground Strike, Spirit 2, waits 4 | 1 + 3 on every enemy (7.5) ÷ 4 = 2.9 | 1 + 5 on every enemy (12.5) ÷ 4 = 4.1 |
+
+A caster still deals less a turn than a gun carry in the lane, but it deals it
+from the bench too, and in one burst that can finish a hero.
+
+**Items.** Extra Spirit (+1) adds 2 to its bearer's skill: about Extended
+Magazine's +1 a swing over a match. Boundless Spirit (+5) adds 10: a Level 3
+Seven with it bombs for 23. The Spirit tier 4s come late, when the curve
+wants kills.
+
+**Lady Geist's Essence Bomb** hits the enemy Active alone, as Deadlock's does:
+3✦, she pays 1 HP, it waits 3. 3 − 0.5 (the HP at the heal rate) = 2.5, the
+middle of a wait-3 skill's 2–3 ([hero-design.md](./hero-design.md) §4); the
+area bomb was 1✦ on every enemy, 2.5 − 0.5 = 2.0. Her reach becomes one.
+
+**Warden's Willpower** is Shield 2 and Swift (it was Shield 3). Since the
+second swing Swift is a free Retreat, worth its soul and its swap (1.5), so
+Shield 3 (1.8) put the skill at 3.3, over a wait-3 skill's 2–3; Shield 2 (1.2)
+brings it to 2.7. HP 7 and Attack 2 stay: the rules set them. The Spirit rule
+is a check on him too: every spirit skill aimed at him hits harder.
+
+**Left for testing** (only when Patrick asks by name):
+- Lash's Ground Strike at Level 3: 9 to every enemy every 4 turns.
+- Boundless Spirit and the other Spirit tier 4s on a caster's skill.
+- Supports' heals at Level 3 (Rejuvenating Aurora 13 each).
+- Whether Warden at Shield 2 still holds the lane too long early; if so, the
+  next lever is his HP (tank 1: HP 6).
+
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).
 - Mirage's Djinn's Mark burst (2/stack ×4) at the compressed scale.
-- Whether heals/shields should also scale with Spirit (would give supports a
-  spirit build path; currently they don't).
 - Ability economy: one ability per hero per turn, free on a cooldown, and the
   Active may still attack. If a full bench casting every turn makes the late game
   too swingy, the cooldowns are the lever.

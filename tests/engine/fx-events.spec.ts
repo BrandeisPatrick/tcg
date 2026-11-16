@@ -71,7 +71,7 @@ describe('board FX stream — hits', () => {
 });
 
 describe("board FX stream — Djinn's Mark", () => {
-  it('each stack stamps the mark and the 3rd detonates with tag, stacks and Mirage as source: 4 + his Spirit', () => {
+  it('each stack stamps the mark and the 3rd detonates with tag, stacks and Mirage as source: 4 + twice his Spirit', () => {
     const G = freshReadyGame();
     const mirage = makeHero('hero_mirage', '0');
     mirage.spiritMod = 2;
@@ -83,7 +83,7 @@ describe("board FX stream — Djinn's Mark", () => {
     expect(marks.map((m) => m.value)).toEqual([1, 2, 3]);
     const det = hits(G).filter((h) => h.tag === 'djinns_mark');
     expect(det).toHaveLength(1);
-    expect(det[0]).toMatchObject({ stacks: 3, amount: 4 + 2, type: 'spirit', cast: 'proc', source: { iid: mirage.iid } });
+    expect(det[0]).toMatchObject({ stacks: 3, amount: 4 + 2 * 2, type: 'spirit', cast: 'proc', source: { iid: mirage.iid } });
     expect(target.statuses.some((s) => s.id === 'djinns_mark')).toBe(false);
   });
 

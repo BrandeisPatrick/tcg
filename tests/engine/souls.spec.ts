@@ -397,12 +397,13 @@ describe('souls economy', () => {
     expect(retreats.length).toBe(0);
   });
 
-  // ----- Spirit scaling on hero skills (use Lady Geist as representative — Essence Bomb, {sp:1} spirit to every enemy) -----
-  it("hero skill at 0 SPI deals base damage (Lady Geist's Essence Bomb: 1 + 0 = 1 spirit to each enemy)", async () => {
+  // ----- Spirit scaling on hero skills (use Lady Geist as representative — Essence Bomb,
+  // {sp:3} spirit to the enemy Active since 2026-11-16; a skill counts Spirit twice) -----
+  it("hero skill at 0 SPI deals base damage (Lady Geist's Essence Bomb: 3 + 0 = 3 spirit to the enemy Active)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     expect(skill.scalesSpirit).toBe(true);
-    expect(skill.base).toBe(1);
+    expect(skill.base).toBe(3);
     const G = freshG();
     const caster = G.players['0'].active!;
     caster.spiritMod = 0;
@@ -410,10 +411,10 @@ describe('souls economy', () => {
     target.hpMax = 20; target.hp = 20;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(1);
+    expect(hpBefore - target.hp).toBe(3);
   });
 
-  it("hero skill at +3 SPI deals base + spirit (Lady Geist's Essence Bomb: 1 + 3 = 4 spirit to each enemy)", async () => {
+  it("hero skill at +3 SPI deals base + twice the spirit (Lady Geist's Essence Bomb: 3 + 2 × 3 = 9 spirit to the enemy Active)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -423,7 +424,7 @@ describe('souls economy', () => {
     target.hpMax = 20; target.hp = 20; // soak the full damage to measure it
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(4); // base 1 + 3 spirit
+    expect(hpBefore - target.hp).toBe(9); // base 3 + 2 × 3 spirit (SKILL_SPIRIT_RATE)
   });
 
   it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 5); Rem's Tag Along prints {sp:4} and does", async () => {
@@ -440,23 +441,23 @@ describe('souls economy', () => {
     expect(ally.hp - 1).toBe(5);
     ally.hp = 1;
     ABILITIES_BY_ID['skill_rem'].run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    expect(ally.hp - 1).toBe(4 + 2); // {sp:4}
+    expect(ally.hp - 1).toBe(4 + 2 * 2); // {sp:4}: a skill counts Spirit twice
   });
 
-  it("a flat shield is flat — Spirit does NOT scale it (Warden's Willpower: Shield 3); Paige's Plot Armor prints {sp:2} and does", async () => {
+  it("a flat shield is flat — Spirit does NOT scale it (Warden's Willpower: Shield 2); Paige's Plot Armor prints {sp:2} and does", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const G = freshG();
     const warden = makeHero('hero_warden', '0', 'active', 0);
     G.players['0'].active = warden;
     warden.spiritMod = 4; // spirit is ignored for Willpower's shield
     ABILITIES_BY_ID['skill_warden'].run(G, { movingPlayer: '0' }, { source: warden, target: warden });
-    expect(warden.statuses.find((s) => s.id === 'shield')?.value).toBe(3); // flat 3, no spirit
+    expect(warden.statuses.find((s) => s.id === 'shield')?.value).toBe(2); // flat 2, no spirit
     const paige = G.players['0'].bench[2]!;
     expect(paige.cardId).toBe('hero_paige');
     paige.spiritMod = 4;
     const ally = G.players['0'].bench[0]!;
     ABILITIES_BY_ID['skill_paige'].run(G, { movingPlayer: '0' }, { source: paige, target: ally });
-    expect(ally.statuses.find((s) => s.id === 'shield')?.value).toBe(2 + 4);
+    expect(ally.statuses.find((s) => s.id === 'shield')?.value).toBe(2 + 2 * 4);
   });
 
   it('no skill has bullet scaling — all damage scaling goes through Spirit', async () => {

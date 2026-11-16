@@ -29,7 +29,7 @@ import { STATUSES_BY_ID } from '@/statuses';
 import {
   effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, ultimateCard,
 } from '@/engine/query';
-import { LEVEL_THRESHOLDS, MAX_LEVEL, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { LEVEL_THRESHOLDS, MAX_LEVEL, SKILL_SPIRIT_RATE, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
 import { skillIconSrc, ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
@@ -229,6 +229,8 @@ export function HeroDetailSheet({
   const attached = card.attached ?? [];
 
   const scale: Scale = { spirit: effectiveSpirit(card), bullet: effectiveAtk(card), who: data.name };
+  // A skill or passive counts the hero's Spirit twice; the ultimate once.
+  const kitScale: Scale = { ...scale, rate: SKILL_SPIRIT_RATE };
   // Which ability the hero has used this turn, so only that row reads Used.
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
   // What a kit ability's row says at its right, where its price once stood
@@ -282,7 +284,7 @@ export function HeroDetailSheet({
           name={ability.name}
           // The skill's own Deadlock icon; its ring keeps the kind's colour.
           art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
-          line={shortLine(ability.text, scale, lineMax)}
+          line={shortLine(ability.text, kitScale, lineMax)}
           right={pace(ability.id, dial)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
@@ -304,7 +306,7 @@ export function HeroDetailSheet({
           passive ink={shopInk(kind).ink} mode="quiet" calm={calm}
           name={ability.name}
           art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
-          line={fullLine(ability.text, scale)}
+          line={fullLine(ability.text, kitScale)}
           right={<span data-kit-tag style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: T.label, letterSpacing: '0.04em', color: poster.inkDim, whiteSpace: 'nowrap' }}>Passive</span>}
         />
       ),
@@ -739,19 +741,20 @@ const TRIGGER_LABELS: Record<string, string> = {
  */
 export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }) {
   const scale: Scale = { spirit: effectiveSpirit(card), bullet: effectiveAtk(card), who: data.name };
+  const kitScale: Scale = { ...scale, rate: SKILL_SPIRIT_RATE };
   const ult = ultimateCard(data.ult);
-  const entry = (key: string, name: string, tag: string, rule: string, note?: string) => (
+  const entry = (key: string, name: string, tag: string, rule: string, note?: string, at: Scale = scale) => (
     <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
         <span style={{ ...NAME, fontSize: T.body }}>{name}</span>
         <span style={{ ...CAPTION, flexShrink: 0 }}>{tag}</span>
       </div>
       <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.inkSoft }}>
-        <RuleText text={sentence(rule)} keywordColor={poster.ink} scale={scale} />
+        <RuleText text={sentence(rule)} keywordColor={poster.ink} scale={at} />
       </div>
       {note && (
         <div style={{ ...CAPTION, fontStyle: 'italic' }}>
-          <RuleText text={note} keywordColor={poster.ink} scale={scale} />
+          <RuleText text={note} keywordColor={poster.ink} scale={at} />
         </div>
       )}
     </div>
@@ -759,7 +762,7 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
   return (
     <>
       {heroAbilities(data).map(({ kind, ability }: { kind: 'skill' | 'passive'; ability: HeroAbilityDef }) =>
-        entry(ability.id, ability.name, kind === 'passive' ? `Passive · ${TRIGGER_LABELS[ability.trigger] ?? ability.trigger}` : `Skill · ${skillPace(ability)}`, ability.text))}
+        entry(ability.id, ability.name, kind === 'passive' ? `Passive · ${TRIGGER_LABELS[ability.trigger] ?? ability.trigger}` : `Skill · ${skillPace(ability)}`, ability.text, undefined, kitScale))}
       {ult && entry(ult.id, ult.name, `Ultimate · ${ult.charged ? 'charged' : ult.size} · Level ${ULT_UNLOCK_LEVEL} · ${ult.charged ? 'one a turn' : `${ultPace(ult)}, one a turn`}`, ult.text ?? '', ult.charged?.text)}
     </>
   );

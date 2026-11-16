@@ -13,7 +13,7 @@ import {
 import { CARDS_BY_ID, CARD_INDEX, CARD_TOTAL, itemCard } from '@/cards';
 import type { CardData } from '@/engine/types';
 import { heroAbilities, skillWait, ultimateCard, ultWait } from '@/engine/query';
-import { PRICE } from '@/engine/constants';
+import { PRICE, SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { HeroPortrait } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { ITEM_IMG_BASE, SPELL_IMG_BASE } from '@/art/assets';
@@ -629,7 +629,8 @@ export function CardFrame({
                   marginRight: 5,
                 }}>{l.tag}</span>
               )}
-              <RuleText text={l.body} scale={scale} passTaps={!tapExplains} />
+              {/* A skill or passive counts its hero's Spirit twice; the ultimate once. */}
+              <RuleText text={l.body} scale={l.kind === 'skill' || l.kind === 'passive' ? { ...scale, rate: SKILL_SPIRIT_RATE } : scale} passTaps={!tapExplains} />
             </>
           );
           return (

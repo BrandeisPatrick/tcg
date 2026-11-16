@@ -77,7 +77,7 @@ import { attackBlocked, attackTargets, legalActions, playBlocked, playBlockedAny
 import { buildOf } from '@/engine/deck';
 import { seededRandom } from '@/engine/rng';
 import { forecastAttack, simulate } from '@/engine/forecast';
-import { BOSS_RETALIATION, LANE_INCOME } from '@/engine/constants';
+import { BOSS_RETALIATION, LANE_INCOME, SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { withBlindRolls } from '@/engine/chance';
 
 /** How hard the AI plays: the difficulty dial (see the head of this file). */
@@ -187,7 +187,7 @@ function heroThreat(c: CardInstance): number {
     for (const id of data.skills) {
       const ab = getAbility(id);
       if (!ab || ab.base == null) continue;
-      const v = ab.base + (ab.scalesSpirit ? effectiveSpirit(c) : 0);
+      const v = ab.base + (ab.scalesSpirit ? SKILL_SPIRIT_RATE * effectiveSpirit(c) : 0);
       if (best === undefined || v > best) best = v;
     }
     if (best !== undefined) t += best;

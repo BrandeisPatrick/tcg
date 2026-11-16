@@ -105,7 +105,7 @@ export const HEROES: HeroCard[] = [
   {
     id: 'hero_lady_geist', name: 'Lady Geist', type: 'hero', rarity: 3,
     atk: 1, hp: 7, growth: { atk: 0, hp: 0, spirit: 2 }, retreat: 2,
-    profile: { role: 'Bruiser', mix: { tank: 2, damage: 3, control: 0, support: 0 }, reach: 'both', curve: 'early' },
+    profile: { role: 'Bruiser', mix: { tank: 2, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'early' },
     skills: ['skill_lady_geist'], ult: 'eff_ult_lady_geist',
     signature: ['mystic_vulnerability', 'spirit_snatch'],
   },

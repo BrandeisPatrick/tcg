@@ -196,16 +196,18 @@ describe('Lifesteal is gone from Drifter and Lady Geist: Bloodscent and Essence 
     expect(drifter.hp).toBe(1);          // no heal; the defender does not strike back
   });
 
-  it('Lady Geist\'s Essence Bomb costs her 1 HP and drains nothing: {sp:1} spirit damage to every enemy', () => {
+  it('Lady Geist\'s Essence Bomb costs her 1 HP and drains nothing: {sp:3} spirit damage to the enemy Active alone (2026-11-16)', () => {
     const G = freshReadyGame();
     const geist = makeHero('hero_lady_geist', '0', 'active', 0);
     geist.hp = 5; geist.hpMax = 10;
     G.players['0'].active = geist;
     G.players['0'].souls = 20;
-    const enemies = [G.players['1'].active, ...G.players['1'].bench].filter(Boolean) as CardInstance[];
-    for (const e of enemies) e.hp = e.hpMax = 20;
-    expect(perform(G, '0', { type: 'useSkill', heroIid: geist.iid, skillId: 'skill_lady_geist' })).not.toBe(INVALID);
-    for (const e of enemies) expect(e.hp, e.cardId).toBe(20 - 1);  // dealt 1 spirit each (Spirit 0)
+    const rivalActive = G.players['1'].active!;
+    const bench = G.players['1'].bench.filter(Boolean) as CardInstance[];
+    for (const e of [rivalActive, ...bench]) e.hp = e.hpMax = 20;
+    expect(perform(G, '0', { type: 'useSkill', heroIid: geist.iid, skillId: 'skill_lady_geist', targetIid: rivalActive.iid })).not.toBe(INVALID);
+    expect(rivalActive.hp).toBe(20 - 3);                             // dealt 3 spirit (Spirit 0)
+    for (const e of bench) expect(e.hp, e.cardId).toBe(20);         // the bench is untouched
     expect(geist.hp).toBe(5 - 1);                                    // paid 1 HP, healed nothing
   });
 });
@@ -342,7 +344,7 @@ describe('Support — Rem: Tag Along, and the ride machinery (an old merge, with
     rem.spiritMod = 2;
     ally.hp = 1; ally.hpMax = 20;
     getAbility('skill_rem')!.run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    expect(ally.hp).toBe(1 + 4 + 2);
+    expect(ally.hp).toBe(1 + 4 + 2 * 2); // a skill counts Spirit twice
   });
 
   it('after 3 ticks a merged Rem returns to the bench and the max-HP reverts', () => {
