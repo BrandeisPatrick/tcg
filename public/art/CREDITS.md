@@ -35,6 +35,14 @@ from their "Deadlock Graphical Library" collection.
   80), and Silver's wolf-form card (`hero_silver_wolf_card.webp`, Deadlock's
   `images/heroes/werewolf_wolf_card.webp`), the art her card shows while Lycan
   Curse lasts.
+- Graves (2026-11-16): her portrait, minimap and small icons are the game's own
+  (`images/heroes/necro_card.webp`, `necro_mm.webp`, `necro_sm.webp` from the
+  deadlock-api's asset bucket, used as served), and her ultimate icon
+  (`public/ult/graves.webp`) is Borrowed Decree's (`necro_gravestone.webp`).
+  The two units her kit raises wear her abilities' own icons, white glyphs set
+  on a dark ground at the hero files' sizes: the Ghoul
+  (`unit_ghoul_*.webp`) Grasping Hands' (`necro_hands.webp`), the Gravestone
+  (`unit_gravestone_*.webp`) Borrowed Decree's.
 - The small hero icons (`_mm.webp`, `_sm.webp`) are the game's own icons,
   pulled from the community asset bucket at https://deadlock-api.com/
   (https://assets.deadlock-api.com/).

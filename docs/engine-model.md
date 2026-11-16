@@ -77,7 +77,7 @@ discard pile. A drafted match builds each deck as the last pick lands
 (`G.playerDeck`, DECK_SIZE items, upgrades allowed since 2026-11-15, at most
 MAX_COPIES of one) when it is a legal one, else the
 deck its heroes' builds make (`deckFromBuilds`, cards/decks.ts: the builds
-read across, round by round, as they are) — and its four drafted
+read across, round by round, as they are) — and its three drafted (`SQUAD_SIZE`)
 heroes, shuffled from the match seed (`nextRandom`, counted in
 `G.counters.rng`, so a game replays from G alone). At the last pick the decks
 are stocked unseen (`stockDeck`) and each side chooses its first Active from
@@ -493,3 +493,28 @@ move plays its activation, then its effect resolving on the board:
 `buildFxTimeline` holds every effect of the batch back by the lead, so nothing
 lands under the card or the plate. `actionHoldMs` is when `completeAction`
 unlocks the next move, and the rival pauses `AI_THINK_MS` (450) between moves.
+
+## Units and the mill (2026-11-16)
+
+**A unit** (`cards/units.ts`; docs/hero-design.md, "Units") is a board card
+that is no hero: a Ghoul, a Gravestone. It is hero-shaped — `type: 'hero'`
+with `unit` set — so the board, the targeting filters, the statuses and the
+attack treat it as they treat a hero, and the rules that differ ask
+`unitData` / `isUnit` (query.ts):
+
+| Rule | A hero | A unit |
+|---|---|---|
+| Where it comes from | drafted (`SQUAD_SIZE`, 3 a side) | an effect makes it: `raiseIntoDeck` (a card shuffled into a deck), `raiseUnit` (onto the bench) |
+| Put on the board (`placeHero`) | free | its price (`placeCost`; refused as `'souls'`) |
+| Items, spells | wears items, casts spells | wears nothing (`playBlocked` `'noHero'`), casts nothing (`spellCaster`) |
+| Exp | earns it | none (`grantExp`) |
+| At 0 HP | falls: bounty, push, a wait, back to the hand | `destroyUnit`: to its owner's discard pile for good, nothing paid or pushed, and its `death` effect runs |
+
+A unit that stood in the lane leaves it open, and the state-based pass asks
+who steps up. The Gravestone is `flags.benchOnly`: it never takes the lane.
+
+**The mill** (`millDeck`, deck.ts): the top cards of a deck go to that side's
+discard pile. A hero is never discarded — off a deck or out of a hand
+(`discardFromHand`): it goes back into its owner's deck, which is shuffled
+(`heroBackIntoDeck`). The `deck` FX stream names both: `'mill'` and, for a
+card an effect made, `'raise'`.

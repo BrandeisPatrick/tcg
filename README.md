@@ -1,7 +1,7 @@
 # Deadlock TCG
 
 A fan-made, turn-based card game set in **Valve's Deadlock**: build a deck of
-Deadlock's items, draft four heroes into it, draw, pay souls to put items on
+Deadlock's items, draft three heroes into it, draw, pay souls to put items on
 your heroes, fight in one lane and push down the rival's Patron. One player
 against an AI, as a single-page React app.
 
@@ -22,7 +22,7 @@ builds) and the Gallery. A Quick Match goes like this.
 ### Your deck
 
 - Five **ready decks** head the Loadout screen: Gunline, Spirit Storm,
-  Bulwark, Ambush and Lockdown. Each is a squad of four heroes and its 16
+  Bulwark, Ambush and Lockdown. Each is a squad of three heroes and its 16
   items; "Use deck" saves both, and the match is ready to play. Each holds 8
   tier-1, 6 tier-2 and 2 tier-3 items (56 souls), at most 2 copies of one, with
   an upgrade beside the item it is built from and a counter (Counterspell,
@@ -40,7 +40,7 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### The draft
 
-- 21 heroes from Deadlock's roster, each built from its Deadlock role
+- 22 heroes from Deadlock's roster, each built from its Deadlock role
   ([`docs/hero-design.md`](./docs/hero-design.md)): HP 4 + its tank score and
   Attack 1 (2 for a gun or melee hero), moved a point by its curve (early,
   mid, late); a Retreat price of 0–2 souls; either a skill (fifteen heroes)
@@ -54,8 +54,15 @@ builds) and the Gallery. A Quick Match goes like this.
   every enemy and Victor himself at the start of your turn, which charges it.
   Silver's turns her into a wolf for 2 turns (+3 Attack, Shield 6), and her
   card shows Deadlock's wolf-form art while it lasts.
-- A snake draft, four heroes each. Your four are shuffled into your deck: 20
-  cards.
+- A draft of three heroes each (it was four until 2026-11-16). Your three are
+  shuffled into your deck: 19 cards. The board keeps four spots, the Active
+  and three on the bench, so a full squad leaves one free for a unit.
+- Units are board cards that are no hero. Graves' kit makes them: a Ghoul
+  (1 Attack, 1 HP) is shuffled into her side's deck and played for 1 soul; a
+  Gravestone stands on her bench and makes a Ghoul a turn until anything
+  damages it. A unit wears nothing and earns nothing; destroyed, it is gone,
+  and nobody is paid for it. A Ghoul destroyed makes the enemy discard the top
+  card of its deck. A hero is never discarded: it goes back into the deck.
 - The pie rule: you draft first, and the rival moves first. Its first turn has
   no attack.
 

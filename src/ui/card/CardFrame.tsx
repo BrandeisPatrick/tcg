@@ -391,7 +391,9 @@ export function CardFrame({
   const cost = costInPlay ?? printedCost;
   // A card with no price prints no coin (a hero, an ultimate's face) — but a
   // copy made free prints a 0, so it does not look like a card with no cost.
-  const showCost = !isHero && !hideCost && (cost > 0 || cost !== printedCost);
+  // A unit (a Ghoul) is a hero-shaped card that is paid for: it prints its price, as an item does.
+  const isUnitCard = data?.type === 'hero' && !!data.unit;
+  const showCost = (!isHero || isUnitCard) && !hideCost && (cost > 0 || cost !== printedCost);
   const showStats = isHero;
 
   if (clean) {
@@ -432,7 +434,7 @@ export function CardFrame({
             mark={<span aria-hidden style={soulCoin(SEAL * 0.62, false, unaffordable ? poster.redDeep : poster.soulInk)} />}
             n={cost} />
         )}
-        {showStats && !hideStats && (
+        {showStats && !hideStats && !(isUnitCard && showCost) && (
           <Seal data-card-hp ink={poster.ink}
             mark={<HeartIcon size={Math.round(SEAL * 0.62)} color={poster.stat.hp} />}
             n={(data as any).hp} />

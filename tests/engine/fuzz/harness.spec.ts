@@ -379,6 +379,43 @@ describe('the transition rules fire', () => {
   /** Where a card is after a move. */
   const at = (A: GameState, iid: string) => everyCard(A).find((x) => x.card.iid === iid)!;
 
+  it('a unit an effect raises may appear — a Ghoul in a deck, a Gravestone on a bench — and nothing else may', () => {
+    expect(ids2(pair((G) => { stackDeck(G, '0', ['unit_ghoul']); }))).not.toContain('card-appeared');
+    expect(ids2(pair((G) => { G.players['0'].bench[2] = null; }, (() => { const B = clean(); B.players['0'].bench[2] = null; return B; })()))).not.toContain('card-appeared');
+    const open = () => { const B = clean(); B.players['0'].bench[2] = null; return B; };
+    const stone = (G: GameState) => { G.players['0'].bench[2] = makeInstance(allocatorOf(G), 'unit_gravestone', '0', 'bench', 3); };
+    expect(ids2(pair(stone, open()))).not.toContain('card-appeared');
+    // …a Ghoul straight into a hand or onto the board, or a Gravestone into a deck, is from nowhere.
+    expect(ids2(pair((G) => { giveCard(G, '0', 'unit_ghoul'); }))).toContain('card-appeared');
+    expect(ids2(pair((G) => { stackDeck(G, '0', ['unit_gravestone']); }))).toContain('card-appeared');
+    expect(ids2(pair((G) => { stackDeck(G, '0', ['grit']); }))).toContain('card-appeared');
+    // Units are no roster: two Ghouls on one side are no duplicate hero.
+    const G = clean();
+    stackDeck(G, '0', ['unit_ghoul', 'unit_ghoul']);
+    stackDeck(G, '1', ['unit_ghoul']);
+    expect(ids(G)).not.toContain('roster-duplicate');
+  });
+
+  it('a unit placed costs its price; a hero placed is free', () => {
+    const G = clean();
+    G.players['0'].bench[2] = null;
+    G.players['0'].souls = 3;
+    const ghoul = giveCard(G, '0', 'unit_ghoul');
+    expect(placeHeroBlockedOracle(G, '0', ghoul.iid, false)).toBeNull();
+    const put = made(G, 'placeHero', [ghoul.iid]);
+    expect(put.after.G.players['0'].souls).toBe(2);
+    expect(put.check()).toEqual([]);
+    expect(put.check((A) => { A.players['0'].souls = 3; })).toContain('souls-delta'); // placed for nothing
+    G.players['0'].souls = 0;
+    expect(placeHeroBlockedOracle(G, '0', ghoul.iid, false)).toBe('souls');
+    // It wears nothing: the play oracle sees no hero in it.
+    const H = clean();
+    H.players['0'].bench[2] = makeInstance(allocatorOf(H), 'unit_ghoul', '0', 'bench', 3);
+    H.players['0'].souls = 10;
+    const item = giveCard(H, '0', 'extra_health');
+    expect(playBlockedOracle(H, '0', item.iid, H.players['0'].bench[2]!.iid)).toBe('no-hero');
+  });
+
   it('structures lose HP with no hero falling', () => {
     expect(ids2(pair((G) => { pushOff(G, '1', 1); }))).toContain('structure-delta');
   });

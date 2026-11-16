@@ -1,6 +1,6 @@
 # Hero Design — requirements
 
-Status, 2026-11-09: **21 heroes are built to these cards** (branch `deck-and-heroes`; see "As
+Status, 2026-11-16: **22 heroes are built to these cards** (Graves on 2026-11-16, with the units her kit raises: see "Units, the mill and Graves" at the end). Status, 2026-11-09: 21 heroes were built to these cards (branch `deck-and-heroes`; see "As
 built" at the end): the 19 of step 2, and in step 3 Victor and Silver with their charged ultimates,
 on the trigger prompt system of section 6 (`src/engine/prompts.ts`), and Rem rebuilt to Patrick's
 call of the same day (section 5: she stands in the lane, Tag Along a ride). The other 23 cards in section 8
@@ -342,9 +342,10 @@ HP 5 · Attack 1 · Retreat 0 · per level +2 Spirit
 
 **Graves** — peaks mid, many targets; mix tank 1 · damage 2 · control 2 · support 0  
 HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, waits 4 — **Essence Theft**: Her beam drains every enemy: Spirit Resist -1 for 2 turns. Graves gets +1 Spirit for 2 turns.
-- Ultimate, medium, waits 6 — **Borrowed Decree**: Deal 3✦ spirit damage to every enemy. Root the enemy Active 1 turn.
-- Why: The necromancer steals her enemies' defenses and raises Ghouls that hit the whole team and pin their front line.
+- Skill, waits 4 — **Grasping Hands**: Deal 1✦ spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck.
+- Ultimate, small, waits 4 — **Borrowed Decree**: Raise a Gravestone on your bench: each turn it shuffles a Ghoul into your deck.
+- Why: The necromancer traps the lane and raises the dead. Her Ghouls are cards (Patrick, 2026-11-16): she fills her own deck with them, and each one that dies takes a card off the enemy's.
+- Built 2026-11-16 to Patrick's design; this replaces the proposal of 2026-11-09 (Essence Theft and a Borrowed Decree that hit every enemy). The reasoning is in "Units, the mill and Graves" at the end.
 
 **Mina** — peaks late, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
@@ -716,3 +717,69 @@ Built on `deck-and-heroes`. Where the doc is silent, the build reads it this way
   them, as for Rem), their ultimate icons are the `signature4` icons, and the wolf is Deadlock's
   `werewolf_wolf_card`.
 
+
+### Units, the mill and Graves (2026-11-16)
+
+Patrick: "a new concept for heroes… her skill traps a hero, deals damage and spawns two zombies,
+but the zombies become cards that cost one soul… her ultimate is a tomb, another unit: it has to
+have a spot on the field… every turn it adds a zombie to the deck… zombies have 1 attack and 1
+health, and whenever they die the enemy discards a card from its deck… whenever a hero is
+discarded it is added to the deck again, reshuffled… and the max heroes go from 4 to 3."
+
+Deadlock's Graves does this, so the card uses the game's own names: the skill is **Grasping
+Hands** (a line of hands that damages and immobilizes, "summoning a Ghoul"), the ultimate
+**Borrowed Decree** (gravestones that raise Ghouls), and the zombie is a **Ghoul**.
+
+**Squads of three.** A side drafts 3 heroes, not 4 (`SQUAD_SIZE`). The board keeps its four
+spots, the Active and three on the bench, so a full squad leaves one free. Seat 0 drafts first and
+last, seat 1 the two picks after the first. Story mode still recruits up to four.
+
+**Units.** A unit is a board card that is no hero. It takes a spot, has Attack and HP, and is
+damaged, targeted and given statuses like a hero. It differs in five ways:
+
+- It is never drafted or built into a deck: a hero's kit makes it.
+- Played from the hand it costs souls (a hero is free).
+- It wears no item, casts no spell and earns no exp.
+- Destroyed, it is gone for good, to its owner's discard pile.
+- Nobody is paid for it: no bounty, no push on the structures, no exp. (A unit that fed the enemy
+  a bounty would be a card you pay to lose.)
+
+| Unit | Attack · HP | Price | What it does |
+|---|---|---|---|
+| Ghoul | 1 · 1 | 1 soul | May stand in the lane. **Death Rattle:** when it is destroyed, the enemy discards the top card of its deck. |
+| Gravestone | 0 · 1 | not played from the hand | Bench only. At the start of your turn, shuffle a Ghoul into your deck. Any damage destroys it. |
+
+**The mill.** A discard off the top of a deck. A hero is never discarded, from a deck or from a
+hand: it goes back into its owner's deck and the deck is shuffled. A Ghoul milled is discarded
+like any card.
+
+**The numbers**, by the budget of section 4 and [card-design.md](card-design.md) §3. Nothing was
+run through the sim.
+
+- **A card off the enemy's deck is worth 1.4** (the value of a drawn card,
+  [card-design.md](card-design.md), "The Cooldown family").
+- **A Ghoul played is worth about 2.5 for its 1 soul:** its death 1.4 × 0.8 (it dies sooner or
+  later; the deck may be empty) = 1.1; in the lane it takes a swing meant for a hero, 3.5 × 0.5 at
+  0.6 (it has to get there: a Retreat, or the lane left open) = 1.0; its own swing of 1 at 0.3.
+  It is over its price because the spot is the real cost: with three heroes out a side has one
+  spare, and the Gravestone wants the same one.
+- **A Ghoul card in the deck is worth 0.85:** it has to be drawn (0.6 of the time, in a 19-card
+  deck) and paid for: (2.5 − 1) × 0.6. One Death Rattle discards **1** card ("one or two, it
+  depends"): at 2 a played Ghoul would be worth 3.6.
+- **Grasping Hands** (waits 4, so 3 to 4.5 points): 1✦ is 1; Root 1 turn 1.5; two Ghoul cards 1.7.
+  **4.2.** A Root, not a Stun ("stun, trap a hero"): a Stun is 3 points and would put the skill at
+  5.7, and Deadlock's hands immobilize.
+- **Borrowed Decree** (small, 4 to 6 points): a Gravestone on the bench is reached only by damage
+  that hits the bench (an area hit, reach, a card aimed there), so it stands about 5 of its
+  owner's turns: 5 Ghoul cards × 0.85 = **4.25**. It is small, not medium, because one hit ends it
+  ("it has to be damaged once") and it takes the squad's spare spot while it stands.
+- **Graves herself:** HP 5 (tank 1), Attack 1, Retreat 1, +1 HP and +2 Spirit a level (mid), as
+  the proposal had her. Control 2, damage 2.
+
+**Defaults chosen, for Patrick to overrule:**
+- Ghouls go into the deck, shuffled, both from the skill and from the Gravestone (not the hand).
+- The Gravestone never takes the lane and has no Attack.
+- A unit can be healed, shielded and targeted by spells like a hero; it only cannot wear items.
+- A Ghoul in the lane is attacked like a hero. When it dies there the lane is open and its side
+  picks who steps up, at no cost, as when an Active falls.
+- No ready deck carries Graves yet.

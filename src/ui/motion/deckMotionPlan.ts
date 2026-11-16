@@ -262,6 +262,29 @@ export function planDeckMotion(batch: readonly FxEvent[], input: PlanInput): Dec
         c.end = Math.max(c.end, at + T.flight);
         break;
       }
+      case 'mill': {
+        // Off the top of the deck, face up, onto the discard pile (a Ghoul's death).
+        const at = c.next;
+        flights.push({
+          key: `${ev.seq}`, what: 'discard', pid, cardId: ev.cardId, iid: ev.iid,
+          at, hold: 0, dur: T.flight,
+          from: deck, to: discard,
+          faces: { start: 'back', end: 'face' },
+        });
+        ticks.push({ pile: 'deck', pid, at, delta: -1 });
+        ticks.push({ pile: 'discard', pid, at: at + T.flight, delta: 1 });
+        c.next = at + T.stagger;
+        c.end = Math.max(c.end, at + T.flight);
+        break;
+      }
+      case 'raise': {
+        // A card an effect made is shuffled in: the deck counts one more, on the beat.
+        const at = c.next;
+        ticks.push({ pile: 'deck', pid, at, delta: 1 });
+        c.next = at + T.stagger;
+        c.end = Math.max(c.end, at);
+        break;
+      }
       case 'toHand': {
         const at = c.next;
         flights.push({

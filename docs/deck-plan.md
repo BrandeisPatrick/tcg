@@ -22,12 +22,12 @@ with less to rebuild.
 - A deck has 16 items, with at most 4 copies of any one item. Any tier can go in.
 - A deck may hold any item, upgrades too (Patrick, 2026-11-15: upgrades are played "regularly" from the hand for less; see Upgrades). From 2026-11-09 until then a deck held base items only and an upgrade reached it when its component was played.
 - A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), read across as they are, upgrades included.
-- You draft 4 heroes as now. They are shuffled into your deck, with an animation, so the deck has 20 cards.
+- You draft 3 heroes (Patrick, 2026-11-16; it was 4). They are shuffled into your deck, with an animation, so the deck has 19 cards. The board keeps its 4 spots, so a full squad leaves one for a unit ([hero-design.md](hero-design.md), "Units").
 
 ## Ready decks (2026-11-15)
 
 Patrick, 2026-11-15: "we need to have decks ready." Five decks head the Loadout, each a squad of
-four heroes and its 16 items (`src/cards/readyDecks.ts`). "Use deck" saves the squad and the deck
+three heroes and its 16 items (`src/cards/readyDecks.ts`; squads were four until 2026-11-16, and each deck kept its items and let one hero go). "Use deck" saves the squad and the deck
 together. When that would replace picks or a deck of the player's own, the button asks once more.
 
 The recipe, the same for all five. No sim ran. Rebuilt on 2026-11-15 for the one-play spells, the
@@ -51,15 +51,15 @@ upgrades in the deck and the counters ([card-design.md](card-design.md), "Change
   Cooldown is worth its price now (draw 3, discard 1) for a deck that wants one
   ([card-design.md](card-design.md), "The Cooldown family").
 - **The rest from the squad's own builds**, so each hero finds its items.
-- **A squad has a front, a carry and a helper.** No hero is in two decks; Shiv is in none.
+- **A squad has a front, a carry and a helper.** No hero is in two decks. Seven heroes are in none: Shiv, Paige, Lady Geist, Viscous, Drifter, Dynamo and Graves.
 
 | Deck | Squad | Tier 1 (two of each) | Tier 2 | Tier 3 |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze, Paige | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Titanic Magazine (the upgrade), Long Range, Opening Rounds, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
-| Spirit Storm | Lady Geist, Seven, Lash, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Improved Spirit (the upgrade), 2 Cold Front, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
-| Bulwark | Abrams, Viscous, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Bullet Lifesteal, Healing Booster, Battle Vest, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
-| Ambush | Silver, Yamato, Mirage, Drifter | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Split Shot | Tesla Bullets, Dispel Magic |
-| Lockdown | Mo & Krill, Sinclair, Dynamo, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Spirit Sap, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
+| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Titanic Magazine (the upgrade), Long Range, Opening Rounds, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
+| Spirit Storm | Lash, Seven, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Improved Spirit (the upgrade), 2 Cold Front, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
+| Bulwark | Abrams, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Bullet Lifesteal, Healing Booster, Battle Vest, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
+| Ambush | Silver, Yamato, Mirage | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Split Shot | Tesla Bullets, Dispel Magic |
+| Lockdown | Mo & Krill, Sinclair, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Spirit Sap, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
 
 How each wins:
 
