@@ -667,6 +667,17 @@ export function statusDuration(card: CardInstance, statusId: StatusId, duration:
   return n;
 }
 
+/** How long crowd control `caster` casts on an enemy lands for, after the
+ *  `ccDuration` hooks of what the caster carries (Duration Extender, Superior
+ *  Duration). The target's own hooks (`statusDuration`) are read after it. */
+export function castCcDuration(caster: CardInstance, statusId: StatusId, duration: number): number {
+  let n = duration;
+  for (const { ability } of abilitySources(caster)) {
+    if (ability.ccDuration) n = ability.ccDuration(caster, statusId, n);
+  }
+  return n;
+}
+
 /** Souls off `card`'s Retreat: the sum of the `retreatDiscount` hooks of what it
  *  carries (Sprint Boots, Enduring Speed). `retreatCost` (legality.ts) asks it of
  *  the hero leaving the Active slot and keeps the price at 0 or more. */
