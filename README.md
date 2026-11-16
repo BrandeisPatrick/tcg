@@ -192,7 +192,7 @@ charges come back sooner too, on top of a charge item's; a wait never goes under
   time (Assassinate's takes 5 turns).
   Only the charge items change that: Extra Charge adds a charge, and Rapid
   Recharge adds 2 and brings each back a turn sooner.
-- The ultimate is a button on the hero card, from Level 2. Your side uses
+- The ultimate is a button on the hero card, from Level 3. Your side uses
   one ultimate a turn. It waits 4, 6 or 8 turns by its size (small, medium,
   large), after each use and from the match's first turn: a large one is
   first ready on your turn 8.

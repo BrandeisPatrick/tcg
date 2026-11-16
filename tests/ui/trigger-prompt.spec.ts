@@ -23,14 +23,15 @@ import { HeroDetailSheet, HeroRules } from '@/ui/overlays/HeroDetailSheet';
 import { HeroSlot } from '@/ui/board/HeroSlot';
 import { skillBlockReason } from '@/ui/board/heroActions';
 import { freshReadyGame } from '../engine/_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
-/** P1's Victor (Level 2, 1 HP, 9 damage taken since his last rising) felled
+/** P1's Victor (Level 3, 1 HP, 9 damage taken since his last rising) felled
  *  by P0's Haze, whose hit is the tenth damage: the prompt is owed. He holds
  *  no souls — the ultimate takes none. */
 function felled(): { G: GameState; victor: CardInstance } {
   const G = freshReadyGame();
   const victor = makeInstance(allocatorOf(G), 'hero_victor', '1', 'active', 0);
-  victor.level = 2;
+  victor.level = ULT_UNLOCK_LEVEL;
   victor.hp = 1;
   victor.tally = { eff_ult_victor: 9 };
   G.players['1'].active = victor;
@@ -68,7 +69,7 @@ describe('the trigger prompt names the moment, the card and what it takes', () =
   it('short of its damage there is no prompt: Victor falls, 9 of 10', () => {
     const G = freshReadyGame();
     const victor = makeInstance(allocatorOf(G), 'hero_victor', '1', 'active', 0);
-    victor.level = 2;
+    victor.level = ULT_UNLOCK_LEVEL;
     victor.hp = 1;
     victor.tally = { eff_ult_victor: 7 }; // and Haze's blow at a hurt hero, 1 + Fixation's 1: 9
     G.players['1'].active = victor;
@@ -82,7 +83,7 @@ describe('the hero sheet: a charged ultimate\'s live count, its rule, and when a
   it('Silver\'s Lycan Curse reads "5 / 8" after 5 damage dealt, and never past what it needs; its rule under the effect', () => {
     const G = freshReadyGame();
     const silver = makeInstance(allocatorOf(G), 'hero_silver', '0', 'active', 0);
-    silver.level = 2;
+    silver.level = ULT_UNLOCK_LEVEL;
     silver.tally = { eff_ult_silver: 5 };
     const out = html(createElement(HeroDetailSheet, { card: silver, isMine: true, onClose: () => {} }));
     expect(out).toContain('5 / 8');

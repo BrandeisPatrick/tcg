@@ -42,7 +42,7 @@ after 2 turns, keeping its level (section 7).
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
 | Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Three skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, and since 2026-11-16 Vindicta's Assassinate, which waits 5; Lightning Ball was one until Seven's skill became Static Charge, 2026-11-15, and Kinetic Pulse until Dynamo's became Rejuvenating Aurora, 2026-11-16): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
-| Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 2. Costs no souls (Patrick, 2026-11-15), and a side uses **one ultimate a turn**. It waits 4 (small), 6 (medium) or 8 (large) turns by size: after each use, and from the match's first turn, so a large one is first ready on its side's turn 8. |
+| Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 3 (Patrick, 2026-11-16; it was Level 2). Costs no souls (Patrick, 2026-11-15), and a side uses **one ultimate a turn**. It waits 4 (small), 6 (medium) or 8 (large) turns by size: after each use, and from the match's first turn, so a large one is first ready on its side's turn 8. |
 | Charged ultimate | For heroes like Victor and Silver (Patrick, 2026-11-09). It has no opening wait: it is ready once the hero has taken (Victor, 10) or dealt (Silver, 8) enough damage. The count starts over after use, and it then waits its size's turns like any ultimate. (Until 2026-11-15 it had a soul price, 20 and 16, that each damage brought down by 1.) |
 
 ## 3. Writing card text
@@ -651,7 +651,7 @@ it this way:
 Built on `deck-and-heroes`. Where the doc is silent, the build reads it this way:
 
 **Trigger prompts (section 6)**
-- **Usable** means the doc's tests and nothing else: the right level (an ultimate's Level 2), not
+- **Usable** means the doc's tests and nothing else: the right level (an ultimate's Level 3 since 2026-11-16, Level 2 before), not
   waiting (its cooldown), charged (a charged ultimate's damage), and, for an ultimate, its side's
   one of the turn not yet used (since 2026-11-15; before it, the souls of its `kitCost`). Whose turn it is, the Act, and the
   hero's statuses (a Stun, a Silence) do not stop a trigger. With nothing usable nobody is asked and

@@ -25,6 +25,7 @@ import { allocatorOf } from '@/engine/ids';
 import { makeInstance } from '@/engine/instances';
 import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, PRICE, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame, giveCard, giveItem, useItem } from './_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 /** End the turn of `pid` and begin the other seat's, as the game's turn hooks do. */
 function nextTurn(G: GameState, pid: PlayerID): PlayerID {
@@ -41,7 +42,7 @@ const act = (G: GameState, pid: PlayerID, a: Action) => expect(perform(G, pid, a
 
 /** P0's turn with Seven on its bench (slot 1), at `level`, and every hero of both
  *  sides tough enough that nothing falls. */
-function withSeven(level: 1 | 2 = 1): { G: GameState; seven: CardInstance; foe: CardInstance } {
+function withSeven(level: 1 | 3 = 1): { G: GameState; seven: CardInstance; foe: CardInstance } {
   const G = freshReadyGame();
   const seven = makeInstance(allocatorOf(G), 'hero_seven', '0', 'bench', 1);
   seven.level = level;
@@ -111,7 +112,7 @@ describe('Storm Cloud: a channel of 2 turns that a Stun ends', () => {
   });
 
   it('nothing lands as it is used; each of Seven\'s next two turn ends deals 2 + his Spirit to every enemy; then it is over', () => {
-    const { G, seven } = withSeven(2);
+    const { G, seven } = withSeven(ULT_UNLOCK_LEVEL);
     const spirit = seven.spiritMod;
     const foes = heroesOf(G.players['1']);
     act(G, '0', { ...ult, heroIid: seven.iid });
@@ -139,7 +140,7 @@ describe('Storm Cloud: a channel of 2 turns that a Stun ends', () => {
   });
 
   it('Knockdown on the channelling Seven ends it at once: the second pulse never comes, and the ultimate is spent', () => {
-    const { G, seven } = withSeven(2);
+    const { G, seven } = withSeven(ULT_UNLOCK_LEVEL);
     const me = G.players['0'];
     // Seven channels from the lane, where Knockdown reaches him.
     [me.active, me.bench[0]] = [seven, me.active];
@@ -161,7 +162,7 @@ describe('Storm Cloud: a channel of 2 turns that a Stun ends', () => {
 
   it('a Sleep ends a channel too; a Silence or a Disarm does not', () => {
     for (const [id, ends] of [['sleep', true], ['stun', true], ['rabbit', true], ['silenced', false], ['disarm', false], ['rooted', false]] as const) {
-      const { G, seven } = withSeven(2);
+      const { G, seven } = withSeven(ULT_UNLOCK_LEVEL);
       addStatus(G, seven, 'casting', 2, 2);
       addStatus(G, seven, id, 1, 1);
       expect(has(seven, 'casting'), id).toBe(!ends);
@@ -324,7 +325,7 @@ describe('Counterspell: a spell that shields one of your heroes from the next en
     const { G, haze } = countered();
     nextTurn(G, '0');
     const seven: CardInstance = heroesOf(G.players['1']).find((h) => h.cardId === 'hero_seven')!;
-    seven.level = 2;
+    seven.level = ULT_UNLOCK_LEVEL;
     seven.cooldowns = undefined;
     act(G, '1', { type: 'useSkill', heroIid: seven.iid, skillId: 'eff_ult_seven' });
     expect(has(seven, 'casting')).toBe(true);
@@ -364,7 +365,7 @@ describe('Counterspell: a spell that shields one of your heroes from the next en
   });
 
   it('the rival\'s Counterspell stops yours: Knockdown at a shielded channeller is wasted and the channel goes on', () => {
-    const { G, seven } = withSeven(2);
+    const { G, seven } = withSeven(ULT_UNLOCK_LEVEL);
     const me = G.players['0'];
     [me.active, me.bench[0]] = [seven, me.active];
     seven.zone = 'active'; seven.slot = undefined;

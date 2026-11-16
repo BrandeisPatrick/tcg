@@ -27,6 +27,7 @@ import { statusOfKeyword } from '@/ui/card/RuleText';
 import { forecastMismatches } from './fuzz/forecast';
 import { freshReadyGame, giveItem, makeAttack, makeHero, useItem } from './_helpers';
 import { killBounty } from '@/engine/rounds';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === id);
 const hps = (cs: CardInstance[]) => cs.map((c) => c.hp);
@@ -116,7 +117,7 @@ describe('Ricochet: a swing that lands bounces to every other enemy hero', () =>
 
     // Bullet Dance is her Attack as bullet damage to every enemy, no swing at all.
     const haze = lane('hero_haze', 'ricochet');
-    haze.atk.level = 2;
+    haze.atk.level = ULT_UNLOCK_LEVEL;
     haze.G.players['0'].souls = 12;
     const from = haze.G.fx.length;
     expect(perform(haze.G, '0', { type: 'useSkill', heroIid: haze.atk.iid, skillId: 'eff_ult_haze' })).not.toBe(INVALID);

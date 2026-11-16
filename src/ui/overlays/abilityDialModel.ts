@@ -8,7 +8,7 @@
  *            wait then being its next charge's
  *   charge   a charged ultimate: the damage counted toward what it needs
  *
- * An ultimate below its unlock level has no dial: its row says "Level 2".
+ * An ultimate below its unlock level has no dial: its row says "Level 3".
  */
 import type { AbilityId, CardInstance } from '@/engine/types';
 import { ULT_UNLOCK_LEVEL } from '@/engine/constants';

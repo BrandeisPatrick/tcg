@@ -32,6 +32,7 @@ import { CARDS_BY_ID } from '@/cards';
 import { configureReadyMatch, flagBenchOnly, freshReadyGame, giveCard, giveItem, makeHero, playNew } from '../_helpers';
 import { forecastMismatches } from './forecast';
 import { everyCard } from './oracle';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 beforeAll(configureReadyMatch);
 
@@ -44,11 +45,11 @@ function runMove(name: string, G: GameState, pid: PlayerID, ...args: unknown[]) 
 }
 
 const anywhere = (G: GameState, iid: string) => everyCard(G).find((x) => x.card.iid === iid)?.card;
-/** `hero` uses its ultimate (a kit ability, unlocked at Level 2: the hero is raised to it; it
+/** `hero` uses its ultimate (a kit ability, unlocked at Level 3: the hero is raised to it; it
  *  costs 4, 8 or 12 souls by its card's size: its side is given that much if it holds less, so
  *  a refusal is never the price's). */
 function useUlt(G: GameState, hero: CardInstance, targetIid?: string) {
-  hero.level = Math.max(2, hero.level ?? 1) as 2 | 3 | 4;
+  hero.level = Math.max(ULT_UNLOCK_LEVEL, hero.level ?? 1) as 3 | 4;
   const ult = (CARDS_BY_ID[hero.cardId] as { ult?: string }).ult;
   const ps = G.players[seatOf(hero)];
   ps.souls = Math.max(ps.souls, kitCost(hero, ult));
@@ -860,13 +861,13 @@ describe('M2 the attack forecast matches what the attack does', () => {
 //     it went with the hero rebuild.)
 // ===========================================================================
 describe('M3 the AI sees every legal play', () => {
-  /** Sinclair at Level 2, alone on P0's side (a short list: the AI keeps only its top 12 moves)
+  /** Sinclair at Level 3, alone on P0's side (a short list: the AI keeps only its top 12 moves)
    *  with `souls` (an ultimate takes none), facing P1's Abrams — whose Seismic Impact (the enemy
    *  Active) is there to copy. */
   const sinclairGame = (souls = 0) => {
     const G = game();
     const sinclair = makeHero('hero_sinclair', '0', 'active', 0);
-    sinclair.level = 2;
+    sinclair.level = ULT_UNLOCK_LEVEL;
     G.players['0'].active = sinclair;
     G.players['0'].bench = [null, null, null];
     G.players['0'].souls = souls;
@@ -926,7 +927,7 @@ describe('M3 the AI sees every legal play', () => {
   it('M3b Yamato\'s self-cast ultimate is offered', () => {
     const G = game();
     const yamato = makeHero('hero_yamato', '0', 'active', 0);
-    yamato.level = 2;
+    yamato.level = ULT_UNLOCK_LEVEL;
     G.players['0'].active = yamato;
     const offered = enumerateAIMoves(G, ctxFor('0'), false).some((m) => m.move === 'useSkill' && m.args[0] === yamato.iid && m.args[2] === 'eff_ult_yamato');
     expect(offered).toBe(true);

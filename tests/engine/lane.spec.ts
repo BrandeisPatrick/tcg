@@ -77,7 +77,7 @@ describe('exp comes from the lane', () => {
   });
 });
 
-describe('a hero unlocks its ultimate at Level 2', () => {
+describe('a hero unlocks its ultimate at Level 3 (2 until 2026-11-16)', () => {
   it('no ultimate is open while every hero is Level 1, however late the turn', () => {
     const G = freshReadyGame();
     for (let t = 2; t <= 20; t += 2) {
@@ -87,11 +87,14 @@ describe('a hero unlocks its ultimate at Level 2', () => {
     }
   });
 
-  it("reaching Level 2 unlocks that hero's ultimate at once — and only that hero's; nothing is dealt", () => {
+  it("reaching Level 3 unlocks that hero's ultimate at once — and only that hero's; nothing is dealt", () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
     ps.souls = SOULS;
     grantExp(G, ps.active!, LEVEL_THRESHOLDS[0]);
+    expect(ps.active!.level).toBe(2);
+    expect(ultBlock(G, ps.active!)).toBe('locked'); // Level 2 unlocks nothing
+    grantExp(G, ps.active!, LEVEL_THRESHOLDS[1]);
     expect(ps.active!.level).toBe(ULT_UNLOCK_LEVEL);
     expect(ultBlock(G, ps.active!)).toBeNull();
     expect(ultBlock(G, ps.bench[1]!)).toBe('locked');
@@ -106,11 +109,12 @@ describe('a hero unlocks its ultimate at Level 2', () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
     ps.souls = SOULS;
-    ps.active!.exp = LEVEL_THRESHOLDS[0] - EXP_ON_KILL;
+    ps.active!.level = 2;
+    ps.active!.exp = LEVEL_THRESHOLDS[1] - EXP_ON_KILL;
     G.players['1'].active!.hp = 1;
     expect(ultBlock(G, ps.active!)).toBe('locked');
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
-    expect(ps.active!.level).toBe(2);
+    expect(ps.active!.level).toBe(ULT_UNLOCK_LEVEL);
     expect(ultBlock(G, ps.active!)).toBeNull();
   });
 
@@ -119,7 +123,7 @@ describe('a hero unlocks its ultimate at Level 2', () => {
     const ps = G.players['0'];
     ps.souls = SOULS;
     const lash = ps.bench[1]!;
-    grantExp(G, lash, LEVEL_THRESHOLDS[0]);
+    grantExp(G, lash, LEVEL_THRESHOLDS[0] + LEVEL_THRESHOLDS[1]);
     expect(ultBlock(G, lash)).toBeNull();
     expect(perform(G, '0', { type: 'useSkill', heroIid: lash.iid, skillId: 'eff_ult_lash' })).not.toBe(INVALID);
   });

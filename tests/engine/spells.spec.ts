@@ -17,6 +17,7 @@ import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
 import { addStatus } from '@/engine/statusOps';
 import { EXP_ON_KILL, PRICE } from '@/engine/constants';
 import { freshReadyGame, giveCard, giveItem, makeAttack, useItem } from './_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 /** End `pid`'s turn, pass the rival's whole turn and begin `pid`'s next own
  *  turn. */
@@ -39,7 +40,7 @@ describe('a spell is played from the hand, and spends no hero\'s ability', () =>
     const foe = G.players['1'].active!;
     foe.hpMax = foe.hp = 30;
     const [lash, paige] = [me.bench[1]!, me.bench[2]!];
-    lash.level = 2; // its ultimate unlocked
+    lash.level = ULT_UNLOCK_LEVEL; // its ultimate unlocked
     const front = giveCard(G, '0', 'cold_front');
     const grit = giveCard(G, '0', 'grit');
     expect(cast(G, '0', front.iid, foe.iid)).not.toBe(INVALID);

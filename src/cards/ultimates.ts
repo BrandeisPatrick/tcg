@@ -1,7 +1,7 @@
 import type { UltimateCard } from '@/engine/types';
 
 // Ultimates are buttons printed on the hero card (docs/hero-design.md §2): each
-// hero's `ult` names the ability id here (`abilities[0]`), usable from Level 2
+// hero's `ult` names the ability id here (`abilities[0]`), usable from Level 3
 // (ULT_UNLOCK_LEVEL) for no souls, one ultimate a turn for its side, then on
 // its size's wait (ULT_WAIT: small 4, medium 6, large 8 turns), which it also
 // starts the match on — a charged one waits on damage instead (`charged.need`).

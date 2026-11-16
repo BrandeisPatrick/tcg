@@ -381,7 +381,7 @@ export const LESSONS: Lesson[] = [
     title: 'The Skill',
     blurb: "Income, Act, End. Kelvin's skill ends it.",
     face: 'hero_kelvin',
-    outro: "Every turn runs Income, Act, End — a banner opens each turn. A skill costs no souls: after a use it waits a few turns, and some hold two charges. The ultimate is the other button on the card: from Level 2, no souls either, one ultimate a turn.",
+    outro: "Every turn runs Income, Act, End — a banner opens each turn. A skill costs no souls: after a use it waits a few turns, and some hold two charges. The ultimate is the other button on the card: from Level 3, no souls either, one ultimate a turn.",
     // Lash already hurt to a single point: Frost Grenade's one spirit damage
     // (to every enemy, and he is the only one) is the whole fight. A skill
     // costs no souls; Frost Grenade holds two charges.

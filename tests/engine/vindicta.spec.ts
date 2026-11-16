@@ -24,6 +24,7 @@ import { heroAbilities, heroesOf, kitCharges } from '@/engine/query';
 import { addStatus } from '@/engine/statusOps';
 import { FLIGHT_DODGE_IN, FLIGHT_TURNS, ULT_WAIT } from '@/engine/constants';
 import { freshReadyGame, giveItem } from './_helpers';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 function nextTurn(G: GameState, pid: PlayerID): PlayerID {
   const next: PlayerID = pid === '0' ? '1' : '0';
@@ -37,7 +38,7 @@ const flying = (c: CardInstance) => c.statuses.find((s) => s.id === 'flying');
 const rolls = (G: GameState) => G.counters?.rng ?? 0;
 
 /** P0's turn; Vindicta on its bench (slot 1), Level `level`, every hero of both sides tough. */
-function board(level: 1 | 2 = 1): { G: GameState; vindicta: CardInstance; foes: CardInstance[] } {
+function board(level: 1 | 3 = 1): { G: GameState; vindicta: CardInstance; foes: CardInstance[] } {
   const G = freshReadyGame();
   const vindicta = G.players['0'].bench[0]!;
   expect(vindicta.cardId).toBe('hero_vindicta');
@@ -102,8 +103,8 @@ describe('Assassinate: a snipe that holds 2 charges and takes 5 turns to come ba
 describe('Flight: for 3 turns she flies', () => {
   const fly = (v: CardInstance): Action => ({ type: 'useSkill', heroIid: v.iid, skillId: 'eff_ult_vindicta' });
 
-  it('her ultimate, from Level 2, for no souls: the Flying status for 3 of her turns, then a small ultimate\'s wait', () => {
-    const { G, vindicta } = board(2);
+  it('her ultimate, from Level 3, for no souls: the Flying status for 3 of her turns, then a small ultimate\'s wait', () => {
+    const { G, vindicta } = board(ULT_UNLOCK_LEVEL);
     G.players['0'].souls = 0;
     act(G, '0', fly(vindicta));
     expect(flying(vindicta)).toMatchObject({ duration: FLIGHT_TURNS });

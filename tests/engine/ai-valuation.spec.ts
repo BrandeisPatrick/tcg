@@ -5,6 +5,7 @@ import { CARDS_BY_ID } from '@/cards';
 import type { CardInstance, GameState, HeroCard, PlayerID, StatusInstance } from '@/engine/types';
 import { freshReadyGame, giveCard, giveItem, makeHero } from './_helpers';
 import { newTrack } from '@/engine/map';
+import { ULT_UNLOCK_LEVEL } from '@/engine/constants';
 
 // What the AI makes of a position: `evalState` (src/ai/heuristic.ts) prices the
 // statuses a unit carries, the channel it is running and a Rem riding on it.
@@ -323,7 +324,7 @@ describe('AI valuation: control items and ultimates get used', () => {
     });
   }
 
-  /** P1 whose `hero` (Level 2: its ultimate unlocked) stands in `slot`, wearing
+  /** P1 whose `hero` (Level 3: its ultimate unlocked) stands in `slot`, wearing
    *  nothing, and nobody else on the bench, with the souls its ultimate costs
    *  (`kitCost`: its size's) and no more. */
   function unlocked(hero: string, slot: 'active' | 'bench' = 'active') {
@@ -331,7 +332,7 @@ describe('AI valuation: control items and ultimates get used', () => {
     const ai = G.players['1'];
     ai.bench = [null, null, null];
     const h = makeHero(hero, '1', slot, slot === 'active' ? 0 : 1);
-    h.level = 2;
+    h.level = ULT_UNLOCK_LEVEL;
     if (slot === 'active') ai.active = h; else ai.bench[0] = h;
     ai.souls = kitCost(h, (CARDS_BY_ID[hero] as HeroCard).ult);
     return { G, h };

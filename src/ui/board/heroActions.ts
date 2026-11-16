@@ -2,7 +2,7 @@
  * What a hero can still do this turn, read the way the engine reads it. A
  * turn opens with its income and its draw; then the player puts heroes from
  * the hand on the bench (free) and items from the hand on heroes (their
- * price), every hero may use one ability a turn (its skill or, from Level 2,
+ * price), every hero may use one ability a turn (its skill or, from Level 3,
  * its ultimate; or an active item it wears, free), one Retreat (the leaving
  * hero's own price), and each hero standing in the Active slot may attack
  * once; the turn goes on after an attack (attack, Retreat, attack). The
