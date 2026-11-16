@@ -299,7 +299,7 @@ Power, taken as 1.5.
 | Reactive Barrier *fix* | Vitality T2 | 4 | Shield 3 → 4 on hard CC | 0.2 × 3 × 0.5 × 0.9 × 6 = 1.6 → **2.0** |
 | Healing Nova *fix* | Vitality T3 · active | 8 | Heal all allies 3 → 5 | 3.2 × 3 × 0.5 × 0.4 × 1.33 = 2.6 → **4.5** |
 | Dispel Magic *fix* | Vitality T3 · active | 8 | Shield 2 → 4; heal 3 → 4 | (0.9 + 1.1) × 1.33 = 2.7 → (1.8 + 1.3) × 1.33 → **4.0** |
-| Healing Tempo *fix* | Vitality T4 | 16 | +2 → +3 Bullet Power | 4.2 + 1.8 = 6.0 → **8.0** |
+| Healing Tempo *fix* | Vitality T4 | 16 | +2 → +3 Bullet Power | 4.2 + 1.8 = 6.0 → **8.0** (12.6 with its tempo since 2026-11-16) |
 | Leech *fix* | Vitality T4 | 16 | +3 HP, its canon health | 2.5 → + 6.3 → **9.0** |
 | Inhibitor *fix* | Vitality T4 | 16 | +4 HP, its canon health | 1.0 → + 8.4 → **9.5** |
 
@@ -492,6 +492,10 @@ Source: the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
 - **"1 turn sooner"** is Deadlock's 30% off a wait of 3 or 4 turns: 3 → 2
   (Serrated Knives, Lightning Ball), 4 → 3 (Frost Grenade, Kinetic Pulse). A
   wait never goes under 1.
+- **Since 2026-11-16** Kinetic Pulse is history as Lightning Ball is: Dynamo's
+  skill is Rejuvenating Aurora, which holds no charges. The charged skills are
+  Serrated Knives, Frost Grenade and Assassinate; the prices stand (the mean of
+  the skills they serve moves little).
 - **A charge an item adds comes ready**, and goes when the item goes. The
   hero records the charges it has spent, so what is left is always what it
   holds less those.
@@ -719,6 +723,58 @@ played or simulated.
   as one play, Slowing Hex (2.0 of 4) and Colossus (8.0 of 16) at exactly
   half included.
 
+### Changed 2026-11-16: the turn goes on after an attack; Healing Tempo
+
+Patrick: "Healing Tempo should make a hero healed this turn have bonus attack
+and zero retreat cost, so Dynamo with Healing Tempo can do a rearrange and
+attack combo. Also the turn should not end with the attack: allow attack,
+retreat, attack."
+
+**The rule.** Each hero makes one attack a turn, from the Active slot
+(`G.attackers`), and the turn goes on after it: abilities, cards from the hand
+and the one Retreat are all still open, and the turn ends on the turn button.
+With one Retreat a turn a side swings at most twice: attack, Retreat, attack.
+The engine, the AI, the board and the fuzz oracle read it the same way
+(docs/engine-model.md).
+- **What it does to the budget.** A Retreat after the attack now buys the
+  incoming hero's swing, so the Retreat's price (0, 1 or 2 souls) is the
+  price of a second attack, and what makes a Retreat free (Swift: Fleetfoot,
+  Willpower, Healing Tempo; Sprint Boots, Enduring Speed) is worth that much
+  more. Their prices are left as they are until Patrick asks for the testing.
+- **Left for testing:** match length with two swings a turn; the heroes whose
+  printed Retreat is 0 (Wraith, Lash), who make the second swing free every
+  turn.
+
+**Healing Tempo** (Vitality T4, 16, built from Healing Booster). Deadlock's
+item: "Applying heal to yourself or an ally grants the target bonus fire rate
+and bonus move speed. Does not apply on innate Regen or passive Lifesteals."
+So it is worn by the healer, and the hero it heals gets the tempo: Dynamo
+wears it, and Rejuvenating Aurora hands every hero it heals the turn's swing
+and a free Retreat.
+
+| | Was | Now |
+|---|---|---|
+| Text | +3 Bullet Power. Healing Boost 4. | +3 Bullet Power. Healing Boost 4. A hero the bearer's skill, ultimate or spell heals gets +2 Bullet Power and Swift this turn. |
+| Worth | 6.3 + 1.8 = 8.1 | 6.3 + 1.8 + 4.5 = **12.6** |
+
+- **+2 Bullet Power** is the fire rate (35% in Deadlock): +2 on the turn's
+  swing, 2.0. **Swift** is the move speed: the hero's next Retreat is free,
+  about 1 soul, and with the rule above it is the second swing for nothing.
+  A healed turn is worth about 3.0 on the hero it lands on.
+- **How often.** On a healer it lands on about half its bearer's own turns
+  (Rejuvenating Aurora every 4, Rescue Beam, Healing Rite, Frost Grenade):
+  3.0 × 0.5 × the 3 turns a tier-4 item is worn = 4.5. The aurora heals the
+  whole side, so on its turn both heroes that swing have the +2.
+- **Band.** 12.6 against 16 is inside ¾–1½ × price (12–24), at its bottom;
+  the old 8.1 was the half the 2026-11-05 audit put it at.
+- **Never on regen, lifesteal or a worn item's heal**, as the item says: only
+  a heal the bearer's skill, ultimate or spell made (`onBearerHeals`, fired by
+  `healUnit` in a skill, ultimate or spell frame), and only one that restored
+  HP. The buff is a status put on for 1, so it lasts until its side's next
+  turn begins: a heal on the bearer's own turn is that turn's.
+- **Dynamo's default build** takes it in the tier-4 slot (Transcendent
+  Cooldown was there): Healing Booster, already in the build, evolves into it.
+
 ## 4. Signature items and default builds
 
 Every hero has two **signature items** (`HeroCard.signature`), chosen to fit its
@@ -736,7 +792,7 @@ where Deadlock builds them so, or into a slot that opens.
 |---|---|---|---|
 | Abrams | Healing Booster (passive, Vitality T2) | Fortitude (passive, Vitality T3) | Healing Booster → Fortitude → Bullet Lifesteal → Spirit Shielding → Bullet Resilience → Cheat Death |
 | Drifter | Restorative Shot (passive, Weapon T1) | Frenzy (passive, Weapon T4) | Restorative Shot → Frenzy → Bullet Lifesteal → Stalker → Berserker → Leech |
-| Dynamo | Compress Cooldown (passive, Spirit T2) | Rescue Beam (active, Vitality T3) | Compress Cooldown → Rescue Beam → Healing Booster → Duration Extender → Superior Cooldown → Transcendent Cooldown |
+| Dynamo | Compress Cooldown (passive, Spirit T2) | Rescue Beam (active, Vitality T3) | Compress Cooldown → Rescue Beam → Healing Booster → Duration Extender → Superior Cooldown → Healing Tempo (was Transcendent Cooldown until 2026-11-16) |
 | Haze | Swift Striker (passive, Weapon T2) | Burst Fire (passive, Weapon T3) | Swift Striker → Burst Fire → Titanic Magazine → Intensifying Magazine → Toxic Bullets → Infinite Rounds |
 | Kelvin | Cold Front (active, Spirit T2) | Knockdown (active, Spirit T3) | Cold Front → Knockdown → Improved Spirit → Spirit Shielding → Silence Wave → Arctic Blast |
 | Lady Geist | Mystic Vulnerability (passive, Spirit T2) | Spirit Snatch (passive, Spirit T3) | Mystic Vulnerability → Spirit Snatch → Improved Spirit → Spirit Lifesteal → Decay → Escalating Exposure |

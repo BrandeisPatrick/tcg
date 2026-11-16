@@ -220,7 +220,7 @@ the same morning (§7). None has been played or simulated.
 
 **Skills** (`SKILL_COOLDOWN` 3; `cooldown: 4` on five).
 - **The wait is the old price plus 1.** The ten skills that cost 2 souls wait
-  3 turns. The five that cost 3 (The Cube, Ground Strike, Kinetic Pulse, Frost
+  3 turns. The five that cost 3 (The Cube, Ground Strike, Kinetic Pulse (Rejuvenating Aurora since 2026-11-16), Frost
   Grenade, Rabbit Hex: area damage with a rider, or a turn denied) wait 4.
 - **Why that holds the rate.** At 2 souls a turn a 2-soul skill took a whole
   turn of the lane, so a side that bought nothing cast one skill a turn at
@@ -253,7 +253,7 @@ in a turn.
   | Serrated Knives | Shiv | 2 charges from the first point | 2 charges, 3 turns each |
   | Frost Grenade | Kelvin | 2 charges from the first point | 2 charges, 4 turns each |
   | Lightning Ball | Seven | +1 charge at its first upgrade | (2 charges, 3 turns each, until Static Charge replaced it) |
-  | Kinetic Pulse | Dynamo | +1 charge at its first upgrade | 2 charges, 4 turns each |
+  | Kinetic Pulse | Dynamo | +1 charge at its first upgrade | (2 charges, 4 turns each, until Rejuvenating Aurora, which holds none, replaced it on 2026-11-16) |
   | Assassinate | Vindicta | 2 charges, her longest cooldown | 2 charges, 5 turns each (her skill since 2026-11-16; it was her ultimate) |
 
   Yamato's Flying Slash gains a charge only at its third upgrade, so it is
@@ -317,6 +317,18 @@ starts no wait. Refresher resets waits and sets a charged skill back to full.
   far enough apart.
 - Victor's 10 and Silver's 8.
 - Rapid Recharge on a charged skill: a cast every turn while it is worn.
+
+## 9. The turn goes on after an attack (2026-11-16)
+
+Patrick: "The turn should not end with the attack: allow attack, retreat,
+attack." Each hero attacks once a turn from the Active slot, and with the one
+Retreat a turn a side swings at most twice. "An extra attack = 2 × the attack
+it doubles" still prices a card that grants one; the second swing this rule
+allows is not free: it costs the turn's Retreat (the leaving hero's 0, 1 or 2
+souls) and puts the incoming hero in the lane for the rival's turn. Nothing has
+been simulated; the knobs it touches (the Retreat prices, Swift, the 0-Retreat
+heroes) are in [card-design.md](./card-design.md), "Changed 2026-11-16: the
+turn goes on after an attack".
 
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).

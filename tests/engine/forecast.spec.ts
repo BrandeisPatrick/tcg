@@ -225,7 +225,7 @@ describe('forecastAttack when there is no attack to make', () => {
   const blocks: [string, () => GameState, string][] = [
     ['a stunned Frenzy bearer (the +3 rides on a swing, it does not make one)', stunnedFrenzy, 'cannot'],
     ['Turn 1', () => { const G = board('hero_dynamo').G; G.turnNumber = 1; return G; }, 'turn1'],
-    ['a turn whose attack has been made', () => { const G = board('hero_dynamo').G; G.attackUsed = true; return G; }, 'used'],
+    ['an Active that has made its attack this turn', () => { const G = board('hero_dynamo').G; G.attackUsed = true; G.attackers = [G.players['0'].active!.iid]; return G; }, 'used'],
     ['no rival Active', () => { const G = board('hero_dynamo').G; G.players['1'].active = null; return G; }, 'noTarget'],
     ['a rival corpse in the lane', () => { const { G, defender } = board('hero_dynamo'); defender.hp = 0; defender.respawnTurnsLeft = 2; return G; }, 'noTarget'],
   ];

@@ -89,7 +89,9 @@ export const HEROES: HeroCard[] = [
   {
     id: 'hero_dynamo', name: 'Dynamo', type: 'hero', rarity: 3,
     atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
-    profile: { role: 'Support', mix: { tank: 1, damage: 1, control: 3, support: 2 }, reach: 'many', curve: 'mid' },
+    // Support 3 since 2026-11-16 (Rejuvenating Aurora heals his side); his
+    // control is Singularity's (control 2: in the ultimate).
+    profile: { role: 'Support', mix: { tank: 1, damage: 1, control: 2, support: 3 }, reach: 'many', curve: 'mid' },
     skills: ['skill_dynamo'], ult: 'eff_ult_dynamo',
     signature: ['improved_cooldown', 'rescue_beam'],
   },

@@ -128,10 +128,9 @@ export function probeLegality(
 
   // While a promotion is owed the engine refuses everything else (section F), and so it does
   // while the opening's first Active (F2) or a draw card's discard (F3) is owed; the rest of
-  // the probes ask about moves in an ordinary position. Once the turn's attack is made the Act
-  // is over and only ending the turn is left: B and E check that refusal, D skips it.
+  // the probes ask about moves in an ordinary position. An attack ends nothing: the turn goes
+  // on after it (2026-11-16).
   const owed = G.pendingPromotion !== undefined;
-  const actOver = G.attackUsed;
   const choice = G.pendingActive !== undefined || G.pendingDiscard !== undefined || !!G.triggers?.length;
 
   // ---------------------------------------------------------------- B: skillBlocked <=> useSkill
@@ -179,9 +178,6 @@ export function probeLegality(
       if (eng && ultLocked(hero, skillId)) {
         add('ult-locked', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid} is level ${hero.level ?? 1} but its ultimate ${skillId} is accepted`);
       }
-      if (eng && actOver) {
-        add('act-over', 'useSkill', named([hero.iid]), `${hero.cardId}#${hero.iid}'s ${skillId} is accepted after the turn's attack`);
-      }
     }
   }
 
@@ -209,7 +205,7 @@ export function probeLegality(
   }
   // The Mid-Boss is among the targets tried: no ability or item may ever be aimed at it.
   const targets: (CardInstance | Ghost | undefined)[] = [undefined, 'ghost', ...boardUnits(G), ...(G.boss ? [G.boss] : [])];
-  for (let n = 0; n < opts.targetCombos && sources.length && !owed && !actOver && !choice; n++) {
+  for (let n = 0; n < opts.targetCombos && sources.length && !owed && !choice; n++) {
     const src = pickOne(sources, rnd);
     const tgt = pickOne(targets, rnd);
     const tCard = tgt === 'ghost' ? undefined : tgt;
@@ -244,7 +240,6 @@ export function probeLegality(
         if (!ok(from) || !ok(to)) reason = 'bad-slot';
         else if (from === to) reason = 'same-slot';
         else if (choice) reason = 'choice-owed'; // the first Active, a discard: owed first
-        else if (actOver) reason = 'act-over'; // nothing moves once the turn's attack is made
         else {
           const a = get(from), b = get(to);
           if (!a) reason = 'no-hero-at-from';
@@ -458,7 +453,7 @@ function probeHand(G: GameState, ctx: Ctx, pid: PlayerID, rnd: () => number, opt
   const listed = legalActions(G, pid).filter((a) => a.type === 'playCard' || a.type === 'placeHero').map(actionKey);
   const oracle = handPlaysOracle(G, pid);
   if (JSON.stringify([...listed].sort()) !== JSON.stringify([...oracle].sort())) {
-    add('hand-offers', 'playCard', [], `legalActions' plays from the hand differ from the rules${G.attackUsed ? ' (after the attack)' : ''}: ${setDiff(listed, oracle)}`);
+    add('hand-offers', 'playCard', [], `legalActions' plays from the hand differ from the rules${G.attackUsed ? ' (after an attack)' : ''}: ${setDiff(listed, oracle)}`);
   }
 
   const theirHand = handOf(G, foe);

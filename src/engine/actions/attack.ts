@@ -2,9 +2,11 @@
  * The Active's attack: it swings at its target — the rival Active, or with
  * reach any living enemy hero the player names — for its bullet damage, then
  * once more at the same hero for each Extra Attack it has queued. It costs
- * nothing and it is one-way — the defender does not strike back. A player
- * makes one a turn (`G.attackUsed`), and it ends the turn's Act: after it
- * nothing is left but `endTurn` (and a promotion owed). Extra swings come only
+ * nothing and it is one-way — the defender does not strike back. Each hero
+ * makes one a turn (`G.attackers`), whoever stands in the Active slot, and the
+ * turn goes on after it (Patrick, 2026-11-16): skills, cards and the turn's one
+ * Retreat are still open, so attack, Retreat, attack is two swings from two
+ * heroes. Extra swings come only
  * from explicit grants (Burst Fire, Fleetfoot, Fury Trance,
  * Blood Tribute). `attackBlocked` (legality.ts) holds every condition, so this
  * assumes a living Active, a legal target and a swing that deals something.
@@ -34,14 +36,17 @@ import { fireTriggers } from '../triggers';
 import { withCast } from '../castContext';
 import { pushFx } from '../fx';
 
-/** Make the turn's attack: mark it made, swing, then each Extra Attack. The
- *  target is `targetIid`, left out the first of `attackTargets`. */
+/** Make the Active's attack: mark it made (for this hero, this turn), swing,
+ *  then each Extra Attack. The target is `targetIid`, left out the first of
+ *  `attackTargets`. */
 export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
   const atk = G.players[pid].active!;
   // Who is swung at is settled before the attack is marked: once it is,
   // `attackTargets` is empty.
   const target = (targetIid === undefined ? attackTargets(G, pid)[0] : findCardOnBoard(G, targetIid)?.card)!;
   G.attackUsed = true;
+  G.attackers = [...(G.attackers ?? []), atk.iid];
+  // The last hero to swing at the boss this turn takes its blow back.
   if (isBoss(target)) G.bossAttacker = atk.iid;
 
   // ---- The primary swing. ----
@@ -71,8 +76,9 @@ export function attack(G: GameState, pid: PlayerID, targetIid?: string) {
  * A full-power swing at every living enemy hero, in `targetsFor` order: each is
  * its own `swing` (index 0, 1, 2, ...) with its power read for that hero, its
  * own on-attack procs, and the state-based pass at the end. For an ultimate that
- * attacks the whole board. It is not the turn's attack: `G.attackUsed` is left
- * as it is, and Extra Attacks are neither read nor spent. A hero a Dome keeps
+ * attacks the whole board. It is not the hero's attack: `G.attackers` is left
+ * as it is, Extra Attacks are neither read nor spent, and every swing is marked
+ * a volley, so what rides on an attack alone (Express Shot, a pierce) sits it out. A hero a Dome keeps
  * from being the target of an attack is skipped, and
  * so is a swing that would deal nothing (the attacker is Disarmed, say). The
  * volley does not ricochet: it already reaches every hero a bounce would.
@@ -98,6 +104,8 @@ export function attackAll(G: GameState, attacker: CardInstance) {
  *  returned, with how much got through (Haze's Fixation, Vindicta's Flight).
  *  Then, if the swing landed, it bounces (`bounces` off: the volley). */
 function swing(G: GameState, atk: CardInstance, target: CardInstance, index: number, power: AttackPower, bounces = true) {
+  // `bounces` off is the ultimate's volley.
+  const volley = !bounces;
   const extra = index > 0;
   pushFx(G, {
     kind: 'swing', iid: atk.iid, targetIid: target.iid, index, raw: power.total,
@@ -108,12 +116,13 @@ function swing(G: GameState, atk: CardInstance, target: CardInstance, index: num
   let dealt = 0;
   withCast(atk, 'attack', () => {
     dealt = damageUnit(G, target, power.total, 'attack', extra ? `${atkName} (Extra Attack)` : atkName);
-  });
+  }, volley ? { volley: true } : undefined);
   // Bullets into the Mid-Boss are all a swing at it is: nothing reacts, nothing bounces.
   if (isBoss(target)) return;
   // `primary: true` marks the hero's main swing of the turn, for a passive
   // that should fire once a turn rather than on every Extra Attack.
-  fireTriggers(G, atk, 'onAttack', { only: 'passives', target, params: extra ? { dealt } : { primary: true, dealt } });
+  const said = extra ? { dealt } : { primary: true, dealt };
+  fireTriggers(G, atk, 'onAttack', { only: 'passives', target, params: volley ? { ...said, volley: true } : said });
 
   // ---- Ricochet: a swing that got through bounces to every other living enemy
   // hero a Dome does not cover, for N bullet damage each. A bounce is the

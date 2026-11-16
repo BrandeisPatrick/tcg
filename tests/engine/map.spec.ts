@@ -209,7 +209,7 @@ describe('the Mid-Boss', () => {
     expect(G.bossAttacker).toBe(G.players['0'].active!.iid);
   });
 
-  it('keeps the attack\'s own rules: none on the first mover\'s first turn, one a turn, and it ends the Act', () => {
+  it('keeps the attack\'s own rules: none on the first mover\'s first turn, one a hero a turn, and the turn goes on after it', () => {
     const first = at(1);
     first.bossRespawnRound = 1; // a boss up from the first turn: still no attack on it
     riseBoss(first);
@@ -217,7 +217,8 @@ describe('the Mid-Boss', () => {
     const { G } = withBoss();
     expect(shootBoss(G, '0')).not.toBe(INVALID);
     expect(blocked(G, '0', { type: 'attack', targetIid: G.boss!.iid })).toBe('used');
-    expect(legalActions(G, '0')).toEqual([{ type: 'endTurn' }]);
+    expect(legalActions(G, '0').some((a) => a.type === 'attack')).toBe(false);
+    expect(legalActions(G, '0')).toContainEqual({ type: 'endTurn' });
   });
 
   it('only basic attacks reach it: no status lands, no ability or item is aimed at it, no other damage counts', () => {
@@ -359,7 +360,7 @@ describe('the Rejuvenator', () => {
     expect(G.fx.some((e) => e.kind === 'revive' && e.iid === rival.iid && e.credit)).toBe(true);
     // The forecast says it fell all the same.
     rival.hp = 1;
-    expect(forecastAttack({ ...G, attackUsed: false }, '0')).toMatchObject({ defenderActiveKO: rival.iid, damageToActive: 1 });
+    expect(forecastAttack({ ...G, attackUsed: false, attackers: [] }, '0')).toMatchObject({ defenderActiveKO: rival.iid, damageToActive: 1 });
   });
 
   it('lapses as the last round it is good through ends — the second mover\'s turn of it', () => {

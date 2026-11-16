@@ -179,11 +179,13 @@ describe('playing an item: its price, from the hand onto a hero', () => {
     expect(blocked(G, '0', { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid })).toBeNull();
   });
 
-  it('refused once the turn\'s attack is made', () => {
+  it('made after an attack as before it: the turn goes on (2026-11-16)', () => {
     const G = turn(20);
     const card = giveCard(G, '0', 'extended_magazine');
     makeAttack(G, '0');
-    refusedUntouched(G, '0', play(card, G.players['0'].active!), 'actOver');
+    const haze = G.players['0'].active!;
+    expect(perform(G, '0', play(card, haze))).not.toBe(INVALID);
+    expect(wornItems(haze).some((w) => w.cardId === 'extended_magazine')).toBe(true);
   });
 
   it('the refusals, in order — not in the hand, a hero card, no hero of yours, a duplicate, a full hero, too few souls — change nothing', () => {

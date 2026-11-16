@@ -191,8 +191,8 @@ You choose the discards from anywhere in your hand.
 - Each hero, bench included, may use one ability a turn: its skill or its
   ultimate. Neither costs souls: souls buy the cards in your hand and a
   Retreat. Waits count your own turns.
-- A skill waits 3 turns after a use (4 for the heavier ones). Four skills are
-  charged, as in Deadlock: Serrated Knives, Frost Grenade, Kinetic Pulse and
+- A skill waits 3 turns after a use (4 for the heavier ones). Three skills are
+  charged, as in Deadlock: Serrated Knives, Frost Grenade and
   Vindicta's Assassinate hold 2 uses, and the wait brings them back one at a
   time (Assassinate's takes 5 turns).
   Only the charge items change that: Extra Charge adds a charge, and Rapid
@@ -211,14 +211,15 @@ You choose the discards from anywhere in your hand.
   board. A card from the hand, yours or the rival's, is shown mid-screen for
   about 0.6 s first; a skill lifts and flares its hero's own tile; an ultimate
   drops its name plate. Tap to skip a card's reveal.
-- Your Active makes one basic attack a turn: at the rival's Active (any enemy
-  hero, with reach). The attack ends the
-  Act, and the turn then ends on its own. Extra swings come only from cards
-  that grant Extra Attack.
+- Each hero makes one basic attack a turn from the Active slot: at the
+  rival's Active (any enemy hero, with reach). An attack does not end the
+  turn (Patrick, 2026-11-16): abilities, cards and the Retreat are still open
+  after it, and the turn ends when you press the turn button. Extra swings
+  come only from cards that grant Extra Attack.
 - Retreat: the leaving hero's printed price (0 for the mobile, 1 for most, 2
   for the slow and heavy; Sprint Boots and Swift lower it), once a turn,
-  before the attack. A bench hero steps into the Active slot and may make the
-  attack.
+  before or after an attack. A bench hero steps into the Active slot and may
+  make its own attack, so attack, Retreat, attack is two swings in a turn.
 
 **Trigger prompts.** Some cards say you *may* use them when something happens
 — "When Victor falls, you may use this" — and that moment often comes on the

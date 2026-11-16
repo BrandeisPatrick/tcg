@@ -68,6 +68,7 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   const realTurn = ctxTurn - G.draftTurnsOffset;
   G.turnNumber = realTurn;
   G.attackUsed = false;
+  G.attackers = [];
   G.retreatUsed = false;
   G.ultUsed = undefined;
   G.bossAttacker = null;

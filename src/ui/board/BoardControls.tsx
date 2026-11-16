@@ -34,8 +34,8 @@ interface Props {
 
 /**
  * The turn controls. A button's label is always the action a press performs —
- * the turn button only ever ends the turn (the attack is made from the
- * Active's sheet), and red Cancel takes its place while a card, a skill or an
+ * the turn button only ever ends the turn (an attack is made from the
+ * Active's sheet, and does not end it), and red Cancel takes its place while a card, a skill or an
  * item is armed. It stays enabled while busy so Board can queue the press.
  */
 export function BoardControls({ variant, isMyTurn, busy, hasPending, autoPlay, souls, bank, onBankOpenChange, menu, onEndTurn, onCancel, onToggleAuto }: Props) {

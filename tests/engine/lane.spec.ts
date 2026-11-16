@@ -102,16 +102,15 @@ describe('a hero unlocks its ultimate at Level 2', () => {
     expect(ps.hand).toEqual([]);
   });
 
-  it('a kill blow that levels the attacker unlocks its ultimate mid-turn; the attack has ended the Act, so it waits a turn', () => {
+  it('a kill blow that levels the attacker unlocks its ultimate mid-turn, and the turn goes on: it may use it at once', () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
     ps.souls = SOULS;
     ps.active!.exp = LEVEL_THRESHOLDS[0] - EXP_ON_KILL;
     G.players['1'].active!.hp = 1;
+    expect(ultBlock(G, ps.active!)).toBe('locked');
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
     expect(ps.active!.level).toBe(2);
-    expect(ultBlock(G, ps.active!)).toBe('actOver');
-    G.attackUsed = false; // the next turn
     expect(ultBlock(G, ps.active!)).toBeNull();
   });
 

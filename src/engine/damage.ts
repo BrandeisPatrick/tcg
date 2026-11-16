@@ -198,7 +198,8 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
     // gear is told what the hit dealt (`amount`), so a headshot item can tell a
     // hit that found its target at full HP (Weakening Headshot, Headhunter).
     if (cast.kind === 'attack') {
-      fireTriggers(G, cast.source, 'onAttack', { reaction: true, target, amount: dmg, params: cast.bounce ? { bounce: true } : undefined });
+      const mark = cast.bounce || cast.volley ? { ...(cast.bounce ? { bounce: true } : {}), ...(cast.volley ? { volley: true } : {}) } : undefined;
+      fireTriggers(G, cast.source, 'onAttack', { reaction: true, target, amount: dmg, params: mark });
     }
   }
 
@@ -294,6 +295,12 @@ export function healUnit(G: GameState, target: CardInstance, amount: number, sou
       from: fxSource(fx?.from),
       source: cast?.source && cast.source !== target ? fxSource(cast.source) : undefined,
     });
+    // A heal the caster's skill, ultimate or spell made: its gear hears it
+    // (Healing Tempo). Regen, lifesteal and a worn item's heal (an attack or
+    // proc frame, or none) are not a cast heal.
+    if (cast?.source && (cast.kind === 'skill' || cast.kind === 'ult' || cast.kind === 'spell')) {
+      fireTriggers(G, cast.source, 'onBearerHeals', { reaction: true, target, amount: healed });
+    }
   }
   return healed;
 }

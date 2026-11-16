@@ -11,7 +11,7 @@
  */
 import type { CardInstance, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
-import { attackBlocked, attackTargets } from '@/engine/legality';
+import { attackBlocked, attackTargets, heroAttacked } from '@/engine/legality';
 import { otherPlayer } from '@/engine/query';
 import { forecastAttack } from '@/engine/forecast';
 import type { PendingPlay } from '../helpers';
@@ -32,7 +32,7 @@ export function attackOffer(G: GameState, me: PlayerID, hero: CardInstance, isMy
     blockedReason: !isMyTurn ? 'Not your turn'
       : block ? attackBlockReason(block, G.players[otherPlayer(me)].active)
       : undefined,
-    made: isMyTurn && G.attackUsed && G.players[me].active?.iid === hero.iid,
+    made: isMyTurn && heroAttacked(G, hero) && G.players[me].active?.iid === hero.iid,
   };
 }
 

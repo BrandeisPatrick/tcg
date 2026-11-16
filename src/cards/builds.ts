@@ -31,7 +31,8 @@ export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   hero_victor:     ['extra_health', 'torment_pulse', 'spirit_lifesteal', 'spirit_shielding', 'fortitude', 'leech'],
 
   // ----- Skill heroes -----
-  hero_dynamo:     ['improved_cooldown', 'rescue_beam', 'healing_booster', 'duration_extender', 'superior_cooldown', 'transcendent_cooldown'],
+  // Healing Tempo (2026-11-16) is Healing Booster's upgrade: the aurora's heal turns into tempo.
+  hero_dynamo:     ['improved_cooldown', 'rescue_beam', 'healing_booster', 'duration_extender', 'superior_cooldown', 'healing_tempo'],
   hero_kelvin:     ['cold_front', 'knockdown', 'improved_spirit', 'spirit_shielding', 'silence_glyph', 'arctic_blast'],
   hero_lady_geist: ['mystic_vulnerability', 'spirit_snatch', 'improved_spirit', 'spirit_lifesteal', 'decay', 'escalating_exposure'],
   hero_lash:       ['mystic_slow', 'improved_burst', 'improved_spirit', 'suppressor', 'decay', 'lightning_scroll'],

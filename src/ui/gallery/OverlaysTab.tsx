@@ -18,7 +18,7 @@ import { Section, Caption } from './primitives';
 const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
   { id: 'ready',    label: 'Your Active, all ready',  hint: 'Skill, Ultimate and Attack: one row each, the row is the button, its price or damage at the right.' },
   { id: 'skilled',  label: 'Skill used',              hint: 'Both ability rows go dim and read “Used”; the Attack is still there.' },
-  { id: 'attacked', label: 'Attacked',                hint: 'Every row goes dim: the Attack reads “Used”, the abilities “Turn over”.' },
+  { id: 'attacked', label: 'Attacked',                hint: 'The Attack reads “Used”; the turn goes on, so the abilities stay lit.' },
   { id: 'turn1',    label: 'Turn 1',                  hint: 'The skill is there; the Attack row is dim with “No attacks on Turn 1”.' },
   { id: 'locked',   label: 'Ultimate locked',         hint: 'Below Level 2 the Ultimate row is dim and reads “Level 2” where its price would be.' },
   { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the Ultimate, the Attack, and the passive as one quiet line (tap it for its rule).' },
@@ -70,7 +70,6 @@ export function OverlaysTab() {
       eachSkill({ canUse: false, blockedReason: 'Used its skill this turn' });
     }
     if (s === 'attacked') {
-      eachSkill({ canUse: false, blockedReason: 'The attack ended your turn' });
       attackBlocked('Attacked this turn', true);
     }
     if (s === 'locked') {

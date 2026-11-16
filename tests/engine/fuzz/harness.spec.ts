@@ -586,13 +586,15 @@ describe('the transition rules fire', () => {
     expect(heavy.check()).toEqual([]);
     expect(heavy.check((A) => { A.players['0'].souls = 2; })).toContain('souls-delta'); // the old flat 1
   });
-  it('the Act: after the attack only endTurn and a promotion are accepted — no card played either; one Retreat a turn; nothing around a choice owed', () => {
+  it('one attack a hero a turn, and the turn goes on after it (2026-11-16): the Active that swung swings no more, the hero a Retreat brings in may; one Retreat a turn; nothing around a choice owed', () => {
     const p = pair(() => undefined);
     p.before.G.attackUsed = true;
-    expect(moveIds(p, 'useSkill', [heroIid(p)])).toContain('act-over');
-    expect(moveIds(p, 'playCard', [])).toContain('act-over');
-    expect(moveIds(p, 'placeHero', [])).toContain('act-over');
-    expect(moveIds(p, 'promoteToActive', [])).not.toContain('act-over');
+    p.before.G.attackers = [heroIid(p)];
+    expect(moveIds(p, 'attack', [])).toContain('second-attack');
+    const fresh = pair(() => undefined);
+    fresh.before.G.attackUsed = true;
+    fresh.before.G.attackers = [fresh.before.G.players['0'].bench[0]!.iid]; // swung, then retreated
+    expect(moveIds(fresh, 'attack', [])).not.toContain('second-attack');
     const q = pair(() => undefined);
     q.before.G.retreatUsed = true;
     expect(moveIds(q, 'moveHero', [1, 0])).toContain('retreat-once');
@@ -966,7 +968,7 @@ describe('the transition rules fire', () => {
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('turn-number-step');
   });
   it('a card play, a hero placed, a first Active, a discard or a spell the rules refuse, accepted', () => {
-    // a card played onto a rival's hero; one not in the hand; one after the attack; one a soul short
+    // a card played onto a rival's hero; one not in the hand; one a soul short (one after an attack is fine)
     const P = clean();
     P.players['0'].souls = 10;
     const card = giveCard(P, '0', 'extra_spirit');
@@ -975,7 +977,8 @@ describe('the transition rules fire', () => {
     expect(moveIds(pair(() => undefined, P), 'playCard', ['ghost', P.players['0'].active!.iid])).toContain('accepted-illegal');
     expect(moveIds(pair(() => undefined, P), 'playCard', [card.iid, P.players['0'].active!.iid, 'titanic_magazine'])).toContain('accepted-illegal');
     P.attackUsed = true;
-    expect(moveIds(pair(() => undefined, P), 'playCard', [card.iid, P.players['0'].active!.iid])).toContain('accepted-illegal');
+    P.attackers = [P.players['0'].active!.iid];
+    expect(moveIds(pair(() => undefined, P), 'playCard', [card.iid, P.players['0'].active!.iid])).not.toContain('accepted-illegal');
     const S = clean();
     S.players['0'].souls = 1;
     const dear = giveCard(S, '0', 'extra_spirit');
@@ -1272,7 +1275,7 @@ describe('the rules oracles', () => {
     expect(discardBlockedOracle(D, '1', [a.iid])).toBe('not-owed');
     expect(playBlockedOracle(D, '0', c.iid, p0(D).haze.iid)).toBe('discard-owed');
   });
-  it('the play oracle: not after the attack, nor around a choice owed; equipment in the hand onto a hero of the side in a slot — a corpse too — never a duplicate, never past the cap unless it evolves one worn or names the one it replaces, souls enough', () => {
+  it('the play oracle: never around a choice owed (after an attack too); equipment in the hand onto a hero of the side in a slot — a corpse too — never a duplicate, never past the cap unless it evolves one worn or names the one it replaces, souls enough', () => {
     const G = clean();
     G.players['0'].souls = 10;
     const { haze, vindicta, paige } = p0(G);
@@ -1302,8 +1305,8 @@ describe('the rules oracles', () => {
     // An upgrade is a card like any other: onto a hero without its component, for its whole price.
     expect(playBlockedOracle(G, '0', titanic.iid, p0(G).lash.iid, 3)).toBe('souls');
     expect(playBlockedOracle(G, '0', titanic.iid, p0(G).lash.iid, 4)).toBeNull();
-    G.attackUsed = true;
-    expect(playBlockedOracle(G, '0', card.iid, p0(G).lash.iid)).toBe('act-over');
+    G.attackUsed = true; // an attack ends nothing: the turn goes on
+    expect(playBlockedOracle(G, '0', card.iid, p0(G).lash.iid)).toBeNull();
     G.attackUsed = false;
     G.pendingPromotion = '0';
     expect(playBlockedOracle(G, '0', card.iid, p0(G).lash.iid)).toBe('promotion-owed');
@@ -1354,15 +1357,15 @@ describe('the rules oracles', () => {
     expect(spellCasterOracle(G, '0')).toBeUndefined();
     expect(playBlockedOracle(G, '0', cold.iid, foeActive)).toBe('no-caster');
     expect(playBlockedOracle(G, '0', grit.iid, undefined)).toBe('no-caster');
-    // Around a choice owed, and after the attack, as any card.
+    // Around a choice owed, as any card; after an attack, as before it.
     const D = clean();
     D.players['0'].souls = 10;
     const c2 = giveCard(D, '0', 'cold_front');
     D.pendingDiscard = { pid: '0', count: 1, cardId: 'improved_cooldown' };
     expect(playBlockedOracle(D, '0', c2.iid, D.players['1'].active!.iid)).toBe('discard-owed');
     D.pendingDiscard = undefined;
-    D.attackUsed = true;
-    expect(playBlockedOracle(D, '0', c2.iid, D.players['1'].active!.iid)).toBe('act-over');
+    D.attackUsed = true; // an attack ends nothing: the turn goes on
+    expect(playBlockedOracle(D, '0', c2.iid, D.players['1'].active!.iid)).toBeNull();
   });
 
   it('the oracles\' tables are the cards\': the draw cards\' numbers are their texts\', and the souls an item pays are its text\'s', () => {

@@ -64,19 +64,25 @@ function built(souls: number) {
   return { G, me, haze: me.active!, vindicta: me.bench[0]!, shiv: me.bench[1]!, abrams: G.players['1'].active! };
 }
 
-describe('One attack a turn, and the Retreat before it', () => {
-  it('the attack ends the Act: no Retreat and no second attack after it', () => {
-    const { G, me, haze, abrams } = built(2);
+describe('One attack a hero a turn, and the one Retreat before or after it', () => {
+  it('attack, Retreat, attack (2026-11-16): the Active swings once, the Retreat after it brings in a hero who swings too, and that is all', () => {
+    const { G, me, haze, shiv, abrams } = built(2);
     makeAttack(G, '0');
     expect(G.attackUsed).toBe(true);
     expect(attackBlocked(G, '0')).toBe('used');
-    expect(moveBlocked(G, '0', 2, 0)).toBe('actOver');
-    expect(retreat(G, 2)).toBe(INVALID);
-    expect(me.active!.iid).toBe(haze.iid);
-    const hp = abrams.hp;
-    expect(perform(G, '0', { type: 'attack' })).toBe(INVALID);
-    expect(abrams.hp).toBe(hp);
-    expect(legalActions(G, '0')).toEqual([{ type: 'endTurn' }]);
+    const hp0 = abrams.hp;
+    expect(perform(G, '0', { type: 'attack' })).toBe(INVALID); // Haze has swung
+    expect(abrams.hp).toBe(hp0);
+    expect(moveBlocked(G, '0', 2, 0)).toBeNull();
+    expect(retreat(G, 2)).not.toBe(INVALID);
+    expect(me.active!.iid).toBe(shiv.iid);
+    expect(attackBlocked(G, '0')).toBeNull();
+    makeAttack(G, '0');
+    expect(abrams.hp).toBeLessThan(hp0);
+    expect(attackBlocked(G, '0')).toBe('used');
+    expect(moveBlocked(G, '0', 1, 0)).toBe('retreated'); // one Retreat a turn: Haze cannot come back to swing again
+    expect(legalActions(G, '0').some((a) => a.type === 'attack' || (a.type === 'moveHero' && (a.fromSlot === 0 || a.toSlot === 0)))).toBe(false);
+    expect(haze.hp).toBeGreaterThan(0);
   });
 
   it('a Retreat before the attack lets the hero who steps in make it', () => {
@@ -283,11 +289,11 @@ describe('Majestic Leap', () => {
     expect(attackBlocked(G, '0')).toBeNull();
   });
 
-  it('is played in the Act, so the attack ends its window too', () => {
+  it('is played after an attack as before it, and the hero it brings in may attack', () => {
     const { G, shiv } = built(10);
     const leap = giveCard(G, '0', 'majestic_leap');
     makeAttack(G, '0');
-    expect(refusal(G, leap, shiv.iid)).toBe('actOver');
+    expect(refusal(G, leap, shiv.iid)).toBeNull();
   });
 
   it('needs a bench ally to aim at, and a Root on either side holds it', () => {

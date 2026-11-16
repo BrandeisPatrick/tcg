@@ -720,11 +720,15 @@ export interface GameState {
    *  opening (after the opening hand is dealt). Only `chooseActive` is legal,
    *  for that seat, from either seat, until it does. AI seats choose at once. */
   pendingActive?: PlayerID;
-  /** The turn's attack has been made. One basic attack a turn per player: this
-   *  is its gate, and the attack ends the Act — after it nothing is legal but
-   *  `endTurn` (and an owed promotion). Ending the turn never attacks. Reset at
-   *  each turn start. */
+  /** An attack has been made this turn (by any hero). The gate itself is
+   *  per hero (`attackers`); the turn goes on after an attack (Patrick,
+   *  2026-11-16). Ending the turn never attacks. Reset at each turn start. */
   attackUsed: boolean;
+  /** The heroes (iids) that have made their attack this turn: each hero
+   *  attacks once a turn, from the Active slot, so with the one Retreat a turn
+   *  a side swings at most twice (attack, Retreat, attack). Reset at each
+   *  turn start; missing means none. */
+  attackers?: string[];
   /** The turn's Retreat has been made (one a turn). Reset at each turn start. */
   retreatUsed: boolean;
   /** The sides that have used an ultimate this turn: one a turn for a side

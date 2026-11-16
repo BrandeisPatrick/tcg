@@ -17,7 +17,7 @@ import { CARDS_BY_ID, ITEMS } from '@/cards';
 import { deckProblem, isLegalDeck } from '@/cards/decks';
 import { isValidTarget } from '@/ui/board/targeting';
 import {
-  ACT_OVER, DISCARD_FIRST, ONE_ULT_A_TURN, actionRefusal, attackBlockReason, chooseActiveBlockReason, discardBlockReason,
+  DISCARD_FIRST, ONE_ULT_A_TURN, actionRefusal, attackBlockReason, chooseActiveBlockReason, discardBlockReason,
   moveBlockReason, placeBlockReason, playBlockReason, promoteBlockReason, skillBlockReason,
 } from '@/ui/board/heroActions';
 import { statusClass } from '@/ui/card/StatusIcon';
@@ -450,19 +450,19 @@ describe('a refused move is said, with the engine\'s own code', () => {
     expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toEqual({ code: 'retreated', text: 'One Retreat a turn' });
   });
 
-  it('anything but ending the turn after the attack says the attack ended the turn — a card from the hand too', () => {
+  it('after an attack nothing is refused for it but that Active\'s second swing: the turn goes on (2026-11-16)', () => {
     const G = board();
+    G.players[ME].souls = 20;
     G.attackUsed = true;
+    G.attackers = [G.players[ME].active!.iid];
     const lash = G.players[ME].bench[1]!;
     const rite = giveCard(G, ME, 'healing_rite');
     const card = giveCard(G, ME, 'extended_magazine');
-    const over = { code: 'actOver', text: 'The attack ended your turn' };
-    expect(ACT_OVER).toBe(over.text);
-    expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid })).toEqual(over);
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: rite.iid, heroIid: G.players[ME].active!.iid })).toEqual(over);
-    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].active!.iid })).toEqual(over);
-    expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toEqual(over);
-    expect(actionRefusal(G, ME, { type: 'attack' })?.code).toBe('used');
+    expect(actionRefusal(G, ME, { type: 'useSkill', heroIid: lash.iid, targetIid: G.players['1'].active!.iid })).toBeNull();
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: rite.iid, heroIid: G.players[ME].active!.iid })).toBeNull();
+    expect(actionRefusal(G, ME, { type: 'playCard', cardIid: card.iid, heroIid: G.players[ME].active!.iid })).toBeNull();
+    expect(actionRefusal(G, ME, { type: 'moveHero', fromSlot: 1, toSlot: 0 })).toBeNull();
+    expect(actionRefusal(G, ME, { type: 'attack' })).toEqual({ code: 'used', text: 'Attacked this turn' });
     expect(actionRefusal(G, ME, { type: 'endTurn' })).toBeNull();
   });
 
@@ -524,13 +524,13 @@ describe('a refused move is said, with the engine\'s own code', () => {
 // below is keyed by the engine's own union, so a code added there is a compile
 // error here until it is worded.
 describe('every block code has words', () => {
-  const skill: Record<SkillBlock, true> = { noSkill: true, trigger: true, actOver: true, down: true, locked: true, used: true, status: true, ultUsed: true, cooldown: true, charge: true, souls: true, hp: true, target: true };
+  const skill: Record<SkillBlock, true> = { noSkill: true, trigger: true, down: true, locked: true, used: true, status: true, ultUsed: true, cooldown: true, charge: true, souls: true, hp: true, target: true };
   const attack: Record<AttackBlock, true> = { turn1: true, used: true, noActive: true, cannot: true, noTarget: true, target: true };
   const play: Record<PlayBlock, true> = { notYourTurn: true, notInHand: true, hero: true, noHero: true, duplicate: true, full: true, replace: true, souls: true, noCaster: true, target: true };
   const place: Record<PlaceBlock, true> = { notYourTurn: true, notInHand: true, notHero: true, souls: true, occupied: true, benchOnly: true, benchFull: true, badSlot: true, slotTaken: true };
   const choose: Record<ChooseActiveBlock, true> = { notOwed: true, notInDeck: true, notHero: true, benchOnly: true };
   const discard: Record<DiscardBlock, true> = { notOwed: true, none: true, tooMany: true, repeat: true, notInHand: true };
-  const move: Record<MoveBlock, true> = { same: true, actOver: true, empty: true, benchOnly: true, down: true, rooted: true, retreated: true, souls: true, illegal: true };
+  const move: Record<MoveBlock, true> = { same: true, empty: true, benchOnly: true, down: true, rooted: true, retreated: true, souls: true, illegal: true };
   const promote: Record<PromoteBlock, true> = { notOnBench: true, notOwed: true, down: true, benchOnly: true };
 
   it('skills: all but noSkill (nothing to say: there is no skill to offer)', () => {
