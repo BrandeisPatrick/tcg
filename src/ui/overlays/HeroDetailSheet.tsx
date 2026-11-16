@@ -189,6 +189,12 @@ function shortLine(rule: string, scale: Scale, max: number): string {
   return sentence(s);
 }
 
+/** A passive's rule as its row prints it: whole (a passive has no other
+ *  line to give), its scaling numbers read live. */
+function fullLine(rule: string, scale: Scale): string {
+  return sentence(parseMarkup(rule).map((t) => (t.type === 'text' ? t.text : shownNumber(t, scale))).join('').trim());
+}
+
 type Kind = 'weapon' | 'spirit' | 'vitality';
 /** An ability's kind, read off its own rule: bullet damage is Deadlock's
  *  weapon orange, spirit damage its spirit purple, a heal or a Shield with no
@@ -281,20 +287,20 @@ export function HeroDetailSheet({
     });
   }
 
-  // A passive is printed as a skill is (Patrick, 2026-11-16) — its own icon,
-  // its kind's ring, its rule on one line — but it is never a button and has
-  // no wait: "Passive" stands where a skill's wait would. The "i" view has the
-  // whole rule.
+  // A passive is printed as a skill is, in the skill's place (Patrick,
+  // 2026-11-16: "just another skill box with no cooldown") — its own icon, its
+  // kind's ring, the skill's paper box — but it is never a button, has no wait
+  // ("Passive" stands where a skill's wait would) and its rule wraps whole.
   for (const ability of passiveAbilities) {
     const kind = abilityKind(ability.text);
     rows.push({
       key: ability.id,
       node: (
         <ActionRow
-          ink={shopInk(kind).ink} mode="quiet" calm={calm}
+          passive ink={shopInk(kind).ink} mode="quiet" calm={calm}
           name={ability.name}
           art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
-          line={shortLine(ability.text, scale, lineMax)}
+          line={fullLine(ability.text, scale)}
           right={<span data-kit-tag style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: T.label, letterSpacing: '0.04em', color: poster.inkDim, whiteSpace: 'nowrap' }}>Passive</span>}
         />
       ),
@@ -614,12 +620,17 @@ export function HeroDetailSheet({
  *   blocked  stands in the number's place (the attack's under its name),
  *            and the line goes
  *   quiet    the row as it reads (a rival's hero): not a button
+ *   passive  a passive (Patrick, 2026-11-16: "just another skill box, with no
+ *            cooldown"): the same paper box, edge and tile as a usable skill,
+ *            but no press lip and never a button; its rule wraps whole
  *
  * The name stays the row's first words — the row is found by its text.
  */
 function ActionRow({
-  ult = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
+  ult = false, passive = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
 }: {
+  /** A passive: printed as a skill's box, never a button, its line whole. */
+  passive?: boolean;
   ult?: boolean;
   /** The kind's colour: the picture tile's frame. */
   ink: string;
@@ -667,7 +678,7 @@ function ActionRow({
       </span>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ ...NAME, ...ONE_LINE, opacity: dim ? 0.5 : 1 }}>{name}</span>
-        {caption && <span style={{ ...CAPTION, ...ONE_LINE, color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
+        {caption && <span style={{ ...CAPTION, ...(passive ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
       </span>
       <span style={{ flexShrink: 0, maxWidth: '42%', display: 'flex', justifyContent: 'flex-end' }}>
         {dim && !reasonBelow && said
@@ -681,8 +692,8 @@ function ActionRow({
     ...plateStyle,
     display: 'flex', alignItems: 'center', gap: 10,
     minHeight: 60, padding: '7px 12px 7px 8px', boxSizing: 'border-box',
-    background: dim ? 'transparent' : ready ? poster.paper : plateStyle.background,
-    borderColor: ready ? poster.ink : poster.inkRule,
+    background: dim ? 'transparent' : ready || passive ? poster.paper : plateStyle.background,
+    borderColor: ready || passive ? poster.ink : poster.inkRule,
     boxShadow: glow ? chargedGlow(ink) : ready ? `0 2px 0 ${poster.ink}` : 'none',
   };
 
