@@ -83,7 +83,8 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   // top of it every own turn, the first included (bank.ts).
   const paid = laneIncome(G, pid, ownTurn(G, pid));
   ps.souls += paid.total;
-  pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}).`);
+  ps.incomeBonus = 0; // Cultist Sacrifice's souls are paid once
+  pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}${paid.trophy ? `, +${paid.trophy} Trophy Collector` : ''}${paid.bonus ? `, +${paid.bonus} Cultist Sacrifice` : ''}).`);
   // The wait ticks ONLY for the player whose turn is starting, so a corpse
   // counts down once per round (on its owner's turn): a timer of N is N of the
   // owner's turns of downtime (RESPAWN_TURNS).
@@ -139,6 +140,8 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   // Strip action-denying CC now that this player has spent their turn under
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
   tickEndOfTurnCC(G, G.players[pid]);
+  // A spell lock (Silence Wave) counts down as the locked side's turn ends.
+  if (ps.spellLock) ps.spellLock -= 1;
   clearTurnFlags(G.players[pid]);
   // What the End step felled (a Naptime wake-up burst) pays and pushes now.
   resolve(G);

@@ -8,12 +8,13 @@ import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
-import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE } from '@/engine/constants';
+import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
 import { fireTriggers } from '@/engine/triggers';
 import { withCast, currentCast } from '@/engine/castContext';
+import { expandSkillHit } from '@/engine/expansion';
 import { pushFx } from '@/engine/fx';
 import { drawCards, millDeck, nextRandom, raiseIntoDeck } from '@/engine/deck';
 import { GHOUL, GRAVESTONE } from '@/cards/units';
@@ -333,6 +334,9 @@ const eff_knockdown: AbilityDef = {
 // Silence Wave (canon T3 spirit active, once named Silence Glyph — the card id
 // keeps the old name so saved decks still load): damage + Silence the enemy
 // Active 2 turns.
+// Since 2026-11-16 (Patrick: "the side cannot play spells … change Silence
+// Wave to a card that targets players") it silences the rival side, not a
+// hero: Pokémon's item lock. The rival plays no spells on its next 2 turns.
 const eff_silence_glyph: AbilityDef = {
   id: 'eff_silence_glyph', trigger: 'onPlay', target: 'enemyActive',
   base: 2,
@@ -340,7 +344,9 @@ const eff_silence_glyph: AbilityDef = {
   run: (G, ctx, { target }) => {
     if (!target) return;
     damageUnit(G, target, 2 + activeSpi(G, ctx.movingPlayer), 'spirit');
-    addStatus(G, target, 'silenced', 1, 2);
+    const rival = G.players[otherPlayer(ctx.movingPlayer)];
+    rival.spellLock = Math.max(rival.spellLock ?? 0, 2);
+    pushLog(G, `Silence Wave: P${rival.id} plays no spells for 2 turns.`);
   },
 };
 
@@ -423,7 +429,9 @@ const eff_echo_shard: AbilityDef = {
       default: target = undefined;
     }
     pushLog(G, `Echo Shard: ${data.name} casts ${skill.name ?? 'their skill'} again.`);
+    const fx0 = G.fx.length;
     withCast(hero, 'skill', () => skill.run(G, { movingPlayer: ctx.movingPlayer }, { source: hero, target }));
+    expandSkillHit(G, ctx.movingPlayer, hero, fx0);
     fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: ctx.movingPlayer });
   },
 };
@@ -509,19 +517,48 @@ const eff_phantom_strike: AbilityDef = {
   },
 };
 
-// Vortex Web (canon T4 spirit active): a grenade that drags every enemy in and
-// slows them. TCG: 2 + Spirit spirit damage to every enemy hero, Rooted 2 turns.
-const eff_vortex_web: AbilityDef = {
-  id: 'eff_vortex_web', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Vortex Web — hit and root every enemy.',
-  scalesSpirit: true, base: 2,
+// Mystic Expansion / Greater Expansion: what they do is expansion.ts's (after
+// a skill's cast); the abilities mark the cards for the AI's worth of them.
+const eff_mystic_expansion: AbilityDef = { id: 'eff_mystic_expansion', trigger: 'ongoing', target: 'self', base: 1, run: () => {} };
+const eff_greater_expansion: AbilityDef = { id: 'eff_greater_expansion', trigger: 'ongoing', target: 'self', base: 4, run: () => {} };
+
+// Trophy Collector: its income is the bank's (`laneIncome`, bank.ts); the
+// ability only marks the card for the AI's worth of what it wears.
+const eff_trophy_collector: AbilityDef = {
+  id: 'eff_trophy_collector', trigger: 'ongoing', target: 'self',
+  base: 2,
+  run: () => {},
+};
+
+// Cultist Sacrifice: CULTIST_SACRIFICE_SOULS on top of the next own income.
+const eff_cultist_sacrifice: AbilityDef = {
+  id: 'eff_cultist_sacrifice', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Cultist Sacrifice — 8 souls at the start of your next turn.',
+  base: 4,
   run: (G, ctx) => {
-    const enemy = otherPlayer(ctx.movingPlayer);
-    const dmg = 2 + activeSpi(G, ctx.movingPlayer);
-    eachBoard(G, enemy, (c) => {
-      damageUnit(G, c, dmg, 'spirit', 'Vortex Web');
-      if (!isRespawning(c)) addStatus(G, c, 'rooted', 1, 2);
-    });
+    const ps = G.players[ctx.movingPlayer];
+    ps.incomeBonus = (ps.incomeBonus ?? 0) + CULTIST_SACRIFICE_SOULS;
+    pushLog(G, `Cultist Sacrifice: P${ctx.movingPlayer} gains ${CULTIST_SACRIFICE_SOULS} souls at the start of its next turn.`);
+  },
+};
+
+// Vortex Web (canon T4 spirit active): a vacuum grenade that pulls enemies in.
+// Since 2026-11-16 (Patrick: "make it cheaper, so we're able to pull something
+// from bench to active") it is the cheap pull, Pokémon's Boss's Orders: an
+// enemy bench hero is pulled into their Active slot, hit for 2 + Spirit and
+// Rooted 1 turn, so it cannot Retreat back out. (It was 2 + Spirit to every
+// enemy, all Rooted 2 turns.)
+const eff_vortex_web: AbilityDef = {
+  id: 'eff_vortex_web', trigger: 'onPlay', target: 'enemyBench',
+  prompt: 'Vortex Web — pull an enemy bench hero to the front.',
+  scalesSpirit: true, base: 2,
+  run: (G, ctx, { target }) => {
+    if (!target) return;
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    if (!pullToActive(G, enemy, target)) return;
+    damageUnit(G, target, 2 + activeSpi(G, ctx.movingPlayer), 'spirit', 'Vortex Web');
+    if (!isRespawning(target)) addStatus(G, target, 'rooted', 1, 1);
+    resolve(G);
   },
 };
 
@@ -2785,7 +2822,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_knockdown, eff_cast_metal_skin,
   eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
   eff_guardian_ward, eff_warp_stone, eff_divine_barrier, eff_ethereal_shift,
-  eff_phantom_strike, eff_vortex_web, eff_refresher, eff_colossus_cast,
+  eff_phantom_strike, eff_vortex_web, eff_trophy_collector, eff_cultist_sacrifice, eff_mystic_expansion, eff_greater_expansion, eff_refresher, eff_colossus_cast,
   eff_golden_goose_egg, eff_grit, eff_return_fire, eff_fleetfoot, eff_split_shot,
   eff_blood_tribute, eff_healing_nova, eff_rescue_beam, eff_fury_trance,
   eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,

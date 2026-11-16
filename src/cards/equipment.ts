@@ -33,6 +33,15 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'improved_spirit',   name: 'Improved Spirit',   type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, upgradesFrom: 'extra_spirit', bonus: { spirit: 2 }, text: '+2 Spirit Power.' },
 
   // ----- T2 — healing boost (canon T2 Vitality) -----
+  // Mystic Expansion → Greater Expansion (canon Spirit T1 → T3 passives: ability
+  // range and radius). Patrick, 2026-11-16: the radius is the board, so
+  // positioning counts (engine/expansion.ts).
+  { id: 'mystic_expansion', name: 'Mystic Expansion', type: 'equipment', rarity: 1, slot: 'spirit', tier: 1, abilities: ['eff_mystic_expansion'], text: "When the bearer's skill deals damage to one enemy, each enemy next to it on the board takes 1 spirit damage." },
+  { id: 'greater_expansion', name: 'Greater Expansion', type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'mystic_expansion', abilities: ['eff_greater_expansion'], text: "When the bearer's skill deals damage to one enemy, every other enemy takes the same damage." },
+  // Trophy Collector (canon Vitality T2 passive): kills raise the soul income,
+  // kept through death. Patrick, 2026-11-16: it should not rely on kills
+  // ("too hard to complete"): worn, it pays 1 soul a turn more.
+  { id: 'trophy_collector', name: 'Trophy Collector', type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_trophy_collector'], text: 'Your lane pays 1 more soul a turn while it is worn. Two do not add up.' },
   { id: 'healing_booster', name: 'Healing Booster', type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_healing_booster'], text: 'Healing Boost 2.' },
 
   // ----- T2 — reactive shields (canon T2 Vitality) -----

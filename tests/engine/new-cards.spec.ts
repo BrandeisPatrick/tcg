@@ -132,15 +132,18 @@ describe('New active items', () => {
     expect(status(kelvin, 'disarm')).toBeDefined();
   });
 
-  it('Vortex Web hits every enemy hero and roots them for 2 turns', () => {
+  // Since 2026-11-16 Vortex Web is the cheap pull (Pokémon's Boss's Orders).
+  it('Vortex Web pulls an enemy bench hero into their Active slot, hits it for 2 and Roots it 1 turn', () => {
     const G = freshReadyGame();
-    const foes = [G.players['1'].active!, ...G.players['1'].bench.filter((b): b is CardInstance => !!b)];
-    for (const f of foes) { f.hpMax = 20; f.hp = 20; }
-    useItem(G, '0', 'vortex_web');
-    for (const f of foes) {
-      expect(f.hp, f.cardId).toBeLessThan(20);
-      expect(status(f, 'rooted'), f.cardId).toMatchObject({ duration: 2 });
-    }
+    const enemy = G.players['1'];
+    const front = enemy.active!;
+    const pulled = enemy.bench.find((b): b is CardInstance => !!b)!;
+    pulled.hpMax = 20; pulled.hp = 20;
+    useItem(G, '0', 'vortex_web', pulled.iid);
+    expect(enemy.active).toBe(pulled);
+    expect(enemy.bench).toContain(front);
+    expect(pulled.hp).toBe(18); // 2 spirit, the Active's Spirit 0
+    expect(status(pulled, 'rooted')).toMatchObject({ duration: 1 });
   });
 
   /** P0 with Lash stepped up to the Active slot (a Retreat): an Active with a

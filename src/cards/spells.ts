@@ -63,6 +63,10 @@ export const SPELLS: SpellCard[] = [
   { id: 'restorative_locket', name: 'Restorative Locket', type: 'spell', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_restorative_locket'], text: 'Heal an ally 2, plus 2 per enemy hero whose skill is waiting. Its Retreat this turn is free.' },
 
   // ----- Tier 3 -----
+  // Cultist Sacrifice (canon Weapon T3 active: consume an enemy NPC for bonus
+  // souls). Patrick, 2026-11-16: "you play it, and you get a burst of souls
+  // next turn."
+  { id: 'cultist_sacrifice', name: 'Cultist Sacrifice', type: 'spell', rarity: 3, slot: 'weapon', tier: 3, abilities: ['eff_cultist_sacrifice'], text: 'At the start of your next turn, gain 8 souls.' },
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
   { id: 'disarming_hex',   name: 'Disarming Hex',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, price: 2, upgradesFrom: 'rusted_barrel', abilities: ['eff_disarming_hex'], text: 'Disarm any enemy for 2 turns.' },
   { id: 'knockdown',       name: 'Knockdown',       type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, price: 2, abilities: ['eff_knockdown'], text: 'Stun enemy Active for 1 turn. A Stun ends a channel.' },
@@ -75,7 +79,7 @@ export const SPELLS: SpellCard[] = [
   // "Counters").
   { id: 'counterspell',    name: 'Counterspell',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_counterspell'],    text: 'One of your heroes gains Counterspell for 2 turns: the next enemy spell, skill or ultimate that would hit it does nothing to it, and it heals 4. It triggers once.' },
   { id: 'debuff_remover',  name: 'Dispel Magic',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_debuff_remover'],  text: 'Remove every debuff from one of your heroes, delayed ones too, and it gains Shield 4. If any was removed, heal it 4.' },
-  { id: 'silence_glyph',   name: 'Silence Wave',    type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_silence_glyph'], text: 'Deal {sp:2} spirit damage to enemy Active and Silence it for 2 turns.' },
+  { id: 'silence_glyph',   name: 'Silence Wave',    type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_silence_glyph'], text: 'Deal {sp:2} spirit damage to the enemy Active. The rival plays no spells on its next 2 turns.' },
   { id: 'warp_stone',      name: 'Warp Stone',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_warp_stone'],      text: 'A bench ally swaps into your Active slot and gains Bullet Resist 4 for 3 turns.' },
   // Blood Tribute's price is paid in blood as well: 3 HP off your Active.
   { id: 'blood_tribute',   name: 'Blood Tribute',   type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_blood_tribute'],   text: 'Your Active pays 3 HP (never below 1) and gains Extra Attack 1 and +3 Bullet Power this turn.' },
@@ -95,7 +99,7 @@ export const SPELLS: SpellCard[] = [
   { id: 'divine_barrier', name: 'Divine Barrier', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, price: 3, upgradesFrom: 'guardian_ward', abilities: ['eff_divine_barrier'], text: "Cleanse an ally's debuffs except Stun and grant it Shield 7." },
   { id: 'ethereal_shift', name: 'Ethereal Shift', type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, price: 2, abilities: ['eff_ethereal_shift'],   text: 'An ally gains Dome for 1 turn and +1 Spirit Power for 2 turns.' },
   { id: 'phantom_strike', name: 'Phantom Strike', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, abilities: ['eff_phantom_strike'], text: 'Drag an enemy bench hero into their Active slot, deal {sp:5} spirit damage to it and Disarm it for 1 turn.' },
-  { id: 'vortex_web',     name: 'Vortex Web',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, upgradesFrom: 'slowing_hex', abilities: ['eff_vortex_web'], text: 'Deal {sp:2} spirit damage to every enemy. They are Rooted for 2 turns.' },
+  { id: 'vortex_web',     name: 'Vortex Web',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, price: 3, upgradesFrom: 'slowing_hex', abilities: ['eff_vortex_web'], text: 'Pull an enemy bench hero into their Active slot, deal {sp:2} spirit damage to it and Root it for 1 turn.' },
   { id: 'refresher',      name: 'Refresher',      type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_refresher'],        text: "Your Active's skill and ultimate are ready again: their waits end and its charges come back." },
   { id: 'colossus',       name: 'Colossus',       type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'extra_health', abilities: ['eff_colossus_cast'], text: 'Your Active gains Bullet Resist 5 and Spirit Resist 5 for 3 turns. The enemy Active is Rooted for 1 turn.' },
   { id: 'infuser',        name: 'Infuser',        type: 'spell', rarity: 3, slot: 'vitality', tier: 4, price: 3, upgradesFrom: 'spirit_lifesteal', abilities: ['eff_infuser'], text: 'Your Active gains +3 Spirit Power for 2 turns and heals 3.' },

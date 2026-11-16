@@ -5,14 +5,21 @@
  * bank sheet reads to answer it, and what the turn's Income pays from.
  */
 import type { GameState, PlayerID } from './types';
-import { LANE_INCOME, ROUND_CAP, SECOND_MOVER_FIRST_INCOME_BONUS } from './constants';
+import { LANE_INCOME, ROUND_CAP, SECOND_MOVER_FIRST_INCOME_BONUS, TROPHY_COLLECTOR_INCOME } from './constants';
 import { bountyAtRound, killBounty, ownTurn, round, secondMover } from './rounds';
 
 /** Souls the lane pays `pid` at the start of its own turn number `own`: the
- *  lane's income, and the second mover's bonus on its first turn. */
-export function laneIncome(G: Pick<GameState, 'firstMover'>, pid: PlayerID, own: number): { total: number; seat: number } {
+ *  lane's income, the second mover's bonus on its first turn, Trophy
+ *  Collector's 1 while a hero of the side on the board wears one (two do not
+ *  add up; a fallen hero keeps its items, so it keeps paying), and what a
+ *  Cultist Sacrifice played last turn adds (`incomeBonus`). */
+export function laneIncome(G: Pick<GameState, 'firstMover' | 'players'>, pid: PlayerID, own: number): { total: number; seat: number; trophy: number; bonus: number } {
   const seat = pid === secondMover(G) && own === 1 ? SECOND_MOVER_FIRST_INCOME_BONUS : 0;
-  return { total: LANE_INCOME + seat, seat };
+  const ps = G.players[pid];
+  const worn = [ps.active, ...ps.bench].some((h) => !!h && (h.attached ?? []).some((it) => it.cardId === 'trophy_collector'));
+  const trophy = worn ? TROPHY_COLLECTOR_INCOME : 0;
+  const bonus = ps.incomeBonus ?? 0;
+  return { total: LANE_INCOME + seat + trophy + bonus, seat, trophy, bonus };
 }
 
 /** What `pid`'s bank holds and what is coming to it. */
