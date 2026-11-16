@@ -89,13 +89,14 @@ How each wins:
 Patrick, 2026-11-09: "the player at beginning of the game, player should decide which hero to draw
 at turn 1, it is like rotation selection so it also fits a small screen like mobile."
 
-- Each side chooses its starting hero from its 4 drafted heroes, not from whatever the deal
+- Each side chooses its starting hero from its 3 drafted heroes, not from whatever the deal
   happened to bring. The chosen hero goes straight to the Active slot.
-  - You choose on a carousel that fits a phone: one large hero card in the middle (the real
-    card: stats, skill, ultimate), its neighbours peeking in at the sides; swipe, tap the arrows
-    or a neighbour, or use the keyboard's arrows; one button confirms ("Start with Warden").
+  - You choose from their faces alone (Patrick, 2026-11-16: "too much text, the player already
+    knows their hero"): the draft's own team cards, splash art and name, three across so they
+    fit a phone. Tap one (it lifts in gold) or use the keyboard's arrows; one button confirms
+    ("Start with Warden").
   - The rival AI picks its own, with its own valuation; its choice stays hidden until you confirm.
-- Then each side draws 4 cards from the rest of its deck (the other 3 heroes and the 16 items).
+- Then each side draws 4 cards from the rest of its deck (the other 2 heroes and the 16 items).
   That is 5 cards dealt, as before: the hero and the 4.
   - The Pocket hero guarantee is not needed here: every side opens with a hero in the lane.
 - That is your only hero on the board for now. The others come as you draw them.
@@ -208,7 +209,7 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
   tick as cards leave and land. Under reduced motion nothing flies and
   everything just updates.
 - The opening (2026-11-09): the draft's last pick stocks each deck unseen and
-  holds its turn; the carousel (`OpeningPicker`) offers your drafted heroes
+  holds its turn; the picker (`OpeningPicker`) offers your drafted heroes
   from the deck (`openingCandidates`; Rem can lead since 2026-11-09); `chooseActive` puts
   yours in the lane, makes the AI's pick (most HP, then attack), shuffles
   both decks and deals `OPENING_DRAW` (4), then ends the draft's turn so turn 1

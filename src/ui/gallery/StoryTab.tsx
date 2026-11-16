@@ -248,7 +248,7 @@ function PickSection({ runs }: { runs: Runs }) {
     {
       label: 'Starting hero',
       hint: 'Three heroes dealt at random; one starts the run.',
-      make: () => ({ kind: 'hero', title: 'Choose your first hero', subtitle: 'They start the run with you. Recruit three more on the way.', verb: 'Start with', options: randomStartingHeroes() }),
+      make: () => ({ kind: 'hero', title: 'Choose your first hero', subtitle: 'They start the run with you. Recruit two more on the way.', verb: 'Start with', options: randomStartingHeroes() }),
     },
     {
       label: 'Recruit',
