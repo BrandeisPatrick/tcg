@@ -2,10 +2,10 @@ import type { GameState, CardInstance, DamageType, PlayerID, StatusId } from '@/
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from '@/engine/damage';
-import { awardSouls, resolve, rideOn } from '@/engine/death';
+import { awardSouls, raiseUnit, resolve, rideOn } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
-  abilityAim, attackPower, effectiveAtk, findCardOnBoard, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
+  abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
 import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP } from '@/engine/constants';
@@ -15,7 +15,8 @@ import { getAbility, registerAbilities } from '@/engine/registry';
 import { fireTriggers } from '@/engine/triggers';
 import { withCast, currentCast } from '@/engine/castContext';
 import { pushFx } from '@/engine/fx';
-import { drawCards, nextRandom, oweDiscard } from '@/engine/deck';
+import { drawCards, millDeck, nextRandom, oweDiscard, raiseIntoDeck } from '@/engine/deck';
+import { GHOUL, GRAVESTONE } from '@/cards/units';
 
 export type { TargetFilter };
 export { getAbility };
@@ -2152,6 +2153,57 @@ const skill_seven: HeroAbilityDef = {
   },
 };
 
+// ----- Graves, and the units her kit raises (docs/hero-design.md, "Units") -----
+// Deadlock's necromancer. Her Ghouls are cards here (Patrick, 2026-11-16): a
+// Ghoul is shuffled into her side's deck, drawn like any card and played for
+// 1 soul onto a free spot.
+
+/** Ghouls a cast of Grasping Hands raises, and the cards a Ghoul's death
+ *  takes off the top of the rival's deck. */
+const GRASPING_HANDS_GHOULS = 2;
+const GHOUL_DEATH_DISCARD = 1;
+
+// Grasping Hands (Deadlock: a line of hands that damages and immobilizes, and
+// summons a Ghoul). The hit and the trap land now; the Ghouls go into the deck.
+const skill_graves: HeroAbilityDef = {
+  id: 'skill_graves', trigger: 'activate', target: 'enemyActive', cooldown: 4,
+  name: 'Grasping Hands',
+  text: 'Deal {sp:1} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck.',
+  base: 1,
+  scalesSpirit: true,
+  run: (G, ctx, { source, target }) => {
+    if (target) {
+      damageUnit(G, target, 1 + spi(source), 'spirit', 'Grasping Hands');
+      addStatus(G, target, 'rooted', 1, 1);
+    }
+    raiseIntoDeck(G, ctx.movingPlayer, GHOUL, GRASPING_HANDS_GHOULS, 'Grasping Hands');
+  },
+};
+
+// The Ghoul's one line: destroyed, it takes a card off the top of the rival's
+// deck (`millDeck`: a hero there goes back in instead). It is both what the
+// card prints (a passive) and what `destroyUnit` runs (the unit's `death`).
+const passive_ghoul: HeroAbilityDef = {
+  id: 'passive_ghoul', trigger: 'ongoing', target: 'self',
+  name: 'Death Rattle',
+  text: 'When this Ghoul is destroyed, the enemy discards the top card of its deck.',
+  base: GHOUL_DEATH_DISCARD,
+  run: (G, _ctx, { source }) => {
+    if (source) millDeck(G, otherPlayer(seatOf(source)), GHOUL_DEATH_DISCARD, 'Ghoul');
+  },
+};
+
+// The Gravestone: while it stands, a Ghoul a turn.
+const passive_gravestone: HeroAbilityDef = {
+  id: 'passive_gravestone', trigger: 'startOfTurn', target: 'self',
+  name: 'Borrowed Decree',
+  text: 'At the start of your turn, shuffle a Ghoul into your deck. Any damage destroys the Gravestone.',
+  base: 1,
+  run: (G, _ctx, { source }) => {
+    if (source) raiseIntoDeck(G, seatOf(source), GHOUL, 1, 'Gravestone');
+  },
+};
+
 // Lash — Ground Strike: control 3 needs hard control in the skill, so the slam
 // pins the enemy Active (Rooted: it cannot retreat or be swapped).
 const skill_lash: HeroAbilityDef = {
@@ -2531,6 +2583,16 @@ function copiedUlt(G: GameState, pid: PlayerID): AbilityDef | undefined {
   // An optional trigger (Victor's revive) has no "at once": nothing to cast.
   return copied?.optional ? undefined : copied;
 }
+// Borrowed Decree (Deadlock: gravestones that raise Ghouls). A Gravestone is a
+// unit: it takes a spot on the bench, so the ultimate needs a free one (`aim`
+// answers null without: it cannot be used). It makes a Ghoul a turn while it
+// stands, and anything that damages it destroys it (1 HP).
+const eff_ult_graves: AbilityDef = {
+  id: 'eff_ult_graves', trigger: 'onPlay', target: 'noTarget',
+  base: 3,
+  aim: (G, pid) => (freeBenchSlot(G.players[pid]) === undefined ? null : { target: 'noTarget' }),
+  run: (G, ctx) => { raiseUnit(G, G.players[ctx.movingPlayer], GRAVESTONE); },
+};
 const eff_ult_sinclair: AbilityDef = {
   id: 'eff_ult_sinclair', trigger: 'onPlay', target: 'noTarget',
   base: 4,
@@ -2703,14 +2765,14 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_mystical_piano, eff_nullification_burst, eff_prism_blast,
   // ----- Hero skills -----
   skill_mo_krill, skill_viscous, skill_lady_geist, skill_shiv, skill_warden, skill_wraith,
-  skill_seven, skill_lash, skill_yamato, skill_dynamo, skill_kelvin, skill_paige, skill_rem,
+  skill_seven, skill_graves, passive_ghoul, passive_gravestone, skill_lash, skill_yamato, skill_dynamo, skill_kelvin, skill_paige, skill_rem,
   skill_sinclair, skill_silver,
   // ----- Hero passives -----
   passive_abrams_heal, passive_haze_fixation, passive_vindicta_flight, passive_drifter_bloodscent,
   passive_mirage_djinns_mark, passive_victor_aura,
   // ----- Ultimates -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
-  eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven,
+  eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven, eff_ult_graves,
   eff_ult_shiv, eff_ult_sinclair, eff_ult_vindicta, eff_ult_viscous, eff_ult_yamato,
   eff_ult_wraith, eff_ult_warden, eff_ult_mirage, eff_ult_drifter, eff_ult_victor, eff_ult_silver,
 ];

@@ -116,11 +116,38 @@ export function stepInCandidates(ps: PlayerState): CardInstance[] {
   });
 }
 
+/** The bench slot (1..3) a hero from `ps`'s hand goes into: the first empty
+ *  one that no riding Rem will come back to; undefined when there is none. */
+export function freeBenchSlot(ps: PlayerState): 1 | 2 | 3 | undefined {
+  const reserved = new Set(heroesOf(ps).filter((h) => h.remMergeTurnsLeft != null).map((h) => h.slot));
+  const i = ps.bench.findIndex((b, k) => b == null && !reserved.has((k + 1) as 1 | 2 | 3));
+  return i < 0 ? undefined : ((i + 1) as 1 | 2 | 3);
+}
+
+/** The bench slots a hero from `ps`'s hand may go into now: the empty ones
+ *  no riding Rem will come back to. */
+export function freeBenchSlots(ps: PlayerState): (1 | 2 | 3)[] {
+  const reserved = new Set(heroesOf(ps).filter((h) => h.remMergeTurnsLeft != null).map((h) => h.slot));
+  return ps.bench.flatMap((b, k) => (b == null && !reserved.has((k + 1) as 1 | 2 | 3) ? [(k + 1) as 1 | 2 | 3] : []));
+}
+
 /** The hero card behind an instance, or undefined for anything else (a spell,
  *  a piece of equipment, an unknown id). */
 export function heroData(card: CardInstance): HeroCard | undefined {
   const data = CARDS_BY_ID[card.cardId];
   return data?.type === 'hero' ? data : undefined;
+}
+
+/** The unit card behind an instance (a Ghoul, a Gravestone: a hero-shaped card
+ *  with `unit` set, cards/units.ts), or undefined for a hero or anything else. */
+export function unitData(card: CardInstance): HeroCard | undefined {
+  const data = heroData(card);
+  return data?.unit ? data : undefined;
+}
+
+/** True for a unit: a board card that is no hero. */
+export function isUnit(card: CardInstance | null | undefined): boolean {
+  return !!card && !!unitData(card);
 }
 
 // ---------- The map ----------

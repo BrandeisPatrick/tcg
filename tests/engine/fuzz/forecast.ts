@@ -16,7 +16,7 @@ import { isRespawning, otherPlayer, structureHp } from '@/engine/query';
 import { DeadlockGame } from '@/engine/game';
 import type { Snapshot, StepInfo } from './driver';
 import { signatureOf, type Hit } from './hits';
-import { boardOf, callMove, describeUnit, diffPaths } from './oracle';
+import { boardOf, callMove, describeUnit, diffPaths, isUnitCard } from './oracle';
 
 interface Mismatch { check: string; message: string }
 
@@ -41,7 +41,9 @@ function evaluate(G: GameState, ctx: Ctx, pid: PlayerID):
   if (r.outcome !== 'accepted') return { kind: 'rejected', how: r.outcome };
   const t2 = tgt.zone === 'pit'
     ? (r.G.boss?.iid === tgt.iid ? r.G.boss : { ...tgt, hp: 0 })
-    : boardOf(r.G.players[foe]).find((c) => c.iid === tgt.iid);
+    : boardOf(r.G.players[foe]).find((c) => c.iid === tgt.iid)
+      // A unit destroyed leaves the board for the discard pile: it fell.
+      ?? (isUnitCard(tgt) && r.G.players[foe].discard.some((c) => c.iid === tgt.iid) ? { ...tgt, hp: 0 } : undefined);
   if (!t2) return { kind: 'missing' };
 
   const mismatches: Mismatch[] = [];

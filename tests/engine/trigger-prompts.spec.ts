@@ -72,6 +72,9 @@ function nextTurn(G: GameState, pid: PlayerID): PlayerID {
   return next;
 }
 
+/** The seeds the drafted-match test looks through for one whose match reaches Victor's prompt. */
+const PROMPT_SEEDS = Array.from({ length: 32 }, (_, i) => 9 + i); // 9..40
+
 describe('trigger prompts: asked only when the trigger can be used', () => {
   it('nothing usable — below Level 2, a damage short, its side\'s ultimate of the turn used, still waiting — asks nothing, and the fall goes ahead', () => {
     for (const setup of [
@@ -386,23 +389,37 @@ describe('both heroes in a drafted match the AI plays to its end', () => {
   // out.) The AI's use of Silver's Wolf form is staged below: whether a seeded match reaches
   // it depends on how much she deals.
   it('Victor and Silver are drafted, stand on the board, the AI answers his prompt, and the match is decided', () => {
-    const seen = new Set<string>();
-    let asked = 0;
-    let picks: Record<PlayerID, string[]> | undefined;
-    const game = playGame({
-      seed: 9,
-      policies: { '0': 'heuristic', '1': 'heuristic' },
-      prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
-      beforeMove: ({ G }, info) => {
-        if (G.draft) picks = G.draft.picks;
-        for (const pid of ['0', '1'] as PlayerID[]) {
-          for (const c of [G.players[pid].active, ...G.players[pid].bench]) {
-            if (c) seen.add(c.cardId);
+    // Whether a seeded match reaches Victor's prompt depends on the whole card pool, so a pinned
+    // seed broke with every rule change (8, then 9). The test takes the first of a few seeds
+    // whose match asks, and holds that match to everything below.
+    const play = (seed: number) => {
+      const seen = new Set<string>();
+      let asked = 0;
+      let picks: Record<PlayerID, string[]> | undefined;
+      const game = playGame({
+        seed,
+        policies: { '0': 'heuristic', '1': 'heuristic' },
+        prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
+        beforeMove: ({ G }, info) => {
+          if (G.draft) picks = G.draft.picks;
+          for (const pid of ['0', '1'] as PlayerID[]) {
+            for (const c of [G.players[pid].active, ...G.players[pid].bench]) {
+              if (c) seen.add(c.cardId);
+            }
           }
-        }
-        if (info.name === 'useTrigger' || info.name === 'passTrigger') asked++;
-      },
-    });
+          if (info.name === 'useTrigger' || info.name === 'passTrigger') asked++;
+        },
+      });
+      return { seen, asked, picks, game };
+    };
+    let found: ReturnType<typeof play> | undefined;
+    for (const seed of PROMPT_SEEDS) {
+      const m = play(seed);
+      // …with both heroes drawn and put on the board before it is decided.
+      if (m.asked > 0 && m.seen.has('hero_victor') && m.seen.has('hero_silver')) { found = m; break; }
+    }
+    expect(found, `none of the seeds ${PROMPT_SEEDS[0]}..${PROMPT_SEEDS[PROMPT_SEEDS.length - 1]} reaches Victor's prompt with Silver on the board`).toBeDefined();
+    const { seen, asked, picks, game } = found!;
     expect(picks?.['0']).toContain('hero_victor');
     expect(picks?.['1']).toContain('hero_silver');
     expect(game.threw).toEqual([]);

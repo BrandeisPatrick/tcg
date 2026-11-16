@@ -20,8 +20,8 @@ import type { Action } from './engine';
 import { getAbility } from './registry';
 import { ULT_UNLOCK_LEVEL } from './constants';
 import {
-  abilityAim, attackPower, findCardOnBoard, handCard, hasReach, heroesOf, heroRetreat, isBlocked, isRespawning,
-  isUntargetable, itemPrice, kitAbilityIds, kitCost, kitWaiting, laneOpen, liveBoardCards, optionalTriggers, otherPlayer, promptOwed,
+  abilityAim, attackPower, findCardOnBoard, freeBenchSlot, freeBenchSlots, handCard, hasReach, heroRetreat, isBlocked, isRespawning,
+  isUnit, isUntargetable, itemPrice, kitAbilityIds, kitCost, kitWaiting, laneOpen, liveBoardCards, optionalTriggers, otherPlayer, promptOwed,
   resolveSkill, retreatDiscount, slotCap, slottedHeroes, standingBoss, stepInCandidates, targetsFor, triggerPrice, ultCharge, wornItems,
 } from './query';
 import { seatToMove } from './rounds';
@@ -251,7 +251,8 @@ export function answerBlocked(G: GameState, a: { type: 'passTrigger' } | { type:
  *  Undefined when no hero of `pid`'s stands: it can play no spell then. */
 export function spellCaster(G: GameState, pid: PlayerID): CardInstance | undefined {
   const ps = G.players[pid];
-  return [ps.active, ...ps.bench].find((c): c is CardInstance => !!c && !isRespawning(c) && CARDS_BY_ID[c.cardId]?.type === 'hero');
+  // (A unit casts nothing: with only Ghouls standing, no spell is played.)
+  return [ps.active, ...ps.bench].find((c): c is CardInstance => !!c && !isRespawning(c) && CARDS_BY_ID[c.cardId]?.type === 'hero' && !isUnit(c));
 }
 
 /** What `pid` may play the spell `cardId` on: the live board cards its first
@@ -269,7 +270,8 @@ export function spellTargets(G: GameState, pid: PlayerID, cardId: CardId): CardI
  *  respawn timer) with this iid. */
 function slottedHero(G: GameState, pid: PlayerID, heroIid: string): CardInstance | undefined {
   const found = findCardOnBoard(G, heroIid);
-  return found && found.owner === pid ? found.card : undefined;
+  // A unit (a Ghoul, a Gravestone) wears nothing: it is no hero to put an item on.
+  return found && found.owner === pid && !isUnit(found.card) ? found.card : undefined;
 }
 
 /** The worn item an upgrade played onto `hero` evolves: the component it
@@ -388,32 +390,30 @@ export function playNeedsTarget(G: GameState, pid: PlayerID, cardIid: string): b
   return !!data && (data.type !== 'spell' || spellTargets(G, pid, data.id) !== 'none');
 }
 
-/** The bench slot (1..3) a hero from `ps`'s hand goes into: the first empty
- *  one that no riding Rem will come back to; undefined when there is none. */
-export function freeBenchSlot(ps: PlayerState): 1 | 2 | 3 | undefined {
-  const reserved = new Set(heroesOf(ps).filter((h) => h.remMergeTurnsLeft != null).map((h) => h.slot));
-  const i = ps.bench.findIndex((b, k) => b == null && !reserved.has((k + 1) as 1 | 2 | 3));
-  return i < 0 ? undefined : ((i + 1) as 1 | 2 | 3);
+
+export { freeBenchSlot, freeBenchSlots };
+
+export type PlaceBlock = 'notYourTurn' | 'notInHand' | 'notHero' | 'souls' | 'occupied' | 'benchOnly' | 'benchFull' | 'badSlot' | 'slotTaken';
+
+/** What putting the hand card `cardId` on the board costs: nothing for a hero,
+ *  its price for a unit (a Ghoul: 1 soul). */
+export function placeCost(cardId: CardId): number {
+  const data = CARDS_BY_ID[cardId];
+  return data?.type === 'hero' ? data.unit?.price ?? 0 : 0;
 }
 
-export type PlaceBlock = 'notYourTurn' | 'notInHand' | 'notHero' | 'occupied' | 'benchOnly' | 'benchFull' | 'badSlot' | 'slotTaken';
-
-/** The bench slots a hero from `ps`'s hand may go into now: the empty ones
- *  no riding Rem will come back to. */
-export function freeBenchSlots(ps: PlayerState): (1 | 2 | 3)[] {
-  const reserved = new Set(heroesOf(ps).filter((h) => h.remMergeTurnsLeft != null).map((h) => h.slot));
-  return ps.bench.flatMap((b, k) => (b == null && !reserved.has((k + 1) as 1 | 2 | 3) ? [(k + 1) as 1 | 2 | 3] : []));
-}
 
 /**
  * Why `pid` cannot put the hero `cardIid` from its hand on the board right
  * now, or null when it can: into the bench slot `slot` (1-3), or its first
  * free one (`freeBenchSlot`) when none is named, or, `toActive`, straight
  * into an EMPTY Active slot (the lane left open by a fallen Active gone to
- * the hand; `slot` is then ignored). Free. Checked in this order:
+ * the hand; `slot` is then ignored). Free for a hero; a unit (a Ghoul) costs
+ * its price (`placeCost`). Checked in this order:
  *  - 'notYourTurn' it is not `pid`'s turn.
  *  - 'notInHand'   no card in `pid`'s hand has that iid.
  *  - 'notHero'     the card is an item: it goes on a hero (`playCard`).
+ *  - 'souls'       a unit, and `pid` has fewer souls than its price.
  *  - 'occupied'    `toActive`, and the Active slot holds a hero (standing or
  *                  a corpse: a bench hero steps up to a corpse's slot).
  *  - 'benchOnly'   `toActive`, and the hero never takes the Active slot
@@ -431,6 +431,7 @@ export function placeHeroBlocked(G: GameState, pid: PlayerID, cardIid: string, t
   const data = CARDS_BY_ID[card.cardId];
   if (data?.type !== 'hero') return 'notHero';
   const ps = G.players[pid];
+  if (ps.souls < placeCost(card.cardId)) return 'souls';
   if (toActive) {
     if (ps.active) return 'occupied';
     if (data.flags?.benchOnly) return 'benchOnly';

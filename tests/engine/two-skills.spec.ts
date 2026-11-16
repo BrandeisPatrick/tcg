@@ -395,6 +395,7 @@ describe('what a hero card prints', () => {
     hero_drifter: ['passive', "Bloodscent", "His attacks deal +1 bullet damage to a hero below half HP. Each knockout while he is Active gives him +1 Attack for the game (max +2)."],
     hero_victor: ['passive', "Aura of Suffering", "While Victor is Active, at the start of your turn deal 1 spirit damage to every enemy and to Victor."],
     hero_silver: ['skill', "Boot Kick", "Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns."],
+    hero_graves: ['skill', "Grasping Hands", "Deal {sp:1} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck."],
   };
 
   it('heroAbilities lists skills, then passives, with names and texts, for every hero', () => {

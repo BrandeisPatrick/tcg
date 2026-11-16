@@ -1,5 +1,5 @@
 /**
- * The 21 heroes in the game are the cards of docs/hero-design.md §8, under the
+ * The 22 heroes in the game are the cards of docs/hero-design.md §8, under the
  * rules of §2–4: HP from the formula (4 + tank score, the curve's point),
  * Attack 1 or 2, growth by curve (even at Level 2), a printed Retreat of 0–2
  * souls, exactly one skill (1–3 souls, then a 1-turn wait) or one passive, and
@@ -52,6 +52,7 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   // The charged ultimates wait on damage (`charged`: what they need); their size is what the effect is worth.
   hero_victor:     { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 2, skill: null, ult: 'medium', charged: 10 },
   hero_silver:     { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium', charged: 8 },
+  hero_graves:     { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: [4, 1], ult: 'small' },
 };
 
 /** Growth points a level, by curve (§2). */
@@ -79,7 +80,7 @@ function act(G: GameState, pid: PlayerID, a: Action) {
   expect(perform(G, pid, a), JSON.stringify(a)).not.toBe(INVALID);
 }
 
-describe('the 21 heroes are the hero doc\'s cards', () => {
+describe('the 22 heroes are the hero doc\'s cards', () => {
   it('every hero in the game is in the doc\'s table, and the table is every hero', () => {
     expect(HEROES.map((h) => h.id).sort()).toEqual(Object.keys(DOC).sort());
   });

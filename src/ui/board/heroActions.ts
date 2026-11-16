@@ -185,6 +185,7 @@ export function placeBlockReason(block: PlaceBlock): string {
     case 'notYourTurn': return 'Not your turn';
     case 'notInHand': return 'That card is not in your hand';
     case 'notHero': return 'An item goes on a hero';
+    case 'souls': return 'Not enough souls';
     case 'occupied': return 'Your Active slot is taken';
     case 'benchOnly': return 'That hero can only fight from the bench';
     case 'benchFull': return 'Your bench is full';

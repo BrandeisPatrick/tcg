@@ -11,7 +11,8 @@ import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
 import {
-  fallPending, findCardOnBoard, isRespawning, killPush, laneOpen, otherPlayer, promptOwed, respawnTimer, reviveReady, stepInCandidates,
+  fallPending, findCardOnBoard, freeBenchSlot, isRespawning, isUnit, killPush, laneOpen, otherPlayer, promptOwed, respawnTimer, reviveReady, stepInCandidates,
+  unitData,
 } from './query';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
@@ -20,7 +21,10 @@ import { leaveActive } from './lane';
 import { awardSouls } from './souls';
 import { killBounty } from './rounds';
 import { pushStructures, reapBoss } from './map';
-import { heroToHand } from './deck';
+import { heroToHand, toDiscard } from './deck';
+import { getAbility } from './registry';
+import { allocatorOf } from './ids';
+import { makeInstance } from './instances';
 
 export { awardSouls };
 
@@ -111,8 +115,48 @@ function payHeldExp(G: GameState, hero: CardInstance) {
  *  the fall waits on the answer, the hero at 0 HP where it stood, and the
  *  answer settles it. With nothing to ask, it falls now (`killInPlace`). */
 function fall(G: GameState, ps: PlayerState, hero: CardInstance, opts: { unpaid?: boolean } = {}) {
+  if (isUnit(hero)) { destroyUnit(G, ps, hero); return; }
   if (fireTriggers(G, hero, 'onFall', { movingPlayer: ps.id, prompt: opts.unpaid ? { unpaid: true } : {} })) return;
   killInPlace(G, ps, hero, opts);
+}
+
+/**
+ * A unit of `ps` (a Ghoul, a Gravestone) is destroyed: it leaves its spot for
+ * its owner's discard pile, for good — no bounty, no push, no exp, no wait and
+ * no Rejuvenator — and its death effect runs (the Ghoul's: the rival discards
+ * from the top of its deck). A unit that stood in the lane leaves it open, and
+ * the state-based pass asks who steps up, as when an Active falls.
+ */
+export function destroyUnit(G: GameState, ps: PlayerState, unit: CardInstance) {
+  pushLog(G, `${cardName(unit.cardId)} is destroyed.`);
+  if (ps.active === unit) {
+    leaveActive(G, unit);
+    ps.active = null;
+  } else {
+    const at = ps.bench.indexOf(unit);
+    if (at >= 0) ps.bench[at] = null;
+  }
+  unit.hp = 0;
+  unit.statuses = [];
+  unit.exhausted = false;
+  toDiscard(G, ps.id, unit);
+  const death = unitData(unit)?.unit?.death;
+  if (death) getAbility(death)?.run(G, { movingPlayer: ps.id }, { source: unit });
+}
+
+/**
+ * Raise a new unit of `cardId` on `ps`'s bench, in its first free slot (an
+ * effect does it: Borrowed Decree's Gravestone). Returns it, or undefined when
+ * the bench has no room.
+ */
+export function raiseUnit(G: GameState, ps: PlayerState, cardId: string): CardInstance | undefined {
+  const slot = freeBenchSlot(ps);
+  if (slot === undefined) return undefined;
+  const unit = makeInstance(allocatorOf(G), cardId, ps.id, 'bench', slot);
+  ps.bench[slot - 1] = unit;
+  pushLog(G, `${cardName(cardId)} rises on P${ps.id}'s bench.`);
+  pushFx(G, { kind: 'deck', what: 'place', pid: ps.id, iid: unit.iid, cardId, slot });
+  return unit;
 }
 
 /** `hero` of `ps` has fallen to the Mid-Boss's blow (`hp` 0, the End step):

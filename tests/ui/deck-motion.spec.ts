@@ -461,25 +461,34 @@ describe('the layer puts each batch up once', () => {
   // respond stage). Seed 9: seed 8's match no longer reaches the prompt (with
   // the lane at 2 souls a turn his side cannot pay for it there).
   it('across a drafted match the AI plays to its end, with Victor and Silver, no card is planned to fly twice', () => {
-    let seen = 0;
-    let openings = 0;
-    let asked = 0;
-    const keys: string[] = [];
-    playGame({
-      seed: 9,
-      policies: { '0': 'heuristic', '1': 'heuristic' },
-      prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
-      afterMove: (before, after, move, accepted) => {
-        if (accepted && (move.name === 'useTrigger' || move.name === 'passTrigger')) asked++;
-        const fx = after.G.fx ?? [];
-        const fresh = freshBatch(fx, seen);
-        seen = Math.max(seen, ...fx.map((e) => e.seq));
-        if (fresh.length === 0) return;
-        const plan = planDeckMotion(fresh, { me: '0', before: before.G, after: after.G });
-        if (plan.opening) openings++;
-        keys.push(...plan.flights.map((f) => f.key));
-      },
-    });
+    // The first of a few seeds whose match reaches Victor's prompt (which one does depends on
+    // the whole card pool, so the seed is looked for, not pinned).
+    const play = (seed: number) => {
+      let seen = 0;
+      let openings = 0;
+      let asked = 0;
+      const keys: string[] = [];
+      playGame({
+        seed,
+        policies: { '0': 'heuristic', '1': 'heuristic' },
+        prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
+        afterMove: (before, after, move, accepted) => {
+          if (accepted && (move.name === 'useTrigger' || move.name === 'passTrigger')) asked++;
+          const fx = after.G.fx ?? [];
+          const fresh = freshBatch(fx, seen);
+          seen = Math.max(seen, ...fx.map((e) => e.seq));
+          if (fresh.length === 0) return;
+          const plan = planDeckMotion(fresh, { me: '0', before: before.G, after: after.G });
+          if (plan.opening) openings++;
+          keys.push(...plan.flights.map((f) => f.key));
+        },
+      });
+      return { openings, asked, keys };
+    };
+    let found: ReturnType<typeof play> | undefined;
+    for (let seed = 9; seed <= 40 && !found; seed++) { const m = play(seed); if (m.asked > 0) found = m; }
+    expect(found, 'no seed of 9..40 reaches Victor\'s prompt').toBeDefined();
+    const { openings, asked, keys } = found!;
     expect(asked).toBeGreaterThan(0);
     expect(openings).toBe(1);
     expect(keys.length).toBeGreaterThan(20);

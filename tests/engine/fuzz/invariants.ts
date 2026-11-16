@@ -42,7 +42,7 @@ import {
 } from '@/engine/constants';
 import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/query';
 import {
-  DRAW_CARDS, MAX_TOTAL_EXP, PIDS, boardOf, chooseActiveBlockedOracle, deckOf,
+  DRAW_CARDS, MAX_TOTAL_EXP, PIDS, RAISED, boardOf, isUnitCard, unitOracle, chooseActiveBlockedOracle, deckOf,
   describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
   skillChargesLeftOracle, skillChargesOracle, skillWaitOracle, ultFaceOracle, ultUncharged,
   freeBenchSlotOracle, isMergedRem, itemData, killBountyOracle, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
@@ -200,7 +200,8 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     // A drafted match has eight different heroes, wherever they are — on a board, merged into an
     // ally, in a deck, a hand or a discard pile (the hand-built test boards hold two different
     // rosters too).
-    const roster = everyCard(G).filter((x) => isHeroCard(x.card)).map((x) => x.card.cardId);
+    // (Units are no roster: a side may hold any number of Ghouls.)
+    const roster = everyCard(G).filter((x) => isHeroCard(x.card) && !isUnitCard(x.card)).map((x) => x.card.cardId);
     const dupHero = roster.find((x, i) => roster.indexOf(x) !== i);
     if (dupHero) add('roster-duplicate', dupHero, `${dupHero} appears twice across the two sides`);
   }
@@ -699,8 +700,9 @@ export function collectTransitionViolations(
 
   // Cards do not vanish and none appears from nowhere: every card anywhere before (decks, hands
   // and discard piles included) is somewhere after — but for a Mid-Boss that falls; and the
-  // only new card is, at a round's start, the Mid-Boss (a play makes none: an upgrade is a
-  // card of its own, drawn from the deck like any other).
+  // only new cards are, at a round's start, the Mid-Boss, and the units an effect raises
+  // (`RAISED`: Graves' Ghouls into a deck, her Gravestone onto a bench). A play makes none:
+  // an upgrade is a card of its own, drawn from the deck like any other.
   {
     const beforeIids = new Map(everyCard(before.G).map((x) => [x.card.iid, x]));
     const afterCards = everyCard(after.G);
@@ -712,6 +714,8 @@ export function collectTransitionViolations(
     const appeared = afterCards.filter((x) => !beforeIids.has(x.card.iid));
     for (const x of appeared) {
       if (x.place === 'pit' && handOver) continue;
+      // A unit a card's effect raised: a Ghoul shuffled into a deck, a Gravestone on a bench.
+      if (RAISED[x.card.cardId]?.(x.place)) continue;
       add('card-appeared', x.card.iid, `${x.card.cardId}#${x.card.iid} (${x.place}) of P${x.pid} appeared after ${move.name}(${JSON.stringify(args)})`);
     }
   }
@@ -784,6 +788,7 @@ export function collectTransitionViolations(
     let cost = 0;
     let payout = 0;
     if (playedCard && playedOn) cost = playCostOracle(playedOn, playedCard.cardId);
+    else if (move.name === 'placeHero') cost = unitOracle(handCardOf(B, mover, args[0])?.cardId)?.price ?? 0; // a hero is free, a unit its price
     else if (playedSpell) {
       // A spell: its whole price, and what its text pays out as it resolves (Golden Goose Egg).
       cost = playCostOracle(undefined, playedSpell.cardId);
@@ -970,7 +975,10 @@ export function collectTransitionViolations(
     const problems: string[] = [];
     for (const iid of named) {
       const where = placeOf(after.G, iid);
-      if (where?.place !== 'discard' || where.pid !== mover) problems.push(`${iid} is ${where ? `in ${where.place}` : 'nowhere'}`);
+      // A hero is never discarded: it goes back into its owner's deck (which is shuffled).
+      const hero = handCardOf(B, mover, iid);
+      const want = hero && isHeroCard(hero) && !isUnitCard(hero) ? 'deck' : 'discard';
+      if (where?.place !== want || where.pid !== mover) problems.push(`${iid} is ${where ? `in ${where.place}` : 'nowhere'} (the rules: ${want})`);
     }
     const left = Math.min(B.pendingDiscard.count - named.length, handOf(after.G, mover).length);
     const want = left > 0 ? left : undefined;

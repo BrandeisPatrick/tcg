@@ -42,6 +42,7 @@ export const DEFAULT_BUILDS: Record<CardId, CardId[]> = {
   hero_yamato:     ['extended_magazine', 'shadow_weave', 'titanic_magazine', 'kinetic_dash', 'heroic_aura', 'glass_cannon'],
   hero_warden:     ['weapon_shielding', 'metal_skin', 'bullet_lifesteal', 'enduring_speed', 'fortitude', 'juggernaut'],
   hero_silver:     ['monster_rounds', 'bullet_lifesteal', 'swift_striker', 'kinetic_dash', 'berserker', 'frenzy'],
+  hero_graves:     ['mystic_slow', 'torment_pulse', 'improved_spirit', 'suppressor', 'decay', 'escalating_exposure'],
 };
 
 /** Items a build may hold. */

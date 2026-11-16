@@ -29,6 +29,24 @@ export const other = (p: PlayerID): PlayerID => (p === '0' ? '1' : '0');
 export const isHeroCard = (c: CardInstance | null | undefined): boolean =>
   !!c && CARDS_BY_ID[c.cardId]?.type === 'hero';
 
+/** What makes a card a unit (docs/hero-design.md, "Units"), read off the card:
+ *  it is hero-shaped with `unit` set — a Ghoul, a Gravestone. A unit is never
+ *  drafted: a card's effect makes it. It costs its price to put on the board,
+ *  wears nothing, and destroyed it goes to its owner's discard pile for good,
+ *  paying and pushing nothing. */
+export function unitOracle(cardId: unknown): { price: number } | undefined {
+  const d = typeof cardId === 'string' ? (CARDS_BY_ID[cardId] as { type?: string; unit?: { price: number } } | undefined) : undefined;
+  return d?.type === 'hero' && d.unit ? { price: d.unit.price } : undefined;
+}
+export const isUnitCard = (c: CardInstance | null | undefined): boolean => !!c && !!unitOracle(c.cardId);
+/** The units a card's effect makes, and where each may appear: a Ghoul in a
+ *  deck (Grasping Hands, a Gravestone's turn start), a Gravestone on a bench
+ *  (Borrowed Decree). */
+export const RAISED: Readonly<Record<string, (place: string) => boolean>> = {
+  unit_ghoul: (place) => place === 'deck',
+  unit_gravestone: (place) => place.startsWith('bench'),
+};
+
 /** A Rem merged into an ally: she rides in its `attached` list, a hero, not an item. */
 export const isMergedRem = (c: CardInstance): boolean => c.cardId === 'hero_rem' && c.remMergeTurnsLeft != null;
 
@@ -605,7 +623,8 @@ export function wornItemOf(G: GameState, pid: PlayerID, iid: unknown): { item: C
  *  standing bench hero; undefined when none of its heroes stands. */
 export function spellCasterOracle(G: GameState, pid: PlayerID): CardInstance | undefined {
   const ps = G.players[pid];
-  return [ps.active, ...ps.bench].find((c): c is CardInstance => !!c && isHeroCard(c) && !isRespawning(c));
+  // (A unit casts nothing.)
+  return [ps.active, ...ps.bench].find((c): c is CardInstance => !!c && isHeroCard(c) && !isUnitCard(c) && !isRespawning(c));
 }
 
 /** Who `pid` may play the spell `cardId` on: the board cards its first
@@ -654,7 +673,7 @@ export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown,
     return souls < itemPriceOracle(card.cardId) ? 'souls' : null;
   }
   const hero = slottedHeroOf(G, pid, heroIid);
-  if (!hero) return 'no-hero';
+  if (!hero || isUnitCard(hero)) return 'no-hero'; // a unit wears nothing
   const worn = wornItemsOf(hero);
   if (worn.some((a) => a.cardId === card.cardId)) return 'duplicate';
   const full = !upgradeComponentOracle(hero, card.cardId) && worn.length >= slotCapOracle(G, pid);
@@ -689,7 +708,7 @@ export function freeBenchSlotsOracle(G: GameState, pid: PlayerID): number[] {
  *  made; not its turn; not in its hand; no hero; the Active slot holds a hero
  *  (standing or a corpse); a bench-only hero to the Active; a slot that is no
  *  bench slot; a slot taken (a hero, a corpse, or a merged Rem's); no bench
- *  slot free. */
+ *  slot free. A unit (a Ghoul) also needs its price in souls. */
 export function placeHeroBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown, toActive: boolean, slot?: unknown): string | null {
   const owed = owedOracle(G, 'placeHero');
   if (owed) return owed;
@@ -697,6 +716,8 @@ export function placeHeroBlockedOracle(G: GameState, pid: PlayerID, cardIid: unk
   const card = handCardOf(G, pid, cardIid);
   if (!card) return 'not-in-hand';
   if (!isHeroCard(card)) return 'not-hero';
+  // A hero is free; a unit costs its price.
+  if (G.players[pid].souls < (unitOracle(card.cardId)?.price ?? 0)) return 'souls';
   if (toActive) {
     if (G.players[pid].active) return 'occupied';
     if ((CARDS_BY_ID[card.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly) return 'bench-only';

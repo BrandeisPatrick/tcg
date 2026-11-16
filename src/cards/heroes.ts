@@ -188,6 +188,15 @@ export const HEROES: HeroCard[] = [
     skills: ['skill_silver'], ult: 'eff_ult_silver',
     signature: ['monster_rounds', 'bullet_lifesteal'],
   },
+  {
+    // The necromancer (Patrick, 2026-11-16): she traps the lane and fills her
+    // own deck with Ghouls; her Gravestone keeps them coming.
+    id: 'hero_graves', name: 'Graves', type: 'hero', rarity: 3,
+    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
+    profile: { role: 'Controller', mix: { tank: 1, damage: 2, control: 2, support: 0 }, reach: 'many', curve: 'mid' },
+    skills: ['skill_graves'], ult: 'eff_ult_graves',
+    signature: ['mystic_slow', 'torment_pulse'],
+  },
 ];
 
 export const HEROES_BY_ID = Object.fromEntries(HEROES.map((h) => [h.id, h])) as Record<string, HeroCard>;

@@ -23,7 +23,7 @@
 import type { CardInstance, GameState, PlayerID, SpellCard } from '../types';
 import { cardName, itemCard } from '@/cards';
 import { findCardOnBoard, handCard, isRespawning, itemPrice, wornItems } from '../query';
-import { freeBenchSlot, playCost, spellCaster, upgradeComponent } from '../legality';
+import { freeBenchSlot, placeCost, playCost, spellCaster, upgradeComponent } from '../legality';
 import { attachItem, detachItem, syncVitalitySpike } from '../instances';
 import { discardFromHand, toDiscard } from '../deck';
 import { grantExp } from '../expSystem';
@@ -115,26 +115,30 @@ function castSpell(G: GameState, pid: PlayerID, card: CardInstance, data: SpellC
 }
 
 /** Put the hero `cardIid` from `pid`'s hand in a bench slot — `slot`, or
- *  its first free one — or, `toActive`, in its empty Active slot. Free. The
+ *  its first free one — or, `toActive`, in its empty Active slot. Free for a
+ *  hero; a unit (a Ghoul) is paid for (`placeCost`). The
  *  board flies it there (`place`). The state-based pass follows: a hero
  *  benched while the lane is open is promoted to it (an AI seat's at once;
  *  the human seat is asked). */
 export function placeHero(G: GameState, pid: PlayerID, cardIid: string, toActive = false, slot?: 1 | 2 | 3) {
   const ps = G.players[pid];
   const card = handCard(G, pid, cardIid)!;
+  const cost = placeCost(card.cardId);
+  ps.souls -= cost;
+  const paid = cost > 0 ? ` (-${cost} soul${cost === 1 ? '' : 's'})` : '';
   ps.hand = ps.hand.filter((c) => c !== card);
   if (toActive) {
     ps.active = card;
     card.zone = 'active';
     card.slot = 0;
-    pushLog(G, `P${pid} put ${cardName(card.cardId)} in the lane.`);
+    pushLog(G, `P${pid} put ${cardName(card.cardId)} in the lane${paid}.`);
     pushFx(G, { kind: 'deck', what: 'place', pid, iid: card.iid, cardId: card.cardId, slot: 0 });
   } else {
     const at = slot ?? freeBenchSlot(ps)!;
     ps.bench[at - 1] = card;
     card.zone = 'bench';
     card.slot = at;
-    pushLog(G, `P${pid} benched ${cardName(card.cardId)}.`);
+    pushLog(G, `P${pid} benched ${cardName(card.cardId)}${paid}.`);
     pushFx(G, { kind: 'deck', what: 'place', pid, iid: card.iid, cardId: card.cardId, slot: at });
   }
   resolve(G);

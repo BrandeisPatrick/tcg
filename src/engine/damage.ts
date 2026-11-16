@@ -1,7 +1,7 @@
 import type { CardInstance, DamageType, FxCastKind, FxTag, GameState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
-import { chargedUlt, fallPending, incomingDamage, isBoss, isRespawning, itemHealingBoost, itemResist, optionalTriggers, seatOf } from './query';
+import { chargedUlt, fallPending, incomingDamage, isBoss, isRespawning, isUnit, itemHealingBoost, itemResist, optionalTriggers, seatOf } from './query';
 import { currentCast, withCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
@@ -210,7 +210,8 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   // A hero that may cancel its own fall (an optional trigger at 'onFall':
   // Victor's revive) holds the exp back until the fall is decided (`downedBy`,
   // paid by killInPlace): a fall that never happens pays none.
-  if (hpBefore > 0 && target.hp <= 0 && cast && cast.source) {
+  // (Destroying a unit — a Ghoul, a Gravestone — earns nothing.)
+  if (hpBefore > 0 && target.hp <= 0 && cast && cast.source && !isUnit(target)) {
     const srcData = CARDS_BY_ID[cast.source.cardId];
     if (srcData?.type === 'hero') {
       if (optionalTriggers(target, 'onFall').length > 0) target.downedBy = cast.source.iid;
