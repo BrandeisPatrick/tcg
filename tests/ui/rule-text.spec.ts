@@ -347,10 +347,10 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     const found = abilitiesReadingSpirit();
     for (const id of [
       'skill_mo_krill', 'skill_kelvin', 'skill_lady_geist', 'skill_lash', 'skill_paige', 'skill_rem',
-      'skill_seven', 'skill_shiv', 'skill_yamato', 'passive_vindicta_flight', 'passive_mirage_djinns_mark',
+      'skill_seven', 'skill_shiv', 'skill_yamato', 'skill_vindicta', 'status_flying', 'passive_mirage_djinns_mark',
       'eff_cold_front', 'eff_silence_glyph',
       'eff_ult_abrams', 'eff_ult_dynamo', 'eff_ult_kelvin', 'eff_ult_lady_geist', 'eff_ult_lash', 'eff_ult_mo_krill',
-      'eff_ult_paige', 'eff_ult_seven', 'eff_ult_shiv', 'eff_ult_vindicta', 'eff_ult_viscous', 'eff_ult_wraith',
+      'eff_ult_paige', 'eff_ult_seven', 'eff_ult_shiv', 'eff_ult_viscous', 'eff_ult_wraith',
       'eff_ult_warden', 'eff_ult_drifter',
     ]) expect(found.has(id), id).toBe(true);
     // A flat number reads no Spirit: Kinetic Pulse's 1, The Cube, Full Auto, Rabbit Hex,
@@ -358,6 +358,7 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     for (const id of [
       'skill_dynamo', 'skill_viscous', 'skill_wraith', 'skill_sinclair', 'skill_warden',
       'eff_ult_rem', 'eff_ult_haze', 'eff_ult_yamato', 'eff_ult_mirage',
+      'eff_ult_vindicta', // Flight puts up the Flying status; the status's own proc reads Spirit
     ]) expect(found.has(id), id).toBe(false);
   });
 
@@ -430,7 +431,7 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
   it('the spells and ultimates the marks were written for print them', () => {
     expect(SPELLS.find((s) => s.id === 'cold_front')!.text).toBe('Deal {sp:2} spirit damage to enemy Active.');
     expect(ULTIMATES.find((u) => u.id === 'ult_seven')!.text).toBe("Channel 2 turns: at each turn's end, deal {sp:2} spirit damage to every enemy.");
-    expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Deal {sp:8} spirit damage to any enemy.');
+    expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Fly 3 turns: 1 in 3 hits miss her; her attacks add {sp:1} spirit damage.');
   });
 
   it('Paige\'s Plot Armor says what the code grants: a Shield that grows with Spirit and +1 Attack', () => {

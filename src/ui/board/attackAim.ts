@@ -17,6 +17,7 @@ import { forecastAttack } from '@/engine/forecast';
 import type { PendingPlay } from '../helpers';
 import type { AttackOffer } from '../overlays/HeroDetailSheet';
 import { actionRefusal, attackBlockReason, attackLine, type Refusal } from './heroActions';
+import { withBlindRolls } from '@/engine/chance';
 
 /** What the Active's sheet prints on its Attack plate: what the swing at the
  *  default target would do, or why it cannot be made (a Dome on the rival
@@ -26,7 +27,8 @@ import { actionRefusal, attackBlockReason, attackLine, type Refusal } from './he
 export function attackOffer(G: GameState, me: PlayerID, hero: CardInstance, isMyTurn: boolean): Omit<AttackOffer, 'onAttack'> {
   const block = isMyTurn ? attackBlocked(G, me) : null;
   return {
-    line: isMyTurn && block === null ? attackLine(forecastAttack(G, me)) : undefined,
+    // A preview: no die is rolled for it (a flying target's dodge is not shown before the attack).
+    line: isMyTurn && block === null ? attackLine(withBlindRolls(() => forecastAttack(G, me))) : undefined,
     blockedReason: !isMyTurn ? 'Not your turn'
       : block ? attackBlockReason(block, G.players[otherPlayer(me)].active)
       : undefined,

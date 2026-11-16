@@ -793,9 +793,10 @@ describe('M2 the attack forecast matches what the attack does', () => {
     expect(forecastMismatches(G, ctxFor('0'), '0')).toEqual([]);
   });
 
-  it('M2a a swing\'s spirit rider — Vindicta\'s Flight, {sp:1} with each swing (it was Wraith\'s Mixed Bullets) — is in the plan', () => {
+  it('M2a a swing\'s spirit rider — Vindicta\'s Flight, {sp:1} with each swing while she flies (it was Wraith\'s Mixed Bullets) — is in the plan', () => {
     const { G, atk } = duel('hero_vindicta');
     atk.spiritMod = 3;
+    addStatus(G, atk, 'flying', 1, 3);
     expect(forecastMismatches(G, ctxFor('0'), '0')).toEqual([]);
     expect(swing(G).hp).toBe(40 - 2 - (1 + 3)); // her 2 Attack, and Flight's {sp:1} at Spirit 3
   });

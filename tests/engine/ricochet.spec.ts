@@ -190,6 +190,7 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
   it("Vindicta's Flight and Drifter's Bloodscent stay with the swing", () => {
     const vindicta = lane('hero_vindicta', 'ricochet');
     vindicta.atk.spiritMod = 2;
+    addStatus(vindicta.G, vindicta.atk, 'flying', 1, 3); // in Flight: her swing's spirit rider is the status's
     const fx = vindicta.G.fx.length;
     makeAttack(vindicta.G, '0');
     expect(vindicta.abrams.hp).toBe(14); // 3 bullet + Flight's 1 + 2 Spirit

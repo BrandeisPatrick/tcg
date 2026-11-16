@@ -76,7 +76,7 @@ export const HEROES: HeroCard[] = [
     id: 'hero_vindicta', name: 'Vindicta', type: 'hero', rarity: 3,
     atk: 2, hp: 5, growth: { atk: 2, hp: 0, spirit: 0 }, retreat: 0,
     profile: { role: 'Marksman', mix: { tank: 0, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'early', gun: true },
-    skills: [], passives: ['passive_vindicta_flight'], ult: 'eff_ult_vindicta',
+    skills: ['skill_vindicta'], ult: 'eff_ult_vindicta',
     signature: ['long_range', 'sharpshooter'],
   },
   {

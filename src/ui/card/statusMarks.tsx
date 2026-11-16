@@ -33,6 +33,7 @@
  *   dome  Ethereal_Shift_v1   siphon_gain  Siphon_Bullets_v1, an arrow up
  *   casting / casting_light  Singularity: Dynamo's channelled ultimate, the game's glyph for a channel
  *   wolf_form  Silver's Lycan Curse, the ultimate's own icon (public/ult/silver.webp)
+ *   flying  Vindicta's Flight, the ability's own icon (deadlock-api `vindicta_flight.webp`, drawn white)
  *   counterspell  the Counterspell item's HUD glyph (the parry: deadlock-api `icon_parry.svg`,
  *     drawn white at 128×128)
  *
@@ -53,7 +54,7 @@ type MarkKind =
   // Buffs and the rest
   | 'bullet_resist' | 'spirit_resist' | 'shield' | 'weapon_power' | 'spirit_power' | 'unstoppable' | 'invulnerable'
   | 'healing_boost' | 'extra_attack' | 'casting' | 'return_fire' | 'siphon_gain' | 'dome' | 'last_stand'
-  | 'swift' | 'ricochet' | 'wolf_form' | 'counterspell'
+  | 'swift' | 'ricochet' | 'wolf_form' | 'counterspell' | 'flying'
   // An id with no picture.
   | 'unknown';
 
@@ -66,7 +67,7 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
     'spirit_resist_down', 'healing_boost_down', 'fixation', 'rooted', 'rabbit',
     'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable', 'invulnerable',
     'healing_boost', 'extra_attack', 'casting', 'return_fire', 'siphon_gain', 'dome', 'last_stand',
-    'swift', 'ricochet', 'wolf_form', 'counterspell',
+    'swift', 'ricochet', 'wolf_form', 'counterspell', 'flying',
   ] as const).map((id): [string, MarkKind] => [id, id]),
   ['casting_light', 'casting'],
 ]);
@@ -110,6 +111,7 @@ const GLYPH_BOX = {
   bullet_resist_down: { px: [60, 60], box: [3, 6, 51, 47] },
   casting: { px: [137, 137], box: [0, 0, 137, 137] },
   counterspell: { px: [128, 128], box: [14, 22, 94, 84] },
+  flying: { px: [137, 137], box: [5, 17, 127, 109] },
   charged: { px: [137, 137], box: [4, 0, 133, 137] },
   disarm: { px: [128, 128], box: [4, 5, 120, 119] },
   djinns_mark: { px: [137, 137], box: [0, 17, 137, 109] },
@@ -181,6 +183,8 @@ const SOURCE: Record<MarkKind, Source> = {
   wolf_form: { kind: 'glyph', file: 'ult/silver.webp', px: [137, 137], box: [2, 2, 134, 134] },
   // The item's status wears the item's glyph.
   counterspell: glyph('counterspell'),
+  // A status an ultimate grants wears that ultimate's icon: Flight's.
+  flying: glyph('flying'),
   unknown: drawn,
 };
 

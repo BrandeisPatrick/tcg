@@ -10,7 +10,7 @@ import { bankForecast } from '@/engine/bank';
 import { bountyAtRound, killBounty } from '@/engine/rounds';
 import { playBlocked, playCost, retreatCost } from '@/engine/legality';
 import { heroRetreat, itemPrice, netWorth } from '@/engine/query';
-import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, readyClient } from './_helpers';
+import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, readyClient, spendSkill } from './_helpers';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -108,6 +108,7 @@ describe('souls economy', () => {
     const ctx: any = { currentPlayer: '0', turn: 2, numPlayers: 2 };
     G.players['0'].souls = 0;
     G.players['0'].bench[2] = null;
+    spendSkill(G.players['0'].bench[0]!); // Vindicta's snipes are spent: a kill's bounty is not this test's souls
     const hero = giveCard(G, '0', 'hero_kelvin');
     giveCard(G, '0', 'swift_striker'); // Haze's first build item, unaffordable
     // The AI's turn, move by move, up to its end.

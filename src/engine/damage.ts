@@ -7,7 +7,9 @@ import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { pushFx, fxSource } from './fx';
 import { tallyBossHit } from './map';
-import { COUNTERSPELL_HEAL, EXP_ON_KILL } from './constants';
+import { COUNTERSPELL_HEAL, EXP_ON_KILL, FLIGHT_DODGE_IN } from './constants';
+import { rollsBlind } from './chance';
+import { nextRandom } from './deck';
 
 /** Presentation hints for the FX layer, passed by call sites whose damage is
  *  one of a kind (a Djinn's Mark detonation, a Killing Blow execute, a Tesla
@@ -64,6 +66,18 @@ export function counterspellStops(G: GameState, target: CardInstance): boolean {
   return true;
 }
 
+/**
+ * Flying (Vindicta's Flight): each hit on a flying hero misses 1 time in
+ * FLIGHT_DODGE_IN — any hit, of any type, from any source. The die is the
+ * match's own (`nextRandom`); a preview and the AI's look roll none
+ * (engine/chance.ts) and take the hit as landing.
+ */
+function dodges(G: GameState, target: CardInstance): boolean {
+  if (!target.statuses.some((s) => s.id === 'flying')) return false;
+  if (rollsBlind()) return false;
+  return nextRandom(G) < 1 / FLIGHT_DODGE_IN;
+}
+
 // Damage routing for a unit. Returns the damage actually dealt after mitigation.
 // `sourceName`, if omitted, is resolved from the current cast context so skill /
 // spell / ult damage gets "Caster → Target" attribution in the log automatically.
@@ -79,6 +93,12 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   if (pit && !(type === 'attack' && cast?.kind === 'attack' && !cast.bounce && !!cast.source)) return 0;
   // Counterspell: an enemy card does nothing to its bearer.
   if (counterspellStops(G, target)) return 0;
+  // Flying: the hit may miss altogether.
+  if (dodges(G, target)) {
+    pushLog(G, `${cardName(target.cardId)} is flying: the hit misses.`);
+    pushFx(G, { kind: 'immune', iid: target.iid, what: 'flying', cast: cast?.kind });
+    return 0;
+  }
   // Incoming-damage hooks come before everything else (Vindicta's flight takes
   // 1 off a bullet — she's literally above the gunfire).
   amount = incomingDamage(target, amount, type);

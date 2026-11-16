@@ -350,7 +350,8 @@ interface AbilitySource {
 }
 
 /** The abilities a board hero carries, in the order they are asked: its own
- *  passives, then each worn piece of equipment's abilities in worn order. The
+ *  passives, then each worn piece of equipment's abilities in worn order, then
+ *  what a status on it carries (Flying). The
  *  one list behind the reactive triggers (engine/triggers.ts) and the pure
  *  hooks read below, so a card's behaviour is found in the same place by every
  *  rule. A riding Rem in `attached` is a hero, not equipment, and adds none. */
@@ -366,6 +367,12 @@ export function abilitySources(card: CardInstance): AbilitySource[] {
       const ability = getAbility(id);
       if (ability) out.push({ ability, equip });
     }
+  }
+  // What a status on it carries (Flying's proc: `StatusDef.ability`).
+  for (const s of card.statuses) {
+    const id = STATUSES_BY_ID[s.id]?.ability;
+    const ability = id ? getAbility(id) : undefined;
+    if (ability) out.push({ ability });
   }
   return out;
 }

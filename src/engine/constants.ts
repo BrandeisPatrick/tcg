@@ -100,6 +100,11 @@ export const MAX_HAND = 10;
  *  shield stays up for unless it is triggered first, and the HP its hero heals
  *  when it stops a card. */
 export const COUNTERSPELL_TURNS = 2;
+
+/** Flight (Vindicta's ultimate; docs/hero-design.md): the turns she flies, and
+ *  the odds a hit on a flying hero misses — 1 in this many. */
+export const FLIGHT_TURNS = 3;
+export const FLIGHT_DODGE_IN = 3;
 export const COUNTERSPELL_HEAL = 4;
 
 // ---------- Abilities ----------

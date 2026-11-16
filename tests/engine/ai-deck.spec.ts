@@ -21,14 +21,16 @@ import { makeInstance } from '@/engine/instances';
 import { seededRandom } from '@/engine/rng';
 import { discardChoice, enumerateAIMoves } from '@/ai/heuristic';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { freshReadyGame, giveCard, giveItem, stackDeck } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, spendSkill, stackDeck } from './_helpers';
 
 const ctxFor = (pid: PlayerID) => ({ currentPlayer: pid, numPlayers: 2, turn: 2 }) as unknown as Ctx;
 
-/** P0's turn (engine turn 2) with `souls` to spend. */
+/** P0's turn (engine turn 2) with `souls` to spend. Vindicta's two snipes are spent (`spendSkill`):
+ *  these tests are about the hand and the souls, and a free Assassinate would come first. */
 function turn(souls: number): GameState {
   const G = freshReadyGame();
   G.players['0'].souls = souls;
+  spendSkill(G.players['0'].bench[0]!);
   return G;
 }
 
@@ -104,8 +106,11 @@ describe('the AI plays its hand', () => {
   });
 
   it('puts a charge item only on a hero whose skill holds charges', () => {
-    // Nobody on this side has a charged skill: Extra Charge would do nothing, so it stays in the hand.
+    // Nobody on this side has a charged skill (Yamato stands in for Vindicta, whose Assassinate
+    // holds charges): Extra Charge would do nothing, so it stays in the hand.
     const none = turn(10);
+    none.players['0'].bench[0] = makeInstance(allocatorOf(none), 'hero_yamato', '0', 'bench', 1);
+    spendSkill(none.players['0'].bench[0]!);
     const kept = giveCard(none, '0', 'extra_charge');
     playOut(none);
     expect(none.players['0'].hand).toContain(kept);

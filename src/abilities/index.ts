@@ -8,7 +8,7 @@ import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
-import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP } from '@/engine/constants';
+import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP, FLIGHT_TURNS } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -2403,12 +2403,29 @@ const passive_haze_fixation: HeroAbilityDef = {
   },
 };
 
-// Vindicta — Flight: she floats above the fight, and every swing of hers also
-// lands {sp:1} spirit damage (not a Ricochet bounce: the bounce is her bullet alone).
-const passive_vindicta_flight: HeroAbilityDef = {
-  id: 'passive_vindicta_flight', trigger: 'onAttack', target: 'self',
-  name: 'Flight',
-  text: 'Vindicta flies: her attacks also deal {sp:1} spirit damage.',
+// Vindicta (Patrick, 2026-11-16): Assassinate is her skill and Flight her
+// ultimate. Until then Flight was a passive and Assassinate the ultimate.
+
+// Assassinate — the snipe. Charged, as in Deadlock (2 charges, her longest
+// cooldown): two shots held, and each takes 5 turns to come back.
+const skill_vindicta: HeroAbilityDef = {
+  id: 'skill_vindicta', trigger: 'activate', target: 'enemyHero', cooldown: 5, charges: 2,
+  name: 'Assassinate',
+  text: 'Snipe any enemy, bench too: deal {sp:4} spirit damage.',
+  base: 4,
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
+    if (target) damageUnit(G, target, 4 + spi(source), 'spirit', 'Assassinate');
+  },
+};
+
+// What the Flying status carries (statuses/ `flying`: `ability`): the flier's
+// swing also lands 1 + Spirit spirit damage (Deadlock's Flight: "your weapon
+// deals bonus spirit damage"; her old passive). Not on a Ricochet bounce: the
+// bounce is the bullet alone.
+const status_flying: AbilityDef = {
+  id: 'status_flying', trigger: 'onAttack', target: 'self',
+  base: 1,
   run: (G, _ctx, { source, target, params }) => {
     if (!source || !target || params?.bounce || target.hp <= 0 || isRespawning(target)) return;
     damageUnit(G, target, 1 + effectiveSpirit(source), 'spirit', 'Flight', { source, cast: 'proc' });
@@ -2607,10 +2624,16 @@ const eff_ult_sinclair: AbilityDef = {
     copied.run(G, ctx, { source, target });
   },
 };
+// Flight (Patrick, 2026-11-16): she takes to the air for FLIGHT_TURNS turns —
+// the Flying status: 1 hit in 3 on her misses, and her attacks add spirit
+// damage. Sinclair's copy flies Sinclair.
 const eff_ult_vindicta: AbilityDef = {
-  id: 'eff_ult_vindicta', trigger: 'onPlay', target: 'enemyHero',
-  base: 8,
-  run: (G, _ctx, { target }) => { if (target) damageUnit(G, target, 8 + ultSpi(), 'spirit', 'Assassinate'); },
+  id: 'eff_ult_vindicta', trigger: 'onPlay', target: 'noTarget',
+  base: FLIGHT_TURNS,
+  run: (G, ctx, { source }) => {
+    const flier = ultCaster(G, ctx.movingPlayer, source, 'hero_vindicta');
+    if (flier) addStatus(G, flier, 'flying', 1, FLIGHT_TURNS);
+  },
 };
 const eff_ult_viscous: AbilityDef = {
   id: 'eff_ult_viscous', trigger: 'onPlay', target: 'noTarget',
@@ -2765,10 +2788,10 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_mystical_piano, eff_nullification_burst, eff_prism_blast,
   // ----- Hero skills -----
   skill_mo_krill, skill_viscous, skill_lady_geist, skill_shiv, skill_warden, skill_wraith,
-  skill_seven, skill_graves, passive_ghoul, passive_gravestone, skill_lash, skill_yamato, skill_dynamo, skill_kelvin, skill_paige, skill_rem,
+  skill_seven, skill_vindicta, status_flying, skill_graves, passive_ghoul, passive_gravestone, skill_lash, skill_yamato, skill_dynamo, skill_kelvin, skill_paige, skill_rem,
   skill_sinclair, skill_silver,
   // ----- Hero passives -----
-  passive_abrams_heal, passive_haze_fixation, passive_vindicta_flight, passive_drifter_bloodscent,
+  passive_abrams_heal, passive_haze_fixation, passive_drifter_bloodscent,
   passive_mirage_djinns_mark, passive_victor_aura,
   // ----- Ultimates -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,

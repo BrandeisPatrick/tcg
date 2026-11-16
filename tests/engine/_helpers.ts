@@ -10,6 +10,7 @@ import { newTrack } from '@/engine/map';
 import { attachItem, makeInstance, syncVitalitySpike } from '@/engine/instances';
 import { playCost } from '@/engine/legality';
 import { CARDS_BY_ID, itemCard } from '@/cards';
+import { getAbility } from '@/engine/registry';
 import { setMatchConfig } from '@/storage/matchConfig';
 
 let testIids = 1;
@@ -78,6 +79,22 @@ export function freshReadyGame(): GameState {
     fx: [],
   };
   return G;
+}
+
+/**
+ * Take a charged skill out of a test's picture: every charge of `hero`'s skill
+ * spent, its wait just begun. For the AI tests written around other decisions
+ * (the hand, the souls, the Retreat): since 2026-11-16 the standard board's
+ * Vindicta holds two snipes the AI would rather fire first. Returns `hero`.
+ */
+export function spendSkill(hero: CardInstance): CardInstance {
+  const data = CARDS_BY_ID[hero.cardId];
+  const id = data?.type === 'hero' ? data.skills[0] : undefined;
+  const ability = id ? getAbility(id) : undefined;
+  if (!id || !ability) return hero;
+  hero.cooldowns = { ...(hero.cooldowns ?? {}), [id]: (ability as { cooldown?: number }).cooldown ?? 3 };
+  if ((ability.charges ?? 1) > 1) hero.chargesSpent = { ...(hero.chargesSpent ?? {}), [id]: ability.charges! };
+  return hero;
 }
 
 /**

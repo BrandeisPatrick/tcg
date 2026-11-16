@@ -254,6 +254,7 @@ in a turn.
   | Frost Grenade | Kelvin | 2 charges from the first point | 2 charges, 4 turns each |
   | Lightning Ball | Seven | +1 charge at its first upgrade | (2 charges, 3 turns each, until Static Charge replaced it) |
   | Kinetic Pulse | Dynamo | +1 charge at its first upgrade | 2 charges, 4 turns each |
+  | Assassinate | Vindicta | 2 charges, her longest cooldown | 2 charges, 5 turns each (her skill since 2026-11-16; it was her ultimate) |
 
   Yamato's Flying Slash gains a charge only at its third upgrade, so it is
   not charged here. Vindicta's Assassinate has 2 charges and is an ultimate:

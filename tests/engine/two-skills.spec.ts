@@ -379,7 +379,7 @@ describe('what a hero card prints', () => {
     hero_mo_krill: ['skill', "Sand Blast", "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn (it can't attack)."],
     hero_rem: ['skill', "Tag Along", "Rem rides on another of your heroes as equipment for 2 turns: it heals {sp:4}. Then Rem returns to your bench."],
     hero_shiv: ['skill', "Serrated Knives", "Throw a knife: deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns."],
-    hero_vindicta: ['passive', "Flight", "Vindicta flies: her attacks also deal {sp:1} spirit damage."],
+    hero_vindicta: ['skill', "Assassinate", "Snipe any enemy, bench too: deal {sp:4} spirit damage."],
     hero_wraith: ['skill', "Full Auto", "Wraith gets +2 Attack for 2 turns."],
     hero_dynamo: ['skill', "Kinetic Pulse", "Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air)."],
     hero_kelvin: ['skill', "Frost Grenade", "Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each."],

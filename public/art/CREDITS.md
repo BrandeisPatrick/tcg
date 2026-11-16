@@ -73,6 +73,10 @@ from their "Deadlock Graphical Library" collection.
   game's own HUD icons, fetched from the Deadlock wiki's asset mirror
   (`https://cdn.deadlock.wiki/<File_Name>.png`) and used as they are: white
   glyphs on transparency, painted in the chip's colour through an SVG filter.
+  The Flying status (2026-11-16) wears Vindicta's Flight icon
+  (`images/abilities/hornet/vindicta_flight.webp` from the deadlock-api's asset
+  bucket, drawn white as `flying.png`); the same icon is her ultimate's now
+  (`public/ult/vindicta.webp`, which was Assassinate's).
   The Counterspell status (2026-11-15) wears the item's own HUD glyph, the
   parry (`icons/hud/modifiers/icon_parry.svg` from the deadlock-api's asset
   bucket, the item's `image`), drawn white at 128×128 as `counterspell.png`.

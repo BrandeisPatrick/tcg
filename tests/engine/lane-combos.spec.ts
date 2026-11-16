@@ -30,7 +30,7 @@ import { attackPower, heroRetreat, itemPrice } from '@/engine/query';
 import { addStatus, clearTurnFlags } from '@/engine/statusOps';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { statusOfKeyword } from '@/ui/card/RuleText';
-import { freshReadyGame, giveCard, giveItem, makeAttack, makeHero, useItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeAttack, makeHero, spendSkill, useItem } from './_helpers';
 
 /** P0 plays the spell `card` from its hand (on `targetIid`): why the engine
  *  refuses it, or null when it took it. */
@@ -361,6 +361,8 @@ describe('The AI retreats before it attacks when the swap is worth it', () => {
     const b = built(2);
     b.haze.atkMod = 2;
     b.shiv.skillUsedThisTurn = true;
+    spendSkill(b.vindicta);                        // her snipes are spent: the swap is the question here
+    addStatus(b.G, b.vindicta, 'flying', 1, 3);    // and she is in Flight, which is where her swing's spirit comes from
     addStatus(b.G, b.haze, 'weapon_power_down', 2, 2);
     return b;
   };

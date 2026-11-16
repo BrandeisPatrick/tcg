@@ -77,6 +77,7 @@ import { buildOf } from '@/engine/deck';
 import { seededRandom } from '@/engine/rng';
 import { forecastAttack, simulate } from '@/engine/forecast';
 import { BOSS_RETALIATION, LANE_INCOME } from '@/engine/constants';
+import { withBlindRolls } from '@/engine/chance';
 
 /** How hard the AI plays: the difficulty dial (see the head of this file). */
 export type AiStrength = 'easy' | 'normal' | 'hard';
@@ -935,6 +936,12 @@ function addNoise(G: GameState, pid: PlayerID, options: MoveOption[]): void {
 }
 
 export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true, options: AiOptions = {}): MoveOption[] {
+  // The AI's look is blind to chance: it rolls no die on its copies of the game, so it never
+  // knows ahead of the move whether a flying hero will dodge (engine/chance.ts).
+  return withBlindRolls(() => enumerateMoves(G, ctx, lookahead, options));
+}
+
+function enumerateMoves(G: GameState, ctx: Ctx, lookahead: boolean, options: AiOptions): MoveOption[] {
   const pid = ctx.currentPlayer as PlayerID;
   const d = dial(options);
   // Pre-match draft: only one move kind is legal. Score by stat sum +

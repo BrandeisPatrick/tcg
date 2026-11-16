@@ -83,6 +83,7 @@ import { finishStoryBattle } from '@/story/storyRun';
 import { MatchEndScreen } from './board/MatchEndScreen';
 import { CoachPlate } from './tutorial/CoachPlate';
 import { useMatchNav } from './hooks/matchNav';
+import { withBlindRolls } from '@/engine/chance';
 
 // Animation / pacing constants.
 // (The pause between the rival's moves, `AI_THINK_MS`, and each move's hold are in board/pacing.ts.)
@@ -300,7 +301,7 @@ export function Board(props: BoardProps<GameState>) {
   // they land.) Projected only while the mover's attack is still there to be
   // made.
   const projectedPatronDamage = useMemo(
-    () => (attackOpen ? forecastAttack(G, mover).pushDamage : 0),
+    () => (attackOpen ? withBlindRolls(() => forecastAttack(G, mover)).pushDamage : 0), // a preview: blind to any roll
     [G, mover, attackOpen],
   );
 

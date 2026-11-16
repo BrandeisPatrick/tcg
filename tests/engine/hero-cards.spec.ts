@@ -38,7 +38,7 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   hero_warden:     { atk: 2, hp: 7, growth: [1, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium' },
   hero_haze:       { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 1, skill: null, ult: 'large' },
   hero_wraith:     { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 0, skill: [3, 1], ult: 'medium' },
-  hero_vindicta:   { atk: 2, hp: 5, growth: [2, 0, 0], retreat: 0, skill: null, ult: 'medium' },
+  hero_vindicta:   { atk: 2, hp: 5, growth: [2, 0, 0], retreat: 0, skill: [5, 2], ult: 'small' },
   hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: [4, 1], ult: 'large' },
   hero_drifter:    { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: null, ult: 'medium' },
   hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: [4, 1], ult: 'large' },
@@ -220,9 +220,9 @@ describe('a skill costs no souls: it waits, and a charged one holds two uses (Pa
     }
   });
 
-  it('the three charged skills are ones Deadlock gives charges: Serrated Knives, Frost Grenade and Kinetic Pulse (Seven\'s is Static Charge now, which has none)', () => {
+  it('the four charged skills are ones Deadlock gives charges: Serrated Knives, Frost Grenade, Kinetic Pulse and Assassinate (Seven\'s is Static Charge, which has none)', () => {
     const charged = HEROES.filter((h) => (getAbility(h.skills[0] ?? '')?.charges ?? 1) > 1).map((h) => h.id).sort();
-    expect(charged).toEqual(['hero_dynamo', 'hero_kelvin', 'hero_shiv']);
+    expect(charged).toEqual(['hero_dynamo', 'hero_kelvin', 'hero_shiv', 'hero_vindicta']);
   });
 
   it('it is used with no souls, and ready again on the hero\'s third own turn after — SKILL_COOLDOWN', () => {

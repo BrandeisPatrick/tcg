@@ -41,7 +41,7 @@ after 2 turns, keeping its level (section 7).
 | Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. |
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
-| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Three skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, Kinetic Pulse; Lightning Ball was the fourth until Seven's skill became Static Charge, 2026-11-15): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
+| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Four skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, Kinetic Pulse, and since 2026-11-16 Vindicta's Assassinate, which waits 5; Lightning Ball was one until Seven's skill became Static Charge, 2026-11-15): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
 | Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 2. Costs no souls (Patrick, 2026-11-15), and a side uses **one ultimate a turn**. It waits 4 (small), 6 (medium) or 8 (large) turns by size: after each use, and from the match's first turn, so a large one is first ready on its side's turn 8. |
 | Charged ultimate | For heroes like Victor and Silver (Patrick, 2026-11-09). It has no opening wait: it is ready once the hero has taken (Victor, 10) or dealt (Silver, 8) enough damage. The count starts over after use, and it then waits its size's turns like any ultimate. (Until 2026-11-15 it had a soul price, 20 and 16, that each damage brought down by 1.) |
 
@@ -297,8 +297,9 @@ HP 5 · Attack 1 · Retreat 0 · per level +3 Attack +1 HP
 
 **Vindicta** · in the game today — peaks early, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +2 Attack
-- Passive — **Flight**: Vindicta flies: her attacks also deal 1✦ spirit damage.
-- Ultimate, medium, waits 6 — **Assassinate**: Deal 8✦ spirit damage to any enemy.
+- Skill, 2 charges, 5 turns each — **Assassinate**: Snipe any enemy, bench too: deal 4✦ spirit damage.
+- Ultimate, small, waits 4 — **Flight**: Fly 3 turns: 1 in 3 hits miss her; her attacks add 1✦ spirit damage.
+- Built so on 2026-11-16 (Patrick). Until then Flight was her passive (1✦ on each swing) and Assassinate her ultimate (medium: 8✦ to any enemy). The reasoning is in "Vindicta: the snipe and Flight" at the end.
 - Why: Vindicta floats out of reach adding spirit damage to her rifle, then snipes any wounded hero on the board, bench included.
 - Changed from today: Stats stay 2/5 (Attack capped at 2, so the early +1 goes on HP). The bullet-resist passive becomes Flight's real effect, bonus spirit damage on her shots; Assassinate becomes a flat 8✦ on any enemy.
 
@@ -783,3 +784,46 @@ run through the sim.
 - A Ghoul in the lane is attacked like a hero. When it dies there the lane is open and its side
   picks who steps up, at no cost, as when an Active falls.
 - No ready deck carries Graves yet.
+
+### Vindicta: the snipe and Flight (2026-11-16)
+
+Patrick: "Her skill becomes snipe, a charge ability; it might take longer to charge up. Her
+ultimate becomes fly… she goes into a fly status, which means she has a one third chance to dodge
+any attack, any damage."
+
+In Deadlock, Assassinate holds 2 charges and has her longest cooldown, and Flight makes her weapon
+deal bonus spirit damage while she is in the air. So the swap fits the game.
+
+| | Was | Now |
+|---|---|---|
+| Skill or passive | Passive, **Flight**: her attacks also deal 1✦ | Skill, **Assassinate**: 2 charges, 5 turns each. Snipe any enemy, bench too: 4✦ |
+| Ultimate | **Assassinate**, medium (waits 6): 8✦ to any enemy | **Flight**, small (waits 4): fly 3 turns. 1 in 3 hits miss her; her attacks add 1✦ |
+
+**Flying** is a status. While a hero has it:
+- each hit on it misses 1 time in 3, whatever the hit is (a swing, a skill, a spell, a Bleed tick),
+  and a miss takes nothing;
+- its attacks add 1 + its Spirit as spirit damage (not on a Ricochet bounce).
+
+**The roll** is drawn from the match's own seeded stream, so a game replays. A copy of the game
+would roll the same number, so two things run blind (`engine/chance.ts`): the attack preview
+shown while a swing is being aimed, and the whole of the AI's look. Blind, no die is drawn and the
+hit is taken as landing. The attack made rolls for real, and so does the forecast taken as it is
+committed, which the board animates.
+
+**The numbers**, by section 4. Nothing was run through the sim.
+
+- **Assassinate** waits 5, the longest of any skill ("it might take longer to charge up"). A
+  skill is worth about 0.75 to 1.1 points a turn of wait (2 to 3 at 3 turns, 3 to 4.5 at 4), so 3.75
+  to 5.6 at 5. 4✦ is 4, and reaching the bench +0.5: **4.5**. Half the ultimate's 8✦, twice as
+  often, with a second shot held.
+- **Flight** is small (4 to 6 points; "relatively low cost"). The dodge: about 5.5 damage a turn
+  comes at the Active mid-game, a third of it missed is 1.8 prevented, 0.9 points a turn, for 3
+  turns: 2.7. That alone is under a small ultimate. With the spirit damage her attacks add while
+  she flies, 1 × 0.85 a turn for 3 turns = 2.55, it is **5.25**.
+- **The rider is kept on purpose.** Patrick described only the dodge. Her attacks' 1✦ was her
+  whole passive until today and it is what Flight does in Deadlock, so it moved into the ultimate
+  with it. Without it her damage would have dropped (8✦ every 6 turns and 0.85 a turn, against
+  4.5 every 5) for a dodge worth 0.9 a turn. If the dodge is meant to stand alone, the rider comes
+  off in one line and Flight should last longer.
+- She flies 3 turns of every 4 once Flight is first used (it waits 4), and her side spends its one
+  ultimate a turn on it each time.

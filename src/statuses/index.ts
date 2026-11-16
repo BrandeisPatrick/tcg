@@ -42,6 +42,10 @@ export interface StatusDef {
    *  public/heroes/) in place of the hero's portrait. When the status ends
    *  the card shows the hero again. The engine reads nothing here. */
   form?: { hero: CardId; art: string };
+  /** An ability the bearer carries while the status is on it: its triggers and
+   *  hooks are read like a passive's (`abilitySources`, engine/query.ts).
+   *  Flying's: the spirit damage its bearer's attacks add. */
+  ability?: string;
 }
 
 /**
@@ -87,6 +91,11 @@ export const STATUSES: StatusDef[] = [
   // bearer — a spell, a skill or an ultimate — does nothing to it (damage.ts).
   // It triggers once, and is gone when its turns run out.
   { id: 'counterspell',  title: 'Counterspell',  desc: 'The next enemy spell, skill or ultimate that would hit this hero does nothing to it, and it heals 4. Triggers once.', hvalue: 2 },
+
+  // Flying (Vindicta's Flight, docs/hero-design.md): each hit on the bearer
+  // misses 1 time in 3 (`damageUnit` rolls), and its attacks add 1 + Spirit
+  // spirit damage (the status carries a proc: `ability`).
+  { id: 'flying',        title: 'Flying',        desc: 'Each hit on this hero misses 1 time in 3. Its attacks also deal 1 spirit damage, plus its Spirit.', hvalue: 2, ability: 'status_flying' },
 
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across

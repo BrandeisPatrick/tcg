@@ -518,3 +518,22 @@ discard pile. A hero is never discarded — off a deck or out of a hand
 (`discardFromHand`): it goes back into its owner's deck, which is shuffled
 (`heroBackIntoDeck`). The `deck` FX stream names both: `'mill'` and, for a
 card an effect made, `'raise'`.
+
+## Chance, and what a status carries (2026-11-16)
+
+**Flying** (Vindicta's Flight) is the one effect that rolls a die: `damageUnit`
+asks `dodges` for every hit on a hero with the status, and 1 in
+`FLIGHT_DODGE_IN` (3) misses. The number comes from `nextRandom` (the match
+seed and `G.counters.rng`), so a game replays from G alone. Because a copy of G
+would draw the same number, a preview and the AI must not roll:
+`withBlindRolls` (`engine/chance.ts`) skips every roll — no number is drawn, no
+hit dodges. The attack line and the push shown while aiming
+(`ui/board/attackAim.ts`, Board) and the whole of `enumerateAIMoves` run inside
+it. A move made, and the forecast taken as the attack is committed (the
+choreographer walks it), roll for real and agree.
+
+**A status may carry an ability** (`StatusDef.ability`): `abilitySources` lists
+it after the passives and the equipment, so its triggers and hooks are read
+the same way. Flying's is `status_flying`, the spirit damage the flier's
+attacks add; the ultimate's card lists it as its second ability so the card
+prints its purple number.

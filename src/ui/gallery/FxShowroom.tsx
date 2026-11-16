@@ -202,6 +202,7 @@ export const GROUPS: Group[] = [
       { label: 'Charged', events: [status('r0', 'charged', 1, 2, true)] },
       { label: 'Dome', events: [status('y0', 'dome', 1, 1, false)] },
       { label: 'Counterspell', events: [status('y0', 'counterspell', 1, 2, false)] },
+      { label: 'Flying (Vindicta)', events: [status('y0', 'flying', 1, 3, false)] },
       { label: 'Fixation ×2', events: [status('r0', 'fixation', 2, 99, true)] },
       { label: 'Rooted', events: [status('r0', 'rooted', 1, 2, true)] },
       { label: 'Rabbit', events: [status('r0', 'rabbit', 1, 1, true)] },

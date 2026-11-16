@@ -57,6 +57,9 @@ builds) and the Gallery. A Quick Match goes like this.
 - A draft of three heroes each (it was four until 2026-11-16). Your three are
   shuffled into your deck: 19 cards. The board keeps four spots, the Active
   and three on the bench, so a full squad leaves one free for a unit.
+- A flying hero (Vindicta's ultimate, Flight, 3 turns) is missed by 1 hit in
+  3. The roll is the match's own; the attack preview and the rival AI do not
+  see it before the hit is made.
 - Units are board cards that are no hero. Graves' kit makes them: a Ghoul
   (1 Attack, 1 HP) is shuffled into her side's deck and played for 1 soul; a
   Gravestone stands on her bench and makes a Ghoul a turn until anything
@@ -187,9 +190,10 @@ You choose the discards from anywhere in your hand.
 - Each hero, bench included, may use one ability a turn: its skill or its
   ultimate. Neither costs souls: souls buy the cards in your hand and a
   Retreat. Waits count your own turns.
-- A skill waits 3 turns after a use (4 for the heavier ones). Three skills are
-  charged, as in Deadlock: Serrated Knives, Frost Grenade and Kinetic Pulse
-  hold 2 uses, and the wait brings them back one at a time.
+- A skill waits 3 turns after a use (4 for the heavier ones). Four skills are
+  charged, as in Deadlock: Serrated Knives, Frost Grenade, Kinetic Pulse and
+  Vindicta's Assassinate hold 2 uses, and the wait brings them back one at a
+  time (Assassinate's takes 5 turns).
   Only the charge items change that: Extra Charge adds a charge, and Rapid
   Recharge adds 2 and brings each back a turn sooner.
 - The ultimate is a button on the hero card, from Level 2. Your side uses
@@ -449,7 +453,7 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
   `scripts/replay-trace.ts`, `scripts/eval/*` and `scripts/qa/*` know nothing of
   `useTrigger` / `passTrigger`; port them with the hand's moves.
 - **Free kits are reasoned, not played.** Skills and ultimates cost no souls
-  since 2026-11-15; their waits, the three charged skills and the charged
+  since 2026-11-15; their waits, the four charged skills and the charged
   ultimates' 10 and 8 damage are set by reasoning
   (docs/balance-model.md §8). Play will show match length.
 - **One-play spells, counters and the ready decks are reasoned, not played**
