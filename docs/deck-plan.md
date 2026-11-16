@@ -233,7 +233,7 @@ them regularly; an upgrade costs much less").
 - **Upgrades evolve:** play an upgrade on the hero who wears the item it is built from and it
   replaces that item, like evolving a Pokémon.
   - You pay only the difference, as in Deadlock: Titanic Magazine over Extended Magazine costs 1,
-    not 4. The old item goes to the discard pile.
+    not 2. The old item goes to the discard pile.
   - On any other hero, the upgrade costs its normal price.
 - The rule is for equipment built from equipment. A spell (an active item) always costs its price,
   and equipment built from a spell evolves nothing.
