@@ -40,6 +40,8 @@ import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { spring, text, fonts } from '../tokens';
 import { poster, scrimStyle, printEdge, shopInk } from '../poster';
+import { AbilityTile } from './AbilityDial';
+import { abilityDial, dialReason, dialSaid, type DialModel } from './abilityDialModel';
 import {
   scale as T, Souls, HpSegments, hpNumberStyle, ultimateGlyph, panelStyle, plateStyle, bandStyle, chargedGlow,
 } from '../hud';
@@ -81,8 +83,6 @@ const PAD = 8;
 const HEAD = 118;
 /** A hairline on the paper. */
 const RULE = poster.inkRule;
-/** The marks (dials, pips) on the paper. */
-const MARKS = { ink: poster.ink, track: poster.inkRule, faint: poster.inkFaint };
 /** A strip tile's side and the gap between tiles. */
 const TILE = 30;
 const TILE_GAP = 5;
@@ -233,9 +233,11 @@ export function HeroDetailSheet({
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
   // What a kit ability's row says at its right, where its price once stood
   // (a skill and an ultimate cost no souls): a charged skill's charges left,
-  // a charged ultimate's count, else its wait (`kitTag`).
-  const pace = (abilityId: AbilityId): ReactNode => {
-    const tag = kitTag(card, abilityId);
+  // a charged ultimate's count, else its wait (`kitTag`). While its dial is
+  // holding it (a wait running, a count short), the dial's own words: the
+  // tile carries the picture, so these only name the unit ("2 turns left").
+  const pace = (abilityId: AbilityId, dial?: DialModel): ReactNode => {
+    const tag = (dial && dialSaid(dial)) ?? kitTag(card, abilityId);
     if (!tag) return undefined;
     return (
       <span data-kit-tag style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: T.label, letterSpacing: '0.04em', color: poster.inkDim, whiteSpace: 'nowrap' }}>
@@ -270,16 +272,18 @@ export function HeroDetailSheet({
     const mode = modeOf(usable, used, offer?.blockedReason);
     const reason = mode === 'used' ? 'Used' : mode === 'blocked' ? offer?.blockedReason : undefined;
     const kind = abilityKind(ability.text);
+    const dial = abilityDial(card, ability.id);
     rows.push({
       key: ability.id,
       node: (
         <ActionRow
           ink={shopInk(kind).ink} mode={mode} calm={calm}
+          dial={dial} dialMemo={`${card.iid}:${ability.id}`}
           name={ability.name}
           // The skill's own Deadlock icon; its ring keeps the kind's colour.
           art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={shortLine(ability.text, scale, lineMax)}
-          right={pace(ability.id)}
+          right={pace(ability.id, dial)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
         />
@@ -317,17 +321,20 @@ export function HeroDetailSheet({
     const mode = !mine && locked ? 'blocked' : modeOf(usable, used, offer?.blockedReason);
     const reason = mode === 'used' ? 'Used' : mine && mode === 'blocked' ? offer?.blockedReason : undefined;
     const ink = shopInk(abilityKind(ultFace.text ?? '')).ink;
+    // No dial while it is locked: the row says "Level 2", and that is the gate.
+    const dial = abilityDial(card, abilityId);
     rows.push({
       key: abilityId,
       node: (
         <ActionRow
           ult ink={ink} mode={mode} calm={calm}
+          dial={dial} dialMemo={`${card.iid}:${abilityId}`}
           name={ultFace.name}
           // A charged ultimate is named so: it waits on damage, not on turns.
           ultLabel={`Ultimate · ${ultFace.charged ? 'charged' : ultFace.size}`}
           art={<img src={ultIconSrc(ultFace.linkedHero)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={shortLine(ultFace.text ?? '', scale, lineMax)}
-          right={pace(abilityId)}
+          right={pace(abilityId, dial)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(abilityId); onClose(); } : undefined}
         />
@@ -628,7 +635,12 @@ export function HeroDetailSheet({
  */
 function ActionRow({
   ult = false, passive = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
+  dial, dialMemo,
 }: {
+  /** A kit ability's wait, worn on its picture tile (AbilityDial.tsx). */
+  dial?: DialModel;
+  /** Names the dial among all dials: the hero and the ability. */
+  dialMemo?: string;
   /** A passive: printed as a skill's box, never a button, its line whole. */
   passive?: boolean;
   ult?: boolean;
@@ -653,18 +665,14 @@ function ActionRow({
   const dim = mode === 'used' || mode === 'blocked';
   const glow = ult && ready;
   const go = (e: SyntheticEvent) => { e.stopPropagation(); onUse?.(); };
-  const said = reason ? shortReason(reason) : undefined;
+  // A reason the dial is already showing is said in the dial's few words (the
+  // whole reason stays the title, and the dial names itself in full).
+  const said = reason ? ((dial && dialReason(reason) && dialSaid(dial)) || shortReason(reason)) : undefined;
   const caption = dim ? (reasonBelow ? said : undefined) : line;
 
   const inner = (
     <>
-      <span style={{
-        position: 'relative', width: ART, height: ART, flexShrink: 0, boxSizing: 'border-box',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderRadius: 7, background: poster.ink,
-        boxShadow: `inset 0 0 0 2px ${ink}`,
-        opacity: dim ? 0.45 : 1, filter: dim ? 'saturate(0.4)' : undefined,
-      }}>
+      <AbilityTile ink={ink} size={ART} dim={dim} dial={dial} memo={dialMemo} calm={calm}>
         {art}
         {ult && ultLabel && (
           <span role="img" aria-label={ultLabel} style={{
@@ -675,7 +683,7 @@ function ActionRow({
             <span aria-hidden style={ultimateGlyph(12, poster.ink)} />
           </span>
         )}
-      </span>
+      </AbilityTile>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ ...NAME, ...ONE_LINE, opacity: dim ? 0.5 : 1 }}>{name}</span>
         {caption && <span style={{ ...CAPTION, ...(passive ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
@@ -975,6 +983,3 @@ function Pill({
 function growthLine(g: { atk: number; hp: number; spirit: number }): string {
   return [g.atk && `+${g.atk} BP`, g.hp && `+${g.hp} HP`, g.spirit && `+${g.spirit} SPI`].filter(Boolean).join(', ');
 }
-
-/** A cooldown dial's name: "Ready in 2 turns · cooldown 3". */
-const readyIn = (left: number, full: number) => `Ready in ${left} turn${left === 1 ? '' : 's'} · cooldown ${full}`;
