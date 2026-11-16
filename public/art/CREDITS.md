@@ -68,6 +68,10 @@ from their "Deadlock Graphical Library" collection.
   skill or passive is named for (Willpower, Fixation, Grasping Hands…): the
   deadlock-api's ability image (`image_webp` in its ability list), from the
   community asset bucket at https://deadlock-api.com/, used as served.
+- The Attack row's icon, `public/hud/weapon_damage.webp`, is the game's own
+  weapon-damage icon, the image every hero's weapon item carries in the
+  deadlock-api's weapon list (`images/abilities/weapon_damage.webp`), from the
+  same asset bucket, used as served.
 - Everything in `public/spells/` and `public/items/` is the game's own shop art
   for each item, one icon per card: the wiki's 200×200 shop icon from the
   Deadlock wiki's asset mirror (`https://cdn.deadlock.wiki/<Item_Name>.png`),

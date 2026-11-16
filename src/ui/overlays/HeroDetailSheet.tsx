@@ -31,7 +31,7 @@ import {
 } from '@/engine/query';
 import { LEVEL_THRESHOLDS, MAX_LEVEL, SKILL_SPIRIT_RATE, ULT_UNLOCK_LEVEL } from '@/engine/constants';
 import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
-import { skillIconSrc, ultIconSrc } from '@/art/assets';
+import { ATTACK_ICON_SRC, skillIconSrc, ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
 import { SpikeMark } from '../board/SpikeMark';
 import { kitTag, skillPace, ultPace } from '../board/heroActions';
@@ -45,7 +45,6 @@ import { abilityDial, dialReason, dialSaid, type DialModel } from './abilityDial
 import {
   scale as T, Souls, HpSegments, hpNumberStyle, ultimateGlyph, panelStyle, plateStyle, bandStyle, chargedGlow,
 } from '../hud';
-import { SwordIcon } from '../card/Icons';
 import { Explain } from '../explain/Explain';
 import { statusContent } from '../explain/content';
 import { RuleText, type Scale } from '../card/RuleText';
@@ -357,7 +356,7 @@ export function HeroDetailSheet({
         <ActionRow
           ink={weapon} mode={mode} calm={calm}
           name="Attack"
-          art={<SwordIcon size={20} color={poster.cream} />}
+          art={<img src={ATTACK_ICON_SRC} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={usable || mode === 'quiet' ? `Deal ${dmg} bullet damage.` : undefined}
           right={<span style={NUMBER(T.display)}>{dmg}</span>}
           reason={mode === 'used' ? 'Used' : mode === 'blocked' ? attack.blockedReason : undefined}

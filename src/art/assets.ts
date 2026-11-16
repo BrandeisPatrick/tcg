@@ -29,6 +29,12 @@ export function skillIconSrc(heroId: string): string {
   return `${SKILL_IMG_BASE}${heroId.replace(/^hero_/, '')}.webp`;
 }
 
+/** The Attack row's icon (Patrick, 2026-11-16: "Attack needs a better icon
+ *  image"): Deadlock's own weapon-damage icon, the deadlock-api's
+ *  `images/abilities/weapon_damage.webp` (the icon every hero's weapon item
+ *  carries), white bullets in the skills' style. */
+export const ATTACK_ICON_SRC = `${BASE}hud/weapon_damage.webp`;
+
 /** The ultimate icon of the hero `heroId` (the button printed on its card). */
 export function ultIconSrc(heroId: string): string {
   return `${ULT_IMG_BASE}${heroId.replace(/^hero_/, '')}.webp`;

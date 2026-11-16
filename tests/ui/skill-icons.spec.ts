@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import '@/abilities';
 import { HEROES } from '@/cards/heroes';
 import { heroAbilities } from '@/engine/query';
-import { skillIconSrc, ultIconSrc, SKILL_IMG_BASE } from '@/art/assets';
+import { ATTACK_ICON_SRC, skillIconSrc, ultIconSrc, SKILL_IMG_BASE } from '@/art/assets';
 
 const pub = (src: string) => resolve(__dirname, '../../public', src.replace(/^.*?\/(skill|ult)\//, '$1/'));
 
@@ -30,5 +30,10 @@ describe('skill icons', () => {
 
   it('is named as the ultimates are: the hero id without its prefix', () => {
     expect(skillIconSrc('hero_mo_krill')).toBe(`${SKILL_IMG_BASE}mo_krill.webp`);
+  });
+
+  it("the Attack row wears Deadlock's weapon-damage icon (2026-11-16), and it ships", () => {
+    expect(ATTACK_ICON_SRC.endsWith('hud/weapon_damage.webp')).toBe(true);
+    expect(existsSync(resolve(__dirname, '../../public/hud/weapon_damage.webp'))).toBe(true);
   });
 });
