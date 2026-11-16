@@ -57,8 +57,8 @@ export const SPELLS: SpellCard[] = [
 
   // ----- Tier 3 -----
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
-  { id: 'disarming_hex',   name: 'Disarming Hex',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, upgradesFrom: 'rusted_barrel', abilities: ['eff_disarming_hex'], text: 'Disarm any enemy for 2 turns.' },
-  { id: 'knockdown',       name: 'Knockdown',       type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_knockdown'], text: 'Stun enemy Active for 1 turn. A Stun ends a channel.' },
+  { id: 'disarming_hex',   name: 'Disarming Hex',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, upgradesFrom: 'rusted_barrel', abilities: ['eff_disarming_hex'], text: 'Disarm any enemy for 2 turns and apply Bullet Resist −3 to it for 2 turns.' },
+  { id: 'knockdown',       name: 'Knockdown',       type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_knockdown'], text: 'Stun enemy Active for 1 turn and deal {sp:1} spirit damage to it. A flying hero lands and is Stunned 2 turns. A Stun ends a channel.' },
   { id: 'metal_skin',      name: 'Metal Skin',      type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_cast_metal_skin'], text: 'Grant ally Bullet Resist 6 for 3 turns.' },
   // Three ids keep an item's old name so saved builds still load: debuff_remover
   // is Dispel Magic, silence_glyph is Silence Wave, curse is Cursed Relic.
@@ -78,33 +78,32 @@ export const SPELLS: SpellCard[] = [
   { id: 'alchemical_fire', name: 'Alchemical Fire', type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_alchemical_fire'], text: 'Deal {sp:1} spirit damage to every enemy and apply Bullet Resist −2 to them for 2 turns.' },
   { id: 'heroic_aura',     name: 'Heroic Aura',     type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_heroic_aura'],     text: 'All allies gain +2 Bullet Power and Bullet Resist 1 for 2 turns.' },
   { id: 'shadow_weave',    name: 'Shadow Weave',    type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, upgradesFrom: 'sprint_boots', abilities: ['eff_shadow_weave'], text: 'Your Active gains Dome for 1 turn and +2 Bullet Power for 2 turns.' },
-  { id: 'majestic_leap',   name: 'Majestic Leap',   type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_majestic_leap'],   text: 'Your Active retreats free; the bench ally you pick steps in.' },
+  { id: 'majestic_leap',   name: 'Majestic Leap',   type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_majestic_leap'],   text: 'Your Active retreats free; the bench ally you pick leaps in with Shield 4 and Flying for 1 turn.' },
   { id: 'superior_cooldown', name: 'Superior Cooldown', type: 'spell', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'improved_cooldown', abilities: ['eff_superior_cooldown'], text: 'Draw 5 cards, then discard 1 card from your hand.' },
 
   // ----- Tier 4 -----
-  { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
-  { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', abilities: ['eff_unstoppable_cast'], text: 'Your Active hero gains Unstoppable and Invulnerable for 1 turn.' },
-  { id: 'curse',          name: 'Cursed Relic',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_curse'], text: 'Silence and Disarm one enemy hero for 3 turns: no skill, no attack.' },
-  { id: 'divine_barrier', name: 'Divine Barrier', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'guardian_ward', abilities: ['eff_divine_barrier'], text: "Cleanse an ally's debuffs except Stun and grant it Shield 4." },
-  { id: 'ethereal_shift', name: 'Ethereal Shift', type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_ethereal_shift'],   text: 'An ally gains Dome for 1 turn and +1 Spirit Power for 2 turns.' },
+  { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_echo_shard'],       text: 'Each of your heroes uses its skill again this turn. Your Active gains Bullet Resist 3 and Spirit Resist 3 for 2 turns.' },
+  { id: 'unstoppable',    name: 'Unstoppable',    type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', abilities: ['eff_unstoppable_cast'], text: 'An ally is cleansed of every debuff, gains Unstoppable for 3 turns and is Invulnerable for 1 turn.' },
+  { id: 'curse',          name: 'Cursed Relic',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_curse'], text: 'Curse one enemy hero: it loses its buffs and its channel, and is Silenced and Disarmed for 4 turns.' },
+  { id: 'divine_barrier', name: 'Divine Barrier', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'guardian_ward', abilities: ['eff_divine_barrier'], text: "Cleanse an ally's debuffs except Stun. It gains Shield 10, and Bullet Resist 3 and Spirit Resist 3 for 3 turns." },
+  { id: 'ethereal_shift', name: 'Ethereal Shift', type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_ethereal_shift'],   text: 'An ally is Invulnerable for 1 turn and gains +4 Spirit Power and Spirit Resist 3 for 3 turns.' },
   { id: 'phantom_strike', name: 'Phantom Strike', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, abilities: ['eff_phantom_strike'], text: 'Drag an enemy bench hero into their Active slot, deal {sp:5} spirit damage to it and Disarm it for 1 turn.' },
   { id: 'vortex_web',     name: 'Vortex Web',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, upgradesFrom: 'slowing_hex', abilities: ['eff_vortex_web'], text: 'Deal {sp:2} spirit damage to every enemy. They are Rooted for 2 turns.' },
   { id: 'refresher',      name: 'Refresher',      type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_refresher'],        text: "Your Active's skill and ultimate are ready again: their waits end and its charges come back." },
   { id: 'colossus',       name: 'Colossus',       type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'extra_health', abilities: ['eff_colossus_cast'], text: 'Your Active gains Bullet Resist 5 and Spirit Resist 5 for 3 turns. The enemy Active is Rooted for 1 turn.' },
-  { id: 'infuser',        name: 'Infuser',        type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'spirit_lifesteal', abilities: ['eff_infuser'], text: 'Your Active gains +3 Spirit Power for 2 turns and heals 3.' },
+  { id: 'infuser',        name: 'Infuser',        type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'spirit_lifesteal', abilities: ['eff_infuser'], text: 'Your Active heals 6 and gains +4 Spirit Power and Spirit Lifesteal for 3 turns.' },
   { id: 'arctic_blast',   name: 'Arctic Blast',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, upgradesFrom: 'cold_front', abilities: ['eff_arctic_blast'], text: 'Deal {sp:2} spirit damage to every enemy. Stun the enemy Active for 1 turn.' },
   // ----- Added 2026-11-05: the full shop (docs/card-design.md) -----
   { id: 'capacitor',      name: 'Capacitor',      type: 'spell', rarity: 3, slot: 'weapon',   tier: 4, upgradesFrom: 'tesla_bullets', abilities: ['eff_capacitor'], text: 'Deal {sp:2} spirit damage to the enemy Active and 2 to each enemy bench hero. Root them all for 1 turn.' },
   { id: 'vampiric_burst', name: 'Vampiric Burst', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'bullet_lifesteal', abilities: ['eff_vampiric_burst'], text: 'Your Active heals 4, gains Extra Attack 2 this turn and +3 Bullet Power for 2 turns.' },
   { id: 'focus_lens',     name: 'Focus Lens',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, upgradesFrom: 'spirit_sap', abilities: ['eff_focus_lens'], text: 'Silence any enemy for 2 turns. It gets Spirit Resist −3 for 2 turns and a Reverb of 5.' },
-  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'spell', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'superior_cooldown', abilities: ['eff_transcendent_cooldown'], text: 'Draw 8 cards, then discard 2 cards from your hand.' },
+  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'spell', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'superior_cooldown', abilities: ['eff_transcendent_cooldown'], text: 'Draw 8 cards, then discard 2 cards from your hand. Each of your heroes heals 3.' },
   { id: 'scourge',        name: 'Scourge',        type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_scourge'], text: 'An ally is cleansed of its debuffs and gains Spirit Resist 3 for 2 turns. Every enemy takes {sp:2} spirit damage.' },
 
   // ----- Tier 5 (added 2026-11-05: Deadlock's 9,999-soul items, docs/card-design.md) -----
-  // Nullification Burst and Mystical Piano root or stun the whole enemy side:
-  // hard crowd control, two charges a match. Prism Blast cools down 3 own turns.
+  // Nullification Burst and Mystical Piano root or stun the whole enemy side.
   { id: 'nullification_burst', name: 'Nullification Burst', type: 'spell', rarity: 4, slot: 'vitality', tier: 5, abilities: ['eff_nullification_burst'], text: 'Every enemy hero loses its buffs and takes {sp:1} spirit damage. They cannot be healed and are Rooted for 2 turns.' },
-  { id: 'mystical_piano',      name: 'Mystical Piano',      type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, abilities: ['eff_mystical_piano'], text: 'Stun every enemy hero for 2 turns and Root them for 2 turns.' },
+  { id: 'mystical_piano',      name: 'Mystical Piano',      type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, abilities: ['eff_mystical_piano'], text: 'Deal {sp:2} spirit damage to every enemy hero, then Stun them for 2 turns and Root them for 2 turns.' },
   { id: 'prism_blast',         name: 'Prism Blast',         type: 'spell', rarity: 4, slot: 'spirit',   tier: 5, abilities: ['eff_prism_blast'], text: 'Your Active gains Unstoppable and Invulnerable for 1 turn. Every enemy takes {sp:7} spirit damage.' },
 ];
 

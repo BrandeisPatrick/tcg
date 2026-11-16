@@ -621,12 +621,12 @@ half its price; the target is the band (¾ to 1½ × price).
   Vortex Web, Capacitor 8.5, Refresher, Prism Blast, Nullification Burst).
 - **Golden Goose Egg** is unchanged: 2 souls back for its 2, and +1 max HP for
   good. It is a free stat that costs a card.
-- **Under half their price, and a number alone does not fix them** (Patrick's
-  call: a new rider, or leave hard control dear on purpose):
+- **Under half their price, and a number alone did not fix them:**
   Knockdown 4.0 of 8, Disarming Hex 2.5 of 8, Majestic Leap 1.5 of 8, Cursed
   Relic 6 of 16, Mystical Piano 9.6 of 24, and the ones that were under before
   this change too: Echo Shard, Ethereal Shift, Divine Barrier, Infuser,
-  Unstoppable.
+  Unstoppable. Each gained a rider on 2026-11-16 (Patrick: "resolve all the
+  plan issues"); see "Changed 2026-11-16: the one-play riders" below.
 
 **Removed.** Active Reload (Patrick: "Active Reload may not make too much
 sense right now"). Its reload has no board verb; its card was +1 Bullet Power
@@ -654,18 +654,74 @@ price, so x and y are set for one play.
 |---|---|---|---|---|
 | Compress Cooldown | Spirit T2 | 4 | Draw 2, discard 1 → draw 3, discard 1 | 3 × 1.4 − 0.3 → **4.0** |
 | Superior Cooldown | Spirit T3 | 8 | Draw 4, discard 2 → draw 5, discard 1 | 5 × 1.4 − 0.3 = 6.7 → **6.5** |
-| Transcendent Cooldown | Spirit T4 | 16 | Draw 8, discard 4 → draw 8, discard 2 | 8 × 1.4 − 0.6 = 10.6 → **10.5**, under its band (12–24) |
+| Transcendent Cooldown | Spirit T4 | 16 | Draw 8, discard 4 → draw 8, discard 2; each of your heroes heals 3 (2026-11-16) | 8 × 1.4 − 0.6 = 10.6; the heal 3 × 3.2 × 0.5 × 0.4 = 1.9 → **12.5** |
 
 - Compress and Superior keep a card for every 2 souls (2 for 4, 4 for 8).
   Transcendent cannot follow: a hand holds 10, so a draw of more than 8 is
-  mostly lost, and it keeps 6 for 16. It is the family's top end and stays
-  dear for what it does.
+  mostly lost, and it keeps 6 for 16. Its draw alone was 10.5, under its band.
+  On 2026-11-16 it took the item's regeneration (Deadlock's Transcendent
+  Cooldown carries Out of Combat Regen 4): each of your standing heroes heals
+  3, which lands it at 12.5. It shortens no wait: only the charge items do
+  ("Added 2026-11-15: the charge items").
 - The ready decks still carry none: at 2 souls a turn their 16 slots do more
   as cards that are played than as cards that find cards. A deck built for a
   long game, or one that needs its heroes early, wants a Compress or two.
 
 142 cards stay 142: Counterspell in, Active Reload out (96 passives, 46
 actives, counting Counterspell with the actives it plays as).
+
+### Changed 2026-11-16: the one-play riders
+
+Ten spells were worth under half their price as one play, and a number alone
+did not fix them (above). Each gained what its Deadlock item also does, read
+from the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
+2026-11-16), and Transcendent Cooldown took its regeneration. Every number was
+set by reasoning from the budget in §3, with the shares of "Added 2026-11-05";
+nothing was played or simulated.
+
+Two readings used below, for a card aimed at the side's Active: it is still
+the Active on the rival's next turn (share 1.0) and on the one after at 0.5;
+on that turn it takes a swing of about 3.5 and 0.7 spirit hits of about 3.
+A resist of 3 takes 2.4 off a bullet hit and 2.6 off a spirit hit, so on the
+Active it prevents (2.4 + 0.7 × 2.6) = 4.2 a turn, worth half that.
+
+| Card | Tab · tier | Price | In Deadlock | Now | One play (souls) |
+|---|---|---|---|---|---|
+| Knockdown | Spirit T3 | 8 | A Stun, longer on an airborne target; the target's gravity raised | Stun enemy Active 1 turn and deal {sp:1} spirit damage (the slam). A flying hero lands and is Stunned 2 turns. A Stun ends a channel | Stun 2.0; a channel 0.2 × 11 = 2.2; {sp:1} 1 + 1.5 = 2.5; a flier's second turn 2.0 × 0.05 = 0.1 → 6.8 → **6.5** |
+| Disarming Hex | Spirit T3 | 8 | Disarms the target and reduces its Bullet Resist | Disarm any enemy 2 turns and Bullet Resist −3 on it for 2 turns | Disarm 2.5; −3 on 0.85 swings a turn × 2 turns × 0.75 still the Active = 3.8 → 6.3 → **6.0** |
+| Majestic Leap | Vitality T3 | 8 | Launch yourself into the air with a Barrier | Your Active retreats free; the ally you pick leaps in with Shield 4 and Flying for 1 turn | swap 1.5; Shield 4 × 0.5 × 0.9 = 1.8; Flying: the rival's hits on it (3.5 + 2.1) × ⅓ × 0.5 = 0.9, and its own swing this turn adds 2.5 × 0.85 = 2.1 → 6.3 → **6.5** |
+| Cursed Relic | Spirit T4 | 16 | Interrupts, Silences, Disarms, stops item use; removes its buffs | The curse lasts 4 turns (it was 3); the hero loses its buffs, and with them its channel | Silence + Disarm 2.0 a turn × 4 = 8.0; the buffs of a hero picked for them about 3.0 (a Shield 7 is 3.2, Metal Skin's resist more); a channel 2.2 → 13.2 → **13.0** |
+| Mystical Piano | Spirit T5 | 24 | Stuns every enemy in an area, drains stamina, then dazes | Deal {sp:2} spirit damage to every enemy hero, then Stun and Root them 2 turns | 9.6 as before; (2 + 1.5) × 3.2 = 11.2 → 20.8 → **21.0** |
+| Echo Shard | Spirit T4 | 16 | Resets the imbued ability's cooldown; carries Bullet and Spirit Resist | Each of your heroes uses its skill again this turn (a Stun or Silence still holds one); your Active gains Bullet Resist 3 and Spirit Resist 3 for 2 turns | the Active's skill 3.3 and its gear's proc 0.5; the bench's 2.2 living × 0.7 with a skill × 3.3 = 5.1; the resists 4.2 × 0.5 × 1.5 = 3.2 → 12.1 → **12.0** |
+| Ethereal Shift | Spirit T4 | 16 | A void state, Invulnerable; then Spirit Power and Spirit Resist | An ally is Invulnerable 1 turn and gains +4 Spirit Power and Spirit Resist 3 for 3 turns (it was a Dome, and +1 for 2) | Invulnerable on the Active (3.5 + 2.1) × 0.5 = 2.8; +4 × 0.7 spirit hits × 3 = 8.4; Spirit Resist 3: 2.6 × 0.7 × 0.5 × 2.0 = 1.8 → **13.0** |
+| Divine Barrier | Vitality T4 | 16 | Purges every non-stun debuff; the game's largest barrier | Shield 4 → 10, and Bullet Resist 3 and Spirit Resist 3 for 3 turns | cleanse but a Stun 1.5; Shield 10 × 0.5 × 0.9 = 4.5; the resists 4.2 × 0.5 × 2.0 = 4.2 → 10.2 → **10.0**, under its band |
+| Infuser | Vitality T4 | 16 | Spirit Lifesteal and Spirit Power | Your Active heals 6 and gains +4 Spirit Power and Spirit Lifesteal for 3 turns (it was +3 for 2 and a heal of 3) | heal 6 × 0.5 × 0.8 = 2.4; +4 × 0.7 × 3 = 8.4; the lifesteal heals 2 × 0.7 × 3 × 0.5 × 0.6 = 1.3 → 12.1 → **12.0** |
+| Unstoppable | Vitality T4 | 16 | Suppresses debuffs; immune to Stun, Silence, Sleep, Root, Disarm | An ally is cleansed of every debuff, Unstoppable 3 turns, Invulnerable 1 | played against a lock, the debuffs taken off about 3.0; Invulnerable 2.8; Unstoppable (0.2 hard CC × 2.0 + 0.3 soft × 1.0) × 3 = 2.1 → 7.9 → **8.0**, half its price |
+
+- **Two stay under their band:** Divine Barrier at 10 and Unstoppable at 8.
+  Both are answers. The average turn prices them low because control lands
+  on a given hero rarely; a counter is played on the turn it does, against a
+  Cursed Relic (8.0 of lockdown) or a Mystical Piano (4.0 on the Active
+  alone). A shield big enough for the average to reach 12 (Shield 23) would
+  be three lives on a hero of 6 HP, so the numbers stop here.
+- **Damage the item does not deal.** Knockdown's slam and Mystical Piano's
+  hit are the two riders Deadlock does not print: neither item deals damage.
+  Each is the item's verb carried to the board (Knockdown slams its target
+  down; the piano comes down on them), and the smallest number that lands the
+  card in its band.
+- **Echo Shard's whole side.** In Deadlock it resets one ability. Here it
+  echoes every standing hero's skill: one skill is worth 2 to 4.5
+  ([hero-design.md](./hero-design.md) §4), so the Active's alone could not
+  reach half of 16. It still shortens no wait.
+- **Majestic Leap's Flying** is the status Vindicta's Flight gives: 1 hit in
+  3 on the bearer misses, and its attacks add 1 + its Spirit as spirit damage.
+  It lasts through the rival's next turn.
+- **Cursed Relic** strips every buff, as Nullification Burst does (Deadlock
+  spares an ultimate's); a channel is a buff, so the curse interrupts one.
+- **Spirit Lifesteal** is a new status (Infuser): it carries the Spirit
+  Lifesteal item's own proc, heal 2 after the bearer's skill, spell or
+  ultimate damages an enemy, and is asked with the gear's reactions
+  (`StatusDef.reacts`).
 
 ## 4. Signature items and default builds
 

@@ -415,7 +415,8 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
 
   it('gear that adds Spirit Power, and every flat number, stays plain ink', () => {
     for (const e of EQUIPMENT) expect(e.text, e.id).not.toMatch(/\{(sp|bp):/);
-    for (const id of ['healing_rite', 'rusted_barrel', 'metal_skin', 'decay', 'knockdown']) {
+    // Knockdown left this list on 2026-11-16: its slam adds Spirit ({sp:1}).
+    for (const id of ['healing_rite', 'rusted_barrel', 'metal_skin', 'decay', 'disarming_hex']) {
       expect((CARDS_BY_ID[id] as { text: string }).text, id).not.toMatch(/\{/);
     }
   });

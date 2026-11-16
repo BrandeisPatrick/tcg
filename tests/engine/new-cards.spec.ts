@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID, SPELLS, EQUIPMENT } from '@/cards';
 import { addStatus } from '@/engine/statusOps';
+import { damageUnit } from '@/engine/damage';
 import { INVALID, perform } from '@/engine/engine';
 import { attackTargets, blocked, playBlocked } from '@/engine/legality';
 import { itemPrice, kitCharges, targetsFor } from '@/engine/query';
@@ -97,7 +98,7 @@ describe('New active items', () => {
     expect(playBlocked(G, '0', card.iid, G.players['1'].bench[0]!.iid)).toBe('target');
   });
 
-  it('Divine Barrier cleanses every debuff but Stun and shields 4', () => {
+  it('Divine Barrier cleanses every debuff but Stun, shields 10 and hardens it 3 / 3 for 3 turns (one play, 2026-11-16)', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     addStatus(G, haze, 'bleed', 2, 3);
@@ -108,16 +109,22 @@ describe('New active items', () => {
     expect(status(haze, 'bleed')).toBeUndefined();
     expect(status(haze, 'silenced')).toBeUndefined();
     expect(status(haze, 'stun')).toBeDefined();
-    expect(status(haze, 'shield')?.value).toBe(4);
+    expect(status(haze, 'shield')?.value).toBe(10);
+    expect(status(haze, 'bullet_resist')).toMatchObject({ value: 3, duration: 3 });
+    expect(status(haze, 'spirit_resist')).toMatchObject({ value: 3, duration: 3 });
   });
 
-  it('Ethereal Shift puts a Dome up: the rival cannot attack that hero', () => {
+  it('Ethereal Shift: Invulnerable for 1 turn (an attack on it does nothing), then +4 Spirit Power and Spirit Resist 3 for 3 turns (one play, 2026-11-16)', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     useItem(G, '0', 'ethereal_shift', haze.iid);
-    expect(status(haze, 'dome')).toBeDefined();
-    expect(status(haze, 'spirit_power')).toMatchObject({ value: 1, duration: 2 });
-    expect(attackTargets(G, '1')).toEqual([]);
+    expect(status(haze, 'invulnerable')).toMatchObject({ duration: 1 });
+    expect(status(haze, 'dome')).toBeUndefined();
+    expect(status(haze, 'spirit_power')).toMatchObject({ value: 4, duration: 3 });
+    expect(status(haze, 'spirit_resist')).toMatchObject({ value: 3, duration: 3 });
+    const hp = haze.hp;
+    damageUnit(G, haze, 5, 'attack', 'test');
+    expect(haze.hp).toBe(hp);
   });
 
   it('Phantom Strike drags a bench hero to the front, hits it and disarms it', () => {

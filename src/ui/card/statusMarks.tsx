@@ -34,6 +34,7 @@
  *   casting / casting_light  Singularity: Dynamo's channelled ultimate, the game's glyph for a channel
  *   wolf_form  Silver's Lycan Curse, the ultimate's own icon (public/ult/silver.webp)
  *   flying  Vindicta's Flight, the ability's own icon (deadlock-api `vindicta_flight.webp`, drawn white)
+ *   spirit_lifesteal  Healing, an arrow up (Infuser's: health drawn back in)
  *   counterspell  the Counterspell item's HUD glyph (the parry: deadlock-api `icon_parry.svg`,
  *     drawn white at 128×128)
  *
@@ -54,7 +55,7 @@ type MarkKind =
   // Buffs and the rest
   | 'bullet_resist' | 'spirit_resist' | 'shield' | 'weapon_power' | 'spirit_power' | 'unstoppable' | 'invulnerable'
   | 'healing_boost' | 'extra_attack' | 'casting' | 'return_fire' | 'siphon_gain' | 'dome' | 'last_stand'
-  | 'swift' | 'ricochet' | 'wolf_form' | 'counterspell' | 'flying'
+  | 'swift' | 'ricochet' | 'wolf_form' | 'counterspell' | 'flying' | 'spirit_lifesteal'
   // An id with no picture.
   | 'unknown';
 
@@ -67,7 +68,7 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
     'spirit_resist_down', 'healing_boost_down', 'fixation', 'rooted', 'rabbit',
     'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable', 'invulnerable',
     'healing_boost', 'extra_attack', 'casting', 'return_fire', 'siphon_gain', 'dome', 'last_stand',
-    'swift', 'ricochet', 'wolf_form', 'counterspell', 'flying',
+    'swift', 'ricochet', 'wolf_form', 'counterspell', 'flying', 'spirit_lifesteal',
   ] as const).map((id): [string, MarkKind] => [id, id]),
   ['casting_light', 'casting'],
 ]);
@@ -185,6 +186,8 @@ const SOURCE: Record<MarkKind, Source> = {
   counterspell: glyph('counterspell'),
   // A status an ultimate grants wears that ultimate's icon: Flight's.
   flying: glyph('flying'),
+  // Infuser's Spirit Lifesteal: the healing glyph, an arrow up (health drawn in).
+  spirit_lifesteal: glyph('healing_boost', 'up'),
   unknown: drawn,
 };
 
