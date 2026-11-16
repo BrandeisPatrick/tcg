@@ -487,24 +487,28 @@ export function chargeBonus(card: CardInstance): number {
 }
 
 /** Own turns sooner each charge of `card`'s charged skill comes back (Rapid
- *  Recharge 1): the largest of the `chargeHaste` hooks. Only the charge
- *  items have one; nothing else shortens a charged skill's wait (the Cooldown
- *  family's `cooldownCut` leaves it alone). */
+ *  Recharge 1): the largest of the `chargeHaste` hooks. Only the charge items
+ *  have one; a Cooldown item's `cooldownCut` adds to it (a charge comes back
+ *  on the skill's wait, so a shorter wait brings it back sooner: Patrick,
+ *  2026-11-16). */
 export function chargeHaste(card: CardInstance): number {
   let n = 0;
   for (const { ability } of abilitySources(card)) n = Math.max(n, ability.chargeHaste?.(card) ?? 0);
   return n;
 }
 
-/** Own turns a skill waits after a use: its own `cooldown`, else
- *  SKILL_COOLDOWN — on `hero`, when one is named, less what it wears takes
- *  off, never under 1: a charged skill's charge items (`chargeHaste`, the turns
- *  one charge takes to come back), any other skill's Cooldown item
- *  (`cooldownCut`). Without a hero it is what the card prints. */
+/** Own turns a skill waits after a use (a charged skill: the turns one
+ *  charge takes to come back): its own `cooldown`, else SKILL_COOLDOWN — on
+ *  `hero`, when one is named, less what it wears takes off, never under 1: a
+ *  Cooldown item (`cooldownCut`), and for a charged skill its charge item
+ *  too (`chargeHaste`), the two added (Patrick, 2026-11-16: charges come
+ *  back on the wait, so the Cooldown items speed them as well). Without a hero
+ *  it is what the card prints. */
 export function skillWait(ability: AbilityDef, hero?: CardInstance): number {
   const base = ability.cooldown ?? SKILL_COOLDOWN;
   if (!hero) return base;
-  return Math.max(1, base - ((ability.charges ?? 1) > 1 ? chargeHaste(hero) : cooldownCut(hero, 'skill')));
+  const haste = (ability.charges ?? 1) > 1 ? chargeHaste(hero) : 0;
+  return Math.max(1, base - cooldownCut(hero, 'skill') - haste);
 }
 
 /** Own turns an ultimate waits after a use: its size's (`ULT_WAIT`) — on

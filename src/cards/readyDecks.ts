@@ -23,8 +23,8 @@ import type { CardId } from '@/engine/types';
  *    the three heroes in the deck come out sooner; Graveyard carries two, to
  *    find its Ghouls too. (Compress Cooldown was the draw card until it went
  *    back to equipment the same day: it stays, as the item that shortens a
- *    skill's wait, in the decks whose heroes have at least two uncharged skills —
- *    Spirit Storm, Ambush, Lockdown and Graveyard's two.)
+ *    skill's wait, in the decks with at least two heroes who have a skill —
+ *    Gunline, Spirit Storm, Ambush, Lockdown and Graveyard's two.)
  *  - The rest comes from the squad's own builds, so each hero finds something
  *    made for it.
  */
@@ -50,7 +50,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     heroes: ['hero_warden', 'hero_vindicta', 'hero_haze'],
     items: [
       ...x2('extended_magazine'), ...x2('headshot_booster'), ...x2('restorative_shot'), 'grit', 'golden_goose_egg',
-      ...x2('titanic_magazine'), 'long_range', 'opening_rounds', 'fleetfoot', 'debuff_reducer',
+      ...x2('titanic_magazine'), 'long_range', 'improved_cooldown', 'fleetfoot', 'debuff_reducer',
       'burst_fire', 'toxic_bullets',
     ],
   },

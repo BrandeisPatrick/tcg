@@ -55,17 +55,17 @@ upgrades in the deck and the counters ([card-design.md](card-design.md), "Change
     2026-11-16, when Patrick made the Cooldown family equipment again ("cooldown should not be draw
     cards; they should be equipment to reduce CD") and Golden Goose Egg the draw card ("Goose Egg
     now should be draw 2").
-  - Compress Cooldown stays, as the item that takes a turn off a skill's wait, in the decks with at
-    least two heroes whose skills it shortens (not a charged skill's): Spirit Storm (Lash, Seven),
-    Ambush (Silver, Yamato), Lockdown (all three) and Graveyard (all three, two of it). Gunline and
-    Bulwark have one such hero each and take back the card it had replaced: Opening Rounds and
-    Battle Vest.
+  - Compress Cooldown stays, as the item that takes a turn off a skill's wait (a charged skill's
+    too: its charges come back on that wait), in the decks with at least two heroes who have a
+    skill: Gunline (Warden, Vindicta), Spirit Storm (all three), Ambush (Silver, Yamato), Lockdown
+    (all three) and Graveyard (all three, two of it). Bulwark has one (Rem) and takes back the card
+    it had replaced, Battle Vest.
 - **The rest from the squad's own builds**, so each hero finds its items.
 - **A squad has a front, a carry and a helper.** No hero is in two decks. Four heroes are in none: Shiv, Paige, Drifter and Dynamo.
 
 | Deck | Squad | Tier 1 (two of each) | Tier 2 | Tier 3 |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot (two of each), Grit, Golden Goose Egg | 2 Titanic Magazine (the upgrade), Long Range, Opening Rounds, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
+| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot (two of each), Grit, Golden Goose Egg | 2 Titanic Magazine (the upgrade), Long Range, Compress Cooldown, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
 | Spirit Storm | Lash, Seven, Kelvin | Extra Spirit, Mystic Burst, Spirit Strike (two of each), Mystic Regeneration, Golden Goose Egg | 2 Improved Spirit (the upgrade), Cold Front, Compress Cooldown, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
 | Bulwark | Abrams, Victor, Rem | Extra Health, Extra Regen, Healing Rite (two of each), Grit, Golden Goose Egg | 2 Bullet Lifesteal, Healing Booster, Battle Vest, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
 | Ambush | Silver, Yamato, Mirage | Sprint Boots, Extended Magazine, Restorative Shot (two of each), Headshot Booster, Golden Goose Egg | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Compress Cooldown | Tesla Bullets, Dispel Magic |

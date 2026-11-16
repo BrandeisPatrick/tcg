@@ -206,7 +206,7 @@ export function skillChargesOracle(skillId: string, hero?: CardInstance): number
 }
 
 /** The Cooldown family as their texts say (2026-11-16): own turns off the
- *  bearer's skill wait (never a charged skill's) and ultimate wait. Pinned
+ *  bearer's skill wait (a charged skill's too, 2026-11-16) and ultimate wait. Pinned
  *  against the card texts by harness.spec. */
 export const COOLDOWN_ITEMS: Readonly<Record<string, { skill: number; ult: number }>> = {
   improved_cooldown: { skill: 1, ult: 0 },
@@ -229,14 +229,14 @@ function cooldownItemsOracle(hero?: CardInstance): { skill: number; ult: number 
 }
 
 /** Own turns a skill waits after a use (a charged one: for a charge to come
- *  back): its card's own, else SKILL_COOLDOWN — a charged one's less what a
- *  charge item `hero` wears takes off, any other's less what a Cooldown item
- *  takes off; never under 1. */
+ *  back): its card's own, else SKILL_COOLDOWN — less what a Cooldown item
+ *  `hero` wears takes off, and a charged one's less a charge item's turn
+ *  sooner as well, the two added; never under 1. */
 export function skillWaitOracle(skillId: string, hero?: CardInstance): number {
   const ability = getAbility(skillId);
   const base = ability?.cooldown ?? SKILL_COOLDOWN;
-  const off = (ability?.charges ?? 1) > 1 ? chargeItemsOracle(hero).sooner : cooldownItemsOracle(hero).skill;
-  return Math.max(1, base - off);
+  const haste = (ability?.charges ?? 1) > 1 ? chargeItemsOracle(hero).sooner : 0;
+  return Math.max(1, base - cooldownItemsOracle(hero).skill - haste);
 }
 
 /** The charges a charged skill has left on `hero`: what it holds less those

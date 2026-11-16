@@ -64,12 +64,13 @@ export const EQUIPMENT: EquipmentCard[] = [
   // The Cooldown family (Patrick, 2026-11-16: "cooldown should not be draw
   // cards, they should be equipment to reduce CD"): Deadlock's passives, so
   // equipment again, each a few turns off the bearer's waits (Deadlock's 18%,
-  // 20%, 25%). Not a charged skill's: only the charge items speed those.
+  // 20%, 25%). A charged skill's too: its charges come back on that wait
+  // (Patrick, 2026-11-16), so it adds to a charge item's turn sooner.
   // improved_cooldown keeps the item's old id so saved builds and decks still
   // load: it is Compress Cooldown.
-  { id: 'improved_cooldown',     name: 'Compress Cooldown',     type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_compress_cooldown'], text: "The bearer's skill waits 1 turn less (not a charged skill)." },
-  { id: 'superior_cooldown',     name: 'Superior Cooldown',     type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'improved_cooldown', abilities: ['eff_superior_cooldown'], text: "The bearer's skill waits 1 turn less and its ultimate 2 less (not a charged skill)." },
-  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'equipment', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'superior_cooldown', abilities: ['eff_transcendent_cooldown'], text: "The bearer's skill waits 2 turns less and its ultimate 3 less (not a charged skill)." },
+  { id: 'improved_cooldown',     name: 'Compress Cooldown',     type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_compress_cooldown'], text: "The bearer's skill waits 1 turn less." },
+  { id: 'superior_cooldown',     name: 'Superior Cooldown',     type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'improved_cooldown', abilities: ['eff_superior_cooldown'], text: "The bearer's skill waits 1 turn less and its ultimate 2 less." },
+  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'equipment', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'superior_cooldown', abilities: ['eff_transcendent_cooldown'], text: "The bearer's skill waits 2 turns less and its ultimate 3 less." },
   { id: 'surge_of_power', name: 'Surge of Power', type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'extra_spirit', abilities: ['eff_surge_of_power'], text: 'After the bearer uses a skill: +2 Bullet Power until the end of your next turn.' },
   // Burst Fire (canon T3 Weapon): fires a burst of extra shots — grants Extra
   // Attack 1 each turn (stacks with other Extra Attack sources).
