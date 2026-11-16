@@ -4,9 +4,8 @@ import type { Ctx } from 'boardgame.io';
 import { ABILITIES_BY_ID, type AbilityDef, type HeroAbilityDef } from '@/abilities';
 import { CARDS_BY_ID } from '@/cards';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
+import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID, type StatusDef } from '@/statuses';
 import { enumerateAIMoves } from '@/ai/heuristic';
-import { FIXATION_CAP } from '@/engine/constants';
 import { attackAll } from '@/engine/actions/attack';
 import { promoteToActive, pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
@@ -32,29 +31,38 @@ import { TEST_ROSTERS, TEST_SEED, freshReadyGame, giveCard, giveItem, makeHero, 
 import { killBounty } from '@/engine/rounds';
 
 // The primitives the new hero kits are built from — an attack that names its
-// target, Fixation, Dome, Rooted, Rabbit, Last Stand, a pull, a swap-in, HP as a
+// target, a stacking mark that falls off as its bearer leaves the lane (Haze's
+// Fixation was one until 2026-11-16; a throwaway status stands in for it), Dome, Rooted, Rabbit, Last Stand, a pull, a swap-in, HP as a
 // cost and souls. No card of the real roster uses them yet, so each is played
 // here on throwaway heroes and abilities registered for this file (the real
 // roster is left as it is; replay-trace.ts proves the game plays the same). One
 // describe per primitive.
 
 const REACHER = 'hero_test_reacher'; // passive Long Arm: its attack may be aimed at any enemy hero
-const FIXER = 'hero_test_fixer';     // passive Fixed Eye: +1 to its swing per Fixation stack on the hero it swings at
+const FIXER = 'hero_test_fixer';     // passive Fixed Eye: +1 to its swing per mark stack on the hero it swings at
 const TALLY = 'hero_test_tally';     // passive Tally: remembers every swing it follows through
 const PAYER = 'hero_test_payer';     // skill Blood Price: pays 2 HP for 2 spirit damage
 const CALM = 'hero_test_calm';       // passive Calm: heals 2 at the end of its owner's turn
 const LONG_BARREL = 'test_long_barrel'; // gear whose ability has reach
+/** A throwaway stacking mark, the primitive Fixation was built on: +1 a stack up to
+ *  MARK_CAP, its timer started over with each, gone when its bearer leaves the lane. */
+const MARK = 'test_mark';
+const MARK_CAP = 2;
+const markDef: StatusDef = {
+  id: MARK, title: 'Mark', desc: 'A throwaway mark: +<value> to Fixed Eye\'s swing.', hvalue: -1,
+  stack: { add: true, cap: MARK_CAP, duration: 'reset' }, clearOnLeaveActive: true,
+};
 
 const longArm: HeroAbilityDef = {
   id: 'test_passive_long_arm', name: 'Long Arm', text: 'Its attack may be aimed at any enemy hero.',
   trigger: 'ongoing', target: 'self', reach: true, run: () => {},
 };
 const fixedEye: HeroAbilityDef = {
-  id: 'test_passive_fixed_eye', name: 'Fixed Eye', text: '+1 Bullet Power per Fixation stack on the hero it swings at.',
+  id: 'test_passive_fixed_eye', name: 'Fixed Eye', text: '+1 Bullet Power per mark stack on the hero it swings at.',
   trigger: 'ongoing', target: 'self',
   attackBonus: (_self, target) => {
-    const stacks = target?.statuses.find((s) => s.id === 'fixation')?.value ?? 0;
-    return stacks > 0 ? { amount: stacks, label: `Fixation: +${stacks}` } : null;
+    const stacks = target?.statuses.find((s) => s.id === MARK)?.value ?? 0;
+    return stacks > 0 ? { amount: stacks, label: `Mark: +${stacks}` } : null;
   },
   run: () => {},
 };
@@ -90,6 +98,7 @@ const throwaway = (id: string, name: string, over: Partial<HeroCard> = {}): Hero
 
 beforeAll(() => {
   registerAbilities([longArm, fixedEye, tally, bloodPrice, gearReach, calm]);
+  STATUSES_BY_ID[MARK] = markDef;
   CARDS_BY_ID[LONG_BARREL] = { id: LONG_BARREL, name: 'Long Barrel', type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, abilities: [gearReach.id] };
   CARDS_BY_ID[REACHER] = throwaway(REACHER, 'Reacher', { passives: [longArm.id] });
   CARDS_BY_ID[FIXER] = throwaway(FIXER, 'Fixer', { passives: [fixedEye.id] });
@@ -99,6 +108,7 @@ beforeAll(() => {
 });
 afterAll(() => {
   for (const id of [REACHER, FIXER, TALLY, PAYER, CALM, LONG_BARREL]) delete CARDS_BY_ID[id];
+  delete STATUSES_BY_ID[MARK];
 });
 beforeEach(() => { swungAt.length = 0; });
 
@@ -132,11 +142,8 @@ const snapshot = (G: GameState) => JSON.stringify(G);
 
 describe('the new statuses', () => {
   it('are defined as the rules word them', () => {
-    expect(STATUSES_BY_ID.fixation).toMatchObject({
-      title: 'Fixation', desc: 'When Haze attacks this hero, she deals +<value> bullet damage. Up to 2; it falls off when the hero leaves the Active slot.', hvalue: -1,
-      stack: { add: true, cap: 2, duration: 'reset' }, clearOnLeaveActive: true,
-    });
-    expect(FIXATION_CAP).toBe(2);
+    // Haze's Fixation is a flat bonus since 2026-11-16 (+1 to a hurt enemy): no status.
+    expect(STATUSES_BY_ID.fixation).toBeUndefined();
     expect(STATUSES_BY_ID.dome).toMatchObject({ title: 'Dome', desc: 'Cannot be the target of an attack.', hvalue: 2, untargetable: ['attack'] });
     expect(STATUSES_BY_ID.rooted).toMatchObject({ title: 'Rooted', desc: 'Cannot retreat or be swapped.', hvalue: -1, blocks: ['move'], cc: true });
     expect(STATUSES_BY_ID.rabbit).toMatchObject({
@@ -148,10 +155,10 @@ describe('the new statuses', () => {
   });
 
   it('are buffs or debuffs, and crowd control or not, as their definitions say (the derived sets follow)', () => {
-    for (const id of ['fixation', 'rooted', 'rabbit']) expect(DEBUFF_IDS.has(id), id).toBe(true);
+    for (const id of ['rooted', 'rabbit']) expect(DEBUFF_IDS.has(id), id).toBe(true);
     for (const id of ['dome', 'last_stand']) expect(DEBUFF_IDS.has(id), id).toBe(false);
     for (const id of ['rooted', 'rabbit']) expect(CC_STATUSES.has(id), id).toBe(true);
-    for (const id of ['fixation', 'dome', 'last_stand']) expect(CC_STATUSES.has(id), id).toBe(false);
+    for (const id of ['dome', 'last_stand']) expect(CC_STATUSES.has(id), id).toBe(false);
   });
 
   it('only Dome keeps its bearer from being attacked, and only Rooted from moving', () => {
@@ -159,7 +166,7 @@ describe('the new statuses', () => {
     const c = G.players['1'].active!;
     expect(isUntargetable(c, 'attack')).toBe(false);
     expect(isBlocked(c, 'move')).toBe(false);
-    for (const id of ['stun', 'silenced', 'disarm', 'sleep', 'rabbit', 'fixation', 'last_stand']) {
+    for (const id of ['stun', 'silenced', 'disarm', 'sleep', 'rabbit', MARK, 'last_stand']) {
       c.statuses = [{ id, value: 1, duration: 2 }];
       expect(isUntargetable(c, 'attack'), id).toBe(false);
       expect(isBlocked(c, 'move'), id).toBe(false); // a Stun does not root its bearer
@@ -177,22 +184,22 @@ describe('the new statuses', () => {
 
 // ---------------------------------------------------------------------------
 
-describe('Fixation', () => {
+describe('a stacking mark that falls off as its bearer leaves the lane (the primitive Fixation was built on)', () => {
   it('stacks up to 2 and starts its timer over with every stack', () => {
     const G = freshReadyGame();
     const foe = G.players['1'].active!;
-    addStatus(G, foe, 'fixation', 1, 99);
-    expect(status(foe, 'fixation')).toMatchObject({ value: 1, duration: 99 });
-    expect(G.log.at(-1)!.text).toBe('Abrams suffered Fixation 1.');
-    addStatus(G, foe, 'fixation', 1, 99);
-    expect(status(foe, 'fixation')!.value).toBe(2);
-    addStatus(G, foe, 'fixation', 1, 99); // a third stack goes over the cap…
-    addStatus(G, foe, 'fixation', 5, 99); // …and so does a big one
-    expect(status(foe, 'fixation')!.value).toBe(FIXATION_CAP);
-    expect(foe.statuses.filter((s) => s.id === 'fixation')).toHaveLength(1);
+    addStatus(G, foe, MARK, 1, 99);
+    expect(status(foe, MARK)).toMatchObject({ value: 1, duration: 99 });
+    expect(G.log.at(-1)!.text).toMatch(/^Abrams (suffered|gained) Mark/);
+    addStatus(G, foe, MARK, 1, 99);
+    expect(status(foe, MARK)!.value).toBe(2);
+    addStatus(G, foe, MARK, 1, 99); // a third stack goes over the cap…
+    addStatus(G, foe, MARK, 5, 99); // …and so does a big one
+    expect(status(foe, MARK)!.value).toBe(MARK_CAP);
+    expect(foe.statuses.filter((s) => s.id === MARK)).toHaveLength(1);
     // The timer is the newest stack's, not the longer of the two.
-    addStatus(G, foe, 'fixation', 1, 4);
-    expect(status(foe, 'fixation')!.duration).toBe(4);
+    addStatus(G, foe, MARK, 1, 4);
+    expect(status(foe, MARK)!.duration).toBe(4);
   });
 
   it('ends when its bearer leaves the Active slot — a retreat, a swap-in, a pull, a promotion — and takes nothing else with it', () => {
@@ -219,7 +226,7 @@ describe('Fixation', () => {
     for (const [label, leave] of ways) {
       const G = freshReadyGame();
       const foe = G.players['1'].active!;
-      addStatus(G, foe, 'fixation', 2, 99);
+      addStatus(G, foe, MARK, 2, 99);
       addStatus(G, foe, 'bleed', 1, 2);
       leave(G);
       expect(G.players['1'].active, label).not.toBe(foe);
@@ -230,21 +237,21 @@ describe('Fixation', () => {
   it('stays on a hero that stays: a swap between bench slots, and the hero who steps in', () => {
     const G = freshReadyGame();
     const foe = G.players['1'];
-    addStatus(G, foe.bench[0]!, 'fixation', 1, 99);
-    addStatus(G, foe.bench[1]!, 'fixation', 1, 99);
+    addStatus(G, foe.bench[0]!, MARK, 1, 99);
+    addStatus(G, foe.bench[1]!, MARK, 1, 99);
     expect(perform(G, '1', { type: 'moveHero', fromSlot: 1, toSlot: 3 })).not.toBe(INVALID); // bench ↔ bench
-    expect(has(foe.bench[2]!, 'fixation')).toBe(true);
+    expect(has(foe.bench[2]!, MARK)).toBe(true);
     foe.souls = retreatCost(G, '1');
     const incoming = foe.bench[1]!;
     expect(perform(G, '1', { type: 'moveHero', fromSlot: 0, toSlot: 2 })).not.toBe(INVALID); // a retreat
     expect(foe.active).toBe(incoming);
-    expect(has(incoming, 'fixation')).toBe(true); // arriving is not leaving
+    expect(has(incoming, MARK)).toBe(true); // arriving is not leaving
   });
 
   it('leaveActive ends exactly the statuses that declare clearOnLeaveActive', () => {
     const G = freshReadyGame();
     const hero = G.players['1'].active!;
-    addStatus(G, hero, 'fixation', 3, 99);
+    addStatus(G, hero, MARK, 3, 99);
     addStatus(G, hero, 'shield', 4, 999);
     addStatus(G, hero, 'stun', 1, 1);
     leaveActive(G, hero);
@@ -258,10 +265,10 @@ describe('Fixation', () => {
     const { G, atk, rival } = duel(FIXER);
     expect(attackPower(atk).total).toBe(3);
     expect(attackPower(atk, rival).total).toBe(3); // no stacks yet
-    addStatus(G, rival, 'fixation', 2, 99);
+    addStatus(G, rival, MARK, 2, 99);
     const against = attackPower(atk, rival);
     expect(against.total).toBe(5);
-    expect(against.parts.find((p) => p.bonus)).toMatchObject({ label: 'Fixation: +2', amount: 2 });
+    expect(against.parts.find((p) => p.bonus)).toMatchObject({ label: 'Mark: +2', amount: 2 });
     expect(attackPower(atk).total).toBe(3);   // the card face has no target
     expect(effectiveAtk(atk)).toBe(3);
     // Only the hero it is fixed on pays: another target has no stacks.
@@ -271,7 +278,7 @@ describe('Fixation', () => {
 
   it('the swing, the forecast and the gate all pass the target', () => {
     const { G, rival } = duel(FIXER);
-    addStatus(G, rival, 'fixation', 3, 99);
+    addStatus(G, rival, MARK, 3, 99);
     const plan = forecastAttack(G, '0');
     expect(plan.steps[0]).toMatchObject({ rawDamage: 6, finalDamage: 6, predictedHpAfter: 24 });
     expect(perform(G, '0', { type: 'attack' })).not.toBe(INVALID);
@@ -284,7 +291,7 @@ describe('Fixation', () => {
     addStatus(h.G, h.atk, 'weapon_power_down', 9, 99);
     expect(attackPower(h.atk).total).toBe(0);
     expect(attackBlocked(h.G, '0')).toBe('cannot');
-    addStatus(h.G, h.rival, 'fixation', 2, 99);
+    addStatus(h.G, h.rival, MARK, 2, 99);
     expect(attackPower(h.atk, h.rival).total).toBe(2);
     expect(attackBlocked(h.G, '0')).toBeNull();
     expect(perform(h.G, '0', { type: 'attack' })).not.toBe(INVALID);
@@ -885,7 +892,7 @@ describe('attackAll', () => {
 
   it('reads each swing\'s power for its own target, and uses no Extra Attack', () => {
     const { G, atk, foes } = duel(FIXER);
-    addStatus(G, foes[2], 'fixation', 2, 99);
+    addStatus(G, foes[2], MARK, 2, 99);
     addStatus(G, atk, 'extra_attack', 2, 99);
     attackAll(G, atk);
     expect(swingsOf(G).map((s) => s.raw)).toEqual([3, 3, 5, 3]);
@@ -975,11 +982,11 @@ describe('swapIntoActive and pullToActive', () => {
   it('leaveActive runs for the hero who leaves, not for the one who arrives', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    addStatus(G, me.active!, 'fixation', 2, 99);
-    addStatus(G, me.bench[0]!, 'fixation', 1, 99);
+    addStatus(G, me.active!, MARK, 2, 99);
+    addStatus(G, me.bench[0]!, MARK, 1, 99);
     expect(swapIntoActive(G, me, me.bench[0]!)).toBe(true);
     expect(me.bench[0]!.statuses).toEqual([]);                     // the old Active lost it
-    expect(me.active!.statuses.map((s) => s.id)).toEqual(['fixation']); // the new one keeps its own
+    expect(me.active!.statuses.map((s) => s.id)).toEqual([MARK]); // the new one keeps its own
   });
 
   it('refuse what they should: a fallen hero, a bench-only hero (no card is one now: Rem flagged by hand), a hero who is not on that bench, a board with no Active', () => withBenchOnly('hero_rem', () => {

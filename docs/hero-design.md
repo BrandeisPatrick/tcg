@@ -274,10 +274,11 @@ HP 6 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 
 **Haze** · in the game today — peaks late, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +3 Attack +1 HP
-- Passive — **Fixation**: Each attack adds a Fixation stack to the target (max 2). Haze deals +1 bullet damage per stack to it until it leaves the Active slot.
+- Passive — **Fixation**: Haze's attacks deal +1 bullet damage to an enemy below full HP.
 - Ultimate, large, waits 8 — **Bullet Dance**: Deal Haze's Attack as bullet damage to every enemy.
-- Why: Haze is the late carry: weak at Level 1, then Fixation ramps on one target, and a late Bullet Dance shreds the whole enemy team.
+- Why: Haze is the late carry: weak at Level 1, then Fixation keeps biting at whoever she has hurt, and a late Bullet Dance shreds the whole enemy team.
 - Changed from today: Attack 3 to 1 and HP 5 to 4: she starts weak and grows +3 Attack a level. The Level 3 extra attack becomes Fixation, her real passive. Bullet Dance now uses her Attack, so it grows as she does.
+- **Changed 2026-11-16 (Patrick): "some passives are too complicated — Haze can just be +X when the target is damaged."** Fixation was a stack on her target for each swing (max 2, +1 bullet damage a stack, gone when it left the lane). Now it is one line, the mirror of Headshot Booster's "+2 to an enemy at full HP": +1 to an enemy below full HP. **The number** keeps the value: at Attack 1 the stacks dealt 1, 2, 3 over three swings at one hero (6); the bonus deals 1, 2, 2 (5) when her first swing finds the hero whole, and 2, 2, 2 (6) when someone has hurt it first. A passive is worth 1–2 points an own turn, and this sits at about 1, where Fixation did. There is no status any more: nothing to read on the target.
 
 **Wraith** · in the game today — peaks late, one target; mix tank 0 · damage 3 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 0 · per level +3 Attack +1 HP
@@ -554,8 +555,9 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
   worth it, because the rival spends those souls on equipment and develops its heroes while
   Viscous's side spends them cubing. The other options were a 2-turn wait (as the
   old engine had), never the same hero twice in a row, and a cube that stops one hit.
-- **Haze — Fixation.** A stack for each of her swings, Extra Attacks too, but not from a Ricochet
-  bounce (she is fixed on the hero she shoots); the stacks last until it leaves the Active slot.
+- **Haze — Fixation.** Since 2026-11-16, +1 bullet damage on each of her swings at an enemy
+  below full HP, Extra Attacks too, never on a Ricochet bounce (a bounce is no swing). Until then
+  it was a stack a swing (max 2) that lasted until the target left the Active slot.
   Her Level 3 extra swing is gone. **Bullet Dance** deals her Attack as her card shows it (0 while
   Disarmed) as bullet damage, but it is no swing: nothing rides on it and it does not ricochet.
 - **Vindicta — Flight.** 1✦ spirit damage rides on each of her swings, not on a bounce. The old

@@ -20,7 +20,7 @@ const MAGNITUDE_STATUSES: Set<StatusId> = new Set([
   'bleed', 'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power',
   'djinns_mark', 'weapon_power_down', 'spirit_power_down',
   'bullet_resist_down', 'spirit_resist_down', 'healing_boost', 'healing_boost_down',
-  'extra_attack', 'fixation', 'last_stand', 'return_fire', 'ricochet',
+  'extra_attack', 'last_stand', 'return_fire', 'ricochet',
 ]);
 
 // Stat-reduction debuffs store a positive magnitude that represents a reduction.

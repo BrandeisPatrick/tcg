@@ -6,12 +6,18 @@ import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import type { CardInstance, GameState, PendingTrigger } from '@/engine/types';
 import { HEROES } from '@/cards';
+import { getAbility } from '@/abilities';
+import { skillWait, ultCharge, ultimateCard, ultWait } from '@/engine/query';
+import { skillIconSrc, ultIconSrc } from '@/art/assets';
+import { skillBlockReason } from '../board/heroActions';
+import { AbilityTile } from '../overlays/AbilityDial';
+import { dialLabel, type DialModel } from '../overlays/abilityDialModel';
 import { allocatorFor, newCounters } from '@/engine/ids';
 import { buildPlayer, freshMap } from '@/engine/actions/setup';
 import { HeroDetailSheet, type SkillOffer } from '../overlays/HeroDetailSheet';
 import { PromotionOverlay } from '../overlays/PromotionOverlay';
 import { TriggerPrompt } from '../overlays/TriggerPrompt';
-import { poster } from '../poster';
+import { poster, shopInk } from '../poster';
 import { mockHeroInstance, mockEquipInstance } from './mock';
 import { Section, Caption } from './primitives';
 
@@ -21,18 +27,31 @@ const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
   { id: 'attacked', label: 'Attacked',                hint: 'The Attack reads “Used”; the turn goes on, so the abilities stay lit.' },
   { id: 'turn1',    label: 'Turn 1',                  hint: 'The skill is there; the Attack row is dim with “No attacks on Turn 1”.' },
   { id: 'locked',   label: 'Ultimate locked',         hint: 'Below Level 2 the Ultimate row is dim and reads “Level 2” where its price would be.' },
-  { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the Ultimate, the Attack, and the passive as one quiet line (tap it for its rule).' },
+  { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the passive is printed as a skill is — its icon, its rule — but is no button and has no wait.' },
   { id: 'bench',    label: 'A bench hero',            hint: 'Its skill can be used from the bench. No Attack — only the Active swings.' },
   { id: 'blocked',  label: 'Not your turn',           hint: 'Every row dim, each with the one reason in place of its price.' },
   { id: 'enemy',    label: 'Rival hero',              hint: 'Read-only: the same rows, none a button, and Close.' },
   { id: 'loaded',   label: 'Statuses, equipment, retreat', hint: 'Worn items and statuses as one strip of small tiles under the header. Retreat is in the foot of the Active’s sheet only.' },
   { id: 'broke',    label: 'Retreat, short of souls', hint: 'Retreat stays in the foot, inert, and says what is missing.' },
   { id: 'charged',  label: 'Charged, in Wolf form',   hint: 'Nine damage counted: a charged ultimate (Victor, Silver) prints its price coming down. Silver wears her wolf while the form lasts.' },
+  { id: 'cool-full', label: 'Cooling: just used',      hint: 'The turn it was used: the wipe covers the whole glyph, every frame segment is still to come, the number is the full wait.' },
+  { id: 'cool-mid',  label: 'Cooling: one turn served', hint: 'The skill has served one turn of its wait (2 of 3 left); the ultimate has one turn left. The wipe opens clockwise from twelve.' },
+  { id: 'cool-last', label: 'Cooling: one turn left',  hint: 'The skill is a turn from ready. Open “all ready” next with the same hero to see the ready moment.' },
+  { id: 'charges',   label: 'Charged skill, 1 charge left', hint: 'A skill that holds charges (Kelvin, Shiv, Vindicta): one in hand, so the row is lit; the next pip is a small clock of its wait.' },
+  { id: 'charges-out', label: 'Charged skill, none left', hint: 'Both charges spent: the tile wears the full dial for the next charge, and the pips are empty.' },
+  { id: 'ult-charge', label: 'Charged ultimate, part filled', hint: 'An ultimate that waits on damage (Victor, Silver): the glyph fills from the foot and the frame has a segment a point.' },
+  { id: 'cool-rival', label: 'Rival hero, cooling',    hint: 'Read-only, and the dials still say what the rival is waiting on.' },
 ];
 
 /** The passive-only hero the "Passive-only Active" state falls back to when
  *  the picked hero has a skill. */
 const PASSIVE_STAND_IN = 'hero_abrams';
+/** The heroes the dial states fall back to when the picked hero has no
+ *  charged skill, or no charged ultimate. */
+const CHARGES_STAND_IN = 'hero_kelvin';
+const CHARGED_ULT_STAND_IN = 'hero_victor';
+const hasCharges = (h: (typeof HEROES)[number]) => h.skills.some((id) => (getAbility(id)?.charges ?? 1) > 1);
+const hasChargedUlt = (h: (typeof HEROES)[number]) => !!ultimateCard(h.ult)?.charged;
 
 /** What the promotion sheet's Retreat costs: Kelvin is the one leaving. */
 const KELVIN_RETREAT = HEROES.find((h) => h.id === 'hero_kelvin')?.retreat ?? 1;
@@ -45,7 +64,11 @@ export function OverlaysTab() {
   const hero = HEROES.find((h) => h.id === heroId)!;
 
   function build(s: string): Parameters<typeof HeroDetailSheet>[0] {
-    const shown = s === 'passive' && hero.skills.length > 0 ? HEROES.find((h) => h.id === PASSIVE_STAND_IN)! : hero;
+    const standIn = (id: string) => HEROES.find((h) => h.id === id)!;
+    const shown = s === 'passive' && hero.skills.length > 0 ? standIn(PASSIVE_STAND_IN)
+      : (s === 'charges' || s === 'charges-out') && !hasCharges(hero) ? standIn(CHARGES_STAND_IN)
+      : s === 'ult-charge' && !hasChargedUlt(hero) ? standIn(CHARGED_ULT_STAND_IN)
+      : hero;
     let card: CardInstance = mockHeroInstance(shown);
     const props: Parameters<typeof HeroDetailSheet>[0] = {
       card,
@@ -103,6 +126,42 @@ export function OverlaysTab() {
         statuses: [{ id: 'wolf_form', value: 1, duration: 2 }, { id: 'weapon_power', value: 3, duration: 2 }, { id: 'shield', value: 6, duration: 999 }],
       };
     }
+    // ---- The dials: waits, charges, a charged ultimate's count. ----
+    const skillId = shown.skills[0];
+    const skillFull = skillId ? skillWait(getAbility(skillId)!) : 0;
+    const ultFace = ultimateCard(shown.ult);
+    const ultFull = ultFace && !ultFace.charged ? ultWait(ultFace) : 0;
+    // Each ability's offer as the match would word it: blocked by its wait.
+    const waiting = (ids: (string | undefined)[], block: 'cooldown' | 'charge' = 'cooldown') => {
+      for (const id of ids) if (id) props.skills = { ...props.skills, [id]: { canUse: false, blockedReason: skillBlockReason(block, card, id) } };
+    };
+    const cool = (skillLeft: number, ultLeft: number) => {
+      card = { ...card, cooldowns: { ...(skillId && skillLeft > 0 ? { [skillId]: skillLeft } : {}), ...(shown.ult && ultFull && ultLeft > 0 ? { [shown.ult]: ultLeft } : {}) } };
+      // A charged skill with nothing in hand is what a wait holds back.
+      if (skillId && (getAbility(skillId)?.charges ?? 1) > 1) card = { ...card, chargesSpent: { [skillId]: getAbility(skillId)!.charges! } };
+      waiting([skillLeft > 0 ? skillId : undefined, ultFull && ultLeft > 0 ? shown.ult : undefined]);
+    };
+    if (s === 'cool-full') {
+      cool(skillFull, Math.max(1, ultFull - 2));
+      card = { ...card, skillUsedThisTurn: true, lastSkillUsed: skillId ?? shown.ult };
+    }
+    if (s === 'cool-mid') cool(Math.max(1, skillFull - 1), 1);
+    if (s === 'cool-last') cool(1, Math.ceil(ultFull / 2));
+    if (s === 'cool-rival') {
+      cool(Math.max(1, skillFull - 1), Math.ceil(ultFull / 2));
+      props.isMine = false; eachSkill({ canUse: false }); props.attack = undefined;
+    }
+    if (s === 'charges' && skillId) {
+      card = { ...card, chargesSpent: { [skillId]: 1 }, cooldowns: { [skillId]: Math.max(1, skillFull - 2) } };
+    }
+    if (s === 'charges-out' && skillId) {
+      card = { ...card, chargesSpent: { [skillId]: getAbility(skillId)?.charges ?? 2 }, cooldowns: { [skillId]: Math.max(1, skillFull - 1) } };
+      waiting([skillId]);
+    }
+    if (s === 'ult-charge' && shown.ult) {
+      card = { ...card, tally: { [shown.ult]: 6 } };
+      if (ultCharge(card)) waiting([shown.ult], 'charge');
+    }
     if (s === 'broke') {
       const cost = Math.max(1, shown.retreat);
       props.retreat = { cost, blockedReason: `Need ${cost} soul${cost === 1 ? '' : 's'}` };
@@ -154,9 +213,85 @@ export function OverlaysTab() {
       </AnimatePresence>
     </Section>
 
+    <AbilityDialDemo heroId={heroId} />
     <NewActiveDemo />
     <TriggerPromptDemo />
     </>
+  );
+}
+
+/** The ability dial alone, at each step of each thing it can say, on the
+ *  sheet's paper; and one live tile to step through a wait turn by turn. */
+function AbilityDialDemo({ heroId }: { heroId: string }) {
+  const [calm, setCalm] = useState(false);
+  const [big, setBig] = useState(false);
+  const [run, setRun] = useState(0);
+  const [left, setLeft] = useState(3);
+  const size = big ? 88 : 44;
+  const inks = { weapon: shopInk('weapon').ink, spirit: shopInk('spirit').ink, vitality: shopInk('vitality').ink };
+  const wait = (l: number, full: number, charges?: { left: number; max: number }): DialModel => ({ kind: 'wait', left: l, full, ...(charges ? { charges } : {}) });
+  const glyph = (ult = false) => (
+    <img src={ult ? ultIconSrc(heroId) : skillIconSrc(heroId)} alt="" draggable={false} style={{ display: 'block', width: size - (big ? 20 : 10), height: size - (big ? 20 : 10), objectFit: 'contain' }} />
+  );
+  const strips: { title: string; ink: string; ult?: boolean; steps: DialModel[] }[] = [
+    { title: 'A skill that waits 3', ink: inks.spirit, steps: [wait(3, 3), wait(2, 3), wait(1, 3), wait(0, 3)] },
+    { title: 'A skill that waits 5', ink: inks.weapon, steps: [wait(5, 5), wait(4, 5), wait(3, 5), wait(2, 5), wait(1, 5), wait(0, 5)] },
+    { title: 'A large ultimate: waits 8', ink: inks.spirit, ult: true, steps: [wait(8, 8), wait(6, 8), wait(4, 8), wait(2, 8), wait(1, 8), wait(0, 8)] },
+    {
+      title: 'A charged skill: 2 charges, 4 turns each', ink: inks.vitality,
+      steps: [wait(0, 4, { left: 2, max: 2 }), wait(4, 4, { left: 1, max: 2 }), wait(2, 4, { left: 1, max: 2 }), wait(4, 4, { left: 0, max: 2 }), wait(2, 4, { left: 0, max: 2 }), wait(1, 4, { left: 0, max: 2 })],
+    },
+    { title: 'With Rapid Recharge: 4 charges, 3 turns each', ink: inks.weapon, steps: [wait(2, 3, { left: 3, max: 4 }), wait(1, 3, { left: 1, max: 4 }), wait(2, 3, { left: 0, max: 4 })] },
+    { title: 'A charged ultimate: needs 10 damage', ink: inks.spirit, ult: true, steps: [0, 3, 6, 9, 10].map((have) => ({ kind: 'charge', have, need: 10 }) as DialModel) },
+  ];
+  const chip = (on: boolean) => ({ fontWeight: on ? 700 : 400, textDecoration: on ? 'underline' : 'none' } as const);
+  return (
+    <Section title="Ability dial">
+      <Caption>
+        What a skill's or an ultimate's tile wears while something holds it. The <strong>frame</strong> is
+        the gauge: one segment a turn of the wait, clockwise from twelve, inked as each turn is served.
+        The <strong>wipe</strong> darkens the glyph for the wait that is left, and the <strong>number</strong>
+        {' '}is the own turns to go. A charged skill adds its <strong>pips</strong>; a charged ultimate
+        fills from the foot instead, because it waits on damage, not turns. Each strip reads left to
+        right, from just used to ready.
+      </Caption>
+      <div className="gal-row" style={{ marginBottom: 12, gap: 14 }}>
+        <button type="button" className="gal-pick__item" style={{ width: 'auto' }} data-dial-replay onClick={() => setRun((n) => n + 1)}><b>Replay the opening</b></button>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" data-dial-calm checked={calm} onChange={(e) => setCalm(e.target.checked)} /> <span style={chip(calm)}>Reduced motion</span>
+        </label>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" data-dial-big checked={big} onChange={(e) => setBig(e.target.checked)} /> <span style={chip(big)}>Twice the size</span>
+        </label>
+      </div>
+      <div data-dial-demo style={{
+        display: 'flex', flexDirection: 'column', gap: 14, padding: 16, borderRadius: 10,
+        background: poster.paper, border: `1.5px solid ${poster.ink}`, maxWidth: 720,
+      }}>
+        {strips.map((strip) => (
+          <div key={strip.title} style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <span style={{ width: 190, font: '500 12px/1.3 var(--g-ui)', color: poster.inkDim }}>{strip.title}</span>
+            <span style={{ display: 'flex', gap: big ? 20 : 12, padding: '6px 0' }}>
+              {strip.steps.map((m, i) => (
+                <span key={`${run}-${i}`} title={dialLabel(m)} style={{ display: 'inline-flex' }}>
+                  <AbilityTile ink={strip.ink} size={size} dial={m} calm={calm}>{glyph(strip.ult)}</AbilityTile>
+                </span>
+              ))}
+            </span>
+          </div>
+        ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderTop: `1px solid ${poster.inkRule}`, paddingTop: 14 }}>
+          <span style={{ width: 190, font: '500 12px/1.3 var(--g-ui)', color: poster.inkDim }}>Live: a wait of 3, turn by turn</span>
+          <span data-dial-live style={{ display: 'inline-flex', padding: '6px 0' }}>
+            <AbilityTile ink={inks.spirit} size={size} dial={wait(left, 3)} memo="gallery-live" calm={calm}>{glyph()}</AbilityTile>
+          </span>
+          <button type="button" className="gal-pick__item" style={{ width: 'auto' }} data-dial-step onClick={() => setLeft((n) => (n > 0 ? n - 1 : 3))}>
+            <b>{left > 0 ? 'End the turn' : 'Use the skill'}</b>
+            <span>{dialLabel(wait(left, 3))}</span>
+          </button>
+        </div>
+      </div>
+    </Section>
   );
 }
 

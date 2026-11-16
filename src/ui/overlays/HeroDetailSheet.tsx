@@ -40,6 +40,8 @@ import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { spring, text, fonts } from '../tokens';
 import { poster, scrimStyle, printEdge, shopInk } from '../poster';
+import { AbilityTile } from './AbilityDial';
+import { abilityDial, dialReason, dialSaid, type DialModel } from './abilityDialModel';
 import {
   scale as T, Souls, HpSegments, hpNumberStyle, ultimateGlyph, panelStyle, plateStyle, bandStyle, chargedGlow,
 } from '../hud';
@@ -81,15 +83,11 @@ const PAD = 8;
 const HEAD = 118;
 /** A hairline on the paper. */
 const RULE = poster.inkRule;
-/** The marks (dials, pips) on the paper. */
-const MARKS = { ink: poster.ink, track: poster.inkRule, faint: poster.inkFaint };
 /** A strip tile's side and the gap between tiles. */
 const TILE = 30;
 const TILE_GAP = 5;
 /** An action row's picture tile. */
 const ART = 44;
-/** A passive line's icon tile. */
-const PASSIVE_ART = 26;
 
 /** Your Active's attack, offered on its sheet: a swing at the rival Active for
  *  its bullet damage. Free and one-way, one a hero a turn; the turn goes on
@@ -191,6 +189,12 @@ function shortLine(rule: string, scale: Scale, max: number): string {
   return sentence(s);
 }
 
+/** A passive's rule as its row prints it: whole (a passive has no other
+ *  line to give), its scaling numbers read live. */
+function fullLine(rule: string, scale: Scale): string {
+  return sentence(parseMarkup(rule).map((t) => (t.type === 'text' ? t.text : shownNumber(t, scale))).join('').trim());
+}
+
 type Kind = 'weapon' | 'spirit' | 'vitality';
 /** An ability's kind, read off its own rule: bullet damage is Deadlock's
  *  weapon orange, spirit damage its spirit purple, a heal or a Shield with no
@@ -214,7 +218,6 @@ export function HeroDetailSheet({
   const [infoOpen, setInfoOpen] = useState(false);
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [passiveOpen, setPassiveOpen] = useState<string | null>(null);
 
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') return null;
@@ -230,9 +233,11 @@ export function HeroDetailSheet({
   const usedSkill = card.skillUsedThisTurn ? (card.lastSkillUsed ?? data.skills[0]) : undefined;
   // What a kit ability's row says at its right, where its price once stood
   // (a skill and an ultimate cost no souls): a charged skill's charges left,
-  // a charged ultimate's count, else its wait (`kitTag`).
-  const pace = (abilityId: AbilityId): ReactNode => {
-    const tag = kitTag(card, abilityId);
+  // a charged ultimate's count, else its wait (`kitTag`). While its dial is
+  // holding it (a wait running, a count short), the dial's own words: the
+  // tile carries the picture, so these only name the unit ("2 turns left").
+  const pace = (abilityId: AbilityId, dial?: DialModel): ReactNode => {
+    const tag = (dial && dialSaid(dial)) ?? kitTag(card, abilityId);
     if (!tag) return undefined;
     return (
       <span data-kit-tag style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: T.label, letterSpacing: '0.04em', color: poster.inkDim, whiteSpace: 'nowrap' }}>
@@ -257,7 +262,7 @@ export function HeroDetailSheet({
   const shield = card.statuses.find((st) => st.id === 'shield')?.value ?? 0;
   const shownStatuses = card.statuses.filter((st) => st.id !== 'shield');
 
-  // ---- The actions: skill(s), ultimate, attack — then the passive line. ----
+  // ---- The actions: skill(s), a passive (a row that is no button), ultimate, attack. ----
   const rows: { key: string; node: ReactNode }[] = [];
 
   for (const ability of skillAbilities) {
@@ -267,18 +272,40 @@ export function HeroDetailSheet({
     const mode = modeOf(usable, used, offer?.blockedReason);
     const reason = mode === 'used' ? 'Used' : mode === 'blocked' ? offer?.blockedReason : undefined;
     const kind = abilityKind(ability.text);
+    const dial = abilityDial(card, ability.id);
     rows.push({
       key: ability.id,
       node: (
         <ActionRow
           ink={shopInk(kind).ink} mode={mode} calm={calm}
+          dial={dial} dialMemo={`${card.iid}:${ability.id}`}
           name={ability.name}
           // The skill's own Deadlock icon; its ring keeps the kind's colour.
           art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={shortLine(ability.text, scale, lineMax)}
-          right={pace(ability.id)}
+          right={pace(ability.id, dial)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
+        />
+      ),
+    });
+  }
+
+  // A passive is printed as a skill is, in the skill's place (Patrick,
+  // 2026-11-16: "just another skill box with no cooldown") — its own icon, its
+  // kind's ring, the skill's paper box — but it is never a button, has no wait
+  // ("Passive" stands where a skill's wait would) and its rule wraps whole.
+  for (const ability of passiveAbilities) {
+    const kind = abilityKind(ability.text);
+    rows.push({
+      key: ability.id,
+      node: (
+        <ActionRow
+          passive ink={shopInk(kind).ink} mode="quiet" calm={calm}
+          name={ability.name}
+          art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
+          line={fullLine(ability.text, scale)}
+          right={<span data-kit-tag style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: T.label, letterSpacing: '0.04em', color: poster.inkDim, whiteSpace: 'nowrap' }}>Passive</span>}
         />
       ),
     });
@@ -294,17 +321,20 @@ export function HeroDetailSheet({
     const mode = !mine && locked ? 'blocked' : modeOf(usable, used, offer?.blockedReason);
     const reason = mode === 'used' ? 'Used' : mine && mode === 'blocked' ? offer?.blockedReason : undefined;
     const ink = shopInk(abilityKind(ultFace.text ?? '')).ink;
+    // No dial while it is locked: the row says "Level 2", and that is the gate.
+    const dial = abilityDial(card, abilityId);
     rows.push({
       key: abilityId,
       node: (
         <ActionRow
           ult ink={ink} mode={mode} calm={calm}
+          dial={dial} dialMemo={`${card.iid}:${abilityId}`}
           name={ultFace.name}
           // A charged ultimate is named so: it waits on damage, not on turns.
           ultLabel={`Ultimate · ${ultFace.charged ? 'charged' : ultFace.size}`}
           art={<img src={ultIconSrc(ultFace.linkedHero)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
           line={shortLine(ultFace.text ?? '', scale, lineMax)}
-          right={pace(abilityId)}
+          right={pace(abilityId, dial)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(abilityId); onClose(); } : undefined}
         />
@@ -546,37 +576,6 @@ export function HeroDetailSheet({
             </div>
           )}
 
-          {/* PASSIVES — a quiet line each, its name; a tap shows the rule. */}
-          {passiveAbilities.map((ability) => {
-            const open = passiveOpen === ability.id;
-            return (
-              <button
-                key={ability.id}
-                type="button"
-                aria-expanded={open}
-                onClick={(e) => { e.stopPropagation(); setPassiveOpen(open ? null : ability.id); }}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4,
-                  padding: '4px 4px 2px', background: 'transparent', border: 'none', textAlign: 'left',
-                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent', color: 'inherit',
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {/* The passive's own Deadlock icon, on the ink of the action rows' tiles. */}
-                  <span aria-hidden style={{
-                    width: PASSIVE_ART, height: PASSIVE_ART, borderRadius: 5, background: poster.ink, flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: PASSIVE_ART - 6, height: PASSIVE_ART - 6, objectFit: 'contain' }} />
-                  </span>
-                  <span style={{ ...NAME, fontSize: T.body, color: poster.inkSoft, flex: 1 }}>{ability.name}</span>
-                  <span aria-hidden style={{ ...CAPTION, fontSize: T.body }}>{open ? '−' : '+'}</span>
-                </span>
-                {open && <span style={{ ...CAPTION, paddingLeft: PASSIVE_ART + 8 }}>{sentence(plainRule(ability.text, scale))}</span>}
-              </button>
-            );
-          })}
-
           {/* The whole card, over the sheet while the "i" is on. */}
           {infoOpen && (
             <InfoPanel
@@ -615,11 +614,6 @@ export function HeroDetailSheet({
   );
 }
 
-/** A rule as plain words, its scaling numbers read live — the whole of it. */
-function plainRule(rule: string, scale: Scale): string {
-  return parseMarkup(rule).map((t) => (t.type === 'text' ? t.text : shownNumber(t, scale))).join('');
-}
-
 // ----- The actions -----
 
 /**
@@ -633,12 +627,22 @@ function plainRule(rule: string, scale: Scale): string {
  *   blocked  stands in the number's place (the attack's under its name),
  *            and the line goes
  *   quiet    the row as it reads (a rival's hero): not a button
+ *   passive  a passive (Patrick, 2026-11-16: "just another skill box, with no
+ *            cooldown"): the same paper box, edge and tile as a usable skill,
+ *            but no press lip and never a button; its rule wraps whole
  *
  * The name stays the row's first words — the row is found by its text.
  */
 function ActionRow({
-  ult = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
+  ult = false, passive = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
+  dial, dialMemo,
 }: {
+  /** A kit ability's wait, worn on its picture tile (AbilityDial.tsx). */
+  dial?: DialModel;
+  /** Names the dial among all dials: the hero and the ability. */
+  dialMemo?: string;
+  /** A passive: printed as a skill's box, never a button, its line whole. */
+  passive?: boolean;
   ult?: boolean;
   /** The kind's colour: the picture tile's frame. */
   ink: string;
@@ -661,18 +665,14 @@ function ActionRow({
   const dim = mode === 'used' || mode === 'blocked';
   const glow = ult && ready;
   const go = (e: SyntheticEvent) => { e.stopPropagation(); onUse?.(); };
-  const said = reason ? shortReason(reason) : undefined;
+  // A reason the dial is already showing is said in the dial's few words (the
+  // whole reason stays the title, and the dial names itself in full).
+  const said = reason ? ((dial && dialReason(reason) && dialSaid(dial)) || shortReason(reason)) : undefined;
   const caption = dim ? (reasonBelow ? said : undefined) : line;
 
   const inner = (
     <>
-      <span style={{
-        position: 'relative', width: ART, height: ART, flexShrink: 0, boxSizing: 'border-box',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderRadius: 7, background: poster.ink,
-        boxShadow: `inset 0 0 0 2px ${ink}`,
-        opacity: dim ? 0.45 : 1, filter: dim ? 'saturate(0.4)' : undefined,
-      }}>
+      <AbilityTile ink={ink} size={ART} dim={dim} dial={dial} memo={dialMemo} calm={calm}>
         {art}
         {ult && ultLabel && (
           <span role="img" aria-label={ultLabel} style={{
@@ -683,10 +683,10 @@ function ActionRow({
             <span aria-hidden style={ultimateGlyph(12, poster.ink)} />
           </span>
         )}
-      </span>
+      </AbilityTile>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ ...NAME, ...ONE_LINE, opacity: dim ? 0.5 : 1 }}>{name}</span>
-        {caption && <span style={{ ...CAPTION, ...ONE_LINE, color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
+        {caption && <span style={{ ...CAPTION, ...(passive ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
       </span>
       <span style={{ flexShrink: 0, maxWidth: '42%', display: 'flex', justifyContent: 'flex-end' }}>
         {dim && !reasonBelow && said
@@ -700,8 +700,8 @@ function ActionRow({
     ...plateStyle,
     display: 'flex', alignItems: 'center', gap: 10,
     minHeight: 60, padding: '7px 12px 7px 8px', boxSizing: 'border-box',
-    background: dim ? 'transparent' : ready ? poster.paper : plateStyle.background,
-    borderColor: ready ? poster.ink : poster.inkRule,
+    background: dim ? 'transparent' : ready || passive ? poster.paper : plateStyle.background,
+    borderColor: ready || passive ? poster.ink : poster.inkRule,
     boxShadow: glow ? chargedGlow(ink) : ready ? `0 2px 0 ${poster.ink}` : 'none',
   };
 
@@ -983,6 +983,3 @@ function Pill({
 function growthLine(g: { atk: number; hp: number; spirit: number }): string {
   return [g.atk && `+${g.atk} BP`, g.hp && `+${g.hp} HP`, g.spirit && `+${g.spirit} SPI`].filter(Boolean).join(', ');
 }
-
-/** A cooldown dial's name: "Ready in 2 turns · cooldown 3". */
-const readyIn = (left: number, full: number) => `Ready in ${left} turn${left === 1 ? '' : 's'} · cooldown ${full}`;

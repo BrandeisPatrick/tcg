@@ -175,11 +175,11 @@ function statusInk(ev: StatusFx): string {
 }
 
 /** The mark over a stamp: the drawing its chip wears (statusMarks.tsx), in the
- *  status ink over an ink underlay. Haze's head carries Fixation's stack. */
+ *  status ink over an ink underlay. */
 function StampMark({ id, color, size, value }: { id: StatusId; color: string; size: number; value?: number }) {
   return (
     <div style={{ width: size, height: size, display: 'block', filter: 'drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5))' }}>
-      <StatusMark id={id} color={color} outline={poster.ink} size={size} count={id === 'fixation' ? value : undefined} />
+      <StatusMark id={id} color={color} outline={poster.ink} size={size} />
     </div>
   );
 }
@@ -285,29 +285,6 @@ function DomeRise({ rect, at, hold, ink }: { rect: Rect; at: number; hold: numbe
         {stroke(ink, 5)}
         {stroke(FX_INK.cream, 1.6)}
       </svg>
-    </>
-  );
-}
-
-/** Fixation: a ring closes in from beyond the card on its middle while a
- *  crosshair flashes through it — the mark has found its target. */
-function LockOn({ rect, at, hold, ink }: { rect: Rect; at: number; hold: number; ink: string }) {
-  const calm = useFxCalm();
-  if (calm) return null;
-  const tr = { duration: sec(hold * 0.55), delay: sec(at + 140), times: [0, 0.2, 0.7, 1], ease: EASE_OUT };
-  const bar = { position: 'absolute' as const, background: ink, boxShadow: `0 0 0 1.5px ${poster.ink}` };
-  return (
-    <>
-      <Ring size={rect.width * 0.62} color={poster.ink} at={at} dur={520} from={2.1} to={0.8} width={8} peak={0.8} />
-      <Ring size={rect.width * 0.62} color={ink} at={at} dur={520} from={2.1} to={0.8} width={4} peak={1} />
-      <motion.div
-        initial={{ opacity: 0, scaleX: 0.2 }} animate={{ opacity: [0, 1, 1, 0], scaleX: [0.2, 1, 1, 1] }} transition={tr}
-        style={{ ...bar, left: 0, right: 0, top: '50%', height: 3, marginTop: -1.5 }}
-      />
-      <motion.div
-        initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 1, 1, 0], scaleY: [0.2, 1, 1, 1] }} transition={tr}
-        style={{ ...bar, top: 0, bottom: 0, left: '50%', width: 3, marginLeft: -1.5 }}
-      />
     </>
   );
 }
@@ -432,7 +409,6 @@ export function StatusStamp({ rect, ev, at, hold, index = 0 }: { rect: Rect; ev:
         )}
         {id === 'reverb' && <Ring size={rect.width * 0.6} color={FX_INK.spirit} at={at} dur={800} from={0.3} to={1.9} width={2.5} dashed />}
         {id === 'dome' && <DomeRise rect={rect} at={at} hold={hold} ink={ink} />}
-        {id === 'fixation' && <LockOn rect={rect} at={at} hold={hold} ink={ink} />}
         {id === 'rooted' && <RootsGrow rect={rect} at={at} hold={hold} ink={ink} seed={ev.seq} />}
         {id === 'rabbit' && <RabbitPoof rect={rect} at={at} seed={ev.seq} />}
         {id === 'last_stand' && <ChargeRise rect={rect} at={at} hold={hold} seed={ev.seq} />}

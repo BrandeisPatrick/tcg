@@ -70,7 +70,7 @@ describe('the trigger prompt names the moment, the card and what it takes', () =
     const victor = makeInstance(allocatorOf(G), 'hero_victor', '1', 'active', 0);
     victor.level = 2;
     victor.hp = 1;
-    victor.tally = { eff_ult_victor: 8 };
+    victor.tally = { eff_ult_victor: 7 }; // and Haze's blow at a hurt hero, 1 + Fixation's 1: 9
     G.players['1'].active = victor;
     perform(G, '0', { type: 'attack' });
     expect(victor.hp).toBe(0);

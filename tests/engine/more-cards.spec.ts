@@ -297,7 +297,10 @@ describe('New equipment', () => {
     expect(full.total).toBe(bare + 2);
     expect(full.parts.some((p) => p.label.startsWith('Headshot Booster'))).toBe(true);
     abrams.hp -= 1;
-    expect(attackPower(haze, abrams).total).toBe(bare);
+    // Hurt: the Booster adds nothing (Haze's own Fixation now adds its +1 to a hurt enemy, item or not).
+    const hurt = attackPower(haze, abrams);
+    expect(hurt.parts.some((p) => p.label.startsWith('Headshot Booster'))).toBe(false);
+    expect(hurt.total).toBe(bare + 1);
     // The card face asks with no target: no bonus to show.
     expect(attackPower(haze).total).toBe(bare);
   });

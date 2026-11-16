@@ -217,5 +217,3 @@ export const BLEED_CAP = 3;
 /** Djinn's Mark stacks additively up to this value, and the mark that reaches
  *  it detonates them all (Mirage's passive). */
 export const DJINN_CAP = 3;
-/** Fixation stacks additively up to this value (+1 to Haze's swing per stack). */
-export const FIXATION_CAP = 2;

@@ -252,7 +252,7 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
     const G = turn(6);
     giveCard(G, '0', 'toxic_bullets');
     const rival = G.players['1'].active!;
-    rival.hp = 2;                                   // Haze swings for 1; Vindicta, behind her, for 2
+    rival.hp = rival.hpMax = 2;                     // Haze swings for 1 at a whole hero; Vindicta, behind her, for 2
     // No skill of the bench's takes the kill first.
     for (const h of G.players['0'].bench) if (h) h.skillUsedThisTurn = true;
     const made = playOut(G);

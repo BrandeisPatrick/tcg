@@ -79,7 +79,7 @@ describe('trigger prompts: asked only when the trigger can be used', () => {
   it('nothing usable — below Level 2, a damage short, its side\'s ultimate of the turn used, still waiting — asks nothing, and the fall goes ahead', () => {
     for (const setup of [
       (v: CardInstance) => { v.level = 1; },
-      (v: CardInstance) => { v.tally = { [VICTOR_ULT]: VICTOR_NEED - 2 }; }, // 8, and the blow's 1: 9 of the 10 it needs
+      (v: CardInstance) => { v.tally = { [VICTOR_ULT]: VICTOR_NEED - 3 }; }, // 7, and the blow's 2 (Haze's 1 + Fixation's 1 on a hurt hero): 9 of the 10 it needs
       (_v: CardInstance, G: GameState) => { G.ultUsed = { '1': true }; },    // one ultimate a turn for a side
       (v: CardInstance) => { v.cooldowns = { [VICTOR_ULT]: 2 }; },
     ]) {

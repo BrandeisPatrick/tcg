@@ -2414,22 +2414,19 @@ const passive_abrams_heal: HeroAbilityDef = {
   },
 };
 
-// Haze — Fixation: each of her swings adds a stack to its target (up to
-// FIXATION_CAP), and her swings deal +1 bullet damage per stack to it. The
-// stacks fall off when it leaves the Active slot (the status says so); a
-// Ricochet bounce adds none — she is fixed on the hero she shoots.
+// Haze — Fixation (Patrick, 2026-11-16: "some passives are too complicated:
+// Haze can just be +X when the target is damaged"). Her swings deal +1 bullet
+// damage to an enemy below full HP: Headshot Booster's mirror ("+2 to an enemy
+// at full HP"). The stacks it replaces (+1 a swing on one target, up to +2,
+// gone when it left the lane) came to 6 over three swings at Attack 1; this
+// comes to 5 or 6 (nothing on a first swing at a hero still whole), so the
+// value holds. docs/hero-design.md, Haze.
 const passive_haze_fixation: HeroAbilityDef = {
-  id: 'passive_haze_fixation', trigger: 'onAttack', target: 'self',
+  id: 'passive_haze_fixation', trigger: 'ongoing', target: 'self',
   name: 'Fixation',
-  text: 'Each attack adds a Fixation stack to the target (max 2). Haze deals +1 bullet damage per stack to it until it leaves the Active slot.',
-  attackBonus: (_self, target) => {
-    const n = target?.statuses.find((s) => s.id === 'fixation')?.value ?? 0;
-    return n > 0 ? { amount: n, label: `Fixation +${n}` } : null;
-  },
-  run: (G, _ctx, { target, params }) => {
-    if (!target || params?.bounce || target.hp <= 0 || isRespawning(target)) return;
-    addStatus(G, target, 'fixation', 1, 99);
-  },
+  text: "Haze's attacks deal +1 bullet damage to an enemy below full HP.",
+  attackBonus: (_self, target) => (target && target.hp > 0 && target.hp < target.hpMax ? { amount: 1, label: 'Fixation +1' } : null),
+  run: () => {},
 };
 
 // Vindicta (Patrick, 2026-11-16): Assassinate is her skill and Flight her
