@@ -1247,7 +1247,7 @@ export function Board(props: BoardProps<GameState>) {
         </AnimatePresence>
 
         {/* The match's opening: your three drafted heroes, one of which takes
-            the lane (the carousel). Blocks the board until it is chosen; the
+            the lane (their faces, three across). Blocks the board until it is chosen; the
             rival's own choice is made, unseen, as yours is confirmed. */}
         <AnimatePresence>
           {G.pendingActive === me && pendingActiveShown === me && !autoPlay && (

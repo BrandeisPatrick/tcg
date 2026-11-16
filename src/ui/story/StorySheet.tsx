@@ -162,7 +162,7 @@ function Intro({ compact }: { compact: boolean }) {
       </div>
       <Rule />
       <p style={{ ...text.body, margin: 0, fontSize: compact ? 13.5 : 14.5, color: poster.inkSoft, maxWidth: 520 }}>
-        Start with one hero and recruit up to four. Supply stops hand out items and souls for
+        Start with one hero and recruit up to three. Supply stops hand out items and souls for
         your next fight. Three routes run out of the Battery, and each one ends at a boss. Every
         block is harder than the last.
       </p>
