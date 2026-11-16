@@ -63,6 +63,11 @@ from their "Deadlock Graphical Library" collection.
   each hero card. Victor's (`victor.webp`, Shocking Reanimation) and Silver's
   (`silver.webp`, Lycan Curse, `werewolf_lycancurse`) came the same way; Lycan
   Curse's is also the mark on Silver's Wolf form status chip.
+- The skill icons in `public/skill/` (`<hero>.webp`, named as the ultimate
+  icons are) are the game's own icon of the Deadlock ability each hero's one
+  skill or passive is named for (Willpower, Fixation, Grasping Hands…): the
+  deadlock-api's ability image (`image_webp` in its ability list), from the
+  community asset bucket at https://deadlock-api.com/, used as served.
 - Everything in `public/spells/` and `public/items/` is the game's own shop art
   for each item, one icon per card: the wiki's 200×200 shop icon from the
   Deadlock wiki's asset mirror (`https://cdn.deadlock.wiki/<Item_Name>.png`),
