@@ -39,10 +39,15 @@ from their "Deadlock Graphical Library" collection.
   (`images/heroes/necro_card.webp`, `necro_mm.webp`, `necro_sm.webp` from the
   deadlock-api's asset bucket, used as served), and her ultimate icon
   (`public/ult/graves.webp`) is Borrowed Decree's (`necro_gravestone.webp`).
-  The two units her kit raises wear her abilities' own icons, white glyphs set
-  on a dark ground at the hero files' sizes: the Ghoul
-  (`unit_ghoul_*.webp`) Grasping Hands' (`necro_hands.webp`), the Gravestone
-  (`unit_gravestone_*.webp`) Borrowed Decree's.
+  The Ghoul (`unit_ghoul_*.webp`) is the game's own ghoul: its model
+  (`models/heroes_wip/necro/necro_shambler/idle.glb`, the model of
+  `npc_necro_skele` in https://api.deadlock-api.com/v1/assets/npc-units) in its
+  idle pose with its own texture, drawn with three.js and cut out at the hero
+  files' sizes. Deadlock ships no picture of it. The fire round its skull has no
+  texture in that file, so it is coloured after Graves' own spirit fire
+  (`images/heroes/guns/necro_hand.webp`). The Gravestone
+  (`unit_gravestone_*.webp`) wears Borrowed Decree's icon, a white glyph set on
+  a dark ground.
 - The small hero icons (`_mm.webp`, `_sm.webp`) are the game's own icons,
   pulled from the community asset bucket at https://deadlock-api.com/
   (https://assets.deadlock-api.com/).
