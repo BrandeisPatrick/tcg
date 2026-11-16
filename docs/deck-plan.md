@@ -24,69 +24,150 @@ with less to rebuild.
 - A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), read across as they are, upgrades included.
 - You draft 3 heroes (Patrick, 2026-11-16; it was 4). They are shuffled into your deck, with an animation, so the deck has 19 cards. The board keeps its 4 spots, so a full squad leaves one for a unit ([hero-design.md](hero-design.md), "Units").
 
-## Ready decks (2026-11-15)
+## Ready decks (2026-11-15; redesigned by reasoning 2026-11-16)
 
-Patrick, 2026-11-15: "we need to have decks ready." Six decks head the Loadout (five until
-2026-11-16, when Graveyard joined for Graves), each a squad of three heroes and its 16 items (`src/cards/readyDecks.ts`; squads were four until 2026-11-16, and each deck kept its items and let one hero go). "Use deck" saves the squad and the deck
-together. When that would replace picks or a deck of the player's own, the button asks once more.
+Patrick, 2026-11-15: "we need to have decks ready." Six decks head the Loadout, each a squad of
+three heroes and its 16 items (`src/cards/readyDecks.ts`). "Use deck" saves the squad and the
+deck together. When that would replace picks or a deck of the player's own, the button asks once
+more.
 
-The recipe, the same for all six. No sim ran. Rebuilt on 2026-11-15 for the one-play spells, the
-upgrades in the deck and the counters ([card-design.md](card-design.md), "Changed 2026-11-15").
+Patrick, 2026-11-16: "redesign the deck based on reasoning." The six were rebuilt for the rules
+of that day. Every number below is reasoned, none played or simulated.
 
-- **At most 2 copies of one.** Pocket's rule, inside this game's cap of 4, so a ready deck holds at
-  least 8 different items.
-- **8 tier-1, 6 tier-2, 2 tier-3: 56 souls.** The lane pays 2 a turn
-  ([balance-model.md](balance-model.md) §7): by own turn 9 a side has earned about 30 souls and
-  drawn about 11 items. At 3.5 souls an item, those 11 cost about 38, so most of what is drawn can
-  be played and a skill or two paid for. A deck dealt from builds costs 50 to 76. The 56 counts
-  tiers' prices: a spell that prints its own (Rusted Barrel 1, Knockdown 4; card-design.md,
-  "Changed 2026-11-16: spells priced for one play") makes its deck cheaper still.
-- **An upgrade beside the item it is built from.** An upgrade is a deck card like any other now:
-  played onto the hero wearing its component it costs the difference (Titanic Magazine over
-  Extended Magazine costs 2, Fortitude over Extra Health 6). Each deck carries one such line, and
-  never an upgrade without its component.
-- **A counter in every deck:** Counterspell, Debuff Reducer, Dispel Magic or Knockdown.
-- **Mostly equipment.** A spell is one play; equipment stays. A deck carries a few spells for the
-  turn that needs one, at most half the deck.
-- **One draw card: Golden Goose Egg** (draw 2, a tier-1 spell for 2 souls). A deck holds its
-  three heroes, so a draw finds one a turn or two sooner. Graveyard carries two, since Graves
-  shuffles Ghouls into the deck as well. The egg takes a tier-1 slot, so the recipe stays 8 / 6 / 2.
-  - History: Compress Cooldown was the draw card (draw 3, discard 1) from 2026-11-15 until
-    2026-11-16, when Patrick made the Cooldown family equipment again ("cooldown should not be draw
-    cards; they should be equipment to reduce CD") and Golden Goose Egg the draw card ("Goose Egg
-    now should be draw 2").
-  - Compress Cooldown stays, as the item that takes a turn off a skill's wait (a charged skill's
-    too: its charges come back on that wait), in the decks with at least two heroes who have a
-    skill: Gunline (Warden, Vindicta), Spirit Storm (all three), Ambush (Silver, Yamato), Lockdown
-    (all three) and Graveyard (all three, two of it). Bulwark has one (Rem) and takes back the card
-    it had replaced, Battle Vest.
-- **The rest from the squad's own builds**, so each hero finds its items.
-- **A squad has a front, a carry and a helper.** No hero is in two decks. Four heroes are in none: Shiv, Paige, Drifter and Dynamo.
+### What the rules of 2026-11-16 reward
 
-| Deck | Squad | Tier 1 (two of each) | Tier 2 | Tier 3 |
+- **A second swing costs a Retreat.** An attack no longer ends the turn and each hero attacks once,
+  so attack, Retreat, attack is two swings. The Retreat is the leaving hero's printed 0, 1 or 2
+  souls, so it is the price of the second swing. A swing at Attack 1–3 with a bonus or two is 2 to
+  4 damage, 2 to 4 points: more than any tier-1 card is worth in a turn.
+  - So a Retreat made free is worth about one swing a turn. Six heroes print 0 (Vindicta, Wraith,
+    Lash, Rem, Yamato, Mirage); Swift Striker and Sprint Boots take 1 off; Willpower, Fleetfoot,
+    Majestic Leap and Healing Tempo make one Retreat free.
+  - What a hero gets for stepping in is paid every turn the deck swaps: Kinetic Dash's +3 Bullet
+    Power on the incoming swing is about 3 points a swap, against 4 souls once.
+  - Root is the counter: a Rooted Active cannot Retreat, so it denies the rival's second swing
+    (Mystic Slow, Slowing Bullets, Ground Strike, Grasping Hands).
+- **The Cooldown items shorten every wait**, a charged skill's too. In a squad of three skills
+  Compress Cooldown is a cast every few turns on whoever wears it; two copies find two of them.
+- **Healing Tempo turns a heal into a swing.** A hero its wearer heals gets +2 Bullet Power and a
+  free Retreat that turn. On Dynamo, Rejuvenating Aurora heals every hero, so the Active swings
+  harder, retreats free, and the hero stepping in swings harder too.
+- **Cheap spells count at their price.** Majestic Leap 2, Disarming Hex 3 and Knockdown 4 cost
+  what they print, not their tier's 8.
+
+### The recipe
+
+- **16 items, at most 56 souls at the prices they print, and at most two of them over 4 souls:**
+  the deck's payoffs, up to 16 each. The lane pays 2 a turn ([balance-model.md](balance-model.md)
+  §7): by its turn 9 a side has about 30 souls (18 from the lane, about 12 in bounties) and has
+  drawn about 11 of its 16 items, 13 with its Golden Goose Egg. With two payoffs of 8 the other 14
+  average under 3 souls, so most of what is drawn is played, and a payoff lands around turn 4.
+  Until this redesign the recipe counted tiers (8 tier-1, 6 tier-2, 2 tier-3). That priced
+  Majestic Leap at 8 for a card that costs 2, and left no room for a deck to be built around one
+  tier-4 card (Aurora's Healing Tempo: 16, the same as two tier-3s).
+- **At most 2 copies of one** (Pocket's rule, inside this game's cap of 4).
+- **One upgrade line beside the item it is built from**, never an upgrade without its component
+  (played onto the hero wearing it, the upgrade costs the difference).
+- **A counter:** Counterspell, Debuff Reducer, Dispel Magic or Knockdown. Knockdown is the
+  aggressive decks' (4 souls, a Stun that also breaks a channel), Debuff Reducer the slow decks'
+  (it stays).
+- **One draw card, Golden Goose Egg** (draw 2 for 2 souls, worth 2.8): a deck holds two heroes
+  behind its first Active, and a draw finds one sooner. Graveyard carries two, to find its Ghouls.
+- **Mostly equipment:** spells are played once, so at most half the deck. Lockdown carries the
+  most (7), because a denial is a spell.
+- **A squad has a front, a carry and a helper**, and no hero is in two decks. Four heroes are in
+  none: Abrams, Rem, Shiv and Paige.
+
+| Deck | Squad | How it wins | Payoffs | Souls |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot (two of each), Grit, Golden Goose Egg | 2 Titanic Magazine (the upgrade), Long Range, Compress Cooldown, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
-| Spirit Storm | Lash, Seven, Kelvin | Extra Spirit, Mystic Burst, Spirit Strike (two of each), Mystic Regeneration, Golden Goose Egg | 2 Improved Spirit (the upgrade), Cold Front, Compress Cooldown, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
-| Bulwark | Abrams, Victor, Rem | Extra Health, Extra Regen, Healing Rite (two of each), Grit, Golden Goose Egg | 2 Bullet Lifesteal, Healing Booster, Battle Vest, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
-| Ambush | Silver, Yamato, Mirage | Sprint Boots, Extended Magazine, Restorative Shot (two of each), Headshot Booster, Golden Goose Egg | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Compress Cooldown | Tesla Bullets, Dispel Magic |
-| Lockdown | Mo & Krill, Sinclair, Wraith | Spirit Strike, Extra Spirit (two of each), Rusted Barrel, Golden Goose Egg, Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Compress Cooldown, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
-| Graveyard | Viscous, Graves, Lady Geist | Extra Spirit, Spirit Strike, Golden Goose Egg (two of each), Extra Health, Healing Rite | 2 Compress Cooldown, Improved Spirit (the upgrade), Mystic Slow, Reactive Barrier, Debuff Reducer | Torment Pulse, Decay |
+| Gunline | Warden, Vindicta, Haze | Two shots a turn | Burst Fire, Toxic Bullets | 56 |
+| Spirit Storm | Lash, Seven, Kelvin | Area skills cast more often | Torment Pulse, Superior Cooldown | 56 |
+| Aurora | Victor, Dynamo, Drifter | Heal into a free Retreat, finish the wounded | Healing Tempo | 56 |
+| Ambush | Silver, Yamato, Mirage | Every hero that steps in hits for 3 more | Tesla Bullets, Burst Fire | 56 |
+| Lockdown | Mo & Krill, Sinclair, Wraith | Deny every turn, then two shots | Superior Cooldown, Burst Fire | 55 |
+| Graveyard | Viscous, Graves, Lady Geist | Ghouls mill them; Roots deny their swaps | Torment Pulse, Decay | 56 |
 
-How each wins:
+### Each deck
 
-- **Gunline** out-guns the lane: Warden holds it, Vindicta and Haze shoot, Paige shields.
-- **Spirit Storm** casts skills that hit every enemy, with items that trigger on a skill's hit.
-  Cold Front gives spirit damage that costs no souls to use.
-- **Bulwark** outlasts: heals, shields and lifesteal, with Victor's aura and Torment Pulse for
-  damage.
-- **Ambush** swaps: cheap Retreats, Kinetic Dash for the hero that steps in, Fleetfoot for the
-  second swing.
-- **Lockdown** denies: Slowing Hex, Rusted Barrel, Knockdown and Silence Wave are free to use once
-  worn, so its souls go to items and Wraith's gun finishes.
-- **Graveyard** grinds the rival's deck: Grasping Hands shuffles two Ghouls into Graves's deck, each
-  1 soul to play, and every Ghoul that falls discards the top of the rival's deck. Viscous holds
-  the lane, Lady Geist's spirit damage finishes, the two Golden Goose Eggs find the Ghouls, and
-  the two Compress Cooldown bring Grasping Hands back sooner.
+**Gunline** (Warden, Vindicta, Haze). Warden holds the lane and shoots; a free Retreat brings in
+Vindicta or Haze for a second shot every turn.
+- 2 Swift Striker (4): +1 Bullet Power and Retreat −1. On Warden and Haze (Retreat 1) the second
+  swing is free every turn; Vindicta's is 0 already.
+- Kinetic Dash (4): +3 on the hero stepping in. Titanic Magazine over 2 Extended Magazine (+1, then
+  +2 for 2 more souls); 2 Headshot Booster (+2 on the first swing at a fresh Active, the swing a
+  kill leaves); 2 Restorative Shot (a heal a swing, two swings a turn).
+- Compress Cooldown (4): Willpower 3 → 2 (its Swift is a free Retreat too), Assassinate's charges
+  5 → 4.
+- Knockdown (4) is the counter; Grit and Golden Goose Egg.
+- Payoffs: Burst Fire (an Extra Attack every turn on its wearer) and Toxic Bullets (Bleed that
+  stacks twice as fast with two swings).
+- Out: Long Range, Fleetfoot and Debuff Reducer (Swift Striker makes the Retreat free every turn,
+  which Fleetfoot did once).
+
+**Spirit Storm** (Lash, Seven, Kelvin). Three skills that hit the Active or every enemy; the deck
+casts them more often and makes each cast hit harder.
+- 2 Compress Cooldown, then Superior Cooldown (a payoff): Ground Strike and Static Charge 4 → 3,
+  Frost Grenade's charges 4 → 3, and with Superior the ultimates 2 sooner (Death Slam stuns every
+  enemy). Extra Charge (2): a third Frost Grenade charge.
+- Improved Spirit over 2 Extra Spirit: every skill's spirit number grows.
+- 2 Mystic Burst (1 spirit damage on every skill cast), Mystic Vulnerability (Spirit Resist −1 on
+  what a skill hits), Mystic Regeneration and Healing Rite for the casters' small HP.
+- Knockdown (4) counter; Torment Pulse, the other payoff (1 to the Active and the first bench hero
+  every turn); Golden Goose Egg.
+- Out: Cold Front, Spirit Strike and Spirit Lifesteal: the skills do the damage and a third cast is
+  worth more than a spell.
+
+**Aurora** (Victor, Dynamo, Drifter), new. It replaces Bulwark (Abrams, Victor, Rem), whose heals
+and shields took no part in the second swing. It is the deck Patrick named: "Dynamo with Healing
+Tempo can do a rearrange and attack combo."
+- Victor leads: his Aura of Suffering deals 1 spirit damage to every enemy each turn (and to
+  himself, which charges his revive), so enemies drop below half, and Drifter's Bloodscent hits a
+  hero below half for 2 more.
+- Dynamo wears Healing Booster (4), then Healing Tempo over it (12 more; the payoff). Rejuvenating
+  Aurora heals every hero 5 + Spirit, so each one healed gets +2 Bullet Power and a free Retreat:
+  Victor (Retreat 2) swings, retreats for nothing, and Drifter steps in with Kinetic Dash (+3),
+  Healing Tempo's +2 and Bloodscent's +2.
+- Compress Cooldown on Dynamo: the Aurora every 3 turns instead of 4.
+- Sprint Boots (Victor's Retreat 2 → 1 on the turns without a heal); 2 Extra Health (the front);
+  2 Extended Magazine, Bullet Lifesteal and Restorative Shot on Drifter.
+- 2 Healing Rite and Grit: a Healing Rite cast by Dynamo in the lane counts for Healing Tempo too.
+- Debuff Reducer is the counter (it stays on the front); Golden Goose Egg.
+
+**Ambush** (Silver, Yamato, Mirage). Swap in, strike, swap again: Yamato and Mirage retreat for
+nothing, Silver for 0 with Swift Striker.
+- 2 Kinetic Dash: +3 on every hero that steps in. Majestic Leap (2): a free swap for Silver's turn.
+- Titanic Magazine over 2 Extended Magazine; 2 Headshot Booster; Restorative Shot.
+- Compress Cooldown: Boot Kick and Flying Slash 3 → 2.
+- Knockdown counter; Grit; Golden Goose Egg.
+- Payoffs: Tesla Bullets (2 to a bench hero after every swing: two a turn) and Burst Fire.
+- Out: Sprint Boots and Fleetfoot (the squad's Retreats are free already), Dispel Magic (Knockdown
+  is the cheaper counter).
+
+**Lockdown** (Mo & Krill, Sinclair, Wraith). Disarm, silence and hex every turn; Wraith (Retreat
+0) gets two shots behind it.
+- 2 Disarming Hex (3 each now): Disarm any enemy 2 turns. Slowing Hex (4): Silence 2 turns.
+  Rusted Barrel (1). Knockdown (4) is the counter and a third denial.
+- 2 Compress Cooldown, then Superior Cooldown: Sand Blast 3 → 2, Rabbit Hex 4 → 3, Full Auto 3 → 2,
+  and with Superior the ultimates 2 sooner (Combo and Telekinesis both stun).
+- Titanic Magazine over 2 Extended Magazine and Burst Fire for Wraith; 2 Extra Health for Mo &
+  Krill in front; Grit; Golden Goose Egg.
+- Out: Silence Wave (8) for two Disarming Hex (6), and Spirit Strike, Extra Spirit, Mystic Shot and
+  Spirit Lifesteal: the squad's damage is Wraith's gun.
+
+**Graveyard** (Viscous, Graves, Lady Geist). Grasping Hands shuffles two Ghouls into Graves's deck;
+every Ghoul that falls discards the top of the rival's.
+- 2 Compress Cooldown: Grasping Hands and The Cube 4 → 3, Essence Bomb 3 → 2.
+- Mystic Slow: what a skill hits is Rooted 1 turn. Essence Bomb hits every enemy, so the rival
+  cannot Retreat for its second swing.
+- 2 Golden Goose Egg (find the Ghouls and the heroes); Improved Spirit over 2 Extra Spirit; Mystic
+  Burst; Spirit Lifesteal, Mystic Regeneration, Healing Rite and Extra Health for Lady Geist, who
+  pays HP for her bomb.
+- Debuff Reducer counter; payoffs Torment Pulse and Decay.
+- Out: Reactive Barrier (the Cube already guards).
+
+**Left for testing** (only when Patrick asks by name): whether two Kinetic Dash in Ambush and two
+Swift Striker in Gunline make the second swing too cheap; whether Aurora's Healing Tempo lands by
+turn 6–7 as the curve says; whether Lockdown's seven spells leave it short of items late.
 
 ## Start of the match
 
