@@ -83,7 +83,8 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   // top of it every own turn, the first included (bank.ts).
   const paid = laneIncome(G, pid, ownTurn(G, pid));
   ps.souls += paid.total;
-  pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}).`);
+  ps.incomeBonus = 0; // Cultist Sacrifice's souls are paid once
+  pushLog(G, `P${pid} +${paid.total} Souls (income${paid.seat ? `, +${paid.seat} second mover` : ''}${paid.trophy ? `, +${paid.trophy} Trophy Collector` : ''}${paid.bonus ? `, +${paid.bonus} Cultist Sacrifice` : ''}).`);
   // The wait ticks ONLY for the player whose turn is starting, so a corpse
   // counts down once per round (on its owner's turn): a timer of N is N of the
   // owner's turns of downtime (RESPAWN_TURNS).

@@ -20,6 +20,7 @@ import { withCast } from '../castContext';
 import { counterspellNegates } from '../damage';
 import { fireTriggers } from '../triggers';
 import { resolve } from '../death';
+import { expandSkillHit } from '../expansion';
 
 /** `skillId` names the ability; left out, it is the hero's first skill. */
 export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid?: string, skillId?: AbilityId) {
@@ -70,9 +71,12 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   // Aimed at an enemy hero carrying Counterspell, it does nothing: the wait
   // it has just started is what it cost.
   if (!counterspellNegates(G, pid, target, `${heroName}'s ${ult ? cardName(faceId) : 'skill'}`)) {
+    const fx0 = G.fx.length;
     withCast(hero, ult ? 'ult' : 'skill', () => {
       ability.run(G, { movingPlayer: pid }, { source: hero, target });
     });
+    // Mystic / Greater Expansion widen a skill's one-enemy hit (expansion.ts).
+    if (!ult) expandSkillHit(G, pid, hero, fx0);
   }
   // Worn reactions: Diviner's Kevlar after an ultimate, Surge of Power and
   // Mystic Burst after a skill.

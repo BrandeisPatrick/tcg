@@ -8,12 +8,13 @@ import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
-import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE } from '@/engine/constants';
+import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
 import { fireTriggers } from '@/engine/triggers';
 import { withCast, currentCast } from '@/engine/castContext';
+import { expandSkillHit } from '@/engine/expansion';
 import { pushFx } from '@/engine/fx';
 import { drawCards, millDeck, nextRandom, raiseIntoDeck } from '@/engine/deck';
 import { GHOUL, GRAVESTONE } from '@/cards/units';
@@ -428,7 +429,9 @@ const eff_echo_shard: AbilityDef = {
       default: target = undefined;
     }
     pushLog(G, `Echo Shard: ${data.name} casts ${skill.name ?? 'their skill'} again.`);
+    const fx0 = G.fx.length;
     withCast(hero, 'skill', () => skill.run(G, { movingPlayer: ctx.movingPlayer }, { source: hero, target }));
+    expandSkillHit(G, ctx.movingPlayer, hero, fx0);
     fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: ctx.movingPlayer });
   },
 };
@@ -511,6 +514,31 @@ const eff_phantom_strike: AbilityDef = {
     damageUnit(G, target, 5 + activeSpi(G, ctx.movingPlayer), 'spirit', 'Phantom Strike');
     if (!isRespawning(target)) addStatus(G, target, 'disarm', 1, 1);
     resolve(G);
+  },
+};
+
+// Mystic Expansion / Greater Expansion: what they do is expansion.ts's (after
+// a skill's cast); the abilities mark the cards for the AI's worth of them.
+const eff_mystic_expansion: AbilityDef = { id: 'eff_mystic_expansion', trigger: 'ongoing', target: 'self', base: 1, run: () => {} };
+const eff_greater_expansion: AbilityDef = { id: 'eff_greater_expansion', trigger: 'ongoing', target: 'self', base: 4, run: () => {} };
+
+// Trophy Collector: its income is the bank's (`laneIncome`, bank.ts); the
+// ability only marks the card for the AI's worth of what it wears.
+const eff_trophy_collector: AbilityDef = {
+  id: 'eff_trophy_collector', trigger: 'ongoing', target: 'self',
+  base: 2,
+  run: () => {},
+};
+
+// Cultist Sacrifice: CULTIST_SACRIFICE_SOULS on top of the next own income.
+const eff_cultist_sacrifice: AbilityDef = {
+  id: 'eff_cultist_sacrifice', trigger: 'onPlay', target: 'noTarget',
+  prompt: 'Cultist Sacrifice — 8 souls at the start of your next turn.',
+  base: 4,
+  run: (G, ctx) => {
+    const ps = G.players[ctx.movingPlayer];
+    ps.incomeBonus = (ps.incomeBonus ?? 0) + CULTIST_SACRIFICE_SOULS;
+    pushLog(G, `Cultist Sacrifice: P${ctx.movingPlayer} gains ${CULTIST_SACRIFICE_SOULS} souls at the start of its next turn.`);
   },
 };
 
@@ -2794,7 +2822,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_knockdown, eff_cast_metal_skin,
   eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
   eff_guardian_ward, eff_warp_stone, eff_divine_barrier, eff_ethereal_shift,
-  eff_phantom_strike, eff_vortex_web, eff_refresher, eff_colossus_cast,
+  eff_phantom_strike, eff_vortex_web, eff_trophy_collector, eff_cultist_sacrifice, eff_mystic_expansion, eff_greater_expansion, eff_refresher, eff_colossus_cast,
   eff_golden_goose_egg, eff_grit, eff_return_fire, eff_fleetfoot, eff_split_shot,
   eff_blood_tribute, eff_healing_nova, eff_rescue_beam, eff_fury_trance,
   eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,

@@ -351,14 +351,14 @@ item has, brings it back within a step.
   hold charges: Extra Charge and Rapid Recharge are cards, and Recharging Rush
   is still out. See "Added 2026-11-15: the charge items".)
 - **Range and radius** (test 1; targets here are slots): Mystic Expansion,
-  Greater Expansion. Patrick, 2026-11-16, gave them a board verb, not built
-  yet: Mystic Expansion (Spirit T1) makes the bearer's one-target skill also
-  hit a random enemy bench hero, and Greater Expansion (Spirit T3, built from
-  it) makes it hit every enemy. That passes test 1; it is why Essence Bomb
-  hits the Active alone.
-- **Cultist Sacrifice** (test 1): it consumes an NPC for souls.
+  Greater Expansion. Cards since 2026-11-16: Patrick gave them a board verb,
+  the radius as the board's own neighbours ("Added 2026-11-16: effects from
+  the archetype review").
+- **Cultist Sacrifice** (test 1): it consumes an NPC for souls. A card since
+  2026-11-16 (same section): souls next turn.
 - **Witchmail** (test 1): it cuts cooldowns, and what is left is a stat stick.
-- **Trophy Collector** (tests 1 and 3): souls and sprint.
+- **Trophy Collector** (tests 1 and 3): souls and sprint. A card since
+  2026-11-16 (same section): souls each turn while worn.
 - **Stamina Mastery** (test 3): stamina and air dashes.
 - **Magic Carpet** (test 3): an escape whose board verb, the free Retreat, is
   Majestic Leap's.
@@ -900,6 +900,37 @@ target still takes a turn off after.
 A 1-turn Stun made 2 is the strongest use: Knockdown, Static Charge, Goo Ball,
 Telekinesis, Combo and Singularity on a bearer with Superior Duration. That is
 the control deck's payoff and is left for testing.
+
+### Added 2026-11-16: effects from the archetype review
+
+The deck archetypes (Patrick, 2026-11-16) were checked against every card for
+the effects they lack; Patrick picked these. None was simulated.
+
+| Card | Tab · tier | Price | Text | Value (points) |
+|---|---|---|---|---|
+| Mystic Expansion | Spirit T1 (new) | 1 | When the bearer's skill deals damage to one enemy, each enemy next to it on the board takes 1 spirit damage. | about 2.7 one-enemy damaging casts in its 8 turns worn × 0.8 that a neighbour stands × 1 = **2.2**, its tier's 2 |
+| Greater Expansion | Spirit T3 (new, built from it) | 4 | When the bearer's skill deals damage to one enemy, every other enemy takes the same damage. | 1.3 casts in 4 turns × 2.2 other enemies standing × about 4 (a Level 2 skill, Spirit counted twice) = **11.4**, the top of its band (6–12) |
+| Trophy Collector | Vitality T2 (new) | 2 | Your lane pays 1 more soul a turn while it is worn. Two do not add up. | 6 souls in its 6 turns worn less its 2 = 4 net; souls stop being the limit by mid-match (balance-model.md §12), so about half buys something: 4 × 2 × 0.5 = **4.0** |
+| Cultist Sacrifice | Weapon T3 spell (new) | 4 | At the start of your next turn, gain 8 souls. | 8 less its 4 = 4 net; one turn later most of a burst is spent (0.8): 4 × 2 × 0.8 = **6.4**, in its band |
+| Silence Wave | Spirit T3 spell | 4 | Deal {sp:2} spirit damage to the enemy Active. The rival plays no spells on its next 2 turns. | 2; a side plays about 0.6 spells a turn at about 3 points: 2 × 0.6 × 3 = 3.6 → **5.6**, half its 8 or more, so its tier's price |
+| Vortex Web | Spirit T4 spell | 3 | Pull an enemy bench hero into their Active slot, deal {sp:2} spirit damage to it and Root it for 1 turn. | the pull 2.0 ([hero-design.md](./hero-design.md) §4); the kill it sets up, 3 × 0.5 = 1.5; 2; the Root 0.4 → **5.9**, under half its 16, so it prints 3 (value ÷ 2, above Slowing Hex's 2, the spell it is built from) |
+
+- **Next to on the board** (Mystic Expansion): the board as it is drawn. A
+  side's bench is a row of three slots; its Active stands in the lane in the
+  column of one of them (the human seat's under its bench slot 2, the other
+  seat's over its slot 0). A hero's neighbours are the slots touching it.
+  Where a side puts a hero next to its Active is now a choice.
+- **Silence Wave** silenced a hero before (2 turns); it now silences the
+  side, Pokémon's item lock. **Vortex Web** hit and rooted every enemy before;
+  it is now the cheap pull, Pokémon's Boss's Orders (Phantom Strike does the
+  same for 8, with a 5-damage hit).
+- **Not built:** Monster Rounds as structure damage. Patrick's version, +1 to
+  the structure on every attack, is about 0.7 swings × 8 turns = 5.6
+  structure HP for 1 soul; a kill pushes 2 to 4, so it would be worth several
+  kills. It waits, as Patrick said structure damage is not needed now.
+- **Left for testing** (only when Patrick asks by name): Greater Expansion on
+  a high-Spirit caster; two Trophy Collectors' worth of tempo in a deck that
+  also runs Cultist Sacrifice; Silence Wave chained 4 times.
 
 ## 4. Signature items and default builds
 

@@ -63,6 +63,10 @@ export const SPELLS: SpellCard[] = [
   { id: 'restorative_locket', name: 'Restorative Locket', type: 'spell', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_restorative_locket'], text: 'Heal an ally 2, plus 2 per enemy hero whose skill is waiting. Its Retreat this turn is free.' },
 
   // ----- Tier 3 -----
+  // Cultist Sacrifice (canon Weapon T3 active: consume an enemy NPC for bonus
+  // souls). Patrick, 2026-11-16: "you play it, and you get a burst of souls
+  // next turn."
+  { id: 'cultist_sacrifice', name: 'Cultist Sacrifice', type: 'spell', rarity: 3, slot: 'weapon', tier: 3, abilities: ['eff_cultist_sacrifice'], text: 'At the start of your next turn, gain 8 souls.' },
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
   { id: 'disarming_hex',   name: 'Disarming Hex',   type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, price: 2, upgradesFrom: 'rusted_barrel', abilities: ['eff_disarming_hex'], text: 'Disarm any enemy for 2 turns.' },
   { id: 'knockdown',       name: 'Knockdown',       type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, price: 2, abilities: ['eff_knockdown'], text: 'Stun enemy Active for 1 turn. A Stun ends a channel.' },
