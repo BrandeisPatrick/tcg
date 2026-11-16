@@ -57,29 +57,27 @@ describe('deck motion plan', () => {
   it('a draw card: each card flies deck → hand, one stagger apart, and the deck ticks as each leaves', () => {
     const G = freshReadyGame();
     const stacked = stackDeck(G, '0', ['headshot_booster', 'extra_health', 'extra_spirit']);
-    const spell = giveCard(G, '0', 'improved_cooldown'); // Compress Cooldown: draw 3, discard 1
-    G.players['0'].souls = 4;
+    const spell = giveCard(G, '0', 'golden_goose_egg'); // the draw card: draw 2 (2026-11-16)
+    G.players['0'].souls = 2;
     const before = snapshot(G);
     G.fx = [];
     expect(perform(G, '0', { type: 'playCard', cardIid: spell.iid })).not.toBe(INVALID);
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
     const draws = ofKind(plan, 'draw');
-    expect(draws).toHaveLength(3);
-    expect(draws.map((f) => f.iid)).toEqual([stacked[0].iid, stacked[1].iid, stacked[2].iid]);
-    expect(draws.map((f) => f.at)).toEqual([0, T.stagger, 2 * T.stagger]);
+    expect(draws).toHaveLength(2);
+    expect(draws.map((f) => f.iid)).toEqual([stacked[0].iid, stacked[1].iid]);
+    expect(draws.map((f) => f.at)).toEqual([0, T.stagger]);
     expect(draws.every((f) => f.dur === T.flight && f.hold === 0)).toBe(true);
     expect(draws.every((f) => f.from.kind === 'pile' && f.from.pile === 'deck')).toBe(true);
     expect(draws.map((f) => f.to)).toEqual([
       { kind: 'hand', pid: '0', iid: stacked[0].iid },
       { kind: 'hand', pid: '0', iid: stacked[1].iid },
-      { kind: 'hand', pid: '0', iid: stacked[2].iid },
     ]);
     // Yours land face up, out of a face-down deck; the real card stays hidden until then.
     expect(draws.every((f) => f.faces.start === 'back' && f.faces.end === 'face' && f.hide === f.iid)).toBe(true);
     expect(plan.ticks.filter((t) => t.pile === 'deck')).toEqual([
       { pile: 'deck', pid: '0', at: 0, delta: -1 },
       { pile: 'deck', pid: '0', at: T.stagger, delta: -1 },
-      { pile: 'deck', pid: '0', at: 2 * T.stagger, delta: -1 },
     ]);
     // The spell itself, played: from the hand to the discard pile, face up, and the pile ticks as it lands.
     const [played] = ofKind(plan, 'discard');
@@ -90,7 +88,7 @@ describe('deck motion plan', () => {
     expect(plan.ticks.filter((t) => t.pile === 'discard')).toEqual([{ pile: 'discard', pid: '0', at: played.at + T.flight, delta: 1 }]);
     expect(plan.total).toBeGreaterThanOrEqual(T.stagger + T.flight);
     expect(plan.opening).toBe(false);
-    expect(arrivingIids(plan, '0')).toEqual([stacked[0].iid, stacked[1].iid, stacked[2].iid]);
+    expect(arrivingIids(plan, '0')).toEqual([stacked[0].iid, stacked[1].iid]);
     expect(arrivingIids(plan, '1')).toEqual([]);
   });
 
@@ -98,7 +96,8 @@ describe('deck motion plan', () => {
     const G = freshReadyGame();
     stackDeck(G, '0', Array(8).fill('headshot_booster'));
     const before = snapshot(G);
-    useItem(G, '0', 'transcendent_cooldown'); // draw 8, discard 4
+    G.fx = [];
+    drawCards(G, '0', 8); // the engine's draw: no card draws 8 since the Cooldown family stopped drawing (2026-11-16)
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
     const draws = ofKind(plan, 'draw');
     expect(draws).toHaveLength(8);
@@ -113,7 +112,7 @@ describe('deck motion plan', () => {
     stackDeck(G, '1', ['headshot_booster']);
     const before = snapshot(G);
     G.fx = [];
-    useItem(G, '1', 'improved_cooldown');
+    useItem(G, '1', 'golden_goose_egg');
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
     const [draw] = ofKind(plan, 'draw');
     expect(draw.pid).toBe('1');
@@ -125,7 +124,7 @@ describe('deck motion plan', () => {
   it('a discard from the hand flies hand → discard pile, face up, and the pile ticks as it lands', () => {
     const G = freshReadyGame();
     const [a, b] = stackDeck(G, '0', ['headshot_booster', 'extra_health']);
-    useItem(G, '0', 'improved_cooldown');
+    drawCards(G, '0', 2);
     G.fx = [];
     const before = snapshot(G);
     discardFromHand(G, '0', [a.iid, b.iid]);
@@ -149,7 +148,7 @@ describe('deck motion plan', () => {
     const G = freshReadyGame();
     G.turnNumber = 3; // P1's turn
     const [a] = stackDeck(G, '1', ['headshot_booster']);
-    useItem(G, '1', 'improved_cooldown');
+    drawCards(G, '1', 1);
     G.fx = [];
     const before = snapshot(G);
     discardFromHand(G, '1', [a.iid]);

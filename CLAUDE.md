@@ -4,9 +4,9 @@
 
 Read [docs/card-design.md](docs/card-design.md) before adding, renaming or redesigning a card.
 
-- A Deadlock **active** item is always a **spell**; a **passive** item is always **equipment**. No exceptions
-  but the two Patrick made himself, recorded in docs/card-design.md §1: Counterspell and the Cooldown family
-  (passives in Deadlock, spells here).
+- A Deadlock **active** item is always a **spell**; a **passive** item is always **equipment**. No exception
+  but the one Patrick made himself, recorded in docs/card-design.md §1: Counterspell (a passive in Deadlock,
+  a spell here). The Cooldown family was the other until 2026-11-16; it is equipment again.
 - Keep the main game's flavor: canon item names, the item's real verb, its shop slot (Weapon / Spirit / Vitality) and its tier.
 - A spell whose one play is worth under half its tier's price costs less, not more effects (Patrick, 2026-11-16):
   it prints its own price, about its one-play value; its tier stays canon (docs/card-design.md §2).

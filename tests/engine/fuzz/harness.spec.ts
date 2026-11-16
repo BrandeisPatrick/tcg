@@ -23,7 +23,7 @@ import { attachItem, makeInstance } from '@/engine/instances';
 import { SOULS_ON_USE, checkInvariants, checkTransition, collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { chaosMove, marketSeedFor, mulberry32, playGame } from './driver';
 import {
-  DRAW_CARDS, callMove, chooseActiveBlockedOracle, diffPaths,
+  COOLDOWN_ITEMS, DRAW_CARDS, callMove, chooseActiveBlockedOracle, diffPaths,
   discardBlockedOracle, everyCard, evolvesFromOracle, filterForItem, filterForSkill, freeBenchSlotOracle, heroesOfSide, itemData, itemPriceOracle,
   netWorthOracle, netWorthOracleWithoutHand, placeHeroBlockedOracle, playBlockedOracle, playCostOracle, slotCapOracle, spellCasterOracle,
   spellTargetsOracle, targetLegal, upgradeComponentOracle, upgradesOfOracle, wornWorth,
@@ -196,7 +196,7 @@ describe('the invariants fire on states built to break them', () => {
     ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'knockdown'); }],
     ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'grit'); }],
     ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'cold_front'); }],
-    ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'superior_cooldown'); }],
+    ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'golden_goose_egg'); }],
     ['cooldown-range', (G) => { p0(G).lash.cooldowns = { skill_lash: 1.5 }; }],
     ['cooldown-range', (G) => { p0(G).lash.cooldowns = { skill_lash: -1 }; }],
     ['item-cooldown-key', (G) => { giveItem(G, p0(G).haze, 'extra_spirit').cooldowns = { extra_spirit: 1 }; }],
@@ -240,7 +240,7 @@ describe('the invariants fire on states built to break them', () => {
     // a discard owed by the seat not on turn, or of more cards than its hand holds
     ['pending-discard', (G) => { giveCard(G, '1', 'grit'); G.pendingDiscard = { pid: '1', count: 1, cardId: 'improved_cooldown' }; }],
     ['pending-discard', (G) => { giveCard(G, '0', 'grit'); G.pendingDiscard = { pid: '0', count: 2, cardId: 'superior_cooldown' }; }],
-    ['pending-discard', (G) => { giveCard(G, '0', 'grit'); G.pendingDiscard = { pid: '0', count: 1, cardId: 'grit' }; }],
+    ['pending-discard', (G) => { giveCard(G, '0', 'grit'); G.pendingDiscard = { pid: '0', count: 1, cardId: 'no_such_card' }; }], // named for no card
   ];
   it.each(cases.map((c, i) => [`${c[0]} #${i}`, c] as const))('%s', (_label, [id, mutate]) => {
     const G = clean();
@@ -563,15 +563,15 @@ describe('the transition rules fire', () => {
     expect(disc.check()).toEqual([]);
     expect(disc.check((A) => { A.players['0'].souls = 1; })).toContain('souls-delta');
   });
-  it('souls: a spell costs its price and pays what its text says (Golden Goose Egg: 2 for its 2), a Retreat costs the leaving hero\'s printed retreat (Haze 1, Lady Geist 2)', () => {
+  it('souls: a spell costs its price and pays nothing (no card pays souls since Golden Goose Egg became the draw card, 2026-11-16), a Retreat costs the leaving hero\'s printed retreat (Haze 1, Lady Geist 2)', () => {
     const G = clean();
     G.players['0'].souls = 5;
     const egg = giveCard(G, '0', 'golden_goose_egg');
     const use = made(G, 'playCard', [egg.iid]);
-    expect(use.after.G.players['0'].souls).toBe(5 - PRICE[1] + 2); // its price, then the 2 it pays out
+    expect(use.after.G.players['0'].souls).toBe(5 - PRICE[1]); // its price, nothing back
     expect(use.check()).toEqual([]);
-    expect(use.check((A) => { A.players['0'].souls = 5 - PRICE[1]; })).toContain('souls-delta'); // the payout missing
-    expect(use.check((A) => { A.players['0'].souls = 5 + 2; })).toContain('souls-delta');        // the price unpaid
+    expect(use.check((A) => { A.players['0'].souls = 5 - PRICE[1] + 2; })).toContain('souls-delta'); // the old payout
+    expect(use.check((A) => { A.players['0'].souls = 5; })).toContain('souls-delta');                 // the price unpaid
     const H = clean();
     H.players['0'].souls = 3;
     const retreat = made(H, 'moveHero', [1, 0]);
@@ -648,37 +648,35 @@ describe('the transition rules fire', () => {
     expect(used.check()).toEqual([]);
     expect(used.check((A) => { A.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_WAIT.large - 1 }; })).toContain('ability-cooldown');
   });
-  it('a draw card draws from the top of the deck and owes its discard — fewer into a nearly full hand or from a short deck, none owed from an empty hand', () => {
+  it('the draw card (Golden Goose Egg) draws 2 from the top of the deck and owes nothing — fewer into a nearly full hand or from a short deck', () => {
     const G = clean();
     G.players['0'].souls = 30;
     giveCard(G, '0', 'grit');
     stackDeck(G, '0', ['cold_front', 'extra_spirit', 'knockdown', 'extra_health']);
-    const compress = giveCard(G, '0', 'improved_cooldown');
-    const use = made(G, 'playCard', [compress.iid]);
-    expect(at(use.after.G, compress.iid).place).toBe('discard'); // played once, then discarded
-    expect(use.after.G.players['0'].hand.map((c) => c.cardId)).toEqual(['grit', 'cold_front', 'extra_spirit', 'knockdown']);
-    expect(use.after.G.pendingDiscard).toEqual({ pid: '0', count: 1, cardId: 'improved_cooldown' });
+    const egg = giveCard(G, '0', 'golden_goose_egg');
+    const use = made(G, 'playCard', [egg.iid]);
+    expect(at(use.after.G, egg.iid).place).toBe('discard'); // played once, then discarded
+    expect(use.after.G.players['0'].hand.map((c) => c.cardId)).toEqual(['grit', 'cold_front', 'extra_spirit']);
+    expect(use.after.G.pendingDiscard).toBeUndefined();
     expect(use.check()).toEqual([]);
-    expect(use.check((A) => { A.pendingDiscard = undefined; })).toContain('draw-card');
-    expect(use.check((A) => { A.pendingDiscard!.count = 2; })).toContain('draw-card');
-    expect(use.check((A) => { const ps = A.players['0']; const c = ps.hand.pop()!; c.zone = 'deck'; ps.deck.unshift(c); })).toContain('draw-card'); // two drawn, not three
+    expect(use.check((A) => { A.pendingDiscard = { pid: '0', count: 1, cardId: 'golden_goose_egg' }; })).toContain('draw-card'); // it owes nothing
+    expect(use.check((A) => { const ps = A.players['0']; const c = ps.hand.pop()!; c.zone = 'deck'; ps.deck.unshift(c); })).toContain('draw-card'); // one drawn, not two
     expect(use.check((A) => { const ps = A.players['0']; [ps.hand[1], ps.deck[0]] = [{ ...ps.deck[0], zone: 'hand' }, { ...ps.hand[1], zone: 'deck' }]; })).toContain('draw-card'); // not the top card
-    // Into a hand one short of MAX_HAND once the draw card has left it: one card drawn, one owed.
+    // Into a hand one short of MAX_HAND once the draw card has left it: one card drawn.
     const F = clean();
     F.players['0'].souls = 30;
     for (let i = 0; i < MAX_HAND - 1; i++) giveCard(F, '0', 'grit');
     stackDeck(F, '0', ['cold_front', 'extra_spirit']);
-    const full = made(F, 'playCard', [giveCard(F, '0', 'improved_cooldown').iid]);
+    const full = made(F, 'playCard', [giveCard(F, '0', 'golden_goose_egg').iid]);
     expect(full.after.G.players['0'].hand).toHaveLength(MAX_HAND);
     expect(full.after.G.players['0'].deck).toHaveLength(1);
     expect(full.check()).toEqual([]);
-    // An empty deck and an empty hand: nothing drawn, nothing owed.
+    // An empty deck: nothing drawn, nothing owed.
     const Z = clean();
     Z.players['0'].souls = 30;
-    const none = made(Z, 'playCard', [giveCard(Z, '0', 'superior_cooldown').iid]);
+    const none = made(Z, 'playCard', [giveCard(Z, '0', 'golden_goose_egg').iid]);
     expect(none.after.G.pendingDiscard).toBeUndefined();
     expect(none.check()).toEqual([]);
-    expect(none.check((A) => { giveCard(A, '0', 'grit'); A.pendingDiscard = { pid: '0', count: 1, cardId: 'superior_cooldown' }; })).toContain('draw-card');
   });
   it('a discard: the cards named go to the discard pile and that much of the debt is paid', () => {
     const G = clean();
@@ -860,11 +858,11 @@ describe('the transition rules fire', () => {
     expect(use.check()).toEqual([]);
     // marked as the old item use marked its bearer
     expect(use.check((A) => { const h = A.players['0'].active!; h.skillUsedThisTurn = true; h.lastSkillUsed = 'cold_front'; })).toContain('spell-spends');
-    // An untargeted one too (Transcendent Cooldown), and no cooldown is left anywhere.
-    const trans = giveCard(G, '0', 'transcendent_cooldown');
-    const t = made(G, 'playCard', [trans.iid]);
+    // An untargeted one too (Golden Goose Egg), and no cooldown is left anywhere.
+    const egg = giveCard(G, '0', 'golden_goose_egg');
+    const t = made(G, 'playCard', [egg.iid]);
     expect(t.check()).toEqual([]);
-    expect(t.check((A) => { const h = A.players['0'].bench[2]!; h.skillUsedThisTurn = true; h.lastSkillUsed = 'transcendent_cooldown'; })).toContain('spell-spends');
+    expect(t.check((A) => { const h = A.players['0'].bench[2]!; h.skillUsedThisTurn = true; h.lastSkillUsed = 'golden_goose_egg'; })).toContain('spell-spends');
   });
   it('cooldowns: the new player\'s tick down at its turn start, the ender\'s stay; nothing else moves one but what starts it, and Refresher', () => {
     const before = clean();
@@ -1198,11 +1196,15 @@ describe('the rules oracles', () => {
     expect(playCostOracle(vindicta, 'fortitude')).toBe(8 - 2);
     expect(playCostOracle(vindicta, 'colossus')).toBe(16);
     expect(playCostOracle(undefined, 'colossus')).toBe(16);
-    // The draw cards are spells: none evolves another, and each costs its price (Transcendent
-    // prints its own, 11, since 2026-11-16).
-    expect(upgradesOfOracle('improved_cooldown')).toEqual([]);
-    expect(upgradesOfOracle('superior_cooldown')).toEqual([]);
-    expect(['improved_cooldown', 'superior_cooldown', 'transcendent_cooldown'].map((id) => playCostOracle(undefined, id))).toEqual([4, 8, 11]);
+    // The Cooldown family is equipment again (2026-11-16): a line, each evolving the one before,
+    // priced by its tier; onto the hero wearing the one below, the difference.
+    expect(upgradesOfOracle('improved_cooldown')).toEqual(['superior_cooldown']);
+    expect(upgradesOfOracle('superior_cooldown')).toEqual(['transcendent_cooldown']);
+    expect(['improved_cooldown', 'superior_cooldown', 'transcendent_cooldown'].map((id) => playCostOracle(undefined, id))).toEqual([4, 8, 16]);
+    giveItem(G, vindicta, 'improved_cooldown');
+    expect(playCostOracle(vindicta, 'superior_cooldown')).toBe(8 - 4);
+    // The draw card is a spell for its tier's price.
+    expect(playCostOracle(undefined, 'golden_goose_egg')).toBe(2);
   });
   it('slots and worth: three items (four with the flex slot); every worn item and every item in the hand counts, a hero card nothing; a merged Rem is a hero, not an item', () => {
     const G = clean();
@@ -1368,13 +1370,19 @@ describe('the rules oracles', () => {
     expect(playBlockedOracle(D, '0', c2.iid, D.players['1'].active!.iid)).toBeNull();
   });
 
-  it('the oracles\' tables are the cards\': the draw cards\' numbers are their texts\', and the souls an item pays are its text\'s', () => {
+  it('the oracles\' tables are the cards\': the draw cards\' and the Cooldown items\' numbers are their texts\', and the souls an item pays are its text\'s', () => {
     const drawing = Object.fromEntries(ITEMS.flatMap((i) => {
-      const m = /Draw (\d+) cards?, then discard (\d+)/.exec(i.text ?? '');
-      return m ? [[i.id, { draw: Number(m[1]), discard: Number(m[2]) }]] : [];
+      const m = /^Draw (\d+) cards?(?:, then discard (\d+))?/.exec(i.text ?? '');
+      return m ? [[i.id, { draw: Number(m[1]), discard: Number(m[2] ?? 0) }]] : [];
     }));
     expect(DRAW_CARDS).toEqual(drawing);
     for (const id of Object.keys(DRAW_CARDS)) expect(itemData(id)?.type, id).toBe('spell');
+    const cutting = Object.fromEntries(ITEMS.flatMap((i) => {
+      const m = /skill waits (\d+) turns? less(?: and its ultimate (\d+) less)?/.exec(i.text ?? '');
+      return m ? [[i.id, { skill: Number(m[1]), ult: Number(m[2] ?? 0) }]] : [];
+    }));
+    expect(COOLDOWN_ITEMS).toEqual(cutting);
+    for (const id of Object.keys(COOLDOWN_ITEMS)) expect(itemData(id)?.type, id).toBe('equipment');
     const paying = Object.fromEntries(ITEMS.flatMap((i) => {
       const m = /Gain (\d+) souls/.exec(i.text ?? '');
       return m ? [[i.id, Number(m[1])]] : [];

@@ -205,13 +205,38 @@ export function skillChargesOracle(skillId: string, hero?: CardInstance): number
   return own > 1 ? own + chargeItemsOracle(hero).charges : own;
 }
 
+/** The Cooldown family as their texts say (2026-11-16): own turns off the
+ *  bearer's skill wait (never a charged skill's) and ultimate wait. Pinned
+ *  against the card texts by harness.spec. */
+export const COOLDOWN_ITEMS: Readonly<Record<string, { skill: number; ult: number }>> = {
+  improved_cooldown: { skill: 1, ult: 0 },
+  superior_cooldown: { skill: 1, ult: 2 },
+  transcendent_cooldown: { skill: 2, ult: 3 },
+};
+
+/** What the Cooldown items `hero` wears take off its waits: the largest of
+ *  each, since two of them do not add up. */
+function cooldownItemsOracle(hero?: CardInstance): { skill: number; ult: number } {
+  let skill = 0;
+  let ult = 0;
+  for (const it of hero?.attached ?? []) {
+    const item = COOLDOWN_ITEMS[it.cardId];
+    if (!item) continue;
+    skill = Math.max(skill, item.skill);
+    ult = Math.max(ult, item.ult);
+  }
+  return { skill, ult };
+}
+
 /** Own turns a skill waits after a use (a charged one: for a charge to come
  *  back): its card's own, else SKILL_COOLDOWN — a charged one's less what a
- *  charge item `hero` wears takes off, never under 1. */
+ *  charge item `hero` wears takes off, any other's less what a Cooldown item
+ *  takes off; never under 1. */
 export function skillWaitOracle(skillId: string, hero?: CardInstance): number {
   const ability = getAbility(skillId);
   const base = ability?.cooldown ?? SKILL_COOLDOWN;
-  return (ability?.charges ?? 1) > 1 ? Math.max(1, base - chargeItemsOracle(hero).sooner) : base;
+  const off = (ability?.charges ?? 1) > 1 ? chargeItemsOracle(hero).sooner : cooldownItemsOracle(hero).skill;
+  return Math.max(1, base - off);
 }
 
 /** The charges a charged skill has left on `hero`: what it holds less those
@@ -446,13 +471,12 @@ export function upgradesOfOracle(itemId: unknown): string[] {
   return typeof itemId === 'string' ? ITEMS.filter((i) => evolvesFromOracle(i.id) === itemId).map((i) => i.id) : [];
 }
 
-/** The draw cards, from their texts ("Draw N cards, then discard M cards from
- *  your hand"): what each casts — N drawn, then M discarded from anywhere in
- *  the hand. Pinned against the card texts by harness.spec. */
+/** The draw cards, from their texts ("Draw N cards[, then discard M cards
+ *  from your hand]"): what each casts — N drawn, then M discarded from
+ *  anywhere in the hand. Golden Goose Egg since 2026-11-16 (the Cooldown
+ *  family drew until then). Pinned against the card texts by harness.spec. */
 export const DRAW_CARDS: Readonly<Record<CardId, { draw: number; discard: number }>> = {
-  improved_cooldown: { draw: 3, discard: 1 },
-  superior_cooldown: { draw: 5, discard: 1 },
-  transcendent_cooldown: { draw: 8, discard: 2 },
+  golden_goose_egg: { draw: 2, discard: 0 },
 };
 
 /** True while `hero` wears CATEGORY_SPIKE_ITEMS or more items of the tab `slot`
@@ -462,13 +486,14 @@ export function hasSpikeOracle(hero: CardInstance, slot: ItemSlot): boolean {
 }
 
 /** The cooldown an ultimate starts when it is used: its size's wait (4, 6 or
- *  8 own turns: small, medium, large). A charged ultimate starts it too, and
- *  counts its damage from nothing again. */
+ *  8 own turns: small, medium, large) less what a Cooldown item the hero wears
+ *  takes off, never under 1. A charged ultimate starts it too, and counts its
+ *  damage from nothing again. */
 export function ultCooldownOracle(hero: CardInstance): number {
   const d = CARDS_BY_ID[hero.cardId];
   const face = d?.type === 'hero' && d.ult ? ultFaceOracle(d.ult) : undefined;
   if (!face) return 0;
-  return ULT_WAIT[face.size];
+  return Math.max(1, ULT_WAIT[face.size] - cooldownItemsOracle(hero).ult);
 }
 
 /** A hero's experience as one number: the thresholds of every level it has

@@ -39,11 +39,14 @@ export const SPELLS: SpellCard[] = [
   // less than half the tier's price (Patrick, 2026-11-16: "they should have
   // reduced cost; a spell should have the benefit of costing less"): Rusted
   // Barrel, Knockdown, Disarming Hex, Majestic Leap, Cursed Relic, Mystical
-  // Piano, Echo Shard, Ethereal Shift, Divine Barrier, Infuser, Unstoppable and
-  // Transcendent Cooldown. The tier stays the item's (docs/card-design.md,
+  // Piano, Echo Shard, Ethereal Shift, Divine Barrier, Infuser and Unstoppable
+  // (Transcendent Cooldown too, until it went back to equipment the same day).
+  // The tier stays the item's (docs/card-design.md,
   // "Changed 2026-11-16: spells priced for one play").
   { id: 'rusted_barrel',    name: 'Rusted Barrel',    type: 'spell', rarity: 1, slot: 'spirit',   tier: 1, price: 1, abilities: ['eff_rusted_barrel'],    text: 'Apply Bullet Power −1 on enemy Active for 2 turns.' },
-  { id: 'golden_goose_egg', name: 'Golden Goose Egg', type: 'spell', rarity: 1, slot: 'spirit',   tier: 1, abilities: ['eff_golden_goose_egg'], text: 'Gain 2 souls. Your Active gains +1 max HP.' },
+  // The draw card (Patrick, 2026-11-16: "Goose Egg now should be draw 2"; the
+  // Cooldown family drew until then). Deadlock's egg is an active, so a spell.
+  { id: 'golden_goose_egg', name: 'Golden Goose Egg', type: 'spell', rarity: 1, slot: 'spirit',   tier: 1, abilities: ['eff_golden_goose_egg'], text: 'Draw 2 cards.' },
   { id: 'grit',             name: 'Grit',             type: 'spell', rarity: 1, slot: 'vitality', tier: 1, abilities: ['eff_grit'],             text: 'Your Active gains Shield 4.' },
 
   // ----- Tier 2 -----
@@ -55,12 +58,6 @@ export const SPELLS: SpellCard[] = [
   { id: 'fleetfoot',      name: 'Fleetfoot',      type: 'spell', rarity: 2, slot: 'weapon',   tier: 2, abilities: ['eff_fleetfoot'],      text: 'Your Active gains Extra Attack 1 this turn, and its Retreat this turn is free.' },
   { id: 'split_shot',     name: 'Split Shot',     type: 'spell', rarity: 2, slot: 'weapon',   tier: 2, abilities: ['eff_split_shot'],     text: 'Your Active gains Ricochet 2 this turn.' },
   { id: 'restorative_locket', name: 'Restorative Locket', type: 'spell', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_restorative_locket'], text: 'Heal an ally 2, plus 2 per enemy hero whose skill is waiting. Its Retreat this turn is free.' },
-  // The draw cards (docs/deck-plan.md): Deadlock's three Cooldown items — a
-  // passive there — are actives here by Patrick's call, each a draw and a
-  // discard from anywhere in the hand, played once like any spell.
-  // improved_cooldown keeps the item's old id so saved builds and decks still
-  // load: it is Compress Cooldown.
-  { id: 'improved_cooldown', name: 'Compress Cooldown', type: 'spell', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_compress_cooldown'], text: 'Draw 3 cards, then discard 1 card from your hand.' },
 
   // ----- Tier 3 -----
   { id: 'decay',           name: 'Decay',           type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_decay'],           text: 'Apply Bleed 3 to enemy Active for 2 turns.' },
@@ -70,8 +67,9 @@ export const SPELLS: SpellCard[] = [
   // Three ids keep an item's old name so saved builds still load: debuff_remover
   // is Dispel Magic, silence_glyph is Silence Wave, curse is Cursed Relic.
   // Counterspell is a PASSIVE in Deadlock (Vitality T3), and a spell here by
-  // Patrick's own call (2026-11-15), the second exception to the active /
-  // passive rule beside the Cooldown family (docs/card-design.md, "Counters").
+  // Patrick's own call (2026-11-15), the one exception to the active / passive
+  // rule since the Cooldown family went back to equipment (docs/card-design.md,
+  // "Counters").
   { id: 'counterspell',    name: 'Counterspell',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_counterspell'],    text: 'One of your heroes gains Counterspell for 2 turns: the next enemy spell, skill or ultimate that would hit it does nothing to it, and it heals 4. It triggers once.' },
   { id: 'debuff_remover',  name: 'Dispel Magic',    type: 'spell', rarity: 3, slot: 'vitality', tier: 3, abilities: ['eff_debuff_remover'],  text: 'Remove every debuff from one of your heroes, delayed ones too, and it gains Shield 4. If any was removed, heal it 4.' },
   { id: 'silence_glyph',   name: 'Silence Wave',    type: 'spell', rarity: 3, slot: 'spirit',   tier: 3, abilities: ['eff_silence_glyph'], text: 'Deal {sp:2} spirit damage to enemy Active and Silence it for 2 turns.' },
@@ -86,7 +84,6 @@ export const SPELLS: SpellCard[] = [
   { id: 'heroic_aura',     name: 'Heroic Aura',     type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, abilities: ['eff_heroic_aura'],     text: 'All allies gain +2 Bullet Power and Bullet Resist 1 for 2 turns.' },
   { id: 'shadow_weave',    name: 'Shadow Weave',    type: 'spell', rarity: 3, slot: 'weapon',   tier: 3, upgradesFrom: 'sprint_boots', abilities: ['eff_shadow_weave'], text: 'Your Active gains Dome for 1 turn and +2 Bullet Power for 2 turns.' },
   { id: 'majestic_leap',   name: 'Majestic Leap',   type: 'spell', rarity: 3, slot: 'vitality', tier: 3, price: 2, abilities: ['eff_majestic_leap'],   text: 'Your Active retreats free; the bench ally you pick steps in.' },
-  { id: 'superior_cooldown', name: 'Superior Cooldown', type: 'spell', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'improved_cooldown', abilities: ['eff_superior_cooldown'], text: 'Draw 5 cards, then discard 1 card from your hand.' },
 
   // ----- Tier 4 -----
   { id: 'echo_shard',     name: 'Echo Shard',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, price: 3, abilities: ['eff_echo_shard'],       text: 'Your Active hero uses their skill again this turn.' },
@@ -104,7 +101,6 @@ export const SPELLS: SpellCard[] = [
   { id: 'capacitor',      name: 'Capacitor',      type: 'spell', rarity: 3, slot: 'weapon',   tier: 4, upgradesFrom: 'tesla_bullets', abilities: ['eff_capacitor'], text: 'Deal {sp:2} spirit damage to the enemy Active and 2 to each enemy bench hero. Root them all for 1 turn.' },
   { id: 'vampiric_burst', name: 'Vampiric Burst', type: 'spell', rarity: 3, slot: 'vitality', tier: 4, upgradesFrom: 'bullet_lifesteal', abilities: ['eff_vampiric_burst'], text: 'Your Active heals 4, gains Extra Attack 2 this turn and +3 Bullet Power for 2 turns.' },
   { id: 'focus_lens',     name: 'Focus Lens',     type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, upgradesFrom: 'spirit_sap', abilities: ['eff_focus_lens'], text: 'Silence any enemy for 2 turns. It gets Spirit Resist −3 for 2 turns and a Reverb of 5.' },
-  { id: 'transcendent_cooldown', name: 'Transcendent Cooldown', type: 'spell', rarity: 4, slot: 'spirit', tier: 4, price: 11, upgradesFrom: 'superior_cooldown', abilities: ['eff_transcendent_cooldown'], text: 'Draw 8 cards, then discard 2 cards from your hand.' },
   { id: 'scourge',        name: 'Scourge',        type: 'spell', rarity: 3, slot: 'spirit',   tier: 4, abilities: ['eff_scourge'], text: 'An ally is cleansed of its debuffs and gains Spirit Resist 3 for 2 turns. Every enemy takes {sp:2} spirit damage.' },
 
   // ----- Tier 5 (added 2026-11-05: Deadlock's 9,999-soul items, docs/card-design.md) -----

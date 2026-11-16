@@ -19,7 +19,7 @@ import { attackPower, effectiveSpirit, itemPrice } from '@/engine/query';
 import { fireTriggers } from '@/engine/triggers';
 import { PRICE } from '@/engine/constants';
 import { statusOfKeyword } from '@/ui/card/RuleText';
-import { freshReadyGame, giveCard, giveItem, makeAttack, useItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeAttack, stackDeck, useItem } from './_helpers';
 
 const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === id);
 const board = (G: GameState, pid: PlayerID) =>
@@ -132,15 +132,18 @@ describe('Return Fire', () => {
 });
 
 describe('New active items', () => {
-  it('Golden Goose Egg gains 2 souls and +1 max HP on your Active', () => {
+  it('Golden Goose Egg draws 2 cards (2026-11-16; it paid 2 souls and +1 max HP until then)', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     G.players['0'].souls = 3;
     const { hp, hpMax } = haze;
-    useItem(G, '0', 'golden_goose_egg'); // an item costs nothing to use
-    expect(G.players['0'].souls).toBe(3 + 2);
-    expect(haze.hpMax).toBe(hpMax + 1);
-    expect(haze.hp).toBe(hp + 1);
+    stackDeck(G, '0', ['grit', 'cold_front', 'extra_health']);
+    const handBefore = G.players['0'].hand.length;
+    useItem(G, '0', 'golden_goose_egg'); // useItem pays its price for it
+    expect(G.players['0'].souls).toBe(3);
+    expect(G.players['0'].hand.length).toBe(handBefore + 2);
+    expect(G.players['0'].deck).toHaveLength(1);
+    expect([haze.hpMax, haze.hp]).toEqual([hpMax, hp]);
   });
 
   it('Grit shields your Active 4, and nobody else', () => {

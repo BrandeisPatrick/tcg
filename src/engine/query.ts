@@ -488,7 +488,8 @@ export function chargeBonus(card: CardInstance): number {
 
 /** Own turns sooner each charge of `card`'s charged skill comes back (Rapid
  *  Recharge 1): the largest of the `chargeHaste` hooks. Only the charge
- *  items have one; nothing else shortens a skill's wait. */
+ *  items have one; nothing else shortens a charged skill's wait (the Cooldown
+ *  family's `cooldownCut` leaves it alone). */
 export function chargeHaste(card: CardInstance): number {
   let n = 0;
   for (const { ability } of abilitySources(card)) n = Math.max(n, ability.chargeHaste?.(card) ?? 0);
@@ -496,19 +497,23 @@ export function chargeHaste(card: CardInstance): number {
 }
 
 /** Own turns a skill waits after a use: its own `cooldown`, else
- *  SKILL_COOLDOWN. For a charged skill, the turns one charge takes to come
- *  back — on `hero`, when one is named, less what its charge items take off
- *  (`chargeHaste`), never under 1. Without a hero it is what the card prints. */
+ *  SKILL_COOLDOWN — on `hero`, when one is named, less what it wears takes
+ *  off, never under 1: a charged skill's charge items (`chargeHaste`, the turns
+ *  one charge takes to come back), any other skill's Cooldown item
+ *  (`cooldownCut`). Without a hero it is what the card prints. */
 export function skillWait(ability: AbilityDef, hero?: CardInstance): number {
   const base = ability.cooldown ?? SKILL_COOLDOWN;
-  return hero && (ability.charges ?? 1) > 1 ? Math.max(1, base - chargeHaste(hero)) : base;
+  if (!hero) return base;
+  return Math.max(1, base - ((ability.charges ?? 1) > 1 ? chargeHaste(hero) : cooldownCut(hero, 'skill')));
 }
 
-/** Own turns an ultimate waits, after a use and from the match's start: its
- *  size's (`ULT_WAIT`). A charged ultimate waits on damage instead
- *  (`ultCharge`). */
-export function ultWait(face: UltimateCard): number {
-  return ULT_WAIT[face.size];
+/** Own turns an ultimate waits after a use: its size's (`ULT_WAIT`) — on
+ *  `hero`, when one is named, less what its Cooldown item takes off
+ *  (`cooldownCut`), never under 1. Without a hero (and at the match's start,
+ *  when nobody wears anything yet) it is the size's. A charged ultimate waits
+ *  on damage instead (`ultCharge`), and this after a use. */
+export function ultWait(face: UltimateCard, hero?: CardInstance): number {
+  return Math.max(1, ULT_WAIT[face.size] - (hero ? cooldownCut(hero, 'ult') : 0));
 }
 
 /** A charged skill's charges on `card` — the most it holds (its own, and
@@ -667,12 +672,13 @@ export function retreatDiscount(card: CardInstance): number {
   return n;
 }
 
-/** Own turns off the wait `card`'s ultimate starts ('ult'), summed over the
- *  `cooldownCut` hooks of what it carries. No card has the hook today. The
- *  callers keep the result at 1 or more. */
-export function cooldownCut(card: CardInstance, kind: 'ult' | 'item'): number {
+/** Own turns off the wait `card`'s skill ('skill') or ultimate ('ult')
+ *  starts: the largest of the `cooldownCut` hooks of what it carries (the
+ *  Cooldown family), so two of them do not add up. The callers keep the wait
+ *  at 1 or more. */
+export function cooldownCut(card: CardInstance, kind: 'skill' | 'ult'): number {
   let n = 0;
-  for (const { ability } of abilitySources(card)) n += ability.cooldownCut?.(card, kind) ?? 0;
+  for (const { ability } of abilitySources(card)) n = Math.max(n, ability.cooldownCut?.(card, kind) ?? 0);
   return n;
 }
 

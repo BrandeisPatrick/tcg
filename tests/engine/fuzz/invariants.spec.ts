@@ -44,13 +44,11 @@ describe('invariants hold in every state of seeded games', () => {
         expect(coverage.remMerges, 'Rem never merged').toBeGreaterThan(0);
         expect(coverage.ultsPlayed, 'no ultimate was ever played').toBeGreaterThan(0);
         expect(coverage.spellsPlayed, 'no spell was ever played').toBeGreaterThan(0);
-        // A draw card is a spell that costs its tier's souls for the cards it nets; the AI plays
-        // one only when its look says they are worth that, so only a random seat is held to it —
-        // and to the discard a draw card owes, which nothing else in the game asks for.
-        if (Object.values(mix.policies).some((p) => p !== 'heuristic')) {
-          expect(coverage.drawCards, 'no draw card was ever played').toBeGreaterThan(0);
-          expect(coverage.discards, 'no discard was ever made').toBeGreaterThan(0);
-        }
+        // The draw card is Golden Goose Egg since 2026-11-16, and these decks come from the heroes'
+        // builds, which carry none (the Cooldown family, which drew until then, is equipment now):
+        // its draw is held to the rules by harness.spec's own cases. No card owes a discard any
+        // more, so none is ever made.
+        expect(coverage.discards, 'a discard was made, though no card owes one').toBe(0);
       }
       // Every seat opens on a first Active, places the heroes it draws, plays equipment onto
       // them — an upgrade evolving the item it is built from — and casts spells; fallen heroes

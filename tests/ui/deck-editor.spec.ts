@@ -38,12 +38,15 @@ describe('the tooltip reads the item as Deadlock lays it out', () => {
     }
   });
 
-  it('an active is a spell, played once then discarded — whatever its tier, hard crowd control and the draw cards too; equipment is a passive', () => {
+  it('an active is a spell, played once then discarded — whatever its tier, hard crowd control and the draw card too; equipment is a passive (the Cooldown family since 2026-11-16)', () => {
     expect(useFacts('extended_magazine')).toEqual({ kind: 'passive' });
     expect(SPELL_USE).toBe('Played once, then discarded');
     for (const item of ITEMS) expect(useFacts(item.id), item.id).toEqual({ kind: item.type === 'spell' ? 'active' : 'passive' });
-    for (const id of ['cold_front', 'knockdown', 'improved_cooldown', 'superior_cooldown', 'transcendent_cooldown']) {
+    for (const id of ['cold_front', 'knockdown', 'golden_goose_egg']) {
       expect(useFacts(id), id).toEqual({ kind: 'active' });
+    }
+    for (const id of ['improved_cooldown', 'superior_cooldown', 'transcendent_cooldown']) {
+      expect(useFacts(id), id).toEqual({ kind: 'passive' });
     }
   });
 
@@ -110,7 +113,8 @@ describe('the deck builder prints no item text', () => {
   it('an upgrade is added like any item: its note says the card it evolves for the difference', () => {
     expect(upgradeSource('grit')).toBeNull();
     expect(upgradeSource('improved_spirit')).toBe('Evolves Extra Spirit for the difference');
-    expect(upgradeSource('transcendent_cooldown')).toBeNull(); // an active evolves nothing
+    expect(upgradeSource('golden_goose_egg')).toBeNull(); // an active evolves nothing
+    expect(upgradeSource('transcendent_cooldown')).toBe('Evolves Superior Cooldown for the difference');
     expect(addLabel('improved_spirit', 0, 0)).toBe('Add Improved Spirit to the deck');
     const html = renderToStaticMarkup(createElement(DeckEditor, { squad: ['hero_haze'] }));
     expect(html).toContain('aria-label="Add Titanic Magazine to the deck"');

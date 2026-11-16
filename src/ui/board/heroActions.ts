@@ -59,11 +59,11 @@ export function kitTag(hero: CardInstance, skillId: AbilityId): string {
     const charge = ultCharge(hero);
     if (charge) return `${charge.have} / ${charge.need}`;
     const face = ultimateCard(skill.id);
-    return face ? `Waits ${ultWait(face)}` : '';
+    return face ? `Waits ${ultWait(face, hero)}` : '';
   }
   const charges = kitCharges(hero, skill.id);
   if (charges) return `${charges.left} charge${charges.left === 1 ? '' : 's'}`;
-  return `Waits ${skillWait(skill.ability)}`;
+  return `Waits ${skillWait(skill.ability, hero)}`;
 }
 
 /** The line printed on a second ultimate in a turn: a side uses one a turn. */

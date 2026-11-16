@@ -26,9 +26,10 @@ that are `disabled` or not `shopable`), or the item's page on the
 [Deadlock wiki](https://deadlock.wiki/Items) when the API is unreachable. If
 the game moves an item between active and passive, the card changes type with it.
 
-Two cards are Patrick's own exceptions, both passives in Deadlock and spells
-here: the Cooldown family (the draw cards: draw x, discard y; see "Changed
-2026-11-15") and Counterspell (2026-11-15). Nothing else is.
+One card is Patrick's own exception, a passive in Deadlock and a spell here:
+Counterspell (2026-11-15). Nothing else is. The Cooldown family was the other
+(the draw cards, 2026-11-15) until 2026-11-16, when Patrick made it equipment
+again (see "Changed 2026-11-16: the Cooldown family is equipment").
 
 A good effect never justifies breaking this. If a passive item has an effect
 that only works as a one-shot, pick a different item, or translate the passive
@@ -462,8 +463,9 @@ and the charge items pass test 1. The fuzz oracle mirrors them from their
 printed text.
 
 **The rule.** Only the charge items add a charge to a skill or bring one back
-sooner. No other card shortens a skill's wait: the Cooldown family are this
-game's draw cards (draw x, discard y; confirmed 2026-11-15, below). Refresher, whose verb is the reset, still sets a charged
+sooner. No other card shortens a charged skill's wait: the Cooldown family,
+equipment again since 2026-11-16, takes turns off every other wait but not
+this one. Refresher, whose verb is the reset, still sets a charged
 skill back to full with the cooldowns it clears.
 
 Source: the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
@@ -573,7 +575,8 @@ it. Three kinds of effect do, and each has its answer.
   only be triggered once"). It is a passive item in Deadlock (Vitality T3:
   "your next parry protects you from the damage and effects of enemy abilities
   and items", with a heal on a parried spell; deadlock-api, read 2026-11-15),
-  so it is the second exception to §1 beside the Cooldown family. It was built
+  so it is an exception to §1 (the only one since the Cooldown family went
+  back to equipment on 2026-11-16). It was built
   as equipment first, the same day, and flipped.
   - x is 2: put up on your turn, the shield covers the rival's next two turns
     and is gone as your second turn after begins. One turn would let the rival
@@ -627,8 +630,9 @@ half its price; the target is the band (¾ to 1½ × price).
   Fire 10.5, Heroic Aura 4.3, Shadow Weave 4.9, and every tier-4 and tier-5
   active budgeted above for one use (Vampiric Burst, Scourge, Arctic Blast,
   Vortex Web, Capacitor 8.5, Refresher, Prism Blast, Nullification Burst).
-- **Golden Goose Egg** is unchanged: 2 souls back for its 2, and +1 max HP for
-  good. It is a free stat that costs a card.
+- **Golden Goose Egg** was unchanged here: 2 souls back for its 2, and +1 max
+  HP for good. Since 2026-11-16 it is the draw card instead (see "Changed
+  2026-11-16: the Cooldown family is equipment").
 - **Under half their price, and a number alone did not fix them:**
   Knockdown 4.0 of 8, Disarming Hex 2.5 of 8, Majestic Leap 1.5 of 8, Cursed
   Relic 6 of 16, Mystical Piano 9.6 of 24, and the ones that were under before
@@ -642,7 +646,9 @@ and a heal of 1 after an attack, which Restorative Shot already is. Haze, Shiv
 and Mirage's builds take Swift Striker, Stalker and Mystic Shot in its place,
 and Swift Striker is Haze's first signature.
 
-**The Cooldown family: draw x, discard y** (Patrick, 2026-11-15: "Cooldown
+**The Cooldown family: draw x, discard y** — history: equipment again since
+2026-11-16 (see "Changed 2026-11-16: the Cooldown family is equipment").
+(Patrick, 2026-11-15: "Cooldown
 cards are all draw x discard y effect"). Compress, Superior and Transcendent
 Cooldown are passive items in Deadlock and spells here, Patrick's exception to
 §1: they are the deck's draw cards. Played once now, their old numbers (2 / 1,
@@ -774,6 +780,59 @@ and a free Retreat.
   turn begins: a heal on the bearer's own turn is that turn's.
 - **Dynamo's default build** takes it in the tier-4 slot (Transcendent
   Cooldown was there): Healing Booster, already in the build, evolves into it.
+
+### Changed 2026-11-16: the Cooldown family is equipment; Golden Goose Egg draws
+
+Patrick: "Cooldown should not be draw cards; they should be equipment to
+reduce CD. Goose Egg now should be draw 2."
+
+**The Cooldown family** is Deadlock's passives again, so equipment (§1 has one
+exception left, Counterspell). In Deadlock Compress Cooldown takes 18% off one
+ability's cooldown, Superior Cooldown 20% off every ability's and Transcendent
+Cooldown 25% off abilities and items. Here a wait is 3 or 4 turns for a skill and
+4, 6 or 8 for an ultimate, so a share of it is a turn or two:
+
+| Card | Tab · tier | Price | Effect | Worth |
+|---|---|---|---|---|
+| Compress Cooldown | Spirit T2 | 4 | The bearer's skill waits 1 turn less | **3.0** |
+| Superior Cooldown (from Compress) | Spirit T3 | 8 | Skill 1 less, ultimate 2 less | **6.5** |
+| Transcendent Cooldown (from Superior) | Spirit T4 | 16 | Skill 2 less, ultimate 3 less | **12** |
+
+- **How it is worth that.** A skill cast is 2–4.5 points (hero-design.md §4),
+  about 3; an ultimate cast about 10 (small 4–6 to large 12–18). A tier-2 item
+  is worn about 6 own turns, tier 3 about 4, tier 4 about 3.
+  - Compress: a wait of 3 → 2 casts 3 times in 6 turns instead of 2: one more
+    cast, 3.0 (a wait of 4 → 3 gains less, so it sits at the band's floor, 3).
+  - Superior: over 4 turns a skill a turn sooner is about half a cast (1.5),
+    and an ultimate 2 turns sooner about half a cast (5): 6.5, inside 6–12.
+  - Transcendent: over 3 turns a skill 2 sooner is a cast nearly every turn
+    (+1.5 casts, 4.5) and an ultimate 3 sooner most of a cast (7.5): 12, the
+    bottom of 12–24. On a small ultimate (4 → 1) it is an ultimate every turn,
+    one a turn for the side as always.
+- **Not a charged skill's wait.** Patrick, 2026-11-15: "only these kind of
+  items can allow charged skills to get faster" — the charge items. So the
+  Cooldown family is worth nothing to Kelvin's, Shiv's or Vindicta's skill (it
+  still cuts their ultimates), as the charge items are worth nothing on a skill
+  without charges.
+- **One at a time.** Two on one hero do not add up: the larger applies
+  (`cooldownCut` takes the largest), as for the charge items. A wait never goes
+  under 1. The ultimate's opening wait at the match's start is the size's: no
+  one wears anything yet.
+- **Transcendent's price** is its tier's 16 again: the printed 11 was for a
+  spell played once (above, "spells priced for one play"); equipment is priced
+  by its tier.
+- **Left for testing:** an ultimate every turn with Transcendent on a small
+  ultimate; whether Compress at a tier-2 price is bought over a stat item.
+
+**Golden Goose Egg** (Spirit T1 spell, 2): "Draw 2 cards." It was 2 souls back
+and +1 max HP. A card drawn is worth 1.4 (above, "The Cooldown family"), so 2.8
+against its price of 2, the top of its band (1.5–3). Deadlock's egg is an active
+(you hatch it), so it stays a spell. Nothing makes a side discard now; the
+engine's discard step stays for a card that may want it.
+
+**The ready decks** each carry one Golden Goose Egg (Graveyard two) in a tier-1
+slot, and keep Compress Cooldown where at least two of the squad's skills are
+shortened by it (docs/deck-plan.md).
 
 ## 4. Signature items and default builds
 

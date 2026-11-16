@@ -2,7 +2,7 @@ import type { GameState, CardInstance, DamageType, PlayerID, StatusId } from '@/
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
 import { damageUnit, healUnit } from '@/engine/damage';
-import { awardSouls, raiseUnit, resolve, rideOn } from '@/engine/death';
+import { raiseUnit, resolve, rideOn } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
@@ -15,7 +15,7 @@ import { getAbility, registerAbilities } from '@/engine/registry';
 import { fireTriggers } from '@/engine/triggers';
 import { withCast, currentCast } from '@/engine/castContext';
 import { pushFx } from '@/engine/fx';
-import { drawCards, millDeck, nextRandom, oweDiscard, raiseIntoDeck } from '@/engine/deck';
+import { drawCards, millDeck, nextRandom, raiseIntoDeck } from '@/engine/deck';
 import { GHOUL, GRAVESTONE } from '@/cards/units';
 
 export type { TargetFilter };
@@ -160,10 +160,12 @@ export interface AbilityDef {
   /** Ricochet the bearer's swing carries (the Ricochet item: 2). Summed with a
    *  `ricochet` status by `ricochetPower`, which the swing reads to bounce. */
   ricochet?: (self: CardInstance) => number;
-  /** Own turns off the cooldowns the bearer starts: its ultimate's ('ult') or
-   *  its active items' ('item') — the Cooldown family. Summed by `cooldownCut`;
-   *  a cooldown never goes under 1. */
-  cooldownCut?: (self: CardInstance, kind: 'ult' | 'item') => number;
+  /** Own turns off the waits the bearer starts: its skill's ('skill', never a
+   *  charged skill's: only the charge items speed those, Patrick 2026-11-15)
+   *  or its ultimate's ('ult') — the Cooldown family (Compress, Superior,
+   *  Transcendent Cooldown, equipment again since 2026-11-16). The largest
+   *  hook applies (`cooldownCut`); a wait never goes under 1. */
+  cooldownCut?: (self: CardInstance, kind: 'skill' | 'ult') => number;
   /** The charge items (Extra Charge, Rapid Recharge), the only cards that
    *  touch a charged skill's charges (Patrick, 2026-11-15): the extra charges
    *  the bearer's charged skill holds while it wears this (`chargeBonus`), and
@@ -553,17 +555,15 @@ const eff_colossus_cast: AbilityDef = {
 
 // Golden Goose Egg (canon T1 spirit active): the egg hatches into souls and a
 // permanent stat. TCG: gain 2 souls, and your Active gains +1 max HP for good.
+// Golden Goose Egg: the draw card (Patrick, 2026-11-16). Two cards at 1.4
+// each is 2.8 against its price of 2 (docs/card-design.md).
 const eff_golden_goose_egg: AbilityDef = {
   id: 'eff_golden_goose_egg', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Golden Goose Egg — gain 2 souls; your Active gains +1 max HP.',
-  base: 2,
+  prompt: 'Golden Goose Egg — draw 2 cards.',
+  base: 3,
+  draw: { cards: 2, discard: 0 },
   run: (G, ctx) => {
-    awardSouls(G, ctx.movingPlayer, 2, 'Golden Goose Egg');
-    const mine = standingActive(G, ctx.movingPlayer);
-    if (!mine) return;
-    mine.hpMax += 1;
-    mine.hp += 1;
-    pushLog(G, `${cardName(mine.cardId)} gains +1 max HP (Golden Goose Egg).`);
+    drawCards(G, ctx.movingPlayer, 2);
   },
 };
 
@@ -905,31 +905,28 @@ const eff_spirit_shield_proc: AbilityDef = {
   run: (G, _ctx, { source }) => { if (source) addStatus(G, source, 'shield', 2, 999); },
 };
 
-// The draw cards (canon Compress → Superior → Transcendent Cooldown, spells
-// here: "draw x, discard y", Patrick 2026-11-15; the numbers' reasoning is in
-// docs/card-design.md, "The Cooldown family"): draw N cards, then the player discards M from
-// anywhere in the hand (`oweDiscard`; the `discard` move pays it). A draw into
-// a full hand is skipped; the discard is never more than the hand holds.
-function drawThenDiscard(draw: number, discard: number, cardId: string): AbilityDef['run'] {
-  return (G, ctx) => {
-    drawCards(G, ctx.movingPlayer, draw);
-    oweDiscard(G, ctx.movingPlayer, discard, cardId);
-  };
-}
+// The Cooldown family: worn, each takes turns off the waits its bearer starts
+// (`cooldownCut`, read by `skillWait` and `ultWait`; the largest worn applies).
+// `base` is the AI's worth of the card (its budget: 3, 6.5, 12).
+// docs/card-design.md, "Changed 2026-11-16: the Cooldown family is equipment".
+const cut = (skill: number, ult: number): AbilityDef['cooldownCut'] => (_self, kind) => (kind === 'skill' ? skill : ult);
 const eff_compress_cooldown: AbilityDef = {
-  id: 'eff_compress_cooldown', trigger: 'onPlay', target: 'noTarget',
-  draw: { cards: 3, discard: 1 },
-  run: drawThenDiscard(3, 1, 'improved_cooldown'),
+  id: 'eff_compress_cooldown', trigger: 'ongoing', target: 'self',
+  base: 3,
+  cooldownCut: cut(1, 0),
+  run: () => {},
 };
 const eff_superior_cooldown: AbilityDef = {
-  id: 'eff_superior_cooldown', trigger: 'onPlay', target: 'noTarget',
-  draw: { cards: 5, discard: 1 },
-  run: drawThenDiscard(5, 1, 'superior_cooldown'),
+  id: 'eff_superior_cooldown', trigger: 'ongoing', target: 'self',
+  base: 6,
+  cooldownCut: cut(1, 2),
+  run: () => {},
 };
 const eff_transcendent_cooldown: AbilityDef = {
-  id: 'eff_transcendent_cooldown', trigger: 'onPlay', target: 'noTarget',
-  draw: { cards: 8, discard: 2 },
-  run: drawThenDiscard(8, 2, 'transcendent_cooldown'),
+  id: 'eff_transcendent_cooldown', trigger: 'ongoing', target: 'self',
+  base: 12,
+  cooldownCut: cut(2, 3),
+  run: () => {},
 };
 
 // Mystic Burst family: each time the bearer uses a skill, hit the enemy active

@@ -193,9 +193,8 @@ dearer card was never reached, nor the upgrades its play makes.
   4.
 - Everything in §8: the waits, the charges and the charged ultimates' 10 and
   8 are reasoned, not played.
-- Golden Goose Egg's 2 souls a use is now a whole turn of the lane every
-  other turn. Its budget in points is unchanged (16.4, already listed as over
-  in card-design.md §3).
+- Golden Goose Egg's 2 souls a use was a whole turn of the lane every other
+  turn. (Since 2026-11-16 it draws 2 cards instead: card-design.md.)
 - Match length. The one seeded AI match the tests replay (seed 12) ended in
   round 7 where it ran to the round cap before. That is one match, not a
   measurement.
@@ -268,7 +267,8 @@ in a turn.
 allow charged skills to get faster"). Extra Charge (Spirit T1) gives the
 bearer's charged skill 1 more charge. Rapid Recharge (Spirit T3, built from
 it) gives 2 more and brings each back 1 turn sooner. Nothing else adds a
-charge or shortens a skill's wait. The cards and their budget are in
+charge or shortens a charged skill's wait (the Cooldown family, equipment again
+since 2026-11-16, shortens the other waits). The cards and their budget are in
 [card-design.md](./card-design.md) ("Added 2026-11-15: the charge items").
 
 **Ultimates** (`ULT_WAIT`: small 4, medium 6, large 8; `G.ultUsed`).
@@ -305,9 +305,10 @@ charge or shortens a skill's wait. The cards and their budget are in
   themselves; without the wait she would never leave the form.
 
 **Unchanged.** A hero uses one ability a turn (skill, ultimate or active
-item). Retreat costs the hero's printed souls. No card shortens a wait: the
-Cooldown family are this game's draw cards, and only the charge items touch a
-charged skill's charges. Echo Shard's repeat of a skill spends no charge and
+item). Retreat costs the hero's printed souls. Only the charge items touch a
+charged skill's charges. (Until 2026-11-16 no card shortened a wait and the
+Cooldown family were the draw cards; since then they are equipment that takes
+turns off the bearer's skill and ultimate waits, card-design.md.) Echo Shard's repeat of a skill spends no charge and
 starts no wait. Refresher resets waits and sets a charged skill back to full.
 
 **Left for testing** (only when asked by name):
