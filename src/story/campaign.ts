@@ -23,8 +23,9 @@ interface Loc { id: string; name: string; kind: NodeKind; lat: number; lng: numb
 interface Region { id: string; name: string; locs: Loc[] }
 
 // Each route opens with a RECRUIT and carries three recruit nodes total, so a
-// player committing to any single route can always build to a full 4-hero
-// roster (1 start + 3 recruits) before its boss. Recruits come early; the
+// player committing to any single route can always build to a full roster
+// (SQUAD_SIZE, three: 1 start + 2 recruits; the third recruit stop then pays
+// supplies) before its boss. Recruits come early; the
 // themed battles ramp up after you've had a chance to grow.
 // Routes are laid out as clean radial fans from the shared Battery start — each
 // node sits further from the centre than the last, so a path spans OUTWARD to a

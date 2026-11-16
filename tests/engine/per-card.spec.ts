@@ -29,21 +29,21 @@ function freshG(): GameState {
 // ============================================================================
 
 describe('Active items — tier 1', () => {
-  it('Healing Rite heals 2 (flat, no Spirit scaling)', () => {
+  it('Healing Rite heals 5 (flat, no Spirit scaling)', () => {
     const G = freshG();
     const target = G.players['0'].bench[0]!;
-    target.hp = Math.max(1, target.hpMax - 5); // wounded but alive (heroes are 5 HP now)
+    target.hpMax = 20; target.hp = 5; // wounded, with room for the whole heal
     const before = target.hp;
     ABILITIES_BY_ID['eff_healing_rite'].run(G, { movingPlayer: '0' }, { target });
-    expect(target.hp - before).toBe(2);
+    expect(target.hp - before).toBe(5);
   });
 
-  it('Rusted Barrel applies Weaken 2 for 2 turns', () => {
+  it('Rusted Barrel applies Bullet Power −1 for 2 turns', () => {
     const G = freshG();
     const target = G.players['1'].active!;
     ABILITIES_BY_ID['eff_rusted_barrel'].run(G, { movingPlayer: '0' }, { target });
     const w = target.statuses.find((s) => s.id === 'weapon_power_down');
-    expect(w?.value).toBe(2);
+    expect(w?.value).toBe(1);
     expect(w?.duration).toBe(2);
   });
 });
@@ -91,13 +91,13 @@ describe('Active items — tier 3 control and resist', () => {
     expect(target.statuses.find((s) => s.id === 'disarm')).toBeUndefined();
   });
 
-  it('Metal Skin grants ally Bullet Resist 5 for 2 turns (no scaling)', () => {
+  it('Metal Skin grants ally Bullet Resist 6 for 3 turns (no scaling)', () => {
     const G = freshG();
     const ally = G.players['0'].bench[0]!;
     ABILITIES_BY_ID['eff_cast_metal_skin'].run(G, { movingPlayer: '0' }, { target: ally });
     const br = ally.statuses.find((s) => s.id === 'bullet_resist');
-    expect(br?.value).toBe(5);
-    expect(br?.duration).toBe(2);
+    expect(br?.value).toBe(6);
+    expect(br?.duration).toBe(3);
   });
 });
 
@@ -251,13 +251,13 @@ describe('Spell scaling treats corpse Active as 0 Spirit', () => {
   it('healing_rite returns base heal when caster Active is a corpse', () => {
     const G = freshG();
     const ally = G.players['0'].bench[0]!;
-    ally.hp = Math.max(1, ally.hpMax - 5); // wounded but alive (heroes are 5 HP now)
+    ally.hpMax = 20; ally.hp = 5; // wounded, with room for the whole heal
     // KO the caster's active.
     G.players['0'].active!.respawnTurnsLeft = 3;
     G.players['0'].active!.hp = 0;
     const before = ally.hp;
     ABILITIES_BY_ID['eff_healing_rite'].run(G, { movingPlayer: '0' as PlayerID }, { target: ally });
-    expect(ally.hp - before).toBe(2);
+    expect(ally.hp - before).toBe(5);
   });
 });
 
@@ -279,11 +279,11 @@ describe('item slots (3 per hero)', () => {
     expect(wornItems(hero)).toHaveLength(3);
     expect(G.players['0'].hand).toEqual([card]);
     // Naming one it wears, the card takes its place (hand.spec has the swap in full).
-    expect(playBlocked(G, '0', card.iid, hero.iid, undefined, wornItems(hero)[1].iid)).toBeNull();
+    expect(playBlocked(G, '0', card.iid, hero.iid, wornItems(hero)[1].iid)).toBeNull();
     // An upgrade of a worn item evolves it: Improved Spirit takes Extra Spirit's place.
     const up = giveCard(G, '0', 'improved_spirit');
     expect(playBlocked(G, '0', up.iid, hero.iid)).toBeNull();
-    expect(perform(G, '0', { type: 'playCard', cardIid: up.iid, heroIid: hero.iid, upgradeId: undefined })).not.toBe(INVALID);
+    expect(perform(G, '0', { type: 'playCard', cardIid: up.iid, heroIid: hero.iid })).not.toBe(INVALID);
     expect(wornItems(hero).map((it) => it.cardId)).toEqual(['extra_health', 'restorative_shot', 'improved_spirit']);
   });
 });

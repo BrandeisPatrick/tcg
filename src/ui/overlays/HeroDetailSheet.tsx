@@ -27,16 +27,15 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
 import {
-  activeCooldown, effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, itemCooldown, ultimateCard,
+  effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, ultimateCard,
 } from '@/engine/query';
-import { HARD_CC_CHARGES, LEVEL_THRESHOLDS, MAX_LEVEL, ULT_UNLOCK_LEVEL } from '@/engine/constants';
-import { HeroPortrait, HeroBadge, heroForm } from '@/cards/art/heroArt';
+import { LEVEL_THRESHOLDS, MAX_LEVEL, ULT_UNLOCK_LEVEL } from '@/engine/constants';
+import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
 import { ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
 import { SpikeMark } from '../board/SpikeMark';
 import { kitTag, skillPace, ultPace } from '../board/heroActions';
 import { CATEGORY_WORD } from '../shop/itemFacts';
-import { ChargePips, CooldownDial } from './AbilityDial';
 import { StatusIcon } from '../card/StatusIcon';
 import { LevelRing } from '../card/LevelRing';
 import { spring, text, fonts } from '../tokens';
@@ -128,10 +127,6 @@ interface Props {
   skills?: Record<AbilityId, SkillOffer>;
   /** The player tapped this ability's row. */
   onUseSkill?: (skillId: AbilityId) => void;
-  /** Each worn active item's offer, by item iid. */
-  items?: Record<string, SkillOffer>;
-  /** The player tapped this active item's Use. */
-  onUseItem?: (itemIid: string) => void;
   /** The Attack row — on the local player's Active only. */
   attack?: AttackOffer;
   /** Retreat lives on your Active's sheet: he goes to the bench and a bench
@@ -212,7 +207,7 @@ const KIND_ICON: Record<Kind, (size: number, color: string) => ReactNode> = {
 };
 
 export function HeroDetailSheet({
-  card, isMine, skills: skillOffers, onUseSkill, items: itemOffers, onUseItem, attack,
+  card, isMine, skills: skillOffers, onUseSkill, attack,
   retreat, onRetreat, onClose,
 }: Props) {
   const { isMobile, width: vw } = useViewport();
@@ -350,7 +345,6 @@ export function HeroDetailSheet({
     const eqData = CARDS_BY_ID[eq.cardId];
     const rider = eqData?.type === 'hero';
     const open = openChip === eq.iid;
-    const left = itemCooldown(eq);
     return {
       key: eq.iid, w: TILE,
       node: (
@@ -372,7 +366,7 @@ export function HeroDetailSheet({
               <HeroBadge cardId={eq.cardId} size={TILE - 6} />
             </span>
           ) : (
-            <ItemIcon itemId={eq.cardId} size={TILE} chip marks={{ cooldown: left || undefined, charges: eq.charges ?? undefined }} />
+            <ItemIcon itemId={eq.cardId} size={TILE} chip />
           )}
         </button>
       ),
@@ -461,7 +455,7 @@ export function HeroDetailSheet({
               borderRadius: 7, overflow: 'hidden', background: poster.ground,
               boxShadow: `0 0 0 1.5px ${poster.ink}`,
             }}>
-              <HeroPortrait cardId={data.id} art={form?.art} />
+              <HeroPortrait cardId={data.id} art={heroPortraitFile(card, form)} />
               <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: printEdge }} />
               {form && (
                 <span role="note" style={{
@@ -540,12 +534,7 @@ export function HeroDetailSheet({
               {opened >= 0 && (
                 <ItemPopover
                   item={attached[opened]}
-                  bearer={card}
                   scale={scale}
-                  mine={mine}
-                  usedId={usedSkill}
-                  offer={itemOffers?.[attached[opened].iid]}
-                  onUse={onUseItem ? closeTo(() => onUseItem(attached[opened].iid)) : undefined}
                   style={{ position: 'absolute', zIndex: 11, top: TILE + 6, left: 0, right: 0 }}
                 />
               )}
@@ -776,20 +765,13 @@ export function HeroRules({ card, data }: { card: CardInstance; data: HeroCard }
 
 /**
  * What a worn item does, under the inventory row, as Deadlock's item tooltip:
- * a band in its category's colour with its name and tier, its rules in cream,
- * how long it waits (or the charges it has left) — and for an active item of
- * yours, its Use (or why not). A riding Rem says when she rides back.
+ * a band in its category's colour with its name and tier, and its rules in
+ * cream. Only equipment is worn (a spell is played and discarded), so there
+ * is nothing to use here. A riding Rem says when she rides back.
  */
-function ItemPopover({
-  item, bearer, scale, mine, usedId, offer, onUse, style,
-}: {
+function ItemPopover({ item, scale, style }: {
   item: CardInstance;
-  bearer: CardInstance;
   scale: Scale;
-  mine: boolean;
-  usedId?: AbilityId;
-  offer?: SkillOffer;
-  onUse?: () => void;
   style: CSSProperties;
 }) {
   const data = CARDS_BY_ID[item.cardId];
@@ -832,59 +814,16 @@ function ItemPopover({
     );
   }
 
-  const active = face?.type === 'spell';
-  const left = itemCooldown(item);
-  const full = Math.max(left, face ? activeCooldown(bearer, face.tier, active ? face.cooldown : undefined) : left);
-  const hardCC = active && !!face.hardCC;
-  const charges = hardCC ? item.charges ?? 0 : item.charges ?? undefined;
-  const used = usedId === item.cardId;
-  const usable = mine && active && !!onUse && !!offer?.canUse && !used;
   const ink = face ? shopInk(face.slot).ink : poster.paperBand;
 
   return (
     <div role="group" aria-label={data?.name ?? item.cardId} onClick={(e) => e.stopPropagation()} style={shell}>
-      {bandRow(ink, data?.name ?? item.cardId, face ? `${CATEGORY_WORD[face.slot]} · T${face.tier}${active ? ' · Active' : ''}` : undefined)}
+      {bandRow(ink, data?.name ?? item.cardId, face ? `${CATEGORY_WORD[face.slot]} · T${face.tier}` : undefined)}
       <div style={bodyStyle}>
         {face?.text && (
           <div style={{ ...text.body, fontSize: T.body, lineHeight: 1.4, color: poster.inkSoft }}>
             <RuleText text={sentence(face.text)} keywordColor={poster.ink} scale={scale} />
           </div>
-        )}
-        {(charges !== undefined || left > 0) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, ...text.body, fontSize: T.label, color: poster.inkDim }}>
-            {charges !== undefined ? (
-              <>
-                <ChargePips left={charges} total={hardCC ? HARD_CC_CHARGES : Math.max(charges, 1)} ink={MARKS.ink} faint={MARKS.faint} label={`${charges} charge${charges === 1 ? '' : 's'} left`} />
-                <span>{`${charges} charge${charges === 1 ? '' : 's'} left`}</span>
-              </>
-            ) : (
-              <>
-                <CooldownDial left={left} full={full} size={22} ink={MARKS.ink} track={MARKS.track} label={readyIn(left, full)} />
-                <span>{`Ready in ${left} turn${left === 1 ? '' : 's'}`}</span>
-              </>
-            )}
-          </div>
-        )}
-        {mine && active && onUse && (
-          usable ? (
-            <motion.button
-              type="button"
-              aria-label={`Use ${data?.name ?? item.cardId}`}
-              whileTap={{ scale: 0.97 }}
-              onClick={(e) => { e.stopPropagation(); onUse(); }}
-              style={{
-                ...bandStyle(ink),
-                alignSelf: 'stretch', marginTop: 2, minHeight: 36, borderRadius: 5, border: 'none',
-                boxShadow: `inset 0 0 0 1.5px ${poster.ink}, 0 2px 0 ${poster.ink}`,
-                cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-              }}
-            >Use</motion.button>
-          ) : (used || offer?.blockedReason) ? (
-            <div style={{
-              paddingTop: 7, borderTop: `1px solid ${RULE}`,
-              ...text.body, fontSize: T.label, lineHeight: 1.3, color: poster.inkDim, textAlign: 'center',
-            }}>{used ? 'Used this turn' : offer?.blockedReason}</div>
-          ) : null
         )}
       </div>
     </div>

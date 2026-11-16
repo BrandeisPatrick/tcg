@@ -2,6 +2,7 @@ import type { CardId, ItemTier } from '@/engine/types';
 import type { StoryNode, NodeKind, StoryRun, RewardChoice } from './types';
 import type { StorySetup } from '@/storage/matchConfig';
 import { HEROES, ITEMS } from '@/cards';
+import { SQUAD_SIZE } from '@/engine/constants';
 
 // ---- seeded PRNG (mulberry32) ------------------------------------------------
 export function rng(seed: number): () => number {
@@ -41,13 +42,13 @@ export function randomStartingHeroes(): CardId[] {
 }
 
 // ---- opponent scaling --------------------------------------------------------
-/** How many heroes the opponent fields at a node (grows with depth / kind). */
+/** How many heroes the opponent fields at a node (grows with depth / kind),
+ *  up to a squad (SQUAD_SIZE: three since 2026-11-16, as the player's). */
 export function enemyRosterSize(depth: number, kind: NodeKind): number {
-  if (kind === 'boss') return 4;
+  if (kind === 'boss') return SQUAD_SIZE;
   if (depth <= 0) return 1;       // the opening 1v1
   if (depth <= 2) return 2;
-  if (depth <= 4) return 3;
-  return 4;
+  return SQUAD_SIZE;
 }
 /** Flat stat buff applied to EVERY enemy hero at a node. Softened so an
  *  under-recruited early run stays recoverable; bosses still hit hard. */

@@ -5,7 +5,7 @@
  * nothing and it is one-way — the defender does not strike back. A player
  * makes one a turn (`G.attackUsed`), and it ends the turn's Act: after it
  * nothing is left but `endTurn` (and a promotion owed). Extra swings come only
- * from explicit grants (Burst Fire, Active Reload, Fleetfoot, Fury Trance,
+ * from explicit grants (Burst Fire, Fleetfoot, Fury Trance,
  * Blood Tribute). `attackBlocked` (legality.ts) holds every condition, so this
  * assumes a living Active, a legal target and a swing that deals something.
  *

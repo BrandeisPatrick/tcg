@@ -60,7 +60,9 @@ export interface BaseCard {
 }
 
 /** A hero's role (docs/hero-design.md §1): how it plays in Deadlock. */
-export type HeroRole = 'Tank' | 'Bruiser' | 'Gun carry' | 'Marksman' | 'Spirit caster' | 'Assassin' | 'Support' | 'Controller';
+export type HeroRole = 'Tank' | 'Bruiser' | 'Gun carry' | 'Marksman' | 'Spirit caster' | 'Assassin' | 'Support' | 'Controller'
+  /** No hero's: a unit's (a Ghoul, a Gravestone). */
+  | 'Unit';
 
 /** When a hero peaks (docs/hero-design.md §2). Early: +1 point at Level 1 and
  *  2 growth points a level; mid: none and 3; late: −1 point (never below
@@ -113,6 +115,21 @@ export interface HeroCard extends Omit<BaseCard, 'text'> {
    *  Rem stands in the lane (2026-11-09); the engine keeps the rule for one
    *  that may. */
   flags?: { benchOnly?: boolean };
+  /**
+   * Set on a UNIT (docs/hero-design.md, "Units"; Patrick, 2026-11-16): a board
+   * card that is no hero — a Ghoul, a Gravestone. It is hero-shaped so the
+   * board treats it as one (it takes a spot, has Attack and HP, takes statuses
+   * and damage, may stand in the lane unless `flags.benchOnly`), and it differs
+   * where this says:
+   *  - it is never drafted and never in a deck a player builds: a card's
+   *    effect makes it (cards/units.ts);
+   *  - played from the hand it costs `price` souls (a hero is free);
+   *  - it wears no item, earns no exp and has no kit beyond its `passives`;
+   *  - destroyed, it is gone for good: to its owner's discard pile, with no
+   *    bounty, no push and no exp for whoever did it — and its `death` effect
+   *    runs (the Ghoul's: the enemy discards from the top of its deck).
+   */
+  unit?: { price: number; death?: AbilityId };
 }
 
 /** What every item shares, active or passive: its shop tab and tier (its price
@@ -123,23 +140,21 @@ interface ItemFields {
   slot: ItemSlot;
   tier: ItemTier;
   upgradesFrom?: CardId;
+  /** A price of its own, in souls, where a card is set under its tier's
+   *  (Patrick's call, card by card: Rusted Barrel is 1). Read through
+   *  `itemPrice` (query.ts), never `PRICE[tier]` directly. */
+  price?: number;
 }
 
-/** An ACTIVE item (Deadlock's `is_active_item`): worn like any item, and used
- *  from its bearer's sheet as that hero's one ability of the turn. Its first
- *  ability's target filter says what it is aimed at; every onPlay ability runs
- *  when it is used. It then cools down (ACTIVE_COOLDOWN by tier), or, for hard
- *  crowd control, spends one of its HARD_CC_CHARGES. */
+/** An ACTIVE item (Deadlock's `is_active_item`): a spell. It is played from
+ *  the hand for its price, on the target its first ability's filter allows
+ *  (or on nothing, for one that takes none); every onPlay ability runs, what
+ *  it leaves behind lasts a turn or two, and the card goes to the discard
+ *  pile. It is never worn, takes no slot and has no cooldown (Patrick,
+ *  2026-11-15; until then an active was worn and used again on a cooldown). */
 export interface SpellCard extends BaseCard, ItemFields {
   type: 'spell';
   abilities: AbilityId[];
-  /** Hard crowd control (its effect stuns, silences, disarms, roots, sleeps or
-   *  curses an enemy): HARD_CC_CHARGES uses a match and no cooldown. */
-  hardCC?: true;
-  /** Own turns it waits after use (and when put on), when the card names its
-   *  own rather than its tier's ACTIVE_COOLDOWN: the draw cards wait 2 at
-   *  every tier. */
-  cooldown?: number;
 }
 
 /** A PASSIVE item: always on while worn — its stat `bonus` and its abilities'
@@ -240,11 +255,6 @@ export interface CardInstance {
    *  cancel its own fall (it declares an optional trigger at 'onFall') holds
    *  it; cleared once the fall is decided. */
   downedBy?: string;
-  /** A hard crowd-control active's uses left this match (HARD_CC_CHARGES when
-   *  bought; it travels with the item). At 0 the item stays worn but cannot be
-   *  used. Undefined on every other card. An active's cooldown lives in this
-   *  instance's own `cooldowns`, keyed by its card id, and travels with it too. */
-  charges?: number;
   /** A hero: the items whose first equip has paid it EXP_ON_EQUIP, so a
    *  second copy of one pays nothing more. */
   equippedIds?: CardId[];
@@ -254,7 +264,7 @@ export interface CardInstance {
   vitalitySpike?: true;
   // Multi-attack is modeled via the `extra_attack` STATUS (value = N extra
   // full-power swings queued for this turn). It stacks additively across
-  // sources (Active Reload, Burst Fire, Haze's Fixation) and is consumed by the
+  // sources (Fleetfoot, Burst Fire, Haze's Fixation) and is consumed by the
   // bearer's attack — see grantExtraAttacks / actions/attack.ts. Each bonus swing
   // re-fires onAttack procs (so Toxic Bullets / Djinn's Mark proc per swing)
   // and bounces again with Ricochet.
@@ -570,8 +580,8 @@ export interface BossFx extends FxBase {
 /** A card moved between a side's deck, hand and discard pile — what the
  *  deck, the discard pile and the hand animate: 'shuffle' (the deck was
  *  shuffled: the opening, the drafted heroes going in), 'draw' (deck → hand),
- *  'discard' (hand → discard pile), 'upgrade' (an upgrade card made and
- *  shuffled into the deck), 'toHand' (a fallen hero back in the hand). `iid` /
+ *  'discard' (hand → discard pile; 'mill': the top of the deck → discard pile),
+ *  'raise' (a card an effect made is shuffled into the deck), 'toHand' (a fallen hero back in the hand). `iid` /
  *  `cardId` name the card ('shuffle' names none). */
 export interface DeckFx extends FxBase {
   kind: 'deck';
@@ -580,7 +590,7 @@ export interface DeckFx extends FxBase {
    *  left its slot to ride on an ally as equipment (Rem's Tag Along;
    *  `bearerIid` the ally). `rideOff`: the ride is over and it is back on the
    *  bench (`slot`), off `bearerIid`. */
-  what: 'shuffle' | 'draw' | 'discard' | 'upgrade' | 'toHand' | 'place' | 'rideOn' | 'rideOff';
+  what: 'shuffle' | 'draw' | 'discard' | 'mill' | 'raise' | 'toHand' | 'place' | 'rideOn' | 'rideOff';
   pid: PlayerID;
   iid?: string;
   cardId?: CardId;

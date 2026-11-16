@@ -309,10 +309,10 @@ describe('a skill the hero does not have', () => {
 });
 
 describe('Echo Shard', () => {
-  /** Echo Shard, worn and used by a bench hero (Vindicta): the item is ITS one
-   *  ability this turn, so the Active's skill before it stands in no way, and
-   *  "your Active" is the player's Active, the twin. */
-  const play = (G: GameState) => { useItem(G, '0', 'echo_shard', undefined, G.players['0'].bench[0]!); };
+  /** Echo Shard played from the hand: a spell, so the Active's skill before it
+   *  stands in no way. Every hero of the side echoes since 2026-11-16; these
+   *  read the twin's own skills, so its bench is cleared first. */
+  const play = (G: GameState) => { G.players['0'].bench = [null, null, null]; useItem(G, '0', 'echo_shard'); };
 
   it('repeats the skill the hero used this turn — the second one, when that was used', () => {
     const { G, twin, rival, benched } = twinGame();
@@ -338,6 +338,7 @@ describe('Echo Shard', () => {
 
   it('still fizzles on a hero with no skill', () => {
     const G = freshReadyGame(); // P0 Active = Haze, passive only
+    G.players['0'].bench = [null, null, null];
     const foe = G.players['1'].active!;
     const hp = foe.hp;
     expect(() => ABILITIES_BY_ID.eff_echo_shard.run(G, { movingPlayer: '0' }, {})).not.toThrow();
@@ -379,14 +380,14 @@ describe('what a hero card prints', () => {
     hero_mo_krill: ['skill', "Sand Blast", "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn (it can't attack)."],
     hero_rem: ['skill', "Tag Along", "Rem rides on another of your heroes as equipment for 2 turns: it heals {sp:4}. Then Rem returns to your bench."],
     hero_shiv: ['skill', "Serrated Knives", "Throw a knife: deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns."],
-    hero_vindicta: ['passive', "Flight", "Vindicta flies: her attacks also deal {sp:1} spirit damage."],
+    hero_vindicta: ['skill', "Assassinate", "Snipe any enemy, bench too: deal {sp:4} spirit damage."],
     hero_wraith: ['skill', "Full Auto", "Wraith gets +2 Attack for 2 turns."],
     hero_dynamo: ['skill', "Kinetic Pulse", "Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air)."],
     hero_kelvin: ['skill', "Frost Grenade", "Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each."],
     hero_lady_geist: ['skill', "Essence Bomb", "Lady Geist pays 1 HP: deal {sp:1} spirit damage to every enemy."],
     hero_lash: ['skill', "Ground Strike", "Slam down: deal {sp:1} spirit damage to every enemy, and the enemy Active is Rooted 1 turn (can't retreat)."],
     hero_paige: ['skill', "Plot Armor", "Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns."],
-    hero_seven: ['skill', "Lightning Ball", "Roll a ball of lightning through the enemy team: deal {sp:1} spirit damage to every enemy."],
+    hero_seven: ['skill', "Static Charge", "Deal {sp:1} spirit damage to the enemy Active and Charge it: after its next turn, it is Stunned 1 turn."],
     hero_sinclair: ['skill', "Rabbit Hex", "Hex the enemy Active into a Rabbit for 1 turn: it can't attack or use abilities, and takes +1 damage."],
     hero_viscous: ['skill', "The Cube", "Cube one of your heroes: it takes no damage until your next turn."],
     hero_yamato: ['skill', "Flying Slash", "Grapple onto any enemy, bench too, and slash it: deal {sp:2} spirit damage."],
@@ -395,6 +396,7 @@ describe('what a hero card prints', () => {
     hero_drifter: ['passive', "Bloodscent", "His attacks deal +1 bullet damage to a hero below half HP. Each knockout while he is Active gives him +1 Attack for the game (max +2)."],
     hero_victor: ['passive', "Aura of Suffering", "While Victor is Active, at the start of your turn deal 1 spirit damage to every enemy and to Victor."],
     hero_silver: ['skill', "Boot Kick", "Dash-kick the enemy Active: deal 1 bullet damage and mark it: Vulnerable 2 turns."],
+    hero_graves: ['skill', "Grasping Hands", "Deal {sp:1} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck."],
   };
 
   it('heroAbilities lists skills, then passives, with names and texts, for every hero', () => {

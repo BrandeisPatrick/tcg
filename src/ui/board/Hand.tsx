@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import type { CardInstance } from '@/engine/types';
 import { CARDS_BY_ID } from '@/cards';
 import { itemPrice } from '@/engine/query';
+import { placeCost } from '@/engine/legality';
 import { CardFrame, SIZES } from '../card/CardFrame';
 import { spring } from '../tokens';
 import { poster } from '../poster';
@@ -181,10 +182,12 @@ export function Hand({ cards, souls, disabled, pending, playable, onTap, onLongP
           // animate={{ opacity: 1 }} overrides a style-prop opacity, which
           // silently disabled the stuck/disabled fade entirely.
           const opacity = cardDisabled && !selected ? (stuck ? 0.9 : 0.62) : 1;
-          const price = itemPrice(c.cardId);
+          // An item's price, or a unit's (a Ghoul costs a soul to put on the board; a hero is free).
+          const price = itemPrice(c.cardId) || placeCost(c.cardId);
           const unaffordable = price > souls;
           const isHero = CARDS_BY_ID[c.cardId]?.type === 'hero';
-          const why = !stuck ? '' : isHero ? ' — no room on the board now' : unaffordable ? ` — costs ${price} souls` : ' — no hero can take it now';
+          const costs = ` — costs ${price} soul${price === 1 ? '' : 's'}`;
+          const why = !stuck ? '' : isHero ? (unaffordable ? costs : ' — no room on the board now') : unaffordable ? costs : ' — no hero can take it now';
           const label = `${inHandLabel(CARDS_BY_ID[c.cardId]?.name ?? c.cardId)}${why}`;
           // What can be acted on pulses: a card that can be played, while
           // nothing is armed.

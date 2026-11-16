@@ -47,7 +47,7 @@ export const HEROES: HeroCard[] = [
     atk: 1, hp: 4, growth: { atk: 3, hp: 1, spirit: 0 }, retreat: 1,
     profile: { role: 'Gun carry', mix: { tank: 0, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'late', gun: true },
     skills: [], passives: ['passive_haze_fixation'], ult: 'eff_ult_haze',
-    signature: ['active_reload', 'burst_fire'],
+    signature: ['swift_striker', 'burst_fire'],
   },
   {
     id: 'hero_mo_krill', name: 'Mo & Krill', type: 'hero', rarity: 3,
@@ -76,7 +76,7 @@ export const HEROES: HeroCard[] = [
     id: 'hero_vindicta', name: 'Vindicta', type: 'hero', rarity: 3,
     atk: 2, hp: 5, growth: { atk: 2, hp: 0, spirit: 0 }, retreat: 0,
     profile: { role: 'Marksman', mix: { tank: 0, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'early', gun: true },
-    skills: [], passives: ['passive_vindicta_flight'], ult: 'eff_ult_vindicta',
+    skills: ['skill_vindicta'], ult: 'eff_ult_vindicta',
     signature: ['long_range', 'sharpshooter'],
   },
   {
@@ -187,6 +187,15 @@ export const HEROES: HeroCard[] = [
     profile: { role: 'Bruiser', mix: { tank: 2, damage: 3, control: 1, support: 0 }, reach: 'one', curve: 'mid', gun: true },
     skills: ['skill_silver'], ult: 'eff_ult_silver',
     signature: ['monster_rounds', 'bullet_lifesteal'],
+  },
+  {
+    // The necromancer (Patrick, 2026-11-16): she traps the lane and fills her
+    // own deck with Ghouls; her Gravestone keeps them coming.
+    id: 'hero_graves', name: 'Graves', type: 'hero', rarity: 3,
+    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
+    profile: { role: 'Controller', mix: { tank: 1, damage: 2, control: 2, support: 0 }, reach: 'many', curve: 'mid' },
+    skills: ['skill_graves'], ult: 'eff_ult_graves',
+    signature: ['mystic_slow', 'torment_pulse'],
   },
 ];
 

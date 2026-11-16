@@ -42,6 +42,14 @@ export interface StatusDef {
    *  public/heroes/) in place of the hero's portrait. When the status ends
    *  the card shows the hero again. The engine reads nothing here. */
   form?: { hero: CardId; art: string };
+  /** An ability the bearer carries while the status is on it: its triggers and
+   *  hooks are read like a passive's (`abilitySources`, engine/query.ts).
+   *  Flying's: the spirit damage its bearer's attacks add. */
+  ability?: string;
+  /** Its `ability` is a worn item's proc: asked with the gear's reactions to
+   *  the bearer's damage (`fireTriggers` with `reaction`), not with the
+   *  hero's passives. Spirit Lifesteal's (Infuser). */
+  reacts?: true;
 }
 
 /**
@@ -82,10 +90,25 @@ export const STATUSES: StatusDef[] = [
   // Shield. Her card shows Deadlock's wolf-form art while it lasts.
   { id: 'wolf_form',     title: 'Wolf form',     desc: 'Turned into a wolf (Lycan Curse): +3 Attack while it lasts; the card shows the wolf.', hvalue: 1, form: { hero: 'hero_silver', art: 'hero_silver_wolf_card.webp' } },
 
+  // Counterspell (docs/card-design.md, "Counters"): a magic shield the
+  // Counterspell spell puts on a hero. The next enemy card played on the
+  // bearer — a spell, a skill or an ultimate — does nothing to it (damage.ts).
+  // It triggers once, and is gone when its turns run out.
+  { id: 'counterspell',  title: 'Counterspell',  desc: 'The next enemy spell, skill or ultimate that would hit this hero does nothing to it, and it heals 4. Triggers once.', hvalue: 2 },
+
+  // Flying (Vindicta's Flight, docs/hero-design.md): each hit on the bearer
+  // misses 1 time in 3 (`damageUnit` rolls), and its attacks add 1 + Spirit
+  // spirit damage (the status carries a proc: `ability`).
+  // Spirit Lifesteal for a while (Infuser, 2026-11-16): the status carries
+  // the item's own proc — heal 2 after its skill, spell or ultimate damages an
+  // enemy (`StatusDef.ability`).
+  { id: 'spirit_lifesteal', title: 'Spirit Lifesteal', desc: 'After its skill, spell or ultimate damages an enemy: heal 2.', hvalue: 1, ability: 'eff_spirit_lifesteal', reacts: true },
+  { id: 'flying',        title: 'Flying',        desc: 'Each hit on this hero misses 1 time in 3. Its attacks also deal 1 spirit damage, plus its Spirit.', hvalue: 2, ability: 'status_flying' },
+
   // ----- Multi-attack -----
   // Counts the bearer's extra full-power basic attacks this turn (stacks across
   // sources). Each extra swing rides on the turn's attack and re-fires onAttack
-  // procs. Granted at turn start (Burst Fire), by a spell (Active Reload) or by
+  // procs. Granted at turn start (Burst Fire), by a spell (Fleetfoot) or by
   // Haze's own swing (Fixation); consumed by the attack.
   { id: 'extra_attack',  title: 'Extra Attack',  desc: 'Makes <value> extra basic attack(s) this turn.',             hvalue:  1 },
 
@@ -93,8 +116,8 @@ export const STATUSES: StatusDef[] = [
   // Heavy channel: the caster is locked out of attacking and skills, but deals
   // <value> spirit AoE to all enemies at the end of each of their turns until
   // it expires. Mobile variant (casting_light) keeps the AoE drain but lets the
-  // caster keep acting. Stun / Sleep interrupts a pulse.
-  { id: 'casting',       title: 'Channeling',    desc: 'Locked in an ultimate: cannot attack or use skills. Deals <value> spirit to all enemies at end of turn.', hvalue: 1, blocks: ['attack', 'skill'] },
+  // caster keep acting. A Stun, a Sleep or a hex ends the channel at once.
+  { id: 'casting',       title: 'Channeling',    desc: 'Channelling an ultimate: cannot attack or use skills. Deals <value> spirit damage to every enemy at the end of its turn. A Stun ends it.', hvalue: 1, blocks: ['attack', 'skill'] },
   { id: 'casting_light', title: 'Channeling',    desc: 'Deals <value> spirit to all enemies at end of turn and drains HP. Can still act.',                         hvalue: 1 },
 
   // ----- Hard CC -----
@@ -112,7 +135,7 @@ export const STATUSES: StatusDef[] = [
   // ----- Delayed CC -----
   // Mirage's mark refreshes its full 3-turn timer on every new stack (stack.duration
   // 'reset'); the mark that makes DJINN_CAP detonates them all (his passive).
-  { id: 'charged',       title: 'Charged',       desc: 'On expiry: Stun for 1 turn.',                              hvalue: -1 },
+  { id: 'charged',       title: 'Charged',       desc: 'When this runs out: Stun for 1 turn. Taking it off first stops the Stun.', hvalue: -1 },
   { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 4 spirit damage + Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' } },
   { id: 'reverb',        title: 'Reverb',        desc: 'Detonates at the start of your turn for <value> spirit damage.', hvalue: -1 },
   // Last Stand is a delayed strike: at the start of its bearer's owner's turn, when it is

@@ -1,8 +1,8 @@
 /**
  * The deck game's card motion (docs/deck-plan.md, "Animations"): cards flying
  * between the deck, the hand and the discard pile, a hero placed flying to its
- * slot, the opening's Actives to the lane and its heroes into the deck, an
- * upgrade appearing and going in, and the piles' counts ticking with it — all
+ * slot, the opening's Actives to the lane and its heroes into the deck,
+ * and the piles' counts ticking with it — all
  * driven by the `deck` FX events the engine reports.
  *
  *   deckMotionPlan.ts     the plan, pure (events → flights, ticks, riffles)

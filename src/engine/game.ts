@@ -101,16 +101,17 @@ export const DeadlockGame: Game<GameState> = {
   moves: {
     completeAction,
 
-    /** Put an item from your hand on one of your heroes (bench and corpses
-     *  included), for its price — an upgrade onto the hero wearing its
-     *  component evolves it for the difference. `upgradeId` picks the upgrade
-     *  the play shuffles into the deck when it could make several;
-     *  `replaceIid`, onto a full hero, the worn item it replaces (to the
-     *  discard pile). Not the hero's ability for the turn. */
-    playCard: ({ G, ctx, playerID, events }, cardIid: string, heroIid: string, upgradeId?: string, replaceIid?: string) =>
+    /** Play an item from your hand, for its price. Equipment goes on one of
+     *  your heroes (bench and corpses included) — an upgrade onto the hero
+     *  wearing its component evolves it for the difference; `replaceIid`, onto
+     *  a full hero, is the worn item it replaces (to the discard pile). A
+     *  spell is cast on `heroIid`, its target (a hero of either side), or on
+     *  nothing when it takes none, and goes to the discard pile. Neither is a
+     *  hero's ability for the turn. */
+    playCard: ({ G, ctx, playerID, events }, cardIid: string, heroIid?: string, replaceIid?: string) =>
       move({ G, ctx, events }, mover(ctx, playerID), {
-        type: 'playCard', cardIid, heroIid,
-        ...(upgradeId === undefined ? {} : { upgradeId }),
+        type: 'playCard', cardIid,
+        ...(heroIid === undefined ? {} : { heroIid }),
         ...(replaceIid === undefined ? {} : { replaceIid }),
       }),
 
@@ -135,10 +136,6 @@ export const DeadlockGame: Game<GameState> = {
       if (G.turnNumber < 1 && !G.pendingActive) events?.endTurn?.();
       return undefined;
     },
-
-    /** Use an active item a hero wears (that hero's one ability this turn). */
-    activate: ({ G, ctx, playerID, events }, itemIid: string, targetIid?: string) =>
-      move({ G, ctx, events }, mover(ctx, playerID), { type: 'activate', itemIid, targetIid }),
 
     /** A kit ability: the hero's skill or its ultimate, named by `skillId`
      *  (left off for the hero's first skill). It costs no souls: it waits. */

@@ -4,7 +4,9 @@
 
 Read [docs/card-design.md](docs/card-design.md) before adding, renaming or redesigning a card.
 
-- A Deadlock **active** item is always a **spell**; a **passive** item is always **equipment**. No exceptions.
+- A Deadlock **active** item is always a **spell**; a **passive** item is always **equipment**. No exceptions
+  but the two Patrick made himself, recorded in docs/card-design.md §1: Counterspell and the Cooldown family
+  (passives in Deadlock, spells here).
 - Keep the main game's flavor: canon item names, the item's real verb, its shop slot (Weapon / Spirit / Vitality) and its tier.
 - Card text always names the damage type: "deal N bullet damage" or "deal N spirit damage", never bare
   "damage". Attacks are bullet; purple `{sp:N}` numbers are spirit.

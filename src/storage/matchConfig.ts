@@ -97,7 +97,7 @@ interface MatchConfig {
 }
 
 let current: MatchConfig = {
-  heroPreferences: [null, null, null, null],
+  heroPreferences: [null, null, null],
 };
 
 export function setMatchConfig(config: MatchConfig): void {

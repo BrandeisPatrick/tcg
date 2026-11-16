@@ -8,7 +8,7 @@
 //     stay in place, greyed out (whose pick it was is the strips' job), so
 //     the grid never reshuffles under the cursor
 //   ▸ a one-line dossier for whichever hero is focused
-//   ▸ YOUR team as four numbered tarot-style cards; the slot being drafted
+//   ▸ YOUR team as three numbered tarot-style cards (SQUAD_SIZE); the slot being drafted
 //     previews the focused hero in green, locked picks turn gold
 //   ▸ a chamfered LOCK button (Enter works too) — the one true "draft" trigger
 //
@@ -18,6 +18,7 @@
 import {
   useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react';
+import { SQUAD_SIZE } from '@/engine/constants';
 import { motion, AnimatePresence, easeInOut } from 'framer-motion';
 import type { CardId, DraftState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, cardName, HEROES } from '@/cards';
@@ -64,7 +65,7 @@ const WIDE_PAD_X = 'clamp(18px, 3vw, 44px)';
  *  title's featured hero while it is in the pool, otherwise any free hero at
  *  random rather than always the first tile of the grid. */
 export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
-  // The roster grid + four cards need real width; below this everything
+  // The roster grid + the squad's cards need real width; below this everything
   // stacks tighter and the page may scroll.
   const { width } = useViewport();
   const isMobile = width < 860;
@@ -129,7 +130,7 @@ export function DraftOverlay({ draft, currentPlayer, me, onPick }: Props) {
   });
 
   const preferred = useMemo(
-    () => (getMatchConfig().heroPreferences.filter(Boolean) as string[]).slice(0, 4),
+    () => (getMatchConfig().heroPreferences.filter(Boolean) as string[]).slice(0, SQUAD_SIZE),
     [],
   );
 
@@ -411,7 +412,7 @@ function PickSide({ picks, side, tone, live, compact }: {
 
   const slots = (
     <div style={{ display: 'flex', gap: compact ? 4 : 10, flexDirection: side === 'left' ? 'row' : 'row-reverse' }}>
-      {[0, 1, 2, 3].map((s) => {
+      {Array.from({ length: SQUAD_SIZE }, (_, i) => i).map((s) => {
         const id = picks[s];
         return id ? (
           <motion.div
@@ -748,7 +749,7 @@ function TeamCards({
   compact: boolean;
 }) {
   const live = picks.length;
-  const w = compact ? 'calc((100% - 24px) / 4)' : 'clamp(136px, min(15vw, 30vh), 224px)';
+  const w = compact ? `calc((100% - ${8 * (SQUAD_SIZE - 1)}px) / ${SQUAD_SIZE})` : 'clamp(136px, min(15vw, 30vh), 224px)';
   return (
     <div
       style={{
@@ -758,7 +759,7 @@ function TeamCards({
         justifyContent: 'center',
       }}
     >
-      {[0, 1, 2, 3].map((s) => {
+      {Array.from({ length: SQUAD_SIZE }, (_, i) => i).map((s) => {
         const id = picks[s];
         if (id) {
           return <TeamCard key={`t-${id}`} w={w} numeral={NUMERALS[s]} heroId={id} tone="gold" role={s === 0 ? 'Active' : ''} />;

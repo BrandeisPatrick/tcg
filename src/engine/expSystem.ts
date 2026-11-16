@@ -19,7 +19,7 @@ export function grantExp(G: GameState, card: CardInstance, amount: number): numb
   if (amount <= 0) return 0;
   if (isRespawning(card)) return 0;
   const data = CARDS_BY_ID[card.cardId];
-  if (!data || data.type !== 'hero') return 0;
+  if (!data || data.type !== 'hero' || data.unit) return 0; // a unit earns nothing
   const startLevel = (card.level ?? START_LEVEL) as 1 | 2 | 3 | 4;
   if (startLevel >= MAX_LEVEL) return 0;
 

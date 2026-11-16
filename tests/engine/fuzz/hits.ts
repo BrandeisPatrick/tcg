@@ -66,7 +66,7 @@ export function summarise(hits: Hit[]): { signature: string; count: number; firs
 function itemTags(cardId: string | undefined): string[] {
   const d = itemData(cardId);
   if (!d) return ['item:unknown'];
-  return [`item:${d.id}`, `type:${d.type === 'spell' ? 'active' : 'passive'}`, `tier:${d.tier}`, ...(d.type === 'spell' && d.hardCC ? ['item:hard-cc'] : [])];
+  return [`item:${d.id}`, `type:${d.type === 'spell' ? 'active' : 'passive'}`, `tier:${d.tier}`];
 }
 
 /** Context tags for a move about to be made from `snap`. */
@@ -85,10 +85,9 @@ export function moveTags(snap: Snapshot, name: string, args: unknown[]): string[
   if (name === 'playCard') {
     const card = handCardOf(G, pid, args[0]);
     tags.push(...(card ? (isHeroCard(card) ? ['card:hero'] : itemTags(card.cardId)) : ['card:not-in-hand']));
-    if (card && upgradesOfOracle(card.cardId).length > 1) tags.push('play:upgrade-choice');
-    if (card && upgradesOfOracle(card.cardId).length === 1) tags.push('play:makes-upgrade');
-    if (args[2] !== undefined) tags.push('play:names-upgrade');
-    if (args[3] !== undefined) tags.push('play:names-replace');
+    if (card && itemData(card.cardId)?.type === 'spell') tags.push(args[1] === undefined ? 'play:spell-untargeted' : 'play:spell-targeted');
+    if (card && upgradesOfOracle(card.cardId).length > 0) tags.push('play:has-upgrades');
+    if (args[2] !== undefined) tags.push('play:names-replace');
     const hero = slottedHeroOf(G, pid, args[1]);
     if (!hero) tags.push('hero:unknown');
     else {

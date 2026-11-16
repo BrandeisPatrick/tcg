@@ -72,7 +72,6 @@ export const EQUIPMENT: EquipmentCard[] = [
 
   // ----- Passive items that were spells, and new passives (docs/card-design.md) -----
   { id: 'healbane',      name: 'Healbane',      type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_healbane'], text: "When the bearer's skill / spell / ult damages an enemy, it cannot be healed for 2 turns." },
-  { id: 'active_reload', name: 'Active Reload', type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, bonus: { atk: 1 }, abilities: ['eff_active_reload'], text: '+1 Bullet Power. After bearer attacks: heal 1.' },
   { id: 'long_range',    name: 'Long Range',    type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, abilities: ['eff_long_range'], text: "The bearer's attacks can target any enemy hero." },
   { id: 'fortitude',     name: 'Fortitude',     type: 'equipment', rarity: 3, slot: 'vitality', tier: 3, upgradesFrom: 'extra_health', bonus: { hp: 2 }, abilities: ['eff_fortitude'], text: '+2 HP. At the start of your turn: heal 2.' },
 
@@ -127,7 +126,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'mystic_vulnerability', name: 'Mystic Vulnerability', type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_mystic_vulnerability'], text: "When the bearer's skill / spell / ult damages an enemy: Spirit Resist −1 for 2 turns." },
   { id: 'mystic_slow',          name: 'Mystic Slow',          type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_mystic_slow'],          text: "When the bearer's skill / spell / ult damages an enemy: it is Rooted for 1 turn." },
   { id: 'slowing_bullets',      name: 'Slowing Bullets',      type: 'equipment', rarity: 2, slot: 'weapon', tier: 2, abilities: ['eff_slowing_bullets'],      text: "Bearer's attacks Root the target for 1 turn." },
-  { id: 'debuff_reducer',       name: 'Debuff Reducer',       type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_debuff_reducer'],       text: 'Debuffs on the bearer last 1 turn less (never under 1).' },
+  { id: 'debuff_reducer',       name: 'Debuff Reducer',       type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_debuff_reducer'],       text: 'At the start of your turn: remove 1 random debuff from the bearer.' },
   { id: 'spirit_snatch',        name: 'Spirit Snatch',        type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'spirit_strike', bonus: { hp: 1 }, abilities: ['eff_spirit_snatch'],        text: "+1 HP. When the bearer's skill / spell / ult damages an enemy: it gets Spirit Power −1 and the bearer +1 Spirit Power, both for 2 turns." },
   { id: 'spiritual_overflow',   name: 'Spiritual Overflow',   type: 'equipment', rarity: 4, slot: 'weapon', tier: 4, upgradesFrom: 'spirit_lifesteal', bonus: { spirit: 3 }, abilities: ['eff_spiritual_overflow'],   text: '+3 Spirit Power. After bearer attacks: +1 Spirit Power for 2 turns (up to +3) and heal 1.' },
 
@@ -174,7 +173,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'juggernaut',            name: 'Juggernaut',            type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, upgradesFrom: 'enduring_speed', bonus: { hp: 4 }, abilities: ['eff_enduring_speed', 'eff_juggernaut_regen', 'eff_juggernaut'], text: '+4 HP. Cannot be Rooted, and its Retreat costs 1 less. At the start of your turn: heal 2. When it takes bullet damage, the enemy Active gets Bullet Power −2 for 2 turns.' },
   { id: 'plated_armor',          name: 'Plated Armor',          type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, bonus: { hp: 5 }, abilities: ['eff_plated_armor'], text: '+5 HP. Bullet Resist 3.' },
   // Spellbreaker keeps its component's line (Debuff Reducer: debuffs 1 turn less).
-  { id: 'spellbreaker',          name: 'Spellbreaker',          type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', bonus: { hp: 5 }, abilities: ['eff_debuff_reducer', 'eff_spellbreaker'], text: '+5 HP. Spirit Resist 2. Debuffs on the bearer last 1 turn less (never under 1). A spirit hit of 3 or more on it is halved, rounded up.' },
+  { id: 'spellbreaker',          name: 'Spellbreaker',          type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, upgradesFrom: 'debuff_reducer', bonus: { hp: 5 }, abilities: ['eff_debuff_reducer', 'eff_spellbreaker'], text: '+5 HP. Spirit Resist 2. At the start of your turn: remove 1 random debuff from the bearer. A spirit hit of 3 or more on it is halved, rounded up.' },
   // Spirit
   // Arcane Surge's stamina is Sprint Boots' line: a soul off the Retreat.
   { id: 'arcane_surge',          name: 'Arcane Surge',          type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_sprint_boots', 'eff_arcane_surge'], text: "Bearer's Retreat costs 1 less. When it steps into the Active slot by a Retreat or a swap: +3 Spirit Power for 1 turn." },

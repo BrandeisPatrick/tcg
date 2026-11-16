@@ -36,20 +36,19 @@ import { CARDS_BY_ID } from '@/cards';
 import { STATUSES_BY_ID } from '@/statuses';
 import { getAbility } from '@/abilities';
 import {
-  ACTIVE_COOLDOWN, BOSS_CARD_ID, BOSS_HP, BOSS_SPAWN_ROUND, DRAW_PER_TURN, EXP_ON_EQUIP, HARD_CC_CHARGES, LANE_INCOME,
+  BOSS_CARD_ID, BOSS_HP, BOSS_SPAWN_ROUND, DRAW_PER_TURN, EXP_ON_EQUIP, LANE_INCOME,
   LEVEL_THRESHOLDS, MAX_HAND, MAX_LEVEL, OPENING_DRAW, REVIVE_CREDITS, ROUND_CAP,
   SECOND_MOVER_FIRST_INCOME_BONUS, SKILL_COOLDOWN,
 } from '@/engine/constants';
-import type { ItemCard } from '@/engine/types';
 import { attackPower, isRespawning, netWorth, stepInCandidates } from '@/engine/query';
 import {
-  DRAW_CARDS, MAX_TOTAL_EXP, PIDS, activateBlockedOracle, activeCooldownOracle, boardOf, chooseActiveBlockedOracle, deckOf,
+  DRAW_CARDS, MAX_TOTAL_EXP, PIDS, RAISED, boardOf, isUnitCard, unitOracle, chooseActiveBlockedOracle, deckOf,
   describeUnit, discardBlockedOracle, discardList, discardOf, everyCard, handCardOf, handOf, hasSpikeOracle, isHeroCard, kitSoulsOracle,
   skillChargesLeftOracle, skillChargesOracle, skillWaitOracle, ultFaceOracle, ultUncharged,
   freeBenchSlotOracle, isMergedRem, itemData, killBountyOracle, killPushOracle, netWorthOracle, netWorthOracleWithoutHand, other, patronOf, placeHeroBlockedOracle,
   playBlockedOracle, playCostOracle, pushMultiplierOracle, respawnTimerOracle, retreatCostOracle, roundOracle, seatOnTurn,
   slotCapOracle, slottedHeroOf, standingWinnerOracle, structureHpOracle, totalExp, ultCooldownOracle, ultLocked,
-  upgradeComponentOracle, upgradeMadeOracle, wornItemOf, wornItemsOf,
+  upgradeComponentOracle, wornItemsOf,
 } from './oracle';
 
 interface Violation {
@@ -76,9 +75,6 @@ export const SOULS_ON_USE: Readonly<Record<string, number>> = { golden_goose_egg
 
 /** The move that puts items on (and, an evolving upgrade, one off) heroes. */
 const ITEM_MOVES = ['playCard'];
-
-/** The full cooldown an active item starts on: its own (the draw cards' 2), else its tier's. */
-const fullItemCooldown = (d: ItemCard) => (d.type === 'spell' && d.cooldown !== undefined ? d.cooldown : d.tier <= 2 ? ACTIVE_COOLDOWN.low : ACTIVE_COOLDOWN.high);
 
 /** A bench-only hero (`flags.benchOnly`; no card is one since Rem stands in the lane) never stands in the Active slot. */
 const benchOnlyCard = (cardId: string) => !!(CARDS_BY_ID[cardId] as { flags?: { benchOnly?: boolean } } | undefined)?.flags?.benchOnly;
@@ -113,7 +109,6 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
       // wait, which runs from the match's first turn wherever the hero is.
       const ultId = (CARDS_BY_ID[c.cardId] as { ult?: string } | undefined)?.ult;
       if (Object.keys(c.cooldowns ?? {}).some((k) => !isHeroCard(c) || k !== ultId)) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
-      if (c.charges !== undefined) wrong.push(`charges ${c.charges}`);
       if (isHeroCard(c)) {
         if (c.hp !== c.hpMax || c.statuses.length || c.respawnTurnsLeft !== undefined) wrong.push(`a hero at ${c.hp}/${c.hpMax} with ${c.statuses.length} status(es), timer ${c.respawnTurnsLeft}`);
       } else if (!itemData(c.cardId)) wrong.push('neither an item nor a hero');
@@ -133,7 +128,6 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
         items++;
         if ((c.attached ?? []).length) wrong.push(`carries ${c.attached!.map((a) => a.cardId).join('+')}`);
         if (Object.keys(c.cooldowns ?? {}).length) wrong.push(`cooldowns ${JSON.stringify(c.cooldowns)}`);
-        if (c.charges !== undefined) wrong.push(`charges ${c.charges}`);
       } else if (isHeroCard(c)) {
         if (c.slot !== undefined) wrong.push(`slot ${c.slot}`);
         if (c.hp !== c.hpMax || c.hpMax < 1) wrong.push(`hp ${c.hp}/${c.hpMax}`);
@@ -206,7 +200,8 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     // A drafted match has eight different heroes, wherever they are — on a board, merged into an
     // ally, in a deck, a hand or a discard pile (the hand-built test boards hold two different
     // rosters too).
-    const roster = everyCard(G).filter((x) => isHeroCard(x.card)).map((x) => x.card.cardId);
+    // (Units are no roster: a side may hold any number of Ghouls.)
+    const roster = everyCard(G).filter((x) => isHeroCard(x.card) && !isUnitCard(x.card)).map((x) => x.card.cardId);
     const dupHero = roster.find((x, i) => roster.indexOf(x) !== i);
     if (dupHero) add('roster-duplicate', dupHero, `${dupHero} appears twice across the two sides`);
   }
@@ -443,19 +438,13 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     }
   }
 
-  /** One worn item: its charges and its cooldown. */
+  /** One worn item: equipment only (a spell is played and discarded, never worn), and it
+   *  carries no cooldown: nothing an item does waits. */
   function checkItem(a: CardInstance, _pid: PlayerID) {
     const d = itemData(a.cardId)!;
-    const hardCC = d.type === 'spell' && !!d.hardCC;
-    // Hard crowd control: HARD_CC_CHARGES uses a match and no cooldown; nothing else has charges.
-    if (hardCC) {
-      if (!Number.isInteger(a.charges) || a.charges! < 0 || a.charges! > HARD_CC_CHARGES) add('item-charges', a.iid, `hard crowd control ${a.cardId}#${a.iid} has charges ${a.charges} (0..${HARD_CC_CHARGES})`);
-    } else if (a.charges !== undefined) add('item-charges', a.iid, `${a.cardId}#${a.iid} is no hard crowd control but has charges ${a.charges}`);
-    // An active's cooldown is its own (keyed by its id), from 0 to its full cooldown (its own,
-    // else its tier's); a passive and a hard crowd-control item have none.
+    if (d.type === 'spell') add('item-worn-spell', a.iid, `the spell ${a.cardId}#${a.iid} is worn: a spell is played from the hand and goes to the discard pile`);
     for (const [k, v] of Object.entries(a.cooldowns ?? {})) {
-      if (d.type !== 'spell' || hardCC || k !== a.cardId) add('item-cooldown-key', `${a.iid}-${k}`, `${d.type === 'spell' ? (hardCC ? 'hard crowd control' : 'active') : 'passive'} ${a.cardId}#${a.iid} has a cooldown entry ${k}=${v}`);
-      if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > fullItemCooldown(d)) add('cooldown-range', `${a.iid}-${k}`, `${a.cardId}#${a.iid} cooldown ${v} (0..${fullItemCooldown(d)})`);
+      add('item-cooldown-key', `${a.iid}-${k}`, `${d.type === 'spell' ? 'spell' : 'equipment'} ${a.cardId}#${a.iid} has a cooldown entry ${k}=${v}`);
     }
   }
 }
@@ -605,11 +594,10 @@ export function collectTransitionViolations(
 
   // ---- what the rules allow: an accepted card play, hand move, choice or item use the oracle refuses ----
   {
-    const why = move.name === 'playCard' ? playBlockedOracle(B, mover, args[0], args[1], args[2], undefined, args[3])
+    const why = move.name === 'playCard' ? playBlockedOracle(B, mover, args[0], args[1], undefined, args[2])
       : move.name === 'placeHero' ? placeHeroBlockedOracle(B, mover, args[0], args[1] === true, args[1] === true ? undefined : args[2])
       : move.name === 'chooseActive' ? chooseActiveBlockedOracle(B, args[0])
       : move.name === 'discard' ? discardBlockedOracle(B, mover, discardList(args[0]))
-      : move.name === 'activate' ? activateBlockedOracle(B, mover, args[0], args[1])
       : null;
     if (why) add('accepted-illegal', move.name, `${move.name}(${JSON.stringify(args)}) by P${mover} was accepted but the rules refuse it: ${why}`);
   }
@@ -699,19 +687,22 @@ export function collectTransitionViolations(
   }
 
   // ---- what a hand move does to the cards (worked out on the board before it) ----
-  /** A play: the card from the hand, the hero it goes on, the component it evolves (off that
-   *  same hero), and the upgrade it makes. */
-  const playedCard = move.name === 'playCard' ? handCardOf(B, mover, args[0]) : undefined;
+  /** A play: the card from the hand. A spell is cast (`playedSpell`) and goes to the discard
+   *  pile; equipment goes on the hero named (`playedOn`), evolving the component it upgrades
+   *  when that hero wears it. A play makes no other card: an upgrade is a card of its own. */
+  const played = move.name === 'playCard' ? handCardOf(B, mover, args[0]) : undefined;
+  const playedSpell = played && itemData(played.cardId)?.type === 'spell' ? played : undefined;
+  const playedCard = played && !playedSpell ? played : undefined;
   const playedOn = playedCard ? slottedHeroOf(B, mover, args[1]) : undefined;
   const evolved = playedCard && playedOn ? upgradeComponentOracle(playedOn, playedCard.cardId) : undefined;
   /** The worn item a play onto a full hero takes the place of (off that same hero). */
-  const replaced = playedCard && playedOn && args[3] !== undefined ? wornItemsOf(playedOn).find((a) => a.iid === args[3]) : undefined;
-  const upgradeMade = playedCard ? upgradeMadeOracle(playedCard.cardId, args[2]) : undefined;
+  const replaced = playedCard && playedOn && args[2] !== undefined ? wornItemsOf(playedOn).find((a) => a.iid === args[2]) : undefined;
 
   // Cards do not vanish and none appears from nowhere: every card anywhere before (decks, hands
   // and discard piles included) is somewhere after — but for a Mid-Boss that falls; and the
-  // only new cards are the upgrade a play makes (in the player's deck) and, at a round's start,
-  // the Mid-Boss.
+  // only new cards are, at a round's start, the Mid-Boss, and the units an effect raises
+  // (`RAISED`: Graves' Ghouls into a deck, her Gravestone onto a bench). A play makes none:
+  // an upgrade is a card of its own, drawn from the deck like any other.
   {
     const beforeIids = new Map(everyCard(before.G).map((x) => [x.card.iid, x]));
     const afterCards = everyCard(after.G);
@@ -721,15 +712,11 @@ export function collectTransitionViolations(
       if (!afterIids.has(iid) && iid !== fellBoss) add('card-vanished', iid, `${x.card.cardId}#${iid} (${x.place}) of P${x.pid} is nowhere after ${move.name}`);
     }
     const appeared = afterCards.filter((x) => !beforeIids.has(x.card.iid));
-    let upgrades = 0;
     for (const x of appeared) {
       if (x.place === 'pit' && handOver) continue;
-      if (upgradeMade && x.place === 'deck' && x.pid === mover && x.card.cardId === upgradeMade && upgrades === 0) { upgrades++; continue; }
+      // A unit a card's effect raised: a Ghoul shuffled into a deck, a Gravestone on a bench.
+      if (RAISED[x.card.cardId]?.(x.place)) continue;
       add('card-appeared', x.card.iid, `${x.card.cardId}#${x.card.iid} (${x.place}) of P${x.pid} appeared after ${move.name}(${JSON.stringify(args)})`);
-    }
-    // Each copy played makes one upgrade, shuffled into the deck.
-    if (!duplicated && playedCard && playedOn && upgradeMade && upgrades !== 1) {
-      add('played-card-state', `${playedCard.iid}-upgrade`, `${playedCard.cardId} was played but no ${upgradeMade} was shuffled into P${mover}'s deck`);
     }
   }
 
@@ -801,9 +788,11 @@ export function collectTransitionViolations(
     let cost = 0;
     let payout = 0;
     if (playedCard && playedOn) cost = playCostOracle(playedOn, playedCard.cardId);
-    else if (move.name === 'activate') {
-      const used = wornItemOf(B, mover, args[0]);
-      payout = used ? SOULS_ON_USE[used.item.cardId] ?? 0 : 0;
+    else if (move.name === 'placeHero') cost = unitOracle(handCardOf(B, mover, args[0])?.cardId)?.price ?? 0; // a hero is free, a unit its price
+    else if (playedSpell) {
+      // A spell: its whole price, and what its text pays out as it resolves (Golden Goose Egg).
+      cost = playCostOracle(undefined, playedSpell.cardId);
+      payout = SOULS_ON_USE[playedSpell.cardId] ?? 0;
     } else if (move.name === 'moveHero') {
       const [f, t] = args as [number, number];
       const ps = B.players[mover];
@@ -891,11 +880,23 @@ export function collectTransitionViolations(
     return undefined;
   };
 
-  // A play: the card leaves the hand and is worn by the hero named; an active starts on its
-  // full cooldown (its own, else its tier's) or, hard crowd control, with HARD_CC_CHARGES; a
-  // passive has neither. The component it evolves — or, onto a full hero, the worn item it
-  // replaces — leaves that hero for the player's discard pile. A play never leaves a hero
-  // over its cap.
+  // A spell played: the card leaves the hand for its player's discard pile, with no cooldown,
+  // worn by nobody.
+  if (!duplicated && playedSpell) {
+    const where = placeOf(after.G, playedSpell.iid);
+    const now = wornAfter(playedSpell.iid);
+    const card1 = everyCard(after.G).find((x) => x.card.iid === playedSpell.iid)?.card;
+    const problems: string[] = [];
+    if (handCardOf(after.G, mover, playedSpell.iid)) problems.push('it is still in the hand');
+    if (now) problems.push(`it is worn by ${now.bearer.cardId}#${now.bearer.iid}`);
+    if (where?.place !== 'discard' || where.pid !== mover) problems.push(`it is ${where ? `in ${where.place} of P${where.pid}` : 'nowhere'}, not in P${mover}'s discard pile`);
+    if (Object.keys(card1?.cooldowns ?? {}).length) problems.push(`it carries cooldowns ${JSON.stringify(card1!.cooldowns)}`);
+    if (problems.length) add('played-card-state', playedSpell.iid, `the spell ${playedSpell.cardId}#${playedSpell.iid} was played by P${mover}: ${problems.join('; ')}`);
+  }
+
+  // Equipment played: the card leaves the hand and is worn by the hero named, with no cooldown.
+  // The component it evolves — or, onto a full hero, the worn item it replaces — leaves that
+  // hero for the player's discard pile. A play never leaves a hero over its cap.
   if (!duplicated && playedCard && playedOn) {
     const hero1 = heroes1.get(playedOn.iid);
     const now = wornAfter(playedCard.iid);
@@ -904,19 +905,8 @@ export function collectTransitionViolations(
     if (handCardOf(after.G, mover, playedCard.iid)) problems.push('it is still in the hand');
     if (!now || now.bearer.iid !== playedOn.iid || !d || !hero1) {
       problems.push(now ? `it is worn by ${now.bearer.cardId}#${now.bearer.iid}` : 'it is worn by nobody');
-    } else {
-      const it = now.item;
-      const cd = it.cooldowns?.[d.id];
-      const keys = Object.keys(it.cooldowns ?? {});
-      if (d.type === 'spell' && d.hardCC) {
-        const want = playedCard.charges ?? HARD_CC_CHARGES;
-        if (it.charges !== want || keys.length) problems.push(`hard crowd control with charges ${it.charges} and cooldowns ${JSON.stringify(it.cooldowns)} (${want} charges, no cooldown)`);
-      } else if (d.type === 'spell') {
-        const want = activeCooldownOracle(hero1, d);
-        if (cd !== want || keys.length !== 1 || it.charges !== undefined) problems.push(`an active on cooldowns ${JSON.stringify(it.cooldowns)}${it.charges !== undefined ? ` with charges ${it.charges}` : ''} (its full cooldown is ${want})`);
-      } else if (keys.length || it.charges !== undefined) {
-        problems.push(`a passive with cooldowns ${JSON.stringify(it.cooldowns)} / charges ${it.charges}`);
-      }
+    } else if (Object.keys(now.item.cooldowns ?? {}).length) {
+      problems.push(`it is worn with cooldowns ${JSON.stringify(now.item.cooldowns)}`);
     }
     if (evolved) {
       const where = placeOf(after.G, evolved.iid);
@@ -985,7 +975,10 @@ export function collectTransitionViolations(
     const problems: string[] = [];
     for (const iid of named) {
       const where = placeOf(after.G, iid);
-      if (where?.place !== 'discard' || where.pid !== mover) problems.push(`${iid} is ${where ? `in ${where.place}` : 'nowhere'}`);
+      // A hero is never discarded: it goes back into its owner's deck (which is shuffled).
+      const hero = handCardOf(B, mover, iid);
+      const want = hero && isHeroCard(hero) && !isUnitCard(hero) ? 'deck' : 'discard';
+      if (where?.place !== want || where.pid !== mover) problems.push(`${iid} is ${where ? `in ${where.place}` : 'nowhere'} (the rules: ${want})`);
     }
     const left = Math.min(B.pendingDiscard.count - named.length, handOf(after.G, mover).length);
     const want = left > 0 ? left : undefined;
@@ -993,15 +986,14 @@ export function collectTransitionViolations(
     if (problems.length) add('discard-move', mover, `discard(${JSON.stringify(args)}) by P${mover}: ${problems.join('; ')}`);
   }
 
-  // A draw card used: N cards from the top of the deck to the hand (fewer when the deck runs
-  // out or the hand fills to MAX_HAND), then M owed to the discard (no more than the hand
-  // holds; none when it is empty).
-  if (!duplicated && move.name === 'activate') {
-    const used = wornItemOf(B, mover, args[0]);
-    const draw = used ? DRAW_CARDS[used.item.cardId] : undefined;
+  // A draw card played: it leaves the hand, then N cards come from the top of the deck to the
+  // hand (fewer when the deck runs out or the hand fills to MAX_HAND), then M are owed to the
+  // discard (no more than the hand holds; none when it is empty).
+  if (!duplicated && playedSpell) {
+    const draw = DRAW_CARDS[playedSpell.cardId];
     if (draw) {
       const deck0 = deckOf(B, mover);
-      const hand0 = handOf(B, mover).length;
+      const hand0 = handOf(B, mover).length - 1; // the draw card itself has left the hand
       const n = Math.max(0, Math.min(draw.draw, deck0.length, MAX_HAND - hand0));
       const top = deck0.slice(deck0.length - n).map((c) => c.iid).reverse();
       const hand1 = handOf(after.G, mover);
@@ -1012,7 +1004,7 @@ export function collectTransitionViolations(
       if (deckOf(after.G, mover).length !== deck0.length - n) problems.push(`the deck went ${deck0.length} -> ${deckOf(after.G, mover).length}`);
       const pd = after.G.pendingDiscard;
       if (owed > 0 ? pd?.pid !== mover || pd.count !== owed : pd !== undefined) problems.push(`the discard owed is ${JSON.stringify(pd)} (the rules: ${owed} by P${mover})`);
-      if (problems.length) add('draw-card', used!.item.iid, `${used!.item.cardId} (draw ${draw.draw}, discard ${draw.discard}) by P${mover} with ${hand0} in hand: ${problems.join('; ')}`);
+      if (problems.length) add('draw-card', playedSpell.iid, `${playedSpell.cardId} (draw ${draw.draw}, discard ${draw.discard}) by P${mover} with ${hand0} in hand: ${problems.join('; ')}`);
     }
   }
 
@@ -1022,7 +1014,7 @@ export function collectTransitionViolations(
   // Vitality spike's +1 max HP while the hero wears 3+ Vitality items; a level the play's exp
   // earns adds its own. Current HP moves with the max on the way on (never below 1, and a
   // corpse stays at 0). A play touches no other hero.
-  if (!duplicated && ITEM_MOVES.includes(move.name)) {
+  if (!duplicated && ITEM_MOVES.includes(move.name) && !playedSpell) {
     type Bonus = { atk: number; spirit: number; hp: number };
     const gains = new Map<string, { bonus: Bonus; on: boolean; off: boolean }>();
     const change = (iid: string | undefined, cardId: string | undefined, sign: 1 | -1) => {
@@ -1065,8 +1057,9 @@ export function collectTransitionViolations(
 
   // Exp for wearing (rules.md §4): EXP_ON_EQUIP the first time a hero wears an item played
   // onto it — never for a corpse or a re-play (`equippedIds` remembers what it has worn).
-  // A hero never forgets what it has worn.
-  if (!duplicated && ITEM_MOVES.includes(move.name)) {
+  // A hero never forgets what it has worn. (A spell is worn by nobody: what it does to the
+  // board — damage, heals, a kill's exp — is its effect's, held to the damage rules.)
+  if (!duplicated && ITEM_MOVES.includes(move.name) && !playedSpell) {
     for (const [iid, h0] of heroes0) {
       const h1 = heroes1.get(iid);
       if (!h1) continue;
@@ -1084,31 +1077,22 @@ export function collectTransitionViolations(
     }
   }
 
-  // An active item used (rules.md §5): its bearer has used its one ability this turn, and the
-  // item cools down (its own cooldown, else its tier's) — or, hard crowd control, spends one charge.
-  if (!duplicated && move.name === 'activate') {
-    const used = wornItemOf(B, mover, args[0]);
-    const d = used && itemData(used.item.cardId);
-    if (used && d?.type === 'spell') {
-      const now = wornAfter(used.item.iid);
-      const bearer1 = heroes1.get(used.bearer.iid);
-      if (bearer1 && !isRespawning(bearer1) && !bearer1.skillUsedThisTurn) add('activate-spends', `${used.bearer.iid}-used`, `${describeUnit(bearer1)} used ${d.id} but is not marked as having used its ability`);
-      if (!now) add('activate-spends', used.item.iid, `${d.id}#${used.item.iid} is worn by nobody after it was used`);
-      else if (d.hardCC) {
-        if (now.item.charges !== (used.item.charges ?? 0) - 1) add('activate-spends', used.item.iid, `hard crowd control ${d.id} had ${used.item.charges} charges and has ${now.item.charges} after its use`);
-      } else {
-        const want = activeCooldownOracle(now.bearer, d);
-        if (now.item.cooldowns?.[d.id] !== want) add('activate-spends', used.item.iid, `${d.id} cools down ${now.item.cooldowns?.[d.id]} after its use; the rules say ${want}`);
+  // A spell played spends no hero's ability (docs/card-design.md §1): no hero of the side is
+  // newly marked as having used its one ability of the turn.
+  if (!duplicated && playedSpell) {
+    for (const [iid, h0] of heroes0) {
+      const h1 = heroes1.get(iid);
+      if (h1 && !h0.skillUsedThisTurn && h1.skillUsedThisTurn && h1.lastSkillUsed === playedSpell.cardId) {
+        add('spell-spends', iid, `${describeUnit(h1)} is marked as having used its ability after P${mover} played the spell ${playedSpell.cardId}`);
       }
     }
   }
 
   // Cooldowns count their owner's turns (rules.md §5): at the start of a player's turn each of
-  // its heroes' and items' cooldowns on the board comes down by one (gone at 0), on a corpse
-  // and a merged Rem too; nothing else moves a cooldown but the ability or item that starts it
-  // — a skill or ultimate used (the `ability-cooldown` rule), an item played or used (the
-  // `played-card-state` / `activate-spends` rules), and Refresher, which takes the player's
-  // Active and the items it wears off cooldown. A card that comes onto the board or leaves it
+  // its heroes' cooldowns on the board comes down by one (gone at 0), on a corpse and a merged
+  // Rem too; nothing else moves a cooldown but the ability that starts it — a skill or
+  // ultimate used (the `ability-cooldown` rule) — and Refresher, which ends the waits of the
+  // player's Active. (No item has a cooldown.) A card that comes onto the board or leaves it
   // (a hero to or from the hand, a component evolved away) is left out.
   if (!duplicated) {
     // (A turn handed over has begun even when its start ends the match — a Bleed tick that
@@ -1116,13 +1100,12 @@ export function collectTransitionViolations(
     const started = move.name === 'endTurn' && switched ? (after.ctx.currentPlayer as PlayerID) : undefined;
     const usedSkill = move.name === 'useSkill' && typeof args[0] === 'string'
       ? `${args[0]}|${typeof args[2] === 'string' ? args[2] : firstSkillId(heroes0.get(args[0] as string))}` : undefined;
-    const usedItem = move.name === 'activate' ? wornItemOf(B, mover, args[0]) : undefined;
     // A trigger used arms its own cooldown, as from its button.
     const usedTrigger = move.name === 'useTrigger' && typeof args[0] === 'string' ? `${args[0]}|${args[1]}` : undefined;
     const refreshed = new Set<string>();
-    if (usedItem?.item.cardId === 'refresher') {
+    if (playedSpell?.cardId === 'refresher') {
       const active = B.players[mover].active;
-      if (active) for (const c of [active, ...wornItemsOf(active)]) refreshed.add(c.iid);
+      if (active) refreshed.add(active.iid);
     }
     for (const pid of PIDS) {
       const present0 = boardIids(B, pid);
@@ -1151,7 +1134,7 @@ export function collectTransitionViolations(
             if (now1 !== Math.max(0, still)) add('cooldown-bookkeeping', `${key}-charges`, `${ability} on ${owner} had ${h0.chargesSpent[ability]} charges spent as its wait ran out; it has ${now1} spent, the rules give ${Math.max(0, still)}`);
           }
         }
-        else if (key === usedSkill || key === usedTrigger || (usedItem && owner === usedItem.item.iid) || (playedCard && owner === playedCard.iid)) want = 'any';
+        else if (key === usedSkill || key === usedTrigger) want = 'any';
         else if (refreshed.has(owner) && v1 === undefined) want = undefined;
         if (want !== 'any' && v1 !== want) add('cooldown-bookkeeping', key, `cooldown ${key} ${v0 ?? '-'} -> ${v1 ?? '-'} after ${move.name}(${JSON.stringify(args)}); the rules give ${want ?? '-'}`);
       }

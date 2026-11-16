@@ -29,13 +29,25 @@ function attachEquip(hero: CardInstance, cardId: string): CardInstance {
 }
 
 describe('Rusted Barrel applies Weaken (reduces enemy ATK)', () => {
-  it('applies Weaken 2 / 2T on the target', () => {
+  it('applies Bullet Power −1 for 2 turns on the target (Patrick, 2026-11-15: the cheap one)', () => {
     const G = freshG();
     const enemy = G.players['1'].active!;
     ABILITIES_BY_ID['eff_rusted_barrel'].run(G, { movingPlayer: '0' }, { target: enemy });
     const w = enemy.statuses.find((s) => s.id === 'weapon_power_down');
-    expect(w?.value).toBe(2);
+    expect(w?.value).toBe(1);
     expect(w?.duration).toBe(2);
+  });
+
+  it('costs 1 soul, a price of its own under tier 1\'s 2 — in the hand, on the card and in net worth', async () => {
+    const { itemPrice } = await import('@/engine/query');
+    const { playCost } = await import('@/engine/legality');
+    const { PRICE } = await import('@/engine/constants');
+    const { itemCard } = await import('@/cards');
+    expect(itemCard('rusted_barrel')).toMatchObject({ tier: 1, price: 1, text: 'Apply Bullet Power −1 on enemy Active for 2 turns.' });
+    expect(itemPrice('rusted_barrel')).toBe(1);
+    expect(playCost(undefined, 'rusted_barrel')).toBe(1);
+    // Every other tier-1 card still lists at the tier's price.
+    expect(itemPrice('healing_rite')).toBe(PRICE[1]);
   });
 });
 

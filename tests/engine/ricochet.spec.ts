@@ -155,8 +155,8 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     }
   });
 
-  it('Restorative Shot, Active Reload, Frenzy and Spiritual Overflow fire once a swing', () => {
-    for (const item of ['restorative_shot', 'active_reload', 'frenzy', 'spiritual_overflow']) {
+  it('Restorative Shot, Frenzy and Spiritual Overflow fire once a swing', () => {
+    for (const item of ['restorative_shot', 'frenzy', 'spiritual_overflow']) {
       const { G, atk } = lane('hero_dynamo', 'ricochet', item);
       atk.hpMax = 20; atk.hp = 5; // below half, for Frenzy
       const fx = G.fx.length;
@@ -190,6 +190,7 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
   it("Vindicta's Flight and Drifter's Bloodscent stay with the swing", () => {
     const vindicta = lane('hero_vindicta', 'ricochet');
     vindicta.atk.spiritMod = 2;
+    addStatus(vindicta.G, vindicta.atk, 'flying', 1, 3); // in Flight: her swing's spirit rider is the status's
     const fx = vindicta.G.fx.length;
     makeAttack(vindicta.G, '0');
     expect(vindicta.abrams.hp).toBe(14); // 3 bullet + Flight's 1 + 2 Spirit
@@ -239,17 +240,17 @@ describe('A bounce that knocks a hero out', () => {
   });
 });
 
-describe('Split Shot: your Active gains Ricochet 1 this turn', () => {
+describe('Split Shot: your Active gains Ricochet 2 this turn', () => {
   it('its swing bounces, and the end of the turn takes the Ricochet away', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const bench = G.players['1'].bench.filter((b): b is CardInstance => !!b);
     for (const b of bench) { b.hpMax = 20; b.hp = 20; }
     useItem(G, '0', 'split_shot'); // Haze's ability of the turn; she may still attack
-    expect(status(haze, 'ricochet')).toMatchObject({ value: 1, duration: 1 });
+    expect(status(haze, 'ricochet')).toMatchObject({ value: 2, duration: 1 });
     expect(hps(bench)).toEqual([20, 20, 20]); // the item itself shoots nothing
     makeAttack(G, '0');
-    expect(hps(bench)).toEqual([19, 19, 19]); // Haze's one swing, one bounce of 1 each
+    expect(hps(bench)).toEqual([18, 18, 18]); // Haze's one swing, one bounce of 2 each
     endTurnEffects(G, '0');
     expect(status(haze, 'ricochet')).toBeUndefined();
   });
@@ -264,16 +265,16 @@ describe('Split Shot: your Active gains Ricochet 1 this turn', () => {
     expect(status(haze, 'ricochet')).toBeUndefined();
   });
 
-  it('adds to a worn Ricochet: 3 a bounce', () => {
+  it('adds to a worn Ricochet: 4 a bounce', () => {
     const { G, atk, bench } = lane('hero_dynamo', 'ricochet');
     useItem(G, '0', 'split_shot');
-    expect(ricochetPower(atk)).toBe(3);
+    expect(ricochetPower(atk)).toBe(4);
     makeAttack(G, '0');
-    expect(hps(bench)).toEqual([17, 17, 17]);
+    expect(hps(bench)).toEqual([16, 16, 16]);
   });
 
   it('the cards print the keyword, and the rule text bolds and explains it', () => {
-    expect(CARDS_BY_ID['split_shot']).toMatchObject({ slot: 'weapon', tier: 2, text: 'Your Active gains Ricochet 1 this turn.' });
+    expect(CARDS_BY_ID['split_shot']).toMatchObject({ slot: 'weapon', tier: 2, text: 'Your Active gains Ricochet 2 this turn.' });
     expect(CARDS_BY_ID['ricochet']).toMatchObject({ slot: 'weapon', tier: 4 });
     expect((CARDS_BY_ID['ricochet'] as { text: string }).text).toMatch(/^Ricochet 2: /);
     expect(statusOfKeyword('Ricochet', ' 2 this turn.')).toEqual({ id: 'ricochet', value: 2 });

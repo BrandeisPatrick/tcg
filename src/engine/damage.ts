@@ -1,13 +1,15 @@
 import type { CardInstance, DamageType, FxCastKind, FxTag, GameState } from './types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { pushLog } from './log';
-import { chargedUlt, fallPending, incomingDamage, isBoss, isRespawning, itemHealingBoost, itemResist, optionalTriggers, seatOf } from './query';
+import { chargedUlt, fallPending, incomingDamage, isBoss, isRespawning, isUnit, itemHealingBoost, itemResist, optionalTriggers, seatOf } from './query';
 import { currentCast, withCast } from './castContext';
 import { fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { pushFx, fxSource } from './fx';
 import { tallyBossHit } from './map';
-import { EXP_ON_KILL } from './constants';
+import { COUNTERSPELL_HEAL, EXP_ON_KILL, FLIGHT_DODGE_IN } from './constants';
+import { rollsBlind } from './chance';
+import { nextRandom } from './deck';
 
 /** Presentation hints for the FX layer, passed by call sites whose damage is
  *  one of a kind (a Djinn's Mark detonation, a Killing Blow execute, a Tesla
@@ -23,6 +25,59 @@ interface DamageFxOpts {
   cast?: FxCastKind;
 }
 
+/**
+ * Counterspell (docs/card-design.md, "Counters"): a status on a hero, put up
+ * by the Counterspell spell, that stops the next enemy card played on it — a
+ * spell, a skill or an ultimate. It triggers once: spending it takes the
+ * status off and heals the hero COUNTERSPELL_HEAL.
+ */
+function spendCounterspell(G: GameState, hero: CardInstance, what: string): void {
+  hero.statuses = hero.statuses.filter((s) => s.id !== 'counterspell');
+  pushLog(G, `${cardName(hero.cardId)}'s Counterspell stops ${what}.`);
+  pushFx(G, { kind: 'immune', iid: hero.iid, what: 'counterspell' });
+  // The heal is the hero's own, not the stopped card's: outside its frame.
+  withCast(hero, 'proc', () => healUnit(G, hero, COUNTERSPELL_HEAL, 'Counterspell'));
+}
+
+/** True when `target` — an enemy hero the card of `pid` now being played is
+ *  aimed at — carries Counterspell: the status is spent and the card does
+ *  nothing at all (the callers skip its effect; its price or wait is paid). */
+export function counterspellNegates(G: GameState, pid: string, target: CardInstance | undefined, what: string): boolean {
+  if (!target || isBoss(target) || seatOf(target) === pid) return false;
+  if (!target.statuses.some((s) => s.id === 'counterspell')) return false;
+  spendCounterspell(G, target, what);
+  return true;
+}
+
+/** True when what the card now resolving would do to `target` is stopped by
+ *  its Counterspell: an enemy spell, skill or ultimate that reaches a hero it
+ *  was not aimed at (one that hits every enemy, or "the enemy Active"). The
+ *  status is spent on the first hit, and the frame remembers the hero so the
+ *  rest of the same card is stopped for it as well. A swing, a proc and a
+ *  status ticking are no card played: they pass. */
+export function counterspellStops(G: GameState, target: CardInstance): boolean {
+  const cast = currentCast();
+  if (!cast?.source || (cast.kind !== 'spell' && cast.kind !== 'skill' && cast.kind !== 'ult')) return false;
+  if (isBoss(target) || isBoss(cast.source) || seatOf(cast.source) === seatOf(target)) return false;
+  if (cast.countered?.has(target.iid)) return true;
+  if (!target.statuses.some((s) => s.id === 'counterspell')) return false;
+  (cast.countered ??= new Set()).add(target.iid);
+  spendCounterspell(G, target, `${cardName(cast.source.cardId)}'s ${cast.kind === 'spell' ? 'spell' : cast.kind === 'ult' ? 'ultimate' : 'skill'}`);
+  return true;
+}
+
+/**
+ * Flying (Vindicta's Flight): each hit on a flying hero misses 1 time in
+ * FLIGHT_DODGE_IN — any hit, of any type, from any source. The die is the
+ * match's own (`nextRandom`); a preview and the AI's look roll none
+ * (engine/chance.ts) and take the hit as landing.
+ */
+function dodges(G: GameState, target: CardInstance): boolean {
+  if (!target.statuses.some((s) => s.id === 'flying')) return false;
+  if (rollsBlind()) return false;
+  return nextRandom(G) < 1 / FLIGHT_DODGE_IN;
+}
+
 // Damage routing for a unit. Returns the damage actually dealt after mitigation.
 // `sourceName`, if omitted, is resolved from the current cast context so skill /
 // spell / ult damage gets "Caster → Target" attribution in the log automatically.
@@ -36,6 +91,14 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   // else: no ability, item, proc, rider, Ricochet bounce or tick reaches it.
   const pit = isBoss(target);
   if (pit && !(type === 'attack' && cast?.kind === 'attack' && !cast.bounce && !!cast.source)) return 0;
+  // Counterspell: an enemy card does nothing to its bearer.
+  if (counterspellStops(G, target)) return 0;
+  // Flying: the hit may miss altogether.
+  if (dodges(G, target)) {
+    pushLog(G, `${cardName(target.cardId)} is flying: the hit misses.`);
+    pushFx(G, { kind: 'immune', iid: target.iid, what: 'flying', cast: cast?.kind });
+    return 0;
+  }
   // Incoming-damage hooks come before everything else (Vindicta's flight takes
   // 1 off a bullet — she's literally above the gunfire).
   amount = incomingDamage(target, amount, type);
@@ -167,7 +230,8 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   // A hero that may cancel its own fall (an optional trigger at 'onFall':
   // Victor's revive) holds the exp back until the fall is decided (`downedBy`,
   // paid by killInPlace): a fall that never happens pays none.
-  if (hpBefore > 0 && target.hp <= 0 && cast && cast.source) {
+  // (Destroying a unit — a Ghoul, a Gravestone — earns nothing.)
+  if (hpBefore > 0 && target.hp <= 0 && cast && cast.source && !isUnit(target)) {
     const srcData = CARDS_BY_ID[cast.source.cardId];
     if (srcData?.type === 'hero') {
       if (optionalTriggers(target, 'onFall').length > 0) target.downedBy = cast.source.iid;

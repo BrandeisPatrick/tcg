@@ -1,5 +1,5 @@
 /**
- * The 21 heroes in the game are the cards of docs/hero-design.md §8, under the
+ * The 22 heroes in the game are the cards of docs/hero-design.md §8, under the
  * rules of §2–4: HP from the formula (4 + tank score, the curve's point),
  * Attack 1 or 2, growth by curve (even at Level 2), a printed Retreat of 0–2
  * souls, exactly one skill (1–3 souls, then a 1-turn wait) or one passive, and
@@ -38,8 +38,8 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   hero_warden:     { atk: 2, hp: 7, growth: [1, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium' },
   hero_haze:       { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 1, skill: null, ult: 'large' },
   hero_wraith:     { atk: 1, hp: 4, growth: [3, 1, 0], retreat: 0, skill: [3, 1], ult: 'medium' },
-  hero_vindicta:   { atk: 2, hp: 5, growth: [2, 0, 0], retreat: 0, skill: null, ult: 'medium' },
-  hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: [3, 2], ult: 'large' },
+  hero_vindicta:   { atk: 2, hp: 5, growth: [2, 0, 0], retreat: 0, skill: [5, 2], ult: 'small' },
+  hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: [4, 1], ult: 'large' },
   hero_drifter:    { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: null, ult: 'medium' },
   hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: [4, 1], ult: 'large' },
   hero_mirage:     { atk: 1, hp: 4, growth: [1, 1, 2], retreat: 0, skill: null, ult: 'small' },
@@ -52,6 +52,7 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   // The charged ultimates wait on damage (`charged`: what they need); their size is what the effect is worth.
   hero_victor:     { atk: 1, hp: 6, growth: [0, 3, 1], retreat: 2, skill: null, ult: 'medium', charged: 10 },
   hero_silver:     { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: [3, 1], ult: 'medium', charged: 8 },
+  hero_graves:     { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: [4, 1], ult: 'small' },
 };
 
 /** Growth points a level, by curve (§2). */
@@ -79,7 +80,7 @@ function act(G: GameState, pid: PlayerID, a: Action) {
   expect(perform(G, pid, a), JSON.stringify(a)).not.toBe(INVALID);
 }
 
-describe('the 21 heroes are the hero doc\'s cards', () => {
+describe('the 22 heroes are the hero doc\'s cards', () => {
   it('every hero in the game is in the doc\'s table, and the table is every hero', () => {
     expect(HEROES.map((h) => h.id).sort()).toEqual(Object.keys(DOC).sort());
   });
@@ -219,9 +220,9 @@ describe('a skill costs no souls: it waits, and a charged one holds two uses (Pa
     }
   });
 
-  it('the four charged skills are the ones Deadlock gives charges: Serrated Knives, Frost Grenade, Lightning Ball and Kinetic Pulse', () => {
+  it('the four charged skills are ones Deadlock gives charges: Serrated Knives, Frost Grenade, Kinetic Pulse and Assassinate (Seven\'s is Static Charge, which has none)', () => {
     const charged = HEROES.filter((h) => (getAbility(h.skills[0] ?? '')?.charges ?? 1) > 1).map((h) => h.id).sort();
-    expect(charged).toEqual(['hero_dynamo', 'hero_kelvin', 'hero_seven', 'hero_shiv']);
+    expect(charged).toEqual(['hero_dynamo', 'hero_kelvin', 'hero_shiv', 'hero_vindicta']);
   });
 
   it('it is used with no souls, and ready again on the hero\'s third own turn after — SKILL_COOLDOWN', () => {
@@ -365,12 +366,10 @@ describe('Viscous\'s skill is The Cube: one of his heroes takes no damage until 
     expect(pid).toBe('1');
     const rival = G.players['1'];
     const hp = haze.hp;
-    // Seven's Lightning Ball hits every enemy: all but the cube.
+    // Seven's Static Charge on the cubed Active: its spirit hit deals nothing.
     const seven = rival.bench[2]!;
-    const viscousHp = viscous.hp;
-    act(G, '1', { type: 'useSkill', heroIid: seven.iid }); // 2 of the turn's 5 souls
+    act(G, '1', { type: 'useSkill', heroIid: seven.iid, targetIid: haze.iid });
     expect(haze.hp).toBe(hp);
-    expect(viscous.hp).toBe(viscousHp - 1);
     act(G, '1', { type: 'attack' }); // Abrams swings at the cubed Haze
     expect(haze.hp).toBe(hp);
     expect(G.fx.some((e) => e.kind === 'immune' && e.iid === haze.iid && e.what === 'damage')).toBe(true);

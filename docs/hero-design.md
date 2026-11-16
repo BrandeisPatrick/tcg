@@ -1,6 +1,6 @@
 # Hero Design — requirements
 
-Status, 2026-11-09: **21 heroes are built to these cards** (branch `deck-and-heroes`; see "As
+Status, 2026-11-16: **22 heroes are built to these cards** (Graves on 2026-11-16, with the units her kit raises: see "Units, the mill and Graves" at the end). Status, 2026-11-09: 21 heroes were built to these cards (branch `deck-and-heroes`; see "As
 built" at the end): the 19 of step 2, and in step 3 Victor and Silver with their charged ultimates,
 on the trigger prompt system of section 6 (`src/engine/prompts.ts`), and Rem rebuilt to Patrick's
 call of the same day (section 5: she stands in the lane, Tag Along a ride). The other 23 cards in section 8
@@ -41,7 +41,7 @@ after 2 turns, keeping its level (section 7).
 | Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. |
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
-| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Four skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, Lightning Ball, Kinetic Pulse): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
+| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Four skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, Kinetic Pulse, and since 2026-11-16 Vindicta's Assassinate, which waits 5; Lightning Ball was one until Seven's skill became Static Charge, 2026-11-15): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
 | Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 2. Costs no souls (Patrick, 2026-11-15), and a side uses **one ultimate a turn**. It waits 4 (small), 6 (medium) or 8 (large) turns by size: after each use, and from the match's first turn, so a large one is first ready on its side's turn 8. |
 | Charged ultimate | For heroes like Victor and Silver (Patrick, 2026-11-09). It has no opening wait: it is ready once the hero has taken (Victor, 10) or dealt (Silver, 8) enough damage. The count starts over after use, and it then waits its size's turns like any ultimate. (Until 2026-11-15 it had a soul price, 20 and 16, that each damage brought down by 1.) |
 
@@ -54,7 +54,9 @@ after 2 turns, keeping its level (section 7).
 - **Ultimates stay simple** (Patrick: "keep word and effect simple").
   - One or two effects in 15 words or fewer, with no story words.
   - Allowed effects: damage, heal, shield, one status, a pull or swap, or a stat boost.
-  - Not allowed: effects over several turns (channels), knockout rewards, costs paid in the hero's own HP, "then" steps, or conditions.
+  - Not allowed: knockout rewards, costs paid in the hero's own HP, "then" steps, or conditions.
+  - **A channel is allowed** (Patrick, 2026-11-15; until then it was not): an ultimate may run over 2 or 3 of its caster's turns, pulsing as each ends, when a Stun on the caster ends it. The card says "Channel N turns", and the caster can't attack or use its skill while it runs.
+  - **Effects that resolve after a turn** (Patrick, 2026-11-15): where a hero's control is a Stun, prefer one that goes off after the enemy's next turn, so the enemy has that turn to answer it ([card-design.md](card-design.md), "Counters"). Seven is the first; the other Stuns are still immediate.
   - Two exceptions:
     - Shiv's Killing Blow keeps its condition: it knocks out a hero below half HP.
     - Victor's ultimate is used on the enemy's turn, at the moment he falls.
@@ -295,8 +297,9 @@ HP 5 · Attack 1 · Retreat 0 · per level +3 Attack +1 HP
 
 **Vindicta** · in the game today — peaks early, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 5 · Attack 2 · Retreat 0 · per level +2 Attack
-- Passive — **Flight**: Vindicta flies: her attacks also deal 1✦ spirit damage.
-- Ultimate, medium, waits 6 — **Assassinate**: Deal 8✦ spirit damage to any enemy.
+- Skill, 2 charges, 5 turns each — **Assassinate**: Snipe any enemy, bench too: deal 4✦ spirit damage.
+- Ultimate, small, waits 4 — **Flight**: Fly 3 turns: 1 in 3 hits miss her; her attacks add 1✦ spirit damage.
+- Built so on 2026-11-16 (Patrick). Until then Flight was her passive (1✦ on each swing) and Assassinate her ultimate (medium: 8✦ to any enemy). The reasoning is in "Vindicta: the snipe and Flight" at the end.
 - Why: Vindicta floats out of reach adding spirit damage to her rifle, then snipes any wounded hero on the board, bench included.
 - Changed from today: Stats stay 2/5 (Attack capped at 2, so the early +1 goes on HP). The bullet-resist passive becomes Flight's real effect, bonus spirit damage on her shots; Assassinate becomes a flat 8✦ on any enemy.
 
@@ -323,10 +326,14 @@ HP 5 · Attack 2 · Retreat 1 · per level +2 Attack +1 HP
 
 **Seven** · in the game today — peaks late, many targets; mix tank 1 · damage 3 · control 1 · support 0  
 HP 4 · Attack 1 · Retreat 1 · per level +1 HP +3 Spirit
-- Skill, 2 charges, 3 turns each — **Lightning Ball**: Roll a ball of lightning through the enemy team: deal 1✦ spirit damage to every enemy.
-- Ultimate, large, waits 8 — **Storm Cloud**: Deal 5✦ spirit damage to every enemy.
+- Skill, waits 4 — **Static Charge**: Deal 1✦ spirit damage to the enemy Active and Charge it: after its next turn, it is Stunned 1 turn.
+- Ultimate, large, waits 8 — **Storm Cloud**: Channel 2 turns: at each turn's end, deal 2✦ spirit damage to every enemy.
 - Why: Seven is the easy spirit carry who zaps grouped enemies all game and wins late teamfights with a storm that hits the whole team.
 - Changed from today: Attack 2 to 1 (spirit hero; HP stays 4 after the late -1). Static Charge's delayed stun gave way to Lightning Ball because control 1 allows little control; Storm Cloud is one hit on every enemy instead of a 3-turn channel.
+- **Changed 2026-11-15 (Patrick: "Seven's stun… I can play Debuff Remover to counter it"; "Seven will be channelling for 2 or 3 turns… I can use Knockdown to counter it"):** both came back, as effects the enemy can answer.
+  - Static Charge: 1✦ now (1 point, growing with Spirit) and a Stun that lands after the enemy's next turn. A Stun is 3 points; delayed and answerable (Dispel Magic, Debuff Reducer, a Retreat) it counts half, 1.5. 2.5 points at Level 1: a turn denied, so it waits 4. It holds no charges, as in Deadlock.
+  - Storm Cloud: 2 pulses of 2✦. Base 4 on every enemy is 10 points against the single hit's 12.5, but Spirit counts twice: at Level 2 (Spirit 3) 5 + 5 against 8, at Level 4 (Spirit 9) 11 + 11 against 14. The first pulse lands as the turn he starts it ends; the second only if the enemy has not stunned him in between, about 0.6 of the time, so it is worth 5 + 3 = 8 at Level 2 and 11 + 6.6 = 17.6 at Level 4: the single hit's value when answered as often as that, more when ignored, and Seven is locked for both turns.
+  - His control stays 1: the Stun is his only control and the enemy can take it off.
 
 **Celeste** — peaks early, many targets; mix tank 0 · damage 3 · control 0 · support 0  
 HP 5 · Attack 1 · Retreat 0 · per level +2 Spirit
@@ -336,9 +343,10 @@ HP 5 · Attack 1 · Retreat 0 · per level +2 Spirit
 
 **Graves** — peaks mid, many targets; mix tank 1 · damage 2 · control 2 · support 0  
 HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, waits 4 — **Essence Theft**: Her beam drains every enemy: Spirit Resist -1 for 2 turns. Graves gets +1 Spirit for 2 turns.
-- Ultimate, medium, waits 6 — **Borrowed Decree**: Deal 3✦ spirit damage to every enemy. Root the enemy Active 1 turn.
-- Why: The necromancer steals her enemies' defenses and raises Ghouls that hit the whole team and pin their front line.
+- Skill, waits 4 — **Grasping Hands**: Deal 1✦ spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck.
+- Ultimate, small, waits 4 — **Borrowed Decree**: Raise a Gravestone on your bench: each turn it shuffles a Ghoul into your deck.
+- Why: The necromancer traps the lane and raises the dead. Her Ghouls are cards (Patrick, 2026-11-16): she fills her own deck with them, and each one that dies takes a card off the enemy's.
+- Built 2026-11-16 to Patrick's design; this replaces the proposal of 2026-11-09 (Essence Theft and a Borrowed Decree that hit every enemy). The reasoning is in "Units, the mill and Graves" at the end.
 
 **Mina** — peaks late, one target; mix tank 0 · damage 3 · control 0 · support 0  
 HP 4 · Attack 1 · Retreat 0 · per level +1 HP +3 Spirit
@@ -571,7 +579,8 @@ writes it; where the doc is silent or two rules meet, the build reads it this wa
 - **Yamato — Shadow Transformation's** Unstoppable lasts two of her turns, as its +3 Attack does.
 - **Dynamo, Seven, Warden** no longer channel: their ultimates are one hit each. The channel
   statuses and their end-of-turn pulse stay in the engine with no card using them, as does Charged
-  (Seven's old Static Charge).
+  (Seven's old Static Charge). (Since 2026-11-15 Seven uses both again: Static Charge is his skill
+  and Storm Cloud a 2-turn channel; section 3 and his card in section 8.)
 - **Trigger prompts.** None of the 19 kits has an optional "may" effect, so nothing is marked
   `TODO(trigger-prompt)`. (Step 3 built the prompts for Victor; see below.)
 
@@ -709,3 +718,113 @@ Built on `deck-and-heroes`. Where the doc is silent, the build reads it this way
   them, as for Rem), their ultimate icons are the `signature4` icons, and the wolf is Deadlock's
   `werewolf_wolf_card`.
 
+
+### Units, the mill and Graves (2026-11-16)
+
+Patrick: "a new concept for heroes… her skill traps a hero, deals damage and spawns two zombies,
+but the zombies become cards that cost one soul… her ultimate is a tomb, another unit: it has to
+have a spot on the field… every turn it adds a zombie to the deck… zombies have 1 attack and 1
+health, and whenever they die the enemy discards a card from its deck… whenever a hero is
+discarded it is added to the deck again, reshuffled… and the max heroes go from 4 to 3."
+
+Deadlock's Graves does this, so the card uses the game's own names: the skill is **Grasping
+Hands** (a line of hands that damages and immobilizes, "summoning a Ghoul"), the ultimate
+**Borrowed Decree** (gravestones that raise Ghouls), and the zombie is a **Ghoul**.
+
+**Squads of three.** A side drafts 3 heroes, not 4 (`SQUAD_SIZE`). The board keeps its four
+spots, the Active and three on the bench, so a full squad leaves one free. Seat 0 drafts first and
+last, seat 1 the two picks after the first. Story mode recruits up to three as well since
+2026-11-16 (a full roster turns a recruit stop into supplies), and its rivals field three at most.
+
+**Units.** A unit is a board card that is no hero. It takes a spot, has Attack and HP, and is
+damaged, targeted and given statuses like a hero. It differs in five ways:
+
+- It is never drafted or built into a deck: a hero's kit makes it.
+- Played from the hand it costs souls (a hero is free).
+- It wears no item, casts no spell and earns no exp.
+- Destroyed, it is gone for good, to its owner's discard pile.
+- Nobody is paid for it: no bounty, no push on the structures, no exp. (A unit that fed the enemy
+  a bounty would be a card you pay to lose.)
+
+| Unit | Attack · HP | Price | What it does |
+|---|---|---|---|
+| Ghoul | 1 · 1 | 1 soul | May stand in the lane. **Death Rattle:** when it is destroyed, the enemy discards the top card of its deck. |
+| Gravestone | 0 · 1 | not played from the hand | Bench only. At the start of your turn, shuffle a Ghoul into your deck. Any damage destroys it. |
+
+**The mill.** A discard off the top of a deck. A hero is never discarded, from a deck or from a
+hand: it goes back into its owner's deck and the deck is shuffled. A Ghoul milled is discarded
+like any card.
+
+**The numbers**, by the budget of section 4 and [card-design.md](card-design.md) §3. Nothing was
+run through the sim.
+
+- **A card off the enemy's deck is worth 1.4** (the value of a drawn card,
+  [card-design.md](card-design.md), "The Cooldown family").
+- **A Ghoul played is worth about 2.5 for its 1 soul:** its death 1.4 × 0.8 (it dies sooner or
+  later; the deck may be empty) = 1.1; in the lane it takes a swing meant for a hero, 3.5 × 0.5 at
+  0.6 (it has to get there: a Retreat, or the lane left open) = 1.0; its own swing of 1 at 0.3.
+  It is over its price because the spot is the real cost: with three heroes out a side has one
+  spare, and the Gravestone wants the same one.
+- **A Ghoul card in the deck is worth 0.85:** it has to be drawn (0.6 of the time, in a 19-card
+  deck) and paid for: (2.5 − 1) × 0.6. One Death Rattle discards **1** card ("one or two, it
+  depends"): at 2 a played Ghoul would be worth 3.6.
+- **Grasping Hands** (waits 4, so 3 to 4.5 points): 1✦ is 1; Root 1 turn 1.5; two Ghoul cards 1.7.
+  **4.2.** A Root, not a Stun ("stun, trap a hero"): a Stun is 3 points and would put the skill at
+  5.7, and Deadlock's hands immobilize.
+- **Borrowed Decree** (small, 4 to 6 points): a Gravestone on the bench is reached only by damage
+  that hits the bench (an area hit, reach, a card aimed there), so it stands about 5 of its
+  owner's turns: 5 Ghoul cards × 0.85 = **4.25**. It is small, not medium, because one hit ends it
+  ("it has to be damaged once") and it takes the squad's spare spot while it stands.
+- **Graves herself:** HP 5 (tank 1), Attack 1, Retreat 1, +1 HP and +2 Spirit a level (mid), as
+  the proposal had her. Control 2, damage 2.
+
+**Defaults chosen, for Patrick to overrule:**
+- Ghouls go into the deck, shuffled, both from the skill and from the Gravestone (not the hand).
+- The Gravestone never takes the lane and has no Attack.
+- A unit can be healed, shielded and targeted by spells like a hero; it only cannot wear items.
+- A Ghoul in the lane is attacked like a hero. When it dies there the lane is open and its side
+  picks who steps up, at no cost, as when an Active falls.
+- No ready deck carries Graves yet.
+
+### Vindicta: the snipe and Flight (2026-11-16)
+
+Patrick: "Her skill becomes snipe, a charge ability; it might take longer to charge up. Her
+ultimate becomes fly… she goes into a fly status, which means she has a one third chance to dodge
+any attack, any damage."
+
+In Deadlock, Assassinate holds 2 charges and has her longest cooldown, and Flight makes her weapon
+deal bonus spirit damage while she is in the air. So the swap fits the game.
+
+| | Was | Now |
+|---|---|---|
+| Skill or passive | Passive, **Flight**: her attacks also deal 1✦ | Skill, **Assassinate**: 2 charges, 5 turns each. Snipe any enemy, bench too: 4✦ |
+| Ultimate | **Assassinate**, medium (waits 6): 8✦ to any enemy | **Flight**, small (waits 4): fly 3 turns. 1 in 3 hits miss her; her attacks add 1✦ |
+
+**Flying** is a status. While a hero has it:
+- each hit on it misses 1 time in 3, whatever the hit is (a swing, a skill, a spell, a Bleed tick),
+  and a miss takes nothing;
+- its attacks add 1 + its Spirit as spirit damage (not on a Ricochet bounce).
+
+**The roll** is drawn from the match's own seeded stream, so a game replays. A copy of the game
+would roll the same number, so two things run blind (`engine/chance.ts`): the attack preview
+shown while a swing is being aimed, and the whole of the AI's look. Blind, no die is drawn and the
+hit is taken as landing. The attack made rolls for real, and so does the forecast taken as it is
+committed, which the board animates.
+
+**The numbers**, by section 4. Nothing was run through the sim.
+
+- **Assassinate** waits 5, the longest of any skill ("it might take longer to charge up"). A
+  skill is worth about 0.75 to 1.1 points a turn of wait (2 to 3 at 3 turns, 3 to 4.5 at 4), so 3.75
+  to 5.6 at 5. 4✦ is 4, and reaching the bench +0.5: **4.5**. Half the ultimate's 8✦, twice as
+  often, with a second shot held.
+- **Flight** is small (4 to 6 points; "relatively low cost"). The dodge: about 5.5 damage a turn
+  comes at the Active mid-game, a third of it missed is 1.8 prevented, 0.9 points a turn, for 3
+  turns: 2.7. That alone is under a small ultimate. With the spirit damage her attacks add while
+  she flies, 1 × 0.85 a turn for 3 turns = 2.55, it is **5.25**.
+- **The rider is kept on purpose.** Patrick described only the dodge. Her attacks' 1✦ was her
+  whole passive until today and it is what Flight does in Deadlock, so it moved into the ultimate
+  with it. Without it her damage would have dropped (8✦ every 6 turns and 0.85 a turn, against
+  4.5 every 5) for a dodge worth 0.9 a turn. If the dodge is meant to stand alone, the rider comes
+  off in one line and Flight should last longer.
+- She flies 3 turns of every 4 once Flight is first used (it waits 4), and her side spends its one
+  ultimate a turn on it each time.

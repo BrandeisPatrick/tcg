@@ -32,8 +32,9 @@
  * ultimates without hand-tuning each case, and what a line leaves on the board:
  * the statuses it lands, the channel it starts, the Rem it sets riding, the
  * souls it keeps, the cards it holds. A turn is the player's to spend on cards from the
- * hand, abilities (one per hero — a skill, an ultimate or a worn active item,
- * none of which costs souls; one ultimate a turn for the side) and
+ * hand (equipment onto a hero, a spell on its target, each for its souls),
+ * abilities (one per hero — a skill or an ultimate, neither of which costs
+ * souls; one ultimate a turn for the side) and
  * one Retreat, and then one attack, which ends it: after the attack only
  * `endTurn` is left. Ending the turn never attacks, so the AI has to choose
  * `attack` itself. Every line before the attack is valued with the attack
@@ -67,15 +68,16 @@ import { CARDS_BY_ID, itemCard } from '@/cards';
 import { CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import {
   attackPower, checkWinner, effectiveAtk, effectiveSpirit, findCardOnBoard, findWornItem, handCard, heroesOf, heroWorth, isBoss, isRespawning,
-  itemCooldown, itemPrice, kitCharges, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, ultCharge, wornItems,
+  itemPrice, kitCharges, liveBoardCards, otherPlayer, promptOwed, resolveSkill, reviveReady, slottedHeroes, ultCharge, wornItems,
 } from '@/engine/query';
 import { getAbility } from '@/abilities';
 import type { Action } from '@/engine/engine';
-import { attackBlocked, attackTargets, legalActions, playBlocked, playCost, upgradeComponent } from '@/engine/legality';
+import { attackBlocked, attackTargets, legalActions, playBlocked, playBlockedAny, playCost, spellTargets, upgradeComponent } from '@/engine/legality';
 import { buildOf } from '@/engine/deck';
 import { seededRandom } from '@/engine/rng';
 import { forecastAttack, simulate } from '@/engine/forecast';
 import { BOSS_RETALIATION, LANE_INCOME } from '@/engine/constants';
+import { withBlindRolls } from '@/engine/chance';
 
 /** How hard the AI plays: the difficulty dial (see the head of this file). */
 export type AiStrength = 'easy' | 'normal' | 'hard';
@@ -192,41 +194,24 @@ function heroThreat(c: CardInstance): number {
   return t;
 }
 
-/** How much of an active item's worth is still there while it cools down
- *  (a turn or two away from use again): the lookahead sees the use cost it. */
-const COOLING_SHARE = 0.5;
-
-/** What a worn draw card is worth for each card it nets (draws less
- *  discards), ready or cooling alike: what a cast gains shows in the hand it
- *  leaves (`handValue`), so a cast is weighed by the cards it brings and the
- *  hero's ability it spends, not by the card going on cooldown. */
-const DRAW_NET_CARD = 2;
-
 // Value of what a hero wears beyond its stat bonuses (+atk/+spirit/+hp, which
-// heroThreat and hp already show): a passive item's ability procs and hooks
-// (lifesteal, burst, resist…), and an active item's effect, ready to use. The
-// 1-ply lookahead sees no benefit in a proc item otherwise (wearing one changes
-// nothing on the board this turn), and using an active puts it on cooldown or
-// spends a charge, which is the price the lookahead weighs its effect against.
+// heroThreat and hp already show): an equipment's ability procs and hooks
+// (lifesteal, burst, resist…). The 1-ply lookahead sees no benefit in a proc
+// item otherwise (wearing one changes nothing on the board this turn). A
+// spell is never worn: what one does shows on the board the play leaves, and
+// its price in the souls and the card it spent.
 function equipValue(c: CardInstance): number {
   let v = 0;
   for (const it of wornItems(c)) {
     const data = itemCard(it.cardId)!;
-    if (data.type === 'equipment') {
-      for (const aid of data.abilities ?? []) {
-        const ab = getAbility(aid);
-        // A charge item (Extra Charge, Rapid Recharge) is worth its charges
-        // only on a hero whose skill holds charges; on any other it does nothing.
-        if ((ab?.chargeBonus || ab?.chargeHaste) && !kitCharges(c)) continue;
-        v += ab?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
-      }
-      continue;
+    if (data.type !== 'equipment') continue;
+    for (const aid of data.abilities ?? []) {
+      const ab = getAbility(aid);
+      // A charge item (Extra Charge, Rapid Recharge) is worth its charges
+      // only on a hero whose skill holds charges; on any other it does nothing.
+      if ((ab?.chargeBonus || ab?.chargeHaste) && !kitCharges(c)) continue;
+      v += ab?.base ?? 3; // magnitude proxy; non-magnitude procs get a flat 3
     }
-    const first = getAbility(data.abilities[0]);
-    if (first?.draw) { v += (first.draw.cards - first.draw.discard) * DRAW_NET_CARD; continue; }
-    const worth = first?.base ?? 3;
-    if (data.hardCC) v += worth * Math.min(it.charges ?? 0, 1) + (it.charges ?? 0);
-    else v += itemCooldown(it) > 0 ? worth * COOLING_SHARE : worth;
   }
   return v;
 }
@@ -519,20 +504,37 @@ function handValue(g: GameState, pid: PlayerID): number {
 function keepValue(G: GameState, pid: PlayerID, card: CardInstance): number {
   if (CARDS_BY_ID[card.cardId]?.type === 'hero') return 100;
   const ps = G.players[pid];
-  const heroes = slottedHeroes(ps);
-  // Who could take it were the souls there: the engine's own gate, souls aside.
-  const fits = heroes.filter((h) => {
-    const why = playBlocked(G, pid, card.iid, h.iid);
-    return why === null || why === 'souls' || why === 'notYourTurn';
-  });
+  // What it could be played on were the souls there: the engine's own gate,
+  // souls aside (a spell that takes no target: the board itself).
+  const fits = playSpots(G, pid, card);
   const price = itemPrice(card.cardId);
   let v = 10 + Math.min(price, 16) * 0.5;
   if (fits.length === 0) v -= 12;
-  if (fits.some((h) => buildWants(G, pid, h, card.cardId) || upgradeComponent(h, card.cardId))) v += 6;
+  if (fits.some((h) => !!h && h.ownerId === pid && (buildWants(G, pid, h, card.cardId) || !!upgradeComponent(h, card.cardId)))) v += 6;
   // An item further off than the AI saves for (SAVE_HORIZON turns of income)
   // is worth less in a hand that must shrink.
   if (price > ps.souls + SAVE_HORIZON * LANE_INCOME) v -= 4;
   return v;
+}
+
+/** What `pid` could play its hand item `card` on were the souls there (the
+ *  engine's own gate, souls and whose turn it is aside): its own heroes for
+ *  equipment, the targets its card allows for a spell — `undefined` standing
+ *  for the board itself when the spell takes no target. Empty when nothing
+ *  lets it be played now. */
+function playSpots(G: GameState, pid: PlayerID, card: CardInstance): (CardInstance | undefined)[] {
+  const data = itemCard(card.cardId);
+  if (!data) return [];
+  const open = (heroIid?: string) => {
+    const why = playBlockedAny(G, pid, card.iid, heroIid);
+    return why === null || why === 'souls' || why === 'notYourTurn';
+  };
+  if (data.type === 'spell') {
+    const targets = spellTargets(G, pid, card.cardId);
+    if (targets === 'none') return open() ? [undefined] : [];
+    return targets.filter((t) => open(t.iid));
+  }
+  return slottedHeroes(G.players[pid]).filter((h) => open(h.iid));
 }
 
 /** The cards `pid` discards to pay a draw card's discard of `n`: the `n` of
@@ -562,7 +564,7 @@ function leastWorn(G: GameState, pid: PlayerID, hero: CardInstance): CardInstanc
 function replaceWorthIt(G: GameState, pid: PlayerID, a: Action): boolean {
   if (a.type !== 'playCard' || a.replaceIid === undefined) return true;
   const card = handCard(G, pid, a.cardIid);
-  const hero = findCardOnBoard(G, a.heroIid)?.card;
+  const hero = a.heroIid === undefined ? undefined : findCardOnBoard(G, a.heroIid)?.card;
   const least = hero && leastWorn(G, pid, hero);
   if (!card || !least || least.iid !== a.replaceIid) return false;
   return itemPrice(card.cardId) >= REPLACE_RATIO * itemPrice(least.cardId);
@@ -573,10 +575,12 @@ function turnsAway(cost: number, souls: number): number {
   return Math.ceil(Math.max(0, cost - souls) / LANE_INCOME);
 }
 
-/** The card `pid` is saving for: of the items of tier SAVE_TIER or more in
- *  its hand that one of its heroes can take (the engine's own gate, souls
+/** The card `pid` is saving for: of the equipment of tier SAVE_TIER or more
+ *  in its hand that one of its heroes can take (the engine's own gate, souls
  *  aside) and that it can pay for within SAVE_HORIZON turns of income, the
  *  one of the highest tier — the soonest paid for on a tie, then the dearer.
+ *  A spell is no goal: what one is worth depends on the board the turn it is
+ *  played, so the look weighs it then.
  *  Its cost is the least any of those heroes would pay (an upgrade onto the
  *  hero wearing its component: the difference). A card it can pay for now is
  *  a goal too: the souls for it are not to be spent on something else first.
@@ -587,7 +591,7 @@ function savingGoal(G: GameState, pid: PlayerID): { cardIid: string; cost: numbe
   let goal: { cardIid: string; cost: number; turns: number; tier: number } | null = null;
   for (const card of ps.hand) {
     const data = itemCard(card.cardId);
-    if (!data || data.tier < SAVE_TIER) continue;
+    if (!data || data.type !== 'equipment' || data.tier < SAVE_TIER) continue;
     let cost = Infinity;
     for (const h of heroes) {
       const why = playBlocked(G, pid, card.iid, h.iid);
@@ -614,26 +618,24 @@ function savingCost(G: GameState, pid: PlayerID, a: Action, line: GameState, goa
 }
 
 /** The tie-break a hand play earns (`BUILD_FIT`): an item onto a hero whose
- *  build wants it, and the upgrade its heroes' builds name. */
+ *  build wants it. */
 function buildFit(G: GameState, pid: PlayerID, a: Action): number {
   if (a.type !== 'playCard') return 0;
   const card = handCard(G, pid, a.cardIid);
-  const hero = findCardOnBoard(G, a.heroIid)?.card;
-  if (!card || !hero) return 0;
-  let v = buildWants(G, pid, hero, card.cardId) ? BUILD_FIT : 0;
-  if (a.upgradeId && slottedHeroes(G.players[pid]).some((h) => buildWants(G, pid, h, a.upgradeId!))) v += BUILD_FIT / 2;
-  return v;
+  const hero = a.heroIid === undefined ? undefined : findCardOnBoard(G, a.heroIid)?.card;
+  if (!card || !hero || itemCard(card.cardId)?.type !== 'equipment') return 0;
+  return buildWants(G, pid, hero, card.cardId) ? BUILD_FIT : 0;
 }
 
 interface MoveOption {
-  move: 'playCard' | 'placeHero' | 'discard' | 'chooseActive' | 'activate' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'useTrigger' | 'passTrigger' | 'draftPick';
+  move: 'playCard' | 'placeHero' | 'discard' | 'chooseActive' | 'useSkill' | 'attack' | 'endTurn' | 'moveHero' | 'promoteToActive' | 'useTrigger' | 'passTrigger' | 'draftPick';
   args: any[];
   score: number;
 }
 
 /** An engine action in the form the callers dispatch: the boardgame.io move and
- *  its arguments (playCard [card, hero, upgrade?, replace?], placeHero [card, toActive?, slot?],
- *  discard [cards], chooseActive [card], activate [item, target?], useSkill
+ *  its arguments (playCard [card, hero or target?, replace?], placeHero [card, toActive?, slot?],
+ *  discard [cards], chooseActive [card], useSkill
  *  [hero, target?, skill?], moveHero [from, to], promoteToActive [iid], attack
  *  [target?], endTurn []). */
 function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
@@ -641,12 +643,11 @@ function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
   switch (a.type) {
     case 'playCard': return {
       move: 'playCard',
-      args: a.replaceIid !== undefined ? [a.cardIid, a.heroIid, a.upgradeId, a.replaceIid] : a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid],
+      args: a.replaceIid !== undefined ? [a.cardIid, a.heroIid, a.replaceIid] : present(a.cardIid, a.heroIid),
     };
     case 'placeHero': return { move: 'placeHero', args: a.toActive ? [a.cardIid, true] : a.slot === undefined ? [a.cardIid] : [a.cardIid, false, a.slot] };
     case 'discard': return { move: 'discard', args: [[...a.cardIids]] };
     case 'chooseActive': return { move: 'chooseActive', args: [a.cardIid] };
-    case 'activate': return { move: 'activate', args: present(a.itemIid, a.targetIid) };
     case 'useSkill': {
       // The skill is named only when it is not the hero's first (the move's default),
       // so a one-skill hero's move is the one it always was; a skill with no target
@@ -672,7 +673,7 @@ function toMove(G: GameState, a: Action): Pick<MoveOption, 'move' | 'args'> {
 
 /** A crude active item's score, as the spell it was: above a skill, more on an
  *  enemy it could finish or an ally in trouble. */
-function scoreActivate(pid: PlayerID, target?: CardInstance): number {
+function scoreSpell(pid: PlayerID, target?: CardInstance): number {
   let s = 25;
   if (target && target.ownerId !== pid) {
     s += 5;
@@ -787,17 +788,18 @@ function crudeScore(G: GameState, pid: PlayerID, a: Action): number {
     // reason of its own), then an item.
     case 'placeHero': return a.toActive ? 60 : a.slot === undefined ? 30 : 29;
     // A play onto a full hero (one it discards an item for) after one onto a free slot.
-    case 'playCard': return 22 + buildFit(G, pid, a) - (a.replaceIid !== undefined ? 2 : 0);
+    // A spell is scored as the cast it is, by what it lands on.
+    case 'playCard': {
+      const card = handCard(G, pid, a.cardIid);
+      if (card && itemCard(card.cardId)?.type === 'spell') return scoreSpell(pid, a.heroIid ? findCardOnBoard(G, a.heroIid)?.card : undefined);
+      return 22 + buildFit(G, pid, a) - (a.replaceIid !== undefined ? 2 : 0);
+    }
     case 'discard': return 50_000;
     // The opening's first Active, from the drafted heroes in the deck: the
     // hero with the most HP, then attack.
     case 'chooseActive': {
       const data = CARDS_BY_ID[G.players[G.pendingActive ?? pid].deck.find((c) => c.iid === a.cardIid)?.cardId ?? ''];
       return 60_000 + (data?.type === 'hero' ? data.hp * 10 + data.atk : 0);
-    }
-    case 'activate': {
-      const found = findWornItem(G, a.itemIid, pid);
-      return found ? scoreActivate(pid, a.targetIid ? findCardOnBoard(G, a.targetIid)?.card : undefined) : 0;
     }
     case 'useSkill': {
       const hero = findCardOnBoard(G, a.heroIid)?.card;
@@ -934,6 +936,12 @@ function addNoise(G: GameState, pid: PlayerID, options: MoveOption[]): void {
 }
 
 export function enumerateAIMoves(G: GameState, ctx: Ctx, lookahead = true, options: AiOptions = {}): MoveOption[] {
+  // The AI's look is blind to chance: it rolls no die on its copies of the game, so it never
+  // knows ahead of the move whether a flying hero will dodge (engine/chance.ts).
+  return withBlindRolls(() => enumerateMoves(G, ctx, lookahead, options));
+}
+
+function enumerateMoves(G: GameState, ctx: Ctx, lookahead: boolean, options: AiOptions): MoveOption[] {
   const pid = ctx.currentPlayer as PlayerID;
   const d = dial(options);
   // Pre-match draft: only one move kind is legal. Score by stat sum +

@@ -61,11 +61,13 @@ function scriptedTrack(story: StorySetup, pid: PlayerID): TrackHp | undefined {
   return patron === undefined ? undefined : { patron };
 }
 
-/** Snake draft order for 4 picks per player (8 total).
- *  P0 picks at indexes 0, 3, 4, 7; P1 picks at 1, 2, 5, 6. The pie rule: the
- *  seat that drafts first moves second, so seat 1 takes the first turn — and
- *  seat 0's last pick ends the draft's turn and hands it over. */
-const DRAFT_ORDER: PlayerID[] = ['0', '1', '1', '0', '0', '1', '1', '0'];
+/** Draft order for SQUAD_SIZE (3) picks per player, 6 in all.
+ *  P0 picks at indexes 0, 3, 5; P1 picks at 1, 2, 4: seat 0 has the first pick
+ *  and the last, seat 1 the two after the first. The pie rule: the seat that
+ *  drafts first moves second, so seat 1 takes the first turn — and seat 0's
+ *  last pick ends the draft's turn and hands it over. (It was a snake of 4
+ *  each until 2026-11-16; a plain snake of 3 would end on seat 1.) */
+const DRAFT_ORDER: PlayerID[] = ['0', '1', '1', '0', '1', '0'];
 
 /** The seat a person plays, from the match config: seat 0 unless the config
  *  says otherwise (null: the AI plays both seats). */
@@ -232,7 +234,7 @@ export function armUltWaits(G: GameState, firstTurn: number) {
 /**
  * The drafted match's opening, as the last pick lands: each side's deck is
  * stocked with its items (`sideDeckIds`: the human seat's saved deck, else
- * one made from its heroes' builds) and its four drafted heroes, unshuffled
+ * one made from its heroes' builds) and its three drafted heroes, unshuffled
  * and unseen. The human seat is asked for its first Active from among its
  * drafted heroes (`G.pendingActive`, answered by `chooseActive`); with no
  * human seat the AI's picks are made at once and the opening finishes here

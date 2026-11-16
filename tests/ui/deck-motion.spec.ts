@@ -3,7 +3,7 @@
  * (src/ui/motion/deckMotionPlan.ts), never from state diffs: pin what a batch
  * becomes — the opening's heroes into the deck and the riffle, a draw's
  * staggered flights and the deck's ticks, a discard from the hand or off a
- * hero, an upgrade appearing and going in, a fallen hero back to the hand —
+ * hero, a played spell to the discard pile, a fallen hero back to the hand —
  * on real engine runs, and the piles' count ticker that holds the numbers
  * until the card leaves or lands.
  */
@@ -57,28 +57,40 @@ describe('deck motion plan', () => {
   it('a draw card: each card flies deck → hand, one stagger apart, and the deck ticks as each leaves', () => {
     const G = freshReadyGame();
     const stacked = stackDeck(G, '0', ['headshot_booster', 'extra_health', 'extra_spirit']);
+    const spell = giveCard(G, '0', 'improved_cooldown'); // Compress Cooldown: draw 3, discard 1
+    G.players['0'].souls = 4;
     const before = snapshot(G);
-    useItem(G, '0', 'improved_cooldown'); // Compress Cooldown: draw 2, discard 1
+    G.fx = [];
+    expect(perform(G, '0', { type: 'playCard', cardIid: spell.iid })).not.toBe(INVALID);
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
     const draws = ofKind(plan, 'draw');
-    expect(draws).toHaveLength(2);
-    expect(draws.map((f) => f.iid)).toEqual([stacked[0].iid, stacked[1].iid]);
-    expect(draws.map((f) => f.at)).toEqual([0, T.stagger]);
+    expect(draws).toHaveLength(3);
+    expect(draws.map((f) => f.iid)).toEqual([stacked[0].iid, stacked[1].iid, stacked[2].iid]);
+    expect(draws.map((f) => f.at)).toEqual([0, T.stagger, 2 * T.stagger]);
     expect(draws.every((f) => f.dur === T.flight && f.hold === 0)).toBe(true);
     expect(draws.every((f) => f.from.kind === 'pile' && f.from.pile === 'deck')).toBe(true);
     expect(draws.map((f) => f.to)).toEqual([
       { kind: 'hand', pid: '0', iid: stacked[0].iid },
       { kind: 'hand', pid: '0', iid: stacked[1].iid },
+      { kind: 'hand', pid: '0', iid: stacked[2].iid },
     ]);
     // Yours land face up, out of a face-down deck; the real card stays hidden until then.
     expect(draws.every((f) => f.faces.start === 'back' && f.faces.end === 'face' && f.hide === f.iid)).toBe(true);
-    expect(plan.ticks).toEqual([
+    expect(plan.ticks.filter((t) => t.pile === 'deck')).toEqual([
       { pile: 'deck', pid: '0', at: 0, delta: -1 },
       { pile: 'deck', pid: '0', at: T.stagger, delta: -1 },
+      { pile: 'deck', pid: '0', at: 2 * T.stagger, delta: -1 },
     ]);
-    expect(plan.total).toBe(T.stagger + T.flight);
+    // The spell itself, played: from the hand to the discard pile, face up, and the pile ticks as it lands.
+    const [played] = ofKind(plan, 'discard');
+    expect(ofKind(plan, 'discard')).toHaveLength(1);
+    expect(played.iid).toBe(spell.iid);
+    expect(played.from).toEqual({ kind: 'hand', pid: '0', iid: spell.iid });
+    expect(played.to).toEqual({ kind: 'pile', pile: 'discard', pid: '0' });
+    expect(plan.ticks.filter((t) => t.pile === 'discard')).toEqual([{ pile: 'discard', pid: '0', at: played.at + T.flight, delta: 1 }]);
+    expect(plan.total).toBeGreaterThanOrEqual(T.stagger + T.flight);
     expect(plan.opening).toBe(false);
-    expect(arrivingIids(plan, '0')).toEqual([stacked[0].iid, stacked[1].iid]);
+    expect(arrivingIids(plan, '0')).toEqual([stacked[0].iid, stacked[1].iid, stacked[2].iid]);
     expect(arrivingIids(plan, '1')).toEqual([]);
   });
 
@@ -91,16 +103,17 @@ describe('deck motion plan', () => {
     const draws = ofKind(plan, 'draw');
     expect(draws).toHaveLength(8);
     draws.forEach((f, i) => expect(f.at).toBe(i * T.stagger));
-    expect(plan.total).toBe(7 * T.stagger + T.flight);
+    expect(Math.max(...draws.map((f) => f.at + f.dur))).toBe(7 * T.stagger + T.flight);
     expect(plan.total).toBeLessThan(2000);
   });
 
   it("the rival's draws stay face down and land in its hand", () => {
     const G = freshReadyGame();
+    G.turnNumber = 3; // P1's turn: a spell is played on its own turn
     stackDeck(G, '1', ['headshot_booster']);
     const before = snapshot(G);
     G.fx = [];
-    useItem(G, '1', 'improved_cooldown', undefined, G.players['1'].active!);
+    useItem(G, '1', 'improved_cooldown');
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
     const [draw] = ofKind(plan, 'draw');
     expect(draw.pid).toBe('1');
@@ -134,8 +147,9 @@ describe('deck motion plan', () => {
 
   it("the rival's discard turns over: a back leaves its hand, a face lands on the pile", () => {
     const G = freshReadyGame();
+    G.turnNumber = 3; // P1's turn
     const [a] = stackDeck(G, '1', ['headshot_booster']);
-    useItem(G, '1', 'improved_cooldown', undefined, G.players['1'].active!);
+    useItem(G, '1', 'improved_cooldown');
     G.fx = [];
     const before = snapshot(G);
     discardFromHand(G, '1', [a.iid]);
@@ -144,35 +158,28 @@ describe('deck motion plan', () => {
     expect(d.from).toEqual({ kind: 'hand', pid: '1', iid: a.iid });
   });
 
-  it('an upgrade appears over the table, holds, then flies into the deck; the deck ticks up as it lands', () => {
+  it('a played item makes no card: nothing appears over the table or flies into the deck, and the deck does not tick', () => {
     const G = freshReadyGame();
     const hero = G.players['0'].active!;
     const before = snapshot(G);
     G.fx = [];
-    playNew(G, '0', 'improved_cooldown', hero);
-    const made = upgradesOf('improved_cooldown');
-    expect(made.length).toBeGreaterThan(0);
+    playNew(G, '0', 'extended_magazine', hero); // Deadlock builds Titanic Magazine from it; nothing is made here
+    expect(upgradesOf('extended_magazine').length).toBeGreaterThan(0);
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
-    const [up] = ofKind(plan, 'upgrade');
-    expect(up).toBeDefined();
-    expect(made).toContain(up.cardId);
-    expect(up.from).toEqual({ kind: 'stage', pid: '0', i: 0, n: 1 });
-    expect(up.to).toEqual({ kind: 'pile', pile: 'deck', pid: '0' });
-    expect(up.hold).toBe(T.appear);
-    expect(up.faces).toEqual({ start: 'face', end: 'face' });
-    expect(plan.ticks).toEqual([{ pile: 'deck', pid: '0', at: T.appear + T.flight, delta: 1 }]);
-    expect(plan.total).toBe(T.appear + T.flight);
+    expect(plan.flights.filter((f) => f.to.kind === 'pile' && f.to.pile === 'deck')).toEqual([]);
+    expect(plan.ticks.filter((t) => t.pile === 'deck')).toEqual([]);
+    expect(G.players['0'].deck).toEqual(before.players['0'].deck);
   });
 
   it('an evolved upgrade: the item it replaced flies off the hero to the discard pile', () => {
     const G = freshReadyGame();
     const hero = G.players['0'].active!;
-    const worn = playNew(G, '0', 'improved_cooldown', hero);
-    const [upgradeId] = upgradesOf('improved_cooldown');
+    const worn = playNew(G, '0', 'extended_magazine', hero);
+    const [upgradeId] = upgradesOf('extended_magazine');
     G.fx = [];
     const before = snapshot(G);
     expect(locate(before, '0', worn.iid)).toEqual({ kind: 'worn', heroIid: hero.iid });
-    playNew(G, '0', upgradeId, hero); // evolves over Compress Cooldown
+    playNew(G, '0', upgradeId, hero); // evolves over Extended Magazine
     const plan = planDeckMotion(G.fx, { me: '0', before, after: G });
     const off = ofKind(plan, 'discard').find((f) => f.iid === worn.iid);
     expect(off).toBeDefined();
@@ -454,25 +461,34 @@ describe('the layer puts each batch up once', () => {
   // respond stage). Seed 9: seed 8's match no longer reaches the prompt (with
   // the lane at 2 souls a turn his side cannot pay for it there).
   it('across a drafted match the AI plays to its end, with Victor and Silver, no card is planned to fly twice', () => {
-    let seen = 0;
-    let openings = 0;
-    let asked = 0;
-    const keys: string[] = [];
-    playGame({
-      seed: 9,
-      policies: { '0': 'heuristic', '1': 'heuristic' },
-      prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
-      afterMove: (before, after, move, accepted) => {
-        if (accepted && (move.name === 'useTrigger' || move.name === 'passTrigger')) asked++;
-        const fx = after.G.fx ?? [];
-        const fresh = freshBatch(fx, seen);
-        seen = Math.max(seen, ...fx.map((e) => e.seq));
-        if (fresh.length === 0) return;
-        const plan = planDeckMotion(fresh, { me: '0', before: before.G, after: after.G });
-        if (plan.opening) openings++;
-        keys.push(...plan.flights.map((f) => f.key));
-      },
-    });
+    // The first of a few seeds whose match reaches Victor's prompt (which one does depends on
+    // the whole card pool, so the seed is looked for, not pinned).
+    const play = (seed: number) => {
+      let seen = 0;
+      let openings = 0;
+      let asked = 0;
+      const keys: string[] = [];
+      playGame({
+        seed,
+        policies: { '0': 'heuristic', '1': 'heuristic' },
+        prefer: { '0': ['hero_victor'], '1': ['hero_silver'] },
+        afterMove: (before, after, move, accepted) => {
+          if (accepted && (move.name === 'useTrigger' || move.name === 'passTrigger')) asked++;
+          const fx = after.G.fx ?? [];
+          const fresh = freshBatch(fx, seen);
+          seen = Math.max(seen, ...fx.map((e) => e.seq));
+          if (fresh.length === 0) return;
+          const plan = planDeckMotion(fresh, { me: '0', before: before.G, after: after.G });
+          if (plan.opening) openings++;
+          keys.push(...plan.flights.map((f) => f.key));
+        },
+      });
+      return { openings, asked, keys };
+    };
+    let found: ReturnType<typeof play> | undefined;
+    for (let seed = 9; seed <= 40 && !found; seed++) { const m = play(seed); if (m.asked > 0) found = m; }
+    expect(found, 'no seed of 9..40 reaches Victor\'s prompt').toBeDefined();
+    const { openings, asked, keys } = found!;
     expect(asked).toBeGreaterThan(0);
     expect(openings).toBe(1);
     expect(keys.length).toBeGreaterThan(20);

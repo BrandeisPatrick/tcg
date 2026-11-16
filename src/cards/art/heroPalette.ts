@@ -41,6 +41,10 @@ export const HERO_IDENTITY: Record<string, HeroIdentity> = {
   hero_drifter:   { primary: '#a5b4c8', accent: '#1b212d', keywords: ['Stalker', 'Bloodthirsty', 'Cruel'],       initial: 'D' },
   hero_victor:    { primary: '#8fe3d0', accent: '#163a33', keywords: ['Undying', 'Aura', 'Reanimated'],         initial: 'V' },
   hero_silver:    { primary: '#c9c3b8', accent: '#3a2f25', keywords: ['Bruiser', 'Shapeshifter', 'Bloodlust'],  initial: 'S' },
+  hero_graves:    { primary: '#a8c7a0', accent: '#1f2b22', keywords: ['Morbid', 'Area Denial', 'Necromancer'],  initial: 'G' },
+  // The units her kit raises (cards/units.ts).
+  unit_ghoul:      { primary: '#a8c7a0', accent: '#1f2b22', keywords: ['Unit', 'Ghoul'],                        initial: 'G' },
+  unit_gravestone: { primary: '#b9b6c6', accent: '#26262e', keywords: ['Unit', 'Gravestone'],                   initial: 'G' },
 };
 
 export function getHeroIdentity(cardId: string): HeroIdentity {

@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { Client } from 'boardgame.io/client';
 import type { Ctx } from 'boardgame.io';
 import { DeadlockGame } from '@/engine/game';
-import { activateBlocked, attackBlocked, playCost, retreatCost, skillBlocked } from '@/engine/legality';
-import { ACTIVE_COOLDOWN, LANE_INCOME } from '@/engine/constants';
+import { attackBlocked, playBlocked, playCost, retreatCost, skillBlocked } from '@/engine/legality';
+import { LANE_INCOME } from '@/engine/constants';
 import { forecastAttack } from '@/engine/forecast';
-import { attackPower, heroRetreat, itemCooldown, kitCharges, kitCost, wornActives, wornItems } from '@/engine/query';
+import { attackPower, heroRetreat, kitCharges, kitCost, wornItems } from '@/engine/query';
 import { itemCard } from '@/cards';
 import { setMatchConfig } from '@/storage/matchConfig';
 import type { CardInstance, GameState } from '@/engine/types';
@@ -81,30 +81,30 @@ describe('the tutorial is staged so the taught move wins', () => {
     }
   });
 
-  it('Lesson 3: Cold Front waits in the hand; put on Kelvin it starts on cooldown and cannot be the kill — Frost Grenade and the swing finish a Lash on 2, the swing alone does not', () => {
-    for (const skill of [false, true]) {
+  it('Lesson 3: Cold Front waits in the hand, a spell; played on a Lash on 3 it hits for 2 and is discarded, and the swing finishes him — the swing alone does not', () => {
+    for (const spell of [false, true]) {
       const c = lesson('level');
       expect(turn(c)).toEqual([2, ['cold_front']]); // Turn 2: there is an attack; the gift, in the hand
       const [kelvin, lash] = actives(c);
-      // Two souls brought in and the turn's two pay for Cold Front; Frost Grenade costs none.
+      // Two souls brought in and the turn's two pay for Cold Front.
       expect(state(c).G.players['0'].souls).toBe(2 + LANE_INCOME);
-      expect(kitCost(kelvin)).toBe(0);
-      expect(playCost(kelvin, 'cold_front')).toBe(state(c).G.players['0'].souls);
-      moves(c).playCard(state(c).G.players['0'].hand[0].iid, kelvin.iid);
-      expect(state(c).G.players['0'].souls).toBe(0);                       // every soul went on the item
-      const front = wornActives(state(c).G.players['0'].active!).find((it) => it.cardId === 'cold_front')!;
-      expect(itemCooldown(front)).toBe(ACTIVE_COOLDOWN.low);               // ready in two turns
-      expect(activateBlocked(state(c).G, '0', front.iid, lash.iid)).toBe('cooldown');
-      expect(lash.hp).toBe(2);
+      expect(playCost(undefined, 'cold_front')).toBe(state(c).G.players['0'].souls);
+      expect(lash.hp).toBe(3);
       expect(attackPower(kelvin, lash).total).toBe(1);
-      if (skill) {
-        expect(skillBlocked(state(c).G, '0', state(c).G.players['0'].active!)).toBeNull(); // with no souls left, the skill is still up
-        moves(c).useSkill(kelvin.iid);                                      // one spirit damage to every enemy
-        expect(state(c).G.players['0'].souls).toBe(0);
-        expect(kitCharges(state(c).G.players['0'].active!, 'skill_kelvin')).toEqual({ max: 2, left: 1 });
+      if (spell) {
+        const card = state(c).G.players['0'].hand[0];
+        expect(playBlocked(state(c).G, '0', card.iid, lash.iid)).toBeNull();
+        moves(c).playCard(card.iid, lash.iid);                              // two spirit damage to the rival Active
+        const me = state(c).G.players['0'];
+        expect(me.souls).toBe(0);                                           // every soul went on the spell
+        expect(me.hand).toEqual([]);
+        expect(me.discard.map((x) => x.cardId)).toEqual(['cold_front']);    // played once, then discarded
+        expect(wornItems(me.active!)).toEqual([]);                          // never worn
+        expect(state(c).G.players['1'].active!.hp).toBe(1);
+        expect(me.active!.skillUsedThisTurn ?? false).toBe(false);          // no ability of Kelvin's was spent
       }
       moves(c).attack();
-      expect(winner(c), skill ? 'skill, then the swing' : 'the swing alone').toBe(skill ? '0' : undefined);
+      expect(winner(c), spell ? 'the spell, then the swing' : 'the swing alone').toBe(spell ? '0' : undefined);
     }
   });
 

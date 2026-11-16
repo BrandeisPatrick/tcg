@@ -21,14 +21,16 @@ import { makeInstance } from '@/engine/instances';
 import { seededRandom } from '@/engine/rng';
 import { discardChoice, enumerateAIMoves } from '@/ai/heuristic';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
-import { freshReadyGame, giveCard, giveItem, stackDeck } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, spendSkill, stackDeck } from './_helpers';
 
 const ctxFor = (pid: PlayerID) => ({ currentPlayer: pid, numPlayers: 2, turn: 2 }) as unknown as Ctx;
 
-/** P0's turn (engine turn 2) with `souls` to spend. */
+/** P0's turn (engine turn 2) with `souls` to spend. Vindicta's two snipes are spent (`spendSkill`):
+ *  these tests are about the hand and the souls, and a free Assassinate would come first. */
 function turn(souls: number): GameState {
   const G = freshReadyGame();
   G.players['0'].souls = souls;
+  spendSkill(G.players['0'].bench[0]!);
   return G;
 }
 
@@ -37,13 +39,12 @@ function best(G: GameState, pid: PlayerID = '0'): Action {
   const [m] = enumerateAIMoves(G, ctxFor(pid));
   switch (m.move) {
     case 'playCard': return {
-      type: 'playCard', cardIid: m.args[0], heroIid: m.args[1],
-      ...(m.args[2] ? { upgradeId: m.args[2] } : {}),
-      ...(m.args[3] !== undefined ? { replaceIid: m.args[3] } : {}),
+      type: 'playCard', cardIid: m.args[0],
+      ...(m.args[1] !== undefined ? { heroIid: m.args[1] } : {}),
+      ...(m.args[2] !== undefined ? { replaceIid: m.args[2] } : {}),
     };
     case 'placeHero': return { type: 'placeHero', cardIid: m.args[0], toActive: m.args[1] === true };
     case 'discard': return { type: 'discard', cardIids: m.args[0] };
-    case 'activate': return { type: 'activate', itemIid: m.args[0], targetIid: m.args[1] };
     case 'useSkill': return { type: 'useSkill', heroIid: m.args[0], targetIid: m.args[1], skillId: m.args[2] };
     case 'moveHero': return { type: 'moveHero', fromSlot: m.args[0], toSlot: m.args[1] };
     case 'attack': return { type: 'attack', targetIid: m.args[0] };
@@ -105,8 +106,11 @@ describe('the AI plays its hand', () => {
   });
 
   it('puts a charge item only on a hero whose skill holds charges', () => {
-    // Nobody on this side has a charged skill: Extra Charge would do nothing, so it stays in the hand.
+    // Nobody on this side has a charged skill (Yamato stands in for Vindicta, whose Assassinate
+    // holds charges): Extra Charge would do nothing, so it stays in the hand.
     const none = turn(10);
+    none.players['0'].bench[0] = makeInstance(allocatorOf(none), 'hero_yamato', '0', 'bench', 1);
+    spendSkill(none.players['0'].bench[0]!);
     const kept = giveCard(none, '0', 'extra_charge');
     playOut(none);
     expect(none.players['0'].hand).toContain(kept);
@@ -145,17 +149,17 @@ describe('the AI plays its hand', () => {
     expect(made.some((a) => a.type === 'playCard')).toBe(false);
   });
 
-  it('names the upgrade its heroes\' builds want when a play could make several', () => {
+  it('a play makes no upgrade: Extra Health goes on a hero, and nothing is shuffled into the deck', () => {
     const G = turn(10);
-    // Abrams' build takes Fortitude, not Colossus: Extra Health played makes Fortitude.
+    // Until 2026-11-15 a play of Extra Health made Fortitude or Colossus for the deck.
     G.turnNumber = 3; // P1's turn
     G.players['1'].souls = 10;
-    giveCard(G, '1', 'extra_health');
+    const card = giveCard(G, '1', 'extra_health');
     const made = playOut(G, '1');
     const play = made.find((a) => a.type === 'playCard') as Extract<Action, { type: 'playCard' }> | undefined;
     expect(play).toBeDefined();
-    expect(play!.upgradeId).toBe('fortitude');
-    expect(G.players['1'].deck.map((c) => c.cardId)).toEqual(['fortitude']);
+    expect(play).toEqual({ type: 'playCard', cardIid: card.iid, heroIid: play!.heroIid });
+    expect(G.players['1'].deck).toEqual([]);
   });
 });
 
@@ -186,18 +190,18 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
 
   it('saves a turn for a tier-2 card too, then plays it', () => {
     const saving = turn(2);
-    giveCard(saving, '0', 'active_reload'); // tier 2: 4 souls
+    giveCard(saving, '0', 'swift_striker'); // tier 2: 4 souls
     expect(spends(playOut(saving))).toEqual([]);
     expect(saving.players['0'].souls).toBe(2);
     const paid = turn(4);
-    const reload = giveCard(paid, '0', 'active_reload');
-    expect(playOut(paid).some((a) => a.type === 'playCard' && a.cardIid === reload.iid)).toBe(true);
+    const striker = giveCard(paid, '0', 'swift_striker');
+    expect(playOut(paid).some((a) => a.type === 'playCard' && a.cardIid === striker.iid)).toBe(true);
     expect(paid.players['0'].souls).toBe(0);
   });
 
   it('the higher tier is the goal: with a tier-2 it could pay for now and a tier-3 two turns off, it holds for the tier-3', () => {
     const G = turn(4);
-    giveCard(G, '0', 'active_reload');
+    giveCard(G, '0', 'swift_striker');
     giveCard(G, '0', 'toxic_bullets');
     expect(spends(playOut(G))).toEqual([]);
     expect(G.players['0'].souls).toBe(4);
@@ -267,21 +271,21 @@ describe('the AI and a full hero (Patrick, 2026-11-09: a full hero swaps an item
     const me = G.players['0'];
     for (const h of [me.active, ...me.bench]) if (h) h.skillUsedThisTurn = true;
     const haze = me.active!;
-    const worn = ['extended_magazine', 'titanic_magazine', 'active_reload'].map((id) => giveItem(G, haze, id));
-    for (const h of me.bench) if (h) ['fortitude', 'healing_nova', 'sharpshooter'].forEach((id) => giveItem(G, h, id));
+    const worn = ['extended_magazine', 'titanic_magazine', 'swift_striker'].map((id) => giveItem(G, haze, id));
+    for (const h of me.bench) if (h) ['fortitude', 'toxic_bullets', 'sharpshooter'].forEach((id) => giveItem(G, h, id));
     return { G, me, haze, worn };
   }
-  const swaps = (G: GameState) => enumerateAIMoves(G, ctxFor('0'), false).filter((m) => m.move === 'playCard' && m.args[3] !== undefined);
+  const swaps = (G: GameState) => enumerateAIMoves(G, ctxFor('0'), false).filter((m) => m.move === 'playCard' && m.args[2] !== undefined);
 
   it('replaces only the hero\'s least valuable item, and only with a card worth twice its price or more', () => {
     const { G, haze, worn } = fullBoard(20);
     const tier3 = giveCard(G, '0', 'weighted_shots');                       // 8 souls: 4 x the magazine
     expect(legalActions(G, '0').filter((a) => a.type === 'playCard' && a.cardIid === tier3.iid && a.heroIid === haze.iid)).toHaveLength(3);
     const offered = swaps(G).filter((m) => m.args[0] === tier3.iid && m.args[1] === haze.iid);
-    expect(offered.map((m) => m.args[3])).toEqual([worn[0].iid]);         // Extended Magazine, tier 1
+    expect(offered.map((m) => m.args[2])).toEqual([worn[0].iid]);         // Extended Magazine, tier 1
     // The lookahead takes it: Weighted Shots goes on Haze, the magazine to the discard pile.
     playOut(G);
-    expect(wornItems(haze).map((it) => it.cardId)).toEqual(['titanic_magazine', 'active_reload', 'weighted_shots']);
+    expect(wornItems(haze).map((it) => it.cardId)).toEqual(['titanic_magazine', 'swift_striker', 'weighted_shots']);
     expect(G.players['0'].discard.map((c) => c.cardId)).toEqual(['extended_magazine']);
   });
 
@@ -295,20 +299,20 @@ describe('the AI and a full hero (Patrick, 2026-11-09: a full hero swaps an item
 });
 
 describe('the AI and its draw cards', () => {
-  it('casts a ready draw card and pays the discard with the cards worth least to it', () => {
-    const G = turn(0);
+  it('plays a draw card it can pay for and pays the discard with the cards worth least to it', () => {
+    const G = turn(4); // Compress Cooldown's price
     const me = G.players['0'];
-    // Nothing else worth an ability this turn: every other hero's is spent.
-    const dyn = me.bench[0]!;
-    for (const h of [me.active, ...me.bench]) if (h && h !== dyn) h.skillUsedThisTurn = true;
-    const draw = giveItem(G, dyn, 'improved_cooldown');
+    // Nothing else to do this turn: every hero's ability is spent.
+    for (const h of [me.active, ...me.bench]) if (h) h.skillUsedThisTurn = true;
+    const draw = giveCard(G, '0', 'improved_cooldown');
     stackDeck(G, '0', ['hero_kelvin', 'glass_cannon']);
     const made = playOut(G);
-    expect(made.some((a) => a.type === 'activate' && a.itemIid === draw.iid)).toBe(true);
+    expect(made.some((a) => a.type === 'playCard' && a.cardIid === draw.iid)).toBe(true);
     expect(made.some((a) => a.type === 'discard')).toBe(true);
     expect(G.pendingDiscard).toBeUndefined();
-    // The hero is kept; the tier-4 item it cannot pay for anytime soon goes.
-    expect(me.discard.map((c) => c.cardId)).toEqual(['glass_cannon']);
+    // The spell itself, played, then the tier-4 item it cannot pay for anytime
+    // soon: the hero is kept.
+    expect(me.discard.map((c) => c.cardId)).toEqual(['improved_cooldown', 'glass_cannon']);
   });
 
   it('discardChoice keeps heroes, then items its heroes could take, cheaper first; drops items no hero can take', () => {

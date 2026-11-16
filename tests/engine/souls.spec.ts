@@ -10,7 +10,7 @@ import { bankForecast } from '@/engine/bank';
 import { bountyAtRound, killBounty } from '@/engine/rounds';
 import { playBlocked, playCost, retreatCost } from '@/engine/legality';
 import { heroRetreat, itemPrice, netWorth } from '@/engine/query';
-import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, readyClient } from './_helpers';
+import { freshReadyGame, configureReadyMatch, giveCard, giveItem, makeHero, readyClient, spendSkill } from './_helpers';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -108,8 +108,9 @@ describe('souls economy', () => {
     const ctx: any = { currentPlayer: '0', turn: 2, numPlayers: 2 };
     G.players['0'].souls = 0;
     G.players['0'].bench[2] = null;
+    spendSkill(G.players['0'].bench[0]!); // Vindicta's snipes are spent: a kill's bounty is not this test's souls
     const hero = giveCard(G, '0', 'hero_kelvin');
-    giveCard(G, '0', 'active_reload'); // Haze's first build item, unaffordable
+    giveCard(G, '0', 'swift_striker'); // Haze's first build item, unaffordable
     // The AI's turn, move by move, up to its end.
     for (let i = 0; i < 20; i++) {
       const [m] = enumerateAIMoves(G, ctx);
@@ -119,7 +120,7 @@ describe('souls economy', () => {
     }
     expect(G.players['0'].bench[2]).toBe(hero);
     expect(G.players['0'].souls).toBe(0);
-    expect(G.players['0'].hand.map((c) => c.cardId)).toEqual(['active_reload']);
+    expect(G.players['0'].hand.map((c) => c.cardId)).toEqual(['swift_striker']);
   });
 
   it('souls accumulate: what a turn does not spend carries over, and each own turn adds the income', () => {
@@ -155,11 +156,11 @@ describe('souls economy', () => {
     }
   });
 
-  it('net worth counts worn items at their price (PRICE by tier, actives and passives alike): a side whose heroes wear 8 souls of items is 8 ahead — and its rival\'s income stays the lane\'s', () => {
+  it('net worth counts worn items at their price (PRICE by tier): a side whose heroes wear 8 souls of items is 8 ahead — and its rival\'s income stays the lane\'s', () => {
     const cases: [CardId[], number, number][] = [
       [['toxic_bullets'], PRICE[3], 0],                                  // one tier 3 passive: 8
-      [['titanic_magazine', 'cold_front'], 2 * PRICE[2], 0],             // a tier 2 passive and a tier 2 active: 8
-      [['extended_magazine', 'grit', 'extra_health'], 3 * PRICE[1], 0], // three tier 1s: 6
+      [['titanic_magazine', 'improved_spirit'], 2 * PRICE[2], 0],        // two tier 2s: 8
+      [['extended_magazine', 'extra_spirit', 'extra_health'], 3 * PRICE[1], 0], // three tier 1s: 6
       [['glass_cannon'], PRICE[4], 0],                                   // one tier 4: 16
     ];
     for (const [items, worth, bonus] of cases) {
@@ -425,7 +426,7 @@ describe('souls economy', () => {
     expect(hpBefore - target.hp).toBe(4); // base 1 + 3 spirit
   });
 
-  it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 2); Rem's Tag Along prints {sp:4} and does", async () => {
+  it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 5); Rem's Tag Along prints {sp:4} and does", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const G = freshG();
     const rem = makeHero('hero_rem', '0', 'bench', 1);
@@ -436,7 +437,7 @@ describe('souls economy', () => {
     ally.hp = 1;
     // A flat heal: the caster's Spirit is ignored.
     ABILITIES_BY_ID['eff_healing_rite'].run(G, { movingPlayer: '0' }, { source: rem, target: ally });
-    expect(ally.hp - 1).toBe(2);
+    expect(ally.hp - 1).toBe(5);
     ally.hp = 1;
     ABILITIES_BY_ID['skill_rem'].run(G, { movingPlayer: '0' }, { source: rem, target: ally });
     expect(ally.hp - 1).toBe(4 + 2); // {sp:4}

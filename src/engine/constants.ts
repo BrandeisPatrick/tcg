@@ -62,15 +62,6 @@ export const PRICE: Readonly<Record<ItemTier, number>> = { 1: 2, 2: 4, 3: 8, 4: 
  *  `ItemTier` and its PRICE, and nothing else. */
 export const ITEM_TIERS: readonly ItemTier[] = Object.keys(PRICE).map(Number) as ItemTier[];
 
-/** Own turns an active item waits after it is used, and when it is put on:
- *  `low` for tiers 1–2, `high` for tiers 3 and up — unless the card names its
- *  own (`SpellCard.cooldown`: the draw cards' 2). Hard crowd control uses
- *  charges instead. */
-export const ACTIVE_COOLDOWN = { low: 2, high: 3 } as const;
-
-/** Uses a hard crowd-control active has per match (no cooldown). */
-export const HARD_CC_CHARGES = 2;
-
 /** A hero wearing this many items of one tab gets that tab's category spike:
  *  +1 Bullet Power (Weapon), +1 Spirit Power (Spirit) or +1 max HP (Vitality). */
 export const CATEGORY_SPIKE_ITEMS = 3;
@@ -80,6 +71,11 @@ export const CATEGORY_SPIKE_ITEMS = 3;
 /** Items a deck holds (the deck builder's size, and the one made from the
  *  heroes' builds). The four drafted heroes are shuffled in on top of these. */
 export const DECK_SIZE = 16;
+
+/** The heroes a side drafts for a match (Patrick, 2026-11-16: 3, down from 4).
+ *  The board keeps its four spots — the Active and three on the bench — so a
+ *  full squad leaves one free for a unit (a Ghoul, a Gravestone). */
+export const SQUAD_SIZE = 3;
 
 /** The most copies of one item a deck may hold. */
 export const MAX_COPIES = 4;
@@ -99,6 +95,17 @@ export const DRAW_PER_TURN = 1;
 /** The most cards a hand holds: a draw into a full hand is skipped (the card
  *  stays in the deck). */
 export const MAX_HAND = 10;
+
+/** Counterspell (docs/card-design.md, "Counters"): the turns of its owner the
+ *  shield stays up for unless it is triggered first, and the HP its hero heals
+ *  when it stops a card. */
+export const COUNTERSPELL_TURNS = 2;
+
+/** Flight (Vindicta's ultimate; docs/hero-design.md): the turns she flies, and
+ *  the odds a hit on a flying hero misses — 1 in this many. */
+export const FLIGHT_TURNS = 3;
+export const FLIGHT_DODGE_IN = 3;
+export const COUNTERSPELL_HEAL = 4;
 
 // ---------- Abilities ----------
 // A kit ability costs no souls (Patrick, 2026-11-15): souls buy the deck's

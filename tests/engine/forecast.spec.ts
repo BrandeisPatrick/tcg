@@ -117,10 +117,11 @@ const cases: Case[] = [
     damageToActive: 0, pushDamage: 0, ko: false,
   },
   {
-    name: "Vindicta's Flight rider (1 + her Spirit as a spirit hit) finishes the target after the bullet",
+    name: "Vindicta's Flight rider (1 + her Spirit as a spirit hit, while she flies) finishes the target after the bullet",
     build: () => {
       const { G, attacker, defender } = board('hero_vindicta');
       attacker.spiritMod = 3; defender.hpMax = defender.hp = 4;
+      addStatus(G, attacker, 'flying', 1, 3); // in Flight (her ultimate): the rider is the status's
       return G;
     },
     // The bullet itself does not drop it (predictedKO false: the choreographer
@@ -249,7 +250,7 @@ describe('simulate', () => {
     expect(ran.G.attackUsed).toBe(true);
     expect(G).toEqual(snapshot);
 
-    const refused = simulate(G, '0', { type: 'activate', itemIid: 'not-an-item' });
+    const refused = simulate(G, '0', { type: 'playCard', cardIid: 'not-a-card' });
     expect(refused.invalid).toBe(true);
     expect(refused.events).toEqual([]);
     expect(refused.G).toEqual({ ...G, log: [] }); // the copy, left as it was

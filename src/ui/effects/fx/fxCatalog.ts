@@ -17,8 +17,14 @@ export const FX_TIMING = {
   castCharge: 240,
   /** Effects the caster puts on itself land as the charge lets go. */
   selfLead: 240,
-  /** Ultimates wait for the screen-fill name plate before the strike lands. */
-  ultLead: 600,
+  /** A card played from the hand is shown mid-screen first — its activation —
+   *  and only then does what it does resolve on the board (Patrick,
+   *  2026-11-15: "display the card in the centre of the screen, and then
+   *  resolve the effect"). The reveal (CardPlayFlash) is fading as this ends. */
+  cardLead: 640,
+  /** An ultimate's name plate fills the screen first; the strike begins as
+   *  the plate lifts (UltMomentFlash), so it lands on a board in plain view. */
+  ultLead: 900,
   /** A gunfire hit's volley leaves this long before its rounds land — the
    *  muzzle flash, then three tracers in flight (travel + two round gaps). */
   volleyLead: 300,

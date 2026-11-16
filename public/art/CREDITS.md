@@ -35,6 +35,24 @@ from their "Deadlock Graphical Library" collection.
   80), and Silver's wolf-form card (`hero_silver_wolf_card.webp`, Deadlock's
   `images/heroes/werewolf_wolf_card.webp`), the art her card shows while Lycan
   Curse lasts.
+- Graves (2026-11-16): her portrait, minimap and small icons are the game's own
+  (`images/heroes/necro_card.webp`, `necro_mm.webp`, `necro_sm.webp` from the
+  deadlock-api's asset bucket, used as served), and her ultimate icon
+  (`public/ult/graves.webp`) is Borrowed Decree's (`necro_gravestone.webp`).
+  The Ghoul (`unit_ghoul_*.webp`) is the game's own ghoul: its model
+  (`models/heroes_wip/necro/necro_shambler/idle.glb`, the model of
+  `npc_necro_skele` in https://api.deadlock-api.com/v1/assets/npc-units) in its
+  idle pose with its own texture, drawn with three.js and cut out at the hero
+  files' sizes. Deadlock ships no picture of it. The fire round its skull has no
+  texture in that file, so it is coloured after Graves' own spirit fire
+  (`images/heroes/guns/necro_hand.webp`). The Gravestone
+  (`unit_gravestone_*.webp`) wears Borrowed Decree's icon, a white glyph set on
+  a dark ground.
+- The final level's portraits (`hero_<id>_gloat.webp`, one for every hero):
+  each is Deadlock's own "gloat" card of that hero (`images/heroes/<name>_card_gloat.webp`
+  from the deadlock-api's asset bucket, named in
+  https://api.deadlock-api.com/v1/assets/heroes as `hero_card_gloat_webp`), used
+  as served. A hero's board tile and sheet wear it once it reaches Level 4.
 - The small hero icons (`_mm.webp`, `_sm.webp`) are the game's own icons,
   pulled from the community asset bucket at https://deadlock-api.com/
   (https://assets.deadlock-api.com/).
@@ -51,9 +69,10 @@ from their "Deadlock Graphical Library" collection.
   encoded to WebP by `scripts/fetch_item_art.py`. The first set came through the
   asset bucket above; the 41 items added on 2026-11-05 (Monster Rounds through
   Spirit Burn, docs/card-design.md) and the six tier-5 items after them
-  (Haunting Shot through Prism Blast) came from the wiki. Extra Charge and
-  Rapid Recharge (2026-11-15) are the same shop icons from the deadlock-api's
-  shop list (`shop_image_webp`, 200×200 WebP, used as served). See
+  (Haunting Shot through Prism Blast) came from the wiki. Extra Charge,
+  Rapid Recharge and Counterspell (2026-11-15; Counterspell's is in
+  `public/spells/`, as it is a spell here) are the same shop icons from the
+  deadlock-api's shop list (`shop_image_webp`, 200×200 WebP, used as served). See
   `public/ART_PIPELINE.md`.
 - The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,
   Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, Fixation, the armours
@@ -64,6 +83,13 @@ from their "Deadlock Graphical Library" collection.
   game's own HUD icons, fetched from the Deadlock wiki's asset mirror
   (`https://cdn.deadlock.wiki/<File_Name>.png`) and used as they are: white
   glyphs on transparency, painted in the chip's colour through an SVG filter.
+  The Flying status (2026-11-16) wears Vindicta's Flight icon
+  (`images/abilities/hornet/vindicta_flight.webp` from the deadlock-api's asset
+  bucket, drawn white as `flying.png`); the same icon is her ultimate's now
+  (`public/ult/vindicta.webp`, which was Assassinate's).
+  The Counterspell status (2026-11-15) wears the item's own HUD glyph, the
+  parry (`icons/hud/modifiers/icon_parry.svg` from the deadlock-api's asset
+  bucket, the item's `image`), drawn white at 128×128 as `counterspell.png`.
 - The map icons (`map_guardian.png`, `map_walker.png`, `map_patron.png`,
   `map_mid_boss.png`, `map_rejuvenator.png` in this folder) are the game's own
   pictures from the same mirror: the wiki's `Guardian.png` (the Lane Guardian;

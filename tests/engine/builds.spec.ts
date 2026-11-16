@@ -27,8 +27,11 @@ describe('items', () => {
     expect(new Set(ITEMS.map((i) => i.id)).size).toBe(ITEMS.length);
   });
 
-  it('an item costs its tier\'s price, and nothing that is no item has one', () => {
-    for (const item of ITEMS) expect(itemPrice(item.id), item.id).toBe(PRICE[item.tier]);
+  it('an item costs its tier\'s price — but for the one card with a price of its own (Rusted Barrel: 1) — and nothing that is no item has one', () => {
+    for (const item of ITEMS) expect(itemPrice(item.id), item.id).toBe(item.price ?? PRICE[item.tier]);
+    // A price of its own is Patrick's call, card by card, and always under the tier's.
+    expect(ITEMS.filter((i) => i.price !== undefined).map((i) => [i.id, i.price])).toEqual([['rusted_barrel', 1]]);
+    for (const item of ITEMS) if (item.price !== undefined) expect(item.price, item.id).toBeLessThan(PRICE[item.tier]);
     expect(PRICE).toEqual({ 1: 2, 2: 4, 3: 8, 4: 16, 5: 24 });
     expect(itemPrice('hero_haze')).toBe(0);
     expect(itemPrice('ult_haze')).toBe(0);

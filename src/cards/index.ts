@@ -3,7 +3,10 @@ import { HEROES, HEROES_BY_ID } from './heroes';
 import { SPELLS, SPELLS_BY_ID } from './spells';
 import { EQUIPMENT, EQUIPMENT_BY_ID } from './equipment';
 import { ULTIMATES, ULTIMATES_BY_ID } from './ultimates';
+import { UNITS, UNITS_BY_ID } from './units';
 
+/** The catalogue: every card a player drafts, builds into a deck or reads on a
+ *  hero. The units (cards/units.ts) are not in it: a card's effect makes them. */
 export const ALL_CARDS: CardData[] = [...HEROES, ...SPELLS, ...EQUIPMENT, ...ULTIMATES];
 
 export const CARDS_BY_ID: Record<string, CardData> = {
@@ -11,6 +14,7 @@ export const CARDS_BY_ID: Record<string, CardData> = {
   ...SPELLS_BY_ID,
   ...EQUIPMENT_BY_ID,
   ...ULTIMATES_BY_ID,
+  ...UNITS_BY_ID,
 };
 
 /** Every item a deck can hold, actives (spells) then passives (equipment),
@@ -45,7 +49,7 @@ export function itemCard(id: CardId | undefined): ItemCard | undefined {
   return data?.type === 'spell' || data?.type === 'equipment' ? data : undefined;
 }
 
-export { HEROES, SPELLS, EQUIPMENT, ULTIMATES };
+export { HEROES, SPELLS, EQUIPMENT, ULTIMATES, UNITS };
 
 
 /**

@@ -3,6 +3,8 @@ import { STATUSES_BY_ID } from '@/statuses';
 import { getHeroIdentity } from './heroPalette';
 import { poster } from '@/ui/poster';
 import { HERO_IMG_BASE } from '@/art/assets';
+import { MAX_LEVEL, START_LEVEL } from '@/engine/constants';
+import { HEROES_BY_ID } from '../heroes';
 
 interface PortraitProps {
   cardId: string;
@@ -24,6 +26,19 @@ export function heroForm(card: CardInstance): { label: string; turns: number; ar
     if (!def?.form) continue;
     return { label: def.title, turns: s.duration, art: def.form.hero === card.cardId ? def.form.art : undefined };
   }
+  return undefined;
+}
+
+/**
+ * The art a hero's portrait wears on the board (a file under public/heroes/),
+ * or undefined for its own card art: another form's while a status gives one
+ * (`heroForm`), else — once the hero has reached its final level — Deadlock's
+ * own "gloat" card of it (`<cardId>_gloat.webp`; Patrick, 2026-11-16). A unit
+ * has no gloat card and never wears one.
+ */
+export function heroPortraitFile(card: CardInstance, form = heroForm(card)): string | undefined {
+  if (form?.art) return form.art;
+  if ((card.level ?? START_LEVEL) >= MAX_LEVEL && HEROES_BY_ID[card.cardId]) return `${card.cardId}_gloat.webp`;
   return undefined;
 }
 

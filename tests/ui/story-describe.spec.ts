@@ -12,10 +12,11 @@ const node = (run: StoryRun, id: string) => run.nodes.find((n) => n.id === id)!;
 const clearAll = (run: StoryRun, ids: string[]) => ids.reduce(clearNode, run);
 
 describe('effectiveKind', () => {
-  it('reads a recruit stop as supply once the roster has four heroes', () => {
+  it('reads a recruit stop as supply once the roster has three heroes (a squad, SQUAD_SIZE)', () => {
     const run = newRun('hero_kelvin');
     expect(effectiveKind(run, node(run, 'wallst'))).toBe('recruit');
-    const full = { ...run, heroes: ['hero_kelvin', 'hero_haze', 'hero_abrams', 'hero_yamato'] };
+    expect(effectiveKind({ ...run, heroes: ['hero_kelvin', 'hero_haze'] }, node(run, 'wallst'))).toBe('recruit');
+    const full = { ...run, heroes: ['hero_kelvin', 'hero_haze', 'hero_abrams'] };
     expect(effectiveKind(full, node(full, 'wallst'))).toBe('supply');
     // Other kinds are untouched.
     expect(effectiveKind(full, node(full, 'cityhall'))).toBe('battle');
@@ -91,7 +92,7 @@ describe('stopFacts', () => {
     expect(city.foes).toBe(2);
     expect(city.patronHp).toBe(3);
     const boss = stopFacts(run, node(run, 'yankee'));
-    expect(boss.foes).toBe(4);
+    expect(boss.foes).toBe(3);                       // a squad, as the player's (it was 4)
     expect(boss.buff).toEqual({ atk: 4, hp: 8 });
   });
 
@@ -109,7 +110,7 @@ describe('stopFacts', () => {
     const run = newRun('hero_kelvin');
     expect(stopFacts(run, node(run, 'cloisters')).offer).toEqual(supplyOffer(6));
     expect(stopFacts(run, node(run, 'wallst')).offer).toBeUndefined();
-    const full = { ...run, heroes: ['hero_kelvin', 'hero_haze', 'hero_abrams', 'hero_yamato'] };
+    const full = { ...run, heroes: ['hero_kelvin', 'hero_haze', 'hero_abrams'] };
     expect(stopFacts(full, node(full, 'wallst')).offer).toEqual(supplyOffer(1));
   });
 

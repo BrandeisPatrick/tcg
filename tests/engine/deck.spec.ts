@@ -16,13 +16,13 @@ import { Client } from 'boardgame.io/client';
 import type { CardId, CardInstance, DeckFx, GameState, PlayerID } from '@/engine/types';
 import { CARDS_BY_ID, HEROES, ITEMS, itemCard } from '@/cards';
 import { defaultBuild } from '@/cards/builds';
-import { baseItem, buildsAcross, copyCounts, deckFromBuilds, deckProblem, isBaseItem, isLegalDeck, rebaseDeck, upgradesOf, ITEM_SLOTS, catalogueByTab } from '@/cards/decks';
+import { buildsAcross, copyCounts, deckFromBuilds, deckProblem, evolvesFrom, fitDeck, isBaseItem, isLegalDeck, upgradesOf, ITEM_SLOTS, catalogueByTab } from '@/cards/decks';
 import { DeadlockGame } from '@/engine/game';
 import { setupGame } from '@/engine/actions/setup';
 import { buildOf, nextRandom, shuffle, sideDeckIds } from '@/engine/deck';
 import { INVALID, perform } from '@/engine/engine';
 import { blocked, legalActions } from '@/engine/legality';
-import { DECK_SIZE, MAX_COPIES, OPENING_DRAW, OPENING_HAND } from '@/engine/constants';
+import { DECK_SIZE, MAX_COPIES, OPENING_DRAW, OPENING_HAND, SQUAD_SIZE } from '@/engine/constants';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { TEST_ROSTERS } from './_helpers';
 
@@ -48,18 +48,18 @@ const allCards = (G: GameState, pid: PlayerID) => {
  *  snake slots, seat 1 the rest. Returns the state as the first turn opens. */
 function drafted(seed: number, opts: { human?: PlayerID | null; deck?: CardId[]; builds?: Record<CardId, CardId[]> } = {}) {
   setMatchConfig({
-    heroPreferences: [null, null, null, null], seed,
+    heroPreferences: [null, null, null], seed,
     humanSeat: opts.human === undefined ? '0' : opts.human,
     deck: opts.deck, builds: opts.builds,
   });
   const client = Client({ game: DeadlockGame, numPlayers: 2 });
   client.start();
-  const order = ['hero_haze', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_lash', 'hero_kelvin', 'hero_seven', 'hero_paige'];
+  const order = ['hero_haze', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_kelvin', 'hero_lash'];
   for (const id of order) client.moves.draftPick(id);
   const G = structuredClone(client.getState()!.G) as GameState;
   client.stop();
-  // Snake: P0 at 0, 3, 4, 7; P1 at 1, 2, 5, 6.
-  const picks: Record<PlayerID, CardId[]> = { '0': [order[0], order[3], order[4], order[7]], '1': [order[1], order[2], order[5], order[6]] };
+  // SQUAD_SIZE (3) each: P0 at 0, 3, 5; P1 at 1, 2, 4.
+  const picks: Record<PlayerID, CardId[]> = { '0': [order[0], order[3], order[5]], '1': [order[1], order[2], order[4]] };
   return { G, picks };
 }
 
@@ -73,9 +73,9 @@ describe('what makes a deck', () => {
     expect(deckProblem([...legal.slice(1), 'grit'])).toBe('copies');
     expect(deckProblem([...legal.slice(1), 'hero_haze'])).toBe('notItem');
     expect(isLegalDeck(undefined)).toBe(false);
-    // An upgrade never starts in a deck: playing its component shuffles it in.
-    expect(deckProblem([...legal.slice(1), 'improved_spirit'])).toBe('upgrade');
-    expect(isLegalDeck([...legal.slice(1), 'titanic_magazine'])).toBe(false);
+    // An upgrade is a card like any other: a deck may hold it (Patrick, 2026-11-15).
+    expect(deckProblem([...legal.slice(1), 'improved_spirit'])).toBeNull();
+    expect(isLegalDeck([...legal.slice(1), 'titanic_magazine'])).toBe(true);
     expect(isLegalDeck([...legal.slice(1), 'extended_magazine'])).toBe(true);
     expect(copyCounts(['grit', 'grit', 'cold_front'])).toEqual({ grit: 2, cold_front: 1 });
   });
@@ -92,50 +92,59 @@ describe('what makes a deck', () => {
     expect(seen.sort()).toEqual(ITEMS.map((i) => i.id).sort());
   });
 
-  it('upgradesOf reads upgradesFrom backwards, in catalogue order: Extra Health makes Fortitude or Colossus', () => {
+  it('upgradesOf reads the equipment upgrades backwards, in catalogue order: Extra Health evolves into Fortitude — an active neither evolves nor is evolved', () => {
     let links = 0;
     for (const item of ITEMS) {
       for (const up of upgradesOf(item.id)) {
         expect(itemCard(up)!.upgradesFrom).toBe(item.id);
+        expect(evolvesFrom(up)).toBe(item.id);
+        expect([item.type, itemCard(up)!.type]).toEqual(['equipment', 'equipment']);
         links++;
       }
     }
-    expect(links).toBe(ITEMS.filter((i) => i.upgradesFrom).length);
-    expect([...upgradesOf('extra_health')].sort()).toEqual(['colossus', 'fortitude']);
-    expect(upgradesOf('improved_cooldown')).toEqual(['superior_cooldown']);
-    expect(upgradesOf('superior_cooldown')).toEqual(['transcendent_cooldown']);
+    const both = ITEMS.filter((i) => i.type === 'equipment' && i.upgradesFrom && itemCard(i.upgradesFrom)?.type === 'equipment');
+    expect(links).toBe(both.length);
+    expect(links).toBeGreaterThan(0);
+    // Deadlock builds Colossus (an active) from Extra Health too: no discount, so it is no upgrade here.
+    expect([...upgradesOf('extra_health')]).toEqual(['fortitude']);
+    expect(evolvesFrom('colossus')).toBeUndefined();
+    // The draw cards are actives: Deadlock's line stays on the cards, and none evolves another.
+    expect(upgradesOf('improved_cooldown')).toEqual([]);
+    expect(evolvesFrom('superior_cooldown')).toBeUndefined();
     expect(upgradesOf('glass_cannon')).toEqual([]);
   });
 });
 
 describe('an upgrade and its base item', () => {
-  it('a base item has no upgradesFrom; an upgrade walks down to the one that has none', () => {
+  it('a base item evolves no other; an equipment upgrade names the one it evolves', () => {
     expect(isBaseItem('extra_spirit')).toBe(true);
     expect(isBaseItem('improved_spirit')).toBe(false);
     expect(isBaseItem('hero_haze')).toBe(false);
-    expect(baseItem('extra_spirit')).toBe('extra_spirit');
-    expect(baseItem('boundless_spirit')).toBe('extra_spirit');
-    expect(baseItem('transcendent_cooldown')).toBe('improved_cooldown');
-    expect(baseItem('hero_haze')).toBeUndefined();
-    for (const item of ITEMS) expect(isBaseItem(baseItem(item.id)!), item.id).toBe(true);
+    expect(evolvesFrom('extra_spirit')).toBeUndefined();
+    expect(evolvesFrom('improved_spirit')).toBe('extra_spirit');
+    expect(evolvesFrom('boundless_spirit')).toBe('improved_spirit');
+    expect(evolvesFrom('hero_haze')).toBeUndefined();
+    // An active is always a base item: it evolves nothing.
+    expect(isBaseItem('transcendent_cooldown')).toBe(true);
+    for (const item of ITEMS) if (item.type === 'spell') expect(isBaseItem(item.id), item.id).toBe(true);
   });
 
-  it('rebaseDeck makes every upgrade its base item and makes up what the cap turns away from the fill', () => {
-    expect(rebaseDeck(['improved_spirit', 'grit', 'nope', 'hero_haze'])).toEqual(['extra_spirit', 'grit']);
-    const five = ['extra_spirit', 'extra_spirit', 'improved_spirit', 'boundless_spirit', 'improved_spirit'];
-    expect(rebaseDeck(five)).toEqual(Array(MAX_COPIES).fill('extra_spirit'));
-    expect(rebaseDeck(five, ['surge_of_power', 'grit', 'cold_front'])).toEqual([...Array(MAX_COPIES).fill('extra_spirit'), 'grit']);
+  it('fitDeck keeps every item as it is, upgrades too, and makes up what the cap turns away from the fill', () => {
+    expect(fitDeck(['improved_spirit', 'grit', 'nope', 'hero_haze'])).toEqual(['improved_spirit', 'grit']);
+    const five = Array(MAX_COPIES + 1).fill('improved_spirit');
+    expect(fitDeck(five)).toEqual(Array(MAX_COPIES).fill('improved_spirit'));
+    expect(fitDeck(five, ['improved_spirit', 'grit', 'cold_front'])).toEqual([...Array(MAX_COPIES).fill('improved_spirit'), 'grit']);
   });
 });
 
 describe('the deck made from the heroes\' builds', () => {
-  it('reads the builds across — every hero\'s first item, then every hero\'s second… — each upgrade as its base item, until it holds DECK_SIZE', () => {
+  it('reads the builds across — every hero\'s first item, then every hero\'s second… — upgrades as they are, until it holds DECK_SIZE', () => {
     const heroes = TEST_ROSTERS['0'];
     const deck = deckFromBuilds(heroes.map(defaultBuild));
     expect(deck).toHaveLength(DECK_SIZE);
     expect(isLegalDeck(deck)).toBe(true);
     const across: CardId[] = [];
-    for (let i = 0; i < 6; i++) for (const h of heroes) across.push(baseItem(defaultBuild(h)[i])!);
+    for (let i = 0; i < 6; i++) for (const h of heroes) across.push(defaultBuild(h)[i]);
     expect(buildsAcross(heroes.map(defaultBuild))).toEqual(across);
     // Taken in that order while each has room under the cap.
     const want: CardId[] = [];
@@ -143,18 +152,19 @@ describe('the deck made from the heroes\' builds', () => {
     expect(deck).toEqual(want);
   });
 
-  it('holds no upgrade: Rem\'s Improved and Boundless Spirit come as Extra Spirit, her Healing Nova as Healing Rite', () => {
+  it('holds the upgrades a build names: Rem\'s Improved and Boundless Spirit and her Healing Nova come as themselves', () => {
     const rem = deckFromBuilds([defaultBuild('hero_rem')]);
-    expect(rem.every(isBaseItem)).toBe(true);
-    expect(rem).not.toContain('improved_spirit');
-    expect(copyCounts(rem).extra_spirit).toBe(MAX_COPIES);
-    expect(rem).toContain('healing_rite');
-    // Every hero with any three others: base items only.
+    expect(rem).toContain('improved_spirit');
+    expect(rem).toContain('boundless_spirit');
+    expect(rem).toContain('healing_nova');
+    for (const id of defaultBuild('hero_rem')) expect(copyCounts(rem)[id], id).toBeGreaterThan(0);
+    // Every hero with any three others: a legal deck of the builds' own items.
     const all = HEROES.map((h) => h.id);
     for (let i = 0; i < all.length; i++) {
-      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length], all[(i + 3) % all.length]];
+      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length]]; // a squad: SQUAD_SIZE (3) heroes
       const deck = deckFromBuilds(four.map(defaultBuild));
-      expect(deck.filter((id) => !isBaseItem(id)), four.join(',')).toEqual([]);
+      const named = new Set(four.flatMap(defaultBuild));
+      expect(deck.filter((id) => !named.has(id)), four.join(',')).toEqual([]);
     }
   });
 
@@ -167,10 +177,10 @@ describe('the deck made from the heroes\' builds', () => {
     expect(deckFromBuilds([['nope', 'hero_haze']])).toEqual([]);
   });
 
-  it('every hero\'s default build, with any three others, makes a legal deck', () => {
+  it('every hero\'s default build, with any two others (a squad of three), makes a legal deck', () => {
     const all = HEROES.map((h) => h.id);
     for (let i = 0; i < all.length; i++) {
-      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length], all[(i + 3) % all.length]];
+      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length]]; // a squad: SQUAD_SIZE (3) heroes
       expect(isLegalDeck(deckFromBuilds(four.map(defaultBuild))), four.join(',')).toBe(true);
     }
   });
@@ -195,13 +205,13 @@ describe('a drafted match deals the deck', () => {
     return pick;
   };
 
-  it('each side: its DECK_SIZE items and its four heroes — the chosen one in the lane, OPENING_DRAW in the hand, the rest in the deck', () => {
+  it('each side: its DECK_SIZE items and its three heroes (SQUAD_SIZE) — the chosen one in the lane, OPENING_DRAW in the hand, the rest in the deck', () => {
     for (const seed of [1, 2, 3, 77, 4242]) {
       const { G, picks } = drafted(seed);
       choose(G);
       for (const pid of ['0', '1'] as PlayerID[]) {
         const all = allCards(G, pid);
-        expect(all, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + 4);
+        expect(all, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + SQUAD_SIZE);
         expect(ids(all).filter(isHero).sort(), `seed ${seed}`).toEqual([...picks[pid]].sort());
         expect(isLegalDeck(ids(all).filter((id) => !isHero(id))), `seed ${seed}`).toBe(true);
         for (const c of G.players[pid].deck) expect(c.zone).toBe('deck');
@@ -209,7 +219,7 @@ describe('a drafted match deals the deck', () => {
         expect(ps.active, `seed ${seed} P${pid}`).not.toBeNull();
         expect(canLead(ps.active!.cardId)).toBe(true);
         expect(ps.hand, `seed ${seed} P${pid}`).toHaveLength(OPENING_DRAW);
-        expect(ps.deck, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + 4 - 1 - OPENING_DRAW);
+        expect(ps.deck, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + SQUAD_SIZE - 1 - OPENING_DRAW);
         expect(ps.hand.length + 1).toBe(OPENING_HAND);
         expect(ps.bench).toEqual([null, null, null]);
       }
@@ -225,7 +235,7 @@ describe('a drafted match deals the deck', () => {
     expect(G.players['1'].active).toBeNull();
     for (const pid of ['0', '1'] as PlayerID[]) {
       expect(G.players[pid].hand).toEqual([]);
-      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + 4);
+      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + SQUAD_SIZE);
     }
     expect(G.fx.filter((e) => e.kind === 'deck')).toEqual([]);
     // Nothing else is legal until it is chosen — the end of the turn included.
@@ -257,7 +267,7 @@ describe('a drafted match deals the deck', () => {
     // Each side: the chosen one in the lane, OPENING_DRAW dealt, the rest in the deck.
     for (const pid of ['0', '1'] as PlayerID[]) {
       expect(G.players[pid].hand).toHaveLength(OPENING_DRAW);
-      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + 4 - 1 - OPENING_DRAW);
+      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + SQUAD_SIZE - 1 - OPENING_DRAW);
     }
     // The board flies both Actives, then the decks shuffle and deal: in that order.
     const deck = G.fx.filter((e): e is DeckFx => e.kind === 'deck').map((e) => e.what);

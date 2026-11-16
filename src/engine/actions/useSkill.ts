@@ -7,7 +7,8 @@
  * prompt pays a trigger with too): a skill its cooldown, a charged skill a
  * charge, an ultimate its size's wait — and an ultimate is its side's one for
  * the turn. `skillBlocked` (legality.ts) has already said it may be done and
- * at whom; this only does it.
+ * at whom; this only does it. One aimed at an enemy hero carrying Counterspell
+ * is paid for and does nothing (`counterspellNegates`, damage.ts).
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID, cardName } from '@/cards';
@@ -16,6 +17,7 @@ import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { nextActionId } from '../ids';
 import { withCast } from '../castContext';
+import { counterspellNegates } from '../damage';
 import { fireTriggers } from '../triggers';
 import { resolve } from '../death';
 
@@ -65,9 +67,13 @@ export function useSkill(G: GameState, pid: PlayerID, heroIid: string, targetIid
   // The FX layer's cast event goes out first so the ability's effects read
   // as its own: flare on the hero, bolt to the target, then the impact.
   pushFx(G, { kind: 'cast', castKind: ult ? 'ult' : 'skill', by: pid, cardId: faceId, iid: hero.iid, targetIid: target?.iid });
-  withCast(hero, ult ? 'ult' : 'skill', () => {
-    ability.run(G, { movingPlayer: pid }, { source: hero, target });
-  });
+  // Aimed at an enemy hero carrying Counterspell, it does nothing: the wait
+  // it has just started is what it cost.
+  if (!counterspellNegates(G, pid, target, `${heroName}'s ${ult ? cardName(faceId) : 'skill'}`)) {
+    withCast(hero, ult ? 'ult' : 'skill', () => {
+      ability.run(G, { movingPlayer: pid }, { source: hero, target });
+    });
+  }
   // Worn reactions: Diviner's Kevlar after an ultimate, Surge of Power and
   // Mystic Burst after a skill.
   fireTriggers(G, hero, ult ? 'onBearerUltCast' : 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });

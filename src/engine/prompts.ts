@@ -36,6 +36,7 @@ import { pushLog } from './log';
 import { pushFx } from './fx';
 import { nextActionId } from './ids';
 import { withCast } from './castContext';
+import { counterspellNegates } from './damage';
 import { getAbility } from './registry';
 import { fireTriggers } from './triggers';
 import { killInPlace, resolve } from './death';
@@ -115,9 +116,11 @@ export function answerTrigger(G: GameState, use?: TriggerOffer): void {
     const paid = resolveSkill(hero, use.abilityId) ? payKit(G, entry.pid, hero, use.abilityId) : payPassive(G, entry.pid, hero, use.abilityId);
     pushLog(G, `P${entry.pid} used ${name} (${cardName(hero.cardId)})${paid > 0 ? ` (−${paid} soul${paid === 1 ? '' : 's'})` : ''}.`);
     pushFx(G, { kind: 'cast', castKind: ult ? 'ult' : 'skill', by: entry.pid, cardId: faceId, iid: hero.iid, targetIid: subject?.iid });
-    withCast(hero, ult ? 'ult' : 'skill', () => {
-      ability.run(G, { movingPlayer: entry.pid }, { source: hero, target: subject, params: { moment: entry.moment } });
-    });
+    if (!counterspellNegates(G, entry.pid, subject, `${cardName(hero.cardId)}'s ${name}`)) {
+      withCast(hero, ult ? 'ult' : 'skill', () => {
+        ability.run(G, { movingPlayer: entry.pid }, { source: hero, target: subject, params: { moment: entry.moment } });
+      });
+    }
     // The worn reactions to an ultimate used (Diviner's Kevlar and the like).
     if (ult) fireTriggers(G, hero, 'onBearerUltCast', { reaction: true, movingPlayer: entry.pid });
     G.action = { id: nextActionId(G), kind: ult ? 'ult' : 'skill', by: entry.pid, cardId: faceId, state: 'begin', abilityId: use.abilityId };

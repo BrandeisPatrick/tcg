@@ -1,10 +1,11 @@
 import type { CardId } from '@/engine/types';
 import { itemCard, migrateCardIds } from '@/cards';
 import { BUILD_SIZE, DEFAULT_BUILDS, defaultBuild } from '@/cards/builds';
-import { buildsAcross, rebaseDeck } from '@/cards/decks';
+import { buildsAcross, fitDeck } from '@/cards/decks';
 import { AI_STRENGTHS, DEFAULT_AI_STRENGTH, type AiStrength } from '@/ai/heuristic';
+import { SQUAD_SIZE } from '@/engine/constants';
 
-export const MAX_PREFERRED_HEROES = 4;
+export const MAX_PREFERRED_HEROES = SQUAD_SIZE;
 
 /**
  * The save's schema. Version 1 had no version field and kept up to five
@@ -13,11 +14,11 @@ export const MAX_PREFERRED_HEROES = 4;
  * strength (a save from before it plays 'normal'); version 4 brings a deck
  * back — one deck of items (DECK_SIZE, at most MAX_COPIES of one), the deck
  * builder's — beside the builds, which make the deck of a player who saved
- * none (a save from before it has none); version 5 keeps upgrades out of the
- * deck (Patrick, 2026-11-09: an upgrade comes only from playing its
- * component): a saved deck's upgrades become their base items, and a copy
- * the MAX_COPIES cap then turns away is made up from the squad's builds
- * (`rebaseDeck`, cards/decks.ts).
+ * none (a save from before it has none); version 5 kept upgrades out of the
+ * deck (2026-11-09 to 2026-11-15: an upgrade came only from playing its
+ * component). Since 2026-11-15 a deck holds any item, upgrades too, so a
+ * saved deck is only made to fit (`fitDeck`, cards/decks.ts): a copy the
+ * MAX_COPIES cap turns away is made up from the squad's builds.
  */
 const PLAYER_DATA_VERSION = 5;
 /** The first version that keeps builds: an older save's are not carried over. */
@@ -59,13 +60,13 @@ function defaultPlayerData(): PlayerData {
 }
 
 /** A saved deck brought up to date: retired items swapped for their
- *  replacements, unknown ids and anything that is no item dropped, each
- *  upgrade turned into its base item, at most MAX_COPIES of one item, at most
- *  DECK_SIZE in all; a copy the cap turns away is made up from `fill` (the
- *  squad's builds read across), when it has room (`rebaseDeck`). */
+ *  replacements, unknown ids and anything that is no item dropped, at most
+ *  MAX_COPIES of one item, at most DECK_SIZE in all; a copy the cap turns
+ *  away is made up from `fill` (the squad's builds read across), when it has
+ *  room (`fitDeck`). */
 function migrateDeck(ids: unknown, fill: readonly CardId[] = []): CardId[] {
   if (!Array.isArray(ids)) return [];
-  return rebaseDeck(migrateCardIds(ids.filter((x): x is string => typeof x === 'string')), fill);
+  return fitDeck(migrateCardIds(ids.filter((x): x is string => typeof x === 'string')), fill);
 }
 
 /** The squad's builds read across (`buildsAcross`), its heroes in pick order:

@@ -1,7 +1,7 @@
 # Deadlock TCG
 
 A fan-made, turn-based card game set in **Valve's Deadlock**: build a deck of
-Deadlock's items, draft four heroes into it, draw, pay souls to put items on
+Deadlock's items, draft three heroes into it, draw, pay souls to put items on
 your heroes, fight in one lane and push down the rival's Patron. One player
 against an AI, as a single-page React app.
 
@@ -21,28 +21,27 @@ builds) and the Gallery. A Quick Match goes like this.
 
 ### Your deck
 
-- Five **ready decks** head the Loadout screen: Gunline, Spirit Storm,
-  Bulwark, Ambush and Lockdown. Each is a squad of four heroes and its 16
-  items; "Use deck" saves both, and the match is ready to play. Each holds 8
-  tier-1, 6 tier-2 and 2 tier-3 items (56 souls), at most 2 copies of one, two
-  of them Compress Cooldown, the draw card
+- Six **ready decks** head the Loadout screen: Gunline, Spirit Storm,
+  Bulwark, Ambush, Lockdown and Graveyard (Graves's). Each is a squad of three
+  heroes and its 16 items; "Use deck" saves both, and the match is ready to
+  play. Each holds 8 tier-1, 6 tier-2 and 2 tier-3 items (56 souls), at most 2
+  copies of one, with an upgrade beside the item it is built from, a counter
+  (Counterspell, Debuff Reducer, Dispel Magic or Knockdown) and a draw card
+  (Compress Cooldown; two in Graveyard)
   ([`docs/deck-plan.md`](./docs/deck-plan.md), "Ready decks").
 - Or build your own below them, on a deck builder that looks like Deadlock's
   shop: Weapon, Vitality and Spirit tabs, rows by tier, the item icons. Tap an
   item to add a copy; tap one in the deck to take a copy out.
 - A deck is 16 items, any tier, at most 4 copies of one.
-- A deck holds base items only. An upgrade (Improved Spirit, Superior and
-  Transcendent Cooldown, Fortitude…) never starts in a deck: it comes only
-  from playing the item it is built from. The deck builder shows upgrades
-  greyed, with "Comes from playing Extra Spirit" on the tile.
+- Any item may be in a deck, upgrades too. An upgrade's tile says which item
+  it evolves ("Evolves Extra Spirit for the difference").
 - No saved deck (or one short of 16)? You are dealt one made from your drafted
   heroes' builds: every hero's first build item, then every hero's second, and
-  so on until 16, each upgrade a build names counted as its base item (Improved
-  Spirit brings Extra Spirit). The rival's deck is always made this way.
+  so on until 16. The rival's deck is always made this way.
 
 ### The draft
 
-- 21 heroes from Deadlock's roster, each built from its Deadlock role
+- 22 heroes from Deadlock's roster, each built from its Deadlock role
   ([`docs/hero-design.md`](./docs/hero-design.md)): HP 4 + its tank score and
   Attack 1 (2 for a gun or melee hero), moved a point by its curve (early,
   mid, late); a Retreat price of 0–2 souls; either a skill (fifteen heroes)
@@ -56,8 +55,18 @@ builds) and the Gallery. A Quick Match goes like this.
   every enemy and Victor himself at the start of your turn, which charges it.
   Silver's turns her into a wolf for 2 turns (+3 Attack, Shield 6), and her
   card shows Deadlock's wolf-form art while it lasts.
-- A snake draft, four heroes each. Your four are shuffled into your deck: 20
-  cards.
+- A draft of three heroes each (it was four until 2026-11-16). Your three are
+  shuffled into your deck: 19 cards. The board keeps four spots, the Active
+  and three on the bench, so a full squad leaves one free for a unit.
+- A flying hero (Vindicta's ultimate, Flight, 3 turns) is missed by 1 hit in
+  3. The roll is the match's own; the attack preview and the rival AI do not
+  see it before the hit is made.
+- Units are board cards that are no hero. Graves' kit makes them: a Ghoul
+  (1 Attack, 1 HP) is shuffled into her side's deck and played for 1 soul; a
+  Gravestone stands on her bench and makes a Ghoul a turn until anything
+  damages it. A unit wears nothing and earns nothing; destroyed, it is gone,
+  and nobody is paid for it. A Ghoul destroyed makes the enemy discard the top
+  card of its deck. A hero is never discarded: it goes back into the deck.
 - The pie rule: you draft first, and the rival moves first. Its first turn has
   no attack.
 
@@ -152,13 +161,15 @@ hand is skipped, and an empty deck simply draws nothing.
   which of the items it wears to discard: that one goes to your discard pile,
   the new one goes on for its price. Cancel backs out with nothing paid. A
   riding Rem is no item: she takes no slot and is never offered.
-- Upgrades evolve: an item played onto the hero wearing the item it is built
-  from takes that item's place and costs the difference (Superior Cooldown over
-  Compress Cooldown costs 4, not 8). The old item goes to the discard pile. On
-  any other hero, an upgrade costs its full price.
-- Playing an item that Deadlock builds into a bigger one makes that upgrade and
-  shuffles it into your deck. Where there are several (Extra Health → Fortitude
-  or Colossus), you pick. Each copy played makes one.
+- Upgrades evolve: equipment played onto the hero wearing the equipment it is
+  built from takes that item's place and costs the difference (Titanic
+  Magazine over Extended Magazine costs 2, not 4). The old item goes to the
+  discard pile. On any other hero, an upgrade costs its full price. Nothing is
+  made or shuffled into your deck when you play a card: an upgrade is a card
+  you draw and play like any other.
+- A spell (an active item) is played once: pay its price, it resolves on the
+  target its text names, and it goes to your discard pile. It is never worn,
+  takes no slot, and spends no hero's ability. A spell always costs its price.
 - Three items from one tab on one hero give that tab's category spike: +1
   Bullet Power (Weapon), +1 Spirit Power (Spirit) or +1 max HP (Vitality).
 - Your deck and your discard pile sit at the ends of your hand with their
@@ -177,21 +188,29 @@ You choose the discards from anywhere in your hand.
 
 **Act.**
 
-- Each hero, bench included, may use one ability a turn: its skill, an active
-  item it wears, or its ultimate. None of them costs souls: souls buy the
-  cards in your hand and a Retreat. Waits count your own turns.
+- Each hero, bench included, may use one ability a turn: its skill or its
+  ultimate. Neither costs souls: souls buy the cards in your hand and a
+  Retreat. Waits count your own turns.
 - A skill waits 3 turns after a use (4 for the heavier ones). Four skills are
-  charged, as in Deadlock: Serrated Knives, Frost Grenade, Lightning Ball and
-  Kinetic Pulse hold 2 uses, and the wait brings them back one at a time.
+  charged, as in Deadlock: Serrated Knives, Frost Grenade, Kinetic Pulse and
+  Vindicta's Assassinate hold 2 uses, and the wait brings them back one at a
+  time (Assassinate's takes 5 turns).
   Only the charge items change that: Extra Charge adds a charge, and Rapid
   Recharge adds 2 and brings each back a turn sooner.
 - The ultimate is a button on the hero card, from Level 2. Your side uses
   one ultimate a turn. It waits 4, 6 or 8 turns by its size (small, medium,
   large), after each use and from the match's first turn: a large one is
   first ready on your turn 8.
-- An active item is used from its hero's sheet. It cools down 2 turns (tiers
-  1–2) or 3 (tier 3 and up), and starts on cooldown when it is played. Hard
-  crowd control (stun, silence, root, …) has 2 charges a match instead.
+- Big effects leave a turn to answer them. A Charged hero (Seven's Static
+  Charge) is Stunned only after its next turn: Dispel Magic or Debuff Reducer
+  takes the Charge off first. A channel (Seven's Storm Cloud, 2 turns) ends
+  the moment its caster is Stunned: Knockdown. Counterspell is a spell you
+  cast on one of your heroes: for 2 turns the next enemy spell, skill or
+  ultimate that would hit it does nothing, once.
+- Every move is shown in two phases: its activation, then its effect on the
+  board. A card from the hand, yours or the rival's, is shown mid-screen for
+  about 0.6 s first; a skill lifts and flares its hero's own tile; an ultimate
+  drops its name plate. Tap to skip a card's reveal.
 - Your Active makes one basic attack a turn: at the rival's Active (any enemy
   hero, with reach). The attack ends the
   Act, and the turn then ends on its own. Extra swings come only from cards
@@ -250,8 +269,8 @@ Level 2.
 
 The rival picks only from the engine's legal moves and plays your rules: its
 deck is made from its heroes' builds, it benches the heroes it draws, puts
-items on the heroes whose builds list them, evolves upgrades, casts its draw
-cards (discarding what it wants least) and picks the upgrade its builds name.
+items on the heroes whose builds list them, evolves upgrades and plays its
+spells at the targets it values most.
 On a full hero it lets go only the hero's least valuable item, and only for a
 card a tier up or more.
 It weighs each move by playing it on a copy of the game. Every match plays
@@ -268,15 +287,18 @@ sets them:
 
 142 item cards, each a current Deadlock shop item under its own name, tab and
 tier. An active item is always a spell and a passive item always equipment
-([`docs/card-design.md`](./docs/card-design.md) §1), with one exception: the
+([`docs/card-design.md`](./docs/card-design.md) §1), with two exceptions, both
+Patrick's calls: Counterspell, a passive in Deadlock, is a spell here, and the
 Cooldown family, passives in Deadlock, are the deck's draw cards here, so they
-are actives ([`docs/deck-plan.md`](./docs/deck-plan.md)). Cells read passives ·
-actives; the column heads give the price.
+are actives ([`docs/deck-plan.md`](./docs/deck-plan.md)): draw 3, discard 1 /
+draw 5, discard 1 / draw 8, discard 2 ([`docs/card-design.md`](./docs/card-design.md),
+"The Cooldown family"). One card prints a price of its own: Rusted Barrel, 1 soul. Cells read
+passives · actives; the column heads give the tier's price.
 
 | Tab | T1 · 2 | T2 · 4 | T3 · 8 | T4 · 16 | T5 · 24 | All |
 |---|---|---|---|---|---|---|
-| Weapon | 4 · 0 | 12 · 2 | 13 · 4 | 8 · 1 | 2 · 0 | 46 |
-| Vitality | 3 · 2 | 11 · 3 | 4 · 7 | 10 · 6 | 0 · 1 | 47 |
+| Weapon | 4 · 0 | 11 · 2 | 13 · 4 | 8 · 1 | 2 · 0 | 45 |
+| Vitality | 3 · 2 | 11 · 3 | 4 · 8 | 10 · 6 | 0 · 1 | 48 |
 | Spirit | 5 · 2 | 8 · 4 | 7 · 5 | 6 · 9 | 1 · 2 | 49 |
 | All | 16 | 40 | 40 | 40 | 6 | 142 |
 
@@ -392,7 +414,8 @@ src/
 │                    and stage/ — the canvas particle world with height)
 └── statuses/    Status taxonomy + display metadata
 public/
-├── heroes/      Hero portraits .webp (card, mini and small, plus a wide splash)
+├── heroes/      Hero portraits .webp (card, mini and small, a wide splash, and the
+│                Level-4 "gloat" card the board shows at a hero's final level)
 ├── items/       Passive items' shop icons .webp
 ├── spells/      Active items' shop icons .webp
 ├── ult/         Each hero's Deadlock ultimate icon .webp (the button on its card)
@@ -434,8 +457,13 @@ docs/            Design and model notes: cards, engine, stats, balance, ultimate
 - **Free kits are reasoned, not played.** Skills and ultimates cost no souls
   since 2026-11-15; their waits, the four charged skills and the charged
   ultimates' 10 and 8 damage are set by reasoning
-  (docs/balance-model.md §8). Play will show match length and whether four
-  skills held for one turn is too much.
+  (docs/balance-model.md §8). Play will show match length.
+- **One-play spells, counters and the ready decks are reasoned, not played**
+  (2026-11-15 and 2026-11-16; docs/card-design.md, "Changed 2026-11-15" and
+  "Changed 2026-11-16: the one-play riders"). No sim or play test has run on
+  them. The ten spells that sat under half their price each gained a rider;
+  Divine Barrier (10 of 16) and Unstoppable (8 of 16) still sit under their
+  band, as answers.
 - **Machinery no card uses.** Since the hero rebuild no hero opens a channel
   (`casting` / `casting_light`, `tickCastingPulses`) or puts on Charged, the
   FX layer's Naptime wake-up tag has no burst to play, and since Rem stands in

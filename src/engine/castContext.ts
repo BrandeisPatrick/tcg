@@ -21,6 +21,9 @@ interface CastFrame {
    *  hands the attacker's on-attack gear `bounce: true`, so a heal or a chain
    *  that belongs to the swing stays out of it (actions/attack.ts). */
   bounce?: true;
+  /** The heroes whose Counterspell has stopped this card (their iids): the
+   *  rest of what the card does to them is stopped too (damage.ts). */
+  countered?: Set<string>;
 }
 
 /** What a frame says beyond its source and kind. */

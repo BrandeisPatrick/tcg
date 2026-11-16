@@ -150,13 +150,13 @@ export function marketSeedFor(seed: number): number {
   return (Math.imul(seed >>> 0, 0x9e3779b1) ^ 0x6a09e667) >>> 0;
 }
 
-const CHAOS_NAMES = ['playCard', 'placeHero', 'discard', 'chooseActive', 'activate', 'useSkill', 'moveHero', 'promoteToActive', 'useTrigger', 'passTrigger', 'attack', 'endTurn'] as const;
+const CHAOS_NAMES = ['playCard', 'placeHero', 'discard', 'chooseActive', 'useSkill', 'moveHero', 'promoteToActive', 'useTrigger', 'passTrigger', 'attack', 'endTurn'] as const;
 /** Ids that name no card of a hand: a hero not drafted, an ultimate, nonsense. */
 const JUNK_IDS = ['hero_haze', 'ult_lash', 'eff_cold_front', 'nope', ''];
 
 /** A random-but-plausible move: real iids from anywhere in G (the player's own
  *  heroes, worn items and hand cards most of the time, the rival's now and
- *  then), an upgrade's id or junk for a play's third argument, slots 0..3 (with
+ *  then), slots 0..3 (with
  *  an occasional out-of-range or missing one), discards of the right cards, too
  *  many, repeated or junk, or sometimes nonsense. */
 export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name: string; args: unknown[] } {
@@ -195,16 +195,11 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
   switch (name) {
     case 'playCard': {
       const card = maybe(myCard(), 0.05);
-      const args: unknown[] = [card, maybe(myHero(), 0.06)];
-      // Now and then the upgrade it is to make: one of its own, another item's, or junk.
-      if (r() < 0.3) {
-        const held = myHand.find((c) => c.iid === card);
-        const ups = held ? upgradesOfOracle(held.cardId) : [];
-        args.push(ups.length && r() < 0.6 ? pick(ups, r) : r() < 0.5 ? pick(ITEMS, r).id : pick(JUNK_IDS, r));
-      }
+      // Onto one of the player's heroes most of the time; any hero of the board (a spell's
+      // target may be a rival) or nothing now and then.
+      const args: unknown[] = [card, r() < 0.25 ? maybe(anyIid(), 0.3) : maybe(myHero(), 0.06)];
       // Now and then the worn item it is to replace: one the hero wears, another hero's, Rem, junk.
       if (r() < 0.25) {
-        if (args.length < 3) args.push(undefined);
         const hero = boardOf(mine).find((c) => c.iid === args[1]);
         const worn = hero ? wornItemsOf(hero) : [];
         const x = r();
@@ -234,11 +229,6 @@ export function chaosMove(G: GameState, pid: PlayerID, r: () => number): { name:
     case 'chooseActive': {
       const owing = G.pendingActive ? handOf(G, G.pendingActive) : myHand;
       return { name, args: [owing.length && r() < 0.8 ? pick(owing, r).iid : anyIid()] };
-    }
-    case 'activate': {
-      const args: unknown[] = [maybe(myItem(true), 0.04)];
-      if (r() < 0.75) args.push(maybe(anyIid(), 0.2));
-      return { name, args };
     }
     case 'useSkill': {
       const hero = myBoard.length && r() < 0.8 ? pick(myBoard, r) : anyIid();
@@ -396,8 +386,7 @@ const HAND_TYPES: ReadonlySet<Action['type']> = new Set(['playCard', 'placeHero'
 /** A hand play as a client call. */
 function handCall(a: Action): { name: string; args: unknown[] } {
   if (a.type === 'playCard') {
-    if (a.replaceIid !== undefined) return { name: 'playCard', args: [a.cardIid, a.heroIid, a.upgradeId, a.replaceIid] };
-    return { name: 'playCard', args: a.upgradeId ? [a.cardIid, a.heroIid, a.upgradeId] : [a.cardIid, a.heroIid] };
+    return { name: 'playCard', args: a.replaceIid !== undefined ? [a.cardIid, a.heroIid, a.replaceIid] : a.heroIid === undefined ? [a.cardIid] : [a.cardIid, a.heroIid] };
   }
   if (a.type === 'placeHero') return { name: 'placeHero', args: a.toActive ? [a.cardIid, true] : a.slot === undefined ? [a.cardIid] : [a.cardIid, false, a.slot] };
   return { name: 'endTurn', args: [] };

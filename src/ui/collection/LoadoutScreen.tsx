@@ -2,7 +2,7 @@
  * Loadout — the one screen you set yourself up on: a ready deck to take as it
  * is (ReadyDecks: a squad and its 16 items in one press), or your own — the
  * squad you want the draft to hand you, your deck (DeckEditor: the items you draw from, which
- * every match deals with your four drafted heroes shuffled in), and each
+ * every match deals with your three drafted heroes shuffled in), and each
  * hero's build (BuildEditor: what a deck made from your heroes is built from
  * when you have saved none).
  *
@@ -237,14 +237,14 @@ function Squad({ slots, onAdd, onClear, compact, split }: {
     <section>
       <SectionHead title="Squad" note="Drafted first, in order" />
 
-      {/* Capped when this column is the whole sheet: four 3:4 slots across a
+      {/* Capped when this column is the whole sheet: the squad's 3:4 slots across a
           full-width tablet sheet stand ~390px tall and bury the deck below
           the fold. The cap keeps them about twice a roster tile at any width. */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gridTemplateColumns: `repeat(${MAX_PREFERRED_HEROES}, minmax(0, 1fr))`,
         gap: compact ? 8 : 12,
-        maxWidth: split ? undefined : 560,
+        maxWidth: split ? undefined : 440,
         marginBottom: 20,
       }}>
         {slots.map((heroId, i) => (

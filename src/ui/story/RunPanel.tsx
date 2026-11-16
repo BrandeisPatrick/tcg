@@ -31,6 +31,7 @@ import { PosterButton } from '../chrome';
 import { useViewport } from '../hooks/useViewport';
 import { KIND_LABEL, StopGlyph, FramedPortrait, eyebrow } from './StopGlyph';
 import { SoulsFace, rewardSummary } from './RewardFace';
+import { SQUAD_SIZE } from '@/engine/constants';
 
 const Z = { runSheet: 70, reward: 80 } as const; // CardPreview sits at 90
 
@@ -168,7 +169,7 @@ function PanelBody({ run, header = true, onPreview, onOpenReward, onFocusStop, o
       >
         {header && <PanelHead bossesDown={bossesDown} bosses={routes.length} />}
 
-        <Block label="Roster" count={`${run.heroes.length}/4`} first={!header}>
+        <Block label="Roster" count={`${run.heroes.length}/${SQUAD_SIZE}`} first={!header}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             {[0, 1, 2, 3].map((i) => {
               const id = run.heroes[i];
@@ -505,7 +506,7 @@ function CompactBar({ run, onOpen }: { run: StoryRun; onOpen: () => void }) {
     <motion.button
       type="button"
       onClick={onOpen}
-      aria-label={`Story run: ${run.heroes.length} of 4 heroes, next fight: ${rewardSummary(run.nextFight)}, ${down} of ${bosses.length} bosses. Open the run`}
+      aria-label={`Story run: ${run.heroes.length} of ${SQUAD_SIZE} heroes, next fight: ${rewardSummary(run.nextFight)}, ${down} of ${bosses.length} bosses. Open the run`}
       whileTap={{ scale: 0.99 }}
       transition={spring.snappy}
       style={{

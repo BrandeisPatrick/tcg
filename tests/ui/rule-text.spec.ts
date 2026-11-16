@@ -303,21 +303,25 @@ const abilitiesSource = readFileSync(resolve(__dirname, '../../src/abilities/ind
 const statusOpsSource = readFileSync(resolve(__dirname, '../../src/engine/statusOps.ts'), 'utf8');
 
 /** Every ability whose effect reads Spirit, by id — found in the source: its
- *  block calls `spi(`, `activeSpi(`, `ultSpi(` or `effectiveSpirit(`. */
+ *  block calls `spi(`, `activeSpi(`, `ultSpi(` or `effectiveSpirit(`, or it
+ *  opens a channel (`'casting'`), whose pulse adds the caster's Spirit where
+ *  it is dealt (`tickCastingPulses`). */
 function abilitiesReadingSpirit(): Set<string> {
   const out = new Set<string>();
   for (const m of abilitiesSource.matchAll(/^const \w+: (?:Hero)?AbilityDef = \{\n([\s\S]*?)^\};/gm)) {
     const body = m[1];
     const id = /id: '([^']+)'/.exec(body)?.[1];
-    if (id && /\b(?:spi|activeSpi|ultSpi|effectiveSpirit)\(/.test(body)) out.add(id);
+    if (id && (/\b(?:spi|activeSpi|ultSpi|effectiveSpirit)\(/.test(body) || /'casting(_light)?'/.test(body))) out.add(id);
   }
   return out;
 }
 
-/** The three ultimates that were channels (their Spirit read in the pulse,
+/** Two ultimates that were channels (their Spirit read in the pulse,
  *  `tickCastingPulses`) are one hit each since the hero rebuild: they read
- *  Spirit in their own effect, like every other ultimate. */
-const ONCE_CHANNELS = ['eff_ult_dynamo', 'eff_ult_seven', 'eff_ult_warden'];
+ *  Spirit in their own effect, like every other ultimate. Seven's Storm Cloud
+ *  is a channel again (Patrick, 2026-11-15): its Spirit is read in the pulse. */
+const ONCE_CHANNELS = ['eff_ult_dynamo', 'eff_ult_warden'];
+const CHANNELS = ['eff_ult_seven'];
 
 /** Spirit scales these abilities through a skill's `scalesSpirit` flag too. */
 const READS_SPIRIT = abilitiesReadingSpirit();
@@ -343,10 +347,10 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     const found = abilitiesReadingSpirit();
     for (const id of [
       'skill_mo_krill', 'skill_kelvin', 'skill_lady_geist', 'skill_lash', 'skill_paige', 'skill_rem',
-      'skill_seven', 'skill_shiv', 'skill_yamato', 'passive_vindicta_flight', 'passive_mirage_djinns_mark',
+      'skill_seven', 'skill_shiv', 'skill_yamato', 'skill_vindicta', 'status_flying', 'passive_mirage_djinns_mark',
       'eff_cold_front', 'eff_silence_glyph',
       'eff_ult_abrams', 'eff_ult_dynamo', 'eff_ult_kelvin', 'eff_ult_lady_geist', 'eff_ult_lash', 'eff_ult_mo_krill',
-      'eff_ult_paige', 'eff_ult_seven', 'eff_ult_shiv', 'eff_ult_vindicta', 'eff_ult_viscous', 'eff_ult_wraith',
+      'eff_ult_paige', 'eff_ult_seven', 'eff_ult_shiv', 'eff_ult_viscous', 'eff_ult_wraith',
       'eff_ult_warden', 'eff_ult_drifter',
     ]) expect(found.has(id), id).toBe(true);
     // A flat number reads no Spirit: Kinetic Pulse's 1, The Cube, Full Auto, Rabbit Hex,
@@ -354,11 +358,17 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     for (const id of [
       'skill_dynamo', 'skill_viscous', 'skill_wraith', 'skill_sinclair', 'skill_warden',
       'eff_ult_rem', 'eff_ult_haze', 'eff_ult_yamato', 'eff_ult_mirage',
+      'eff_ult_vindicta', // Flight puts up the Flying status; the status's own proc reads Spirit
     ]) expect(found.has(id), id).toBe(false);
   });
 
-  it('the channel still reads Spirit where its pulse is dealt; the three ultimates that were channels read it in their own hit and open none', () => {
+  it('a channel reads Spirit where its pulse is dealt (Storm Cloud); the two ultimates that were channels read it in their own hit and open none', () => {
     expect(statusOpsSource).toMatch(/const perTick = channel\.value \+ effectiveSpirit\(c\)/);
+    for (const id of CHANNELS) {
+      const block = new RegExp(`const ${id}: AbilityDef = \\{\\n([\\s\\S]*?)^\\};`, 'm').exec(abilitiesSource)?.[1] ?? '';
+      expect(block, id).toMatch(/'casting'/);
+      expect(block, id).not.toMatch(/ultSpi\(/); // not twice: the pulse adds it
+    }
     for (const id of ONCE_CHANNELS) {
       const block = new RegExp(`const ${id}: AbilityDef = \\{\\n([\\s\\S]*?)^\\};`, 'm').exec(abilitiesSource)?.[1] ?? '';
       expect(block, id).toMatch(/ultSpi\(/);
@@ -405,7 +415,8 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
 
   it('gear that adds Spirit Power, and every flat number, stays plain ink', () => {
     for (const e of EQUIPMENT) expect(e.text, e.id).not.toMatch(/\{(sp|bp):/);
-    for (const id of ['healing_rite', 'rusted_barrel', 'metal_skin', 'decay', 'knockdown']) {
+    // Knockdown left this list on 2026-11-16: its slam adds Spirit ({sp:1}).
+    for (const id of ['healing_rite', 'rusted_barrel', 'metal_skin', 'decay', 'disarming_hex']) {
       expect((CARDS_BY_ID[id] as { text: string }).text, id).not.toMatch(/\{/);
     }
   });
@@ -420,8 +431,8 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
 
   it('the spells and ultimates the marks were written for print them', () => {
     expect(SPELLS.find((s) => s.id === 'cold_front')!.text).toBe('Deal {sp:2} spirit damage to enemy Active.');
-    expect(ULTIMATES.find((u) => u.id === 'ult_seven')!.text).toBe('Deal {sp:5} spirit damage to every enemy.');
-    expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Deal {sp:8} spirit damage to any enemy.');
+    expect(ULTIMATES.find((u) => u.id === 'ult_seven')!.text).toBe("Channel 2 turns: at each turn's end, deal {sp:2} spirit damage to every enemy.");
+    expect(ULTIMATES.find((u) => u.id === 'ult_vindicta')!.text).toBe('Fly 3 turns: 1 in 3 hits miss her; her attacks add {sp:1} spirit damage.');
   });
 
   it('Paige\'s Plot Armor says what the code grants: a Shield that grows with Spirit and +1 Attack', () => {

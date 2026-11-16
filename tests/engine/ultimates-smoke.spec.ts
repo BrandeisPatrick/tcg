@@ -73,12 +73,16 @@ describe('ultimate-specific behaviour', () => {
     expect(enemy.hp).toBeLessThanOrEqual(0);
   });
 
-  it('Vindicta\'s Assassinate deals {sp:8} to any enemy, bench too', () => {
+  it('Vindicta\'s Assassinate (her skill since 2026-11-16) deals {sp:4} to any enemy, bench too; her ultimate, Flight, makes her fly 3 turns', () => {
     const G = freshG('hero_vindicta');
     const enemy = G.players['1'].bench[0]!;
     enemy.hpMax = 20; enemy.hp = 20;
-    getAbility('eff_ult_vindicta')!.run(G, { movingPlayer: '0' }, { target: enemy });
-    expect(20 - enemy.hp).toBe(8); // run bare: no caster's Spirit on it
+    getAbility('skill_vindicta')!.run(G, { movingPlayer: '0' }, { target: enemy });
+    expect(20 - enemy.hp).toBe(4); // run bare: no caster's Spirit on it
+    const vindicta = G.players['0'].active!;
+    getAbility('eff_ult_vindicta')!.run(G, { movingPlayer: '0' }, { source: vindicta });
+    expect(vindicta.statuses.find((s) => s.id === 'flying')).toMatchObject({ duration: 3 });
+    expect(enemy.hp).toBe(16); // Flight deals nothing itself
   });
 
   it('Rem\'s Naptime applies Sleep for 2 turns: a Stun, with no wake-up burst', () => {

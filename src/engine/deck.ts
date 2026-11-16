@@ -6,15 +6,13 @@
  *
  *  - A drafted match builds each side's deck from its items (the human seat's
  *    saved deck, else one made from its heroes' builds: `deckFromBuilds`) and
- *    its four heroes, shuffled; each side draws OPENING_HAND, at least one a
+ *    its three heroes, shuffled; each side draws OPENING_HAND, at least one a
  *    hero (`dealOpeningHand`). A scripted match (a Story fight, a lesson) puts
  *    its rosters on the board and deals from a deck of items.
  *  - Each own turn draws DRAW_PER_TURN; a draw into a full hand (MAX_HAND) is
  *    skipped and an empty deck draws nothing.
  *  - A draw card draws, then owes a discard from anywhere in the hand
  *    (`oweDiscard`, paid by the `discard` move).
- *  - Playing an item Deadlock builds into a bigger one makes that upgrade and
- *    shuffles it into the deck (`shuffleIntoDeck`).
  *
  * Every random pick is drawn from the match seed (`nextRandom`, counted in
  * `G.counters.rng`), so a game replays from G alone, and a simulation on a
@@ -189,14 +187,76 @@ export function oweDiscard(G: GameState, pid: PlayerID, count: number, cardId: C
   if (n > 0) G.pendingDiscard = { pid, count: n, cardId };
 }
 
+/** True for a hero card proper (not a unit): one that is never lost to a discard. */
+function isHeroProper(card: CardInstance): boolean {
+  const data = CARDS_BY_ID[card.cardId];
+  return data?.type === 'hero' && !data.unit;
+}
+
+/** A hero that would be discarded goes back into its owner's deck instead,
+ *  and the deck is shuffled (Patrick, 2026-11-16: a side must not lose a hero
+ *  to a discard). */
+function heroBackIntoDeck(G: GameState, pid: PlayerID, hero: CardInstance) {
+  const ps = G.players[pid];
+  hero.zone = 'deck';
+  hero.slot = undefined;
+  ps.deck.push(hero);
+  shuffle(G, ps.deck);
+  pushLog(G, `${cardName(hero.cardId)} is a hero: it goes back into P${pid}'s deck, and the deck is shuffled.`);
+  pushFx(G, { kind: 'deck', what: 'shuffle', pid });
+}
+
+/**
+ * Discard the top `n` cards of `pid`'s deck (a Ghoul's death does it to the
+ * rival). Fewer when the deck runs out. A hero among them is not discarded:
+ * it goes back in and the deck is shuffled (`heroBackIntoDeck`); that card's
+ * discard is spent all the same. Returns the cards discarded.
+ */
+export function millDeck(G: GameState, pid: PlayerID, n: number, source: string): CardInstance[] {
+  const ps = G.players[pid];
+  const gone: CardInstance[] = [];
+  for (let i = 0; i < n; i++) {
+    const card = ps.deck.pop();
+    if (!card) break;
+    if (isHeroProper(card)) { heroBackIntoDeck(G, pid, card); continue; }
+    card.zone = 'discard';
+    ps.discard.push(card);
+    gone.push(card);
+    pushFx(G, { kind: 'deck', what: 'mill', pid, iid: card.iid, cardId: card.cardId });
+  }
+  if (gone.length > 0) pushLog(G, `${source}: P${pid} discards ${gone.map((c) => cardName(c.cardId)).join(', ')} from the top of its deck.`);
+  else if (ps.deck.length === 0) pushLog(G, `${source}: P${pid}'s deck is empty.`);
+  return gone;
+}
+
+/**
+ * A card's effect makes `n` new cards of `cardId` and shuffles each into
+ * `pid`'s deck, at a place drawn from the match's own stream (Graves' Ghouls).
+ * Returns the cards made.
+ */
+export function raiseIntoDeck(G: GameState, pid: PlayerID, cardId: CardId, n: number, source: string): CardInstance[] {
+  const ps = G.players[pid];
+  const made: CardInstance[] = [];
+  for (let i = 0; i < n; i++) {
+    const card = makeInstance(allocatorOf(G), cardId, pid, 'deck');
+    ps.deck.splice(Math.floor(nextRandom(G) * (ps.deck.length + 1)), 0, card);
+    made.push(card);
+    pushFx(G, { kind: 'deck', what: 'raise', pid, iid: card.iid, cardId });
+  }
+  if (n > 0) pushLog(G, `${source}: ${n} ${cardName(cardId)}${n === 1 ? '' : 's'} shuffled into P${pid}'s deck.`);
+  return made;
+}
+
 /** Discard the hand cards `iids` of `pid` (the `discard` move: legality has
- *  checked them), paying that much of the discard owed. */
+ *  checked them), paying that much of the discard owed. A hero discarded goes
+ *  back into the deck instead (`heroBackIntoDeck`). */
 export function discardFromHand(G: GameState, pid: PlayerID, iids: readonly string[]) {
   const ps = G.players[pid];
   for (const iid of iids) {
     const card = ps.hand.find((c) => c.iid === iid);
     if (!card) continue;
     ps.hand = ps.hand.filter((c) => c !== card);
+    if (isHeroProper(card)) { heroBackIntoDeck(G, pid, card); continue; }
     toDiscard(G, pid, card);
     pushLog(G, `P${pid} discarded ${cardName(card.cardId)}.`);
   }
@@ -205,21 +265,6 @@ export function discardFromHand(G: GameState, pid: PlayerID, iids: readonly stri
     const left = Math.min(owed.count - iids.length, ps.hand.length);
     G.pendingDiscard = left > 0 ? { ...owed, count: left } : undefined;
   }
-}
-
-// ---------- Upgrades ----------
-
-/** Make a fresh card of the item `itemId` for `pid` and shuffle it into its
- *  deck, at a random place: what playing its component makes. */
-export function shuffleIntoDeck(G: GameState, pid: PlayerID, itemId: CardId): CardInstance | undefined {
-  if (!itemCard(itemId)) return undefined;
-  const ps = G.players[pid];
-  const card = makeInstance(allocatorOf(G), itemId, pid, 'deck');
-  const at = Math.floor(nextRandom(G) * (ps.deck.length + 1));
-  ps.deck.splice(at, 0, card);
-  pushLog(G, `${cardName(itemId)} is shuffled into P${pid}'s deck.`);
-  pushFx(G, { kind: 'deck', what: 'upgrade', pid, iid: card.iid, cardId: itemId });
-  return card;
 }
 
 // ---------- A fallen hero comes back ----------

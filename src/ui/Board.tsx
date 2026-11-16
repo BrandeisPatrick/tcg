@@ -5,10 +5,9 @@ import type { AbilityId, GameState, CardId, CardInstance, PlayerID } from '@/eng
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import {
   abilityAim, findCardOnBoard, findWornItem, handCard, isRespawning, itemPrice, kitAbilityIds, otherPlayer, promptOwed, resolveSkill, slotCap,
-  stepInCandidates, ultimateCard, wornActives,
+  stepInCandidates, ultimateCard,
 } from '@/engine/query';
 import { bankForecast } from '@/engine/bank';
-import { upgradesOf } from '@/cards/decks';
 import { RESPAWN_TURNS } from '@/engine/constants';
 import { humanSeat } from './seat';
 import { Log } from './side-panel/Log';
@@ -19,7 +18,6 @@ import { LiveScaleContext, boardLiveSpirit } from './card/liveScale';
 import { plainText } from './card/scaling';
 import { HeroDetailSheet, type SkillOffer } from './overlays/HeroDetailSheet';
 import { DiscardOverlay } from './overlays/DiscardOverlay';
-import { UpgradePicker } from './overlays/UpgradePicker';
 import { useReplacePick } from './overlays/ReplacePicker';
 import { TriggerPrompt } from './overlays/TriggerPrompt';
 import { DeckPile, DiscardPile } from './board/CardPiles';
@@ -39,7 +37,7 @@ import { panelStyle, scale } from './hud';
 import { TurnBanner, useLaneBox } from './board/TurnBanner';
 import { BoardControls } from './board/BoardControls';
 import {
-  DISCARD_FIRST, actionRefusal, activateBlockReason, laneRide, moveBlockReason, placeBlockReason, playBlockReason, readyHeroes, retreatBlock,
+  DISCARD_FIRST, actionRefusal, laneRide, moveBlockReason, placeBlockReason, playBlockReason, readyHeroes, retreatBlock,
   skillBlockReason,
 } from './board/heroActions';
 import { isValidTarget } from './board/targeting';
@@ -47,7 +45,7 @@ import { attackOffer, tapAttackPlate, tapWhileAttackArmed } from './board/attack
 import { DEFAULT_AI_STRENGTH, enumerateAIMoves } from '@/ai/heuristic';
 import { getAbility } from '@/abilities';
 import {
-  activateBlocked, activateTargets, attackBlocked, openingCandidates, placeHeroBlocked, playBlockedAny, playCost, playTargets, retreatCost, skillBlocked,
+  attackBlocked, openingCandidates, placeHeroBlocked, playBlockedAny, playCost, playNeedsTarget, playTargets, retreatCost, skillBlocked,
   skillTargets,
 } from '@/engine/legality';
 import type { Action } from '@/engine/engine';
@@ -64,7 +62,8 @@ import { DeckMotionLayer, DeckMotionProvider, useDeckMotion } from './motion';
 import type { Rect } from './effects/fx/geometry';
 import { useDelayedValue } from './hooks/useDelayedValue';
 import { UltMomentFlash } from './effects/UltMomentFlash';
-import { CardPlayFlash, CARD_REVEAL_MS } from './effects/CardPlayFlash';
+import { CardPlayFlash } from './effects/CardPlayFlash';
+import { AI_THINK_MS, actionHoldMs } from './board/pacing';
 import { COMBAT_STEP_MS } from './hooks/useCombatSpeed';
 import { useSettings } from '@/storage/settings';
 import { useViewport } from './hooks/useViewport';
@@ -84,9 +83,10 @@ import { finishStoryBattle } from '@/story/storyRun';
 import { MatchEndScreen } from './board/MatchEndScreen';
 import { CoachPlate } from './tutorial/CoachPlate';
 import { useMatchNav } from './hooks/matchNav';
+import { withBlindRolls } from '@/engine/chance';
 
 // Animation / pacing constants.
-const AI_THINK_MS = 800;        // delay between AI moves; also gives combat anims time to settle
+// (The pause between the rival's moves, `AI_THINK_MS`, and each move's hold are in board/pacing.ts.)
 /** The rival's placement is watched: its next move waits this long past the
  *  hero's flight landing (nothing under reduced motion, where nothing flies). */
 const PLACE_SETTLE_MS = 500;
@@ -146,9 +146,6 @@ export function Board(props: BoardProps<GameState>) {
   // Retreat with more than one bench hero able to go in: the chooser is up
   // until the player picks who (or backs out).
   const [retreatPick, setRetreatPick] = useState(false);
-  // An item put on a hero that could make one of several upgrades: the play
-  // waits on the player's pick (UpgradePicker), or is backed out of.
-  const [upgradePick, setUpgradePick] = useState<{ cardIid: string; heroIid: string; itemId: CardId; options: readonly CardId[] } | null>(null);
   // Where each card in the hand is on screen: the animation layer flies cards
   // to and from them.
   const handCardRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -304,7 +301,7 @@ export function Board(props: BoardProps<GameState>) {
   // they land.) Projected only while the mover's attack is still there to be
   // made.
   const projectedPatronDamage = useMemo(
-    () => (attackOpen ? forecastAttack(G, mover).pushDamage : 0),
+    () => (attackOpen ? withBlindRolls(() => forecastAttack(G, mover)).pushDamage : 0), // a preview: blind to any roll
     [G, mover, attackOpen],
   );
 
@@ -394,18 +391,17 @@ export function Board(props: BoardProps<GameState>) {
   // phase + stopImmediatePropagation so the system listener (bubble phase on
   // window) never sees the press.
   useEffect(() => {
-    if (!pending && !heroDetail && !retreatPick && !upgradePick) return;
+    if (!pending && !heroDetail && !retreatPick) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopImmediatePropagation();
-      if (upgradePick) setUpgradePick(null);
-      else if (retreatPick) setRetreatPick(false);
+      if (retreatPick) setRetreatPick(false);
       else if (heroDetail) setHeroDetail(null);
       else setPending(null);
     };
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
-  }, [pending, heroDetail, retreatPick, upgradePick]);
+  }, [pending, heroDetail, retreatPick]);
 
   // Tap-away: while a card or skill is armed, a click on anything that is
   // not a control — the sheet, the room, the log — backs out of targeting,
@@ -535,15 +531,15 @@ export function Board(props: BoardProps<GameState>) {
   useEffect(() => {
     // A move that ends the match leaves its reveal open: nothing to complete.
     if (ctx.gameover || G.action?.state !== 'begin') return;
-    // Play / skill reveals are a quick "you played X" beat; the ultimate is a
-    // dramatic screen-fill that needs longer to land. Keep each in sync with
-    // its overlay's animation length (CardPlayFlash / UltMomentFlash 2.3s).
-    const HOLD_MS = G.action.kind === 'ult' ? 2400 : CARD_REVEAL_MS;
+    // Each move holds the table for its activation — the card shown
+    // mid-screen, the hero's flare, the ultimate's plate — and the rival's for
+    // a beat of its resolve too (board/pacing.ts).
+    const HOLD_MS = actionHoldMs(G.action.kind, G.action.by === me);
     const t = setTimeout(() => {
       try { (moves as any).completeAction(); } catch {}
     }, HOLD_MS);
     return () => clearTimeout(t);
-  }, [G.action?.id, G.action?.state, G.action?.kind, moves, ctx.gameover]);
+  }, [G.action?.id, G.action?.state, G.action?.kind, G.action?.by, me, moves, ctx.gameover]);
 
   /** The glow on the tiles: is this hero a legal target for what is armed?
    *  The engine answers (`isValidTarget` asks `skillBlocked` /
@@ -575,28 +571,17 @@ export function Board(props: BoardProps<GameState>) {
 
   /** Put the item `cardIid` from the hand on a hero, once the engine says it
    *  may go there; a refusal (a full hero, one already wearing it, not enough
-   *  souls) is said on the sticker and the card stays in the hand. An item
-   *  that could make one of several upgrades asks which first. */
-  function playCardOn(cardIid: string, heroIid: string) {
+   *  souls) is said on the sticker and the card stays in the hand. */
+  function playCardOn(cardIid: string, heroIid?: string) {
     if (!isMyTurn || actionLocked) return;
-    const no = actionRefusal(G, me, { type: 'playCard', cardIid, heroIid });
+    // A spell that takes no target is played on nothing, wherever it was dropped.
+    const on = playNeedsTarget(G, me, cardIid) ? heroIid : undefined;
+    const no = actionRefusal(G, me, { type: 'playCard', cardIid, ...(on === undefined ? {} : { heroIid: on }) });
     // A full hero: the sheet asks which worn item the card replaces.
-    if (no?.code === 'full' && replacePick.open(cardIid, heroIid)) return;
-    if (no) { showNotice(no.text, true); shake(slotRefs.current.get(heroIid)); return; }
-    const card = handCard(G, me, cardIid);
-    const options = card ? upgradesOf(card.cardId) : [];
-    if (card && options.length > 1) { setUpgradePick({ cardIid, heroIid, itemId: card.cardId, options }); return; }
-    moves.playCard(cardIid, heroIid);
-  }
-
-  /** The upgrade picked for the play that waited on it. */
-  function pickUpgrade(upgradeId: CardId) {
-    const pick = upgradePick;
-    setUpgradePick(null);
-    if (!pick || !isMyTurn || actionLocked) return;
-    const no = actionRefusal(G, me, { type: 'playCard', cardIid: pick.cardIid, heroIid: pick.heroIid, upgradeId });
-    if (no) { showNotice(no.text, true); return; }
-    moves.playCard(pick.cardIid, pick.heroIid, upgradeId);
+    if (no?.code === 'full' && on !== undefined && replacePick.open(cardIid, on)) return;
+    if (no) { showNotice(no.text, true); if (on !== undefined) shake(slotRefs.current.get(on)); return; }
+    if (on === undefined) moves.playCard(cardIid);
+    else moves.playCard(cardIid, on);
   }
 
   /** A card played onto a full hero waits on the sheet that asks which worn
@@ -605,16 +590,23 @@ export function Board(props: BoardProps<GameState>) {
     if (!isMyTurn || actionLocked) return;
     const no = actionRefusal(G, me, a);
     if (no) { showNotice(no.text, true); return; }
-    moves.playCard(a.cardIid, a.heroIid, a.upgradeId, a.replaceIid);
+    if (a.heroIid !== undefined) moves.playCard(a.cardIid, a.heroIid, a.replaceIid);
   });
 
   /** Why the card `c` cannot be played right now, in the engine's words: a
    *  hero with no room on the board, an item no hero can take (the first
-   *  hero's refusal: full, wearing it, too dear). */
+   *  hero's refusal: full, wearing it, too dear), a spell with nothing to be
+   *  played on. */
   function stuckReason(c: CardInstance): string {
     if (CARDS_BY_ID[c.cardId]?.type === 'hero') {
       const why = placeHeroBlocked(G, me, c.iid);
       return why ? placeBlockReason(why) : 'It cannot go on the board now';
+    }
+    if (CARDS_BY_ID[c.cardId]?.type === 'spell') {
+      const why = playBlockedAny(G, me, c.iid);
+      const name = CARDS_BY_ID[c.cardId]?.name;
+      if (why === 'target') return `${name ?? 'That spell'} has nothing to be played on now`;
+      return why ? playBlockReason(why, { item: name, spell: true, cost: itemPrice(c.cardId), have: G.players[me].souls }) : 'It cannot be played now';
     }
     const heroes = [G.players[me].active, ...G.players[me].bench].filter((h): h is CardInstance => !!h);
     const first = heroes[0];
@@ -674,19 +666,37 @@ export function Board(props: BoardProps<GameState>) {
 
   /** A tap on a card in the hand. A hero is picked up: the free slots of
    *  your board light, and the next tap on one of them places it there (free).
-   *  An item is armed: the heroes it may go on glow, and the next tap on one
-   *  of them puts it on for its price. */
+   *  Equipment is armed: the heroes it may go on glow, and the next tap on one
+   *  of them puts it on for its price. A spell is armed too: the heroes it
+   *  may be played on glow, on either side; one that takes no target is
+   *  played by a second tap on the card. */
   function onTapCardInHand(c: CardInstance) {
     if (!isMyTurn || actionLocked) return;
     const data = CARDS_BY_ID[c.cardId];
     if (data?.type === 'hero') { setPreview(null); pickUpHero(c); return; }
+    const price = itemPrice(c.cardId);
+    const cost = `${price} soul${price === 1 ? '' : 's'}`;
+    if (data?.type === 'spell') {
+      const aimed = playNeedsTarget(G, me, c.iid);
+      // The second tap on an armed spell that takes no target plays it.
+      if (!aimed && pending?.kind === 'playCard' && pending.iid === c.iid) { setPending(null); playCardOn(c.iid); return; }
+      const why = aimed ? (playTargets(G, me, c.iid).length === 0 ? 'target' : null) : playBlockedAny(G, me, c.iid);
+      if (why) { showNotice(stuckReason(c), true); return; }
+      setPreview(null);
+      setPending({
+        kind: 'playCard', iid: c.iid,
+        title: data.name,
+        desc: `${cost} — ${plainText(data.text) || 'a spell'}`,
+        filter: aimed ? getAbility(data.abilities[0])?.target ?? 'anyBoard' : 'noTarget',
+      });
+      return;
+    }
     if (playTargets(G, me, c.iid).length === 0) { showNotice(stuckReason(c), true); return; }
     setPreview(null);
-    const price = itemPrice(c.cardId);
     setPending({
       kind: 'playCard', iid: c.iid,
       title: data?.name ?? 'Card',
-      desc: `${price} soul${price === 1 ? '' : 's'} — put it on one of your heroes (an upgrade on the hero wearing its part costs the difference).`,
+      desc: `${cost} — put it on one of your heroes (an upgrade on the hero wearing its part costs the difference).`,
       filter: 'allyHero',
     });
   }
@@ -713,14 +723,6 @@ export function Board(props: BoardProps<GameState>) {
     setPreview({ cardId: c.cardId, iid: c.iid, hover: false, inHand: true });
   }
 
-  /** Use an active item once the engine says it may be used. */
-  function fireItem(itemIid: string, targetIid?: string) {
-    const no = actionRefusal(G, me, { type: 'activate', itemIid, targetIid });
-    if (no) { showNotice(no.text, true); return; }
-    if (targetIid) moves.activate(itemIid, targetIid);
-    else moves.activate(itemIid);
-  }
-
   /** Use one of a hero's skills once the engine says it may be used. */
   function castSkill(heroIid: string, targetIid?: string, skillId?: AbilityId) {
     const no = actionRefusal(G, me, { type: 'useSkill', heroIid, targetIid, skillId });
@@ -738,7 +740,6 @@ export function Board(props: BoardProps<GameState>) {
       // aimed at (a full hero, a corpse for a skill, the wrong side) is
       // refused with the reason.
       if (pending.kind === 'playCard') playCardOn(pending.iid, card.iid);
-      else if (pending.kind === 'activate') fireItem(pending.iid, card.iid);
       else if (pending.kind === 'attack') aimAttack(card.iid);
       else castSkill(pending.iid, card.iid, pending.skillId);
       setPending(null);
@@ -777,29 +778,6 @@ export function Board(props: BoardProps<GameState>) {
       title: ult ? `${data.name} · ${ult.name}` : `${data.name} · Skill`,
       desc: plainText(ult ? ult.text : ability.text ?? ability.prompt) || 'Choose a target.',
       filter: aim,
-    });
-  }
-
-  /**
-   * Try to use an active item a hero wears. Asks the engine first
-   * (`activateBlocked`); an item that takes no target goes at once, one that
-   * does arms the targeting like a skill.
-   */
-  function tryUseItem(itemIid: string) {
-    if (!isMyTurn) return;
-    if (actionLocked) return;
-    const worn = findWornItem(G, itemIid, me);
-    const data = worn && itemCard(worn.item.cardId);
-    if (!worn || data?.type !== 'spell') return;
-    const why = activateBlocked(G, me, itemIid);
-    if (why) { showNotice(activateBlockReason(why, worn.item, worn.bearer), true); return; }
-    const targets = activateTargets(G, me, worn.item, worn.bearer);
-    if (targets === 'none') { fireItem(itemIid); return; }
-    setPending({
-      kind: 'activate', iid: itemIid,
-      title: `${CARDS_BY_ID[worn.bearer.cardId]?.name ?? ''} · ${data.name}`,
-      desc: plainText(data.text) || 'Choose a target.',
-      filter: getAbility(data.abilities[0])?.target ?? 'anyBoard',
     });
   }
 
@@ -1170,7 +1148,8 @@ export function Board(props: BoardProps<GameState>) {
               desc={pending.desc}
               filter={pending.filter}
               chip={pending.kind === 'placeHero' ? 'Spot' : undefined}
-              hint={pending.kind === 'placeHero' ? 'tap a lit slot, or the card again to put it back' : undefined}
+              hint={pending.kind === 'placeHero' ? 'tap a lit slot, or the card again to put it back'
+                : pending.kind === 'playCard' && pending.filter === 'noTarget' ? 'tap the card again to play it' : undefined}
               onCancel={() => setPending(null)}
               // Sit above the hand's fan, not on its cards.
               dockAbove={handRowRef}
@@ -1226,8 +1205,8 @@ export function Board(props: BoardProps<GameState>) {
             };
 
             // Any of your heroes may use one ability a turn, on the engine's
-            // own terms (`skillBlocked`, `activateBlocked`) — its skill, its
-            // ultimate and each active item it wears asked on its own.
+            // own terms (`skillBlocked`) — its skill and its ultimate asked
+            // each on its own.
             const offer = (block: string | null, why: () => string): SkillOffer => ({
               canUse: isMine && isMyTurn && !discardFirst && block === null,
               blockedReason: !isMine ? undefined
@@ -1243,11 +1222,6 @@ export function Board(props: BoardProps<GameState>) {
               const block = isMine ? skillBlocked(G, me, hero, undefined, skillId) : null;
               skillOffers[skillId] = offer(block, () => skillBlockReason(block!, hero, skillId));
             }
-            const itemOffers: Record<string, SkillOffer> = {};
-            for (const it of wornActives(hero)) {
-              const block = isMine ? activateBlocked(G, me, it.iid) : null;
-              itemOffers[it.iid] = offer(block, () => activateBlockReason(block!, it, hero));
-            }
             // Your Active's attack is offered on its sheet with what it would
             // do, or why it cannot be made (one a turn, and it ends the turn).
             const attack = !isMyActive ? undefined : { ...attackOffer(G, me, hero, isMyTurn), onAttack: attackFromSheet };
@@ -1258,8 +1232,6 @@ export function Board(props: BoardProps<GameState>) {
                 isMine={isMine}
                 skills={skillOffers}
                 onUseSkill={(skillId) => tryUseSkill(hero, skillId)}
-                items={itemOffers}
-                onUseItem={tryUseItem}
                 attack={attack}
                 retreat={retreat}
                 onRetreat={startRetreat}
@@ -1274,7 +1246,7 @@ export function Board(props: BoardProps<GameState>) {
           {incomeShown && <IncomeTick key={`income-${G.turnNumber}`} G={G} me={me} />}
         </AnimatePresence>
 
-        {/* The match's opening: your four drafted heroes, one of which takes
+        {/* The match's opening: your three drafted heroes, one of which takes
             the lane (the carousel). Blocks the board until it is chosen; the
             rival's own choice is made, unseen, as yours is confirmed. */}
         <AnimatePresence>
@@ -1316,18 +1288,6 @@ export function Board(props: BoardProps<GameState>) {
           )}
         </AnimatePresence>
 
-        {/* An item that could make one of several upgrades: which one. */}
-        <AnimatePresence>
-          {upgradePick && (
-            <UpgradePicker
-              key="upgrade"
-              itemId={upgradePick.itemId}
-              options={upgradePick.options}
-              onPick={pickUpgrade}
-              onCancel={() => setUpgradePick(null)}
-            />
-          )}
-        </AnimatePresence>
         {/* A card onto a full hero: which worn item it replaces. */}
         {replacePick.element}
 
@@ -1457,7 +1417,7 @@ export function Board(props: BoardProps<GameState>) {
           targeting={!!pending}
           attacking={isMyTurn && !!combatPlan}
           sheetHero={heroDetail?.cardId ?? null}
-          choosing={!!upgradePick || G.pendingDiscard?.pid === me || G.pendingActive === me || prompt?.pid === me || pending?.kind === 'placeHero'}
+          choosing={G.pendingDiscard?.pid === me || G.pendingActive === me || prompt?.pid === me || pending?.kind === 'placeHero'}
           lesson={lesson}
           onNextLesson={following && matchNav ? () => matchNav.startLesson(following.id) : undefined}
           onLessons={matchNav ? matchNav.toLessons : undefined}

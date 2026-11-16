@@ -19,7 +19,7 @@ import { attackPower, effectiveSpirit, itemPrice } from '@/engine/query';
 import { fireTriggers } from '@/engine/triggers';
 import { PRICE } from '@/engine/constants';
 import { statusOfKeyword } from '@/ui/card/RuleText';
-import { freshReadyGame, giveItem, makeAttack, useItem } from './_helpers';
+import { freshReadyGame, giveCard, giveItem, makeAttack, useItem } from './_helpers';
 
 const status = (c: CardInstance, id: string) => c.statuses.find((s) => s.id === id);
 const board = (G: GameState, pid: PlayerID) =>
@@ -143,11 +143,11 @@ describe('New active items', () => {
     expect(haze.hp).toBe(hp + 1);
   });
 
-  it('Grit shields your Active 2, whoever wears it', () => {
+  it('Grit shields your Active 4, and nobody else', () => {
     const G = freshReadyGame();
     const vindicta = G.players['0'].bench[0]!;
-    useItem(G, '0', 'grit', undefined, vindicta);
-    expect(status(G.players['0'].active!, 'shield')?.value).toBe(2);
+    useItem(G, '0', 'grit');
+    expect(status(G.players['0'].active!, 'shield')?.value).toBe(4);
     expect(status(vindicta, 'shield')).toBeUndefined();
   });
 
@@ -161,29 +161,29 @@ describe('New active items', () => {
     expect(status(haze, 'rooted')).toBeDefined(); // the un-Root went in the 2026-11-03 rework
   });
 
-  it('Split Shot gives your Active Ricochet 1 this turn and shoots nothing itself (ricochet.spec has the bounce)', () => {
+  it('Split Shot gives your Active Ricochet 2 this turn and shoots nothing itself (ricochet.spec has the bounce)', () => {
     const G = freshReadyGame();
     hpPool(G, '1');
     const haze = G.players['0'].active!;
     useItem(G, '0', 'split_shot');
-    expect(status(haze, 'ricochet')).toMatchObject({ value: 1, duration: 1 });
+    expect(status(haze, 'ricochet')).toMatchObject({ value: 2, duration: 1 });
     for (const c of board(G, '1')) expect(c.hp, c.cardId).toBe(20);
   });
 
-  it('Blood Tribute pays 3 HP (never below 1) for Extra Attack 1 and +1 Bullet Power this turn', () => {
+  it('Blood Tribute pays 3 HP (never below 1) for Extra Attack 1 and +3 Bullet Power this turn', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     haze.hpMax = 10; haze.hp = 10;
     useItem(G, '0', 'blood_tribute');
     expect(haze.hp).toBe(7);
     expect(status(haze, 'extra_attack')?.value).toBe(1);
-    expect(status(haze, 'weapon_power')).toMatchObject({ value: 1, duration: 1 });
+    expect(status(haze, 'weapon_power')).toMatchObject({ value: 3, duration: 1 });
     // One use a hero a turn: the next two are worn on the bench, and the price
     // is still your Active's.
     haze.hp = 2;
-    useItem(G, '0', 'blood_tribute', undefined, G.players['0'].bench[0]!);
+    useItem(G, '0', 'blood_tribute');
     expect(haze.hp).toBe(1);
-    useItem(G, '0', 'blood_tribute', undefined, G.players['0'].bench[1]!);
+    useItem(G, '0', 'blood_tribute');
     expect(haze.hp).toBe(1);
   });
 
@@ -197,7 +197,7 @@ describe('New active items', () => {
     for (const c of board(G, '1')) expect(c.hp, c.cardId).toBe(15);
   });
 
-  it('Rescue Beam swaps a bench ally in and heals the hero it rescues 4', () => {
+  it('Rescue Beam swaps a bench ally in and heals the hero it rescues 10', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     const lash = G.players['0'].bench[1]!;
@@ -205,32 +205,33 @@ describe('New active items', () => {
     useItem(G, '0', 'rescue_beam', lash.iid);
     expect(G.players['0'].active!.iid).toBe(lash.iid);
     expect(G.players['0'].bench[1]!.iid).toBe(haze.iid);
-    expect(haze.hp).toBe(14);
+    expect(haze.hp).toBe(20);
   });
 
   it('Rescue Beam needs a bench ally to aim at', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
-    const item = giveItem(G, haze, 'rescue_beam');
-    const a = { type: 'activate' as const, itemIid: item.iid, targetIid: haze.iid };
+    G.players['0'].souls = 20;
+    const card = giveCard(G, '0', 'rescue_beam');
+    const a = { type: 'playCard' as const, cardIid: card.iid, heroIid: haze.iid };
     expect(blocked(G, '0', a)).toBe('target');
     expect(perform(G, '0', a)).toBe(INVALID);
   });
 
-  it('Fury Trance grants Extra Attack 1 and Spirit Resist 3, and silences its own hero', () => {
+  it('Fury Trance grants Extra Attack 2 and Spirit Resist 3, and silences its own hero for a turn', () => {
     const G = freshReadyGame();
     // Lash has a skill to lose (Haze's kit is a passive). The two items are
     // worn on the bench, so Lash's own ability of the turn is still unspent.
     const [vindicta, lash, paige] = G.players['0'].bench as CardInstance[];
     const abrams = G.players['1'].active!;
     G.players['0'].souls = 3; // Ground Strike's price: only the silence stands in her way
-    useItem(G, '0', 'warp_stone', lash.iid, vindicta);
+    useItem(G, '0', 'warp_stone', lash.iid);
     const skill = { type: 'useSkill' as const, heroIid: lash.iid, targetIid: abrams.iid };
     expect(blocked(G, '0', skill)).toBeNull();
-    useItem(G, '0', 'fury_trance', undefined, paige);
-    expect(status(lash, 'extra_attack')?.value).toBe(1);
+    useItem(G, '0', 'fury_trance');
+    expect(status(lash, 'extra_attack')?.value).toBe(2);
     expect(status(lash, 'spirit_resist')).toMatchObject({ value: 3, duration: 2 });
-    expect(status(lash, 'silenced')).toMatchObject({ duration: 2 });
+    expect(status(lash, 'silenced')).toMatchObject({ duration: 1 });
     expect(blocked(G, '0', skill)).toBe('status');
   });
 
@@ -265,13 +266,26 @@ describe('New active items', () => {
     expect(attackTargets(G, '1')).toEqual([]);
   });
 
-  it('Infuser gives your Active +3 Spirit Power for 2 turns and heals it 3', () => {
+  it('Infuser heals your Active 6 and gives it +4 Spirit Power and Spirit Lifesteal for 3 turns (one play, 2026-11-16)', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     haze.hpMax = 20; haze.hp = 10;
     useItem(G, '0', 'infuser');
-    expect(status(haze, 'spirit_power')).toMatchObject({ value: 3, duration: 2 });
-    expect(haze.hp).toBe(13);
+    expect(status(haze, 'spirit_power')).toMatchObject({ value: 4, duration: 3 });
+    expect(status(haze, 'spirit_lifesteal')).toMatchObject({ duration: 3 });
+    expect(haze.hp).toBe(16);
+  });
+
+  it('Spirit Lifesteal heals 2 when its spirit damage hits an enemy', () => {
+    const G = freshReadyGame();
+    const haze = G.players['0'].active!;
+    haze.hpMax = 30; haze.hp = 10;
+    useItem(G, '0', 'infuser');                       // 16
+    const foe = G.players['1'].active!;
+    foe.hpMax = 40; foe.hp = 40;
+    useItem(G, '0', 'cold_front', foe.iid);           // a spell's spirit damage: heal 2
+    expect(foe.hp).toBeLessThan(40);
+    expect(haze.hp).toBe(18);
   });
 
   it('Arctic Blast hits every enemy for 2 + Spirit and stuns only the enemy Active', () => {
@@ -333,22 +347,18 @@ describe('New equipment', () => {
     expect(status(G.players['1'].active!, 'rooted')).toMatchObject({ duration: 1 });
   });
 
-  it('Debuff Reducer: a debuff lands 1 turn shorter, never under 1; buffs and permanent marks are untouched', () => {
+  // Debuff Reducer's own tests are in counters.spec.ts (one random debuff off at the start of
+  // the turn). It no longer shortens anything as it lands.
+  it('Debuff Reducer: a debuff lands for its whole length on the bearer; buffs too', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     giveItem(G, haze, 'debuff_reducer');
     addStatus(G, haze, 'bleed', 1, 3);
     addStatus(G, haze, 'silenced', 1, 2);
-    addStatus(G, haze, 'stun', 1, 1);
     addStatus(G, haze, 'bullet_resist', 2, 2);
-    addStatus(G, haze, 'fixation', 1, 99);
-    addStatus(G, haze, 'charged', 1, 2); // a shorter fuse would only stun sooner
-    expect(status(haze, 'bleed')?.duration).toBe(2);
-    expect(status(haze, 'silenced')?.duration).toBe(1);
-    expect(status(haze, 'stun')?.duration).toBe(1);
+    expect(status(haze, 'bleed')?.duration).toBe(3);
+    expect(status(haze, 'silenced')?.duration).toBe(2);
     expect(status(haze, 'bullet_resist')?.duration).toBe(2);
-    expect(status(haze, 'fixation')?.duration).toBe(99);
-    expect(status(haze, 'charged')?.duration).toBe(2);
   });
 
   it('Spirit Snatch: the bearer\'s item damage moves 1 Spirit Power from the enemy to the bearer for 2 turns', () => {

@@ -108,7 +108,7 @@ describe('damage: mitigation pipeline order', () => {
     expect(u.hp).toBe(30 - 15);
   });
 
-  it('Vindicta Flight: no damage reduction any more (attack/spirit/pure land in full); her swing adds {sp:1} spirit', () => {
+  it('Vindicta on the ground takes every hit in full; in Flight (the Flying status) her swing adds {sp:1} spirit', () => {
     const G = freshG();
     // Vindicta is on the bench in the test roster. Bump her HP to test all three
     // damage types without bumping into the 0-HP overflow clamp.
@@ -121,14 +121,15 @@ describe('damage: mitigation pipeline order', () => {
     expect(v.hp).toBe(22);
     damageUnit(G, v, 2, 'pure'); // full 2
     expect(v.hp).toBe(20);
-    // Flight rides on her swing instead: {sp:1} spirit to the hero she hits.
+    // Flight's spirit rides on her swing: {sp:1} to the hero she hits. It is what the Flying
+    // status carries (her ultimate; it was her passive until 2026-11-16).
     const foe = G.players['1'].active!;
     foe.hp = foe.hpMax = 30;
     v.spiritMod = 1;
-    ABILITIES_BY_ID.passive_vindicta_flight.run(G, { movingPlayer: '0' }, { source: v, target: foe });
+    ABILITIES_BY_ID.status_flying.run(G, { movingPlayer: '0' }, { source: v, target: foe });
     expect(foe.hp).toBe(30 - 2);
     // …but not on a Ricochet bounce.
-    ABILITIES_BY_ID.passive_vindicta_flight.run(G, { movingPlayer: '0' }, { source: v, target: foe, params: { bounce: true } });
+    ABILITIES_BY_ID.status_flying.run(G, { movingPlayer: '0' }, { source: v, target: foe, params: { bounce: true } });
     expect(foe.hp).toBe(30 - 2);
   });
 

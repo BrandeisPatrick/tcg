@@ -1,20 +1,29 @@
 import type { CardId } from '@/engine/types';
 
 /**
- * Ready decks: a squad of four heroes and the 16 items of their deck, made to
+ * Ready decks: a squad of three heroes (SQUAD_SIZE) and the 16 items of their deck, made to
  * be picked and played as they are (the Loadout's "Ready decks" row). Each is
  * a legal deck (`deckProblem`, decks.ts) built to one recipe, written down in
  * docs/deck-plan.md ("Ready decks"):
  *
- *  - Base items only, at most 2 copies of one (Pokémon TCG Pocket's rule,
- *    inside this game's cap of MAX_COPIES).
+ *  - At most 2 copies of one card (Pokémon TCG Pocket's rule, inside this
+ *    game's cap of MAX_COPIES).
  *  - The curve of a lane that pays 2 souls a turn: 8 tier-1, 6 tier-2 and 2
- *    tier-3 items, 56 souls in all. The dearer tiers arrive as upgrades:
- *    playing a base item shuffles what it builds into the deck.
- *  - Two Compress Cooldown (`improved_cooldown`) in every deck: the draw
- *    engine, as every Pocket deck carries its two Professor's Research.
- *  - The rest comes from the squad's own builds (their base items), so each
- *    hero finds something made for it.
+ *    tier-3 items, 56 souls in all.
+ *  - Upgrades are deck cards like any other (2026-11-15), and each deck
+ *    carries one line of them beside the item they are built from: played
+ *    onto the hero wearing that item, the upgrade costs only the difference.
+ *    No ready deck carries an upgrade without its component.
+ *  - A counter in every deck (docs/card-design.md, "Counters"): Counterspell,
+ *    Debuff Reducer, Dispel Magic or Knockdown.
+ *    (Counterspell is a spell: Patrick's call.)
+ *  - Spells are played once and discarded, so a deck leans on equipment and
+ *    carries a few spells for the turn that needs one.
+ *  - A draw card in every deck (2026-11-16): one Compress Cooldown (draw 3,
+ *    discard 1), so the three heroes in the deck come out sooner; Graveyard
+ *    carries two, to find its Ghouls too.
+ *  - The rest comes from the squad's own builds, so each hero finds something
+ *    made for it.
  */
 export interface ReadyDeck {
   id: string;
@@ -22,7 +31,7 @@ export interface ReadyDeck {
   /** One line: how it wins. */
   blurb: string;
   /** The squad, in pick order: the first is the natural first Active. */
-  heroes: [CardId, CardId, CardId, CardId];
+  heroes: [CardId, CardId, CardId];
   /** The 16 items, cheapest tier first. */
   items: CardId[];
 }
@@ -35,21 +44,21 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     id: 'gunline',
     name: 'Gunline',
     blurb: 'Out-gun the lane. Warden holds it while Vindicta and Haze shoot.',
-    heroes: ['hero_warden', 'hero_vindicta', 'hero_haze', 'hero_paige'],
+    heroes: ['hero_warden', 'hero_vindicta', 'hero_haze'],
     items: [
       ...x2('extended_magazine'), ...x2('headshot_booster'), ...x2('restorative_shot'), ...x2('grit'),
-      ...x2('improved_cooldown'), ...x2('active_reload'), 'long_range', 'opening_rounds',
+      ...x2('titanic_magazine'), 'long_range', 'improved_cooldown', 'fleetfoot', 'debuff_reducer',
       'burst_fire', 'toxic_bullets',
     ],
   },
   {
     id: 'spirit_storm',
     name: 'Spirit Storm',
-    blurb: 'Skills that hit every enemy, and the items that feed on them.',
-    heroes: ['hero_lady_geist', 'hero_seven', 'hero_lash', 'hero_kelvin'],
+    blurb: "Lash and Kelvin hit every enemy; Seven's storm finishes what the items softened.",
+    heroes: ['hero_lash', 'hero_seven', 'hero_kelvin'],
     items: [
       ...x2('extra_spirit'), ...x2('mystic_burst'), ...x2('mystic_regeneration'), ...x2('spirit_strike'),
-      ...x2('improved_cooldown'), ...x2('cold_front'), 'mystic_vulnerability', 'spirit_lifesteal',
+      ...x2('improved_spirit'), 'cold_front', 'improved_cooldown', 'mystic_vulnerability', 'spirit_lifesteal',
       'knockdown', 'torment_pulse',
     ],
   },
@@ -57,33 +66,44 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     id: 'bulwark',
     name: 'Bulwark',
     blurb: "Outlast them. Heal and shield while Victor's aura grinds them down.",
-    heroes: ['hero_abrams', 'hero_viscous', 'hero_victor', 'hero_rem'],
+    heroes: ['hero_abrams', 'hero_victor', 'hero_rem'],
     items: [
       ...x2('extra_health'), ...x2('extra_regen'), ...x2('grit'), ...x2('healing_rite'),
-      ...x2('improved_cooldown'), ...x2('bullet_lifesteal'), 'healing_booster', 'battle_vest',
-      'bullet_resilience', 'torment_pulse',
+      ...x2('bullet_lifesteal'), 'healing_booster', 'improved_cooldown', 'debuff_reducer', 'guardian_ward',
+      'fortitude', 'counterspell',
     ],
   },
   {
     id: 'ambush',
     name: 'Ambush',
     blurb: 'Swap in, strike, swap out. Cheap Retreats and extra attacks.',
-    heroes: ['hero_silver', 'hero_yamato', 'hero_mirage', 'hero_drifter'],
+    heroes: ['hero_silver', 'hero_yamato', 'hero_mirage'],
     items: [
       ...x2('sprint_boots'), ...x2('extended_magazine'), ...x2('restorative_shot'), ...x2('headshot_booster'),
-      ...x2('improved_cooldown'), ...x2('kinetic_dash'), 'fleetfoot', 'swift_striker',
-      'tesla_bullets', 'berserker',
+      ...x2('kinetic_dash'), 'titanic_magazine', 'fleetfoot', 'swift_striker', 'improved_cooldown',
+      'tesla_bullets', 'debuff_remover',
     ],
   },
   {
     id: 'lockdown',
     name: 'Lockdown',
     blurb: 'Silence, disarm and stun, then Wraith finishes it.',
-    heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_dynamo', 'hero_wraith'],
+    heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_wraith'],
     items: [
       ...x2('rusted_barrel'), ...x2('spirit_strike'), ...x2('extra_spirit'), 'healing_rite', 'extra_health',
-      ...x2('improved_cooldown'), ...x2('slowing_hex'), 'mystic_shot', 'spirit_lifesteal',
+      ...x2('slowing_hex'), 'improved_spirit', 'improved_cooldown', 'mystic_shot', 'spirit_lifesteal',
       'knockdown', 'silence_glyph',
+    ],
+  },
+  {
+    id: 'graveyard',
+    name: 'Graveyard',
+    blurb: 'Graves fills your deck with Ghouls; every Ghoul that falls costs them a card.',
+    heroes: ['hero_viscous', 'hero_graves', 'hero_lady_geist'],
+    items: [
+      ...x2('extra_spirit'), ...x2('spirit_strike'), ...x2('extra_health'), ...x2('healing_rite'),
+      ...x2('improved_cooldown'), 'improved_spirit', 'mystic_slow', 'reactive_barrier', 'debuff_reducer',
+      'torment_pulse', 'decay',
     ],
   },
 ];

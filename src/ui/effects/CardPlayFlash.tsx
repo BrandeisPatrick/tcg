@@ -5,20 +5,26 @@ import { CardFrame } from '../card/CardFrame';
 import { fonts } from '../tokens';
 import { poster, chamfer, clipBoth } from '../poster';
 import { PatronSigil, scale } from '../hud';
+import { FX_TIMING } from './fx/fxCatalog';
 
-/** Reveal hold in ms — Board's completeAction timer must match. */
-export const CARD_REVEAL_MS = 1350;
+/** How long the reveal runs, ms: the card is up for the timeline's `cardLead`
+ *  — the board resolves nothing before that — and fades as the effect begins. */
+export const CARD_REVEAL_MS = FX_TIMING.cardLead + 140;
 
 /**
- * Drives the item / hero reveal animation off `G.action`. While the engine's
- * action is `state: 'begin'` and matches an `item` (an active item used) or a
- * `skill` (hero activation), the overlay renders the relevant card mid-screen.
- * Ultimates are handled by `UltMomentFlash` instead.
+ * A card's ACTIVATION, for a card played from the hand (Patrick, 2026-11-15):
+ * the card is shown mid-screen, so both players see what was played — the
+ * rival's card above all — and only then does its effect resolve on the board
+ * (the FX timeline holds every effect back by `cardLead`). Driven by
+ * `G.action`: while it is `state: 'begin'` and an `item` (a spell cast or a
+ * piece of equipment put on), the overlay shows that card.
+ *
+ * A skill has no screen-fill: its activation is on the hero's own tile (the
+ * cast flare, FxLayer). Ultimates are `UltMomentFlash`'s.
  *
  * Lifecycle is owned by `Board.tsx`: it schedules the `completeAction` move
- * after a fixed hold so dispatch unblocks at the same time the animation
- * naturally finishes. This component is presentational — when action.state
- * flips to `done` (or the action is replaced), the overlay unmounts.
+ * after the hold. This component is presentational — when action.state flips
+ * to `done` (or the action is replaced), the overlay unmounts.
  */
 interface Props {
   G: GameState;
@@ -29,7 +35,7 @@ interface Props {
 
 export function CardPlayFlash({ G, onSkip }: Props) {
   const action = G.action;
-  const matching = action && action.state === 'begin' && (action.kind === 'item' || action.kind === 'skill');
+  const matching = action && action.state === 'begin' && action.kind === 'item';
   return (
     <AnimatePresence>
       {matching && (
@@ -37,7 +43,6 @@ export function CardPlayFlash({ G, onSkip }: Props) {
           key={action.id}
           cardId={action.cardId}
           caster={action.by === '0' ? 'P0' : 'P1'}
-          kind={action.kind === 'skill' ? 'skill' : 'item'}
           onSkip={onSkip}
         />
       )}
@@ -80,12 +85,15 @@ function sheetBox(): Box {
   return { left: 0, top: 0, width: W, height: H };
 }
 
-export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
-  cardId: string; caster: 'P0' | 'P1'; kind?: 'item' | 'skill'; onSkip?: () => void;
+export function CardPlayOverlay({ cardId, caster, onSkip }: {
+  cardId: string; caster: 'P0' | 'P1'; onSkip?: () => void;
 }) {
   const isOwn = caster === 'P0';
-  const verb = 'used';
+  const verb = 'played';
   const dur = CARD_REVEAL_MS / 1000;
+  // The card comes from its player's side of the table and leaves toward the
+  // board, where its effect is about to resolve.
+  const from = isOwn ? 60 : -60;
   // Once the action has resolved the overlay is only fading out; it must not
   // keep swallowing taps meant for the board underneath.
   const present = useIsPresent();
@@ -94,7 +102,8 @@ export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
   // The card as large as the sheet has room for, under its caption and over
   // the hint: one centred column, nothing outside the sheet.
   const fit = Math.max(0.4, Math.min(0.92, (box.height - 16 - (TAG_H + GAP) * 2) / FULL.h, (box.width - 16) / FULL.w));
-  const fade = { duration: dur, times: [0, 0.12, 0.82, 1] };
+  // In fast, held, out fast: up by 130 ms, gone as `cardLead` runs out.
+  const fade = { duration: dur, times: [0, 0.17, 0.8, 1] };
   return (
     <>
       {/* Scrim over the scene so the print pops off the sheet behind it.
@@ -102,8 +111,8 @@ export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
           the action immediately instead of waiting out the full hold. */}
       <motion.div
         initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 0.22, 0.22, 0] }}
-        exit={{ opacity: 0, transition: { duration: 0.2 } }}
+        animate={{ opacity: [0, 0.3, 0.3, 0] }}
+        exit={{ opacity: 0, transition: { duration: 0.12 } }}
         transition={fade}
         onClick={onSkip}
         style={{
@@ -142,47 +151,39 @@ export function CardPlayOverlay({ cardId, caster, kind = 'item', onSkip }: {
             transform: `scale(${fit})`,
           }}>
             <motion.div
-              initial={{ opacity: 0, scale: 0.5, y: 20, rotateY: 38 }}
+              initial={{ opacity: 0, scale: 0.45, y: from, rotateY: 30 }}
               animate={{
                 opacity: [0, 1, 1, 0],
-                scale: [0.5, 1, 0.94, 0.9],
-                y: [20, 0, 0, -10],
+                // Slapped down from its player's side, held, then thrown at the
+                // board: it shrinks away as the effect takes over.
+                scale: [0.45, 1, 0.97, 0.6],
+                y: [from, 0, 0, -from * 0.4],
                 // Flips face-up toward the viewer as it lands — "dealt onto the
                 // sheet" rather than just fading in.
-                rotateY: [38, -4, 0, 0],
+                rotateY: [30, -3, 0, 0],
                 // Scripted cast sheen: `--cast` sweeps CardShine's light bar
                 // across the print once it has landed (the only card CSS
                 // variable still read now that the glare layers are gone).
                 ['--cast' as string]: [0, 0, 1, 1],
               }}
-              exit={{ opacity: 0, scale: 0.88 }}
-              transition={{ ...fade, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0, scale: 0.6, transition: { duration: 0.1 } }}
+              // One easing per segment (in, held, out). A single curve here is
+              // applied across the whole timeline and warps `times`: the card
+              // then starts to fade a third of the way in instead of holding.
+              transition={{ ...fade, ease: ['easeOut', 'linear', 'easeIn'] }}
               style={{
                 transformPerspective: 1100,
                 filter: 'drop-shadow(0 10px 0 rgba(0, 0, 0, 0.25))',
               }}
             >
-              <CardFrame cardId={cardId} size="full" physical={false} castSheen hideStats={kind === 'skill'} />
+              <CardFrame cardId={cardId} size="full" physical={false} castSheen />
             </motion.div>
           </div>
         </div>
-        {/* Skip hint — fades in after the card lands so it never competes with
-            the reveal pop itself, and leaves with the scrim. Its row is held
-            whether or not it shows, so the card does not move. */}
-        <div style={{ flex: `0 0 ${TAG_H}px`, display: 'flex', alignItems: 'center' }}>
-          {onSkip && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, transition: { duration: 0.2 } }}
-              transition={{ delay: 0.6, duration: 0.35 }}
-            >
-              <span style={{ ...tagStyle, height: 22, padding: '0 10px', fontSize: scale.floor, color: poster.inkSoft }}>
-                Tap to skip
-              </span>
-            </motion.div>
-          )}
-        </div>
+        {/* The reveal is under a second: a tap anywhere still skips it (the
+            scrim), but there is no time to read a hint. The row is held so the
+            card sits where it always did. */}
+        <div style={{ flex: `0 0 ${TAG_H}px` }} />
       </div>
     </>
   );

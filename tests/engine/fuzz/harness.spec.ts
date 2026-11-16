@@ -15,16 +15,18 @@ import { DeadlockGame } from '@/engine/game';
 import * as query from '@/engine/query';
 import { ITEMS } from '@/cards';
 import {
-  BOSS_CARD_ID, BOSS_HP, HARD_CC_CHARGES, LANE_INCOME, MAX_HAND, PRICE, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP, ULT_WAIT,
+  BOSS_CARD_ID, BOSS_HP, LANE_INCOME, MAX_HAND, PRICE, RESPAWN_TURNS, REVIVE_CREDITS, ROUND_CAP, ULT_WAIT,
 } from '@/engine/constants';
 import { flagBenchOnly, freshReadyGame, giveCard, giveItem, makeHero, nextTestIid, setTrack, stackDeck, withBenchOnly } from '../_helpers';
+import { allocatorOf } from '@/engine/ids';
+import { attachItem, makeInstance } from '@/engine/instances';
 import { SOULS_ON_USE, checkInvariants, checkTransition, collectInvariantViolations, collectTransitionViolations } from './invariants';
 import { chaosMove, marketSeedFor, mulberry32, playGame } from './driver';
 import {
-  DRAW_CARDS, activateBlockedOracle, activateTargetsOracle, activeCooldownOracle, callMove, chooseActiveBlockedOracle, diffPaths,
-  discardBlockedOracle, everyCard, filterForItem, filterForSkill, freeBenchSlotOracle, heroesOfSide, itemData, itemPriceOracle,
-  netWorthOracle, netWorthOracleWithoutHand, placeHeroBlockedOracle, playBlockedOracle, playCostOracle, slotCapOracle, targetLegal,
-  upgradeComponentOracle, upgradeMadeOracle, upgradesOfOracle, wornWorth,
+  DRAW_CARDS, callMove, chooseActiveBlockedOracle, diffPaths,
+  discardBlockedOracle, everyCard, evolvesFromOracle, filterForItem, filterForSkill, freeBenchSlotOracle, heroesOfSide, itemData, itemPriceOracle,
+  netWorthOracle, netWorthOracleWithoutHand, placeHeroBlockedOracle, playBlockedOracle, playCostOracle, slotCapOracle, spellCasterOracle,
+  spellTargetsOracle, targetLegal, upgradeComponentOracle, upgradesOfOracle, wornWorth,
 } from './oracle';
 import { splitKnown, type Hit } from './hits';
 import { killBounty } from '@/engine/rounds';
@@ -33,10 +35,18 @@ const ctx = (over: Partial<Ctx> = {}): Ctx => ({ currentPlayer: '0', turn: 2, nu
 const clean = (): GameState => freshReadyGame();
 const ids = (G: GameState, c: Ctx = ctx()) => collectInvariantViolations(G, c).map((v) => v.id);
 
+/** Put any item on `hero` as worn — a spell too, which the rules never do (a spell is played
+ *  and discarded): for seeding the broken states the invariants must catch. */
+const forceWear = (G: GameState, hero: CardInstance, cardId: string): CardInstance => {
+  if (itemData(cardId)?.type !== 'spell') return giveItem(G, hero, cardId);
+  const it = makeInstance(allocatorOf(G), cardId, query.seatOf(hero), 'equipment');
+  attachItem(hero, it);
+  return it;
+};
 /** A loose item instance (worn by nobody yet). */
 const loose = (G: GameState, cardId: string, owner: PlayerID): CardInstance => {
   const host = makeHero('hero_shiv', owner, 'bench', 1);
-  const it = giveItem(G, host, cardId);
+  const it = forceWear(G, host, cardId);
   it.attachedTo = undefined;
   return it;
 };
@@ -121,8 +131,8 @@ describe('the invariants fire on states built to break them', () => {
     ['bench-length', (G) => { (G.players['0'].bench as unknown[])[1] = undefined; }],
     ['zone-slot-match', (G) => { G.players['0'].bench[0]!.slot = 3; }],
     ['zone-slot-match', (G) => { giveItem(G, p0(G).haze, 'extra_spirit').attachedTo = p0(G).vindicta.iid; }],
-    ['zone-slot-match', (G) => { giveItem(G, p0(G).haze, 'grit').zone = 'bench'; }],
-    ['item-slot-cap', (G) => { for (const id of ['extra_spirit', 'extra_health', 'extended_magazine', 'grit']) giveItem(G, p0(G).haze, id); }],
+    ['zone-slot-match', (G) => { giveItem(G, p0(G).haze, 'extra_regen').zone = 'bench'; }],
+    ['item-slot-cap', (G) => { for (const id of ['extra_spirit', 'extra_health', 'extended_magazine', 'restorative_shot']) giveItem(G, p0(G).haze, id); }],
     ['item-duplicate', (G) => { giveItem(G, p0(G).haze, 'extra_spirit'); giveItem(G, p0(G).haze, 'extra_spirit'); }],
     ['attached-foreign', (G) => { p0(G).haze.attached = [{ ...G.players['1'].bench[0]!, ownerId: '0' }]; }],
     ['attached-foreign', (G) => { const it = giveItem(G, p0(G).haze, 'extra_spirit'); it.attached = [loose(G, 'grit', '0')]; }],
@@ -182,17 +192,17 @@ describe('the invariants fire on states built to break them', () => {
     ['draft-picks', (G) => { G.draft = { pool: ['hero_haze'], order: [], currentIndex: 0, picks: { '0': ['hero_haze'], '1': [] } }; }],
     ['rem-merge-turns', (G) => { const b = G.players['0'].active!; const rem = makeHero('hero_rem', '0', 'equipment', 0); rem.attachedTo = b.iid; rem.remMergeTurnsLeft = 0; b.attached = [rem]; }],
     ['rem-on-corpse', (G) => { const b = G.players['0'].bench[0]!; b.hp = 0; b.respawnTurnsLeft = 2; const rem = makeHero('hero_rem', '0', 'equipment', 0); rem.attachedTo = b.iid; rem.remMergeTurnsLeft = 2; b.attached = [rem]; }],
-    // hard crowd control holds 0..2 charges; nothing else holds any
-    ['item-charges', (G) => { giveItem(G, p0(G).haze, 'knockdown').charges = HARD_CC_CHARGES + 1; }],
-    ['item-charges', (G) => { giveItem(G, p0(G).haze, 'extra_spirit').charges = 1; }],
-    // Cold Front is tier 2: its full cooldown is 2; a draw card's own is 2 at any tier
-    ['cooldown-range', (G) => { giveItem(G, p0(G).haze, 'cold_front').cooldowns = { cold_front: 3 }; }],
-    ['cooldown-range', (G) => { giveItem(G, p0(G).haze, 'superior_cooldown').cooldowns = { superior_cooldown: 3 }; }],
+    // a spell is played and discarded: none is ever worn — hard crowd control and a draw card neither
+    ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'knockdown'); }],
+    ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'grit'); }],
+    ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'cold_front'); }],
+    ['item-worn-spell', (G) => { forceWear(G, p0(G).haze, 'superior_cooldown'); }],
     ['cooldown-range', (G) => { p0(G).lash.cooldowns = { skill_lash: 1.5 }; }],
     ['cooldown-range', (G) => { p0(G).lash.cooldowns = { skill_lash: -1 }; }],
     ['item-cooldown-key', (G) => { giveItem(G, p0(G).haze, 'extra_spirit').cooldowns = { extra_spirit: 1 }; }],
-    ['item-cooldown-key', (G) => { giveItem(G, p0(G).haze, 'knockdown').cooldowns = { knockdown: 1 }; }],
-    ['item-cooldown-key', (G) => { giveItem(G, p0(G).haze, 'cold_front').cooldowns = { grit: 1 }; }],
+    // no worn item waits: a cooldown entry on one, its own id or another's, is none of the rules'
+    ['item-cooldown-key', (G) => { forceWear(G, p0(G).haze, 'knockdown').cooldowns = { knockdown: 1 }; }],
+    ['item-cooldown-key', (G) => { giveItem(G, p0(G).haze, 'extended_magazine').cooldowns = { grit: 1 }; }],
     ['vitality-spike-sync', (G) => { for (const id of ['extra_health', 'extra_regen', 'sprint_boots']) giveItem(G, p0(G).haze, id); p0(G).haze.vitalitySpike = undefined; }],
     ['vitality-spike-sync', (G) => { p0(G).haze.vitalitySpike = true; }],
     // ---- the hands ----
@@ -205,10 +215,9 @@ describe('the invariants fire on states built to break them', () => {
     ['hand-card-state', (G) => { giveCard(G, '0', 'extra_spirit').zone = 'equipment'; }],
     ['hand-card-state', (G) => { giveCard(G, '0', 'extra_spirit').attachedTo = p0(G).haze.iid; }],
     ['hand-card-state', (G) => { giveCard(G, '0', 'extra_spirit').attached = [loose(G, 'grit', '0')]; }],
-    // an item in the hand is set going by nothing: its cooldown starts when it is played, and it
-    // carries no charges (it never comes back from a hero)
+    // an item in the hand is set going by nothing: no card carries a cooldown
     ['hand-card-state', (G) => { giveCard(G, '0', 'cold_front').cooldowns = { cold_front: 2 }; }],
-    ['hand-card-state', (G) => { giveCard(G, '0', 'knockdown').charges = 1; }],
+    ['hand-card-state', (G) => { giveCard(G, '0', 'knockdown').cooldowns = { knockdown: 1 }; }],
     // a hero in the hand is clean: full HP, no status, no wait, in no slot, carrying items only
     ['hand-card-state', (G) => { const h = giveCard(G, '0', 'hero_yamato'); h.hp = h.hpMax - 1; }],
     ['hand-card-state', (G) => { giveCard(G, '0', 'hero_yamato').statuses.push({ id: 'shield', value: 1, duration: 9 }); }],
@@ -242,7 +251,7 @@ describe('the invariants fire on states built to break them', () => {
   it('what the rules allow is not reported: the flex slot\'s fourth item, a merged Rem beside three items, cards in the deck, the hand and the discard pile, a discard owed', () => {
     const G = clean();
     flex(G, '0');
-    for (const id of ['extra_spirit', 'extra_health', 'extended_magazine', 'grit']) giveItem(G, p0(G).haze, id);
+    for (const id of ['extra_spirit', 'extra_health', 'extended_magazine', 'restorative_shot']) giveItem(G, p0(G).haze, id);
     expect(ids(G)).toEqual([]);
     const H = clean();
     for (const id of ['extra_spirit', 'extra_health', 'extended_magazine']) giveItem(H, p0(H).vindicta, id);
@@ -370,6 +379,43 @@ describe('the transition rules fire', () => {
   /** Where a card is after a move. */
   const at = (A: GameState, iid: string) => everyCard(A).find((x) => x.card.iid === iid)!;
 
+  it('a unit an effect raises may appear — a Ghoul in a deck, a Gravestone on a bench — and nothing else may', () => {
+    expect(ids2(pair((G) => { stackDeck(G, '0', ['unit_ghoul']); }))).not.toContain('card-appeared');
+    expect(ids2(pair((G) => { G.players['0'].bench[2] = null; }, (() => { const B = clean(); B.players['0'].bench[2] = null; return B; })()))).not.toContain('card-appeared');
+    const open = () => { const B = clean(); B.players['0'].bench[2] = null; return B; };
+    const stone = (G: GameState) => { G.players['0'].bench[2] = makeInstance(allocatorOf(G), 'unit_gravestone', '0', 'bench', 3); };
+    expect(ids2(pair(stone, open()))).not.toContain('card-appeared');
+    // …a Ghoul straight into a hand or onto the board, or a Gravestone into a deck, is from nowhere.
+    expect(ids2(pair((G) => { giveCard(G, '0', 'unit_ghoul'); }))).toContain('card-appeared');
+    expect(ids2(pair((G) => { stackDeck(G, '0', ['unit_gravestone']); }))).toContain('card-appeared');
+    expect(ids2(pair((G) => { stackDeck(G, '0', ['grit']); }))).toContain('card-appeared');
+    // Units are no roster: two Ghouls on one side are no duplicate hero.
+    const G = clean();
+    stackDeck(G, '0', ['unit_ghoul', 'unit_ghoul']);
+    stackDeck(G, '1', ['unit_ghoul']);
+    expect(ids(G)).not.toContain('roster-duplicate');
+  });
+
+  it('a unit placed costs its price; a hero placed is free', () => {
+    const G = clean();
+    G.players['0'].bench[2] = null;
+    G.players['0'].souls = 3;
+    const ghoul = giveCard(G, '0', 'unit_ghoul');
+    expect(placeHeroBlockedOracle(G, '0', ghoul.iid, false)).toBeNull();
+    const put = made(G, 'placeHero', [ghoul.iid]);
+    expect(put.after.G.players['0'].souls).toBe(2);
+    expect(put.check()).toEqual([]);
+    expect(put.check((A) => { A.players['0'].souls = 3; })).toContain('souls-delta'); // placed for nothing
+    G.players['0'].souls = 0;
+    expect(placeHeroBlockedOracle(G, '0', ghoul.iid, false)).toBe('souls');
+    // It wears nothing: the play oracle sees no hero in it.
+    const H = clean();
+    H.players['0'].bench[2] = makeInstance(allocatorOf(H), 'unit_ghoul', '0', 'bench', 3);
+    H.players['0'].souls = 10;
+    const item = giveCard(H, '0', 'extra_health');
+    expect(playBlockedOracle(H, '0', item.iid, H.players['0'].bench[2]!.iid)).toBe('no-hero');
+  });
+
   it('structures lose HP with no hero falling', () => {
     expect(ids2(pair((G) => { pushOff(G, '1', 1); }))).toContain('structure-delta');
   });
@@ -406,7 +452,7 @@ describe('the transition rules fire', () => {
     const base = clean();
     giveItem(base, p0(base).haze, 'extra_spirit');
     expect(ids2(pair((G) => { G.players['0'].active!.attached = []; G.players['0'].active!.spiritMod -= 1; }, base))).toContain('card-vanished');
-    expect(ids2(pair((G) => { giveItem(G, G.players['0'].bench[0]!, 'grit'); }))).toContain('card-appeared');
+    expect(ids2(pair((G) => { giveItem(G, G.players['0'].bench[0]!, 'extra_regen'); }))).toContain('card-appeared');
   });
   it('a card vanishes from the hand, the deck or the discard pile; one appears in them from nowhere', () => {
     const base = clean();
@@ -417,22 +463,19 @@ describe('the transition rules fire', () => {
     expect(ids2(pair((G) => { giveCard(G, '1', 'grit'); }))).toContain('card-appeared');
     expect(ids2(pair((G) => { stackDeck(G, '0', ['grit']); }))).toContain('card-appeared');
   });
-  it('a play makes the upgrade its item builds into, shuffled into the deck — one, and the one named; an upgrade onto the hero wearing its component evolves it, the component to the discard pile', () => {
+  it('a play makes no card: nothing is shuffled into the deck, whatever the item builds into; an upgrade onto the hero wearing its component evolves it, the component to the discard pile', () => {
     const G = clean();
     G.players['0'].souls = 30;
-    // Extended Magazine builds into Titanic Magazine and Escalating Resilience: the first, unless one is named.
+    // Extended Magazine builds into Titanic Magazine and Escalating Resilience: each is a card of its own, made by no play.
     expect(upgradesOfOracle('extended_magazine')).toEqual(['titanic_magazine', 'escalating_resilience']);
     const mag = giveCard(G, '0', 'extended_magazine');
     const play = made(G, 'playCard', [mag.iid, p0(G).vindicta.iid]);
-    expect(play.after.G.players['0'].deck.map((c) => c.cardId)).toEqual(['titanic_magazine']);
+    expect(play.after.G.players['0'].deck).toEqual([]);
     expect(play.check()).toEqual([]);
-    expect(play.check((A) => { A.players['0'].deck = []; })).toContain('played-card-state'); // no upgrade made
-    expect(play.check((A) => { A.players['0'].deck[0].cardId = 'escalating_resilience'; })).toContain('card-appeared'); // the wrong one
-    expect(play.check((A) => { stackDeck(A, '0', ['titanic_magazine']); })).toContain('card-appeared'); // two of it
-    const named = made(G, 'playCard', [mag.iid, p0(G).vindicta.iid, 'escalating_resilience']);
-    expect(named.after.G.players['0'].deck.map((c) => c.cardId)).toEqual(['escalating_resilience']);
-    expect(named.check()).toEqual([]);
-    expect(named.check((A) => { A.players['0'].deck[0].cardId = 'titanic_magazine'; })).toContain('card-appeared');
+    expect(play.check((A) => { stackDeck(A, '0', ['titanic_magazine']); })).toContain('card-appeared'); // an upgrade made, as it once was
+    expect(play.check((A) => { stackDeck(A, '0', ['escalating_resilience']); })).toContain('card-appeared');
+    // A third argument is the worn item a full hero gives up, never an upgrade's name: with room on the hero it is refused.
+    expect(callMove(G, ctx(), '0', 'playCard', [mag.iid, p0(G).vindicta.iid, 'escalating_resilience']).outcome).toBe('rejected');
     // Titanic Magazine onto the hero wearing Extended Magazine: it evolves, the magazine to the discard pile.
     const E = clean();
     E.players['0'].souls = 30;
@@ -520,13 +563,15 @@ describe('the transition rules fire', () => {
     expect(disc.check()).toEqual([]);
     expect(disc.check((A) => { A.players['0'].souls = 1; })).toContain('souls-delta');
   });
-  it('souls: an item used pays what its text says (Golden Goose Egg: 2), a Retreat costs the leaving hero\'s printed retreat (Haze 1, Lady Geist 2)', () => {
+  it('souls: a spell costs its price and pays what its text says (Golden Goose Egg: 2 for its 2), a Retreat costs the leaving hero\'s printed retreat (Haze 1, Lady Geist 2)', () => {
     const G = clean();
-    const egg = giveItem(G, p0(G).vindicta, 'golden_goose_egg');
-    const use = made(G, 'activate', [egg.iid]);
-    expect(use.after.G.players['0'].souls).toBe(2);
+    G.players['0'].souls = 5;
+    const egg = giveCard(G, '0', 'golden_goose_egg');
+    const use = made(G, 'playCard', [egg.iid]);
+    expect(use.after.G.players['0'].souls).toBe(5 - PRICE[1] + 2); // its price, then the 2 it pays out
     expect(use.check()).toEqual([]);
-    expect(use.check((A) => { A.players['0'].souls = 3; })).toContain('souls-delta');
+    expect(use.check((A) => { A.players['0'].souls = 5 - PRICE[1]; })).toContain('souls-delta'); // the payout missing
+    expect(use.check((A) => { A.players['0'].souls = 5 + 2; })).toContain('souls-delta');        // the price unpaid
     const H = clean();
     H.players['0'].souls = 3;
     const retreat = made(H, 'moveHero', [1, 0]);
@@ -588,12 +633,12 @@ describe('the transition rules fire', () => {
     expect(moveIds(unmarked, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-per-turn');
     ult.before.G.ultUsed = { '0': true };
     expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-per-turn');
-    // A real ultimate: its size's wait (Death Slam, large: 8), no souls, the Cooldown items not
-    // cutting it (they draw cards now).
+    // A real ultimate: its size's wait (Death Slam, large: 8), no souls; nothing the hero wears
+    // cuts it (the Cooldown items are draw spells, and no equipment has the hook).
     const G = clean();
     G.players['0'].souls = 5;
     p0(G).lash.level = 2;
-    giveItem(G, p0(G).lash, 'improved_cooldown');
+    giveItem(G, p0(G).lash, 'extra_health');
     const used = made(G, 'useSkill', [p0(G).lash.iid, undefined, 'eff_ult_lash']);
     expect(used.after.G.players['0'].bench[1]!.cooldowns?.eff_ult_lash).toBe(ULT_WAIT.large);
     expect(used.after.G.players['0'].souls).toBe(5);
@@ -603,28 +648,32 @@ describe('the transition rules fire', () => {
   });
   it('a draw card draws from the top of the deck and owes its discard — fewer into a nearly full hand or from a short deck, none owed from an empty hand', () => {
     const G = clean();
+    G.players['0'].souls = 30;
     giveCard(G, '0', 'grit');
-    stackDeck(G, '0', ['cold_front', 'extra_spirit', 'knockdown']);
-    const compress = giveItem(G, p0(G).vindicta, 'improved_cooldown');
-    const use = made(G, 'activate', [compress.iid]);
-    expect(use.after.G.players['0'].hand.map((c) => c.cardId)).toEqual(['grit', 'cold_front', 'extra_spirit']);
+    stackDeck(G, '0', ['cold_front', 'extra_spirit', 'knockdown', 'extra_health']);
+    const compress = giveCard(G, '0', 'improved_cooldown');
+    const use = made(G, 'playCard', [compress.iid]);
+    expect(at(use.after.G, compress.iid).place).toBe('discard'); // played once, then discarded
+    expect(use.after.G.players['0'].hand.map((c) => c.cardId)).toEqual(['grit', 'cold_front', 'extra_spirit', 'knockdown']);
     expect(use.after.G.pendingDiscard).toEqual({ pid: '0', count: 1, cardId: 'improved_cooldown' });
     expect(use.check()).toEqual([]);
     expect(use.check((A) => { A.pendingDiscard = undefined; })).toContain('draw-card');
     expect(use.check((A) => { A.pendingDiscard!.count = 2; })).toContain('draw-card');
-    expect(use.check((A) => { const ps = A.players['0']; const c = ps.hand.pop()!; c.zone = 'deck'; ps.deck.unshift(c); })).toContain('draw-card'); // one drawn, not two
+    expect(use.check((A) => { const ps = A.players['0']; const c = ps.hand.pop()!; c.zone = 'deck'; ps.deck.unshift(c); })).toContain('draw-card'); // two drawn, not three
     expect(use.check((A) => { const ps = A.players['0']; [ps.hand[1], ps.deck[0]] = [{ ...ps.deck[0], zone: 'hand' }, { ...ps.hand[1], zone: 'deck' }]; })).toContain('draw-card'); // not the top card
-    // Into a hand one short of MAX_HAND: one card drawn, one owed.
+    // Into a hand one short of MAX_HAND once the draw card has left it: one card drawn, one owed.
     const F = clean();
+    F.players['0'].souls = 30;
     for (let i = 0; i < MAX_HAND - 1; i++) giveCard(F, '0', 'grit');
     stackDeck(F, '0', ['cold_front', 'extra_spirit']);
-    const full = made(F, 'activate', [giveItem(F, p0(F).vindicta, 'improved_cooldown').iid]);
+    const full = made(F, 'playCard', [giveCard(F, '0', 'improved_cooldown').iid]);
     expect(full.after.G.players['0'].hand).toHaveLength(MAX_HAND);
     expect(full.after.G.players['0'].deck).toHaveLength(1);
     expect(full.check()).toEqual([]);
     // An empty deck and an empty hand: nothing drawn, nothing owed.
     const Z = clean();
-    const none = made(Z, 'activate', [giveItem(Z, p0(Z).vindicta, 'superior_cooldown').iid]);
+    Z.players['0'].souls = 30;
+    const none = made(Z, 'playCard', [giveCard(Z, '0', 'superior_cooldown').iid]);
     expect(none.after.G.pendingDiscard).toBeUndefined();
     expect(none.check()).toEqual([]);
     expect(none.check((A) => { giveCard(A, '0', 'grit'); A.pendingDiscard = { pid: '0', count: 1, cardId: 'superior_cooldown' }; })).toContain('draw-card');
@@ -666,42 +715,56 @@ describe('the transition rules fire', () => {
     expect(first.check()).toEqual([]);
     expect(first.check((A) => { A.pendingActive = '0'; })).toContain('placed-hero');
   });
-  it('a play: the card goes from the hand onto the hero named; an active starts on its full cooldown (its own, else its tier\'s) or with its charges', () => {
+  it('a play: equipment goes from the hand onto the hero named, with no cooldown; a spell goes to its player\'s discard pile, worn by nobody', () => {
     const G = clean();
     G.players['0'].souls = 40;
-    const cold = giveCard(G, '0', 'cold_front');
-    const play = made(G, 'playCard', [cold.iid, p0(G).haze.iid]);
-    expect(at(play.after.G, cold.iid).card).toMatchObject({ zone: 'equipment', attachedTo: p0(G).haze.iid, cooldowns: { cold_front: 2 } });
+    const spirit = giveCard(G, '0', 'extra_spirit');
+    const play = made(G, 'playCard', [spirit.iid, p0(G).haze.iid]);
+    expect(at(play.after.G, spirit.iid).card).toMatchObject({ zone: 'equipment', attachedTo: p0(G).haze.iid });
     expect(play.check()).toEqual([]);
-    expect(play.check((A) => { at(A, cold.iid).card.cooldowns = { cold_front: 1 }; })).toContain('played-card-state');
+    expect(play.check((A) => { at(A, spirit.iid).card.cooldowns = { extra_spirit: 1 }; })).toContain('played-card-state');
     // left in the hand, or put on another hero than the one named
     expect(play.check((A) => {
       const h = A.players['0'].active!;
-      const it = at(A, cold.iid).card;
+      const it = at(A, spirit.iid).card;
       h.attached = h.attached!.filter((x) => x !== it);
-      A.players['0'].hand.push({ ...it, zone: 'hand', attachedTo: undefined, cooldowns: undefined });
+      A.players['0'].hand.push({ ...it, zone: 'hand', attachedTo: undefined });
     })).toContain('played-card-state');
     expect(play.check((A) => {
-      const it = at(A, cold.iid).card;
+      const it = at(A, spirit.iid).card;
       A.players['0'].active!.attached = [];
       const v = A.players['0'].bench[0]!;
       v.attached = [{ ...it, attachedTo: v.iid }];
     })).toContain('played-card-state');
-    const knock = giveCard(G, '0', 'knockdown');
-    const k = made(G, 'playCard', [knock.iid, p0(G).lash.iid]);
-    expect(at(k.after.G, knock.iid).card.charges).toBe(HARD_CC_CHARGES);
-    expect(k.check()).toEqual([]);
-    expect(k.check((A) => { at(A, knock.iid).card.charges = 1; })).toContain('played-card-state');
-    // A tier 3 active starts on 3; Superior Cooldown, tier 3, on its own 2.
-    const fire = giveCard(G, '0', 'alchemical_fire');
-    const f = made(G, 'playCard', [fire.iid, p0(G).haze.iid]);
-    expect(at(f.after.G, fire.iid).card.cooldowns).toEqual({ alchemical_fire: 3 });
-    expect(f.check()).toEqual([]);
-    const sup = giveCard(G, '0', 'superior_cooldown');
-    const s = made(G, 'playCard', [sup.iid, p0(G).paige.iid]);
-    expect(at(s.after.G, sup.iid).card.cooldowns).toEqual({ superior_cooldown: 2 });
-    expect(s.check()).toEqual([]);
-    expect(s.check((A) => { at(A, sup.iid).card.cooldowns = { superior_cooldown: 3 }; })).toContain('played-card-state');
+    // A spell, on the enemy Active: it resolves and is discarded, whatever its tier.
+    for (const id of ['cold_front', 'knockdown', 'alchemical_fire']) {
+      const card = giveCard(G, '0', id);
+      const cast = made(G, 'playCard', [card.iid, G.players['1'].active!.iid]);
+      expect(at(cast.after.G, card.iid), id).toMatchObject({ place: 'discard', pid: '0' });
+      expect(at(cast.after.G, card.iid).card.cooldowns, id).toBeUndefined();
+      expect(cast.check(), id).toEqual([]);
+      // still in the hand
+      expect(cast.check((A) => {
+        const ps = A.players['0'];
+        const c = at(A, card.iid).card;
+        ps.discard = ps.discard.filter((x) => x !== c);
+        ps.hand.push({ ...c, zone: 'hand' });
+      }), id).toContain('played-card-state');
+      // worn by the caster, as the old actives were
+      expect(cast.check((A) => {
+        const ps = A.players['0'];
+        const c = at(A, card.iid).card;
+        ps.discard = ps.discard.filter((x) => x !== c);
+        (ps.active!.attached ??= []).push({ ...c, zone: 'equipment', attachedTo: ps.active!.iid });
+      }), id).toContain('played-card-state');
+      // on the rival's pile; carrying a cooldown
+      expect(cast.check((A) => {
+        const c = at(A, card.iid).card;
+        A.players['0'].discard = A.players['0'].discard.filter((x) => x !== c);
+        A.players['1'].discard.push(c);
+      }), id).toContain('played-card-state');
+      expect(cast.check((A) => { at(A, card.iid).card.cooldowns = { [id]: 2 }; }), id).toContain('played-card-state');
+    }
   });
   it('a play never leaves a hero over its slot cap', () => {
     const G = clean();
@@ -786,61 +849,60 @@ describe('the transition rules fire', () => {
     expect(dead.check()).toEqual([]);
     expect(dead.check((A) => { A.players['0'].bench[0]!.exp = 1; })).toContain('equip-exp');
   });
-  it('an item used spends its bearer\'s ability and arms its cooldown — its own for a draw card — or spends a charge', () => {
+  it('a spell played spends no hero\'s ability: the caster may still use its skill that turn', () => {
     const G = clean();
-    const cold = giveItem(G, p0(G).vindicta, 'cold_front');
-    const use = made(G, 'activate', [cold.iid, G.players['1'].active!.iid]);
+    G.players['0'].souls = 40;
+    const cold = giveCard(G, '0', 'cold_front');
+    const use = made(G, 'playCard', [cold.iid, G.players['1'].active!.iid]);
+    expect(use.after.G.players['0'].active!.skillUsedThisTurn).toBeFalsy();
     expect(use.check()).toEqual([]);
-    expect(use.check((A) => { A.players['0'].bench[0]!.skillUsedThisTurn = false; })).toContain('activate-spends');
-    expect(use.check((A) => { A.players['0'].bench[0]!.attached![0].cooldowns = { cold_front: 1 }; })).toContain('activate-spends');
-    const knock = giveItem(G, p0(G).lash, 'knockdown');
-    const k = made(G, 'activate', [knock.iid, G.players['1'].active!.iid]);
-    expect(k.after.G.players['0'].bench[1]!.attached![0].charges).toBe(1);
-    expect(k.check()).toEqual([]);
-    expect(k.check((A) => { A.players['0'].bench[1]!.attached![0].charges = 2; })).toContain('activate-spends');
-    const trans = giveItem(G, p0(G).paige, 'transcendent_cooldown');
-    const t = made(G, 'activate', [trans.iid]);
-    expect(t.after.G.players['0'].bench[2]!.attached![0].cooldowns).toEqual({ transcendent_cooldown: 2 });
+    // marked as the old item use marked its bearer
+    expect(use.check((A) => { const h = A.players['0'].active!; h.skillUsedThisTurn = true; h.lastSkillUsed = 'cold_front'; })).toContain('spell-spends');
+    // An untargeted one too (Transcendent Cooldown), and no cooldown is left anywhere.
+    const trans = giveCard(G, '0', 'transcendent_cooldown');
+    const t = made(G, 'playCard', [trans.iid]);
     expect(t.check()).toEqual([]);
-    expect(t.check((A) => { A.players['0'].bench[2]!.attached![0].cooldowns = { transcendent_cooldown: 3 }; })).toContain('activate-spends');
+    expect(t.check((A) => { const h = A.players['0'].bench[2]!; h.skillUsedThisTurn = true; h.lastSkillUsed = 'transcendent_cooldown'; })).toContain('spell-spends');
   });
   it('cooldowns: the new player\'s tick down at its turn start, the ender\'s stay; nothing else moves one but what starts it, and Refresher', () => {
     const before = clean();
     before.players['1'].active!.cooldowns = { passive_abrams_heal: 2 };
-    giveItem(before, before.players['1'].bench[0]!, 'cold_front', { cooldown: 2 });
-    giveItem(before, p0(before).haze, 'decay', { cooldown: 3 });
+    before.players['1'].bench[0]!.cooldowns = { some_wait: 2 };
+    p0(before).haze.cooldowns = { eff_ult_haze: 3 };
     const end = (mutate: (A: GameState) => void) => {
       const after = structuredClone(before) as GameState;
       after.turnNumber = 3; after.players['1'].souls = LANE_INCOME;
       after.players['1'].active!.cooldowns = { passive_abrams_heal: 1 };
-      after.players['1'].bench[0]!.attached![0].cooldowns = { cold_front: 1 };
+      after.players['1'].bench[0]!.cooldowns = { some_wait: 1 };
       mutate(after);
       return collectTransitionViolations({ G: before, ctx: ctx() }, { G: after, ctx: ctx({ currentPlayer: '1', turn: 3 }) }, { name: 'endTurn', args: [] }, true).map((v) => v.id);
     };
     expect(end(() => undefined)).toEqual([]);
-    expect(end((A) => { A.players['1'].bench[0]!.attached![0].cooldowns = { cold_front: 2 }; })).toContain('cooldown-bookkeeping'); // not ticked
+    expect(end((A) => { A.players['1'].bench[0]!.cooldowns = { some_wait: 2 }; })).toContain('cooldown-bookkeeping'); // not ticked
     // a turn handed over has begun even when its start ends the match (a Bleed tick that fells
     // a hero and the patron with it): its ticks have run
     const over = (cd: number) => {
       const after = structuredClone(before) as GameState;
       after.turnNumber = 3;
       after.players['1'].active!.cooldowns = { passive_abrams_heal: 1 };
-      after.players['1'].bench[0]!.attached![0].cooldowns = { cold_front: cd };
+      after.players['1'].bench[0]!.cooldowns = { some_wait: cd };
       return collectTransitionViolations({ G: before, ctx: ctx() }, { G: after, ctx: ctx({ currentPlayer: '1', turn: 3, gameover: { winner: '0' } } as Partial<Ctx>) }, { name: 'endTurn', args: [] }, true).map((v) => v.id);
     };
     expect(over(1)).not.toContain('cooldown-bookkeeping');
     expect(over(2)).toContain('cooldown-bookkeeping');
-    expect(end((A) => { A.players['0'].active!.attached![0].cooldowns = { decay: 2 }; })).toContain('cooldown-bookkeeping'); // the ender's ticked
+    expect(end((A) => { A.players['0'].active!.cooldowns = { eff_ult_haze: 2 }; })).toContain('cooldown-bookkeeping'); // the ender's ticked
     // a skill moves only its own cooldown
     const p = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 1 }; G.players['0'].active!.cooldowns = { x: 1 }; });
     expect(moveIds(p, 'useSkill', [p.before.G.players['0'].bench[1]!.iid])).toContain('cooldown-bookkeeping');
-    // Refresher takes the Active and the items it wears off cooldown
+    // Refresher, played from the hand, ends the waits of the Active — and of nobody else
     const R = clean();
+    R.players['0'].souls = 40;
     p0(R).haze.cooldowns = { eff_ult_haze: 2 };
-    giveItem(R, p0(R).haze, 'decay', { cooldown: 2 });
-    const refresher = giveItem(R, p0(R).paige, 'refresher');
-    const use = made(R, 'activate', [refresher.iid]);
+    p0(R).vindicta.cooldowns = { skill_vindicta: 2 };
+    const refresher = giveCard(R, '0', 'refresher');
+    const use = made(R, 'playCard', [refresher.iid]);
     expect(use.after.G.players['0'].active!.cooldowns).toBeUndefined();
+    expect(use.after.G.players['0'].bench[0]!.cooldowns).toEqual({ skill_vindicta: 2 });
     expect(use.check()).toEqual([]);
     expect(use.check((A) => { A.players['0'].bench[0]!.cooldowns = { skill_vindicta: 1 }; })).toContain('cooldown-bookkeeping');
   });
@@ -903,7 +965,7 @@ describe('the transition rules fire', () => {
     p = base((G) => { G.turnNumber = 7; G.players['1'].souls = LANE_INCOME; G.players['1'].bench[0]!.respawnTurnsLeft = 1; });
     expect(moveIds(p, 'endTurn', [], p.after.ctx)).toContain('turn-number-step');
   });
-  it('a card play, a hero placed, a first Active, a discard or an item use the rules refuse, accepted', () => {
+  it('a card play, a hero placed, a first Active, a discard or a spell the rules refuse, accepted', () => {
     // a card played onto a rival's hero; one not in the hand; one after the attack; one a soul short
     const P = clean();
     P.players['0'].souls = 10;
@@ -925,10 +987,21 @@ describe('the transition rules fire', () => {
     // a first Active nobody owes; a discard nobody owes
     expect(moveIds(pair(() => undefined, H), 'chooseActive', [yam.iid])).toContain('accepted-illegal');
     expect(moveIds(pair(() => undefined, H), 'discard', [[yam.iid]])).toContain('accepted-illegal');
-    // an item used while it cools down
+    // a spell with no target named, on a hero its filter rules out, or naming a card to replace
     const C = clean();
-    const cold = giveItem(C, p0(C).haze, 'cold_front', { cooldown: 1 });
-    expect(moveIds(pair(() => undefined, C), 'activate', [cold.iid, C.players['1'].active!.iid])).toContain('accepted-illegal');
+    C.players['0'].souls = 10;
+    const cold = giveCard(C, '0', 'cold_front');
+    const foe = C.players['1'].active!.iid;
+    expect(moveIds(pair(() => undefined, C), 'playCard', [cold.iid, foe])).not.toContain('accepted-illegal');
+    expect(moveIds(pair(() => undefined, C), 'playCard', [cold.iid])).toContain('accepted-illegal');
+    expect(moveIds(pair(() => undefined, C), 'playCard', [cold.iid, C.players['0'].active!.iid])).toContain('accepted-illegal');
+    expect(moveIds(pair(() => undefined, C), 'playCard', [cold.iid, foe, 'ghost'])).toContain('accepted-illegal');
+    // …and with no hero of its side standing to cast it
+    const N = clean();
+    N.players['0'].souls = 10;
+    const late = giveCard(N, '0', 'cold_front');
+    for (const h of heroesOfSide(N.players['0'])) { h.hp = 0; h.respawnTurnsLeft = RESPAWN_TURNS; }
+    expect(moveIds(pair(() => undefined, N), 'playCard', [late.iid, N.players['1'].active!.iid])).toContain('accepted-illegal');
   });
   it('a wiped board is no loss: nothing is reported while the game runs on', () => {
     const G = clean();
@@ -1027,19 +1100,24 @@ describe('the driver', () => {
 
   it('chaos moves name every move the engine has and nothing else, with ids from the state', () => {
     const G = clean();
-    giveItem(G, G.players['0'].active!, 'cold_front');
+    const worn = giveItem(G, G.players['0'].active!, 'extra_regen');
     const held = giveCard(G, '0', 'extra_spirit');
+    const spell = giveCard(G, '0', 'cold_front');
     const rnd = mulberry32(3);
     const names = new Set<string>();
     const iids = new Set<unknown>();
+    const swaps = new Set<unknown>();
     for (let i = 0; i < 600; i++) {
       const m = chaosMove(G, '0', rnd);
       names.add(m.name);
-      if (m.name === 'activate' || m.name === 'playCard') iids.add(m.args[0]);
+      if (m.name === 'playCard') { iids.add(m.args[0]); swaps.add(m.args[2]); }
     }
     expect([...names].sort()).toEqual(Object.keys(DeadlockGame.moves!).sort());
-    expect(iids.has(G.players['0'].active!.attached![0].iid)).toBe(true); // a worn item's own iid
-    expect(iids.has(held.iid)).toBe(true); // a hand card's own iid
+    expect(names.has('activate')).toBe(false); // the move is gone: a spell is a card played
+    expect(iids.has(worn.iid)).toBe(true);     // a worn item's own iid, as the card played…
+    expect(swaps.has(worn.iid)).toBe(true);    // …and as the one to replace
+    expect(iids.has(held.iid)).toBe(true);     // a hand card's own iid
+    expect(iids.has(spell.iid)).toBe(true);    // a spell's too
   });
 
   it('callMove runs on a clone', () => {
@@ -1068,14 +1146,14 @@ describe('the driver', () => {
 });
 
 describe('the rules oracles', () => {
-  it('the target oracle matches the TargetFilter doc; an item is aimed by its first ability, a passive is never used', () => {
+  it('the target oracle matches the TargetFilter doc; a spell is aimed by its first ability, equipment is never aimed', () => {
     const G = clean();
     const me = G.players['0'];
     const foe = G.players['1'];
     const dead = foe.bench[0]!;
     dead.hp = 0; dead.respawnTurnsLeft = 3;
-    expect(filterForItem(giveItem(G, me.active!, 'cold_front'))).toBe('enemyActive');
-    expect(filterForItem(giveItem(G, me.active!, 'grit'))).toBe('noTarget');
+    expect(filterForItem(giveCard(G, '0', 'cold_front'))).toBe('enemyActive');
+    expect(filterForItem(giveCard(G, '0', 'grit'))).toBe('noTarget');
     expect(filterForItem(giveItem(G, me.active!, 'extra_spirit'))).toBe('passive');
     expect(filterForItem(me.bench[0]!)).toBeNull();
     expect(filterForSkill(me.bench[2]!)).toBe('allyHero'); // Paige
@@ -1089,7 +1167,7 @@ describe('the rules oracles', () => {
     resolve(G);
   });
 
-  it('prices: PRICE by tier; an upgrade onto the hero wearing its component costs the difference, onto another the full price; the upgrades a play makes', () => {
+  it('prices: PRICE by tier; equipment onto the hero wearing its equipment component costs the difference, onto another the full price; a spell never less than its price', () => {
     const G = clean();
     expect(['extended_magazine', 'titanic_magazine', 'decay', 'curse', 'hero_haze'].map(itemPriceOracle)).toEqual([2, 4, 8, 16, 0]);
     const { haze, vindicta } = p0(G);
@@ -1104,14 +1182,21 @@ describe('the rules oracles', () => {
     corpse.hp = 0; corpse.respawnTurnsLeft = 2;
     giveItem(G, corpse, 'extended_magazine');
     expect(playCostOracle(corpse, 'titanic_magazine')).toBe(2);
-    // What a play makes: the first upgrade, or the one named of several; nothing for an item that builds into none.
-    expect(upgradesOfOracle('extra_health')).toEqual(['colossus', 'fortitude']);
-    expect(upgradeMadeOracle('extra_health', undefined)).toBe('colossus');
-    expect(upgradeMadeOracle('extra_health', 'fortitude')).toBe('fortitude');
-    expect(upgradeMadeOracle('extra_health', 'nope')).toBe('colossus');
-    expect(upgradeMadeOracle('titanic_magazine', undefined)).toBeUndefined();
-    expect(upgradesOfOracle('improved_cooldown')).toEqual(['superior_cooldown']);
-    expect(upgradesOfOracle('superior_cooldown')).toEqual(['transcendent_cooldown']);
+    // What evolves what: equipment from equipment only. Colossus (a spell) is built from Extra
+    // Health in Deadlock's shop, and costs its whole price beside it; Weapon Shielding
+    // (equipment) is built from Grit (a spell), which is never worn, so it evolves nothing.
+    expect(upgradesOfOracle('extra_health')).toEqual(['fortitude']);
+    expect(evolvesFromOracle('fortitude')).toBe('extra_health');
+    expect(evolvesFromOracle('colossus')).toBeUndefined();
+    expect(evolvesFromOracle('weapon_shielding')).toBeUndefined();
+    giveItem(G, vindicta, 'extra_health');
+    expect(playCostOracle(vindicta, 'fortitude')).toBe(8 - 2);
+    expect(playCostOracle(vindicta, 'colossus')).toBe(16);
+    expect(playCostOracle(undefined, 'colossus')).toBe(16);
+    // The draw cards are spells: none evolves another, and each costs its price.
+    expect(upgradesOfOracle('improved_cooldown')).toEqual([]);
+    expect(upgradesOfOracle('superior_cooldown')).toEqual([]);
+    expect(['improved_cooldown', 'superior_cooldown', 'transcendent_cooldown'].map((id) => playCostOracle(undefined, id))).toEqual([4, 8, 16]);
   });
   it('slots and worth: three items (four with the flex slot); every worn item and every item in the hand counts, a hero card nothing; a merged Rem is a hero, not an item', () => {
     const G = clean();
@@ -1119,11 +1204,11 @@ describe('the rules oracles', () => {
     G.players['0'].flexSlot = true;
     expect(slotCapOracle(G, '0')).toBe(4);
     const vind = p0(G).vindicta;
-    giveItem(G, vind, 'grit');
+    giveItem(G, vind, 'extra_regen');
     giveItem(G, vind, 'extra_health');
     const rem = mergeRem(G, G.players['0'].bench[0]!);
     expect(wornWorth(G.players['0'].bench[0]!)).toBe(4); // two tier 1 items, Rem not among them
-    giveItem(G, rem, 'cold_front');
+    giveItem(G, rem, 'healing_booster');
     expect(heroesOfSide(G.players['0']).map((h) => h.cardId)).toContain('hero_rem');
     expect(netWorthOracle(G, '0')).toBe(4 + 4);
     // The hand counts at list price — in net worth, not in a hero's worth; a hero card at 0.
@@ -1131,6 +1216,9 @@ describe('the rules oracles', () => {
     giveCard(G, '0', 'hero_yamato');
     expect(netWorthOracle(G, '0')).toBe(4 + 4 + 16);
     expect(netWorthOracleWithoutHand(G, '0')).toBe(4 + 4);
+    // A spell in the hand counts at its price too; played, it is on the discard pile and counts nothing.
+    giveCard(G, '0', 'cold_front');
+    expect(netWorthOracle(G, '0')).toBe(4 + 4 + 16 + 4);
   });
   it('the hand oracles: a hero onto the bench (its first free slot, not a merged Rem\'s) or into an empty lane; the first Active; a discard', () => {
     const G = clean();
@@ -1181,7 +1269,7 @@ describe('the rules oracles', () => {
     expect(discardBlockedOracle(D, '1', [a.iid])).toBe('not-owed');
     expect(playBlockedOracle(D, '0', c.iid, p0(D).haze.iid)).toBe('discard-owed');
   });
-  it('the play oracle: not after the attack, nor around a choice owed; an item in the hand onto a hero of the side in a slot — a corpse too — never a duplicate, never past the cap unless it evolves one worn, souls enough, an upgrade named only among its own', () => {
+  it('the play oracle: not after the attack, nor around a choice owed; equipment in the hand onto a hero of the side in a slot — a corpse too — never a duplicate, never past the cap unless it evolves one worn or names the one it replaces, souls enough', () => {
     const G = clean();
     G.players['0'].souls = 10;
     const { haze, vindicta, paige } = p0(G);
@@ -1191,21 +1279,26 @@ describe('the rules oracles', () => {
     expect(playBlockedOracle(G, '0', card.iid, paige.iid)).toBeNull();
     expect(playBlockedOracle(G, '1', card.iid, haze.iid)).toBe('not-your-turn');
     expect(playBlockedOracle(G, '0', 'ghost', haze.iid)).toBe('not-in-hand');
-    expect(playBlockedOracle(G, '0', giveItem(G, vindicta, 'grit').iid, haze.iid)).toBe('not-in-hand');
+    expect(playBlockedOracle(G, '0', giveItem(G, vindicta, 'extra_regen').iid, haze.iid)).toBe('not-in-hand');
     expect(playBlockedOracle(G, '0', giveCard(G, '1', 'grit').iid, haze.iid)).toBe('not-in-hand');
     expect(playBlockedOracle(G, '0', giveCard(G, '0', 'hero_yamato').iid, haze.iid)).toBe('hero-card');
     expect(playBlockedOracle(G, '0', card.iid, G.players['1'].active!.iid)).toBe('no-hero');
     expect(playBlockedOracle(G, '0', card.iid, undefined)).toBe('no-hero');
     giveItem(G, vindicta, 'extra_spirit');
     expect(playBlockedOracle(G, '0', card.iid, vindicta.iid)).toBe('duplicate');
-    for (const id of ['extended_magazine', 'extra_health', 'extra_regen']) giveItem(G, haze, id);
+    const worn = ['extended_magazine', 'extra_health', 'extra_regen'].map((id) => giveItem(G, haze, id));
     expect(playBlockedOracle(G, '0', card.iid, haze.iid)).toBe('full');
+    // Onto a full hero, naming the worn item it takes the place of.
+    expect(playBlockedOracle(G, '0', card.iid, haze.iid, undefined, worn[2].iid)).toBeNull();
+    expect(playBlockedOracle(G, '0', card.iid, haze.iid, undefined, 'ghost')).toBe('replace-not-worn');
+    expect(playBlockedOracle(G, '0', card.iid, p0(G).lash.iid, undefined, worn[2].iid)).toBe('replace-not-full'); // Lash has room
     const titanic = giveCard(G, '0', 'titanic_magazine');
     expect(playBlockedOracle(G, '0', titanic.iid, haze.iid)).toBeNull(); // takes the magazine's place
-    expect(playBlockedOracle(G, '0', titanic.iid, haze.iid, undefined, 1)).toBe('souls'); // 2, the difference
-    expect(playBlockedOracle(G, '0', titanic.iid, haze.iid, 'escalating_resilience')).toBe('not-an-upgrade');
-    const mag = giveCard(G, '0', 'extended_magazine');
-    expect(playBlockedOracle(G, '0', mag.iid, p0(G).lash.iid, 'escalating_resilience')).toBeNull();
+    expect(playBlockedOracle(G, '0', titanic.iid, haze.iid, 1)).toBe('souls'); // 2, the difference
+    expect(playBlockedOracle(G, '0', titanic.iid, haze.iid, undefined, worn[1].iid)).toBe('replace-not-full'); // it evolves: nothing to replace
+    // An upgrade is a card like any other: onto a hero without its component, for its whole price.
+    expect(playBlockedOracle(G, '0', titanic.iid, p0(G).lash.iid, 3)).toBe('souls');
+    expect(playBlockedOracle(G, '0', titanic.iid, p0(G).lash.iid, 4)).toBeNull();
     G.attackUsed = true;
     expect(playBlockedOracle(G, '0', card.iid, p0(G).lash.iid)).toBe('act-over');
     G.attackUsed = false;
@@ -1223,37 +1316,50 @@ describe('the rules oracles', () => {
   // game's only take-away is the evolution onto the hero itself (the play oracle and the
   // upgrade-and-evolve transition test above); a sale has no deck equivalent.
   it.skip('what a same-turn sale puts back: onto the hero it came from while it has room and wears no copy, else into the hand — and what that one settled, after it', () => {});
-  it('the item-use oracle: an active worn by a standing bearer who has not used its ability, unlocked, ready, on a legal target — never around a choice owed', () => {
+  it('the spell oracle: a spell in the hand, a hero of the side standing to cast it, on a target its card allows (or none), for its price — whatever the caster has done or suffers, never around a choice owed', () => {
     const G = clean();
+    G.players['0'].souls = 10;
     const foeActive = G.players['1'].active!.iid;
-    const lash = p0(G).lash;
-    const cold = giveItem(G, lash, 'cold_front');
-    expect(activateBlockedOracle(G, '0', cold.iid, foeActive)).toBeNull(); // a bench bearer, "the enemy Active"
-    expect(activateTargetsOracle(G, '0', cold, lash)).toEqual([G.players['1'].active]);
-    expect(activateBlockedOracle(G, '0', cold.iid)).toBe('missing-target');
-    expect(activateBlockedOracle(G, '0', cold.iid, G.players['1'].bench[0]!.iid)).toBe('bad-target');
-    expect(activateBlockedOracle(G, '1', cold.iid, foeActive)).toBe('not-worn');
-    expect(activateBlockedOracle(G, '0', giveItem(G, lash, 'extra_spirit').iid)).toBe('passive');
-    expect(activateBlockedOracle(G, '0', giveItem(G, p0(G).paige, 'grit', { cooldown: 1 }).iid)).toBe('cooling');
-    const knock = giveItem(G, p0(G).vindicta, 'knockdown');
-    knock.charges = 0;
-    expect(activateBlockedOracle(G, '0', knock.iid, foeActive)).toBe('no-charges');
-    knock.charges = 1;
-    p0(G).vindicta.statuses.push({ id: 'silenced', value: 1, duration: 1 });
-    expect(activateBlockedOracle(G, '0', knock.iid, foeActive)).toBe('bearer-locked');
-    lash.skillUsedThisTurn = true;
-    expect(activateBlockedOracle(G, '0', cold.iid, foeActive)).toBe('bearer-used');
-    lash.skillUsedThisTurn = false;
-    G.pendingDiscard = { pid: '0', count: 1, cardId: 'improved_cooldown' };
-    expect(activateBlockedOracle(G, '0', cold.iid, foeActive)).toBe('discard-owed');
-    G.pendingDiscard = undefined;
-    lash.hp = 0; lash.respawnTurnsLeft = 2;
-    expect(activateBlockedOracle(G, '0', cold.iid, foeActive)).toBe('bearer-down');
-    // the cooldowns: the tier's, or the card's own (the draw cards: 2 at every tier)
-    const haze = p0(G).haze;
-    expect(activeCooldownOracle(haze, 3)).toBe(3);
-    expect(activeCooldownOracle(haze, itemData('alchemical_fire')!)).toBe(3);
-    expect(activeCooldownOracle(haze, itemData('transcendent_cooldown')!)).toBe(2);
+    const { haze, lash } = p0(G);
+    const cold = giveCard(G, '0', 'cold_front');
+    expect(spellCasterOracle(G, '0')).toBe(haze);
+    expect(spellTargetsOracle(G, '0', 'cold_front')).toEqual([G.players['1'].active]);
+    expect(playBlockedOracle(G, '0', cold.iid, foeActive)).toBeNull();
+    expect(playBlockedOracle(G, '0', cold.iid, undefined)).toBe('missing-target');
+    expect(playBlockedOracle(G, '0', cold.iid, G.players['1'].bench[0]!.iid)).toBe('bad-target');
+    expect(playBlockedOracle(G, '0', cold.iid, haze.iid)).toBe('bad-target');
+    expect(playBlockedOracle(G, '1', cold.iid, foeActive)).toBe('not-your-turn');
+    expect(playBlockedOracle(G, '0', cold.iid, foeActive, undefined, 'ghost')).toBe('replace-spell');
+    expect(playBlockedOracle(G, '0', cold.iid, foeActive, 3)).toBe('souls'); // tier 2: 4
+    // A spell that takes no target ignores a hero named; equipment has no spell targets.
+    const grit = giveCard(G, '0', 'grit');
+    expect(spellTargetsOracle(G, '0', 'grit')).toBe('none');
+    expect(playBlockedOracle(G, '0', grit.iid, undefined)).toBeNull();
+    expect(playBlockedOracle(G, '0', grit.iid, lash.iid)).toBeNull();
+    expect(spellTargetsOracle(G, '0', 'extra_spirit')).toEqual([]);
+    // A spell is no hero's ability: the caster's used skill, a Silence or a Stun on it do not stop one,
+    // and a hero wearing three items is no fuller for it.
+    haze.skillUsedThisTurn = true;
+    haze.statuses.push({ id: 'silenced', value: 1, duration: 1 }, { id: 'stun', value: 1, duration: 1 });
+    for (const id of ['extended_magazine', 'extra_health', 'extra_regen']) giveItem(G, haze, id);
+    expect(playBlockedOracle(G, '0', cold.iid, foeActive)).toBeNull();
+    // The caster: the standing Active, else the first standing hero of the bench; with none, no spell.
+    haze.hp = 0; haze.respawnTurnsLeft = 2;
+    expect(spellCasterOracle(G, '0')).toBe(p0(G).vindicta);
+    expect(playBlockedOracle(G, '0', cold.iid, foeActive)).toBeNull();
+    for (const h of heroesOfSide(G.players['0'])) { h.hp = 0; h.respawnTurnsLeft = 2; }
+    expect(spellCasterOracle(G, '0')).toBeUndefined();
+    expect(playBlockedOracle(G, '0', cold.iid, foeActive)).toBe('no-caster');
+    expect(playBlockedOracle(G, '0', grit.iid, undefined)).toBe('no-caster');
+    // Around a choice owed, and after the attack, as any card.
+    const D = clean();
+    D.players['0'].souls = 10;
+    const c2 = giveCard(D, '0', 'cold_front');
+    D.pendingDiscard = { pid: '0', count: 1, cardId: 'improved_cooldown' };
+    expect(playBlockedOracle(D, '0', c2.iid, D.players['1'].active!.iid)).toBe('discard-owed');
+    D.pendingDiscard = undefined;
+    D.attackUsed = true;
+    expect(playBlockedOracle(D, '0', c2.iid, D.players['1'].active!.iid)).toBe('act-over');
   });
 
   it('the oracles\' tables are the cards\': the draw cards\' numbers are their texts\', and the souls an item pays are its text\'s', () => {

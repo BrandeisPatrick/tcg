@@ -43,17 +43,22 @@ describe('invariants hold in every state of seeded games', () => {
         // The spotlight rosters exist to reach the intricate rules; make sure they do.
         expect(coverage.remMerges, 'Rem never merged').toBeGreaterThan(0);
         expect(coverage.ultsPlayed, 'no ultimate was ever played').toBeGreaterThan(0);
-        expect(coverage.activates, 'no active item was ever used').toBeGreaterThan(0);
-        expect(coverage.drawCards, 'no draw card was ever cast').toBeGreaterThan(0);
-        expect(coverage.discards, 'no discard was ever made').toBeGreaterThan(0);
+        expect(coverage.spellsPlayed, 'no spell was ever played').toBeGreaterThan(0);
+        // A draw card is a spell that costs its tier's souls for the cards it nets; the AI plays
+        // one only when its look says they are worth that, so only a random seat is held to it —
+        // and to the discard a draw card owes, which nothing else in the game asks for.
+        if (Object.values(mix.policies).some((p) => p !== 'heuristic')) {
+          expect(coverage.drawCards, 'no draw card was ever played').toBeGreaterThan(0);
+          expect(coverage.discards, 'no discard was ever made').toBeGreaterThan(0);
+        }
       }
-      // Every seat opens on a first Active, places the heroes it draws and plays items onto
-      // them, making upgrades and evolving them; fallen heroes come back to the hand. A random
-      // seat plays a card held from an earlier turn.
+      // Every seat opens on a first Active, places the heroes it draws, plays equipment onto
+      // them — an upgrade evolving the item it is built from — and casts spells; fallen heroes
+      // come back to the hand. A random seat plays a card held from an earlier turn.
       expect(coverage.firstActives, 'no first Active was ever chosen').toBeGreaterThan(0);
       expect(coverage.heroesPlaced, 'no hero was ever put on the board from the hand').toBeGreaterThan(0);
       expect(coverage.plays, 'no card was ever played').toBeGreaterThan(0);
-      expect(coverage.upgradesMade, 'no play ever made an upgrade').toBeGreaterThan(0);
+      expect(coverage.spellsPlayed, 'no spell was ever played').toBeGreaterThan(0);
       expect(coverage.evolves, 'no upgrade ever evolved').toBeGreaterThan(0);
       expect(coverage.backToHand, 'no fallen hero ever came back to the hand').toBeGreaterThan(0);
       if (Object.values(mix.policies).some((p) => p !== 'heuristic')) {

@@ -20,38 +20,52 @@ with less to rebuild.
 
 - You build your deck on a screen that looks like today's shop: Weapon, Vitality and Spirit tabs, rows by tier, and the item icons. Tap an item to add a copy.
 - A deck has 16 items, with at most 4 copies of any one item. Any tier can go in.
-- A deck holds base items only (Patrick, 2026-11-09: "this card is a upgrade, should not appear in the starting deck"). An upgrade, an item whose card has `upgradesFrom`, reaches a deck only when its component is played (see Upgrades).
-- A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), each upgrade a build names counted as its base item.
-- You draft 4 heroes as now. They are shuffled into your deck, with an animation, so the deck has 20 cards.
+- A deck may hold any item, upgrades too (Patrick, 2026-11-15: upgrades are played "regularly" from the hand for less; see Upgrades). From 2026-11-09 until then a deck held base items only and an upgrade reached it when its component was played.
+- A player with no saved deck gets one built from their drafted heroes' builds (the per-hero builds the game has today), read across as they are, upgrades included.
+- You draft 3 heroes (Patrick, 2026-11-16; it was 4). They are shuffled into your deck, with an animation, so the deck has 19 cards. The board keeps its 4 spots, so a full squad leaves one for a unit ([hero-design.md](hero-design.md), "Units").
 
 ## Ready decks (2026-11-15)
 
-Patrick, 2026-11-15: "we need to have decks ready." Five decks head the Loadout, each a squad of
-four heroes and its 16 items (`src/cards/readyDecks.ts`). "Use deck" saves the squad and the deck
+Patrick, 2026-11-15: "we need to have decks ready." Six decks head the Loadout (five until
+2026-11-16, when Graveyard joined for Graves), each a squad of three heroes and its 16 items (`src/cards/readyDecks.ts`; squads were four until 2026-11-16, and each deck kept its items and let one hero go). "Use deck" saves the squad and the deck
 together. When that would replace picks or a deck of the player's own, the button asks once more.
 
-The recipe, the same for all five. No sim ran.
+The recipe, the same for all six. No sim ran. Rebuilt on 2026-11-15 for the one-play spells, the
+upgrades in the deck and the counters ([card-design.md](card-design.md), "Changed 2026-11-15").
 
-- **Base items only, at most 2 copies of one.** Pocket's rule, inside this game's cap of 4, so a
-  ready deck holds at least 8 different items.
+- **At most 2 copies of one.** Pocket's rule, inside this game's cap of 4, so a ready deck holds at
+  least 8 different items.
 - **8 tier-1, 6 tier-2, 2 tier-3: 56 souls.** The lane pays 2 a turn
   ([balance-model.md](balance-model.md) §7): by own turn 9 a side has earned about 30 souls and
   drawn about 11 items. At 3.5 souls an item, those 11 cost about 38, so most of what is drawn can
   be played and a skill or two paid for. A deck dealt from builds costs 50 to 76.
-- **No tier-4 base item.** The dear tiers arrive as upgrades: playing a base item shuffles what it
-  builds into the deck, and the upgrade evolves for the difference.
-- **Two Compress Cooldown in every deck.** The draw card (draw 2, discard 1), as every Pocket deck
-  carries its two Professor's Research.
-- **The rest from the squad's own builds**, read as base items, so each hero finds its items.
-- **A squad has a front, a carry and a helper.** No hero is in two decks; Shiv is in none.
+- **An upgrade beside the item it is built from.** An upgrade is a deck card like any other now:
+  played onto the hero wearing its component it costs the difference (Titanic Magazine over
+  Extended Magazine costs 2, Fortitude over Extra Health 6). Each deck carries one such line, and
+  never an upgrade without its component.
+- **A counter in every deck:** Counterspell, Debuff Reducer, Dispel Magic or Knockdown.
+- **Mostly equipment.** A spell is one play; equipment stays. A deck carries a few spells for the
+  turn that needs one, at most half the deck.
+- **One draw card.** Two Compress Cooldown were in every deck until 2026-11-15, and none for a day
+  after. Since 2026-11-16 each deck carries one, in place of a tier-2 card: it is worth its price
+  as one play (draw 3, discard 1; [card-design.md](card-design.md), "The Cooldown family"), and a
+  deck holds its three heroes, so a draw finds one a turn or two sooner. Graveyard carries two,
+  since Graves shuffles Ghouls into the deck as well.
+- **The rest from the squad's own builds**, so each hero finds its items.
+- **A squad has a front, a carry and a helper.** No hero is in two decks. Four heroes are in none: Shiv, Paige, Drifter and Dynamo.
 
 | Deck | Squad | Tier 1 (two of each) | Tier 2 | Tier 3 |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze, Paige | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Compress Cooldown, 2 Active Reload, Long Range, Opening Rounds | Burst Fire, Toxic Bullets |
-| Spirit Storm | Lady Geist, Seven, Lash, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Compress Cooldown, 2 Cold Front, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
-| Bulwark | Abrams, Viscous, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Compress Cooldown, 2 Bullet Lifesteal, Healing Booster, Battle Vest | Bullet Resilience, Torment Pulse |
-| Ambush | Silver, Yamato, Mirage, Drifter | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Compress Cooldown, 2 Kinetic Dash, Fleetfoot, Swift Striker | Tesla Bullets, Berserker |
-| Lockdown | Mo & Krill, Sinclair, Dynamo, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Compress Cooldown, 2 Slowing Hex, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
+| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Titanic Magazine (the upgrade), Long Range, Compress Cooldown, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
+| Spirit Storm | Lash, Seven, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Improved Spirit (the upgrade), Cold Front, Compress Cooldown, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
+| Bulwark | Abrams, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Bullet Lifesteal, Healing Booster, Compress Cooldown, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
+| Ambush | Silver, Yamato, Mirage | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Compress Cooldown | Tesla Bullets, Dispel Magic |
+| Lockdown | Mo & Krill, Sinclair, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Compress Cooldown, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
+| Graveyard | Viscous, Graves, Lady Geist | Extra Spirit, Spirit Strike, Extra Health, Healing Rite | 2 Compress Cooldown, Improved Spirit (the upgrade), Mystic Slow, Reactive Barrier, Debuff Reducer | Torment Pulse, Decay |
+
+The draw card took one tier-2 slot in each of the five older decks (2026-11-16): Opening Rounds
+(Gunline), the second Cold Front (Spirit Storm), Battle Vest (Bulwark), Split Shot (Ambush) and
+Spirit Sap (Lockdown, which keeps its spells at half the deck).
 
 How each wins:
 
@@ -64,6 +78,9 @@ How each wins:
   second swing.
 - **Lockdown** denies: Slowing Hex, Rusted Barrel, Knockdown and Silence Wave are free to use once
   worn, so its souls go to items and Wraith's gun finishes.
+- **Graveyard** grinds the rival's deck: Grasping Hands shuffles two Ghouls into Graves's deck, each
+  1 soul to play, and every Ghoul that falls discards the top of the rival's deck. Viscous holds
+  the lane, Lady Geist's spirit damage finishes, and the two Compress Cooldown find the Ghouls.
 
 ## Start of the match
 
@@ -107,28 +124,35 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 
 ## The draw cards
 
-Deadlock's three cooldown items become the draw engine. A hero wears one, casts it like any item
-spell, and then it waits 2 turns. Casting is free; you pay only to put the item on.
+Deadlock's three cooldown items are the draw cards: draw x, discard y (Patrick confirmed it on
+2026-11-15). Since that day each is a spell played once from the hand for its price (until then a
+hero wore one and cast it every 2 turns for free), and x and y were raised to suit one play.
 
 | Card | Tier | Price | Spell | Net cards |
 |---|---|---|---|---|
-| Compress Cooldown (`improved_cooldown`) | 2 | 4 souls | Draw 2, discard 1 | +1 |
-| Superior Cooldown | 3 | 8 souls | Draw 4, discard 2 | +2 |
-| Transcendent Cooldown | 4 | 16 souls | Draw 8, discard 4 | +4 |
+| Compress Cooldown (`improved_cooldown`) | 2 | 4 souls | Draw 3, discard 1 | +2 |
+| Superior Cooldown | 3 | 8 souls | Draw 5, discard 1 | +4 |
+| Transcendent Cooldown | 4 | 16 souls | Draw 8, discard 2 | +6 |
 
 - You can discard any cards in your hand, not only the new ones.
-- Each step doubles both the price and the cards you keep, so a soul buys the same at every tier.
+- Compress and Superior keep a card for every 2 souls. Transcendent keeps 6 for 16: a hand holds 10, so it cannot draw more.
+- The numbers were 2 / 1, 4 / 2 and 8 / 4 until 2026-11-15, when each became one play ([card-design.md](card-design.md), "The Cooldown family").
 
 ## Upgrades
 
-- When you play an item that Deadlock upgrades into a bigger one (cards carry `upgradesFrom`), the bigger card is made and shuffled into your deck. You see it appear and fly into the deck.
-  - Examples: Compress Cooldown → Superior Cooldown → Transcendent Cooldown; Extended Magazine → Titanic Magazine; Extra Health → Fortitude or Colossus.
-  - 46 such links exist between cards we have.
-- Where Deadlock has more than one upgrade, you pick which one is made.
-- Each copy you play makes one upgrade.
-- **Upgrades evolve:** play an upgrade on the hero who wears its lower item and it replaces that item, like evolving a Pokémon.
-  - You pay only the difference, as in Deadlock: Superior Cooldown over Compress Cooldown costs 4, not 8.
+Changed 2026-11-15 (Patrick: "instead of spawning another card when you play one, you just play
+them regularly; an upgrade costs much less").
+
+- An upgrade is a deck card like any other. Nothing is made or shuffled into the deck when a card is
+  played, and any item may be in a deck (the deck builder says "Evolves Extended Magazine for the
+  difference" on an upgrade's tile).
+- **Upgrades evolve:** play an upgrade on the hero who wears the item it is built from and it
+  replaces that item, like evolving a Pokémon.
+  - You pay only the difference, as in Deadlock: Titanic Magazine over Extended Magazine costs 2,
+    not 4. The old item goes to the discard pile.
   - On any other hero, the upgrade costs its normal price.
+- The rule is for equipment built from equipment. A spell (an active item) always costs its price,
+  and equipment built from a spell evolves nothing.
 
 ## A fallen hero
 
@@ -203,7 +227,10 @@ Built on `deck-and-heroes`. Where the build reads the plan one way of several:
   the slot, the real tile hidden until it lands; the AI's next move waits for
   the rival's flight plus `PLACE_SETTLE_MS` (500), not at all under reduced
   motion. The coach's gate steps aside while a hero is picked up.
-- Upgrades never start in a deck (2026-11-09). A legal deck holds base items
+- (History, 2026-11-09 to 2026-11-15; an upgrade is a deck card since —
+  `deckProblem` has no `'upgrade'` answer, `evolvesFrom` names the equipment
+  an upgrade evolves, and builds are read across as they are.) Upgrades never
+  start in a deck. A legal deck holds base items
   only (`deckProblem`'s `'upgrade'`, cards/decks.ts; `isBaseItem`,
   `baseItem` walks `upgradesFrom` down). The deck made from builds — the
   player's From builds and every AI deck — reads the builds across as before,

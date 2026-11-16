@@ -1,11 +1,12 @@
 /**
  * Ready decks — the Loadout's first row: five decks made to be picked and
- * played as they are (cards/readyDecks.ts), each a squad of four and its 16
+ * played as they are (cards/readyDecks.ts), each a squad of three and its 16
  * items. "Use deck" saves both: the squad the draft hands you first and the
  * deck every match deals. When that would replace picks or a deck of your
  * own, the button asks once more before it does.
  */
 import { useEffect, useState } from 'react';
+import { SQUAD_SIZE } from '@/engine/constants';
 import { cardName } from '@/cards';
 import { READY_DECKS, type ReadyDeck } from '@/cards/readyDecks';
 import type { CardId } from '@/engine/types';
@@ -80,7 +81,7 @@ export function ReadyDecks({ inUse, guarded, onUse, compact }: {
               )}
             </div>
 
-            <div aria-hidden style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 4 }}>
+            <div aria-hidden style={{ display: 'grid', gridTemplateColumns: `repeat(${SQUAD_SIZE}, minmax(0, 1fr))`, gap: 4 }}>
               {deck.heroes.map((h) => <Portrait key={h} heroId={h} />)}
             </div>
             <p style={{ ...text.label, margin: 0, fontSize: 10, letterSpacing: '0.08em', color: poster.inkDim, lineHeight: 1.3 }}>

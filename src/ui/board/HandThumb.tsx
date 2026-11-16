@@ -3,6 +3,7 @@ import type { CardId } from '@/engine/types';
 import { itemCard } from '@/cards';
 import { HERO_IMG_BASE } from '@/art/assets';
 import { PRICE } from '@/engine/constants';
+import { placeCost } from '@/engine/legality';
 import { Souls, scale } from '../hud';
 import { TierDiamonds, itemArtUrl } from '../card/ItemIcon';
 import { levelGreen, poster, shopInk } from '../poster';
@@ -78,7 +79,12 @@ export function HandThumb({ cardId, armed = false, unaffordable = false, level }
       {/* The price, half over the top-left corner: the soul wisp and the
           number in ink green on a paper tag (red: not enough souls). */}
       {data && (
-        <Souls n={PRICE[data.tier]} size={scale.label} tone={unaffordable ? 'short' : 'mint'} plate
+        <Souls n={data.price ?? PRICE[data.tier]} size={scale.label} tone={unaffordable ? 'short' : 'mint'} plate
+          style={{ position: 'absolute', top: -5, left: -5, pointerEvents: 'none' }} />
+      )}
+      {/* A unit (a Ghoul) is paid for too: its price where an item's is. A hero is free and prints none. */}
+      {!data && placeCost(cardId) > 0 && (
+        <Souls n={placeCost(cardId)} size={scale.label} tone={unaffordable ? 'short' : 'mint'} plate
           style={{ position: 'absolute', top: -5, left: -5, pointerEvents: 'none' }} />
       )}
       {/* An active item: the shop's bolt, half over the top-right corner. */}
