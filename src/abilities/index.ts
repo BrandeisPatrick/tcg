@@ -160,9 +160,9 @@ export interface AbilityDef {
   /** Ricochet the bearer's swing carries (the Ricochet item: 2). Summed with a
    *  `ricochet` status by `ricochetPower`, which the swing reads to bounce. */
   ricochet?: (self: CardInstance) => number;
-  /** Own turns off the waits the bearer starts: its skill's ('skill', never a
-   *  charged skill's: only the charge items speed those, Patrick 2026-11-15)
-   *  or its ultimate's ('ult') — the Cooldown family (Compress, Superior,
+  /** Own turns off the waits the bearer starts: its skill's ('skill', a
+   *  charged skill's too, added to its charge item's: Patrick 2026-11-16) or
+   *  its ultimate's ('ult') — the Cooldown family (Compress, Superior,
    *  Transcendent Cooldown, equipment again since 2026-11-16). The largest
    *  hook applies (`cooldownCut`); a wait never goes under 1. */
   cooldownCut?: (self: CardInstance, kind: 'skill' | 'ult') => number;
@@ -804,8 +804,10 @@ const eff_healing_booster: AbilityDef = {
   run: () => {},
 };
 // ----- The charge items (Extra Charge → Rapid Recharge) -----
-// The only cards that touch a charged skill's charges (Patrick, 2026-11-15:
-// "only these kind of items can allow charged skills to get faster"). Pure
+// The only cards that add a charged skill's charges (Patrick, 2026-11-15:
+// "only these kind of items can allow charged skills to get faster"; since
+// 2026-11-16 a Cooldown item's turn off adds to Rapid Recharge's, as the
+// charges come back on the skill's wait). Pure
 // hooks, read by `kitCharges` and `skillWait` (engine/query.ts); they do
 // nothing on a hero whose skill holds no charges. docs/card-design.md.
 // `base` is the AI's worth of the card on a hero with a charged skill (their

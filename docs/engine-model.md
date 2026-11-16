@@ -366,8 +366,8 @@ resolves, once, at its end.
   put on the bearer, saying so in the log), `ricochet` (the Ricochet item: the
   bearer's swing bounces, summed by `ricochetPower`), `debuffDuration` (Debuff
   Reducer), `cooldownCut` (the Cooldown family: own turns off the waits the
-  bearer's skill and ultimate start, the largest worn, never a charged skill's,
-  never below 1; read by `skillWait` and `ultWait`), `resist` (Bullet and Spirit Resilience) and
+  bearer's skill (a charged skill's too, added to `chargeHaste`) and ultimate
+  start, the largest worn, never below 1; read by `skillWait` and `ultWait`), `resist` (Bullet and Spirit Resilience) and
   `healingBoost` (Healing Booster). `attackPower`, `damageUnit`, `healUnit`,
   `addStatus`, `retreatCost` and the cooldowns (`activeCooldown`, the
   ultimate's in `useSkill`) ask every ability the hero carries; nothing else

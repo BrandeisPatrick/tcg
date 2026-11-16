@@ -4,8 +4,9 @@
  * they should be equipment to reduce CD"): Deadlock's passives, each a few
  * turns off the waits its bearer starts — Compress its skill's 1, Superior its
  * skill's 1 and its ultimate's 2, Transcendent its skill's 2 and its
- * ultimate's 3. Never a charged skill's (only the charge items speed those,
- * Patrick 2026-11-15); never under 1; two worn do not add up. Each evolves the
+ * ultimate's 3. A charged skill's too: its charges come back on that wait
+ * (Patrick, 2026-11-16), so the cut adds to a charge item's turn sooner. Never
+ * under 1; two Cooldown items worn do not add up. Each evolves the
  * one before, as in Deadlock. (The draw card is Golden Goose Egg now: hand.spec.)
  *
  * Board (freshReadyGame): P0's Active is made a Level 2 Viscous — The Cube is
@@ -77,12 +78,15 @@ describe('The Cooldown family is equipment that shortens waits', () => {
     expect(hero.cooldowns?.eff_ult_viscous).toBe(3);
   });
 
-  it('a charged skill\'s wait is the charge items\' alone: Kelvin\'s Frost Grenade keeps its 4, his ultimate does not', () => {
+  it('a charged skill\'s charges come back sooner too (2026-11-16): Kelvin\'s Frost Grenade 4 → 3, and 2 with Rapid Recharge as well', () => {
     const { G } = viscous();
     const kelvin = G.players['0'].bench[0] = makeHero('hero_kelvin', '0', 'bench', 1);
     giveItem(G, kelvin, SUPERIOR);
     const grenade = getAbility('skill_kelvin')!;
-    expect(skillWait(grenade, kelvin)).toBe(skillWait(grenade));
+    expect(skillWait(grenade)).toBe(4);
+    expect(skillWait(grenade, kelvin)).toBe(3);
+    giveItem(G, kelvin, 'rapid_recharge'); // the charge item's turn sooner adds to it
+    expect(skillWait(grenade, kelvin)).toBe(2);
     const shelter = ultimateCard('eff_ult_kelvin')!;
     expect(ultWait(shelter, kelvin)).toBe(ULT_WAIT[shelter.size] - 2);
   });

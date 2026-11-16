@@ -462,11 +462,12 @@ Deadlock; the budgets below still stand, the three left average 3.6). Skills hol
 and the charge items pass test 1. The fuzz oracle mirrors them from their
 printed text.
 
-**The rule.** Only the charge items add a charge to a skill or bring one back
-sooner. No other card shortens a charged skill's wait: the Cooldown family,
-equipment again since 2026-11-16, takes turns off every other wait but not
-this one. Refresher, whose verb is the reset, still sets a charged
-skill back to full with the cooldowns it clears.
+**The rule.** Only the charge items add a charge to a skill. Since 2026-11-16
+the Cooldown family brings charges back sooner too (Patrick: "cooldown should
+also work for charged skills, because they also regenerate based on CD"): its
+turns off add to Rapid Recharge's, never under a wait of 1. Refresher, whose
+verb is the reset, still sets a charged skill back to full with the cooldowns
+it clears.
 
 Source: the deadlock-api's shop list (`/v1/assets/items/by-type/upgrade`, read
 2026-11-15). Both are passive Spirit items, so both are equipment.
@@ -809,11 +810,14 @@ Cooldown 25% off abilities and items. Here a wait is 3 or 4 turns for a skill an
     (+1.5 casts, 4.5) and an ultimate 3 sooner most of a cast (7.5): 12, the
     bottom of 12–24. On a small ultimate (4 → 1) it is an ultimate every turn,
     one a turn for the side as always.
-- **Not a charged skill's wait.** Patrick, 2026-11-15: "only these kind of
-  items can allow charged skills to get faster" — the charge items. So the
-  Cooldown family is worth nothing to Kelvin's, Shiv's or Vindicta's skill (it
-  still cuts their ultimates), as the charge items are worth nothing on a skill
-  without charges.
+- **A charged skill's wait too** (Patrick, the same day: "cooldown should also
+  work for charged skills, because they also regenerate based on CD"). A
+  charge comes back on the skill's wait, so the turns off bring each charge
+  back sooner, and they add to Rapid Recharge's turn sooner (Kelvin's Frost
+  Grenade: 4, 3 with Superior, 2 with Rapid Recharge as well). On a charged
+  skill an extra charge back is an extra cast, as on any other, so the worth
+  above holds; with Rapid Recharge as well it is a cast nearly every turn,
+  which is left for testing with the rest.
 - **One at a time.** Two on one hero do not add up: the larger applies
   (`cooldownCut` takes the largest), as for the charge items. A wait never goes
   under 1. The ultimate's opening wait at the match's start is the size's: no

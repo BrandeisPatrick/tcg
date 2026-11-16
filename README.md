@@ -177,8 +177,8 @@ hand is skipped, and an empty deck simply draws nothing.
 
 **The draw card.** Golden Goose Egg, a tier-1 spell for 2 souls: "Draw 2 cards." Deadlock's
 three Cooldown items are equipment that shortens the bearer's waits (Compress: its skill waits 1
-turn less; Superior: skill 1, ultimate 2; Transcendent: skill 2, ultimate 3; never a charged
-skill's, and a wait never goes under 1).
+turn less; Superior: skill 1, ultimate 2; Transcendent: skill 2, ultimate 3). A charged skill's
+charges come back sooner too, on top of a charge item's; a wait never goes under 1.
 
 **Act.**
 
