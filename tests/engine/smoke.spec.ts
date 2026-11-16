@@ -7,6 +7,7 @@ import type { Ctx } from 'boardgame.io';
 import { configureReadyMatch, passTurn } from './_helpers';
 import { LANE_INCOME, STRUCTURES } from '@/engine/constants';
 import { structureHp } from '@/engine/query';
+import { CARDS_BY_ID } from '@/cards';
 
 // Boot the boardgame.io Client straight into a playable match (skip the draft).
 beforeAll(configureReadyMatch);
@@ -117,8 +118,9 @@ describe('Deadlock TCG engine smoke', () => {
     // The structures took real damage (both tracks start whole: a sum under twice a track is a kill's push or a lane's).
     const track = STRUCTURES.reduce((n, [, hp]) => n + hp, 0);
     expect(structureHp(G.players['0']) + structureHp(G.players['1'])).toBeLessThan(2 * track);
-    // Nothing came from an empty deck: the hands stay empty.
-    expect(G.players['1'].hand).toEqual([]);
+    // Nothing came from an empty deck: no item is in the hand. A hero may be — one that fell
+    // and came back when its wait was over (more fall now that a side may swing twice a turn).
+    expect(G.players['1'].hand.filter((c) => CARDS_BY_ID[c.cardId]?.type !== 'hero')).toEqual([]);
   });
 
   it('damage pipeline: spirit ignores armor, pure ignores shield', async () => {

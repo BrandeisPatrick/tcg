@@ -737,13 +737,17 @@ export function collectTransitionViolations(
       }
     }
     if (after.G.attackUsed) add('end-turn-flags', 'attackUsed', 'G.attackUsed is still set at the start of the next turn');
+    if (after.G.attackers?.length) add('end-turn-flags', 'attackers', 'G.attackers still names heroes at the start of the next turn');
     if (after.G.retreatUsed) add('end-turn-flags', 'retreatUsed', 'G.retreatUsed is still set at the start of the next turn');
   }
 
-  // The Act: once the turn's attack is made, nothing but ending the turn (and an
-  // owed promotion or trigger prompt, and the board's reveal bookkeeping) is accepted.
-  if (before.G.attackUsed && !['endTurn', 'promoteToActive', 'completeAction', 'useTrigger', 'passTrigger'].includes(move.name)) {
-    add('act-over', move.name, `${move.name} was accepted after the turn's attack had ended the Act`);
+  // One attack a hero a turn: an Active that has made its attack this turn makes
+  // no second one; the turn itself goes on after an attack (2026-11-16).
+  if (move.name === 'attack') {
+    const swinger = B.players[mover]?.active;
+    if (swinger && (B.attackers ?? []).includes(swinger.iid)) {
+      add('second-attack', swinger.iid, `${describeUnit(swinger)} attacked twice in a turn`);
+    }
   }
   // A choice owed comes first: while it is, nothing else is accepted.
   if (B.pendingActive !== undefined && !['chooseActive', 'completeAction'].includes(move.name)) {

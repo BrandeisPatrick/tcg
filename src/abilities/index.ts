@@ -52,6 +52,10 @@ export interface AbilityDef {
     // a card's swap (Warp Stone, Rescue Beam, Majestic Leap, Traveler) — never
     // a promotion off a fallen Active, nor a drag to the front by the rival.
     | 'onBearerStepIn'
+    // the bearer's skill, ultimate or spell just healed a unit (itself too):
+    // `target` is the one healed, `amount` what it got. Never on regen, lifesteal
+    // or a worn item's heal, as Deadlock's Healing Tempo says.
+    | 'onBearerHeals'
     // A hero's passive: an enemy hero was knocked out while the bearer stood in
     // its side's Active slot (Drifter's Bloodscent). `target` is the fallen hero.
     | 'onRivalFall'
@@ -85,9 +89,10 @@ export interface AbilityDef {
   /** A hero skill only: the uses it holds (a charged skill; absent, one). A
    *  use spends a charge, and the skill's wait brings them back one at a
    *  time, so two charges are two turns running and then the usual pace. The
-   *  four that have them are the four Deadlock gives charges: Serrated Knives
-   *  and Frost Grenade hold two there from the start, Lightning Ball and
-   *  Kinetic Pulse from their first upgrade (deadlock-api, 2026-11-15). */
+   *  ones that have them are skills Deadlock gives charges: Serrated Knives
+   *  and Frost Grenade hold two there from the start, and Assassinate two
+   *  (Lightning Ball and Kinetic Pulse, which had them from their first
+   *  upgrade, left the roster on 2026-11-15 and 2026-11-16). */
   charges?: number;
   /** The souls an optional trigger costs to use. No kit ability has a price
    *  since 2026-11-15 (skills and ultimates cost no souls); the field stays
@@ -588,7 +593,7 @@ const eff_return_fire: AbilityDef = {
 
 // Fleetfoot (canon T2 weapon active): a sprint you can shoot out of. TCG: your
 // Active gains Extra Attack 1 this turn and Swift — its Retreat this turn is
-// free (before the attack, which ends the turn's play).
+// free (before or after its attack: the turn goes on after one).
 const eff_fleetfoot: AbilityDef = {
   id: 'eff_fleetfoot', trigger: 'onPlay', target: 'noTarget',
   prompt: 'Fleetfoot — your Active gains Extra Attack 1 and a free Retreat this turn.',
@@ -823,6 +828,22 @@ const eff_healing_tempo: AbilityDef = {
   base: 4,
   healingBoost: () => 4,
   run: () => {},
+};
+// Healing Tempo's tempo (Patrick, 2026-11-16: "a hero healed this turn has
+// bonus attack and zero retreat cost, so Dynamo with Healing Tempo can
+// rearrange and attack"): Deadlock's "applying heal to yourself or an ally
+// grants the target bonus fire rate and bonus move speed". A hero the bearer's
+// skill, ultimate or spell heals gets +2 Bullet Power (the fire rate) and Swift
+// (the move speed: its next Retreat is free) for the turn. A status put on for
+// 1 lasts until its side's next turn begins, so a heal on the bearer's own
+// turn is that turn's. docs/card-design.md, "Changed 2026-11-16".
+const eff_healing_tempo_proc: AbilityDef = {
+  id: 'eff_healing_tempo_proc', trigger: 'onBearerHeals', target: 'self',
+  run: (G, _ctx, { target }) => {
+    if (!target || target.hp <= 0 || isRespawning(target)) return;
+    addStatus(G, target, 'weapon_power', 2, 1);
+    addStatus(G, target, 'swift', 1, 1);
+  },
 };
 
 // ----- Equipment reactive triggers -----
@@ -1443,12 +1464,12 @@ const eff_escalating_resilience: AbilityDef = {
 // again. The Extra Attack it grants on the turn's first swing rides on that
 // attack (actions/attack.ts counts them after the first swing; what a later
 // swing grants is swept with the rest), so it is once an attack. Not on a
-// bounce, nor in an ultimate's volley: no turn's attack is under way then.
+// bounce, nor in an ultimate's volley (`params.volley`): that is no attack.
 const eff_express_shot: AbilityDef = {
   id: 'eff_express_shot', trigger: 'onAttack', target: 'self',
   base: 2,
   run: (G, _ctx, { source, target, params }) => {
-    if (!source || !target || params?.bounce || !G.attackUsed || isRespawning(source)) return;
+    if (!source || !target || params?.bounce || params?.volley || isRespawning(source)) return;
     if (isRespawning(target) || !aboveHalf(target)) return;
     grantExtraAttacks(source, 1);
   },
@@ -1551,7 +1572,7 @@ function throughArmour(label: string): NonNullable<AbilityDef['attackBonus']> {
  *  ultimate's volley, which reaches every hero already. */
 function pierceBehind(label: string): AbilityDef['run'] {
   return (G, _ctx, { source, target, params }) => {
-    if (!source || !target || params?.bounce || !G.attackUsed || isRespawning(source)) return;
+    if (!source || !target || params?.bounce || params?.volley || isRespawning(source)) return;
     const behind = G.players[otherPlayer(seatOf(source))].bench
       .find((b) => !!b && b !== target && !isRespawning(b) && b.hp > 0 && !isUntargetable(b, 'attack'));
     if (!behind) return;
@@ -1930,7 +1951,7 @@ const eff_haunting_shot: AbilityDef = {
   id: 'eff_haunting_shot', trigger: 'onAttack', target: 'self',
   base: 3,
   run: (G, _ctx, { source, params }) => {
-    if (!source || params?.bounce || !G.attackUsed || isRespawning(source)) return;
+    if (!source || params?.bounce || params?.volley || isRespawning(source)) return;
     for (const c of liveBoardCards(G.players[otherPlayer(seatOf(source))])) {
       if (!heroData(c) || c.hp <= 0) continue;
       damageUnit(G, c, Math.ceil(c.hp / 3), 'spirit', 'Haunting Shot', { tag: 'burst' });
@@ -2233,17 +2254,24 @@ const skill_yamato: HeroAbilityDef = {
   },
 };
 
-// Dynamo — Kinetic Pulse: knocks the enemy team into the air. A flat 1: the
-// card prints no Spirit on it.
+// Dynamo — Rejuvenating Aurora (Patrick, 2026-11-16: "should heal a lot, cuz
+// most of the time it is the Active that got hurt, but still an AoE heal"): his
+// channelled heal on himself and every ally near him, here one heal on every
+// hero of his side. Priced on the hero it mostly lands on: 5 + Spirit (6.5 at
+// the budget's Spirit 1.5) is 3.3 points on a hurt Active alone, and the
+// budget's area heal (Healing Nova's: each hero × 0.4 for the share that
+// lands) reads (5 + 1.5) × 3 × 0.5 × 0.4 = 3.9 — the 3–4.5 of a skill that
+// waits 4. No charges: Deadlock gives it none (cooldown 48 s, its longest).
+// docs/hero-design.md, Dynamo.
 const skill_dynamo: HeroAbilityDef = {
-  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget', cooldown: 4, charges: 2,
-  name: 'Kinetic Pulse',
-  text: 'Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air).',
-  base: 1,
-  run: (G, ctx) => {
-    const front = enemyActiveOf(G, ctx.movingPlayer);
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, 1, 'spirit'); });
-    if (front) addStatus(G, front, 'disarm', 1, 1);
+  id: 'skill_dynamo', trigger: 'activate', target: 'noTarget', cooldown: 4,
+  name: 'Rejuvenating Aurora',
+  text: 'Your heroes heal {sp:5} each.',
+  base: 5,
+  scalesSpirit: true,
+  run: (G, ctx, { source }) => {
+    const heal = 5 + spi(source);
+    for (const c of liveBoardCards(G.players[ctx.movingPlayer])) healUnit(G, c, heal, 'Rejuvenating Aurora');
   },
 };
 
@@ -2752,7 +2780,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,
   eff_majestic_leap,
   // ----- Passive items: resists and healing boost while worn -----
-  eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo,
+  eff_bullet_resist, eff_spirit_resist, eff_healing_booster, eff_healing_tempo, eff_healing_tempo_proc,
   // ----- Passive items: the charge items -----
   eff_extra_charge, eff_rapid_recharge,
   // ----- Passive items: procs and hooks -----

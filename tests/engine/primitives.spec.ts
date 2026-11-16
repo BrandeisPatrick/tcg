@@ -776,16 +776,20 @@ describe('an attack that names its target', () => {
     expect(attackTargets(G, '0')).toEqual(foes.slice(0, 3)); // the fallen are not in the list
   });
 
-  it('keeps its reasons and their order: turn1, used, noActive, noTarget, then target, then cannot', () => {
+  it('keeps its reasons and their order: turn1, noActive, used, noTarget, then target, then cannot', () => {
     const { G, me, atk, foes } = duel(REACHER);
     const ghost = 'ghost-iid';
     G.turnNumber = 1;
     expect(attackBlocked(G, '0', ghost)).toBe('turn1');
     G.turnNumber = 2;
-    G.attackUsed = true; // the turn's one attack is made: whoever stands in the slot, it is spent
+    G.attackUsed = true;
+    G.attackers = ['a-hero-that-retreated']; // another hero's attack does not spend this one's
+    expect(attackBlocked(G, '0', foes[0].iid)).toBeNull();
+    G.attackers = [atk.iid]; // this Active's own attack, made: one a hero a turn
     expect(attackBlocked(G, '0', foes[0].iid)).toBe('used');
     expect(attackBlocked(G, '0', ghost)).toBe('used');
     G.attackUsed = false;
+    G.attackers = [];
     atk.skillUsedThisTurn = true; // an ability first does not spend it
     expect(attackBlocked(G, '0', foes[0].iid)).toBeNull();
     atk.skillUsedThisTurn = false;

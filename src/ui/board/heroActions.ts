@@ -3,9 +3,10 @@
  * turn opens with its income and its draw; then the player puts heroes from
  * the hand on the bench (free) and items from the hand on heroes (their
  * price), every hero may use one ability a turn (its skill or, from Level 2,
- * its ultimate, each for its souls; or an active item it wears, free), one
- * Retreat (the leaving hero's own price), and the Active makes the turn's
- * attack, which ends the turn. The board's glint, the
+ * its ultimate; or an active item it wears, free), one Retreat (the leaving
+ * hero's own price), and each hero standing in the Active slot may attack
+ * once; the turn goes on after an attack (attack, Retreat, attack). The
+ * board's glint, the
  * hero sheet's plates, the hand, the refusal stickers and the tutorial all ask
  * the engine's own `skillBlocked` / `activateBlocked` / `attackBlocked` /
  * `playBlocked` / `placeHeroBlocked` / `moveBlocked` (legality.ts) and
@@ -65,9 +66,6 @@ export function kitTag(hero: CardInstance, skillId: AbilityId): string {
   return `Waits ${skillWait(skill.ability)}`;
 }
 
-/** The line printed when the turn's attack has ended its Act. */
-export const ACT_OVER = 'The attack ended your turn';
-
 /** The line printed on a second ultimate in a turn: a side uses one a turn. */
 export const ONE_ULT_A_TURN = 'One ultimate a turn';
 
@@ -90,7 +88,6 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       return skill.kind === 'skill' ? 'Used its other skill this turn' : 'Used its skill this turn';
     }
     case 'trigger': return triggerMomentLine(hero, skill?.ability);
-    case 'actOver': return ACT_OVER;
     case 'locked': return `Unlocks at Level ${ULT_UNLOCK_LEVEL}`;
     case 'status': return 'Cannot use abilities (status)';
     case 'ultUsed': return ONE_ULT_A_TURN;
@@ -134,7 +131,7 @@ export function triggerMomentLine(hero?: CardInstance, ability?: AbilityDef): st
 export function attackBlockReason(block: AttackBlock, rival?: CardInstance | null): string {
   switch (block) {
     case 'turn1': return 'No attacks on Turn 1';
-    // One attack a turn: 'used' is the turn's attack, made.
+    // One attack a hero a turn: 'used' is this Active's, made.
     case 'used': return 'Attacked this turn';
     case 'cannot': return 'Cannot attack (status)';
     case 'noTarget': {
@@ -221,7 +218,6 @@ export function discardBlockReason(block: DiscardBlock): string {
 export function moveBlockReason(block: MoveBlock, cost?: number): string {
   switch (block) {
     case 'same': return 'That hero is already there';
-    case 'actOver': return ACT_OVER;
     case 'retreated': return 'One Retreat a turn';
     case 'empty': return 'There is no hero in that slot';
     case 'benchOnly': return 'That hero can only fight from the bench';
@@ -291,7 +287,6 @@ function refusalText(G: GameState, pid: PlayerID, a: Action, code: string): stri
   if (code === 'promotionOwed') return 'Choose who steps up first';
   if (code === 'activeOwed') return 'Put your first Active in the lane';
   if (code === 'discardOwed') return DISCARD_FIRST;
-  if (code === 'actOver') return ACT_OVER;
   switch (a.type) {
     case 'attack':
       if (code === 'draft') return 'Pick your heroes first';

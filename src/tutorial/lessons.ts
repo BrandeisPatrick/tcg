@@ -8,15 +8,16 @@
  * souls arrive and count up and a card is drawn, then the player plays from
  * the hand (a hero onto the bench for free, an item onto a hero for its price:
  * a tap on it and a tap on the hero) and the heroes act (abilities, a Retreat,
- * the attack — which ends the Act, and the turn's End follows on its own).
+ * an attack from each hero that stands in the lane), until the turn button
+ * ends it.
  *
  *   1  The Skill        Kelvin vs a hurt Lash. Frost Grenade ends it.
  *   2  The Hand         Yamato draws Extended Magazine (a tier 1 item, two of
  *                       the turn's five souls); he puts it on, and the swing
- *                       it adds is the kill — the attack ends the Act.
+ *                       it adds is the kill.
  *   3  Spells           Kelvin holds Cold Front, a gift: a spell. Played on
  *                       Lash for its souls it hits him and is discarded; the
- *                       one attack that ends the Act finishes him.
+ *                       attack finishes him.
  *   4  The Bench        Kelvin spent at one health, Yamato fresh behind him;
  *                       retreat, and Yamato's swing is the kill.
  *   5  The Map          Round 4: Frost Grenade's kill pushes the rival's
@@ -410,7 +411,7 @@ export const LESSONS: Lesson[] = [
     }),
     steps: [
       play('play', 'Put It On', 'extended_magazine', (v) => `Income paid you ${soulsText(LANE_INCOME)} (you hold ${souls(v)}) and drew you a card: Extended Magazine, tier 1, +1 Bullet Power. Its price, ${soulsText(itemPrice('extended_magazine'))}, is on its coin. Played, it also makes one of its upgrades for your deck: pick either.`),
-      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and it comes last: it ends the Act, and the turn's End follows on its own.`),
+      attack((v) => `${nameOf(mine(v))} swings for ${atkOf(mine(v))} now, and ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}. The attack is free, and the turn goes on after it: each hero in the lane swings once a turn.`),
     ],
   },
 
@@ -434,7 +435,7 @@ export const LESSONS: Lesson[] = [
     }),
     steps: [
       cast('play', 'Play the Spell', 'cold_front', (v) => `Cold Front waits in your hand, under the board — a gift, and a spell: its card bears a bolt, and its price is ${soulsText(itemPrice('cold_front'))}. ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}; Cold Front hits him for two.`),
-      attack((v) => `Cold Front is spent: it is on your discard pile. ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}. The attack ends the Act.`),
+      attack((v) => `Cold Front is spent: it is on your discard pile. ${nameOf(theirs(v))} is at ${hpOf(theirs(v))}, and ${nameOf(mine(v))} swings for ${atkOf(mine(v))}.`),
     ],
   },
 

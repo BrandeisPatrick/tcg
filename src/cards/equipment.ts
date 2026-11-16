@@ -116,7 +116,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   // heroes with its on-hit debuffs, so it scales with Extra Attack and with the
   // bearer's debuff gear.
   { id: 'ricochet', name: 'Ricochet', type: 'equipment', rarity: 4, slot: 'weapon', tier: 4, abilities: ['eff_ricochet'], text: "Ricochet 2: after the bearer's attack lands, every other enemy hero takes 2 bullet damage and the attack's on-hit debuffs." },
-  { id: 'healing_tempo',  name: 'Healing Tempo',  type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, upgradesFrom: 'healing_booster', bonus: { atk: 3 }, abilities: ['eff_healing_tempo'], text: '+3 Bullet Power. Healing Boost 4.' },
+  { id: 'healing_tempo',  name: 'Healing Tempo',  type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, upgradesFrom: 'healing_booster', bonus: { atk: 3 }, abilities: ['eff_healing_tempo', 'eff_healing_tempo_proc'], text: '+3 Bullet Power. Healing Boost 4. A hero the bearer\'s skill, ultimate or spell heals gets +2 Bullet Power and Swift this turn.' },
   { id: 'boundless_spirit', name: 'Boundless Spirit', type: 'equipment', rarity: 4, slot: 'spirit', tier: 4, upgradesFrom: 'improved_spirit', bonus: { spirit: 5, hp: 3 }, text: '+5 Spirit Power. +3 HP.' },
   { id: 'glass_cannon',   name: 'Glass Cannon',   type: 'equipment', rarity: 4, slot: 'weapon', tier: 4, bonus: { atk: 6, hp: -1 }, text: '+6 Bullet Power. −1 max HP.' },
 

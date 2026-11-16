@@ -358,10 +358,13 @@ function carriesReach(hero: CardInstance): boolean {
 
 /** Is an attack open to `pid`'s Active at all (whoever it might aim at, and
  *  whatever the swing would deal)? Not while a choice is owed (the opening's
- *  first Active, a draw card's discard). */
+ *  first Active, a draw card's discard), and not for an Active that has made
+ *  its attack this turn: each hero attacks once a turn, and the turn goes on
+ *  after it (Patrick, 2026-11-16). */
 export function attackOpenFor(G: GameState, pid: PlayerID): boolean {
   const active = G.players[pid].active;
-  return !G.draft && !G.pendingActive && !G.pendingDiscard && G.turnNumber > 1 && !G.attackUsed && !!active && !isRespawning(active);
+  return !G.draft && !G.pendingActive && !G.pendingDiscard && G.turnNumber > 1 && !!active && !isRespawning(active)
+    && !(G.attackers ?? []).includes(active.iid);
 }
 
 // ---------------------------------------------------------------------------
@@ -592,13 +595,12 @@ export function seatOnTurn(G: GameState): PlayerID | null {
 }
 
 /** What stops any move but the one owed (and ending the turn, but for those),
- *  in the order the choices come: the first Active, a promotion, a discard;
- *  then the attack having ended the Act. `move` is the move asked about. */
+ *  in the order the choices come: the first Active, a promotion, a discard.
+ *  An attack ends nothing (2026-11-16). `move` is the move asked about. */
 function owedOracle(G: GameState, move: string): string | null {
   if (G.pendingActive !== undefined && move !== 'chooseActive') return 'active-owed';
   if (G.pendingPromotion !== undefined && move !== 'promoteToActive') return 'promotion-owed';
   if (G.pendingDiscard !== undefined && move !== 'discard' && move !== 'promoteToActive') return 'discard-owed';
-  if (G.attackUsed && move !== 'endTurn' && move !== 'promoteToActive' && move !== 'attack') return 'act-over';
   return null;
 }
 

@@ -34,13 +34,14 @@
  * souls it keeps, the cards it holds. A turn is the player's to spend on cards from the
  * hand (equipment onto a hero, a spell on its target, each for its souls),
  * abilities (one per hero — a skill or an ultimate, neither of which costs
- * souls; one ultimate a turn for the side) and
- * one Retreat, and then one attack, which ends it: after the attack only
- * `endTurn` is left. Ending the turn never attacks, so the AI has to choose
- * `attack` itself. Every line before the attack is valued with the attack
- * still to come (if making it helps), so a card, a buff, a bench skill, an item
- * or a Retreat is weighed by the swing it sets up, and attacking early — which
- * forfeits everything else — only wins when nothing else adds. Among plays the
+ * souls; one ultimate a turn for the side), one Retreat, and an attack from
+ * each hero that stands in the Active slot; the turn goes on after an attack
+ * (Patrick, 2026-11-16), so attack, Retreat, attack is two swings. Ending the
+ * turn never attacks, so the AI has to choose `attack` itself. Every line is
+ * valued with the Active's attack still to come (if it has one left and making
+ * it helps), so a card, a buff, a bench skill, an item or a Retreat is weighed
+ * by the swing it sets up — a Retreat after the Active has swung by the swing
+ * of the hero it brings in. Among plays the
  * evaluation cannot tell apart, an item goes to the hero whose build lists it.
  *
  * Without lookahead (the eval framework's random agent, the MCTS bot's rollouts)
@@ -731,10 +732,10 @@ const ABOUT_TO_DIE = 0.35;
 /** A retreat's score by rule of thumb, or null when it gives no reason of its
  *  own: it has one when the hero stepping in is much fresher, when the Active
  *  is crowd-controlled (dead weight whatever its HP), or when it buys the
- *  turn's attack — the Active cannot make it (Stunned, Disarmed) and the hero
- *  who steps in can; `bought` is that swing's crude score, from
- *  `attackBought`, and is only counted for a hero not itself about to die in
- *  the lane. (A Retreat comes before the attack, and one a turn.) The lookahead
+ *  turn's attack — the Active cannot make one (Stunned, Disarmed, or it has
+ *  swung already) and the hero who steps in can; `bought` is that swing's
+ *  crude score, from `attackBought`, and is only counted for a hero not itself
+ *  about to die in the lane. (One Retreat a turn.) The lookahead
  *  also takes a retreat whose line — the swap, then the new Active's attack —
  *  beats attacking as things stand by RETREAT_MARGIN; anything else the AI
  *  still lists — the engine allows it — but ranks behind everything. */
@@ -753,8 +754,8 @@ function retreatPoints(active: CardInstance, incoming: CardInstance, bought: num
 }
 
 /** The crude score of the attack retreat `a` buys, or null when it buys none:
- *  the Active cannot make the turn's attack now (it is locked out: Stunned,
- *  Disarmed) and the hero the retreat brings in can. Asked of the engine — the
+ *  the Active cannot attack now (it is locked out — Stunned, Disarmed — or has
+ *  made its attack this turn) and the hero the retreat brings in can. Asked of the engine — the
  *  retreat is made on a copy and the attack gate read after it — not worked
  *  out here. */
 function attackBought(G: GameState, pid: PlayerID, a: Extract<Action, { type: 'moveHero' }>): number | null {
@@ -859,14 +860,14 @@ function answered(g: GameState): GameState {
 
 // ----- the lookahead ----------------------------------------------------------
 
-/** The position after `a`, on a copy. The attack ends the turn's Act and
- *  there is one a turn, so a line is "this move, then the turn's attack" while
- *  the attack is still open after it — and the attack only when making it
- *  leaves the better position (a swing into Return Fire may not). So a buff, a
- *  skill, an ultimate or a retreat is valued by the attack it sets up, and sees
- *  lethal; the attack itself is valued alone, everything it forfeits
- *  forfeited. `endTurn` is scored as the position stands: ending the turn
- *  forfeits the attack. */
+/** The position after `a`, on a copy. A line is "this move, then the Active's
+ *  attack" while that attack is still open after it — and the attack only when
+ *  making it leaves the better position (a swing into Return Fire may not). So
+ *  a buff, a skill, an ultimate or a retreat is valued by the attack it sets
+ *  up, and sees lethal; a retreat after the Active has swung, by the swing of
+ *  the hero it brings in. The attack itself is valued alone (what may follow it
+ *  is the next move's question). `endTurn` is scored as the position stands:
+ *  ending the turn forfeits any attack left. */
 function lineAfter(G: GameState, pid: PlayerID, a: Action, d: Dial = NORMAL): GameState {
   if (a.type === 'endTurn') return G;
   // A prompt the move opens (a hero of the rival's that may come back) is

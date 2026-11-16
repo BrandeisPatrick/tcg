@@ -40,14 +40,20 @@ export type AttackBlock = 'turn1' | 'used' | 'noActive' | 'cannot' | 'noTarget' 
 
 /** The reasons that stop the Active attacking whatever it aims at — the ones
  *  about the attacker and the turn, in the order `attackBlocked` checks them.
- *  A player makes one attack a turn (`G.attackUsed`), whoever stands in the
- *  Active slot; a hero that used its ability this turn may still make it. */
+ *  Each hero makes one attack a turn (`G.attackers`), from the Active slot; a
+ *  hero that used its ability this turn may still make it, and one that has
+ *  attacked may still use its ability. */
 function attackerBlock(G: GameState, pid: PlayerID): 'turn1' | 'used' | 'noActive' | null {
   if (!attackTurn(G)) return 'turn1';
-  if (G.attackUsed) return 'used';
   const active = G.players[pid].active;
   if (!active || isRespawning(active)) return 'noActive';
+  if (heroAttacked(G, active)) return 'used';
   return null;
+}
+
+/** `hero` has made its attack this turn (`G.attackers`). */
+export function heroAttacked(G: GameState, hero: CardInstance): boolean {
+  return !!G.attackers?.includes(hero.iid);
 }
 
 /** Everyone `active` could aim a basic attack at, were it free to make one: the
@@ -86,15 +92,15 @@ export function attackTargets(G: GameState, pid: PlayerID): CardInstance[] {
 
 /** Why `pid`'s Active cannot attack right now, or null when it can. One gate,
  *  read by the `attack` move, the forecast, the AI and the board, so they cannot
- *  drift apart. A player makes one basic attack a turn, from whoever stands in
- *  the Active slot when it is made — a Retreat before it lets the hero who steps
- *  in make it — and the attack ends the turn's Act. `targetIid` names who is to
+ *  drift apart. Each hero makes one basic attack a turn, from the Active slot,
+ *  and the turn goes on after it (Patrick, 2026-11-16): a Retreat after the
+ *  attack lets the hero who steps in make its own. `targetIid` names who is to
  *  be swung at; left out, it is the first of `attackTargets` (the rival Active,
  *  unless the hero has reach). Checked in this order:
  *   - 'turn1'    Turn 1 has no attack (the first mover forgoes first strike).
- *   - 'used'     the turn's attack has been made (`G.attackUsed`).
  *   - 'noActive' there is no living Active. A fallen one is replaced first —
- *                the hero who steps up may make the attack.
+ *                the hero who steps up may make its attack.
+ *   - 'used'     the Active has made its attack this turn (`G.attackers`).
  *   - 'noTarget' there is no legal target: the rival has no living Active to
  *                swing at (or, with reach, no living hero), or all of them are
  *                untargetable (a Dome) — and no Mid-Boss stands in the pit.
@@ -124,7 +130,7 @@ function ultCharged(hero: CardInstance): boolean {
   return !charge || charge.have >= charge.need;
 }
 
-export type SkillBlock = 'noSkill' | 'trigger' | 'actOver' | 'down' | 'locked' | 'used' | 'status' | 'ultUsed' | 'cooldown' | 'charge' | 'souls' | 'hp' | 'target';
+export type SkillBlock = 'noSkill' | 'trigger' | 'down' | 'locked' | 'used' | 'status' | 'ultUsed' | 'cooldown' | 'charge' | 'souls' | 'hp' | 'target';
 
 /** What one of a hero's kit abilities may be aimed at (`skillId` names it —
  *  its skill or its ultimate; left out, the hero's first skill): the live
@@ -145,7 +151,7 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
 /**
  * Why `hero` cannot use one of its kit abilities right now, or null when it
  * can: a hero with that ability (`skillId`: its skill or its ultimate; left
- * out, its first skill), in a turn whose attack has not ended the Act, alive,
+ * out, its first skill), alive,
  * its ultimate unlocked, that has not used an ability this turn (one per hero
  * per turn, skill and ultimate alike), free of the statuses that lock it, no
  * ultimate used by its side this turn if it is one, the ability off its wait
@@ -155,7 +161,6 @@ export function skillTargets(G: GameState, pid: PlayerID, hero: CardInstance, sk
  *  - 'trigger'  it is an optional trigger ("When Victor falls, you may use
  *               this"): it is used at its moment, through the trigger prompt
  *               (`triggerBlocked`), never from its button.
- *  - 'actOver'  the turn's attack has been made: it ends the Act.
  *  - 'down'     it is a corpse on the respawn timer.
  *  - 'locked'   it is the hero's ultimate and the hero is below ULT_UNLOCK_LEVEL.
  *  - 'used'     it has used an ability this turn (any of its kit).
@@ -180,7 +185,6 @@ export function skillBlocked(G: GameState, pid: PlayerID, hero: CardInstance, ta
   const skill = resolveSkill(hero, skillId);
   if (!skill) return 'noSkill';
   if (skill.ability.optional) return 'trigger';
-  if (G.attackUsed) return 'actOver';
   if (isRespawning(hero)) return 'down';
   if (skill.kind === 'ult' && (hero.level ?? 1) < ULT_UNLOCK_LEVEL) return 'locked';
   if (hero.skillUsedThisTurn) return 'used';
@@ -505,11 +509,10 @@ export function retreatCost(G: GameState, pid: PlayerID): number {
   return Math.max(0, heroRetreat(leaving) - retreatDiscount(leaving));
 }
 
-export type MoveBlock = 'same' | 'actOver' | 'empty' | 'benchOnly' | 'down' | 'rooted' | 'retreated' | 'souls' | 'illegal';
+export type MoveBlock = 'same' | 'empty' | 'benchOnly' | 'down' | 'rooted' | 'retreated' | 'souls' | 'illegal';
 
 /** Why `pid` cannot swap the heroes in two slots (0 = Active, 1..3 = bench),
- *  or null when they can. Nothing moves once the turn's attack has ended the
- *  Act. A swap trades two OCCUPIED slots: a hole is nobody to trade with (the
+ *  or null when they can. A swap trades two OCCUPIED slots: a hole is nobody to trade with (the
  *  Active walking into a hole would leave the lane empty), and slots outside
  *  0..3 are no slots. A bench-only hero (`flags.benchOnly`, which no card sets
  *  now) never takes the Active slot, whichever side of the swap it is on. Swapping the Active with a bench hero
@@ -517,13 +520,13 @@ export type MoveBlock = 'same' | 'actOver' | 'empty' | 'benchOnly' | 'down' | 'r
  *  blocks 'move', on either side of the swap), the player has not retreated
  *  this turn (one a turn), and it costs `retreatCost` souls. Bench-to-bench
  *  swaps are free, and a Rooted hero may still be moved between bench slots. A
- *  Retreat comes before the attack: the hero who steps in may make it. (The
+ *  Retreat may come before an attack or after one: the hero who steps in may
+ *  make its own (attack, Retreat, attack). (The
  *  forced promotion of a fallen Active is not a swap: `promoteBlocked`.) */
 export function moveBlocked(G: GameState, pid: PlayerID, fromSlot: number, toSlot: number): MoveBlock | null {
   const isSlot = (s: number) => s === 0 || s === 1 || s === 2 || s === 3;
   if (!isSlot(fromSlot) || !isSlot(toSlot)) return 'illegal';
   if (fromSlot === toSlot) return 'same';
-  if (G.attackUsed) return 'actOver';
   const ps = G.players[pid];
   const get = (s: number) => (s === 0 ? ps.active : ps.bench[s - 1]);
   const a = get(fromSlot);
@@ -592,9 +595,8 @@ export function draftPickBlocked(G: GameState, pid: PlayerID, heroId: string): D
  * a seat's Active has fallen and a bench hero can step up — for that seat's
  * bench, made from either seat), so nothing, the end of the turn included,
  * happens around a corpse in the lane; a draw card's discard
- * (`G.pendingDiscard`: `discard`, by the player who owes it). Once the turn's
- * attack is made ('actOver') nothing is legal but ending the turn and a
- * promotion.
+ * (`G.pendingDiscard`: `discard`, by the player who owes it). An attack ends
+ * nothing: the turn goes on after it (Patrick, 2026-11-16).
  */
 export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
   if (!G.players[pid]) return 'noPlayer';
@@ -609,7 +611,6 @@ export function blocked(G: GameState, pid: PlayerID, a: Action): string | null {
     if (!owed) return 'promotionOwed';
   }
   if (G.pendingDiscard && a.type !== 'discard' && a.type !== 'promoteToActive') return 'discardOwed';
-  if (G.attackUsed && a.type !== 'endTurn' && a.type !== 'promoteToActive' && a.type !== 'attack') return 'actOver';
   switch (a.type) {
     case 'attack':
       return G.draft ? 'draft' : attackBlocked(G, pid, a.targetIid);

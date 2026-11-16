@@ -102,11 +102,13 @@ corpses and on heroes waiting in the hand too) and the fallen heroes' waits
 tick; a hero whose wait is over goes back to the hand (`heroToHand`); then the
 side draws DRAW_PER_TURN (`drawCards`: a draw into a hand of MAX_HAND is
 skipped, an empty deck draws nothing and nothing else happens). A turn has no
-steps: the player plays from the hand, uses abilities and retreats until the
-turn's attack, which ends it.
+steps: the player plays from the hand, uses abilities, retreats once and
+attacks with each hero that stands in the Active slot (once a hero a turn,
+`G.attackers`), in any order, until `endTurn`. An attack does not end the turn
+(Patrick, 2026-11-16), so attack, Retreat, attack is two swings.
 
 **The hand.** It holds heroes and items (zone `'hand'`); every move from it
-is `pid`'s own turn's, before the attack.
+is `pid`'s own turn's, before or after an attack.
 - `placeHero(cardIid, toActive?, slot?)` puts a hero on the bench slot named
   (`slot` 1-3, free: not held, not one a riding Rem will come back to), else
   its first free bench slot (`freeBenchSlot`) or, `toActive`, into an EMPTY

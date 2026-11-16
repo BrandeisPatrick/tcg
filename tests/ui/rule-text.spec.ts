@@ -347,16 +347,16 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     const found = abilitiesReadingSpirit();
     for (const id of [
       'skill_mo_krill', 'skill_kelvin', 'skill_lady_geist', 'skill_lash', 'skill_paige', 'skill_rem',
-      'skill_seven', 'skill_shiv', 'skill_yamato', 'skill_vindicta', 'status_flying', 'passive_mirage_djinns_mark',
+      'skill_seven', 'skill_shiv', 'skill_yamato', 'skill_dynamo', 'skill_vindicta', 'status_flying', 'passive_mirage_djinns_mark',
       'eff_cold_front', 'eff_silence_glyph',
       'eff_ult_abrams', 'eff_ult_dynamo', 'eff_ult_kelvin', 'eff_ult_lady_geist', 'eff_ult_lash', 'eff_ult_mo_krill',
       'eff_ult_paige', 'eff_ult_seven', 'eff_ult_shiv', 'eff_ult_viscous', 'eff_ult_wraith',
       'eff_ult_warden', 'eff_ult_drifter',
     ]) expect(found.has(id), id).toBe(true);
-    // A flat number reads no Spirit: Kinetic Pulse's 1, The Cube, Full Auto, Rabbit Hex,
+    // A flat number reads no Spirit: The Cube, Full Auto, Rabbit Hex,
     // Willpower, Naptime, Bullet Dance (Haze's Attack), Shadow Transformation, Traveler.
     for (const id of [
-      'skill_dynamo', 'skill_viscous', 'skill_wraith', 'skill_sinclair', 'skill_warden',
+      'skill_viscous', 'skill_wraith', 'skill_sinclair', 'skill_warden',
       'eff_ult_rem', 'eff_ult_haze', 'eff_ult_yamato', 'eff_ult_mirage',
       'eff_ult_vindicta', // Flight puts up the Flying status; the status's own proc reads Spirit
     ]) expect(found.has(id), id).toBe(false);

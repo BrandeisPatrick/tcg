@@ -92,9 +92,9 @@ const ART = 44;
 const PASSIVE_ART = 26;
 
 /** Your Active's attack, offered on its sheet: a swing at the rival Active for
- *  its bullet damage. Free and one-way, one a turn — and it ends the turn's
- *  Act, so abilities and a Retreat come before it (a hero may use its ability
- *  and then attack). A hero with reach may name any living rival: the row
+ *  its bullet damage. Free and one-way, one a hero a turn; the turn goes on
+ *  after it (abilities, cards, a Retreat and the next Active's own attack).
+ *  A hero with reach may name any living rival: the row
  *  then still speaks for the default target (the first the engine lists), and
  *  tapping it closes the sheet and asks who (`onAttack`; the board arms the
  *  targeting, see board/attackAim.ts). */
@@ -326,7 +326,7 @@ export function HeroDetailSheet({
           ink={weapon} mode={mode} calm={calm}
           name="Attack"
           art={<SwordIcon size={20} color={poster.cream} />}
-          line={usable || mode === 'quiet' ? `Deal ${dmg} bullet damage. Ends your turn.` : undefined}
+          line={usable || mode === 'quiet' ? `Deal ${dmg} bullet damage.` : undefined}
           right={<span style={NUMBER(T.display)}>{dmg}</span>}
           reason={mode === 'used' ? 'Used' : mode === 'blocked' ? attack.blockedReason : undefined}
           reasonBelow

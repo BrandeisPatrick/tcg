@@ -74,14 +74,15 @@ describe('a spell is played from the hand, and spends no hero\'s ability', () =>
     expect([vindicta.skillUsedThisTurn ?? false, haze.skillUsedThisTurn ?? false]).toEqual([false, false]);
   });
 
-  it('the turn\'s attack ends the Act: no spell after it', () => {
+  it('an attack does not end the turn (2026-11-16): a spell after it is played as before it', () => {
     const G = freshReadyGame();
     const front = giveCard(G, '0', 'cold_front');
     G.players['0'].souls = 20;
     G.players['1'].active!.hpMax = G.players['1'].active!.hp = 20;
     makeAttack(G, '0');
-    expect(blocked(G, '0', { type: 'playCard', cardIid: front.iid, heroIid: G.players['1'].active!.iid })).toBe('actOver');
-    expect(legalActions(G, '0')).toEqual([{ type: 'endTurn' }]);
+    const cast = { type: 'playCard' as const, cardIid: front.iid, heroIid: G.players['1'].active!.iid };
+    expect(blocked(G, '0', cast)).toBeNull();
+    expect(legalActions(G, '0')).toContainEqual(cast);
   });
 
   it('the refusals: a card not in the hand, no souls, a target the spell may not be played on, no target named, nobody standing to cast it', () => {

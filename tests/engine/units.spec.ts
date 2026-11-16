@@ -224,6 +224,25 @@ describe('a hero is never discarded: it goes back into the deck, which is shuffl
     expect(G.players['0'].discard).not.toContain(hero);
     expect(G.pendingDiscard).toBeUndefined();
   });
+
+  it('a hero back from a fall still wears its items in the hand: they are discarded, and it goes into the deck carrying nothing', () => {
+    const G = freshReadyGame();
+    G.players['0'].souls = 4;
+    const hero = giveCard(G, '0', 'hero_yamato');
+    // The item it wore when it fell: taken out of the hand and put on it.
+    const worn = giveCard(G, '0', 'extra_health');
+    G.players['0'].hand = G.players['0'].hand.filter((c) => c !== worn);
+    Object.assign(worn, { zone: 'attached', attachedTo: hero.iid });
+    hero.attached = [worn];
+    const draw = giveCard(G, '0', 'improved_cooldown');
+    stackDeck(G, '0', ['grit', 'grit', 'grit']);
+    act(G, '0', { type: 'playCard', cardIid: draw.iid });
+    act(G, '0', { type: 'discard', cardIids: [hero.iid] });
+    expect(hero.zone).toBe('deck');
+    expect(hero.attached ?? []).toEqual([]);
+    expect(G.players['0'].discard.map((c) => c.iid)).toContain(worn.iid);
+    expect(worn.zone).toBe('discard');
+  });
 });
 
 describe('Graves', () => {

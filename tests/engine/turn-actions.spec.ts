@@ -115,27 +115,31 @@ describe('turn actions: the attack is a move', () => {
     expect(haze.statuses.some((s) => s.id === 'bleed')).toBe(false);
   });
 
-  it('the attack ends the Act: after it a bench skill, a spell, an item from the hand and a retreat are refused; endTurn is not', () => {
+  it('an attack does not end the turn (2026-11-16): after it a bench skill, a spell, an item and a Retreat are made, and the hero the Retreat brings in attacks too — the one that swung swings no more', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    me.souls = 5;
+    me.souls = 20;
     const rival = sturdyRival(G);
     const grit = giveCard(G, '0', 'grit'); // a spell in the hand
     const card = giveCard(G, '0', 'extended_magazine');
-    expect(blocked(G, '0', { type: 'playCard', cardIid: grit.iid })).toBeNull();
-    expect(blocked(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: me.active!.iid })).toBeNull();
+    const haze = me.active!;
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
+    expect(attackBlocked(G, '0')).toBe('used'); // Haze has swung
     const lash = me.bench[1]!; // Lash carries a skill; the Active (Haze) is passive-only
     const hpBefore = rival.hp;
-    expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).toBe('INVALID_MOVE');
-    expect(rival.hp).toBe(hpBefore);
-    expect(runMove('playCard', G, '0', grit.iid)).toBe('INVALID_MOVE');
-    expect(blocked(G, '0', { type: 'playCard', cardIid: grit.iid })).toBe('actOver');
-    expect(runMove('playCard', G, '0', card.iid, me.active!.iid)).toBe('INVALID_MOVE');
-    expect(blocked(G, '0', { type: 'playCard', cardIid: card.iid, heroIid: me.active!.iid })).toBe('actOver');
-    expect(me.hand).toEqual([grit, card]); // neither was played
-    expect(runMove('moveHero', G, '0', 1, 0)).toBe('INVALID_MOVE');
-    expect(me.souls).toBe(5);
+    expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).not.toBe('INVALID_MOVE');
+    expect(rival.hp).toBeLessThan(hpBefore);
+    expect(runMove('playCard', G, '0', grit.iid)).not.toBe('INVALID_MOVE');
+    expect(runMove('playCard', G, '0', card.iid, haze.iid)).not.toBe('INVALID_MOVE');
+    expect(me.hand).toEqual([]); // both were played
+    expect(runMove('moveHero', G, '0', 1, 0)).not.toBe('INVALID_MOVE'); // Haze out, Vindicta in
+    expect(me.active!.iid).not.toBe(haze.iid);
+    expect(attackBlocked(G, '0')).toBeNull(); // Vindicta has not swung
+    const hpMid = rival.hp;
+    expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
+    expect(rival.hp).toBeLessThan(hpMid);
+    expect(attackBlocked(G, '0')).toBe('used');
+    expect(runMove('moveHero', G, '0', 1, 0)).toBe('INVALID_MOVE'); // one Retreat a turn
     expect(blocked(G, '0', { type: 'endTurn' })).toBeNull();
   });
 
@@ -194,16 +198,16 @@ describe('turn actions: abilities, then the attack', () => {
     expect(me.souls).toBe(5); // Essence Bomb costs no souls; the attack is free
   });
 
-  it('the Active that attacked cannot use its skill afterwards, and neither can a bench hero', () => {
+  it('the Active that attacked may still use its skill afterwards, and so may a bench hero: the turn goes on', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
     me.souls = 5;
     me.active = makeHero('hero_lady_geist', '0', 'active', 0);
     const rival = sturdyRival(G);
     expect(runMove('attack', G, '0')).not.toBe('INVALID_MOVE');
-    expect(runMove('useSkill', G, '0', me.active.iid, rival.iid)).toBe('INVALID_MOVE');
-    expect(runMove('useSkill', G, '0', me.bench[1]!.iid, rival.iid)).toBe('INVALID_MOVE'); // Lash
-    expect(me.souls).toBe(5);
+    expect(runMove('useSkill', G, '0', me.active.iid, rival.iid)).not.toBe('INVALID_MOVE');
+    expect(runMove('useSkill', G, '0', me.bench[1]!.iid, rival.iid)).not.toBe('INVALID_MOVE'); // Lash
+    expect(me.souls).toBe(5); // skills cost no souls
   });
 
   it('two different heroes each use their skill in one turn, for no souls; the same hero cannot twice', () => {
@@ -341,7 +345,8 @@ describe('AI: the attack is a choice', () => {
     const cases: [AttackBlock | null, (G: GameState) => void][] = [
       [null, () => {}],
       ['turn1', (G) => { G.turnNumber = 1; }],
-      ['used', (G) => { G.attackUsed = true; }],
+      ['used', (G) => { G.attackUsed = true; G.attackers = [G.players['1'].active!.iid]; }],
+      [null, (G) => { G.attackUsed = true; G.attackers = ['a-hero-that-retreated']; }], // another hero's attack does not spend this one's
       ['noActive', (G) => { G.players['1'].active!.respawnTurnsLeft = 2; }],
       [null, (G) => { G.players['1'].active!.skillUsedThisTurn = true; }], // an ability does not spend the attack
       ['noTarget', (G) => { G.players['0'].active!.respawnTurnsLeft = 2; }],

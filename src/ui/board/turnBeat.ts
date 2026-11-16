@@ -44,21 +44,19 @@ interface Edge {
  * The beat a turn is on. As a turn hands over: the End beat of the turn that
  * ended, still its player's, then the Income beat of the one that began; a
  * board that mounts on a match's first turn opens on its Income too. Then the
- * turn's own Act — and End once its attack is made, for the attack ends the
- * turn's play and the turn ends on its own (`attackMade`: the attack made, its
- * walk over). The hand-over is read in the render that first shows the new
+ * turn's own Act until the turn is ended (an attack does not end it, Patrick
+ * 2026-11-16). The hand-over is read in the render that first shows the new
  * turn, so not one frame of the new turn's Act slips out before its beats.
  * Every reader of the spine calls this with the same inputs, so they agree.
  */
-export function useTurnBeat({ turn, isMyTurn, attackMade }: {
+export function useTurnBeat({ turn, isMyTurn }: {
   /** The engine turn; under 1 while there is no match turn yet (the draft). */
   turn: number;
   isMyTurn: boolean;
-  attackMade: boolean;
 }): BeatView {
   const [seen, setSeen] = useState({ turn, mine: isMyTurn });
   const [edge, setEdge] = useState<Edge | null>(
-    () => (turn >= 1 && !attackMade ? { beat: 'income', turn, mine: isMyTurn } : null),
+    () => (turn >= 1 ? { beat: 'income', turn, mine: isMyTurn } : null),
   );
   // A new turn: its hand-over starts in this very render (a state update
   // during render re-renders at once, before anything is committed). The
@@ -82,5 +80,5 @@ export function useTurnBeat({ turn, isMyTurn, attackMade }: {
     return () => clearTimeout(t);
   }, [edge]);
   if (shown) return { beat: shown.beat, turn: shown.turn, mine: shown.mine, edge: true };
-  return { beat: attackMade ? 'end' : 'act', turn, mine: isMyTurn, edge: false };
+  return { beat: 'act', turn, mine: isMyTurn, edge: false };
 }

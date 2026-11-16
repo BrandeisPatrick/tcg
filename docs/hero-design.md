@@ -41,7 +41,7 @@ after 2 turns, keeping its level (section 7).
 | Growth | Each level's points are split between Attack, HP and Spirit: gun heroes into Attack, spirit heroes into Spirit, tanks into HP. This replaces the flat +1/+1/+1. |
 | Retreat | From Pokémon: the souls it costs to swap the Active with a bench hero. 0 for very mobile heroes, 1 for most, 2 for slow heavy ones. |
 | Weakness | **None.** Patrick: "I don't like weak." No hero takes extra damage from a type. |
-| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Four skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, Kinetic Pulse, and since 2026-11-16 Vindicta's Assassinate, which waits 5; Lightning Ball was one until Seven's skill became Static Charge, 2026-11-15): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
+| Kit | Exactly one **skill** or one **passive**, plus an **ultimate**. A skill costs no souls (Patrick, 2026-11-15). After a use it waits 3 turns, or 4 for the heavier ones (area damage with a rider, or a turn denied). Three skills are **charged**, as they are in Deadlock (Serrated Knives, Frost Grenade, and since 2026-11-16 Vindicta's Assassinate, which waits 5; Lightning Ball was one until Seven's skill became Static Charge, 2026-11-15, and Kinetic Pulse until Dynamo's became Rejuvenating Aurora, 2026-11-16): they hold 2 uses, and the wait brings them back one at a time. A passive is always on. Use the hero's real Deadlock ability names. |
 | Ultimate | **A button printed on the hero card**, like a Pokémon attack, not a card in the deck (Patrick, 2026-11-09). It shows the hero's own Deadlock ultimate icon: the deadlock-api's `signature4` ability for that hero, field `image_webp`. Unlocks at Level 2. Costs no souls (Patrick, 2026-11-15), and a side uses **one ultimate a turn**. It waits 4 (small), 6 (medium) or 8 (large) turns by size: after each use, and from the match's first turn, so a large one is first ready on its side's turn 8. |
 | Charged ultimate | For heroes like Victor and Silver (Patrick, 2026-11-09). It has no opening wait: it is ready once the hero has taken (Victor, 10) or dealt (Silver, 8) enough damage. The count starts over after use, and it then waits its size's turns like any ultimate. (Until 2026-11-15 it had a soul price, 20 and 16, that each damage brought down by 1.) |
 
@@ -412,12 +412,16 @@ HP 5 · Attack 1 · Retreat 0 · per level +1 HP +2 Spirit
 
 ### Support (7)
 
-**Dynamo** · in the game today — peaks mid, many targets; mix tank 1 · damage 1 · control 3 · support 2  
+**Dynamo** · in the game today — peaks mid, many targets; mix tank 1 · damage 1 · control 2 · support 3  
 HP 5 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit
-- Skill, 2 charges, 4 turns each — **Kinetic Pulse**: Deal 1 spirit damage to every enemy, and the enemy Active is Disarmed 1 turn (knocked into the air).
+- Skill, waits 4 — **Rejuvenating Aurora**: Your heroes heal 5✦ each.
 - Ultimate, large, waits 8 — **Singularity**: Stun every enemy 1 turn. Deal 2✦ spirit damage to each.
-- Why: Dynamo locks down the whole enemy team: Kinetic Pulse knocks them up, and one Singularity stuns everyone.
-- Changed from today: Attack 3 to 1 and HP 6 to 5 (spirit hero, tank 1); the heal-and-buff skill becomes Kinetic Pulse because control 3 needs control in the skill. Singularity is one turn that stuns every enemy instead of a 3-turn channel.
+- Why: Dynamo keeps his whole team standing with Rejuvenating Aurora, and one Singularity stuns everyone.
+- Changed from today: Attack 3 to 1 and HP 6 to 5 (spirit hero, tank 1). Singularity is one turn that stuns every enemy instead of a 3-turn channel.
+- **Changed 2026-11-16 (Patrick): "Dynamo skill should be the healing aura, which should heal a lot cuz most of time it is gonna be the active hero got hurt, but still should be an AoE heal."** Kinetic Pulse (1 spirit damage to every enemy and a Disarm on the Active, 2 charges) gives way to Deadlock's Rejuvenating Aurora, his heal on himself and every ally near him. The mix goes control 3 · support 2 → control 2 · support 3: his control is Singularity's now.
+  - **The number.** Priced on the hero it mostly lands on, the hurt Active: 5 + Spirit, 6.5 at the budget's Spirit 1.5, is 3.3 points there alone. Read as an area heal the way Healing Nova is (each hero × 0.4 for the share of an area heal that lands): (5 + 1.5) × 3 × 0.5 × 0.4 = 3.9. A skill that waits 4 is worth 3–4.5, so it sits at the top of that band, which is "a lot": 5 at Level 1, 9 at Level 3, against Kelvin's Frost Grenade's 1 + Spirit and Healing Nova's 5.
+  - **The wait.** 4 turns, the heavier skills' wait, and no charges: Deadlock gives it none (48 s, Dynamo's longest cooldown), and Kinetic Pulse's two were its own.
+  - Healing Tempo (card-design.md, 2026-11-16) turns the heal into tempo: a hero it heals that wears it swings harder this turn and retreats for nothing.
 
 **Kelvin** · in the game today — peaks mid, many targets; mix tank 2 · damage 1 · control 2 · support 3  
 HP 6 · Attack 1 · Retreat 1 · per level +1 HP +2 Spirit

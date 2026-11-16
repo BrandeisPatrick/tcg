@@ -93,9 +93,6 @@ const PLACE_SETTLE_MS = 500;
 /** The longest the board stays up after the match is decided, so the blow
  *  that decided it can be seen landing before the result sheet takes over. */
 const FINAL_BLOW_MAX_MS = 2800;
-/** How long your turn holds on its End beat after the attack has been made,
- *  before it ends on its own, ms. */
-const AUTO_END_MS = 500;
 /** What a click must land on to NOT cancel an armed card or skill. */
 const TAP_AWAY_CONTROLS = 'button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="tab"]';
 
@@ -171,7 +168,7 @@ export function Board(props: BoardProps<GameState>) {
   // The turn's beat (Income · Act · End): a turn's hand-over plays its End
   // and the next one's Income (turnBeat.ts); the Income beat shows the souls
   // and the card arriving.
-  const spine = useTurnBeat({ turn: G.draft ? 0 : G.turnNumber, isMyTurn, attackMade: G.attackUsed && !combatPlan });
+  const spine = useTurnBeat({ turn: G.draft ? 0 : G.turnNumber, isMyTurn });
   /** The mover's attack can still be made, and it is not being made already. */
   const attackOpen = !ctx.gameover && !combatPlan && !G.pendingDiscard && !prompt && attackBlocked(G, mover) === null;
   // The ready glint: your heroes that can still do something this turn —
@@ -365,19 +362,9 @@ export function Board(props: BoardProps<GameState>) {
     endTurn();
   }, [combatPlan, G.action?.state, ctx.currentPlayer, ctx.gameover, me, endTurn]);
 
-  // The attack ends the turn's play: once it has been walked and made, your
-  // turn ends on its own after a short End beat on the dial — no tap — unless
-  // a promotion is owed (it comes first) or Auto is playing the turn. The
-  // timer checks the turn it was set for is still the one in play.
-  const liveTurnRef = useRef(G.turnNumber);
-  liveTurnRef.current = G.turnNumber;
-  useEffect(() => {
-    if (!isMyTurn || autoPlay || ctx.gameover || !G.attackUsed || combatPlan) return;
-    if (G.pendingPromotion === me || G.pendingDiscard || G.triggers?.length || G.action?.state === 'begin') return;
-    const turnAt = G.turnNumber;
-    const t = setTimeout(() => { if (liveTurnRef.current === turnAt) endTurn(); }, AUTO_END_MS);
-    return () => clearTimeout(t);
-  }, [isMyTurn, autoPlay, ctx.gameover, G.attackUsed, combatPlan, G.pendingPromotion, G.pendingDiscard, G.triggers, G.action?.state, G.turnNumber, me, endTurn]);
+  // An attack does not end the turn (Patrick, 2026-11-16): the turn goes on
+  // until the turn button is pressed, so a Retreat after the attack can bring
+  // in a hero to make its own (attack, Retreat, attack).
 
   // Targeting needs the board visible — close any hover/long-press preview the
   // moment a pending action arms, AND any that opens mid-targeting (a hover
@@ -1223,7 +1210,7 @@ export function Board(props: BoardProps<GameState>) {
               skillOffers[skillId] = offer(block, () => skillBlockReason(block!, hero, skillId));
             }
             // Your Active's attack is offered on its sheet with what it would
-            // do, or why it cannot be made (one a turn, and it ends the turn).
+            // do, or why it cannot be made (one a hero a turn).
             const attack = !isMyActive ? undefined : { ...attackOffer(G, me, hero, isMyTurn), onAttack: attackFromSheet };
 
             return (

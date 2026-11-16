@@ -21,6 +21,10 @@ interface CastFrame {
    *  hands the attacker's on-attack gear `bounce: true`, so a heal or a chain
    *  that belongs to the swing stays out of it (actions/attack.ts). */
   bounce?: true;
+  /** An attack frame that is an ultimate's volley (`attackAll`), not the
+   *  turn's attack: what rides on an attack alone (Express Shot's second shot,
+   *  a pierce) sits it out. */
+  volley?: true;
   /** The heroes whose Counterspell has stopped this card (their iids): the
    *  rest of what the card does to them is stopped too (damage.ts). */
   countered?: Set<string>;
@@ -29,12 +33,16 @@ interface CastFrame {
 /** What a frame says beyond its source and kind. */
 interface CastOpts {
   bounce?: true;
+  volley?: true;
 }
 
 const stack: CastFrame[] = [];
 
 function pushCast(source: CardInstance | null, kind: CastKind, opts: CastOpts = {}) {
-  stack.push(opts.bounce ? { source, kind, bounce: true } : { source, kind });
+  const frame: CastFrame = { source, kind };
+  if (opts.bounce) frame.bounce = true;
+  if (opts.volley) frame.volley = true;
+  stack.push(frame);
 }
 
 function popCast() {

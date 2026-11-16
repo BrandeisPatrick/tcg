@@ -7,9 +7,9 @@ import { useAmbientLoop, type Loop } from '../hooks/useAmbientLoop';
 import { useViewport } from '../hooks/useViewport';
 import { BEAT_WORD, TURN_BEATS, useTurnBeat, type TurnBeat } from './turnBeat';
 
-/** Where a turn stands against its attack (one a turn, and it ends the turn's
- *  play): 'prepare' before it, 'battle' while it is walked, 'regroup' once it
- *  is made (`G.attackUsed`). */
+/** Where a turn stands against its attacks: 'prepare' before one, 'battle'
+ *  while one is walked, 'regroup' once one is made (`G.attackUsed`); the turn
+ *  goes on after it. */
 export type TurnPhase = 'prepare' | 'battle' | 'regroup';
 
 /** The phase in words — for the dial's accessible name only. */
@@ -74,7 +74,7 @@ export function TurnCompass({ isMyTurn: moverIsMe, turn: engineTurn, phase, beat
   // The turn's beat. Through a hand-over's End beat the dial still belongs
   // to the player whose turn just ended, so everything below reads `isMyTurn`
   // from the beat rather than from the mover.
-  const spine = useTurnBeat({ turn: engineTurn, isMyTurn: moverIsMe, attackMade: phase === 'regroup' });
+  const spine = useTurnBeat({ turn: engineTurn, isMyTurn: moverIsMe });
   const isMyTurn = step ? spine.mine : moverIsMe;
   const turn = step ? spine.turn : engineTurn;
   // Hue follows the turn owner — gold when it's the player's move, red
