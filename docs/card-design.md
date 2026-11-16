@@ -357,6 +357,8 @@ item has, brings it back within a step.
 - **Cultist Sacrifice** (test 1): it consumes an NPC for souls. A card since
   2026-11-16 (same section): souls next turn.
 - **Witchmail** (test 1): it cuts cooldowns, and what is left is a stat stick.
+  A card since 2026-11-16: the Cooldown family made a wait a thing a card may
+  move (next section).
 - **Trophy Collector** (tests 1 and 3): souls and sprint. A card since
   2026-11-16 (same section): souls each turn while worn.
 - **Stamina Mastery** (test 3): stamina and air dashes.
@@ -915,6 +917,17 @@ the effects they lack; Patrick picked these. None was simulated.
 | Silence Wave | Spirit T3 spell | 4 | Deal {sp:2} spirit damage to the enemy Active. The rival plays no spells on its next 2 turns. | 2; a side plays about 0.6 spells a turn at about 3 points: 2 × 0.6 × 3 = 3.6 → **5.6**, half its 8 or more, so its tier's price |
 | Vortex Web | Spirit T4 spell | 3 | Pull an enemy bench hero into their Active slot, deal {sp:2} spirit damage to it and Root it for 1 turn. | the pull 2.0 ([hero-design.md](./hero-design.md) §4); the kill it sets up, 3 × 0.5 = 1.5; 2; the Root 0.4 → **5.9**, under half its 16, so it prints 3 (value ÷ 2, above Slowing Hex's 2, the spell it is built from) |
 
+- **Witchmail** (Vitality T4, 8; Patrick: "you have not implemented
+  Witchmail"): "+3 Spirit Power. Spirit Resist 3. The bearer's skill waits 1
+  turn less, and each spirit hit of 3 or more on it brings the skill back 1
+  turn sooner." Canon: Spirit Power, Spirit Resist, a passive cooldown cut, and
+  heavy spirit hits cut a cooldown. Worn 3 turns: +3 Spirit Power 3 × 0.7 × 3 =
+  6.3; Spirit Resist 3, 2.6 off a spirit hit × 0.5 hits a turn × 3 = 3.9; the
+  wait 1 less, Compress Cooldown's verb, 1.5 over 3 turns; about one heavy hit
+  in 3 turns, a third of a cast, 1.0 → **12.7**, the bottom of its band
+  (12–24). The cut never takes a wait past its last turn, so the turn's tick
+  still readies the skill (and returns a charge). Cheat Death was already a
+  card (Vitality T4, 2026-11-05).
 - **Next to on the board** (Mystic Expansion): the board as it is drawn. A
   side's bench is a row of three slots; its Active stands in the lane in the
   column of one of them (the human seat's under its bench slot 2, the other
