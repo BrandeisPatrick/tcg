@@ -22,7 +22,7 @@ import { setupGame } from '@/engine/actions/setup';
 import { buildOf, nextRandom, shuffle, sideDeckIds } from '@/engine/deck';
 import { INVALID, perform } from '@/engine/engine';
 import { blocked, legalActions } from '@/engine/legality';
-import { DECK_SIZE, MAX_COPIES, OPENING_DRAW, OPENING_HAND } from '@/engine/constants';
+import { DECK_SIZE, MAX_COPIES, OPENING_DRAW, OPENING_HAND, SQUAD_SIZE } from '@/engine/constants';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { TEST_ROSTERS } from './_helpers';
 
@@ -48,18 +48,18 @@ const allCards = (G: GameState, pid: PlayerID) => {
  *  snake slots, seat 1 the rest. Returns the state as the first turn opens. */
 function drafted(seed: number, opts: { human?: PlayerID | null; deck?: CardId[]; builds?: Record<CardId, CardId[]> } = {}) {
   setMatchConfig({
-    heroPreferences: [null, null, null, null], seed,
+    heroPreferences: [null, null, null], seed,
     humanSeat: opts.human === undefined ? '0' : opts.human,
     deck: opts.deck, builds: opts.builds,
   });
   const client = Client({ game: DeadlockGame, numPlayers: 2 });
   client.start();
-  const order = ['hero_haze', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_lash', 'hero_kelvin', 'hero_seven', 'hero_paige'];
+  const order = ['hero_haze', 'hero_abrams', 'hero_dynamo', 'hero_vindicta', 'hero_kelvin', 'hero_lash'];
   for (const id of order) client.moves.draftPick(id);
   const G = structuredClone(client.getState()!.G) as GameState;
   client.stop();
-  // Snake: P0 at 0, 3, 4, 7; P1 at 1, 2, 5, 6.
-  const picks: Record<PlayerID, CardId[]> = { '0': [order[0], order[3], order[4], order[7]], '1': [order[1], order[2], order[5], order[6]] };
+  // SQUAD_SIZE (3) each: P0 at 0, 3, 5; P1 at 1, 2, 4.
+  const picks: Record<PlayerID, CardId[]> = { '0': [order[0], order[3], order[5]], '1': [order[1], order[2], order[4]] };
   return { G, picks };
 }
 
@@ -161,7 +161,7 @@ describe('the deck made from the heroes\' builds', () => {
     // Every hero with any three others: a legal deck of the builds' own items.
     const all = HEROES.map((h) => h.id);
     for (let i = 0; i < all.length; i++) {
-      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length], all[(i + 3) % all.length]];
+      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length]]; // a squad: SQUAD_SIZE (3) heroes
       const deck = deckFromBuilds(four.map(defaultBuild));
       const named = new Set(four.flatMap(defaultBuild));
       expect(deck.filter((id) => !named.has(id)), four.join(',')).toEqual([]);
@@ -177,10 +177,10 @@ describe('the deck made from the heroes\' builds', () => {
     expect(deckFromBuilds([['nope', 'hero_haze']])).toEqual([]);
   });
 
-  it('every hero\'s default build, with any three others, makes a legal deck', () => {
+  it('every hero\'s default build, with any two others (a squad of three), makes a legal deck', () => {
     const all = HEROES.map((h) => h.id);
     for (let i = 0; i < all.length; i++) {
-      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length], all[(i + 3) % all.length]];
+      const four = [all[i], all[(i + 1) % all.length], all[(i + 2) % all.length]]; // a squad: SQUAD_SIZE (3) heroes
       expect(isLegalDeck(deckFromBuilds(four.map(defaultBuild))), four.join(',')).toBe(true);
     }
   });
@@ -205,13 +205,13 @@ describe('a drafted match deals the deck', () => {
     return pick;
   };
 
-  it('each side: its DECK_SIZE items and its four heroes — the chosen one in the lane, OPENING_DRAW in the hand, the rest in the deck', () => {
+  it('each side: its DECK_SIZE items and its three heroes (SQUAD_SIZE) — the chosen one in the lane, OPENING_DRAW in the hand, the rest in the deck', () => {
     for (const seed of [1, 2, 3, 77, 4242]) {
       const { G, picks } = drafted(seed);
       choose(G);
       for (const pid of ['0', '1'] as PlayerID[]) {
         const all = allCards(G, pid);
-        expect(all, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + 4);
+        expect(all, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + SQUAD_SIZE);
         expect(ids(all).filter(isHero).sort(), `seed ${seed}`).toEqual([...picks[pid]].sort());
         expect(isLegalDeck(ids(all).filter((id) => !isHero(id))), `seed ${seed}`).toBe(true);
         for (const c of G.players[pid].deck) expect(c.zone).toBe('deck');
@@ -219,7 +219,7 @@ describe('a drafted match deals the deck', () => {
         expect(ps.active, `seed ${seed} P${pid}`).not.toBeNull();
         expect(canLead(ps.active!.cardId)).toBe(true);
         expect(ps.hand, `seed ${seed} P${pid}`).toHaveLength(OPENING_DRAW);
-        expect(ps.deck, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + 4 - 1 - OPENING_DRAW);
+        expect(ps.deck, `seed ${seed} P${pid}`).toHaveLength(DECK_SIZE + SQUAD_SIZE - 1 - OPENING_DRAW);
         expect(ps.hand.length + 1).toBe(OPENING_HAND);
         expect(ps.bench).toEqual([null, null, null]);
       }
@@ -235,7 +235,7 @@ describe('a drafted match deals the deck', () => {
     expect(G.players['1'].active).toBeNull();
     for (const pid of ['0', '1'] as PlayerID[]) {
       expect(G.players[pid].hand).toEqual([]);
-      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + 4);
+      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + SQUAD_SIZE);
     }
     expect(G.fx.filter((e) => e.kind === 'deck')).toEqual([]);
     // Nothing else is legal until it is chosen — the end of the turn included.
@@ -267,7 +267,7 @@ describe('a drafted match deals the deck', () => {
     // Each side: the chosen one in the lane, OPENING_DRAW dealt, the rest in the deck.
     for (const pid of ['0', '1'] as PlayerID[]) {
       expect(G.players[pid].hand).toHaveLength(OPENING_DRAW);
-      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + 4 - 1 - OPENING_DRAW);
+      expect(G.players[pid].deck).toHaveLength(DECK_SIZE + SQUAD_SIZE - 1 - OPENING_DRAW);
     }
     // The board flies both Actives, then the decks shuffle and deal: in that order.
     const deck = G.fx.filter((e): e is DeckFx => e.kind === 'deck').map((e) => e.what);

@@ -1,5 +1,5 @@
 /**
- * The match's opening: choose your first Active from your four drafted
+ * The match's opening: choose your first Active from your three drafted
  * heroes (docs/deck-plan.md, "Start of the match"). A carousel, so it fits a
  * phone: the hero in the middle is its real card, large (stats, skill and
  * ultimate, the face the hero wears everywhere), its neighbours peek in at
@@ -28,7 +28,7 @@ import { PatronSigil, bandStyle, scale as type } from '../hud';
 import { PosterButton } from '../chrome';
 
 interface Props {
-  /** The heroes to choose among, in deck order: the drafted four, less any
+  /** The heroes to choose among, in deck order: the drafted three, less any
    *  that cannot stand in the lane. */
   candidates: CardInstance[];
   onPick: (heroIid: string, from: Rect | null) => void;
@@ -202,7 +202,7 @@ export function OpeningPicker({ candidates, onPick }: Props) {
           </div>
         </div>
 
-        {/* The arrows, either side of which of the four is in the middle. */}
+        {/* The arrows, either side of which of them is in the middle. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <Arrow dir="left" onTap={prev} compact />
           <div aria-hidden style={{ display: 'flex', gap: 7 }}>

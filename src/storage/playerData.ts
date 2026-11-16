@@ -3,8 +3,9 @@ import { itemCard, migrateCardIds } from '@/cards';
 import { BUILD_SIZE, DEFAULT_BUILDS, defaultBuild } from '@/cards/builds';
 import { buildsAcross, fitDeck } from '@/cards/decks';
 import { AI_STRENGTHS, DEFAULT_AI_STRENGTH, type AiStrength } from '@/ai/heuristic';
+import { SQUAD_SIZE } from '@/engine/constants';
 
-export const MAX_PREFERRED_HEROES = 4;
+export const MAX_PREFERRED_HEROES = SQUAD_SIZE;
 
 /**
  * The save's schema. Version 1 had no version field and kept up to five

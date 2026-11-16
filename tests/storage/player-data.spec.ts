@@ -63,7 +63,7 @@ describe('the save keeps the rival AI\'s strength', () => {
     }));
     expect(loadPlayerData()).toEqual({
       version: 5,
-      preferredHeroes: ['hero_haze', null, 'hero_kelvin', null],
+      preferredHeroes: ['hero_haze', null, 'hero_kelvin'], // a save's squad of four is cut to SQUAD_SIZE (3) on load
       builds: { hero_kelvin: ['grit', 'cold_front'] },
       lessonsDone: ['lesson-1', 'lesson-2'],
       tutorialDone: false,
@@ -75,7 +75,7 @@ describe('the save keeps the rival AI\'s strength', () => {
     saveAiStrength('hard');
     expect(saved()).toEqual({
       version: 5,
-      preferredHeroes: ['hero_haze', null, 'hero_kelvin', null],
+      preferredHeroes: ['hero_haze', null, 'hero_kelvin'],
       builds: { hero_kelvin: ['grit', 'cold_front'] },
       lessonsDone: ['lesson-1', 'lesson-2'],
       tutorialDone: false,
@@ -145,7 +145,7 @@ describe('the save keeps the rival AI\'s strength', () => {
     const data = loadPlayerData();
     expect(data.builds).toEqual({});
     expect(getBuild('hero_kelvin')).toEqual(defaultBuild('hero_kelvin'));
-    expect(data.preferredHeroes).toEqual(['hero_lash', null, null, null]);
+    expect(data.preferredHeroes).toEqual(['hero_lash', null, null]);
     expect(data.lessonsDone).toEqual(['lesson-1']);
     expect(data.tutorialDone).toBe(true);
     expect(data.aiStrength).toBe('normal');

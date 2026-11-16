@@ -3,7 +3,7 @@ import { READY_DECKS, readyDeckInUse } from '@/cards/readyDecks';
 import { copyCounts, deckProblem, evolvesFrom } from '@/cards/decks';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import { itemPrice } from '@/engine/query';
-import { DECK_SIZE, PRICE } from '@/engine/constants';
+import { DECK_SIZE, PRICE, SQUAD_SIZE } from '@/engine/constants';
 
 // The ready decks (docs/deck-plan.md, "Ready decks"): each is a squad of four
 // and a legal 16-item deck built to one recipe.
@@ -14,8 +14,9 @@ describe('ready decks', () => {
     expect(new Set(READY_DECKS.map((d) => d.name)).size).toBe(5);
   });
 
-  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: four different heroes and a legal deck; an upgrade is in it beside the item it is built from', (_name, d) => {
-    expect(new Set(d.heroes).size).toBe(4);
+  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: three different heroes (SQUAD_SIZE) and a legal deck; an upgrade is in it beside the item it is built from', (_name, d) => {
+    expect(d.heroes).toHaveLength(SQUAD_SIZE);
+    expect(new Set(d.heroes).size).toBe(SQUAD_SIZE);
     for (const h of d.heroes) expect(CARDS_BY_ID[h]?.type, h).toBe('hero');
     expect(d.items).toHaveLength(DECK_SIZE);
     expect(deckProblem(d.items)).toBeNull();
@@ -55,7 +56,7 @@ describe('ready decks', () => {
     const d = READY_DECKS[1];
     expect(readyDeckInUse(d.heroes, [...d.items].reverse())).toBe(d);
     expect(readyDeckInUse(d.heroes, d.items.slice(1))).toBeUndefined();                 // a card short
-    expect(readyDeckInUse([d.heroes[1], d.heroes[0], d.heroes[2], d.heroes[3]], d.items)).toBeUndefined(); // another order
-    expect(readyDeckInUse([null, null, null, null], [])).toBeUndefined();
+    expect(readyDeckInUse([d.heroes[1], d.heroes[0], d.heroes[2]], d.items)).toBeUndefined(); // another order
+    expect(readyDeckInUse([null, null, null], [])).toBeUndefined();
   });
 });

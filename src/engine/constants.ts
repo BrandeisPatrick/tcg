@@ -72,6 +72,11 @@ export const CATEGORY_SPIKE_ITEMS = 3;
  *  heroes' builds). The four drafted heroes are shuffled in on top of these. */
 export const DECK_SIZE = 16;
 
+/** The heroes a side drafts for a match (Patrick, 2026-11-16: 3, down from 4).
+ *  The board keeps its four spots — the Active and three on the bench — so a
+ *  full squad leaves one free for a unit (a Ghoul, a Gravestone). */
+export const SQUAD_SIZE = 3;
+
 /** The most copies of one item a deck may hold. */
 export const MAX_COPIES = 4;
 

@@ -53,7 +53,7 @@ function configureLesson(id: string): boolean {
   const lesson = lessonById(id) ?? LESSONS.find((l) => String(l.number) === id);
   if (!lesson) return false;
   setMatchConfig({
-    heroPreferences: [null, null, null, null],
+    heroPreferences: [null, null, null],
     tutorial: lesson.setup(),
     lesson: lesson.id,
   });
@@ -147,7 +147,7 @@ export function Root() {
       if (!current) return current;
       pendingBattleNode.current = node.id;
       setMatchConfig({
-        heroPreferences: [null, null, null, null],
+        heroPreferences: [null, null, null],
         builds: loadPlayerData().builds,
         deck: loadPlayerData().deck,
         story: buildStoryMatch(current, node),

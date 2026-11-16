@@ -1245,7 +1245,7 @@ export function Board(props: BoardProps<GameState>) {
           {incomeShown && <IncomeTick key={`income-${G.turnNumber}`} G={G} me={me} />}
         </AnimatePresence>
 
-        {/* The match's opening: your four drafted heroes, one of which takes
+        {/* The match's opening: your three drafted heroes, one of which takes
             the lane (the carousel). Blocks the board until it is chosen; the
             rival's own choice is made, unseen, as yours is confirmed. */}
         <AnimatePresence>

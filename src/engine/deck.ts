@@ -6,7 +6,7 @@
  *
  *  - A drafted match builds each side's deck from its items (the human seat's
  *    saved deck, else one made from its heroes' builds: `deckFromBuilds`) and
- *    its four heroes, shuffled; each side draws OPENING_HAND, at least one a
+ *    its three heroes, shuffled; each side draws OPENING_HAND, at least one a
  *    hero (`dealOpeningHand`). A scripted match (a Story fight, a lesson) puts
  *    its rosters on the board and deals from a deck of items.
  *  - Each own turn draws DRAW_PER_TURN; a draw into a full hand (MAX_HAND) is

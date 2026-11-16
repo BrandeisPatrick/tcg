@@ -1,7 +1,7 @@
 import type { CardId } from '@/engine/types';
 
 /**
- * Ready decks: a squad of four heroes and the 16 items of their deck, made to
+ * Ready decks: a squad of three heroes (SQUAD_SIZE) and the 16 items of their deck, made to
  * be picked and played as they are (the Loadout's "Ready decks" row). Each is
  * a legal deck (`deckProblem`, decks.ts) built to one recipe, written down in
  * docs/deck-plan.md ("Ready decks"):
@@ -30,7 +30,7 @@ export interface ReadyDeck {
   /** One line: how it wins. */
   blurb: string;
   /** The squad, in pick order: the first is the natural first Active. */
-  heroes: [CardId, CardId, CardId, CardId];
+  heroes: [CardId, CardId, CardId];
   /** The 16 items, cheapest tier first. */
   items: CardId[];
 }
@@ -43,7 +43,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     id: 'gunline',
     name: 'Gunline',
     blurb: 'Out-gun the lane. Warden holds it while Vindicta and Haze shoot.',
-    heroes: ['hero_warden', 'hero_vindicta', 'hero_haze', 'hero_paige'],
+    heroes: ['hero_warden', 'hero_vindicta', 'hero_haze'],
     items: [
       ...x2('extended_magazine'), ...x2('headshot_booster'), ...x2('restorative_shot'), ...x2('grit'),
       ...x2('titanic_magazine'), 'long_range', 'opening_rounds', 'fleetfoot', 'debuff_reducer',
@@ -53,8 +53,8 @@ export const READY_DECKS: readonly ReadyDeck[] = [
   {
     id: 'spirit_storm',
     name: 'Spirit Storm',
-    blurb: 'Skills that hit every enemy, and the items that feed on them.',
-    heroes: ['hero_lady_geist', 'hero_seven', 'hero_lash', 'hero_kelvin'],
+    blurb: "Lash and Kelvin hit every enemy; Seven's storm finishes what the items softened.",
+    heroes: ['hero_lash', 'hero_seven', 'hero_kelvin'],
     items: [
       ...x2('extra_spirit'), ...x2('mystic_burst'), ...x2('mystic_regeneration'), ...x2('spirit_strike'),
       ...x2('improved_spirit'), ...x2('cold_front'), 'mystic_vulnerability', 'spirit_lifesteal',
@@ -65,7 +65,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     id: 'bulwark',
     name: 'Bulwark',
     blurb: "Outlast them. Heal and shield while Victor's aura grinds them down.",
-    heroes: ['hero_abrams', 'hero_viscous', 'hero_victor', 'hero_rem'],
+    heroes: ['hero_abrams', 'hero_victor', 'hero_rem'],
     items: [
       ...x2('extra_health'), ...x2('extra_regen'), ...x2('grit'), ...x2('healing_rite'),
       ...x2('bullet_lifesteal'), 'healing_booster', 'battle_vest', 'debuff_reducer', 'guardian_ward',
@@ -76,7 +76,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     id: 'ambush',
     name: 'Ambush',
     blurb: 'Swap in, strike, swap out. Cheap Retreats and extra attacks.',
-    heroes: ['hero_silver', 'hero_yamato', 'hero_mirage', 'hero_drifter'],
+    heroes: ['hero_silver', 'hero_yamato', 'hero_mirage'],
     items: [
       ...x2('sprint_boots'), ...x2('extended_magazine'), ...x2('restorative_shot'), ...x2('headshot_booster'),
       ...x2('kinetic_dash'), 'titanic_magazine', 'fleetfoot', 'swift_striker', 'split_shot',
@@ -87,7 +87,7 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     id: 'lockdown',
     name: 'Lockdown',
     blurb: 'Silence, disarm and stun, then Wraith finishes it.',
-    heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_dynamo', 'hero_wraith'],
+    heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_wraith'],
     items: [
       ...x2('rusted_barrel'), ...x2('spirit_strike'), ...x2('extra_spirit'), 'healing_rite', 'extra_health',
       ...x2('slowing_hex'), 'improved_spirit', 'spirit_sap', 'mystic_shot', 'spirit_lifesteal',

@@ -192,7 +192,7 @@ export function DeckEditor({ squad, onChange }: {
   const status = deck.length === 0
     ? `No deck saved: each match deals one from your drafted heroes' builds.`
     : full
-      ? `${DECK_SIZE} items: your deck. Your four drafted heroes are shuffled in.`
+      ? `${DECK_SIZE} items: your deck. Your three drafted heroes are shuffled in.`
       : `${deck.length} of ${DECK_SIZE}: until it is full, a match deals a deck from your heroes' builds.`;
 
   return (
