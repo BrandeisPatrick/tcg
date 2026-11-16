@@ -212,6 +212,8 @@ export const COOLDOWN_ITEMS: Readonly<Record<string, { skill: number; ult: numbe
   improved_cooldown: { skill: 1, ult: 0 },
   superior_cooldown: { skill: 1, ult: 2 },
   transcendent_cooldown: { skill: 2, ult: 3 },
+  // Witchmail (2026-11-16): its skill 1 turn less while worn (its heavy-hit cut is a proc).
+  witchmail: { skill: 1, ult: 0 },
 };
 
 /** What the Cooldown items `hero` wears take off its waits: the largest of

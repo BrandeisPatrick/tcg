@@ -517,6 +517,28 @@ const eff_phantom_strike: AbilityDef = {
   },
 };
 
+// Witchmail: Spirit Resist 3 and the skill's wait 1 shorter while worn
+// (`cooldownCut`, the largest worn applies), and a spirit hit of 3 or more on
+// the bearer takes 1 off its skill's wait now — never past its last turn, so
+// the turn's tick is still what readies it (and returns a charge).
+const eff_witchmail: AbilityDef = {
+  id: 'eff_witchmail', trigger: 'ongoing', target: 'self',
+  base: 4,
+  resist: (_self, type) => (type === 'spirit' ? 3 : 0),
+  cooldownCut: (_self, kind) => (kind === 'skill' ? 1 : 0),
+  run: () => {},
+};
+const eff_witchmail_proc: AbilityDef = {
+  id: 'eff_witchmail_proc', trigger: 'onBearerDamagedBySpirit', target: 'self',
+  run: (_G, _ctx, { source, params }) => {
+    if (!source || (params?.amount ?? 0) < 3) return;
+    const data = CARDS_BY_ID[source.cardId];
+    const skillId = data?.type === 'hero' ? data.skills[0] : undefined;
+    const left = skillId ? source.cooldowns?.[skillId] : undefined;
+    if (skillId && left !== undefined && left > 1) source.cooldowns![skillId] = left - 1;
+  },
+};
+
 // Mystic Expansion / Greater Expansion: what they do is expansion.ts's (after
 // a skill's cast); the abilities mark the cards for the AI's worth of them.
 const eff_mystic_expansion: AbilityDef = { id: 'eff_mystic_expansion', trigger: 'ongoing', target: 'self', base: 1, run: () => {} };
@@ -2822,7 +2844,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   eff_knockdown, eff_cast_metal_skin,
   eff_silence_glyph, eff_curse, eff_debuff_remover, eff_unstoppable_cast, eff_echo_shard,
   eff_guardian_ward, eff_warp_stone, eff_divine_barrier, eff_ethereal_shift,
-  eff_phantom_strike, eff_vortex_web, eff_trophy_collector, eff_cultist_sacrifice, eff_mystic_expansion, eff_greater_expansion, eff_refresher, eff_colossus_cast,
+  eff_phantom_strike, eff_vortex_web, eff_trophy_collector, eff_cultist_sacrifice, eff_mystic_expansion, eff_greater_expansion, eff_witchmail, eff_witchmail_proc, eff_refresher, eff_colossus_cast,
   eff_golden_goose_egg, eff_grit, eff_return_fire, eff_fleetfoot, eff_split_shot,
   eff_blood_tribute, eff_healing_nova, eff_rescue_beam, eff_fury_trance,
   eff_alchemical_fire, eff_heroic_aura, eff_shadow_weave, eff_infuser, eff_arctic_blast,

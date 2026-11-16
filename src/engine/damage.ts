@@ -222,7 +222,8 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   if (type === 'attack') {
     fireTriggers(G, target, 'onBearerDamagedByBullet', { reaction: true });
   } else if (type === 'spirit') {
-    fireTriggers(G, target, 'onBearerDamagedBySpirit', { reaction: true });
+    // The hit's size goes with it (Witchmail reads a heavy hit).
+    fireTriggers(G, target, 'onBearerDamagedBySpirit', { reaction: true, amount: dmg });
   }
 
   // Kill blow → EXP_ON_KILL to the killer hero (only the hit that drops hp

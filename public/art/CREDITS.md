@@ -68,8 +68,8 @@ from their "Deadlock Graphical Library" collection.
   skill or passive is named for (Willpower, Fixation, Grasping Hands…): the
   deadlock-api's ability image (`image_webp` in its ability list), from the
   community asset bucket at https://deadlock-api.com/, used as served.
-- The icons of Mystic Expansion, Greater Expansion, Trophy Collector
-  (`public/items/`) and Cultist Sacrifice (`public/spells/`), added
+- The icons of Mystic Expansion, Greater Expansion, Trophy Collector,
+  Witchmail (`public/items/`) and Cultist Sacrifice (`public/spells/`), added
   2026-11-16, are the game's own shop icons from the same asset bucket
   (`images/items/<tab>/<item>.webp`; Mystic Expansion's file there is
   `mystic_reach.webp`), used as served.

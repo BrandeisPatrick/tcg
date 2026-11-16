@@ -186,6 +186,10 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'battle_vest',           name: 'Battle Vest',           type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_battle_vest'], text: 'Bullet Resist 1. While the bearer is above half HP: +1 Bullet Power.' },
   { id: 'enchanters_emblem',     name: "Enchanter's Emblem",    type: 'equipment', rarity: 2, slot: 'vitality', tier: 2, abilities: ['eff_enchanters_emblem'], text: 'Spirit Resist 1. At the start of your turn, if the bearer is above half HP: +1 Spirit Power for 1 turn.' },
   { id: 'veil_walker',           name: 'Veil Walker',           type: 'equipment', rarity: 3, slot: 'vitality', tier: 3, bonus: { hp: 2 }, abilities: ['eff_veil_walker'], text: '+2 HP. When the bearer steps into the Active slot by a Retreat or a swap: heal 2 and Dome for 1 turn.' },
+  // Witchmail (canon Vitality T4 passive: Spirit Power, Spirit Resist, a
+  // cooldown cut, and heavy spirit hits taken cut a cooldown). Skipped while no
+  // card could touch a wait; since the Cooldown family can (2026-11-16), a card.
+  { id: 'witchmail', name: 'Witchmail', type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, bonus: { spirit: 3 }, abilities: ['eff_witchmail', 'eff_witchmail_proc'], text: "+3 Spirit Power. Spirit Resist 3. The bearer's skill waits 1 turn less, and each spirit hit of 3 or more on it brings the skill back 1 turn sooner." },
   { id: 'cheat_death',           name: 'Cheat Death',           type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, bonus: { hp: 4 }, abilities: ['eff_cheat_death'], text: '+4 HP. Bullet Resist 2. A hit that would fell the bearer from 2 HP or more leaves it at 1 HP.' },
   { id: 'indomitable',           name: 'Indomitable',           type: 'equipment', rarity: 4, slot: 'vitality', tier: 4, upgradesFrom: 'reactive_barrier', bonus: { hp: 4 }, abilities: ['eff_indomitable'], text: '+4 HP. Bullet Resist 2 and Spirit Resist 2. When the bearer is Stunned, Silenced, Disarmed, Slept or Rooted: it is cleansed of them and gains Shield 4.' },
   // Juggernaut keeps its component's lines (Enduring Speed: Retreat −1, no Root).
