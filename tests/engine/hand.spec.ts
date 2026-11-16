@@ -202,6 +202,7 @@ describe('playing an item: its price, from the hand onto a hero', () => {
     const lash = me.bench[1]!;
     for (const id of ['extra_spirit', 'extra_regen', 'sprint_boots']) giveItem(G, lash, id);
     refusedUntouched(G, '0', play(card, lash), 'full');
+    me.souls = PRICE[1] - 1; // a soul short of Extended Magazine (1 since prices halved)
     refusedUntouched(G, '0', play(card, me.bench[0]!), 'souls');
     me.souls = 20;
     expect(attempt(G, '0', play(card, me.bench[0]!)).result).not.toBe(INVALID);
@@ -784,10 +785,11 @@ describe('net worth counts the hand', () => {
     expect(netWorth(G, '0')).toBe(20 + PRICE[1]);
     const titanic = giveCard(G, '0', 'titanic_magazine');
     expect(netWorth(G, '0')).toBe(20 + PRICE[1] + PRICE[2]);
-    playItem(G, '0', titanic, me.bench[0]!);                                    // evolves the magazine: 2 souls
-    expect(netWorth(G, '0')).toBe(18 + PRICE[2]);
+    playItem(G, '0', titanic, me.bench[0]!);                                    // evolves the magazine: the difference
+    const left = 20 - (PRICE[2] - PRICE[1]);
+    expect(netWorth(G, '0')).toBe(left + PRICE[2]);
     giveCard(G, '0', 'boundless_spirit');
     giveCard(G, '0', 'hero_kelvin');
-    expect(netWorth(G, '0')).toBe(18 + PRICE[2] + PRICE[4]);
+    expect(netWorth(G, '0')).toBe(left + PRICE[2] + PRICE[4]);
   });
 });

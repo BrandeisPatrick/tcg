@@ -12,8 +12,8 @@
  * ends it.
  *
  *   1  The Skill        Kelvin vs a hurt Lash. Frost Grenade ends it.
- *   2  The Hand         Yamato draws Extended Magazine (a tier 1 item, two of
- *                       the turn's five souls); he puts it on, and the swing
+ *   2  The Hand         Yamato draws Extended Magazine (a tier 1 item, one of
+ *                       the turn's two souls); he puts it on, and the swing
  *                       it adds is the kill.
  *   3  Spells           Kelvin holds Cold Front, a gift: a spell. Played on
  *                       Lash for its souls it hits him and is discarded; the
@@ -400,8 +400,8 @@ export const LESSONS: Lesson[] = [
     face: 'hero_yamato',
     outro: `Every turn pays ${soulsText(LANE_INCOME)} and draws a card. Souls carry over: what you do not spend stays in your bank. Tap your souls to see what the next turn pays and what a kill is worth. An item waits in your hand until you pay to put it on a hero; once on, it stays, through death too. A hero you draw goes on the bench for free.`,
     // Yamato swings for 2 at a Lash on 3. His deck is one card, Extended
-    // Magazine — his build's first item, a tier 1 for the turn's two
-    // souls — drawn as the turn opens; on him it makes his swing 3, and the
+    // Magazine — his build's first item, a tier 1 for one of the turn's two
+    // souls (prices halved, 2026-11-16) — drawn as the turn opens; on him it makes his swing 3, and the
     // swing that ends the Act is the kill. Turn two, so there is an attack.
     setup: () => fight({
       startTurn: 2,
@@ -425,8 +425,8 @@ export const LESSONS: Lesson[] = [
     // Kelvin holds Cold Front, a gift: a spell. Lash stands at three: Cold
     // Front's two spirit damage, then Kelvin's swing of one, finish him — a
     // spell, then the attack that ends the Act. Turn two, so there is an
-    // attack. Two souls kept from before and the turn's two pay for Cold
-    // Front's four.
+    // attack. Cold Front costs two since prices halved (2026-11-16): the
+    // turn's two pay for it, and the two kept from before stay in the bank.
     setup: () => fight({
       startTurn: 2,
       playerItems: ['cold_front'],

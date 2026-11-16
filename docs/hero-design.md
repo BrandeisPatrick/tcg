@@ -76,7 +76,7 @@ after 2 turns, keeping its level (section 7).
 
 ## 4. Budget
 
-One soul buys about one point of effect, the same rate items are priced at. Since 2026-11-15 a kit costs no souls: its points are paid for in turns of waiting ([balance-model.md](balance-model.md) §8), and the point values below are unchanged.
+One soul bought about one point of effect, the rate items were priced at; since 2026-11-16 cards cost half, so a soul buys two ([balance-model.md](balance-model.md) §12) and the points are unchanged. Since 2026-11-15 a kit costs no souls: its points are paid for in turns of waiting ([balance-model.md](balance-model.md) §8), and the point values below are unchanged.
 
 | Effect | Points |
 |---|---|

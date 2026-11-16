@@ -57,11 +57,12 @@ of that day. Every number below is reasoned, none played or simulated.
 
 ### The recipe
 
-- **16 items, at most 56 souls at the prices they print, and at most two of them over 4 souls:**
-  the deck's payoffs, up to 16 each. The lane pays 2 a turn ([balance-model.md](balance-model.md)
-  §7): by its turn 9 a side has about 30 souls (18 from the lane, about 12 in bounties) and has
-  drawn about 11 of its 16 items, 13 with its Golden Goose Egg. With two payoffs of 8 the other 14
-  average under 3 souls, so most of what is drawn is played, and a payoff lands around turn 4.
+- **16 items, at most 28 souls at the prices they print, and at most two of them over 2 souls:**
+  the deck's payoffs, up to 8 each (56, 4 and 16 until prices halved on 2026-11-16,
+  [balance-model.md](balance-model.md) §12). The lane pays 2 a turn (§7): by its turn 9 a side has
+  about 30 souls (18 from the lane, about 12 in bounties) and has drawn about 11 of its 16 items,
+  13 with its Golden Goose Egg. A whole deck lists at about what a side has by turn 7, so
+  everything drawn is played, and a payoff of 4 lands on turn 2.
   Until this redesign the recipe counted tiers (8 tier-1, 6 tier-2, 2 tier-3). That priced
   Majestic Leap at 8 for a card that costs 2, and left no room for a deck to be built around one
   tier-4 card (Aurora's Healing Tempo: 16, the same as two tier-3s).
@@ -78,14 +79,14 @@ of that day. Every number below is reasoned, none played or simulated.
 - **A squad has a front, a carry and a helper**, and no hero is in two decks. Four heroes are in
   none: Abrams, Rem, Shiv and Paige.
 
-| Deck | Squad | How it wins | Payoffs | Souls |
+| Deck | Squad | How it wins | Payoffs | Souls (halved 2026-11-16) |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze | Two shots a turn | Burst Fire, Toxic Bullets | 56 |
-| Spirit Storm | Lash, Seven, Kelvin | Area skills cast more often | Torment Pulse, Superior Cooldown | 56 |
-| Aurora | Victor, Dynamo, Drifter | Heal into a free Retreat, finish the wounded | Healing Tempo | 56 |
-| Ambush | Silver, Yamato, Mirage | Every hero that steps in hits for 3 more | Tesla Bullets, Burst Fire | 56 |
-| Lockdown | Mo & Krill, Sinclair, Wraith | Deny every turn, then two shots | Superior Cooldown, Burst Fire | 55 |
-| Graveyard | Viscous, Graves, Lady Geist | Ghouls mill them; Roots deny their swaps | Torment Pulse, Decay | 56 |
+| Gunline | Warden, Vindicta, Haze | Two shots a turn | Burst Fire, Toxic Bullets | 28 |
+| Spirit Storm | Lash, Seven, Kelvin | Area skills cast more often | Torment Pulse, Superior Cooldown | 28 |
+| Aurora | Victor, Dynamo, Drifter | Heal into a free Retreat, finish the wounded | Healing Tempo | 28 |
+| Ambush | Silver, Yamato, Mirage | Every hero that steps in hits for 3 more | Tesla Bullets, Burst Fire | 28 |
+| Lockdown | Mo & Krill, Sinclair, Wraith | Deny every turn, then two shots | Superior Cooldown, Burst Fire | 28 |
+| Graveyard | Viscous, Graves, Lady Geist | Ghouls mill them; Roots deny their swaps | Torment Pulse, Decay | 28 |
 
 ### Each deck
 
@@ -149,7 +150,8 @@ nothing, Silver for 0 with Swift Striker.
   Rusted Barrel (1). Knockdown (4) is the counter and a third denial.
 - 2 Compress Cooldown, then Superior Cooldown: Sand Blast 3 → 2, Rabbit Hex 4 → 3, Full Auto 3 → 2,
   and with Superior the ultimates 2 sooner (Combo and Telekinesis both stun).
-- Titanic Magazine over 2 Extended Magazine and Burst Fire for Wraith; 2 Extra Health for Mo &
+- Headshot Booster over 2 Extended Magazine and Burst Fire for Wraith (it was Titanic Magazine
+  until prices halved: two Disarming Hex at 2 each put the deck at 29); 2 Extra Health for Mo &
   Krill in front; Grit; Golden Goose Egg.
 - Out: Silence Wave (8) for two Disarming Hex (6), and Spirit Strike, Extra Spirit, Mystic Shot and
   Spirit Lifesteal: the squad's damage is Wraith's gun.
@@ -203,7 +205,7 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
     will hold then, and what a kill pays now.
 - The Mid-Boss is off for now (Patrick, 2026-11-09: "remove the mid boss mechanics for now").
 - Put heroes from your hand on the bench (up to 3). It's free.
-- Put an item from your hand on a hero by paying its price: 2, 4, 8, 16 or 24 souls by tier, as today.
+- Put an item from your hand on a hero by paying its price: 1, 2, 4, 8 or 12 souls by tier (2, 4, 8, 16 or 24 until 2026-11-16).
 - A hero wears 3 items. Played onto a full hero, a card goes on in place of one it wears: a sheet asks which goes to the discard pile (Patrick, 2026-11-09: "when I click equip it should ask me which equipment to discard"). Cancel backs out with nothing paid.
 - Retreat, skills, ultimates and the attack work as today until the hero rules land. After that, skills and ultimates cost souls (see [hero-design.md](hero-design.md)); since 2026-11-15 they cost none and wait instead ([balance-model.md](balance-model.md) §8).
 - Your hand holds up to 10 cards. When it is full, further draws are skipped.
@@ -230,8 +232,8 @@ them regularly; an upgrade costs much less").
   difference" on an upgrade's tile).
 - **Upgrades evolve:** play an upgrade on the hero who wears the item it is built from and it
   replaces that item, like evolving a Pokémon.
-  - You pay only the difference, as in Deadlock: Titanic Magazine over Extended Magazine costs 2,
-    not 4. The old item goes to the discard pile.
+  - You pay only the difference, as in Deadlock: Titanic Magazine over Extended Magazine costs 1,
+    not 2. The old item goes to the discard pile.
   - On any other hero, the upgrade costs its normal price.
 - The rule is for equipment built from equipment. A spell (an active item) always costs its price,
   and equipment built from a spell evolves nothing.

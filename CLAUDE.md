@@ -8,8 +8,10 @@ Read [docs/card-design.md](docs/card-design.md) before adding, renaming or redes
   but the one Patrick made himself, recorded in docs/card-design.md §1: Counterspell (a passive in Deadlock,
   a spell here). The Cooldown family was the other until 2026-11-16; it is equipment again.
 - Keep the main game's flavor: canon item names, the item's real verb, its shop slot (Weapon / Spirit / Vitality) and its tier.
-- A spell whose one play is worth under half its tier's price costs less, not more effects (Patrick, 2026-11-16):
-  it prints its own price, about its one-play value; its tier stays canon (docs/card-design.md §2).
+- A spell whose one play is worth under half its tier's budget costs less, not more effects (Patrick, 2026-11-16):
+  it prints its own price, about half its one-play value (a soul buys 2 points); its tier stays canon (docs/card-design.md §2).
+- Card prices are half the budget (Patrick, 2026-11-16: "equipment and spells, they're too expensive"):
+  `PRICE` 1 / 2 / 4 / 8 / 12 by tier. Retreat stays 0–2 for now (docs/balance-model.md §12).
 - Card text always names the damage type: "deal N bullet damage" or "deal N spirit damage", never bare
   "damage". Attacks are bullet; purple `{sp:N}` numbers are spirit.
 - Hero cards follow [docs/hero-design.md](docs/hero-design.md): role first, then the TCG; no Weakness;
@@ -22,7 +24,7 @@ reasoning from the budget in [docs/card-design.md](docs/card-design.md) §3, who
 [docs/balance-model.md](docs/balance-model.md) (1 damage = 1.0, 1 heal
 or shield = 0.5, a permanent +1 stat = 0.7 × the own turns it is expected to be worn, a turn of hard
 crowd control on the Active = 2.0, an extra attack = 2 × the attack it doubles; a card's value lands
-on its tier's price), and the reasoning is written down beside the card in
+on its tier's budget, 2 / 4 / 8 / 16 / 24 points, and since 2026-11-16 it costs half that in souls), and the reasoning is written down beside the card in
 [docs/card-design.md](docs/card-design.md).
 
 - Do not run the balance sim (`scripts/balance-sim.ts`), restricted play, or the browser QA scripts

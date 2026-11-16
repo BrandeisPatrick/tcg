@@ -485,9 +485,10 @@ describe('AI: the attack is a choice', () => {
     const G = p1Turn();
     const ai = G.players['1'];
     ai.souls = 9;
-    // A spell in the hand it cannot pay for (Decay: 8 souls against 9 less a
-    // soul), and a bench hero locked in a heavy channel: no skill from him.
-    ai.souls = 7;
+    // A spell in the hand it cannot pay for (Decay: 4 souls since prices
+    // halved, 2026-11-16, against 3), and a bench hero locked in a heavy
+    // channel: no skill from him.
+    ai.souls = PRICE[3] - 1;
     const dear = giveCard(G, '1', 'decay');
     const dynamo = ai.bench.find((b) => b?.cardId === 'hero_dynamo')!;
     addStatus(G, dynamo, 'casting', 3, 3);

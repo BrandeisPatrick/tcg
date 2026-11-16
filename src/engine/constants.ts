@@ -49,12 +49,20 @@ export const KILL_PUSH_BASE = 1;
 // ---------- Items ----------
 
 /** What putting an item on a hero costs, by its tier: Deadlock's 1 : 2 : 4 : 8
- *  ladder (800 to 6,400 souls there, 2 × cost ÷ 800 here), and its tier 5 at
- *  9,999 there, 24 here: 1.5 × tier 4 as 9,999 is 1.56 × 6,400, so an upgrade
- *  over a tier-4 component costs a whole 8. An upgrade played onto the hero
- *  that wears its component costs the difference (it evolves). Net worth
- *  counts every worn item and every item in hand at this price. */
-export const PRICE: Readonly<Record<ItemTier, number>> = { 1: 2, 2: 4, 3: 8, 4: 16, 5: 24 };
+ *  ladder (800 to 6,400 souls there, cost ÷ 800 here), and its tier 5 at
+ *  9,999 there, 12 here: 1.5 × tier 4 as 9,999 is 1.56 × 6,400. Half what it
+ *  was until 2026-11-16 (Patrick: "equipment and spells, they're too
+ *  expensive"; it was 2 / 4 / 8 / 16 / 24): a soul now buys SOUL_POINTS
+ *  points of the budget, so a tier's budget in points is unchanged. An
+ *  upgrade played onto the hero that wears its component costs the
+ *  difference (it evolves). Net worth counts every worn item and every item
+ *  in hand at this price. */
+export const PRICE: Readonly<Record<ItemTier, number>> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 12 };
+
+/** Points of the card budget one soul buys (docs/balance-model.md §12): 2
+ *  since 2026-11-16, when prices halved; 1 before. A tier's budget in points
+ *  is its price × this: 2 / 4 / 8 / 16 / 24. */
+export const SOUL_POINTS = 2;
 
 /** The tiers, cheapest first: PRICE's keys (whole-number keys list in
  *  ascending order). The deck builder's rows, the tier marks, the build

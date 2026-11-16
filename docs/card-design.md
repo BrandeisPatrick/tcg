@@ -49,17 +49,18 @@ A Deadlock player should recognise every card on sight.
   **Vitality** items through HP, healing, shields and resists.
 - **Canon tier.** A card's tier follows the item's shop tier (800 / 1600 /
   3200 / 6400 / 9999 souls → T1 / T2 / T3 / T4 / T5), and its price is the
-  tier's: `PRICE` = 2 / 4 / 8 / 16 / 24 souls. Equipment played onto the hero
+  tier's: `PRICE` = 1 / 2 / 4 / 8 / 12 souls (2 / 4 / 8 / 16 / 24 until
+  2026-11-16; see "Changed 2026-11-16: cards cost half"). Equipment played onto the hero
   wearing the equipment it is built from costs the difference; a spell always
   costs its price. A card may print a price of its own under its tier's where
   Patrick sets one: Rusted Barrel costs 1 (2026-11-15), and a spell whose one
   play is worth under half its tier's price costs about what that play is
   worth instead of gaining effects (2026-11-16: "a spell should have the
   benefit of costing less"; the eleven are in "Changed 2026-11-16: spells
-  priced for one play"). The tier stays the item's. Tiers 1–4 are 2 × cost ÷
-  800; tier 5 is 24 rather than 25, 1.5 × tier 4 as 9,999 is 1.56 × 6,400, so
-  an upgrade over a tier-4 component costs a whole 8 and a half-price sale
-  refunds a whole 12. An early, cheap card comes from a cheap item.
+  priced for one play"). The tier stays the item's. Tiers 1–4 are cost ÷ 800
+  (2 × cost ÷ 800 until prices halved); tier 5 is 12, 1.5 × tier 4 as 9,999 is
+  1.56 × 6,400, so an upgrade over a tier-4 component costs a whole 4 and a
+  half-price sale refunds a whole 6. An early, cheap card comes from a cheap item.
 - **Families stay families.** Upgrade lines (Extra Spirit → Improved Spirit →
   Boundless Spirit, the Cooldown line, the Lifesteal line into Leech) keep their
   order: the higher tier is the stronger, costlier card.
@@ -852,6 +853,34 @@ Spirit twice ([balance-model.md](./balance-model.md) §10), which puts a point
 of Spirit back near the 0.7 the stat items are priced at. No item's price or
 text changes; ultimates and spells (`{sp:}` on a spell adds your Active's
 Spirit) count it once.
+
+### Changed 2026-11-16: cards cost half
+
+Patrick: "equipment and spells, they're too expensive." `PRICE` halves to
+1 / 2 / 4 / 8 / 12 souls by tier ([balance-model.md](./balance-model.md) §12).
+Every budget above is in points and stays: a tier's budget is 2 / 4 / 8 / 16
+/ 24 points, and a soul buys two (`SOUL_POINTS`). The tiers stay canon.
+
+The spells priced for one play print their one-play value ÷ 2, to the whole
+soul, a spell line still dearer than the spell it is built from:
+
+| Card | Tab · tier | One play (points) | Was | Now |
+|---|---|---|---|---|
+| Rusted Barrel | Spirit T1 | — | 1 | **1** (its tier's) |
+| Majestic Leap | Vitality T3 | 1.5 | 2 | **1** |
+| Echo Shard | Spirit T4 | 2.7 | 3 | **1** |
+| Disarming Hex | Spirit T3 | 2.5 | 3 | **2** (1.25, but above Rusted Barrel's 1) |
+| Knockdown | Spirit T3 | 4.0 | 4 | **2** |
+| Ethereal Shift | Spirit T4 | 3.2 | 3 | **2** |
+| Unstoppable | Vitality T4 | 3.1 | 3 | **2** |
+| Cursed Relic | Spirit T4 | 6.0 | 6 | **3** |
+| Divine Barrier | Vitality T4 | 4.7 | 5 | **3** (above Guardian Ward's 2) |
+| Infuser | Vitality T4 | 5.4 | 5 | **3** |
+| Mystical Piano | Spirit T5 | 9.6 | 10 | **5** |
+
+The ready decks' recipe halves with it: 16 items at most 28 souls, at most two
+over 2 (tier 3 and up at its tier's price), none over 8
+([deck-plan.md](./deck-plan.md)).
 
 ## 4. Signature items and default builds
 

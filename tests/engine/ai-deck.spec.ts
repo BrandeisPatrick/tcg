@@ -22,6 +22,7 @@ import { seededRandom } from '@/engine/rng';
 import { oweDiscard } from '@/engine/deck';
 import { discardChoice, enumerateAIMoves } from '@/ai/heuristic';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
+import { LANE_INCOME, PRICE } from '@/engine/constants';
 import { freshReadyGame, giveCard, giveItem, spendSkill, stackDeck } from './_helpers';
 
 const ctxFor = (pid: PlayerID) => ({ currentPlayer: pid, numPlayers: 2, turn: 2 }) as unknown as Ctx;
@@ -131,7 +132,9 @@ describe('the AI plays its hand', () => {
   });
 
   it('evolves an upgrade onto the hero wearing its component, for the difference', () => {
-    const G = turn(2);
+    // The difference and no more (1 since prices halved, 2026-11-16): with the full price
+    // (2) in hand the AI may as well put Titanic Magazine on a second hero, a fair choice.
+    const G = turn(PRICE[2] - PRICE[1]);
     const me = G.players['0'];
     // The souls are the upgrade's: no skill bids for them (Paige's Plot Armor would, at 2).
     for (const h of [me.active, ...me.bench]) if (h) h.skillUsedThisTurn = true;
@@ -167,19 +170,22 @@ describe('the AI plays its hand', () => {
 describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not save… this needs to be solved")', () => {
   // P0: Haze (Active, no skill), Vindicta, Lash and Paige. Skills cost no
   // souls, so what spends them is a card played or a Retreat. Toxic Bullets is
-  // tier 3: 8 souls.
+  // tier 3: 4 souls since prices halved (2026-11-16; it was 8), two turns of
+  // the lane. The AI saves for tier 3 and up (SAVE_TIER): a tier-2 card is
+  // one turn's income now.
   const spends = (made: Action[]) => made.filter((a) => a.type === 'playCard' || a.type === 'moveHero');
 
   it('keeps its souls for a tier-3 card it can pay for next turn: no cheap card first', () => {
-    const G = turn(6);
+    const held = PRICE[3] - LANE_INCOME; // the lane pays the rest next turn
+    const G = turn(held);
     giveCard(G, '0', 'toxic_bullets');
     giveCard(G, '0', 'extended_magazine'); // tier 1: it could pay for this now
     expect(spends(playOut(G))).toEqual([]);
-    expect(G.players['0'].souls).toBe(6);
+    expect(G.players['0'].souls).toBe(held);
   });
 
   it('with the souls for it, plays the tier-3 card first: nothing cheaper takes its souls', () => {
-    const G = turn(8);
+    const G = turn(PRICE[3]);
     const me = G.players['0'];
     const toxic = giveCard(G, '0', 'toxic_bullets');
     const mag = giveCard(G, '0', 'extended_magazine');
@@ -189,23 +195,25 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
     expect(me.hand).toEqual([mag]);
   });
 
-  it('saves a turn for a tier-2 card too, then plays it', () => {
-    const saving = turn(2);
-    giveCard(saving, '0', 'swift_striker'); // tier 2: 4 souls
-    expect(spends(playOut(saving))).toEqual([]);
-    expect(saving.players['0'].souls).toBe(2);
-    const paid = turn(4);
+  it('a tier-2 card is no saving goal since prices halved (it is one turn of the lane): a cheaper card is not held back for it, and it is played once paid for', () => {
+    // Until 2026-11-16 a tier-2 card cost 4 and the AI saved a turn for it.
+    expect(PRICE[2]).toBe(LANE_INCOME);
+    const short = turn(PRICE[2] - 1);
+    giveCard(short, '0', 'swift_striker');
+    giveCard(short, '0', 'extended_magazine');
+    expect(spends(playOut(short)).length).toBeGreaterThan(0);
+    const paid = turn(PRICE[2]);
     const striker = giveCard(paid, '0', 'swift_striker');
     expect(playOut(paid).some((a) => a.type === 'playCard' && a.cardIid === striker.iid)).toBe(true);
     expect(paid.players['0'].souls).toBe(0);
   });
 
-  it('the higher tier is the goal: with a tier-2 it could pay for now and a tier-3 two turns off, it holds for the tier-3', () => {
-    const G = turn(4);
+  it('the higher tier is the goal: with a tier-2 it could pay for now and a tier-3 a turn off, it holds for the tier-3', () => {
+    const G = turn(PRICE[2]);
     giveCard(G, '0', 'swift_striker');
     giveCard(G, '0', 'toxic_bullets');
     expect(spends(playOut(G))).toEqual([]);
-    expect(G.players['0'].souls).toBe(4);
+    expect(G.players['0'].souls).toBe(PRICE[2]);
   });
 
   it('with only tier-1 cards in hand there is nothing to save for: it spends as the look says', () => {
@@ -216,41 +224,43 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
   });
 
   it('a card further off than three turns of income is no goal yet: it spends', () => {
-    const G = turn(2);
-    giveCard(G, '0', 'glass_cannon'); // tier 4, 16 souls: seven turns of income away
+    const G = turn(1);
+    giveCard(G, '0', 'glass_cannon'); // tier 4, 8 souls: 7 short, past three turns of income (6)
     giveCard(G, '0', 'extended_magazine');
     expect(spends(playOut(G)).length).toBeGreaterThan(0);
-    expect(G.players['0'].souls).toBeLessThan(2);
+    expect(G.players['0'].souls).toBeLessThan(1);
   });
 
-  it('an upgrade onto the hero wearing its component counts at the difference: it saves 2 toward Sharpshooter\'s 4, then evolves it', () => {
+  it('an upgrade onto the hero wearing its component counts at the difference: it saves 1 toward Sharpshooter\'s 2, then evolves it', () => {
     const stage = (souls: number) => {
       const G = turn(souls);
       const vindicta = G.players['0'].bench.find((h) => h?.cardId === 'hero_vindicta')!;
       giveItem(G, vindicta, 'long_range');
-      const sharp = giveCard(G, '0', 'sharpshooter'); // tier 3; 8 − Long Range's 4 on Vindicta
+      const sharp = giveCard(G, '0', 'sharpshooter'); // tier 3; 4 − Long Range's 2 on Vindicta
       return { G, vindicta, sharp };
     };
-    const saving = stage(2);
+    const saving = stage(1);
     expect(spends(playOut(saving.G))).toEqual([]);
-    expect(saving.G.players['0'].souls).toBe(2);
-    const paid = stage(4);
+    expect(saving.G.players['0'].souls).toBe(1);
+    const paid = stage(PRICE[3] - PRICE[2]);
     const made = playOut(paid.G);
     expect(made.find((a) => a.type === 'playCard')).toMatchObject({ type: 'playCard', cardIid: paid.sharp.iid, heroIid: paid.vindicta.iid });
     expect(wornItems(paid.vindicta).map((it) => it.cardId)).toEqual(['sharpshooter']);
   });
 
   it('its skills cost no souls, so it still uses them while it saves', () => {
-    const G = turn(6);
+    const held = PRICE[3] - LANE_INCOME;
+    const G = turn(held);
     giveCard(G, '0', 'toxic_bullets');
     const made = playOut(G);
     expect(made.some((a) => a.type === 'useSkill')).toBe(true);
     expect(spends(made)).toEqual([]);
-    expect(G.players['0'].souls).toBe(6);
+    expect(G.players['0'].souls).toBe(held);
   });
 
   it('a kill is still worth the souls: it pays Haze\'s Retreat to bring in the hero whose swing finishes the rival Active, though it delays the card', () => {
-    const G = turn(6);
+    const held = PRICE[3] - LANE_INCOME; // the Retreat's soul puts Toxic Bullets a turn further off
+    const G = turn(held);
     giveCard(G, '0', 'toxic_bullets');
     const rival = G.players['1'].active!;
     rival.hp = rival.hpMax = 2;                     // Haze swings for 1 at a whole hero; Vindicta, behind her, for 2
@@ -259,7 +269,7 @@ describe('the AI saves for a dear card (Patrick, 2026-11-15: "the AI does not sa
     const made = playOut(G);
     expect(made.some((a) => a.type === 'moveHero')).toBe(true);
     expect(G.record['0'].kills).toBe(1);
-    expect(G.players['0'].souls).toBeLessThan(6 + 1); // the Retreat's soul gone, the kill's bounty in
+    expect(G.players['0'].souls).toBeLessThan(held + 1); // the Retreat's soul gone, the kill's bounty in
   });
 });
 
@@ -329,7 +339,7 @@ describe('the AI and its draw cards', () => {
   });
 
   it('discardChoice keeps heroes, then items its heroes could take, cheaper first; drops items no hero can take', () => {
-    const G = turn(4);
+    const G = turn(1); // Boundless Spirit (8 since prices halved) is then past three turns of income
     const me = G.players['0'];
     const haze = me.active!;
     for (const h of [haze, ...me.bench]) if (h) giveItem(G, h, 'extended_magazine');

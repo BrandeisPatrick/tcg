@@ -24,8 +24,8 @@ builds) and the Gallery. A Quick Match goes like this.
 - Six **ready decks** head the Loadout screen: Gunline, Spirit Storm, Aurora
   (Dynamo's Healing Tempo deck), Ambush, Lockdown and Graveyard (Graves's). Each
   is a squad of three heroes and its 16 items; "Use deck" saves both, and the
-  match is ready to play. Each costs at most 56 souls at its printed prices, with
-  at most two cards over 4 (its payoffs), at most 2 copies of one, an upgrade
+  match is ready to play. Each costs at most 28 souls at its printed prices, with
+  at most two cards over 2 (its payoffs), at most 2 copies of one, an upgrade
   beside the item it is built from, a counter (Counterspell, Debuff Reducer,
   Dispel Magic or Knockdown) and a draw card (Golden Goose Egg; two in Graveyard).
   They were redesigned on 2026-11-16 for the second swing a free Retreat buys
@@ -154,8 +154,8 @@ hand is skipped, and an empty deck simply draws nothing.
 
 - Tap a hero to put it on the bench (up to 3), for free, or into the lane when
   it is empty.
-- Tap an item, then a hero, to put it on that hero for its price: 2 / 4 / 8 /
-  16 / 24 souls by tier. Any hero of yours takes it, bench and fallen heroes
+- Tap an item, then a hero, to put it on that hero for its price: 1 / 2 / 4 /
+  8 / 12 souls by tier (half what it was until 2026-11-16). Any hero of yours takes it, bench and fallen heroes
   included, until the turn's attack.
 - A hero wears 3 items, or 4 once your side has felled the rival's Walker.
   Items stay on through death. Tap an item onto a full hero and a sheet asks

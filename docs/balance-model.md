@@ -48,9 +48,9 @@ squishies die faster — that's positioning, not a stat problem.
 
 **How the curve is produced (not by special-casing turns):**
 - **Low Lv1 offense.** Base BP is 1–2 and base skill damage 1–2 (a Lv1 caster
-  can't one-shot a fresh hero). Souls come 2 a turn (§7), so the first items
-  are small: a tier 1 is a turn's income, a tier 2 two turns', a tier 3 four
-  and a tier 4 eight, less what kills pay.
+  can't one-shot a fresh hero). Souls come 2 a turn (§7); since prices halved
+  (§12) a tier 1 is half a turn's income, a tier 2 one turn's, a tier 3 two
+  and a tier 4 four, less what kills pay.
 - **Scaling outpaces HP late.** +1 BP / +1 Spirit per level plus Spirit/Weapon
   items push damage past the +1 HP/level growth, so TTK falls to ~1 and a leveled
   hero's attack **and** skill can kill two targets.
@@ -106,7 +106,8 @@ spend it"); a kill is "not worth much at the very beginning and worth a lot at
 the very later"; "keep it simple using simple numbers". No sim ran.
 
 **The lane pays 2 souls a turn** (`LANE_INCOME`; it was 5): the price of one
-tier-1 item. Every printed price stays: items 2 / 4 / 8 / 16 / 24, skills 2 or
+tier-1 item. Every printed price stays: items 2 / 4 / 8 / 16 / 24 (halved
+on 2026-11-16, §12), skills 2 or
 3, ultimates 4 / 8 / 12, Retreat 0–2. A side may still play as many cards in a
 turn as its souls pay for.
 
@@ -439,6 +440,56 @@ the lane is where the exp is.
 **Left for testing** (only when Patrick asks by name): whether bench casters'
 ultimates come often enough (the knob is the bench's 1 exp a turn); whether
 small ultimates still need their opening wait of 4 now that Level 3 gates them.
+
+## 12. Cards cost half (2026-11-16)
+
+Patrick: "We should make all the cards cost cheaper, like for real … for
+equipment and spells, they're too expensive. And for Retreat, probably should
+be cheaper … or maybe there are some cards that reduce its cost, so we don't
+need it to cost low for now."
+
+**What it was.** The lane pays 2 souls a turn (`LANE_INCOME`) and a kill 1 to
+6. A tier-3 item cost 8, four turns of the lane; a tier 4 cost 16, eight. A
+ready deck's 16 items listed at up to 56 souls against about 30 earned by turn
+9, so about half of what a side drew waited in its hand.
+
+**Now.** `PRICE` is 1 / 2 / 4 / 8 / 12 (it was 2 / 4 / 8 / 16 / 24), Deadlock's
+1 : 2 : 4 : 8 ladder kept at cost ÷ 800. A tier-1 item is half a turn of the
+lane, a tier 2 one turn, a tier 3 two, a tier 4 four. A ready deck lists at 28
+souls at most, about what a side has earned by its turn 7, so by turn 9 it can
+play every item it has drawn.
+
+**The budget is unchanged in points.** A card's value still lands on its
+tier's 2 / 4 / 8 / 16 / 24 points ([card-design.md](./card-design.md) §3); a
+soul now buys two of them (`SOUL_POINTS`). No card's effect changed: no card is
+stronger, each comes out sooner.
+
+**Spells priced for one play** print their value ÷ 2, to the whole soul, a
+line still dearer than the spell it is built from (card-design.md, "Changed
+2026-11-16: cards cost half"). Rusted Barrel's own 1 is now its tier's.
+
+**What stays.**
+- **Retreat**: 0, 1 or 2 souls by hero, Patrick's call for now. Sprint Boots
+  (now 1), Swift Striker (2), Enduring Speed (2), Majestic Leap (1) and Swift
+  take it down, and with items cheap a deck that wants free Retreats has them
+  early.
+- The lane's 2 and the kill bounty; units' printed prices.
+
+**What it changes.**
+- **Souls stop being the limit by the middle of a match; the draw is.** A
+  draw (Golden Goose Egg) is worth more, and which cards came matters more
+  than in which order they are paid for.
+- **A Retreat is dearer next to an item**: 2 souls is a tier-2 item now, where
+  it was a tier 1. If Retreat still feels heavy, that is the next lever
+  (Retreat 0 / 1 / 1, or the lane at 3).
+- **The AI** reads an item's price as its designed worth, so its weights per
+  soul double (`SOUL_POINTS`): it values each item as before. It saves only
+  for a tier 3 or more, since a tier 2 is a turn's income.
+- **Net worth** (the round cap's tie-break) counts items at the new prices.
+
+**Left for testing** (only when Patrick asks by name): whether a side buys
+everything by turn 6 and souls have nothing left to decide; whether Retreat
+should come down too.
 
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).
