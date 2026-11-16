@@ -350,7 +350,11 @@ item has, brings it back within a step.
   hold charges: Extra Charge and Rapid Recharge are cards, and Recharging Rush
   is still out. See "Added 2026-11-15: the charge items".)
 - **Range and radius** (test 1; targets here are slots): Mystic Expansion,
-  Greater Expansion.
+  Greater Expansion. Patrick, 2026-11-16, gave them a board verb, not built
+  yet: Mystic Expansion (Spirit T1) makes the bearer's one-target skill also
+  hit a random enemy bench hero, and Greater Expansion (Spirit T3, built from
+  it) makes it hit every enemy. That passes test 1; it is why Essence Bomb
+  hits the Active alone.
 - **Cultist Sacrifice** (test 1): it consumes an NPC for souls.
 - **Witchmail** (test 1): it cuts cooldowns, and what is left is a stat stick.
 - **Trophy Collector** (tests 1 and 3): souls and sprint.

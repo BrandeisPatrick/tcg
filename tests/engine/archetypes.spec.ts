@@ -196,7 +196,7 @@ describe('Lifesteal is gone from Drifter and Lady Geist: Bloodscent and Essence 
     expect(drifter.hp).toBe(1);          // no heal; the defender does not strike back
   });
 
-  it('Lady Geist\'s Essence Bomb costs her 1 HP and drains nothing: {sp:3} spirit damage to the enemy Active alone (2026-11-16)', () => {
+  it('Lady Geist\'s Essence Bomb costs her 2 HP and drains nothing: {sp:4} spirit damage to the enemy Active alone (2026-11-16)', () => {
     const G = freshReadyGame();
     const geist = makeHero('hero_lady_geist', '0', 'active', 0);
     geist.hp = 5; geist.hpMax = 10;
@@ -206,9 +206,9 @@ describe('Lifesteal is gone from Drifter and Lady Geist: Bloodscent and Essence 
     const bench = G.players['1'].bench.filter(Boolean) as CardInstance[];
     for (const e of [rivalActive, ...bench]) e.hp = e.hpMax = 20;
     expect(perform(G, '0', { type: 'useSkill', heroIid: geist.iid, skillId: 'skill_lady_geist', targetIid: rivalActive.iid })).not.toBe(INVALID);
-    expect(rivalActive.hp).toBe(20 - 3);                             // dealt 3 spirit (Spirit 0)
+    expect(rivalActive.hp).toBe(20 - 4);                             // dealt 4 spirit (Spirit 0)
     for (const e of bench) expect(e.hp, e.cardId).toBe(20);         // the bench is untouched
-    expect(geist.hp).toBe(5 - 1);                                    // paid 1 HP, healed nothing
+    expect(geist.hp).toBe(5 - 2);                                    // paid 2 HP, healed nothing
   });
 });
 

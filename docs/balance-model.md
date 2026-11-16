@@ -374,7 +374,7 @@ skills spread over their wait, riders left out:
 |---|---|---|
 | Haze (gun): Attack 4, Fixation +1 | 5 | 5 |
 | Seven: Static Charge, Spirit 3, waits 4 | 1 + 4 ÷ 4 = 2.0 | 1 + 7 ÷ 4 = 2.75 |
-| Lady Geist: Essence Bomb, Spirit 2, waits 3 | 1 + 3 on every enemy (7.5) ÷ 3 = 3.5 | 1 + 7 ÷ 3 = 3.3, on the Active |
+| Lady Geist: Essence Bomb, Spirit 2, waits 3 | 1 + 3 on every enemy (7.5) ÷ 3 = 3.5 | 1 + 8 ÷ 3 = 3.7, on the Active |
 | Lash: Ground Strike, Spirit 2, waits 4 | 1 + 3 on every enemy (7.5) ÷ 4 = 2.9 | 1 + 5 on every enemy (12.5) ÷ 4 = 4.1 |
 
 A caster still deals less a turn than a gun carry in the lane, but it deals it
@@ -385,10 +385,12 @@ Magazine's +1 a swing over a match. Boundless Spirit (+5) adds 10: a Level 3
 Seven with it bombs for 23. The Spirit tier 4s come late, when the curve
 wants kills.
 
-**Lady Geist's Essence Bomb** hits the enemy Active alone, as Deadlock's does:
-3✦, she pays 1 HP, it waits 3. 3 − 0.5 (the HP at the heal rate) = 2.5, the
-middle of a wait-3 skill's 2–3 ([hero-design.md](./hero-design.md) §4); the
-area bomb was 1✦ on every enemy, 2.5 − 0.5 = 2.0. Her reach becomes one.
+**Lady Geist's Essence Bomb** hits the enemy Active alone, as Deadlock's does,
+and harder (Patrick: "she should deal more damage"): 4✦, she pays 2 HP, it
+waits 3. 4 − 2 × 0.5 (the HP at the heal rate) = 3.0, the top of a wait-3
+skill's 2–3 ([hero-design.md](./hero-design.md) §4); the area bomb was 1✦ on
+every enemy for 1 HP, 2.5 − 0.5 = 2.0. Her reach becomes one. More targets are
+the range items' to give (card-design.md, "Range and radius").
 
 **Warden's Willpower** is Shield 2 and Swift (it was Shield 3). Since the
 second swing Swift is a free Retreat, worth its soul and its swap (1.5), so

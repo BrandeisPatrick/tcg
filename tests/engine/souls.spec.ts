@@ -398,12 +398,12 @@ describe('souls economy', () => {
   });
 
   // ----- Spirit scaling on hero skills (use Lady Geist as representative — Essence Bomb,
-  // {sp:3} spirit to the enemy Active since 2026-11-16; a skill counts Spirit twice) -----
-  it("hero skill at 0 SPI deals base damage (Lady Geist's Essence Bomb: 3 + 0 = 3 spirit to the enemy Active)", async () => {
+  // {sp:4} spirit to the enemy Active since 2026-11-16; a skill counts Spirit twice) -----
+  it("hero skill at 0 SPI deals base damage (Lady Geist's Essence Bomb: 4 + 0 = 4 spirit to the enemy Active)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     expect(skill.scalesSpirit).toBe(true);
-    expect(skill.base).toBe(3);
+    expect(skill.base).toBe(4);
     const G = freshG();
     const caster = G.players['0'].active!;
     caster.spiritMod = 0;
@@ -411,10 +411,10 @@ describe('souls economy', () => {
     target.hpMax = 20; target.hp = 20;
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(3);
+    expect(hpBefore - target.hp).toBe(4);
   });
 
-  it("hero skill at +3 SPI deals base + twice the spirit (Lady Geist's Essence Bomb: 3 + 2 × 3 = 9 spirit to the enemy Active)", async () => {
+  it("hero skill at +3 SPI deals base + twice the spirit (Lady Geist's Essence Bomb: 4 + 2 × 3 = 10 spirit to the enemy Active)", async () => {
     const { ABILITIES_BY_ID } = await import('@/abilities');
     const skill = ABILITIES_BY_ID['skill_lady_geist'];
     const G = freshG();
@@ -424,7 +424,7 @@ describe('souls economy', () => {
     target.hpMax = 20; target.hp = 20; // soak the full damage to measure it
     const hpBefore = target.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target });
-    expect(hpBefore - target.hp).toBe(9); // base 3 + 2 × 3 spirit (SKILL_SPIRIT_RATE)
+    expect(hpBefore - target.hp).toBe(10); // base 4 + 2 × 3 spirit (SKILL_SPIRIT_RATE)
   });
 
   it("a flat heal is flat — Spirit does NOT scale it (Healing Rite's 5); Rem's Tag Along prints {sp:4} and does", async () => {

@@ -56,10 +56,10 @@ describe('a skill counts Spirit twice, an ultimate and a spell once', () => {
 });
 
 describe("Lady Geist's Essence Bomb hits the enemy Active alone", () => {
-  it('aims at the enemy Active, prints {sp:3}', () => {
+  it('aims at the enemy Active, prints {sp:4}, and costs her 2 HP', () => {
     const bomb = getAbility('skill_lady_geist') as { target: string; text: string; base: number; hpCost: number };
-    expect([bomb.target, bomb.base, bomb.hpCost]).toEqual(['enemyActive', 3, 1]);
-    expect(bomb.text).toBe('Lady Geist pays 1 HP: deal {sp:3} spirit damage to the enemy Active.');
+    expect([bomb.target, bomb.base, bomb.hpCost]).toEqual(['enemyActive', 4, 2]);
+    expect(bomb.text).toBe('Lady Geist pays 2 HP: deal {sp:4} spirit damage to the enemy Active.');
   });
 });
 
