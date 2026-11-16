@@ -6,6 +6,7 @@ import { INVALID, perform } from '@/engine/engine';
 import { playBlocked } from '@/engine/legality';
 import { isBlocked, itemPrice } from '@/engine/query';
 import { freshReadyGame, giveCard, makeHero } from './_helpers';
+import { endTurnEffects } from '@/engine/actions/turn';
 
 const run = (id: string, G: GameState, args: any) =>
   ABILITIES_BY_ID[id].run(G, { movingPlayer: '0' }, args);
@@ -20,14 +21,37 @@ describe('Knockdown — now a pure 1-turn stun', () => {
   });
 });
 
-describe('Silence Glyph', () => {
-  it('deals 2 spirit and Silences the enemy Active for 2 turns', () => {
+// Silence Wave (id silence_glyph). Since 2026-11-16 it silences the rival
+// side, Pokémon's item lock: no spells on its next 2 turns.
+describe('Silence Wave', () => {
+  it('deals 2 spirit to the enemy Active and the rival plays no spells on its next 2 turns', () => {
     const G = freshReadyGame();
     const t = G.players['1'].active!;
     t.hpMax = 20; t.hp = 20;
     run('eff_silence_glyph', G, { target: t });
     expect(t.hp).toBe(18); // 2 spirit (caster has 0 spirit)
-    expect(t.statuses.find((s) => s.id === 'silenced')?.duration).toBe(2);
+    expect(t.statuses.some((s) => s.id === 'silenced')).toBe(false); // the side, not the hero
+    expect(G.players['1'].spellLock).toBe(2);
+  });
+
+  it('a locked side cannot play a spell, and the lock wears off as its turns end', () => {
+    const G = freshReadyGame();
+    run('eff_silence_glyph', G, { target: G.players['1'].active! });
+    G.turnNumber = 3; // P1's turn
+    G.players['1'].souls = 10;
+    const grit = giveCard(G, '1', 'grit');
+    expect(playBlocked(G, '1', grit.iid)).toBe('spellLock');
+    endTurnEffects(G, '1');
+    expect(G.players['1'].spellLock).toBe(1);
+    expect(playBlocked(G, '1', grit.iid)).toBe('spellLock');
+    G.turnNumber = 5;
+    endTurnEffects(G, '1');
+    expect(G.players['1'].spellLock).toBe(0);
+    G.turnNumber = 7;
+    expect(playBlocked(G, '1', grit.iid)).toBeNull();
+    // Equipment is still played: only spells are locked.
+    const vest = giveCard(G, '1', 'extra_health');
+    expect(playBlocked(G, '1', vest.iid, G.players['1'].active!.iid)).toBeNull();
   });
 });
 

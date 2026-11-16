@@ -267,11 +267,12 @@ describe('Enduring Speed cannot be Rooted', () => {
     expect(status(haze, 'stun')).toBeDefined();
   });
 
-  it('Vortex Web hits the bearer but roots only the rest', () => {
+  // Capacitor since Vortex Web became a one-hero pull (2026-11-16).
+  it('Capacitor hits the bearer but roots only the rest', () => {
     const { G } = built(0);
     const [abrams, ...rest] = board(G, '1');
     giveItem(G, abrams, 'enduring_speed');
-    useItem(G, '0', 'vortex_web');
+    useItem(G, '0', 'capacitor', G.players['1'].active!.iid);
     expect(abrams.hp).toBeLessThan(30);
     expect(status(abrams, 'rooted')).toBeUndefined();
     for (const c of rest) expect(status(c, 'rooted'), c.cardId).toBeDefined();

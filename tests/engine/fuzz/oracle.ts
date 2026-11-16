@@ -693,6 +693,8 @@ export function playBlockedOracle(G: GameState, pid: PlayerID, cardIid: unknown,
   const data = itemData(card.cardId);
   if (!data) return 'hero-card';
   if (data.type === 'spell') {
+    // Silence Wave (2026-11-16): a side whose spell lock is running plays no spells.
+    if ((G.players[pid].spellLock ?? 0) > 0) return 'spell-lock';
     if (!spellCasterOracle(G, pid)) return 'no-caster';
     const targets = spellTargetsOracle(G, pid, card.cardId);
     if (targets !== 'none' && !targets.some((t) => t.iid === heroIid)) return heroIid === undefined ? 'missing-target' : 'bad-target';

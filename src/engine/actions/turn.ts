@@ -139,6 +139,8 @@ export function endTurnEffects(G: GameState, pid: PlayerID) {
   // Strip action-denying CC now that this player has spent their turn under
   // it — so "Stun N turns" denies exactly N turns (docs/stats-model.md).
   tickEndOfTurnCC(G, G.players[pid]);
+  // A spell lock (Silence Wave) counts down as the locked side's turn ends.
+  if (ps.spellLock) ps.spellLock -= 1;
   clearTurnFlags(G.players[pid]);
   // What the End step felled (a Naptime wake-up burst) pays and pushes now.
   resolve(G);

@@ -333,6 +333,9 @@ const eff_knockdown: AbilityDef = {
 // Silence Wave (canon T3 spirit active, once named Silence Glyph — the card id
 // keeps the old name so saved decks still load): damage + Silence the enemy
 // Active 2 turns.
+// Since 2026-11-16 (Patrick: "the side cannot play spells … change Silence
+// Wave to a card that targets players") it silences the rival side, not a
+// hero: Pokémon's item lock. The rival plays no spells on its next 2 turns.
 const eff_silence_glyph: AbilityDef = {
   id: 'eff_silence_glyph', trigger: 'onPlay', target: 'enemyActive',
   base: 2,
@@ -340,7 +343,9 @@ const eff_silence_glyph: AbilityDef = {
   run: (G, ctx, { target }) => {
     if (!target) return;
     damageUnit(G, target, 2 + activeSpi(G, ctx.movingPlayer), 'spirit');
-    addStatus(G, target, 'silenced', 1, 2);
+    const rival = G.players[otherPlayer(ctx.movingPlayer)];
+    rival.spellLock = Math.max(rival.spellLock ?? 0, 2);
+    pushLog(G, `Silence Wave: P${rival.id} plays no spells for 2 turns.`);
   },
 };
 
@@ -509,19 +514,23 @@ const eff_phantom_strike: AbilityDef = {
   },
 };
 
-// Vortex Web (canon T4 spirit active): a grenade that drags every enemy in and
-// slows them. TCG: 2 + Spirit spirit damage to every enemy hero, Rooted 2 turns.
+// Vortex Web (canon T4 spirit active): a vacuum grenade that pulls enemies in.
+// Since 2026-11-16 (Patrick: "make it cheaper, so we're able to pull something
+// from bench to active") it is the cheap pull, Pokémon's Boss's Orders: an
+// enemy bench hero is pulled into their Active slot, hit for 2 + Spirit and
+// Rooted 1 turn, so it cannot Retreat back out. (It was 2 + Spirit to every
+// enemy, all Rooted 2 turns.)
 const eff_vortex_web: AbilityDef = {
-  id: 'eff_vortex_web', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Vortex Web — hit and root every enemy.',
+  id: 'eff_vortex_web', trigger: 'onPlay', target: 'enemyBench',
+  prompt: 'Vortex Web — pull an enemy bench hero to the front.',
   scalesSpirit: true, base: 2,
-  run: (G, ctx) => {
-    const enemy = otherPlayer(ctx.movingPlayer);
-    const dmg = 2 + activeSpi(G, ctx.movingPlayer);
-    eachBoard(G, enemy, (c) => {
-      damageUnit(G, c, dmg, 'spirit', 'Vortex Web');
-      if (!isRespawning(c)) addStatus(G, c, 'rooted', 1, 2);
-    });
+  run: (G, ctx, { target }) => {
+    if (!target) return;
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    if (!pullToActive(G, enemy, target)) return;
+    damageUnit(G, target, 2 + activeSpi(G, ctx.movingPlayer), 'spirit', 'Vortex Web');
+    if (!isRespawning(target)) addStatus(G, target, 'rooted', 1, 1);
+    resolve(G);
   },
 };
 

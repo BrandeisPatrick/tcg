@@ -336,6 +336,12 @@ export interface PlayerState {
   reviveCredits: number;
   /** The last round the credits are good through (they lapse at its end). */
   reviveUntilRound: number;
+  /** Own turns this side plays no spells (Silence Wave, 2026-11-16): set by
+   *  the rival's card, counted down as each of this side's turns ends. */
+  spellLock?: number;
+  /** Souls the lane pays this side on top at its next own turn's income
+   *  (Cultist Sacrifice, 2026-11-16); paid and cleared then. */
+  incomeBonus?: number;
 }
 
 /** What the map has seen one side do this match: the result sheet and the
