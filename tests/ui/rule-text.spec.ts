@@ -212,8 +212,9 @@ describe('status words in card text explain the status', () => {
       expect(KEYWORDS[word], word).toBeTruthy();
       expect(STATUSES_BY_ID[id], `${word} -> ${id}`).toBeTruthy();
     }
-    // The five statuses the new kits bring are keywords too.
-    for (const word of ['Fixation', 'Dome', 'Rooted', 'Rabbit', 'Last Stand']) expect(KEYWORD_STATUS[word], word).toBeTruthy();
+    // The statuses the new kits bring are keywords too (Fixation was one until it became a flat bonus, 2026-11-16).
+    for (const word of ['Dome', 'Rooted', 'Rabbit', 'Last Stand']) expect(KEYWORD_STATUS[word], word).toBeTruthy();
+    expect(KEYWORD_STATUS.Fixation).toBeUndefined();
   });
 
   it('the status takes the number printed after it, and a minus makes it the debuff', () => {
@@ -248,11 +249,9 @@ describe('status words in card text explain the status', () => {
     expect(statusContent('shield').lines).toEqual(['Absorb N damage, then break.']); // a keyword has no number yet
   });
 
-  it('Fixation says what it does', () => {
-    expect(STATUSES_BY_ID.fixation.title).toBe('Fixation');
-    expect(statusContent('fixation', { value: 2, duration: 99 }).lines).toEqual([
-      'When Haze attacks this hero, she deals +2 bullet damage. Up to 2; it falls off when the hero leaves the Active slot.',
-    ]);
+  it('Fixation says what it does in its own words: a bonus on Haze\'s attacks, no status to explain', () => {
+    expect(STATUSES_BY_ID.fixation).toBeUndefined();
+    expect((ABILITIES_BY_ID.passive_haze_fixation as { text?: string }).text).toBe("Haze's attacks deal +1 bullet damage to an enemy below full HP.");
   });
 
   it('an id the registry does not know still reads', () => {

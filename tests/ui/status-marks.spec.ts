@@ -22,8 +22,9 @@ import { StatusesTab } from '@/ui/gallery/StatusesTab';
 // so they print the moment they land. An id nothing has been set aside for gets
 // a plain diamond tag and a label spelled out of its id, and never throws.
 
-/** The five the new kits brought, which also have a flourish on the sticker. */
-const MARKED = ['fixation', 'dome', 'rooted', 'rabbit', 'last_stand'] as const;
+/** The ones the new kits brought, which also have a flourish on the sticker. (Fixation was
+ *  one until 2026-11-16, when Haze's passive became a flat bonus with no status.) */
+const MARKED = ['dome', 'rooted', 'rabbit', 'last_stand'] as const;
 /** Given their pictures before the registry lists them. */
 const AHEAD = ['swift', 'ricochet'] as const;
 const UNKNOWN = 'mystery_status';
@@ -79,7 +80,7 @@ describe('which statuses wear a mark', () => {
 
   it("the game's own icons are used where it has one; an item's status wears the item's glyph", () => {
     const at = (id: string) => renderToStaticMarkup(createElement(StatusMark, { id, color: '#fff', size: 12 }));
-    for (const id of ['stun', 'silenced', 'disarm', 'sleep', 'bleed', 'rooted', 'rabbit', 'charged', 'djinns_mark', 'fixation',
+    for (const id of ['stun', 'silenced', 'disarm', 'sleep', 'bleed', 'rooted', 'rabbit', 'charged', 'djinns_mark',
       'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable', 'healing_boost', 'extra_attack',
       'swift', 'last_stand', 'healing_boost_down', 'bullet_resist_down', 'spirit_resist_down', 'casting', 'casting_light',
       'return_fire', 'ricochet', 'reverb', 'dome', 'siphon_drain', 'siphon_gain', 'weapon_power_down', 'spirit_power_down']) {
@@ -148,7 +149,7 @@ describe('every status has a chip and a sticker, and neither is blank', () => {
       return renderToStaticMarkup(createElement(StatusStamp, { rect: { left: 40, top: 60, width: 180, height: 240 }, ev, at: 0, hold: 1050 }));
     };
     expect(lasting('shield', 999)).not.toContain('data-turns');
-    expect(lasting('fixation', 99)).not.toContain('data-turns');
+    expect(lasting('djinns_mark', 99)).not.toContain('data-turns');
     expect(lasting('stun', 0)).not.toContain('data-turns');
     expect(lasting('stun', 1)).toMatch(/>1t</);
     // Djinn's Mark: a pip of the mark per stack, the turns once, beside them.
@@ -157,19 +158,16 @@ describe('every status has a chip and a sticker, and neither is blank', () => {
     expect(djinn.match(/data-turns=/g)).toHaveLength(1);
   });
 
-  it('Fixation always prints its stack, one stack included; Last Stand its strike; the on-or-off ones no number', () => {
-    expect(statusChipText('fixation', 1)).toBe('Fixation 1');
-    expect(statusChipText('fixation', 3)).toBe('Fixation 3');
+  it('Last Stand always prints its strike, a strike of 1 included; the on-or-off ones no number', () => {
     expect(statusChipText('last_stand', 1)).toBe('Last Stand 1');
     expect(statusChipText('last_stand', 5)).toBe('Last Stand 5');
     for (const id of ['dome', 'rooted', 'rabbit']) expect(statusChipText(id, 1), id).toBe(statusLabel(id));
   });
 
-  it('the head on the sticker carries the stack count; on a chip the pill does', () => {
-    const st = sticker('fixation', 3);
-    expect(st).toMatch(/data-mark="fixation"[\s\S]*?data-count="3"[^>]*>3</);
-    const pill = renderToStaticMarkup(createElement(StatusMark, { id: 'fixation', color: '#fff', size: 12 }));
+  it('a mark prints no number of its own: a stack is the chip\'s pill (Fixation\'s head count went with its stacks, 2026-11-16)', () => {
+    const pill = renderToStaticMarkup(createElement(StatusMark, { id: 'djinns_mark', color: '#fff', size: 12 }));
     expect(pill).not.toContain('data-count');
+    expect(STATUSES.some((s) => s.id === 'fixation')).toBe(false);
   });
 });
 
@@ -243,7 +241,7 @@ describe('the Gallery lists every status', () => {
     expect(section('Buffs')).not.toBe('');
     expect(section('Debuffs')).not.toBe('');
     for (const id of ['dome', 'last_stand']) expect(section('Buffs'), id).toContain(`>${id}<`);
-    for (const id of ['fixation', 'rooted', 'rabbit']) expect(section('Debuffs'), id).toContain(`>${id}<`);
+    for (const id of ['rooted', 'rabbit']) expect(section('Debuffs'), id).toContain(`>${id}<`);
   });
 });
 
@@ -258,13 +256,12 @@ describe('the Combat showroom has a demo for each of them', () => {
     for (const id of ALL) expect(landed.has(id), id).toBe(true);
   });
 
-  it('a Dome going up, a Fixation stack landing, Rooted and Rabbit landing, a Last Stand taking hold', () => {
+  it('a Dome going up, Rooted and Rabbit landing, a Last Stand taking hold', () => {
     expect(statusOf('Dome').map((e) => e.statusId)).toEqual(['dome']);
-    expect(statusOf('Fixation ×2').map((e) => [e.statusId, e.value])).toEqual([['fixation', 2]]);
     expect(statusOf('Rooted').map((e) => e.statusId)).toEqual(['rooted']);
     expect(statusOf('Rabbit').map((e) => e.statusId)).toEqual(['rabbit']);
     expect(statusOf('Last Stand 5').map((e) => [e.statusId, e.value])).toEqual([['last_stand', 5]]);
-    for (const label of ['Dome', 'Fixation ×2', 'Rooted', 'Rabbit', 'Last Stand 5']) {
+    for (const label of ['Dome', 'Rooted', 'Rabbit', 'Last Stand 5']) {
       expect(buildFxTimeline(stamped(label)).items, label).toHaveLength(1);
     }
   });

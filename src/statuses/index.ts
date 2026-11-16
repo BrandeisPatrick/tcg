@@ -1,5 +1,5 @@
 import type { CardId, StatusId } from '@/engine/types';
-import { BLEED_CAP, DJINN_CAP, FIXATION_CAP } from '@/engine/constants';
+import { BLEED_CAP, DJINN_CAP } from '@/engine/constants';
 
 /** What a status stops its bearer doing. The only place a lockout is written:
  *  `isBlocked` (engine/query.ts) reads it, and the attack gate, `useSkill`,
@@ -145,7 +145,6 @@ export const STATUSES: StatusDef[] = [
   // `attackBonus(self, target)` hook. It lasts while the target stays in the lane
   // (it ends when the target leaves the Active slot), so it is applied with duration
   // 99, and every new stack starts the timer over.
-  { id: 'fixation',      title: 'Fixation',      desc: `When Haze attacks this hero, she deals +<value> bullet damage. Up to ${FIXATION_CAP}; it falls off when the hero leaves the Active slot.`, hvalue: -1, stack: { add: true, cap: FIXATION_CAP, duration: 'reset' }, clearOnLeaveActive: true },
 
   // ----- Other debuff -----
   { id: 'weapon_power_down',   title: 'Bullet Power',  desc: 'Bullet Power −<value> on basic attacks.',                 hvalue: -1 },

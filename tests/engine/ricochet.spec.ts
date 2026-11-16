@@ -136,14 +136,13 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     }
   });
 
-  it("a passive's debuff spreads too (Mirage's Djinn's Mark); Haze's Fixation stays on the hero she shoots", () => {
+  it("a passive's debuff spreads too (Mirage's Djinn's Mark); Haze's Fixation puts nothing on anyone (a bonus, no status, since 2026-11-16)", () => {
     const mirage = lane('hero_mirage', 'ricochet');
     makeAttack(mirage.G, '0');
     for (const c of mirage.enemies) expect(status(c, 'djinns_mark'), c.cardId).toMatchObject({ value: 1 });
     const haze = lane('hero_haze', 'ricochet');
     makeAttack(haze.G, '0');
-    expect(status(haze.abrams, 'fixation')).toMatchObject({ value: 1 });
-    for (const c of haze.bench) expect(status(c, 'fixation'), c.cardId).toBeUndefined();
+    for (const c of [haze.abrams, ...haze.bench]) expect(status(c, 'fixation'), c.cardId).toBeUndefined();
   });
 
   it('Bullet Lifesteal, and Leech, heal once a swing, not once a bounce', () => {
@@ -174,17 +173,16 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     expect(hps(bench)).toEqual([16, 18, 18]);
   });
 
-  it("Haze's Fixation stacks once a swing, not once a bounce, and its bonus rides the swing alone", () => {
+  it("Haze's Fixation rides the swing alone: +1 on a swing at a hurt hero, never on a bounce", () => {
     const { G, atk, abrams, bench } = lane('hero_haze', 'ricochet');
     grantExtraAttacks(atk, 1);
     const fx = G.fx.length;
     makeAttack(G, '0');
     expect(swingsSince(G, fx)).toHaveLength(2);
-    // Swing 1: 3 (no stack yet). Swing 2: 3 + Fixation 1. Each bounce is Ricochet's 2.
+    // Swing 1: 3 (Abrams still whole). Swing 2: 3 + Fixation 1 (he is hurt now). Each bounce is Ricochet's 2,
+    // though the bench is hurt by the first bounce: a bounce is no swing, so Fixation is not on it.
     expect(abrams.hp).toBe(20 - 3 - 4);
-    expect(status(abrams, 'fixation')).toMatchObject({ value: 2 });
     expect(hps(bench)).toEqual([16, 16, 16]);
-    for (const c of bench) expect(status(c, 'fixation'), c.cardId).toBeUndefined();
   });
 
   it("Vindicta's Flight and Drifter's Bloodscent stay with the swing", () => {

@@ -18,7 +18,6 @@
  *   stun  Status_Stun            silenced  Status_Silence        disarm  Status_Disarm
  *   sleep  Status_Sleep          bleed  Status_Bleed             rooted  Immobilize
  *   rabbit  Rabbit_Hex           charged  Static_Charge          djinns_mark  Djinn's_Mark
- *   fixation  Fixation (its stack count rides on her head on the sticker)
  *   reverb  Mystic_Reverb_v1     siphon_drain  Siphon_Bullets_v1, an arrow down
  *   weapon_power_down  Bullet_damage, an arrow down   spirit_power_down  Spirit_Icon, an arrow down
  *   bullet_resist_down  Bullet_Resist_Reduction_icon  spirit_resist_down  Spirit_Resist_Reduction_icon
@@ -50,7 +49,7 @@ type MarkKind =
   // Debuffs
   | 'stun' | 'silenced' | 'disarm' | 'sleep' | 'bleed' | 'charged' | 'djinns_mark' | 'reverb'
   | 'siphon_drain' | 'weapon_power_down' | 'spirit_power_down' | 'bullet_resist_down'
-  | 'spirit_resist_down' | 'healing_boost_down' | 'fixation' | 'rooted' | 'rabbit'
+  | 'spirit_resist_down' | 'healing_boost_down' | 'rooted' | 'rabbit'
   // Buffs and the rest
   | 'bullet_resist' | 'spirit_resist' | 'shield' | 'weapon_power' | 'spirit_power' | 'unstoppable' | 'invulnerable'
   | 'healing_boost' | 'extra_attack' | 'casting' | 'return_fire' | 'siphon_gain' | 'dome' | 'last_stand'
@@ -64,7 +63,7 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
   ...([
     'stun', 'silenced', 'disarm', 'sleep', 'bleed', 'charged', 'djinns_mark', 'reverb',
     'siphon_drain', 'weapon_power_down', 'spirit_power_down', 'bullet_resist_down',
-    'spirit_resist_down', 'healing_boost_down', 'fixation', 'rooted', 'rabbit',
+    'spirit_resist_down', 'healing_boost_down', 'rooted', 'rabbit',
     'bullet_resist', 'spirit_resist', 'shield', 'weapon_power', 'spirit_power', 'unstoppable', 'invulnerable',
     'healing_boost', 'extra_attack', 'casting', 'return_fire', 'siphon_gain', 'dome', 'last_stand',
     'swift', 'ricochet', 'wolf_form', 'counterspell', 'flying',
@@ -117,7 +116,6 @@ const GLYPH_BOX = {
   djinns_mark: { px: [137, 137], box: [0, 17, 137, 109] },
   ethereal_shift: { px: [128, 128], box: [7, 14, 114, 114] },
   extra_attack: { px: [128, 128], box: [11, 29, 112, 70] },
-  fixation: { px: [137, 137], box: [16, 3, 118, 133] },
   healing_boost: { px: [128, 128], box: [8, 9, 112, 110] },
   healing_boost_down: { px: [128, 128], box: [8, 9, 112, 110] },
   last_stand: { px: [137, 137], box: [3, 2, 131, 126] },
@@ -158,7 +156,6 @@ const SOURCE: Record<MarkKind, Source> = {
   bullet_resist_down: glyph('bullet_resist_down'),
   spirit_resist_down: glyph('spirit_resist_down'),
   healing_boost_down: glyph('healing_boost_down'),
-  fixation: glyph('fixation'),
   rooted: glyph('rooted'),
   rabbit: glyph('rabbit'),
   // Buffs and the rest
@@ -275,15 +272,12 @@ function BadgeMark({ dir, color, outline, size }: { dir: Badge; color: string; o
 }
 
 /** A status's mark at `size` px. */
-export function StatusMark({ id, color, outline, size, count }: {
+export function StatusMark({ id, color, outline, size }: {
   id: StatusId;
   color: string;
   /** An ink laid wider underneath, so the mark reads on any ground. */
   outline?: string;
   size: number;
-  /** A number to print on the mark where it has room (Fixation's stack, on
-   *  Haze's head) — over art only; a chip's pill carries it. */
-  count?: number;
 }) {
   const kind = markFor(id);
   const src = SOURCE[kind];
@@ -292,17 +286,6 @@ export function StatusMark({ id, color, outline, size, count }: {
       {src.kind === 'glyph' && <Glyph url={urlOf(src.file)} px={src.px} box={src.box} color={color} outline={outline} size={size} />}
       {src.kind === 'drawn' && <Drawn color={color} outline={outline} size={size} />}
       {src.kind === 'glyph' && src.badge && <BadgeMark dir={src.badge} color={color} outline={outline} size={size} />}
-      {count !== undefined && outline && (
-        <span
-          data-count={count}
-          style={{
-            position: 'absolute', left: '47%', top: '52%', transform: 'translate(-50%, -50%)',
-            font: `700 ${Math.round(size * 0.42)}px/1 ${fonts.display}`, color: outline, letterSpacing: 0,
-          }}
-        >
-          {count}
-        </span>
-      )}
     </span>
   );
 }

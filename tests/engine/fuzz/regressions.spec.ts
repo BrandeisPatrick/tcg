@@ -830,15 +830,14 @@ describe('M2 the attack forecast matches what the attack does', () => {
   it('M2e the target\'s Weapon Shielding (Shield 2 after each bullet) is in the plan of a two-swing attack', () => {
     const { G, atk, foe } = duel('hero_haze', 5);
     giveItem(G, foe, 'weapon_shielding');
-    // Haze's Fixation no longer swings twice (each swing adds a stack she hits harder for): the
-    // second swing is an Extra Attack. The first lands and raises the Shield the second runs into.
+    // The second swing is an Extra Attack. The first lands and raises the Shield the second runs into.
     expect(atk.cardId).toBe('hero_haze');
     grantExtraAttacks(atk, 1);
     expect(forecastMismatches(G, ctxFor('0'), '0')).toEqual([]);
-    // swing 1: 5 -> 4, Shield 2; swing 2 (1 + Fixation 1) is soaked by it — no KO.
+    // swing 1: 5 -> 4, Shield 2; swing 2 (1 + Fixation 1, the target hurt now) is soaked by it — no KO.
     const hit = swing(G);
     expect(hit.hp).toBe(4);
-    expect(hit.statuses.find((s) => s.id === 'fixation')?.value).toBe(2); // two swings landed
+    expect(hit.statuses.some((s) => s.id === 'fixation')).toBe(false); // Fixation is a bonus, no status (2026-11-16)
   });
 
   it('M2f Bullet Resist Shredder (+1 damage on the next swing) is in the plan of a two-swing attack', () => {

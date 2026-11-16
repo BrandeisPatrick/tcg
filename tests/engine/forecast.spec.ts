@@ -68,27 +68,27 @@ const cases: Case[] = [
     damageToActive: 9, pushDamage: 0, ko: false,
   },
   {
-    name: "Haze's Fixation: the target's stack adds to her swing, and the swing adds a stack the Extra Attack hits with",
+    name: "Haze's Fixation (2026-11-16): +1 on every swing at a hurt target, the Extra Attack's too",
     build: () => {
       const { G, attacker, defender } = board('hero_haze');
-      addStatus(G, defender, 'fixation', 1, 99); extraAttacks(attacker, 1);
+      defender.hp = defender.hpMax - 1; extraAttacks(attacker, 1);
       return G;
     },
     steps: [
-      { rawDamage: 4, finalDamage: 4, predictedHpAfter: 36, bonusLabel: 'Fixation +1' },
-      { rawDamage: 5, finalDamage: 5, predictedHpAfter: 31, bonusLabel: 'Extra Attack' },
+      { rawDamage: 4, finalDamage: 4, predictedHpAfter: 35, bonusLabel: 'Fixation +1' },
+      { rawDamage: 4, finalDamage: 4, predictedHpAfter: 31, bonusLabel: 'Extra Attack' },
     ],
-    damageToActive: 9, pushDamage: 0, ko: false,
+    damageToActive: 8, pushDamage: 0, ko: false,
   },
   {
-    name: "Haze's Fixation stops at 2 stacks: seven swings at the Extra Attack cap hit for 3, 4, then 5 each",
+    name: "Haze's Fixation is a flat +1: seven swings at the Extra Attack cap hit for 3 (the target still whole), then 4 each",
     build: () => { const { G, attacker } = board('hero_haze'); extraAttacks(attacker, 6); return G; },
-    steps: [3, 4, 5, 5, 5, 5, 5].map((dmg, i, all) => ({
+    steps: [3, 4, 4, 4, 4, 4, 4].map((dmg, i, all) => ({
       rawDamage: dmg, finalDamage: dmg,
       predictedHpAfter: 40 - all.slice(0, i + 1).reduce((a, b) => a + b, 0),
       bonusLabel: i === 0 ? undefined : 'Extra Attack',
     })),
-    damageToActive: 32, pushDamage: 0, ko: false,
+    damageToActive: 27, pushDamage: 0, ko: false,
   },
   {
     name: 'a Shield eats part of the first swing and is gone for the second',

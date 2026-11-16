@@ -80,7 +80,7 @@ from their "Deadlock Graphical Library" collection.
   deadlock-api's shop list (`shop_image_webp`, 200×200 WebP, used as served). See
   `public/ART_PIPELINE.md`.
 - The status icons in `public/status/` (Stun, Silence, Sleep, Bleed,
-  Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, Fixation, the armours
+  Immobilize, Rabbit Hex, Static Charge, Djinn's Mark, the armours
   and their reduction icons, Barrier, Healing, the damage heart, Fire Rate,
   the sprint boot, Unstoppable, Warden's Last Stand, Dynamo's Singularity for
   a channel, and the item glyphs of Mystic Reverb, Siphon Bullets, Return

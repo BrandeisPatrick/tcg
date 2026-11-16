@@ -375,7 +375,7 @@ describe('what a hero card prints', () => {
   // purple, card/scaling.ts).
   const PRINTED: Record<string, [kind: 'skill' | 'passive', name: string, text: string]> = {
     hero_abrams: ['passive', "Infernal Resilience", "At the start of your turn, if Abrams is Active, he heals 2."],
-    hero_haze: ['passive', "Fixation", "Each attack adds a Fixation stack to the target (max 2). Haze deals +1 bullet damage per stack to it until it leaves the Active slot."],
+    hero_haze: ['passive', "Fixation", "Haze's attacks deal +1 bullet damage to an enemy below full HP."],
     hero_mo_krill: ['skill', "Sand Blast", "Deal {sp:1} spirit damage to the enemy Active and Disarm it 1 turn (it can't attack)."],
     hero_rem: ['skill', "Tag Along", "Rem rides on another of your heroes as equipment for 2 turns: it heals {sp:4}. Then Rem returns to your bench."],
     hero_shiv: ['skill', "Serrated Knives", "Throw a knife: deal {sp:1} spirit damage to the enemy Active and Bleed 1 for 2 turns."],

@@ -414,7 +414,9 @@ resolves, once, at its end.
   - `untargetable` — the bearer cannot be the target of a basic attack (Dome);
     `isUntargetable(card, act)` is the only check on who may be aimed at.
   - `clearOnLeaveActive` — the status ends when its bearer leaves the Active
-    slot (Fixation); `leaveActive` does it, and every move off the slot calls it.
+    slot (no card's status uses it since Fixation became a flat bonus on
+    2026-11-16; the primitive and its test stay); `leaveActive` does it, and
+    every move off the slot calls it.
   - `cc` (hard crowd control: Unstoppable blocks it, it ticks at the end of the
     turn) and `stack`.
 

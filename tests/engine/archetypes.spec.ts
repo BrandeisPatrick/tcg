@@ -5,10 +5,10 @@ import { INVALID, perform } from '@/engine/engine';
 import { tickCastingPulses, addStatus, tickRemMerges } from '@/engine/statusOps';
 import { damageUnit } from '@/engine/damage';
 import { reapDead } from '@/engine/death';
-import { effectiveAtk, isBlocked, seatOf } from '@/engine/query';
+import { attackPower, effectiveAtk, isBlocked, seatOf } from '@/engine/query';
 import { skillBlocked } from '@/engine/legality';
 import { grantExtraAttacks } from '@/engine/statusOps';
-import { FIXATION_CAP, MAX_EXTRA_ATTACKS } from '@/engine/constants';
+import { MAX_EXTRA_ATTACKS } from '@/engine/constants';
 import { getAbility } from '@/abilities';
 import { buildPlayer } from '@/engine/actions/setup';
 import { allocatorFor, newCounters } from '@/engine/ids';
@@ -80,29 +80,26 @@ describe('Multi-attack: Extra Attack (N)', () => {
     expect(def.statuses.find((s) => s.id === 'bleed')?.value).toBe(3);
   });
 
-  it('Burst Fire (equipment) grants Extra Attack; Fixation adds a stack to the target, not an Extra Attack', () => {
+  it('Burst Fire (equipment) grants Extra Attack; Fixation is a bonus on the swing, not an Extra Attack', () => {
     const G = freshReadyGame();
     const dyn = makeHero('hero_dynamo', '0', 'active', 0); // plain active
     G.players['0'].active = dyn;
-    const def = G.players['1'].active!;
     getAbility('eff_burst_fire')!.run(G, { movingPlayer: '0' }, { source: dyn });                                     // +1 (each turn)
-    getAbility('passive_haze_fixation')!.run(G, { movingPlayer: '0' }, { source: dyn, target: def, params: { primary: true } }); // a stack on the target
     expect(extraOf(dyn)).toBe(1);
-    expect(def.statuses.find((s) => s.id === 'fixation')?.value).toBe(1);
+    const fixation = getAbility('passive_haze_fixation')!;
+    expect(fixation.trigger).toBe('ongoing'); // nothing it runs: it only reads the target
   });
 
-  it('Fixation stacks on a swing, never on a Ricochet bounce, up to FIXATION_CAP (no extra swings)', () => {
+  it('Fixation (2026-11-16): +1 to an enemy below full HP, nothing to one at full HP, and it puts no status on anyone', () => {
     const G = freshReadyGame();
     const haze = makeHero('hero_haze', '0');
     const def = G.players['1'].active!;
-    const fixation = getAbility('passive_haze_fixation')!;
-    const stacks = () => def.statuses.find((s) => s.id === 'fixation')?.value ?? 0;
-    // A bounce adds none.
-    fixation.run(G, { movingPlayer: '0' }, { source: haze, target: def, params: { dealt: 2, bounce: true } });
-    expect(stacks()).toBe(0);
-    // Each swing adds one, up to the cap.
-    for (let i = 0; i < FIXATION_CAP + 2; i++) fixation.run(G, { movingPlayer: '0' }, { source: haze, target: def, params: { primary: true } });
-    expect(stacks()).toBe(FIXATION_CAP);
+    const bonus = (t: typeof def) => attackPower(haze, t).parts.find((p) => p.bonus)?.amount ?? 0;
+    def.hp = def.hpMax;
+    expect(bonus(def)).toBe(0);
+    def.hp = def.hpMax - 1;
+    expect(bonus(def)).toBe(1);
+    expect(def.statuses.some((s) => s.id === 'fixation')).toBe(false);
     expect(extraOf(haze)).toBe(0);
   });
 });
@@ -118,12 +115,12 @@ describe('Haze Fixation — reactive follow-up swing', () => {
       const def = G.players['1'].active!;
       def.hp = def.hpMax = 99;
       makeAttack(G, '0');
-      expect(def.hp, `level ${level}`).toBe(99 - effectiveAtk(haze)); // the first swing: no stack yet
+      expect(def.hp, `level ${level}`).toBe(99 - effectiveAtk(haze)); // the first swing: a hero at full HP, no bonus
       expect(extraOf(haze), `level ${level}`).toBe(0);
     }
   });
 
-  it('each swing through the attack phase adds a stack, and the next swing deals +stacks (capped at 2)', () => {
+  it('the first swing at a hero still whole deals its Attack; every swing after it, at a hurt hero, +1', () => {
     const G = freshReadyGame();
     const haze = makeHero('hero_haze', '0', 'active', 0);
     G.players['0'].active = haze;
@@ -131,14 +128,13 @@ describe('Haze Fixation — reactive follow-up swing', () => {
     const def = G.players['1'].active!;
     def.hp = def.hpMax = 99;
     const dmg = effectiveAtk(haze);
-    grantExtraAttacks(haze, 3); // four swings: +0, +1, +2, +2
+    grantExtraAttacks(haze, 3); // four swings: +0, +1, +1, +1
     makeAttack(G, '0');
-    expect(def.hp).toBe(99 - (dmg * 4 + 0 + 1 + 2 + 2));
-    expect(def.statuses.find((s) => s.id === 'fixation')?.value).toBe(FIXATION_CAP);
+    expect(def.hp).toBe(99 - (dmg * 4 + 0 + 1 + 1 + 1));
     expect(extraOf(haze)).toBe(0); // consumed + cleared
   });
 
-  it('a disarmed Haze puts no Fixation stack on (she never attacked)', () => {
+  it('a disarmed Haze cannot attack: nothing dealt, no Fixation bonus', () => {
     const G = freshReadyGame();
     const haze = makeHero('hero_haze', '0', 'active', 0);
     G.players['0'].active = haze;
@@ -149,7 +145,7 @@ describe('Haze Fixation — reactive follow-up swing', () => {
     expect(perform(G, '0', { type: 'attack' })).toBe(INVALID); // the gate refuses it
     expect(def.hp).toBe(hp0); // no damage
     expect(extraOf(haze)).toBe(0);
-    expect(def.statuses.some((s) => s.id === 'fixation')).toBe(false); // Fixation never fired
+    expect(def.statuses.some((s) => s.id === 'fixation')).toBe(false); // and no status of hers (Fixation has none)
   });
 });
 

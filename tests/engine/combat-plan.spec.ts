@@ -20,7 +20,7 @@ function swingsFor(hero: CardInstance, atk: number): CardInstance {
 
 /** Swap P0's Active to a hero with no onAttack passive (Dynamo, its Attack
  *  raised to 3) so mitigation/invariant tests see exactly the one plain swing —
- *  the default fixture Active is Haze, whose Fixation stacks on her target. */
+ *  the default fixture Active is Haze, whose Fixation adds +1 at a hurt target. */
 function plainActive(G: GameState) {
   G.players['0'].active = swingsFor(makeHero('hero_dynamo', '0', 'active', 0), 3);
 }
@@ -258,14 +258,14 @@ describe('the attack is one-way', () => {
     expect(atk.statuses.find((s) => s.id === 'djinns_mark')).toBeUndefined();
   });
 
-  it("the attacker's own onAttack passive still fires (Haze's Fixation on the defender)", () => {
+  it("the attacker's own onAttack passive still fires (Mirage's Djinn's Mark on the defender)", () => {
     const G = freshG();
+    G.players['0'].active = makeHero('hero_mirage', '0', 'active', 0);
     soloAttacker(G, '0');
-    expect(G.players['0'].active!.cardId).toBe('hero_haze');
     const def = G.players['1'].active!;
     def.hp = def.hpMax = 30;
     makeAttack(G, '0');
-    expect(def.statuses.find((s) => s.id === 'fixation')?.value).toBe(1);
+    expect(def.statuses.find((s) => s.id === 'djinns_mark')?.value).toBe(1);
   });
 });
 
