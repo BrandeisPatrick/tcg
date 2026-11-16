@@ -32,14 +32,14 @@ describe('ready decks', () => {
     for (const id of upgrades) expect(d.items, id).toContain(evolvesFrom(id));
   });
 
-  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 2 copies, 56 souls at most at printed prices with at most two over 4, a counter, a draw card, mostly equipment', (_name, d) => {
+  it.each(READY_DECKS.map((d) => [d.name, d] as const))('%s: the recipe — at most 2 copies, 28 souls at most at printed prices with at most two over 2, a counter, a draw card, mostly equipment', (_name, d) => {
     const counts = copyCounts(d.items);
     expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(2);
     // What the deck costs is what its cards print (a spell priced for one play counts its own
-    // price): 56 souls at most, and at most two cards over 4 — its payoffs — none over 16.
+    // price): 28 souls at most, and at most two cards over 2 — its payoffs — none over 8 (56, 4 and 16 until prices halved).
     // (Until the redesign of 2026-11-16 the recipe counted tiers: 8 / 6 / 2.)
-    expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBeLessThanOrEqual(56);
-    const payoffs = d.items.filter((id) => itemPrice(id) > 4);
+    expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBeLessThanOrEqual(28);
+    const payoffs = d.items.filter((id) => itemPrice(id) > PRICE[2]);
     expect(payoffs.length, payoffs.join(', ')).toBeLessThanOrEqual(2);
     for (const id of payoffs) expect(itemPrice(id), id).toBeLessThanOrEqual(PRICE[4]);
     // A counter in every deck; the draw card, Golden Goose Egg, once (twice in Graveyard, which

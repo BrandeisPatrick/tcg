@@ -57,11 +57,12 @@ of that day. Every number below is reasoned, none played or simulated.
 
 ### The recipe
 
-- **16 items, at most 56 souls at the prices they print, and at most two of them over 4 souls:**
-  the deck's payoffs, up to 16 each. The lane pays 2 a turn ([balance-model.md](balance-model.md)
-  §7): by its turn 9 a side has about 30 souls (18 from the lane, about 12 in bounties) and has
-  drawn about 11 of its 16 items, 13 with its Golden Goose Egg. With two payoffs of 8 the other 14
-  average under 3 souls, so most of what is drawn is played, and a payoff lands around turn 4.
+- **16 items, at most 28 souls at the prices they print, and at most two of them over 2 souls:**
+  the deck's payoffs, up to 8 each (56, 4 and 16 until prices halved on 2026-11-16,
+  [balance-model.md](balance-model.md) §12). The lane pays 2 a turn (§7): by its turn 9 a side has
+  about 30 souls (18 from the lane, about 12 in bounties) and has drawn about 11 of its 16 items,
+  13 with its Golden Goose Egg. A whole deck lists at about what a side has by turn 7, so
+  everything drawn is played, and a payoff of 4 lands on turn 2.
   Until this redesign the recipe counted tiers (8 tier-1, 6 tier-2, 2 tier-3). That priced
   Majestic Leap at 8 for a card that costs 2, and left no room for a deck to be built around one
   tier-4 card (Aurora's Healing Tempo: 16, the same as two tier-3s).
@@ -203,7 +204,7 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
     will hold then, and what a kill pays now.
 - The Mid-Boss is off for now (Patrick, 2026-11-09: "remove the mid boss mechanics for now").
 - Put heroes from your hand on the bench (up to 3). It's free.
-- Put an item from your hand on a hero by paying its price: 2, 4, 8, 16 or 24 souls by tier, as today.
+- Put an item from your hand on a hero by paying its price: 1, 2, 4, 8 or 12 souls by tier (2, 4, 8, 16 or 24 until 2026-11-16).
 - A hero wears 3 items. Played onto a full hero, a card goes on in place of one it wears: a sheet asks which goes to the discard pile (Patrick, 2026-11-09: "when I click equip it should ask me which equipment to discard"). Cancel backs out with nothing paid.
 - Retreat, skills, ultimates and the attack work as today until the hero rules land. After that, skills and ultimates cost souls (see [hero-design.md](hero-design.md)); since 2026-11-15 they cost none and wait instead ([balance-model.md](balance-model.md) §8).
 - Your hand holds up to 10 cards. When it is full, further draws are skipped.

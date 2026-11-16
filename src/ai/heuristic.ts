@@ -77,7 +77,7 @@ import { attackBlocked, attackTargets, legalActions, playBlocked, playBlockedAny
 import { buildOf } from '@/engine/deck';
 import { seededRandom } from '@/engine/rng';
 import { forecastAttack, simulate } from '@/engine/forecast';
-import { BOSS_RETALIATION, LANE_INCOME, SKILL_SPIRIT_RATE } from '@/engine/constants';
+import { BOSS_RETALIATION, LANE_INCOME, PRICE, SKILL_SPIRIT_RATE, SOUL_POINTS } from '@/engine/constants';
 import { withBlindRolls } from '@/engine/chance';
 
 /** How hard the AI plays: the difficulty dial (see the head of this file). */
@@ -261,7 +261,7 @@ const HAND_HERO = 6;
  *  price — well under what it is worth worn (`WORN_PRICE` of its price, and its
  *  stats and effects), so it is played once it can be paid for. Drawing is
  *  worth about this a card. */
-const HAND_ITEM = { base: 0.5, perSoul: 0.1 } as const;
+const HAND_ITEM = { base: 0.5, perSoul: 0.1 * SOUL_POINTS } as const;
 
 /** What a worn item is worth for each soul of its list price, on top of what
  *  the position reads off it (its stats in `presence`, its effects in
@@ -269,15 +269,15 @@ const HAND_ITEM = { base: 0.5, perSoul: 0.1 } as const;
  *  §3), most of which the one-ply evaluation cannot see — a proc to come, a
  *  resist against the next hit. Above a soul's own worth (SOUL), so paying for
  *  an item and putting it on is worth it, and an evolve gains the difference. */
-const WORN_PRICE = 0.5;
+const WORN_PRICE = 0.5 * SOUL_POINTS; // a soul buys SOUL_POINTS of the budget since prices halved
 
-/** The lowest tier the AI saves for (`savingGoal`): tier 2, the first whose
- *  price (4) is more than a turn of the lane (2). A tier-1 card is one turn's
- *  income and needs no saving: it is weighed against a skill as it always
- *  was. The dearer tier comes first because the item budget gives it more for
+/** The lowest tier the AI saves for (`savingGoal`): tier 3, the first whose
+ *  price (4 since prices halved, 2026-11-16) is more than a turn of the lane
+ *  (2). A tier-1 or tier-2 card is a turn's income or less and needs no
+ *  saving: it is weighed against a skill as it always was. The dearer tier comes first because the item budget gives it more for
  *  each soul and turn worn (docs/card-design.md §3: 2 points over 8 turns at
  *  tier 1, 4 over 6, 8 over 4, 16 over 3). */
-const SAVE_TIER = 2;
+const SAVE_TIER = 3;
 
 /** How far ahead the AI saves: a card it can pay for within this many of its
  *  own turns of income, souls in hand counted. Three turns is a third of a
@@ -509,7 +509,7 @@ function keepValue(G: GameState, pid: PlayerID, card: CardInstance): number {
   // souls aside (a spell that takes no target: the board itself).
   const fits = playSpots(G, pid, card);
   const price = itemPrice(card.cardId);
-  let v = 10 + Math.min(price, 16) * 0.5;
+  let v = 10 + Math.min(price, PRICE[4]) * 0.5 * SOUL_POINTS;
   if (fits.length === 0) v -= 12;
   if (fits.some((h) => !!h && h.ownerId === pid && (buildWants(G, pid, h, card.cardId) || !!upgradeComponent(h, card.cardId)))) v += 6;
   // An item further off than the AI saves for (SAVE_HORIZON turns of income)

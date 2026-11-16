@@ -6,9 +6,10 @@ import type { CardId } from '@/engine/types';
  * (`deckProblem`, decks.ts) built to one recipe; every choice is reasoned in docs/deck-plan.md
  * ("Redesigned 2026-11-16: the ready decks by reasoning"). No sim ran.
  *
- *  - 16 items at most 56 souls at the prices they print (a spell priced for one play counts
- *    its own price), and at most two of them over 4 souls: the deck's payoffs. The lane pays
- *    2 a turn, so a side has about 30 souls by its turn 9 for the 11 or so items it draws.
+ *  - 16 items at most 28 souls at the prices they print (a spell priced for one play counts
+ *    its own price), and at most two of them over 2 souls: the deck's payoffs. (56 and 4 until
+ *    prices halved, 2026-11-16.) The lane pays 2 a turn, so a side has about 30 souls by its
+ *    turn 9 for the 11 or so items it draws: every one of them can be played.
  *  - At most 2 copies of one card (Pokémon TCG Pocket's rule, inside MAX_COPIES).
  *  - One upgrade line beside the item it is built from (played onto the hero wearing that
  *    item, the upgrade costs only the difference); never an upgrade without its component.
@@ -85,8 +86,11 @@ export const READY_DECKS: readonly ReadyDeck[] = [
     blurb: 'Disarm, silence and hex them every turn, then Wraith shoots twice.',
     heroes: ['hero_mo_krill', 'hero_sinclair', 'hero_wraith'],
     items: [
+      // Headshot Booster for Titanic Magazine since prices halved (2026-11-16): Disarming Hex's
+      // 1.5 rounds to 2, twice, and the deck came to 29; Wraith's first swing on a fresh Active
+      // gets the +2 instead, for 1 soul.
       'rusted_barrel', ...x2('extended_magazine'), ...x2('extra_health'), 'grit', 'golden_goose_egg',
-      'slowing_hex', ...x2('improved_cooldown'), 'titanic_magazine',
+      'headshot_booster', 'slowing_hex', ...x2('improved_cooldown'),
       ...x2('disarming_hex'), 'knockdown', 'superior_cooldown', 'burst_fire',
     ],
   },
