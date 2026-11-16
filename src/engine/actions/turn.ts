@@ -60,7 +60,8 @@ function tickRespawn(G: GameState, pid: PlayerID) {
  *  the turn's flags reset, the Mid-Boss rises if its round has come, the
  *  start-of-turn ticks, cooldowns (heroes' and items') and Rem's ride, the
  *  income, fallen heroes whose wait is over going back to the hand, the draw
- *  (DRAW_PER_TURN; skipped into a full hand, nothing from an empty deck), the
+ *  (DRAW_PER_TURN; skipped into a full hand; an empty deck loses the match
+ *  under the deck-out rule, `G.deckOut`, else draws nothing), the
  *  start-of-turn passives and gear, and the state-based pass. */
 export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   if (G.draft) return;
@@ -87,6 +88,13 @@ export function beginTurn(G: GameState, pid: PlayerID, ctxTurn: number) {
   // counts down once per round (on its owner's turn): a timer of N is N of the
   // owner's turns of downtime (RESPAWN_TURNS).
   tickRespawn(G, pid);
+  // Deck-out (2026-11-16): a side whose deck is empty when its draw comes
+  // loses, as in the Pokémon TCG. The match ends here (`checkWinner`).
+  if (G.deckOut && ps.deck.length === 0) {
+    G.deckedOut = pid;
+    pushLog(G, `P${pid} has no card left to draw and loses.`);
+    return;
+  }
   drawCards(G, pid, DRAW_PER_TURN);
   fireBoardTriggers(G, pid, 'startOfTurn');
   resolve(G);

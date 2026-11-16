@@ -25,8 +25,8 @@
  * power, doubled from round 9), the flex slot (`flex-slot-walker`), the
  * Mid-Boss (`boss-*`: in a match without one, `G.midBoss` off as
  * MID_BOSS_ENABLED is now, none ever stands — `boss-off`), the Rejuvenator (`revive-*`), the wait of a fallen hero
- * (`respawn-timer-start`, `respawn-timer`) and the round cap (`round-cap`,
- * `game-over-winner`).
+ * (`respawn-timer-start`, `respawn-timer`), the round cap and the deck-out
+ * rule (`round-cap`, `game-over-winner`).
  *
  * Nothing here mutates G (it is frozen by immer in a live client).
  */
@@ -338,10 +338,16 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
   }
   if (!G.draft && over) {
     const fallen = PIDS.filter((pid) => (patronOf(G.players[pid])?.hp ?? 1) <= 0);
-    const want = fallen.length === 1 ? other(fallen[0]) : fallen.length === 2 || G.capped ? standingWinnerOracle(G) : undefined;
+    // Deck-out (2026-11-16): under the rule, a side whose deck is empty at its
+    // turn's draw loses. Written from the rule, not read off the engine's flag:
+    // the side named must have the rule on and no card in its deck.
+    const deckedOut = G.deckOut && G.deckedOut && G.players[G.deckedOut].deck.length === 0 ? G.deckedOut : undefined;
+    if (G.deckedOut && !deckedOut) add('game-over-winner', 'deck-out', `P${G.deckedOut} is marked decked out but the rule is off or its deck holds ${G.players[G.deckedOut].deck.length}`);
+    const want = fallen.length === 1 ? other(fallen[0]) : fallen.length === 2 ? standingWinnerOracle(G)
+      : deckedOut ? other(deckedOut) : G.capped ? standingWinnerOracle(G) : undefined;
     const got = (ctx.gameover as { winner?: PlayerID } | undefined)?.winner;
-    if (want === undefined) add('game-over-winner', 'reason', `the match is over with no Patron fallen and no cap reached (winner P${got})`);
-    else if (got !== want) add('game-over-winner', 'winner', `P${got} won; the rules give P${want} (${fallen.length ? `fallen Patron: P${fallen.join(', P')}` : 'the round cap'})`);
+    if (want === undefined) add('game-over-winner', 'reason', `the match is over with no Patron fallen, no deck run out and no cap reached (winner P${got})`);
+    else if (got !== want) add('game-over-winner', 'winner', `P${got} won; the rules give P${want} (${fallen.length ? `fallen Patron: P${fallen.join(', P')}` : deckedOut ? `P${deckedOut}'s deck ran out` : 'the round cap'})`);
   }
 
   // ---- the turn: its number, and whose it is (the pie rule) ----

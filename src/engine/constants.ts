@@ -168,8 +168,10 @@ export const LATE_GAME_ROUND = 9;
 export const LATE_PUSH_MULTIPLIER = 2;
 
 /** The last round: once both players' own turn ROUND_CAP is over, the side
- *  with more structure HP wins (then the richer side, then the second mover). */
-export const ROUND_CAP = 12;
+ *  with more structure HP wins (then the richer side, then the second mover).
+ *  20 since 2026-11-16 (Patrick; it was 12). A side's deck runs out first in
+ *  most long matches (`GameState.deckOut`, docs/balance-model.md §13). */
+export const ROUND_CAP = 20;
 
 /** Whether a match has the Mid-Boss at all. Off for now (Patrick,
  *  2026-11-09: "remove the mid boss mechanics for now"): no boss rises,

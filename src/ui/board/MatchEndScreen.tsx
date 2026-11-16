@@ -56,7 +56,10 @@ export function MatchEndScreen({
   const headline = won ? 'Victory' : 'Defeat';
   // The round cap decided it: nobody's Patron fell, and what stood won.
   const cap = G.capped ? standingVerdict(G) : null;
-  const capLine = cap ? `Round ${ROUND_CAP} over · ${cap.by === 'structures' ? 'more structure HP' : cap.by === 'netWorth' ? 'structures tied, more net worth' : 'all tied, the second mover'}` : null;
+  const capLine = G.deckedOut
+    // The deck-out rule decided it (2026-11-16): a side had no card to draw.
+    ? (G.deckedOut === me ? 'Your deck ran out' : "The rival's deck ran out")
+    : cap ? `Round ${ROUND_CAP} over · ${cap.by === 'structures' ? 'more structure HP' : cap.by === 'netWorth' ? 'structures tied, more net worth' : 'all tied, the second mover'}` : null;
   // A lesson keeps its own closing line; a match lets the headline speak.
   const flavor = isTutorial && won ? lessonOutro : undefined;
 
