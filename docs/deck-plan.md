@@ -79,14 +79,14 @@ of that day. Every number below is reasoned, none played or simulated.
 - **A squad has a front, a carry and a helper**, and no hero is in two decks. Four heroes are in
   none: Abrams, Rem, Shiv and Paige.
 
-| Deck | Squad | How it wins | Payoffs | Souls |
+| Deck | Squad | How it wins | Payoffs | Souls (halved 2026-11-16) |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze | Two shots a turn | Burst Fire, Toxic Bullets | 56 |
-| Spirit Storm | Lash, Seven, Kelvin | Area skills cast more often | Torment Pulse, Superior Cooldown | 56 |
-| Aurora | Victor, Dynamo, Drifter | Heal into a free Retreat, finish the wounded | Healing Tempo | 56 |
-| Ambush | Silver, Yamato, Mirage | Every hero that steps in hits for 3 more | Tesla Bullets, Burst Fire | 56 |
-| Lockdown | Mo & Krill, Sinclair, Wraith | Deny every turn, then two shots | Superior Cooldown, Burst Fire | 55 |
-| Graveyard | Viscous, Graves, Lady Geist | Ghouls mill them; Roots deny their swaps | Torment Pulse, Decay | 56 |
+| Gunline | Warden, Vindicta, Haze | Two shots a turn | Burst Fire, Toxic Bullets | 28 |
+| Spirit Storm | Lash, Seven, Kelvin | Area skills cast more often | Torment Pulse, Superior Cooldown | 28 |
+| Aurora | Victor, Dynamo, Drifter | Heal into a free Retreat, finish the wounded | Healing Tempo | 28 |
+| Ambush | Silver, Yamato, Mirage | Every hero that steps in hits for 3 more | Tesla Bullets, Burst Fire | 28 |
+| Lockdown | Mo & Krill, Sinclair, Wraith | Deny every turn, then two shots | Superior Cooldown, Burst Fire | 28 |
+| Graveyard | Viscous, Graves, Lady Geist | Ghouls mill them; Roots deny their swaps | Torment Pulse, Decay | 28 |
 
 ### Each deck
 
@@ -150,7 +150,8 @@ nothing, Silver for 0 with Swift Striker.
   Rusted Barrel (1). Knockdown (4) is the counter and a third denial.
 - 2 Compress Cooldown, then Superior Cooldown: Sand Blast 3 → 2, Rabbit Hex 4 → 3, Full Auto 3 → 2,
   and with Superior the ultimates 2 sooner (Combo and Telekinesis both stun).
-- Titanic Magazine over 2 Extended Magazine and Burst Fire for Wraith; 2 Extra Health for Mo &
+- Headshot Booster over 2 Extended Magazine and Burst Fire for Wraith (it was Titanic Magazine
+  until prices halved: two Disarming Hex at 2 each put the deck at 29); 2 Extra Health for Mo &
   Krill in front; Grit; Golden Goose Egg.
 - Out: Silence Wave (8) for two Disarming Hex (6), and Spirit Strike, Extra Spirit, Mystic Shot and
   Spirit Lifesteal: the squad's damage is Wraith's gun.
@@ -231,7 +232,7 @@ them regularly; an upgrade costs much less").
   difference" on an upgrade's tile).
 - **Upgrades evolve:** play an upgrade on the hero who wears the item it is built from and it
   replaces that item, like evolving a Pokémon.
-  - You pay only the difference, as in Deadlock: Titanic Magazine over Extended Magazine costs 2,
+  - You pay only the difference, as in Deadlock: Titanic Magazine over Extended Magazine costs 1,
     not 4. The old item goes to the discard pile.
   - On any other hero, the upgrade costs its normal price.
 - The rule is for equipment built from equipment. A spell (an active item) always costs its price,

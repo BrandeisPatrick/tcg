@@ -65,7 +65,11 @@ describe('invariants hold in every state of seeded games', () => {
         expect(coverage.replaces, 'no card ever replaced a worn item on a full hero').toBeGreaterThan(0);
       }
       // The harness has to actually play: a game that never leaves the draft checks nothing.
-      expect(games.every((g) => g.steps > 20)).toBe(true);
+      // Every game gets past the draft (its six picks and first Actives) into several turns of
+      // play. (It read "more than 20 moves" until prices halved, 2026-11-16: since then a random
+      // seat that leaves its lane empty can lose a real match in fewer — seed 10131, 19 moves
+      // over 7 turns, randomLegal-vs-heuristic.)
+      expect(games.every((g) => g.turns >= 5 && g.steps > 15), games.filter((g) => g.turns < 5 || g.steps <= 15).map((g) => `${g.seed}: ${g.steps} moves, ${g.turns} turns`).join('; ')).toBe(true);
       const { unexpected, expected } = splitKnown(hits, KNOWN);
       if (process.env.FUZZ_VERBOSE) {
         // eslint-disable-next-line no-console
