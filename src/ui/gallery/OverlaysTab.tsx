@@ -21,7 +21,7 @@ const SHEET_SCENARIOS: { id: string; label: string; hint: string }[] = [
   { id: 'attacked', label: 'Attacked',                hint: 'The Attack reads “Used”; the turn goes on, so the abilities stay lit.' },
   { id: 'turn1',    label: 'Turn 1',                  hint: 'The skill is there; the Attack row is dim with “No attacks on Turn 1”.' },
   { id: 'locked',   label: 'Ultimate locked',         hint: 'Below Level 2 the Ultimate row is dim and reads “Level 2” where its price would be.' },
-  { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the Ultimate, the Attack, and the passive as one quiet line (tap it for its rule).' },
+  { id: 'passive',  label: 'Passive-only Active',     hint: 'No skill to use: the passive is printed as a skill is — its icon, its rule — but is no button and has no wait.' },
   { id: 'bench',    label: 'A bench hero',            hint: 'Its skill can be used from the bench. No Attack — only the Active swings.' },
   { id: 'blocked',  label: 'Not your turn',           hint: 'Every row dim, each with the one reason in place of its price.' },
   { id: 'enemy',    label: 'Rival hero',              hint: 'Read-only: the same rows, none a button, and Close.' },

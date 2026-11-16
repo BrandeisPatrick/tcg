@@ -88,8 +88,6 @@ const TILE = 30;
 const TILE_GAP = 5;
 /** An action row's picture tile. */
 const ART = 44;
-/** A passive line's icon tile. */
-const PASSIVE_ART = 26;
 
 /** Your Active's attack, offered on its sheet: a swing at the rival Active for
  *  its bullet damage. Free and one-way, one a hero a turn; the turn goes on
@@ -214,7 +212,6 @@ export function HeroDetailSheet({
   const [infoOpen, setInfoOpen] = useState(false);
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [passiveOpen, setPassiveOpen] = useState<string | null>(null);
 
   const data = CARDS_BY_ID[card.cardId];
   if (!data || data.type !== 'hero') return null;
@@ -257,7 +254,7 @@ export function HeroDetailSheet({
   const shield = card.statuses.find((st) => st.id === 'shield')?.value ?? 0;
   const shownStatuses = card.statuses.filter((st) => st.id !== 'shield');
 
-  // ---- The actions: skill(s), ultimate, attack — then the passive line. ----
+  // ---- The actions: skill(s), a passive (a row that is no button), ultimate, attack. ----
   const rows: { key: string; node: ReactNode }[] = [];
 
   for (const ability of skillAbilities) {
@@ -279,6 +276,26 @@ export function HeroDetailSheet({
           right={pace(ability.id)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
+        />
+      ),
+    });
+  }
+
+  // A passive is printed as a skill is (Patrick, 2026-11-16) — its own icon,
+  // its kind's ring, its rule on one line — but it is never a button and has
+  // no wait: "Passive" stands where a skill's wait would. The "i" view has the
+  // whole rule.
+  for (const ability of passiveAbilities) {
+    const kind = abilityKind(ability.text);
+    rows.push({
+      key: ability.id,
+      node: (
+        <ActionRow
+          ink={shopInk(kind).ink} mode="quiet" calm={calm}
+          name={ability.name}
+          art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
+          line={shortLine(ability.text, scale, lineMax)}
+          right={<span data-kit-tag style={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: T.label, letterSpacing: '0.04em', color: poster.inkDim, whiteSpace: 'nowrap' }}>Passive</span>}
         />
       ),
     });
@@ -546,37 +563,6 @@ export function HeroDetailSheet({
             </div>
           )}
 
-          {/* PASSIVES — a quiet line each, its name; a tap shows the rule. */}
-          {passiveAbilities.map((ability) => {
-            const open = passiveOpen === ability.id;
-            return (
-              <button
-                key={ability.id}
-                type="button"
-                aria-expanded={open}
-                onClick={(e) => { e.stopPropagation(); setPassiveOpen(open ? null : ability.id); }}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4,
-                  padding: '4px 4px 2px', background: 'transparent', border: 'none', textAlign: 'left',
-                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent', color: 'inherit',
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {/* The passive's own Deadlock icon, on the ink of the action rows' tiles. */}
-                  <span aria-hidden style={{
-                    width: PASSIVE_ART, height: PASSIVE_ART, borderRadius: 5, background: poster.ink, flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: PASSIVE_ART - 6, height: PASSIVE_ART - 6, objectFit: 'contain' }} />
-                  </span>
-                  <span style={{ ...NAME, fontSize: T.body, color: poster.inkSoft, flex: 1 }}>{ability.name}</span>
-                  <span aria-hidden style={{ ...CAPTION, fontSize: T.body }}>{open ? '−' : '+'}</span>
-                </span>
-                {open && <span style={{ ...CAPTION, paddingLeft: PASSIVE_ART + 8 }}>{sentence(plainRule(ability.text, scale))}</span>}
-              </button>
-            );
-          })}
-
           {/* The whole card, over the sheet while the "i" is on. */}
           {infoOpen && (
             <InfoPanel
@@ -613,11 +599,6 @@ export function HeroDetailSheet({
       <div aria-hidden style={{ flex: '1 1 0px', minHeight: isMobile ? 16 : 24, width: '100%' }} />
     </motion.div>
   );
-}
-
-/** A rule as plain words, its scaling numbers read live — the whole of it. */
-function plainRule(rule: string, scale: Scale): string {
-  return parseMarkup(rule).map((t) => (t.type === 'text' ? t.text : shownNumber(t, scale))).join('');
 }
 
 // ----- The actions -----
