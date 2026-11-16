@@ -96,7 +96,7 @@ export const EQUIPMENT: EquipmentCard[] = [
 
   // ----- T3 premium (offense / scaling / tier-up resists) -----
   { id: 'berserker',          name: 'Berserker',          type: 'equipment', rarity: 3, slot: 'weapon', tier: 3, abilities: ['eff_berserker'],          text: 'When the bearer takes bullet damage: gain +2 Bullet Power (max +4). Lost on death.' },
-  { id: 'superior_duration',  name: 'Superior Duration',  type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'duration_extender', abilities: ['eff_superior_duration'],   text: "The bearer's own buffs last 2 turns longer." },
+  { id: 'superior_duration',  name: 'Superior Duration',  type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'duration_extender', abilities: ['eff_superior_duration'],   text: "Buffs on the bearer last 2 turns longer, and crowd control it casts on an enemy 1 turn longer." },
 
   // ----- T4 — premium items (canon T4) -----
   // Crippling Headshot (canon T4 Weapon, built from Weakening Headshot): +2
@@ -187,7 +187,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   // Spirit
   // Arcane Surge's stamina is Sprint Boots' line: a soul off the Retreat.
   { id: 'arcane_surge',          name: 'Arcane Surge',          type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_sprint_boots', 'eff_arcane_surge'], text: "Bearer's Retreat costs 1 less. When it steps into the Active slot by a Retreat or a swap: +3 Spirit Power for 1 turn." },
-  { id: 'duration_extender',     name: 'Duration Extender',     type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_duration_extender'], text: "The bearer's own buffs of 2 turns or more last 1 turn longer." },
+  { id: 'duration_extender',     name: 'Duration Extender',     type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_duration_extender'], text: "Buffs on the bearer, and crowd control it casts on an enemy, last 1 turn longer if they last 2 turns or more." },
   { id: 'quicksilver_reload',    name: 'Quicksilver Reload',    type: 'equipment', rarity: 2, slot: 'spirit', tier: 2, abilities: ['eff_quicksilver_reload'], text: 'After the bearer uses a skill: the enemy Active takes 1 spirit damage, and the bearer gains +1 Bullet Power for 1 turn.' },
   { id: 'radiant_regeneration',  name: 'Radiant Regeneration',  type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'mystic_regeneration', bonus: { hp: 2 }, abilities: ['eff_radiant_regeneration', 'eff_radiant_regeneration_ult'], text: '+2 HP. After the bearer uses its skill or ultimate: heal 2.' },
   { id: 'torment_pulse',         name: 'Torment Pulse',         type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, abilities: ['eff_torment_pulse'], text: 'At the end of your turn: the enemy Active and the first enemy bench hero each take 1 spirit damage.' },

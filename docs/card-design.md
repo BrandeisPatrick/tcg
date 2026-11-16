@@ -882,6 +882,25 @@ The ready decks' recipe halves with it: 16 items at most 28 souls, at most two
 over 2 (tier 3 and up at its tier's price), none over 8
 ([deck-plan.md](./deck-plan.md)).
 
+### Changed 2026-11-16: the Duration items stretch crowd control
+
+Patrick: "We should have some items that extend the duration of CC, like
+Duration Extender … so we can have a control deck." In Deadlock both items
+lengthen everything an ability does, its stuns and roots included; here they
+now stretch the crowd control (Stun, Sleep, Root, Silence, Disarm, Rabbit)
+their bearer casts on an enemy: from its skill, its ultimate or a spell it
+casts. An attack's or an item proc's is not stretched. Debuff Reducer on the
+target still takes a turn off after.
+
+| Card | Tab · tier | Price | Text | Value (points) |
+|---|---|---|---|---|
+| Duration Extender | Spirit T2 | 2 | Buffs on the bearer, and crowd control it casts on an enemy, last 1 turn longer if they last 2 turns or more. | buffs 3.0 as before; the 2-turn kinds (Disarming Hex, Cursed Relic, Mystical Piano, Naptime, Frozen Shelter) about once while worn, the turn added worth 1.0 (Disarm), 2.0 (Sleep, Stun) or 0.4 (Root): 1.2 → **4.2**, its tier's 4 |
+| Superior Duration | Spirit T3 | 4 | Buffs on the bearer last 2 turns longer, and crowd control it casts on an enemy 1 turn longer. | buffs 5.0 as before (under its band); a control hero casts crowd control about 1.5 times in its 4 turns worn, each turn added worth about 1.3 (a Stun's 2.0, a Disarm's 1.0, a Root's 0.4): 2.0 → **7.0**, in its band (6–12) |
+
+A 1-turn Stun made 2 is the strongest use: Knockdown, Static Charge, Goo Ball,
+Telekinesis, Combo and Singularity on a bearer with Superior Duration. That is
+the control deck's payoff and is left for testing.
+
 ## 4. Signature items and default builds
 
 Every hero has two **signature items** (`HeroCard.signature`), chosen to fit its

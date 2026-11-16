@@ -2,7 +2,7 @@ import type { CardInstance, GameState, StatusInstance, StatusId, PlayerState, Fx
 import { DEBUFF_IDS, CC_STATUSES, STATUSES_BY_ID } from '@/statuses';
 import { counterspellStops, damageUnit, healUnit } from './damage';
 import { resolve, returnRemToBench } from './death';
-import { kitCharges, liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isBoss, isRespawning, resistedBy, seatOf, skillWait, statusDuration } from './query';
+import { castCcDuration, kitCharges, liveBoardCards, otherPlayer, effectiveSpirit, isBlocked, isBoss, isRespawning, resistedBy, seatOf, skillWait, statusDuration } from './query';
 import { pushLog } from './log';
 import { cardName } from '@/cards';
 import { fireTriggers } from './triggers';
@@ -81,6 +81,14 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
     return;
   }
 
+  // Crowd control an enemy casts on it — from a skill, an ultimate or a spell —
+  // lasts as the caster's Duration items say; then the target's own hooks.
+  if (CC_STATUSES.has(id)) {
+    const cast = currentCast();
+    if (cast?.source && cast.source.ownerId !== target.ownerId && (cast.kind === 'skill' || cast.kind === 'ult' || cast.kind === 'spell')) {
+      duration = castCcDuration(cast.source, id, duration);
+    }
+  }
   duration = statusDuration(target, id, duration);
 
   // Unstoppable: cleanse existing CC when applied.

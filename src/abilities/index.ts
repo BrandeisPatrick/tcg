@@ -150,6 +150,11 @@ export interface AbilityDef {
   /** How long a debuff (a status whose `hvalue` is below 0) lands for on the
    *  bearer (Debuff Reducer shortens them). Read after `buffDuration`. */
   debuffDuration?: (self: CardInstance, statusId: StatusId, duration: number) => number;
+  /** The crowd control (a CC status) the bearer CASTS on an enemy — from its
+   *  skill, its ultimate or a spell it casts — lasts this long instead
+   *  (Duration Extender, Superior Duration, 2026-11-16). Read before the
+   *  target's own `debuffDuration` (Debuff Reducer still shortens it). */
+  ccDuration?: (self: CardInstance, statusId: StatusId, duration: number) => number;
   /** Souls off the bearer's Retreat while it stands in the Active slot (Sprint
    *  Boots: 1). Summed over what the hero leaving the slot carries by
    *  `retreatCost` (engine/legality.ts), never below 0. */
@@ -1150,11 +1155,16 @@ const eff_frenzy: AbilityDef = {
 // A pure hook, nothing to fire — `base: 0` keeps it worth nothing to the AI's
 // equipment valuation, as it was when the card listed no abilities. Permanent
 // buffs (duration 99+) are left alone.
+// Since 2026-11-16 (Patrick: "we should have items that extend the duration
+// of CC") it also stretches the crowd control its bearer casts by 1 turn: a
+// 1-turn Stun becomes 2. docs/card-design.md, "Changed 2026-11-16: the
+// Duration items stretch crowd control".
 const eff_superior_duration: AbilityDef = {
   id: 'eff_superior_duration', trigger: 'ongoing', target: 'self',
-  base: 0,
+  base: 2,
   buffDuration: (_self, statusId, duration) =>
     (STATUSES_BY_ID[statusId]?.hvalue ?? 0) > 0 && duration < 99 ? duration + 2 : duration,
+  ccDuration: (_self, _statusId, duration) => (duration < 99 ? duration + 1 : duration),
   run: () => {},
 };
 
@@ -1801,11 +1811,15 @@ const eff_arcane_surge: AbilityDef = {
 // the bearer's own buffs of 2 turns or more last 1 turn longer (Superior
 // Duration, its upgrade, stretches every buff by 2). Shields and permanent
 // marks (99+) are left alone.
+// Since 2026-11-16 the crowd control its bearer casts, of 2 turns or more,
+// lasts 1 turn longer too (Disarming Hex, Cursed Relic, Naptime, Frozen
+// Shelter's Root); the 1-turn kind is Superior Duration's.
 const eff_duration_extender: AbilityDef = {
   id: 'eff_duration_extender', trigger: 'ongoing', target: 'self',
   base: 1,
   buffDuration: (_self, statusId, duration) =>
     (STATUSES_BY_ID[statusId]?.hvalue ?? 0) > 0 && duration >= 2 && duration < 99 ? duration + 1 : duration,
+  ccDuration: (_self, _statusId, duration) => (duration >= 2 && duration < 99 ? duration + 1 : duration),
   run: () => {},
 };
 
