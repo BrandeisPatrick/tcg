@@ -55,7 +55,8 @@ export function killInPlace(G: GameState, ps: PlayerState, hero: CardInstance, o
     // the victim's side's front structure.
     pushStructures(G, ps.id, killPush(G, hero), 'kill');
     // A knockout while a hero stands in the other side's lane: its passive
-    // may feed on it (Drifter's Bloodscent).
+    // may feed on it (`onRivalFall`; Drifter's Bloodscent did until it became
+    // one rule on 2026-11-16, and no card listens now).
     const rival = G.players[oppId].active;
     if (rival && !isRespawning(rival) && rival.hp > 0) fireTriggers(G, rival, 'onRivalFall', { only: 'passives', target: hero, movingPlayer: oppId });
   }

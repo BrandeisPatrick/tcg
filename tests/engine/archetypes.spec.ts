@@ -165,18 +165,24 @@ describe('Active Reload is no card any more (removed 2026-11-15, docs/card-desig
 });
 
 describe('Lifesteal is gone from Drifter and Lady Geist: Bloodscent and Essence Bomb as printed', () => {
-  it('Drifter\'s Bloodscent grows his Attack +1 for each knockout while he is Active, up to 2, and heals nothing', () => {
+  it('Drifter\'s Bloodscent is one rule since 2026-11-16: +2 to a hero below half HP; no Attack grows from knockouts, and it heals nothing', () => {
     const G = freshReadyGame();
     const drifter = makeHero('hero_drifter', '0', 'active', 0);
     drifter.hp = 1; drifter.hpMax = 20;
     const bloodscent = getAbility('passive_drifter_bloodscent')!;
-    for (let i = 0; i < 3; i++) bloodscent.run(G, { movingPlayer: '0' }, { source: drifter, params: { dealt: 4 } });
-    expect(drifter.atkMod).toBe(2); // capped at +2
-    expect(drifter.tally?.passive_drifter_bloodscent).toBe(2);
+    expect(bloodscent.trigger).toBe('ongoing');
+    bloodscent.run(G, { movingPlayer: '0' }, { source: drifter, params: { dealt: 4 } });
+    expect(drifter.atkMod).toBe(0);
+    expect(drifter.tally?.passive_drifter_bloodscent).toBeUndefined();
     expect(drifter.hp).toBe(1);     // no lifesteal
+    const def = G.players['1'].active!;
+    def.hpMax = 10; def.hp = 4;
+    expect(attackPower(drifter, def).parts.find((p) => p.bonus)).toMatchObject({ amount: 2, label: 'Bloodscent +2' });
+    def.hp = 5; // half is not below half
+    expect(attackPower(drifter, def).parts.some((p) => p.bonus)).toBe(false);
   });
 
-  it('Drifter\'s swing through a real attack phase heals him nothing, and hits a hero below half HP for +1', () => {
+  it('Drifter\'s swing through a real attack phase heals him nothing, and hits a hero below half HP for +2', () => {
     const G = freshReadyGame();
     const drifter = makeHero('hero_drifter', '0', 'active', 0);
     drifter.hp = 1; drifter.hpMax = 20;
@@ -186,7 +192,7 @@ describe('Lifesteal is gone from Drifter and Lady Geist: Bloodscent and Essence 
     def.hp = 40; def.hpMax = 99; // below half: survives the swing
     const dmg = effectiveAtk(drifter);
     makeAttack(G, '0');
-    expect(def.hp).toBe(40 - (dmg + 1)); // Bloodscent +1
+    expect(def.hp).toBe(40 - (dmg + 2)); // Bloodscent +2
     expect(drifter.hp).toBe(1);          // no heal; the defender does not strike back
   });
 
