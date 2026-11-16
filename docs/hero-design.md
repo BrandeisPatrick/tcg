@@ -232,11 +232,11 @@ HP 6 · Attack 1 · Retreat 2 · per level +3 HP +1 Spirit
 
 **Lady Geist** · in the game today — peaks early, one target; mix tank 2 · damage 3 · control 0 · support 0  
 HP 7 · Attack 1 · Retreat 2 · per level +2 Spirit
-- Skill, waits 3 — **Essence Bomb**: Lady Geist pays 1 HP: deal 3✦ spirit damage to the enemy Active.
+- Skill, waits 3 — **Essence Bomb**: Lady Geist pays 2 HP: deal 4✦ spirit damage to the enemy Active.
 - Ultimate, medium, waits 6 — **Soul Exchange**: Swap HP with the enemy Active. Deal 3✦ spirit damage to it.
 - Why: Lady Geist bleeds herself to bomb the whole enemy side, and the lower she drops, the harder Soul Exchange flips the duel.
 - Changed from today: HP 4 to 7 (tank 2, early +1 on HP since she is a spirit hero); the single-target drain becomes Essence Bomb so her reach is both. Soul Exchange adds 3✦ so it always does something and can finish a kill.
-- **Changed 2026-11-16 (Patrick): "Lady Geist's bomb should just be a single target: she just bombed the Active."** Deadlock's Essence Bomb is a one-target nuke she pays health for. 3✦ less the 1 HP (0.5 at the heal rate) is 2.5, the middle of a wait-3 skill's 2–3; the area bomb it replaces was 1✦ on every enemy, 2.5 − 0.5 = 2.0. Her reach becomes one. With a skill's Spirit counted twice (balance-model.md §10) it is 7 at Level 2 and 11 at Level 3.
+- **Changed 2026-11-16 (Patrick): "Lady Geist's bomb should just be a single target: she just bombed the Active."** Deadlock's Essence Bomb is a one-target nuke she pays health for. Her reach becomes one. Then: "but she should deal more damage." She pays 2 HP for 4✦: 4 less the 2 HP (0.5 each at the heal rate) is 3.0, the top of a wait-3 skill's 2–3; the area bomb it replaces was 1✦ on every enemy for 1 HP, 2.5 − 0.5 = 2.0. The HP she pays also lowers her for Soul Exchange. With a skill's Spirit counted twice (balance-model.md §10) it is 4 at Level 1, 8 at Level 2 and 12 at Level 3. Hitting more than the Active is for the range items (card-design.md, Mystic Expansion), not the skill.
 
 **Shiv** · in the game today — peaks late, one target; mix tank 2 · damage 3 · control 0 · support 0  
 HP 6 · Attack 1 · Retreat 1 · per level +2 Attack +1 HP +1 Spirit

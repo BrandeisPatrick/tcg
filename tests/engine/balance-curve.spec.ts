@@ -49,16 +49,16 @@ describe('skills scale with Spirit into the late game', () => {
 
     const before1 = dummy.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
-    const lv1Dmg = before1 - dummy.hp; // {sp:3}, Spirit 0
+    const lv1Dmg = before1 - dummy.hp; // {sp:4}, Spirit 0
 
     grantExp(G, caster, 21); // → Lv4, +6 Spirit (5 + 7 + 9)
     const before4 = dummy.hp;
     skill.run(G, { movingPlayer: '0' }, { source: caster, target: dummy });
-    const lv4Dmg = before4 - dummy.hp; // 3 + 2 × 6: a skill counts Spirit twice
+    const lv4Dmg = before4 - dummy.hp; // 4 + 2 × 6: a skill counts Spirit twice
 
-    expect(lv1Dmg).toBe(3);
+    expect(lv1Dmg).toBe(4);
     expect(lv4Dmg).toBeGreaterThan(lv1Dmg);
-    expect(lv4Dmg).toBe(15);
+    expect(lv4Dmg).toBe(16);
   });
 });
 

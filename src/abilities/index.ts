@@ -2104,17 +2104,18 @@ const skill_viscous: HeroAbilityDef = {
 };
 
 // Lady Geist — Essence Bomb: she bleeds herself to bomb the enemy Active
-// (Patrick, 2026-11-16: "she just bombed the active"), Deadlock's one-target
-// nuke. 3 spirit damage less the 1 HP (0.5) is 2.5, the middle of a wait-3
-// skill's 2–3 (hero-design.md §4).
+// (Patrick, 2026-11-16: "she just bombed the active … but she should deal
+// more damage"), Deadlock's one-target nuke paid for in her own health. 4
+// spirit damage less the 2 HP (0.5 each) is 3.0, the top of a wait-3 skill's
+// 2–3 (hero-design.md §4); the HP she pays also feeds Soul Exchange.
 const skill_lady_geist: HeroAbilityDef = {
-  id: 'skill_lady_geist', trigger: 'activate', target: 'enemyActive', hpCost: 1,
+  id: 'skill_lady_geist', trigger: 'activate', target: 'enemyActive', hpCost: 2,
   name: 'Essence Bomb',
-  text: 'Lady Geist pays 1 HP: deal {sp:3} spirit damage to the enemy Active.',
-  base: 3,
+  text: 'Lady Geist pays 2 HP: deal {sp:4} spirit damage to the enemy Active.',
+  base: 4,
   scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
-    if (target) damageUnit(G, target, 3 + spi(source), 'spirit', 'Essence Bomb');
+    if (target) damageUnit(G, target, 4 + spi(source), 'spirit', 'Essence Bomb');
   },
 };
 
