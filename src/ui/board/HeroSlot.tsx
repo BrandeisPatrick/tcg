@@ -7,7 +7,7 @@ import { useFxCalm } from '../effects/fx/FxMotionContext';
 import { useDelayedValue } from '../hooks/useDelayedValue';
 import { CARDS_BY_ID } from '@/cards';
 import { effectiveAtk, hasSpike } from '@/engine/query';
-import { HeroBadge, HeroPortrait, heroForm } from '@/cards/art/heroArt';
+import { HeroBadge, HeroPortrait, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
 import { getHeroIdentity } from '@/cards/art/heroPalette';
 import { STATUSES_BY_ID } from '@/statuses';
 import { ItemIcon } from '../card/ItemIcon';
@@ -293,7 +293,7 @@ export function HeroSlot({
           filter: isCorpse ? 'grayscale(0.95) brightness(0.5) contrast(0.9)' : undefined,
           transition: 'filter 600ms ease',
         }}>
-          <HeroPortrait cardId={card.cardId} art={isCorpse ? undefined : form?.art} />
+          <HeroPortrait cardId={card.cardId} art={isCorpse ? undefined : heroPortraitFile(card, form)} />
         </div>
         <div aria-hidden style={{ position: 'absolute', inset: 0, boxShadow: PRINT_EDGE, pointerEvents: 'none' }} />
 

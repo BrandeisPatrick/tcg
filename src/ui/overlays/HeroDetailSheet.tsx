@@ -30,7 +30,7 @@ import {
   effectiveAtk, effectiveSpirit, hasSpike, heroAbilities, ultimateCard,
 } from '@/engine/query';
 import { LEVEL_THRESHOLDS, MAX_LEVEL, ULT_UNLOCK_LEVEL } from '@/engine/constants';
-import { HeroPortrait, HeroBadge, heroForm } from '@/cards/art/heroArt';
+import { HeroPortrait, HeroBadge, heroForm, heroPortraitFile } from '@/cards/art/heroArt';
 import { ultIconSrc } from '@/art/assets';
 import { ItemIcon } from '../card/ItemIcon';
 import { SpikeMark } from '../board/SpikeMark';
@@ -455,7 +455,7 @@ export function HeroDetailSheet({
               borderRadius: 7, overflow: 'hidden', background: poster.ground,
               boxShadow: `0 0 0 1.5px ${poster.ink}`,
             }}>
-              <HeroPortrait cardId={data.id} art={form?.art} />
+              <HeroPortrait cardId={data.id} art={heroPortraitFile(card, form)} />
               <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: printEdge }} />
               {form && (
                 <span role="note" style={{

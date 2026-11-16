@@ -48,6 +48,11 @@ from their "Deadlock Graphical Library" collection.
   (`images/heroes/guns/necro_hand.webp`). The Gravestone
   (`unit_gravestone_*.webp`) wears Borrowed Decree's icon, a white glyph set on
   a dark ground.
+- The final level's portraits (`hero_<id>_gloat.webp`, one for every hero):
+  each is Deadlock's own "gloat" card of that hero (`images/heroes/<name>_card_gloat.webp`
+  from the deadlock-api's asset bucket, named in
+  https://api.deadlock-api.com/v1/assets/heroes as `hero_card_gloat_webp`), used
+  as served. A hero's board tile and sheet wear it once it reaches Level 4.
 - The small hero icons (`_mm.webp`, `_sm.webp`) are the game's own icons,
   pulled from the community asset bucket at https://deadlock-api.com/
   (https://assets.deadlock-api.com/).
