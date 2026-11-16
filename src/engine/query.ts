@@ -192,7 +192,8 @@ export function standingVerdict(G: GameState): { winner: PlayerID; by: StandingV
 
 /** How a match is won: the rival's Patron falls — to the push of a kill, or
  *  of an Active into an empty lane; both at once goes to what stands
- *  (`standingVerdict`) — or round ROUND_CAP ends (`G.capped`) and what stands
+ *  (`standingVerdict`) — or the rival has no card to draw (`G.deckedOut`,
+ *  2026-11-16) — or round ROUND_CAP ends (`G.capped`) and what stands
  *  decides. A board with every hero down is no loss by itself. This is
  *  boardgame.io's `endIf`: it runs after every move and turn edge on the
  *  already-resolved state. */
@@ -202,6 +203,7 @@ export function checkWinner(G: GameState): { winner?: PlayerID } | undefined {
   const down1 = patronFallen(G.players['1']);
   if (down0 && down1) return { winner: standingVerdict(G).winner };
   if (down0 || down1) return { winner: down0 ? '1' : '0' };
+  if (G.deckedOut) return { winner: G.deckedOut === '0' ? '1' : '0' };
   if (G.capped) return { winner: standingVerdict(G).winner };
   return undefined;
 }

@@ -197,11 +197,11 @@ describe('souls economy', () => {
     }
   });
 
-  it('a kill pays the round\'s bounty to the killer\'s side: 1 soul in rounds 1–2, 1 more every two rounds, 6 in the last two', () => {
+  it('a kill pays the round\'s bounty to the killer\'s side: 1 soul in rounds 1–2, 1 more every two rounds, 10 in the last two (round 20 since 2026-11-16)', () => {
     expect(KILL_BOUNTY_STEP_ROUNDS).toBe(2);
-    expect(Array.from({ length: ROUND_CAP }, (_, i) => bountyAtRound(i + 1))).toEqual([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]);
+    expect(Array.from({ length: ROUND_CAP }, (_, i) => bountyAtRound(i + 1))).toEqual([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10]);
     // Whoever's turn it is: round r holds engine turns 2r − 1 and 2r.
-    for (const [turn, bounty] of [[1, 1], [2, 1], [5, 2], [6, 2], [9, 3], [17, 5], [24, 6]] as const) {
+    for (const [turn, bounty] of [[1, 1], [2, 1], [5, 2], [6, 2], [9, 3], [17, 5], [24, 6], [40, 10]] as const) {
       const G = freshG();
       G.turnNumber = turn;
       expect(killBounty(G), `engine turn ${turn}`).toBe(bounty);
@@ -249,10 +249,10 @@ describe('souls economy', () => {
     // lane pays it nothing more; the second mover's last turn is still to come.
     G.turnNumber = 2 * ROUND_CAP - 1;
     G.players['1'].souls = 4;
-    expect(bankForecast(G, '1')).toEqual({ held: 4, income: 0, next: 4, bounty: 6, bountyNext: 6, last: true });
+    expect(bankForecast(G, '1')).toEqual({ held: 4, income: 0, next: 4, bounty: bountyAtRound(ROUND_CAP), bountyNext: bountyAtRound(ROUND_CAP), last: true });
     expect(bankForecast(G, '0')).toMatchObject({ income: LANE_INCOME, last: false });
     G.turnNumber = 2 * ROUND_CAP;
-    expect(bankForecast(G, '0')).toEqual({ held: 3, income: 0, next: 3, bounty: 6, bountyNext: 6, last: true });
+    expect(bankForecast(G, '0')).toEqual({ held: 3, income: 0, next: 3, bounty: bountyAtRound(ROUND_CAP), bountyNext: bountyAtRound(ROUND_CAP), last: true });
   });
 
   it("retreat (swap Active with bench hero) costs the leaving hero's printed retreat (Haze's), once a turn", () => {

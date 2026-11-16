@@ -101,7 +101,9 @@ rule's dial, is 0). Cooldowns (the heroes' and the worn items', on
 corpses and on heroes waiting in the hand too) and the fallen heroes' waits
 tick; a hero whose wait is over goes back to the hand (`heroToHand`); then the
 side draws DRAW_PER_TURN (`drawCards`: a draw into a hand of MAX_HAND is
-skipped, an empty deck draws nothing and nothing else happens). A turn has no
+skipped; under the deck-out rule, `G.deckOut`, on in every match set up to
+play since 2026-11-16, a side whose deck is empty at its draw loses:
+`G.deckedOut`, and `checkWinner` names the rival). A turn has no
 steps: the player plays from the hand, uses abilities, retreats once and
 attacks with each hero that stands in the Active slot (once a hero a turn,
 `G.attackers`), in any order, until `endTurn`. An attack does not end the turn
@@ -209,7 +211,7 @@ made.
 
 **Kills and the end.** A kill pays the side the hero fell to the round's bounty
 (`killBounty`, rounds.ts: 1 soul, and 1 more every `KILL_BOUNTY_STEP_ROUNDS`
-rounds, so 1 in rounds 1–2 and 6 in rounds 11–12; whoever fell, whatever dealt
+rounds, so 1 in rounds 1–2 and 10 in rounds 19–20 since the cap went to 20; whoever fell, whatever dealt
 the blow, a kill the Rejuvenator undoes included; a fall to the Mid-Boss pays
 nothing). It pushes the victim's level + 1 into the victim's side's structures
 (`killPush`) and goes on the record (`MapRecord.kills`, `.bounty`). The

@@ -86,7 +86,7 @@ builds) and the Gallery. A Quick Match goes like this.
 - Each of your turns opens with 2 souls of income, the price of one tier-1
   item (Pokémon TCG Pocket's one Energy a turn).
 - A kill pays your side a bounty: 1 soul in rounds 1–2, and 1 more every two
-  rounds, up to 6 in rounds 11–12. Little early, a lot late. A structure's
+  rounds, up to 10 in rounds 19–20. Little early, a lot late. A structure's
   fall pays nothing.
 - Tap your souls (or hover them with a mouse) for the bank sheet: what the
   next turn pays, what you will hold then, and what a kill pays now.
@@ -150,7 +150,8 @@ arrive, you draw a card, every cooldown ticks down one, and a fallen hero whose
 wait is over goes back to your hand.
 
 **The hand.** It holds heroes and items, up to 10 cards; a draw into a full
-hand is skipped, and an empty deck simply draws nothing.
+hand is skipped. A side whose deck is empty when its turn's draw comes
+loses the match (2026-11-16), as in the Pokémon TCG.
 
 - Tap a hero to put it on the bench (up to 3), for free, or into the lane when
   it is empty.
@@ -259,7 +260,7 @@ purple 1 is 1 + 2 × Spirit there); an ultimate or a spell counts it once.
 - A fallen hero waits in its slot for 2 of its side's turns (`RESPAWN_TURNS`
   in `src/engine/constants.ts`; 0 sends it straight to the hand), then goes
   back to your hand at full HP with its level and items, to be benched again.
-- The round cap: after round 12, the side with more structure HP wins, then
+- The round cap: after round 20 (12 until 2026-11-16), the side with more structure HP wins, then
   the side with more net worth, then the second mover.
 
 ### The rival AI

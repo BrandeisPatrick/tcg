@@ -197,7 +197,7 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
   - Changed 2026-11-15 (Patrick: the lane pays one unit a turn, as Pocket gives one Energy; "keep
     it simple using simple numbers"). It was 5 a turn. The reasoning is in
     [balance-model.md](balance-model.md) §7.
-  - A kill pays a bounty: 1 soul in rounds 1–2, 1 more every two rounds, 6 in rounds 11–12
+  - A kill pays a bounty: 1 soul in rounds 1–2, 1 more every two rounds, 10 in rounds 19–20 (6 in rounds 11–12 under the old cap of 12)
     (Patrick: "not worth much at the very beginning and worth a lot at the very later"). Until
     2026-11-15 kills paid nothing.
   - Objectives still push the map and give exp, and pay no souls.

@@ -312,6 +312,9 @@ export function setupGame(): GameState {
       attackUsed: false,
       retreatUsed: false,
       ...freshMap(story.midBoss ?? getMatchConfig().midBoss ?? MID_BOSS_ENABLED),
+      // A lesson that names its decks (one card, or none) plays without the
+      // deck-out rule; a Story battle draws from real decks and has it.
+      deckOut: !(story.playerDeck || story.enemyDeck),
       action: null,
       fx: [],
     };
@@ -358,6 +361,7 @@ export function setupGame(): GameState {
     attackUsed: false,
     retreatUsed: false,
     ...freshMap(getMatchConfig().midBoss ?? MID_BOSS_ENABLED),
+    deckOut: true,
     action: null,
     fx: [],
   };

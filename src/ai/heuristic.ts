@@ -219,6 +219,9 @@ function equipValue(c: CardInstance): number {
 
 /** What a won game is worth, in the units of `evalState`: more than any position. */
 const DECISIVE = 1_000_000;
+/** An empty deck under the deck-out rule (`evalState`): a loss at that
+ *  side's next draw, so most of a decided match. */
+const DECK_OUT = DECISIVE * 0.9;
 
 /** What a point of each structure's HP is worth: the win condition, the
  *  Patron (the last, and the loss) highest. A kill pushes the victim's level +
@@ -442,8 +445,17 @@ function evalState(g: GameState, pid: PlayerID, d: Dial = NORMAL): number {
   const en = otherPlayer(pid);
   const me = g.players[pid];
   const foe = g.players[en];
+  // Under the deck-out rule an empty deck loses at its side's next draw: the
+  // rival's before it acts again, ours after one more rival turn. So the AI
+  // never draws itself empty (Golden Goose Egg) and prizes milling the rival
+  // dry (Graves's Ghouls), just short of a win in hand.
+  let s = 0;
+  if (g.deckOut) {
+    if (me.deck.length === 0) s -= DECK_OUT;
+    if (foe.deck.length === 0) s += DECK_OUT;
+  }
   // The structures are the win condition — weighed heavily, the Patron most.
-  let s = structureValue(me) - structureValue(foe);
+  s += structureValue(me) - structureValue(foe);
   s += mapPrizes(g, pid) - mapPrizes(g, en);
   s += bossStake(g, pid);
   s -= bossBlow(g, pid) - bossBlow(g, en);

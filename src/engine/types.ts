@@ -760,6 +760,15 @@ export interface GameState {
   /** Round ROUND_CAP is over (set as the second mover's own turn ROUND_CAP
    *  ends): the match is decided on what stands (`checkWinner`). */
   capped: boolean;
+  /** The deck-out rule is on (Patrick, 2026-11-16: "running out of cards is
+   *  the end of the game"): a side whose deck is empty when its turn's draw
+   *  comes loses. On in every match set up to play; off in a scripted lesson
+   *  that names its decks (a deck of one card or none) and in hand-built test
+   *  states unless they turn it on. */
+  deckOut?: boolean;
+  /** The side that lost to the deck-out rule: its deck was empty at its
+   *  turn's draw (`beginTurn`). */
+  deckedOut?: PlayerID;
   /** What each side has done on the map this match (kills, pushes, bosses,
    *  revives). */
   record: { '0': MapRecord; '1': MapRecord };

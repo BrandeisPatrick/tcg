@@ -34,7 +34,7 @@ describe('the bank sheet', () => {
     const bank = bankForecast(G, '0');
     expect(bankRows(bank)).toEqual([
       { label: 'Next turn', value: 'Last round' },
-      { label: 'A kill pays', value: '6' },
+      { label: 'A kill pays', value: '10' }, // round 20's bounty (the cap since 2026-11-16)
     ]);
     expect(bankFootnote(bank)).toBe('The most a kill pays.');
   });

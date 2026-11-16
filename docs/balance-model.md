@@ -491,6 +491,52 @@ line still dearer than the spell it is built from (card-design.md, "Changed
 everything by turn 6 and souls have nothing left to decide; whether Retreat
 should come down too.
 
+## 13. Deck-out ends the match; the round cap is 20 (2026-11-16)
+
+Patrick: "Running out of cards is end of game. Round limit to be 20."
+
+**The rules.** A side whose deck is empty when its turn's draw comes loses,
+as in the Pokémon TCG (`G.deckOut`, on in every match set up to play; a
+scripted lesson that names its decks plays without it). The round cap goes
+from 12 to 20 (`ROUND_CAP`); what stands still decides a match that reaches
+it.
+
+**When a deck runs out.** A side has 16 items and its 3 heroes: one hero
+opens in the lane, 4 cards are dealt, so 14 are left, and it draws 1 on each
+own turn. Its deck is empty after own turn 14 and it loses at own turn 15's
+draw. Each Golden Goose Egg played takes 2 turns off that; a draw skipped into
+a full hand (10 cards) puts one back.
+
+| Golden Goose Eggs played | Loses at its own turn |
+|---|---|
+| 0 | 15 |
+| 1 | 13 |
+| 2 | 11 |
+| 4 | 7 |
+
+So **deck-out, not round 20, ends a long match**: it comes in round 15 at the
+latest, and the cap only matters if a deck grows (Graves's Ghouls shuffle into
+their own deck). Under the old cap of 12 a match ended before any deck ran out.
+
+**What it changes.**
+- **The first mover runs out first.** With equal decks it reaches its own
+  turn 15 one engine turn before the second mover does, so a match that goes
+  the distance is the second mover's, unless the first mover's deck is
+  bigger or it drew less. (The pie rule's other dial,
+  `SECOND_MOVER_FIRST_INCOME_BONUS`, is 0.)
+- **Mill wins now.** Graveyard's Ghouls discard the top of the rival's deck as
+  they fall; each one is a turn off the rival's clock.
+- **Golden Goose Egg has a cost.** Four of them draw 8 cards and lose the
+  match at own turn 7 unless it is won by then. A turbo deck has to win early.
+- **The bounty climbs to 10** (1 more every two rounds, rounds 19–20), so a
+  kill late is worth a tier-4 item and more.
+- **The AI** never draws itself empty and prizes emptying the rival's deck
+  (`DECK_OUT` in its evaluation, just short of a win).
+
+**Left for testing** (only when Patrick asks by name): how often a match
+reaches deck-out; whether the first mover needs a dial for it; whether 4
+Golden Goose Egg is ever right.
+
 ## Open knobs for future passes
 - HP floor 4 vs 5 for squishies (early swinginess).
 - Mirage's Djinn's Mark burst (2/stack ×4) at the compressed scale.
