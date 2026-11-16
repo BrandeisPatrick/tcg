@@ -41,7 +41,7 @@ export function abilityDial(hero: CardInstance, abilityId: AbilityId): DialModel
     if (charge) return { kind: 'charge', have: charge.have, need: charge.need };
     const face = ultimateCard(skill.id);
     if (!face) return undefined;
-    return { kind: 'wait', left: cooling, full: Math.max(ultWait(face), cooling, 1) };
+    return { kind: 'wait', left: cooling, full: Math.max(ultWait(face, hero), cooling, 1) };
   }
   const charges = kitCharges(hero, skill.id);
   // A charged skill holding every charge has nothing coming back.

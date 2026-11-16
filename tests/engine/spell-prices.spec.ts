@@ -13,7 +13,7 @@ import { PRICE } from '@/engine/constants';
 const PRINTED: Record<string, number> = {
   knockdown: 4, disarming_hex: 3, majestic_leap: 2, curse: 6, mystical_piano: 10,
   echo_shard: 3, ethereal_shift: 3, divine_barrier: 5, infuser: 5, unstoppable: 3,
-  transcendent_cooldown: 11,
+  // transcendent_cooldown printed 11 until it went back to equipment (2026-11-16): priced by its tier now.
 };
 
 describe('spells priced for one play', () => {
@@ -25,7 +25,7 @@ describe('spells priced for one play', () => {
   });
 
   it('a spell line keeps its order: the later card still costs more than the one it is built from', () => {
-    for (const [base, top] of [['rusted_barrel', 'disarming_hex'], ['guardian_ward', 'divine_barrier'], ['superior_cooldown', 'transcendent_cooldown']] as const) {
+    for (const [base, top] of [['rusted_barrel', 'disarming_hex'], ['guardian_ward', 'divine_barrier']] as const) {
       expect(itemPrice(top), `${base} → ${top}`).toBeGreaterThan(itemPrice(base));
     }
   });
@@ -38,7 +38,6 @@ describe('spells priced for one play', () => {
     const text = (id: string) => (CARDS_BY_ID[id] as { text: string }).text;
     expect(text('knockdown')).toBe('Stun enemy Active for 1 turn. A Stun ends a channel.');
     expect(text('echo_shard')).toBe('Your Active hero uses their skill again this turn.');
-    expect(text('transcendent_cooldown')).toBe('Draw 8 cards, then discard 2 cards from your hand.');
     expect(text('divine_barrier')).toBe("Cleanse an ally's debuffs except Stun and grant it Shield 7.");
   });
 });

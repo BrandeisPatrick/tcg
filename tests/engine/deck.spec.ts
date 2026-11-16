@@ -108,9 +108,9 @@ describe('what makes a deck', () => {
     // Deadlock builds Colossus (an active) from Extra Health too: no discount, so it is no upgrade here.
     expect([...upgradesOf('extra_health')]).toEqual(['fortitude']);
     expect(evolvesFrom('colossus')).toBeUndefined();
-    // The draw cards are actives: Deadlock's line stays on the cards, and none evolves another.
-    expect(upgradesOf('improved_cooldown')).toEqual([]);
-    expect(evolvesFrom('superior_cooldown')).toBeUndefined();
+    // The Cooldown family is equipment again (2026-11-16): Deadlock's line, each evolving the one before.
+    expect(upgradesOf('improved_cooldown')).toEqual(['superior_cooldown']);
+    expect(evolvesFrom('superior_cooldown')).toBe('improved_cooldown');
     expect(upgradesOf('glass_cannon')).toEqual([]);
   });
 });
@@ -125,7 +125,8 @@ describe('an upgrade and its base item', () => {
     expect(evolvesFrom('boundless_spirit')).toBe('improved_spirit');
     expect(evolvesFrom('hero_haze')).toBeUndefined();
     // An active is always a base item: it evolves nothing.
-    expect(isBaseItem('transcendent_cooldown')).toBe(true);
+    expect(isBaseItem('golden_goose_egg')).toBe(true);
+    expect(isBaseItem('transcendent_cooldown')).toBe(false); // equipment, built from Superior Cooldown
     for (const item of ITEMS) if (item.type === 'spell') expect(isBaseItem(item.id), item.id).toBe(true);
   });
 

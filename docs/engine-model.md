@@ -40,7 +40,7 @@ lock a skill. The engine fixes that by construction:
 | `engine.ts` | `Action`, `perform(G, pid, action)` — validate, then mutate |
 | `actions/` | what each action does once it is legal: `hand` (`playCard`: equipment onto a hero, an evolve, or a spell cast and discarded; `placeHero`; `chooseActive`; `discard`), `attack` (and `attackAll`, a swing at every enemy hero), `useSkill`, `board` (swap / promote, and the free `swapIntoActive` / `pullToActive` a card's effect makes), `turn` (start / end), `setup` (draft, rosters, the decks and the opening) |
 | `deck.ts` | the deck, the hand and the discard pile: the match's seeded stream (`nextRandom`, `shuffle`), what a side brings (`buildOf`, `sideDeckIds`, `fillDeck`), `drawCards`, `dealOpeningHand` (the hero guarantee), `toDiscard`, `oweDiscard` / `discardFromHand`, `heroToHand` (a fallen hero back) |
-| `map.ts`, `souls.ts`, `bank.ts` | the map: `newTrack`, `pushStructures` (front first, the Walker's flex slot), the Mid-Boss (`riseBoss`, `tallyBossHit`, `reapBoss`), the Rejuvenator lapsing (`lapseRevives`); `awardSouls`, the one way souls are paid outside the income (a kill's bounty, Golden Goose Egg); the bank: `laneIncome` (what a turn's Income pays) and `bankForecast` (what the board's bank sheet shows: the next income, what that makes, the kill bounty now and next round) |
+| `map.ts`, `souls.ts`, `bank.ts` | the map: `newTrack`, `pushStructures` (front first, the Walker's flex slot), the Mid-Boss (`riseBoss`, `tallyBossHit`, `reapBoss`), the Rejuvenator lapsing (`lapseRevives`); `awardSouls`, the one way souls are paid outside the income (a kill's bounty); the bank: `laneIncome` (what a turn's Income pays) and `bankForecast` (what the board's bank sheet shows: the next income, what that makes, the kill bounty now and next round) |
 | `rng.ts` | the seeded generator the match's stream draws with (`seededRandom`) |
 | `instances.ts` | card instances and items going on and off heroes: `makeInstance`, `attachItem` / `detachItem` (a passive's bonus on and off), `syncVitalitySpike` |
 | `damage.ts`, `death.ts`, `statusOps.ts`, `expSystem.ts` | the kernel every effect goes through: damage and heals, death / reap / promotion and souls (`awardSouls`), statuses and their ticks, exp |
@@ -138,10 +138,11 @@ is `pid`'s own turn's, before or after an attack.
     card of its own.
   - Either kind opens the reveal (`G.action`, kind `'item'`): the card is shown
     mid-screen before its effect resolves on the board.
-- The draw cards (the Cooldown family, spells declaring `draw` on their
-  ability) draw and then owe a discard (`oweDiscard`: never more than the hand
-  holds): `G.pendingDiscard` makes `discard(cardIids)` — any cards of the
-  hand, up to what is owed — the only legal move until it is paid.
+- The draw card (Golden Goose Egg since 2026-11-16, a spell declaring `draw`
+  on its ability) draws. A card that also owes a discard (`oweDiscard`: never
+  more than the hand holds; none does since the Cooldown family went back to
+  equipment) sets `G.pendingDiscard`, which makes `discard(cardIids)` — any
+  cards of the hand, up to what is owed — the only legal move until it is paid.
 - Items stay on through death, and a fallen hero carries them back to the
   hand. A hero wearing three items of one tab has that tab's category spike
   (+1 Bullet Power, Spirit Power or max HP), read off what it wears. Hand
@@ -364,8 +365,9 @@ resolves, once, at its end.
   `retreatCost`), `resists` (Enduring Speed: a status `addStatus` refuses to
   put on the bearer, saying so in the log), `ricochet` (the Ricochet item: the
   bearer's swing bounces, summed by `ricochetPower`), `debuffDuration` (Debuff
-  Reducer), `cooldownCut` (the Cooldown family: own turns off the cooldowns the
-  bearer starts, never below 1), `resist` (Bullet and Spirit Resilience) and
+  Reducer), `cooldownCut` (the Cooldown family: own turns off the waits the
+  bearer's skill and ultimate start, the largest worn, never a charged skill's,
+  never below 1; read by `skillWait` and `ultWait`), `resist` (Bullet and Spirit Resilience) and
   `healingBoost` (Healing Booster). `attackPower`, `damageUnit`, `healUnit`,
   `addStatus`, `retreatCost` and the cooldowns (`activeCooldown`, the
   ultimate's in `useSkill`) ask every ability the hero carries; nothing else

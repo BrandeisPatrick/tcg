@@ -71,7 +71,7 @@ const firstOf = (G: GameState): PlayerID => G.firstMover ?? '0';
 
 /** Souls an active item pays out to whoever uses it, as its text says (Golden
  *  Goose Egg: "Gain 2 souls"). Written from the cards, not read off the engine. */
-export const SOULS_ON_USE: Readonly<Record<string, number>> = { golden_goose_egg: 2 };
+export const SOULS_ON_USE: Readonly<Record<string, number>> = {}; // Golden Goose Egg paid 2 until it became the draw card (2026-11-16)
 
 /** The move that puts items on (and, an evolving upgrade, one off) heroes. */
 const ITEM_MOVES = ['playCard'];
@@ -172,10 +172,12 @@ export function collectInvariantViolations(G: GameState, ctx: Ctx): Violation[] 
     }
   }
   if (G.pendingDiscard !== undefined) {
-    // A draw card's discard: owed by the player on turn, at least one card, no more than the hand holds.
+    // A card's discard: owed by the player on turn, at least one card, no more than the hand holds,
+    // and named for a card. (No card owes one since the Cooldown family stopped drawing on 2026-11-16;
+    // the engine keeps the step, and the fuzz games check that none is ever made.)
     const d = G.pendingDiscard;
     const hand = G.players[d.pid] ? handOf(G, d.pid).length : -1;
-    if (d.pid !== current || !Number.isInteger(d.count) || d.count < 1 || d.count > hand || !(d.cardId in DRAW_CARDS)) {
+    if (d.pid !== current || !Number.isInteger(d.count) || d.count < 1 || d.count > hand || !CARDS_BY_ID[d.cardId]) {
       add('pending-discard', String(d.pid), `G.pendingDiscard is ${JSON.stringify(d)} with P${current} on turn and ${hand} card(s) in P${d.pid}'s hand`);
     }
   }

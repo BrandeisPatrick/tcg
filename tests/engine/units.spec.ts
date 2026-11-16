@@ -20,7 +20,7 @@ import { INVALID, perform, type Action } from '@/engine/engine';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
 import { damageUnit } from '@/engine/damage';
 import { resolve } from '@/engine/death';
-import { millDeck } from '@/engine/deck';
+import { millDeck, oweDiscard } from '@/engine/deck';
 import { blocked, placeCost, placeHeroBlocked, playBlocked, skillBlocked } from '@/engine/legality';
 import { attackPower, heroesOf, isUnit, slottedHeroes, stepInCandidates, structureHp, unitData } from '@/engine/query';
 import { allocatorOf } from '@/engine/ids';
@@ -211,13 +211,11 @@ describe('a hero is never discarded: it goes back into the deck, which is shuffl
     expect(millDeck(G, '1', 1, 'test')).toEqual([g]);
   });
 
-  it('discarded from the hand to a draw card', () => {
+  it('discarded from the hand to a discard owed (the engine\'s step, which no card asks for since 2026-11-16)', () => {
     const G = freshReadyGame();
-    G.players['0'].souls = 4;
     const hero = giveCard(G, '0', 'hero_yamato');
-    const draw = giveCard(G, '0', 'improved_cooldown');
-    stackDeck(G, '0', ['grit', 'grit', 'grit']);
-    act(G, '0', { type: 'playCard', cardIid: draw.iid });
+    giveCard(G, '0', 'grit');
+    oweDiscard(G, '0', 1, 'golden_goose_egg');
     act(G, '0', { type: 'discard', cardIids: [hero.iid] });
     expect(G.players['0'].deck).toContain(hero);
     expect(hero.zone).toBe('deck');
@@ -234,9 +232,7 @@ describe('a hero is never discarded: it goes back into the deck, which is shuffl
     G.players['0'].hand = G.players['0'].hand.filter((c) => c !== worn);
     Object.assign(worn, { zone: 'attached', attachedTo: hero.iid });
     hero.attached = [worn];
-    const draw = giveCard(G, '0', 'improved_cooldown');
-    stackDeck(G, '0', ['grit', 'grit', 'grit']);
-    act(G, '0', { type: 'playCard', cardIid: draw.iid });
+    oweDiscard(G, '0', 1, 'golden_goose_egg');
     act(G, '0', { type: 'discard', cardIids: [hero.iid] });
     expect(hero.zone).toBe('deck');
     expect(hero.attached ?? []).toEqual([]);

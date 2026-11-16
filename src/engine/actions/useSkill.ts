@@ -12,7 +12,7 @@
  */
 import type { AbilityId, CardInstance, GameState, PlayerID } from '../types';
 import { CARDS_BY_ID, cardName } from '@/cards';
-import { abilityAim, cooldownCut, findCardOnBoard, kitCharges, kitCost, resolveSkill, skillWait, ultimateCard, ultWait } from '../query';
+import { abilityAim, findCardOnBoard, kitCharges, kitCost, resolveSkill, skillWait, ultimateCard, ultWait } from '../query';
 import { pushLog } from '../log';
 import { pushFx } from '../fx';
 import { nextActionId } from '../ids';
@@ -111,7 +111,7 @@ export function payKit(G: GameState, pid: PlayerID, hero: CardInstance, abilityI
     // Every ultimate waits its size's turns after a use. A charged one counts
     // its damage from nothing again as well; the wait is what keeps the damage
     // its own effect deals (Silver's wolf) from readying it as the effect ends.
-    (hero.cooldowns ??= {})[abilityId] = Math.max(1, (face ? ultWait(face) : 1) - cooldownCut(hero, 'ult'));
+    (hero.cooldowns ??= {})[abilityId] = face ? ultWait(face, hero) : 1;
     if (face?.charged && hero.tally?.[abilityId]) hero.tally[abilityId] = 0;
     return souls;
   }

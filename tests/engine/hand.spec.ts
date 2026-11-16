@@ -26,7 +26,7 @@ import { itemPrice, netWorth, otherPlayer, slotCap, wornItems } from '@/engine/q
 import { itemCard } from '@/cards';
 import { setupGame } from '@/engine/actions/setup';
 import { beginTurn, endTurnEffects } from '@/engine/actions/turn';
-import { drawCards } from '@/engine/deck';
+import { drawCards, oweDiscard } from '@/engine/deck';
 import { resolve } from '@/engine/death';
 import {
   DRAW_PER_TURN, EXP_ON_EQUIP, LANE_INCOME, MAX_HAND, MAX_ITEMS, PRICE,
@@ -613,9 +613,9 @@ describe('what a play sets going', () => {
     const health = playNew(G, '0', 'extra_health', lash);
     expect([health.zone, health.cooldowns]).toEqual(['equipment', undefined]);
     stackDeck(G, '0', ['grit', 'grit', 'grit', 'grit']);
-    const draw = useItem(G, '0', 'superior_cooldown');                          // a draw card
+    const draw = useItem(G, '0', 'golden_goose_egg');                           // the draw card
     expect([draw.zone, draw.cooldowns]).toEqual(['discard', undefined]);
-    expect(ids(me.discard)).toEqual(['cold_front', 'heroic_aura', 'knockdown', 'superior_cooldown']);
+    expect(ids(me.discard)).toEqual(['cold_front', 'heroic_aura', 'knockdown', 'golden_goose_egg']);
   });
 
   it('the bonus goes on with the Vitality spike synced', () => {
@@ -653,7 +653,7 @@ describe('what a play sets going', () => {
   });
 });
 
-describe('the draw cards: draw, then discard from anywhere in the hand', () => {
+describe('the draw card: Golden Goose Egg draws 2 (2026-11-16); a discard owed is paid from anywhere in the hand', () => {
   /** P0 holding the draw card `id` and the souls it costs, and nothing else; the deck stacked with `deck`. */
   function ready(id: string, deck: string[]) {
     const G = turn(itemPrice(id));
@@ -662,42 +662,42 @@ describe('the draw cards: draw, then discard from anywhere in the hand', () => {
     return { G, item, stacked };
   }
   const cast = (item: CardInstance): Action => ({ type: 'playCard', cardIid: item.iid });
+  /** P0 owing `count` to the discard with the hand it holds: the engine's step, which no card asks
+   *  for since the Cooldown family stopped drawing (2026-11-16), set going as a card would. */
+  function owing(count: number, hand: string[]) {
+    const G = turn(0);
+    const cards = hand.map((id) => giveCard(G, '0', id));
+    oweDiscard(G, '0', count, 'golden_goose_egg');
+    return { G, cards };
+  }
 
-  it('Compress Cooldown: draw 3, owe 1; it costs its price, is played once and goes to the discard pile', () => {
-    const { G, item, stacked } = ready('improved_cooldown', ['grit', 'cold_front', 'extra_health']);
+  it('Golden Goose Egg: draw 2, owe nothing; it costs its price, is played once and goes to the discard pile', () => {
+    const { G, item, stacked } = ready('golden_goose_egg', ['grit', 'cold_front', 'extra_health']);
     const keep = giveCard(G, '0', 'toxic_bullets');
     expect(attempt(G, '0', cast(item)).result).not.toBe(INVALID);
     expect(G.players['0'].souls).toBe(0);
-    expect(G.players['0'].hand).toEqual([keep, stacked[0], stacked[1], stacked[2]]);
-    expect(G.pendingDiscard).toEqual({ pid: '0', count: 1, cardId: 'improved_cooldown' });
+    expect(G.players['0'].hand).toEqual([keep, stacked[0], stacked[1]]);
+    expect(G.pendingDiscard).toBeUndefined();
     expect([item.zone, item.cooldowns]).toEqual(['discard', undefined]);
     expect(G.players['0'].discard).toEqual([item]);
-    // The discard may be any card of the hand, not only a new one.
-    expect(attempt(G, '0', { type: 'discard', cardIids: [keep.iid] }).result).not.toBe(INVALID);
-    expect(G.pendingDiscard).toBeUndefined();
-    expect(G.players['0'].discard).toEqual([item, keep]);
-    expect(G.players['0'].hand).toEqual([stacked[0], stacked[1], stacked[2]]);
   });
 
-  it('Superior Cooldown draws 5 and owes 1; Transcendent draws 8 and owes 2', () => {
-    for (const [id, draw, owe] of [['superior_cooldown', 5, 1], ['transcendent_cooldown', 8, 2]] as const) {
-      const { G, item } = ready(id, Array.from({ length: 9 }, () => 'grit'));
+  it('the egg draws what the deck holds: one card from a deck of one, none from an empty one', () => {
+    for (const [deck, want] of [[['grit'], 1], [[], 0]] as const) {
+      const { G, item } = ready('golden_goose_egg', [...deck]);
       perform(G, '0', cast(item));
-      expect(G.players['0'].hand, id).toHaveLength(draw);
-      expect(G.pendingDiscard, id).toMatchObject({ pid: '0', count: owe });
-      expect(G.players['0'].discard, id).toEqual([item]);
+      expect(G.players['0'].hand, `${deck.length} in the deck`).toHaveLength(want);
+      expect(G.pendingDiscard).toBeUndefined();
     }
   });
 
-  it('while the discard is owed nothing else is legal; it may be paid a card at a time', () => {
-    const { G, item } = ready('transcendent_cooldown', ['grit', 'grit', 'grit', 'grit']); // a short deck: 4 drawn, 2 owed
-    perform(G, '0', cast(item));
-    const hand = G.players['0'].hand;
+  it('while a discard is owed nothing else is legal; it may be paid a card at a time, any card of the hand', () => {
+    const { G, cards } = owing(2, ['grit', 'grit', 'grit', 'grit']);
     refusedUntouched(G, '0', { type: 'attack' }, 'discardOwed');
     refusedUntouched(G, '0', { type: 'endTurn' }, 'discardOwed');
     expect(legalActions(G, '0').every((a) => a.type === 'discard')).toBe(true);
-    expect(legalActions(G, '0')).toHaveLength(hand.length);
-    perform(G, '0', { type: 'discard', cardIids: [hand[0].iid] });
+    expect(legalActions(G, '0')).toHaveLength(cards.length);
+    perform(G, '0', { type: 'discard', cardIids: [cards[0].iid] });
     expect(G.pendingDiscard?.count).toBe(1);
     perform(G, '0', { type: 'discard', cardIids: [G.players['0'].hand[0].iid] });
     expect(G.pendingDiscard).toBeUndefined();
@@ -705,10 +705,10 @@ describe('the draw cards: draw, then discard from anywhere in the hand', () => {
   });
 
   it('the discard\'s refusals, in order — none owed, none named, too many, a card twice, one not in the hand — change nothing', () => {
-    const { G, item } = ready('improved_cooldown', ['grit', 'grit']);
-    expect(discardBlocked(G, '0', [])).toBe('notOwed');
-    perform(G, '0', cast(item));
-    const [a, b] = G.players['0'].hand;
+    const fresh = turn(0);
+    expect(discardBlocked(fresh, '0', [])).toBe('notOwed');
+    const { G, cards } = owing(1, ['grit', 'grit']);
+    const [a, b] = cards;
     refusedUntouched(G, '1', { type: 'discard', cardIids: [a.iid] }, 'notOwed');
     refusedUntouched(G, '0', { type: 'discard', cardIids: [] }, 'none');
     refusedUntouched(G, '0', { type: 'discard', cardIids: [a.iid, b.iid] }, 'tooMany');
@@ -717,17 +717,14 @@ describe('the draw cards: draw, then discard from anywhere in the hand', () => {
     refusedUntouched(G, '0', { type: 'discard', cardIids: ['nope'] }, 'notInHand');
   });
 
-  it('a draw into a full hand is skipped, and the discard never asks for more than the hand holds', () => {
-    const { G, item } = ready('improved_cooldown', ['grit', 'grit']);
+  it('a draw into a full hand is skipped, and a discard never asks for more than the hand holds', () => {
+    const { G, item } = ready('golden_goose_egg', ['grit', 'grit']);
     for (let i = 0; i < MAX_HAND - 1; i++) giveCard(G, '0', 'grit');  // the draw card and these fill the hand
     perform(G, '0', cast(item));                                // played, it leaves one place free
     expect(G.players['0'].hand).toHaveLength(MAX_HAND);         // one drawn, one skipped
     expect(G.players['0'].deck).toHaveLength(1);
-    expect(G.pendingDiscard?.count).toBe(1);
-    const empty = ready('superior_cooldown', ['grit']);
-    perform(empty.G, '0', cast(empty.item));
-    expect(empty.G.players['0'].hand).toHaveLength(1);
-    expect(empty.G.pendingDiscard?.count).toBe(1);               // owed 2, the hand holds 1
+    const short = owing(2, ['grit']);
+    expect(short.G.pendingDiscard?.count).toBe(1);               // owed 2, the hand holds 1
   });
 });
 

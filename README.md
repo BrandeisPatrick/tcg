@@ -27,7 +27,7 @@ builds) and the Gallery. A Quick Match goes like this.
   play. Each holds 8 tier-1, 6 tier-2 and 2 tier-3 items (56 souls), at most 2
   copies of one, with an upgrade beside the item it is built from, a counter
   (Counterspell, Debuff Reducer, Dispel Magic or Knockdown) and a draw card
-  (Compress Cooldown; two in Graveyard)
+  (Golden Goose Egg; two in Graveyard)
   ([`docs/deck-plan.md`](./docs/deck-plan.md), "Ready decks").
 - Or build your own below them, on a deck builder that looks like Deadlock's
   shop: Weapon, Vitality and Spirit tabs, rows by tier, the item icons. Tap an
@@ -86,7 +86,7 @@ builds) and the Gallery. A Quick Match goes like this.
   item (Pokémon TCG Pocket's one Energy a turn).
 - A kill pays your side a bounty: 1 soul in rounds 1–2, and 1 more every two
   rounds, up to 6 in rounds 11–12. Little early, a lot late. A structure's
-  fall pays nothing. (One item, Golden Goose Egg, pays 2 a use.)
+  fall pays nothing.
 - Tap your souls (or hover them with a mouse) for the bank sheet: what the
   next turn pays, what you will hold then, and what a kill pays now.
 - You may play as many cards in a turn as your souls pay for.
@@ -175,16 +175,10 @@ hand is skipped, and an empty deck simply draws nothing.
 - Your deck and your discard pile sit at the ends of your hand with their
   counts (the rival's beside its hand). Tap the discard pile to list it.
 
-**The draw cards.** Deadlock's three Cooldown items are the draw engine:
-actives worn on a hero and cast from its sheet (free), then they wait 2 turns.
-
-| Card | Tier | Price | Cast | Cards kept |
-|---|---|---|---|---|
-| Compress Cooldown | 2 | 4 | draw 2, discard 1 | +1 |
-| Superior Cooldown | 3 | 8 | draw 4, discard 2 | +2 |
-| Transcendent Cooldown | 4 | 16 | draw 8, discard 4 | +4 |
-
-You choose the discards from anywhere in your hand.
+**The draw card.** Golden Goose Egg, a tier-1 spell for 2 souls: "Draw 2 cards." Deadlock's
+three Cooldown items are equipment that shortens the bearer's waits (Compress: its skill waits 1
+turn less; Superior: skill 1, ultimate 2; Transcendent: skill 2, ultimate 3; never a charged
+skill's, and a wait never goes under 1).
 
 **Act.**
 
@@ -288,12 +282,12 @@ sets them:
 
 142 item cards, each a current Deadlock shop item under its own name, tab and
 tier. An active item is always a spell and a passive item always equipment
-([`docs/card-design.md`](./docs/card-design.md) §1), with two exceptions, both
-Patrick's calls: Counterspell, a passive in Deadlock, is a spell here, and the
-Cooldown family, passives in Deadlock, are the deck's draw cards here, so they
-are actives ([`docs/deck-plan.md`](./docs/deck-plan.md)): draw 3, discard 1 /
-draw 5, discard 1 / draw 8, discard 2 ([`docs/card-design.md`](./docs/card-design.md),
-"The Cooldown family"). One card prints a price of its own: Rusted Barrel, 1 soul. Cells read
+([`docs/card-design.md`](./docs/card-design.md) §1), with one exception,
+Patrick's call: Counterspell, a passive in Deadlock, is a spell here. (The
+Cooldown family was the other until 2026-11-16, when it went back to equipment
+that shortens waits; [`docs/card-design.md`](./docs/card-design.md), "Changed
+2026-11-16: the Cooldown family is equipment".) Spells worth under half their
+tier's price as one play print a price of their own. Cells read
 passives · actives; the column heads give the tier's price.
 
 | Tab | T1 · 2 | T2 · 4 | T3 · 8 | T4 · 16 | T5 · 24 | All |

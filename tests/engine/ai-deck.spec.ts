@@ -19,6 +19,7 @@ import { kitCharges, wornItems } from '@/engine/query';
 import { allocatorOf } from '@/engine/ids';
 import { makeInstance } from '@/engine/instances';
 import { seededRandom } from '@/engine/rng';
+import { oweDiscard } from '@/engine/deck';
 import { discardChoice, enumerateAIMoves } from '@/ai/heuristic';
 import { getMatchConfig, setMatchConfig } from '@/storage/matchConfig';
 import { freshReadyGame, giveCard, giveItem, spendSkill, stackDeck } from './_helpers';
@@ -299,20 +300,32 @@ describe('the AI and a full hero (Patrick, 2026-11-09: a full hero swaps an item
 });
 
 describe('the AI and its draw cards', () => {
-  it('plays a draw card it can pay for and pays the discard with the cards worth least to it', () => {
-    const G = turn(4); // Compress Cooldown's price
+  it('plays the draw card it can pay for (Golden Goose Egg, 2026-11-16) and draws its 2', () => {
+    const G = turn(2); // the egg's price
     const me = G.players['0'];
     // Nothing else to do this turn: every hero's ability is spent.
     for (const h of [me.active, ...me.bench]) if (h) h.skillUsedThisTurn = true;
-    const draw = giveCard(G, '0', 'improved_cooldown');
+    const draw = giveCard(G, '0', 'golden_goose_egg');
     stackDeck(G, '0', ['hero_kelvin', 'glass_cannon']);
     const made = playOut(G);
     expect(made.some((a) => a.type === 'playCard' && a.cardIid === draw.iid)).toBe(true);
+    expect(G.pendingDiscard).toBeUndefined();
+    expect(me.deck).toHaveLength(0);
+    expect(me.discard.map((c) => c.cardId)).toEqual(['golden_goose_egg']);
+  });
+
+  it('pays a discard owed with the card worth least to it (the engine\'s step; no card owes one since 2026-11-16)', () => {
+    const G = turn(0);
+    const me = G.players['0'];
+    for (const h of [me.active, ...me.bench]) if (h) h.skillUsedThisTurn = true;
+    giveCard(G, '0', 'hero_kelvin');
+    giveCard(G, '0', 'glass_cannon');
+    oweDiscard(G, '0', 1, 'golden_goose_egg');
+    const made = playOut(G);
     expect(made.some((a) => a.type === 'discard')).toBe(true);
     expect(G.pendingDiscard).toBeUndefined();
-    // The spell itself, played, then the tier-4 item it cannot pay for anytime
-    // soon: the hero is kept.
-    expect(me.discard.map((c) => c.cardId)).toEqual(['improved_cooldown', 'glass_cannon']);
+    // The tier-4 item it cannot pay for anytime soon goes; the hero is kept.
+    expect(me.discard.map((c) => c.cardId)).toEqual(['glass_cannon']);
   });
 
   it('discardChoice keeps heroes, then items its heroes could take, cheaper first; drops items no hero can take', () => {

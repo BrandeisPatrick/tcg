@@ -1,27 +1,28 @@
 /**
  * The Cooldown family (canon Compress → Superior → Transcendent Cooldown) is
- * the deck's draw cards (docs/deck-plan.md): three spells, played from the
- * hand once like any spell, each a draw and then a discard from anywhere in
- * the hand — 2 and 1, 4 and 2, 8 and 4. They cut no cooldown: nothing in the
- * catalogue does. Each step doubles the price and the cards kept. Deadlock
- * builds each from the one before, but as actives none evolves another: each
- * costs its whole price. (The draw and the discard in detail: hand.spec.)
+ * equipment again (Patrick, 2026-11-16: "cooldown should not be draw cards;
+ * they should be equipment to reduce CD"): Deadlock's passives, each a few
+ * turns off the waits its bearer starts — Compress its skill's 1, Superior its
+ * skill's 1 and its ultimate's 2, Transcendent its skill's 2 and its
+ * ultimate's 3. Never a charged skill's (only the charge items speed those,
+ * Patrick 2026-11-15); never under 1; two worn do not add up. Each evolves the
+ * one before, as in Deadlock. (The draw card is Golden Goose Egg now: hand.spec.)
  *
  * Board (freshReadyGame): P0's Active is made a Level 2 Viscous — The Cube is
- * a skill that waits 4 turns, and his ultimate is unlocked.
+ * a skill that waits 4 turns, and his ultimate (Goo Ball, medium) waits 6.
  */
 import { describe, it, expect } from 'vitest';
 import { itemCard } from '@/cards';
+import { ultimateCard } from '@/engine/query';
 import { evolvesFrom, upgradesOf } from '@/cards/decks';
-import { ABILITIES_BY_ID, getAbility } from '@/abilities';
+import { getAbility } from '@/abilities';
 import { INVALID, perform } from '@/engine/engine';
-import { cooldownCut, itemPrice, skillWait } from '@/engine/query';
+import { cooldownCut, itemPrice, skillWait, ultWait } from '@/engine/query';
 import { playCost } from '@/engine/legality';
-import { MAX_HAND, PRICE, SKILL_COOLDOWN, ULT_WAIT } from '@/engine/constants';
-import { freshReadyGame, giveItem, makeHero, stackDeck, useItem } from './_helpers';
+import { PRICE, ULT_WAIT } from '@/engine/constants';
+import { freshReadyGame, giveItem, makeHero } from './_helpers';
 
-/** P0's Active made a Level 2 Viscous, with souls to pay for
- *  his skill or his ultimate. */
+/** P0's Active made a Level 2 Viscous. */
 function viscous() {
   const G = freshReadyGame();
   G.players['0'].souls = 20;
@@ -34,67 +35,65 @@ function viscous() {
 const COMPRESS = 'improved_cooldown';
 const SUPERIOR = 'superior_cooldown';
 const TRANSCENDENT = 'transcendent_cooldown';
-const FAMILY = [[COMPRESS, 2, 3, 1], [SUPERIOR, 3, 5, 1], [TRANSCENDENT, 4, 8, 2]] as const;
+/** Each: its tier, then the turns off a skill's wait and an ultimate's. */
+const FAMILY = [[COMPRESS, 2, 1, 0], [SUPERIOR, 3, 1, 2], [TRANSCENDENT, 4, 2, 3]] as const;
 
-describe('The Cooldown family is the draw engine', () => {
-  it('three Spirit spells, tiers 2, 3 and 4, Deadlock\'s line from one to the next; as actives none evolves another', () => {
-    for (const [id, tier, draw, discard] of FAMILY) {
-      const card = itemCard(id)!;
-      expect(card, id).toMatchObject({ type: 'spell', slot: 'spirit', tier });
-      expect(getAbility(card.type === 'spell' ? card.abilities[0] : '')?.draw, id).toEqual({ cards: draw, discard });
-      expect(card.text, id).toContain(`Draw ${draw} cards, then discard ${discard}`);
+describe('The Cooldown family is equipment that shortens waits', () => {
+  it('three Spirit equipment, tiers 2, 3 and 4, priced by tier, each built from the one before', () => {
+    for (const [id, tier] of FAMILY) {
+      expect(itemCard(id), id).toMatchObject({ type: 'equipment', slot: 'spirit', tier });
+      expect(itemPrice(id), id).toBe(PRICE[tier]);
     }
-    expect(itemCard(SUPERIOR)!.upgradesFrom).toBe(COMPRESS);
-    expect(itemCard(TRANSCENDENT)!.upgradesFrom).toBe(SUPERIOR);
-    // The upgrade discount is equipment's alone: an active neither evolves nor is evolved.
-    expect(upgradesOf(COMPRESS)).toEqual([]);
-    expect([evolvesFrom(SUPERIOR), evolvesFrom(TRANSCENDENT)]).toEqual([undefined, undefined]);
-    for (const [id] of FAMILY) expect(playCost(undefined, id), id).toBe(itemPrice(id));
+    expect(evolvesFrom(SUPERIOR)).toBe(COMPRESS);
+    expect(evolvesFrom(TRANSCENDENT)).toBe(SUPERIOR);
+    expect(upgradesOf(COMPRESS)).toEqual([SUPERIOR]);
+    expect(upgradesOf(SUPERIOR)).toEqual([TRANSCENDENT]);
   });
 
-  it('each step costs more and keeps more: a soul buys about the same at every tier', () => {
-    const kept = FAMILY.map(([, , draw, discard]) => draw - discard);
-    const price = FAMILY.map(([id]) => itemPrice(id));
-    // Draw x, discard y (Patrick, 2026-11-15), set for one play: Compress and Superior keep a
-    // card for every 2 souls at their tiers' prices; Transcendent, held by the hand's cap of 10,
-    // keeps 6, and prints a price of its own for that, 11 (2026-11-16: it was its tier's 16).
-    expect(price).toEqual([PRICE[2], PRICE[3], 11]);
-    expect(kept).toEqual([2, 4, 6]);
-    expect([price[0] / kept[0], price[1] / kept[1]]).toEqual([2, 2]);
-    expect(price[2] / kept[2]).toBeLessThan(2);
-    expect(FAMILY[2][2]).toBeLessThan(MAX_HAND);
-  });
-
-  it('played from the hand for its price: no hero\'s ability is spent, the cards are drawn, the discard is owed, and the card is on the discard pile', () => {
-    for (const [id, , draw, discard] of FAMILY) {
+  it('their texts say what they take off, and the hook takes exactly that', () => {
+    for (const [id, , skill, ult] of FAMILY) {
       const { G, hero } = viscous();
-      stackDeck(G, '0', Array.from({ length: 8 }, () => 'grit'));
-      G.players['0'].souls = 0;
-      const card = useItem(G, '0', id); // dealt, its price handed over, and played
-      expect(hero.skillUsedThisTurn ?? false, id).toBe(false);
-      expect(card.cooldowns, id).toBeUndefined();
-      expect(G.players['0'].discard, id).toContain(card);
-      expect(G.players['0'].souls, id).toBe(0);
-      expect(G.players['0'].hand, id).toHaveLength(draw);
-      expect(G.pendingDiscard, id).toMatchObject({ pid: '0', count: discard, cardId: id });
+      giveItem(G, hero, id);
+      expect(cooldownCut(hero, 'skill'), id).toBe(skill);
+      expect(cooldownCut(hero, 'ult'), id).toBe(ult);
+      expect(itemCard(id)!.text, id).toContain(`skill waits ${skill} turn${skill === 1 ? '' : 's'} less`);
+      if (ult) expect(itemCard(id)!.text, id).toContain(`ultimate ${ult} less`);
     }
   });
 
-  it('cuts no wait: played, they leave the ultimate and the skill on their own timers, and no card has a cooldown hook', () => {
-    for (const played of [[], [COMPRESS], [SUPERIOR], [TRANSCENDENT]]) {
-      const { G, hero } = viscous();
-      stackDeck(G, '0', Array.from({ length: 8 }, () => 'grit'));
-      for (const id of played) {
-        useItem(G, '0', id);
-        // Pay the discard the draw card owes, so the turn goes on.
-        const owed = G.pendingDiscard!;
-        expect(perform(G, '0', { type: 'discard', cardIids: G.players['0'].hand.slice(0, owed.count).map((c) => c.iid) })).not.toBe(INVALID);
-      }
-      expect(cooldownCut(hero, 'ult'), played.join() || 'none').toBe(0);
-      expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, skillId: 'eff_ult_viscous' }), played.join()).not.toBe(INVALID);
-      expect(hero.cooldowns?.eff_ult_viscous, played.join() || 'none').toBe(ULT_WAIT.medium);
-    }
-    expect(Object.values(ABILITIES_BY_ID).filter((a) => a.cooldownCut).map((a) => a.id)).toEqual([]);
+  it('worn, the bearer\'s skill and ultimate wait less after a use: The Cube 4 → 2, Goo Ball 6 → 3 with Transcendent', () => {
+    const { G, hero } = viscous();
+    giveItem(G, hero, TRANSCENDENT);
+    expect(skillWait(getAbility('skill_viscous')!, hero)).toBe(2);
+    expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, targetIid: hero.iid })).not.toBe(INVALID);
+    expect(hero.cooldowns?.skill_viscous).toBe(2);
+    const goo = ultimateCard('eff_ult_viscous')!;
+    expect(ULT_WAIT[goo.size]).toBe(6);
+    expect(ultWait(goo, hero)).toBe(3);
+    // The next turn, the ultimate: one ability a hero a turn.
+    hero.skillUsedThisTurn = false;
+    hero.cooldowns = {};
+    expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, skillId: 'eff_ult_viscous' })).not.toBe(INVALID);
+    expect(hero.cooldowns?.eff_ult_viscous).toBe(3);
+  });
+
+  it('a charged skill\'s wait is the charge items\' alone: Kelvin\'s Frost Grenade keeps its 4, his ultimate does not', () => {
+    const { G } = viscous();
+    const kelvin = G.players['0'].bench[0] = makeHero('hero_kelvin', '0', 'bench', 1);
+    giveItem(G, kelvin, SUPERIOR);
+    const grenade = getAbility('skill_kelvin')!;
+    expect(skillWait(grenade, kelvin)).toBe(skillWait(grenade));
+    const shelter = ultimateCard('eff_ult_kelvin')!;
+    expect(ultWait(shelter, kelvin)).toBe(ULT_WAIT[shelter.size] - 2);
+  });
+
+  it('two worn do not add up (the larger applies), and a wait is never taken under 1', () => {
+    const { G, hero } = viscous();
+    giveItem(G, hero, COMPRESS);
+    giveItem(G, hero, TRANSCENDENT);
+    expect(cooldownCut(hero, 'skill')).toBe(2);
+    expect(cooldownCut(hero, 'ult')).toBe(3);
+    expect(skillWait({ ...getAbility('skill_viscous')!, cooldown: 2 }, hero)).toBe(1);
   });
 
   it('a wait is never taken under 1: Rapid Recharge\'s turn off stops there', () => {
@@ -106,13 +105,11 @@ describe('The Cooldown family is the draw engine', () => {
     expect(skillWait({ ...knives, cooldown: 1 }, shiv)).toBe(1);
   });
 
-  it("leaves a skill's cooldown alone: The Cube still waits its 4 turns", () => {
+  it('onto the hero wearing the one below, an upgrade costs the difference', () => {
     const { G, hero } = viscous();
-    stackDeck(G, '0', Array.from({ length: 8 }, () => 'grit'));
-    useItem(G, '0', TRANSCENDENT);
-    expect(perform(G, '0', { type: 'discard', cardIids: G.players['0'].hand.slice(0, G.pendingDiscard!.count).map((c) => c.iid) })).not.toBe(INVALID);
-    expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, targetIid: hero.iid })).not.toBe(INVALID);
-    expect(hero.cooldowns?.skill_viscous).toBe(4);
-    expect(SKILL_COOLDOWN).toBe(3); // the default; The Cube names its own
+    giveItem(G, hero, COMPRESS);
+    expect(playCost(hero, SUPERIOR)).toBe(PRICE[3] - PRICE[2]);
+    expect(playCost(undefined, SUPERIOR)).toBe(PRICE[3]);
+    void G;
   });
 });

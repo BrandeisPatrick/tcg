@@ -48,26 +48,29 @@ upgrades in the deck and the counters ([card-design.md](card-design.md), "Change
 - **A counter in every deck:** Counterspell, Debuff Reducer, Dispel Magic or Knockdown.
 - **Mostly equipment.** A spell is one play; equipment stays. A deck carries a few spells for the
   turn that needs one, at most half the deck.
-- **One draw card.** Two Compress Cooldown were in every deck until 2026-11-15, and none for a day
-  after. Since 2026-11-16 each deck carries one, in place of a tier-2 card: it is worth its price
-  as one play (draw 3, discard 1; [card-design.md](card-design.md), "The Cooldown family"), and a
-  deck holds its three heroes, so a draw finds one a turn or two sooner. Graveyard carries two,
-  since Graves shuffles Ghouls into the deck as well.
+- **One draw card: Golden Goose Egg** (draw 2, a tier-1 spell for 2 souls). A deck holds its
+  three heroes, so a draw finds one a turn or two sooner. Graveyard carries two, since Graves
+  shuffles Ghouls into the deck as well. The egg takes a tier-1 slot, so the recipe stays 8 / 6 / 2.
+  - History: Compress Cooldown was the draw card (draw 3, discard 1) from 2026-11-15 until
+    2026-11-16, when Patrick made the Cooldown family equipment again ("cooldown should not be draw
+    cards; they should be equipment to reduce CD") and Golden Goose Egg the draw card ("Goose Egg
+    now should be draw 2").
+  - Compress Cooldown stays, as the item that takes a turn off a skill's wait, in the decks with at
+    least two heroes whose skills it shortens (not a charged skill's): Spirit Storm (Lash, Seven),
+    Ambush (Silver, Yamato), Lockdown (all three) and Graveyard (all three, two of it). Gunline and
+    Bulwark have one such hero each and take back the card it had replaced: Opening Rounds and
+    Battle Vest.
 - **The rest from the squad's own builds**, so each hero finds its items.
 - **A squad has a front, a carry and a helper.** No hero is in two decks. Four heroes are in none: Shiv, Paige, Drifter and Dynamo.
 
 | Deck | Squad | Tier 1 (two of each) | Tier 2 | Tier 3 |
 |---|---|---|---|---|
-| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot, Grit | 2 Titanic Magazine (the upgrade), Long Range, Compress Cooldown, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
-| Spirit Storm | Lash, Seven, Kelvin | Extra Spirit, Mystic Burst, Mystic Regeneration, Spirit Strike | 2 Improved Spirit (the upgrade), Cold Front, Compress Cooldown, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
-| Bulwark | Abrams, Victor, Rem | Extra Health, Extra Regen, Grit, Healing Rite | 2 Bullet Lifesteal, Healing Booster, Compress Cooldown, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
-| Ambush | Silver, Yamato, Mirage | Sprint Boots, Extended Magazine, Restorative Shot, Headshot Booster | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Compress Cooldown | Tesla Bullets, Dispel Magic |
-| Lockdown | Mo & Krill, Sinclair, Wraith | Rusted Barrel, Spirit Strike, Extra Spirit (two of each), Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Compress Cooldown, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
-| Graveyard | Viscous, Graves, Lady Geist | Extra Spirit, Spirit Strike, Extra Health, Healing Rite | 2 Compress Cooldown, Improved Spirit (the upgrade), Mystic Slow, Reactive Barrier, Debuff Reducer | Torment Pulse, Decay |
-
-The draw card took one tier-2 slot in each of the five older decks (2026-11-16): Opening Rounds
-(Gunline), the second Cold Front (Spirit Storm), Battle Vest (Bulwark), Split Shot (Ambush) and
-Spirit Sap (Lockdown, which keeps its spells at half the deck).
+| Gunline | Warden, Vindicta, Haze | Extended Magazine, Headshot Booster, Restorative Shot (two of each), Grit, Golden Goose Egg | 2 Titanic Magazine (the upgrade), Long Range, Opening Rounds, Fleetfoot, Debuff Reducer | Burst Fire, Toxic Bullets |
+| Spirit Storm | Lash, Seven, Kelvin | Extra Spirit, Mystic Burst, Spirit Strike (two of each), Mystic Regeneration, Golden Goose Egg | 2 Improved Spirit (the upgrade), Cold Front, Compress Cooldown, Mystic Vulnerability, Spirit Lifesteal | Knockdown, Torment Pulse |
+| Bulwark | Abrams, Victor, Rem | Extra Health, Extra Regen, Healing Rite (two of each), Grit, Golden Goose Egg | 2 Bullet Lifesteal, Healing Booster, Battle Vest, Debuff Reducer, Guardian Ward | Fortitude (the upgrade), Counterspell |
+| Ambush | Silver, Yamato, Mirage | Sprint Boots, Extended Magazine, Restorative Shot (two of each), Headshot Booster, Golden Goose Egg | 2 Kinetic Dash, Titanic Magazine (the upgrade), Fleetfoot, Swift Striker, Compress Cooldown | Tesla Bullets, Dispel Magic |
+| Lockdown | Mo & Krill, Sinclair, Wraith | Spirit Strike, Extra Spirit (two of each), Rusted Barrel, Golden Goose Egg, Healing Rite, Extra Health | 2 Slowing Hex, Improved Spirit (the upgrade), Compress Cooldown, Mystic Shot, Spirit Lifesteal | Knockdown, Silence Wave |
+| Graveyard | Viscous, Graves, Lady Geist | Extra Spirit, Spirit Strike, Golden Goose Egg (two of each), Extra Health, Healing Rite | 2 Compress Cooldown, Improved Spirit (the upgrade), Mystic Slow, Reactive Barrier, Debuff Reducer | Torment Pulse, Decay |
 
 How each wins:
 
@@ -82,7 +85,8 @@ How each wins:
   worn, so its souls go to items and Wraith's gun finishes.
 - **Graveyard** grinds the rival's deck: Grasping Hands shuffles two Ghouls into Graves's deck, each
   1 soul to play, and every Ghoul that falls discards the top of the rival's deck. Viscous holds
-  the lane, Lady Geist's spirit damage finishes, and the two Compress Cooldown find the Ghouls.
+  the lane, Lady Geist's spirit damage finishes, the two Golden Goose Eggs find the Ghouls, and
+  the two Compress Cooldown bring Grasping Hands back sooner.
 
 ## Start of the match
 
@@ -125,21 +129,15 @@ at turn 1, it is like rotation selection so it also fits a small screen like mob
 - The shop phase is gone: no buying, no selling, no market.
 - When your deck is empty you stop drawing. Nothing else happens.
 
-## The draw cards
+## The draw card
 
-Deadlock's three cooldown items are the draw cards: draw x, discard y (Patrick confirmed it on
-2026-11-15). Since that day each is a spell played once from the hand for its price (until then a
-hero wore one and cast it every 2 turns for free), and x and y were raised to suit one play.
+Golden Goose Egg is the draw card (Patrick, 2026-11-16: "Goose Egg now should be draw 2"): a
+tier-1 spell, 2 souls, "Draw 2 cards." It is worth 2.8 against its 2 (a card drawn is worth 1.4,
+[card-design.md](card-design.md), "Changed 2026-11-16: the Cooldown family is equipment").
 
-| Card | Tier | Price | Spell | Net cards |
-|---|---|---|---|---|
-| Compress Cooldown (`improved_cooldown`) | 2 | 4 souls | Draw 3, discard 1 | +2 |
-| Superior Cooldown | 3 | 8 souls | Draw 5, discard 1 | +4 |
-| Transcendent Cooldown | 4 | 16 souls | Draw 8, discard 2 | +6 |
-
-- You can discard any cards in your hand, not only the new ones.
-- Compress and Superior keep a card for every 2 souls. Transcendent keeps 6 for 16: a hand holds 10, so it cannot draw more.
-- The numbers were 2 / 1, 4 / 2 and 8 / 4 until 2026-11-15, when each became one play ([card-design.md](card-design.md), "The Cooldown family").
+Until 2026-11-16 Deadlock's three cooldown items were the draw cards (draw x, discard y; Patrick,
+2026-11-15). They are equipment again, as in Deadlock, and shorten the bearer's waits instead.
+Nothing makes a side discard now; the engine keeps the discard step for a card that may want it.
 
 ## Upgrades
 

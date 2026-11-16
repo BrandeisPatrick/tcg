@@ -38,12 +38,12 @@ describe('ready decks', () => {
     expect(d.items.reduce((n, id) => n + PRICE[itemCard(id)!.tier], 0)).toBe(56);
     const under = d.items.reduce((n, id) => n + PRICE[itemCard(id)!.tier] - itemPrice(id), 0);
     expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBe(56 - under);
-    // A counter in every deck; a draw card in every one since 2026-11-16 (Compress Cooldown: one,
-    // two in Graveyard, which also digs for its Ghouls); and a deck leans on equipment, which
-    // stays, over spells, which do not.
+    // A counter in every deck; a draw card in every one since 2026-11-16 (Golden Goose Egg: one,
+    // two in Graveyard, which also digs for its Ghouls; Compress Cooldown drew until it went back
+    // to equipment that day); and a deck leans on equipment, which stays, over spells, which do not.
     expect(d.items.some((id) => ['counterspell', 'debuff_reducer', 'debuff_remover', 'knockdown'].includes(id))).toBe(true);
-    const draws = d.items.filter((id) => /_cooldown$/.test(id));
-    expect(new Set(draws)).toEqual(new Set(['improved_cooldown']));
+    const draws = d.items.filter((id) => /^Draw \d+ cards?/.test(itemCard(id)!.text ?? ''));
+    expect(new Set(draws)).toEqual(new Set(['golden_goose_egg']));
     expect(draws).toHaveLength(d.id === 'graveyard' ? 2 : 1);
     const spells = d.items.filter((id) => itemCard(id)!.type === 'spell').length;
     expect(spells).toBeGreaterThan(0);
