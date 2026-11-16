@@ -46,10 +46,6 @@ export interface StatusDef {
    *  hooks are read like a passive's (`abilitySources`, engine/query.ts).
    *  Flying's: the spirit damage its bearer's attacks add. */
   ability?: string;
-  /** Its `ability` is a worn item's proc: asked with the gear's reactions to
-   *  the bearer's damage (`fireTriggers` with `reaction`), not with the
-   *  hero's passives. Spirit Lifesteal's (Infuser). */
-  reacts?: true;
 }
 
 /**
@@ -99,10 +95,6 @@ export const STATUSES: StatusDef[] = [
   // Flying (Vindicta's Flight, docs/hero-design.md): each hit on the bearer
   // misses 1 time in 3 (`damageUnit` rolls), and its attacks add 1 + Spirit
   // spirit damage (the status carries a proc: `ability`).
-  // Spirit Lifesteal for a while (Infuser, 2026-11-16): the status carries
-  // the item's own proc — heal 2 after its skill, spell or ultimate damages an
-  // enemy (`StatusDef.ability`).
-  { id: 'spirit_lifesteal', title: 'Spirit Lifesteal', desc: 'After its skill, spell or ultimate damages an enemy: heal 2.', hvalue: 1, ability: 'eff_spirit_lifesteal', reacts: true },
   { id: 'flying',        title: 'Flying',        desc: 'Each hit on this hero misses 1 time in 3. Its attacks also deal 1 spirit damage, plus its Spirit.', hvalue: 2, ability: 'status_flying' },
 
   // ----- Multi-attack -----

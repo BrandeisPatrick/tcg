@@ -164,14 +164,15 @@ describe('one use: the price, then the discard pile', () => {
   it('hard crowd control is a spell like any other: one play, its effect, the discard pile — a second needs a second card', () => {
     const G = freshReadyGame();
     const me = G.players['0'];
-    me.souls = 2 * PRICE[3];
+    const price = itemPrice('knockdown');                    // 4: it prints its own (2026-11-16)
+    me.souls = 2 * price;
     const [first, second] = [giveCard(G, '0', 'knockdown'), giveCard(G, '0', 'knockdown')]; // Stun the enemy Active for 1 turn
     const foe = G.players['1'].active!;
     expect(cast(G, '0', first.iid, foe.iid)).not.toBe(INVALID);
     expect(foe.statuses.some((s) => s.id === 'stun')).toBe(true);
-    expect([me.souls, me.discard.map((c) => c.iid)]).toEqual([PRICE[3], [first.iid]]);
+    expect([me.souls, me.discard.map((c) => c.iid)]).toEqual([price, [first.iid]]);
     nextOwnTurn(G, '0');
-    me.souls = PRICE[3];
+    me.souls = price;
     expect(cast(G, '0', second.iid, G.players['1'].active!.iid)).not.toBe(INVALID);
     expect(me.discard.map((c) => c.iid)).toEqual([first.iid, second.iid]);
     expect(legalActions(G, '0').some((a) => a.type === 'playCard')).toBe(false);

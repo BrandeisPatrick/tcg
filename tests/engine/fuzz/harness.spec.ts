@@ -1169,7 +1169,9 @@ describe('the rules oracles', () => {
 
   it('prices: PRICE by tier; equipment onto the hero wearing its equipment component costs the difference, onto another the full price; a spell never less than its price', () => {
     const G = clean();
-    expect(['extended_magazine', 'titanic_magazine', 'decay', 'curse', 'hero_haze'].map(itemPriceOracle)).toEqual([2, 4, 8, 16, 0]);
+    expect(['extended_magazine', 'titanic_magazine', 'decay', 'arctic_blast', 'hero_haze'].map(itemPriceOracle)).toEqual([2, 4, 8, 16, 0]);
+    // A price printed on the card (a spell priced for one play) is the price: Cursed Relic, 6.
+    expect(['rusted_barrel', 'curse'].map(itemPriceOracle)).toEqual([1, 6]);
     const { haze, vindicta } = p0(G);
     expect(playCostOracle(haze, 'titanic_magazine')).toBe(4);
     const mag = giveItem(G, haze, 'extended_magazine');
@@ -1193,10 +1195,11 @@ describe('the rules oracles', () => {
     expect(playCostOracle(vindicta, 'fortitude')).toBe(8 - 2);
     expect(playCostOracle(vindicta, 'colossus')).toBe(16);
     expect(playCostOracle(undefined, 'colossus')).toBe(16);
-    // The draw cards are spells: none evolves another, and each costs its price.
+    // The draw cards are spells: none evolves another, and each costs its price (Transcendent
+    // prints its own, 11, since 2026-11-16).
     expect(upgradesOfOracle('improved_cooldown')).toEqual([]);
     expect(upgradesOfOracle('superior_cooldown')).toEqual([]);
-    expect(['improved_cooldown', 'superior_cooldown', 'transcendent_cooldown'].map((id) => playCostOracle(undefined, id))).toEqual([4, 8, 16]);
+    expect(['improved_cooldown', 'superior_cooldown', 'transcendent_cooldown'].map((id) => playCostOracle(undefined, id))).toEqual([4, 8, 11]);
   });
   it('slots and worth: three items (four with the flex slot); every worn item and every item in the hand counts, a hero card nothing; a merged Rem is a hero, not an item', () => {
     const G = clean();

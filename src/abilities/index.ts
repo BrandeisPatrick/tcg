@@ -5,7 +5,7 @@ import { damageUnit, healUnit } from '@/engine/damage';
 import { awardSouls, raiseUnit, resolve, rideOn } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
-  abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBlocked, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
+  abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
 import { COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, DJINN_CAP, FLIGHT_TURNS } from '@/engine/constants';
@@ -293,38 +293,23 @@ const eff_decay: AbilityDef = {
   },
 };
 
-// Disarming Hex (canon T3 spirit active: "disarms enemy target and reduces
-// their Bullet Resist"). One play (2026-11-16, docs/card-design.md "The ten
-// one-play riders"): the Disarm, and the resist cut its item carries.
 const eff_disarming_hex: AbilityDef = {
   id: 'eff_disarming_hex', trigger: 'onPlay', target: 'enemyAny',
-  prompt: 'Disarming Hex — Disarm any enemy and cut its Bullet Resist, for 2 turns.',
+  prompt: 'Disarming Hex — Disarm any enemy for 2 turns.',
   run: (G, _ctx, { target }) => {
-    if (!target) return;
-    addStatus(G, target, 'disarm', 1, 2);
-    addStatus(G, target, 'bullet_resist_down', 3, 2);
+    if (target) addStatus(G, target, 'disarm', 1, 2);
   },
 };
 
-// Knockdown (canon T3 spirit active: a Stun that lasts longer on an airborne
-// target, whose gravity it raises). The immediate counter to a channel
-// (Patrick, 2026-11-15): a Stun ends one at once (addStatus), so Knockdown on a
-// channelling Seven costs him the rest. One play (2026-11-16): the slam deals
-// 1 + Spirit spirit damage, and a flying hero is brought down — it loses
-// Flying and is Stunned 2 turns.
+// Short, sharp hard CC: a clean 1-turn stun (Cursed Relic is the long sister).
+// The immediate counter to a channel (Patrick, 2026-11-15): a Stun ends one at
+// once (addStatus), so Knockdown on a channelling Seven costs him the rest.
 const eff_knockdown: AbilityDef = {
   id: 'eff_knockdown', trigger: 'onPlay', target: 'enemyActive',
-  prompt: 'Knockdown — Stun the enemy Active and slam it down. A Stun ends a channel.',
-  scalesSpirit: true, base: 1,
-  run: (G, ctx, { target }) => {
+  prompt: 'Knockdown — Stun the enemy Active for 1 turn. A Stun ends a channel.',
+  run: (G, _ctx, { target }) => {
     if (!target) return;
-    const flew = target.statuses.some((st) => st.id === 'flying');
-    if (flew) {
-      target.statuses = target.statuses.filter((st) => st.id !== 'flying');
-      pushLog(G, `${cardName(target.cardId)} is knocked out of the air.`);
-    }
-    addStatus(G, target, 'stun', 1, flew ? 2 : 1);
-    damageUnit(G, target, 1 + activeSpi(G, ctx.movingPlayer), 'spirit', 'Knockdown');
+    addStatus(G, target, 'stun', 1, 1);
   },
 };
 
@@ -345,24 +330,17 @@ const eff_silence_glyph: AbilityDef = {
 };
 
 // Cursed Relic (canon T4 spirit active, once named Curse — the id keeps the
-// old name): "curses an enemy — interrupting, Silencing, Disarming … removes
-// all buffs". Long lockdown on one enemy hero, Active or bench: Silence (no
-// skill) + Disarm (no attack) for 4 turns, and it loses every buff it has —
-// a channel included (a channel is a buff), so the curse interrupts one. On
-// the Active it is dead weight that pressures a retreat (no forced swap); on
-// the bench it shuts off a caster. One play (2026-11-16): 3 turns → 4, and the
-// buffs.
-const CURSE_TURNS = 4;
+// old name): long lockdown on one enemy hero, Active or bench —
+// Silence (no skill) + Disarm (no attack) for 3 turns. On the Active it is
+// dead weight that pressures a retreat (no forced swap); on the bench it shuts
+// off a caster.
 const eff_curse: AbilityDef = {
   id: 'eff_curse', trigger: 'onPlay', target: 'enemyHero',
-  prompt: 'Cursed Relic — one enemy hero loses its buffs and cannot use its skill or attack for 4 turns.',
+  prompt: 'Cursed Relic — one enemy hero cannot use its skill or attack for 3 turns.',
   run: (G, _ctx, { target }) => {
     if (!target) return;
-    const before = target.statuses.length;
-    target.statuses = target.statuses.filter((st) => (STATUSES_BY_ID[st.id]?.hvalue ?? 0) <= 0);
-    if (target.statuses.length < before) pushLog(G, `${cardName(target.cardId)} loses its buffs (Cursed Relic).`);
-    addStatus(G, target, 'silenced', 1, CURSE_TURNS);
-    addStatus(G, target, 'disarm', 1, CURSE_TURNS);
+    addStatus(G, target, 'silenced', 1, 3);
+    addStatus(G, target, 'disarm', 1, 3);
   },
 };
 
@@ -385,77 +363,53 @@ const eff_debuff_remover: AbilityDef = {
   },
 };
 
-// Unstoppable (canon T4 vitality active: "suppress negative status effects and
-// become immune to Stun, Silence, Sleep, Root and Disarm"). An ally is cleansed
-// of every debuff, gains Unstoppable (immune to crowd control) and is
-// Invulnerable (immune to damage) for 1 turn — the two halves the one status
-// used to be before the hero doc made Unstoppable crowd control alone. One
-// play (2026-11-16): the whole cleanse, and Unstoppable for 3 turns.
-const UNSTOPPABLE_TURNS = 3;
+// Unstoppable (canon T4 vitality active): an ally gains Unstoppable for 1 turn
+// (cleanses CC on apply; immune to CC) and is Invulnerable for it (immune to
+// damage) — the two halves the one status used to be before the hero doc made
+// Unstoppable crowd control alone. Strong, so it is a tier 4 price and a
+// 3-turn cooldown.
 const eff_unstoppable_cast: AbilityDef = {
   id: 'eff_unstoppable_cast', trigger: 'onPlay', target: 'allyHero',
   base: 1,
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
     if (!t) return;
-    cleanseDebuffs(t);
-    addStatus(G, t, 'unstoppable', 1, UNSTOPPABLE_TURNS);
+    addStatus(G, t, 'unstoppable', 1, 1);
     addStatus(G, t, 'invulnerable', 1, 1);
   },
 };
 
-// Echo Shard (canon: reset the imbued ability's cooldown; the item carries
-// Bullet and Spirit Resist). Every standing hero of the mover's side uses its
-// skill AGAIN this turn — bypassing the one-ability-a-turn limit and the
-// skill's wait, and re-firing onBearerSkillUsed so cast-payoff gear (Mystic
-// Burst, Surge of Power) triggers a second time — and the Active gains Bullet
-// Resist 3 and Spirit Resist 3 for 2 turns. Each skill auto-targets to match
-// its filter (enemy Active for offense, the hero itself for buffs). A hero with
-// no skill, or one a Stun or Silence holds, is passed over; it fizzles
-// politely when none is left. It repeats a skill, never an ultimate: after an
-// ultimate it casts the hero's first skill. One play (2026-11-16): the whole
-// side echoes, not the Active alone, and the resists.
-function echoSkill(G: GameState, pid: PlayerID, hero: CardInstance): boolean {
-  const data = CARDS_BY_ID[hero.cardId];
-  if (data?.type !== 'hero' || data.skills.length === 0) return false;
-  // The skill it used this turn, again — else its first.
-  const last = resolveSkill(hero, hero.lastSkillUsed);
-  const skill = (last?.kind === 'skill' ? last : resolveSkill(hero))?.ability;
-  if (!skill) return false;
-  const enemy = G.players[otherPlayer(pid)];
-  let target: CardInstance | undefined;
-  switch (skill.target) {
-    case 'enemyActive': case 'enemyAny': case 'enemyHero': case 'anyBoard':
-      target = enemy.active ?? undefined; break;
-    case 'allyHero': case 'allyAny': case 'self':
-      target = hero; break;
-    default: target = undefined;
-  }
-  pushLog(G, `Echo Shard: ${data.name} casts ${skill.name ?? 'their skill'} again.`);
-  withCast(hero, 'skill', () => skill.run(G, { movingPlayer: pid }, { source: hero, target }));
-  fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: pid });
-  return true;
-}
-const standingNow = (c: CardInstance | null | undefined): c is CardInstance => !!c && !isRespawning(c) && c.hp > 0;
+// Echo Shard (canon: recast last ability): the active hero uses their skill
+// AGAIN this turn — bypasses the one-ability-a-turn limit and the skill's
+// cooldown, and re-fires onBearerSkillUsed so cast-payoff gear (Mystic Burst,
+// Surge of Power) triggers a second time. Auto-targets to match the
+// skill's filter (enemy Active for offense, the hero itself for buffs). Fizzles
+// politely on a skill-less / passive hero. It repeats a skill, never an
+// ultimate: after an ultimate it casts the hero's first skill.
 const eff_echo_shard: AbilityDef = {
   id: 'eff_echo_shard', trigger: 'onPlay', target: 'noTarget',
   run: (G, ctx, _args) => {
     const ps = G.players[ctx.movingPlayer];
-    const heroes = [ps.active, ...ps.bench].filter(standingNow);
-    if (heroes.length === 0) { pushLog(G, 'Echo Shard fizzled — no hero standing.'); return; }
-    let echoed = 0;
-    for (const hero of heroes) {
-      // A skill before it may have knocked one of them out.
-      if (!standingNow(hero)) continue;
-      if (isBlocked(hero, 'skill')) continue;
-      if (echoSkill(G, ctx.movingPlayer, hero)) echoed++;
+    const hero = ps.active;
+    if (!hero || isRespawning(hero)) { pushLog(G, 'Echo Shard fizzled — no active hero.'); return; }
+    const data = CARDS_BY_ID[hero.cardId];
+    if (data?.type !== 'hero' || data.skills.length === 0) { pushLog(G, 'Echo Shard fizzled — hero has no skill.'); return; }
+    // The skill it used this turn, again — else its first.
+    const last = resolveSkill(hero, hero.lastSkillUsed);
+    const skill = (last?.kind === 'skill' ? last : resolveSkill(hero))?.ability;
+    if (!skill) { pushLog(G, 'Echo Shard fizzled.'); return; }
+    const enemy = G.players[otherPlayer(ctx.movingPlayer)];
+    let target: CardInstance | undefined;
+    switch (skill.target) {
+      case 'enemyActive': case 'enemyAny': case 'enemyHero': case 'anyBoard':
+        target = enemy.active ?? undefined; break;
+      case 'allyHero': case 'allyAny': case 'self':
+        target = hero; break;
+      default: target = undefined;
     }
-    if (echoed === 0) pushLog(G, 'Echo Shard fizzled — hero has no skill.');
-    const mine = standingActive(G, ctx.movingPlayer);
-    if (mine) {
-      addStatus(G, mine, 'bullet_resist', 3, 2);
-      addStatus(G, mine, 'spirit_resist', 3, 2);
-    }
+    pushLog(G, `Echo Shard: ${data.name} casts ${skill.name ?? 'their skill'} again.`);
+    withCast(hero, 'skill', () => skill.run(G, { movingPlayer: ctx.movingPlayer }, { source: hero, target }));
+    fireTriggers(G, hero, 'onBearerSkillUsed', { reaction: true, movingPlayer: ctx.movingPlayer });
   },
 };
 
@@ -495,36 +449,31 @@ const eff_warp_stone: AbilityDef = {
   },
 };
 
-// Divine Barrier (canon T4 vitality active: the game's largest barrier, 600,
-// on yourself or an ally, after every debuff but a stun is purged). One play
-// (2026-11-16): Shield 4 → 10, and Bullet Resist 3 and Spirit Resist 3 for 3
-// turns as the barrier's weight.
+// Divine Barrier (canon T4 vitality active): purges every debuff but a stun and
+// throws a barrier on the ally. Its Shield is its component Guardian Ward's, 7
+// (2026-11-16: it was 4), so the line keeps its order at its own price.
 const eff_divine_barrier: AbilityDef = {
   id: 'eff_divine_barrier', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Divine Barrier — cleanse an ally (not Stun), Shield it 10 and harden it.',
-  base: 10,
+  prompt: 'Divine Barrier — cleanse an ally (not Stun) and Shield it 7.',
+  base: 7,
   run: (G, _ctx, { target }) => {
     if (!target) return;
     target.statuses = target.statuses.filter((st) => st.id === 'stun' || !DEBUFF_IDS.has(st.id));
-    addStatus(G, target, 'shield', 10, 999);
-    addStatus(G, target, 'bullet_resist', 3, 3);
-    addStatus(G, target, 'spirit_resist', 3, 3);
+    addStatus(G, target, 'shield', 7, 999);
   },
 };
 
-// Ethereal Shift (canon T4 spirit active: "enter a void state and become
-// Invulnerable", then Spirit Power and Spirit Resist for a while). TCG (one
-// play, 2026-11-16): an ally is Invulnerable for 1 turn and gains +4 Spirit
-// Power and Spirit Resist 3 for 3 turns. It was a Dome and +1 for 2.
+// Ethereal Shift (canon T4 spirit active): a moment out of reach, then a
+// Spirit Power buff. TCG: Dome for 1 turn (no attack can target it) and
+// Spirit Power +1 for 2 turns.
 const eff_ethereal_shift: AbilityDef = {
   id: 'eff_ethereal_shift', trigger: 'onPlay', target: 'allyHero',
-  prompt: 'Ethereal Shift — an ally is Invulnerable for 1 turn, then empowered.',
-  base: 4,
+  prompt: 'Ethereal Shift — an ally cannot be attacked for 1 turn.',
+  base: 2,
   run: (G, _ctx, { target }) => {
     if (!target) return;
-    addStatus(G, target, 'invulnerable', 1, 1);
-    addStatus(G, target, 'spirit_power', 4, 3);
-    addStatus(G, target, 'spirit_resist', 3, 3);
+    addStatus(G, target, 'dome', 1, 1);
+    addStatus(G, target, 'spirit_power', 1, 2);
   },
 };
 
@@ -775,21 +724,17 @@ const eff_shadow_weave: AbilityDef = {
   },
 };
 
-// Infuser (canon T4 vitality active: "gain Spirit Lifesteal and Spirit
-// Power"). TCG (one play, 2026-11-16): your Active heals 6 and gains +4 Spirit
-// Power and Spirit Lifesteal for 3 turns (the status carries Spirit
-// Lifesteal's own proc: heal 2 after its skill, spell or ultimate damages an
-// enemy). It was +3 for 2 turns and a heal of 3.
+// Infuser (canon T4 vitality active): a burst of spirit power and spirit
+// lifesteal. TCG: your Active gains +3 Spirit Power for 2 turns and heals 3.
 const eff_infuser: AbilityDef = {
   id: 'eff_infuser', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Infuser — your Active heals 6 and gains +4 Spirit Power and Spirit Lifesteal.',
-  base: 4,
+  prompt: 'Infuser — your Active gains +3 Spirit Power and heals 3.',
+  base: 3,
   run: (G, ctx) => {
     const mine = standingActive(G, ctx.movingPlayer);
     if (!mine) return;
-    healUnit(G, mine, 6, 'Infuser');
-    addStatus(G, mine, 'spirit_power', 4, 3);
-    addStatus(G, mine, 'spirit_lifesteal', 1, 3);
+    addStatus(G, mine, 'spirit_power', 3, 2);
+    healUnit(G, mine, 3, 'Infuser');
   },
 };
 
@@ -811,21 +756,14 @@ const eff_arctic_blast: AbilityDef = {
 
 // ----- Added 2026-11-03: the mobility active (docs/card-design.md) -----
 
-// Majestic Leap (canon T3 vitality active: "launch yourself high into the air
-// and grant yourself a Barrier"). TCG: your Active goes back to the bench,
-// free, and the bench ally you pick leaps in — airborne and behind a barrier:
-// Shield 4, and Flying for 1 turn (1 hit in 3 on it misses through the rival's
-// next turn, and its attacks add spirit damage). One play (2026-11-16): it was
-// the swap alone.
+// Majestic Leap (canon T3 vitality active): a launch into the air that lands
+// you somewhere else. TCG: Warp Stone without the resist — your Active leaps
+// back to the bench, free, and the bench ally you pick steps in.
 const eff_majestic_leap: AbilityDef = {
   id: 'eff_majestic_leap', trigger: 'onPlay', target: 'allyBench',
-  prompt: 'Majestic Leap — your Active leaps out; a bench ally leaps in, shielded and flying.',
-  base: 4,
+  prompt: 'Majestic Leap — your Active leaps out; a bench ally steps in.',
   run: (G, ctx, { target }) => {
-    if (!target) return;
-    if (!swapIntoActive(G, G.players[ctx.movingPlayer], target)) return;
-    addStatus(G, target, 'shield', 4, 999);
-    addStatus(G, target, 'flying', 1, 1);
+    if (target) swapIntoActive(G, G.players[ctx.movingPlayer], target);
   },
 };
 
@@ -967,20 +905,10 @@ const eff_superior_cooldown: AbilityDef = {
   draw: { cards: 5, discard: 1 },
   run: drawThenDiscard(5, 1, 'superior_cooldown'),
 };
-// Transcendent Cooldown also carries the item's regeneration (Out of Combat
-// Regen 4): each of your heroes heals 3 — what lifts it to its band as one
-// play (2026-11-16; docs/card-design.md, "The Cooldown family").
 const eff_transcendent_cooldown: AbilityDef = {
   id: 'eff_transcendent_cooldown', trigger: 'onPlay', target: 'noTarget',
   draw: { cards: 8, discard: 2 },
-  base: 3,
-  run: (G, ctx, args) => {
-    const ps = G.players[ctx.movingPlayer];
-    for (const c of [ps.active, ...ps.bench]) {
-      if (c && heroData(c) && !isRespawning(c) && c.hp > 0) healUnit(G, c, 3, 'Transcendent Cooldown');
-    }
-    drawThenDiscard(8, 2, 'transcendent_cooldown')(G, ctx, args);
-  },
+  run: drawThenDiscard(8, 2, 'transcendent_cooldown'),
 };
 
 // Mystic Burst family: each time the bearer uses a skill, hit the enemy active
@@ -2052,22 +1980,18 @@ const eff_frostbite_charm: AbilityDef = {
 
 // Mystical Piano (canon T5 spirit active): after a short delay every enemy in
 // a wide area is stunned and its stamina drained, then dazed. TCG: every enemy
-// hero takes 2 + Spirit spirit damage as the piano comes down (one play,
-// 2026-11-16), then is Stunned for 2 turns and Rooted for 2 turns (no
-// stamina, no Retreat).
+// hero is Stunned for 2 turns and Rooted for 2 turns (no stamina, no Retreat):
+// hard crowd control, two charges a match.
 const eff_mystical_piano: AbilityDef = {
   id: 'eff_mystical_piano', trigger: 'onPlay', target: 'noTarget',
-  prompt: 'Mystical Piano — hit, stun and root every enemy hero for 2 turns.',
-  scalesSpirit: true, base: 2,
+  prompt: 'Mystical Piano — stun and root every enemy hero for 2 turns.',
+  base: 2,
   run: (G, ctx) => {
-    const dmg = 2 + activeSpi(G, ctx.movingPlayer);
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => {
-      if (!heroData(c) || c.hp <= 0) return;
-      damageUnit(G, c, dmg, 'spirit', 'Mystical Piano');
-      if (c.hp <= 0 || isRespawning(c)) return;
+    for (const c of liveBoardCards(G.players[otherPlayer(ctx.movingPlayer)])) {
+      if (!heroData(c) || c.hp <= 0) continue;
       addStatus(G, c, 'stun', 1, 2);
       addStatus(G, c, 'rooted', 1, 2);
-    });
+    }
   },
 };
 

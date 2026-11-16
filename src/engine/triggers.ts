@@ -64,11 +64,10 @@ export function fireTriggers(G: GameState, bearer: CardInstance, trigger: Trigge
   const ctx = { movingPlayer: firing.movingPlayer ?? bearer.ownerId };
   // abilitySources builds a fresh list, so a proc that detaches its own item
   // (a spent cooldown→draw piece) cannot make this loop skip a sibling.
-  for (const { ability, equip, reacts } of abilitySources(bearer)) {
+  for (const { ability, equip } of abilitySources(bearer)) {
     if (ability.trigger !== trigger || ability.optional) continue;
-    // A status whose ability `reacts` is asked with the gear, not the passives.
-    if (only === 'passives' && (equip || reacts)) continue;
-    if (only === 'equipment' && !equip && !reacts) continue;
+    if (only === 'passives' && equip) continue;
+    if (only === 'equipment' && !equip) continue;
     const run = () => ability.run(G, ctx, { source: bearer, target, params: { ...params, equip, amount } });
     if (reaction) withCast(bearer, 'proc', run);
     else run();

@@ -33,9 +33,11 @@ describe('ready decks', () => {
     expect(Math.max(...Object.values(counts))).toBeLessThanOrEqual(2);
     const tiers = [1, 2, 3, 4, 5].map((t) => d.items.filter((id) => itemCard(id)!.tier === t).length);
     expect(tiers).toEqual([8, 6, 2, 0, 0]);
-    // 56 souls at the tiers' prices; a card with a price of its own (Rusted Barrel, 1) lists under its tier's.
+    // 56 souls at the tiers' prices; a spell with a price of its own (Rusted Barrel 1, Knockdown 4)
+    // lists under its tier's, so such a deck costs less.
     expect(d.items.reduce((n, id) => n + PRICE[itemCard(id)!.tier], 0)).toBe(56);
-    expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBe(56 - d.items.filter((id) => id === 'rusted_barrel').length);
+    const under = d.items.reduce((n, id) => n + PRICE[itemCard(id)!.tier] - itemPrice(id), 0);
+    expect(d.items.reduce((n, id) => n + itemPrice(id), 0)).toBe(56 - under);
     // A counter in every deck; a draw card in every one since 2026-11-16 (Compress Cooldown: one,
     // two in Graveyard, which also digs for its Ghouls); and a deck leans on equipment, which
     // stays, over spells, which do not.

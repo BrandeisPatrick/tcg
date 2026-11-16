@@ -8,6 +8,8 @@ Read [docs/card-design.md](docs/card-design.md) before adding, renaming or redes
   but the two Patrick made himself, recorded in docs/card-design.md §1: Counterspell and the Cooldown family
   (passives in Deadlock, spells here).
 - Keep the main game's flavor: canon item names, the item's real verb, its shop slot (Weapon / Spirit / Vitality) and its tier.
+- A spell whose one play is worth under half its tier's price costs less, not more effects (Patrick, 2026-11-16):
+  it prints its own price, about its one-play value; its tier stays canon (docs/card-design.md §2).
 - Card text always names the damage type: "deal N bullet damage" or "deal N spirit damage", never bare
   "damage". Attacks are bullet; purple `{sp:N}` numbers are spirit.
 - Hero cards follow [docs/hero-design.md](docs/hero-design.md): role first, then the TCG; no Weakness;

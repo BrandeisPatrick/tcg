@@ -52,14 +52,16 @@ describe('The Cooldown family is the draw engine', () => {
     for (const [id] of FAMILY) expect(playCost(undefined, id), id).toBe(itemPrice(id));
   });
 
-  it('each step doubles the price and the cards kept: a soul buys the same at every tier', () => {
+  it('each step costs more and keeps more: a soul buys about the same at every tier', () => {
     const kept = FAMILY.map(([, , draw, discard]) => draw - discard);
     const price = FAMILY.map(([id]) => itemPrice(id));
-    expect(price).toEqual([PRICE[2], PRICE[3], PRICE[4]]);
     // Draw x, discard y (Patrick, 2026-11-15), set for one play: Compress and Superior keep a
-    // card for every 2 souls; Transcendent, held by the hand's cap of 10, keeps 6 for its 16.
+    // card for every 2 souls at their tiers' prices; Transcendent, held by the hand's cap of 10,
+    // keeps 6, and prints a price of its own for that, 11 (2026-11-16: it was its tier's 16).
+    expect(price).toEqual([PRICE[2], PRICE[3], 11]);
     expect(kept).toEqual([2, 4, 6]);
     expect([price[0] / kept[0], price[1] / kept[1]]).toEqual([2, 2]);
+    expect(price[2] / kept[2]).toBeLessThan(2);
     expect(FAMILY[2][2]).toBeLessThan(MAX_HAND);
   });
 

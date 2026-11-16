@@ -309,10 +309,10 @@ describe('a skill the hero does not have', () => {
 });
 
 describe('Echo Shard', () => {
-  /** Echo Shard played from the hand: a spell, so the Active's skill before it
-   *  stands in no way. Every hero of the side echoes since 2026-11-16; these
-   *  read the twin's own skills, so its bench is cleared first. */
-  const play = (G: GameState) => { G.players['0'].bench = [null, null, null]; useItem(G, '0', 'echo_shard'); };
+  /** Echo Shard, worn and used by a bench hero (Vindicta): the item is ITS one
+   *  ability this turn, so the Active's skill before it stands in no way, and
+   *  "your Active" is the player's Active, the twin. */
+  const play = (G: GameState) => { useItem(G, '0', 'echo_shard'); };
 
   it('repeats the skill the hero used this turn — the second one, when that was used', () => {
     const { G, twin, rival, benched } = twinGame();
@@ -338,7 +338,6 @@ describe('Echo Shard', () => {
 
   it('still fizzles on a hero with no skill', () => {
     const G = freshReadyGame(); // P0 Active = Haze, passive only
-    G.players['0'].bench = [null, null, null];
     const foe = G.players['1'].active!;
     const hp = foe.hp;
     expect(() => ABILITIES_BY_ID.eff_echo_shard.run(G, { movingPlayer: '0' }, {})).not.toThrow();

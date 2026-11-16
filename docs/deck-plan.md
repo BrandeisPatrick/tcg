@@ -38,7 +38,9 @@ upgrades in the deck and the counters ([card-design.md](card-design.md), "Change
 - **8 tier-1, 6 tier-2, 2 tier-3: 56 souls.** The lane pays 2 a turn
   ([balance-model.md](balance-model.md) §7): by own turn 9 a side has earned about 30 souls and
   drawn about 11 items. At 3.5 souls an item, those 11 cost about 38, so most of what is drawn can
-  be played and a skill or two paid for. A deck dealt from builds costs 50 to 76.
+  be played and a skill or two paid for. A deck dealt from builds costs 50 to 76. The 56 counts
+  tiers' prices: a spell that prints its own (Rusted Barrel 1, Knockdown 4; card-design.md,
+  "Changed 2026-11-16: spells priced for one play") makes its deck cheaper still.
 - **An upgrade beside the item it is built from.** An upgrade is a deck card like any other now:
   played onto the hero wearing its component it costs the difference (Titanic Magazine over
   Extended Magazine costs 2, Fortitude over Extra Health 6). Each deck carries one such line, and

@@ -52,12 +52,12 @@ describe('Card types follow the active / passive rule', () => {
     }
   });
 
-  it('every new item sits on a shop tab at a tier, and is priced by its tier', () => {
+  it('every new item sits on a shop tab at a tier, and is priced by its tier — or by the price a spell prints for one play', () => {
     for (const id of [...NEW_SPELLS, ...NEW_ITEMS]) {
       const item = CARDS_BY_ID[id] as ItemCard;
       expect(['weapon', 'spirit', 'vitality'], id).toContain(item.slot);
       expect([1, 2, 3, 4], id).toContain(item.tier);
-      expect(itemPrice(id), id).toBe(PRICE[item.tier]);
+      expect(itemPrice(id), id).toBe(item.price ?? PRICE[item.tier]);
     }
   });
 
@@ -266,26 +266,13 @@ describe('New active items', () => {
     expect(attackTargets(G, '1')).toEqual([]);
   });
 
-  it('Infuser heals your Active 6 and gives it +4 Spirit Power and Spirit Lifesteal for 3 turns (one play, 2026-11-16)', () => {
+  it('Infuser gives your Active +3 Spirit Power for 2 turns and heals it 3', () => {
     const G = freshReadyGame();
     const haze = G.players['0'].active!;
     haze.hpMax = 20; haze.hp = 10;
     useItem(G, '0', 'infuser');
-    expect(status(haze, 'spirit_power')).toMatchObject({ value: 4, duration: 3 });
-    expect(status(haze, 'spirit_lifesteal')).toMatchObject({ duration: 3 });
-    expect(haze.hp).toBe(16);
-  });
-
-  it('Spirit Lifesteal heals 2 when its spirit damage hits an enemy', () => {
-    const G = freshReadyGame();
-    const haze = G.players['0'].active!;
-    haze.hpMax = 30; haze.hp = 10;
-    useItem(G, '0', 'infuser');                       // 16
-    const foe = G.players['1'].active!;
-    foe.hpMax = 40; foe.hp = 40;
-    useItem(G, '0', 'cold_front', foe.iid);           // a spell's spirit damage: heal 2
-    expect(foe.hp).toBeLessThan(40);
-    expect(haze.hp).toBe(18);
+    expect(status(haze, 'spirit_power')).toMatchObject({ value: 3, duration: 2 });
+    expect(haze.hp).toBe(13);
   });
 
   it('Arctic Blast hits every enemy for 2 + Spirit and stuns only the enemy Active', () => {
