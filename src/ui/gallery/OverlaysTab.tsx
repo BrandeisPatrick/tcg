@@ -114,6 +114,8 @@ export function OverlaysTab() {
           { id: 'bleed', value: 3, duration: 2 },
           { id: 'shield', value: 5, duration: 999 },
           { id: 'spirit_power', value: 2, duration: 2 },
+          // A build-up two thirds full: its token's circle fills a segment a stack.
+          { id: 'toxin', value: 2, duration: 3 },
         ],
         // Cheat Death mid-wait: its tile wears the wait as a dial with no number.
         attached: [mockEquipInstance('titanic_magazine'), mockEquipInstance('improved_cooldown', 2), { ...mockEquipInstance('cheat_death'), cooldowns: { eff_cheat_death: 2 } }],

@@ -346,7 +346,9 @@ export function targetLegal(
   }
 }
 
-const rooted = (c: CardInstance) => c.statuses.some((s) => s.id === 'rooted');
+// Rooted: "cannot retreat or be swapped"; the Cube (2026-11-16): encased, "cannot attack,
+// Retreat or use abilities" — nor be swapped.
+const rooted = (c: CardInstance) => c.statuses.some((s) => s.id === 'rooted' || s.id === 'cube');
 function benchMover(c: CardInstance): boolean {
   const d = CARDS_BY_ID[c.cardId] as { type?: string; flags?: { benchOnly?: boolean } } | undefined;
   return c.zone === 'bench' && d?.type === 'hero' && !d.flags?.benchOnly && !rooted(c);

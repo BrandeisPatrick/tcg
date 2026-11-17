@@ -47,7 +47,8 @@ export const DEFAULT_PROBE: ProbeOpts = { chaosPerStep: 3, targetCombos: 8, move
 
 const pickOne = <T,>(arr: T[], r: () => number): T => arr[Math.floor(r() * arr.length)];
 const isBenchOnly = (c: CardInstance) => !!(CARDS_BY_ID[c.cardId] as { flags?: { benchOnly?: boolean } }).flags?.benchOnly;
-const isRooted = (c: CardInstance) => c.statuses.some((s) => s.id === 'rooted');
+// Rooted, or encased in the Cube (2026-11-16: "cannot attack, Retreat or use abilities").
+const isRooted = (c: CardInstance) => c.statuses.some((s) => s.id === 'rooted' || s.id === 'cube');
 
 type Ghost = 'ghost';
 

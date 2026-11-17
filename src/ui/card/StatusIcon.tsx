@@ -101,11 +101,66 @@ interface Props {
  * inside compact bench tiles (HeroSlot caps its rows at 36 / 54px).
  * `terse` drops the word where even that is too wide (HeroSlot decides).
  */
+/** A build-up's circle (Patrick, 2026-11-16: "a circular status with filling,
+ *  1/3, 1/4, until it fills up the circle, then it deals damage"): a ring
+ *  round the token in `cap` arcs, the stacks held drawn solid in cream, the
+ *  rest faint. The stack that fills it sets it off, so a full ring is never
+ *  seen standing. */
+function BuildUpRing({ size, have, cap }: { size: number; have: number; cap: number }) {
+  const stroke = Math.max(2, size * 0.13);
+  const r = size / 2 - stroke / 2;
+  const round = 2 * Math.PI * r;
+  const gap = cap > 1 ? Math.min(round / cap * 0.28, stroke * 1.4) : 0;
+  const arc = round / cap - gap;
+  return (
+    <svg aria-hidden width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}>
+      {Array.from({ length: cap }, (_, i) => (
+        <circle
+          key={i}
+          cx={size / 2} cy={size / 2} r={r}
+          fill="none"
+          stroke={poster.cream}
+          strokeOpacity={i < have ? 1 : 0.28}
+          strokeWidth={stroke}
+          strokeLinecap="butt"
+          strokeDasharray={`${arc} ${round - arc}`}
+          // Start at twelve, clockwise, half a gap in.
+          transform={`rotate(${-90 + (360 / cap) * i + (gap / 2 / round) * 360} ${size / 2} ${size / 2})`}
+        />
+      ))}
+    </svg>
+  );
+}
+
 export function StatusIcon({ id, value, duration, size = 'normal', titled = true, terse = false, token }: Props) {
   const color = colorFor(id);
   const label = statusLabel(id);
-  const showValue = typeof value === 'number' && (VALUE_STATUSES.has(id) || value > 1);
+  const def = STATUSES_BY_ID[id];
+  // A build-up (Djinn's Mark, Toxin): its stacks fill a circle, no number.
+  const buildCap = def?.burst ? def.stack?.cap : undefined;
+  const showValue = buildCap === undefined && typeof value === 'number' && (VALUE_STATUSES.has(id) || value > 1);
   const showDuration = typeof duration === 'number' && duration > 0 && duration < 99;
+
+  if (token && buildCap) {
+    const have = Math.max(0, Math.min(buildCap, typeof value === 'number' ? value : 1));
+    return (
+      <span
+        data-status={id}
+        data-build-up={`${have}/${buildCap}`}
+        title={titled ? `${label} ${have} of ${buildCap}` : undefined}
+        style={{
+          position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: token, height: token, boxSizing: 'border-box',
+          background: color,
+          borderRadius: token / 2,
+          boxShadow: `0 0 0 1px ${poster.paper}, 0 2px 4px rgba(0, 0, 0, 0.6)`,
+        }}
+      >
+        <StatusMark id={id} color={poster.cream} size={Math.round(token * 0.5)} />
+        <BuildUpRing size={token} have={have} cap={buildCap} />
+      </span>
+    );
+  }
 
   if (token) {
     return (
@@ -163,6 +218,9 @@ export function StatusIcon({ id, value, duration, size = 'normal', titled = true
     >
       <StatusMark id={id} color={poster.cream} size={markPx} />
       {!terse && <span>{label}</span>}
+      {buildCap !== undefined && typeof value === 'number' && (
+        <span style={{ padding: '0 4px', background: 'rgba(23, 20, 16, 0.35)', borderRadius: 2 }}>{value}/{buildCap}</span>
+      )}
       {showValue && (
         <span style={{
           padding: '0 4px',

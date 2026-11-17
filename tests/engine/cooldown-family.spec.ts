@@ -67,7 +67,8 @@ describe('The Cooldown family is equipment that shortens waits', () => {
     const { G, hero } = viscous();
     giveItem(G, hero, TRANSCENDENT);
     expect(skillWait(getAbility('skill_viscous')!, hero)).toBe(2);
-    expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, targetIid: hero.iid })).not.toBe(INVALID);
+    // Cube an ally: a cubed hero uses nothing until its side's next turn (2026-11-16).
+    expect(perform(G, '0', { type: 'useSkill', heroIid: hero.iid, targetIid: G.players['0'].bench[0]!.iid })).not.toBe(INVALID);
     expect(hero.cooldowns?.skill_viscous).toBe(2);
     const goo = ultimateCard('eff_ult_viscous')!;
     expect(ULT_WAIT[goo.size]).toBe(6);

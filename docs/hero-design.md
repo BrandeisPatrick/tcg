@@ -204,10 +204,11 @@ HP 6 · Attack 1 · Retreat 1 · per level +3 HP +1 Spirit
 
 **Viscous** · in the game today — peaks mid, many targets; mix tank 2 · damage 1 · control 3 · support 2  
 HP 6 · Attack 1 · Retreat 1 · per level +2 HP +1 Spirit
-- Skill, waits 4 — **The Cube**: Cube one of your heroes: it takes no damage until your next turn.
+- Skill, waits 4 — **The Cube**: Cube one of your heroes until your next turn, and heal it 3✦.
 - Ultimate, medium, waits 6 — **Goo Ball**: Deal 2✦ spirit damage to every enemy. Stun the enemy Active 1 turn.
 - Why: Viscous saves his carry inside The Cube and bowls the enemy team over with Goo Ball, but deals little damage himself.
 - Changed from today: HP 4 to 6 and Attack 2 to 1 to match tank 2, damage 1. His skill becomes The Cube, his signature, so his hard control lives only in Goo Ball (an exception to the control-3 rule). Goo Ball drops its Unstoppable and its damage goes 3 to 2.
+- **Changed 2026-11-16 (Patrick): "When you're cubed you can't attack, can't retreat, can't use a skill, you receive no damage or status, and you heal."** Deadlock's own Cube: the hero is encased. The Cube status lasts until your next turn: no damage, no status put on it, and it cannot attack, Retreat (or be swapped) or use an ability; the skill heals it 3✦ as it closes. Worth, at a wait of 4 (3–4.5): the rival's turn on the cubed hero, about 4 on the Active, at 0.5 a point prevented, 2.0; the statuses turned away, 0.5; the heal, 3 × 0.5 = 1.5 → 4.0. The cubed hero gives up the rest of its own turn, so it is cast once that hero has acted.
 
 **Billy** — peaks mid, many targets; mix tank 2 · damage 2 · control 3 · support 0  
 HP 6 · Attack 2 · Retreat 1 · per level +1 Attack +1 HP +1 Spirit

@@ -223,7 +223,7 @@ export function moveBlockReason(block: MoveBlock, cost?: number): string {
     case 'empty': return 'There is no hero in that slot';
     case 'benchOnly': return 'That hero can only fight from the bench';
     case 'down': return 'Down until it respawns';
-    case 'rooted': return 'Rooted: cannot retreat or be swapped';
+    case 'rooted': return 'Rooted or in The Cube: cannot retreat or be swapped';
     case 'souls': return cost === undefined ? 'Not enough souls' : `Need ${souls(cost)}`;
     case 'illegal': return 'Not a place on the board';
   }

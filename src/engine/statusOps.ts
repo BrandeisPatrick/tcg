@@ -73,6 +73,13 @@ export function addStatus(G: GameState, target: CardInstance, id: StatusId, valu
   // Counterspell: an enemy card puts nothing on its bearer.
   if (counterspellStops(G, target)) return;
 
+  // The Cube (2026-11-16): nothing is put on an encased hero.
+  if (id !== 'cube' && target.statuses.some((s) => s.id === 'cube')) {
+    pushLog(G, `${name} is encased: ${STATUSES_BY_ID[id]?.title ?? id} does not land (The Cube).`);
+    pushFx(G, { kind: 'immune', iid: target.iid, what: id });
+    return;
+  }
+
   // What the bearer carries may refuse the status outright.
   const resisted = resistedBy(target, id);
   if (resisted) {
