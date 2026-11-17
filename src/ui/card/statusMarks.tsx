@@ -69,6 +69,9 @@ const MARK_OF: ReadonlyMap<string, MarkKind> = new Map<string, MarkKind>([
     'swift', 'ricochet', 'wolf_form', 'counterspell', 'flying',
   ] as const).map((id): [string, MarkKind] => [id, id]),
   ['casting_light', 'casting'],
+  // Toxic Bullets' build-up wears the bleed drop; the Cube, Invulnerable's mark.
+  ['toxin', 'bleed'],
+  ['cube', 'invulnerable'],
 ]);
 
 /** Which mark a status wears: its own picture, or the diamond tag for an id

@@ -940,6 +940,15 @@ the effects they lack; Patrick picked these. None was simulated.
   of its own (`AbilityDef.itemWait`, kept on the worn item and counted down
   with its owner's turns); its tile wears the wait as the skills' dial, with
   no number (`ItemWaitDial`).
+- **Toxic Bullets** (Weapon T3, 4; changed 2026-11-16, Patrick: "Toxic
+  Bullets lets you build up and deal delayed damage … like Mirage's Djinn's
+  Mark … the damage should scale with Bullet Power"): "Each attack adds a
+  Toxin to the target. The third bursts for {bp:4} bullet damage." Canon:
+  bullets build up toxicity, and a full build-up makes the target bleed. The
+  Toxin is a build-up status (`burst`): its token draws a circle that fills a
+  segment a stack, with no number, as Djinn's Mark's now does. Worn 4 turns:
+  about 2.8 swings, so 0.93 bursts × (4 + about 3 Bullet Power) = **6.5**, in
+  its band (6–12). (It was Bleed 2 a swing, stacking to 3.)
 - **Next to on the board** (Mystic Expansion): the board as it is drawn. A
   side's bench is a row of three slots; its Active stands in the lane in the
   column of one of them (the human seat's under its bench slot 2, the other

@@ -1,5 +1,5 @@
 import type { CardId, StatusId } from '@/engine/types';
-import { BLEED_CAP, DJINN_CAP } from '@/engine/constants';
+import { BLEED_CAP, DJINN_CAP, TOXIN_BURST, TOXIN_CAP } from '@/engine/constants';
 
 /** What a status stops its bearer doing. The only place a lockout is written:
  *  `isBlocked` (engine/query.ts) reads it, and the attack gate, `useSkill`,
@@ -36,6 +36,10 @@ export interface StatusDef {
    *  values up to `cap`; `duration` says whether the timer keeps the longer of
    *  the two ('max') or starts over ('reset'). */
   stack?: { add: true; cap: number; duration: 'max' | 'reset' };
+  /** A build-up (Patrick, 2026-11-16): its stacks fill a circle to the
+   *  stack's `cap`, and the one that fills it sets it off (Djinn's Mark,
+   *  Toxin). The token chip draws the circle filling, a segment a stack. */
+  burst?: true;
   /** The bearer has taken another form while the status lasts (Silver's
    *  wolf). The board shows it: the status's title as a badge on the card,
    *  and — when the bearer is `hero` — that form's own art (`art`, under
@@ -66,6 +70,8 @@ export const STATUSES: StatusDef[] = [
   // made a hero untouchable (Unstoppable, Prism Blast) give both.
   { id: 'unstoppable',   title: 'Unstoppable',   desc: "Can't be stunned, put to sleep, rooted, silenced or disarmed. Cleanses them when it lands.", hvalue: 2 },
   { id: 'invulnerable',  title: 'Invulnerable',  desc: 'Takes no damage.',                                         hvalue: 2 },
+  // The Cube (Viscous, 2026-11-16): encased until its side's next turn.
+  { id: 'cube',          title: 'Cube',          desc: 'Encased until your next turn: takes no damage and gains no status, and cannot attack, Retreat or use abilities.', hvalue: 2, blocks: ['attack', 'skill', 'pulse', 'move'] },
   { id: 'healing_boost', title: 'Healing Boost', desc: '+<value> to all healing received.',                           hvalue:  1 },
   // Not crowd control, so it ticks at the start of its owner's turn like any buff: put up
   // for 1 turn on your own turn it covers the rival's turn and is gone when yours begins.
@@ -128,7 +134,9 @@ export const STATUSES: StatusDef[] = [
   // Mirage's mark refreshes its full 3-turn timer on every new stack (stack.duration
   // 'reset'); the mark that makes DJINN_CAP detonates them all (his passive).
   { id: 'charged',       title: 'Charged',       desc: 'When this runs out: Stun for 1 turn. Taking it off first stops the Stun.', hvalue: -1 },
-  { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 4 spirit damage + twice Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' } },
+  { id: 'djinns_mark',   title: "Djinn's Mark",  desc: `At ${DJINN_CAP} marks they detonate: 4 spirit damage + twice Mirage's Spirit Power.`, hvalue: -1, stack: { add: true, cap: DJINN_CAP, duration: 'reset' }, burst: true },
+  // Toxic Bullets' build-up (2026-11-16): the item's Djinn's Mark, on Bullet Power.
+  { id: 'toxin',         title: 'Toxin',         desc: `At ${TOXIN_CAP} Toxins they burst: ${TOXIN_BURST} bullet damage + the attacker's Bullet Power.`, hvalue: -1, stack: { add: true, cap: TOXIN_CAP, duration: 'reset' }, burst: true },
   { id: 'reverb',        title: 'Reverb',        desc: 'Detonates at the start of your turn for <value> spirit damage.', hvalue: -1 },
   // Last Stand is a delayed strike: at the start of its bearer's owner's turn, when it is
   // about to expire, it deals <value> + the bearer's Spirit to every enemy hero, then the

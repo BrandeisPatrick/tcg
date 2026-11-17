@@ -8,7 +8,7 @@ import {
   abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
-import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE } from '@/engine/constants';
+import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE, TOXIN_BURST, TOXIN_CAP } from '@/engine/constants';
 import { pullToActive, swapIntoActive } from '@/engine/actions/board';
 import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
@@ -1094,9 +1094,27 @@ const eff_mystic_reverb: AbilityDef = {
 // ----- Bullet-weapon offense + defensive tech (canon weapon/spirit items) -----
 
 // Toxic Bullets (canon T3 weapon): attacks apply stacking Bleed, 2 a swing.
+// Toxic Bullets (canon T3 weapon: bullets build up toxicity, and at full
+// build-up the target bleeds). Since 2026-11-16 (Patrick: "Toxic Bullets lets
+// you build up and deal delayed damage … like Mirage's Djinn's Mark … it
+// should scale with Bullet Power"): each swing adds a Toxin; the one that makes
+// TOXIN_CAP bursts for TOXIN_BURST + the bearer's Bullet Power. (It was Bleed 2
+// a swing, stacking to 3.)
 const eff_toxic_bullets: AbilityDef = {
   id: 'eff_toxic_bullets', trigger: 'onAttack', target: 'self',
-  run: (G, _ctx, { target }) => { if (target) addStatus(G, target, 'bleed', 2, 2); },
+  base: 3,
+  run: (G, _ctx, { source, target }) => {
+    if (!source || !target) return;
+    // A swing that drops its target builds nothing on the fallen (as Djinn's Mark).
+    if (target.hp <= 0 || source.hp <= 0 || isRespawning(target)) return;
+    addStatus(G, target, 'toxin', 1, 3);
+    const toxin = target.statuses.find((s) => s.id === 'toxin');
+    if (toxin && toxin.value >= TOXIN_CAP) {
+      target.statuses = target.statuses.filter((s) => s !== toxin);
+      pushLog(G, `${cardName(target.cardId)} — the Toxins burst.`);
+      damageUnit(G, target, TOXIN_BURST + effectiveAtk(source), 'attack', 'Toxic Bullets', { source, cast: 'proc' });
+    }
+  },
 };
 
 // Tesla Bullets (canon T3 weapon): the shot "jumps" — chain 2 bullet damage to
@@ -2176,13 +2194,19 @@ const skill_mo_krill: HeroAbilityDef = {
 // his heroes takes no damage until his next turn. Invulnerable is not crowd
 // control, so it ticks at the start of its owner's turn: put on for 1 turn on
 // his turn, it covers the rival's turn and is gone when his next one begins.
+// Since 2026-11-16 (Patrick: "when you're cubed you can't attack, retreat or
+// use a skill, you receive no damage or status, and you heal"), Deadlock's own:
+// the hero is encased (the Cube status) until your next turn, and heals.
 const skill_viscous: HeroAbilityDef = {
   id: 'skill_viscous', trigger: 'activate', target: 'allyHero', cooldown: 4,
   name: 'The Cube',
-  text: 'Cube one of your heroes: it takes no damage until your next turn.',
+  text: 'Cube one of your heroes until your next turn, and heal it {sp:3}.',
   base: 3,
-  run: (G, _ctx, { target }) => {
-    if (target) addStatus(G, target, 'invulnerable', 1, 1);
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
+    if (!target) return;
+    healUnit(G, target, 3 + spi(source), 'The Cube');
+    addStatus(G, target, 'cube', 1, 1);
   },
 };
 

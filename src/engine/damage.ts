@@ -110,7 +110,7 @@ export function damageUnit(G: GameState, target: CardInstance, amount: number, t
   const fxCast: FxCastKind = castKind === 'attack' && fx?.tag ? 'proc' : castKind;
   const fxFrom = fxSource(fx?.source ?? cast?.source);
   // Invulnerable takes no damage (The Cube; the Unstoppable item and Prism Blast).
-  if (target.statuses.some((s) => s.id === 'invulnerable')) {
+  if (target.statuses.some((s) => s.id === 'invulnerable' || s.id === 'cube')) {
     pushFx(G, { kind: 'immune', iid: target.iid, what: 'damage', cast: fxCast });
     return 0;
   }

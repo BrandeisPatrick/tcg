@@ -95,7 +95,7 @@ export const EQUIPMENT: EquipmentCard[] = [
   { id: 'fortitude',     name: 'Fortitude',     type: 'equipment', rarity: 3, slot: 'vitality', tier: 3, upgradesFrom: 'extra_health', bonus: { hp: 2 }, abilities: ['eff_fortitude'], text: '+2 HP. At the start of your turn: heal 2.' },
 
   // ----- T3 weapon offense (canon Toxic / Tesla Bullets, both T3 Weapon) -----
-  { id: 'toxic_bullets', name: 'Toxic Bullets', type: 'equipment', rarity: 3, slot: 'weapon', tier: 3, abilities: ['eff_toxic_bullets'], text: "Bearer's attacks apply Bleed 2 (stacks, max 3) for 2 turns." },
+  { id: 'toxic_bullets', name: 'Toxic Bullets', type: 'equipment', rarity: 3, slot: 'weapon', tier: 3, abilities: ['eff_toxic_bullets'], text: 'Each attack adds a Toxin to the target. The third bursts for {bp:4} bullet damage.' },
   { id: 'tesla_bullets', name: 'Tesla Bullets', type: 'equipment', rarity: 3, slot: 'weapon', tier: 3, abilities: ['eff_tesla_bullets'], text: "After bearer attacks: chain 2 bullet damage to an enemy bench hero." },
 
   // ----- T3 — passive resists (canon T3 Vitality) -----

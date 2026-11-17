@@ -248,3 +248,8 @@ export const BLEED_CAP = 3;
 /** Djinn's Mark stacks additively up to this value, and the mark that reaches
  *  it detonates them all (Mirage's passive). */
 export const DJINN_CAP = 3;
+
+/** Toxins that burst (Toxic Bullets, 2026-11-16): the attack that adds the
+ *  last one deals TOXIN_BURST + the attacker's Bullet Power. */
+export const TOXIN_CAP = 3;
+export const TOXIN_BURST = 4;
