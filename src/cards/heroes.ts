@@ -114,7 +114,9 @@ export const HEROES: HeroCard[] = [
     atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 0,
     profile: { role: 'Assassin', mix: { tank: 1, damage: 2, control: 3, support: 0 }, reach: 'many', curve: 'mid' },
     skills: ['skill_lash'], passives: ['passive_lash_ground_strike'], ult: 'eff_ult_lash',
-    signature: ['mystic_slow', 'improved_burst'],
+    // 2026-11-17: his damage is his swing the turn he steps in, so his items are
+    // the step-in ones (Mystic Slow and Tankbuster answered a skill hit he no longer deals).
+    signature: ['kinetic_dash', 'arcane_surge'],
   },
   {
     id: 'hero_paige', name: 'Paige', type: 'hero', rarity: 3,
