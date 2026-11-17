@@ -172,13 +172,13 @@ describe('ultimates resolve through the real useSkill flow, for no souls, as kit
     const G = freshG('hero_sinclair', 'hero_lash');
     const sinclair = G.players['0'].active!;
     const foes = [G.players['1'].active!, ...G.players['1'].bench.filter((c): c is CardInstance => !!c)];
-    const before = foes.map((f) => f.hp);
-    expect(use(G, sinclair, 'eff_ult_sinclair')).not.toBe(INVALID_MOVE);
-    // Death Slam, cast by Sinclair this turn: {sp:3} to every enemy, each stunned.
-    foes.forEach((f, i) => {
-      expect(f.hp, f.cardId).toBe(before[i] - 3);
-      expect(f.statuses.some((s) => s.id === 'stun'), f.cardId).toBe(true);
-    });
+    // Death Slam, cast by Sinclair this turn, aimed as Death Slam is (2026-11-17): it lifts
+    // the enemy hero he picks back to its player's hand, and leaves the rest where they stand.
+    const [lifted, ...rest] = foes.slice(1);
+    expect(use(G, sinclair, 'eff_ult_sinclair', lifted.iid)).not.toBe(INVALID_MOVE);
+    expect(lifted.zone).toBe('hand');
+    expect(G.players['1'].hand).toContain(lifted);
+    for (const f of [foes[0], ...rest]) expect(f.zone, f.cardId).not.toBe('hand');
     // Used as Audience Participation (medium): no souls, on its own wait;
     // Death Slam is no ability of his, now or later — no copy is kept.
     expect(G.players['0'].souls).toBe(SOULS);

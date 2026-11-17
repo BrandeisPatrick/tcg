@@ -108,7 +108,10 @@ export function skillBlockReason(block: SkillBlock, hero?: CardInstance, skillId
       return cost > 0 ? `Need ${souls(cost)}` : 'Not enough souls';
     }
     case 'hp': return skill?.ability.hpCost ? `Needs more than ${skill.ability.hpCost} HP` : 'Not enough HP';
-    case 'target': return 'No valid target';
+    case 'target':
+      // Lash's Grapple: used from the bench, into an Active that can be swapped.
+      if (skill?.ability.fromBench) return hero?.zone === 'bench' ? 'Cannot swap now (Rooted)' : 'Used from the bench';
+      return 'No valid target';
     case 'down': return 'Down until it respawns';
     case 'noSkill': return '';
   }

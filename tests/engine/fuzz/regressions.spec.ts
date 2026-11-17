@@ -119,7 +119,7 @@ describe('E1 a corpse carries no statuses', () => {
     const G = game();
     const lash = G.players['0'].bench[1]!;
     giveItem(G, lash, 'diviners_kevlar');
-    expect(useUlt(G, lash)).not.toBe(INVALID_MOVE);
+    expect(useUlt(G, lash, G.players['1'].active!.iid)).not.toBe(INVALID_MOVE); // Death Slam is aimed (2026-11-17)
     expect(lash.statuses.map((s) => s.id)).toContain('shield');
   });
 

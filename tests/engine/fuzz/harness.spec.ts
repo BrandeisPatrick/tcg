@@ -616,7 +616,7 @@ describe('the transition rules fire', () => {
     expect(retreat.check((A) => { A.players['0'].bench[0]!.statuses.push({ id: 'swift', value: 1, duration: 1 }); })).toContain('swift-spent');
   });
   it('an ability arms its wait: a skill its own, an ultimate its size\'s, one ultimate a turn; a locked ultimate is never used', () => {
-    const skill = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 4 }; }); // Ground Strike names 4
+    const skill = pair((G) => { G.players['0'].bench[1]!.cooldowns = { skill_lash: 3 }; }); // Grapple names 3 (2026-11-17)
     const lash = skill.before.G.players['0'].bench[1]!.iid;
     expect(moveIds(skill, 'useSkill', [lash])).not.toContain('ability-cooldown');
     const unarmed = pair(() => undefined);
@@ -633,16 +633,18 @@ describe('the transition rules fire', () => {
     // The mark left unset, or an ultimate used when the side had used one this turn, is reported.
     const unmarked = pair((G) => { G.players['0'].bench[1]!.cooldowns = { eff_ult_lash: ULT_WAIT.large }; });
     unmarked.before.G.players['0'].bench[1]!.level = ULT_UNLOCK_LEVEL;
-    expect(moveIds(unmarked, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-per-turn');
+    // (Death Slam is aimed at an enemy hero since 2026-11-17.)
+    const foe = (G: GameState) => G.players['1'].active!.iid;
+    expect(moveIds(unmarked, 'useSkill', [lash, foe(unmarked.before.G), 'eff_ult_lash'])).toContain('ult-per-turn');
     ult.before.G.ultUsed = { '0': true };
-    expect(moveIds(ult, 'useSkill', [lash, undefined, 'eff_ult_lash'])).toContain('ult-per-turn');
+    expect(moveIds(ult, 'useSkill', [lash, foe(ult.before.G), 'eff_ult_lash'])).toContain('ult-per-turn');
     // A real ultimate: its size's wait (Death Slam, large: 8), no souls; nothing the hero wears
     // cuts it (the Cooldown items are draw spells, and no equipment has the hook).
     const G = clean();
     G.players['0'].souls = 5;
     p0(G).lash.level = ULT_UNLOCK_LEVEL;
     giveItem(G, p0(G).lash, 'extra_health');
-    const used = made(G, 'useSkill', [p0(G).lash.iid, undefined, 'eff_ult_lash']);
+    const used = made(G, 'useSkill', [p0(G).lash.iid, foe(G), 'eff_ult_lash']);
     expect(used.after.G.players['0'].bench[1]!.cooldowns?.eff_ult_lash).toBe(ULT_WAIT.large);
     expect(used.after.G.players['0'].souls).toBe(5);
     expect(used.after.G.ultUsed).toEqual({ '0': true });

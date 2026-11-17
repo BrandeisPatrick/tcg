@@ -36,8 +36,8 @@ export const EQUIPMENT: EquipmentCard[] = [
   // Mystic Expansion → Greater Expansion (canon Spirit T1 → T3 passives: ability
   // range and radius). Patrick, 2026-11-16: the radius is the board, so
   // positioning counts (engine/expansion.ts).
-  { id: 'mystic_expansion', name: 'Mystic Expansion', type: 'equipment', rarity: 1, slot: 'spirit', tier: 1, abilities: ['eff_mystic_expansion'], text: "When the bearer's skill deals damage to one enemy, each enemy next to it on the board takes 1 spirit damage." },
-  { id: 'greater_expansion', name: 'Greater Expansion', type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'mystic_expansion', abilities: ['eff_greater_expansion'], text: "When the bearer's skill deals damage to one enemy, every other enemy takes the same damage." },
+  { id: 'mystic_expansion', name: 'Mystic Expansion', type: 'equipment', rarity: 1, slot: 'spirit', tier: 1, abilities: ['eff_mystic_expansion'], text: "When the bearer's skill deals damage to one enemy, each enemy next to it on the board takes 1 spirit damage. Lash's Death Slam lifts them too." },
+  { id: 'greater_expansion', name: 'Greater Expansion', type: 'equipment', rarity: 3, slot: 'spirit', tier: 3, upgradesFrom: 'mystic_expansion', abilities: ['eff_greater_expansion'], text: "When the bearer's skill deals damage to one enemy, every other enemy takes the same damage. Lash's Death Slam lifts every enemy hero." },
   // Trophy Collector (canon Vitality T2 passive): kills raise the soul income,
   // kept through death. Patrick, 2026-11-16: it should not rely on kills
   // ("too hard to complete"): worn, it pays 1 soul a turn more.

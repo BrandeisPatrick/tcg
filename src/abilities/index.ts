@@ -1,11 +1,11 @@
 import type { GameState, CardInstance, DamageType, PlayerID, StatusId } from '@/engine/types';
 import { CARDS_BY_ID, cardName } from '@/cards';
 import { CC_STATUSES, DEBUFF_IDS, STATUSES_BY_ID } from '@/statuses';
-import { damageUnit, healUnit } from '@/engine/damage';
-import { raiseUnit, resolve, rideOn } from '@/engine/death';
+import { counterspellStops, damageUnit, healUnit } from '@/engine/damage';
+import { bounceToHand, raiseUnit, resolve, rideOn } from '@/engine/death';
 import { addStatus, cleanseDebuffs, grantExtraAttacks } from '@/engine/statusOps';
 import {
-  abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
+  abilityAim, attackPower, effectiveAtk, findCardOnBoard, freeBenchSlot, heroData, isBlocked, isBoss, isRespawning, isUntargetable, itemResist, liveBoardCards,
   otherPlayer, effectiveSpirit, resolveSkill, seatOf, slottedHeroes, stepInCandidates, ultimateCard, wornItems, type TargetFilter,
 } from '@/engine/query';
 import { CHEAT_DEATH_WAIT, COUNTERSPELL_HEAL, COUNTERSPELL_TURNS, CULTIST_SACRIFICE_SOULS, DJINN_CAP, FLIGHT_TURNS, SKILL_SPIRIT_RATE, TOXIN_BURST, TOXIN_CAP } from '@/engine/constants';
@@ -14,7 +14,7 @@ import { pushLog } from '@/engine/log';
 import { getAbility, registerAbilities } from '@/engine/registry';
 import { fireTriggers } from '@/engine/triggers';
 import { withCast, currentCast } from '@/engine/castContext';
-import { expandSkillHit } from '@/engine/expansion';
+import { boardNeighbours, expandSkillHit } from '@/engine/expansion';
 import { pushFx } from '@/engine/fx';
 import { drawCards, millDeck, nextRandom, raiseIntoDeck } from '@/engine/deck';
 import { GHOUL, GRAVESTONE } from '@/cards/units';
@@ -53,6 +53,11 @@ export interface AbilityDef {
     // a card's swap (Warp Stone, Rescue Beam, Majestic Leap, Traveler) — never
     // a promotion off a fallen Active, nor a drag to the front by the rival.
     | 'onBearerStepIn'
+    // A hero's passive: the hero just moved from its bench into its side's
+    // Active slot, by any road — a Retreat, a card's swap, its own skill, a
+    // promotion off a fallen Active, or a drag to the front by the rival
+    // (Lash's Ground Strike, 2026-11-17). Never a hero put in from the hand.
+    | 'onEnterActive'
     // the bearer's skill, ultimate or spell just healed a unit (itself too):
     // `target` is the one healed, `amount` what it got. Never on regen, lifesteal
     // or a worn item's heal, as Deadlock's Healing Tempo says.
@@ -111,6 +116,13 @@ export interface AbilityDef {
    *  payment comes straight off its HP before the skill runs — through no Shield
    *  or resist, setting off no trigger, and never enough to kill. */
   hpCost?: number;
+  /** A hero passive only: the skill it is part of (Lash, 2026-11-17: Ground
+   *  Strike's landing is always on, and is printed in the skill's own row). The
+   *  engine runs it as a passive; the card and the sheet print it only there. */
+  partOf?: string;
+  /** A hero skill only: it is used from the bench (Lash's Ground Strike). Its `aim`
+   *  is what keeps it there; this says so, for the button's reason. */
+  fromBench?: true;
   /** If true, the hero's Spirit adds to the skill's damage/heal/effect magnitude,
    *  counted SKILL_SPIRIT_RATE times (`spi`). */
   scalesSpirit?: boolean;
@@ -2360,19 +2372,59 @@ const passive_gravestone: HeroAbilityDef = {
   },
 };
 
-// Lash — Ground Strike: control 3 needs hard control in the skill, so the slam
-// pins the enemy Active (Rooted: it cannot retreat or be swapped).
+// Lash — Ground Strike (Patrick, 2026-11-17: "his skill should just be Ground
+// Strike, which has damage and movement and passive"). One skill, two halves:
+// the movement is the skill (from the bench he leaps into the Active, a free
+// swap his player chose, so it steps in), and the damage is its landing, which
+// is always on: `passive_lash_ground_strike`, printed in this row (`partOf`),
+// lands however he comes in. Control 3 is the swap itself (docs/hero-design.md
+// §4). The leap is open while Lash is on the bench and could take the front:
+// he can step in, nothing roots him, and there is a standing, unrooted Active.
+function leapOpen(G: GameState, pid: PlayerID, hero: CardInstance): boolean {
+  const ps = G.players[pid];
+  const front = ps.active;
+  return hero.zone === 'bench' && !!front && !isRespawning(front) && !isBlocked(front, 'move')
+    && !isBlocked(hero, 'move') && stepInCandidates(ps).some((b) => b.iid === hero.iid);
+}
 const skill_lash: HeroAbilityDef = {
-  id: 'skill_lash', trigger: 'activate', target: 'noTarget', cooldown: 4,
+  id: 'skill_lash', trigger: 'activate', target: 'noTarget', cooldown: 3,
   name: 'Ground Strike',
-  text: 'Deal {sp:1} spirit damage to every enemy. Root the enemy Active 1 turn.',
-  base: 1,
+  text: 'Lash leaps in from the bench. Whenever he steps in from the bench, he deals {sp:3} spirit damage to the enemy Active.',
+  base: 3,
   scalesSpirit: true,
+  fromBench: true,
+  aim: (G, pid, hero) => (leapOpen(G, pid, hero) ? { target: 'noTarget' } : null),
   run: (G, ctx, { source }) => {
-    const front = enemyActiveOf(G, ctx.movingPlayer);
-    const dmg = 1 + spi(source);
-    eachBoard(G, otherPlayer(ctx.movingPlayer), (c) => { damageUnit(G, c, dmg, 'spirit'); });
-    if (front) addStatus(G, front, 'rooted', 1, 1);
+    if (!source) return;
+    const ps = G.players[ctx.movingPlayer];
+    const was = ps.active;
+    if (!leapOpen(G, ctx.movingPlayer, source) || !was) { pushLog(G, 'Ground Strike fizzled.'); return; }
+    pushLog(G, `Ground Strike: ${cardName(source.cardId)} leaps in for ${cardName(was.cardId)}.`);
+    swapIntoActive(G, ps, source, { quiet: true });
+  },
+};
+
+// The landing: Deadlock's slam hits harder the farther he falls; here the fall
+// is the leap in from the bench. Fired by every road from the bench to the
+// Active (`onEnterActive`), so a Retreat or a promotion lands it too.
+const passive_lash_ground_strike: HeroAbilityDef = {
+  id: 'passive_lash_ground_strike', trigger: 'onEnterActive', target: 'self',
+  partOf: 'skill_lash',
+  name: 'Ground Strike',
+  text: 'Whenever Lash steps in from the bench, he deals {sp:3} spirit damage to the enemy Active.',
+  base: 3,
+  scalesSpirit: true,
+  run: (G, _ctx, { source }) => {
+    if (!source || source.zone !== 'active' || source.hp <= 0 || isRespawning(source)) return;
+    const front = standingActive(G, otherPlayer(seatOf(source)));
+    if (!front) return;
+    // His own leap's landing is that skill's hit (Expansion widens it, Mystic
+    // Burst answers it); any other road lands it as his own proc — never inside
+    // a rival's cast (Vortex Web), which would credit them with it.
+    const hit = () => damageUnit(G, front, 3 + spi(source), 'spirit', 'Ground Strike', { source });
+    if (currentCast()?.source === source) hit();
+    else withCast(source, 'proc', hit);
+    resolve(G);
   },
 };
 
@@ -2676,14 +2728,36 @@ const eff_ult_lady_geist: AbilityDef = {
     damageUnit(G, target, 3 + ultSpi(), 'spirit', 'Soul Exchange');
   },
 };
+// Death Slam (Patrick, 2026-11-17: "pick one hero, return to player hand; it
+// can be AOE if he has the Expansion"): Lash lifts an enemy hero off the board,
+// and it goes back to its player's hand with its items (`bounceToHand`), to be
+// placed and paid for again. Expansion widens it as it widens a skill's hit:
+// Mystic Expansion lifts the heroes next to it on the board too, Greater
+// Expansion every enemy hero. The Cube holds its hero down; a Counterspell
+// stops it for its hero (the one aimed at, in useSkill; the rest, here).
 const eff_ult_lash: AbilityDef = {
-  id: 'eff_ult_lash', trigger: 'onPlay', target: 'noTarget',
-  base: 3,
-  run: (G, ctx) => {
-    const foes = enemiesOf(G, ctx.movingPlayer);
-    const dmg = 3 + ultSpi();
-    for (const c of foes) damageUnit(G, c, dmg, 'spirit', 'Death Slam');
-    for (const c of foes) addStatus(G, c, 'stun', 1, 1);
+  id: 'eff_ult_lash', trigger: 'onPlay', target: 'enemyHero',
+  base: 6,
+  run: (G, ctx, { source, target }) => {
+    if (!target) return;
+    const enemyPid = otherPlayer(ctx.movingPlayer);
+    const enemy = G.players[enemyPid];
+    const worn = source ? wornItems(source).map((it) => it.cardId) : [];
+    const liftable = (c: CardInstance | null | undefined): c is CardInstance =>
+      !!c && !isRespawning(c) && c.hp > 0 && CARDS_BY_ID[c.cardId]?.type === 'hero';
+    let lifted: CardInstance[] = [target];
+    if (worn.includes('greater_expansion')) {
+      lifted = [target, ...[enemy.active, ...enemy.bench].filter((c): c is CardInstance => liftable(c) && c !== target)];
+    } else if (worn.includes('mystic_expansion')) {
+      lifted = [target, ...boardNeighbours(G, enemyPid, target).filter(liftable)];
+    }
+    for (const hero of lifted) {
+      if (!liftable(hero)) continue;
+      if (hero !== target && counterspellStops(G, hero)) continue;
+      if (hero.statuses.some((s) => s.id === 'cube')) { pushLog(G, `Death Slam cannot lift ${cardName(hero.cardId)} out of The Cube.`); continue; }
+      pushLog(G, `Death Slam lifts ${cardName(hero.cardId)} off the board.`);
+      bounceToHand(G, enemy, hero);
+    }
     resolve(G);
   },
 };
@@ -2943,7 +3017,7 @@ const ABILITIES_LIST: AbilityDef[] = [
   skill_sinclair, skill_silver,
   // ----- Hero passives -----
   passive_abrams_heal, passive_haze_fixation, passive_drifter_bloodscent,
-  passive_mirage_djinns_mark, passive_victor_aura,
+  passive_mirage_djinns_mark, passive_victor_aura, passive_lash_ground_strike,
   // ----- Ultimates -----
   eff_ult_abrams, eff_ult_dynamo, eff_ult_haze, eff_ult_kelvin, eff_ult_lady_geist,
   eff_ult_lash, eff_ult_mo_krill, eff_ult_paige, eff_ult_rem, eff_ult_seven, eff_ult_graves,

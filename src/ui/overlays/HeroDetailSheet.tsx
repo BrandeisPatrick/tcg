@@ -23,6 +23,7 @@
 import { useState, type CSSProperties, type ReactNode, type SyntheticEvent } from 'react';
 import { motion } from 'framer-motion';
 import type { AbilityId, CardId, CardInstance, HeroCard, ItemSlot, StatusInstance } from '@/engine/types';
+import { getAbility } from '@/abilities';
 import { CARDS_BY_ID, itemCard } from '@/cards';
 import type { HeroAbilityDef } from '@/abilities';
 import { STATUSES_BY_ID } from '@/statuses';
@@ -189,6 +190,12 @@ function shortLine(rule: string, scale: Scale, max: number): string {
   return sentence(s);
 }
 
+/** True when one of `data`'s passives is part of its skill `skillId` (Lash's
+ *  landing): that skill's row prints its whole rule, the passive's included. */
+function carriesPassive(data: HeroCard, skillId: string): boolean {
+  return (data.passives ?? []).some((id) => getAbility(id)?.partOf === skillId);
+}
+
 /** A passive's rule as its row prints it: whole (a passive has no other
  *  line to give), its scaling numbers read live. */
 function fullLine(rule: string, scale: Scale): string {
@@ -284,7 +291,9 @@ export function HeroDetailSheet({
           name={ability.name}
           // The skill's own Deadlock icon; its ring keeps the kind's colour.
           art={<img src={skillIconSrc(data.id)} alt="" draggable={false} style={{ display: 'block', width: ART - 10, height: ART - 10, objectFit: 'contain' }} />}
-          line={shortLine(ability.text, kitScale, lineMax)}
+          // A skill with a standing half (Lash's Ground Strike, `partOf`) prints its whole rule.
+          wrap={carriesPassive(data, ability.id)}
+          line={carriesPassive(data, ability.id) ? fullLine(ability.text, kitScale) : shortLine(ability.text, kitScale, lineMax)}
           right={pace(ability.id, dial)}
           reason={reason}
           onUse={onUseSkill ? () => { onUseSkill(ability.id); onClose(); } : undefined}
@@ -638,9 +647,12 @@ export function HeroDetailSheet({
  * The name stays the row's first words — the row is found by its text.
  */
 function ActionRow({
-  ult = false, passive = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
+  ult = false, passive = false, wrap = false, ink, mode, name, ultLabel, art, line, right, reason, reasonBelow = false, onUse, ariaLabel, calm,
   dial, dialMemo,
 }: {
+  /** The line wraps whole, as a passive's does: a skill that carries a
+   *  standing rule (Lash's Ground Strike). */
+  wrap?: boolean;
   /** A kit ability's wait, worn on its picture tile (AbilityDial.tsx). */
   dial?: DialModel;
   /** Names the dial among all dials: the hero and the ability. */
@@ -690,7 +702,7 @@ function ActionRow({
       </AbilityTile>
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <span style={{ ...NAME, ...ONE_LINE, opacity: dim ? 0.5 : 1 }}>{name}</span>
-        {caption && <span style={{ ...CAPTION, ...(passive ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
+        {caption && <span style={{ ...CAPTION, ...(passive || wrap ? {} : ONE_LINE), color: dim ? poster.inkSoft : poster.inkDim }}>{caption}</span>}
       </span>
       <span style={{ flexShrink: 0, maxWidth: '42%', display: 'flex', justifyContent: 'flex-end' }}>
         {dim && !reasonBelow && said

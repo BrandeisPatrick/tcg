@@ -152,7 +152,7 @@ describe('New active items', () => {
     const G = freshReadyGame();
     const ps = G.players['0'];
     const lash = ps.bench[1]!;
-    ps.souls = 1 + 3; // Haze's retreat, then Ground Strike's price
+    ps.souls = 1 + 3; // Haze's retreat, and some to spare
     expect(perform(G, '0', { type: 'moveHero', fromSlot: 2, toSlot: 0 })).not.toBe(INVALID);
     expect(ps.active).toBe(lash);
     return { G, lash };
@@ -180,9 +180,16 @@ describe('New active items', () => {
   });
 
   it('Refresher readies your Active for this very turn', () => {
-    const { G, lash } = lashAtTheFront();
-    lash.cooldowns = { skill_lash: 1 };
-    const skill = { type: 'useSkill' as const, heroIid: lash.iid, targetIid: G.players['1'].active!.iid };
+    // Paige at the front, whose Plot Armor is used from the Active. (Lash was until
+    // 2026-11-17: his skill is now Grapple, used from the bench only.)
+    const G = freshReadyGame();
+    const ps = G.players['0'];
+    const paige = ps.bench[2]!;
+    ps.souls = 1; // Haze's retreat
+    expect(perform(G, '0', { type: 'moveHero', fromSlot: 3, toSlot: 0 })).not.toBe(INVALID);
+    expect(ps.active).toBe(paige);
+    paige.cooldowns = { skill_paige: 1 };
+    const skill = { type: 'useSkill' as const, heroIid: paige.iid, targetIid: paige.iid };
     expect(blocked(G, '0', skill)).toBe('cooldown');
     useItem(G, '0', 'refresher');
     expect(blocked(G, '0', skill)).toBeNull();

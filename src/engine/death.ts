@@ -7,14 +7,14 @@
  * tick, turn start, promotion).
  */
 import type { CardInstance, GameState, PlayerID, PlayerState } from './types';
-import { CARDS_BY_ID, cardName } from '@/cards';
+import { CARDS_BY_ID, cardName, itemCard } from '@/cards';
 import { pushLog } from './log';
 import { pushFx } from './fx';
 import {
   fallPending, findCardOnBoard, freeBenchSlot, isRespawning, isUnit, killPush, laneOpen, otherPlayer, promptOwed, respawnTimer, reviveReady, stepInCandidates,
   unitData,
 } from './query';
-import { fireTriggers } from './triggers';
+import { enteredFromBench, fireTriggers } from './triggers';
 import { grantExp } from './expSystem';
 import { EXP_ON_KILL } from './constants';
 import { leaveActive } from './lane';
@@ -24,7 +24,7 @@ import { pushStructures, reapBoss } from './map';
 import { heroToHand, toDiscard } from './deck';
 import { getAbility } from './registry';
 import { allocatorOf } from './ids';
-import { makeInstance } from './instances';
+import { detachItem, makeInstance, syncVitalitySpike } from './instances';
 
 export { awardSouls };
 
@@ -243,6 +243,35 @@ export function returnRemToBench(G: GameState, ps: PlayerState, bearer: CardInst
 }
 
 /**
+ * Lash's Death Slam (Patrick, 2026-11-17: "pick one hero, return to player
+ * hand"): `hero`, standing on `ps`'s board, goes back to its owner's hand and
+ * takes what it wears with it — each item a card in the hand again, to be paid
+ * for again. The hero comes back as a fallen one does (`heroToHand`: full HP,
+ * its level and exp, no statuses); its slot is left empty, so an Active's lane
+ * opens and its side steps a hero up (`resolve`). A riding Rem jumps off first,
+ * as she does when her bearer falls. No bounty, no push: nobody fell.
+ */
+export function bounceToHand(G: GameState, ps: PlayerState, hero: CardInstance) {
+  const rem = hero.attached?.find((a) => a.remMergeTurnsLeft != null);
+  if (rem) returnRemToBench(G, ps, hero, rem, { bearerFalls: true });
+  const sDrain = hero.statuses.find((s) => s.id === 'siphon_drain');
+  if (sDrain) hero.hpMax += sDrain.value;
+  const sGain = hero.statuses.find((s) => s.id === 'siphon_gain');
+  if (sGain) hero.hpMax -= sGain.value;
+  const worn = (hero.attached ?? []).filter((a) => !!itemCard(a.cardId));
+  for (const it of worn) {
+    detachItem(hero, it);
+    it.zone = 'hand';
+    it.slot = undefined;
+    it.cooldowns = undefined;
+    ps.hand.push(it);
+  }
+  syncVitalitySpike(hero);
+  if (worn.length > 0) pushLog(G, `${cardName(hero.cardId)}'s ${worn.length === 1 ? 'item goes' : `${worn.length} items go`} back to P${ps.id}'s hand.`);
+  heroToHand(G, ps, hero, { lifted: true });
+}
+
+/**
  * Sweep a player's board for heroes that just hit 0 HP. The hero stays in its
  * slot — `killInPlace` arms the respawn timer instead of moving them out.
  * (`resolve` then promotes a bench hero into a fallen Active's slot.)
@@ -329,4 +358,5 @@ export function promoteFromBench(G: GameState, ps: PlayerState, benchHero: CardI
   }
   const data = CARDS_BY_ID[benchHero.cardId];
   pushLog(G, `P${ps.id} promoted ${data?.name ?? benchHero.cardId} to Active.`);
+  enteredFromBench(G, benchHero);
 }

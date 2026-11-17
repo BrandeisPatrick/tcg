@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'boardgame.io/client';
-import { ABILITIES_BY_ID, type HeroAbilityDef } from '@/abilities';
+import { ABILITIES_BY_ID, getAbility, type HeroAbilityDef } from '@/abilities';
 import { CARDS_BY_ID, HEROES } from '@/cards';
 import { enumerateAIMoves } from '@/ai/heuristic';
 import { damageUnit } from '@/engine/damage';
@@ -187,14 +187,16 @@ describe('a skill\'s cooldown', () => {
     const stuck = JSON.stringify(G());
     moves.useSkill(cool.iid, rival.iid);
     expect(JSON.stringify(G())).toBe(stuck);                            // refused, untouched
-    // Lash's skill names a wait of 4: it sets its field, which counts down on her turns.
-    moves.useSkill(lash.iid, G().players['1'].active!.iid);
-    expect(G().players['0'].bench[1]!.cooldowns?.skill_lash).toBe(4);
+    // Lash's skill names a wait of 3 (Ground Strike, 2026-11-17: from the bench he leaps into
+    // the Active): it sets its field, which counts down on his owner's turns.
+    moves.useSkill(lash.iid);
+    expect(G().players['0'].active!.iid).toBe(lash.iid);
+    expect(G().players['0'].active!.cooldowns?.skill_lash).toBe(3);
 
     endTurns(2);                                                        // turn 3: the clock reached 0
     const warm = G().players['0'].bench[0]!;
     expect('cooldowns' in warm).toBe(false);
-    expect(G().players['0'].bench[1]!.cooldowns?.skill_lash).toBe(3);
+    expect(G().players['0'].active!.cooldowns?.skill_lash).toBe(2);
     expect(skillBlocked(G(), '0', warm, rival.iid)).toBeNull();
     moves.useSkill(cool.iid, G().players['1'].active!.iid);
     expect(G().players['0'].bench[0]!.cooldowns).toEqual({ [CHILL]: 2 });
@@ -384,7 +386,7 @@ describe('what a hero card prints', () => {
     hero_dynamo: ['skill', "Rejuvenating Aurora", "Your heroes heal {sp:5} each."],
     hero_kelvin: ['skill', "Frost Grenade", "Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each."],
     hero_lady_geist: ['skill', "Essence Bomb", "Lady Geist pays 2 HP: deal {sp:4} spirit damage to the enemy Active."],
-    hero_lash: ['skill', "Ground Strike", "Deal {sp:1} spirit damage to every enemy. Root the enemy Active 1 turn."],
+    hero_lash: ['skill', "Ground Strike", "Lash leaps in from the bench. Whenever he steps in from the bench, he deals {sp:3} spirit damage to the enemy Active."],
     hero_paige: ['skill', "Plot Armor", "Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns."],
     hero_seven: ['skill', "Static Charge", "Deal {sp:1} spirit damage to the enemy Active. After its next turn, it is Stunned 1 turn."],
     hero_sinclair: ['skill', "Rabbit Hex", "Turn the enemy Active into a Rabbit for 1 turn."],
@@ -397,21 +399,23 @@ describe('what a hero card prints', () => {
     hero_silver: ['skill', "Boot Kick", "Deal 1 bullet damage to the enemy Active. It is Vulnerable 2 turns."],
     hero_graves: ['skill', "Grasping Hands", "Deal {sp:1} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck."],
   };
-
   it('heroAbilities lists skills, then passives, with names and texts, for every hero', () => {
     expect(Object.keys(PRINTED).sort()).toEqual(HEROES.map((h) => h.id).sort());
     for (const hero of HEROES) {
       const kit = heroAbilities(hero);
       expect(kit.length, hero.id).toBeGreaterThan(0);
-      expect(kit.map((x) => x.ability.id), hero.id).toEqual([...hero.skills, ...(hero.passives ?? [])]);
+      // A passive that is part of a skill (Lash's landing, 2026-11-17) prints in that skill's row.
+      const printed = (hero.passives ?? []).filter((id) => !getAbility(id)?.partOf);
+      expect(kit.map((x) => x.ability.id), hero.id).toEqual([...hero.skills, ...printed]);
       expect(kit.map((x) => x.kind), hero.id).toEqual([
-        ...hero.skills.map(() => 'skill'), ...(hero.passives ?? []).map(() => 'passive'),
+        ...hero.skills.map(() => 'skill'), ...printed.map(() => 'passive'),
       ]);
       for (const { ability } of kit) {
         expect(ability.name.length, `${hero.id} ${ability.id} name`).toBeGreaterThan(0);
         expect(ability.text.length, `${hero.id} ${ability.id} text`).toBeGreaterThan(0);
       }
-      expect(kit.map((x) => [x.kind, x.ability.name, x.ability.text]), hero.id).toEqual([PRINTED[hero.id]]);
+      expect(kit.map((x) => [x.kind, x.ability.name, x.ability.text]), hero.id)
+        .toEqual([PRINTED[hero.id]]);
       expect(hero.skills.length, hero.id).toBeLessThanOrEqual(2);
     }
   });

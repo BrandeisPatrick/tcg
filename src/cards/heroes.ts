@@ -113,7 +113,7 @@ export const HEROES: HeroCard[] = [
     id: 'hero_lash', name: 'Lash', type: 'hero', rarity: 3,
     atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 0,
     profile: { role: 'Assassin', mix: { tank: 1, damage: 2, control: 3, support: 0 }, reach: 'many', curve: 'mid' },
-    skills: ['skill_lash'], ult: 'eff_ult_lash',
+    skills: ['skill_lash'], passives: ['passive_lash_ground_strike'], ult: 'eff_ult_lash',
     signature: ['mystic_slow', 'improved_burst'],
   },
   {

@@ -603,6 +603,9 @@ export interface DeckFx extends FxBase {
   slot?: 0 | 1 | 2 | 3;
   /** `rideOn` / `rideOff`: the hero ridden on. */
   bearerIid?: string;
+  /** `toHand`: the hero did not fall but was lifted off the board, with its
+   *  items, by Lash's Death Slam (`bounceToHand`). */
+  lifted?: true;
 }
 
 export type FxEvent = HitFx | HealFx | StatusFx | ShieldFx | ImmuneFx | SwingFx | CastFx | ReviveFx | LevelUpFx | PushFx | FallFx | BossFx | DeckFx;

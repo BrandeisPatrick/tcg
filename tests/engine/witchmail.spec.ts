@@ -25,7 +25,7 @@ describe('Witchmail', () => {
     const { G, hero } = lash();
     expect(effectiveSpirit(hero)).toBe(3);
     expect(cooldownCut(hero, 'skill')).toBe(1);
-    expect(skillWait(getAbility('skill_lash')!, hero)).toBe(3); // Ground Strike waits 4
+    expect(skillWait(getAbility('skill_lash')!, hero)).toBe(2); // Grapple waits 3 (2026-11-17)
     const before = hero.hp;
     damageUnit(G, hero, 5, 'spirit');
     expect(before - hero.hp).toBe(2); // 5 less Spirit Resist 3

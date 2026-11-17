@@ -22,6 +22,7 @@ describe('skill icons', () => {
   });
 
   it('every hero has the one skill or passive the icon is for', () => {
+    // (Lash's landing is a passive printed in his skill's row since 2026-11-17: one row, one icon.)
     for (const h of HEROES) {
       const own = heroAbilities(h as never).filter((k: { kind: string }) => k.kind === 'skill' || k.kind === 'passive');
       expect(own.length, h.id).toBe(1);

@@ -282,8 +282,10 @@ export function discardFromHand(G: GameState, pid: PlayerID, iids: readonly stri
  * RESPAWN_TURNS 0, one that has just fallen), leaves the board for its
  * owner's hand: at full HP, its level, exp and items kept, its slot left
  * empty. A hero comes back even into a full hand (MAX_HAND limits draws).
+ * `lifted`: no fall at all, but Lash's Death Slam (`bounceToHand`), which has
+ * taken its items off first; the event says so.
  */
-export function heroToHand(G: GameState, ps: PlayerState, hero: CardInstance) {
+export function heroToHand(G: GameState, ps: PlayerState, hero: CardInstance, opts: { lifted?: boolean } = {}) {
   if (ps.active === hero) {
     leaveActive(G, hero);
     ps.active = null;
@@ -301,5 +303,5 @@ export function heroToHand(G: GameState, ps: PlayerState, hero: CardInstance) {
   hero.hp = hero.hpMax;
   ps.hand.push(hero);
   pushLog(G, `${cardName(hero.cardId)} is back in P${ps.id}'s hand.`);
-  pushFx(G, { kind: 'deck', what: 'toHand', pid: ps.id, iid: hero.iid, cardId: hero.cardId });
+  pushFx(G, { kind: 'deck', what: 'toHand', pid: ps.id, iid: hero.iid, cardId: hero.cardId, ...(opts.lifted ? { lifted: true as const } : {}) });
 }

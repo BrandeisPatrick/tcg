@@ -532,7 +532,9 @@ function fallsDuring(before: GameState, after: GameState, pid: PlayerID, fresh: 
   // in an earlier move): passed, it goes ahead as it would have.
   for (const t of before.triggers ?? []) if (t.unpaid) bossBlows.set(t.subjectIid, (bossBlows.get(t.subjectIid) ?? 0) + 1);
   const now = heroesByIid(after.players[pid]);
-  const backInHand = new Map(handOf(after, pid).filter(isHeroCard).map((h) => [h.iid, h]));
+  // A hero lifted to the hand by Lash's Death Slam (the 'toHand' event says `lifted`) did not fall.
+  const lifted = new Set(fresh.filter((e) => e.kind === 'deck' && e.what === 'toHand' && e.lifted).map((e) => (e as { iid?: string }).iid));
+  const backInHand = new Map(handOf(after, pid).filter(isHeroCard).filter((h) => !lifted.has(h.iid)).map((h) => [h.iid, h]));
   const out: Fall[] = [];
   for (const [iid, prev] of was) {
     if (isRespawning(prev)) continue; // a corpse that goes back to the hand is no fall

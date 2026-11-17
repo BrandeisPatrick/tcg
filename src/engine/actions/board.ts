@@ -20,7 +20,7 @@ import { promoteFromBench, resolve } from '../death';
 import { retreatCost } from '../legality';
 import { stepInCandidates } from '../query';
 import { leaveActive } from '../lane';
-import { fireTriggers } from '../triggers';
+import { enteredFromBench, fireTriggers } from '../triggers';
 
 /** Swap the heroes in two slots. With the Active on one side it is a Retreat:
  *  it charges `retreatCost` (read before the swap, off the hero leaving), is
@@ -55,6 +55,7 @@ export function moveHero(G: GameState, pid: PlayerID, fromSlot: 0|1|2|3, toSlot:
   if (isRetreat) {
     pushLog(G, `P${pid} retreated (${cost > 0 ? `-${cost} soul${cost === 1 ? '' : 's'}` : 'free'}).`);
     fireTriggers(G, ps.active!, 'onBearerStepIn', { reaction: true });
+    enteredFromBench(G, ps.active!);
   } else {
     pushLog(G, `P${pid} swapped bench slots ${fromSlot} <-> ${toSlot}.`);
   }
@@ -124,6 +125,7 @@ export function swapIntoActive(G: GameState, ps: PlayerState, hero: CardInstance
   const swapped = swapWithActive(G, ps, hero, opts.quiet ? null : (h, a) => `${h} steps in for ${a}.`);
   // The player chose this move: the hero who stepped in sets off its step-in gear.
   if (swapped) fireTriggers(G, ps.active!, 'onBearerStepIn', { reaction: true });
+  if (swapped) enteredFromBench(G, ps.active!);
   return swapped;
 }
 
@@ -134,5 +136,7 @@ export function swapIntoActive(G: GameState, ps: PlayerState, hero: CardInstance
  * Returns whether it was made, on the same terms as `swapIntoActive`.
  */
 export function pullToActive(G: GameState, victimPs: PlayerState, benchHero: CardInstance): boolean {
-  return swapWithActive(G, victimPs, benchHero, (h) => `${h} is dragged to the front.`);
+  const pulled = swapWithActive(G, victimPs, benchHero, (h) => `${h} is dragged to the front.`);
+  if (pulled) enteredFromBench(G, victimPs.active!);
+  return pulled;
 }

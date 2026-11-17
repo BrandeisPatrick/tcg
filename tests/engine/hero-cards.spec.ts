@@ -42,7 +42,8 @@ const DOC: Record<string, { atk: number; hp: number; growth: [number, number, nu
   hero_vindicta:   { atk: 2, hp: 5, growth: [2, 0, 0], retreat: 0, skill: [5, 2], ult: 'small' },
   hero_seven:      { atk: 1, hp: 4, growth: [0, 1, 3], retreat: 1, skill: [4, 1], ult: 'large' },
   hero_drifter:    { atk: 2, hp: 6, growth: [2, 1, 0], retreat: 1, skill: null, ult: 'medium' },
-  hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: [4, 1], ult: 'large' },
+  // Ground Strike waits 3 (2026-11-17: the leap in from the bench; its landing is always on).
+  hero_lash:       { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 0, skill: [3, 1], ult: 'large' },
   hero_mirage:     { atk: 1, hp: 4, growth: [1, 1, 2], retreat: 0, skill: null, ult: 'small' },
   hero_yamato:     { atk: 2, hp: 5, growth: [1, 1, 1], retreat: 0, skill: [3, 1], ult: 'medium' },
   hero_dynamo:     { atk: 1, hp: 5, growth: [0, 1, 2], retreat: 1, skill: [4, 1], ult: 'large' },
@@ -142,10 +143,16 @@ describe('the 22 heroes are the hero doc\'s cards', () => {
   });
 
   it('a hero has exactly one skill or one passive, plus an ultimate; no hero has a Weakness', () => {
+    // Every card prints one kit row. Lash's (Patrick, 2026-11-17: "his skill should just be
+    // Ground Strike, which has damage and movement and passive") is a skill whose landing is
+    // always on: the engine runs that half as a passive, printed in the skill (`partOf`).
+    const PART_OF: Record<string, string[]> = { hero_lash: ['passive_lash_ground_strike'] };
     for (const h of HEROES) {
       const kit = heroAbilities(h);
       expect(kit.length, h.id).toBe(1);
-      expect(h.skills.length + (h.passives ?? []).length, h.id).toBe(1);
+      const part = PART_OF[h.id] ?? [];
+      for (const id of part) expect(getAbility(id)?.partOf, id).toBe(h.skills[0]);
+      expect(h.skills.length + (h.passives ?? []).filter((id) => !part.includes(id)).length, h.id).toBe(1);
       expect(ultimateCard(h.ult)?.linkedHero, h.id).toBe(h.id);
       expect(Object.keys(h).some((k) => /weak/i.test(k)), h.id).toBe(false);
     }
@@ -331,7 +338,7 @@ describe('the ultimate is a button on the hero card: from Level 2, for no souls,
     const lash = me.bench[1]!;
     lash.level = ULT_UNLOCK_LEVEL;
     me.souls = 40;
-    act(G, '0', { type: 'useSkill', heroIid: lash.iid }); // Ground Strike
+    act(G, '0', { type: 'useSkill', heroIid: lash.iid }); // Ground Strike, from the bench (2026-11-17)
     expect(me.souls).toBe(40);
     expect(skillBlocked(G, '0', lash, undefined, 'eff_ult_lash')).toBe('used');
   });

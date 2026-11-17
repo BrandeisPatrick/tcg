@@ -127,12 +127,13 @@ describe('turn actions: the attack is a move', () => {
     expect(attackBlocked(G, '0')).toBe('used'); // Haze has swung
     const lash = me.bench[1]!; // Lash carries a skill; the Active (Haze) is passive-only
     const hpBefore = rival.hp;
+    // Grapple (2026-11-17): he swings in for Haze, and Ground Strike lands as he does.
     expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).not.toBe('INVALID_MOVE');
     expect(rival.hp).toBeLessThan(hpBefore);
     expect(runMove('playCard', G, '0', grit.iid)).not.toBe('INVALID_MOVE');
     expect(runMove('playCard', G, '0', card.iid, haze.iid)).not.toBe('INVALID_MOVE');
     expect(me.hand).toEqual([]); // both were played
-    expect(runMove('moveHero', G, '0', 1, 0)).not.toBe('INVALID_MOVE'); // Haze out, Vindicta in
+    expect(runMove('moveHero', G, '0', 1, 0)).not.toBe('INVALID_MOVE'); // Lash out (his Retreat is free), Vindicta in
     expect(me.active!.iid).not.toBe(haze.iid);
     expect(attackBlocked(G, '0')).toBeNull(); // Vindicta has not swung
     const hpMid = rival.hp;
@@ -217,7 +218,7 @@ describe('turn actions: abilities, then the attack', () => {
     const lash = me.bench[1]!;
     const paige = me.bench[2]!;
     const rival = sturdyRival(G);
-    expect(runMove('useSkill', G, '0', lash.iid)).not.toBe('INVALID_MOVE'); // Ground Strike
+    expect(runMove('useSkill', G, '0', lash.iid)).not.toBe('INVALID_MOVE'); // Grapple: he swings in
     expect(runMove('useSkill', G, '0', paige.iid, me.active!.iid)).not.toBe('INVALID_MOVE'); // Plot Armor
     expect(me.souls).toBe(8);
     // Lash has used hers this turn.
@@ -237,7 +238,7 @@ describe('turn actions: abilities, then the attack', () => {
     expect(runMove('useSkill', G, '0', lash.iid)).not.toBe('INVALID_MOVE');
     expect(runMove('useSkill', G, '0', paige.iid, me.active!.iid)).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(0);
-    expect([lash.cooldowns?.skill_lash, paige.cooldowns?.skill_paige]).toEqual([4, 3]);
+    expect([lash.cooldowns?.skill_lash, paige.cooldowns?.skill_paige]).toEqual([3, 3]); // Grapple waits 3 (2026-11-17)
     // A new turn's flags, with the waits still running: neither is ready.
     lash.skillUsedThisTurn = false;
     paige.skillUsedThisTurn = false;
@@ -266,12 +267,15 @@ describe('turn actions: abilities, then the attack', () => {
     const me = G.players['0'];
     me.souls = 9;
     const rival = sturdyRival(G);
-    expect(runMove('moveHero', G, '0', 2, 0)).not.toBe('INVALID_MOVE'); // Lash steps in
-    const lash = me.active!;
-    expect(runMove('useSkill', G, '0', lash.iid, rival.iid)).not.toBe('INVALID_MOVE');
+    // Paige steps in and uses Plot Armor from the Active. (Lash did until 2026-11-17: his
+    // skill is now Grapple, used from the bench only.)
+    expect(runMove('moveHero', G, '0', 3, 0)).not.toBe('INVALID_MOVE'); // Paige steps in
+    const paige = me.active!;
+    expect(paige.cardId).toBe('hero_paige');
+    expect(runMove('useSkill', G, '0', paige.iid, paige.iid)).not.toBe('INVALID_MOVE');
     expect(attackBlocked(G, '0')).toBeNull();
     expect(runMove('moveHero', G, '0', 2, 0)).toBe('INVALID_MOVE'); // a second Retreat
-    expect(me.active!.iid).toBe(lash.iid);
+    expect(me.active!.iid).toBe(paige.iid);
     // Bench to bench is no Retreat: still free, still open.
     expect(runMove('moveHero', G, '0', 1, 3)).not.toBe('INVALID_MOVE');
     const hp = rival.hp;
