@@ -69,13 +69,15 @@ describe('Mystic Expansion and Greater Expansion', () => {
 
   it('only a skill that hit one enemy: an area skill is not widened', () => {
     const G = freshReadyGame();
-    const lash = G.players['0'].active = makeHero('hero_lash', '0', 'active', 0);
-    giveItem(G, lash, 'greater_expansion');
+    // Kelvin's Frost Grenade, 1 to every enemy. (Lash's Ground Strike was the area skill
+    // here until 2026-11-17; it now lands on the enemy Active alone.)
+    const kelvin = G.players['0'].active = makeHero('hero_kelvin', '0', 'active', 0);
+    giveItem(G, kelvin, 'greater_expansion');
     const enemy = G.players['1'];
     const foes = [enemy.active!, ...enemy.bench.filter((b) => !!b)] as NonNullable<typeof enemy.active>[];
     for (const f of foes) f.hp = f.hpMax = 30;
-    expect(perform(G, '0', { type: 'useSkill', heroIid: lash.iid, skillId: 'skill_lash' })).not.toBe(INVALID);
-    for (const f of foes) expect(f.hp, f.cardId).toBe(30 - 1); // Ground Strike's 1 each, no more
+    expect(perform(G, '0', { type: 'useSkill', heroIid: kelvin.iid, skillId: 'skill_kelvin' })).not.toBe(INVALID);
+    for (const f of foes) expect(f.hp, f.cardId).toBe(30 - 1); // Frost Grenade's 1 each, no more
   });
 
   it('cards: Spirit T1 and T3, one built from the other', () => {

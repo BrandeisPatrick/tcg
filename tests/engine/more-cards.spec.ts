@@ -223,18 +223,19 @@ describe('New active items', () => {
 
   it('Fury Trance grants Extra Attack 2 and Spirit Resist 3, and silences its own hero for a turn', () => {
     const G = freshReadyGame();
-    // Lash has a skill to lose (Haze's kit is a passive). The two items are
-    // worn on the bench, so Lash's own ability of the turn is still unspent.
-    const [vindicta, lash, paige] = G.players['0'].bench as CardInstance[];
-    const abrams = G.players['1'].active!;
-    G.players['0'].souls = 3; // Ground Strike's price: only the silence stands in her way
-    useItem(G, '0', 'warp_stone', lash.iid);
-    const skill = { type: 'useSkill' as const, heroIid: lash.iid, targetIid: abrams.iid };
+    // Paige has a skill to lose (Haze's kit is a passive) and uses it from the Active.
+    // (Lash did until 2026-11-17: his Grapple is used from the bench only.) The items
+    // are spells, so Paige's own ability of the turn is still unspent.
+    const paige = (G.players['0'].bench as CardInstance[])[2];
+    G.players['0'].souls = 3; // only the silence stands in her way
+    useItem(G, '0', 'warp_stone', paige.iid);
+    expect(G.players['0'].active).toBe(paige);
+    const skill = { type: 'useSkill' as const, heroIid: paige.iid, targetIid: paige.iid };
     expect(blocked(G, '0', skill)).toBeNull();
     useItem(G, '0', 'fury_trance');
-    expect(status(lash, 'extra_attack')?.value).toBe(2);
-    expect(status(lash, 'spirit_resist')).toMatchObject({ value: 3, duration: 2 });
-    expect(status(lash, 'silenced')).toMatchObject({ duration: 1 });
+    expect(status(paige, 'extra_attack')?.value).toBe(2);
+    expect(status(paige, 'spirit_resist')).toMatchObject({ value: 3, duration: 2 });
+    expect(status(paige, 'silenced')).toMatchObject({ duration: 1 });
     expect(blocked(G, '0', skill)).toBe('status');
   });
 

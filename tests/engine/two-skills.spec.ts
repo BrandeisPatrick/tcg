@@ -187,14 +187,16 @@ describe('a skill\'s cooldown', () => {
     const stuck = JSON.stringify(G());
     moves.useSkill(cool.iid, rival.iid);
     expect(JSON.stringify(G())).toBe(stuck);                            // refused, untouched
-    // Lash's skill names a wait of 4: it sets its field, which counts down on her turns.
-    moves.useSkill(lash.iid, G().players['1'].active!.iid);
-    expect(G().players['0'].bench[1]!.cooldowns?.skill_lash).toBe(4);
+    // Lash's skill names a wait of 3 (Grapple, 2026-11-17: from the bench he swings into
+    // the Active): it sets its field, which counts down on his owner's turns.
+    moves.useSkill(lash.iid);
+    expect(G().players['0'].active!.iid).toBe(lash.iid);
+    expect(G().players['0'].active!.cooldowns?.skill_lash).toBe(3);
 
     endTurns(2);                                                        // turn 3: the clock reached 0
     const warm = G().players['0'].bench[0]!;
     expect('cooldowns' in warm).toBe(false);
-    expect(G().players['0'].bench[1]!.cooldowns?.skill_lash).toBe(3);
+    expect(G().players['0'].active!.cooldowns?.skill_lash).toBe(2);
     expect(skillBlocked(G(), '0', warm, rival.iid)).toBeNull();
     moves.useSkill(cool.iid, G().players['1'].active!.iid);
     expect(G().players['0'].bench[0]!.cooldowns).toEqual({ [CHILL]: 2 });
@@ -384,7 +386,7 @@ describe('what a hero card prints', () => {
     hero_dynamo: ['skill', "Rejuvenating Aurora", "Your heroes heal {sp:5} each."],
     hero_kelvin: ['skill', "Frost Grenade", "Deal 1 spirit damage to every enemy. Your heroes heal {sp:1} each."],
     hero_lady_geist: ['skill', "Essence Bomb", "Lady Geist pays 2 HP: deal {sp:4} spirit damage to the enemy Active."],
-    hero_lash: ['skill', "Ground Strike", "Deal {sp:1} spirit damage to every enemy. Root the enemy Active 1 turn."],
+    hero_lash: ['skill', "Grapple", "Lash swings in from the bench, swapping with your Active."],
     hero_paige: ['skill', "Plot Armor", "Give one of your heroes Shield {sp:2} and +1 Attack for 2 turns."],
     hero_seven: ['skill', "Static Charge", "Deal {sp:1} spirit damage to the enemy Active. After its next turn, it is Stunned 1 turn."],
     hero_sinclair: ['skill', "Rabbit Hex", "Turn the enemy Active into a Rabbit for 1 turn."],
@@ -396,6 +398,11 @@ describe('what a hero card prints', () => {
     hero_victor: ['passive', "Aura of Suffering", "While Victor is Active, at the start of your turn deal 1 spirit damage to every enemy and to Victor."],
     hero_silver: ['skill', "Boot Kick", "Deal 1 bullet damage to the enemy Active. It is Vulnerable 2 turns."],
     hero_graves: ['skill', "Grasping Hands", "Deal {sp:1} spirit damage to the enemy Active and Root it 1 turn. Shuffle 2 Ghouls into your deck."],
+  };
+  // The one hero who prints two rows (Patrick, 2026-11-17): Lash's Grapple is the jump in from
+  // the bench, and its landing is Ground Strike, a passive that is always on.
+  const SECOND_ROW: Record<string, [kind: 'skill' | 'passive', name: string, text: string]> = {
+    hero_lash: ['passive', "Ground Strike", "Whenever Lash steps in from the bench, he deals {sp:3} spirit damage to the enemy Active."],
   };
 
   it('heroAbilities lists skills, then passives, with names and texts, for every hero', () => {
@@ -411,7 +418,8 @@ describe('what a hero card prints', () => {
         expect(ability.name.length, `${hero.id} ${ability.id} name`).toBeGreaterThan(0);
         expect(ability.text.length, `${hero.id} ${ability.id} text`).toBeGreaterThan(0);
       }
-      expect(kit.map((x) => [x.kind, x.ability.name, x.ability.text]), hero.id).toEqual([PRINTED[hero.id]]);
+      expect(kit.map((x) => [x.kind, x.ability.name, x.ability.text]), hero.id)
+        .toEqual([PRINTED[hero.id], ...(SECOND_ROW[hero.id] ? [SECOND_ROW[hero.id]] : [])]);
       expect(hero.skills.length, hero.id).toBeLessThanOrEqual(2);
     }
   });
@@ -425,7 +433,7 @@ describe('what a hero card prints', () => {
     }
   });
 
-  it('each ability carries no prompt of its own: its name is the one place the sheet and the coach read it from, one per hero', () => {
+  it('each ability carries no prompt of its own: its name is the one place the sheet and the coach read it from, one per hero (Lash two, 2026-11-17)', () => {
     const names = new Set<string>();
     for (const hero of HEROES) {
       for (const { ability } of heroAbilities(hero)) {
@@ -435,6 +443,6 @@ describe('what a hero card prints', () => {
         names.add(ability.name);
       }
     }
-    expect(names.size).toBe(HEROES.length);
+    expect(names.size).toBe(HEROES.length + 1); // Lash's Grapple and Ground Strike
   });
 });

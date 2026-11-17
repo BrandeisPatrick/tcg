@@ -946,7 +946,11 @@ describe('swapIntoActive and pullToActive', () => {
     expect(me.bench[2]).toBe(paige); // the others stand where they stood
     expect(me.souls).toBe(3);        // free
     expect(haze.exhausted || lash.exhausted).toBe(false);
-    expect(G.log.at(-1)!.text).toBe('Lash steps in for Haze.');
+    // The step-in line, then Lash's Ground Strike landing as he steps in (2026-11-17).
+    const texts = G.log.map((l) => l.text);
+    expect(texts).toContain('Lash steps in for Haze.');
+    expect(texts.indexOf('Lash steps in for Haze.')).toBeLessThan(texts.length - 1);
+    expect(texts.at(-1)).toMatch(/^Ground Strike → Abrams/);
     // Swap back: the same two, the other way round.
     expect(swapIntoActive(G, me, haze)).toBe(true);
     expect(me.active).toBe(haze);

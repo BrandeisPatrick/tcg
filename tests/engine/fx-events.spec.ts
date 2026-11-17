@@ -309,29 +309,23 @@ describe('board FX stream — casts and the turn flush', () => {
   it('useSkill pushes the cast first, then its effects; the end of the turn flushes the stream', () => {
     // Seat 0's turn 1, past its shop step: abilities are made in the act step.
     const client = readyClient();
-    // Give P0 a caster in the Active slot: Haze has no skill, so Lash (her
-    // Ground Strike hits every enemy and Roots the enemy Active) steps up from
-    // the bench by a Retreat, which costs Haze's retreat: fund it and the skill.
+    // P0's caster: Haze has no skill, so Lash uses his from the bench — Grapple
+    // (2026-11-17): he swings into the Active, and Ground Strike lands as he does.
     let s = client.getState()!;
     let G = s.G as GameState;
     const lash = G.players['0'].bench.find((b) => b?.cardId === 'hero_lash')!;
-    // Fund the retreat (1) and Ground Strike (3).
-    (client as any).store.dispatch({ type: 'UPDATE', state: { ...s, G: { ...G, players: { ...G.players, '0': { ...G.players['0'], souls: 5 } } } } });
-    client.moves.moveHero!(lash.slot, 0);
-    s = client.getState()!; G = s.G as GameState;
-    expect(G.players['0'].active?.cardId).toBe('hero_lash');
     const enemy = G.players['1'].active!;
     const before = G.fx.length;
-    client.moves.useSkill!(G.players['0'].active!.iid);
+    client.moves.useSkill!(lash.iid);
     s = client.getState()!; G = s.G as GameState;
+    expect(G.players['0'].active?.iid).toBe(lash.iid);
     const fresh = G.fx.slice(before);
     expect(fresh[0].kind).toBe('cast');
     expect(fresh[0] as CastFx).toMatchObject({ castKind: 'skill', by: '0', cardId: 'hero_lash', targetIid: undefined });
-    expect((fresh[0] as CastFx).iid).toBe(G.players['0'].active!.iid);
-    const kinds = fresh.map((e) => e.kind);
-    expect(kinds.filter((k) => k === 'hit')).toHaveLength(4);  // every enemy hero
-    const statuses = fresh.filter((e): e is StatusFx => e.kind === 'status');
-    expect(statuses.map((e) => [e.statusId, e.iid])).toEqual([['rooted', enemy.iid]]);  // the enemy Active, Rooted
+    expect((fresh[0] as CastFx).iid).toBe(lash.iid);
+    const hits = fresh.filter((e): e is HitFx => e.kind === 'hit');
+    expect(hits.map((h) => [h.iid, h.type, h.cast])).toEqual([[enemy.iid, 'spirit', 'skill']]); // Ground Strike, on the enemy Active
+    expect(fresh.filter((e) => e.kind === 'status')).toEqual([]);
     // seq strictly increases in push order
     for (let i = 1; i < fresh.length; i++) expect(fresh[i].seq).toBeGreaterThan(fresh[i - 1].seq);
 

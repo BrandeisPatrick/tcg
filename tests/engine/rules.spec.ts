@@ -53,51 +53,51 @@ describe('rule: each hero uses its skill once per turn', () => {
   it('the hero\'s flag clears when its turn ends; the skill then waits its turns, and is used again once they have run', () => {
     const c = readyClient(); // turn 1, its shop closed: the act step
     let g = c.getState()!.G as GameState;
-    // Use a skill — Lash on bench (active Haze is passive-only).
-    const hero = g.players['0'].bench[1]!;  // Lash
+    // Use a skill — Paige on the bench (active Haze is passive-only). Until 2026-11-17 this
+    // was Lash's Ground Strike; his skill is now Grapple, which swings him off the bench.
+    const hero = g.players['0'].bench[2]!;  // Paige
     expect(hero.skillUsedThisTurn).toBe(false);
-    const target = g.players['1'].active!;
-    (c.moves as any).useSkill(hero.iid, target.iid);
+    (c.moves as any).useSkill(hero.iid, g.players['0'].active!.iid);
     g = c.getState()!.G as GameState;
-    expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(true);
+    expect(g.players['0'].bench[2]!.skillUsedThisTurn).toBe(true);
     // End turn: the flag is cleared on the way out, for the opponent's turn.
     c.moves.endTurn?.();
     g = c.getState()!.G as GameState;
-    expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(false);
-    // P0's next three turns Ground Strike waits (4 turns): the flag is clear,
+    expect(g.players['0'].bench[2]!.skillUsedThisTurn).toBe(false);
+    // P0's next two turns Plot Armor waits (3 turns): the flag is clear,
     // and the move is refused all the same.
     passTurn(c);
-    for (const left of [3, 2, 1]) {
+    for (const left of [2, 1]) {
       g = c.getState()!.G as GameState;
-      expect(g.players['0'].bench[1]!.cooldowns?.skill_lash).toBe(left);
-      (c.moves as any).useSkill(hero.iid, g.players['1'].active!.iid);
+      expect(g.players['0'].bench[2]!.cooldowns?.skill_paige).toBe(left);
+      (c.moves as any).useSkill(hero.iid, g.players['0'].active!.iid);
       g = c.getState()!.G as GameState;
-      expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(false);
+      expect(g.players['0'].bench[2]!.skillUsedThisTurn).toBe(false);
       c.moves.endTurn?.();
       passTurn(c);
     }
-    // The fourth: it is ready, and costs no souls.
+    // The third: it is ready, and costs no souls.
     g = c.getState()!.G as GameState;
     const soulsBefore = g.players['0'].souls;
-    expect(kitCost(g.players['0'].bench[1]!)).toBe(0);
-    (c.moves as any).useSkill(hero.iid, g.players['1'].active!.iid);
+    expect(kitCost(g.players['0'].bench[2]!)).toBe(0);
+    (c.moves as any).useSkill(hero.iid, g.players['0'].active!.iid);
     g = c.getState()!.G as GameState;
-    expect(g.players['0'].bench[1]!.skillUsedThisTurn).toBe(true);
+    expect(g.players['0'].bench[2]!.skillUsedThisTurn).toBe(true);
     expect(g.players['0'].souls).toBe(soulsBefore);
   });
 });
 
 describe('rule: a skill costs no souls; it waits', () => {
-  it("useSkill spends no souls (Lash's Ground Strike), and puts the skill on its wait", () => {
+  it("useSkill spends no souls (Lash's Grapple), and puts the skill on its wait", () => {
     const G = freshG();
     const me = G.players['0'];
     me.souls = 3;
     const hero = me.bench[1]!;  // Lash
-    const target = G.players['1'].active!;
-    const r = runMove('useSkill', G, '0', hero.iid, target.iid);
+    const r = runMove('useSkill', G, '0', hero.iid);
     expect(r).not.toBe('INVALID_MOVE');
     expect(me.souls).toBe(3);
-    expect(hero.cooldowns?.skill_lash).toBe(4);
+    expect(me.active).toBe(hero); // Grapple (2026-11-17): he swings in from the bench
+    expect(hero.cooldowns?.skill_lash).toBe(3);
   });
 
   it('useSkill while the skill waits is refused: nothing happens and the hero has not used its skill', () => {

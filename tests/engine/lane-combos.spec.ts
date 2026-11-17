@@ -110,10 +110,12 @@ describe('One attack a hero a turn, and the one Retreat before or after it', () 
     hpPool(G, '1');
     const me = G.players['0'];
     me.souls = 10;
-    const lash = me.bench[1]!;
+    // Paige steps in and uses Plot Armor from the Active (Lash did until 2026-11-17: his
+    // Grapple is used from the bench only).
+    const paige = me.bench[2]!;
     const abrams = G.players['1'].active!;
-    expect(retreat(G, 2)).not.toBe(INVALID); // Lash in
-    expect(perform(G, '0', { type: 'useSkill', heroIid: lash.iid, targetIid: abrams.iid })).not.toBe(INVALID);
+    expect(retreat(G, 3)).not.toBe(INVALID); // Paige in
+    expect(perform(G, '0', { type: 'useSkill', heroIid: paige.iid, targetIid: paige.iid })).not.toBe(INVALID);
     expect(attackBlocked(G, '0')).toBeNull();
     const hp = abrams.hp;
     makeAttack(G, '0');

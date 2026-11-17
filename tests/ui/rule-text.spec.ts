@@ -346,7 +346,8 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
   it('the source scan finds the abilities the skills, spells and ultimates are known to be', () => {
     const found = abilitiesReadingSpirit();
     for (const id of [
-      'skill_mo_krill', 'skill_kelvin', 'skill_lady_geist', 'skill_lash', 'skill_paige', 'skill_rem',
+      'skill_mo_krill', 'skill_kelvin', 'skill_lady_geist', 'skill_paige', 'skill_rem',
+      'passive_lash_ground_strike', // Lash's landing, {sp:3} (2026-11-17)
       'skill_seven', 'skill_shiv', 'skill_yamato', 'skill_dynamo', 'skill_vindicta', 'status_flying', 'passive_mirage_djinns_mark',
       'skill_viscous', // The Cube's heal, {sp:3} since 2026-11-16
       'eff_cold_front', 'eff_silence_glyph',
@@ -355,9 +356,10 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
       'eff_ult_warden', 'eff_ult_drifter',
     ]) expect(found.has(id), id).toBe(true);
     // A flat number reads no Spirit: Full Auto, Rabbit Hex,
-    // Willpower, Naptime, Bullet Dance (Haze's Attack), Shadow Transformation, Traveler.
+    // Willpower, Naptime, Bullet Dance (Haze's Attack), Shadow Transformation, Traveler;
+    // and Lash's Grapple, a swap with no number (2026-11-17).
     for (const id of [
-      'skill_wraith', 'skill_sinclair', 'skill_warden',
+      'skill_wraith', 'skill_sinclair', 'skill_warden', 'skill_lash',
       'eff_ult_rem', 'eff_ult_haze', 'eff_ult_yamato', 'eff_ult_mirage',
       'eff_ult_vindicta', // Flight puts up the Flying status; the status's own proc reads Spirit
     ]) expect(found.has(id), id).toBe(false);
