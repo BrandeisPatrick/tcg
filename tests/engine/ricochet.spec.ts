@@ -174,15 +174,15 @@ describe('What spreads with the bounce, and what stays with the swing', () => {
     expect(hps(bench)).toEqual([16, 18, 18]);
   });
 
-  it("Haze's Fixation rides the swing alone: +1 on a swing at a hurt hero, never on a bounce", () => {
+  it("Haze's Fixation rides the swing alone: +{bp:1/2} on a swing at a hurt hero, never on a bounce", () => {
     const { G, atk, abrams, bench } = lane('hero_haze', 'ricochet');
     grantExtraAttacks(atk, 1);
     const fx = G.fx.length;
     makeAttack(G, '0');
     expect(swingsSince(G, fx)).toHaveLength(2);
-    // Swing 1: 3 (Abrams still whole). Swing 2: 3 + Fixation 1 (he is hurt now). Each bounce is Ricochet's 2,
+    // Swing 1: 3 (Abrams still whole). Swing 2: 3 + Fixation 1 + half of 3 = 2 (he is hurt now). Each bounce is Ricochet's 2,
     // though the bench is hurt by the first bounce: a bounce is no swing, so Fixation is not on it.
-    expect(abrams.hp).toBe(20 - 3 - 4);
+    expect(abrams.hp).toBe(20 - 3 - 5);
     expect(hps(bench)).toEqual([16, 16, 16]);
   });
 

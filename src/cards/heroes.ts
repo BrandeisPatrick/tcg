@@ -69,7 +69,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_shiv', name: 'Shiv', type: 'hero', rarity: 3,
-    atk: 1, hp: 6, growth: { atk: 1, hp: 2, spirit: 1 }, retreat: 1,
+    atk: 1, hp: 6, growth: { atk: 2, hp: 1, spirit: 1 }, retreat: 1,
     profile: { role: 'Bruiser', mix: { tank: 2, damage: 3, control: 0, support: 0 }, reach: 'one', curve: 'late', gun: true },
     skills: ['skill_shiv'], ult: 'eff_ult_shiv',
     signature: ['slowing_bullets', 'berserker'],
@@ -136,7 +136,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_sinclair', name: 'Sinclair', type: 'hero', rarity: 3,
-    atk: 1, hp: 5, growth: { atk: 1, hp: 1, spirit: 2 }, retreat: 1,
+    atk: 1, hp: 5, growth: { atk: 0, hp: 1, spirit: 2 }, retreat: 1,
     profile: { role: 'Controller', mix: { tank: 0, damage: 1, control: 3, support: 1 }, reach: 'one', curve: 'mid' },
     skills: ['skill_sinclair'], ult: 'eff_ult_sinclair',
     signature: ['slowing_hex', 'disarming_hex'],
@@ -164,7 +164,7 @@ export const HEROES: HeroCard[] = [
   },
   {
     id: 'hero_mirage', name: 'Mirage', type: 'hero', rarity: 3,
-    atk: 2, hp: 5, growth: { atk: 2, hp: 1, spirit: 2 }, retreat: 0,
+    atk: 1, hp: 5, growth: { atk: 2, hp: 1, spirit: 2 }, retreat: 0,
     profile: { role: 'Assassin', mix: { tank: 1, damage: 2, control: 1, support: 0 }, reach: 'one', curve: 'late' },
     skills: [], passives: ['passive_mirage_djinns_mark'], ult: 'eff_ult_mirage',
     signature: ['fleetfoot', 'tesla_bullets'],
@@ -180,7 +180,7 @@ export const HEROES: HeroCard[] = [
     // The tank who won't die: his Aura burns him too, and every hit he soaks
     // up makes his charged revive cheaper (asked when he falls).
     id: 'hero_victor', name: 'Victor', type: 'hero', rarity: 3,
-    atk: 1, hp: 7, growth: { atk: 1, hp: 3, spirit: 0 }, retreat: 2,
+    atk: 1, hp: 7, growth: { atk: 0, hp: 3, spirit: 1 }, retreat: 2,
     profile: { role: 'Tank', mix: { tank: 3, damage: 2, control: 0, support: 0 }, reach: 'many', curve: 'late' },
     skills: [], passives: ['passive_victor_aura'], ult: 'eff_ult_victor',
     signature: ['extra_health', 'torment_pulse'],

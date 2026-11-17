@@ -2342,12 +2342,13 @@ const skill_shiv: HeroAbilityDef = {
 const skill_warden: HeroAbilityDef = {
   id: 'skill_warden', trigger: 'activate', target: 'self',
   name: 'Willpower',
-  text: 'Shield 2 on Warden, and Swift.',
+  text: 'Shield {sp:2} on Warden, and Swift.',
   base: 2,
+  scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
     if (!t) return;
-    addStatus(G, t, 'shield', 2, 999);
+    addStatus(G, t, 'shield', 2 + spi(source), 999);
     addStatus(G, t, 'swift', 1, 1);
   },
 };
@@ -2356,11 +2357,12 @@ const skill_warden: HeroAbilityDef = {
 const skill_wraith: HeroAbilityDef = {
   id: 'skill_wraith', trigger: 'activate', target: 'self',
   name: 'Full Auto',
-  text: 'Wraith gets +2 Attack for 2 turns.',
+  text: 'Wraith gets +{sp:2} Attack for 2 turns.',
   base: 2,
+  scalesSpirit: true,
   run: (G, _ctx, { source, target }) => {
     const t = target ?? source;
-    if (t) addStatus(G, t, 'weapon_power', 2, 2);
+    if (t) addStatus(G, t, 'weapon_power', 2 + spi(source), 2);
   },
 };
 
@@ -2587,13 +2589,15 @@ const skill_rem: HeroAbilityDef = {
 // rival's next turn. Its +1 damage rider went on 2026-11-16 (Patrick: one
 // rule); a turn denied is the 3 points of a skill that waits 4 by itself.
 const skill_sinclair: HeroAbilityDef = {
-  id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive',
+  id: 'skill_sinclair', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Rabbit Hex',
-  text: 'Turn the enemy Active into a Rabbit for 1 turn.',
-  base: 3,
-  run: (G, _ctx, { target }) => {
+  text: 'Deal {sp:1} spirit damage to the enemy Active and turn it into a Rabbit for 1 turn.',
+  base: 1,
+  scalesSpirit: true,
+  run: (G, _ctx, { source, target }) => {
     if (!target) return;
-    addStatus(G, target, 'rabbit', 1, 1);
+    damageUnit(G, target, 1 + spi(source), 'spirit', 'Rabbit Hex');
+    if (target.hp > 0) addStatus(G, target, 'rabbit', 1, 1);
   },
 };
 
@@ -2601,13 +2605,14 @@ const skill_sinclair: HeroAbilityDef = {
 // doc's "takes +1 damage" (Bullet Resist −1 and Spirit Resist −1, as Eternal
 // Night's), for 2 turns; the kick lands first, so the mark is for what follows.
 const skill_silver: HeroAbilityDef = {
-  id: 'skill_silver', trigger: 'activate', target: 'enemyActive',
+  id: 'skill_silver', trigger: 'activate', target: 'enemyActive', cooldown: 4,
   name: 'Boot Kick',
-  text: 'Deal 1 bullet damage to the enemy Active. It is Vulnerable 2 turns.',
+  text: 'Deal {bp:1/2} bullet damage to the enemy Active. It is Vulnerable 2 turns.',
   base: 1,
-  run: (G, _ctx, { target }) => {
+  run: (G, _ctx, { source, target }) => {
     if (!target) return;
-    damageUnit(G, target, 1, 'attack', 'Boot Kick');
+    // A kick with her gun's weight: 1 + half her Bullet Power, counted once as Bullet Power always is.
+    damageUnit(G, target, 1 + Math.floor((source ? effectiveAtk(source) : 0) / 2), 'attack', 'Boot Kick');
     addStatus(G, target, 'bullet_resist_down', 1, 2);
     addStatus(G, target, 'spirit_resist_down', 1, 2);
   },
@@ -2622,14 +2627,14 @@ const skill_silver: HeroAbilityDef = {
 const passive_victor_aura: HeroAbilityDef = {
   id: 'passive_victor_aura', trigger: 'startOfTurn', target: 'self',
   name: 'Aura of Suffering',
-  text: 'While Victor is Active, at the start of your turn deal 1 spirit damage to every enemy and to Victor.',
+  text: 'While Victor is Active, at the start of your turn deal {sp:1/2} spirit damage to every enemy and 1 to Victor.',
   run: (G, ctx, { source }) => {
     if (!source || isRespawning(source) || source.hp <= 0) return;
     const found = findCardOnBoard(G, source.iid);
     if (!found || found.card !== source || source.zone !== 'active') return;
     withCast(source, 'proc', () => {
       for (const c of liveBoardCards(G.players[otherPlayer(ctx.movingPlayer)])) {
-        if (c.hp > 0) damageUnit(G, c, 1, 'spirit', 'Aura of Suffering', { source });
+        if (c.hp > 0) damageUnit(G, c, 1 + Math.floor(spi(source) / 2), 'spirit', 'Aura of Suffering', { source }); // {sp:1/2}: it hits every enemy, so Spirit counts once
       }
       damageUnit(G, source, 1, 'spirit', 'Aura of Suffering', { source });
     });
@@ -2661,12 +2666,12 @@ const passive_mirage_djinns_mark: HeroAbilityDef = {
 const passive_abrams_heal: HeroAbilityDef = {
   id: 'passive_abrams_heal', trigger: 'startOfTurn', target: 'self',
   name: 'Infernal Resilience',
-  text: 'At the start of your turn, if Abrams is Active, he heals 1.',
+  text: 'At the start of your turn, if Abrams is Active, he heals {sp:1}.',
   run: (G, _ctx, { source }) => {
     if (!source) return;
     const found = findCardOnBoard(G, source.iid);
     if (found && found.card === source && source.zone === 'active') {
-      healUnit(G, source, 1, 'Infernal Resilience', { tag: 'regen' });
+      healUnit(G, source, 1 + spi(source), 'Infernal Resilience', { tag: 'regen' });
     }
   },
 };
@@ -2681,8 +2686,12 @@ const passive_abrams_heal: HeroAbilityDef = {
 const passive_haze_fixation: HeroAbilityDef = {
   id: 'passive_haze_fixation', trigger: 'ongoing', target: 'self',
   name: 'Fixation',
-  text: "Haze's attacks deal +1 bullet damage to an enemy below full HP.",
-  attackBonus: (_self, target) => (target && target.hp > 0 && target.hp < target.hpMax ? { amount: 1, label: 'Fixation +1' } : null),
+  text: "Haze's attacks deal +{bp:1/2} bullet damage to an enemy below full HP.",
+  attackBonus: (self, target) => {
+    if (!target || target.hp <= 0 || target.hp >= target.hpMax) return null;
+    const amount = 1 + Math.floor(effectiveAtk(self) / 2); // {bp:1/2}: grows with her gun
+    return { amount, label: `Fixation +${amount}` };
+  },
   run: () => {},
 };
 
@@ -2723,8 +2732,12 @@ const status_flying: AbilityDef = {
 const passive_drifter_bloodscent: HeroAbilityDef = {
   id: 'passive_drifter_bloodscent', trigger: 'ongoing', target: 'self',
   name: 'Bloodscent',
-  text: 'His attacks deal +2 bullet damage to a hero below half HP.',
-  attackBonus: (_self, target) => (target && heroData(target) && belowHalf(target) ? { amount: 2, label: 'Bloodscent +2' } : null),
+  text: 'His attacks deal +{bp:1/2} bullet damage to a hero below half HP.',
+  attackBonus: (self, target) => {
+    if (!target || !heroData(target) || !belowHalf(target)) return null;
+    const amount = 1 + Math.floor(effectiveAtk(self) / 2); // {bp:1/2}: 2 at his Attack 2, as before
+    return { amount, label: `Bloodscent +${amount}` };
+  },
   run: () => {},
 };
 

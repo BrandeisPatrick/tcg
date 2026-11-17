@@ -283,7 +283,7 @@ describe('status words in card text explain the status', () => {
 
   it('Fixation says what it does in its own words: a bonus on Haze\'s attacks, no status to explain', () => {
     expect(STATUSES_BY_ID.fixation).toBeUndefined();
-    expect((ABILITIES_BY_ID.passive_haze_fixation as { text?: string }).text).toBe("Haze's attacks deal +1 bullet damage to an enemy below full HP.");
+    expect((ABILITIES_BY_ID.passive_haze_fixation as { text?: string }).text).toBe("Haze's attacks deal +{bp:1/2} bullet damage to an enemy below full HP.");
   });
 
   it('an id the registry does not know still reads', () => {
@@ -362,7 +362,12 @@ const READS_SPIRIT = abilitiesReadingSpirit();
  *  TOXIN_BURST + the bearer's Bullet Power (`effectiveAtk(source)` in
  *  eff_toxic_bullets). (Split Shot carried one while its damage was the
  *  Active's swing, and lost it when it became Ricochet 2.) */
-const BP_SCALING: string[] = ['toxic_bullets'];
+const BP_SCALING: string[] = [
+  'toxic_bullets',
+  // Every hero skill and passive scales with Spirit or Bullet Power (Patrick, 2026-11-17);
+  // these three with Bullet Power: 1 + half the hero's Attack (`effectiveAtk`), counted once.
+  'skill_silver', 'passive_haze_fixation', 'passive_drifter_bloodscent',
+];
 
 /** Where an ability's text is printed: a hero ability prints its own; a spell,
  *  an ultimate or a piece of gear prints the card's. */
@@ -386,12 +391,13 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
       'eff_ult_abrams', 'eff_ult_dynamo', 'eff_ult_kelvin', 'eff_ult_lady_geist', 'eff_ult_mo_krill',
       'eff_ult_paige', 'eff_ult_seven', 'eff_ult_shiv', 'eff_ult_viscous', 'eff_ult_wraith',
       'eff_ult_warden', 'eff_ult_drifter',
+      // Every skill and passive scales (Patrick, 2026-11-17): these four read Spirit since.
+      'skill_wraith', 'skill_sinclair', 'skill_warden', 'passive_abrams_heal', 'passive_victor_aura',
     ]) expect(found.has(id), id).toBe(true);
-    // A flat number reads no Spirit: Full Auto, Rabbit Hex,
-    // Willpower, Naptime, Bullet Dance (Haze's Attack), Shadow Transformation, Traveler;
+    // A flat number reads no Spirit: Naptime, Bullet Dance (Haze's Attack), Shadow Transformation, Traveler;
     // and Lash's Grapple, a swap with no number, and Death Slam, a lift to the hand (2026-11-17).
     for (const id of [
-      'skill_wraith', 'skill_sinclair', 'skill_warden', 'skill_lash', 'eff_ult_lash',
+      'skill_lash', 'eff_ult_lash', // Grapple's payoff is an attack (Bullet Power) and Ground Strike's {sp:3}
       'eff_ult_rem', 'eff_ult_haze', 'eff_ult_yamato', 'eff_ult_mirage',
       'eff_ult_vindicta', // Flight puts up the Flying status; the status's own proc reads Spirit
     ]) expect(found.has(id), id).toBe(false);
@@ -441,11 +447,11 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     }
   });
 
-  it('half-scaling is written {sp:N/2} exactly where the code adds floor(Spirit / 2) — only Tag Along\'s Attack (2026-11-17: Rem worn as gear counts her Spirit once)', () => {
+  it('half-scaling is written {sp:N/2} exactly where the code adds floor(Spirit / 2) — Tag Along\'s Attack and Victor\'s aura (2026-11-17: Spirit counted once, as gear counts it, and on every enemy)', () => {
     const halfMarked = [...READS_SPIRIT].filter((id) => textOf(id).some((t) => /\{sp:\d+\/2\}/.test(t)));
     const halfCode = abilitiesSource.match(/Math\.floor\((?:spi|activeSpi|ultSpi|effectiveSpirit)\([^)]*\) \/ 2\)/g) ?? [];
-    expect(halfMarked).toEqual(['skill_rem']);
-    expect(halfCode).toHaveLength(1);
+    expect(halfMarked.sort()).toEqual(['passive_victor_aura', 'skill_rem']);
+    expect(halfCode).toHaveLength(2);
   });
 
   it('gear that adds Spirit Power, and every flat number, stays plain ink', () => {
@@ -465,6 +471,11 @@ describe('a number is purple exactly when its effect adds Spirit Power', () => {
     // And the code adds it: Toxic Bullets' burst reads its bearer's Bullet Power.
     const toxic = /const eff_toxic_bullets: AbilityDef = \{\n([\s\S]*?)^\};/m.exec(abilitiesSource)?.[1] ?? '';
     expect(toxic).toMatch(/TOXIN_BURST \+ effectiveAtk\(source\)/);
+    // The hero abilities' {bp:1/2}: 1 + half the Attack.
+    for (const id of ['skill_silver', 'passive_haze_fixation', 'passive_drifter_bloodscent']) {
+      const body = new RegExp(`const ${id}: HeroAbilityDef = \\{\\n([\\s\\S]*?)^\\};`, 'm').exec(abilitiesSource)?.[1] ?? '';
+      expect(body, id).toMatch(/1 \+ Math\.floor\(\(?(?:source \? )?effectiveAtk\((?:source|self)\)/);
+    }
   });
 
   it('the spells and ultimates the marks were written for print them', () => {

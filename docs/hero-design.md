@@ -896,7 +896,7 @@ What the games showed, and why:
 
 | Hero | Before (own builds) | Change | Reasoning | After (same items) |
 |---|---|---|---|---|
-| Shiv | 71% | Serrated Knives waits 4 (was 3), Bleeds 1 turn (was 2); growth +1 Attack +2 HP +1 Spirit (was +2 +1 +1) | A charged skill: two uses on turns 1 and 2. Bleed 1 for 1 turn makes a use worth 2 at Level 1, inside a charged wait-4 skill's band (about 2/3 of 3–4.5) | 58% |
+| Shiv | 71% | Serrated Knives waits 4 (was 3), Bleeds 1 turn (was 2); growth kept at +2 Attack +1 HP +1 Spirit | A charged skill: two uses on turns 1 and 2. Bleed 1 for 1 turn makes a use worth 2 at Level 1, inside a charged wait-4 skill's band (about 2/3 of 3–4.5) | 58% |
 | Vindicta | 71% | Assassinate {sp:3} (was 4); growth +1 Attack +1 HP (was +2 Attack); Retreat 1 (was 0) | 3 no longer kills a fresh hero on the bench; Silver's same growth change took 7 points off him; Retreat 1 ends the free swing-and-swap | 61% (still the highest) |
 | Yamato | 68% | Attack 1 (was 2): not a gun hero | Her damage is the katana's slashes, not her gun; the formula gives a non-gun hero Attack 1. Flying Slash keeps {sp:2}, wait 3 | 48% |
 | Kelvin | 64% | Frost Grenade {sp:2} damage and {sp:2} heal (was 3) | 2 + 0.5 = 2.5 a use with two charges and a wait of 4; his Spirit (+2 a level, counted twice) still makes it 6 + 6 at Level 2 | 53% |
@@ -905,15 +905,16 @@ What the games showed, and why:
 | Seven | 38% | Static Charge {sp:2} (was 1); HP 5 | 2 + a Stun is 4 points for a wait of 4, inside 3–4.5 | 49% |
 | Graves | 38% | Grasping Hands {sp:2} (was 1); growth +1 HP a level | As Seven: the hit was under its band | 48% |
 | Lady Geist | 39% | Essence Bomb costs 1 HP (was 2); growth +1 HP a level | No growth into HP and a skill that cost her HP: she ran out of HP first | 55% |
-| Victor | 38% | HP 7 (was 6); growth +1 Attack +3 HP (was +3 HP +1 Spirit) | His aura is a flat 1, so Spirit did nothing; the point goes on Attack | 44% |
-| Mirage | 35% | Attack 2, HP 5; Djinn's Mark {sp:6} (was 4); growth +2 Attack +1 HP +2 Spirit | A passive that pays only from the lane: her marks come from hits, so Attack, and a burst worth the three swings | 45% |
+| Victor | 38% | HP 7 (was 6); Aura of Suffering {sp:1/2} to each enemy (was 1) | The aura hits every enemy, so Spirit counts once; his +1 Spirit a level now feeds it | 44%† |
+| Mirage | 35% | HP 5; Djinn's Mark {sp:6} (was 4); growth +2 Attack +1 HP +2 Spirit (Attack stays 1 at Level 1) | A passive that pays only from the lane: her marks come from hits, so Attack, and a burst worth the three swings | 45% |
 | Dynamo | 34% | Rejuvenating Aurora also gives +1 Attack for 2 turns; growth +2 HP a level | Heals were worth half their budget in the games (the race is won on damage). Paige's +1 Attack is what made a 1/5 support win (51%) | 43% |
 | Rem | 30% | HP 5; Tag Along gives +{sp:1/2} Attack for the ride (1 + her Spirit) | Patrick: Rem worn as gear makes the host strong, and the buff grows with her Spirit. Counted once, as gear counts its stats: 1.5 points at Level 1, 6 at Level 2 (Spirit 3), with the heal of {sp:4} | 48% (the AI under-plays her) |
-| Sinclair | 42% | Rabbit Hex waits 3 (was 4); HP 5; growth +1 Attack a level | A turn of hard control is 2–3 points, the band of a wait-3 skill; his Spirit had nothing to grow | 44% |
+| Sinclair | 42% | Rabbit Hex also deals {sp:1} spirit damage (waits 4); HP 5 | A turn of hard control (2–3) and 1 damage is 3–4 points, a wait-4 skill's band; his Spirit growth now counts | 44%† |
 | Viscous | 46% | Growth +1 HP a level | The Cube keeps its wait of 4: at 3, Transcendent Cooldown would encase someone every turn | 44%* |
 | Haze, Wraith | 45%, 42% | HP 5 | The floor (below) | 44%, 51% |
 
 \* The check ran with The Cube at a wait of 3; the growth change replaced it afterwards, unchecked.
+† Changed after the last check, by reasoning (below).
 
 **The HP floor is 5** (was 4): no hero starts where one skill can take it off the bench. The six
 heroes at 4 move to 5. The formula in §2 is otherwise unchanged. The heroes that carry a point
@@ -921,3 +922,31 @@ over it are listed in `tests/engine/hero-cards.spec.ts` (`TUNED`) with their rea
 
 Left as they are: Mo & Krill 56%, Lash 54%, Warden 54%, Paige 47%, Drifter 45% (within reach of 50).
 Vindicta at 61% is the one hero still above the rest; a next step would be Assassinate's wait (5 → 6).
+
+#### By curve, then every skill scales (Patrick, 2026-11-17)
+
+**A hero's strength is a curve.** Patrick: "some of them require equipment to become strong in the
+late game." The AI games end after about 7 own turns, before Level 3 and tier 3–4 items, so they
+favour early heroes and under-rate late ones. Two changes above cut the wrong phase and were undone:
+- Shiv (late): his early burst was the problem (two charges on turns 1 and 2), and the skill's nerf
+  answers it. His +2 Attack a level, his late carry, stays.
+- Mirage (late): Attack 2 at Level 1 was an early buff on a late hero. She starts at Attack 1 again
+  and keeps the late buffs: +2 Attack a level and Djinn's Mark {sp:6}.
+
+**Every skill and passive scales with Spirit or Bullet Power**, as in Deadlock. On a hero, Bullet
+Power is its Attack, counted once; `{bp:1/2}` is 1 + half of it. The nine that were flat:
+
+| Ability | Was | Now | Reasoning |
+|---|---|---|---|
+| Silver: Boot Kick | 1 bullet, waits 3 | {bp:1/2} bullet, waits 4 | 2 at her Attack 2 + Vulnerable 2 turns (2) = 4, a wait-4 skill's band |
+| Warden: Willpower | Shield 2 | Shield {sp:2} | Deadlock's Willpower is a spirit shield; it grows with spirit items |
+| Wraith: Full Auto | +2 Attack | +{sp:2} Attack | Deadlock's Full Auto is spirit; his build is spirit items, so he spikes late with gear |
+| Sinclair: Rabbit Hex | no number | {sp:1} spirit damage and the Rabbit, waits 4 | as above |
+| Abrams: Infernal Resilience | heals 1 | heals {sp:1} | grows with spirit items |
+| Haze: Fixation | +1 | +{bp:1/2} | 1 at Level 1, 3 at Level 2, 4 at Level 3: a late carry's curve |
+| Drifter: Bloodscent | +2 | +{bp:1/2} | 2 at his Attack 2, as before; grows with his gun |
+| Victor: Aura of Suffering | 1 to each enemy | {sp:1/2} to each enemy, 1 to Victor | it hits every enemy, so Spirit counts once; his Spirit growth is back |
+| Lash: Grapple | no number | unchanged | its payoff is an attack (Bullet Power) and Ground Strike's {sp:3} |
+
+Riders stay flat where the main number scales (Paige's and Dynamo's +1 Attack, Shiv's Bleed 1).
+Ultimates are not covered by this rule yet.

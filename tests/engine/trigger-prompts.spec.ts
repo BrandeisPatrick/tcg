@@ -316,7 +316,7 @@ describe('Victor — Aura of Suffering', () => {
 });
 
 describe('Silver — Boot Kick and Lycan Curse', () => {
-  it('Boot Kick: 1 bullet damage to the enemy Active, then Vulnerable 2 turns (takes +1 damage: both resists down), for no souls, and then it waits', () => {
+  it('Boot Kick: {bp:1/2} bullet damage to the enemy Active (2 at her Attack 2), then Vulnerable 2 turns (takes +1 damage: both resists down), for no souls, and then it waits', () => {
     const G = freshReadyGame();
     const silver = standIn(G, '0', 'hero_silver');
     const foe = G.players['1'].active!;
@@ -324,11 +324,11 @@ describe('Silver — Boot Kick and Lycan Curse', () => {
     G.players['0'].souls = 2;
     expect(perform(G, '0', { type: 'useSkill', heroIid: silver.iid, targetIid: foe.iid })).not.toBe(INVALID);
     expect(G.players['0'].souls).toBe(2);                              // a skill costs no souls
-    expect(silver.cooldowns?.skill_silver).toBe(SKILL_COOLDOWN);
-    expect(foe.hp).toBe(hp - 1);
+    expect(silver.cooldowns?.skill_silver).toBe(4);                   // 4 since it scales (2026-11-17)
+    expect(foe.hp).toBe(hp - (1 + Math.floor(2 / 2)));
     expect(foe.statuses.find((s) => s.id === 'bullet_resist_down')).toMatchObject({ value: 1, duration: 2 });
     expect(foe.statuses.find((s) => s.id === 'spirit_resist_down')).toMatchObject({ value: 1, duration: 2 });
-    expect(silver.tally?.[SILVER_ULT]).toBe(1);                        // the kick charged her
+    expect(silver.tally?.[SILVER_ULT]).toBe(2);                        // the kick charged her: the 2 it dealt
   });
 
   it('Lycan Curse: Wolf form for 2 of her turns — +3 Attack, Shield 6, the wolf on her card — and then she is Silver again', () => {
